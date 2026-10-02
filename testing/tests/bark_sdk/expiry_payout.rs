@@ -27,7 +27,7 @@ async fn server_marks_spent(srv: &Captaind, vtxo: VtxoId) {
 
 /// The server pays an expired VTXO out on-chain to `tr(user_pubkey)` and marks
 /// it spent. The wallet, which was never told:
-/// - still refreshes its other VTXOs, dropping the paid one (O22);
+/// - still refreshes its other VTXOs, dropping the paid one;
 /// - adopts the spent state, so the VTXO leaves the balance;
 /// - finds the payout and sweeps it into its on-chain wallet.
 #[tokio::test]

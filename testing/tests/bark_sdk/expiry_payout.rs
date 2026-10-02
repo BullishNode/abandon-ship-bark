@@ -85,7 +85,7 @@ async fn expiry_payout_adopt_find_sweep() {
 
 	let payouts = expiry_payout::find_expiry_payouts(&wallet).await.unwrap();
 	assert_eq!(payouts.len(), 1, "{payouts:?}");
-	assert_eq!(payouts[0].vtxo_id, paid.id());
+	assert_eq!(payouts[0].vtxo_id, Some(paid.id()));
 	assert_eq!(payouts[0].outpoint.txid, payout_txid);
 	assert_eq!(payouts[0].amount, payout_amount);
 	assert_eq!(payouts[0].confirmations, 1);
@@ -105,7 +105,8 @@ async fn expiry_payout_adopt_find_sweep() {
 		.expect("an expiry payout movement");
 	assert_eq!(movement.subsystem.kind, EXPIRY_PAYOUT_MOVEMENT_KIND);
 	assert_eq!(movement.status, MovementStatus::Successful);
-	assert!(movement.input_vtxos.contains(&paid.id()));
+	assert!(movement.input_vtxos.is_empty(), "the sweep spends on-chain outputs, not VTXOs");
+	assert_eq!(movement.effective_balance, -payout_amount.to_signed().unwrap());
 	let metadata = &movement.metadata;
 	assert_eq!(metadata["sweep_txid"], serde_json::to_value(sweep.txid).unwrap());
 	assert_eq!(metadata["payout_txids"], serde_json::to_value([payout_txid]).unwrap());

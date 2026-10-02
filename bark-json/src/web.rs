@@ -906,8 +906,9 @@ impl From<bark::expiry_payout::AdoptedVtxoStatus> for AdoptedVtxoStatus {
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(ToSchema))]
 pub struct ExpiryPayout {
-	#[cfg_attr(feature = "utoipa", schema(value_type = String))]
-	pub vtxo_id: VtxoId,
+	/// Absent when expired coins share this payout key.
+	#[cfg_attr(feature = "utoipa", schema(value_type = Option<String>))]
+	pub vtxo_id: Option<VtxoId>,
 	#[cfg_attr(feature = "utoipa", schema(value_type = String))]
 	pub txid: Txid,
 	pub vout: u32,

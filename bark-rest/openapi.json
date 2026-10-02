@@ -5840,7 +5840,6 @@
         "type": "object",
         "description": "An on-chain output paying the expiry payout address of a VTXO.",
         "required": [
-          "vtxo_id",
           "txid",
           "vout",
           "amount_sat",
@@ -5867,7 +5866,11 @@
             "minimum": 0
           },
           "vtxo_id": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Absent when expired coins share this payout key."
           }
         }
       },

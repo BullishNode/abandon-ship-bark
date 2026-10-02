@@ -31,6 +31,7 @@ use bitcoin_ext::{BlockHeight, P2TR_DUST};
 use server_rpc::protos::VtxoSpendState;
 
 use crate::{Wallet, WalletVtxo};
+use crate::chain::ScriptUtxo;
 use crate::movement::{MovementDestination, MovementStatus};
 use crate::movement::update::MovementUpdate;
 use crate::subsystem::Subsystem;
@@ -77,11 +78,11 @@ pub struct AdoptedVtxoStatus {
 
 /// An on-chain output paying the expiry payout address of a VTXO.
 ///
-/// VTXOs that share a key share a payout address, so one output can be listed
-/// for several VTXOs.
+/// A reused key does not identify which historical entitlement was settled.
+/// Each output is listed once; its coin ID is absent when ambiguous.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpiryPayout {
-	pub vtxo_id: VtxoId,
+	pub vtxo_id: Option<VtxoId>,
 	pub outpoint: OutPoint,
 	pub amount: Amount,
 	/// 0 while the output is in the mempool.
@@ -215,22 +216,28 @@ async fn find_expiry_payouts_with_keys(
 		.context("failed to look up expiry payouts")?;
 	let tip = wallet.chain().tip().await?;
 
+	Ok(payouts_for_scripts(&by_script, utxos, tip))
+}
+
+fn payouts_for_scripts(
+	by_script: &BTreeMap<ScriptBuf, (Keypair, Vec<VtxoId>)>,
+	utxos: Vec<ScriptUtxo>,
+	tip: BlockHeight,
+) -> Vec<(ExpiryPayout, Keypair)> {
 	let mut ret = Vec::new();
 	for utxo in utxos {
 		let Some((keypair, vtxo_ids)) = by_script.get(&utxo.script_pubkey) else {
 			continue;
 		};
 		let confirmations = confirmations(utxo.confirmed_height, tip);
-		for vtxo_id in vtxo_ids {
-			ret.push((ExpiryPayout {
-				vtxo_id: *vtxo_id,
-				outpoint: utxo.outpoint,
-				amount: utxo.amount,
-				confirmations,
-			}, *keypair));
-		}
+		ret.push((ExpiryPayout {
+			vtxo_id: match vtxo_ids.as_slice() { [id] => Some(*id), _ => None },
+			outpoint: utxo.outpoint,
+			amount: utxo.amount,
+			confirmations,
+		}, *keypair));
 	}
-	Ok(ret)
+	ret
 }
 
 /// Sweep every payout [find_expiry_payouts] finds to a fresh
@@ -277,10 +284,7 @@ pub async fn sweep_expiry_payouts(
 		warn!("Failed to register sweep tx {} with the onchain wallet: {:#}", txid, e);
 	}
 
-	let swept_vtxos = vtxos.iter()
-		.filter(|v| payouts.iter().any(|(p, _)| p.vtxo_id == v.vtxo.id()))
-		.collect::<Vec<_>>();
-	let vtxo_total = swept_vtxos.iter().map(|v| v.vtxo.amount()).sum::<Amount>();
+	let payout_total = inputs.iter().map(|(_, output, _)| output.value).sum::<Amount>();
 	let payout_txids = {
 		let mut txids = inputs.iter().map(|(o, _, _)| o.txid).collect::<Vec<_>>();
 		txids.dedup();
@@ -291,8 +295,7 @@ pub async fn sweep_expiry_payouts(
 		EXPIRY_PAYOUT_MOVEMENT_KIND,
 		MovementStatus::Successful,
 		MovementUpdate::new()
-			.consumed_vtxos(swept_vtxos.iter().map(|v| v.vtxo.id()))
-			.intended_and_effective_balance(-vtxo_total.to_signed()?)
+			.intended_and_effective_balance(-payout_total.to_signed()?)
 			.sent_to([MovementDestination::bitcoin(address, swept)])
 			.metadata([
 				("payout_txids".into(), serde_json::to_value(&payout_txids)?),
@@ -367,6 +370,27 @@ mod test {
 			script_pubkey: expiry_payout_script(key.public_key()),
 		};
 		(outpoint, txout, *key)
+	}
+
+	#[test]
+	fn reused_key_does_not_attribute_a_payout_to_every_old_coin() {
+		let key = keypair(1);
+		let script = expiry_payout_script(key.public_key());
+		let old = VtxoId::from(OutPoint::new(Txid::from_byte_array([1; 32]), 0));
+		let later = VtxoId::from(OutPoint::new(Txid::from_byte_array([2; 32]), 0));
+		// The old coin was refreshed; the later coin expired. Both are spent
+		// and share a key. A restored wallet only has those facts.
+		let by_script = BTreeMap::from([(script.clone(), (key, vec![old, later]))]);
+		let output = ScriptUtxo {
+			outpoint: OutPoint::new(Txid::from_byte_array([3; 32]), 0),
+			script_pubkey: script,
+			amount: Amount::from_sat(49_000),
+			confirmed_height: Some(BlockHeight::new(100)),
+		};
+		let payouts = payouts_for_scripts(&by_script, vec![output], BlockHeight::new(100));
+		assert_eq!(payouts.len(), 1, "one UTXO, not one payout per historical coin");
+		assert_eq!(payouts[0].0.vtxo_id, None, "a shared key cannot identify the paid coin");
+		assert_eq!(payouts[0].0.amount.to_sat(), 49_000);
 	}
 
 	#[test]

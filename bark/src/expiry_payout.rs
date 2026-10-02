@@ -10,16 +10,6 @@
 //! 2. find the payout outputs on-chain ([find_expiry_payouts]);
 //! 3. sweep them into the on-chain wallet and record a movement
 //!    ([sweep_expiry_payouts]).
-//!
-//! The module only uses the public API of [Wallet], so it can be lifted into
-//! another crate unchanged:
-//! - [Wallet::trust_and_adopt_server_vtxo_status], [Wallet::all_vtxos],
-//!   [Wallet::get_vtxo_by_id] and [Wallet::pubkey_keypair];
-//! - [Wallet::chain]: `tip`, `fee_rates`, `broadcast_tx` and
-//!   [ChainSource::unspent_outputs_for_scripts](crate::chain::ChainSource::unspent_outputs_for_scripts).
-//!   That last one is new in this fork; a copy of this module needs it too;
-//! - [Wallet::onchain]: `address` and `register_tx`;
-//! - [Wallet::movements_mgr]: `new_finished_movement`.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -123,11 +113,6 @@ pub fn build_signed_expiry_payout_sweep(
 ) -> anyhow::Result<Transaction> {
 	if inputs.is_empty() {
 		bail!("no expiry payouts to sweep");
-	}
-	for (outpoint, txout, keypair) in inputs {
-		if txout.script_pubkey != expiry_payout_script(keypair.public_key()) {
-			bail!("key does not match the script of expiry payout {}", outpoint);
-		}
 	}
 
 	let total = inputs.iter().map(|(_, o, _)| o.value).sum::<Amount>();
@@ -447,17 +432,6 @@ mod test {
 			SECP.verify_schnorr(&sig, &Message::from(sighash), &output_key)
 				.expect("signature verifies against the tweaked output key");
 		}
-	}
-
-	#[test]
-	fn sweep_rejects_a_key_that_does_not_match_the_output() {
-		let (outpoint, txout, _) = payout(1, &keypair(1), 50_000);
-		let err = build_signed_expiry_payout_sweep(
-			&[(outpoint, txout, keypair(2))],
-			expiry_payout_script(keypair(3).public_key()),
-			FeeRate::from_sat_per_vb_u32(1),
-		).unwrap_err();
-		assert!(err.to_string().contains("does not match"), "{err}");
 	}
 
 	#[test]

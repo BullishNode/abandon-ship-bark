@@ -856,12 +856,10 @@ pub struct WalletDeleteResponse {
 	pub message: String,
 }
 
-/// Selects VTXOs by id. Omit `vtxo_ids` to let the endpoint pick its default set.
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(ToSchema))]
 pub struct ExpiryVtxosRequest {
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub vtxo_ids: Option<Vec<String>>,
+	pub vtxo_ids: Vec<String>,
 }
 
 /// The state a VTXO has after adopting the server's view of it.

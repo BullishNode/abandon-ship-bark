@@ -855,3 +855,94 @@ pub struct WalletDeleteResponse {
 	pub fingerprint: Option<String>,
 	pub message: String,
 }
+
+/// Selects VTXOs by id. Omit `vtxo_ids` to let the endpoint pick its default set.
+#[derive(Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(ToSchema))]
+pub struct ExpiryVtxosRequest {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub vtxo_ids: Option<Vec<String>>,
+}
+
+/// The state a VTXO has after adopting the server's view of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum AdoptedVtxoState {
+	/// The server considers the VTXO spent; the wallet now has it spent too.
+	Spent,
+	/// The server will let the wallet spend the VTXO.
+	Spendable,
+	/// The server does not know the VTXO's transaction chain yet.
+	Unregistered,
+	/// Anything else: the VTXO is locked, or still in another flow.
+	Other,
+}
+
+impl From<bark::expiry_payout::AdoptedVtxoState> for AdoptedVtxoState {
+	fn from(v: bark::expiry_payout::AdoptedVtxoState) -> Self {
+		match v {
+			bark::expiry_payout::AdoptedVtxoState::Spent => AdoptedVtxoState::Spent,
+			bark::expiry_payout::AdoptedVtxoState::Spendable => AdoptedVtxoState::Spendable,
+			bark::expiry_payout::AdoptedVtxoState::Unregistered => AdoptedVtxoState::Unregistered,
+			bark::expiry_payout::AdoptedVtxoState::Other => AdoptedVtxoState::Other,
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(ToSchema))]
+pub struct AdoptedVtxoStatus {
+	#[cfg_attr(feature = "utoipa", schema(value_type = String))]
+	pub vtxo_id: VtxoId,
+	pub state: AdoptedVtxoState,
+}
+
+impl From<bark::expiry_payout::AdoptedVtxoStatus> for AdoptedVtxoStatus {
+	fn from(v: bark::expiry_payout::AdoptedVtxoStatus) -> Self {
+		AdoptedVtxoStatus { vtxo_id: v.vtxo_id, state: v.state.into() }
+	}
+}
+
+/// An on-chain output paying the expiry payout address of a VTXO.
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(ToSchema))]
+pub struct ExpiryPayout {
+	#[cfg_attr(feature = "utoipa", schema(value_type = String))]
+	pub vtxo_id: VtxoId,
+	#[cfg_attr(feature = "utoipa", schema(value_type = String))]
+	pub txid: Txid,
+	pub vout: u32,
+	pub amount_sat: u64,
+	/// 0 while the output is in the mempool
+	pub confirmations: u32,
+}
+
+impl From<bark::expiry_payout::ExpiryPayout> for ExpiryPayout {
+	fn from(v: bark::expiry_payout::ExpiryPayout) -> Self {
+		ExpiryPayout {
+			vtxo_id: v.vtxo_id,
+			txid: v.outpoint.txid,
+			vout: v.outpoint.vout,
+			amount_sat: v.amount.to_sat(),
+			confirmations: v.confirmations,
+		}
+	}
+}
+
+#[derive(Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(ToSchema))]
+pub struct SweepExpiryPayoutsRequest {
+	/// Fee rate in sat/vB; defaults to the chain source's regular fee rate
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub fee_rate_sat_vb: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(ToSchema))]
+pub struct SweepExpiryPayoutsResponse {
+	#[cfg_attr(feature = "utoipa", schema(value_type = String))]
+	pub txid: Txid,
+	/// The amount paid to the on-chain wallet, after the sweep's fee
+	pub swept_sat: u64,
+}

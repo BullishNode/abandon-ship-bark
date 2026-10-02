@@ -45,6 +45,9 @@ impl Subsystem {
 
 	/// The built-in round subsystem
 	pub const ROUND: Subsystem = Subsystem::new("bark.round");
+
+	/// The built-in subsystem that sweeps on-chain payouts of expired VTXOs
+	pub const EXPIRY_PAYOUT: Subsystem = Subsystem::new("bark.expiry_payout");
 }
 
 impl fmt::Display for Subsystem {

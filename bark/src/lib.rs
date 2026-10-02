@@ -380,6 +380,7 @@ pub extern crate lnurl as lnurllib;
 pub mod actions;
 pub mod chain;
 pub mod exit;
+pub mod expiry_payout;
 pub use bark_common::fs_perms;
 pub use bark_common::secret;
 pub mod movement;

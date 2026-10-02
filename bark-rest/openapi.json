@@ -2096,6 +2096,48 @@
         }
       }
     },
+    "/api/v1/onchain/sweep-expiry-payouts": {
+      "post": {
+        "tags": [
+          "onchain"
+        ],
+        "summary": "Sweep on-chain payouts of expired VTXOs",
+        "description": "Spends every payout output found for the expired VTXOs the wallet has as spent (see `POST /api/v1/wallet/vtxos/expiry-payouts`) to a fresh address of the on-chain wallet, signing with the VTXO keys. Broadcasts the transaction and records an `expiry-payout` movement carrying the payout and sweep txids.",
+        "operationId": "sweep_expiry_payouts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SweepExpiryPayoutsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Returns the sweep transaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SweepExpiryPayoutsResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/onchain/sync": {
       "post": {
         "tags": [
@@ -3277,6 +3319,116 @@
         }
       }
     },
+    "/api/v1/wallet/vtxos/adopt-server-status": {
+      "post": {
+        "tags": [
+          "wallet"
+        ],
+        "summary": "Adopt the server's VTXO status",
+        "description": "Asks the Ark server for the state of each VTXO and adopts it. A VTXO the server reports spent, for example because the server paid it out on-chain after it expired, is marked spent, so it leaves the balance and coin selection. Without `vtxo_ids`, checks every unspent VTXO that has expired. Only use this with a server you trust.",
+        "operationId": "adopt_server_vtxo_status",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpiryVtxosRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Returns the adopted state of each VTXO",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdoptedVtxoStatus"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "One of the provided VTXO IDs is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/wallet/vtxos/expiry-payouts": {
+      "post": {
+        "tags": [
+          "wallet"
+        ],
+        "summary": "Find on-chain payouts of expired VTXOs",
+        "description": "Looks up the unspent on-chain outputs paying the BIP86 address `tr(user_pubkey)` of each VTXO, where a server pays a VTXO it settled after expiry. Without `vtxo_ids`, looks at every expired VTXO the wallet has as spent. VTXOs that share a key share a payout address, so an output can be listed for several VTXOs. With a bitcoind chain source only confirmed outputs are found.",
+        "operationId": "expiry_payouts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpiryVtxosRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Returns the payout outputs found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExpiryPayout"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "One of the provided VTXO IDs is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/wallet/vtxos/{id}": {
       "get": {
         "tags": [
@@ -3429,6 +3581,31 @@
         ],
         "properties": {
           "address": {
+            "type": "string"
+          }
+        }
+      },
+      "AdoptedVtxoState": {
+        "type": "string",
+        "description": "The state a VTXO has after adopting the server's view of it.",
+        "enum": [
+          "spent",
+          "spendable",
+          "unregistered",
+          "other"
+        ]
+      },
+      "AdoptedVtxoStatus": {
+        "type": "object",
+        "required": [
+          "vtxo_id",
+          "state"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/AdoptedVtxoState"
+          },
+          "vtxo_id": {
             "type": "string"
           }
         }
@@ -5679,6 +5856,56 @@
           }
         }
       },
+      "ExpiryPayout": {
+        "type": "object",
+        "description": "An on-chain output paying the expiry payout address of a VTXO.",
+        "required": [
+          "vtxo_id",
+          "txid",
+          "vout",
+          "amount_sat",
+          "confirmations"
+        ],
+        "properties": {
+          "amount_sat": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "confirmations": {
+            "type": "integer",
+            "format": "int32",
+            "description": "0 while the output is in the mempool",
+            "minimum": 0
+          },
+          "txid": {
+            "type": "string"
+          },
+          "vout": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "vtxo_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ExpiryVtxosRequest": {
+        "type": "object",
+        "description": "Selects VTXOs by id. Omit `vtxo_ids` to let the endpoint pick its default set.",
+        "properties": {
+          "vtxo_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "FeeEstimateQuery": {
         "type": "object",
         "description": "Query parameters for fee estimates that only require an amount.",
@@ -7055,6 +7282,38 @@
           "signature": {
             "type": "string",
             "description": "The BIP-340 Schnorr signature over the message digest\n`SHA256(\"bark/message\" || message)`"
+          }
+        }
+      },
+      "SweepExpiryPayoutsRequest": {
+        "type": "object",
+        "properties": {
+          "fee_rate_sat_vb": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Fee rate in sat/vB; defaults to the chain source's regular fee rate",
+            "minimum": 0
+          }
+        }
+      },
+      "SweepExpiryPayoutsResponse": {
+        "type": "object",
+        "required": [
+          "txid",
+          "swept_sat"
+        ],
+        "properties": {
+          "swept_sat": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The amount paid to the on-chain wallet, after the sweep's fee",
+            "minimum": 0
+          },
+          "txid": {
+            "type": "string"
           }
         }
       },

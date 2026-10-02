@@ -41,6 +41,8 @@ pub fn router() -> Router<Arc<ServerState>> {
 		.route("/bip321", post(bip321_uri))
 		.route("/balance", get(balance))
 		.route("/vtxos", get(vtxos))
+		.route("/vtxos/adopt-server-status", post(adopt_server_vtxo_status))
+		.route("/vtxos/expiry-payouts", post(expiry_payouts))
 		.route("/vtxos/{id}", get(get_vtxo))
 		.route("/vtxos/{id}/encoded", get(get_vtxo_encoded))
 		.route("/movements", get(movements))
@@ -76,6 +78,8 @@ pub fn router() -> Router<Arc<ServerState>> {
 		vtxos,
 		get_vtxo,
 		get_vtxo_encoded,
+		adopt_server_vtxo_status,
+		expiry_payouts,
 		movements,
 		history,
 		send,
@@ -118,6 +122,10 @@ pub fn router() -> Router<Arc<ServerState>> {
 		bark_json::web::OffboardAllRequest,
 		bark_json::web::ImportVtxoRequest,
 		bark_json::web::MailboxSyncResponse,
+		bark_json::web::ExpiryVtxosRequest,
+		bark_json::web::AdoptedVtxoState,
+		bark_json::web::AdoptedVtxoStatus,
+		bark_json::web::ExpiryPayout,
 		bark_json::web::PendingRoundInfo,
 		bark_json::cli::RoundStatus,
 		error::InternalServerError,
@@ -599,6 +607,75 @@ pub async fn get_vtxo_encoded(
 
 	let encoded = bark_json::primitives::EncodedVtxo(vtxo.serialize_hex());
 	Ok(axum::Json(bark_json::web::EncodedVtxoResponse { encoded }))
+}
+
+fn parse_vtxo_ids(ids: Option<Vec<String>>) -> HandlerResult<Option<Vec<VtxoId>>> {
+	Ok(ids.map(|ids| ids.iter()
+		.map(|s| VtxoId::from_str(s).badarg("Invalid VTXO id"))
+		.collect::<Result<Vec<_>, _>>()
+	).transpose()?)
+}
+
+#[utoipa::path(
+	post,
+	path = "/vtxos/adopt-server-status",
+	summary = "Adopt the server's VTXO status",
+	request_body = bark_json::web::ExpiryVtxosRequest,
+	responses(
+		(status = 200, description = "Returns the adopted state of each VTXO", body = Vec<bark_json::web::AdoptedVtxoStatus>),
+		(status = 400, description = "One of the provided VTXO IDs is invalid", body = error::BadRequestError),
+		(status = 500, description = "Internal server error", body = error::InternalServerError)
+	),
+	description = "Asks the Ark server for the state of each VTXO and adopts it. A VTXO the \
+		server reports spent, for example because the server paid it out on-chain after it \
+		expired, is marked spent, so it leaves the balance and coin selection. Without \
+		`vtxo_ids`, checks every unspent VTXO that has expired. Only use this with a server \
+		you trust.",
+	tag = "wallet"
+)]
+#[debug_handler]
+pub async fn adopt_server_vtxo_status(
+	State(state): State<Arc<ServerState>>,
+	Json(body): Json<bark_json::web::ExpiryVtxosRequest>,
+) -> HandlerResult<Json<Vec<bark_json::web::AdoptedVtxoStatus>>> {
+	let wallet = state.require_wallet()?;
+	let ids = parse_vtxo_ids(body.vtxo_ids)?;
+
+	let statuses = wallet.adopt_server_vtxo_status(ids).await
+		.context("Failed to adopt server VTXO status")?;
+
+	Ok(axum::Json(statuses.into_iter().map(Into::into).collect()))
+}
+
+#[utoipa::path(
+	post,
+	path = "/vtxos/expiry-payouts",
+	summary = "Find on-chain payouts of expired VTXOs",
+	request_body = bark_json::web::ExpiryVtxosRequest,
+	responses(
+		(status = 200, description = "Returns the payout outputs found", body = Vec<bark_json::web::ExpiryPayout>),
+		(status = 400, description = "One of the provided VTXO IDs is invalid", body = error::BadRequestError),
+		(status = 500, description = "Internal server error", body = error::InternalServerError)
+	),
+	description = "Looks up the unspent on-chain outputs paying the BIP86 address \
+		`tr(user_pubkey)` of each VTXO, where a server pays a VTXO it settled after expiry. \
+		Without `vtxo_ids`, looks at every expired VTXO the wallet has as spent. VTXOs that \
+		share a key share a payout address, so an output can be listed for several VTXOs. \
+		With a bitcoind chain source only confirmed outputs are found.",
+	tag = "wallet"
+)]
+#[debug_handler]
+pub async fn expiry_payouts(
+	State(state): State<Arc<ServerState>>,
+	Json(body): Json<bark_json::web::ExpiryVtxosRequest>,
+) -> HandlerResult<Json<Vec<bark_json::web::ExpiryPayout>>> {
+	let wallet = state.require_wallet()?;
+	let ids = parse_vtxo_ids(body.vtxo_ids)?;
+
+	let payouts = wallet.find_expiry_payouts(ids).await
+		.context("Failed to find expiry payouts")?;
+
+	Ok(axum::Json(payouts.into_iter().map(Into::into).collect()))
 }
 
 #[utoipa::path(

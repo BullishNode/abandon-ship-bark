@@ -369,7 +369,7 @@ pub async fn sweep_expiry_payouts(
 		Some(r) => Some(bitcoin::FeeRate::from_sat_per_vb(r).badarg("Invalid fee rate")?),
 		None => None,
 	};
-	let sweep = wallet.sweep_expiry_payouts(fee_rate).await
+	let sweep = bark::expiry_payout::sweep_expiry_payouts(&wallet, fee_rate).await
 		.context("Failed to sweep expiry payouts")?;
 
 	Ok(axum::Json(bark_json::web::SweepExpiryPayoutsResponse {

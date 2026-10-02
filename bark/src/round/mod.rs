@@ -2713,29 +2713,10 @@ impl Wallet {
 		Ok(())
 	}
 
-	/// Participate in a round
-	///
-	/// This function will start a new round participation and block until
-	/// the round is finished.
-	/// After this method returns the round state will be kept active until
-	/// the round tx fully confirms.
-	pub(crate) async fn participate_round(
-		&self,
-		participation: RoundParticipation,
-		movement_kind: Option<RoundMovement>,
-	) -> anyhow::Result<RoundStatus> {
-		let state = self.join_next_round(participation, movement_kind).await?;
-
-		info!("Waiting for a round start...");
-		let mut events = self.subscribe_round_events().await?;
-
-		self.drive_round_state(state, &mut events).await
-	}
-
 	/// Drive an already-joined round state to its final [RoundStatus], blocking
 	/// on `events` and persisting each update.
 	///
-	/// Shared by [Wallet::participate_round] and the blocking maintenance
+	/// Shared by [Wallet::refresh_vtxos] and the blocking maintenance
 	/// refresh: the latter submits its participation up-front (against an
 	/// in-flight attempt) and then drives the resulting round to completion
 	/// here.

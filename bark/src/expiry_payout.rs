@@ -3,13 +3,23 @@
 //! A server can choose to settle a VTXO that expired unrefreshed by paying its
 //! value on-chain to the BIP86 key-path address of the VTXO's own key,
 //! `tr(user_pubkey)`, and marking the VTXO spent on its side. The wallet is not
-//! told about this. These methods let the wallet:
+//! told about this. These functions let the wallet:
 //!
 //! 1. adopt the server's spent state, so the VTXO leaves the balance and coin
-//!    selection ([Wallet::adopt_server_vtxo_status]);
-//! 2. find the payout outputs on-chain ([Wallet::find_expiry_payouts]);
+//!    selection ([adopt_server_vtxo_status]);
+//! 2. find the payout outputs on-chain ([find_expiry_payouts]);
 //! 3. sweep them into the on-chain wallet and record a movement
-//!    ([Wallet::sweep_expiry_payouts]).
+//!    ([sweep_expiry_payouts]).
+//!
+//! The module only uses the public API of [Wallet], so it can be lifted into
+//! another crate unchanged:
+//! - [Wallet::trust_and_adopt_server_vtxo_status], [Wallet::all_vtxos],
+//!   [Wallet::get_vtxo_by_id] and [Wallet::pubkey_keypair];
+//! - [Wallet::chain]: `tip`, `fee_rates`, `broadcast_tx` and
+//!   [ChainSource::unspent_outputs_for_scripts](crate::chain::ChainSource::unspent_outputs_for_scripts).
+//!   That last one is new in this fork; a copy of this module needs it too;
+//! - [Wallet::onchain]: `address` and `register_tx`;
+//! - [Wallet::movements_mgr]: `new_finished_movement`.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -24,20 +34,25 @@ use bitcoin::sighash::{Prevouts, SighashCache, TapSighashType};
 use bitcoin::taproot;
 use log::{info, warn};
 
-use ark::VtxoId;
+use serde::{Deserialize, Serialize};
+
+use ark::{SECP, VtxoId};
 use bitcoin_ext::{BlockHeight, P2TR_DUST};
 use server_rpc::protos::VtxoSpendState;
 
-use crate::{SECP, Wallet, WalletVtxo};
+use crate::{Wallet, WalletVtxo};
 use crate::movement::{MovementDestination, MovementStatus};
 use crate::movement::update::MovementUpdate;
 use crate::subsystem::Subsystem;
 use crate::vtxo::{ServerStatusAdoption, VtxoStateKind};
 
-/// The movement kind recorded by [Wallet::sweep_expiry_payouts].
+/// The subsystem of the movement recorded by [sweep_expiry_payouts].
+pub const EXPIRY_PAYOUT_SUBSYSTEM: Subsystem = Subsystem::new("bark.expiry_payout");
+
+/// The movement kind recorded by [sweep_expiry_payouts].
 pub const EXPIRY_PAYOUT_MOVEMENT_KIND: &str = "expiry-payout";
 
-/// The state a VTXO has after [Wallet::adopt_server_vtxo_status].
+/// The state a VTXO has after [adopt_server_vtxo_status].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AdoptedVtxoState {
@@ -155,186 +170,187 @@ pub fn build_signed_expiry_payout_sweep(
 	Ok(tx)
 }
 
-impl Wallet {
-	/// Every VTXO in `states` whose expiry height the chain tip has reached.
-	async fn expired_vtxos(&self, states: &[VtxoStateKind]) -> anyhow::Result<Vec<WalletVtxo>> {
-		let tip = self.chain().tip().await?;
-		let mut vtxos = self.inner.db.get_vtxos_by_state(states).await?;
-		vtxos.retain(|v| v.vtxo.expiry_height() <= tip);
-		Ok(vtxos)
-	}
+/// Every VTXO of `wallet` in one of `states` whose expiry height the chain tip
+/// has reached.
+async fn expired_vtxos(
+	wallet: &Wallet,
+	states: &[VtxoStateKind],
+) -> anyhow::Result<Vec<WalletVtxo>> {
+	let tip = wallet.chain().tip().await?;
+	let mut vtxos = wallet.all_vtxos().await?;
+	vtxos.retain(|v| states.contains(&v.state.kind()) && v.vtxo.expiry_height() <= tip);
+	Ok(vtxos)
+}
 
-	async fn vtxos_by_id(&self, ids: Vec<VtxoId>) -> anyhow::Result<Vec<WalletVtxo>> {
-		let mut ret = Vec::with_capacity(ids.len());
-		for id in ids {
-			ret.push(self.get_vtxo_by_id(id).await?);
-		}
-		Ok(ret)
+async fn vtxos_by_id(wallet: &Wallet, ids: Vec<VtxoId>) -> anyhow::Result<Vec<WalletVtxo>> {
+	let mut ret = Vec::with_capacity(ids.len());
+	for id in ids {
+		ret.push(wallet.get_vtxo_by_id(id).await?);
 	}
+	Ok(ret)
+}
 
-	/// Ask the server for the state of each VTXO in `vtxo_ids` and adopt it, see
-	/// [Wallet::trust_and_adopt_server_vtxo_status]. A VTXO the server reports
-	/// spent is marked spent, so it leaves the balance and coin selection.
-	///
-	/// When `vtxo_ids` is `None`, this checks every unspent VTXO that has expired.
-	///
-	/// NOTE: Only call this method if you can trust the server.
-	pub async fn adopt_server_vtxo_status(
-		&self,
-		vtxo_ids: Option<Vec<VtxoId>>,
-	) -> anyhow::Result<Vec<AdoptedVtxoStatus>> {
-		let ids = match vtxo_ids {
-			Some(ids) => ids,
-			None => self.expired_vtxos(VtxoStateKind::UNSPENT_STATES).await?
-				.into_iter().map(|v| v.vtxo.id()).collect(),
+/// Ask the server for the state of each VTXO in `vtxo_ids` and adopt it, see
+/// [Wallet::trust_and_adopt_server_vtxo_status]. A VTXO the server reports
+/// spent is marked spent, so it leaves the balance and coin selection.
+///
+/// When `vtxo_ids` is `None`, this checks every unspent VTXO that has expired.
+///
+/// NOTE: Only call this with a server you trust.
+pub async fn adopt_server_vtxo_status(
+	wallet: &Wallet,
+	vtxo_ids: Option<Vec<VtxoId>>,
+) -> anyhow::Result<Vec<AdoptedVtxoStatus>> {
+	let ids = match vtxo_ids {
+		Some(ids) => ids,
+		None => expired_vtxos(wallet, VtxoStateKind::UNSPENT_STATES).await?
+			.into_iter().map(|v| v.vtxo.id()).collect(),
+	};
+
+	let mut ret = Vec::with_capacity(ids.len());
+	for vtxo_id in ids {
+		let adoption = wallet.trust_and_adopt_server_vtxo_status(vtxo_id).await?;
+		ret.push(AdoptedVtxoStatus {
+			vtxo_id,
+			state: AdoptedVtxoState::from_adoption(adoption),
+		});
+	}
+	Ok(ret)
+}
+
+/// Find the unspent on-chain outputs paying the [expiry_payout_script] of each
+/// VTXO in `vtxo_ids`. A swept payout is spent, so it is not listed.
+///
+/// When `vtxo_ids` is `None`, this looks at every expired VTXO the wallet has
+/// as spent, which includes the ones [adopt_server_vtxo_status] marked spent.
+///
+/// With a bitcoind chain source only confirmed payouts are found.
+pub async fn find_expiry_payouts(
+	wallet: &Wallet,
+	vtxo_ids: Option<Vec<VtxoId>>,
+) -> anyhow::Result<Vec<ExpiryPayout>> {
+	let vtxos = match vtxo_ids {
+		Some(ids) => vtxos_by_id(wallet, ids).await?,
+		None => expired_vtxos(wallet, &[VtxoStateKind::Spent]).await?,
+	};
+	Ok(find_expiry_payouts_with_keys(wallet, &vtxos).await?
+		.into_iter().map(|(payout, _)| payout).collect())
+}
+
+/// The payouts of [find_expiry_payouts], each with the key that spends it.
+async fn find_expiry_payouts_with_keys(
+	wallet: &Wallet,
+	vtxos: &[WalletVtxo],
+) -> anyhow::Result<Vec<(ExpiryPayout, Keypair)>> {
+	let mut vtxos_by_script = BTreeMap::<ScriptBuf, Vec<VtxoId>>::new();
+	let mut keys_by_script = HashMap::<ScriptBuf, Keypair>::new();
+	for v in vtxos {
+		let Some((_idx, keypair)) = wallet.pubkey_keypair(&v.vtxo.user_pubkey()).await? else {
+			warn!("No key for vtxo {} in this wallet, cannot look for its payout", v.vtxo.id());
+			continue;
 		};
-
-		let mut ret = Vec::with_capacity(ids.len());
-		for vtxo_id in ids {
-			let adoption = self.trust_and_adopt_server_vtxo_status(vtxo_id).await?;
-			ret.push(AdoptedVtxoStatus {
-				vtxo_id,
-				state: AdoptedVtxoState::from_adoption(adoption),
-			});
-		}
-		Ok(ret)
+		let script = expiry_payout_script(keypair.public_key());
+		vtxos_by_script.entry(script.clone()).or_default().push(v.vtxo.id());
+		keys_by_script.insert(script, keypair);
 	}
 
-	/// Find the unspent on-chain outputs paying the [expiry_payout_script] of
-	/// each VTXO in `vtxo_ids`.
-	///
-	/// When `vtxo_ids` is `None`, this looks at every expired VTXO the wallet has
-	/// as spent, which includes the ones [Wallet::adopt_server_vtxo_status]
-	/// marked spent.
-	///
-	/// With a bitcoind chain source only confirmed payouts are found.
-	pub async fn find_expiry_payouts(
-		&self,
-		vtxo_ids: Option<Vec<VtxoId>>,
-	) -> anyhow::Result<Vec<ExpiryPayout>> {
-		let vtxos = match vtxo_ids {
-			Some(ids) => self.vtxos_by_id(ids).await?,
-			None => self.expired_vtxos(&[VtxoStateKind::Spent]).await?,
+	let scripts = vtxos_by_script.keys().cloned().collect::<Vec<_>>();
+	let utxos = wallet.chain().unspent_outputs_for_scripts(&scripts).await
+		.context("failed to look up expiry payouts")?;
+	let tip = wallet.chain().tip().await?;
+
+	let mut ret = Vec::new();
+	for utxo in utxos {
+		let (Some(vtxo_ids), Some(keypair)) = (
+			vtxos_by_script.get(&utxo.script_pubkey), keys_by_script.get(&utxo.script_pubkey),
+		) else {
+			continue;
 		};
-		Ok(self.find_expiry_payouts_with_keys(&vtxos).await?
-			.into_iter().map(|(payout, _)| payout).collect())
-	}
-
-	/// The payouts of [Wallet::find_expiry_payouts], each with the key that spends it.
-	async fn find_expiry_payouts_with_keys(
-		&self,
-		vtxos: &[WalletVtxo],
-	) -> anyhow::Result<Vec<(ExpiryPayout, Keypair)>> {
-		let mut vtxos_by_script = BTreeMap::<ScriptBuf, Vec<VtxoId>>::new();
-		let mut keys_by_script = HashMap::<ScriptBuf, Keypair>::new();
-		for v in vtxos {
-			let Some((_idx, keypair)) = self.pubkey_keypair(&v.vtxo.user_pubkey()).await? else {
-				warn!("No key for vtxo {} in this wallet, cannot look for its payout", v.vtxo.id());
-				continue;
-			};
-			let script = expiry_payout_script(keypair.public_key());
-			vtxos_by_script.entry(script.clone()).or_default().push(v.vtxo.id());
-			keys_by_script.insert(script, keypair);
-		}
-
-		let scripts = vtxos_by_script.keys().cloned().collect::<Vec<_>>();
-		let utxos = self.chain().unspent_outputs_for_scripts(&scripts).await
-			.context("failed to look up expiry payouts")?;
-		let tip = self.chain().tip().await?;
-
-		let mut ret = Vec::new();
-		for utxo in utxos {
-			let (Some(vtxo_ids), Some(keypair)) = (
-				vtxos_by_script.get(&utxo.script_pubkey), keys_by_script.get(&utxo.script_pubkey),
-			) else {
-				continue;
-			};
-			let confirmations = confirmations(utxo.confirmed_height, tip);
-			for vtxo_id in vtxo_ids {
-				ret.push((ExpiryPayout {
-					vtxo_id: *vtxo_id,
-					outpoint: utxo.outpoint,
-					amount: utxo.amount,
-					confirmations,
-				}, *keypair));
-			}
-		}
-		Ok(ret)
-	}
-
-	/// Sweep every payout [Wallet::find_expiry_payouts] finds by default to a
-	/// fresh address of the on-chain wallet, and record a finished movement of
-	/// kind [EXPIRY_PAYOUT_MOVEMENT_KIND].
-	///
-	/// `fee_rate` defaults to the chain source's regular fee rate.
-	pub async fn sweep_expiry_payouts(
-		&self,
-		fee_rate: Option<FeeRate>,
-	) -> anyhow::Result<ExpiryPayoutSweep> {
-		let onchain = self.onchain().context("sweeping expiry payouts needs an onchain wallet")?;
-
-		let vtxos = self.expired_vtxos(&[VtxoStateKind::Spent]).await?;
-		let payouts = self.find_expiry_payouts_with_keys(&vtxos).await?;
-		if payouts.is_empty() {
-			bail!("no expiry payouts to sweep");
-		}
-
-		let mut inputs = BTreeMap::<OutPoint, (TxOut, Keypair)>::new();
-		for (payout, keypair) in &payouts {
-			inputs.entry(payout.outpoint).or_insert_with(|| (TxOut {
-				value: payout.amount,
-				script_pubkey: expiry_payout_script(keypair.public_key()),
+		let confirmations = confirmations(utxo.confirmed_height, tip);
+		for vtxo_id in vtxo_ids {
+			ret.push((ExpiryPayout {
+				vtxo_id: *vtxo_id,
+				outpoint: utxo.outpoint,
+				amount: utxo.amount,
+				confirmations,
 			}, *keypair));
 		}
-		let inputs = inputs.into_iter()
-			.map(|(outpoint, (txout, keypair))| (outpoint, txout, keypair))
-			.collect::<Vec<_>>();
-
-		let fee_rate = match fee_rate {
-			Some(r) => r,
-			None => self.chain().fee_rates().await.regular,
-		};
-		let address = onchain.write().await.address().await
-			.context("failed to get an onchain address")?;
-		let tx = build_signed_expiry_payout_sweep(&inputs, address.script_pubkey(), fee_rate)?;
-		let txid = tx.compute_txid();
-		let swept = tx.output[0].value;
-
-		self.chain().broadcast_tx(&tx).await.context("failed to broadcast the sweep")?;
-		info!("Swept {} expiry payout(s) for {} in tx {}", inputs.len(), swept, txid);
-		if let Err(e) = onchain.write().await.register_tx(&tx).await {
-			warn!("Failed to register sweep tx {} with the onchain wallet: {:#}", txid, e);
-		}
-
-		let mut swept_vtxos = HashMap::new();
-		for v in &vtxos {
-			if payouts.iter().any(|(p, _)| p.vtxo_id == v.vtxo.id()) {
-				swept_vtxos.insert(v.vtxo.id(), v.vtxo.amount());
-			}
-		}
-		let vtxo_total = swept_vtxos.values().copied().sum::<Amount>();
-		let payout_txids = {
-			let mut txids = inputs.iter().map(|(o, _, _)| o.txid).collect::<Vec<_>>();
-			txids.dedup();
-			txids
-		};
-		self.movements_mgr().new_finished_movement(
-			Subsystem::EXPIRY_PAYOUT,
-			EXPIRY_PAYOUT_MOVEMENT_KIND,
-			MovementStatus::Successful,
-			MovementUpdate::new()
-				.consumed_vtxos(swept_vtxos.keys().copied())
-				.intended_and_effective_balance(-vtxo_total.to_signed()?)
-				.sent_to([MovementDestination::bitcoin(address, swept)])
-				.metadata([
-					("payout_txids".into(), serde_json::to_value(&payout_txids)?),
-					("sweep_txid".into(), serde_json::to_value(txid)?),
-					("swept_sat".into(), swept.to_sat().into()),
-				]),
-		).await?;
-
-		Ok(ExpiryPayoutSweep { txid, swept })
 	}
+	Ok(ret)
+}
+
+/// Sweep every payout [find_expiry_payouts] finds by default to a fresh
+/// address of the wallet's on-chain wallet, and record a finished movement of
+/// kind [EXPIRY_PAYOUT_MOVEMENT_KIND].
+///
+/// `fee_rate` defaults to the chain source's regular fee rate.
+pub async fn sweep_expiry_payouts(
+	wallet: &Wallet,
+	fee_rate: Option<FeeRate>,
+) -> anyhow::Result<ExpiryPayoutSweep> {
+	let onchain = wallet.onchain().context("sweeping expiry payouts needs an onchain wallet")?;
+
+	let vtxos = expired_vtxos(wallet, &[VtxoStateKind::Spent]).await?;
+	let payouts = find_expiry_payouts_with_keys(wallet, &vtxos).await?;
+	if payouts.is_empty() {
+		bail!("no expiry payouts to sweep");
+	}
+
+	let mut inputs = BTreeMap::<OutPoint, (TxOut, Keypair)>::new();
+	for (payout, keypair) in &payouts {
+		inputs.entry(payout.outpoint).or_insert_with(|| (TxOut {
+			value: payout.amount,
+			script_pubkey: expiry_payout_script(keypair.public_key()),
+		}, *keypair));
+	}
+	let inputs = inputs.into_iter()
+		.map(|(outpoint, (txout, keypair))| (outpoint, txout, keypair))
+		.collect::<Vec<_>>();
+
+	let fee_rate = match fee_rate {
+		Some(r) => r,
+		None => wallet.chain().fee_rates().await.regular,
+	};
+	let address = onchain.write().await.address().await
+		.context("failed to get an onchain address")?;
+	let tx = build_signed_expiry_payout_sweep(&inputs, address.script_pubkey(), fee_rate)?;
+	let txid = tx.compute_txid();
+	let swept = tx.output[0].value;
+
+	wallet.chain().broadcast_tx(&tx).await.context("failed to broadcast the sweep")?;
+	info!("Swept {} expiry payout(s) for {} in tx {}", inputs.len(), swept, txid);
+	if let Err(e) = onchain.write().await.register_tx(&tx).await {
+		warn!("Failed to register sweep tx {} with the onchain wallet: {:#}", txid, e);
+	}
+
+	let mut swept_vtxos = HashMap::new();
+	for v in &vtxos {
+		if payouts.iter().any(|(p, _)| p.vtxo_id == v.vtxo.id()) {
+			swept_vtxos.insert(v.vtxo.id(), v.vtxo.amount());
+		}
+	}
+	let vtxo_total = swept_vtxos.values().copied().sum::<Amount>();
+	let payout_txids = {
+		let mut txids = inputs.iter().map(|(o, _, _)| o.txid).collect::<Vec<_>>();
+		txids.dedup();
+		txids
+	};
+	wallet.movements_mgr().new_finished_movement(
+		EXPIRY_PAYOUT_SUBSYSTEM,
+		EXPIRY_PAYOUT_MOVEMENT_KIND,
+		MovementStatus::Successful,
+		MovementUpdate::new()
+			.consumed_vtxos(swept_vtxos.keys().copied())
+			.intended_and_effective_balance(-vtxo_total.to_signed()?)
+			.sent_to([MovementDestination::bitcoin(address, swept)])
+			.metadata([
+				("payout_txids".into(), serde_json::to_value(&payout_txids)?),
+				("sweep_txid".into(), serde_json::to_value(txid)?),
+				("swept_sat".into(), swept.to_sat().into()),
+			]),
+	).await?;
+
+	Ok(ExpiryPayoutSweep { txid, swept })
 }
 
 fn confirmations(confirmed_height: Option<BlockHeight>, tip: BlockHeight) -> u32 {

@@ -838,13 +838,23 @@ impl ChainSource {
 				let res: ScanResult = rpc.call_raw(
 					"scantxoutset", &["start".into(), descriptors.into()],
 				).await.context("scantxoutset failed")?;
-				for u in res.unspents {
-					// The scan does not see mempool spends, such as our own
-					// unconfirmed sweep.
-					let unspent: Option<serde_json::Value> = rpc.call_raw(
-						"gettxout", &[u.txid.to_string().into(), u.vout.into(), true.into()],
-					).await.context("gettxout failed")?;
-					if unspent.is_none() {
+
+				// The scan does not see mempool spends, such as our own
+				// unconfirmed sweep.
+				#[derive(Debug, serde::Deserialize)]
+				struct Spending {
+					spendingtxid: Option<Txid>,
+				}
+				let prevouts = res.unspents.iter()
+					.map(|u| serde_json::json!({ "txid": u.txid, "vout": u.vout }))
+					.collect::<Vec<_>>();
+				let spending: Vec<Spending> = if prevouts.is_empty() { vec![] } else {
+					rpc.call_raw("gettxspendingprevout", &[prevouts.into()]).await
+						.context("gettxspendingprevout failed")?
+				};
+				anyhow::ensure!(spending.len() == res.unspents.len(), "gettxspendingprevout: wrong length");
+				for (u, s) in res.unspents.into_iter().zip(spending) {
+					if s.spendingtxid.is_some() {
 						continue;
 					}
 					ret.push(ScriptUtxo {

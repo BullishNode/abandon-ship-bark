@@ -11,6 +11,7 @@
 mod arkoor;
 mod balance;
 mod exit;
+mod expiry_payout;
 mod import;
 mod lightning;
 mod mailbox;

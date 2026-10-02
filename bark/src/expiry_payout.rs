@@ -189,7 +189,7 @@ pub async fn adopt_server_vtxo_status(
 /// every expired VTXO the wallet has as spent. A swept payout is spent, so it
 /// is not listed.
 ///
-/// With a bitcoind chain source only confirmed payouts are found.
+/// Both confirmed and mempool payouts are included.
 pub async fn find_expiry_payouts(wallet: &Wallet) -> anyhow::Result<Vec<ExpiryPayout>> {
 	let vtxos = expired_spent_vtxos(wallet).await?;
 	Ok(find_expiry_payouts_with_keys(wallet, &vtxos).await?

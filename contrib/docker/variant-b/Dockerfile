@@ -1,6 +1,5 @@
-# barkd/bark image for the variant-b fork, laid out like secondark/bark
-# (bark and barkd in /usr/local/bin, /run.sh as entrypoint) so it drops into
-# the same regtest compose files.
+# barkd/bark image for the variant-b fork: bark and barkd in /usr/local/bin.
+# The regtest compose file and web-journey.sh pass the barkd command line.
 #
 #   docker build -f contrib/docker/variant-b/Dockerfile \
 #     --build-arg GIT_HASH=$(git rev-parse HEAD) -t abandon-ship/bark:variant-b .
@@ -20,10 +19,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 	&& cp target/release/bark target/release/barkd /usr/local/bin/
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates telnet \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 COPY --from=build /usr/local/bin/bark /usr/local/bin/bark
 COPY --from=build /usr/local/bin/barkd /usr/local/bin/barkd
-COPY contrib/docker/variant-b/run.sh /run.sh
-RUN chmod a+x /usr/local/bin/bark /usr/local/bin/barkd /run.sh
-CMD ["/run.sh"]
+CMD ["barkd"]

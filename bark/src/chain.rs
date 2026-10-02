@@ -805,6 +805,7 @@ impl ChainSource {
 	///
 	/// With bitcoind this scans the UTXO set with `scantxoutset`, which only sees
 	/// confirmed outputs and takes a while on mainnet; all scripts go in one scan.
+	/// An output already spent by a mempool transaction is left out.
 	pub async fn unspent_outputs_for_scripts(
 		&self,
 		scripts: &[ScriptBuf],
@@ -838,6 +839,14 @@ impl ChainSource {
 					"scantxoutset", &["start".into(), descriptors.into()],
 				).await.context("scantxoutset failed")?;
 				for u in res.unspents {
+					// The scan does not see mempool spends, such as our own
+					// unconfirmed sweep.
+					let unspent: Option<serde_json::Value> = rpc.call_raw(
+						"gettxout", &[u.txid.to_string().into(), u.vout.into(), true.into()],
+					).await.context("gettxout failed")?;
+					if unspent.is_none() {
+						continue;
+					}
 					ret.push(ScriptUtxo {
 						script_pubkey: u.script_pubkey,
 						outpoint: OutPoint::new(u.txid, u.vout),

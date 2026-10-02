@@ -7,7 +7,7 @@ use ark::VtxoId;
 use ark_testing::{TestContext, btc, sat};
 use ark_testing::constants::ROUND_CONFIRMATIONS;
 use ark_testing::daemon::captaind::Captaind;
-use bark::expiry_payout::{self, AdoptedVtxoState, EXPIRY_PAYOUT_MOVEMENT_KIND, EXPIRY_PAYOUT_SUBSYSTEM, expiry_payout_script};
+use bark::expiry_payout::{self, AdoptedVtxoState, AdoptedVtxoStatus, EXPIRY_PAYOUT_MOVEMENT_KIND, EXPIRY_PAYOUT_SUBSYSTEM, expiry_payout_script};
 use bark::movement::MovementStatus;
 use bark::vtxo::VtxoStateKind;
 use server::database::Db;
@@ -77,16 +77,13 @@ async fn expiry_payout_adopt_find_sweep() {
 	let payout_txid = ctx.bitcoind().fund_addr(&payout_addr, payout_amount).await;
 	ctx.generate_blocks(1).await;
 
-	// Adopt: only expired, unspent vtxos are checked by default.
 	let balance_before = wallet.balance().await.unwrap().total();
-	let adopted = expiry_payout::adopt_server_vtxo_status(&wallet, None).await.unwrap();
-	assert_eq!(adopted.len(), 1, "{adopted:?}");
-	assert_eq!(adopted[0].vtxo_id, paid.id());
-	assert_eq!(adopted[0].state, AdoptedVtxoState::Spent);
+	let adopted = expiry_payout::adopt_server_vtxo_status(&wallet, vec![paid.id()]).await.unwrap();
+	assert_eq!(adopted, vec![AdoptedVtxoStatus { vtxo_id: paid.id(), state: AdoptedVtxoState::Spent }]);
 	assert_eq!(wallet.get_vtxo_by_id(paid.id()).await.unwrap().state.kind(), VtxoStateKind::Spent);
 	assert_eq!(wallet.balance().await.unwrap().total(), balance_before - paid.amount());
 
-	let payouts = expiry_payout::find_expiry_payouts(&wallet, None).await.unwrap();
+	let payouts = expiry_payout::find_expiry_payouts(&wallet).await.unwrap();
 	assert_eq!(payouts.len(), 1, "{payouts:?}");
 	assert_eq!(payouts[0].vtxo_id, paid.id());
 	assert_eq!(payouts[0].outpoint.txid, payout_txid);
@@ -101,7 +98,7 @@ async fn expiry_payout_adopt_find_sweep() {
 	ctx.generate_blocks(1).await;
 	wallet.sync_onchain().await.unwrap();
 	assert_eq!(onchain.read().await.balance().await, onchain_before + sweep.swept);
-	assert!(expiry_payout::find_expiry_payouts(&wallet, None).await.unwrap().is_empty(), "payout was swept");
+	assert!(expiry_payout::find_expiry_payouts(&wallet).await.unwrap().is_empty(), "payout was swept");
 
 	let movement = wallet.history().await.unwrap().into_iter()
 		.find(|m| m.subsystem.name == EXPIRY_PAYOUT_SUBSYSTEM.as_name())

@@ -2232,6 +2232,10 @@ impl Wallet {
 	///
 	/// Returns the [RoundStatus] of the round if a successful refresh occurred.
 	/// It will return [None] if no [Vtxo] needed to be refreshed.
+	///
+	/// If the server rejects some inputs as unusable, for example because it
+	/// already paid them out on-chain, this retries once in the same round
+	/// without them, so the other VTXOs still get refreshed.
 	pub async fn refresh_vtxos<V: VtxoRef>(
 		&self,
 		vtxos: impl IntoIterator<Item = V>,
@@ -2241,7 +2245,42 @@ impl Wallet {
 			None => return Ok(None),
 		};
 
-		Ok(Some(self.participate_round(participation, Some(RoundMovement::Refresh)).await?))
+		info!("Waiting for a round start...");
+		let mut events = self.subscribe_round_events().await?;
+		while let Some(event) = events.next().await {
+			let event = event.context("error on round event stream")?;
+			let RoundEvent::Attempt(attempt) = event else { continue };
+			if attempt.attempt_seq != 0 {
+				continue;
+			}
+
+			let inputs = participation.inputs.iter().map(|v| v.id()).collect::<Vec<_>>();
+			let state = match self.join_attempt_interactive(
+				participation, &attempt, Some(RoundMovement::Refresh),
+			).await {
+				Ok(state) => state,
+				Err(e) => {
+					let rejected = rejected_vtxos_from_error(&e);
+					if rejected.is_empty() {
+						return Err(e);
+					}
+					warn!("Refresh rejected {} unusable input(s) ({:?}); retrying without them",
+						rejected.len(), rejected);
+					let remaining = inputs.into_iter().filter(|id| !rejected.contains(id));
+					let Some(retry) = self.build_refresh_participation(remaining).await? else {
+						return Err(e);
+					};
+					self.join_attempt_interactive(
+						retry, &attempt, Some(RoundMovement::Refresh),
+					).await?
+				},
+			};
+
+			let state = self.lock_wait_round_state(state.id()).await?
+				.context("refresh round state vanished after joining")?;
+			return Ok(Some(self.drive_round_state(state, &mut events).await?));
+		}
+		bail!("round event stream ended before a round started")
 	}
 
 	/// This will refresh all provided VTXOs in delegated (non-interactive) mode

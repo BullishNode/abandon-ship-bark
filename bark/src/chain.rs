@@ -12,7 +12,7 @@ use bdk_core::{BlockId, CheckPoint};
 use bdk_esplora::esplora_client;
 use bitcoin::constants::genesis_block;
 use bitcoin::{
-	Amount, Block, BlockHash, FeeRate, Network, OutPoint, Transaction, Txid, Weight,
+	Amount, Block, BlockHash, FeeRate, Network, OutPoint, ScriptBuf, Transaction, Txid, Weight,
 };
 use log::{debug, info, warn};
 use tokio::sync::RwLock;
@@ -800,6 +800,71 @@ impl ChainSource {
 		}
 	}
 
+	/// The unspent outputs paying any of `scripts`, each with the height of the
+	/// block that confirmed it (`None` while it is in the mempool).
+	///
+	/// With bitcoind this scans the UTXO set with `scantxoutset`, which only sees
+	/// confirmed outputs and takes a while on mainnet; all scripts go in one scan.
+	pub async fn unspent_outputs_for_scripts(
+		&self,
+		scripts: &[ScriptBuf],
+	) -> anyhow::Result<Vec<ScriptUtxo>> {
+		let mut ret = Vec::new();
+		if scripts.is_empty() {
+			return Ok(ret);
+		}
+		match self.inner() {
+			#[cfg(feature = "bitcoind-rpc")]
+			ChainSourceClient::Bitcoind { rpc, .. } => {
+				#[derive(Debug, serde::Deserialize)]
+				struct Unspent {
+					txid: Txid,
+					vout: u32,
+					#[serde(rename = "scriptPubKey")]
+					script_pubkey: ScriptBuf,
+					#[serde(with = "bitcoin::amount::serde::as_btc")]
+					amount: Amount,
+					height: u32,
+				}
+				#[derive(Debug, serde::Deserialize)]
+				struct ScanResult {
+					unspents: Vec<Unspent>,
+				}
+
+				let descriptors = scripts.iter()
+					.map(|s| serde_json::Value::from(format!("raw({})", s.to_hex_string())))
+					.collect::<Vec<_>>();
+				let res: ScanResult = rpc.call_raw(
+					"scantxoutset", &["start".into(), descriptors.into()],
+				).await.context("scantxoutset failed")?;
+				for u in res.unspents {
+					ret.push(ScriptUtxo {
+						script_pubkey: u.script_pubkey,
+						outpoint: OutPoint::new(u.txid, u.vout),
+						amount: u.amount,
+						confirmed_height: Some(BlockHeight::new(u.height)),
+					});
+				}
+			},
+			ChainSourceClient::Esplora(client) => {
+				for script in scripts {
+					let utxos = client.get_scripthash_utxos(script).await
+						.with_context(|| format!("utxo lookup for script {} failed", script))?;
+					for u in utxos {
+						ret.push(ScriptUtxo {
+							script_pubkey: script.clone(),
+							outpoint: OutPoint::new(u.txid, u.vout),
+							amount: u.value,
+							confirmed_height: u.status.block_height.filter(|_| u.status.confirmed)
+								.map(BlockHeight::new),
+						});
+					}
+				}
+			},
+		}
+		Ok(ret)
+	}
+
 	/// Gets the current fee rates from the chain source, falling back to user-specified values if
 	/// necessary.
 	///
@@ -889,6 +954,16 @@ async fn bitcoind_tx_status(
 	} else {
 		Ok(TxStatus::Mempool)
 	}
+}
+
+/// An unspent output found by [ChainSource::unspent_outputs_for_scripts].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScriptUtxo {
+	pub script_pubkey: ScriptBuf,
+	pub outpoint: OutPoint,
+	pub amount: Amount,
+	/// `None` while the output is in the mempool.
+	pub confirmed_height: Option<BlockHeight>,
 }
 
 /// The [FeeRates] struct represents the fee rates for transactions categorized by speed or urgency.

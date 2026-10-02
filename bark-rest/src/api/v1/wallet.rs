@@ -609,13 +609,6 @@ pub async fn get_vtxo_encoded(
 	Ok(axum::Json(bark_json::web::EncodedVtxoResponse { encoded }))
 }
 
-fn parse_vtxo_ids(ids: Option<Vec<String>>) -> HandlerResult<Option<Vec<VtxoId>>> {
-	Ok(ids.map(|ids| ids.iter()
-		.map(|s| VtxoId::from_str(s).badarg("Invalid VTXO id"))
-		.collect::<Result<Vec<_>, _>>()
-	).transpose()?)
-}
-
 #[utoipa::path(
 	post,
 	path = "/vtxos/adopt-server-status",
@@ -628,9 +621,8 @@ fn parse_vtxo_ids(ids: Option<Vec<String>>) -> HandlerResult<Option<Vec<VtxoId>>
 	),
 	description = "Asks the Ark server for the state of each VTXO and adopts it. A VTXO the \
 		server reports spent, for example because the server paid it out on-chain after it \
-		expired, is marked spent, so it leaves the balance and coin selection. Without \
-		`vtxo_ids`, checks every unspent VTXO that has expired. Only use this with a server \
-		you trust.",
+		expired, is marked spent, so it leaves the balance and coin selection. Only use \
+		this with a server you trust.",
 	tag = "wallet"
 )]
 #[debug_handler]
@@ -639,7 +631,9 @@ pub async fn adopt_server_vtxo_status(
 	Json(body): Json<bark_json::web::ExpiryVtxosRequest>,
 ) -> HandlerResult<Json<Vec<bark_json::web::AdoptedVtxoStatus>>> {
 	let wallet = state.require_wallet()?;
-	let ids = parse_vtxo_ids(body.vtxo_ids)?;
+	let ids = body.vtxo_ids.iter()
+		.map(|s| VtxoId::from_str(s).badarg("Invalid VTXO id"))
+		.collect::<Result<Vec<_>, _>>()?;
 
 	let statuses = bark::expiry_payout::adopt_server_vtxo_status(&wallet, ids).await
 		.context("Failed to adopt server VTXO status")?;
@@ -651,28 +645,22 @@ pub async fn adopt_server_vtxo_status(
 	post,
 	path = "/vtxos/expiry-payouts",
 	summary = "Find on-chain payouts of expired VTXOs",
-	request_body = bark_json::web::ExpiryVtxosRequest,
 	responses(
 		(status = 200, description = "Returns the payout outputs found", body = Vec<bark_json::web::ExpiryPayout>),
-		(status = 400, description = "One of the provided VTXO IDs is invalid", body = error::BadRequestError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Looks up the unspent on-chain outputs paying the BIP86 address \
-		`tr(user_pubkey)` of each VTXO, where a server pays a VTXO it settled after expiry. \
-		Without `vtxo_ids`, looks at every expired VTXO the wallet has as spent. VTXOs that \
-		share a key share a payout address, so an output can be listed for several VTXOs. \
+		`tr(user_pubkey)` of every expired VTXO the wallet has as spent, where a server pays \
+		a VTXO it settled after expiry. VTXOs that share a key share a payout address, so an output can be listed for several VTXOs. \
 		With a bitcoind chain source only confirmed outputs are found.",
 	tag = "wallet"
 )]
 #[debug_handler]
 pub async fn expiry_payouts(
 	State(state): State<Arc<ServerState>>,
-	Json(body): Json<bark_json::web::ExpiryVtxosRequest>,
 ) -> HandlerResult<Json<Vec<bark_json::web::ExpiryPayout>>> {
 	let wallet = state.require_wallet()?;
-	let ids = parse_vtxo_ids(body.vtxo_ids)?;
-
-	let payouts = bark::expiry_payout::find_expiry_payouts(&wallet, ids).await
+	let payouts = bark::expiry_payout::find_expiry_payouts(&wallet).await
 		.context("Failed to find expiry payouts")?;
 
 	Ok(axum::Json(payouts.into_iter().map(Into::into).collect()))

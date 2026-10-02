@@ -3325,7 +3325,7 @@
           "wallet"
         ],
         "summary": "Adopt the server's VTXO status",
-        "description": "Asks the Ark server for the state of each VTXO and adopts it. A VTXO the server reports spent, for example because the server paid it out on-chain after it expired, is marked spent, so it leaves the balance and coin selection. Without `vtxo_ids`, checks every unspent VTXO that has expired. Only use this with a server you trust.",
+        "description": "Asks the Ark server for the state of each VTXO and adopts it. A VTXO the server reports spent, for example because the server paid it out on-chain after it expired, is marked spent, so it leaves the balance and coin selection. Only use this with a server you trust.",
         "operationId": "adopt_server_vtxo_status",
         "requestBody": {
           "content": {
@@ -3380,18 +3380,8 @@
           "wallet"
         ],
         "summary": "Find on-chain payouts of expired VTXOs",
-        "description": "Looks up the unspent on-chain outputs paying the BIP86 address `tr(user_pubkey)` of each VTXO, where a server pays a VTXO it settled after expiry. Without `vtxo_ids`, looks at every expired VTXO the wallet has as spent. VTXOs that share a key share a payout address, so an output can be listed for several VTXOs. With a bitcoind chain source only confirmed outputs are found.",
+        "description": "Looks up the unspent on-chain outputs paying the BIP86 address `tr(user_pubkey)` of every expired VTXO the wallet has as spent, where a server pays a VTXO it settled after expiry. VTXOs that share a key share a payout address, so an output can be listed for several VTXOs. With a bitcoind chain source only confirmed outputs are found.",
         "operationId": "expiry_payouts",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExpiryVtxosRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Returns the payout outputs found",
@@ -3402,16 +3392,6 @@
                   "items": {
                     "$ref": "#/components/schemas/ExpiryPayout"
                   }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "One of the provided VTXO IDs is invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BadRequestError"
                 }
               }
             }
@@ -5893,13 +5873,12 @@
       },
       "ExpiryVtxosRequest": {
         "type": "object",
-        "description": "Selects VTXOs by id. Omit `vtxo_ids` to let the endpoint pick its default set.",
+        "required": [
+          "vtxo_ids"
+        ],
         "properties": {
           "vtxo_ids": {
-            "type": [
-              "array",
-              "null"
-            ],
+            "type": "array",
             "items": {
               "type": "string"
             }

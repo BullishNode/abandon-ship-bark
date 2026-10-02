@@ -11,7 +11,7 @@
 //! 3. sweep them into the on-chain wallet and record a movement
 //!    ([sweep_expiry_payouts]).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use anyhow::Context;
 use bitcoin::{
@@ -167,14 +167,6 @@ async fn expired_vtxos(
 	Ok(vtxos)
 }
 
-async fn vtxos_by_id(wallet: &Wallet, ids: Vec<VtxoId>) -> anyhow::Result<Vec<WalletVtxo>> {
-	let mut ret = Vec::with_capacity(ids.len());
-	for id in ids {
-		ret.push(wallet.get_vtxo_by_id(id).await?);
-	}
-	Ok(ret)
-}
-
 /// Ask the server for the state of each VTXO in `vtxo_ids` and adopt it, see
 /// [Wallet::trust_and_adopt_server_vtxo_status]. A VTXO the server reports
 /// spent is marked spent, so it leaves the balance and coin selection.
@@ -215,7 +207,13 @@ pub async fn find_expiry_payouts(
 	vtxo_ids: Option<Vec<VtxoId>>,
 ) -> anyhow::Result<Vec<ExpiryPayout>> {
 	let vtxos = match vtxo_ids {
-		Some(ids) => vtxos_by_id(wallet, ids).await?,
+		Some(ids) => {
+			let mut vtxos = Vec::with_capacity(ids.len());
+			for id in ids {
+				vtxos.push(wallet.get_vtxo_by_id(id).await?);
+			}
+			vtxos
+		},
 		None => expired_vtxos(wallet, &[VtxoStateKind::Spent]).await?,
 	};
 	Ok(find_expiry_payouts_with_keys(wallet, &vtxos).await?
@@ -227,28 +225,24 @@ async fn find_expiry_payouts_with_keys(
 	wallet: &Wallet,
 	vtxos: &[WalletVtxo],
 ) -> anyhow::Result<Vec<(ExpiryPayout, Keypair)>> {
-	let mut vtxos_by_script = BTreeMap::<ScriptBuf, Vec<VtxoId>>::new();
-	let mut keys_by_script = HashMap::<ScriptBuf, Keypair>::new();
+	let mut by_script = BTreeMap::<ScriptBuf, (Keypair, Vec<VtxoId>)>::new();
 	for v in vtxos {
 		let Some((_idx, keypair)) = wallet.pubkey_keypair(&v.vtxo.user_pubkey()).await? else {
 			warn!("No key for vtxo {} in this wallet, cannot look for its payout", v.vtxo.id());
 			continue;
 		};
-		let script = expiry_payout_script(keypair.public_key());
-		vtxos_by_script.entry(script.clone()).or_default().push(v.vtxo.id());
-		keys_by_script.insert(script, keypair);
+		by_script.entry(expiry_payout_script(keypair.public_key()))
+			.or_insert_with(|| (keypair, Vec::new())).1.push(v.vtxo.id());
 	}
 
-	let scripts = vtxos_by_script.keys().cloned().collect::<Vec<_>>();
+	let scripts = by_script.keys().cloned().collect::<Vec<_>>();
 	let utxos = wallet.chain().unspent_outputs_for_scripts(&scripts).await
 		.context("failed to look up expiry payouts")?;
 	let tip = wallet.chain().tip().await?;
 
 	let mut ret = Vec::new();
 	for utxo in utxos {
-		let (Some(vtxo_ids), Some(keypair)) = (
-			vtxos_by_script.get(&utxo.script_pubkey), keys_by_script.get(&utxo.script_pubkey),
-		) else {
+		let Some((keypair, vtxo_ids)) = by_script.get(&utxo.script_pubkey) else {
 			continue;
 		};
 		let confirmations = confirmations(utxo.confirmed_height, tip);
@@ -308,13 +302,10 @@ pub async fn sweep_expiry_payouts(
 		warn!("Failed to register sweep tx {} with the onchain wallet: {:#}", txid, e);
 	}
 
-	let mut swept_vtxos = HashMap::new();
-	for v in &vtxos {
-		if payouts.iter().any(|(p, _)| p.vtxo_id == v.vtxo.id()) {
-			swept_vtxos.insert(v.vtxo.id(), v.vtxo.amount());
-		}
-	}
-	let vtxo_total = swept_vtxos.values().copied().sum::<Amount>();
+	let swept_vtxos = vtxos.iter()
+		.filter(|v| payouts.iter().any(|(p, _)| p.vtxo_id == v.vtxo.id()))
+		.collect::<Vec<_>>();
+	let vtxo_total = swept_vtxos.iter().map(|v| v.vtxo.amount()).sum::<Amount>();
 	let payout_txids = {
 		let mut txids = inputs.iter().map(|(o, _, _)| o.txid).collect::<Vec<_>>();
 		txids.dedup();
@@ -325,7 +316,7 @@ pub async fn sweep_expiry_payouts(
 		EXPIRY_PAYOUT_MOVEMENT_KIND,
 		MovementStatus::Successful,
 		MovementUpdate::new()
-			.consumed_vtxos(swept_vtxos.keys().copied())
+			.consumed_vtxos(swept_vtxos.iter().map(|v| v.vtxo.id()))
 			.intended_and_effective_balance(-vtxo_total.to_signed()?)
 			.sent_to([MovementDestination::bitcoin(address, swept)])
 			.metadata([

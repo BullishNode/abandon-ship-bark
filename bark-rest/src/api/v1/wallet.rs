@@ -641,7 +641,7 @@ pub async fn adopt_server_vtxo_status(
 	let wallet = state.require_wallet()?;
 	let ids = parse_vtxo_ids(body.vtxo_ids)?;
 
-	let statuses = wallet.adopt_server_vtxo_status(ids).await
+	let statuses = bark::expiry_payout::adopt_server_vtxo_status(&wallet, ids).await
 		.context("Failed to adopt server VTXO status")?;
 
 	Ok(axum::Json(statuses.into_iter().map(Into::into).collect()))
@@ -672,7 +672,7 @@ pub async fn expiry_payouts(
 	let wallet = state.require_wallet()?;
 	let ids = parse_vtxo_ids(body.vtxo_ids)?;
 
-	let payouts = wallet.find_expiry_payouts(ids).await
+	let payouts = bark::expiry_payout::find_expiry_payouts(&wallet, ids).await
 		.context("Failed to find expiry payouts")?;
 
 	Ok(axum::Json(payouts.into_iter().map(Into::into).collect()))

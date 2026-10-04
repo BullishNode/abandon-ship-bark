@@ -12,6 +12,8 @@ use ark::VtxoId;
 use tonic_tracing_opentelemetry::middleware::server::OtelGrpcLayer;
 use tracing::{info, trace, warn};
 use server_rpc::{self as rpc, protos};
+use protos::expiry_settlement_request::Operation;
+use protos::expiry_settlement_claim_result::Status as SettlementStatus;
 
 use crate::rpcserver::{
 	middleware, StatusContext, ToStatusResult,
@@ -19,6 +21,73 @@ use crate::rpcserver::{
 };
 use crate::system::RuntimeManager;
 use crate::Server;
+use crate::database::expiry_settlement::{ClaimResult, SettlementVtxo};
+
+impl From<SettlementVtxo> for protos::ExpirySettlementVtxo {
+	fn from(v: SettlementVtxo) -> Self {
+		Self { vtxo_id: v.id.to_bytes().to_vec(), vtxo: v.vtxo, expiry: v.expiry }
+	}
+}
+
+fn settlement_ids(ids: &[Vec<u8>]) -> Result<Vec<VtxoId>, tonic::Status> {
+	if !(1..=256).contains(&ids.len()) {
+		return Err(tonic::Status::invalid_argument("expected 1..256 VTXO IDs"));
+	}
+	ids.iter().map(|id| VtxoId::from_slice(id).badarg("invalid VTXO ID")).collect()
+}
+
+#[async_trait]
+impl rpc::server::ExpirySettlementAdminService for Server {
+	async fn exchange(
+		&self,
+		req: tonic::Request<protos::ExpirySettlementRequest>,
+	) -> Result<tonic::Response<protos::ExpirySettlementResponse>, tonic::Status> {
+		let tip = self.chain_tip().height.to_u32();
+		let mut response = protos::ExpirySettlementResponse {
+			chain_tip: tip, ..Default::default()
+		};
+		match req.into_inner().operation.badarg("missing settlement operation")? {
+			Operation::Page(p) => {
+				if !(1..=256).contains(&p.limit) || p.min_amount_sat > i64::MAX as u64 {
+					return Err(tonic::Status::invalid_argument("invalid page limit or amount"));
+				}
+				let after_id = if p.after_vtxo_id.is_empty() {
+					String::new()
+				} else {
+					VtxoId::from_slice(&p.after_vtxo_id).badarg("invalid cursor ID")?.to_string()
+				};
+				response.vtxos = self.db.read(async |tx| tx.expiry_settlement_page(
+					p.claimed, tip, p.grace_blocks, p.min_amount_sat,
+					(p.after_expiry, after_id), p.limit,
+				).await).await.to_status()?.into_iter().map(Into::into).collect();
+			},
+			Operation::Claim(c) => {
+				for id in settlement_ids(&c.vtxo_ids)? {
+					let result = self.db.claim_expired_vtxo(
+						&self.vtxos_in_flux, id, tip, c.grace_blocks,
+					).await.to_status()?;
+					let (status, vtxo) = match result {
+						ClaimResult::Claimed(v) => (SettlementStatus::Claimed, Some(v.into())),
+						ClaimResult::Busy => (SettlementStatus::Busy, None),
+						ClaimResult::Ineligible => (SettlementStatus::Ineligible, None),
+					};
+					response.claims.push(protos::ExpirySettlementClaimResult {
+						vtxo_id: id.to_bytes().to_vec(), status: status as i32, vtxo,
+					});
+				}
+			},
+			Operation::Spenders(s) => {
+				let ids = settlement_ids(&s.outpoints)?;
+				let spenders = self.db.read(async |tx| tx.expiry_settlement_spenders(&ids).await)
+					.await.to_status()?;
+				response.spenders = ids.into_iter().zip(spenders).map(|(id, txid)| {
+					protos::ExpirySettlementSpender { outpoint: id.to_bytes().to_vec(), txid }
+				}).collect();
+			},
+		}
+		Ok(tonic::Response::new(response))
+	}
+}
 
 #[async_trait]
 impl rpc::server::WalletAdminService for Server {
@@ -197,6 +266,7 @@ pub async fn run_rpc_server(srv: Arc<Server>) -> anyhow::Result<()> {
 		.add_service(rpc::server::RoundAdminServiceServer::from_arc(srv.clone()))
 		.add_service(rpc::server::LightningAdminServiceServer::from_arc(srv.clone()))
 		.add_service(rpc::server::BanAdminServiceServer::from_arc(srv.clone()))
+		.add_service(rpc::server::ExpirySettlementAdminServiceServer::from_arc(srv.clone()))
 		.add_service(rpc::server::NurseryAdminServiceServer::from_arc(srv.clone()));
 
 	tonic::transport::Server::builder()

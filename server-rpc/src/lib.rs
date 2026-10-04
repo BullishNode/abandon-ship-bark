@@ -72,6 +72,7 @@ pub use client::ServerConnection;
 pub use crate::protos::bark_server::ark_service_client::ArkServiceClient;
 
 pub mod admin {
+	pub use crate::protos::bark_server::expiry_settlement_admin_service_client::ExpirySettlementAdminServiceClient;
 	pub use crate::protos::bark_server::wallet_admin_service_client::WalletAdminServiceClient;
 	pub use crate::protos::bark_server::round_admin_service_client::RoundAdminServiceClient;
 	pub use crate::protos::bark_server::lightning_admin_service_client::LightningAdminServiceClient;
@@ -87,6 +88,7 @@ pub mod intman {
 
 #[cfg(feature = "server")]
 pub mod server {
+	pub use crate::protos::bark_server::expiry_settlement_admin_service_server::{ExpirySettlementAdminService, ExpirySettlementAdminServiceServer};
 	pub use crate::protos::bark_server::ark_service_server::{ArkService, ArkServiceServer};
 	pub use crate::protos::bark_server::wallet_admin_service_server::{WalletAdminService, WalletAdminServiceServer};
 	pub use crate::protos::bark_server::round_admin_service_server::{RoundAdminService, RoundAdminServiceServer};

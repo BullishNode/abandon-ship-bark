@@ -1913,6 +1913,8 @@ impl Server {
 		let input_ids = inputs.iter().map(|i| i.vtxo_id).collect::<Vec<_>>();
 
 		// check input proofs
+		let _guard = self.vtxos_in_flux.try_lock(&input_ids)
+			.badarg("input VTXO already locked")?;
 		let outputs_for_verify = outputs.iter()
 			.map(|o| o.vtxo_request.clone())
 			.collect::<Vec<_>>();

@@ -10,8 +10,16 @@
 //! 2. find the payout outputs on-chain ([find_expiry_payouts]);
 //! 3. sweep them into the on-chain wallet and record a movement
 //!    ([sweep_expiry_payouts]).
+//!
+//! Optional fee receipts come from `<server_address>/expiry-payouts/<txid>.json`:
+//! `{"txid":"...","outputs":[{"vout":0,"amount_sat":10000,"fee_sat":150}]}`.
+//! The txid, output index and received amount must match. Missing receipts leave
+//! the fee unknown and do not prevent discovery or spending. A sweep records the
+//! sum of known original fees in `payout_fee_sat` movement metadata, or null when
+//! any fee is unknown. The sweep's own mining fee is separate.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::{
@@ -23,6 +31,7 @@ use bitcoin::secp256k1::PublicKey;
 use bitcoin::sighash::{Prevouts, SighashCache, TapSighashType};
 use bitcoin::taproot;
 use log::{info, warn};
+use futures::StreamExt;
 
 use serde::{Deserialize, Serialize};
 
@@ -85,6 +94,8 @@ pub struct ExpiryPayout {
 	pub vtxo_id: Option<VtxoId>,
 	pub outpoint: OutPoint,
 	pub amount: Amount,
+	/// The operator's recorded deduction for this output, when available.
+	pub fee: Option<Amount>,
 	/// 0 while the output is in the mempool.
 	pub confirmations: u32,
 }
@@ -216,7 +227,9 @@ async fn find_expiry_payouts_with_keys(
 		.context("failed to look up expiry payouts")?;
 	let tip = wallet.chain().tip().await?;
 
-	Ok(payouts_for_scripts(&by_script, utxos, tip))
+	let mut payouts = payouts_for_scripts(&by_script, utxos, tip);
+	attach_fee_receipts(wallet.config(), &mut payouts).await;
+	Ok(payouts)
 }
 
 fn payouts_for_scripts(
@@ -234,10 +247,66 @@ fn payouts_for_scripts(
 			vtxo_id: match vtxo_ids.as_slice() { [id] => Some(*id), _ => None },
 			outpoint: utxo.outpoint,
 			amount: utxo.amount,
+			fee: None,
 			confirmations,
 		}, *keypair));
 	}
 	ret
+}
+
+#[derive(Deserialize)]
+struct FeeReceipt {
+	txid: Txid,
+	outputs: Vec<FeeReceiptOutput>,
+}
+
+#[derive(Deserialize)]
+struct FeeReceiptOutput {
+	vout: u32,
+	amount_sat: u64,
+	fee_sat: u64,
+}
+
+impl FeeReceipt {
+	fn fee_for(&self, payout: &ExpiryPayout) -> Option<Amount> {
+		if self.txid != payout.outpoint.txid { return None; }
+		let mut matches = self.outputs.iter().filter(|o| o.vout == payout.outpoint.vout);
+		let output = matches.next()?;
+		if matches.next().is_some() || output.amount_sat != payout.amount.to_sat() { return None; }
+		let gross = output.amount_sat.checked_add(output.fee_sat)?;
+		(gross <= Amount::MAX_MONEY.to_sat()).then(|| Amount::from_sat(output.fee_sat))
+	}
+}
+
+/// Optional static receipts at the Ark server's HTTP origin. An outage must
+/// neither hide funds nor prevent spending them; the entire lookup has a bound.
+async fn attach_fee_receipts(config: &crate::Config, payouts: &mut [(ExpiryPayout, Keypair)]) {
+	if payouts.is_empty() { return; }
+	let builder = reqwest::Client::builder();
+	#[cfg(feature = "socks5-proxy")]
+	let builder = if let Some(proxy) = &config.socks5_proxy {
+		let Ok(proxy) = reqwest::Proxy::all(proxy) else { return; };
+		builder.proxy(proxy)
+	} else { builder };
+	let Ok(client) = builder.build() else { return; };
+	let txids = payouts.iter().map(|(p, _)| p.outpoint.txid)
+		.collect::<std::collections::BTreeSet<_>>();
+	let mut requests = futures::stream::iter(txids).map(|txid| {
+		let request = client.get(format!("{}/expiry-payouts/{txid}.json", config.server_address.trim_end_matches('/')));
+		async move {
+			let response = request.send().await?.error_for_status()?;
+			response.json::<FeeReceipt>().await
+		}
+	}).buffer_unordered(4);
+	let _ = bark_runtime::timeout(Duration::from_secs(3), async {
+		while let Some(result) = requests.next().await {
+			if let Ok(receipt) = result {
+				for (payout, _) in payouts.iter_mut().filter(|(p, _)| p.outpoint.txid == receipt.txid) {
+					payout.fee = receipt.fee_for(payout);
+				}
+			}
+		}
+	}).await;
 }
 
 /// Sweep every payout [find_expiry_payouts] finds to a fresh
@@ -285,6 +354,7 @@ pub async fn sweep_expiry_payouts(
 	}
 
 	let payout_total = inputs.iter().map(|(_, output, _)| output.value).sum::<Amount>();
+	let payout_fee_sat = payouts.iter().map(|(p, _)| p.fee.map(|f| f.to_sat())).sum::<Option<u64>>();
 	let payout_txids = {
 		let mut txids = inputs.iter().map(|(o, _, _)| o.txid).collect::<Vec<_>>();
 		txids.dedup();
@@ -298,6 +368,7 @@ pub async fn sweep_expiry_payouts(
 			.intended_and_effective_balance(-payout_total.to_signed()?)
 			.sent_to([MovementDestination::bitcoin(address, swept)])
 			.metadata([
+				("payout_fee_sat".into(), serde_json::to_value(payout_fee_sat)?),
 				("payout_txids".into(), serde_json::to_value(&payout_txids)?),
 				("sweep_txid".into(), serde_json::to_value(txid)?),
 				("swept_sat".into(), swept.to_sat().into()),
@@ -391,6 +462,65 @@ mod test {
 		assert_eq!(payouts.len(), 1, "one UTXO, not one payout per historical coin");
 		assert_eq!(payouts[0].0.vtxo_id, None, "a shared key cannot identify the paid coin");
 		assert_eq!(payouts[0].0.amount.to_sat(), 49_000);
+	}
+
+	#[test]
+	fn receipt_fee_belongs_to_the_exact_output() {
+		let txid = Txid::from_byte_array([3; 32]);
+		let payout = ExpiryPayout {
+			vtxo_id: None, outpoint: OutPoint::new(txid, 2),
+			amount: Amount::from_sat(49_850), fee: None, confirmations: 1,
+		};
+		let mut receipt = FeeReceipt { txid, outputs: vec![
+			FeeReceiptOutput { vout: 0, amount_sat: 69_849, fee_sat: 151 },
+			FeeReceiptOutput { vout: 2, amount_sat: 49_850, fee_sat: 150 },
+		] };
+		assert_eq!(receipt.fee_for(&payout), Some(Amount::from_sat(150)));
+		receipt.txid = Txid::from_byte_array([4; 32]);
+		assert_eq!(receipt.fee_for(&payout), None);
+		receipt.txid = txid;
+		receipt.outputs[1].amount_sat += 1;
+		assert_eq!(receipt.fee_for(&payout), None);
+		receipt.outputs[1].amount_sat -= 1;
+		receipt.outputs.push(FeeReceiptOutput { vout: 2, amount_sat: 49_850, fee_sat: 151 });
+		assert_eq!(receipt.fee_for(&payout), None);
+	}
+
+	#[cfg(not(target_arch = "wasm32"))]
+	#[tokio::test]
+	async fn receipt_lookup_preserves_outputs_when_unavailable() {
+		use std::io::{Read, Write};
+		let txid = Txid::from_byte_array([5; 32]);
+		for (status, body, fee) in [
+			("200 OK", format!(r#"{{"txid":"{txid}","outputs":[{{"vout":0,"amount_sat":10000,"fee_sat":151}},{{"vout":1,"amount_sat":20000,"fee_sat":150}}]}}"#), Some(151)),
+			("404 Not Found", String::new(), None),
+			("200 OK", "unavailable".to_owned(), None),
+		] {
+			let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+			let config = crate::Config {
+				server_address: format!("http://{}", listener.local_addr().unwrap()),
+				..crate::Config::network_default(Network::Regtest)
+			};
+			let server = std::thread::spawn(move || {
+				let (mut socket, _) = listener.accept().unwrap();
+				socket.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+				let mut request = [0; 4096];
+				let n = socket.read(&mut request).unwrap();
+				assert!(String::from_utf8_lossy(&request[..n]).starts_with(&format!("GET /expiry-payouts/{txid}.json ")));
+				write!(socket, "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+			});
+			let mut payouts = (0..2).map(|vout| (ExpiryPayout {
+				vtxo_id: None, outpoint: OutPoint::new(txid, vout),
+				amount: Amount::from_sat(10_000 * (vout as u64 + 1)), fee: None, confirmations: 0,
+			}, keypair(1))).collect::<Vec<_>>();
+			attach_fee_receipts(&config, &mut payouts).await;
+			server.join().unwrap();
+			assert_eq!(payouts.len(), 2);
+			assert_eq!(payouts[0].0.fee.map(|f| f.to_sat()), fee);
+			assert_eq!(payouts[1].0.fee.map(|f| f.to_sat()), fee.map(|_| 150));
+			assert_eq!(payouts[0].0.amount.to_sat(), 10_000);
+			assert_eq!(payouts[1].0.amount.to_sat(), 20_000);
+		}
 	}
 
 	#[test]

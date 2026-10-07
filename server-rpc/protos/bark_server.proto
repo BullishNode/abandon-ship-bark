@@ -620,6 +620,8 @@ message ExpirySettlementRequest {
 	}
 }
 
+// Claimed pages order by ID only, return expiry zero, and ignore after_expiry.
+// Candidate pages order by (expiry, ID). Restart claimed scans each tick.
 message ExpirySettlementPage {
 	// Claimed pages ignore grace/minimum and include all durable handoffs.
 	bool claimed = 1;

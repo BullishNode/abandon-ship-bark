@@ -74,18 +74,25 @@ impl Tx<'_> {
 		&self, claimed: bool, tip: u32, grace: u32, minimum: u64,
 		after: (u32, String), limit: u32,
 	) -> anyhow::Result<Vec<SettlementVtxo>> {
+		if claimed {
+			// Receipt IDs alone are enough for reconciliation. Page their primary
+			// key rather than repeatedly sorting the full VTXO history by expiry.
+			let rows = self.query("SELECT id AS vtxo_id, ''::bytea AS vtxo, 0::integer AS expiry
+				FROM expiry_settlement WHERE id > $1 ORDER BY id LIMIT $2",
+				&[&after.1, &(limit as i64)]).await?;
+			return rows.into_iter().map(SettlementVtxo::from_row).collect();
+		}
 		let rows = self.query("
-			SELECT v.vtxo_id, CASE WHEN $3 THEN ''::bytea ELSE v.vtxo END AS vtxo, v.expiry
-			FROM vtxo v LEFT JOIN expiry_settlement s ON s.id = v.vtxo_id
+			SELECT v.vtxo_id, v.vtxo, v.expiry FROM vtxo v
 			WHERE (v.expiry::bigint, v.vtxo_id) > ($1::bigint, $2)
-			  AND (($3 AND s.id IS NOT NULL) OR (NOT $3 AND s.id IS NULL
-			    AND v.policy_type = 'pubkey'
-			    AND v.spend_state IN ('spendable', 'unclaimed')
-			    AND v.confirmed_height IS NULL
-			    AND v.expiry::bigint + $4::bigint <= $5::bigint
-			    AND v.amount >= $6::bigint))
-			ORDER BY v.expiry, v.vtxo_id LIMIT $7::bigint
-		", &[&(after.0 as i64), &after.1, &claimed, &(grace as i64),
+			  AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
+			  AND v.policy_type = 'pubkey'
+			  AND v.spend_state IN ('spendable', 'unclaimed')
+			  AND v.confirmed_height IS NULL
+			  AND v.expiry::bigint + $3::bigint <= $4::bigint
+			  AND v.amount >= $5::bigint
+			ORDER BY v.expiry, v.vtxo_id LIMIT $6::bigint
+		", &[&(after.0 as i64), &after.1, &(grace as i64),
 			&(tip as i64), &i64::try_from(minimum)?, &(limit as i64)]).await?;
 		rows.into_iter().map(SettlementVtxo::from_row).collect()
 	}
@@ -180,6 +187,51 @@ mod tests {
 
 	async fn claim(db: &Db, flux: &VtxosInFlux, id: VtxoId) -> ClaimResult {
 		db.claim_expired_vtxo(flux, id, 200_000, 144).await.unwrap()
+	}
+
+	#[tokio::test]
+	#[ignore = "requires isolated EXPIRY_TEST_POSTGRES_PORT"]
+	async fn expiry_settlement_receipt_pages_ignore_expiry_and_find_late_ids() {
+		let (db, _) = database().await;
+		let original = board(&db).await;
+		// Synthetic aliases test receipt paging only; no payment is made.
+		db.write(async |tx| {
+			tx.execute("INSERT INTO vtxo (vtxo_id,vtxo,expiry,created_at,updated_at,
+				vtxo_txid,exit_delta,policy_type,policy,server_pubkey,amount,anchor_point,spend_state)
+				SELECT '10'||lpad(to_hex(n),62,'0')||':0',vtxo,258-n,NOW(),NOW(),
+				vtxo_txid,exit_delta,policy_type,policy,server_pubkey,amount,anchor_point,'spent'::spend_state
+				FROM vtxo CROSS JOIN generate_series(1,257) n WHERE vtxo_id=$1",
+				&[&original.to_string()]).await?;
+			tx.execute("INSERT INTO expiry_settlement(id) SELECT vtxo_id FROM vtxo
+				WHERE vtxo_id <> $1 AND expiry <> 257", &[&original.to_string()]).await?;
+			Ok(())
+		}).await.unwrap();
+		let page = db.read(async |tx| tx.expiry_settlement_page(
+			true, 0, 0, 0, (u32::MAX, String::new()), 256,
+		).await).await.unwrap();
+		assert_eq!(page.len(), 256);
+		assert!(page.iter().all(|v| v.expiry == 0 && v.vtxo.is_empty()));
+		assert!(page.windows(2).all(|w| w[0].id.to_string() < w[1].id.to_string()));
+		let after = (0, page.last().unwrap().id.to_string());
+		// A receipt commits after an ID cursor has passed its position.
+		db.write(async |tx| {
+			tx.execute("INSERT INTO expiry_settlement(id) SELECT vtxo_id FROM vtxo
+				WHERE expiry=257 AND vtxo_id <> $1", &[&original.to_string()]).await?;
+			Ok(())
+		}).await.unwrap();
+		assert!(db.read(async |tx| tx.expiry_settlement_page(
+			true, 0, 0, 0, after.clone(), 256,
+		).await).await.unwrap().is_empty());
+		let fresh = db.read(async |tx| tx.expiry_settlement_page(
+			true, 0, 0, 0, (0, String::new()), 256,
+		).await).await.unwrap();
+		assert_eq!(fresh.len(), 256);
+		assert!(fresh[0].id.to_string() < page[0].id.to_string());
+		let tail = db.read(async |tx| tx.expiry_settlement_page(
+			true, 0, 0, 0, (0, fresh.last().unwrap().id.to_string()), 256,
+		).await).await.unwrap();
+		assert_eq!(tail.len(), 1);
+		assert_eq!(tail[0].id, page.last().unwrap().id);
 	}
 
 	#[tokio::test]

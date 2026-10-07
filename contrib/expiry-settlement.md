@@ -10,9 +10,11 @@ The request selects one operation:
 
 - `page`: up to 256 expired pubkey VTXOs, ordered by `(expiry, vtxo_id)`, with
   grace and minimum-amount filters. `claimed = true` instead returns durable
-  handoff IDs/expiries, ignoring grace/amount filters and omitting VTXO bytes.
-  Retry `claim` to fetch an unknown receipt's VTXO. Use the last returned expiry and ID
-  as the next cursor. Smaller page limits reduce encoded response size.
+  handoff IDs ordered by ID, ignoring grace/amount/expiry filters and omitting
+  VTXO bytes. Claimed pages set expiry to zero and use only the last ID as cursor;
+  candidate pages use both expiry and ID. Retry `claim` to fetch an unknown
+  receipt's VTXO. Restart claimed scans each tick: a concurrent receipt can commit
+  behind the current cursor. Smaller page limits reduce encoded response size.
 - `claim`: up to 256 IDs. Each independent result is `CLAIMED`, `BUSY` or
   `INELIGIBLE`. A committed receipt and the transition to `spent` occur in the
   same transaction. Retrying an existing receipt returns `CLAIMED` and the

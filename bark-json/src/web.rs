@@ -913,6 +913,8 @@ pub struct ExpiryPayout {
 	pub txid: Txid,
 	pub vout: u32,
 	pub amount_sat: u64,
+	/// Fee deducted by the operator for this output; absent if no receipt is available.
+	pub fee_sat: Option<u64>,
 	/// 0 while the output is in the mempool
 	pub confirmations: u32,
 }
@@ -924,6 +926,7 @@ impl From<bark::expiry_payout::ExpiryPayout> for ExpiryPayout {
 			txid: v.outpoint.txid,
 			vout: v.outpoint.vout,
 			amount_sat: v.amount.to_sat(),
+			fee_sat: v.fee.map(|f| f.to_sat()),
 			confirmations: v.confirmations,
 		}
 	}

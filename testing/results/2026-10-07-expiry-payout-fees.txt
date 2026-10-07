@@ -1,0 +1,34 @@
+Expiry payout fee receipts, 2026-10-07; source base 3ab429866.
+
+Expiry module: 9 PASS / 0 FAIL; wallet library: 236 PASS / 0 FAIL.
+REST compile: PASS; SOCKS-enabled compile: PASS; host barkd build: PASS.
+Existing deprecated-method/dead-code warnings retained in local logs.
+
+Actual sidecar payouts on abandon-session2, fresh seed restores:
+- REST/browser: gross 29520, received 28693, original fee 827 sat.
+  Payout 890ca9d164e607c3cc5b9b22fb0ecfd2719e7ff6554ce2c9bbb8c5fe694853be:0.
+  Browser sweep 6cd166fe99e5978e2d38c5e42f2369dc7e2d20202bcc5c7b9a5a4bdf42cf160e:
+  proceeds 28136, separate fee 557 sat. Movement retains original fee 827.
+  Removing the receipt returned unknown fee without hiding the payout.
+  Dashboard/movement privacy checks PASS; no browser exceptions.
+  Browser harness first exited 1 parsing Core's empty gettxout response
+  after broadcast; corrected continuation exited 0 for the same transaction.
+- Generated Python/UniFFI: PASS, exit 0. Gross 59520, received 58743,
+  original fee 777 sat, preserved through the optional native fee field.
+  Receipt404 left funds discoverable with fee None.
+  Payout 12ad68229af8bd0be6c88623957b2f80152a6b9db1613eb37c9cb0d14771a9f5:0.
+  Sweep de9014c7a28aea68e67dae3f17ace894c474b12727739fdfda203d62dd85189c:
+  proceeds 58188, separate fee 555 sat. Core confirmed the exact input.
+
+Receipts were exported from actual selected sidecar ledger rows and served
+at the Ark origin through a local nginx HTTP/gRPC proxy. Two inconsistent
+historical test receipts were rejected, not guessed. No receipt is needed
+to spend; unavailable accounting remains unknown.
+
+Raw logs, scripts and screenshots:
+~/bark-integration-2026-10-01/session2-continuation/2026-10-07/
+  bark-receipts-build.txt, bark-receipts-full.txt, receipt-barkd-build.txt
+  fee-receipts-live/browser-journey.log, browser-continue.log
+  fee-receipts-live/native-journey.log, native-result.json
+Private wallet/seed data is not published. Full final suite, image rebuild
+and architectural stress comparison are separate gates still pending.

@@ -32,6 +32,34 @@ pub(crate) enum ClaimResult {
 }
 
 impl Db {
+	/// Replay a stopped payout service's durable IDs before any server workers
+	/// start. A missing entitlement or conflicting spend requires restoring
+	/// captaind's history; payout IDs cannot reconstruct that history.
+	pub async fn restore_expiry_settlements(&self, ids: &[VtxoId]) -> anyhow::Result<()> {
+		self.write(async |tx| {
+			for id in ids {
+				let id = id.to_string();
+				let row = tx.query_opt("
+					SELECT policy_type = 'pubkey'
+					  AND spend_state IN ('spendable', 'unclaimed', 'spent')
+					  AND spent_in_round IS NULL AND oor_spent_txid IS NULL
+					  AND offboarded_in IS NULL AND confirmed_height IS NULL AS eligible,
+					  EXISTS (SELECT 1 FROM round_part_input i
+					    JOIN round_participation p ON p.id = i.participation_id
+					    WHERE i.vtxo_id = $1 AND p.forfeited_at IS NULL) AS unfinished
+					FROM vtxo WHERE vtxo_id = $1 FOR UPDATE
+				", &[&id]).await?
+					.ok_or_else(|| anyhow::anyhow!("settlement replay: missing VTXO {id}; restore captaind history"))?;
+				anyhow::ensure!(row.get::<_, Option<bool>>("eligible") == Some(true), "settlement replay: conflicting spend for {id}");
+				anyhow::ensure!(!row.get::<_, bool>("unfinished"), "settlement replay: unfinished round for {id}");
+				tx.execute("UPDATE vtxo SET spend_state = 'spent', updated_at = NOW()
+					WHERE vtxo_id = $1 AND spend_state <> 'spent'", &[&id]).await?;
+				tx.execute("INSERT INTO expiry_settlement (id) VALUES ($1) ON CONFLICT DO NOTHING", &[&id]).await?;
+			}
+			Ok(())
+		}).await
+	}
+
 	/// Hold the same lock as refresh, arkoor and offboard until the commit is durable.
 	pub(crate) async fn claim_expired_vtxo(
 		&self, flux: &VtxosInFlux, id: VtxoId, tip: u32, grace: u32,
@@ -152,6 +180,44 @@ mod tests {
 
 	async fn claim(db: &Db, flux: &VtxosInFlux, id: VtxoId) -> ClaimResult {
 		db.claim_expired_vtxo(flux, id, 200_000, 144).await.unwrap()
+	}
+
+	#[tokio::test]
+	#[ignore = "requires isolated EXPIRY_TEST_POSTGRES_PORT"]
+	async fn expiry_settlement_startup_replay_is_atomic_and_idempotent() {
+		let (db, _) = database().await;
+		let id = board(&db).await;
+		let missing = VtxoId::from_slice(&[8; 36]).unwrap();
+		let err = db.restore_expiry_settlements(&[id, missing]).await.unwrap_err();
+		assert!(format!("{err:#}").contains("missing VTXO"), "{err:#}");
+		assert_eq!(receipt_count(&db).await, 0);
+		let live = db.read(async |tx| tx.get_user_vtxos_by_id(&[id]).await).await.unwrap();
+		assert!(live[0].check_spendable(BlockHeight::new(200_000)).is_ok());
+		db.restore_expiry_settlements(&[id, id]).await.unwrap();
+		db.restore_expiry_settlements(&[id]).await.unwrap();
+		assert_eq!(receipt_count(&db).await, 1);
+		assert!(matches!(claim(&db, &VtxosInFlux::new(), id).await, ClaimResult::Claimed(_)));
+	}
+
+	#[tokio::test]
+	#[ignore = "requires isolated EXPIRY_TEST_POSTGRES_PORT"]
+	async fn expiry_settlement_startup_replay_refuses_unfinished_or_conflicting_spend() {
+		let (db, _) = database().await;
+		let id = board(&db).await;
+		db.write(async |tx| tx.try_store_round_participation(
+			BlockHeight::new(200_000), [7; 32], &[id], &[], None,
+		).await).await.unwrap();
+		let err = db.restore_expiry_settlements(&[id]).await.unwrap_err();
+		assert!(format!("{err:#}").contains("unfinished round"), "{err:#}");
+		assert_eq!(receipt_count(&db).await, 0);
+		db.write(async |tx| {
+			tx.execute("UPDATE round_participation SET forfeited_at = NOW()", &[]).await?;
+			tx.execute_vtxo_tree_update(VtxoTreeUpdate::new()
+				.mark_vtxos_oor_spent([(id, Txid::from_byte_array([6; 32]))])).await
+		}).await.unwrap();
+		let err = db.restore_expiry_settlements(&[id]).await.unwrap_err();
+		assert!(format!("{err:#}").contains("conflicting spend"), "{err:#}");
+		assert_eq!(receipt_count(&db).await, 0);
 	}
 
 	#[tokio::test]

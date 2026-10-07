@@ -203,6 +203,9 @@ mod defaults {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
 	pub data_dir: PathBuf,
+	/// Import durable payout IDs before starting any workers after a restore.
+	#[serde(default)]
+	pub settlement_replay_ids: Option<PathBuf>,
 	pub network: bitcoin::Network,
 	/// The number of blocks after which a VTXO expires, by default 6*24*30 so that
 	/// a VTXO can live for up to 30 days.

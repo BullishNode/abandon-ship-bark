@@ -418,6 +418,7 @@ impl TestContext {
 		// NB we don't auto-complete `..Default::default()` here
 		// to force us to evaluate every value in test context.
 		server::config::Config {
+			settlement_replay_ids: None,
 			data_dir: data_dir.clone(),
 			network: Network::Regtest,
 			vtxo_lifetime: BlockDelta::new(432),

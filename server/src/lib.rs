@@ -356,6 +356,14 @@ impl Server {
 		let db = database::Db::connect(&cfg.postgres)
 			.await
 			.context("failed to connect to db")?;
+		if let Some(path) = &cfg.settlement_replay_ids {
+			let ids = std::fs::read_to_string(path)
+				.with_context(|| format!("reading settlement replay {}", path.display()))?
+				.split_whitespace().map(str::parse)
+				.collect::<Result<Vec<VtxoId>, _>>()?;
+			db.restore_expiry_settlements(&ids).await.context("settlement replay failed; workers not started")?;
+			info!("Replayed {} settlement IDs before starting workers", ids.len());
+		}
 
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		bcd::require_network(&bitcoind, cfg.network).await?;

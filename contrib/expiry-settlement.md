@@ -27,9 +27,27 @@ of an obligation to the payout service, not a payment confirmation.
 
 The caller remains responsible for validated exit paths, confirmed sweeps,
 mainnet grace/confirmation policy, fees, signing, its durable payout ledger and
-signed transaction journal. This patch does not implement a sidecar adapter or
-an automatic recovery barrier before captaind starts normal work after restore.
-It is not a complete replacement for the existing sidecar.
+signed transaction journal. After a restore, configure the optional top-level `settlement_replay_ids` path.
+Captaind reads whitespace-separated VTXO IDs and replays them in one database
+transaction immediately after opening the database, before workers or listeners.
+Missing VTXOs, other recorded spends, confirmed exits or unfinished participations
+abort startup and roll back the whole import. Replaying an existing receipt is
+idempotent. The import deliberately does not require a current chain tip.
+
+Stop captaind, watchmand and sidecar writers before restoring. With the current
+sidecar journal and its state database, run its `--export-settlement-ids PATH`
+command, then start captaind with that path. Keep writers stopped until the
+export is complete. Restore missing captaind history or resolve an unfinished
+round from authoritative records before retrying; payout IDs cannot reconstruct
+lost Ark transfers. An omitted path disables this barrier, and a stale export
+cannot reveal omitted settlements. This is an operator restore procedure, not
+automatic backup freshness detection.
+
+The paired experiment adapter keeps only its own quarantine/payout tables in a
+separate database. It reconciles permanent claim receipts before creating new
+transactions; signed journal transactions can rebroadcast without the admin RPC.
+All adapter replicas must share that state database and journal. Independent
+payout ledgers must not consume the same permanent captaind receipts.
 
 A small generated-client example is available:
 

@@ -36,9 +36,6 @@ bark(backup,'exit','claim',rpc('getnewaddress'),'--all','--no-sync')
 mine(1)
 claim=q(f"SELECT onchain_spent_txid FROM vtxo WHERE vtxo_id='{coin['id']}'")
 assert claim and rpc('getrawtransaction',[claim,True])['confirmations']>=1
-if os.environ.get('LATE_FORFEIT')=='1':
-    bark(owner,'balance',check=False)
-    event('late-forfeit-state',state=q(f"SELECT spend_state FROM vtxo WHERE vtxo_id='{replacement['id']}'"))
 ticks()
 r=row(replacement['id'])
 save('predecessor-proof.json',dict(owner=owner,backup=backup,predecessors=inputs,replacement=replacement,leaf=leaf,payment=r))
@@ -49,4 +46,4 @@ if os.environ.get('EXPECT_PREDECESSOR_BUG')=='1':
 else:
     assert r is None,'replacement must not be paid after its predecessor exited'
     event('PASS',scenario='unfinished refresh predecessor exit blocks replacement payment',input_count=input_count,
-        partial_compensation='unresolved for remaining swept input' if input_count==2 else 'not applicable')
+        partial_compensation='checked separately by mixed-cancel' if input_count==2 else 'not applicable')

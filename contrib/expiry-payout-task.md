@@ -32,8 +32,9 @@ through durable commit. Core's mempool preflight also holds that lock, so slow C
 calls can delay ordinary wallet funding. Database coin states, receipt associations,
 change-key metadata and the nursery transaction commit atomically. An uncertain
 COMMIT retains the selected inputs until its outcome is known. The nursery stores
-one raw transaction; receipt rows reference it. Startup reapplies pending spends
-before workers, even with new payouts disabled.
+one raw transaction; receipt rows reference it. Startup waits for the previous
+process's nursery writes to finish, then loads the wallet and reapplies pending
+spends before workers, even with new payouts disabled.
 
 ## Configuration and deployment
 
@@ -80,6 +81,17 @@ Monitor `expiry payout tick summary` for success, duration, candidates/waiting/p
 real-estimate warnings, nursery warnings, receipt-export errors and rounds-wallet
 funding. A growing eligible backlog requires checking its exact-path sweep depth,
 fee cap and confirmed funding. The task keeps entitlements while those gates wait.
+
+| Waiting condition | Release evidence and next action |
+| --- | --- |
+| Missing real estimate | Core returns the configured target's estimate; check estimation data and wait |
+| Coin below the gross minimum | Before its backing path is swept, the owner can refresh/offboard it. After the sweep, an operator must lower `min_payout_sat`; fee and dust checks still apply |
+| Missing funding transaction | The persisted round's funding transaction reaches Core; inspect round/nursery recovery |
+| Unswept path or insufficient depth | A confirmed sweep spends this coin's own path into the rounds wallet; inspect watchmand and the exact input, then wait |
+| Unfinished delegated exchange | Originals are swept, or the documented cancellation conditions hold; inspect participation/forfeit state and the cancellation audit |
+| Fee cap, dust, weight or confirmed funding | A valid affordable transaction can be built; wait for fees/confirmations or restore rounds-wallet funding; the batch splitter continues to other eligible coins |
+| Unknown COMMIT outcome | The database answers after the original row locks release; restore database service while the task retains wallet inputs |
+| Receipt publication failure | The configured directory becomes writable and served; the next enabled tick regenerates missing files from nursery history |
 
 For a committed transaction missing from the mempool, check the nursery and Core's
 rejection, restore funding/service conditions, and restart the same fork if needed;

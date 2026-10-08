@@ -1,0 +1,20 @@
+name: abandon-captaind-task
+services:
+  bitcoind:
+    container_name: abandon-captaind-task-bitcoind
+    image: bitcoin/bitcoin@sha256:a1d05be6939b5c85132a761d2b795f5b8a2612ce53782263da4939778e461792
+    command: [bitcoind, -regtest, -server, -printtoconsole, -rpcbind=0.0.0.0, -rpcallowip=0.0.0.0/0, -rpcuser=second, -rpcpassword=ark, -txindex, -blockfilterindex, -coinstatsindex]
+    ports: ["127.0.0.1:53443:18443"]
+    volumes: ["bitcoin:/home/bitcoin/.bitcoin"]
+  postgres:
+    container_name: abandon-captaind-task-postgres
+    image: postgres@sha256:da788743d2060767375896de4d646f7576f5911461444b372616f19ea61db2ec
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    command: [postgres, -c, wal_level=replica, -c, archive_mode=on, -c, "archive_command=test ! -f /wal-archive/%f && cp %p /wal-archive/%f", -c, archive_timeout=5s]
+    ports: ["127.0.0.1:50432:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data", "wal:/wal-archive"]
+volumes:
+  bitcoin:
+  postgres:
+  wal:

@@ -33,6 +33,7 @@ mod intman;
 pub mod ln;
 pub mod nursery;
 mod offboards;
+pub mod expiry_payout;
 pub mod recovery;
 mod round;
 pub mod telemetry;
@@ -95,7 +96,7 @@ use crate::secret::Secret;
 use crate::system::RuntimeManager;
 use crate::utils::{InstrumentedLock, TimedEntryMap};
 use crate::vtxopool::VtxoPool;
-use crate::wallet::{PersistedWallet, WalletKind, MNEMONIC_FILE};
+use crate::wallet::{BdkWalletExt, PersistedWallet, WalletKind, MNEMONIC_FILE};
 
 lazy_static::lazy_static! {
 	/// Global secp context.
@@ -357,14 +358,7 @@ impl Server {
 		let db = database::Db::connect(&cfg.postgres)
 			.await
 			.context("failed to connect to db")?;
-		if let Some(path) = &cfg.settlement_replay_ids {
-			let ids = std::fs::read_to_string(path)
-				.with_context(|| format!("reading settlement replay {}", path.display()))?
-				.split_whitespace().map(str::parse)
-				.collect::<Result<Vec<VtxoId>, _>>()?;
-			db.restore_expiry_settlements(&ids).await.context("settlement replay failed; workers not started")?;
-			info!("Replayed {} settlement IDs before starting workers", ids.len());
-		}
+
 
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		bcd::require_network(&bitcoind, cfg.network).await?;
@@ -387,6 +381,11 @@ impl Server {
 			db.clone(), bitcoind.clone(), cfg.network, &wallet_xpriv, WalletKind::Rounds, deep_tip,
 			cfg.min_trusted_confs,
 		).await.context("error loading rounds wallet")?;
+		// Reapply durable nursery spends before any worker can select their inputs.
+		for tx in db.read(async |t| t.pending_expiry_payments(rounds_wallet.latest_checkpoint().height()).await).await? {
+			rounds_wallet.commit_tx(&tx);
+		}
+		rounds_wallet.persist().await?;
 		if let Some(list) = bitcoin_address_blocklist.clone() {
 			rounds_wallet.set_address_blocklist(list);
 		}
@@ -408,6 +407,7 @@ impl Server {
 		rtmgr.run_shutdown_signal_listener(Duration::from_secs(60));
 
 		let tx_nursery = TxNursery::new(db.clone(), bitcoind.clone());
+		tx_nursery.resume_expiry_payments().await?;
 
 		let fee_estimator = fee_estimator::start(
 			rtmgr.clone(),
@@ -513,6 +513,7 @@ impl Server {
 		srv.lightning_manager.spawn_hold_settler(srv.clone(), settlement_stream);
 
 		srv.clone().start_offboard_retry_task().await;
+		srv.start_expiry_payout_task();
 
 		let srv2 = srv.clone();
 		tokio::spawn(async move {

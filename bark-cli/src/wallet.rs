@@ -291,6 +291,10 @@ pub struct CreateOpts {
 	#[arg(long)]
 	pub mnemonic: Option<bip39::Mnemonic>,
 
+	/// The supplied mnemonic is new; start scanning at the current tip.
+	#[arg(long, requires = "mnemonic", conflicts_with = "birthday_height")]
+	pub fresh_mnemonic: bool,
+
 	/// The wallet/mnemonic's birthday blockheight to start syncing when recovering.
 	#[arg(long)]
 	pub birthday_height: Option<BlockHeight>,
@@ -434,8 +438,11 @@ async fn try_create_wallet(
 		config.user_agent = Some(user_agent.to_owned());
 	}
 
-	// A mnemonic implies that the user wishes to recover an existing wallet.
-	if opts.mnemonic.is_some() {
+	if opts.fresh_mnemonic && (opts.mnemonic.is_none() || opts.birthday_height.is_some()) {
+		bail!("fresh_mnemonic requires a mnemonic and cannot be combined with a birthday height");
+	}
+	let is_new_wallet = opts.mnemonic.is_none() || opts.fresh_mnemonic;
+	if !is_new_wallet {
 		if opts.birthday_height.is_none() {
 			// Only Bitcoin Core requires a birthday height to avoid syncing the entire chain.
 			if config.bitcoind_address.is_some() {
@@ -458,7 +465,6 @@ async fn try_create_wallet(
 	chain.require_version().await.context("chain source version check failed")?;
 
 	// generate seed
-	let is_new_wallet = opts.mnemonic.is_none();
 	let mnemonic = opts.mnemonic.unwrap_or_else(|| bip39::Mnemonic::generate(12).expect("12 is valid"));
 	let seed = mnemonic.to_seed("");
 
@@ -608,6 +614,7 @@ mod test {
 			signet: true,
 			mutinynet: false,
 			mnemonic: None,
+			fresh_mnemonic: false,
 			birthday_height: None,
 			config: ConfigOpts::default(),
 		}
@@ -679,4 +686,3 @@ mod test {
 		assert!(!is_expected_datadir_file("barkd.lock.bak"));
 	}
 }
-

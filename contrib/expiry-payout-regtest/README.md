@@ -35,5 +35,16 @@ The fixture now takes an exclusive OS lock for each scenario and waits for the p
 
 `startup.py` checks rejection of a foreign sweep address, missing watchman configuration and nonloopback admin bind, then checks disabled startup and restores enabled operation. PASS `20261008T014645-cd986e70`. The startup-check build passed163serverunit tests. An earlier driver stopped before the scenario because the admin port was still in use; that attempt is not a scenario pass. Bootstrap starts disabled until the actual rounds-wallet sweep address and watchmand configuration exist.
 
+Additional individual flow evidence:
+
+| Scenario | Observed result | Evidence run |
+| --- | --- | --- |
+| `eligibility.py` | PASS: a live coin is excluded; an expired owner's successful offboard excludes its entitlement from later payouts | `20261008T010506-8d7a1004` |
+| `fees.py` | PASS: an older coin exceeding the actual fee cap stays spendable, a later affordable coin pays, and restoring the cap releases the waiting coin | `20261008T010626-e4538152` |
+| `shared.py` | PASS: three real Ark transfers sharing a key get one output with exact aggregate principal and fee | `20261008T011658-a4b93e37` |
+| `race.py` | PASS: hold the native receipt transaction, contest its input from offboard and a restored wallet's delegated refresh, then verify both lose and exactly one payout commits | `20261008T015114-dd9ac15a` |
+
+The race test uses two copies of the generated test wallet: a failed offboard reserves the input locally, so attempting refresh from that same copy could silently select zero inputs. Initial run `20261008T014653-a95b50d6` exposed this test defect. Run `20261008T014953-91fa206a` reached the server but failed an overly narrow error-text assertion; the server returned the exact coin as unusable. The passing case requires the rejected coin ID, checks no round participation was created, and independently verifies the final on-chain payment and fee. These are regtest results, not signet or a complete suite.
+
 
 `missing-anchor.py` kills captaind after it commits an unsigned round, while the signed funding update is held. After expiry, Core has never seen that funding transaction. The old task aborted every tick on that candidate and left a later ordinary swept coin unpaid: FAIL at the intended assertion, `20261008T011338-09cc58e0`. With the narrow not-found-as-waiting fix, the same persisted case passes `20261008T011650-5ce34723`; the unfunded replacement stays unpaid and the later valid coin pays. Use `REUSE_MISSING_ANCHOR=1` only to rerun an existing fixture, otherwise the scenario creates a new real interrupted round. Build plus163serverunits PASS `20261008T011527-10d0a02f`; fixed debug captaind SHA256 `fe5b51cedc50238c327b0032a3fe845e1c33d59f3d6a89893b4e72b3a5269eb3`. Transport errors still fail the tick and no missing transaction becomes affirmative sweep proof.

@@ -20,8 +20,9 @@ ID grouping. Completed forfeits or changed replacement states veto cancellation.
 Live originals still wait. Cancellation is checked once per participation per tick
 and waits for a real fee estimate, like payouts.
 
-The existing estimator supplies a real, unclamped Core estimate. No estimate means
-wait. The signed payout's entire mining fee is deducted proportionally from users,
+Each tick requests a real Core estimate for its configured target. No estimate means
+wait; an unavailable different target does not block this one. The shared estimator
+is unchanged. The signed payout's entire mining fee is deducted proportionally from users,
 with deterministic satoshi rounding and a per-coin percentage cap. Shared keys get
 one output. Confirmed funding, dust and maximum transaction weight are checked.
 There is no Ark service fee on expiry payouts.

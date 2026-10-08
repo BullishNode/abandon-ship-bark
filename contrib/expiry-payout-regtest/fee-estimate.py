@@ -8,7 +8,7 @@ class NoEstimate(http.server.BaseHTTPRequestHandler):
         body=self.rfile.read(int(self.headers['Content-Length']))
         request=json.loads(body)
         if request['method']=='estimatesmartfee':
-            result=dict(jsonrpc='2.0',id=request['id'],result={'errors':['test: estimate unavailable']},error=None)
+            result=dict(jsonrpc='2.0',id=request['id'],result={'blocks':request['params'][0],'errors':['test: estimate unavailable']},error=None)
             payload=json.dumps(result).encode()
         else:
             headers={k:v for k,v in self.headers.items() if k.lower() not in ('host','content-length')}
@@ -22,11 +22,12 @@ class NoEstimate(http.server.BaseHTTPRequestHandler):
     def log_message(self,*args):pass
 
 original=(F/'captaind.toml').read_text()
-server=http.server.ThreadingHTTPServer(('127.0.0.1',53445),NoEstimate)
+server=http.server.ThreadingHTTPServer(('127.0.0.1',0),NoEstimate)
+proxy_port=server.server_address[1]
 threading.Thread(target=server.serve_forever,daemon=True).start()
 try:
     stop_daemon('captaind')
-    (F/'captaind.toml').write_text(original.replace(':53443',':53445'))
+    (F/'captaind.toml').write_text(original.replace(':53443',f':{proxy_port}'))
     start_daemon('captaind')
     owner,coin=board('native-no-estimate',60000)
     expire([coin])

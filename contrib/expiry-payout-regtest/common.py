@@ -3,12 +3,16 @@
 All funds are regtest, every daemon/volume/port belongs to abandon-captaind-task.
 No automatic funding after bootstrap; no volume deletion.
 """
-import base64, json, os, signal, socket, subprocess, sys, threading, time, urllib.request
+import base64, fcntl, json, os, signal, socket, subprocess, sys, threading, time, urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 E = Path(os.environ.get('EXPIRY_EVIDENCE', '/home/francis/bark-integration-2026-10-01/expiry-task-evidence/runtime'))
 F = E / 'fixture'
+F.mkdir(parents=True,exist_ok=True)
+FIXTURE_LEASE = (F/'scenario.lock').open('a')
+# One writer per fixture, including ad-hoc recovery commands.
+fcntl.flock(FIXTURE_LEASE,fcntl.LOCK_EX | fcntl.LOCK_NB)
 B = ROOT
 OUT = E / os.environ.get('EXPIRY_CASE', 'native-tests')
 OUT.mkdir(parents=True,exist_ok=True)
@@ -106,6 +110,10 @@ def stop_daemon(name, kill=False):
     assert executable == str(B/'target/debug'/name), executable
     os.kill(pid,signal.SIGKILL if kill else signal.SIGTERM)
     wait(lambda: not listening(48535 if name=='captaind' else 48538),name+' stop')
+    def exited():
+        status=Path(f'/proc/{pid}/stat')
+        return not status.exists() or status.read_text().split()[2]=='Z'
+    wait(exited,name+' process exit',90)
 
 
 def synced():

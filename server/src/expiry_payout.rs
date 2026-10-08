@@ -15,6 +15,7 @@ use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Transaction, Txid, Weight};
 use serde::{Deserialize, Serialize};
 use bitcoin_ext::bdk::{WalletExt, WithGuaranteedChange};
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
+use bitcoin_ext::FeeRateExt;
 use tracing::{info, warn};
 
 use crate::database::expiry_settlement::payout_script;
@@ -280,10 +281,13 @@ impl Server {
 			warn!("expiry receipt export deferred: {e:#}");
 		}
 		let cfg = &self.config.expiry_payout;
-		let Some(rates) = self.fee_estimator.real_rates() else {
+		let estimate: bitcoin_ext::rpc::json::EstimateSmartFeeResult = self.bitcoind.call_raw(
+			"estimatesmartfee", &[cfg.conf_target_blocks.into(), "economical".into()],
+		).await?;
+		let Some(rate) = estimate.fee_rate else {
 			warn!("no real fee estimate; expiry payouts wait"); return Ok(());
 		};
-		let rate = match cfg.conf_target_blocks { 1 => rates.fast, 3 => rates.regular, _ => rates.slow };
+		let rate = FeeRate::from_amount_per_kvb_ceil(rate);
 		ensure!(rate > FeeRate::ZERO, "zero expiry fee estimate");
 		let tip = self.chain_tip().height.to_u32();
 		let mut cursor = (0, String::new());

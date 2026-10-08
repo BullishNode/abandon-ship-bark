@@ -18,6 +18,9 @@ if not (F/'captaind/mnemonic').exists():
     cmd([B/'target/debug/captaind','--config',F/'captaind.toml','create'],'create')
 cmd(['docker','exec','-i',PROJECT+'-postgres','psql','-X','-U','postgres','-d','expiry_task','-v','ON_ERROR_STOP=1'],
     'expiry-schema',input=(B/'contrib/expiry-settlement.sql').read_text())
+configured=(F/'captaind.toml').read_text()
+if not (F/'watchmand.toml').exists():
+    (F/'captaind.toml').write_text(configured.replace('enabled = true','enabled = false'))
 if not listening(48535): start_daemon('captaind')
 info=json.loads(cmd([B/'target/debug/captaind','--config',F/'captaind.toml','rpc','wallet'],'rounds-wallet').stdout)
 address=(F/'sweep-address.txt').read_text().strip() if (F/'sweep-address.txt').exists() else info['rounds']['address']
@@ -33,6 +36,10 @@ if not (F/'watchmand/mnemonic').exists():
     shutil.copyfile(F/'captaind/mnemonic',F/'watchmand/mnemonic')
     (F/'watchmand/mnemonic').chmod(0o600)
 if not listening(48538): start_daemon('watchmand')
+if (F/'captaind.toml').read_text()!=configured:
+    stop_daemon('captaind')
+    (F/'captaind.toml').write_text(configured)
+    start_daemon('captaind')
 descriptor_row=wait(lambda: q("SELECT encode(content,'hex') FROM wallet_changeset WHERE kind='watchman' ORDER BY id LIMIT 1"),'watchman descriptor')
 match=re.search(rb'tr\([^)]*\)',bytes.fromhex(descriptor_row))
 assert match,'watchman descriptor absent'

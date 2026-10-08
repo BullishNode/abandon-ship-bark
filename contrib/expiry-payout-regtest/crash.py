@@ -34,9 +34,10 @@ try:
             except urllib.error.HTTPError as e:status,data=e.code,e.read()
             self.send_response(status);self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
         def log_message(self,*args):pass
-    server=http.server.ThreadingHTTPServer(('127.0.0.1',53444),Proxy)
+    server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Proxy)
+    proxy_port=server.server_address[1]
     threading.Thread(target=server.serve_forever,daemon=True).start()
-    stop_daemon('captaind');config.write_text(original.replace(':53443',':53444'));start_daemon('captaind')
+    stop_daemon('captaind');config.write_text(original.replace(':53443',f':{proxy_port}'));start_daemon('captaind')
     before=wait(lambda:row(coin['id']),'atomic native receipt')
     wait(lambda:int(q("SELECT count(*) FROM pg_stat_activity WHERE datname='expiry_task' AND wait_event='advisory' AND query LIKE '%INSERT INTO wallet_changeset%'"))>0,'wallet persist held after atomic commit')
     assert before['txid'] not in rpc('getrawmempool')

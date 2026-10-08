@@ -34,7 +34,9 @@ try:
     assert 6 in calls,'selected target was not queried'
     tx=rpc('getrawtransaction',[proof['txid'],True])
     out=[o for o in tx['vout'] if o['scriptPubKey'].get('address')==payout_address(coin)]
-    assert len(out)==1 and SAT(out[0]['value'])+proof['fee_sat']==coin['amount_sat']
+    assert len(out)==1
+    charged=next(o['fee_sat'] for o in proof['receipt']['outputs'] if o['vout']==out[0]['n'])
+    assert SAT(out[0]['value'])+charged==coin['amount_sat']
     save('selected-fee-proof.json',dict(coin=coin,proof=proof,estimate_targets=calls))
     event('PASS',scenario='selected real six-block estimate pays despite unavailable fast estimate',txid=proof['txid'])
 finally:

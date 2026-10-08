@@ -34,7 +34,12 @@ for cycle in range(cycles):
         txid,vout=c['chain_anchor'].split(':')
         inflow+=SAT(rpc('getrawtransaction',[txid,True])['vout'][int(vout)]['value'])
     with ThreadPoolExecutor(2) as pool:
-        list(pool.map(lambda w:bark(w,'refresh','--all'),wallets))
+        list(pool.map(lambda w:bark(w,'refresh','--delegated','--all'),wallets))
+    # Delegated submission returns before the round. Require actual inclusion
+    # before mining and claiming the replacements; a submitted request alone
+    # does not establish that the rounds wallet funded a refresh.
+    wait(lambda:all(q(f"SELECT spent_in_round IS NOT NULL FROM vtxo WHERE vtxo_id='{c['id']}'")=='t'
+        for c in boards),'both delegated refreshes included')
     mine(3)
     coins=[bark(w,'vtxos')[0] for w in wallets]
     assert all(c['id']!=b['id'] for c,b in zip(coins,boards)),'refresh funding not claimed'

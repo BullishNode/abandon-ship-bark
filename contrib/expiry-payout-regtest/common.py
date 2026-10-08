@@ -6,7 +6,7 @@ No automatic funding after bootstrap; no volume deletion.
 import base64, fcntl, json, os, signal, socket, subprocess, sys, threading, time, urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get('EXPIRY_SOURCE_ROOT', Path(__file__).resolve().parents[2]))
 E = Path(os.environ.get('EXPIRY_EVIDENCE', '/home/francis/bark-integration-2026-10-01/expiry-task-evidence/runtime'))
 F = E / 'fixture'
 F.mkdir(parents=True,exist_ok=True)
@@ -18,7 +18,7 @@ OUT = E / os.environ.get('EXPIRY_CASE', 'native-tests')
 OUT.mkdir(parents=True,exist_ok=True)
 PROJECT = 'abandon-captaind-task'
 D = ['docker', 'exec', PROJECT + '-postgres']
-IMAGE = 'abandon-ship/bark:release-2c29c425d'
+IMAGE = os.environ.get('EXPIRY_BARK_IMAGE', 'abandon-ship/bark:release-2c29c425d')
 NATIVE_IMAGE = os.environ.get('EXPIRY_NATIVE_IMAGE')
 N = 0
 COMMAND_LOCK = threading.Lock()
@@ -56,7 +56,7 @@ def rpc(method, params=None, wallet='faucet', port=53443):
     req = urllib.request.Request(f'http://127.0.0.1:{port}/wallet/{wallet}',
         json.dumps(dict(jsonrpc='2.0',id=1,method=method,params=params or [])).encode(),
         {'Authorization':'Basic '+base64.b64encode(b'second:ark').decode(), 'Content-Type':'application/json'})
-    result = json.load(urllib.request.urlopen(req,timeout=1200 if method=='scantxoutset' else 120))
+    result = json.load(urllib.request.urlopen(req,timeout=1200 if method in ['scantxoutset','importdescriptors','signrawtransactionwithwallet'] else 120))
     if result.get('error'): raise RuntimeError((method,result['error']))
     return result['result']
 
@@ -194,8 +194,9 @@ def prime():
 
 def expire(coins):
     mine(max(0,max(c['expiry_height'] for c in coins)+145-rpc('getblockcount')))
+    anchors={c['chain_anchor'] for c in coins}
     for _ in range(90):
-        if all(q(f"SELECT onchain_spent_txid IS NOT NULL FROM vtxo WHERE vtxo_id='{c['chain_anchor']}'")=='t' for c in coins): break
+        if all(q(f"SELECT onchain_spent_txid IS NOT NULL FROM vtxo WHERE vtxo_id='{anchor}'")=='t' for anchor in anchors): break
         time.sleep(.5)
         mine(1)
     else: raise AssertionError('watchman sweep not observed')

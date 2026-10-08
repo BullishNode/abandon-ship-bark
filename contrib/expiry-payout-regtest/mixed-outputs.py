@@ -39,6 +39,51 @@ try:
 finally:
     configure_task(enabled=False)
     q(f"UPDATE vtxo SET spend_state='unclaimed',updated_at=NOW() WHERE vtxo_id='{rows[0]['id']}'")
+if os.environ.get('EXPIRY_CANCEL_FORFEIT')=='1':
+    q("CREATE FUNCTION cancel_forfeit_hold() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(50327); RETURN NEW; END $$; CREATE TRIGGER cancel_forfeit_hold BEFORE INSERT ON expiry_cancelled_participation FOR EACH ROW EXECUTE FUNCTION cancel_forfeit_hold()")
+    lock=subprocess.Popen(D[:2]+['-i']+D[2:]+['psql','-X','-U','postgres','-d','expiry_task','-At'],
+        stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=(OUT/'cancel-forfeit-lock.log').open('w'),text=True)
+    forfeit=None
+    try:
+        lock.stdin.write("SELECT pg_advisory_lock(50327); SELECT 'locked';\n");lock.stdin.flush()
+        while lock.stdout.readline().strip()!='locked':assert lock.poll() is None
+        configure_task(enabled=True)
+        wait(lambda:int(q("SELECT count(*) FROM pg_stat_activity WHERE wait_event='advisory' AND query LIKE 'INSERT INTO expiry_cancelled_participation%'"))>0,'cancellation holds input associations')
+        forfeit=subprocess.Popen([ROOT/'target/debug/examples/delegated_request'],stdin=subprocess.PIPE,
+            stdout=(OUT/'cached-forfeit.stdout').open('w'),stderr=(OUT/'cached-forfeit.stderr').open('w'),text=True)
+        forfeit.stdin.write(json.dumps(request|{'forfeit_unlock_hash':hash}));forfeit.stdin.close()
+        wait(lambda:int(q("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE 'UPDATE round_part_input SET signed_forfeit_tx%'"))>0,'verified forfeit has cached participation and waits on its input association')
+        lock.stdin.close();lock.wait(timeout=5)
+        assert forfeit.wait(timeout=30)!=0,'cached forfeit unexpectedly returned an unlock preimage'
+        assert 'inputs not fully matched' in (OUT/'cached-forfeit.stderr').read_text()
+        save('cached-forfeit-proof.json',dict(cancellation_won=True,forfeit_rejected=True,unlock_hash=hash))
+    finally:
+        if lock.poll() is None:lock.stdin.close();lock.wait(timeout=5)
+        if forfeit is not None and forfeit.poll() is None:forfeit.terminate();forfeit.wait(timeout=10)
+        q('DROP TRIGGER IF EXISTS cancel_forfeit_hold ON expiry_cancelled_participation; DROP FUNCTION IF EXISTS cancel_forfeit_hold()')
+if os.environ.get('EXPIRY_CANCEL_CRASH')=='1':
+    for table,key,cancelled in [('expiry_cancelled_participation',50325,False),('expiry_settlement',50326,True)]:
+        q(f"CREATE FUNCTION cancel_crash_hold() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock({key}); RETURN NEW; END $$; CREATE TRIGGER cancel_crash_hold BEFORE INSERT ON {table} FOR EACH ROW EXECUTE FUNCTION cancel_crash_hold()")
+        lock=subprocess.Popen(D[:2]+['-i']+D[2:]+['psql','-X','-U','postgres','-d','expiry_task','-At'],
+            stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=(OUT/('crash-lock-'+table+'.log')).open('w'),text=True)
+        try:
+            lock.stdin.write(f"SELECT pg_advisory_lock({key}); SELECT 'locked';\n");lock.stdin.flush()
+            while lock.stdout.readline().strip()!='locked':assert lock.poll() is None
+            configure_task(enabled=True)
+            wait(lambda:int(q(f"SELECT count(*) FROM pg_stat_activity WHERE datname='expiry_task' AND wait_event='advisory' AND query LIKE 'INSERT INTO {table}%'"))>0,'held '+table)
+            stop_daemon('captaind',kill=True)
+            lock.stdin.close();lock.wait(timeout=5)
+            assert q(f"SELECT count(*) FROM expiry_cancelled_participation WHERE id='{hash}'")==str(int(cancelled))
+            assert row(remaining['id']) is None
+            assert q(f"SELECT spend_state FROM vtxo WHERE vtxo_id='{remaining['id']}'")==('spendable' if cancelled else 'spent')
+            assert all(q(f"SELECT spend_state FROM vtxo WHERE vtxo_id='{c['id']}'")==('spent' if cancelled else 'unclaimed') for c in rows)
+            save('crash-'+table+'.json',dict(cancel_committed=cancelled,payment_committed=False,remaining=remaining['id']))
+        finally:
+            if lock.poll() is None:lock.stdin.close();lock.wait(timeout=5)
+            q(f'DROP TRIGGER IF EXISTS cancel_crash_hold ON {table}; DROP FUNCTION IF EXISTS cancel_crash_hold()')
+            if not listening(48535):
+                config=F/'captaind.toml';config.write_text(config.read_text().replace('enabled = true','enabled = false'))
+                start_daemon('captaind')
 configure_task(enabled=True)
 proof=settle([remaining])[0];mine(3)
 assert row(first['id']) is None and all(row(c['id']) is None for c in rows)

@@ -46,5 +46,20 @@ Additional individual flow evidence:
 
 The race test uses two copies of the generated test wallet: a failed offboard reserves the input locally, so attempting refresh from that same copy could silently select zero inputs. Initial run `20261008T014653-a95b50d6` exposed this test defect. Run `20261008T014953-91fa206a` reached the server but failed an overly narrow error-text assertion; the server returned the exact coin as unusable. The passing case requires the rejected coin ID, checks no round participation was created, and independently verifies the final on-chain payment and fee. These are regtest results, not signet or a complete suite.
 
+Recovery and funding cases on the startup-checked native binary:
+
+| Scenario | Observed result | Evidence run |
+| --- | --- | --- |
+| `commit-reply.py` | PASS: the real PostgreSQL COMMIT response is dropped after commit; the task resolves the durable payment and broadcasts it once | `20261008T015346-f52b94bd` |
+| `receipt-outage.py` | PASS: an unwritable receipt directory does not stop payment; fixing the path recreates the exact receipt, as does deleting the file afterward | `20261008T015439-145d62a6` |
+| `participating.py` | PASS: owner refresh after expiry wins before payout; the unfinished round input stays unpaid and its replacement later settles | `20261008T015740-d11b254f` |
+| `unclaimed.py` | PASS with one original input: legitimate unclaimed output pays, a plain Core wallet finds it from the seed over indexes0..200 and spends it | `20261008T015934-936badf4` |
+| `predecessor.py` | PASS with one original input: its confirmed exit excludes the unclaimed replacement from payout | `20261008T020018-e3968e15` |
+| `fragmented.py` | PASS: funding shortage leaves claims intact; the smaller eligible payout uses10inputs, and returning the temporarily withdrawn capital releases the larger payment | `20261008T020105-a8a75839` |
+
+Build the recovery helper with `cargo build --locked -p bark-server --example coin_key_descriptor` before seed recovery cases. It reads the generated wallet mnemonic on stdin; private descriptors and seeds stay in local test state, outside committed evidence. `INPUT_COUNT=2` expands the unclaimed/predecessor setup but is not implied by a one-input pass.
+
+Failed setup attempts remain recorded: commit-reply `20261008T015234-56408767` could not bind a fixed proxy port; it now obtains a free port from the OS. Participating `20261008T015518-ef012ac9` tried to schedule a refresh beyond expiry, which captaind correctly rejected. The corrected case performs an immediate expired-owner refresh instead. Fragmented funding temporarily moves this fixture's rounds funds to its own faucet and returns the same principal; it is not the no-top-up liquidity test.
+
 
 `missing-anchor.py` kills captaind after it commits an unsigned round, while the signed funding update is held. After expiry, Core has never seen that funding transaction. The old task aborted every tick on that candidate and left a later ordinary swept coin unpaid: FAIL at the intended assertion, `20261008T011338-09cc58e0`. With the narrow not-found-as-waiting fix, the same persisted case passes `20261008T011650-5ce34723`; the unfunded replacement stays unpaid and the later valid coin pays. Use `REUSE_MISSING_ANCHOR=1` only to rerun an existing fixture, otherwise the scenario creates a new real interrupted round. Build plus163serverunits PASS `20261008T011527-10d0a02f`; fixed debug captaind SHA256 `fe5b51cedc50238c327b0032a3fe845e1c33d59f3d6a89893b4e72b3a5269eb3`. Transport errors still fail the tick and no missing transaction becomes affirmative sweep proof.

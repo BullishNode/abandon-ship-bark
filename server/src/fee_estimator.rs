@@ -99,7 +99,7 @@ impl Config {
 ///
 /// The fee rates are updated periodically by a background process.
 pub struct FeeEstimator {
-	fee_rates: parking_lot::RwLock<VecDeque<(OnchainFeeRates, Instant)>>,
+	fee_rates: parking_lot::RwLock<VecDeque<(OnchainFeeRates, Instant, Option<OnchainFeeRates>)>>,
 	history_duration: Duration,
 	max_fee_rate: Option<FeeRate>,
 }
@@ -111,7 +111,7 @@ impl FeeEstimator {
 		max_fee_rate: Option<FeeRate>,
 	) -> Self {
 		Self {
-			fee_rates: parking_lot::RwLock::new([(initial, Instant::now())].into()),
+			fee_rates: parking_lot::RwLock::new([(initial, Instant::now(), None)].into()),
 			history_duration, max_fee_rate,
 		}
 	}
@@ -129,6 +129,13 @@ impl FeeEstimator {
 	/// Returns the slow fee rate (6-block confirmation target).
 	pub fn slow(&self) -> FeeRate {
 		self.get_current_rates().slow
+	}
+
+	/// Unclamped estimates from the last successful Core update, or None
+	/// at startup and whenever that update used fallback rates. The estimate
+	/// and its availability are read together, including equal-rate updates.
+	pub fn real_rates(&self) -> Option<OnchainFeeRates> {
+		self.fee_rates.read().front().and_then(|(_, _, real)| *real)
 	}
 
 	/// Checks if the given fee rate is considered a historically retrieved fast fee rate during the
@@ -193,7 +200,7 @@ impl FeeEstimator {
 	{
 		let now = Instant::now();
 		let fee_rates = self.fee_rates.read();
-		for (rates, timestamp) in fee_rates.iter() {
+		for (rates, timestamp, _) in fee_rates.iter() {
 			if now - *timestamp > duration {
 				break;
 			}
@@ -204,18 +211,19 @@ impl FeeEstimator {
 		false
 	}
 
-	fn update(&self, mut rates: OnchainFeeRates) {
+	fn update(&self, mut rates: OnchainFeeRates, using_fallback: bool) {
+		let real_rates = (!using_fallback).then_some(rates);
 		if let Some(max) = self.max_fee_rate {
 			rates.clamp(max);
 		}
 
 		let mut deque = self.fee_rates.write();
 		let now = Instant::now();
-		while deque.back().is_some_and(|(_, timestamp)| now - *timestamp >= self.history_duration) {
+		while deque.back().is_some_and(|(_, timestamp, _)| now - *timestamp >= self.history_duration) {
 			deque.pop_back();
 		}
 
-		deque.push_front((rates, Instant::now()));
+		deque.push_front((rates, now, real_rates));
 	}
 }
 
@@ -258,13 +266,13 @@ impl Process {
 		};
 
 		// grab the latest and then update
-		let latest = self.fee_estimator.fee_rates.read().front().map(|(v, _)| v).cloned()
+		let latest = self.fee_estimator.fee_rates.read().front().map(|(v, _, _)| v).cloned()
 			.unwrap_or(OnchainFeeRates {
 				fast: FeeRate::ZERO,
 				regular: FeeRate::ZERO,
 				slow: FeeRate::ZERO,
 			});
-		self.fee_estimator.update(rates);
+		self.fee_estimator.update(rates, using_fallback);
 		let _ = rates;
 		let current = self.fee_estimator.fee_rates.read().front().unwrap().0;
 
@@ -359,6 +367,20 @@ mod test {
 	}
 
 	#[test]
+	fn real_estimates_exclude_fallback_and_preserve_unclamped_rate() {
+		let rates = OnchainFeeRates { fast: rate(20), regular: rate(10), slow: rate(4) };
+		let estimator = FeeEstimator::new(rates, Duration::from_secs(60), Some(rate(2)));
+		assert_eq!(estimator.real_rates(), None);
+		estimator.update(rates, false);
+		assert_eq!(estimator.real_rates(), Some(rates));
+		assert_eq!(estimator.slow(), rate(2)); // Existing callers retain their cap.
+		estimator.update(rates, true); // Same numeric rates, now a failed estimate.
+		assert_eq!(estimator.real_rates(), None);
+		estimator.update(rates, false);
+		assert_eq!(estimator.real_rates(), Some(rates));
+	}
+
+	#[test]
 	fn offboard_fee_rate_bounds() {
 		let est = estimator(10, 5, 2);
 		let d = Duration::from_secs(3600);
@@ -381,7 +403,7 @@ mod test {
 		// a rate that cleared yesterday's floor is rejected once the
 		// network moves up.
 		let est = estimator(10, 5, 2);
-		est.update(OnchainFeeRates { fast: rate(20), regular: rate(10), slow: rate(4) });
+		est.update(OnchainFeeRates { fast: rate(20), regular: rate(10), slow: rate(4) }, false);
 		let d = Duration::from_secs(3600);
 
 		// 3 was >= the old slow (2) but is below the new slow (4).

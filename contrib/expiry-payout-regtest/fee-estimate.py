@@ -46,7 +46,9 @@ wait(lambda:(F/'receipts'/(row(coin['id'])['txid']+'.json')).exists(), 'fee rece
 proof=payment(coin['id'])
 tx=rpc('getrawtransaction',[proof['txid'],True])
 recipient=[o for o in tx['vout'] if o['scriptPubKey'].get('address')==payout_address(coin)]
-assert len(recipient)==1 and SAT(recipient[0]['value'])+proof['fee_sat']==coin['amount_sat']
+assert len(recipient)==1
+charged=next(o['fee_sat'] for o in proof['receipt']['outputs'] if o['vout']==recipient[0]['n'])
+assert SAT(recipient[0]['value'])+charged==coin['amount_sat']
 mine(3)
 save('fee-estimate-proof.json',dict(wallet=owner,coin=coin,proof=proof))
 event('PASS',scenario='real estimate outage defers eligible native payment; restoration pays',**proof)

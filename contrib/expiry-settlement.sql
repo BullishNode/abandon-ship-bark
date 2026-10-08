@@ -1,7 +1,11 @@
--- Apply once to captaind's database before using the optional settlement RPC.
--- Kept outside refinery so this maintained patch does not take an upstream
--- migration number or prevent stock watchmand from opening the same database.
+-- Run with psql autocommit before starting this fork. Not a refinery migration.
+-- Stock watchmand keeps the same numbered schema; captaind must understand this kind.
+ALTER TYPE nursery_tx_kind ADD VALUE IF NOT EXISTS 'expiry-payout';
 CREATE TABLE IF NOT EXISTS expiry_settlement (
 	id TEXT PRIMARY KEY REFERENCES vtxo(vtxo_id),
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	txid TEXT NOT NULL,
+	raw_tx BYTEA NOT NULL,
+	fee_sat BIGINT NOT NULL CHECK (fee_sat >= 0)
 );
+CREATE INDEX IF NOT EXISTS expiry_settlement_txid ON expiry_settlement (txid);

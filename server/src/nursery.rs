@@ -48,6 +48,8 @@ pub enum NurseryTxKind {
 	VtxoPool,
 	/// An internal wallet tx, e.g. a rounds-to-watchman wallet top-up.
 	Internal,
+	/// Recipient-funded settlement of expired user coins.
+	ExpiryPayout,
 }
 
 impl NurseryTxKind {
@@ -57,6 +59,7 @@ impl NurseryTxKind {
 			Self::Offboard => "offboard",
 			Self::VtxoPool => "vtxopool",
 			Self::Internal => "internal",
+			Self::ExpiryPayout => "expiry-payout",
 		}
 	}
 }
@@ -69,6 +72,7 @@ impl std::str::FromStr for NurseryTxKind {
 			"offboard" => Ok(Self::Offboard),
 			"vtxopool" => Ok(Self::VtxoPool),
 			"internal" => Ok(Self::Internal),
+			"expiry-payout" => Ok(Self::ExpiryPayout),
 			other => Err(anyhow::anyhow!("unknown nursery tx kind: {}", other)),
 		}
 	}
@@ -224,6 +228,19 @@ impl TxNursery {
 			}
 		}
 
+		Ok(())
+	}
+
+	/// A commit can survive without its first broadcast. The sync manager only
+	/// polls the mempool after new blocks, so resume native payments on startup.
+	pub(crate) async fn resume_expiry_payments(&self) -> anyhow::Result<()> {
+		let pending = self.db.read(async |t| t.get_unconfirmed_nursery_txs().await).await?;
+		for (txid, kind) in pending {
+			if kind != NurseryTxKind::ExpiryPayout { continue; }
+			let tx = self.db.read(async |t| t.get_nursery_raw_tx(txid).await).await?
+				.with_context(|| format!("corrupt db: missing expiry tx {}", txid))?;
+			self.broadcast(&tx, kind).await;
+		}
 		Ok(())
 	}
 

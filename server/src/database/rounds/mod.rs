@@ -347,6 +347,7 @@ impl<'t> Tx<'t> {
 			WHERE vtxo.vtxo_id = u.vtxo_id
 				AND vtxo.spend_state = 'spent'
 				AND vtxo.spent_in_round IS NOT NULL
+				AND (vtxo.confirmed_height IS NULL OR vtxo.oor_spent_txid = u.txid)
 				AND (vtxo.oor_spent_txid IS NULL OR vtxo.oor_spent_txid = u.txid)",
 			&[Type::TEXT_ARRAY, Type::TEXT_ARRAY],
 		).await.context("error preparing vtxo query")?;
@@ -362,6 +363,7 @@ impl<'t> Tx<'t> {
 				WHERE v.vtxo_id IS NULL
 					OR v.spend_state != 'spent'
 					OR v.spent_in_round IS NULL
+					OR (v.confirmed_height IS NOT NULL AND v.oor_spent_txid IS DISTINCT FROM u.txid)
 					OR (v.oor_spent_txid IS NOT NULL AND v.oor_spent_txid != u.txid)
 				LIMIT 1",
 				&[Type::TEXT_ARRAY, Type::TEXT_ARRAY],

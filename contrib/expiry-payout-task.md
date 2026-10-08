@@ -1,24 +1,19 @@
-# Native expiry payout task: implementation status
+# Native expiry payout task
 
-Branch `expiry-payout-task` is an unfinished implementation of approach D.
-There is no background payout task yet. It currently retains approach B's
-settlement endpoint while the native path is being built; it is not a release
-of the no-sidecar design.
+Approach D is under qualification on `expiry-payout-task`. Do not deploy it with mainnet funds. The draft now contains the background task; a complete runtime, recovery and client qualification is still pending.
 
-The fee estimator now exposes `real_rates()`. It returns no rate at startup
-or after a fallback update, including when fallback happens to have identical
-numeric values. The returned actual Core estimates bypass the existing rate
-cap; existing fast/regular/slow callers retain their previous behavior.
-Availability and rates are read together under the existing lock.
+`[expiry_payout]` is absent/disabled by default. When enabled, the task pages expired pubkey coins, validates each exact exit path against Core and watchmand's spender records, and requires a confirmed sweep into the rounds wallet. Unclaimed refresh outputs also require every original input's sweep; missing original-input history defers payment. Candidate waiting does not consume the payout batch. Failed batches split so one fee/funding/busy coin does not block every later coin. At most one new payment is made per tick.
 
-Validation, 2026-10-07: server unit suite 161 PASS / 0 FAIL, 12 database tests
-ignored by that invocation. Repository prechecks, ark-lib arithmetic clippy,
-WASM test compilation and complete workspace test/example compilation PASS.
-Compilation is not execution of the integration/database tests. Existing
-warnings remain. Exact commands/output are recorded in the local four-way
-comparison observation log, runs 20261007T234848-4d6af54b and
-20261007T235558-e073fca4.
+The task obtains a real unclamped Core estimate from the existing estimator. Startup/fallback estimates defer payment, even when their numeric values match a prior real estimate. Supported confirmation targets are the estimator's existing1,3 and6 blocks. There is no fixed fallback for expiry payouts.
 
-Still required: the native task, atomic payment integration, receipts/client,
-full regtest and signet qualification, backup/restore and operations runbooks,
-final four-way comparison and production readiness review.
+Under captaind's coin and wallet locks, recipient deductions fund the complete signed transaction's mining fee. Each coin respects the configured percentage cap; shared keys get one output. Coins spent, raw receipt, change derivation metadata and the nursery transaction share one database commit. An ambiguous commit retains the selected inputs until its outcome is known. Startup reapplies durable nursery spends to the rounds wallet before ordinary workers; the nursery retries unbroadcast payments. Complete continuous PostgreSQL backup/WAL replay is required; arbitrary old snapshots are not repaired with a separate journal or chain scan.
+
+There is no expiry settlement RPC, separate sidecar or Core payout wallet in this arm. The rounds wallet funds payouts and receives watchmand sweeps. Apply `contrib/expiry-settlement.sql` with psql autocommit before starting this fork; it extends the nursery kind and creates the native receipts table outside numbered migrations. It is not an in-place migration from approach B's different receipt schema. Stock watchmand's numbered schema remains unchanged.
+
+Defaults: interval60s, grace1008blocks, sweep depth100, minimum10000sat gross, fee cap20%, batch100, confirmation target6. Mainnet enforces grace>=144 and sweep depth>=100. Regtest/signet timing overrides are test settings. `receipt_dir` is empty by default; set it to a directory served at `/expiry-payouts/` on the Ark HTTP origin for the shared client's exact fee display. Receipt files contain only txid/output/net/fee and are regenerated when missing. Publication errors do not undo a committed payment.
+
+The deployment must verify watchmand's actual sweep address belongs to the rounds wallet. That startup deployment check and complete operational runbooks are still open. Turning off the task stops new payouts; already committed nursery transactions still recover and broadcast. The task's fee-receipt exporter runs only when enabled.
+
+Validation checkpoint2026-10-07: initial native compilation failed for a missing extension-trait import; corrected server/test/example check and163server units PASS/0FAIL. These are not database integration tests. Autonomous runtime test PASS:119670sat gross ->119208sat at tr(coin key),462sat full mining fee; one receipt and nursery row, confirmed after repeated ticks. Independent Core destination/amount check PASS. Complete workspace checks PASS; an earlier precheck invocation failed because the deleted RPC example had not yet been staged, then passed after staging. The earlier real-rate foundation passed repository prechecks and complete workspace compilation; repeat those checks for the complete task before committing.
+
+`contrib/expiry-payout-regtest` owns a separate Core/Postgres fixture with WAL archiving and generated test wallets. No top-ups occur after bootstrap apart from explicitly declared user boards. It does not touch the original abandon-regtest volumes. Initial test covers autonomous expiry, exact fee receipt and nursery confirmation. Evidence runs:20261008T004212-493a1415(runtime),20261008T004445-6f36be7e(recipient),20261008T004425-fc2ace95(repository checks). Still required: all races/branches/crash/PITR/history/funding/capital/client cases, disabled behavior, common framework adapters, final images, all signet gates and four-way review.

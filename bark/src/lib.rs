@@ -1927,8 +1927,12 @@ impl Wallet {
 
 		info!("Waiting for round to perform maintenance refresh...");
 		let mut events = self.subscribe_round_events().await?;
+		// The first event can be replayed near the submission deadline.
+		// Wait for a later round to get its full submission window.
+		let initial_round = events.next().await.context("round event stream ended")??.round_seq();
 		while let Some(event) = events.next().await {
 			let event = event.context("error on round event stream")?;
+			if event.round_seq() <= initial_round { continue; }
 			if let RoundEvent::Attempt(a) = event && a.attempt_seq == 0 {
 				debug!("Round {} started, triggering maintenance refresh", a.round_seq);
 				let state_id = match self.join_round_for_maintenance_refresh(&a).await? {
@@ -2247,8 +2251,12 @@ impl Wallet {
 
 		info!("Waiting for a round start...");
 		let mut events = self.subscribe_round_events().await?;
+		// The first event can be replayed near the submission deadline.
+		// Wait for a later round to get its full submission window.
+		let initial_round = events.next().await.context("round event stream ended")??.round_seq();
 		while let Some(event) = events.next().await {
 			let event = event.context("error on round event stream")?;
+			if event.round_seq() <= initial_round { continue; }
 			let RoundEvent::Attempt(attempt) = event else { continue };
 			if attempt.attempt_seq != 0 {
 				continue;

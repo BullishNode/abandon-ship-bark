@@ -212,13 +212,15 @@ pub struct Config {
 	/// Existing estimator targets: 1, 3 or 6 blocks.
 	pub conf_target_blocks: u16,
 	pub receipt_dir: PathBuf,
+	/// The same configuration file mounted into the watchmand process.
+	pub watchman_config: Option<PathBuf>,
 }
 
 impl Default for Config {
 	fn default() -> Self {
 		Self { enabled: false, interval: Duration::from_secs(60), grace_blocks: 1008,
 			sweep_min_confs: 100, min_payout_sat: 10_000, max_fee_pct: 20,
-			max_batch: 100, conf_target_blocks: 6, receipt_dir: PathBuf::new() }
+			max_batch: 100, conf_target_blocks: 6, receipt_dir: PathBuf::new(), watchman_config: None }
 	}
 }
 

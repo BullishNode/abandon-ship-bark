@@ -9,3 +9,12 @@ CREATE TABLE IF NOT EXISTS expiry_settlement (
 	fee_sat BIGINT NOT NULL CHECK (fee_sat >= 0)
 );
 CREATE INDEX IF NOT EXISTS expiry_settlement_txid ON expiry_settlement (txid);
+-- Keep the exact exchange attribution when its live participation is removed.
+CREATE TABLE IF NOT EXISTS expiry_cancelled_participation (
+	id TEXT PRIMARY KEY,
+	round_id BIGINT NOT NULL REFERENCES round(id),
+	input_ids TEXT[] NOT NULL,
+	output_ids TEXT[] NOT NULL,
+	exited_ids TEXT[] NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

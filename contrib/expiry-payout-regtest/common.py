@@ -198,4 +198,3 @@ def payment(id):
 def payout_address(coin):
     d=rpc('getdescriptorinfo',['tr('+coin['user_pubkey'][2:]+')'])['descriptor']
     return rpc('deriveaddresses',[d])[0]
-

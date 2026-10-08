@@ -18,7 +18,7 @@ OUT = E / os.environ.get('EXPIRY_CASE', 'native-tests')
 OUT.mkdir(parents=True,exist_ok=True)
 PROJECT = 'abandon-captaind-task'
 D = ['docker', 'exec', PROJECT + '-postgres']
-IMAGE = 'abandon-ship/bark:release-3a8f9694a'
+IMAGE = 'abandon-ship/bark:release-2c29c425d'
 NATIVE_IMAGE = os.environ.get('EXPIRY_NATIVE_IMAGE')
 N = 0
 COMMAND_LOCK = threading.Lock()
@@ -74,9 +74,20 @@ def listening(port):
     with socket.socket() as s: return s.connect_ex(('127.0.0.1',port)) == 0
 
 
-def start_daemon(name, image=None):
+def start_daemon(name, image=None, bind_retries=2):
     port = 48535 if name=='captaind' else 48538
     assert not listening(port)
+    # These fixture ports lie in Linux's ephemeral range. After a daemon stops,
+    # an unrelated outbound connection can temporarily occupy one of them.
+    ports=[48535,48536,48537] if name=='captaind' else [48538]
+    def ports_available():
+        for p in ports:
+            with socket.socket() as s:
+                s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+                try:s.bind(('127.0.0.1',p))
+                except OSError:return False
+        return True
+    wait(ports_available,name+' fixture ports free',120)
     args=[str(B/'target/debug'/name),'--config',str(F/(name+'.toml')),'start']
     daemon_image=image or NATIVE_IMAGE
     if daemon_image:
@@ -85,14 +96,23 @@ def start_daemon(name, image=None):
             '-v',str(E)+':'+str(E),'-e','RUST_LOG=info','-e','CAPTAIND_LOG=info',
             '-e','WATCHMAND_LOG=info','--entrypoint',name,daemon_image,*args[1:]]
         (F/(name+'.container')).write_text(container)
+    log=OUT/(name+'.log')
+    log_start=log.stat().st_size if log.exists() else 0
     p = subprocess.Popen(args,
         stdout=(OUT/(name+'.log')).open('a'),stderr=subprocess.STDOUT,start_new_session=True,
         env={**os.environ,'RUST_LOG':'info','CAPTAIND_LOG':'info','WATCHMAND_LOG':'info'})
     (F/(name+'.pid')).write_text(str(p.pid))
     def ready():
         assert p.poll() is None, name+' startup failed'
-        return listening(port)
-    wait(ready,name+' start')
+        return all(listening(port) for port in ports)
+    try:wait(ready,name+' start')
+    except AssertionError:
+        # Handle allocation in the small bind-check/start window too. Retry
+        # only this observed bind failure, never an application startup error.
+        if bind_retries and p.poll() is not None and 'Address already in use' in log.read_text()[log_start:]:
+            event('fixture-bind-retry',daemon=name)
+            return start_daemon(name,image,bind_retries-1)
+        raise
 
 
 def stop_daemon(name, kill=False):

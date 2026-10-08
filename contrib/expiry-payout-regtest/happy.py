@@ -7,7 +7,9 @@ wait(lambda:row(coin['id']), 'native task payout')
 proof=wait(lambda: payment(coin['id']) if (F/'receipts'/(row(coin['id'])['txid']+'.json')).exists() else None, 'native fee receipt')
 tx=rpc('getrawtransaction',[proof['txid'],True])
 recipient=[o for o in tx['vout'] if o['scriptPubKey'].get('address')==payout_address(coin)]
-assert len(recipient)==1 and SAT(recipient[0]['value'])+proof['fee_sat']==coin['amount_sat']
+assert len(recipient)==1
+charged=next(o['fee_sat'] for o in proof['receipt']['outputs'] if o['vout']==recipient[0]['n'])
+assert SAT(recipient[0]['value'])+charged==coin['amount_sat']
 # Ticks run without any sidecar or Exchange call.
 time.sleep(3)
 assert row(coin['id'])['txid']==proof['txid']

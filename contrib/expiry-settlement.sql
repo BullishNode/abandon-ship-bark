@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS expiry_settlement (
 	fee_sat BIGINT NOT NULL CHECK (fee_sat >= 0)
 );
 CREATE INDEX IF NOT EXISTS expiry_settlement_txid ON expiry_settlement (txid);
+CREATE INDEX IF NOT EXISTS expiry_payout_candidates ON vtxo (expiry, vtxo_id)
+	WHERE policy_type='pubkey' AND spend_state IN ('spendable','unclaimed')
+	AND confirmed_height IS NULL;
 -- Keep the exact exchange attribution when its live participation is removed.
 CREATE TABLE IF NOT EXISTS expiry_cancelled_participation (
 	id TEXT PRIMARY KEY,

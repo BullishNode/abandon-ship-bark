@@ -380,6 +380,19 @@ impl Server {
 			db.clone(), bitcoind.clone(), cfg.network, &wallet_xpriv, WalletKind::Rounds, deep_tip,
 			cfg.min_trusted_confs,
 		).await.context("error loading rounds wallet")?;
+		if cfg.expiry_payout.enabled {
+			let path = cfg.expiry_payout.watchman_config.as_ref()
+				.context("enabled expiry payouts require watchman_config")?;
+			let watchman = config::watchmand::Config::load(path)
+				.context("failed loading expiry payout watchman config")?;
+			ensure!(watchman.network == cfg.network, "watchmand and captaind networks differ");
+			let address = watchman.sweep_address.context("watchmand sweep_address is missing")?
+				.require_network(cfg.network)?;
+			ensure!(rounds_wallet.is_mine(address.script_pubkey()),
+				"expiry payouts require watchmand sweeps into the rounds wallet");
+			ensure!(cfg.rpc.admin_address.is_none_or(|a| a.ip().is_loopback()),
+				"expiry payouts require the admin RPC to be disabled or bound to loopback");
+		}
 		// Reapply durable nursery spends before any worker can select their inputs.
 		for tx in db.read(async |t| t.pending_expiry_payments(rounds_wallet.latest_checkpoint().height()).await).await? {
 			rounds_wallet.commit_tx(&tx);

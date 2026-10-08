@@ -117,3 +117,4 @@ min_payout_sat = 1000
 max_fee_pct = 20
 max_batch = 100
 receipt_dir = "__FIXTURE__/receipts"
+watchman_config = "__FIXTURE__/watchmand.toml"

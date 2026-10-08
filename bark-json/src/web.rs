@@ -212,6 +212,10 @@ pub struct CreateWalletRequest {
 	pub chain_source: Option<ChainSourceConfig>,
 	/// The optional mnemonic to use for the wallet
 	pub mnemonic: Option<String>,
+	/// The supplied mnemonic was just generated and has no transaction history.
+	/// Never set this when restoring an existing wallet.
+	#[serde(default)]
+	pub fresh_mnemonic: bool,
 	/// The network to use for the wallet
 	pub network: BarkNetwork,
 	/// An optional birthday height to start syncing the wallet from

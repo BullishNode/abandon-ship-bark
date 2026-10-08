@@ -82,7 +82,7 @@ def start_daemon(name, image=None):
             '-e','WATCHMAND_LOG=info','--entrypoint',name,daemon_image,*args[1:]]
         (F/(name+'.container')).write_text(container)
     p = subprocess.Popen(args,
-        stdout=(OUT/(name+'.log')).open('a'),stderr=subprocess.STDOUT,
+        stdout=(OUT/(name+'.log')).open('a'),stderr=subprocess.STDOUT,start_new_session=True,
         env={**os.environ,'RUST_LOG':'info','CAPTAIND_LOG':'info','WATCHMAND_LOG':'info'})
     (F/(name+'.pid')).write_text(str(p.pid))
     def ready():
@@ -156,12 +156,12 @@ def board(label, amount=60000):
 
 
 def prime():
-    if 'feerate' in rpc('estimatesmartfee',[6]): return
+    if all('feerate' in rpc('estimatesmartfee',[target]) for target in [1,3,6]): return
     for _ in range(12):
         for _ in range(8):
             rpc('sendtoaddress',[rpc('getnewaddress'),.001,'','',False,True,None,'unset',None,3])
         mine(1)
-    assert 'feerate' in rpc('estimatesmartfee',[6])
+    assert all('feerate' in rpc('estimatesmartfee',[target]) for target in [1,3,6])
 
 
 def expire(coins):
@@ -198,3 +198,33 @@ def payment(id):
 def payout_address(coin):
     d=rpc('getdescriptorinfo',['tr('+coin['user_pubkey'][2:]+')'])['descriptor']
     return rpc('deriveaddresses',[d])[0]
+
+
+def configure_task(**settings):
+    """Restart only this private captaind, preserving all unrelated settings."""
+    import re
+    config=F/'captaind.toml'
+    text=config.read_text()
+    before,section=text.split('[expiry_payout]',1)
+    for key,value in settings.items():
+        value=json.dumps(value)
+        section,n=re.subn(r'(?m)^'+key+r' = .*$',key+' = '+value,section)
+        assert n==1,(key,n)
+    stop_daemon('captaind')
+    config.write_text(before+'[expiry_payout]'+section)
+    start_daemon('captaind')
+
+
+def ticks(count=3):
+    """Observe actual completed ticks, rather than assuming a sleep is enough."""
+    log=OUT/'captaind.log'
+    baseline=log.read_text().count('expiry payout tick summary')
+    wait(lambda:log.read_text().count('expiry payout tick summary')>=baseline+count,
+        str(count)+' completed native ticks')
+
+
+def settle(coins):
+    for c in coins:
+        r=wait(lambda:row(c['id']),'native payment '+c['id'])
+        wait(lambda:(F/'receipts'/(r['txid']+'.json')).exists(),'public receipt')
+    return [payment(c['id']) for c in coins]

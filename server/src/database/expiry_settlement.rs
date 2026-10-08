@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use anyhow::Context;
 use ark::{ProtocolEncoding, VtxoId, Vtxo};
+use ark::tree::signed::UnlockHash;
 use bitcoin::{ScriptBuf, Transaction};
 use bitcoin::consensus::{deserialize, serialize};
 use crate::expiry_payout::{FeeOutput, Payment, Status};
@@ -11,6 +12,7 @@ use tokio_postgres::Row;
 
 use crate::nursery::NurseryTxKind;
 use crate::SECP;
+use super::model::SpendState;
 use super::Tx;
 
 pub(crate) struct SettlementVtxo {
@@ -53,7 +55,7 @@ impl Tx<'_> {
 				AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
 				AND v.policy_type = 'pubkey' AND v.spend_state IN ('spendable', 'unclaimed')
 				AND v.confirmed_height IS NULL AND v.expiry::bigint + $3 <= $4
-				AND v.amount >= $5 ORDER BY v.expiry, v.vtxo_id LIMIT $6",
+				AND (v.amount >= $5 OR v.spend_state='unclaimed') ORDER BY v.expiry, v.vtxo_id LIMIT $6",
 				&[&(after.0 as i64), &after.1, &(grace as i64), &(tip as i64),
 					&i64::try_from(minimum)?, &(limit as i64)]).await?
 		};
@@ -140,6 +142,49 @@ impl Tx<'_> {
 			SELECT unnest($1::text[]),$2,$3,$4", &[&ids, &txid, &serialize(tx), &i64::try_from(fee)?]).await?;
 		self.upsert_nursery_tx(tx, NurseryTxKind::ExpiryPayout, confirm_target).await?;
 		Ok(())
+	}
+
+	/// Retire an irrecoverable delegated exchange and release only its swept
+	/// originals. The caller holds all coin locks and proves every chain path.
+	pub(crate) async fn cancel_expired_participation(
+		&self, hash: UnlockHash, round_id: i64, inputs: &[VtxoId], outputs: &[VtxoId], exited: &[VtxoId],
+	) -> anyhow::Result<bool> {
+		// Forfeit registration takes these association locks before coin rows.
+		// A cached registration must lose here if cancellation commits first.
+		let associations = self.query("SELECT i.vtxo_id FROM round_part_input i
+			JOIN round_participation p ON p.id=i.participation_id
+			WHERE p.unlock_hash=$1 ORDER BY i.vtxo_id FOR UPDATE OF i", &[&hash.to_string()]).await?;
+		let Some(part) = self.get_round_participation_by_unlock_hash(hash).await? else { return Ok(false); };
+		if associations.len() != inputs.len() || part.forfeited_at.is_some()
+			|| part.inputs.len() != inputs.len() || part.inputs.iter().any(|i|
+				i.signed_forfeit_tx.is_some() || !inputs.contains(&i.vtxo_id)) { return Ok(false); }
+		let Some(round) = part.round_id else { return Ok(false); };
+		if self.get_round(round).await?.map(|r| r.id) != Some(round_id) { return Ok(false); }
+		let keys: Vec<String> = inputs.iter().chain(outputs).map(ToString::to_string).collect();
+		self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&keys]).await?;
+		if !self.query("SELECT id FROM expiry_settlement WHERE id=ANY($1)", &[&keys]).await?.is_empty() {
+			return Ok(false);
+		}
+		let old = self.get_user_vtxos_by_id(inputs).await?;
+		let new = self.get_user_vtxos_by_id(outputs).await?;
+		if old.len() != inputs.len() || new.len() != outputs.len()
+			|| old.iter().any(|v| v.spend_state != SpendState::Spent || v.spent_in_round != Some(round_id)
+				|| v.oor_spent_txid.is_some() || v.offboarded_in.is_some()
+				|| (v.confirmed_height.is_some() && !exited.contains(&v.vtxo_id)))
+			|| new.iter().any(|v| v.spend_state != SpendState::Unclaimed || v.spent_in_round.is_some()
+				|| v.oor_spent_txid.is_some() || v.offboarded_in.is_some() || v.confirmed_height.is_some()) {
+			return Ok(false);
+		}
+		let input_keys: Vec<String> = inputs.iter().map(ToString::to_string).collect();
+		let output_keys: Vec<String> = outputs.iter().map(ToString::to_string).collect();
+		let exited_keys: Vec<String> = exited.iter().map(ToString::to_string).collect();
+		self.execute("INSERT INTO expiry_cancelled_participation (id,round_id,input_ids,output_ids,exited_ids)
+			VALUES ($1,$2,$3,$4,$5)", &[&hash.to_string(), &round_id, &input_keys, &output_keys, &exited_keys]).await?;
+		self.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW() WHERE vtxo_id=ANY($1)", &[&output_keys]).await?;
+		self.execute("UPDATE vtxo SET spend_state='spendable',spent_in_round=NULL,updated_at=NOW()
+			WHERE vtxo_id=ANY($1) AND NOT(vtxo_id=ANY($2))", &[&input_keys, &exited_keys]).await?;
+		ensure!(self.remove_round_participation(hash).await?, "expired participation disappeared");
+		Ok(true)
 	}
 
 	pub(crate) async fn pending_expiry_payments(&self, wallet_height: u32) -> anyhow::Result<Vec<Transaction>> {

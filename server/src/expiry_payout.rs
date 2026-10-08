@@ -9,7 +9,7 @@ use std::io::Write;
 use std::str::FromStr;
 
 use anyhow::Context;
-use ark::{ProtocolEncoding, Vtxo, VtxoId};
+use ark::{ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy};
 use bdk_wallet::coin_selection::LargestFirstCoinSelection;
 use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Transaction, Txid, Weight};
 use serde::{Deserialize, Serialize};
@@ -294,12 +294,15 @@ impl Server {
 		let tip = self.chain_tip().height.to_u32();
 		let mut cursor = (0, String::new());
 		let mut batch = Vec::new();
+		let mut cancellation_attempts = BTreeSet::new();
 		loop {
 			let page = self.db.read(async |t| t.expiry_settlement_page(false, tip,
 				cfg.grace_blocks, cfg.min_payout_sat, cursor.clone(), 256).await).await?;
 			let Some(last) = page.last() else { break; };
 			cursor = (last.expiry, last.id.to_string());
 			for coin in page {
+				// Padding leaves have no participation or owner entitlement.
+				if coin.unclaimed && coin.predecessors.is_empty() { continue; }
 				stats.candidates += 1;
 				let vtxo = Vtxo::deserialize(&coin.vtxo)?;
 				if !self.expiry_path_swept(&vtxo).await? { stats.waiting += 1; continue; }
@@ -308,8 +311,17 @@ impl Server {
 					for bytes in &coin.predecessors {
 						if !self.expiry_path_swept(&Vtxo::deserialize(bytes)?).await? { safe = false; break; }
 					}
-					if !safe { stats.waiting += 1; continue; }
+					if !safe {
+						if let Some(hash) = vtxo.unlock_hash() {
+							if cancellation_attempts.insert(hash) {
+								self.cancel_failed_expiry_refresh(&vtxo).await?;
+							}
+						}
+						stats.waiting += 1;
+						continue;
+					}
 				}
+				if vtxo.amount().to_sat() < cfg.min_payout_sat { stats.waiting += 1; continue; }
 				batch.push(coin.id);
 				if batch.len() == cfg.max_batch {
 					let paid = self.pay_expiry_batch(std::mem::take(&mut batch), rate).await?;
@@ -318,6 +330,52 @@ impl Server {
 			}
 		}
 		if !batch.is_empty() { stats.paid = self.pay_expiry_batch(batch, rate).await?; }
+		Ok(())
+	}
+
+	/// When an original exited, an unfinished delegated exchange can no longer
+	/// complete. After every replacement is swept, preserve the original owners'
+	/// claims instead of inventing a partial allocation across replacement keys.
+	async fn cancel_failed_expiry_refresh(&self, vtxo: &Vtxo) -> anyhow::Result<()> {
+		let Some(hash) = vtxo.unlock_hash() else { return Ok(()); };
+		let Some(part) = self.db.read(async |t| t.get_round_participation_by_unlock_hash(hash).await).await?
+			else { return Ok(()); };
+		let Some(round_id) = part.round_id else { return Ok(()); };
+		if round_id.as_round_txid() != vtxo.chain_anchor().txid || part.forfeited_at.is_some()
+			|| part.inputs.is_empty() || part.inputs.iter().any(|i| i.is_forfeited()) { return Ok(()); }
+		let Some(round) = self.db.read(async |t| t.get_round(round_id).await).await? else { return Ok(()); };
+		let db_id = round.id;
+		let tree = round.into_cached_tree()?;
+		let indexes = tree.spec.spec.leaf_idxs_for_participation(hash, part.outputs.iter().map(|o| &o.vtxo_request))
+			.context("expired participation leaves missing")?;
+		if indexes.is_empty() || indexes.iter().any(|i| tree.spec.spec.vtxos[*i].cosign_pubkey.is_some()) { return Ok(()); }
+		let outputs = indexes.into_iter().map(|i| tree.build_vtxo(i)).collect::<Vec<_>>();
+		let output_ids = outputs.iter().map(Vtxo::id).collect::<Vec<_>>();
+		let input_ids = part.inputs.iter().map(|i| i.vtxo_id).collect::<Vec<_>>();
+		let ids = input_ids.iter().chain(&output_ids).copied().collect::<Vec<_>>();
+		let Ok(_flux) = self.vtxos_in_flux.try_lock(&ids) else { return Ok(()); };
+		let inputs = self.db.read(async |t| t.get_user_vtxos_by_id(&input_ids).await).await?;
+		// HTLC ownership resolution is outside this pubkey payout policy.
+		if outputs.iter().chain(inputs.iter().map(|v| &v.vtxo))
+			.any(|v| !matches!(v.policy(), VtxoPolicy::Pubkey(..))) { return Ok(()); }
+		for output in &outputs {
+			if !self.expiry_path_swept(output).await? { return Ok(()); }
+		}
+		let mut exited = Vec::new();
+		for input in &inputs {
+			let leaf = input.vtxo_id.to_point();
+			if let Some(tx) = crate::bitcoind::custom_get_raw_transaction_info(&self.bitcoind, leaf.txid, None).await? {
+				if tx.confirmations.unwrap_or(0) > 0 { exited.push(input.vtxo_id); continue; }
+			}
+			// A waiting/live path remains in the original exchange. Only swept
+			// originals are released here, so none can also exit after release.
+			if !self.expiry_path_swept(&input.vtxo).await? { return Ok(()); }
+		}
+		if exited.is_empty() { return Ok(()); }
+		if self.db.write(async |t| t.cancel_expired_participation(hash, db_id, &input_ids, &output_ids, &exited).await).await? {
+			info!(unlock_hash = %hash, round = %round_id, inputs = input_ids.len(), exited = exited.len(),
+				"cancelled swept delegated exchange; original swept entitlements released");
+		}
 		Ok(())
 	}
 

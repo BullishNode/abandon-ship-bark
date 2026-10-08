@@ -4,8 +4,7 @@ ALTER TYPE nursery_tx_kind ADD VALUE IF NOT EXISTS 'expiry-payout';
 CREATE TABLE IF NOT EXISTS expiry_settlement (
 	id TEXT PRIMARY KEY REFERENCES vtxo(vtxo_id),
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	txid TEXT NOT NULL,
-	raw_tx BYTEA NOT NULL,
+	txid TEXT NOT NULL REFERENCES nursery_tx(txid),
 	fee_sat BIGINT NOT NULL CHECK (fee_sat >= 0)
 );
 CREATE INDEX IF NOT EXISTS expiry_settlement_txid ON expiry_settlement (txid);

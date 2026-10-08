@@ -12,7 +12,6 @@ use anyhow::Context;
 use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use bdk_wallet::coin_selection::LargestFirstCoinSelection;
 use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Transaction, Txid, Weight};
-use bitcoind_async_client::traits::Reader;
 use serde::{Deserialize, Serialize};
 use bitcoin_ext::bdk::{WalletExt, WithGuaranteedChange};
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
@@ -323,7 +322,12 @@ impl Server {
 	async fn expiry_path_swept(&self, vtxo: &Vtxo) -> anyhow::Result<bool> {
 		let anchor = vtxo.chain_anchor();
 		if self.bitcoind.try_get_tx_out(anchor, true).await?.is_some() { return Ok(false); }
-		let anchor_tx = self.bitcoind.get_raw_transaction_verbosity_zero(&anchor.txid).await?.0;
+		// A crash can leave a persisted unsigned round that Core never saw.
+		// Keep that candidate waiting without starving later funded coins.
+		let Some(anchor_info) = crate::bitcoind::custom_get_raw_transaction_info(
+			&self.bitcoind, anchor.txid, None,
+		).await? else { return Ok(false); };
+		let anchor_tx = bitcoin::consensus::deserialize(&anchor_info.hex)?;
 		vtxo.validate_unsigned(&anchor_tx).context("invalid expiry path")?;
 		let path = std::iter::once(anchor).chain(vtxo.transactions()
 			.map(|t| OutPoint::new(t.tx.compute_txid(), t.output_idx as u32))).collect::<Vec<_>>();

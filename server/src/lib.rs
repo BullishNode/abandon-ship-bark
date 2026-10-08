@@ -374,6 +374,12 @@ impl Server {
 		let wallet_xpriv = master_xpriv.derive_priv(
 			&crate::SECP, &[WalletKind::Rounds.child_number()],
 		).expect("can't error");
+		// A dead process's COMMIT can still be running in Postgres. Wait for its
+		// nursery writes before loading wallet metadata or pending payments.
+		db.write(async |t| {
+			t.execute("LOCK TABLE nursery_tx IN SHARE MODE", &[]).await?;
+			Ok(())
+		}).await.context("waiting for prior nursery commits")?;
 		let mut rounds_wallet = PersistedWallet::load_from_xpriv(
 			db.clone(), bitcoind.clone(), cfg.network, &wallet_xpriv, WalletKind::Rounds, deep_tip,
 			cfg.min_trusted_confs,

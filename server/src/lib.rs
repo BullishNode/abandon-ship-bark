@@ -235,7 +235,6 @@ impl Server {
 		if cfg.data_dir.join(MNEMONIC_FILE).exists() {
 			bail!("Found an existing mnemonic file in datadir, the server is probably already initialized!");
 		}
-
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		// Check if our bitcoind is on the expected network.
 		let network = bitcoind.network().await?;
@@ -357,7 +356,6 @@ impl Server {
 		let db = database::Db::connect(&cfg.postgres)
 			.await
 			.context("failed to connect to db")?;
-
 
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		bcd::require_network(&bitcoind, cfg.network).await?;

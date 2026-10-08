@@ -184,7 +184,7 @@ def expire(coins):
 
 
 def row(id):
-    data=q(f"SELECT row_to_json(s) FROM (SELECT s.id,s.txid,s.fee_sat,encode(s.raw_tx,'hex') raw FROM expiry_settlement s WHERE s.id='{id}') s")
+    data=q(f"SELECT row_to_json(s) FROM (SELECT s.id,s.txid,s.fee_sat,encode(n.tx,'hex') raw FROM expiry_settlement s JOIN nursery_tx n ON n.txid=s.txid WHERE s.id='{id}') s")
     return json.loads(data) if data else None
 
 

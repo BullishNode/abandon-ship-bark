@@ -22,8 +22,9 @@ use crate::nursery::NurseryTxKind;
 use crate::wallet::{BdkWalletExt, WalletKind};
 use crate::Server;
 
-fn deferred(status: Status, reason: impl ToString) -> Payment {
-	Payment { status, reason: reason.to_string(), ..Default::default() }
+fn deferred(reason: impl std::fmt::Display) -> Option<Payment> {
+	warn!("expiry batch deferred: {reason}");
+	None
 }
 
 /// Largest remainders, tied by sorted coin ID, keep all integer shares within
@@ -41,16 +42,15 @@ fn fee_shares(amounts: &[u64], fee: u64) -> anyhow::Result<Vec<u64>> {
 }
 
 impl Server {
-	async fn claim_and_pay(&self, ids: Vec<VtxoId>, fee_rate: FeeRate) -> anyhow::Result<Payment> {
+	async fn claim_and_pay(&self, ids: Vec<VtxoId>, fee_rate: FeeRate) -> anyhow::Result<Option<Payment>> {
 		let cfg = self.config.expiry_payout.clone();
 		ensure!((1..=100).contains(&ids.len()), "expected 1..100 expiry coins");
 		let keys: Vec<String> = ids.iter().map(ToString::to_string).collect();
 		ensure!(keys.iter().collect::<BTreeSet<_>>().len() == keys.len(), "duplicate expiry coin ID");
-		let Ok(_flux) = self.vtxos_in_flux.try_lock(&ids) else { return Ok(deferred(Status::Busy, "coin in flux")) };
-		if let Some(payment) = self.db.read(async |t| t.expiry_replay(&keys).await).await? { return Ok(payment) }
+		let Ok(_flux) = self.vtxos_in_flux.try_lock(&ids) else { return Ok(deferred("coin in flux")) };
 		let tip = self.chain_tip().height.to_u32();
 		let coins = self.db.read(async |t| t.expiry_inputs(&keys, tip, cfg.grace_blocks, cfg.min_payout_sat).await).await?;
-		if coins.len() != ids.len() { return Ok(deferred(Status::Ineligible, "coin is spent, exited, too small, in grace or participating")) }
+		if coins.len() != ids.len() { return Ok(deferred("coin is spent, exited, too small, in grace or participating")) }
 		let mut expected = BTreeMap::<ScriptBuf,u64>::new();
 		for v in &coins { *expected.entry(payout_script(v)).or_default() += v.amount().to_sat(); }
 		let pct = u64::from(cfg.max_fee_pct);
@@ -107,12 +107,12 @@ impl Server {
 		}).await;
 		let (mut wallet, (tx, fee)) = match built {
 			Ok(b) => b,
-			Err(e) => return Ok(deferred(Status::Busy, format!("payout funding/fee deferred: {e:#}"))),
+			Err(e) => return Ok(deferred(format!("payout funding/fee deferred: {e:#}"))),
 		};
 		let accepted = crate::bitcoind::test_mempool_accept(&self.bitcoind, &[&tx]).await?;
 		if !accepted[0].allowed {
 			wallet.mark_output_keys_unused(&tx);
-			return Ok(deferred(Status::Busy, format!("payout not accepted: {:?}", accepted[0].reject_reason)));
+			return Ok(deferred(format!("payout not accepted: {:?}", accepted[0].reject_reason)));
 		}
 		// The raw transaction alone cannot recover a change key beyond the
 		// restored wallet's lookahead. Commit its derivation metadata with it.
@@ -139,11 +139,11 @@ impl Server {
 					// its result: a lost COMMIT response alone does not mean rollback.
 					let outcome = db.write(async |t| {
 						t.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) FOR UPDATE", &[&keys]).await?;
-						t.expiry_replay(&keys).await
+						Ok(t.get_nursery_raw_tx(tx.compute_txid()).await?.is_some())
 					}).await;
 					match outcome {
-						Ok(None) => { wallet.mark_output_keys_unused(&tx); return Err(error); },
-						Ok(Some(_)) => break,
+						Ok(false) => { wallet.mark_output_keys_unused(&tx); return Err(error); },
+						Ok(true) => break,
 						Err(e) => {
 							warn!("expiry commit outcome unavailable; retaining wallet inputs until database returns: {e:#}");
 							tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -157,8 +157,7 @@ impl Server {
 			drop(wallet);
 			nursery.broadcast_tx(tx.clone(), NurseryTxKind::ExpiryPayout, target).await?;
 			db.read(async |t| t.expiry_receipt(&tx.compute_txid().to_string()).await).await
-		}).await?
-
+		}).await?.map(Some)
 	}
 }
 
@@ -242,12 +241,7 @@ impl Config {
 	}
 }
 
-#[derive(Default, Eq, PartialEq)]
-pub(crate) enum Status { #[default] Ineligible, Busy, Paid }
-#[derive(Default)]
 pub(crate) struct Payment {
-	pub status: Status,
-	pub reason: String,
 	pub txid: String,
 	pub raw_tx: Vec<u8>,
 	pub fee_sat: u64,
@@ -296,7 +290,7 @@ impl Server {
 		let mut batch = Vec::new();
 		let mut cancellation_attempts = BTreeSet::new();
 		loop {
-			let page = self.db.read(async |t| t.expiry_settlement_page(false, tip,
+			let page = self.db.read(async |t| t.expiry_settlement_page(tip,
 				cfg.grace_blocks, cfg.min_payout_sat, cursor.clone(), 256).await).await?;
 			let Some(last) = page.last() else { break; };
 			cursor = (last.expiry, last.id.to_string());
@@ -412,13 +406,11 @@ impl Server {
 	async fn pay_expiry_batch(&self, batch: Vec<VtxoId>, rate: FeeRate) -> anyhow::Result<usize> {
 		let mut pending = VecDeque::from([batch]);
 		while let Some(mut batch) = pending.pop_front() {
-			let payment = self.claim_and_pay(batch.clone(), rate).await?;
-			if payment.status == Status::Paid {
+			if let Some(payment) = self.claim_and_pay(batch.clone(), rate).await? {
 				if let Err(e) = self.write_expiry_receipt(&payment) { warn!("expiry receipt deferred: {e:#}"); }
 				info!(txid = %payment.txid, fee_sat = payment.fee_sat, coins = batch.len(), "expiry payment committed");
 				return Ok(batch.len());
 			}
-			warn!(reason = %payment.reason, coins = batch.len(), "expiry batch deferred");
 			if batch.len() > 1 {
 				let right = batch.split_off(batch.len()/2);
 				pending.push_back(batch); pending.push_back(right);
@@ -429,14 +421,14 @@ impl Server {
 
 	async fn export_expiry_receipts(&self) -> anyhow::Result<()> {
 		if self.config.expiry_payout.receipt_dir.as_os_str().is_empty() { return Ok(()); }
-		let mut cursor = (0, String::new());
+		let mut cursor = String::new();
 		loop {
-			let page = self.db.read(async |t| t.expiry_settlement_page(true, 0, 0, 0, cursor.clone(), 256).await).await?;
+			let page = self.db.read(async |t| t.expiry_receipt_page(&cursor).await).await?;
 			let Some(last) = page.last() else { return Ok(()); };
-			cursor = (0, last.id.to_string());
-			for coin in page {
-				if self.config.expiry_payout.receipt_dir.join(format!("{}.json", coin.payment_txid)).try_exists()? { continue; }
-				let payment = self.db.read(async |t| t.expiry_receipt(&coin.payment_txid).await).await?;
+			cursor = last.clone();
+			for txid in page {
+				if self.config.expiry_payout.receipt_dir.join(format!("{txid}.json")).try_exists()? { continue; }
+				let payment = self.db.read(async |t| t.expiry_receipt(&txid).await).await?;
 				self.write_expiry_receipt(&payment)?;
 			}
 		}
@@ -445,7 +437,6 @@ impl Server {
 	fn write_expiry_receipt(&self, payment: &Payment) -> anyhow::Result<()> {
 		let directory = &self.config.expiry_payout.receipt_dir;
 		if directory.as_os_str().is_empty() { return Ok(()); }
-		ensure!(payment.status == Status::Paid, "receipt requires a committed payment");
 		let tx: Transaction = bitcoin::consensus::deserialize(&payment.raw_tx)?;
 		ensure!(tx.compute_txid().to_string() == payment.txid, "receipt identity mismatch");
 		fs::create_dir_all(directory)?;

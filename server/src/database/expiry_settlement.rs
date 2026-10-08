@@ -6,8 +6,8 @@ use anyhow::Context;
 use ark::{ProtocolEncoding, VtxoId, Vtxo};
 use ark::tree::signed::UnlockHash;
 use bitcoin::{ScriptBuf, Transaction};
-use bitcoin::consensus::{deserialize, serialize};
-use crate::expiry_payout::{FeeOutput, Payment, Status};
+use bitcoin::consensus::deserialize;
+use crate::expiry_payout::{FeeOutput, Payment};
 use tokio_postgres::Row;
 
 use crate::nursery::NurseryTxKind;
@@ -19,7 +19,6 @@ pub(crate) struct SettlementVtxo {
 	pub id: VtxoId,
 	pub vtxo: Vec<u8>,
 	pub expiry: u32,
-	pub payment_txid: String,
 	pub unclaimed: bool,
 	pub predecessors: Vec<Vec<u8>>,
 }
@@ -28,7 +27,6 @@ impl SettlementVtxo {
 	fn from_row(row: Row) -> anyhow::Result<Self> {
 		Ok(Self {
 			id: row.get::<_, &str>("vtxo_id").parse()?,
-			payment_txid: row.get("payment_txid"),
 			unclaimed: row.get("unclaimed"), predecessors: Vec::new(),
 			vtxo: row.get("vtxo"), expiry: u32::try_from(row.get::<_, i32>("expiry"))?,
 		})
@@ -41,15 +39,10 @@ pub(crate) fn payout_script(vtxo: &Vtxo) -> ScriptBuf {
 
 impl Tx<'_> {
 	pub(crate) async fn expiry_settlement_page(
-		&self, claimed: bool, tip: u32, grace: u32, minimum: u64,
+		&self, tip: u32, grace: u32, minimum: u64,
 		after: (u32, String), limit: u32,
 	) -> anyhow::Result<Vec<SettlementVtxo>> {
-		let rows = if claimed {
-			self.query("SELECT id AS vtxo_id, ''::bytea AS vtxo, 0::integer AS expiry, txid AS payment_txid, false AS unclaimed
-				FROM expiry_settlement WHERE id > $1 ORDER BY id LIMIT $2",
-				&[&after.1, &(limit as i64)]).await?
-		} else {
-			self.query("SELECT v.vtxo_id, v.vtxo, v.expiry, ''::text AS payment_txid,
+		let rows = self.query("SELECT v.vtxo_id, v.vtxo, v.expiry,
 				v.spend_state='unclaimed' AS unclaimed FROM vtxo v
 				WHERE (v.expiry::bigint, v.vtxo_id) > ($1::bigint, $2)
 				AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
@@ -57,8 +50,7 @@ impl Tx<'_> {
 				AND v.confirmed_height IS NULL AND v.expiry::bigint + $3 <= $4
 				AND (v.amount >= $5 OR v.spend_state='unclaimed') ORDER BY v.expiry, v.vtxo_id LIMIT $6",
 				&[&(after.0 as i64), &after.1, &(grace as i64), &(tip as i64),
-					&i64::try_from(minimum)?, &(limit as i64)]).await?
-		};
+					&i64::try_from(minimum)?, &(limit as i64)]).await?;
 		let mut candidates = rows.into_iter().map(SettlementVtxo::from_row).collect::<anyhow::Result<Vec<_>>>()?;
 		for coin in &mut candidates {
 			if !coin.unclaimed { continue; }
@@ -75,25 +67,16 @@ impl Tx<'_> {
 		Ok(candidates)
 	}
 
-	/// A subset of one stored batch replays that full payment. Mixed/new IDs
-	/// cannot consume a partial new batch after an ambiguous caller response.
-	pub(crate) async fn expiry_replay(&self, ids: &[String]) -> anyhow::Result<Option<Payment>> {
-		let rows = self.query("SELECT id,txid FROM expiry_settlement WHERE id = ANY($1)", &[&ids]).await?;
-		if rows.is_empty() { return Ok(None) }
-		let txid: String = rows[0].get("txid");
-		if rows.len() != ids.len() || rows.iter().any(|r| r.get::<_, String>("txid") != txid) {
-			return Ok(Some(Payment { status: Status::Ineligible,
-				reason: "batch overlaps existing payments; retry each stored ID separately".into(),
-				..Default::default() }));
-		}
-		Ok(Some(self.expiry_receipt(&txid).await?))
+	pub(crate) async fn expiry_receipt_page(&self, after: &str) -> anyhow::Result<Vec<String>> {
+		Ok(self.query("SELECT DISTINCT txid FROM expiry_settlement WHERE txid > $1 ORDER BY txid LIMIT 256",
+			&[&after]).await?.into_iter().map(|r| r.get("txid")).collect())
 	}
 
 	pub(crate) async fn expiry_receipt(&self, txid: &str) -> anyhow::Result<Payment> {
-		let rows = self.query("SELECT s.raw_tx,s.fee_sat,v.vtxo FROM expiry_settlement s
+		let rows = self.query("SELECT s.fee_sat,v.vtxo FROM expiry_settlement s
 			JOIN vtxo v ON v.vtxo_id=s.id WHERE s.txid=$1 ORDER BY s.id", &[&txid]).await?;
 		let first = rows.first().context("expiry payment missing")?;
-		let raw_tx: Vec<u8> = first.get("raw_tx");
+		let raw_tx: Vec<u8> = self.query_one("SELECT tx FROM nursery_tx WHERE txid=$1", &[&txid]).await?.get("tx");
 		let tx: Transaction = deserialize(&raw_tx)?;
 		let fee_sat = u64::try_from(first.get::<_, i64>("fee_sat"))?;
 		let mut gross = BTreeMap::<ScriptBuf, u64>::new();
@@ -111,8 +94,7 @@ impl Tx<'_> {
 		}
 		ensure!(gross.is_empty() && outputs.iter().map(|o| o.fee_sat).sum::<u64>() == fee_sat,
 			"expiry receipt metadata does not match its transaction");
-		Ok(Payment { status: Status::Paid, txid: txid.into(),
-			raw_tx, fee_sat, outputs, reason: String::new() })
+		Ok(Payment { txid: txid.into(), raw_tx, fee_sat, outputs })
 	}
 
 	pub(crate) async fn expiry_inputs(
@@ -138,9 +120,9 @@ impl Tx<'_> {
 			WHERE vtxo_id=ANY($1) AND spend_state IN ('spendable','unclaimed')", &[&ids]).await?;
 		ensure!(n as usize == ids.len(), "expiry inputs changed during commit");
 		let txid = tx.compute_txid().to_string();
-		self.execute("INSERT INTO expiry_settlement (id,txid,raw_tx,fee_sat)
-			SELECT unnest($1::text[]),$2,$3,$4", &[&ids, &txid, &serialize(tx), &i64::try_from(fee)?]).await?;
 		self.upsert_nursery_tx(tx, NurseryTxKind::ExpiryPayout, confirm_target).await?;
+		self.execute("INSERT INTO expiry_settlement (id,txid,fee_sat)
+			SELECT unnest($1::text[]),$2,$3", &[&ids, &txid, &i64::try_from(fee)?]).await?;
 		Ok(())
 	}
 

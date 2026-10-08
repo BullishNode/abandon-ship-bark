@@ -776,8 +776,8 @@ async fn do_round_forfeit_updates(
 			WHERE v.vtxo_id IS NULL
 				OR v.spend_state != 'spent'
 				OR v.spent_in_round IS NULL
-				OR (v.confirmed_height IS NOT NULL AND v.oor_spent_txid IS DISTINCT FROM u.txid)
-				OR (v.oor_spent_txid IS NOT NULL AND v.oor_spent_txid != u.txid)
+				OR NOT ((v.confirmed_height IS NULL AND v.oor_spent_txid IS NULL)
+					OR v.oor_spent_txid = u.txid)
 			LIMIT 1
 		", &[&ids, &txids]).await.context("failed to find bad vtxo")?;
 		let vtxo_id: &str = bad.get("vtxo_id");

@@ -242,13 +242,13 @@ mod test {
 		let dir = tmp_dir();
 		let mgr = FcntlPidLockManager::new(&dir).unwrap();
 
-		let g = mgr.try_lock("foo").await;
+		let g = mgr.try_lock("pid-fcntl-per-key-foo").await;
 		assert!(g.is_some());
 
-		let busy = mgr.try_lock("foo").await;
+		let busy = mgr.try_lock("pid-fcntl-per-key-foo").await;
 		assert!(busy.is_none(), "same key should be blocked");
 
-		let g2 = mgr.try_lock("bar").await;
+		let g2 = mgr.try_lock("pid-fcntl-per-key-bar").await;
 		assert!(g2.is_some(), "different key should be free");
 
 		let _ = fs::remove_dir_all(&dir);

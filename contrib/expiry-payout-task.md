@@ -42,8 +42,18 @@ same confirmed sweep, grace and destination checks. The task takes the payment
 guard before coin locks, as cooperative claims do, and retains it through an
 uncertain commit. The spent state, fulfilled HTLC resolution and payout commit
 together. A receive whose external payment was canceled without disclosing the
-preimage receives no payout. Failed-send refunds and returning Lightning-client
-reconciliation remain unqualified.
+preimage receives no payout.
+
+A Lightning send's HTLC coins return to the sender's own key when the payment
+cannot have succeeded. The task and the sender's refund request share one
+decision under the payment guard: no recorded preimage, no successful attempt,
+every attempt concluded, and every node that sent an attempt reports the
+payment failed or unknown. An offline or still-paying node leaves the coins
+waiting; a completed payment whose preimage was never recorded is never
+refunded. The commit takes the settlement write lock, rechecks the preimage,
+marks the HTLCs revoked and cancels an intra-Ark receive for the same hash. A
+committed intra-Ark receive holds the coins. Returning Lightning-client
+reconciliation remains unqualified.
 
 A returning arkoor sender checks expired outputs before delivery. A per-output
 settlement refusal and the server's stored signed chain distinguish a recipient

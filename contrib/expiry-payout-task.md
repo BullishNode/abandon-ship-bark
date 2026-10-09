@@ -27,14 +27,24 @@ an uncertain COMMIT waits on that pending row before checking its outcome.
 The fork requires the funding transaction in the cosign request, or an already
 known chain transaction when `require_board_funding_tx` is false.
 
-Unregistered arkoor and claim outputs belong to their actual input owner. The
-last transaction's single input must match a stored parent spent into that
+An arkoor or claim output belongs to its recipient if and only if the server
+held its full signed chain, from a registration or a mailbox post, before its
+settlement committed. A mailbox post validates the chain and registers it in
+the same transaction, and is refused, whole, once any of its outputs settled.
+Other outputs, never registered or posted, belong to their actual input owner:
+the last transaction's single input must match a stored parent spent into that
 transaction; checkpoint parents retain the original user's key. Each output's
 own value follows that key's fallback record. The selected source and owner are
-checked again at commit. Registration locks the same coin rows: if it wins,
-payout must reselect the recipient; if payout wins, registration is refused.
+checked again at commit. Registration and posts lock the same coin rows: if one
+wins, payout must reselect the recipient; if payout wins, it is refused.
 Outputs already present in the HTLC ledger are excluded from this unregistered
-source.
+source. Change outputs are never posted and stay with the input owner. An
+output delivered outside this server's mailbox without registration, to a
+recipient silent through expiry and grace, is refunded to its input owner.
+
+A Lightning receive forwarding to another wallet registers its claim outputs
+before delivery, so a settled claim output was paid to the destination's own
+record; the client treats its refused delivery as complete.
 
 An unclaimed Lightning receive with a recorded preimage, a settled subscription
 and no prior HTLC resolution pays the coin's own key through its fallback

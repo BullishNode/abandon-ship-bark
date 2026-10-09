@@ -149,7 +149,10 @@ impl rpc::server::MailboxService for crate::Server {
 		// only accept vtxos the server itself cosigned: unknown ids are
 		// rejected before they can take up mailbox space. The pubkey check
 		// stops a known id from being posted with doctored content that would
-		// route it into a mailbox its owner doesn't watch.
+		// route it into a mailbox its owner doesn't watch. A posted chain is
+		// registered with it: the recipient holds it, so an expiry payout of
+		// these vtxos is the recipient's. Unsigned or invalid chains, and
+		// vtxos already settled to an expiry payout, are refused.
 		let vtxo_ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
 		let stored = self.db.read(async |t| t.get_user_vtxos_by_id(&vtxo_ids).await)
 			.await.to_status()?;
@@ -159,7 +162,12 @@ impl rpc::server::MailboxService for crate::Server {
 			}
 		}
 
+		let registration = self.validate_vtxo_registration(&vtxos).await.to_status()?;
+
 		let checkpoint = self.db.write(async |t| {
+			// The vtxo rows before the MailboxWrite lock, as when a round
+			// finishes; never the reverse.
+			registration.apply(t).await?;
 			t.store_vtxos_in_mailbox(
 				MailboxType::ArkoorReceive,
 				mailbox_id,

@@ -25,7 +25,7 @@ use ark::arkoor::ArkoorDestination;
 use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
 use ark::attestations::FallbackRecordAttestation;
 use server::database::Db;
-use server_rpc::protos;
+use server_rpc::{protos, StatusExt};
 
 #[tokio::test]
 async fn fallback_register_board_rotate_and_offline_pool() {
@@ -140,6 +140,123 @@ async fn fallback_stored_legacy_record_migrates_on_sync() {
 	assert_eq!(wallet.fallback_destination().await.unwrap().seq, seq);
 }
 
+/// A send from two inputs with different expiries stalls in registration
+/// while the first input's outputs settle, which refunds them to the sender.
+/// The returning sender delivers the other outputs through the mailbox. The
+/// post registers them, so the recipient is paid for those.
+#[tokio::test]
+async fn fallback_multi_input_send_one_input_settled_pays_recipient() {
+	let ctx = TestContext::new("bark_sdk/fallback_multi_input_send_one_input_settled_pays_recipient").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(128);
+			c.min_board_amount = sat(330);
+		}).watchmand().create().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let sender_mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let sender = ctx.bark_sdk("sender", &srv).mnemonic(sender_mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).funded(sat(1_000_000)).create().await;
+	sender.stop_daemon_wait().await.unwrap();
+	let first = sender.board_amount(sat(30_000)).await.unwrap();
+	ctx.await_transaction(first.funding_tx.compute_txid()).await;
+	ctx.generate_blocks(40).await;
+	let second = sender.board_amount(sat(30_000)).await.unwrap();
+	ctx.await_transaction(second.funding_tx.compute_txid()).await;
+	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+	let first_anchor = first.funding_tx.compute_txid();
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			sender.sync().await;
+			if sender.spendable_vtxos().await.unwrap().len() == 2 { break; }
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.expect("both boards must become spendable");
+	let recipient = ctx.bark_sdk("recipient", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	recipient.stop_daemon_wait().await.unwrap();
+	let address = recipient.new_address().await.unwrap();
+	let recipient_spk = recipient.fallback_destination().await.unwrap().spk;
+	let sender_spk = sender.fallback_destination().await.unwrap().spk;
+	drop(recipient);
+
+	// The registration request of the send never reaches the server.
+	let reached = Arc::new(Notify::new());
+	let proxy = srv.start_proxy_no_mailbox(InterruptArkoorRegistration {
+		reached: reached.clone(), commit: false, recipient: address.policy().user_pubkey(),
+	}).await;
+	let mut config = sender.config().clone();
+	config.server_address = proxy.address.clone();
+	drop(sender);
+	let open = |config| bark::Wallet::open(Network::Regtest,
+		bark::WalletSeed::new_from_mnemonic(Network::Regtest, &sender_mnemonic), config,
+		bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("sender")), run_daemon: false, ..Default::default() },
+	);
+	let sender = open(config.clone()).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(30), async {
+		tokio::select! {
+			// The second board's change is above the payout minimum.
+			r = sender.send_arkoor_payment(&address, sat(45_000)) => panic!("send completed before interruption: {r:?}"),
+			_ = reached.notified() => {},
+		}
+	}).await.expect("registration request must be reached");
+	let pending = sender.pending_arkoor_sends().await.unwrap();
+	assert_eq!(pending.len(), 1);
+	let bark::actions::arkoor_send::Progress::Registration {
+		signed_destination_vtxos, signed_change_vtxos, ..
+	} = &pending[0].progress else { panic!("the send must stall in registration"); };
+	let outputs = signed_destination_vtxos.iter().map(|v| (v.clone(), true))
+		.chain(signed_change_vtxos.iter().map(|v| (v.clone(), false))).collect::<Vec<_>>();
+	drop(sender);
+	drop(proxy);
+	let (first_outputs, second_outputs): (Vec<_>, Vec<_>) = outputs.into_iter()
+		.partition(|(v, _)| v.chain_anchor().txid == first_anchor);
+	assert!(!first_outputs.is_empty() && !second_outputs.is_empty(), "the send spends both boards");
+	assert!(second_outputs.iter().any(|(_, to_recipient)| *to_recipient));
+	let ids = |outputs: &[(ark::Vtxo<ark::vtxo::Full>, bool)]| outputs.iter().map(|(v, _)| v.id().to_string()).collect::<Vec<_>>();
+	let first_coins = first_outputs.iter().map(|(v, _)| v.clone()).collect::<Vec<ark::Vtxo>>();
+	let second_coins = second_outputs.iter().map(|(v, _)| v.clone()).collect::<Vec<ark::Vtxo>>();
+
+	// The first board's outputs settle while the sender is away: unregistered,
+	// so they are refunded to the sender.
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &first_coins).await;
+	assert!((ctx.bitcoind().get_block_count().await as u32) < second_coins[0].expiry_height().to_u32());
+	super::fallback_lightning::enable_payouts(&ctx, &srv).await;
+	for row in wait_settled(&ctx, &db, &ids(&first_outputs)).await {
+		assert_eq!(row.get::<_, Vec<u8>>("spk"), sender_spk.as_bytes(), "unregistered outputs refund the sender");
+	}
+
+	// The sender returns: registration is refused as settled, and delivery
+	// posts the second board's outputs to the recipient's mailbox.
+	config.server_address = srv.ark_url();
+	let sender = open(config).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(60), async {
+		while !sender.pending_arkoor_sends().await.unwrap().is_empty() {
+			sender.sync_pending_arkoor_sends().await.unwrap();
+		}
+	}).await.expect("the returning send must finish");
+	let destination_ids = second_outputs.iter().filter(|(_, r)| *r).map(|(v, _)| v.id().to_string()).collect::<Vec<_>>();
+	let spendable = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state='spendable'", &[&destination_ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(spendable as usize, destination_ids.len(), "the post registered the delivered outputs");
+	drop(sender);
+
+	// The second board's outputs settle: the delivered ones are the recipient's.
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &second_coins).await;
+	let rows = wait_settled(&ctx, &db, &ids(&second_outputs)).await;
+	for (vtxo, to_recipient) in &second_outputs {
+		let row = rows.iter().find(|r| r.get::<_, String>("id") == vtxo.id().to_string()).unwrap();
+		let expected = if *to_recipient { &recipient_spk } else { &sender_spk };
+		assert_eq!(row.get::<_, Vec<u8>>("spk"), expected.as_bytes(),
+			"output {} (to recipient: {to_recipient})", vtxo.id());
+	}
+	let all = ids(&first_outputs).into_iter().chain(ids(&second_outputs)).collect::<Vec<_>>();
+	let settlements = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_settlement WHERE id=ANY($1)", &[&all],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(settlements as usize, all.len(), "every output is settled once");
+	println!("multi-input send: first board outputs refunded to the sender, delivered second board outputs paid to the recipient");
+}
+
 /// Real funded boards, sweep, expiry task and nursery. The absent wallet's
 /// individual coins are all below the configured minimum; their group is not.
 #[tokio::test]
@@ -187,6 +304,32 @@ async fn fallback_arkoor_registration_wins_payout_race() {
 async fn fallback_arkoor_payout_wins_registration_race() {
 	Box::pin(grouped_expiry_without_client("fallback_arkoor_payout_wins_registration_race",
 		2, 25_000, 100, ExpiryCase::PayoutWins)).await;
+}
+
+/// A recipient holding the signed chain through its mailbox is paid, though
+/// the sender never registered it.
+#[tokio::test]
+async fn fallback_arkoor_post_without_registration_pays_recipient() {
+	Box::pin(grouped_expiry_without_client("fallback_arkoor_post_without_registration_pays_recipient",
+		2, 25_000, 100, ExpiryCase::PostedArkoor)).await;
+}
+
+#[tokio::test]
+async fn fallback_arkoor_post_after_settlement_refused() {
+	Box::pin(grouped_expiry_without_client("fallback_arkoor_post_after_settlement_refused",
+		2, 25_000, 100, ExpiryCase::PostAfterSettlement)).await;
+}
+
+#[tokio::test]
+async fn fallback_arkoor_post_wins_payout_race() {
+	Box::pin(grouped_expiry_without_client("fallback_arkoor_post_wins_payout_race",
+		2, 25_000, 100, ExpiryCase::PostWins)).await;
+}
+
+#[tokio::test]
+async fn fallback_arkoor_payout_wins_post_race() {
+	Box::pin(grouped_expiry_without_client("fallback_arkoor_payout_wins_post_race",
+		2, 25_000, 100, ExpiryCase::PayoutWinsPost)).await;
 }
 
 #[tokio::test]
@@ -340,6 +483,7 @@ async fn fallback_oversized_wallet_group_paid_alone() {
 enum ExpiryCase {
 	Registered, AbandonedBoard, ReturningBoard, UnregisteredArkoor, RegistrationWins, PayoutWins,
 	ReturningArkoor, RegisteredArkoorReturn, ReturningArkoorChange,
+	PostedArkoor, PostAfterSettlement, PostWins, PayoutWinsPost,
 }
 
 async fn grouped_expiry_without_client(
@@ -350,9 +494,14 @@ async fn grouped_expiry_without_client(
 	let registered_return = matches!(case, ExpiryCase::RegisteredArkoorReturn);
 	let with_change = matches!(case, ExpiryCase::ReturningArkoorChange);
 	let returning_arkoor = matches!(case, ExpiryCase::ReturningArkoor) || registered_return || with_change;
-	let registration_wins = matches!(case, ExpiryCase::RegistrationWins);
-	let payout_wins = matches!(case, ExpiryCase::PayoutWins);
-	let arkoor = matches!(case, ExpiryCase::UnregisteredArkoor) || registration_wins || payout_wins || returning_arkoor;
+	let registration_wins = matches!(case, ExpiryCase::RegistrationWins | ExpiryCase::PostWins);
+	let payout_wins = matches!(case, ExpiryCase::PayoutWins | ExpiryCase::PayoutWinsPost);
+	// The racing activation is a mailbox post instead of a registration.
+	let race_by_post = matches!(case, ExpiryCase::PostWins | ExpiryCase::PayoutWinsPost);
+	let posted = matches!(case, ExpiryCase::PostedArkoor);
+	let post_after_settlement = matches!(case, ExpiryCase::PostAfterSettlement);
+	let unregistered_case = matches!(case, ExpiryCase::UnregisteredArkoor) || post_after_settlement;
+	let arkoor = unregistered_case || posted || registration_wins || payout_wins || returning_arkoor;
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let mut mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let sender_mnemonic = mnemonic.clone();
@@ -435,12 +584,17 @@ async fn grouped_expiry_without_client(
 	let mut coins = Vec::new();
 	for coin in wallet_coins { coins.push(wallet.get_full_vtxo(coin.id()).await.unwrap()); }
 	let original_inputs = coins.iter().map(|v| v.id()).collect::<Vec<_>>();
+	let mut recipient_mailbox = None;
 	let other_owner_spk = if arkoor {
 		let recipient_mnemonic = bip39::Mnemonic::generate(12).unwrap();
 		let recipient = ctx.bark_sdk("recipient", &srv).mnemonic(recipient_mnemonic.clone())
 			.cfg(|c| c.daemon_manual_sync = true).create().await;
 		recipient.stop_daemon_wait().await.unwrap();
 		let address = recipient.new_address().await.unwrap();
+		recipient_mailbox = address.delivery().iter().find_map(|d| match d {
+			ark::address::VtxoDelivery::ServerMailbox { blinded_id } => Some(blinded_id.as_ref().to_vec()),
+			_ => None,
+		});
 		let spk = recipient.fallback_destination().await.unwrap().spk;
 		assert_ne!(spk, record.spk);
 		if returning_arkoor {
@@ -488,7 +642,16 @@ async fn grouped_expiry_without_client(
 			"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state='unregistered'", &[&ids],
 		).await?.get::<_, i64>(0))).await.unwrap();
 		assert_eq!(unregistered as usize, if registered_return { 0 } else { coins.len() });
-		let other_spk = if registration_wins || registered_return {
+		if posted {
+			// The sender skips registration and only posts the signed chain.
+			activate(&srv, &coins, recipient_mailbox.clone()).await.await.unwrap()
+				.expect("a valid signed chain is accepted by the mailbox");
+			let spendable = db.read(async |t| Ok(t.query_one(
+				"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state='spendable'", &[&ids],
+			).await?.get::<_, i64>(0))).await.unwrap();
+			assert_eq!(spendable as usize, coins.len(), "the post registered the signed chain");
+		}
+		let other_spk = if registration_wins || registered_return || posted {
 			let sender_spk = record.spk.clone();
 			record = recipient.fallback_destination().await.unwrap();
 			mailbox_key = recipient.mailbox_keypair();
@@ -535,7 +698,7 @@ async fn grouped_expiry_without_client(
 	}
 	let estimate = core.estimate_smart_fee(6, None).unwrap();
 	assert!(estimate.fee_rate.is_some(), "real fee estimate required: {estimate:?}");
-	if count > 3 || matches!(case, ExpiryCase::UnregisteredArkoor) || returning_arkoor {
+	if count > 3 || unregistered_case || posted || returning_arkoor {
 		// Test a group whose complete backing paths have already been swept.
 		// Sweeps can confirm in several blocks. Keep payouts disabled until
 		// every backing path has a confirmed real sweep, without changing
@@ -585,13 +748,9 @@ async fn grouped_expiry_without_client(
 		Some(hold_expiry_race(&db, registration_wins).await)
 	} else { None };
 	srv.start().await.unwrap();
-	let registration_request = || protos::RegisterVtxoTransactionsRequest {
-		vtxos: coins.iter().map(|v| v.serialize()).collect(),
-	};
+	let race_mailbox = if race_by_post { recipient_mailbox.clone() } else { None };
 	let mut registration = if registration_wins {
-		let mut rpc = srv.get_public_rpc().await;
-		let request = registration_request();
-		let task = tokio::spawn(async move { rpc.register_vtxo_transactions(request).await });
+		let task = activate(&srv, &coins, race_mailbox.clone()).await;
 		wait_expiry_race_lock(&db, true).await;
 		Some(task)
 	} else { None };
@@ -607,9 +766,7 @@ async fn grouped_expiry_without_client(
 				_ = tokio::time::sleep(Duration::from_secs(1)) => { generate_blocks_without_payouts(&ctx, &db, 1).await; },
 			}
 		}
-		let mut rpc = srv.get_public_rpc().await;
-		let request = registration_request();
-		registration = Some(tokio::spawn(async move { rpc.register_vtxo_transactions(request).await }));
+		registration = Some(activate(&srv, &coins, race_mailbox.clone()).await);
 	}
 	if let Some((release, gate)) = race_gate {
 		// Observe the loser waiting for the winner's real PostgreSQL row lock.
@@ -689,6 +846,24 @@ async fn grouped_expiry_without_client(
 			vtxos: coins.iter().map(|v| v.serialize()).collect(),
 		}).await.unwrap_err();
 		assert!(err.message().contains("expiry settlement"), "late registration must lose: {err}");
+	}
+	let posts = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM mailbox WHERE mailbox_type='arkoor-receive'", &[],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	if post_after_settlement {
+		// A replay of the signed chain after the payout cannot claim it.
+		let err = activate(&srv, &coins, recipient_mailbox.clone()).await.await.unwrap()
+			.expect_err("a post after settlement must be refused");
+		assert!(err.is_expiry_settled(), "{err}");
+		let after = db.read(async |t| Ok(t.query_one(
+			"SELECT count(*) FROM mailbox WHERE mailbox_type='arkoor-receive'", &[],
+		).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(after, posts, "a refused post leaves no mailbox entry");
+		println!("post after settlement refused: {}", err.message());
+	}
+	if posted || race_by_post || post_after_settlement {
+		let expected = if posted || registration_wins { coins.len() } else { 0 };
+		assert_eq!(posts as usize, expected, "only an accepted post is in the mailbox");
 	}
 	let outputs = tx.output.iter().filter(|o| o.script_pubkey == record.spk).collect::<Vec<_>>();
 	assert_eq!(outputs.len(), 1);
@@ -861,6 +1036,43 @@ async fn grouped_expiry_without_client(
 	}).await.expect("receipt must regenerate after record rotation");
 	let rebuilt: serde_json::Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
 	assert_eq!(rebuilt, receipt);
+}
+
+/// Wait until every coin of `ids` is settled to an expiry payout.
+async fn wait_settled(ctx: &TestContext, db: &Db, ids: &[String]) -> Vec<tokio_postgres::Row> {
+	tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			let rows = db.read(async |t| Ok(t.query(
+				"SELECT id, txid, spk FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+			).await?)).await.unwrap();
+			if rows.len() == ids.len() { break rows; }
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			ctx.generate_blocks(1).await;
+		}
+	}).await.expect("the expired coins must be paid")
+}
+
+/// Make unregistered outputs spendable: register their signed chain, or, with
+/// a blinded mailbox id, post it to the recipient's mailbox.
+async fn activate(
+	srv: &ark_testing::Captaind, coins: &[ark::Vtxo<ark::vtxo::Full>], mailbox: Option<Vec<u8>>,
+) -> JoinHandle<Result<(), tonic::Status>> {
+	let vtxos = coins.iter().map(|v| v.serialize()).collect::<Vec<_>>();
+	match mailbox {
+		Some(blinded_id) => {
+			let mut rpc = srv.get_mailbox_public_rpc().await;
+			tokio::spawn(async move {
+				rpc.post_arkoor_message(protos::mailbox_server::PostArkoorMessageRequest { blinded_id, vtxos })
+					.await.map(|_| ())
+			})
+		},
+		None => {
+			let mut rpc = srv.get_public_rpc().await;
+			tokio::spawn(async move {
+				rpc.register_vtxo_transactions(protos::RegisterVtxoTransactionsRequest { vtxos }).await.map(|_| ())
+			})
+		},
+	}
 }
 
 /// Mine blocks with the mempool except expiry payouts and their descendants,

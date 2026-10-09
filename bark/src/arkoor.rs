@@ -8,7 +8,7 @@ use ark::{ProtocolEncoding, VtxoPolicy};
 use ark::arkoor::ArkoorDestination;
 use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
 use ark::vtxo::{Full, Vtxo, VtxoId};
-use server_rpc::{protos, ServerConnection};
+use server_rpc::{protos, ServerConnection, StatusExt};
 
 use crate::{VtxoDelivery, Wallet, WalletVtxo};
 use crate::actions::DriveMode;
@@ -98,6 +98,9 @@ pub(crate) enum DeliveryOutcome {
 	/// No mailbox accepted the post. `summary` describes why and is meant to
 	/// be captured in a caller's park error for observability.
 	AllFailed { summary: String },
+	/// No mailbox accepted the post, and a vtxo of it is already settled to
+	/// an expiry payout, so posting it again cannot succeed.
+	ExpirySettled { summary: String },
 }
 
 /// Posts `vtxos` to every [`VtxoDelivery::ServerMailbox`] method found in
@@ -116,6 +119,7 @@ pub(crate) async fn post_arkoor_to_mailboxes(
 		.collect::<Vec<_>>();
 
 	let mut any_succeeded = false;
+	let mut settled = false;
 	let mut failures: Vec<String> = Vec::new();
 	for method in delivery {
 		let VtxoDelivery::ServerMailbox { blinded_id } = method else { continue };
@@ -126,6 +130,7 @@ pub(crate) async fn post_arkoor_to_mailboxes(
 		match srv.mailbox_client.post_arkoor_message(req).await {
 			Ok(_) => any_succeeded = true,
 			Err(e) => {
+				settled |= e.is_expiry_settled();
 				let reason = format!("{:#}", e);
 				error!("failed to post arkoor vtxos to mailbox: {}", reason);
 				failures.push(reason);
@@ -141,7 +146,11 @@ pub(crate) async fn post_arkoor_to_mailboxes(
 	} else {
 		format!("no delivery mechanism accepted the arkoor vtxos: {}", failures.join("; "))
 	};
-	DeliveryOutcome::AllFailed { summary }
+	if settled {
+		DeliveryOutcome::ExpirySettled { summary }
+	} else {
+		DeliveryOutcome::AllFailed { summary }
+	}
 }
 
 /// Checks that the address lists a useable delivery mechanism.

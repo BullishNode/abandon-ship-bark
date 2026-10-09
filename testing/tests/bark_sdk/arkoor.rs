@@ -1,8 +1,3 @@
-use std::str::FromStr;
-
-use bitcoin::secp256k1::PublicKey;
-
-use ark::VtxoPolicy;
 use ark::address::VtxoDelivery;
 
 use ark_testing::{TestContext, sat};
@@ -51,15 +46,13 @@ async fn send_to_address_without_delivery_succeeds() {
 		.boarded(sat(400_000))
 		.create().await;
 
-	// A hard-coded recipient key on an address that opts out of delivery.
-	let recipient_pubkey = PublicKey::from_str(
-		"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-	).unwrap();
-	let own = sender.new_address().await.expect("new address");
+	// The recipient has a fallback record but opts out of mailbox delivery.
+	let receiver = ctx.bark_sdk("receiver", &srv).create().await;
+	let recipient = receiver.new_address().await.expect("linked recipient address");
 	let address = ark::Address::new(
-		own.is_testnet(),
-		own.ark_id(),
-		VtxoPolicy::new_pubkey(recipient_pubkey),
+		recipient.is_testnet(),
+		recipient.ark_id(),
+		recipient.policy().clone(),
 		vec![],
 	);
 

@@ -7,10 +7,18 @@ use log::debug;
 
 use ark::VtxoId;
 
+/// Registration cannot activate an output after its expiry payment commits.
+/// Keep this reason stable so a client can distinguish settlement from an
+/// unrelated registration rejection without changing the RPC messages.
+pub const EXPIRY_SETTLED_ERROR: &str = "VTXO already committed to an expiry settlement";
+
 /// Extension trait for [tonic::Status]
 pub trait StatusExt: Borrow<tonic::Status> {
 	/// Whether the server rejected the request and no state has changed
 	fn is_rejection(&self) -> bool;
+
+	/// This registration was refused because expiry settlement already committed.
+	fn is_expiry_settled(&self) -> bool;
 
 	/// Get any not-found identifiers
 	fn not_found<T: FromHex>(&self) -> Option<Vec<T>>;
@@ -23,6 +31,10 @@ pub trait StatusExt: Borrow<tonic::Status> {
 }
 
 impl StatusExt for tonic::Status {
+	fn is_expiry_settled(&self) -> bool {
+		self.code() == tonic::Code::InvalidArgument && self.message().ends_with(EXPIRY_SETTLED_ERROR)
+	}
+
 	fn is_rejection(&self) -> bool {
 	    match self.code() {
 			tonic::Code::InvalidArgument | tonic::Code::NotFound => true,
@@ -97,6 +109,16 @@ mod test {
 
 	const VTXO_A: &str = "0000000000000000000000000000000000000000000000000000000000000001:0";
 	const VTXO_B: &str = "0000000000000000000000000000000000000000000000000000000000000002:1";
+
+	#[test]
+	fn settlement_reason_requires_explicit_registration_refusal() {
+		assert!(tonic::Status::invalid_argument(format!("tx body error: bad user input: {EXPIRY_SETTLED_ERROR}"))
+			.is_expiry_settled());
+		assert!(!tonic::Status::unavailable(EXPIRY_SETTLED_ERROR).is_expiry_settled());
+		assert!(!tonic::Status::invalid_argument("vtxo signature invalid").is_expiry_settled());
+		assert!(!tonic::Status::invalid_argument(format!("{EXPIRY_SETTLED_ERROR}: lookup uncertain"))
+			.is_expiry_settled());
+	}
 
 	#[test]
 	fn rejected_vtxos_parses_identifiers_metadata() {

@@ -28,6 +28,13 @@ use crate::serde_utils;
 
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "utoipa", derive(ToSchema))]
+pub struct FallbackDestination {
+	pub address: String,
+	pub seq: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(ToSchema))]
 pub struct ArkInfo {
 	/// The bitcoin network the server operates on
 	#[cfg_attr(feature = "utoipa", schema(value_type = String))]

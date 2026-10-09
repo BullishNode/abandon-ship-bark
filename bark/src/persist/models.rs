@@ -93,6 +93,20 @@ pub(crate) fn wallet_vtxo_from_full(
 pub struct SerdeVtxoKey {
 	pub index: u32,
 	pub public_key: PublicKey,
+	#[serde(default)]
+	pub linked: bool,
+	#[serde(default = "key_already_issued")]
+	pub issued: bool,
+}
+
+// Historical keys were all handed out. They must never re-enter the pool.
+fn key_already_issued() -> bool { true }
+
+/// Last signed fallback destination, including a pending server acknowledgement.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FallbackRecord {
+	pub spk: bitcoin::ScriptBuf,
+	pub seq: u64,
 }
 
 /// Identifier for a stored [RoundState].

@@ -40,6 +40,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		.route("/addresses/index/{index}", get(peek_address))
 		.route("/bip321", post(bip321_uri))
 		.route("/balance", get(balance))
+		.route("/fallback-destination", get(fallback_destination))
 		.route("/vtxos", get(vtxos))
 		.route("/vtxos/adopt-server-status", post(adopt_server_vtxo_status))
 		.route("/vtxos/expiry-payouts", post(expiry_payouts))
@@ -75,6 +76,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		peek_address,
 		bip321_uri,
 		balance,
+		fallback_destination,
 		vtxos,
 		get_vtxo,
 		get_vtxo_encoded,
@@ -97,6 +99,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 	),
 	components(schemas(
 		bark_json::web::ArkAddressResponse,
+		bark_json::cli::FallbackDestination,
 		bark_json::web::Bip321UriRequest,
 		bark_json::web::Bip321UriQuery,
 		bark_json::web::Bip321UriResponse,
@@ -483,6 +486,29 @@ pub async fn bip321_uri(
 		onchain: uri.address().map(|a| a.to_string())
 			.or_else(|| uri.tb().first().map(|a| a.inner().to_string())),
 		bip321,
+	}))
+}
+
+#[utoipa::path(
+	get,
+	path = "/fallback-destination",
+	summary = "Get the automatic expiry payout destination",
+	responses(
+		(status = 200, description = "Locally stored fallback address and sequence", body = bark_json::cli::FallbackDestination),
+		(status = 500, description = "Internal server error", body = error::InternalServerError)
+	),
+	tag = "wallet"
+)]
+#[debug_handler]
+pub async fn fallback_destination(
+	State(state): State<Arc<ServerState>>,
+) -> HandlerResult<Json<bark_json::cli::FallbackDestination>> {
+	let wallet = state.require_wallet()?;
+	let record = wallet.fallback_destination().await?;
+	Ok(Json(bark_json::cli::FallbackDestination {
+		address: bitcoin::Address::from_script(&record.spk, wallet.network().await?)
+			.context("invalid stored fallback address")?.to_string(),
+		seq: record.seq,
 	}))
 }
 

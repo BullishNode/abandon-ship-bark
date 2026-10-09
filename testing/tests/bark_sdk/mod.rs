@@ -13,6 +13,7 @@ mod balance;
 mod board;
 mod exit;
 mod expiry_payout;
+mod fallback;
 mod import;
 mod lightning;
 mod mailbox;

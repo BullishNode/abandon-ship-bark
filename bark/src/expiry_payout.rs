@@ -196,6 +196,28 @@ pub async fn adopt_server_vtxo_status(
 	Ok(ret)
 }
 
+impl Wallet {
+	/// Reconcile expired coins before automatic refresh. An expired coin may
+	/// already have been paid on-chain while the wallet was offline. Uncertain
+	/// or in-flight states stay in the wallet but are excluded from this attempt.
+	pub(crate) async fn sync_expired_vtxos(&self) -> anyhow::Result<Vec<VtxoId>> {
+		let tip = self.chain().tip().await?;
+		let mut unavailable = Vec::new();
+		for vtxo in self.spendable_vtxos().await? {
+			if vtxo.expiry_height() > tip { continue; }
+			match self.trust_and_adopt_server_vtxo_status(vtxo.id()).await {
+				Ok(Some(ServerStatusAdoption::Spendable)) => {},
+				Ok(_) => unavailable.push(vtxo.id()),
+				Err(e) => {
+					warn!("Expired VTXO {} status unavailable; deferring refresh: {e:#}", vtxo.id());
+					unavailable.push(vtxo.id());
+				},
+			}
+		}
+		Ok(unavailable)
+	}
+}
+
 /// Find the unspent on-chain outputs paying the [expiry_payout_script] of
 /// every expired VTXO the wallet has as spent. A swept payout is spent, so it
 /// is not listed.

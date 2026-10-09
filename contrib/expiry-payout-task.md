@@ -50,6 +50,11 @@ spends before workers, even with new payouts disabled.
 Apply `contrib/expiry-settlement.sql`, then `contrib/expiry-fallback.sql`, with psql
 autocommit before startup. New client wallets use BIP84. Do not reinterpret a
 funded BIP86 wallet database with the new descriptor; no BIP86 migration is included.
+Wallet sync and automatic refresh reconcile expired coins with the trusted server
+before selecting inputs. Spent coins leave the Ark balance; their BIP84 payouts
+appear in the ordinary on-chain balance. An unavailable status retains the coin
+and defers its automatic refresh. A status reply cannot overwrite a concurrent
+local coin lock. Historical coin-key payouts still use the existing sweep.
 The optional schema is outside numbered migrations, so stock watchmand remains compatible.
 It does not migrate approach B's different schema. For an earlier D draft containing
 `expiry_settlement.raw_tx`, stop captaind, verify every copy equals its nursery row,

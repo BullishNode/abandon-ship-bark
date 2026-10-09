@@ -158,6 +158,14 @@ It does not migrate approach B's different schema. For an earlier D draft contai
 `expiry_settlement.raw_tx`, stop captaind, verify every copy equals its nursery row,
 then drop the duplicate column and add the nursery foreign key before upgrading.
 
+Run one captaind per database. The payment guards and coin locks live in
+memory, so captaind holds a PostgreSQL session advisory lock for its whole
+life and refuses to start while another process holds it; `drain` and
+`undo-round` take it too. Stop the old process before starting a new one: a
+binary from before this lock takes none and cannot be refused. The lock needs
+a direct or session-pooled connection, not transaction pooling. Captaind
+exits if the lock's connection drops, so run it under a restart policy.
+
 `[expiry_payout]` defaults:
 
 | Setting | Default |

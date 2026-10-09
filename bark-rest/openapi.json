@@ -2096,48 +2096,6 @@
         }
       }
     },
-    "/api/v1/onchain/sweep-expiry-payouts": {
-      "post": {
-        "tags": [
-          "onchain"
-        ],
-        "summary": "Sweep on-chain payouts of expired VTXOs",
-        "description": "Spends every payout output found for the expired VTXOs the wallet has as spent (see `POST /api/v1/wallet/vtxos/expiry-payouts`) to a fresh address of the on-chain wallet, signing with the VTXO keys. Broadcasts the transaction and records an `expiry-payout` movement carrying the payout and sweep txids.",
-        "operationId": "sweep_expiry_payouts",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SweepExpiryPayoutsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Returns the sweep transaction",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SweepExpiryPayoutsResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InternalServerError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/onchain/sync": {
       "post": {
         "tags": [
@@ -2564,6 +2522,37 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateWalletResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/wallet/fallback-destination": {
+      "get": {
+        "tags": [
+          "wallet"
+        ],
+        "summary": "Get the automatic expiry payout destination",
+        "operationId": "fallback_destination",
+        "responses": {
+          "200": {
+            "description": "Locally stored fallback address and sequence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FallbackDestination"
                 }
               }
             }
@@ -3374,41 +3363,6 @@
         }
       }
     },
-    "/api/v1/wallet/vtxos/expiry-payouts": {
-      "post": {
-        "tags": [
-          "wallet"
-        ],
-        "summary": "Find on-chain payouts of expired VTXOs",
-        "description": "Looks up the unspent on-chain outputs paying the BIP86 address `tr(user_pubkey)` of every expired VTXO the wallet has as spent, where a server pays a VTXO it settled after expiry. VTXOs that share a key share a payout address, so an output can be listed for several VTXOs. With a bitcoind chain source only confirmed outputs are found.",
-        "operationId": "expiry_payouts",
-        "responses": {
-          "200": {
-            "description": "Returns the payout outputs found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ExpiryPayout"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InternalServerError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/wallet/vtxos/{id}": {
       "get": {
         "tags": [
@@ -4151,6 +4105,10 @@
           "force": {
             "type": "boolean",
             "description": "Proceed even if the datadir contains unexpected files"
+          },
+          "fresh_mnemonic": {
+            "type": "boolean",
+            "description": "The supplied mnemonic was just generated and has no transaction history.\nNever set this when restoring an existing wallet."
           },
           "gap_limit": {
             "type": [
@@ -5836,44 +5794,6 @@
           }
         }
       },
-      "ExpiryPayout": {
-        "type": "object",
-        "description": "An on-chain output paying the expiry payout address of a VTXO.",
-        "required": [
-          "txid",
-          "vout",
-          "amount_sat",
-          "confirmations"
-        ],
-        "properties": {
-          "amount_sat": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "confirmations": {
-            "type": "integer",
-            "format": "int32",
-            "description": "0 while the output is in the mempool",
-            "minimum": 0
-          },
-          "txid": {
-            "type": "string"
-          },
-          "vout": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "vtxo_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Absent when expired coins share this payout key."
-          }
-        }
-      },
       "ExpiryVtxosRequest": {
         "type": "object",
         "required": [
@@ -5885,6 +5805,23 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "FallbackDestination": {
+        "type": "object",
+        "required": [
+          "address",
+          "seq"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -7264,38 +7201,6 @@
           "signature": {
             "type": "string",
             "description": "The BIP-340 Schnorr signature over the message digest\n`SHA256(\"bark/message\" || message)`"
-          }
-        }
-      },
-      "SweepExpiryPayoutsRequest": {
-        "type": "object",
-        "properties": {
-          "fee_rate_sat_vb": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "Fee rate in sat/vB; defaults to the chain source's regular fee rate",
-            "minimum": 0
-          }
-        }
-      },
-      "SweepExpiryPayoutsResponse": {
-        "type": "object",
-        "required": [
-          "txid",
-          "swept_sat"
-        ],
-        "properties": {
-          "swept_sat": {
-            "type": "integer",
-            "format": "int64",
-            "description": "The amount paid to the on-chain wallet, after the sweep's fee",
-            "minimum": 0
-          },
-          "txid": {
-            "type": "string"
           }
         }
       },

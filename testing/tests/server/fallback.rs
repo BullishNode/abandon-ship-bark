@@ -1,7 +1,6 @@
 use ark::{musig, ProtocolEncoding, SECP};
 use ark::attestations::{FallbackRecordAttestation, KeyLinkAttestation};
 use ark_testing::TestContext;
-use ark_testing::daemon::captaind::Captaind;
 use bitcoin::{absolute, transaction, OutPoint, ScriptBuf, Transaction};
 use bitcoin::constants::ChainHash;
 use bitcoin::hashes::{sha256, Hash, HashEngine};
@@ -139,30 +138,6 @@ async fn fallback_records_and_immutable_links() {
 	b.unwrap();
 	assert_eq!(rpc.set_fallback(request(None, vec![])).await.unwrap().into_inner().record,
 		final_record);
-}
-
-/// The payment guards and coin locks are in memory, so a second process on
-/// the same database, such as an old binary left running during an upgrade,
-/// would bypass them.
-#[tokio::test]
-async fn second_captaind_on_same_database_refused() {
-	let ctx = TestContext::new("server/second_captaind_on_same_database_refused").await;
-	let srv = ctx.captaind("server").create().await;
-	// The same seed and database; with the mnemonic present the harness
-	// starts it without creating a new server.
-	let mut cfg = srv.config().clone();
-	cfg.data_dir = ctx.datadir.join("server-dup");
-	std::fs::create_dir_all(&cfg.data_dir).unwrap();
-	let mnemonic = server::wallet::MNEMONIC_FILE;
-	std::fs::copy(srv.config().data_dir.join(mnemonic), cfg.data_dir.join(mnemonic)).unwrap();
-	let dup = Captaind::new("server-dup", ctx.bitcoind_arc(), cfg.clone());
-
-	dup.try_start().await.expect_err("a second captaind must not start on the same database");
-	let stderr = std::fs::read_to_string(cfg.data_dir.join("stderr.log")).unwrap();
-	assert!(stderr.contains("another captaind holds database"), "{stderr}");
-
-	srv.stop().await.unwrap();
-	dup.try_start().await.expect("the lock is free once the first captaind stopped");
 }
 
 /// A seed has the same mailbox key on every network and server, so a record

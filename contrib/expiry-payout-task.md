@@ -36,9 +36,13 @@ payout must reselect the recipient; if payout wins, registration is refused.
 Outputs already present in the HTLC ledger are excluded from this unregistered
 source.
 
-An unclaimed Lightning receive with a recorded preimage and no prior HTLC
-resolution pays the coin's own key through its fallback record. It requires the
-same confirmed sweep, grace and destination checks. The task takes the payment
+An unclaimed Lightning receive with a recorded preimage, a settled subscription
+and no prior HTLC resolution pays the coin's own key through its fallback
+record. The preimage is recorded before the hold invoice settles, so it does
+not prove the payer paid; the settled subscription does, for an external
+payment and for an intra-Ark one. A receive whose collection failed or is not
+yet recorded waits and is checked again every tick. It requires the same
+confirmed sweep, grace and destination checks. The task takes the payment
 guard before coin locks, as cooperative claims do, and retains it through an
 uncertain commit. The spent state, fulfilled HTLC resolution and payout commit
 together. A receive whose external payment was canceled without disclosing the

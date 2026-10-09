@@ -165,9 +165,9 @@ A persisted settlement phase consumes only the board's own lock, records one
 debit and completes its original board movement. If the funding anchor is already
 spent and no board exit is known, an unavailable server leaves the entitlement
 pending without starting a new exit. Existing board exits keep their recovery path.
-Historical coin-key payouts still use the existing sweep. Its
-movement now has zero Ark balance change (the coin was already debited), with
-`payout_total_sat`, `swept_sat`, and `sweep_fee_sat` recording the on-chain transfer.
+A coin without a fallback link, from before creation refusal, is still paid to
+its own key's key-path address, `tr(user_pubkey)`. bark no longer finds or sweeps
+those; the coin key descriptor tool kept with the regtest tooling spends them.
 The optional schema is outside numbered migrations, so stock watchmand remains compatible.
 It does not migrate approach B's different schema. For an earlier D draft containing
 `expiry_settlement.raw_tx`, stop captaind, verify every copy equals its nursery row,
@@ -189,6 +189,12 @@ These rules are documented, not enforced in code.
 - `abandon` an expiry payout only once it can never confirm: a conflicting
   spend of one of its inputs has `sweep_min_confs` confirmations. Its coins
   stay settled to it, so paying them again is a manual operation.
+- Run captaind under a restart policy. It exits when a payout's COMMIT
+  outcome is unknown and the database does not answer.
+- watchmand's `sweep_address` must be a rounds-wallet address. Startup checks
+  the configured file, not a different running process.
+- `[expiry_payout]` refuses unknown keys. Remove `max_batch` and `receipt_dir`
+  from an older configuration before starting this build.
 
 `[expiry_payout]` defaults:
 

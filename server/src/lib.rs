@@ -33,6 +33,7 @@ mod intman;
 pub mod ln;
 pub mod nursery;
 mod offboards;
+pub mod expiry_payout;
 mod round;
 pub mod telemetry;
 pub mod utils;
@@ -94,7 +95,7 @@ use crate::secret::Secret;
 use crate::system::RuntimeManager;
 use crate::utils::{InstrumentedLock, TimedEntryMap};
 use crate::vtxopool::VtxoPool;
-use crate::wallet::{PersistedWallet, WalletKind, MNEMONIC_FILE};
+use crate::wallet::{BdkWalletExt, PersistedWallet, WalletKind, MNEMONIC_FILE};
 
 lazy_static::lazy_static! {
 	/// Global secp context.
@@ -234,7 +235,6 @@ impl Server {
 		if cfg.data_dir.join(MNEMONIC_FILE).exists() {
 			bail!("Found an existing mnemonic file in datadir, the server is probably already initialized!");
 		}
-
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		// Check if our bitcoind is on the expected network.
 		let network = bitcoind.network().await?;
@@ -374,10 +374,34 @@ impl Server {
 		let wallet_xpriv = master_xpriv.derive_priv(
 			&crate::SECP, &[WalletKind::Rounds.child_number()],
 		).expect("can't error");
+		// A dead process's COMMIT can still be running in Postgres. Wait for its
+		// nursery writes before loading wallet metadata or pending payments.
+		db.write(async |t| {
+			t.execute("LOCK TABLE nursery_tx IN SHARE MODE", &[]).await?;
+			Ok(())
+		}).await.context("waiting for prior nursery commits")?;
 		let mut rounds_wallet = PersistedWallet::load_from_xpriv(
 			db.clone(), bitcoind.clone(), cfg.network, &wallet_xpriv, WalletKind::Rounds, deep_tip,
 			cfg.min_trusted_confs,
 		).await.context("error loading rounds wallet")?;
+		if cfg.expiry_payout.enabled {
+			let path = cfg.expiry_payout.watchman_config.as_ref()
+				.context("enabled expiry payouts require watchman_config")?;
+			let watchman = config::watchmand::Config::load(path)
+				.context("failed loading expiry payout watchman config")?;
+			ensure!(watchman.network == cfg.network, "watchmand and captaind networks differ");
+			let address = watchman.sweep_address.context("watchmand sweep_address is missing")?
+				.require_network(cfg.network)?;
+			ensure!(rounds_wallet.is_mine(address.script_pubkey()),
+				"expiry payouts require watchmand sweeps into the rounds wallet");
+			ensure!(cfg.rpc.admin_address.is_none_or(|a| a.ip().is_loopback()),
+				"expiry payouts require the admin RPC to be disabled or bound to loopback");
+		}
+		// Reapply durable nursery spends before any worker can select their inputs.
+		for tx in db.read(async |t| t.pending_expiry_payments(rounds_wallet.latest_checkpoint().height()).await).await? {
+			rounds_wallet.commit_tx(&tx);
+		}
+		rounds_wallet.persist().await?;
 		if let Some(list) = bitcoin_address_blocklist.clone() {
 			rounds_wallet.set_address_blocklist(list);
 		}
@@ -399,6 +423,7 @@ impl Server {
 		rtmgr.run_shutdown_signal_listener(Duration::from_secs(60));
 
 		let tx_nursery = TxNursery::new(db.clone(), bitcoind.clone());
+		tx_nursery.resume_expiry_payments().await?;
 
 		let fee_estimator = fee_estimator::start(
 			rtmgr.clone(),
@@ -504,6 +529,7 @@ impl Server {
 		srv.lightning_manager.spawn_hold_settler(srv.clone(), settlement_stream);
 
 		srv.clone().start_offboard_retry_task().await;
+		srv.start_expiry_payout_task();
 
 		let srv2 = srv.clone();
 		tokio::spawn(async move {
@@ -626,6 +652,7 @@ impl Server {
 		funding_tx: Option<&Transaction>,
 		user_pub_nonce: PublicNonce,
 	) -> anyhow::Result<ark::board::BoardCosignResponse> {
+		self.db.read(async |t| t.require_fallback(&[user_pubkey]).await).await?;
 		check_max_amount("board", amount, self.config.max_board_amount)?;
 
 		let min_amount = self.config.min_board_amount.max(P2TR_DUST);
@@ -664,8 +691,28 @@ impl Server {
 			);
 		}
 
+		// The fork must know the output it promises to track before returning
+		// a cosign. When optional request data is omitted, only an already-known
+		// chain transaction can supply it. Never treat these bytes as broadcast.
+		let fetched_funding_tx;
+		let funding_tx = match funding_tx {
+			Some(tx) => tx,
+			None if self.config.require_board_funding_tx => return badarg!("missing funding_tx"),
+			None => {
+				let info = bcd::custom_get_raw_transaction_info(&self.bitcoind, utxo.txid, None).await?
+					.context("missing funding_tx and funding transaction not known")?;
+				fetched_funding_tx = bitcoin::consensus::deserialize::<Transaction>(&info.hex)?;
+				&fetched_funding_tx
+			},
+		};
+		if utxo.vout as usize >= funding_tx.output.len() {
+			return badarg!("board outpoint does not match funding tx (vout)");
+		}
+		if utxo.txid != funding_tx.compute_txid() {
+			return badarg!("board outpoint does not match funding tx (txid)");
+		}
+
 		if self.config.require_board_funding_tx {
-			let funding_tx = funding_tx.context("missing funding_tx")?;
 
 			if funding_tx.input.len() > MAX_NB_BOARD_FUNDING_INPUTS {
 				return badarg!("invalid funding tx: too many inputs (max is {})",
@@ -673,20 +720,14 @@ impl Server {
 				);
 			}
 
-			// validate utxo against funding tx
-			if utxo.vout as usize >= funding_tx.output.len() {
-				return badarg!("board outpoint does not match funding tx (vout)");
-			}
-			if utxo.txid != funding_tx.compute_txid() {
-				return badarg!("board outpoint does not match funding tx (txid)");
-			}
-
 			// validate funding tx is real
 			// check that any of the inputs is a vtxo
 			self.db.read(async |tx| {
-				// check the funding tx itself first, obviously can't exist
-				if tx.get_virtual_transaction_by_txid(utxo.txid).await?.is_some() {
-					return badarg!("invalid funding tx: known as virtual tx: {}", utxo.txid);
+				// A previously accepted board proposal is an idempotent retry.
+				if let Some(known) = tx.get_virtual_transaction_by_txid(utxo.txid).await? {
+					if !known.is_funding || !tx.is_pending_board_funding(utxo.txid).await? {
+						return badarg!("invalid funding tx: known as virtual tx: {}", utxo.txid);
+					}
 				}
 				for inp in &funding_tx.input {
 					let vtxo_id = inp.previous_output.into();
@@ -729,6 +770,24 @@ impl Server {
 			utxo,
 			user_pub_nonce,
 		);
+		let (anchor, pending) = builder.build_unsigned_vtxos().badarg("invalid board")?;
+		if funding_tx.output[utxo.vout as usize] != anchor.txout() {
+			return badarg!("board funding output does not match amount or script");
+		}
+		pending.validate_unsigned(funding_tx).badarg("invalid board funding path")?;
+		// Reserve the anchor's one cosigned exit immediately. Watchman may
+		// confirm the funding before registration; that must not look like a
+		// fresh off-chain spend of a confirmed output during registration.
+		let update = VtxoTreeUpdate::new()
+			.upsert_unsigned_funding_tx(utxo.txid)
+			.upsert_unsigned_tx([pending.point().txid])
+			.insert_oor_spent_vtxos([(anchor, pending.point().txid)]);
+		self.db.write(async |t| {
+			t.store_pending_board(&pending).await?;
+			t.execute_vtxo_tree_update(update).await?;
+			t.add_funding_vtxos_to_frontier(utxo.txid, None).await?;
+			Ok(())
+		}).await?;
 
 		info!("Cosigning board request for utxo {}", utxo);
 		let resp = builder.server_cosign(self.server_key.leak_ref());
@@ -746,6 +805,7 @@ impl Server {
 	/// - The VTXO is actually a board (not another VTXO type)
 	#[tracing::instrument(skip(self, vtxo))]
 	pub async fn register_board(&self, vtxo: Vtxo<Full>) -> anyhow::Result<()> {
+		self.db.read(async |t| t.require_fallback(&[vtxo.user_pubkey()]).await).await?;
 		let funding_txid = vtxo.chain_anchor().txid;
 		let funding_vout = vtxo.chain_anchor().vout;
 		let tx_info = bcd::custom_get_raw_transaction_info(&self.bitcoind, funding_txid, None).await
@@ -814,6 +874,7 @@ impl Server {
 			.insert_spendable_vtxos(builder.build_server_vtxos())
 			.mark_vtxos_oor_spent(builder.spend_info());
 		let inserted = self.db.write(async |t| {
+			t.lock_board_registration(&vtxo).await?;
 			let inserted = t.execute_vtxo_tree_update(update).await?;
 			t.add_funding_vtxos_to_frontier(funding_txid, Some(confirmed_height)).await
 				.context("failed to add board vtxos to frontier")?;
@@ -929,8 +990,9 @@ impl Server {
 		let update = VtxoTreeUpdate::new()
 			.upsert_signed_tx(signed_txs)
 			.provide_signatures(vtxos)
-			.mark_vtxos_registered(registered_ids);
+			.mark_vtxos_registered(registered_ids.iter().copied());
 		self.db.write(async |t| {
+			t.lock_vtxo_registration(&registered_ids).await?;
 			t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::create_htlc_vtxos(&t, &htlc_sends, HtlcDirection::Incoming).await?;
 			Ok(())

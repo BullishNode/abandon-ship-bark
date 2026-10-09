@@ -296,6 +296,7 @@ impl Bark {
 			Cp::Board(b) => format!("board.{}", match b.progress {
 				board::Progress::Broadcasting { .. } => "Broadcasting",
 				board::Progress::Confirming { .. } => "Confirming",
+				board::Progress::ServerSpent => "ServerSpent",
 			}),
 			Cp::ArkoorSend(s) => format!("arkoor.{}", match s.progress {
 				arkoor_send::Progress::Cosigning => "Cosigning",

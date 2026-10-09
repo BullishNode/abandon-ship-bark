@@ -761,6 +761,7 @@ async fn do_round_forfeit_updates(
 		WHERE vtxo.vtxo_id = u.vtxo_id
 		AND vtxo.spend_state = 'spent'
 		AND vtxo.spent_in_round IS NOT NULL
+		AND (vtxo.confirmed_height IS NULL OR vtxo.oor_spent_txid = u.txid)
 		AND (vtxo.oor_spent_txid IS NULL OR vtxo.oor_spent_txid = u.txid)
 	", &[&ids, &txids]).await.context("failed to mark VTXOs as round-forfeited")?;
 	if rows != forfeits.len() as u64 {
@@ -771,6 +772,7 @@ async fn do_round_forfeit_updates(
 			WHERE v.vtxo_id IS NULL
 				OR v.spend_state != 'spent'
 				OR v.spent_in_round IS NULL
+				OR (v.confirmed_height IS NOT NULL AND v.oor_spent_txid IS DISTINCT FROM u.txid)
 				OR (v.oor_spent_txid IS NOT NULL AND v.oor_spent_txid != u.txid)
 			LIMIT 1
 		", &[&ids, &txids]).await.context("failed to find bad vtxo")?;

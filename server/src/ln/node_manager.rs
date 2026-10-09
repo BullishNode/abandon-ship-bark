@@ -40,6 +40,7 @@ use std::time::Duration;
 use anyhow::Context;
 use bitcoin::Amount;
 use bitcoin_ext::{AmountExt, BlockDelta, BlockHeight};
+use cln_rpc::listpays_pays::ListpaysPaysStatus;
 use cln_rpc::plugins::hold as hold_plugin;
 use lightning_invoice::Bolt11Invoice;
 use futures::Stream;
@@ -81,6 +82,31 @@ enum PayInvoiceRace {
 
 	#[error("invoice was canceled and can no longer be paid")]
 	Canceled,
+}
+
+/// The hold plugin canceled the invoice: it failed the incoming HTLCs back to
+/// the payer, and a canceled invoice can never be settled.
+#[derive(Debug, thiserror::Error)]
+#[error("hold invoice for {0} was canceled: its payment can never be collected")]
+pub(crate) struct HoldInvoiceCanceled(PaymentHash);
+
+/// How long [`LightningManager::node_payment_status`] waits for the node.
+///
+/// A node can accept a connection and still never answer. The callers hold a
+/// payment guard or run the expiry payout task, so they must not wait forever.
+const NODE_PAYMENT_STATUS_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// What a lightning node itself records for its payments of one hash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodePaymentStatus {
+	/// The node has no payment for this hash.
+	Unknown,
+	/// Every payment the node made for this hash failed.
+	Failed,
+	/// A payment for this hash is still in flight.
+	Pending,
+	/// A payment for this hash completed.
+	Complete,
 }
 
 /// Handle for the cln manager process.
@@ -486,6 +512,55 @@ impl LightningManager {
 		Ok(PaymentStatus::Pending)
 	}
 
+	/// The hold plugin's state of the invoice for `payment_hash` on the node
+	/// that issued it, if it has one.
+	pub async fn hold_invoice_state(
+		&self,
+		node_id: LightningNodeId,
+		payment_hash: PaymentHash,
+	) -> anyhow::Result<Option<hold_plugin::InvoiceState>> {
+		let mut hold_client = self.node_by_id(node_id)
+			.with_context(|| format!("lightning node {node_id} is not online"))?
+			.hold_rpc.context("node doesn't support hold anymore")?;
+		hold_invoice_state(&mut hold_client, payment_hash).await
+	}
+
+	/// Ask the node that made a payment attempt what happened to it.
+	///
+	/// Our attempt status can lag the node or miss a completion, for example
+	/// when the preimage could not be stored. Fund-releasing decisions that the
+	/// database alone cannot prove use this. An offline node, or one that does
+	/// not answer in time, is an error, not evidence that the payment failed.
+	pub async fn node_payment_status(
+		&self,
+		node_id: LightningNodeId,
+		payment_hash: PaymentHash,
+	) -> anyhow::Result<NodePaymentStatus> {
+		let node = self.node_by_id(node_id)
+			.with_context(|| format!("lightning node {node_id} is not online"))?;
+		let mut rpc = node.rpc.clone();
+		let request = rpc.list_pays(cln_rpc::ListpaysRequest {
+			bolt11: None,
+			payment_hash: Some(payment_hash.to_vec()),
+			status: None,
+			index: None,
+			limit: None,
+			start: None,
+		});
+		let pays = tokio::time::timeout(NODE_PAYMENT_STATUS_TIMEOUT, request).await
+			.with_context(|| format!("lightning node {node_id} did not answer"))?
+			.context("could not list payments on lightning node")?.into_inner().pays;
+		Ok(if pays.iter().any(|p| p.status() == ListpaysPaysStatus::Complete) {
+			NodePaymentStatus::Complete
+		} else if pays.iter().any(|p| p.status() == ListpaysPaysStatus::Pending) {
+			NodePaymentStatus::Pending
+		} else if pays.is_empty() {
+			NodePaymentStatus::Unknown
+		} else {
+			NodePaymentStatus::Failed
+		})
+	}
+
 	/// Waits until the payment for the given payment hash reaches a final state.
 	///
 	/// Never returns [`PaymentStatus::Pending`].
@@ -607,14 +682,20 @@ impl LightningManager {
 				// The cooperative claim and the hold settler both settle on
 				// the same preimage, so one of them can find the HTLCs
 				// already gone. That is the outcome we wanted, not a failure.
-				let paid = is_hold_invoice_paid(&mut hold_client, payment_hash).await
+				let state = hold_invoice_state(&mut hold_client, payment_hash).await
 					.with_context(|| format!(
 						"hold settle failed ({}) and the invoice state is unknown", err,
 					))?;
-				if !paid {
-					return Err(err.into());
+				match state {
+					Some(hold_plugin::InvoiceState::Paid) => {
+						debug!("Hold invoice for {} was already settled", payment_hash);
+					},
+					Some(hold_plugin::InvoiceState::Cancelled) => {
+						return Err(anyhow::Error::new(HoldInvoiceCanceled(payment_hash))
+							.context(format!("hold settle failed ({})", err)));
+					},
+					_ => return Err(err.into()),
 				}
-				debug!("Hold invoice for {} was already settled", payment_hash);
 			}
 		}
 
@@ -694,7 +775,9 @@ impl LightningManager {
 	///
 	/// - Retry on failure: a settlement that fails is retried on the same
 	///   item every 5 seconds until it succeeds, so one stuck preimage does
-	///   not advance past unsettled work but never abandons it either.
+	///   not advance past unsettled work but never abandons it either. The
+	///   one exception is an invoice the hold plugin canceled: its HTLCs are
+	///   gone, so retrying could only stall the settlements behind it.
 	///
 	/// - Backoff: 5s sleep between retries avoids busy-looping when the
 	///   backend or database is persistently unavailable. The preimage is
@@ -734,22 +817,22 @@ async fn run_hold_settler(
 	error!("Hold settler exited: hold invoices will no longer be settled automatically");
 }
 
-/// Whether the hold plugin already holds a paid invoice for `payment_hash`.
+/// The hold plugin's state of the invoice for `payment_hash`, if it has one.
 ///
 /// Used to tell a settlement that lost a race from one that genuinely
 /// failed: the plugin refuses a settle with "no HTLCs to settle" both when
 /// the invoice was already settled and when the HTLCs are gone for good.
-async fn is_hold_invoice_paid(
+async fn hold_invoice_state(
 	hold_client: &mut hold_plugin::hold_client::HoldClient<tonic::transport::Channel>,
 	payment_hash: PaymentHash,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<Option<hold_plugin::InvoiceState>> {
 	let res = hold_client.list(hold_plugin::ListRequest {
 		constraint: Some(hold_plugin::list_request::Constraint::PaymentHash(
 			payment_hash.to_byte_array().to_vec(),
 		)),
 	}).await?.into_inner();
 
-	Ok(res.invoices.iter().any(|i| i.state == hold_plugin::InvoiceState::Paid as i32))
+	Ok(res.invoices.first().and_then(|i| hold_plugin::InvoiceState::try_from(i.state).ok()))
 }
 
 /// Try to settle a single hold invoice. Returns true if the entry was
@@ -780,6 +863,13 @@ async fn try_settle_hold_invoice(
 	}
 
 	if let Err(e) = srv.lightning_manager.settle_invoice(sub.id, preimage).await {
+		// Retrying a canceled invoice could only fail again, and would hold
+		// up the settlements queued behind this one. The receive stays
+		// unsettled, so its coins are never paid out as collected.
+		if e.downcast_ref::<HoldInvoiceCanceled>().is_some() {
+			error!("Hold invoice for {} can never be settled: {:#}", payment_hash, e);
+			return true;
+		}
 		warn!("Hold invoice settlement failed for {}, will retry: {:#}", payment_hash, e);
 		return false;
 	}

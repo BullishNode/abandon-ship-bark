@@ -121,9 +121,9 @@ async fn request_htlc_revocation(
 		htlc_vtxos.push(vtxo);
 	}
 
-	// Any pubkey works for the revocation output; the tests never claim it.
-	let revocation_pubkey =
-		Keypair::new(&SECP, &mut bip39::rand::thread_rng()).public_key();
+	// Use a linked output so a missing fallback record cannot mask the
+	// settlement refusal these tests are meant to exercise.
+	let revocation_pubkey = client.derive_store_next_keypair().await.unwrap().0.public_key();
 	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
 		htlc_vtxos.iter().cloned(),
 		ark::VtxoPolicy::new_pubkey(revocation_pubkey),
@@ -1227,8 +1227,10 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 		.expect("Accepted subscription must record lowest incoming HTLC expiry");
 
 	// Prepare the claim while the inbound HTLC is still live. The granted
-	// HTLC-recv VTXOs are now outstanding value of the server.
-	let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	// HTLC-recv VTXOs are now outstanding value of the server. The keys are
+	// linked to the wallet's fallback record, as the server requires.
+	let client = bark.client().await;
+	let (keypair, _) = client.derive_store_next_keypair().await.unwrap();
 	let granted = rpc
 		.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 			payment_hash: payment_hash.as_ref().to_vec(),
@@ -1258,7 +1260,7 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
 		granted.iter().cloned(),
 		ark::VtxoPolicy::new_pubkey(
-			Keypair::new(&SECP, &mut bip39::rand::thread_rng()).public_key(),
+			client.derive_store_next_keypair().await.unwrap().0.public_key(),
 		),
 	)
 	.unwrap()
@@ -1426,7 +1428,8 @@ async fn settled_hash_replay_claim_still_settles_hold() {
 	let lowest = sub.lowest_incoming_htlc_expiry
 		.expect("Accepted subscription must record lowest incoming HTLC expiry");
 
-	let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	let client = bark.client().await;
+	let (keypair, _) = client.derive_store_next_keypair().await.unwrap();
 	let granted = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 		payment_hash: payment_hash.as_ref().to_vec(),
 		user_pubkey: keypair.public_key().serialize().to_vec(),
@@ -1440,7 +1443,7 @@ async fn settled_hash_replay_claim_still_settles_hold() {
 	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
 		granted.iter().cloned(),
 		ark::VtxoPolicy::new_pubkey(
-			Keypair::new(&SECP, &mut bip39::rand::thread_rng()).public_key(),
+			client.derive_store_next_keypair().await.unwrap().0.public_key(),
 		),
 	).unwrap().generate_user_nonces(&[keypair]).unwrap();
 

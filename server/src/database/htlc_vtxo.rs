@@ -209,6 +209,11 @@ pub async fn create_htlc_vtxos(
 		return Ok(());
 	}
 
+	let ids = vtxos.iter().map(|v| v.0).collect::<Vec<_>>();
+	let keys = tx.get_user_vtxos_by_id(&ids).await?.iter()
+		.map(|v| v.vtxo.user_pubkey()).collect::<Vec<_>>();
+	tx.require_fallback(&keys).await?;
+
 	let mut vtxo_ids = Vec::with_capacity(vtxos.len());
 	let mut payment_hashes = Vec::with_capacity(vtxos.len());
 	let mut expiries = Vec::with_capacity(vtxos.len());

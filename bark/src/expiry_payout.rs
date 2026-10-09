@@ -1,7 +1,11 @@
-//! Collect coins that the server paid out on-chain after they expired.
+//! Reconcile expired coins and collect historical coin-key payouts.
+//!
+//! Registered fallback payouts arrive directly in the BIP84 on-chain wallet.
+//! Status adoption atomically records the Ark debit once, without claiming a
+//! payout destination or transaction from the spent status alone.
 //!
 //! A server can choose to settle a VTXO that expired unrefreshed by paying its
-//! value on-chain to the BIP86 key-path address of the VTXO's own key,
+//! value on-chain to the key-path address of the VTXO's own key,
 //! `tr(user_pubkey)`, and marking the VTXO spent on its side. The wallet is not
 //! told about this. These functions let the wallet:
 //!
@@ -16,7 +20,8 @@
 //! The txid, output index and received amount must match. Missing receipts leave
 //! the fee unknown and do not prevent discovery or spending. A sweep records the
 //! sum of known original fees in `payout_fee_sat` movement metadata, or null when
-//! any fee is unknown. The sweep's own mining fee is separate.
+//! any fee is unknown. The sweep's own mining fee is `sweep_fee_sat`; its Ark
+//! balance delta is zero because adoption already removed the expired coin.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -196,6 +201,28 @@ pub async fn adopt_server_vtxo_status(
 	Ok(ret)
 }
 
+impl Wallet {
+	/// Reconcile expired coins before automatic refresh. An expired coin may
+	/// already have been paid on-chain while the wallet was offline. Uncertain
+	/// or in-flight states stay in the wallet but are excluded from this attempt.
+	pub(crate) async fn sync_expired_vtxos(&self) -> anyhow::Result<Vec<VtxoId>> {
+		let tip = self.chain().tip().await?;
+		let mut unavailable = Vec::new();
+		for vtxo in self.spendable_vtxos().await? {
+			if vtxo.expiry_height() > tip { continue; }
+			match self.trust_and_adopt_server_vtxo_status(vtxo.id()).await {
+				Ok(Some(ServerStatusAdoption::Spendable)) => {},
+				Ok(_) => unavailable.push(vtxo.id()),
+				Err(e) => {
+					warn!("Expired VTXO {} status unavailable; deferring refresh: {e:#}", vtxo.id());
+					unavailable.push(vtxo.id());
+				},
+			}
+		}
+		Ok(unavailable)
+	}
+}
+
 /// Find the unspent on-chain outputs paying the [expiry_payout_script] of
 /// every expired VTXO the wallet has as spent. A swept payout is spent, so it
 /// is not listed.
@@ -365,13 +392,17 @@ pub async fn sweep_expiry_payouts(
 		EXPIRY_PAYOUT_MOVEMENT_KIND,
 		MovementStatus::Successful,
 		MovementUpdate::new()
-			.intended_and_effective_balance(-payout_total.to_signed()?)
+			// Adoption already debited the Ark coin. This transaction only moves
+			// on-chain outputs, including when a spent coin was imported.
+			.intended_and_effective_balance(bitcoin::SignedAmount::ZERO)
 			.sent_to([MovementDestination::bitcoin(address, swept)])
 			.metadata([
 				("payout_fee_sat".into(), serde_json::to_value(payout_fee_sat)?),
 				("payout_txids".into(), serde_json::to_value(&payout_txids)?),
 				("sweep_txid".into(), serde_json::to_value(txid)?),
 				("swept_sat".into(), swept.to_sat().into()),
+				("payout_total_sat".into(), payout_total.to_sat().into()),
+				("sweep_fee_sat".into(), (payout_total - swept).to_sat().into()),
 			]),
 	).await?;
 

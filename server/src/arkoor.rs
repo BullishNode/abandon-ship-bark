@@ -115,12 +115,14 @@ impl Server {
 		// once the sender uploads the signed transaction chain via
 		// register_vtxo_transactions; until then `check_spendable` rejects
 		// them. This replaces the standalone chain-registration guard.
+		let output_keys = builder.build_unsigned_vtxos().map(|v| v.user_pubkey()).collect::<Vec<_>>();
 		let update = VtxoTreeUpdate::new()
 			.upsert_unsigned_tx(builder.virtual_transactions())
 			.insert_oor_spent_vtxos(builder.build_unsigned_internal_vtxos())
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
 		let inserted = self.db.write(async |t| {
+			t.require_fallback(&output_keys).await?;
 			let inserted = t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::set_htlc_vtxo_resolutions(
 				&t, &claimed_htlc_recvs, HtlcResolution::Fulfilled,

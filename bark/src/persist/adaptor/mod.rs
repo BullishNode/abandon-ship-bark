@@ -72,7 +72,7 @@ use crate::movement::{
 use crate::movement::update::MovementUpdate;
 use crate::persist::BarkPersister;
 use crate::persist::models::{
-	PaidInvoice, RoundStateId, SerdeExitChildTx, SerdeRoundState, SerdeVtxo, SerdeVtxoKey,
+	FallbackRecord, PaidInvoice, RoundStateId, SerdeExitChildTx, SerdeRoundState, SerdeVtxo, SerdeVtxoKey,
 	SettledLightningReceive, StoredExit, StoredRoundState, Unlocked, wallet_vtxo_from_full,
 };
 use crate::round::RoundState;
@@ -117,6 +117,7 @@ pub mod partition {
 	/// An index from [WalletActionId] to the movement that action owns, so a
 	/// re-driven action step reuses its movement instead of duplicating it.
 	pub const MOVEMENT_ACTION: u8 = 17;
+	pub const FALLBACK_RECORD: u8 = 18;
 
 	pub const LAST_IDS: u8 = u8::MAX;
 }
@@ -212,6 +213,42 @@ impl Query<std::ops::RangeFull> {
 	}
 }
 
+// Issued keys retain their original sort encoding. Pool keys occupy a separate
+// range, so finding the last issued key never scans the wallet's key history.
+fn vtxo_key_sort_key(index: u32, issued: bool) -> SortKey {
+	SortKey::u64_desc(u64::from(index) + if issued { 0 } else { 1 << 32 })
+}
+
+async fn last_issued_key<S: StorageAdaptor>(guard: &S) -> anyhow::Result<Option<u32>> {
+	let records = guard.query_sorted(Query::new(
+		partition::PUBLIC_KEY, SortKey::u64_desc(u32::MAX as u64)..,
+	).limit(1)).await?;
+	records.first().map(|r| r.to_data::<SerdeVtxoKey>().map(|k| k.index)).transpose()
+}
+
+async fn write_vtxo_key<S: StorageAdaptor>(
+	guard: &mut S, index: u32, public_key: PublicKey, linked: bool, issued: bool,
+) -> anyhow::Result<()> {
+	let mut key = SerdeVtxoKey { index, public_key, linked, issued };
+	if let Some(stored) = guard.get(partition::PUBLIC_KEY, &public_key.serialize()).await? {
+		let stored = stored.to_data::<SerdeVtxoKey>()?;
+		ensure!(stored.index == index, "vtxo public key already stored under a different index");
+		key.linked |= stored.linked;
+		key.issued |= stored.issued;
+	}
+	for issued in [false, true] {
+		let sk = vtxo_key_sort_key(index, issued);
+		for r in guard.query_sorted(Query::new(partition::PUBLIC_KEY, sk.clone()..=sk)).await? {
+			ensure!(r.to_data::<SerdeVtxoKey>()?.public_key == public_key,
+				"vtxo key index {index} already stored under a different public key");
+		}
+	}
+	guard.put(Record::from_data(
+		partition::PUBLIC_KEY, &public_key.serialize(),
+		Some(vtxo_key_sort_key(index, key.issued)), &key,
+	)?).await
+}
+
 fn serialize_payment_method(pm: &PaymentMethod) -> Vec<u8> {
 	let body = pm.value_string();
 
@@ -264,7 +301,7 @@ async fn write_movement_records<S: StorageAdaptor>(
 
 /// Storage adaptor trait for persistence backends.
 ///
-/// This trait provides a minimal interface (5 methods) that can be efficiently
+/// This trait provides a small interface that can be efficiently
 /// implemented on various storage backends while enabling query optimization.
 ///
 /// # Implementor's Guide
@@ -313,6 +350,10 @@ async fn write_movement_records<S: StorageAdaptor>(
 pub trait StorageAdaptor: Send + Sync + 'static {
 	/// Stores a record, inserting or updating by primary key.
 	async fn put(&mut self, record: Record) -> anyhow::Result<()>;
+
+	/// Store all records atomically. Failure or interruption must leave either
+	/// the entire batch or none of it; a loop of independent puts is not enough.
+	async fn put_batch(&mut self, records: Vec<Record>) -> anyhow::Result<()>;
 
 	/// Retrieves a record by primary key.
 	///
@@ -881,6 +922,30 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 		Ok(())
 	}
 
+	async fn record_server_spent_vtxo(
+		&self, vtxo_id: VtxoId, holder: Option<&VtxoLockHolder>,
+	) -> anyhow::Result<Option<Movement>> {
+		let mut guard = self.inner.write().await;
+		let (mut vtxo, transition) = get_check_vtxo_state(&*guard, vtxo_id,
+			&VtxoState::Spent, &[VtxoStateKind::Spendable, VtxoStateKind::Locked]).await?;
+		if let StateTransition::AlreadyApplied = transition { return Ok(None); }
+		if let Some(VtxoState::Locked { holder: actual }) = vtxo.current_state() {
+			ensure!(holder.is_some() && holder == actual.as_ref(), "server spend cannot consume another operation's lock");
+		}
+		// An interrupted allocation can leave an unused ID, never a partial debit.
+		let id = MovementId(guard.incremental_id(partition::MOVEMENT).await?);
+		let movement = Movement::server_spend(id, &vtxo.vtxo, chrono::Local::now())?;
+		vtxo.states.push(VtxoState::Spent);
+		guard.put_batch(vec![
+			Record::from_data(partition::VTXO, &vtxo_id.to_bytes(),
+				Some(sort::vtxo_sort_key(VtxoStateKind::Spent,
+					vtxo.vtxo.expiry_height().to_u32(), vtxo.vtxo.amount())), &vtxo)?,
+			Record::from_data(partition::MOVEMENT, &id.to_bytes(),
+				Some(sort::movement_sort_key(&movement.time.created_at)), &movement)?,
+		]).await?;
+		Ok(Some(movement))
+	}
+
 	async fn mark_vtxos_registered(&self, vtxo_ids: &[VtxoId]) -> anyhow::Result<()> {
 		let mut lock = self.inner.write().await;
 		for id in vtxo_ids {
@@ -928,28 +993,52 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 	}
 
 	async fn store_vtxo_key(&self, index: u32, public_key: PublicKey) -> anyhow::Result<()> {
-		let vtxo_key = SerdeVtxoKey { index, public_key };
-		let record = Record::from_data(
-			partition::PUBLIC_KEY,
-			&public_key.serialize()[..],
-			Some(sort::SortKey::u64_desc(index as u64)),
-			&vtxo_key,
-		)?;
-		self.inner.write().await.put(record).await
+		let mut guard = self.inner.write().await;
+		write_vtxo_key(&mut *guard, index, public_key, false, true).await
+	}
+
+	async fn store_linked_vtxo_keys(&self, keys: &[(u32, PublicKey)]) -> anyhow::Result<()> {
+		let mut guard = self.inner.write().await;
+		for &(index, public_key) in keys {
+			write_vtxo_key(&mut *guard, index, public_key, true, false).await?;
+		}
+		Ok(())
+	}
+
+	async fn is_vtxo_key_linked(&self, public_key: &PublicKey) -> anyhow::Result<bool> {
+		Ok(self.inner.read().await.get(partition::PUBLIC_KEY, &public_key.serialize()).await?
+			.map(|r| r.to_data::<SerdeVtxoKey>().map(|k| k.linked)).transpose()?.unwrap_or(false))
+	}
+
+	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>> {
+		let mut guard = self.inner.write().await;
+		let index = last_issued_key(&*guard).await?.map(|i| i.checked_add(1)
+			.context("vtxo key index exhausted")).transpose()?.unwrap_or(0);
+		let sk = vtxo_key_sort_key(index, false);
+		let records = guard.query_sorted(Query::new(partition::PUBLIC_KEY, sk.clone()..=sk)).await?;
+		let Some(record) = records.first() else { return Ok(None); };
+		let key = record.to_data::<SerdeVtxoKey>()?;
+		if !key.linked { return Ok(None); }
+		write_vtxo_key(&mut *guard, index, key.public_key, true, true).await?;
+		Ok(Some((index, key.public_key)))
 	}
 
 	async fn get_last_vtxo_key_index(&self) -> anyhow::Result<Option<u32>> {
-		// pks are sorted descending, so the first one is the highest index
-		let query = Query::new_full_range(partition::PUBLIC_KEY).limit(1);
-		let records = self.inner.read().await.query_sorted(query).await?;
+		last_issued_key(&*self.inner.read().await).await
+	}
 
-		match records.into_iter().next() {
-			Some(record) => {
-				let vtxo_key = record.to_data::<SerdeVtxoKey>()?;
-				Ok(Some(vtxo_key.index))
-			}
-			None => Ok(None),
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {
+		self.inner.read().await.get(partition::FALLBACK_RECORD, &[]).await?
+			.map(|r| r.to_data()).transpose()
+	}
+
+	async fn store_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()> {
+		i64::try_from(record.seq).context("fallback sequence out of range")?;
+		let mut guard = self.inner.write().await;
+		if let Some(stored) = guard.get(partition::FALLBACK_RECORD, &[]).await? {
+			if stored.to_data::<FallbackRecord>()?.seq > record.seq { return Ok(()); }
 		}
+		guard.put(Record::from_data(partition::FALLBACK_RECORD, &[], None, record)?).await
 	}
 
 	async fn get_public_key_idx(&self, public_key: &PublicKey) -> anyhow::Result<Option<u32>> {

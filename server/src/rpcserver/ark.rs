@@ -35,6 +35,7 @@ use ark::vtxo::policy::check_block_height;
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use server_rpc::{self as rpc, protos, RequestExt, TryFromBytes};
 use crate::database::SpendState;
+use crate::database::fallback::{FallbackKeyLink, FallbackRecord};
 
 use crate::database::rounds::StoredRoundOutput;
 use crate::round::DelegatedInput;
@@ -184,6 +185,25 @@ impl rpc::server::ArkService for Server {
 
 		Ok(tonic::Response::new(protos::GetVtxoStatusResponse {
 			spend_state: spend_state as i32,
+		}))
+	}
+
+	#[tracing::instrument(skip(self, req))]
+	async fn set_fallback(
+		&self,
+		req: tonic::Request<protos::SetFallbackRequest>,
+	) -> Result<tonic::Response<protos::SetFallbackResponse>, tonic::Status> {
+		let req = req.into_inner();
+		let mailbox_pk = PublicKey::from_bytes(&req.mailbox_pk)?;
+		let record = req.record.as_deref().map(|bytes|
+			FallbackRecord::from_bytes(bytes, mailbox_pk, self.config.network),
+		).transpose().badarg("invalid fallback record")?;
+		let key_links = req.key_links.iter().map(|bytes| FallbackKeyLink::from_bytes(bytes, mailbox_pk))
+			.collect::<anyhow::Result<Vec<_>>>().badarg("invalid fallback key link")?;
+		let stored = self.db.write(async |t| t.set_fallback(mailbox_pk, record.as_ref(), &key_links).await)
+			.await.to_status()?;
+		Ok(tonic::Response::new(protos::SetFallbackResponse {
+			record: stored.map(|r| r.to_bytes()).unwrap_or_default(),
 		}))
 	}
 
@@ -599,7 +619,7 @@ impl rpc::server::ArkService for Server {
 			Ok(SelfSignedInput { vtxo_id, attestation })
 		}).collect::<Result<_, tonic::Status>>()?;
 
-		let mut vtxo_requests = Vec::with_capacity(req.vtxo_requests.len());
+		let mut vtxo_requests = Vec::<ark::SignedVtxoRequest>::with_capacity(req.vtxo_requests.len());
 		for r in req.vtxo_requests.clone() {
 			// Make sure users provided right number of nonces.
 			if r.public_nonces.len() != self.config.nb_round_nonces {
@@ -607,6 +627,9 @@ impl rpc::server::ArkService for Server {
 			}
 			vtxo_requests.push(r.try_into().badarg("invalid signed vtxo request")?);
 		}
+		// Reject before admitting this participant, so an unlinked output cannot abort the round.
+		let output_keys = vtxo_requests.iter().map(|r| r.vtxo.policy.user_pubkey()).collect::<Vec<_>>();
+		self.db.read(async |t| t.require_fallback(&output_keys).await).await.to_status()?;
 
 		#[allow(deprecated)]
 		if !req.offboard_requests.is_empty() {

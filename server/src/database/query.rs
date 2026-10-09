@@ -25,6 +25,7 @@ use ark::vtxo::{Bare, Full};
 use bitcoin_ext::BlockHeight;
 
 use crate::database::model::{VirtualTransaction, VtxoState};
+use crate::database::Tx;
 use crate::database::rounds::{StoredRoundInput, StoredRoundOutput, StoredRoundParticipation};
 use crate::error::ContextExt;
 use crate::secret::Secret;
@@ -159,13 +160,17 @@ pub async fn try_get_bare_vtxo_by_id(
 }
 
 pub async fn store_round_participation(
-	tx: &PgTransaction<'_>,
+	tx: &Tx<'_>,
 	unlock_hash: UnlockHash,
 	unlock_preimage: UnlockPreimage,
 	inputs: &[VtxoId],
 	outputs: impl IntoIterator<Item = &StoredRoundOutput>,
 	scheduled_height: Option<BlockHeight>,
 ) -> anyhow::Result<()> {
+	let outputs = outputs.into_iter().collect::<Vec<_>>();
+	let keys = outputs.iter().map(|o| o.vtxo_request.policy.user_pubkey()).collect::<Vec<_>>();
+	tx.require_fallback(&keys).await?;
+
 	let part_stmt = tx.prepare_typed(
 		"INSERT INTO round_participation \
 			(unlock_hash, unlock_preimage, scheduled_height, created_at) \

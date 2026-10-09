@@ -362,6 +362,8 @@ impl Wallet {
 	/// with it. Adoption only ever moves a vtxo towards spent or in-flight
 	/// resolution: a vtxo the wallet has as spent stays spent, even when the server
 	/// reports it spendable.
+	/// A newly adopted spend records the coin's full Ark debit in the same storage
+	/// transaction. Repeated adoption does not create another movement.
 	///
 	/// A locked vtxo is left alone and the server isn't asked at all: returns
 	/// `Ok(None)`. Unlock the vtxo first if you want its status adopted.
@@ -396,7 +398,11 @@ impl Wallet {
 				}
 			},
 			ServerStatusAdoption::Spent => {
-				self.mark_vtxos_as_spent(&[vtxo_id]).await?;
+				// The coin can become locked while its server status is fetched.
+				// Do not overwrite a concurrent local operation's lock.
+				if let Some(movement) = self.inner.db.record_server_spent_vtxo(vtxo_id, None).await? {
+					self.inner.notifications.dispatch_movement_created(movement);
+				}
 			},
 			ServerStatusAdoption::InFlight(_) => {},
 		}

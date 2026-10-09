@@ -319,7 +319,7 @@ pub struct Revocation {
 const PAYMENT_PENDING_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Build a fresh [`LightningSend`] in `Progress::Start`: pick inputs,
-/// lock them, derive the htlc key, snapshot expiry.
+/// link output keys, lock inputs, and snapshot expiry.
 ///
 /// The executor persists the returned state. Idempotent under re-run
 /// only if no checkpoint exists yet for this invoice (the caller is
@@ -355,14 +355,15 @@ pub(crate) async fn start_lightning_send(
 	let change = input_total.checked_sub(payment_amount + fee)
 		.context("selected inputs don't cover payment and fee")?;
 
+	// Linking can need the server. Fail before locking inputs when the pool is empty.
+	let (change_keypair, _) = wallet.derive_store_next_keypair().await?;
+	let (revocation_keypair, _) = wallet.derive_store_next_keypair().await?;
+
 	let action_id = ln_pay_action_id(invoice.payment_hash());
 	wallet.lock_vtxos(
 		&inputs,
 		Some(crate::vtxo::VtxoLockHolder::Action { id: action_id }),
 	).await?;
-
-	let (change_keypair, _) = wallet.derive_store_next_keypair().await?;
-	let (revocation_keypair, _) = wallet.derive_store_next_keypair().await?;
 
 	let htlc_expiry = tip + ark_info.htlc_send_expiry_delta;
 

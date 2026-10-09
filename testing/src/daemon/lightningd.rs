@@ -423,6 +423,11 @@ impl Lightningd {
 		self.inner.try_grpc_client().await
 	}
 
+	/// The docker container name, when the node runs in docker.
+	pub fn container_name(&self) -> &str {
+		&self.inner.container_name
+	}
+
 	pub async fn grpc_client(&self) -> NodeClient<Channel> {
 		self.inner.grpc_client().await
 	}

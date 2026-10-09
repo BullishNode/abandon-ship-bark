@@ -324,6 +324,40 @@ impl<S: state::CanSign> BoardBuilder<S> {
 }
 
 impl BoardBuilder<state::ServerCanCosign> {
+	/// Reconstruct the funding anchor and unsigned user entitlement at cosign.
+	/// The user VTXO must not become spendable before funding is confirmed and
+	/// the signed board is registered. The unsigned path also lets a server
+	/// prove a sweep when the user disappears before registration.
+	pub fn build_unsigned_vtxos(
+		&self,
+	) -> Result<(ServerVtxo<Full>, Vtxo<Full>), BoardFundingTxValidationError> {
+		let amount = self.amount.expect("state invariant");
+		let fee = self.fee.expect("state invariant");
+		let user_amount = amount.checked_sub(fee)
+			.ok_or_else(|| BoardFundingTxValidationError("board fee exceeds amount".into()))?;
+		let point = self.utxo.expect("state invariant");
+		let combined = musig::combine_keys([self.user_pubkey, self.server_pubkey])
+			.x_only_public_key().0;
+		let funding = Vtxo {
+			policy: ServerVtxoPolicy::new_expiry(combined), amount,
+			expiry_height: self.expiry_height, server_pubkey: self.server_pubkey,
+			exit_delta: self.exit_delta, anchor_point: point,
+			genesis: Full { items: vec![] }, point,
+		};
+		let user = Vtxo {
+			policy: VtxoPolicy::new_pubkey(self.user_pubkey), amount: user_amount,
+			expiry_height: self.expiry_height, server_pubkey: self.server_pubkey,
+			exit_delta: self.exit_delta, anchor_point: point,
+			genesis: Full { items: vec![GenesisItem {
+				transition: GenesisTransition::new_cosigned(vec![self.user_pubkey, self.server_pubkey], None),
+				output_idx: 0, other_outputs: vec![], fee_amount: fee,
+			}] },
+			point: OutPoint::new(self.exit_data.as_ref().expect("state invariant").txid,
+				BOARD_FUNDING_TX_VTXO_VOUT),
+		};
+		Ok((funding, user))
+	}
+
 	/// This constructor is to be used by the server with the information provided
 	/// by the user.
 	pub fn new_for_cosign(
@@ -615,11 +649,11 @@ mod test {
 		let builder = builder.set_funding_details(amount, fee, utxo).unwrap().generate_user_nonces();
 
 		// server
-		let cosign = {
+		let (cosign, (funding, unsigned)) = {
 			let server_builder = BoardBuilder::new_for_cosign(
 				builder.user_pubkey, expiry, server_pubkey, exit_delta, amount, fee, utxo, *builder.user_pub_nonce(),
 			);
-			server_builder.server_cosign(&server_key)
+			(server_builder.server_cosign(&server_key), server_builder.build_unsigned_vtxos().unwrap())
 		};
 
 		// user
@@ -629,6 +663,17 @@ mod test {
 		encoding_roundtrip(&vtxo);
 
 		vtxo.validate(&funding_tx).unwrap();
+		assert_eq!(funding.point(), utxo);
+		assert_eq!(funding.txout(), funding_tx.output[0]);
+		assert!(!unsigned.has_all_witnesses());
+		assert!(unsigned.validate(&funding_tx).is_err());
+		unsigned.validate_unsigned(&funding_tx).unwrap();
+		encoding_roundtrip(&unsigned);
+		let mut without_signature = vtxo;
+		without_signature.genesis.items[0].transition = GenesisTransition::new_cosigned(
+			vec![user_key.public_key(), server_pubkey], None,
+		);
+		assert_eq!(unsigned, without_signature, "cosign data reconstructs exactly the eventual board");
 	}
 
 	/// Helper to create a valid vtxo and funding tx for testing new_from_vtxo

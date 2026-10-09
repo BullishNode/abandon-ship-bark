@@ -33,7 +33,7 @@ use crate::exit::{ExitStateKind, ExitTxOrigin};
 use crate::movement::{Movement, MovementId, MovementStatus, MovementSubsystem, PaymentMethod};
 use crate::movement::update::MovementUpdate;
 use crate::persist::{BarkPersister, RoundStateId, StoredRoundState, Unlocked};
-use crate::persist::models::{PaidInvoice, SettledLightningReceive, StoredExit};
+use crate::persist::models::{FallbackRecord, PaidInvoice, SettledLightningReceive, StoredExit};
 use crate::round::RoundState;
 use crate::vtxo::{VtxoLockHolder, VtxoState, VtxoStateKind, WalletVtxo};
 
@@ -271,6 +271,38 @@ impl BarkPersister for SqliteClient {
 		query::store_vtxo_key(&conn, index, public_key)
 	}
 
+	async fn store_linked_vtxo_keys(&self, keys: &[(u32, PublicKey)]) -> anyhow::Result<()> {
+		let mut conn = self.connect()?;
+		let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+		query::store_linked_vtxo_keys(&tx, keys)?;
+		tx.commit()?;
+		Ok(())
+	}
+
+	async fn is_vtxo_key_linked(&self, public_key: &PublicKey) -> anyhow::Result<bool> {
+		let conn = self.connect()?;
+		Ok(conn.query_row(
+			"SELECT EXISTS(SELECT 1 FROM bark_vtxo_key WHERE public_key = ?1 AND linked = 1)",
+			[public_key.to_string()], |row| row.get(0),
+		)?)
+	}
+
+	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>> {
+		let mut conn = self.connect()?;
+		let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+		let key = query::take_next_linked_vtxo_key(&tx)?;
+		tx.commit()?;
+		Ok(key)
+	}
+
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {
+		query::get_fallback_record(&self.connect()?)
+	}
+
+	async fn store_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()> {
+		query::store_fallback_record(&self.connect()?, record)
+	}
+
 	async fn get_last_vtxo_key_index(&self) -> anyhow::Result<Option<u32>> {
 		let conn = self.connect()?;
 		query::get_last_vtxo_key_index(&conn)
@@ -447,6 +479,27 @@ impl BarkPersister for SqliteClient {
 		Ok(())
 	}
 
+	async fn record_server_spent_vtxo(
+		&self, vtxo_id: VtxoId, holder: Option<&VtxoLockHolder>,
+	) -> anyhow::Result<Option<Movement>> {
+		let mut conn = self.connect()?;
+		let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+		let vtxo = query::get_wallet_vtxo_by_id(&tx, vtxo_id)?.context("vtxo not found")?;
+		if vtxo.state.kind() == VtxoStateKind::Spent { return Ok(None); }
+		if let VtxoState::Locked { holder: actual } = &vtxo.state {
+			ensure!(holder.is_some() && holder == actual.as_ref(), "server spend cannot consume another operation's lock");
+		}
+		query::update_vtxo_state_checked(&tx, vtxo_id, VtxoState::Spent,
+			&[VtxoStateKind::Spendable, VtxoStateKind::Locked])?;
+		let time = chrono::Local::now();
+		let id = query::create_new_movement(&tx, MovementStatus::Successful,
+			&Movement::server_spend_subsystem(), time, None)?;
+		let movement = Movement::server_spend(id, &vtxo.vtxo, time)?;
+		query::update_movement(&tx, &movement)?;
+		tx.commit()?;
+		Ok(Some(movement))
+	}
+
 	async fn mark_vtxos_registered(&self, vtxo_ids: &[VtxoId]) -> anyhow::Result<()> {
 		let conn = self.connect()?;
 		query::mark_vtxos_registered(&conn, vtxo_ids)
@@ -497,11 +550,37 @@ pub mod helpers {
 mod test {
 	use ark::ProtocolEncoding;
 	use ark::test_util::VTXO_VECTORS;
-
 	use crate::{persist::sqlite::helpers::in_memory_db, vtxo::VtxoState};
 	use crate::persist::test_suite::bark_persister_tests;
 
 	use super::*;
+
+	#[tokio::test]
+	async fn server_spend_rolls_back_and_survives_reopen() {
+		for owned_lock in [false, true] {
+			let dir = tempfile::tempdir().unwrap();
+			let path = dir.path().join("wallet.sqlite");
+			let db = SqliteClient::open(&path).unwrap();
+			let coin = &VTXO_VECTORS.board_vtxo;
+			let holder = owned_lock.then(|| VtxoLockHolder::Movement { id: MovementId::new(42) });
+			let state = holder.clone().map(|h| VtxoState::Locked { holder: Some(h) }).unwrap_or(VtxoState::Spendable);
+			db.store_vtxos(&[(coin, &state)]).await.unwrap();
+			let conn = db.connect().unwrap();
+			conn.execute_batch("CREATE TRIGGER fail_debit BEFORE INSERT ON bark_movements BEGIN
+				SELECT RAISE(ABORT, 'injected ledger failure'); END;").unwrap();
+			assert!(db.record_server_spent_vtxo(coin.id(), holder.as_ref()).await.is_err());
+			assert_eq!(db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, state);
+			assert!(db.get_all_movements().await.unwrap().is_empty());
+			conn.execute_batch("DROP TRIGGER fail_debit;").unwrap();
+			let movement = db.record_server_spent_vtxo(coin.id(), holder.as_ref()).await.unwrap().unwrap();
+			drop(conn);
+			drop(db);
+			let reopened = SqliteClient::open(&path).unwrap();
+			assert!(reopened.record_server_spent_vtxo(coin.id(), holder.as_ref()).await.unwrap().is_none());
+			assert_eq!(reopened.get_all_movements().await.unwrap(), vec![movement]);
+			assert_eq!(reopened.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spent);
+		}
+	}
 
 	#[tokio::test]
 	async fn test_add_and_retrieve_vtxos() {

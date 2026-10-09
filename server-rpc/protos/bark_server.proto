@@ -15,6 +15,7 @@ service ArkService {
 
 	rpc GetVtxo(GetVtxoRequest) returns (GetVtxoResponse) {}
 	rpc GetVtxoStatus(GetVtxoStatusRequest) returns (GetVtxoStatusResponse) {}
+	rpc SetFallback(SetFallbackRequest) returns (SetFallbackResponse) {}
 
 	// * BOARDING *
 
@@ -74,6 +75,16 @@ service ArkService {
 	rpc RequestLeafVtxoCosign(LeafVtxoCosignRequest) returns (LeafVtxoCosignResponse) {}
 	rpc RequestForfeitNonces(ForfeitNoncesRequest) returns (ForfeitNoncesResponse) {}
 	rpc ForfeitVtxos(ForfeitVtxosRequest) returns (ForfeitVtxosResponse) {}
+}
+
+message SetFallbackRequest {
+	bytes mailbox_pk = 1;
+	optional bytes record = 2; // scriptPubKey || seq (u64 LE) || Schnorr signature
+	repeated bytes key_links = 3; // compressed coin pubkey || Schnorr signature
+}
+
+message SetFallbackResponse {
+	bytes record = 1; // stored record after the call, or empty when absent
 }
 
 message HandshakeRequest {

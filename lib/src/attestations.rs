@@ -3,7 +3,8 @@ use std::io::{self, Write as _};
 use bitcoin::consensus::WriteExt;
 use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::key::Keypair;
-use bitcoin::secp256k1::{self, schnorr, Message};
+use bitcoin::secp256k1::{self, schnorr, Message, PublicKey};
+use bitcoin::Script;
 
 use crate::{SignedVtxoRequest, Vtxo, VtxoId, VtxoRequest, SECP};
 use crate::arkoor::ArkoorDestination;
@@ -294,6 +295,79 @@ impl ProtocolEncoding for VtxoStatusAttestation {
 	}
 }
 
+/// Bind a coin key to the wallet mailbox that receives its expiry payout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct KeyLinkAttestation {
+	signature: schnorr::Signature,
+}
+
+impl KeyLinkAttestation {
+	const MESSAGE_PREFIX: &'static [u8; 32] = b"Ark expiry fallback key link    ";
+
+	pub fn new(mailbox_pk: PublicKey, coin_key: &Keypair) -> Self {
+		let msg = Self::compute_message(mailbox_pk);
+		Self { signature: SECP.sign_schnorr_with_aux_rand(&msg, coin_key, &rand::random()) }
+	}
+
+	pub fn verify(&self, mailbox_pk: PublicKey, coin_pk: PublicKey) -> Result<(), secp256k1::Error> {
+		SECP.verify_schnorr(&self.signature, &Self::compute_message(mailbox_pk), &coin_pk.x_only_public_key().0)
+	}
+
+	fn compute_message(mailbox_pk: PublicKey) -> Message {
+		let mut engine = sha256::Hash::engine();
+		engine.input(Self::MESSAGE_PREFIX);
+		engine.input(&mailbox_pk.serialize());
+		Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array())
+	}
+}
+
+impl ProtocolEncoding for KeyLinkAttestation {
+	fn encode<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<(), io::Error> {
+		self.signature.encode(writer)
+	}
+
+	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, ProtocolDecodingError> {
+		Ok(Self { signature: schnorr::Signature::decode(reader)? })
+	}
+}
+
+/// Authorize an expiry payout destination and its revision with the mailbox key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct FallbackRecordAttestation {
+	signature: schnorr::Signature,
+}
+
+impl FallbackRecordAttestation {
+	const MESSAGE_PREFIX: &'static [u8; 32] = b"Ark expiry fallback record      ";
+
+	pub fn new(spk: &Script, seq: u64, mailbox_key: &Keypair) -> Self {
+		let msg = Self::compute_message(spk, seq);
+		Self { signature: SECP.sign_schnorr_with_aux_rand(&msg, mailbox_key, &rand::random()) }
+	}
+
+	pub fn verify(&self, spk: &Script, seq: u64, mailbox_pk: PublicKey) -> Result<(), secp256k1::Error> {
+		SECP.verify_schnorr(&self.signature, &Self::compute_message(spk, seq), &mailbox_pk.x_only_public_key().0)
+	}
+
+	fn compute_message(spk: &Script, seq: u64) -> Message {
+		let mut engine = sha256::Hash::engine();
+		engine.input(Self::MESSAGE_PREFIX);
+		engine.input(spk.as_bytes());
+		engine.input(&seq.to_le_bytes());
+		Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array())
+	}
+}
+
+impl ProtocolEncoding for FallbackRecordAttestation {
+	fn encode<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<(), io::Error> {
+		self.signature.encode(writer)
+	}
+
+	fn decode<R: io::Read + ?Sized>(reader: &mut R) -> Result<Self, ProtocolDecodingError> {
+		Ok(Self { signature: schnorr::Signature::decode(reader)? })
+	}
+}
+
 /// Attestation for proving ownership of a VTXO when requesting an offboard
 ///
 /// It commits to the offboard request and all input vtxos.
@@ -425,6 +499,58 @@ mod tests {
 
 	lazy_static! {
 		static ref TEST_CHALLENGE: Challenge = Challenge::new([0x42; 32]);
+	}
+
+	#[test]
+	fn fallback_key_link_fixed_vector_and_wrong_owner() {
+		let coin_key = Keypair::from_str("0000000000000000000000000000000000000000000000000000000000000003").unwrap();
+		let mailbox_key = Keypair::from_str("0000000000000000000000000000000000000000000000000000000000000007").unwrap();
+		let mailbox_pk = mailbox_key.public_key();
+		assert_eq!(KeyLinkAttestation::compute_message(mailbox_pk).as_ref().as_hex().to_string(),
+			"f7652423a1881bb4763d2092f5bb51ca87e63b86fa7a49c3fb9bc484a9820d5d");
+		// Independent BIP340 vector with zero auxiliary randomness.
+		let vector = KeyLinkAttestation::deserialize_hex(
+			"287fddfc438aaecba21cf13acf104e9a4f9f64a8a1cfcadec70726cb820d6372f3bd35ec9095622c202020b534a51c2b6fa61c010b8b6aa4e75386decc8de5bf",
+		).unwrap();
+		vector.verify(mailbox_pk, coin_key.public_key()).unwrap();
+		assert!(vector.verify(coin_key.public_key(), coin_key.public_key()).is_err());
+		assert!(vector.verify(mailbox_pk.negate(&SECP), coin_key.public_key()).is_err());
+		assert!(vector.verify(mailbox_pk, mailbox_pk).is_err());
+		let signed = KeyLinkAttestation::new(mailbox_pk, &coin_key);
+		signed.verify(mailbox_pk, coin_key.public_key()).unwrap();
+		encoding_roundtrip(&signed);
+		assert_eq!(signed.serialize().len(), 64);
+		for length in 0..64 {
+			assert!(KeyLinkAttestation::deserialize(&signed.serialize()[..length]).is_err());
+		}
+	}
+
+	#[test]
+	fn fallback_record_fixed_vector_and_tampering() {
+		let coin_key = Keypair::from_str("0000000000000000000000000000000000000000000000000000000000000003").unwrap();
+		let mailbox_key = Keypair::from_str("0000000000000000000000000000000000000000000000000000000000000007").unwrap();
+		let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+		let seq = 1_791_475_200;
+		assert_eq!(FallbackRecordAttestation::compute_message(&spk, seq).as_ref().as_hex().to_string(),
+			"70a675feb7f3fbecca5cc031630e22e032db4d76ebb718a96a59cc079e08a035");
+		let vector = FallbackRecordAttestation::deserialize_hex(
+			"ce292c50256c14275af413203cbbd3ace30175beecf793ffbc1dd8ef70d73f72743d4c4709124e30038892e4db053ae63a33346f72fc50d98705b8bad5f8e7af",
+		).unwrap();
+		vector.verify(&spk, seq, mailbox_key.public_key()).unwrap();
+		assert!(vector.verify(&ScriptBuf::new(), seq, mailbox_key.public_key()).is_err());
+		assert!(vector.verify(&spk, seq + 1, mailbox_key.public_key()).is_err());
+		assert!(vector.verify(&spk, seq, coin_key.public_key()).is_err());
+		for revision in [0, seq, u64::MAX] {
+			let signed = FallbackRecordAttestation::new(&spk, revision, &mailbox_key);
+			signed.verify(&spk, revision, mailbox_key.public_key()).unwrap();
+			encoding_roundtrip(&signed);
+		}
+		for length in 0..64 {
+			assert!(FallbackRecordAttestation::deserialize(&vector.serialize()[..length]).is_err());
+		}
+		let link = KeyLinkAttestation::new(mailbox_key.public_key(), &mailbox_key);
+		let replay = FallbackRecordAttestation::deserialize(&link.serialize()).unwrap();
+		assert!(replay.verify(&spk, seq, mailbox_key.public_key()).is_err());
 	}
 
 	#[test]

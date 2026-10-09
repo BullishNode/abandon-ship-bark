@@ -3,9 +3,11 @@
 //!
 //! ## Payment lifecycle
 //!
-//! [`ClnXpay::pay`] is fire-and-forget: it spawns a task that calls `xpay` over gRPC.
-//! On success, the sendpay stream picks up the result. On RPC error, the spawned task
-//! marks the attempt as `Submitted` with the error so the monitor can reconcile later.
+//! [`ClnXpay::pay`] is fire-and-forget: it spawns a task that calls `xpay` over gRPC
+//! and then reconciles the attempt against `listpays`. An attempt is only failed on
+//! evidence that CLN cannot complete the payment: an xpay error that CLN only returns
+//! before it sends any HTLC, or a reconciliation by the monitor once CLN stopped
+//! retrying. Any other error, such as a dropped connection, leaves the attempt open.
 //!
 //! ## Sendpay stream
 //!
@@ -49,6 +51,35 @@ use super::super::payment_handler::PaymentAttemptHandler;
 /// The buffer we add to the xpay timeout before we check invoice
 pub const XPAY_TIMEOUT_BUFFER: Duration = Duration::from_secs(15);
 
+/// xpay error codes that CLN only returns before the payment sends its first
+/// HTLC, so the payment can no longer succeed.
+///
+/// From CLN v26.06 `plugins/xpay/xpay.c`: invalid parameters and an expired
+/// invoice are refused before the payment starts. A route-finding failure
+/// keeps its own code only while no attempt was made; once an HTLC was sent,
+/// every failure is reported as `PAY_UNSPECIFIED_ERROR` or as a destination
+/// failure, and xpay can report those while other parts are still in flight.
+const XPAY_ERRORS_BEFORE_ANY_HTLC: [i32; 3] = [
+	-32602, // JSONRPC2_INVALID_PARAMS
+	205, // PAY_ROUTE_NOT_FOUND
+	207, // PAY_INVOICE_EXPIRED
+];
+
+/// The error message of an xpay call that CLN refused before it sent any
+/// HTLC, or `None` when the error proves nothing about the payment, as for a
+/// transport error while CLN may still be paying.
+fn xpay_failed_before_any_htlc(err: &anyhow::Error) -> Option<String> {
+	// cln-grpc reports lightningd's error as the debug format of its
+	// `RpcError`, which starts with the code CLN returned.
+	let status = err.downcast_ref::<tonic::Status>()?;
+	if status.code() != tonic::Code::Unknown {
+		return None;
+	}
+	let rest = status.message().strip_prefix("Error calling method Xpay: RpcError { code: Some(")?;
+	let code = rest.split_once(')')?.0.parse::<i32>().ok()?;
+	XPAY_ERRORS_BEFORE_ANY_HTLC.contains(&code).then(|| status.message().to_owned())
+}
+
 /// Shared client for sending xpay RPCs and reconciling payment status against CLN.
 ///
 /// Wrapped in an `Arc` so both [`ClnXpay::pay`] (fire-and-forget spawned tasks)
@@ -81,9 +112,9 @@ impl ClnXpayClient {
 
 	/// Calls xpay and then reconciles the attempt status against CLN.
 	///
-	/// On RPC success the sendpay stream will pick up the result, but we still
-	/// reconcile afterwards to handle edge cases (e.g. the stream missing an event).
-	/// On RPC error the reconciliation drives the attempt to its final state.
+	/// Only an xpay error that proves no HTLC was sent lets this reconciliation
+	/// fail the attempt. After any other error CLN may still be paying, so the
+	/// attempt stays open for the monitor.
 	#[tracing::instrument(skip_all, fields(
 		payment_hash = %invoice.payment_hash(),
 		invoice = %invoice,
@@ -102,26 +133,29 @@ impl ClnXpayClient {
 	) {
 		let mut rpc = self.rpc.clone();
 		let payment_hash = invoice.payment_hash();
-		match call_xpay(
+		let failure = match call_xpay(
 			&mut rpc, &invoice, payment_amount, max_routing_fee, max_cltv_expiry_delta, retry_for,
 		).await {
 			Ok(_preimage) => {
-				// NB we don't do db stuff when it's succesful, because
-				// it will happen in the sendpay stream of the monitor process
 				trace!("Payment successful for payment hash {}", payment_hash.as_hex());
+				None
 			},
-			// Fetch and store the attempt as failed.
 			Err(pay_err) => {
 				debug!("Error calling pay-command: {}", pay_err);
+				xpay_failed_before_any_htlc(&pay_err)
 			},
-		}
+		};
 
 		let attempt_res = self.db
 			.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await).await;
 
 		match attempt_res {
 			Ok(Some(attempt)) => {
-				if let Err(e) = self.sync_payment_attempt_status(attempt).await {
+				let evidence = match failure {
+					Some(ref error) => FailureEvidence::Refused(error),
+					None => FailureEvidence::Unproven,
+				};
+				if let Err(e) = self.sync_payment_attempt_status(attempt, evidence).await {
 					error!("Error syncing payment attempt status: {e:#}");
 				}
 			},
@@ -136,11 +170,18 @@ impl ClnXpayClient {
 
 	/// Queries CLN's `listpays` for the given attempt and updates the DB to match.
 	///
-	/// If CLN has no record of the payment and the attempt is still open, it is
-	/// marked `Failed`. If CLN reports a different status than the DB, the DB is
-	/// updated (unless the DB status is already final, which is logged as an error).
-	/// Sends on `payment_update_tx` when the status changes.
-	pub async fn sync_payment_attempt_status(&self, attempt: LightningPaymentAttempt) -> anyhow::Result<()> {
+	/// A complete payment succeeds the attempt and a pending one keeps it
+	/// open. CLN can report no payment, or only failed ones, while xpay has
+	/// not sent its first HTLC yet or is between retries. The attempt is then
+	/// marked `Failed` only with `evidence` that CLN can no longer be sending
+	/// it. If CLN reports a different status than a final DB status, that is
+	/// logged as an error. Sends on `payment_update_tx` when the status
+	/// changes.
+	pub async fn sync_payment_attempt_status(
+		&self,
+		attempt: LightningPaymentAttempt,
+		evidence: FailureEvidence<'_>,
+	) -> anyhow::Result<()> {
 		let payment_hash = attempt.payment_hash;
 		debug!("Lightning payment attempt ({}): with payment hash {} is being verified.",
 			attempt.id, payment_hash,
@@ -174,14 +215,30 @@ impl ClnXpayClient {
 					)
 				},
 				LightningPaymentStatus::Requested
-					| LightningPaymentStatus::Submitted =>
-				{
-					self.payment_handler().fail_payment_attempt(&attempt, None).await?;
+					| LightningPaymentStatus::Submitted => match evidence {
+					FailureEvidence::Unproven => {
+						debug!("Lightning payment attempt ({}): CLN shows no payment for \
+							payment hash {} yet; leaving it open",
+							attempt.id, payment_hash,
+						);
+					},
+					FailureEvidence::Refused(error) => {
+						self.payment_handler().fail_payment_attempt(&attempt, Some(error)).await?;
+					},
+					FailureEvidence::RetriesOver => {
+						self.payment_handler().fail_payment_attempt(&attempt, None).await?;
+					},
 				},
 			}
 		} else {
+			// A complete or pending payment outweighs any failed earlier one.
 			let latest = listpays_response.pays.into_iter().max_by_key(|p| {
-				p.created_index.expect("should have index")
+				let rank = match p.status() {
+					ListpaysPaysStatus::Failed => 0,
+					ListpaysPaysStatus::Pending => 1,
+					ListpaysPaysStatus::Complete => 2,
+				};
+				(rank, p.created_index.expect("should have index"))
 			}).expect("we have at least one");
 
 			let updated_status = match latest.status() {
@@ -197,7 +254,13 @@ impl ClnXpayClient {
 						LightningPaymentStatus::Succeeded
 					}
 				},
-				ListpaysPaysStatus::Failed => LightningPaymentStatus::Failed,
+				ListpaysPaysStatus::Failed => match evidence {
+					// xpay reports a failure before CLN marks every part failed,
+					// and between retries all parts can be failed.
+					FailureEvidence::Unproven => attempt.status,
+					FailureEvidence::Refused(_) | FailureEvidence::RetriesOver =>
+						LightningPaymentStatus::Failed,
+				},
 			};
 
 			let error_string = latest.erroronion.as_ref().map(|b| {
@@ -241,6 +304,19 @@ impl ClnXpayClient {
 
 		Ok(())
 	}
+}
+
+/// Why a reconciliation may fail an attempt that CLN shows nothing pending or
+/// complete for.
+#[derive(Debug, Clone, Copy)]
+pub enum FailureEvidence<'a> {
+	/// No proof: CLN may still be sending the payment.
+	Unproven,
+	/// xpay refused the payment before sending any HTLC, with this error.
+	Refused(&'a str),
+	/// The attempt is older than its retry time plus [XPAY_TIMEOUT_BUFFER],
+	/// so CLN stopped retrying it.
+	RetriesOver,
 }
 
 /// Timing knobs for the xpay monitor loop and reconciliation backoff.
@@ -422,7 +498,8 @@ impl ClnXpayProcess {
 			}
 
 			let attempt_id = attempt.id;
-			if let Err(e) = self.client.sync_payment_attempt_status(attempt).await {
+			let evidence = FailureEvidence::RetriesOver;
+			if let Err(e) = self.client.sync_payment_attempt_status(attempt, evidence).await {
 				error!("Error syncing payment attempt status: {e:#}");
 			} else {
 				self.update_next_attempt_check(attempt_id);
@@ -515,4 +592,48 @@ async fn call_xpay(
 	);
 
 	result
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn cln_error(message: &str) -> anyhow::Error {
+		tonic::Status::new(tonic::Code::Unknown, message).into()
+	}
+
+	#[test]
+	fn only_errors_before_any_htlc_fail_the_payment() {
+		// Errors as cln-grpc returned them on the CLN v26.06.6 test image.
+		let refused = [
+			"Error calling method Xpay: RpcError { code: Some(205), message: \"Failed: Unknown \
+				source node 0356715caa742a65f95b8d7e8abe50265dbbe012b961beb73c667ee8ece9c104a3\", data: None }",
+			"Error calling method Xpay: RpcError { code: Some(207), message: \"Invoice expired 2 \
+				seconds ago\", data: None }",
+			"Error calling method Xpay: RpcError { code: Some(-32602), message: \"Invalid bolt11 \
+				invoice: Bad bech32 string\", data: None }",
+		];
+		for message in refused {
+			assert_eq!(xpay_failed_before_any_htlc(&cln_error(message)).as_deref(), Some(message));
+		}
+
+		// A destination failure can arrive while other parts are in flight.
+		let destination = cln_error("Error calling method Xpay: RpcError { code: Some(203), \
+			message: \"Destination said it doesn't know invoice: incorrect_or_unknown_payment_details\", \
+			data: None }");
+		assert_eq!(xpay_failed_before_any_htlc(&destination), None);
+		// Errors that did not come from lightningd prove nothing.
+		let no_code = cln_error("Error calling method Xpay: RpcError { code: None, \
+			message: \"reading response from socket\", data: None }");
+		assert_eq!(xpay_failed_before_any_htlc(&no_code), None);
+		let transport = tonic::Status::unavailable("error trying to connect: tcp connect error").into();
+		assert_eq!(xpay_failed_before_any_htlc(&transport), None);
+		let not_status = anyhow!("missing preimage");
+		assert_eq!(xpay_failed_before_any_htlc(&not_status), None);
+		// The code must be the one cln-grpc puts first, not text in a message.
+		let spoofed = cln_error("Error calling method Xpay: RpcError { code: Some(209), \
+			message: \"code: Some(205)\", data: None }");
+		assert_eq!(xpay_failed_before_any_htlc(&spoofed), None);
+	}
 }

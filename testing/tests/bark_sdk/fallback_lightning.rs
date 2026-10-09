@@ -1,5 +1,10 @@
 use std::collections::BTreeSet;
+use std::convert::Infallible;
+use std::future::{Future, poll_fn};
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use tokio::sync::Notify;
@@ -19,7 +24,10 @@ use server::database::Db;
 use cln_rpc::plugins::hold;
 use cln_rpc::plugins::hold::hold_client::HoldClient;
 use server_rpc::protos;
-use tonic::transport::Channel;
+use tonic::body::Body;
+use tonic::codegen::{http, Service};
+use tonic::server::NamedService;
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity, Server};
 
 #[derive(Clone)]
 struct InterruptedReceiveClaim {
@@ -453,6 +461,182 @@ async fn absent_sender(completed: bool) {
 	srv.stop().await.unwrap();
 	let spend_txid = restore_and_spend(&ctx, &mnemonic, payout).await;
 	println!("failed send refunded: payout={payout}, principal_sat={principal}, fee_sat={fee}, confirmed_seed_spend={spend_txid}");
+}
+
+/// Relays the server's calls to its own CLN node. The first xpay call fails
+/// at once with a transport error, while its request reaches the node only
+/// when the test releases it: the server cannot tell whether its node pays.
+#[derive(Clone)]
+struct DroppedXpayRelay {
+	upstream: Channel,
+	intercepted: Arc<AtomicBool>,
+	/// The xpay call was answered with the error.
+	dropped: Arc<Notify>,
+	/// The server asked its node about payments after the error.
+	listed: Arc<Notify>,
+	release: Arc<Notify>,
+}
+
+impl NamedService for DroppedXpayRelay {
+	const NAME: &'static str = "cln.Node";
+}
+
+impl Service<http::Request<Body>> for DroppedXpayRelay {
+	type Response = http::Response<Body>;
+	type Error = Infallible;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Infallible>> + Send>>;
+
+	fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn call(&mut self, request: http::Request<Body>) -> Self::Future {
+		let relay = self.clone();
+		Box::pin(async move {
+			let path = request.uri().path().to_owned();
+			let mut upstream = relay.upstream.clone();
+			if path == "/cln.Node/Xpay" && !relay.intercepted.swap(true, Ordering::SeqCst) {
+				// Read the whole request before failing the call, so the node
+				// gets exactly what the server sent.
+				let (parts, body) = request.into_parts();
+				let bytes = axum::body::to_bytes(axum::body::Body::new(body), usize::MAX).await.unwrap();
+				let held = http::Request::from_parts(parts, Body::new(axum::body::Body::from(bytes)));
+				let release = relay.release.clone();
+				tokio::spawn(async move {
+					release.notified().await;
+					poll_fn(|cx| upstream.poll_ready(cx)).await.unwrap();
+					// Keep the call open until xpay answers, so the node
+					// finishes the payment.
+					let response = upstream.call(held).await.unwrap();
+					let _ = axum::body::to_bytes(axum::body::Body::new(response.into_body()), usize::MAX).await;
+				});
+				relay.dropped.notify_one();
+				return Ok(tonic::Status::unavailable("connection reset by peer").into_http());
+			}
+			let listing = path == "/cln.Node/ListPays" && relay.intercepted.load(Ordering::SeqCst);
+			poll_fn(|cx| upstream.poll_ready(cx)).await.unwrap();
+			let response = match upstream.call(request).await {
+				Ok(response) => response,
+				Err(e) => tonic::Status::unavailable(e.to_string()).into_http(),
+			};
+			if listing {
+				relay.listed.notify_one();
+			}
+			Ok(response)
+		})
+	}
+}
+
+/// The server's xpay call fails with a transport error while its node may
+/// still be paying. That is no evidence the payment failed: the sender's
+/// refund waits, and the payment the node then completes is recorded.
+#[tokio::test]
+async fn fallback_dropped_xpay_call_is_not_refunded() {
+	let name = "fallback_dropped_xpay_call_is_not_refunded";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+
+	// Test-only fault: the server reaches its own node through this relay,
+	// in plain text on loopback. It changes no payment, coin or attempt state.
+	let details = lightning.internal.grpc_details().await;
+	let upstream = Channel::builder(details.uri.parse().unwrap()).tls_config(ClientTlsConfig::new()
+		.ca_certificate(Certificate::from_pem(std::fs::read_to_string(&details.server_cert_path).unwrap()))
+		.identity(Identity::from_pem(
+			std::fs::read_to_string(&details.client_cert_path).unwrap(),
+			std::fs::read_to_string(&details.client_key_path).unwrap(),
+		))
+	).unwrap().connect().await.unwrap();
+	let relay = DroppedXpayRelay {
+		upstream,
+		intercepted: Arc::new(AtomicBool::new(false)),
+		dropped: Arc::new(Notify::new()),
+		listed: Arc::new(Notify::new()),
+		release: Arc::new(Notify::new()),
+	};
+	let port = ark_testing::ports::pick_port();
+	tokio::spawn(Server::builder().add_service(relay.clone()).serve(([127, 0, 0, 1], port).into()));
+	let relay_uri = format!("http://127.0.0.1:{port}");
+
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10))
+		.cfg(move |c| c.cln_array[0].uri = relay_uri.parse().unwrap())
+		.create().await;
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let sender = ctx.bark_sdk("sender", &srv)
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(300_000)).create().await;
+	sender.stop_daemon_wait().await.unwrap();
+
+	let preimage = Preimage::random();
+	let payment_hash = preimage.compute_payment_hash();
+	let mut payee = lightning.external.hold_client().await;
+	let invoice = payee.invoice(hold::InvoiceRequest {
+		payment_hash: payment_hash.as_ref().to_vec(),
+		amount_msat: 100_000 * 1_000,
+		description: Some(hold::invoice_request::Description::Memo(name.into())),
+		min_final_cltv_expiry: Some(18),
+		expiry: Some(3600),
+		routing_hints: vec![],
+	}).await.unwrap().into_inner().bolt11;
+	// Boarding just mined blocks; pay from a synced tip.
+	lightning.sync().await;
+	sender.pay_lightning_invoice(invoice, None, false).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(30), relay.dropped.notified()).await
+		.expect("the server must call xpay");
+	// The server reconciles with its node right after the error. The node
+	// has no record of the payment yet.
+	tokio::time::timeout(Duration::from_secs(30), relay.listed.notified()).await
+		.expect("the server must ask its node about the payment");
+	tokio::time::sleep(Duration::from_secs(1)).await;
+	let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	println!("dropped xpay call: attempt status after reconciliation: {}", attempt.status);
+
+	// The sender asks for its refund while the node may still pay.
+	let held = sender.all_vtxos().await.unwrap().into_iter()
+		.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| p.payment_hash == payment_hash))
+		.map(|w| w.vtxo).collect::<Vec<_>>();
+	assert!(!held.is_empty());
+	let mut keypairs = Vec::new();
+	let mut full = Vec::new();
+	for vtxo in &held {
+		let vtxo = sender.get_full_vtxo(vtxo.id()).await.unwrap();
+		keypairs.push(sender.get_vtxo_key(&vtxo).await.unwrap());
+		full.push(vtxo);
+	}
+	let output = sender.derive_store_next_keypair().await.unwrap().0.public_key();
+	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
+		full.into_iter(), ark::VtxoPolicy::new_pubkey(output),
+	).unwrap().generate_user_nonces(&keypairs).unwrap();
+	let status = srv.get_public_rpc().await
+		.request_lightning_pay_htlc_revocation(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+		.await.expect_err("the server refunded a payment its node may still complete");
+	println!("dropped xpay call: refund refused: {}", status.message());
+	assert_ne!(attempt.status, server::database::ln::LightningPaymentStatus::Failed);
+
+	// The request reaches the node, which pays.
+	relay.release.notify_one();
+	lightning.external.wait_for_hold_invoice_accepted(payment_hash).await;
+	payee.settle(hold::SettleRequest { payment_preimage: preimage.as_ref().to_vec() }).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+				.await.unwrap().unwrap();
+			if attempt.status == server::database::ln::LightningPaymentStatus::Succeeded { break; }
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.expect("the server must record the payment its node completed");
+	assert_eq!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(payment_hash).await)
+		.await.unwrap(), Some(preimage));
+	let ids = held.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let revoked = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM htlc_vtxo h JOIN vtxo v ON v.id=h.id
+		 WHERE v.vtxo_id=ANY($1) AND h.offchain_resolution='revoked'", &[&ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(revoked, 0);
+	let state = sender.check_lightning_payment(payment_hash, true).await.unwrap();
+	assert!(matches!(state, bark::actions::lightning::pay::LightningSendState::Paid(_)), "{state:?}");
+	println!("dropped xpay call: node completed the payment; server recorded it; sender not refunded");
 }
 
 /// A sender's late refund request holds its payment guard while the database

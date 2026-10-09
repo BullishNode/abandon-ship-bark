@@ -52,8 +52,12 @@ A Lightning send's HTLC coins return to the sender's own key when the payment
 cannot have succeeded. The task and the sender's refund request share one
 decision under the payment guard: no recorded preimage, no successful attempt,
 every attempt concluded, and every node that sent an attempt reports the
-payment failed or unknown. An offline or still-paying node leaves the coins
-waiting; a completed payment whose preimage was never recorded is never
+payment failed or unknown. An attempt concludes as failed only on evidence:
+xpay refused it before sending any HTLC (invalid parameters, an expired
+invoice, or no route before the first try), or, after its retry time plus a
+buffer, the node reports nothing pending or complete. A transport error on the
+xpay call leaves the attempt open. An offline or still-paying node leaves the
+coins waiting; a completed payment whose preimage was never recorded is never
 refunded. The commit takes the settlement write lock, rechecks the preimage,
 marks the HTLCs revoked and cancels an intra-Ark receive for the same hash. A
 committed intra-Ark receive holds the coins. Returning Lightning-client

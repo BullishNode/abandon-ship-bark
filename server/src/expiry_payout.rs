@@ -18,7 +18,7 @@ use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
 use bitcoin_ext::FeeRateExt;
 use tracing::{info, warn};
 
-use crate::database::expiry_settlement::payout_script;
+use crate::database::expiry_settlement::{payout_script, ExpiryInput};
 use crate::nursery::NurseryTxKind;
 use crate::wallet::{BdkWalletExt, WalletKind};
 use crate::Server;
@@ -45,7 +45,7 @@ fn fee_shares(amounts: &[u64], fee: u64) -> anyhow::Result<Vec<u64>> {
 #[derive(Clone)]
 struct PayoutGroup {
 	script: ScriptBuf,
-	ids: Vec<VtxoId>,
+	inputs: Vec<ExpiryInput>,
 	gross: u64,
 }
 
@@ -67,17 +67,18 @@ fn group_fee_shares(
 impl Server {
 	async fn claim_and_pay(&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate) -> anyhow::Result<Option<Payment>> {
 		let cfg = self.config.expiry_payout.clone();
-		let ids = groups.iter().flat_map(|g| g.ids.iter().copied()).collect::<Vec<_>>();
+		let inputs = groups.iter().flat_map(|g| g.inputs.iter().copied()).collect::<Vec<_>>();
+		let ids = inputs.iter().map(|i| i.id).collect::<Vec<_>>();
 		ensure!(!ids.is_empty() && ids.len() <= cfg.max_batch, "expiry batch exceeds coin limit");
 		let keys: Vec<String> = ids.iter().map(ToString::to_string).collect();
-		let scripts = groups.iter().flat_map(|g| g.ids.iter().map(|_| g.script.as_bytes().to_vec()))
+		let scripts = groups.iter().flat_map(|g| g.inputs.iter().map(|_| g.script.as_bytes().to_vec()))
 			.collect::<Vec<_>>();
 		let destinations = ids.iter().copied().zip(scripts.iter().cloned().map(ScriptBuf::from))
 			.collect::<BTreeMap<_, _>>();
 		ensure!(keys.iter().collect::<BTreeSet<_>>().len() == keys.len(), "duplicate expiry coin ID");
 		let Ok(_flux) = self.vtxos_in_flux.try_lock(&ids) else { return Ok(deferred("coin in flux")) };
 		let tip = self.chain_tip().height.to_u32();
-		let coins = self.db.read(async |t| t.expiry_inputs(&keys, tip, cfg.grace_blocks).await).await?;
+		let coins = self.db.read(async |t| t.expiry_inputs(&inputs, tip, cfg.grace_blocks).await).await?;
 		if coins.len() != ids.len() { return Ok(deferred("coin is spent, exited, in grace or participating")) }
 		let mut expected = BTreeMap::<ScriptBuf,u64>::new();
 		for v in &coins {
@@ -163,7 +164,7 @@ impl Server {
 				if let Some(change) = &wallet_metadata {
 					t.store_changeset(WalletKind::Rounds, change).await?;
 				}
-				t.store_expiry_payment(&keys, &scripts, &tx, fee, tip,
+				t.store_expiry_payment(&inputs, &scripts, &tx, fee, tip,
 					cfg.grace_blocks, target).await
 			}).await;
 			if let Err(error) = stored {
@@ -171,7 +172,7 @@ impl Server {
 					// Wait for the original transaction's row locks before reading
 					// its result: a lost COMMIT response alone does not mean rollback.
 					let outcome = db.write(async |t| {
-						t.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) FOR UPDATE", &[&keys]).await?;
+						t.lock_expiry_inputs(&keys).await?;
 						Ok(t.get_nursery_raw_tx(tx.compute_txid()).await?.is_some())
 					}).await;
 					match outcome {
@@ -385,11 +386,11 @@ impl Server {
 					}
 				}
 				let index = *group_index.entry(script.clone()).or_insert_with(|| {
-					groups.push(PayoutGroup { script, ids: Vec::new(), gross: 0 });
+					groups.push(PayoutGroup { script, inputs: Vec::new(), gross: 0 });
 					groups.len() - 1
 				});
 				let group = &mut groups[index];
-				group.ids.push(coin.id);
+				group.inputs.push(ExpiryInput { id: coin.id, pending_board: coin.pending_board });
 				group.gross = group.gross.checked_add(vtxo.amount().to_sat()).context("expiry group overflow")?;
 			}
 		}
@@ -399,21 +400,21 @@ impl Server {
 		let mut batch_coins = 0;
 		for group in groups {
 			if group.gross <= cfg.min_payout_sat {
-				stats.waiting += group.ids.len();
+				stats.waiting += group.inputs.len();
 				continue;
 			}
-			if group.ids.len() > cfg.max_batch {
-				warn!(coins = group.ids.len(), max_batch = cfg.max_batch,
+			if group.inputs.len() > cfg.max_batch {
+				warn!(coins = group.inputs.len(), max_batch = cfg.max_batch,
 					"expiry wallet group exceeds configured coin limit");
-				stats.waiting += group.ids.len();
+				stats.waiting += group.inputs.len();
 				continue;
 			}
-			if batch_coins + group.ids.len() > cfg.max_batch {
+			if batch_coins + group.inputs.len() > cfg.max_batch {
 				let paid = self.pay_expiry_batch(std::mem::take(&mut batch), rate).await?;
 				if paid > 0 { stats.paid = paid; return Ok(()); }
 				batch_coins = 0;
 			}
-			batch_coins += group.ids.len();
+			batch_coins += group.inputs.len();
 			batch.push(group);
 		}
 		if !batch.is_empty() { stats.paid = self.pay_expiry_batch(batch, rate).await?; }
@@ -501,7 +502,7 @@ impl Server {
 		while let Some(mut batch) = pending.pop_front() {
 			if let Some(payment) = self.claim_and_pay(batch.clone(), rate).await? {
 				if let Err(e) = self.write_expiry_receipt(&payment) { warn!("expiry receipt deferred: {e:#}"); }
-				let coins: usize = batch.iter().map(|g| g.ids.len()).sum();
+				let coins: usize = batch.iter().map(|g| g.inputs.len()).sum();
 				info!(txid = %payment.txid, fee_sat = payment.fee_sat, coins, "expiry payment committed");
 				return Ok(coins);
 			}

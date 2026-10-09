@@ -611,6 +611,19 @@ impl<'t> Tx<'t> {
 				WHERE id = $1;
 			").await?;
 			self.execute(&update, &[&id]).await?;
+
+			if status == LightningHtlcSubscriptionStatus::HtlcsReady {
+				let fail = self.prepare("
+					UPDATE lightning_payment_attempt
+					SET status = $2, error = $3, updated_at = NOW()
+					WHERE lightning_htlc_subscription_id = $1 AND status NOT IN ($2, $4);
+				").await?;
+				self.execute(&fail, &[
+					&id, &LightningPaymentStatus::Failed,
+					&"the recipient did not claim before its HTLC-recv expiry",
+					&LightningPaymentStatus::Succeeded,
+				]).await?;
+			}
 		}
 
 		Ok(Some((status, htlc_recvs_granted)))

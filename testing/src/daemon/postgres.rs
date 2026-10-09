@@ -154,6 +154,17 @@ impl DaemonHelper for PostgresHelper {
 	async fn prepare(&self) -> anyhow::Result<()> {
 		fs::create_dir_all(LOCK_DIR).await.expect("failed to create postgres lock dir");
 
+		// A postgres that was killed leaves its socket lock file behind, and
+		// once its pid is reused postgres refuses to start on that port. We
+		// hold the port's reservation and nothing listens on it, so any lock
+		// file for it is stale.
+		let stale_lock = PathBuf::from(LOCK_DIR).join(format!(".s.PGSQL.{}.lock", self.port()));
+		match fs::remove_file(&stale_lock).await {
+			Ok(()) => debug!("Removed stale postgres socket lock {}", stale_lock.display()),
+			Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
+			Err(e) => bail!("failed to remove stale postgres socket lock {}: {}", stale_lock.display(), e),
+		}
+
 		if self.datadir.exists() {
 			fs::remove_dir_all(&self.datadir).await.expect("failed to clear postgres datadir");
 		}

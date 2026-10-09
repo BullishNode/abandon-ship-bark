@@ -67,7 +67,9 @@ invoice, or no route before the first try), or, after its retry time plus a
 buffer, the node reports nothing pending or complete. A transport error on the
 xpay call leaves the attempt open. An offline or still-paying node leaves the
 coins waiting; a completed payment whose preimage was never recorded is never
-refunded. The commit takes the settlement write lock, rechecks the preimage,
+refunded. A node query gives up after ten seconds, and a node that failed to
+answer is not asked again in the same tick: its sends wait, while other
+wallets are paid in that tick. The commit takes the settlement write lock, rechecks the preimage,
 marks the HTLCs revoked and cancels an intra-Ark receive for the same hash. A
 settled intra-Ark receive holds the coins.
 

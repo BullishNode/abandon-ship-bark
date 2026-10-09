@@ -396,7 +396,11 @@ impl Wallet {
 				}
 			},
 			ServerStatusAdoption::Spent => {
-				self.mark_vtxos_as_spent(&[vtxo_id]).await?;
+				// The coin can become locked while its server status is fetched.
+				// Do not overwrite a concurrent local operation's lock.
+				self.set_vtxo_states(&[vtxo_id], &VtxoState::Spent,
+					&[VtxoStateKind::Spendable, VtxoStateKind::Spent],
+				).await?;
 			},
 			ServerStatusAdoption::InFlight(_) => {},
 		}

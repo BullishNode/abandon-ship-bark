@@ -1901,9 +1901,12 @@ impl Wallet {
 		F: Fn(RoundParticipation) -> Fut,
 		Fut: Future<Output = anyhow::Result<Option<RoundStateId>>>,
 	{
+		let unavailable = self.sync_expired_vtxos().await?;
 		let mut excluded = HashSet::new();
 		for _ in 0..10 {
-			let vtxos = self.get_vtxos_to_refresh_with_excluded(excluded.iter().copied()).await?;
+			let vtxos = self.get_vtxos_to_refresh_with_excluded(
+				unavailable.iter().chain(excluded.iter()).copied(),
+			).await?;
 			match (vtxos.is_empty(), excluded.is_empty()) {
 				// Every VTXO due for refresh has been excluded as unusable by the server:
 				// there is nothing left to submit, so surface an error rather than
@@ -1989,6 +1992,11 @@ impl Wallet {
 		self.inner.chain.invalidate_caches().await;
 
 		futures::join!(
+			async {
+				if let Err(e) = self.sync_expired_vtxos().await {
+					warn!("Error syncing expired VTXO states: {:#}", e);
+				}
+			},
 			async {
 				if let Err(e) = self.sync_fallback().await {
 					warn!("Error syncing fallback record and linked keys: {:#}", e);

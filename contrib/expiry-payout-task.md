@@ -71,10 +71,7 @@ can never be collected; its subscription stays unsettled and its coins stay
 held, unpaid.
 
 A Lightning send's HTLC coins return to the sender's own key when the payment
-cannot have succeeded. Captaind refuses to start paying an invoice that expires
-more than `max_invoice_expiry` (default 24h) ahead, since a lost request is
-refunded only after its invoice expired; invoices this server issued for an
-intra-Ark payment are exempt. The task and the sender's refund request share one
+cannot have succeeded. The task and the sender's refund request share one
 decision under the payment guard: no recorded preimage, no successful attempt,
 every attempt concluded, and every node that sent an attempt reports the
 payment failed or unknown. An attempt concludes as failed only on evidence:
@@ -180,13 +177,16 @@ replayed here. Records stored before this binding keep paying until their
 wallet signs a new one, which it does at its next sync. Clients and server
 must be upgraded together: an older client's records are refused.
 
-Run one captaind per database. The payment guards and coin locks live in
-memory, so captaind holds a PostgreSQL session advisory lock for its whole
-life and refuses to start while another process holds it; `drain` and
-`undo-round` take it too. Stop the old process before starting a new one: a
-binary from before this lock takes none and cannot be refused. The lock needs
-a direct or session-pooled connection, not transaction pooling. Captaind
-exits if the lock's connection drops, so run it under a restart policy.
+## Operator rules
+
+These rules are documented, not enforced in code.
+
+- Run one captaind per database. Its payment guards and coin locks live in
+  memory, as upstream's do. Stop the old binary before starting a new one, and
+  never run `captaind drain` or `undo-round` next to a running captaind.
+- `abandon` an expiry payout only once it can never confirm: a conflicting
+  spend of one of its inputs has `sweep_min_confs` confirmations. Its coins
+  stay settled to it, so paying them again is a manual operation.
 
 `[expiry_payout]` defaults:
 
@@ -245,8 +245,7 @@ group net minimum and confirmed funding. The task keeps entitlements while those
 
 For a committed transaction missing from the mempool, check the nursery and Core's
 rejection, restore funding/service conditions, and restart the same fork if needed;
-startup retries the identical transaction. The nursery refuses `abandon` for
-expiry payouts: their coins are settled to them. A manual CPFP requires an actual owned
+startup retries the identical transaction. A manual CPFP requires an actual owned
 change output. Exactly funded payouts may have none: wait for acceptance/fees to
 improve; do not construct another payment for the same coins. Receipt deletion is
 repaired from nursery bytes, original coin values and the stored paid scripts. A

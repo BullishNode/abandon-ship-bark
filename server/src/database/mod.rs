@@ -52,7 +52,7 @@ use chrono::Local;
 use futures::Stream;
 use tokio_postgres::{Client, NoTls, RowStream};
 use tokio_postgres::types::Type;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use ark::{ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoId};
 use ark::lightning::{PaymentHash, Preimage};
 use ark::mailbox::{MailboxIdentifier, MailboxType};
@@ -72,22 +72,11 @@ const DEFAULT_DATABASE: &str = "postgres";
 ///
 /// Each variant maps to a unique lock id. Using an enum avoids
 /// computing `hashtext(...)` at runtime and makes every lock site
-/// grep-able. [AdvisoryLock::CaptaindSingleton] is the exception: it is
-/// a session lock, held by one connection for the life of the process.
+/// grep-able.
 #[repr(i64)]
 enum AdvisoryLock {
 	MailboxWrite = 1,
 	HtlcSettlementWrite = 2,
-	CaptaindSingleton = 3,
-}
-
-/// Proof that this process is the only captaind using its database.
-///
-/// The payment guards and the flux locks only exist in memory, so a
-/// second process on the same database would bypass them. The lock is
-/// released when this is dropped.
-pub struct CaptaindLock {
-	_client: Client,
 }
 
 /// An uncommitted offboard fetched for the retry-task commit path. Carries
@@ -229,32 +218,6 @@ impl Db {
 		}
 
 		Ok(())
-	}
-
-	/// Take the database's captaind lock on a connection of its own,
-	/// outside the pool, or fail if another process holds it.
-	///
-	/// The process exits when that connection is lost: the database then
-	/// released the lock, and another process may have acted without it.
-	pub async fn acquire_captaind_lock(config: &PostgresConfig) -> anyhow::Result<CaptaindLock> {
-		let (client, connection) = Self::config(&config.name, config).connect(NoTls).await
-			.context("failed to connect for the captaind database lock")?;
-		tokio::spawn(async move {
-			// Ok only once the client was dropped, which released the lock.
-			if let Err(e) = connection.await {
-				error!("captaind database lock connection lost; exiting: {}", e);
-				std::process::exit(1);
-			}
-		});
-
-		let locked = client.query_one(
-			&format!("SELECT pg_try_advisory_lock({})", AdvisoryLock::CaptaindSingleton as i64), &[],
-		).await?.get::<_, bool>(0);
-		if !locked {
-			bail!("another captaind holds database {}; stop it before starting this one", config.name);
-		}
-
-		Ok(CaptaindLock { _client: client })
 	}
 
 	pub async fn connect(config: &PostgresConfig) -> anyhow::Result<Self> {

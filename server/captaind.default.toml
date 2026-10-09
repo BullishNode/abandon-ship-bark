@@ -148,10 +148,6 @@ cln_xpay_timeout = "60s"
 # The longest time a client may ask us to give xpay to finish a payment
 cln_xpay_max_retry_for = "5m"
 
-# We only pay invoices that expire within this time. A lost payment request
-# is refunded only after its invoice expired. Invoices we issued are exempt.
-max_invoice_expiry = "24h"
-
 # FIXME
 invoice_check_base_delay = "10s"
 

@@ -31,7 +31,6 @@ use server_rpc::protos::{self, InputVtxo, lightning_payment_status};
 use server_rpc::protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos;
 use server_rpc::TryFromBytes;
 use bitcoin_ext::{AmountExt, BlockDelta, BlockHeight};
-use chrono::{DateTime, Local};
 use cln_rpc::plugins::hold as hold_plugin;
 
 use crate::arkoor::ArkoorCosignRequestValidationParams;
@@ -39,8 +38,7 @@ use crate::database::htlc_vtxo::{self, HtlcResolution};
 use crate::database::SpendState;
 use crate::database::tree::VtxoTreeUpdate;
 use crate::database::ln::{
-	invoice_expires_at, LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningNodeId,
-	LightningPaymentStatus,
+	LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningNodeId, LightningPaymentStatus,
 };
 use crate::error::ContextExt;
 use crate::ln::node_manager::NodePaymentStatus;
@@ -93,27 +91,6 @@ fn validate_htlc_recv_expiry(
 ///
 /// Since both invoice and sub amount are both user-provided, we need to ensure
 /// they match.
-/// Refuse an invoice that expires more than `cap` after `now`.
-///
-/// A payment request that never reached the node fails only once the invoice
-/// expired, so a long expiry would hold the sender's refund for that long.
-fn check_invoice_expiry_cap(
-	invoice: &Invoice,
-	cap: Duration,
-	now: DateTime<Local>,
-) -> anyhow::Result<()> {
-	let Some(expires_at) = invoice_expires_at(invoice) else {
-		return badarg!("invoice expiry is out of range");
-	};
-	let latest = chrono::Duration::from_std(cap).ok().and_then(|cap| now.checked_add_signed(cap));
-	if latest.is_none_or(|latest| expires_at > latest) {
-		return badarg!("invoice expires at {}; this server only pays invoices that expire within {:?}",
-			expires_at, cap,
-		);
-	}
-	Ok(())
-}
-
 pub(crate) fn validate_intra_ark_payment(
 	subscription: &LightningHtlcSubscription,
 	invoice: &Invoice,
@@ -349,11 +326,10 @@ impl Server {
 			}
 		}
 
-		match self.db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await).await? {
-			Some(sub) => validate_intra_ark_payment(&sub, &invoice, payment_amount)?,
-			// Our own invoices expire after invoice_expiry, and their refund
-			// does not wait for the expiry.
-			None => check_invoice_expiry_cap(&invoice, self.config.max_invoice_expiry, Local::now())?,
+		if let Some(sub) = self.db.read(async |t|
+			t.get_htlc_subscription_by_payment_hash(payment_hash).await
+		).await? {
+			validate_intra_ark_payment(&sub, &invoice, payment_amount)?;
 		}
 
 		// Verify we can actually perform the payment when fees are taken into account. If for some
@@ -1208,33 +1184,6 @@ mod tests {
 
 		validate_intra_ark_payment(&sub, &forged, Amount::from_sat(1000))
 			.expect_err("forged invoice must be rejected");
-	}
-
-	/// A lost payment request is refunded only after its invoice expired.
-	#[test]
-	fn invoice_expiry_cap() {
-		let secp = Secp256k1::new();
-		let secret = SecretKey::from_slice(&[1; 32]).unwrap();
-		let now = DateTime::from_timestamp(1_700_000_000, 0).unwrap().with_timezone(&Local);
-		let invoice = |expiry: Duration| Invoice::Bolt11(InvoiceBuilder::new(Currency::Regtest)
-			.description("test".into())
-			.payment_hash(sha256::Hash::hash(b"preimage"))
-			.payment_secret(PaymentSecret([42; 32]))
-			.duration_since_epoch(Duration::from_secs(1_700_000_000))
-			.expiry_time(expiry)
-			.min_final_cltv_expiry_delta(144)
-			.amount_milli_satoshis(1_000_000)
-			.build_signed(|hash: &Message| secp.sign_ecdsa_recoverable(hash, &secret))
-			.unwrap());
-		let hour = Duration::from_secs(60 * 60);
-		let cap = 24 * hour;
-		check_invoice_expiry_cap(&invoice(23 * hour), cap, now).expect("below the cap");
-		check_invoice_expiry_cap(&invoice(cap), cap, now).expect("at the cap");
-		let err = check_invoice_expiry_cap(&invoice(25 * hour), cap, now).unwrap_err();
-		assert!(err.downcast_ref::<crate::error::BadArgument>().is_some(), "{err:#}");
-		// An expiry a timestamp cannot hold is refused too.
-		check_invoice_expiry_cap(&invoice(Duration::from_secs(i64::MAX as u64)), cap, now)
-			.expect_err("out of range");
 	}
 
 	/// The amount check in `initiate_lightning_payment` is skipped entirely for

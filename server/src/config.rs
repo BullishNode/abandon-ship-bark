@@ -198,11 +198,6 @@ mod defaults {
 		std::time::Duration::from_secs(5 * 60)
 	}
 
-	/// 24 hours.
-	pub fn max_invoice_expiry() -> std::time::Duration {
-		std::time::Duration::from_secs(24 * 60 * 60)
-	}
-
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -335,12 +330,6 @@ pub struct Config {
 	/// The longest time a client may ask us to give xpay to finish a payment
 	#[serde(default = "defaults::cln_xpay_max_retry_for", with = "utils::serde::duration")]
 	pub cln_xpay_max_retry_for: Duration,
-	/// The latest an invoice we pay may expire, counted from when its
-	/// payment starts. A request lost on its way to the node fails only after
-	/// the invoice expired, and the sender's refund waits until then.
-	/// Invoices this server issued are exempt.
-	#[serde(default = "defaults::max_invoice_expiry", with = "utils::serde::duration")]
-	pub max_invoice_expiry: Duration,
 	#[serde(with = "utils::serde::duration")]
 	pub invoice_check_base_delay: Duration,
 	#[serde(alias = "invoice_check_max_delay", with = "utils::serde::duration")]
@@ -591,12 +580,6 @@ impl Config {
 		}
 		if i32::try_from(self.cln_xpay_max_retry_for.as_secs()).is_err() {
 			bail!("Invalid configuration: cln_xpay_max_retry_for is too large");
-		}
-		if self.max_invoice_expiry.is_zero() {
-			bail!("Invalid configuration: max_invoice_expiry must be positive");
-		}
-		if chrono::Duration::from_std(self.max_invoice_expiry).is_err() {
-			bail!("Invalid configuration: max_invoice_expiry is too large");
 		}
 
 		// At 0 mailbox pages are empty while have_more stays true, so readers page forever.

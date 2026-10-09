@@ -131,9 +131,7 @@ impl rpc::server::NurseryAdminService for Server {
 		if self.tx_nursery.abandon(txid).await.to_status()? {
 			Ok(tonic::Response::new(protos::Empty {}))
 		} else {
-			Err(tonic::Status::not_found(
-				"no abandonable nursery tx with that txid (expiry payouts cannot be abandoned)",
-			))
+			Err(tonic::Status::not_found("no active nursery tx with that txid"))
 		}
 	}
 }

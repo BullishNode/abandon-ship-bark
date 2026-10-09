@@ -755,7 +755,7 @@ async fn grouped_expiry_without_client(
 		Some(task)
 	} else { None };
 	let tip = ctx.bitcoind().get_block_count().await as u32;
-	generate_blocks_without_payouts(&ctx, &db, expiry.saturating_sub(tip) + 3).await;
+	ctx.generate_blocks(expiry.saturating_sub(tip) + 3).await;
 	if payout_wins {
 		// Advance the real sweeps until payout reaches its coin-state update.
 		let waiting = wait_expiry_race_lock(&db, true);
@@ -763,7 +763,7 @@ async fn grouped_expiry_without_client(
 		loop {
 			tokio::select! {
 				_ = &mut waiting => break,
-				_ = tokio::time::sleep(Duration::from_secs(1)) => { generate_blocks_without_payouts(&ctx, &db, 1).await; },
+				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.generate_blocks(1).await; },
 			}
 		}
 		registration = Some(activate(&srv, &coins, race_mailbox.clone()).await);
@@ -776,7 +776,7 @@ async fn grouped_expiry_without_client(
 		loop {
 			tokio::select! {
 				_ = &mut waiting => break,
-				_ = tokio::time::sleep(Duration::from_secs(1)) => { generate_blocks_without_payouts(&ctx, &db, 1).await; },
+				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.generate_blocks(1).await; },
 			}
 		}
 		release.notify_one();
@@ -799,7 +799,7 @@ async fn grouped_expiry_without_client(
 			).await?)).await.unwrap();
 			if rows.len() == ids.len() { break rows; }
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			generate_blocks_without_payouts(&ctx, &db, 1).await;
+			ctx.generate_blocks(1).await;
 		}
 	}).await.expect("swept grouped entitlements must be paid within 90 seconds");
 	if let Some(never) = never_broadcast {
@@ -823,13 +823,6 @@ async fn grouped_expiry_without_client(
 		assert_eq!(row.get::<_, i64>("fee_sat") as u64, fee);
 	}
 	ctx.await_transaction(txid).await;
-	// The coins are settled to the payout, so the operator cannot drop it.
-	let err = srv.abandon(txid).await.unwrap_err();
-	assert_eq!(err.code(), tonic::Code::NotFound, "{err}");
-	let nursery = srv.list_nursery_txs(false, true).await;
-	let entry = nursery.iter().find(|t| t.txid == txid.to_string())
-		.expect("the unconfirmed payout stays in the nursery");
-	assert!(entry.abandoned_at.is_none(), "an expiry payout cannot be abandoned");
 	ctx.generate_blocks(1).await;
 	let tx: Transaction = core.get_raw_transaction(&txid, None).unwrap();
 	if let Some(other_owner_spk) = other_owner_spk {
@@ -1073,35 +1066,6 @@ async fn activate(
 			})
 		},
 	}
-}
-
-/// Mine blocks with the mempool except expiry payouts and their descendants,
-/// so the test decides when a payout confirms. Each template is read before
-/// the nursery: a payout is committed there before it is broadcast.
-async fn generate_blocks_without_payouts(ctx: &TestContext, db: &Db, count: u32) {
-	tokio::time::sleep(Duration::from_secs(1)).await;
-	let core = ctx.bitcoind().sync_client();
-	let address = ctx.bitcoind().get_new_address();
-	for _ in 0..count {
-		let template: serde_json::Value = core.call("getblocktemplate", &[
-			serde_json::json!({"rules": ["segwit"]}),
-		]).unwrap();
-		let payouts = db.read(async |t| Ok(t.query(
-			"SELECT txid FROM nursery_tx WHERE kind::TEXT='expiry-payout'", &[],
-		).await?)).await.unwrap().iter().map(|r| r.get::<_, String>(0)).collect::<Vec<_>>();
-		let mut excluded = Vec::<bool>::new();
-		let mut block = Vec::new();
-		for tx in template["transactions"].as_array().unwrap() {
-			let skip = payouts.iter().any(|t| t == tx["txid"].as_str().unwrap())
-				|| tx["depends"].as_array().unwrap().iter().any(|d| excluded[d.as_u64().unwrap() as usize - 1]);
-			excluded.push(skip);
-			if !skip { block.push(tx["data"].clone()); }
-		}
-		let _: serde_json::Value = core.call("generateblock", &[
-			address.to_string().into(), serde_json::Value::Array(block),
-		]).unwrap();
-	}
-	ctx.await_block_count_sync().await;
 }
 
 #[derive(Clone)]

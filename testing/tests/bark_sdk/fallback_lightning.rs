@@ -562,12 +562,48 @@ impl Service<http::Request<Body>> for DroppedXpayRelay {
 	}
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum XpayDelay {
+	/// The request reaches the node a second after the error.
+	Brief,
+	/// The request reaches the node only after the monitor's failure
+	/// horizon: the attempt's retry time plus the server's buffer.
+	PastRetries,
+	/// The request reaches the node only after the invoice expired, so the
+	/// node refuses it before sending any HTLC.
+	PastInvoiceExpiry,
+}
+
 /// The server's xpay call fails with a transport error while its node may
 /// still be paying. That is no evidence the payment failed: the sender's
 /// refund waits, and the payment the node then completes is recorded.
 #[tokio::test]
 async fn fallback_dropped_xpay_call_is_not_refunded() {
-	let name = "fallback_dropped_xpay_call_is_not_refunded";
+	Box::pin(dropped_xpay(XpayDelay::Brief)).await;
+}
+
+/// The same, with the request held past the time the node would have
+/// stopped retrying a request it received at once. The request can still
+/// start when it arrives, so the server must not conclude it failed.
+#[tokio::test]
+async fn fallback_long_delayed_xpay_dispatch_is_not_refunded() {
+	Box::pin(dropped_xpay(XpayDelay::PastRetries)).await;
+}
+
+/// A request held past the invoice expiry can no longer start: the node
+/// refuses an expired invoice before sending any HTLC. The sender is then
+/// refunded.
+#[tokio::test]
+async fn fallback_delayed_xpay_after_invoice_expiry_is_refunded() {
+	Box::pin(dropped_xpay(XpayDelay::PastInvoiceExpiry)).await;
+}
+
+async fn dropped_xpay(delay: XpayDelay) {
+	let name = match delay {
+		XpayDelay::Brief => "fallback_dropped_xpay_call_is_not_refunded",
+		XpayDelay::PastRetries => "fallback_long_delayed_xpay_dispatch_is_not_refunded",
+		XpayDelay::PastInvoiceExpiry => "fallback_delayed_xpay_after_invoice_expiry_is_refunded",
+	};
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 
@@ -605,14 +641,16 @@ async fn fallback_dropped_xpay_call_is_not_refunded() {
 	let preimage = Preimage::random();
 	let payment_hash = preimage.compute_payment_hash();
 	let mut payee = lightning.external.hold_client().await;
+	let invoice_expiry = if delay == XpayDelay::PastInvoiceExpiry { 40 } else { 3600 };
 	let invoice = payee.invoice(hold::InvoiceRequest {
 		payment_hash: payment_hash.as_ref().to_vec(),
 		amount_msat: 100_000 * 1_000,
 		description: Some(hold::invoice_request::Description::Memo(name.into())),
 		min_final_cltv_expiry: Some(18),
-		expiry: Some(3600),
+		expiry: Some(invoice_expiry),
 		routing_hints: vec![],
 	}).await.unwrap().into_inner().bolt11;
+	let invoice_created = std::time::Instant::now();
 	// Boarding just mined blocks; pay from a synced tip.
 	lightning.sync().await;
 	sender.pay_lightning_invoice(invoice, None, false).await.unwrap();
@@ -622,16 +660,30 @@ async fn fallback_dropped_xpay_call_is_not_refunded() {
 	// has no record of the payment yet.
 	tokio::time::timeout(Duration::from_secs(30), relay.listed.notified()).await
 		.expect("the server must ask its node about the payment");
-	tokio::time::sleep(Duration::from_secs(1)).await;
 	let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
 		.await.unwrap().unwrap();
-	println!("dropped xpay call: attempt status after reconciliation: {}", attempt.status);
+	let retry_for = attempt.retry_for.unwrap_or(srv.config().cln_xpay_timeout);
+	let hold = match delay {
+		XpayDelay::Brief => Duration::from_secs(1),
+		// Several monitor checks past its horizon; the server adds a buffer
+		// of 15 seconds to the retry time.
+		XpayDelay::PastRetries => retry_for + Duration::from_secs(15)
+			+ 3 * srv.config().invoice_check_interval + Duration::from_secs(10),
+		XpayDelay::PastInvoiceExpiry => Duration::from_secs(invoice_expiry + 5)
+			.saturating_sub(invoice_created.elapsed()),
+	};
+	tokio::time::sleep(hold).await;
+	let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	println!("dropped xpay call: delay={delay:?}, held {hold:?} (retry_for {retry_for:?}); attempt status: {}",
+		attempt.status);
 
-	// The sender asks for its refund while the node may still pay.
+	// The sender asks for its refund while the request is still held.
 	let held = sender.all_vtxos().await.unwrap().into_iter()
 		.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| p.payment_hash == payment_hash))
 		.map(|w| w.vtxo).collect::<Vec<_>>();
 	assert!(!held.is_empty());
+	let ids = held.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
 	let mut keypairs = Vec::new();
 	let mut full = Vec::new();
 	for vtxo in &held {
@@ -643,16 +695,59 @@ async fn fallback_dropped_xpay_call_is_not_refunded() {
 	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
 		full.into_iter(), ark::VtxoPolicy::new_pubkey(output),
 	).unwrap().generate_user_nonces(&keypairs).unwrap();
-	let status = srv.get_public_rpc().await
-		.request_lightning_pay_htlc_revocation(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
-		.await.expect_err("the server refunded a payment its node may still complete");
-	println!("dropped xpay call: refund refused: {}", status.message());
-	assert_ne!(attempt.status, server::database::ln::LightningPaymentStatus::Failed);
+	let revocation = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+
+	if delay == XpayDelay::PastInvoiceExpiry {
+		// The request reaches the node after the invoice expired. The node
+		// refuses it, so the payment can no longer start or complete.
+		relay.release.notify_one();
+		tokio::time::timeout(Duration::from_secs(90), async {
+			loop {
+				let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+					.await.unwrap().unwrap();
+				if attempt.status == server::database::ln::LightningPaymentStatus::Failed { break; }
+				tokio::time::sleep(Duration::from_millis(500)).await;
+			}
+		}).await.expect("a request that can no longer start must be failed");
+		srv.get_public_rpc().await.request_lightning_pay_htlc_revocation(revocation).await
+			.expect("the sender of a payment that can no longer start is refunded");
+		let invoices = payee.list(hold::ListRequest {
+			constraint: Some(hold::list_request::Constraint::PaymentHash(payment_hash.to_vec())),
+		}).await.unwrap().into_inner().invoices;
+		assert!(!matches!(invoices[0].state(), hold::InvoiceState::Accepted | hold::InvoiceState::Paid),
+			"the expired invoice was never paid: {:?}", invoices[0].state());
+		let mut node = lightning.internal.grpc_client().await;
+		let pays = node.list_pays(cln_rpc::ListpaysRequest {
+			bolt11: None, payment_hash: Some(payment_hash.to_vec()), status: None,
+			index: None, limit: None, start: None,
+		}).await.unwrap().into_inner().pays;
+		assert!(pays.is_empty(), "the late request must not start a payment: {pays:?}");
+		println!("dropped xpay call past invoice expiry: node refused it, sender refunded, payee unpaid");
+		return;
+	}
+
+	let refund = srv.get_public_rpc().await.request_lightning_pay_htlc_revocation(revocation).await;
+	println!("dropped xpay call: refund while the request is held: {:?}", refund.as_ref().map(|_| ()).map_err(|e| e.message().to_owned()));
 
 	// The request reaches the node, which pays.
 	relay.release.notify_one();
 	lightning.external.wait_for_hold_invoice_accepted(payment_hash).await;
 	payee.settle(hold::SettleRequest { payment_preimage: preimage.as_ref().to_vec() }).await.unwrap();
+	let mut node = lightning.internal.grpc_client().await;
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let pays = node.list_pays(cln_rpc::ListpaysRequest {
+				bolt11: None, payment_hash: Some(payment_hash.to_vec()), status: None,
+				index: None, limit: None, start: None,
+			}).await.unwrap().into_inner().pays;
+			if pays.iter().any(|p| p.status() == cln_rpc::listpays_pays::ListpaysPaysStatus::Complete) { break; }
+			tokio::time::sleep(Duration::from_millis(200)).await;
+		}
+	}).await.expect("the server's node must complete the late request");
+	println!("dropped xpay call: the node completed the payment after the delay; refunded before={}", refund.is_ok());
+	assert!(refund.is_err(), "the server refunded a payment its node then completed: paid twice");
+	assert_ne!(attempt.status, server::database::ln::LightningPaymentStatus::Failed,
+		"the server failed a payment whose request had not reached its node");
 	tokio::time::timeout(Duration::from_secs(90), async {
 		loop {
 			let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
@@ -663,7 +758,6 @@ async fn fallback_dropped_xpay_call_is_not_refunded() {
 	}).await.expect("the server must record the payment its node completed");
 	assert_eq!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(payment_hash).await)
 		.await.unwrap(), Some(preimage));
-	let ids = held.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
 	let revoked = db.read(async |t| Ok(t.query_one(
 		"SELECT count(*) FROM htlc_vtxo h JOIN vtxo v ON v.id=h.id
 		 WHERE v.vtxo_id=ANY($1) AND h.offchain_resolution='revoked'", &[&ids],

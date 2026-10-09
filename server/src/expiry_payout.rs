@@ -1,6 +1,6 @@
 //! Operator-initiated, recipient-funded payments using the native wallet and nursery.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -12,7 +12,7 @@ use bdk_wallet::coin_selection::LargestFirstCoinSelection;
 use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Transaction, Txid, Weight};
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
-use bitcoin_ext::bdk::{WalletExt, WithGuaranteedChange};
+use bitcoin_ext::bdk::{WalletExt, WithGuaranteedChange, KEYCHAIN};
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
 use bitcoin_ext::FeeRateExt;
 use tracing::{error, info, warn};
@@ -365,6 +365,9 @@ impl Server {
 		};
 		let rate = FeeRate::from_amount_per_kvb_ceil(rate);
 		ensure!(rate > FeeRate::ZERO, "zero expiry fee estimate");
+		if let Err(e) = self.bump_stalled_expiry_payouts(rate).await {
+			warn!("expiry payout bump deferred: {e:#}");
+		}
 		let tip = self.chain_tip().height.to_u32();
 		let mut cursor = (0, String::new());
 		let mut groups = Vec::<PayoutGroup>::new();
@@ -548,6 +551,56 @@ impl Server {
 			if !outputs.is_empty() && outputs.iter().all(|o| wallet.is_mine(o.script_pubkey.clone())) { return Ok(true); }
 		}
 		Ok(false)
+	}
+
+	/// Accelerate each payout past its confirmation target whose mempool chunk
+	/// pays less than `rate` with a child spending its operator change, as
+	/// upstream accelerates its own txs: the payout and its txid never change.
+	/// The child pays the payout's shortfall, at the operator's expense.
+	/// Without funds the payout is only rebroadcast, as before.
+	async fn bump_stalled_expiry_payouts(&self, rate: FeeRate) -> anyhow::Result<()> {
+		let tip = self.chain_tip().height;
+		for report in self.tx_nursery.list_txs(false, false).await? {
+			let txid = report.tx.txid;
+			if report.tx.kind != NurseryTxKind::ExpiryPayout || tip < report.tx.confirm_target_height
+				|| report.chunk_fee_rate.is_some_and(|r| r >= rate) { continue; }
+			let built = self.rounds_wallet.build_blocking(move |wallet| {
+				// The change, or the wallet output a later operator tx moved it to.
+				let family = wallet.tx_graph().walk_descendants(txid, |_, d| Some(d))
+					.chain([txid]).collect::<HashSet<_>>();
+				let change = wallet.list_unspent()
+					.find(|u| family.contains(&u.outpoint.txid) && !u.chain_position.is_confirmed())
+					.context("payout has no unspent change")?.outpoint;
+				// A round may be spending it.
+				let lock = wallet.lock_wallet_utxo(change).map_err(|_| anyhow!("payout change is locked"))?;
+				let drain = wallet.next_unused_address(KEYCHAIN).script_pubkey();
+				let psbt = wallet.build_tx_at_chunk_feerate(LargestFirstCoinSelection, rate, |b| {
+					b.add_utxo(change)?;
+					b.drain_to(drain.clone());
+					Ok(())
+				})?;
+				Ok((wallet.finish_tx(psbt)?, lock))
+			}).await;
+			let (mut wallet, (child, _lock)) = match built {
+				Ok(built) => built,
+				Err(e) => { warn!(%txid, "expiry payout bump not built, unfunded or busy: {e:#}"); continue; },
+			};
+			// The nursery first: after a crash it rebroadcasts the child.
+			self.tx_nursery.broadcast_tx(child.clone(), NurseryTxKind::Internal, self.nursery_confirm_target()).await?;
+			wallet.commit_tx(&child);
+			if let Err(e) = wallet.persist().await { warn!("expiry bump wallet persist deferred to restart: {e:#}"); }
+			drop(wallet);
+			if !report.in_mempool {
+				// An evicted payout is relayed with the child that pays for it.
+				let payout = self.db.read(async |t| t.get_nursery_raw_tx(txid).await).await?
+					.context("expiry payout missing from the nursery")?;
+				if let Err(e) = crate::bitcoind::submit_package(&self.bitcoind, &[payout, child.clone()]).await {
+					warn!(%txid, "expiry payout package not accepted: {e:#}");
+				}
+			}
+			info!(%txid, child = %child.compute_txid(), %rate, "expiry payout accelerated");
+		}
+		Ok(())
 	}
 
 	async fn pay_expiry_batch(

@@ -101,8 +101,8 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 	assert!(wallet.pending_lightning_sends().await.unwrap().is_empty());
 }
 
-/// A wallet whose stored record predates the chain and server binding signs a
-/// bound one at its next sync. The server never drops the old row by itself.
+/// A wallet whose stored record predates the chain binding signs a bound one
+/// at its next sync. The server never drops the old row by itself.
 #[tokio::test]
 async fn fallback_stored_legacy_record_migrates_on_sync() {
 	let ctx = TestContext::new("bark_sdk/fallback_stored_legacy_record_migrates_on_sync").await;
@@ -110,7 +110,6 @@ async fn fallback_stored_legacy_record_migrates_on_sync() {
 	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
 	wallet.stop_daemon_wait().await.unwrap();
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	let server_pubkey = srv.ark_info().await.server_pubkey;
 	let mailbox = wallet.mailbox_keypair();
 	let mailbox_pk = mailbox.public_key().serialize().to_vec();
 	let record = wallet.fallback_destination().await.unwrap();
@@ -135,8 +134,8 @@ async fn fallback_stored_legacy_record_migrates_on_sync() {
 	assert!(seq > record.seq, "the wallet signed a newer record");
 	assert_eq!(row.get::<_, Vec<u8>>("spk"), record.spk.as_bytes(), "the destination is unchanged");
 	FallbackRecordAttestation::deserialize(&row.get::<_, Vec<u8>>("sig")).unwrap()
-		.verify(ChainHash::REGTEST, server_pubkey, &record.spk, seq, mailbox.public_key())
-		.expect("the stored record is bound to this chain and server");
+		.verify(ChainHash::REGTEST, &record.spk, seq, mailbox.public_key())
+		.expect("the stored record is bound to this chain");
 	assert_eq!(wallet.fallback_destination().await.unwrap().seq, seq);
 }
 
@@ -1003,7 +1002,7 @@ async fn grouped_expiry_without_client(
 	let mut signed_record = next_spk.as_bytes().to_vec();
 	signed_record.extend_from_slice(&seq.to_le_bytes());
 	signed_record.extend_from_slice(&FallbackRecordAttestation::new(
-		ChainHash::REGTEST, srv.ark_info().await.server_pubkey, &next_spk, seq, &mailbox_key,
+		ChainHash::REGTEST, &next_spk, seq, &mailbox_key,
 	).serialize());
 	assert_eq!(srv.get_public_rpc().await.set_fallback(protos::SetFallbackRequest {
 		mailbox_pk: mailbox_key.public_key().serialize().to_vec(),

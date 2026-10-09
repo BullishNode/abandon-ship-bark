@@ -18,14 +18,9 @@ pub(crate) struct FallbackRecord {
 }
 
 impl FallbackRecord {
-	/// Stored rows are not checked again: a record from before the chain and
-	/// server binding keeps paying until its wallet signs a new one.
-	pub fn from_bytes(
-		bytes: &[u8],
-		mailbox_pk: PublicKey,
-		network: Network,
-		server_pk: PublicKey,
-	) -> anyhow::Result<Self> {
+	/// Stored rows are not checked again: a record from before the chain
+	/// binding keeps paying until its wallet signs a new one.
+	pub fn from_bytes(bytes: &[u8], mailbox_pk: PublicKey, network: Network) -> anyhow::Result<Self> {
 		// Standard address scripts are at most 42 bytes. The suffix is seq || signature.
 		ensure!((73..=114).contains(&bytes.len()), "invalid fallback record length");
 		let (spk, suffix) = bytes.split_at(bytes.len() - 72);
@@ -37,7 +32,7 @@ impl FallbackRecord {
 		let stored_seq = i64::try_from(seq).context("fallback sequence exceeds database range")?;
 		let attestation = FallbackRecordAttestation::deserialize(&suffix[8..])?;
 		let chain = ChainHash::using_genesis_block_const(network);
-		attestation.verify(chain, server_pk, &spk, seq, mailbox_pk)
+		attestation.verify(chain, &spk, seq, mailbox_pk)
 			.context("invalid fallback record signature")?;
 		Ok(Self { spk, seq: stored_seq, attestation })
 	}
@@ -147,26 +142,22 @@ mod tests {
 		Keypair::from_seckey_slice(&SECP, &[7; 32]).unwrap()
 	}
 
-	fn server() -> PublicKey {
-		Keypair::from_seckey_slice(&SECP, &[9; 32]).unwrap().public_key()
-	}
-
-	fn signed_record_bytes(chain: ChainHash, server: PublicKey, spk: &ScriptBuf, seq: u64) -> Vec<u8> {
+	fn signed_record_bytes(chain: ChainHash, spk: &ScriptBuf, seq: u64) -> Vec<u8> {
 		let mut bytes = spk.as_bytes().to_vec();
 		bytes.extend_from_slice(&seq.to_le_bytes());
-		bytes.extend_from_slice(&FallbackRecordAttestation::new(chain, server, spk, seq, &mailbox()).serialize());
+		bytes.extend_from_slice(&FallbackRecordAttestation::new(chain, spk, seq, &mailbox()).serialize());
 		bytes
 	}
 
 	fn record_bytes(spk: &ScriptBuf, seq: u64) -> Vec<u8> {
-		signed_record_bytes(ChainHash::REGTEST, server(), spk, seq)
+		signed_record_bytes(ChainHash::REGTEST, spk, seq)
 	}
 
 	#[test]
 	fn fallback_record_wire_validation() {
 		let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
 		let bytes = record_bytes(&spk, 1791475200);
-		let decode = |b: &[u8]| FallbackRecord::from_bytes(b, mailbox().public_key(), Network::Regtest, server());
+		let decode = |b: &[u8]| FallbackRecord::from_bytes(b, mailbox().public_key(), Network::Regtest);
 		assert_eq!(decode(&bytes).unwrap().to_bytes(), bytes);
 		for len in 0..bytes.len() {
 			assert!(decode(&bytes[..len]).is_err());
@@ -181,10 +172,9 @@ mod tests {
 		assert!(decode(&record_bytes(&spk, u64::MAX)).is_err());
 		assert!(decode(&record_bytes(&ScriptBuf::from_hex("6a").unwrap(), 1)).is_err());
 		assert!(FallbackRecord::from_bytes(&bytes, Keypair::from_seckey_slice(&SECP, &[8; 32])
-			.unwrap().public_key(), Network::Regtest, server()).is_err());
-		// Bound to the chain and the server.
-		assert!(decode(&signed_record_bytes(ChainHash::BITCOIN, server(), &spk, 1)).is_err());
-		assert!(decode(&signed_record_bytes(ChainHash::REGTEST, mailbox().public_key(), &spk, 1)).is_err());
+			.unwrap().public_key(), Network::Regtest).is_err());
+		// Bound to the chain.
+		assert!(decode(&signed_record_bytes(ChainHash::BITCOIN, &spk, 1)).is_err());
 		let mut legacy = spk.as_bytes().to_vec();
 		legacy.extend_from_slice(&1u64.to_le_bytes());
 		let mut engine = sha256::Hash::engine();

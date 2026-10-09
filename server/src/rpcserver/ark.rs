@@ -196,7 +196,7 @@ impl rpc::server::ArkService for Server {
 		let req = req.into_inner();
 		let mailbox_pk = PublicKey::from_bytes(&req.mailbox_pk)?;
 		let record = req.record.as_deref().map(|bytes|
-			FallbackRecord::from_bytes(bytes, mailbox_pk, self.config.network, self.server_pubkey),
+			FallbackRecord::from_bytes(bytes, mailbox_pk, self.config.network),
 		).transpose().badarg("invalid fallback record")?;
 		let key_links = req.key_links.iter().map(|bytes| FallbackKeyLink::from_bytes(bytes, mailbox_pk))
 			.collect::<anyhow::Result<Vec<_>>>().badarg("invalid fallback key link")?;

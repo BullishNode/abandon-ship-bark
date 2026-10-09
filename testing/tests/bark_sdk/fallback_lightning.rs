@@ -67,6 +67,10 @@ enum ReceiveOutcome {
 	Collected,
 	/// The recipient disappears before disclosing the preimage.
 	Undisclosed,
+	/// The recipient prepares the claim and disappears before disclosing
+	/// the preimage. Nobody cancels: the hold plugin's own HTLC deadline
+	/// fails the payment back to the external payer.
+	UndisclosedUntilHoldDeadline,
 	/// The recipient discloses the preimage, but the incoming HTLCs were
 	/// already failed back, so the server never collects the payment.
 	Uncollected,
@@ -87,6 +91,13 @@ async fn fallback_unsettled_lightning_receive_is_not_paid() {
 	Box::pin(interrupted_receive(ReceiveOutcome::Undisclosed)).await;
 }
 
+/// The external counterpart of an abandoned intra-Ark receive: the payer is
+/// refunded by the hold plugin's own deadline, and the recipient is not paid.
+#[tokio::test]
+async fn fallback_prepared_receive_refunds_external_payer_at_hold_deadline() {
+	Box::pin(interrupted_receive(ReceiveOutcome::UndisclosedUntilHoldDeadline)).await;
+}
+
 /// A recorded preimage alone is not a collected payment. The rounds wallet
 /// must not pay out a receive whose payer was refunded.
 #[tokio::test]
@@ -105,10 +116,11 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 	let name = match outcome {
 		ReceiveOutcome::Collected => "fallback_settled_lightning_receive_without_claim_commit",
 		ReceiveOutcome::Undisclosed => "fallback_unsettled_lightning_receive_is_not_paid",
+		ReceiveOutcome::UndisclosedUntilHoldDeadline => "fallback_prepared_receive_refunds_external_payer_at_hold_deadline",
 		ReceiveOutcome::Uncollected => "fallback_uncollected_lightning_receive_is_held",
 		ReceiveOutcome::CollectedStatusLost => "fallback_collected_lightning_receive_pays_after_status_recovers",
 	};
-	let disclosed = outcome != ReceiveOutcome::Undisclosed;
+	let disclosed = !matches!(outcome, ReceiveOutcome::Undisclosed | ReceiveOutcome::UndisclosedUntilHoldDeadline);
 	let collected = matches!(outcome, ReceiveOutcome::Collected | ReceiveOutcome::CollectedStatusLost);
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
@@ -187,15 +199,36 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 			_ = reached.notified() => {},
 		}
 	}).await.expect("claim must reach the interrupted commit");
-	if !disclosed {
+	if outcome == ReceiveOutcome::Undisclosed {
 		// The user disappears before disclosing the preimage. Cancel the
 		// real held invoice, so the external payer keeps its funds.
 		lightning.internal.hold_client().await.cancel(cln_rpc::plugins::hold::CancelRequest {
 			payment_hash: payment_hash.to_vec(),
 		}).await.unwrap();
 	}
-	let paid = tokio::time::timeout(Duration::from_secs(30), paying).await
-		.expect("external payment must finish").unwrap();
+	let paid = if outcome == ReceiveOutcome::UndisclosedUntilHoldDeadline {
+		// Only blocks pass. The hold plugin fails the incoming HTLCs back
+		// before they expire, which bounds the payer's wait.
+		let mut paying = paying;
+		let paid = tokio::time::timeout(Duration::from_secs(180), async {
+			loop {
+				tokio::select! {
+					paid = &mut paying => break paid,
+					_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.generate_blocks(1).await; },
+				}
+			}
+		}).await.expect("the hold plugin must fail the payment back by its deadline").unwrap();
+		let invoices = lightning.internal.hold_client().await.list(hold::ListRequest {
+			constraint: Some(hold::list_request::Constraint::PaymentHash(payment_hash.to_vec())),
+		}).await.unwrap().into_inner().invoices;
+		assert_eq!(invoices[0].state(), hold::InvoiceState::Cancelled);
+		println!("hold deadline: external payment failed back at height {}",
+			ctx.bitcoind().sync_client().get_block_count().unwrap());
+		paid
+	} else {
+		tokio::time::timeout(Duration::from_secs(30), paying).await
+			.expect("external payment must finish").unwrap()
+	};
 	if collected { paid.expect("external payment must succeed"); }
 	else { paid.expect_err("external canceled payment must fail"); }
 	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
@@ -230,7 +263,7 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
 	enable_payouts(&ctx, &srv).await;
 	match outcome {
-		ReceiveOutcome::Undisclosed => {
+		ReceiveOutcome::Undisclosed | ReceiveOutcome::UndisclosedUntilHoldDeadline => {
 			assert_no_payout(&ctx, &db, &ids, &record.spk).await;
 			println!("unsettled receive: external payer refunded, no recorded preimage, no expiry payout");
 			return;
@@ -895,6 +928,169 @@ async fn fallback_receive_not_granted_after_incoming_htlcs_failed_back() {
 		.await.unwrap().unwrap();
 	assert!(sub.htlc_vtxos.is_empty());
 	assert_ne!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::HtlcsReady);
+}
+
+/// An intra-Ark payment whose recipient prepared the claim, got its HTLC-recv
+/// vtxos and disappeared without disclosing the preimage. The sender
+/// disappears too. Once the recipient can no longer claim, the expiry payout
+/// refunds the sender, and only the sender.
+#[tokio::test]
+async fn fallback_abandoned_intra_ark_receive_refunds_absent_sender() {
+	Box::pin(abandoned_intra_ark_receive(false)).await;
+}
+
+/// As above, but the sender returns and asks for its refund itself. It is
+/// refused while the granted receive can still be claimed, and granted once
+/// it no longer can.
+#[tokio::test]
+async fn fallback_abandoned_intra_ark_receive_allows_revocation() {
+	Box::pin(abandoned_intra_ark_receive(true)).await;
+}
+
+async fn abandoned_intra_ark_receive(returning_sender: bool) {
+	let name = if returning_sender { "fallback_abandoned_intra_ark_receive_allows_revocation" }
+		else { "fallback_abandoned_intra_ark_receive_refunds_absent_sender" };
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	// The granted HTLC-recv vtxos come from the pool and expire well before
+	// the sender's boards, so a returning sender's refund is a live coin.
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(1000);
+			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
+			// The refund decision requires this sweep depth whether or not
+			// payouts are enabled.
+			c.expiry_payout.sweep_min_confs = 1;
+		}).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await
+		.expect("the initially funded pool must become ready");
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let reached = Arc::new(Notify::new());
+	let claim_request = Arc::new(Mutex::new(None));
+	let proxy = srv.start_proxy_no_mailbox(InterruptedReceiveClaim {
+		reached: reached.clone(), request: claim_request.clone(), reveal_preimage: false, fail_incoming: None,
+	}).await;
+	let recipient = ctx.bark_sdk("recipient", &proxy.address)
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	recipient.stop_daemon_wait().await.unwrap();
+	let recipient_record = recipient.fallback_destination().await.unwrap();
+	let sender_mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let sender = ctx.bark_sdk("sender", &srv).mnemonic(sender_mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(300_000)).create().await;
+	sender.stop_daemon_wait().await.unwrap();
+	let sender_record = sender.fallback_destination().await.unwrap();
+	let sender_total = sender.balance().await.unwrap().total();
+
+	let invoice = recipient.bolt11_invoice(sat(100_000), None, None).await.unwrap();
+	let payment_hash = PaymentHash::from(&invoice);
+	sender.pay_lightning_invoice(invoice.to_string(), None, false).await.unwrap();
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::Accepted);
+	// The recipient prepares the claim and disappears at its real claim
+	// request, before the preimage reaches the server.
+	tokio::time::timeout(Duration::from_secs(30), async {
+		tokio::select! {
+			r = recipient.try_claim_lightning_receive(payment_hash, true) =>
+				panic!("claim completed before interruption: {r:?}"),
+			_ = reached.notified() => {},
+		}
+	}).await.expect("the recipient must reach its claim request");
+	drop(recipient);
+	drop(proxy);
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::HtlcsReady);
+	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(payment_hash).await)
+		.await.unwrap().is_none(), "the preimage was never disclosed");
+	let granted = db.read(async |t| t.get_user_vtxos_by_id(&sub.htlc_vtxos).await).await.unwrap()
+		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
+	assert!(!granted.is_empty());
+	let granted_ids = granted.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let held = sender.all_vtxos().await.unwrap().into_iter()
+		.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| p.payment_hash == payment_hash))
+		.map(|w| w.vtxo.id()).collect::<Vec<_>>();
+	let htlcs = db.read(async |t| t.get_user_vtxos_by_id(&held).await).await.unwrap()
+		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
+	assert!(!htlcs.is_empty());
+	let htlc_ids = htlcs.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let htlc_principal = htlcs.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+	let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	assert!(attempt.is_self_payment() && !attempt.status.is_final());
+	let recv_deadline = granted.iter().map(|v| v.policy().as_server_htlc_recv().unwrap().htlc_expiry.to_u32())
+		.max().unwrap();
+	let send_expiry = htlcs[0].policy().as_server_htlc_send().unwrap().htlc_expiry.to_u32();
+	println!("abandoned intra-Ark receive: granted_sat={}, recv_deadline={recv_deadline}, \
+		send_expiry={send_expiry}, sender_htlc_sat={htlc_principal}",
+		granted.iter().map(|v| v.amount().to_sat()).sum::<u64>());
+
+	let core = ctx.bitcoind().sync_client();
+	if returning_sender {
+		// Past both HTLC deadlines, but the granted vtxos are not swept: the
+		// recipient can still exit them and claim with the preimage.
+		ctx.generate_blocks(send_expiry.saturating_sub(core.get_block_count().unwrap() as u32) + 2).await;
+		// The client revokes past the HTLC expiry; a refusal parks its action.
+		let refused = sender.check_lightning_payment(payment_hash, false).await;
+		let state = sender.lightning_send_state(payment_hash).await.unwrap();
+		assert!(matches!(state, bark::actions::lightning::pay::LightningSendState::InProgress(_)), "{state:?}");
+		assert_eq!(db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+			.await.unwrap().unwrap().status, server::database::ln::LightningHtlcSubscriptionStatus::HtlcsReady,
+			"a refund before the granted receive is swept would let both parties keep the value");
+		println!("sender refund refused while the granted receive can still be claimed: {:?}", refused.err());
+
+		expire_and_confirm_sweeps(&ctx, &db, &granted).await;
+		assert!((core.get_block_count().unwrap() as u32) < htlcs[0].expiry_height().to_u32());
+		let revoked = sender.check_lightning_payment(payment_hash, false).await;
+		let state = sender.lightning_send_state(payment_hash).await.unwrap();
+		assert!(matches!(state, bark::actions::lightning::pay::LightningSendState::Unknown),
+			"the sender's revocation must complete: {revoked:?}, {state:?}");
+		assert!(sender.pending_lightning_sends().await.unwrap().is_empty());
+		let balance = sender.balance().await.unwrap();
+		assert_eq!(balance.pending_lightning_send, sat(0));
+		assert_eq!(balance.total(), sender_total, "the sender's HTLC value is back in Ark");
+		println!("sender refunded by its own revocation: total={}", balance.total());
+	} else {
+		drop(sender);
+		let mut coins = htlcs.clone();
+		coins.extend(granted.iter().cloned());
+		expire_and_confirm_sweeps(&ctx, &db, &coins).await;
+		enable_payouts(&ctx, &srv).await;
+		let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &htlc_ids, &sender_record.spk, htlc_principal).await;
+		srv.stop().await.unwrap();
+		let spend_txid = restore_and_spend(&ctx, &sender_mnemonic, payout).await;
+		srv.start().await.unwrap();
+		println!("absent sender refunded: payout={payout}, fee_sat={fee}, confirmed_seed_spend={spend_txid}");
+	}
+
+	// Exactly one party has the value: the receive is canceled, the
+	// sender's HTLCs are revoked once, and the recipient gets nothing.
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::Canceled);
+	let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(attempt.status, server::database::ln::LightningPaymentStatus::Failed);
+	let revoked = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM htlc_vtxo h JOIN vtxo v ON v.id=h.id
+		 WHERE v.vtxo_id=ANY($1) AND h.offchain_resolution='revoked'", &[&htlc_ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(revoked as usize, htlc_ids.len());
+	let request = claim_request.lock().unwrap().take().unwrap();
+	let err = srv.get_public_rpc().await.claim_lightning_receive(request).await
+		.expect_err("a late claim must not pay the recipient after the sender's refund");
+	println!("late recipient claim refused: {}", err.message());
+	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(payment_hash).await)
+		.await.unwrap().is_none());
+	if returning_sender { enable_payouts(&ctx, &srv).await; }
+	assert_no_payout(&ctx, &db, &granted_ids, &recipient_record.spk).await;
+	let recipient_coins = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state='htlc-recv-unclaimed'
+		 AND oor_spent_txid IS NULL", &[&granted_ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(recipient_coins as usize, granted_ids.len(), "the granted receive was never claimed");
+	println!("abandoned intra-Ark receive: returning_sender={returning_sender}; sender refunded once, recipient unpaid");
 }
 
 /// A sender's late refund request holds its payment guard while the database

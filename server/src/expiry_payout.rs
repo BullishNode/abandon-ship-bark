@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use bitcoin_ext::bdk::{WalletExt, WithGuaranteedChange};
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
 use bitcoin_ext::FeeRateExt;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::database::expiry_settlement::{payout_script, ExpiryInput, ExpirySource};
 use crate::database::ln::LightningNodeId;
@@ -75,8 +75,8 @@ impl Server {
 		// guard before coin locks and can hold it while they wait on a node.
 		// Take the guards in that same order, but without waiting: a busy
 		// payment defers only its own wallet group, not the other wallets in
-		// the batch. The guards are retained if COMMIT outlives this caller,
-		// just as we retain the wallet and coin locks below.
+		// the batch. The guards are held until this returns, after COMMIT,
+		// as are the wallet and coin locks below.
 		let mut payment_guards = BTreeMap::new();
 		let mut payable = Vec::with_capacity(groups.len());
 		for group in groups {
@@ -197,46 +197,32 @@ impl Server {
 		// restored wallet's lookahead. Commit its derivation metadata with it.
 		let wallet_metadata = wallet.staged().cloned();
 		let target = self.nursery_confirm_target();
-		let db = self.db.clone();
-		let nursery = self.tx_nursery.clone();
-		let flux = _flux.into_owned();
-		let worker = self.rtmgr.spawn("ExpiryPayoutCommit");
-		// Cancelling a tick must not drop its locks while COMMIT can still
-		// succeed. The short durable handoff finishes even if its caller leaves.
-		tokio::spawn(async move {
-			let (_flux, _worker, _payment_guards) = (flux, worker, payment_guards);
-			let stored = db.write(async |t| {
-				if let Some(change) = &wallet_metadata {
-					t.store_changeset(WalletKind::Rounds, change).await?;
-				}
-				t.store_expiry_payment(&inputs, &scripts, &tx, fee, tip,
-					cfg.grace_blocks, target).await
-			}).await;
-			if let Err(error) = stored {
-				loop {
-					// Wait for the original transaction's row locks before reading
-					// its result: a lost COMMIT response alone does not mean rollback.
-					let outcome = db.write(async |t| {
-						t.lock_expiry_inputs(&keys).await?;
-						Ok(t.get_nursery_raw_tx(tx.compute_txid()).await?.is_some())
-					}).await;
-					match outcome {
-						Ok(false) => { wallet.mark_output_keys_unused(&tx); return Err(error); },
-						Ok(true) => break,
-						Err(e) => {
-							warn!("expiry commit outcome unavailable; retaining wallet inputs until database returns: {e:#}");
-							tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-						},
-					}
-				}
+		// The payment guards, coin and wallet locks are held through COMMIT.
+		let stored = self.db.write(async |t| {
+			if let Some(change) = &wallet_metadata {
+				t.store_changeset(WalletKind::Rounds, change).await?;
 			}
-			wallet.take_staged();
-			wallet.commit_tx(&tx);
-			if let Err(e) = wallet.persist().await { warn!("expiry wallet persist deferred to restart: {e:#}"); }
-			drop(wallet);
-			nursery.broadcast_tx(tx.clone(), NurseryTxKind::ExpiryPayout, target).await?;
-			Ok(tx.compute_txid())
-		}).await?.map(|txid| Some((txid, fee, ids.len())))
+			t.store_expiry_payment(&inputs, &scripts, &tx, fee, tip, cfg.grace_blocks, target).await
+		}).await;
+		if let Err(error) = stored {
+			// A lost COMMIT response does not mean rollback. Wait for the original
+			// transaction's row locks, then read its result. If the database does
+			// not answer, exit: startup waits for that COMMIT and reapplies it.
+			let committed = self.db.write(async |t| {
+				t.lock_expiry_inputs(&keys).await?;
+				Ok(t.get_nursery_raw_tx(tx.compute_txid()).await?.is_some())
+			}).await.unwrap_or_else(|e| {
+				error!("expiry commit outcome unknown; exiting: {e:#}");
+				std::process::exit(1);
+			});
+			if !committed { wallet.mark_output_keys_unused(&tx); return Err(error); }
+		}
+		wallet.take_staged();
+		wallet.commit_tx(&tx);
+		if let Err(e) = wallet.persist().await { warn!("expiry wallet persist deferred to restart: {e:#}"); }
+		drop(wallet);
+		self.tx_nursery.broadcast_tx(tx.clone(), NurseryTxKind::ExpiryPayout, target).await?;
+		Ok(Some((tx.compute_txid(), fee, ids.len())))
 	}
 }
 

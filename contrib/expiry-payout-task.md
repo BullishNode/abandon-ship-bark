@@ -56,8 +56,8 @@ not prove the payer paid; the settled subscription does, for an external
 payment and for an intra-Ark one. A receive whose collection failed or is not
 yet recorded waits and is checked again every tick. It requires the same
 confirmed sweep, grace and destination checks. The task takes the payment
-guard before coin locks, as cooperative claims do, and retains it through an
-uncertain commit. The spent state, fulfilled HTLC resolution and payout commit
+guard before coin locks, as cooperative claims do, and holds it through the
+commit. The spent state, fulfilled HTLC resolution and payout commit
 together. A receive whose external payment was canceled without disclosing the
 preimage receives no payout.
 
@@ -140,8 +140,10 @@ There is no Ark service fee on expiry payouts.
 The coin lock arbitrates against refresh/offboard. The wallet lock protects signing
 through durable commit. Core's mempool preflight also holds that lock, so slow Core
 calls can delay ordinary wallet funding. Database coin states, settlement rows,
-change-key metadata and the nursery transaction commit atomically. An uncertain
-COMMIT retains the selected inputs until its outcome is known. The nursery stores
+change-key metadata and the nursery transaction commit atomically. After an
+uncertain COMMIT the task waits for the original row locks and reads the outcome;
+if the database does not answer, captaind exits and its restart waits for that
+COMMIT, so run captaind under a restart policy. The nursery stores
 one raw transaction; settlement rows reference it. Startup waits for the previous
 process's nursery writes to finish, then loads the wallet and reapplies pending
 spends before workers, even with new payouts disabled.
@@ -234,11 +236,11 @@ group net minimum and confirmed funding. The task keeps entitlements while those
 | Unswept path or insufficient depth | A confirmed sweep spends this coin's own path into the rounds wallet; inspect watchmand and the exact input, then wait |
 | Unfinished delegated exchange | Originals are swept, or the documented cancellation conditions hold; inspect participation/forfeit state and the cancellation audit |
 | Net minimum, dust, weight or confirmed funding | A valid affordable transaction can be built; wait for fees/confirmations or restore rounds-wallet funding; the batch splitter continues to other eligible coins |
-| Unknown COMMIT outcome | The database answers after the original row locks release; restore database service while the task retains wallet inputs |
+| Unknown COMMIT outcome | Captaind exited; restore database service and restart it, startup waits for the original COMMIT and reapplies a committed payout |
 
 For a committed transaction missing from the mempool, check the nursery and Core's
-rejection, restore funding/service conditions, and restart the same fork if needed;
-startup retries the identical transaction. A manual CPFP requires an actual owned
+rejection and restore funding/service conditions; the nursery rebroadcasts the
+identical transaction after the next block. A manual CPFP requires an actual owned
 change output. Exactly funded payouts may have none: wait for acceptance/fees to
 improve; do not construct another payment for the same coins. Each settled coin's
 row keeps its payout txid, fee and paid script; a later wallet-record change does

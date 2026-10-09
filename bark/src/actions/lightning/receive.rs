@@ -783,6 +783,19 @@ async fn deliver_vtxos_to_address(
 	match post_arkoor_to_mailboxes(&mut srv, destination.delivery(), vtxos).await {
 		DeliveryOutcome::AnySucceeded => Ok(()),
 		DeliveryOutcome::AllFailed { summary } => bail!(summary),
+		// The claim outputs were registered before delivery started, so a
+		// settled one was paid to the destination's own expiry record. Post
+		// the others one by one; a settled one is delivered.
+		DeliveryOutcome::ExpirySettled { .. } => {
+			for vtxo in vtxos {
+				let single = std::slice::from_ref(vtxo);
+				match post_arkoor_to_mailboxes(&mut srv, destination.delivery(), single).await {
+					DeliveryOutcome::AnySucceeded | DeliveryOutcome::ExpirySettled { .. } => {},
+					DeliveryOutcome::AllFailed { summary } => bail!(summary),
+				}
+			}
+			Ok(())
+		},
 	}
 }
 

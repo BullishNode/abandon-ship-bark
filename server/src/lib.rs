@@ -70,6 +70,7 @@ use ark::vtxo::Full;
 use ark::board::BoardBuilder;
 use ark::fees::validate_and_subtract_fee;
 use ark::mailbox::{BlindedMailboxIdentifier, MailboxBlindingError, MailboxIdentifier};
+use ark::lightning::PaymentHash;
 use ark::musig::{self, PublicNonce};
 use ark::rounds::{RoundEvent, RoundId};
 use ark::tree::signed::{LeafVtxoCosignRequest, LeafVtxoCosignResponse, UnlockPreimage};
@@ -229,6 +230,24 @@ pub struct Server {
 	bitcoin_address_blocklist: Option<BitcoinAddressBlocklist>,
 	/// Held for the life of the process: one captaind per database.
 	_db_lock: database::CaptaindLock,
+}
+
+/// A validated signed vtxo chain, see [Server::validate_vtxo_registration].
+pub(crate) struct VtxoRegistration {
+	ids: Vec<VtxoId>,
+	update: VtxoTreeUpdate,
+	htlc_sends: Vec<(VtxoId, PaymentHash, BlockHeight)>,
+}
+
+impl VtxoRegistration {
+	/// Register the chain, unless one of its vtxos is already settled to an
+	/// expiry payout. Takes the vtxo row locks first.
+	pub(crate) async fn apply(self, t: &database::Tx<'_>) -> anyhow::Result<()> {
+		t.lock_vtxo_registration(&self.ids).await?;
+		t.execute_vtxo_tree_update(self.update).await?;
+		htlc_vtxo::create_htlc_vtxos(t, &self.htlc_sends, HtlcDirection::Incoming).await?;
+		Ok(())
+	}
 }
 
 impl Server {
@@ -920,6 +939,16 @@ impl Server {
 		&self,
 		vtxos: impl IntoIterator<Item = impl AsRef<Vtxo<Full>>>,
 	) -> anyhow::Result<()> {
+		let registration = self.validate_vtxo_registration(vtxos).await?;
+		self.db.write(async |t| registration.apply(t).await).await
+	}
+
+	/// The read-only checks of [Server::register_vtxo_transactions]. The
+	/// result is registered with [VtxoRegistration::apply].
+	pub(crate) async fn validate_vtxo_registration(
+		&self,
+		vtxos: impl IntoIterator<Item = impl AsRef<Vtxo<Full>>>,
+	) -> anyhow::Result<VtxoRegistration> {
 		let mut seen_ids: HashSet<VtxoId> = HashSet::new();
 		let vtxos = vtxos.into_iter()
 			.map(|v| v.as_ref().clone())
@@ -996,13 +1025,7 @@ impl Server {
 			.upsert_signed_tx(signed_txs)
 			.provide_signatures(vtxos)
 			.mark_vtxos_registered(registered_ids.iter().copied());
-		self.db.write(async |t| {
-			t.lock_vtxo_registration(&registered_ids).await?;
-			t.execute_vtxo_tree_update(update).await?;
-			htlc_vtxo::create_htlc_vtxos(&t, &htlc_sends, HtlcDirection::Incoming).await?;
-			Ok(())
-		}).await?;
-		Ok(())
+		Ok(VtxoRegistration { ids: registered_ids, update, htlc_sends })
 	}
 
 	/// Unblind a [BlindedMailboxIdentifier].

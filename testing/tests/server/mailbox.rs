@@ -13,10 +13,15 @@ use ark::test_util::dummy::DummyTestVtxoSpec;
 use ark::vtxo::raw::RawVtxo;
 
 use server::database::{Db, MailboxPayload};
+use server::database::tree::VtxoTreeUpdate;
 use server_rpc::{protos, MAX_NB_MAILBOX_ARKOOR_VTXOS};
 use server_rpc::protos::mailbox_server::mailbox_message::Message;
 
-use ark_testing::{TestContext, btc, require_bark_version};
+use ark::address::VtxoDelivery;
+use ark::arkoor::ArkoorDestination;
+use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
+
+use ark_testing::{TestContext, btc, require_bark_version, sat};
 use ark_testing::daemon::captaind::MailboxClient;
 
 /// Regression test for the checkpoint visibility gap in concurrent mailbox writes.
@@ -48,18 +53,23 @@ async fn mailbox_checkpoint_visibility_gap() {
 	let ark_url = srv.ark_url();
 
 	// Generate 100 unique VTXOs and seed them into the vtxo table (FK constraint).
+	let mut anchors = Vec::new();
 	let vtxo_pairs: Vec<_> = (0..100).map(|_| {
 		let kp = Keypair::new(&SECP, &mut thread_rng());
-		let (_tx, vtxo) = DummyTestVtxoSpec {
+		let (tx, vtxo) = DummyTestVtxoSpec {
 			user_keypair: kp,
 			..Default::default()
 		}.build();
+		anchors.push(tx);
 		(kp, vtxo)
 	}).collect();
 
 	db.write(async |t| t.upsert_vtxos(
 		vtxo_pairs.iter().map(|(_, v)| ServerVtxo::from(v.clone()))
 	).await).await.expect("upsert vtxos");
+	// A post validates each chain against its stored anchor.
+	db.write(async |t| t.execute_vtxo_tree_update(VtxoTreeUpdate::new().upsert_signed_tx(anchors)).await)
+		.await.expect("store anchor txs");
 
 	let writers_done = Arc::new(AtomicBool::new(false));
 	let expiry = chrono::Local::now() + Duration::from_secs(300);
@@ -164,12 +174,15 @@ async fn mailbox_post_arkoor_requires_known_vtxos() {
 
 	// Seed one vtxo into the vtxo table, as if the server cosigned it.
 	let owner_kp = Keypair::new(&SECP, &mut thread_rng());
-	let (_tx, vtxo) = DummyTestVtxoSpec {
+	let (anchor_tx, vtxo) = DummyTestVtxoSpec {
 		user_keypair: owner_kp,
 		..Default::default()
 	}.build();
 	db.write(async |t| t.upsert_vtxos([ServerVtxo::from(vtxo.clone())]).await).await
 		.expect("upsert vtxo");
+	// A post validates the chain against its stored anchor.
+	db.write(async |t| t.execute_vtxo_tree_update(VtxoTreeUpdate::new().upsert_signed_tx([anchor_tx])).await)
+		.await.expect("store anchor tx");
 
 	// A vtxo the server never cosigned is rejected.
 	let attacker_kp = Keypair::new(&SECP, &mut thread_rng());
@@ -367,4 +380,68 @@ async fn mailbox_lightning_send_finished() {
 
 	// On success the preimage must be present
 	assert!(send_finished.preimage.is_some(), "preimage should be present on successful payment");
+}
+
+/// A post registers the signed chain it delivers: the recipient then holds
+/// it, so the vtxos are the recipient's. An unsigned chain is refused.
+#[tokio::test]
+async fn mailbox_post_arkoor_registers_and_rejects_unsigned() {
+	let ctx = TestContext::new("server/mailbox_post_arkoor_registers_and_rejects_unsigned").await;
+	let srv = ctx.captaind("server").no_vtxo_pool().create().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let sender = ctx.bark_sdk("sender", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(100_000)).create().await;
+	sender.stop_daemon_wait().await.unwrap();
+	let recipient = ctx.bark_sdk("recipient", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	recipient.stop_daemon_wait().await.unwrap();
+	let address = recipient.new_address().await.unwrap();
+	let blinded_id = address.delivery().iter().find_map(|d| match d {
+		VtxoDelivery::ServerMailbox { blinded_id } => Some(blinded_id.as_ref().to_vec()),
+		_ => None,
+	}).unwrap();
+
+	// A real cosign whose registration never happens.
+	let mut inputs = Vec::new();
+	let mut keys = Vec::new();
+	for coin in sender.spendable_vtxos().await.unwrap() {
+		inputs.push(sender.get_full_vtxo(coin.id()).await.unwrap());
+	}
+	for input in &inputs {
+		keys.push(sender.pubkey_keypair(&input.user_pubkey()).await.unwrap().unwrap().1);
+	}
+	let builder = ArkoorPackageBuilder::new_with_checkpoints(inputs, vec![ArkoorDestination {
+		total_amount: sat(100_000), policy: address.policy().clone(),
+	}]).unwrap().generate_user_nonces(&keys).unwrap();
+	let response = srv.get_public_rpc().await.request_arkoor_cosign(
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+	).await.unwrap().into_inner();
+	let outputs = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response).unwrap())
+		.unwrap().build_signed_vtxos();
+	let ids = outputs.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let states = || async {
+		db.read(async |t| Ok(t.query("SELECT spend_state::TEXT FROM vtxo WHERE vtxo_id=ANY($1)", &[&ids])
+			.await?)).await.unwrap().iter().map(|r| r.get::<_, String>(0)).collect::<Vec<_>>()
+	};
+	let posts = || async {
+		db.read(async |t| Ok(t.query_one(
+			"SELECT count(*) FROM mailbox WHERE mailbox_type='arkoor-receive' AND vtxo_id=ANY($1)", &[&ids],
+		).await?.get::<_, i64>(0))).await.unwrap()
+	};
+	assert!(states().await.iter().all(|s| s == "unregistered"));
+
+	let mut rpc = srv.get_mailbox_public_rpc().await;
+	let mut unsigned = outputs.clone();
+	unsigned[0].invalidate_final_sig();
+	let err = rpc.post_arkoor_message(protos::mailbox_server::PostArkoorMessageRequest {
+		blinded_id: blinded_id.clone(), vtxos: unsigned.iter().map(|v| v.serialize()).collect(),
+	}).await.unwrap_err();
+	assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err}");
+	assert!(states().await.iter().all(|s| s == "unregistered"), "a refused post registers nothing");
+	assert_eq!(posts().await, 0, "a refused post stores nothing");
+
+	rpc.post_arkoor_message(protos::mailbox_server::PostArkoorMessageRequest {
+		blinded_id, vtxos: outputs.iter().map(|v| v.serialize()).collect(),
+	}).await.expect("the signed chain is accepted");
+	assert!(states().await.iter().all(|s| s == "spendable"), "the post registered the chain");
+	assert_eq!(posts().await as usize, outputs.len());
 }

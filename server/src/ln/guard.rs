@@ -62,29 +62,6 @@ impl PaymentGuards {
 		}
 	}
 
-	/// Takes the lock on the payment hash if it is free, without waiting.
-	///
-	/// Returns `None` if another caller holds the lock or waits for it.
-	pub fn try_lock(&self, payment_hash: PaymentHash) -> Option<PaymentGuard> {
-		let mut waiting = Waiting {
-			locks: &self.locks,
-			payment_hash,
-			semaphore: self.locks.semaphore(payment_hash),
-			acquired: false,
-		};
-
-		// A refused attempt drops `waiting`, which forgets an unused hash.
-		let permit = waiting.semaphore.try_acquire().ok()?;
-		permit.forget();
-		waiting.acquired = true;
-
-		Some(PaymentGuard {
-			locks: self.locks.clone(),
-			payment_hash,
-			semaphore: waiting.semaphore.clone(),
-		})
-	}
-
 	/// The number of payment hashes that are locked or waited for.
 	///
 	/// For tests and diagnostics.
@@ -371,24 +348,6 @@ mod tests {
 
 		drop(giving_up);
 		assert_eq!(guards.tracked(), 0, "no lock remains");
-	}
-
-	#[tokio::test]
-	async fn try_lock_takes_only_a_free_payment() {
-		let guards = PaymentGuards::new();
-		let held = guards.try_lock(hash(1)).expect("a free payment is locked");
-		assert!(guards.try_lock(hash(1)).is_none(), "a held payment is not locked twice");
-		assert!(guards.try_lock(hash(2)).is_some(), "a different payment is not blocked");
-
-		// A waiting caller keeps its place: try_lock does not pass it.
-		let mut waiting = Box::pin(guards.lock(hash(1)));
-		assert!(poll(&mut waiting).await.is_none(), "the lock is held");
-		drop(held);
-		assert!(guards.try_lock(hash(1)).is_none(), "the waiting caller is served first");
-		let granted = poll(&mut waiting).await.expect("the waiting caller receives the lock");
-
-		drop(granted);
-		assert_eq!(guards.tracked(), 0, "a refused try_lock leaves no lock behind");
 	}
 
 	/// A task can hold the guard across an await point.

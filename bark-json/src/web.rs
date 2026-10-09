@@ -212,6 +212,10 @@ pub struct CreateWalletRequest {
 	pub chain_source: Option<ChainSourceConfig>,
 	/// The optional mnemonic to use for the wallet
 	pub mnemonic: Option<String>,
+	/// The supplied mnemonic was just generated and has no transaction history.
+	/// Never set this when restoring an existing wallet.
+	#[serde(default)]
+	pub fresh_mnemonic: bool,
 	/// The network to use for the wallet
 	pub network: BarkNetwork,
 	/// An optional birthday height to start syncing the wallet from
@@ -913,6 +917,8 @@ pub struct ExpiryPayout {
 	pub txid: Txid,
 	pub vout: u32,
 	pub amount_sat: u64,
+	/// Fee deducted by the operator for this output; absent if no receipt is available.
+	pub fee_sat: Option<u64>,
 	/// 0 while the output is in the mempool
 	pub confirmations: u32,
 }
@@ -924,6 +930,7 @@ impl From<bark::expiry_payout::ExpiryPayout> for ExpiryPayout {
 			txid: v.outpoint.txid,
 			vout: v.outpoint.vout,
 			amount_sat: v.amount.to_sat(),
+			fee_sat: v.fee.map(|f| f.to_sat()),
 			confirmations: v.confirmations,
 		}
 	}

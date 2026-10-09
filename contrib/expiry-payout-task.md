@@ -58,7 +58,10 @@ can never be collected; its subscription stays unsettled and its coins stay
 held, unpaid.
 
 A Lightning send's HTLC coins return to the sender's own key when the payment
-cannot have succeeded. The task and the sender's refund request share one
+cannot have succeeded. Captaind refuses to start paying an invoice that expires
+more than `max_invoice_expiry` (default 24h) ahead, since a lost request is
+refunded only after its invoice expired; invoices this server issued for an
+intra-Ark payment are exempt. The task and the sender's refund request share one
 decision under the payment guard: no recorded preimage, no successful attempt,
 every attempt concluded, and every node that sent an attempt reports the
 payment failed or unknown. An attempt concludes as failed only on evidence:

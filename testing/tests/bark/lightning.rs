@@ -292,6 +292,47 @@ async fn two_barks_try_to_pay_same_invoice() {
 	assert!(!vtxos.iter().any(|v| matches!(v.state, VtxoStateInfo::Locked { .. })), "should not be any locked vtxo left");
 }
 
+/// A payment request lost on its way to the node is refunded only once its
+/// invoice expired, so an external invoice that expires too far ahead is
+/// refused before any payment starts.
+#[tokio::test]
+async fn lightning_pay_refuses_invoice_beyond_expiry_cap() {
+	let ctx = TestContext::new("lightningd/lightning_pay_refuses_invoice_beyond_expiry_cap").await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal)
+		.cfg(|c| c.max_invoice_expiry = Duration::from_secs(24 * 60 * 60)).create().await;
+	let board_amount = btc(2);
+	let bark = ctx.bark("bark", &srv).funded(btc(3)).create().await;
+	bark.board_and_confirm_and_register(&ctx, board_amount).await;
+	lightning.sync().await;
+
+	// 25 hours, above the cap.
+	let invoice = lightning.external.grpc_client().await.invoice(cln_rpc::InvoiceRequest {
+		description: "beyond the expiry cap".into(),
+		label: "beyond_expiry_cap".into(),
+		amount_msat: Some(cln_rpc::AmountOrAny {
+			value: Some(cln_rpc::amount_or_any::Value::Amount(cln_rpc::Amount { msat: btc(1).to_sat() * 1000 })),
+		}),
+		cltv: None,
+		fallbacks: vec![],
+		preimage: None,
+		expiry: Some(25 * 60 * 60),
+		exposeprivatechannels: vec![],
+		deschashonly: None,
+	}).await.unwrap().into_inner().bolt11;
+	let payment_hash = PaymentHash::from(&Bolt11Invoice::from_str(&invoice).unwrap());
+
+	// The server refuses the payment at initiation and bark revokes the send.
+	let res = bark.try_pay_lightning(&invoice, None, true).await;
+	info!("Pay result for an invoice beyond the expiry cap: {:?}", res);
+	assert_eq!(bark.spendable_balance().await, board_amount, "the send is revoked");
+	assert_eq!(bark.offchain_balance().await.pending_lightning_send, btc(0));
+
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	assert!(db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+		.await.unwrap().is_none(), "no payment attempt is made");
+}
+
 #[tokio::test]
 async fn bark_pay_ln_fails_then_succeeds() {
 	require_bark_version!(> "0.5.0");

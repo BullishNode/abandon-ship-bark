@@ -491,6 +491,8 @@ impl TestContext {
 			invoice_check_interval: Duration::from_secs(3),
 			cln_xpay_timeout: Duration::from_secs(5),
 			cln_xpay_max_retry_for: Duration::from_secs(60),
+			// Above the 7 days lightningd gives its invoices by default.
+			max_invoice_expiry: Duration::from_secs(8 * 24 * 60 * 60),
 			invoice_check_base_delay: Duration::from_secs(2),
 			max_invoice_check_delay: Duration::from_secs(10),
 			invoice_poll_interval: Duration::from_secs(10),

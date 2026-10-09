@@ -24,7 +24,7 @@ use crate::database::{Checkpoint, Tx};
 pub type LightningNodeId = i64;
 
 /// When `invoice` expires, if that time can be represented.
-pub(crate) fn invoice_expires_at(invoice: &Invoice) -> Option<DateTime<Local>> {
+fn invoice_expires_at(invoice: &Invoice) -> Option<DateTime<Local>> {
 	let since_epoch = match invoice {
 		Invoice::Bolt11(invoice) => invoice.expires_at()?,
 		Invoice::Bolt12(invoice) => invoice.created_at().checked_add(invoice.relative_expiry())?,

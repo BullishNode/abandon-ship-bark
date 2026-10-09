@@ -19,6 +19,7 @@ use bitcoin_ext::FeeRateExt;
 use tracing::{info, warn};
 
 use crate::database::expiry_settlement::{payout_script, ExpiryInput, ExpirySource};
+use crate::ln::SendRefund;
 use crate::nursery::NurseryTxKind;
 use crate::wallet::{BdkWalletExt, WalletKind};
 use crate::Server;
@@ -80,7 +81,7 @@ impl Server {
 		// locks. Use that same order and retain the guards if COMMIT outlives
 		// this caller, just as we retain the wallet and coin locks below.
 		let hashes = inputs.iter().filter_map(|i| match i.source {
-			ExpirySource::LightningReceive(hash) => Some(hash),
+			ExpirySource::LightningReceive(hash) | ExpirySource::LightningSend(hash) => Some(hash),
 			_ => None,
 		}).collect::<BTreeSet<_>>();
 		let mut payment_guards = Vec::with_capacity(hashes.len());
@@ -89,6 +90,22 @@ impl Server {
 		let tip = self.chain_tip().height.to_u32();
 		let coins = self.db.read(async |t| t.expiry_inputs(&inputs, tip, cfg.grace_blocks).await).await?;
 		if coins.len() != ids.len() { return Ok(deferred("coin is spent, exited, in grace or participating")) }
+		// Decide failed-send refunds again under the payment guards.
+		let sends = inputs.iter().filter_map(|i| match i.source {
+			ExpirySource::LightningSend(hash) => Some((i.id, hash)),
+			_ => None,
+		}).collect::<BTreeMap<_, _>>();
+		let mut decided = BTreeSet::new();
+		for coin in &coins {
+			let Some(hash) = sends.get(&coin.id()) else { continue; };
+			if !decided.insert(*hash) { continue; }
+			let policy = coin.policy().as_server_htlc_send().context("expiry send is not an HTLC send")?;
+			match self.lightning_send_refund(*hash, policy.htlc_expiry).await? {
+				SendRefund::Allowed => {},
+				SendRefund::Refused(reason) | SendRefund::Undecided(reason) =>
+					return Ok(deferred(format!("lightning send {hash} not refundable: {reason}"))),
+			}
+		}
 		let mut expected = BTreeMap::<ScriptBuf,u64>::new();
 		for v in &coins {
 			let script = destinations.get(&v.id()).context("expiry destination missing")?;
@@ -349,6 +366,7 @@ impl Server {
 		let mut group_index = BTreeMap::<ScriptBuf, usize>::new();
 		let mut destination_allowed = BTreeMap::<ScriptBuf, bool>::new();
 		let mut cancellation_attempts = BTreeSet::new();
+		let mut send_refunds = BTreeMap::new();
 		loop {
 			let page = self.db.read(async |t| t.expiry_settlement_page(tip,
 				cfg.grace_blocks, cursor.clone(), 256).await).await?;
@@ -388,6 +406,25 @@ impl Server {
 				};
 				if !allowed { stats.waiting += 1; continue; }
 				if !self.expiry_path_swept(&vtxo).await? { stats.waiting += 1; continue; }
+				if let ExpirySource::LightningSend(hash) = coin.source {
+					let refundable = match send_refunds.get(&hash) {
+						Some(refundable) => *refundable,
+						None => {
+							let policy = vtxo.policy().as_server_htlc_send()
+								.context("expiry send is not an HTLC send")?;
+							let refundable = match self.lightning_send_refund(hash, policy.htlc_expiry).await? {
+								SendRefund::Allowed => true,
+								SendRefund::Refused(reason) | SendRefund::Undecided(reason) => {
+									warn!(%hash, %reason, "expiry send refund held");
+									false
+								},
+							};
+							send_refunds.insert(hash, refundable);
+							refundable
+						},
+					};
+					if !refundable { stats.waiting += 1; continue; }
+				}
 				if coin.unclaimed {
 					let mut safe = !coin.predecessors.is_empty();
 					for bytes in &coin.predecessors {

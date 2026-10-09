@@ -13,6 +13,7 @@ use bitcoin::secp256k1::PublicKey;
 use crate::expiry_payout::{FeeOutput, Payment};
 use tokio_postgres::Row;
 
+use crate::database::ln::LightningHtlcSubscriptionStatus;
 use crate::nursery::NurseryTxKind;
 use crate::SECP;
 use super::model::SpendState;
@@ -27,7 +28,9 @@ pub(crate) struct ExpiryInput {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ExpirySource { Registered, PendingBoard, Unregistered, LightningReceive(PaymentHash) }
+pub(crate) enum ExpirySource {
+	Registered, PendingBoard, Unregistered, LightningReceive(PaymentHash), LightningSend(PaymentHash),
+}
 
 pub(crate) struct SettlementVtxo {
 	pub id: VtxoId,
@@ -42,10 +45,12 @@ pub(crate) struct SettlementVtxo {
 impl SettlementVtxo {
 	fn from_row(row: Row) -> anyhow::Result<Self> {
 		let receive_hash = row.get::<_, Option<&str>>("receive_hash");
+		let send_hash = row.get::<_, Option<&str>>("send_hash");
 		Ok(Self {
 			id: row.get::<_, &str>("vtxo_id").parse()?,
 			unclaimed: row.get("unclaimed"), predecessors: Vec::new(),
 			source: if let Some(hash) = receive_hash { ExpirySource::LightningReceive(hash.parse()?) }
+				else if let Some(hash) = send_hash { ExpirySource::LightningSend(hash.parse()?) }
 				else if row.get("pending_board") { ExpirySource::PendingBoard }
 				else if row.get("unregistered") { ExpirySource::Unregistered }
 				else { ExpirySource::Registered },
@@ -64,11 +69,13 @@ impl Tx<'_> {
 		&self, tip: u32, grace: u32,
 		after: (u32, String), limit: u32,
 	) -> anyhow::Result<Vec<SettlementVtxo>> {
-		let rows = self.query("SELECT vtxo_id,vtxo,expiry,unclaimed,pending_board,unregistered,receive_hash FROM (
+		let rows = self.query("SELECT vtxo_id,vtxo,expiry,unclaimed,pending_board,unregistered,receive_hash,send_hash FROM (
 				SELECT v.vtxo_id, v.vtxo, v.expiry,
 				v.spend_state='unclaimed' AS unclaimed, false AS pending_board,
 				v.spend_state='unregistered' AS unregistered,
-				CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash
+				CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash,
+				CASE WHEN v.spend_state='spendable' AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
+					THEN h.payment_hash END AS send_hash
 				FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id=v.id
 				WHERE (v.expiry::bigint, v.vtxo_id) > ($1::bigint, $2)
 				AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
@@ -77,10 +84,16 @@ impl Tx<'_> {
 					OR (v.spend_state='htlc-recv-unclaimed'
 						AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
 						AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-						AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)))
+						AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash))
+					OR (v.spend_state='spendable'
+						AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
+						AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
+						AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
+						AND NOT EXISTS (SELECT 1 FROM lightning_htlc_subscription r
+							WHERE r.payment_hash=h.payment_hash AND r.status IN ('htlcs-ready','settled'))))
 				AND v.confirmed_height IS NULL AND v.expiry::bigint + $3 <= $4
 				UNION ALL
-				SELECT p.vtxo_id,p.vtxo,p.expiry,false,true,false,NULL FROM pending_board p
+				SELECT p.vtxo_id,p.vtxo,p.expiry,false,true,false,NULL,NULL FROM pending_board p
 				WHERE (p.expiry::bigint,p.vtxo_id) > ($1::bigint,$2)
 				AND p.expiry::bigint + $3 <= $4
 				AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)
@@ -180,30 +193,45 @@ impl Tx<'_> {
 			_ => None,
 		}).collect::<BTreeMap<_, _>>();
 		let receive_ids = receives.keys().cloned().collect::<Vec<_>>();
+		let sends = inputs.iter().filter_map(|i| match i.source {
+			ExpirySource::LightningSend(hash) => Some((i.id.to_string(), hash.to_string())),
+			_ => None,
+		}).collect::<BTreeMap<_, _>>();
+		let send_ids = sends.keys().cloned().collect::<Vec<_>>();
 		let owners = inputs.iter().map(|i| (i.id, i.owner)).collect::<BTreeMap<_, _>>();
 		let rows = self.query("SELECT v.vtxo,v.spend_state='unregistered' AS unregistered,
-			CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash
+			CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash,
+			CASE WHEN v.spend_state='spendable' AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
+				THEN h.payment_hash END AS send_hash
 			FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id=v.id
 			WHERE ((v.vtxo_id=ANY($1) AND v.policy_type='pubkey' AND v.spend_state IN ('spendable','unclaimed'))
 				OR (v.vtxo_id=ANY($5) AND v.spend_state='unregistered' AND h.id IS NULL)
 				OR (v.vtxo_id=ANY($6) AND v.spend_state='htlc-recv-unclaimed'
 					AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
 					AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-					AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)))
+					AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash))
+				OR (v.vtxo_id=ANY($7) AND v.spend_state='spendable'
+					AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
+					AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
+					AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
+					AND NOT EXISTS (SELECT 1 FROM lightning_htlc_subscription r
+						WHERE r.payment_hash=h.payment_hash AND r.status IN ('htlcs-ready','settled'))))
 			AND v.confirmed_height IS NULL AND v.expiry::bigint + $2 <= $3
 			AND v.spent_in_round IS NULL AND v.oor_spent_txid IS NULL
 			AND v.offboarded_in IS NULL AND NOT EXISTS
 			(SELECT 1 FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id
 			 WHERE i.vtxo_id=v.vtxo_id AND p.forfeited_at IS NULL)
 			UNION ALL
-			SELECT p.vtxo,false,NULL FROM pending_board p WHERE p.vtxo_id=ANY($4)
+			SELECT p.vtxo,false,NULL,NULL FROM pending_board p WHERE p.vtxo_id=ANY($4)
 			AND p.expiry::bigint + $2 <= $3
 			AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)",
-			&[&ids, &(grace as i64), &(tip as i64), &boards, &unregistered, &receive_ids]).await?;
+			&[&ids, &(grace as i64), &(tip as i64), &boards, &unregistered, &receive_ids, &send_ids]).await?;
 		let mut coins = Vec::new();
 		for row in rows {
 			let vtxo = Vtxo::deserialize(row.get("vtxo"))?;
-			if row.get::<_, Option<&str>>("receive_hash") != receives.get(&vtxo.id().to_string()).map(String::as_str) {
+			if row.get::<_, Option<&str>>("receive_hash") != receives.get(&vtxo.id().to_string()).map(String::as_str)
+				|| row.get::<_, Option<&str>>("send_hash") != sends.get(&vtxo.id().to_string()).map(String::as_str)
+			{
 				continue;
 			}
 			let owner = if row.get("unregistered") { self.unregistered_expiry_owner(&vtxo).await? }
@@ -229,6 +257,13 @@ impl Tx<'_> {
 	) -> anyhow::Result<()> {
 		let ids = inputs.iter().map(|i| i.id.to_string()).collect::<Vec<_>>();
 		ensure!(ids.len() == scripts.len(), "expiry destination count mismatch");
+		let sends = inputs.iter().filter_map(|i| match i.source {
+			ExpirySource::LightningSend(hash) => Some((i.id.to_string(), hash)),
+			_ => None,
+		}).collect::<BTreeMap<_, _>>();
+		// A refund must not commit after a settlement it did not see. Take the
+		// settlement write lock first, as the sender's refund request does.
+		if !sends.is_empty() { self.lock_htlc_settlements().await?; }
 		self.lock_expiry_inputs(&ids).await?;
 		let coins = self.expiry_inputs(inputs, tip, grace).await?;
 		ensure!(coins.len() == ids.len(), "expiry inputs changed");
@@ -251,6 +286,20 @@ impl Tx<'_> {
 			AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
 			AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)", &[&receives]).await?;
 		ensure!(fulfilled as usize == receives.len(), "expiry receive resolution changed during commit");
+		let send_ids = sends.keys().cloned().collect::<Vec<_>>();
+		let revoked = self.execute("UPDATE htlc_vtxo h SET offchain_resolution='revoked'
+			FROM vtxo v WHERE h.id=v.id AND v.vtxo_id=ANY($1) AND h.direction='incoming'
+			AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
+			AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)", &[&send_ids]).await?;
+		ensure!(revoked as usize == send_ids.len(), "expiry send resolution changed during commit");
+		// Cancel an intra-Ark receive for the same hash, as the refund request
+		// does, so a later claim is refused. A committed receive vetoes the refund.
+		for hash in sends.values().collect::<std::collections::BTreeSet<_>>() {
+			if let Some(status) = self.cancel_revocable_htlc_subscription(*hash).await? {
+				ensure!(!matches!(status, LightningHtlcSubscriptionStatus::HtlcsReady
+					| LightningHtlcSubscriptionStatus::Settled), "intra-Ark receive committed during expiry refund");
+			}
+		}
 		let txid = tx.compute_txid().to_string();
 		self.upsert_nursery_tx(tx, NurseryTxKind::ExpiryPayout, confirm_target).await?;
 		self.execute("INSERT INTO expiry_settlement (id,txid,fee_sat,spk)

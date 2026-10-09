@@ -36,7 +36,6 @@ pub fn router() -> Router<Arc<ServerState>> {
 		.route("/utxos", get(onchain_utxos))
 		.route("/transactions", get(onchain_transactions))
 		.route("/sync", post(onchain_sync))
-		.route("/sweep-expiry-payouts", post(sweep_expiry_payouts))
 }
 
 #[derive(OpenApi)]
@@ -50,7 +49,6 @@ pub fn router() -> Router<Arc<ServerState>> {
 		onchain_utxos,
 		onchain_transactions,
 		onchain_sync,
-		sweep_expiry_payouts,
 	),
 	components(schemas(
 		bark_json::cli::onchain::OnchainBalance,
@@ -63,8 +61,6 @@ pub fn router() -> Router<Arc<ServerState>> {
 		bark_json::primitives::TransactionInfo,
 		bark_json::primitives::WalletTxInfo,
 		bark_json::primitives::BlockRef,
-		bark_json::web::SweepExpiryPayoutsRequest,
-		bark_json::web::SweepExpiryPayoutsResponse,
 	)),
 	tags((name = "onchain", description = "Manage barkd's on-chain bitcoin wallet."))
 )]
@@ -340,40 +336,4 @@ pub async fn onchain_sync(
 
 	onchain.write().await.sync(wallet.chain()).await?;
 	Ok(())
-}
-
-#[utoipa::path(
-	post,
-	path = "/sweep-expiry-payouts",
-	summary = "Sweep on-chain payouts of expired VTXOs",
-	request_body = bark_json::web::SweepExpiryPayoutsRequest,
-	responses(
-		(status = 200, description = "Returns the sweep transaction", body = bark_json::web::SweepExpiryPayoutsResponse),
-		(status = 500, description = "Internal server error", body = error::InternalServerError)
-	),
-	description = "Spends every payout output found for the expired VTXOs the wallet has as \
-		spent (see `POST /api/v1/wallet/vtxos/expiry-payouts`) to a fresh address of the \
-		on-chain wallet, signing with the VTXO keys. Broadcasts the transaction and records \
-		an `expiry-payout` movement carrying the payout and sweep txids.",
-	tag = "onchain"
-)]
-#[debug_handler]
-pub async fn sweep_expiry_payouts(
-	State(state): State<Arc<ServerState>>,
-	Json(body): Json<bark_json::web::SweepExpiryPayoutsRequest>,
-) -> HandlerResult<Json<bark_json::web::SweepExpiryPayoutsResponse>> {
-	let wallet = state.require_wallet()?;
-	state.require_onchain()?;
-
-	let fee_rate = match body.fee_rate_sat_vb {
-		Some(r) => Some(bitcoin::FeeRate::from_sat_per_vb(r).badarg("Invalid fee rate")?),
-		None => None,
-	};
-	let sweep = bark::expiry_payout::sweep_expiry_payouts(&wallet, fee_rate).await
-		.context("Failed to sweep expiry payouts")?;
-
-	Ok(axum::Json(bark_json::web::SweepExpiryPayoutsResponse {
-		txid: sweep.txid,
-		swept_sat: sweep.swept.to_sat(),
-	}))
 }

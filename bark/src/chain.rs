@@ -12,7 +12,7 @@ use bdk_core::{BlockId, CheckPoint};
 use bdk_esplora::esplora_client;
 use bitcoin::constants::genesis_block;
 use bitcoin::{
-	Amount, Block, BlockHash, FeeRate, Network, OutPoint, ScriptBuf, Transaction, Txid, Weight,
+	Amount, Block, BlockHash, FeeRate, Network, OutPoint, Transaction, Txid, Weight,
 };
 use log::{debug, info, warn};
 use tokio::sync::RwLock;
@@ -127,13 +127,6 @@ impl ChainSourceClient {
 	}
 }
 
-#[cfg(feature = "bitcoind-rpc")]
-struct ScriptScan {
-	block: BlockHash,
-	scripts: Vec<ScriptBuf>,
-	outputs: Vec<ScriptUtxo>,
-}
-
 /// Client for interacting with the configured on-chain backend.
 ///
 /// [ChainSource] abstracts over multiple backends using [ChainSourceSpec] to provide:
@@ -180,8 +173,6 @@ pub struct ChainSource {
 	/// Last observed tip with the time it was fetched, used to short-circuit
 	/// repeat `tip_ref()` / `tip()` calls within `TIP_CACHE_TTL`.
 	tip_cache: RwLock<Option<(BlockRef, Instant)>>,
-	#[cfg(feature = "bitcoind-rpc")]
-	script_scan: tokio::sync::Mutex<Option<ScriptScan>>,
 }
 
 impl ChainSource {
@@ -224,8 +215,6 @@ impl ChainSource {
 			fee_rates: RwLock::new(FeeRates { fast: fee, regular: fee, slow: fee }),
 			fee_rates_fetched_at: RwLock::new(None),
 			tip_cache: RwLock::new(None),
-			#[cfg(feature = "bitcoind-rpc")]
-			script_scan: tokio::sync::Mutex::new(None),
 		}
 	}
 
@@ -337,8 +326,6 @@ impl ChainSource {
 			fee_rates,
 			fee_rates_fetched_at: RwLock::new(None),
 			tip_cache: RwLock::new(None),
-			#[cfg(feature = "bitcoind-rpc")]
-			script_scan: tokio::sync::Mutex::new(None),
 		})
 	}
 
@@ -813,116 +800,6 @@ impl ChainSource {
 		}
 	}
 
-	/// The unspent outputs paying any of `scripts`, each with the height of the
-	/// block that confirmed it (`None` while it is in the mempool).
-	///
-	/// Bitcoind scans confirmed outputs once per block and script set, then
-	/// includes mempool receives and spends using `getdescriptoractivity`.
-	/// The scan is serialized because Core permits only one at a time.
-	pub async fn unspent_outputs_for_scripts(
-		&self,
-		scripts: &[ScriptBuf],
-	) -> anyhow::Result<Vec<ScriptUtxo>> {
-		let mut ret = Vec::new();
-		if scripts.is_empty() {
-			return Ok(ret);
-		}
-		match self.inner() {
-			#[cfg(feature = "bitcoind-rpc")]
-			ChainSourceClient::Bitcoind { rpc, .. } => {
-				#[derive(Debug, serde::Deserialize)]
-				struct Unspent {
-					txid: Txid,
-					vout: u32,
-					#[serde(rename = "scriptPubKey")]
-					script_pubkey: ScriptBuf,
-					#[serde(with = "bitcoin::amount::serde::as_btc")]
-					amount: Amount,
-					height: u32,
-				}
-				#[derive(Debug, serde::Deserialize)]
-				struct ScanResult {
-					success: bool,
-					bestblock: BlockHash,
-					unspents: Vec<Unspent>,
-				}
-
-				let descriptors = scripts.iter()
-					.map(|s| serde_json::Value::from(format!("raw({})", s.to_hex_string())))
-					.collect::<Vec<_>>();
-				{
-					let mut cache = self.script_scan.lock().await;
-					let block: BlockHash = rpc.call_raw("getbestblockhash", &[]).await?;
-					if !cache.as_ref().is_some_and(|s| s.block == block && s.scripts == scripts) {
-						let res: ScanResult = rpc.call_raw(
-							"scantxoutset", &["start".into(), descriptors.clone().into()],
-						).await.context("scantxoutset failed")?;
-						anyhow::ensure!(res.success, "scantxoutset was interrupted");
-						*cache = Some(ScriptScan {
-							block: res.bestblock,
-							scripts: scripts.to_vec(),
-							outputs: res.unspents.into_iter().map(|u| ScriptUtxo {
-								script_pubkey: u.script_pubkey,
-								outpoint: OutPoint::new(u.txid, u.vout),
-								amount: u.amount,
-								confirmed_height: Some(BlockHeight::new(u.height)),
-							}).collect(),
-						});
-					}
-					ret = cache.as_ref().expect("scan populated above").outputs.clone();
-				}
-				#[derive(Debug, serde::Deserialize)]
-				struct OutputScript { hex: ScriptBuf }
-				#[derive(Debug, serde::Deserialize)]
-				#[serde(tag = "type", rename_all = "lowercase")]
-				enum Activity {
-					Receive {
-						txid: Txid, vout: u32, output_spk: OutputScript,
-						#[serde(with = "bitcoin::amount::serde::as_btc")]
-						amount: Amount,
-					},
-					Spend { prevout_txid: Txid, prevout_vout: u32 },
-				}
-				#[derive(Debug, serde::Deserialize)]
-				struct Activities { activity: Vec<Activity> }
-				let mempool: Activities = rpc.call_raw("getdescriptoractivity", &[
-					serde_json::json!([]), descriptors.into(), true.into(),
-				]).await.context("expiry payout lookup requires getdescriptoractivity (tested with Core 31)")?;
-				let mut spent = HashSet::new();
-				for activity in mempool.activity {
-					match activity {
-						Activity::Receive { txid, vout, output_spk, amount } => ret.push(ScriptUtxo {
-							outpoint: OutPoint::new(txid, vout), amount,
-							script_pubkey: output_spk.hex, confirmed_height: None,
-						}),
-						Activity::Spend { prevout_txid, prevout_vout } => {
-							spent.insert(OutPoint::new(prevout_txid, prevout_vout));
-						},
-					}
-				}
-				ret.retain(|u| !spent.contains(&u.outpoint));
-				ret.sort_by_key(|u| u.outpoint);
-				ret.dedup_by_key(|u| u.outpoint);
-			},
-			ChainSourceClient::Esplora(client) => {
-				for script in scripts {
-					let utxos = client.get_scripthash_utxos(script).await
-						.with_context(|| format!("utxo lookup for script {} failed", script))?;
-					for u in utxos {
-						ret.push(ScriptUtxo {
-							script_pubkey: script.clone(),
-							outpoint: OutPoint::new(u.txid, u.vout),
-							amount: u.value,
-							confirmed_height: u.status.block_height.filter(|_| u.status.confirmed)
-								.map(BlockHeight::new),
-						});
-					}
-				}
-			},
-		}
-		Ok(ret)
-	}
-
 	/// Gets the current fee rates from the chain source, falling back to user-specified values if
 	/// necessary.
 	///
@@ -1012,16 +889,6 @@ async fn bitcoind_tx_status(
 	} else {
 		Ok(TxStatus::Mempool)
 	}
-}
-
-/// An unspent output found by [ChainSource::unspent_outputs_for_scripts].
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ScriptUtxo {
-	pub script_pubkey: ScriptBuf,
-	pub outpoint: OutPoint,
-	pub amount: Amount,
-	/// `None` while the output is in the mempool.
-	pub confirmed_height: Option<BlockHeight>,
 }
 
 /// The [FeeRates] struct represents the fee rates for transactions categorized by speed or urgency.
@@ -1187,90 +1054,6 @@ fn classify_submit_package_errors<'a>(
 mod test {
 	use super::*;
 	use std::str::FromStr;
-
-	#[cfg(all(feature = "bitcoind-rpc", feature = "sqlite"))]
-	#[tokio::test]
-	async fn bitcoind_payout_discovery_tracks_mempool_between_blocks() {
-		use std::sync::atomic::{AtomicUsize, Ordering};
-		use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-		use tokio::net::TcpListener;
-		use serde_json::{json, Value};
-
-		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-		let url = format!("http://{}", listener.local_addr().unwrap());
-		let phase = Arc::new(AtomicUsize::new(0));
-		let scans = Arc::new(AtomicUsize::new(0));
-		let (server_phase, server_scans) = (phase.clone(), scans.clone());
-		let txid = "11".repeat(32);
-		let hash = "22".repeat(32);
-		let script = "5120".to_owned() + &"33".repeat(32);
-		let (server_txid, server_hash, server_script) = (txid.clone(), hash.clone(), script.clone());
-		let server = tokio::spawn(async move {
-			loop {
-				let (socket, _) = listener.accept().await.unwrap();
-				let mut socket = BufReader::new(socket);
-				let mut len = 0;
-				loop {
-					let mut line = String::new();
-					socket.read_line(&mut line).await.unwrap();
-					if line == "\r\n" { break; }
-					if let Some(n) = line.to_lowercase().strip_prefix("content-length:") {
-						len = n.trim().parse().unwrap();
-					}
-				}
-				let mut body = vec![0; len];
-				socket.read_exact(&mut body).await.unwrap();
-				let request: Value = serde_json::from_slice(&body).unwrap();
-				let phase = server_phase.load(Ordering::SeqCst);
-				let hash = if phase >= 3 { "44".repeat(32) } else { server_hash.clone() };
-				let result = match request["method"].as_str().unwrap() {
-					"getbestblockhash" => json!(hash),
-					"scantxoutset" => {
-						server_scans.fetch_add(1, Ordering::SeqCst);
-						let unspents = if phase >= 3 { vec![json!({"txid":server_txid,"vout":0,
-							"scriptPubKey":server_script,"amount":0.00049,"height":101})] } else { vec![] };
-						json!({"success":true,"bestblock":hash,"unspents":unspents})
-					},
-					"getdescriptoractivity" => {
-						assert_eq!(request["params"][0], json!([]));
-						assert_eq!(request["params"][2], json!(true));
-						let mut activity = vec![];
-						if phase == 1 || phase == 2 { activity.push(json!({"type":"receive","txid":server_txid,
-							"vout":0,"amount":0.00049,"output_spk":{"hex":server_script}})); }
-						if phase == 2 { activity.push(json!({"type":"spend",
-							"prevout_txid":server_txid,"prevout_vout":0})); }
-						json!({"activity":activity})
-					},
-					method => panic!("unexpected RPC {method}"),
-				};
-				let body = json!({"result":result,"error":null,"id":request["id"]}).to_string();
-				let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body);
-				socket.get_mut().write_all(response.as_bytes()).await.unwrap();
-			}
-		});
-		let mut chain = ChainSource::offline_for_test(Network::Regtest);
-		chain.inner = ChainSourceClient::Bitcoind {
-			rpc: BitcoindClient::new(url.clone(), bitcoind_async_client::Auth::UserPass("test".into(), "test".into()), None, None, None).unwrap(),
-			sync: BitcoinRpcClient::new(&url, rpc::Auth::None).unwrap(),
-		};
-		let scripts = [ScriptBuf::from_hex(&script).unwrap()];
-		assert!(chain.unspent_outputs_for_scripts(&scripts).await.unwrap().is_empty());
-		phase.store(1, Ordering::SeqCst);
-		let outputs = chain.unspent_outputs_for_scripts(&scripts).await.unwrap();
-		assert_eq!(outputs.len(), 1, "a payout arriving between blocks must be found");
-		assert_eq!(outputs[0].amount, Amount::from_sat(49_000));
-		assert_eq!(outputs[0].confirmed_height, None);
-		phase.store(2, Ordering::SeqCst);
-		assert!(chain.unspent_outputs_for_scripts(&scripts).await.unwrap().is_empty(), "an unconfirmed sweep spends the payout");
-		assert_eq!(scans.load(Ordering::SeqCst), 1, "polling must reuse the block's UTXO scan");
-		phase.store(3, Ordering::SeqCst);
-		let outputs = chain.unspent_outputs_for_scripts(&scripts).await.unwrap();
-		assert_eq!(outputs[0].confirmed_height, Some(BlockHeight::new(101)));
-		assert_eq!(scans.load(Ordering::SeqCst), 2, "a new block needs a new scan");
-		chain.unspent_outputs_for_scripts(&[scripts[0].clone(), ScriptBuf::new()]).await.unwrap();
-		assert_eq!(scans.load(Ordering::SeqCst), 3, "new scripts need a new scan");
-		server.abort();
-	}
 
 	#[test]
 	fn classify_package_errors_attributes_root_cause_in_package_order() {

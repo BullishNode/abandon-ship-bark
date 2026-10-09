@@ -186,7 +186,7 @@ impl TxNursery {
 	/// operator about it.
 	///
 	/// Returns false when the txid is not in the nursery, was already
-	/// abandoned or has confirmed.
+	/// abandoned, has confirmed or is an expiry payout.
 	pub async fn abandon(&self, txid: Txid) -> anyhow::Result<bool> {
 		let kind = self.db.write(async |t| t.abandon_nursery_tx(txid).await).await?;
 		if let Some(kind) = kind {

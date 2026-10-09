@@ -215,7 +215,8 @@ group net minimum and confirmed funding. The task keeps entitlements while those
 
 For a committed transaction missing from the mempool, check the nursery and Core's
 rejection, restore funding/service conditions, and restart the same fork if needed;
-startup retries the identical transaction. A manual CPFP requires an actual owned
+startup retries the identical transaction. The nursery refuses `abandon` for
+expiry payouts: their coins are settled to them. A manual CPFP requires an actual owned
 change output. Exactly funded payouts may have none: wait for acceptance/fees to
 improve; do not construct another payment for the same coins. Receipt deletion is
 repaired from nursery bytes, original coin values and the stored paid scripts. A

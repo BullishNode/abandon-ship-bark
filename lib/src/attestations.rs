@@ -334,9 +334,9 @@ impl ProtocolEncoding for KeyLinkAttestation {
 
 /// Authorize an expiry payout destination and its revision with the mailbox key.
 ///
-/// The record is bound to one chain and one Ark server. A seed has the same
-/// mailbox key everywhere, so an unbound record signed for another network or
-/// server could be replayed to redirect this wallet's payouts.
+/// The record is bound to one chain. A seed has the same mailbox key on every
+/// network, so an unbound record signed for another network could be replayed
+/// to redirect this wallet's payouts to an address it does not scan here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct FallbackRecordAttestation {
 	signature: schnorr::Signature,
@@ -345,35 +345,27 @@ pub struct FallbackRecordAttestation {
 impl FallbackRecordAttestation {
 	const MESSAGE_PREFIX: &'static [u8; 32] = b"Ark expiry fallback record      ";
 
-	pub fn new(
-		chain: ChainHash,
-		server_pk: PublicKey,
-		spk: &Script,
-		seq: u64,
-		mailbox_key: &Keypair,
-	) -> Self {
-		let msg = Self::compute_message(chain, server_pk, spk, seq);
+	pub fn new(chain: ChainHash, spk: &Script, seq: u64, mailbox_key: &Keypair) -> Self {
+		let msg = Self::compute_message(chain, spk, seq);
 		Self { signature: SECP.sign_schnorr_with_aux_rand(&msg, mailbox_key, &rand::random()) }
 	}
 
 	pub fn verify(
 		&self,
 		chain: ChainHash,
-		server_pk: PublicKey,
 		spk: &Script,
 		seq: u64,
 		mailbox_pk: PublicKey,
 	) -> Result<(), secp256k1::Error> {
-		let msg = Self::compute_message(chain, server_pk, spk, seq);
+		let msg = Self::compute_message(chain, spk, seq);
 		SECP.verify_schnorr(&self.signature, &msg, &mailbox_pk.x_only_public_key().0)
 	}
 
 	// Every field before the script has a fixed length.
-	fn compute_message(chain: ChainHash, server_pk: PublicKey, spk: &Script, seq: u64) -> Message {
+	fn compute_message(chain: ChainHash, spk: &Script, seq: u64) -> Message {
 		let mut engine = sha256::Hash::engine();
 		engine.input(Self::MESSAGE_PREFIX);
 		engine.input(chain.as_bytes());
-		engine.input(&server_pk.serialize());
 		engine.input(spk.as_bytes());
 		engine.input(&seq.to_le_bytes());
 		Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array())
@@ -551,28 +543,23 @@ mod tests {
 	fn fallback_record_fixed_vector_and_tampering() {
 		let coin_key = Keypair::from_str("0000000000000000000000000000000000000000000000000000000000000003").unwrap();
 		let mailbox_key = Keypair::from_str("0000000000000000000000000000000000000000000000000000000000000007").unwrap();
-		let server_pk = Keypair::from_str("0000000000000000000000000000000000000000000000000000000000000005").unwrap().public_key();
 		let chain = ChainHash::REGTEST;
 		let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
 		let seq = 1_791_475_200;
-		assert_eq!(FallbackRecordAttestation::compute_message(chain, server_pk, &spk, seq).as_ref().as_hex().to_string(),
-			"e1f9a854632a9bc2661e51dbf239de3a40f85ff843487d8483d7e5c997c318e5");
+		assert_eq!(FallbackRecordAttestation::compute_message(chain, &spk, seq).as_ref().as_hex().to_string(),
+			"57bc21f9dc3f0fba95e70bcfe14a90eed161b3b04280d905773e3b307f93797d");
 		// Independently checked with a BIP340 reference verifier.
 		let vector = FallbackRecordAttestation::deserialize_hex(
-			"6b7b78821fe97c05c4323bea50df5cd7b9b8c9486bf3db2b32f46f30dd3c803173f17c36b27cbc58e8a0af92862b935dcf5c6736855b3148d5ec67d36a4c70ee",
+			"46260ccdc219f47f0562570edcdd9b93f13d5c3003fc8782e693a22c0186d3c92b26370c567d1998f6fbdb3886187315466d0b3d0d27a02d0bf938bb54102ef4",
 		).unwrap();
-		let verify = |v: &FallbackRecordAttestation, chain, server_pk, spk: &Script, seq, pk| {
-			v.verify(chain, server_pk, spk, seq, pk)
-		};
-		verify(&vector, chain, server_pk, &spk, seq, mailbox_key.public_key()).unwrap();
-		assert!(verify(&vector, ChainHash::SIGNET, server_pk, &spk, seq, mailbox_key.public_key()).is_err());
-		assert!(verify(&vector, chain, coin_key.public_key(), &spk, seq, mailbox_key.public_key()).is_err());
-		assert!(verify(&vector, chain, server_pk, &ScriptBuf::new(), seq, mailbox_key.public_key()).is_err());
-		assert!(verify(&vector, chain, server_pk, &spk, seq + 1, mailbox_key.public_key()).is_err());
-		assert!(verify(&vector, chain, server_pk, &spk, seq, coin_key.public_key()).is_err());
+		vector.verify(chain, &spk, seq, mailbox_key.public_key()).unwrap();
+		assert!(vector.verify(ChainHash::SIGNET, &spk, seq, mailbox_key.public_key()).is_err());
+		assert!(vector.verify(chain, &ScriptBuf::new(), seq, mailbox_key.public_key()).is_err());
+		assert!(vector.verify(chain, &spk, seq + 1, mailbox_key.public_key()).is_err());
+		assert!(vector.verify(chain, &spk, seq, coin_key.public_key()).is_err());
 		for revision in [0, seq, u64::MAX] {
-			let signed = FallbackRecordAttestation::new(chain, server_pk, &spk, revision, &mailbox_key);
-			signed.verify(chain, server_pk, &spk, revision, mailbox_key.public_key()).unwrap();
+			let signed = FallbackRecordAttestation::new(chain, &spk, revision, &mailbox_key);
+			signed.verify(chain, &spk, revision, mailbox_key.public_key()).unwrap();
 			encoding_roundtrip(&signed);
 		}
 		for length in 0..64 {
@@ -580,7 +567,7 @@ mod tests {
 		}
 		let link = KeyLinkAttestation::new(mailbox_key.public_key(), &mailbox_key);
 		let replay = FallbackRecordAttestation::deserialize(&link.serialize()).unwrap();
-		assert!(replay.verify(chain, server_pk, &spk, seq, mailbox_key.public_key()).is_err());
+		assert!(replay.verify(chain, &spk, seq, mailbox_key.public_key()).is_err());
 	}
 
 	#[test]

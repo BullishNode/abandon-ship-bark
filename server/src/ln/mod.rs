@@ -38,7 +38,7 @@ use crate::database::htlc_vtxo::{self, HtlcResolution};
 use crate::database::SpendState;
 use crate::database::tree::VtxoTreeUpdate;
 use crate::database::ln::{
-	LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningPaymentStatus,
+	LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningNodeId, LightningPaymentStatus,
 };
 use crate::error::ContextExt;
 use crate::ln::node_manager::NodePaymentStatus;
@@ -455,7 +455,7 @@ impl Server {
 		let builder = self.validate_cosign_request(validation, cosign_request)
 			.badarg("invalid cosign request")?;
 
-		match self.lightning_send_refund(payment_hash, input_policy.htlc_expiry).await? {
+		match self.lightning_send_refund(payment_hash, input_policy.htlc_expiry, &mut BTreeSet::new()).await? {
 			SendRefund::Allowed => {},
 			SendRefund::Refused(reason) => return badarg!("{reason}"),
 			SendRefund::Undecided(reason) =>
@@ -540,10 +540,16 @@ impl Server {
 	/// An intra-Ark attempt stays open while its receive is prepared. It is
 	/// refunded only once the recipient can no longer claim, see
 	/// [Self::granted_receive_claimable]; the commit then cancels the receive.
+	///
+	/// A node that did not answer is added to `unavailable_nodes`, and a node
+	/// already in it is not asked again: the decision stays open. A caller
+	/// deciding many payments at once shares the set, so one silent node
+	/// costs it one timeout, not one per payment.
 	pub(crate) async fn lightning_send_refund(
 		&self,
 		payment_hash: PaymentHash,
 		htlc_expiry: BlockHeight,
+		unavailable_nodes: &mut BTreeSet<LightningNodeId>,
 	) -> anyhow::Result<SendRefund> {
 		if self.htlc_settler.is_settled(payment_hash).await?.is_some() {
 			return Ok(SendRefund::Refused("invoice has already been paid".into()));
@@ -563,13 +569,19 @@ impl Server {
 		let nodes = attempts.iter().filter(|a| a.lightning_htlc_subscription_id.is_none())
 			.map(|a| a.lightning_node_id).collect::<BTreeSet<_>>();
 		for node in nodes {
+			if unavailable_nodes.contains(&node) {
+				return Ok(SendRefund::Undecided(format!("lightning node {node} did not answer earlier")));
+			}
 			match self.lightning_manager.node_payment_status(node, payment_hash).await {
 				Ok(NodePaymentStatus::Complete) =>
 					return Ok(SendRefund::Refused("This lightning payment has completed".into())),
 				Ok(NodePaymentStatus::Pending) =>
 					return Ok(SendRefund::Undecided("the payment is still in flight".into())),
 				Ok(NodePaymentStatus::Failed | NodePaymentStatus::Unknown) => {},
-				Err(e) => return Ok(SendRefund::Undecided(format!("{e:#}"))),
+				Err(e) => {
+					unavailable_nodes.insert(node);
+					return Ok(SendRefund::Undecided(format!("{e:#}")));
+				},
 			}
 		}
 		if attempts.iter().any(|a| !a.status.is_final() && !a.is_self_payment()) {

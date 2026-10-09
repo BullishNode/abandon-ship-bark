@@ -1250,7 +1250,19 @@ async fn fallback_busy_lightning_payment_does_not_stall_other_wallets() {
 /// refunded.
 #[tokio::test]
 async fn fallback_unresponsive_node_holds_send_refund_only() {
-	let name = "fallback_unresponsive_node_holds_send_refund_only";
+	Box::pin(unresponsive_node(1)).await;
+}
+
+/// Several failed sends wait on the same silent node. The tick asks that
+/// node once, not once per payment, so other wallets are paid promptly.
+#[tokio::test]
+async fn fallback_unresponsive_node_does_not_stall_tick() {
+	Box::pin(unresponsive_node(6)).await;
+}
+
+async fn unresponsive_node(sends: usize) {
+	let name = if sends == 1 { "fallback_unresponsive_node_holds_send_refund_only" }
+		else { "fallback_unresponsive_node_does_not_stall_tick" };
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
@@ -1273,41 +1285,47 @@ async fn fallback_unresponsive_node_holds_send_refund_only() {
 	bystander.stop_daemon_wait().await.unwrap();
 	let bystander_record = bystander.fallback_destination().await.unwrap();
 
-	// A real failed payment: the external payee cancels its hold invoice.
-	let preimage = Preimage::random();
-	let payment_hash = preimage.compute_payment_hash();
+	// Real failed payments: the external payee cancels each hold invoice.
+	let amount = if sends == 1 { 100_000 } else { 20_000 };
 	let mut payee = lightning.external.hold_client().await;
-	let invoice = payee.invoice(hold::InvoiceRequest {
-		payment_hash: payment_hash.as_ref().to_vec(),
-		amount_msat: 100_000 * 1_000,
-		description: Some(hold::invoice_request::Description::Memo(name.into())),
-		min_final_cltv_expiry: Some(18),
-		expiry: Some(3600),
-		routing_hints: vec![],
-	}).await.unwrap().into_inner().bolt11;
-	// Boarding just mined blocks. A node paying from a stale tip sets an
-	// HTLC expiry the payee rejects, which would fail the payment for an
-	// unrelated reason.
-	lightning.sync().await;
-	sender.pay_lightning_invoice(invoice, None, false).await.unwrap();
-	lightning.external.wait_for_hold_invoice_accepted(payment_hash).await;
-	payee.cancel(hold::CancelRequest { payment_hash: payment_hash.as_ref().to_vec() }).await.unwrap();
-	tokio::time::timeout(Duration::from_secs(60), async {
-		tokio::select! {
-			r = sender.check_lightning_payment(payment_hash, true) =>
-				panic!("refund completed before the sender disappeared: {r:?}"),
-			_ = reached.notified() => {},
-		}
-	}).await.expect("the sender must reach its refund request");
+	let mut payment_hashes = Vec::new();
+	for i in 0..sends {
+		let preimage = Preimage::random();
+		let payment_hash = preimage.compute_payment_hash();
+		let invoice = payee.invoice(hold::InvoiceRequest {
+			payment_hash: payment_hash.as_ref().to_vec(),
+			amount_msat: amount * 1_000,
+			description: Some(hold::invoice_request::Description::Memo(format!("{name} {i}"))),
+			min_final_cltv_expiry: Some(18),
+			expiry: Some(3600),
+			routing_hints: vec![],
+		}).await.unwrap().into_inner().bolt11;
+		// Boarding just mined blocks. A node paying from a stale tip sets an
+		// HTLC expiry the payee rejects, which would fail the payment for an
+		// unrelated reason.
+		lightning.sync().await;
+		sender.pay_lightning_invoice(invoice, None, false).await.unwrap();
+		lightning.external.wait_for_hold_invoice_accepted(payment_hash).await;
+		payee.cancel(hold::CancelRequest { payment_hash: payment_hash.as_ref().to_vec() }).await.unwrap();
+		tokio::time::timeout(Duration::from_secs(60), async {
+			tokio::select! {
+				r = sender.check_lightning_payment(payment_hash, true) =>
+					panic!("refund completed before the sender disappeared: {r:?}"),
+				_ = reached.notified() => {},
+			}
+		}).await.expect("the sender must reach its refund request");
+		payment_hashes.push(payment_hash);
+	}
 
 	let held = sender.all_vtxos().await.unwrap().into_iter()
-		.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| p.payment_hash == payment_hash))
+		.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| payment_hashes.contains(&p.payment_hash)))
 		.map(|w| w.vtxo.id()).collect::<Vec<_>>();
 	let htlcs = db.read(async |t| t.get_user_vtxos_by_id(&held).await).await.unwrap()
 		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
 	let htlc_ids = htlcs.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
 	let htlc_principal = htlcs.iter().map(|v| v.amount().to_sat()).sum::<u64>();
-	assert!(!htlc_ids.is_empty());
+	assert_eq!(htlcs.iter().map(|v| v.policy().as_server_htlc_send().unwrap().payment_hash)
+		.collect::<BTreeSet<_>>().len(), sends);
 	let others = bystander.all_vtxos().await.unwrap().into_iter().map(|w| w.vtxo.id()).collect::<Vec<_>>();
 	let other_coins = db.read(async |t| t.get_user_vtxos_by_id(&others).await).await.unwrap()
 		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
@@ -1333,12 +1351,27 @@ async fn fallback_unresponsive_node_holds_send_refund_only() {
 	coins.extend(other_coins.iter().cloned());
 	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
 	train_fee_estimator(&ctx).await;
+	// Each query of the silent node gives up after ten seconds. Asked once
+	// per payment, a tick would scan for at least `sends` times as long
+	// before it pays anyone, so the tick durations are checked below.
+	let payable = std::time::Instant::now();
 	let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &other_ids, &bystander_record.spk, other_principal).await;
+	let waited = payable.elapsed();
+	println!("unresponsive node: {sends} held sends; other wallet paid {payout} (fee_sat={fee}) {waited:?} after it became payable");
 	let early = db.read(async |t| Ok(t.query_one(
 		"SELECT count(*) FROM expiry_settlement WHERE id=ANY($1)", &[&htlc_ids],
 	).await?.get::<_, i64>(0))).await.unwrap();
 	assert_eq!(early, 0, "an unanswered node query must not refund the sender");
-	println!("unresponsive node: other wallet paid {payout} (fee_sat={fee}); sender refund waits");
+	let logs = std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap();
+	let summaries = logs.lines().filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+		.filter(|e| e["message"] == "expiry payout tick summary" && e["candidates"].as_u64() > Some(0))
+		// The log writes this u128 field as a string.
+		.map(|e| e["duration_ms"].as_str().unwrap().parse::<u64>().unwrap()).collect::<Vec<_>>();
+	println!("tick durations with candidates (ms): {summaries:?}");
+	if sends > 1 {
+		assert!(summaries.iter().all(|ms| *ms < 35_000),
+			"a tick waited behind {sends} queries of the silent node: {summaries:?}");
+	}
 
 	docker("unpause");
 	let (refund, refund_fee) = wait_and_reconcile_payout(&ctx, &db, &htlc_ids, &sender_record.spk, htlc_principal).await;

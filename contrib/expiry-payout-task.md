@@ -15,6 +15,18 @@ Coins with a proven key link use the wallet record's destination. Coins without 
 record or link use their own taproot key (legacy fallback). A blocklisted destination
 or a destination owned by the rounds wallet waits.
 
+Board cosigning also records an unsigned entitlement in `pending_board`, keyed
+uniquely by its funding outpoint. The server checks the proposed funding output's
+amount and script, and adds the funding anchor to watchmand's frontier before
+returning the cosign. The unsigned user coin stays outside the ordinary coin
+table, so generic transaction registration cannot bypass board confirmation.
+A proposal never broadcast has no swept backing path and receives no payout.
+Normal registration and payout lock the same retained pending row. Settlement
+inserts the user coin already spent with its receipt and nursery transaction;
+an uncertain COMMIT waits on that pending row before checking its outcome.
+The fork requires the funding transaction in the cosign request, or an already
+known chain transaction when `require_board_funding_tx` is false.
+
 The task groups all currently payable coins by destination across page boundaries.
 Waiting coins do not fill the batch. Failed batches split between groups, never
 within one group. One new payment per tick. Sweeps that confirm in different ticks
@@ -96,7 +108,7 @@ runs only while the task is enabled.
 ## Operations and recovery
 
 Use complete PostgreSQL base backups plus continuous WAL archiving, including the
-payment commit and wallet metadata. Monitor archive failures and exercise physical
+pending boards, payment commit and wallet metadata. Monitor archive failures and exercise physical
 replay on a separate volume. An old snapshot with missing WAL is not a supported
 restore. Preserve nursery history: receipts depend on it, enforced by a foreign key.
 Keep seed backups offline before a mainnet deployment.

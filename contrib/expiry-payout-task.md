@@ -82,7 +82,8 @@ accounting so its later settlement is not debited twice.
 
 The task groups all currently payable coins by destination across page boundaries.
 Waiting coins do not fill the batch. Failed batches split between groups, never
-within one group. One new payment per tick. Sweeps that confirm in different ticks
+within one group. A group larger than `max_batch` is paid alone in its own
+payment. One new payment per tick. Sweeps that confirm in different ticks
 can produce separate payments to the same wallet.
 
 A failed delegated exchange can be cancelled once every replacement is swept and
@@ -144,12 +145,14 @@ then drop the duplicate column and add the nursery foreign key before upgrading.
 | grace_blocks | 1008 |
 | sweep_min_confs | 100 |
 | min_payout_sat | 10000 |
-| max_batch | 100 |
+| max_batch | 10000 |
 | conf_target_blocks | 6; accepts1,3,6 |
 
-`max_batch` counts coins per claim. The default is 100; a positive larger value
-is valid. The current implementation leaves a larger indivisible group waiting.
-The policy for such groups remains an open qualification gate.
+`max_batch` counts coins per claim. The default is 10000; any positive value is
+valid. It bounds the coins of a claim that combines wallet groups. A wallet group
+with more coins is paid alone, ignoring the limit, with the same net minimum. The payout
+pays from the rounds wallet with one output per wallet group, so a group's coin
+count does not change the transaction size; the 400,000 WU weight check still applies.
 
 Mainnet enforces grace>=144 and sweep depth>=100. Short regtest/signet timings are
 rehearsal settings. When enabled, `watchman_config` must be the same file mounted
@@ -180,7 +183,6 @@ group net minimum and confirmed funding. The task keeps entitlements while those
 | --- | --- |
 | Missing real estimate | Core returns the configured target's estimate; check estimation data and wait |
 | Group below the net minimum | Later eligible coins at the same destination or a lower fee can make it payable. If neither occurs, the group remains unpaid under this policy |
-| Group exceeds max_batch | The whole group waits. The oversized-group policy is not yet qualified |
 | Blocklisted or rounds-wallet destination | The group waits until the destination is permitted; no alternate destination is substituted |
 | Missing funding transaction | The persisted round's funding transaction reaches Core; inspect round/nursery recovery |
 | Unswept path or insufficient depth | A confirmed sweep spends this coin's own path into the rounds wallet; inspect watchmand and the exact input, then wait |

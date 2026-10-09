@@ -36,6 +36,14 @@ payout must reselect the recipient; if payout wins, registration is refused.
 Outputs already present in the HTLC ledger are excluded from this unregistered
 source; settled receive and failed send arbitration remain separate work.
 
+A returning arkoor sender checks expired outputs before delivery. A per-output
+settlement refusal and the server's stored signed chain distinguish a recipient
+payment from an input-owner refund, including a lost registration reply. Refunded
+amounts are removed from the reported recipients; already-paid change is not
+restored as spendable Ark value. Unknown outcomes retain the action and its locks.
+Change stored before an interrupted finalization keeps ordinary coin-status
+accounting so its later settlement is not debited twice.
+
 The task groups all currently payable coins by destination across page boundaries.
 Waiting coins do not fill the batch. Failed batches split between groups, never
 within one group. One new payment per tick. Sweeps that confirm in different ticks

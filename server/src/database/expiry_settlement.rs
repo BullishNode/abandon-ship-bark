@@ -81,10 +81,15 @@ impl Tx<'_> {
 				AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
 				AND ((v.policy_type = 'pubkey' AND v.spend_state IN ('spendable', 'unclaimed'))
 					OR (v.spend_state='unregistered' AND h.id IS NULL)
+					-- A recorded preimage does not prove the payer paid: it is
+					-- stored before the hold invoice settles. Only a settled
+					-- subscription shows the incoming payment was collected.
 					OR (v.spend_state='htlc-recv-unclaimed'
 						AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
 						AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-						AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash))
+						AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
+						AND EXISTS (SELECT 1 FROM lightning_htlc_subscription r
+							WHERE r.payment_hash=h.payment_hash AND r.status='settled'))
 					OR (v.spend_state='spendable'
 						AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
 						AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
@@ -209,7 +214,9 @@ impl Tx<'_> {
 				OR (v.vtxo_id=ANY($6) AND v.spend_state='htlc-recv-unclaimed'
 					AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
 					AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-					AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash))
+					AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
+					AND EXISTS (SELECT 1 FROM lightning_htlc_subscription r
+						WHERE r.payment_hash=h.payment_hash AND r.status='settled'))
 				OR (v.vtxo_id=ANY($7) AND v.spend_state='spendable'
 					AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
 					AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
@@ -284,7 +291,9 @@ impl Tx<'_> {
 		let fulfilled = self.execute("UPDATE htlc_vtxo h SET offchain_resolution='fulfilled'
 			FROM vtxo v WHERE h.id=v.id AND v.vtxo_id=ANY($1) AND h.direction='outgoing'
 			AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-			AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)", &[&receives]).await?;
+			AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
+			AND EXISTS (SELECT 1 FROM lightning_htlc_subscription r
+				WHERE r.payment_hash=h.payment_hash AND r.status='settled')", &[&receives]).await?;
 		ensure!(fulfilled as usize == receives.len(), "expiry receive resolution changed during commit");
 		let send_ids = sends.keys().cloned().collect::<Vec<_>>();
 		let revoked = self.execute("UPDATE htlc_vtxo h SET offchain_resolution='revoked'

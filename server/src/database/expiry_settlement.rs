@@ -90,12 +90,14 @@ impl Tx<'_> {
 						AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
 						AND EXISTS (SELECT 1 FROM lightning_htlc_subscription r
 							WHERE r.payment_hash=h.payment_hash AND r.status='settled'))
+					-- A prepared intra-Ark receive is a candidate: the refund
+					-- decision waits until its recipient can no longer claim.
 					OR (v.spend_state='spendable'
 						AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
 						AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
 						AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
 						AND NOT EXISTS (SELECT 1 FROM lightning_htlc_subscription r
-							WHERE r.payment_hash=h.payment_hash AND r.status IN ('htlcs-ready','settled'))))
+							WHERE r.payment_hash=h.payment_hash AND r.status='settled')))
 				AND v.confirmed_height IS NULL AND v.expiry::bigint + $3 <= $4
 				UNION ALL
 				SELECT p.vtxo_id,p.vtxo,p.expiry,false,true,false,NULL,NULL FROM pending_board p
@@ -222,7 +224,7 @@ impl Tx<'_> {
 					AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
 					AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
 					AND NOT EXISTS (SELECT 1 FROM lightning_htlc_subscription r
-						WHERE r.payment_hash=h.payment_hash AND r.status IN ('htlcs-ready','settled'))))
+						WHERE r.payment_hash=h.payment_hash AND r.status='settled')))
 			AND v.confirmed_height IS NULL AND v.expiry::bigint + $2 <= $3
 			AND v.spent_in_round IS NULL AND v.oor_spent_txid IS NULL
 			AND v.offboarded_in IS NULL AND NOT EXISTS
@@ -304,7 +306,7 @@ impl Tx<'_> {
 		// Cancel an intra-Ark receive for the same hash, as the refund request
 		// does, so a later claim is refused. A committed receive vetoes the refund.
 		for hash in sends.values().collect::<std::collections::BTreeSet<_>>() {
-			if let Some(status) = self.cancel_revocable_htlc_subscription(*hash).await? {
+			if let Some(status) = self.cancel_revocable_htlc_subscription(*hash, tip.into()).await? {
 				ensure!(!matches!(status, LightningHtlcSubscriptionStatus::HtlcsReady
 					| LightningHtlcSubscriptionStatus::Settled), "intra-Ark receive committed during expiry refund");
 			}

@@ -12,7 +12,7 @@ use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Local};
 use lightning_invoice::Bolt11Invoice;
 use tracing::{debug, trace, warn};
-use ark::VtxoId;
+use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use ark::lightning::{Invoice, PaymentHash, Preimage};
 use ark::mailbox::MailboxIdentifier;
 use bitcoin_ext::{AmountExt, BlockHeight};
@@ -567,14 +567,22 @@ impl<'t> Tx<'t> {
 	/// Cancel the latest receive subscription for `payment_hash` as part of
 	/// revoking the matching HTLC-send vtxos of an intra-Ark payment.
 	///
-	/// Only subscriptions still in a revocable state (`Created`/`Accepted`)
-	/// are canceled. The status the subscription had *before* this call is
-	/// returned (or `None` when no subscription exists, i.e. a plain outgoing
-	/// payment). When that status is `HtlcsReady` or `Settled` the row is left
+	/// Subscriptions still in a revocable state (`Created`/`Accepted`) are
+	/// canceled. A prepared one (`HtlcsReady`) is canceled only once its
+	/// recipient can no longer claim: every granted HTLC-recv vtxo is past
+	/// its HTLC expiry at `tip`, unclaimed, not exited and unresolved. The
+	/// caller has also checked, under the payment guard, that their backing
+	/// funds were swept, see `Server::granted_receive_claimable`. Its open
+	/// intra-Ark payment attempt then fails.
+	///
+	/// The status the subscription has *after* this call is returned (or
+	/// `None` when no subscription exists, i.e. a plain outgoing payment).
+	/// When that status is `HtlcsReady` or `Settled` the row is left
 	/// untouched and the caller MUST refuse the revocation.
 	pub async fn cancel_revocable_htlc_subscription(
 		&self,
 		payment_hash: PaymentHash,
+		tip: BlockHeight,
 	) -> anyhow::Result<Option<LightningHtlcSubscriptionStatus>> {
 		// The row is locked `FOR UPDATE` so this serializes against
 		// `prepare_lightning_claim`'s grant: the receive side cannot transition
@@ -592,18 +600,60 @@ impl<'t> Tx<'t> {
 		let id = row.get::<_, i64>("id");
 		let status = row.get::<_, LightningHtlcSubscriptionStatus>("status");
 
-		if matches!(status,
-			LightningHtlcSubscriptionStatus::Created | LightningHtlcSubscriptionStatus::Accepted,
-		) {
-			let update = self.prepare("
-				UPDATE lightning_htlc_subscription
-				SET status = 'canceled'::lightning_htlc_subscription_status, updated_at = NOW()
-				WHERE id = $1;
-			").await?;
-			self.execute(&update, &[&id]).await?;
+		let cancel = match status {
+			LightningHtlcSubscriptionStatus::Created | LightningHtlcSubscriptionStatus::Accepted => true,
+			LightningHtlcSubscriptionStatus::HtlcsReady => self.granted_receive_expired(id, tip).await?,
+			LightningHtlcSubscriptionStatus::Settled | LightningHtlcSubscriptionStatus::Canceled => false,
+		};
+		if !cancel {
+			return Ok(Some(status));
 		}
 
-		Ok(Some(status))
+		let update = self.prepare("
+			UPDATE lightning_htlc_subscription
+			SET status = 'canceled'::lightning_htlc_subscription_status, updated_at = NOW()
+			WHERE id = $1;
+		").await?;
+		self.execute(&update, &[&id]).await?;
+
+		if status == LightningHtlcSubscriptionStatus::HtlcsReady {
+			let fail = self.prepare("
+				UPDATE lightning_payment_attempt
+				SET status = $2, error = $3, updated_at = NOW()
+				WHERE lightning_htlc_subscription_id = $1 AND status NOT IN ($2, $4);
+			").await?;
+			self.execute(&fail, &[
+				&id, &LightningPaymentStatus::Failed,
+				&"the recipient did not claim before its HTLC-recv expiry",
+				&LightningPaymentStatus::Succeeded,
+			]).await?;
+		}
+
+		Ok(Some(LightningHtlcSubscriptionStatus::Canceled))
+	}
+
+	/// Whether no HTLC-recv vtxo granted to the subscription can be claimed
+	/// anymore by what this database records: all are past their HTLC
+	/// expiry at `tip`, none was claimed, exited or resolved.
+	async fn granted_receive_expired(&self, subscription_id: i64, tip: BlockHeight) -> anyhow::Result<bool> {
+		let rows = self.query("
+			SELECT v.vtxo, v.spend_state = 'htlc-recv-unclaimed' AND v.oor_spent_txid IS NULL
+				AND v.confirmed_height IS NULL AND h.offchain_resolution IS NULL
+				AND h.chain_resolution IS NULL AS unclaimed
+			FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id = v.id
+			WHERE v.lightning_htlc_subscription_id = $1
+		", &[&subscription_id]).await?;
+		if rows.is_empty() {
+			return Ok(false);
+		}
+		for row in rows {
+			let vtxo: Vtxo = Vtxo::deserialize(row.get("vtxo"))?;
+			let Some(policy) = vtxo.policy().as_server_htlc_recv() else { return Ok(false) };
+			if !row.get::<_, bool>("unclaimed") || tip <= policy.htlc_expiry {
+				return Ok(false);
+			}
+		}
+		Ok(true)
 	}
 
 	/// Update the lightning receive with the HTLC VTXOs allocated

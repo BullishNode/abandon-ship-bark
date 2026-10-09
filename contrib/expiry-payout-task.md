@@ -69,7 +69,21 @@ xpay call leaves the attempt open. An offline or still-paying node leaves the
 coins waiting; a completed payment whose preimage was never recorded is never
 refunded. The commit takes the settlement write lock, rechecks the preimage,
 marks the HTLCs revoked and cancels an intra-Ark receive for the same hash. A
-committed intra-Ark receive holds the coins. Returning Lightning-client
+settled intra-Ark receive holds the coins.
+
+An intra-Ark receive whose claim was prepared holds the sender's coins while
+its recipient can still claim, even after the invoice expired. The server
+cannot collect without the preimage, so once the recipient can no longer
+claim, the sender is refunded, by its own request or by the task, and its
+open attempt fails. The recipient can no longer claim when the tip is past
+the HTLC expiry of every granted HTLC-recv coin, none of them was claimed,
+exited or resolved, and a confirmed sweep spent each one's backing path into
+the rounds wallet at `sweep_min_confs` depth. The decision runs under the
+payment guard, which keeps the cooperative claim out; the commit rechecks the
+recorded state and cancels the receive, so a later claim is refused. The
+granted coins are never paid out. An external payer of a prepared receive
+that is never claimed gets its payment back from the hold plugin, which fails
+the incoming HTLCs back before they expire. Returning Lightning-client
 reconciliation remains unqualified.
 
 A returning arkoor sender checks expired outputs before delivery. A per-output

@@ -547,7 +547,9 @@ impl Server {
 		Ok(())
 	}
 
-	async fn expiry_path_swept(&self, vtxo: &Vtxo) -> anyhow::Result<bool> {
+	/// Whether a confirmed sweep spent this coin's own backing path into the
+	/// rounds wallet, at the configured depth.
+	pub(crate) async fn expiry_path_swept(&self, vtxo: &Vtxo) -> anyhow::Result<bool> {
 		let anchor = vtxo.chain_anchor();
 		if self.bitcoind.try_get_tx_out(anchor, true).await?.is_some() { return Ok(false); }
 		// A crash can leave a persisted unsigned round that Core never saw.

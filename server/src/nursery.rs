@@ -231,19 +231,6 @@ impl TxNursery {
 		Ok(())
 	}
 
-	/// A commit can survive without its first broadcast. The sync manager only
-	/// polls the mempool after new blocks, so resume native payments on startup.
-	pub(crate) async fn resume_expiry_payments(&self) -> anyhow::Result<()> {
-		let pending = self.db.read(async |t| t.get_unconfirmed_nursery_txs().await).await?;
-		for (txid, kind) in pending {
-			if kind != NurseryTxKind::ExpiryPayout { continue; }
-			let tx = self.db.read(async |t| t.get_nursery_raw_tx(txid).await).await?
-				.with_context(|| format!("corrupt db: missing expiry tx {}", txid))?;
-			self.broadcast(&tx, kind).await;
-		}
-		Ok(())
-	}
-
 	/// Rebroadcast all unconfirmed nursery txs that are missing from the
 	/// mempool.
 	async fn process_mempool(&self, mempool: &RawMempool) -> anyhow::Result<()> {

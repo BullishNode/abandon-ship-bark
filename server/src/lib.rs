@@ -423,7 +423,6 @@ impl Server {
 		rtmgr.run_shutdown_signal_listener(Duration::from_secs(60));
 
 		let tx_nursery = TxNursery::new(db.clone(), bitcoind.clone());
-		tx_nursery.resume_expiry_payments().await?;
 
 		let fee_estimator = fee_estimator::start(
 			rtmgr.clone(),

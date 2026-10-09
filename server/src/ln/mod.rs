@@ -8,7 +8,7 @@ pub mod settler;
 mod payment_handler;
 
 use std::cmp;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::time::Duration;
 
 use anyhow::{bail, Context};
@@ -39,7 +39,17 @@ use crate::database::ln::{
 	LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningPaymentStatus,
 };
 use crate::error::ContextExt;
+use crate::ln::node_manager::NodePaymentStatus;
 use crate::{check_max_amount, telemetry, Server, CAPTAIND_API_KEY};
+
+/// Whether the server may refund the sender of a Lightning send.
+pub(crate) enum SendRefund {
+	Allowed,
+	/// The payment completed, or it may still complete.
+	Refused(String),
+	/// The outcome is not known yet. Retry later; this is not a failure.
+	Undecided(String),
+}
 
 
 
@@ -403,9 +413,6 @@ impl Server {
 		&self,
 		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
-		let tip = self.chain_tip().height as BlockHeight;
-		let db = self.db.clone();
-
 		let requested_policy = cosign_request.all_outputs()
 			.all_same(|v| v.policy.clone())
 			.context("all revocation vtxo requests must have the same policy")?;
@@ -446,26 +453,11 @@ impl Server {
 		let builder = self.validate_cosign_request(validation, cosign_request)
 			.badarg("invalid cosign request")?;
 
-		let attempt = db.read(async |t|
-			t.get_latest_payment_attempt_by_payment_hash(payment_hash).await
-		).await?;
-
-		// If payment not found but input vtxos are found, we can allow revoke
-		if let Some(attempt) = attempt {
-			match attempt.status {
-				LightningPaymentStatus::Failed => {},
-				LightningPaymentStatus::Succeeded => {
-					error!("This lightning payment has completed, but no preimage found. Accepting revocation");
-				},
-				_ if tip > input_policy.htlc_expiry => {
-					// Check one last time to see if it completed
-					let res = self.lightning_manager.get_payment_status(payment_hash).await;
-					if let Ok(PaymentStatus::Success(_)) = res {
-						return badarg!("This lightning payment has completed");
-					}
-				},
-				_ => return badarg!("This lightning payment is not eligible for revocation yet")
-			}
+		match self.lightning_send_refund(payment_hash, input_policy.htlc_expiry).await? {
+			SendRefund::Allowed => {},
+			SendRefund::Refused(reason) => return badarg!("{reason}"),
+			SendRefund::Undecided(reason) =>
+				return badarg!("This lightning payment is not eligible for revocation yet: {reason}"),
 		}
 
 		// Output user vtxos from the revoke cosign go in as `unregistered`,
@@ -526,6 +518,56 @@ impl Server {
 		slog!(LightningPayHtlcsRevoked, payment_hash, htlc_vtxo_ids, new_vtxo_ids);
 
 		Ok(builder.cosign_response())
+	}
+
+	/// Decide whether the sender's HTLC coins for `payment_hash` can be
+	/// refunded. The sender's refund request and the automatic expiry payout
+	/// share this decision. Callers hold the payment guard, and their commit
+	/// still rechecks the recorded settlement under its lock and cancels any
+	/// intra-Ark receive.
+	///
+	/// A recorded preimage or a successful attempt refuses. Before the HTLC
+	/// expiry an open attempt refuses. Then every node that sent an attempt is
+	/// asked directly, since our attempt status can lag the node or miss a
+	/// completion whose preimage was never stored. An offline or still-paying
+	/// node, or an attempt the node reports done but our monitor has not
+	/// concluded, leaves the decision open.
+	pub(crate) async fn lightning_send_refund(
+		&self,
+		payment_hash: PaymentHash,
+		htlc_expiry: BlockHeight,
+	) -> anyhow::Result<SendRefund> {
+		if self.htlc_settler.is_settled(payment_hash).await?.is_some() {
+			return Ok(SendRefund::Refused("invoice has already been paid".into()));
+		}
+		let tip = self.chain_tip().height as BlockHeight;
+		let attempts = self.db.read(async |t|
+			t.get_payment_attempts_by_payment_hash(payment_hash).await
+		).await?;
+		if attempts.iter().any(|a| a.status == LightningPaymentStatus::Succeeded) {
+			return Ok(SendRefund::Refused("This lightning payment has completed".into()));
+		}
+		let open = attempts.iter().any(|a| !a.status.is_final());
+		if open && tip <= htlc_expiry {
+			return Ok(SendRefund::Refused("This lightning payment is not eligible for revocation yet".into()));
+		}
+		// Intra-Ark payments make no node payment; the commit arbitrates their receive.
+		let nodes = attempts.iter().filter(|a| a.lightning_htlc_subscription_id.is_none())
+			.map(|a| a.lightning_node_id).collect::<BTreeSet<_>>();
+		for node in nodes {
+			match self.lightning_manager.node_payment_status(node, payment_hash).await {
+				Ok(NodePaymentStatus::Complete) =>
+					return Ok(SendRefund::Refused("This lightning payment has completed".into())),
+				Ok(NodePaymentStatus::Pending) =>
+					return Ok(SendRefund::Undecided("the payment is still in flight".into())),
+				Ok(NodePaymentStatus::Failed | NodePaymentStatus::Unknown) => {},
+				Err(e) => return Ok(SendRefund::Undecided(format!("{e:#}"))),
+			}
+		}
+		if open {
+			return Ok(SendRefund::Undecided("the payment attempt is not concluded".into()));
+		}
+		Ok(SendRefund::Allowed)
 	}
 
 	#[tracing::instrument(skip(self))]

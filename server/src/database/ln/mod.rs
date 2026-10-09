@@ -396,6 +396,29 @@ impl<'t> Tx<'t> {
 		Ok(row.map(|r| r.get("updated_at")))
 	}
 
+	/// Every payment attempt for a payment hash, oldest first.
+	pub async fn get_payment_attempts_by_payment_hash(
+		&self,
+		payment_hash: PaymentHash,
+	) -> anyhow::Result<Vec<LightningPaymentAttempt>> {
+		let stmt = self.prepare("
+			SELECT lpa.id,
+				lpa.lightning_node_id, lpa.payment_hash, lpa.amount_msat, lpa.final_amount_msat,
+				lpa.status, lpa.error, lpa.block_height, lpa.user_fee_sat, lpa.retry_for_secs,
+				lpa.user_agent, lpa.lightning_htlc_subscription_id,
+				lpa.created_at, lpa.updated_at
+			FROM lightning_payment_attempt lpa
+			WHERE lpa.payment_hash = $1
+			ORDER BY lpa.created_at, lpa.id;
+		").await?;
+
+		let mut attempts = Vec::new();
+		for row in self.query(&stmt, &[&payment_hash.to_string()]).await? {
+			attempts.push(row.try_into()?);
+		}
+		Ok(attempts)
+	}
+
 	/// Get the latest payment attempt for a payment hash (any status).
 	pub async fn get_latest_payment_attempt_by_payment_hash(
 		&self,
@@ -904,16 +927,32 @@ impl<'t> Tx<'t> {
 	/// `Submitted`/`Failed` for a payment that actually went through. Never gate
 	/// a fund-releasing decision on the status; call this instead.
 	///
-	/// Call this INSIDE the write transaction that releases the funds so a
-	/// settlement racing between an earlier read-check and the write cannot
-	/// slip through.
+	/// Call this INSIDE the write transaction that releases the funds. It
+	/// first takes the settlement write lock, so a settlement committed before
+	/// the lock is visible to the read, and a later one waits for this
+	/// transaction. Without the lock, a read under read committed does not
+	/// serialize against a concurrent insert.
+	///
+	/// This only covers preimages the server recorded. A node can complete a
+	/// payment whose preimage was never stored: ask the node as well.
 	pub async fn ensure_not_settled(
 		&self,
 		payment_hash: PaymentHash,
 	) -> anyhow::Result<()> {
+		self.lock_htlc_settlements().await?;
 		if let Some(preimage) = self.get_htlc_settlement_by_payment_hash(payment_hash).await? {
 			return badarg!("invoice has already been paid, preimage: {}", preimage);
 		}
+		Ok(())
+	}
+
+	/// Hold the settlement write lock until this transaction ends. Take it
+	/// before reading settlements that a fund release depends on.
+	pub async fn lock_htlc_settlements(&self) -> anyhow::Result<()> {
+		self.execute(
+			&format!("SELECT pg_advisory_xact_lock({})", super::AdvisoryLock::HtlcSettlementWrite as i64),
+			&[],
+		).await.context("failed to lock htlc settlements")?;
 		Ok(())
 	}
 

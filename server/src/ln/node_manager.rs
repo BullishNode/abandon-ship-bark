@@ -40,6 +40,7 @@ use std::time::Duration;
 use anyhow::Context;
 use bitcoin::Amount;
 use bitcoin_ext::{AmountExt, BlockDelta, BlockHeight};
+use cln_rpc::listpays_pays::ListpaysPaysStatus;
 use cln_rpc::plugins::hold as hold_plugin;
 use lightning_invoice::Bolt11Invoice;
 use futures::Stream;
@@ -81,6 +82,19 @@ enum PayInvoiceRace {
 
 	#[error("invoice was canceled and can no longer be paid")]
 	Canceled,
+}
+
+/// What a lightning node itself records for its payments of one hash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodePaymentStatus {
+	/// The node has no payment for this hash.
+	Unknown,
+	/// Every payment the node made for this hash failed.
+	Failed,
+	/// A payment for this hash is still in flight.
+	Pending,
+	/// A payment for this hash completed.
+	Complete,
 }
 
 /// Handle for the cln manager process.
@@ -484,6 +498,38 @@ impl LightningManager {
 
 		trace!(payment_hash = %payment_hash, "payment still pending");
 		Ok(PaymentStatus::Pending)
+	}
+
+	/// Ask the node that made a payment attempt what happened to it.
+	///
+	/// Our attempt status can lag the node or miss a completion, for example
+	/// when the preimage could not be stored. Fund-releasing decisions that the
+	/// database alone cannot prove use this. An offline node is an error, not
+	/// evidence that the payment failed.
+	pub async fn node_payment_status(
+		&self,
+		node_id: LightningNodeId,
+		payment_hash: PaymentHash,
+	) -> anyhow::Result<NodePaymentStatus> {
+		let node = self.node_by_id(node_id)
+			.with_context(|| format!("lightning node {node_id} is not online"))?;
+		let pays = node.rpc.clone().list_pays(cln_rpc::ListpaysRequest {
+			bolt11: None,
+			payment_hash: Some(payment_hash.to_vec()),
+			status: None,
+			index: None,
+			limit: None,
+			start: None,
+		}).await.context("could not list payments on lightning node")?.into_inner().pays;
+		Ok(if pays.iter().any(|p| p.status() == ListpaysPaysStatus::Complete) {
+			NodePaymentStatus::Complete
+		} else if pays.iter().any(|p| p.status() == ListpaysPaysStatus::Pending) {
+			NodePaymentStatus::Pending
+		} else if pays.is_empty() {
+			NodePaymentStatus::Unknown
+		} else {
+			NodePaymentStatus::Failed
+		})
 	}
 
 	/// Waits until the payment for the given payment hash reaches a final state.

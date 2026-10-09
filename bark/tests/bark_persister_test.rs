@@ -42,6 +42,10 @@ struct Dummy;
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 impl BarkPersister for Dummy {
+	async fn record_server_spent_vtxo(&self, _: VtxoId) -> anyhow::Result<Option<Movement>> {
+		unimplemented!()
+	}
+
 	async fn init_wallet(&self, _properties: &WalletProperties) -> anyhow::Result<()> {
 		Ok(())
 	}

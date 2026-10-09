@@ -122,6 +122,28 @@ unsafe impl Sync for IndexedDbClient {}
 #[cfg(target_arch = "wasm32")]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl StorageAdaptor for IndexedDbClient {
+	async fn put_batch(&mut self, records: Vec<Record>) -> anyhow::Result<()> {
+		if records.is_empty() { return Ok(()); }
+		let values = records.iter().map(|r| Ok((partition_name(r.partition),
+			JsString::from(r.pk.to_lower_hex_string()), serde_wasm_bindgen::to_value(r)?)))
+			.collect::<anyhow::Result<Vec<_>>>()?;
+		let partitions = records.iter().map(|r| partition_name(r.partition)).collect::<HashSet<_>>();
+		let mut guard = self.inner().await?;
+		let inner = guard.as_mut().unwrap();
+		for partition in &partitions {
+			if !inner.partitions.contains(partition) { inner.add_partition(partition).await?; }
+		}
+		let names = partitions.iter().map(|p| p.as_str()).collect::<Vec<_>>();
+		inner.conn.as_ref().context("database connection already closed")?
+			.transaction(&names).rw().run(move |t| async move {
+				for (partition, key, value) in values {
+					t.object_store(&partition)?.put_kv(&key, &value).await?;
+				}
+				Ok(())
+			}).await?;
+		Ok(())
+	}
+
 	async fn get(&self, partition: u8, pk: &[u8]) -> anyhow::Result<Option<Record>> {
 		let pk = pk.to_lower_hex_string();
 		let partition_name = partition_name(partition);

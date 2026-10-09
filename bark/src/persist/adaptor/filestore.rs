@@ -52,6 +52,22 @@ impl FileStorageAdaptor {
 
 #[async_trait]
 impl StorageAdaptor for FileStorageAdaptor {
+	async fn put_batch(&mut self, records: Vec<Record>) -> anyhow::Result<()> {
+		// This test backend's non-Unix writer truncates in place. Refuse a
+		// batch there rather than violating its atomicity contract.
+		#[cfg(not(unix))]
+		{
+			let _ = records;
+			bail!("atomic batches require a Unix file store or another storage backend");
+		}
+		#[cfg(unix)]
+		{
+			let mut data = self.read().await?;
+			data.put_batch(records).await?;
+			self.persist(&data).await
+		}
+	}
+
 	async fn put(&mut self, record: Record) -> anyhow::Result<()> {
 		let mut data = self.read().await?;
 		data.put(record).await?;
@@ -85,6 +101,26 @@ impl StorageAdaptor for FileStorageAdaptor {
 mod tests {
 	use super::*;
 	use crate::persist::adaptor::test_suite;
+	use crate::persist::adaptor::StorageAdaptorWrapper;
+	use crate::persist::BarkPersister;
+	use crate::vtxo::VtxoState;
+	use ark::test_util::VTXO_VECTORS;
+
+	#[tokio::test]
+	#[cfg(unix)]
+	async fn server_spend_survives_reopen() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("wallet.json");
+		let db = StorageAdaptorWrapper::new(FileStorageAdaptor::open(&path).await.unwrap());
+		crate::persist::test_suite::test_server_spend_records_debit_once(&db).await;
+		let history = db.get_all_movements().await.unwrap();
+		drop(db);
+		let reopened = StorageAdaptorWrapper::new(FileStorageAdaptor::open(path).await.unwrap());
+		let id = VTXO_VECTORS.board_vtxo.id();
+		assert!(reopened.record_server_spent_vtxo(id).await.unwrap().is_none());
+		assert_eq!(reopened.get_all_movements().await.unwrap(), history);
+		assert_eq!(reopened.get_wallet_vtxo(id).await.unwrap().unwrap().state, VtxoState::Spent);
+	}
 
 	#[tokio::test]
 	async fn file_adaptor_test_suite() {

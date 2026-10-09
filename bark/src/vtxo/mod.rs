@@ -400,7 +400,7 @@ impl Wallet {
 			ServerStatusAdoption::Spent => {
 				// The coin can become locked while its server status is fetched.
 				// Do not overwrite a concurrent local operation's lock.
-				if let Some(movement) = self.inner.db.record_server_spent_vtxo(vtxo_id).await? {
+				if let Some(movement) = self.inner.db.record_server_spent_vtxo(vtxo_id, None).await? {
 					self.inner.notifications.dispatch_movement_created(movement);
 				}
 			},

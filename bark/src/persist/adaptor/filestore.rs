@@ -117,7 +117,7 @@ mod tests {
 		drop(db);
 		let reopened = StorageAdaptorWrapper::new(FileStorageAdaptor::open(path).await.unwrap());
 		let id = VTXO_VECTORS.board_vtxo.id();
-		assert!(reopened.record_server_spent_vtxo(id).await.unwrap().is_none());
+		assert!(reopened.record_server_spent_vtxo(id, None).await.unwrap().is_none());
 		assert_eq!(reopened.get_all_movements().await.unwrap(), history);
 		assert_eq!(reopened.get_wallet_vtxo(id).await.unwrap().unwrap().state, VtxoState::Spent);
 	}

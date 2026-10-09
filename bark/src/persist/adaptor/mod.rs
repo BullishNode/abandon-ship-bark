@@ -922,11 +922,16 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 		Ok(())
 	}
 
-	async fn record_server_spent_vtxo(&self, vtxo_id: VtxoId) -> anyhow::Result<Option<Movement>> {
+	async fn record_server_spent_vtxo(
+		&self, vtxo_id: VtxoId, holder: Option<&VtxoLockHolder>,
+	) -> anyhow::Result<Option<Movement>> {
 		let mut guard = self.inner.write().await;
 		let (mut vtxo, transition) = get_check_vtxo_state(&*guard, vtxo_id,
-			&VtxoState::Spent, &[VtxoStateKind::Spendable]).await?;
+			&VtxoState::Spent, &[VtxoStateKind::Spendable, VtxoStateKind::Locked]).await?;
 		if let StateTransition::AlreadyApplied = transition { return Ok(None); }
+		if let Some(VtxoState::Locked { holder: actual }) = vtxo.current_state() {
+			ensure!(holder.is_some() && holder == actual.as_ref(), "server spend cannot consume another operation's lock");
+		}
 		// An interrupted allocation can leave an unused ID, never a partial debit.
 		let id = MovementId(guard.incremental_id(partition::MOVEMENT).await?);
 		let movement = Movement::server_spend(id, &vtxo.vtxo, chrono::Local::now())?;

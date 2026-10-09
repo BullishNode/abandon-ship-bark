@@ -69,7 +69,12 @@ and defers its automatic refresh. A status reply cannot overwrite a concurrent
 local coin lock. Adopting a newly spent coin records its full Ark debit atomically
 with the state change; retries do not duplicate the movement. This reconciliation
 records the observation time, without inferring a payout transaction or fee from
-the status alone. Historical coin-key payouts still use the existing sweep. Its
+the status alone. Expired pending boards also query that authenticated status.
+A persisted settlement phase consumes only the board's own lock, records one
+debit and completes its original board movement. If the funding anchor is already
+spent and no board exit is known, an unavailable server leaves the entitlement
+pending without starting a new exit. Existing board exits keep their recovery path.
+Historical coin-key payouts still use the existing sweep. Its
 movement now has zero Ark balance change (the coin was already debited), with
 `payout_total_sat`, `swept_sat`, and `sweep_fee_sat` recording the on-chain transfer.
 The optional schema is outside numbered migrations, so stock watchmand remains compatible.

@@ -139,6 +139,82 @@ async fn fallback_stored_legacy_record_migrates_on_sync() {
 	assert_eq!(wallet.fallback_destination().await.unwrap().seq, seq);
 }
 
+/// A wallet whose expired balance nets below the payout minimum keeps it: no
+/// coin is settled. Once a later coin of the same wallet expires and lifts the
+/// group above the minimum, one payment pays the retained and the new coin in
+/// one output, and nothing is paid twice.
+#[tokio::test]
+async fn fallback_retained_balance_paid_once_eligible() {
+	let ctx = TestContext::new("bark_sdk/fallback_retained_balance_paid_once_eligible").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(128);
+			c.min_board_amount = sat(330);
+		}).watchmand().create().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.funded(sat(1_000_000)).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let first = wallet.board_amount(sat(7_000)).await.unwrap();
+	ctx.await_transaction(first.funding_tx.compute_txid()).await;
+	ctx.generate_blocks(60).await;
+	let second = wallet.board_amount(sat(7_000)).await.unwrap();
+	ctx.await_transaction(second.funding_tx.compute_txid()).await;
+	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+	let coins = tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			wallet.sync().await;
+			let coins = wallet.spendable_vtxos().await.unwrap();
+			if coins.len() == 2 { break coins; }
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.expect("both boards must become spendable");
+	let record = wallet.fallback_destination().await.unwrap();
+	let (early, late): (Vec<_>, Vec<_>) = coins.iter().map(|c| c.id()).partition(|id| first.vtxos.contains(id));
+	let first_coin = wallet.get_full_vtxo(early[0]).await.unwrap();
+	let second_coin = wallet.get_full_vtxo(late[0]).await.unwrap();
+	assert!(first_coin.expiry_height() < second_coin.expiry_height());
+	let ids = [&first_coin, &second_coin].map(|v| v.id().to_string()).to_vec();
+	drop(wallet);
+
+	// The first coin expires alone. Its 7,000 sat are below the 10,000 sat
+	// net minimum, so it is retained.
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &[first_coin.clone()]).await;
+	super::fallback_lightning::enable_payouts(&ctx, &srv).await;
+	for _ in 0..5 {
+		tokio::time::sleep(Duration::from_secs(2)).await;
+		ctx.generate_blocks(1).await;
+	}
+	assert!((ctx.bitcoind().get_block_count().await as u32) < second_coin.expiry_height().to_u32());
+	let settled = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(settled, 0, "a balance below the minimum is retained, not settled");
+
+	// The second coin expires: the group is eligible and paid exactly once.
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &[second_coin.clone()]).await;
+	let rows = wait_settled(&ctx, &db, &ids).await;
+	let txid: Txid = rows[0].get::<_, String>("txid").parse().unwrap();
+	assert!(rows.iter().all(|r| r.get::<_, String>("txid") == txid.to_string()), "one payment pays both coins");
+	assert!(rows.iter().all(|r| r.get::<_, Vec<u8>>("spk") == record.spk.as_bytes()));
+	ctx.await_transaction(txid).await;
+	let tx: Transaction = ctx.bitcoind().sync_client().get_raw_transaction(&txid, None).unwrap();
+	let paid = tx.output.iter().filter(|o| o.script_pubkey == record.spk).collect::<Vec<_>>();
+	assert_eq!(paid.len(), 1, "one output for the wallet group");
+	let fee = rows[0].get::<_, i64>("fee_sat") as u64;
+	assert_eq!(paid[0].value.to_sat(), 14_000 - fee);
+	assert!(paid[0].value >= sat(10_000));
+	for _ in 0..3 {
+		tokio::time::sleep(Duration::from_secs(2)).await;
+		ctx.generate_blocks(1).await;
+	}
+	let payouts = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM nursery_tx WHERE kind::TEXT='expiry-payout'", &[],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(payouts, 1, "nothing is paid twice");
+	println!("retained balance: 2 coins of 7,000 sat paid once in {txid}, net {}", paid[0].value);
+}
+
 /// A send from two inputs with different expiries stalls in registration
 /// while the first input's outputs settle, which refunds them to the sender.
 /// The returning sender delivers the other outputs through the mailbox. The

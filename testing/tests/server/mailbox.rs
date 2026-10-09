@@ -13,7 +13,6 @@ use ark::test_util::dummy::DummyTestVtxoSpec;
 use ark::vtxo::raw::RawVtxo;
 
 use server::database::{Db, MailboxPayload};
-use server::database::tree::VtxoTreeUpdate;
 use server_rpc::{protos, MAX_NB_MAILBOX_ARKOOR_VTXOS};
 use server_rpc::protos::mailbox_server::mailbox_message::Message;
 
@@ -53,23 +52,18 @@ async fn mailbox_checkpoint_visibility_gap() {
 	let ark_url = srv.ark_url();
 
 	// Generate 100 unique VTXOs and seed them into the vtxo table (FK constraint).
-	let mut anchors = Vec::new();
 	let vtxo_pairs: Vec<_> = (0..100).map(|_| {
 		let kp = Keypair::new(&SECP, &mut thread_rng());
-		let (tx, vtxo) = DummyTestVtxoSpec {
+		let (_tx, vtxo) = DummyTestVtxoSpec {
 			user_keypair: kp,
 			..Default::default()
 		}.build();
-		anchors.push(tx);
 		(kp, vtxo)
 	}).collect();
 
 	db.write(async |t| t.upsert_vtxos(
 		vtxo_pairs.iter().map(|(_, v)| ServerVtxo::from(v.clone()))
 	).await).await.expect("upsert vtxos");
-	// A post validates each chain against its stored anchor.
-	db.write(async |t| t.execute_vtxo_tree_update(VtxoTreeUpdate::new().upsert_signed_tx(anchors)).await)
-		.await.expect("store anchor txs");
 
 	let writers_done = Arc::new(AtomicBool::new(false));
 	let expiry = chrono::Local::now() + Duration::from_secs(300);
@@ -174,15 +168,12 @@ async fn mailbox_post_arkoor_requires_known_vtxos() {
 
 	// Seed one vtxo into the vtxo table, as if the server cosigned it.
 	let owner_kp = Keypair::new(&SECP, &mut thread_rng());
-	let (anchor_tx, vtxo) = DummyTestVtxoSpec {
+	let (_tx, vtxo) = DummyTestVtxoSpec {
 		user_keypair: owner_kp,
 		..Default::default()
 	}.build();
 	db.write(async |t| t.upsert_vtxos([ServerVtxo::from(vtxo.clone())]).await).await
 		.expect("upsert vtxo");
-	// A post validates the chain against its stored anchor.
-	db.write(async |t| t.execute_vtxo_tree_update(VtxoTreeUpdate::new().upsert_signed_tx([anchor_tx])).await)
-		.await.expect("store anchor tx");
 
 	// A vtxo the server never cosigned is rejected.
 	let attacker_kp = Keypair::new(&SECP, &mut thread_rng());
@@ -383,10 +374,11 @@ async fn mailbox_lightning_send_finished() {
 }
 
 /// A post registers the signed chain it delivers: the recipient then holds
-/// it, so the vtxos are the recipient's. An unsigned chain is refused.
+/// it, so the vtxos are the recipient's. An unsigned chain is delivered
+/// unregistered, as upstream does.
 #[tokio::test]
-async fn mailbox_post_arkoor_registers_and_rejects_unsigned() {
-	let ctx = TestContext::new("server/mailbox_post_arkoor_registers_and_rejects_unsigned").await;
+async fn mailbox_post_arkoor_registers_signed_chain() {
+	let ctx = TestContext::new("server/mailbox_post_arkoor_registers_signed_chain").await;
 	let srv = ctx.captaind("server").no_vtxo_pool().create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let sender = ctx.bark_sdk("sender", &srv).cfg(|c| c.daemon_manual_sync = true)
@@ -432,12 +424,10 @@ async fn mailbox_post_arkoor_registers_and_rejects_unsigned() {
 	let mut rpc = srv.get_mailbox_public_rpc().await;
 	let mut unsigned = outputs.clone();
 	unsigned[0].invalidate_final_sig();
-	let err = rpc.post_arkoor_message(protos::mailbox_server::PostArkoorMessageRequest {
+	rpc.post_arkoor_message(protos::mailbox_server::PostArkoorMessageRequest {
 		blinded_id: blinded_id.clone(), vtxos: unsigned.iter().map(|v| v.serialize()).collect(),
-	}).await.unwrap_err();
-	assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err}");
-	assert!(states().await.iter().all(|s| s == "unregistered"), "a refused post registers nothing");
-	assert_eq!(posts().await, 0, "a refused post stores nothing");
+	}).await.expect("an unsigned chain is still delivered");
+	assert!(states().await.iter().all(|s| s == "unregistered"), "an unsigned chain registers nothing");
 
 	rpc.post_arkoor_message(protos::mailbox_server::PostArkoorMessageRequest {
 		blinded_id, vtxos: outputs.iter().map(|v| v.serialize()).collect(),

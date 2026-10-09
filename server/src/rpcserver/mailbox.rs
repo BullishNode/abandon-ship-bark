@@ -9,9 +9,9 @@ use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use ark::vtxo::Full;
 use ark::vtxo::policy::VtxoPolicyKind;
 use ark::mailbox::{BlindedMailboxIdentifier, MailboxAuthorization, MailboxIdentifier, MailboxType};
-use server_rpc::{self as rpc, protos, TryFromBytes};
+use server_rpc::{self as rpc, protos, StatusExt, TryFromBytes};
 
-use crate::database::{Checkpoint, MailboxEntry, MailboxPayload};
+use crate::database::{Checkpoint, MailboxEntry, MailboxPayload, SpendState};
 use crate::rpcserver::{StatusContext, ToStatus, ToStatusResult};
 use crate::rpcserver::macros::badarg;
 
@@ -149,10 +149,7 @@ impl rpc::server::MailboxService for crate::Server {
 		// only accept vtxos the server itself cosigned: unknown ids are
 		// rejected before they can take up mailbox space. The pubkey check
 		// stops a known id from being posted with doctored content that would
-		// route it into a mailbox its owner doesn't watch. A posted chain is
-		// registered with it: the recipient holds it, so an expiry payout of
-		// these vtxos is the recipient's. Unsigned or invalid chains, and
-		// vtxos already settled to an expiry payout, are refused.
+		// route it into a mailbox its owner doesn't watch.
 		let vtxo_ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
 		let stored = self.db.read(async |t| t.get_user_vtxos_by_id(&vtxo_ids).await)
 			.await.to_status()?;
@@ -162,12 +159,25 @@ impl rpc::server::MailboxService for crate::Server {
 			}
 		}
 
-		let registration = self.validate_vtxo_registration(&vtxos).await.to_status()?;
+		// The recipient holds a posted chain, so register it as the sender
+		// should have: an unregistered output is the recipient's from now on.
+		// Every expiry-settled vtxo is spent, so this also refuses a post of
+		// one. Other registration errors are delivered anyway, as upstream does.
+		let unregistered = stored.iter()
+			.filter(|s| matches!(s.spend_state, SpendState::Unregistered | SpendState::Spent))
+			.filter_map(|s| vtxos.iter().find(|v| v.id() == s.vtxo_id))
+			.collect::<Vec<_>>();
+		if !unregistered.is_empty() {
+			if let Err(e) = self.register_vtxo_transactions(unregistered).await {
+				let status = e.to_status();
+				if status.is_expiry_settled() {
+					return Err(status);
+				}
+				warn!("posted arkoor vtxos not registered: {}", status.message());
+			}
+		}
 
 		let checkpoint = self.db.write(async |t| {
-			// The vtxo rows before the MailboxWrite lock, as when a round
-			// finishes; never the reverse.
-			registration.apply(t).await?;
 			t.store_vtxos_in_mailbox(
 				MailboxType::ArkoorReceive,
 				mailbox_id,

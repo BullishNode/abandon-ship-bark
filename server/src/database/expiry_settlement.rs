@@ -123,7 +123,7 @@ impl Tx<'_> {
 		self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE",
 			&[&ids]).await?;
 		if self.query_opt("SELECT id FROM expiry_settlement WHERE id=ANY($1) LIMIT 1", &[&ids]).await?.is_some() {
-			return badarg!("VTXO already committed to an expiry settlement");
+			return badarg!("{}", server_rpc::EXPIRY_SETTLED_ERROR);
 		}
 		Ok(())
 	}

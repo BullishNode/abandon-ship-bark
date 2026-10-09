@@ -13,7 +13,7 @@ use log::{error, info, warn};
 use ark::{ProtocolEncoding, Vtxo};
 use ark::arkoor::ArkoorDestination;
 use ark::vtxo::{Full, VtxoId};
-use server_rpc::protos;
+use server_rpc::{protos, StatusExt};
 
 use crate::Wallet;
 use crate::actions::{Advance, AdvanceError, WalletAction, WalletActionId};
@@ -43,6 +43,12 @@ pub struct ArkoorSend {
 	/// pre-split bark, meaning one whole change output.
 	#[serde(default, with = "crate::utils::serde::opt_amount_vec_sat")]
 	pub change_pieces: Option<Vec<Amount>>,
+	/// Expired destination outputs settled to the input owner before registration.
+	#[serde(default, with = "bitcoin::amount::serde::as_sat")]
+	pub refunded_amount: Amount,
+	/// Change already settled on-chain; it must not be reintroduced as spendable.
+	#[serde(default, with = "bitcoin::amount::serde::as_sat")]
+	pub settled_change_amount: Amount,
 
 	// Mutable state:
 	pub progress: Progress,
@@ -129,8 +135,23 @@ impl WalletAction for ArkoorSend {
 				movement_id, signed_destination_vtxos, signed_change_vtxos,
 				last_park_error: _,
 			} => {
+				let tip = wallet.chain().tip().await?;
+				let (destination, refunded) = remove_settled_outputs(wallet, &signed_destination_vtxos, tip, false).await?;
+				let (change, settled_change) = remove_settled_outputs(wallet, &signed_change_vtxos, tip, true).await?;
+				if destination.len() != signed_destination_vtxos.len() || change.len() != signed_change_vtxos.len() {
+					return Ok(Advance::Next(ArkoorSend {
+						refunded_amount: self.refunded_amount.checked_add(refunded).context("refund amount overflow")?,
+						settled_change_amount: self.settled_change_amount.checked_add(settled_change).context("settled change overflow")?,
+						progress: Progress::Delivery {
+							movement_id, signed_destination_vtxos: destination,
+							signed_change_vtxos: change, last_park_error: None,
+						},
+						..self
+					}));
+				}
 				// The receiver explicitly wants no delivery. We should honour it
-				if self.destination.delivery().is_empty() {
+				// Settled outputs have already reached the owner chosen at registration.
+				if self.destination.delivery().is_empty() || signed_destination_vtxos.is_empty() {
 					return Ok(Advance::Next(ArkoorSend {
 						progress: Progress::Finalizing {
 							movement_id,
@@ -167,10 +188,26 @@ impl WalletAction for ArkoorSend {
 				}
 			},
 			Progress::Finalizing { movement_id, signed_change_vtxos, delivery_succeeded } => {
+				if !signed_change_vtxos.is_empty() {
+					let tip = wallet.chain().tip().await?;
+					let (change, settled_change) = remove_settled_outputs(wallet, &signed_change_vtxos, tip, true).await?;
+					if change.len() != signed_change_vtxos.len() {
+						return Ok(Advance::Next(ArkoorSend {
+							settled_change_amount: self.settled_change_amount.checked_add(settled_change).context("settled change overflow")?,
+							progress: Progress::Finalizing { movement_id, signed_change_vtxos: change, delivery_succeeded },
+							..self
+						}));
+					}
+				}
 				finalize_arkoor_send(
-					wallet, &self.input_vtxo_ids, movement_id,
+					wallet, &self, movement_id,
 					&signed_change_vtxos, delivery_succeeded,
 				).await?;
+				if self.refunded_amount != Amount::ZERO {
+					return Ok(Advance::Failed(anyhow!(
+						"Payment outputs expired before registration and were returned on-chain to the sender",
+					)));
+				}
 				return Ok(Advance::Done);
 			},
 		};
@@ -208,9 +245,15 @@ impl WalletAction for ArkoorSend {
 			// emergency exit from the signed transaction chain we hold, so
 			// fall through to Delivery rather than foreclose that recovery
 			// path by skipping the mailbox post.
+			// Delivery separately reconciles expired outputs before posting: a
+			// settlement rejection may instead mean the sender was refunded.
 			Progress::Registration {
 				movement_id, signed_destination_vtxos, signed_change_vtxos,
 			} => {
+				if matches!(&error, AdvanceError::Server(status) if status.is_expiry_settled()) {
+					// Settlement can race the cached tip at the expiry boundary.
+					wallet.chain().invalidate_caches().await;
+				}
 				Ok(Advance::Next(ArkoorSend {
 					progress: Progress::Delivery {
 						movement_id,
@@ -221,25 +264,12 @@ impl WalletAction for ArkoorSend {
 					..self
 				}))
 			},
-			Progress::Delivery { movement_id, signed_change_vtxos, .. } => {
-				// Defensive: `attempt_delivery` collects per-method failures into
-				// the park summary rather than returning `AdvanceError::Server`,
-				// so this arm is unreachable today. Kept as a safe fallback so
-				// that if a future change starts surfacing per-method rejections
-				// we still salvage the change instead of looping.
-				Ok(Advance::Next(ArkoorSend {
-					progress: Progress::Finalizing {
-						movement_id,
-						signed_change_vtxos,
-						delivery_succeeded: false,
-					},
-					..self
-				}))
-			},
-			Progress::Finalizing { .. } => {
-				// Finalizing only touches local state, so a server-rejection here
-				// would be a bug. Surface as Failed rather than loop.
-				Ok(Advance::Failed(error.into()))
+			Progress::Delivery { .. } | Progress::Finalizing { .. } => {
+				// Expiry reconciliation has not established every outcome. Keep
+				// both the signed outputs and input locks until it can retry.
+				Ok(Advance::Park {
+					state: self, wake_after: Some(DELIVERY_RETRY_BACKOFF), error: Some(error),
+				})
 			},
 		}
 	}
@@ -288,6 +318,8 @@ pub(crate) async fn start_arkoor_send(
 		change_pieces: Some(split_change_amount(
 			change, amount, wallet.config().change_vtxo_split_factor,
 		)),
+		refunded_amount: Amount::ZERO,
+		settled_change_amount: Amount::ZERO,
 		progress: Progress::Cosigning,
 	})
 }
@@ -368,15 +400,51 @@ async fn run_registration(
 	Ok(())
 }
 
+/// Registration is atomic per request. Retry expired outputs individually so
+/// one settled leaf cannot obscure the other leaves' outcomes. Only the explicit
+/// settlement refusal establishes a payout; an ordinary rejection or outage
+/// leaves the checkpoint intact. Stored signatures then distinguish a recipient
+/// payment (including a lost registration reply) from an input-owner refund.
+async fn remove_settled_outputs(
+	wallet: &Wallet, vtxos: &[Vtxo<Full>], tip: bitcoin_ext::BlockHeight, change: bool,
+) -> Result<(Vec<Vtxo<Full>>, Amount), AdvanceError> {
+	let mut remaining = Vec::new();
+	let mut removed_amount = Amount::ZERO;
+	for vtxo in vtxos {
+		// Finalization may have stored change before a crash. Ordinary status
+		// adoption owns that coin's debit; counting it here too would debit twice.
+		if vtxo.expiry_height() > tip
+			|| (change && wallet.inner.db.get_wallet_vtxo(vtxo.id()).await?.is_some()) {
+			remaining.push(vtxo.clone());
+			continue;
+		}
+		match run_registration(wallet, std::slice::from_ref(vtxo), &[]).await {
+			Ok(()) => remaining.push(vtxo.clone()),
+			Err(AdvanceError::Server(status)) if status.is_expiry_settled() => {
+				let stored = wallet.fetch_vtxo(vtxo.id()).await?;
+				if stored.to_bare() != vtxo.to_bare() {
+					return Err(anyhow!("settled VTXO differs from saved payment").into());
+				}
+				if stored.has_all_witnesses() { wallet.validate_vtxo(&stored).await.map_err(AdvanceError::Vtxo)?; }
+				if change || !stored.has_all_witnesses() {
+					removed_amount = removed_amount.checked_add(vtxo.amount()).context("settled output amount overflow")?;
+				}
+			},
+			Err(err) => return Err(err),
+		}
+	}
+	Ok((remaining, removed_amount))
+}
+
 /// Finalize the send. All steps are idempotent.
 async fn finalize_arkoor_send(
 	wallet: &Wallet,
-	input_vtxo_ids: &[VtxoId],
+	send: &ArkoorSend,
 	movement_id: MovementId,
 	signed_change_vtxos: &[Vtxo<Full>],
 	delivery_succeeded: bool,
 ) -> Result<(), AdvanceError> {
-	wallet.mark_vtxos_as_spent(input_vtxo_ids).await?;
+	wallet.mark_vtxos_as_spent(&send.input_vtxo_ids).await?;
 
 	if !signed_change_vtxos.is_empty() {
 		wallet.store_spendable_vtxos(signed_change_vtxos.iter()).await?;
@@ -389,15 +457,30 @@ async fn finalize_arkoor_send(
 		).await.context("failed to record arkoor change vtxos on movement")?;
 	}
 
-	let final_status = if delivery_succeeded {
+	let payment_succeeded = delivery_succeeded && send.refunded_amount == Amount::ZERO;
+	let final_status = if payment_succeeded {
 		MovementStatus::Successful
 	} else {
 		MovementStatus::Failed
 	};
-	wallet.inner.movements.finish_movement(movement_id, final_status).await
+	let paid = send.amount.checked_sub(send.refunded_amount).context("refund exceeds payment")?;
+	let debit = send.amount.checked_add(send.settled_change_amount).context("settled send amount overflow")?;
+	let destinations = if paid == Amount::ZERO { Vec::new() }
+		else { vec![MovementDestination::ark(send.destination.clone(), paid)] };
+	let mut update = MovementUpdate::new()
+		.effective_balance(-debit.to_signed().context("settled debit out-of-range")?)
+		.replace_sent_on(destinations);
+	if send.refunded_amount != Amount::ZERO || send.settled_change_amount != Amount::ZERO {
+		update = update.metadata([
+			("attempted_destination".into(), send.destination.to_string().into()),
+			("expiry_refunded_principal_sat".into(), send.refunded_amount.to_sat().into()),
+			("expiry_settled_change_sat".into(), send.settled_change_amount.to_sat().into()),
+		]);
+	}
+	wallet.inner.movements.finish_movement_with_update(movement_id, final_status, update).await
 		.context("failed to finalize arkoor movement")?;
 
-	if delivery_succeeded {
+	if payment_succeeded {
 		info!("Successfully sent arkoor vtxos");
 	}
 
@@ -419,6 +502,8 @@ mod test {
 			input_vtxo_ids: vec![],
 			change_key_index: 0,
 			change_pieces: Some(vec![Amount::from_sat(5_000), Amount::from_sat(5_000)]),
+			refunded_amount: Amount::ZERO,
+			settled_change_amount: Amount::ZERO,
 			progress: Progress::Cosigning,
 		}
 	}

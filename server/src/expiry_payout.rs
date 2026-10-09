@@ -18,7 +18,7 @@ use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
 use bitcoin_ext::FeeRateExt;
 use tracing::{info, warn};
 
-use crate::database::expiry_settlement::{payout_script, ExpiryInput};
+use crate::database::expiry_settlement::{payout_script, ExpiryInput, ExpirySource};
 use crate::nursery::NurseryTxKind;
 use crate::wallet::{BdkWalletExt, WalletKind};
 use crate::Server;
@@ -347,13 +347,22 @@ impl Server {
 			cursor = (last.expiry, last.id.to_string());
 			let vtxos = page.iter().map(|coin| Vtxo::deserialize(&coin.vtxo))
 				.collect::<Result<Vec<_>, _>>()?;
-			let user_keys = vtxos.iter().map(Vtxo::user_pubkey).collect::<Vec<_>>();
+			let owners = page.iter().zip(&vtxos).map(|(coin, vtxo)| {
+				if coin.source == ExpirySource::Unregistered { coin.input_owner }
+				else { Some(vtxo.user_pubkey()) }
+			}).collect::<Vec<_>>();
+			let user_keys = owners.iter().flatten().copied().collect::<Vec<_>>();
 			let fallback = self.db.read(async |t| t.fallback_scripts(&user_keys).await).await?;
-			for (coin, vtxo) in page.into_iter().zip(vtxos) {
+			for ((coin, vtxo), owner) in page.into_iter().zip(vtxos).zip(owners) {
 				// Padding leaves have no participation or owner entitlement.
 				if coin.unclaimed && coin.predecessors.is_empty() { continue; }
 				stats.candidates += 1;
-				let script = fallback.get(&vtxo.user_pubkey()).cloned().unwrap_or_else(|| payout_script(&vtxo));
+				let Some(owner) = owner else {
+					warn!(id = %coin.id, "unregistered expiry input owner unavailable");
+					stats.waiting += 1;
+					continue;
+				};
+				let script = fallback.get(&owner).cloned().unwrap_or_else(|| payout_script(owner));
 				let allowed = match destination_allowed.get(&script) {
 					Some(allowed) => *allowed,
 					None => {
@@ -390,7 +399,7 @@ impl Server {
 					groups.len() - 1
 				});
 				let group = &mut groups[index];
-				group.inputs.push(ExpiryInput { id: coin.id, pending_board: coin.pending_board });
+				group.inputs.push(ExpiryInput { id: coin.id, source: coin.source, owner });
 				group.gross = group.gross.checked_add(vtxo.amount().to_sat()).context("expiry group overflow")?;
 			}
 		}

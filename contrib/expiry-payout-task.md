@@ -7,7 +7,7 @@ remains gated on the shipping image's complete regtest and signet/client/restore
 
 ## Settlement
 
-Each tick pages expired pubkey coins and verifies a confirmed sweep of an output
+Each tick pages expired user entitlements and verifies a confirmed sweep of an output
 on that coin's own exit path into the rounds wallet. Missing funding transactions,
 live paths and missing predecessor history wait. Unclaimed refresh outputs require
 all their original inputs swept. Padding leaves without a participation are skipped.
@@ -26,6 +26,15 @@ inserts the user coin already spent with its receipt and nursery transaction;
 an uncertain COMMIT waits on that pending row before checking its outcome.
 The fork requires the funding transaction in the cosign request, or an already
 known chain transaction when `require_board_funding_tx` is false.
+
+Unregistered arkoor and claim outputs belong to their actual input owner. The
+last transaction's single input must match a stored parent spent into that
+transaction; checkpoint parents retain the original user's key. Each output's
+own value follows that key's fallback record. The selected source and owner are
+checked again at commit. Registration locks the same coin rows: if it wins,
+payout must reselect the recipient; if payout wins, registration is refused.
+Outputs already present in the HTLC ledger are excluded from this unregistered
+source; settled receive and failed send arbitration remain separate work.
 
 The task groups all currently payable coins by destination across page boundaries.
 Waiting coins do not fill the batch. Failed batches split between groups, never

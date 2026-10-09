@@ -990,8 +990,9 @@ impl Server {
 		let update = VtxoTreeUpdate::new()
 			.upsert_signed_tx(signed_txs)
 			.provide_signatures(vtxos)
-			.mark_vtxos_registered(registered_ids);
+			.mark_vtxos_registered(registered_ids.iter().copied());
 		self.db.write(async |t| {
+			t.lock_vtxo_registration(&registered_ids).await?;
 			t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::create_htlc_vtxos(&t, &htlc_sends, HtlcDirection::Incoming).await?;
 			Ok(())

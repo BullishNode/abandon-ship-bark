@@ -3,10 +3,12 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
-use ark::{ProtocolEncoding, VtxoId, Vtxo};
+use ark::{ProtocolEncoding, ServerVtxo, VtxoId, Vtxo};
+use ark::vtxo::policy::ServerVtxoPolicy;
 use ark::tree::signed::UnlockHash;
 use bitcoin::{ScriptBuf, Transaction};
 use bitcoin::consensus::deserialize;
+use bitcoin::secp256k1::PublicKey;
 use crate::expiry_payout::{FeeOutput, Payment};
 use tokio_postgres::Row;
 
@@ -19,15 +21,20 @@ use super::Tx;
 #[derive(Clone, Copy)]
 pub(crate) struct ExpiryInput {
 	pub id: VtxoId,
-	pub pending_board: bool,
+	pub source: ExpirySource,
+	pub owner: PublicKey,
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExpirySource { Registered, PendingBoard, Unregistered }
 
 pub(crate) struct SettlementVtxo {
 	pub id: VtxoId,
 	pub vtxo: Vec<u8>,
 	pub expiry: u32,
 	pub unclaimed: bool,
-	pub pending_board: bool,
+	pub source: ExpirySource,
+	pub input_owner: Option<PublicKey>,
 	pub predecessors: Vec<Vec<u8>>,
 }
 
@@ -36,14 +43,17 @@ impl SettlementVtxo {
 		Ok(Self {
 			id: row.get::<_, &str>("vtxo_id").parse()?,
 			unclaimed: row.get("unclaimed"), predecessors: Vec::new(),
-			pending_board: row.get("pending_board"),
+			source: if row.get("pending_board") { ExpirySource::PendingBoard }
+				else if row.get("unregistered") { ExpirySource::Unregistered }
+				else { ExpirySource::Registered },
+			input_owner: None,
 			vtxo: row.get("vtxo"), expiry: u32::try_from(row.get::<_, i32>("expiry"))?,
 		})
 	}
 }
 
-pub(crate) fn payout_script(vtxo: &Vtxo) -> ScriptBuf {
-	ScriptBuf::new_p2tr(&SECP, vtxo.user_pubkey().x_only_public_key().0, None)
+pub(crate) fn payout_script(owner: PublicKey) -> ScriptBuf {
+	ScriptBuf::new_p2tr(&SECP, owner.x_only_public_key().0, None)
 }
 
 impl Tx<'_> {
@@ -51,15 +61,18 @@ impl Tx<'_> {
 		&self, tip: u32, grace: u32,
 		after: (u32, String), limit: u32,
 	) -> anyhow::Result<Vec<SettlementVtxo>> {
-		let rows = self.query("SELECT vtxo_id,vtxo,expiry,unclaimed,pending_board FROM (
+		let rows = self.query("SELECT vtxo_id,vtxo,expiry,unclaimed,pending_board,unregistered FROM (
 				SELECT v.vtxo_id, v.vtxo, v.expiry,
-				v.spend_state='unclaimed' AS unclaimed, false AS pending_board FROM vtxo v
+				v.spend_state='unclaimed' AS unclaimed, false AS pending_board,
+				v.spend_state='unregistered' AS unregistered FROM vtxo v
 				WHERE (v.expiry::bigint, v.vtxo_id) > ($1::bigint, $2)
 				AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
-				AND v.policy_type = 'pubkey' AND v.spend_state IN ('spendable', 'unclaimed')
+				AND ((v.policy_type = 'pubkey' AND v.spend_state IN ('spendable', 'unclaimed'))
+					OR (v.spend_state='unregistered' AND NOT EXISTS
+						(SELECT 1 FROM htlc_vtxo h WHERE h.id=v.id)))
 				AND v.confirmed_height IS NULL AND v.expiry::bigint + $3 <= $4
 				UNION ALL
-				SELECT p.vtxo_id,p.vtxo,p.expiry,false,true FROM pending_board p
+				SELECT p.vtxo_id,p.vtxo,p.expiry,false,true,false FROM pending_board p
 				WHERE (p.expiry::bigint,p.vtxo_id) > ($1::bigint,$2)
 				AND p.expiry::bigint + $3 <= $4
 				AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)
@@ -68,6 +81,9 @@ impl Tx<'_> {
 					&(limit as i64)]).await?;
 		let mut candidates = rows.into_iter().map(SettlementVtxo::from_row).collect::<anyhow::Result<Vec<_>>>()?;
 		for coin in &mut candidates {
+			if coin.source == ExpirySource::Unregistered {
+				coin.input_owner = self.unregistered_expiry_owner(&Vtxo::deserialize(&coin.vtxo)?).await?;
+			}
 			if !coin.unclaimed { continue; }
 			let vtxo: Vtxo = Vtxo::deserialize(&coin.vtxo)?;
 			let Some(hash) = vtxo.unlock_hash() else { continue; };
@@ -80,6 +96,36 @@ impl Tx<'_> {
 				.collect::<Option<Vec<_>>>().unwrap_or_default();
 		}
 		Ok(candidates)
+	}
+
+	/// Each arkoor transaction has one input, including checkpoint and dust
+	/// isolation steps. A package with several inputs therefore allocates each
+	/// output's own amount to the owner of its actual parent, not the recipient.
+	async fn unregistered_expiry_owner(&self, vtxo: &Vtxo) -> anyhow::Result<Option<PublicKey>> {
+		let Some(last) = vtxo.transactions().last() else { return Ok(None); };
+		let [input] = last.tx.input.as_slice() else { return Ok(None); };
+		let parent = input.previous_output.to_string();
+		let Some(row) = self.query_opt("SELECT vtxo FROM vtxo
+			WHERE vtxo_id=$1 AND oor_spent_txid=$2", &[&parent, &vtxo.point().txid.to_string()]).await?
+			else { return Ok(None); };
+		let parent: ServerVtxo = ServerVtxo::deserialize(row.get("vtxo"))?;
+		Ok(match parent.policy() {
+			ServerVtxoPolicy::User(policy) => Some(policy.user_pubkey()),
+			ServerVtxoPolicy::Checkpoint(policy) => Some(policy.user_pubkey),
+			_ => None,
+		})
+	}
+
+	/// Registration changes an unregistered output's entitlement from its
+	/// input owner to its recipient. Arbitrate that change with payout commit.
+	pub(crate) async fn lock_vtxo_registration(&self, ids: &[VtxoId]) -> anyhow::Result<()> {
+		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+		self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE",
+			&[&ids]).await?;
+		if self.query_opt("SELECT id FROM expiry_settlement WHERE id=ANY($1) LIMIT 1", &[&ids]).await?.is_some() {
+			return badarg!("VTXO already committed to an expiry settlement");
+		}
+		Ok(())
 	}
 
 	pub(crate) async fn expiry_receipt_page(&self, after: &str) -> anyhow::Result<Vec<String>> {
@@ -96,9 +142,9 @@ impl Tx<'_> {
 		let fee_sat = u64::try_from(first.get::<_, i64>("fee_sat"))?;
 		let mut gross = BTreeMap::<ScriptBuf, u64>::new();
 		for row in rows {
-			let v = Vtxo::deserialize(row.get("vtxo"))?;
+			let v: Vtxo = Vtxo::deserialize(row.get("vtxo"))?;
 			let spk = row.get::<_, Option<Vec<u8>>>("spk").map(ScriptBuf::from)
-				.unwrap_or_else(|| payout_script(&v));
+				.unwrap_or_else(|| payout_script(v.user_pubkey()));
 			let total = gross.entry(spk).or_default();
 			*total = total.checked_add(v.amount().to_sat()).context("expiry receipt gross overflow")?;
 		}
@@ -118,21 +164,32 @@ impl Tx<'_> {
 	pub(crate) async fn expiry_inputs(
 		&self, inputs: &[ExpiryInput], tip: u32, grace: u32,
 	) -> anyhow::Result<Vec<Vtxo>> {
-		let ids = inputs.iter().filter(|i| !i.pending_board).map(|i| i.id.to_string()).collect::<Vec<_>>();
-		let boards = inputs.iter().filter(|i| i.pending_board).map(|i| i.id.to_string()).collect::<Vec<_>>();
-		let rows = self.query("SELECT v.vtxo FROM vtxo v WHERE v.vtxo_id = ANY($1)
-			AND v.policy_type='pubkey' AND v.spend_state IN ('spendable','unclaimed')
+		let ids = inputs.iter().filter(|i| i.source == ExpirySource::Registered).map(|i| i.id.to_string()).collect::<Vec<_>>();
+		let boards = inputs.iter().filter(|i| i.source == ExpirySource::PendingBoard).map(|i| i.id.to_string()).collect::<Vec<_>>();
+		let unregistered = inputs.iter().filter(|i| i.source == ExpirySource::Unregistered).map(|i| i.id.to_string()).collect::<Vec<_>>();
+		let owners = inputs.iter().map(|i| (i.id, i.owner)).collect::<BTreeMap<_, _>>();
+		let rows = self.query("SELECT v.vtxo,v.spend_state='unregistered' AS unregistered FROM vtxo v
+			WHERE ((v.vtxo_id=ANY($1) AND v.policy_type='pubkey' AND v.spend_state IN ('spendable','unclaimed'))
+				OR (v.vtxo_id=ANY($5) AND v.spend_state='unregistered' AND NOT EXISTS
+					(SELECT 1 FROM htlc_vtxo h WHERE h.id=v.id)))
 			AND v.confirmed_height IS NULL AND v.expiry::bigint + $2 <= $3
 			AND v.spent_in_round IS NULL AND v.oor_spent_txid IS NULL
 			AND v.offboarded_in IS NULL AND NOT EXISTS
 			(SELECT 1 FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id
 			 WHERE i.vtxo_id=v.vtxo_id AND p.forfeited_at IS NULL)
 			UNION ALL
-			SELECT p.vtxo FROM pending_board p WHERE p.vtxo_id=ANY($4)
+			SELECT p.vtxo,false FROM pending_board p WHERE p.vtxo_id=ANY($4)
 			AND p.expiry::bigint + $2 <= $3
 			AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)",
-			&[&ids, &(grace as i64), &(tip as i64), &boards]).await?;
-		rows.into_iter().map(|r| Ok(Vtxo::deserialize(r.get("vtxo"))?)).collect()
+			&[&ids, &(grace as i64), &(tip as i64), &boards, &unregistered]).await?;
+		let mut coins = Vec::new();
+		for row in rows {
+			let vtxo = Vtxo::deserialize(row.get("vtxo"))?;
+			let owner = if row.get("unregistered") { self.unregistered_expiry_owner(&vtxo).await? }
+				else { Some(vtxo.user_pubkey()) };
+			if owner.as_ref() == owners.get(&vtxo.id()) { coins.push(vtxo); }
+		}
+		Ok(coins)
 	}
 
 	/// Pending rows survive both registration and payout. Lock them first in
@@ -154,15 +211,15 @@ impl Tx<'_> {
 		self.lock_expiry_inputs(&ids).await?;
 		let coins = self.expiry_inputs(inputs, tip, grace).await?;
 		ensure!(coins.len() == ids.len(), "expiry inputs changed");
-		let boards = inputs.iter().filter(|i| i.pending_board).map(|i| i.id).collect::<Vec<_>>();
+		let boards = inputs.iter().filter(|i| i.source == ExpirySource::PendingBoard).map(|i| i.id).collect::<Vec<_>>();
 		let update = VtxoTreeUpdate::new().insert_unspent_vtxos(
 			coins.into_iter().filter(|v| boards.contains(&v.id())).map(Into::into), SpendState::Spent,
 		);
 		let inserted = self.execute_vtxo_tree_update(update).await?;
 		ensure!(inserted as usize == boards.len(), "pending boards changed during commit");
-		let ordinary = inputs.iter().filter(|i| !i.pending_board).map(|i| i.id.to_string()).collect::<Vec<_>>();
+		let ordinary = inputs.iter().filter(|i| i.source != ExpirySource::PendingBoard).map(|i| i.id.to_string()).collect::<Vec<_>>();
 		let n = self.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW()
-			WHERE vtxo_id=ANY($1) AND spend_state IN ('spendable','unclaimed')", &[&ordinary]).await?;
+			WHERE vtxo_id=ANY($1) AND spend_state IN ('spendable','unclaimed','unregistered')", &[&ordinary]).await?;
 		ensure!(n as usize == ordinary.len(), "expiry inputs changed during commit");
 		let txid = tx.compute_txid().to_string();
 		self.upsert_nursery_tx(tx, NurseryTxKind::ExpiryPayout, confirm_target).await?;

@@ -12,7 +12,7 @@ use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Local};
 use lightning_invoice::Bolt11Invoice;
 use tracing::{debug, trace, warn};
-use ark::VtxoId;
+use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use ark::lightning::{Invoice, PaymentHash, Preimage};
 use ark::mailbox::MailboxIdentifier;
 use bitcoin_ext::{AmountExt, BlockHeight};
@@ -611,6 +611,18 @@ impl<'t> Tx<'t> {
 				WHERE id = $1;
 			").await?;
 			self.execute(&update, &[&id]).await?;
+			if status == LightningHtlcSubscriptionStatus::HtlcsReady {
+				let fail = self.prepare("
+					UPDATE lightning_payment_attempt
+					SET status = $2, error = $3, updated_at = NOW()
+					WHERE lightning_htlc_subscription_id = $1 AND status NOT IN ($2, $4);
+				").await?;
+				self.execute(&fail, &[
+					&id, &LightningPaymentStatus::Failed,
+					&"the recipient did not claim before its HTLC-recv expiry",
+					&LightningPaymentStatus::Succeeded,
+				]).await?;
+			}
 		}
 
 		Ok(Some((status, htlc_recvs_granted)))

@@ -36,6 +36,7 @@ use cln_rpc::plugins::hold as hold_plugin;
 use crate::arkoor::ArkoorCosignRequestValidationParams;
 use crate::database::block::BlockTable;
 use crate::database::htlc_vtxo::{self, HtlcDirection, HtlcResolution, HtlcVtxo};
+use crate::database::SpendState;
 use crate::database::tree::VtxoTreeUpdate;
 use crate::database::ln::{
 	LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningPaymentStatus,
@@ -462,6 +463,7 @@ impl Server {
 			return badarg!("pay htlcs revocation policy must be pubkey");
 		}
 
+		let tip = self.chain_tip().height;
 		let htlc_vtxo_ids = cosign_request.inputs().cloned().collect::<Vec<VtxoId>>();
 		let htlc_vtxo_states = self.db.read(async |t| t.get_user_vtxos_by_id(&htlc_vtxo_ids).await).await?;
 		for v in &htlc_vtxo_states {
@@ -592,6 +594,10 @@ impl Server {
 	/// completion whose preimage was never stored. An offline or still-paying
 	/// node, or an attempt the node reports done but our monitor has not
 	/// concluded, leaves the decision open.
+	///
+	/// An intra-Ark attempt stays open while its receive is prepared. It is
+	/// refunded only once the recipient can no longer claim, see
+	/// [Self::granted_receive_claimable]; the commit then cancels the receive.
 	pub(crate) async fn lightning_send_refund(
 		&self,
 		payment_hash: PaymentHash,
@@ -624,10 +630,60 @@ impl Server {
 				Err(e) => return Ok(SendRefund::Undecided(format!("{e:#}"))),
 			}
 		}
-		if open {
+		if attempts.iter().any(|a| !a.status.is_final() && !a.is_self_payment()) {
 			return Ok(SendRefund::Undecided("the payment attempt is not concluded".into()));
 		}
+		let receive = self.db.read(async |t|
+			t.get_htlc_subscription_by_payment_hash(payment_hash).await
+		).await?;
+		match receive {
+			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady => {
+				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
+					return Ok(SendRefund::Undecided(reason));
+				}
+			},
+			_ if open => return Ok(SendRefund::Undecided("the payment attempt is not concluded".into())),
+			_ => {},
+		}
 		Ok(SendRefund::Allowed)
+	}
+
+	/// Why the recipient of a prepared receive can still claim its granted
+	/// HTLC-recv vtxos, or `None` once it no longer can.
+	///
+	/// Without the preimage the server cannot collect the payment, so the
+	/// sender keeps it. But the recipient must not be able to claim as well.
+	/// It can claim cooperatively until the refund cancels the receive, and
+	/// unilaterally, revealing the preimage, as long as the granted vtxos can
+	/// still be exited. So past the HTLC-recv expiry, with no claim or exit
+	/// recorded, the backing funds of every granted vtxo must have been swept
+	/// into the rounds wallet. Callers hold the payment guard, which keeps
+	/// the claim out until their commit cancels the receive.
+	pub(crate) async fn granted_receive_claimable(
+		&self,
+		sub: &LightningHtlcSubscription,
+	) -> anyhow::Result<Option<String>> {
+		let tip = self.chain_tip().height as BlockHeight;
+		let granted = self.db.read(async |t| t.get_user_vtxos_by_id(&sub.htlc_vtxos).await).await?;
+		if granted.is_empty() || granted.len() != sub.htlc_vtxos.len() {
+			return Ok(Some("the granted HTLC-recv vtxos are unknown".into()));
+		}
+		for vtxo in &granted {
+			let policy = vtxo.vtxo.policy().as_server_htlc_recv()
+				.context("granted receive vtxo is not an HTLC-recv")?;
+			if tip <= policy.htlc_expiry {
+				return Ok(Some(format!("the recipient can claim until height {}", policy.htlc_expiry)));
+			}
+			if vtxo.spend_state != SpendState::HtlcRecvUnclaimed || vtxo.oor_spent_txid.is_some()
+				|| vtxo.confirmed_height.is_some()
+			{
+				return Ok(Some(format!("granted vtxo {} was claimed or exited", vtxo.vtxo_id)));
+			}
+			if !self.expiry_path_swept(&vtxo.vtxo).await? {
+				return Ok(Some(format!("granted vtxo {} can still be exited", vtxo.vtxo_id)));
+			}
+		}
+		Ok(None)
 	}
 
 	#[tracing::instrument(skip(self))]

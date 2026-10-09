@@ -1,4 +1,8 @@
+use std::sync::Arc;
 use std::time::Duration;
+
+use tokio::sync::Notify;
+use tokio::task::JoinHandle;
 
 use bitcoin::{Address, FeeRate, Network, OutPoint, Transaction, Txid};
 use bitcoin::bip32::Xpriv;
@@ -14,6 +18,8 @@ use ark_testing::{TestContext, btc, sat};
 use ark_testing::constants::BOARD_CONFIRMATIONS;
 use ark_testing::daemon::watchmand::WATCHMAND_CONFIG_FILE;
 use ark::ProtocolEncoding;
+use ark::arkoor::ArkoorDestination;
+use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
 use ark::attestations::FallbackRecordAttestation;
 use server::database::Db;
 use server_rpc::protos;
@@ -96,30 +102,58 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 /// individual coins are all below the configured minimum; their group is not.
 #[tokio::test]
 async fn fallback_grouped_expiry_without_client() {
-	grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, 100, false, false).await;
+	Box::pin(grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, 100, ExpiryCase::Registered)).await;
 }
 
 #[tokio::test]
 async fn fallback_grouped_200_small_coins() {
-	grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200, false, false).await;
+	Box::pin(grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200, ExpiryCase::Registered)).await;
 }
 
 /// A funded board must survive the owner disappearing before registration.
 #[tokio::test]
 async fn fallback_abandoned_board_without_registration() {
-	grouped_expiry_without_client("fallback_abandoned_board_without_registration", 1, 25_000, 100, true, false).await;
+	Box::pin(grouped_expiry_without_client("fallback_abandoned_board_without_registration", 1, 25_000, 100, ExpiryCase::AbandonedBoard)).await;
 }
 
 #[tokio::test]
 async fn fallback_abandoned_board_return_clears_pending() {
-	grouped_expiry_without_client("fallback_abandoned_board_return_clears_pending", 1, 25_000, 100, true, true).await;
+	Box::pin(grouped_expiry_without_client("fallback_abandoned_board_return_clears_pending", 1, 25_000, 100, ExpiryCase::ReturningBoard)).await;
+}
+
+#[tokio::test]
+async fn fallback_unregistered_arkoor_pays_input_owner() {
+	Box::pin(grouped_expiry_without_client("fallback_unregistered_arkoor_pays_input_owner",
+		2, 25_000, 100, ExpiryCase::UnregisteredArkoor)).await;
+}
+
+#[tokio::test]
+async fn fallback_arkoor_registration_wins_payout_race() {
+	Box::pin(grouped_expiry_without_client("fallback_arkoor_registration_wins_payout_race",
+		2, 25_000, 100, ExpiryCase::RegistrationWins)).await;
+}
+
+#[tokio::test]
+async fn fallback_arkoor_payout_wins_registration_race() {
+	Box::pin(grouped_expiry_without_client("fallback_arkoor_payout_wins_registration_race",
+		2, 25_000, 100, ExpiryCase::PayoutWins)).await;
+}
+
+#[derive(Clone, Copy)]
+enum ExpiryCase {
+	Registered, AbandonedBoard, ReturningBoard, UnregisteredArkoor, RegistrationWins, PayoutWins,
 }
 
 async fn grouped_expiry_without_client(
-	name: &str, count: usize, amount: u64, max_batch: usize, abandoned: bool, returning: bool,
+	name: &str, count: usize, amount: u64, max_batch: usize, case: ExpiryCase,
 ) {
+	let abandoned = matches!(case, ExpiryCase::AbandonedBoard | ExpiryCase::ReturningBoard);
+	let returning = matches!(case, ExpiryCase::ReturningBoard);
+	let registration_wins = matches!(case, ExpiryCase::RegistrationWins);
+	let payout_wins = matches!(case, ExpiryCase::PayoutWins);
+	let arkoor = matches!(case, ExpiryCase::UnregisteredArkoor) || registration_wins || payout_wins;
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
-	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let mut mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
@@ -193,12 +227,45 @@ async fn grouped_expiry_without_client(
 		}).await.expect("watchman must confirm funding before client registration");
 		wallet.sync().await;
 	}
-	let record = wallet.fallback_destination().await.unwrap();
-	let mailbox_key = wallet.mailbox_keypair();
-	let coins = if abandoned { board_coins } else { wallet.spendable_vtxos().await.unwrap() };
-	let signed_board = if abandoned {
-		Some(wallet.get_full_vtxo(coins[0].id()).await.unwrap())
+	let mut record = wallet.fallback_destination().await.unwrap();
+	let mut mailbox_key = wallet.mailbox_keypair();
+	let wallet_coins = if abandoned { board_coins } else { wallet.spendable_vtxos().await.unwrap() };
+	let mut coins = Vec::new();
+	for coin in wallet_coins { coins.push(wallet.get_full_vtxo(coin.id()).await.unwrap()); }
+	let other_owner_spk = if arkoor {
+		let recipient_mnemonic = bip39::Mnemonic::generate(12).unwrap();
+		let recipient = ctx.bark_sdk("recipient", &srv).mnemonic(recipient_mnemonic.clone())
+			.cfg(|c| c.daemon_manual_sync = true).create().await;
+		recipient.stop_daemon_wait().await.unwrap();
+		let address = recipient.new_address().await.unwrap();
+		let spk = recipient.fallback_destination().await.unwrap().spk;
+		assert_ne!(spk, record.spk);
+		let mut keys = Vec::new();
+		for coin in &coins { keys.push(wallet.pubkey_keypair(&coin.user_pubkey()).await.unwrap().unwrap().1); }
+		let builder = ArkoorPackageBuilder::new_with_checkpoints(coins, vec![ArkoorDestination {
+			total_amount: sat(count as u64 * amount), policy: address.policy().clone(),
+		}]).unwrap().generate_user_nonces(&keys).unwrap();
+		let response = srv.get_public_rpc().await.request_arkoor_cosign(
+			protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+		).await.unwrap().into_inner();
+		coins = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response).unwrap())
+			.unwrap().build_signed_vtxos();
+		let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+		let unregistered = db.read(async |t| Ok(t.query_one(
+			"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state='unregistered'", &[&ids],
+		).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(unregistered as usize, count, "no signed chain was registered");
+		let other_spk = if registration_wins {
+			let sender_spk = record.spk.clone();
+			record = recipient.fallback_destination().await.unwrap();
+			mailbox_key = recipient.mailbox_keypair();
+			mnemonic = recipient_mnemonic;
+			sender_spk
+		} else { spk };
+		drop(recipient);
+		Some(other_spk)
 	} else { None };
+	let signed_board = if abandoned { Some(coins[0].clone()) } else { None };
 	if abandoned {
 		let id = coins[0].id().to_string();
 		let count = db.read(async |t| Ok(t.query_one("SELECT count(*) FROM vtxo WHERE vtxo_id=$1", &[&id])
@@ -235,8 +302,8 @@ async fn grouped_expiry_without_client(
 	}
 	let estimate = core.estimate_smart_fee(6, None).unwrap();
 	assert!(estimate.fee_rate.is_some(), "real fee estimate required: {estimate:?}");
-	if count > 3 {
-		// This gate tests one group of 200 simultaneously eligible coins.
+	if count > 3 || matches!(case, ExpiryCase::UnregisteredArkoor) {
+		// Test a group whose complete backing paths have already been swept.
 		// Sweeps can confirm in several blocks. Keep payouts disabled until
 		// every backing path has a confirmed real sweep, without changing
 		// any coin state or substituting synthetic sweep history.
@@ -281,9 +348,59 @@ async fn grouped_expiry_without_client(
 			srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE),
 		);
 	}
+	let race_gate = if registration_wins || payout_wins {
+		Some(hold_expiry_race(&db, registration_wins).await)
+	} else { None };
 	srv.start().await.unwrap();
+	let registration_request = || protos::RegisterVtxoTransactionsRequest {
+		vtxos: coins.iter().map(|v| v.serialize()).collect(),
+	};
+	let mut registration = if registration_wins {
+		let mut rpc = srv.get_public_rpc().await;
+		let request = registration_request();
+		let task = tokio::spawn(async move { rpc.register_vtxo_transactions(request).await });
+		wait_expiry_race_lock(&db, true).await;
+		Some(task)
+	} else { None };
 	let tip = ctx.bitcoind().get_block_count().await as u32;
 	ctx.generate_blocks(expiry.saturating_sub(tip) + 3).await;
+	if payout_wins {
+		// Advance the real sweeps until payout reaches its coin-state update.
+		let waiting = wait_expiry_race_lock(&db, true);
+		tokio::pin!(waiting);
+		loop {
+			tokio::select! {
+				_ = &mut waiting => break,
+				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.generate_blocks(1).await; },
+			}
+		}
+		let mut rpc = srv.get_public_rpc().await;
+		let request = registration_request();
+		registration = Some(tokio::spawn(async move { rpc.register_vtxo_transactions(request).await }));
+	}
+	if let Some((release, gate)) = race_gate {
+		// Observe the loser waiting for the winner's real PostgreSQL row lock.
+		// For registration-first, keep confirming sweeps while payout catches up.
+		let waiting = wait_expiry_race_lock(&db, false);
+		tokio::pin!(waiting);
+		loop {
+			tokio::select! {
+				_ = &mut waiting => break,
+				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.generate_blocks(1).await; },
+			}
+		}
+		release.notify_one();
+		gate.await.unwrap();
+		let result = tokio::time::timeout(Duration::from_secs(30), registration.unwrap())
+			.await.expect("registration race must finish").unwrap();
+		if registration_wins { result.expect("registration holding the lock must win"); }
+		else { assert!(result.unwrap_err().message().contains("expiry settlement")); }
+		db.write(async |t| {
+			t.batch_execute("DROP TRIGGER expiry_race_pause ON vtxo; DROP FUNCTION expiry_race_pause();").await?;
+			Ok(())
+		}).await.unwrap();
+		println!("expiry registration race: registration_wins={registration_wins}, losing operation observed blocked on coin row");
+	}
 	let rows = tokio::time::timeout(Duration::from_secs(90), async {
 		loop {
 			let rows = db.read(async |t| Ok(t.query(
@@ -294,7 +411,7 @@ async fn grouped_expiry_without_client(
 			tokio::time::sleep(Duration::from_secs(1)).await;
 			ctx.generate_blocks(1).await;
 		}
-	}).await.expect("swept grouped boards must be paid within 90 seconds");
+	}).await.expect("swept grouped entitlements must be paid within 90 seconds");
 	if let Some(never) = never_broadcast {
 		let missing_txid = never.funding_tx.compute_txid();
 		assert!(core.get_raw_transaction(&missing_txid, None).is_err());
@@ -318,6 +435,21 @@ async fn grouped_expiry_without_client(
 	ctx.await_transaction(txid).await;
 	ctx.generate_blocks(1).await;
 	let tx: Transaction = core.get_raw_transaction(&txid, None).unwrap();
+	if let Some(other_owner_spk) = other_owner_spk {
+		assert!(!tx.output.iter().any(|o| o.script_pubkey == other_owner_spk),
+			"payout must go only to the winning entitlement owner");
+		let other_address = Address::from_script(&other_owner_spk, Network::Regtest).unwrap();
+		let scan: serde_json::Value = core.call("scantxoutset", &[
+			"start".into(), serde_json::json!([{"desc": format!("addr({other_address})")}]),
+		]).unwrap();
+		assert_eq!(scan["success"], true);
+		assert!(scan["unspents"].as_array().unwrap().is_empty(),
+			"absent losing owner must not have a second payout anywhere in the UTXO set");
+		let err = srv.get_public_rpc().await.register_vtxo_transactions(protos::RegisterVtxoTransactionsRequest {
+			vtxos: coins.iter().map(|v| v.serialize()).collect(),
+		}).await.unwrap_err();
+		assert!(err.message().contains("expiry settlement"), "late registration must lose: {err}");
+	}
 	let outputs = tx.output.iter().filter(|o| o.script_pubkey == record.spk).collect::<Vec<_>>();
 	assert_eq!(outputs.len(), 1);
 	assert!(fee > 0);
@@ -436,4 +568,55 @@ async fn grouped_expiry_without_client(
 	}).await.expect("receipt must regenerate after record rotation");
 	let rebuilt: serde_json::Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
 	assert_eq!(rebuilt, receipt);
+}
+
+/// Hold a fixture-only trigger after its operation has acquired the coin locks.
+/// The service still uses its ordinary RPC and payout code; no production hook.
+async fn hold_expiry_race(db: &Db, registration_wins: bool) -> (Arc<Notify>, JoinHandle<()>) {
+	let state = if registration_wins { "spendable" } else { "spent" };
+	db.write(async |t| {
+		t.batch_execute(&format!("
+			CREATE FUNCTION expiry_race_pause() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN PERFORM pg_advisory_xact_lock(727064210); RETURN NEW; END $$;
+			CREATE TRIGGER expiry_race_pause BEFORE UPDATE OF spend_state ON vtxo
+			FOR EACH ROW WHEN (OLD.spend_state='unregistered' AND NEW.spend_state='{state}')
+			EXECUTE FUNCTION expiry_race_pause();
+		")).await?;
+		Ok(())
+	}).await.unwrap();
+	let ready = Arc::new(Notify::new());
+	let ready_task = ready.clone();
+	let release = Arc::new(Notify::new());
+	let release_task = release.clone();
+	let db = db.clone();
+	let gate = tokio::spawn(async move {
+		db.write(async |t| {
+			t.query_one("SELECT pg_advisory_xact_lock(727064210)", &[]).await?;
+			ready_task.notify_one();
+			release_task.notified().await;
+			Ok(())
+		}).await.unwrap();
+	});
+	ready.notified().await;
+	(release, gate)
+}
+
+async fn wait_expiry_race_lock(db: &Db, advisory: bool) {
+	let query = if advisory {
+		"SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype='advisory'
+		 AND objid=727064210::oid AND NOT granted
+		 AND database=(SELECT oid FROM pg_database WHERE datname=current_database()))"
+	} else {
+		"SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+		 AND wait_event_type='Lock'
+		 AND query LIKE 'SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY%FOR UPDATE%')"
+	};
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let blocked = db.read(async |t| Ok(t.query_one(query, &[]).await?.get::<_, bool>(0)))
+				.await.unwrap();
+			if blocked { break; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("operation must block on the declared database lock");
 }

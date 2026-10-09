@@ -12,3 +12,15 @@ CREATE TABLE IF NOT EXISTS key_link (
 	sig BYTEA NOT NULL
 );
 ALTER TABLE expiry_settlement ADD COLUMN IF NOT EXISTS spk BYTEA;
+
+-- The funding outpoint admits exactly one entitlement. Retain the row after
+-- registration or payout: it serializes both paths and lost-COMMIT recovery.
+-- The unsigned user coin is deliberately absent from vtxo until registration
+-- or settlement, so generic transaction registration cannot activate it.
+CREATE TABLE IF NOT EXISTS pending_board (
+	id TEXT PRIMARY KEY,
+	vtxo_id TEXT NOT NULL UNIQUE,
+	vtxo BYTEA NOT NULL,
+	expiry INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS pending_board_expiry ON pending_board (expiry, vtxo_id);

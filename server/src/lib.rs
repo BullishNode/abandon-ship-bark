@@ -691,8 +691,28 @@ impl Server {
 			);
 		}
 
+		// The fork must know the output it promises to track before returning
+		// a cosign. When optional request data is omitted, only an already-known
+		// chain transaction can supply it. Never treat these bytes as broadcast.
+		let fetched_funding_tx;
+		let funding_tx = match funding_tx {
+			Some(tx) => tx,
+			None if self.config.require_board_funding_tx => return badarg!("missing funding_tx"),
+			None => {
+				let info = bcd::custom_get_raw_transaction_info(&self.bitcoind, utxo.txid, None).await?
+					.context("missing funding_tx and funding transaction not known")?;
+				fetched_funding_tx = bitcoin::consensus::deserialize::<Transaction>(&info.hex)?;
+				&fetched_funding_tx
+			},
+		};
+		if utxo.vout as usize >= funding_tx.output.len() {
+			return badarg!("board outpoint does not match funding tx (vout)");
+		}
+		if utxo.txid != funding_tx.compute_txid() {
+			return badarg!("board outpoint does not match funding tx (txid)");
+		}
+
 		if self.config.require_board_funding_tx {
-			let funding_tx = funding_tx.context("missing funding_tx")?;
 
 			if funding_tx.input.len() > MAX_NB_BOARD_FUNDING_INPUTS {
 				return badarg!("invalid funding tx: too many inputs (max is {})",
@@ -700,20 +720,14 @@ impl Server {
 				);
 			}
 
-			// validate utxo against funding tx
-			if utxo.vout as usize >= funding_tx.output.len() {
-				return badarg!("board outpoint does not match funding tx (vout)");
-			}
-			if utxo.txid != funding_tx.compute_txid() {
-				return badarg!("board outpoint does not match funding tx (txid)");
-			}
-
 			// validate funding tx is real
 			// check that any of the inputs is a vtxo
 			self.db.read(async |tx| {
-				// check the funding tx itself first, obviously can't exist
-				if tx.get_virtual_transaction_by_txid(utxo.txid).await?.is_some() {
-					return badarg!("invalid funding tx: known as virtual tx: {}", utxo.txid);
+				// A previously accepted board proposal is an idempotent retry.
+				if let Some(known) = tx.get_virtual_transaction_by_txid(utxo.txid).await? {
+					if !known.is_funding || !tx.is_pending_board_funding(utxo.txid).await? {
+						return badarg!("invalid funding tx: known as virtual tx: {}", utxo.txid);
+					}
 				}
 				for inp in &funding_tx.input {
 					let vtxo_id = inp.previous_output.into();
@@ -756,6 +770,24 @@ impl Server {
 			utxo,
 			user_pub_nonce,
 		);
+		let (anchor, pending) = builder.build_unsigned_vtxos().badarg("invalid board")?;
+		if funding_tx.output[utxo.vout as usize] != anchor.txout() {
+			return badarg!("board funding output does not match amount or script");
+		}
+		pending.validate_unsigned(funding_tx).badarg("invalid board funding path")?;
+		// Reserve the anchor's one cosigned exit immediately. Watchman may
+		// confirm the funding before registration; that must not look like a
+		// fresh off-chain spend of a confirmed output during registration.
+		let update = VtxoTreeUpdate::new()
+			.upsert_unsigned_funding_tx(utxo.txid)
+			.upsert_unsigned_tx([pending.point().txid])
+			.insert_oor_spent_vtxos([(anchor, pending.point().txid)]);
+		self.db.write(async |t| {
+			t.store_pending_board(&pending).await?;
+			t.execute_vtxo_tree_update(update).await?;
+			t.add_funding_vtxos_to_frontier(utxo.txid, None).await?;
+			Ok(())
+		}).await?;
 
 		info!("Cosigning board request for utxo {}", utxo);
 		let resp = builder.server_cosign(self.server_key.leak_ref());
@@ -842,6 +874,7 @@ impl Server {
 			.insert_spendable_vtxos(builder.build_server_vtxos())
 			.mark_vtxos_oor_spent(builder.spend_info());
 		let inserted = self.db.write(async |t| {
+			t.lock_board_registration(&vtxo).await?;
 			let inserted = t.execute_vtxo_tree_update(update).await?;
 			t.add_funding_vtxos_to_frontier(funding_txid, Some(confirmed_height)).await
 				.context("failed to add board vtxos to frontier")?;

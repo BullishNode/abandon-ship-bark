@@ -96,15 +96,21 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 /// individual coins are all below the configured minimum; their group is not.
 #[tokio::test]
 async fn fallback_grouped_expiry_without_client() {
-	grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, 100).await;
+	grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, 100, false).await;
 }
 
 #[tokio::test]
 async fn fallback_grouped_200_small_coins() {
-	grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200).await;
+	grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200, false).await;
 }
 
-async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, max_batch: usize) {
+/// A funded board must survive the owner disappearing before registration.
+#[tokio::test]
+async fn fallback_abandoned_board_without_registration() {
+	grouped_expiry_without_client("fallback_abandoned_board_without_registration", 1, 25_000, 100, true).await;
+}
+
+async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, max_batch: usize, abandoned: bool) {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
@@ -116,17 +122,87 @@ async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, ma
 		.cfg(|c| c.daemon_manual_sync = true)
 		.funded(sat(count as u64 * amount + 1_000_000)).create().await;
 	wallet.stop_daemon_wait().await.unwrap();
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let never_broadcast = if abandoned {
+		let (key, _) = wallet.derive_store_next_keypair().await.unwrap();
+		let (address, expiry) = wallet.board_funding_address(&key).await.unwrap();
+		let psbt = wallet.onchain().unwrap().write().await.prepare_tx(
+			&[(address, sat(40_000))], FeeRate::from_sat_per_vb(3).unwrap(),
+		).await.unwrap();
+		let funding = &psbt.unsigned_tx;
+		let info = srv.ark_info().await;
+		let builder = ark::board::BoardBuilder::new(key.public_key(), expiry,
+			info.server_pubkey, info.vtxo_exit_delta);
+		let vout = funding.output.iter().position(|o| o.script_pubkey == builder.funding_script_pubkey()).unwrap();
+		let (_, nonce) = ark::musig::nonce_pair(&key);
+		let request = protos::BoardCosignRequest {
+			amount: 40_000, utxo: OutPoint::new(funding.compute_txid(), vout as u32).serialize(),
+			expiry_height: expiry.into(), user_pubkey: key.public_key().serialize().to_vec(),
+			pub_nonce: nonce.serialize().to_vec(), funding_tx: bitcoin::consensus::serialize(funding),
+		};
+		let mut rpc = srv.get_public_rpc().await;
+		let mut wrong_amount = request.clone();
+		wrong_amount.amount += 1;
+		let err = rpc.request_board_cosign(wrong_amount).await.unwrap_err();
+		assert!(err.message().contains("amount or script"), "{err}");
+		let mut wrong_script = funding.clone();
+		wrong_script.output[vout].script_pubkey = ctx.bitcoind().get_new_address().script_pubkey();
+		let mut wrong_request = request.clone();
+		wrong_request.utxo = OutPoint::new(wrong_script.compute_txid(), vout as u32).serialize();
+		wrong_request.funding_tx = bitcoin::consensus::serialize(&wrong_script);
+		let err = rpc.request_board_cosign(wrong_request).await.unwrap_err();
+		assert!(err.message().contains("amount or script"), "{err}");
+		let pending = db.read(async |t| Ok(t.query_one("SELECT count(*) FROM pending_board", &[])
+			.await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(pending, 0, "invalid cosigns cannot install pending candidates");
+		rpc.request_board_cosign(request.clone()).await.unwrap();
+		rpc.request_board_cosign(request).await.unwrap();
+		// A third cosign through the real client uses a new nonce but must
+		// identify the same entitlement; the unfinished PSBT is never broadcast.
+		Some(wallet.board_psbt(psbt, key, expiry).await.unwrap())
+	} else { None };
+	let mut board_coins = Vec::new();
 	for i in 0..count {
 		let board = wallet.board_amount(sat(amount)).await.unwrap();
 		ctx.await_transaction(board.funding_tx.compute_txid()).await;
+		board_coins.push(wallet.get_vtxo_by_id(board.vtxos[0]).await.unwrap());
 		// Confirm short chains instead of changing Core's mempool limits.
 		if i % 8 == 7 { ctx.generate_blocks(1).await; }
 	}
 	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
-	wallet.sync().await;
+	if !abandoned {
+		// Force watchman to observe funding before the registration RPC. The
+		// anchor's reserved exit must still be an idempotent spend in this order.
+		let anchors = board_coins.iter().map(|v| v.chain_anchor().to_string()).collect::<Vec<_>>();
+		tokio::time::timeout(Duration::from_secs(30), async {
+			loop {
+				let confirmed = db.read(async |t| Ok(t.query_one(
+					"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND confirmed_height IS NOT NULL",
+					&[&anchors],
+				).await?.get::<_, i64>(0))).await.unwrap();
+				if confirmed as usize == count { break; }
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}).await.expect("watchman must confirm funding before client registration");
+		wallet.sync().await;
+	}
 	let record = wallet.fallback_destination().await.unwrap();
 	let mailbox_key = wallet.mailbox_keypair();
-	let coins = wallet.spendable_vtxos().await.unwrap();
+	let coins = if abandoned { board_coins } else { wallet.spendable_vtxos().await.unwrap() };
+	let signed_board = if abandoned {
+		Some(wallet.get_full_vtxo(coins[0].id()).await.unwrap())
+	} else { None };
+	if abandoned {
+		let id = coins[0].id().to_string();
+		let count = db.read(async |t| Ok(t.query_one("SELECT count(*) FROM vtxo WHERE vtxo_id=$1", &[&id])
+			.await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(count, 0, "cosign must not install a registerable user coin");
+		let mut rpc = srv.get_public_rpc().await;
+		let err = rpc.register_vtxo_transactions(protos::RegisterVtxoTransactionsRequest {
+			vtxos: vec![signed_board.as_ref().unwrap().serialize()],
+		}).await.unwrap_err();
+		assert!(err.message().contains("vtxo not found"), "{err}");
+	}
 	assert_eq!(coins.len(), count);
 	let principal = coins.iter().map(|v| v.amount().to_sat()).sum::<u64>();
 	assert_eq!(principal, count as u64 * amount);
@@ -150,7 +226,6 @@ async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, ma
 	}
 	let estimate = core.estimate_smart_fee(6, None).unwrap();
 	assert!(estimate.fee_rate.is_some(), "real fee estimate required: {estimate:?}");
-	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	if count > 3 {
 		// This gate tests one group of 200 simultaneously eligible coins.
 		// Sweeps can confirm in several blocks. Keep payouts disabled until
@@ -211,6 +286,19 @@ async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, ma
 			ctx.generate_blocks(1).await;
 		}
 	}).await.expect("swept grouped boards must be paid within 90 seconds");
+	if let Some(never) = never_broadcast {
+		let missing_txid = never.funding_tx.compute_txid();
+		assert!(core.get_raw_transaction(&missing_txid, None).is_err());
+		let never_id = never.vtxos[0].to_string();
+		let settled = db.read(async |t| Ok(t.query_one(
+			"SELECT count(*) FROM expiry_settlement WHERE id=$1", &[&never_id],
+		).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(settled, 0, "a never-broadcast proposal has no payout entitlement");
+		let mut rpc = srv.get_public_rpc().await;
+		assert!(rpc.register_board_vtxo(protos::BoardVtxoRequest {
+			board_vtxo: signed_board.as_ref().unwrap().serialize(),
+		}).await.is_err(), "a paid board cannot be registered again");
+	}
 	let txid: Txid = rows[0].get::<_, String>("txid").parse().unwrap();
 	let fee = rows[0].get::<_, i64>("fee_sat") as u64;
 	for row in &rows {

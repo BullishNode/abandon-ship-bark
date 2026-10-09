@@ -9,6 +9,7 @@ mod embedded {
 }
 
 mod ban;
+mod pending_board;
 pub(crate) mod expiry_settlement;
 pub(crate) mod fallback;
 pub mod block;

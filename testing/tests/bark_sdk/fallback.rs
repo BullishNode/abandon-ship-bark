@@ -6,9 +6,10 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use bitcoin::{Address, FeeRate, Network, OutPoint, Transaction, Txid};
+use bitcoin::constants::ChainHash;
 use bitcoin::bip32::Xpriv;
-use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
-use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
+use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin_ext::BlockDelta;
 use bitcoin_ext::rpc::RpcApi;
 use bark::lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
@@ -98,6 +99,45 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 	assert!(format!("{err:#}").contains("no linked keys available"), "{err:#}");
 	assert_eq!(wallet.spendable_vtxos().await.unwrap().iter().map(|v| v.id()).collect::<Vec<_>>(), before);
 	assert!(wallet.pending_lightning_sends().await.unwrap().is_empty());
+}
+
+/// A wallet whose stored record predates the chain and server binding signs a
+/// bound one at its next sync. The server never drops the old row by itself.
+#[tokio::test]
+async fn fallback_stored_legacy_record_migrates_on_sync() {
+	let ctx = TestContext::new("bark_sdk/fallback_stored_legacy_record_migrates_on_sync").await;
+	let srv = ctx.captaind("server").create().await;
+	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let server_pubkey = srv.ark_info().await.server_pubkey;
+	let mailbox = wallet.mailbox_keypair();
+	let mailbox_pk = mailbox.public_key().serialize().to_vec();
+	let record = wallet.fallback_destination().await.unwrap();
+
+	// The signature a wallet made before the binding, for the same script and sequence.
+	let mut engine = sha256::Hash::engine();
+	engine.input(b"Ark expiry fallback record      ");
+	engine.input(record.spk.as_bytes());
+	engine.input(&record.seq.to_le_bytes());
+	let msg = Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array());
+	let legacy = Secp256k1::new().sign_schnorr_no_aux_rand(&msg, &mailbox);
+	let legacy_sig = legacy.as_ref().to_vec();
+	db.write(async |t| Ok(t.execute(
+		"UPDATE fallback_record SET sig = $2 WHERE mailbox_pk = $1", &[&mailbox_pk, &legacy_sig],
+	).await?)).await.unwrap();
+
+	wallet.sync().await;
+	let row = db.read(async |t| Ok(t.query_one(
+		"SELECT spk, seq, sig FROM fallback_record WHERE mailbox_pk = $1", &[&mailbox_pk],
+	).await?)).await.unwrap();
+	let seq = row.get::<_, i64>("seq") as u64;
+	assert!(seq > record.seq, "the wallet signed a newer record");
+	assert_eq!(row.get::<_, Vec<u8>>("spk"), record.spk.as_bytes(), "the destination is unchanged");
+	FallbackRecordAttestation::deserialize(&row.get::<_, Vec<u8>>("sig")).unwrap()
+		.verify(ChainHash::REGTEST, server_pubkey, &record.spk, seq, mailbox.public_key())
+		.expect("the stored record is bound to this chain and server");
+	assert_eq!(wallet.fallback_destination().await.unwrap().seq, seq);
 }
 
 /// Real funded boards, sweep, expiry task and nursery. The absent wallet's
@@ -808,7 +848,9 @@ async fn grouped_expiry_without_client(
 	let seq = latest_record_seq + 1;
 	let mut signed_record = next_spk.as_bytes().to_vec();
 	signed_record.extend_from_slice(&seq.to_le_bytes());
-	signed_record.extend_from_slice(&FallbackRecordAttestation::new(&next_spk, seq, &mailbox_key).serialize());
+	signed_record.extend_from_slice(&FallbackRecordAttestation::new(
+		ChainHash::REGTEST, srv.ark_info().await.server_pubkey, &next_spk, seq, &mailbox_key,
+	).serialize());
 	assert_eq!(srv.get_public_rpc().await.set_fallback(protos::SetFallbackRequest {
 		mailbox_pk: mailbox_key.public_key().serialize().to_vec(),
 		record: Some(signed_record.clone()), key_links: vec![],

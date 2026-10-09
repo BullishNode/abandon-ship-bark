@@ -471,6 +471,7 @@ impl Server {
 		// Output user vtxos from the revoke cosign go in as `unregistered`,
 		// matching the arkoor cosign path. They flip to spendable once the
 		// caller uploads the signed chain via register_vtxo_transactions.
+		let output_keys = builder.build_unsigned_vtxos().map(|v| v.user_pubkey()).collect::<Vec<_>>();
 		let update = VtxoTreeUpdate::new()
 			.upsert_unsigned_tx(builder.virtual_transactions())
 			.insert_oor_spent_vtxos(builder.build_unsigned_internal_vtxos())
@@ -483,6 +484,7 @@ impl Server {
 			// `ensure_not_settled` commits the check atomically with the
 			// vtxo-tree update below, so a settled payment can no longer be
 			// refunded (which would double-pay the sender).
+			t.require_fallback(&output_keys).await?;
 			t.ensure_not_settled(payment_hash).await?;
 
 			// For an intra-Ark payment the payee shares this payment hash via a

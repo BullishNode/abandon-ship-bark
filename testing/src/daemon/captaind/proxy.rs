@@ -40,6 +40,10 @@ pub trait ArkRpcProxy: Send + Sync + Clone + 'static {
 		Ok(upstream.get_vtxo_status(req).await?.into_inner())
 	}
 
+	async fn set_fallback(&self, upstream: &mut ArkClient, req: protos::SetFallbackRequest) -> Result<protos::SetFallbackResponse, tonic::Status> {
+		Ok(upstream.set_fallback(req).await?.into_inner())
+	}
+
 	async fn request_board_cosign(&self, upstream: &mut ArkClient, req: protos::BoardCosignRequest) -> Result<protos::BoardCosignResponse, tonic::Status> {
 		Ok(upstream.request_board_cosign(req).await?.into_inner())
 	}
@@ -310,6 +314,13 @@ impl<T: ArkRpcProxy> rpc::server::ArkService for ArkRpcProxyWrapper<T> {
 	) -> Result<tonic::Response<protos::GetVtxoStatusResponse>, tonic::Status> {
 		self.proxy.on_request(req.metadata()).await?;
 		Ok(tonic::Response::new(ArkRpcProxy::get_vtxo_status(&self.proxy, &mut self.upstream_client(), req.into_inner()).await?))
+	}
+
+	async fn set_fallback(
+		&self, req: tonic::Request<protos::SetFallbackRequest>,
+	) -> Result<tonic::Response<protos::SetFallbackResponse>, tonic::Status> {
+		self.proxy.on_request(req.metadata()).await?;
+		Ok(tonic::Response::new(ArkRpcProxy::set_fallback(&self.proxy, &mut self.upstream_client(), req.into_inner()).await?))
 	}
 
 	async fn request_board_cosign(

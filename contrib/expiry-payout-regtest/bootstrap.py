@@ -18,6 +18,8 @@ if not (F/'captaind/mnemonic').exists():
     cmd([B/'target/debug/captaind','--config',F/'captaind.toml','create'],'create')
 cmd(['docker','exec','-i',PROJECT+'-postgres','psql','-X','-U','postgres','-d','expiry_task','-v','ON_ERROR_STOP=1'],
     'expiry-schema',input=(B/'contrib/expiry-settlement.sql').read_text())
+cmd(['docker','exec','-i',PROJECT+'-postgres','psql','-X','-U','postgres','-d','expiry_task','-v','ON_ERROR_STOP=1'],
+    'fallback-schema',input=(B/'contrib/expiry-fallback.sql').read_text())
 configured=(F/'captaind.toml').read_text()
 if not (F/'watchmand.toml').exists():
     (F/'captaind.toml').write_text(configured.replace('enabled = true','enabled = false'))

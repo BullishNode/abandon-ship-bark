@@ -17,7 +17,7 @@ use bark_json::movements::{MovementDestination, MovementStatus, PaymentMethod};
 use bark_json::exit::ExitState;
 use bark_json::primitives::VtxoStateInfo;
 use bitcoin_ext::{BlockDelta, TaprootSpendInfoExt};
-use bitcoin_ext::rpc::BitcoinRpcExt;
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::Db;
 use server::database::htlc_vtxo::{self, HtlcResolution};
 use server_rpc::protos::{self, lightning_payment_status};
@@ -673,6 +673,9 @@ async fn bark_should_exit_a_pending_board() {
 	let srv = ctx.captaind("server").create().await;
 	let proxy = srv.start_proxy_no_mailbox(InvalidSigProxy).await;
 	let bark = ctx.bark("bark1", &proxy.address).funded(sat(1_000_000)).create().await;
+	assert_eq!(bark.onchain_balance().await, sat(1_000_000));
+	let funding_txids = bark.onchain_wallet().await.list_transactions().into_iter()
+		.map(|tx| tx.compute_txid()).collect::<Vec<_>>();
 	let board_amount = sat(500_000);
 	let res = bark.try_board(board_amount).await;
 	assert!(res.is_ok(), "board should succeed");
@@ -735,7 +738,16 @@ async fn bark_should_exit_a_pending_board() {
 	let chain_anchor = metadata.get("chain_anchor").map(|ca| serde_json::from_value::<OutPoint>(ca.clone()).unwrap());
 	assert!(chain_anchor.is_some(), "chain anchor should be present");
 	let onchain_fee = metadata.get("onchain_fee_sat").map(|of| Amount::from_sat(serde_json::from_value::<u64>(of.clone()).unwrap()));
-	assert_eq!(onchain_fee, Some(sat(772)));
+	let core = ctx.bitcoind().sync_client();
+	let transaction_fee = |txid| {
+		let tx = core.get_raw_transaction(&txid, None).unwrap();
+		let inputs = tx.input.iter().map(|i| {
+			core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
+				.output[i.previous_output.vout as usize].value
+		}).sum::<Amount>();
+		inputs - tx.output.iter().map(|o| o.value).sum::<Amount>()
+	};
+	assert_eq!(onchain_fee, Some(transaction_fee(chain_anchor.unwrap().txid)));
 
 	// Now verify that the exit can complete
 	complete_exit(&ctx, &bark).await;
@@ -744,7 +756,14 @@ async fn bark_should_exit_a_pending_board() {
 	// One more progress pass so the exit state advances from Claimable → Claimed
 	// now that the drain tx has confirmed — that's what flips the movement to Successful.
 	bark.progress_exit().await;
-	assert_eq!(bark.onchain_balance().await, sat(997_201));
+	let balance = bark.onchain_balance().await;
+	// BIP84 changes funding/claim sizes. Reconcile actual chain fees instead
+	// of carrying the old BIP86 wallet's fixed fee totals into this test.
+	let fees = bark.onchain_wallet().await.list_transactions().into_iter()
+		.map(|tx| tx.compute_txid()).filter(|id| !funding_txids.contains(id))
+		.map(transaction_fee).sum::<Amount>();
+	assert!(fees > Amount::ZERO && fees < sat(10_000), "unexpected exit cost: {fees}");
+	assert_eq!(balance, sat(1_000_000) - fees);
 
 	// Re-fetch the exit movement once the exit has completed — it should now be Successful.
 	let movements = bark.history().await;

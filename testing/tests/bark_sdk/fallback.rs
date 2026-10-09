@@ -96,21 +96,28 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 /// individual coins are all below the configured minimum; their group is not.
 #[tokio::test]
 async fn fallback_grouped_expiry_without_client() {
-	grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, 100, false).await;
+	grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, 100, false, false).await;
 }
 
 #[tokio::test]
 async fn fallback_grouped_200_small_coins() {
-	grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200, false).await;
+	grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200, false, false).await;
 }
 
 /// A funded board must survive the owner disappearing before registration.
 #[tokio::test]
 async fn fallback_abandoned_board_without_registration() {
-	grouped_expiry_without_client("fallback_abandoned_board_without_registration", 1, 25_000, 100, true).await;
+	grouped_expiry_without_client("fallback_abandoned_board_without_registration", 1, 25_000, 100, true, false).await;
 }
 
-async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, max_batch: usize, abandoned: bool) {
+#[tokio::test]
+async fn fallback_abandoned_board_return_clears_pending() {
+	grouped_expiry_without_client("fallback_abandoned_board_return_clears_pending", 1, 25_000, 100, true, true).await;
+}
+
+async fn grouped_expiry_without_client(
+	name: &str, count: usize, amount: u64, max_batch: usize, abandoned: bool, returning: bool,
+) {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
@@ -123,7 +130,7 @@ async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, ma
 		.funded(sat(count as u64 * amount + 1_000_000)).create().await;
 	wallet.stop_daemon_wait().await.unwrap();
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	let never_broadcast = if abandoned {
+	let never_broadcast = if abandoned && !returning {
 		let (key, _) = wallet.derive_store_next_keypair().await.unwrap();
 		let (address, expiry) = wallet.board_funding_address(&key).await.unwrap();
 		let psbt = wallet.onchain().unwrap().write().await.prepare_tx(
@@ -208,6 +215,8 @@ async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, ma
 	assert_eq!(principal, count as u64 * amount);
 	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
 	let expiry = coins.iter().map(|v| v.expiry_height().to_u32()).max().unwrap();
+	let chain_balance_before = wallet.onchain().unwrap().read().await.balance().await;
+	let return_config = if returning { Some(wallet.config().clone()) } else { None };
 	drop(wallet);
 
 	// Feed Core's real estimator with confirmed transactions. No fee estimate
@@ -334,6 +343,50 @@ async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, ma
 	println!("grouped expiry payout: txid={txid}, coins={count}, principal_sat={principal}, net_sat={}, fee_sat={fee}",
 		outputs[0].value.to_sat());
 
+	let mut latest_record_seq = record.seq;
+	if let Some(mut config) = return_config {
+		// The test daemon reserves new ports on restart. Reopen the original
+		// wallet data using the same server identity at its current test URL.
+		config.server_address = srv.ark_url();
+		let wallet = bark::Wallet::open(Network::Regtest,
+			bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic), config.clone(),
+			bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: false, ..Default::default() },
+		).await.unwrap();
+		wallet.require_ark_info().await.unwrap();
+		srv.stop().await.unwrap();
+		wallet.sync_pending_boards().await.unwrap();
+		assert_eq!(wallet.pending_boards().await.unwrap().len(), 1, "unknown status keeps the entitlement");
+		assert_eq!(wallet.get_vtxo_by_id(coins[0].id()).await.unwrap().state.kind(),
+			bark::vtxo::VtxoStateKind::Locked);
+		assert!(!wallet.exit_mgr().is_exiting(coins[0].id()).await, "offline return must not start an impossible exit");
+		drop(wallet);
+		srv.start().await.unwrap();
+		config.server_address = srv.ark_url();
+		let wallet = bark::Wallet::open(Network::Regtest,
+			bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic), config,
+			bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: false, ..Default::default() },
+		).await.unwrap();
+		for _ in 0..2 {
+			wallet.sync().await;
+			wallet.sync_onchain().await.unwrap();
+		}
+		assert!(wallet.pending_boards().await.unwrap().is_empty(), "paid board must leave pending state");
+		assert_eq!(wallet.balance().await.unwrap().total(), sat(0));
+		assert_eq!(wallet.get_vtxo_by_id(coins[0].id()).await.unwrap().state.kind(),
+			bark::vtxo::VtxoStateKind::Spent);
+		assert!(!wallet.exit_mgr().is_exiting(coins[0].id()).await, "paid board must not start an exit");
+		assert_eq!(wallet.onchain().unwrap().read().await.balance().await,
+			chain_balance_before + outputs[0].value);
+		latest_record_seq = wallet.fallback_destination().await.unwrap().seq;
+		let history = wallet.history().await.unwrap();
+		let debits = history.iter().filter(|m| m.subsystem.name == "bark.server_spend").collect::<Vec<_>>();
+		assert_eq!(debits.len(), 1, "repeated sync must not duplicate the Ark debit");
+		assert_eq!(debits[0].effective_balance, -sat(principal).to_signed().unwrap());
+		assert!(history.iter().all(|m| m.status == bark::movement::MovementStatus::Successful));
+		assert_eq!(history.iter().map(|m| m.effective_balance).sum::<bitcoin::SignedAmount>(),
+			bitcoin::SignedAmount::ZERO);
+	}
+
 	// Restore from only the mnemonic and Bitcoin blocks. A new standard BDK
 	// wallet scans both BIP84 chains with lookahead 20, without Ark databases,
 	// coin keys, record scripts, address indexes or a connection to captaind.
@@ -369,7 +422,7 @@ async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, ma
 	srv.start().await.unwrap();
 	let next_spk = restored.next_unused_address(KeychainKind::External).script_pubkey();
 	assert_ne!(next_spk, record.spk);
-	let seq = record.seq + 1;
+	let seq = latest_record_seq + 1;
 	let mut signed_record = next_spk.as_bytes().to_vec();
 	signed_record.extend_from_slice(&seq.to_le_bytes());
 	signed_record.extend_from_slice(&FallbackRecordAttestation::new(&next_spk, seq, &mailbox_key).serialize());

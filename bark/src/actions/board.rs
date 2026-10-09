@@ -125,6 +125,10 @@ pub enum Progress {
 		/// Most recent reason a registration attempt failed, for diagnostics.
 		last_park_error: Option<String>,
 	},
+	/// The trusted server reports the expired board spent. Persist this decision
+	/// before consuming our own lock and recording the debit, so an interruption
+	/// cannot confuse settlement with a failed funding transaction on restart.
+	ServerSpent,
 }
 
 /// Stable action id derived from the funding outpoint. Known before broadcast
@@ -156,6 +160,15 @@ impl WalletAction for Board {
 				}
 			},
 			Progress::Confirming { .. } => run_confirm(wallet, self).await,
+			Progress::ServerSpent => {
+				let holder = VtxoLockHolder::Movement { id: self.movement_id };
+				if let Some(debit) = wallet.inner.db.record_server_spent_vtxo(self.vtxo_id, Some(&holder)).await? {
+					wallet.inner.notifications.dispatch_movement_created(debit);
+				}
+				wallet.inner.movements.finish_movement(self.movement_id, MovementStatus::Successful).await
+					.context("failed to finalize settled board movement")?;
+				Ok(Advance::Done)
+			},
 		}
 	}
 
@@ -164,7 +177,7 @@ impl WalletAction for Board {
 	fn pending_balance_vtxo_ids(&self) -> Vec<VtxoId> {
 		match &self.progress {
 			Progress::Broadcasting { .. } => Vec::new(),
-			Progress::Confirming { .. } => vec![self.vtxo_id],
+			Progress::Confirming { .. } | Progress::ServerSpent => vec![self.vtxo_id],
 		}
 	}
 
@@ -183,6 +196,7 @@ impl WalletAction for Board {
 		let progress = match self.progress {
 			broadcasting @ Progress::Broadcasting { .. } => broadcasting,
 			Progress::Confirming { .. } => Progress::Confirming { last_park_error: None },
+			Progress::ServerSpent => Progress::ServerSpent,
 		};
 		Ok(Advance::Park {
 			state: Board { progress, ..self },
@@ -288,6 +302,17 @@ async fn run_confirm(wallet: &Wallet, board: Board) -> Result<Advance<Board>, Ad
 	}
 
 	let mut last_park_error = None;
+	if vtxo.expiry_height() <= current_height {
+		let (_, key) = wallet.pubkey_keypair(&vtxo.user_pubkey()).await?
+			.context("pending board key missing")?;
+		match wallet.fetch_vtxo_spend_state(vtxo.id(), &key).await {
+			Ok(protos::VtxoSpendState::Spent) => return Ok(Advance::Next(Board {
+				progress: Progress::ServerSpent, ..board
+			})),
+			Ok(_) => {},
+			Err(e) => { last_park_error = Some(format!("board settlement status unavailable: {e:#}")); },
+		}
+	}
 	let anchor = vtxo.chain_anchor();
 	let confs = match wallet.inner.chain.tx_status(anchor.txid).await {
 		Ok(TxStatus::Confirmed(block_ref)) =>
@@ -347,6 +372,18 @@ async fn run_confirm(wallet: &Wallet, board: Board) -> Result<Advance<Board>, Ad
 	let exit_margin = wallet.config().vtxo_exit_margin;
 	if vtxo.expiry_height() <= current_height + exit_margin {
 		if !wallet.exit_mgr().is_exiting(vtxo.id()).await {
+			// A spent anchor with no board exit on-chain cannot fund a new exit.
+			// Keep the entitlement pending until the server's outcome is known.
+			// An existing board exit still follows the normal recovery path.
+			if wallet.inner.chain.outpoint_spent_confirmed(anchor).await?
+				&& matches!(wallet.inner.chain.tx_status(vtxo.point().txid).await?, TxStatus::NotFound) {
+				return Ok(Advance::Park {
+					state: Board { progress: Progress::Confirming {
+						last_park_error: Some("waiting for server settlement status after funding was spent".into()),
+					}, ..board },
+					wake_after: None, error: None,
+				});
+			}
 			warn!("Board {} expired before confirmation, marking VTXO for exit", board.id);
 			wallet.inner.exit.start_exit_for_vtxos(&[vtxo.vtxo.clone()]).await?;
 		}

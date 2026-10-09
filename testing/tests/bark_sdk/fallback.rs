@@ -112,6 +112,14 @@ async fn fallback_grouped_200_small_coins() {
 	Box::pin(grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200, ExpiryCase::Registered)).await;
 }
 
+/// One wallet group is one payout output, however many coins it holds. With
+/// the default configuration, the 101st coin must not hold up the wallet.
+#[tokio::test]
+async fn fallback_grouped_101_coins_default_batch() {
+	let max_batch = server::expiry_payout::Config::default().max_batch;
+	Box::pin(grouped_expiry_without_client("fallback_grouped_101_coins_default_batch", 101, 600, max_batch, ExpiryCase::Registered)).await;
+}
+
 /// A funded board must survive the owner disappearing before registration.
 #[tokio::test]
 async fn fallback_abandoned_board_without_registration() {
@@ -157,6 +165,135 @@ async fn fallback_registered_arkoor_lost_reply_return_reports_sent() {
 async fn fallback_unregistered_arkoor_return_does_not_restore_paid_change() {
 	Box::pin(grouped_expiry_without_client("fallback_unregistered_arkoor_return_does_not_restore_paid_change",
 		2, 25_000, 100, ExpiryCase::ReturningArkoorChange)).await;
+}
+
+/// A wallet group larger than `max_batch` is paid alone in its own claim.
+/// Smaller groups of other wallets are still paid in claims of their own.
+#[tokio::test]
+async fn fallback_oversized_wallet_group_paid_alone() {
+	let ctx = TestContext::new("bark_sdk/fallback_oversized_wallet_group_paid_alone").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(128);
+			c.min_board_amount = sat(330);
+		}).watchmand().create().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let large = ctx.bark_sdk("large", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(5_000)).boarded(sat(5_000)).boarded(sat(5_000)).create().await;
+	let small_a = ctx.bark_sdk("small-a", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(25_000)).create().await;
+	let small_b = ctx.bark_sdk("small-b", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(25_000)).create().await;
+	let mut wallets = Vec::new();
+	for wallet in [&large, &small_a, &small_b] {
+		wallet.stop_daemon_wait().await.unwrap();
+		let spk = wallet.fallback_destination().await.unwrap().spk;
+		let coins = wallet.spendable_vtxos().await.unwrap().into_iter().map(|v| v.vtxo).collect::<Vec<_>>();
+		wallets.push((spk, coins));
+	}
+	assert_eq!(wallets[0].1.len(), 3);
+	assert_eq!(wallets[1].1.len(), 1);
+	assert_eq!(wallets[2].1.len(), 1);
+	drop((large, small_a, small_b));
+
+	// Real confirmed sweeps of every backing anchor and a real fee estimate,
+	// as in the grouped test; the task is enabled only afterwards.
+	let core = ctx.bitcoind().sync_client();
+	let coins = wallets.iter().flat_map(|(_, c)| c.iter().cloned()).collect::<Vec<_>>();
+	let expiry = coins.iter().map(|v| v.expiry_height().to_u32()).max().unwrap();
+	let tip = ctx.bitcoind().get_block_count().await as u32;
+	ctx.generate_blocks(expiry.saturating_sub(tip) + 3).await;
+	let anchors = coins.iter().map(|v| v.chain_anchor().to_string()).collect::<Vec<_>>();
+	tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			let rows = db.read(async |t| Ok(t.query(
+				"SELECT vtxo_id, onchain_spent_txid FROM vtxo WHERE vtxo_id = ANY($1)", &[&anchors],
+			).await?)).await.unwrap();
+			assert_eq!(rows.len(), anchors.len());
+			if rows.iter().all(|row| {
+				let Some(txid) = row.get::<_, Option<String>>("onchain_spent_txid") else { return false; };
+				let txid: Txid = txid.parse().unwrap();
+				core.get_raw_transaction_info(&txid, None).unwrap().confirmations.unwrap_or(0) > 0
+			}) { break; }
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			ctx.generate_blocks(1).await;
+		}
+	}).await.expect("all board sweeps must confirm");
+	for _ in 0..12 {
+		for _ in 0..8 {
+			let address = ctx.bitcoind().get_new_address();
+			let _: Txid = core.call("sendtoaddress", &[
+				address.to_string().into(), 0.001.into(), "".into(), "".into(),
+				false.into(), true.into(), serde_json::Value::Null, "unset".into(),
+				serde_json::Value::Null, 3.into(),
+			]).unwrap();
+		}
+		ctx.generate_blocks(1).await;
+	}
+	assert!(core.estimate_smart_fee(6, None).unwrap().fee_rate.is_some());
+
+	srv.stop().await.unwrap();
+	{
+		let mut config = srv.config_mut();
+		config.expiry_payout.enabled = true;
+		config.expiry_payout.interval = Duration::from_secs(1);
+		config.expiry_payout.grace_blocks = 0;
+		config.expiry_payout.sweep_min_confs = 1;
+		config.expiry_payout.min_payout_sat = 10_000;
+		config.expiry_payout.max_batch = 2;
+		config.expiry_payout.watchman_config = Some(
+			srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE),
+		);
+	}
+	srv.start().await.unwrap();
+	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let rows = tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			let rows = db.read(async |t| Ok(t.query(
+				"SELECT id, txid, fee_sat, spk FROM expiry_settlement WHERE id = ANY($1)", &[&ids],
+			).await?)).await.unwrap();
+			if rows.len() == ids.len() { break rows; }
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			ctx.generate_blocks(1).await;
+		}
+	}).await.expect("every wallet, including the group larger than max_batch, must be paid");
+	let txid_of = |id: &str| rows.iter().find(|r| r.get::<_, String>("id") == id).unwrap().get::<_, String>("txid");
+	let large_txid = txid_of(&wallets[0].1[0].id().to_string());
+	for (i, (spk, coins)) in wallets.iter().enumerate() {
+		for coin in coins {
+			let row = rows.iter().find(|r| r.get::<_, String>("id") == coin.id().to_string()).unwrap();
+			assert_eq!(row.get::<_, Vec<u8>>("spk"), spk.as_bytes());
+			assert_eq!(row.get::<_, String>("txid") == large_txid, i == 0,
+				"the oversized group has a claim of its own");
+		}
+	}
+	let mut payouts = rows.iter().map(|r| r.get::<_, String>("txid")).collect::<Vec<_>>();
+	payouts.sort();
+	payouts.dedup();
+	for txid in &payouts {
+		let txid: Txid = txid.parse().unwrap();
+		ctx.await_transaction(txid).await;
+		let tx: Transaction = core.get_raw_transaction(&txid, None).unwrap();
+		let fee = rows.iter().find(|r| r.get::<_, String>("txid") == txid.to_string()).unwrap()
+			.get::<_, i64>("fee_sat") as u64;
+		let input = tx.input.iter().map(|i| core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
+			.output[i.previous_output.vout as usize].value.to_sat()).sum::<u64>();
+		assert_eq!(fee, input - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>());
+		for (spk, coins) in &wallets {
+			let paid = tx.output.iter().filter(|o| &o.script_pubkey == spk).collect::<Vec<_>>();
+			let settled = rows.iter().filter(|r| r.get::<_, String>("txid") == txid.to_string()
+				&& r.get::<_, Vec<u8>>("spk") == spk.as_bytes()).count();
+			assert_eq!(paid.len(), usize::from(settled > 0), "one output per wallet group");
+			if settled > 0 {
+				assert_eq!(settled, coins.len(), "a wallet group is never split");
+				let gross = coins.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+				assert!(paid[0].value.to_sat() < gross && paid[0].value >= sat(10_000));
+			}
+		}
+	}
+	let large_tx: Transaction = core.get_raw_transaction(&large_txid.parse().unwrap(), None).unwrap();
+	println!("oversized group: coins=3, max_batch=2, claim={large_txid}, outputs={}; other claims={:?}",
+		large_tx.output.len(), payouts.iter().filter(|t| **t != large_txid).collect::<Vec<_>>());
 }
 
 #[derive(Clone, Copy)]

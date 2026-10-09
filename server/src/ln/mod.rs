@@ -609,10 +609,13 @@ impl Server {
 	/// sender keeps it. But the recipient must not be able to claim as well.
 	/// It can claim cooperatively until the refund cancels the receive, and
 	/// unilaterally, revealing the preimage, as long as the granted vtxos can
-	/// still be exited. So past the HTLC-recv expiry, with no claim or exit
-	/// recorded, the backing funds of every granted vtxo must have been swept
-	/// into the rounds wallet. Callers hold the payment guard, which keeps
-	/// the claim out until their commit cancels the receive.
+	/// still be exited. So past the HTLC-recv expiry, with no claim recorded,
+	/// the backing funds of every granted vtxo must have been swept into the
+	/// rounds wallet. A granted vtxo the recipient exited instead counts once
+	/// watchmand's spend of it through the server's timeout clause has the
+	/// payout sweep depth; a spend with the preimage keeps the refund refused.
+	/// Callers hold the payment guard, which keeps the claim out until their
+	/// commit cancels the receive.
 	pub(crate) async fn granted_receive_claimable(
 		&self,
 		sub: &LightningHtlcSubscription,
@@ -628,10 +631,18 @@ impl Server {
 			if tip <= policy.htlc_expiry {
 				return Ok(Some(format!("the recipient can claim until height {}", policy.htlc_expiry)));
 			}
-			if vtxo.spend_state != SpendState::HtlcRecvUnclaimed || vtxo.oor_spent_txid.is_some()
-				|| vtxo.confirmed_height.is_some()
-			{
-				return Ok(Some(format!("granted vtxo {} was claimed or exited", vtxo.vtxo_id)));
+			if vtxo.spend_state != SpendState::HtlcRecvUnclaimed || vtxo.oor_spent_txid.is_some() {
+				return Ok(Some(format!("granted vtxo {} was claimed", vtxo.vtxo_id)));
+			}
+			if vtxo.confirmed_height.is_some() {
+				let htlc = self.db.read(async |t| htlc_vtxo::get_htlc_vtxo(t, vtxo.vtxo_id).await).await?
+					.context("granted vtxo has no HTLC record")?.htlc;
+				let depth = self.config.expiry_payout.sweep_min_confs;
+				match (htlc.chain_resolution, htlc.chain_resolution_height) {
+					(Some(HtlcResolution::Revoked), Some(height))
+						if height.to_u32().saturating_add(depth) <= tip.to_u32().saturating_add(1) => continue,
+					_ => return Ok(Some(format!("granted vtxo {} exited and is not timed out", vtxo.vtxo_id))),
+				}
 			}
 			if !self.expiry_path_swept(&vtxo.vtxo).await? {
 				return Ok(Some(format!("granted vtxo {} can still be exited", vtxo.vtxo_id)));

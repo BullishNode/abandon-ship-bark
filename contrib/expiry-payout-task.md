@@ -97,9 +97,12 @@ its recipient can still claim, even after the invoice expired. The server
 cannot collect without the preimage, so once the recipient can no longer
 claim, the sender is refunded, by its own request or by the task, and its
 open attempt fails. The recipient can no longer claim when the tip is past
-the HTLC expiry of every granted HTLC-recv coin, none of them was claimed,
-exited or resolved, and a confirmed sweep spent each one's backing path into
-the rounds wallet at `sweep_min_confs` depth. The decision runs under the
+the HTLC expiry of every granted HTLC-recv coin, none of them was claimed or
+resolved, and a confirmed sweep spent each one's backing path into the rounds
+wallet at `sweep_min_confs` depth. A granted coin the recipient exited counts
+once watchmand's spend of its output through the server's timeout clause has
+`sweep_min_confs` confirmations; a spend with the preimage records the
+preimage, and the refund is refused. The decision runs under the
 payment guard, which keeps the cooperative claim out; the commit rechecks the
 recorded state and cancels the receive, so a later claim is refused. The
 granted coins are never paid out. An external payer of a prepared receive

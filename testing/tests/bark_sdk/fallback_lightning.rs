@@ -1302,6 +1302,126 @@ async fn fallback_ln_receive_external_delivery_after_settlement_terminates() {
 	println!("external delivery after settlement: receive settled, outputs paid to the destination record");
 }
 
+/// An intra-Ark payment whose recipient prepared the claim, then exited its
+/// granted HTLC-recv vtxos on-chain without disclosing the preimage, and
+/// disappeared; so did the sender. Watchmand spends the exited outputs
+/// through the server's timeout clause. At the sweep depth, the recipient
+/// can no longer claim, and the expiry payout refunds the sender.
+#[tokio::test]
+async fn fallback_exited_granted_receive_refunds_absent_sender() {
+	let name = "fallback_exited_granted_receive_refunds_absent_sender";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(1000);
+			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
+			c.expiry_payout.sweep_min_confs = 1;
+		}).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await
+		.expect("the initially funded pool must become ready");
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let reached = Arc::new(Notify::new());
+	let claim_request = Arc::new(Mutex::new(None));
+	let proxy = srv.start_proxy_no_mailbox(InterruptedReceiveClaim {
+		reached: reached.clone(), request: claim_request.clone(), reveal_preimage: false, fail_incoming: None,
+	}).await;
+	let recipient = ctx.bark_sdk("recipient", &proxy.address)
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	recipient.stop_daemon_wait().await.unwrap();
+	let recipient_record = recipient.fallback_destination().await.unwrap();
+	let sender_mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let sender = ctx.bark_sdk("sender", &srv).mnemonic(sender_mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(300_000)).create().await;
+	sender.stop_daemon_wait().await.unwrap();
+	let sender_record = sender.fallback_destination().await.unwrap();
+
+	let invoice = recipient.bolt11_invoice(sat(100_000), None, None).await.unwrap();
+	let payment_hash = PaymentHash::from(&invoice);
+	sender.pay_lightning_invoice(invoice.to_string(), None, false).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(30), async {
+		tokio::select! {
+			r = recipient.try_claim_lightning_receive(payment_hash, true) =>
+				panic!("claim completed before interruption: {r:?}"),
+			_ = reached.notified() => {},
+		}
+	}).await.expect("the recipient must reach its claim request");
+	drop(recipient);
+	drop(proxy);
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::HtlcsReady);
+	let granted = db.read(async |t| t.get_user_vtxos_by_id(&sub.htlc_vtxos).await).await.unwrap()
+		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
+	assert!(!granted.is_empty());
+	let granted_ids = granted.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let held = sender.all_vtxos().await.unwrap().into_iter()
+		.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| p.payment_hash == payment_hash))
+		.map(|w| w.vtxo.id()).collect::<Vec<_>>();
+	let htlcs = db.read(async |t| t.get_user_vtxos_by_id(&held).await).await.unwrap()
+		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
+	assert!(!htlcs.is_empty());
+	let htlc_ids = htlcs.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let htlc_principal = htlcs.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+	drop(sender);
+
+	// The recipient broadcasts the signed exit chain of its granted vtxos.
+	let core = ctx.bitcoind().sync_client();
+	for vtxo in &granted {
+		for item in vtxo.transactions() {
+			let txid = item.tx.compute_txid();
+			if core.get_raw_transaction_info(&txid, None).is_ok() { continue; }
+			ctx.broadcast_cpfp(&item.tx).await;
+			ctx.generate_blocks(1).await;
+		}
+	}
+	tokio::time::timeout(Duration::from_secs(120), async {
+		loop {
+			let exited = db.read(async |t| Ok(t.query_one(
+				"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND confirmed_height IS NOT NULL", &[&granted_ids],
+			).await?.get::<_, i64>(0))).await.unwrap();
+			if exited as usize == granted_ids.len() { break; }
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			ctx.generate_blocks(1).await;
+		}
+	}).await.expect("the granted vtxos must be exited");
+	// Watchmand claims each exited output through the timeout clause, once
+	// past its HTLC expiry and exit delta.
+	tokio::time::timeout(Duration::from_secs(180), async {
+		loop {
+			let revoked = db.read(async |t| Ok(t.query_one(
+				"SELECT count(*) FROM htlc_vtxo h JOIN vtxo v ON v.id=h.id
+				 WHERE v.vtxo_id=ANY($1) AND h.chain_resolution='revoked'", &[&granted_ids],
+			).await?.get::<_, i64>(0))).await.unwrap();
+			if revoked as usize == granted_ids.len() { break; }
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			ctx.generate_blocks(1).await;
+		}
+	}).await.expect("watchmand must spend the exited outputs through the timeout clause");
+	ctx.generate_blocks(1).await;
+
+	expire_and_confirm_sweeps(&ctx, &db, &htlcs).await;
+	enable_payouts(&ctx, &srv).await;
+	let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &htlc_ids, &sender_record.spk, htlc_principal).await;
+
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::Canceled);
+	let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(attempt.status, server::database::ln::LightningPaymentStatus::Failed);
+	let revoked = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM htlc_vtxo h JOIN vtxo v ON v.id=h.id
+		 WHERE v.vtxo_id=ANY($1) AND h.offchain_resolution='revoked'", &[&htlc_ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(revoked as usize, htlc_ids.len());
+	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(payment_hash).await)
+		.await.unwrap().is_none(), "the preimage was never disclosed");
+	assert_no_payout(&ctx, &db, &granted_ids, &recipient_record.spk).await;
+	println!("exited granted receive: sender refunded once, payout={payout}, fee_sat={fee}");
+}
+
 /// A sender's late refund request holds its payment guard while the database
 /// keeps it waiting. Another wallet whose expired coins share the payout batch
 /// must still be paid, and the sender's coins must settle exactly once.

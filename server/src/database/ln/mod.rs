@@ -650,12 +650,15 @@ impl<'t> Tx<'t> {
 
 	/// Whether no HTLC-recv vtxo granted to the subscription can be claimed
 	/// anymore by what this database records: all are past their HTLC
-	/// expiry at `tip`, none was claimed, exited or resolved.
+	/// expiry at `tip`, none was claimed or resolved, except an exited one
+	/// spent through the server's timeout clause. Its depth was checked under
+	/// the payment guard, and a reorg clears the resolution.
 	async fn granted_receive_expired(&self, subscription_id: i64, tip: BlockHeight) -> anyhow::Result<bool> {
 		let rows = self.query("
 			SELECT v.vtxo, v.spend_state = 'htlc-recv-unclaimed' AND v.oor_spent_txid IS NULL
-				AND v.confirmed_height IS NULL AND h.offchain_resolution IS NULL
-				AND h.chain_resolution IS NULL AS unclaimed
+				AND h.offchain_resolution IS NULL
+				AND ((v.confirmed_height IS NULL AND h.chain_resolution IS NULL)
+					OR (v.confirmed_height IS NOT NULL AND h.chain_resolution = 'revoked')) AS unclaimed
 			FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id = v.id
 			WHERE v.lightning_htlc_subscription_id = $1
 		", &[&subscription_id]).await?;

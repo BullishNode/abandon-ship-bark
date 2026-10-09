@@ -16,7 +16,8 @@
 //! ## Timeout and expiry enforcement
 //!
 //! Periodically checks all open subscriptions for accepted HTLCs held too long
-//! (`receive_htlc_forward_timeout`) and expired invoices. Both result in cancellation.
+//! (`receive_htlc_forward_timeout`) and expired invoices whose claim was not
+//! prepared. Granted HTLC-recv vtxos remain committed until their expiry.
 
 use std::str::FromStr;
 use std::fmt;

@@ -34,7 +34,16 @@ own value follows that key's fallback record. The selected source and owner are
 checked again at commit. Registration locks the same coin rows: if it wins,
 payout must reselect the recipient; if payout wins, registration is refused.
 Outputs already present in the HTLC ledger are excluded from this unregistered
-source; settled receive and failed send arbitration remain separate work.
+source.
+
+An unclaimed Lightning receive with a recorded preimage and no prior HTLC
+resolution pays the coin's own key through its fallback record. It requires the
+same confirmed sweep, grace and destination checks. The task takes the payment
+guard before coin locks, as cooperative claims do, and retains it through an
+uncertain commit. The spent state, fulfilled HTLC resolution and payout commit
+together. A receive whose external payment was canceled without disclosing the
+preimage receives no payout. Failed-send refunds and returning Lightning-client
+reconciliation remain unqualified.
 
 A returning arkoor sender checks expired outputs before delivery. A per-output
 settlement refusal and the server's stored signed chain distinguish a recipient

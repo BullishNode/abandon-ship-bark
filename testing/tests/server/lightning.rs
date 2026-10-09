@@ -136,9 +136,9 @@ async fn try_request_htlc_revocation(
 		htlc_vtxos.push(vtxo);
 	}
 
-	// Any pubkey works for the revocation output; the tests never claim it.
-	let revocation_pubkey =
-		Keypair::new(&SECP, &mut bip39::rand::thread_rng()).public_key();
+	// Use a linked output so a missing fallback record cannot mask the
+	// settlement refusal these tests are meant to exercise.
+	let revocation_pubkey = client.derive_store_next_keypair().await.unwrap().0.public_key();
 	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
 		htlc_vtxos.iter().cloned(),
 		ark::VtxoPolicy::new_pubkey(revocation_pubkey),
@@ -1900,7 +1900,8 @@ async fn settled_hash_cannot_be_granted_htlc_recv_vtxos() {
 	let lowest = sub.lowest_incoming_htlc_expiry
 		.expect("Accepted subscription must record lowest incoming HTLC expiry");
 
-	let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	let client = bark.client().await;
+	let (keypair, _) = client.derive_store_next_keypair().await.unwrap();
 	let err = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 		payment_hash: payment_hash.as_ref().to_vec(),
 		user_pubkey: keypair.public_key().serialize().to_vec(),

@@ -43,7 +43,6 @@ pub fn router() -> Router<Arc<ServerState>> {
 		.route("/fallback-destination", get(fallback_destination))
 		.route("/vtxos", get(vtxos))
 		.route("/vtxos/adopt-server-status", post(adopt_server_vtxo_status))
-		.route("/vtxos/expiry-payouts", post(expiry_payouts))
 		.route("/vtxos/{id}", get(get_vtxo))
 		.route("/vtxos/{id}/encoded", get(get_vtxo_encoded))
 		.route("/movements", get(movements))
@@ -81,7 +80,6 @@ pub fn router() -> Router<Arc<ServerState>> {
 		get_vtxo,
 		get_vtxo_encoded,
 		adopt_server_vtxo_status,
-		expiry_payouts,
 		movements,
 		history,
 		send,
@@ -128,7 +126,6 @@ pub fn router() -> Router<Arc<ServerState>> {
 		bark_json::web::ExpiryVtxosRequest,
 		bark_json::web::AdoptedVtxoState,
 		bark_json::web::AdoptedVtxoStatus,
-		bark_json::web::ExpiryPayout,
 		bark_json::web::PendingRoundInfo,
 		bark_json::cli::RoundStatus,
 		error::InternalServerError,
@@ -665,31 +662,6 @@ pub async fn adopt_server_vtxo_status(
 		.context("Failed to adopt server VTXO status")?;
 
 	Ok(axum::Json(statuses.into_iter().map(Into::into).collect()))
-}
-
-#[utoipa::path(
-	post,
-	path = "/vtxos/expiry-payouts",
-	summary = "Find on-chain payouts of expired VTXOs",
-	responses(
-		(status = 200, description = "Returns the payout outputs found", body = Vec<bark_json::web::ExpiryPayout>),
-		(status = 500, description = "Internal server error", body = error::InternalServerError)
-	),
-	description = "Looks up the unspent on-chain outputs paying the BIP86 address \
-		`tr(user_pubkey)` of every expired VTXO the wallet has as spent, where a server pays \
-		a VTXO it settled after expiry. VTXOs that share a key share a payout address, so an output can be listed for several VTXOs. \
-		With a bitcoind chain source only confirmed outputs are found.",
-	tag = "wallet"
-)]
-#[debug_handler]
-pub async fn expiry_payouts(
-	State(state): State<Arc<ServerState>>,
-) -> HandlerResult<Json<Vec<bark_json::web::ExpiryPayout>>> {
-	let wallet = state.require_wallet()?;
-	let payouts = bark::expiry_payout::find_expiry_payouts(&wallet).await
-		.context("Failed to find expiry payouts")?;
-
-	Ok(axum::Json(payouts.into_iter().map(Into::into).collect()))
 }
 
 #[utoipa::path(

@@ -1,8 +1,9 @@
+use std::str::FromStr;
 use std::time::Duration;
 
 use futures::StreamExt;
 
-use ark::lightning::{PaymentHash, Preimage};
+use ark::lightning::{Bolt11Invoice, PaymentHash, Preimage};
 use bitcoin_ext::BlockDelta;
 use ark_testing::{TestContext, btc, util::{FutureExt, poll_interval}};
 use ark_testing::balance::assert_balance_consistent;
@@ -480,4 +481,58 @@ async fn pay_with_retry_for() {
 		).await.expect("db read").expect("payment attempt");
 		assert_eq!(attempt.retry_for, Some(expected));
 	}
+}
+
+/// A payment request lost on its way to the node is refunded only once its
+/// invoice expired, so bark refuses an external invoice that expires further
+/// ahead than its cap, before any coin is locked. Invoices the server issued
+/// for an intra-Ark payment are exempt.
+#[tokio::test]
+async fn pay_refuses_invoice_beyond_expiry_cap() {
+	let ctx = TestContext::new("bark_sdk/pay_refuses_invoice_beyond_expiry_cap").await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	// Intra-Ark invoices expire after the server's default 48 hours.
+	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10))
+		.cfg(|c| c.invoice_expiry = Duration::from_secs(48 * 60 * 60)).create().await;
+	let board_amount = btc(2);
+	let wallet = ctx.bark_sdk("bark", &srv).cfg(|c| c.max_invoice_expiry_secs = 24 * 60 * 60)
+		.boarded(board_amount).create().await;
+	let recipient = ctx.bark_sdk("recipient", &srv).create().await;
+	lightning.sync().await;
+	let external_invoice = |label: &'static str, hours: u64| {
+		let lightning = &lightning;
+		async move {
+			lightning.external.grpc_client().await.invoice(cln_rpc::InvoiceRequest {
+				description: label.into(),
+				label: label.into(),
+				amount_msat: Some(cln_rpc::AmountOrAny {
+					value: Some(cln_rpc::amount_or_any::Value::Amount(cln_rpc::Amount { msat: 100_000_000 })),
+				}),
+				cltv: None,
+				fallbacks: vec![],
+				preimage: None,
+				expiry: Some(hours * 60 * 60),
+				exposeprivatechannels: vec![],
+				deschashonly: None,
+			}).await.unwrap().into_inner().bolt11
+		}
+	};
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+
+	let beyond = external_invoice("beyond_expiry_cap", 25).await;
+	let payment_hash = PaymentHash::from(&Bolt11Invoice::from_str(&beyond).unwrap());
+	let err = wallet.pay_lightning_invoice(beyond, None, true).await.unwrap_err();
+	assert!(format!("{err:#}").contains("expires more than"), "{err:#}");
+	let balance = assert_balance_consistent(&wallet, false).await;
+	assert_eq!(balance.spendable, board_amount, "no coin is locked");
+	assert_eq!(balance.pending_lightning_send, btc(0));
+	assert!(db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(payment_hash).await)
+		.await.unwrap().is_none(), "no payment attempt is made");
+
+	let within = external_invoice("within_expiry_cap", 23).await;
+	wallet.pay_lightning_invoice(within, None, true).await.expect("an invoice within the cap is paid");
+
+	let intra_ark = recipient.bolt11_invoice(btc(0.001), None, None).await.unwrap();
+	wallet.pay_lightning_invoice(intra_ark.to_string(), None, false).await
+		.expect("an intra-Ark invoice from this server is exempt");
 }

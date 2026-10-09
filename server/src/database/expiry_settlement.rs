@@ -2,7 +2,6 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::Context;
 use ark::{ProtocolEncoding, ServerVtxo, VtxoId, Vtxo};
 use ark::lightning::PaymentHash;
 use ark::vtxo::policy::ServerVtxoPolicy;
@@ -10,7 +9,6 @@ use ark::tree::signed::UnlockHash;
 use bitcoin::{ScriptBuf, Transaction};
 use bitcoin::consensus::deserialize;
 use bitcoin::secp256k1::PublicKey;
-use crate::expiry_payout::{FeeOutput, Payment};
 use tokio_postgres::Row;
 
 use crate::database::ln::LightningHtlcSubscriptionStatus;
@@ -154,39 +152,6 @@ impl Tx<'_> {
 			return badarg!("{}", server_rpc::EXPIRY_SETTLED_ERROR);
 		}
 		Ok(())
-	}
-
-	pub(crate) async fn expiry_receipt_page(&self, after: &str) -> anyhow::Result<Vec<String>> {
-		Ok(self.query("SELECT DISTINCT txid FROM expiry_settlement WHERE txid > $1 ORDER BY txid LIMIT 256",
-			&[&after]).await?.into_iter().map(|r| r.get("txid")).collect())
-	}
-
-	pub(crate) async fn expiry_receipt(&self, txid: &str) -> anyhow::Result<Payment> {
-		let rows = self.query("SELECT s.fee_sat,s.spk,v.vtxo FROM expiry_settlement s
-			JOIN vtxo v ON v.vtxo_id=s.id WHERE s.txid=$1 ORDER BY s.id", &[&txid]).await?;
-		let first = rows.first().context("expiry payment missing")?;
-		let raw_tx: Vec<u8> = self.query_one("SELECT tx FROM nursery_tx WHERE txid=$1", &[&txid]).await?.get("tx");
-		let tx: Transaction = deserialize(&raw_tx)?;
-		let fee_sat = u64::try_from(first.get::<_, i64>("fee_sat"))?;
-		let mut gross = BTreeMap::<ScriptBuf, u64>::new();
-		for row in rows {
-			let v: Vtxo = Vtxo::deserialize(row.get("vtxo"))?;
-			let spk = row.get::<_, Option<Vec<u8>>>("spk").map(ScriptBuf::from)
-				.unwrap_or_else(|| payout_script(v.user_pubkey()));
-			let total = gross.entry(spk).or_default();
-			*total = total.checked_add(v.amount().to_sat()).context("expiry receipt gross overflow")?;
-		}
-		let mut outputs = Vec::new();
-		for (i, o) in tx.output.iter().enumerate() {
-			if let Some(amount) = gross.remove(&o.script_pubkey) {
-				outputs.push(FeeOutput { vout: i as u32,
-					amount_sat: o.value.to_sat(), fee_sat: amount.checked_sub(o.value.to_sat())
-						.context("expiry receipt exceeds gross")? });
-			}
-		}
-		ensure!(gross.is_empty() && outputs.iter().map(|o| o.fee_sat).sum::<u64>() == fee_sat,
-			"expiry receipt metadata does not match its transaction");
-		Ok(Payment { txid: txid.into(), raw_tx, fee_sat, outputs })
 	}
 
 	pub(crate) async fn expiry_inputs(

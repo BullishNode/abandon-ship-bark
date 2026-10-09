@@ -76,6 +76,15 @@ impl Server {
 		let destinations = ids.iter().copied().zip(scripts.iter().cloned().map(ScriptBuf::from))
 			.collect::<BTreeMap<_, _>>();
 		ensure!(keys.iter().collect::<BTreeSet<_>>().len() == keys.len(), "duplicate expiry coin ID");
+		// Cooperative Lightning claims take the payment guard before coin
+		// locks. Use that same order and retain the guards if COMMIT outlives
+		// this caller, just as we retain the wallet and coin locks below.
+		let hashes = inputs.iter().filter_map(|i| match i.source {
+			ExpirySource::LightningReceive(hash) => Some(hash),
+			_ => None,
+		}).collect::<BTreeSet<_>>();
+		let mut payment_guards = Vec::with_capacity(hashes.len());
+		for hash in hashes { payment_guards.push(self.payment_guards.lock(hash).await); }
 		let Ok(_flux) = self.vtxos_in_flux.try_lock(&ids) else { return Ok(deferred("coin in flux")) };
 		let tip = self.chain_tip().height.to_u32();
 		let coins = self.db.read(async |t| t.expiry_inputs(&inputs, tip, cfg.grace_blocks).await).await?;
@@ -159,7 +168,7 @@ impl Server {
 		// Cancelling a tick must not drop its locks while COMMIT can still
 		// succeed. The short durable handoff finishes even if its caller leaves.
 		tokio::spawn(async move {
-			let (_flux, _worker) = (flux, worker);
+			let (_flux, _worker, _payment_guards) = (flux, worker, payment_guards);
 			let stored = db.write(async |t| {
 				if let Some(change) = &wallet_metadata {
 					t.store_changeset(WalletKind::Rounds, change).await?;

@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use anyhow::Context;
 use ark::{ProtocolEncoding, ServerVtxo, VtxoId, Vtxo};
+use ark::lightning::PaymentHash;
 use ark::vtxo::policy::ServerVtxoPolicy;
 use ark::tree::signed::UnlockHash;
 use bitcoin::{ScriptBuf, Transaction};
@@ -26,7 +27,7 @@ pub(crate) struct ExpiryInput {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ExpirySource { Registered, PendingBoard, Unregistered }
+pub(crate) enum ExpirySource { Registered, PendingBoard, Unregistered, LightningReceive(PaymentHash) }
 
 pub(crate) struct SettlementVtxo {
 	pub id: VtxoId,
@@ -40,10 +41,12 @@ pub(crate) struct SettlementVtxo {
 
 impl SettlementVtxo {
 	fn from_row(row: Row) -> anyhow::Result<Self> {
+		let receive_hash = row.get::<_, Option<&str>>("receive_hash");
 		Ok(Self {
 			id: row.get::<_, &str>("vtxo_id").parse()?,
 			unclaimed: row.get("unclaimed"), predecessors: Vec::new(),
-			source: if row.get("pending_board") { ExpirySource::PendingBoard }
+			source: if let Some(hash) = receive_hash { ExpirySource::LightningReceive(hash.parse()?) }
+				else if row.get("pending_board") { ExpirySource::PendingBoard }
 				else if row.get("unregistered") { ExpirySource::Unregistered }
 				else { ExpirySource::Registered },
 			input_owner: None,
@@ -61,18 +64,23 @@ impl Tx<'_> {
 		&self, tip: u32, grace: u32,
 		after: (u32, String), limit: u32,
 	) -> anyhow::Result<Vec<SettlementVtxo>> {
-		let rows = self.query("SELECT vtxo_id,vtxo,expiry,unclaimed,pending_board,unregistered FROM (
+		let rows = self.query("SELECT vtxo_id,vtxo,expiry,unclaimed,pending_board,unregistered,receive_hash FROM (
 				SELECT v.vtxo_id, v.vtxo, v.expiry,
 				v.spend_state='unclaimed' AS unclaimed, false AS pending_board,
-				v.spend_state='unregistered' AS unregistered FROM vtxo v
+				v.spend_state='unregistered' AS unregistered,
+				CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash
+				FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id=v.id
 				WHERE (v.expiry::bigint, v.vtxo_id) > ($1::bigint, $2)
 				AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
 				AND ((v.policy_type = 'pubkey' AND v.spend_state IN ('spendable', 'unclaimed'))
-					OR (v.spend_state='unregistered' AND NOT EXISTS
-						(SELECT 1 FROM htlc_vtxo h WHERE h.id=v.id)))
+					OR (v.spend_state='unregistered' AND h.id IS NULL)
+					OR (v.spend_state='htlc-recv-unclaimed'
+						AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
+						AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
+						AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)))
 				AND v.confirmed_height IS NULL AND v.expiry::bigint + $3 <= $4
 				UNION ALL
-				SELECT p.vtxo_id,p.vtxo,p.expiry,false,true,false FROM pending_board p
+				SELECT p.vtxo_id,p.vtxo,p.expiry,false,true,false,NULL FROM pending_board p
 				WHERE (p.expiry::bigint,p.vtxo_id) > ($1::bigint,$2)
 				AND p.expiry::bigint + $3 <= $4
 				AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)
@@ -167,24 +175,37 @@ impl Tx<'_> {
 		let ids = inputs.iter().filter(|i| i.source == ExpirySource::Registered).map(|i| i.id.to_string()).collect::<Vec<_>>();
 		let boards = inputs.iter().filter(|i| i.source == ExpirySource::PendingBoard).map(|i| i.id.to_string()).collect::<Vec<_>>();
 		let unregistered = inputs.iter().filter(|i| i.source == ExpirySource::Unregistered).map(|i| i.id.to_string()).collect::<Vec<_>>();
+		let receives = inputs.iter().filter_map(|i| match i.source {
+			ExpirySource::LightningReceive(hash) => Some((i.id.to_string(), hash.to_string())),
+			_ => None,
+		}).collect::<BTreeMap<_, _>>();
+		let receive_ids = receives.keys().cloned().collect::<Vec<_>>();
 		let owners = inputs.iter().map(|i| (i.id, i.owner)).collect::<BTreeMap<_, _>>();
-		let rows = self.query("SELECT v.vtxo,v.spend_state='unregistered' AS unregistered FROM vtxo v
+		let rows = self.query("SELECT v.vtxo,v.spend_state='unregistered' AS unregistered,
+			CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash
+			FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id=v.id
 			WHERE ((v.vtxo_id=ANY($1) AND v.policy_type='pubkey' AND v.spend_state IN ('spendable','unclaimed'))
-				OR (v.vtxo_id=ANY($5) AND v.spend_state='unregistered' AND NOT EXISTS
-					(SELECT 1 FROM htlc_vtxo h WHERE h.id=v.id)))
+				OR (v.vtxo_id=ANY($5) AND v.spend_state='unregistered' AND h.id IS NULL)
+				OR (v.vtxo_id=ANY($6) AND v.spend_state='htlc-recv-unclaimed'
+					AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
+					AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
+					AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)))
 			AND v.confirmed_height IS NULL AND v.expiry::bigint + $2 <= $3
 			AND v.spent_in_round IS NULL AND v.oor_spent_txid IS NULL
 			AND v.offboarded_in IS NULL AND NOT EXISTS
 			(SELECT 1 FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id
 			 WHERE i.vtxo_id=v.vtxo_id AND p.forfeited_at IS NULL)
 			UNION ALL
-			SELECT p.vtxo,false FROM pending_board p WHERE p.vtxo_id=ANY($4)
+			SELECT p.vtxo,false,NULL FROM pending_board p WHERE p.vtxo_id=ANY($4)
 			AND p.expiry::bigint + $2 <= $3
 			AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)",
-			&[&ids, &(grace as i64), &(tip as i64), &boards, &unregistered]).await?;
+			&[&ids, &(grace as i64), &(tip as i64), &boards, &unregistered, &receive_ids]).await?;
 		let mut coins = Vec::new();
 		for row in rows {
 			let vtxo = Vtxo::deserialize(row.get("vtxo"))?;
+			if row.get::<_, Option<&str>>("receive_hash") != receives.get(&vtxo.id().to_string()).map(String::as_str) {
+				continue;
+			}
 			let owner = if row.get("unregistered") { self.unregistered_expiry_owner(&vtxo).await? }
 				else { Some(vtxo.user_pubkey()) };
 			if owner.as_ref() == owners.get(&vtxo.id()) { coins.push(vtxo); }
@@ -219,8 +240,17 @@ impl Tx<'_> {
 		ensure!(inserted as usize == boards.len(), "pending boards changed during commit");
 		let ordinary = inputs.iter().filter(|i| i.source != ExpirySource::PendingBoard).map(|i| i.id.to_string()).collect::<Vec<_>>();
 		let n = self.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW()
-			WHERE vtxo_id=ANY($1) AND spend_state IN ('spendable','unclaimed','unregistered')", &[&ordinary]).await?;
+			WHERE vtxo_id=ANY($1) AND spend_state IN ('spendable','unclaimed','unregistered','htlc-recv-unclaimed')", &[&ordinary]).await?;
 		ensure!(n as usize == ordinary.len(), "expiry inputs changed during commit");
+		let receives = inputs.iter().filter(|i| matches!(i.source, ExpirySource::LightningReceive(_)))
+			.map(|i| i.id.to_string()).collect::<Vec<_>>();
+		// The caller retains the payment guards through this commit. Keep the
+		// resolution conditional as well, so another resolution cannot be overwritten.
+		let fulfilled = self.execute("UPDATE htlc_vtxo h SET offchain_resolution='fulfilled'
+			FROM vtxo v WHERE h.id=v.id AND v.vtxo_id=ANY($1) AND h.direction='outgoing'
+			AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
+			AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)", &[&receives]).await?;
+		ensure!(fulfilled as usize == receives.len(), "expiry receive resolution changed during commit");
 		let txid = tx.compute_txid().to_string();
 		self.upsert_nursery_tx(tx, NurseryTxKind::ExpiryPayout, confirm_target).await?;
 		self.execute("INSERT INTO expiry_settlement (id,txid,fee_sat,spk)

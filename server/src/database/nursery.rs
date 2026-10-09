@@ -205,9 +205,10 @@ impl<'t> Tx<'t> {
 
 	/// Abandon a nursery tx: give up on it and stop warning. Returns the
 	/// kind of the abandoned tx, or None when the txid is unknown,
-	/// already abandoned or confirmed. A confirmed tx must stay active:
-	/// if a reorg evicts its confirmation, the nursery has to follow it
-	/// up again.
+	/// already abandoned, confirmed or an expiry payout. A confirmed tx
+	/// must stay active: if a reorg evicts its confirmation, the nursery
+	/// has to follow it up again. An expiry payout must stay active
+	/// because its coins are settled to it.
 	pub async fn abandon_nursery_tx(
 		&self,
 		txid: Txid,
@@ -215,6 +216,7 @@ impl<'t> Tx<'t> {
 		let stmt = self.prepare_typed("
 			UPDATE nursery_tx SET abandoned_at = NOW(), updated_at = NOW()
 			WHERE txid = $1 AND abandoned_at IS NULL AND confirmed_at_height IS NULL
+			AND kind::TEXT <> 'expiry-payout'
 			RETURNING kind::TEXT
 		", &[Type::TEXT]).await?;
 

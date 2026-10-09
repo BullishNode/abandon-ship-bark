@@ -112,6 +112,10 @@ pub struct LightningPaymentAttempt {
 	/// How long the lightning node was told to keep retrying the payment.
 	/// `None` for pre-V66 rows, for which `cln_xpay_timeout` applies.
 	pub retry_for: Option<Duration>,
+	/// When the invoice expires. The node refuses to start paying an expired
+	/// invoice, so a payment request that reaches it later cannot start.
+	/// `None` for rows from before this fork stored it.
+	pub invoice_expires_at: Option<DateTime<Local>>,
 	pub created_at: DateTime<Local>,
 	pub updated_at: DateTime<Local>,
 }
@@ -153,6 +157,7 @@ impl TryFrom<Row> for LightningPaymentAttempt {
 			user_agent: row.get("user_agent"),
 			retry_for: row.get::<_, Option<i32>>("retry_for_secs")
 				.map(|s| Duration::from_secs(u64::try_from(s).expect("negative retry_for_secs in db row"))),
+			invoice_expires_at: row.get("invoice_expires_at"),
 			created_at: row.get("created_at"),
 			updated_at: row.get("updated_at"),
 		})

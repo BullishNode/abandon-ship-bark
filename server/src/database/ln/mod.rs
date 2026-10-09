@@ -23,6 +23,16 @@ use crate::database::{Checkpoint, Tx};
 /// Identifier by which lightning nodes are stored in the database.
 pub type LightningNodeId = i64;
 
+/// When `invoice` expires, if that time can be represented.
+fn invoice_expires_at(invoice: &Invoice) -> Option<DateTime<Local>> {
+	let since_epoch = match invoice {
+		Invoice::Bolt11(invoice) => invoice.expires_at()?,
+		Invoice::Bolt12(invoice) => invoice.created_at().checked_add(invoice.relative_expiry())?,
+	};
+	let secs = i64::try_from(since_epoch.as_secs()).ok()?;
+	Some(DateTime::from_timestamp(secs, since_epoch.subsec_nanos())?.with_timezone(&Local))
+}
+
 impl<'t> Tx<'t> {
 	// *******************
 	// * lightning state *
@@ -131,6 +141,7 @@ impl<'t> Tx<'t> {
 			SELECT lpa.id,
 				lpa.lightning_node_id, lpa.payment_hash, lpa.amount_msat, lpa.final_amount_msat,
 				lpa.status, lpa.error, lpa.block_height, lpa.user_fee_sat, lpa.retry_for_secs,
+				lpa.invoice_expires_at,
 				lpa.user_agent, lpa.lightning_htlc_subscription_id,
 				lpa.created_at, lpa.updated_at
 			FROM lightning_payment_attempt lpa
@@ -155,6 +166,7 @@ impl<'t> Tx<'t> {
 			SELECT lpa.id,
 				lpa.lightning_node_id, lpa.payment_hash, lpa.amount_msat, lpa.final_amount_msat,
 				lpa.status, lpa.error, lpa.block_height, lpa.user_fee_sat, lpa.retry_for_secs,
+				lpa.invoice_expires_at,
 				lpa.user_agent, lpa.lightning_htlc_subscription_id,
 				lpa.created_at, lpa.updated_at
 			FROM lightning_payment_attempt lpa
@@ -194,6 +206,7 @@ impl<'t> Tx<'t> {
 			SELECT lpa.id,
 				lpa.lightning_node_id, lpa.payment_hash, lpa.amount_msat, lpa.final_amount_msat,
 				lpa.status, lpa.error, lpa.block_height, lpa.user_fee_sat, lpa.retry_for_secs,
+				lpa.invoice_expires_at,
 				lpa.user_agent, lpa.lightning_htlc_subscription_id,
 				lpa.created_at, lpa.updated_at
 			FROM lightning_payment_attempt lpa
@@ -276,8 +289,9 @@ impl<'t> Tx<'t> {
 				retry_for_secs,
 				created_at,
 				updated_at,
-				lightning_htlc_subscription_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10)
+				lightning_htlc_subscription_id,
+				invoice_expires_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10, $11)
 			RETURNING id, updated_at;
 		").await?;
 
@@ -292,7 +306,7 @@ impl<'t> Tx<'t> {
 				&node_id, &payment_hash.to_string(), &(amount.to_msat() as i64),
 				&mailbox_str, &requested_status,
 				&block_height_i32, &user_fee_sat_i64, &user_agent, &retry_for_secs_i32,
-				&lightning_htlc_subscription_id,
+				&lightning_htlc_subscription_id, &invoice_expires_at(invoice),
 			],
 		).await?;
 
@@ -405,6 +419,7 @@ impl<'t> Tx<'t> {
 			SELECT lpa.id,
 				lpa.lightning_node_id, lpa.payment_hash, lpa.amount_msat, lpa.final_amount_msat,
 				lpa.status, lpa.error, lpa.block_height, lpa.user_fee_sat, lpa.retry_for_secs,
+				lpa.invoice_expires_at,
 				lpa.user_agent, lpa.lightning_htlc_subscription_id,
 				lpa.created_at, lpa.updated_at
 			FROM lightning_payment_attempt lpa
@@ -428,6 +443,7 @@ impl<'t> Tx<'t> {
 			SELECT lpa.id,
 				lpa.lightning_node_id, lpa.payment_hash, lpa.amount_msat, lpa.final_amount_msat,
 				lpa.status, lpa.error, lpa.block_height, lpa.user_fee_sat, lpa.retry_for_secs,
+				lpa.invoice_expires_at,
 				lpa.user_agent, lpa.lightning_htlc_subscription_id,
 				lpa.created_at, lpa.updated_at
 			FROM lightning_payment_attempt lpa

@@ -64,8 +64,14 @@ every attempt concluded, and every node that sent an attempt reports the
 payment failed or unknown. An attempt concludes as failed only on evidence:
 xpay refused it before sending any HTLC (invalid parameters, an expired
 invoice, or no route before the first try), or, after its retry time plus a
-buffer, the node reports nothing pending or complete. A transport error on the
-xpay call leaves the attempt open. An offline or still-paying node leaves the
+buffer, the node reports nothing pending or complete. That retry time counts
+from when the node is known to have received the request: lightningd answered
+the xpay call, or the node listed the payment. A request the node never
+answered, after a transport error or a restart, can still arrive late and
+start, so it fails only after its invoice expired, since the node refuses to
+start paying an expired invoice. A transport error on the xpay call leaves the
+attempt open. Applying `contrib/expiry-fallback.sql` adds the column that
+holds the invoice expiry; attempts from before it stay open. An offline or still-paying node leaves the
 coins waiting; a completed payment whose preimage was never recorded is never
 refunded. A node query gives up after ten seconds, and a node that failed to
 answer is not asked again in the same tick: its sends wait, while other

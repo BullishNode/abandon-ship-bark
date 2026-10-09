@@ -9,6 +9,10 @@
 //! before it sends any HTLC, or a reconciliation by the monitor once CLN stopped
 //! retrying. Any other error, such as a dropped connection, leaves the attempt open.
 //!
+//! CLN only stops retrying a request it received. A request that CLN never
+//! answered may still be on its way and start late, so the monitor fails it only
+//! after its invoice expired, since CLN refuses to start an expired invoice.
+//!
 //! ## Sendpay stream
 //!
 //! The main loop `wait`s on CLN for new `created` and `updated` sendpay events.
@@ -21,7 +25,7 @@
 //! the stream missed (e.g. events during downtime). Uses exponential backoff per
 //! invoice to avoid hammering CLN.
 
-use std::{fmt, str};
+use std::{cmp, fmt, str};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,10 +69,9 @@ const XPAY_ERRORS_BEFORE_ANY_HTLC: [i32; 3] = [
 	207, // PAY_INVOICE_EXPIRED
 ];
 
-/// The error message of an xpay call that CLN refused before it sent any
-/// HTLC, or `None` when the error proves nothing about the payment, as for a
-/// transport error while CLN may still be paying.
-fn xpay_failed_before_any_htlc(err: &anyhow::Error) -> Option<String> {
+/// The code lightningd answered an xpay call with, or `None` when the error
+/// did not come from lightningd, as for a transport error.
+fn xpay_error_code(err: &anyhow::Error) -> Option<i32> {
 	// cln-grpc reports lightningd's error as the debug format of its
 	// `RpcError`, which starts with the code CLN returned.
 	let status = err.downcast_ref::<tonic::Status>()?;
@@ -76,8 +79,16 @@ fn xpay_failed_before_any_htlc(err: &anyhow::Error) -> Option<String> {
 		return None;
 	}
 	let rest = status.message().strip_prefix("Error calling method Xpay: RpcError { code: Some(")?;
-	let code = rest.split_once(')')?.0.parse::<i32>().ok()?;
-	XPAY_ERRORS_BEFORE_ANY_HTLC.contains(&code).then(|| status.message().to_owned())
+	rest.split_once(')')?.0.parse::<i32>().ok()
+}
+
+/// The error message of an xpay call that CLN refused before it sent any
+/// HTLC, or `None` when the error proves nothing about the payment, as for a
+/// transport error while CLN may still be paying.
+fn xpay_failed_before_any_htlc(err: &anyhow::Error) -> Option<String> {
+	let code = xpay_error_code(err)?;
+	XPAY_ERRORS_BEFORE_ANY_HTLC.contains(&code).then(|| err.downcast_ref::<tonic::Status>()
+		.expect("lightningd errors are statuses").message().to_owned())
 }
 
 /// Shared client for sending xpay RPCs and reconciling payment status against CLN.
@@ -142,7 +153,7 @@ impl ClnXpayClient {
 			},
 			Err(pay_err) => {
 				debug!("Error calling pay-command: {}", pay_err);
-				xpay_failed_before_any_htlc(&pay_err)
+				Some((xpay_failed_before_any_htlc(&pay_err), xpay_error_code(&pay_err).is_some()))
 			},
 		};
 
@@ -152,8 +163,9 @@ impl ClnXpayClient {
 		match attempt_res {
 			Ok(Some(attempt)) => {
 				let evidence = match failure {
-					Some(ref error) => FailureEvidence::Refused(error),
-					None => FailureEvidence::Unproven,
+					Some((Some(ref error), _)) => FailureEvidence::Refused(error),
+					Some((None, true)) => FailureEvidence::Answered,
+					Some((None, false)) | None => FailureEvidence::Unproven,
 				};
 				if let Err(e) = self.sync_payment_attempt_status(attempt, evidence).await {
 					error!("Error syncing payment attempt status: {e:#}");
@@ -222,6 +234,13 @@ impl ClnXpayClient {
 							attempt.id, payment_hash,
 						);
 					},
+					// CLN received the request: record that, so the monitor
+					// counts its retry time from now.
+					FailureEvidence::Answered => if attempt.status == LightningPaymentStatus::Requested {
+						self.payment_handler().process_payment_attempt(
+							&self.settler, &attempt, LightningPaymentStatus::Submitted, None, None, None,
+						).await?;
+					},
 					FailureEvidence::Refused(error) => {
 						self.payment_handler().fail_payment_attempt(&attempt, Some(error)).await?;
 					},
@@ -258,6 +277,9 @@ impl ClnXpayClient {
 					// xpay reports a failure before CLN marks every part failed,
 					// and between retries all parts can be failed.
 					FailureEvidence::Unproven => attempt.status,
+					// CLN received the request: record that, so the monitor
+					// counts its retry time from now.
+					FailureEvidence::Answered => LightningPaymentStatus::Submitted,
 					FailureEvidence::Refused(_) | FailureEvidence::RetriesOver =>
 						LightningPaymentStatus::Failed,
 				},
@@ -312,10 +334,13 @@ impl ClnXpayClient {
 pub enum FailureEvidence<'a> {
 	/// No proof: CLN may still be sending the payment.
 	Unproven,
+	/// No proof of failure, but lightningd answered the xpay call: CLN
+	/// received the request, so it cannot start later.
+	Answered,
 	/// xpay refused the payment before sending any HTLC, with this error.
 	Refused(&'a str),
-	/// The attempt is older than its retry time plus [XPAY_TIMEOUT_BUFFER],
-	/// so CLN stopped retrying it.
+	/// CLN stopped retrying the attempt and no delayed request can start it,
+	/// see [ClnXpayProcess::retries_over].
 	RetriesOver,
 }
 
@@ -460,6 +485,26 @@ impl ClnXpayProcess {
 		);
 	}
 
+	/// Whether CLN can no longer be paying the attempt, nor start it later.
+	///
+	/// CLN retries a request it received for the attempt's retry time, so once
+	/// our status shows that CLN received it, that bounds the attempt. A request
+	/// CLN never answered may still be on its way and can start whenever it
+	/// arrives, unless its invoice expired by then: CLN refuses to start paying
+	/// an expired invoice. So such an attempt is only over once its invoice
+	/// expired and a request that arrived just before had its retry time.
+	fn retries_over(attempt: &LightningPaymentAttempt, retry_for: Duration, now: DateTime<Local>) -> bool {
+		let received_by = match attempt.status {
+			LightningPaymentStatus::Submitted => attempt.updated_at,
+			_ => match attempt.invoice_expires_at {
+				Some(expires_at) => cmp::max(attempt.created_at, expires_at),
+				// Older attempts did not store the expiry; they stay open.
+				None => return false,
+			},
+		};
+		received_by + retry_for + XPAY_TIMEOUT_BUFFER <= now
+	}
+
 	/// Iterates over all open payment attempts for this node and reconciles
 	/// each one that is old enough and not in backoff. Prunes expired backoff
 	/// entries afterwards.
@@ -498,7 +543,11 @@ impl ClnXpayProcess {
 			}
 
 			let attempt_id = attempt.id;
-			let evidence = FailureEvidence::RetriesOver;
+			let evidence = if Self::retries_over(&attempt, retry_for, Local::now()) {
+				FailureEvidence::RetriesOver
+			} else {
+				FailureEvidence::Unproven
+			};
 			if let Err(e) = self.client.sync_payment_attempt_status(attempt, evidence).await {
 				error!("Error syncing payment attempt status: {e:#}");
 			} else {
@@ -631,9 +680,43 @@ mod tests {
 		assert_eq!(xpay_failed_before_any_htlc(&transport), None);
 		let not_status = anyhow!("missing preimage");
 		assert_eq!(xpay_failed_before_any_htlc(&not_status), None);
+		// Only an answer from lightningd shows that CLN received the request.
+		assert_eq!(xpay_error_code(&destination), Some(203));
+		assert_eq!(xpay_error_code(&no_code), None);
+		assert_eq!(xpay_error_code(&transport), None);
+		assert_eq!(xpay_error_code(&not_status), None);
 		// The code must be the one cln-grpc puts first, not text in a message.
 		let spoofed = cln_error("Error calling method Xpay: RpcError { code: Some(209), \
 			message: \"code: Some(205)\", data: None }");
 		assert_eq!(xpay_failed_before_any_htlc(&spoofed), None);
+	}
+
+	#[test]
+	fn unanswered_request_is_over_only_after_its_invoice_expired() {
+		let created = Local::now();
+		let retry_for = Duration::from_secs(5);
+		let attempt = LightningPaymentAttempt {
+			id: 1, lightning_node_id: 1, payment_hash: Preimage::from_slice(&[1; 32]).unwrap().compute_payment_hash(),
+			amount_msat: 1_000_000, final_amount_msat: None, status: LightningPaymentStatus::Requested,
+			lightning_htlc_subscription_id: None, error: None, block_height: None, user_fee: None,
+			user_agent: None, retry_for: Some(retry_for),
+			invoice_expires_at: Some(created + Duration::from_secs(600)),
+			created_at: created, updated_at: created,
+		};
+		let over = |a: &LightningPaymentAttempt, secs: u64|
+			ClnXpayProcess::retries_over(a, retry_for, created + Duration::from_secs(secs));
+		// A request CLN never answered may arrive until its invoice expires.
+		assert!(!over(&attempt, 20));
+		assert!(!over(&attempt, 619));
+		assert!(over(&attempt, 620));
+		// Once CLN received it, its retry time bounds it.
+		let received = LightningPaymentAttempt {
+			status: LightningPaymentStatus::Submitted, updated_at: created + Duration::from_secs(10), ..attempt.clone()
+		};
+		assert!(!over(&received, 29));
+		assert!(over(&received, 30));
+		// Without a stored expiry, an unanswered request stays open.
+		let older = LightningPaymentAttempt { invoice_expires_at: None, ..attempt };
+		assert!(!over(&older, 1_000_000));
 	}
 }

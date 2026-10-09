@@ -74,6 +74,26 @@ pub struct Movement {
 }
 
 impl Movement {
+	pub(crate) fn server_spend_subsystem() -> MovementSubsystem {
+		MovementSubsystem { name: "bark.server_spend".into(), kind: "reconcile".into() }
+	}
+
+	/// A trusted status establishes the Ark debit, but not its destination,
+	/// payout transaction, fee or original spend time. Do not invent those.
+	pub(crate) fn server_spend<G>(
+		id: MovementId,
+		vtxo: &ark::Vtxo<G>,
+		time: DateTime<chrono::Local>,
+	) -> anyhow::Result<Self> {
+		let mut movement = Self::new(id, MovementStatus::Successful,
+			&Self::server_spend_subsystem(), time);
+		movement.intended_balance = -vtxo.amount().to_signed()?;
+		movement.effective_balance = movement.intended_balance;
+		movement.input_vtxos = vec![vtxo.id()];
+		movement.time.completed_at = Some(time);
+		Ok(movement)
+	}
+
 	pub fn new(
 		id: MovementId,
 		status: MovementStatus,

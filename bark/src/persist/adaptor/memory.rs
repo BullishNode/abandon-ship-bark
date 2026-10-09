@@ -61,6 +61,14 @@ impl StorageAdaptorWrapper<MemoryStorageAdaptor> {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl StorageAdaptor for MemoryStorageAdaptor {
+	async fn put_batch(&mut self, records: Vec<Record>) -> anyhow::Result<()> {
+		// No await or fallible work between writes; the wrapper owns the lock.
+		for record in records {
+			self.partitions.entry(record.partition).or_default().insert(record.pk.clone(), record);
+		}
+		Ok(())
+	}
+
 	async fn put(&mut self, record: Record) -> anyhow::Result<()> {
 		let partition = self.partitions.entry(record.partition).or_default();
 		partition.insert(record.pk.clone(), record);

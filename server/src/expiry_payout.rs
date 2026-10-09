@@ -19,6 +19,7 @@ use bitcoin_ext::FeeRateExt;
 use tracing::{info, warn};
 
 use crate::database::expiry_settlement::{payout_script, ExpiryInput, ExpirySource};
+use crate::database::ln::LightningNodeId;
 use crate::ln::SendRefund;
 use crate::nursery::NurseryTxKind;
 use crate::wallet::{BdkWalletExt, WalletKind};
@@ -68,7 +69,9 @@ fn group_fee_shares(
 impl Server {
 	/// Pay the groups whose Lightning payments are free. Returns the payment
 	/// and the number of coins it settled.
-	async fn claim_and_pay(&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate) -> anyhow::Result<Option<(Payment, usize)>> {
+	async fn claim_and_pay(
+		&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate, unavailable_nodes: &mut BTreeSet<LightningNodeId>,
+	) -> anyhow::Result<Option<(Payment, usize)>> {
 		let cfg = self.config.expiry_payout.clone();
 		// Cooperative Lightning claims and refund requests take the payment
 		// guard before coin locks and can hold it while they wait on a node.
@@ -118,7 +121,7 @@ impl Server {
 			let Some(hash) = sends.get(&coin.id()) else { continue; };
 			if !decided.insert(*hash) { continue; }
 			let policy = coin.policy().as_server_htlc_send().context("expiry send is not an HTLC send")?;
-			match self.lightning_send_refund(*hash, policy.htlc_expiry).await? {
+			match self.lightning_send_refund(*hash, policy.htlc_expiry, unavailable_nodes).await? {
 				SendRefund::Allowed => {},
 				SendRefund::Refused(reason) | SendRefund::Undecided(reason) =>
 					return Ok(deferred(format!("lightning send {hash} not refundable: {reason}"))),
@@ -386,6 +389,9 @@ impl Server {
 		let mut destination_allowed = BTreeMap::<ScriptBuf, bool>::new();
 		let mut cancellation_attempts = BTreeSet::new();
 		let mut send_refunds = BTreeMap::new();
+		// A node that does not answer once is not asked again this tick, so
+		// it holds up only the payments it made, not every other wallet.
+		let mut unavailable_nodes = BTreeSet::new();
 		loop {
 			let page = self.db.read(async |t| t.expiry_settlement_page(tip,
 				cfg.grace_blocks, cursor.clone(), 256).await).await?;
@@ -431,7 +437,9 @@ impl Server {
 						None => {
 							let policy = vtxo.policy().as_server_htlc_send()
 								.context("expiry send is not an HTLC send")?;
-							let refundable = match self.lightning_send_refund(hash, policy.htlc_expiry).await? {
+							let refundable = match self.lightning_send_refund(
+								hash, policy.htlc_expiry, &mut unavailable_nodes,
+							).await? {
 								SendRefund::Allowed => true,
 								SendRefund::Refused(reason) | SendRefund::Undecided(reason) => {
 									warn!(%hash, %reason, "expiry send refund held");
@@ -484,20 +492,20 @@ impl Server {
 				info!(coins = group.inputs.len(), max_batch = cfg.max_batch,
 					"expiry wallet group exceeds max_batch; paying it alone");
 				let coins = group.inputs.len();
-				let paid = self.pay_expiry_batch(vec![group], rate).await?;
+				let paid = self.pay_expiry_batch(vec![group], rate, &mut unavailable_nodes).await?;
 				if paid > 0 { stats.paid = paid; return Ok(()); }
 				stats.waiting += coins;
 				continue;
 			}
 			if batch_coins + group.inputs.len() > cfg.max_batch {
-				let paid = self.pay_expiry_batch(std::mem::take(&mut batch), rate).await?;
+				let paid = self.pay_expiry_batch(std::mem::take(&mut batch), rate, &mut unavailable_nodes).await?;
 				if paid > 0 { stats.paid = paid; return Ok(()); }
 				batch_coins = 0;
 			}
 			batch_coins += group.inputs.len();
 			batch.push(group);
 		}
-		if !batch.is_empty() { stats.paid = self.pay_expiry_batch(batch, rate).await?; }
+		if !batch.is_empty() { stats.paid = self.pay_expiry_batch(batch, rate, &mut unavailable_nodes).await?; }
 		Ok(())
 	}
 
@@ -579,10 +587,12 @@ impl Server {
 		Ok(false)
 	}
 
-	async fn pay_expiry_batch(&self, batch: Vec<PayoutGroup>, rate: FeeRate) -> anyhow::Result<usize> {
+	async fn pay_expiry_batch(
+		&self, batch: Vec<PayoutGroup>, rate: FeeRate, unavailable_nodes: &mut BTreeSet<LightningNodeId>,
+	) -> anyhow::Result<usize> {
 		let mut pending = VecDeque::from([batch]);
 		while let Some(mut batch) = pending.pop_front() {
-			if let Some((payment, coins)) = self.claim_and_pay(batch.clone(), rate).await? {
+			if let Some((payment, coins)) = self.claim_and_pay(batch.clone(), rate, unavailable_nodes).await? {
 				if let Err(e) = self.write_expiry_receipt(&payment) { warn!("expiry receipt deferred: {e:#}"); }
 				info!(txid = %payment.txid, fee_sat = payment.fee_sat, coins, "expiry payment committed");
 				return Ok(coins);

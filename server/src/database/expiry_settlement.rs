@@ -1,4 +1,4 @@
-//! Atomic expiry payments. The nursery and receipt share the coin-state commit.
+//! Atomic expiry payments. The nursery tx and the settlement rows share the coin-state commit.
 
 use std::collections::BTreeMap;
 
@@ -62,49 +62,53 @@ pub(crate) fn payout_script(owner: PublicKey) -> ScriptBuf {
 	ScriptBuf::new_p2tr(&SECP, owner.x_only_public_key().0, None)
 }
 
+/// Expired, unsettled coins and the source that decides their payee: `$1` is
+/// the grace period and `$2` the tip. A coin that is spent, exited, offboarded
+/// or in a live exchange is not a candidate. Scan and commit share this rule.
+const CANDIDATES: &str = "SELECT v.vtxo_id, v.vtxo, v.expiry,
+		v.spend_state='unclaimed' AS unclaimed, false AS pending_board,
+		v.spend_state='unregistered' AS unregistered,
+		CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash,
+		CASE WHEN v.spend_state='spendable' AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
+			THEN h.payment_hash END AS send_hash
+	FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id=v.id
+	WHERE NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
+	AND ((v.policy_type = 'pubkey' AND v.spend_state IN ('spendable', 'unclaimed'))
+		OR (v.spend_state='unregistered' AND h.id IS NULL)
+		-- A recorded preimage does not prove the payer paid: it is
+		-- stored before the hold invoice settles. Only a settled
+		-- subscription shows the incoming payment was collected.
+		OR (v.spend_state='htlc-recv-unclaimed'
+			AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
+			AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
+			AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
+			AND EXISTS (SELECT 1 FROM lightning_htlc_subscription r
+				WHERE r.payment_hash=h.payment_hash AND r.status='settled'))
+		-- A prepared intra-Ark receive is a candidate: the refund
+		-- decision waits until its recipient can no longer claim.
+		OR (v.spend_state='spendable'
+			AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
+			AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
+			AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
+			AND NOT EXISTS (SELECT 1 FROM lightning_htlc_subscription r
+				WHERE r.payment_hash=h.payment_hash AND r.status='settled')))
+	AND v.confirmed_height IS NULL AND v.expiry::bigint + $1 <= $2
+	AND v.spent_in_round IS NULL AND v.oor_spent_txid IS NULL AND v.offboarded_in IS NULL
+	AND NOT EXISTS (SELECT 1 FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id
+		WHERE i.vtxo_id=v.vtxo_id AND p.forfeited_at IS NULL)
+	UNION ALL
+	SELECT p.vtxo_id, p.vtxo, p.expiry, false, true, false, NULL, NULL FROM pending_board p
+	WHERE p.expiry::bigint + $1 <= $2
+	AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)";
+
 impl Tx<'_> {
 	pub(crate) async fn expiry_settlement_page(
 		&self, tip: u32, grace: u32,
 		after: (u32, String), limit: u32,
 	) -> anyhow::Result<Vec<SettlementVtxo>> {
-		let rows = self.query("SELECT vtxo_id,vtxo,expiry,unclaimed,pending_board,unregistered,receive_hash,send_hash FROM (
-				SELECT v.vtxo_id, v.vtxo, v.expiry,
-				v.spend_state='unclaimed' AS unclaimed, false AS pending_board,
-				v.spend_state='unregistered' AS unregistered,
-				CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash,
-				CASE WHEN v.spend_state='spendable' AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
-					THEN h.payment_hash END AS send_hash
-				FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id=v.id
-				WHERE (v.expiry::bigint, v.vtxo_id) > ($1::bigint, $2)
-				AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
-				AND ((v.policy_type = 'pubkey' AND v.spend_state IN ('spendable', 'unclaimed'))
-					OR (v.spend_state='unregistered' AND h.id IS NULL)
-					-- A recorded preimage does not prove the payer paid: it is
-					-- stored before the hold invoice settles. Only a settled
-					-- subscription shows the incoming payment was collected.
-					OR (v.spend_state='htlc-recv-unclaimed'
-						AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
-						AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-						AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
-						AND EXISTS (SELECT 1 FROM lightning_htlc_subscription r
-							WHERE r.payment_hash=h.payment_hash AND r.status='settled'))
-					-- A prepared intra-Ark receive is a candidate: the refund
-					-- decision waits until its recipient can no longer claim.
-					OR (v.spend_state='spendable'
-						AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
-						AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-						AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
-						AND NOT EXISTS (SELECT 1 FROM lightning_htlc_subscription r
-							WHERE r.payment_hash=h.payment_hash AND r.status='settled')))
-				AND v.confirmed_height IS NULL AND v.expiry::bigint + $3 <= $4
-				UNION ALL
-				SELECT p.vtxo_id,p.vtxo,p.expiry,false,true,false,NULL,NULL FROM pending_board p
-				WHERE (p.expiry::bigint,p.vtxo_id) > ($1::bigint,$2)
-				AND p.expiry::bigint + $3 <= $4
-				AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)
-			) candidates ORDER BY expiry,vtxo_id LIMIT $5",
-				&[&(after.0 as i64), &after.1, &(grace as i64), &(tip as i64),
-					&(limit as i64)]).await?;
+		let rows = self.query(&format!("SELECT * FROM ({CANDIDATES}) c
+			WHERE (c.expiry::bigint, c.vtxo_id) > ($3::bigint, $4) ORDER BY c.expiry, c.vtxo_id LIMIT $5"),
+			&[&(grace as i64), &(tip as i64), &(after.0 as i64), &after.1, &(limit as i64)]).await?;
 		let mut candidates = rows.into_iter().map(SettlementVtxo::from_row).collect::<anyhow::Result<Vec<_>>>()?;
 		for coin in &mut candidates {
 			if coin.source == ExpirySource::Unregistered {
@@ -154,63 +158,21 @@ impl Tx<'_> {
 		Ok(())
 	}
 
+	/// The selected inputs that are still payable with the same source and owner.
 	pub(crate) async fn expiry_inputs(
 		&self, inputs: &[ExpiryInput], tip: u32, grace: u32,
 	) -> anyhow::Result<Vec<Vtxo>> {
-		let ids = inputs.iter().filter(|i| i.source == ExpirySource::Registered).map(|i| i.id.to_string()).collect::<Vec<_>>();
-		let boards = inputs.iter().filter(|i| i.source == ExpirySource::PendingBoard).map(|i| i.id.to_string()).collect::<Vec<_>>();
-		let unregistered = inputs.iter().filter(|i| i.source == ExpirySource::Unregistered).map(|i| i.id.to_string()).collect::<Vec<_>>();
-		let receives = inputs.iter().filter_map(|i| match i.source {
-			ExpirySource::LightningReceive(hash) => Some((i.id.to_string(), hash.to_string())),
-			_ => None,
-		}).collect::<BTreeMap<_, _>>();
-		let receive_ids = receives.keys().cloned().collect::<Vec<_>>();
-		let sends = inputs.iter().filter_map(|i| match i.source {
-			ExpirySource::LightningSend(hash) => Some((i.id.to_string(), hash.to_string())),
-			_ => None,
-		}).collect::<BTreeMap<_, _>>();
-		let send_ids = sends.keys().cloned().collect::<Vec<_>>();
-		let owners = inputs.iter().map(|i| (i.id, i.owner)).collect::<BTreeMap<_, _>>();
-		let rows = self.query("SELECT v.vtxo,v.spend_state='unregistered' AS unregistered,
-			CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash,
-			CASE WHEN v.spend_state='spendable' AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
-				THEN h.payment_hash END AS send_hash
-			FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id=v.id
-			WHERE ((v.vtxo_id=ANY($1) AND v.policy_type='pubkey' AND v.spend_state IN ('spendable','unclaimed'))
-				OR (v.vtxo_id=ANY($5) AND v.spend_state='unregistered' AND h.id IS NULL)
-				OR (v.vtxo_id=ANY($6) AND v.spend_state='htlc-recv-unclaimed'
-					AND v.policy_type IN ('server-htlc-receive','server-htlc-receive-v1')
-					AND h.direction='outgoing' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-					AND EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
-					AND EXISTS (SELECT 1 FROM lightning_htlc_subscription r
-						WHERE r.payment_hash=h.payment_hash AND r.status='settled'))
-				OR (v.vtxo_id=ANY($7) AND v.spend_state='spendable'
-					AND v.policy_type IN ('server-htlc-send','server-htlc-send-v1')
-					AND h.direction='incoming' AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-					AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash)
-					AND NOT EXISTS (SELECT 1 FROM lightning_htlc_subscription r
-						WHERE r.payment_hash=h.payment_hash AND r.status='settled')))
-			AND v.confirmed_height IS NULL AND v.expiry::bigint + $2 <= $3
-			AND v.spent_in_round IS NULL AND v.oor_spent_txid IS NULL
-			AND v.offboarded_in IS NULL AND NOT EXISTS
-			(SELECT 1 FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id
-			 WHERE i.vtxo_id=v.vtxo_id AND p.forfeited_at IS NULL)
-			UNION ALL
-			SELECT p.vtxo,false,NULL,NULL FROM pending_board p WHERE p.vtxo_id=ANY($4)
-			AND p.expiry::bigint + $2 <= $3
-			AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)",
-			&[&ids, &(grace as i64), &(tip as i64), &boards, &unregistered, &receive_ids, &send_ids]).await?;
+		let ids = inputs.iter().map(|i| i.id.to_string()).collect::<Vec<_>>();
+		let expected = inputs.iter().map(|i| (i.id, (i.source, i.owner))).collect::<BTreeMap<_, _>>();
+		let rows = self.query(&format!("SELECT * FROM ({CANDIDATES}) c WHERE c.vtxo_id=ANY($3)"),
+			&[&(grace as i64), &(tip as i64), &ids]).await?;
 		let mut coins = Vec::new();
 		for row in rows {
-			let vtxo = Vtxo::deserialize(row.get("vtxo"))?;
-			if row.get::<_, Option<&str>>("receive_hash") != receives.get(&vtxo.id().to_string()).map(String::as_str)
-				|| row.get::<_, Option<&str>>("send_hash") != sends.get(&vtxo.id().to_string()).map(String::as_str)
-			{
-				continue;
-			}
-			let owner = if row.get("unregistered") { self.unregistered_expiry_owner(&vtxo).await? }
+			let coin = SettlementVtxo::from_row(row)?;
+			let vtxo = Vtxo::deserialize(&coin.vtxo)?;
+			let owner = if coin.source == ExpirySource::Unregistered { self.unregistered_expiry_owner(&vtxo).await? }
 				else { Some(vtxo.user_pubkey()) };
-			if owner.as_ref() == owners.get(&vtxo.id()) { coins.push(vtxo); }
+			if owner.map(|o| (coin.source, o)).as_ref() == expected.get(&coin.id) { coins.push(vtxo); }
 		}
 		Ok(coins)
 	}

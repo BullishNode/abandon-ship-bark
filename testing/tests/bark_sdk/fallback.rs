@@ -1,12 +1,22 @@
 use std::time::Duration;
 
-use bitcoin::{Address, Network};
+use bitcoin::{Address, FeeRate, Network, OutPoint, Transaction, Txid};
+use bitcoin::bip32::Xpriv;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin_ext::BlockDelta;
+use bitcoin_ext::rpc::RpcApi;
 use bark::lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
+use bdk_wallet::{KeychainKind, SignOptions};
+use bdk_wallet::template::Bip84;
 
 use ark_testing::{TestContext, btc, sat};
+use ark_testing::constants::BOARD_CONFIRMATIONS;
+use ark_testing::daemon::watchmand::WATCHMAND_CONFIG_FILE;
+use ark::ProtocolEncoding;
+use ark::attestations::FallbackRecordAttestation;
 use server::database::Db;
+use server_rpc::protos;
 
 #[tokio::test]
 async fn fallback_register_board_rotate_and_offline_pool() {
@@ -80,4 +90,209 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 	assert!(format!("{err:#}").contains("no linked keys available"), "{err:#}");
 	assert_eq!(wallet.spendable_vtxos().await.unwrap().iter().map(|v| v.id()).collect::<Vec<_>>(), before);
 	assert!(wallet.pending_lightning_sends().await.unwrap().is_empty());
+}
+
+/// Real funded boards, sweep, expiry task and nursery. The absent wallet's
+/// individual coins are all below the configured minimum; their group is not.
+#[tokio::test]
+async fn fallback_grouped_expiry_without_client() {
+	grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, 100).await;
+}
+
+#[tokio::test]
+async fn fallback_grouped_200_small_coins() {
+	grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200).await;
+}
+
+async fn grouped_expiry_without_client(name: &str, count: usize, amount: u64, max_batch: usize) {
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(128);
+			c.min_board_amount = sat(330);
+		}).watchmand().create().await;
+	let wallet = ctx.bark_sdk("wallet", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true)
+		.funded(sat(count as u64 * amount + 1_000_000)).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	for i in 0..count {
+		let board = wallet.board_amount(sat(amount)).await.unwrap();
+		ctx.await_transaction(board.funding_tx.compute_txid()).await;
+		// Confirm short chains instead of changing Core's mempool limits.
+		if i % 8 == 7 { ctx.generate_blocks(1).await; }
+	}
+	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+	wallet.sync().await;
+	let record = wallet.fallback_destination().await.unwrap();
+	let mailbox_key = wallet.mailbox_keypair();
+	let coins = wallet.spendable_vtxos().await.unwrap();
+	assert_eq!(coins.len(), count);
+	let principal = coins.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+	assert_eq!(principal, count as u64 * amount);
+	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let expiry = coins.iter().map(|v| v.expiry_height().to_u32()).max().unwrap();
+	drop(wallet);
+
+	// Feed Core's real estimator with confirmed transactions. No fee estimate
+	// is injected into the server or substituted by a test fallback.
+	let core = ctx.bitcoind().sync_client();
+	for _ in 0..12 {
+		for _ in 0..8 {
+			let address = ctx.bitcoind().get_new_address();
+			let _: Txid = core.call("sendtoaddress", &[
+				address.to_string().into(), 0.001.into(), "".into(), "".into(),
+				false.into(), true.into(), serde_json::Value::Null, "unset".into(),
+				serde_json::Value::Null, 3.into(),
+			]).unwrap();
+		}
+		ctx.generate_blocks(1).await;
+	}
+	let estimate = core.estimate_smart_fee(6, None).unwrap();
+	assert!(estimate.fee_rate.is_some(), "real fee estimate required: {estimate:?}");
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	if count > 3 {
+		// This gate tests one group of 200 simultaneously eligible coins.
+		// Sweeps can confirm in several blocks. Keep payouts disabled until
+		// every backing path has a confirmed real sweep, without changing
+		// any coin state or substituting synthetic sweep history.
+		let tip = ctx.bitcoind().get_block_count().await as u32;
+		ctx.generate_blocks(expiry.saturating_sub(tip) + 3).await;
+		let anchors = coins.iter().map(|v| v.chain_anchor().to_string()).collect::<Vec<_>>();
+		tokio::time::timeout(Duration::from_secs(90), async {
+			loop {
+				let rows = db.read(async |t| Ok(t.query(
+					"SELECT vtxo_id, onchain_spent_txid FROM vtxo WHERE vtxo_id = ANY($1)",
+					&[&anchors],
+				).await?)).await.unwrap();
+				assert_eq!(rows.len(), count);
+				let all_swept = rows.iter().all(|row| {
+					let Some(txid) = row.get::<_, Option<String>>("onchain_spent_txid") else { return false; };
+					let txid: Txid = txid.parse().unwrap();
+					let info = core.get_raw_transaction_info(&txid, None).unwrap();
+					if info.confirmations.unwrap_or(0) == 0 { return false; }
+					let tx = core.get_raw_transaction(&txid, None).unwrap();
+					let anchor: OutPoint = row.get::<_, String>("vtxo_id").parse().unwrap();
+					assert!(tx.input.iter().any(|i| i.previous_output == anchor));
+					true
+				});
+				if all_swept { break; }
+				tokio::time::sleep(Duration::from_secs(1)).await;
+				ctx.generate_blocks(1).await;
+			}
+		}).await.expect("all board sweeps must confirm before the grouped test starts");
+	}
+
+	srv.stop().await.unwrap();
+	{
+		let mut config = srv.config_mut();
+		config.expiry_payout.enabled = true;
+		config.expiry_payout.interval = Duration::from_secs(1);
+		config.expiry_payout.grace_blocks = 0;
+		config.expiry_payout.sweep_min_confs = 1;
+		config.expiry_payout.min_payout_sat = 10_000;
+		config.expiry_payout.max_batch = max_batch;
+		config.expiry_payout.receipt_dir = ctx.datadir.join("receipts");
+		config.expiry_payout.watchman_config = Some(
+			srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE),
+		);
+	}
+	srv.start().await.unwrap();
+	let tip = ctx.bitcoind().get_block_count().await as u32;
+	ctx.generate_blocks(expiry.saturating_sub(tip) + 3).await;
+	let rows = tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			let rows = db.read(async |t| Ok(t.query(
+				"SELECT id, txid, fee_sat, spk FROM expiry_settlement WHERE id = ANY($1) ORDER BY id",
+				&[&ids],
+			).await?)).await.unwrap();
+			if rows.len() == ids.len() { break rows; }
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			ctx.generate_blocks(1).await;
+		}
+	}).await.expect("swept grouped boards must be paid within 90 seconds");
+	let txid: Txid = rows[0].get::<_, String>("txid").parse().unwrap();
+	let fee = rows[0].get::<_, i64>("fee_sat") as u64;
+	for row in &rows {
+		assert_eq!(row.get::<_, String>("txid"), txid.to_string());
+		assert_eq!(row.get::<_, Vec<u8>>("spk"), record.spk.as_bytes());
+		assert_eq!(row.get::<_, i64>("fee_sat") as u64, fee);
+	}
+	ctx.await_transaction(txid).await;
+	ctx.generate_blocks(1).await;
+	let tx: Transaction = core.get_raw_transaction(&txid, None).unwrap();
+	let outputs = tx.output.iter().filter(|o| o.script_pubkey == record.spk).collect::<Vec<_>>();
+	assert_eq!(outputs.len(), 1);
+	assert!(fee > 0);
+	assert_eq!(outputs[0].value.to_sat(), principal - fee);
+	assert!(outputs[0].value >= sat(10_000));
+	let input = tx.input.iter().map(|i| {
+		core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
+			.output[i.previous_output.vout as usize].value.to_sat()
+	}).sum::<u64>();
+	assert_eq!(fee, input - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>());
+	let vout = tx.output.iter().position(|o| o.script_pubkey == record.spk).unwrap() as u32;
+	let unspent = core.get_tx_out(&txid, vout, Some(true)).unwrap().unwrap();
+	assert!(unspent.confirmations >= 1);
+	assert_eq!(unspent.value, outputs[0].value);
+	let receipt_path = ctx.datadir.join("receipts").join(format!("{txid}.json"));
+	tokio::time::timeout(Duration::from_secs(10), async {
+		while !receipt_path.exists() { tokio::time::sleep(Duration::from_millis(100)).await; }
+	}).await.expect("receipt must be exported");
+	let receipt: serde_json::Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
+	assert_eq!(receipt["outputs"].as_array().unwrap().len(), 1);
+	assert_eq!(receipt["outputs"][0]["amount_sat"], principal - fee);
+	assert_eq!(receipt["outputs"][0]["fee_sat"], fee);
+	println!("grouped expiry payout: txid={txid}, coins={count}, principal_sat={principal}, net_sat={}, fee_sat={fee}",
+		outputs[0].value.to_sat());
+
+	// Restore from only the mnemonic and Bitcoin blocks. A new standard BDK
+	// wallet scans both BIP84 chains with lookahead 20, without Ark databases,
+	// coin keys, record scripts, address indexes or a connection to captaind.
+	srv.stop().await.unwrap();
+	let master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
+	let mut restored = bdk_wallet::Wallet::create(
+		Bip84(master, KeychainKind::External), Bip84(master, KeychainKind::Internal),
+	).network(Network::Regtest).lookahead(20).create_wallet_no_persist().unwrap();
+	for height in 1..=core.get_block_count().unwrap() {
+		let hash = core.get_block_hash(height).unwrap();
+		restored.apply_block(&core.get_block(&hash).unwrap(), height as u32).unwrap();
+	}
+	let payout = OutPoint::new(txid, vout);
+	let discovered = restored.list_unspent().find(|u| u.outpoint == payout)
+		.expect("mnemonic-only BIP84 restore must discover the payout");
+	assert_eq!(discovered.txout.value, outputs[0].value);
+	let destination = ctx.bitcoind().get_new_address();
+	let mut builder = restored.build_tx();
+	builder.add_utxo(payout).unwrap().manually_selected_only()
+		.drain_to(destination.script_pubkey()).fee_rate(FeeRate::from_sat_per_vb(3).unwrap());
+	let mut psbt = builder.finish().unwrap();
+	assert!(restored.sign(&mut psbt, SignOptions::default()).unwrap());
+	let spend = psbt.extract_tx().unwrap();
+	assert_eq!(spend.input.len(), 1);
+	assert_eq!(spend.input[0].previous_output, payout);
+	let spend_txid = core.send_raw_transaction(&spend).unwrap();
+	ctx.bitcoind().generate(1).await;
+	assert!(core.get_tx_out(&txid, vout, Some(true)).unwrap().is_none());
+	assert_eq!(ctx.bitcoind().get_received_by_address(&destination), spend.output[0].value);
+	println!("mnemonic-only BIP84 recovery: lookahead=20, payout={payout}, confirmed_spend={spend_txid}");
+
+	// A later valid record update cannot rewrite the historical receipt.
+	srv.start().await.unwrap();
+	let next_spk = restored.next_unused_address(KeychainKind::External).script_pubkey();
+	assert_ne!(next_spk, record.spk);
+	let seq = record.seq + 1;
+	let mut signed_record = next_spk.as_bytes().to_vec();
+	signed_record.extend_from_slice(&seq.to_le_bytes());
+	signed_record.extend_from_slice(&FallbackRecordAttestation::new(&next_spk, seq, &mailbox_key).serialize());
+	assert_eq!(srv.get_public_rpc().await.set_fallback(protos::SetFallbackRequest {
+		mailbox_pk: mailbox_key.public_key().serialize().to_vec(),
+		record: Some(signed_record.clone()), key_links: vec![],
+	}).await.unwrap().into_inner().record, signed_record);
+	std::fs::remove_file(&receipt_path).unwrap();
+	tokio::time::timeout(Duration::from_secs(10), async {
+		while !receipt_path.exists() { tokio::time::sleep(Duration::from_millis(100)).await; }
+	}).await.expect("receipt must regenerate after record rotation");
+	let rebuilt: serde_json::Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
+	assert_eq!(rebuilt, receipt);
 }

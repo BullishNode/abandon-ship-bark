@@ -39,7 +39,7 @@ pub(crate) fn payout_script(vtxo: &Vtxo) -> ScriptBuf {
 
 impl Tx<'_> {
 	pub(crate) async fn expiry_settlement_page(
-		&self, tip: u32, grace: u32, minimum: u64,
+		&self, tip: u32, grace: u32,
 		after: (u32, String), limit: u32,
 	) -> anyhow::Result<Vec<SettlementVtxo>> {
 		let rows = self.query("SELECT v.vtxo_id, v.vtxo, v.expiry,
@@ -48,9 +48,9 @@ impl Tx<'_> {
 				AND NOT EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = v.vtxo_id)
 				AND v.policy_type = 'pubkey' AND v.spend_state IN ('spendable', 'unclaimed')
 				AND v.confirmed_height IS NULL AND v.expiry::bigint + $3 <= $4
-				AND (v.amount >= $5 OR v.spend_state='unclaimed') ORDER BY v.expiry, v.vtxo_id LIMIT $6",
+				ORDER BY v.expiry, v.vtxo_id LIMIT $5",
 				&[&(after.0 as i64), &after.1, &(grace as i64), &(tip as i64),
-					&i64::try_from(minimum)?, &(limit as i64)]).await?;
+					&(limit as i64)]).await?;
 		let mut candidates = rows.into_iter().map(SettlementVtxo::from_row).collect::<anyhow::Result<Vec<_>>>()?;
 		for coin in &mut candidates {
 			if !coin.unclaimed { continue; }
@@ -73,7 +73,7 @@ impl Tx<'_> {
 	}
 
 	pub(crate) async fn expiry_receipt(&self, txid: &str) -> anyhow::Result<Payment> {
-		let rows = self.query("SELECT s.fee_sat,v.vtxo FROM expiry_settlement s
+		let rows = self.query("SELECT s.fee_sat,s.spk,v.vtxo FROM expiry_settlement s
 			JOIN vtxo v ON v.vtxo_id=s.id WHERE s.txid=$1 ORDER BY s.id", &[&txid]).await?;
 		let first = rows.first().context("expiry payment missing")?;
 		let raw_tx: Vec<u8> = self.query_one("SELECT tx FROM nursery_tx WHERE txid=$1", &[&txid]).await?.get("tx");
@@ -82,7 +82,10 @@ impl Tx<'_> {
 		let mut gross = BTreeMap::<ScriptBuf, u64>::new();
 		for row in rows {
 			let v = Vtxo::deserialize(row.get("vtxo"))?;
-			*gross.entry(payout_script(&v)).or_default() += v.amount().to_sat();
+			let spk = row.get::<_, Option<Vec<u8>>>("spk").map(ScriptBuf::from)
+				.unwrap_or_else(|| payout_script(&v));
+			let total = gross.entry(spk).or_default();
+			*total = total.checked_add(v.amount().to_sat()).context("expiry receipt gross overflow")?;
 		}
 		let mut outputs = Vec::new();
 		for (i, o) in tx.output.iter().enumerate() {
@@ -98,31 +101,33 @@ impl Tx<'_> {
 	}
 
 	pub(crate) async fn expiry_inputs(
-		&self, ids: &[String], tip: u32, grace: u32, minimum: u64,
+		&self, ids: &[String], tip: u32, grace: u32,
 	) -> anyhow::Result<Vec<Vtxo>> {
 		let rows = self.query("SELECT v.vtxo FROM vtxo v WHERE v.vtxo_id = ANY($1)
 			AND v.policy_type='pubkey' AND v.spend_state IN ('spendable','unclaimed')
 			AND v.confirmed_height IS NULL AND v.expiry::bigint + $2 <= $3
-			AND v.amount >= $4 AND v.spent_in_round IS NULL AND v.oor_spent_txid IS NULL
+			AND v.spent_in_round IS NULL AND v.oor_spent_txid IS NULL
 			AND v.offboarded_in IS NULL AND NOT EXISTS
 			(SELECT 1 FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id
 			 WHERE i.vtxo_id=v.vtxo_id AND p.forfeited_at IS NULL)
-			ORDER BY v.vtxo_id", &[&ids, &(grace as i64), &(tip as i64), &i64::try_from(minimum)?]).await?;
+			ORDER BY v.vtxo_id", &[&ids, &(grace as i64), &(tip as i64)]).await?;
 		rows.into_iter().map(|r| Ok(Vtxo::deserialize(r.get("vtxo"))?)).collect()
 	}
 
 	pub(crate) async fn store_expiry_payment(
-		&self, ids: &[String], tx: &Transaction, fee: u64, tip: u32, grace: u32, minimum: u64,
+		&self, ids: &[String], scripts: &[Vec<u8>], tx: &Transaction, fee: u64, tip: u32, grace: u32,
 		confirm_target: bitcoin_ext::BlockHeight,
 	) -> anyhow::Result<()> {
-		ensure!(self.expiry_inputs(ids, tip, grace, minimum).await?.len() == ids.len(), "expiry inputs changed");
+		ensure!(ids.len() == scripts.len(), "expiry destination count mismatch");
+		ensure!(self.expiry_inputs(ids, tip, grace).await?.len() == ids.len(), "expiry inputs changed");
 		let n = self.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW()
 			WHERE vtxo_id=ANY($1) AND spend_state IN ('spendable','unclaimed')", &[&ids]).await?;
 		ensure!(n as usize == ids.len(), "expiry inputs changed during commit");
 		let txid = tx.compute_txid().to_string();
 		self.upsert_nursery_tx(tx, NurseryTxKind::ExpiryPayout, confirm_target).await?;
-		self.execute("INSERT INTO expiry_settlement (id,txid,fee_sat)
-			SELECT unnest($1::text[]),$2,$3", &[&ids, &txid, &i64::try_from(fee)?]).await?;
+		self.execute("INSERT INTO expiry_settlement (id,txid,fee_sat,spk)
+			SELECT p.id,$2,$3,p.spk FROM UNNEST($1::text[],$4::bytea[]) AS p(id,spk)",
+			&[&ids, &txid, &i64::try_from(fee)?, &scripts]).await?;
 		Ok(())
 	}
 

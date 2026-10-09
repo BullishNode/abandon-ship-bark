@@ -1374,7 +1374,7 @@ async fn fallback_busy_lightning_payment_does_not_stall_other_wallets() {
 
 	// Payouts run from before expiry, so the guard is busy before either
 	// wallet becomes payable.
-	restart_with_payouts(&ctx, &srv).await;
+	restart_with_payouts(&srv).await;
 
 	// Test-only fault: a database session holds the sender's HTLC coin rows,
 	// so the refund request waits while it holds its payment guard. No
@@ -1546,7 +1546,7 @@ async fn unresponsive_node(sends: usize) {
 
 	// Payouts run from before expiry, so the node is already silent when
 	// either wallet becomes payable.
-	restart_with_payouts(&ctx, &srv).await;
+	restart_with_payouts(&srv).await;
 
 	// A real outage of the server's own node: its container is frozen, so it
 	// accepts connections but answers nothing. Nothing else is changed.
@@ -1629,7 +1629,7 @@ pub(crate) async fn expire_and_confirm_sweeps(ctx: &TestContext, db: &Db, coins:
 /// advance, which ages out old fee history, then restart with payouts enabled.
 pub(crate) async fn enable_payouts(ctx: &TestContext, srv: &Captaind) {
 	train_fee_estimator(ctx).await;
-	restart_with_payouts(ctx, srv).await;
+	restart_with_payouts(srv).await;
 }
 
 async fn train_fee_estimator(ctx: &TestContext) {
@@ -1649,7 +1649,7 @@ async fn train_fee_estimator(ctx: &TestContext) {
 	assert!(estimate["feerate"].as_f64().is_some(), "real economical fee estimate required: {estimate}");
 }
 
-async fn restart_with_payouts(ctx: &TestContext, srv: &Captaind) {
+async fn restart_with_payouts(srv: &Captaind) {
 	srv.stop().await.unwrap();
 	{
 		let mut config = srv.config_mut();
@@ -1659,7 +1659,6 @@ async fn restart_with_payouts(ctx: &TestContext, srv: &Captaind) {
 		config.expiry_payout.sweep_min_confs = 1;
 		config.expiry_payout.min_payout_sat = 10_000;
 		config.expiry_payout.max_batch = 100;
-		config.expiry_payout.receipt_dir = ctx.datadir.join("receipts");
 		config.expiry_payout.watchman_config = Some(srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE));
 	}
 	srv.start().await.unwrap();

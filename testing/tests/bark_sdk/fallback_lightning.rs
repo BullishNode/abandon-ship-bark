@@ -17,13 +17,18 @@ use bitcoin_ext::BlockDelta;
 use bitcoin_ext::rpc::RpcApi;
 use server::database::Db;
 use cln_rpc::plugins::hold;
+use cln_rpc::plugins::hold::hold_client::HoldClient;
 use server_rpc::protos;
+use tonic::transport::Channel;
 
 #[derive(Clone)]
 struct InterruptedReceiveClaim {
 	reached: Arc<Notify>,
 	request: Arc<Mutex<Option<protos::ClaimLightningReceiveRequest>>>,
 	reveal_preimage: bool,
+	/// The server's own hold plugin, to fail the incoming HTLCs back to the
+	/// payer just before the claim arrives.
+	fail_incoming: Option<HoldClient<Channel>>,
 }
 
 #[async_trait::async_trait]
@@ -32,9 +37,13 @@ impl ArkRpcProxy for InterruptedReceiveClaim {
 		&self, upstream: &mut ArkClient, request: protos::ClaimLightningReceiveRequest,
 	) -> Result<protos::ArkoorPackageCosignResponse, tonic::Status> {
 		*self.request.lock().unwrap() = Some(request.clone());
+		if let Some(hold) = &self.fail_incoming {
+			hold.clone().cancel(hold::CancelRequest { payment_hash: request.payment_hash.clone() }).await
+				.expect("the server's node must fail the held incoming HTLCs back");
+		}
 		if self.reveal_preimage {
 			upstream.claim_lightning_receive(request).await
-				.expect_err("the test database trigger must interrupt claim commit");
+				.expect_err("the claim must not complete");
 		}
 		self.reached.notify_one();
 		// Keep the client at its real claim checkpoint until the test drops it.
@@ -42,21 +51,55 @@ impl ArkRpcProxy for InterruptedReceiveClaim {
 	}
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReceiveOutcome {
+	/// The server collects the external payment; the Ark claim rolls back.
+	Collected,
+	/// The recipient disappears before disclosing the preimage.
+	Undisclosed,
+	/// The recipient discloses the preimage, but the incoming HTLCs were
+	/// already failed back, so the server never collects the payment.
+	Uncollected,
+	/// The server collects the external payment, but cannot record that
+	/// until later.
+	CollectedStatusLost,
+}
+
 /// External Lightning has paid, but the Ark claim transaction rolls back.
 /// The recipient disappears with only the original HTLC-receive entitlement.
 #[tokio::test]
 async fn fallback_settled_lightning_receive_without_claim_commit() {
-	Box::pin(interrupted_receive(true)).await;
+	Box::pin(interrupted_receive(ReceiveOutcome::Collected)).await;
 }
 
 #[tokio::test]
 async fn fallback_unsettled_lightning_receive_is_not_paid() {
-	Box::pin(interrupted_receive(false)).await;
+	Box::pin(interrupted_receive(ReceiveOutcome::Undisclosed)).await;
 }
 
-async fn interrupted_receive(settled: bool) {
-	let name = if settled { "fallback_settled_lightning_receive_without_claim_commit" }
-		else { "fallback_unsettled_lightning_receive_is_not_paid" };
+/// A recorded preimage alone is not a collected payment. The rounds wallet
+/// must not pay out a receive whose payer was refunded.
+#[tokio::test]
+async fn fallback_uncollected_lightning_receive_is_held() {
+	Box::pin(interrupted_receive(ReceiveOutcome::Uncollected)).await;
+}
+
+/// The hold is not a refusal: once the server records the collection it
+/// already made, the recipient is paid.
+#[tokio::test]
+async fn fallback_collected_lightning_receive_pays_after_status_recovers() {
+	Box::pin(interrupted_receive(ReceiveOutcome::CollectedStatusLost)).await;
+}
+
+async fn interrupted_receive(outcome: ReceiveOutcome) {
+	let name = match outcome {
+		ReceiveOutcome::Collected => "fallback_settled_lightning_receive_without_claim_commit",
+		ReceiveOutcome::Undisclosed => "fallback_unsettled_lightning_receive_is_not_paid",
+		ReceiveOutcome::Uncollected => "fallback_uncollected_lightning_receive_is_held",
+		ReceiveOutcome::CollectedStatusLost => "fallback_collected_lightning_receive_pays_after_status_recovers",
+	};
+	let disclosed = outcome != ReceiveOutcome::Undisclosed;
+	let collected = matches!(outcome, ReceiveOutcome::Collected | ReceiveOutcome::CollectedStatusLost);
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
@@ -70,8 +113,12 @@ async fn interrupted_receive(settled: bool) {
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let reached = Arc::new(Notify::new());
 	let claim_request = Arc::new(Mutex::new(None));
+	let fail_incoming = match outcome {
+		ReceiveOutcome::Uncollected => Some(lightning.internal.hold_client().await),
+		_ => None,
+	};
 	let proxy = srv.start_proxy_no_mailbox(InterruptedReceiveClaim {
-		reached: reached.clone(), request: claim_request.clone(), reveal_preimage: settled,
+		reached: reached.clone(), request: claim_request.clone(), reveal_preimage: disclosed, fail_incoming,
 	}).await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let wallet = ctx.bark_sdk("recipient", &proxy.address).mnemonic(mnemonic.clone())
@@ -107,6 +154,22 @@ async fn interrupted_receive(settled: bool) {
 			FOR EACH ROW EXECUTE FUNCTION interrupt_receive_claim();").await?;
 		Ok(())
 	}).await.unwrap();
+	if outcome == ReceiveOutcome::CollectedStatusLost {
+		// Test-only fault: the hold plugin really settles, but the server
+		// cannot record the settled status until the trigger is dropped.
+		db.write(async |t| {
+			t.batch_execute("CREATE FUNCTION interrupt_receive_status() RETURNS trigger AS $$
+				BEGIN
+					IF NEW.status='settled' THEN
+						RAISE EXCEPTION 'test interrupted receive status write';
+					END IF;
+					RETURN NEW;
+				END; $$ LANGUAGE plpgsql;
+				CREATE TRIGGER interrupt_receive_status BEFORE UPDATE ON lightning_htlc_subscription
+				FOR EACH ROW EXECUTE FUNCTION interrupt_receive_status();").await?;
+			Ok(())
+		}).await.unwrap();
+	}
 	tokio::time::timeout(Duration::from_secs(30), async {
 		tokio::select! {
 			r = wallet.try_claim_lightning_receive(payment_hash, true) =>
@@ -114,7 +177,7 @@ async fn interrupted_receive(settled: bool) {
 			_ = reached.notified() => {},
 		}
 	}).await.expect("claim must reach the interrupted commit");
-	if !settled {
+	if !disclosed {
 		// The user disappears before disclosing the preimage. Cancel the
 		// real held invoice, so the external payer keeps its funds.
 		lightning.internal.hold_client().await.cancel(cln_rpc::plugins::hold::CancelRequest {
@@ -123,13 +186,14 @@ async fn interrupted_receive(settled: bool) {
 	}
 	let paid = tokio::time::timeout(Duration::from_secs(30), paying).await
 		.expect("external payment must finish").unwrap();
-	if settled { paid.expect("external payment must succeed"); }
+	if collected { paid.expect("external payment must succeed"); }
 	else { paid.expect_err("external canceled payment must fail"); }
 	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
 		.await.unwrap().unwrap();
-	if settled { assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::Settled); }
+	assert_eq!(sub.status == server::database::ln::LightningHtlcSubscriptionStatus::Settled,
+		outcome == ReceiveOutcome::Collected, "subscription status {}", sub.status);
 	assert_eq!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(payment_hash).await)
-		.await.unwrap().is_some(), settled);
+		.await.unwrap().is_some(), disclosed);
 	let ids = sub.htlc_vtxos.iter().map(ToString::to_string).collect::<Vec<_>>();
 	assert!(!ids.is_empty());
 	let coins = db.read(async |t| t.get_user_vtxos_by_id(&sub.htlc_vtxos).await).await.unwrap()
@@ -150,14 +214,52 @@ async fn interrupted_receive(settled: bool) {
 		t.batch_execute("DROP TRIGGER interrupt_receive_claim ON vtxo; DROP FUNCTION interrupt_receive_claim();").await?;
 		Ok(())
 	}).await.unwrap();
-	println!("interrupted receive: external_paid={settled}, granted_sat={principal}, unresolved_htlcs={}", coins.len());
+	println!("interrupted receive: outcome={outcome:?}, external_paid={collected}, preimage_recorded={disclosed}, \
+		granted_sat={principal}, unresolved_htlcs={}", coins.len());
 
 	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
 	enable_payouts(&ctx, &srv).await;
-	if !settled {
-		assert_no_payout(&ctx, &db, &ids, &record.spk).await;
-		println!("unsettled receive: external payer refunded, no recorded preimage, no expiry payout");
-		return;
+	match outcome {
+		ReceiveOutcome::Undisclosed => {
+			assert_no_payout(&ctx, &db, &ids, &record.spk).await;
+			println!("unsettled receive: external payer refunded, no recorded preimage, no expiry payout");
+			return;
+		},
+		ReceiveOutcome::Uncollected => {
+			assert_no_payout(&ctx, &db, &ids, &record.spk).await;
+			let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+				.await.unwrap().unwrap();
+			assert_ne!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::Settled);
+			let held = db.read(async |t| Ok(t.query_one(
+				"SELECT count(*) FROM htlc_vtxo h JOIN vtxo v ON v.id=h.id
+				 WHERE v.vtxo_id=ANY($1) AND v.spend_state='htlc-recv-unclaimed'
+				 AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL", &[&ids],
+			).await?.get::<_, i64>(0))).await.unwrap();
+			assert_eq!(held as usize, coins.len(), "the receive stays held, not resolved");
+			println!("uncollected receive: preimage recorded, external payer refunded, subscription {}, \
+				no expiry payout", sub.status);
+			return;
+		},
+		ReceiveOutcome::CollectedStatusLost => {
+			// While the collection is unrecorded the receive is held.
+			assert_no_payout(&ctx, &db, &ids, &record.spk).await;
+			db.write(async |t| {
+				t.batch_execute("DROP TRIGGER interrupt_receive_status ON lightning_htlc_subscription;
+					DROP FUNCTION interrupt_receive_status();").await?;
+				Ok(())
+			}).await.unwrap();
+			// The server's own hold settler records the collection it made.
+			tokio::time::timeout(Duration::from_secs(60), async {
+				loop {
+					let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+						.await.unwrap().unwrap();
+					if sub.status == server::database::ln::LightningHtlcSubscriptionStatus::Settled { break; }
+					tokio::time::sleep(Duration::from_millis(500)).await;
+				}
+			}).await.expect("the server must record the collected payment");
+			println!("collected receive: held while unrecorded, settled status recovered");
+		},
+		ReceiveOutcome::Collected => {},
 	}
 	let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &ids, &record.spk, principal).await;
 	let fulfilled = db.read(async |t| Ok(t.query_one(

@@ -390,6 +390,8 @@ async fn inner_main() -> anyhow::Result<()> {
 		}
 		Command::Drain { address } => {
 			info!("Running with config: {:#?}", cfg);
+			// Never next to a running captaind, which may be spending the same coins.
+			let _lock = server::database::Db::acquire_captaind_lock(&cfg.postgres).await?;
 			let db = server::database::Db::connect(&cfg.postgres).await?;
 			let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 
@@ -594,6 +596,7 @@ async fn inner_main() -> anyhow::Result<()> {
 			}
 		},
 		Command::UndoRound { funding_txid, dangerous, force } => {
+			let _lock = server::database::Db::acquire_captaind_lock(&cfg.postgres).await?;
 			let db = server::database::Db::connect(&cfg.postgres).await?;
 			let round_id = ark::rounds::RoundId::new(funding_txid);
 

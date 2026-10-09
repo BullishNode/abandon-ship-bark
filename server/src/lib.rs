@@ -227,6 +227,8 @@ pub struct Server {
 	fee_estimator: Arc<FeeEstimator>,
 	/// scriptPubkeys in the bitcoin address blocklist
 	bitcoin_address_blocklist: Option<BitcoinAddressBlocklist>,
+	/// Held for the life of the process: one captaind per database.
+	_db_lock: database::CaptaindLock,
 }
 
 impl Server {
@@ -353,6 +355,8 @@ impl Server {
 		info!("Starting server at {}", cfg.data_dir.display());
 
 		info!("Connecting to db at {}:{}", cfg.postgres.host, cfg.postgres.port);
+		// Before migrations, so two binaries never migrate concurrently.
+		let db_lock = database::Db::acquire_captaind_lock(&cfg.postgres).await?;
 		let db = database::Db::connect(&cfg.postgres)
 			.await
 			.context("failed to connect to db")?;
@@ -511,6 +515,7 @@ impl Server {
 			pending_offboards: parking_lot::Mutex::new(TimedEntryMap::new()),
 			fee_estimator,
 			bitcoin_address_blocklist,
+			_db_lock: db_lock,
 		};
 
 		let srv = Arc::new(srv);

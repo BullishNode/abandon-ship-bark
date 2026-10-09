@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tokio::sync::Notify;
@@ -16,6 +17,7 @@ use bdk_wallet::template::Bip84;
 
 use ark_testing::{TestContext, btc, sat};
 use ark_testing::constants::BOARD_CONFIRMATIONS;
+use ark_testing::daemon::captaind::{ArkClient, proxy::ArkRpcProxy};
 use ark_testing::daemon::watchmand::WATCHMAND_CONFIG_FILE;
 use ark::ProtocolEncoding;
 use ark::arkoor::ArkoorDestination;
@@ -139,9 +141,28 @@ async fn fallback_arkoor_payout_wins_registration_race() {
 		2, 25_000, 100, ExpiryCase::PayoutWins)).await;
 }
 
+#[tokio::test]
+async fn fallback_unregistered_arkoor_return_does_not_report_sent() {
+	Box::pin(grouped_expiry_without_client("fallback_unregistered_arkoor_return_does_not_report_sent",
+		2, 25_000, 100, ExpiryCase::ReturningArkoor)).await;
+}
+
+#[tokio::test]
+async fn fallback_registered_arkoor_lost_reply_return_reports_sent() {
+	Box::pin(grouped_expiry_without_client("fallback_registered_arkoor_lost_reply_return_reports_sent",
+		2, 25_000, 100, ExpiryCase::RegisteredArkoorReturn)).await;
+}
+
+#[tokio::test]
+async fn fallback_unregistered_arkoor_return_does_not_restore_paid_change() {
+	Box::pin(grouped_expiry_without_client("fallback_unregistered_arkoor_return_does_not_restore_paid_change",
+		2, 25_000, 100, ExpiryCase::ReturningArkoorChange)).await;
+}
+
 #[derive(Clone, Copy)]
 enum ExpiryCase {
 	Registered, AbandonedBoard, ReturningBoard, UnregisteredArkoor, RegistrationWins, PayoutWins,
+	ReturningArkoor, RegisteredArkoorReturn, ReturningArkoorChange,
 }
 
 async fn grouped_expiry_without_client(
@@ -149,17 +170,21 @@ async fn grouped_expiry_without_client(
 ) {
 	let abandoned = matches!(case, ExpiryCase::AbandonedBoard | ExpiryCase::ReturningBoard);
 	let returning = matches!(case, ExpiryCase::ReturningBoard);
+	let registered_return = matches!(case, ExpiryCase::RegisteredArkoorReturn);
+	let with_change = matches!(case, ExpiryCase::ReturningArkoorChange);
+	let returning_arkoor = matches!(case, ExpiryCase::ReturningArkoor) || registered_return || with_change;
 	let registration_wins = matches!(case, ExpiryCase::RegistrationWins);
 	let payout_wins = matches!(case, ExpiryCase::PayoutWins);
-	let arkoor = matches!(case, ExpiryCase::UnregisteredArkoor) || registration_wins || payout_wins;
+	let arkoor = matches!(case, ExpiryCase::UnregisteredArkoor) || registration_wins || payout_wins || returning_arkoor;
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let mut mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let sender_mnemonic = mnemonic.clone();
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.min_board_amount = sat(330);
 		}).watchmand().create().await;
-	let wallet = ctx.bark_sdk("wallet", &srv).mnemonic(mnemonic.clone())
+	let mut wallet = ctx.bark_sdk("wallet", &srv).mnemonic(mnemonic.clone())
 		.cfg(|c| c.daemon_manual_sync = true)
 		.funded(sat(count as u64 * amount + 1_000_000)).create().await;
 	wallet.stop_daemon_wait().await.unwrap();
@@ -232,6 +257,7 @@ async fn grouped_expiry_without_client(
 	let wallet_coins = if abandoned { board_coins } else { wallet.spendable_vtxos().await.unwrap() };
 	let mut coins = Vec::new();
 	for coin in wallet_coins { coins.push(wallet.get_full_vtxo(coin.id()).await.unwrap()); }
+	let original_inputs = coins.iter().map(|v| v.id()).collect::<Vec<_>>();
 	let other_owner_spk = if arkoor {
 		let recipient_mnemonic = bip39::Mnemonic::generate(12).unwrap();
 		let recipient = ctx.bark_sdk("recipient", &srv).mnemonic(recipient_mnemonic.clone())
@@ -240,22 +266,52 @@ async fn grouped_expiry_without_client(
 		let address = recipient.new_address().await.unwrap();
 		let spk = recipient.fallback_destination().await.unwrap().spk;
 		assert_ne!(spk, record.spk);
-		let mut keys = Vec::new();
-		for coin in &coins { keys.push(wallet.pubkey_keypair(&coin.user_pubkey()).await.unwrap().unwrap().1); }
-		let builder = ArkoorPackageBuilder::new_with_checkpoints(coins, vec![ArkoorDestination {
-			total_amount: sat(count as u64 * amount), policy: address.policy().clone(),
-		}]).unwrap().generate_user_nonces(&keys).unwrap();
-		let response = srv.get_public_rpc().await.request_arkoor_cosign(
-			protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
-		).await.unwrap().into_inner();
-		coins = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response).unwrap())
-			.unwrap().build_signed_vtxos();
+		if returning_arkoor {
+			let reached = Arc::new(Notify::new());
+			let proxy = srv.start_proxy_no_mailbox(InterruptArkoorRegistration {
+				reached: reached.clone(), commit: registered_return, recipient: address.policy().user_pubkey(),
+			}).await;
+			let mut config = wallet.config().clone();
+			config.server_address = proxy.address.clone();
+			drop(wallet);
+			wallet = bark::Wallet::open(Network::Regtest,
+				bark::WalletSeed::new_from_mnemonic(Network::Regtest, &sender_mnemonic), config,
+				bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: false, ..Default::default() },
+			).await.unwrap();
+			let payment = sat(count as u64 * amount - if with_change { 10_000 } else { 0 });
+			tokio::time::timeout(Duration::from_secs(30), async {
+				tokio::select! {
+					r = wallet.send_arkoor_payment(&address, payment) => panic!("send completed before interruption: {r:?}"),
+					_ = reached.notified() => {},
+				}
+			}).await.expect("registration request must be reached");
+			let pending = wallet.pending_arkoor_sends().await.unwrap();
+			assert_eq!(pending.len(), 1);
+			let bark::actions::arkoor_send::Progress::Registration {
+				signed_destination_vtxos, signed_change_vtxos, ..
+			} = &pending[0].progress else { panic!("registration checkpoint must survive lost request/reply"); };
+			assert_eq!(signed_change_vtxos.iter().map(|v| v.amount()).sum::<bitcoin::Amount>(),
+				if with_change { sat(10_000) } else { sat(0) });
+			coins = signed_destination_vtxos.clone();
+			coins.extend(signed_change_vtxos.clone());
+		} else {
+			let mut keys = Vec::new();
+			for coin in &coins { keys.push(wallet.pubkey_keypair(&coin.user_pubkey()).await.unwrap().unwrap().1); }
+			let builder = ArkoorPackageBuilder::new_with_checkpoints(coins, vec![ArkoorDestination {
+				total_amount: sat(count as u64 * amount), policy: address.policy().clone(),
+			}]).unwrap().generate_user_nonces(&keys).unwrap();
+			let response = srv.get_public_rpc().await.request_arkoor_cosign(
+				protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+			).await.unwrap().into_inner();
+			coins = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response).unwrap())
+				.unwrap().build_signed_vtxos();
+		}
 		let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
 		let unregistered = db.read(async |t| Ok(t.query_one(
 			"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state='unregistered'", &[&ids],
 		).await?.get::<_, i64>(0))).await.unwrap();
-		assert_eq!(unregistered as usize, count, "no signed chain was registered");
-		let other_spk = if registration_wins {
+		assert_eq!(unregistered as usize, if registered_return { 0 } else { coins.len() });
+		let other_spk = if registration_wins || registered_return {
 			let sender_spk = record.spk.clone();
 			record = recipient.fallback_destination().await.unwrap();
 			mailbox_key = recipient.mailbox_keypair();
@@ -277,13 +333,13 @@ async fn grouped_expiry_without_client(
 		}).await.unwrap_err();
 		assert!(err.message().contains("vtxo not found"), "{err}");
 	}
-	assert_eq!(coins.len(), count);
+	assert_eq!(coins.len(), count + usize::from(with_change));
 	let principal = coins.iter().map(|v| v.amount().to_sat()).sum::<u64>();
 	assert_eq!(principal, count as u64 * amount);
 	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
 	let expiry = coins.iter().map(|v| v.expiry_height().to_u32()).max().unwrap();
 	let chain_balance_before = wallet.onchain().unwrap().read().await.balance().await;
-	let return_config = if returning { Some(wallet.config().clone()) } else { None };
+	let return_config = if returning || returning_arkoor { Some(wallet.config().clone()) } else { None };
 	drop(wallet);
 
 	// Feed Core's real estimator with confirmed transactions. No fee estimate
@@ -302,7 +358,7 @@ async fn grouped_expiry_without_client(
 	}
 	let estimate = core.estimate_smart_fee(6, None).unwrap();
 	assert!(estimate.fee_rate.is_some(), "real fee estimate required: {estimate:?}");
-	if count > 3 || matches!(case, ExpiryCase::UnregisteredArkoor) {
+	if count > 3 || matches!(case, ExpiryCase::UnregisteredArkoor) || returning_arkoor {
 		// Test a group whose complete backing paths have already been swept.
 		// Sweeps can confirm in several blocks. Keep payouts disabled until
 		// every backing path has a confirmed real sweep, without changing
@@ -472,11 +528,62 @@ async fn grouped_expiry_without_client(
 	assert_eq!(receipt["outputs"].as_array().unwrap().len(), 1);
 	assert_eq!(receipt["outputs"][0]["amount_sat"], principal - fee);
 	assert_eq!(receipt["outputs"][0]["fee_sat"], fee);
-	println!("grouped expiry payout: txid={txid}, coins={count}, principal_sat={principal}, net_sat={}, fee_sat={fee}",
-		outputs[0].value.to_sat());
+	println!("grouped expiry payout: txid={txid}, coins={}, principal_sat={principal}, net_sat={}, fee_sat={fee}",
+		coins.len(), outputs[0].value.to_sat());
 
 	let mut latest_record_seq = record.seq;
-	if let Some(mut config) = return_config {
+	if returning_arkoor {
+		let mut config = return_config.clone().unwrap();
+		let unavailable = Arc::new(AtomicBool::new(true));
+		let proxy = srv.start_proxy_no_mailbox(InterruptSettlementLookup { unavailable: unavailable.clone() }).await;
+		config.server_address = proxy.address.clone();
+		let wallet = bark::Wallet::open(Network::Regtest,
+			bark::WalletSeed::new_from_mnemonic(Network::Regtest, &sender_mnemonic), config,
+			bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: false, ..Default::default() },
+		).await.unwrap();
+		wallet.sync_pending_arkoor_sends().await.unwrap();
+		assert_eq!(wallet.pending_arkoor_sends().await.unwrap().len(), 1,
+			"uncertain per-output settlement outcome must preserve the action");
+		for id in &original_inputs {
+			assert_eq!(wallet.get_vtxo_by_id(*id).await.unwrap().state.kind(), bark::vtxo::VtxoStateKind::Locked);
+		}
+		assert!(wallet.history().await.unwrap().iter().filter(|m| m.subsystem.name == "bark.arkoor")
+			.all(|m| m.status == bark::movement::MovementStatus::Pending));
+		unavailable.store(false, Ordering::SeqCst);
+		for _ in 0..2 {
+			wallet.sync_pending_arkoor_sends().await.unwrap();
+			wallet.sync_onchain().await.unwrap();
+		}
+		assert!(wallet.pending_arkoor_sends().await.unwrap().is_empty());
+		assert_eq!(wallet.balance().await.unwrap().total(), sat(0));
+		for id in &original_inputs {
+			assert_eq!(wallet.get_vtxo_by_id(*id).await.unwrap().state.kind(), bark::vtxo::VtxoStateKind::Spent);
+		}
+		let history = wallet.history().await.unwrap();
+		let sends = history.iter().filter(|m| m.subsystem.name == "bark.arkoor").collect::<Vec<_>>();
+		assert_eq!(sends.len(), 1);
+		assert!(sends[0].output_vtxos.is_empty(), "paid change must not be restored as an Ark output");
+		let expected = if registered_return { bark::movement::MovementStatus::Successful }
+			else { bark::movement::MovementStatus::Failed };
+		assert_eq!(sends[0].status, expected,
+			"registration outcome must distinguish a recipient payout from an input-owner refund");
+		if !registered_return { assert!(sends[0].sent_to.is_empty(), "refunded payment must not claim a recipient was paid"); }
+		if !registered_return {
+			assert_eq!(sends[0].metadata["expiry_refunded_principal_sat"], principal - if with_change { 10_000 } else { 0 });
+			assert_eq!(sends[0].metadata["expiry_settled_change_sat"], if with_change { 10_000 } else { 0 });
+			assert!(sends[0].metadata["attempted_destination"].as_str().unwrap().starts_with("tark"));
+		}
+		let posts = db.read(async |t| Ok(t.query_one(
+			"SELECT count(*) FROM mailbox WHERE mailbox_type='arkoor-receive'", &[],
+		).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(posts, 0, "already-settled outputs must not be delivered as Ark coins");
+		assert_eq!(history.iter().map(|m| m.effective_balance).sum::<bitcoin::SignedAmount>(), bitcoin::SignedAmount::ZERO);
+		assert_eq!(wallet.onchain().unwrap().read().await.balance().await,
+			chain_balance_before + if registered_return { sat(0) } else { outputs[0].value });
+		if !registered_return { latest_record_seq = wallet.fallback_destination().await.unwrap().seq; }
+		println!("returning arkoor: registered_before_disappearance={registered_return}, status={}, pending=0, Ark=0", sends[0].status);
+	}
+	if let Some(mut config) = return_config.filter(|_| returning) {
 		// The test daemon reserves new ports on restart. Reopen the original
 		// wallet data using the same server identity at its current test URL.
 		config.server_address = srv.ark_url();
@@ -568,6 +675,44 @@ async fn grouped_expiry_without_client(
 	}).await.expect("receipt must regenerate after record rotation");
 	let rebuilt: serde_json::Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
 	assert_eq!(rebuilt, receipt);
+}
+
+#[derive(Clone)]
+struct InterruptArkoorRegistration {
+	reached: Arc<Notify>,
+	commit: bool,
+	recipient: PublicKey,
+}
+
+#[derive(Clone)]
+struct InterruptSettlementLookup {
+	unavailable: Arc<AtomicBool>,
+}
+
+#[async_trait::async_trait]
+impl ArkRpcProxy for InterruptSettlementLookup {
+	async fn get_vtxo(
+		&self, upstream: &mut ArkClient, request: protos::GetVtxoRequest,
+	) -> Result<protos::GetVtxoResponse, tonic::Status> {
+		if self.unavailable.load(Ordering::SeqCst) {
+			return Err(tonic::Status::unavailable("test settlement lookup outage"));
+		}
+		Ok(upstream.get_vtxo(request).await?.into_inner())
+	}
+}
+
+#[async_trait::async_trait]
+impl ArkRpcProxy for InterruptArkoorRegistration {
+	async fn register_vtxo_transactions(
+		&self, upstream: &mut ArkClient, request: protos::RegisterVtxoTransactionsRequest,
+	) -> Result<protos::Empty, tonic::Status> {
+		let destination = request.vtxos.iter().any(|v| ark::Vtxo::deserialize(v)
+			.map(|v: ark::Vtxo| v.user_pubkey() == self.recipient).unwrap_or(false));
+		if !destination { return Ok(upstream.register_vtxo_transactions(request).await?.into_inner()); }
+		if self.commit { upstream.register_vtxo_transactions(request).await?; }
+		self.reached.notify_one();
+		Err(tonic::Status::unavailable("test interrupts the registration request or reply"))
+	}
 }
 
 /// Hold a fixture-only trigger after its operation has acquired the coin locks.

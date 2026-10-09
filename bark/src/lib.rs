@@ -1278,7 +1278,7 @@ impl Wallet {
 
 		// Fallback registration is mandatory, including when --force was used.
 		// A failed or lost reply can be retried with the durable local record.
-		fallback::register(network, ark_info.server_pubkey, seed, db, onchain, &mut connection, fallback_spk).await?;
+		fallback::register(network, seed, db, onchain, &mut connection, fallback_spk).await?;
 
 		// write the config to db
 		db.init_wallet(&properties).await.context("cannot init wallet in the database")?;

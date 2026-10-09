@@ -173,9 +173,10 @@ It does not migrate approach B's different schema. For an earlier D draft contai
 `expiry_settlement.raw_tx`, stop captaind, verify every copy equals its nursery row,
 then drop the duplicate column and add the nursery foreign key before upgrading.
 
-A wallet record's signature covers the chain's genesis hash and the Ark
-server key, so a record signed for another network or server cannot be
-replayed here. Records stored before this binding keep paying until their
+A wallet record's signature covers the chain's genesis hash, so a record
+signed for another network cannot be replayed here. A record replayed from
+another server on the same network pays an address the wallet signed for this
+network and scans. Records stored before this binding keep paying until their
 wallet signs a new one, which it does at its next sync. Clients and server
 must be upgraded together: an older client's records are refused.
 

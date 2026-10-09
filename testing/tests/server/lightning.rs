@@ -1227,8 +1227,10 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 		.expect("Accepted subscription must record lowest incoming HTLC expiry");
 
 	// Prepare the claim while the inbound HTLC is still live. The granted
-	// HTLC-recv VTXOs are now outstanding value of the server.
-	let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	// HTLC-recv VTXOs are now outstanding value of the server. The keys are
+	// linked to the wallet's fallback record, as the server requires.
+	let client = bark.client().await;
+	let (keypair, _) = client.derive_store_next_keypair().await.unwrap();
 	let granted = rpc
 		.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 			payment_hash: payment_hash.as_ref().to_vec(),
@@ -1258,7 +1260,7 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
 		granted.iter().cloned(),
 		ark::VtxoPolicy::new_pubkey(
-			Keypair::new(&SECP, &mut bip39::rand::thread_rng()).public_key(),
+			client.derive_store_next_keypair().await.unwrap().0.public_key(),
 		),
 	)
 	.unwrap()

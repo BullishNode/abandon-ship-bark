@@ -16,7 +16,8 @@
 //! ## Timeout and expiry enforcement
 //!
 //! Periodically checks all open subscriptions for accepted HTLCs held too long
-//! (`receive_htlc_forward_timeout`) and expired invoices. Both result in cancellation.
+//! (`receive_htlc_forward_timeout`) and expired invoices whose claim was not
+//! prepared. Both result in cancellation, unless the server knows the preimage.
 
 use std::str::FromStr;
 use std::fmt;
@@ -276,8 +277,12 @@ impl ClnHoldProcess {
 				}
 			}
 
-			// Cancel invoice & subscription if invoice expired
-			if htlc_subscription.invoice.is_expired() {
+			// Cancel invoice & subscription if invoice expired. Once the
+			// claim was prepared, the server granted HTLC-recv vtxos against
+			// the incoming HTLCs and must collect them, never fail them back.
+			if htlc_subscription.invoice.is_expired()
+				&& htlc_subscription.status != LightningHtlcSubscriptionStatus::HtlcsReady
+			{
 				let Some(_guard) = self.try_lock_subscription(&htlc_subscription).await? else {
 					continue;
 				};
@@ -505,6 +510,19 @@ impl ClnHoldProcess {
 		htlc_subscription: &LightningHtlcSubscription,
 		reason: &str,
 	) -> anyhow::Result<()> {
+		// A server that knows the preimage collects the incoming HTLCs, it
+		// never fails them back. A prepared claim is settled by the hold
+		// settler; any other receive stays open for its claim.
+		let known = self.db.read(async |t|
+			t.get_htlc_settlement_by_payment_hash(PaymentHash::from(*payment_hash)).await
+		).await?;
+		if known.is_some() {
+			debug!("Lightning htlc subscription ({}) not canceled ({}): its preimage is known.",
+				htlc_subscription.id, reason,
+			);
+			return Ok(());
+		}
+
 		hold_client.cancel(hold::CancelRequest {
 			payment_hash: payment_hash.to_byte_array().to_vec(),
 		}).await?;

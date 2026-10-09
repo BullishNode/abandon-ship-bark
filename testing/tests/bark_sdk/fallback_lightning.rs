@@ -9,9 +9,11 @@ use std::time::Duration;
 
 use tokio::sync::Notify;
 
-use ark::Vtxo;
+use ark::{ProtocolEncoding, Vtxo};
+use ark::vtxo::Full;
 use ark::lightning::{PaymentHash, Preimage};
 use ark_testing::{Captaind, TestContext, btc, sat};
+use ark_testing::context::LightningPaymentSetup;
 use ark_testing::daemon::captaind::{ArkClient, proxy::ArkRpcProxy};
 use ark_testing::daemon::watchmand::WATCHMAND_CONFIG_FILE;
 use bdk_wallet::{KeychainKind, SignOptions};
@@ -637,6 +639,262 @@ async fn fallback_dropped_xpay_call_is_not_refunded() {
 	let state = sender.check_lightning_payment(payment_hash, true).await.unwrap();
 	assert!(matches!(state, bark::actions::lightning::pay::LightningSendState::Paid(_)), "{state:?}");
 	println!("dropped xpay call: node completed the payment; server recorded it; sender not refunded");
+}
+
+/// A receive the external node pays into the server's hold invoice, driven
+/// at the RPC layer so the test controls each step of the claim.
+struct HeldReceive {
+	preimage: Preimage,
+	payment_hash: PaymentHash,
+	paying: tokio::task::JoinHandle<anyhow::Result<()>>,
+}
+
+async fn held_receive(
+	lightning: &LightningPaymentSetup, srv: &Captaind, db: &Db,
+) -> HeldReceive {
+	let preimage = Preimage::random();
+	let payment_hash = preimage.compute_payment_hash();
+	let invoice = srv.get_public_rpc().await.start_lightning_receive(protos::StartLightningReceiveRequest {
+		payment_hash: payment_hash.to_vec(),
+		amount_sat: 100_000,
+		min_cltv_delta: 18,
+		mailbox_id: None,
+		description: None,
+	}).await.unwrap().into_inner().bolt11;
+	// Pay from a synced tip, as `try_pay_bolt11` does.
+	lightning.external.wait_for_block_sync().await;
+	let mut payer = lightning.external.grpc_client().await;
+	let paying = tokio::spawn(async move {
+		payer.xpay(cln_rpc::XpayRequest {
+			invstring: invoice, amount_msat: None, maxfee: None, layers: vec![], retry_for: None,
+			partial_msat: None, maxdelay: None, payer_note: None, label: None, localinvreqid: None,
+			dev_use_shadow: None,
+		}).await.map(|_| ()).map_err(anyhow::Error::from)
+	});
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+				.await.unwrap().unwrap();
+			if sub.status == server::database::ln::LightningHtlcSubscriptionStatus::Accepted { break; }
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}).await.expect("external Lightning must fund the receive");
+	HeldReceive { preimage, payment_hash, paying }
+}
+
+/// Ask for the HTLC-recv vtxos of a held receive, for a key linked to the
+/// wallet's fallback record.
+async fn prepare_claim(
+	srv: &Captaind, wallet: &bark::Wallet, receive: &HeldReceive,
+) -> Result<(bitcoin::secp256k1::Keypair, Vec<Vtxo<Full>>), tonic::Status> {
+	let (keypair, _) = wallet.derive_store_next_keypair().await.unwrap();
+	let sub_expiry = Db::connect(&srv.config().postgres).await.unwrap()
+		.read(async |t| t.get_htlc_subscription_by_payment_hash(receive.payment_hash).await)
+		.await.unwrap().unwrap().lowest_incoming_htlc_expiry.unwrap();
+	let granted = srv.get_public_rpc().await.prepare_lightning_receive_claim(
+		protos::PrepareLightningReceiveClaimRequest {
+			payment_hash: receive.payment_hash.to_vec(),
+			user_pubkey: keypair.public_key().serialize().to_vec(),
+			htlc_recv_expiry: sub_expiry.saturating_sub(srv.config().htlc_expiry_delta).into(),
+			lightning_receive_anti_dos: None,
+		},
+	).await?.into_inner().htlc_vtxos.into_iter()
+		.map(|b| Vtxo::<Full>::deserialize(&b).unwrap()).collect();
+	Ok((keypair, granted))
+}
+
+/// Disclose the preimage and claim the granted vtxos cooperatively.
+async fn claim(
+	srv: &Captaind, wallet: &bark::Wallet, receive: &HeldReceive,
+	keypair: bitcoin::secp256k1::Keypair, granted: Vec<Vtxo<Full>>,
+) -> Result<(), tonic::Status> {
+	let output = wallet.derive_store_next_keypair().await.unwrap().0.public_key();
+	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
+		granted.into_iter(), ark::VtxoPolicy::new_pubkey(output),
+	).unwrap().generate_user_nonces(&[keypair]).unwrap();
+	srv.get_public_rpc().await.claim_lightning_receive(protos::ClaimLightningReceiveRequest {
+		payment_hash: receive.payment_hash.to_vec(),
+		payment_preimage: receive.preimage.as_ref().to_vec(),
+		cosign_request: Some(protos::ArkoorPackageCosignRequest::from(builder.cosign_request())),
+	}).await.map(|_| ())
+}
+
+async fn hold_state(lightning: &LightningPaymentSetup, payment_hash: PaymentHash) -> hold::InvoiceState {
+	let invoices = lightning.internal.hold_client().await.list(hold::ListRequest {
+		constraint: Some(hold::list_request::Constraint::PaymentHash(payment_hash.to_vec())),
+	}).await.unwrap().into_inner().invoices;
+	invoices[0].state()
+}
+
+/// The server granted HTLC-recv vtxos for a receive, so it must collect the
+/// incoming HTLCs. The invoice expiring before the recipient claims must not
+/// make the server fail them back.
+#[tokio::test]
+async fn fallback_prepared_receive_is_collected_after_invoice_expiry() {
+	let name = "fallback_prepared_receive_is_collected_after_invoice_expiry";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let invoice_expiry = Duration::from_secs(20);
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10))
+		.cfg(move |c| c.invoice_expiry = invoice_expiry).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await
+		.expect("the initially funded pool must become ready");
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let wallet = ctx.bark_sdk("recipient", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+
+	let started = std::time::Instant::now();
+	let receive = held_receive(&lightning, &srv, &db).await;
+	let (keypair, granted) = prepare_claim(&srv, &wallet, &receive).await.unwrap();
+	assert!(!granted.is_empty());
+
+	// The invoice expires while the claim is prepared. Give the server's
+	// subscription checks, every 3 seconds, several runs past the expiry.
+	let checks_done = invoice_expiry + Duration::from_secs(10);
+	tokio::time::timeout(checks_done.saturating_sub(started.elapsed()), async {
+		loop {
+			let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(receive.payment_hash).await)
+				.await.unwrap().unwrap();
+			if sub.status == server::database::ln::LightningHtlcSubscriptionStatus::Canceled { break; }
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.err();
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(receive.payment_hash).await)
+		.await.unwrap().unwrap();
+	println!("prepared receive after invoice expiry: subscription {}, hold invoice {:?}",
+		sub.status, hold_state(&lightning, receive.payment_hash).await);
+
+	claim(&srv, &wallet, &receive, keypair, granted).await
+		.expect("the recipient's claim must still be collected");
+	let paid = tokio::time::timeout(Duration::from_secs(30), receive.paying).await
+		.expect("external payment must finish").unwrap();
+	paid.expect("the server must collect the external payment");
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(receive.payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::Settled);
+	assert_eq!(hold_state(&lightning, receive.payment_hash).await, hold::InvoiceState::Paid);
+	println!("prepared receive collected after invoice expiry; external payer paid");
+}
+
+/// A receive whose incoming HTLCs are gone can never be collected, even
+/// with its preimage. It must not hold up collecting the receives behind it.
+#[tokio::test]
+async fn fallback_uncollectable_receive_does_not_block_later_collection() {
+	let name = "fallback_uncollectable_receive_does_not_block_later_collection";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await
+		.expect("the initially funded pool must become ready");
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let wallet = ctx.bark_sdk("recipient", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+
+	// First receive: the claim is prepared, then the server's own hold
+	// plugin fails the incoming HTLCs back, as its expiry deadline does.
+	// Test-only fault: a direct plugin cancel; no server state is changed.
+	let lost = held_receive(&lightning, &srv, &db).await;
+	let (keypair, granted) = prepare_claim(&srv, &wallet, &lost).await.unwrap();
+	lightning.internal.hold_client().await.cancel(hold::CancelRequest {
+		payment_hash: lost.payment_hash.to_vec(),
+	}).await.unwrap();
+	let err = claim(&srv, &wallet, &lost, keypair, granted).await
+		.expect_err("a claim the server cannot collect must be refused");
+	println!("uncollectable receive: claim refused: {}", err.message());
+	tokio::time::timeout(Duration::from_secs(30), lost.paying).await
+		.expect("external payment must finish").unwrap()
+		.expect_err("the failed-back external payment must fail");
+	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(lost.payment_hash).await)
+		.await.unwrap().is_some(), "the disclosed preimage is recorded");
+
+	// Second receive: the hold invoice settles, but the server cannot record
+	// that until the test-only trigger is dropped. Only the hold settler
+	// records it afterwards.
+	let collected = held_receive(&lightning, &srv, &db).await;
+	let (keypair, granted) = prepare_claim(&srv, &wallet, &collected).await.unwrap();
+	let sub_id = db.read(async |t| t.get_htlc_subscription_by_payment_hash(collected.payment_hash).await)
+		.await.unwrap().unwrap().id;
+	db.write(async |t| {
+		t.batch_execute(&format!("CREATE FUNCTION interrupt_receive_status() RETURNS trigger AS $$
+			BEGIN
+				IF NEW.status='settled' AND NEW.id={sub_id} THEN
+					RAISE EXCEPTION 'test interrupted receive status write';
+				END IF;
+				RETURN NEW;
+			END; $$ LANGUAGE plpgsql;
+			CREATE TRIGGER interrupt_receive_status BEFORE UPDATE ON lightning_htlc_subscription
+			FOR EACH ROW EXECUTE FUNCTION interrupt_receive_status();")).await?;
+		Ok(())
+	}).await.unwrap();
+	claim(&srv, &wallet, &collected, keypair, granted).await
+		.expect_err("the claim cannot record the settled status");
+	tokio::time::timeout(Duration::from_secs(30), collected.paying).await
+		.expect("external payment must finish").unwrap()
+		.expect("the server must collect the external payment");
+	db.write(async |t| {
+		t.batch_execute("DROP TRIGGER interrupt_receive_status ON lightning_htlc_subscription;
+			DROP FUNCTION interrupt_receive_status();").await?;
+		Ok(())
+	}).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(60), async {
+		loop {
+			let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(collected.payment_hash).await)
+				.await.unwrap().unwrap();
+			if sub.status == server::database::ln::LightningHtlcSubscriptionStatus::Settled { break; }
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.expect("the hold settler must record the later collection");
+
+	// The uncollectable receive stays held: its payment was never collected.
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(lost.payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::HtlcsReady);
+	assert_eq!(hold_state(&lightning, lost.payment_hash).await, hold::InvoiceState::Cancelled);
+	println!("uncollectable receive held ({}); later receive collected and recorded", sub.status);
+}
+
+/// The hold plugin already failed the incoming HTLCs back while the server's
+/// status still says they are held. Granting HTLC-recv vtxos now would commit
+/// the server to a payment it can never collect.
+#[tokio::test]
+async fn fallback_receive_not_granted_after_incoming_htlcs_failed_back() {
+	let name = "fallback_receive_not_granted_after_incoming_htlcs_failed_back";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await
+		.expect("the initially funded pool must become ready");
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let wallet = ctx.bark_sdk("recipient", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+
+	let mut receive = held_receive(&lightning, &srv, &db).await;
+	// Test-only fault: a direct cancel at the server's own hold plugin; the
+	// server's subscription is left as it was.
+	lightning.internal.hold_client().await.cancel(hold::CancelRequest {
+		payment_hash: receive.payment_hash.to_vec(),
+	}).await.unwrap();
+	let paying = tokio::time::timeout(Duration::from_secs(30), &mut receive.paying).await
+		.expect("external payment must finish").unwrap();
+	paying.expect_err("the failed-back external payment must fail");
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(receive.payment_hash).await)
+		.await.unwrap().unwrap();
+	assert_eq!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::Accepted);
+
+	let err = prepare_claim(&srv, &wallet, &receive).await
+		.expect_err("the server granted HTLC-recv vtxos it can never collect");
+	assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err:?}");
+	println!("failed-back receive: grant refused: {}", err.message());
+	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(receive.payment_hash).await)
+		.await.unwrap().unwrap();
+	assert!(sub.htlc_vtxos.is_empty());
+	assert_ne!(sub.status, server::database::ln::LightningHtlcSubscriptionStatus::HtlcsReady);
 }
 
 /// A sender's late refund request holds its payment guard while the database

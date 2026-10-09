@@ -48,6 +48,15 @@ uncertain commit. The spent state, fulfilled HTLC resolution and payout commit
 together. A receive whose external payment was canceled without disclosing the
 preimage receives no payout.
 
+Once the server grants a receive's HTLC-recv coins or knows its preimage, it
+collects the held incoming HTLCs and never cancels them: neither an expired
+invoice nor a forwarding timeout fails them back. A grant first checks that the
+hold plugin still holds the incoming HTLCs. The hold settler retries
+collection until it succeeds, and stops only when the hold plugin reports the
+invoice canceled, since its HTLCs then went back to the payer. Such a receive
+can never be collected; its subscription stays unsettled and its coins stay
+held, unpaid.
+
 A Lightning send's HTLC coins return to the sender's own key when the payment
 cannot have succeeded. The task and the sender's refund request share one
 decision under the payment guard: no recorded preimage, no successful attempt,

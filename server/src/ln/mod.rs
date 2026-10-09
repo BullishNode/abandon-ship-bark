@@ -31,6 +31,7 @@ use server_rpc::protos::{self, InputVtxo, lightning_payment_status};
 use server_rpc::protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos;
 use server_rpc::TryFromBytes;
 use bitcoin_ext::{AmountExt, BlockDelta, BlockHeight};
+use cln_rpc::plugins::hold as hold_plugin;
 
 use crate::arkoor::ArkoorCosignRequestValidationParams;
 use crate::database::htlc_vtxo::{self, HtlcResolution};
@@ -806,6 +807,21 @@ impl Server {
 			self.config.htlc_expiry_delta,
 			htlc_recv_expiry,
 		)?;
+
+		// Granting HTLC-recv vtxos commits the server to collecting the
+		// incoming HTLCs, so they must still be held. Our status can lag the
+		// hold plugin, which may already have failed them back. An intra-Ark
+		// payment has no incoming HTLCs: the sender's HTLC vtxos stand in.
+		let is_self_payment = self.db.read(async |t|
+			t.get_open_lightning_payment_attempt_by_subscription_id(sub.id).await
+		).await?.is_some();
+		if !is_self_payment {
+			let state = self.lightning_manager.hold_invoice_state(sub.lightning_node_id, payment_hash).await
+				.context("could not check the incoming HTLCs")?;
+			if state != Some(hold_plugin::InvoiceState::Accepted) {
+				return badarg!("the incoming payment is no longer held");
+			}
+		}
 
 		let dest = ArkoorDestination {
 			total_amount: htlc_amount,

@@ -2,11 +2,13 @@
 
 #[cfg(feature = "onchain-bdk")]
 use std::any::Any;
+use std::cmp;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::{Address, Network, Script, ScriptBuf};
+use bitcoin::constants::ChainHash;
 use bitcoin::secp256k1::{Keypair, PublicKey};
 use tokio::sync::RwLock;
 
@@ -30,23 +32,45 @@ pub(crate) fn next_key_index(last: Option<u32>) -> anyhow::Result<u32> {
 	Ok(next)
 }
 
-fn record_bytes(record: &FallbackRecord, key: &Keypair) -> Vec<u8> {
+fn record_bytes(
+	record: &FallbackRecord,
+	network: Network,
+	server_pk: PublicKey,
+	key: &Keypair,
+) -> Vec<u8> {
+	let chain = ChainHash::using_genesis_block_const(network);
 	let mut bytes = record.spk.as_bytes().to_vec();
 	bytes.extend(record.seq.to_le_bytes());
-	bytes.extend(FallbackRecordAttestation::new(&record.spk, record.seq, key).serialize());
+	bytes.extend(FallbackRecordAttestation::new(chain, server_pk, &record.spk, record.seq, key).serialize());
 	bytes
 }
 
-fn decode_record(bytes: &[u8], mailbox: PublicKey, network: Network) -> anyhow::Result<FallbackRecord> {
+/// Parse a record without checking its signature.
+fn parse_record(
+	bytes: &[u8],
+	network: Network,
+) -> anyhow::Result<(FallbackRecord, FallbackRecordAttestation)> {
 	ensure!((73..=114).contains(&bytes.len()), "invalid fallback record length");
 	let split = bytes.len() - 72;
 	let spk = ScriptBuf::from_bytes(bytes[..split].to_vec());
 	let seq = u64::from_le_bytes(bytes[split..split + 8].try_into()?);
 	i64::try_from(seq).context("fallback sequence out of range")?;
 	validate_script(&spk, network)?;
-	FallbackRecordAttestation::deserialize(&bytes[split + 8..])?
-		.verify(&spk, seq, mailbox).context("invalid fallback record signature")?;
-	Ok(FallbackRecord { spk, seq })
+	let attestation = FallbackRecordAttestation::deserialize(&bytes[split + 8..])?;
+	Ok((FallbackRecord { spk, seq }, attestation))
+}
+
+fn decode_record(
+	bytes: &[u8],
+	mailbox: PublicKey,
+	network: Network,
+	server_pk: PublicKey,
+) -> anyhow::Result<FallbackRecord> {
+	let (record, attestation) = parse_record(bytes, network)?;
+	let chain = ChainHash::using_genesis_block_const(network);
+	attestation.verify(chain, server_pk, &record.spk, record.seq, mailbox)
+		.context("invalid fallback record signature")?;
+	Ok(record)
 }
 
 fn validate_script(spk: &Script, network: Network) -> anyhow::Result<()> {
@@ -88,6 +112,7 @@ async fn mark_reserved(onchain: &Arc<RwLock<dyn OnchainWalletTrait>>, spk: &Scri
 // crash or lost reply retries the same address and sequence after reopening.
 pub(crate) async fn register(
 	network: Network,
+	server_pubkey: PublicKey,
 	seed: &WalletSeed,
 	db: &dyn BarkPersister,
 	onchain: &Arc<RwLock<dyn OnchainWalletTrait>>,
@@ -110,14 +135,22 @@ pub(crate) async fn register(
 	};
 	let mut proposed = FallbackRecord { spk, seq };
 	let key = seed.to_mailbox_keypair();
-	for _ in 0..2 {
+	let chain = ChainHash::using_genesis_block_const(network);
+	// One more round than an unowned reply needs, for replacing an unbound record.
+	for _ in 0..3 {
 		db.store_fallback_record(&proposed).await?;
 		mark_reserved(onchain, &proposed.spk).await?;
 		let reply = connection.client.set_fallback(protos::SetFallbackRequest {
 			mailbox_pk: key.public_key().serialize().to_vec(),
-			record: Some(record_bytes(&proposed, &key)), key_links: vec![],
+			record: Some(record_bytes(&proposed, network, server_pubkey, &key)), key_links: vec![],
 		}).await.context("failed to register expiry fallback destination")?.into_inner();
-		let current = decode_record(&reply.record, key.public_key(), network)?;
+		let (current, attestation) = parse_record(&reply.record, network)?;
+		if attestation.verify(chain, server_pubkey, &current.spk, current.seq, key.public_key()).is_err() {
+			// The server kept a record signed before records were bound to a
+			// chain and server, or one for another of them. Sign ours above it.
+			proposed.seq = next_sequence(Some(cmp::max(current.seq, proposed.seq)))?;
+			continue;
+		}
 		ensure!(current.seq >= proposed.seq, "server returned an older fallback record");
 		if onchain.read().await.is_mine(&current.spk).await? {
 			db.store_fallback_record(&current).await?;
@@ -151,8 +184,8 @@ impl Wallet {
 		let _guard = self.inner.lock_manager.lock(
 			&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30),
 		).await?;
-		let (mut connection, _) = self.require_server().await?;
-		register(self.network().await?, &self.inner.seed, &*self.inner.db,
+		let (mut connection, ark_info) = self.require_server().await?;
+		register(self.network().await?, ark_info.server_pubkey, &self.inner.seed, &*self.inner.db,
 			self.inner.onchain.as_ref().context("onchain wallet required")?,
 			&mut connection, Some(spk),
 		).await
@@ -171,8 +204,8 @@ impl Wallet {
 		let _guard = self.inner.lock_manager.lock(
 			&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30),
 		).await?;
-		let (mut connection, _) = self.require_server().await?;
-		register(self.network().await?, &self.inner.seed, &*self.inner.db,
+		let (mut connection, ark_info) = self.require_server().await?;
+		register(self.network().await?, ark_info.server_pubkey, &self.inner.seed, &*self.inner.db,
 			onchain, &mut connection, requested,
 		).await
 	}
@@ -181,10 +214,11 @@ impl Wallet {
 		let _guard = self.inner.lock_manager.lock(
 			&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30),
 		).await?;
-		let (mut connection, _) = self.require_server().await?;
+		let (mut connection, ark_info) = self.require_server().await?;
+		let server_pubkey = ark_info.server_pubkey;
 		let onchain = self.inner.onchain.as_ref().context("onchain wallet required")?;
 		let network = self.network().await?;
-		register(network, &self.inner.seed, &*self.inner.db, onchain, &mut connection, None).await?;
+		register(network, server_pubkey, &self.inner.seed, &*self.inner.db, onchain, &mut connection, None).await?;
 		let first = next_key_index(self.inner.db.get_last_vtxo_key_index().await?)?;
 		let end = first.saturating_add(LINK_AHEAD).min(1 << 31);
 		let mailbox = self.mailbox_keypair().public_key();
@@ -202,7 +236,7 @@ impl Wallet {
 		let reply = connection.client.set_fallback(protos::SetFallbackRequest {
 			mailbox_pk: mailbox.serialize().to_vec(), record: None, key_links: links,
 		}).await.context("failed to link next coin keys")?.into_inner();
-		let current = decode_record(&reply.record, mailbox, network)?;
+		let current = decode_record(&reply.record, mailbox, network, server_pubkey)?;
 		ensure!(onchain.read().await.is_mine(&current.spk).await?,
 			"fallback changed to an unowned address while linking coin keys");
 		self.inner.db.store_fallback_record(&current).await?;
@@ -225,8 +259,8 @@ impl Wallet {
 				if !wallet.fallback_received(&record.spk) { return Ok(()); }
 				wallet.reserve_fallback_address().await?
 			};
-			let (mut connection, _) = self.require_server().await?;
-			register(self.network().await?, &self.inner.seed, &*self.inner.db,
+			let (mut connection, ark_info) = self.require_server().await?;
+			register(self.network().await?, ark_info.server_pubkey, &self.inner.seed, &*self.inner.db,
 				onchain, &mut connection, Some(replacement),
 			).await?;
 		}
@@ -248,13 +282,20 @@ mod tests {
 			spk: ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap(),
 			seq: 100,
 		};
-		let mut wire = record_bytes(&record, &key);
-		assert_eq!(decode_record(&wire, key.public_key(), Network::Regtest).unwrap(), record);
-		assert!(decode_record(&wire, other.public_key(), Network::Regtest).is_err());
+		let server = Keypair::from_seckey_slice(&SECP, &[3; 32]).unwrap().public_key();
+		let mut wire = record_bytes(&record, Network::Regtest, server, &key);
+		assert_eq!(decode_record(&wire, key.public_key(), Network::Regtest, server).unwrap(), record);
+		assert!(decode_record(&wire, other.public_key(), Network::Regtest, server).is_err());
+		// A record signed for another chain or server is not ours.
+		assert!(decode_record(&wire, key.public_key(), Network::Regtest, other.public_key()).is_err());
+		let signet = record_bytes(&record, Network::Signet, server, &key);
+		assert!(decode_record(&signet, key.public_key(), Network::Regtest, server).is_err());
+		// It still parses, so registration can replace it.
+		assert_eq!(parse_record(&signet, Network::Regtest).unwrap().0, record);
 		wire[2] ^= 1;
-		assert!(decode_record(&wire, key.public_key(), Network::Regtest).is_err());
+		assert!(decode_record(&wire, key.public_key(), Network::Regtest, server).is_err());
 		for len in [0, 72, 115] {
-			assert!(decode_record(&vec![0; len], key.public_key(), Network::Regtest).is_err());
+			assert!(decode_record(&vec![0; len], key.public_key(), Network::Regtest, server).is_err());
 		}
 		assert_eq!(next_key_index(None).unwrap(), 0);
 		assert_eq!(next_key_index(Some((1 << 31) - 2)).unwrap(), (1 << 31) - 1);

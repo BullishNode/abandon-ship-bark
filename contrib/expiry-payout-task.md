@@ -161,6 +161,12 @@ It does not migrate approach B's different schema. For an earlier D draft contai
 `expiry_settlement.raw_tx`, stop captaind, verify every copy equals its nursery row,
 then drop the duplicate column and add the nursery foreign key before upgrading.
 
+A wallet record's signature covers the chain's genesis hash and the Ark
+server key, so a record signed for another network or server cannot be
+replayed here. Records stored before this binding keep paying until their
+wallet signs a new one, which it does at its next sync. Clients and server
+must be upgraded together: an older client's records are refused.
+
 Run one captaind per database. The payment guards and coin locks live in
 memory, so captaind holds a PostgreSQL session advisory lock for its whole
 life and refuses to start while another process holds it; `drain` and

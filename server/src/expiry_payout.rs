@@ -10,6 +10,7 @@ use anyhow::Context;
 use ark::{ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy};
 use bdk_wallet::coin_selection::LargestFirstCoinSelection;
 use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Transaction, Txid, Weight};
+use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use bitcoin_ext::bdk::{WalletExt, WithGuaranteedChange};
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
@@ -105,7 +106,7 @@ impl Server {
 				ExpirySource::LightningReceive(hash) | ExpirySource::LightningSend(hash) => Some(hash),
 				_ => None,
 			}).filter(|hash| !payment_guards.contains_key(hash)).collect::<BTreeSet<_>>();
-			let taken = hashes.iter().map_while(|hash| self.payment_guards.try_lock(*hash)).collect::<Vec<_>>();
+			let taken = hashes.iter().map_while(|hash| self.payment_guards.lock(*hash).now_or_never()).collect::<Vec<_>>();
 			if taken.len() < hashes.len() {
 				warn!(script = ?group.script, "expiry wallet group deferred: Lightning payment in progress");
 				continue;

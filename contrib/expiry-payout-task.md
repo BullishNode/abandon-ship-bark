@@ -22,7 +22,7 @@ returning the cosign. The unsigned user coin stays outside the ordinary coin
 table, so generic transaction registration cannot bypass board confirmation.
 A proposal never broadcast has no swept backing path and receives no payout.
 Normal registration and payout lock the same retained pending row. Settlement
-inserts the user coin already spent with its receipt and nursery transaction;
+inserts the user coin already spent with its settlement row and nursery transaction;
 an uncertain COMMIT waits on that pending row before checking its outcome.
 The fork requires the funding transaction in the cosign request, or an already
 known chain transaction when `require_board_funding_tx` is false.
@@ -139,10 +139,10 @@ There is no Ark service fee on expiry payouts.
 
 The coin lock arbitrates against refresh/offboard. The wallet lock protects signing
 through durable commit. Core's mempool preflight also holds that lock, so slow Core
-calls can delay ordinary wallet funding. Database coin states, receipt associations,
+calls can delay ordinary wallet funding. Database coin states, settlement rows,
 change-key metadata and the nursery transaction commit atomically. An uncertain
 COMMIT retains the selected inputs until its outcome is known. The nursery stores
-one raw transaction; receipt rows reference it. Startup waits for the previous
+one raw transaction; settlement rows reference it. Startup waits for the previous
 process's nursery writes to finish, then loads the wallet and reapplies pending
 spends before workers, even with new payouts disabled.
 
@@ -212,22 +212,16 @@ into watchmand. Startup verifies its network and rounds-wallet sweep address, an
 requires disabled or loopback admin RPC. This validates the file, not a different
 running process. No settlement RPC, sidecar or separate payout wallet is used.
 
-Set `receipt_dir` to a directory served at `/expiry-payouts/` on the Ark HTTP origin.
-Files expose only txid, output index, net amount and fee. Missing files regenerate
-once per payment, not once per coin. Publication failure does not stop settlement.
-The client shows an unavailable fee when a receipt cannot be fetched. The exporter
-runs only while the task is enabled.
-
 ## Operations and recovery
 
 Use complete PostgreSQL base backups plus continuous WAL archiving, including the
 pending boards, payment commit and wallet metadata. Monitor archive failures and exercise physical
 replay on a separate volume. An old snapshot with missing WAL is not a supported
-restore. Preserve nursery history: receipts depend on it, enforced by a foreign key.
+restore. Preserve nursery history: settlement rows depend on it, enforced by a foreign key.
 Keep seed backups offline before a mainnet deployment.
 
 Monitor `expiry payout tick summary` for success, duration, candidates/waiting/paid,
-real-estimate warnings, nursery warnings, receipt-export errors and rounds-wallet
+real-estimate warnings, nursery warnings and rounds-wallet
 funding. A growing eligible backlog requires checking its exact-path sweep depth,
 group net minimum and confirmed funding. The task keeps entitlements while those gates wait.
 
@@ -241,15 +235,14 @@ group net minimum and confirmed funding. The task keeps entitlements while those
 | Unfinished delegated exchange | Originals are swept, or the documented cancellation conditions hold; inspect participation/forfeit state and the cancellation audit |
 | Net minimum, dust, weight or confirmed funding | A valid affordable transaction can be built; wait for fees/confirmations or restore rounds-wallet funding; the batch splitter continues to other eligible coins |
 | Unknown COMMIT outcome | The database answers after the original row locks release; restore database service while the task retains wallet inputs |
-| Receipt publication failure | The configured directory becomes writable and served; the next enabled tick regenerates missing files from nursery history |
 
 For a committed transaction missing from the mempool, check the nursery and Core's
 rejection, restore funding/service conditions, and restart the same fork if needed;
 startup retries the identical transaction. A manual CPFP requires an actual owned
 change output. Exactly funded payouts may have none: wait for acceptance/fees to
-improve; do not construct another payment for the same coins. Receipt deletion is
-repaired from nursery bytes, original coin values and the stored paid scripts. A
-subsequent wallet-record change does not alter the historical receipt.
+improve; do not construct another payment for the same coins. Each settled coin's
+row keeps its payout txid, fee and paid script; a later wallet-record change does
+not alter it.
 
 To stop new payouts, set enabled=false and restart this fork. Pending nursery
 payments still recover. Do not roll back to stock captaind against this history:

@@ -4,8 +4,6 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use std::fs::{self, File};
-use std::io::Write;
 use std::str::FromStr;
 
 use anyhow::Context;
@@ -67,11 +65,11 @@ fn group_fee_shares(
 }
 
 impl Server {
-	/// Pay the groups whose Lightning payments are free. Returns the payment
-	/// and the number of coins it settled.
+	/// Pay the groups whose Lightning payments are free. Returns the payment's
+	/// txid and fee, and the number of coins it settled.
 	async fn claim_and_pay(
 		&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate, unavailable_nodes: &mut BTreeSet<LightningNodeId>,
-	) -> anyhow::Result<Option<(Payment, usize)>> {
+	) -> anyhow::Result<Option<(Txid, u64, usize)>> {
 		let cfg = self.config.expiry_payout.clone();
 		// Cooperative Lightning claims and refund requests take the payment
 		// guard before coin locks and can hold it while they wait on a node.
@@ -237,8 +235,8 @@ impl Server {
 			if let Err(e) = wallet.persist().await { warn!("expiry wallet persist deferred to restart: {e:#}"); }
 			drop(wallet);
 			nursery.broadcast_tx(tx.clone(), NurseryTxKind::ExpiryPayout, target).await?;
-			db.read(async |t| t.expiry_receipt(&tx.compute_txid().to_string()).await).await
-		}).await?.map(|payment| Some((payment, ids.len())))
+			Ok(tx.compute_txid())
+		}).await?.map(|txid| Some((txid, fee, ids.len())))
 	}
 }
 
@@ -305,7 +303,6 @@ pub struct Config {
 	pub max_batch: usize,
 	/// Existing estimator targets: 1, 3 or 6 blocks.
 	pub conf_target_blocks: u16,
-	pub receipt_dir: PathBuf,
 	/// The same configuration file mounted into the watchmand process.
 	pub watchman_config: Option<PathBuf>,
 }
@@ -314,7 +311,7 @@ impl Default for Config {
 	fn default() -> Self {
 		Self { enabled: false, interval: Duration::from_secs(60), grace_blocks: 1008,
 			sweep_min_confs: 100, min_payout_sat: 10_000,
-			max_batch: 10_000, conf_target_blocks: 6, receipt_dir: PathBuf::new(), watchman_config: None }
+			max_batch: 10_000, conf_target_blocks: 6, watchman_config: None }
 	}
 }
 
@@ -335,14 +332,6 @@ impl Config {
 	}
 }
 
-pub(crate) struct Payment {
-	pub txid: String,
-	pub raw_tx: Vec<u8>,
-	pub fee_sat: u64,
-	pub outputs: Vec<FeeOutput>,
-}
-#[derive(Serialize)]
-pub(crate) struct FeeOutput { pub vout: u32, pub amount_sat: u64, pub fee_sat: u64 }
 #[derive(Default)]
 struct TickStats { candidates: usize, waiting: usize, paid: usize }
 
@@ -370,9 +359,6 @@ impl Server {
 	}
 
 	async fn expiry_payout_tick(&self, stats: &mut TickStats) -> anyhow::Result<()> {
-		if let Err(e) = self.export_expiry_receipts().await {
-			warn!("expiry receipt export deferred: {e:#}");
-		}
 		let cfg = &self.config.expiry_payout;
 		let estimate: bitcoin_ext::rpc::json::EstimateSmartFeeResult = self.bitcoind.call_raw(
 			"estimatesmartfee", &[cfg.conf_target_blocks.into(), "economical".into()],
@@ -592,9 +578,8 @@ impl Server {
 	) -> anyhow::Result<usize> {
 		let mut pending = VecDeque::from([batch]);
 		while let Some(mut batch) = pending.pop_front() {
-			if let Some((payment, coins)) = self.claim_and_pay(batch.clone(), rate, unavailable_nodes).await? {
-				if let Err(e) = self.write_expiry_receipt(&payment) { warn!("expiry receipt deferred: {e:#}"); }
-				info!(txid = %payment.txid, fee_sat = payment.fee_sat, coins, "expiry payment committed");
+			if let Some((txid, fee_sat, coins)) = self.claim_and_pay(batch.clone(), rate, unavailable_nodes).await? {
+				info!(%txid, fee_sat, coins, "expiry payment committed");
 				return Ok(coins);
 			}
 			if batch.len() > 1 {
@@ -603,36 +588,5 @@ impl Server {
 			}
 		}
 		Ok(0)
-	}
-
-	async fn export_expiry_receipts(&self) -> anyhow::Result<()> {
-		if self.config.expiry_payout.receipt_dir.as_os_str().is_empty() { return Ok(()); }
-		let mut cursor = String::new();
-		loop {
-			let page = self.db.read(async |t| t.expiry_receipt_page(&cursor).await).await?;
-			let Some(last) = page.last() else { return Ok(()); };
-			cursor = last.clone();
-			for txid in page {
-				if self.config.expiry_payout.receipt_dir.join(format!("{txid}.json")).try_exists()? { continue; }
-				let payment = self.db.read(async |t| t.expiry_receipt(&txid).await).await?;
-				self.write_expiry_receipt(&payment)?;
-			}
-		}
-	}
-
-	fn write_expiry_receipt(&self, payment: &Payment) -> anyhow::Result<()> {
-		let directory = &self.config.expiry_payout.receipt_dir;
-		if directory.as_os_str().is_empty() { return Ok(()); }
-		let tx: Transaction = bitcoin::consensus::deserialize(&payment.raw_tx)?;
-		ensure!(tx.compute_txid().to_string() == payment.txid, "receipt identity mismatch");
-		fs::create_dir_all(directory)?;
-		let temporary = directory.join(format!("{}.tmp", payment.txid));
-		let mut file = File::create(&temporary)?;
-		serde_json::to_writer(&mut file, &serde_json::json!({"txid": payment.txid, "outputs": payment.outputs}))?;
-		file.write_all(b"\n")?;
-		file.sync_all()?;
-		fs::rename(temporary, directory.join(format!("{}.json", payment.txid)))?;
-		File::open(directory)?.sync_all()?;
-		Ok(())
 	}
 }

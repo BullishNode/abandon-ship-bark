@@ -739,7 +739,6 @@ async fn grouped_expiry_without_client(
 		config.expiry_payout.sweep_min_confs = 1;
 		config.expiry_payout.min_payout_sat = 10_000;
 		config.expiry_payout.max_batch = max_batch;
-		config.expiry_payout.receipt_dir = ctx.datadir.join("receipts");
 		config.expiry_payout.watchman_config = Some(
 			srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE),
 		);
@@ -872,14 +871,10 @@ async fn grouped_expiry_without_client(
 	let unspent = core.get_tx_out(&txid, vout, Some(true)).unwrap().unwrap();
 	assert!(unspent.confirmations >= 1);
 	assert_eq!(unspent.value, outputs[0].value);
-	let receipt_path = ctx.datadir.join("receipts").join(format!("{txid}.json"));
-	tokio::time::timeout(Duration::from_secs(10), async {
-		while !receipt_path.exists() { tokio::time::sleep(Duration::from_millis(100)).await; }
-	}).await.expect("receipt must be exported");
-	let receipt: serde_json::Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
-	assert_eq!(receipt["outputs"].as_array().unwrap().len(), 1);
-	assert_eq!(receipt["outputs"][0]["amount_sat"], principal - fee);
-	assert_eq!(receipt["outputs"][0]["fee_sat"], fee);
+	let settlement = |rows: Vec<tokio_postgres::Row>| rows.iter().map(|r| (
+		r.get::<_, String>("id"), r.get::<_, String>("txid"), r.get::<_, i64>("fee_sat"), r.get::<_, Vec<u8>>("spk"),
+	)).collect::<Vec<_>>();
+	let settled = settlement(rows);
 	println!("grouped expiry payout: txid={txid}, coins={}, principal_sat={principal}, net_sat={}, fee_sat={fee}",
 		coins.len(), outputs[0].value.to_sat());
 
@@ -1009,7 +1004,7 @@ async fn grouped_expiry_without_client(
 	assert_eq!(ctx.bitcoind().get_received_by_address(&destination), spend.output[0].value);
 	println!("mnemonic-only BIP84 recovery: lookahead=20, payout={payout}, confirmed_spend={spend_txid}");
 
-	// A later valid record update cannot rewrite the historical receipt.
+	// A later valid record update cannot rewrite the recorded payment.
 	srv.start().await.unwrap();
 	let next_spk = restored.next_unused_address(KeychainKind::External).script_pubkey();
 	assert_ne!(next_spk, record.spk);
@@ -1023,12 +1018,10 @@ async fn grouped_expiry_without_client(
 		mailbox_pk: mailbox_key.public_key().serialize().to_vec(),
 		record: Some(signed_record.clone()), key_links: vec![],
 	}).await.unwrap().into_inner().record, signed_record);
-	std::fs::remove_file(&receipt_path).unwrap();
-	tokio::time::timeout(Duration::from_secs(10), async {
-		while !receipt_path.exists() { tokio::time::sleep(Duration::from_millis(100)).await; }
-	}).await.expect("receipt must regenerate after record rotation");
-	let rebuilt: serde_json::Value = serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
-	assert_eq!(rebuilt, receipt);
+	let rows = db.read(async |t| Ok(t.query(
+		"SELECT id, txid, fee_sat, spk FROM expiry_settlement WHERE id = ANY($1) ORDER BY id", &[&ids],
+	).await?)).await.unwrap();
+	assert_eq!(settlement(rows), settled);
 }
 
 /// Wait until every coin of `ids` is settled to an expiry payout.

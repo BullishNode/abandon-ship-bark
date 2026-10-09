@@ -140,6 +140,13 @@ The minimum applies to that output after its fee deduction; there is no percenta
 cap. Confirmed funding, dust and maximum transaction weight are checked.
 There is no Ark service fee on expiry payouts.
 
+A wallet group whose net would fall below `min_payout_sat` is a retained balance,
+not a loss. Its coins stay unsettled, in the candidate scan and in the wallet's
+expired balance; nothing is written for them. When later expired coins of the
+same wallet, or a lower fee, lift the group's net to the minimum, the next tick
+pays every retained and new coin of the group in one output of one payment. A
+retained coin is never paid twice: it settles in the same commit as the others.
+
 The coin lock arbitrates against refresh/offboard. The wallet lock protects signing
 through durable commit. Core's mempool preflight also holds that lock, so slow Core
 calls can delay ordinary wallet funding. Database coin states, settlement rows,

@@ -24,3 +24,8 @@ CREATE TABLE IF NOT EXISTS pending_board (
 	expiry INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS pending_board_expiry ON pending_board (expiry, vtxo_id);
+
+-- The xpay monitor fails a payment attempt that never reached the node only
+-- after its invoice expired: the node refuses an expired invoice, so a
+-- delayed request can no longer start. NULL for older attempts.
+ALTER TABLE lightning_payment_attempt ADD COLUMN IF NOT EXISTS invoice_expires_at TIMESTAMPTZ;

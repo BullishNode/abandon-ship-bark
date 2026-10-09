@@ -215,6 +215,88 @@ async fn fallback_retained_balance_paid_once_eligible() {
 	println!("retained balance: 2 coins of 7,000 sat paid once in {txid}, net {}", paid[0].value);
 }
 
+/// A payout that misses its confirmation target is accelerated by a child
+/// spending its operator change: the payout txid, its recipient output and
+/// the settlement rows stay as they are, and the operator pays the bump.
+#[tokio::test]
+async fn fallback_stalled_payout_bumped_by_child() {
+	let ctx = TestContext::new("bark_sdk/fallback_stalled_payout_bumped_by_child").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(128);
+			c.min_board_amount = sat(330);
+			c.nursery_confirm_target_blocks = BlockDelta::new(2);
+		}).watchmand().create().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let core = ctx.bitcoind().sync_client();
+	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(30_000)).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let record = wallet.fallback_destination().await.unwrap();
+	let coin = wallet.get_full_vtxo(wallet.spendable_vtxos().await.unwrap()[0].id()).await.unwrap();
+	let ids = vec![coin.id().to_string()];
+	drop(wallet);
+
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &[coin]).await;
+	super::fallback_lightning::enable_payouts(&ctx, &srv).await;
+	// No block is mined until the payout is held out of blocks.
+	let txid: Txid = tokio::time::timeout(Duration::from_secs(60), async {
+		loop {
+			let row = db.read(async |t| Ok(t.query_opt(
+				"SELECT txid FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+			).await?)).await.unwrap();
+			if let Some(row) = row { break row.get::<_, String>(0).parse().unwrap(); }
+			tokio::time::sleep(Duration::from_millis(200)).await;
+		}
+	}).await.expect("the expired coin must be paid");
+	ctx.await_transaction(txid).await;
+	let _: bool = core.call("prioritisetransaction", &[txid.to_string().into(), 0.into(), (-1_000_000).into()]).unwrap();
+	let payout: Transaction = core.get_raw_transaction(&txid, None).unwrap();
+	let change = payout.output.iter().position(|o| o.script_pubkey != record.spk)
+		.expect("every payout carries operator change") as u32;
+	assert_eq!(payout.output.len(), 2, "one recipient output and the change");
+	let paid = payout.output.iter().find(|o| o.script_pubkey == record.spk).unwrap().value;
+
+	// Past its target the payout's chunk pays nothing; a child spends its change.
+	let child: Transaction = tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			ctx.generate_blocks(1).await;
+			tokio::time::sleep(Duration::from_secs(2)).await;
+			let children = db.read(async |t| Ok(t.query(
+				"SELECT tx FROM nursery_tx WHERE kind::TEXT='internal'", &[],
+			).await?)).await.unwrap().iter()
+				.map(|r| bitcoin::consensus::deserialize::<Transaction>(&r.get::<_, Vec<u8>>(0)).unwrap())
+				.collect::<Vec<_>>();
+			if let Some(child) = children.into_iter()
+				.find(|c| c.input.iter().any(|i| i.previous_output == OutPoint::new(txid, change)))
+			{ break child; }
+		}
+	}).await.expect("the stalled payout must get a child");
+	let _: bool = core.call("prioritisetransaction", &[txid.to_string().into(), 0.into(), 1_000_000.into()]).unwrap();
+	ctx.await_transaction(child.compute_txid()).await;
+	ctx.generate_blocks(1).await;
+	let block = |txid: Txid| core.get_raw_transaction_info(&txid, None).unwrap().blockhash;
+	assert!(block(txid).is_some(), "the original payout confirms");
+	assert_eq!(block(txid), block(child.compute_txid()), "together with its child");
+
+	let rows = db.read(async |t| Ok(t.query(
+		"SELECT txid, spk FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+	).await?)).await.unwrap();
+	assert_eq!(rows.len(), 1);
+	assert_eq!(rows[0].get::<_, String>("txid"), txid.to_string(), "the payout txid never changes");
+	assert_eq!(rows[0].get::<_, Vec<u8>>("spk"), record.spk.as_bytes());
+	// The recipient finds its unchanged net from its address alone.
+	let address = Address::from_script(&record.spk, Network::Regtest).unwrap();
+	let scan: serde_json::Value = core.call("scantxoutset", &[
+		"start".into(), serde_json::json!([{"desc": format!("addr({address})")}]),
+	]).unwrap();
+	let found = scan["unspents"].as_array().unwrap();
+	assert_eq!(found.len(), 1);
+	assert_eq!(found[0]["txid"], txid.to_string());
+	assert_eq!(bitcoin::Amount::from_btc(found[0]["amount"].as_f64().unwrap()).unwrap(), paid);
+	println!("stalled payout {txid} bumped by child {}", child.compute_txid());
+}
+
 /// A send from two inputs with different expiries stalls in registration
 /// while the first input's outputs settle, which refunds them to the sender.
 /// The returning sender delivers the other outputs through the mailbox. The

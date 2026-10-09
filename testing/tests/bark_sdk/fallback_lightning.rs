@@ -340,6 +340,10 @@ async fn absent_sender(completed: bool) {
 		expiry: Some(3600),
 		routing_hints: vec![],
 	}).await.unwrap().into_inner().bolt11;
+	// Boarding just mined blocks. A node paying from a stale tip sets an
+	// HTLC expiry the payee rejects, which would fail the payment for an
+	// unrelated reason.
+	lightning.sync().await;
 	wallet.pay_lightning_invoice(invoice, None, false).await.unwrap();
 	lightning.external.wait_for_hold_invoice_accepted(payment_hash).await;
 
@@ -451,6 +455,267 @@ async fn absent_sender(completed: bool) {
 	println!("failed send refunded: payout={payout}, principal_sat={principal}, fee_sat={fee}, confirmed_seed_spend={spend_txid}");
 }
 
+/// A sender's late refund request holds its payment guard while the database
+/// keeps it waiting. Another wallet whose expired coins share the payout batch
+/// must still be paid, and the sender's coins must settle exactly once.
+#[tokio::test]
+async fn fallback_busy_lightning_payment_does_not_stall_other_wallets() {
+	let name = "fallback_busy_lightning_payment_does_not_stall_other_wallets";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().create().await;
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let reached = Arc::new(Notify::new());
+	let revocation = Arc::new(Mutex::new(None));
+	let proxy = srv.start_proxy_no_mailbox(AbsentSender {
+		reached: reached.clone(), request: revocation.clone(),
+	}).await;
+	let sender = ctx.bark_sdk("sender", &proxy.address)
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(300_000)).create().await;
+	sender.stop_daemon_wait().await.unwrap();
+	let bystander_mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let bystander = ctx.bark_sdk("bystander", &srv).mnemonic(bystander_mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(50_000)).create().await;
+	bystander.stop_daemon_wait().await.unwrap();
+	let bystander_record = bystander.fallback_destination().await.unwrap();
+
+	// A real failed payment: the external payee cancels its hold invoice.
+	let preimage = Preimage::random();
+	let payment_hash = preimage.compute_payment_hash();
+	let mut payee = lightning.external.hold_client().await;
+	let invoice = payee.invoice(hold::InvoiceRequest {
+		payment_hash: payment_hash.as_ref().to_vec(),
+		amount_msat: 100_000 * 1_000,
+		description: Some(hold::invoice_request::Description::Memo(name.into())),
+		min_final_cltv_expiry: Some(18),
+		expiry: Some(3600),
+		routing_hints: vec![],
+	}).await.unwrap().into_inner().bolt11;
+	// Boarding just mined blocks. A node paying from a stale tip sets an
+	// HTLC expiry the payee rejects, which would fail the payment for an
+	// unrelated reason.
+	lightning.sync().await;
+	sender.pay_lightning_invoice(invoice, None, false).await.unwrap();
+	lightning.external.wait_for_hold_invoice_accepted(payment_hash).await;
+	payee.cancel(hold::CancelRequest { payment_hash: payment_hash.as_ref().to_vec() }).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(60), async {
+		tokio::select! {
+			r = sender.check_lightning_payment(payment_hash, true) =>
+				panic!("refund completed before the sender disappeared: {r:?}"),
+			_ = reached.notified() => {},
+		}
+	}).await.expect("the sender must reach its refund request");
+
+	let held = sender.all_vtxos().await.unwrap().into_iter()
+		.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| p.payment_hash == payment_hash))
+		.map(|w| w.vtxo.id()).collect::<Vec<_>>();
+	let htlcs = db.read(async |t| t.get_user_vtxos_by_id(&held).await).await.unwrap()
+		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
+	let htlc_ids = htlcs.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	assert!(!htlc_ids.is_empty());
+	let others = bystander.all_vtxos().await.unwrap().into_iter().map(|w| w.vtxo.id()).collect::<Vec<_>>();
+	let other_coins = db.read(async |t| t.get_user_vtxos_by_id(&others).await).await.unwrap()
+		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
+	let other_ids = other_coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let other_principal = other_coins.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+	assert_eq!(other_principal, 50_000);
+	drop(sender);
+	drop(bystander);
+	drop(proxy);
+
+	// Payouts run from before expiry, so the guard is busy before either
+	// wallet becomes payable.
+	restart_with_payouts(&ctx, &srv).await;
+
+	// Test-only fault: a database session holds the sender's HTLC coin rows,
+	// so the refund request waits while it holds its payment guard. No
+	// payment, coin, attempt or sweep state is changed by this lock.
+	let locked = Arc::new(Notify::new());
+	let release = Arc::new(Notify::new());
+	let lock_task = tokio::spawn({
+		let (db, ids, locked, release) = (db.clone(), htlc_ids.clone(), locked.clone(), release.clone());
+		async move {
+			db.write(async |t| {
+				t.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) FOR UPDATE", &[&ids]).await?;
+				locked.notify_one();
+				release.notified().await;
+				Ok(())
+			}).await
+		}
+	});
+	tokio::time::timeout(Duration::from_secs(30), locked.notified()).await
+		.expect("the test session must lock the HTLC rows");
+	let request = revocation.lock().unwrap().take().unwrap();
+	let mut rpc = srv.get_public_rpc().await;
+	let refund = tokio::spawn(async move { rpc.request_lightning_pay_htlc_revocation(request).await });
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let waiting = db.read(async |t| Ok(t.query_one(
+				"SELECT count(*) FROM pg_locks WHERE NOT granted", &[],
+			).await?.get::<_, i64>(0))).await.unwrap();
+			if waiting > 0 { break; }
+			assert!(!refund.is_finished(), "the refund request must wait on the locked rows");
+			tokio::time::sleep(Duration::from_millis(200)).await;
+		}
+	}).await.expect("the refund request must wait while holding its payment guard");
+
+	let mut coins = htlcs.clone();
+	coins.extend(other_coins.iter().cloned());
+	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
+	train_fee_estimator(&ctx).await;
+	let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &other_ids, &bystander_record.spk, other_principal).await;
+	assert!(!refund.is_finished(), "the refund request still holds its payment guard");
+	let early = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_settlement WHERE id=ANY($1)", &[&htlc_ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(early, 0, "the busy payment's coins wait");
+	let logs = std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap();
+	assert!(logs.contains("expiry wallet group deferred: Lightning payment in progress"));
+	println!("busy payment guard: other wallet paid {payout} (fee_sat={fee}) while the refund request waited");
+
+	// The refund request continues. The sender's HTLC coins settle once:
+	// either through that refund or through the expiry payout.
+	release.notify_one();
+	lock_task.await.unwrap().unwrap();
+	let refunded = tokio::time::timeout(Duration::from_secs(60), refund).await
+		.expect("the refund request must finish").unwrap();
+	for _ in 0..10 {
+		tokio::time::sleep(Duration::from_secs(1)).await;
+		ctx.generate_blocks(1).await;
+	}
+	let state = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FILTER (WHERE v.oor_spent_txid IS NOT NULL),
+			count(*) FILTER (WHERE s.id IS NOT NULL),
+			count(*) FILTER (WHERE h.offchain_resolution='revoked')
+		 FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id LEFT JOIN expiry_settlement s ON s.id=v.vtxo_id
+		 WHERE v.vtxo_id=ANY($1)", &[&htlc_ids],
+	).await?)).await.unwrap();
+	let (refunded_in_ark, paid_on_chain, revoked) =
+		(state.get::<_, i64>(0) as usize, state.get::<_, i64>(1) as usize, state.get::<_, i64>(2) as usize);
+	match &refunded {
+		Ok(_) => assert_eq!((refunded_in_ark, paid_on_chain), (htlc_ids.len(), 0)),
+		Err(_) => assert_eq!((refunded_in_ark, paid_on_chain), (0, htlc_ids.len())),
+	}
+	assert_eq!(revoked, htlc_ids.len());
+	println!("busy payment released: refund_request_ok={}, refunded_in_ark={refunded_in_ark}, \
+		paid_on_chain={paid_on_chain}", refunded.is_ok());
+	srv.stop().await.unwrap();
+	let spend_txid = restore_and_spend(&ctx, &bystander_mnemonic, payout).await;
+	println!("other wallet recovered: payout={payout}, confirmed_seed_spend={spend_txid}");
+}
+
+/// The server's own node stops answering while a failed send's coins are
+/// payable. That is no evidence the payment failed: the sender's coins wait,
+/// and other wallets are still paid. Once the node answers, the sender is
+/// refunded.
+#[tokio::test]
+async fn fallback_unresponsive_node_holds_send_refund_only() {
+	let name = "fallback_unresponsive_node_holds_send_refund_only";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().create().await;
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let reached = Arc::new(Notify::new());
+	let revocation = Arc::new(Mutex::new(None));
+	let proxy = srv.start_proxy_no_mailbox(AbsentSender {
+		reached: reached.clone(), request: revocation.clone(),
+	}).await;
+	let sender_mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let sender = ctx.bark_sdk("sender", &proxy.address).mnemonic(sender_mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(300_000)).create().await;
+	sender.stop_daemon_wait().await.unwrap();
+	let sender_record = sender.fallback_destination().await.unwrap();
+	let bystander_mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let bystander = ctx.bark_sdk("bystander", &srv).mnemonic(bystander_mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(50_000)).create().await;
+	bystander.stop_daemon_wait().await.unwrap();
+	let bystander_record = bystander.fallback_destination().await.unwrap();
+
+	// A real failed payment: the external payee cancels its hold invoice.
+	let preimage = Preimage::random();
+	let payment_hash = preimage.compute_payment_hash();
+	let mut payee = lightning.external.hold_client().await;
+	let invoice = payee.invoice(hold::InvoiceRequest {
+		payment_hash: payment_hash.as_ref().to_vec(),
+		amount_msat: 100_000 * 1_000,
+		description: Some(hold::invoice_request::Description::Memo(name.into())),
+		min_final_cltv_expiry: Some(18),
+		expiry: Some(3600),
+		routing_hints: vec![],
+	}).await.unwrap().into_inner().bolt11;
+	// Boarding just mined blocks. A node paying from a stale tip sets an
+	// HTLC expiry the payee rejects, which would fail the payment for an
+	// unrelated reason.
+	lightning.sync().await;
+	sender.pay_lightning_invoice(invoice, None, false).await.unwrap();
+	lightning.external.wait_for_hold_invoice_accepted(payment_hash).await;
+	payee.cancel(hold::CancelRequest { payment_hash: payment_hash.as_ref().to_vec() }).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(60), async {
+		tokio::select! {
+			r = sender.check_lightning_payment(payment_hash, true) =>
+				panic!("refund completed before the sender disappeared: {r:?}"),
+			_ = reached.notified() => {},
+		}
+	}).await.expect("the sender must reach its refund request");
+
+	let held = sender.all_vtxos().await.unwrap().into_iter()
+		.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| p.payment_hash == payment_hash))
+		.map(|w| w.vtxo.id()).collect::<Vec<_>>();
+	let htlcs = db.read(async |t| t.get_user_vtxos_by_id(&held).await).await.unwrap()
+		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
+	let htlc_ids = htlcs.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let htlc_principal = htlcs.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+	assert!(!htlc_ids.is_empty());
+	let others = bystander.all_vtxos().await.unwrap().into_iter().map(|w| w.vtxo.id()).collect::<Vec<_>>();
+	let other_coins = db.read(async |t| t.get_user_vtxos_by_id(&others).await).await.unwrap()
+		.into_iter().map(|v| v.vtxo).collect::<Vec<Vtxo>>();
+	let other_ids = other_coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let other_principal = other_coins.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+	drop(sender);
+	drop(bystander);
+	drop(proxy);
+
+	// Payouts run from before expiry, so the node is already silent when
+	// either wallet becomes payable.
+	restart_with_payouts(&ctx, &srv).await;
+
+	// A real outage of the server's own node: its container is frozen, so it
+	// accepts connections but answers nothing. Nothing else is changed.
+	let container = lightning.internal.container_name().to_owned();
+	let docker = |action: &str| {
+		let status = std::process::Command::new("docker").args([action, &container]).status().unwrap();
+		assert!(status.success(), "docker {action} {container}");
+	};
+	docker("pause");
+	let mut coins = htlcs.clone();
+	coins.extend(other_coins.iter().cloned());
+	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
+	train_fee_estimator(&ctx).await;
+	let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &other_ids, &bystander_record.spk, other_principal).await;
+	let early = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_settlement WHERE id=ANY($1)", &[&htlc_ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(early, 0, "an unanswered node query must not refund the sender");
+	println!("unresponsive node: other wallet paid {payout} (fee_sat={fee}); sender refund waits");
+
+	docker("unpause");
+	let (refund, refund_fee) = wait_and_reconcile_payout(&ctx, &db, &htlc_ids, &sender_record.spk, htlc_principal).await;
+	let revoked = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM htlc_vtxo h JOIN vtxo v ON v.id=h.id
+		 WHERE v.vtxo_id=ANY($1) AND h.offchain_resolution='revoked'", &[&htlc_ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(revoked as usize, htlc_ids.len());
+	println!("node answers again: sender refunded {refund} (fee_sat={refund_fee})");
+	srv.stop().await.unwrap();
+	let other_spend = restore_and_spend(&ctx, &bystander_mnemonic, payout).await;
+	let sender_spend = restore_and_spend(&ctx, &sender_mnemonic, refund).await;
+	println!("seed-only spends confirmed: other={other_spend}, sender={sender_spend}");
+}
+
 /// Mine past every coin's expiry, then wait until a confirmed sweep spends
 /// each backing anchor. The payout task requires that real chain evidence.
 async fn expire_and_confirm_sweeps(ctx: &TestContext, db: &Db, coins: &[Vtxo]) {
@@ -483,6 +748,11 @@ async fn expire_and_confirm_sweeps(ctx: &TestContext, db: &Db, coins: &[Vtxo]) {
 /// Train Core's estimator with real transactions after the large expiry
 /// advance, which ages out old fee history, then restart with payouts enabled.
 async fn enable_payouts(ctx: &TestContext, srv: &Captaind) {
+	train_fee_estimator(ctx).await;
+	restart_with_payouts(ctx, srv).await;
+}
+
+async fn train_fee_estimator(ctx: &TestContext) {
 	let core = ctx.bitcoind().sync_client();
 	for _ in 0..12 {
 		for _ in 0..8 {
@@ -497,6 +767,9 @@ async fn enable_payouts(ctx: &TestContext, srv: &Captaind) {
 	}
 	let estimate: serde_json::Value = core.call("estimatesmartfee", &[6.into(), "economical".into()]).unwrap();
 	assert!(estimate["feerate"].as_f64().is_some(), "real economical fee estimate required: {estimate}");
+}
+
+async fn restart_with_payouts(ctx: &TestContext, srv: &Captaind) {
 	srv.stop().await.unwrap();
 	{
 		let mut config = srv.config_mut();
@@ -570,8 +843,24 @@ async fn wait_and_reconcile_payout(
 	).await?)).await.unwrap();
 	let (gross, grouped) = (gross.get::<_, i64>(0) as u64, gross.get::<_, i64>(1) as usize);
 	assert!(grouped >= ids.len() && gross >= principal);
-	assert_eq!(output.value.to_sat(), gross - fee);
-	println!("payout output: gross_sat={gross}, coins={grouped}, entitlement_sat={principal}, fee_sat={fee}");
+	// Other wallets can share the transaction. Each destination's output
+	// carries its share of the fee, and the shares add up to the whole fee.
+	let destinations = db.read(async |t| Ok(t.query(
+		"SELECT s.spk, sum(v.amount)::bigint FROM expiry_settlement s JOIN vtxo v ON v.vtxo_id=s.id
+		 WHERE s.txid=$1 GROUP BY s.spk", &[&txid.to_string()],
+	).await?)).await.unwrap();
+	let mut deducted = 0;
+	for row in &destinations {
+		let spk = ScriptBuf::from(row.get::<_, Vec<u8>>(0));
+		let paid = tx.output.iter().filter(|o| o.script_pubkey == spk).collect::<Vec<_>>();
+		assert_eq!(paid.len(), 1);
+		deducted += (row.get::<_, i64>(1) as u64).checked_sub(paid[0].value.to_sat()).unwrap();
+	}
+	assert_eq!(deducted, fee);
+	let share = gross - output.value.to_sat();
+	assert!(share > 0 && share <= fee);
+	println!("payout output: gross_sat={gross}, coins={grouped}, entitlement_sat={principal}, fee_share_sat={share}, \
+		tx_fee_sat={fee}, destinations={}", destinations.len());
 	let total_in = tx.input.iter().map(|i| core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
 		.output[i.previous_output.vout as usize].value.to_sat()).sum::<u64>();
 	assert_eq!(fee, total_in - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>());

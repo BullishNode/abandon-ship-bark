@@ -301,7 +301,7 @@ async fn write_movement_records<S: StorageAdaptor>(
 
 /// Storage adaptor trait for persistence backends.
 ///
-/// This trait provides a minimal interface (5 methods) that can be efficiently
+/// This trait provides a small interface that can be efficiently
 /// implemented on various storage backends while enabling query optimization.
 ///
 /// # Implementor's Guide
@@ -350,6 +350,10 @@ async fn write_movement_records<S: StorageAdaptor>(
 pub trait StorageAdaptor: Send + Sync + 'static {
 	/// Stores a record, inserting or updating by primary key.
 	async fn put(&mut self, record: Record) -> anyhow::Result<()>;
+
+	/// Store all records atomically. Failure or interruption must leave either
+	/// the entire batch or none of it; a loop of independent puts is not enough.
+	async fn put_batch(&mut self, records: Vec<Record>) -> anyhow::Result<()>;
 
 	/// Retrieves a record by primary key.
 	///
@@ -916,6 +920,25 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 			update_vtxo_state_checked(&mut *lock, *id, new_state.clone(), allowed_old_states).await?;
 		}
 		Ok(())
+	}
+
+	async fn record_server_spent_vtxo(&self, vtxo_id: VtxoId) -> anyhow::Result<Option<Movement>> {
+		let mut guard = self.inner.write().await;
+		let (mut vtxo, transition) = get_check_vtxo_state(&*guard, vtxo_id,
+			&VtxoState::Spent, &[VtxoStateKind::Spendable]).await?;
+		if let StateTransition::AlreadyApplied = transition { return Ok(None); }
+		// An interrupted allocation can leave an unused ID, never a partial debit.
+		let id = MovementId(guard.incremental_id(partition::MOVEMENT).await?);
+		let movement = Movement::server_spend(id, &vtxo.vtxo, chrono::Local::now())?;
+		vtxo.states.push(VtxoState::Spent);
+		guard.put_batch(vec![
+			Record::from_data(partition::VTXO, &vtxo_id.to_bytes(),
+				Some(sort::vtxo_sort_key(VtxoStateKind::Spent,
+					vtxo.vtxo.expiry_height().to_u32(), vtxo.vtxo.amount())), &vtxo)?,
+			Record::from_data(partition::MOVEMENT, &id.to_bytes(),
+				Some(sort::movement_sort_key(&movement.time.created_at)), &movement)?,
+		]).await?;
+		Ok(Some(movement))
 	}
 
 	async fn mark_vtxos_registered(&self, vtxo_ids: &[VtxoId]) -> anyhow::Result<()> {

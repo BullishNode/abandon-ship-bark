@@ -115,7 +115,12 @@ async fn expiry_payout_adopt_find_sweep() {
 	assert_eq!(movement.subsystem.kind, EXPIRY_PAYOUT_MOVEMENT_KIND);
 	assert_eq!(movement.status, MovementStatus::Successful);
 	assert!(movement.input_vtxos.is_empty(), "the sweep spends on-chain outputs, not VTXOs");
-	assert_eq!(movement.effective_balance, -payout_amount.to_signed().unwrap());
+	assert_eq!(movement.effective_balance, bitcoin::SignedAmount::ZERO,
+		"the on-chain sweep must not debit the Ark coin again");
+	let debits = wallet.history().await.unwrap().into_iter()
+		.filter(|m| m.subsystem.name == "bark.server_spend").collect::<Vec<_>>();
+	assert_eq!(debits.len(), 1);
+	assert_eq!(debits[0].effective_balance, -paid.amount().to_signed().unwrap());
 	let metadata = &movement.metadata;
 	assert_eq!(metadata["sweep_txid"], serde_json::to_value(sweep.txid).unwrap());
 	assert_eq!(metadata["payout_txids"], serde_json::to_value([payout_txid]).unwrap());
@@ -188,8 +193,16 @@ async fn expiry_status_defers_and_preserves_concurrent_lock() {
 	}).await.expect("delayed status and concurrent lock must finish");
 	assert!(adopted.is_err());
 	assert_eq!(wallet.get_vtxo_by_id(coin.id()).await.unwrap().state.kind(), VtxoStateKind::Locked);
+	assert_eq!(wallet.history().await.unwrap().len(), history_before,
+		"a refused transition must not write a debit");
 	wallet.unlock_vtxos(&[coin.id()], None).await.unwrap();
 	assert!(wallet.maybe_schedule_maintenance_refresh_delegated().await.unwrap().is_none());
 	assert_eq!(wallet.get_vtxo_by_id(coin.id()).await.unwrap().state.kind(), VtxoStateKind::Spent);
-	assert_eq!(wallet.history().await.unwrap().len(), history_before);
+	let history = wallet.history().await.unwrap();
+	assert_eq!(history.len(), history_before + 1);
+	let debit = history.iter().find(|m| m.subsystem.name == "bark.server_spend").unwrap();
+	assert_eq!(debit.status, MovementStatus::Successful);
+	assert_eq!(debit.effective_balance, -coin.amount().to_signed().unwrap());
+	wallet.trust_and_adopt_server_vtxo_status(coin.id()).await.unwrap();
+	assert_eq!(wallet.history().await.unwrap(), history, "adoption is idempotent");
 }

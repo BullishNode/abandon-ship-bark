@@ -683,6 +683,12 @@ pub trait BarkPersister: Send + Sync + 'static {
 		allowed_old_states: &[VtxoStateKind],
 	) -> anyhow::Result<()>;
 
+	/// Adopt a server-reported spend and record its Ark balance debit atomically.
+	/// Only Spendable may transition; Spent is an idempotent no-op. Other states
+	/// must fail without writing either record, including a concurrent lock.
+	/// Returns the newly created movement, or None when already spent.
+	async fn record_server_spent_vtxo(&self, vtxo_id: VtxoId) -> anyhow::Result<Option<Movement>>;
+
 	/// Force the given VTXOs to [VtxoState::Spent], whatever their current
 	/// state. Used when the server is seen to have acted on a vtxo and the
 	/// wallet state must follow. [VtxoState::Exited] vtxos are left

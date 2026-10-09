@@ -54,7 +54,12 @@ Wallet sync and automatic refresh reconcile expired coins with the trusted serve
 before selecting inputs. Spent coins leave the Ark balance; their BIP84 payouts
 appear in the ordinary on-chain balance. An unavailable status retains the coin
 and defers its automatic refresh. A status reply cannot overwrite a concurrent
-local coin lock. Historical coin-key payouts still use the existing sweep.
+local coin lock. Adopting a newly spent coin records its full Ark debit atomically
+with the state change; retries do not duplicate the movement. This reconciliation
+records the observation time, without inferring a payout transaction or fee from
+the status alone. Historical coin-key payouts still use the existing sweep. Its
+movement now has zero Ark balance change (the coin was already debited), with
+`payout_total_sat`, `swept_sat`, and `sweep_fee_sat` recording the on-chain transfer.
 The optional schema is outside numbered migrations, so stock watchmand remains compatible.
 It does not migrate approach B's different schema. For an earlier D draft containing
 `expiry_settlement.raw_tx`, stop captaind, verify every copy equals its nursery row,

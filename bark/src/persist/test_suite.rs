@@ -76,6 +76,8 @@ macro_rules! bark_persister_tests {
 			test_vtxo_state_transition_repeated,
 			test_vtxo_state_transition_rejected,
 			test_vtxo_state_transition_holder_upgrade,
+			test_server_spend_records_debit_once,
+			test_server_spend_preserves_other_states,
 			test_remove_vtxo,
 			test_has_spent_vtxo,
 			test_store_vtxos_idempotent,
@@ -417,6 +419,37 @@ pub async fn test_fallback_record_ordering(db: &impl BarkPersister) {
 // ---------------------------------------------------------------------------
 // VTXO lifecycle
 // ---------------------------------------------------------------------------
+
+pub async fn test_server_spend_records_debit_once(db: &impl BarkPersister) {
+	let vtxo = &VTXO_VECTORS.board_vtxo;
+	db.store_vtxos(&[(vtxo, &VtxoState::Spendable)]).await.unwrap();
+	let (a, b) = futures::join!(db.record_server_spent_vtxo(vtxo.id()), db.record_server_spent_vtxo(vtxo.id()));
+	let recorded = [a.unwrap(), b.unwrap()].into_iter().flatten().collect::<Vec<_>>();
+	assert_eq!(recorded.len(), 1, "concurrent adoption must debit only once");
+	let movement = &recorded[0];
+	assert_eq!(movement.status, MovementStatus::Successful);
+	assert_eq!(movement.effective_balance, -vtxo.amount().to_signed().unwrap());
+	assert_eq!(movement.input_vtxos, vec![vtxo.id()]);
+	assert!(movement.sent_to.is_empty(), "a spent status does not prove a destination");
+	assert!(movement.metadata.is_empty(), "no invented payout transaction or fee");
+	assert_eq!(db.get_wallet_vtxo(vtxo.id()).await.unwrap().unwrap().state, VtxoState::Spent);
+	assert!(db.record_server_spent_vtxo(vtxo.id()).await.unwrap().is_none());
+	assert_eq!(db.get_all_movements().await.unwrap(), recorded);
+}
+
+pub async fn test_server_spend_preserves_other_states(db: &impl BarkPersister) {
+	let locked = &VTXO_VECTORS.board_vtxo;
+	let exited = &VTXO_VECTORS.round1_vtxo;
+	let spent = &VTXO_VECTORS.round2_vtxo;
+	let lock = VtxoState::Locked { holder: Some(MovementId::new(42).into()) };
+	db.store_vtxos(&[(locked, &lock), (exited, &VtxoState::Exited), (spent, &VtxoState::Spent)]).await.unwrap();
+	assert!(db.record_server_spent_vtxo(locked.id()).await.is_err());
+	assert!(db.record_server_spent_vtxo(exited.id()).await.is_err());
+	assert!(db.record_server_spent_vtxo(spent.id()).await.unwrap().is_none());
+	assert_eq!(db.get_wallet_vtxo(locked.id()).await.unwrap().unwrap().state, lock);
+	assert_eq!(db.get_wallet_vtxo(exited.id()).await.unwrap().unwrap().state, VtxoState::Exited);
+	assert!(db.get_all_movements().await.unwrap().is_empty());
+}
 
 pub async fn test_store_and_get_vtxo(db: &impl BarkPersister) {
 	let vtxo = &VTXO_VECTORS.board_vtxo;

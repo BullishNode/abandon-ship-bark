@@ -164,22 +164,22 @@ async fn manual_refresh_delegated_does_not_drop_rejected_vtxo() {
 #[tokio::test]
 async fn manual_maintenance_refresh_drops_server_rejected_vtxo() {
 	let ctx = TestContext::new("bark_sdk/manual_maintenance_refresh_drops_server_rejected_vtxo").await;
-	let srv = ctx.captaind("server").funded(btc(1)).create().await;
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1))
+		.cfg(|c| c.round_interval = Duration::from_secs(10)).create().await;
 	let (wallet, _proxy, bad_id, good_id) = setup_bark_sdk_with_rejected_vtxo(&ctx, &srv).await;
 
 	// Age both vtxos so they are due for refresh.
 	ctx.generate_blocks(srv.config().vtxo_lifetime.to_u32()).await;
 
-	// `maintenance_refresh` blocks until the round it joins finishes, so trigger a round
-	// alongside it (after a short delay so it subscribes first). It should submit
+	// Maintenance skips the initial replayed round; periodic rounds give it a
+	// subsequent complete submission window within the deadline. It should submit
 	// [bad, good], have `bad` rejected, then re-submit just [good] to the same attempt.
-	let (res, _) = tokio::join!(
-		wallet.maintenance_refresh(),
-		async {
+	let (res, _) = tokio::time::timeout(Duration::from_secs(60), async {
+		tokio::join!(wallet.maintenance_refresh(), async {
 			tokio::time::sleep(Duration::from_secs(2)).await;
 			srv.trigger_round().await;
-		},
-	);
+		})
+	}).await.expect("maintenance must join a subsequent complete round");
 	let status = res.expect("maintenance refresh must not fail wholesale around a rejected input");
 	assert!(status.is_some(), "maintenance refresh should have refreshed the healthy vtxo");
 

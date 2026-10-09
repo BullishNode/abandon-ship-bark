@@ -10,6 +10,7 @@ mod embedded {
 
 mod ban;
 pub(crate) mod expiry_settlement;
+pub(crate) mod fallback;
 pub mod block;
 pub mod data_migrations;
 pub mod htlc_vtxo;

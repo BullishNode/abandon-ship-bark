@@ -653,6 +653,7 @@ impl Server {
 		funding_tx: Option<&Transaction>,
 		user_pub_nonce: PublicNonce,
 	) -> anyhow::Result<ark::board::BoardCosignResponse> {
+		self.db.read(async |t| t.require_fallback(&[user_pubkey]).await).await?;
 		check_max_amount("board", amount, self.config.max_board_amount)?;
 
 		let min_amount = self.config.min_board_amount.max(P2TR_DUST);
@@ -784,6 +785,7 @@ impl Server {
 	pub async fn register_board(&self, vtxo: Vtxo<Full>) -> anyhow::Result<()> {
 		check_max_amount("board", vtxo.amount(), self.config.max_board_amount)?;
 
+		self.db.read(async |t| t.require_fallback(&[vtxo.user_pubkey()]).await).await?;
 		let funding_txid = vtxo.chain_anchor().txid;
 		let funding_vout = vtxo.chain_anchor().vout;
 		let tx_info = bcd::custom_get_raw_transaction_info(&self.bitcoind, funding_txid, None).await

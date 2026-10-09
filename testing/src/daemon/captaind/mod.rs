@@ -19,6 +19,7 @@ use tokio::process::Command;
 
 use server_log::{parse_record, FinishedPoolIssuance, ParsedRecord, LogMsg, SyncedToHeight};
 use server_rpc::{self as rpc, protos};
+use server::database::Db;
 pub use server::config::{self, Config};
 use server::database::Db;
 use server::database::htlc_vtxo::{self, HtlcVtxo};
@@ -706,6 +707,17 @@ impl CaptaindHelper {
 
 		let status = cmd.args(args).status().await?;
 		if status.success() {
+			// Preserve old-release schemas in upgrade tests until the upgrade itself.
+			let current_binary = self.exec.lock().is_none();
+			if current_binary {
+				let postgres = self.cfg.lock().postgres.clone();
+				let db = Db::connect(&postgres).await?;
+				db.write(async |t| {
+					t.batch_execute(include_str!("../../../../contrib/expiry-settlement.sql")).await?;
+					t.batch_execute(include_str!("../../../../contrib/expiry-fallback.sql")).await?;
+					Ok(())
+				}).await.context("failed to apply expiry fallback fixture schema")?;
+			}
 			Ok(())
 		} else {
 			bail!("Failed to create captaind '{}'", self.name);

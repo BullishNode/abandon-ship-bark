@@ -261,49 +261,48 @@ async fn fallback_multi_input_send_one_input_settled_pays_recipient() {
 /// individual coins are all below the configured minimum; their group is not.
 #[tokio::test]
 async fn fallback_grouped_expiry_without_client() {
-	Box::pin(grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, 100, ExpiryCase::Registered)).await;
+	Box::pin(grouped_expiry_without_client("fallback_grouped_expiry_without_client", 3, 5_000, ExpiryCase::Registered)).await;
 }
 
 #[tokio::test]
 async fn fallback_grouped_200_small_coins() {
-	Box::pin(grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, 200, ExpiryCase::Registered)).await;
+	Box::pin(grouped_expiry_without_client("fallback_grouped_200_small_coins", 200, 600, ExpiryCase::Registered)).await;
 }
 
-/// One wallet group is one payout output, however many coins it holds. With
-/// the default configuration, the 101st coin must not hold up the wallet.
+/// One wallet group is one payout output, however many coins it holds. The
+/// 101st coin must not hold up the wallet.
 #[tokio::test]
 async fn fallback_grouped_101_coins_default_batch() {
-	let max_batch = server::expiry_payout::Config::default().max_batch;
-	Box::pin(grouped_expiry_without_client("fallback_grouped_101_coins_default_batch", 101, 600, max_batch, ExpiryCase::Registered)).await;
+	Box::pin(grouped_expiry_without_client("fallback_grouped_101_coins_default_batch", 101, 600, ExpiryCase::Registered)).await;
 }
 
 /// A funded board must survive the owner disappearing before registration.
 #[tokio::test]
 async fn fallback_abandoned_board_without_registration() {
-	Box::pin(grouped_expiry_without_client("fallback_abandoned_board_without_registration", 1, 25_000, 100, ExpiryCase::AbandonedBoard)).await;
+	Box::pin(grouped_expiry_without_client("fallback_abandoned_board_without_registration", 1, 25_000, ExpiryCase::AbandonedBoard)).await;
 }
 
 #[tokio::test]
 async fn fallback_abandoned_board_return_clears_pending() {
-	Box::pin(grouped_expiry_without_client("fallback_abandoned_board_return_clears_pending", 1, 25_000, 100, ExpiryCase::ReturningBoard)).await;
+	Box::pin(grouped_expiry_without_client("fallback_abandoned_board_return_clears_pending", 1, 25_000, ExpiryCase::ReturningBoard)).await;
 }
 
 #[tokio::test]
 async fn fallback_unregistered_arkoor_pays_input_owner() {
 	Box::pin(grouped_expiry_without_client("fallback_unregistered_arkoor_pays_input_owner",
-		2, 25_000, 100, ExpiryCase::UnregisteredArkoor)).await;
+		2, 25_000, ExpiryCase::UnregisteredArkoor)).await;
 }
 
 #[tokio::test]
 async fn fallback_arkoor_registration_wins_payout_race() {
 	Box::pin(grouped_expiry_without_client("fallback_arkoor_registration_wins_payout_race",
-		2, 25_000, 100, ExpiryCase::RegistrationWins)).await;
+		2, 25_000, ExpiryCase::RegistrationWins)).await;
 }
 
 #[tokio::test]
 async fn fallback_arkoor_payout_wins_registration_race() {
 	Box::pin(grouped_expiry_without_client("fallback_arkoor_payout_wins_registration_race",
-		2, 25_000, 100, ExpiryCase::PayoutWins)).await;
+		2, 25_000, ExpiryCase::PayoutWins)).await;
 }
 
 /// A recipient holding the signed chain through its mailbox is paid, though
@@ -311,50 +310,50 @@ async fn fallback_arkoor_payout_wins_registration_race() {
 #[tokio::test]
 async fn fallback_arkoor_post_without_registration_pays_recipient() {
 	Box::pin(grouped_expiry_without_client("fallback_arkoor_post_without_registration_pays_recipient",
-		2, 25_000, 100, ExpiryCase::PostedArkoor)).await;
+		2, 25_000, ExpiryCase::PostedArkoor)).await;
 }
 
 #[tokio::test]
 async fn fallback_arkoor_post_after_settlement_refused() {
 	Box::pin(grouped_expiry_without_client("fallback_arkoor_post_after_settlement_refused",
-		2, 25_000, 100, ExpiryCase::PostAfterSettlement)).await;
+		2, 25_000, ExpiryCase::PostAfterSettlement)).await;
 }
 
 #[tokio::test]
 async fn fallback_arkoor_post_wins_payout_race() {
 	Box::pin(grouped_expiry_without_client("fallback_arkoor_post_wins_payout_race",
-		2, 25_000, 100, ExpiryCase::PostWins)).await;
+		2, 25_000, ExpiryCase::PostWins)).await;
 }
 
 #[tokio::test]
 async fn fallback_arkoor_payout_wins_post_race() {
 	Box::pin(grouped_expiry_without_client("fallback_arkoor_payout_wins_post_race",
-		2, 25_000, 100, ExpiryCase::PayoutWinsPost)).await;
+		2, 25_000, ExpiryCase::PayoutWinsPost)).await;
 }
 
 #[tokio::test]
 async fn fallback_unregistered_arkoor_return_does_not_report_sent() {
 	Box::pin(grouped_expiry_without_client("fallback_unregistered_arkoor_return_does_not_report_sent",
-		2, 25_000, 100, ExpiryCase::ReturningArkoor)).await;
+		2, 25_000, ExpiryCase::ReturningArkoor)).await;
 }
 
 #[tokio::test]
 async fn fallback_registered_arkoor_lost_reply_return_reports_sent() {
 	Box::pin(grouped_expiry_without_client("fallback_registered_arkoor_lost_reply_return_reports_sent",
-		2, 25_000, 100, ExpiryCase::RegisteredArkoorReturn)).await;
+		2, 25_000, ExpiryCase::RegisteredArkoorReturn)).await;
 }
 
 #[tokio::test]
 async fn fallback_unregistered_arkoor_return_does_not_restore_paid_change() {
 	Box::pin(grouped_expiry_without_client("fallback_unregistered_arkoor_return_does_not_restore_paid_change",
-		2, 25_000, 100, ExpiryCase::ReturningArkoorChange)).await;
+		2, 25_000, ExpiryCase::ReturningArkoorChange)).await;
 }
 
-/// A wallet group larger than `max_batch` is paid alone in its own claim.
-/// Smaller groups of other wallets are still paid in claims of their own.
+/// Several wallets in one claim: one output per wallet group, and a group is
+/// never split. Packing a group larger than the batch limit alone is unit tested.
 #[tokio::test]
-async fn fallback_oversized_wallet_group_paid_alone() {
-	let ctx = TestContext::new("bark_sdk/fallback_oversized_wallet_group_paid_alone").await;
+async fn fallback_wallet_groups_one_output_each() {
+	let ctx = TestContext::new("bark_sdk/fallback_wallet_groups_one_output_each").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
@@ -423,7 +422,6 @@ async fn fallback_oversized_wallet_group_paid_alone() {
 		config.expiry_payout.grace_blocks = 0;
 		config.expiry_payout.sweep_min_confs = 1;
 		config.expiry_payout.min_payout_sat = 10_000;
-		config.expiry_payout.max_batch = 2;
 		config.expiry_payout.watchman_config = Some(
 			srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE),
 		);
@@ -439,15 +437,11 @@ async fn fallback_oversized_wallet_group_paid_alone() {
 			tokio::time::sleep(Duration::from_secs(1)).await;
 			ctx.generate_blocks(1).await;
 		}
-	}).await.expect("every wallet, including the group larger than max_batch, must be paid");
-	let txid_of = |id: &str| rows.iter().find(|r| r.get::<_, String>("id") == id).unwrap().get::<_, String>("txid");
-	let large_txid = txid_of(&wallets[0].1[0].id().to_string());
-	for (i, (spk, coins)) in wallets.iter().enumerate() {
+	}).await.expect("every wallet must be paid");
+	for (spk, coins) in &wallets {
 		for coin in coins {
 			let row = rows.iter().find(|r| r.get::<_, String>("id") == coin.id().to_string()).unwrap();
 			assert_eq!(row.get::<_, Vec<u8>>("spk"), spk.as_bytes());
-			assert_eq!(row.get::<_, String>("txid") == large_txid, i == 0,
-				"the oversized group has a claim of its own");
 		}
 	}
 	let mut payouts = rows.iter().map(|r| r.get::<_, String>("txid")).collect::<Vec<_>>();
@@ -474,9 +468,7 @@ async fn fallback_oversized_wallet_group_paid_alone() {
 			}
 		}
 	}
-	let large_tx: Transaction = core.get_raw_transaction(&large_txid.parse().unwrap(), None).unwrap();
-	println!("oversized group: coins=3, max_batch=2, claim={large_txid}, outputs={}; other claims={:?}",
-		large_tx.output.len(), payouts.iter().filter(|t| **t != large_txid).collect::<Vec<_>>());
+	println!("wallet groups: claims={payouts:?}");
 }
 
 #[derive(Clone, Copy)]
@@ -487,7 +479,7 @@ enum ExpiryCase {
 }
 
 async fn grouped_expiry_without_client(
-	name: &str, count: usize, amount: u64, max_batch: usize, case: ExpiryCase,
+	name: &str, count: usize, amount: u64, case: ExpiryCase,
 ) {
 	let abandoned = matches!(case, ExpiryCase::AbandonedBoard | ExpiryCase::ReturningBoard);
 	let returning = matches!(case, ExpiryCase::ReturningBoard);
@@ -738,7 +730,6 @@ async fn grouped_expiry_without_client(
 		config.expiry_payout.grace_blocks = 0;
 		config.expiry_payout.sweep_min_confs = 1;
 		config.expiry_payout.min_payout_sat = 10_000;
-		config.expiry_payout.max_batch = max_batch;
 		config.expiry_payout.watchman_config = Some(
 			srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE),
 		);

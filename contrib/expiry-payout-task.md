@@ -117,8 +117,8 @@ accounting so its later settlement is not debited twice.
 
 The task groups all currently payable coins by destination across page boundaries.
 Waiting coins do not fill the batch. Failed batches split between groups, never
-within one group. A group larger than `max_batch` is paid alone in its own
-payment. One new payment per tick. Sweeps that confirm in different ticks
+within one group. A claim holds at most 10,000 coins; a group with more coins
+is paid alone in its own payment. One new payment per tick. Sweeps that confirm in different ticks
 can produce separate payments to the same wallet.
 
 A failed delegated exchange can be cancelled once every replacement is swept and
@@ -199,14 +199,12 @@ These rules are documented, not enforced in code.
 | grace_blocks | 1008 |
 | sweep_min_confs | 100 |
 | min_payout_sat | 10000 |
-| max_batch | 10000 |
 | conf_target_blocks | 6; accepts1,3,6 |
 
-`max_batch` counts coins per claim. The default is 10000; any positive value is
-valid. It bounds the coins of a claim that combines wallet groups. A wallet group
-with more coins is paid alone, ignoring the limit, with the same net minimum. The payout
-pays from the rounds wallet with one output per wallet group, so a group's coin
-count does not change the transaction size; the 400,000 WU weight check still applies.
+The payout pays from the rounds wallet with one output per wallet group, so a
+group's coin count does not change the transaction size; the 400,000 WU weight
+check still applies. Every payout carries operator change: a rounds wallet whose
+balance equals a payout's gross defers it until the operator adds funds.
 
 Mainnet enforces grace>=144 and sweep depth>=100. Short regtest/signet timings are
 rehearsal settings. When enabled, `watchman_config` must be the same file mounted
@@ -240,9 +238,8 @@ group net minimum and confirmed funding. The task keeps entitlements while those
 
 For a committed transaction missing from the mempool, check the nursery and Core's
 rejection and restore funding/service conditions; the nursery rebroadcasts the
-identical transaction after the next block. A manual CPFP requires an actual owned
-change output. Exactly funded payouts may have none: wait for acceptance/fees to
-improve; do not construct another payment for the same coins. Each settled coin's
+identical transaction after the next block. A manual CPFP spends the payout's operator
+change output; do not construct another payment for the same coins. Each settled coin's
 row keeps its payout txid, fee and paid script; a later wallet-record change does
 not alter it.
 

@@ -23,6 +23,10 @@ use crate::nursery::NurseryTxKind;
 use crate::wallet::{BdkWalletExt, WalletKind};
 use crate::Server;
 
+/// Coins one claim may lock and update. A wallet group with more coins is
+/// paid alone instead of never.
+const MAX_BATCH_COINS: usize = 10_000;
+
 fn deferred<T>(reason: impl std::fmt::Display) -> Option<T> {
 	warn!("expiry batch deferred: {reason}");
 	None
@@ -40,6 +44,23 @@ fn fee_shares(amounts: &[u64], fee: u64) -> anyhow::Result<Vec<u64>> {
 	let left = fee - shares.iter().sum::<u64>();
 	for (i, _) in order.into_iter().take(left as usize) { shares[i] += 1; }
 	Ok(shares)
+}
+
+/// Pack items in order into batches of at most `limit` total size. An item
+/// larger than the limit is a batch of its own, at its place in the order.
+fn batches<T>(items: Vec<T>, limit: usize, size: impl Fn(&T) -> usize) -> Vec<Vec<T>> {
+	let mut batches = Vec::new();
+	let mut batch = Vec::new();
+	let mut total = 0;
+	for item in items {
+		let n = size(&item);
+		if n > limit { batches.push(vec![item]); continue; }
+		if total + n > limit { batches.push(std::mem::take(&mut batch)); total = 0; }
+		total += n;
+		batch.push(item);
+	}
+	if !batch.is_empty() { batches.push(batch); }
+	batches
 }
 
 #[derive(Clone)]
@@ -97,7 +118,7 @@ impl Server {
 		let inputs = groups.iter().flat_map(|g| g.inputs.iter().copied()).collect::<Vec<_>>();
 		let ids = inputs.iter().map(|i| i.id).collect::<Vec<_>>();
 		// A wallet group larger than the limit is paid alone.
-		ensure!(!ids.is_empty() && (groups.len() == 1 || ids.len() <= cfg.max_batch),
+		ensure!(!ids.is_empty() && (groups.len() == 1 || ids.len() <= MAX_BATCH_COINS),
 			"expiry batch exceeds coin limit");
 		let keys: Vec<String> = ids.iter().map(ToString::to_string).collect();
 		let scripts = groups.iter().flat_map(|g| g.inputs.iter().map(|_| g.script.as_bytes().to_vec()))
@@ -149,18 +170,9 @@ impl Server {
 				for (spk, amount) in &expected_build { b.add_recipient(spk.clone(), Amount::from_sat(*amount)); }
 				Ok(())
 			};
-			// Select the gross debit with zero initial fee, then deduct the final
-			// exact fee from recipients. This also supports an exactly-funded wallet.
-			let mut psbt = wallet.build_tx_at_chunk_feerate(LargestFirstCoinSelection, FeeRate::ZERO, configure)?;
-			if psbt.fee()? != Amount::ZERO {
-				wallet.mark_output_keys_unused(&psbt.unsigned_tx);
-				psbt = wallet.build_tx_at_chunk_feerate(WithGuaranteedChange(LargestFirstCoinSelection), FeeRate::ZERO, |b| {
-					b.ordering(bdk_wallet::TxOrdering::Untouched);
-					for op in &unconfirmed { b.add_unspendable(*op); }
-					for (spk, amount) in &expected_build { b.add_recipient(spk.clone(), Amount::from_sat(*amount)); }
-					Ok(())
-				})?;
-			}
+			// Select the gross debit with zero fee, then deduct the exact fee from
+			// recipients. Every payout keeps operator change, which can bump it.
+			let mut psbt = wallet.build_tx_at_chunk_feerate(WithGuaranteedChange(LargestFirstCoinSelection), FeeRate::ZERO, configure)?;
 			ensure!(psbt.fee()? == Amount::ZERO, "change must not charge an operator fee");
 			let unused = psbt.unsigned_tx.clone();
 			let result = (|| {
@@ -233,7 +245,6 @@ mod tests {
 	fn config_preserves_mainnet_floors_and_explicit_test_timing() {
 		let mut cfg = Config::default();
 		assert!(!cfg.enabled);
-		assert_eq!(cfg.max_batch, 10_000);
 		cfg.validate(bitcoin::Network::Bitcoin).unwrap();
 		cfg.enabled = true;
 		cfg.validate(bitcoin::Network::Bitcoin).unwrap();
@@ -244,13 +255,14 @@ mod tests {
 		cfg.interval = Duration::ZERO;
 		assert!(cfg.validate(bitcoin::Network::Regtest).is_err());
 		cfg.interval = Duration::from_secs(1);
-		cfg.max_batch = 200;
-		cfg.validate(bitcoin::Network::Regtest).unwrap();
-		cfg.max_batch = 0;
-		assert!(cfg.validate(bitcoin::Network::Regtest).is_err());
-		cfg.max_batch = 1;
 		cfg.conf_target_blocks = 2;
 		assert!(cfg.validate(bitcoin::Network::Regtest).is_err());
+	}
+
+	#[test]
+	fn batches_bound_coins_and_pay_an_oversized_group_alone() {
+		assert_eq!(batches(vec![1, 3, 1, 1, 2], 2, |n| *n), [vec![3], vec![1, 1], vec![1], vec![2]]);
+		assert_eq!(batches(Vec::<usize>::new(), 2, |n| *n), Vec::<Vec<usize>>::new());
 	}
 
 	#[test]
@@ -286,7 +298,6 @@ pub struct Config {
 	pub grace_blocks: u32,
 	pub sweep_min_confs: u32,
 	pub min_payout_sat: u64,
-	pub max_batch: usize,
 	/// Existing estimator targets: 1, 3 or 6 blocks.
 	pub conf_target_blocks: u16,
 	/// The same configuration file mounted into the watchmand process.
@@ -297,7 +308,7 @@ impl Default for Config {
 	fn default() -> Self {
 		Self { enabled: false, interval: Duration::from_secs(60), grace_blocks: 1008,
 			sweep_min_confs: 100, min_payout_sat: 10_000,
-			max_batch: 10_000, conf_target_blocks: 6, watchman_config: None }
+			conf_target_blocks: 6, watchman_config: None }
 	}
 }
 
@@ -305,7 +316,6 @@ impl Config {
 	pub fn validate(&self, network: bitcoin::Network) -> anyhow::Result<()> {
 		if !self.enabled { return Ok(()); }
 		ensure!(!self.interval.is_zero(), "expiry_payout.interval must be positive");
-		ensure!(self.max_batch > 0, "expiry_payout.max_batch must be positive");
 		ensure!(self.min_payout_sat >= 330 && self.min_payout_sat <= i64::MAX as u64,
 			"expiry_payout.min_payout_sat must fit the ledger and be at least 330");
 		ensure!(matches!(self.conf_target_blocks, 1 | 3 | 6), "expiry_payout.conf_target_blocks must be 1, 3 or 6");
@@ -450,34 +460,14 @@ impl Server {
 		}
 		// Only batch after scanning every page, so a page boundary cannot turn
 		// one payable wallet into several individually sub-minimum fragments.
-		let mut batch = Vec::new();
-		let mut batch_coins = 0;
-		for group in groups {
-			if group.gross <= cfg.min_payout_sat {
-				stats.waiting += group.inputs.len();
-				continue;
-			}
-			// The payout pays from the rounds wallet with one output per wallet
-			// group, so its coin count does not size the transaction. A group
-			// larger than the limit is paid alone instead of never.
-			if group.inputs.len() > cfg.max_batch {
-				info!(coins = group.inputs.len(), max_batch = cfg.max_batch,
-					"expiry wallet group exceeds max_batch; paying it alone");
-				let coins = group.inputs.len();
-				let paid = self.pay_expiry_batch(vec![group], rate, &mut unavailable_nodes).await?;
-				if paid > 0 { stats.paid = paid; return Ok(()); }
-				stats.waiting += coins;
-				continue;
-			}
-			if batch_coins + group.inputs.len() > cfg.max_batch {
-				let paid = self.pay_expiry_batch(std::mem::take(&mut batch), rate, &mut unavailable_nodes).await?;
-				if paid > 0 { stats.paid = paid; return Ok(()); }
-				batch_coins = 0;
-			}
-			batch_coins += group.inputs.len();
-			batch.push(group);
+		let (payable, small): (Vec<_>, Vec<_>) = groups.into_iter().partition(|g| g.gross > cfg.min_payout_sat);
+		stats.waiting += small.iter().map(|g| g.inputs.len()).sum::<usize>();
+		for batch in batches(payable, MAX_BATCH_COINS, |g| g.inputs.len()) {
+			let coins = batch.iter().map(|g| g.inputs.len()).sum::<usize>();
+			stats.paid = self.pay_expiry_batch(batch, rate, &mut unavailable_nodes).await?;
+			if stats.paid > 0 { return Ok(()); }
+			stats.waiting += coins;
 		}
-		if !batch.is_empty() { stats.paid = self.pay_expiry_batch(batch, rate, &mut unavailable_nodes).await?; }
 		Ok(())
 	}
 

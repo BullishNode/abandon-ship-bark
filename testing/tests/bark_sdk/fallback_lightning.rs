@@ -1658,7 +1658,6 @@ async fn restart_with_payouts(srv: &Captaind) {
 		config.expiry_payout.grace_blocks = 0;
 		config.expiry_payout.sweep_min_confs = 1;
 		config.expiry_payout.min_payout_sat = 10_000;
-		config.expiry_payout.max_batch = 100;
 		config.expiry_payout.watchman_config = Some(srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE));
 	}
 	srv.start().await.unwrap();

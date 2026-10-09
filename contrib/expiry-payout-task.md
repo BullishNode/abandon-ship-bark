@@ -255,8 +255,15 @@ group net minimum and confirmed funding. The task keeps entitlements while those
 
 For a committed transaction missing from the mempool, check the nursery and Core's
 rejection and restore funding/service conditions; the nursery rebroadcasts the
-identical transaction after the next block. A manual CPFP spends the payout's operator
-change output; do not construct another payment for the same coins. Each settled coin's
+identical transaction after the next block. Each tick, a payout past its nursery
+confirmation target whose mempool chunk pays less than the tick's fee estimate
+gets a child that spends its operator change, or the wallet output a later
+operator tx moved it to, built with the rounds wallet's ancestor-aware builder:
+the child pays the payout's shortfall, at the operator's expense. An evicted
+payout is resubmitted with its child as a package. The payout itself is never
+replaced, so its txid, outputs and settlement rows never change. Without funds,
+the tick warns and the nursery keeps rebroadcasting. Never construct another
+payment for the same coins. Each settled coin's
 row keeps its payout txid, fee and paid script; a later wallet-record change does
 not alter it.
 

@@ -24,7 +24,7 @@ use crate::nursery::NurseryTxKind;
 use crate::wallet::{BdkWalletExt, WalletKind};
 use crate::Server;
 
-fn deferred(reason: impl std::fmt::Display) -> Option<Payment> {
+fn deferred<T>(reason: impl std::fmt::Display) -> Option<T> {
 	warn!("expiry batch deferred: {reason}");
 	None
 }
@@ -66,8 +66,33 @@ fn group_fee_shares(
 }
 
 impl Server {
-	async fn claim_and_pay(&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate) -> anyhow::Result<Option<Payment>> {
+	/// Pay the groups whose Lightning payments are free. Returns the payment
+	/// and the number of coins it settled.
+	async fn claim_and_pay(&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate) -> anyhow::Result<Option<(Payment, usize)>> {
 		let cfg = self.config.expiry_payout.clone();
+		// Cooperative Lightning claims and refund requests take the payment
+		// guard before coin locks and can hold it while they wait on a node.
+		// Take the guards in that same order, but without waiting: a busy
+		// payment defers only its own wallet group, not the other wallets in
+		// the batch. The guards are retained if COMMIT outlives this caller,
+		// just as we retain the wallet and coin locks below.
+		let mut payment_guards = BTreeMap::new();
+		let mut payable = Vec::with_capacity(groups.len());
+		for group in groups {
+			let hashes = group.inputs.iter().filter_map(|i| match i.source {
+				ExpirySource::LightningReceive(hash) | ExpirySource::LightningSend(hash) => Some(hash),
+				_ => None,
+			}).filter(|hash| !payment_guards.contains_key(hash)).collect::<BTreeSet<_>>();
+			let taken = hashes.iter().map_while(|hash| self.payment_guards.try_lock(*hash)).collect::<Vec<_>>();
+			if taken.len() < hashes.len() {
+				warn!(script = ?group.script, "expiry wallet group deferred: Lightning payment in progress");
+				continue;
+			}
+			payment_guards.extend(taken.into_iter().map(|guard| (guard.payment_hash(), guard)));
+			payable.push(group);
+		}
+		if payable.is_empty() { return Ok(deferred("Lightning payment in progress")); }
+		let groups = payable;
 		let inputs = groups.iter().flat_map(|g| g.inputs.iter().copied()).collect::<Vec<_>>();
 		let ids = inputs.iter().map(|i| i.id).collect::<Vec<_>>();
 		ensure!(!ids.is_empty() && ids.len() <= cfg.max_batch, "expiry batch exceeds coin limit");
@@ -77,15 +102,6 @@ impl Server {
 		let destinations = ids.iter().copied().zip(scripts.iter().cloned().map(ScriptBuf::from))
 			.collect::<BTreeMap<_, _>>();
 		ensure!(keys.iter().collect::<BTreeSet<_>>().len() == keys.len(), "duplicate expiry coin ID");
-		// Cooperative Lightning claims take the payment guard before coin
-		// locks. Use that same order and retain the guards if COMMIT outlives
-		// this caller, just as we retain the wallet and coin locks below.
-		let hashes = inputs.iter().filter_map(|i| match i.source {
-			ExpirySource::LightningReceive(hash) | ExpirySource::LightningSend(hash) => Some(hash),
-			_ => None,
-		}).collect::<BTreeSet<_>>();
-		let mut payment_guards = Vec::with_capacity(hashes.len());
-		for hash in hashes { payment_guards.push(self.payment_guards.lock(hash).await); }
 		let Ok(_flux) = self.vtxos_in_flux.try_lock(&ids) else { return Ok(deferred("coin in flux")) };
 		let tip = self.chain_tip().height.to_u32();
 		let coins = self.db.read(async |t| t.expiry_inputs(&inputs, tip, cfg.grace_blocks).await).await?;
@@ -217,7 +233,7 @@ impl Server {
 			drop(wallet);
 			nursery.broadcast_tx(tx.clone(), NurseryTxKind::ExpiryPayout, target).await?;
 			db.read(async |t| t.expiry_receipt(&tx.compute_txid().to_string()).await).await
-		}).await?.map(Some)
+		}).await?.map(|payment| Some((payment, ids.len())))
 	}
 }
 
@@ -555,9 +571,8 @@ impl Server {
 	async fn pay_expiry_batch(&self, batch: Vec<PayoutGroup>, rate: FeeRate) -> anyhow::Result<usize> {
 		let mut pending = VecDeque::from([batch]);
 		while let Some(mut batch) = pending.pop_front() {
-			if let Some(payment) = self.claim_and_pay(batch.clone(), rate).await? {
+			if let Some((payment, coins)) = self.claim_and_pay(batch.clone(), rate).await? {
 				if let Err(e) = self.write_expiry_receipt(&payment) { warn!("expiry receipt deferred: {e:#}"); }
-				let coins: usize = batch.iter().map(|g| g.inputs.len()).sum();
 				info!(txid = %payment.txid, fee_sat = payment.fee_sat, coins, "expiry payment committed");
 				return Ok(coins);
 			}

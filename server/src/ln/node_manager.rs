@@ -84,6 +84,12 @@ enum PayInvoiceRace {
 	Canceled,
 }
 
+/// How long [`LightningManager::node_payment_status`] waits for the node.
+///
+/// A node can accept a connection and still never answer. The callers hold a
+/// payment guard or run the expiry payout task, so they must not wait forever.
+const NODE_PAYMENT_STATUS_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// What a lightning node itself records for its payments of one hash.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodePaymentStatus {
@@ -504,8 +510,8 @@ impl LightningManager {
 	///
 	/// Our attempt status can lag the node or miss a completion, for example
 	/// when the preimage could not be stored. Fund-releasing decisions that the
-	/// database alone cannot prove use this. An offline node is an error, not
-	/// evidence that the payment failed.
+	/// database alone cannot prove use this. An offline node, or one that does
+	/// not answer in time, is an error, not evidence that the payment failed.
 	pub async fn node_payment_status(
 		&self,
 		node_id: LightningNodeId,
@@ -513,14 +519,18 @@ impl LightningManager {
 	) -> anyhow::Result<NodePaymentStatus> {
 		let node = self.node_by_id(node_id)
 			.with_context(|| format!("lightning node {node_id} is not online"))?;
-		let pays = node.rpc.clone().list_pays(cln_rpc::ListpaysRequest {
+		let mut rpc = node.rpc.clone();
+		let request = rpc.list_pays(cln_rpc::ListpaysRequest {
 			bolt11: None,
 			payment_hash: Some(payment_hash.to_vec()),
 			status: None,
 			index: None,
 			limit: None,
 			start: None,
-		}).await.context("could not list payments on lightning node")?.into_inner().pays;
+		});
+		let pays = tokio::time::timeout(NODE_PAYMENT_STATUS_TIMEOUT, request).await
+			.with_context(|| format!("lightning node {node_id} did not answer"))?
+			.context("could not list payments on lightning node")?.into_inner().pays;
 		Ok(if pays.iter().any(|p| p.status() == ListpaysPaysStatus::Complete) {
 			NodePaymentStatus::Complete
 		} else if pays.iter().any(|p| p.status() == ListpaysPaysStatus::Pending) {

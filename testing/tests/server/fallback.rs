@@ -3,14 +3,29 @@ use ark::attestations::{FallbackRecordAttestation, KeyLinkAttestation};
 use ark_testing::TestContext;
 use ark_testing::daemon::captaind::Captaind;
 use bitcoin::{absolute, transaction, OutPoint, ScriptBuf, Transaction};
-use bitcoin::secp256k1::Keypair;
+use bitcoin::constants::ChainHash;
+use bitcoin::hashes::{sha256, Hash, HashEngine};
+use bitcoin::secp256k1::{Keypair, Message, PublicKey};
 use server::database::Db;
 use server_rpc::protos;
 
-fn record(key: &Keypair, spk: &ScriptBuf, seq: u64) -> Vec<u8> {
+fn bound_record(chain: ChainHash, server: PublicKey, key: &Keypair, spk: &ScriptBuf, seq: u64) -> Vec<u8> {
 	let mut bytes = spk.as_bytes().to_vec();
 	bytes.extend_from_slice(&seq.to_le_bytes());
-	bytes.extend_from_slice(&FallbackRecordAttestation::new(spk, seq, key).serialize());
+	bytes.extend_from_slice(&FallbackRecordAttestation::new(chain, server, spk, seq, key).serialize());
+	bytes
+}
+
+/// A record signed before records were bound to a chain and a server.
+fn legacy_record(key: &Keypair, spk: &ScriptBuf, seq: u64) -> Vec<u8> {
+	let mut engine = sha256::Hash::engine();
+	engine.input(b"Ark expiry fallback record      ");
+	engine.input(spk.as_bytes());
+	engine.input(&seq.to_le_bytes());
+	let msg = Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array());
+	let mut bytes = spk.as_bytes().to_vec();
+	bytes.extend_from_slice(&seq.to_le_bytes());
+	bytes.extend_from_slice(SECP.sign_schnorr_no_aux_rand(&msg, key).as_ref());
 	bytes
 }
 
@@ -26,6 +41,10 @@ async fn fallback_records_and_immutable_links() {
 	let srv = ctx.captaind("server").create().await;
 	let mut rpc = srv.get_public_rpc().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let server_pubkey = srv.ark_info().await.server_pubkey;
+	let record = |key: &Keypair, spk: &ScriptBuf, seq: u64| {
+		bound_record(ChainHash::REGTEST, server_pubkey, key, spk, seq)
+	};
 	let mailbox = Keypair::from_seckey_slice(&SECP, &[1; 32]).unwrap();
 	let coin = Keypair::from_seckey_slice(&SECP, &[2; 32]).unwrap();
 	let other_mailbox = Keypair::from_seckey_slice(&SECP, &[3; 32]).unwrap();
@@ -144,4 +163,45 @@ async fn second_captaind_on_same_database_refused() {
 
 	srv.stop().await.unwrap();
 	dup.try_start().await.expect("the lock is free once the first captaind stopped");
+}
+
+/// A seed has the same mailbox key on every network and server, so a record
+/// signed for another one must not redirect this wallet's payouts.
+#[tokio::test]
+async fn fallback_record_replay_from_other_network_or_server_refused() {
+	let ctx = TestContext::new("server/fallback_record_replay_from_other_network_or_server_refused").await;
+	let srv = ctx.captaind("server").create().await;
+	let mut rpc = srv.get_public_rpc().await;
+	let server_pubkey = srv.ark_info().await.server_pubkey;
+	let mailbox = Keypair::from_seckey_slice(&SECP, &[1; 32]).unwrap();
+	let other_server = Keypair::from_seckey_slice(&SECP, &[9; 32]).unwrap().public_key();
+	let ours = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+	let theirs = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
+	let request = |record| protos::SetFallbackRequest {
+		mailbox_pk: mailbox.public_key().serialize().to_vec(), record: Some(record), key_links: vec![],
+	};
+	let current = || protos::SetFallbackRequest {
+		mailbox_pk: mailbox.public_key().serialize().to_vec(), record: None, key_links: vec![],
+	};
+
+	// A record from before the binding names no chain or server.
+	let err = rpc.set_fallback(request(legacy_record(&mailbox, &theirs, 99))).await.unwrap_err();
+	assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err}");
+	assert!(rpc.set_fallback(current()).await.unwrap().into_inner().record.is_empty());
+
+	let stored = bound_record(ChainHash::REGTEST, server_pubkey, &mailbox, &ours, 100);
+	assert_eq!(rpc.set_fallback(request(stored.clone())).await.unwrap().into_inner().record, stored);
+	for replay in [
+		legacy_record(&mailbox, &theirs, 101),
+		bound_record(ChainHash::BITCOIN, server_pubkey, &mailbox, &theirs, 101),
+		bound_record(ChainHash::REGTEST, other_server, &mailbox, &theirs, 101),
+	] {
+		let err = rpc.set_fallback(request(replay)).await.unwrap_err();
+		assert_eq!(err.code(), tonic::Code::InvalidArgument, "{err}");
+		assert_eq!(rpc.set_fallback(current()).await.unwrap().into_inner().record, stored,
+			"a refused record leaves the stored one");
+	}
+
+	let rotated = bound_record(ChainHash::REGTEST, server_pubkey, &mailbox, &theirs, 101);
+	assert_eq!(rpc.set_fallback(request(rotated.clone())).await.unwrap().into_inner().record, rotated);
 }

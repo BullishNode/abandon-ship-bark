@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use anyhow::Context;
 use ark::attestations::{FallbackRecordAttestation, KeyLinkAttestation};
 use ark::ProtocolEncoding;
@@ -86,6 +88,21 @@ impl Tx<'_> {
 			seq: row.get("seq"),
 			attestation: FallbackRecordAttestation::deserialize(&row.get::<_, Vec<u8>>("sig"))?,
 		})).transpose()
+	}
+
+	/// Resolve a page of coin keys with one lookup. Missing entries are legacy
+	/// coins; a present record is held if its destination is invalid at payout.
+	pub(crate) async fn fallback_scripts(
+		&self, keys: &[PublicKey],
+	) -> anyhow::Result<BTreeMap<PublicKey, ScriptBuf>> {
+		let keys = keys.iter().map(|key| key.serialize().to_vec()).collect::<Vec<_>>();
+		self.query("SELECT l.user_pubkey, r.spk FROM key_link l
+			JOIN fallback_record r ON r.mailbox_pk=l.mailbox_pk
+			WHERE l.user_pubkey=ANY($1::bytea[])", &[&keys]).await?
+			.into_iter().map(|row| Ok((
+				PublicKey::from_slice(&row.get::<_, Vec<u8>>("user_pubkey"))?,
+				ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
+			))).collect()
 	}
 
 	/// Refuse a new user output unless its key has an immutable link to a record.

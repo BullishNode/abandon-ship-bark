@@ -28,7 +28,7 @@ fn deferred(reason: impl std::fmt::Display) -> Option<Payment> {
 	None
 }
 
-/// Largest remainders, tied by sorted coin ID, keep all integer shares within
+/// Largest remainders, tied by sorted destination script, keep all integer shares within
 /// one sat of proportional allocation and make their sum equal the actual fee.
 fn fee_shares(amounts: &[u64], fee: u64) -> anyhow::Result<Vec<u64>> {
 	let total: u64 = amounts.iter().try_fold(0u64, |a,b| a.checked_add(*b)).context("gross overflow")?;
@@ -42,23 +42,59 @@ fn fee_shares(amounts: &[u64], fee: u64) -> anyhow::Result<Vec<u64>> {
 	Ok(shares)
 }
 
+#[derive(Clone)]
+struct PayoutGroup {
+	script: ScriptBuf,
+	ids: Vec<VtxoId>,
+	gross: u64,
+}
+
+/// Compute fees after grouping. Every recipient pays its proportional share of
+/// the actual miner fee, and the minimum applies to its remaining output.
+fn group_fee_shares(
+	gross: &BTreeMap<ScriptBuf, u64>, fee: u64, minimum: u64,
+) -> anyhow::Result<BTreeMap<ScriptBuf, u64>> {
+	let amounts = gross.values().copied().collect::<Vec<_>>();
+	let shares = fee_shares(&amounts, fee)?;
+	gross.iter().zip(shares).map(|((script, amount), share)| {
+		let net = amount.checked_sub(share).context("fee exceeds payout")?;
+		ensure!(net >= minimum && net >= script.minimal_non_dust().to_sat(),
+			"net wallet payout is below the minimum");
+		Ok((script.clone(), share))
+	}).collect()
+}
+
 impl Server {
-	async fn claim_and_pay(&self, ids: Vec<VtxoId>, fee_rate: FeeRate) -> anyhow::Result<Option<Payment>> {
+	async fn claim_and_pay(&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate) -> anyhow::Result<Option<Payment>> {
 		let cfg = self.config.expiry_payout.clone();
-		ensure!((1..=100).contains(&ids.len()), "expected 1..100 expiry coins");
+		let ids = groups.iter().flat_map(|g| g.ids.iter().copied()).collect::<Vec<_>>();
+		ensure!(!ids.is_empty() && ids.len() <= cfg.max_batch, "expiry batch exceeds coin limit");
 		let keys: Vec<String> = ids.iter().map(ToString::to_string).collect();
+		let scripts = groups.iter().flat_map(|g| g.ids.iter().map(|_| g.script.as_bytes().to_vec()))
+			.collect::<Vec<_>>();
+		let destinations = ids.iter().copied().zip(scripts.iter().cloned().map(ScriptBuf::from))
+			.collect::<BTreeMap<_, _>>();
 		ensure!(keys.iter().collect::<BTreeSet<_>>().len() == keys.len(), "duplicate expiry coin ID");
 		let Ok(_flux) = self.vtxos_in_flux.try_lock(&ids) else { return Ok(deferred("coin in flux")) };
 		let tip = self.chain_tip().height.to_u32();
-		let coins = self.db.read(async |t| t.expiry_inputs(&keys, tip, cfg.grace_blocks, cfg.min_payout_sat).await).await?;
-		if coins.len() != ids.len() { return Ok(deferred("coin is spent, exited, too small, in grace or participating")) }
+		let coins = self.db.read(async |t| t.expiry_inputs(&keys, tip, cfg.grace_blocks).await).await?;
+		if coins.len() != ids.len() { return Ok(deferred("coin is spent, exited, in grace or participating")) }
 		let mut expected = BTreeMap::<ScriptBuf,u64>::new();
-		for v in &coins { *expected.entry(payout_script(v)).or_default() += v.amount().to_sat(); }
-		let pct = u64::from(cfg.max_fee_pct);
+		for v in &coins {
+			let script = destinations.get(&v.id()).context("expiry destination missing")?;
+			let amount = expected.entry(script.clone()).or_default();
+			*amount = amount.checked_add(v.amount().to_sat()).context("expiry gross overflow")?;
+		}
+		for script in expected.keys() {
+			if let Some(list) = &self.bitcoin_address_blocklist {
+				if list.check_spk(script).await { return Ok(deferred("destination is blocklisted")); }
+			}
+		}
 		let expected_build = expected.clone();
-		let amounts: Vec<_> = coins.iter().map(|v| v.amount().to_sat()).collect();
-		let scripts: Vec<_> = coins.iter().map(payout_script).collect();
+		let minimum = cfg.min_payout_sat;
 		let built = self.rounds_wallet.build_blocking(move |wallet| {
+			ensure!(expected_build.keys().all(|spk| !wallet.is_mine(spk.clone())),
+				"expiry destination belongs to the rounds wallet");
 			// Confirmed funds avoid charging recipients for unrelated ancestor fees.
 			let unconfirmed: Vec<_> = wallet.list_unspent().filter(|u| !u.chain_position.is_confirmed()).map(|u| u.outpoint).collect();
 			let configure = |b: &mut bdk_wallet::TxBuilder<'_, _>| {
@@ -85,15 +121,11 @@ impl Server {
 				let weight = psbt.unsigned_tx.weight() + Weight::from_wu(2 + 66 * psbt.inputs.len() as u64);
 				ensure!(weight.to_wu() <= 400_000, "payout exceeds maximum transaction weight");
 				let fee = fee_rate.fee_wu(weight).context("fee overflow")?.to_sat();
-				let shares = fee_shares(&amounts, fee)?;
-				let mut per_script = BTreeMap::<ScriptBuf,u64>::new();
-				for ((amount, share), spk) in amounts.iter().zip(&shares).zip(&scripts) {
-					ensure!(u128::from(*share)*100 <= u128::from(*amount)*u128::from(pct)
-						&& share < amount, "actual per-coin fee exceeds cap");
-					*per_script.entry(spk.clone()).or_default() += share;
-				}
+				let mut per_script = group_fee_shares(&expected_build, fee, minimum)?;
 				for out in &mut psbt.unsigned_tx.output {
 					if let Some(share) = per_script.remove(&out.script_pubkey) {
+						ensure!(Some(&out.value.to_sat()) == expected_build.get(&out.script_pubkey),
+							"payout gross does not match destination");
 						out.value -= Amount::from_sat(share);
 						ensure!(out.value >= out.script_pubkey.minimal_non_dust(), "recipient output would be dust");
 					}
@@ -131,8 +163,8 @@ impl Server {
 				if let Some(change) = &wallet_metadata {
 					t.store_changeset(WalletKind::Rounds, change).await?;
 				}
-				t.store_expiry_payment(&keys, &tx, fee, tip,
-					cfg.grace_blocks, cfg.min_payout_sat, target).await
+				t.store_expiry_payment(&keys, &scripts, &tx, fee, tip,
+					cfg.grace_blocks, target).await
 			}).await;
 			if let Err(error) = stored {
 				loop {
@@ -179,12 +211,11 @@ mod tests {
 		cfg.interval = Duration::ZERO;
 		assert!(cfg.validate(bitcoin::Network::Regtest).is_err());
 		cfg.interval = Duration::from_secs(1);
-		cfg.max_batch = 101;
+		cfg.max_batch = 200;
+		cfg.validate(bitcoin::Network::Regtest).unwrap();
+		cfg.max_batch = 0;
 		assert!(cfg.validate(bitcoin::Network::Regtest).is_err());
 		cfg.max_batch = 1;
-		cfg.max_fee_pct = 100;
-		assert!(cfg.validate(bitcoin::Network::Regtest).is_err());
-		cfg.max_fee_pct = 20;
 		cfg.conf_target_blocks = 2;
 		assert!(cfg.validate(bitcoin::Network::Regtest).is_err());
 	}
@@ -195,6 +226,21 @@ mod tests {
 		assert_eq!(fee_shares(&[10_000,20_000], 100).unwrap(), [33,67]);
 		assert!(fee_shares(&[330],330).is_err());
 		assert_eq!(fee_shares(&[10_000;100], 749).unwrap().iter().sum::<u64>(), 749);
+	}
+
+	#[test]
+	fn grouped_minimum_is_net_and_has_no_percentage_cap() {
+		let a = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+		let b = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
+		let gross = BTreeMap::from([(a.clone(), 200 * 600)]);
+		assert_eq!(group_fee_shares(&gross, 110_000, 10_000).unwrap()[&a], 110_000);
+		assert!(group_fee_shares(&gross, 110_001, 10_000).is_err());
+		assert!(group_fee_shares(&gross, 120_000, 0).is_err());
+		assert!(group_fee_shares(&gross, 119_999, 0).is_err(), "dust still waits");
+		let gross = BTreeMap::from([(a.clone(), 10_001), (b.clone(), 20_002)]);
+		assert_eq!(group_fee_shares(&gross, 3, 10_000).unwrap(),
+			BTreeMap::from([(a, 1), (b, 2)]));
+		assert!(group_fee_shares(&gross, 5, 10_000).is_err());
 	}
 }
 
@@ -207,7 +253,6 @@ pub struct Config {
 	pub grace_blocks: u32,
 	pub sweep_min_confs: u32,
 	pub min_payout_sat: u64,
-	pub max_fee_pct: u32,
 	pub max_batch: usize,
 	/// Existing estimator targets: 1, 3 or 6 blocks.
 	pub conf_target_blocks: u16,
@@ -219,7 +264,7 @@ pub struct Config {
 impl Default for Config {
 	fn default() -> Self {
 		Self { enabled: false, interval: Duration::from_secs(60), grace_blocks: 1008,
-			sweep_min_confs: 100, min_payout_sat: 10_000, max_fee_pct: 20,
+			sweep_min_confs: 100, min_payout_sat: 10_000,
 			max_batch: 100, conf_target_blocks: 6, receipt_dir: PathBuf::new(), watchman_config: None }
 	}
 }
@@ -228,8 +273,7 @@ impl Config {
 	pub fn validate(&self, network: bitcoin::Network) -> anyhow::Result<()> {
 		if !self.enabled { return Ok(()); }
 		ensure!(!self.interval.is_zero(), "expiry_payout.interval must be positive");
-		ensure!((1..=100).contains(&self.max_batch), "expiry_payout.max_batch must be 1..100");
-		ensure!((1..=99).contains(&self.max_fee_pct), "expiry_payout.max_fee_pct must be 1..99");
+		ensure!(self.max_batch > 0, "expiry_payout.max_batch must be positive");
 		ensure!(self.min_payout_sat >= 330 && self.min_payout_sat <= i64::MAX as u64,
 			"expiry_payout.min_payout_sat must fit the ledger and be at least 330");
 		ensure!(matches!(self.conf_target_blocks, 1 | 3 | 6), "expiry_payout.conf_target_blocks must be 1, 3 or 6");
@@ -291,18 +335,39 @@ impl Server {
 		ensure!(rate > FeeRate::ZERO, "zero expiry fee estimate");
 		let tip = self.chain_tip().height.to_u32();
 		let mut cursor = (0, String::new());
-		let mut batch = Vec::new();
+		let mut groups = Vec::<PayoutGroup>::new();
+		let mut group_index = BTreeMap::<ScriptBuf, usize>::new();
+		let mut destination_allowed = BTreeMap::<ScriptBuf, bool>::new();
 		let mut cancellation_attempts = BTreeSet::new();
 		loop {
 			let page = self.db.read(async |t| t.expiry_settlement_page(tip,
-				cfg.grace_blocks, cfg.min_payout_sat, cursor.clone(), 256).await).await?;
+				cfg.grace_blocks, cursor.clone(), 256).await).await?;
 			let Some(last) = page.last() else { break; };
 			cursor = (last.expiry, last.id.to_string());
-			for coin in page {
+			let vtxos = page.iter().map(|coin| Vtxo::deserialize(&coin.vtxo))
+				.collect::<Result<Vec<_>, _>>()?;
+			let user_keys = vtxos.iter().map(Vtxo::user_pubkey).collect::<Vec<_>>();
+			let fallback = self.db.read(async |t| t.fallback_scripts(&user_keys).await).await?;
+			for (coin, vtxo) in page.into_iter().zip(vtxos) {
 				// Padding leaves have no participation or owner entitlement.
 				if coin.unclaimed && coin.predecessors.is_empty() { continue; }
 				stats.candidates += 1;
-				let vtxo = Vtxo::deserialize(&coin.vtxo)?;
+				let script = fallback.get(&vtxo.user_pubkey()).cloned().unwrap_or_else(|| payout_script(&vtxo));
+				let allowed = match destination_allowed.get(&script) {
+					Some(allowed) => *allowed,
+					None => {
+						let blocked = match &self.bitcoin_address_blocklist {
+							Some(list) => list.check_spk(&script).await,
+							None => false,
+						};
+						let ours = self.rounds_wallet.lock().await.is_mine(script.clone());
+						let allowed = !blocked && !ours;
+						if !allowed { warn!(?script, blocked, ours, "expiry destination held"); }
+						destination_allowed.insert(script.clone(), allowed);
+						allowed
+					},
+				};
+				if !allowed { stats.waiting += 1; continue; }
 				if !self.expiry_path_swept(&vtxo).await? { stats.waiting += 1; continue; }
 				if coin.unclaimed {
 					let mut safe = !coin.predecessors.is_empty();
@@ -319,13 +384,37 @@ impl Server {
 						continue;
 					}
 				}
-				if vtxo.amount().to_sat() < cfg.min_payout_sat { stats.waiting += 1; continue; }
-				batch.push(coin.id);
-				if batch.len() == cfg.max_batch {
-					let paid = self.pay_expiry_batch(std::mem::take(&mut batch), rate).await?;
-					if paid > 0 { stats.paid = paid; return Ok(()); }
-				}
+				let index = *group_index.entry(script.clone()).or_insert_with(|| {
+					groups.push(PayoutGroup { script, ids: Vec::new(), gross: 0 });
+					groups.len() - 1
+				});
+				let group = &mut groups[index];
+				group.ids.push(coin.id);
+				group.gross = group.gross.checked_add(vtxo.amount().to_sat()).context("expiry group overflow")?;
 			}
+		}
+		// Only batch after scanning every page, so a page boundary cannot turn
+		// one payable wallet into several individually sub-minimum fragments.
+		let mut batch = Vec::new();
+		let mut batch_coins = 0;
+		for group in groups {
+			if group.gross <= cfg.min_payout_sat {
+				stats.waiting += group.ids.len();
+				continue;
+			}
+			if group.ids.len() > cfg.max_batch {
+				warn!(coins = group.ids.len(), max_batch = cfg.max_batch,
+					"expiry wallet group exceeds configured coin limit");
+				stats.waiting += group.ids.len();
+				continue;
+			}
+			if batch_coins + group.ids.len() > cfg.max_batch {
+				let paid = self.pay_expiry_batch(std::mem::take(&mut batch), rate).await?;
+				if paid > 0 { stats.paid = paid; return Ok(()); }
+				batch_coins = 0;
+			}
+			batch_coins += group.ids.len();
+			batch.push(group);
 		}
 		if !batch.is_empty() { stats.paid = self.pay_expiry_batch(batch, rate).await?; }
 		Ok(())
@@ -407,13 +496,14 @@ impl Server {
 		Ok(false)
 	}
 
-	async fn pay_expiry_batch(&self, batch: Vec<VtxoId>, rate: FeeRate) -> anyhow::Result<usize> {
+	async fn pay_expiry_batch(&self, batch: Vec<PayoutGroup>, rate: FeeRate) -> anyhow::Result<usize> {
 		let mut pending = VecDeque::from([batch]);
 		while let Some(mut batch) = pending.pop_front() {
 			if let Some(payment) = self.claim_and_pay(batch.clone(), rate).await? {
 				if let Err(e) = self.write_expiry_receipt(&payment) { warn!("expiry receipt deferred: {e:#}"); }
-				info!(txid = %payment.txid, fee_sat = payment.fee_sat, coins = batch.len(), "expiry payment committed");
-				return Ok(batch.len());
+				let coins: usize = batch.iter().map(|g| g.ids.len()).sum();
+				info!(txid = %payment.txid, fee_sat = payment.fee_sat, coins, "expiry payment committed");
+				return Ok(coins);
 			}
 			if batch.len() > 1 {
 				let right = batch.split_off(batch.len()/2);

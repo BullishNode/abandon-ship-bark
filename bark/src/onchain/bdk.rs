@@ -160,7 +160,7 @@ impl DerefMut for OnchainWallet {
 impl OnchainWallet {
 	pub async fn load_or_create(network: Network, seed: [u8; 64], db: Arc<dyn BarkPersister>) -> anyhow::Result<Self> {
 		let xpriv = bip32::Xpriv::new_master(network, &seed).expect("valid seed");
-		let desc = bdk_wallet::template::Bip86(xpriv, KeychainKind::External);
+		let desc = bdk_wallet::template::Bip84(xpriv, KeychainKind::External);
 
 		let changeset = db.initialize_bdk_wallet().await.context("error reading bdk wallet state")?;
 		let wallet_opt = bdk_wallet::Wallet::load()

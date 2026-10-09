@@ -28,7 +28,7 @@ use crate::movement::{
 	Movement, MovementDestination, MovementId, MovementStatus, MovementSubsystem, PaymentMethod,
 };
 use crate::movement::update::MovementUpdate;
-use crate::persist::models::{SerdeRoundState, StoredExit, StoredRoundState, Unlocked};
+use crate::persist::models::{FallbackRecord, SerdeRoundState, StoredExit, StoredRoundState, Unlocked};
 use crate::lock_manager::LockManager;
 use crate::lock_manager::memory::MemoryLockManager;
 use crate::round::{RoundFlowState, RoundParticipation, RoundState};
@@ -67,6 +67,8 @@ macro_rules! bark_persister_tests {
 			test_vtxo_keys_empty,
 			test_vtxo_key_roundtrip,
 			test_vtxo_key_last_index_advances,
+			test_linked_key_issuance,
+			test_fallback_record_ordering,
 
 			test_store_and_get_vtxo,
 			test_get_vtxos_by_state,
@@ -362,6 +364,54 @@ pub async fn test_vtxo_key_last_index_advances(db: &impl BarkPersister) {
 
 	let last = db.get_last_vtxo_key_index().await.expect("get_last_vtxo_key_index");
 	assert_eq!(last, Some(2), "last index after storing indices 0..=2");
+}
+
+// Replenishment retries, recovery, and concurrent callers must not reuse keys.
+pub async fn test_linked_key_issuance(db: &impl BarkPersister) {
+	let secp = Secp256k1::new();
+	let keys = (0..8).map(|i| {
+		let sk = SecretKey::from_slice(&[i as u8 + 10; 32]).unwrap();
+		(i, Keypair::from_secret_key(&secp, &sk).public_key())
+	}).collect::<Vec<_>>();
+	assert_eq!(db.take_next_linked_vtxo_key().await.unwrap(), None);
+	db.store_linked_vtxo_keys(&keys).await.unwrap();
+	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), None);
+	let (a, b) = futures::join!(db.take_next_linked_vtxo_key(), db.take_next_linked_vtxo_key());
+	let mut issued = [a.unwrap().unwrap(), b.unwrap().unwrap()];
+	issued.sort_by_key(|k| k.0);
+	assert_eq!(issued, [keys[0], keys[1]]);
+	db.store_linked_vtxo_keys(&keys).await.unwrap();
+	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), Some(1));
+	// A recovered key consumes that index even when it was still in the pool.
+	db.store_vtxo_key(keys[3].0, keys[3].1).await.unwrap();
+	for key in &keys[4..] {
+		assert_eq!(db.take_next_linked_vtxo_key().await.unwrap(), Some(*key));
+	}
+	assert_eq!(db.take_next_linked_vtxo_key().await.unwrap(), None);
+	db.store_linked_vtxo_keys(&keys).await.unwrap();
+	assert_eq!(db.take_next_linked_vtxo_key().await.unwrap(), None);
+	assert!(db.store_linked_vtxo_keys(&[(0, keys[1].1)]).await.is_err());
+	assert_eq!(db.get_public_key_idx(&keys[0].1).await.unwrap(), Some(0));
+}
+
+pub async fn test_fallback_record_ordering(db: &impl BarkPersister) {
+	assert_eq!(db.get_fallback_record().await.unwrap(), None);
+	let newest = FallbackRecord { spk: ScriptBuf::from_bytes(vec![0, 20, 1]), seq: 100 };
+	db.store_fallback_record(&newest).await.unwrap();
+	for seq in [0, 99] {
+		db.store_fallback_record(&FallbackRecord { spk: ScriptBuf::new(), seq }).await.unwrap();
+		assert_eq!(db.get_fallback_record().await.unwrap(), Some(newest.clone()));
+	}
+	// The server breaks equal-sequence ties; adoption must converge to its reply.
+	let adopted = FallbackRecord { spk: ScriptBuf::new(), seq: 100 };
+	db.store_fallback_record(&adopted).await.unwrap();
+	assert_eq!(db.get_fallback_record().await.unwrap(), Some(adopted));
+	let newer = FallbackRecord { seq: 101, ..newest };
+	db.store_fallback_record(&newer).await.unwrap();
+	assert_eq!(db.get_fallback_record().await.unwrap(), Some(newer));
+	assert!(db.store_fallback_record(&FallbackRecord {
+		spk: ScriptBuf::new(), seq: u64::MAX,
+	}).await.is_err());
 }
 
 // ---------------------------------------------------------------------------

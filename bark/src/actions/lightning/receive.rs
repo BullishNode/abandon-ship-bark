@@ -372,14 +372,14 @@ pub(crate) async fn start_lightning_receive(
 		description,
 	};
 
+	let (_, key_index) = wallet.derive_store_next_keypair().await?;
+
 	let resp = srv.client.start_lightning_receive(req).await?.into_inner();
 	info!("Ark Server is ready to receive LN payment to invoice: {}.", resp.bolt11);
 
 	let invoice = Bolt11Invoice::from_str(&resp.bolt11)
 		.context("invalid bolt11 invoice returned by Ark server")?;
 	validate_bolt11_payment_hash(&invoice, payment_hash)?;
-
-	let (_, key_index) = wallet.derive_store_next_keypair().await?;
 
 	Ok(LightningReceive {
 		invoice,

@@ -507,6 +507,7 @@ async fn try_create_wallet(
 		config,
 		OpenWalletArgs {
 			persister: Some(db),
+			onchain: Some(Arc::new(tokio::sync::RwLock::new(onchain))),
 			lock_manager: Some(lock_manager),
 			create_if_not_exists: true,
 			create_without_server: opts.force,

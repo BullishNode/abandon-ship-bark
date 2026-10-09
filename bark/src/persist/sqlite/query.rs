@@ -22,7 +22,7 @@ use crate::exit::{ExitState, ExitStateKind, ExitTxOrigin};
 use crate::movement::{Movement, MovementId, MovementStatus, MovementSubsystem, PaymentMethod};
 use crate::persist::{RoundStateId, StoredRoundState};
 use crate::persist::models::{
-	PaidInvoice, SerdeRoundState, SettledLightningReceive, StoredExit, Unlocked,
+	FallbackRecord, PaidInvoice, SerdeRoundState, SettledLightningReceive, StoredExit, Unlocked,
 };
 use crate::persist::sqlite::convert::{row_to_movement, row_to_wallet_vtxo, rows_to_wallet_vtxos};
 use crate::round::RoundState;
@@ -755,6 +755,7 @@ pub fn store_vtxo_key(
 	if let Some(existing) = existing {
 		ensure!(existing == public_key.to_string(),
 			"vtxo key index {index} already stored under a different public key");
+		conn.execute("UPDATE bark_vtxo_key SET issued = 1 WHERE idx = ?1", [index])?;
 		return Ok(());
 	}
 
@@ -778,7 +779,7 @@ pub fn get_public_key_idx(conn: &Connection, public_key: &PublicKey) -> anyhow::
 }
 
 pub fn get_last_vtxo_key_index(conn: &Connection) -> anyhow::Result<Option<u32>> {
-	let query = "SELECT idx FROM bark_vtxo_key ORDER BY idx DESC LIMIT 1";
+	let query = "SELECT idx FROM bark_vtxo_key WHERE issued = 1 ORDER BY idx DESC LIMIT 1";
 	let mut statement = conn.prepare(query)?;
 	let mut rows = statement.query(())?;
 
@@ -787,6 +788,50 @@ pub fn get_last_vtxo_key_index(conn: &Connection) -> anyhow::Result<Option<u32>>
 	} else {
 		Ok(None)
 	}
+}
+
+pub fn store_linked_vtxo_keys(conn: &Transaction, keys: &[(u32, PublicKey)]) -> anyhow::Result<()> {
+	for (index, public_key) in keys {
+		// Neither a repeated response nor pool replenishment may un-issue a key.
+		let changed = conn.execute(
+			"INSERT INTO bark_vtxo_key (idx, public_key, linked, issued) VALUES (?1, ?2, 1, 0)
+			ON CONFLICT (idx) DO UPDATE SET linked = 1 WHERE public_key = excluded.public_key",
+			params![index, public_key.to_string()],
+		)?;
+		ensure!(changed == 1, "vtxo key index {index} already stored under a different public key");
+	}
+	Ok(())
+}
+
+pub fn take_next_linked_vtxo_key(conn: &Transaction) -> anyhow::Result<Option<(u32, PublicKey)>> {
+	let key: Option<(u32, String)> = conn.query_row(
+		"UPDATE bark_vtxo_key SET issued = 1
+		WHERE linked = 1 AND issued = 0
+		AND idx = (SELECT COALESCE(MAX(idx) + 1, 0) FROM bark_vtxo_key WHERE issued = 1)
+		RETURNING idx, public_key",
+		[], |row| Ok((row.get(0)?, row.get(1)?)),
+	).optional()?;
+	key.map(|(index, pk)| Ok((index, PublicKey::from_str(&pk)?))).transpose()
+}
+
+pub fn get_fallback_record(conn: &Connection) -> anyhow::Result<Option<FallbackRecord>> {
+	Ok(conn.query_row(
+		"SELECT spk, seq FROM bark_fallback_record WHERE id = 1", [],
+		|row| Ok(FallbackRecord {
+			spk: bitcoin::ScriptBuf::from_bytes(row.get(0)?), seq: row.get(1)?,
+		}),
+	).optional()?)
+}
+
+pub fn store_fallback_record(conn: &Connection, record: &FallbackRecord) -> anyhow::Result<()> {
+	let seq = i64::try_from(record.seq).context("fallback sequence out of range")?;
+	conn.execute(
+		"INSERT INTO bark_fallback_record (id, spk, seq) VALUES (1, ?1, ?2)
+		ON CONFLICT (id) DO UPDATE SET spk = excluded.spk, seq = excluded.seq
+		WHERE excluded.seq >= seq",
+		params![record.spk.as_bytes(), seq],
+	)?;
+	Ok(())
 }
 
 pub fn get_mailbox_checkpoint(conn: &Connection) -> anyhow::Result<u64> {

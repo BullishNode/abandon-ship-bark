@@ -29,8 +29,11 @@ known chain transaction when `require_board_funding_tx` is false.
 
 An arkoor or claim output belongs to its recipient if and only if the server
 held its full signed chain, from a registration or a mailbox post, before its
-settlement committed. A mailbox post validates the chain and registers it in
-the same transaction, and is refused, whole, once any of its outputs settled.
+settlement committed. A mailbox post registers its outputs that are unregistered
+or spent, through the same registration call, before it stores them. It is
+refused once any of them settled: every settled coin is spent. A chain that
+fails registration otherwise, for example an unsigned one, is still delivered,
+as upstream does, and stays with the input owner.
 Other outputs, never registered or posted, belong to their actual input owner:
 the last transaction's single input must match a stored parent spent into that
 transaction; checkpoint parents retain the original user's key. Each output's

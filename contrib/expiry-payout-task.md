@@ -1,7 +1,7 @@
 # Native expiry payouts
 
-Approach D adds an off-by-default captaind task. The earlier coin-key payout evidence is in
-`expiry-payout-regtest/README.md`. Qualification of registered BIP84 destinations
+Approach D adds an off-by-default captaind task. The regtest harness and the earlier
+coin-key payout evidence live outside this repository. Qualification of registered BIP84 destinations
 is in progress; the earlier results do not qualify this protocol. Mainnet deployment
 remains gated on the shipping image's complete regtest and signet/client/restore results.
 

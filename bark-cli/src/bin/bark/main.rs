@@ -174,6 +174,10 @@ enum Command {
 	#[command()]
 	DebugInfo,
 
+	/// Print the automatic expiry payout destination
+	#[command()]
+	Fallback,
+
 	/// Get an address to receive VTXOs
 	#[command()]
 	Address {
@@ -478,6 +482,12 @@ async fn inner_main(cli: Cli) -> anyhow::Result<()> {
 		},
 		Command::DebugInfo => {
 			output_json(&json::cli::DebugInfo::from(wallet.debug_info().await?))
+		},
+		Command::Fallback => {
+			let record = wallet.fallback_destination().await?;
+			output_json(&json::cli::FallbackDestination {
+				address: bitcoin::Address::from_script(&record.spk, net)?.to_string(), seq: record.seq,
+			});
 		},
 		Command::Address { index, subcommand } => {
 			match subcommand {

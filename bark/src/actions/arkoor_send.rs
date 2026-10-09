@@ -255,13 +255,11 @@ pub(crate) async fn start_arkoor_send(
 	wallet.validate_arkoor_address(&destination).await
 		.context("invalid arkoor address")?;
 
-	let (change_keypair, change_key_index) = wallet.peek_next_keypair().await
+	let (change_keypair, change_key_index) = wallet.derive_store_next_keypair().await
 		.context("failed to derive arkoor change keypair")?;
 	if destination.policy().user_pubkey() == change_keypair.public_key() {
 		bail!("Cannot create arkoor to same address as change");
 	}
-	wallet.inner.db.store_vtxo_key(change_key_index, change_keypair.public_key()).await
-		.context("failed to store arkoor change keypair")?;
 
 	// The server refuses expired vtxos as arkoor inputs; they have to wait
 	// for a refresh.

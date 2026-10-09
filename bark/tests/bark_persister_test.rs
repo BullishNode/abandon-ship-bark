@@ -129,6 +129,22 @@ impl BarkPersister for Dummy {
 		Ok(())
 	}
 
+	async fn store_linked_vtxo_keys(&self, _: &[(u32, PublicKey)]) -> anyhow::Result<()> {
+		anyhow::bail!("dummy persister cannot acknowledge key links")
+	}
+
+	async fn is_vtxo_key_linked(&self, _: &PublicKey) -> anyhow::Result<bool> { Ok(false) }
+
+	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>> { Ok(None) }
+
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<bark::persist::models::FallbackRecord>> {
+		Ok(None)
+	}
+
+	async fn store_fallback_record(&self, _: &bark::persist::models::FallbackRecord) -> anyhow::Result<()> {
+		anyhow::bail!("dummy persister cannot store fallback records")
+	}
+
 	async fn get_last_vtxo_key_index(&self) -> anyhow::Result<Option<u32>> {
 		Ok(Some(0))
 	}

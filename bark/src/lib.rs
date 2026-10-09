@@ -381,6 +381,7 @@ pub mod actions;
 pub mod chain;
 pub mod exit;
 pub mod expiry_payout;
+mod fallback;
 pub use bark_common::fs_perms;
 pub use bark_common::secret;
 pub mod movement;
@@ -434,7 +435,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 use bip39::Mnemonic;
-use bitcoin::{Amount, Network, OutPoint};
+use bitcoin::{Amount, Network, OutPoint, ScriptBuf};
 use bitcoin::bip32::{self, ChildNumber, Fingerprint};
 use bitcoin::secp256k1::{self, Keypair, PublicKey};
 use futures::stream::FuturesUnordered;
@@ -683,6 +684,8 @@ pub struct WalletProperties {
 /// The VTXO seed is derived by applying a hardened derivation
 /// step at index 350 from the wallet's seed.
 pub struct WalletSeed {
+	#[cfg(feature = "onchain-bdk")]
+	onchain_root: bip32::Xpriv,
 	master: bip32::Xpriv,
 	vtxo: bip32::Xpriv,
 }
@@ -691,16 +694,15 @@ impl WalletSeed {
 	/// Create a new [WalletSeed] from a given BIP-32 master seed
 	pub fn new_from_seed(network: Network, seed: &[u8; 64]) -> Self {
 		let bark_path = [ChildNumber::from_hardened_idx(BARK_PURPOSE_INDEX).unwrap()];
-		let master = bip32::Xpriv::new_master(network, seed)
-			.expect("invalid seed")
-			.derive_priv(&SECP, &bark_path)
+		let root = bip32::Xpriv::new_master(network, seed).expect("invalid seed");
+		let master = root.derive_priv(&SECP, &bark_path)
 			.expect("purpose is valid");
 
 		let vtxo_path = [ChildNumber::from_hardened_idx(VTXO_KEYS_INDEX).unwrap()];
 		let vtxo = master.derive_priv(&SECP, &vtxo_path)
 			.expect("vtxo path is valid");
 
-		Self { master, vtxo }
+		Self { master, vtxo, #[cfg(feature = "onchain-bdk")] onchain_root: root }
 	}
 
 	/// Create a new [WalletSeed] from a given BIP-39 [Mnemonic]
@@ -765,12 +767,16 @@ pub struct OpenWalletArgs {
 	/// Default: none
 	pub onchain: Option<Arc<tokio::sync::RwLock<dyn OnchainWalletTrait>>>,
 
+	/// Expiry payout script in the provided onchain wallet. When omitted, the
+	/// built-in BDK wallet reserves its lowest unused BIP84 external address.
+	pub fallback_spk: Option<ScriptBuf>,
+
 	/// Whether to create a new wallet if no wallet exists
 	///
 	///  Default: true
 	pub create_if_not_exists: bool,
 
-	/// Whether to create a new wallet even if the Ark server cannot be reached
+	/// Legacy option; fallback registration still requires a reachable Ark server
 	///
 	/// Default: false
 	pub create_without_server: bool,
@@ -796,6 +802,7 @@ impl Default for OpenWalletArgs {
 	    Self {
 			run_daemon: true,
 			onchain: None,
+			fallback_spk: None,
 			datadir: None,
 			persister: None,
 			lock_manager: None,
@@ -991,7 +998,7 @@ impl Wallet {
 	pub async fn peek_next_keypair(&self) -> anyhow::Result<(Keypair, u32)> {
 		let last_revealed = self.inner.db.get_last_vtxo_key_index().await?;
 
-		let index = last_revealed.map(|i| i + 1).unwrap_or(u32::MIN);
+		let index = fallback::next_key_index(last_revealed)?;
 		let keypair = self.inner.seed.derive_vtxo_keypair(index);
 
 		Ok((keypair, index))
@@ -1000,9 +1007,20 @@ impl Wallet {
 	/// Derive and store the keypair directly after currently last revealed one,
 	/// together with its index.
 	pub async fn derive_store_next_keypair(&self) -> anyhow::Result<(Keypair, u32)> {
-		let (keypair, index) = self.peek_next_keypair().await?;
-		self.inner.db.store_vtxo_key(index, keypair.public_key()).await?;
-		Ok((keypair, index))
+		let _guard = self.inner.lock_manager.lock(
+			&format!("{}.key-pool", self.fingerprint()), Duration::from_secs(30),
+		).await.context("key pool is busy")?;
+		let key = match self.inner.db.take_next_linked_vtxo_key().await? {
+			Some(key) => key,
+			None => {
+				self.sync_fallback().await.context("no linked keys available; connect to the Ark server")?;
+				self.inner.db.take_next_linked_vtxo_key().await?
+					.context("server did not replenish the linked key pool")?
+			},
+		};
+		let keypair = self.inner.seed.derive_vtxo_keypair(key.0);
+		ensure!(keypair.public_key() == key.1, "stored linked key does not match wallet seed");
+		Ok((keypair, key.0))
 	}
 
 	#[deprecated(note = "use peek_keypair instead")]
@@ -1150,6 +1168,10 @@ impl Wallet {
 		let properties = self.properties().await?;
 		let network = properties.network;
 		let keypair = self.peek_keypair(index).await?;
+		ensure!(self.inner.db.is_vtxo_key_linked(&keypair.public_key()).await?,
+			"address key is not linked to an expiry fallback record");
+		// An explicitly requested pool address is handed out too. Never reuse it.
+		self.inner.db.store_vtxo_key(index, keypair.public_key()).await?;
 		let mailbox = self.mailbox_identifier();
 
 
@@ -1219,7 +1241,9 @@ impl Wallet {
 		config: &Config,
 		db: &dyn BarkPersister,
 		lock_manager: &dyn LockManager,
-		allow_unreachable_server: bool,
+		_allow_unreachable_server: bool,
+		onchain: &Arc<tokio::sync::RwLock<dyn OnchainWalletTrait>>,
+		fallback_spk: Option<ScriptBuf>,
 	) -> anyhow::Result<()> {
 		trace!("Config: {:?}", config);
 
@@ -1239,29 +1263,11 @@ impl Wallet {
 			bail!("cannot overwrite already existing config")
 		}
 
-		// Try to connect to the server and get its pubkey. An unsafe ArkInfo
-		// is treated the same as an unreachable server: when
-		// `allow_unreachable_server` is set, both drop to `(None, None)` so
-		// we can still produce an offline wallet and revisit the server on
-		// the next open.
-		let (server_pubkey, mailbox_pubkey) = match Self::connect_to_server(&config, network).await {
-			Ok(conn) => {
-				let ark_info = conn.ark_info().await;
-				match check_ark_info_safe(&ark_info, config.vtxo_exit_margin) {
-					Ok(()) => (Some(ark_info.server_pubkey), Some(ark_info.mailbox_pubkey)),
-					Err(err) if allow_unreachable_server => {
-						warn!("server-advertised ArkInfo is unsafe, \
-							treating as unavailable: {:#}", err);
-						(None, None)
-					},
-					Err(err) => return Err(err),
-				}
-			},
-			Err(_) if allow_unreachable_server => (None, None),
-			Err(err) => {
-				bail!("Failed to connect to provided server: {:#}", err);
-			},
-		};
+		let mut connection = Self::connect_to_server(config, network).await?;
+		let ark_info = connection.ark_info().await;
+		check_ark_info_safe(&ark_info, config.vtxo_exit_margin)?;
+		let server_pubkey = Some(ark_info.server_pubkey);
+		let mailbox_pubkey = Some(ark_info.mailbox_pubkey);
 
 		let properties = WalletProperties {
 			network,
@@ -1269,6 +1275,10 @@ impl Wallet {
 			server_pubkey,
 			server_mailbox_pubkey: mailbox_pubkey,
 		};
+
+		// Fallback registration is mandatory, including when --force was used.
+		// A failed or lost reply can be retried with the durable local record.
+		fallback::register(network, seed, db, onchain, &mut connection, fallback_spk).await?;
 
 		// write the config to db
 		db.init_wallet(&properties).await.context("cannot init wallet in the database")?;
@@ -1320,12 +1330,27 @@ impl Wallet {
 				.context("failed to instantiate platform default persister")?
 		};
 
+		let onchain = match args.onchain {
+			Some(onchain) => onchain,
+			None => {
+				#[cfg(feature = "onchain-bdk")]
+				{
+					Arc::new(tokio::sync::RwLock::new(onchain::OnchainWallet::load_from_xpriv(
+						network, seed.onchain_root, db.clone(),
+					).await?)) as Arc<tokio::sync::RwLock<dyn OnchainWalletTrait>>
+				}
+				#[cfg(not(feature = "onchain-bdk"))]
+				{ bail!("an onchain wallet and fallback_spk are required without onchain-bdk") }
+			},
+		};
+
 		let mut created_now = false;
 		let properties = if let Some(p) = db.read_properties().await? {
 			p
 		} else if args.create_if_not_exists {
 			Self::create(
 				network, &seed, &config, &*db, &*lock_manager, args.create_without_server,
+				&onchain, args.fallback_spk.clone(),
 			).await.context("error creating new wallet")?;
 			created_now = true;
 			db.read_properties().await?
@@ -1378,7 +1403,7 @@ impl Wallet {
 		let movements = Arc::new(MovementManager::new(db.clone(), notifications.clone()));
 		let exit = Exit::new(db.clone(), chain.clone(), movements.clone()).await?;
 
-		let onchain = args.onchain;
+		let onchain = Some(onchain);
 		let ret = Wallet { inner: Arc::new(WalletInner {
 			config, db, lock_manager, seed, exit, movements, notifications, server, chain,
 			onchain,
@@ -1386,6 +1411,8 @@ impl Wallet {
 			last_force_exit_scan_tip: tokio::sync::Mutex::new(None),
 			round_secret_nonces: RoundSecretNonces::new(),
 		})};
+
+		ret.open_fallback(args.fallback_spk).await?;
 
 		ret.inner.exit.load().await
 			.context("error loading exit system after opening wallet")?;
@@ -1409,6 +1436,9 @@ impl Wallet {
 				},
 			}
 		};
+
+		// Recovery may have advanced the issued key index beyond the initial pool.
+		if created_now { ret.sync_fallback().await?; }
 
 		if args.run_daemon {
 			ret.start_daemon()
@@ -1529,6 +1559,7 @@ impl Wallet {
 	pub async fn sync_onchain(&self) -> anyhow::Result<()> {
 		if let Some(onchain) = self.inner.onchain.as_ref() {
 			onchain.write().await.sync(self.chain()).await?;
+			self.rotate_fallback_if_paid().await?;
 		}
 		Ok(())
 	}
@@ -1958,6 +1989,11 @@ impl Wallet {
 		self.inner.chain.invalidate_caches().await;
 
 		futures::join!(
+			async {
+				if let Err(e) = self.sync_fallback().await {
+					warn!("Error syncing fallback record and linked keys: {:#}", e);
+				}
+			},
 			async {
 				// NB: order matters here, if syncing call fails,
 				// we still want to update the fee rates

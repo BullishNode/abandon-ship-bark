@@ -324,6 +324,36 @@ const PAYMENT_PENDING_POLL_INTERVAL: Duration = Duration::from_secs(2);
 /// The executor persists the returned state. Idempotent under re-run
 /// only if no checkpoint exists yet for this invoice (the caller is
 /// responsible for the existence check).
+/// When the invoice expires, `None` when that is out of range.
+fn invoice_expires_at(invoice: &Invoice) -> Option<chrono::DateTime<chrono::Local>> {
+	let since_epoch = match invoice {
+		Invoice::Bolt11(invoice) => invoice.expires_at()?,
+		Invoice::Bolt12(invoice) => invoice.created_at().checked_add(invoice.relative_expiry())?,
+	};
+	let secs = i64::try_from(since_epoch.as_secs()).ok()?;
+	Some(chrono::DateTime::from_timestamp(secs, since_epoch.subsec_nanos())?.with_timezone(&chrono::Local))
+}
+
+/// Refuse an invoice that expires further ahead than the configured maximum,
+/// so a lost request cannot hold the refund that long. Invoices the server
+/// issued for an intra-Ark payment are exempt: their refund does not wait for
+/// their expiry.
+async fn check_invoice_expiry(wallet: &Wallet, invoice: &Invoice) -> anyhow::Result<()> {
+	let max = Duration::from_secs(wallet.config().max_invoice_expiry_secs);
+	let latest = chrono::Local::now() + max;
+	if invoice_expires_at(invoice).is_some_and(|expires_at| expires_at <= latest) {
+		return Ok(());
+	}
+	let (mut srv, _) = wallet.require_server().await?;
+	let req = protos::CheckLightningReceiveRequest { hash: invoice.payment_hash().to_vec(), wait: false };
+	match srv.client.check_lightning_receive(req).await {
+		Ok(_) => Ok(()),
+		Err(e) if e.code() == tonic::Code::NotFound =>
+			bail!("Invoice expires more than {} seconds ahead; refusing to pay it", max.as_secs()),
+		Err(e) => Err(e).context("failed to check whether the invoice is intra-Ark"),
+	}
+}
+
 pub(crate) async fn start_lightning_send(
 	wallet: &Wallet,
 	invoice: Invoice,
@@ -340,6 +370,7 @@ pub(crate) async fn start_lightning_send(
 	}
 
 	invoice.check_signature()?;
+	check_invoice_expiry(wallet, &invoice).await?;
 
 	let payment_amount = invoice.get_payment_amount(user_amount)?;
 	if payment_amount == Amount::ZERO {

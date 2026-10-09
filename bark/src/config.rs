@@ -245,6 +245,14 @@ pub struct Config {
 	///
 	/// Default value: 250
 	pub vtxo_key_gap_limit: u32,
+
+	/// How far ahead, in seconds, an invoice paid over Lightning may expire.
+	/// The server fails a payment request it lost, and refunds the sender,
+	/// only once the invoice expired. Invoices the Ark server issued for an
+	/// intra-Ark payment are exempt.
+	///
+	/// Default value: 86400 (24h)
+	pub max_invoice_expiry_secs: u64,
 }
 
 impl Config {
@@ -277,6 +285,7 @@ impl Config {
 			daemon_manual_sync: false,
 			change_vtxo_split_factor: 2,
 			vtxo_key_gap_limit: DEFAULT_VTXO_KEY_GAP_LIMIT,
+			max_invoice_expiry_secs: 24 * 60 * 60,
 		};
 
 		if network != Network::Bitcoin {

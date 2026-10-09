@@ -14,7 +14,7 @@ use ark::vtxo::Full;
 use ark::lightning::{PaymentHash, Preimage};
 use ark_testing::{Captaind, TestContext, btc, sat};
 use ark_testing::context::LightningPaymentSetup;
-use ark_testing::daemon::captaind::{ArkClient, proxy::ArkRpcProxy};
+use ark_testing::daemon::captaind::{ArkClient, MailboxClient, proxy::{ArkRpcProxy, MailboxRpcProxy}};
 use ark_testing::daemon::watchmand::WATCHMAND_CONFIG_FILE;
 use bdk_wallet::{KeychainKind, SignOptions};
 use bdk_wallet::template::Bip84;
@@ -1187,6 +1187,121 @@ async fn abandoned_intra_ark_receive(returning_sender: bool) {
 	println!("abandoned intra-Ark receive: returning_sender={returning_sender}; sender refunded once, recipient unpaid");
 }
 
+/// Fails every arkoor mailbox post, as an unreachable mailbox would.
+#[derive(Clone)]
+struct FailPost;
+
+#[async_trait::async_trait]
+impl MailboxRpcProxy for FailPost {
+	async fn post_arkoor_message(
+		&self, _upstream: &mut MailboxClient, _req: protos::mailbox_server::PostArkoorMessageRequest,
+	) -> Result<protos::core::Empty, tonic::Status> {
+		Err(tonic::Status::unavailable("test drops the mailbox post"))
+	}
+}
+
+/// A Lightning receive forwarding to another wallet stalls in delivery until
+/// its claim outputs settle. They were registered before delivery, so they
+/// were paid to the destination's own record. The returning receiver treats
+/// the settled refusal as delivered instead of retrying forever.
+#[tokio::test]
+async fn fallback_ln_receive_external_delivery_after_settlement_terminates() {
+	let ctx = TestContext::new("bark_sdk/fallback_ln_receive_external_delivery_after_settlement_terminates").await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(1000);
+			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
+		}).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await
+		.expect("the initially funded pool must become ready");
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let destination = ctx.bark_sdk("destination", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	destination.stop_daemon_wait().await.unwrap();
+	let destination_address = destination.new_address().await.unwrap();
+	let destination_spk = destination.fallback_destination().await.unwrap().spk;
+	drop(destination);
+
+	let proxy = srv.start_proxy_with_mailbox((), FailPost).await;
+	let receiver_mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let receiver = ctx.bark_sdk("receiver", &proxy.address).mnemonic(receiver_mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	receiver.stop_daemon_wait().await.unwrap();
+	let mut config = receiver.config().clone();
+	let invoice = receiver.bolt11_invoice_for_address(sat(100_000), destination_address.clone(), None, None)
+		.await.unwrap();
+	let payment_hash = PaymentHash::from(&invoice);
+	lightning.external.wait_for_block_sync().await;
+	let mut payer = lightning.external.grpc_client().await;
+	let paying = tokio::spawn(async move {
+		payer.xpay(cln_rpc::XpayRequest {
+			invstring: invoice.to_string(), amount_msat: None, maxfee: None, layers: vec![], retry_for: None,
+			partial_msat: None, maxdelay: None, payer_note: None, label: None, localinvreqid: None,
+			dev_use_shadow: None,
+		}).await.map(|_| ()).map_err(anyhow::Error::from)
+	});
+	let delivery = tokio::time::timeout(Duration::from_secs(60), async {
+		loop {
+			let _ = receiver.try_claim_lightning_receive(payment_hash, false).await;
+			let recv = receiver.lightning_receive_checkpoint(payment_hash).await.unwrap().unwrap();
+			if let bark::actions::lightning::receive::Progress::Delivering(delivery) = recv.progress {
+				break delivery;
+			}
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.expect("the receive must claim and reach delivery");
+	tokio::time::timeout(Duration::from_secs(30), paying).await.unwrap().unwrap()
+		.expect("the external payment completes once the receive is claimed");
+	drop(receiver);
+	drop(proxy);
+	let ids = delivery.vtxos.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+
+	// The claim outputs settle while the receiver is away.
+	expire_and_confirm_sweeps(&ctx, &db, &delivery.vtxos).await;
+	enable_payouts(&ctx, &srv).await;
+	tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			let rows = db.read(async |t| Ok(t.query(
+				"SELECT spk FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+			).await?)).await.unwrap();
+			if rows.len() == ids.len() {
+				assert!(rows.iter().all(|r| r.get::<_, Vec<u8>>("spk") == destination_spk.as_bytes()),
+					"registered claim outputs are paid to the destination's record");
+				break;
+			}
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			ctx.generate_blocks(1).await;
+		}
+	}).await.expect("the claim outputs must be paid");
+
+	// The receiver returns, with its mailbox reachable again.
+	config.server_address = srv.ark_url();
+	let receiver = bark::Wallet::open(Network::Regtest,
+		bark::WalletSeed::new_from_mnemonic(Network::Regtest, &receiver_mnemonic), config,
+		bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("receiver")), run_daemon: false, ..Default::default() },
+	).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let _ = receiver.try_claim_lightning_receive(payment_hash, false).await;
+			if matches!(receiver.lightning_receive_state(payment_hash).await.unwrap(),
+				bark::actions::lightning::receive::LightningReceiveState::Settled(_))
+			{ break; }
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.expect("the delivery of settled outputs must finish");
+	assert!(receiver.pending_lightning_receives().await.unwrap().is_empty());
+	let history = receiver.history().await.unwrap();
+	let movement = history.iter().find(|m| m.id == delivery.movement_id).unwrap();
+	assert_eq!(movement.status, bark::movement::MovementStatus::Successful);
+	assert!(!movement.sent_to.is_empty(), "the receive was forwarded to the destination");
+	let posts = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM mailbox WHERE mailbox_type='arkoor-receive' AND vtxo_id=ANY($1)", &[&ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(posts, 0, "settled outputs are not delivered as Ark coins");
+	println!("external delivery after settlement: receive settled, outputs paid to the destination record");
+}
+
 /// A sender's late refund request holds its payment guard while the database
 /// keeps it waiting. Another wallet whose expired coins share the payout batch
 /// must still be paid, and the sender's coins must settle exactly once.
@@ -1483,7 +1598,7 @@ async fn unresponsive_node(sends: usize) {
 
 /// Mine past every coin's expiry, then wait until a confirmed sweep spends
 /// each backing anchor. The payout task requires that real chain evidence.
-async fn expire_and_confirm_sweeps(ctx: &TestContext, db: &Db, coins: &[Vtxo]) {
+pub(crate) async fn expire_and_confirm_sweeps(ctx: &TestContext, db: &Db, coins: &[Vtxo]) {
 	let core = ctx.bitcoind().sync_client();
 	let expiry = coins.iter().map(|v| v.expiry_height().to_u32()).max().unwrap();
 	ctx.generate_blocks(expiry.saturating_sub(core.get_block_count().unwrap() as u32) + 3).await;
@@ -1512,7 +1627,7 @@ async fn expire_and_confirm_sweeps(ctx: &TestContext, db: &Db, coins: &[Vtxo]) {
 
 /// Train Core's estimator with real transactions after the large expiry
 /// advance, which ages out old fee history, then restart with payouts enabled.
-async fn enable_payouts(ctx: &TestContext, srv: &Captaind) {
+pub(crate) async fn enable_payouts(ctx: &TestContext, srv: &Captaind) {
 	train_fee_estimator(ctx).await;
 	restart_with_payouts(ctx, srv).await;
 }

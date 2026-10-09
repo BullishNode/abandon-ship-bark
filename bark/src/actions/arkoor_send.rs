@@ -171,7 +171,8 @@ impl WalletAction for ArkoorSend {
 						signed_change_vtxos,
 						delivery_succeeded: true,
 					},
-					DeliveryOutcome::AllFailed { summary } => {
+					// The settled outputs are removed when the action resumes.
+					DeliveryOutcome::AllFailed { summary } | DeliveryOutcome::ExpirySettled { summary } => {
 						return Ok(Advance::Park {
 							state: ArkoorSend {
 								progress: Progress::Delivery {

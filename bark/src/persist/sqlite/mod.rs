@@ -479,13 +479,18 @@ impl BarkPersister for SqliteClient {
 		Ok(())
 	}
 
-	async fn record_server_spent_vtxo(&self, vtxo_id: VtxoId) -> anyhow::Result<Option<Movement>> {
+	async fn record_server_spent_vtxo(
+		&self, vtxo_id: VtxoId, holder: Option<&VtxoLockHolder>,
+	) -> anyhow::Result<Option<Movement>> {
 		let mut conn = self.connect()?;
 		let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
 		let vtxo = query::get_wallet_vtxo_by_id(&tx, vtxo_id)?.context("vtxo not found")?;
 		if vtxo.state.kind() == VtxoStateKind::Spent { return Ok(None); }
+		if let VtxoState::Locked { holder: actual } = &vtxo.state {
+			ensure!(holder.is_some() && holder == actual.as_ref(), "server spend cannot consume another operation's lock");
+		}
 		query::update_vtxo_state_checked(&tx, vtxo_id, VtxoState::Spent,
-			&[VtxoStateKind::Spendable])?;
+			&[VtxoStateKind::Spendable, VtxoStateKind::Locked])?;
 		let time = chrono::Local::now();
 		let id = query::create_new_movement(&tx, MovementStatus::Successful,
 			&Movement::server_spend_subsystem(), time, None)?;
@@ -552,25 +557,29 @@ mod test {
 
 	#[tokio::test]
 	async fn server_spend_rolls_back_and_survives_reopen() {
-		let dir = tempfile::tempdir().unwrap();
-		let path = dir.path().join("wallet.sqlite");
-		let db = SqliteClient::open(&path).unwrap();
-		let coin = &VTXO_VECTORS.board_vtxo;
-		db.store_vtxos(&[(coin, &VtxoState::Spendable)]).await.unwrap();
-		let conn = db.connect().unwrap();
-		conn.execute_batch("CREATE TRIGGER fail_debit BEFORE INSERT ON bark_movements BEGIN
-			SELECT RAISE(ABORT, 'injected ledger failure'); END;").unwrap();
-		assert!(db.record_server_spent_vtxo(coin.id()).await.is_err());
-		assert_eq!(db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spendable);
-		assert!(db.get_all_movements().await.unwrap().is_empty());
-		conn.execute_batch("DROP TRIGGER fail_debit;").unwrap();
-		let movement = db.record_server_spent_vtxo(coin.id()).await.unwrap().unwrap();
-		drop(conn);
-		drop(db);
-		let reopened = SqliteClient::open(&path).unwrap();
-		assert!(reopened.record_server_spent_vtxo(coin.id()).await.unwrap().is_none());
-		assert_eq!(reopened.get_all_movements().await.unwrap(), vec![movement]);
-		assert_eq!(reopened.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spent);
+		for owned_lock in [false, true] {
+			let dir = tempfile::tempdir().unwrap();
+			let path = dir.path().join("wallet.sqlite");
+			let db = SqliteClient::open(&path).unwrap();
+			let coin = &VTXO_VECTORS.board_vtxo;
+			let holder = owned_lock.then(|| VtxoLockHolder::Movement { id: MovementId::new(42) });
+			let state = holder.clone().map(|h| VtxoState::Locked { holder: Some(h) }).unwrap_or(VtxoState::Spendable);
+			db.store_vtxos(&[(coin, &state)]).await.unwrap();
+			let conn = db.connect().unwrap();
+			conn.execute_batch("CREATE TRIGGER fail_debit BEFORE INSERT ON bark_movements BEGIN
+				SELECT RAISE(ABORT, 'injected ledger failure'); END;").unwrap();
+			assert!(db.record_server_spent_vtxo(coin.id(), holder.as_ref()).await.is_err());
+			assert_eq!(db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, state);
+			assert!(db.get_all_movements().await.unwrap().is_empty());
+			conn.execute_batch("DROP TRIGGER fail_debit;").unwrap();
+			let movement = db.record_server_spent_vtxo(coin.id(), holder.as_ref()).await.unwrap().unwrap();
+			drop(conn);
+			drop(db);
+			let reopened = SqliteClient::open(&path).unwrap();
+			assert!(reopened.record_server_spent_vtxo(coin.id(), holder.as_ref()).await.unwrap().is_none());
+			assert_eq!(reopened.get_all_movements().await.unwrap(), vec![movement]);
+			assert_eq!(reopened.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spent);
+		}
 	}
 
 	#[tokio::test]

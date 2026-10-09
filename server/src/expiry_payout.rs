@@ -95,7 +95,9 @@ impl Server {
 		let groups = payable;
 		let inputs = groups.iter().flat_map(|g| g.inputs.iter().copied()).collect::<Vec<_>>();
 		let ids = inputs.iter().map(|i| i.id).collect::<Vec<_>>();
-		ensure!(!ids.is_empty() && ids.len() <= cfg.max_batch, "expiry batch exceeds coin limit");
+		// A wallet group larger than the limit is paid alone.
+		ensure!(!ids.is_empty() && (groups.len() == 1 || ids.len() <= cfg.max_batch),
+			"expiry batch exceeds coin limit");
 		let keys: Vec<String> = ids.iter().map(ToString::to_string).collect();
 		let scripts = groups.iter().flat_map(|g| g.inputs.iter().map(|_| g.script.as_bytes().to_vec()))
 			.collect::<Vec<_>>();
@@ -244,6 +246,7 @@ mod tests {
 	fn config_preserves_mainnet_floors_and_explicit_test_timing() {
 		let mut cfg = Config::default();
 		assert!(!cfg.enabled);
+		assert_eq!(cfg.max_batch, 10_000);
 		cfg.validate(bitcoin::Network::Bitcoin).unwrap();
 		cfg.enabled = true;
 		cfg.validate(bitcoin::Network::Bitcoin).unwrap();
@@ -308,7 +311,7 @@ impl Default for Config {
 	fn default() -> Self {
 		Self { enabled: false, interval: Duration::from_secs(60), grace_blocks: 1008,
 			sweep_min_confs: 100, min_payout_sat: 10_000,
-			max_batch: 100, conf_target_blocks: 6, receipt_dir: PathBuf::new(), watchman_config: None }
+			max_batch: 10_000, conf_target_blocks: 6, receipt_dir: PathBuf::new(), watchman_config: None }
 	}
 }
 
@@ -474,10 +477,16 @@ impl Server {
 				stats.waiting += group.inputs.len();
 				continue;
 			}
+			// The payout pays from the rounds wallet with one output per wallet
+			// group, so its coin count does not size the transaction. A group
+			// larger than the limit is paid alone instead of never.
 			if group.inputs.len() > cfg.max_batch {
-				warn!(coins = group.inputs.len(), max_batch = cfg.max_batch,
-					"expiry wallet group exceeds configured coin limit");
-				stats.waiting += group.inputs.len();
+				info!(coins = group.inputs.len(), max_batch = cfg.max_batch,
+					"expiry wallet group exceeds max_batch; paying it alone");
+				let coins = group.inputs.len();
+				let paid = self.pay_expiry_batch(vec![group], rate).await?;
+				if paid > 0 { stats.paid = paid; return Ok(()); }
+				stats.waiting += coins;
 				continue;
 			}
 			if batch_coins + group.inputs.len() > cfg.max_batch {

@@ -889,16 +889,17 @@ impl Server {
 		)?;
 
 		// Granting HTLC-recv vtxos commits the server to collecting the
-		// incoming HTLCs, so they must still be held. Our status can lag the
-		// hold plugin, which may already have failed them back. An intra-Ark
-		// payment has no incoming HTLCs: the sender's HTLC vtxos stand in.
+		// incoming HTLCs, so they must still be held, or already collected.
+		// Our status can lag the hold plugin, which may already have failed
+		// them back, or settled them outside captaind. An intra-Ark payment
+		// has no incoming HTLCs: the sender's HTLC vtxos stand in.
 		let is_self_payment = self.db.read(async |t|
 			t.get_open_lightning_payment_attempt_by_subscription_id(sub.id).await
 		).await?.is_some();
 		if !is_self_payment {
 			let state = self.lightning_manager.hold_invoice_state(sub.lightning_node_id, payment_hash).await
 				.context("could not check the incoming HTLCs")?;
-			if state != Some(hold_plugin::InvoiceState::Accepted) {
+			if !matches!(state, Some(hold_plugin::InvoiceState::Accepted | hold_plugin::InvoiceState::Paid)) {
 				return badarg!("the incoming payment is no longer held");
 			}
 		}

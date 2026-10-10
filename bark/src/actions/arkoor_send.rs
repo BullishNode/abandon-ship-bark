@@ -377,7 +377,7 @@ async fn run_cosign(wallet: &Wallet, send: &ArkoorSend) -> Result<Progress, Adva
 /// Registration -> Delivery. Push the signed transaction chains for the
 /// cosigned output vtxos to the server so receivers don't have to re-register
 /// them on receive and spends don't have to lazily retry the registration.
-async fn run_registration(
+pub(crate) async fn run_registration(
 	wallet: &Wallet,
 	signed_destination_vtxos: &[Vtxo<Full>],
 	signed_change_vtxos: &[Vtxo<Full>],

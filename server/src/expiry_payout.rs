@@ -86,9 +86,21 @@ fn group_fee_shares(
 	}).collect()
 }
 
+/// Split a payout's full mining fee at `fee_rate`. The operator pays for its
+/// change output's weight; the recipient groups share the rest. Returns the
+/// full fee, the operator's part and each group's share.
+fn payout_fees(
+	gross: &BTreeMap<ScriptBuf, u64>, fee_rate: FeeRate, weight: Weight, change_weight: Weight, minimum: u64,
+) -> anyhow::Result<(u64, u64, BTreeMap<ScriptBuf, u64>)> {
+	let fee = fee_rate.fee_wu(weight).context("fee overflow")?.to_sat();
+	let operator = fee_rate.fee_wu(change_weight).context("fee overflow")?.to_sat();
+	let recipients = fee.checked_sub(operator).context("change outweighs the payout")?;
+	Ok((fee, operator, group_fee_shares(gross, recipients, minimum)?))
+}
+
 impl Server {
 	/// Pay the groups whose Lightning payments are free. Returns the payment's
-	/// txid and fee, and the number of coins it settled.
+	/// txid, the fee its recipients paid, and the number of coins it settled.
 	async fn claim_and_pay(
 		&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate, unavailable_nodes: &mut BTreeSet<LightningNodeId>,
 	) -> anyhow::Result<Option<(Txid, u64, usize)>> {
@@ -171,16 +183,20 @@ impl Server {
 				for (spk, amount) in &expected_build { b.add_recipient(spk.clone(), Amount::from_sat(*amount)); }
 				Ok(())
 			};
-			// Select the gross debit with zero fee, then deduct the exact fee from
-			// recipients. Every payout keeps operator change, which can bump it.
+			// Select the gross debit with zero fee, then deduct the exact fee:
+			// change pays for its own weight, recipients for the rest. Every
+			// payout keeps operator change, which can bump it.
 			let mut psbt = wallet.build_tx_at_chunk_feerate(WithGuaranteedChange(LargestFirstCoinSelection), FeeRate::ZERO, configure)?;
 			ensure!(psbt.fee()? == Amount::ZERO, "change must not charge an operator fee");
 			let unused = psbt.unsigned_tx.clone();
 			let result = (|| {
 				let weight = psbt.unsigned_tx.weight() + Weight::from_wu(2 + 66 * psbt.inputs.len() as u64);
 				ensure!(weight.to_wu() <= 400_000, "payout exceeds maximum transaction weight");
-				let fee = fee_rate.fee_wu(weight).context("fee overflow")?.to_sat();
-				let mut per_script = group_fee_shares(&expected_build, fee, minimum)?;
+				let change = psbt.unsigned_tx.output.iter()
+					.position(|o| !expected_build.contains_key(&o.script_pubkey))
+					.context("payout has no operator change")?;
+				let (fee, operator_fee, mut per_script) = payout_fees(&expected_build, fee_rate, weight,
+					psbt.unsigned_tx.output[change].weight(), minimum)?;
 				for out in &mut psbt.unsigned_tx.output {
 					if let Some(share) = per_script.remove(&out.script_pubkey) {
 						ensure!(Some(&out.value.to_sat()) == expected_build.get(&out.script_pubkey),
@@ -189,10 +205,17 @@ impl Server {
 						ensure!(out.value >= out.script_pubkey.minimal_non_dust(), "recipient output would be dust");
 					}
 				}
+				// Change too small for its own weight waits for operator funds,
+				// like a wallet without change.
+				let change = &mut psbt.unsigned_tx.output[change];
+				change.value = change.value.checked_sub(Amount::from_sat(operator_fee))
+					.filter(|v| *v >= change.script_pubkey.minimal_non_dust())
+					.context("operator change cannot pay for its own weight")?;
 				ensure!(per_script.is_empty() && psbt.fee()?.to_sat() == fee, "payout deductions do not equal its full mining fee");
 				let tx = wallet.finish_tx(psbt)?;
 				ensure!(tx.weight() == weight, "unexpected signed payout weight");
-				Ok((tx, fee))
+				// Settlement rows record what the recipients paid.
+				Ok((tx, fee - operator_fee))
 			})();
 			if result.is_err() { wallet.mark_output_keys_unused(&unused); }
 			result
@@ -287,6 +310,28 @@ mod tests {
 		assert_eq!(group_fee_shares(&gross, 3, 10_000).unwrap(),
 			BTreeMap::from([(a, 1), (b, 2)]));
 		assert!(group_fee_shares(&gross, 5, 10_000).is_err());
+	}
+
+	#[test]
+	fn operator_pays_for_change_weight() {
+		let a = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+		let b = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
+		let rate = FeeRate::from_sat_per_kwu(250);
+		let change = bitcoin::TxOut { value: Amount::ZERO, script_pubkey: a.clone() }.weight();
+		assert_eq!(change, Weight::from_vb_unchecked(31));
+		// 150 sat in all, 31 of them for the change output: the group nets
+		// exactly the minimum, where paying the whole fee would defer it.
+		let gross = BTreeMap::from([(a.clone(), 10_119)]);
+		let (fee, operator, shares) = payout_fees(&gross, rate, Weight::from_vb_unchecked(150), change, 10_000).unwrap();
+		assert_eq!((fee, operator, shares[&a]), (150, 31, 119));
+		assert!(group_fee_shares(&gross, fee, 10_000).is_err());
+		let gross = BTreeMap::from([(a.clone(), 10_118)]);
+		assert!(payout_fees(&gross, rate, Weight::from_vb_unchecked(150), change, 10_000).is_err());
+		// Several groups share only the recipients' part.
+		let gross = BTreeMap::from([(a.clone(), 20_000), (b.clone(), 40_000)]);
+		let (fee, operator, shares) = payout_fees(&gross, rate, Weight::from_vb_unchecked(211), change, 10_000).unwrap();
+		assert_eq!((fee, operator), (211, 31));
+		assert_eq!(shares, BTreeMap::from([(a, 60), (b, 120)]));
 	}
 }
 

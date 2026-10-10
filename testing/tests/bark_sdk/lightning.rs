@@ -445,6 +445,79 @@ async fn receive_claim_after_hold_invoice_already_settled() {
 	assert_eq!(balance.spendable, invoice_amount);
 }
 
+/// As [receive_claim_after_hold_invoice_already_settled], but the claim comes
+/// after the incoming HTLCs would have been too close to expiring. The node
+/// already collected them, so the margin no longer applies and the late
+/// recipient must still get the payment.
+#[tokio::test]
+async fn receive_late_claim_after_hold_invoice_already_settled() {
+	let ctx = TestContext::new("bark_sdk/receive_late_claim_after_hold_invoice_already_settled").await;
+
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10)).create().await;
+	srv.wait_for_vtxopool(&ctx).await;
+
+	let wallet = ctx.bark_sdk("bark", &srv)
+		.cfg(|cfg| cfg.daemon_manual_sync = true)
+		.create().await;
+
+	lightning.sync().await;
+
+	let invoice_amount = btc(0.5);
+	let invoice = wallet.bolt11_invoice(invoice_amount, None, None).await
+		.expect("creating invoice");
+	let payment_hash = PaymentHash::from(&invoice);
+	let preimage = wallet.lightning_receive_checkpoint(payment_hash).await
+		.expect("fetching receive checkpoint")
+		.expect("receive checkpoint should exist")
+		.payment_preimage;
+
+	let mut hold_client = lightning.internal.hold_client().await;
+	let mut mailbox = wallet.subscribe_mailbox_messages(None).await
+		.expect("subscribing to mailbox stream");
+
+	let (pay_result, claim_result) = tokio::join!(
+		lightning.external.try_pay_bolt11(invoice.to_string()),
+		async {
+			loop {
+				let msg = mailbox.next().wait_millis(10_000).await
+					.expect("mailbox stream ended before notification")
+					.expect("mailbox stream error");
+				if let Some(MailboxMsg::IncomingLightningPayment(_)) = msg.message {
+					break;
+				}
+			}
+
+			hold_client.settle(hold::SettleRequest {
+				payment_preimage: preimage.as_ref().to_vec(),
+			}).await.expect("settling the hold invoice out of band");
+
+			// Mine until tip + htlc_expiry_delta passes the lowest incoming
+			// HTLC expiry, the point where an unsettled receive is refused.
+			let lowest_incoming_htlc_expiry = Db::connect(&srv.config().postgres).await.unwrap()
+				.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+				.await.unwrap().unwrap().lowest_incoming_htlc_expiry.unwrap();
+			let refused_from = lowest_incoming_htlc_expiry.to_u32() + 1
+				- srv.config().htlc_expiry_delta.to_u32();
+			let tip = ctx.bitcoind().get_block_count().await as u32;
+			let tip = ctx.generate_blocks(refused_from.saturating_sub(tip)).await;
+			assert!(tip.to_u32() >= refused_from);
+			srv.wait_for_sync_height(tip).await;
+
+			wallet.try_claim_lightning_receive(payment_hash, true).await
+		},
+	);
+
+	let state = claim_result.expect("try_claim_lightning_receive errored");
+	assert!(matches!(state, LightningReceiveState::Settled(_)),
+		"receive should be settled after the claim, got {:?}", state);
+
+	pay_result.expect("lightning payment failed");
+
+	let balance = assert_balance_consistent(&wallet, false).await;
+	assert_eq!(balance.spendable, invoice_amount);
+}
+
 #[tokio::test]
 async fn pay_with_retry_for() {
 	let ctx = TestContext::new("bark_sdk/pay_with_retry_for").await;

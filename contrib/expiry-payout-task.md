@@ -65,7 +65,8 @@ Once the server grants a receive's HTLC-recv coins or knows its preimage, it
 collects the held incoming HTLCs and never cancels them: neither an expired
 invoice nor a forwarding timeout fails them back. A grant first checks that the
 hold plugin still holds the incoming HTLCs, or has already collected them, for
-example after a settle outside captaind; the recipient's claim then completes. The hold settler retries
+example after a settle outside captaind; the recipient's claim then completes,
+however late, since collected HTLCs can no longer expire. The hold settler retries
 collection until it succeeds, and stops only when the hold plugin reports the
 invoice canceled, since its HTLCs then went back to the payer. Such a receive
 can never be collected; its subscription stays unsettled and its coins stay
@@ -201,6 +202,10 @@ These rules are documented, not enforced in code.
 - `abandon` an expiry payout only once it can never confirm: a conflicting
   spend of one of its inputs has `sweep_min_confs` confirmations. Its coins
   stay settled to it, so paying them again is a manual operation.
+- Never settle a hold invoice outside captaind. A recipient who claims after
+  such a settle still gets the payment, but one who stays absent before
+  captaind granted their coins has no coin for the task to pay, so the
+  collected payment is never credited to them.
 - Run captaind under a restart policy. It exits when a payout's COMMIT
   outcome is unknown and the database does not answer.
 - watchmand's `sweep_address` must be a rounds-wallet address. Startup checks

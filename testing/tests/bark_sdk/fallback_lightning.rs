@@ -25,7 +25,7 @@ use bitcoin_ext::rpc::RpcApi;
 use server::database::Db;
 use cln_rpc::plugins::hold;
 use cln_rpc::plugins::hold::hold_client::HoldClient;
-use server_rpc::protos;
+use server_rpc::{protos, StatusExt};
 use tonic::body::Body;
 use tonic::codegen::{http, Service};
 use tonic::server::NamedService;
@@ -66,6 +66,29 @@ impl ArkRpcProxy for InterruptedReceiveClaim {
 		// Keep the client at its real claim checkpoint until the test drops it.
 		std::future::pending().await
 	}
+}
+
+/// Refuses every claim for a reason other than an expiry settlement.
+#[derive(Clone)]
+struct RefuseClaim;
+
+#[async_trait::async_trait]
+impl ArkRpcProxy for RefuseClaim {
+	async fn claim_lightning_receive(
+		&self, _upstream: &mut ArkClient, _request: protos::ClaimLightningReceiveRequest,
+	) -> Result<protos::ArkoorPackageCosignResponse, tonic::Status> {
+		Err(tonic::Status::invalid_argument("test refuses the claim"))
+	}
+}
+
+/// What the paid recipient meets the first time it returns.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReturnFault {
+	None,
+	/// The server is unreachable.
+	ServerUnreachable,
+	/// The server refuses the claim for a reason other than settlement.
+	ClaimRefused,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -131,7 +154,8 @@ async fn fallback_collected_lightning_receive_pays_after_status_recovers() {
 }
 
 /// A recipient paid on-chain returns: its Ark balance gains nothing, the
-/// server's settlement is unchanged, and its client does not loop.
+/// server's settlement is unchanged, the server refuses its stale claim as
+/// expiry-settled, and its client records the receive as paid.
 #[tokio::test]
 async fn fallback_paid_lightning_receive_returns_at_htlcs_ready() {
 	Box::pin(interrupted_receive(ReceiveOutcome::CollectedReturnsAtHtlcsReady)).await;
@@ -147,7 +171,25 @@ async fn fallback_committed_claim_lost_reply_paid_and_returns() {
 	Box::pin(interrupted_receive(ReceiveOutcome::ClaimCommittedReplyLost)).await;
 }
 
+/// Neither an unreachable server nor another refusal finishes the receive;
+/// it waits for the expiry-settled refusal.
+#[tokio::test]
+async fn fallback_paid_lightning_receive_return_waits_for_unreachable_server() {
+	Box::pin(interrupted_receive_with(ReceiveOutcome::CollectedReturnsAtHtlcsReady,
+		ReturnFault::ServerUnreachable)).await;
+}
+
+#[tokio::test]
+async fn fallback_paid_lightning_receive_return_survives_other_claim_refusal() {
+	Box::pin(interrupted_receive_with(ReceiveOutcome::CollectedReturnsAtPreimageRevealed,
+		ReturnFault::ClaimRefused)).await;
+}
+
 async fn interrupted_receive(outcome: ReceiveOutcome) {
+	interrupted_receive_with(outcome, ReturnFault::None).await
+}
+
+async fn interrupted_receive_with(outcome: ReceiveOutcome, fault: ReturnFault) {
 	let name = match outcome {
 		ReceiveOutcome::Collected => "fallback_settled_lightning_receive_without_claim_commit",
 		ReceiveOutcome::Undisclosed => "fallback_unsettled_lightning_receive_is_not_paid",
@@ -157,6 +199,11 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 		ReceiveOutcome::CollectedReturnsAtHtlcsReady => "fallback_paid_lightning_receive_returns_at_htlcs_ready",
 		ReceiveOutcome::CollectedReturnsAtPreimageRevealed => "fallback_paid_lightning_receive_returns_at_preimage_revealed",
 		ReceiveOutcome::ClaimCommittedReplyLost => "fallback_committed_claim_lost_reply_paid_and_returns",
+	};
+	let name = match fault {
+		ReturnFault::None => name,
+		ReturnFault::ServerUnreachable => "fallback_paid_lightning_receive_return_waits_for_unreachable_server",
+		ReturnFault::ClaimRefused => "fallback_paid_lightning_receive_return_survives_other_claim_refusal",
 	};
 	let disclosed = !matches!(outcome, ReceiveOutcome::Undisclosed | ReceiveOutcome::UndisclosedUntilHoldDeadline);
 	let returning = matches!(outcome, ReceiveOutcome::CollectedReturnsAtHtlcsReady
@@ -368,6 +415,7 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 	}
 	let paid_ids = if claim_committed { claim_outputs.clone() } else { ids.clone() };
 	let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &paid_ids, &record.spk, principal).await;
+	let mut late_claim = None;
 	if claim_committed {
 		let settled_htlcs = db.read(async |t| Ok(t.query_one(
 			"SELECT count(*) FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
@@ -380,11 +428,12 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 		).await?.get::<_, i64>(0))).await.unwrap();
 		assert_eq!(fulfilled as usize, coins.len());
 		let request = claim_request.lock().unwrap().take().unwrap();
-		srv.get_public_rpc().await.claim_lightning_receive(request).await
-			.expect_err("a late cooperative claim cannot spend the paid HTLC a second time");
+		late_claim = Some(srv.get_public_rpc().await.claim_lightning_receive(request).await
+			.expect_err("a late cooperative claim cannot spend the paid HTLC a second time"));
 	}
 	if returning {
-		returning_recipient(&ctx, &db, &srv, &mnemonic, return_config, payment_hash, payout).await;
+		returning_recipient(&ctx, &db, &srv, &mnemonic, return_config, payment_hash, payout, principal,
+			&paid_ids, late_claim, fault).await;
 	}
 	srv.stop().await.unwrap();
 	let spend_txid = restore_and_spend(&ctx, &mnemonic, payout).await;
@@ -394,10 +443,13 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 /// The recipient comes back after its payout and drives its receive. Its
 /// Ark balance must not count the paid coins as spendable, its on-chain
 /// wallet finds the payout once, and the server's settlement and payouts
-/// stay as they were. What its receive history shows is reported.
+/// stay as they were. Its stale claim gets the expiry-settled refusal, and
+/// the receive is recorded like an expired coin: a successful credit and a
+/// server spend of each paid coin. A first return meeting `fault` keeps it.
 async fn returning_recipient(
 	ctx: &TestContext, db: &Db, srv: &Captaind, mnemonic: &bip39::Mnemonic,
-	mut config: bark::Config, payment_hash: PaymentHash, payout: OutPoint,
+	config: bark::Config, payment_hash: PaymentHash, payout: OutPoint, principal: u64,
+	paid_ids: &[String], late_claim: Option<tonic::Status>, fault: ReturnFault,
 ) {
 	let core = ctx.bitcoind().sync_client();
 	let settlement = async || db.read(async |t| Ok(t.query(
@@ -406,14 +458,62 @@ async fn returning_recipient(
 		r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, i64>(2), r.get::<_, Vec<u8>>(3),
 	)).collect::<Vec<_>>();
 	let before = settlement().await;
-	let claims = || std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap()
-		.matches("requested lightning receive claim").count();
+	let server_log = || std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap();
+	let claims = || server_log().matches("requested lightning receive claim").count();
+	let open = async |server_address: String| {
+		let mut config = config.clone();
+		config.server_address = server_address;
+		bark::Wallet::open(Network::Regtest,
+			bark::WalletSeed::new_from_mnemonic(Network::Regtest, mnemonic), config,
+			bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("recipient")), run_daemon: false, ..Default::default() },
+		).await.unwrap()
+	};
+	let movements = async |wallet: &bark::Wallet, subsystem: &str| wallet.history().await.unwrap().into_iter()
+		.filter(|m| m.subsystem.name == subsystem).collect::<Vec<_>>();
+
+	if fault != ReturnFault::None {
+		let mut _proxy = None;
+		let address = match fault {
+			ReturnFault::ServerUnreachable => {
+				let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+				format!("http://127.0.0.1:{port}")
+			},
+			ReturnFault::ClaimRefused => {
+				let proxy = srv.start_proxy_no_mailbox(RefuseClaim).await;
+				let address = proxy.address.clone();
+				_proxy = Some(proxy);
+				address
+			},
+			ReturnFault::None => unreachable!(),
+		};
+		let wallet = open(address).await;
+		let before_fault = wallet.lightning_receive_checkpoint(payment_hash).await.unwrap()
+			.expect("the recipient returns with its receive").progress;
+		for _ in 0..2 {
+			wallet.sync_pending_lightning_receives().await.unwrap();
+		}
+		let checkpoint = wallet.lightning_receive_checkpoint(payment_hash).await.unwrap()
+			.map(|c| c.progress);
+		let receives = movements(&wallet, "bark.lightning_receive").await;
+		let debits = movements(&wallet, "bark.server_spend").await;
+		println!("returning recipient under {fault:?}: checkpoint before={before_fault:?}, after={checkpoint:?}, \
+			receive_movements={:?}, server_spends={}",
+			receives.iter().map(|m| (m.status.to_string(), m.effective_balance.to_sat())).collect::<Vec<_>>(),
+			debits.len());
+		let expected = match fault {
+			ReturnFault::ClaimRefused => matches!(checkpoint,
+				Some(bark::actions::lightning::receive::Progress::PreimageRevealed(_))),
+			_ => checkpoint.as_ref() == Some(&before_fault),
+		};
+		assert!(expected, "{fault:?} must keep the receive: {checkpoint:?}");
+		assert!(receives.len() == 1 && receives[0].status == bark::movement::MovementStatus::Pending,
+			"{fault:?} must leave the receive pending");
+		assert!(debits.is_empty(), "{fault:?} establishes no payout");
+		drop(wallet);
+	}
+
 	let claims_before = claims();
-	config.server_address = srv.ark_url();
-	let wallet = bark::Wallet::open(Network::Regtest,
-		bark::WalletSeed::new_from_mnemonic(Network::Regtest, mnemonic), config,
-		bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("recipient")), run_daemon: false, ..Default::default() },
-	).await.unwrap();
+	let wallet = open(srv.ark_url()).await;
 	let mut progress = Vec::new();
 	for _ in 0..4 {
 		wallet.sync_pending_lightning_receives().await.unwrap();
@@ -422,13 +522,25 @@ async fn returning_recipient(
 			.map(|c| format!("{:?}", c.progress).split('(').next().unwrap().to_owned()));
 		ctx.generate_blocks(1).await;
 	}
+	let claim_calls = claims() - claims_before;
 	let balance = wallet.balance().await.unwrap();
-	let receives = wallet.history().await.unwrap().into_iter()
-		.filter(|m| m.subsystem.name == "bark.lightning_receive")
+	let receives = movements(&wallet, "bark.lightning_receive").await.iter()
 		.map(|m| (m.status.to_string(), m.effective_balance.to_sat()))
 		.collect::<Vec<_>>();
+	let debits = movements(&wallet, "bark.server_spend").await;
+	let mut debited = debits.iter().flat_map(|m| m.input_vtxos.iter().map(ToString::to_string))
+		.collect::<Vec<_>>();
+	debited.sort();
+	let mut paid = paid_ids.to_vec();
+	paid.sort();
+	let debit_sat = debits.iter().map(|m| m.effective_balance.to_sat()).sum::<i64>();
 	let tx: Transaction = core.get_raw_transaction(&payout.txid, None).unwrap();
 	let onchain = wallet.onchain().unwrap().read().await.balance().await;
+	println!("returning recipient: checkpoints={progress:?}, claimable_lightning_receive={}, \
+		pending_balance_total={}, receive_movements={receives:?}, server_spends={debited:?} ({debit_sat} sat), \
+		claim_calls_on_return={claim_calls}, late_claim={:?}",
+		balance.claimable_lightning_receive, balance.claimable_lightning_receive + balance.pending_in_round,
+		late_claim.as_ref().map(|e| e.message()));
 	assert_eq!(balance.spendable, bitcoin::Amount::ZERO, "a paid receive never becomes spendable Ark value");
 	assert_eq!(onchain, tx.output[payout.vout as usize].value, "the payout reaches the on-chain wallet once");
 	assert_eq!(settlement().await, before, "the returning client changes no settlement");
@@ -436,10 +548,37 @@ async fn returning_recipient(
 		"SELECT count(*) FROM nursery_tx WHERE kind::TEXT='expiry-payout'", &[],
 	).await?.get::<_, i64>(0))).await.unwrap();
 	assert_eq!(payouts, 1, "nothing is paid twice");
-	println!("returning recipient: checkpoints={progress:?}, claimable_lightning_receive={}, \
-		pending_balance_total={}, receive_movements={receives:?}, claim_calls_on_return={}",
-		balance.claimable_lightning_receive, balance.claimable_lightning_receive + balance.pending_in_round,
-		claims() - claims_before);
+
+	// Collect every violation, so one run shows all of them.
+	let mut violations = Vec::new();
+	if let Some(err) = late_claim.as_ref().filter(|e| !e.is_expiry_settled()) {
+		violations.push(format!("a claim of the paid HTLC got {err:?}, not the expiry-settled refusal"));
+	}
+	if server_log().contains("failed to find bad vtxo") {
+		violations.push("the server answered a claim with an Internal error".to_owned());
+	}
+	if let Some(progress) = progress.last().unwrap() {
+		violations.push(format!("the receive is still pending at {progress}"));
+	}
+	if balance.claimable_lightning_receive != bitcoin::Amount::ZERO {
+		violations.push(format!("claimable_lightning_receive is {}", balance.claimable_lightning_receive));
+	}
+	let principal = principal as i64;
+	if receives != [("successful".to_owned(), principal)] {
+		violations.push(format!("receive movements are {receives:?}, not one successful +{principal}"));
+	}
+	if debited != paid || debit_sat != -principal {
+		violations.push(format!("server spends debit {debited:?} ({debit_sat} sat), not the paid {paid:?}"));
+	}
+	if claim_calls != ark_testing::util::action_drive_factor() {
+		violations.push(format!("{claim_calls} claim calls on return, not one"));
+	}
+	if !matches!(wallet.lightning_receive_state(payment_hash).await,
+		Ok(bark::actions::lightning::receive::LightningReceiveState::Settled(_)))
+	{
+		violations.push("the receive is not recorded as settled".to_owned());
+	}
+	assert!(violations.is_empty(), "returning recipient: {violations:#?}");
 }
 
 #[derive(Clone)]

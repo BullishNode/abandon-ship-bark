@@ -272,8 +272,11 @@ payout is resubmitted with its child as a package. The payout itself is never
 replaced, so its txid, outputs and settlement rows never change. Without funds,
 the tick warns and the nursery keeps rebroadcasting. Never construct another
 payment for the same coins. Each settled coin's
-row keeps its payout txid, the fee its recipients paid and its paid script; a later wallet-record change does
-not alter it.
+row keeps its payout txid, its paid script and fee_sat; a later wallet-record change does not alter it.
+Every row of one payout txid carries the same fee_sat: the total fee all recipients of that payout
+paid. The payout's mining fee is fee_sat plus the operator's part for its change output's weight.
+Per-coin fee shares are not stored; derive a recipient's share as its coins' gross minus its output's
+net. Rows written before the operator paid for its change weight carry the whole mining fee.
 
 To stop new payouts, set enabled=false and restart this fork. Pending nursery
 payments still recover. Do not roll back to stock captaind against this history:

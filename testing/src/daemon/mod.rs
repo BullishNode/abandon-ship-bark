@@ -276,6 +276,34 @@ impl<T> Daemon<T>
 		Ok(())
 	}
 
+	/// Crash the daemon: SIGKILL, with no chance to clean up, then reap it.
+	/// [Self::start] can run it again on the same data.
+	pub async fn kill(&self) -> anyhow::Result<()> {
+		let mut state_lock = self.daemon_state.lock().await;
+		let mut child_lock = self.child.lock().await;
+		let mut child = child_lock.take().expect("daemon not started yet");
+		if let Some(pid) = child.id() {
+			signal::kill(Pid::from_raw(pid as i32), signal::Signal::SIGKILL)
+				.with_context(|| format!("failed to SIGKILL daemon {}", self.name))?;
+		}
+		child.wait().await.with_context(|| format!("failed to reap daemon {}", self.name))?;
+		self.inner.cleanup_external();
+		info!("Killed {}", self.name);
+		*state_lock = DaemonState::Stopped;
+		Ok(())
+	}
+
+	/// Wait until the daemon exits by itself and return its exit status.
+	pub async fn wait_exit(&self) -> anyhow::Result<std::process::ExitStatus> {
+		let mut state_lock = self.daemon_state.lock().await;
+		let mut child_lock = self.child.lock().await;
+		let mut child = child_lock.take().expect("daemon not started yet");
+		let status = child.wait().await.with_context(|| format!("failed to reap daemon {}", self.name))?;
+		self.inner.cleanup_external();
+		*state_lock = DaemonState::Stopped;
+		Ok(status)
+	}
+
 	pub fn add_stdout_handler<L: LogHandler>(&self, log_handler: L) {
 		self.log_handler_tx.lock().as_ref().expect("not started yet")
 			.try_send(Box::new(log_handler))

@@ -21,13 +21,14 @@ use ark::lightning::{Bolt11InvoiceExt, PaymentHash, Preimage};
 use ark::{ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy};
 use ark::vtxo::Full;
 use bitcoin_ext::BlockDelta;
-use server_rpc::protos;
+use server_rpc::{protos, StatusExt};
 use server_rpc::protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos;
 
 use crate::{Config, Wallet};
 use crate::actions::{
 	Advance, AdvanceError, BASE_RETRY_BACKOFF, WalletAction, WalletActionId, park_with_backoff,
 };
+use crate::actions::arkoor_send::run_registration;
 use crate::arkoor::{DeliveryOutcome, post_arkoor_to_mailboxes};
 use crate::movement::update::MovementUpdate;
 use crate::movement::{MovementDestination, MovementId, MovementStatus};
@@ -118,6 +119,9 @@ impl WalletAction for LightningReceive {
 						let err = anyhow!("Lightning receive {} canceled server-side", self.payment_hash);
 						return Ok(Advance::Failed(err));
 					},
+					IncomingStatus::Settled => {
+						return Err(anyhow!("payment already settled").into());
+					},
 					IncomingStatus::Ready => {
 						match prepare_lightning_receive_htlcs(wallet, &self).await? {
 							Grant::Accepted(htlcs) => Progress::HtlcsReady(htlcs),
@@ -134,6 +138,15 @@ impl WalletAction for LightningReceive {
 				// Preimage not revealed yet: if we can no longer finish a
 				// unilateral claim in time, abandon rather than commit.
 				if is_htlc_claim_window_closed(wallet, &htlcs).await? {
+					// Unless a claim call reached the server before we lost its
+					// reply: the server settles only with our preimage, so the
+					// receive is already past the point of no return.
+					if let IncomingStatus::Settled = check_incoming_lightning_payment(wallet, &self).await? {
+						return Ok(Advance::Next(LightningReceive {
+							progress: Progress::PreimageRevealed(htlcs),
+							..self
+						}));
+					}
 					abandon_lightning_receive(wallet, &self, &htlcs).await?;
 					return Ok(Advance::Done);
 				}
@@ -198,12 +211,9 @@ impl WalletAction for LightningReceive {
 			Progress::AwaitingPayment => {
 				Ok(park_with_backoff(self, retries, Some(error)))
 			},
-			Progress::HtlcsReady(htlcs) => {
-				if is_htlc_claim_window_closed(wallet, &htlcs).await? {
-					abandon_lightning_receive(wallet, &self, &htlcs).await?;
-					let err = anyhow!("HTLC claim window closed, abandoning");
-					return Ok(Advance::Failed(err));
-				}
+			// Abandoning once the claim window closes needs the server's
+			// payment status, see advance; an error alone never abandons.
+			Progress::HtlcsReady(_) => {
 				Ok(park_with_backoff(self, retries, Some(error)))
 			},
 			Progress::PreimageRevealed(_) | Progress::Delivering(_) => {
@@ -312,6 +322,8 @@ pub(crate) enum IncomingStatus {
 	Ready,
 	/// The server canceled the hold invoice; nothing to claim.
 	Canceled,
+	/// The server settled the payment, which needs our preimage.
+	Settled,
 }
 
 /// Mint a bolt11 invoice and build a fresh [`LightningReceive`] in
@@ -442,9 +454,7 @@ pub(crate) async fn check_incoming_lightning_payment(
 		protos::LightningReceiveStatus::HtlcsReady => IncomingStatus::Ready,
 		protos::LightningReceiveStatus::Created => IncomingStatus::Pending,
 		protos::LightningReceiveStatus::Canceled => IncomingStatus::Canceled,
-		protos::LightningReceiveStatus::Settled => {
-			return Err(anyhow!("payment already settled").into());
-		},
+		protos::LightningReceiveStatus::Settled => IncomingStatus::Settled,
 	})
 }
 
@@ -665,7 +675,7 @@ async fn claim_lightning_receive_htlcs(
 	};
 	trace!("ln claim arkoor params: inputs: {:?}; policy: {:?}", input_ids, receive_policy);
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(
-		inputs, receive_policy,
+		inputs.clone(), receive_policy,
 	).context("creating claim arkoor builder failed")?
 		.generate_user_nonces(&keypairs)
 		.context("arkoor nonce generation for claim failed")?;
@@ -673,11 +683,31 @@ async fn claim_lightning_receive_htlcs(
 	info!("Claiming arkoor against payment preimage for {}", recv.payment_hash);
 	*preimage_revealed = true;
 	let package_cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
-	let resp = srv.client.claim_lightning_receive(protos::ClaimLightningReceiveRequest {
+	let resp = match srv.client.claim_lightning_receive(protos::ClaimLightningReceiveRequest {
 		payment_hash: recv.payment_hash.to_byte_array().to_vec(),
 		payment_preimage: recv.payment_preimage.to_vec(),
 		cosign_request: Some(package_cosign_request),
-	}).await.map_err(AdvanceError::Server)?.into_inner();
+	}).await {
+		Ok(resp) => resp.into_inner(),
+		// The server paid our HTLC vtxos on-chain at expiry instead.
+		Err(status) if status.is_expiry_settled() => {
+			let paid = expiry_settled_vtxos(wallet, &inputs).await?;
+			record_expiry_payout(wallet, recv, &paid).await?;
+			if paid.len() != inputs.len() {
+				return Err(anyhow!("only {} of {} HTLC vtxos of lightning receive {} are paid at expiry",
+					paid.len(), inputs.len(), recv.payment_hash).into());
+			}
+			wallet.inner.movements.finish_movement(htlcs.movement_id, MovementStatus::Successful).await
+				.context("failed to finish lightning receive movement")?;
+			let amount = recv.invoice.get_payment_amount(None)
+				.unwrap_or(inputs.iter().map(|v| v.amount()).sum());
+			wallet.inner.db.record_settled_lightning_receive(
+				recv.payment_hash, recv.payment_preimage, &recv.invoice, amount,
+			).await?;
+			return Ok(None);
+		},
+		Err(status) => return Err(AdvanceError::Server(status)),
+	};
 	let cosign_resp = resp.try_into().context("invalid cosign response")?;
 
 	let mut outputs = builder.user_cosign(&keypairs, cosign_resp)
@@ -685,7 +715,15 @@ async fn claim_lightning_receive_htlcs(
 		.build_signed_vtxos();
 
 	// Register the claim outputs so they are spendable for any later flow.
-	wallet.register_vtxo_transactions_with_server(&outputs).await?;
+	// Outputs never registered stay with our HTLC key, which the server pays
+	// on-chain once they expire.
+	let mut paid = Vec::new();
+	if let Err(e) = wallet.register_vtxo_transactions_with_server(&outputs).await {
+		if !e.downcast_ref::<tonic::Status>().is_some_and(|s| s.is_expiry_settled()) {
+			return Err(e.into());
+		}
+		paid = expiry_settled_vtxos(wallet, &outputs).await?;
+	}
 
 	let mut effective_balance = Amount::ZERO;
 	for vtxo in &outputs {
@@ -724,7 +762,8 @@ async fn claim_lightning_receive_htlcs(
 	// Spend the inputs first: these two writes can't be atomic, and counting
 	// the receive in neither balance for a moment beats counting it in both.
 	wallet.mark_vtxos_as_spent(&htlcs.vtxo_ids).await?;
-	wallet.store_vtxos(&outputs, &VtxoState::Spendable).await?;
+	record_expiry_payout(wallet, recv, &paid).await?;
+	wallet.store_vtxos(outputs.iter().filter(|v| !paid.contains(v)), &VtxoState::Spendable).await?;
 
 	wallet.inner.movements.finish_movement_with_update(
 		htlcs.movement_id,
@@ -797,6 +836,45 @@ async fn deliver_vtxos_to_address(
 			Ok(())
 		},
 	}
+}
+
+/// The given vtxos the server paid on-chain at expiry. Registration is atomic
+/// per request, so ask for each vtxo on its own. Only the explicit settlement
+/// refusal establishes a payout; any other error leaves the receive to retry.
+async fn expiry_settled_vtxos(
+	wallet: &Wallet,
+	vtxos: &[Vtxo<Full>],
+) -> Result<Vec<Vtxo<Full>>, AdvanceError> {
+	let mut settled = Vec::new();
+	for vtxo in vtxos {
+		match run_registration(wallet, std::slice::from_ref(vtxo), &[]).await {
+			Ok(()) => {},
+			Err(AdvanceError::Server(status)) if status.is_expiry_settled() => settled.push(vtxo.clone()),
+			Err(e) => return Err(e),
+		}
+	}
+	Ok(settled)
+}
+
+/// Record vtxos the server paid on-chain at expiry like an expired board: the
+/// receive keeps its credit, and each paid vtxo gets the Ark debit of a server
+/// spend, which takes this receive's lock on it.
+async fn record_expiry_payout(
+	wallet: &Wallet,
+	recv: &LightningReceive,
+	vtxos: &[Vtxo<Full>],
+) -> anyhow::Result<()> {
+	let holder = VtxoLockHolder::Action { id: recv.id() };
+	for vtxo in vtxos {
+		// HTLC vtxos already hold the lock; claim outputs are new to the wallet.
+		if wallet.inner.db.get_wallet_vtxo(vtxo.id()).await?.is_none() {
+			wallet.store_vtxos([vtxo], &VtxoState::Locked { holder: Some(holder.clone()) }).await?;
+		}
+		if let Some(debit) = wallet.inner.db.record_server_spent_vtxo(vtxo.id(), Some(&holder)).await? {
+			wallet.inner.notifications.dispatch_movement_created(debit);
+		}
+	}
+	Ok(())
 }
 
 /// HtlcsReady abandon: the preimage was never revealed, so we simply drop

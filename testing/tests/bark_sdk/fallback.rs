@@ -215,12 +215,10 @@ async fn fallback_retained_balance_paid_once_eligible() {
 	println!("retained balance: 2 coins of 7,000 sat paid once in {txid}, net {}", paid[0].value);
 }
 
-/// A payout that misses its confirmation target is accelerated by a child
-/// spending its operator change: the payout txid, its recipient output and
-/// the settlement rows stay as they are, and the operator pays the bump.
-#[tokio::test]
-async fn fallback_stalled_payout_bumped_by_child() {
-	let ctx = TestContext::new("bark_sdk/fallback_stalled_payout_bumped_by_child").await;
+/// An expired coin's payout, committed and in the mempool, with no block
+/// mined since. The nursery's confirmation target is two blocks.
+async fn committed_payout(name: &str) -> (TestContext, Arc<ark_testing::Captaind>, Db, bark::persist::models::FallbackRecord, Vec<String>, Transaction) {
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
@@ -228,7 +226,6 @@ async fn fallback_stalled_payout_bumped_by_child() {
 			c.nursery_confirm_target_blocks = BlockDelta::new(2);
 		}).watchmand().create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	let core = ctx.bitcoind().sync_client();
 	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true)
 		.boarded(sat(30_000)).create().await;
 	wallet.stop_daemon_wait().await.unwrap();
@@ -239,7 +236,6 @@ async fn fallback_stalled_payout_bumped_by_child() {
 
 	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &[coin]).await;
 	super::fallback_lightning::enable_payouts(&ctx, &srv).await;
-	// No block is mined until the payout is held out of blocks.
 	let txid: Txid = tokio::time::timeout(Duration::from_secs(60), async {
 		loop {
 			let row = db.read(async |t| Ok(t.query_opt(
@@ -250,31 +246,124 @@ async fn fallback_stalled_payout_bumped_by_child() {
 		}
 	}).await.expect("the expired coin must be paid");
 	ctx.await_transaction(txid).await;
-	let _: bool = core.call("prioritisetransaction", &[txid.to_string().into(), 0.into(), (-1_000_000).into()]).unwrap();
-	let payout: Transaction = core.get_raw_transaction(&txid, None).unwrap();
-	let change = payout.output.iter().position(|o| o.script_pubkey != record.spk)
-		.expect("every payout carries operator change") as u32;
+	let payout: Transaction = ctx.bitcoind().sync_client().get_raw_transaction(&txid, None).unwrap();
 	assert_eq!(payout.output.len(), 2, "one recipient output and the change");
-	let paid = payout.output.iter().find(|o| o.script_pubkey == record.spk).unwrap().value;
+	(ctx, srv, db, record, ids, payout)
+}
 
-	// Past its target the payout's chunk pays nothing; a child spends its change.
-	let child: Transaction = tokio::time::timeout(Duration::from_secs(90), async {
+/// Mine a block with exactly these txs, in this order, like a miner that
+/// leaves out everything else.
+async fn mine_only(ctx: &TestContext, txids: &[Txid]) {
+	let core = ctx.bitcoind().sync_client();
+	let txids = txids.iter().map(|t| t.to_string()).collect::<Vec<_>>();
+	let _: serde_json::Value = core.call("generateblock", &[
+		ctx.bitcoind().get_new_address().to_string().into(), serde_json::json!(txids),
+	]).unwrap();
+	ctx.await_block_count_sync().await;
+}
+
+/// Send from Core's wallet at `sat_per_vb` from confirmed coins only. A tx
+/// without a mempool parent is one Core's fee estimator tracks.
+fn send_at(ctx: &TestContext, sat_per_vb: u64) -> Txid {
+	let address = ctx.bitcoind().get_new_address();
+	let sent: serde_json::Value = ctx.bitcoind().sync_client().call("send", &[
+		serde_json::json!([{ address.to_string(): 0.001 }]), serde_json::Value::Null, "unset".into(),
+		sat_per_vb.into(), serde_json::json!({ "minconf": 1 }),
+	]).unwrap();
+	sent["txid"].as_str().unwrap().parse().unwrap()
+}
+
+/// A mempool entry's chunk fee rate in sat/kwu, as the server reads it.
+fn chunk_rate(entry: &serde_json::Value) -> u64 {
+	let fee = bitcoin::Amount::from_btc(entry["fees"]["chunk"].as_f64().unwrap()).unwrap().to_sat();
+	fee * 1000 / entry["chunkweight"].as_u64().unwrap()
+}
+
+/// The rate of the server's "expiry payout accelerated" log line for `txid`.
+fn accelerated_at(ctx: &TestContext, txid: Txid) -> Option<u64> {
+	let logs = std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap();
+	logs.lines().filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+		.filter(|e| e["message"] == "expiry payout accelerated" && e["txid"] == txid.to_string())
+		.filter_map(|e| e["rate"].as_str().and_then(|r| r.parse().ok()).or(e["rate"].as_u64()))
+		.last()
+}
+
+/// The child the server built to accelerate the payout, if any.
+async fn payout_child(db: &Db, change: OutPoint) -> Option<Transaction> {
+	db.read(async |t| Ok(t.query(
+		"SELECT tx FROM nursery_tx WHERE kind::TEXT='internal'", &[],
+	).await?)).await.unwrap().iter()
+		.map(|r| bitcoin::consensus::deserialize::<Transaction>(&r.get::<_, Vec<u8>>(0)).unwrap())
+		.find(|c| c.input.iter().any(|i| i.previous_output == change))
+}
+
+/// The recipient finds its unchanged net from its address alone, in the
+/// unchanged payout.
+fn assert_paid_once(ctx: &TestContext, record: &bark::persist::models::FallbackRecord, txid: Txid, paid: bitcoin::Amount) {
+	let core = ctx.bitcoind().sync_client();
+	let address = Address::from_script(&record.spk, Network::Regtest).unwrap();
+	let scan: serde_json::Value = core.call("scantxoutset", &[
+		"start".into(), serde_json::json!([{"desc": format!("addr({address})")}]),
+	]).unwrap();
+	let found = scan["unspents"].as_array().unwrap();
+	assert_eq!(found.len(), 1);
+	assert_eq!(found[0]["txid"], txid.to_string());
+	assert_eq!(bitcoin::Amount::from_btc(found[0]["amount"].as_f64().unwrap()).unwrap(), paid);
+}
+
+/// A payout whose fee falls short of a risen estimate is accelerated by a
+/// child spending its operator change. Core's estimator is first trained at
+/// 3 sat/vB, where the payout is built; then blocks carry only 25 sat/vB txs
+/// while 3 sat/vB txs wait, so the estimate rises past the payout's rate.
+/// A miner taking only chunks at the new rate must take the payout with its
+/// child. The payout txid, its recipient output and the settlement rows stay
+/// as they are, and the operator pays the bump.
+#[tokio::test]
+async fn fallback_stalled_payout_bumped_by_child() {
+	let (ctx, _srv, db, record, ids, payout) = committed_payout("fallback_stalled_payout_bumped_by_child").await;
+	let core = ctx.bitcoind().sync_client();
+	let txid = payout.compute_txid();
+	let change = OutPoint::new(txid, payout.output.iter().position(|o| o.script_pubkey != record.spk)
+		.expect("every payout carries operator change") as u32);
+	let paid = payout.output.iter().find(|o| o.script_pubkey == record.spk).unwrap().value;
+	let entry: serde_json::Value = core.call("getmempoolentry", &[txid.to_string().into()]).unwrap();
+	let payout_rate = chunk_rate(&entry);
+	// Confirmed coins for the sends below, each from one coin.
+	let coins = (0..240).map(|_| serde_json::json!({ ctx.bitcoind().get_new_address().to_string(): 0.01 }))
+		.collect::<Vec<_>>();
+	let fanout: serde_json::Value = core.call("send", &[
+		serde_json::json!(coins), serde_json::Value::Null, "unset".into(), 25.into(), serde_json::json!({ "minconf": 1 }),
+	]).unwrap();
+	mine_only(&ctx, &[fanout["txid"].as_str().unwrap().parse().unwrap()]).await;
+
+	// Leave the payout and the waiting txs out of every block until the
+	// server builds a child.
+	let mut waiting = Vec::new();
+	let child = tokio::time::timeout(Duration::from_secs(300), async {
 		loop {
-			ctx.generate_blocks(1).await;
+			if let Some(child) = payout_child(&db, change).await { break child; }
+			waiting.extend((0..4).map(|_| send_at(&ctx, 3)));
+			let high = (0..8).map(|_| send_at(&ctx, 25)).collect::<Vec<_>>();
+			mine_only(&ctx, &high).await;
 			tokio::time::sleep(Duration::from_secs(2)).await;
-			let children = db.read(async |t| Ok(t.query(
-				"SELECT tx FROM nursery_tx WHERE kind::TEXT='internal'", &[],
-			).await?)).await.unwrap().iter()
-				.map(|r| bitcoin::consensus::deserialize::<Transaction>(&r.get::<_, Vec<u8>>(0)).unwrap())
-				.collect::<Vec<_>>();
-			if let Some(child) = children.into_iter()
-				.find(|c| c.input.iter().any(|i| i.previous_output == OutPoint::new(txid, change)))
-			{ break child; }
 		}
 	}).await.expect("the stalled payout must get a child");
-	let _: bool = core.call("prioritisetransaction", &[txid.to_string().into(), 0.into(), 1_000_000.into()]).unwrap();
+	let rate = accelerated_at(&ctx, txid).expect("the server logs the acceleration rate");
+	assert!(payout_rate < rate, "a real shortfall: payout {payout_rate} sat/kwu, target {rate} sat/kwu");
+	assert!(core.get_raw_transaction_info(&txid, None).unwrap().blockhash.is_none(),
+		"the payout was left out of every block");
+
+	// A miner at the target rate takes every chunk paying it, parents first.
 	ctx.await_transaction(child.compute_txid()).await;
-	ctx.generate_blocks(1).await;
+	let mempool: serde_json::Map<String, serde_json::Value> = core.call("getrawmempool", &[true.into()]).unwrap();
+	let mut chunks = mempool.iter().filter(|(_, e)| chunk_rate(e) >= rate)
+		.map(|(t, e)| (e["ancestorcount"].as_u64().unwrap(), t.parse::<Txid>().unwrap()))
+		.collect::<Vec<_>>();
+	chunks.sort();
+	let chunk_of_payout = chunk_rate(&mempool[&txid.to_string()]);
+	assert!(chunk_of_payout >= rate, "with its child the payout pays {chunk_of_payout} of {rate} sat/kwu");
+	assert!(waiting.iter().all(|t| !chunks.iter().any(|(_, c)| c == t)), "3 sat/vB txs stay below the target");
+	mine_only(&ctx, &chunks.into_iter().map(|(_, t)| t).collect::<Vec<_>>()).await;
 	let block = |txid: Txid| core.get_raw_transaction_info(&txid, None).unwrap().blockhash;
 	assert!(block(txid).is_some(), "the original payout confirms");
 	assert_eq!(block(txid), block(child.compute_txid()), "together with its child");
@@ -285,16 +374,55 @@ async fn fallback_stalled_payout_bumped_by_child() {
 	assert_eq!(rows.len(), 1);
 	assert_eq!(rows[0].get::<_, String>("txid"), txid.to_string(), "the payout txid never changes");
 	assert_eq!(rows[0].get::<_, Vec<u8>>("spk"), record.spk.as_bytes());
-	// The recipient finds its unchanged net from its address alone.
-	let address = Address::from_script(&record.spk, Network::Regtest).unwrap();
-	let scan: serde_json::Value = core.call("scantxoutset", &[
-		"start".into(), serde_json::json!([{"desc": format!("addr({address})")}]),
-	]).unwrap();
-	let found = scan["unspents"].as_array().unwrap();
-	assert_eq!(found.len(), 1);
-	assert_eq!(found[0]["txid"], txid.to_string());
-	assert_eq!(bitcoin::Amount::from_btc(found[0]["amount"].as_f64().unwrap()).unwrap(), paid);
-	println!("stalled payout {txid} bumped by child {}", child.compute_txid());
+	assert_paid_once(&ctx, &record, txid, paid);
+	println!("stalled payout {txid} at {payout_rate} sat/kwu bumped to {chunk_of_payout} sat/kwu \
+		(target {rate}) by child {}, {} waiting txs left out", child.compute_txid(), waiting.len());
+}
+
+/// A payout evicted from Core's mempool past its target is relayed again
+/// with the child that pays for it, as one package. No block is mined, so
+/// the nursery's own rebroadcast, which runs on new blocks, cannot have
+/// brought it back, nor can captaind's restart, which does not rebroadcast.
+#[tokio::test]
+async fn fallback_evicted_payout_resubmitted_with_child() {
+	let (ctx, srv, db, record, ids, payout) = committed_payout("fallback_evicted_payout_resubmitted_with_child").await;
+	let txid = payout.compute_txid();
+	let change = OutPoint::new(txid, payout.output.iter().position(|o| o.script_pubkey != record.spk)
+		.expect("every payout carries operator change") as u32);
+	let paid = payout.output.iter().find(|o| o.script_pubkey == record.spk).unwrap().value;
+	// Empty blocks take the payout past its target without confirming it.
+	for _ in 0..3 { mine_only(&ctx, &[]).await; }
+	assert!(payout_child(&db, change).await.is_none(), "a payout at the estimate is not bumped");
+
+	// Captaind reads the node's RPC cookie once, so it restarts with the node.
+	let height = ctx.bitcoind().get_block_count().await;
+	srv.stop().await.unwrap();
+	ctx.bitcoind().restart_wiping_mempool().await;
+	let core = ctx.bitcoind().sync_client();
+	assert!(!core.get_raw_mempool().unwrap().contains(&txid), "the payout is evicted");
+	srv.start().await.unwrap();
+	let child = tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			if let Some(child) = payout_child(&db, change).await {
+				let mempool = core.get_raw_mempool().unwrap();
+				if mempool.contains(&txid) && mempool.contains(&child.compute_txid()) { break child; }
+			}
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.expect("the evicted payout must be relayed with its child");
+	assert_eq!(ctx.bitcoind().get_block_count().await, height, "no block was mined");
+
+	ctx.generate_blocks(1).await;
+	let block = |txid: Txid| core.get_raw_transaction_info(&txid, None).unwrap().blockhash;
+	assert!(block(txid).is_some(), "the original payout confirms");
+	assert_eq!(block(txid), block(child.compute_txid()), "together with its child");
+	let rows = db.read(async |t| Ok(t.query(
+		"SELECT txid FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+	).await?)).await.unwrap();
+	assert_eq!(rows.len(), 1);
+	assert_eq!(rows[0].get::<_, String>("txid"), txid.to_string(), "the payout txid never changes");
+	assert_paid_once(&ctx, &record, txid, paid);
+	println!("evicted payout {txid} resubmitted with child {}", child.compute_txid());
 }
 
 /// A send from two inputs with different expiries stalls in registration

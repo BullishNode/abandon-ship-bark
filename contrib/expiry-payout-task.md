@@ -222,7 +222,7 @@ These rules are documented, not enforced in code.
 | interval | 60s |
 | grace_blocks | 1008 |
 | sweep_min_confs | 100 |
-| min_payout_sat | 10000 |
+| min_payout_sat | 1000; at least 330 |
 | conf_target_blocks | 6; accepts1,3,6 |
 
 The payout pays from the rounds wallet with one output per wallet group, so a

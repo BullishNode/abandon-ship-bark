@@ -353,7 +353,7 @@ pub struct Config {
 impl Default for Config {
 	fn default() -> Self {
 		Self { enabled: false, interval: Duration::from_secs(60), grace_blocks: 1008,
-			sweep_min_confs: 100, min_payout_sat: 10_000,
+			sweep_min_confs: 100, min_payout_sat: 1_000,
 			conf_target_blocks: 6, watchman_config: None }
 	}
 }

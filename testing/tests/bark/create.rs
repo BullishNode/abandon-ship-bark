@@ -85,8 +85,10 @@ async fn bark_create_is_atomic() {
 	// We stop the server
 	// This ensures that clients cannot be created
 	srv.stop().await.unwrap();
+	// Fork rule (ef7b0470a): creation registers the fallback with the server,
+	// so the connection error comes from that mandatory step.
 	let err = ctx.bark("bark_fails", &srv).try_create().await.unwrap_err();
-	assert!(err.to_alt_string().contains("Failed to connect to provided server"), "{:?}", err);
+	assert!(err.to_alt_string().contains("Failed to connect to Ark server"), "{:?}", err);
 	assert!(!ctx.datadir.join("bark_fails").is_dir());
 }
 
@@ -119,13 +121,15 @@ async fn bark_create_force_flag() {
 	// Stop the server to simulate unavailability
 	srv.stop().await.unwrap();
 
-	// Attempt to create with force_create should succeed
+	// Fork rule (ef7b0470a): fallback registration is mandatory, including
+	// with --force, so a create while the server is offline is refused.
 	let datadir = ctx.datadir.join("bark");
 	let bitcoind = Arc::new(ctx.new_bitcoind("bark_bitcoind").await);
 	let cfg = ctx.bark_default_cfg(&srv, Some(&bitcoind));
-	Bark::try_new_with_create_opts(
+	let err = Bark::try_new_with_create_opts(
 		"bark", datadir, BarkNetwork::Regtest, cfg, Some(bitcoind), None, None, true, None,
-	).await.unwrap();
+	).await.unwrap_err();
+	assert!(err.to_alt_string().contains("Failed to connect to Ark server"), "{:?}", err);
 
-	assert!(std::path::Path::is_dir(ctx.datadir.join("bark").as_path()));
+	assert!(!ctx.datadir.join("bark").exists());
 }

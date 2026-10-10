@@ -5,7 +5,7 @@ use std::time::Duration;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
-use bitcoin::{Address, FeeRate, Network, OutPoint, Transaction, Txid};
+use bitcoin::{Address, FeeRate, Network, OutPoint, ScriptBuf, Transaction, Txid};
 use bitcoin::constants::ChainHash;
 use bitcoin::bip32::Xpriv;
 use bitcoin::secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
@@ -612,7 +612,11 @@ async fn fallback_wallet_groups_one_output_each() {
 			.get::<_, i64>("fee_sat") as u64;
 		let input = tx.input.iter().map(|i| core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
 			.output[i.previous_output.vout as usize].value.to_sat()).sum::<u64>();
-		assert_eq!(fee, input - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>());
+		let spks = rows.iter().filter(|r| r.get::<_, String>("txid") == txid.to_string())
+			.map(|r| ScriptBuf::from(r.get::<_, Vec<u8>>("spk"))).collect::<Vec<_>>();
+		super::fallback_lightning::assert_change_pays_own_weight(
+			&tx, input - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>(), fee, &spks,
+		);
 		for (spk, coins) in &wallets {
 			let paid = tx.output.iter().filter(|o| &o.script_pubkey == spk).collect::<Vec<_>>();
 			let settled = rows.iter().filter(|r| r.get::<_, String>("txid") == txid.to_string()
@@ -1017,7 +1021,9 @@ async fn grouped_expiry_without_client(
 		core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
 			.output[i.previous_output.vout as usize].value.to_sat()
 	}).sum::<u64>();
-	assert_eq!(fee, input - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>());
+	super::fallback_lightning::assert_change_pays_own_weight(
+		&tx, input - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>(), fee, &[record.spk.clone()],
+	);
 	let vout = tx.output.iter().position(|o| o.script_pubkey == record.spk).unwrap() as u32;
 	let unspent = core.get_tx_out(&txid, vout, Some(true)).unwrap().unwrap();
 	assert!(unspent.confirmations >= 1);

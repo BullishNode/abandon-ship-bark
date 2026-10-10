@@ -1,10 +1,11 @@
 use ark::{musig, ProtocolEncoding, SECP};
 use ark::attestations::{FallbackRecordAttestation, KeyLinkAttestation};
 use ark_testing::TestContext;
+use ark_testing::daemon::captaind::ArkClient;
 use bitcoin::{absolute, transaction, OutPoint, ScriptBuf, Transaction};
 use bitcoin::constants::ChainHash;
 use bitcoin::hashes::{sha256, Hash, HashEngine};
-use bitcoin::secp256k1::{Keypair, Message};
+use bitcoin::secp256k1::{rand, Keypair, Message};
 use server::database::Db;
 use server_rpc::protos;
 
@@ -32,6 +33,18 @@ fn link(key: &Keypair, mailbox: &Keypair) -> Vec<u8> {
 	let mut bytes = key.public_key().serialize().to_vec();
 	bytes.extend_from_slice(&KeyLinkAttestation::new(mailbox.public_key(), key).serialize());
 	bytes
+}
+
+/// Link `key` to a fresh mailbox that has a fallback record, as a wallet does
+/// through SetFallback before the server creates a coin for that key.
+pub async fn link_fresh_fallback(rpc: &mut ArkClient, key: &Keypair) {
+	let mailbox = Keypair::new(&SECP, &mut rand::thread_rng());
+	let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+	rpc.set_fallback(protos::SetFallbackRequest {
+		mailbox_pk: mailbox.public_key().serialize().to_vec(),
+		record: Some(bound_record(ChainHash::REGTEST, &mailbox, &spk, 1)),
+		key_links: vec![link(key, &mailbox)],
+	}).await.expect("fallback registration failed");
 }
 
 #[tokio::test]

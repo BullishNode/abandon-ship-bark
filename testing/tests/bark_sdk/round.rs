@@ -216,12 +216,16 @@ async fn participation_status(srv: &Captaind, unlock_hash: Vec<u8>) -> i32 {
 		.await.expect("status request failed").into_inner().status
 }
 
-/// An interactive participation beats a delegated one on the same input: the
-/// server registers delegated participations only after the interactive sign-ups,
-/// so the delegated one finds the input taken and is dropped.
+/// An interactive and a delegated participation on the same input: the server
+/// admits only one of them, so the input is refreshed exactly once.
+///
+/// Fork rule (08f184417): an interactive refresh waits for a fresh round, so
+/// the delegated participation can take the input in an earlier round and the
+/// interactive submission is then refused. Upstream's "interactive wins" no
+/// longer holds, so assert what holds for either winner.
 #[tokio::test]
-async fn interactive_participation_wins_over_delegated() {
-	let ctx = TestContext::new("bark_sdk/interactive_participation_wins_over_delegated").await;
+async fn interactive_or_delegated_participation_refreshes_once() {
+	let ctx = TestContext::new("bark_sdk/interactive_or_delegated_participation_refreshes_once").await;
 	let srv = ctx.captaind("server").funded(btc(10)).create().await;
 
 	let wallet = ctx.bark_sdk("bark", &srv)
@@ -245,26 +249,62 @@ async fn interactive_participation_wins_over_delegated() {
 	// `refresh_vtxos` blocks until the round it joins finishes, so trigger
 	// rounds alongside it.
 	let res = ctx.trigger_rounds_until(&srv, wallet.refresh_vtxos(vec![id])).await;
-	res.expect("the interactive refresh must succeed");
-
-	let rejected = log_rejected.recv().wait(Duration::from_secs(30)).await
-		.expect("the delegated participation must be rejected");
-	assert!(rejected.reason.contains(&id.to_string()),
-		"the rejection must name the contested input: {}", rejected.reason,
-	);
-	// The flux lock rejects it first; the already-registered check behind it
-	// would catch it otherwise.
-	assert!(
-		rejected.reason.contains("already in use by another process")
-			|| rejected.reason.contains("already registered"),
-		"unexpected rejection reason: {}", rejected.reason,
-	);
+	match res {
+		Ok(_) => {
+			let rejected = log_rejected.recv().wait(Duration::from_secs(30)).await
+				.expect("the delegated participation must be rejected");
+			assert!(rejected.reason.contains(&id.to_string()),
+				"the rejection must name the contested input: {}", rejected.reason,
+			);
+			// The flux lock rejects it first; the already-registered check behind it
+			// would catch it otherwise.
+			assert!(
+				rejected.reason.contains("already in use by another process")
+					|| rejected.reason.contains("already registered"),
+				"unexpected rejection reason: {}", rejected.reason,
+			);
+		},
+		Err(e) => {
+			let err = format!("{:#}", e);
+			assert!(err.contains(&id.to_string()) && err.contains("not spendable"),
+				"the interactive refusal must name the spent input: {err}",
+			);
+		},
+	}
 
 	let finished = log_finished.recv().wait(Duration::from_secs(30)).await
 		.expect("the round must finish");
 	assert_eq!(finished.nb_input_vtxos, 1,
-		"only the interactive participation should have been included",
+		"only one participation should have been included",
 	);
+
+	// Whichever participation won, the wallet ends with one replacement and
+	// the input spent.
+	ctx.await_transaction(finished.txid).await;
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	let mut new_ids = Vec::new();
+	for _ in 0..30 {
+		wallet.chain().invalidate_caches().await;
+		wallet.sync().await;
+		new_ids = wallet.spendable_vtxos().await.expect("list vtxos")
+			.into_iter().map(|v| v.id()).collect::<Vec<_>>();
+		if new_ids.len() == 1 && new_ids[0] != id {
+			break;
+		}
+		tokio::time::sleep(poll_interval()).await;
+	}
+	assert!(new_ids.len() == 1 && new_ids[0] != id,
+		"the input must be replaced by exactly one round output: {id} -> {new_ids:?}",
+	);
+	assert_eq!(wallet.get_vtxo_by_id(id).await.expect("input vtxo").state, VtxoState::Spent,
+		"the refreshed input should be marked spent",
+	);
+	let refreshes = wallet.history().await.expect("list movements").into_iter()
+		.filter(|m| m.subsystem.name == "bark.round" && m.subsystem.kind == "refresh")
+		.filter(|m| m.input_vtxos.contains(&id) && m.status == MovementStatus::Successful)
+		.count();
+	assert_eq!(refreshes, 1, "the input must be refreshed exactly once");
+	assert!(log_finished.try_recv().is_err(), "no second round may spend the input");
 }
 
 /// A round that finishes supersedes every pending participation over one of its

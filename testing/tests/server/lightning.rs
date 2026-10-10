@@ -33,6 +33,8 @@ use bitcoin_ext::AmountExt;
 
 use cln_rpc::plugins::hold;
 
+use crate::fallback::link_fresh_fallback;
+
 
 /// Asserts that every unspent entry in `vtxo_pool` (`spent_at IS NULL`)
 /// references a `vtxo` row with `spend_state = 'pool'`.
@@ -919,7 +921,10 @@ async fn server_returned_htlc_recv_vtxos_identical(
 				wait: true,
 			}).wait_millis(10_000).await.unwrap().into_inner();
 
+			// Fork rule (dc1110fc7): the server only creates coins for keys
+			// linked to a fallback record, so link each key as a wallet would.
 			let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+			link_fresh_fallback(&mut client, &keypair).await;
 			let req_1 = protos::PrepareLightningReceiveClaimRequest {
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
@@ -939,6 +944,7 @@ async fn server_returned_htlc_recv_vtxos_identical(
 
 			// we change keypair to make sure server don't use it on second request
 			let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+			link_fresh_fallback(&mut client, &keypair).await;
 			let req_2 = protos::PrepareLightningReceiveClaimRequest {
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
@@ -999,15 +1005,25 @@ async fn server_concurrent_prepare_lightning_claim(
 		} => {},
 	}
 
+	// Fork rule (dc1110fc7): the server only creates coins for keys linked to
+	// a fallback record. Link every key up front, each to its own mailbox, so
+	// the links don't tie the requests together either.
+	let mut client = srv.get_public_rpc().await;
+	let mut keys = Vec::with_capacity(NB_REQUESTS);
+	for _ in 0..NB_REQUESTS {
+		let key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+		link_fresh_fallback(&mut client, &key).await;
+		keys.push(key);
+	}
+
 	// Fire all requests at once, each over its own connection. Every call
 	// uses a fresh user pubkey, so nothing but the server's own bookkeeping
 	// ties the requests together.
-	let results = join_all((0..NB_REQUESTS).map(|_| async {
+	let results = join_all(keys.iter().map(|key| async {
 		let mut client = srv.get_public_rpc().await;
 		client.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 			payment_hash: receive.payment_hash.to_vec(),
-			user_pubkey: Keypair::new(&SECP, &mut bip39::rand::thread_rng())
-				.public_key().serialize().to_vec(),
+			user_pubkey: key.public_key().serialize().to_vec(),
 			htlc_recv_expiry: 172,
 			lightning_receive_anti_dos: None,
 		}).await
@@ -1048,11 +1064,12 @@ async fn server_concurrent_prepare_lightning_claim(
 
 	// The losers are told to retry, so a retry after the storm must
 	// return the winner's vtxos instead of allocating a new set.
-	let retry = srv.get_public_rpc().await
+	let retry_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	link_fresh_fallback(&mut client, &retry_key).await;
+	let retry = client
 		.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 			payment_hash: receive.payment_hash.to_vec(),
-			user_pubkey: Keypair::new(&SECP, &mut bip39::rand::thread_rng())
-				.public_key().serialize().to_vec(),
+			user_pubkey: retry_key.public_key().serialize().to_vec(),
 			htlc_recv_expiry: 172,
 			lightning_receive_anti_dos: None,
 		}).await
@@ -1108,9 +1125,13 @@ async fn refuses_htlc_recv_expiry_past_lowest_incoming_htlc_expiry(
 			let lowest = sub.lowest_incoming_htlc_expiry
 				.expect("Accepted subscription must have lowest_incoming_htlc_expiry");
 
+			// Fork rule (dc1110fc7): the server only creates coins for keys
+			// linked to a fallback record. Link both keys, so only the expiry
+			// decides the outcome.
 			// Boundary: requested + delta == lowest + 1. Server must refuse.
 			let attacker_expiry = lowest.saturating_sub(htlc_expiry_delta).to_u32() + 1;
 			let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+			link_fresh_fallback(&mut client, &keypair).await;
 			let req = protos::PrepareLightningReceiveClaimRequest {
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
@@ -1129,6 +1150,7 @@ async fn refuses_htlc_recv_expiry_past_lowest_incoming_htlc_expiry(
 			// Just below the boundary: requested + delta == lowest. Must accept.
 			let safe_expiry = lowest.saturating_sub(htlc_expiry_delta).to_u32();
 			let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+			link_fresh_fallback(&mut client, &keypair).await;
 			let req_safe = protos::PrepareLightningReceiveClaimRequest {
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
@@ -1610,7 +1632,9 @@ async fn should_refuse_ln_pay_input_vtxo_that_is_being_exited() {
 	bark.claim_all_exits(bark.get_onchain_address().await).await;
 	ctx.generate_blocks(1).await;
 
-	assert_eq!(bark.onchain_balance().await, sat(596_429));
+	// Fork rule (7a9c92fef): new on-chain wallets use BIP84 instead of BIP86,
+	// which changes the on-chain fees of this flow: 87 sat above upstream.
+	assert_eq!(bark.onchain_balance().await, sat(596_516));
 
 	#[derive(Clone)]
 	struct Proxy(Wallet, WalletVtxoInfo);

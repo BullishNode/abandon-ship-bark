@@ -434,10 +434,7 @@ async fn refuse_generic_spends_of_htlc_send_vtxo_while_payment_in_flight() {
 	// 2. Round: forfeits the vtxo instead of offboarding it. Rounds only run on
 	// a long interval here, so kick one off alongside.
 	force_unlock_htlc_vtxos(&client, &htlc_vtxo_ids).await;
-	let (res, _) = tokio::join!(
-		client.refresh_vtxos(htlc_vtxo_ids.clone()),
-		srv.trigger_round(),
-	);
+	let res = ctx.trigger_rounds_until(&srv, client.refresh_vtxos(htlc_vtxo_ids.clone())).await;
 	let err = res.expect_err("server must refuse an HTLC vtxo as a round input");
 	let err = format!("{err:#}");
 	assert!(err.contains("not spendable"), "unexpected error: {err}");
@@ -631,10 +628,7 @@ async fn refuse_generic_spends_of_htlc_send_vtxo_with_no_payment_in_flight() {
 		"server paid out an HTLC vtxo");
 
 	force_unlock_htlc_vtxos(&client, &htlc_vtxo_ids).await;
-	let (res, _) = tokio::join!(
-		client.refresh_vtxos(htlc_vtxo_ids.clone()),
-		srv.trigger_round(),
-	);
+	let res = ctx.trigger_rounds_until(&srv, client.refresh_vtxos(htlc_vtxo_ids.clone())).await;
 	let err = res.expect_err("server must refuse an HTLC vtxo as a round input");
 	assert!(format!("{err:#}").contains("not spendable"), "unexpected error: {err:#}");
 

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use std::future::Future;
 use std::time::{Duration, Instant};
 
 use ark::fees::{
@@ -925,13 +926,28 @@ impl TestContext {
 		child_txid
 	}
 
-	/// Triggers a round and refreshes all given barks concurrently.
+	/// Triggers rounds until `fut` completes. An interactive refresh skips the
+	/// round it first sees and waits for a fresh one, so a single trigger can
+	/// leave it waiting. Stops triggering after a few rounds.
+	pub async fn trigger_rounds_until<T>(&self, srv: &Captaind, fut: impl Future<Output = T>) -> T {
+		const MAX_ROUND_TRIGGERS: usize = 5;
+		tokio::pin!(fut);
+		let mut triggers = 0;
+		loop {
+			tokio::select! {
+				res = &mut fut => return res,
+				_ = async {
+					if triggers > 0 { tokio::time::sleep(Duration::from_secs(6)).await; }
+					srv.trigger_round().await;
+				}, if triggers < MAX_ROUND_TRIGGERS => triggers += 1,
+			}
+		}
+	}
+
+	/// Triggers rounds and refreshes all given barks concurrently.
 	pub async fn refresh_all(&self, srv: &Captaind, barks: &[&Bark]) {
 		let futures = barks.iter().map(|b| b.try_refresh_all_no_retry());
-		let (results, _) = tokio::join!(
-			join_all(futures),
-			srv.trigger_round(),
-		);
+		let results = self.trigger_rounds_until(srv, join_all(futures)).await;
 		for r in results {
 			r.expect("refresh failed");
 		}

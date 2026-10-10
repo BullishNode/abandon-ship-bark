@@ -303,15 +303,9 @@ async fn finished_round_supersedes_pending_delegated_participation() {
 
 	let mut log_finished = srv.subscribe_log::<RoundFinished>();
 
-	// `refresh_vtxos` blocks until the round it joins finishes, so trigger a round
-	// alongside it, after a short delay so it subscribes first.
-	let (res, _) = tokio::join!(
-		wallet.refresh_vtxos(vec![id]),
-		async {
-			tokio::time::sleep(Duration::from_secs(2)).await;
-			srv.trigger_round().await;
-		},
-	);
+	// `refresh_vtxos` blocks until the round it joins finishes, so trigger
+	// rounds alongside it.
+	let res = ctx.trigger_rounds_until(&srv, wallet.refresh_vtxos(vec![id])).await;
 	res.expect("the interactive refresh must succeed");
 	log_finished.recv().wait(Duration::from_secs(30)).await
 		.expect("the round must finish, not abort on the superseded participation");

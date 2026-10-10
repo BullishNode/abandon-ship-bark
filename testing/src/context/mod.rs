@@ -602,6 +602,13 @@ impl TestContext {
 		mod_cfg(&mut cfg);
 
 		Server::create(cfg.clone()).await.expect("error creating server");
+		// The fork schema outside the numbered migrations, as for captaind.
+		server::database::Db::connect(&cfg.postgres).await.expect("connect to server db")
+			.write(async |t| {
+				t.batch_execute(include_str!("../../../contrib/expiry-settlement.sql")).await?;
+				t.batch_execute(include_str!("../../../contrib/expiry-fallback.sql")).await?;
+				Ok(())
+			}).await.expect("failed to apply expiry fallback fixture schema");
 		let srv = Server::start(cfg).await.expect("error starting server");
 
 		// Server::start returns before LightningManager has finished its first

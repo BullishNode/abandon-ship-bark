@@ -905,25 +905,28 @@ async fn grouped_expiry_without_client(
 	ctx.generate_blocks(expiry.saturating_sub(tip) + 3).await;
 	if payout_wins {
 		// Advance the real sweeps until payout reaches its coin-state update.
+		// Mine without waiting for captaind: a parked payout holds the rounds
+		// wallet, which captaind's block sync needs.
 		let waiting = wait_expiry_race_lock(&db, true);
 		tokio::pin!(waiting);
 		loop {
 			tokio::select! {
 				_ = &mut waiting => break,
-				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.generate_blocks(1).await; },
+				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.bitcoind().generate(1).await; },
 			}
 		}
 		registration = Some(activate(&srv, &coins, race_mailbox.clone()).await);
 	}
 	if let Some((release, gate)) = race_gate {
 		// Observe the loser waiting for the winner's real PostgreSQL row lock.
-		// For registration-first, keep confirming sweeps while payout catches up.
+		// For registration-first, keep confirming sweeps while payout catches up,
+		// again without waiting for captaind's sync.
 		let waiting = wait_expiry_race_lock(&db, false);
 		tokio::pin!(waiting);
 		loop {
 			tokio::select! {
 				_ = &mut waiting => break,
-				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.generate_blocks(1).await; },
+				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.bitcoind().generate(1).await; },
 			}
 		}
 		release.notify_one();

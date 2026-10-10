@@ -1861,9 +1861,24 @@ async fn wait_and_reconcile_payout(
 		tx_fee_sat={fee}, destinations={}", destinations.len());
 	let total_in = tx.input.iter().map(|i| core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
 		.output[i.previous_output.vout as usize].value.to_sat()).sum::<u64>();
-	assert_eq!(fee, total_in - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>());
+	let spks = destinations.iter().map(|r| ScriptBuf::from(r.get::<_, Vec<u8>>(0))).collect::<Vec<_>>();
+	assert_change_pays_own_weight(&tx, total_in - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>(), fee, &spks);
 	assert!(fee > 0);
 	(OutPoint::new(txid, vout as u32), fee)
+}
+
+/// The settlement rows record the recipients' part of a payout's mining fee.
+/// Its operator change pays the rest, the fee for its own weight at the same
+/// rate: both round up, so `operator / tx_fee` is `change weight / weight`
+/// within one sat.
+pub(crate) fn assert_change_pays_own_weight(tx: &Transaction, tx_fee: u64, recipient_fee: u64, recipients: &[ScriptBuf]) {
+	let change = tx.output.iter().filter(|o| !recipients.contains(&o.script_pubkey)).collect::<Vec<_>>();
+	assert_eq!(change.len(), 1, "every payout carries one operator change output");
+	let (weight, change_weight) = (tx.weight().to_wu(), change[0].weight().to_wu());
+	let operator = tx_fee.checked_sub(recipient_fee).expect("recipients pay at most the whole fee");
+	assert!(operator > 0 && operator * weight > (tx_fee - 1) * change_weight
+		&& operator * weight < tx_fee * change_weight + weight,
+		"operator paid {operator} of {tx_fee} sat for {change_weight} of {weight} WU");
 }
 
 /// A plain BIP84 wallet built from the mnemonic alone, with the standard

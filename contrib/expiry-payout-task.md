@@ -136,7 +136,8 @@ and waits for a real fee estimate, like payouts.
 
 Each tick requests a real Core estimate for its configured target. No estimate means
 wait; an unavailable different target does not block this one. The shared estimator
-is unchanged. The signed payout's entire mining fee is deducted proportionally from users,
+is unchanged. The operator change pays for its own output's weight at the payout's
+fee rate; the rest of the signed payout's mining fee is deducted proportionally from users,
 with deterministic satoshi rounding. Each destination gets one output per payment.
 The minimum applies to that output after its fee deduction; there is no percentage
 cap. Confirmed funding, dust and maximum transaction weight are checked.
@@ -227,7 +228,8 @@ These rules are documented, not enforced in code.
 The payout pays from the rounds wallet with one output per wallet group, so a
 group's coin count does not change the transaction size; the 400,000 WU weight
 check still applies. Every payout carries operator change: a rounds wallet whose
-balance equals a payout's gross defers it until the operator adds funds.
+balance equals a payout's gross, or leaves change too small to pay for its own
+weight, defers it until the operator adds funds.
 
 Mainnet enforces grace>=144 and sweep depth>=100. Short regtest/signet timings are
 rehearsal settings. When enabled, `watchman_config` must be the same file mounted
@@ -270,7 +272,7 @@ payout is resubmitted with its child as a package. The payout itself is never
 replaced, so its txid, outputs and settlement rows never change. Without funds,
 the tick warns and the nursery keeps rebroadcasting. Never construct another
 payment for the same coins. Each settled coin's
-row keeps its payout txid, fee and paid script; a later wallet-record change does
+row keeps its payout txid, the fee its recipients paid and its paid script; a later wallet-record change does
 not alter it.
 
 To stop new payouts, set enabled=false and restart this fork. Pending nursery

@@ -628,9 +628,11 @@ async fn do_oor_spend_updates(
 			OR (vtxo.spend_state = 'spent' AND vtxo.oor_spent_txid = u.txid))
 	", &[&ids, &txids]).await.context("failed to mark VTXOs as oor-spent")?;
 	if rows != spends.len() as u64 {
-		// Find the first vtxo that wasn't spendable and doesn't match our txid
+		// Find the first vtxo that wasn't spendable and doesn't match our txid.
+		// An expiry settlement spends a vtxo without an oor_spent_txid.
 		let bad = tx.query_one("
-			SELECT u.vtxo_id, v.spend_state::text, v.oor_spent_txid, v.confirmed_height
+			SELECT u.vtxo_id, v.spend_state::text, v.oor_spent_txid, v.confirmed_height,
+				EXISTS (SELECT 1 FROM expiry_settlement s WHERE s.id = u.vtxo_id) AS expiry_settled
 			FROM UNNEST($1::text[], $2::text[]) AS u(vtxo_id, txid)
 			LEFT JOIN vtxo v ON v.vtxo_id = u.vtxo_id
 			WHERE v.vtxo_id IS NULL
@@ -638,12 +640,15 @@ async fn do_oor_spend_updates(
 						AND (v.spend_state = 'spendable'
 							OR v.spend_state = 'pool'
 							OR v.spend_state = 'htlc-recv-unclaimed'))
-					AND NOT (v.spend_state = 'spent' AND v.oor_spent_txid = u.txid))
+					AND NOT (v.spend_state = 'spent' AND v.oor_spent_txid IS NOT DISTINCT FROM u.txid))
 			LIMIT 1
 		", &[&ids, &txids]).await.context("failed to find bad vtxo")?;
 		let vtxo_id: &str = bad.get("vtxo_id");
 		if bad.get::<_, Option<i32>>("confirmed_height").is_some() {
 			return badarg!("vtxo {} has exited onchain", vtxo_id);
+		}
+		if bad.get::<_, bool>("expiry_settled") {
+			return badarg!("{}", server_rpc::EXPIRY_SETTLED_ERROR);
 		}
 		return badarg!("vtxo doesn't exist or is unspendable: {}", vtxo_id);
 	}

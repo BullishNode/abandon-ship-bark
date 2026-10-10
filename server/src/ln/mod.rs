@@ -879,15 +879,6 @@ impl Server {
 			.context("fee overflowed")?;
 		let htlc_amount = validate_and_subtract_fee(received_amount, fee)?;
 
-		let lowest_incoming_htlc_expiry = sub.lowest_incoming_htlc_expiry
-			.context("no incoming HTLCs found for this payment")?;
-		validate_htlc_recv_expiry(
-			lowest_incoming_htlc_expiry,
-			self.sync_manager.chain_tip().height,
-			self.config.htlc_expiry_delta,
-			htlc_recv_expiry,
-		)?;
-
 		// Granting HTLC-recv vtxos commits the server to collecting the
 		// incoming HTLCs, so they must still be held, or already collected.
 		// Our status can lag the hold plugin, which may already have failed
@@ -896,12 +887,30 @@ impl Server {
 		let is_self_payment = self.db.read(async |t|
 			t.get_open_lightning_payment_attempt_by_subscription_id(sub.id).await
 		).await?.is_some();
+		let mut already_collected = false;
 		if !is_self_payment {
 			let state = self.lightning_manager.hold_invoice_state(sub.lightning_node_id, payment_hash).await
 				.context("could not check the incoming HTLCs")?;
 			if !matches!(state, Some(hold_plugin::InvoiceState::Accepted | hold_plugin::InvoiceState::Paid)) {
 				return badarg!("the incoming payment is no longer held");
 			}
+			already_collected = state == Some(hold_plugin::InvoiceState::Paid);
+		}
+
+		// Collected HTLCs can no longer expire, so a late claim of a receive
+		// settled outside captaind skips the margin. A settle outside captaind
+		// before any grant still strands an absent recipient: nothing here
+		// credits them until they claim, hence the operator rule in
+		// contrib/expiry-payout-task.md.
+		if !already_collected {
+			let lowest_incoming_htlc_expiry = sub.lowest_incoming_htlc_expiry
+				.context("no incoming HTLCs found for this payment")?;
+			validate_htlc_recv_expiry(
+				lowest_incoming_htlc_expiry,
+				self.sync_manager.chain_tip().height,
+				self.config.htlc_expiry_delta,
+				htlc_recv_expiry,
+			)?;
 		}
 
 		let dest = ArkoorDestination {

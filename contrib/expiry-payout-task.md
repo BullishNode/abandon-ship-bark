@@ -64,7 +64,8 @@ preimage receives no payout.
 Once the server grants a receive's HTLC-recv coins or knows its preimage, it
 collects the held incoming HTLCs and never cancels them: neither an expired
 invoice nor a forwarding timeout fails them back. A grant first checks that the
-hold plugin still holds the incoming HTLCs. The hold settler retries
+hold plugin still holds the incoming HTLCs, or has already collected them, for
+example after a settle outside captaind; the recipient's claim then completes. The hold settler retries
 collection until it succeeds, and stops only when the hold plugin reports the
 invoice canceled, since its HTLCs then went back to the payer. Such a receive
 can never be collected; its subscription stays unsettled and its coins stay

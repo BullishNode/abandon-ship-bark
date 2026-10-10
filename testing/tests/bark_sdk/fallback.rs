@@ -1177,7 +1177,7 @@ async fn wait_settled(ctx: &TestContext, db: &Db, ids: &[String]) -> Vec<tokio_p
 	tokio::time::timeout(Duration::from_secs(90), async {
 		loop {
 			let rows = db.read(async |t| Ok(t.query(
-				"SELECT id, txid, spk FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+				"SELECT id, txid, fee_sat, spk FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
 			).await?)).await.unwrap();
 			if rows.len() == ids.len() { break rows; }
 			tokio::time::sleep(Duration::from_secs(1)).await;

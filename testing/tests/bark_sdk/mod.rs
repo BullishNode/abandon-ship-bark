@@ -14,6 +14,7 @@ mod board;
 mod exit;
 mod expiry_payout;
 mod fallback;
+mod fallback_faults;
 mod fallback_lightning;
 mod import;
 mod lightning;

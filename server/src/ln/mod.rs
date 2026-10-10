@@ -55,6 +55,25 @@ pub(crate) enum SendRefund {
 
 
 
+/// Bound the requested HTLC-recv VTXO expiry of a receive whose incoming
+/// HTLCs are already collected: no inbound expiry limits it any more, but it
+/// must stay a block height and keep the server's reclaim clause as near as
+/// a fresh invoice would.
+fn validate_collected_htlc_recv_expiry(
+	chain_tip: BlockHeight,
+	htlc_expiry_delta: BlockDelta,
+	max_user_invoice_cltv_delta: BlockDelta,
+	requested: BlockHeight,
+) -> anyhow::Result<()> {
+	let ceiling = chain_tip.checked_add(htlc_expiry_delta)
+		.and_then(|h| h.checked_add(max_user_invoice_cltv_delta))
+		.context("chain tip + deltas overflows BlockHeight")?;
+	if requested > ceiling {
+		return badarg!("requested HTLC recv expiry {requested} is above {ceiling}");
+	}
+	Ok(())
+}
+
 /// Validate the client-requested HTLC-recv VTXO expiry leaves at
 /// least `htlc_expiry_delta` blocks of settlement margin below the
 /// inbound Lightning HTLC expiry, both for the request and the
@@ -898,11 +917,19 @@ impl Server {
 		}
 
 		// Collected HTLCs can no longer expire, so a late claim of a receive
-		// settled outside captaind skips the margin. A settle outside captaind
+		// settled outside captaind skips the margin; its requested expiry is
+		// still bounded. A settle outside captaind
 		// before any grant still strands an absent recipient: nothing here
 		// credits them until they claim, hence the operator rule in
 		// contrib/expiry-payout-task.md.
-		if !already_collected {
+		if already_collected {
+			validate_collected_htlc_recv_expiry(
+				self.sync_manager.chain_tip().height,
+				self.config.htlc_expiry_delta,
+				self.config.max_user_invoice_cltv_delta,
+				htlc_recv_expiry,
+			)?;
+		} else {
 			let lowest_incoming_htlc_expiry = sub.lowest_incoming_htlc_expiry
 				.context("no incoming HTLCs found for this payment")?;
 			validate_htlc_recv_expiry(
@@ -1268,5 +1295,17 @@ mod tests {
 		validate_htlc_recv_expiry(lowest_expiry, BlockHeight::new(980), DELTA, BlockHeight::new(900)).expect_err("Only 20 blocks to respond");
 		validate_htlc_recv_expiry(lowest_expiry, BlockHeight::new(970), DELTA, BlockHeight::new(900)).expect_err("Only 30 blocks to respond");
 		validate_htlc_recv_expiry(lowest_expiry, BlockHeight::new(960), DELTA, BlockHeight::new(900)).expect("This is safe now");
+	}
+
+	#[test]
+	fn collected_htlc_recv_expiry_is_bounded() {
+		let tip = BlockHeight::new(1000);
+		let max_cltv = BlockDelta::new(250);
+		validate_collected_htlc_recv_expiry(tip, DELTA, max_cltv, BlockHeight::new(1040)).expect("what the client asks");
+		validate_collected_htlc_recv_expiry(tip, DELTA, max_cltv, BlockHeight::new(1290)).expect("at the ceiling");
+		validate_collected_htlc_recv_expiry(tip, DELTA, max_cltv, BlockHeight::new(1291)).expect_err("above the ceiling");
+		validate_collected_htlc_recv_expiry(tip, DELTA, max_cltv, BlockHeight::new(500_000_000)).expect_err("not a block height");
+		validate_collected_htlc_recv_expiry(tip, DELTA, max_cltv, BlockHeight::MAX).expect_err("far future");
+		validate_collected_htlc_recv_expiry(BlockHeight::MAX, DELTA, max_cltv, BlockHeight::new(1040)).expect_err("overflow");
 	}
 }

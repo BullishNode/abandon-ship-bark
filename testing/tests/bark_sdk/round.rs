@@ -20,6 +20,89 @@ use ark_testing::constants::ROUND_CONFIRMATIONS;
 use ark_testing::daemon::captaind::{self, ArkClient, Captaind};
 use ark_testing::util::{FutureExt, poll_interval};
 
+#[derive(Clone)]
+struct ReorderedOutputsProxy {
+	duplicate_leaf: bool,
+	replies: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl captaind::proxy::ArkRpcProxy for ReorderedOutputsProxy {
+	async fn round_participation_status(
+		&self, upstream: &mut ArkClient, req: protos::RoundParticipationStatusRequest,
+	) -> Result<protos::RoundParticipationStatusResponse, tonic::Status> {
+		let mut response = upstream.round_participation_status(req).await?.into_inner();
+		if response.output_vtxos.len() > 1 {
+			self.replies.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			response.output_vtxos.reverse();
+			if self.duplicate_leaf {
+				response.output_vtxos[1] = response.output_vtxos[0].clone();
+			}
+		}
+		Ok(response)
+	}
+}
+
+async fn reordered_delegated_outputs(duplicate_leaf: bool) {
+	let name = if duplicate_leaf { "delegated_round_rejects_duplicate_output_leaf" }
+		else { "delegated_round_accepts_reordered_requested_outputs" };
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).create().await;
+	let replies = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+	let proxy = srv.start_proxy_no_mailbox(ReorderedOutputsProxy {
+		duplicate_leaf, replies: replies.clone(),
+	}).await;
+	let proxy_address = proxy.address.clone();
+	let wallet = ctx.bark_sdk("wallet", &srv).cfg(move |c| {
+		c.daemon_manual_sync = true;
+		c.server_address = proxy_address;
+	}).boarded(sat(300_000)).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let input = wallet.spendable_vtxos().await.unwrap().remove(0);
+	let input = wallet.get_full_vtxo(input.id()).await.unwrap();
+	let mut outputs = Vec::new();
+	for _ in 0..3 {
+		let (key, _) = wallet.derive_store_next_keypair().await.unwrap();
+		outputs.push(ark::VtxoRequest {
+			amount: sat(100_000), policy: ark::VtxoPolicy::new_pubkey(key.public_key()),
+		});
+	}
+	let wanted = outputs.iter().map(|o| o.policy.user_pubkey()).collect::<Vec<_>>();
+	wallet.join_next_round_delegated(bark::round::RoundParticipation {
+		inputs: vec![input], outputs, unblinded_mailbox_id: None,
+	}, None).await.unwrap();
+	let mut finished = srv.subscribe_log::<RoundFinished>();
+	srv.trigger_round().await;
+	finished.recv().wait(Duration::from_secs(60)).await.unwrap();
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	wallet.sync().await;
+	assert!(replies.load(std::sync::atomic::Ordering::Relaxed) > 0);
+	if duplicate_leaf {
+		assert!(!wallet.pending_round_states().await.unwrap().is_empty());
+		let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+		let signed = db.read(async |t| Ok(t.query_one(
+			"SELECT count(*) FROM round_part_input WHERE signed_forfeit_tx IS NOT NULL", &[],
+		).await?)).await.unwrap().get::<_, i64>(0);
+		assert_eq!(signed, 0, "duplicate leaf must never release forfeits");
+	} else {
+		assert!(wallet.pending_round_states().await.unwrap().is_empty(),
+			"all requested signed outputs must be claimable regardless of database row order");
+		let coins = wallet.spendable_vtxos().await.unwrap();
+		assert_eq!(coins.len(), 3);
+		assert!(coins.iter().all(|v| v.amount() == sat(100_000) && wanted.contains(&v.user_pubkey())));
+	}
+}
+
+#[tokio::test]
+async fn delegated_round_accepts_reordered_requested_outputs() {
+	reordered_delegated_outputs(false).await;
+}
+
+#[tokio::test]
+async fn delegated_round_rejects_duplicate_output_leaf() {
+	reordered_delegated_outputs(true).await;
+}
+
 /// A captaind proxy that rejects any round submission — interactive
 /// (`submit_payment`) or delegated (`submit_round_participation`) — whose inputs
 /// include one of the armed `bad` vtxos, mimicking the real server:

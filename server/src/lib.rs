@@ -34,6 +34,7 @@ pub mod ln;
 pub mod nursery;
 mod offboards;
 pub mod expiry_payout;
+mod payout_witness;
 mod round;
 pub mod telemetry;
 pub mod utils;
@@ -265,6 +266,9 @@ impl Server {
 			mnemonic.to_seed("")
 		};
 		let master_xpriv = bip32::Xpriv::new_master(cfg.network, &seed).unwrap();
+		let server_key = master_xpriv.derive_priv(&SECP, &SERVER_KEY_PATH.parse::<bip32::DerivationPath>()?)?;
+		payout_witness::PayoutWitness::initialize(&cfg.data_dir, cfg.network,
+			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key())?;
 
 		// Store initial wallet states to avoid full chain sync.
 		for wallet in [WalletKind::Rounds, WalletKind::Watchman] {
@@ -356,6 +360,12 @@ impl Server {
 		let db = database::Db::connect(&cfg.postgres)
 			.await
 			.context("failed to connect to db")?;
+		// Refuse a database-only rollback before wallets or payout/round workers
+		// can spend funds. Never initialize missing history during startup.
+		let payout_witness = if cfg.expiry_payout.enabled || cfg.data_dir.join(payout_witness::DIRECTORY).exists() {
+			Some(payout_witness::PayoutWitness::load(&cfg.data_dir, cfg.network, server_key.public_key(), &db)
+				.await.context("payout recovery witness validation failed")?)
+		} else { None };
 
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		bcd::require_network(&bitcoind, cfg.network).await?;
@@ -422,7 +432,7 @@ impl Server {
 		let _startup_worker = rtmgr.spawn("Bootstrapping");
 		rtmgr.run_shutdown_signal_listener(Duration::from_secs(60));
 
-		let tx_nursery = TxNursery::new(db.clone(), bitcoind.clone());
+		let tx_nursery = TxNursery::new(db.clone(), bitcoind.clone(), payout_witness);
 
 		let fee_estimator = fee_estimator::start(
 			rtmgr.clone(),

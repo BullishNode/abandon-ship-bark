@@ -1121,6 +1121,11 @@ impl Server {
 		};
 		let builder = self.validate_cosign_request(validation, cosign_request)
 			.badarg("invalid cosign request")?;
+		// A forwarding destination must be payable before we collect the
+		// incoming payment. The write transaction checks this again before
+		// creating the claim outputs.
+		let output_keys = builder.build_unsigned_vtxos().map(|v| v.user_pubkey()).collect::<Vec<_>>();
+		self.db.read(async |t| t.require_fallback(&output_keys).await).await?;
 
 		// Record the preimage in the settler so the watchman signer/policy
 		// can find it if this VTXO ends up being claimed on-chain.

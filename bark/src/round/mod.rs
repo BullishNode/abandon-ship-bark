@@ -1346,7 +1346,7 @@ fn check_output_vtxos_exitable(
 
 fn check_round_matches_participation(
 	part: &RoundParticipation,
-	new_vtxos: &[Vtxo<Full>],
+	new_vtxos: &mut [Vtxo<Full>],
 	funding_tx: &Transaction,
 	ark_info: &ArkInfo,
 	scheduled_height: Option<BlockHeight>,
@@ -1364,6 +1364,16 @@ fn check_round_matches_participation(
 		ensure!(new_vtxos[idx + 1..].iter().all(|v| v.id() != vtxo.id()),
 			"server delivered duplicate VTXO {}", vtxo.id(),
 		);
+	}
+
+	// PostgreSQL does not preserve the request order in the participation
+	// output table. Match every distinct signed leaf to one requested amount
+	// and policy before applying the checks below and releasing forfeits.
+	for (idx, req) in part.outputs.iter().enumerate() {
+		let offset = new_vtxos[idx..].iter().position(|v|
+			v.amount() == req.amount && v.policy() == &req.policy,
+		).context("server did not deliver every requested round output")?;
+		new_vtxos.swap(idx, idx + offset);
 	}
 
 	// We have two requirements on the outputs:
@@ -1542,13 +1552,13 @@ async fn progress_delegated(
 		.context("invalid output VTXOs from server")
 		.map_err(HarkForfeitError::Err)?;
 
-	// Check that the vtxos match our participation in the exact order, and that
+	// Match every vtxo to our participation and check that
 	// the server-chosen tree parameters are safe, before we forfeit our inputs.
 	let tip = wallet.inner.chain.tip().await
 		.context("chain source error")
 		.map_err(HarkForfeitError::Err)?;
 	check_round_matches_participation(
-		participation, &new_vtxos, &funding_tx, &ark_info, scheduled_height,
+		participation, &mut new_vtxos, &funding_tx, &ark_info, scheduled_height,
 		tip, wallet.inner.config.vtxo_exit_margin,
 	)
 		.context("new VTXOs received from server don't match our participation")

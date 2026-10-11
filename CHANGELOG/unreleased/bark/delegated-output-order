@@ -1,0 +1,1 @@
+- Match delegated round outputs by their requested amount and policy when PostgreSQL returns them in another order. Keep duplicate-leaf, ownership, expiry and forfeit checks.

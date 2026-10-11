@@ -96,13 +96,14 @@ pub struct NurseryTxReport {
 pub struct TxNursery {
 	db: Db,
 	bitcoind: BitcoindClient,
+	payout_witness: Option<crate::payout_witness::PayoutWitness>,
 }
 
 impl TxNursery {
 	/// Create a new nursery. It follows up through chain events, so
 	/// register it as a [ChainEventListener] with the SyncManager.
-	pub fn new(db: Db, bitcoind: BitcoindClient) -> TxNursery {
-		TxNursery { db, bitcoind }
+	pub(crate) fn new(db: Db, bitcoind: BitcoindClient, payout_witness: Option<crate::payout_witness::PayoutWitness>) -> TxNursery {
+		TxNursery { db, bitcoind, payout_witness }
 	}
 
 	/// Broadcast a tx that is expected to confirm by the given block
@@ -174,12 +175,24 @@ impl TxNursery {
 	/// next mempool update.
 	async fn broadcast(&self, tx: &Transaction, kind: NurseryTxKind) {
 		let txid = tx.compute_txid();
+		if kind == NurseryTxKind::ExpiryPayout {
+			if let Err(e) = self.witness_payout(tx).await {
+				warn!(%txid, "payout recovery witness not durable; keep committed payout pending: {e:#}");
+				return;
+			}
+		}
 		slog!(BroadcastingTx, txid, kind: kind.name().into(), raw_tx: serialize(tx));
 		if let Err(e) = bcd::broadcast_tx(&self.bitcoind, tx).await {
 			slog!(TxBroadcastError, txid, kind: kind.name().into(),
 				raw_tx: serialize(tx), error: e.to_string(),
 			);
 		}
+	}
+
+	/// Also covers package submission, which can relay an evicted parent without
+	/// going through the nursery's ordinary broadcast path.
+	pub(crate) async fn witness_payout(&self, tx: &Transaction) -> anyhow::Result<()> {
+		self.payout_witness.as_ref().context("payout recovery witness unavailable")?.record(&self.db, tx).await
 	}
 
 	/// Abandon a nursery tx: stop following it up and stop warning the

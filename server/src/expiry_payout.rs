@@ -639,6 +639,7 @@ impl Server {
 				// An evicted payout is relayed with the child that pays for it.
 				let payout = self.db.read(async |t| t.get_nursery_raw_tx(txid).await).await?
 					.context("expiry payout missing from the nursery")?;
+				self.tx_nursery.witness_payout(&payout).await?;
 				if let Err(e) = crate::bitcoind::submit_package(&self.bitcoind, &[payout, child.clone()]).await {
 					warn!(%txid, "expiry payout package not accepted: {e:#}");
 				}

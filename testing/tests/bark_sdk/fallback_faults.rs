@@ -14,6 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -725,7 +727,9 @@ async fn fallback_stale_database_restore_refused() {
 	// Preserve the stopped watchman: the old sweeps already confirmed, and no
 	// new external worker is needed to prove the startup safety boundary.
 	if srv.start().await.is_err() {
-		let logs = std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap();
+		let logs = format!("{}\n{}",
+			std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap(),
+			std::fs::read_to_string(ctx.datadir.join("server/stderr.log")).unwrap());
 		assert!(logs.contains("payout recovery witness"), "startup refused for an unrelated reason");
 		assert_eq!(settlement_count(&restored_db).await, 0);
 		println!("stale database refused before any new settlement");
@@ -756,6 +760,214 @@ async fn fallback_stale_database_restore_refused() {
 	assert_paid_once(&ctx, &restored_db, &owners[..2].iter().collect::<Vec<_>>()).await;
 	panic!("payout recovery witness did not refuse a stale database before workers started");
 }
+
+async fn witness_refuses_start(ctx: &TestContext, srv: &Captaind) {
+	assert!(srv.start().await.is_err(), "inconsistent witness must refuse before workers");
+	let logs = format!("{}\n{}",
+		std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap(),
+		std::fs::read_to_string(ctx.datadir.join("server/stderr.log")).unwrap());
+	assert!(logs.contains("payout recovery witness"), "unrelated startup failure: {logs}");
+}
+
+#[tokio::test]
+async fn fallback_witness_identity_and_corruption_refused() {
+	let (ctx, srv, db) = server("fallback_witness_identity_and_corruption_refused").await;
+	let owners = absent_owners(&ctx, &srv).await;
+	expire(&ctx, &db, &owners).await;
+	restart_payouts(&srv, 10_000).await;
+	let payouts = assert_paid_once(&ctx, &db, &owners[..2].iter().collect::<Vec<_>>()).await;
+	srv.stop().await.unwrap();
+	srv.watchmand().stop().await.unwrap();
+	let dir = ctx.datadir.join("server/expiry-payout-witness");
+	let path = dir.join("identity.json");
+	let identity = std::fs::read(&path).unwrap();
+	std::fs::remove_file(&path).unwrap();
+	witness_refuses_start(&ctx, &srv).await;
+	std::fs::write(&path, &identity).unwrap();
+	let mut wrong: serde_json::Value = serde_json::from_slice(&identity).unwrap();
+	wrong["genesis"] = serde_json::json!("another chain");
+	std::fs::write(&path, serde_json::to_vec(&wrong).unwrap()).unwrap();
+	witness_refuses_start(&ctx, &srv).await;
+	std::fs::write(&path, &identity).unwrap();
+	wrong = serde_json::from_slice(&identity).unwrap();
+	wrong["server_pubkey"] = serde_json::json!("another server");
+	std::fs::write(&path, serde_json::to_vec(&wrong).unwrap()).unwrap();
+	witness_refuses_start(&ctx, &srv).await;
+	std::fs::write(&path, &identity).unwrap();
+	let path = dir.join(format!("{}.json", payouts.first().unwrap()));
+	let witness = std::fs::read(&path).unwrap();
+	std::fs::remove_file(&path).unwrap();
+	witness_refuses_start(&ctx, &srv).await;
+	std::fs::write(&path, &witness).unwrap();
+	let history = std::fs::read(dir.join("history")).unwrap();
+	std::fs::remove_file(dir.join("history")).unwrap();
+	witness_refuses_start(&ctx, &srv).await;
+	std::fs::write(dir.join("history"), b"partial").unwrap();
+	witness_refuses_start(&ctx, &srv).await;
+	std::fs::write(dir.join("history"), &history).unwrap();
+	for field in ["corrupt", "tx", "spk", "fee", "missing-settlement"] {
+		let mut changed: serde_json::Value = serde_json::from_slice(&witness).unwrap();
+		match field {
+			"tx" => changed["tx"][0] = serde_json::json!(255),
+			"spk" => changed["settlements"][0]["spk"] = serde_json::json!([0]),
+			"fee" => changed["settlements"][0]["fee_sat"] = serde_json::json!(-1),
+			"missing-settlement" => changed["settlements"] = serde_json::json!([]),
+			_ => {},
+		}
+		let bytes = if field == "corrupt" { b"{truncated".to_vec() } else { serde_json::to_vec(&changed).unwrap() };
+		std::fs::write(&path, bytes).unwrap();
+		witness_refuses_start(&ctx, &srv).await;
+		std::fs::write(&path, &witness).unwrap();
+	}
+	// The original complete witness and DB resume normally, retaining both
+	// original payments and paying the still-unpaid small board exactly once.
+	srv.watchmand().start().await.unwrap();
+	configure_payouts(&srv, 1_000);
+	srv.start().await.unwrap();
+	finish(&ctx, &srv, &db, &owners, false).await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn fallback_witness_io_failure_preserves_committed_payment() {
+	let (ctx, srv, db) = server("fallback_witness_io_failure_preserves_committed_payment").await;
+	let owners = absent_owners(&ctx, &srv).await;
+	expire(&ctx, &db, &owners).await;
+	srv.stop().await.unwrap();
+	let dir = ctx.datadir.join("server/expiry-payout-witness");
+	std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o500)).unwrap();
+	configure_payouts(&srv, 10_000);
+	srv.start().await.unwrap();
+	tokio::time::timeout(Duration::from_secs(90), async {
+		while settlement_count(&db).await != 2 { tokio::time::sleep(Duration::from_millis(200)).await; }
+	}).await.unwrap();
+	let committed = db.read(async |t| Ok(t.query("SELECT DISTINCT txid FROM expiry_settlement", &[]).await?))
+		.await.unwrap().into_iter().map(|r| r.get::<_, String>(0).parse::<Txid>().unwrap()).collect::<BTreeSet<_>>();
+	ctx.generate_blocks(3).await;
+	for id in &committed {
+		assert!(ctx.bitcoind().sync_client().get_raw_transaction_info(id, None).is_err(),
+			"a payout was relayed without its durable witness");
+	}
+	std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+	srv.stop().await.unwrap();
+	srv.start().await.unwrap();
+	let paid = assert_paid_once(&ctx, &db, &owners[..2].iter().collect::<Vec<_>>()).await;
+	assert_eq!(paid, committed, "recover only the existing committed transaction");
+	finish(&ctx, &srv, &db, &owners, true).await;
+}
+
+/// Intercept only this fixture's witness fsync calls. The production daemon
+/// has no fault hook. A process kill exercises retry/rename boundaries; it
+/// does not pretend to simulate power loss or a disk lying about fsync.
+#[cfg(target_os = "linux")]
+async fn witness_fsync_crash(phase: &str) {
+	let name = format!("fallback_witness_crash_{phase}");
+	let (ctx, srv, db) = server(&name).await;
+	let owners = absent_owners(&ctx, &srv).await;
+	expire(&ctx, &db, &owners).await;
+	srv.stop().await.unwrap();
+	let dir = ctx.datadir.join("witness-fault");
+	std::fs::create_dir(&dir).unwrap();
+	let source = dir.join("fsync.c");
+	let library = dir.join("fsync.so");
+	let marker = dir.join("killed");
+	std::fs::write(&source, r#"
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+static void crash_once(void) {
+ const char *marker = getenv("WITNESS_FAULT_MARKER");
+ int fd = marker ? open(marker, O_WRONLY | O_CREAT | O_EXCL, 0600) : -1;
+ if (fd < 0) return;
+ close(fd);
+ kill(getpid(), SIGKILL);
+}
+int fsync(int fd) {
+ int (*real_fsync)(int) = dlsym(RTLD_NEXT, "fsync");
+ char link[64], path[4096]; struct stat st;
+ snprintf(link, sizeof(link), "/proc/self/fd/%d", fd);
+ ssize_t n = readlink(link, path, sizeof(path) - 1);
+ if (n < 0) return real_fsync(fd);
+ path[n] = 0;
+ const char *phase = getenv("WITNESS_FAULT_PHASE");
+ int witness = phase && strstr(path, "/expiry-payout-witness")
+   && !strstr(path, "identity.json") && fstat(fd, &st) == 0;
+ int directory = witness && S_ISDIR(st.st_mode);
+ int history = witness && strstr(path, "/history");
+ if (witness && ((directory && !strcmp(phase, "before-directory"))
+   || (!directory && !strcmp(phase, "before-file"))
+   || (history && !strcmp(phase, "before-history")))) crash_once();
+ int result = real_fsync(fd);
+ if (!result && witness && ((directory && !strcmp(phase, "after-directory"))
+   || (!directory && !strcmp(phase, "after-file"))
+   || (history && !strcmp(phase, "after-history")))) crash_once();
+ return result;
+}
+"#).unwrap();
+	run(Command::new("cc").args(["-shared", "-fPIC", "-o"])
+		.arg(&library).arg(&source).arg("-ldl")).await;
+	let wrapper = dir.join("captaind");
+	let binary = std::env::var("CAPTAIND_EXEC").unwrap();
+	// Fixture paths are local, generated names, never untrusted shell input.
+	for path in [&library, &marker, std::path::Path::new(&binary)] {
+		assert!(!path.to_str().unwrap().contains('\''));
+	}
+	std::fs::write(&wrapper, format!(
+		"#!/bin/sh\nexport LD_PRELOAD='{}' WITNESS_FAULT_MARKER='{}' WITNESS_FAULT_PHASE='{phase}'\nexec '{binary}' \"$@\"\n",
+		library.display(), marker.display(),
+	)).unwrap();
+	std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
+	srv.set_exec(Some(wrapper));
+	configure_payouts(&srv, 10_000);
+	// The fault may happen during startup's first nursery/payout tick.
+	let _ = srv.start().await;
+	tokio::time::timeout(Duration::from_secs(90), async {
+		while !marker.exists() { tokio::time::sleep(Duration::from_millis(100)).await; }
+	}).await.expect("the daemon must reach the declared witness fsync boundary");
+	let _ = srv.stop().await;
+	assert_eq!(settlement_count(&db).await, 2, "the payout committed before its witness write");
+	let committed = db.read(async |t| Ok(t.query("SELECT DISTINCT txid FROM expiry_settlement", &[]).await?))
+		.await.unwrap().into_iter().map(|r| r.get::<_, String>(0).parse::<Txid>().unwrap()).collect::<BTreeSet<_>>();
+	for id in &committed {
+		assert!(ctx.bitcoind().sync_client().get_raw_transaction_info(id, None).is_err(),
+			"broadcast preceded the durable witness boundary");
+	}
+	srv.set_exec(None);
+	srv.start().await.unwrap();
+	let paid = assert_paid_once(&ctx, &db, &owners[..2].iter().collect::<Vec<_>>()).await;
+	assert_eq!(paid, committed, "recovery retries only the original committed payout");
+	finish(&ctx, &srv, &db, &owners, true).await;
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn fallback_witness_crash_before_file() { witness_fsync_crash("before-file").await; }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn fallback_witness_crash_after_file() { witness_fsync_crash("after-file").await; }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn fallback_witness_crash_before_directory() { witness_fsync_crash("before-directory").await; }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn fallback_witness_crash_after_directory() { witness_fsync_crash("after-directory").await; }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn fallback_witness_crash_before_history() { witness_fsync_crash("before-history").await; }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn fallback_witness_crash_after_history() { witness_fsync_crash("after-history").await; }
 
 /// A physical base backup taken before any owner existed, plus continuously
 /// archived WAL, restored to a new cluster after a payout: wallet records,

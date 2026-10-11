@@ -245,6 +245,31 @@ replay on a separate volume. An old snapshot with missing WAL is not a supported
 restore. Preserve nursery history: settlement rows depend on it, enforced by a foreign key.
 Keep seed backups offline before a mainnet deployment.
 
+Captaind also keeps `expiry-payout-witness/` in its server data directory, outside
+the PostgreSQL restore volume. Before it relays a payout, it durably records the
+raw transaction and its immutable settlement IDs, scripts and recipient fees.
+The append-only `history` index detects a missing transaction file. Startup
+checks this history before any wallet or payout, round or Lightning worker runs.
+A restored database must contain every witnessed transaction and settlement
+unchanged. The ordinary nursery relay and CPFP parent-package relay both enforce
+this requirement. A witness write failure retains the committed nursery
+transaction; it does not authorize another payout.
+
+Back up this directory independently with the server identity. Preserve its
+latest history during a database restore. Never replace it with an older copy
+to make startup pass, delete a record, or initialize empty history on an existing
+server. New server creation initializes it. Existing installations need an
+explicit reconciliation of complete payment history before this upgrade; startup
+does not trust the current database to initialize a missing witness automatically.
+
+This check protects a database-only restore with preserved witness history. It
+cannot detect rollback of both the witness and the database together. It also
+cannot prove that an arbitrary old snapshot retains unpaid obligations created
+after that snapshot. Complete WAL recovery remains required. Corrupt or torn
+witness history refuses startup; restore the independently preserved complete
+history or reconcile it explicitly. Process-crash tests around file, directory
+and index fsync boundaries do not replace storage durability requirements.
+
 Monitor `expiry payout tick summary` for success, duration, candidates/waiting/paid,
 real-estimate warnings, nursery warnings and rounds-wallet
 funding. A growing eligible backlog requires checking its exact-path sweep depth,
@@ -260,6 +285,7 @@ group net minimum and confirmed funding. The task keeps entitlements while those
 | Unfinished delegated exchange | Originals are swept, or the documented cancellation conditions hold; inspect participation/forfeit state and the cancellation audit |
 | Net minimum, dust, weight or confirmed funding | A valid affordable transaction can be built; wait for fees/confirmations or restore rounds-wallet funding; the batch splitter continues to other eligible coins |
 | Unknown COMMIT outcome | Captaind exited; restore database service and restart it, startup waits for the original COMMIT and reapplies a committed payout |
+| Witness write failure | Restore disk space, permissions and complete witness history; retain the existing committed nursery transaction, never construct another payout |
 
 For a committed transaction missing from the mempool, check the nursery and Core's
 rejection and restore funding/service conditions; the nursery rebroadcasts the

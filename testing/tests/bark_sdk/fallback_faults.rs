@@ -676,6 +676,87 @@ async fn table_digest(db: &Db, table: &str) -> (i64, String) {
 const RESTORED_TABLES: [&str; 9] = ["fallback_record", "key_link", "expiry_settlement", "pending_board",
 	"nursery_tx", "vtxo", "htlc_vtxo", "wallet_changeset", "expiry_cancelled_participation"];
 
+/// Restore only PostgreSQL to before a confirmed payout. The owners and their
+/// swept backing already existed in this snapshot; neither the chain nor the
+/// captaind data directory is rolled back. Starting payout workers must refuse
+/// this history instead of forgetting an already paid entitlement.
+#[tokio::test]
+async fn fallback_stale_database_restore_refused() {
+	let (ctx, srv, db) = server("fallback_stale_database_restore_refused").await;
+	let owners = absent_owners(&ctx, &srv).await;
+	expire(&ctx, &db, &owners).await;
+	srv.stop().await.unwrap();
+	srv.watchmand().stop().await.unwrap();
+	assert_eq!(settlement_count(&db).await, 0);
+	let original = srv.config().postgres.clone();
+	let backup = ctx.datadir.join("before-payout.dump");
+	run(Command::new(pg_bin("pg_dump")).args([
+		"-h", "127.0.0.1", "-p", &original.port.to_string(), "-Fc",
+		"-f", backup.to_str().unwrap(), &original.name,
+	])).await;
+	let mut before = BTreeMap::new();
+	for table in RESTORED_TABLES { before.insert(table, table_digest(&db, table).await); }
+	assert!(before["fallback_record"].0 > 0, "the snapshot must contain owner bindings");
+	assert!(before["pending_board"].0 > 0, "the snapshot must contain unpaid boards");
+	srv.watchmand().start().await.unwrap();
+	configure_payouts(&srv, 10_000);
+	srv.start().await.unwrap();
+	let first = assert_paid_once(&ctx, &db, &owners[..2].iter().collect::<Vec<_>>()).await;
+	println!("confirmed original payouts before stale restoration: {first:?}");
+	srv.stop().await.unwrap();
+	srv.watchmand().stop().await.unwrap();
+
+	let restored_name = format!("{}-stale", original.name);
+	run(Command::new(pg_bin("createdb")).args([
+		"-h", "127.0.0.1", "-p", &original.port.to_string(), "-T", "template0", &restored_name,
+	])).await;
+	run(Command::new(pg_bin("pg_restore")).args([
+		"-h", "127.0.0.1", "-p", &original.port.to_string(), "--exit-on-error",
+		"-d", &restored_name, backup.to_str().unwrap(),
+	])).await;
+	let mut restored_config = original;
+	restored_config.name = restored_name.clone();
+	let restored_db = Db::connect(&restored_config).await.unwrap();
+	for table in RESTORED_TABLES {
+		assert_eq!(table_digest(&restored_db, table).await, before[table], "{table} restored exactly");
+	}
+	srv.config_mut().postgres.name = restored_name.clone();
+	srv.watchmand().config_mut().postgres.name = restored_name;
+	// Preserve the stopped watchman: the old sweeps already confirmed, and no
+	// new external worker is needed to prove the startup safety boundary.
+	if srv.start().await.is_err() {
+		let logs = std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap();
+		assert!(logs.contains("payout recovery witness"), "startup refused for an unrelated reason");
+		assert_eq!(settlement_count(&restored_db).await, 0);
+		println!("stale database refused before any new settlement");
+		return;
+	}
+	let ids = owners[..2].iter().flat_map(|o| o.ids.iter().cloned()).collect::<Vec<_>>();
+	let second = tokio::time::timeout(Duration::from_secs(90), async {
+		loop {
+			let rows = restored_db.read(async |t| Ok(t.query(
+				"SELECT DISTINCT txid FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+			).await?)).await.unwrap();
+			if !rows.is_empty() {
+				break rows.iter().map(|r| r.get::<_, String>(0).parse::<Txid>().unwrap()).collect::<BTreeSet<_>>();
+			}
+			ctx.generate_blocks(1).await;
+			tokio::time::sleep(Duration::from_secs(1)).await;
+		}
+	}).await.expect("unsafe startup neither refused nor made the forgotten obligation payable");
+	ctx.generate_blocks(2).await;
+	let core = ctx.bitcoind().sync_client();
+	for txid in first.iter().chain(second.iter()) {
+		let info = core.get_raw_transaction_info(txid, None).unwrap();
+		println!("stale-restore payout {txid}: confirmations={:?}", info.confirmations);
+	}
+	println!("restored database payout ids: {second:?}; original confirmed ids: {first:?}");
+	// This checks both the restored DB and actual chain outputs. On the unsafe
+	// parent it fails if either an additional output or a spent-input retry exists.
+	assert_paid_once(&ctx, &restored_db, &owners[..2].iter().collect::<Vec<_>>()).await;
+	panic!("payout recovery witness did not refuse a stale database before workers started");
+}
+
 /// A physical base backup taken before any owner existed, plus continuously
 /// archived WAL, restored to a new cluster after a payout: wallet records,
 /// key links, paid scripts, pending boards and the nursery's raw payout come

@@ -1116,6 +1116,68 @@ async fn hold_state(lightning: &LightningPaymentSetup, payment_hash: PaymentHash
 	invoices[0].state()
 }
 
+/// Refusing an unlinked forwarding destination must happen before collecting
+/// the payer's payment. The already-granted HTLCs are not claim outputs.
+#[tokio::test]
+async fn fallback_edge_unlinked_claim_refuses_before_collection() {
+	let name = "fallback_edge_unlinked_claim_refuses_before_collection";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(1000);
+			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
+		}).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await.unwrap();
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let forwarder = ctx.bark_sdk("forwarder", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	forwarder.stop_daemon_wait().await.unwrap();
+	let receive = held_receive(&lightning, &srv, &db).await;
+	let (keypair, granted) = prepare_claim(&srv, &forwarder, &receive).await.unwrap();
+	let unlinked = bitcoin::secp256k1::Keypair::from_seckey_slice(
+		&bitcoin::secp256k1::Secp256k1::new(), &[77; 32],
+	).unwrap().public_key();
+	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
+		granted.clone().into_iter(), ark::VtxoPolicy::new_pubkey(unlinked),
+	).unwrap().generate_user_nonces(&[keypair]).unwrap();
+	let err = srv.get_public_rpc().await.claim_lightning_receive(protos::ClaimLightningReceiveRequest {
+		payment_hash: receive.payment_hash.to_vec(),
+		payment_preimage: receive.preimage.as_ref().to_vec(),
+		cosign_request: Some(protos::ArkoorPackageCosignRequest::from(builder.cosign_request())),
+	}).await.expect_err("an unlinked destination must be refused");
+	assert!(err.message().contains("fallback"), "unexpected refusal: {err}");
+	let recorded = db.read(async |t| t.get_htlc_settlement_by_payment_hash(receive.payment_hash).await)
+		.await.unwrap();
+	let state = hold_state(&lightning, receive.payment_hash).await;
+	println!("unlinked destination: refusal={err}; preimage_recorded={}; hold_state={state:?}", recorded.is_some());
+	assert!(recorded.is_none(), "refusing a destination must not authorize collection of the payer's funds");
+	assert_eq!(state, hold::InvoiceState::Accepted);
+	let outputs = db.read(async |t| Ok(t.query(
+		"SELECT vtxo FROM vtxo WHERE policy_type='pubkey'", &[],
+	).await?)).await.unwrap();
+	assert!(outputs.iter().all(|r| Vtxo::<Full>::deserialize(&r.get::<_, Vec<u8>>(0)).unwrap().user_pubkey() != unlinked),
+		"no claim output may be created for an unlinked destination");
+	drop(forwarder);
+	let mut paying = receive.paying;
+	let result = tokio::time::timeout(Duration::from_secs(180), async {
+		loop {
+			tokio::select! {
+				result = &mut paying => break result,
+				_ = tokio::time::sleep(Duration::from_secs(1)) => { ctx.generate_blocks(1).await; },
+			}
+		}
+	}).await.expect("the hold plugin must refund the external payer before its HTLC deadline").unwrap();
+	result.expect_err("a refused forwarding destination must not collect the payment");
+	assert_eq!(hold_state(&lightning, receive.payment_hash).await, hold::InvoiceState::Cancelled);
+	expire_and_confirm_sweeps(&ctx, &db, &granted).await;
+	enable_payouts(&ctx, &srv).await;
+	let ids = granted.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	assert_no_payout(&ctx, &db, &ids, &ScriptBuf::new_p2tr(
+		&bitcoin::secp256k1::Secp256k1::new(), unlinked.x_only_public_key().0, None,
+	)).await;
+}
+
 /// The server granted HTLC-recv vtxos for a receive, so it must collect the
 /// incoming HTLCs. The invoice expiring before the recipient claims must not
 /// make the server fail them back.

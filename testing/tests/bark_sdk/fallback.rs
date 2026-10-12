@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -1433,4 +1434,186 @@ async fn wait_expiry_race_lock(db: &Db, advisory: bool) {
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("operation must block on the declared database lock");
+}
+
+#[tokio::test]
+async fn fallback_edge_same_seed_two_devices_converge() {
+	let name = "fallback_edge_same_seed_two_devices_converge";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(|c| {
+		c.vtxo_lifetime = BlockDelta::new(200);
+	}).create().await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let first = ctx.bark_sdk("device_a", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	let second = ctx.bark_sdk("device_b", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	first.stop_daemon_wait().await.unwrap();
+	second.stop_daemon_wait().await.unwrap();
+	let before = first.fallback_destination().await.unwrap();
+	tokio::join!(Box::pin(first.sync()), Box::pin(second.sync()));
+	let a = first.new_address().await.unwrap();
+	let b = second.new_address().await.unwrap();
+	let payer = ctx.bark_sdk("payer", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(200_000)).create().await;
+	payer.stop_daemon_wait().await.unwrap();
+	payer.send_arkoor_payment(&a, sat(30_000)).await.unwrap();
+	payer.send_arkoor_payment(&b, sat(40_000)).await.unwrap();
+	tokio::join!(Box::pin(first.sync()), Box::pin(second.sync()));
+	let record_a = first.fallback_destination().await.unwrap();
+	let record_b = second.fallback_destination().await.unwrap();
+	assert_eq!(record_a, record_b);
+	assert!(record_a.seq >= before.seq);
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mailbox = first.mailbox_keypair().public_key().serialize().to_vec();
+	assert_eq!(mailbox, second.mailbox_keypair().public_key().serialize().to_vec());
+	for address in [&a, &b] {
+		let key = address.policy().user_pubkey().serialize().to_vec();
+		let linked = db.read(async |t| Ok(t.query_one(
+			"SELECT mailbox_pk FROM key_link WHERE user_pubkey=$1", &[&key],
+		).await?.get::<_, Vec<u8>>(0))).await.unwrap();
+		assert_eq!(linked, mailbox);
+	}
+	let mut coins = Vec::new();
+	for coin in first.spendable_vtxos().await.unwrap() {
+		coins.push(first.get_full_vtxo(coin.id()).await.unwrap());
+	}
+	assert_eq!(coins.iter().map(|v| v.amount().to_sat()).sum::<u64>(), 70_000);
+	assert_eq!(second.spendable_vtxos().await.unwrap().iter().map(|v| v.id()).collect::<BTreeSet<_>>(),
+		coins.iter().map(|v| v.id()).collect::<BTreeSet<_>>());
+	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	println!("two devices: address_key_reused={}, same_mailbox=true, same_spendable_view=true, seq={}",
+		a.policy().user_pubkey() == b.policy().user_pubkey(), record_a.seq);
+	drop(first);
+	drop(second);
+	drop(payer);
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &coins).await;
+	super::fallback_lightning::enable_payouts(&ctx, &srv).await;
+	let (payout, _) = super::fallback_lightning::wait_and_reconcile_payout(
+		&ctx, &db, &ids, &record_a.spk, 70_000,
+	).await;
+	super::fallback_lightning::restore_and_spend(&ctx, &mnemonic, payout).await;
+}
+
+#[tokio::test]
+async fn fallback_edge_restore_while_payout_unconfirmed() {
+	let name = "fallback_edge_restore_while_payout_unconfirmed";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(|c| {
+		c.vtxo_lifetime = BlockDelta::new(100);
+	}).create().await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let original = ctx.bark_sdk("original", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(30_000)).boarded(sat(40_000)).create().await;
+	original.stop_daemon_wait().await.unwrap();
+	let mut coins = Vec::new();
+	for coin in original.spendable_vtxos().await.unwrap() {
+		coins.push(original.get_full_vtxo(coin.id()).await.unwrap());
+	}
+	let record = original.fallback_destination().await.unwrap();
+	original.sync_onchain().await.unwrap();
+	let onchain_before = original.onchain().unwrap().read().await.balance().await;
+	let (_, original_next) = original.peek_next_keypair().await.unwrap();
+	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	drop(original);
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &coins).await;
+	super::fallback_lightning::enable_payouts(&ctx, &srv).await;
+	let txid = tokio::time::timeout(Duration::from_secs(60), async {
+		loop {
+			let rows = db.read(async |t| Ok(t.query(
+				"SELECT txid FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+			).await?)).await.unwrap();
+			if rows.len() == ids.len() {
+				let txid = rows[0].get::<_, String>(0).parse::<Txid>().unwrap();
+				if ctx.bitcoind().sync_client().get_raw_mempool().unwrap().contains(&txid) { break txid; }
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}).await.expect("payout commits and is broadcast without mining another block");
+	let tip = ctx.bitcoind().sync_client().get_block_count().unwrap();
+	let restored = ctx.bark_sdk("restored", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	restored.stop_daemon_wait().await.unwrap();
+	assert_eq!(ctx.bitcoind().sync_client().get_block_count().unwrap(), tip, "restore happened before payout confirmation");
+	assert!(restored.spendable_vtxos().await.unwrap().is_empty());
+	let (_, next) = restored.peek_next_keypair().await.unwrap();
+	assert!(next >= original_next, "restored index {next} must not reuse a funded key before {original_next}");
+	let (new_address, index) = restored.new_address_with_index().await.unwrap();
+	assert!(index >= original_next);
+	assert!(coins.iter().all(|v| v.user_pubkey() != new_address.policy().user_pubkey()));
+	ctx.generate_blocks(1).await;
+	restored.sync().await;
+	restored.sync_onchain().await.unwrap();
+	assert!(restored.spendable_vtxos().await.unwrap().is_empty());
+	assert!(restored.pending_round_state_ids().await.unwrap().is_empty(), "paid coins must not enter a refresh");
+	let tx: Transaction = ctx.bitcoind().sync_client().get_raw_transaction(&txid, None).unwrap();
+	let (vout, output) = tx.output.iter().enumerate().find(|(_, o)| o.script_pubkey == record.spk).unwrap();
+	assert_eq!(restored.onchain().unwrap().read().await.balance().await, onchain_before + output.value,
+		"the restore sees the payout and the original board funding change");
+	let count = db.read(async |t| Ok(t.query_one(
+		"SELECT count(DISTINCT txid) FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(count, 1);
+	drop(restored);
+	super::fallback_lightning::restore_and_spend(&ctx, &mnemonic, OutPoint { txid, vout: vout as u32 }).await;
+}
+
+#[tokio::test]
+async fn fallback_edge_all_eight_offline_addresses_receive_then_return() {
+	let name = "fallback_edge_all_eight_offline_addresses_receive_then_return";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(|c| {
+		c.vtxo_lifetime = BlockDelta::new(300);
+	}).create().await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let wallet = ctx.bark_sdk("recipient", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	wallet.sync().await;
+	let record = wallet.fallback_destination().await.unwrap();
+	let mut config = wallet.config().clone();
+	srv.stop().await.unwrap();
+	let mut addresses = Vec::new();
+	for _ in 0..8 { addresses.push(wallet.new_address().await.unwrap()); }
+	let error = tokio::time::timeout(Duration::from_secs(15), wallet.new_address()).await.unwrap().unwrap_err();
+	assert!(format!("{error:#}").contains("no linked keys available"));
+	drop(wallet);
+	srv.start().await.unwrap();
+	let mut builder = ctx.bark_sdk("payer", &srv).cfg(|c| c.daemon_manual_sync = true);
+	for _ in 0..8 { builder = builder.boarded(sat(20_000)); }
+	let payer = builder.create().await;
+	payer.stop_daemon_wait().await.unwrap();
+	for address in &addresses { payer.send_arkoor_payment(address, sat(20_000)).await.unwrap(); }
+	drop(payer);
+	config.server_address = srv.ark_url();
+	let wallet = bark::Wallet::open(Network::Regtest,
+		bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic), config,
+		bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("recipient")), run_daemon: false, ..Default::default() },
+	).await.unwrap();
+	wallet.sync_mailbox().await.unwrap();
+	let mut coins = Vec::new();
+	for coin in wallet.spendable_vtxos().await.unwrap() {
+		coins.push(wallet.get_full_vtxo(coin.id()).await.unwrap());
+	}
+	assert_eq!(coins.len(), 8);
+	assert_eq!(coins.iter().map(|v| v.amount().to_sat()).sum::<u64>(), 160_000);
+	let (next, index) = wallet.new_address_with_index().await.unwrap();
+	assert!(index >= 8);
+	assert!(addresses.iter().all(|a| a.policy().user_pubkey() != next.policy().user_pubkey()));
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mailbox = wallet.mailbox_keypair().public_key().serialize().to_vec();
+	for coin in &coins {
+		let key = coin.user_pubkey().serialize().to_vec();
+		let owner = db.read(async |t| Ok(t.query_one(
+			"SELECT mailbox_pk FROM key_link WHERE user_pubkey=$1", &[&key],
+		).await?.get::<_, Vec<u8>>(0))).await.unwrap();
+		assert_eq!(owner, mailbox);
+	}
+	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	drop(wallet);
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &coins).await;
+	super::fallback_lightning::enable_payouts(&ctx, &srv).await;
+	let (payout, _) = super::fallback_lightning::wait_and_reconcile_payout(&ctx, &db, &ids, &record.spk, 160_000).await;
+	super::fallback_lightning::restore_and_spend(&ctx, &mnemonic, payout).await;
 }

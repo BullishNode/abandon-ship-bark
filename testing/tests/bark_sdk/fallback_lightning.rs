@@ -190,6 +190,20 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 }
 
 async fn interrupted_receive_with(outcome: ReceiveOutcome, fault: ReturnFault) {
+	interrupted_receive_for(outcome, fault, false).await;
+}
+
+#[tokio::test]
+async fn fallback_edge_forwarder_grant_without_preimage_refunds_payer() {
+	interrupted_receive_for(ReceiveOutcome::UndisclosedUntilHoldDeadline, ReturnFault::None, true).await;
+}
+
+#[tokio::test]
+async fn fallback_edge_forwarder_collected_unclaimed_grant_pays_forwarder() {
+	interrupted_receive_for(ReceiveOutcome::Collected, ReturnFault::None, true).await;
+}
+
+async fn interrupted_receive_for(outcome: ReceiveOutcome, fault: ReturnFault, forwarded: bool) {
 	let name = match outcome {
 		ReceiveOutcome::Collected => "fallback_settled_lightning_receive_without_claim_commit",
 		ReceiveOutcome::Undisclosed => "fallback_unsettled_lightning_receive_is_not_paid",
@@ -205,6 +219,10 @@ async fn interrupted_receive_with(outcome: ReceiveOutcome, fault: ReturnFault) {
 		ReturnFault::ServerUnreachable => "fallback_paid_lightning_receive_return_waits_for_unreachable_server",
 		ReturnFault::ClaimRefused => "fallback_paid_lightning_receive_return_survives_other_claim_refusal",
 	};
+	let name = if forwarded {
+		if outcome == ReceiveOutcome::Collected { "fallback_edge_forwarder_collected_unclaimed_grant_pays_forwarder" }
+		else { "fallback_edge_forwarder_grant_without_preimage_refunds_payer" }
+	} else { name };
 	let disclosed = !matches!(outcome, ReceiveOutcome::Undisclosed | ReceiveOutcome::UndisclosedUntilHoldDeadline);
 	let returning = matches!(outcome, ReceiveOutcome::CollectedReturnsAtHtlcsReady
 		| ReceiveOutcome::CollectedReturnsAtPreimageRevealed | ReceiveOutcome::ClaimCommittedReplyLost);
@@ -224,6 +242,15 @@ async fn interrupted_receive_with(outcome: ReceiveOutcome, fault: ReturnFault) {
 		.expect("the initially funded pool must become ready");
 	lightning.sync().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let destination = if forwarded {
+		let recipient = ctx.bark_sdk("offline_destination", &srv)
+			.cfg(|c| c.daemon_manual_sync = true).create().await;
+		recipient.stop_daemon_wait().await.unwrap();
+		let address = recipient.new_address().await.unwrap();
+		let record = recipient.fallback_destination().await.unwrap();
+		drop(recipient);
+		Some((address, record))
+	} else { None };
 	let reached = Arc::new(Notify::new());
 	let claim_request = Arc::new(Mutex::new(None));
 	let fail_incoming = match outcome {
@@ -239,7 +266,9 @@ async fn interrupted_receive_with(outcome: ReceiveOutcome, fault: ReturnFault) {
 		.cfg(|c| c.daemon_manual_sync = true).create().await;
 	wallet.stop_daemon_wait().await.unwrap();
 	let record = wallet.fallback_destination().await.unwrap();
-	let invoice = wallet.bolt11_invoice(sat(100_000), None, None).await.unwrap();
+	let invoice = if let Some((address, _)) = &destination {
+		wallet.bolt11_invoice_for_address(sat(100_000), address.clone(), None, None).await.unwrap()
+	} else { wallet.bolt11_invoice(sat(100_000), None, None).await.unwrap() };
 	let payment_hash = PaymentHash::from(&invoice);
 	let external = lightning.external;
 	let paying = tokio::spawn(async move { external.try_pay_bolt11(invoice.to_string()).await });
@@ -415,6 +444,12 @@ async fn interrupted_receive_with(outcome: ReceiveOutcome, fault: ReturnFault) {
 	}
 	let paid_ids = if claim_committed { claim_outputs.clone() } else { ids.clone() };
 	let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &paid_ids, &record.spk, principal).await;
+	if let Some((_, destination_record)) = &destination {
+		let paid = db.read(async |t| Ok(t.query_one(
+			"SELECT count(*) FROM expiry_settlement WHERE spk=$1", &[&destination_record.spk.as_bytes()],
+		).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(paid, 0, "without a committed forwarding claim the recipient does not own the granted coins");
+	}
 	let mut late_claim = None;
 	if claim_committed {
 		let settled_htlcs = db.read(async |t| Ok(t.query_one(
@@ -1120,7 +1155,15 @@ async fn hold_state(lightning: &LightningPaymentSetup, payment_hash: PaymentHash
 /// the payer's payment. The already-granted HTLCs are not claim outputs.
 #[tokio::test]
 async fn fallback_edge_unlinked_claim_refuses_before_collection() {
-	let name = "fallback_edge_unlinked_claim_refuses_before_collection";
+	unlinked_forwarding_claim("fallback_edge_unlinked_claim_refuses_before_collection", false).await;
+}
+
+#[tokio::test]
+async fn fallback_edge_unlinked_invoice_for_address_refuses_before_collection() {
+	unlinked_forwarding_claim("fallback_edge_unlinked_invoice_for_address_refuses_before_collection", true).await;
+}
+
+async fn unlinked_forwarding_claim(name: &str, invoice_for_address: bool) {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
@@ -1133,11 +1176,38 @@ async fn fallback_edge_unlinked_claim_refuses_before_collection() {
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let forwarder = ctx.bark_sdk("forwarder", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
 	forwarder.stop_daemon_wait().await.unwrap();
-	let receive = held_receive(&lightning, &srv, &db).await;
-	let (keypair, granted) = prepare_claim(&srv, &forwarder, &receive).await.unwrap();
-	let unlinked = bitcoin::secp256k1::Keypair::from_seckey_slice(
+	let unlinked_key = bitcoin::secp256k1::Keypair::from_seckey_slice(
 		&bitcoin::secp256k1::Secp256k1::new(), &[77; 32],
-	).unwrap().public_key();
+	).unwrap();
+	let unlinked = unlinked_key.public_key();
+	let receive = if invoice_for_address {
+		let info = forwarder.require_ark_info().await.unwrap();
+		let address = ark::Address::builder().testnet(true).server_pubkey(info.server_pubkey)
+			.pubkey_policy(unlinked).mailbox(info.mailbox_pubkey, forwarder.mailbox_identifier(), &unlinked_key)
+			.unwrap().into_address().unwrap();
+		let invoice = forwarder.bolt11_invoice_for_address(sat(100_000), address, None, None).await.unwrap();
+		let payment_hash = PaymentHash::from(&invoice);
+		let preimage = forwarder.lightning_receive_checkpoint(payment_hash).await.unwrap().unwrap().payment_preimage;
+		lightning.external.wait_for_block_sync().await;
+		let mut payer = lightning.external.grpc_client().await;
+		let paying = tokio::spawn(async move {
+			payer.xpay(cln_rpc::XpayRequest {
+				invstring: invoice.to_string(), amount_msat: None, maxfee: None, layers: vec![], retry_for: None,
+				partial_msat: None, maxdelay: None, payer_note: None, label: None, localinvreqid: None,
+				dev_use_shadow: None,
+			}).await.map(|_| ()).map_err(anyhow::Error::from)
+		});
+		tokio::time::timeout(Duration::from_secs(30), async {
+			loop {
+				let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+					.await.unwrap().unwrap();
+				if sub.status == server::database::ln::LightningHtlcSubscriptionStatus::Accepted { break; }
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}).await.unwrap();
+		HeldReceive { preimage, payment_hash, paying }
+	} else { held_receive(&lightning, &srv, &db).await };
+	let (keypair, granted) = prepare_claim(&srv, &forwarder, &receive).await.unwrap();
 	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
 		granted.clone().into_iter(), ark::VtxoPolicy::new_pubkey(unlinked),
 	).unwrap().generate_user_nonces(&[keypair]).unwrap();
@@ -2135,7 +2205,7 @@ pub(crate) async fn assert_no_payout(ctx: &TestContext, db: &Db, ids: &[String],
 
 /// Wait for the payout, then reconcile its single output and the actual
 /// miner fee from the confirmed transaction's real input values.
-async fn wait_and_reconcile_payout(
+pub(crate) async fn wait_and_reconcile_payout(
 	ctx: &TestContext, db: &Db, ids: &[String], destination: &ScriptBuf, principal: u64,
 ) -> (OutPoint, u64) {
 	let rows = tokio::time::timeout(Duration::from_secs(90), async {
@@ -2210,7 +2280,7 @@ pub(crate) fn assert_change_pays_own_weight(tx: &Transaction, tx_fee: u64, recip
 
 /// A plain BIP84 wallet built from the mnemonic alone, with the standard
 /// gap of 20 and the chain, discovers the payout and spends it.
-async fn restore_and_spend(ctx: &TestContext, mnemonic: &bip39::Mnemonic, payout: OutPoint) -> Txid {
+pub(crate) async fn restore_and_spend(ctx: &TestContext, mnemonic: &bip39::Mnemonic, payout: OutPoint) -> Txid {
 	let core = ctx.bitcoind().sync_client();
 	let master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
 	let mut restored = bdk_wallet::Wallet::create(
@@ -2238,4 +2308,193 @@ async fn restore_and_spend(ctx: &TestContext, mnemonic: &bip39::Mnemonic, payout
 	assert!(core.get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().is_none());
 	assert_eq!(ctx.bitcoind().get_received_by_address(&destination), spend.output[0].value);
 	spend_txid
+}
+
+#[tokio::test]
+async fn fallback_edge_forwarded_receive_silent_recipient() {
+	forwarded_absence("fallback_edge_forwarded_receive_silent_recipient", 1).await;
+}
+
+#[tokio::test]
+async fn fallback_edge_reused_address_groups_forwarded_receives() {
+	forwarded_absence("fallback_edge_reused_address_groups_forwarded_receives", 4).await;
+}
+
+async fn forwarded_absence(name: &str, invoices: usize) {
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(1000);
+			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
+		}).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await.unwrap();
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let recipient = ctx.bark_sdk("recipient", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	recipient.stop_daemon_wait().await.unwrap();
+	let address = recipient.new_address().await.unwrap();
+	let record = recipient.fallback_destination().await.unwrap();
+	drop(recipient); // No recipient RPC until seed-only on-chain recovery.
+	let forwarder = ctx.bark_sdk("forwarder", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	forwarder.stop_daemon_wait().await.unwrap();
+	let forwarder_record = forwarder.fallback_destination().await.unwrap();
+	assert_ne!(record.spk, forwarder_record.spk);
+	for _ in 0..invoices {
+		let invoice = forwarder.bolt11_invoice_for_address(sat(100_000), address.clone(), None, None).await.unwrap();
+		let payment_hash = PaymentHash::from(&invoice);
+		lightning.external.wait_for_block_sync().await;
+		let mut payer = lightning.external.grpc_client().await;
+		let paying = tokio::spawn(async move {
+			payer.xpay(cln_rpc::XpayRequest {
+				invstring: invoice.to_string(), amount_msat: None, maxfee: None, layers: vec![], retry_for: None,
+				partial_msat: None, maxdelay: None, payer_note: None, label: None, localinvreqid: None,
+				dev_use_shadow: None,
+			}).await
+		});
+		tokio::time::timeout(Duration::from_secs(60), async {
+			loop {
+				let _ = forwarder.try_claim_lightning_receive(payment_hash, false).await;
+				if matches!(forwarder.lightning_receive_state(payment_hash).await.unwrap(),
+					bark::actions::lightning::receive::LightningReceiveState::Settled(_)) { break; }
+				tokio::time::sleep(Duration::from_millis(200)).await;
+			}
+		}).await.expect("the forwarding wallet must claim and deliver while its recipient stays silent");
+		tokio::time::timeout(Duration::from_secs(30), paying).await.unwrap().unwrap().unwrap();
+		assert_eq!(hold_state(&lightning, payment_hash).await, hold::InvoiceState::Paid);
+	}
+	drop(forwarder);
+	let rows = db.read(async |t| Ok(t.query("SELECT vtxo FROM vtxo WHERE policy_type='pubkey'", &[]).await?))
+		.await.unwrap();
+	let coins = rows.iter().map(|r| Vtxo::<Full>::deserialize(&r.get::<_, Vec<u8>>(0)).unwrap())
+		.filter(|v| v.user_pubkey() == address.policy().user_pubkey()).collect::<Vec<_>>();
+	assert!(coins.len() >= invoices);
+	let principal = coins.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+	assert_eq!(principal, 100_000 * invoices as u64);
+	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let delivered = db.read(async |t| Ok(t.query_one(
+		"SELECT count(DISTINCT vtxo_id) FROM mailbox WHERE mailbox_type='arkoor-receive' AND vtxo_id=ANY($1)", &[&ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(delivered as usize, coins.len(), "every forwarded coin was delivered to the silent recipient");
+	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
+	enable_payouts(&ctx, &srv).await;
+	let (payout, fee) = wait_and_reconcile_payout(&ctx, &db, &ids, &record.spk, principal).await;
+	let wrong = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_settlement WHERE spk=$1", &[&forwarder_record.spk.as_bytes()],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(wrong, 0, "none of the recipient's funds belongs to the forwarding wallet");
+	restore_and_spend(&ctx, &mnemonic, payout).await;
+	println!("forwarded absence: invoices={invoices}, coins={}, gross={principal}, recipient_fee={fee}, payout={payout}", coins.len());
+}
+
+#[derive(Clone)]
+struct PauseForwardedPost {
+	reached: Arc<Notify>,
+	request: Arc<Mutex<Option<protos::mailbox_server::PostArkoorMessageRequest>>>,
+	resume: Arc<AtomicBool>,
+}
+
+#[async_trait::async_trait]
+impl MailboxRpcProxy for PauseForwardedPost {
+	async fn post_arkoor_message(
+		&self, upstream: &mut MailboxClient, req: protos::mailbox_server::PostArkoorMessageRequest,
+	) -> Result<protos::core::Empty, tonic::Status> {
+		if self.resume.load(Ordering::SeqCst) {
+			return upstream.post_arkoor_message(req).await.map(|r| r.into_inner());
+		}
+		*self.request.lock().unwrap() = Some(req);
+		self.reached.notify_one();
+		std::future::pending().await
+	}
+}
+
+/// Kill a real barkd at the mailbox boundary, after signed claim registration.
+/// Restart it only after the recipient's confirmed payout.
+#[tokio::test]
+async fn fallback_edge_forwarder_sigkill_before_mailbox_delivery() {
+	let name = "fallback_edge_forwarder_sigkill_before_mailbox_delivery";
+	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(1000);
+			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
+		}).create().await;
+	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await.unwrap();
+	lightning.sync().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let recipient = ctx.bark_sdk("recipient", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	recipient.stop_daemon_wait().await.unwrap();
+	let address = recipient.new_address().await.unwrap();
+	let record = recipient.fallback_destination().await.unwrap();
+	drop(recipient);
+	let reached = Arc::new(Notify::new());
+	let request = Arc::new(Mutex::new(None));
+	let resume = Arc::new(AtomicBool::new(false));
+	let proxy = srv.start_proxy_with_mailbox((), PauseForwardedPost {
+		reached: reached.clone(), request: request.clone(), resume: resume.clone(),
+	}).await;
+	let proxy_address = proxy.address.clone();
+	let forwarder = ctx.barkd("forwarder", &srv).cfg(move |c| c.server_address = proxy_address).create().await;
+	// The new daemon uses another Core: confirm the pool funding anchor
+	// before receiving, rather than depending on mempool P2P relay.
+	ctx.generate_blocks(1).await;
+	ctx.await_block_count_sync().await;
+	forwarder.onchain_sync().await;
+	let client = forwarder.client_config();
+	let invoice = client.client.post(format!("{}/api/v1/lightning/receives/invoice/for-address", client.base_path))
+		.json(&serde_json::json!({"amount_sat":100_000,"address":address.to_string(),"description":null}))
+		.send().await.unwrap().error_for_status().unwrap().json::<bark_json::cli::InvoiceInfo>().await.unwrap();
+	lightning.external.wait_for_block_sync().await;
+	let mut payer = lightning.external.grpc_client().await;
+	let paying = tokio::spawn(async move {
+		payer.xpay(cln_rpc::XpayRequest {
+			invstring: invoice.invoice, amount_msat: None, maxfee: None, layers: vec![], retry_for: None,
+			partial_msat: None, maxdelay: None, payer_note: None, label: None, localinvreqid: None,
+			dev_use_shadow: None,
+		}).await
+	});
+	tokio::time::timeout(Duration::from_secs(60), reached.notified()).await
+		.expect("real barkd must reach the blocked post after its claim commits");
+	let post = request.lock().unwrap().clone().unwrap();
+	let coins = post.vtxos.iter().map(|v| Vtxo::<Full>::deserialize(v).unwrap()).collect::<Vec<_>>();
+	assert!(!coins.is_empty());
+	assert!(coins.iter().all(|v| v.user_pubkey() == address.policy().user_pubkey()));
+	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+	let registered = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state='spendable'", &[&ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(registered as usize, coins.len(), "claim outputs were registered before the mailbox post");
+	forwarder.kill().await.unwrap(); // Daemon::kill uses SIGKILL, not graceful shutdown.
+	tokio::time::timeout(Duration::from_secs(30), paying).await.unwrap().unwrap().unwrap();
+	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
+	enable_payouts(&ctx, &srv).await;
+	let principal = coins.iter().map(|v| v.amount().to_sat()).sum::<u64>();
+	let (payout, _) = wait_and_reconcile_payout(&ctx, &db, &ids, &record.spk, principal).await;
+	// Enabling payouts restarts captaind on newly allocated test ports.
+	// The paused proxy must follow those ports before the daemon returns.
+	proxy.set_ark_upstream(srv.get_public_rpc().await);
+	proxy.set_mailbox_upstream(srv.get_mailbox_public_rpc().await);
+	resume.store(true, Ordering::SeqCst);
+	forwarder.start().await.unwrap();
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			if forwarder.pending_lightning_receives().await.is_empty() { break; }
+			tokio::time::sleep(Duration::from_millis(500)).await;
+		}
+	}).await.expect("the restarted forwarder must finish already-paid delivery");
+	let rows = db.read(async |t| Ok(t.query("SELECT id,txid,spk FROM expiry_settlement", &[]).await?)).await.unwrap();
+	assert_eq!(rows.len(), coins.len(), "no second payment after restart");
+	assert!(rows.iter().all(|r| r.get::<_, String>("txid") == payout.txid.to_string()
+		&& r.get::<_, Vec<u8>>("spk") == record.spk.as_bytes()));
+	let posts = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM mailbox WHERE mailbox_type='arkoor-receive' AND vtxo_id=ANY($1)", &[&ids],
+	).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(posts, 0, "late delivery must not advertise settled coins as fresh Ark funds");
+	forwarder.stop().await.unwrap();
+	restore_and_spend(&ctx, &mnemonic, payout).await;
 }

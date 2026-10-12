@@ -14,6 +14,7 @@ mod board;
 mod exit;
 mod expiry_payout;
 mod fallback;
+mod fallback_sweep_economics;
 mod fallback_delegated;
 mod fallback_delegated_absence;
 mod fallback_faults;

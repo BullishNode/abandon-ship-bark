@@ -33,12 +33,12 @@ use ark::musig::{self, PublicNonce, SecretNonce};
 use ark::rounds::{RoundAttempt, RoundEvent, RoundFinished, RoundSeq, ROUND_TX_VTXO_TREE_VOUT};
 use ark::tree::signed::{LeafVtxoCosignContext, UnlockHash, VtxoTreeSpec};
 use bitcoin_ext::{BlockDelta, BlockHeight, TxStatus};
-use server_rpc::{protos, ServerConnection, TryFromBytes, MAX_NB_FORFEIT_NONCE_IDS};
+use server_rpc::{protos, ServerConnection, StatusExt, TryFromBytes, MAX_NB_FORFEIT_NONCE_IDS};
 
 use crate::import::ImportVtxoArgs;
 use crate::movement::manager::OnDropStatus;
 use crate::{Wallet, WalletVtxo, SECP, SUBSCRIBE_REQUEST_TIMEOUT};
-use crate::movement::{MovementId, MovementStatus};
+use crate::movement::{Movement, MovementId, MovementStatus};
 use crate::movement::update::MovementUpdate;
 use crate::persist::models::{RoundStateId, StoredRoundState, Unlocked};
 use crate::subsystem::{RoundMovement, Subsystem};
@@ -819,6 +819,7 @@ impl RoundState {
 
 					//TODO(stevenroose) should we mark as failed for these cases?
 
+					Err(HarkForfeitError::ExpiryPaid(outputs)) => self.finish_expiry_payment(wallet, &outputs).await,
 					Err(HarkForfeitError::Err(e)) => {
 						//TODO(stevenroose) we failed here but we might actualy be able to
 						// succeed if we retry. should we implement some kind of limited
@@ -860,6 +861,7 @@ impl RoundState {
 
 						Ok(RoundStatus::Confirmed { funding_txid })
 					},
+					Err(HarkForfeitError::ExpiryPaid(outputs)) => self.finish_expiry_payment(wallet, &outputs).await,
 					Err(HarkForfeitError::Err(e)) => {
 						Err(e.context("error forfeiting VTXOs after round"))
 					},
@@ -871,6 +873,29 @@ impl RoundState {
 				}
 			},
 		}
+	}
+
+	// Every replacement must have an explicit settlement refusal. Persist
+	// paid-output tombstones so mailbox replay cannot resurrect this exchange.
+	// Existing movement IDs (or the recovery action ID) make crash retries safe.
+	async fn finish_expiry_payment(&mut self, wallet: &Wallet, outputs: &[Vtxo<Full>]) -> anyhow::Result<RoundStatus> {
+		let amount = self.participation.total_in().context("round input amount overflow")?;
+		let update = MovementUpdate::new().consumed_vtxos(&self.participation.inputs)
+			.effective_balance(-amount.to_signed()?).fee(Amount::ZERO)
+			.metadata([("paid_onchain_at_expiry".into(), true.into())]);
+		let mid = if let Some(mid) = self.movement_id { mid } else {
+			let action = format!("expiry-round-{}", self.unlock_hash().context("settled round has no unlock hash")?);
+			wallet.inner.db.get_or_create_movement_for_action(&Movement::server_spend_subsystem(),
+				chrono::Local::now(), &action, update.clone()).await?.0
+		};
+		wallet.inner.movements.finish_movement_with_update(mid, MovementStatus::Successful, update).await?;
+		let inputs = self.participation.inputs.iter().map(Vtxo::id).collect::<Vec<_>>();
+		wallet.inner.db.steal_lock_to_spent(&inputs).await?;
+		wallet.store_spent_vtxos(outputs).await?;
+		let error = "round replaced by an on-chain expiry payment".to_owned();
+		self.flow = RoundFlowState::Failed { error: error.clone() };
+		self.done = true;
+		Ok(RoundStatus::Failed { error })
 	}
 
 	/// Once we know the signed round funding tx, this returns the output VTXOs
@@ -1132,6 +1157,8 @@ async fn start_attempt(
 /// just an internal type; need Error trait to work with anyhow
 #[derive(Debug, thiserror::Error)]
 enum HarkForfeitError {
+	#[error("round outputs paid on-chain at expiry")]
+	ExpiryPaid(Vec<Vtxo<Full>>),
 	/// An error happened after we sent forfeit signatures to the server
 	#[error("error after forfeits were sent")]
 	SentForfeits(#[source] anyhow::Error),
@@ -1257,7 +1284,9 @@ async fn hark_vtxo_swap(
 		forfeit_bundles: forfeit_bundles.iter().map(|b| b.serialize()).collect(),
 	}).await
 		.context("forfeit vtxos call failed")
-		.map_err(HarkForfeitError::SentForfeits)?
+		.map_err(|error| if error.downcast_ref::<tonic::Status>().is_some_and(|s| s.is_expiry_settled()) {
+			HarkForfeitError::ExpiryPaid(output_vtxos.to_vec())
+		} else { HarkForfeitError::SentForfeits(error) })?
 		.into_inner().unlock_preimage.as_slice().try_into()
 		.context("invalid preimage length")
 		.map_err(HarkForfeitError::SentForfeits)?;
@@ -1277,9 +1306,18 @@ async fn hark_vtxo_swap(
 	}
 
 	// then register the output vtxos with the server
-	wallet.register_vtxo_transactions_with_server(output_vtxos).await
-		.context("couldn't register output vtxo transactions with server")
-		.map_err(HarkForfeitError::SentForfeits)?;
+	if let Err(error) = wallet.register_vtxo_transactions_with_server(output_vtxos).await {
+		if error.downcast_ref::<tonic::Status>().is_some_and(|s| s.is_expiry_settled()) {
+			for output in output_vtxos.iter() {
+				match wallet.register_vtxo_transactions_with_server(std::slice::from_ref(output)).await {
+					Err(e) if e.downcast_ref::<tonic::Status>().is_some_and(|s| s.is_expiry_settled()) => {},
+					_ => return Err(HarkForfeitError::SentForfeits(error)),
+				}
+			}
+			return Err(HarkForfeitError::ExpiryPaid(output_vtxos.to_vec()));
+		}
+		return Err(HarkForfeitError::SentForfeits(error.context("couldn't register output vtxo transactions with server")));
+	}
 
 	Ok(())
 }
@@ -1570,6 +1608,7 @@ async fn progress_delegated(
 	hark_vtxo_swap(
 		wallet, participation, &mut new_vtxos, &funding_tx, unlock_hash, sent_forfeit_sigs,
 	).await.map_err(|e| match e {
+		HarkForfeitError::ExpiryPaid(outputs) => HarkForfeitError::ExpiryPaid(outputs),
 		HarkForfeitError::Err(e) =>
 			HarkForfeitError::Err(e.context("error forfeiting hArk VTXOs")),
 		HarkForfeitError::SentForfeits(e) =>

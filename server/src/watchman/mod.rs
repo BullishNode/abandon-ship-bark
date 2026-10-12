@@ -424,7 +424,34 @@ impl Watchman {
 			},
 		});
 
-		for chunk in vtxos.chunks(self.config.claim_chunksize.get()) {
+		if vtxos.is_empty() {
+			return Ok(());
+		}
+		// Replacing only part of a claim can pay less absolute fee than the
+		// transaction it conflicts with. Keep its existing input group intact.
+		let mut replacements = HashMap::<Txid, Vec<ServerVtxo>>::new();
+		let mut fresh = Vec::new();
+		for vtxo in vtxos {
+			match self.get_mempool_spend(vtxo.id()) {
+				Some(spend) if spend.kind == SpendKind::Claim => {
+					replacements.entry(spend.txid).or_default().push(vtxo);
+				},
+				_ => fresh.push(vtxo),
+			}
+		}
+		// Spread the inputs across batches so an affordable cohort does not
+		// leave a tiny final batch that cannot pay its fee and retain dust.
+		let batches = fresh.len().div_ceil(self.config.claim_chunksize.get());
+		let min_chunk_size = fresh.len() / batches.max(1);
+		let larger_batches = fresh.len() % batches.max(1);
+		let mut offset = 0;
+		let fresh_chunks = (0..batches).map(|batch| {
+			let chunk_size = min_chunk_size + usize::from(batch < larger_batches);
+			let chunk = &fresh[offset..offset + chunk_size];
+			offset += chunk_size;
+			chunk
+		});
+		for chunk in replacements.values().map(Vec::as_slice).chain(fresh_chunks) {
 			if let Err(e) = self.build_and_broadcast_claim(chunk, feerate).await {
 				slog!(ClaimChunkBroadcastFailure, error: e.to_string(),
 					vtxos: chunk.iter().map(|v| v.id()).collect(),

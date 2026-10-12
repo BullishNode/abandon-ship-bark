@@ -13,6 +13,7 @@ mod balance;
 mod exit;
 mod expiry_payout;
 mod fallback;
+mod fallback_delegated;
 mod fallback_faults;
 mod fallback_lightning;
 mod import;

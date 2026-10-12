@@ -3,6 +3,7 @@ mod blocklist;
 mod block_index;
 mod forfeit;
 mod fallback;
+mod fixtures;
 mod forfeit;
 mod lightning;
 mod mailbox;

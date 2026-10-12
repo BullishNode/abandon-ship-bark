@@ -12,11 +12,15 @@ use ark_testing::util::FutureExt;
 
 #[tokio::test]
 async fn fallback_delegated_return_after_payout_terminates() {
-    Box::pin(return_after_payout()).await;
+    Box::pin(return_after_payout("fallback_delegated_return_after_payout_terminates", false)).await;
 }
 
-async fn return_after_payout() {
-    let name = "fallback_delegated_return_after_payout_terminates";
+#[tokio::test]
+async fn fallback_delegated_seed_restore_after_payout_terminates() {
+    Box::pin(return_after_payout("fallback_delegated_seed_restore_after_payout_terminates", true)).await;
+}
+
+async fn return_after_payout(name: &str, recovered: bool) {
     let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
     let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(|c| {
         c.vtxo_lifetime = BlockDelta::new(200);
@@ -63,7 +67,7 @@ async fn return_after_payout() {
     config.server_address = srv.ark_url();
     let wallet = bark::Wallet::open(bitcoin::Network::Regtest,
         bark::WalletSeed::new_from_mnemonic(bitcoin::Network::Regtest, &mnemonic), config,
-        bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("phone")), run_daemon: false, ..Default::default() },
+        bark::OpenWalletArgs { datadir: Some(ctx.datadir.join(if recovered { "seed-restored-phone" } else { "phone" })), run_daemon: false, ..Default::default() },
     ).await.unwrap();
     // Payout is confirmed before the phone returns. A generic retry error
     // alone is insufficient: its old coins and pending round must terminate.

@@ -233,9 +233,18 @@ impl Bitcoind {
 
 	pub async fn load_wallet(&self, name: &str) {
 		info!("Loading wallet '{}'", name);
-		self.async_client().call_raw::<serde_json::Value>(
+		let client = self.async_client();
+		let result = client.call_raw::<serde_json::Value>(
 			"loadwallet", &[name.into()],
-		).await.expect("failed to load wallet");
+		).await;
+		if matches!(result, Err(bitcoind_async_client::error::ClientError::Server(-35, _))) {
+			let loaded = client.call_raw::<Vec<String>>("listwallets", &[]).await
+				.expect("failed to list loaded wallets");
+			assert!(loaded.iter().any(|wallet| wallet == name),
+				"Core reported already loaded but wallet '{}' is absent", name);
+		} else {
+			result.expect("failed to load wallet");
+		}
 	}
 
 	pub async fn generate_to_wallet(&self, block_num: u64) {

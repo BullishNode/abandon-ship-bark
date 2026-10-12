@@ -213,6 +213,17 @@ impl Server {
 				.map(|idx| tree.build_vtxo(idx).id())
 				.collect::<Vec<_>>();
 
+			// Use the same ordered coin locks as payout commit. Never release
+			// the unlock preimage for an already-paid exchange. Only an entirely
+			// settled exchange returns the terminal error the client may adopt.
+			if let Err(error) = t.lock_vtxo_registration(&output_vtxo_ids).await {
+				let ids = output_vtxo_ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+				let paid: i64 = t.query_one("SELECT count(*) FROM expiry_settlement WHERE id=ANY($1)",
+					&[&ids]).await?.get(0);
+				if paid as usize == ids.len() { return Err(error); }
+				return badarg!("round outputs are only partially expiry-settled; retry after remaining payouts");
+			}
+
 			let update = VtxoTreeUpdate::new()
 				.upsert_signed_tx(ff_txs)
 				.insert_unspent_vtxos(ff_vtxos, SpendState::RoundForfeit)

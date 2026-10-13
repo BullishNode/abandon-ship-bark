@@ -156,6 +156,26 @@ low-balance threshold. It returns 0 for a qualified healthy snapshot, 2 for a
 required operator action and 1 for an unqualified observation. Zero confirmed
 balance is not automatically insolvency; confirmed and trusted value are distinct.
 Helper tests do not qualify actual alerts, funding budgets or maintenance windows.
+The helper command forms are source-verified. Run them from the deployment repository:
+
+```sh
+python3 deploy/fallback/maintenance/operator-preflight.py \
+  --captaind /etc/ark/captaind.toml --watchmand /etc/ark/watchmand.toml \
+  --policy /etc/ark/operator-capital-policy.json
+python3 deploy/fallback/maintenance/operator-health.py \
+  --genesis "$ARK_GENESIS" --server-pubkey "$ARK_SERVER_PUBKEY" \
+  --low-balance-sat "$ARK_ROUNDS_ALERT_SAT" < pool-status.json
+```
+
+Obtain `pool-status.json` from the deployed bridge's bounded `pool_status` operation;
+the exact bridge invocation and auth belong to the pinned deployment manifest.
+Do not supply an invented or stale snapshot. These helpers read observations and
+configuration only. Connect their nonzero exit outcomes to the actual operator
+alert system and qualify alert delivery; an unconnected executable is not monitoring.
+The capital policy must specify opening confirmed capital, rounds working capital,
+pool refill, operator fee reserve, payout/bump reserve, fee budget, planned funding
+vbytes, client exit margin/refresh threshold and positive lifetime slack. The
+helper verifies declared arithmetic; it does not verify that those balances exist.
 
 [code] Ordinary round funding uses FAST; pool funding uses SLOW; fresh watchman
 sweeps use REGULAR. captaind and watchmand each own an estimator and need explicit

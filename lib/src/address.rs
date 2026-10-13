@@ -10,6 +10,7 @@ use bitcoin::secp256k1::{Keypair, PublicKey};
 use crate::{ProtocolDecodingError, ProtocolEncoding, VtxoPolicy};
 use crate::encode::{MAX_VEC_SIZE, ReadExt, WriteExt};
 use crate::mailbox::{BlindedMailboxIdentifier, MailboxIdentifier};
+use crate::fallback::AccountChild;
 
 
 /// The human-readable part for mainnet addresses
@@ -59,6 +60,8 @@ pub enum VtxoDelivery {
 	ServerMailbox {
 		blinded_id: BlindedMailboxIdentifier,
 	},
+	/// Account attribution metadata; this does not deliver or authorize spending.
+	AccountChild(AccountChild),
 	Unknown {
 		delivery_type: u8,
 		data: Vec<u8>,
@@ -76,6 +79,9 @@ const DELIVERY_BUILTIN: u8 = 0x00;
 /// The type byte for the "server mailbox" delivery mechanism
 const DELIVERY_MAILBOX: u8 = 0x01;
 
+/// One exact ordinary child of a registered fallback account.
+const DELIVERY_ACCOUNT_CHILD: u8 = 0x02;
+
 impl VtxoDelivery {
 
 	/// Returns whether the VTXO delivery type is unknown
@@ -90,6 +96,7 @@ impl VtxoDelivery {
 	fn encoded_length(&self) -> usize {
 		match self {
 			Self::ServerMailbox { .. } => 1 + 33,
+			Self::AccountChild(..) => 1 + 33 + 4,
 			Self::Unknown { data, .. } => 1usize.saturating_add(data.len()),
 		}
 	}
@@ -100,6 +107,10 @@ impl VtxoDelivery {
 			Self::ServerMailbox { blinded_id } => {
 				w.emit_u8(DELIVERY_MAILBOX)?;
 				w.emit_slice(blinded_id.as_ref())?;
+			},
+			Self::AccountChild(origin) => {
+				w.emit_u8(DELIVERY_ACCOUNT_CHILD)?;
+				origin.encode(w)?;
 			},
 			Self::Unknown { delivery_type, data } => {
 				w.emit_u8(*delivery_type)?;
@@ -121,6 +132,9 @@ impl VtxoDelivery {
 					|_| ParseAddressError::Invalid("invalid blinded mailbox identifier"),
 				)?,
 			}),
+			DELIVERY_ACCOUNT_CHILD => AccountChild::deserialize(&payload[1..])
+				.map(Self::AccountChild)
+				.map_err(|_| ParseAddressError::Invalid("invalid fallback account child")),
 			delivery_type => Ok(Self::Unknown {
 				delivery_type: delivery_type,
 				data: payload[1..].to_vec(),
@@ -208,6 +222,21 @@ impl Address {
 		&self.delivery
 	}
 
+	/// The receiver's registered account and ordinary child, if supplied.
+	/// Repeated origins are refused so no sender can select a different one.
+	pub fn account_child(&self) -> Result<Option<AccountChild>, ParseAddressError> {
+		let mut origin = None;
+		for method in &self.delivery {
+			if let VtxoDelivery::AccountChild(child) = method {
+				if origin.is_some() {
+					return Err(ParseAddressError::Invalid("repeated fallback account child"));
+				}
+				origin = Some(*child);
+			}
+		}
+		Ok(origin)
+	}
+
 	/// Write the address payload to the writer
 	pub fn encode_payload<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<(), io::Error> {
 		writer.emit_slice(&self.ark_id.to_byte_array())?;
@@ -267,7 +296,9 @@ impl Address {
 			delivery.push(VtxoDelivery::decode(&buf[..])?);
 		}
 
-		Ok(Address::new(testnet, ark_id, policy, delivery))
+		let address = Address::new(testnet, ark_id, policy, delivery);
+		address.account_child()?;
+		Ok(address)
 	}
 }
 
@@ -485,6 +516,11 @@ impl Builder {
 		self
 	}
 
+	/// Add the exact child hint used to attribute this address's user key.
+	pub fn account_child(self, origin: AccountChild) -> Self {
+		self.delivery(VtxoDelivery::AccountChild(origin))
+	}
+
 	/// Set the mailbox identifier of the server mailbox to use
 	///
 	/// Errors if no server pubkey was provided yet or if the vtxo key
@@ -674,6 +710,34 @@ mod test {
 		payload.extend_from_slice(&[0; 33]);
 		payload.extend_from_slice(&25u32.to_le_bytes());
 		assert!(VtxoDelivery::decode(&payload).is_err(), "unverified origin bytes must not become an accepted address field");
+	}
+
+
+	#[test]
+	fn account_child_address_preserves_mailbox_and_rejects_duplicate_origins() {
+		let server = Keypair::from_seckey_slice(&SECP, &[1; 32]).unwrap();
+		let mailbox_key = Keypair::from_seckey_slice(&SECP, &[7; 32]).unwrap();
+		let receiver = Keypair::from_seckey_slice(&SECP, &[3; 32]).unwrap();
+		let origin = AccountChild::new(mailbox_key.public_key(), 50).unwrap();
+		let address = Address::builder()
+			.testnet(true)
+			.server_pubkey(server.public_key())
+			.pubkey_policy(receiver.public_key())
+			.mailbox(server.public_key(), MailboxIdentifier::from_pubkey(mailbox_key.public_key()), &receiver).unwrap()
+			.account_child(origin)
+			.into_address().unwrap();
+		let decoded = test_roundtrip(&address);
+		assert_eq!(decoded.account_child().unwrap(), Some(origin));
+		assert!(matches!(decoded.delivery()[0], VtxoDelivery::ServerMailbox { .. }));
+		assert_eq!(decoded.delivery().len(), 2);
+		// A payer receives only the address text, not the receiver's database.
+		let mut duplicate = decoded.clone();
+		duplicate.delivery.push(VtxoDelivery::AccountChild(origin));
+		assert!(duplicate.account_child().is_err());
+		assert!(Address::from_str(&duplicate.to_string()).is_err());
+		duplicate.delivery.pop();
+		duplicate.delivery.push(VtxoDelivery::AccountChild(AccountChild::new(mailbox_key.public_key(), 25).unwrap()));
+		assert!(Address::from_str(&duplicate.to_string()).is_err());
 	}
 
 }

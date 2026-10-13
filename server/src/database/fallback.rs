@@ -132,6 +132,7 @@ impl Tx<'_> {
 
 #[cfg(test)]
 mod tests {
+	use bitcoin::bip32::{ChildNumber, Xpriv, Xpub};
 	use ark::SECP;
 	use bitcoin::hashes::{sha256, Hash, HashEngine};
 	use bitcoin::secp256k1::{Keypair, Message};
@@ -207,4 +208,34 @@ mod tests {
 		extended.push(0);
 		assert!(decode(&extended).is_err());
 	}
+
+	#[test]
+	fn immutable_account_record_accepts_portable_full_field_proofs() {
+		let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+		let account = Xpriv::new_master(Network::Regtest, &[3; 64]).unwrap();
+		let xpub = Xpub::from_priv(&SECP, &account);
+		let child0 = account.derive_priv(&SECP, &[ChildNumber::from_normal_idx(0).unwrap()]).unwrap().to_keypair(&SECP);
+		let mailbox = mailbox();
+		let mut wire = vec![3, u8::try_from(spk.len()).unwrap()];
+		wire.extend_from_slice(spk.as_bytes());
+		wire.extend_from_slice(&xpub.encode());
+		for (prefix, key) in [
+			(b"Ark expiry fallback record v3   ", &mailbox),
+			(b"Ark expiry fallback account v3  ", &child0),
+		] {
+			let mut engine = sha256::Hash::engine();
+			engine.input(prefix);
+			engine.input(ChainHash::REGTEST.as_bytes());
+			engine.input(&mailbox.public_key().serialize());
+			engine.input(&[u8::try_from(spk.len()).unwrap()]);
+			engine.input(spk.as_bytes());
+			engine.input(&xpub.encode());
+			let message = Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array());
+			wire.extend_from_slice(&SECP.sign_schnorr_with_aux_rand(&message, key, &[0; 32]).serialize());
+		}
+		assert!(FallbackRecord::from_bytes(&wire, mailbox.public_key(), Network::Regtest).is_ok(),
+			"a valid immutable xpub record must register without per-key signatures");
+		assert!(FallbackRecord::from_bytes(&wire, mailbox.public_key(), Network::Signet).is_err());
+	}
+
 }

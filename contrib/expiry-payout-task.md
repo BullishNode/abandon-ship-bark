@@ -11,9 +11,14 @@ The owned signet target runs this release. Its VTXO lifetime is 48 blocks and
 its net payout minimum is 1,000 sats. Existing VTXOs retain their original expiry.
 The final browser-created absent-wallet journey still awaits expiry and recovery.
 Live adversarial traffic, the operator fault windows, Noah payment journeys,
-the sustained simulation and the final release review remain incomplete.
+the sustained simulation and the final operational release review remain incomplete.
 Mainnet deployment remains gated on those results. The test-only public tip
 `08dea972e` does not change the production release.
+
+The source review covers all 96 changed files at `8f2286ee7` against `6768e0fb4`
+and all 125 commits through `e413c4af9`. Each commit has a necessity and fate
+assessment. This source review does not qualify the remaining live tests or
+authorize a mainnet release.
 
 ## Settlement
 

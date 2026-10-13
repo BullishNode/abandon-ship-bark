@@ -1221,3 +1221,23 @@ Simulator and deployment repository changes have separate upstreams and journals
 Their documentation belongs in this page as bounded repository-specific sections
 when integrated; their lines are not Bark fork savings. Noah's pinned backend is
 not modified by this source change record.
+
+### Borrow payout groups during a claim attempt
+
+[code/review] The cleanup after baseline `a8c1a3bb2` changes only ownership of
+the in-memory batch: `claim_and_pay` borrows `&[PayoutGroup]` and filters references,
+while `pay_expiry_batch` retains the batch for its unchanged split-on-deferral rule.
+The unused `Clone` derive is removed. Before, every attempt cloned all input
+vectors even if it deferred. There is no new API, table, config, state or worker.
+No eligibility, destination, ordering, fee, lock, commit or broadcast check changes.
+The borrowing lifetime keeps the same batch alive through the awaited claim.
+
+[measured] Isolated offline `cargo check -p bark-server --lib --locked` passes
+using the owner-authorized standalone qualification toolchain. This checks type,
+ownership and server compilation; it is not a new live signet result. Runtime
+qualification and deployment remain the lead's responsibility. The production
+diff in `server/src/expiry_payout.rs` is two additions and three deletions against
+the cleanup start; inline and integration tests are unchanged. Server/RPC/lib
+fork additions become 2,269 production lines and 358 inline-test lines against
+`6768e0fb4`. Net code reduction is one line; the material improvement is removal
+of repeated full coin-vector allocations, not a claimed substantial LOC reduction.

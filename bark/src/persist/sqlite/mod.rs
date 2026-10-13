@@ -271,30 +271,6 @@ impl BarkPersister for SqliteClient {
 		query::store_vtxo_key(&conn, index, public_key)
 	}
 
-	async fn store_linked_vtxo_keys(&self, keys: &[(u32, PublicKey)]) -> anyhow::Result<()> {
-		let mut conn = self.connect()?;
-		let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-		query::store_linked_vtxo_keys(&tx, keys)?;
-		tx.commit()?;
-		Ok(())
-	}
-
-	async fn is_vtxo_key_linked(&self, public_key: &PublicKey) -> anyhow::Result<bool> {
-		let conn = self.connect()?;
-		Ok(conn.query_row(
-			"SELECT EXISTS(SELECT 1 FROM bark_vtxo_key WHERE public_key = ?1 AND linked = 1)",
-			[public_key.to_string()], |row| row.get(0),
-		)?)
-	}
-
-	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>> {
-		let mut conn = self.connect()?;
-		let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-		let key = query::take_next_linked_vtxo_key(&tx)?;
-		tx.commit()?;
-		Ok(key)
-	}
-
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {
 		query::get_fallback_record(&self.connect()?)
 	}

@@ -7,10 +7,9 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use bitcoin::{Address, FeeRate, Network, OutPoint, ScriptBuf, Transaction, Txid};
-use bitcoin::constants::ChainHash;
 use bitcoin::bip32::Xpriv;
-use bitcoin::secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
-use bitcoin::hashes::{sha256, Hash, HashEngine};
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin_ext::BlockDelta;
 use bitcoin_ext::rpc::RpcApi;
 use bark::lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
@@ -24,13 +23,13 @@ use ark_testing::daemon::watchmand::WATCHMAND_CONFIG_FILE;
 use ark::ProtocolEncoding;
 use ark::arkoor::ArkoorDestination;
 use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
-use ark::attestations::FallbackRecordAttestation;
+use ark::fallback::FallbackRecord;
 use server::database::Db;
 use server_rpc::{protos, StatusExt};
 
 #[tokio::test]
-async fn fallback_register_board_rotate_and_offline_pool() {
-	let ctx = TestContext::new("bark_sdk/fallback_register_board_rotate_and_offline_pool").await;
+async fn fallback_register_board_fixed_destination_and_offline_addresses() {
+	let ctx = TestContext::new("bark_sdk/fallback_register_board_fixed_destination_and_offline_addresses").await;
 	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).create().await;
 	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true)
 		.boarded(sat(300_000)).create().await;
@@ -40,10 +39,10 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 	assert!(record.spk.is_p2wpkh());
 	let mailbox = wallet.mailbox_keypair().public_key().serialize().to_vec();
 	let stored = db.read(async |t| Ok(t.query_one(
-		"SELECT spk, seq FROM fallback_record WHERE mailbox_pk = $1", &[&mailbox],
+		"SELECT spk, account_xpub FROM fallback_record WHERE mailbox_pk = $1", &[&mailbox],
 	).await?)).await.unwrap();
 	assert_eq!(stored.get::<_, Vec<u8>>(0), record.spk.as_bytes());
-	assert_eq!(stored.get::<_, i64>(1), record.seq as i64);
+	assert_eq!(stored.get::<_, Vec<u8>>(1), record.account_xpub.encode());
 	for vtxo in wallet.spendable_vtxos().await.unwrap() {
 		let pk = vtxo.user_pubkey().serialize().to_vec();
 		let linked = db.read(async |t| Ok(t.query_one(
@@ -52,15 +51,13 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 		assert_eq!(linked.get::<_, Vec<u8>>(0), mailbox);
 	}
 
-	// The rotation trigger is an actual chain receive. S5 separately proves
-	// the automatic expiry transaction; this test isolates client registration.
+	// A chain receive must not change the immutable recovery destination.
 	let address = Address::from_script(&record.spk, Network::Regtest).unwrap();
 	ctx.bitcoind().fund_addr(address, sat(20_000)).await;
 	ctx.generate_blocks(1).await;
 	wallet.sync_onchain().await.unwrap();
 	let rotated = wallet.fallback_destination().await.unwrap();
-	assert_ne!(rotated.spk, record.spk);
-	assert!(rotated.seq > record.seq);
+	assert_eq!(rotated, record, "receiving a payout must not rotate the immutable destination");
 	let foreign = ctx.bitcoind().get_new_address().script_pubkey();
 	assert!(wallet.set_fallback_destination(foreign).await.is_err());
 	assert_eq!(wallet.fallback_destination().await.unwrap(), rotated);
@@ -68,26 +65,23 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 	wallet.sync().await;
 	srv.stop().await.unwrap();
 	let mut keys = Vec::<PublicKey>::new();
-	for _ in 0..8 {
+	for _ in 0..100 {
 		let (address, _) = wallet.new_address_with_index().await.unwrap();
 		let pk = address.policy().user_pubkey();
 		assert!(!keys.contains(&pk));
 		keys.push(pk);
 	}
-	let err = tokio::time::timeout(Duration::from_secs(15), wallet.new_address()).await
-		.expect("offline exhaustion returns promptly").unwrap_err();
-	assert!(format!("{err:#}").contains("no linked keys available"));
 	let err = tokio::time::timeout(Duration::from_secs(15), wallet.board_amount(sat(10_000))).await
 		.expect("offline board returns promptly").unwrap_err();
-	assert!(format!("{err:#}").contains("no linked keys available"));
+	assert!(!format!("{err:#}").is_empty());
 	assert!(wallet.pending_boards().await.unwrap().is_empty());
 
-	// An empty pool must fail before Lightning send locks any input. No LN
+	// An unavailable server must fail before Lightning send locks any input. No LN
 	// node is needed: the valid invoice must never reach an HTLC cosign step.
 	let secp = Secp256k1::new();
 	let key = SecretKey::from_slice(&[42; 32]).unwrap();
 	let invoice = InvoiceBuilder::new(Currency::Regtest)
-		.description("offline linking failure".into())
+		.description("offline server unavailable".into())
 		.payment_hash(sha256::Hash::hash(b"fallback offline send"))
 		.payment_secret(PaymentSecret([43; 32]))
 		.current_timestamp().min_final_cltv_expiry_delta(144)
@@ -97,47 +91,30 @@ async fn fallback_register_board_rotate_and_offline_pool() {
 	assert!(!before.is_empty());
 	let err = tokio::time::timeout(Duration::from_secs(15), wallet.pay_lightning_invoice(invoice, None, false))
 		.await.expect("offline LN send returns promptly").unwrap_err();
-	assert!(format!("{err:#}").contains("no linked keys available"), "{err:#}");
+	assert!(!format!("{err:#}").is_empty());
 	assert_eq!(wallet.spendable_vtxos().await.unwrap().iter().map(|v| v.id()).collect::<Vec<_>>(), before);
 	assert!(wallet.pending_lightning_sends().await.unwrap().is_empty());
 }
 
-/// A wallet whose stored record predates the chain binding signs a bound one
-/// at its next sync. The server never drops the old row by itself.
+/// Malformed/legacy records do not replace an authenticated immutable binding.
 #[tokio::test]
-async fn fallback_stored_legacy_record_migrates_on_sync() {
-	let ctx = TestContext::new("bark_sdk/fallback_stored_legacy_record_migrates_on_sync").await;
+async fn fallback_invalid_record_refused_without_overwrite() {
+	let ctx = TestContext::new("bark_sdk/fallback_invalid_record_refused_without_overwrite").await;
 	let srv = ctx.captaind("server").create().await;
 	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
 	wallet.stop_daemon_wait().await.unwrap();
-	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	let mailbox = wallet.mailbox_keypair();
-	let mailbox_pk = mailbox.public_key().serialize().to_vec();
 	let record = wallet.fallback_destination().await.unwrap();
-
-	// The signature a wallet made before the binding, for the same script and sequence.
-	let mut engine = sha256::Hash::engine();
-	engine.input(b"Ark expiry fallback record      ");
-	engine.input(record.spk.as_bytes());
-	engine.input(&record.seq.to_le_bytes());
-	let msg = Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array());
-	let legacy = Secp256k1::new().sign_schnorr_no_aux_rand(&msg, &mailbox);
-	let legacy_sig = legacy.as_ref().to_vec();
-	db.write(async |t| Ok(t.execute(
-		"UPDATE fallback_record SET sig = $2 WHERE mailbox_pk = $1", &[&mailbox_pk, &legacy_sig],
-	).await?)).await.unwrap();
-
-	wallet.sync().await;
-	let row = db.read(async |t| Ok(t.query_one(
-		"SELECT spk, seq, sig FROM fallback_record WHERE mailbox_pk = $1", &[&mailbox_pk],
-	).await?)).await.unwrap();
-	let seq = row.get::<_, i64>("seq") as u64;
-	assert!(seq > record.seq, "the wallet signed a newer record");
-	assert_eq!(row.get::<_, Vec<u8>>("spk"), record.spk.as_bytes(), "the destination is unchanged");
-	FallbackRecordAttestation::deserialize(&row.get::<_, Vec<u8>>("sig")).unwrap()
-		.verify(ChainHash::REGTEST, &record.spk, seq, mailbox.public_key())
-		.expect("the stored record is bound to this chain");
-	assert_eq!(wallet.fallback_destination().await.unwrap().seq, seq);
+	let mut corrupt = record.serialize();
+	corrupt[4] ^= 1;
+	let mut rpc = srv.get_public_rpc().await;
+	assert!(rpc.set_fallback(protos::SetFallbackRequest {
+		mailbox_pk: wallet.mailbox_keypair().public_key().serialize().to_vec(), record: corrupt,
+	}).await.is_err());
+	let canonical = rpc.set_fallback(protos::SetFallbackRequest {
+		mailbox_pk: wallet.mailbox_keypair().public_key().serialize().to_vec(), record: record.serialize(),
+	}).await.unwrap().into_inner().record;
+	assert_eq!(canonical, record.serialize());
+	assert_eq!(wallet.fallback_destination().await.unwrap(), record);
 }
 
 /// A wallet whose expired balance nets below the payout minimum keeps it: no
@@ -1164,7 +1141,6 @@ async fn grouped_expiry_without_client(
 	println!("grouped expiry payout: txid={txid}, coins={}, principal_sat={principal}, net_sat={}, fee_sat={fee}",
 		coins.len(), outputs[0].value.to_sat());
 
-	let mut latest_record_seq = record.seq;
 	if returning_arkoor {
 		let mut config = return_config.clone().unwrap();
 		let unavailable = Arc::new(AtomicBool::new(true));
@@ -1213,7 +1189,6 @@ async fn grouped_expiry_without_client(
 		assert_eq!(history.iter().map(|m| m.effective_balance).sum::<bitcoin::SignedAmount>(), bitcoin::SignedAmount::ZERO);
 		assert_eq!(wallet.onchain().unwrap().read().await.balance().await,
 			chain_balance_before + if registered_return { sat(0) } else { outputs[0].value });
-		if !registered_return { latest_record_seq = wallet.fallback_destination().await.unwrap().seq; }
 		println!("returning arkoor: registered_before_disappearance={registered_return}, status={}, pending=0, Ark=0", sends[0].status);
 	}
 	if let Some(mut config) = return_config.filter(|_| returning) {
@@ -1249,7 +1224,6 @@ async fn grouped_expiry_without_client(
 		assert!(!wallet.exit_mgr().is_exiting(coins[0].id()).await, "paid board must not start an exit");
 		assert_eq!(wallet.onchain().unwrap().read().await.balance().await,
 			chain_balance_before + outputs[0].value);
-		latest_record_seq = wallet.fallback_destination().await.unwrap().seq;
 		let history = wallet.history().await.unwrap();
 		let debits = history.iter().filter(|m| m.subsystem.name == "bark.server_spend").collect::<Vec<_>>();
 		assert_eq!(debits.len(), 1, "repeated sync must not duplicate the Ark debit");
@@ -1290,20 +1264,17 @@ async fn grouped_expiry_without_client(
 	assert_eq!(ctx.bitcoind().get_received_by_address(&destination), spend.output[0].value);
 	println!("mnemonic-only BIP84 recovery: lookahead=20, payout={payout}, confirmed_spend={spend_txid}");
 
-	// A later valid record update cannot rewrite the recorded payment.
+	// A later valid two-party binding cannot replace the immutable destination.
 	srv.start().await.unwrap();
 	let next_spk = restored.next_unused_address(KeychainKind::External).script_pubkey();
 	assert_ne!(next_spk, record.spk);
-	let seq = latest_record_seq + 1;
-	let mut signed_record = next_spk.as_bytes().to_vec();
-	signed_record.extend_from_slice(&seq.to_le_bytes());
-	signed_record.extend_from_slice(&FallbackRecordAttestation::new(
-		ChainHash::REGTEST, &next_spk, seq, &mailbox_key,
-	).serialize());
+	let root = Xpriv::new_master(Network::Regtest, &sender_mnemonic.to_seed("")).unwrap();
+	let account = root.derive_priv(&Secp256k1::new(), &"m/350'/0'".parse::<bitcoin::bip32::DerivationPath>().unwrap()).unwrap();
+	let attempted = FallbackRecord::new(Network::Regtest, next_spk, &account, &mailbox_key).unwrap();
 	assert_eq!(srv.get_public_rpc().await.set_fallback(protos::SetFallbackRequest {
 		mailbox_pk: mailbox_key.public_key().serialize().to_vec(),
-		record: Some(signed_record.clone()), key_links: vec![],
-	}).await.unwrap().into_inner().record, signed_record);
+		record: attempted.serialize(),
+	}).await.unwrap().into_inner().record, record.serialize());
 	let rows = db.read(async |t| Ok(t.query(
 		"SELECT id, txid, fee_sat, spk FROM expiry_settlement WHERE id = ANY($1) ORDER BY id", &[&ids],
 	).await?)).await.unwrap();
@@ -1463,7 +1434,7 @@ async fn fallback_edge_same_seed_two_devices_converge() {
 	let record_a = first.fallback_destination().await.unwrap();
 	let record_b = second.fallback_destination().await.unwrap();
 	assert_eq!(record_a, record_b);
-	assert!(record_a.seq >= before.seq);
+	assert!(record_a.same_binding(&before));
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let mailbox = first.mailbox_keypair().public_key().serialize().to_vec();
 	assert_eq!(mailbox, second.mailbox_keypair().public_key().serialize().to_vec());
@@ -1482,8 +1453,8 @@ async fn fallback_edge_same_seed_two_devices_converge() {
 	assert_eq!(second.spendable_vtxos().await.unwrap().iter().map(|v| v.id()).collect::<BTreeSet<_>>(),
 		coins.iter().map(|v| v.id()).collect::<BTreeSet<_>>());
 	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
-	println!("two devices: address_key_reused={}, same_mailbox=true, same_spendable_view=true, seq={}",
-		a.policy().user_pubkey() == b.policy().user_pubkey(), record_a.seq);
+	println!("two devices: address_key_reused={}, same_mailbox=true, same_spendable_view=true, account={}",
+		a.policy().user_pubkey() == b.policy().user_pubkey(), record_a.account_xpub);
 	drop(first);
 	drop(second);
 	drop(payer);

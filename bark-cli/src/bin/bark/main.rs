@@ -486,7 +486,7 @@ async fn inner_main(cli: Cli) -> anyhow::Result<()> {
 		Command::Fallback => {
 			let record = wallet.fallback_destination().await?;
 			output_json(&json::cli::FallbackDestination {
-				address: bitcoin::Address::from_script(&record.spk, net)?.to_string(), seq: record.seq,
+				address: bitcoin::Address::from_script(&record.spk, net)?.to_string(), account_xpub: record.account_xpub.to_string(),
 			});
 		},
 		Command::Address { index, subcommand } => {

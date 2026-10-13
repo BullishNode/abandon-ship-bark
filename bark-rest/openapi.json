@@ -5812,16 +5812,14 @@
         "type": "object",
         "required": [
           "address",
-          "seq"
+          "account_xpub"
         ],
         "properties": {
           "address": {
             "type": "string"
           },
-          "seq": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
+          "account_xpub": {
+            "type": "string"
           }
         }
       },

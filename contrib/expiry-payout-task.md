@@ -1,9 +1,19 @@
 # Native expiry payouts
 
 Approach D adds an off-by-default captaind task. The regtest harness and the earlier
-coin-key payout evidence live outside this repository. Qualification of registered BIP84 destinations
-is in progress; the earlier results do not qualify this protocol. Mainnet deployment
-remains gated on the shipping image's complete regtest and signet/client/restore results.
+coin-key payout evidence live outside this repository.
+
+The production release `8f2286ee7` passes the declared 247-test native suite,
+the 500-owner scale run and ten capital plus ten mixed-workload soak cycles.
+The scale run includes 1,548 entitlements and 500 confirmed seed-only recovery
+spends. These results qualify the specified workloads, not all production cases.
+The owned signet target runs this release. Its VTXO lifetime is 48 blocks and
+its net payout minimum is 1,000 sats. Existing VTXOs retain their original expiry.
+The final browser-created absent-wallet journey still awaits expiry and recovery.
+Live adversarial traffic, the operator fault windows, Noah payment journeys,
+the sustained simulation and the final release review remain incomplete.
+Mainnet deployment remains gated on those results. The test-only public tip
+`08dea972e` does not change the production release.
 
 ## Settlement
 
@@ -109,8 +119,9 @@ payment guard, which keeps the cooperative claim out; the commit rechecks the
 recorded state and cancels the receive, so a later claim is refused. The
 granted coins are never paid out. An external payer of a prepared receive
 that is never claimed gets its payment back from the hold plugin, which fails
-the incoming HTLCs back before they expire. Returning Lightning-client
-reconciliation remains unqualified.
+the incoming HTLCs back before they expire. The declared native suite covers
+return after settlement, terminal client adoption and seed-only recovery.
+The real Noah/backend and signet disappearance journeys remain unqualified.
 
 A returning arkoor sender checks expired outputs before delivery. A per-output
 settlement refusal and the server's stored signed chain distinguish a recipient

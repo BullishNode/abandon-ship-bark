@@ -25,8 +25,8 @@ scale run includes 1,548 entitlements and 500 confirmed seed-only recovery spend
 These results qualify those workloads. They do not qualify every production case.
 The final live browser/absent-wallet recovery, operator fault windows, realistic
 Ark and Lightning traffic, Noah journeys and operational mainnet release remain
-separate gates. Current simulation reports need independent accounting; snapshots
-and successful outer sync calls do not prove transactions or adoption succeeded.
+separate gates. Successful outer sync calls do not prove transactions or
+adoption succeeded.
 
 ## Promise, architecture and exclusions
 
@@ -75,7 +75,7 @@ mechanisms from earlier proposals, reverts and adopted upstream code.
 | D12 | [owner] Run one captaind per DB; prohibit unsafe abandonment and out-of-band hold settlement. | Earlier singleton, abandon-refusal and server invoice-cap mechanisms were explicitly reverted. | These are operator rules, not native exclusion guarantees. No additional operator assumption may replace an existing code check during cleanup. |
 | D13 | [owner] Production rounds batch every 10–15 minutes; choose `max_fee_rate` from the declared capital/fee budget. Set mainnet net minimum explicitly to 10,000 sats. | Short signet intervals and 1,000-sat test minimum are not mainnet policy. | Fee ceiling affects shared estimates, not the payout task's direct Core estimate. Code default is 1,000 and validation floor is 330, not 10,000. |
 | D14 | [owner] Alert on pool issuance failure and insufficient rounds-wallet float. Provision pool capital and fee/CPFP budget before release. | Separate reserve wallet is optional, not a mandatory new server subsystem. | Avoid silent Lightning unavailability; an alert cannot supply missing capital. |
-| D15 | [owner/code] Attribute the exact unclaimed tree-padding policy to the operator in the frontier ownership view. | Do not exclude all unclaimed coins or all 330-sat coins. | Keep every actual customer class and total frontier reconciliation. Source correction is in the optional feature SQL; live installation still needs qualification. |
+| D15 | [owner/code] Attribute the exact unclaimed tree-padding policy to the operator in the frontier ownership view. | Do not exclude all unclaimed coins or all 330-sat coins. | Keep every actual customer class and total frontier reconciliation. Optional feature SQL corrects the view. Owned signet installation is verified; each installation must preserve customer membership and totals. |
 | D16 | [owner] Continuously remove duplication and unused machinery; publish small qualified commits and deploy qualified runtime changes promptly. | Relocation or formatting does not establish lower complexity. | Preserve all six sources and critical unique coverage. Record actual before/after production and test additions. |
 
 ## Build, installation and identity
@@ -143,47 +143,13 @@ settings and defaults appear below. The client also adds
 bound conservative unknown-send refunds; server-issued intra-Ark invoices are
 exempt. This client cap is not the reverted server-side invoice cap.
 
-## Deployment helper status
-
-[code/measured] Deployment policy helpers are published in the separate
-`BullishNode/abandon-ship-server` repository at
-`38725681519bffd6298c888e2d7ad678b35d961a` on
-`production-policy-20261013`. They are not yet installed on the target.
-`deploy/fallback/maintenance/operator-preflight.py` checks the declared network,
-configuration, capital reserves and fee budget. `operator-health.py` consumes a
-bounded bridge snapshot with exact genesis/server identity and an operator-selected
-low-balance threshold. It returns 0 for a qualified healthy snapshot, 2 for a
-required operator action and 1 for an unqualified observation. Zero confirmed
-balance is not automatically insolvency; confirmed and trusted value are distinct.
-Helper tests do not qualify actual alerts, funding budgets or maintenance windows.
-The helper command forms are source-verified. Run them from the deployment repository:
-
-```sh
-python3 deploy/fallback/maintenance/operator-preflight.py \
-  --captaind /etc/ark/captaind.toml --watchmand /etc/ark/watchmand.toml \
-  --policy /etc/ark/operator-capital-policy.json
-python3 deploy/fallback/maintenance/operator-health.py \
-  --genesis "$ARK_GENESIS" --server-pubkey "$ARK_SERVER_PUBKEY" \
-  --low-balance-sat "$ARK_ROUNDS_ALERT_SAT" < pool-status.json
-```
-
-Obtain `pool-status.json` from the deployed bridge's bounded `pool_status` operation;
-the exact bridge invocation and auth belong to the pinned deployment manifest.
-Do not supply an invented or stale snapshot. These helpers read observations and
-configuration only. Connect their nonzero exit outcomes to the actual operator
-alert system and qualify alert delivery; an unconnected executable is not monitoring.
-The capital policy must specify opening confirmed capital, rounds working capital,
-pool refill, operator fee reserve, payout/bump reserve, fee budget, planned funding
-vbytes, client exit margin/refresh threshold and positive lifetime slack. The
-helper verifies declared arithmetic; it does not verify that those balances exist.
-
-[code] Ordinary round funding uses FAST; pool funding uses SLOW; fresh watchman
-sweeps use REGULAR. captaind and watchmand each own an estimator and need explicit
-ceilings. Replacement sweeps must exceed the prior fee plus incremental relay fee;
-that replacement floor can exceed the cached ceiling. Do not advertise a hard
-transaction-wide cap where only fetched estimates are clamped. The proposed
-2 sat/vB signet ceiling leaves 30s rounds/48-block lifetime/1,000-sat minimum
-unchanged; it is not an approved mainnet monetary budget or an installed setting.
+[code] Ordinary round funding uses FAST. Pool funding uses SLOW. Fresh watchman
+sweeps use REGULAR. captaind and watchmand each own an estimator and need an
+explicit ceiling. Validate startup fallback rates separately: the ceiling clamps
+fetched estimates. Replacement sweeps must exceed the previous fee plus the
+incremental relay fee. That replacement floor can exceed the cached ceiling.
+The payout task uses direct Core estimates, and CPFP has a separate budget.
+Do not describe the estimator ceiling as a maximum for every transaction.
 
 ## Treasury, accounting and monitoring
 
@@ -528,8 +494,8 @@ addition counts. Documentation and generated API files are explicitly named;
 they must not be reported as production Rust savings. Inline-test ranges are the bodies of `#[cfg(test)]` modules or functions;
 production code after a closed test module remains production. Fixture/test-suite
 files are test-only.
-Deletion counts include all categories. The baseline does not include this new
-canonical page or a pending padding-view correction.
+Deletion counts include all categories. The original baseline does not include this new
+canonical page or the later padding-view correction. The final ledger records both.
 
 | File | Added / deleted | Non-test additions | Inline test additions | Fixture additions | Upstream and resulting behavior / decisions | Hunk IDs |
 | --- | ---: | ---: | ---: | ---: | --- | --- |
@@ -1185,7 +1151,7 @@ in D01–D16 above. It does not invent undocumented original intent.
 | C109 / [28e6e8395](https://github.com/BullishNode/abandon-ship-bark/commit/28e6e839506b89f79fffe8bdbc97cf8a42403874) | contrib: say what expiry_settlement.fee_sat holds<br>`contrib/expiry-payout-task.md` | [review] Necessary fee-accounting clarification for operators and independent reconciliation. | [code/review] Retained documentation: every row carries same recipient-total fee, never sum rows; older rows whole mining fee. Actual raw fee includes operator change-weight share. No production change. |
 | C110 / [d47c6a4d1](https://github.com/BullishNode/abandon-ship-bark/commit/d47c6a4d115b30bf56219d69251fa9238d13f32d) | Match delegated outputs independently of database row order<br>`CHANGELOG/unreleased/bark/delegated-output-order`<br>`bark/src/round/mod.rs`<br>`testing/tests/bark_sdk/round.rs` | [review] Necessary eliminate reliance on unspecified PostgreSQL row order while preserving exact requested policy/amount matching before forfeits. | [code/review] Retained destructive matching of remaining distinct leaves, prior duplicate/ownership/expiry checks and positive/duplicate-leaf negative fixture. Does not weaken authentication or allow arbitrary leaves. Returned set same requested multiset, repeated identical policy/amount requests matched by distinct VTXO IDs. |
 | C111 / [dbfa4a091](https://github.com/BullishNode/abandon-ship-bark/commit/dbfa4a091620ffcf722e23ae43e9b0ba2a18018c) | testing: reproduce double payout after stale database restore<br>`testing/tests/bark_sdk/fallback_faults.rs` | [review] Necessary true RED reproduction of earlier-DB restore that forgets confirmed payment history while chain and server data directory remain current. | [code/review] Retained stale-dump test rejects unrelated startup errors, otherwise exposes second chain outputs/spent-input attempts and fails. Not a whole-VM rollback test, unpaid-history recovery proof, or live restore-window qualification. |
-| C112 / [4a4fd2c85](https://github.com/BullishNode/abandon-ship-bark/commit/4a4fd2c8536d5c22dfacd097a0950d72d51db0e1) | server: refuse payout recovery with forgotten payment history<br>`contrib/expiry-payout-task.md`<br>`server/src/expiry_payout.rs`<br>`server/src/lib.rs`<br>`server/src/nursery.rs`<br>`server/src/payout_witness.rs`<br>`testing/tests/bark_sdk/fallback_faults.rs` | [review] Necessary independent payout history prevents DB-only restoration from silently paying a witnessed obligation again before any native worker starts. | [code/review] Retained205-line witness and startup/nursery/CPFP relay integration. Identity/genesis, immutable raw tx+sorted settlement evidence, indexed missing-file detection and file/directory/history fsync precede relay. Witness write failure keeps original committed payout pending. Full patch tests refusal/corruption/I/O and six exact fsync SIGKILL boundaries. Does not simulate power loss/dishonest disk, protect joint DB+witness rollback, detect dropped later unpaid obligations, or enforce singleton process. Operational independent backup and live refusal test required. |
+| C112 / [4a4fd2c85](https://github.com/BullishNode/abandon-ship-bark/commit/4a4fd2c8536d5c22dfacd097a0950d72d51db0e1) | server: refuse payout recovery with forgotten payment history<br>`contrib/expiry-payout-task.md`<br>`server/src/expiry_payout.rs`<br>`server/src/lib.rs`<br>`server/src/nursery.rs`<br>`server/src/payout_witness.rs`<br>`testing/tests/bark_sdk/fallback_faults.rs` | [review] Necessary independent payout history prevents DB-only restoration from silently paying a witnessed obligation again before any native worker starts. | [code/review] Retained205-line witness and startup/nursery/CPFP relay integration. Identity/genesis, immutable raw tx+sorted settlement evidence, indexed missing-file detection and file/directory/history fsync precede relay. Witness write failure keeps original committed payout pending. Full patch tests refusal/corruption/I/O and six exact fsync SIGKILL boundaries. Does not test power loss/dishonest disk, protect joint DB+witness rollback, detect dropped later unpaid obligations, or enforce singleton process. Operational independent backup and live refusal test required. |
 | C113 / [26a4b48fe](https://github.com/BullishNode/abandon-ship-bark/commit/26a4b48fe4df871c91b86c90c7b003bef0def7d7) | testing: refuse unlinked Lightning claims before collecting the payer<br>`testing/tests/bark_sdk/fallback_lightning.rs` | [review] Necessary true RED coverage: unlinked forwarding destination must refuse before preimage persistence/collection. | [code/review] Retained real external payer/hold-plugin deadline/refund/no-destination-output assertions, explicit native nonpayment tick evidence. No synthetic payment status earns coverage. |
 | C114 / [de69e3748](https://github.com/BullishNode/abandon-ship-bark/commit/de69e374823d65473347e1ec8ffc9614bfeea1f1) | server: check forwarding destination before collecting Lightning payment<br>`server/src/ln/mod.rs` | [review] Necessary minimal precollection fallback admission for every proposed forwarding claim output. | [code/review] Retained5-line existing require_fallback call before settler preimage recording, with second write-time check. This prevents collection followed by deterministic unpayable claim rejection; creation refusal still applies. |
 | C115 / [c947a8e72](https://github.com/BullishNode/abandon-ship-bark/commit/c947a8e7259f05e8f79ca6b6973538e31d2ab706) | test: cover absent forwarders and concurrent wallet recovery<br>`testing/tests/bark_sdk/fallback.rs`<br>`testing/tests/bark_sdk/fallback_lightning.rs` | [review] Necessary edge1-8 coverage for forwarded absent phones, SIGKILL before delivery, unlinked invoice destination, same-seed devices, restore during unconfirmed payout and eight exhausted offline addresses. | [code/review] Full450addedlines read. Registered forwarded recipient receives payout; collected-but-uncommitted forwarding grant belongs to forwarder, outstanding customer liability is not end-user recovery. Genuine barkd killed at blocked mailbox post after registration, reopens after recipient payment, no duplicate/newmailbox stale funds; seed-only spend asserted. Same-seed fixture tests same mailbox/view, not two simultaneously spending devices or arbitrary wallet replacement. Eight-key refusal and replenishment verified in native fixture; signet/backend integration still required. |
@@ -1198,8 +1164,8 @@ in D01–D16 above. It does not invent undocumented original intent.
 | C122 / [d335d3035](https://github.com/BullishNode/abandon-ship-bark/commit/d335d30355b6d768b100a26755c5a1c9174539fe) | testing: cover affordable sweep tails and real fee replacement<br>`testing/tests/bark_sdk/fallback_sweep_economics.rs`<br>`testing/tests/bark_sdk/mod.rs` | [review] Necessary actual uneconomical-singleton-tail RED and real-RBF replacement qualification when cohorts unchanged or new input arrives. | [code/review] Retained247-line fixture. Trains actual market estimate, leaves old claims unconfirmed, requires oldmempoolIDs replaced and complete distinct input cohort once, no injected funding/downgrade. Affordably balanced cohorts recover via BIP84 seed. Does not qualify every arbitrary fragmented value distribution or separate-node propagation; specified one-Core target scope. |
 | C123 / [8f2286ee7](https://github.com/BullishNode/abandon-ship-bark/commit/8f2286ee7e1631b0ceccd1631ec3b728a1bb0a52) | server: avoid tiny sweep tails while preserving fee replacement groups<br>`server/src/watchman/mod.rs` | [review] Necessary minimal watchman sweep repair: affordable cohort must not strand singleton tail and existing replacement fee groups remain intact. | [code/review] Retained28-line mechanism. Partition existing mempool Claim spend groups from fresh inputs; spread fresh batches by count and preserve each existing replacement group. Empty cohort safe. Guarantees do not infer affordable sweeps at any fee, arbitrary tiny singleton arrival eventually paid, value-aware balancing, deterministic HashMap order, or replacement over actual changed config chunklimit. Honest measured limits/fees and pending obligations remain required. |
 | C124 / [08dea972e](https://github.com/BullishNode/abandon-ship-bark/commit/08dea972e0be8104fc056b9fcc33d1ccdb4cc043) | test: cover signed delegated requests replayed after issuance<br>`testing/tests/bark_sdk/fallback_postissued.rs`<br>`testing/tests/bark_sdk/mod.rs` | [review] Necessary signed postissuance replay coverage directly through RPC rather than client filtering or beforeissuance supersession. | [code/review] Retained test-only public tip after native8f. Real accepted signed request replayed across3rounds, InvalidArgument unusable originals, exactlyoneassociation and unchanged fullunclaimedset, one replacement payout, no original payout, confirmed mnemonic-only spend. Does not qualify altered valid newlysigned requests or both arbitrated case12orders. |
-| C125 / [e413c4af9](https://github.com/BullishNode/abandon-ship-bark/commit/e413c4af9f1758f6fa0dd082da42dbb6323530b7) | server: distinguish qualified fallback workloads from open release gates<br>`contrib/expiry-payout-task.md` | [review] Necessary honest public distinction between qualified native/scale/soak workloads and incomplete production requirements. | [code/review] Retained docs-only public head; declares shipping8f and test08dea differences,48/min1000 and openlive/browser/operator/Noah/simulation/release gates. No deployment required for documentation-only patch; native behavior unchanged. |
-| C126 / [a8c1a3bb2](https://github.com/BullishNode/abandon-ship-bark/commit/a8c1a3bb2c0361b6609dd3f9dee836812b3691c8) | server: record completed source review and remaining live gates<br>`contrib/expiry-payout-task.md` | [review] Publish verified completed source passes while retaining every open live/operational/mainnet release gate. | [code/review] Retained documentation only; no source/native behavior or simulatorSDKpin change, no redeployment needed. |
+| C125 / [e413c4af9](https://github.com/BullishNode/abandon-ship-bark/commit/e413c4af9f1758f6fa0dd082da42dbb6323530b7) | server: distinguish qualified fallback workloads from open release gates<br>`contrib/expiry-payout-task.md` | [review] Necessary honest public distinction between qualified native/scale/soak workloads and incomplete production requirements. | [code/review] Retained docs-only public head; declares shipping8f and test08dea differences,48/min1000 and open live/browser/operator/Noah/traffic/release gates. No deployment required for documentation-only patch; native behavior unchanged. |
+| C126 / [a8c1a3bb2](https://github.com/BullishNode/abandon-ship-bark/commit/a8c1a3bb2c0361b6609dd3f9dee836812b3691c8) | server: record completed source review and remaining live gates<br>`contrib/expiry-payout-task.md` | [review] Publish verified completed source passes while retaining every open live/operational/mainnet release gate. | [code/review] Retained documentation only; no source or native behavior change, no redeployment needed. |
 ## Continuous simplification ledger
 
 The owner asks for real behavior-preserving deletion, not only documentation.
@@ -1218,10 +1184,8 @@ Never remove distinct critical race/recovery coverage just to make tests smaller
 No new abstraction, sidecar, protocol field or operational assumption is needed
 to perform the padding accounting correction.
 
-Simulator and deployment repository changes have separate upstreams and journals.
-Their documentation belongs in this page as bounded repository-specific sections
-when integrated; their lines are not Bark fork savings. Noah's pinned backend is
-not modified by this source change record.
+This page records changes to the Bark fork. Its production and test line counts
+exclude other repositories and internal test tooling.
 
 ### Borrow payout groups during a claim attempt
 
@@ -1275,11 +1239,22 @@ old/new comparison subsequently returned `ours -> ours` 95 / 216,252,
 `theirs -> ours` 27 / 8,910, and `theirs -> theirs` 32 / 44,914. It parses and
 checks the proposed mapping against real rows without installing the view.
 
-[open] After installation, compare both customer membership and total frontier
+[owner] At each installation, compare both customer membership and total frontier
 reconciliation within one declared snapshot. Confirm that only the exact padding
 class moved to operator ownership. Retain the previous raw view definition and
 roll back the view only if the actual classification differs from that declared
 result. Do not drop any entitlement or edit customer amounts to make totals match.
+
+[measured] The root installed this view on owned signet on 2026-10-13. One
+repeatable-read transaction verified the actual old and new leaf membership,
+amounts, aggregate ownership and frontier reconciliation before commit. The
+actual snapshot contains 140 leaves / 253,758 sats. Only 25 exact padding leaves /
+8,250 sats move to operator ownership. All 32 customer leaves / 44,914 sats remain
+customer-owned. Coin-state, settlement, nursery and numbered-migration digests
+are unchanged within this snapshot. The previous view definition is retained.
+These later counts differ from the earlier read-only comparison because the
+server continues normal work. This result qualifies the view correction, not
+complete server solvency, native cleanup deployment or mainnet readiness.
 
 ### Changes after the original source-review baseline
 
@@ -1289,9 +1264,11 @@ changes must be included in the lead's final review and deployment manifest.
 | ID / commit | Files and behavior | Decision, validation and limit |
 | --- | --- | --- |
 | C127 / [d85c54531](https://github.com/BullishNode/abandon-ship-bark/commit/d85c54531047a65825442f7413abe08178a4f60c) | `docs/expiry-fallback.md`: one operator/design/upstream change page, 97-file/417-hunk/126-commit baseline inventory. | [owner/code] Consolidate maintained instructions and expose every source decision. Structural inventory/privacy checks pass; documentation does not qualify runtime procedures. |
-| C128 / [4b2ce346a](https://github.com/BullishNode/abandon-ship-bark/commit/4b2ce346aae24e551b798cb3f2f81338e733535b) | `docs/expiry-fallback.md`: exact policy/health helper commands and declared capital fields. | [code] Commands read from committed deployment helper source; not evidence of installed alert delivery or actual balances. |
+| C128 / [4b2ce346a](https://github.com/BullishNode/abandon-ship-bark/commit/4b2ce346aae24e551b798cb3f2f81338e733535b) | `docs/expiry-fallback.md`: historical deployment-specific helper commands. | [review] Removed from the maintained manual. Internal deployment tooling is outside the fork change record; production capital and monitoring requirements remain. |
 | C129 / [f04bb4b18](https://github.com/BullishNode/abandon-ship-bark/commit/f04bb4b188de78dc5a120becc0bf68e9181e5737) | `server/src/expiry_payout.rs`: `PayoutGroup`, `claim_and_pay`, `pay_expiry_batch`; borrow the batch, remove full vector copies and unused Clone derive. Manual records the change. | [owner/review] Behavior-preserving complexity reduction; private signature only, all selection/authorization/commit checks retained. Offline server compilation passes; live candidate qualification/deployment remain separate. |
 | C130 / [72b2cc5db](https://github.com/BullishNode/abandon-ship-bark/commit/72b2cc5db450f2f7aba863240eaad3d8fe5981d4) | `contrib/expiry-fallback.sql`, `server/schema.sql`: replace frontier ownership mapping using the upstream recursive walk; exact padding is operator-owned; use one CASE via GROUP BY 1. Manual records the RED/comparison. | [owner/code/measured] Actual signet RED and read-only old/new comparison preserve customer classes and total leaves. Numbered migrations, coin states and payout logic unchanged. Source/golden checks pass; root alone performs live DDL application and final verification. |
+| C131 / [f4d4afab8](https://github.com/BullishNode/abandon-ship-bark/commit/f4d4afab875add25e8ee84564708510735d6c3fe) | `docs/expiry-fallback.md`: records the four consolidation and cleanup commits with their validation limits and line counts. | [owner/code] Publish the full decision record. This changes no runtime behavior. |
+| C132 / this documentation change | `contrib/expiry-payout-task.md`: direct old links to this canonical page. This page records actual padding-view qualification. | [owner/measured] Remove competing maintained instructions. Preserve the complete previous task page in Git history. No native binary changes or release-gate credit. |
 
 [measured] At C130, compared with cleanup start `a8c1a3bb2`, the optional SQL
 adds 45 lines; schema snapshot adds 13 and deletes 20; payout implementation adds

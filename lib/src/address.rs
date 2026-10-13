@@ -740,4 +740,19 @@ mod test {
 		assert!(Address::from_str(&duplicate.to_string()).is_err());
 	}
 
+
+	#[test]
+	fn account_child_index_only_delivery_is_known() {
+		let mut payload = vec![0x02];
+		payload.extend_from_slice(&50u32.to_le_bytes());
+		assert!(!VtxoDelivery::decode(&payload).unwrap().is_unknown(), "the existing blinded mailbox supplies identity");
+	}
+
+	#[test]
+	fn mailbox_delivery_rejects_invalid_curve_point() {
+		let mut payload = vec![0x01];
+		payload.extend_from_slice(&[0; 33]);
+		assert!(VtxoDelivery::decode(&payload).is_err(), "a peer curve point must be validated before upstream unblinding");
+	}
+
 }

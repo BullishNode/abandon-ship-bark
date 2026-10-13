@@ -1238,9 +1238,8 @@ using the owner-authorized standalone qualification toolchain. This checks type,
 ownership and server compilation; it is not a new live signet result. Runtime
 qualification and deployment remain the lead's responsibility. The production
 diff in `server/src/expiry_payout.rs` is two additions and three deletions against
-the cleanup start; inline and integration tests are unchanged. Server/RPC/lib
-fork additions become 2,269 production lines and 358 inline-test lines against
-`6768e0fb4`. Net code reduction is one line; the material improvement is removal
+the cleanup start; inline and integration tests are unchanged. At this borrow-only commit, Server/RPC/lib fork additions become 2,269
+production lines and 358 inline-test lines against `6768e0fb4`. Net code reduction is one line; the material improvement is removal
 of repeated full coin-vector allocations, not a claimed substantial LOC reduction.
 
 ### Attribute padding to the operator without discarding its value
@@ -1281,3 +1280,24 @@ reconciliation within one declared snapshot. Confirm that only the exact padding
 class moved to operator ownership. Retain the previous raw view definition and
 roll back the view only if the actual classification differs from that declared
 result. Do not drop any entitlement or edit customer amounts to make totals match.
+
+### Changes after the original source-review baseline
+
+These commits extend the original C001–C126 register. Their exact source
+changes must be included in the lead's final review and deployment manifest.
+
+| ID / commit | Files and behavior | Decision, validation and limit |
+| --- | --- | --- |
+| C127 / [d85c54531](https://github.com/BullishNode/abandon-ship-bark/commit/d85c54531047a65825442f7413abe08178a4f60c) | `docs/expiry-fallback.md`: one operator/design/upstream change page, 97-file/417-hunk/126-commit baseline inventory. | [owner/code] Consolidate maintained instructions and expose every source decision. Structural inventory/privacy checks pass; documentation does not qualify runtime procedures. |
+| C128 / [4b2ce346a](https://github.com/BullishNode/abandon-ship-bark/commit/4b2ce346aae24e551b798cb3f2f81338e733535b) | `docs/expiry-fallback.md`: exact policy/health helper commands and declared capital fields. | [code] Commands read from committed deployment helper source; not evidence of installed alert delivery or actual balances. |
+| C129 / [f04bb4b18](https://github.com/BullishNode/abandon-ship-bark/commit/f04bb4b188de78dc5a120becc0bf68e9181e5737) | `server/src/expiry_payout.rs`: `PayoutGroup`, `claim_and_pay`, `pay_expiry_batch`; borrow the batch, remove full vector copies and unused Clone derive. Manual records the change. | [owner/review] Behavior-preserving complexity reduction; private signature only, all selection/authorization/commit checks retained. Offline server compilation passes; live candidate qualification/deployment remain separate. |
+| C130 / [72b2cc5db](https://github.com/BullishNode/abandon-ship-bark/commit/72b2cc5db450f2f7aba863240eaad3d8fe5981d4) | `contrib/expiry-fallback.sql`, `server/schema.sql`: replace frontier ownership mapping using the upstream recursive walk; exact padding is operator-owned; use one CASE via GROUP BY 1. Manual records the RED/comparison. | [owner/code/measured] Actual signet RED and read-only old/new comparison preserve customer classes and total leaves. Numbered migrations, coin states and payout logic unchanged. Source/golden checks pass; root alone performs live DDL application and final verification. |
+
+[measured] At C130, compared with cleanup start `a8c1a3bb2`, the optional SQL
+adds 45 lines; schema snapshot adds 13 and deletes 20; payout implementation adds
+two and deletes three. Inline/integration tests and public API/config/table
+surfaces are unchanged. Server/RPC/lib additions against upstream are 2,282
+non-test lines and 358 inline-test lines, with 152 deletions. This is not a claimed
+net LOC reduction: the required accounting correction adds SQL. Real complexity
+reductions are removal of repeated coin-vector allocation and the duplicated
+ownership CASE; maintain the distinction between them and document growth.

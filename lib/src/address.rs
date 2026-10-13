@@ -649,4 +649,31 @@ mod test {
 			Ok(_) => panic!("expected error, got a parsed address"),
 		}
 	}
+
+	#[test]
+	fn account_child_delivery_is_known_and_bounded() {
+		let mailbox = Keypair::from_seckey_slice(&SECP, &[7; 32]).unwrap().public_key();
+		let mut payload = vec![0x02];
+		payload.extend_from_slice(&mailbox.serialize());
+		payload.extend_from_slice(&50u32.to_le_bytes());
+		let parsed = VtxoDelivery::decode(&payload).unwrap();
+		assert!(!parsed.is_unknown(), "an offline recipient's account child must be recognized");
+		for length in 1..payload.len() {
+			assert!(VtxoDelivery::decode(&payload[..length]).is_err());
+		}
+		let mut hardened = payload.clone();
+		hardened[34..38].copy_from_slice(&(1u32 << 31).to_le_bytes());
+		assert!(VtxoDelivery::decode(&hardened).is_err());
+		payload.push(0);
+		assert!(VtxoDelivery::decode(&payload).is_err());
+	}
+
+	#[test]
+	fn account_child_delivery_rejects_invalid_key() {
+		let mut payload = vec![0x02];
+		payload.extend_from_slice(&[0; 33]);
+		payload.extend_from_slice(&25u32.to_le_bytes());
+		assert!(VtxoDelivery::decode(&payload).is_err(), "unverified origin bytes must not become an accepted address field");
+	}
+
 }

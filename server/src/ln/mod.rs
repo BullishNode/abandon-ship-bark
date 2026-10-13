@@ -53,6 +53,49 @@ pub(crate) enum SendRefund {
 	Undecided(String),
 }
 
+/// An observation for expiry attribution, not an authorization to pay.
+/// Recheck under the payment guard and the settlement write lock at commit.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum SendRefundEvidence {
+	/// Non-refundable sender entitlement. A receive still needs separate
+	/// collection evidence; knowing its preimage alone does not prove that.
+	Paid(String),
+	Refundable,
+	Unresolved(String),
+}
+
+impl From<SendRefundEvidence> for SendRefund {
+	fn from(evidence: SendRefundEvidence) -> Self {
+		match evidence {
+			SendRefundEvidence::Paid(reason) => SendRefund::Refused(reason),
+			SendRefundEvidence::Refundable => SendRefund::Allowed,
+			SendRefundEvidence::Unresolved(reason) => SendRefund::Undecided(reason),
+		}
+	}
+}
+
+/// Attempt rows can forbid a refund, but cannot authorize one without
+/// checking the node and any prepared receive's remaining claim rights.
+fn send_refund_attempt_evidence(
+	statuses: impl IntoIterator<Item = LightningPaymentStatus>,
+	tip: BlockHeight,
+	htlc_expiry: BlockHeight,
+) -> Option<SendRefundEvidence> {
+	let mut open = false;
+	for status in statuses {
+		if status == LightningPaymentStatus::Succeeded {
+			return Some(SendRefundEvidence::Paid("This lightning payment has completed".into()));
+		}
+		open |= !status.is_final();
+	}
+	if open && tip <= htlc_expiry {
+		return Some(SendRefundEvidence::Unresolved(
+			"This lightning payment is not eligible for revocation yet".into(),
+		));
+	}
+	None
+}
+
 
 
 /// Bound the requested HTLC-recv VTXO expiry of a receive whose incoming
@@ -570,41 +613,51 @@ impl Server {
 		htlc_expiry: BlockHeight,
 		unavailable_nodes: &mut BTreeSet<LightningNodeId>,
 	) -> anyhow::Result<SendRefund> {
+		Ok(self.lightning_send_refund_evidence(payment_hash, htlc_expiry, unavailable_nodes).await?.into())
+	}
+
+	/// The same refund checks expressed as ownership evidence. Temporary
+	/// ineligibility must never be persisted as a completed payment.
+	pub(crate) async fn lightning_send_refund_evidence(
+		&self,
+		payment_hash: PaymentHash,
+		htlc_expiry: BlockHeight,
+		unavailable_nodes: &mut BTreeSet<LightningNodeId>,
+	) -> anyhow::Result<SendRefundEvidence> {
 		if self.htlc_settler.is_settled(payment_hash).await?.is_some() {
-			return Ok(SendRefund::Refused("invoice has already been paid".into()));
+			return Ok(SendRefundEvidence::Paid("invoice has already been paid".into()));
 		}
 		let tip = self.chain_tip().height as BlockHeight;
 		let attempts = self.db.read(async |t|
 			t.get_payment_attempts_by_payment_hash(payment_hash).await
 		).await?;
-		if attempts.iter().any(|a| a.status == LightningPaymentStatus::Succeeded) {
-			return Ok(SendRefund::Refused("This lightning payment has completed".into()));
+		if let Some(evidence) = send_refund_attempt_evidence(
+			attempts.iter().map(|a| a.status), tip, htlc_expiry,
+		) {
+			return Ok(evidence);
 		}
 		let open = attempts.iter().any(|a| !a.status.is_final());
-		if open && tip <= htlc_expiry {
-			return Ok(SendRefund::Refused("This lightning payment is not eligible for revocation yet".into()));
-		}
 		// Intra-Ark payments make no node payment; the commit arbitrates their receive.
 		let nodes = attempts.iter().filter(|a| a.lightning_htlc_subscription_id.is_none())
 			.map(|a| a.lightning_node_id).collect::<BTreeSet<_>>();
 		for node in nodes {
 			if unavailable_nodes.contains(&node) {
-				return Ok(SendRefund::Undecided(format!("lightning node {node} did not answer earlier")));
+				return Ok(SendRefundEvidence::Unresolved(format!("lightning node {node} did not answer earlier")));
 			}
 			match self.lightning_manager.node_payment_status(node, payment_hash).await {
 				Ok(NodePaymentStatus::Complete) =>
-					return Ok(SendRefund::Refused("This lightning payment has completed".into())),
+					return Ok(SendRefundEvidence::Paid("This lightning payment has completed".into())),
 				Ok(NodePaymentStatus::Pending) =>
-					return Ok(SendRefund::Undecided("the payment is still in flight".into())),
+					return Ok(SendRefundEvidence::Unresolved("the payment is still in flight".into())),
 				Ok(NodePaymentStatus::Failed | NodePaymentStatus::Unknown) => {},
 				Err(e) => {
 					unavailable_nodes.insert(node);
-					return Ok(SendRefund::Undecided(format!("{e:#}")));
+					return Ok(SendRefundEvidence::Unresolved(format!("{e:#}")));
 				},
 			}
 		}
 		if attempts.iter().any(|a| !a.status.is_final() && !a.is_self_payment()) {
-			return Ok(SendRefund::Undecided("the payment attempt is not concluded".into()));
+			return Ok(SendRefundEvidence::Unresolved("the payment attempt is not concluded".into()));
 		}
 		let receive = self.db.read(async |t|
 			t.get_htlc_subscription_by_payment_hash(payment_hash).await
@@ -612,13 +665,13 @@ impl Server {
 		match receive {
 			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady => {
 				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
-					return Ok(SendRefund::Undecided(reason));
+					return Ok(SendRefundEvidence::Unresolved(reason));
 				}
 			},
-			_ if open => return Ok(SendRefund::Undecided("the payment attempt is not concluded".into())),
+			_ if open => return Ok(SendRefundEvidence::Unresolved("the payment attempt is not concluded".into())),
 			_ => {},
 		}
-		Ok(SendRefund::Allowed)
+		Ok(SendRefundEvidence::Refundable)
 	}
 
 	/// Why the recipient of a prepared receive can still claim its granted
@@ -1174,6 +1227,45 @@ mod tests {
 
 	/// Typical config delta used in tests.
 	const DELTA: BlockDelta = BlockDelta::new(40);
+
+	#[test]
+	fn send_refund_pending_deadline_never_means_paid() {
+		for status in [LightningPaymentStatus::Requested, LightningPaymentStatus::Submitted] {
+			for tip in [99u32, 100] {
+				let evidence = send_refund_attempt_evidence([status], tip.into(), 100u32.into()).unwrap();
+				assert!(matches!(&evidence, SendRefundEvidence::Unresolved(_)), "{evidence:?}");
+				assert!(matches!(SendRefund::from(evidence), SendRefund::Undecided(_)),
+					"temporary ineligibility must remain retryable in the RPC adapter");
+			}
+			assert!(send_refund_attempt_evidence([status], 101u32.into(), 100u32.into()).is_none(),
+				"after the deadline the remaining authoritative checks must run");
+		}
+	}
+
+	#[test]
+	fn send_refund_success_dominates_lagging_attempts() {
+		for status in [LightningPaymentStatus::Requested, LightningPaymentStatus::Submitted,
+			LightningPaymentStatus::Failed] {
+			for statuses in [[status, LightningPaymentStatus::Succeeded],
+				[LightningPaymentStatus::Succeeded, status]] {
+				for tip in [99u32, 100, 101] {
+					let evidence = send_refund_attempt_evidence(statuses, tip.into(), 100u32.into()).unwrap();
+					assert!(matches!(evidence, SendRefundEvidence::Paid(_)), "{evidence:?}");
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn send_refund_failed_status_does_not_authorize_refund() {
+		for tip in [99u32, 100, 101] {
+			assert!(send_refund_attempt_evidence([LightningPaymentStatus::Failed],
+				tip.into(), 100u32.into()).is_none(),
+				"a stale failed row cannot replace node and prepared-receive checks");
+			assert!(send_refund_attempt_evidence([], tip.into(), 100u32.into()).is_none(),
+				"absence of attempts cannot replace the prepared-receive check");
+		}
+	}
 
 	/// Build a signed bolt11 invoice, standing in for one we issued via cln.
 	///

@@ -9,6 +9,7 @@ use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::Keypair;
 use futures::future::join_all;
 use log::{info, trace};
+use prost::Message;
 
 use ark::{ProtocolEncoding, Vtxo, SECP};
 use ark::lightning::PaymentHash;
@@ -39,6 +40,32 @@ use bitcoin_ext::AmountExt;
 use cln_rpc::plugins::hold;
 
 use crate::fallback::link_fresh_fallback;
+
+/// Field 6 must reach the hold plugin as a hash, not an invoice memo.
+/// Inject its wire bytes so this same test also runs on the parent protocol.
+#[tokio::test]
+async fn lightning_receive_description_hash_reaches_invoice() {
+	let ctx = TestContext::new("server/lightning_receive_description_hash_reaches_invoice").await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal).create().await;
+	let metadata_hash = sha256::Hash::hash(b"[[\"text/plain\",\"owned fixture\"]]");
+	let request = protos::StartLightningReceiveRequest {
+		payment_hash: ark::lightning::Preimage::random().compute_payment_hash().to_vec(),
+		amount_sat: 10_000,
+		min_cltv_delta: 18,
+		..Default::default()
+	};
+	let mut wire = request.encode_to_vec();
+	wire.extend([0x32, 32]); // optional bytes description_hash = 6
+	wire.extend(metadata_hash.to_byte_array());
+	let request = protos::StartLightningReceiveRequest::decode(wire.as_slice()).unwrap();
+	let response = srv.get_public_rpc().await.start_lightning_receive(request).await.unwrap().into_inner();
+	let invoice = Bolt11Invoice::from_str(&response.bolt11).unwrap();
+	assert_eq!(invoice.amount_milli_satoshis(), Some(10_000_000));
+	let signed = invoice.into_signed_raw();
+	assert_eq!(signed.raw_invoice().description_hash().map(|h| h.0), Some(metadata_hash),
+		"explicit description_hash must produce a hash-bound BOLT11 invoice");
+}
 
 
 /// Asserts that every unspent entry in `vtxo_pool` (`spent_at IS NULL`)

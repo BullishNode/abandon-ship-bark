@@ -64,7 +64,6 @@ fn batches<T>(items: Vec<T>, limit: usize, size: impl Fn(&T) -> usize) -> Vec<Ve
 	batches
 }
 
-#[derive(Clone)]
 struct PayoutGroup {
 	script: ScriptBuf,
 	inputs: Vec<ExpiryInput>,
@@ -102,7 +101,7 @@ impl Server {
 	/// Pay the groups whose Lightning payments are free. Returns the payment's
 	/// txid, the fee its recipients paid, and the number of coins it settled.
 	async fn claim_and_pay(
-		&self, groups: Vec<PayoutGroup>, fee_rate: FeeRate, unavailable_nodes: &mut BTreeSet<LightningNodeId>,
+		&self, groups: &[PayoutGroup], fee_rate: FeeRate, unavailable_nodes: &mut BTreeSet<LightningNodeId>,
 	) -> anyhow::Result<Option<(Txid, u64, usize)>> {
 		let cfg = self.config.expiry_payout.clone();
 		// Cooperative Lightning claims and refund requests take the payment
@@ -654,7 +653,7 @@ impl Server {
 	) -> anyhow::Result<usize> {
 		let mut pending = VecDeque::from([batch]);
 		while let Some(mut batch) = pending.pop_front() {
-			if let Some((txid, fee_sat, coins)) = self.claim_and_pay(batch.clone(), rate, unavailable_nodes).await? {
+			if let Some((txid, fee_sat, coins)) = self.claim_and_pay(&batch, rate, unavailable_nodes).await? {
 				info!(%txid, fee_sat, coins, "expiry payment committed");
 				return Ok(coins);
 			}

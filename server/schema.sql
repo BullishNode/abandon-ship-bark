@@ -1426,27 +1426,31 @@ CREATE VIEW public.v_frontier_vtxos AS
 --
 
 CREATE VIEW public.v_frontier_ownership_totals AS
- WITH RECURSIVE descendants(vtxo_id, vtxo_txid, oor_spent_txid, spend_state, amount) AS (
+ WITH RECURSIVE descendants(vtxo_id, vtxo_txid, oor_spent_txid, spend_state, amount, policy) AS (
          SELECT f.vtxo_id,
             f.vtxo_txid,
             f.oor_spent_txid,
             f.spend_state,
-            f.amount
-           FROM public.v_frontier_vtxos f
+            f.amount,
+            p.policy
+           FROM (public.v_frontier_vtxos f
+           JOIN public.vtxo p ON (p.vtxo_id = f.vtxo_id))
           WHERE (NOT f.conflicted)
         UNION
          SELECT c.vtxo_id,
             c.vtxo_txid,
             c.oor_spent_txid,
             c.spend_state,
-            c.amount
+            c.amount,
+            c.policy
            FROM (descendants p
              CROSS JOIN LATERAL ( SELECT vtxo.vtxo_id,
                     vtxo.vtxo_txid,
                     vtxo.oor_spent_txid,
                     vtxo.spend_state,
                     vtxo.amount,
-                    vtxo.onchain_spent_txid
+                    vtxo.onchain_spent_txid,
+                    vtxo.policy
                    FROM public.vtxo
                   WHERE (vtxo.vtxo_txid = p.oor_spent_txid)
                  OFFSET 0) c)
@@ -1458,7 +1462,9 @@ CREATE VIEW public.v_frontier_ownership_totals AS
         CASE (spend_state)::text
             WHEN 'spendable'::text THEN 'theirs'::text
             WHEN 'unregistered'::text THEN 'theirs'::text
-            WHEN 'unclaimed'::text THEN 'theirs'::text
+            WHEN 'unclaimed'::text THEN
+                CASE WHEN policy = decode('0002dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c'::text, 'hex'::text)
+                     THEN 'ours'::text ELSE 'theirs'::text END
             WHEN 'htlc-recv-unclaimed'::text THEN 'pending'::text
             WHEN 'spent'::text THEN 'ours'::text
             WHEN 'pool'::text THEN 'ours'::text
@@ -1473,20 +1479,7 @@ CREATE VIEW public.v_frontier_ownership_totals AS
   WHERE ((oor_spent_txid IS NULL) OR (EXISTS ( SELECT 1
            FROM public.v_conflicted_txids ct
           WHERE (ct.txid = descendants.oor_spent_txid))))
-  GROUP BY
-        CASE (spend_state)::text
-            WHEN 'spendable'::text THEN 'theirs'::text
-            WHEN 'unregistered'::text THEN 'theirs'::text
-            WHEN 'unclaimed'::text THEN 'theirs'::text
-            WHEN 'htlc-recv-unclaimed'::text THEN 'pending'::text
-            WHEN 'spent'::text THEN 'ours'::text
-            WHEN 'pool'::text THEN 'ours'::text
-            WHEN 'round-forfeit'::text THEN 'ours'::text
-            WHEN 'offboard-forfeit'::text THEN 'ours'::text
-            WHEN 'ln-spent'::text THEN 'ours'::text
-            ELSE 'unknown'::text
-        END;
-
+  GROUP BY 1;
 
 --
 -- Name: v_vtxo_frontier_totals; Type: VIEW; Schema: public; Owner: -

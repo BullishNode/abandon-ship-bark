@@ -75,7 +75,7 @@ mechanisms from earlier proposals, reverts and adopted upstream code.
 | D12 | [owner] Run one captaind per DB; prohibit unsafe abandonment and out-of-band hold settlement. | Earlier singleton, abandon-refusal and server invoice-cap mechanisms were explicitly reverted. | These are operator rules, not native exclusion guarantees. No additional operator assumption may replace an existing code check during cleanup. |
 | D13 | [owner] Production rounds batch every 10–15 minutes; choose `max_fee_rate` from the declared capital/fee budget. Set mainnet net minimum explicitly to 10,000 sats. | Short signet intervals and 1,000-sat test minimum are not mainnet policy. | Fee ceiling affects shared estimates, not the payout task's direct Core estimate. Code default is 1,000 and validation floor is 330, not 10,000. |
 | D14 | [owner] Alert on pool issuance failure and insufficient rounds-wallet float. Provision pool capital and fee/CPFP budget before release. | Separate reserve wallet is optional, not a mandatory new server subsystem. | Avoid silent Lightning unavailability; an alert cannot supply missing capital. |
-| D15 | [owner/open] Exclude exact tree-padding policy from customer liabilities. | Do not exclude all unclaimed coins or all 330-sat coins. | Keep every actual customer class and total frontier reconciliation. Installed view correction still needs qualification. |
+| D15 | [owner/code] Attribute the exact unclaimed tree-padding policy to the operator in the frontier ownership view. | Do not exclude all unclaimed coins or all 330-sat coins. | Keep every actual customer class and total frontier reconciliation. Source correction is in the optional feature SQL; live installation still needs qualification. |
 | D16 | [owner] Continuously remove duplication and unused machinery; publish small qualified commits and deploy qualified runtime changes promptly. | Relocation or formatting does not establish lower complexity. | Preserve all six sources and critical unique coverage. Record actual before/after production and test additions. |
 
 ## Build, installation and identity
@@ -202,8 +202,9 @@ settlement row. Allocate per destination using gross minus the actual output.
 Verify change with the public ranged rounds-wallet descriptor, not a guessed
 address label. Pending or absent fee evidence is unknown, never zero. Keep user
 principal, operator float and channel balances separate. Tree padding is not a
-customer liability; until its view correction is installed, the upstream view
-counts it as such. Reconciliation must account for its operator value explicitly.
+customer liability. The fork feature SQL corrects its ownership class; an older
+installation still counts it as customer-owned until that SQL is applied. Keep
+its value in operator totals so frontier reconciliation remains unchanged.
 
 [owner/open] Alert on growing eligible backlog, missing tick summaries, nursery
 rejection/age, unavailable Core or CLN, failed pool replenishment, insufficient
@@ -1241,3 +1242,42 @@ the cleanup start; inline and integration tests are unchanged. Server/RPC/lib
 fork additions become 2,269 production lines and 358 inline-test lines against
 `6768e0fb4`. Net code reduction is one line; the material improvement is removal
 of repeated full coin-vector allocations, not a claimed substantial LOC reduction.
+
+### Attribute padding to the operator without discarding its value
+
+[owner/code] `contrib/expiry-fallback.sql` replaces only
+`v_frontier_ownership_totals`. `server/schema.sql` records the same definition.
+The optional feature installer retains upstream numbered migration checksums and
+stock watchmand schema compatibility. Existing operators apply the updated feature
+SQL before traffic resumes; creating a binary alone does not update this view.
+No customer VTXO state, settlement, payout rule or nursery transaction changes.
+
+The view reuses the upstream V58 indexed recursive walk and conflict rules;
+it is not a new accounting subsystem. The walk carries each row's immutable
+encoded policy. Only an
+`unclaimed` leaf whose policy is exactly `00` followed by the compressed
+`02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c`
+padding key becomes `ours` instead of `theirs`. This matches the tree builder's
+pubkey policy encoding; value alone is never a discriminator. All other classes,
+conflicted branches, conflict-terminal leaves and totals retain their old rules.
+The unique VTXO ID keeps the additional seed policy join one-to-one. `GROUP BY 1`
+uses the output ownership expression instead of duplicating its CASE branches.
+
+[measured] The owned signet read-only RED snapshot found 27 padding leaves,
+8,910 sats, included in customer liabilities. It also retained three genuine
+unclaimed customer leaves, 10,298 sats, and 29 spendable customer leaves,
+34,616 sats. For that exact snapshot, the corrected customer subtotal is
+32 leaves / 44,914 sats instead of 59 / 53,824. The operator subtotal increases
+by the same 27 leaves / 8,910 sats, while all 154 leaves / 270,076 sats remain
+in reconciliation. These are bounded snapshot numbers, not a current global
+balance or proof of live installation. Source/golden checks do not replace
+root-controlled live before/after qualification. The actual owned-signet read-only
+old/new comparison subsequently returned `ours -> ours` 95 / 216,252,
+`theirs -> ours` 27 / 8,910, and `theirs -> theirs` 32 / 44,914. It parses and
+checks the proposed mapping against real rows without installing the view.
+
+[open] After installation, compare both customer membership and total frontier
+reconciliation within one declared snapshot. Confirm that only the exact padding
+class moved to operator ownership. Retain the previous raw view definition and
+roll back the view only if the actual classification differs from that declared
+result. Do not drop any entitlement or edit customer amounts to make totals match.

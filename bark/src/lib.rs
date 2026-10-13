@@ -684,7 +684,6 @@ pub struct WalletProperties {
 /// The VTXO seed is derived by applying a hardened derivation
 /// step at index 350 from the wallet's seed.
 pub struct WalletSeed {
-	#[cfg(feature = "onchain-bdk")]
 	onchain_root: bip32::Xpriv,
 	master: bip32::Xpriv,
 	vtxo: bip32::Xpriv,
@@ -702,7 +701,7 @@ impl WalletSeed {
 		let vtxo = master.derive_priv(&SECP, &vtxo_path)
 			.expect("vtxo path is valid");
 
-		Self { master, vtxo, #[cfg(feature = "onchain-bdk")] onchain_root: root }
+		Self { master, vtxo, onchain_root: root }
 	}
 
 	/// Create a new [WalletSeed] from a given BIP-39 [Mnemonic]
@@ -712,6 +711,15 @@ impl WalletSeed {
 
 	pub fn fingerprint(&self) -> Fingerprint {
 		self.master.fingerprint(&SECP)
+	}
+
+	/// The native payout destination is deterministic, independent of wallet state.
+	fn fallback_script(&self, network: Network) -> anyhow::Result<ScriptBuf> {
+		let coin_type = if network == Network::Bitcoin { 0 } else { 1 };
+		let path = [ChildNumber::Hardened { index: 84 }, ChildNumber::Hardened { index: coin_type },
+			ChildNumber::Hardened { index: 0 }, ChildNumber::Normal { index: 0 }, ChildNumber::Normal { index: 0 }];
+		let key = self.onchain_root.derive_priv(&SECP, &path)?.to_priv().public_key(&SECP);
+		Ok(bitcoin::Address::p2wpkh(&bitcoin::CompressedPublicKey::try_from(key)?, network).script_pubkey())
 	}
 
 	fn derive_vtxo_keypair(&self, idx: u32) -> Keypair {
@@ -1008,19 +1016,12 @@ impl Wallet {
 	/// together with its index.
 	pub async fn derive_store_next_keypair(&self) -> anyhow::Result<(Keypair, u32)> {
 		let _guard = self.inner.lock_manager.lock(
-			&format!("{}.key-pool", self.fingerprint()), Duration::from_secs(30),
-		).await.context("key pool is busy")?;
-		let key = match self.inner.db.take_next_linked_vtxo_key().await? {
-			Some(key) => key,
-			None => {
-				self.sync_fallback().await.context("no linked keys available; connect to the Ark server")?;
-				self.inner.db.take_next_linked_vtxo_key().await?
-					.context("server did not replenish the linked key pool")?
-			},
-		};
-		let keypair = self.inner.seed.derive_vtxo_keypair(key.0);
-		ensure!(keypair.public_key() == key.1, "stored linked key does not match wallet seed");
-		Ok((keypair, key.0))
+			&format!("{}.key-allocation", self.fingerprint()), Duration::from_secs(30),
+		).await.context("key allocation is busy")?;
+		self.fallback_destination().await.context("register the immutable fallback account before deriving coin keys")?;
+		let (keypair, index) = self.peek_next_keypair().await?;
+		self.inner.db.store_vtxo_key(index, keypair.public_key()).await?;
+		Ok((keypair, index))
 	}
 
 	#[deprecated(note = "use peek_keypair instead")]
@@ -1168,9 +1169,7 @@ impl Wallet {
 		let properties = self.properties().await?;
 		let network = properties.network;
 		let keypair = self.peek_keypair(index).await?;
-		ensure!(self.inner.db.is_vtxo_key_linked(&keypair.public_key()).await?,
-			"address key is not linked to an expiry fallback record");
-		// An explicitly requested pool address is handed out too. Never reuse it.
+		self.fallback_destination().await?;
 		self.inner.db.store_vtxo_key(index, keypair.public_key()).await?;
 		let mailbox = self.mailbox_identifier();
 
@@ -1189,6 +1188,7 @@ impl Wallet {
 			.pubkey_policy(keypair.public_key())
 			.mailbox(mailbox_pubkey, mailbox, &keypair)
 			.context("failed to assign mailbox")?
+			.account_child(ark::fallback::AccountChild::new(mailbox.as_pubkey(), index)?)
 			.into_address()
 			.context("failed to build address")?)
 	}
@@ -1559,7 +1559,6 @@ impl Wallet {
 	pub async fn sync_onchain(&self) -> anyhow::Result<()> {
 		if let Some(onchain) = self.inner.onchain.as_ref() {
 			onchain.write().await.sync(self.chain()).await?;
-			self.rotate_fallback_if_paid().await?;
 		}
 		Ok(())
 	}

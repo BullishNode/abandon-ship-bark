@@ -424,22 +424,11 @@ pub trait BarkPersister: Send + Sync + 'static {
 	/// - Returns an error if the mapping cannot be stored.
 	async fn store_vtxo_key(&self, index: u32, public_key: PublicKey) -> anyhow::Result<()>;
 
-	/// Store keys acknowledged by SetFallback without handing them out.
-	/// Retrying this operation must preserve each key's issued state.
-	async fn store_linked_vtxo_keys(&self, keys: &[(u32, PublicKey)]) -> anyhow::Result<()>;
-
-	/// Whether SetFallback has acknowledged this key's immutable link.
-	async fn is_vtxo_key_linked(&self, public_key: &PublicKey) -> anyhow::Result<bool>;
-
-	/// Atomically hand out the linked key immediately after the last issued key.
-	/// Returns None when that key has not been linked yet.
-	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>>;
-
 	/// Read the last signed fallback destination.
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>>;
 
-	/// Store a signed fallback destination, ignoring older sequences.
-	/// An equal sequence adopts the server's record after a concurrent registration.
+	/// Persist an immutable binding; canonical signatures may be adopted only
+	/// when the address and account are unchanged.
 	async fn store_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()>;
 
 	/// Get the last revealed/used [Vtxo] key index.

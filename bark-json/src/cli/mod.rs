@@ -30,7 +30,7 @@ use crate::serde_utils;
 #[cfg_attr(feature = "utoipa", derive(ToSchema))]
 pub struct FallbackDestination {
 	pub address: String,
-	pub seq: u64,
+	pub account_xpub: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

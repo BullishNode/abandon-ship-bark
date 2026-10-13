@@ -8,6 +8,7 @@ use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::secp256k1::{self, schnorr, Keypair, Message, PublicKey};
 use bitcoin::{Network, Script, ScriptBuf};
 
+use crate::mailbox::BlindedMailboxIdentifier;
 use crate::{ProtocolDecodingError, ProtocolEncoding, ReadExt, WriteExt, SECP};
 
 const RECORD_VERSION: u8 = 3;
@@ -25,7 +26,7 @@ pub enum FallbackError {
 	HardenedChild,
 	#[error("coin policy key does not match the registered account child")]
 	WrongChild,
-	#[error("invalid fallback signature: {0}")]
+	#[error("invalid fallback key or signature: {0}")]
 	Signature(#[from] secp256k1::Error),
 	#[error("invalid coin-account derivation: {0}")]
 	Derivation(#[from] bip32::Error),
@@ -176,6 +177,25 @@ impl ProtocolEncoding for AccountChild {
 	}
 }
 
+
+/// The existing blinded mailbox plus one ordinary index carried on creation.
+/// Server admission unblinds once, then verifies the resolved AccountChild.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountChildHint {
+	blinded_mailbox_id: BlindedMailboxIdentifier,
+	child_index: u32,
+}
+
+impl AccountChildHint {
+	pub fn new(blinded_mailbox_id: BlindedMailboxIdentifier, child_index: u32) -> Result<Self, FallbackError> {
+		PublicKey::from_slice(blinded_mailbox_id.as_ref())?;
+		if child_index >= (1 << 31) { return Err(FallbackError::HardenedChild); }
+		Ok(Self { blinded_mailbox_id, child_index })
+	}
+
+	pub fn blinded_mailbox_id(&self) -> BlindedMailboxIdentifier { self.blinded_mailbox_id }
+	pub fn child_index(&self) -> u32 { self.child_index }
+}
 
 #[cfg(test)]
 mod tests {

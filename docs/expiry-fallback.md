@@ -6,8 +6,10 @@ remain evidence. They are not alternate current instructions.
 
 ## Status and evidence conventions
 
-**Mainnet release is not qualified.** The qualified native source is
-`8f2286ee7e1631b0ceccd1631ec3b728a1bb0a52`. The published review baseline is
+**Mainnet release is not qualified.** The full native qualification baseline is
+`8f2286ee7e1631b0ceccd1631ec3b728a1bb0a52`. The current signet daemons run
+`7596c0dc1005c619c4c9528f9e408f005ed7793c`; Bark clients remain on that earlier
+baseline. The published review baseline is
 `a8c1a3bb2c0361b6609dd3f9dee836812b3691c8`. The upstream comparison base is
 `6768e0fb4`; the separate reviewed upstream reference is `04c554507`.
 Pin the final qualified release commit and image digests. Do not deploy a moving branch.
@@ -20,13 +22,19 @@ The appendices provide exact code, hunk and commit identifiers. A source review 
 not a historical build result, live safety proof or mainnet release authorization.
 
 [measured] The declared 247-test native suite, 500-owner scale run and ten capital
-plus ten mixed-workload soak cycles passed on the shipping native source. The
+plus ten mixed-workload soak cycles passed on the `8f2286ee7` native source. The
 scale run includes 1,548 entitlements and 500 confirmed seed-only recovery spends.
 These results qualify those workloads. They do not qualify every production case.
 The final live browser/absent-wallet recovery, operator fault windows, realistic
 Ark and Lightning traffic, Noah journeys and operational mainnet release remain
 separate gates. Successful outer sync calls do not prove transactions or
 adoption succeeded.
+
+[measured] The `7596c0dc1` daemon build uses the same dependency features and
+release profile as the earlier release. Five payout unit tests pass. Live
+executable hashes, startup witness validation and retained transaction identities
+are verified. This qualifies the deployed batch-borrow cleanup and accounting
+correction; it does not establish a new full-suite or mainnet qualification.
 
 ## Promise, architecture and exclusions
 
@@ -1197,10 +1205,11 @@ vectors even if it deferred. There is no new API, table, config, state or worker
 No eligibility, destination, ordering, fee, lock, commit or broadcast check changes.
 The borrowing lifetime keeps the same batch alive through the awaited claim.
 
-[measured] Isolated offline `cargo check -p bark-server --lib --locked` passes
-using the owner-authorized standalone qualification toolchain. This checks type,
-ownership and server compilation; it is not a new live signet result. Runtime
-qualification and deployment remain the lead's responsibility. The production
+[measured] Isolated offline compilation and five payout unit tests pass. The
+matched release binaries are deployed on signet; running executable hashes,
+startup witness validation and retained transaction identities are verified.
+The earlier full-suite and scale results remain attached to `8f2286ee7`.
+The production
 diff in `server/src/expiry_payout.rs` is two additions and three deletions against
 the cleanup start; inline and integration tests are unchanged. At this borrow-only commit, Server/RPC/lib fork additions become 2,269
 production lines and 358 inline-test lines against `6768e0fb4`. Net code reduction is one line; the material improvement is removal
@@ -1269,6 +1278,7 @@ changes must be included in the lead's final review and deployment manifest.
 | C130 / [72b2cc5db](https://github.com/BullishNode/abandon-ship-bark/commit/72b2cc5db450f2f7aba863240eaad3d8fe5981d4) | `contrib/expiry-fallback.sql`, `server/schema.sql`: replace frontier ownership mapping using the upstream recursive walk; exact padding is operator-owned; use one CASE via GROUP BY 1. Manual records the RED/comparison. | [owner/code/measured] Actual signet RED and read-only old/new comparison preserve customer classes and total leaves. Numbered migrations, coin states and payout logic unchanged. Source/golden checks pass; root alone performs live DDL application and final verification. |
 | C131 / [f4d4afab8](https://github.com/BullishNode/abandon-ship-bark/commit/f4d4afab875add25e8ee84564708510735d6c3fe) | `docs/expiry-fallback.md`: records the four consolidation and cleanup commits with their validation limits and line counts. | [owner/code] Publish the full decision record. This changes no runtime behavior. |
 | C132 / this documentation change | `contrib/expiry-payout-task.md`: direct old links to this canonical page. This page records actual padding-view qualification. | [owner/measured] Remove competing maintained instructions. Preserve the complete previous task page in Git history. No native binary changes or release-gate credit. |
+| C133 / this status update | `docs/expiry-fallback.md`: distinguish the earlier full qualification from the deployed daemon cleanup and unchanged clients. | [measured] Record verified deployment without extending old test results to a different build. Documentation only; no new native behavior or mainnet qualification. |
 
 [measured] At C130, compared with cleanup start `a8c1a3bb2`, the optional SQL
 adds 45 lines; schema snapshot adds 13 and deletes 20; payout implementation adds

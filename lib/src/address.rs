@@ -10,7 +10,7 @@ use bitcoin::secp256k1::{Keypair, PublicKey};
 use crate::{ProtocolDecodingError, ProtocolEncoding, VtxoPolicy};
 use crate::encode::{MAX_VEC_SIZE, ReadExt, WriteExt};
 use crate::mailbox::{BlindedMailboxIdentifier, MailboxIdentifier};
-use crate::fallback::AccountChild;
+use crate::fallback::{AccountChild, AccountChildHint};
 
 
 /// The human-readable part for mainnet addresses
@@ -61,7 +61,7 @@ pub enum VtxoDelivery {
 		blinded_id: BlindedMailboxIdentifier,
 	},
 	/// Account attribution metadata; this does not deliver or authorize spending.
-	AccountChild(AccountChild),
+	AccountChildIndex(u32),
 	Unknown {
 		delivery_type: u8,
 		data: Vec<u8>,
@@ -96,7 +96,7 @@ impl VtxoDelivery {
 	fn encoded_length(&self) -> usize {
 		match self {
 			Self::ServerMailbox { .. } => 1 + 33,
-			Self::AccountChild(..) => 1 + 33 + 4,
+			Self::AccountChildIndex(..) => 1 + 4,
 			Self::Unknown { data, .. } => 1usize.saturating_add(data.len()),
 		}
 	}
@@ -108,9 +108,9 @@ impl VtxoDelivery {
 				w.emit_u8(DELIVERY_MAILBOX)?;
 				w.emit_slice(blinded_id.as_ref())?;
 			},
-			Self::AccountChild(origin) => {
+			Self::AccountChildIndex(index) => {
 				w.emit_u8(DELIVERY_ACCOUNT_CHILD)?;
-				origin.encode(w)?;
+				w.emit_u32(*index)?;
 			},
 			Self::Unknown { delivery_type, data } => {
 				w.emit_u8(*delivery_type)?;
@@ -128,13 +128,17 @@ impl VtxoDelivery {
 
 		match payload[0] {
 			DELIVERY_MAILBOX => Ok(Self::ServerMailbox {
-				blinded_id: BlindedMailboxIdentifier::from_slice(&payload[1..]).map_err(
+				blinded_id: BlindedMailboxIdentifier::deserialize(&payload[1..]).map_err(
 					|_| ParseAddressError::Invalid("invalid blinded mailbox identifier"),
 				)?,
 			}),
-			DELIVERY_ACCOUNT_CHILD => AccountChild::deserialize(&payload[1..])
-				.map(Self::AccountChild)
-				.map_err(|_| ParseAddressError::Invalid("invalid fallback account child")),
+			DELIVERY_ACCOUNT_CHILD => {
+				if payload.len() != 5 { return Err(ParseAddressError::Invalid("invalid fallback child index length")); }
+				let index = u32::from_le_bytes(payload[1..5].try_into()
+					.map_err(|_| ParseAddressError::Invalid("invalid fallback child index"))?);
+				if index >= (1 << 31) { return Err(ParseAddressError::Invalid("hardened fallback child index")); }
+				Ok(Self::AccountChildIndex(index))
+			},
 			delivery_type => Ok(Self::Unknown {
 				delivery_type: delivery_type,
 				data: payload[1..].to_vec(),
@@ -222,19 +226,33 @@ impl Address {
 		&self.delivery
 	}
 
-	/// The receiver's registered account and ordinary child, if supplied.
-	/// Repeated origins are refused so no sender can select a different one.
-	pub fn account_child(&self) -> Result<Option<AccountChild>, ParseAddressError> {
-		let mut origin = None;
+	/// Resolve the index metadata against the address's existing blinded mailbox.
+	/// Multiple mailboxes or indices would make attribution ambiguous.
+	pub fn account_child(&self) -> Result<Option<AccountChildHint>, ParseAddressError> {
+		let mut index = None;
+		let mut mailbox = None;
+		let mut mailbox_count = 0u32;
 		for method in &self.delivery {
-			if let VtxoDelivery::AccountChild(child) = method {
-				if origin.is_some() {
-					return Err(ParseAddressError::Invalid("repeated fallback account child"));
-				}
-				origin = Some(*child);
+			match method {
+				VtxoDelivery::AccountChildIndex(child_index) => {
+					if index.is_some() { return Err(ParseAddressError::Invalid("repeated fallback child index")); }
+					index = Some(*child_index);
+				},
+				VtxoDelivery::ServerMailbox { blinded_id } => {
+					mailbox_count = mailbox_count.checked_add(1)
+						.ok_or(ParseAddressError::Invalid("too many mailboxes"))?;
+					mailbox = Some(*blinded_id);
+				},
+				_ => {},
 			}
 		}
-		Ok(origin)
+		match index {
+			None => Ok(None),
+			Some(index) if mailbox_count == 1 => AccountChildHint::new(mailbox
+				.ok_or(ParseAddressError::Invalid("fallback child index requires a mailbox"))?, index)
+				.map(Some).map_err(|_| ParseAddressError::Invalid("invalid fallback account child")),
+			Some(_) => Err(ParseAddressError::Invalid("fallback child index requires exactly one mailbox")),
+		}
 	}
 
 	/// Write the address payload to the writer
@@ -518,7 +536,7 @@ impl Builder {
 
 	/// Add the exact child hint used to attribute this address's user key.
 	pub fn account_child(self, origin: AccountChild) -> Self {
-		self.delivery(VtxoDelivery::AccountChild(origin))
+		self.delivery(VtxoDelivery::AccountChildIndex(origin.child_index()))
 	}
 
 	/// Set the mailbox identifier of the server mailbox to use
@@ -588,6 +606,8 @@ impl<T: Iterator<Item = u8>> io::Read for ByteIter<T> {
 #[cfg(test)]
 mod test {
 	use bitcoin::secp256k1::rand;
+	use bitcoin::bip32::{ChildNumber, Xpriv};
+	use crate::fallback::FallbackRecord;
 	use crate::SECP;
 	use super::*;
 
@@ -688,9 +708,7 @@ mod test {
 
 	#[test]
 	fn account_child_delivery_is_known_and_bounded() {
-		let mailbox = Keypair::from_seckey_slice(&SECP, &[7; 32]).unwrap().public_key();
 		let mut payload = vec![0x02];
-		payload.extend_from_slice(&mailbox.serialize());
 		payload.extend_from_slice(&50u32.to_le_bytes());
 		let parsed = VtxoDelivery::decode(&payload).unwrap();
 		assert!(!parsed.is_unknown(), "an offline recipient's account child must be recognized");
@@ -698,7 +716,7 @@ mod test {
 			assert!(VtxoDelivery::decode(&payload[..length]).is_err());
 		}
 		let mut hardened = payload.clone();
-		hardened[34..38].copy_from_slice(&(1u32 << 31).to_le_bytes());
+		hardened[1..5].copy_from_slice(&(1u32 << 31).to_le_bytes());
 		assert!(VtxoDelivery::decode(&hardened).is_err());
 		payload.push(0);
 		assert!(VtxoDelivery::decode(&payload).is_err());
@@ -706,9 +724,8 @@ mod test {
 
 	#[test]
 	fn account_child_delivery_rejects_invalid_key() {
-		let mut payload = vec![0x02];
+		let mut payload = vec![0x01];
 		payload.extend_from_slice(&[0; 33]);
-		payload.extend_from_slice(&25u32.to_le_bytes());
 		assert!(VtxoDelivery::decode(&payload).is_err(), "unverified origin bytes must not become an accepted address field");
 	}
 
@@ -727,16 +744,16 @@ mod test {
 			.account_child(origin)
 			.into_address().unwrap();
 		let decoded = test_roundtrip(&address);
-		assert_eq!(decoded.account_child().unwrap(), Some(origin));
+		assert_eq!(decoded.account_child().unwrap().unwrap().child_index(), origin.child_index());
 		assert!(matches!(decoded.delivery()[0], VtxoDelivery::ServerMailbox { .. }));
 		assert_eq!(decoded.delivery().len(), 2);
 		// A payer receives only the address text, not the receiver's database.
 		let mut duplicate = decoded.clone();
-		duplicate.delivery.push(VtxoDelivery::AccountChild(origin));
+		duplicate.delivery.push(VtxoDelivery::AccountChildIndex(origin.child_index()));
 		assert!(duplicate.account_child().is_err());
 		assert!(Address::from_str(&duplicate.to_string()).is_err());
 		duplicate.delivery.pop();
-		duplicate.delivery.push(VtxoDelivery::AccountChild(AccountChild::new(mailbox_key.public_key(), 25).unwrap()));
+		duplicate.delivery.push(VtxoDelivery::AccountChildIndex(25));
 		assert!(Address::from_str(&duplicate.to_string()).is_err());
 	}
 
@@ -753,6 +770,52 @@ mod test {
 		let mut payload = vec![0x01];
 		payload.extend_from_slice(&[0; 33]);
 		assert!(VtxoDelivery::decode(&payload).is_err(), "a peer curve point must be validated before upstream unblinding");
+	}
+
+
+	#[test]
+	fn account_child_noah_public_vectors() {
+		let mailbox = Keypair::from_seckey_slice(&SECP, &[7; 32]).unwrap();
+		let server = Keypair::from_seckey_slice(&SECP, &[2; 32]).unwrap();
+		let server_mailbox = Keypair::from_seckey_slice(&SECP, &[1; 32]).unwrap();
+		let root = Xpriv::new_master(bitcoin::Network::Signet, &[3; 64]).unwrap();
+		let account = root.derive_priv(&SECP, &[ChildNumber::from_hardened_idx(350).unwrap(), ChildNumber::from_hardened_idx(0).unwrap()]).unwrap();
+		let spk = bitcoin::ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+		let record = FallbackRecord::new(bitcoin::Network::Signet, spk, &account, &mailbox).unwrap();
+		record.verify(bitcoin::Network::Signet, mailbox.public_key()).unwrap();
+		for index in [0, 25, 50, (1 << 31) - 1] {
+			let user = account.derive_priv(&SECP, &[ChildNumber::from_normal_idx(index).unwrap()]).unwrap().to_keypair(&SECP);
+			let origin = AccountChild::new(mailbox.public_key(), index).unwrap();
+			let address = Address::builder().testnet(true).server_pubkey(server.public_key())
+				.pubkey_policy(user.public_key())
+				.mailbox(server_mailbox.public_key(), MailboxIdentifier::from_pubkey(mailbox.public_key()), &user).unwrap()
+				.account_child(origin).into_address().unwrap();
+			let parsed = Address::from_str(&address.to_string()).unwrap();
+			let hint = parsed.account_child().unwrap().unwrap();
+			let resolved = MailboxIdentifier::from_blinded(hint.blinded_mailbox_id(), user.public_key(), &server_mailbox).unwrap();
+			assert_eq!(resolved.as_pubkey(), mailbox.public_key());
+			AccountChild::new(resolved.as_pubkey(), hint.child_index()).unwrap()
+				.verify_pubkey(&record.account_xpub, user.public_key()).unwrap();
+			println!("expiry_identity_vector {}", serde_json::json!({
+				"variant": "valid", "index": index, "address": address.to_string(),
+				"server_pubkey": server.public_key().to_string(), "server_mailbox_pubkey": server_mailbox.public_key().to_string(),
+				"mailbox_pubkey": mailbox.public_key().to_string(), "user_pubkey": user.public_key().to_string(),
+				"xpub": record.account_xpub.to_string(), "record": record.serialize_hex(),
+			}));
+			if index == 50 {
+				for (variant, bytes) in [
+					("hardened", (1u32 << 31).to_le_bytes().to_vec()),
+					("truncated", vec![50, 0, 0]),
+					("trailing", vec![50, 0, 0, 0, 0]),
+				] {
+					let invalid = Address::new(true, server.public_key(), address.policy().clone(), vec![
+						address.delivery()[0].clone(), VtxoDelivery::Unknown { delivery_type: 0x02, data: bytes },
+					]);
+					assert!(Address::from_str(&invalid.to_string()).is_err());
+					println!("expiry_identity_vector {}", serde_json::json!({"variant": variant, "index": index, "address": invalid.to_string()}));
+				}
+			}
+		}
 	}
 
 }

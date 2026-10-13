@@ -37,7 +37,7 @@ use ark::vtxo::policy::check_block_height;
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use server_rpc::{self as rpc, protos, RequestExt, TryFromBytes};
 use crate::database::SpendState;
-use crate::database::fallback::{FallbackKeyLink, FallbackRecord};
+use crate::database::fallback::FallbackRecord;
 
 use crate::database::rounds::StoredRoundOutput;
 use crate::recovery::NB_NORMAL_CHILDREN;
@@ -344,15 +344,12 @@ impl rpc::server::ArkService for Server {
 	) -> Result<tonic::Response<protos::SetFallbackResponse>, tonic::Status> {
 		let req = req.into_inner();
 		let mailbox_pk = PublicKey::from_bytes(&req.mailbox_pk)?;
-		let record = req.record.as_deref().map(|bytes|
-			FallbackRecord::from_bytes(bytes, mailbox_pk, self.config.network),
-		).transpose().badarg("invalid fallback record")?;
-		let key_links = req.key_links.iter().map(|bytes| FallbackKeyLink::from_bytes(bytes, mailbox_pk))
-			.collect::<anyhow::Result<Vec<_>>>().badarg("invalid fallback key link")?;
-		let stored = self.db.write(async |t| t.set_fallback(mailbox_pk, record.as_ref(), &key_links).await)
+		let record = FallbackRecord::from_bytes(&req.record, mailbox_pk, self.config.network)
+			.badarg("invalid fallback record")?;
+		let stored = self.db.write(async |t| t.set_fallback(mailbox_pk, &record).await)
 			.await.to_status()?;
 		Ok(tonic::Response::new(protos::SetFallbackResponse {
-			record: stored.map(|r| r.to_bytes()).unwrap_or_default(),
+			record: stored.to_bytes(),
 		}))
 	}
 

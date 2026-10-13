@@ -491,7 +491,7 @@ pub async fn bip321_uri(
 	path = "/fallback-destination",
 	summary = "Get the automatic expiry payout destination",
 	responses(
-		(status = 200, description = "Locally stored fallback address and sequence", body = bark_json::cli::FallbackDestination),
+		(status = 200, description = "Authenticated immutable fallback address and account", body = bark_json::cli::FallbackDestination),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	tag = "wallet"
@@ -505,7 +505,7 @@ pub async fn fallback_destination(
 	Ok(Json(bark_json::cli::FallbackDestination {
 		address: bitcoin::Address::from_script(&record.spk, wallet.network().await?)
 			.context("invalid stored fallback address")?.to_string(),
-		seq: record.seq,
+		account_xpub: record.account_xpub.to_string(),
 	}))
 }
 

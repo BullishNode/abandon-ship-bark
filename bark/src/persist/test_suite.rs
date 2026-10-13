@@ -67,7 +67,7 @@ macro_rules! bark_persister_tests {
 			test_vtxo_keys_empty,
 			test_vtxo_key_roundtrip,
 			test_vtxo_key_last_index_advances,
-			test_linked_key_issuance,
+			test_concurrent_key_index_collision,
 			test_fallback_record_ordering,
 
 			test_store_and_get_vtxo,
@@ -369,52 +369,31 @@ pub async fn test_vtxo_key_last_index_advances(db: &impl BarkPersister) {
 	assert_eq!(last, Some(2), "last index after storing indices 0..=2");
 }
 
-// Replenishment retries, recovery, and concurrent callers must not reuse keys.
-pub async fn test_linked_key_issuance(db: &impl BarkPersister) {
-	let secp = Secp256k1::new();
-	let keys = (0..8).map(|i| {
-		let sk = SecretKey::from_slice(&[i as u8 + 10; 32]).unwrap();
-		(i, Keypair::from_secret_key(&secp, &sk).public_key())
-	}).collect::<Vec<_>>();
-	assert_eq!(db.take_next_linked_vtxo_key().await.unwrap(), None);
-	db.store_linked_vtxo_keys(&keys).await.unwrap();
-	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), None);
-	let (a, b) = futures::join!(db.take_next_linked_vtxo_key(), db.take_next_linked_vtxo_key());
-	let mut issued = [a.unwrap().unwrap(), b.unwrap().unwrap()];
-	issued.sort_by_key(|k| k.0);
-	assert_eq!(issued, [keys[0], keys[1]]);
-	db.store_linked_vtxo_keys(&keys).await.unwrap();
-	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), Some(1));
-	// A recovered key consumes that index even when it was still in the pool.
-	db.store_vtxo_key(keys[3].0, keys[3].1).await.unwrap();
-	for key in &keys[4..] {
-		assert_eq!(db.take_next_linked_vtxo_key().await.unwrap(), Some(*key));
-	}
-	assert_eq!(db.take_next_linked_vtxo_key().await.unwrap(), None);
-	db.store_linked_vtxo_keys(&keys).await.unwrap();
-	assert_eq!(db.take_next_linked_vtxo_key().await.unwrap(), None);
-	assert!(db.store_linked_vtxo_keys(&[(0, keys[1].1)]).await.is_err());
-	assert_eq!(db.get_public_key_idx(&keys[0].1).await.unwrap(), Some(0));
+// Concurrent writers must not silently overwrite an index with another key.
+pub async fn test_concurrent_key_index_collision(db: &impl BarkPersister) {
+	let a = Keypair::from_secret_key(&Secp256k1::new(), &SecretKey::from_slice(&[10; 32]).unwrap()).public_key();
+	let b = Keypair::from_secret_key(&Secp256k1::new(), &SecretKey::from_slice(&[11; 32]).unwrap()).public_key();
+	let (a_result, b_result) = futures::join!(db.store_vtxo_key(0, a), db.store_vtxo_key(0, b));
+	assert_ne!(a_result.is_ok(), b_result.is_ok());
+	let winner = if a_result.is_ok() { a } else { b };
+	db.store_vtxo_key(0, winner).await.unwrap();
+	assert_eq!(db.get_public_key_idx(&winner).await.unwrap(), Some(0));
+	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), Some(0));
 }
 
 pub async fn test_fallback_record_ordering(db: &impl BarkPersister) {
 	assert_eq!(db.get_fallback_record().await.unwrap(), None);
-	let newest = FallbackRecord { spk: ScriptBuf::from_bytes(vec![0, 20, 1]), seq: 100 };
-	db.store_fallback_record(&newest).await.unwrap();
-	for seq in [0, 99] {
-		db.store_fallback_record(&FallbackRecord { spk: ScriptBuf::new(), seq }).await.unwrap();
-		assert_eq!(db.get_fallback_record().await.unwrap(), Some(newest.clone()));
-	}
-	// The server breaks equal-sequence ties; adoption must converge to its reply.
-	let adopted = FallbackRecord { spk: ScriptBuf::new(), seq: 100 };
-	db.store_fallback_record(&adopted).await.unwrap();
-	assert_eq!(db.get_fallback_record().await.unwrap(), Some(adopted));
-	let newer = FallbackRecord { seq: 101, ..newest };
-	db.store_fallback_record(&newer).await.unwrap();
-	assert_eq!(db.get_fallback_record().await.unwrap(), Some(newer));
-	assert!(db.store_fallback_record(&FallbackRecord {
-		spk: ScriptBuf::new(), seq: u64::MAX,
-	}).await.is_err());
+	let seed = crate::WalletSeed::new_from_seed(Network::Regtest, &[17; 64]);
+	let record = FallbackRecord::new(Network::Regtest, seed.fallback_script(Network::Regtest).unwrap(),
+		&seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
+	db.store_fallback_record(&record).await.unwrap();
+	let canonical = FallbackRecord::new(Network::Regtest, record.spk.clone(), &seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
+	db.store_fallback_record(&canonical).await.unwrap();
+	assert_eq!(db.get_fallback_record().await.unwrap(), Some(canonical.clone()));
+	let mut other = canonical;
+	other.spk = ScriptBuf::new();
+	assert!(db.store_fallback_record(&other).await.is_err());
+	assert_eq!(db.get_fallback_record().await.unwrap().unwrap().spk, record.spk);
 }
 
 // ---------------------------------------------------------------------------

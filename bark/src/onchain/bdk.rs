@@ -9,7 +9,7 @@ use bdk_wallet::Wallet as BdkWallet;
 use bdk_wallet::coin_selection::DefaultCoinSelectionAlgorithm;
 use bdk_wallet::{Balance, KeychainKind, LocalOutput, TxBuilder, TxOrdering};
 use bitcoin::{
-	Address, Amount, FeeRate, Network, Psbt, Script, ScriptBuf, Sequence, Transaction, TxOut,
+	Address, Amount, FeeRate, Network, Psbt, Script, Sequence, Transaction, TxOut,
 	Txid, Weight, bip32, psbt,
 };
 use log::{debug, error, info, trace, warn};
@@ -141,7 +141,6 @@ fn cpfp_internal_to_error(e: CpfpInternalError) -> CpfpError {
 pub struct OnchainWallet {
 	pub inner: BdkWallet,
 	db: Arc<dyn BarkPersister>,
-	fallback_reservation: Option<(KeychainKind, u32)>,
 }
 
 impl Deref for OnchainWallet {
@@ -183,45 +182,20 @@ impl OnchainWallet {
 				.create_wallet_no_persist()?,
 		};
 
-		let mut ret = Self { inner: wallet, db, fallback_reservation: None };
-		if let Some(record) = ret.db.get_fallback_record().await? {
-			ret.mark_fallback_used(&record.spk).await?;
-		}
+		let mut ret = Self { inner: wallet, db };
+		let spk = ret.inner.peek_address(KeychainKind::External, 0).address.script_pubkey();
+		ret.mark_fallback_used(&spk).await?;
 		Ok(ret)
 	}
 
 	pub(crate) async fn mark_fallback_used(&mut self, spk: &Script) -> anyhow::Result<()> {
-		let (keychain, index) = self.inner.derivation_of_spk(spk.to_owned())
-			.context("fallback address is not in this BDK wallet")?;
-		if let Some((old_chain, old_index)) = self.fallback_reservation {
-			if (old_chain, old_index) != (keychain, index) {
-				self.inner.unmark_used(old_chain, old_index);
-			}
-		}
-		// A record from another device may name a cached but unrevealed index.
-		// Reveal it durably so normal onchain sync watches it after reopening.
-		self.inner.reveal_addresses_to(keychain, index).for_each(drop);
-		self.inner.mark_used(keychain, index);
-		self.fallback_reservation = Some((keychain, index));
+		let expected = self.inner.peek_address(KeychainKind::External, 0).address.script_pubkey();
+		ensure!(spk == expected.as_script(), "native fallback must be BIP84 external index 0");
+		self.inner.reveal_addresses_to(KeychainKind::External, 0).for_each(drop);
+		self.inner.mark_used(KeychainKind::External, 0);
 		self.persist().await
 	}
 
-	pub(crate) async fn reserve_fallback_address(&mut self) -> anyhow::Result<ScriptBuf> {
-		// Clear only the previous manual reservation. Outputs seen in transactions
-		// remain used, so retries after an outage cannot march past the restore gap.
-		if let Some((keychain, index)) = self.fallback_reservation.take() {
-			self.inner.unmark_used(keychain, index);
-		}
-		let address = self.inner.next_unused_address(KeychainKind::External);
-		let spk = address.address.script_pubkey();
-		self.mark_fallback_used(&spk).await?;
-		Ok(spk)
-	}
-
-	pub(crate) fn fallback_received(&self, spk: &Script) -> bool {
-		// Include spent outputs: a sweep or spend must not hide that a payout arrived.
-		self.inner.tx_graph().all_txouts().any(|(_, out)| out.script_pubkey.as_script() == spk)
-	}
 }
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -663,45 +637,23 @@ impl OnchainWallet {
 
 #[cfg(test)]
 mod fallback_tests {
-	use bitcoin::absolute::LockTime;
-	use bitcoin::transaction::Version;
-
 	use crate::persist::adaptor::StorageAdaptorWrapper;
-	use crate::persist::models::FallbackRecord;
-
 	use super::*;
 
 	#[tokio::test]
-	async fn fallback_reservation_survives_reload_and_failed_rotation() {
+	async fn fixed_index_zero_remains_reserved_after_reload() {
 		let db = Arc::new(StorageAdaptorWrapper::new_memory());
 		let seed = [17; 64];
 		let mut wallet = OnchainWallet::load_or_create(Network::Regtest, seed, db.clone()).await.unwrap();
-		// Normal receives may have revealed addresses far beyond a restore gap.
-		for _ in 0..30 { wallet.address().await.unwrap(); }
-		let reserved = wallet.reserve_fallback_address().await.unwrap();
-		assert!(reserved.is_p2wpkh());
-		assert_eq!(wallet.derivation_of_spk(reserved.clone()), Some((KeychainKind::External, 0)));
-		db.store_fallback_record(&FallbackRecord { spk: reserved.clone(), seq: 1 }).await.unwrap();
+		let reserved = wallet.inner.peek_address(KeychainKind::External, 0).address.script_pubkey();
+		assert_eq!(reserved, crate::WalletSeed::new_from_seed(Network::Regtest, &seed)
+			.fallback_script(Network::Regtest).unwrap());
+		for _ in 0..30 { assert_ne!(wallet.address().await.unwrap().script_pubkey(), reserved); }
 		drop(wallet);
-		let mut wallet = OnchainWallet::load_or_create(Network::Regtest, seed, db.clone()).await.unwrap();
+		let mut wallet = OnchainWallet::load_or_create(Network::Regtest, seed, db).await.unwrap();
 		assert_ne!(wallet.inner.next_unused_address(KeychainKind::External).address.script_pubkey(), reserved);
 		assert_ne!(wallet.address().await.unwrap().script_pubkey(), reserved);
-
-		let payout = Transaction {
-			version: Version::TWO, lock_time: LockTime::ZERO, input: vec![],
-			output: vec![TxOut { value: Amount::from_sat(20_000), script_pubkey: reserved.clone() }],
-		};
-		wallet.register_tx(&payout).await.unwrap();
-		assert!(wallet.fallback_received(&reserved));
-		// Failed attempts before a replacement record was saved must not consume
-		// one new index each time the server or database is unavailable.
-		let replacement = wallet.reserve_fallback_address().await.unwrap();
-		assert_eq!(wallet.derivation_of_spk(replacement.clone()), Some((KeychainKind::External, 1)));
-		for _ in 0..25 { assert_eq!(wallet.reserve_fallback_address().await.unwrap(), replacement); }
-		db.store_fallback_record(&FallbackRecord { spk: replacement.clone(), seq: 2 }).await.unwrap();
-		drop(wallet);
-		let wallet = OnchainWallet::load_or_create(Network::Regtest, seed, db).await.unwrap();
-		assert!(wallet.fallback_received(&reserved));
-		assert!(!wallet.fallback_received(&replacement));
+		let other = wallet.inner.peek_address(KeychainKind::External, 1).address.script_pubkey();
+		assert!(wallet.mark_fallback_used(&other).await.is_err());
 	}
 }

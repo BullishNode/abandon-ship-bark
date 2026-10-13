@@ -63,6 +63,7 @@ nix = { version = "0.30.1", features = [ "signal" ] }
 uuid = { version = "1.17.0", features = ["v4"] }
 
 anyhow.workspace = true
+prost.workspace = true
 lazy_static.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

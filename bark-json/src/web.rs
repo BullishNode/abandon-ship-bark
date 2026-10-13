@@ -900,6 +900,24 @@ pub struct AdoptedVtxoStatus {
 	pub state: AdoptedVtxoState,
 }
 
+#[cfg(test)]
+mod invoice_description_tests {
+	use super::{LightningInvoiceRequest, LightningInvoiceForAddressRequest};
+	use serde_json::json;
+
+	#[test]
+	fn description_hash_survives_invoice_request_roundtrip() {
+		let hash = "ab".repeat(32);
+		let request = json!({"amount_sat": 330, "description_hash": hash});
+		let decoded: LightningInvoiceRequest = serde_json::from_value(request.clone()).unwrap();
+		assert_eq!(serde_json::to_value(decoded).unwrap(), request,
+			"explicit metadata hash must not disappear into an ordinary memo request");
+		let forwarded = json!({"amount_sat": 330, "address": "opaque fixture", "description_hash": hash});
+		let decoded: LightningInvoiceForAddressRequest = serde_json::from_value(forwarded.clone()).unwrap();
+		assert_eq!(serde_json::to_value(decoded).unwrap(), forwarded);
+	}
+}
+
 impl From<bark::expiry_payout::AdoptedVtxoStatus> for AdoptedVtxoStatus {
 	fn from(v: bark::expiry_payout::AdoptedVtxoStatus) -> Self {
 		AdoptedVtxoStatus { vtxo_id: v.vtxo_id, state: v.state.into() }

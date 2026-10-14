@@ -12,12 +12,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use bitcoin::{Address, Amount, FeeRate, Network, OutPoint, ScriptBuf, TxOut, Weight};
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::secp256k1::Keypair;
 use bitcoincore_rpc::RpcApi;
+use tokio::process::{Child, Command};
 
 use ark::board::BoardBuilder;
 use ark::{ProtocolEncoding, ServerVtxo};
@@ -525,15 +527,42 @@ async fn frozen_expiry_source_refuses_competing_virtual_spend() {
 #[tokio::test]
 async fn automatic_expired_board_pays_registered_recipient_from_actual_backing() {
 	let AutomaticBoardFixture { ctx, srv, mnemonic, coin, record } =
-		automatic_board_fixture("automatic_expired_board_pays_registered_recipient_from_actual_backing").await;
+		automatic_board_fixture_with_fee("automatic_expired_board_pays_registered_recipient_from_actual_backing", sat(1_000)).await;
+	// Declare a confirmed fee reserve before expiry. The original wallet has
+	// already stopped; neither daemon receives a manual freeze/sweep request.
+	ctx.bitcoind().fund_addr(srv.watchmand().wait_wallet_address().await, sat(50_000)).await;
+	srv.watchmand().stop().await.unwrap();
+	srv.stop().await.unwrap();
+	let cap_cfg = srv.config().clone();
+	let mut cap: toml::Value = toml::Value::try_from(&cap_cfg).unwrap();
+	cap["expiry_payout"]["enabled"] = toml::Value::Boolean(false);
+	cap.as_table_mut().unwrap().insert("direct_expiry".into(), toml::Value::Table(toml::map::Map::from_iter([
+		("enabled".into(), toml::Value::Boolean(true)),
+		("interval".into(), toml::Value::String("100ms".into())),
+		("grace_blocks".into(), toml::Value::Integer(0)),
+		("max_groups_per_tick".into(), toml::Value::Integer(2)),
+	])));
+	let cap_path = ctx.datadir.join("automatic-captaind.toml");
+	write_automatic_config(&cap_path, &toml::to_string_pretty(&cap).unwrap());
+	let mut watch = srv.watchmand().config().clone();
+	watch.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+		history_dir: cap_cfg.data_dir.clone(), max_miner_fee: sat(10_000),
+	});
+	watch.watchman.reaction_interval = std::time::Duration::from_secs(1);
+	watch.watchman.sweep_interval = std::time::Duration::from_secs(1);
+	watch.fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(50).unwrap());
+	let watch_path = ctx.datadir.join("automatic-watchmand.toml");
+	write_automatic_config(&watch_path, &toml::to_string_pretty(&watch).unwrap());
+	let mut cap_daemon = spawn_automatic_daemon("CAPTAIND_EXEC", &cap_path, ctx.datadir.join("automatic-captaind.log"));
+	let mut watch_daemon = spawn_automatic_daemon("WATCHMAND_EXEC", &watch_path, ctx.datadir.join("automatic-watchmand.log"));
 	let core = ctx.bitcoind().sync_client();
 	let height = core.get_block_count().unwrap() as u32;
 	ctx.generate_blocks(coin.expiry_height().to_u32().saturating_sub(height) + 3).await;
-	srv.watchmand().wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;
-	srv.watchmand().trigger_sweep().await;
 	let backing = coin.chain_anchor();
 	let carrier = tokio::time::timeout(std::time::Duration::from_secs(30), async {
 		loop {
+			assert!(cap_daemon.try_wait().unwrap().is_none(), "automatic captaind exited before payment");
+			assert!(watch_daemon.try_wait().unwrap().is_none(), "automatic watchmand exited before payment");
 			let spend = core.get_raw_mempool().unwrap().into_iter()
 				.map(|id| core.get_raw_transaction(&id, None).unwrap())
 				.find(|tx| tx.input.iter().any(|i| i.previous_output == backing));
@@ -554,11 +583,42 @@ async fn automatic_expired_board_pays_registered_recipient_from_actual_backing()
 	ctx.generate_blocks(1).await;
 	assert!(core.get_raw_transaction_info(&carrier.compute_txid(), None).unwrap().confirmations.unwrap() >= 1);
 	assert!(core.get_tx_out(&backing.txid, backing.vout, Some(true)).unwrap().is_none());
+	let db = Db::connect(&cap_cfg.postgres).await.unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(15), async {
+		loop {
+			let confirmed = db.read(async |t| Ok(t.query_one("SELECT confirmed_height FROM expiry_carrier WHERE txid=$1",
+				&[&carrier.compute_txid().to_string()]).await?.get::<_, Option<i32>>(0))).await.unwrap();
+			if confirmed.is_some() { break; }
+			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+		}
+	}).await.expect("actual daemon must reconcile the confirmed winner before recovery");
+	assert_eq!(db.read(async |t| Ok(t.query_one("SELECT count(*)::bigint FROM expiry_carrier", &[]).await?
+		.get::<_, i64>(0))).await.unwrap(), 1, "one automatic carrier, no second principal payout");
+	cap_daemon.kill().await.unwrap();
+	cap_daemon.wait().await.unwrap();
+	watch_daemon.kill().await.unwrap();
+	watch_daemon.wait().await.unwrap();
 	let (discovered, recovered_spend) = recover_all_bip84_and_spend(&ctx, &mnemonic).await;
 	// Compare only after the independent mnemonic-only scan and spend have finished.
 	let payout = OutPoint::new(carrier.compute_txid(), recipient_vout as u32);
 	assert!(discovered.contains(&(payout, expected.value)));
 	assert!(recovered_spend.input.iter().any(|i| i.previous_output == payout));
+}
+
+fn write_automatic_config(path: &Path, text: &str) {
+	let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(path).unwrap();
+	file.write_all(text.as_bytes()).unwrap();
+	file.sync_all().unwrap();
+}
+
+fn spawn_automatic_daemon(exec: &str, config: &Path, log: PathBuf) -> Child {
+	let output = OpenOptions::new().write(true).create_new(true).mode(0o600).open(log).unwrap();
+	let child = Command::new(std::env::var_os(exec).unwrap()).arg("start").arg("--config").arg(config)
+		.env_remove("RUST_MIN_STACK").stdout(output.try_clone().unwrap()).stderr(output).kill_on_drop(true).spawn().unwrap();
+	let environment = std::fs::read(format!("/proc/{}/environ", child.id().unwrap())).unwrap();
+	assert!(!environment.split(|v| *v == 0).any(|v| v.starts_with(b"RUST_MIN_STACK=")),
+		"standalone daemon must use its ordinary production worker stack");
+	child
 }
 
 

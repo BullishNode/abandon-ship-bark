@@ -1617,3 +1617,88 @@ async fn fallback_edge_all_eight_offline_addresses_receive_then_return() {
 	let (payout, _) = super::fallback_lightning::wait_and_reconcile_payout(&ctx, &db, &ids, &record.spk, 160_000).await;
 	super::fallback_lightning::restore_and_spend(&ctx, &mnemonic, payout).await;
 }
+
+/// The declared ceiling also applies when expiry payout reads Core directly.
+/// The old worker must retain the minimum while paying a real absent recipient.
+#[tokio::test]
+async fn fallback_legacy_payout_respects_configured_max_fee_rate() {
+	let ctx = TestContext::new("bark_sdk/fallback_legacy_payout_respects_configured_max_fee_rate").await;
+	let maximum = FeeRate::from_sat_per_vb(1).unwrap();
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.no_vtxo_pool().funded(btc(1)).cfg(move |c| {
+			c.vtxo_lifetime = BlockDelta::new(128);
+			c.min_board_amount = sat(330);
+			c.fee_estimator.max_fee_rate = Some(maximum);
+		}).watchmand().create().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let wallet = ctx.bark_sdk("absent", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(1896)).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let record = wallet.fallback_destination().await.unwrap();
+	let coins = wallet.spendable_vtxos().await.unwrap();
+	assert_eq!(coins.len(), 1);
+	let coin = wallet.get_full_vtxo(coins[0].id()).await.unwrap();
+	assert_eq!(coin.amount(), sat(1896));
+	let ids = vec![coin.id().to_string()];
+	drop(wallet);
+
+	super::fallback_lightning::expire_and_confirm_sweeps(&ctx, &db, &[coin]).await;
+	// Core starts with four mining outputs. Provide confirmed independent
+	// inputs before training with eight sends in each block.
+	let outputs = (0..96).map(|_| serde_json::json!({ ctx.bitcoind().get_new_address().to_string(): 0.01 }))
+		.collect::<Vec<_>>();
+	let fanout: serde_json::Value = ctx.bitcoind().sync_client().call("send", &[
+		serde_json::json!(outputs), serde_json::Value::Null, "unset".into(), 20.into(),
+		serde_json::json!({ "minconf": 1 }),
+	]).unwrap();
+	mine_only(&ctx, &[fanout["txid"].as_str().unwrap().parse().unwrap()]).await;
+	// Confirm real independent transactions at an unaffordable rate.
+	for _ in 0..12 {
+		let txids = (0..8).map(|_| send_at(&ctx, 20)).collect::<Vec<_>>();
+		mine_only(&ctx, &txids).await;
+	}
+	let core = ctx.bitcoind().sync_client();
+	let estimate = core.estimate_smart_fee(6, Some(bitcoin_ext::rpc::json::EstimateMode::Economical)).unwrap()
+		.fee_rate.expect("real Core fee estimate");
+	assert!(estimate.to_sat() > 8_000, "parent refusal requires a genuinely high estimate");
+	srv.stop().await.unwrap();
+	{
+		let mut config = srv.config_mut();
+		config.expiry_payout.enabled = true;
+		config.expiry_payout.interval = Duration::from_secs(1);
+		config.expiry_payout.grace_blocks = 0;
+		config.expiry_payout.sweep_min_confs = 1;
+		config.expiry_payout.min_payout_sat = 1000;
+		config.expiry_payout.watchman_config = Some(srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE));
+	}
+	srv.start().await.unwrap();
+	let txid: Txid = tokio::time::timeout(Duration::from_secs(25), async {
+		loop {
+			let row = db.read(async |t| Ok(t.query_opt(
+				"SELECT txid FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+			).await?)).await.unwrap();
+			if let Some(row) = row { break row.get::<_, String>(0).parse().unwrap(); }
+			tokio::time::sleep(Duration::from_millis(200)).await;
+		}
+	}).await.expect("declared maximum must make the real1896sat payout affordable");
+	ctx.await_transaction(txid).await;
+	let tx = core.get_raw_transaction(&txid, None).unwrap();
+	let input = tx.input.iter().map(|i| core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
+		.output[i.previous_output.vout as usize].value.to_sat()).sum::<u64>();
+	let actual_fee = input - tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>();
+	assert!(actual_fee <= maximum.fee_wu(tx.weight()).unwrap().to_sat());
+	let paid = tx.output.iter().filter(|o| o.script_pubkey == record.spk).collect::<Vec<_>>();
+	assert_eq!(paid.len(), 1);
+	assert!(paid[0].value >= sat(1000));
+	let row = db.read(async |t| Ok(t.query_one(
+		"SELECT fee_sat,spk FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+	).await?)).await.unwrap();
+	let recipient_fee = row.get::<_, i64>("fee_sat") as u64;
+	assert_eq!(paid[0].value.to_sat() + recipient_fee, 1896);
+	assert_eq!(row.get::<_, Vec<u8>>("spk"), record.spk.as_bytes());
+	super::fallback_lightning::assert_change_pays_own_weight(&tx, actual_fee, recipient_fee, &[record.spk.clone()]);
+	ctx.generate_blocks(1).await;
+	assert!(core.get_raw_transaction_info(&txid, None).unwrap().confirmations.unwrap_or(0) > 0);
+	println!("legacy payout ceiling: estimate_sat_per_kvb={}, actual_fee_sat={actual_fee}, signed_wu={}, recipient_net_sat={}, recipient_fee_sat={recipient_fee}",
+		estimate.to_sat(), tx.weight().to_wu(), paid[0].value.to_sat());
+}

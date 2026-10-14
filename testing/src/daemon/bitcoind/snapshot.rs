@@ -110,6 +110,7 @@ pub async fn ensure_snapshot(snapshot_dir: &Path) {
 			datadir: snapshot_dir.to_path_buf(),
 			wallet: true,
 			txindex: true,
+			txospenderindex: false,
 			network: Network::Regtest,
 			fallback_fee: FeeRate::from_sat_per_vb(1).unwrap(),
 			relay_fee: None,

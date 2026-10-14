@@ -1085,6 +1085,7 @@ async fn held_receive(
 		min_cltv_delta: 18,
 		mailbox_id: None,
 		description: None,
+		description_hash: None,
 	}).await.unwrap().into_inner().bolt11;
 	// Pay from a synced tip, as `try_pay_bolt11` does.
 	lightning.external.wait_for_block_sync().await;

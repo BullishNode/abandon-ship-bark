@@ -613,6 +613,7 @@ impl rpc::server::ArkService for Server {
 			BlockDelta::try_from(req.min_cltv_delta).badarg("invalid min_cltv_delta")?,
 			mailbox_id,
 			req.description,
+			req.description_hash,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(resp))

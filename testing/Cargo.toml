@@ -78,6 +78,7 @@ env_logger.workspace = true
 chrono.workspace = true
 rand.workspace = true
 tokio = { workspace = true, features = [ "process" ] }
+tokio-util.workspace = true
 tokio-stream.workspace = true
 tokio-tungstenite = "0.28"
 tonic.workspace = true

@@ -1,5 +1,6 @@
 use anyhow::Context;
 use bitcoin::Amount;
+use bitcoin::hashes::sha256;
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
 use log::{error, info, warn};
@@ -121,7 +122,20 @@ impl Wallet {
 		description: Option<String>,
 		token: Option<String>,
 	) -> anyhow::Result<Bolt11Invoice> {
-		let start = start_lightning_receive(self, amount, description, token, None).await?;
+		let start = start_lightning_receive(self, amount, description, None, token, None).await?;
+		self.inner.db.upsert_wallet_action_checkpoint(&start.id(), &start.clone().into()).await?;
+		Ok(start.invoice.clone())
+	}
+
+	/// Create an invoice committing to the caller's exact SHA-256 description
+	/// hash, such as the hash of LNURL-pay metadata bytes. No memo is inferred.
+	pub async fn bolt11_invoice_with_description_hash(
+		&self,
+		amount: Amount,
+		description_hash: sha256::Hash,
+		token: Option<String>,
+	) -> anyhow::Result<Bolt11Invoice> {
+		let start = start_lightning_receive(self, amount, None, Some(description_hash), token, None).await?;
 		self.inner.db.upsert_wallet_action_checkpoint(&start.id(), &start.clone().into()).await?;
 		Ok(start.invoice.clone())
 	}
@@ -156,7 +170,23 @@ impl Wallet {
 		token: Option<String>,
 	) -> anyhow::Result<Bolt11Invoice> {
 		let start = start_lightning_receive(
-			self, amount, description, token, Some(claim_destination),
+			self, amount, description, None, token, Some(claim_destination),
+		).await?;
+		self.inner.db.upsert_wallet_action_checkpoint(&start.id(), &start.clone().into()).await?;
+		Ok(start.invoice.clone())
+	}
+
+	/// Create a hash-bound invoice with the same claim destination and delivery
+	/// behavior as [`Self::bolt11_invoice_for_address`].
+	pub async fn bolt11_invoice_for_address_with_description_hash(
+		&self,
+		amount: Amount,
+		claim_destination: ark::Address,
+		description_hash: sha256::Hash,
+		token: Option<String>,
+	) -> anyhow::Result<Bolt11Invoice> {
+		let start = start_lightning_receive(
+			self, amount, None, Some(description_hash), token, Some(claim_destination),
 		).await?;
 		self.inner.db.upsert_wallet_action_checkpoint(&start.id(), &start.clone().into()).await?;
 		Ok(start.invoice.clone())

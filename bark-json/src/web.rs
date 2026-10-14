@@ -1,5 +1,6 @@
 
 use bitcoin::{Amount, FeeRate, Txid};
+use bitcoin::hashes::sha256;
 use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -532,6 +533,11 @@ pub struct LightningInvoiceRequest {
 	/// Optional description embedded in the invoice as its memo.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub description: Option<String>,
+	/// Exact SHA-256 description commitment, as 64 hexadecimal characters.
+	/// Mutually exclusive with description; the caller hashes the metadata.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "utoipa", schema(value_type = Option<String>))]
+	pub description_hash: Option<sha256::Hash>,
 	/// Optional lightning receive token for authentication of the claim, if
 	/// the server requires one and there are no existing spendable VTXOs to
 	/// prove ownership of.
@@ -549,6 +555,11 @@ pub struct LightningInvoiceForAddressRequest {
 	/// Optional description embedded in the invoice as its memo.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub description: Option<String>,
+	/// Exact SHA-256 description commitment, as 64 hexadecimal characters.
+	/// Mutually exclusive with description; the caller hashes the metadata.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "utoipa", schema(value_type = Option<String>))]
+	pub description_hash: Option<sha256::Hash>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -915,6 +926,18 @@ mod invoice_description_tests {
 		let forwarded = json!({"amount_sat": 330, "address": "opaque fixture", "description_hash": hash});
 		let decoded: LightningInvoiceForAddressRequest = serde_json::from_value(forwarded.clone()).unwrap();
 		assert_eq!(serde_json::to_value(decoded).unwrap(), forwarded);
+	}
+
+	#[test]
+	fn invoice_description_hash_rejects_invalid_hex_and_lengths() {
+		for hash in ["".into(), "ab".repeat(31), "ab".repeat(33), "zz".repeat(32)] {
+			assert!(serde_json::from_value::<LightningInvoiceRequest>(
+				json!({"amount_sat": 330, "description_hash": hash}),
+			).is_err());
+			assert!(serde_json::from_value::<LightningInvoiceForAddressRequest>(
+				json!({"amount_sat": 330, "address": "opaque fixture", "description_hash": hash}),
+			).is_err());
+		}
 	}
 }
 

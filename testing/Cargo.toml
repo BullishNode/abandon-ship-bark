@@ -36,6 +36,10 @@ path = "tests/server-migrations/mod.rs"
 name = "upgrade"
 path = "tests/upgrade/mod.rs"
 
+[[test]]
+name = "carrier-builder"
+path = "tests/carrier.rs"
+
 [features]
 slow_test = []
 

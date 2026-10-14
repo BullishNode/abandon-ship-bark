@@ -6,6 +6,7 @@
 //! for user functionality.
 //!
 
+pub mod carrier;
 mod config;
 mod daemon;
 mod frontier;

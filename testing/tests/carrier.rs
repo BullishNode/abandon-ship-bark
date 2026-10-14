@@ -309,6 +309,11 @@ async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 	assert_eq!(pending.pending_boards[0].anchor, coin.chain_anchor());
 	assert_eq!(pending.pending_boards[0].genesis, SnapshotGenesis::EncodedPath);
 	assert_eq!(pending.regular[0].genesis, SnapshotGenesis::Anchor);
+	assert_eq!(pending.path_root(&ServerVtxo::from(coin.clone()), &board.funding_tx).unwrap(), Some(roots[0].id()));
+	let mut wrong_funding = board.funding_tx.clone();
+	wrong_funding.lock_time = bitcoin::absolute::LockTime::from_consensus(1);
+	assert!(pending.path_root(&ServerVtxo::from(coin.clone()), &wrong_funding).is_err(),
+		"a transaction with the same funding output but different identity is not its backing");
 	assert_eq!(pending.serialized_bytes, roots[0].serialize().len() + pending.pending_boards[0].vtxo.serialize().len());
 	assert!(snapshot_error(snapshot(&db, &roots, 1, 1_000_000).await).contains("row budget"));
 	assert!(snapshot_error(snapshot(&db, &roots, 2, pending.serialized_bytes - 1).await).contains("byte budget"));
@@ -348,6 +353,7 @@ async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 		assert_eq!(fact.state.spend_state, SpendState::Spendable);
 		assert_eq!(fact.genesis, SnapshotGenesis::EncodedPath);
 		fact.full_vtxo.as_ref().unwrap().validate_unsigned(&board.funding_tx).unwrap();
+		assert_eq!(inventory.path_root(fact.full_vtxo.as_ref().unwrap(), &board.funding_tx).unwrap(), Some(roots[0].id()));
 	}
 	// A source aggregate independently counts every state, not just the known
 	// payable leaves; the reader must not suppress intermediates or spent rows.
@@ -374,6 +380,15 @@ async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 	assert!(change.iter().all(|v| superset.regular.iter().any(|f| f.state.vtxo_id == v.id())));
 	let actual_path = progressed.full_vtxo.as_ref().unwrap().transactions().map(|item| OutPoint::new(item.tx.compute_txid(), item.output_idx as u32)).collect::<Vec<_>>();
 	assert!(change.iter().all(|v| !actual_path.contains(&v.point())), "sibling outpoints are not on this validated full path");
+	assert_eq!(superset.path_root(progressed.full_vtxo.as_ref().unwrap(), &board.funding_tx).unwrap(), Some(progressed_roots[0].id()));
+	for sibling in &change {
+		let fact = superset.regular.iter().find(|f| f.state.vtxo_id == sibling.id()).unwrap();
+		assert_eq!(superset.path_root(fact.full_vtxo.as_ref().unwrap(), &board.funding_tx).unwrap(), None,
+			"same-anchor sibling is outside the supplied progressed backing");
+	}
+	let overlap = snapshot(&db, &[roots[0].clone(), progressed_roots[0].clone()], count, bytes).await.unwrap();
+	assert!(overlap.path_root(progressed.full_vtxo.as_ref().unwrap(), &board.funding_tx).is_err(),
+		"an ancestor and its own descendant cannot count the same claim path twice");
 	let sibling_root = inventory.regular.iter().find(|f| f.state.vtxo_id == change[0].id()).unwrap().state.vtxo.to_bare();
 	let paired_roots = [progressed_roots[0].clone(), sibling_root];
 	assert_eq!(snapshot(&db, &paired_roots, count, bytes).await.unwrap().regular.len(), count, "shared anchors are inventoried once");

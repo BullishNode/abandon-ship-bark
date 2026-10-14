@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::str::FromStr;
 
 use anyhow::Context;
-use bitcoin::{OutPoint, Txid};
+use bitcoin::{OutPoint, Transaction, Txid};
 use bitcoin_ext::BlockHeight;
 use chrono::{DateTime, Utc};
 use tokio_postgres::Row;
@@ -61,6 +61,36 @@ pub struct BackingSnapshot {
 	pub regular: Vec<BackingVtxoFact>,
 	pub pending_boards: Vec<BackingPendingBoardFact>,
 	pub serialized_bytes: usize,
+}
+
+impl BackingSnapshot {
+	/// Match one complete source path to its supplied physical root. This proves
+	/// geometry and amounts only: ownership, signatures, maturity, current spends
+	/// and complete economic retirement remain the resolver's responsibility.
+	/// An incomplete source must not be passed as an invented full VTXO.
+	pub fn path_root(
+		&self, source: &ServerVtxo<Full>, funding: &Transaction,
+	) -> anyhow::Result<Option<VtxoId>> {
+		ensure!(funding.compute_txid() == source.chain_anchor().txid,
+			"backing path funding transaction differs from its anchor");
+		source.validate_unsigned(funding).context("invalid backing source path")?;
+		let path = std::iter::once((source.chain_anchor(),
+			funding.output.get(source.chain_anchor().vout as usize)
+				.context("backing anchor output is missing")?.clone()))
+			.chain(source.transactions().map(|item| (
+				OutPoint::new(item.tx.compute_txid(), item.output_idx as u32),
+				item.tx.output[item.output_idx].clone(),
+			))).collect::<Vec<_>>();
+		let mut matched = None;
+		for root in &self.roots {
+			let Some((_, output)) = path.iter().find(|(point, _)| *point == root.point()) else { continue; };
+			ensure!(root.chain_anchor() == source.chain_anchor() && root.txout() == *output,
+				"backing root metadata differs from the actual source path");
+			ensure!(matched.replace(root.id()).is_none(),
+				"backing set contains overlapping roots on the same source path");
+		}
+		Ok(matched)
+	}
 }
 
 // One statement sees one PostgreSQL snapshot even inside a READ COMMITTED Tx.

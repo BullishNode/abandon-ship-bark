@@ -208,6 +208,8 @@ pub struct Config {
 	pub data_dir: PathBuf,
 	#[serde(default)]
 	pub expiry_payout: crate::expiry_payout::Config,
+	#[serde(default)]
+	pub direct_expiry: crate::expiry_dispatch::Config,
 	pub network: bitcoin::Network,
 	/// The number of blocks after which a VTXO expires, by default 6*24*30 so that
 	/// a VTXO can live for up to 30 days.
@@ -548,6 +550,7 @@ impl Config {
 	/// It also checks if all required configurations are available
 	pub fn validate(&self) -> anyhow::Result<()> {
 		self.bitcoind.validate()?;
+		self.direct_expiry.validate(self.expiry_payout.enabled)?;
 		self.expiry_payout.validate(self.network)?;
 		self.fees.validate()?;
 

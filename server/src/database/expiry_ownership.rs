@@ -449,32 +449,6 @@ impl Tx<'_> {
 }
 
 impl Server {
-	/// Only an actual terminal hold-node observation supplies unpaid external
-	/// receive evidence. Unknown, paid, missing and unavailable stay unresolved;
-	/// the existing hold settler owns collection/status reconciliation.
-	pub(crate) async fn observe_expiry_receive_cancellations(
-		&self, snapshot: &BackingSnapshot, covered: &[VtxoId], unavailable_nodes: &mut BTreeSet<LightningNodeId>,
-	) -> anyhow::Result<BTreeSet<PaymentHash>> {
-		let ids = covered.iter().copied().collect::<BTreeSet<_>>();
-		let hashes = snapshot.regular.iter().filter(|f| ids.contains(&f.state.vtxo_id))
-			.filter_map(|f| f.full_vtxo.as_ref().and_then(|v| v.clone().try_into_user_vtxo().ok()))
-			.filter_map(|v| v.policy().as_server_htlc_recv().map(|p| p.payment_hash)).collect::<BTreeSet<_>>();
-		let mut canceled = BTreeSet::new();
-		for hash in hashes {
-			let Some(_guard) = self.payment_guards.lock(hash).now_or_never() else { continue; };
-			let sub = self.db.read(async |t| t.get_htlc_subscription_by_payment_hash(hash).await).await?;
-			let Some(sub) = sub else { continue; };
-			if unavailable_nodes.contains(&sub.lightning_node_id) { continue; }
-			if self.htlc_settler.is_settled(hash).await?.is_some() { continue; }
-			match self.lightning_manager.hold_invoice_state(sub.lightning_node_id, hash).await {
-				Ok(Some(cln_rpc::plugins::hold::InvoiceState::Cancelled)) => { canceled.insert(hash); },
-				Ok(_) => {},
-				Err(_) => { unavailable_nodes.insert(sub.lightning_node_id); },
-			}
-		}
-		Ok(canceled)
-	}
-
 	/// Read-only per-pass observations under the existing payment guards.
 	/// The guards are released before return; freeze must reacquire and re-read.
 	pub async fn observe_expiry_send_evidence(

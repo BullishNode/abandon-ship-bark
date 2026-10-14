@@ -13,6 +13,8 @@ mod client_stack;
 mod cap_freeze;
 #[path = "carrier/route_consistency.rs"]
 mod route_consistency;
+#[path = "carrier/pending_board_return.rs"]
+mod pending_board_return;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;

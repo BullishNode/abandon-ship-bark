@@ -12,16 +12,18 @@ use bitcoin::secp256k1::Keypair;
 use bitcoincore_rpc::RpcApi;
 
 use ark::board::BoardBuilder;
-use ark::ServerVtxo;
+use ark::{ProtocolEncoding, ServerVtxo};
 use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
-use server::database::Db;
+use server::database::{Db, SpendState};
+use server::database::carrier_snapshot::{BackingSnapshot, BackingSnapshotLimits, SnapshotGenesis};
 use server::secret::Secret;
 use server::utils::InstrumentedLock;
 use server::wallet::{self, BdkWalletExt, PersistedWallet, WalletKind};
 use server::watchman::{WatchmanSigner, carrier::{build_direct_carrier, CarrierLimits}};
 
 use ark_testing::{sat, TestContext};
+use ark_testing::constants::BOARD_CONFIRMATIONS;
 
 fn operator_backing(
 	operator: &Keypair, server: &Keypair, expiry: BlockHeight, amount: Amount, point: OutPoint,
@@ -275,4 +277,143 @@ async fn automatic_expired_board_pays_registered_recipient_from_actual_backing()
 	let payout = OutPoint::new(carrier.compute_txid(), recipient_vout as u32);
 	assert!(discovered.contains(&(payout, expected.value)));
 	assert!(recovered_spend.input.iter().any(|i| i.previous_output == payout));
+}
+
+
+async fn snapshot(db: &Db, roots: &[ServerVtxo], rows: usize, bytes: usize) -> anyhow::Result<BackingSnapshot> {
+	db.read(async |t| t.backing_snapshot(roots, BackingSnapshotLimits {
+		max_rows: rows, max_serialized_bytes: bytes,
+	}).await).await
+}
+
+#[tokio::test]
+async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
+	let ctx = TestContext::new("carrier-builder/backing_snapshot_real_pending_registered_board_and_arkoor_inventory").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().watchmand_cfg(|c| {
+		c.watchman.sweep_interval = std::time::Duration::from_secs(3600);
+		c.watchman.reaction_interval = std::time::Duration::from_secs(3600);
+	}).create().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let sender = ctx.bark_sdk("sender", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.funded(sat(1_100_000)).create().await;
+	sender.stop_daemon_wait().await.unwrap();
+	let board = sender.board_amount(sat(100_000)).await.unwrap();
+	ctx.await_transaction(board.funding_tx.compute_txid()).await;
+	let coin = sender.get_full_vtxo(board.vtxos[0]).await.unwrap();
+	let root = db.read(async |t| Ok(t.get_bare_vtxo_by_id(coin.chain_anchor().into()).await?.vtxo)).await.unwrap();
+	let roots = [root];
+	let pending = snapshot(&db, &roots, 100, 1_000_000).await.unwrap();
+	assert_eq!(pending.regular.len(), 1, "only actual funding exists before Board registration");
+	assert_eq!(pending.pending_boards.len(), 1);
+	assert_eq!(pending.pending_boards[0].vtxo.id(), coin.id());
+	assert_eq!(pending.pending_boards[0].anchor, coin.chain_anchor());
+	assert_eq!(pending.pending_boards[0].genesis, SnapshotGenesis::EncodedPath);
+	assert_eq!(pending.regular[0].genesis, SnapshotGenesis::Anchor);
+	assert_eq!(pending.serialized_bytes, roots[0].serialize().len() + pending.pending_boards[0].vtxo.serialize().len());
+	assert!(snapshot_error(snapshot(&db, &roots, 1, 1_000_000).await).contains("row budget"));
+	assert!(snapshot_error(snapshot(&db, &roots, 2, pending.serialized_bytes - 1).await).contains("byte budget"));
+	assert!(snapshot(&db, &roots, 2, pending.serialized_bytes).await.is_ok());
+	let absent_source = ServerVtxo::from(pending.pending_boards[0].vtxo.to_bare());
+	assert!(snapshot_error(snapshot(&db, &[absent_source], 100, 1_000_000).await).contains("no source row"),
+		"an actual cosigned but unregistered user output is not a regular physical-root row");
+	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+	sender.sync_onchain().await.unwrap();
+	sender.sync_pending_boards().await.unwrap();
+	let registered = snapshot(&db, &roots, 100, 1_000_000).await.unwrap();
+	assert!(registered.pending_boards.is_empty(), "retained pending Board cannot duplicate registered user leaf");
+	assert_eq!(registered.regular.len(), 2);
+	assert_eq!(registered.regular.iter().find(|f| f.state.vtxo_id == coin.id()).unwrap().state.spend_state, SpendState::Spendable);
+	let retained: i64 = db.read(async |t| Ok(t.query_one("SELECT count(*) FROM pending_board WHERE id=$1",
+		&[&coin.chain_anchor().to_string()]).await?.get(0))).await.unwrap();
+	assert_eq!(retained, 1, "deduplication must be real, not disappearance of pending source");
+
+	let recipient = ctx.bark_sdk("recipient", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	recipient.stop_daemon_wait().await.unwrap();
+	let address = recipient.new_address().await.unwrap();
+	sender.send_arkoor_payment(&address, sat(40_000)).await.unwrap();
+	recipient.sync_mailbox().await.unwrap();
+	let received = recipient.spendable_vtxos().await.unwrap();
+	let change = sender.spendable_vtxos().await.unwrap();
+	assert_eq!(received.len(), 1);
+	assert!(!change.is_empty());
+	assert_eq!(change.iter().map(|v| v.amount()).sum::<Amount>(), sat(60_000));
+	let inventory = snapshot(&db, &roots, 100, 1_000_000).await.unwrap();
+	assert!(inventory.pending_boards.is_empty());
+	assert!(inventory.regular.len() > registered.regular.len());
+	let old = inventory.regular.iter().find(|f| f.state.vtxo_id == coin.id()).unwrap();
+	assert_eq!(old.state.spend_state, SpendState::Spent, "spent user source is retained");
+	assert!(old.state.oor_spent_txid.is_some());
+	for id in std::iter::once(received[0].id()).chain(change.iter().map(|v| v.id())) {
+		let fact = inventory.regular.iter().find(|f| f.state.vtxo_id == id).unwrap();
+		assert_eq!(fact.state.spend_state, SpendState::Spendable);
+		assert_eq!(fact.genesis, SnapshotGenesis::EncodedPath);
+		fact.full_vtxo.as_ref().unwrap().validate_unsigned(&board.funding_tx).unwrap();
+	}
+	// A source aggregate independently counts every state, not just the known
+	// payable leaves; the reader must not suppress intermediates or spent rows.
+	let aggregate = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) AS rows, sum(octet_length(vtxo))::bigint AS bytes FROM vtxo WHERE anchor_point=$1",
+		&[&coin.chain_anchor().to_string()],
+	).await?)).await.unwrap();
+	let count = aggregate.get::<_, i64>("rows") as usize;
+	let bytes = aggregate.get::<_, i64>("bytes") as usize;
+	assert_eq!(inventory.regular.len(), count);
+	assert_eq!(inventory.serialized_bytes, bytes);
+	assert!(snapshot_error(snapshot(&db, &roots, count - 1, bytes).await).contains("row budget"));
+	assert!(snapshot_error(snapshot(&db, &roots, count, bytes - 1).await).contains("byte budget"));
+	let exact = snapshot(&db, &roots, count, bytes).await.unwrap();
+	assert_eq!(exact.regular.iter().map(|f| f.state.vtxo_id).collect::<Vec<_>>(),
+		inventory.regular.iter().map(|f| f.state.vtxo_id).collect::<Vec<_>>(), "stable order");
+	assert!(exact.regular.windows(2).all(|pair| pair[0].state.vtxo_id.to_string() < pair[1].state.vtxo_id.to_string()));
+
+	// A progressed output retains the same chain anchor. Its lookup deliberately
+	// contains a sibling and the spent ancestor: neither is inferred as covered.
+	let progressed = inventory.regular.iter().find(|f| f.state.vtxo_id == received[0].id()).unwrap();
+	let progressed_roots = [progressed.state.vtxo.to_bare()];
+	let superset = snapshot(&db, &progressed_roots, count, bytes).await.unwrap();
+	assert!(change.iter().all(|v| superset.regular.iter().any(|f| f.state.vtxo_id == v.id())));
+	let actual_path = progressed.full_vtxo.as_ref().unwrap().transactions().map(|item| OutPoint::new(item.tx.compute_txid(), item.output_idx as u32)).collect::<Vec<_>>();
+	assert!(change.iter().all(|v| !actual_path.contains(&v.point())), "sibling outpoints are not on this validated full path");
+	let sibling_root = inventory.regular.iter().find(|f| f.state.vtxo_id == change[0].id()).unwrap().state.vtxo.to_bare();
+	let paired_roots = [progressed_roots[0].clone(), sibling_root];
+	assert_eq!(snapshot(&db, &paired_roots, count, bytes).await.unwrap().regular.len(), count, "shared anchors are inventoried once");
+	assert!(snapshot_error(snapshot(&db, &[roots[0].clone(), roots[0].clone()], 100, 1_000_000).await).contains("duplicate"));
+	assert!(snapshot_error(snapshot(&db, &roots, 0, bytes).await).contains("positive"));
+	// Observe real chain facts through the normal watchman/indexed-spend path,
+	// without editing source rows. First synchronize confirmed live funding,
+	// then relay the client's actual signed Board transaction spending it.
+	let core = ctx.bitcoind().sync_client();
+	srv.watchmand().trigger_sweep().await;
+	srv.watchmand().wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;
+	let live = snapshot(&db, &roots, count, bytes).await.unwrap();
+	let funding_fact = live.regular.iter().find(|f| f.state.vtxo_id == roots[0].id()).unwrap();
+	assert!(funding_fact.frontier_at.is_some());
+	assert!(funding_fact.state.confirmed_height.is_some());
+	assert_eq!(funding_fact.onchain_spent_txid, None);
+	let board_exit = coin.transactions().next().unwrap().tx;
+	assert!(board_exit.input.iter().any(|i| i.previous_output == roots[0].point()));
+	ctx.broadcast_cpfp(&board_exit).await;
+	ctx.generate_blocks(1).await;
+	srv.watchmand().wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;
+	let retired = snapshot(&db, &roots, count, bytes).await.unwrap();
+	let funding_fact = retired.regular.iter().find(|f| f.state.vtxo_id == roots[0].id()).unwrap();
+	assert_eq!(funding_fact.onchain_spent_txid, Some(board_exit.compute_txid()));
+	assert_eq!(funding_fact.onchain_spent_height, Some(BlockHeight::new(core.get_block_count().unwrap() as u32)));
+	assert_eq!(retired.regular.len(), count, "physical retirement does not discard source history");
+	let mut proof = OpenOptions::new().write(true).create_new(true).mode(0o600)
+		.open(ctx.datadir.join("snapshot-board-exit.tx")).unwrap();
+	proof.write_all(&bitcoin::consensus::serialize(&board_exit)).unwrap();
+	let summary = serde_json::json!({
+		"scope": "raw source snapshot, no rights/ownership/automatic-route qualification",
+		"pending_boards": 1, "registered_rows": 2, "arkoor_rows": count, "serialized_vtxo_bytes": bytes,
+		"observed_states": retired.regular.iter().map(|f| f.state.spend_state.as_str()).collect::<std::collections::BTreeSet<_>>(),
+		"funding_point": roots[0].point().to_string(), "actual_confirmed_spender": board_exit.compute_txid().to_string(),
+		"actual_spent_height": funding_fact.onchain_spent_height.unwrap().to_u32(),
+	});
+	std::fs::write(ctx.datadir.join("snapshot-summary.json"), serde_json::to_vec_pretty(&summary).unwrap()).unwrap();
+	println!("raw backing snapshot only: pending=1, registered=2, arkoor_rows={count}, serialized_bytes={bytes}; complete budgets, raw superset and real chain facts passed");
+}
+
+fn snapshot_error(result: anyhow::Result<BackingSnapshot>) -> String {
+	match result { Ok(_) => panic!("expected whole-snapshot refusal"), Err(err) => format!("{err:#}") }
 }

@@ -10,14 +10,14 @@ use ark::VtxoId;
 const OUTPUT_FEE: Amount = Amount::from_sat(1_000);
 
 /// A customer entitlement whose ownership and backing have been resolved.
-pub(super) struct CustomerLeaf {
+pub(crate) struct CustomerLeaf {
 	pub id: VtxoId,
 	pub script: ScriptBuf,
 	pub amount: Amount,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) struct LeafAllocation {
+pub(crate) struct LeafAllocation {
 	pub id: VtxoId,
 	pub gross: Amount,
 	pub fee: Amount,
@@ -25,12 +25,12 @@ pub(super) struct LeafAllocation {
 	pub forfeited: Amount,
 }
 
-pub(super) struct Recipient {
+pub(crate) struct Recipient {
 	pub output: TxOut,
 	pub leaves: Vec<LeafAllocation>,
 }
 
-pub(super) struct SettlementPlan {
+pub(crate) struct SettlementPlan {
 	pub recipients: Vec<Recipient>,
 	pub forfeits: Vec<LeafAllocation>,
 }
@@ -38,7 +38,7 @@ pub(super) struct SettlementPlan {
 /// Group by actual output, with stable per-leaf amounts for persisted attribution.
 /// Mining cost is independent: an affordable carrier must fund any shortfall,
 /// and return any available fee surplus to the operator.
-pub(super) fn allocate(leaves: Vec<CustomerLeaf>) -> anyhow::Result<SettlementPlan> {
+pub(crate) fn allocate(leaves: Vec<CustomerLeaf>) -> anyhow::Result<SettlementPlan> {
 	let mut ids = BTreeSet::new();
 	let mut groups = BTreeMap::<ScriptBuf, Vec<CustomerLeaf>>::new();
 	for leaf in leaves {

@@ -572,6 +572,7 @@ impl Process {
 
 		// The slow rate often misses the nursery target and delays the refill.
 		let fee_rate = self.srv.fee_estimator.regular();
+		let max_fee_rate = self.srv.config.fee_estimator.max_fee_rate;
 
 		let funding_txout = builder.funding_txout();
 
@@ -579,7 +580,7 @@ impl Process {
 		let (mut wallet, funding_psbt) = self.srv.rounds_wallet.build_blocking(
 			move |wallet| {
 				let selection = WithGuaranteedChange(SingleRandomDraw);
-				wallet.build_tx_at_chunk_feerate(selection, fee_rate, |b| {
+				wallet.build_quiet_tx_at_chunk_feerate(selection, fee_rate, max_fee_rate, |b| {
 					b.add_recipient(txout.script_pubkey.clone(), txout.value);
 					Ok(())
 				}).context("failed to build signed tree funding tx")
@@ -624,7 +625,7 @@ impl Process {
 		}
 
 		// finish and broadcast the tx
-		let tx = wallet.finish_tx(funding_psbt).context("error finishing tree funding tx")?;
+		let tx = wallet.finish_tx_with_max_fee_rate(funding_psbt, max_fee_rate).context("error finishing tree funding tx")?;
 
 		// Create the vtxos and virtual transactions in the database
 		// before committing the funding tx to the wallet. The funding tx

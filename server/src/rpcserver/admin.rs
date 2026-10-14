@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::sync::{atomic, Arc};
 
 use ark::VtxoId;
+use prost::Message;
 use tonic_tracing_opentelemetry::middleware::server::OtelGrpcLayer;
 use tracing::{info, trace, warn};
 use server_rpc::{self as rpc, protos};
@@ -36,6 +37,23 @@ impl rpc::server::WalletAdminService for Server {
 			watchman: None,
 		}))
 	}
+
+	#[tracing::instrument(skip(self, _req))]
+	async fn wallet_inventory(
+		&self, _req: tonic::Request<protos::Empty>,
+	) -> Result<tonic::Response<protos::WalletInventoryResponse>, tonic::Status> {
+		let rounds = self.rounds_wallet.lock().await.inventory()
+			.map_err(|error| tonic::Status::failed_precondition(format!("{error:#}")))?;
+		let response = protos::WalletInventoryResponse {
+			rounds: Some(rounds), watchman: None, complete: false,
+			missing_sources: vec!["watchmand owns its wallet; inventory unavailable from captaind".into()],
+		};
+		if response.encoded_len() > 2 * 1024 * 1024 {
+			return Err(tonic::Status::resource_exhausted("complete wallet inventory exceeds serialized byte budget"));
+		}
+		Ok(tonic::Response::new(response))
+	}
+
 }
 
 #[async_trait]

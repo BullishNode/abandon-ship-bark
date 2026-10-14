@@ -1588,3 +1588,22 @@ async fn fallback_edge_all_eight_offline_addresses_receive_then_return() {
 	let (payout, _) = super::fallback_lightning::wait_and_reconcile_payout(&ctx, &db, &ids, &record.spk, 160_000).await;
 	super::fallback_lightning::restore_and_spend(&ctx, &mnemonic, payout).await;
 }
+
+#[tokio::test]
+async fn fallback_native_auth_child_zero_survives_reopen() {
+	let ctx = TestContext::new("bark_sdk/fallback_native_auth_child_zero_survives_reopen").await;
+	let srv = ctx.captaind("server").create().await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let wallet = ctx.bark_sdk("wallet", &srv).mnemonic(mnemonic.clone()).cfg(|c| c.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let identity = wallet.peek_keypair(0).await.unwrap().public_key();
+	assert_eq!(wallet.peek_address(0).await.unwrap().policy().user_pubkey(), identity);
+	let (_, first_index) = wallet.new_address_with_index().await.unwrap();
+	assert_eq!(first_index, 1, "reserved auth key zero is never allocated again");
+	let config = wallet.config().clone();
+	drop(wallet);
+	let reopened = bark::Wallet::open(Network::Regtest, bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic),
+		config, bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: false, ..Default::default() }).await.unwrap();
+	assert_eq!(reopened.peek_keypair(0).await.unwrap().public_key(), identity);
+	assert_eq!(reopened.new_address_with_index().await.unwrap().1, 2);
+}

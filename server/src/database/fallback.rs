@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
 use ark::fallback::{AccountChild, FallbackRecord as AccountRecord};
@@ -92,6 +92,40 @@ impl Tx<'_> {
 				PublicKey::from_slice(&row.get::<_, Vec<u8>>("user_pubkey"))?,
 				ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
 			))).collect()
+	}
+
+	/// Resolve exact account children and authenticate the complete immutable
+	/// records before freezing or publishing a direct settlement. Verify each
+	/// wallet's record once per page, while deriving every requested child.
+	pub(crate) async fn authenticated_fallback_scripts(
+		&self, keys: &[PublicKey], network: Network,
+	) -> anyhow::Result<BTreeMap<PublicKey, ScriptBuf>> {
+		let expected = keys.iter().copied().collect::<BTreeSet<_>>();
+		let encoded = expected.iter().map(|key| key.serialize().to_vec()).collect::<Vec<_>>();
+		let rows = self.query("SELECT l.user_pubkey,l.mailbox_pk,l.child_index,r.spk,r.account_xpub,r.mailbox_sig,r.account_sig
+			FROM key_link l JOIN fallback_record r ON r.mailbox_pk=l.mailbox_pk WHERE l.user_pubkey=ANY($1::bytea[])", &[&encoded]).await?;
+		let mut records = BTreeMap::<PublicKey, AccountRecord>::new();
+		let mut scripts = BTreeMap::new();
+		for row in rows {
+			let key = PublicKey::from_slice(&row.get::<_, Vec<u8>>("user_pubkey"))?;
+			let mailbox = PublicKey::from_slice(&row.get::<_, Vec<u8>>("mailbox_pk"))?;
+			if !records.contains_key(&mailbox) {
+				let record = AccountRecord {
+					spk: ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
+					account_xpub: Xpub::decode(&row.get::<_, Vec<u8>>("account_xpub"))?,
+					mailbox_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("mailbox_sig"))?,
+					account_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("account_sig"))?,
+				};
+				record.verify(network, mailbox)?;
+				records.insert(mailbox, record);
+			}
+			let record = records.get(&mailbox).context("authenticated fallback record missing")?;
+			AccountChild::new(mailbox, u32::try_from(row.get::<_, i32>("child_index"))?)?
+				.verify_pubkey(&record.account_xpub, key)?;
+			ensure!(scripts.insert(key, record.spk.clone()).is_none(), "duplicate fallback account child");
+		}
+		ensure!(scripts.keys().copied().collect::<BTreeSet<_>>() == expected, "missing authenticated fallback account child");
+		Ok(scripts)
 	}
 
 	/// Refuse a new user output unless its key has an immutable link to a record.

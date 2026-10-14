@@ -3,6 +3,8 @@
 
 #[path = "carrier/returning_client.rs"]
 mod returning_client;
+#[path = "carrier/cap_freeze.rs"]
+mod cap_freeze;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;

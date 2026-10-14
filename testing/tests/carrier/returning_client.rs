@@ -9,7 +9,7 @@ use bark::expiry_payout::{adopt_server_vtxo_status, AdoptedVtxoState};
 use bark::vtxo::VtxoStateKind;
 use server::watchman::direct_delivery::{DirectDelivery, DeliveryState};
 use server_rpc::{protos, StatusExt};
-use ark_testing::daemon::captaind::{proxy::ArkRpcProxy, ArkClient};
+use ark_testing::daemon::captaind::{proxy::{ArkRpcProxy, ArkRpcProxyServer}, ArkClient, Captaind};
 
 use super::*;
 
@@ -35,12 +35,19 @@ impl ArkRpcProxy for DelayedSpend {
 
 #[tokio::test]
 async fn returning_real_sdk_preserves_frozen_value_then_adopts_confirmed_carrier() {
-	let scenario = returning_scenario();
-	eprintln!("returning scenario future bytes: {}", std::mem::size_of_val(&scenario));
-	scenario.await;
+	returning_scenario().await;
 }
 
 async fn returning_scenario() {
+	// Debug-codegen poll frames are much larger than these stored futures.
+	// Keep fixture setup and financial assertions out of the same poll frame.
+	let (ctx, srv, proxy, delayed, returning, receiver) = Box::pin(returning_wallets()).await;
+	Box::pin(returning_assertions(ctx, srv, proxy, delayed, returning, receiver)).await;
+}
+
+async fn returning_wallets() -> (
+	TestContext, Arc<Captaind>, ArkRpcProxyServer, DelayedSpend, bark::Wallet, bark::Wallet,
+) {
 	let ctx = TestContext::new("returning-client/returning_real_sdk_preserves_frozen_value_then_adopts_confirmed_carrier").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().funded(ark_testing::btc(1))
 		.cfg(|c| {
@@ -56,6 +63,14 @@ async fn returning_scenario() {
 	returning.stop_daemon_wait().await.unwrap();
 	let receiver = ctx.bark_sdk("receiver", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
 	receiver.stop_daemon_wait().await.unwrap();
+	(ctx, srv, proxy, delayed, returning, receiver)
+}
+
+async fn returning_assertions(
+	ctx: TestContext, srv: Arc<Captaind>,
+	_proxy: ArkRpcProxyServer,
+	delayed: DelayedSpend, returning: bark::Wallet, receiver: bark::Wallet,
+) {
 	let destination = receiver.new_address().await.unwrap();
 	let coin = returning.get_full_vtxo(returning.spendable_vtxos().await.unwrap()[0].id()).await.unwrap();
 	assert_eq!(coin.amount(), sat(20_000));
@@ -122,10 +137,8 @@ async fn returning_scenario() {
 		Network::Regtest, &master, WalletKind::Watchman, tip, 3).await.unwrap();
 	let history_path = srv.config().data_dir.clone();
 	let history_future = super::direct_delivery::history_at(&history_path, &db, coin.server_pubkey());
-	eprintln!("returning history-load future bytes: {}", std::mem::size_of_val(&history_future));
 	let history = history_future.await;
 	let delivery_future = DirectDelivery::recover_group(db.clone(), &reloaded, &freeze.id, Network::Regtest, budget, policy, history);
-	eprintln!("returning production recovery future bytes: {}", std::mem::size_of_val(&delivery_future));
 	let delivery = delivery_future.await.unwrap();
 	let txid = carrier.tx.compute_txid();
 	assert_eq!(delivery.observe_and_submit(&ctx.bitcoind().async_client()).await.unwrap(), DeliveryState::Pending { txid });
@@ -170,4 +183,9 @@ async fn returning_scenario() {
 	returning.sync().await;
 	assert_eq!(returning.history().await.unwrap().iter().filter(|m| m.subsystem.name == "bark.server_spend").count(), 1);
 	assert!(returning.send_arkoor_payment(&destination, sat(1_000)).await.is_err(), "a returned stale client cannot spend paid backing");
+	let mnemonic = bip39::Mnemonic::parse(std::fs::read_to_string(ctx.datadir.join("returning/mnemonic")).unwrap()).unwrap();
+	let (outputs, _) = Box::pin(recover_all_bip84_and_spend(&ctx, &mnemonic)).await;
+	let recovered = outputs.iter().filter(|(point, _)| point.txid == txid).collect::<Vec<_>>();
+	assert_eq!(recovered.len(), 1, "seed-only BIP84 restore must find exactly one payout");
+	assert_eq!(recovered[0].1, sat(19_000));
 }

@@ -59,12 +59,63 @@ async fn lightning_receive_description_hash_reaches_invoice() {
 	wire.extend([0x32, 32]); // optional bytes description_hash = 6
 	wire.extend(metadata_hash.to_byte_array());
 	let request = protos::StartLightningReceiveRequest::decode(wire.as_slice()).unwrap();
-	let response = srv.get_public_rpc().await.start_lightning_receive(request).await.unwrap().into_inner();
+	let response = srv.get_public_rpc().await.start_lightning_receive(request.clone()).await.unwrap().into_inner();
 	let invoice = Bolt11Invoice::from_str(&response.bolt11).unwrap();
 	assert_eq!(invoice.amount_milli_satoshis(), Some(10_000_000));
 	let signed = invoice.into_signed_raw();
 	assert_eq!(signed.raw_invoice().description_hash().map(|h| h.0), Some(metadata_hash),
 		"explicit description_hash must produce a hash-bound BOLT11 invoice");
+	let retry = srv.get_public_rpc().await.start_lightning_receive(request.clone()).await.unwrap().into_inner();
+	assert_eq!(retry.bolt11, response.bolt11);
+	let mut conflicting = request;
+	conflicting.description_hash = Some(vec![9; 32]);
+	let err = srv.get_public_rpc().await.start_lightning_receive(conflicting).await.unwrap_err();
+	assert_eq!(err.code(), tonic::Code::InvalidArgument);
+	assert!(err.message().contains("existing invoice"));
+
+	// Exercise the SDK's exact hash forwarding and response validation too.
+	let wallet = ctx.bark_sdk("wallet", &srv).create().await;
+	let invoice = wallet.bolt11_invoice_with_description_hash(sat(10_000), metadata_hash, None).await.unwrap();
+	assert_eq!(invoice.into_signed_raw().raw_invoice().description_hash().map(|h| h.0), Some(metadata_hash));
+	let destination = wallet.new_address().await.unwrap();
+	let shutdown = tokio_util::sync::CancellationToken::new();
+	let state = Arc::new(bark_rest::ServerState::builder().wallet(wallet).build(shutdown.clone()));
+	let request = bark_json::web::LightningInvoiceForAddressRequest {
+		amount_sat: 10_000, address: destination.to_string(), description: None, description_hash: Some(metadata_hash),
+	};
+	let response = bark_rest::api::v1::lightning::generate_invoice_for_address(
+		axum::extract::State(state), axum::Json(request),
+	).await.unwrap();
+	let invoice = Bolt11Invoice::from_str(&response.0.invoice).unwrap();
+	assert_eq!(invoice.into_signed_raw().raw_invoice().description_hash().map(|h| h.0), Some(metadata_hash));
+	shutdown.cancel();
+}
+
+/// Invalid description fields refuse even when no hold node is configured.
+#[tokio::test]
+async fn lightning_receive_description_hash_invalid_fields_refuse_before_node() {
+	let ctx = TestContext::new("server/lightning_receive_description_hash_invalid_fields_refuse_before_node").await;
+	let srv = ctx.captaind("server").create().await;
+	for size in [0, 31, 33] {
+		let request = protos::StartLightningReceiveRequest {
+			payment_hash: ark::lightning::Preimage::random().compute_payment_hash().to_vec(),
+			amount_sat: 10_000, min_cltv_delta: 18,
+			description_hash: Some(vec![7; size]),
+			..Default::default()
+		};
+		let err = srv.get_public_rpc().await.start_lightning_receive(request).await.unwrap_err();
+		assert_eq!(err.code(), tonic::Code::InvalidArgument);
+		assert!(err.message().contains("32 bytes"), "unexpected error: {err:?}");
+	}
+	let request = protos::StartLightningReceiveRequest {
+		payment_hash: ark::lightning::Preimage::random().compute_payment_hash().to_vec(),
+		amount_sat: 10_000, min_cltv_delta: 18,
+		description: Some("memo".into()), description_hash: Some(vec![7; 32]),
+		..Default::default()
+	};
+	let err = srv.get_public_rpc().await.start_lightning_receive(request).await.unwrap_err();
+	assert_eq!(err.code(), tonic::Code::InvalidArgument);
+	assert!(err.message().contains("mutually exclusive"));
 }
 
 
@@ -1339,6 +1390,7 @@ async fn check_lightning_receive_returns_on_canceled_subscription() {
 		min_cltv_delta: 6,
 		mailbox_id: None,
 		description: None,
+		description_hash: None,
 	}).await.unwrap();
 
 	let db = Db::connect(&srv.config().postgres.clone()).await.unwrap();
@@ -1716,6 +1768,7 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 			min_cltv_delta,
 			mailbox_id: None,
 			description: None,
+			description_hash: None,
 		})
 		.await
 		.expect("start receive failed")
@@ -1851,6 +1904,7 @@ async fn settled_hash_cannot_fund_new_receive() {
 			min_cltv_delta: 6,
 			mailbox_id: None,
 			description: None,
+			description_hash: None,
 		})
 		.await
 		.expect_err("receive for an already-settled hash must be refused");
@@ -1925,6 +1979,7 @@ async fn settled_hash_cannot_be_granted_htlc_recv_vtxos() {
 		min_cltv_delta: 6,
 		mailbox_id: None,
 		description: None,
+		description_hash: None,
 	}).await.expect("receive should be allowed while H is unsettled").into_inner().bolt11;
 
 	let pay_receive = {
@@ -2597,7 +2652,7 @@ async fn check_lightning_receive_poll_interval_fallback() {
 
 	// Create a hold invoice on the server.
 	let resp = srv.start_lightning_receive(
-		payment_hash, btc(1), BlockDelta::new(18), None, None,
+		payment_hash, btc(1), BlockDelta::new(18), None, None, None,
 	).await.unwrap();
 
 	// Create a disconnected receiver: the sender is kept alive so
@@ -2673,6 +2728,7 @@ async fn refuse_receive_with_unlock_hash_as_payment_hash() {
 		min_cltv_delta: 8,
 		mailbox_id: None,
 		description: None,
+		description_hash: None,
 	}).await.expect_err("must refuse a payment hash that is an existing unlock hash");
 	assert_eq!(err.code(), tonic::Code::InvalidArgument);
 	assert!(err.message().contains("unlock hash"), "unexpected error: {err:?}");
@@ -2905,6 +2961,7 @@ async fn prevent_double_pay_via_canceled_subscription_and_inflight_xpay() {
 			min_cltv_delta: 6,
 			mailbox_id: None,
 			description: None,
+			description_hash: None,
 		}).await.unwrap().into_inner().bolt11;
 
 	// 4. Pay invoice-2 from Eve's node. The HTLC is held by the server's

@@ -10,7 +10,8 @@ use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::{Amount, SignedAmount};
-use lightning_invoice::Bolt11Invoice;
+use bitcoin::hashes::{sha256, Hash};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
 use log::{debug, error, info, trace, warn};
 use rand::seq::IteratorRandom;
 
@@ -333,9 +334,13 @@ pub(crate) async fn start_lightning_receive(
 	wallet: &Wallet,
 	amount: Amount,
 	description: Option<String>,
+	description_hash: Option<sha256::Hash>,
 	token: Option<String>,
 	claim_destination: Option<ark::Address>,
 ) -> anyhow::Result<LightningReceive> {
+	if description.is_some() && description_hash.is_some() {
+		bail!("description and description_hash are mutually exclusive");
+	}
 	if amount == Amount::ZERO {
 		bail!("Cannot create invoice for 0 sats (this would create an explicit 0 sat invoice, not an any-amount invoice)");
 	}
@@ -382,6 +387,7 @@ pub(crate) async fn start_lightning_receive(
 		min_cltv_delta: requested_min_cltv_delta.into(),
 		mailbox_id: Some(mailbox_id.serialize()),
 		description,
+		description_hash: description_hash.map(|h| h.to_byte_array().to_vec()),
 	};
 
 	let (_, key_index) = wallet.derive_store_next_keypair().await?;
@@ -392,6 +398,11 @@ pub(crate) async fn start_lightning_receive(
 	let invoice = Bolt11Invoice::from_str(&resp.bolt11)
 		.context("invalid bolt11 invoice returned by Ark server")?;
 	validate_bolt11_payment_hash(&invoice, payment_hash)?;
+	if let Some(expected) = description_hash {
+		if !matches!(invoice.description(), Bolt11InvoiceDescriptionRef::Hash(actual) if actual.0 == expected) {
+			bail!("invoice description hash does not match the requested description_hash");
+		}
+	}
 
 	Ok(LightningReceive {
 		invoice,

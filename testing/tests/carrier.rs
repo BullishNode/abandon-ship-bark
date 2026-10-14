@@ -3,6 +3,8 @@
 
 #[path = "carrier/returning_client.rs"]
 mod returning_client;
+#[path = "carrier/client_stack.rs"]
+mod client_stack;
 #[path = "carrier/cap_freeze.rs"]
 mod cap_freeze;
 

@@ -442,6 +442,21 @@ impl fmt::Debug for ClnXpay {
 	}
 }
 
+/// The existing retry/dispatch fence, shared by the monitor and outgoing
+/// ownership observations. Unknown node state still also needs final failure.
+pub(crate) fn attempt_dispatch_is_fenced(
+	attempt: &LightningPaymentAttempt, retry_for: Duration, now: DateTime<Local>,
+) -> bool {
+	let received_by = match attempt.status {
+		LightningPaymentStatus::Submitted => attempt.updated_at,
+		_ => match attempt.invoice_expires_at {
+			Some(expires_at) => cmp::max(attempt.created_at, expires_at),
+			None => return false,
+		},
+	};
+	received_by + retry_for + XPAY_TIMEOUT_BUFFER <= now
+}
+
 /// Background loop that periodically reconciles open payment attempts against CLN.
 ///
 /// Runs on a fixed interval ([`ClnXpayConfig::invoice_check_interval`]) and,
@@ -494,15 +509,7 @@ impl ClnXpayProcess {
 	/// an expired invoice. So such an attempt is only over once its invoice
 	/// expired and a request that arrived just before had its retry time.
 	fn retries_over(attempt: &LightningPaymentAttempt, retry_for: Duration, now: DateTime<Local>) -> bool {
-		let received_by = match attempt.status {
-			LightningPaymentStatus::Submitted => attempt.updated_at,
-			_ => match attempt.invoice_expires_at {
-				Some(expires_at) => cmp::max(attempt.created_at, expires_at),
-				// Older attempts did not store the expiry; they stay open.
-				None => return false,
-			},
-		};
-		received_by + retry_for + XPAY_TIMEOUT_BUFFER <= now
+		attempt_dispatch_is_fenced(attempt, retry_for, now)
 	}
 
 	/// Iterates over all open payment attempts for this node and reconciles

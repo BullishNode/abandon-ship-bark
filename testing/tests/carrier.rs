@@ -1,6 +1,9 @@
 //! Real operator-owned backing proves construction/signing/relay only.
 //! Exact supplied outputs here do not claim resolved customer entitlement.
 
+#[path = "carrier/returning_client.rs"]
+mod returning_client;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;
 use std::io::Write;

@@ -34,9 +34,10 @@ use ark::lightning::{
 use ark::tree::signed::{LeafVtxoCosignRequest, UnlockHash, UnlockPreimage};
 use ark::vtxo::Full;
 use ark::vtxo::policy::check_block_height;
-use bitcoin_ext::{BlockDelta, BlockHeight};
+use bitcoin_ext::{BlockDelta, BlockHeight, TxStatus};
 use server_rpc::{self as rpc, protos, RequestExt, TryFromBytes};
 use crate::database::SpendState;
+use crate::database::carrier_snapshot::BackingSnapshotLimits;
 use crate::database::fallback::FallbackRecord;
 
 use crate::database::rounds::StoredRoundOutput;
@@ -77,6 +78,31 @@ fn client_spend_state(spend_state: SpendState) -> Option<protos::VtxoSpendState>
 		| SpendState::RoundForfeit
 		| SpendState::OffboardForfeit
 		| SpendState::OffboardConnector => None,
+	}
+}
+
+impl Server {
+	/// A confirmed carrier retires this exact frozen allocation. Spent describes
+	/// retirement, including forfeiture; it does not claim a customer payment.
+	async fn expiry_allocation_confirmed(&self, id: VtxoId) -> anyhow::Result<bool> {
+		let freeze_set = self.db.read(async |t| Ok(t.query_opt(
+			"SELECT a.freeze_set FROM expiry_allocation a WHERE a.id=$1 AND EXISTS (
+				SELECT 1 FROM expiry_carrier_allocation m JOIN expiry_carrier c ON c.txid=m.txid
+				WHERE m.allocation_id=a.id AND c.confirmed_height IS NOT NULL)",
+			&[&id.to_string()],
+		).await?.map(|row| row.get::<_, String>("freeze_set")))).await?;
+		let Some(freeze_set) = freeze_set else { return Ok(false); };
+		// Reuse complete signed-version and authenticated-output validation. A
+		// freeze, submission, or an unmapped transaction cannot retire the coin.
+		let versions = self.db.read_direct_delivery(&freeze_set, self.config.network,
+			BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 16 * 1024 * 1024 },
+		).await?;
+		let mut confirmed = versions.iter().filter_map(|v| v.recorded_confirmation.map(|b| (v, b)));
+		let Some((winner, recorded)) = confirmed.next() else { return Ok(false); };
+		ensure!(confirmed.next().is_none(), "multiple recorded expiry carrier winners");
+		// The direct delivery record means an actual active-chain confirmation;
+		// the legacy two-step sweep depth is not this route's adoption policy.
+		Ok(crate::bitcoind::tx_status(&self.bitcoind, winner.tx.compute_txid()).await? == TxStatus::Confirmed(recorded))
 	}
 }
 
@@ -188,9 +214,12 @@ impl rpc::server::ArkService for Server {
 		attestation.verify(&user_vtxo)
 			.badarg("invalid VTXO status attestation")?;
 
-		let Some(spend_state) = client_spend_state(spend_state) else {
+		let Some(mut spend_state) = client_spend_state(spend_state) else {
 			macros::not_found!([id], "VTXO not found");
 		};
+		if spend_state != protos::VtxoSpendState::Spent && self.expiry_allocation_confirmed(id).await.to_status()? {
+			spend_state = protos::VtxoSpendState::Spent;
+		}
 
 		Ok(tonic::Response::new(protos::GetVtxoStatusResponse {
 			spend_state: spend_state as i32,

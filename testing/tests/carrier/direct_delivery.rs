@@ -9,6 +9,9 @@ use tokio::process::Command;
 use bitcoind_async_client::traits::Reader;
 use server::watchman::direct_delivery::{DirectDelivery, DeliveryState};
 
+#[path = "frozen_expiry.rs"]
+mod frozen_expiry;
+
 #[derive(Clone, Serialize, Deserialize)]
 struct CommitRecipe {
 	config_path: PathBuf,
@@ -304,6 +307,42 @@ async fn direct_delivery_reconciles_old_confirmed_version_without_submitting_new
 	assert_eq!(payouts[0].0.txid, case.versions[0].compute_txid());
 	assert!(outputs.iter().filter(|(p,_)| !version_ids.contains(&p.txid))
 		.all(|(p,_)| p.txid == case.board_funding_txid));
+}
+
+#[tokio::test]
+async fn direct_delivery_old_winner_releases_unused_replacement_fee_input_for_recycling() {
+	let mut case = crash_case("direct_delivery_old_winner_releases_unused_replacement_fee_input_for_recycling", vec![30,40]).await;
+	let core = case.ctx.bitcoind().sync_client();
+	let old_inputs = case.versions[0].input.iter().map(|i| i.previous_output).collect::<BTreeSet<_>>();
+	let unused = case.versions[1].input.iter().map(|i| i.previous_output)
+		.filter(|p| !old_inputs.contains(p)).collect::<Vec<_>>();
+	assert_eq!(unused.len(), 1, "the genuine replacement uses a distinct supplemental input");
+	core.send_raw_transaction(&case.versions[0]).unwrap();
+	case.ctx.generate_blocks(3).await;
+	let delivery = recovered(&case).await;
+	assert!(matches!(delivery.observe_and_submit(&case.ctx.bitcoind().async_client()).await.unwrap(),
+		DeliveryState::Confirmed { txid, .. } if txid == case.versions[0].compute_txid()));
+	assert!(case.wallet.lock_wallet_utxo(unused[0]).is_err());
+	sync_fee_wallet(&mut case.wallet, &core);
+	case.wallet.persist().await.unwrap();
+	drop(delivery);
+	let guard = case.wallet.lock_wallet_utxo(unused[0]).expect("reconciled process-local reservation releases");
+	drop(guard);
+	assert!(core.get_tx_out(&unused[0].txid, unused[0].vout, Some(true)).unwrap().is_some());
+	assert!(case.wallet.list_unspent().any(|u| u.outpoint == unused[0]),
+		"normal owning-wallet chain sync must restore the losing version's unused input");
+	let destination = case.ctx.bitcoind().get_new_address().script_pubkey();
+	let mut builder = case.wallet.build_tx();
+	builder.add_utxo(unused[0]).unwrap().manually_selected_only().drain_to(destination).fee_rate(FeeRate::from_sat_per_vb(1).unwrap());
+	let psbt = builder.finish().expect("recycled confirmed fee input is selectable");
+	let recycled = case.wallet.finish_tx(psbt).unwrap();
+	assert_eq!(recycled.input.iter().map(|i| i.previous_output).collect::<Vec<_>>(), unused);
+	core.send_raw_transaction(&recycled).unwrap();
+	case.ctx.generate_blocks(1).await;
+	assert!(matches!(server::bitcoind::tx_status(&case.ctx.bitcoind().async_client(), recycled.compute_txid()).await.unwrap(),
+		bitcoin_ext::TxStatus::Confirmed(_)));
+	let versions = case.db.read(async |t| Ok(t.query_one("SELECT count(*)::bigint AS rows FROM expiry_carrier", &[]).await?.get::<_, i64>("rows"))).await.unwrap();
+	assert_eq!(versions, 2, "recycling must retain both signed carrier versions");
 }
 
 #[tokio::test]

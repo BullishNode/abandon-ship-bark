@@ -63,7 +63,7 @@ impl DirectDelivery {
 
 	pub fn reserved_fee_inputs(&self) -> &[bitcoin::OutPoint] { self.fee_reservation.utxos() }
 
-	async fn check_generation_frontier(&self) -> anyhow::Result<()> {
+	pub(crate) async fn check_generation_frontier(&self) -> anyhow::Result<()> {
 		ensure!(self.db.direct_delivery_generation(&self.freeze_set).await? == self.versions.iter().map(|v| v.generation).max(),
 			"direct delivery generation frontier changed; recover the complete group before submission; reservations retained");
 		Ok(())

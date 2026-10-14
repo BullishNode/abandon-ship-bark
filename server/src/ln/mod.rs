@@ -927,6 +927,18 @@ impl Server {
 		let mut sub = self.db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await).await?
 			.not_found([payment_hash], "no pending payment with this payment hash")?;
 
+		// A valid account child proves where a grant would pay, not that this
+		// account owns the invoice. Check the immutable receiver before allocating
+		// from the pool or returning a previously prepared grant on a retry.
+		self.db.read(async |t| {
+			t.verify_fallback_child(origin, user_pubkey).await?;
+			let receiver = t.get_lightning_receiver_mailbox_id(payment_hash).await?;
+			if receiver.map(|id| id.as_pubkey()) != Some(origin.mailbox_pk()) {
+				return badarg!("claim account does not match invoice receiver");
+			}
+			Ok(())
+		}).await?;
+
 		slog!(LightningReceivePrepareRequested, payment_hash, user_pubkey, htlc_recv_expiry);
 
 		// first check whether we're in the right state to do this

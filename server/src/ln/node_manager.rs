@@ -39,10 +39,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::Amount;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin_ext::{AmountExt, BlockDelta, BlockHeight};
 use cln_rpc::listpays_pays::ListpaysPaysStatus;
 use cln_rpc::plugins::hold as hold_plugin;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Bolt11InvoiceDescriptionRef};
 use futures::Stream;
 use tokio::sync::{broadcast, Notify, mpsc};
 use tokio_stream::StreamExt;
@@ -70,6 +71,32 @@ use crate::database::ln::{
 use crate::telemetry;
 
 use super::payment_handler::PaymentAttemptHandler;
+
+/// Validate untrusted RPC fields before looking up a node or creating state.
+pub(crate) fn parse_invoice_description(
+	description: Option<String>,
+	description_hash: Option<Vec<u8>>,
+) -> anyhow::Result<Option<Bolt11InvoiceDescription>> {
+	match (description, description_hash) {
+		(Some(_), Some(_)) => bail!("description and description_hash are mutually exclusive"),
+		(Some(memo), None) => Ok(Some(Bolt11InvoiceDescription::Direct(
+			lightning_invoice::Description::new(memo)?,
+		))),
+		(None, Some(hash)) => Ok(Some(Bolt11InvoiceDescription::Hash(lightning_invoice::Sha256(
+			sha256::Hash::from_slice(&hash).context("description_hash must be exactly 32 bytes")?,
+		)))),
+		(None, None) => Ok(None),
+	}
+}
+
+fn hold_invoice_description(
+	description: Option<Bolt11InvoiceDescription>,
+) -> Option<hold_plugin::invoice_request::Description> {
+	description.map(|description| match description {
+		Bolt11InvoiceDescription::Direct(memo) => hold_plugin::invoice_request::Description::Memo(memo.into_inner().0),
+		Bolt11InvoiceDescription::Hash(hash) => hold_plugin::invoice_request::Description::Hash(hash.0.to_byte_array().to_vec()),
+	})
+}
 
 /// Benign outcomes of a pay-invoice attempt that reflect a race with another
 /// actor rather than an internal server fault. `pay_invoice` recognizes these
@@ -606,9 +633,13 @@ impl LightningManager {
 		payment_hash: PaymentHash,
 		amount: Amount,
 		cltv_delta: BlockDelta,
-		description: Option<String>,
+		description: Option<Bolt11InvoiceDescription>,
 		receiver_mailbox_id: Option<MailboxIdentifier>,
 	) -> anyhow::Result<Bolt11Invoice> {
+		let expected_hash = match description.as_ref() {
+			Some(Bolt11InvoiceDescription::Hash(hash)) => Some(hash.0),
+			_ => None,
+		};
 		let node = self.hold_active_node().context("no active hold-compatible cln node")?;
 		let mut hold_client = node.hold_rpc.clone().expect("hold-active node has hold_rpc");
 
@@ -618,10 +649,15 @@ impl LightningManager {
 			min_final_cltv_expiry: Some(cltv_delta.into()),
 			expiry: Some(self.invoice_expiry.as_secs()),
 			routing_hints: vec![],
-			description: description.map(hold_plugin::invoice_request::Description::Memo),
+			description: hold_invoice_description(description),
 		}).await?.into_inner();
 
 		let invoice = Bolt11Invoice::from_str(&res.bolt11)?;
+		if let Some(expected) = expected_hash {
+			if !matches!(invoice.description(), Bolt11InvoiceDescriptionRef::Hash(actual) if actual.0 == expected) {
+				bail!("hold node invoice description hash does not match description_hash");
+			}
+		}
 
 		// Raw agent, not the bucketed label -- see start_lightning_payment.
 		let user_agent = telemetry::current_user_agent();
@@ -1254,6 +1290,37 @@ impl LightningManagerProcess {
 					break;
 				},
 			};
+		}
+	}
+}
+
+#[cfg(test)]
+mod invoice_description_tests {
+	use super::{hold_invoice_description, parse_invoice_description};
+	use cln_rpc::plugins::hold::invoice_request::Description;
+
+	#[test]
+	fn explicit_invoice_description_hash_reaches_hold_as_hash() {
+		let hash = vec![7; 32];
+		let description = parse_invoice_description(None, Some(hash.clone())).unwrap();
+		assert_eq!(hold_invoice_description(description), Some(Description::Hash(hash)));
+	}
+
+	#[test]
+	fn invoice_description_preserves_memo_and_default() {
+		let memo = "ordinary memo\n\t";
+		let description = parse_invoice_description(Some(memo.into()), None).unwrap();
+		assert_eq!(hold_invoice_description(description), Some(Description::Memo(memo.into())));
+		assert_eq!(hold_invoice_description(parse_invoice_description(None, None).unwrap()), None);
+	}
+
+	#[test]
+	fn invoice_description_refuses_ambiguous_or_malformed_fields() {
+		let err = parse_invoice_description(Some("memo".into()), Some(vec![7; 32])).unwrap_err();
+		assert!(err.to_string().contains("mutually exclusive"));
+		for size in [0, 31, 33] {
+			let err = parse_invoice_description(None, Some(vec![7; size])).unwrap_err();
+			assert!(err.to_string().contains("exactly 32 bytes"));
 		}
 	}
 }

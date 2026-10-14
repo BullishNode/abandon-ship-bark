@@ -1461,6 +1461,16 @@
               }
             }
           },
+          "400": {
+            "description": "Ambiguous invoice description",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error",
             "content": {
@@ -6004,6 +6014,13 @@
               "null"
             ],
             "description": "Optional description embedded in the invoice as its memo."
+          },
+          "description_hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact SHA-256 description commitment, as 64 hexadecimal characters.\nMutually exclusive with description; the caller hashes the metadata."
           }
         }
       },
@@ -6025,6 +6042,13 @@
               "null"
             ],
             "description": "Optional description embedded in the invoice as its memo."
+          },
+          "description_hash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact SHA-256 description commitment, as 64 hexadecimal characters.\nMutually exclusive with description; the caller hashes the metadata."
           },
           "token": {
             "type": [

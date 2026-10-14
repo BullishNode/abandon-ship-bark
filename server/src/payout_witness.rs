@@ -171,6 +171,7 @@ impl PayoutWitness {
 pub struct DirectPayoutWitness {
 	files: PayoutWitness,
 	network: Network,
+	key: PublicKey,
 	budget: BackingSnapshotLimits,
 }
 
@@ -215,7 +216,7 @@ impl DirectPayoutWitness {
 			ensure!(indexed.insert(line.parse::<Txid>()?), "duplicate direct payout history entry");
 		}
 		let files = PayoutWitness { directory, indexed: Arc::new(tokio::sync::Mutex::new(indexed.clone())) };
-		let witness = Self { files, network, budget };
+		let witness = Self { files, network, key, budget };
 		let mut present = BTreeSet::new();
 		for entry in fs::read_dir(&witness.files.directory)? {
 			let path = entry?.path();
@@ -237,17 +238,30 @@ impl DirectPayoutWitness {
 		Ok(witness)
 	}
 
+	/// Bind the loaded history to the actual backing server, not a caller's
+	/// convenient empty directory. A changed on-disk identity also fails closed.
+	pub(crate) fn require_identity(&self, network: Network, key: PublicKey) -> anyhow::Result<()> {
+		ensure!(self.network == network && self.key == key, "direct payout witness does not belong to backing server/network");
+		let path = self.files.directory.join("identity.json");
+		ensure!(fs::metadata(&path)?.len() <= u64::try_from(self.budget.max_serialized_bytes)?, "direct payout identity exceeds budget");
+		let stored: Identity = serde_json::from_slice(&fs::read(path)?)?;
+		ensure!(stored == identity(self.network, self.key), "direct payout history identity changed");
+		Ok(())
+	}
+
 	async fn records(&self, db: &Db, freeze_set: &str) -> anyhow::Result<Vec<DirectRecord>> {
 		// Hashes and bytes come from the same bounded, fully authenticated
 		// repeatable-read snapshot. Observation timestamps are deliberately excluded.
-		Ok(db.read_direct_delivery(freeze_set, self.network, self.budget).await?.into_iter()
-			.map(|v| DirectRecord { freeze_set: freeze_set.to_owned(), tx: v.bytes,
-				allocation_hash: v.allocation_hash, carrier_hash: v.carrier_hash }).collect())
+		let versions = db.read_direct_delivery(freeze_set, self.network, self.budget).await?;
+		ensure!(versions.iter().all(|v| v.server_pubkey == self.key), "direct payout witness does not belong to current backing server");
+		Ok(versions.into_iter().map(|v| DirectRecord { freeze_set: freeze_set.to_owned(), tx: v.bytes,
+			allocation_hash: v.allocation_hash, carrier_hash: v.carrier_hash }).collect())
 	}
 
 	/// Successful return means every signed version's financial identity is
 	/// fsynced independently of PostgreSQL. Call before observing/submitting it.
 	pub async fn record_group(&self, db: &Db, freeze_set: &str) -> anyhow::Result<()> {
+		self.require_identity(self.network, self.key)?;
 		for record in self.records(db, freeze_set).await? {
 			let tx: Transaction = deserialize(&record.tx)?;
 			let txid = tx.compute_txid();

@@ -47,7 +47,7 @@ async fn frozen_expiry_component_worker() {
 		Network::Regtest, &master, WalletKind::Watchman, tip, 3).await.unwrap();
 	let wallet = InstrumentedLock::new("frozen_expiry_component", wallet);
 	let mut processor = FrozenExpiryProcessor::new(db.clone(), wallet.clone(), Network::Regtest,
-		recipe.source.operator_script, budget(), limits());
+		recipe.source.operator_script.clone(), budget(), limits(), history_for(&recipe.source, &db).await);
 	processor.recover_durable_groups().await.unwrap();
 	let existing = db.read(async |t| Ok(t.query_opt("SELECT c.txid FROM expiry_carrier c JOIN expiry_carrier_allocation m ON m.txid=c.txid
 		JOIN expiry_allocation a ON a.id=m.allocation_id WHERE a.freeze_set=$1 ORDER BY generation DESC LIMIT 1",
@@ -212,8 +212,8 @@ async fn unknown_publication(name: &str, lose_reply: bool) {
 		&master.derive_priv(&ark::SECP, &DerivationPath::from_str(path).unwrap()).unwrap().private_key);
 	let signer = WatchmanSigner::new(Secret::new(key_at("m/2'/0'")), Secret::new(key_at("m/30'")), db.clone());
 	let wallet = InstrumentedLock::new("unknown_direct_publication", case.wallet);
-	let mut processor = FrozenExpiryProcessor::new(db, wallet.clone(), Network::Regtest,
-		case.recipe.operator_script.clone(), budget(), limits());
+	let mut processor = FrozenExpiryProcessor::new(db.clone(), wallet.clone(), Network::Regtest,
+		case.recipe.operator_script.clone(), budget(), limits(), history_for(&case.recipe, &case.db).await);
 	processor.recover_durable_groups().await.unwrap();
 	let height = BlockHeight::new(core.get_block_count().unwrap() as u32);
 	let outcome = processor.prepare_group(&signer, &node, &case.recipe.freeze_set, height, FeeRate::from_sat_per_vb(30).unwrap()).await;
@@ -289,7 +289,7 @@ async fn frozen_expiry_late_generation_requires_complete_reservation_reload() {
 	let master = Xpriv::new_master(Network::Regtest, &wallet::read_mnemonic_from_datadir(&config.data_dir).unwrap().to_seed("")).unwrap();
 	let wallet = InstrumentedLock::new("stale_processor", case.wallet);
 	let mut processor = FrozenExpiryProcessor::new(case.db.clone(), wallet.clone(), Network::Regtest,
-		case.recipe.operator_script.clone(), budget(), limits());
+		case.recipe.operator_script.clone(), budget(), limits(), history_for(&case.recipe, &case.db).await);
 	processor.recover_durable_groups().await.unwrap();
 	let mut held = wallet.lock().await;
 	case.ctx.bitcoind().fund_addr(held.next_unused_address(KEYCHAIN).address, sat(900_000)).await;
@@ -318,7 +318,7 @@ async fn frozen_expiry_late_generation_requires_complete_reservation_reload() {
 		Network::Regtest, &master, WalletKind::Watchman, tip, 3).await.unwrap();
 	let restored = InstrumentedLock::new("reloaded_processor", restored);
 	let mut recovered = FrozenExpiryProcessor::new(case.db.clone(), restored.clone(), Network::Regtest,
-		case.recipe.operator_script.clone(), budget(), limits());
+		case.recipe.operator_script.clone(), budget(), limits(), history_for(&case.recipe, &case.db).await);
 	recovered.recover_durable_groups().await.unwrap();
 	assert_eq!(recovered.observe_and_submit(&node, &case.recipe.freeze_set).await.unwrap(), DeliveryState::Pending { txid: txids[0] });
 	case.ctx.generate_blocks(3).await;
@@ -362,8 +362,8 @@ async fn delayed_commit(name: &str, cancel_prepare: bool) {
 		&master.derive_priv(&ark::SECP, &DerivationPath::from_str(path).unwrap()).unwrap().private_key);
 	let signer = WatchmanSigner::new(Secret::new(key_at("m/2'/0'")), Secret::new(key_at("m/30'")), db.clone());
 	let wallet = InstrumentedLock::new("delayed_publication", case.wallet);
-	let mut processor = FrozenExpiryProcessor::new(db, wallet.clone(), Network::Regtest,
-		case.recipe.operator_script.clone(), budget(), limits());
+	let mut processor = FrozenExpiryProcessor::new(db.clone(), wallet.clone(), Network::Regtest,
+		case.recipe.operator_script.clone(), budget(), limits(), history_for(&case.recipe, &case.db).await);
 	processor.recover_durable_groups().await.unwrap();
 	let height = BlockHeight::new(core.get_block_count().unwrap() as u32);
 	if cancel_prepare {

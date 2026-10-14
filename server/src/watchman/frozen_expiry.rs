@@ -1,9 +1,9 @@
 //! Complete frozen-group processing for an explicitly admitted startup caller.
 //!
-//! Not enabled by daemon configuration. The caller still needs independently
-//! qualified recovery/current-source admission and financial operating limits.
-//! Existing sweep/CTRL scheduling may invoke this component after those gates;
-//! a failure never authorizes sending its backing through the legacy drain.
+//! Configured direct expiry scheduling uses this component after restoring its
+//! independent history and fee reservations. Current-source admission and
+//! financial operating limits remain separate qualification requirements.
+//! Failure never authorizes sending its backing through the legacy drain.
 
 use std::collections::BTreeMap;
 use std::time::Duration;

@@ -9,6 +9,7 @@
 pub mod carrier;
 pub mod direct_delivery;
 pub mod frozen_expiry;
+mod expiry_runtime;
 mod config;
 mod daemon;
 mod frontier;
@@ -16,7 +17,7 @@ mod policy;
 mod signer;
 pub(crate) mod settlement;
 
-pub use self::config::Config;
+pub use self::config::{Config, DirectExpiryConfig};
 pub use self::daemon::Daemon;
 pub use self::frontier::VtxoExitFrontier;
 pub use self::signer::WatchmanSigner;
@@ -160,6 +161,7 @@ pub struct Watchman {
 	///
 	/// Includes claims, progress txs, and foreign spends (e.g. user exits).
 	mempool_spends: parking_lot::RwLock<HashMap<VtxoId, MempoolSpend>>,
+	direct_expiry: Option<expiry_runtime::DirectExpiryRuntime>,
 }
 
 impl Watchman {
@@ -187,7 +189,18 @@ impl Watchman {
 			frontier,
 			sync_height,
 			mempool_spends: parking_lot::RwLock::new(HashMap::new()),
+			direct_expiry: None,
 		}
+	}
+
+	pub(crate) fn with_direct_expiry(mut self, runtime: Option<expiry_runtime::DirectExpiryRuntime>) -> Self {
+		self.direct_expiry = runtime;
+		self
+	}
+
+	async fn process_direct_expiry(&self, runtime: &expiry_runtime::DirectExpiryRuntime) -> anyhow::Result<()> {
+		runtime.tick(&self.signer, &self.bitcoind,
+			self.fee_estimator.regular(), self.config.claim_chunksize.get()).await
 	}
 
 	pub fn sync_height(&self) -> BlockRef {
@@ -366,6 +379,7 @@ impl Watchman {
 	/// This is the time-critical half of the watchman's work and runs on the
 	/// short [Config::reaction_interval].
 	pub async fn process_reactions(&self) -> anyhow::Result<()> {
+		if let Some(runtime) = &self.direct_expiry { return self.process_direct_expiry(runtime).await; }
 		let work = self.scan_frontier().await;
 
 		let vtxos = work.claims.iter().chain(work.progress.iter().map(|(_, v)| v));
@@ -388,6 +402,7 @@ impl Watchman {
 	/// Sweeps have no deadline, so this runs on the much longer
 	/// [Config::sweep_interval].
 	pub async fn process_sweeps(&self) -> anyhow::Result<()> {
+		if let Some(runtime) = &self.direct_expiry { return self.process_direct_expiry(runtime).await; }
 		let work = self.scan_frontier().await;
 
 		for vtxo in &work.sweeps {
@@ -407,6 +422,7 @@ impl Watchman {
 	/// Filters vtxos by broadcast status (skipping those already broadcast with good feerate),
 	/// then builds and broadcasts claim txs in chunks.
 	async fn process_claims(&self, mut vtxos: Vec<ServerVtxo>) -> anyhow::Result<()> {
+		ensure!(self.direct_expiry.is_none(), "direct expiry backing cannot enter legacy claims");
 		//TODO(stevenroose) adapt feerate to how close the deadline is
 		let min_feerate = self.fee_estimator.regular();
 

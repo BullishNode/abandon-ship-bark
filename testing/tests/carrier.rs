@@ -1,6 +1,7 @@
 //! Real operator-owned backing proves construction/signing/relay only.
 //! Exact supplied outputs here do not claim resolved customer entitlement.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
@@ -16,6 +17,7 @@ use ark::{ProtocolEncoding, ServerVtxo};
 use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef, TxOutExt};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
 use server::database::{Db, SpendState};
+use server::database::expiry_ownership::OwnershipContext;
 use server::database::carrier_snapshot::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits, SnapshotGenesis};
 use server::secret::Secret;
 use server::utils::InstrumentedLock;
@@ -245,9 +247,9 @@ async fn recover_all_bip84_and_spend(
 	(discovered, spend)
 }
 
-/// Manual financial handoff: real customer registration, physical Board backing,
-/// signed carrier and crash-style reload. This does not qualify the automatic
-/// ownership resolver or the watchmand dispatch path.
+/// Source-checked financial handoff: real registration and backing, mature
+/// ownership freeze, signed carrier and crash-style reload. Automatic daemon
+/// dispatch and conditional dependency reconciliation remain separate gates.
 #[tokio::test]
 async fn direct_carrier_atomic_handoff_preserves_payee_and_wallet_reservation() {
 	let AutomaticBoardFixture { ctx, srv, mnemonic, coin, record } =
@@ -264,22 +266,20 @@ async fn direct_carrier_atomic_handoff_preserves_payee_and_wallet_reservation() 
 	let residuals = partition_residuals(&roots, &terminal);
 	let budget = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
 	let inventory = snapshot(&db, &roots, budget.max_rows, budget.max_serialized_bytes).await.unwrap();
-	let partition = inventory.check_partition(&terminal, &[funding], &residuals, budget).unwrap();
+	let partition = inventory.check_partition(&terminal, &[funding.clone()], &residuals, budget).unwrap();
 	let residual = residuals.iter().find(|r| r.txout.value > Amount::ZERO).unwrap();
 	assert_eq!(partition.roots[0].terminal_amount, sat(20_000));
 	assert_eq!(partition.roots[0].anchor_residual_amount, residual.txout.value);
-	let ids = [coin.id(), residual.outpoint.into()];
-	let retirement = vec![roots[0].id().to_string()];
-	let freeze_set = "manual-board-handoff";
-	db.write(async |t| {
-		t.execute("INSERT INTO expiry_allocation (id,freeze_set,owner_pubkey,spk,disposition,gross_sat,fee_sat,payout_sat,forfeited_sat,source,source_evidence,retirement_ids)
-			VALUES ($1,$2,$3,$4,'pay',20000,1000,19000,0,'registered','{\"fixture\":\"manual-authenticated-board\"}',$5)",
-			&[&ids[0].to_string(), &freeze_set, &coin.user_pubkey().serialize().to_vec(), &record.spk.as_bytes(), &retirement]).await?;
-		t.execute("INSERT INTO expiry_allocation (id,freeze_set,disposition,gross_sat,fee_sat,payout_sat,forfeited_sat,source,source_evidence,retirement_ids)
-			VALUES ($1,$2,'operator',$3,0,0,0,'board-fee-anchor','{\"fixture\":\"exact-valued-p2a-residual\"}',$4)",
-			&[&ids[1].to_string(), &freeze_set, &i64::try_from(residual.txout.value.to_sat()).unwrap(), &retirement]).await?;
-		Ok(())
-	}).await.unwrap();
+	let funding = BTreeMap::from([(funding.compute_txid(), funding)]);
+	let cancellations = BTreeSet::new();
+	let send_evidence = BTreeMap::new();
+	let early_context = OwnershipContext { tip: core.get_block_count().unwrap() as u32, grace: 0,
+		max_dependencies: 100, server_pubkey: coin.server_pubkey(), funding: &funding, canceled_receives: &cancellations };
+	assert!(db.write(async |t| t.freeze_expiry_sources(&roots, &terminal, &residuals,
+		&early_context, &send_evidence, Network::Regtest, budget).await).await.is_err(),
+		"an immature source cannot freeze or leave an allocation prefix");
+	let count = db.read(async |t| Ok(t.query_one("SELECT count(*)::bigint AS n FROM expiry_allocation", &[]).await?.get::<_, i64>("n"))).await.unwrap();
+	assert_eq!(count, 0);
 	let operator_mnemonic = wallet::read_mnemonic_from_datadir(&srv.config().data_dir).unwrap();
 	let master = Xpriv::new_master(Network::Regtest, &operator_mnemonic.to_seed("")).unwrap();
 	let key_at = |path| Keypair::from_secret_key(&ark::SECP,
@@ -299,6 +299,28 @@ async fn direct_carrier_atomic_handoff_preserves_payee_and_wallet_reservation() 
 		max_miner_fee: sat(10_000), max_weight: Weight::from_wu(400_000) };
 	let rate = FeeRate::from_sat_per_vb(30).unwrap();
 	let height = BlockHeight::new(core.get_block_count().unwrap() as u32);
+	let context = OwnershipContext { tip: height.to_u32(), ..early_context };
+	let refused: anyhow::Result<()> = db.write(async |t| {
+		t.execute("UPDATE key_link SET child_index=child_index+1 WHERE user_pubkey=$1",
+			&[&coin.user_pubkey().serialize().to_vec()]).await?;
+		assert!(t.freeze_expiry_sources(&roots, &terminal, &residuals, &context,
+			&send_evidence, Network::Regtest, budget).await.is_err(), "a mismatched account child cannot freeze");
+		let count = t.query_one("SELECT count(*)::bigint AS n FROM expiry_allocation", &[]).await?.get::<_, i64>("n");
+		assert_eq!(count, 0);
+		anyhow::bail!("restore the declared invalid-child fixture by rollback");
+	}).await;
+	assert!(refused.is_err());
+	let freeze = db.write(async |t| t.freeze_expiry_sources(&roots, &terminal, &residuals,
+		&context, &send_evidence, Network::Regtest, budget).await).await.unwrap();
+	let retry = db.write(async |t| t.freeze_expiry_sources(&roots, &terminal, &residuals,
+		&context, &send_evidence, Network::Regtest, budget).await).await.unwrap();
+	assert_eq!(freeze.id, retry.id);
+	assert_eq!(freeze.allocation_ids, retry.allocation_ids);
+	assert_eq!(freeze.backing_ids, roots.iter().map(|v| v.id()).collect::<Vec<_>>());
+	assert_eq!(freeze.recipients, vec![recipient.clone()]);
+	let ids = freeze.allocation_ids;
+	let freeze_set = freeze.id.as_str();
+
 	let (mut held, mut carrier) = build_direct_carrier(&signer, fee_wallet.lock_owned().await, &roots,
 		&[recipient.clone()], operator_script.clone(), height, rate, policy).await.unwrap();
 	assert!(!carrier.fee_inputs.is_empty(), "actual funding shortfall must exercise persistent fee reservation");

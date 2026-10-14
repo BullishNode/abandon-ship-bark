@@ -1,5 +1,5 @@
 //! Real pinned backend HTTP enrollment. No payments or dispatch qualification.
-use ark::{ProtocolEncoding, SECP};
+use ark::SECP;
 use ark_testing::{TestContext, ports::pick_port};
 use bitcoin::{
 	hashes::{Hash, sha256},
@@ -13,7 +13,7 @@ use std::{
 	process::Stdio,
 	time::Duration,
 };
-use tokio::process::{Child, Command};
+use tokio::{io::AsyncWriteExt, process::{Child, Command}};
 
 const LOADER: &str = "/noah-host-libs/ld-linux-x86-64.so.2";
 const BACKEND: &str = "/pinned/noah/noah-server";
@@ -124,7 +124,6 @@ const INVOICE_VERIFIER_SHA: &str =
 	"d15d058dccc1ad38ca1fe60a5f05daa4ffa0890d63678817b2af6f4068904dcd";
 
 async fn verify_actual_invoice(invoice: &str, metadata: &str) -> std::process::Output {
-	use tokio::io::AsyncWriteExt;
 	assert_eq!(
 		sha256::Hash::hash(&fs::read(INVOICE_VERIFIER).unwrap()).to_string(),
 		INVOICE_VERIFIER_SHA
@@ -188,6 +187,7 @@ async fn noah_first_original_invoice_commits_discovery_metadata() {
 	let key = wallet.peek_keypair(0).await.unwrap();
 	let forwarder = ctx
 		.barkd("owned_forwarder", &srv)
+		.env("BARKD_NOAH_LNURL_DOMAIN", "owned.invalid")
 		.cfg(|c| c.daemon_manual_sync = true)
 		.create()
 		.await;
@@ -268,6 +268,7 @@ async fn noah_first_original_invoice_commits_discovery_metadata() {
 		discovery["callback"],
 		"https://owned.invalid/.well-known/lnurlp/forwardedphone"
 	);
+	assert!(node.grpc_client().await.list_invoices(cln_rpc::ListinvoicesRequest::default()).await.unwrap().into_inner().invoices.is_empty());
 	// One callback only, no Ark negotiation and no payment/retry dispatch.
 	let response = client
 		.get(format!("{origin}/.well-known/lnurlp/forwardedphone"))
@@ -286,6 +287,20 @@ async fn noah_first_original_invoice_commits_discovery_metadata() {
 	original.write_all(serde_json::to_vec(&json!({"invoice":invoice,"metadata":metadata,"address":address,"amount_msat":12_000_000})).unwrap().as_slice()).unwrap();
 	let result = verify_actual_invoice(invoice, metadata).await;
 	assert!(result.status.success(), "first original Noah invoice must commit exact discovery metadata: {}", String::from_utf8_lossy(&result.stderr));
+	let created = node.grpc_client().await.list_invoices(cln_rpc::ListinvoicesRequest::default()).await.unwrap().into_inner();
+	assert_eq!(created.invoices.len(), 1, "first callback must create exactly one original invoice");
+	let endpoint = format!("{}/api/v1/lightning/receives/invoice/for-address", forwarder.base_url());
+	for label in ["ordinary memo", "Paying satoshis to forwardedphone@other.invalid", "Paying satoshis to Forwardedphone@owned.invalid", "Paying satoshis to forwardedphone@owned.invalid "] {
+		let refused = client.post(&endpoint).bearer_auth(token.trim())
+			.json(&json!({"address":address,"amount_sat":12_000,"description":label})).send().await.unwrap();
+		assert_eq!(refused.status(), reqwest::StatusCode::BAD_REQUEST);
+	}
+	let unauthorized = client.post(&endpoint).json(&json!({"address":address,"amount_sat":12_000,"description":"Paying satoshis to forwardedphone@owned.invalid"})).send().await.unwrap();
+	assert_eq!(unauthorized.status(), reqwest::StatusCode::UNAUTHORIZED);
+	let count = node.grpc_client().await.list_invoices(cln_rpc::ListinvoicesRequest::default()).await.unwrap().into_inner().invoices.len();
+	assert_eq!(count, 1, "refused requests must not issue another invoice");
+	let public = json!({"backend_pin":NOAH_PIN,"backend_sha256":BACKEND_SHA,"fixture_head":env!("GIT_HASH"),"first_original_invoice_sha256":sha256::Hash::hash(invoice.as_bytes()).to_string(),"metadata_sha256":sha256::Hash::hash(metadata.as_bytes()).to_string(),"node_invoice_count":count,"strict_original_verification":true,"payments_dispatched":0,"wallet_funding_sat":0,"paid_journey_qualified":false});
+	fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(ctx.datadir.join("public-result.json")).unwrap().write_all(&serde_json::to_vec_pretty(&public).unwrap()).unwrap();
 	let after = node.grpc_client().await.list_funds(cln_rpc::ListfundsRequest { spent: Some(false) }).await.unwrap().into_inner();
 	assert!(after.outputs.is_empty() && after.channels.is_empty());
 	assert_eq!(wallet.balance().await.unwrap().total().to_sat(), 0);

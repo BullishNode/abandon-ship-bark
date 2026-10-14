@@ -14,8 +14,11 @@ use bitcoincore_rpc::RpcApi;
 
 use ark::board::BoardBuilder;
 use ark::{ProtocolEncoding, ServerVtxo};
+use ark::vtxo::policy::clause::{TapScriptClause, VtxoClause};
+use ark::vtxo::policy::signing::VtxoSigner;
 use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef, TxOutExt};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
+use bitcoin_ext::rpc::BitcoinRpcExt;
 use server::database::{Db, SpendState};
 use server::database::expiry_ownership::OwnershipContext;
 use server::database::carrier_snapshot::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits, SnapshotGenesis};
@@ -380,6 +383,90 @@ async fn direct_carrier_atomic_handoff_preserves_payee_and_wallet_reservation() 
 	let (discovered, spend) = recover_all_bip84_and_spend(&ctx, &mnemonic).await;
 	assert!(discovered.contains(&(payout, sat(19_000))));
 	assert!(spend.input.iter().any(|i| i.previous_output == payout));
+}
+
+/// A completed user exit leaves a user-only script, rather than Ark backing
+/// the server can claim. Refuse freezing it and prove the owner's seed can spend.
+/// This is user-initiated recovery, not absent-user BIP84 payout qualification.
+#[tokio::test]
+async fn confirmed_user_leaf_refuses_expiry_freeze_and_remains_owner_spendable() {
+	let AutomaticBoardFixture { ctx, srv, mnemonic, coin, record } =
+		automatic_board_fixture_with_fee("confirmed_user_leaf_refuses_expiry_freeze_and_remains_owner_spendable", sat(1_000)).await;
+	srv.watchmand().stop().await.unwrap();
+	srv.stop().await.unwrap();
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let core = ctx.bitcoind().sync_client();
+	let parent = coin.transactions().last().unwrap().tx.clone();
+	assert_eq!(parent.compute_txid(), coin.point().txid);
+	let anchor = parent.output.iter().position(|o| o.script_pubkey == *bitcoin_ext::fee::P2A_SCRIPT).unwrap();
+	assert_eq!(parent.output[anchor].value, sat(1_000));
+	let child = bitcoin::Transaction {
+		version: parent.version, lock_time: bitcoin::absolute::LockTime::ZERO,
+		input: vec![bitcoin::TxIn { previous_output: OutPoint::new(parent.compute_txid(), anchor as u32),
+			script_sig: ScriptBuf::new(), sequence: bitcoin::Sequence::ENABLE_RBF_NO_LOCKTIME,
+			witness: bitcoin::Witness::new() }],
+		output: vec![TxOut { value: sat(330), script_pubkey: ctx.bitcoind().get_new_address().script_pubkey() }],
+	};
+	assert_eq!(core.submit_package(&[&parent, &child]).unwrap().package_msg, "success");
+	ctx.generate_blocks(1).await;
+	let confirmation = BlockHeight::new(core.get_block_count().unwrap() as u32);
+	assert!(core.get_tx_out(&coin.point().txid, coin.point().vout, Some(true)).unwrap().is_some());
+	assert!(core.get_tx_out(&coin.chain_anchor().txid, coin.chain_anchor().vout, Some(true)).unwrap().is_none());
+	db.write(async |t| t.register_vtxo_confirmation(coin.id(), confirmation).await).await.unwrap();
+	let root = db.read(async |t| t.get_bare_vtxo_by_id(coin.id()).await).await.unwrap();
+	assert_eq!(root.confirmed_height, Some(confirmation));
+	let roots = [root.vtxo];
+	let terminals = [ServerVtxo::from(coin.clone())];
+	let original = core.get_raw_transaction(&coin.chain_anchor().txid, None).unwrap();
+	let funding = BTreeMap::from([(original.compute_txid(), original)]);
+	let canceled_receives = BTreeSet::new();
+	let send_evidence = BTreeMap::new();
+	let budget = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
+	let operator_mnemonic = wallet::read_mnemonic_from_datadir(&srv.config().data_dir).unwrap();
+	let master = Xpriv::new_master(Network::Regtest, &operator_mnemonic.to_seed("")).unwrap();
+	let key_at = |path| Keypair::from_secret_key(&ark::SECP,
+		&master.derive_priv(&ark::SECP, &DerivationPath::from_str(path).unwrap()).unwrap().private_key);
+	let signer = WatchmanSigner::new(Secret::new(key_at("m/2'/0'")), Secret::new(key_at("m/30'")), db.clone());
+	assert!(signer.find_signable_clause(&roots[0]).await.is_none(),
+		"a user-only leaf has no server claim even after Ark expiry");
+	let maturity = coin.expiry_height().to_u32().max(confirmation.to_u32() + coin.exit_delta().to_u32()) + 1;
+	ctx.generate_blocks(maturity.saturating_sub(core.get_block_count().unwrap() as u32)).await;
+	let context = OwnershipContext { tip: maturity, grace: 0, max_dependencies: 100,
+		server_pubkey: coin.server_pubkey(), funding: &funding, canceled_receives: &canceled_receives };
+	let refused = db.write(async |t| t.freeze_expiry_sources(&roots, &terminals, &[],
+		&context, &send_evidence, Network::Regtest, budget).await).await.err().expect("user-only leaf must not freeze");
+	assert!(format!("{refused:#}").contains("ExitedOrConsumed"));
+	let allocations = db.read(async |t| Ok(t.query_one("SELECT count(*)::bigint AS n FROM expiry_allocation", &[])
+		.await?.get::<_, i64>("n"))).await.unwrap();
+	assert_eq!(allocations, 0, "the refusal must leave no impossible frozen obligation");
+	// Re-derive the account from the mnemonic, without the original client or
+	// its SQLite keys. This fixture's fresh Board is within a bounded scan.
+	let user_master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
+	let account = user_master.derive_priv(&ark::SECP, &DerivationPath::from_str("m/350'/0'").unwrap()).unwrap();
+	assert_eq!(bitcoin::bip32::Xpub::from_priv(&ark::SECP, &account), record.account_xpub);
+	let user_key = (0..32).map(|i| account.derive_priv(&ark::SECP, &[bitcoin::bip32::ChildNumber::Normal { index: i }])
+		.unwrap().to_keypair(&ark::SECP)).find(|k| k.public_key() == coin.user_pubkey()).unwrap();
+	let claim_clause = coin.policy().as_pubkey().unwrap().user_pubkey_claim_clause(coin.exit_delta());
+	let clause: VtxoClause = claim_clause.clone().into();
+	let mut spend = bitcoin::Transaction {
+		version: bitcoin::transaction::Version::TWO, lock_time: bitcoin::absolute::LockTime::ZERO,
+		input: vec![bitcoin::TxIn { previous_output: coin.point(), script_sig: ScriptBuf::new(),
+			sequence: clause.sequence().unwrap(), witness: bitcoin::Witness::new() }],
+		// This 1,000 sat is a miner fee for the user's exit spend, not an expiry charge.
+		output: vec![TxOut { value: coin.amount() - sat(1_000), script_pubkey: record.spk }],
+	};
+	let leaf_hash = bitcoin::taproot::TapLeafHash::from_script(&clause.tapscript(), bitcoin::taproot::LeafVersion::TapScript);
+	let hash = bitcoin::sighash::SighashCache::new(&spend).taproot_script_spend_signature_hash(0,
+		&bitcoin::sighash::Prevouts::All(&[coin.txout()]), leaf_hash, bitcoin::sighash::TapSighashType::Default).unwrap();
+	let signature = ark::SECP.sign_schnorr(&hash.into(), &user_key);
+	spend.input[0].witness = claim_clause.witness(&signature, &clause.control_block(&coin));
+	core.send_raw_transaction(&spend).unwrap();
+	ctx.generate_blocks(1).await;
+	let payout = OutPoint::new(spend.compute_txid(), 0);
+	let (discovered, recovered_spend) = recover_all_bip84_and_spend(&ctx, &mnemonic).await;
+	assert!(discovered.contains(&(payout, sat(19_000))));
+	assert!(recovered_spend.input.iter().any(|i| i.previous_output == payout));
+	assert!(core.get_tx_out(&coin.point().txid, coin.point().vout, Some(true)).unwrap().is_none());
 }
 
 /// Exercise the trusted admission boundary directly: even if an upstream

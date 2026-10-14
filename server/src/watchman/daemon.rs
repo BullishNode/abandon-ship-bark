@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::bip32;
+use bitcoin::Weight;
 use bitcoin::secp256k1::Keypair;
 use tracing::{error, info};
 use bitcoind_async_client::traits::Reader;
@@ -30,6 +31,9 @@ use crate::utils::InstrumentedLock;
 use crate::wallet::{PersistedWallet, WalletKind, MNEMONIC_FILE};
 use crate::ln::settler::HtlcSettler;
 use crate::watchman::{VtxoExitFrontier, Watchman, WatchmanHandle, WatchmanSigner};
+use crate::watchman::carrier::CarrierLimits;
+use crate::watchman::expiry_runtime::DirectExpiryRuntime;
+use crate::payout_witness::{DirectPayoutWitness, DIRECT_HISTORY_LIMITS};
 
 
 /// The HD keypath to use for the server key.
@@ -100,6 +104,7 @@ impl Daemon {
 
 	/// Start the server.
 	pub async fn start(cfg: Config) -> anyhow::Result<Self> {
+		cfg.validate().context("invalid watchmand configuration")?;
 		let seed = wallet::read_mnemonic_from_datadir(&cfg.data_dir)?.to_seed("");
 		let master_xpriv = bip32::Xpriv::new_master(cfg.network, &seed).unwrap();
 		let server_key_path = bip32::DerivationPath::from_str(SERVER_KEY_PATH).unwrap();
@@ -123,6 +128,16 @@ impl Daemon {
 		let db = database::Db::connect(&cfg.postgres)
 			.await
 			.context("failed to connect to db")?;
+		let history = if let Some(direct) = &cfg.watchman.direct_expiry {
+			Some(Arc::new(DirectPayoutWitness::load(&direct.history_dir, cfg.network,
+				server_key.public_key(), &db, DIRECT_HISTORY_LIMITS).await
+				.context("watchmand direct payout recovery witness validation failed")?))
+		} else {
+			let empty = db.read(async |t| Ok(t.query_one("SELECT NOT EXISTS (SELECT 1 FROM expiry_allocation)
+				AND NOT EXISTS (SELECT 1 FROM expiry_carrier) AS empty", &[]).await?.get::<_, bool>("empty"))).await?;
+			ensure!(empty, "source-frozen expiry state requires configured direct settlement; legacy drain refused");
+			None
+		};
 
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		// Check if our bitcoind is on the expected network.
@@ -167,6 +182,17 @@ impl Daemon {
 		}
 		telemetry::set_wallet_balance(WalletKind::Watchman, watchman_wallet.balance());
 		let watchman_wallet = InstrumentedLock::new("watchman_wallet", watchman_wallet);
+		let drain_address = cfg.sweep_address.clone()
+			.context("sweep_address is required for watchman")?.require_network(cfg.network)
+			.context("sweep_address network mismatch")?;
+		let direct_expiry = if let Some(history) = history {
+			let direct = cfg.watchman.direct_expiry.as_ref().context("direct expiry configuration disappeared")?;
+			let policy = CarrierLimits { max_fee_rate: cfg.fee_estimator.max_fee_rate.context("missing direct fee ceiling")?,
+				max_miner_fee: direct.max_miner_fee, max_weight: Weight::from_wu(400_000) };
+			Some(DirectExpiryRuntime::new(db.clone(), watchman_wallet.clone(), cfg.network,
+				drain_address.script_pubkey(), DIRECT_HISTORY_LIMITS, policy, history).await
+				.context("restoring direct expiry reservations")?)
+		} else { None };
 
 		// The settler writes preimages to the htlc_settlement WAL table but
 		// does NOT spawn a CLN settlement subscriber — watchmand has no CLN
@@ -196,10 +222,6 @@ impl Daemon {
 		).await.context("Failed to start SyncManager")?;
 
 		// Start the Watchman VTXO processor
-		let drain_address = cfg.sweep_address
-			.context("sweep_address is required for watchman")?
-			.require_network(cfg.network)
-			.context("sweep_address network mismatch")?;
 		let ephemeral_master_key = {
 			let path = bip32::DerivationPath::from_str(EPHEMERAL_KEY_PATH).unwrap();
 			let xpriv = master_xpriv.derive_priv(&SECP, &path).unwrap();
@@ -231,7 +253,7 @@ impl Daemon {
 			watchman_wallet.clone(),
 			frontier.clone(),
 			sync_height_watcher,
-		);
+		).with_direct_expiry(direct_expiry);
 
 		let watchman_handle = watchman.start(rtmgr.clone());
 

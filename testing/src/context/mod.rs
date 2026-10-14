@@ -560,6 +560,7 @@ impl TestContext {
 		server::config::watchmand::Config {
 			postgres: srv.config().postgres.clone(),
 			watchman: server::watchman::Config {
+				direct_expiry: None,
 				reaction_interval: std::time::Duration::from_secs(1),
 				sweep_interval: std::time::Duration::from_secs(1),
 				progress_grace_period: BlockDelta::new(2),

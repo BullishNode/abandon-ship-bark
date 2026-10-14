@@ -85,7 +85,7 @@ pub async fn build_direct_carrier(
 	let recipient_amount = sum_amounts(recipients.iter().map(|o| o.value))?;
 	let remainder = backing_amount.checked_sub(recipient_amount)
 		.context("carrier recipients exceed supplied backing")?;
-	let inputs = prepare_backing(signer, backing).await?;
+	let inputs = prepare_backing(signer, backing, height).await?;
 	let mut fee = Amount::ZERO;
 
 	for _ in 0..MAX_BUILD_ATTEMPTS {
@@ -177,13 +177,20 @@ fn validate_request(
 }
 
 async fn prepare_backing<S: VtxoSigner<ServerVtxoPolicy> + Sync>(
-	signer: &S, backing: &[ServerVtxo],
+	signer: &S, backing: &[ServerVtxo], height: BlockHeight,
 ) -> anyhow::Result<Vec<BackingInput>> {
 	let mut inputs = Vec::with_capacity(backing.len());
 	for vtxo in backing {
 		let clause = if *vtxo.policy() == ServerVtxoPolicy::ServerOwned { None } else {
 			Some(signer.find_signable_clause(vtxo).await.context("carrier backing has no signable clause")?)
 		};
+		let timelock = match &clause {
+			Some(VtxoClause::TimelockSign(c)) => Some(c.timelock_height),
+			Some(VtxoClause::DelayedTimelockSign(c)) => Some(c.timelock_height),
+			_ => None,
+		};
+		ensure!(timelock.is_none_or(|required| height >= required),
+			"carrier lock height is below its selected backing clause");
 		inputs.push(BackingInput { vtxo: vtxo.clone(), clause });
 	}
 	Ok(inputs)
@@ -397,7 +404,7 @@ mod tests {
 	) -> anyhow::Result<(Transaction, CarrierOutputRoles, Amount)> {
 		validate_request(backing, recipients, operator, rate, policy)?;
 		let signer = ExpirySigner(*DUMMY_SERVER_KEY);
-		let inputs = prepare_backing(&signer, backing).await?;
+		let inputs = prepare_backing(&signer, backing, BlockHeight::new(1_000)).await?;
 		let remainder = sum_amounts(backing.iter().map(|v| v.amount()))?
 			.checked_sub(sum_amounts(recipients.iter().map(|o| o.value))?).context("test recipients exceed backing")?;
 		let mut fee = Amount::ZERO;

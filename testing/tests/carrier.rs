@@ -122,6 +122,10 @@ async fn direct_carrier_actual_backing_mixed_signing_and_confirmed_reserve() {
 	assert!(build_direct_carrier(&signer, wallet.lock_owned().await, &[backing.clone()], &[recipient.clone()],
 		operator_script.clone(), height, fee_rate, policy).await.is_err(), "locked reserve must refuse");
 	drop(locked);
+	let error = build_direct_carrier(&signer, wallet.lock_owned().await, &[backing.clone()], &[recipient.clone()],
+		operator_script.clone(), BlockHeight::new(initial_height), fee_rate, policy).await.err()
+		.expect("stale startup height must refuse before retaining an unsatisfiable signed transaction");
+	assert!(error.to_string().contains("lock height is below its selected backing clause"));
 	let (mut held, carrier) = build_direct_carrier(&signer, wallet.lock_owned().await, &[backing.clone()],
 		&[recipient.clone()], operator_script, height, fee_rate, policy).await.unwrap();
 	assert_eq!(carrier.backing_ids, vec![backing.id()]);

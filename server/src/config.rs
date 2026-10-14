@@ -706,6 +706,13 @@ pub mod watchmand {
 		/// It also checks if all required configurations are available
 		pub fn validate(&self) -> anyhow::Result<()> {
 			self.bitcoind.validate()?;
+			if let Some(direct) = &self.watchman.direct_expiry {
+				ensure!(!direct.history_dir.as_os_str().is_empty(), "direct expiry history directory is empty");
+				ensure!(direct.max_miner_fee > Amount::ZERO && direct.max_miner_fee <= Amount::MAX_MONEY,
+					"invalid direct expiry mining-fee ceiling");
+				ensure!(self.fee_estimator.max_fee_rate.is_some_and(|r| r > bitcoin::FeeRate::ZERO),
+					"direct expiry requires an actual fee-rate ceiling");
+			}
 			Ok(())
 		}
 

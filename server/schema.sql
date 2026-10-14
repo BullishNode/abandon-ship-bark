@@ -2956,6 +2956,7 @@ CREATE INDEX expiry_allocation_set ON expiry_allocation (freeze_set, id);
 -- and its independent recovery witness before submitting the actual carrier.
 CREATE TABLE expiry_carrier (
 	txid TEXT PRIMARY KEY,
+	generation BIGSERIAL UNIQUE CHECK (generation > 0),
 	signed_tx BYTEA NOT NULL CHECK (octet_length(signed_tx) > 0),
 	backing_ids TEXT[] NOT NULL CHECK (cardinality(backing_ids) > 0),
 	fee_inputs JSONB NOT NULL CHECK (jsonb_typeof(fee_inputs) = 'array'),

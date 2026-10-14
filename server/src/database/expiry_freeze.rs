@@ -32,7 +32,28 @@ struct FrozenLeaf {
 	evidence: serde_json::Value,
 }
 
+/// Admission and freeze share ordered durable source locks. Check after the
+/// locks, so a writer that waited for a freeze sees its committed reservation.
+/// This protects source and physical-retirement rows without changing their
+/// spend state; frozen ownership remains separate from confirmed payment.
+pub(super) async fn check_not_expiry_frozen(
+	tx: &tokio_postgres::Transaction<'_>, ids: &[String],
+) -> anyhow::Result<()> {
+	if ids.is_empty() { return Ok(()); }
+	tx.query("SELECT id FROM pending_board WHERE vtxo_id=ANY($1) OR id=ANY($1) ORDER BY id FOR UPDATE", &[&ids]).await?;
+	tx.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&ids]).await?;
+	if tx.query_opt("SELECT id FROM expiry_allocation WHERE id=ANY($1) OR retirement_ids && $1::text[] LIMIT 1", &[&ids]).await?.is_some() {
+		return badarg!("{}", server_rpc::EXPIRY_FROZEN_ERROR);
+	}
+	Ok(())
+}
+
 impl Tx<'_> {
+	pub(crate) async fn check_not_expiry_frozen(&self, ids: &[VtxoId]) -> anyhow::Result<()> {
+		let keys = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+		check_not_expiry_frozen(self, &keys).await
+	}
+
 	/// Caller holds the sorted payment and VTXO flux guards for the entire
 	/// expanded dependency closure. Node observations must be fenced against a
 	/// late payment. This takes the settlement lock before ordered source locks,

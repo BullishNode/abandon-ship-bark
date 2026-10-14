@@ -7,6 +7,9 @@ use log::debug;
 
 use ark::VtxoId;
 
+/// Reservation is not evidence that a payout has confirmed.
+pub const EXPIRY_FROZEN_ERROR: &str = "VTXO reserved for expiry settlement; payment not yet confirmed";
+
 /// Registration cannot activate an output after its expiry payment commits.
 /// Keep this reason stable so a client can distinguish settlement from an
 /// unrelated registration rejection without changing the RPC messages.
@@ -116,6 +119,7 @@ mod test {
 			.is_expiry_settled());
 		assert!(!tonic::Status::unavailable(EXPIRY_SETTLED_ERROR).is_expiry_settled());
 		assert!(!tonic::Status::invalid_argument("vtxo signature invalid").is_expiry_settled());
+		assert!(!tonic::Status::invalid_argument(EXPIRY_FROZEN_ERROR).is_expiry_settled());
 		assert!(!tonic::Status::invalid_argument(format!("{EXPIRY_SETTLED_ERROR}: lookup uncertain"))
 			.is_expiry_settled());
 	}

@@ -130,7 +130,10 @@ const COMMIT_QUERY: &[u8] = b"Q\0\0\0\x0bCOMMIT\0";
 const COMMIT_DONE: &[u8] = b"C\0\0\0\x0bCOMMIT\0";
 const PUBLICATION_MARKER: &[u8] = b"direct-publication-marker";
 
-async fn publication_relay(upstream: &server::config::Postgres, lose_reply: bool) -> (u16, Arc<AtomicBool>, tokio::task::JoinHandle<()>) {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CommitLoss { Request, Reply, BeforeReply }
+
+async fn publication_relay(upstream: &server::config::Postgres, loss: CommitLoss) -> (u16, Arc<AtomicBool>, tokio::task::JoinHandle<()>) {
 	assert!(upstream.host.parse::<std::net::IpAddr>().unwrap().is_loopback());
 	let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
 	let port = listener.local_addr().unwrap().port();
@@ -157,8 +160,16 @@ async fn publication_relay(upstream: &server::config::Postgres, lose_reply: bool
 							let n = match n { Ok(0) | Err(_) => return, Ok(n) => n };
 							let window = [up_tail.as_slice(), &up[..n]].concat();
 							if marked && contains(&window, COMMIT_QUERY) && armed.swap(false, Ordering::SeqCst) {
-								if !lose_reply { fired.store(true, Ordering::SeqCst); return; }
+								if loss == CommitLoss::Request { fired.store(true, Ordering::SeqCst); return; }
 								commit_sent = true;
+								if loss == CommitLoss::BeforeReply {
+									if server_tx.write_all(&up[..n]).await.is_err() { return; }
+									let _ = client_tx.shutdown().await;
+									fired.store(true, Ordering::SeqCst);
+									// Keep the original backend connection alive while its
+									// deferred COMMIT waits for the owned test lock.
+									loop { if !matches!(server_rx.read(&mut down).await, Ok(n) if n > 0) { return; } }
+								}
 							}
 							if server_tx.write_all(&up[..n]).await.is_err() { return; }
 							up_tail = window[window.len().saturating_sub(64)..].to_vec();
@@ -189,7 +200,7 @@ async fn unknown_publication(name: &str, lose_reply: bool) {
 		Ok(())
 	}).await.unwrap();
 	let config: server::Config = toml::from_str(&std::fs::read_to_string(&case.recipe.config_path).unwrap()).unwrap();
-	let (port, fired, relay) = publication_relay(&config.postgres, lose_reply).await;
+	let (port, fired, relay) = publication_relay(&config.postgres, if lose_reply { CommitLoss::Reply } else { CommitLoss::Request }).await;
 	let mut pg = config.postgres.clone();
 	pg.host = "127.0.0.1".into();
 	pg.port = port;
@@ -207,6 +218,7 @@ async fn unknown_publication(name: &str, lose_reply: bool) {
 	let height = BlockHeight::new(core.get_block_count().unwrap() as u32);
 	let outcome = processor.prepare_group(&signer, &node, &case.recipe.freeze_set, height, FeeRate::from_sat_per_vb(30).unwrap()).await;
 	assert!(outcome.is_err(), "actual lost COMMIT must not be reported as successful publication");
+	let original_id = processor.retained_publication_id().expect("the original signed carrier remains held");
 	assert!(fired.load(Ordering::SeqCst), "the actual publication COMMIT barrier must fire");
 	assert!(processor.prepare_group(&signer, &node, &case.recipe.freeze_set, height, FeeRate::from_sat_per_vb(30).unwrap()).await.is_err());
 	assert!(tokio::time::timeout(Duration::from_millis(100), wallet.lock()).await.is_err(), "unknown outcome retains the exclusive fee wallet");
@@ -230,15 +242,28 @@ async fn unknown_publication(name: &str, lose_reply: bool) {
 		assert!(outputs.iter().filter(|(p,_)| p.txid != txid).all(|(p,_)| p.txid == case.board_funding_txid));
 	} else {
 		assert!(rows.is_empty(), "request lost before COMMIT leaves no durable carrier");
-		assert!(processor.probe_publication().await.is_err(), "absence cannot authorize rebuilding or submission");
-		assert!(tokio::time::timeout(Duration::from_millis(100), wallet.lock()).await.is_err());
 		for encoded in &case.recipe.backing {
 			let backing: ServerVtxo = ServerVtxo::deserialize(encoded).unwrap();
 			let point = backing.point();
 			assert!(core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_some());
 		}
-		// The stopped component leaves an identified frozen/backed obligation.
-		// Supported independent-witness restart recovery is not credited here.
+		processor.probe_publication().await.expect("same retained publication must recover without rebuilding principal");
+		assert!(processor.retained_publication_id().is_none());
+		let retained = case.db.read(async |t| Ok(t.query("SELECT txid,signed_tx FROM expiry_carrier", &[]).await?)).await.unwrap();
+		assert_eq!(retained.len(), 1);
+		let signed: bitcoin::Transaction = bitcoin::consensus::deserialize(&retained[0].get::<_, Vec<u8>>("signed_tx")).unwrap();
+		assert_eq!((signed.compute_txid(), signed.compute_wtxid()), original_id, "recovery must preserve the original body and witness bytes");
+		assert_eq!(processor.observe_and_submit(&node, &case.recipe.freeze_set).await.unwrap(), DeliveryState::Pending { txid: original_id.0 });
+		assert_eq!(core.get_raw_transaction(&original_id.0, None).unwrap(), signed);
+		case.ctx.generate_blocks(3).await;
+		let mut held = wallet.lock().await;
+		sync_fee_wallet(&mut held, &core);
+		held.persist().await.unwrap();
+		drop(held);
+		processor.release_confirmed_group(&node, &case.recipe.freeze_set).await.unwrap();
+		let (outputs, _) = recover_all_bip84_and_spend(&case.ctx, &case.mnemonic).await;
+		assert_eq!(outputs.iter().filter(|(p,_)| p.txid == original_id.0).map(|(_,v)| *v).collect::<Vec<_>>(), vec![sat(19_000)]);
+		assert!(outputs.iter().filter(|(p,_)| p.txid != original_id.0).all(|(p,_)| p.txid == case.board_funding_txid));
 	}
 	drop(processor);
 	relay.abort();
@@ -251,8 +276,8 @@ async fn frozen_expiry_lost_commit_reply_probes_same_bytes_before_submission() {
 }
 
 #[tokio::test]
-async fn frozen_expiry_lost_commit_request_retains_wallet_on_absent_probe() {
-	unknown_publication("frozen_expiry_lost_commit_request_retains_wallet_on_absent_probe", false).await;
+async fn frozen_expiry_lost_commit_request_recovers_identical_publication() {
+	unknown_publication("frozen_expiry_lost_commit_request_recovers_identical_publication", false).await;
 }
 
 #[tokio::test]
@@ -306,4 +331,101 @@ async fn frozen_expiry_late_generation_requires_complete_reservation_reload() {
 	let (outputs, _) = recover_all_bip84_and_spend(&case.ctx, &case.mnemonic).await;
 	assert_eq!(outputs.iter().filter(|(p,_)| p.txid == txids[0]).map(|(_,v)| *v).collect::<Vec<_>>(), vec![sat(19_000)]);
 	assert!(outputs.iter().filter(|(p,_)| p.txid != txids[0]).all(|(p,_)| p.txid == case.board_funding_txid));
+}
+
+async fn delayed_commit(name: &str, cancel_prepare: bool) {
+	let case = crash_case(name, vec![]).await;
+	let config: server::Config = toml::from_str(&std::fs::read_to_string(&case.recipe.config_path).unwrap()).unwrap();
+	let (control, connection) = Db::config(&config.postgres.name, &config.postgres)
+		.connect(tokio_postgres::NoTls).await.unwrap();
+	let control_task = tokio::spawn(connection);
+	control.execute("SELECT pg_advisory_lock(936472819::bigint)", &[]).await.unwrap();
+	case.db.write(async |t| {
+		t.batch_execute("CREATE FUNCTION delayed_carrier_commit() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN PERFORM pg_advisory_xact_lock(936472819::bigint); RETURN NEW; END $$;
+			CREATE CONSTRAINT TRIGGER delayed_carrier_commit AFTER INSERT ON expiry_carrier
+			DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION delayed_carrier_commit();
+			CREATE FUNCTION publication_marker() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN RAISE NOTICE 'direct-publication-marker'; RETURN NEW; END $$;
+			CREATE TRIGGER publication_marker AFTER INSERT ON expiry_carrier FOR EACH ROW EXECUTE FUNCTION publication_marker();").await?;
+		Ok(())
+	}).await.unwrap();
+	let (port, fired, relay) = publication_relay(&config.postgres, CommitLoss::BeforeReply).await;
+	let mut pg = config.postgres.clone();
+	pg.host = "127.0.0.1".into();
+	pg.port = port;
+	let db = if cancel_prepare { case.db.clone() } else { Db::connect(&pg).await.unwrap() };
+	let node = case.ctx.bitcoind().async_client();
+	let core = case.ctx.bitcoind().sync_client();
+	let master = Xpriv::new_master(Network::Regtest, &wallet::read_mnemonic_from_datadir(&config.data_dir).unwrap().to_seed("")).unwrap();
+	let key_at = |path| Keypair::from_secret_key(&ark::SECP,
+		&master.derive_priv(&ark::SECP, &DerivationPath::from_str(path).unwrap()).unwrap().private_key);
+	let signer = WatchmanSigner::new(Secret::new(key_at("m/2'/0'")), Secret::new(key_at("m/30'")), db.clone());
+	let wallet = InstrumentedLock::new("delayed_publication", case.wallet);
+	let mut processor = FrozenExpiryProcessor::new(db, wallet.clone(), Network::Regtest,
+		case.recipe.operator_script.clone(), budget(), limits());
+	processor.recover_durable_groups().await.unwrap();
+	let height = BlockHeight::new(core.get_block_count().unwrap() as u32);
+	if cancel_prepare {
+		// Dropping this actual future while COMMIT waits must not drop the signed
+		// carrier or release its exclusive wallet from the surviving processor.
+		let pending = processor.prepare_group(&signer, &node, &case.recipe.freeze_set, height, FeeRate::from_sat_per_vb(30).unwrap());
+		tokio::pin!(pending);
+		tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				assert!(tokio::time::timeout(Duration::from_millis(25), &mut pending).await.is_err(), "prepare must still be waiting for the original COMMIT");
+				let waiting = control.query("SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='COMMIT' AND wait_event_type='Lock'", &[]).await.unwrap();
+				if waiting.len() == 1 { break; }
+			}
+		}).await.unwrap();
+	} else {
+		assert!(processor.prepare_group(&signer, &node, &case.recipe.freeze_set, height, FeeRate::from_sat_per_vb(30).unwrap()).await.is_err());
+		assert!(fired.load(Ordering::SeqCst));
+	}
+	let waiting = control.query("SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND query='COMMIT' AND wait_event_type='Lock'", &[]).await.unwrap();
+	assert_eq!(waiting.len(), 1, "the original real COMMIT remains alive behind the deferred lock");
+	let original = processor.retained_publication_id().expect("cancelled or disconnected publication retains the original signed carrier");
+	assert!(tokio::time::timeout(Duration::from_millis(100), wallet.lock()).await.is_err());
+	assert!(core.get_raw_mempool().unwrap().is_empty());
+	if !cancel_prepare {
+		let pending = processor.probe_publication();
+		tokio::pin!(pending);
+		assert!(tokio::time::timeout(Duration::from_millis(100), &mut pending).await.is_err(), "an absent read cannot skip the previous COMMIT completion fence");
+		let rows: i64 = control.query_one("SELECT count(*)::bigint AS rows FROM expiry_carrier", &[]).await.unwrap().get("rows");
+		assert_eq!(rows, 0);
+		control.execute("SELECT pg_advisory_unlock(936472819::bigint)", &[]).await.unwrap();
+		tokio::time::timeout(Duration::from_secs(10), &mut pending).await.unwrap().unwrap();
+	} else {
+		control.execute("SELECT pg_advisory_unlock(936472819::bigint)", &[]).await.unwrap();
+		processor.probe_publication().await.unwrap();
+	}
+	let rows = case.db.read(async |t| Ok(t.query("SELECT signed_tx,generation FROM expiry_carrier", &[]).await?)).await.unwrap();
+	assert_eq!(rows.len(), 1);
+	assert_eq!(rows[0].get::<_, i64>("generation"), 1, "the original late commit keeps its generation");
+	let signed: bitcoin::Transaction = bitcoin::consensus::deserialize(&rows[0].get::<_, Vec<u8>>("signed_tx")).unwrap();
+	assert_eq!((signed.compute_txid(), signed.compute_wtxid()), original);
+	assert_eq!(processor.observe_and_submit(&node, &case.recipe.freeze_set).await.unwrap(), DeliveryState::Pending { txid: original.0 });
+	case.ctx.generate_blocks(3).await;
+	let mut held = wallet.lock().await;
+	sync_fee_wallet(&mut held, &core);
+	held.persist().await.unwrap();
+	drop(held);
+	processor.release_confirmed_group(&node, &case.recipe.freeze_set).await.unwrap();
+	let (outputs, _) = recover_all_bip84_and_spend(&case.ctx, &case.mnemonic).await;
+	assert_eq!(outputs.iter().filter(|(p,_)| p.txid == original.0).map(|(_,v)| *v).collect::<Vec<_>>(), vec![sat(19_000)]);
+	assert!(outputs.iter().filter(|(p,_)| p.txid != original.0).all(|(p,_)| p.txid == case.board_funding_txid));
+	relay.abort();
+	let _ = relay.await;
+	drop(control);
+	control_task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn frozen_expiry_delayed_commit_completion_is_fenced_before_same_byte_retry() {
+	delayed_commit("frozen_expiry_delayed_commit_completion_is_fenced_before_same_byte_retry", false).await;
+}
+
+#[tokio::test]
+async fn frozen_expiry_cancelled_prepare_retains_original_before_commit_await() {
+	delayed_commit("frozen_expiry_cancelled_prepare_retains_original_before_commit_await", true).await;
 }

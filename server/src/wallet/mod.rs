@@ -15,7 +15,6 @@ use bip39::Mnemonic;
 use bitcoin::{
 	bip32, Address, Amount, FeeRate, Network, OutPoint, Psbt, Transaction, Weight,
 };
-use bitcoin::hex::DisplayHex;
 use bitcoind_async_client::Client as BitcoindClient;
 use tracing::{error, warn};
 
@@ -195,19 +194,19 @@ impl PersistedWallet {
 		}
 	}
 
-	/// Finish the PSBT by signing it and committing it to the wallet.
+	/// Finish the PSBT by signing it.
 	///
 	/// This method does not persist changes to the database.
-	pub fn finish_tx(&mut self, mut psbt: Psbt) -> anyhow::Result<Transaction> {
-		#[allow(deprecated)]
-		let opts = bdk_wallet::SignOptions {
-			trust_witness_utxo: true,
-			..Default::default()
-		};
+	pub fn finish_tx(&mut self, psbt: Psbt) -> anyhow::Result<Transaction> {
+		self.finish_tx_with_max_fee_rate(psbt, None)
+	}
+
+	/// Sign a quiet funding transaction without exceeding its configured ceiling.
+	pub fn finish_tx_with_max_fee_rate(
+		&mut self, psbt: Psbt, max_fee_rate: Option<FeeRate>,
+	) -> anyhow::Result<Transaction> {
 		let fee = psbt.fee().context("error calculating fee")?;
-		let finalized = self.sign(&mut psbt, opts).context("error signing psbt")?;
-		ensure!(finalized, "tx not finalized after signing, psbt: {}", psbt.serialize().as_hex());
-		let ret = psbt.extract_tx().context("error extracting finalized tx from psbt")?;
+		let ret = sign_funding_psbt(&self.wallet, psbt, max_fee_rate)?;
 		let txid = ret.compute_txid();
 		let raw_tx = bitcoin::consensus::serialize(&ret);
 		slog!(WalletSignedTx, wallet: self.kind.name().into(), txid, fee, raw_tx,
@@ -323,6 +322,28 @@ impl PersistedWallet {
 			);
 		}
 		Ok(psbt)
+	}
+
+	/// Quiet funding checks the actual signed child fee before reserving inputs,
+	/// cosigning a tree, or exposing a funding transaction to round participants.
+	/// Ancestor subsidy and omitted change count toward the same ceiling.
+	pub fn build_quiet_tx_at_chunk_feerate<Cs: CoinSelectionAlgorithm + Clone>(
+		&mut self,
+		coin_selection: Cs,
+		target: FeeRate,
+		max_fee_rate: Option<FeeRate>,
+		configure: impl Fn(&mut TxBuilder<'_, Cs>) -> anyhow::Result<()>,
+	) -> anyhow::Result<Psbt> {
+		let psbt = self.build_tx_at_chunk_feerate(coin_selection.clone(), target, &configure)?;
+		let Some(max) = max_fee_rate else { return Ok(psbt); };
+		let canon = TrustedCanonicalization::from_wallet(&self.wallet, self.min_trusted_confs);
+		let result = enforce_quiet_funding_fee(
+			&mut self.wallet, &canon, psbt.clone(), coin_selection, target, max, &configure,
+		);
+		if result.is_err() {
+			self.wallet.mark_output_keys_unused(&psbt.unsigned_tx);
+		}
+		result
 	}
 }
 
@@ -483,6 +504,71 @@ fn build_at_chunk_feerate<Cs: CoinSelectionAlgorithm + Clone>(
 		where it and its {} unconfirmed ancestors needed {}",
 		target, MAX_FEE_BUMP_ATTEMPTS, fee, ancestors.count, needed,
 	);
+}
+
+
+/// BDK conservatively charges one extra witness byte per taproot input. If
+/// that alone crosses the ceiling, retain the exact inputs and rebuild at the
+/// actual signed requirement. Recipient amounts still come from `configure`.
+fn enforce_quiet_funding_fee<Cs: CoinSelectionAlgorithm + Clone>(
+	wallet: &mut Wallet,
+	canon: &TrustedCanonicalization,
+	psbt: Psbt,
+	selection: Cs,
+	target: FeeRate,
+	max: FeeRate,
+	configure: &impl Fn(&mut TxBuilder<'_, Cs>) -> anyhow::Result<()>,
+) -> anyhow::Result<Psbt> {
+	let signed = sign_funding_psbt(wallet, psbt.clone(), None)?;
+	let ceiling = max.fee_wu(signed.weight()).context("quiet funding fee ceiling overflow")?;
+	if psbt.fee()? <= ceiling { return Ok(psbt); }
+	let ancestors = unconfirmed_ancestor_set(wallet, canon, &psbt.unsigned_tx, target);
+	let required = target.fee_wu(signed.weight()).context("quiet funding fee overflow")?
+		.checked_add(ancestors.shortfall).context("quiet ancestor fee overflow")?;
+	ensure!(required <= ceiling,
+		"quiet funding fee exceeds configured maximum: actual {} for {} exceeds {} at {:#}",
+		psbt.fee()?, signed.weight(), ceiling, max,
+	);
+	wallet.mark_output_keys_unused(&psbt.unsigned_tx);
+	let mut b = wallet.build_tx().coin_selection(selection);
+	configure(&mut b)?;
+	b.add_utxos(&psbt.unsigned_tx.input.iter().map(|i| i.previous_output).collect::<Vec<_>>())?;
+	b.manually_selected_only();
+	b.fee_absolute(required);
+	let corrected = b.finish().context("rebuilding quiet funding at exact signed fee")?;
+	let result = (|| {
+		let signed = sign_funding_psbt(wallet, corrected.clone(), Some(max))?;
+		let ancestors = unconfirmed_ancestor_set(wallet, canon, &corrected.unsigned_tx, target);
+		let needed = target.fee_wu(signed.weight()).context("quiet funding fee overflow")?
+			.checked_add(ancestors.shortfall).context("quiet ancestor fee overflow")?;
+		ensure!(corrected.fee()? >= needed, "quiet funding rebuild is below its chunk fee requirement");
+		Ok(())
+	})();
+	if let Err(e) = result {
+		wallet.mark_output_keys_unused(&corrected.unsigned_tx);
+		return Err(e);
+	}
+	Ok(corrected)
+}
+
+/// Signing here has no wallet commit, log, reservation, or database side effect.
+fn sign_funding_psbt(
+	wallet: &Wallet, mut psbt: Psbt, max_fee_rate: Option<FeeRate>,
+) -> anyhow::Result<Transaction> {
+	let fee = psbt.fee().context("error calculating fee")?;
+	#[allow(deprecated)]
+	let opts = bdk_wallet::SignOptions { trust_witness_utxo: true, ..Default::default() };
+	ensure!(wallet.sign(&mut psbt, opts).context("error signing psbt")?,
+		"tx not finalized after signing");
+	let tx = psbt.extract_tx().context("error extracting finalized tx from psbt")?;
+	if let Some(max) = max_fee_rate {
+		let ceiling = max.fee_wu(tx.weight()).context("quiet funding fee ceiling overflow")?;
+		ensure!(fee <= ceiling,
+			"quiet funding fee exceeds configured maximum: actual {} for {} exceeds {} at {:#}",
+			fee, tx.weight(), ceiling, max,
+		);
+	}
+	Ok(tx)
 }
 
 impl ops::Deref for PersistedWallet {
@@ -744,6 +830,66 @@ mod builder_test {
 
 	fn sat_per_vb(rate: u64) -> FeeRate {
 		FeeRate::from_sat_per_vb(rate).unwrap()
+	}
+
+	#[test]
+	fn quiet_funding_at_ceiling_rebuilds_conservative_bdk_fee() {
+		let (mut wallet, _) = wallet_with_coins(&[Amount::from_sat(1_000_000)]);
+		let target = sat_per_vb(20);
+		let canon = TrustedCanonicalization::from_wallet(&wallet, 1);
+		let recipient = foreign_spk(44);
+		let configure = |b: &mut TxBuilder<'_, WithGuaranteedChange<SingleRandomDraw>>| {
+			b.add_recipient(recipient.clone(), Amount::from_sat(500_000));
+			Ok(())
+		};
+		let (psbt, _) = build_at_chunk_feerate(&mut wallet, &canon,
+			WithGuaranteedChange(SingleRandomDraw), target, &[], &configure).unwrap();
+		let signed = sign_funding_psbt(&wallet, psbt.clone(), None).unwrap();
+		assert!(psbt.fee().unwrap() > target.fee_wu(signed.weight()).unwrap());
+		let inputs = psbt.unsigned_tx.input.iter().map(|i| i.previous_output).collect::<Vec<_>>();
+		let corrected = enforce_quiet_funding_fee(&mut wallet, &canon, psbt,
+			WithGuaranteedChange(SingleRandomDraw), target, target, &configure).unwrap();
+		let signed = sign_funding_psbt(&wallet, corrected.clone(), Some(target)).unwrap();
+		assert_eq!(corrected.fee().unwrap(), target.fee_wu(signed.weight()).unwrap());
+		assert_eq!(signed.input.iter().map(|i| i.previous_output).collect::<Vec<_>>(), inputs);
+		assert!(signed.output.iter().any(|o| o.script_pubkey == recipient && o.value == Amount::from_sat(500_000)));
+	}
+
+	#[test]
+	fn quiet_signed_ceiling_rejects_ancestor_subsidy_without_signer_mutation() {
+		let (mut wallet, coins) = wallet_with_coins(&[Amount::from_btc(1.0).unwrap()]);
+		let parent = spend_to_self(&mut wallet, &coins, 1, Amount::from_sat(50_000_000), sat_per_vb(2));
+		let canon = TrustedCanonicalization::from_wallet(&wallet, 1);
+		let (psbt, _) = build_at_chunk_feerate(
+			&mut wallet, &canon, WithGuaranteedChange(SingleRandomDraw), sat_per_vb(20), &[], |b| {
+				b.add_utxo(OutPoint::new(parent.compute_txid(), 0))?;
+				b.manually_selected_only();
+				b.add_recipient(foreign_spk(42), Amount::from_sat(10_000_000));
+				Ok(())
+			},
+		).unwrap();
+		let staged = wallet.staged().cloned();
+		let error = sign_funding_psbt(&wallet, psbt.clone(), Some(sat_per_vb(20))).unwrap_err();
+		assert!(error.to_string().contains("quiet funding fee exceeds configured maximum"));
+		assert!(wallet.staged() == staged.as_ref());
+		// Urgent/unrestricted signing still covers the actual ancestor deficit.
+		let urgent = sign_funding_psbt(&wallet, psbt.clone(), None).unwrap();
+		let affordable = sign_funding_psbt(&wallet, psbt.clone(), Some(sat_per_vb(100))).unwrap();
+		assert_eq!(urgent.weight(), affordable.weight());
+		assert!(psbt.fee().unwrap() > sat_per_vb(20).fee_wu(urgent.weight()).unwrap());
+	}
+
+	#[test]
+	fn quiet_signed_ceiling_includes_omitted_dust_change() {
+		let (mut wallet, _) = wallet_with_coins(&[Amount::from_sat(10_000)]);
+		let mut b = wallet.build_tx();
+		b.add_recipient(foreign_spk(43), Amount::from_sat(9_600));
+		b.fee_rate(sat_per_vb(1));
+		let psbt = b.finish().unwrap();
+		assert_eq!(psbt.unsigned_tx.output.len(), 1, "change must actually be omitted");
+		assert_eq!(psbt.fee().unwrap(), Amount::from_sat(400));
+		assert!(sign_funding_psbt(&wallet, psbt.clone(), Some(sat_per_vb(1))).is_err());
+		assert!(sign_funding_psbt(&wallet, psbt, Some(sat_per_vb(5))).is_ok());
 	}
 
 	#[test]

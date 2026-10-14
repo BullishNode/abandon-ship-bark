@@ -907,6 +907,7 @@ impl CollectingPayments {
 				value: vtxos_spec.total_required_value(),
 			},
 			fee_rate: srv.fee_estimator.fast(),
+			max_fee_rate: srv.config.fee_estimator.max_fee_rate,
 			pinned_input: self.common_round_tx_input.take(),
 		}.build(&srv.rounds_wallet).await.map_err(RoundError::Recoverable)?;
 

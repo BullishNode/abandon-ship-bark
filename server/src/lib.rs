@@ -34,6 +34,7 @@ pub mod ln;
 pub mod nursery;
 mod offboards;
 pub mod expiry_payout;
+mod expiry_dispatch;
 mod expiry_freeze;
 pub mod payout_witness;
 mod round;
@@ -330,7 +331,13 @@ impl Server {
 	}
 
 	/// Start the server.
-	pub async fn start(cfg: Config) -> anyhow::Result<Arc<Self>> {
+	pub async fn start(mut cfg: Config) -> anyhow::Result<Arc<Self>> {
+		cfg.direct_expiry.validate(cfg.expiry_payout.enabled)?;
+		if cfg.direct_expiry.enabled {
+			// The old payout task is refused above. Reuse the guarded source
+			// API's effective grace without a second ownership implementation.
+			cfg.expiry_payout.grace_blocks = cfg.direct_expiry.grace_blocks;
+		}
 		let seed = wallet::read_mnemonic_from_datadir(&cfg.data_dir)?.to_seed("");
 		let master_xpriv = bip32::Xpriv::new_master(cfg.network, &seed).unwrap();
 
@@ -375,6 +382,8 @@ impl Server {
 			Some(payout_witness::PayoutWitness::load(&cfg.data_dir, cfg.network, server_key.public_key(), &db)
 				.await.context("payout recovery witness validation failed")?)
 		} else { None };
+
+		expiry_dispatch::require_no_legacy_payout(&db, cfg.direct_expiry.enabled).await?;
 
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		bcd::require_network(&bitcoind, cfg.network).await?;
@@ -548,6 +557,7 @@ impl Server {
 
 		srv.clone().start_offboard_retry_task().await;
 		srv.start_expiry_payout_task();
+		srv.start_direct_expiry_task();
 
 		let srv2 = srv.clone();
 		tokio::spawn(async move {

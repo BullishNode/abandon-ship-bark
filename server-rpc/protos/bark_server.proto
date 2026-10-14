@@ -806,6 +806,20 @@ message WalletInventory {
 	bool complete = 8;
 	repeated string reserved_outpoints = 9;
 	optional uint32 last_revealed_index = 10;
+	// Canonical owning graph only, not all retained nursery/round generations.
+	repeated WalletInventoryTransaction pending_transactions = 11;
+	// Deduplicated immediate parents known to the same owning BDK graph.
+	repeated WalletInventoryTransaction pending_parents = 12;
+	// Missing or unsafe public parent bodies make this source incomplete.
+	repeated string unavailable_parent_txids = 13;
+}
+
+message WalletInventoryTransaction {
+	string txid = 1;
+	// Exact Bitcoin body with all witnesses removed; unsupported scriptSig refused.
+	bytes transaction_body = 2;
+	// Full retained transaction weight, measured before removing witnesses.
+	uint64 signed_weight_wu = 3;
 }
 
 message WalletInventoryUtxo {

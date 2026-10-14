@@ -122,6 +122,11 @@ impl TrustedCanonicalization {
 		self.txs.get(&txid)
 	}
 
+	/// Reuse this canonical view, including spends that leave no wallet output.
+	pub fn transactions(&self) -> impl Iterator<Item = &LocalTransaction> {
+		self.txs.values()
+	}
+
 	/// Trust verdict for `txid`. Unknown txids (not in the wallet's
 	/// canonical view) are treated as untrusted.
 	pub fn is_trusted(&self, txid: Txid) -> bool {

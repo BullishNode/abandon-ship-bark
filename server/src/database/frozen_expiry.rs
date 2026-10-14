@@ -16,17 +16,28 @@ pub struct FrozenExpiryGroup {
 }
 
 impl Db {
-	/// A complete bounded listing, not a silently truncated queue. The caller
-	/// must hydrate every durable fee reservation before constructing new work.
+	/// Read the complete queue in bounded pages from one consistent snapshot.
+	/// The caller must hydrate every durable fee reservation before new work;
+	/// a large backlog must not turn the page size into a permanent refusal.
 	pub async fn frozen_expiry_group_ids(&self, limit: usize) -> anyhow::Result<Vec<String>> {
 		ensure!(limit > 0, "frozen group limit must be positive");
-		let bound = i64::try_from(limit)?.checked_add(1).context("frozen group limit overflow")?;
+		let page_size = i64::try_from(limit).context("frozen group limit overflow")?;
 		self.read(async |t| {
-			let rows = t.query("SELECT DISTINCT a.freeze_set FROM expiry_allocation a WHERE NOT EXISTS (
-				SELECT 1 FROM expiry_carrier_allocation m JOIN expiry_carrier c ON c.txid=m.txid
-				WHERE m.allocation_id=a.id AND c.confirmed_height IS NOT NULL) ORDER BY a.freeze_set LIMIT $1", &[&bound]).await?;
-			ensure!(rows.len() <= limit, "complete frozen group listing exceeds budget");
-			Ok(rows.into_iter().map(|r| r.get("freeze_set")).collect())
+			t.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ", &[]).await?;
+			let mut after: Option<String> = None;
+			let mut groups = Vec::new();
+			loop {
+				let rows = t.query("SELECT DISTINCT a.freeze_set FROM expiry_allocation a
+					WHERE ($1::text IS NULL OR a.freeze_set > $1) AND NOT EXISTS (
+						SELECT 1 FROM expiry_carrier_allocation m JOIN expiry_carrier c ON c.txid=m.txid
+						WHERE m.allocation_id=a.id AND c.confirmed_height IS NOT NULL)
+					ORDER BY a.freeze_set LIMIT $2", &[&after, &page_size]).await?;
+				let full_page = rows.len() == limit;
+				groups.extend(rows.into_iter().map(|r| r.get::<_, String>("freeze_set")));
+				if !full_page { break; }
+				after = groups.last().cloned();
+			}
+			Ok(groups)
 		}).await
 	}
 

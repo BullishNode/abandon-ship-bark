@@ -11,6 +11,8 @@
 //! sync [`bitcoin_ext::rpc::BitcoinRpcClient`] companion and runs the
 //! Emitter loop inside `tokio::task::spawn_blocking`.
 
+pub mod spending;
+
 use std::borrow::Borrow;
 
 use anyhow::{bail, Context};

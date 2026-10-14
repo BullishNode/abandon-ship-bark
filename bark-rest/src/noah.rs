@@ -45,6 +45,17 @@ impl NoahLnurl {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Arc;
+	use tokio_util::sync::CancellationToken;
+	use crate::{Config, RestServer, ServerState};
+
+	#[tokio::test]
+	async fn configured_mode_requires_authentication() {
+		let shutdown = CancellationToken::new();
+		let state = ServerState::builder().noah_lnurl("owned.invalid".parse::<NoahLnurl>().unwrap()).build(shutdown.clone());
+		let error = RestServer::start(&Config::default(), Arc::new(state), shutdown).await.err().expect("unauthenticated mode must not start");
+		assert!(error.to_string().contains("Noah LNURL mode requires authentication"));
+	}
 
 	#[test]
 	fn hash_matches_actual_ordered_metadata() {

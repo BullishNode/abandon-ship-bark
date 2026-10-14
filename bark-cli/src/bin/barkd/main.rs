@@ -558,6 +558,14 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn noah_domain_requires_authenticated_cli() {
+		for disabled in ["--no-auth", "--dangerously-allow-remote-no-auth"] {
+			assert!(Cli::try_parse_from(["barkd", "--noah-lnurl-domain", "owned.invalid", disabled]).is_err());
+		}
+		assert!(Cli::try_parse_from(["barkd", "--noah-lnurl-domain", "owned.invalid"]).is_ok());
+	}
+
+	#[test]
 	fn defaults_dont_panic() {
 		// assert that mainnet_default_chain_source does not panic
 		let _ = ui_default_chain_source();

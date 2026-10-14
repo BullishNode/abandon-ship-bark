@@ -1,5 +1,6 @@
 //! Real pinned backend HTTP enrollment. No payments or dispatch qualification.
 use ark::SECP;
+use cln_rpc::plugins::hold;
 use ark_testing::{TestContext, ports::pick_port};
 use bitcoin::{
 	hashes::{Hash, sha256},
@@ -11,6 +12,7 @@ use std::{
 	io::Write,
 	os::unix::fs::{OpenOptionsExt, PermissionsExt},
 	process::Stdio,
+	str::FromStr,
 	time::Duration,
 };
 use tokio::{io::AsyncWriteExt, process::{Child, Command}};
@@ -268,7 +270,7 @@ async fn noah_first_original_invoice_commits_discovery_metadata() {
 		discovery["callback"],
 		"https://owned.invalid/.well-known/lnurlp/forwardedphone"
 	);
-	assert!(node.grpc_client().await.list_invoices(cln_rpc::ListinvoicesRequest::default()).await.unwrap().into_inner().invoices.is_empty());
+	assert!(node.hold_client().await.list(hold::ListRequest { constraint: None }).await.unwrap().into_inner().invoices.is_empty());
 	// One callback only, no Ark negotiation and no payment/retry dispatch.
 	let response = client
 		.get(format!("{origin}/.well-known/lnurlp/forwardedphone"))
@@ -287,7 +289,7 @@ async fn noah_first_original_invoice_commits_discovery_metadata() {
 	original.write_all(serde_json::to_vec(&json!({"invoice":invoice,"metadata":metadata,"address":address,"amount_msat":12_000_000})).unwrap().as_slice()).unwrap();
 	let result = verify_actual_invoice(invoice, metadata).await;
 	assert!(result.status.success(), "first original Noah invoice must commit exact discovery metadata: {}", String::from_utf8_lossy(&result.stderr));
-	let created = node.grpc_client().await.list_invoices(cln_rpc::ListinvoicesRequest::default()).await.unwrap().into_inner();
+	let created = node.hold_client().await.list(hold::ListRequest { constraint: None }).await.unwrap().into_inner();
 	assert_eq!(created.invoices.len(), 1, "first callback must create exactly one original invoice");
 	let endpoint = format!("{}/api/v1/lightning/receives/invoice/for-address", forwarder.base_url());
 	for label in ["ordinary memo", "Paying satoshis to forwardedphone@other.invalid", "Paying satoshis to Forwardedphone@owned.invalid", "Paying satoshis to forwardedphone@owned.invalid "] {
@@ -297,9 +299,19 @@ async fn noah_first_original_invoice_commits_discovery_metadata() {
 	}
 	let unauthorized = client.post(&endpoint).json(&json!({"address":address,"amount_sat":12_000,"description":"Paying satoshis to forwardedphone@owned.invalid"})).send().await.unwrap();
 	assert_eq!(unauthorized.status(), reqwest::StatusCode::UNAUTHORIZED);
-	let count = node.grpc_client().await.list_invoices(cln_rpc::ListinvoicesRequest::default()).await.unwrap().into_inner().invoices.len();
+	let count = node.hold_client().await.list(hold::ListRequest { constraint: None }).await.unwrap().into_inner().invoices.len();
 	assert_eq!(count, 1, "refused requests must not issue another invoice");
-	let public = json!({"backend_pin":NOAH_PIN,"backend_sha256":BACKEND_SHA,"fixture_head":env!("GIT_HASH"),"first_original_invoice_sha256":sha256::Hash::hash(invoice.as_bytes()).to_string(),"metadata_sha256":sha256::Hash::hash(metadata.as_bytes()).to_string(),"node_invoice_count":count,"strict_original_verification":true,"payments_dispatched":0,"wallet_funding_sat":0,"paid_journey_qualified":false});
+	// A distinct, explicitly requested generic invoice keeps its ordinary memo.
+	let generic = client.post(format!("{}/api/v1/lightning/receives/invoice", forwarder.base_url()))
+		.bearer_auth(token.trim()).json(&json!({"amount_sat":12_000,"description":"ordinary generic memo"})).send().await.unwrap();
+	assert!(generic.status().is_success());
+	let generic: Value = generic.json().await.unwrap();
+	let decoded = bark::lightning_invoice::Bolt11Invoice::from_str(generic["invoice"].as_str().unwrap()).unwrap();
+	decoded.check_signature().unwrap();
+	let raw = decoded.into_signed_raw();
+	assert_eq!(raw.raw_invoice().description().map(ToString::to_string).as_deref(), Some("ordinary generic memo"));
+	assert!(raw.raw_invoice().description_hash().is_none());
+	let public = json!({"backend_pin":NOAH_PIN,"backend_sha256":BACKEND_SHA,"fixture_head":env!("GIT_HASH"),"first_original_invoice_sha256":sha256::Hash::hash(invoice.as_bytes()).to_string(),"metadata_sha256":sha256::Hash::hash(metadata.as_bytes()).to_string(),"noah_invoice_count_after_refusals":count,"generic_memo_unchanged":true,"strict_original_verification":true,"payments_dispatched":0,"wallet_funding_sat":0,"paid_journey_qualified":false});
 	fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(ctx.datadir.join("public-result.json")).unwrap().write_all(&serde_json::to_vec_pretty(&public).unwrap()).unwrap();
 	let after = node.grpc_client().await.list_funds(cln_rpc::ListfundsRequest { spent: Some(false) }).await.unwrap().into_inner();
 	assert!(after.outputs.is_empty() && after.channels.is_empty());

@@ -131,7 +131,12 @@ async fn watchmand_direct_missing_history_or_disabled_route_refuses_before_worke
 	assert_backing_retained(&case).await;
 	std::fs::rename(&retained, &history).unwrap();
 	let original = case.ctx.datadir.join("server-watchmand/config.toml");
-	let mut child = spawn(&case, &original, "direct-disabled");
+	let mut disabled: server::config::watchmand::Config =
+		toml::from_str(&std::fs::read_to_string(original).unwrap()).unwrap();
+	disabled.watchman.direct_expiry = None;
+	let disabled_path = case.ctx.datadir.join("disabled-route.toml");
+	write_automatic_config(&disabled_path, &toml::to_string_pretty(&disabled).unwrap());
+	let mut child = spawn(&case, &disabled_path, "direct-disabled");
 	let exit = tokio::time::timeout(Duration::from_secs(15), child.wait()).await.unwrap().unwrap();
 	assert!(!exit.success(), "legacy route must not start over frozen direct obligations");
 	assert!(std::fs::read_to_string(case.ctx.datadir.join("direct-disabled-stderr.log")).unwrap()

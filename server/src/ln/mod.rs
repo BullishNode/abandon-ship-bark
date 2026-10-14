@@ -57,7 +57,7 @@ pub(crate) enum SendRefund {
 /// An observation for expiry attribution, not an authorization to pay.
 /// Recheck under the payment guard and the settlement write lock at commit.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum SendRefundEvidence {
+pub enum SendRefundEvidence {
 	/// Non-refundable sender entitlement. A receive still needs separate
 	/// collection evidence; knowing its preimage alone does not prove that.
 	Paid(String),

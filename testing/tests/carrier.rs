@@ -6,7 +6,7 @@ use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::str::FromStr;
 
-use bitcoin::{Address, Amount, FeeRate, Network, OutPoint, TxOut, Weight};
+use bitcoin::{Address, Amount, FeeRate, Network, OutPoint, ScriptBuf, TxOut, Weight};
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::secp256k1::Keypair;
 use bitcoincore_rpc::RpcApi;
@@ -431,4 +431,115 @@ async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 
 fn snapshot_error(result: anyhow::Result<BackingSnapshot>) -> String {
 	match result { Ok(_) => panic!("expected whole-snapshot refusal"), Err(err) => format!("{err:#}") }
+}
+
+
+async fn rounds_changeset_fingerprint(db: &Db) -> (i64, Option<String>) {
+	db.read(async |t| {
+		let row = t.query_one("SELECT count(*) AS count, md5(string_agg(md5(content), ',' ORDER BY id)) AS digest FROM wallet_changeset WHERE kind='rounds'", &[]).await?;
+		Ok((row.get("count"), row.get("digest")))
+	}).await.unwrap()
+}
+
+#[tokio::test]
+async fn wallet_inventory_actual_owner_rpc_and_helper_do_not_mutate_wallet() {
+	let ctx = TestContext::new("carrier-builder/wallet_inventory_actual_owner_rpc_and_helper_do_not_mutate_wallet").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().funded(sat(1_000_000)).create().await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mut rpc = srv.get_wallet_rpc().await;
+	let first = rpc.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner();
+	assert!(!first.complete, "captaind rounds inventory cannot stand in for watchmand's actual fee wallet");
+	assert!(first.watchman.is_none());
+	assert!(!first.missing_sources.is_empty());
+	let rounds = first.rounds.as_ref().unwrap();
+	assert!(rounds.complete);
+	assert_eq!(rounds.wallet, "rounds");
+	assert_eq!(rounds.network, "regtest");
+	assert!(!rounds.utxos.is_empty());
+	assert!(rounds.reserved_outpoints.is_empty());
+	let core = ctx.bitcoind().sync_client();
+	let descriptor_info: serde_json::Value = core.call("getdescriptorinfo", &[serde_json::json!(rounds.public_descriptor)]).unwrap();
+	assert_eq!(descriptor_info["hasprivatekeys"], false);
+	assert_eq!(descriptor_info["isrange"], true);
+	assert_eq!(rounds.tip_height as u64, core.get_block_count().unwrap());
+	assert_eq!(rounds.tip_hash, core.get_block_hash(rounds.tip_height as u64).unwrap().to_string());
+	for output in &rounds.utxos {
+		let point = OutPoint::from_str(&output.outpoint).unwrap();
+		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+		assert_eq!(output.value_sat, actual.value.to_sat());
+		assert_eq!(output.script_pubkey, actual.script_pub_key.hex);
+		assert!(output.confirmed_height_upper_bound.is_some());
+		assert!(output.trusted && output.mature && output.transaction_eligible && output.confirmed_fee_eligible);
+		assert!(!output.reserved && !output.coinbase);
+	}
+	let before_db = rounds_changeset_fingerprint(&db).await;
+	for _ in 0..3 {
+		let next = rpc.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner();
+		assert_eq!(next, first, "repeated reads must not reveal or change the canonical inventory");
+	}
+	let cli = tokio::process::Command::new(std::env::var("CAPTAIND_EXEC").unwrap())
+		.args(["rpc", "--addr", &srv.config().rpc.admin_address.unwrap().to_string(), "wallet-inventory"])
+		.output().await.unwrap();
+	assert!(cli.status.success(), "fixed inventory CLI must succeed");
+	assert!(cli.stdout.len() <= 2 * 1024 * 1024);
+	let cli_json: serde_json::Value = serde_json::from_slice(&cli.stdout).unwrap();
+	assert_eq!(cli_json["complete"], false);
+	assert!(cli_json["watchman"].is_null());
+	assert_eq!(cli_json["rounds"]["public_descriptor"], rounds.public_descriptor);
+	assert_eq!(cli_json["rounds"]["last_revealed_index"], serde_json::json!(rounds.last_revealed_index));
+	std::fs::write(ctx.datadir.join("rounds-wallet-inventory.json"), &cli.stdout).unwrap();
+	let after_db = rounds_changeset_fingerprint(&db).await;
+	assert!(before_db == after_db, "owning-daemon inventory must not append or rewrite persisted wallet state");
+
+	// Real immature coinbase must not become eligible merely because canonical
+	// trust meets the configured confirmation threshold.
+	let mining_address = Address::from_script(&ScriptBuf::from_bytes(rounds.utxos[0].script_pubkey.clone()), Network::Regtest).unwrap();
+	core.generate_to_address(1, &mining_address).unwrap();
+	srv.wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;
+	let immature_source = rpc.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner();
+	let rounds = immature_source.rounds.as_ref().unwrap();
+	let immature = rounds.utxos.iter().find(|u| u.coinbase).unwrap();
+	assert_eq!(immature.confirmations, 1);
+	assert!(immature.trusted);
+	assert!(!immature.mature && !immature.transaction_eligible && !immature.confirmed_fee_eligible);
+	let before_db = rounds_changeset_fingerprint(&db).await;
+
+	// Stop its sole owner, then reload the same existing rounds wallet to inspect
+	// staged changes and live guard behavior directly. No second wallet is created.
+	srv.stop().await.unwrap();
+	let mnemonic = wallet::read_mnemonic_from_datadir(&srv.config().data_dir).unwrap();
+	let master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
+	let tip = BlockRef { height: BlockHeight::new(rounds.tip_height),
+		hash: core.get_block_hash(rounds.tip_height as u64).unwrap() };
+	let existing = PersistedWallet::load_derive_from_master_xpriv(db.clone(), ctx.bitcoind().async_client(),
+		Network::Regtest, &master, WalletKind::Rounds, tip, rounds.min_trusted_confirmations).await.unwrap();
+	let wallet = InstrumentedLock::new("test_existing_rounds_inventory", existing);
+	let held = wallet.lock_owned().await;
+	let staged_before = held.staged().cloned();
+	let index_before = held.derivation_index(KEYCHAIN);
+	let snapshot = held.inventory().unwrap();
+	assert_eq!(snapshot, *rounds);
+	let point = OutPoint::from_str(&snapshot.utxos.iter().find(|u| u.confirmed_fee_eligible).unwrap().outpoint).unwrap();
+	let reservation = held.lock_wallet_utxo(point).unwrap();
+	let reserved = held.inventory().unwrap();
+	let row = reserved.utxos.iter().find(|u| u.outpoint == point.to_string()).unwrap();
+	assert!(row.reserved);
+	assert!(!row.transaction_eligible && !row.confirmed_fee_eligible);
+	assert_eq!(reserved.reserved_outpoints, vec![point.to_string()]);
+	assert!(held.lock_wallet_utxo(point).is_err(), "read preserves the existing reservation");
+	assert!(held.staged() == staged_before.as_ref(), "inventory must not mutate staged BDK state");
+	assert_eq!(held.derivation_index(KEYCHAIN), index_before);
+	assert!(before_db == rounds_changeset_fingerprint(&db).await, "direct helper must not persist");
+	drop(reservation);
+	let released = held.inventory().unwrap();
+	assert_eq!(released, snapshot);
+	std::fs::write(ctx.datadir.join("wallet-inventory-summary.json"), serde_json::to_vec_pretty(&serde_json::json!({
+		"scope": "actual rounds-wallet source only; watchmand unavailable; financial readiness incomplete",
+		"utxos": rounds.utxos.len(), "value_sat": rounds.utxos.iter().map(|u| u.value_sat).sum::<u64>(),
+		"tip_height": rounds.tip_height, "tip_hash": rounds.tip_hash,
+		"public_descriptor_core_checked": true, "private_keys_exported": false,
+		"owner_rpc_repeated_reads": 4, "fixed_cli_json_checked": true, "real_immature_coinbase_refused": true, "address_index_unchanged": true,
+		"staged_state_unchanged": true, "persisted_state_unchanged": true, "reservations_preserved": true,
+		"watchman_inventory": null, "complete": false,
+	})).unwrap()).unwrap();
 }

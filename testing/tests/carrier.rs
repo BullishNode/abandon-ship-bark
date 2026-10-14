@@ -15,6 +15,8 @@ mod cap_freeze;
 mod route_consistency;
 #[path = "carrier/pending_board_return.rs"]
 mod pending_board_return;
+#[path = "carrier/wallet_pending_inventory.rs"]
+mod wallet_pending_inventory;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;

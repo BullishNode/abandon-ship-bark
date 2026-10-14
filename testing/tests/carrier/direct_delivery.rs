@@ -113,19 +113,11 @@ async fn run_commit_worker(recipe: &CommitRecipe, recipe_path: PathBuf) -> Vec<b
 }
 
 async fn crash_case(name: &str, fee_rates: Vec<u64>) -> CrashCase {
-	crash_case_with_history(name, fee_rates, false).await
-}
-
-async fn crash_case_with_history(name: &str, fee_rates: Vec<u64>, history: bool) -> CrashCase {
 	let AutomaticBoardFixture { ctx, srv, coin, record, mnemonic } =
 		automatic_board_fixture_with_fee(name, sat(1_000)).await;
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	if history {
-		server::payout_witness::DirectPayoutWitness::initialize(&srv.config().data_dir,
-			Network::Regtest, coin.server_pubkey(), &db).await.unwrap();
-	}
 	let core = ctx.bitcoind().sync_client();
 	let root = db.read(async |t| Ok(t.get_bare_vtxo_by_id(coin.chain_anchor().into()).await?.vtxo)).await.unwrap();
 	let roots = [root];
@@ -180,7 +172,7 @@ async fn crash_case_with_history(name: &str, fee_rates: Vec<u64>, history: bool)
 
 #[tokio::test]
 async fn direct_history_refuses_forgotten_signed_version_and_allocation_after_confirmation() {
-	let case = crash_case_with_history("direct_history_refuses_forgotten_signed_version_and_allocation_after_confirmation", vec![30,40], true).await;
+	let case = crash_case("direct_history_refuses_forgotten_signed_version_and_allocation_after_confirmation", vec![30,40]).await;
 	let config: server::Config = toml::from_str(&std::fs::read_to_string(&case.recipe.config_path).unwrap()).unwrap();
 	let root: ServerVtxo = ServerVtxo::deserialize(&case.recipe.backing[0]).unwrap();
 	let key = root.server_pubkey();
@@ -228,6 +220,43 @@ async fn direct_history_refuses_forgotten_signed_version_and_allocation_after_co
 		Ok(())
 	}).await.unwrap();
 	load().await.unwrap();
+}
+
+#[tokio::test]
+async fn direct_history_captaind_startup_refuses_forgotten_signed_version() {
+	let case = crash_case("direct_history_captaind_startup_refuses_forgotten_signed_version", vec![30,40]).await;
+	let config: server::Config = toml::from_str(&std::fs::read_to_string(&case.recipe.config_path).unwrap()).unwrap();
+	let root: ServerVtxo = ServerVtxo::deserialize(&case.recipe.backing[0]).unwrap();
+	let history = server::payout_witness::DirectPayoutWitness::load(&config.data_dir,
+		Network::Regtest, root.server_pubkey(), &case.db, budget()).await.unwrap();
+	history.record_group(&case.db, &case.recipe.freeze_set).await.unwrap();
+	let delivery = recovered(&case).await;
+	confirm_once(&case, &delivery, &case.versions[1]).await;
+	server::payout_witness::DirectPayoutWitness::load(&config.data_dir,
+		Network::Regtest, root.server_pubkey(), &case.db, budget()).await.unwrap();
+	let latest = case.versions[1].compute_txid().to_string();
+	case.db.write(async |t| {
+		t.execute("DELETE FROM expiry_carrier_allocation WHERE txid=$1", &[&latest]).await?;
+		t.execute("DELETE FROM expiry_carrier WHERE txid=$1", &[&latest]).await?;
+		Ok(())
+	}).await.unwrap();
+	let stderr = case.ctx.datadir.join("restored-captaind-stderr.log");
+	let output = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&stderr).unwrap();
+	let mut child = Command::new(std::env::var_os("CAPTAIND_EXEC").unwrap())
+		.arg("start").arg("--config").arg(&case.recipe.config_path)
+		.stdout(std::process::Stdio::null()).stderr(output).kill_on_drop(true).spawn().unwrap();
+	let status = match tokio::time::timeout(Duration::from_secs(8), child.wait()).await {
+		Ok(status) => status.unwrap(),
+		Err(_) => {
+			child.kill().await.unwrap();
+			child.wait().await.unwrap();
+			panic!("captaind accepted a database that forgot the independently witnessed confirmed carrier");
+		},
+	};
+	assert!(!status.success());
+	let error = std::fs::read_to_string(stderr).unwrap();
+	assert!(error.contains("direct payout recovery witness validation failed"), "unexpected startup failure: {error}");
+	assert!(error.contains("differs from restored database"), "unexpected history refusal: {error}");
 }
 
 #[tokio::test]

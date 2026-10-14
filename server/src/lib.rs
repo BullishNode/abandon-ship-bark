@@ -270,6 +270,8 @@ impl Server {
 		let server_key = master_xpriv.derive_priv(&SECP, &SERVER_KEY_PATH.parse::<bip32::DerivationPath>()?)?;
 		payout_witness::PayoutWitness::initialize(&cfg.data_dir, cfg.network,
 			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key())?;
+		payout_witness::DirectPayoutWitness::initialize(&cfg.data_dir, cfg.network,
+			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key(), &db).await?;
 
 		// Store initial wallet states to avoid full chain sync.
 		for wallet in [WalletKind::Rounds, WalletKind::Watchman] {
@@ -361,6 +363,12 @@ impl Server {
 		let db = database::Db::connect(&cfg.postgres)
 			.await
 			.context("failed to connect to db")?;
+		// A fresh server creates this history independently of PostgreSQL. Check
+		// it before any wallet, round or Lightning worker can create successors
+		// from a restored database. Disabling the legacy payout task cannot bypass it.
+		payout_witness::DirectPayoutWitness::load(&cfg.data_dir, cfg.network,
+			server_key.public_key(), &db, payout_witness::DIRECT_HISTORY_LIMITS).await
+			.context("direct payout recovery witness validation failed")?;
 		// Refuse a database-only rollback before wallets or payout/round workers
 		// can spend funds. Never initialize missing history during startup.
 		let payout_witness = if cfg.expiry_payout.enabled || cfg.data_dir.join(payout_witness::DIRECTORY).exists() {

@@ -267,6 +267,7 @@ async fn wallet_txs_keep_a_change_output() {
 	let ctx = TestContext::new("server/wallet_txs_keep_a_change_output").await;
 	let srv = ctx.captaind("server").funded(btc(10)).cfg(|cfg| {
 		cfg.round_interval = Duration::from_secs(3600);
+		cfg.fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(50).unwrap());
 	}).create().await;
 
 	// Each tx may spend the change of the one before it, so check every
@@ -374,4 +375,147 @@ async fn wallet_tx_pays_for_unconfirmed_ancestors() {
 	assert_eq!(issuance_chunk_kwu, chunk_fee_rate_kwu(&srv, funding_txid),
 		"the issuance and the round tx must share a chunk",
 	);
+}
+
+/// Real Core parent/child geometry: quiet work must not subsidize a cheap
+/// unconfirmed parent beyond the configured signed child fee ceiling.
+#[tokio::test]
+async fn quiet_round_defers_ancestor_shortfall_then_recovers() {
+	let ctx = TestContext::new("server/quiet_round_defers_ancestor_shortfall_then_recovers").await;
+	let ceiling = FeeRate::from_sat_per_vb(20).unwrap();
+	let srv = ctx.captaind("server").funded(btc(10)).cfg(move |cfg| {
+		cfg.round_interval = Duration::from_secs(3600);
+		cfg.fee_estimator.fallback_fee_rate_slow = FeeRate::from_sat_per_vb(2).unwrap();
+		cfg.fee_estimator.fallback_fee_rate_fast = ceiling;
+		cfg.fee_estimator.max_fee_rate = Some(ceiling);
+		cfg.vtxopool.vtxo_targets = vec![VtxoTarget { count: 3, amount: btc(1) }];
+	}).create().await;
+	srv.wait_for_vtxopool(&ctx).await;
+	let parent = srv.vtxopool_last_issuance().unwrap();
+	const DELTA: i64 = 10_000_000_000;
+	for node in [ctx.bitcoind(), srv.bitcoind()] {
+		node.sync_client().call::<bool>("prioritisetransaction", &[
+			json!(parent), json!(0), json!(-DELTA),
+		]).unwrap();
+	}
+	let bark = ctx.bark("bark", &srv).funded(sat(1_000_000)).create().await;
+	bark.board(sat(800_000)).await;
+	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+	bark.sync().await;
+	let before = bark.spendable_balance_no_sync().await;
+	let ids = bark.vtxo_ids_no_sync().await;
+	let wallet_before = srv.get_wallet_rpc().await.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner().rounds.unwrap();
+	let mut finished = srv.subscribe_log::<RoundFinished>();
+	let mut errors = srv.subscribe_log::<server_log::RoundError>();
+	let result = ctx.trigger_rounds_until(&srv, bark.try_refresh_all_no_retry()).await;
+	if result.is_ok() {
+		let txid = finished.recv().wait(Duration::from_secs(30)).await.unwrap().txid;
+		srv.bitcoind().await_transaction(txid).await;
+		let entry = srv.bitcoind().sync_client().call::<serde_json::Value>(
+			"getmempoolentry", &[json!(txid)],
+		).unwrap();
+		assert!(entry["depends"].as_array().unwrap().iter().any(|d| d == &json!(parent)));
+		let fee = Amount::from_btc(entry["fees"]["base"].as_f64().unwrap()).unwrap();
+		let tx = srv.bitcoind().sync_client().get_raw_transaction(&txid, None).unwrap();
+		assert!(fee > ceiling.fee_wu(tx.weight()).unwrap());
+		std::fs::write(ctx.datadir.join("quiet-round-core-fee.json"), serde_json::to_vec(&json!({"txid":txid,"parent":parent,"fee_sat":fee.to_sat(),"weight_wu":tx.weight().to_wu(),"ceiling_sat":ceiling.fee_wu(tx.weight()).unwrap().to_sat(),"core_entry":entry})).unwrap()).unwrap();
+		panic!("quiet round exceeded configured ceiling: actual fee {} weight {}", fee, tx.weight());
+	}
+	let error = errors.recv().wait(Duration::from_secs(30)).await.unwrap().error;
+	assert!(error.contains("quiet funding fee exceeds configured maximum"), "{error}");
+	bark.assert_unchanged_after_refusal(before).await;
+	assert_eq!(bark.vtxo_ids_no_sync().await, ids);
+	let wallet_after = srv.get_wallet_rpc().await.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner().rounds.unwrap();
+	assert_eq!(wallet_after.reserved_outpoints, wallet_before.reserved_outpoints);
+	assert_eq!(wallet_after.utxos, wallet_before.utxos);
+	for node in [ctx.bitcoind(), srv.bitcoind()] {
+		node.sync_client().call::<bool>("prioritisetransaction", &[
+			json!(parent), json!(0), json!(DELTA),
+		]).unwrap();
+	}
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	ctx.refresh_all(&srv, &[&bark]).await;
+	let txid = finished.recv().wait(Duration::from_secs(30)).await.unwrap().txid;
+	srv.bitcoind().await_transaction(txid).await;
+	let entry = srv.bitcoind().sync_client().call::<serde_json::Value>(
+		"getmempoolentry", &[json!(txid)],
+	).unwrap();
+	let fee = Amount::from_btc(entry["fees"]["base"].as_f64().unwrap()).unwrap();
+	let tx = srv.bitcoind().sync_client().get_raw_transaction(&txid, None).unwrap();
+	assert!(fee <= ceiling.fee_wu(tx.weight()).unwrap());
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	bark.sync().await;
+	assert!(bark.spendable_balance_no_sync().await > Amount::ZERO);
+}
+
+#[tokio::test]
+async fn quiet_pool_defers_ancestor_shortfall_then_recovers() {
+	let ctx = TestContext::new("server/quiet_pool_defers_ancestor_shortfall_then_recovers").await;
+	let ceiling = FeeRate::from_sat_per_vb(20).unwrap();
+	let srv = ctx.captaind("server").funded(btc(10)).cfg(move |cfg| {
+		cfg.round_interval = Duration::from_secs(3600);
+		cfg.fee_estimator.fallback_fee_rate_slow = FeeRate::from_sat_per_vb(2).unwrap();
+		cfg.fee_estimator.max_fee_rate = Some(ceiling);
+		cfg.vtxopool.vtxo_target_issue_threshold = 100;
+		cfg.vtxopool.vtxo_targets = vec![VtxoTarget { count: 3, amount: btc(1) }];
+	}).create().await;
+	srv.wait_for_vtxopool(&ctx).await;
+	let parent = srv.vtxopool_last_issuance().unwrap();
+	const DELTA: i64 = 10_000_000_000;
+	for node in [ctx.bitcoind(), srv.bitcoind()] {
+		node.sync_client().call::<bool>("prioritisetransaction", &[
+			json!(parent), json!(0), json!(-DELTA),
+		]).unwrap();
+	}
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	let counts = async || db.read(async |t| {
+		let row = t.query_one("SELECT (SELECT count(*) FROM vtxo_pool), (SELECT count(*) FROM nursery_tx), (SELECT count(*) FROM virtual_transaction)", &[]).await?;
+		Ok((row.get::<_, i64>(0), row.get::<_, i64>(1), row.get::<_, i64>(2)))
+	}).await.unwrap();
+	let before = counts().await;
+	let wallet_before = srv.get_wallet_rpc().await.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner().rounds.unwrap();
+	srv.stop().await.unwrap();
+	{
+		let mut cfg = srv.config_mut();
+		cfg.fee_estimator.fallback_fee_rate_slow = ceiling;
+		// The real issuer requires at least two new leaves.
+		cfg.vtxopool.vtxo_targets[0].count = 5;
+	}
+	srv.start().await.unwrap();
+	// Drive the restarted worker from an actual fresh chain tip.
+	ctx.generate_blocks(1).await;
+	tokio::time::sleep(Duration::from_secs(10)).await;
+	let latest = srv.vtxopool_last_issuance().unwrap();
+	if latest != parent {
+		let tx = srv.bitcoind().sync_client().get_raw_transaction(&latest, None).unwrap();
+		assert!(tx.input.iter().any(|i| i.previous_output.txid == parent));
+		let input_value: Amount = tx.input.iter().map(|i| {
+			srv.bitcoind().sync_client().get_raw_transaction(&i.previous_output.txid, None).unwrap().output[i.previous_output.vout as usize].value
+		}).sum();
+		let fee = input_value - tx.output.iter().map(|o| o.value).sum::<Amount>();
+		assert!(fee > ceiling.fee_wu(tx.weight()).unwrap());
+		std::fs::write(ctx.datadir.join("quiet-pool-core-fee.json"), serde_json::to_vec(&json!({"txid":latest,"parent":parent,"fee_sat":fee.to_sat(),"weight_wu":tx.weight().to_wu(),"ceiling_sat":ceiling.fee_wu(tx.weight()).unwrap().to_sat()})).unwrap()).unwrap();
+		panic!("quiet pool exceeded configured ceiling: actual fee {} weight {}", fee, tx.weight());
+	}
+	let log = std::fs::read_to_string(srv.config().data_dir.join("stdout.log")).unwrap();
+	assert!(log.contains("quiet funding fee exceeds configured maximum"));
+	assert_eq!(counts().await, before, "refused funding must not issue or expose new tree coins");
+	let wallet_after = srv.get_wallet_rpc().await.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner().rounds.unwrap();
+	assert_eq!(wallet_after.reserved_outpoints, wallet_before.reserved_outpoints);
+	assert_eq!(wallet_after.utxos, wallet_before.utxos);
+	for node in [ctx.bitcoind(), srv.bitcoind()] {
+		node.sync_client().call::<bool>("prioritisetransaction", &[
+			json!(parent), json!(0), json!(DELTA),
+		]).unwrap();
+	}
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	srv.wait_for_vtxopool_issuance_after(&ctx, Some(parent)).await;
+	let latest = srv.vtxopool_last_issuance().unwrap();
+	let tx = srv.bitcoind().sync_client().get_raw_transaction(&latest, None).unwrap();
+	let input_value: Amount = tx.input.iter().map(|i| {
+		srv.bitcoind().sync_client().get_raw_transaction(&i.previous_output.txid, None).unwrap().output[i.previous_output.vout as usize].value
+	}).sum();
+	let fee = input_value - tx.output.iter().map(|o| o.value).sum::<Amount>();
+	assert!(fee <= ceiling.fee_wu(tx.weight()).unwrap());
+	assert!(counts().await.0 > before.0);
 }

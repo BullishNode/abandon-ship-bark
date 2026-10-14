@@ -697,6 +697,10 @@ async fn run_rpc(addr: &str, cmd: RpcCommand) -> anyhow::Result<()> {
 			let response = rpc.wallet_inventory(protos::Empty {}).await?.into_inner();
 			anyhow::ensure!(response.rounds.is_some() || response.watchman.is_some(), "owning wallet inventory absent");
 			let inventory_json = |wallet: protos::WalletInventory| {
+				let transaction_json = |tx: &protos::WalletInventoryTransaction| serde_json::json!({
+					"txid": tx.txid, "transaction_body": tx.transaction_body.as_hex().to_string(),
+					"signed_weight_wu": tx.signed_weight_wu, "encoding": "bitcoin-stripped-body-v1",
+				});
 				let utxos = wallet.utxos.iter().map(|u| serde_json::json!({
 					"outpoint": u.outpoint, "value_sat": u.value_sat, "script_pubkey": u.script_pubkey.as_hex().to_string(),
 					"keychain": u.keychain, "derivation_index": u.derivation_index,
@@ -714,6 +718,10 @@ async fn run_rpc(addr: &str, cmd: RpcCommand) -> anyhow::Result<()> {
 					"min_trusted_confirmations": wallet.min_trusted_confirmations,
 					"complete": wallet.complete, "reserved_outpoints": wallet.reserved_outpoints,
 					"last_revealed_index": wallet.last_revealed_index, "utxos": utxos,
+					"pending_transaction_scope": "canonical_wallet_graph_only",
+					"pending_transactions": wallet.pending_transactions.iter().map(transaction_json).collect::<Vec<_>>(),
+					"pending_parents": wallet.pending_parents.iter().map(transaction_json).collect::<Vec<_>>(),
+					"unavailable_parent_txids": wallet.unavailable_parent_txids,
 				})
 			};
 			let output = serde_json::json!({

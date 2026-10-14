@@ -92,6 +92,8 @@ async fn owning_wallet_pending_spend_preserves_confirmed_tip_backing_and_read_on
 	std::fs::write(ctx.datadir.join("pending-wallet-source.json"), serde_json::to_vec_pretty(&public).unwrap()).unwrap();
 	let pending = source["pending_transactions"].as_array()
 		.expect("missing pending_transactions: current inventory discarded still-confirmed wallet backing");
+	assert_eq!(source["pending_transaction_scope"], "canonical_wallet_graph_only");
+	assert_eq!(source["complete"], true);
 	assert_eq!(pending.len(), 1);
 	assert_eq!(decoded_body(&pending[0]).compute_txid(), spend.compute_txid());
 	assert_eq!(pending[0]["signed_weight_wu"], spend.weight().to_wu());
@@ -104,6 +106,10 @@ async fn owning_wallet_pending_spend_preserves_confirmed_tip_backing_and_read_on
 	assert_eq!(parent.output[original.vout as usize].script_pubkey, funding.output[original.vout as usize].script_pubkey);
 	let descriptor: serde_json::Value = core.call("getdescriptorinfo", &[serde_json::json!(source["public_descriptor"])]).unwrap();
 	assert_eq!(descriptor["hasprivatekeys"], false);
+	let index = initial["rounds"]["utxos"][0]["derivation_index"].as_u64().unwrap();
+	let addresses: Vec<String> = core.call("deriveaddresses", &[source["public_descriptor"].clone(), serde_json::json!([index, index])]).unwrap();
+	let address = bitcoin::Address::from_str(&addresses[0]).unwrap().require_network(Network::Regtest).unwrap();
+	assert_eq!(address.script_pubkey(), parent.output[original.vout as usize].script_pubkey);
 	assert_eq!(confirmed_original.value, sat(1_000_000), "confirmed-tip projection restores the input once, never adds unconfirmed change");
 	ctx.generate_blocks(1).await;
 	srv.wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;

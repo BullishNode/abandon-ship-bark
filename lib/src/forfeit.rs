@@ -38,7 +38,9 @@ pub fn create_hark_forfeit_tx<G>(
 		input: vec![
 			TxIn {
 				previous_output: vtxo.point(),
-				sequence: Sequence::MAX,
+				// Match the Arkoor genesis template, including its opt-in RBF
+				// and BIP68 semantics with zero relative delay.
+				sequence: Sequence::ZERO,
 				script_sig: ScriptBuf::new(),
 				witness: signature.map(|s| Witness::from_slice(&[&s[..]])).unwrap_or_default(),
 			},
@@ -391,6 +393,22 @@ mod test {
 	}
 
 	#[test]
+	fn test_forfeit_genesis_matches_signed_transaction() {
+		let original = &VTXO_VECTORS.arkoor3_vtxo;
+		let unlock_hash = UnlockHash::hash(&[42; 32]);
+		let (secret_nonce, public_nonce) = musig::nonce_pair(&VTXO_VECTORS.server_key);
+		let bundle = HashLockedForfeitBundle::new(original, unlock_hash,
+			&VTXO_VECTORS.arkoor3_user_key, &public_nonce);
+		let (_, signed, forfeit) = bundle.finish(original, &public_nonce, secret_nonce, &VTXO_VECTORS.server_key);
+		// The signed transaction itself is already node-valid on the parent.
+		verify_tx(&[original.txout()], 0, &signed).expect("native signed forfeit must verify");
+		let reconstructed = forfeit.transactions().last().unwrap().tx;
+		assert_eq!(reconstructed, signed, "stored forfeit genesis must reconstruct the actual signed contract");
+		assert_eq!(forfeit.point(), OutPoint::new(signed.compute_txid(), 0));
+		forfeit.validate(&VTXO_VECTORS.round_tx).expect("signed forfeit path must validate from actual funding");
+	}
+
+	#[test]
 	fn test_hark_forfeits() {
 		let (server_sec_nonce, server_pub_nonce) = musig::nonce_pair(&VTXO_VECTORS.server_key);
 		// we need to go through some hoops to print the secret nonces
@@ -428,14 +446,11 @@ mod test {
 		);
 
 
-		// verify a hard-coded example from a previous run of this test
-		let server_sec_nonce = musig::SecretNonce::dangerous_from_bytes(FromHex::from_hex(
-			"220edcf1e0025bafa93c541763eb869fb7325c235fea6f0b9e9b32ae7de3aa416a798bd0c1deecbd2b61bac43ca683c296631e1e555fec9fd200ce973e62f6f387a85e47622bf70a8243580d1879746ffe940588c5ad9d478d1b46e2bb9318743312a8657f684b47f963f7a0e95927b2c71005112d8edc5821a3f6f0f7bd6354947ff8ac",
-		).unwrap());
+		// A historical MAX-sequence bundle still decodes, but must not be
+		// accepted as a signature for the corrected ZERO-sequence contract.
 		let server_pub_nonce = musig::PublicNonce::from_str("03b4d5711322b73c8c412d0d6a6bce0af1eb98662c6fac8faeab3d6979d77c7430034ff4c184887f764d00af812a1c155ca8be4d18a6c012fea0d6b4a819b451414e").unwrap();
 		let bundle = HashLockedForfeitBundle::deserialize_hex("0167754b5920d282ad276e8c80e1088f09238698bb674906fe47a0bfe2e9855912000000003d5491373df6a016f78b3f46d65a4fc6948824c43a59620404e8719cfee05d1a02afcb2341f8ff179d12fe0bf586653dc1ae91f97df02ab25958ecc37675b611bd0225697fa9181018d4a8b2130d4464df40beb48b80534dec43662b0115ac5dad95a102613bd646bceb9afbd895e8092ec504e5b4a419c027114445dff521569bf5").unwrap();
 
-		println!("verifying hard-coded forfeits");
-		verify_hark_forfeits(vtxo, unlock_preimage, server_sec_nonce, &server_pub_nonce, bundle);
+		assert_eq!(bundle.verify(vtxo, &server_pub_nonce), Err("invalid partial sig for forfeit tx"));
 	}
 }

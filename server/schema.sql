@@ -2992,3 +2992,9 @@ CREATE TABLE expiry_carrier_allocation (
 	PRIMARY KEY (txid, allocation_id)
 );
 CREATE INDEX expiry_carrier_allocation_owner ON expiry_carrier_allocation (allocation_id, txid);
+
+-- Immutable route selected before either daemon's financial workers start.
+CREATE TABLE expiry_route (
+	id SMALLINT PRIMARY KEY CHECK (id = 1),
+	direct BOOLEAN NOT NULL
+);

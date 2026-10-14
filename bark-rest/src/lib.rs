@@ -6,6 +6,7 @@ pub mod api;
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod noah;
 #[cfg(feature = "web-ui")]
 pub mod web;
 
@@ -182,6 +183,7 @@ pub struct ServerState {
 	wallet: parking_lot::RwLock<Option<ServerWallet>>,
 	shutdown: CancellationToken,
 	auth_token: Option<AuthToken>,
+	noah_lnurl: Option<noah::NoahLnurl>,
 
 	/// A hook to be called when a wallet is created, returning a
 	/// [Wallet] to be added to the server state
@@ -223,6 +225,7 @@ pub struct ServerState {
 pub struct ServerStateBuilder {
 	wallet: Option<Wallet>,
 	auth_token: Option<AuthToken>,
+	noah_lnurl: Option<noah::NoahLnurl>,
 	on_wallet_create: Option<Box<OnWalletCreate>>,
 	on_wallet_delete: Option<Box<OnWalletDelete>>,
 	on_get_mnemonic: Option<Box<OnGetMnemonic>>,
@@ -235,6 +238,7 @@ impl ServerStateBuilder {
 		Self {
 			wallet: None,
 			auth_token: None,
+			noah_lnurl: None,
 			on_wallet_create: None,
 			on_wallet_delete: None,
 			on_get_mnemonic: None,
@@ -250,6 +254,11 @@ impl ServerStateBuilder {
 
 	pub fn auth_token(mut self, token: impl Into<Option<AuthToken>>) -> Self {
 		self.auth_token = token.into();
+		self
+	}
+
+	pub fn noah_lnurl(mut self, mode: impl Into<Option<noah::NoahLnurl>>) -> Self {
+		self.noah_lnurl = mode.into();
 		self
 	}
 
@@ -283,6 +292,7 @@ impl ServerStateBuilder {
 			wallet: parking_lot::RwLock::new(wallet_opt),
 			shutdown: shutdown,
 			auth_token: self.auth_token,
+			noah_lnurl: self.noah_lnurl,
 			on_wallet_create: self.on_wallet_create,
 			on_wallet_delete: self.on_wallet_delete,
 			on_get_mnemonic: self.on_get_mnemonic,
@@ -329,6 +339,10 @@ impl ServerState {
 		Ok(wallet.notification_mngr.clone())
 	}
 
+	pub fn noah_lnurl(&self) -> Option<&noah::NoahLnurl> {
+		self.noah_lnurl.as_ref()
+	}
+
 	pub fn auth_token(&self) -> Option<&AuthToken> {
 		self.auth_token.as_ref()
 	}
@@ -345,6 +359,7 @@ impl RestServer {
 		state: Arc<ServerState>,
 		shutdown: CancellationToken,
 	) -> anyhow::Result<Self> {
+		ensure!(state.noah_lnurl().is_none() || state.auth_token().is_some(), "Noah LNURL mode requires authentication");
 		let (router, _api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
 			.split_for_parts();
 

@@ -1,11 +1,26 @@
 use std::{num::NonZeroUsize, time::Duration};
+use std::path::PathBuf;
 
 use bitcoin::{Amount, FeeRate};
 
 use bitcoin_ext::BlockDelta;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DirectExpiryConfig {
+	/// Captaind's independently backed-up datadir, shared with this daemon.
+	pub history_dir: PathBuf,
+	/// Absolute mining-fee ceiling for each signed direct claim.
+	#[serde(with = "crate::utils::serde::string")]
+	pub max_miner_fee: Amount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+	/// Direct settlement of source-frozen groups. No legacy claim/progression
+	/// may consume their backing when this route is configured.
+	#[serde(default)]
+	pub direct_expiry: Option<DirectExpiryConfig>,
 	/// Interval at which to react to on-chain exit activity: progressing exit
 	/// chains and claiming VTXOs before a counterparty's timelock matures.
 	/// This work races other parties, so it should run often.

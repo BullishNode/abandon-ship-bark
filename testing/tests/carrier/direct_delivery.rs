@@ -12,6 +12,9 @@ use server::watchman::direct_delivery::{DirectDelivery, DeliveryState};
 
 #[path = "frozen_expiry.rs"]
 mod frozen_expiry;
+
+#[path = "watchmand_direct.rs"]
+mod watchmand_direct;
 #[path = "witness_submission.rs"]
 mod witness_submission;
 

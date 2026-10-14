@@ -11,6 +11,7 @@ mod daemon;
 mod frontier;
 mod policy;
 mod signer;
+mod settlement;
 
 pub use self::config::Config;
 pub use self::daemon::Daemon;

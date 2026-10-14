@@ -208,3 +208,77 @@ async fn automatic_expiry_unregistered_arkoor_pays_exact_actual_input_owner() {
 	assert_eq!(row.get::<_, i64>("payout_sat"), 49_000);
 	assert!(allocation(&db, input.id()).await.is_none(), "consumed original is retirement closure, never independent customer or operator value");
 }
+
+#[tokio::test]
+async fn automatic_expiry_daemon_default_stack_boards_freeze_once() {
+	assert!(std::env::var_os("RUST_MIN_STACK").is_none(), "this qualification must explicitly remove RUST_MIN_STACK from its runner");
+	let ctx = TestContext::new("expiry_automatic/automatic_expiry_daemon_default_stack_boards_freeze_once").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().funded(btc(1)).cfg(|c| {
+		c.vtxo_lifetime = BlockDelta::new(128); c.fees.board.base_fee = sat(1_000);
+		c.direct_expiry.enabled = true; c.direct_expiry.interval = Duration::from_millis(100);
+		c.direct_expiry.grace_blocks = 0; c.direct_expiry.max_groups_per_tick = 1;
+	}).create().await;
+	// Verify the actual standalone process inherited no stack override. Match
+	// only this fixture's exact config path; never inspect another server's env.
+	let config_path = srv.config().data_dir.join("config.toml");
+	let mut daemon_pid = None;
+	for entry in std::fs::read_dir("/proc").unwrap().filter_map(Result::ok) {
+		let Some(pid) = entry.file_name().to_str().and_then(|s| s.parse::<u32>().ok()) else { continue; };
+		let Ok(command) = std::fs::read(entry.path().join("cmdline")) else { continue; };
+		let args = command.split(|b| *b == 0).collect::<Vec<_>>();
+		if args.get(1) != Some(&b"start".as_slice()) || !args.windows(2).any(|a|
+			a[0] == b"--config" && a[1] == config_path.as_os_str().as_encoded_bytes()) { continue; }
+		let env = std::fs::read(entry.path().join("environ")).unwrap();
+		assert!(!env.split(|b| *b == 0).any(|e| e.starts_with(b"RUST_MIN_STACK=")));
+		assert!(daemon_pid.replace(pid).is_none(), "exact fixture config must identify one daemon");
+	}
+	let daemon_pid = daemon_pid.expect("actual captaind process must be identifiable");
+	assert_ne!(daemon_pid, std::process::id());
+	println!("standalone captaind pid={daemon_pid}, RUST_MIN_STACK absent; normal Tokio production runtime");
+	let registered = ctx.bark_sdk("registered", &srv).cfg(|c| c.daemon_manual_sync = true).boarded(sat(21_000)).create().await;
+	registered.stop_daemon_wait().await.unwrap();
+	let registered_coin = registered.get_full_vtxo(registered.spendable_vtxos().await.unwrap()[0].id()).await.unwrap();
+	let registered_fallback = registered.fallback_destination().await.unwrap().spk;
+	let pending = ctx.bark_sdk("pending", &srv).cfg(|c| c.daemon_manual_sync = true).funded(btc(1)).create().await;
+	pending.stop_daemon_wait().await.unwrap();
+	let board = pending.board_amount(sat(31_000)).await.unwrap();
+	ctx.await_transaction(board.funding_tx.compute_txid()).await;
+	let pending_coin = pending.get_full_vtxo(board.vtxos[0]).await.unwrap();
+	let pending_fallback = pending.fallback_destination().await.unwrap().spk;
+	assert_ne!(registered_fallback, pending_fallback);
+	drop(registered); drop(pending); // The pending user never registers its Board.
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert!(allocation(&db, registered_coin.id()).await.is_none());
+	assert!(allocation(&db, pending_coin.id()).await.is_none());
+	let height = ctx.bitcoind().sync_client().get_block_count().unwrap() as u32;
+	let expiry = registered_coin.expiry_height().to_u32().max(pending_coin.expiry_height().to_u32());
+	ctx.generate_blocks(expiry.saturating_sub(height) + 3).await;
+	let mut groups = Vec::<String>::new();
+	for (coin, source, script, gross) in [
+		(&registered_coin, "registered", registered_fallback, 20_000),
+		(&pending_coin, "pending-board", pending_fallback, 30_000),
+	] {
+		let row = await_allocation(&db, coin.id()).await;
+		assert_eq!(row.get::<_, &str>("source"), source);
+		assert_eq!(row.get::<_, &str>("disposition"), "pay");
+		assert_eq!(row.get::<_, Vec<u8>>("spk"), script.as_bytes());
+		assert_eq!(row.get::<_, i64>("gross_sat"), gross);
+		assert_eq!(row.get::<_, i64>("fee_sat"), 1_000);
+		assert_eq!(row.get::<_, i64>("payout_sat"), gross - 1_000);
+		groups.push(row.get("freeze_set"));
+	}
+	assert_ne!(groups[0], groups[1]);
+	tokio::time::sleep(Duration::from_millis(500)).await;
+	for (coin, group) in [(&registered_coin, &groups[0]), (&pending_coin, &groups[1])] {
+		assert_eq!(allocation(&db, coin.id()).await.unwrap().get::<_, String>("freeze_set"), *group);
+	}
+	let totals = db.read(async |t| Ok(t.query_one("SELECT count(*)::bigint, sum(gross_sat)::bigint, sum(payout_sat)::bigint FROM expiry_allocation", &[]).await?)).await.unwrap();
+	assert_eq!(totals.get::<_, i64>(0), 4, "exact two customer leaves plus actual transition fee anchors");
+	assert_eq!(totals.get::<_, i64>(1), 52_000, "complete physical backing is accounted");
+	assert_eq!(totals.get::<_, i64>(2), 48_000, "only genuine customer gross minus two1k fees is pending payout");
+	assert_eq!(db.read(async |t| Ok(t.query_one("SELECT count(*)::bigint FROM expiry_carrier", &[]).await?.get::<_, i64>(0))).await.unwrap(), 0);
+	srv.get_public_rpc().await.get_ark_info(protos::Empty {}).await.unwrap();
+	nix::sys::signal::kill(nix::unistd::Pid::from_raw(daemon_pid as i32), nix::sys::signal::Signal::SIGTERM).unwrap();
+	let exit = tokio::time::timeout(Duration::from_secs(30), srv.wait_exit()).await.unwrap().unwrap();
+	assert!(exit.success(), "default-stack standalone captaind must remain alive and shut down cleanly: {exit}");
+}

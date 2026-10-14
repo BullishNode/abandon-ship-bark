@@ -48,7 +48,8 @@ pub async fn backing_spends(
 	ensure!(!points.is_empty() && points.len() <= 1_000, "backing spend lookup must contain 1..=1000 outpoints");
 	require_spender_index(client).await?;
 	let rows: Vec<SpendRow> = client.call_raw("gettxspendingprevout", &[
-		serde_json::to_value(points)?,
+		serde_json::Value::Array(points.iter().map(|point|
+			serde_json::json!({ "txid": point.txid, "vout": point.vout })).collect()),
 		serde_json::json!({ "mempool_only": false, "return_spending_tx": true }),
 	]).await?;
 	ensure!(rows.len() == points.len(), "Core backing spend response count differs");

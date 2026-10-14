@@ -284,8 +284,16 @@ impl Wallet {
 			vtxo_id: id.to_bytes().to_vec(),
 		}).await.with_context(|| format!("error fetching vtxo {id} from server"))?.into_inner();
 
-		Vtxo::<Full>::deserialize(&resp.vtxo)
-			.with_context(|| format!("server returned an undecodable vtxo for {id}"))
+		let vtxo = Vtxo::<Full>::deserialize(&resp.vtxo)
+			.with_context(|| format!("server returned an undecodable vtxo for {id}"))?;
+		ensure!(vtxo.id() == id, "server returned another vtxo for recovery");
+		if let Some(index) = resp.child_index {
+			let origin = ark::fallback::AccountChild::new(self.mailbox_keypair().public_key(), index)?;
+			let account = bitcoin::bip32::Xpub::from_priv(&crate::SECP, &self.inner.seed.vtxo);
+			origin.verify_pubkey(&account, vtxo.user_pubkey()).context("untrusted recovery child does not match this seed")?;
+			self.inner.db.store_vtxo_key(index, vtxo.user_pubkey()).await?;
+		}
+		Ok(vtxo)
 	}
 
 	/// Fetch the full [`Vtxo<Full>`] of every id in `ids` from the server, in
@@ -421,6 +429,20 @@ impl Wallet {
 				None => report.push_failed(id, None),
 			}
 		}
+
+		// A full-body or batched delivery need not carry its public hint.
+		// Preserve the authenticated individual lookup before the batch gap scan.
+		let mut hinted = Vec::with_capacity(vtxos.len());
+		for vtxo in vtxos {
+			if self.inner.db.get_public_key_idx(&vtxo.user_pubkey()).await?.is_none()
+				&& let Err(error) = self.fetch_vtxo(vtxo.id()).await {
+				warn!("Could not verify sparse recovery hint for {}: {error:#}", vtxo.id());
+				report.push_failed(vtxo.id(), Some(vtxo.amount()));
+				continue;
+			}
+			hinted.push(vtxo);
+		}
+		let vtxos = hinted;
 
 		// One key scan for the whole batch. [`Wallet::find_vtxo_keypairs`] widens
 		// its window on every match, so later keys of the batch are found however

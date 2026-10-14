@@ -186,6 +186,7 @@ fn empty_round_state() -> RoundState {
 	RoundState {
 		done: false,
 		participation: RoundParticipation {
+			output_origins: Default::default(),
 			inputs: vec![],
 			outputs: vec![],
 			unblinded_mailbox_id: None,

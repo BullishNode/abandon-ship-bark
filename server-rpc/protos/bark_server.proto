@@ -195,6 +195,7 @@ message GetVtxoRequest {
 
 message GetVtxoResponse {
 	bytes vtxo = 1;
+	optional uint32 child_index = 2; // public sparse-recovery hint; client verifies full policy key
 }
 
 message GetVtxosByIdsRequest {
@@ -300,6 +301,11 @@ message RecoverVtxosByXpubResponse {
 
 // boarding
 
+message AccountChildHint {
+	bytes blinded_mailbox_id = 1; // existing compressed ServerMailbox point
+	uint32 child_index = 2; // ordinary, never hardened; exact account child is verified
+}
+
 message BoardCosignRequest {
 	uint64 amount = 1;
 	bytes utxo = 2;
@@ -307,6 +313,7 @@ message BoardCosignRequest {
 	bytes user_pubkey = 4;
 	bytes pub_nonce = 5;
 	bytes funding_tx = 6;
+	AccountChildHint origin = 7;
 }
 
 message BoardCosignResponse {
@@ -329,11 +336,13 @@ message RegisterVtxoTransactionsRequest {
 message VtxoRequest {
 	uint64 amount = 1;
 	bytes policy = 2;
+	AccountChildHint origin = 3;
 }
 
 message ArkoorDestination {
 	uint64 total_amount = 1;
 	bytes policy = 2;
+	AccountChildHint origin = 3;
 }
 
 message ArkoorCosignRequest {
@@ -424,6 +433,7 @@ message CheckLightningReceiveRequest {
 }
 
 message PrepareLightningReceiveClaimRequest {
+	AccountChildHint origin = 6;
 	bytes payment_hash = 1;
 	bytes user_pubkey = 2;
 	uint32 htlc_recv_expiry = 3;

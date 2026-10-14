@@ -49,13 +49,26 @@ impl Tx<'_> {
 		})) }).transpose()?.context("fallback record disappeared during registration")
 	}
 
-	/// Verify one ordinary child against its immutable account, then retain the
-	/// exact key attribution in the same transaction that admits the new coin.
-	pub(crate) async fn admit_fallback_child(&self, origin: AccountChild, policy_key: PublicKey) -> anyhow::Result<()> {
+	pub(crate) async fn fallback_origin(&self, policy_key: PublicKey) -> anyhow::Result<Option<AccountChild>> {
+		let row = self.query_opt("SELECT mailbox_pk, child_index FROM key_link WHERE user_pubkey=$1",
+			&[&policy_key.serialize().to_vec()]).await?;
+		row.map(|row| Ok(AccountChild::new(PublicKey::from_slice(&row.get::<_, Vec<u8>>("mailbox_pk"))?,
+			u32::try_from(row.get::<_, i32>("child_index"))?)?)).transpose()
+	}
+
+	/// A cheap read-only preflight, also repeated inside the decisive write.
+	pub(crate) async fn verify_fallback_child(&self, origin: AccountChild, policy_key: PublicKey) -> anyhow::Result<()> {
 		let mailbox = origin.mailbox_pk().serialize().to_vec();
 		let row = self.query_opt("SELECT account_xpub FROM fallback_record WHERE mailbox_pk=$1", &[&mailbox]).await?
 			.context("missing immutable fallback account record")?;
 		origin.verify_pubkey(&Xpub::decode(&row.get::<_, Vec<u8>>("account_xpub"))?, policy_key)?;
+		Ok(())
+	}
+
+	/// Retain exact key attribution in the same transaction as coin admission.
+	pub(crate) async fn admit_fallback_child(&self, origin: AccountChild, policy_key: PublicKey) -> anyhow::Result<()> {
+		self.verify_fallback_child(origin, policy_key).await?;
+		let mailbox = origin.mailbox_pk().serialize().to_vec();
 		let index = i32::try_from(origin.child_index())?;
 		let key = policy_key.serialize().to_vec();
 		self.execute("INSERT INTO key_link (user_pubkey, mailbox_pk, child_index) VALUES ($1,$2,$3)

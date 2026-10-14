@@ -212,6 +212,9 @@ impl Wallet {
 		}
 
 		check_delivery(address.delivery())?;
+		if address.account_child().map_err(|e| ArkoorAddressError::Other(e.to_string()))?.is_none() {
+			return Err(ArkoorAddressError::Other("recipient address has no account child origin".into()));
+		}
 
 		Ok(())
 	}
@@ -229,6 +232,7 @@ impl Wallet {
 		inputs: impl IntoIterator<Item = WalletVtxo>,
 		change_keypair: Keypair,
 		change_pieces: Option<Vec<Amount>>,
+		destination_origin: Option<ark::fallback::AccountChildHint>,
 	) -> Result<ArkoorCreateResult, ArkoorCreateError> {
 		let (mut srv, _) = self.require_server().await?;
 		let input_ids = inputs.into_iter().map(|v| v.id()).collect::<Vec<_>>();
@@ -278,9 +282,11 @@ impl Wallet {
 			.generate_user_nonces(&user_keypairs)
 			.context("invalid nb of keypairs")?;
 
-		let cosign_request = protos::ArkoorPackageCosignRequest::from(
+		let mut cosign_request = protos::ArkoorPackageCosignRequest::from(
 			builder.cosign_request(),
 		);
+
+		self.attach_arkoor_origins(&mut cosign_request, destination_origin.map(|hint| (arkoor_dest.policy.user_pubkey(), hint))).await?;
 
 		let response = srv.client.request_arkoor_cosign(cosign_request).await
 			.map_err(ArkoorCreateError::Cosign)?

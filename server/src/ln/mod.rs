@@ -629,6 +629,35 @@ impl Server {
 		htlc_expiry: BlockHeight,
 		unavailable_nodes: &mut BTreeSet<LightningNodeId>,
 	) -> anyhow::Result<SendRefundEvidence> {
+		let outgoing = self.lightning_send_outgoing_evidence(payment_hash, htlc_expiry, unavailable_nodes).await?;
+		if !matches!(outgoing, SendRefundEvidence::Refundable) { return Ok(outgoing); }
+		let attempts = self.db.read(async |t| t.get_payment_attempts_by_payment_hash(payment_hash).await).await?;
+		let open = attempts.iter().any(|a| !a.status.is_final());
+		let receive = self.db.read(async |t|
+			t.get_htlc_subscription_by_payment_hash(payment_hash).await
+		).await?;
+		match receive {
+			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady => {
+				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
+					return Ok(SendRefundEvidence::Unresolved(reason));
+				}
+			},
+			_ if open => return Ok(SendRefundEvidence::Unresolved("the payment attempt is not concluded".into())),
+			_ => {},
+		}
+		Ok(SendRefundEvidence::Refundable)
+	}
+
+	/// Outgoing payment evidence only, observed under the payment guard.
+	/// Refundable is conditional: a direct carrier must cancel the receive and
+	/// retire its complete grant set under the decisive settlement fence.
+	/// The legacy wrapper above separately requires its rounds-wallet path.
+	pub(crate) async fn lightning_send_outgoing_evidence(
+		&self,
+		payment_hash: PaymentHash,
+		htlc_expiry: BlockHeight,
+		unavailable_nodes: &mut BTreeSet<LightningNodeId>,
+	) -> anyhow::Result<SendRefundEvidence> {
 		if self.htlc_settler.is_settled(payment_hash).await?.is_some() {
 			return Ok(SendRefundEvidence::Paid("invoice has already been paid".into()));
 		}
@@ -641,7 +670,6 @@ impl Server {
 		) {
 			return Ok(evidence);
 		}
-		let open = attempts.iter().any(|a| !a.status.is_final());
 		// Intra-Ark payments make no node payment; the commit arbitrates their receive.
 		let nodes = attempts.iter().filter(|a| a.lightning_htlc_subscription_id.is_none())
 			.map(|a| a.lightning_node_id).collect::<BTreeSet<_>>();
@@ -654,7 +682,19 @@ impl Server {
 					return Ok(SendRefundEvidence::Paid("This lightning payment has completed".into())),
 				Ok(NodePaymentStatus::Pending) =>
 					return Ok(SendRefundEvidence::Unresolved("the payment is still in flight".into())),
-				Ok(NodePaymentStatus::Failed | NodePaymentStatus::Unknown) => {},
+				Ok(NodePaymentStatus::Failed) => {},
+				Ok(NodePaymentStatus::Unknown) => {
+					// Absence is not failure. Every actual external attempt on this
+					// node must have durable final failure and the existing fence
+					// proving no delayed request can still start or finish.
+					let fenced = attempts.iter().filter(|a| a.lightning_htlc_subscription_id.is_none()
+						&& a.lightning_node_id == node).all(|a| a.status == LightningPaymentStatus::Failed
+						&& cln::xpay::attempt_dispatch_is_fenced(a,
+							a.retry_for.unwrap_or(self.config.cln_xpay_timeout), chrono::Local::now()));
+					if !fenced {
+						return Ok(SendRefundEvidence::Unresolved("node has no payment record and late dispatch is not conclusively fenced".into()));
+					}
+				},
 				Err(e) => {
 					unavailable_nodes.insert(node);
 					return Ok(SendRefundEvidence::Unresolved(format!("{e:#}")));
@@ -663,18 +703,6 @@ impl Server {
 		}
 		if attempts.iter().any(|a| !a.status.is_final() && !a.is_self_payment()) {
 			return Ok(SendRefundEvidence::Unresolved("the payment attempt is not concluded".into()));
-		}
-		let receive = self.db.read(async |t|
-			t.get_htlc_subscription_by_payment_hash(payment_hash).await
-		).await?;
-		match receive {
-			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady => {
-				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
-					return Ok(SendRefundEvidence::Unresolved(reason));
-				}
-			},
-			_ if open => return Ok(SendRefundEvidence::Unresolved("the payment attempt is not concluded".into())),
-			_ => {},
 		}
 		Ok(SendRefundEvidence::Refundable)
 	}

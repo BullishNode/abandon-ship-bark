@@ -469,7 +469,7 @@ impl Server {
 
 	/// Read-only per-pass observations under the existing payment guards.
 	/// The guards are released before return; freeze must reacquire and re-read.
-	pub(crate) async fn observe_expiry_send_evidence(
+	pub async fn observe_expiry_send_evidence(
 		&self, snapshot: &BackingSnapshot, covered: &[VtxoId], unavailable_nodes: &mut BTreeSet<LightningNodeId>,
 	) -> anyhow::Result<BTreeMap<PaymentHash, SendRefundEvidence>> {
 		let ids = covered.iter().copied().collect::<BTreeSet<_>>();
@@ -483,19 +483,10 @@ impl Server {
 			let Some(_guard) = self.payment_guards.lock(hash).now_or_never() else {
 				evidence.insert(hash, SendRefundEvidence::Unresolved("payment is in progress".into())); continue;
 			};
-			let attempts = self.db.read(async |t| t.get_payment_attempts_by_payment_hash(hash).await).await?;
-			let pure_intra = !attempts.is_empty() && attempts.iter().all(|a| a.is_self_payment());
-			let observed = if pure_intra {
-				if self.htlc_settler.is_settled(hash).await?.is_some() || attempts.iter().any(|a| a.status == LightningPaymentStatus::Succeeded) {
-					SendRefundEvidence::Paid("intra-Ark payment completed".into())
-				} else if self.chain_tip().height <= expiry {
-					SendRefundEvidence::Unresolved("sender HTLC deadline has not passed".into())
-				} else {
-					// Cooperative cancellation and every physical grant retirement
-				// are still mandatory; this observes only the outgoing-payment fact.
-					SendRefundEvidence::Refundable
-				}
-			} else { self.lightning_send_refund_evidence(hash, expiry, unavailable_nodes).await? };
+			// This supplies only the outgoing fact. The source proposal attaches
+			// all granted receive IDs; freeze must cancel and retire their complete
+			// closure in this carrier or require confirmed retirement beforehand.
+			let observed = self.lightning_send_outgoing_evidence(hash, expiry, unavailable_nodes).await?;
 			evidence.insert(hash, observed);
 		}
 		Ok(evidence)

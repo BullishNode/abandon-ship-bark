@@ -20,6 +20,7 @@ use crate::bitcoind as bcd;
 use crate::database::carrier_snapshot::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits};
 use crate::database::expiry_freeze::FrozenExpiryPlan;
 use crate::database::expiry_ownership::OwnershipContext;
+use crate::database::ln::{LightningHtlcSubscriptionStatus, LightningPaymentStatus};
 use crate::ln::SendRefundEvidence;
 use crate::watchman::WatchmanSigner;
 use crate::Server;
@@ -108,10 +109,56 @@ impl Server {
 				ensure!(self.chain_tip() == tip, "expiry outgoing observation awaits the actual node tip");
 				let observed = self.lightning_send_outgoing_evidence(hash, expiry, &mut unavailable).await?;
 				if matches!(observed, SendRefundEvidence::Refundable) {
-					// Even Created/Accepted without grants needs decisive cancellation;
-					// the absence of grants alone cannot fence a later claim preparation.
-					ensure!(t.get_htlc_subscription_by_payment_hash(hash).await?.is_none(),
-						"expiry refund requires receive cancellation and complete grant retirement qualification");
+					// Cancellation and allocation share this COMMIT. A backing or
+					// ownership refusal rolls both back; no grant can be prepared
+					// while the already-held payment guard fences this decision.
+					if let Some(row) = t.query_opt("SELECT id FROM lightning_htlc_subscription WHERE payment_hash=$1 FOR UPDATE",
+						&[&hash.to_string()]).await? {
+						let granted: bool = t.query_one("SELECT EXISTS(SELECT 1 FROM vtxo WHERE lightning_htlc_subscription_id=$1)",
+							&[&row.get::<_, i64>("id")]).await?.get(0);
+						ensure!(!granted, "expiry refund requires receive cancellation and complete grant retirement qualification");
+					}
+					if let Some(sub) = t.get_htlc_subscription_by_payment_hash(hash).await? {
+						let attempts = t.get_payment_attempts_by_payment_hash(hash).await?;
+						ensure!(!attempts.is_empty() && attempts.iter().all(|a| a.lightning_htlc_subscription_id == Some(sub.id)),
+							"expiry zero-grant cancellation requires a complete pure intra-Ark association");
+						ensure!(sub.htlc_vtxos.is_empty() && matches!(sub.status,
+							LightningHtlcSubscriptionStatus::Accepted | LightningHtlcSubscriptionStatus::Canceled),
+							"expiry refund requires receive cancellation and complete grant retirement qualification");
+						t.ensure_not_settled(hash).await?;
+						// Partial intra-Ark setup can leave the incoming hold alive.
+						// Only the actual node cancellation fences its later settlement;
+						// the intra association or absence of grants does not prove it.
+						ensure!(!unavailable.contains(&sub.lightning_node_id), "expiry incoming hold node is unavailable");
+						let incoming = tokio::time::timeout(std::time::Duration::from_secs(10),
+							self.lightning_manager.hold_invoice_state(sub.lightning_node_id, hash)).await;
+						match incoming {
+							Ok(Ok(Some(cln_rpc::plugins::hold::InvoiceState::Cancelled))) => {},
+							Ok(Ok(state)) => bail!("expiry incoming hold cancellation is not authoritative: {state:?}"),
+							Ok(Err(error)) => {
+								unavailable.insert(sub.lightning_node_id);
+								return Err(error.context("expiry incoming hold node is unavailable"));
+							},
+							Err(error) => {
+								unavailable.insert(sub.lightning_node_id);
+								return Err(anyhow::Error::new(error).context("expiry incoming hold node did not answer"));
+							},
+						}
+						if sub.status == LightningHtlcSubscriptionStatus::Accepted {
+							// Reuse the upstream setup timeout, with its actual accepted
+							// timestamp. Also require the actual incoming claim deadline
+							// to have passed. Neither clock determines an external verdict.
+							ensure!(sub.accepted_at.is_some_and(|at| at < chrono::Local::now() - self.config.receive_htlc_forward_timeout)
+								&& sub.lowest_incoming_htlc_expiry.is_some_and(|height| tip.height > height),
+								"expiry intra-Ark receive setup timeout or claim deadline has not passed");
+							ensure!(t.cancel_revocable_htlc_subscription(hash, tip.height).await?
+								== Some(LightningHtlcSubscriptionStatus::Canceled), "expiry receive cancellation lost its source predicate");
+							for attempt in attempts.iter().filter(|a| !a.status.is_final()) {
+								ensure!(t.update_lightning_payment_attempt_status(attempt, LightningPaymentStatus::Failed,
+									Some("htlc vtxo setup timed out")).await?.is_some(), "expiry intra-Ark cancellation lost its attempt predicate");
+							}
+						}
+					}
 				}
 				sends.insert(hash, observed);
 			}
@@ -158,6 +205,9 @@ impl Server {
 				max_dependencies: budget.max_rows, server_pubkey: self.server_pubkey, funding: &funding, canceled_receives: &canceled };
 			t.freeze_expiry_sources(&roots, &terminals, &residuals, &context, &sends, self.config.network, budget).await
 		}).await;
+		if result.is_ok() {
+			for hash in &hashes { self.lightning_manager.notify_payment_update(*hash); }
+		}
 		drop(payment_guards); // The flux guard also outlives the database COMMIT.
 		result
 	}

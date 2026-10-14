@@ -1,9 +1,22 @@
-use ark::{ProtocolEncoding, Vtxo};
+use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use bitcoin::Txid;
 
 use super::Tx;
 
 impl Tx<'_> {
+	/// Retain the genuine cosigned user proof without registering consumed
+	/// backing. A registered ordinary row always supplies its own spend state.
+	pub(crate) async fn pending_board_status_vtxo(&self, id: VtxoId) -> anyhow::Result<Option<Vtxo>> {
+		let Some(row) = self.query_opt("SELECT p.id,p.vtxo,p.expiry FROM pending_board p
+			WHERE p.vtxo_id=$1 AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id=p.vtxo_id)",
+			&[&id.to_string()]).await? else { return Ok(None); };
+		let vtxo = Vtxo::deserialize(row.get::<_, &[u8]>("vtxo"))?;
+		ensure!(vtxo.id() == id && vtxo.chain_anchor().to_string() == row.get::<_, &str>("id") &&
+			vtxo.expiry_height().to_u32() == u32::try_from(row.get::<_, i32>("expiry"))?,
+			"pending Board status facts disagree with retained proof");
+		Ok(Some(vtxo))
+	}
+
 	/// A cosign retry may refer to a funding transaction we already track.
 	pub(crate) async fn is_pending_board_funding(&self, txid: Txid) -> anyhow::Result<bool> {
 		Ok(self.query_one("SELECT EXISTS (SELECT 1 FROM pending_board p

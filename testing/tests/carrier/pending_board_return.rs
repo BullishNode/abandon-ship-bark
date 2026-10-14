@@ -28,6 +28,24 @@ async fn original_pending_board_returns_after_automatic_confirmed_payout() {
 	Box::pin(confirm_and_return(case)).await;
 }
 
+#[tokio::test]
+async fn retained_pending_proof_preserves_registered_board_status() {
+	let fixture = automatic_board_fixture("retained_pending_proof_preserves_registered_board_status").await;
+	let owner = fixture.ctx.bark_sdk("absent", &fixture.srv).mnemonic(fixture.mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	owner.stop_daemon_wait().await.unwrap();
+	let db = Db::connect(&fixture.srv.config().postgres).await.unwrap();
+	assert_eq!(db.read(async |t| Ok(t.query_one("SELECT count(*) FROM pending_board WHERE vtxo_id=$1",
+		&[&fixture.coin.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 1);
+	let (_, key) = owner.pubkey_keypair(&fixture.coin.user_pubkey()).await.unwrap().unwrap();
+	let state = fixture.srv.get_public_rpc().await.get_vtxo_status(protos::GetVtxoStatusRequest {
+		vtxo_id: fixture.coin.id().to_bytes().to_vec(),
+		attestation: VtxoStatusAttestation::new(fixture.coin.id(), &key).serialize(),
+	}).await.unwrap().into_inner();
+	assert_eq!(state.spend_state, protos::VtxoSpendState::Spendable as i32,
+		"retained pending proof must not override the registered ordinary row");
+}
+
 async fn pending_case() -> PendingCase {
 	let ctx = TestContext::new("pending-board-return/original_pending_board_returns_after_automatic_confirmed_payout").await;
 	// Both actual daemons declare Direct on their first startup. Long setup
@@ -63,10 +81,11 @@ async fn pending_case() -> PendingCase {
 	assert_eq!(original.balance().await.unwrap().pending_board, coin.amount());
 	assert_eq!(original.get_vtxo_by_id(coin.id()).await.unwrap().state.kind(), VtxoStateKind::Locked);
 	let record = original.fallback_destination().await.unwrap();
-	let (_, key) = original.pubkey_keypair(&coin.user_pubkey()).await.unwrap().unwrap();
-	let status = protos::GetVtxoStatusRequest { vtxo_id: coin.id().to_bytes().to_vec(),
-		attestation: VtxoStatusAttestation::new(coin.id(), &key).serialize() };
-	drop(key);
+	let status = {
+		let (_, key) = original.pubkey_keypair(&coin.user_pubkey()).await.unwrap().unwrap();
+		protos::GetVtxoStatusRequest { vtxo_id: coin.id().to_bytes().to_vec(),
+			attestation: VtxoStatusAttestation::new(coin.id(), &key).serialize() }
+	};
 	original.sync_onchain().await.unwrap();
 	let onchain_before = original.onchain().unwrap().read().await.balance().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
@@ -87,8 +106,9 @@ async fn assert_pending_only(db: &Db, coin: &ark::Vtxo) {
 }
 
 async fn assert_not_spent(srv: &ark_testing::Captaind, req: &protos::GetVtxoStatusRequest) {
-	let result = srv.get_public_rpc().await.get_vtxo_status(req.clone()).await;
-	assert!(!matches!(result, Ok(ref r) if r.get_ref().spend_state == protos::VtxoSpendState::Spent as i32),
+	let status = srv.get_public_rpc().await.get_vtxo_status(req.clone()).await
+		.expect("the retained genuine Board proof must authenticate before retirement").into_inner();
+	assert_eq!(status.spend_state, protos::VtxoSpendState::Unregistered as i32,
 		"a pending, frozen or merely broadcast Board is not confirmed retirement");
 }
 
@@ -186,6 +206,10 @@ async fn confirm_and_return(case: PendingCase) {
 	}).await.expect_err("confirmed mapping must still authenticate the pending Board owner");
 	assert_eq!(err.code(), tonic::Code::InvalidArgument);
 	assert!(err.message().contains("invalid VTXO status attestation"));
+	let unknown = ark::VtxoId::from(OutPoint::null());
+	assert_eq!(srv.get_public_rpc().await.get_vtxo_status(protos::GetVtxoStatusRequest {
+		vtxo_id: unknown.to_bytes().to_vec(), attestation: VtxoStatusAttestation::new(unknown, &foreign).serialize(),
+	}).await.unwrap_err().code(), tonic::Code::NotFound);
 	assert_pending_only(&db, &coin).await;
 	cap_child.kill().await.unwrap(); cap_child.wait().await.unwrap();
 	watch_child.kill().await.unwrap(); watch_child.wait().await.unwrap();

@@ -111,6 +111,14 @@ pub async fn generate_invoice_for_address(
 	if body.description.is_some() && body.description_hash.is_some() {
 		badarg!("description and description_hash are mutually exclusive");
 	}
+	let description_hash = match state.noah_lnurl() {
+		Some(mode) => {
+			if body.description_hash.is_some() { badarg!("Noah LNURL mode requires the original description"); }
+			let label = body.description.as_deref().badarg("Noah LNURL description is required")?;
+			Some(mode.description_hash(label).badarg("invalid Noah LNURL description")?)
+		},
+		None => body.description_hash,
+	};
 	let wallet = state.require_wallet()?;
 
 	let amount = Amount::from_sat(body.amount_sat);
@@ -118,7 +126,7 @@ pub async fn generate_invoice_for_address(
 		.badarg("address is not a valid Ark address")?;
 	wallet.validate_arkoor_address(&address).await
 		.badarg("invalid arkoor address")?;
-	let invoice = if let Some(hash) = body.description_hash {
+	let invoice = if let Some(hash) = description_hash {
 		wallet.bolt11_invoice_for_address_with_description_hash(amount, address, hash, None).await
 	} else {
 		wallet.bolt11_invoice_for_address(amount, address, body.description, None).await

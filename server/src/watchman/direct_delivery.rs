@@ -63,9 +63,16 @@ impl DirectDelivery {
 
 	pub fn reserved_fee_inputs(&self) -> &[bitcoin::OutPoint] { self.fee_reservation.utxos() }
 
+	async fn check_generation_frontier(&self) -> anyhow::Result<()> {
+		ensure!(self.db.direct_delivery_generation(&self.freeze_set).await? == self.versions.iter().map(|v| v.generation).max(),
+			"direct delivery generation frontier changed; recover the complete group before submission; reservations retained");
+		Ok(())
+	}
+
 	/// One bounded observation/submission pass. A timeout/error retains guards;
 	/// reconcile these same bytes on the next call rather than creating payment.
 	pub async fn observe_and_submit(&self, node: &Client) -> anyhow::Result<DeliveryState> {
+		self.check_generation_frontier().await?;
 		let mut confirmed = Vec::new();
 		let mut pending = BTreeSet::new();
 		for version in &self.versions {
@@ -96,6 +103,7 @@ impl DirectDelivery {
 		// An older version still in the mempool is not recovery of a newer durable
 		// replacement that crashed before submission. Core decides replacement
 		// admission; no customer output or fee input is reconstructed here.
+		self.check_generation_frontier().await?;
 		bcd::broadcast_tx(node, &latest.tx).await.with_context(||
 			format!("exact durable carrier {txid} submission failed; observed older pending versions: {pending:?}; reservations retained"))?;
 		match bcd::tx_status(node, txid).await? {

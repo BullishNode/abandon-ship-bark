@@ -9,7 +9,7 @@ use tokio::process::Command;
 use bitcoind_async_client::traits::Reader;
 use server::watchman::direct_delivery::{DirectDelivery, DeliveryState};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct CommitRecipe {
 	config_path: PathBuf,
 	backing: Vec<Vec<u8>>,
@@ -90,6 +90,25 @@ struct CrashCase {
 	board_funding_txid: bitcoin::Txid,
 }
 
+async fn run_commit_worker(recipe: &CommitRecipe, recipe_path: PathBuf) -> Vec<bitcoin::Txid> {
+	let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&recipe_path).unwrap();
+	file.write_all(&serde_json::to_vec(recipe).unwrap()).unwrap();
+	file.sync_all().unwrap();
+	let mut worker = Command::new(std::env::current_exe().unwrap())
+		.args(["--ignored", "--exact", "direct_delivery::direct_delivery_commit_worker", "--nocapture"])
+		.env("DIRECT_DELIVERY_COMMIT_RECIPE", &recipe_path).kill_on_drop(true).spawn().unwrap();
+	tokio::time::timeout(Duration::from_secs(30), async {
+		while !recipe.committed_marker.exists() {
+			assert!(worker.try_wait().unwrap().is_none(), "writer exited before durable commit");
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("durable handoff marker must precede injected crash");
+	worker.kill().await.unwrap();
+	let exit = worker.wait().await.unwrap();
+	assert_eq!(std::os::unix::process::ExitStatusExt::signal(&exit), Some(9));
+	serde_json::from_slice(&std::fs::read(&recipe.committed_marker).unwrap()).unwrap()
+}
+
 async fn crash_case(name: &str, fee_rates: Vec<u64>) -> CrashCase {
 	let AutomaticBoardFixture { ctx, srv, coin, record, mnemonic } =
 		automatic_board_fixture_with_fee(name, sat(1_000)).await;
@@ -129,23 +148,7 @@ async fn crash_case(name: &str, fee_rates: Vec<u64>) -> CrashCase {
 		backing: roots.iter().map(ProtocolEncoding::serialize).collect(), allocation_ids: freeze.allocation_ids,
 		freeze_set: freeze.id, recipients: freeze.recipients, operator_script: ctx.bitcoind().get_new_address().script_pubkey(),
 		committed_marker: ctx.datadir.join("committed-before-broadcast"), fee_rates };
-	let recipe_path = ctx.datadir.join("commit-recipe.json");
-	let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&recipe_path).unwrap();
-	file.write_all(&serde_json::to_vec(&recipe).unwrap()).unwrap();
-	file.sync_all().unwrap();
-	let mut worker = Command::new(std::env::current_exe().unwrap())
-		.args(["--ignored", "--exact", "direct_delivery::direct_delivery_commit_worker", "--nocapture"])
-		.env("DIRECT_DELIVERY_COMMIT_RECIPE", &recipe_path).kill_on_drop(true).spawn().unwrap();
-	tokio::time::timeout(Duration::from_secs(30), async {
-		while !recipe.committed_marker.exists() {
-			assert!(worker.try_wait().unwrap().is_none(), "writer exited before durable commit");
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-	}).await.expect("durable handoff marker must precede injected crash");
-	worker.kill().await.unwrap();
-	let exit = worker.wait().await.unwrap();
-	assert_eq!(std::os::unix::process::ExitStatusExt::signal(&exit), Some(9));
-	let txids: Vec<bitcoin::Txid> = serde_json::from_slice(&std::fs::read(&recipe.committed_marker).unwrap()).unwrap();
+	let txids = run_commit_worker(&recipe, ctx.datadir.join("commit-recipe.json")).await;
 	let restarted = PersistedWallet::load_derive_from_master_xpriv(db.clone(), ctx.bitcoind().async_client(),
 		Network::Regtest, &master, WalletKind::Watchman, tip, 3).await.unwrap();
 	let mut versions = Vec::new();
@@ -270,6 +273,43 @@ async fn direct_delivery_generation_migration_refuses_preexisting_journal() {
 	let rows = case.db.read(async |t| Ok(t.query_one("SELECT count(*)::bigint AS rows FROM expiry_carrier", &[]).await?.get::<_, i64>("rows"))).await.unwrap();
 	assert_eq!(rows, 1, "refusal must preserve the signed historical handoff");
 	assert!(case.ctx.bitcoind().sync_client().get_raw_mempool().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn direct_delivery_stale_snapshot_refuses_before_any_submission_then_recovers_new_generation() {
+	let mut case = crash_case("direct_delivery_stale_snapshot_refuses_before_any_submission_then_recovers_new_generation", vec![30]).await;
+	let delivery = recovered(&case).await;
+	let core = case.ctx.bitcoind().sync_client();
+	let reserve = case.wallet.next_unused_address(KEYCHAIN).address;
+	case.ctx.bitcoind().fund_addr(reserve, sat(900_000)).await;
+	case.ctx.generate_blocks(3).await;
+	sync_fee_wallet(&mut case.wallet, &core);
+	case.wallet.persist().await.unwrap();
+	// There remains one signer/writer. The old delivery object is a reader of
+	// the earlier durable generation and holds its recovered fee reservation.
+	let mut newer_recipe = case.recipe.clone();
+	newer_recipe.fee_rates = vec![40];
+	newer_recipe.committed_marker = case.ctx.datadir.join("newer-committed-before-broadcast");
+	let newer_ids = run_commit_worker(&newer_recipe, case.ctx.datadir.join("newer-commit-recipe.json")).await;
+	assert_eq!(newer_ids.len(), 1);
+	let node = case.ctx.bitcoind().async_client();
+	let error = delivery.observe_and_submit(&node).await.unwrap_err();
+	assert!(error.to_string().contains("generation frontier changed"));
+	assert!(!core.get_raw_mempool().unwrap().iter().any(|id| *id == case.versions[0].compute_txid() || *id == newer_ids[0]),
+		"a stale snapshot must not submit either version");
+	for point in delivery.reserved_fee_inputs() { assert!(case.wallet.lock_wallet_utxo(*point).is_err()); }
+	drop(delivery);
+	let config: server::Config = toml::from_str(&std::fs::read_to_string(&case.recipe.config_path).unwrap()).unwrap();
+	let mnemonic = wallet::read_mnemonic_from_datadir(&config.data_dir).unwrap();
+	let master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
+	let tip = server::bitcoind::get_block_by_height(&node, BlockHeight::new(core.get_block_count().unwrap() as u32)).await.unwrap();
+	case.wallet = PersistedWallet::load_derive_from_master_xpriv(case.db.clone(), node,
+		Network::Regtest, &master, WalletKind::Watchman, tip, 3).await.unwrap();
+	let bytes = case.db.read(async |t| Ok(t.query_one("SELECT signed_tx FROM expiry_carrier WHERE txid=$1", &[&newer_ids[0].to_string()]).await?.get::<_, Vec<u8>>("signed_tx"))).await.unwrap();
+	case.versions.push(bitcoin::consensus::deserialize(&bytes).unwrap());
+	let delivery = recovered(&case).await;
+	assert_eq!(delivery.reserved_fee_inputs().len(), 2);
+	confirm_once(&case, &delivery, &case.versions[1]).await;
 }
 
 #[tokio::test]

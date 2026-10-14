@@ -23,6 +23,12 @@ pub(crate) struct StoredCarrier {
 }
 
 impl Db {
+	pub(crate) async fn direct_delivery_generation(&self, freeze_set: &str) -> anyhow::Result<Option<i64>> {
+		self.read(async |t| Ok(t.query_one("SELECT max(c.generation) AS generation FROM expiry_carrier c
+			JOIN expiry_carrier_allocation m ON m.txid=c.txid JOIN expiry_allocation a ON a.id=m.allocation_id
+			WHERE a.freeze_set=$1", &[&freeze_set]).await?.get("generation"))).await
+	}
+
 	pub(crate) async fn read_direct_delivery(
 		&self, freeze_set: &str, network: Network, limits: BackingSnapshotLimits,
 	) -> anyhow::Result<Vec<StoredCarrier>> {

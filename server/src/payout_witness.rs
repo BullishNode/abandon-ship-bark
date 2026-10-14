@@ -14,13 +14,16 @@ use std::sync::Arc;
 use anyhow::Context;
 use bitcoin::{Network, Transaction, Txid};
 use bitcoin::constants::ChainHash;
-use bitcoin::consensus::serialize;
+use bitcoin::consensus::{deserialize, serialize};
+use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::PublicKey;
 
 use crate::database::{Db, Tx};
 use crate::fs_perms;
+use crate::database::carrier_snapshot::BackingSnapshotLimits;
 
 pub(crate) const DIRECTORY: &str = "expiry-payout-witness";
+const DIRECT_DIRECTORY: &str = "direct-expiry-witness";
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -154,6 +157,100 @@ impl PayoutWitness {
 		let path = self.directory.join(format!("{}.json", tx.compute_txid()));
 		write_new_or_identical(&path, &serde_json::to_vec(&witness)?)?;
 		self.index(tx.compute_txid()).await
+	}
+}
+
+/// Independent, immutable history of direct claims. PostgreSQL-only rollback
+/// must refuse startup when it forgets signed bytes, allocation or attribution.
+/// Restoring this history and PostgreSQL to an older point together is outside
+/// that contract. The daemon owns the datadir exclusively while writing it.
+pub struct DirectPayoutWitness {
+	files: PayoutWitness,
+	network: Network,
+	budget: BackingSnapshotLimits,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct DirectRecord {
+	freeze_set: String,
+	tx: Vec<u8>,
+	allocation_hash: sha256::Hash,
+	carrier_hash: sha256::Hash,
+}
+
+impl DirectPayoutWitness {
+	/// Called only during fresh server creation, before any direct journal rows.
+	pub async fn initialize(datadir: &Path, network: Network, key: PublicKey, db: &Db) -> anyhow::Result<()> {
+		let empty = db.read(async |t| Ok(t.query_one("SELECT NOT EXISTS (SELECT 1 FROM expiry_allocation)
+			AND NOT EXISTS (SELECT 1 FROM expiry_carrier) AS empty", &[]).await?.get::<_, bool>("empty"))).await?;
+		ensure!(empty, "cannot initialize empty direct history over an existing journal");
+		let directory = datadir.join(DIRECT_DIRECTORY);
+		fs::create_dir(&directory).context("creating direct payout history")?;
+		fs_perms::harden(&directory, 0o700)?;
+		write_new_or_identical(&directory.join("identity.json"), &serde_json::to_vec(&identity(network, key))?)?;
+		write_new_or_identical(&directory.join("history"), b"")?;
+		File::open(datadir)?.sync_all()?;
+		Ok(())
+	}
+
+	/// Verification precedes all signing, submission and fee-wallet construction.
+	/// Missing/corrupt history is an error; it is never bootstrapped from the DB.
+	pub async fn load(datadir: &Path, network: Network, key: PublicKey, db: &Db,
+		budget: BackingSnapshotLimits,
+	) -> anyhow::Result<Self> {
+		ensure!(budget.max_rows > 0 && budget.max_serialized_bytes > 0, "empty direct history budget");
+		let directory = datadir.join(DIRECT_DIRECTORY);
+		let stored: Identity = serde_json::from_slice(&fs::read(directory.join("identity.json"))
+			.context("independent direct payout identity missing")?)?;
+		ensure!(stored == identity(network, key), "direct payout history identity differs");
+		let history = fs::read_to_string(directory.join("history"))?;
+		ensure!(history.is_empty() || history.ends_with('\n'), "incomplete direct payout history");
+		let mut indexed = BTreeSet::new();
+		for line in history.lines() {
+			ensure!(indexed.insert(line.parse::<Txid>()?), "duplicate direct payout history entry");
+		}
+		let files = PayoutWitness { directory, indexed: Arc::new(tokio::sync::Mutex::new(indexed.clone())) };
+		let witness = Self { files, network, budget };
+		let mut present = BTreeSet::new();
+		for entry in fs::read_dir(&witness.files.directory)? {
+			let path = entry?.path();
+			let name = path.file_name().and_then(|n| n.to_str()).context("invalid direct history filename")?;
+			if name == "identity.json" || name == "history" || (name.starts_with('.') && name.ends_with(".tmp")) { continue; }
+			let txid: Txid = name.strip_suffix(".json").context("invalid direct history filename")?.parse()?;
+			ensure!(fs::metadata(&path)?.len() <= u64::try_from(budget.max_serialized_bytes)?, "direct history record exceeds byte budget");
+			let recorded: DirectRecord = serde_json::from_slice(&fs::read(&path)?)?;
+			let tx: Transaction = deserialize(&recorded.tx)?;
+			ensure!(tx.compute_txid() == txid, "direct history signed transaction identity differs");
+			let current = witness.records(db, &recorded.freeze_set).await?;
+			ensure!(current.iter().any(|r| *r == recorded), "direct payout history differs from restored database for {txid}");
+			present.insert(txid);
+		}
+		ensure!(indexed.is_subset(&present), "indexed direct payout history file is missing");
+		// A crash between durable rename and the index append cannot have passed
+		// the publication gate. Verify its DB state before completing that append.
+		for txid in present { witness.files.index(txid).await?; }
+		Ok(witness)
+	}
+
+	async fn records(&self, db: &Db, freeze_set: &str) -> anyhow::Result<Vec<DirectRecord>> {
+		// Hashes and bytes come from the same bounded, fully authenticated
+		// repeatable-read snapshot. Observation timestamps are deliberately excluded.
+		Ok(db.read_direct_delivery(freeze_set, self.network, self.budget).await?.into_iter()
+			.map(|v| DirectRecord { freeze_set: freeze_set.to_owned(), tx: v.bytes,
+				allocation_hash: v.allocation_hash, carrier_hash: v.carrier_hash }).collect())
+	}
+
+	/// Successful return means every signed version's financial identity is
+	/// fsynced independently of PostgreSQL. Call before observing/submitting it.
+	pub async fn record_group(&self, db: &Db, freeze_set: &str) -> anyhow::Result<()> {
+		for record in self.records(db, freeze_set).await? {
+			let tx: Transaction = deserialize(&record.tx)?;
+			let txid = tx.compute_txid();
+			write_new_or_identical(&self.files.directory.join(format!("{txid}.json")), &serde_json::to_vec(&record)?)?;
+			self.files.index(txid).await?;
+		}
+		Ok(())
 	}
 }
 

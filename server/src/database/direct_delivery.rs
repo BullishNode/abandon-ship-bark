@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::Context;
 use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Transaction, TxOut, Txid};
 use bitcoin::consensus::{deserialize, serialize};
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::PublicKey;
 use bitcoin_ext::BlockRef;
 
@@ -20,6 +21,8 @@ pub(crate) struct StoredCarrier {
 	pub fee_inputs: Vec<(OutPoint, TxOut)>,
 	pub miner_fee: Amount,
 	pub recorded_confirmation: Option<BlockRef>,
+	pub allocation_hash: sha256::Hash,
+	pub carrier_hash: sha256::Hash,
 }
 
 impl Db {
@@ -55,7 +58,12 @@ impl Db {
 				usize::try_from(stats.get::<_, i64>("bytes"))?).is_some_and(|n| n <= limits.max_serialized_bytes),
 				"direct delivery versions are missing or exceed budget");
 			let rows = t.query("SELECT id,owner_pubkey,spk,disposition,gross_sat,fee_sat,payout_sat,
-				forfeited_sat,retirement_ids FROM expiry_allocation WHERE freeze_set=$1 ORDER BY id", &[&freeze_set]).await?;
+				forfeited_sat,retirement_ids,jsonb_build_object('id',id,'owner',owner_pubkey,'spk',spk,
+				'disposition',disposition,'gross',gross_sat,'fee',fee_sat,'payout',payout_sat,
+				'forfeited',forfeited_sat,'source',source,'evidence',source_evidence,'retirement',retirement_ids)::text AS witness
+				FROM expiry_allocation WHERE freeze_set=$1 ORDER BY id", &[&freeze_set]).await?;
+			let allocation_hash = sha256::Hash::hash(&serde_json::to_vec(&rows.iter()
+				.map(|r| r.get::<_, String>("witness")).collect::<Vec<_>>())?);
 			let mut ids = BTreeSet::new();
 			let mut retirement = BTreeSet::new();
 			let mut leaves = Vec::new();
@@ -90,7 +98,10 @@ impl Db {
 					"direct delivery forfeiture differs from policy");
 			}
 			let carriers = t.query("SELECT txid,signed_tx,backing_ids,fee_inputs::text AS fee_inputs,
-				miner_fee_sat,generation,confirmed_height,confirmed_block FROM expiry_carrier
+				miner_fee_sat,generation,confirmed_height,confirmed_block,jsonb_build_object('generation',generation,
+				'backing',backing_ids,'fee_inputs',fee_inputs,'miner',miner_fee_sat,'subsidy',funding_subsidy_sat,
+				'mappings',(SELECT jsonb_agg(jsonb_build_object('id',m.allocation_id,'vout',m.vout) ORDER BY m.allocation_id)
+				FROM expiry_carrier_allocation m WHERE m.txid=expiry_carrier.txid))::text AS witness FROM expiry_carrier
 				WHERE txid IN (SELECT m.txid FROM expiry_carrier_allocation m JOIN expiry_allocation a
 				ON a.id=m.allocation_id WHERE a.freeze_set=$1) ORDER BY generation", &[&freeze_set]).await?;
 			let mut result = Vec::new();
@@ -133,7 +144,8 @@ impl Db {
 				}).transpose()?;
 				let generation = row.get::<_, i64>("generation");
 				ensure!(generation > 0, "invalid direct carrier generation");
-				result.push(StoredCarrier { tx, bytes, fee_inputs, generation,
+				let carrier_hash = sha256::Hash::hash(row.get::<_, String>("witness").as_bytes());
+				result.push(StoredCarrier { tx, bytes, fee_inputs, generation, allocation_hash, carrier_hash,
 					miner_fee: Amount::from_sat(u64::try_from(row.get::<_, i64>("miner_fee_sat"))?), recorded_confirmation });
 			}
 			Ok(result)

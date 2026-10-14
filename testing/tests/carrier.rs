@@ -188,7 +188,14 @@ async fn automatic_board_fixture_with_fee(name: &str, board_fee: Amount) -> Auto
 		.funded(ark_testing::btc(1)).cfg(move |c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.fees.board.base_fee = board_fee;
-		}).watchmand_cfg(|c| {
+			c.direct_expiry.enabled = true;
+			c.direct_expiry.grace_blocks = 0;
+			c.direct_expiry.interval = std::time::Duration::from_secs(3600);
+		}).watchmand_cfg(move |c| {
+			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+				history_dir: c.data_dir.parent().unwrap().join("server"), max_miner_fee: sat(10_000),
+			});
+			c.fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(50).unwrap());
 			c.watchman.sweep_interval = std::time::Duration::from_secs(3600);
 			c.watchman.reaction_interval = std::time::Duration::from_secs(3600);
 		}).create().await;
@@ -215,18 +222,6 @@ async fn automatic_board_fixture_with_fee(name: &str, board_fee: Amount) -> Auto
 	let core = ctx.bitcoind().sync_client();
 	assert!(core.get_tx_out(&coin.chain_anchor().txid, coin.chain_anchor().vout, Some(true)).unwrap().is_some());
 	drop(wallet); // Original client stays absent through claim, confirmation and fresh recovery.
-	// Keep the existing cross-signer recovery guard: watchmand and its config
-	// must exist before the server can enable the legacy expiry task.
-	srv.stop().await.unwrap();
-	{
-		let mut config = srv.config_mut();
-		config.expiry_payout.enabled = true;
-		config.expiry_payout.grace_blocks = 0;
-		config.expiry_payout.sweep_min_confs = 1;
-		config.expiry_payout.interval = std::time::Duration::from_secs(1);
-		config.expiry_payout.watchman_config = Some(srv.watchmand().config().data_dir.join("config.toml"));
-	}
-	srv.start().await.unwrap();
 	AutomaticBoardFixture { ctx, srv, mnemonic, coin, record }
 }
 
@@ -532,7 +527,9 @@ async fn automatic_expired_board_pays_registered_recipient_from_actual_backing()
 		automatic_board_fixture_with_fee("automatic_expired_board_pays_registered_recipient_from_actual_backing", sat(1_000)).await;
 	// Declare a confirmed fee reserve before expiry. The original wallet has
 	// already stopped; neither daemon receives a manual freeze/sweep request.
-	ctx.bitcoind().fund_addr(srv.watchmand().wait_wallet_address().await, sat(50_000)).await;
+	let fee_address = tokio::time::timeout(std::time::Duration::from_secs(30),
+		srv.watchmand().wait_wallet_address()).await.expect("matching direct watchmand must start with a valid fee ceiling");
+	ctx.bitcoind().fund_addr(fee_address, sat(50_000)).await;
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
 	let cap_cfg = srv.config().clone();

@@ -399,6 +399,9 @@ impl Server {
 
 		let deep_tip = bcd::deep_tip(&bitcoind).await
 			.context("failed to query node for deep tip")?;
+		if cfg.direct_expiry.enabled || cfg.expiry_payout.enabled {
+			db.require_expiry_route(cfg.direct_expiry.enabled).await?;
+		}
 		let wallet_xpriv = master_xpriv.derive_priv(
 			&crate::SECP, &[WalletKind::Rounds.child_number()],
 		).expect("can't error");

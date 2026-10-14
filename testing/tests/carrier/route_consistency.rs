@@ -5,7 +5,7 @@ use std::time::Duration;
 use ark_testing::{btc, sat, TestContext};
 use bitcoincore_rpc::RpcApi;
 
-use super::{spawn_automatic_daemon, write_automatic_config};
+use super::{automatic_board_fixture, spawn_automatic_daemon, write_automatic_config};
 
 #[tokio::test]
 async fn direct_captaind_refuses_already_running_legacy_watchmand() {
@@ -46,4 +46,34 @@ async fn direct_captaind_refuses_already_running_legacy_watchmand() {
 	assert!(!status.success(), "a mismatch must refuse, not quietly stop successfully");
 	assert!(std::fs::read_to_string(log).unwrap().contains("expiry settlement route mismatch"),
 		"an unrelated setup failure is not route arbitration evidence");
+}
+
+#[tokio::test]
+async fn legacy_watchmand_refuses_already_running_direct_captaind() {
+	let fixture = automatic_board_fixture("route_direct_captaind_first").await;
+	let ctx = &fixture.ctx;
+	let srv = &fixture.srv;
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	let empty = db.read(async |t| Ok(t.query_one("SELECT NOT EXISTS (SELECT 1 FROM expiry_allocation)
+		AND NOT EXISTS (SELECT 1 FROM expiry_carrier)", &[]).await?.get::<_, bool>(0))).await.unwrap();
+	assert!(empty, "the immutable route must protect backing even before the first freeze");
+	srv.watchmand().stop().await.unwrap();
+	let mut watch = srv.watchmand().config().clone();
+	watch.watchman.direct_expiry = None;
+	let path = ctx.datadir.join("mismatched-watchmand.toml");
+	write_automatic_config(&path, &toml::to_string_pretty(&watch).unwrap());
+	let log = ctx.datadir.join("mismatched-watchmand.log");
+	let mut child = spawn_automatic_daemon("WATCHMAND_EXEC", &path, log.clone());
+	let status = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
+	if status.is_err() {
+		child.kill().await.unwrap();
+		child.wait().await.unwrap();
+	}
+	let core = ctx.bitcoind().sync_client();
+	assert!(core.get_tx_out(&fixture.coin.chain_anchor().txid, fixture.coin.chain_anchor().vout, Some(true)).unwrap().is_some(),
+		"a refused legacy route must leave the real Board backing unspent");
+	let status = status.expect("legacy watchmand must refuse the direct route before starting workers").unwrap();
+	assert!(!status.success());
+	assert!(std::fs::read_to_string(log).unwrap().contains("expiry settlement route mismatch"),
+		"an unrelated witness or configuration failure is not route arbitration evidence");
 }

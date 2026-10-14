@@ -100,6 +100,11 @@ Below is a more detailed summary for each version.
     - **BREAKING:** `BitcoinRpcExt::estimate_mempool_feerate` is removed
 
 - `server`
+  - Refuse conflicting expiry routes before financial workers start
+    A fresh database keeps the first selected route for both captaind and
+    watchmand. Starting direct settlement beside a legacy drain is refused
+    even before any expiry allocations exist. Use matching configurations;
+    changing routes requires separately reconciled fresh state.
   - Introduced the `htlc_vtxo`-table.
     Operator note: existing deployments MUST backfill the table once with
     `captaind data backfill-htlc-vtxos`.

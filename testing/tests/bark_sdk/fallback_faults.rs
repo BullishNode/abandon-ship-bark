@@ -882,32 +882,32 @@ async fn witness_fsync_crash(phase: &str) {
 #include <sys/stat.h>
 #include <unistd.h>
 static void crash_once(void) {
- const char *marker = getenv("WITNESS_FAULT_MARKER");
- int fd = marker ? open(marker, O_WRONLY | O_CREAT | O_EXCL, 0600) : -1;
- if (fd < 0) return;
- close(fd);
- kill(getpid(), SIGKILL);
+	const char *marker = getenv("WITNESS_FAULT_MARKER");
+	int fd = marker ? open(marker, O_WRONLY | O_CREAT | O_EXCL, 0600) : -1;
+	if (fd < 0) return;
+	close(fd);
+	kill(getpid(), SIGKILL);
 }
 int fsync(int fd) {
- int (*real_fsync)(int) = dlsym(RTLD_NEXT, "fsync");
- char link[64], path[4096]; struct stat st;
- snprintf(link, sizeof(link), "/proc/self/fd/%d", fd);
- ssize_t n = readlink(link, path, sizeof(path) - 1);
- if (n < 0) return real_fsync(fd);
- path[n] = 0;
- const char *phase = getenv("WITNESS_FAULT_PHASE");
- int witness = phase && strstr(path, "/expiry-payout-witness")
-   && !strstr(path, "identity.json") && fstat(fd, &st) == 0;
- int directory = witness && S_ISDIR(st.st_mode);
- int history = witness && strstr(path, "/history");
- if (witness && ((directory && !strcmp(phase, "before-directory"))
-   || (!directory && !strcmp(phase, "before-file"))
-   || (history && !strcmp(phase, "before-history")))) crash_once();
- int result = real_fsync(fd);
- if (!result && witness && ((directory && !strcmp(phase, "after-directory"))
-   || (!directory && !strcmp(phase, "after-file"))
-   || (history && !strcmp(phase, "after-history")))) crash_once();
- return result;
+	int (*real_fsync)(int) = dlsym(RTLD_NEXT, "fsync");
+	char link[64], path[4096]; struct stat st;
+	snprintf(link, sizeof(link), "/proc/self/fd/%d", fd);
+	ssize_t n = readlink(link, path, sizeof(path) - 1);
+	if (n < 0) return real_fsync(fd);
+	path[n] = 0;
+	const char *phase = getenv("WITNESS_FAULT_PHASE");
+	int witness = phase && strstr(path, "/expiry-payout-witness")
+	&& !strstr(path, "identity.json") && fstat(fd, &st) == 0;
+	int directory = witness && S_ISDIR(st.st_mode);
+	int history = witness && strstr(path, "/history");
+	if (witness && ((directory && !strcmp(phase, "before-directory"))
+	|| (!directory && !strcmp(phase, "before-file"))
+	|| (history && !strcmp(phase, "before-history")))) crash_once();
+	int result = real_fsync(fd);
+	if (!result && witness && ((directory && !strcmp(phase, "after-directory"))
+	|| (!directory && !strcmp(phase, "after-file"))
+	|| (history && !strcmp(phase, "after-history")))) crash_once();
+	return result;
 }
 "#).unwrap();
 	run(Command::new("cc").args(["-shared", "-fPIC", "-o"])

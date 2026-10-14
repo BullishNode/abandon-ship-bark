@@ -1,4 +1,5 @@
 pub mod sync;
+mod inventory;
 
 use std::collections::HashSet;
 use std::sync::Arc;

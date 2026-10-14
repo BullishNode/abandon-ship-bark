@@ -686,6 +686,8 @@ message ForfeitVtxosResponse {
 
 service WalletAdminService {
 	rpc WalletStatus(core.Empty) returns (WalletStatusResponse) {}
+	// Fixed read-only operation; never reveals an address or exports private keys.
+	rpc WalletInventory(core.Empty) returns (WalletInventoryResponse) {}
 }
 
 service RoundAdminService {
@@ -790,6 +792,51 @@ message WalletStatus {
 message WalletStatusResponse {
 	WalletStatus rounds = 1;
 	WalletStatus watchman = 2;
+}
+
+// Owning-daemon canonical wallet snapshot, not financial operating readiness.
+message WalletInventory {
+	string wallet = 1;
+	string network = 2;
+	string public_descriptor = 3;
+	uint32 tip_height = 4;
+	string tip_hash = 5;
+	uint32 min_trusted_confirmations = 6;
+	repeated WalletInventoryUtxo utxos = 7;
+	bool complete = 8;
+	repeated string reserved_outpoints = 9;
+	optional uint32 last_revealed_index = 10;
+}
+
+message WalletInventoryUtxo {
+	string outpoint = 1;
+	uint64 value_sat = 2;
+	bytes script_pubkey = 3;
+	string keychain = 4;
+	uint32 derivation_index = 5;
+	optional uint32 confirmed_height_upper_bound = 6;
+	optional string confirmation_block_hash = 7;
+	optional uint64 unconfirmed_first_seen = 8;
+	optional uint64 unconfirmed_last_seen = 9;
+	bool coinbase = 10;
+	uint32 confirmations = 11;
+	bool mature = 12;
+	bool trusted = 13;
+	bool reserved = 14;
+	// Trusted, mature, unlocked; may include trusted unconfirmed self-change.
+	bool transaction_eligible = 15;
+	// Additional confirmed-only requirement for supplemental carrier fees.
+	bool confirmed_fee_eligible = 16;
+	optional string confirming_descendant_txid = 17;
+	optional uint64 confirmation_time = 18;
+}
+
+message WalletInventoryResponse {
+	WalletInventory rounds = 1;
+	// Absent from captaind: this wallet belongs to the watchmand process.
+	WalletInventory watchman = 2;
+	bool complete = 3;
+	repeated string missing_sources = 4;
 }
 
 message LightningNodeUri {

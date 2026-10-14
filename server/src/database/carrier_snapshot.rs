@@ -1,12 +1,12 @@
-//! Bounded source inventory for a supplied physical backing set.
-//! This is an anchor superset, never an ownership or covered-leaf decision.
+//! Bounded source inventory and geometry for supplied physical backing.
+//! Source rows are an anchor superset. A geometric cut confers no ownership.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
 use anyhow::Context;
-use bitcoin::{OutPoint, Transaction, Txid};
-use bitcoin_ext::BlockHeight;
+use bitcoin::{Amount, OutPoint, Transaction, TxOut, Txid};
+use bitcoin_ext::{BlockHeight, TxOutExt};
 use chrono::{DateTime, Utc};
 use tokio_postgres::Row;
 
@@ -63,6 +63,29 @@ pub struct BackingSnapshot {
 	pub serialized_bytes: usize,
 }
 
+/// A caller-supplied transition anchor. Its exact output must be evidenced by
+/// the full paths. Even zero-valued anchors must be explicit. This is no payee.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackingPartitionResidual {
+	pub outpoint: OutPoint,
+	pub txout: TxOut,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackingRootPartition {
+	pub root: VtxoId,
+	pub terminals: Vec<VtxoId>,
+	pub terminal_amount: Amount,
+	pub anchor_residual_amount: Amount,
+}
+
+/// A complete geometric cut, not proof that the selected members are current
+/// economic terminals. No ownership, signature, chain or retirement decision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackingPartition {
+	pub roots: Vec<BackingRootPartition>,
+}
+
 impl BackingSnapshot {
 	/// Match one complete source path to its supplied physical root. This proves
 	/// geometry and amounts only: ownership, signatures, maturity, current spends
@@ -91,6 +114,135 @@ impl BackingSnapshot {
 		}
 		Ok(matched)
 	}
+
+	/// Prove one disjoint, complete geometric cut through the supplied roots.
+	/// Every evidenced sibling must continue to another evidenced transition or
+	/// be one supplied terminal. Every P2A output must be an exact explicit
+	/// residual. Current transitions conserve their whole input in outputs;
+	/// unrepresented miner fees and unproved alternatives are refused.
+	///
+	/// A selected full ancestor alone can be a geometric cut. This does not
+	/// prove that later economic claims do not exist. The caller must resolve
+	/// current economic terminals independently before financial authorization.
+	/// Row work counts roots, terminals, funding transactions, residuals and all
+	/// terminal genesis items, including shared paths. Byte work counts terminal
+	/// encodings, funding transactions and residual TxOut encodings.
+	pub fn check_partition(
+		&self,
+		terminals: &[ServerVtxo<Full>],
+		funding: &[Transaction],
+		residuals: &[BackingPartitionResidual],
+		limits: BackingSnapshotLimits,
+	) -> anyhow::Result<BackingPartition> {
+		ensure!(!self.roots.is_empty() && !terminals.is_empty(), "backing partition requires roots and terminals");
+		ensure!(limits.max_rows > 0 && limits.max_serialized_bytes > 0, "backing partition budgets must be positive");
+		let mut rows = self.roots.len().checked_add(terminals.len())
+			.and_then(|n| n.checked_add(funding.len())).and_then(|n| n.checked_add(residuals.len()))
+			.context("backing partition row budget overflow")?;
+		let mut bytes = 0usize;
+		for source in terminals {
+			rows = rows.checked_add(usize::from(source.exit_depth())).context("backing partition row budget overflow")?;
+			ensure!(rows <= limits.max_rows, "complete backing partition exceeds row budget");
+			bytes = bytes.checked_add(source.serialize().len()).context("backing partition byte budget overflow")?;
+			ensure!(bytes <= limits.max_serialized_bytes, "complete backing partition exceeds serialized byte budget");
+		}
+		for tx in funding {
+			bytes = bytes.checked_add(bitcoin::consensus::serialize(tx).len()).context("backing partition byte budget overflow")?;
+			ensure!(bytes <= limits.max_serialized_bytes, "complete backing partition exceeds serialized byte budget");
+		}
+		for residual in residuals {
+			bytes = bytes.checked_add(bitcoin::consensus::serialize(&residual.txout).len())
+				.context("backing partition byte budget overflow")?;
+			ensure!(bytes <= limits.max_serialized_bytes, "complete backing partition exceeds serialized byte budget");
+		}
+		let anchors = funding.iter().map(|tx| (tx.compute_txid(), tx)).collect::<BTreeMap<_, _>>();
+		ensure!(anchors.len() == funding.len(), "backing partition has duplicate funding transactions");
+		let supplied = terminals.iter().map(|v| (v.point(), v)).collect::<BTreeMap<_, _>>();
+		ensure!(supplied.len() == terminals.len(), "backing partition has duplicate terminals");
+		ensure!(self.roots.iter().map(|r| r.point()).collect::<BTreeSet<_>>().len() == self.roots.len(),
+			"backing partition has duplicate roots");
+		let residual_map = residuals.iter().map(|r| (r.outpoint, &r.txout)).collect::<BTreeMap<_, _>>();
+		ensure!(residual_map.len() == residuals.len(), "backing partition has duplicate residuals");
+		ensure!(residuals.iter().all(|r| r.txout.is_p2a_fee_anchor()), "backing partition residual must be an exact P2A anchor");
+		let mut used_funding = BTreeSet::new();
+		let mut transitions = BTreeMap::<OutPoint, (TxOut, Transaction)>::new();
+		for source in terminals {
+			let anchor = anchors.get(&source.chain_anchor().txid).context("backing partition funding is missing")?;
+			let root_id = self.path_root(source, anchor)?.context("backing partition terminal is outside supplied roots")?;
+			let root = self.roots.iter().find(|r| r.id() == root_id).context("backing partition root is missing")?;
+			used_funding.insert(source.chain_anchor().txid);
+			let mut point = source.chain_anchor();
+			let mut output = anchor.output[point.vout as usize].clone();
+			let mut inside = false;
+			for item in source.transactions() {
+				inside |= point == root.point();
+				if inside {
+					let mut tx = item.tx.clone();
+					// Witnesses do not determine partition geometry. They require
+					// separate authorization and signature validation by the caller.
+					for input in &mut tx.input { input.witness.clear(); }
+					if let Some(previous) = transitions.get(&point) {
+						ensure!(previous == &(output.clone(), tx), "backing partition has alternative transitions");
+					} else {
+						transitions.insert(point, (output.clone(), tx));
+					}
+				}
+				point = OutPoint::new(item.tx.compute_txid(), u32::try_from(item.output_idx)?);
+				output = item.tx.output[item.output_idx].clone();
+			}
+		}
+		ensure!(used_funding.len() == anchors.len(), "backing partition has extra funding transactions");
+		let mut visited = BTreeSet::new();
+		let mut used_terminals = BTreeSet::new();
+		let mut used_residuals = BTreeSet::new();
+		let mut used_transitions = BTreeSet::new();
+		let mut partitions = Vec::with_capacity(self.roots.len());
+		for root in &self.roots {
+			let mut partition = BackingRootPartition { root: root.id(), terminals: Vec::new(),
+				terminal_amount: Amount::ZERO, anchor_residual_amount: Amount::ZERO };
+			let mut pending = vec![(root.point(), root.txout())];
+			while let Some((point, output)) = pending.pop() {
+				ensure!(visited.insert(point), "backing partition roots or branches overlap");
+				if let Some(source) = supplied.get(&point) {
+					ensure!(!transitions.contains_key(&point), "backing partition has ancestor and descendant terminals");
+					ensure!(source.txout() == output, "backing partition terminal output differs from path");
+					used_terminals.insert(point);
+					partition.terminals.push(source.id());
+					partition.terminal_amount = partition.terminal_amount.checked_add(output.value)
+						.context("backing partition terminal amount overflow")?;
+				} else if output.is_p2a_fee_anchor() {
+					ensure!(residual_map.get(&point).is_some_and(|supplied| **supplied == output),
+						"backing partition has a missing or mismatched P2A residual");
+					used_residuals.insert(point);
+					partition.anchor_residual_amount = partition.anchor_residual_amount.checked_add(output.value)
+						.context("backing partition anchor amount overflow")?;
+				} else {
+					let (prevout, tx) = transitions.get(&point).context("backing partition has an uncovered output")?;
+					ensure!(*prevout == output && tx.input.len() == 1 && tx.input[0].previous_output == point,
+						"backing partition transition input differs from path");
+					let sum = tx.output.iter().try_fold(Amount::ZERO, |sum, out| sum.checked_add(out.value))
+						.context("backing partition transition output amount overflow")?;
+					ensure!(sum == output.value, "backing partition transition has an unrepresented fee or amount mismatch");
+					used_transitions.insert(point);
+					let txid = tx.compute_txid();
+					for (vout, out) in tx.output.iter().enumerate() {
+						pending.push((OutPoint::new(txid, u32::try_from(vout)?), out.clone()));
+					}
+				}
+			}
+			ensure!(!partition.terminals.is_empty(), "backing partition has an unmapped root");
+			ensure!(partition.terminal_amount.checked_add(partition.anchor_residual_amount) == Some(root.amount()),
+				"backing partition root amount is not conserved");
+			partition.terminals.sort();
+			partitions.push(partition);
+		}
+		ensure!(used_terminals.len() == supplied.len() && used_transitions.len() == transitions.len(),
+			"backing partition has extra terminals or transitions");
+		ensure!(used_residuals.len() == residual_map.len(), "backing partition has extra P2A residuals");
+		partitions.sort_by_key(|p| p.root);
+		Ok(BackingPartition { roots: partitions })
+	}
+
 }
 
 // One statement sees one PostgreSQL snapshot even inside a READ COMMITTED Tx.
@@ -240,6 +392,7 @@ fn optional_height(row: &Row, column: &str) -> anyhow::Result<Option<BlockHeight
 mod test {
 	use super::*;
 	use ark::test_util::VTXO_VECTORS;
+	use ark::board::BoardBuilder;
 
 	#[test]
 	fn backing_snapshot_genesis_availability_does_not_invent_bare_paths() {
@@ -257,4 +410,78 @@ mod test {
 		let encoded = full.serialize();
 		assert!(decode_genesis(&encoded[..encoded.len() - 1]).is_err(), "truncation is not missing-path evidence");
 	}
+
+	fn board_partition_fixture() -> (BackingSnapshot, ServerVtxo<Full>, Transaction, Vec<BackingPartitionResidual>) {
+		let vector = &*VTXO_VECTORS;
+		let board = &vector.board_vtxo;
+		let root = BoardBuilder::new_from_vtxo(board, &vector.anchor_tx, board.server_pubkey())
+			.unwrap().build_server_vtxos().remove(0).into_bare();
+		let source = ServerVtxo::from(board.clone());
+		let residuals = source.transactions().flat_map(|item| {
+			let txid = item.tx.compute_txid();
+			item.tx.output.into_iter().enumerate().filter(|(_, out)| out.is_p2a_fee_anchor())
+				.map(move |(vout, txout)| BackingPartitionResidual { outpoint: OutPoint::new(txid, vout as u32), txout })
+		}).collect();
+		(BackingSnapshot { roots: vec![root], regular: vec![], pending_boards: vec![], serialized_bytes: 0 },
+			source, vector.anchor_tx.clone(), residuals)
+	}
+
+	#[test]
+	fn backing_partition_exact_board_anchor_conservation_and_refusal() {
+		let (snapshot, source, funding, residuals) = board_partition_fixture();
+		let limits = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
+		let partition = snapshot.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap();
+		assert_eq!(partition.roots[0].terminal_amount, source.amount());
+		assert_eq!(partition.roots[0].anchor_residual_amount, Amount::from_sat(330));
+		assert_eq!(source.amount() + Amount::from_sat(330), snapshot.roots[0].amount());
+		assert!(snapshot.check_partition(&[source.clone()], &[funding.clone()], &[], limits).is_err());
+		let mut wrong = residuals.clone();
+		wrong[0].txout.value += Amount::from_sat(1);
+		assert!(snapshot.check_partition(&[source.clone()], &[funding.clone()], &wrong, limits).is_err());
+		wrong = residuals.clone();
+		wrong[0].outpoint.vout += 1;
+		assert!(snapshot.check_partition(&[source.clone()], &[funding.clone()], &wrong, limits).is_err());
+		wrong = residuals.clone(); wrong.extend(residuals.clone());
+		assert!(snapshot.check_partition(&[source.clone()], &[funding.clone()], &wrong, limits).is_err());
+		let mut wrong_funding = funding.clone(); wrong_funding.output[0].value += Amount::from_sat(1);
+		assert!(snapshot.check_partition(&[source.clone()], &[wrong_funding], &residuals, limits).is_err());
+		let board = &VTXO_VECTORS.board_vtxo;
+		let user = BoardBuilder::new(board.user_pubkey(), board.expiry_height(), board.server_pubkey(), board.exit_delta())
+			.set_funding_details(snapshot.roots[0].amount(), Amount::from_sat(330), board.chain_anchor()).unwrap()
+			.generate_user_nonces();
+		let bad_root = BoardBuilder::new_for_cosign(board.user_pubkey(), board.expiry_height(), board.server_pubkey(),
+			board.exit_delta(), snapshot.roots[0].amount() + Amount::from_sat(1), Amount::from_sat(330),
+			board.chain_anchor(), *user.user_pub_nonce()).build_unsigned_vtxos().unwrap().0.into_bare();
+		assert_eq!(bad_root.point(), snapshot.roots[0].point());
+		let wrong_metadata = BackingSnapshot { roots: vec![bad_root], regular: vec![], pending_boards: vec![], serialized_bytes: 0 };
+		let error = wrong_metadata.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap_err();
+		assert!(format!("{error:#}").contains("root metadata differs"), "actual funding identity alone cannot authorize different TxOut metadata");
+
+		assert!(snapshot.check_partition(&[source.clone(), source.clone()], &[funding.clone()], &residuals, limits).is_err());
+		let rows = BackingSnapshotLimits { max_rows: 4, ..limits };
+		assert!(snapshot.check_partition(&[source.clone()], &[funding.clone()], &residuals, rows).is_err());
+		let bytes = source.serialize().len() + bitcoin::consensus::serialize(&funding).len() +
+			residuals.iter().map(|r| bitcoin::consensus::serialize(&r.txout).len()).sum::<usize>();
+		assert!(snapshot.check_partition(&[source.clone()], &[funding.clone()], &residuals,
+			BackingSnapshotLimits { max_rows: 5, max_serialized_bytes: bytes }).is_ok());
+		assert!(snapshot.check_partition(&[source], &[funding], &residuals,
+			BackingSnapshotLimits { max_serialized_bytes: bytes - 1, ..limits }).is_err());
+	}
+
+	#[test]
+	fn backing_partition_rejects_actual_unsigned_alternative_board_shapes() {
+		let (snapshot, source, funding, residuals) = board_partition_fixture();
+		let board = &VTXO_VECTORS.board_vtxo;
+		let user = BoardBuilder::new(board.user_pubkey(), board.expiry_height(), board.server_pubkey(), board.exit_delta())
+			.set_funding_details(snapshot.roots[0].amount(), Amount::from_sat(331), board.chain_anchor()).unwrap()
+			.generate_user_nonces();
+		let alternative = BoardBuilder::new_for_cosign(board.user_pubkey(), board.expiry_height(), board.server_pubkey(),
+			board.exit_delta(), snapshot.roots[0].amount(), Amount::from_sat(331), board.chain_anchor(), *user.user_pub_nonce())
+			.build_unsigned_vtxos().unwrap().1;
+		alternative.validate_unsigned(&funding).unwrap();
+		let error = snapshot.check_partition(&[source, ServerVtxo::from(alternative)], &[funding], &residuals,
+			BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 }).unwrap_err();
+		assert!(format!("{error:#}").contains("alternative transitions"));
+	}
+
 }

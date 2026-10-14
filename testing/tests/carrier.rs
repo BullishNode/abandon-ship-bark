@@ -13,10 +13,10 @@ use bitcoincore_rpc::RpcApi;
 
 use ark::board::BoardBuilder;
 use ark::{ProtocolEncoding, ServerVtxo};
-use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef};
+use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef, TxOutExt};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
 use server::database::{Db, SpendState};
-use server::database::carrier_snapshot::{BackingSnapshot, BackingSnapshotLimits, SnapshotGenesis};
+use server::database::carrier_snapshot::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits, SnapshotGenesis};
 use server::secret::Secret;
 use server::utils::InstrumentedLock;
 use server::wallet::{self, BdkWalletExt, PersistedWallet, WalletKind};
@@ -289,7 +289,7 @@ async fn snapshot(db: &Db, roots: &[ServerVtxo], rows: usize, bytes: usize) -> a
 #[tokio::test]
 async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 	let ctx = TestContext::new("carrier-builder/backing_snapshot_real_pending_registered_board_and_arkoor_inventory").await;
-	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().watchmand_cfg(|c| {
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().cfg(|c| c.fees.board.base_fee = sat(1_000)).watchmand_cfg(|c| {
 		c.watchman.sweep_interval = std::time::Duration::from_secs(3600);
 		c.watchman.reaction_interval = std::time::Duration::from_secs(3600);
 	}).create().await;
@@ -303,6 +303,17 @@ async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 	let root = db.read(async |t| Ok(t.get_bare_vtxo_by_id(coin.chain_anchor().into()).await?.vtxo)).await.unwrap();
 	let roots = [root];
 	let pending = snapshot(&db, &roots, 100, 1_000_000).await.unwrap();
+	let partition_limits = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
+	let board_terminals = [ServerVtxo::from(coin.clone())];
+	let board_residuals = partition_residuals(&roots, &board_terminals);
+	let board_partition = pending.check_partition(&board_terminals, &[board.funding_tx.clone()], &board_residuals, partition_limits).unwrap();
+	assert_eq!(board_partition.roots[0].terminal_amount, coin.amount());
+	assert_eq!(board_partition.roots[0].anchor_residual_amount, sat(1_000));
+	assert_eq!(coin.amount() + sat(1_000), roots[0].amount(), "priced Board anchor is explicit, never guessed operator money");
+	assert!(pending.check_partition(&board_terminals, &[board.funding_tx.clone()], &[], partition_limits).is_err());
+	let mut wrong_residual = board_residuals.clone(); wrong_residual[0].txout.value += sat(1);
+	assert!(pending.check_partition(&board_terminals, &[board.funding_tx.clone()], &wrong_residual, partition_limits).is_err());
+
 	assert_eq!(pending.regular.len(), 1, "only actual funding exists before Board registration");
 	assert_eq!(pending.pending_boards.len(), 1);
 	assert_eq!(pending.pending_boards[0].vtxo.id(), coin.id());
@@ -341,8 +352,32 @@ async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 	let change = sender.spendable_vtxos().await.unwrap();
 	assert_eq!(received.len(), 1);
 	assert!(!change.is_empty());
-	assert_eq!(change.iter().map(|v| v.amount()).sum::<Amount>(), sat(60_000));
+	assert_eq!(change.iter().map(|v| v.amount()).sum::<Amount>(), coin.amount() - sat(40_000));
 	let inventory = snapshot(&db, &roots, 100, 1_000_000).await.unwrap();
+	let mut terminal_sources = Vec::new();
+	for v in &received { terminal_sources.push(ServerVtxo::from(recipient.get_full_vtxo(v.id()).await.unwrap())); }
+	for v in &change { terminal_sources.push(ServerVtxo::from(sender.get_full_vtxo(v.id()).await.unwrap())); }
+	let residuals = partition_residuals(&roots, &terminal_sources);
+	let partition = inventory.check_partition(&terminal_sources, &[board.funding_tx.clone()], &residuals, partition_limits).unwrap();
+	assert_eq!(partition.roots[0].terminal_amount, coin.amount());
+	assert_eq!(partition.roots[0].anchor_residual_amount, sat(1_000));
+	assert_eq!(partition.roots[0].terminals.len(), terminal_sources.len());
+	assert!(residuals.len() > 1 && residuals.iter().any(|r| r.txout.value == Amount::ZERO), "all zero anchors are explicit too");
+	for omitted in 0..terminal_sources.len() {
+		let subset = terminal_sources.iter().enumerate().filter(|(i, _)| *i != omitted).map(|(_, v)| v.clone()).collect::<Vec<_>>();
+		assert!(subset.iter().all(|v| inventory.path_root(v, &board.funding_tx).unwrap() == Some(roots[0].id())),
+			"individual parent path matches do not prove missing-sibling completeness");
+		assert!(inventory.check_partition(&subset, &[board.funding_tx.clone()], &residuals, partition_limits).is_err(), "missing terminal refuses the whole cut");
+	}
+	let mut overlapping = terminal_sources.clone(); overlapping.push(ServerVtxo::from(coin.clone()));
+	assert!(inventory.check_partition(&overlapping, &[board.funding_tx.clone()], &residuals, partition_limits).is_err(), "ancestor and descendant cannot cover the same money");
+	let mut duplicate = terminal_sources.clone(); duplicate.push(terminal_sources[0].clone());
+	assert!(inventory.check_partition(&duplicate, &[board.funding_tx.clone()], &residuals, partition_limits).is_err());
+	let mut wrong_identity = board.funding_tx.clone(); wrong_identity.lock_time = bitcoin::absolute::LockTime::from_consensus(1);
+	assert!(inventory.check_partition(&terminal_sources, &[wrong_identity], &residuals, partition_limits).is_err());
+	let mut wrong_output = board.funding_tx.clone(); wrong_output.output[coin.chain_anchor().vout as usize].value += sat(1);
+	assert!(inventory.check_partition(&terminal_sources, &[wrong_output], &residuals, partition_limits).is_err());
+
 	assert!(inventory.pending_boards.is_empty());
 	assert!(inventory.regular.len() > registered.regular.len());
 	let old = inventory.regular.iter().find(|f| f.state.vtxo_id == coin.id()).unwrap();
@@ -391,6 +426,23 @@ async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 		"an ancestor and its own descendant cannot count the same claim path twice");
 	let sibling_root = inventory.regular.iter().find(|f| f.state.vtxo_id == change[0].id()).unwrap().state.vtxo.to_bare();
 	let paired_roots = [progressed_roots[0].clone(), sibling_root];
+	let progressed_source = [progressed.full_vtxo.clone().unwrap()];
+	assert!(superset.check_partition(&progressed_source, &[board.funding_tx.clone()], &[], partition_limits).is_ok(),
+		"the physical output itself is a geometric cut; this confers no current economic-terminal status");
+	assert!(superset.check_partition(&terminal_sources, &[board.funding_tx.clone()], &[], partition_limits).is_err(), "same-anchor sibling is outside progressed backing");
+	assert!(superset.check_partition(&progressed_source, &[board.funding_tx.clone()], &board_residuals, partition_limits).is_err(), "prior Board anchor is outside progressed backing");
+	assert!(overlap.check_partition(&terminal_sources, &[board.funding_tx.clone()], &residuals, partition_limits).is_err(), "overlapping roots cannot partition a cut");
+	let paired = snapshot(&db, &paired_roots, count, bytes).await.unwrap();
+	let paired_sources = terminal_sources.iter().filter(|v| paired_roots.iter().any(|r| r.point() == v.point())).cloned().collect::<Vec<_>>();
+	assert_eq!(paired_sources.len(), 2);
+	if terminal_sources.len() > paired_sources.len() {
+		assert!(paired.check_partition(&terminal_sources, &[board.funding_tx.clone()], &[], partition_limits).is_err(),
+			"fragmented sender change outside selected roots must not be silently assigned to the pair");
+	}
+	let paired_partition = paired.check_partition(&paired_sources, &[board.funding_tx.clone()], &[], partition_limits).unwrap();
+	assert_eq!(paired_partition.roots.len(), 2);
+	assert!(paired_partition.roots.iter().all(|p| p.anchor_residual_amount == Amount::ZERO));
+
 	assert_eq!(snapshot(&db, &paired_roots, count, bytes).await.unwrap().regular.len(), count, "shared anchors are inventoried once");
 	assert!(snapshot_error(snapshot(&db, &[roots[0].clone(), roots[0].clone()], 100, 1_000_000).await).contains("duplicate"));
 	assert!(snapshot_error(snapshot(&db, &roots, 0, bytes).await).contains("positive"));
@@ -421,12 +473,36 @@ async fn backing_snapshot_real_pending_registered_board_and_arkoor_inventory() {
 	let summary = serde_json::json!({
 		"scope": "raw source snapshot, no rights/ownership/automatic-route qualification",
 		"pending_boards": 1, "registered_rows": 2, "arkoor_rows": count, "serialized_vtxo_bytes": bytes,
+		"geometry_only_partition": { "terminals": terminal_sources.len(), "explicit_anchors": residuals.len(),
+			"terminal_sat": partition.roots[0].terminal_amount.to_sat(), "anchor_residual_sat": partition.roots[0].anchor_residual_amount.to_sat(),
+			"missing_leaf_overlap_sibling_and_funding_refusal": true, "current_economic_cut_qualified": false },
 		"observed_states": retired.regular.iter().map(|f| f.state.spend_state.as_str()).collect::<std::collections::BTreeSet<_>>(),
 		"funding_point": roots[0].point().to_string(), "actual_confirmed_spender": board_exit.compute_txid().to_string(),
 		"actual_spent_height": funding_fact.onchain_spent_height.unwrap().to_u32(),
 	});
 	std::fs::write(ctx.datadir.join("snapshot-summary.json"), serde_json::to_vec_pretty(&summary).unwrap()).unwrap();
 	println!("raw backing snapshot only: pending=1, registered=2, arkoor_rows={count}, serialized_bytes={bytes}; complete budgets, raw superset and real chain facts passed");
+}
+
+
+// Independent fixture inventory from actual full transactions, not a replacement
+// for production coverage validation. Include only anchors below supplied roots.
+fn partition_residuals(roots: &[ServerVtxo], sources: &[ServerVtxo<ark::vtxo::Full>]) -> Vec<BackingPartitionResidual> {
+	let root_points = roots.iter().map(|v| v.point()).collect::<std::collections::BTreeSet<_>>();
+	let mut anchors = std::collections::BTreeMap::new();
+	for source in sources {
+		let mut inside = false;
+		for item in source.transactions() {
+			inside |= root_points.contains(&item.tx.input[0].previous_output);
+			if inside {
+				let txid = item.tx.compute_txid();
+				for (vout, txout) in item.tx.output.into_iter().enumerate() {
+					if txout.is_p2a_fee_anchor() { anchors.insert(OutPoint::new(txid, vout as u32), txout); }
+				}
+			}
+		}
+	}
+	anchors.into_iter().map(|(outpoint, txout)| BackingPartitionResidual { outpoint, txout }).collect()
 }
 
 fn snapshot_error(result: anyhow::Result<BackingSnapshot>) -> String {

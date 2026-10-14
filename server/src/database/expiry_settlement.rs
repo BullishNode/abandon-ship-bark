@@ -149,6 +149,7 @@ impl Tx<'_> {
 	/// Registration changes an unregistered output's entitlement from its
 	/// input owner to its recipient. Arbitrate that change with payout commit.
 	pub(crate) async fn lock_vtxo_registration(&self, ids: &[VtxoId]) -> anyhow::Result<()> {
+		self.check_not_expiry_frozen(ids).await?;
 		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
 		self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE",
 			&[&ids]).await?;

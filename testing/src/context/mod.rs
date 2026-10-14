@@ -425,6 +425,7 @@ impl TestContext {
 		server::config::Config {
 			data_dir: data_dir.clone(),
 			expiry_payout: Default::default(),
+			direct_expiry: Default::default(),
 			network: Network::Regtest,
 			vtxo_lifetime: BlockDelta::new(432),
 			vtxo_exit_delta: BlockDelta::new(12),

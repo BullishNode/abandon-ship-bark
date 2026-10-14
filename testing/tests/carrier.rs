@@ -144,3 +144,135 @@ async fn direct_carrier_actual_backing_mixed_signing_and_confirmed_reserve() {
 		carrier.tx.compute_txid(), carrier.signed_weight.to_wu(), actual_fee,
 		carrier.funding_subsidy.to_sat(), change.value.to_sat());
 }
+
+struct AutomaticBoardFixture {
+	ctx: TestContext,
+	srv: std::sync::Arc<ark_testing::Captaind>,
+	mnemonic: bip39::Mnemonic,
+	coin: ark::Vtxo,
+	record: ark::fallback::FallbackRecord,
+}
+
+async fn automatic_board_fixture(name: &str) -> AutomaticBoardFixture {
+	let ctx = TestContext::new(format!("carrier-builder/{name}")).await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
+		.funded(ark_testing::btc(1)).cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(128);
+		}).watchmand_cfg(|c| {
+			c.watchman.sweep_interval = std::time::Duration::from_secs(3600);
+			c.watchman.reaction_interval = std::time::Duration::from_secs(3600);
+		}).create().await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let wallet = ctx.bark_sdk("absent", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(20_000)).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let coins = wallet.spendable_vtxos().await.unwrap();
+	assert_eq!(coins.len(), 1, "actual native Board must register before route qualification");
+	let coin = wallet.get_full_vtxo(coins[0].id()).await.unwrap();
+	let record = wallet.fallback_destination().await.unwrap();
+	let mailbox = wallet.mailbox_keypair().public_key().serialize().to_vec();
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let stored = db.read(async |t| Ok(t.query_one(
+		"SELECT spk, account_xpub FROM fallback_record WHERE mailbox_pk=$1", &[&mailbox],
+	).await?)).await.unwrap();
+	assert_eq!(stored.get::<_, Vec<u8>>("spk"), record.spk.as_bytes());
+	assert_eq!(stored.get::<_, Vec<u8>>("account_xpub"), record.account_xpub.encode());
+	let coin_key = coin.user_pubkey().serialize().to_vec();
+	let linked = db.read(async |t| Ok(t.query_one(
+		"SELECT mailbox_pk FROM key_link WHERE user_pubkey=$1", &[&coin_key],
+	).await?)).await.unwrap();
+	assert_eq!(linked.get::<_, Vec<u8>>("mailbox_pk"), mailbox);
+	let core = ctx.bitcoind().sync_client();
+	assert!(core.get_tx_out(&coin.chain_anchor().txid, coin.chain_anchor().vout, Some(true)).unwrap().is_some());
+	drop(wallet); // Original client stays absent through claim, confirmation and fresh recovery.
+	// Keep the existing cross-signer recovery guard: watchmand and its config
+	// must exist before the server can enable the legacy expiry task.
+	srv.stop().await.unwrap();
+	{
+		let mut config = srv.config_mut();
+		config.expiry_payout.enabled = true;
+		config.expiry_payout.grace_blocks = 0;
+		config.expiry_payout.sweep_min_confs = 1;
+		config.expiry_payout.interval = std::time::Duration::from_secs(1);
+		config.expiry_payout.watchman_config = Some(srv.watchmand().config().data_dir.join("config.toml"));
+	}
+	srv.start().await.unwrap();
+	AutomaticBoardFixture { ctx, srv, mnemonic, coin, record }
+}
+
+#[tokio::test]
+async fn automatic_board_creation_is_registered_before_absence() {
+	let fixture = automatic_board_fixture("automatic_board_creation_is_registered_before_absence").await;
+	assert_eq!(fixture.coin.amount(), sat(20_000));
+}
+
+// The recovery function receives only a mnemonic and a chain transport. It
+// does not receive the original wallet, expected address, index, txid or outpoint.
+async fn recover_all_bip84_and_spend(
+	ctx: &TestContext, mnemonic: &bip39::Mnemonic,
+) -> (Vec<(OutPoint, Amount)>, bitcoin::Transaction) {
+	let core = ctx.bitcoind().sync_client();
+	let master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
+	let mut restored = bdk_wallet::Wallet::create(
+		bdk_wallet::template::Bip84(master, bdk_wallet::KeychainKind::External),
+		bdk_wallet::template::Bip84(master, bdk_wallet::KeychainKind::Internal),
+	).network(Network::Regtest).lookahead(20).create_wallet_no_persist().unwrap();
+	for height in 1..=core.get_block_count().unwrap() {
+		let hash = core.get_block_hash(height).unwrap();
+		restored.apply_block(&core.get_block(&hash).unwrap(), height as u32).unwrap();
+	}
+	let discovered = restored.list_unspent().map(|u| (u.outpoint, u.txout.value)).collect::<Vec<_>>();
+	assert!(!discovered.is_empty(), "fresh standard BIP84 gap20 scan must discover funds");
+	let destination = ctx.bitcoind().get_new_address();
+	let mut builder = restored.build_tx();
+	builder.drain_wallet().drain_to(destination.script_pubkey()).fee_rate(FeeRate::from_sat_per_vb(3).unwrap());
+	let mut psbt = builder.finish().unwrap();
+	assert!(restored.sign(&mut psbt, bdk_wallet::SignOptions::default()).unwrap());
+	let spend = psbt.extract_tx().unwrap();
+	core.send_raw_transaction(&spend).unwrap();
+	ctx.generate_blocks(1).await;
+	assert!(core.get_raw_transaction_info(&spend.compute_txid(), None).unwrap().confirmations.unwrap() >= 1);
+	for (point, _) in &discovered {
+		assert!(core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_none());
+	}
+	(discovered, spend)
+}
+
+#[tokio::test]
+async fn automatic_expired_board_pays_registered_recipient_from_actual_backing() {
+	let AutomaticBoardFixture { ctx, srv, mnemonic, coin, record } =
+		automatic_board_fixture("automatic_expired_board_pays_registered_recipient_from_actual_backing").await;
+	let core = ctx.bitcoind().sync_client();
+	let height = core.get_block_count().unwrap() as u32;
+	ctx.generate_blocks(coin.expiry_height().to_u32().saturating_sub(height) + 3).await;
+	srv.watchmand().wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;
+	srv.watchmand().trigger_sweep().await;
+	let backing = coin.chain_anchor();
+	let carrier = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+		loop {
+			let spend = core.get_raw_mempool().unwrap().into_iter()
+				.map(|id| core.get_raw_transaction(&id, None).unwrap())
+				.find(|tx| tx.input.iter().any(|i| i.previous_output == backing));
+			if let Some(tx) = spend { break tx; }
+			tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+		}
+	}).await.expect("actual expired Board backing must have a real automatic spender");
+	let expected = TxOut { value: coin.amount().checked_sub(sat(1_000)).unwrap(), script_pubkey: record.spk };
+	let observed = carrier.output.iter().filter(|o| o.script_pubkey == expected.script_pubkey)
+		.map(|o| o.value.to_sat()).collect::<Vec<_>>();
+	let mut proof = OpenOptions::new().write(true).create_new(true).mode(0o600)
+		.open(ctx.datadir.join("automatic-backing-spender.tx")).unwrap();
+	proof.write_all(&bitcoin::consensus::serialize(&carrier)).unwrap();
+	println!("automatic route evidence: backing={}, spender={}, rightful_gross={}, expected_net={}, observed_recipient={observed:?}",
+		backing, carrier.compute_txid(), coin.amount().to_sat(), expected.value.to_sat());
+	let recipient_vout = carrier.output.iter().position(|o| *o == expected)
+		.expect("the same transaction consuming actual Board funding must pay the exact registered gross-minus1000 output; a later two-step payment cannot earn direct-route credit");
+	ctx.generate_blocks(1).await;
+	assert!(core.get_raw_transaction_info(&carrier.compute_txid(), None).unwrap().confirmations.unwrap() >= 1);
+	assert!(core.get_tx_out(&backing.txid, backing.vout, Some(true)).unwrap().is_none());
+	let (discovered, recovered_spend) = recover_all_bip84_and_spend(&ctx, &mnemonic).await;
+	// Compare only after the independent mnemonic-only scan and spend have finished.
+	let payout = OutPoint::new(carrier.compute_txid(), recipient_vout as u32);
+	assert!(discovered.contains(&(payout, expected.value)));
+	assert!(recovered_spend.input.iter().any(|i| i.previous_output == payout));
+}

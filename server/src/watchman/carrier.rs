@@ -292,7 +292,7 @@ fn carrier_fee(tx: &Transaction, prevouts: &[TxOut]) -> anyhow::Result<Amount> {
 	input.checked_sub(output).context("carrier outputs exceed inputs")
 }
 
-fn validate_fee_policy(
+pub(crate) fn validate_fee_policy(
 	tx: &Transaction, actual_fee: Amount, rate: FeeRate, limits: CarrierLimits,
 ) -> anyhow::Result<Amount> {
 	let needed = rate.fee_wu(tx.weight()).context("carrier fee computation overflow")?;

@@ -35,7 +35,7 @@ pub mod nursery;
 mod offboards;
 pub mod expiry_payout;
 pub mod recovery;
-mod payout_witness;
+pub mod payout_witness;
 mod round;
 pub mod telemetry;
 pub mod utils;

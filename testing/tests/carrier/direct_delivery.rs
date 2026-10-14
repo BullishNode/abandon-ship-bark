@@ -110,11 +110,19 @@ async fn run_commit_worker(recipe: &CommitRecipe, recipe_path: PathBuf) -> Vec<b
 }
 
 async fn crash_case(name: &str, fee_rates: Vec<u64>) -> CrashCase {
+	crash_case_with_history(name, fee_rates, false).await
+}
+
+async fn crash_case_with_history(name: &str, fee_rates: Vec<u64>, history: bool) -> CrashCase {
 	let AutomaticBoardFixture { ctx, srv, coin, record, mnemonic } =
 		automatic_board_fixture_with_fee(name, sat(1_000)).await;
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	if history {
+		server::payout_witness::DirectPayoutWitness::initialize(&srv.config().data_dir,
+			Network::Regtest, coin.server_pubkey(), &db).await.unwrap();
+	}
 	let core = ctx.bitcoind().sync_client();
 	let root = db.read(async |t| Ok(t.get_bare_vtxo_by_id(coin.chain_anchor().into()).await?.vtxo)).await.unwrap();
 	let roots = [root];
@@ -165,6 +173,58 @@ async fn crash_case(name: &str, fee_rates: Vec<u64>) -> CrashCase {
 		versions.push(signed);
 	}
 	CrashCase { ctx, db, wallet: restarted, mnemonic, recipe, versions, board_funding_txid: coin.chain_anchor().txid }
+}
+
+#[tokio::test]
+async fn direct_history_refuses_forgotten_signed_version_and_allocation_after_confirmation() {
+	let case = crash_case_with_history("direct_history_refuses_forgotten_signed_version_and_allocation_after_confirmation", vec![30,40], true).await;
+	let config: server::Config = toml::from_str(&std::fs::read_to_string(&case.recipe.config_path).unwrap()).unwrap();
+	let root: ServerVtxo = ServerVtxo::deserialize(&case.recipe.backing[0]).unwrap();
+	let key = root.server_pubkey();
+	let load = async || server::payout_witness::DirectPayoutWitness::load(&config.data_dir,
+		Network::Regtest, key, &case.db, budget()).await;
+	let history = load().await.unwrap();
+	history.record_group(&case.db, &case.recipe.freeze_set).await.unwrap();
+	history.record_group(&case.db, &case.recipe.freeze_set).await.unwrap();
+	let delivery = recovered(&case).await;
+	confirm_once(&case, &delivery, &case.versions[1]).await;
+	// Actual confirmation changes only observation, never the witnessed amounts,
+	// signed bytes or economic owner. Restart must accept that legitimate change.
+	load().await.unwrap();
+	assert!(server::payout_witness::DirectPayoutWitness::initialize(&config.data_dir,
+		Network::Regtest, key, &case.db).await.is_err(), "existing journal cannot bootstrap empty history");
+	let latest = case.versions[1].compute_txid().to_string();
+	case.db.write(async |t| {
+		t.execute("CREATE TABLE direct_history_saved_carrier AS SELECT txid,generation,signed_tx,backing_ids,fee_inputs,
+			miner_fee_sat,funding_subsidy_sat,created_at,confirmed_height,confirmed_block FROM expiry_carrier WHERE txid=$1", &[&latest]).await?;
+		t.execute("CREATE TABLE direct_history_saved_mapping AS SELECT txid,allocation_id,vout FROM expiry_carrier_allocation WHERE txid=$1", &[&latest]).await?;
+		t.execute("DELETE FROM expiry_carrier_allocation WHERE txid=$1", &[&latest]).await?;
+		t.execute("DELETE FROM expiry_carrier WHERE txid=$1", &[&latest]).await?;
+		Ok(())
+	}).await.unwrap();
+	let error = load().await.err().expect("older journal must refuse independently witnessed later transaction");
+	assert!(format!("{error:#}").contains("differs from restored database"));
+	case.db.write(async |t| {
+		t.execute("INSERT INTO expiry_carrier (txid,generation,signed_tx,backing_ids,fee_inputs,miner_fee_sat,
+			funding_subsidy_sat,created_at,confirmed_height,confirmed_block) SELECT txid,generation,signed_tx,backing_ids,
+			fee_inputs,miner_fee_sat,funding_subsidy_sat,created_at,confirmed_height,confirmed_block FROM direct_history_saved_carrier", &[]).await?;
+		t.execute("INSERT INTO expiry_carrier_allocation (txid,allocation_id,vout) SELECT txid,allocation_id,vout FROM direct_history_saved_mapping", &[]).await?;
+		Ok(())
+	}).await.unwrap();
+	load().await.unwrap();
+	let sources = case.db.read(async |t| Ok(t.query("SELECT id,source FROM expiry_allocation WHERE freeze_set=$1",
+		&[&case.recipe.freeze_set]).await?.iter().map(|r| (r.get::<_, String>("id"), r.get::<_, String>("source"))).collect::<Vec<_>>())).await.unwrap();
+	case.db.write(async |t| {
+		t.execute("UPDATE expiry_allocation SET source='changed-attribution' WHERE freeze_set=$1", &[&case.recipe.freeze_set]).await?;
+		Ok(())
+	}).await.unwrap();
+	let error = load().await.err().expect("otherwise valid amounts cannot hide changed source attribution");
+	assert!(format!("{error:#}").contains("differs from restored database"));
+	case.db.write(async |t| {
+		for (id, source) in &sources { t.execute("UPDATE expiry_allocation SET source=$2 WHERE id=$1", &[id,source]).await?; }
+		Ok(())
+	}).await.unwrap();
+	load().await.unwrap();
 }
 
 #[tokio::test]

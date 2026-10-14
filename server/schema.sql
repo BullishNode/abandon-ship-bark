@@ -2919,3 +2919,6 @@ CREATE TABLE key_link (
 	child_index INTEGER NOT NULL CHECK (child_index >= 0),
 	UNIQUE (mailbox_pk, child_index)
 );
+
+-- Bounded complete inventory for physical backing anchors.
+CREATE INDEX vtxo_anchor_point_id_ix ON public.vtxo (anchor_point, vtxo_id);

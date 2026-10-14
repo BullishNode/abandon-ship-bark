@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use bitcoin::{Address, Amount, Network, OutPoint, ScriptBuf, Transaction};
-use bitcoin::secp256k1::{Keypair, rand::thread_rng};
 use bitcoincore_rpc::RpcApi;
 use bitcoincore_rpc::json::CreateRawTransactionInput;
 
-use ark::{ProtocolEncoding, SECP};
+use ark::ProtocolEncoding;
 use bitcoin_ext::BlockHeight;
 use ark_testing::{btc, sat, Captaind, TestContext};
 use ark_testing::constants::BOARD_CONFIRMATIONS;
@@ -81,7 +80,7 @@ async fn blocklist_board_cosign_rejected() {
 	let tip_height = ctx.bitcoind().get_block_count().await as u32;
 	let expiry_height = BlockHeight::new(tip_height) + ark_info.vtxo_lifetime;
 
-	let user_key = Keypair::new(&SECP, &mut thread_rng());
+	let (user_key, origin) = crate::fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
 	let board_amount = btc(1) - sat(2_000);
 	let board_builder = ark::board::BoardBuilder::new(
 		user_key.public_key(),
@@ -104,6 +103,7 @@ async fn blocklist_board_cosign_rejected() {
 
 	let mut rpc = srv.get_public_rpc().await;
 	let err = rpc.request_board_cosign(protos::BoardCosignRequest {
+		origin: Some(origin),
 		amount: board_amount.to_sat(),
 		utxo: board_utxo.serialize(),
 		expiry_height: expiry_height.into(),
@@ -150,7 +150,7 @@ async fn blocklist_board_register_rejected() {
 	let tip_height = ctx.bitcoind().get_block_count().await as u32;
 	let expiry_height = BlockHeight::new(tip_height) + ark_info.vtxo_lifetime;
 
-	let user_key = Keypair::new(&SECP, &mut thread_rng());
+	let (user_key, origin) = crate::fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
 	let board_amount = btc(1) - sat(2_000);
 	let board_builder = ark::board::BoardBuilder::new(
 		user_key.public_key(),
@@ -171,6 +171,7 @@ async fn blocklist_board_register_rejected() {
 	// An old client sends no funding tx, so the cosign has nothing to check.
 	let mut rpc = srv.get_public_rpc().await;
 	let cosign_response = rpc.request_board_cosign(protos::BoardCosignRequest {
+		origin: Some(origin),
 		amount: board_amount.to_sat(),
 		utxo: board_utxo.serialize(),
 		expiry_height: expiry_height.into(),

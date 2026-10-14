@@ -660,8 +660,8 @@ impl Server {
 		utxo: OutPoint,
 		funding_tx: Option<&Transaction>,
 		user_pub_nonce: PublicNonce,
+		origin: ark::fallback::AccountChild,
 	) -> anyhow::Result<ark::board::BoardCosignResponse> {
-		self.db.read(async |t| t.require_fallback(&[user_pubkey]).await).await?;
 		check_max_amount("board", amount, self.config.max_board_amount)?;
 
 		let min_amount = self.config.min_board_amount.max(P2TR_DUST);
@@ -792,6 +792,8 @@ impl Server {
 			.upsert_unsigned_tx([pending.point().txid])
 			.insert_oor_spent_vtxos([(anchor, pending.point().txid)]);
 		self.db.write(async |t| {
+			t.admit_fallback_child(origin, user_pubkey).await?;
+			t.require_fallback(&[user_pubkey]).await?;
 			t.store_pending_board(&pending).await?;
 			t.execute_vtxo_tree_update(update).await?;
 			t.add_funding_vtxos_to_frontier(utxo.txid, None).await?;
@@ -1007,6 +1009,13 @@ impl Server {
 			Ok(())
 		}).await?;
 		Ok(())
+	}
+
+	/// Resolve the existing blinded mailbox context without trusting a clear
+	/// wallet ID or extending a derivation scan/horizon.
+	pub(crate) fn resolve_fallback_hint(&self, hint: ark::fallback::AccountChildHint, policy_key: PublicKey) -> anyhow::Result<ark::fallback::AccountChild> {
+		let mailbox = self.unblind_mailbox_id(hint.blinded_mailbox_id(), policy_key)?;
+		Ok(ark::fallback::AccountChild::new(mailbox.as_pubkey(), hint.child_index())?)
 	}
 
 	/// Unblind a [BlindedMailboxIdentifier].

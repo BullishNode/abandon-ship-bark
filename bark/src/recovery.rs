@@ -262,8 +262,16 @@ impl Wallet {
 			vtxo_id: id.to_bytes().to_vec(),
 		}).await.with_context(|| format!("error fetching vtxo {id} from server"))?.into_inner();
 
-		Vtxo::<Full>::deserialize(&resp.vtxo)
-			.with_context(|| format!("server returned an undecodable vtxo for {id}"))
+		let vtxo = Vtxo::<Full>::deserialize(&resp.vtxo)
+			.with_context(|| format!("server returned an undecodable vtxo for {id}"))?;
+		ensure!(vtxo.id() == id, "server returned another vtxo for recovery");
+		if let Some(index) = resp.child_index {
+			let origin = ark::fallback::AccountChild::new(self.mailbox_keypair().public_key(), index)?;
+			let account = bitcoin::bip32::Xpub::from_priv(&crate::SECP, &self.inner.seed.vtxo);
+			origin.verify_pubkey(&account, vtxo.user_pubkey()).context("untrusted recovery child does not match this seed")?;
+			self.inner.db.store_vtxo_key(index, vtxo.user_pubkey()).await?;
+		}
+		Ok(vtxo)
 	}
 
 	/// Check if a VTXO is confirmed on-chain.
@@ -319,6 +327,15 @@ impl Wallet {
 				},
 			},
 		};
+
+		// A full-body mailbox delivery need not carry its public derivation hint.
+		// Ask the existing endpoint for unknown keys before trying a gap scan.
+		if self.inner.db.get_public_key_idx(&vtxo.user_pubkey()).await?.is_none()
+			&& let Err(error) = self.fetch_vtxo(id).await {
+			warn!("Could not verify sparse recovery hint for {id}: {error:#}");
+			report.push_failed(id, Some(vtxo.amount()));
+			return Ok(());
+		}
 
 		// [`Wallet::find_vtxo_keypairs`] persists the keys it reveals, so each
 		// match extends the window the next candidate is scanned against.

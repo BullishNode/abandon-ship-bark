@@ -22,7 +22,7 @@ use tower_http::cors::CorsLayer;
 use tonic_tracing_opentelemetry::middleware::server::OtelGrpcLayer;
 use tracing::info;
 
-use ark::{musig, ProtocolEncoding, Vtxo, VtxoId};
+use ark::{musig, ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy};
 use ark::arkoor::package::ArkoorPackageCosignRequest;
 use ark::mailbox::MailboxIdentifier;
 use ark::forfeit::HashLockedForfeitBundle;
@@ -148,8 +148,13 @@ impl rpc::server::ArkService for Server {
 		let vtxo_state = self.db.read(async |t| t.get_server_vtxo_by_id(id).await).await
 			.to_status()?;
 
+		let origin = self.db.read(async |tx| match vtxo_state.vtxo.policy().user_pubkey() {
+			Some(key) => tx.fallback_origin(key).await,
+			None => Ok(None),
+		}).await.to_status()?;
 		let response = protos::GetVtxoResponse {
 			vtxo: vtxo_state.vtxo.serialize(),
+			child_index: origin.map(|origin| origin.child_index()),
 		};
 
 		Ok(tonic::Response::new(response))
@@ -236,8 +241,10 @@ impl rpc::server::ArkService for Server {
 			None
 		};
 
+		let hint = req.origin.context("missing account child origin").badarg("board origin")?.try_into()?;
+		let origin = self.resolve_fallback_hint(hint, user_pubkey).badarg("invalid board origin")?;
 		let resp = self.cosign_board(
-			amount, user_pubkey, expiry_height, utxo, funding_tx.as_ref(), pub_nonce,
+			amount, user_pubkey, expiry_height, utxo, funding_tx.as_ref(), pub_nonce, origin,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(resp.into()))
@@ -317,10 +324,12 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ArkoorPackageCosignRequest>,
 	) -> Result<tonic::Response<protos::ArkoorPackageCosignResponse>, tonic::Status> {
-		let request = ArkoorPackageCosignRequest::try_from(req.into_inner())
+		let request = req.into_inner();
+		let hints = self.arkoor_origin_hints(&request).badarg("invalid output origins")?;
+		let request = ArkoorPackageCosignRequest::try_from(request)
 			.context("Failed to parse request")?;
 
-		let response = self.cosign_oor(request).await.to_status()?;
+		let response = self.cosign_oor(request, hints).await.to_status()?;
 		Ok(tonic::Response::new(response.into()))
 	}
 
@@ -618,16 +627,24 @@ impl rpc::server::ArkService for Server {
 		}).collect::<Result<_, tonic::Status>>()?;
 
 		let mut vtxo_requests = Vec::<ark::SignedVtxoRequest>::with_capacity(req.vtxo_requests.len());
-		for r in req.vtxo_requests.clone() {
-			// Make sure users provided right number of nonces.
-			if r.public_nonces.len() != self.config.nb_round_nonces {
+		let mut output_origins = std::collections::HashMap::new();
+		for signed in req.vtxo_requests {
+			if signed.public_nonces.len() != self.config.nb_round_nonces {
 				macros::badarg!("need exactly {} public nonces", self.config.nb_round_nonces);
 			}
-			vtxo_requests.push(r.try_into().badarg("invalid signed vtxo request")?);
+			let request = signed.vtxo.as_ref().context("missing signed output").badarg("round origin")?;
+			let key = VtxoPolicy::deserialize(&request.policy).badarg("invalid round policy")?.user_pubkey();
+			let hint = request.origin.clone().context("missing account child origin").badarg("round origin")?.try_into()?;
+			let origin = self.resolve_fallback_hint(hint, key).badarg("invalid round origin")?;
+			if let Some(previous) = output_origins.insert(key, origin) {
+				if previous != origin { macros::badarg!("conflicting round origins for the same coin key"); }
+			}
+			vtxo_requests.push(signed.try_into().badarg("invalid signed vtxo request")?);
 		}
-		// Reject before admitting this participant, so an unlinked output cannot abort the round.
-		let output_keys = vtxo_requests.iter().map(|r| r.vtxo.policy.user_pubkey()).collect::<Vec<_>>();
-		self.db.read(async |t| t.require_fallback(&output_keys).await).await.to_status()?;
+		self.db.read(async |tx| {
+			for (key, origin) in &output_origins { tx.verify_fallback_child(*origin, *key).await?; }
+			Ok(())
+		}).await.to_status()?;
 
 		#[allow(deprecated)]
 		if !req.offboard_requests.is_empty() {
@@ -641,6 +658,7 @@ impl rpc::server::ArkService for Server {
 		let inp = RoundInput::RegisterPayment {
 			inputs,
 			vtxo_requests,
+			output_origins,
 			unlock_preimage,
 			user_agent_name: crate::telemetry::current_user_agent_name(),
 		};
@@ -709,16 +727,14 @@ impl rpc::server::ArkService for Server {
 			Ok(DelegatedInput { vtxo_id, attestation })
 		}).collect::<Result<_, tonic::Status>>()?;
 
-		// Parse the request-level mailbox ID (applies to all outputs)
-		let unblinded_mailbox_id = req.unblinded_mailbox_id
-			.map(|b| MailboxIdentifier::deserialize(&b[..]))
-			.transpose().badarg("invalid unblinded mailbox id")?;
-
 		let mut outputs = Vec::with_capacity(req.vtxo_requests.len());
-		for r in req.vtxo_requests {
+		for request in req.vtxo_requests {
+			let key = VtxoPolicy::deserialize(&request.policy).badarg("invalid round policy")?.user_pubkey();
+			let hint = request.origin.clone().context("missing account child origin").badarg("round origin")?.try_into()?;
+			let origin = self.resolve_fallback_hint(hint, key).badarg("invalid round origin")?;
 			outputs.push(StoredRoundOutput {
-				vtxo_request: r.try_into().badarg("invalid vtxo request")?,
-				unblinded_mailbox_id,
+				vtxo_request: request.try_into().badarg("invalid vtxo request")?, origin: Some(origin),
+				unblinded_mailbox_id: Some(MailboxIdentifier::from_pubkey(origin.mailbox_pk())),
 			});
 		}
 

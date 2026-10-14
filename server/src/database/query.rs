@@ -12,6 +12,7 @@ use std::str::FromStr;
 
 use anyhow::Context;
 use bitcoin::hashes::Hash;
+use bitcoin::secp256k1::PublicKey;
 use bitcoin::hex::DisplayHex;
 use bitcoin::{Amount, Txid};
 use tokio_postgres::{Row, Transaction as PgTransaction};
@@ -168,6 +169,11 @@ pub async fn store_round_participation(
 	scheduled_height: Option<BlockHeight>,
 ) -> anyhow::Result<()> {
 	let outputs = outputs.into_iter().collect::<Vec<_>>();
+	for output in &outputs {
+		let origin = output.origin.context("missing proven round output origin")?;
+		ensure!(output.unblinded_mailbox_id.map(|mb| mb.as_pubkey()) == Some(origin.mailbox_pk()), "round delivery mailbox differs from proven origin");
+		tx.admit_fallback_child(origin, output.vtxo_request.policy.user_pubkey()).await?;
+	}
 	let keys = outputs.iter().map(|o| o.vtxo_request.policy.user_pubkey()).collect::<Vec<_>>();
 	tx.require_fallback(&keys).await?;
 
@@ -284,10 +290,17 @@ pub async fn complete_round_participation(
 		let policy_bytes = row.get::<_, &[u8]>("policy");
 		let amount = row.get::<_, i64>("amount");
 		let unblinded_mailbox_id_str = row.get::<_, Option<&str>>("unblinded_mailbox_id");
+		let policy = ark::VtxoPolicy::deserialize(policy_bytes).context("invalid vtxo policy in round outputs")?;
+		let origin_row = tx.query_opt("SELECT mailbox_pk, child_index FROM key_link WHERE user_pubkey=$1",
+			&[&policy.user_pubkey().serialize().to_vec()]).await?;
+		let origin = origin_row.map(|row| -> anyhow::Result<_> {
+			Ok(ark::fallback::AccountChild::new(PublicKey::from_slice(&row.get::<_, Vec<u8>>("mailbox_pk"))?,
+				u32::try_from(row.get::<_, i32>("child_index"))?)?)
+		}).transpose()?;
 		outputs.push(StoredRoundOutput {
+			origin,
 			vtxo_request: VtxoRequest {
-				policy: ark::VtxoPolicy::deserialize(policy_bytes)
-					.context("invalid vtxo policy in round outputs")?,
+				policy,
 				amount: Amount::from_sat(amount as u64),
 			},
 			unblinded_mailbox_id: unblinded_mailbox_id_str.map(|id| MailboxIdentifier::from_str(id))

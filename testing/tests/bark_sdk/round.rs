@@ -69,6 +69,7 @@ async fn reordered_delegated_outputs(duplicate_leaf: bool) {
 	}
 	let wanted = outputs.iter().map(|o| o.policy.user_pubkey()).collect::<Vec<_>>();
 	wallet.join_next_round_delegated(bark::round::RoundParticipation {
+			output_origins: Default::default(),
 		inputs: vec![input], outputs, unblinded_mailbox_id: None,
 	}, None).await.unwrap();
 	let mut finished = srv.subscribe_log::<RoundFinished>();

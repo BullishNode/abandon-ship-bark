@@ -1201,6 +1201,7 @@ async fn bad_round_input() {
 		input_vtxos: vec![],
 		vtxo_requests: vec![protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
+				origin: None,
 				amount: vtxo_req.vtxo.amount.to_sat(),
 				policy: vtxo_req.vtxo.policy.serialize(),
 			}),
@@ -1249,6 +1250,7 @@ async fn bad_round_input() {
 		input_vtxos: vec![fake_input],
 		vtxo_requests: vec![protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
+				origin: None,
 				amount: vtxo_req.vtxo.amount.to_sat(),
 				policy: vtxo_req.vtxo.policy.serialize(),
 			}),
@@ -1361,7 +1363,7 @@ async fn reject_overlong_board_cosign() {
 	// exercises the server's validation. The expiry check runs before any signing
 	// and before the funding tx is validated, so a freshly generated nonce, a
 	// throwaway outpoint and an empty funding tx suffice to reach it.
-	let user_key = Keypair::new(&SECP, &mut thread_rng());
+	let (user_key, origin) = fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
 	let (_sec_nonce, pub_nonce) = musig::nonce_pair(&user_key);
 	let funding_tx = Transaction {
 		version: transaction::Version::TWO,
@@ -1372,6 +1374,7 @@ async fn reject_overlong_board_cosign() {
 
 	let mut rpc = srv.get_public_rpc().await;
 	let res = rpc.request_board_cosign(protos::BoardCosignRequest {
+		origin: Some(origin),
 		amount: sat(100_000).to_sat(),
 		utxo: OutPoint::null().serialize(),
 		expiry_height,
@@ -1421,11 +1424,12 @@ async fn request_board_cosign_with_funding_tx(
 ) -> Result<protos::BoardCosignResponse, tonic::Status> {
 	let ark_info = srv.ark_info().await;
 	let tip = ctx.bitcoind().get_block_count().await as u32;
-	let user_key = Keypair::new(&SECP, &mut thread_rng());
+	let (user_key, origin) = fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
 	let (_sec_nonce, pub_nonce) = musig::nonce_pair(&user_key);
 
 	let mut rpc = srv.get_public_rpc().await;
 	let res = rpc.request_board_cosign(protos::BoardCosignRequest {
+		origin: Some(origin),
 		amount: sat(100_000).to_sat(),
 		utxo: utxo.serialize(),
 		expiry_height: tip + ark_info.vtxo_lifetime.to_u32(),
@@ -2206,7 +2210,7 @@ async fn test_register_board() {
 	}).create().await;
 
 	// Create keypair for the board cosigning
-	let client_cosign_keypair = Keypair::new(&*SECP, &mut thread_rng());
+	let (client_cosign_keypair, origin) = fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
 
 	// Get server info and calculate expiry height
 	let ark_info = srv.ark_info().await;
@@ -2241,6 +2245,7 @@ async fn test_register_board() {
 
 	// Request server to cosign the board
 	let cosign_request = protos::BoardCosignRequest {
+		origin: Some(origin),
 		amount: board_amount.to_sat(),
 		utxo: board_utxo.serialize(),
 		expiry_height: expiry_height.into(),

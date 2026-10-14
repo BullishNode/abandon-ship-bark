@@ -1119,6 +1119,7 @@ async fn prepare_claim(
 		.await.unwrap().unwrap().lowest_incoming_htlc_expiry.unwrap();
 	let granted = srv.get_public_rpc().await.prepare_lightning_receive_claim(
 		protos::PrepareLightningReceiveClaimRequest {
+			origin: Some(wallet.fallback_child_hint(keypair.public_key()).await.unwrap().into()),
 			payment_hash: receive.payment_hash.to_vec(),
 			user_pubkey: keypair.public_key().serialize().to_vec(),
 			htlc_recv_expiry: sub_expiry.saturating_sub(srv.config().htlc_expiry_delta).into(),

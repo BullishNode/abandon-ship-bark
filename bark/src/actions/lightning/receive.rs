@@ -525,6 +525,7 @@ pub(crate) async fn prepare_lightning_receive_htlcs(
 	let htlc_recv_expiry = current_height + recv.htlc_recv_cltv_delta;
 	let keypair = wallet.peek_keypair(recv.key_index).await?;
 	let req = protos::PrepareLightningReceiveClaimRequest {
+		origin: Some(wallet.fallback_child_hint(keypair.public_key()).await?.into()),
 		payment_hash: payment_hash.to_vec(),
 		user_pubkey: keypair.public_key().serialize().to_vec(),
 		htlc_recv_expiry: htlc_recv_expiry.into(),

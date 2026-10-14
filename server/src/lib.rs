@@ -34,6 +34,7 @@ pub mod ln;
 pub mod nursery;
 mod offboards;
 pub mod expiry_payout;
+mod expiry_freeze;
 pub mod payout_witness;
 mod round;
 pub mod telemetry;

@@ -75,7 +75,7 @@ pub struct Config {
 	/// Fallback fee rate for slow transactions when estimation fails.
 	#[serde(with = "crate::utils::serde::fee_rate")]
 	pub fallback_fee_rate_slow: FeeRate,
-	/// Optional ceiling applied to every fetched fee rate.
+	/// Optional ceiling applied to fallback and fetched fee rates.
 	///
 	/// If the backend returns a rate above this value (e.g. due to a bad
 	/// mempool spike), it is clamped down to this maximum instead of being
@@ -106,10 +106,13 @@ pub struct FeeEstimator {
 
 impl FeeEstimator {
 	fn new(
-		initial: OnchainFeeRates,
+		mut initial: OnchainFeeRates,
 		history_duration: Duration,
 		max_fee_rate: Option<FeeRate>,
 	) -> Self {
+		if let Some(max) = max_fee_rate {
+			initial.clamp(max);
+		}
 		Self {
 			fee_rates: parking_lot::RwLock::new([(initial, Instant::now())].into()),
 			history_duration, max_fee_rate,
@@ -356,6 +359,31 @@ mod test {
 			Duration::from_secs(3600),
 			None,
 		)
+	}
+
+	#[test]
+	fn initial_fee_rates_respect_configured_ceiling() {
+		let est = FeeEstimator::new(
+			OnchainFeeRates { fast: rate(50), regular: rate(20), slow: rate(10) },
+			Duration::from_secs(3600), Some(rate(3)),
+		);
+		// Startup readers can use fallback rates before the first backend update.
+		assert_eq!((est.fast(), est.regular(), est.slow()), (rate(3), rate(3), rate(3)));
+	}
+
+	#[test]
+	fn initial_fee_rates_clamp_only_rates_above_ceiling() {
+		let est = FeeEstimator::new(
+			OnchainFeeRates { fast: rate(5), regular: rate(3), slow: rate(1) },
+			Duration::from_secs(3600), Some(rate(3)),
+		);
+		assert_eq!((est.fast(), est.regular(), est.slow()), (rate(3), rate(3), rate(1)));
+	}
+
+	#[test]
+	fn initial_fee_rates_without_ceiling_are_preserved() {
+		let est = estimator(50, 20, 10);
+		assert_eq!((est.fast(), est.regular(), est.slow()), (rate(50), rate(20), rate(10)));
 	}
 
 	#[test]

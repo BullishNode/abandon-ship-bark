@@ -156,17 +156,22 @@ struct AutomaticBoardFixture {
 }
 
 async fn automatic_board_fixture(name: &str) -> AutomaticBoardFixture {
+	automatic_board_fixture_with_fee(name, Amount::ZERO).await
+}
+
+async fn automatic_board_fixture_with_fee(name: &str, board_fee: Amount) -> AutomaticBoardFixture {
 	let ctx = TestContext::new(format!("carrier-builder/{name}")).await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
-		.funded(ark_testing::btc(1)).cfg(|c| {
+		.funded(ark_testing::btc(1)).cfg(move |c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
+			c.fees.board.base_fee = board_fee;
 		}).watchmand_cfg(|c| {
 			c.watchman.sweep_interval = std::time::Duration::from_secs(3600);
 			c.watchman.reaction_interval = std::time::Duration::from_secs(3600);
 		}).create().await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let wallet = ctx.bark_sdk("absent", &srv).mnemonic(mnemonic.clone())
-		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(20_000)).create().await;
+		.cfg(|c| c.daemon_manual_sync = true).boarded(sat(20_000).checked_add(board_fee).unwrap()).create().await;
 	wallet.stop_daemon_wait().await.unwrap();
 	let coins = wallet.spendable_vtxos().await.unwrap();
 	assert_eq!(coins.len(), 1, "actual native Board must register before route qualification");
@@ -238,6 +243,121 @@ async fn recover_all_bip84_and_spend(
 		assert!(core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_none());
 	}
 	(discovered, spend)
+}
+
+/// Manual financial handoff: real customer registration, physical Board backing,
+/// signed carrier and crash-style reload. This does not qualify the automatic
+/// ownership resolver or the watchmand dispatch path.
+#[tokio::test]
+async fn direct_carrier_atomic_handoff_preserves_payee_and_wallet_reservation() {
+	let AutomaticBoardFixture { ctx, srv, mnemonic, coin, record } =
+		automatic_board_fixture_with_fee("direct_carrier_atomic_handoff_preserves_payee_and_wallet_reservation", sat(1_000)).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	// No daemon writes while this fixture holds the standard watchman wallet.
+	srv.watchmand().stop().await.unwrap();
+	srv.stop().await.unwrap();
+	let core = ctx.bitcoind().sync_client();
+	let root = db.read(async |t| Ok(t.get_bare_vtxo_by_id(coin.chain_anchor().into()).await?.vtxo)).await.unwrap();
+	let funding = core.get_raw_transaction(&coin.chain_anchor().txid, None).unwrap();
+	let roots = [root];
+	let terminal = [ServerVtxo::from(coin.clone())];
+	let residuals = partition_residuals(&roots, &terminal);
+	let budget = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
+	let inventory = snapshot(&db, &roots, budget.max_rows, budget.max_serialized_bytes).await.unwrap();
+	let partition = inventory.check_partition(&terminal, &[funding], &residuals, budget).unwrap();
+	let residual = residuals.iter().find(|r| r.txout.value > Amount::ZERO).unwrap();
+	assert_eq!(partition.roots[0].terminal_amount, sat(20_000));
+	assert_eq!(partition.roots[0].anchor_residual_amount, residual.txout.value);
+	let ids = [coin.id(), residual.outpoint.into()];
+	let retirement = vec![roots[0].id().to_string()];
+	let freeze_set = "manual-board-handoff";
+	db.write(async |t| {
+		t.execute("INSERT INTO expiry_allocation (id,freeze_set,owner_pubkey,spk,disposition,gross_sat,fee_sat,payout_sat,forfeited_sat,source,source_evidence,retirement_ids)
+			VALUES ($1,$2,$3,$4,'pay',20000,1000,19000,0,'registered','{\"fixture\":\"manual-authenticated-board\"}',$5)",
+			&[&ids[0].to_string(), &freeze_set, &coin.user_pubkey().serialize().to_vec(), &record.spk.as_bytes(), &retirement]).await?;
+		t.execute("INSERT INTO expiry_allocation (id,freeze_set,disposition,gross_sat,fee_sat,payout_sat,forfeited_sat,source,source_evidence,retirement_ids)
+			VALUES ($1,$2,'operator',$3,0,0,0,'board-fee-anchor','{\"fixture\":\"exact-valued-p2a-residual\"}',$4)",
+			&[&ids[1].to_string(), &freeze_set, &i64::try_from(residual.txout.value.to_sat()).unwrap(), &retirement]).await?;
+		Ok(())
+	}).await.unwrap();
+	let operator_mnemonic = wallet::read_mnemonic_from_datadir(&srv.config().data_dir).unwrap();
+	let master = Xpriv::new_master(Network::Regtest, &operator_mnemonic.to_seed("")).unwrap();
+	let key_at = |path| Keypair::from_secret_key(&ark::SECP,
+		&master.derive_priv(&ark::SECP, &DerivationPath::from_str(path).unwrap()).unwrap().private_key);
+	let signer = WatchmanSigner::new(Secret::new(key_at("m/2'/0'")), Secret::new(key_at("m/30'")), db.clone());
+	let initial_height = core.get_block_count().unwrap();
+	let tip = BlockRef { height: BlockHeight::new(initial_height as u32), hash: core.get_block_hash(initial_height).unwrap() };
+	let mut fee_wallet = PersistedWallet::load_derive_from_master_xpriv(db.clone(), ctx.bitcoind().async_client(),
+		Network::Regtest, &master, WalletKind::Watchman, tip, 3).await.unwrap();
+	ctx.bitcoind().fund_addr(fee_wallet.next_unused_address(KEYCHAIN).address, sat(1_000_000)).await;
+	ctx.generate_blocks(coin.expiry_height().to_u32().saturating_sub(initial_height as u32) + 3).await;
+	sync_fee_wallet(&mut fee_wallet, &core);
+	let fee_wallet = InstrumentedLock::new("atomic_direct_carrier_fixture", fee_wallet);
+	let recipient = TxOut { value: sat(19_000), script_pubkey: record.spk.clone() };
+	let operator_script = ctx.bitcoind().get_new_address().script_pubkey();
+	let policy = CarrierLimits { max_fee_rate: FeeRate::from_sat_per_vb(50).unwrap(),
+		max_miner_fee: sat(10_000), max_weight: Weight::from_wu(400_000) };
+	let rate = FeeRate::from_sat_per_vb(30).unwrap();
+	let height = BlockHeight::new(core.get_block_count().unwrap() as u32);
+	let (mut held, mut carrier) = build_direct_carrier(&signer, fee_wallet.lock_owned().await, &roots,
+		&[recipient.clone()], operator_script.clone(), height, rate, policy).await.unwrap();
+	assert!(!carrier.fee_inputs.is_empty(), "actual funding shortfall must exercise persistent fee reservation");
+	let fee_point = carrier.fee_inputs[0].outpoint;
+	let txid = carrier.tx.compute_txid();
+	let previous_wallet = wallet_changeset_fingerprint(&db, WalletKind::Watchman).await;
+	let store = async |t: &server::database::Tx<'_>, carrier: &server::watchman::carrier::DirectCarrier, held: &PersistedWallet| {
+		t.store_frozen_expiry_carrier(freeze_set, &ids, &roots, carrier, held, &operator_script,
+			Network::Regtest, rate, policy, budget).await
+	};
+	let saved = carrier.tx.output[carrier.outputs.recipients[0] as usize].clone();
+	carrier.tx.output[carrier.outputs.recipients[0] as usize].script_pubkey = operator_script.clone();
+	assert!(db.write(async |t| store(t, &carrier, &held).await).await.is_err(), "wrong payee must not publish a carrier");
+	carrier.tx.output[carrier.outputs.recipients[0] as usize] = saved;
+	assert!(db.write(async |t| t.store_frozen_expiry_carrier(freeze_set, &ids[..1], &roots, &carrier, &held,
+		&operator_script, Network::Regtest, rate, policy, budget).await).await.is_err(), "a payable prefix cannot hide an allocation");
+	held.commit_tx(&carrier.tx);
+	let mut body_stored = false;
+	let rolled_back: anyhow::Result<()> = db.write(async |t| {
+		store(t, &carrier, &held).await?;
+		body_stored = true;
+		anyhow::bail!("declared rollback after signed carrier, mappings and wallet stage");
+	}).await;
+	assert!(rolled_back.is_err());
+	assert!(body_stored, "declared rollback must follow successful handoff writes");
+	let counts = db.read(async |t| Ok(t.query_one("SELECT (SELECT count(*) FROM expiry_carrier) AS carriers,
+		(SELECT count(*) FROM expiry_carrier_allocation) AS mappings", &[]).await?)).await.unwrap();
+	assert_eq!(counts.get::<_, i64>("carriers"), 0);
+	assert_eq!(counts.get::<_, i64>("mappings"), 0);
+	assert!(previous_wallet == wallet_changeset_fingerprint(&db, WalletKind::Watchman).await,
+		"body failure must roll back wallet graph with the signed carrier");
+	db.write(async |t| store(t, &carrier, &held).await).await.unwrap();
+	let committed_wallet = wallet_changeset_fingerprint(&db, WalletKind::Watchman).await;
+	assert_ne!(previous_wallet.0, committed_wallet.0);
+	db.write(async |t| store(t, &carrier, &held).await).await.unwrap();
+	assert!(committed_wallet == wallet_changeset_fingerprint(&db, WalletKind::Watchman).await,
+		"idempotent readback must not append another wallet stage");
+	let stored = db.read(async |t| Ok(t.query_one("SELECT signed_tx FROM expiry_carrier WHERE txid=$1", &[&txid.to_string()]).await?)).await.unwrap();
+	assert!(stored.get::<_, Vec<u8>>("signed_tx") == bitcoin::consensus::serialize(&carrier.tx), "durable signed bytes differ");
+	held.take_staged();
+	drop(held);
+	drop(carrier.fee_reservation);
+	let reloaded = PersistedWallet::load_derive_from_master_xpriv(db.clone(), ctx.bitcoind().async_client(),
+		Network::Regtest, &master, WalletKind::Watchman, tip, 3).await.unwrap();
+	assert!(!reloaded.list_unspent().any(|u| u.outpoint == fee_point), "reload before broadcast must retain fee spend");
+	assert!(!core.get_raw_mempool().unwrap().contains(&txid), "DB publication itself never broadcasts");
+	let accepted: serde_json::Value = core.call("testmempoolaccept", &[
+		serde_json::json!([bitcoin::consensus::encode::serialize_hex(&carrier.tx)]),
+	]).unwrap();
+	assert_eq!(accepted[0]["allowed"], true);
+	let mut proof = OpenOptions::new().write(true).create_new(true).mode(0o600)
+		.open(ctx.datadir.join("manual-durable-direct-carrier.tx")).unwrap();
+	proof.write_all(&bitcoin::consensus::serialize(&carrier.tx)).unwrap();
+	core.send_raw_transaction(&carrier.tx).unwrap();
+	ctx.generate_blocks(1).await;
+	let payout = OutPoint::new(txid, carrier.outputs.recipients[0]);
+	let (discovered, spend) = recover_all_bip84_and_spend(&ctx, &mnemonic).await;
+	assert!(discovered.contains(&(payout, sat(19_000))));
+	assert!(spend.input.iter().any(|i| i.previous_output == payout));
 }
 
 #[tokio::test]

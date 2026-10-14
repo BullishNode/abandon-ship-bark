@@ -112,6 +112,11 @@ struct Cli {
 	#[arg(long, env = "BARKD_ALLOWED_ORIGINS", value_delimiter = ',')]
 	allowed_origins: Vec<String>,
 
+	/// Bind forwarded invoice descriptions to the exact Noah LNURL domain.
+	/// Use only on a dedicated authenticated forwarder for that owned backend.
+	#[arg(long, env = "BARKD_NOAH_LNURL_DOMAIN", conflicts_with_all = ["no_auth", "dangerously_allow_remote_no_auth"])]
+	noah_lnurl_domain: Option<bark_rest::noah::NoahLnurl>,
+
 	/// Expose `GET /api/v1/wallet/mnemonic`, which returns the wallet's BIP-39
 	/// mnemonic phrase. Disabled by default; while disabled the endpoint
 	/// responds with 404. Pass `--expose-mnemonic` (or set
@@ -515,6 +520,7 @@ async fn main() -> anyhow::Result<()>{
 	let builder = ServerState::builder()
 		.wallet(wallet_opt)
 		.auth_token(auth_token)
+		.noah_lnurl(cli.noah_lnurl_domain)
 		.on_wallet_create(on_wallet_create)
 		.on_wallet_delete(on_wallet_delete)
 		.on_get_mnemonic(on_get_mnemonic);
@@ -552,6 +558,14 @@ async fn main() -> anyhow::Result<()>{
 #[cfg(test)]
 mod test {
 	use super::*;
+
+	#[test]
+	fn noah_domain_requires_authenticated_cli() {
+		for disabled in ["--no-auth", "--dangerously-allow-remote-no-auth"] {
+			assert!(Cli::try_parse_from(["barkd", "--noah-lnurl-domain", "owned.invalid", disabled]).is_err());
+		}
+		assert!(Cli::try_parse_from(["barkd", "--noah-lnurl-domain", "owned.invalid"]).is_ok());
+	}
 
 	#[test]
 	fn defaults_dont_panic() {

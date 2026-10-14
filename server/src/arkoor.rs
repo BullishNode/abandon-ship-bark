@@ -106,6 +106,15 @@ impl Server {
 		Ok(origins)
 	}
 
+	pub(crate) fn resolve_output_origins(
+		&self, keys: &[PublicKey], hints: &BTreeMap<PublicKey, ark::fallback::AccountChildHint>,
+	) -> anyhow::Result<Vec<(PublicKey, ark::fallback::AccountChild)>> {
+		keys.iter().map(|key| {
+			let hint = *hints.get(key).context("missing account child origin for output")?;
+			Ok((*key, self.resolve_fallback_hint(hint, *key)?))
+		}).collect()
+	}
+
 	/// Returns the signed builder along with the number of VTXO rows actually
 	/// inserted by the tree update. Callers gate retry-sensitive metrics on
 	/// this count: `> 0` means the inputs/outputs were freshly persisted,
@@ -146,10 +155,7 @@ impl Server {
 			.insert_oor_spent_vtxos(builder.build_unsigned_internal_vtxos())
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
-		let origins = output_keys.iter().map(|key| {
-			let hint = *hints.get(key).context("missing account child origin for output")?;
-			Ok((*key, self.resolve_fallback_hint(hint, *key)?))
-		}).collect::<anyhow::Result<Vec<_>>>()?;
+		let origins = self.resolve_output_origins(&output_keys, hints)?;
 		let inserted = self.db.write(async |t| {
 			for (key, origin) in &origins { t.admit_fallback_child(*origin, *key).await?; }
 			t.require_fallback(&output_keys).await?;

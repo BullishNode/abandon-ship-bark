@@ -6,24 +6,25 @@
 //! a failure never authorizes sending its backing through the legacy drain.
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use anyhow::Context;
-use bitcoin::{FeeRate, Network, ScriptBuf, Transaction, Txid};
+use bitcoin::{FeeRate, Network, ScriptBuf, Txid};
 use bitcoin_ext::{BlockHeight, rpc::BitcoinAsyncRpcExt};
 use bitcoind_async_client::Client;
 
-use crate::database::{Db, carrier_snapshot::BackingSnapshotLimits};
+use crate::database::{Db, carrier_snapshot::BackingSnapshotLimits, frozen_expiry::FrozenExpiryGroup};
 use crate::utils::{InstrumentedLock, InstrumentedOwnedLockGuard};
-use crate::wallet::{BdkWalletExt, PersistedWallet, WalletUtxosGuard};
+use crate::wallet::{BdkWalletExt, PersistedWallet};
 use super::WatchmanSigner;
-use super::carrier::{build_direct_carrier, CarrierLimits};
+use super::carrier::{build_direct_carrier, CarrierLimits, DirectCarrier};
 use super::direct_delivery::{DeliveryState, DirectDelivery};
 
 struct UncertainPublication {
-	freeze_set: String,
-	tx: Transaction,
+	group: FrozenExpiryGroup,
+	carrier: DirectCarrier,
+	rate: FeeRate,
 	wallet: InstrumentedOwnedLockGuard<PersistedWallet>,
-	reservation: Option<WalletUtxosGuard>,
 }
 
 pub struct FrozenExpiryProcessor {
@@ -68,21 +69,43 @@ impl FrozenExpiryProcessor {
 		Ok(())
 	}
 
-	/// Probe the complete committed handoff of these SAME signed bytes. Absence
-	/// or a read error keeps the wallet guard/reservation and forbids new work.
+	/// Recover the complete handoff of these SAME signed bytes. A failed read is
+	/// never permission to rebuild: retry the original atomic publication under
+	/// its existing advisory lock, which waits for the previous COMMIT to finish.
+	/// A bounded retry failure retains the original carrier and exclusive wallet.
 	pub async fn probe_publication(&mut self) -> anyhow::Result<()> {
 		let Some(held) = self.uncertain.as_mut() else { return Ok(()); };
-		let versions = self.db.read_direct_delivery(&held.freeze_set, self.network, self.budget).await?;
-		ensure!(versions.iter().any(|v| v.tx == held.tx), "uncertain signed carrier is not durably present; wallet retained");
+		let id = &held.group.plan.id;
+		let versions = match self.db.read_direct_delivery(id, self.network, self.budget).await {
+			Ok(versions) => versions,
+			Err(_) => {
+				// No new signing, coin selection, fee calculation or stage reset.
+				// A still-running original transaction holds this same carrier lock.
+				tokio::time::timeout(Duration::from_secs(10), self.db.write(async |t|
+					t.store_frozen_expiry_carrier(id, &held.group.plan.allocation_ids, &held.group.backing,
+						&held.carrier, &held.wallet, &self.operator_script, self.network, held.rate,
+						self.policy, self.budget).await)).await
+					.context("retained publication retry timed out; same carrier and wallet retained")??;
+				self.db.read_direct_delivery(id, self.network, self.budget).await?
+			},
+		};
+		ensure!(versions.iter().any(|v| v.tx == held.carrier.tx), "uncertain signed carrier is not durably present; wallet retained");
 		// All readback validation happened before releasing the original fee guard.
 		// The exclusive wallet remains held throughout the reservation transfer.
-		drop(held.reservation.take());
-		let delivery = DirectDelivery::recover_group(self.db.clone(), &held.wallet, &held.freeze_set,
+		let original_reservation = std::mem::replace(&mut held.carrier.fee_reservation,
+			held.wallet.lock_wallet_utxos(std::iter::empty())?);
+		drop(original_reservation);
+		let delivery = DirectDelivery::recover_group(self.db.clone(), &held.wallet, id,
 			self.network, self.budget, self.policy).await?;
 		held.wallet.take_staged();
-		self.deliveries.insert(held.freeze_set.clone(), delivery);
+		self.deliveries.insert(id.clone(), delivery);
 		self.uncertain = None;
 		Ok(())
+	}
+
+	/// Public identifiers only; raw witnesses remain in the owning process.
+	pub fn retained_publication_id(&self) -> Option<(Txid, bitcoin::Wtxid)> {
+		self.uncertain.as_ref().map(|held| (held.carrier.tx.compute_txid(), held.carrier.tx.compute_wtxid()))
 	}
 
 	/// Sign and atomically publish one complete source-frozen group. No broadcast
@@ -107,12 +130,15 @@ impl FrozenExpiryProcessor {
 		let (mut held, carrier) = build_direct_carrier(signer, held, &group.backing,
 			&group.plan.recipients, self.operator_script.clone(), height, rate, self.policy).await?;
 		held.commit_tx(&carrier.tx);
-		let outcome = self.db.write(async |t| t.store_frozen_expiry_carrier(id, &group.plan.allocation_ids,
-			&group.backing, &carrier, &held, &self.operator_script, self.network, rate, self.policy, self.budget).await).await;
 		let txid = carrier.tx.compute_txid();
-		self.uncertain = Some(UncertainPublication { freeze_set: id.to_owned(), tx: carrier.tx,
-			wallet: held, reservation: Some(carrier.fee_reservation) });
-		outcome.context("signed carrier publication failed or COMMIT is unknown; same bytes and wallet retained")?;
+		// Retain before the publication await: cancelling its future must not
+		// release the original bytes, staged wallet or exclusive reservation.
+		self.uncertain = Some(UncertainPublication { group, carrier, rate, wallet: held });
+		let retained = self.uncertain.as_ref().expect("publication retained above");
+		self.db.write(async |t| t.store_frozen_expiry_carrier(id, &retained.group.plan.allocation_ids,
+			&retained.group.backing, &retained.carrier, &retained.wallet, &self.operator_script,
+			self.network, retained.rate, self.policy, self.budget).await).await
+			.context("signed carrier publication failed or COMMIT is unknown; same bytes and wallet retained")?;
 		self.probe_publication().await?;
 		Ok(txid)
 	}

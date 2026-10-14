@@ -1071,8 +1071,14 @@ async fn complete_pending_group_listing_survives_more_groups_than_its_query_page
 		.cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.fees.board.base_fee = sat(1_000);
-			c.expiry_payout.grace_blocks = 0;
+			c.direct_expiry.enabled = true;
+			c.direct_expiry.grace_blocks = 0;
+			c.direct_expiry.interval = std::time::Duration::from_secs(3600);
 		}).watchmand_cfg(|c| {
+			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+				history_dir: c.data_dir.parent().unwrap().join("server"), max_miner_fee: sat(10_000),
+			});
+			c.fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(50).unwrap());
 			c.watchman.sweep_interval = std::time::Duration::from_secs(3600);
 			c.watchman.reaction_interval = std::time::Duration::from_secs(3600);
 		}).create().await;

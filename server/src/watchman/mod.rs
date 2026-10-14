@@ -7,6 +7,7 @@
 //!
 
 pub mod carrier;
+pub mod direct_delivery;
 mod config;
 mod daemon;
 mod frontier;

@@ -30,6 +30,9 @@ use server::watchman::{WatchmanSigner, carrier::{build_direct_carrier, CarrierLi
 use ark_testing::{sat, TestContext};
 use ark_testing::constants::BOARD_CONFIRMATIONS;
 
+#[path = "carrier/direct_delivery.rs"]
+mod direct_delivery;
+
 fn operator_backing(
 	operator: &Keypair, server: &Keypair, expiry: BlockHeight, amount: Amount, point: OutPoint,
 ) -> ServerVtxo {

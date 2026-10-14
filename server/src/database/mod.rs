@@ -10,6 +10,7 @@ mod embedded {
 
 pub mod carrier_snapshot;
 pub mod expiry_carrier;
+pub(crate) mod direct_delivery;
 pub mod expiry_freeze;
 pub mod expiry_ownership;
 mod ban;

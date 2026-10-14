@@ -1,5 +1,8 @@
 
 use std::ops::Deref;
+use std::str::FromStr;
+
+use bitcoin::Txid;
 
 use futures::{Stream, TryStreamExt};
 use postgres_types::Type;
@@ -45,6 +48,36 @@ impl TryFrom<Row> for PoolVtxo {
 }
 
 impl<'t> Tx<'t> {
+	/// Record operator change with its genuine, now-consumed pool input in
+	/// the same transaction as the allocation. This is never reusable membership.
+	pub(crate) async fn store_pool_change_retirements(
+		&self, change: &[(VtxoId, VtxoId)],
+	) -> anyhow::Result<()> {
+		ensure!(change.len() <= 2, "pool retirement exceeds change-output bound");
+		for (output, input) in change {
+			self.execute("INSERT INTO vtxo_pool_retirement (vtxo_id,pool_input_id)
+				SELECT o.vtxo_id,p.vtxo_id FROM vtxo o
+				JOIN vtxo_pool p ON p.vtxo_id=$2 AND p.spent_at IS NOT NULL
+				JOIN vtxo i ON i.vtxo_id=p.vtxo_id AND i.spend_state='spent' AND i.oor_spent_txid IS NOT NULL
+				WHERE o.vtxo_id=$1 AND o.spend_state='pool' AND o.policy_type='pubkey'
+				ON CONFLICT (vtxo_id) DO NOTHING", &[&output.to_string(), &input.to_string()]).await?;
+			let stored = self.query_opt("SELECT pool_input_id FROM vtxo_pool_retirement WHERE vtxo_id=$1",
+				&[&output.to_string()]).await?.map(|r| r.get::<_, String>(0));
+			ensure!(stored.as_deref() == Some(input.to_string().as_str()), "conflicting or invalid pool change provenance");
+		}
+		Ok(())
+	}
+
+	pub(crate) async fn pool_change_retirement_input(&self, id: VtxoId)
+		-> anyhow::Result<Option<(VtxoId, Txid)>>
+	{
+		let row = self.query_opt("SELECT r.pool_input_id,i.oor_spent_txid FROM vtxo_pool_retirement r
+			JOIN vtxo_pool p ON p.vtxo_id=r.pool_input_id AND p.spent_at IS NOT NULL
+			JOIN vtxo i ON i.vtxo_id=p.vtxo_id AND i.spend_state='spent' AND i.oor_spent_txid IS NOT NULL
+			WHERE r.vtxo_id=$1", &[&id.to_string()]).await?;
+		row.map(|r| Ok((VtxoId::from_str(r.get(0))?, Txid::from_str(r.get(1))?))).transpose()
+	}
+
 	pub async fn get_pool_vtxos_by_ids(&self, ids: &[VtxoId]) -> anyhow::Result<Vec<PoolVtxo>> {
 		let stmt = self.prepare_typed(
 			"SELECT vtxo FROM vtxo_pool WHERE vtxo_id = ANY($1)",

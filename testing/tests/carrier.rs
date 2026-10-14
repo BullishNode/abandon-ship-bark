@@ -1,6 +1,10 @@
 //! Real operator-owned backing proves construction/signing/relay only.
 //! Exact supplied outputs here do not claim resolved customer entitlement.
 
+#[path = "carrier/pool_retirement.rs"]
+mod pool_retirement;
+
+
 #[path = "carrier/returning_client.rs"]
 mod returning_client;
 #[path = "carrier/client_stack.rs"]

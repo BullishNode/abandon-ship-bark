@@ -355,6 +355,19 @@ impl VtxoPool {
 
 		let change = check_change_outputs(change)?;
 
+		// Every operator change keeps retirement provenance, even when its
+		// key or depth prevents reusing it. Its signed path names the exact
+		// selected pool input and the transaction consuming that input.
+		let mut retirements = Vec::with_capacity(change.len());
+		for output in &change {
+			let parents = input_spend_info.iter().filter(|(id, txid)|
+				output.transactions().any(|item| item.tx.compute_txid() == *txid &&
+					item.tx.input.iter().any(|i| i.previous_output == id.to_point()))
+			).collect::<Vec<_>>();
+			ensure!(parents.len() == 1, "pool change lacks one authenticated allocation input");
+			retirements.push((output.id(), parents[0].0));
+		}
+
 		let update = VtxoTreeUpdate::new()
 			.upsert_signed_tx(signed_vtxs)
 			.insert_oor_spent_vtxos(internal_vtxos)
@@ -386,6 +399,7 @@ impl VtxoPool {
 			htlc_vtxo::create_htlc_vtxos(&t, &htlc_recvs, HtlcDirection::Outgoing).await?;
 			t.mark_vtxopool_vtxos_spent(inputs.iter().map(|v| v.0)).await
 				.context("failed to mark vtxopool vtxos as spent")?;
+			t.store_pool_change_retirements(&retirements).await?;
 			Ok(())
 		}).await?;
 

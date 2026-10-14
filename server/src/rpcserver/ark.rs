@@ -513,9 +513,12 @@ impl rpc::server::ArkService for Server {
 
 		let user_pubkey = PublicKey::from_bytes(&req.user_pubkey)?;
 		let htlc_recv_expiry = BlockHeight::new(req.htlc_recv_expiry);
+		let hint = req.origin.badarg("missing account child origin")?.try_into()
+			.badarg("invalid account child origin")?;
+		let origin = self.resolve_fallback_hint(hint, user_pubkey).badarg("invalid grant origin")?;
 
 		let (sub, htlcs) = self.prepare_lightning_claim(
-			payment_hash, user_pubkey, htlc_recv_expiry, req.lightning_receive_anti_dos,
+			payment_hash, user_pubkey, origin, htlc_recv_expiry, req.lightning_receive_anti_dos,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(protos::PrepareLightningReceiveClaimResponse {

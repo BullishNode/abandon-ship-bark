@@ -914,6 +914,7 @@ impl Server {
 		&self,
 		payment_hash: PaymentHash,
 		user_pubkey: PublicKey,
+		origin: ark::fallback::AccountChild,
 		htlc_recv_expiry: BlockHeight,
 		anti_dos: Option<protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos>,
 	) -> anyhow::Result<(LightningHtlcSubscription, Vec<Vtxo<Full>>)> {
@@ -1005,7 +1006,7 @@ impl Server {
 				user_pubkey, payment_hash, htlc_recv_expiry, self.config.htlc_expiry_delta,
 			),
 		};
-		let vtxos = self.vtxopool.send_arkoor(self, dest).await
+		let vtxos = self.vtxopool.send_arkoor(self, dest, origin).await
 			.context("vtxopool error")?;
 
 		self.db.write(async |t| t.update_lightning_htlc_subscription_with_htlcs(

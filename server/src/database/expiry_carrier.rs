@@ -10,13 +10,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
 use bitcoin::{Amount, FeeRate, Network, ScriptBuf};
-use bitcoin::bip32::Xpub;
 use bitcoin::consensus::serialize;
-use bitcoin::secp256k1::{schnorr, PublicKey};
+use bitcoin::secp256k1::PublicKey;
 use tokio_postgres::Row;
 
 use ark::{ProtocolEncoding, ServerVtxo, VtxoId};
-use ark::fallback::{AccountChild, FallbackRecord};
 
 use crate::database::carrier_snapshot::BackingSnapshotLimits;
 use crate::wallet::{PersistedWallet, WalletKind};
@@ -137,6 +135,8 @@ impl Tx<'_> {
 		ensure!(gross == total(backing.iter().map(|v| v.amount()))?, "frozen gross does not cover exact backing");
 		// Reauthenticate each immutable record and exact account child. A stored
 		// script or mailbox identifier alone cannot authorize a payee.
+		let owners = allocations.iter().filter_map(|a| a.owner).collect::<Vec<_>>();
+		let scripts = self.authenticated_fallback_scripts(&owners, network).await?;
 		let mut leaves = Vec::new();
 		for allocation in &allocations {
 			if allocation.disposition == "operator" {
@@ -147,20 +147,7 @@ impl Tx<'_> {
 			}
 			let owner = allocation.owner.context("customer allocation has no owner")?;
 			let script = allocation.script.as_ref().context("customer allocation has no script")?;
-			let row = self.query_opt("SELECT l.mailbox_pk, l.child_index, r.spk, r.account_xpub, r.mailbox_sig, r.account_sig
-				FROM key_link l JOIN fallback_record r ON r.mailbox_pk=l.mailbox_pk WHERE l.user_pubkey=$1",
-				&[&owner.serialize().to_vec()]).await?.context("frozen owner has no immutable account record")?;
-			let mailbox = PublicKey::from_slice(&row.get::<_, Vec<u8>>("mailbox_pk"))?;
-			let record = FallbackRecord {
-				spk: ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
-				account_xpub: Xpub::decode(&row.get::<_, Vec<u8>>("account_xpub"))?,
-				mailbox_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("mailbox_sig"))?,
-				account_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("account_sig"))?,
-			};
-			record.verify(network, mailbox)?;
-			AccountChild::new(mailbox, u32::try_from(row.get::<_, i32>("child_index"))?)?
-				.verify_pubkey(&record.account_xpub, owner)?;
-			ensure!(record.spk == *script, "frozen destination differs from authenticated record");
+			ensure!(scripts.get(&owner) == Some(script), "frozen destination differs from authenticated record");
 			leaves.push(CustomerLeaf { id: allocation.id, script: script.clone(), amount: allocation.amounts.gross });
 		}
 		let plan = allocate(leaves)?;

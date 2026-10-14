@@ -127,11 +127,23 @@ async fn returning_real_sdk_preserves_frozen_value_then_adopts_confirmed_carrier
 		DeliveryState::Confirmed { txid: winner, block } => { assert_eq!(winner, txid); block },
 		other => panic!("expected actual confirmed winner, got {other:?}"),
 	};
-	core.invalidate_block(&block.hash).unwrap();
+	// A mismatching confirmation record is a deterministic negative control.
+	// Do not invalidate Core's tip under the live upstream SyncManager: a
+	// backward-height observation deliberately terminates that process.
+	let wrong_block = core.get_block_hash(block.height.to_u32() as u64 - 1).unwrap();
+	db.write(async |t| {
+		t.execute("UPDATE expiry_carrier SET confirmed_block=$2 WHERE txid=$1",
+			&[&txid.to_string(), &wrong_block.to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
 	assert_ne!(adopt_server_vtxo_status(&returning, vec![coin.id()]).await.unwrap()[0].state,
 		AdoptedVtxoState::Spent, "a recorded winner outside the active chain must retain Ark value");
 	assert_eq!(returning.balance().await.unwrap().total(), sat(20_000));
-	core.reconsider_block(&block.hash).unwrap();
+	db.write(async |t| {
+		t.execute("UPDATE expiry_carrier SET confirmed_block=$2 WHERE txid=$1",
+			&[&txid.to_string(), &block.hash.to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
 	let payout = carrier.tx.output.iter().find(|o| o.script_pubkey == fallback.spk).unwrap();
 	assert_eq!(payout.value, sat(19_000));
 	returning.sync_onchain().await.unwrap();

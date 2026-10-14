@@ -157,6 +157,7 @@ impl Daemon {
 		} else {
 			None
 		};
+		db.require_expiry_route(cfg.watchman.direct_expiry.is_some()).await?;
 
 
 		// *******************

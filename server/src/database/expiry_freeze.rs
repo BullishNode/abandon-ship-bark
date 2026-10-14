@@ -74,6 +74,7 @@ impl Tx<'_> {
 			"expiry source freeze exceeds row budget");
 		self.lock_htlc_settlements().await?;
 		self.lock_expiry_carriers().await?;
+		self.require_expiry_route(true).await?;
 		let before = self.backing_snapshot(roots, budget).await?;
 		let keys = before.regular.iter().map(|f| f.state.vtxo_id.to_string())
 			.chain(before.pending_boards.iter().map(|f| f.vtxo.id().to_string())).collect::<Vec<_>>();

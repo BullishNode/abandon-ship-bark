@@ -75,7 +75,7 @@ pub struct Config {
 	/// Fallback fee rate for slow transactions when estimation fails.
 	#[serde(with = "crate::utils::serde::fee_rate")]
 	pub fallback_fee_rate_slow: FeeRate,
-	/// Optional ceiling applied to every fetched fee rate.
+	/// Optional ceiling applied to every cached rate, including startup fallback.
 	///
 	/// If the backend returns a rate above this value (e.g. due to a bad
 	/// mempool spike), it is clamped down to this maximum instead of being
@@ -106,10 +106,13 @@ pub struct FeeEstimator {
 
 impl FeeEstimator {
 	fn new(
-		initial: OnchainFeeRates,
+		mut initial: OnchainFeeRates,
 		history_duration: Duration,
 		max_fee_rate: Option<FeeRate>,
 	) -> Self {
+		if let Some(max) = max_fee_rate {
+			initial.clamp(max);
+		}
 		Self {
 			fee_rates: parking_lot::RwLock::new([(initial, Instant::now())].into()),
 			history_duration, max_fee_rate,

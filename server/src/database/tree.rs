@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use anyhow::{Context, bail};
 
@@ -452,6 +452,22 @@ pub async fn execute_vtxo_tree_update(
 	update: VtxoTreeUpdate,
 ) -> anyhow::Result<u64> {
 	debug_assert!(validate(&update).is_ok(), "{}", validate(&update).unwrap_err());
+
+	let changes = &update.vtxo_updates;
+	let mut affected = update.vtxo_inserts.vtxo_ids.iter().cloned()
+		.chain(changes.provide_signatures.iter().map(|v| v.id().to_string()))
+		.chain(changes.oor_spends.iter().map(|s| s.vtxo_id.to_string()))
+		.chain(changes.round_spends.iter().map(|s| s.vtxo_id.to_string()))
+		.chain(changes.offboard_spends.iter().map(|s| s.vtxo_id.to_string()))
+		.chain(changes.round_forfeits.iter().map(|s| s.vtxo_id.to_string()))
+		.chain(changes.claims.iter().chain(changes.registrations.iter()).map(ToString::to_string))
+		.collect::<BTreeSet<_>>();
+	let undo = changes.round_unspends.iter().map(|s| s.round_id).collect::<Vec<_>>();
+	if !undo.is_empty() {
+		affected.extend(tx.query("SELECT vtxo_id FROM vtxo WHERE spent_in_round=ANY($1)", &[&undo]).await?
+			.into_iter().map(|r| r.get::<_, String>("vtxo_id")));
+	}
+	super::expiry_freeze::check_not_expiry_frozen(tx, &affected.into_iter().collect::<Vec<_>>()).await?;
 
 	upsert_virtual_transactions(tx, &update.tx_inserts).await?;
 	let inserted = insert_vtxos(tx, &update.vtxo_inserts).await?;

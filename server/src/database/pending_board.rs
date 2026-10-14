@@ -14,6 +14,7 @@ impl Tx<'_> {
 	/// Call before inserting the funding anchor, in the same transaction.
 	/// Competing requests cannot reserve two leaf IDs against one outpoint.
 	pub(crate) async fn store_pending_board(&self, vtxo: &Vtxo) -> anyhow::Result<()> {
+		self.check_not_expiry_frozen(&[vtxo.id(), vtxo.chain_anchor().into()]).await?;
 		let anchor = vtxo.chain_anchor().to_string();
 		self.execute("INSERT INTO pending_board (id,vtxo_id,vtxo,expiry)
 			VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING",
@@ -29,6 +30,7 @@ impl Tx<'_> {
 	/// Keep this lock until registration commits. Payout uses the same durable
 	/// row even before the unsigned user coin exists in the ordinary table.
 	pub(crate) async fn lock_board_registration(&self, vtxo: &Vtxo) -> anyhow::Result<()> {
+		self.check_not_expiry_frozen(&[vtxo.id(), vtxo.chain_anchor().into()]).await?;
 		if let Some(row) = self.query_opt("SELECT vtxo_id FROM pending_board WHERE id=$1 FOR UPDATE",
 			&[&vtxo.chain_anchor().to_string()]).await? {
 			ensure!(row.get::<_, String>(0) == vtxo.id().to_string(),

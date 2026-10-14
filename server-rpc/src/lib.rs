@@ -45,7 +45,7 @@ mod convert;
 pub use crate::convert::{ConvertError, TryFromBytes};
 
 mod error;
-pub use crate::error::{StatusExt, EXPIRY_SETTLED_ERROR};
+pub use crate::error::{StatusExt, EXPIRY_FROZEN_ERROR, EXPIRY_SETTLED_ERROR};
 
 pub mod pver;
 

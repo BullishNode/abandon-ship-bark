@@ -382,6 +382,45 @@ async fn direct_carrier_atomic_handoff_preserves_payee_and_wallet_reservation() 
 	assert!(spend.input.iter().any(|i| i.previous_output == payout));
 }
 
+/// Exercise the trusted admission boundary directly: even if an upstream
+/// caller hands it a spend transition, a committed expiry allocation must win.
+/// This is not an independently signed malicious transaction or a live payment.
+#[tokio::test]
+async fn frozen_expiry_source_refuses_competing_virtual_spend() {
+	let AutomaticBoardFixture { ctx, srv, coin, .. } =
+		automatic_board_fixture("frozen_expiry_source_refuses_competing_virtual_spend").await;
+	srv.watchmand().stop().await.unwrap();
+	srv.stop().await.unwrap();
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let core = ctx.bitcoind().sync_client();
+	let roots = [db.read(async |t| Ok(t.get_bare_vtxo_by_id(coin.chain_anchor().into()).await?.vtxo)).await.unwrap()];
+	let terminal = [ServerVtxo::from(coin.clone())];
+	let residuals = partition_residuals(&roots, &terminal);
+	let funding = core.get_raw_transaction(&coin.chain_anchor().txid, None).unwrap();
+	let funding = BTreeMap::from([(funding.compute_txid(), funding)]);
+	let canceled_receives = BTreeSet::new();
+	let send_evidence = BTreeMap::new();
+	ctx.generate_blocks(coin.expiry_height().to_u32().saturating_sub(core.get_block_count().unwrap() as u32) + 1).await;
+	let context = OwnershipContext { tip: core.get_block_count().unwrap() as u32, grace: 0,
+		max_dependencies: 100, server_pubkey: coin.server_pubkey(), funding: &funding, canceled_receives: &canceled_receives };
+	let budget = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
+	let plan = db.write(async |t| t.freeze_expiry_sources(&roots, &terminal, &residuals,
+		&context, &send_evidence, Network::Regtest, budget).await).await.unwrap();
+	assert!(plan.allocation_ids.contains(&coin.id()));
+	let before = db.read(async |t| t.get_user_vtxo_by_id(coin.id()).await).await.unwrap();
+	assert_eq!(before.spend_state, SpendState::Spendable);
+	// Use a transaction already stored by the real Board so a foreign-key
+	// error cannot masquerade as expiry arbitration.
+	let attempt = db.write(async |t| t.execute_vtxo_tree_update(server::database::tree::VtxoTreeUpdate::new()
+		.mark_vtxos_oor_spent([(coin.id(), coin.point().txid)])).await).await;
+	assert!(attempt.is_err(), "a committed expiry freeze must refuse a competing money-state transition");
+	let refusal = format!("{:#}", attempt.unwrap_err());
+	assert!(refusal.contains(server_rpc::EXPIRY_FROZEN_ERROR), "reservation must not look paid or be a different SQL failure: {refusal}");
+	let after = db.read(async |t| t.get_user_vtxo_by_id(coin.id()).await).await.unwrap();
+	assert_eq!(after.spend_state, SpendState::Spendable);
+	assert_eq!(after.oor_spent_txid, None);
+}
+
 #[tokio::test]
 async fn automatic_expired_board_pays_registered_recipient_from_actual_backing() {
 	let AutomaticBoardFixture { ctx, srv, mnemonic, coin, record } =

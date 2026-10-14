@@ -271,6 +271,7 @@ impl<'t> Tx<'t> {
 			unlock_hash, inputs,
 		);
 
+		self.check_not_expiry_frozen(inputs).await?;
 		// check that all inputs are free
 		for vtxo in query::get_vtxos_by_id(&self, inputs).await? {
 			vtxo.check_spendable(chain_tip)?;
@@ -307,6 +308,7 @@ impl<'t> Tx<'t> {
 			return Ok(());
 		}
 
+		self.check_not_expiry_frozen(vtxo_ids).await?;
 		let vtxo_id_strs = vtxo_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
 		let serialized = forfeits.iter().map(|ff| serialize(ff)).collect::<Vec<_>>();
 		let txid_strs = txids.iter().map(|t| t.to_string()).collect::<Vec<_>>();

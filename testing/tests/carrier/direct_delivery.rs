@@ -2,7 +2,8 @@
 //! This fixture never starts the legacy sweeping route against its direct inputs.
 
 use super::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
@@ -11,6 +12,8 @@ use server::watchman::direct_delivery::{DirectDelivery, DeliveryState};
 
 #[path = "frozen_expiry.rs"]
 mod frozen_expiry;
+#[path = "witness_submission.rs"]
+mod witness_submission;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct CommitRecipe {
@@ -266,9 +269,19 @@ async fn direct_delivery_parent_crash_control_retains_unbroadcast_handoff() {
 	println!("parent crash control: signed transaction and complete mappings durable; exact carrier remains unbroadcast after real SIGKILL");
 }
 
+pub(super) async fn history_at(datadir: &Path, db: &Db, key: bitcoin::secp256k1::PublicKey) -> Arc<server::payout_witness::DirectPayoutWitness> {
+	Arc::new(server::payout_witness::DirectPayoutWitness::load(datadir, Network::Regtest, key, db, budget()).await.unwrap())
+}
+
+async fn history_for(recipe: &CommitRecipe, db: &Db) -> Arc<server::payout_witness::DirectPayoutWitness> {
+	let config: server::Config = toml::from_str(&std::fs::read_to_string(&recipe.config_path).unwrap()).unwrap();
+	let root: ServerVtxo = ServerVtxo::deserialize(&recipe.backing[0]).unwrap();
+	history_at(&config.data_dir, db, root.server_pubkey()).await
+}
+
 async fn recovered(case: &CrashCase) -> DirectDelivery {
 	DirectDelivery::recover_group(case.db.clone(), &case.wallet, &case.recipe.freeze_set,
-		Network::Regtest, budget(), limits()).await.unwrap()
+		Network::Regtest, budget(), limits(), history_for(&case.recipe, &case.db).await).await.unwrap()
 }
 
 async fn confirm_once(case: &CrashCase, delivery: &DirectDelivery, winner: &bitcoin::Transaction) {
@@ -445,16 +458,17 @@ async fn direct_delivery_refuses_partial_mappings_and_current_fee_excess_before_
 	let case = crash_case("direct_delivery_refuses_partial_mappings_and_current_fee_excess_before_submission", vec![30]).await;
 	let tight = CarrierLimits { max_miner_fee: sat(1), ..limits() };
 	let delivery = DirectDelivery::recover_group(case.db.clone(), &case.wallet, &case.recipe.freeze_set,
-		Network::Regtest, budget(), tight).await.unwrap();
+		Network::Regtest, budget(), tight, history_for(&case.recipe, &case.db).await).await.unwrap();
 	let error = delivery.observe_and_submit(&case.ctx.bitcoind().async_client()).await.unwrap_err();
 	assert!(error.to_string().contains("exceeds current delivery limits"));
 	for point in delivery.reserved_fee_inputs() { assert!(case.wallet.lock_wallet_utxo(*point).is_err()); }
 	drop(delivery);
 	assert!(DirectDelivery::recover_group(case.db.clone(), &case.wallet, &case.recipe.freeze_set,
-		Network::Regtest, BackingSnapshotLimits { max_serialized_bytes: 1, ..budget() }, limits()).await.is_err());
+		Network::Regtest, BackingSnapshotLimits { max_serialized_bytes: 1, ..budget() }, limits(), history_for(&case.recipe, &case.db).await).await.is_err());
+	let history = history_for(&case.recipe, &case.db).await;
 	case.db.write(async |t| { t.execute("DELETE FROM expiry_carrier_allocation WHERE allocation_id=$1",
 		&[&case.recipe.allocation_ids[0].to_string()]).await?; Ok(()) }).await.unwrap();
 	assert!(DirectDelivery::recover_group(case.db.clone(), &case.wallet, &case.recipe.freeze_set,
-		Network::Regtest, budget(), limits()).await.is_err(), "a partial allocation cannot earn replay credit");
+		Network::Regtest, budget(), limits(), history).await.is_err(), "a partial allocation cannot earn replay credit");
 	assert!(case.ctx.bitcoind().sync_client().get_raw_mempool().unwrap().is_empty());
 }

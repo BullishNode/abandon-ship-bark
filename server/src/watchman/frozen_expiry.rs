@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::time::Duration;
+use std::sync::Arc;
 
 use anyhow::Context;
 use bitcoin::{FeeRate, Network, ScriptBuf, Txid};
@@ -14,6 +15,7 @@ use bitcoin_ext::{BlockHeight, rpc::BitcoinAsyncRpcExt};
 use bitcoind_async_client::Client;
 
 use crate::database::{Db, carrier_snapshot::BackingSnapshotLimits, frozen_expiry::FrozenExpiryGroup};
+use crate::payout_witness::DirectPayoutWitness;
 use crate::utils::{InstrumentedLock, InstrumentedOwnedLockGuard};
 use crate::wallet::{BdkWalletExt, PersistedWallet};
 use super::WatchmanSigner;
@@ -29,6 +31,7 @@ struct UncertainPublication {
 
 pub struct FrozenExpiryProcessor {
 	db: Db,
+	witness: Arc<DirectPayoutWitness>,
 	wallet: InstrumentedLock<PersistedWallet>,
 	network: Network,
 	operator_script: ScriptBuf,
@@ -42,10 +45,15 @@ pub struct FrozenExpiryProcessor {
 impl FrozenExpiryProcessor {
 	pub fn new(
 		db: Db, wallet: InstrumentedLock<PersistedWallet>, network: Network,
-		operator_script: ScriptBuf, budget: BackingSnapshotLimits, policy: CarrierLimits,
+		operator_script: ScriptBuf, budget: BackingSnapshotLimits, policy: CarrierLimits, witness: Arc<DirectPayoutWitness>,
 	) -> Self {
-		Self { db, wallet, network, operator_script, budget, policy,
+		Self { db, witness, wallet, network, operator_script, budget, policy,
 			deliveries: BTreeMap::new(), uncertain: None, hydrated: false }
+	}
+
+	/// Includes confirmed groups still retaining their owning-wallet fee guards.
+	pub fn tracked_group_ids(&self) -> impl Iterator<Item = &str> {
+		self.deliveries.keys().map(String::as_str)
 	}
 
 	/// Restore every durable group's union reservation before new construction.
@@ -62,7 +70,7 @@ impl FrozenExpiryProcessor {
 			}
 			if self.db.direct_delivery_generation(&id).await?.is_none() { continue; }
 			let delivery = DirectDelivery::recover_group(self.db.clone(), &held, &id,
-				self.network, self.budget, self.policy).await?;
+				self.network, self.budget, self.policy, self.witness.clone()).await?;
 			self.deliveries.insert(id, delivery);
 		}
 		self.hydrated = true;
@@ -96,7 +104,7 @@ impl FrozenExpiryProcessor {
 			held.wallet.lock_wallet_utxos(std::iter::empty())?);
 		drop(original_reservation);
 		let delivery = DirectDelivery::recover_group(self.db.clone(), &held.wallet, id,
-			self.network, self.budget, self.policy).await?;
+			self.network, self.budget, self.policy, self.witness.clone()).await?;
 		held.wallet.take_staged();
 		self.deliveries.insert(id.clone(), delivery);
 		self.uncertain = None;

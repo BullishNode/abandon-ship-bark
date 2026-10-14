@@ -35,6 +35,12 @@ impl ArkRpcProxy for DelayedSpend {
 
 #[tokio::test]
 async fn returning_real_sdk_preserves_frozen_value_then_adopts_confirmed_carrier() {
+	let scenario = returning_scenario();
+	eprintln!("returning scenario future bytes: {}", std::mem::size_of_val(&scenario));
+	scenario.await;
+}
+
+async fn returning_scenario() {
 	let ctx = TestContext::new("returning-client/returning_real_sdk_preserves_frozen_value_then_adopts_confirmed_carrier").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().funded(ark_testing::btc(1))
 		.cfg(|c| {
@@ -114,7 +120,13 @@ async fn returning_real_sdk_preserves_frozen_value_then_adopts_confirmed_carrier
 	held.take_staged(); drop(held); drop(carrier.fee_reservation);
 	let reloaded = PersistedWallet::load_derive_from_master_xpriv(db.clone(), ctx.bitcoind().async_client(),
 		Network::Regtest, &master, WalletKind::Watchman, tip, 3).await.unwrap();
-	let delivery = DirectDelivery::recover_group(db.clone(), &reloaded, &freeze.id, Network::Regtest, budget, policy).await.unwrap();
+	let history_path = srv.config().data_dir.clone();
+	let history_future = super::direct_delivery::history_at(&history_path, &db, coin.server_pubkey());
+	eprintln!("returning history-load future bytes: {}", std::mem::size_of_val(&history_future));
+	let history = history_future.await;
+	let delivery_future = DirectDelivery::recover_group(db.clone(), &reloaded, &freeze.id, Network::Regtest, budget, policy, history);
+	eprintln!("returning production recovery future bytes: {}", std::mem::size_of_val(&delivery_future));
+	let delivery = delivery_future.await.unwrap();
 	let txid = carrier.tx.compute_txid();
 	assert_eq!(delivery.observe_and_submit(&ctx.bitcoind().async_client()).await.unwrap(), DeliveryState::Pending { txid });
 	returning.sync().await;

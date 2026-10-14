@@ -7,6 +7,7 @@
 //! exclusively while recovering guards, before any new fee-input construction.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use anyhow::Context;
 use bitcoin::{Network, Txid};
@@ -15,6 +16,7 @@ use bitcoind_async_client::Client;
 
 use crate::bitcoind as bcd;
 use crate::database::{Db, carrier_snapshot::BackingSnapshotLimits, direct_delivery::StoredCarrier};
+use crate::payout_witness::DirectPayoutWitness;
 use crate::wallet::{PersistedWallet, WalletKind, WalletUtxosGuard};
 use super::carrier::CarrierLimits;
 
@@ -26,6 +28,7 @@ pub enum DeliveryState {
 
 pub struct DirectDelivery {
 	db: Db,
+	witness: Arc<DirectPayoutWitness>,
 	freeze_set: String,
 	versions: Vec<StoredCarrier>,
 	// Every viable version's fee inputs stay reserved until the owner drops this
@@ -37,13 +40,14 @@ pub struct DirectDelivery {
 impl DirectDelivery {
 	pub async fn recover_group(
 		db: Db, wallet: &PersistedWallet, freeze_set: &str, network: Network,
-		budget: BackingSnapshotLimits, policy: CarrierLimits,
+		budget: BackingSnapshotLimits, policy: CarrierLimits, witness: Arc<DirectPayoutWitness>,
 	) -> anyhow::Result<Self> {
 		ensure!(wallet.kind() == WalletKind::Watchman && wallet.network() == network,
 			"direct delivery requires the owning watchman wallet and network");
 		ensure!(policy.max_fee_rate > bitcoin::FeeRate::ZERO && policy.max_weight.to_wu() > 0 &&
 			policy.max_weight.to_wu() <= 400_000, "invalid direct delivery fee or weight limit");
 		let versions = db.read_direct_delivery(freeze_set, network, budget).await?;
+		for version in &versions { witness.require_identity(network, version.server_pubkey)?; }
 		let mut inputs = BTreeSet::new();
 		for version in &versions {
 			if !version.fee_inputs.is_empty() {
@@ -58,7 +62,7 @@ impl DirectDelivery {
 			}
 		}
 		let fee_reservation = wallet.lock_wallet_utxos(inputs)?;
-		Ok(Self { db, freeze_set: freeze_set.to_owned(), versions, fee_reservation, policy })
+		Ok(Self { db, witness, freeze_set: freeze_set.to_owned(), versions, fee_reservation, policy })
 	}
 
 	pub fn reserved_fee_inputs(&self) -> &[bitcoin::OutPoint] { self.fee_reservation.utxos() }
@@ -72,6 +76,8 @@ impl DirectDelivery {
 	/// One bounded observation/submission pass. A timeout/error retains guards;
 	/// reconcile these same bytes on the next call rather than creating payment.
 	pub async fn observe_and_submit(&self, node: &Client) -> anyhow::Result<DeliveryState> {
+		self.check_generation_frontier().await?;
+		self.witness.record_group(&self.db, &self.freeze_set).await?;
 		self.check_generation_frontier().await?;
 		let mut confirmed = Vec::new();
 		let mut pending = BTreeSet::new();

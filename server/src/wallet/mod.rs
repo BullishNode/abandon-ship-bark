@@ -252,6 +252,22 @@ impl PersistedWallet {
 			.collect::<Vec<_>>()
 	}
 
+	/// Confirmed, trusted and unlocked inputs available for direct-carrier fees.
+	pub(crate) fn confirmed_unlocked_utxos(&self) -> Vec<OutPoint> {
+		let canon = TrustedCanonicalization::from_wallet(&self.wallet, self.min_trusted_confs);
+		let locked = self.locked_outputs.utxos();
+		let tip = self.wallet.latest_checkpoint().height();
+		canon.list_unspent()
+			.filter(|u| u.is_trusted && u.chain_position.is_confirmed() && !locked.contains(&u.outpoint))
+			.filter(|u| {
+				let tx = canon.get(u.outpoint.txid).expect("canonical unspent transaction exists");
+				!tx.tx.is_coinbase() || u.chain_position.confirmation_height_upper_bound()
+					.map(|height| tip.saturating_sub(height) + 1 >= bitcoin::constants::COINBASE_MATURITY)
+					.unwrap_or(false)
+			})
+			.map(|u| u.outpoint).collect()
+	}
+
 	pub fn lock_wallet_utxo(
 		&self,
 		utxo: OutPoint,

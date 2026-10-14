@@ -97,6 +97,14 @@ fn payout_fees(
 	Ok((fee, operator, group_fee_shares(gross, recipients, minimum)?))
 }
 
+fn check_payout_fee_ceiling(fee: Amount, weight: Weight, maximum: Option<FeeRate>) -> anyhow::Result<()> {
+	if let Some(maximum) = maximum {
+		let limit = maximum.fee_wu(weight).context("expiry payout fee ceiling overflow")?;
+		ensure!(fee <= limit, "actual expiry payout fee {fee} exceeds configured ceiling {limit}");
+	}
+	Ok(())
+}
+
 impl Server {
 	/// Pay the groups whose Lightning payments are free. Returns the payment's
 	/// txid, the fee its recipients paid, and the number of coins it settled.
@@ -104,6 +112,7 @@ impl Server {
 		&self, groups: &[PayoutGroup], fee_rate: FeeRate, unavailable_nodes: &mut BTreeSet<LightningNodeId>,
 	) -> anyhow::Result<Option<(Txid, u64, usize)>> {
 		let cfg = self.config.expiry_payout.clone();
+		let maximum = self.config.fee_estimator.max_fee_rate;
 		// Cooperative Lightning claims and refund requests take the payment
 		// guard before coin locks and can hold it while they wait on a node.
 		// Take the guards in that same order, but without waiting: a busy
@@ -213,6 +222,7 @@ impl Server {
 				ensure!(per_script.is_empty() && psbt.fee()?.to_sat() == fee, "payout deductions do not equal its full mining fee");
 				let tx = wallet.finish_tx(psbt)?;
 				ensure!(tx.weight() == weight, "unexpected signed payout weight");
+				check_payout_fee_ceiling(Amount::from_sat(fee), tx.weight(), maximum)?;
 				// Settlement rows record what the recipients paid.
 				Ok((tx, fee - operator_fee))
 			})();
@@ -409,6 +419,8 @@ impl Server {
 		};
 		let rate = FeeRate::from_amount_per_kvb_ceil(rate);
 		ensure!(rate > FeeRate::ZERO, "zero expiry fee estimate");
+		let rate = self.config.fee_estimator.max_fee_rate.map_or(rate, |maximum| rate.min(maximum));
+		ensure!(rate > FeeRate::ZERO, "expiry payout fee ceiling is zero");
 		if let Err(e) = self.bump_stalled_expiry_payouts(rate).await {
 			warn!("expiry payout bump deferred: {e:#}");
 		}
@@ -604,6 +616,7 @@ impl Server {
 	/// Without funds the payout is only rebroadcast, as before.
 	async fn bump_stalled_expiry_payouts(&self, rate: FeeRate) -> anyhow::Result<()> {
 		let tip = self.chain_tip().height;
+		let maximum = self.config.fee_estimator.max_fee_rate;
 		for report in self.tx_nursery.list_txs(false, false).await? {
 			let txid = report.tx.txid;
 			if report.tx.kind != NurseryTxKind::ExpiryPayout || tip < report.tx.confirm_target_height
@@ -623,7 +636,17 @@ impl Server {
 					b.drain_to(drain.clone());
 					Ok(())
 				})?;
-				Ok((wallet.finish_tx(psbt)?, lock))
+				let unused = psbt.unsigned_tx.clone();
+				let result = (|| {
+					let fee = psbt.fee().context("expiry payout bump fee")?;
+					let child = wallet.finish_tx(psbt)?;
+					// Ancestor shortfall and omitted change can exceed the target.
+					// Refuse before the nursery stores or broadcasts this child.
+					check_payout_fee_ceiling(fee, child.weight(), maximum)?;
+					Ok((child, lock))
+				})();
+				if result.is_err() { wallet.mark_output_keys_unused(&unused); }
+				result
 			}).await;
 			let (mut wallet, (child, _lock)) = match built {
 				Ok(built) => built,

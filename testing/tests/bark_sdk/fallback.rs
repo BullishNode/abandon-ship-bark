@@ -1629,6 +1629,7 @@ async fn fallback_legacy_payout_respects_configured_max_fee_rate() {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.min_board_amount = sat(330);
 			c.fee_estimator.max_fee_rate = Some(maximum);
+			c.nursery_confirm_target_blocks = BlockDelta::new(2);
 		}).watchmand().create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let wallet = ctx.bark_sdk("absent", &srv).cfg(|c| c.daemon_manual_sync = true)
@@ -1697,7 +1698,31 @@ async fn fallback_legacy_payout_respects_configured_max_fee_rate() {
 	assert_eq!(paid[0].value.to_sat() + recipient_fee, 1896);
 	assert_eq!(row.get::<_, Vec<u8>>("spk"), record.spk.as_bytes());
 	super::fallback_lightning::assert_change_pays_own_weight(&tx, actual_fee, recipient_fee, &[record.spk.clone()]);
-	ctx.generate_blocks(1).await;
+	// A three-sat target would require a child above that same ceiling to
+	// compensate this one-sat parent. Keep the receipt and unconfirmed payout
+	// intact instead of exposing an over-budget signed child.
+	let change = OutPoint::new(txid, tx.output.iter().position(|o| o.script_pubkey != record.spk).unwrap() as u32);
+	srv.stop().await.unwrap();
+	srv.config_mut().fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(3).unwrap());
+	for _ in 0..3 { mine_only(&ctx, &[]).await; }
+	srv.start().await.unwrap();
+	tokio::time::timeout(Duration::from_secs(15), async {
+		loop {
+			let logs = std::fs::read_to_string(ctx.datadir.join("server/stdout.log")).unwrap();
+			if logs.lines().filter(|l| l.contains("actual expiry payout fee") && l.contains("exceeds configured ceiling")).count() >= 2 { break; }
+			tokio::time::sleep(Duration::from_millis(200)).await;
+		}
+	}).await.expect("ancestor shortfall must be refused before exposing a child, with locks released for retry");
+	assert!(payout_child(&db, change).await.is_none());
+	assert!(core.get_raw_mempool().unwrap().contains(&txid));
+	assert_eq!(core.get_raw_transaction(&txid, None).unwrap(), tx);
+	let preserved = db.read(async |t| Ok(t.query_one(
+		"SELECT txid,fee_sat,spk FROM expiry_settlement WHERE id=ANY($1)", &[&ids],
+	).await?)).await.unwrap();
+	assert_eq!(preserved.get::<_, String>("txid"), txid.to_string());
+	assert_eq!(preserved.get::<_, i64>("fee_sat") as u64, recipient_fee);
+	assert_eq!(preserved.get::<_, Vec<u8>>("spk"), record.spk.as_bytes());
+	mine_only(&ctx, &[txid]).await;
 	assert!(core.get_raw_transaction_info(&txid, None).unwrap().confirmations.unwrap_or(0) > 0);
 	println!("legacy payout ceiling: estimate_sat_per_kvb={}, actual_fee_sat={actual_fee}, signed_wu={}, recipient_net_sat={}, recipient_fee_sat={recipient_fee}",
 		estimate.to_sat(), tx.weight().to_wu(), paid[0].value.to_sat());

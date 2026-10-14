@@ -9,7 +9,7 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::PublicKey;
 use bitcoin_ext::BlockRef;
 
-use ark::VtxoId;
+use ark::{ProtocolEncoding, ServerVtxo, VtxoId};
 use crate::database::carrier_snapshot::BackingSnapshotLimits;
 use crate::watchman::settlement::{allocate, CustomerLeaf, LeafAllocation};
 use super::Db;
@@ -18,6 +18,7 @@ pub(crate) struct StoredCarrier {
 	pub tx: Transaction,
 	pub bytes: Vec<u8>,
 	pub generation: i64,
+	pub server_pubkey: PublicKey,
 	pub fee_inputs: Vec<(OutPoint, TxOut)>,
 	pub miner_fee: Amount,
 	pub recorded_confirmation: Option<BlockRef>,
@@ -54,8 +55,9 @@ impl Db {
 				FROM expiry_carrier WHERE txid IN (SELECT m.txid FROM expiry_carrier_allocation m
 				JOIN expiry_allocation a ON a.id=m.allocation_id WHERE a.freeze_set=$1)", &[&freeze_set]).await?;
 			let versions = usize::try_from(stats.get::<_, i64>("rows"))?;
+			let carrier_bytes = usize::try_from(stats.get::<_, i64>("bytes"))?;
 			ensure!(versions > 0 && versions <= limits.max_rows && allocation_bytes.checked_add(
-				usize::try_from(stats.get::<_, i64>("bytes"))?).is_some_and(|n| n <= limits.max_serialized_bytes),
+				carrier_bytes).is_some_and(|n| n <= limits.max_serialized_bytes),
 				"direct delivery versions are missing or exceed budget");
 			let rows = t.query("SELECT id,owner_pubkey,spk,disposition,gross_sat,fee_sat,payout_sat,
 				forfeited_sat,retirement_ids,jsonb_build_object('id',id,'owner',owner_pubkey,'spk',spk,
@@ -86,6 +88,30 @@ impl Db {
 				}
 				amounts.insert(id, (leaf, disposition.to_owned()));
 			}
+			ensure!(!retirement.is_empty() && count.checked_add(versions).and_then(|n| n.checked_add(retirement.len()))
+				.is_some_and(|n| n <= limits.max_rows), "complete direct delivery roots exceed row budget");
+			let root_ids = retirement.iter().map(ToString::to_string).collect::<Vec<_>>();
+			let root_size = t.query_one("SELECT count(*)::bigint AS rows,
+				COALESCE(sum(octet_length(vtxo)+octet_length(vtxo_id)+octet_length(server_pubkey)),0)::bigint AS bytes
+				FROM vtxo WHERE vtxo_id=ANY($1)", &[&root_ids]).await?;
+			ensure!(usize::try_from(root_size.get::<_, i64>("rows"))? == retirement.len() &&
+				allocation_bytes.checked_add(carrier_bytes).and_then(|n| n.checked_add(
+					usize::try_from(root_size.get::<_, i64>("bytes")).ok()?)).is_some_and(|n| n <= limits.max_serialized_bytes),
+				"direct delivery backing is missing or exceeds byte budget");
+			let mut server_pubkey = None;
+			let mut backing_amount = Amount::ZERO;
+			for row in t.query("SELECT vtxo_id,vtxo,server_pubkey,amount FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id", &[&root_ids]).await? {
+				let root: ServerVtxo = ServerVtxo::deserialize(&row.get::<_, Vec<u8>>("vtxo"))?;
+				let key: PublicKey = row.get::<_, &str>("server_pubkey").parse()?;
+				ensure!(retirement.contains(&root.id()) && root.id().to_string() == row.get::<_, &str>("vtxo_id") &&
+					root.server_pubkey() == key && i64::try_from(root.amount().to_sat())? == row.get::<_, i64>("amount") &&
+					server_pubkey.is_none_or(|previous| previous == key), "direct delivery backing identity or server differs");
+				server_pubkey = Some(key);
+				backing_amount = backing_amount.checked_add(root.amount()).context("direct delivery backing amount overflow")?;
+			}
+			ensure!(amounts.values().try_fold(Amount::ZERO, |sum, (leaf,_)| sum.checked_add(leaf.gross)) == Some(backing_amount),
+				"direct delivery backing no longer conserves allocation gross");
+			let server_pubkey = server_pubkey.context("direct delivery has no backing server identity")?;
 			let authenticated = t.authenticated_fallback_scripts(&owners.iter().map(|(p,_)| *p).collect::<Vec<_>>(), network).await?;
 			ensure!(owners.iter().all(|(key,spk)| authenticated.get(key) == Some(spk)), "direct delivery record or account child mismatch");
 			let plan = allocate(leaves)?;
@@ -145,7 +171,7 @@ impl Db {
 				let generation = row.get::<_, i64>("generation");
 				ensure!(generation > 0, "invalid direct carrier generation");
 				let carrier_hash = sha256::Hash::hash(row.get::<_, String>("witness").as_bytes());
-				result.push(StoredCarrier { tx, bytes, fee_inputs, generation, allocation_hash, carrier_hash,
+				result.push(StoredCarrier { tx, bytes, fee_inputs, generation, server_pubkey, allocation_hash, carrier_hash,
 					miner_fee: Amount::from_sat(u64::try_from(row.get::<_, i64>("miner_fee_sat"))?), recorded_confirmation });
 			}
 			Ok(result)

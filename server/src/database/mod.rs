@@ -9,6 +9,7 @@ mod embedded {
 }
 
 pub mod carrier_snapshot;
+pub mod expiry_ownership;
 mod ban;
 mod pending_board;
 pub(crate) mod expiry_settlement;

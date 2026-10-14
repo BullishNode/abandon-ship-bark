@@ -18,15 +18,15 @@ use super::model::SpendState;
 use super::tree::VtxoTreeUpdate;
 use super::Tx;
 
-#[derive(Clone, Copy)]
-pub(crate) struct ExpiryInput {
+#[derive(Debug, Clone, Copy)]
+pub struct ExpiryInput {
 	pub id: VtxoId,
 	pub source: ExpirySource,
 	pub owner: PublicKey,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ExpirySource {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpirySource {
 	Registered, PendingBoard, Unregistered, LightningReceive(PaymentHash), LightningSend(PaymentHash),
 }
 
@@ -65,7 +65,7 @@ pub(crate) fn payout_script(owner: PublicKey) -> ScriptBuf {
 /// Expired, unsettled coins and the source that decides their payee: `$1` is
 /// the grace period and `$2` the tip. A coin that is spent, exited, offboarded
 /// or in a live exchange is not a candidate. Scan and commit share this rule.
-const CANDIDATES: &str = "SELECT v.vtxo_id, v.vtxo, v.expiry,
+pub(super) const CANDIDATES: &str = "SELECT v.vtxo_id, v.vtxo, v.expiry,
 		v.spend_state='unclaimed' AS unclaimed, false AS pending_board,
 		v.spend_state='unregistered' AS unregistered,
 		CASE WHEN v.spend_state='htlc-recv-unclaimed' THEN h.payment_hash END AS receive_hash,
@@ -131,7 +131,7 @@ impl Tx<'_> {
 	/// Each arkoor transaction has one input, including checkpoint and dust
 	/// isolation steps. A package with several inputs therefore allocates each
 	/// output's own amount to the owner of its actual parent, not the recipient.
-	async fn unregistered_expiry_owner(&self, vtxo: &Vtxo) -> anyhow::Result<Option<PublicKey>> {
+	pub(super) async fn unregistered_expiry_owner(&self, vtxo: &Vtxo) -> anyhow::Result<Option<PublicKey>> {
 		let Some(last) = vtxo.transactions().last() else { return Ok(None); };
 		let [input] = last.tx.input.as_slice() else { return Ok(None); };
 		let parent = input.previous_output.to_string();

@@ -497,10 +497,12 @@ impl rpc::server::ArkService for Server {
 				in order to be able to send Lightning payments.");
 		}
 
-		let cosign_requests = ArkoorPackageCosignRequest::try_from(req.clone())
+		let wire = protos::ArkoorPackageCosignRequest { parts: req.parts };
+		let hints = self.arkoor_origin_hints(&wire).badarg("invalid output origins")?;
+		let cosign_requests = ArkoorPackageCosignRequest::try_from(wire)
 			.context("Failed to parse request")?;
 
-		let resp = self.request_lightning_pay_htlc_cosign(cosign_requests)
+		let resp = self.request_lightning_pay_htlc_cosign(cosign_requests, hints)
 			.await.context("error making payment")?;
 
 		Ok(tonic::Response::new(resp.into()))
@@ -558,10 +560,12 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ArkoorPackageCosignRequest>
 	) -> Result<tonic::Response<protos::ArkoorPackageCosignResponse>, tonic::Status> {
-		let cosign_requests = ArkoorPackageCosignRequest::try_from(req.into_inner())
+		let wire = req.into_inner();
+		let hints = self.arkoor_origin_hints(&wire).badarg("invalid output origins")?;
+		let cosign_requests = ArkoorPackageCosignRequest::try_from(wire)
 			.context("Failed to parse request")?;
 
-		let cosign_resp = self.revoke_lightning_pay_htlcs(cosign_requests).await
+		let cosign_resp = self.revoke_lightning_pay_htlcs(cosign_requests, hints).await
 			.to_status()?;
 
 		Ok(tonic::Response::new(cosign_resp.into()))
@@ -680,15 +684,16 @@ impl rpc::server::ArkService for Server {
 		let payment_hash = PaymentHash::from_bytes(req.payment_hash)?;
 
 		let payment_preimage = Preimage::from_bytes(req.payment_preimage)?;
-		let cosign_request = ArkoorPackageCosignRequest::try_from(
-			req.cosign_request.badarg("cosign request missing")?,
-		).badarg("invalid cosign request")?;
+		let wire = req.cosign_request.badarg("cosign request missing")?;
+		let hints = self.arkoor_origin_hints(&wire).badarg("invalid output origins")?;
+		let cosign_request = ArkoorPackageCosignRequest::try_from(wire).badarg("invalid cosign request")?;
 
 		let cosign_resp = self.claim_lightning_receive(
 			payment_hash,
 			payment_preimage,
 			cosign_request,
 			pver,
+			hints,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(cosign_resp.into()))

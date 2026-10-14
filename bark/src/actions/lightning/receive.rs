@@ -693,8 +693,13 @@ async fn claim_lightning_receive_htlcs(
 		.context("arkoor nonce generation for claim failed")?;
 
 	info!("Claiming arkoor against payment preimage for {}", recv.payment_hash);
+	let mut package_cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	let destination_origin = recv.claim_destination.as_ref().map(|address| {
+		let hint = address.account_child()?.context("claim destination has no account child origin")?;
+		Ok::<_, anyhow::Error>((address.policy().user_pubkey(), hint))
+	}).transpose()?;
+	wallet.attach_arkoor_origins(&mut package_cosign_request, destination_origin).await?;
 	*preimage_revealed = true;
-	let package_cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
 	let resp = match srv.client.claim_lightning_receive(protos::ClaimLightningReceiveRequest {
 		payment_hash: recv.payment_hash.to_byte_array().to_vec(),
 		payment_preimage: recv.payment_preimage.to_vec(),

@@ -290,6 +290,7 @@ impl VtxoPool {
 		&self,
 		srv: &Server,
 		dest: ArkoorDestination,
+		origin: ark::fallback::AccountChild,
 		inputs: &[(VtxoId, BlockHeight, Amount)],
 		commit: F,
 	) -> anyhow::Result<Vec<Vtxo<Full>>>
@@ -386,6 +387,7 @@ impl VtxoPool {
 			.collect::<Vec<_>>();
 
 		srv.db.write(async |t| {
+			t.admit_fallback_child(origin, dest.policy.user_pubkey()).await?;
 			t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::create_htlc_vtxos(&t, &htlc_recvs, HtlcDirection::Outgoing).await?;
 			t.mark_vtxopool_vtxos_spent(inputs.iter().map(|v| v.0)).await
@@ -441,18 +443,20 @@ impl VtxoPool {
 		&self,
 		srv: &Server,
 		dest: ArkoorDestination,
+		origin: ark::fallback::AccountChild,
 		commit: F,
 	) -> anyhow::Result<Vec<Vtxo<Full>>>
 	where
 		F: AsyncFnOnce(&database::Tx<'_>, &[Vtxo<Full>]) -> anyhow::Result<()>,
 	{
+		srv.db.read(async |t| t.verify_fallback_child(origin, dest.policy.user_pubkey()).await).await?;
 		let inputs = self.data.lock().take_inputs(dest.total_amount);
 		if inputs.is_empty() {
 			bail!("vtxo pool is empty");
 		}
 
 		// we try, but if we fail, we place back the inputs
-		match self.prepare_arkoor(srv, dest, &inputs, commit).await {
+		match self.prepare_arkoor(srv, dest, origin, &inputs, commit).await {
 			Ok(v) => {
 				update_all_bucket_metrics(&self.data);
 				Ok(v)

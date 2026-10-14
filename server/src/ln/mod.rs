@@ -972,6 +972,7 @@ impl Server {
 		&self,
 		payment_hash: PaymentHash,
 		user_pubkey: PublicKey,
+		origin: ark::fallback::AccountChild,
 		htlc_recv_expiry: BlockHeight,
 		anti_dos: Option<protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos>,
 	) -> anyhow::Result<(LightningHtlcSubscription, Vec<Vtxo<Full>>)> {
@@ -1081,7 +1082,7 @@ impl Server {
 		// can still settle after the check above. Doing it in the transaction
 		// that stores the HTLC-recv vtxos means a refusal leaves no vtxo behind
 		// and puts the pool inputs back.
-		let vtxos = self.vtxopool.send_arkoor(self, dest, async |t, vtxos| {
+		let vtxos = self.vtxopool.send_arkoor(self, dest, origin, async |t, vtxos| {
 			t.update_lightning_htlc_subscription_with_htlcs(
 				sub.id,
 				vtxos.iter().map(|v| v.id()),

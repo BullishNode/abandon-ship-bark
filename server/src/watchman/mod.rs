@@ -593,7 +593,7 @@ impl Watchman {
 	) -> anyhow::Result<Transaction> {
 		let mut inputs = Vec::with_capacity(vtxos.len());
 		let mut clauses = Vec::with_capacity(vtxos.len());
-		let mut total_input_weight = 0;
+		let mut total_witness_weight = 0;
 		let mut total_input_amount = Amount::ZERO;
 
 		for vtxo in vtxos {
@@ -606,9 +606,10 @@ impl Watchman {
 					witness: Witness::new(),
 				};
 
-				// TxIn base weight (non-witness) + witness weight
-				total_input_weight += 4 * input.base_size() + (1 + 1 + 64); // nb items + sig
-				total_input_amount += vtxo.amount();
+				// Exact witness serialization; base bytes come from the template.
+				total_witness_weight += 1 + 1 + 64; // nb items + sig
+				total_input_amount = total_input_amount.checked_add(vtxo.amount())
+					.context("claim input amount overflow")?;
 
 				inputs.push(input);
 				clauses.push(None);
@@ -624,9 +625,10 @@ impl Watchman {
 					witness: Witness::new(),
 				};
 
-				// TxIn base weight (non-witness) + witness weight
-				total_input_weight += 4 * input.base_size() + clause.witness_size(vtxo);
-				total_input_amount += vtxo.amount();
+				// Exact witness serialization; base bytes come from the template.
+				total_witness_weight += clause.witness_size(vtxo);
+				total_input_amount = total_input_amount.checked_add(vtxo.amount())
+					.context("claim input amount overflow")?;
 
 				inputs.push(input);
 				clauses.push(Some(clause));
@@ -640,21 +642,16 @@ impl Watchman {
 		let lock_time = self.sync_height().height.to_locktime()
 			.expect("valid block height");
 
-		// Output weight (non-witness data * 4)
-		// TxOut: 8 bytes value + varint script_pubkey_len + script_pubkey
-		let output_weight = 4 * (8 + 1 + self.drain_spk.len());
-
-		// Transaction overhead weight:
-		// - version: 4 bytes * 4 = 16
-		// - segwit marker + flag: 2 bytes * 1 = 2
-		// - input count varint: 1 byte * 4 = 4 (assuming < 253 inputs)
-		// - output count varint: 1 byte * 4 = 4 (assuming < 253 outputs)
-		// - locktime: 4 bytes * 4 = 16
-		const TX_OVERHEAD_WEIGHT: usize = 2 + 4 * (4 + 1 + 1+ 4);
-
-		let total_weight = Weight::from_wu(
-			(TX_OVERHEAD_WEIGHT + total_input_weight + output_weight) as u64,
-		);
+		// Serialize the transaction shape so CompactSize boundaries are included.
+		let mut tx = Transaction {
+			version: bitcoin::transaction::Version::TWO,
+			lock_time,
+			input: inputs,
+			output: vec![TxOut {
+				script_pubkey: self.drain_spk.clone(), value: Amount::ZERO,
+			}],
+		};
+		let total_weight = claim_weight(&tx, total_witness_weight)?;
 		let fee = fee_rate.fee_wu(total_weight)
 			.context("fee computation overflow")?;
 		let output_amount = match total_input_amount.checked_sub(fee) {
@@ -662,17 +659,7 @@ impl Watchman {
 			_ => bail!("insufficient funds: input {} < fee {}", total_input_amount, fee),
 		};
 
-		let output = TxOut {
-			script_pubkey: self.drain_spk.clone(),
-			value: output_amount,
-		};
-
-		let mut tx = Transaction {
-			version: bitcoin::transaction::Version::TWO,
-			lock_time,
-			input: inputs,
-			output: vec![output],
-		};
+		tx.output[0].value = output_amount;
 
 		// Sign all inputs
 		let prevouts = vtxos.iter().map(|vtxo| vtxo.txout()).collect::<Vec<_>>();
@@ -800,4 +787,37 @@ fn saturating_add_feerates(f1: FeeRate, f2: FeeRate) -> FeeRate {
 	FeeRate::from_sat_per_kwu(
 		f1.to_sat_per_kwu().saturating_add(f2.to_sat_per_kwu())
 	)
+}
+
+/// The unsigned transaction already includes exact input/output CompactSize sizes.
+fn claim_weight(unsigned: &Transaction, witness_bytes: usize) -> anyhow::Result<Weight> {
+	ensure!(!unsigned.input.is_empty(), "claim has no backing inputs");
+	ensure!(unsigned.input.iter().all(|input| input.witness.is_empty()), "claim template is already signed");
+	let witness = u64::try_from(witness_bytes)?.checked_add(2).context("claim witness weight overflow")?;
+	unsigned.weight().checked_add(Weight::from_wu(witness)).context("claim weight overflow")
+}
+
+#[cfg(test)]
+mod transaction_weight_tests {
+	use super::*;
+
+	#[test]
+	fn claim_weight_matches_signed_shape_across_compact_size_boundaries() {
+		for n_inputs in [1, 252, 253, 1_000] {
+			for n_outputs in [1, 252, 253] {
+				let mut tx = Transaction {
+					version: bitcoin::transaction::Version::TWO,
+					lock_time: bitcoin::absolute::LockTime::ZERO,
+					input: (0..n_inputs).map(|_| TxIn {
+						previous_output: bitcoin::OutPoint::null(), script_sig: ScriptBuf::new(),
+						sequence: Sequence::ZERO, witness: Witness::new(),
+					}).collect(),
+					output: vec![TxOut { value: Amount::from_sat(330), script_pubkey: ScriptBuf::new() }; n_outputs],
+				};
+				let estimated = claim_weight(&tx, 66 * n_inputs).unwrap();
+				for input in &mut tx.input { input.witness.push([1; 64]); }
+				assert_eq!(estimated, tx.weight(), "inputs={n_inputs}, outputs={n_outputs}");
+			}
+		}
+	}
 }

@@ -436,6 +436,14 @@ impl Tx<'_> {
 		// Created/Accepted subscriptions have never handed out a grant. Their
 		// cancellation remains a commit predicate, rather than invented grant data.
 		if rows.is_empty() && matches!(row.get::<_, &str>("status"), "created" | "accepted") { return Ok(None); }
+		// A canceled prepared history with missing grants is still incomplete.
+		// Only the existing durable setup-timeout failure of every matching
+		// intra-Ark attempt identifies a canceled, never-prepared receive.
+		if rows.is_empty() && row.get::<_, &str>("status") == "canceled" && !attempts.is_empty()
+			&& attempts.iter().all(|a| a.lightning_htlc_subscription_id == Some(row.get::<_, i64>("id"))
+				&& a.status == LightningPaymentStatus::Failed && a.error.as_deref() == Some("htlc vtxo setup timed out"))
+			&& self.get_htlc_settlement_by_payment_hash(hash).await?.is_none()
+		{ return Ok(None); }
 		Ok(Some(rows.iter().map(|r| VtxoId::from_str(r.get("vtxo_id"))).collect::<Result<_, _>>()?))
 	}
 }

@@ -48,6 +48,7 @@ pub struct RetirementDependency {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OperatorRecovery {
 	Padding,
+	/// Unused operator pool principal, including authenticated allocation change.
 	UnusedPool,
 	CompletedExchange(UnlockHash),
 	PaidLightningSend(PaymentHash),
@@ -229,7 +230,11 @@ impl Tx<'_> {
 		if state.spend_state == SpendState::Pool {
 			let unused = self.query_opt("SELECT vtxo_id FROM vtxo_pool WHERE vtxo_id=$1 AND spent_at IS NULL", &[&id.to_string()]).await?.is_some();
 			let granted = fact.lightning_htlc_subscription_id.is_some() || self.query_opt("SELECT id FROM htlc_vtxo WHERE id=$1", &[&state.id]).await?.is_some();
-			if unused && !granted && state.spent_in_round.is_none() {
+			let retirement = if let Some((input, spent)) = self.pool_change_retirement_input(id).await? {
+				full.transactions().any(|item| item.tx.compute_txid() == spent &&
+					item.tx.input.iter().any(|i| i.previous_output == input.to_point()))
+			} else { false };
+			if (unused || retirement) && !granted && state.spent_in_round.is_none() {
 				decision.disposition = OwnershipDisposition::Operator(OperatorRecovery::UnusedPool);
 			}
 			return Ok(decision);

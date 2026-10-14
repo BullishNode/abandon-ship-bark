@@ -196,15 +196,16 @@ impl rpc::server::ArkService for Server {
 		let id = VtxoId::from_bytes(req.vtxo_id)?;
 		let attestation = VtxoStatusAttestation::from_bytes(&req.attestation)?;
 
-		let vtxo_state = self.db.read(async |t| t.get_server_vtxo_by_id(id).await).await
-			.to_status()?;
-
-		let spend_state = vtxo_state.spend_state;
-		let user_vtxo = match vtxo_state.vtxo.try_into_user_vtxo() {
-			Ok(v) => v,
-			Err(_) => {
-				macros::not_found!([id], "VTXO not found");
-			},
+		let pending = self.db.read(async |t| t.pending_board_status_vtxo(id).await).await.to_status()?;
+		let (user_vtxo, spend_state) = if let Some(vtxo) = pending {
+			(vtxo, SpendState::Unregistered)
+		} else {
+			let state = self.db.read(async |t| t.get_server_vtxo_by_id(id).await).await.to_status()?;
+			let user = match state.vtxo.try_into_user_vtxo() {
+				Ok(v) => v,
+				Err(_) => { macros::not_found!([id], "VTXO not found"); },
+			};
+			(user, state.spend_state)
 		};
 
 		attestation.verify(&user_vtxo)

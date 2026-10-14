@@ -7,6 +7,8 @@ mod returning_client;
 mod client_stack;
 #[path = "carrier/cap_freeze.rs"]
 mod cap_freeze;
+#[path = "carrier/route_consistency.rs"]
+mod route_consistency;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;

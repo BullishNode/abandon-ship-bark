@@ -8,6 +8,7 @@
 
 pub mod carrier;
 pub mod direct_delivery;
+pub mod frozen_expiry;
 mod config;
 mod daemon;
 mod frontier;

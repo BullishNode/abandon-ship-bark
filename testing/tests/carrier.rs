@@ -1064,3 +1064,47 @@ async fn wallet_inventory_watchmand_actual_owner_and_existing_admin_socket() {
 		"persisted_state_unchanged": true, "reservations_preserved": true, "complete": false,
 	})).unwrap()).unwrap();
 }
+
+#[tokio::test]
+async fn complete_pending_group_listing_survives_more_groups_than_its_query_page() {
+	let ctx = TestContext::new("carrier-builder/complete_pending_group_listing_survives_more_groups_than_its_query_page").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().funded(ark_testing::btc(1))
+		.cfg(|c| {
+			c.vtxo_lifetime = BlockDelta::new(128);
+			c.fees.board.base_fee = sat(1_000);
+			c.expiry_payout.grace_blocks = 0;
+		}).watchmand_cfg(|c| {
+			c.watchman.sweep_interval = std::time::Duration::from_secs(3600);
+			c.watchman.reaction_interval = std::time::Duration::from_secs(3600);
+		}).create().await;
+	let mut coins = Vec::new();
+	for name in ["absent-a", "absent-b"] {
+		let wallet = ctx.bark_sdk(name, &srv).cfg(|c| c.daemon_manual_sync = true).boarded(sat(21_000)).create().await;
+		wallet.stop_daemon_wait().await.unwrap();
+		coins.push(wallet.get_full_vtxo(wallet.spendable_vtxos().await.unwrap()[0].id()).await.unwrap());
+		drop(wallet);
+	}
+	let config = srv.config().clone();
+	srv.stop().await.unwrap();
+	let server = server::Server::start(config).await.unwrap();
+	let core = ctx.bitcoind().sync_client();
+	let expiry = coins.iter().map(|c| c.expiry_height().to_u32()).max().unwrap();
+	ctx.generate_blocks(expiry.saturating_sub(core.get_block_count().unwrap() as u32) + 3).await;
+	let budget = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
+	let mut expected = BTreeSet::new();
+	for coin in &coins {
+		let plan = server.freeze_current_expiry_backing(&[coin.chain_anchor().into()], &[coin.id()], budget).await.unwrap();
+		expected.insert(plan.id);
+	}
+	assert_eq!(expected.len(), 2);
+	// A queue page is not an ownership group: all groups must be returned so
+	// startup can restore every durable fee reservation before new selection.
+	let listed = server.database().frozen_expiry_group_ids(1).await.unwrap();
+	assert_eq!(listed.iter().cloned().collect::<BTreeSet<_>>(), expected);
+	assert_eq!(listed.len(), 2, "the bounded reader must not silently return a prefix");
+	for id in listed {
+		let group = server.database().read_frozen_expiry_group(&id, Network::Regtest, budget).await.unwrap();
+		assert_eq!(group.plan.recipients.len(), 1);
+		assert_eq!(group.plan.recipients[0].value, sat(19_000));
+	}
+}

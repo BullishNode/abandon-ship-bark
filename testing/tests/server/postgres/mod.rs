@@ -1172,6 +1172,30 @@ async fn round_queries_empty() {
 	assert!(db.read(async |t| t.get_expired_round_ids(BlockHeight::MAX).await).await.unwrap().is_empty());
 }
 
+// DB-query fixtures have no RPC server. Use real possession signatures and
+// an actual derived child, then let the production participation transaction
+// verify and retain its origin; never insert a forged key_link row.
+async fn admitted_round_output(db: &Db) -> StoredRoundOutput {
+	let account = bitcoin::bip32::Xpriv::new_master(bitcoin::Network::Regtest, &[41; 32]).unwrap();
+	let mailbox = bitcoin::secp256k1::Keypair::from_seckey_slice(&ark::SECP, &[42; 32]).unwrap();
+	let spk = bitcoin::ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+	let record = ark::fallback::FallbackRecord::new(bitcoin::Network::Regtest, spk, &account, &mailbox).unwrap();
+	record.verify(bitcoin::Network::Regtest, mailbox.public_key()).unwrap();
+	db.write(async |tx| {
+		tx.execute("INSERT INTO fallback_record (mailbox_pk,spk,account_xpub,mailbox_sig,account_sig)
+			VALUES ($1,$2,$3,$4,$5) ON CONFLICT (mailbox_pk) DO NOTHING",
+			&[&mailbox.public_key().serialize().as_slice(), &record.spk.as_bytes(), &record.account_xpub.encode().as_slice(),
+				&record.mailbox_signature.serialize().as_slice(), &record.account_signature.serialize().as_slice()]).await?;
+		Ok(())
+	}).await.unwrap();
+	let origin = ark::fallback::AccountChild::new(mailbox.public_key(), 0).unwrap();
+	StoredRoundOutput {
+		vtxo_request: VtxoRequest { policy: VtxoPolicy::new_pubkey(origin.derive_pubkey(&record.account_xpub).unwrap()),
+			amount: bitcoin::Amount::from_sat(1000) },
+		unblinded_mailbox_id: Some(MailboxIdentifier::from_pubkey(mailbox.public_key())), origin: Some(origin),
+	}
+}
+
 #[tokio::test]
 async fn round_participation() {
 	let mut ctx = TestContext::new_minimal("postgresd/round_participation").await;
@@ -1187,13 +1211,7 @@ async fn round_participation() {
 
 	let unlock_preimage: UnlockPreimage = [1u8; 32];
 
-	let output = StoredRoundOutput {
-		vtxo_request: VtxoRequest {
-			policy: VtxoPolicy::new_pubkey(VTXO_VECTORS.board_vtxo.user_pubkey()),
-			amount: bitcoin::Amount::from_sat(1000),
-		},
-		unblinded_mailbox_id: None,
-	};
+	let output = admitted_round_output(&db).await;
 
 	// No participations yet
 	let pending = db.read(async |t| t.get_all_pending_round_participations(BlockHeight::new(0)).await).await.unwrap();
@@ -1248,13 +1266,7 @@ async fn round_participation_supersedes_on_same_input() {
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos(&[vtxo.clone()]).await).await.unwrap();
 
-	let output = StoredRoundOutput {
-		vtxo_request: VtxoRequest {
-			policy: VtxoPolicy::new_pubkey(VTXO_VECTORS.board_vtxo.user_pubkey()),
-			amount: bitcoin::Amount::from_sat(1000),
-		},
-		unblinded_mailbox_id: None,
-	};
+	let output = admitted_round_output(&db).await;
 
 	// First (old) delegated refresh on the vtxo.
 	let old_preimage: UnlockPreimage = [1u8; 32];
@@ -1296,13 +1308,7 @@ async fn round_participation_forfeited_at() {
 	let unlock_preimage: UnlockPreimage = [2u8; 32];
 	let unlock_hash = UnlockHash::hash(&unlock_preimage);
 
-	let output = StoredRoundOutput {
-		vtxo_request: VtxoRequest {
-			policy: VtxoPolicy::new_pubkey(VTXO_VECTORS.board_vtxo.user_pubkey()),
-			amount: bitcoin::Amount::from_sat(1000),
-		},
-		unblinded_mailbox_id: None,
-	};
+	let output = admitted_round_output(&db).await;
 
 	db.write(async |t| t.try_store_round_participation(BlockHeight::new(0), unlock_preimage, &[vtxo.id()], std::iter::once(&output), None).await).await.unwrap();
 
@@ -1368,13 +1374,7 @@ async fn set_forfeit_transactions_is_idempotent() {
 	let unlock_preimage: UnlockPreimage = [7u8; 32];
 	let unlock_hash = UnlockHash::hash(&unlock_preimage);
 
-	let output = StoredRoundOutput {
-		vtxo_request: VtxoRequest {
-			policy: VtxoPolicy::new_pubkey(VTXO_VECTORS.board_vtxo.user_pubkey()),
-			amount: bitcoin::Amount::from_sat(1000),
-		},
-		unblinded_mailbox_id: None,
-	};
+	let output = admitted_round_output(&db).await;
 	db.write(async |t| t.try_store_round_participation(BlockHeight::new(0), unlock_preimage, &input_vtxo_ids, std::iter::once(&output), None).await).await.unwrap();
 
 	// `set_forfeit_transactions` has two preconditions that `finish_round`
@@ -1498,13 +1498,7 @@ async fn set_forfeit_transactions_rejects_non_round_spent_vtxo() {
 	let unlock_preimage: UnlockPreimage = [9u8; 32];
 	let unlock_hash = UnlockHash::hash(&unlock_preimage);
 
-	let output = StoredRoundOutput {
-		vtxo_request: VtxoRequest {
-			policy: VtxoPolicy::new_pubkey(VTXO_VECTORS.board_vtxo.user_pubkey()),
-			amount: bitcoin::Amount::from_sat(1000),
-		},
-		unblinded_mailbox_id: None,
-	};
+	let output = admitted_round_output(&db).await;
 	db.write(async |t| t.try_store_round_participation(BlockHeight::new(0), unlock_preimage, &[vtxo.id()], std::iter::once(&output), None).await).await.unwrap();
 
 	// Attach the participation to a round, but deliberately skip the
@@ -1560,13 +1554,7 @@ async fn round_participation_same_vtxo_multiple_pending() {
 	let preimage1: UnlockPreimage = [1u8; 32];
 	let preimage2: UnlockPreimage = [2u8; 32];
 
-	let output = StoredRoundOutput {
-		vtxo_request: VtxoRequest {
-			policy: VtxoPolicy::new_pubkey(VTXO_VECTORS.board_vtxo.user_pubkey()),
-			amount: bitcoin::Amount::from_sat(1000),
-		},
-		unblinded_mailbox_id: None,
-	};
+	let output = admitted_round_output(&db).await;
 
 	// First participation succeeds
 	db.write(async |t| t.try_store_round_participation(BlockHeight::new(0), preimage1, &[vtxo.id()], std::iter::once(&output), None).await).await.unwrap();

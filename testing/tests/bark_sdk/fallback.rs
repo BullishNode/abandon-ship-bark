@@ -27,6 +27,73 @@ use ark::fallback::FallbackRecord;
 use server::database::Db;
 use server_rpc::{protos, StatusExt};
 
+use bark::onchain::OnchainWalletTrait;
+
+// Genuine external-wallet wrapper: the backing BDK wallet uses another seed.
+struct ExternalOnchain(bark::onchain::OnchainWallet);
+
+#[async_trait::async_trait]
+impl bark::onchain::OnchainWalletTrait for ExternalOnchain {
+	async fn balance(&self) -> bitcoin::Amount { OnchainWalletTrait::balance(&self.0).await }
+	async fn address(&mut self) -> anyhow::Result<Address> { self.0.address().await }
+	async fn sync(&mut self, chain: &bark::chain::ChainSource) -> anyhow::Result<()> { self.0.sync(chain).await }
+	async fn is_mine(&self, script: &bitcoin::Script) -> anyhow::Result<bool> { self.0.is_mine(script).await }
+	async fn register_tx(&mut self, tx: &Transaction) -> anyhow::Result<()> { self.0.register_tx(tx).await }
+	async fn evict_tx(&mut self, txid: Txid) -> anyhow::Result<()> { self.0.evict_tx(txid).await }
+	async fn prepare_tx(&mut self, destinations: &[(Address, bitcoin::Amount)], rate: FeeRate) -> anyhow::Result<bitcoin::Psbt> { self.0.prepare_tx(destinations, rate).await }
+	async fn prepare_drain_tx(&mut self, address: Address, rate: FeeRate) -> anyhow::Result<bitcoin::Psbt> { self.0.prepare_drain_tx(address, rate).await }
+	async fn finish_psbt(&mut self, psbt: bitcoin::Psbt) -> anyhow::Result<bitcoin::Psbt> { self.0.finish_psbt(psbt).await }
+	async fn make_signed_p2a_cpfp(&mut self, tx: &Transaction, fees: bark::onchain::MakeCpfpFees) -> Result<Transaction, bark::onchain::CpfpError> { self.0.make_signed_p2a_cpfp(tx, fees).await }
+	async fn store_signed_p2a_cpfp(&mut self, tx: &Transaction) -> Result<(), bark::onchain::CpfpError> { self.0.store_signed_p2a_cpfp(tx).await }
+}
+
+#[tokio::test]
+async fn fallback_external_callback_requires_exact_owned_binding() {
+	let ctx = TestContext::new("bark_sdk/fallback_external_callback_requires_exact_owned_binding").await;
+	let srv = ctx.captaind("server").create().await;
+	let template = ctx.bark_sdk("template", &srv).cfg(|c| c.daemon_manual_sync = true).create().await;
+	template.stop_daemon_wait().await.unwrap();
+	let config = template.config().clone();
+	let onchain_seed = [23; 64];
+	let root = Xpriv::new_master(Network::Regtest, &onchain_seed).unwrap();
+	let descriptor = Bip84(root, KeychainKind::External);
+	let independent = bdk_wallet::Wallet::create_single(descriptor).network(Network::Regtest).create_wallet_no_persist().unwrap();
+	let expected = independent.peek_address(KeychainKind::External, 0).script_pubkey();
+	let alternative = independent.peek_address(KeychainKind::External, 1).script_pubkey();
+	let external_db = Arc::new(bark::persist::adaptor::StorageAdaptorWrapper::new_memory());
+	let external = bark::onchain::OnchainWallet::load_or_create(Network::Regtest, onchain_seed, external_db).await.unwrap();
+	assert!(external.is_mine(&expected).await.unwrap());
+	let external: Arc<tokio::sync::RwLock<dyn OnchainWalletTrait>> = Arc::new(tokio::sync::RwLock::new(ExternalOnchain(external)));
+	let seed = bark::WalletSeed::new_from_seed(Network::Regtest, &[24; 64]);
+	let wallet = bark::Wallet::open(Network::Regtest, seed, config, bark::OpenWalletArgs {
+		datadir: Some(ctx.datadir.join("external")), onchain: Some(external), fallback_spk: Some(expected.clone()),
+		create_if_not_exists: true, run_daemon: false, ..Default::default()
+	}).await.unwrap();
+	let record = wallet.fallback_destination().await.unwrap();
+	assert_eq!(record.spk, expected);
+	assert!(wallet.set_fallback_destination(alternative).await.is_err(), "another owned script cannot replace the expected binding");
+	assert_eq!(wallet.fallback_destination().await.unwrap(), record);
+}
+
+#[tokio::test]
+async fn fallback_native_auth_child_zero_survives_reopen() {
+	let ctx = TestContext::new("bark_sdk/fallback_native_auth_child_zero_survives_reopen").await;
+	let srv = ctx.captaind("server").create().await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let wallet = ctx.bark_sdk("wallet", &srv).mnemonic(mnemonic.clone()).cfg(|c| c.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let identity = wallet.peek_keypair(0).await.unwrap().public_key();
+	assert_eq!(wallet.peek_address(0).await.unwrap().policy().user_pubkey(), identity);
+	let (_, first_index) = wallet.new_address_with_index().await.unwrap();
+	assert_eq!(first_index, 1, "reserved auth key zero is never allocated again");
+	let config = wallet.config().clone();
+	drop(wallet);
+	let reopened = bark::Wallet::open(Network::Regtest, bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic),
+		config, bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: false, ..Default::default() }).await.unwrap();
+	assert_eq!(reopened.peek_keypair(0).await.unwrap().public_key(), identity);
+	assert_eq!(reopened.new_address_with_index().await.unwrap().1, 2);
+}
+
 #[tokio::test]
 async fn fallback_register_board_fixed_destination_and_offline_addresses() {
 	let ctx = TestContext::new("bark_sdk/fallback_register_board_fixed_destination_and_offline_addresses").await;
@@ -787,6 +854,7 @@ async fn grouped_expiry_without_client(
 		let vout = funding.output.iter().position(|o| o.script_pubkey == builder.funding_script_pubkey()).unwrap();
 		let (_, nonce) = ark::musig::nonce_pair(&key);
 		let request = protos::BoardCosignRequest {
+			origin: Some(wallet.fallback_child_hint(key.public_key()).await.unwrap().into()),
 			amount: 40_000, utxo: OutPoint::new(funding.compute_txid(), vout as u32).serialize(),
 			expiry_height: expiry.into(), user_pubkey: key.public_key().serialize().to_vec(),
 			pub_nonce: nonce.serialize().to_vec(), funding_tx: bitcoin::consensus::serialize(funding),

@@ -848,6 +848,8 @@ struct WalletInner {
 
 	/// Deterministic seed material used to generate wallet keypairs.
 	seed: WalletSeed,
+	/// Fixed once by the actual native or external onchain wallet factory.
+	fallback_spk: ScriptBuf,
 
 	/// Live connection to an Ark server for round participation and synchronization.
 	///
@@ -1043,6 +1045,7 @@ impl Wallet {
 	/// * `Err(anyhow::Error)` - If the public key does not exist in the database or if an error
 	///   occurs during the database query.
 	pub async fn peek_keypair(&self, index: u32) -> anyhow::Result<Keypair> {
+		ensure!(index < (1 << 31), "hardened coin keys are not supported");
 		let keypair = self.inner.seed.derive_vtxo_keypair(index);
 		if self.inner.db.get_public_key_idx(&keypair.public_key()).await?.is_some() {
 			Ok(keypair)
@@ -1086,8 +1089,10 @@ impl Wallet {
 		}
 
 		// We should derive unrevealed keys, so we add one to the last key index.
-		let start_idx = self.inner.db.get_last_vtxo_key_index().await?.map(|i| i + 1).unwrap_or(0);
-		let mut frontier = start_idx.saturating_add(gap_limit);
+		let last = self.inner.db.get_last_vtxo_key_index().await?;
+		if last.is_some_and(|index| index >= (1 << 31) - 1) { return Ok(found); }
+		let start_idx = fallback::next_key_index(last)?;
+		let mut frontier = start_idx.saturating_add(gap_limit).min((1 << 31) - 1);
 		let mut idx = start_idx;
 		let mut gap = Vec::<(u32, PublicKey)>::new();
 		while idx <= frontier && !unrevealed.is_empty() {
@@ -1104,7 +1109,7 @@ impl Wallet {
 
 				// `frontier` is the last index the scan tests. This index matched,
 				// so the next run of unused indices starts at idx + 1.
-				frontier = idx.saturating_add(1).saturating_add(gap_limit);
+				frontier = idx.saturating_add(1).saturating_add(gap_limit).min((1 << 31) - 1);
 			} else {
 				gap.push((idx, pubkey));
 			}
@@ -1278,7 +1283,8 @@ impl Wallet {
 
 		// Fallback registration is mandatory, including when --force was used.
 		// A failed or lost reply can be retried with the durable local record.
-		fallback::register(network, seed, db, onchain, &mut connection, fallback_spk).await?;
+		let expected = fallback::expected_destination(network, seed, onchain, fallback_spk.as_ref()).await?;
+		fallback::register(network, seed, db, onchain, &mut connection, &expected).await?;
 
 		// write the config to db
 		db.init_wallet(&properties).await.context("cannot init wallet in the database")?;
@@ -1344,13 +1350,14 @@ impl Wallet {
 			},
 		};
 
+		let fallback_spk = fallback::expected_destination(network, &seed, &onchain, args.fallback_spk.as_ref()).await?;
 		let mut created_now = false;
 		let properties = if let Some(p) = db.read_properties().await? {
 			p
 		} else if args.create_if_not_exists {
 			Self::create(
 				network, &seed, &config, &*db, &*lock_manager, args.create_without_server,
-				&onchain, args.fallback_spk.clone(),
+				&onchain, Some(fallback_spk.clone()),
 			).await.context("error creating new wallet")?;
 			created_now = true;
 			db.read_properties().await?
@@ -1405,7 +1412,7 @@ impl Wallet {
 
 		let onchain = Some(onchain);
 		let ret = Wallet { inner: Arc::new(WalletInner {
-			config, db, lock_manager, seed, exit, movements, notifications, server, chain,
+			config, db, lock_manager, seed, fallback_spk, exit, movements, notifications, server, chain,
 			onchain,
 			daemon: parking_lot::Mutex::new(None),
 			last_force_exit_scan_tip: tokio::sync::Mutex::new(None),
@@ -2330,6 +2337,7 @@ impl Wallet {
 		};
 
 		Ok(Some(RoundParticipation {
+			output_origins: Default::default(),
 			inputs: vtxos,
 			outputs: vec![req],
 			unblinded_mailbox_id: None,

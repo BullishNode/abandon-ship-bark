@@ -20,6 +20,7 @@ use crate::secret::Secret;
 #[derive(Debug, Clone)]
 pub struct StoredRoundOutput {
 	pub vtxo_request: VtxoRequest,
+	pub origin: Option<ark::fallback::AccountChild>,
 	pub unblinded_mailbox_id: Option<MailboxIdentifier>,
 }
 

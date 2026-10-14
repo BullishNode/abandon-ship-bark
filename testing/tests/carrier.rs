@@ -434,9 +434,9 @@ fn snapshot_error(result: anyhow::Result<BackingSnapshot>) -> String {
 }
 
 
-async fn rounds_changeset_fingerprint(db: &Db) -> (i64, Option<String>) {
+async fn wallet_changeset_fingerprint(db: &Db, kind: WalletKind) -> (i64, Option<String>) {
 	db.read(async |t| {
-		let row = t.query_one("SELECT count(*) AS count, md5(string_agg(md5(content), ',' ORDER BY id)) AS digest FROM wallet_changeset WHERE kind='rounds'", &[]).await?;
+		let row = t.query_one("SELECT count(*) AS count, md5(string_agg(md5(content), ',' ORDER BY id)) AS digest FROM wallet_changeset WHERE kind=$1::text::wallet_kind", &[&kind.name()]).await?;
 		Ok((row.get("count"), row.get("digest")))
 	}).await.unwrap()
 }
@@ -472,7 +472,7 @@ async fn wallet_inventory_actual_owner_rpc_and_helper_do_not_mutate_wallet() {
 		assert!(output.trusted && output.mature && output.transaction_eligible && output.confirmed_fee_eligible);
 		assert!(!output.reserved && !output.coinbase);
 	}
-	let before_db = rounds_changeset_fingerprint(&db).await;
+	let before_db = wallet_changeset_fingerprint(&db, WalletKind::Rounds).await;
 	for _ in 0..3 {
 		let next = rpc.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner();
 		assert_eq!(next, first, "repeated reads must not reveal or change the canonical inventory");
@@ -488,7 +488,7 @@ async fn wallet_inventory_actual_owner_rpc_and_helper_do_not_mutate_wallet() {
 	assert_eq!(cli_json["rounds"]["public_descriptor"], rounds.public_descriptor);
 	assert_eq!(cli_json["rounds"]["last_revealed_index"], serde_json::json!(rounds.last_revealed_index));
 	std::fs::write(ctx.datadir.join("rounds-wallet-inventory.json"), &cli.stdout).unwrap();
-	let after_db = rounds_changeset_fingerprint(&db).await;
+	let after_db = wallet_changeset_fingerprint(&db, WalletKind::Rounds).await;
 	assert!(before_db == after_db, "owning-daemon inventory must not append or rewrite persisted wallet state");
 
 	// Real immature coinbase must not become eligible merely because canonical
@@ -502,7 +502,7 @@ async fn wallet_inventory_actual_owner_rpc_and_helper_do_not_mutate_wallet() {
 	assert_eq!(immature.confirmations, 1);
 	assert!(immature.trusted);
 	assert!(!immature.mature && !immature.transaction_eligible && !immature.confirmed_fee_eligible);
-	let before_db = rounds_changeset_fingerprint(&db).await;
+	let before_db = wallet_changeset_fingerprint(&db, WalletKind::Rounds).await;
 
 	// Stop its sole owner, then reload the same existing rounds wallet to inspect
 	// staged changes and live guard behavior directly. No second wallet is created.
@@ -529,7 +529,7 @@ async fn wallet_inventory_actual_owner_rpc_and_helper_do_not_mutate_wallet() {
 	assert!(held.lock_wallet_utxo(point).is_err(), "read preserves the existing reservation");
 	assert!(held.staged() == staged_before.as_ref(), "inventory must not mutate staged BDK state");
 	assert_eq!(held.derivation_index(KEYCHAIN), index_before);
-	assert!(before_db == rounds_changeset_fingerprint(&db).await, "direct helper must not persist");
+	assert!(before_db == wallet_changeset_fingerprint(&db, WalletKind::Rounds).await, "direct helper must not persist");
 	drop(reservation);
 	let released = held.inventory().unwrap();
 	assert_eq!(released, snapshot);
@@ -541,5 +541,108 @@ async fn wallet_inventory_actual_owner_rpc_and_helper_do_not_mutate_wallet() {
 		"owner_rpc_repeated_reads": 4, "fixed_cli_json_checked": true, "real_immature_coinbase_refused": true, "address_index_unchanged": true,
 		"staged_state_unchanged": true, "persisted_state_unchanged": true, "reservations_preserved": true,
 		"watchman_inventory": null, "complete": false,
+	})).unwrap()).unwrap();
+}
+
+
+#[tokio::test]
+async fn wallet_inventory_watchmand_actual_owner_and_existing_admin_socket() {
+	let ctx = TestContext::new("carrier-builder/wallet_inventory_watchmand_actual_owner_and_existing_admin_socket").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().watchmand_cfg(|c| {
+		c.min_trusted_confs = 3;
+		c.watchman.sweep_interval = std::time::Duration::from_secs(3600);
+		c.watchman.reaction_interval = std::time::Duration::from_secs(3600);
+	}).create().await;
+	let watchmand = srv.watchmand();
+	let addr = watchmand.config().admin_address.unwrap().to_string();
+	let mut rpc = tokio::time::timeout(std::time::Duration::from_secs(20), async {
+		loop {
+			if let Ok(client) = server_rpc::admin::WalletAdminServiceClient::connect(format!("http://{addr}")).await {
+				break client;
+			}
+			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+		}
+	}).await.expect("existing watchmand admin listener must become ready");
+	assert_eq!(rpc.wallet_status(server_rpc::protos::Empty {}).await.unwrap_err().code(), tonic::Code::Unimplemented,
+		"legacy address-revealing wallet status must not be activated on watchmand");
+	let address = watchmand.wait_wallet_address().await;
+	ctx.bitcoind().fund_addr(address, sat(1_000_000)).await;
+	ctx.generate_blocks(1).await;
+	let core = ctx.bitcoind().sync_client();
+	watchmand.wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;
+	let one_conf = rpc.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner();
+	let one_conf_wallet = one_conf.watchman.as_ref().unwrap();
+	assert_eq!(one_conf_wallet.min_trusted_confirmations, 3);
+	assert_eq!(one_conf_wallet.utxos.len(), 1);
+	assert_eq!(one_conf_wallet.utxos[0].confirmations, 1);
+	assert!(!one_conf_wallet.utxos[0].trusted && !one_conf_wallet.utxos[0].confirmed_fee_eligible);
+	ctx.generate_blocks(2).await;
+	watchmand.wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;
+	let first = rpc.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner();
+	assert!(first.rounds.is_none() && !first.complete && !first.missing_sources.is_empty());
+	let fee_wallet = first.watchman.as_ref().unwrap();
+	assert!(fee_wallet.complete);
+	assert_eq!(fee_wallet.wallet, "watchman");
+	assert_eq!(fee_wallet.tip_height as u64, core.get_block_count().unwrap());
+	assert_eq!(fee_wallet.tip_hash, core.get_block_hash(fee_wallet.tip_height as u64).unwrap().to_string());
+	let info: serde_json::Value = core.call("getdescriptorinfo", &[serde_json::json!(fee_wallet.public_descriptor)]).unwrap();
+	assert_eq!(info["hasprivatekeys"], false);
+	let row = &fee_wallet.utxos[0];
+	assert_eq!(row.confirmations, 3);
+	assert!(row.trusted && row.mature && row.transaction_eligible && row.confirmed_fee_eligible && !row.reserved);
+	let point = OutPoint::from_str(&row.outpoint).unwrap();
+	let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+	assert_eq!(row.value_sat, actual.value.to_sat());
+	assert_eq!(row.script_pubkey, actual.script_pub_key.hex);
+	let rounds_source = srv.get_wallet_rpc().await.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner();
+	assert_ne!(rounds_source.rounds.as_ref().unwrap().public_descriptor, fee_wallet.public_descriptor);
+	assert!(rounds_source.watchman.is_none() && !rounds_source.complete,
+		"separate owner responses remain partial; matching tips do not make them atomic");
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let before = wallet_changeset_fingerprint(&db, WalletKind::Watchman).await;
+	for _ in 0..3 {
+		assert_eq!(rpc.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner(), first);
+	}
+	let cli = tokio::process::Command::new(std::env::var("CAPTAIND_EXEC").unwrap())
+		.args(["rpc", "--addr", &addr, "wallet-inventory"]).output().await.unwrap();
+	assert!(cli.status.success());
+	assert!(cli.stdout.len() <= 2 * 1024 * 1024);
+	let json: serde_json::Value = serde_json::from_slice(&cli.stdout).unwrap();
+	assert!(json["rounds"].is_null());
+	assert_eq!(json["watchman"]["public_descriptor"], fee_wallet.public_descriptor);
+	assert_eq!(json["complete"], false);
+	assert!(before == wallet_changeset_fingerprint(&db, WalletKind::Watchman).await,
+		"actual watchmand RPC and CLI cannot mutate persisted wallet state");
+	std::fs::write(ctx.datadir.join("watchman-wallet-inventory.json"), &cli.stdout).unwrap();
+	watchmand.stop().await.unwrap();
+	srv.stop().await.unwrap();
+	let mnemonic = wallet::read_mnemonic_from_datadir(&watchmand.config().data_dir).unwrap();
+	let master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
+	let tip = BlockRef { height: BlockHeight::new(fee_wallet.tip_height), hash: core.get_block_hash(fee_wallet.tip_height as u64).unwrap() };
+	let existing = PersistedWallet::load_derive_from_master_xpriv(db.clone(), ctx.bitcoind().async_client(), Network::Regtest,
+		&master, WalletKind::Watchman, tip, fee_wallet.min_trusted_confirmations).await.unwrap();
+	let lock = InstrumentedLock::new("test_existing_watchman_inventory", existing);
+	let held = lock.lock_owned().await;
+	let staged = held.staged().cloned();
+	let index = held.derivation_index(KEYCHAIN);
+	assert_eq!(held.inventory().unwrap(), *fee_wallet);
+	let reservation = held.lock_wallet_utxo(point).unwrap();
+	let reserved = held.inventory().unwrap();
+	assert_eq!(reserved.reserved_outpoints, vec![point.to_string()]);
+	assert!(reserved.utxos[0].reserved && !reserved.utxos[0].confirmed_fee_eligible);
+	assert!(held.lock_wallet_utxo(point).is_err());
+	assert!(held.staged() == staged.as_ref());
+	assert_eq!(held.derivation_index(KEYCHAIN), index);
+	assert!(before == wallet_changeset_fingerprint(&db, WalletKind::Watchman).await);
+	drop(reservation);
+	assert_eq!(held.inventory().unwrap(), *fee_wallet);
+	std::fs::write(ctx.datadir.join("watchman-inventory-summary.json"), serde_json::to_vec_pretty(&serde_json::json!({
+		"scope": "actual watchmand-owned fee-wallet source; separate daemon frames are not globally atomic",
+		"utxos": fee_wallet.utxos.len(), "value_sat": fee_wallet.utxos.iter().map(|u| u.value_sat).sum::<u64>(),
+		"tip_height": fee_wallet.tip_height, "tip_hash": fee_wallet.tip_hash,
+		"minimum_confirmations": 3, "one_confirmation_refused": true, "three_confirmations_eligible": true,
+		"owner_rpc_repeated_reads": 4, "private_keys_exported": false, "legacy_wallet_status_unimplemented": true,
+		"existing_admin_socket": true, "staged_state_unchanged": true, "address_index_unchanged": true,
+		"persisted_state_unchanged": true, "reservations_preserved": true, "complete": false,
 	})).unwrap()).unwrap();
 }

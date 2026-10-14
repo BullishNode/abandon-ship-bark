@@ -103,6 +103,32 @@ impl rpc::server::LightningAdminService for Server {
 }
 
 #[async_trait]
+impl rpc::server::WalletAdminService for crate::watchman::Daemon {
+	#[tracing::instrument(skip(self, _req))]
+	async fn wallet_status(
+		&self, _req: tonic::Request<protos::Empty>,
+	) -> Result<tonic::Response<protos::WalletStatusResponse>, tonic::Status> {
+		Err(tonic::Status::unimplemented("watchmand exposes read-only wallet inventory; wallet status is unavailable"))
+	}
+
+	#[tracing::instrument(skip(self, _req))]
+	async fn wallet_inventory(
+		&self, _req: tonic::Request<protos::Empty>,
+	) -> Result<tonic::Response<protos::WalletInventoryResponse>, tonic::Status> {
+		let watchman = crate::watchman::Daemon::wallet_inventory(self).await
+			.map_err(|error| tonic::Status::failed_precondition(format!("{error:#}")))?;
+		let response = protos::WalletInventoryResponse {
+			rounds: None, watchman: Some(watchman), complete: false,
+			missing_sources: vec!["captaind owns its rounds wallet; collect its separate source without assuming global atomicity".into()],
+		};
+		if response.encoded_len() > 2 * 1024 * 1024 {
+			return Err(tonic::Status::resource_exhausted("complete wallet inventory exceeds serialized byte budget"));
+		}
+		Ok(tonic::Response::new(response))
+	}
+}
+
+#[async_trait]
 impl rpc::server::SweepAdminService for crate::watchman::Daemon {
 	#[tracing::instrument(skip(self, _req))]
 	async fn trigger_sweep(
@@ -267,7 +293,7 @@ pub async fn run_rpc_server(srv: Arc<Server>) -> anyhow::Result<()> {
 	Ok(())
 }
 
-/// Run the watchmand admin gRPC server: `SweepAdminService` and `BlocklistAdminService`.
+/// Run read-only wallet inventory, sweep and blocklist administration on the watchmand socket.
 pub async fn run_watchmand_admin_rpc_server(
 	addr: SocketAddr,
 	daemon: Arc<crate::watchman::Daemon>,
@@ -276,6 +302,7 @@ pub async fn run_watchmand_admin_rpc_server(
 	info!("Starting watchmand admin gRPC service on address {}", addr);
 
 	let routes = tonic::service::Routes::default()
+		.add_service(rpc::server::WalletAdminServiceServer::from_arc(daemon.clone()))
 		.add_service(rpc::server::SweepAdminServiceServer::from_arc(daemon.clone()))
 		.add_service(rpc::server::BlocklistAdminServiceServer::from_arc(daemon));
 

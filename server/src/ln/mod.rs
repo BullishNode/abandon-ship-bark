@@ -1355,11 +1355,59 @@ mod tests {
 	use chrono::Local;
 	use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 	use ark::lightning::Bolt11Invoice;
+	use ark::test_util::VTXO_VECTORS;
 
+	use crate::database::htlc_vtxo::Htlc;
+	use crate::database::model::{SpendState, VtxoState};
 	use super::*;
 
 	/// Typical config delta used in tests.
 	const DELTA: BlockDelta = BlockDelta::new(40);
+
+	#[test]
+	fn htlc_recv_expiry_requires_processed_watchman_tip() {
+		let vtxo = VTXO_VECTORS.round2_vtxo.clone();
+		let (payment_hash, expiry) = match vtxo.policy() {
+			ark::VtxoPolicy::ServerHtlcRecv(p) => (p.payment_hash, p.htlc_expiry),
+			ark::VtxoPolicy::ServerHtlcRecv_v0(p) => (p.payment_hash, p.htlc_expiry),
+			_ => panic!("fixture must be a signed HTLC-recv vtxo"),
+		};
+		let mut htlcs = [HtlcVtxo {
+			htlc: Htlc {
+				payment_hash,
+				htlc_expiry: expiry,
+				direction: HtlcDirection::Outgoing,
+				offchain_resolution: None,
+				chain_resolution: None,
+				chain_resolution_height: None,
+			},
+			vtxo: VtxoState {
+				id: 0,
+				vtxo_id: vtxo.id(),
+				vtxo,
+				oor_spent_txid: None,
+				spent_in_round: None,
+				offboarded_in: None,
+				banned_until_height: None,
+				confirmed_height: None,
+				spend_state: SpendState::HtlcRecvUnclaimed,
+				created_at: Local::now(),
+				updated_at: Local::now(),
+			},
+		}];
+		let past = expiry + BlockDelta::new(1);
+		assert!(!htlc_recvs_expired(&htlcs, past, None), "missing watchman tip must hold");
+		assert!(!htlc_recvs_expired(&htlcs, past, Some(expiry.saturating_sub(BlockDelta::new(1)))));
+		assert!(!htlc_recvs_expired(&htlcs, past, Some(expiry)), "expiry equality must hold");
+		assert!(!htlc_recvs_expired(&htlcs, expiry, Some(past)), "server tip must also pass expiry");
+		assert!(htlc_recvs_expired(&htlcs, past, Some(past)));
+
+		htlcs[0].vtxo.confirmed_height = Some(expiry);
+		assert!(!htlc_recvs_expired(&htlcs, past, Some(past)), "unresolved exit must hold");
+		htlcs[0].htlc.chain_resolution = Some(HtlcResolution::Revoked);
+		htlcs[0].htlc.chain_resolution_height = Some(expiry);
+		assert!(htlc_recvs_expired(&htlcs, past, Some(past)));
+	}
 
 	#[test]
 	fn send_refund_pending_deadline_never_means_paid() {

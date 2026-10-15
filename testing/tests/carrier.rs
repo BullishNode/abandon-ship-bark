@@ -19,6 +19,8 @@ mod pending_board_return;
 mod wallet_pending_inventory;
 #[path = "carrier/saved_send_return.rs"]
 mod saved_send_return;
+#[path = "carrier/fee_acceleration.rs"]
+mod fee_acceleration;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;

@@ -119,6 +119,11 @@ impl FeeEstimator {
 		}
 	}
 
+	/// Configured ceiling for ordinary on-chain transactions.
+	pub fn max_fee_rate(&self) -> Option<FeeRate> {
+		self.max_fee_rate
+	}
+
 	/// Returns the fast fee rate (1-block confirmation target).
 	pub fn fast(&self) -> FeeRate {
 		self.get_current_rates().fast

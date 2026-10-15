@@ -184,12 +184,12 @@ mod test {
 	#[test]
 	fn direct_source_mode_requires_exclusive_positive_schedule() {
 		let mut config = Config { enabled: true, ..Config::default() };
-		assert!(config.validate(true).is_err());
-		assert!(config.validate(false).is_ok());
+		assert!(config.validate(true, bitcoin::Network::Signet).is_err());
+		assert!(config.validate(false, bitcoin::Network::Signet).is_ok());
 		config.interval = Duration::ZERO;
-		assert!(config.validate(false).is_err());
+		assert!(config.validate(false, bitcoin::Network::Signet).is_err());
 		config.interval = Duration::from_secs(1);
 		config.max_groups_per_tick = 0;
-		assert!(config.validate(false).is_err());
+		assert!(config.validate(false, bitcoin::Network::Signet).is_err());
 	}
 }

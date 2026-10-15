@@ -80,7 +80,7 @@ pub async fn build_direct_carrier(
 	limits: CarrierLimits,
 ) -> anyhow::Result<(InstrumentedOwnedLockGuard<PersistedWallet>, DirectCarrier)> {
 	build_direct_carrier_with_replacement(signer, wallet, backing, recipients,
-		operator_script, height, fee_rate, limits, None).await
+		operator_script, height, fee_rate, limits, None, None).await
 }
 
 pub(crate) async fn build_direct_carrier_with_replacement(
@@ -89,6 +89,7 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 	backing: &[ServerVtxo], recipients: &[TxOut], operator_script: ScriptBuf,
 	height: BlockHeight, fee_rate: FeeRate, limits: CarrierLimits,
 	replacement: Option<(Amount, FeeRate)>,
+	ordinary_budget: Option<&super::ordinary_fee::OrdinaryFeeBudget>,
 ) -> anyhow::Result<(InstrumentedOwnedLockGuard<PersistedWallet>, DirectCarrier)> {
 	ensure!(wallet.kind() == WalletKind::Watchman, "carrier requires the existing watchman wallet");
 	validate_request(backing, recipients, &operator_script, fee_rate, limits)?;
@@ -97,6 +98,25 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 	let remainder = backing_amount.checked_sub(recipient_amount)
 		.context("carrier recipients exceed supplied backing")?;
 	let inputs = prepare_backing(signer, backing, height).await?;
+	if let Some(budget) = ordinary_budget {
+		// Test the complete fee ceiling before the first signature. In particular,
+		// one large fee UTXO cannot count both as ordinary liquidity and as urgent
+		// reserve merely because most of its value would return as pending change.
+		let preflight_inputs = inputs.clone();
+		let preflight_recipients = recipients.to_vec();
+		let preflight_operator = operator_script.clone();
+		let reserve = budget.urgent_reserve();
+		let (held, result) = tokio::task::spawn_blocking(move || {
+			let available = wallet.confirmed_unlocked_utxos();
+			let result = build_candidate(&mut wallet, &available, &preflight_inputs,
+				&preflight_recipients, &preflight_operator, height, remainder, limits.max_miner_fee)
+				.and_then(|(psbt, _)| validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, reserve));
+			(wallet, result)
+		}).await.context("ordinary fee reserve preflight task failed")?;
+		wallet = held;
+		result?;
+		budget.reserve_ceiling(limits.max_miner_fee)?;
+	}
 	let mut fee = Amount::ZERO;
 
 	for _ in 0..MAX_BUILD_ATTEMPTS {
@@ -113,6 +133,9 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 		}).await.context("carrier wallet build task failed")?;
 		wallet = held;
 		let (mut psbt, roles) = built?;
+		if let Some(budget) = ordinary_budget {
+			validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, budget.urgent_reserve())?;
+		}
 		sign_backing(signer, &inputs, &mut psbt).await?;
 		let (held, signed) = tokio::task::spawn_blocking(move || {
 			let signed = sign_wallet(&wallet, psbt);
@@ -161,6 +184,15 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 		}));
 	}
 	bail!("carrier fee construction did not converge")
+}
+
+fn validate_urgent_reserve(wallet: &Wallet, available: &[OutPoint], tx: &Transaction, reserve: Amount) -> anyhow::Result<()> {
+	let selected = tx.input.iter().map(|i| i.previous_output).collect::<BTreeSet<_>>();
+	let remaining = sum_amounts(available.iter().filter(|p| !selected.contains(*p))
+		.map(|p| wallet.get_utxo(*p).context("urgent reserve output disappeared").map(|u| u.txout.value))
+		.collect::<anyhow::Result<Vec<_>>>()?)?;
+	ensure!(remaining >= reserve, "ordinary carrier would consume protected confirmed urgent fee reserve");
+	Ok(())
 }
 
 fn sum_amounts(amounts: impl IntoIterator<Item = Amount>) -> anyhow::Result<Amount> {
@@ -406,6 +438,26 @@ mod tests {
 		insert_checkpoint(&mut wallet, BlockId { height: 1_000, hash: BlockHash::all_zeros() });
 		let points = coins.iter().map(|v| receive_output_in_latest_block(&mut wallet, *v)).collect();
 		(wallet, points)
+	}
+
+	#[test]
+	fn ordinary_reserve_excludes_whole_inputs_and_pending_change() {
+		let backing = fixture_backing(1, Amount::from_sat(20_000));
+		let inputs = vec![BackingInput { vtxo: backing[0].clone(), clause: None }];
+		let recipients = vec![TxOut { value: Amount::from_sat(19_000), script_pubkey: script(2) }];
+		let (mut wallet, available) = fixture_wallet(&[Amount::from_sat(100_000)]);
+		let (psbt, _) = build_candidate(&mut wallet, &available, &inputs, &recipients, &script(3),
+			BlockHeight::new(1_000), Amount::from_sat(1_000), Amount::from_sat(20_000)).unwrap();
+		assert!(validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, Amount::from_sat(40_000)).is_err());
+		let (mut wallet, available) = fixture_wallet(&[Amount::from_sat(60_000), Amount::from_sat(40_000)]);
+		let (psbt, _) = build_candidate(&mut wallet, &available, &inputs, &recipients, &script(3),
+			BlockHeight::new(1_000), Amount::from_sat(1_000), Amount::from_sat(20_000)).unwrap();
+		validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, Amount::from_sat(40_000)).unwrap();
+		let selected = psbt.unsigned_tx.input.iter().map(|i| i.previous_output).collect::<BTreeSet<_>>();
+		assert!(selected.contains(&available[0]));
+		assert!(!selected.contains(&available[1]), "the complete urgent output stays unselected");
+		assert!(validate_urgent_reserve(&wallet, &[available[0]], &psbt.unsigned_tx, Amount::from_sat(40_000)).is_err(),
+			"an excluded/untrusted/reserved urgent output cannot contribute to the floor");
 	}
 
 	fn limits() -> CarrierLimits {

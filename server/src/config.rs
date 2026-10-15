@@ -701,6 +701,9 @@ pub mod watchmand {
 		pub fn validate(&self) -> anyhow::Result<()> {
 			self.bitcoind.validate()?;
 			if let Some(direct) = &self.watchman.direct_expiry {
+				direct.ordinary_fee_policy.validate()?;
+				ensure!(direct.max_miner_fee.to_sat() <= direct.ordinary_fee_policy.ordinary_budget_sat,
+					"direct carrier fee ceiling exceeds lifetime ordinary allowance");
 				ensure!(!direct.history_dir.as_os_str().is_empty(), "direct expiry history directory is empty");
 				ensure!(direct.max_miner_fee > Amount::ZERO && direct.max_miner_fee <= Amount::MAX_MONEY,
 					"invalid direct expiry mining-fee ceiling");

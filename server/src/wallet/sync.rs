@@ -51,6 +51,10 @@ impl ChainEventListener for InstrumentedLock<PersistedWallet> {
 			hash: block.block.header.prev_blockhash,
 		};
 
+		// Book gross backing holds (or an explicit unknown-gross quarantine)
+		// with this block's wallet changeset before releasing the owning guard.
+		wallet.stage_recovery_receipts(block).await?;
+
 		let block_to_apply = block.block.clone();
 		let (mut wallet, apply_result) = tokio::task::spawn_blocking(move || {
 			let res = wallet.wallet.apply_block_connected_to(&block_to_apply, height.to_u32(), connected_to);

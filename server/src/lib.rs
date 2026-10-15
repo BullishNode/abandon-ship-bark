@@ -394,7 +394,7 @@ impl Server {
 			db.clone(), bitcoind.clone(), cfg.network, &wallet_xpriv, WalletKind::Rounds, deep_tip,
 			cfg.min_trusted_confs,
 		).await.context("error loading rounds wallet")?;
-		if cfg.expiry_payout.enabled {
+		if cfg.expiry_payout.enabled || cfg.expiry_payout.recovery_fee_headroom_sat.is_some() {
 			let path = cfg.expiry_payout.watchman_config.as_ref()
 				.context("enabled expiry payouts require watchman_config")?;
 			let watchman = config::watchmand::Config::load(path)
@@ -404,14 +404,18 @@ impl Server {
 				.require_network(cfg.network)?;
 			ensure!(rounds_wallet.is_mine(address.script_pubkey()),
 				"expiry payouts require watchmand sweeps into the rounds wallet");
+			let fee_headroom = cfg.expiry_payout.recovery_fee_headroom_sat
+				.context("enabled recovery reserve requires declared recovery_fee_headroom_sat")?;
+			rounds_wallet.enable_recovery_reserve(address.script_pubkey(), Amount::from_sat(fee_headroom)).await?;
 			ensure!(cfg.rpc.admin_address.is_none_or(|a| a.ip().is_loopback()),
 				"expiry payouts require the admin RPC to be disabled or bound to loopback");
 		}
-		// Reapply durable nursery spends before any worker can select their inputs.
+		// Preserve the tested payout replay, then include signed-before-nursery
+		// rounds/offboards and actual owning child publications before workers.
 		for tx in db.read(async |t| t.pending_expiry_payments(rounds_wallet.latest_checkpoint().height()).await).await? {
 			rounds_wallet.commit_tx(&tx);
 		}
-		rounds_wallet.persist().await?;
+		rounds_wallet.replay_signed_wallet_publications().await?;
 		if let Some(list) = bitcoin_address_blocklist.clone() {
 			rounds_wallet.set_address_blocklist(list);
 		}

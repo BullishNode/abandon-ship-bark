@@ -234,7 +234,7 @@ async fn interrupted_receive_for(outcome: ReceiveOutcome, fault: ReturnFault, fo
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(512);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(512);
 		}).create().await;
@@ -655,7 +655,7 @@ async fn absent_sender(completed: bool) {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().create().await;
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	lightning.sync().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let reached = Arc::new(Notify::new());
@@ -1167,7 +1167,7 @@ async fn unlinked_forwarding_claim(name: &str, invoice_for_address: bool) {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(1000);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
 		}).create().await;
@@ -1444,7 +1444,7 @@ async fn abandoned_intra_ark_receive(returning_sender: bool) {
 	// The granted HTLC-recv vtxos come from the pool and expire well before
 	// the sender's boards, so a returning sender's refund is a live coin.
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(1000);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
 			// The refund decision requires this sweep depth whether or not
@@ -1605,7 +1605,7 @@ async fn fallback_ln_receive_external_delivery_after_settlement_terminates() {
 	let ctx = TestContext::new("bark_sdk/fallback_ln_receive_external_delivery_after_settlement_terminates").await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(1000);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
 		}).create().await;
@@ -1709,7 +1709,7 @@ async fn fallback_exited_granted_receive_refunds_absent_sender() {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(1000);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
 			c.expiry_payout.sweep_min_confs = 1;
@@ -1828,7 +1828,7 @@ async fn fallback_busy_lightning_payment_does_not_stall_other_wallets() {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().create().await;
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	lightning.sync().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let reached = Arc::new(Notify::new());
@@ -1992,7 +1992,7 @@ async fn unresponsive_node(sends: usize) {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().create().await;
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	lightning.sync().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let reached = Arc::new(Notify::new());
@@ -2171,6 +2171,7 @@ async fn restart_with_payouts(srv: &Captaind) {
 	{
 		let mut config = srv.config_mut();
 		config.expiry_payout.enabled = true;
+		config.expiry_payout.recovery_fee_headroom_sat = Some(20_000);
 		config.expiry_payout.interval = Duration::from_secs(1);
 		config.expiry_payout.grace_blocks = 0;
 		config.expiry_payout.sweep_min_confs = 1;
@@ -2324,7 +2325,7 @@ async fn forwarded_absence(name: &str, invoices: usize) {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(1000);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
 		}).create().await;
@@ -2418,7 +2419,7 @@ async fn fallback_edge_forwarder_sigkill_before_mailbox_delivery() {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(1000);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(400);
 		}).create().await;

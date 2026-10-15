@@ -151,7 +151,7 @@ async fn fallback_retained_balance_paid_once_eligible() {
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.min_board_amount = sat(330);
-		}).watchmand().create().await;
+		}).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true)
 		.funded(sat(1_000_000)).create().await;
@@ -225,7 +225,7 @@ async fn committed_payout(name: &str) -> (TestContext, Arc<ark_testing::Captaind
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.min_board_amount = sat(330);
 			c.nursery_confirm_target_blocks = BlockDelta::new(2);
-		}).watchmand().create().await;
+		}).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let wallet = ctx.bark_sdk("wallet", &srv).cfg(|c| c.daemon_manual_sync = true)
 		.boarded(sat(30_000)).create().await;
@@ -437,7 +437,7 @@ async fn fallback_multi_input_send_one_input_settled_pays_recipient() {
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.min_board_amount = sat(330);
-		}).watchmand().create().await;
+		}).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let sender_mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let sender = ctx.bark_sdk("sender", &srv).mnemonic(sender_mnemonic.clone())
@@ -644,7 +644,7 @@ async fn fallback_wallet_groups_one_output_each() {
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.min_board_amount = sat(330);
-		}).watchmand().create().await;
+		}).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let large = ctx.bark_sdk("large", &srv).cfg(|c| c.daemon_manual_sync = true)
 		.boarded(sat(5_000)).boarded(sat(5_000)).boarded(sat(5_000)).create().await;
@@ -704,6 +704,7 @@ async fn fallback_wallet_groups_one_output_each() {
 	{
 		let mut config = srv.config_mut();
 		config.expiry_payout.enabled = true;
+		config.expiry_payout.recovery_fee_headroom_sat = Some(20_000);
 		config.expiry_payout.interval = Duration::from_secs(1);
 		config.expiry_payout.grace_blocks = 0;
 		config.expiry_payout.sweep_min_confs = 1;
@@ -791,7 +792,7 @@ async fn grouped_expiry_without_client(
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.min_board_amount = sat(330);
-		}).watchmand().create().await;
+		}).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	let mut wallet = ctx.bark_sdk("wallet", &srv).mnemonic(mnemonic.clone())
 		.cfg(|c| c.daemon_manual_sync = true)
 		.funded(sat(count as u64 * amount + 1_000_000)).create().await;
@@ -1016,6 +1017,7 @@ async fn grouped_expiry_without_client(
 	{
 		let mut config = srv.config_mut();
 		config.expiry_payout.enabled = true;
+		config.expiry_payout.recovery_fee_headroom_sat = Some(20_000);
 		config.expiry_payout.interval = Duration::from_secs(1);
 		config.expiry_payout.grace_blocks = 0;
 		config.expiry_payout.sweep_min_confs = 1;
@@ -1440,7 +1442,7 @@ async fn wait_expiry_race_lock(db: &Db, advisory: bool) {
 async fn fallback_edge_same_seed_two_devices_converge() {
 	let name = "fallback_edge_same_seed_two_devices_converge";
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
-	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(|c| {
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 		c.vtxo_lifetime = BlockDelta::new(200);
 	}).create().await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
@@ -1499,7 +1501,7 @@ async fn fallback_edge_same_seed_two_devices_converge() {
 async fn fallback_edge_restore_while_payout_unconfirmed() {
 	let name = "fallback_edge_restore_while_payout_unconfirmed";
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
-	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(|c| {
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 		c.vtxo_lifetime = BlockDelta::new(100);
 	}).create().await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
@@ -1563,7 +1565,7 @@ async fn fallback_edge_restore_while_payout_unconfirmed() {
 async fn fallback_edge_all_eight_offline_addresses_receive_then_return() {
 	let name = "fallback_edge_all_eight_offline_addresses_receive_then_return";
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
-	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(|c| {
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 		c.vtxo_lifetime = BlockDelta::new(300);
 	}).create().await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();

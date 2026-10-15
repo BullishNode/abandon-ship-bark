@@ -551,6 +551,7 @@ impl Process {
 		).context("builder error")?;
 
 		let fee_rate = self.srv.fee_estimator.slow();
+		let max_fee_rate = self.srv.config.fee_estimator.max_fee_rate;
 
 		let funding_txout = builder.funding_txout();
 
@@ -558,7 +559,7 @@ impl Process {
 		let (mut wallet, funding_psbt) = self.srv.rounds_wallet.build_blocking(
 			move |wallet| {
 				let selection = WithGuaranteedChange(SingleRandomDraw);
-				wallet.build_tx_at_chunk_feerate(selection, fee_rate, |b| {
+				wallet.build_quiet_tx_at_chunk_feerate(selection, fee_rate, max_fee_rate, |b| {
 					b.add_recipient(txout.script_pubkey.clone(), txout.value);
 					Ok(())
 				}).context("failed to build signed tree funding tx")
@@ -603,7 +604,7 @@ impl Process {
 		}
 
 		// finish and broadcast the tx
-		let tx = wallet.finish_tx(funding_psbt).context("error finishing tree funding tx")?;
+		let tx = wallet.finish_tx_with_max_fee_rate(funding_psbt, max_fee_rate).context("error finishing tree funding tx")?;
 
 		// Create the vtxos and virtual transactions in the database
 		// before committing the funding tx to the wallet. The funding tx
@@ -620,10 +621,31 @@ impl Process {
 				tree.output_vtxos().map(ServerVtxo::from),
 				database::SpendState::Pool,
 			);
-		self.srv.db.write(async |t| {
+		let funding_metadata = wallet.staged().cloned();
+		let published = self.srv.db.write(async |t| {
+			if let Some(metadata) = &funding_metadata {
+				t.store_changeset(crate::wallet::WalletKind::Rounds, metadata).await?;
+			}
 			t.execute_vtxo_tree_update(update).await?;
 			t.upsert_nursery_tx(&tx, NurseryTxKind::VtxoPool, confirm_target).await
-		}).await?;
+		}).await;
+		if let Err(error) = published {
+			let outcome = self.srv.db.write(async |t| {
+				t.execute("LOCK TABLE nursery_tx IN SHARE MODE", &[]).await?;
+				t.get_nursery_raw_tx(tx.compute_txid()).await
+			}).await.unwrap_or_else(|error| {
+				error!("pool funding commit outcome unknown; exiting: {error:#}");
+				std::process::exit(1);
+			});
+			match outcome {
+				Some(raw) if raw == tx => {},
+				None => return Err(error.context("pool funding transaction not committed")),
+				Some(_) => {
+					error!("pool funding committed different signed bytes; exiting for reconciliation");
+					std::process::exit(1);
+				},
+			}
+		}
 
 		// Here we commit the transaction to the wallet
 		wallet.commit_tx(&tx);

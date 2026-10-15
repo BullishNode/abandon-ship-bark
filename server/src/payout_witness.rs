@@ -43,6 +43,10 @@ struct Settlement {
 struct Witness {
 	tx: Vec<u8>,
 	settlements: Vec<Settlement>,
+	// Old witnessed payouts preserve their exact bytes. New reserved payouts
+	// additionally pin the immutable same-COMMIT capital effect.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	capital_releases: Option<Vec<crate::database::recovery_reserve::CapitalReleaseWitness>>,
 }
 
 fn identity(network: Network, key: PublicKey) -> Identity {
@@ -75,7 +79,11 @@ impl Tx<'_> {
 			}).collect::<Vec<_>>();
 		ensure!(!settlements.is_empty() && settlements.iter().all(|s| s.fee_sat >= 0),
 			"payout recovery witness missing or invalid settlements");
-		Ok(Witness { tx: serialize(tx), settlements })
+		let capital_releases = self.payout_capital_witness(tx.compute_txid()).await?;
+		if let Some(releases) = &capital_releases {
+			ensure!(releases.len() == settlements.len(), "payout capital witness has incomplete release coverage");
+		}
+		Ok(Witness { tx: serialize(tx), settlements, capital_releases })
 	}
 }
 
@@ -152,6 +160,12 @@ impl PayoutWitness {
 	pub(crate) async fn record(&self, db: &Db, tx: &Transaction) -> anyhow::Result<()> {
 		let witness = db.read(async |t| t.payout_witness(tx).await).await?;
 		let path = self.directory.join(format!("{}.json", tx.compute_txid()));
+		if witness.capital_releases.is_none() && !path.exists() {
+			let active = db.read(async |t| Ok(t.query_one(
+				"SELECT EXISTS (SELECT 1 FROM recovery_reserve WHERE id = 'rounds')", &[],
+			).await?.get::<_, bool>(0))).await?;
+			ensure!(!active, "new payout publication requires its immutable native capital release witness");
+		}
 		write_new_or_identical(&path, &serde_json::to_vec(&witness)?)?;
 		self.index(tx.compute_txid()).await
 	}
@@ -201,5 +215,33 @@ mod tests {
 		fs::create_dir(&path).unwrap();
 		assert!(write_new_or_identical(&path, b"committed history").is_err());
 		assert!(path.is_dir());
+	}
+}
+
+#[cfg(test)]
+mod capital_release_compat_test {
+	use super::*;
+
+	#[test]
+	fn payout_witness_preserves_legacy_bytes_without_fabricated_release() {
+		let original = br#"{"tx":[1,2],"settlements":[{"id":"coin","spk":null,"fee_sat":3}]}"#;
+		let witness: Witness = serde_json::from_slice(original).unwrap();
+		assert!(witness.capital_releases.is_none());
+		assert_eq!(serde_json::to_vec(&witness).unwrap(), original);
+	}
+
+	#[test]
+	fn payout_witness_gross_release_is_part_of_recovery_identity() {
+		let original = serde_json::json!({
+			"tx": [1, 2], "settlements": [{"id": "coin", "spk": null, "fee_sat": 3}],
+			"capital_releases": [{"id": "coin", "source": "source:0", "receipt": "receipt",
+				"gross_sat": 7000, "source_gross_sat": 10000, "source_revision": 0,
+				"receipt_block_hash": "block"}]
+		});
+		let witness: Witness = serde_json::from_value(original.clone()).unwrap();
+		let mut changed = original;
+		changed["capital_releases"][0]["gross_sat"] = 6999.into();
+		let restored: Witness = serde_json::from_value(changed).unwrap();
+		assert_ne!(witness, restored, "same payout bytes/settlements cannot hide a changed gross release");
 	}
 }

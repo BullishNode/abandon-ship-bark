@@ -34,7 +34,7 @@ async fn fallback_post_issued_requests_cannot_multiply_outputs() {
 async fn post_issued() {
 	let ctx = TestContext::new("bark_sdk/fallback_post_issued_requests_cannot_multiply_outputs").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
-		.funded(btc(1)).watchmand().cfg(|c| {
+		.funded(btc(1)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(300);
 			c.round_interval = Duration::from_secs(3600);
 		}).create().await;

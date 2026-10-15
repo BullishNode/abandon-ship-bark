@@ -148,6 +148,7 @@ impl Daemon {
 			);
 		}
 
+		let fee_chain = bcd::verify_fee_chain(&bitcoind, cfg.network).await?;
 		let deep_tip = bcd::deep_tip(&bitcoind).await
 			.context("failed to query node for deep tip")?;
 
@@ -188,8 +189,8 @@ impl Daemon {
 			.context("sweep_address network mismatch")?;
 		let direct_expiry = if let Some(history) = history {
 			let direct = cfg.watchman.direct_expiry.as_ref().context("direct expiry configuration disappeared")?;
-			let ordinary = super::ordinary_fee::OrdinaryFeeBudget::load(
-				&direct.history_dir.join(crate::payout_witness::DIRECT_DIRECTORY), direct.ordinary_fee_policy)?;
+			let ordinary = super::ordinary_fee::OrdinaryFeeBudget::load_verified(
+				&direct.history_dir.join(crate::payout_witness::DIRECT_DIRECTORY), direct.ordinary_fee_policy, &fee_chain)?;
 			let retained = db.read(async |tx| Ok(tx.query_one(
 				"SELECT COALESCE(SUM(miner_fee_sat),0)::BIGINT AS total FROM expiry_carrier", &[],
 			).await?.get::<_, i64>("total"))).await?;

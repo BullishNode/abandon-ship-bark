@@ -187,13 +187,32 @@ struct DirectRecord {
 impl DirectPayoutWitness {
 	/// Called only during fresh server creation, before any direct journal rows.
 	pub async fn initialize(datadir: &Path, network: Network, key: PublicKey, db: &Db) -> anyhow::Result<()> {
+		Self::initialize_policy(datadir, network, key, db, crate::watchman::ordinary_fee::OrdinaryFeePolicy::default(), None).await
+	}
+
+	pub(crate) async fn initialize_with_fee_policy(
+		datadir: &Path, network: Network, key: PublicKey, db: &Db,
+		policy: crate::watchman::ordinary_fee::OrdinaryFeePolicy, chain: &crate::bitcoind::VerifiedFeeChain,
+	) -> anyhow::Result<()> {
+		ensure!(chain.matches(network), "direct history fee authority differs from witness network");
+		policy.validate_config(network)?;
+		Self::initialize_policy(datadir, network, key, db, policy, Some(chain)).await
+	}
+
+	async fn initialize_policy(
+		datadir: &Path, network: Network, key: PublicKey, db: &Db,
+		policy: crate::watchman::ordinary_fee::OrdinaryFeePolicy, chain: Option<&crate::bitcoind::VerifiedFeeChain>,
+	) -> anyhow::Result<()> {
 		let empty = db.read(async |t| Ok(t.query_one("SELECT NOT EXISTS (SELECT 1 FROM expiry_allocation)
 			AND NOT EXISTS (SELECT 1 FROM expiry_carrier) AS empty", &[]).await?.get::<_, bool>("empty"))).await?;
 		ensure!(empty, "cannot initialize empty direct history over an existing journal");
 		let directory = datadir.join(DIRECT_DIRECTORY);
 		fs::create_dir(&directory).context("creating direct payout history")?;
 		fs_perms::harden(&directory, 0o700)?;
-		crate::watchman::ordinary_fee::OrdinaryFeePolicy::default().initialize(&directory)?;
+		match chain {
+			Some(chain) => policy.initialize_verified(&directory, chain)?,
+			None => policy.initialize(&directory)?,
+		}
 		write_new_or_identical(&directory.join("identity.json"), &serde_json::to_vec(&identity(network, key))?)?;
 		write_new_or_identical(&directory.join("history"), b"")?;
 		File::open(datadir)?.sync_all()?;

@@ -219,6 +219,76 @@ pub async fn test_mempool_accept(
 
 // --- Startup checks ------------------------------------------------------
 
+/// The node actually returned both this network and its matching genesis.
+/// Private fields prevent a configuration string from granting fee authority.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct VerifiedFeeChain {
+	network: Network,
+	genesis: BlockHash,
+}
+
+impl VerifiedFeeChain {
+	fn from_observed(expected: Network, actual: Network, genesis: BlockHash) -> anyhow::Result<Self> {
+		ensure!(actual == expected, "ordinary fee authority network mismatch");
+		ensure!(genesis == bitcoin::blockdata::constants::genesis_block(actual).block_hash(),
+			"ordinary fee authority genesis mismatch");
+		Ok(Self { network: actual, genesis })
+	}
+
+	pub(crate) fn matches(&self, expected: Network) -> bool {
+		self.network == expected && self.genesis == bitcoin::blockdata::constants::genesis_block(expected).block_hash()
+	}
+}
+
+pub(crate) async fn verify_fee_chain(client: &Client, expected: Network) -> anyhow::Result<VerifiedFeeChain> {
+	let actual = client.network().await.context("ordinary fee authority network unavailable")?;
+	let genesis = client.get_block_hash(0).await.context("ordinary fee authority genesis unavailable")?;
+	VerifiedFeeChain::from_observed(expected, actual, genesis)
+}
+
+#[cfg(test)]
+pub(crate) fn synthetic_fee_chain(network: Network) -> VerifiedFeeChain {
+	VerifiedFeeChain::from_observed(network, network,
+		bitcoin::blockdata::constants::genesis_block(network).block_hash()).unwrap()
+}
+
+#[cfg(test)]
+mod fee_chain_tests {
+	use super::*;
+
+	/// A local synthetic HTTP failure must never mint a chain capability.
+	/// This is transport-negative unit evidence, not a real-Core qualification.
+	#[tokio::test]
+	async fn fee_authority_refuses_unavailable_rpc() {
+		use tokio::io::{AsyncReadExt, AsyncWriteExt};
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let address = listener.local_addr().unwrap();
+		let responder = tokio::spawn(async move {
+			let (mut socket, _) = listener.accept().await.unwrap();
+			let mut request = [0; 4096];
+			let read = socket.read(&mut request).await.unwrap();
+			assert!(read > 0);
+			socket.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+		});
+		let client = Client::new(format!("http://{address}"),
+			bitcoind_async_client::Auth::UserPass("synthetic".into(), "unit-only".into()),
+			None, None, Some(1)).unwrap();
+		assert!(verify_fee_chain(&client, Network::Regtest).await.is_err());
+		responder.await.unwrap();
+	}
+
+	#[test]
+	fn fee_authority_requires_matching_observed_network_and_genesis() {
+		let regtest = bitcoin::blockdata::constants::genesis_block(Network::Regtest).block_hash();
+		let signet = bitcoin::blockdata::constants::genesis_block(Network::Signet).block_hash();
+		assert!(VerifiedFeeChain::from_observed(Network::Regtest, Network::Regtest, regtest).unwrap().matches(Network::Regtest));
+		assert!(VerifiedFeeChain::from_observed(Network::Regtest, Network::Signet, signet).is_err());
+		assert!(VerifiedFeeChain::from_observed(Network::Regtest, Network::Regtest, signet).is_err());
+		assert!(VerifiedFeeChain::from_observed(Network::Signet, Network::Signet, regtest).is_err());
+		assert!(!synthetic_fee_chain(Network::Signet).matches(Network::Regtest));
+	}
+}
+
 pub async fn require_network(client: &Client, expected: Network) -> anyhow::Result<()> {
 	let network = client.network().await
 		.context("failed to query network from bitcoind")?;

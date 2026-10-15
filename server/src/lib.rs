@@ -235,6 +235,7 @@ pub struct Server {
 
 impl Server {
 	pub async fn create(cfg: Config) -> anyhow::Result<()> {
+		cfg.direct_expiry.validate(cfg.expiry_payout.enabled, cfg.network)?;
 		// Check for a mnemonic file to see if the server was already initialized.
 		if cfg.data_dir.join(MNEMONIC_FILE).exists() {
 			bail!("Found an existing mnemonic file in datadir, the server is probably already initialized!");
@@ -247,6 +248,7 @@ impl Server {
 				network, cfg.network,
 			);
 		}
+		let fee_chain = bcd::verify_fee_chain(&bitcoind, cfg.network).await?;
 		let deep_tip = bcd::deep_tip(&bitcoind).await
 			.context("failed to fetch deep tip from bitcoind")?;
 
@@ -272,8 +274,9 @@ impl Server {
 		let server_key = master_xpriv.derive_priv(&SECP, &SERVER_KEY_PATH.parse::<bip32::DerivationPath>()?)?;
 		payout_witness::PayoutWitness::initialize(&cfg.data_dir, cfg.network,
 			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key())?;
-		payout_witness::DirectPayoutWitness::initialize(&cfg.data_dir, cfg.network,
-			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key(), &db).await?;
+		payout_witness::DirectPayoutWitness::initialize_with_fee_policy(&cfg.data_dir, cfg.network,
+			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key(), &db,
+			cfg.direct_expiry.regtest_qualification_fee_policy.unwrap_or_default(), &fee_chain).await?;
 
 		// Store initial wallet states to avoid full chain sync.
 		for wallet in [WalletKind::Rounds, WalletKind::Watchman] {
@@ -333,7 +336,7 @@ impl Server {
 
 	/// Start the server.
 	pub async fn start(mut cfg: Config) -> anyhow::Result<Arc<Self>> {
-		cfg.direct_expiry.validate(cfg.expiry_payout.enabled)?;
+		cfg.direct_expiry.validate(cfg.expiry_payout.enabled, cfg.network)?;
 		if cfg.direct_expiry.enabled {
 			// The old payout task is refused above. Reuse the guarded source
 			// API's effective grace without a second ownership implementation.
@@ -388,6 +391,9 @@ impl Server {
 
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		bcd::require_network(&bitcoind, cfg.network).await?;
+		let fee_chain = bcd::verify_fee_chain(&bitcoind, cfg.network).await?;
+		cfg.direct_expiry.regtest_qualification_fee_policy.unwrap_or_default().require_stored(
+			&cfg.data_dir.join(payout_witness::DIRECT_DIRECTORY), &fee_chain)?;
 		bcd::require_version(&bitcoind).await?;
 		bitcoind.require_txindex().await?;
 

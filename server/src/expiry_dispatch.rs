@@ -23,16 +23,24 @@ pub struct Config {
 	pub interval: Duration,
 	pub grace_blocks: u32,
 	pub max_groups_per_tick: usize,
+	/// Only a fresh verified REGTEST server may choose an explicit qualification policy.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub regtest_qualification_fee_policy: Option<crate::watchman::ordinary_fee::OrdinaryFeePolicy>,
 }
 
 impl Default for Config {
 	fn default() -> Self {
-		Self { enabled: false, interval: Duration::from_secs(30), grace_blocks: 6, max_groups_per_tick: 32 }
+		Self { enabled: false, interval: Duration::from_secs(30), grace_blocks: 6, max_groups_per_tick: 32, regtest_qualification_fee_policy: None }
 	}
 }
 
 impl Config {
-	pub(crate) fn validate(&self, legacy_enabled: bool) -> anyhow::Result<()> {
+	pub(crate) fn validate(&self, legacy_enabled: bool, network: bitcoin::Network) -> anyhow::Result<()> {
+		if let Some(policy) = self.regtest_qualification_fee_policy {
+			ensure!(self.enabled && policy.regtest_qualification.is_some(),
+				"explicit qualification policy requires the direct REGTEST route and declaration");
+			policy.validate_config(network)?;
+		}
 		if !self.enabled { return Ok(()); }
 		ensure!(!legacy_enabled, "direct_expiry cannot run concurrently with legacy expiry_payout");
 		ensure!(!self.interval.is_zero() && self.max_groups_per_tick > 0 && self.max_groups_per_tick <= LIMITS.max_rows,

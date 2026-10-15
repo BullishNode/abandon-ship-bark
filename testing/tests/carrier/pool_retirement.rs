@@ -22,7 +22,7 @@ async fn pool_change_case() {
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(256);
 			c.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { count: 2, amount: sat(100_000) }];
 		}).watchmand_cfg(move |c| {
-			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { history_dir: history, max_miner_fee: sat(10_000) });
+			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(), history_dir: history, max_miner_fee: sat(10_000) });
 			c.fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(50).unwrap());
 			c.watchman.reaction_interval = Duration::from_secs(3600);
 			c.watchman.sweep_interval = Duration::from_secs(3600);
@@ -85,7 +85,7 @@ async fn pool_change_case() {
 	let cap_path = ctx.datadir.join("direct-captaind.toml");
 	write_automatic_config(&cap_path, &toml::to_string_pretty(&cap).unwrap());
 	let mut watch = srv.watchmand().config().clone();
-	watch.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { history_dir: cap_cfg.data_dir.clone(), max_miner_fee: sat(10_000) });
+	watch.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(), history_dir: cap_cfg.data_dir.clone(), max_miner_fee: sat(10_000) });
 	watch.watchman.reaction_interval = Duration::from_secs(1); watch.watchman.sweep_interval = Duration::from_secs(1);
 	watch.fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(50).unwrap());
 	let watch_path = ctx.datadir.join("direct-watchmand.toml");

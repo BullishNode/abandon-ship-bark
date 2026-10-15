@@ -41,6 +41,7 @@ pub struct FrozenExpiryProcessor {
 	deliveries: BTreeMap<String, DirectDelivery>,
 	uncertain: Option<UncertainPublication>,
 	hydrated: bool,
+	ordinary_fee_budget: Option<super::ordinary_fee::OrdinaryFeeBudget>,
 }
 
 impl FrozenExpiryProcessor {
@@ -49,7 +50,12 @@ impl FrozenExpiryProcessor {
 		operator_script: ScriptBuf, budget: BackingSnapshotLimits, policy: CarrierLimits, witness: Arc<DirectPayoutWitness>,
 	) -> Self {
 		Self { db, witness, wallet, network, operator_script, budget, policy,
-			deliveries: BTreeMap::new(), uncertain: None, hydrated: false }
+			deliveries: BTreeMap::new(), uncertain: None, hydrated: false, ordinary_fee_budget: None }
+	}
+
+	pub(crate) fn with_ordinary_fee_budget(mut self, budget: super::ordinary_fee::OrdinaryFeeBudget) -> Self {
+		self.ordinary_fee_budget = Some(budget);
+		self
 	}
 
 	/// Includes confirmed groups still retaining their owning-wallet fee guards.
@@ -150,6 +156,7 @@ impl FrozenExpiryProcessor {
 		height: BlockHeight, rate: FeeRate, replacement: Option<(Amount, FeeRate)>,
 	) -> anyhow::Result<Txid> {
 		ensure!(self.hydrated && self.uncertain.is_none(), "restore durable reservations and reconcile publication before construction");
+		let ordinary = self.ordinary_fee_budget.as_ref().context("native ordinary fee guard is not installed")?;
 		for delivery in self.deliveries.values() { delivery.check_generation_frontier().await?; }
 		let generation = self.db.direct_delivery_generation(id).await?;
 		ensure!(if replacement.is_some() { self.deliveries.contains_key(id) && generation.is_some() }
@@ -167,7 +174,7 @@ impl FrozenExpiryProcessor {
 		}
 		ensure!(self.db.direct_delivery_generation(id).await? == generation, "frozen generation changed before construction");
 		let (mut held, carrier) = build_direct_carrier_with_replacement(signer, held, &group.backing,
-			&group.plan.recipients, self.operator_script.clone(), height, rate, self.policy, replacement).await?;
+			&group.plan.recipients, self.operator_script.clone(), height, rate, self.policy, replacement, Some(ordinary)).await?;
 		held.commit_tx(&carrier.tx);
 		let txid = carrier.tx.compute_txid();
 		// Retain before the publication await: cancelling its future must not

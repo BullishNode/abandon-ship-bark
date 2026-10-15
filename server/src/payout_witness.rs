@@ -23,7 +23,7 @@ use crate::fs_perms;
 use crate::database::carrier_snapshot::BackingSnapshotLimits;
 
 pub(crate) const DIRECTORY: &str = "expiry-payout-witness";
-const DIRECT_DIRECTORY: &str = "direct-expiry-witness";
+pub(crate) const DIRECT_DIRECTORY: &str = "direct-expiry-witness";
 pub(crate) const DIRECT_HISTORY_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits {
 	max_rows: 10_000,
 	max_serialized_bytes: 16 * 1024 * 1024,
@@ -193,6 +193,7 @@ impl DirectPayoutWitness {
 		let directory = datadir.join(DIRECT_DIRECTORY);
 		fs::create_dir(&directory).context("creating direct payout history")?;
 		fs_perms::harden(&directory, 0o700)?;
+		crate::watchman::ordinary_fee::OrdinaryFeePolicy::default().initialize(&directory)?;
 		write_new_or_identical(&directory.join("identity.json"), &serde_json::to_vec(&identity(network, key))?)?;
 		write_new_or_identical(&directory.join("history"), b"")?;
 		File::open(datadir)?.sync_all()?;
@@ -221,7 +222,9 @@ impl DirectPayoutWitness {
 		for entry in fs::read_dir(&witness.files.directory)? {
 			let path = entry?.path();
 			let name = path.file_name().and_then(|n| n.to_str()).context("invalid direct history filename")?;
-			if name == "identity.json" || name == "history" || (name.starts_with('.') && name.ends_with(".tmp")) { continue; }
+			if name == "identity.json" || name == "history" ||
+				name == crate::watchman::ordinary_fee::POLICY_FILE || name == crate::watchman::ordinary_fee::BUDGET_FILE ||
+				(name.starts_with('.') && name.ends_with(".tmp")) { continue; }
 			let txid: Txid = name.strip_suffix(".json").context("invalid direct history filename")?.parse()?;
 			ensure!(fs::metadata(&path)?.len() <= u64::try_from(budget.max_serialized_bytes)?, "direct history record exceeds byte budget");
 			let recorded: DirectRecord = serde_json::from_slice(&fs::read(&path)?)?;

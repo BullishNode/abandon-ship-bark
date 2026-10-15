@@ -209,7 +209,7 @@ async fn automatic_board_fixture_with_funding(name: &str, board_fee: Amount, rou
 			c.direct_expiry.grace_blocks = 0;
 			c.direct_expiry.interval = std::time::Duration::from_secs(3600);
 		}).watchmand_cfg(move |c| {
-			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(),
 				history_dir: c.data_dir.parent().unwrap().join("server"), max_miner_fee: sat(10_000),
 			});
 			c.fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(50).unwrap());
@@ -561,7 +561,7 @@ async fn automatic_expired_board_pays_registered_recipient_from_actual_backing()
 	let cap_path = ctx.datadir.join("automatic-captaind.toml");
 	write_automatic_config(&cap_path, &toml::to_string_pretty(&cap).unwrap());
 	let mut watch = srv.watchmand().config().clone();
-	watch.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+	watch.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(),
 		history_dir: cap_cfg.data_dir.clone(), max_miner_fee: sat(10_000),
 	});
 	watch.watchman.reaction_interval = std::time::Duration::from_secs(1);
@@ -1092,7 +1092,7 @@ async fn complete_pending_group_listing_survives_more_groups_than_its_query_page
 			c.direct_expiry.grace_blocks = 0;
 			c.direct_expiry.interval = std::time::Duration::from_secs(3600);
 		}).watchmand_cfg(|c| {
-			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(),
 				history_dir: c.data_dir.parent().unwrap().join("server"), max_miner_fee: sat(10_000),
 			});
 			c.fee_estimator.max_fee_rate = Some(FeeRate::from_sat_per_vb(50).unwrap());

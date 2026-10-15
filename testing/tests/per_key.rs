@@ -228,3 +228,160 @@ async fn per_key_fifty_offline_keys_receive_25_50_and_eight_reuse() {
 	let link = recipient.fallback_key_link(next.policy().user_pubkey()).await.unwrap();
 	link.verify(Network::Regtest, mailbox, &record).unwrap();
 }
+
+#[tokio::test]
+async fn per_key_two_devices_converge_without_duplicate_principal() {
+	let ctx = TestContext::new("per-key/two_devices_converge_without_duplicate_principal").await;
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).create().await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let first = ctx.bark_sdk("first", &srv).mnemonic(mnemonic.clone()).cfg(|c| c.daemon_manual_sync = true);
+	let second = ctx.bark_sdk("second", &srv).mnemonic(mnemonic).cfg(|c| c.daemon_manual_sync = true);
+	let (first, second) = tokio::join!(first.create(), second.create());
+	first.stop_daemon_wait().await.unwrap();
+	second.stop_daemon_wait().await.unwrap();
+	let record = first.fallback_destination().await.unwrap();
+	assert_eq!(record, second.fallback_destination().await.unwrap());
+	assert_eq!(first.mailbox_keypair().public_key(), second.mailbox_keypair().public_key());
+	for index in 0..=50 {
+		let a = first.peek_keypair(index).await.unwrap().public_key();
+		let b = second.peek_keypair(index).await.unwrap().public_key();
+		assert_eq!(a, b);
+		assert_eq!(first.fallback_key_link(a).await.unwrap(), second.fallback_key_link(b).await.unwrap());
+	}
+	let (a, b) = tokio::join!(first.new_address_with_index(), second.new_address_with_index());
+	let (a, first_index) = a.unwrap();
+	let (b, second_index) = b.unwrap();
+	assert_eq!((first_index, second_index), (1, 1));
+	assert_eq!(a, b, "separate devices may reuse a genuinely linked receiving key");
+	let canonical = first.fallback_key_link(a.policy().user_pubkey()).await.unwrap();
+	let payer = ctx.bark_sdk("payer", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(20_000)).boarded(sat(20_000)).create().await;
+	payer.stop_daemon_wait().await.unwrap();
+	payer.send_arkoor_payment(&a, sat(20_000)).await.unwrap();
+	payer.send_arkoor_payment(&b, sat(20_000)).await.unwrap();
+	let (one, two) = tokio::join!(first.sync_mailbox(), second.sync_mailbox());
+	one.unwrap(); two.unwrap();
+	let one = first.spendable_vtxos().await.unwrap();
+	let two = second.spendable_vtxos().await.unwrap();
+	let one_ids = one.iter().map(|v| v.id()).collect::<std::collections::BTreeSet<_>>();
+	let two_ids = two.iter().map(|v| v.id()).collect::<std::collections::BTreeSet<_>>();
+	assert_eq!(one_ids.len(), 2);
+	assert_eq!(one_ids, two_ids, "two views describe the same two entitlements");
+	assert_eq!(one.iter().map(|v| v.amount()).sum::<Amount>(), sat(40_000));
+	assert_eq!(two.iter().map(|v| v.amount()).sum::<Amount>(), sat(40_000));
+	let ids = one_ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let principal: i64 = db.read(async |t| Ok(t.query_one("SELECT SUM(amount)::bigint FROM vtxo WHERE vtxo_id=ANY($1)",
+		&[&ids]).await?.get(0))).await.unwrap();
+	assert_eq!(principal, 40_000, "duplicate device views never create another economic obligation");
+	let links: i64 = db.read(async |t| Ok(t.query_one("SELECT count(*) FROM key_link WHERE mailbox_pk=$1",
+		&[&first.mailbox_keypair().public_key().serialize().to_vec()]).await?.get(0))).await.unwrap();
+	assert_eq!(links, 51, "concurrent initialization retains one canonical proof per key");
+	assert_eq!(first.fallback_destination().await.unwrap(), record);
+	assert_eq!(second.fallback_destination().await.unwrap(), record);
+	assert_eq!(first.fallback_key_link(a.policy().user_pubkey()).await.unwrap(), canonical);
+}
+
+/// Fresh Ark-wallet recovery is separate from mnemonic-only on-chain payout
+/// discovery. Key 50 is inside the normal VTXO gap; its signed hint is not
+/// claimed to be necessary for discovery in this case.
+#[tokio::test]
+async fn per_key_fresh_seed_key50_preserves_entitlements_and_original_proof() {
+	let ctx = TestContext::new("per-key/fresh_seed_key50_preserves_entitlements_and_original_proof").await;
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1))
+		.cfg(|c| c.fees.board.min_fee = sat(330)).create().await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let original = ctx.bark_sdk("original", &srv).mnemonic(mnemonic.clone())
+		.cfg(|c| c.daemon_manual_sync = true).create().await;
+	original.stop_daemon_wait().await.unwrap();
+	let record = original.fallback_destination().await.unwrap();
+	let mailbox = original.mailbox_identifier();
+	let config = original.config().clone();
+	let mut address = None;
+	for index in 1..=50 {
+		let (next, actual_index) = original.new_address_with_index().await.unwrap();
+		assert_eq!(actual_index, index);
+		address = Some(next);
+	}
+	let address = address.unwrap();
+	let key = address.policy().user_pubkey();
+	let canonical = original.fallback_key_link(key).await.unwrap();
+	assert_eq!(canonical.recovery_index, Some(50));
+	drop(original);
+	let payer = ctx.bark_sdk("payer", &srv).cfg(|c| c.daemon_manual_sync = true)
+		.boarded(sat(30_000)).boarded(sat(30_000)).create().await;
+	payer.stop_daemon_wait().await.unwrap();
+	assert_eq!(payer.estimate_board_offchain_fee(sat(30_000)).await.unwrap().fee, sat(330));
+	let payer_before = payer.spendable_vtxos().await.unwrap();
+	assert_eq!(payer_before.len(), 2);
+	assert!(payer_before.iter().all(|coin| coin.amount() == sat(29_670)));
+	let payer_principal = payer_before.iter().map(|coin| coin.amount()).sum::<Amount>();
+	assert_eq!(payer_principal, sat(60_000 - 2 * 330));
+	payer.send_arkoor_payment(&address, sat(25_000)).await.unwrap();
+	payer.send_arkoor_payment(&address, sat(25_000)).await.unwrap();
+	let payer_after = payer.spendable_vtxos().await.unwrap();
+	let payer_change = payer_after.iter().map(|coin| coin.amount()).sum::<Amount>();
+	assert_eq!(payer_change, sat(9_340));
+	assert!(payer_after.iter().all(|coin| coin.user_pubkey() != key));
+	let payer_change_ids = payer_after.iter().map(|coin| coin.id()).collect::<std::collections::BTreeSet<_>>();
+	drop(payer);
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let expected_ids = db.read(async |t| Ok(t.query("SELECT DISTINCT vtxo_id FROM mailbox
+		WHERE unblinded_mailbox_id=$1 AND vtxo_id IS NOT NULL ORDER BY vtxo_id", &[&mailbox.to_string()]).await?
+		.into_iter().map(|row| row.get::<_, String>(0).parse::<ark::VtxoId>().unwrap())
+		.collect::<std::collections::BTreeSet<_>>())).await.unwrap();
+	assert_eq!(expected_ids.len(), 2);
+	assert!(expected_ids.is_disjoint(&payer_change_ids));
+	assert_eq!(payer_change + sat(50_000), payer_principal,
+		"two exact recipient entitlements plus payer change conserve net Board principal");
+	let mut rpc = srv.get_public_rpc().await;
+	for id in &expected_ids {
+		let public = rpc.get_vtxo(protos::GetVtxoRequest { vtxo_id: id.to_bytes().to_vec() }).await.unwrap().into_inner();
+		assert_eq!(public.child_index, Some(50));
+		assert_eq!(public.fallback_record, record.serialize());
+		assert_eq!(public.key_link, canonical.serialize());
+		let coin = ark::Vtxo::<ark::vtxo::Full>::deserialize(&public.vtxo).unwrap();
+		assert_eq!(coin.id(), *id);
+		assert_eq!(coin.user_pubkey(), key);
+		assert_eq!(coin.amount(), sat(25_000));
+	}
+	let fresh_datadir = ctx.datadir.join("fresh-seed");
+	assert!(!fresh_datadir.exists(), "recovery starts from a genuinely new dataset");
+	// Only the mnemonic/config enter this open. No original DB, coin IDs or
+	// public response bytes are passed to the recovering wallet.
+	let restored = bark::Wallet::open(Network::Regtest,
+		bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic), config,
+		bark::OpenWalletArgs { datadir: Some(fresh_datadir), create_if_not_exists: true,
+			run_daemon: false, ..Default::default() },
+	).await.unwrap();
+	let coins = restored.spendable_vtxos().await.unwrap();
+	assert_eq!(coins.iter().map(|v| v.id()).collect::<std::collections::BTreeSet<_>>(), expected_ids);
+	assert_eq!(coins.len(), 2);
+	assert_eq!(coins.iter().map(|v| v.amount()).sum::<Amount>(), sat(50_000));
+	assert!(coins.iter().all(|v| v.user_pubkey() == key));
+	assert_eq!(restored.fallback_destination().await.unwrap(), record);
+	assert_eq!(restored.fallback_key_link(key).await.unwrap(), canonical);
+	assert_eq!(restored.peek_next_keypair().await.unwrap().1, 51,
+		"a genuinely recovered key50 is issued, even when fresh prelinking already made its public mapping known");
+	// The automatic pool chooses the lowest linked UNUSED key, independently
+	// of peek_next_keypair's max-issued frontier. Recovery marks only actual
+	// key50 used, preserving unused1..49 and skipping50 during allocation.
+	for expected in 1..=49 {
+		let (_, index) = restored.new_address_with_index().await.unwrap();
+		assert_eq!(index, expected);
+	}
+	let (_, index) = restored.new_address_with_index().await.unwrap();
+	assert_eq!(index, 51, "automatic allocation must never reissue recovered key50");
+	assert_eq!(restored.peek_address(50).await.unwrap(), address,
+		"explicit reuse of an original immutable receiving address remains valid");
+	assert_eq!(restored.fallback_key_link(key).await.unwrap(), canonical);
+	let unchanged = restored.spendable_vtxos().await.unwrap();
+	assert_eq!(unchanged.iter().map(|v| v.id()).collect::<std::collections::BTreeSet<_>>(), expected_ids);
+	assert_eq!(unchanged.iter().map(|v| v.amount()).sum::<Amount>(), sat(50_000));
+	// Separately exercise native GetVtxo signed-hint verification. This is
+	// an integrity follow-up, not evidence of seed-only discovery using IDs.
+	let report = restored.recover_vtxos(expected_ids.iter().copied(), None).await.unwrap();
+	assert!(report.is_complete());
+	assert_eq!(restored.peek_next_keypair().await.unwrap().1, 52, "idempotent recovery never unissues the newly allocated51");
+	assert_eq!(restored.spendable_vtxos().await.unwrap().iter().map(|v| v.id()).collect::<std::collections::BTreeSet<_>>(), expected_ids);
+}

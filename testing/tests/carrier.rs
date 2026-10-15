@@ -17,6 +17,8 @@ mod route_consistency;
 mod pending_board_return;
 #[path = "carrier/wallet_pending_inventory.rs"]
 mod wallet_pending_inventory;
+#[path = "carrier/saved_send_return.rs"]
+mod saved_send_return;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;

@@ -106,6 +106,12 @@ impl VtxosInFlux {
 		slog!(VtxosRemovedFromFlux, vtxos: removed);
 	}
 
+	/// Observe only the requested IDs. This does not acquire or release a VTXO lock.
+	pub(crate) fn locked_ids(&self, ids: &[VtxoId]) -> HashSet<VtxoId> {
+		let inner = self.inner.lock();
+		ids.iter().copied().filter(|id| inner.vtxos.contains(id)).collect()
+	}
+
 	#[cfg(test)]
 	fn vtxos(&self) -> Vec<VtxoId> {
 		let mut ret = self.inner.lock().vtxos.iter().copied().collect::<Vec<_>>();
@@ -216,6 +222,20 @@ mod test {
 
 	fn gen_vtxoid(i: u8) -> VtxoId {
 		VtxoId::from_slice(&[i; 36]).unwrap()
+	}
+
+	#[test]
+	fn pool_inventory_flux_observation_does_not_lock_or_unlock() {
+		let flux = VtxosInFlux::new();
+		let locked = gen_vtxoid(1);
+		let free = gen_vtxoid(2);
+		let guard = flux.try_lock([locked]).unwrap();
+		assert_eq!(flux.locked_ids(&[locked, free]), HashSet::from([locked]));
+		let free_guard = flux.try_lock([free]).expect("observing a free ID must not reserve it");
+		assert!(flux.try_lock([locked]).is_err(), "observation must not release existing locks");
+		drop(free_guard);
+		drop(guard);
+		assert!(flux.locked_ids(&[locked, free]).is_empty());
 	}
 
 	#[test]

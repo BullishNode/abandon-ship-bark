@@ -1,5 +1,8 @@
 
 use std::ops::Deref;
+use std::collections::HashMap;
+
+use anyhow::Context;
 
 use futures::{Stream, TryStreamExt};
 use postgres_types::Type;
@@ -44,7 +47,50 @@ impl TryFrom<Row> for PoolVtxo {
 	}
 }
 
+
+/// A private native observation. The tweak never leaves the owning daemon.
+/// No Debug/Serialize implementation: an admin response contains only key flags.
+pub(crate) struct PoolInventoryRow {
+	pub id: String,
+	pub vtxo: Vtxo<Full>,
+	pub pool_spent: bool,
+	pub spend_state: String,
+	pub has_spend_reference: bool,
+	pub key_tweak: Option<Vec<u8>>,
+}
+
 impl<'t> Tx<'t> {
+	pub(crate) async fn pool_inventory_rows(&self, ids: &[VtxoId]) -> anyhow::Result<Vec<PoolInventoryRow>> {
+		let ids = ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+		// The caller uses a repeatable-read transaction for these rows and keys.
+		// Reject oversize ancestry before returning its bytes to the daemon.
+		let rows = self.query(
+			"SELECT p.vtxo_id, CASE WHEN octet_length(p.vtxo) <= 65536 \
+				AND sum(octet_length(p.vtxo)) OVER () <= 524288 THEN p.vtxo END AS vtxo, \
+				(p.spent_at IS NOT NULL) AS pool_spent, v.spend_state::text AS spend_state, \
+				(v.oor_spent_txid IS NOT NULL OR v.spent_in_round IS NOT NULL OR v.offboarded_in IS NOT NULL \
+				OR v.onchain_spent_txid IS NOT NULL) AS has_spend_reference \
+			FROM vtxo_pool p JOIN vtxo v ON v.vtxo_id = p.vtxo_id \
+			WHERE p.vtxo_id = ANY($1) ORDER BY p.vtxo_id",
+			&[&ids],
+		).await?;
+		let mut result = rows.into_iter().map(|r| Ok(PoolInventoryRow {
+			id: r.get("vtxo_id"),
+			vtxo: Vtxo::deserialize(&r.get::<_, Option<Vec<u8>>>("vtxo")
+				.context("pool candidate ancestry exceeds per-coin or aggregate byte limit")?)?,
+			pool_spent: r.get("pool_spent"), spend_state: r.get("spend_state"),
+			has_spend_reference: r.get("has_spend_reference"), key_tweak: None,
+		})).collect::<anyhow::Result<Vec<_>>>()?;
+		let pubkeys = result.iter().map(|r| r.vtxo.user_pubkey().to_string()).collect::<Vec<_>>();
+		let keys = self.query("SELECT pubkey, tweak FROM ephemeral_tweak WHERE pubkey = ANY($1)", &[&pubkeys]).await?
+			.into_iter().map(|r| (r.get::<_, String>("pubkey"), r.get::<_, Vec<u8>>("tweak")))
+			.collect::<HashMap<_, _>>();
+		for row in &mut result {
+			row.key_tweak = keys.get(&row.vtxo.user_pubkey().to_string()).cloned();
+		}
+		Ok(result)
+	}
+
 	pub async fn get_pool_vtxos_by_ids(&self, ids: &[VtxoId]) -> anyhow::Result<Vec<PoolVtxo>> {
 		let stmt = self.prepare_typed(
 			"SELECT vtxo FROM vtxo_pool WHERE vtxo_id = ANY($1)",

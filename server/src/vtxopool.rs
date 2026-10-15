@@ -12,7 +12,7 @@ use bitcoin::{Amount, OutPoint, Transaction};
 use futures::{stream, StreamExt, TryStreamExt};
 use tracing::{debug, error, info, warn};
 
-use ark::{ServerVtxo, Vtxo, VtxoId, VtxoPolicy, VtxoRequest};
+use ark::{ProtocolEncoding, ServerVtxo, Vtxo, VtxoId, VtxoPolicy, VtxoRequest};
 use ark::arkoor::ArkoorDestination;
 use ark::vtxo::Full;
 use ark::arkoor::package::ArkoorPackageBuilder;
@@ -101,6 +101,9 @@ impl Config {
 	}
 }
 
+const MAX_INVENTORY_CANDIDATES: usize = 256;
+const MAX_INVENTORY_ANCESTRY_BYTES: usize = 512 * 1024;
+
 struct Data {
 	/// A quick manual index into the vtxo pool.
 	/// We first order by expiry height and then by amount.
@@ -108,6 +111,21 @@ struct Data {
 }
 
 impl Data {
+	/// Copy actual selectable memory membership, without selecting or pruning.
+	fn inventory_members(&self) -> anyhow::Result<BTreeMap<VtxoId, (BlockHeight, Amount)>> {
+		let mut members = BTreeMap::new();
+		for (expiry, amounts) in &self.pool {
+			for (amount, ids) in amounts {
+				for id in ids {
+					ensure!(members.len() < MAX_INVENTORY_CANDIDATES, "pool inventory exceeds candidate limit");
+					ensure!(members.insert(*id, (*expiry, *amount)).is_none(), "duplicate runtime pool candidate");
+				}
+			}
+		}
+		Ok(members)
+	}
+
+
 	/// Insert a new vtxo into the pool data
 	pub fn insert(&mut self, vtxo: VtxoId, expiry: BlockHeight, amount: Amount) {
 		self.pool.entry(expiry).or_default().entry(amount).or_default().push(vtxo);
@@ -279,6 +297,67 @@ pub struct VtxoPool {
 }
 
 impl VtxoPool {
+	/// Private candidate source, not an availability reservation or chain proof.
+	pub(crate) async fn inventory(&self, srv: &Server) -> anyhow::Result<server_rpc::protos::PoolInventoryResponse> {
+		let before = srv.chain_tip();
+		let members = self.data.lock().inventory_members()?;
+		let ids = members.keys().copied().collect::<Vec<_>>();
+		let rows = srv.db.read(async |t| {
+			t.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ", &[]).await?;
+			t.pool_inventory_rows(&ids).await
+		}).await?;
+		ensure!(rows.len() == members.len(), "runtime pool candidate missing from database");
+		let mut ancestry_bytes = 0usize;
+		let mut candidates = Vec::with_capacity(rows.len());
+		for row in rows {
+			let coin = row.vtxo;
+			ensure!(row.id == coin.id().to_string(), "pool row and signed coin ID differ");
+			ensure!(members.get(&coin.id()) == Some(&(coin.expiry_height(), coin.amount())),
+				"pool runtime and signed coin metadata differ");
+			let signed_vtxo = coin.serialize();
+			ancestry_bytes = ancestry_bytes.checked_add(signed_vtxo.len()).context("pool ancestry byte count overflow")?;
+			ensure!(ancestry_bytes <= MAX_INVENTORY_ANCESTRY_BYTES, "pool ancestry exceeds aggregate byte limit");
+			let key_present = row.key_tweak.is_some();
+			let key_matches = match row.key_tweak {
+				None => false,
+				Some(bytes) => {
+					let bytes = <[u8; 32]>::try_from(bytes.as_slice()).context("invalid pool key tweak length")?;
+					let tweak = bitcoin::secp256k1::Scalar::from_be_bytes(bytes).context("invalid pool key tweak")?;
+					let secret = srv.ephemeral_master_key.leak_ref().secret_key().add_tweak(&tweak)
+						.context("invalid derived pool cosign key")?;
+					Keypair::from_secret_key(&*SECP, &secret).public_key() == coin.user_pubkey()
+				},
+			};
+			candidates.push(server_rpc::protos::PoolInventoryCandidate {
+				id: row.id, amount_sat: coin.amount().to_sat(), expiry_height: coin.expiry_height().to_u32(),
+				exit_depth: u32::from(coin.exit_depth()), runtime_member: true,
+				pool_spent: row.pool_spent, spend_state: row.spend_state, has_spend_reference: row.has_spend_reference,
+				key_present, key_matches, in_flux: false, signed_vtxo,
+			});
+		}
+		// Never hold a parking_lot guard over a DB await. A changed membership
+		// invalidates this cut; flux is observed without acquiring a financial lock.
+		{
+			let data = self.data.lock();
+			ensure!(data.inventory_members()? == members, "pool membership changed during observation");
+			let locked = srv.vtxos_in_flux.locked_ids(&ids);
+			for candidate in &mut candidates {
+				candidate.in_flux = locked.contains(&candidate.id.parse::<VtxoId>()?);
+			}
+		}
+		ensure!(srv.chain_tip() == before, "server tip changed during pool observation");
+		Ok(server_rpc::protos::PoolInventoryResponse {
+			schema_version: 1, network: srv.config.network.to_string(),
+			genesis: bitcoin::constants::genesis_block(srv.config.network).block_hash().to_string(),
+			server_pubkey: srv.server_pubkey.to_string(), height: before.height.to_u32(), tip_hash: before.hash.to_string(),
+			pool_pre_expiry_blocks: self.config.vtxo_pre_expiry.to_u32(),
+			max_exit_depth: u32::from(self.config.max_vtxo_exit_depth), candidate_snapshot_complete: true,
+			complete: false, missing_sources: vec!["independent signed-path and raw Core backing qualification".into()],
+			candidates,
+		})
+	}
+
+
 	/// Create a VTXO from pool
 	///
 	/// The caller is responsible for requesting arkoor preparation
@@ -789,6 +868,34 @@ mod test {
 		if !sel.is_empty() {
 			panic!("additional items: {:?}", sel);
 		}
+	}
+
+	#[test]
+	fn pool_inventory_tracks_actual_selection_without_consuming_inputs() {
+		let mut data = Data { pool: BTreeMap::new() };
+		data.insert(id(1), h(100), sat(10_000));
+		data.insert(id(2), h(100), sat(10_000));
+		let before = data.inventory_members().unwrap();
+		assert_eq!(before.len(), 2);
+		assert_eq!(data.inventory_members().unwrap(), before);
+		let taken = data.take_inputs(sat(15_000));
+		assert_eq!(taken.len(), 2, "observation must leave real selection unchanged");
+		assert!(data.inventory_members().unwrap().is_empty(), "taken inputs cannot remain candidates");
+		for (id, height, amount) in taken { data.insert(id, height, amount); }
+		assert_eq!(data.inventory_members().unwrap(), before);
+	}
+
+	#[test]
+	fn pool_inventory_refuses_overflow_and_duplicate_membership() {
+		let mut data = Data { pool: BTreeMap::new() };
+		for n in 0..MAX_INVENTORY_CANDIDATES as u32 { data.insert(id(n), h(100), sat(1_000)); }
+		assert_eq!(data.inventory_members().unwrap().len(), MAX_INVENTORY_CANDIDATES);
+		data.insert(id(1_000), h(100), sat(1_000));
+		assert!(data.inventory_members().is_err(), "overflow must not become a truncated complete source");
+		let mut duplicate = Data { pool: BTreeMap::new() };
+		duplicate.insert(id(1), h(100), sat(1_000));
+		duplicate.insert(id(1), h(101), sat(2_000));
+		assert!(duplicate.inventory_members().is_err());
 	}
 
 	#[test]

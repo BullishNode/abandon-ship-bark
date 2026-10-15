@@ -124,6 +124,10 @@ enum RpcCommand {
 	#[command()]
 	WalletInventory,
 
+	/// Read PRIVATE signed pool candidate ancestry; save output as private evidence
+	#[command()]
+	PoolInventory,
+
 	/// Start a new round
 	#[command()]
 	TriggerRound,
@@ -726,6 +730,29 @@ async fn run_rpc(addr: &str, cmd: RpcCommand) -> anyhow::Result<()> {
 			});
 			let encoded = serde_json::to_vec_pretty(&output)?;
 			anyhow::ensure!(encoded.len() < 2 * 1024 * 1024, "complete wallet inventory JSON exceeds serialized byte budget");
+			std::io::stdout().write_all(&encoded)?;
+			println!("");
+		},
+
+		RpcCommand::PoolInventory => {
+			let mut rpc = rpc::admin::LightningAdminServiceClient::connect(endpoint)
+				.await.context("failed to connect to rpc")?;
+			let response = rpc.pool_inventory(protos::Empty {}).await?.into_inner();
+			let candidates = response.candidates.into_iter().map(|c| serde_json::json!({
+				"id": c.id, "amount_sat": c.amount_sat, "expiry_height": c.expiry_height, "exit_depth": c.exit_depth,
+				"runtime_member": c.runtime_member, "pool_spent": c.pool_spent, "spend_state": c.spend_state,
+				"has_spend_reference": c.has_spend_reference, "key_present": c.key_present, "key_matches": c.key_matches,
+				"in_flux": c.in_flux, "signed_vtxo": c.signed_vtxo.as_hex().to_string(),
+			})).collect::<Vec<_>>();
+			let output = serde_json::json!({
+				"schema_version": response.schema_version, "network": response.network, "genesis": response.genesis,
+				"server_pubkey": response.server_pubkey, "height": response.height, "tip_hash": response.tip_hash,
+				"pool_pre_expiry_blocks": response.pool_pre_expiry_blocks, "max_exit_depth": response.max_exit_depth,
+				"candidate_snapshot_complete": response.candidate_snapshot_complete,
+				"complete": response.complete, "missing_sources": response.missing_sources, "candidates": candidates,
+			});
+			let encoded = serde_json::to_vec_pretty(&output)?;
+			anyhow::ensure!(encoded.len() <= 2 * 1024 * 1024, "pool inventory JSON exceeds byte budget");
 			std::io::stdout().write_all(&encoded)?;
 			println!("");
 		},

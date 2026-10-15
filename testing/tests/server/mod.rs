@@ -10,6 +10,7 @@ mod mailbox;
 mod nursery;
 mod offboard;
 mod postgres;
+mod pool_inventory;
 mod postgres_migrations;
 mod registration;
 mod settler;

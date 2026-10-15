@@ -911,8 +911,8 @@ mod final_hark_completion_tests {
 		let preimage = [7; 32];
 		let expiry = BlockHeight::new(128);
 		let delta = BlockDelta::new(12);
-		let requests = [1, 2].map(|n| VtxoRequest {
-			amount: Amount::from_sat(n * 10_000),
+		let requests = [10_000, 20_000].map(|amount| VtxoRequest {
+			amount: Amount::from_sat(amount),
 			policy: VtxoPolicy::new_pubkey(leaf_key.public_key()),
 		});
 		let builder = SignedTreeBuilder::new(requests.iter().cloned(), user_cosign.public_key(), preimage,

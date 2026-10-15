@@ -290,7 +290,7 @@ impl VtxoPool {
 		&self,
 		srv: &Server,
 		dest: ArkoorDestination,
-		origin: ark::fallback::AccountChild,
+		origin: ark::fallback::KeyLinkOrigin,
 		inputs: &[(VtxoId, BlockHeight, Amount)],
 		commit: F,
 	) -> anyhow::Result<Vec<Vtxo<Full>>>
@@ -400,9 +400,9 @@ impl VtxoPool {
 			.collect::<Vec<_>>();
 
 		srv.db.write(async |t| {
-			t.admit_fallback_child(origin, dest.policy.user_pubkey()).await?;
+			t.verify_fallback_link(origin, dest.policy.user_pubkey(), srv.config.network).await?;
 			t.execute_vtxo_tree_update(update).await?;
-			htlc_vtxo::create_htlc_vtxos(&t, &htlc_recvs, HtlcDirection::Outgoing).await?;
+			htlc_vtxo::create_htlc_vtxos(&t, &htlc_recvs, HtlcDirection::Outgoing, srv.config.network).await?;
 			t.mark_vtxopool_vtxos_spent(inputs.iter().map(|v| v.0)).await
 				.context("failed to mark vtxopool vtxos as spent")?;
 			t.store_pool_change_retirements(&retirements).await?;
@@ -457,13 +457,13 @@ impl VtxoPool {
 		&self,
 		srv: &Server,
 		dest: ArkoorDestination,
-		origin: ark::fallback::AccountChild,
+		origin: ark::fallback::KeyLinkOrigin,
 		commit: F,
 	) -> anyhow::Result<Vec<Vtxo<Full>>>
 	where
 		F: AsyncFnOnce(&database::Tx<'_>, &[Vtxo<Full>]) -> anyhow::Result<()>,
 	{
-		srv.db.read(async |t| t.verify_fallback_child(origin, dest.policy.user_pubkey()).await).await?;
+		srv.db.read(async |t| t.verify_fallback_link(origin, dest.policy.user_pubkey(), srv.config.network).await).await?;
 		let inputs = self.data.lock().take_inputs(dest.total_amount);
 		if inputs.is_empty() {
 			bail!("vtxo pool is empty");

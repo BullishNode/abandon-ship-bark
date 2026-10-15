@@ -9,7 +9,7 @@ use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use ark::vtxo::Full;
 use ark::vtxo::policy::VtxoPolicyKind;
 use ark::mailbox::{BlindedMailboxIdentifier, MailboxAuthorization, MailboxIdentifier, MailboxType};
-use server_rpc::{self as rpc, protos, StatusExt, TryFromBytes};
+use server_rpc::{self as rpc, protos, RequestExt, StatusExt, TryFromBytes};
 
 use crate::database::{Checkpoint, MailboxEntry, MailboxPayload, SpendState};
 use crate::rpcserver::{StatusContext, ToStatus, ToStatusResult};
@@ -98,6 +98,7 @@ impl rpc::server::MailboxService for crate::Server {
 		&self,
 		req: tonic::Request<protos::mailbox_server::PostArkoorMessageRequest>,
 	) -> Result<tonic::Response<protos::core::Empty>, tonic::Status> {
+		let pver = req.pver()?;
 		let req = req.into_inner();
 
 		if req.vtxos.len() > MAX_NB_MAILBOX_ARKOOR_VTXOS {
@@ -145,6 +146,15 @@ impl rpc::server::MailboxService for crate::Server {
 			self::badarg!("invalid blinded mailbox id");
 		};
 
+		// Authenticate routing before the optional financial registration below.
+		// Repeat in the decisive mailbox write to keep the invariant local.
+		self.db.read(async |t| {
+			let (owner, _, _) = t.fallback_proof(vtxo_pubkey, self.config.network).await?;
+			ensure!(MailboxIdentifier::from_pubkey(owner) == mailbox_id,
+				"mailbox differs from the policy key's signed owner");
+			Ok(())
+		}).await.to_status()?;
+
 		// This endpoint is unauthenticated (senders aren't the recipient), so
 		// only accept vtxos the server itself cosigned: unknown ids are
 		// rejected before they can take up mailbox space. The pubkey check
@@ -168,6 +178,9 @@ impl rpc::server::MailboxService for crate::Server {
 			.filter_map(|s| vtxos.iter().find(|v| v.id() == s.vtxo_id))
 			.collect::<Vec<_>>();
 		if !unregistered.is_empty() {
+			if pver != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+				self::badarg!("per-key protocol version 6 is required for financial registration");
+			}
 			if let Err(e) = self.register_vtxo_transactions(unregistered).await {
 				let status = e.to_status();
 				if status.is_expiry_settled() {
@@ -178,6 +191,9 @@ impl rpc::server::MailboxService for crate::Server {
 		}
 
 		let checkpoint = self.db.write(async |t| {
+			let (owner, _, _) = t.fallback_proof(vtxo_pubkey, self.config.network).await?;
+			ensure!(MailboxIdentifier::from_pubkey(owner) == mailbox_id,
+				"mailbox differs from the policy key's signed owner");
 			t.store_vtxos_in_mailbox(
 				MailboxType::ArkoorReceive,
 				mailbox_id,

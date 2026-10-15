@@ -87,12 +87,14 @@ service ArkService {
 
 message SetFallbackRequest {
 	bytes mailbox_pk = 1;
-	bytes record = 2; // immutable V3 script/account with both full-field signatures
-	reserved 3; // removed standalone per-key signatures
+	bytes record = 2; // immutable V4 mailbox-signed destination
+	reserved 3; // obsolete R&D key-link field
+	repeated bytes key_links = 4; // canonical V1 individual policy-key signatures
 }
 
 message SetFallbackResponse {
 	bytes record = 1; // authenticated canonical immutable record
+	repeated bytes key_links = 2; // canonical retained proofs in request order
 }
 
 message HandshakeRequest {
@@ -195,7 +197,9 @@ message GetVtxoRequest {
 
 message GetVtxoResponse {
 	bytes vtxo = 1;
-	optional uint32 child_index = 2; // public sparse-recovery hint; client verifies full policy key
+	optional uint32 child_index = 2; // signed public recovery hint; never attribution
+	bytes fallback_record = 3;
+	bytes key_link = 4;
 }
 
 message GetVtxosByIdsRequest {
@@ -301,10 +305,7 @@ message RecoverVtxosByXpubResponse {
 
 // boarding
 
-message AccountChildHint {
-	bytes blinded_mailbox_id = 1; // existing compressed ServerMailbox point
-	uint32 child_index = 2; // ordinary, never hardened; exact account child is verified
-}
+
 
 message BoardCosignRequest {
 	uint64 amount = 1;
@@ -313,7 +314,7 @@ message BoardCosignRequest {
 	bytes user_pubkey = 4;
 	bytes pub_nonce = 5;
 	bytes funding_tx = 6;
-	AccountChildHint origin = 7;
+	reserved 7;
 }
 
 message BoardCosignResponse {
@@ -336,13 +337,13 @@ message RegisterVtxoTransactionsRequest {
 message VtxoRequest {
 	uint64 amount = 1;
 	bytes policy = 2;
-	AccountChildHint origin = 3;
+	reserved 3;
 }
 
 message ArkoorDestination {
 	uint64 total_amount = 1;
 	bytes policy = 2;
-	AccountChildHint origin = 3;
+	reserved 3;
 }
 
 message ArkoorCosignRequest {
@@ -433,7 +434,7 @@ message CheckLightningReceiveRequest {
 }
 
 message PrepareLightningReceiveClaimRequest {
-	AccountChildHint origin = 6;
+	reserved 6;
 	bytes payment_hash = 1;
 	bytes user_pubkey = 2;
 	uint32 htlc_recv_expiry = 3;

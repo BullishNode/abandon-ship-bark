@@ -279,6 +279,16 @@ impl Wallet {
 	/// The recovery mailbox only stores ids, so we ask the server for the full
 	/// VTXO data. The result is untrusted until validated by the caller.
 	pub(crate) async fn fetch_vtxo(&self, id: VtxoId) -> anyhow::Result<Vtxo<Full>> {
+		self.fetch_authenticated_recovery_vtxo(id, None).await
+	}
+
+	/// Authenticate the C ownership proof before recording a recovered key.
+	/// A mailbox or batch body must match the proof-bearing response in full.
+	async fn fetch_authenticated_recovery_vtxo(
+		&self,
+		id: VtxoId,
+		expected: Option<&Vtxo<Full>>,
+	) -> anyhow::Result<Vtxo<Full>> {
 		let (mut srv, _) = self.require_server().await?;
 		let resp = srv.client.get_vtxo(protos::GetVtxoRequest {
 			vtxo_id: id.to_bytes().to_vec(),
@@ -287,10 +297,23 @@ impl Wallet {
 		let vtxo = Vtxo::<Full>::deserialize(&resp.vtxo)
 			.with_context(|| format!("server returned an undecodable vtxo for {id}"))?;
 		ensure!(vtxo.id() == id, "server returned another vtxo for recovery");
-		if let Some(index) = resp.child_index {
-			let origin = ark::fallback::AccountChild::new(self.mailbox_keypair().public_key(), index)?;
-			let account = bitcoin::bip32::Xpub::from_priv(&crate::SECP, &self.inner.seed.vtxo);
-			origin.verify_pubkey(&account, vtxo.user_pubkey()).context("untrusted recovery child does not match this seed")?;
+		if let Some(expected) = expected {
+			ensure!(vtxo.serialize() == expected.serialize(),
+				"proof-bearing recovery response changes the supplied vtxo body");
+		}
+		let record = ark::fallback::FallbackRecord::deserialize(&resp.fallback_record)?;
+		let link = ark::fallback::KeyLink::deserialize(&resp.key_link)?;
+		let mailbox = self.mailbox_keypair().public_key();
+		let expected = self.fallback_destination().await?;
+		record.verify(self.network().await?, mailbox)?;
+		ensure!(record.same_binding(&expected), "recovery record changes the immutable destination");
+		link.verify(self.network().await?, mailbox, &record)?;
+		ensure!(link.user_pubkey == vtxo.user_pubkey(), "recovery link is for another policy key");
+		ensure!(resp.child_index == link.recovery_index, "recovery index differs from signed link");
+		if let Some(index) = link.recovery_index {
+			ensure!(self.inner.seed.derive_vtxo_keypair(index).public_key() == vtxo.user_pubkey(),
+				"untrusted recovery index does not match this seed");
+			self.inner.db.store_linked_vtxo_keys(&[(index, link)]).await?;
 			self.inner.db.store_vtxo_key(index, vtxo.user_pubkey()).await?;
 		}
 		Ok(vtxo)
@@ -430,19 +453,19 @@ impl Wallet {
 			}
 		}
 
-		// A full-body or batched delivery need not carry its public hint.
-		// Preserve the authenticated individual lookup before the batch gap scan.
-		let mut hinted = Vec::with_capacity(vtxos.len());
+		// Raw batch and mailbox bodies omit C's authenticated V4 record/V1 link.
+		// Verify every candidate, including known keys, before importing any key.
+		let mut authenticated = Vec::with_capacity(vtxos.len());
 		for vtxo in vtxos {
-			if self.inner.db.get_public_key_idx(&vtxo.user_pubkey()).await?.is_none()
-				&& let Err(error) = self.fetch_vtxo(vtxo.id()).await {
-				warn!("Could not verify sparse recovery hint for {}: {error:#}", vtxo.id());
-				report.push_failed(vtxo.id(), Some(vtxo.amount()));
-				continue;
+			match self.fetch_authenticated_recovery_vtxo(vtxo.id(), Some(&vtxo)).await {
+				Ok(verified) => authenticated.push(verified),
+				Err(error) => {
+					warn!("Could not authenticate recovery proof for {}: {error:#}", vtxo.id());
+					report.push_failed(vtxo.id(), Some(vtxo.amount()));
+				},
 			}
-			hinted.push(vtxo);
 		}
-		let vtxos = hinted;
+		let vtxos = authenticated;
 
 		// One key scan for the whole batch. [`Wallet::find_vtxo_keypairs`] widens
 		// its window on every match, so later keys of the batch are found however

@@ -1,190 +1,132 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
-use ark::fallback::{AccountChild, FallbackRecord as AccountRecord};
+use ark::fallback::{FallbackRecord as Record, KeyLink, KeyLinkOrigin};
 use ark::ProtocolEncoding;
-use bitcoin::bip32::Xpub;
 use bitcoin::secp256k1::{schnorr, PublicKey};
 use bitcoin::{Network, ScriptBuf};
-use tokio_postgres::types::Type;
 
 use super::Tx;
 
-/// A fully authenticated immutable mailbox/account/destination binding.
-pub(crate) struct FallbackRecord(AccountRecord);
+/// A mailbox-signed immutable destination authenticated at the RPC boundary.
+pub(crate) struct FallbackRecord(Record);
 
 impl FallbackRecord {
-	pub fn from_bytes(bytes: &[u8], mailbox_pk: PublicKey, network: Network) -> anyhow::Result<Self> {
-		let record = AccountRecord::deserialize(bytes)?;
-		record.verify(network, mailbox_pk).context("invalid fallback record")?;
+	pub fn from_bytes(bytes: &[u8], mailbox: PublicKey, network: Network) -> anyhow::Result<Self> {
+		let record = Record::deserialize(bytes)?;
+		record.verify(network, mailbox)?;
 		Ok(Self(record))
 	}
-
 	pub fn to_bytes(&self) -> Vec<u8> { self.0.serialize() }
 }
 
+fn read_record(row: &tokio_postgres::Row) -> anyhow::Result<Record> {
+	Ok(Record {
+		spk: ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
+		mailbox_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("mailbox_sig"))?,
+	})
+}
+
+fn read_link(row: &tokio_postgres::Row) -> anyhow::Result<KeyLink> {
+	Ok(KeyLink {
+		user_pubkey: PublicKey::from_slice(&row.get::<_, Vec<u8>>("user_pubkey"))?,
+		recovery_index: row.get::<_, Option<i32>>("recovery_index").map(u32::try_from).transpose()?,
+		signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("sig"))?,
+	})
+}
+
 impl Tx<'_> {
-	pub(crate) async fn set_fallback(
-		&self, mailbox_pk: PublicKey, record: &FallbackRecord,
-	) -> anyhow::Result<FallbackRecord> {
-		let mailbox_bytes = mailbox_pk.serialize().to_vec();
-		let FallbackRecord(record) = record;
-		{
-			self.execute("
-				INSERT INTO fallback_record (mailbox_pk, spk, account_xpub, mailbox_sig, account_sig)
-				VALUES ($1, $2, $3, $4, $5) ON CONFLICT (mailbox_pk) DO NOTHING
-			", &[&mailbox_bytes, &record.spk.as_bytes(), &record.account_xpub.encode().as_slice(),
-				&record.mailbox_signature.serialize().as_slice(), &record.account_signature.serialize().as_slice()])
-				.await.context("failed to store fallback record")?;
+	pub(crate) async fn set_fallback(&self, mailbox: PublicKey, record: &FallbackRecord,
+		links: &[KeyLink], network: Network,
+	) -> anyhow::Result<(FallbackRecord, Vec<KeyLink>)> {
+		ensure!(links.len() <= 64, "too many fallback key links");
+		record.0.verify(network, mailbox)?;
+		let mut distinct = BTreeSet::new();
+		for link in links {
+			ensure!(distinct.insert(link.user_pubkey), "duplicate fallback key link");
+			link.verify(network, mailbox, &record.0)?;
 		}
-		let row = self.query_opt(
-			"SELECT spk, account_xpub, mailbox_sig, account_sig FROM fallback_record WHERE mailbox_pk = $1",
-			&[&mailbox_bytes],
-		).await.context("failed to read fallback record")?;
-		row.map(|row| -> anyhow::Result<_> { Ok(FallbackRecord(AccountRecord {
-			spk: ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
-			account_xpub: Xpub::decode(&row.get::<_, Vec<u8>>("account_xpub"))?,
-			mailbox_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("mailbox_sig"))?,
-			account_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("account_sig"))?,
-		})) }).transpose()?.context("fallback record disappeared during registration")
+		let mb = mailbox.serialize().to_vec();
+		self.execute("INSERT INTO fallback_record(mailbox_pk,spk,mailbox_sig) VALUES($1,$2,$3)
+			ON CONFLICT(mailbox_pk) DO NOTHING", &[&mb, &record.0.spk.as_bytes(),
+			&record.0.mailbox_signature.serialize().as_slice()]).await?;
+		let row = self.query_one("SELECT spk,mailbox_sig FROM fallback_record WHERE mailbox_pk=$1", &[&mb]).await?;
+		let current = read_record(&row)?;
+		current.verify(network, mailbox)?;
+		ensure!(current.same_binding(&record.0), "immutable fallback destination mismatch");
+		// Stable key order bounds conflicting batch lock order. Return request order.
+		let mut ordered = links.iter().collect::<Vec<_>>();
+		ordered.sort_by_key(|link| link.user_pubkey);
+		for link in ordered {
+			let key = link.user_pubkey.serialize().to_vec();
+			let index = link.recovery_index.map(i32::try_from).transpose()?;
+			self.execute("INSERT INTO key_link(user_pubkey,mailbox_pk,sig,recovery_index) VALUES($1,$2,$3,$4)
+				ON CONFLICT(user_pubkey) DO NOTHING", &[&key,&mb,&link.signature.serialize().as_slice(),&index]).await?;
+			let row = self.query_one("SELECT user_pubkey,mailbox_pk,sig,recovery_index FROM key_link WHERE user_pubkey=$1", &[&key]).await?;
+			ensure!(row.get::<_, Vec<u8>>("mailbox_pk") == mb, "coin key already belongs to another mailbox");
+			let stored = read_link(&row)?;
+			stored.verify(network, mailbox, &current)?;
+			ensure!(stored.same_binding(link), "conflicting fallback recovery hint");
+		}
+		let mut canonical = Vec::with_capacity(links.len());
+		for link in links {
+			let row = self.query_one("SELECT user_pubkey,sig,recovery_index FROM key_link WHERE user_pubkey=$1",
+				&[&link.user_pubkey.serialize().to_vec()]).await?;
+			canonical.push(read_link(&row)?);
+		}
+		Ok((FallbackRecord(current), canonical))
 	}
 
-	pub(crate) async fn fallback_origin(&self, policy_key: PublicKey) -> anyhow::Result<Option<AccountChild>> {
-		let row = self.query_opt("SELECT mailbox_pk, child_index FROM key_link WHERE user_pubkey=$1",
-			&[&policy_key.serialize().to_vec()]).await?;
-		row.map(|row| Ok(AccountChild::new(PublicKey::from_slice(&row.get::<_, Vec<u8>>("mailbox_pk"))?,
-			u32::try_from(row.get::<_, i32>("child_index"))?)?)).transpose()
+	pub(crate) async fn fallback_origin(&self, key: PublicKey) -> anyhow::Result<Option<KeyLinkOrigin>> {
+		self.query_opt("SELECT mailbox_pk FROM key_link WHERE user_pubkey=$1", &[&key.serialize().to_vec()]).await?
+			.map(|row| Ok(KeyLinkOrigin::new(PublicKey::from_slice(&row.get::<_, Vec<u8>>("mailbox_pk"))?))).transpose()
 	}
 
-	/// A cheap read-only preflight, also repeated inside the decisive write.
-	pub(crate) async fn verify_fallback_child(&self, origin: AccountChild, policy_key: PublicKey) -> anyhow::Result<()> {
-		let mailbox = origin.mailbox_pk().serialize().to_vec();
-		let row = self.query_opt("SELECT account_xpub FROM fallback_record WHERE mailbox_pk=$1", &[&mailbox]).await?
-			.context("missing immutable fallback account record")?;
-		origin.verify_pubkey(&Xpub::decode(&row.get::<_, Vec<u8>>("account_xpub"))?, policy_key)?;
+	pub(crate) async fn fallback_proof(&self, key: PublicKey, network: Network) -> anyhow::Result<(PublicKey, Record, KeyLink)> {
+		let row = self.query_opt("SELECT l.user_pubkey,l.mailbox_pk,l.sig,l.recovery_index,r.spk,r.mailbox_sig
+			FROM key_link l JOIN fallback_record r USING(mailbox_pk) WHERE l.user_pubkey=$1",
+			&[&key.serialize().to_vec()]).await?.context("missing signed fallback key link")?;
+		let mailbox = PublicKey::from_slice(&row.get::<_, Vec<u8>>("mailbox_pk"))?;
+		let record = read_record(&row)?;
+		let link = read_link(&row)?;
+		link.verify(network, mailbox, &record)?;
+		ensure!(link.user_pubkey == key, "fallback policy key mismatch");
+		Ok((mailbox, record, link))
+	}
+
+	pub(crate) async fn verify_fallback_link(&self, origin: KeyLinkOrigin, key: PublicKey, network: Network) -> anyhow::Result<()> {
+		let (mailbox, _, _) = self.fallback_proof(key, network).await?;
+		ensure!(mailbox == origin.mailbox_pk(), "fallback mailbox differs from linked owner");
 		Ok(())
 	}
 
-	/// Retain exact key attribution in the same transaction as coin admission.
-	pub(crate) async fn admit_fallback_child(&self, origin: AccountChild, policy_key: PublicKey) -> anyhow::Result<()> {
-		self.verify_fallback_child(origin, policy_key).await?;
-		let mailbox = origin.mailbox_pk().serialize().to_vec();
-		let index = i32::try_from(origin.child_index())?;
-		let key = policy_key.serialize().to_vec();
-		self.execute("INSERT INTO key_link (user_pubkey, mailbox_pk, child_index) VALUES ($1,$2,$3)
-			ON CONFLICT (user_pubkey) DO NOTHING", &[&key, &mailbox, &index]).await?;
-		let row = self.query_one("SELECT mailbox_pk, child_index FROM key_link WHERE user_pubkey=$1", &[&key]).await?;
-		ensure!(row.get::<_, Vec<u8>>("mailbox_pk") == mailbox && row.get::<_, i32>("child_index") == index,
-			"coin key already belongs to a different account child");
-		Ok(())
-	}
-
-	/// Resolve a page of coin keys with one lookup. Missing entries have no admitted
-	/// account provenance and cannot establish an automatic payout destination.
-	pub(crate) async fn fallback_scripts(
-		&self, keys: &[PublicKey],
-	) -> anyhow::Result<BTreeMap<PublicKey, ScriptBuf>> {
+	pub(crate) async fn fallback_scripts(&self, keys: &[PublicKey]) -> anyhow::Result<BTreeMap<PublicKey, ScriptBuf>> {
 		let keys = keys.iter().map(|key| key.serialize().to_vec()).collect::<Vec<_>>();
-		self.query("SELECT l.user_pubkey, r.spk FROM key_link l
-			JOIN fallback_record r ON r.mailbox_pk=l.mailbox_pk
-			WHERE l.user_pubkey=ANY($1::bytea[])", &[&keys]).await?
-			.into_iter().map(|row| Ok((
-				PublicKey::from_slice(&row.get::<_, Vec<u8>>("user_pubkey"))?,
-				ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
-			))).collect()
+		self.query("SELECT l.user_pubkey,r.spk FROM key_link l JOIN fallback_record r USING(mailbox_pk)
+			WHERE l.user_pubkey=ANY($1::bytea[])", &[&keys]).await?.into_iter().map(|row| Ok((
+			PublicKey::from_slice(&row.get::<_, Vec<u8>>("user_pubkey"))?, ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
+		))).collect()
 	}
 
-	/// Resolve exact account children and authenticate the complete immutable
-	/// records before freezing or publishing a direct settlement. Verify each
-	/// wallet's record once per page, while deriving every requested child.
-	pub(crate) async fn authenticated_fallback_scripts(
-		&self, keys: &[PublicKey], network: Network,
-	) -> anyhow::Result<BTreeMap<PublicKey, ScriptBuf>> {
+	pub(crate) async fn authenticated_fallback_scripts(&self, keys: &[PublicKey], network: Network) -> anyhow::Result<BTreeMap<PublicKey, ScriptBuf>> {
 		let expected = keys.iter().copied().collect::<BTreeSet<_>>();
-		let encoded = expected.iter().map(|key| key.serialize().to_vec()).collect::<Vec<_>>();
-		let rows = self.query("SELECT l.user_pubkey,l.mailbox_pk,l.child_index,r.spk,r.account_xpub,r.mailbox_sig,r.account_sig
-			FROM key_link l JOIN fallback_record r ON r.mailbox_pk=l.mailbox_pk WHERE l.user_pubkey=ANY($1::bytea[])", &[&encoded]).await?;
-		let mut records = BTreeMap::<PublicKey, AccountRecord>::new();
+		let raw = expected.iter().map(|key| key.serialize().to_vec()).collect::<Vec<_>>();
+		let rows = self.query("SELECT l.user_pubkey,l.mailbox_pk,l.sig,l.recovery_index,r.spk,r.mailbox_sig
+			FROM key_link l JOIN fallback_record r USING(mailbox_pk) WHERE l.user_pubkey=ANY($1::bytea[])", &[&raw]).await?;
 		let mut scripts = BTreeMap::new();
 		for row in rows {
-			let key = PublicKey::from_slice(&row.get::<_, Vec<u8>>("user_pubkey"))?;
 			let mailbox = PublicKey::from_slice(&row.get::<_, Vec<u8>>("mailbox_pk"))?;
-			if !records.contains_key(&mailbox) {
-				let record = AccountRecord {
-					spk: ScriptBuf::from(row.get::<_, Vec<u8>>("spk")),
-					account_xpub: Xpub::decode(&row.get::<_, Vec<u8>>("account_xpub"))?,
-					mailbox_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("mailbox_sig"))?,
-					account_signature: schnorr::Signature::from_slice(&row.get::<_, Vec<u8>>("account_sig"))?,
-				};
-				record.verify(network, mailbox)?;
-				records.insert(mailbox, record);
-			}
-			let record = records.get(&mailbox).context("authenticated fallback record missing")?;
-			AccountChild::new(mailbox, u32::try_from(row.get::<_, i32>("child_index"))?)?
-				.verify_pubkey(&record.account_xpub, key)?;
-			ensure!(scripts.insert(key, record.spk.clone()).is_none(), "duplicate fallback account child");
+			let record = read_record(&row)?;
+			let link = read_link(&row)?;
+			link.verify(network, mailbox, &record)?;
+			scripts.insert(link.user_pubkey, record.spk);
 		}
-		ensure!(scripts.keys().copied().collect::<BTreeSet<_>>() == expected, "missing authenticated fallback account child");
+		ensure!(scripts.len() == expected.len(), "missing signed fallback key link");
 		Ok(scripts)
 	}
 
-	/// Refuse a new user output unless its key has an immutable link to a record.
-	pub(crate) async fn require_fallback(&self, user_pubkeys: &[PublicKey]) -> anyhow::Result<()> {
-		if user_pubkeys.is_empty() {
-			return Ok(());
-		}
-		let keys = user_pubkeys.iter().map(|k| k.serialize().to_vec()).collect::<Vec<_>>();
-		let stmt = self.prepare_typed("
-			SELECT u.user_pubkey FROM UNNEST($1::bytea[]) AS u(user_pubkey)
-			LEFT JOIN key_link l ON l.user_pubkey = u.user_pubkey
-			LEFT JOIN fallback_record r ON r.mailbox_pk = l.mailbox_pk
-			WHERE r.mailbox_pk IS NULL LIMIT 1
-		", &[Type::BYTEA_ARRAY]).await?;
-		if let Some(row) = self.query_opt(&stmt, &[&keys]).await? {
-			let key = PublicKey::from_slice(&row.get::<_, Vec<u8>>("user_pubkey"))?;
-			return badarg!("missing fallback link or wallet record for coin key {}; call SetFallback before creating coins", key);
-		}
+	pub(crate) async fn require_fallback(&self, keys: &[PublicKey], network: Network) -> anyhow::Result<()> {
+		self.authenticated_fallback_scripts(keys, network).await?;
 		Ok(())
 	}
-}
-
-#[cfg(test)]
-mod tests {
-	use bitcoin::bip32::{ChildNumber, Xpriv, Xpub};
-	use bitcoin::constants::ChainHash;
-	use ark::SECP;
-	use bitcoin::hashes::{sha256, Hash, HashEngine};
-	use bitcoin::secp256k1::{Keypair, Message};
-	use super::*;
-	fn mailbox() -> Keypair { Keypair::from_seckey_slice(&SECP, &[7; 32]).unwrap() }
-
-	#[test]
-	fn immutable_account_record_accepts_portable_full_field_proofs() {
-		let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
-		let account = Xpriv::new_master(Network::Regtest, &[3; 64]).unwrap();
-		let xpub = Xpub::from_priv(&SECP, &account);
-		let child0 = account.derive_priv(&SECP, &[ChildNumber::from_normal_idx(0).unwrap()]).unwrap().to_keypair(&SECP);
-		let mailbox = mailbox();
-		let mut wire = vec![3, u8::try_from(spk.len()).unwrap()];
-		wire.extend_from_slice(spk.as_bytes());
-		wire.extend_from_slice(&xpub.encode());
-		for (prefix, key) in [
-			(b"Ark expiry fallback record v3   ", &mailbox),
-			(b"Ark expiry fallback account v3  ", &child0),
-		] {
-			let mut engine = sha256::Hash::engine();
-			engine.input(prefix);
-			engine.input(ChainHash::REGTEST.as_bytes());
-			engine.input(&mailbox.public_key().serialize());
-			engine.input(&[u8::try_from(spk.len()).unwrap()]);
-			engine.input(spk.as_bytes());
-			engine.input(&xpub.encode());
-			let message = Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array());
-			wire.extend_from_slice(&SECP.sign_schnorr_with_aux_rand(&message, key, &[0; 32]).serialize());
-		}
-		assert!(FallbackRecord::from_bytes(&wire, mailbox.public_key(), Network::Regtest).is_ok(),
-			"a valid immutable xpub record must register without per-key signatures");
-		assert!(FallbackRecord::from_bytes(&wire, mailbox.public_key(), Network::Signet).is_err());
-	}
-
 }

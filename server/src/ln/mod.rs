@@ -8,7 +8,7 @@ pub mod settler;
 mod payment_handler;
 
 use std::cmp;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::time::Duration;
 
 use anyhow::{bail, Context};
@@ -271,7 +271,6 @@ impl Server {
 	pub async fn request_lightning_pay_htlc_cosign(
 		&self,
 		request: ArkoorPackageCosignRequest<VtxoId>,
-		hints: BTreeMap<PublicKey, ark::fallback::AccountChildHint>,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		let input_vtxo_ids = request.inputs().cloned().collect::<Vec<VtxoId>>();
 		let input_vtxos = self.db.read(async |t| t.get_user_vtxos_by_id(&input_vtxo_ids).await).await?;
@@ -352,7 +351,7 @@ impl Server {
 
 		slog!(LightningPayHtlcsRequested, payment_hash, expiry);
 
-		let (builder, _) = self.cosign_oor_with_builder_and_hints(builder, &hints).await?;
+		let (builder, _) = self.cosign_oor_with_builder_and_links(builder).await?;
 		Ok(builder.cosign_response())
 	}
 
@@ -519,7 +518,6 @@ impl Server {
 	pub async fn revoke_lightning_pay_htlcs(
 		&self,
 		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
-		hints: BTreeMap<PublicKey, ark::fallback::AccountChildHint>,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		let requested_policy = cosign_request.all_outputs()
 			.all_same(|v| v.policy.clone())
@@ -580,7 +578,6 @@ impl Server {
 			.insert_oor_spent_vtxos(builder.build_unsigned_internal_vtxos())
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
-		let origins = self.resolve_output_origins(&output_keys, &hints)?;
 		let tip = self.chain_tip().height;
 		self.db.write(async |t| {
 			// Re-check the settlement inside the write tx: the early gate and
@@ -589,8 +586,7 @@ impl Server {
 			// `ensure_not_settled` commits the check atomically with the
 			// vtxo-tree update below, so a settled payment can no longer be
 			// refunded (which would double-pay the sender).
-			for (key, origin) in &origins { t.admit_fallback_child(*origin, *key).await?; }
-			t.require_fallback(&output_keys).await?;
+			t.require_fallback(&output_keys, self.config.network).await?;
 			t.ensure_not_settled(payment_hash).await?;
 
 			// For an intra-Ark payment the payee shares this payment hash via a
@@ -1000,7 +996,7 @@ impl Server {
 		&self,
 		payment_hash: PaymentHash,
 		user_pubkey: PublicKey,
-		origin: ark::fallback::AccountChild,
+		origin: ark::fallback::KeyLinkOrigin,
 		htlc_recv_expiry: BlockHeight,
 		anti_dos: Option<protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos>,
 	) -> anyhow::Result<(LightningHtlcSubscription, Vec<Vtxo<Full>>)> {
@@ -1013,14 +1009,14 @@ impl Server {
 		let mut sub = self.db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await).await?
 			.not_found([payment_hash], "no pending payment with this payment hash")?;
 
-		// A valid account child proves where a grant would pay, not that this
-		// account owns the invoice. Check the immutable receiver before allocating
+		// A valid per-key link proves where a grant would pay. Check that its
+		// mailbox also owns the invoice before allocating
 		// from the pool or returning a previously prepared grant on a retry.
 		self.db.read(async |t| {
-			t.verify_fallback_child(origin, user_pubkey).await?;
+			t.verify_fallback_link(origin, user_pubkey, self.config.network).await?;
 			let receiver = t.get_lightning_receiver_mailbox_id(payment_hash).await?;
 			if receiver.map(|id| id.as_pubkey()) != Some(origin.mailbox_pk()) {
-				return badarg!("claim account does not match invoice receiver");
+				return badarg!("claim mailbox does not match invoice receiver");
 			}
 			Ok(())
 		}).await?;
@@ -1212,7 +1208,6 @@ impl Server {
 		payment_preimage: Preimage,
 		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
 		pver: u64,
-		hints: BTreeMap<PublicKey, ark::fallback::AccountChildHint>,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		// Held for the whole call, so no other call decides on this payment
 		// while the claim is validated, settled and cosigned.
@@ -1306,11 +1301,7 @@ impl Server {
 		// incoming payment. The write transaction checks this again before
 		// creating the claim outputs.
 		let output_keys = builder.build_unsigned_vtxos().map(|v| v.user_pubkey()).collect::<Vec<_>>();
-		let origins = self.resolve_output_origins(&output_keys, &hints)?;
-		self.db.read(async |t| {
-			for (key, origin) in &origins { t.verify_fallback_child(*origin, *key).await?; }
-			Ok(())
-		}).await?;
+		self.db.read(async |t| t.require_fallback(&output_keys, self.config.network).await).await?;
 
 		// Record the preimage in the settler so the watchman signer/policy
 		// can find it if this VTXO ends up being claimed on-chain.
@@ -1326,7 +1317,7 @@ impl Server {
 				.context("could not settle hold invoice, refusing to release the claim")?;
 		}
 
-		let (builder, _) = self.cosign_oor_with_builder_and_hints(builder, &hints).await?;
+		let (builder, _) = self.cosign_oor_with_builder_and_links(builder).await?;
 		let vtxo_request = VtxoRequest {
 			amount: sub.amount(),
 			policy: vtxo_policy,

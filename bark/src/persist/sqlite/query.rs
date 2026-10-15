@@ -744,8 +744,8 @@ pub fn store_vtxo_key(
 	index: u32,
 	public_key: PublicKey
 ) -> anyhow::Result<()> {
-	let changed = conn.execute("INSERT INTO bark_vtxo_key (idx, public_key) VALUES (?1,?2)
-		ON CONFLICT (idx) DO UPDATE SET public_key=excluded.public_key
+	let changed = conn.execute("INSERT INTO bark_vtxo_key (idx, public_key, issued) VALUES (?1,?2,1)
+		ON CONFLICT (idx) DO UPDATE SET issued=1
 		WHERE bark_vtxo_key.public_key=excluded.public_key", params![index, public_key.to_string()])?;
 	ensure!(changed == 1, "vtxo key index {index} already stored under a different public key");
 	Ok(())
@@ -765,7 +765,7 @@ pub fn get_public_key_idx(conn: &Connection, public_key: &PublicKey) -> anyhow::
 }
 
 pub fn get_last_vtxo_key_index(conn: &Connection) -> anyhow::Result<Option<u32>> {
-	let query = "SELECT idx FROM bark_vtxo_key ORDER BY idx DESC LIMIT 1";
+	let query = "SELECT idx FROM bark_vtxo_key WHERE issued=1 ORDER BY idx DESC LIMIT 1";
 	let mut statement = conn.prepare(query)?;
 	let mut rows = statement.query(())?;
 
@@ -783,12 +783,36 @@ pub fn get_fallback_record(conn: &Connection) -> anyhow::Result<Option<FallbackR
 }
 
 pub fn store_fallback_record(conn: &Connection, record: &FallbackRecord) -> anyhow::Result<()> {
-	let changed = conn.execute("INSERT INTO bark_fallback_record (id, record, spk, account_xpub) VALUES (1,?1,?2,?3)
-		ON CONFLICT (id) DO UPDATE SET record=excluded.record
-		WHERE bark_fallback_record.spk=excluded.spk AND bark_fallback_record.account_xpub=excluded.account_xpub",
-		params![record.serialize(), record.spk.as_bytes(), record.account_xpub.encode().as_slice()])?;
+	let changed = conn.execute("INSERT INTO bark_fallback_record(id,record,spk) VALUES(1,?1,?2)
+		ON CONFLICT(id) DO UPDATE SET record=excluded.record WHERE bark_fallback_record.spk=excluded.spk",
+		params![record.serialize(),record.spk.as_bytes()])?;
 	ensure!(changed == 1, "immutable fallback record mismatch");
 	Ok(())
+}
+
+pub fn store_linked_vtxo_keys(conn: &Transaction, keys: &[(u32, ark::fallback::KeyLink)]) -> anyhow::Result<()> {
+	for (index, link) in keys {
+		ensure!(link.recovery_index == Some(*index), "native key link index mismatch");
+		let changed = conn.execute("INSERT INTO bark_vtxo_key(idx,public_key,linked_proof,issued) VALUES(?1,?2,?3,0)
+			ON CONFLICT(idx) DO UPDATE SET linked_proof=excluded.linked_proof
+			WHERE bark_vtxo_key.public_key=excluded.public_key",
+			params![index,link.user_pubkey.to_string(),link.serialize()])?;
+		ensure!(changed == 1, "key index already belongs to another public key");
+	}
+	Ok(())
+}
+
+pub fn get_vtxo_key_link(conn: &Connection, key: &PublicKey) -> anyhow::Result<Option<ark::fallback::KeyLink>> {
+	let wire = conn.query_row("SELECT linked_proof FROM bark_vtxo_key WHERE public_key=?1", [key.to_string()],
+		|row| row.get::<_, Option<Vec<u8>>>(0)).optional()?.flatten();
+	wire.map(|bytes| ark::fallback::KeyLink::deserialize(&bytes).map_err(Into::into)).transpose()
+}
+
+pub fn take_next_linked_vtxo_key(conn: &Transaction) -> anyhow::Result<Option<(u32, PublicKey)>> {
+	let row = conn.query_row("UPDATE bark_vtxo_key SET issued=1 WHERE idx=(SELECT MIN(idx) FROM bark_vtxo_key
+		WHERE linked_proof IS NOT NULL AND issued=0) RETURNING idx,public_key", [],
+		|row| Ok((row.get::<_, u32>(0)?,row.get::<_, String>(1)?))).optional()?;
+	row.map(|(index,key)| Ok((index,PublicKey::from_str(&key)?))).transpose()
 }
 
 pub fn get_mailbox_checkpoint(conn: &Connection) -> anyhow::Result<u64> {

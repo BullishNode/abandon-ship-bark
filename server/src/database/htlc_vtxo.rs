@@ -204,6 +204,7 @@ pub async fn create_htlc_vtxos(
 	tx: &Tx<'_>,
 	vtxos: &[(VtxoId, PaymentHash, BlockHeight)],
 	direction: HtlcDirection,
+	network: bitcoin::Network,
 ) -> anyhow::Result<()> {
 	if vtxos.is_empty() {
 		return Ok(());
@@ -212,7 +213,7 @@ pub async fn create_htlc_vtxos(
 	let ids = vtxos.iter().map(|v| v.0).collect::<Vec<_>>();
 	let keys = tx.get_user_vtxos_by_id(&ids).await?.iter()
 		.map(|v| v.vtxo.user_pubkey()).collect::<Vec<_>>();
-	tx.require_fallback(&keys).await?;
+	tx.require_fallback(&keys, network).await?;
 
 	let mut vtxo_ids = Vec::with_capacity(vtxos.len());
 	let mut payment_hashes = Vec::with_capacity(vtxos.len());

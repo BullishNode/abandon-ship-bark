@@ -183,13 +183,14 @@ impl rpc::server::ArkService for Server {
 		let vtxo_state = self.db.read(async |t| t.get_server_vtxo_by_id(id).await).await
 			.to_status()?;
 
-		let origin = self.db.read(async |tx| match vtxo_state.vtxo.policy().user_pubkey() {
-			Some(key) => tx.fallback_origin(key).await,
-			None => Ok(None),
-		}).await.to_status()?;
+		let proof = if let Some(key) = vtxo_state.vtxo.policy().user_pubkey() {
+			Some(self.db.read(async |tx| tx.fallback_proof(key, self.config.network).await).await.to_status()?)
+		} else { None };
 		let response = protos::GetVtxoResponse {
 			vtxo: vtxo_state.vtxo.serialize(),
-			child_index: origin.map(|origin| origin.child_index()),
+			child_index: proof.as_ref().and_then(|(_, _, link)| link.recovery_index),
+			fallback_record: proof.as_ref().map(|(_, record, _)| record.serialize()).unwrap_or_default(),
+			key_link: proof.as_ref().map(|(_, _, link)| link.serialize()).unwrap_or_default(),
 		};
 
 		Ok(tonic::Response::new(response))
@@ -298,6 +299,15 @@ impl rpc::server::ArkService for Server {
 			by_id.insert(id, (user_vtxo, spend_state));
 		}
 
+		// Preserve the single-status endpoint's pending Board identity and
+		// confirmed direct-expiry retirement semantics for batch recovery too.
+		for id in &ids {
+			if let Some(pending) = self.db.read(async |t| t.pending_board_status_vtxo(*id).await)
+				.await.to_status()? {
+				by_id.insert(*id, (pending, protos::VtxoSpendState::Unregistered));
+			}
+		}
+
 		let mut vtxos = Vec::with_capacity(queries.len());
 		let mut missing = Vec::new();
 		for (id, attestation) in queries {
@@ -311,9 +321,14 @@ impl rpc::server::ArkService for Server {
 			attestation.verify(user_vtxo)
 				.badarg("invalid VTXO status attestation")?;
 
+			let mut spend_state = *spend_state;
+			if spend_state != protos::VtxoSpendState::Spent &&
+				self.any_expiry_allocation_confirmed(&[id]).await.to_status()? {
+				spend_state = protos::VtxoSpendState::Spent;
+			}
 			vtxos.push(protos::VtxoStatus {
 				vtxo_id: id.to_bytes().to_vec(),
-				spend_state: *spend_state as i32,
+				spend_state: spend_state as i32,
 			});
 		}
 
@@ -382,14 +397,20 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::SetFallbackRequest>,
 	) -> Result<tonic::Response<protos::SetFallbackResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let req = req.into_inner();
 		let mailbox_pk = PublicKey::from_bytes(&req.mailbox_pk)?;
 		let record = FallbackRecord::from_bytes(&req.record, mailbox_pk, self.config.network)
 			.badarg("invalid fallback record")?;
-		let stored = self.db.write(async |t| t.set_fallback(mailbox_pk, &record).await)
+		if req.key_links.len() > 64 { macros::badarg!("too many fallback key links"); }
+		let links = req.key_links.iter().map(|bytes| ark::fallback::KeyLink::deserialize(bytes))
+			.collect::<Result<Vec<_>, _>>().badarg("invalid fallback key link")?;
+		let (stored, canonical) = self.db.write(async |t| t.set_fallback(mailbox_pk, &record, &links, self.config.network).await)
 			.await.to_status()?;
 		Ok(tonic::Response::new(protos::SetFallbackResponse {
-			record: stored.to_bytes(),
+			record: stored.to_bytes(), key_links: canonical.iter().map(ProtocolEncoding::serialize).collect(),
 		}))
 	}
 
@@ -403,6 +424,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::BoardCosignRequest>,
 	) -> Result<tonic::Response<protos::BoardCosignResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -425,8 +449,8 @@ impl rpc::server::ArkService for Server {
 			None
 		};
 
-		let hint = req.origin.context("missing account child origin").badarg("board origin")?.try_into()?;
-		let origin = self.resolve_fallback_hint(hint, user_pubkey).badarg("invalid board origin")?;
+		let origin = self.db.read(async |t| t.fallback_origin(user_pubkey).await).await.to_status()?
+			.context("missing fallback key link").badarg("board owner")?;
 		let resp = self.cosign_board(
 			amount, user_pubkey, expiry_height, utxo, funding_tx.as_ref(), pub_nonce, origin,
 		).await.to_status()?;
@@ -442,6 +466,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::BoardVtxoRequest>,
 	) -> Result<tonic::Response<protos::Empty>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let req = req.into_inner();
 
 		let vtxo = <Vtxo<Full>>::deserialize(&req.board_vtxo[..])
@@ -459,6 +486,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::RegisterVtxoTransactionsRequest>,
 	) -> Result<tonic::Response<protos::Empty>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let req = req.into_inner();
 
 		if req.vtxos.is_empty() {
@@ -484,6 +514,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::RegisterVtxoTransactionsRequest>,
 	) -> Result<tonic::Response<protos::Empty>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let req = req.into_inner();
 
 		if req.vtxos.is_empty() {
@@ -508,12 +541,14 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ArkoorPackageCosignRequest>,
 	) -> Result<tonic::Response<protos::ArkoorPackageCosignResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let request = req.into_inner();
-		let hints = self.arkoor_origin_hints(&request).badarg("invalid output origins")?;
 		let request = ArkoorPackageCosignRequest::try_from(request)
 			.context("Failed to parse request")?;
 
-		let response = self.cosign_oor(request, hints).await.to_status()?;
+		let response = self.cosign_oor(request).await.to_status()?;
 		Ok(tonic::Response::new(response.into()))
 	}
 
@@ -524,6 +559,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::LightningPayHtlcCosignRequest>,
 	) -> Result<tonic::Response<protos::ArkoorPackageCosignResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -533,11 +571,10 @@ impl rpc::server::ArkService for Server {
 		}
 
 		let wire = protos::ArkoorPackageCosignRequest { parts: req.parts };
-		let hints = self.arkoor_origin_hints(&wire).badarg("invalid output origins")?;
 		let cosign_requests = ArkoorPackageCosignRequest::try_from(wire)
 			.context("Failed to parse request")?;
 
-		let resp = self.request_lightning_pay_htlc_cosign(cosign_requests, hints)
+		let resp = self.request_lightning_pay_htlc_cosign(cosign_requests)
 			.await.context("error making payment")?;
 
 		Ok(tonic::Response::new(resp.into()))
@@ -548,6 +585,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::InitiateLightningPaymentRequest>,
 	) -> Result<tonic::Response<protos::Empty>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -595,12 +636,14 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ArkoorPackageCosignRequest>
 	) -> Result<tonic::Response<protos::ArkoorPackageCosignResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let wire = req.into_inner();
-		let hints = self.arkoor_origin_hints(&wire).badarg("invalid output origins")?;
 		let cosign_requests = ArkoorPackageCosignRequest::try_from(wire)
 			.context("Failed to parse request")?;
 
-		let cosign_resp = self.revoke_lightning_pay_htlcs(cosign_requests, hints).await
+		let cosign_resp = self.revoke_lightning_pay_htlcs(cosign_requests).await
 			.to_status()?;
 
 		Ok(tonic::Response::new(cosign_resp.into()))
@@ -639,6 +682,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::StartLightningReceiveRequest>,
 	) -> Result<tonic::Response<protos::StartLightningReceiveResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -685,6 +732,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::PrepareLightningReceiveClaimRequest>
 	) -> Result<tonic::Response<protos::PrepareLightningReceiveClaimResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -697,9 +747,8 @@ impl rpc::server::ArkService for Server {
 
 		let user_pubkey = PublicKey::from_bytes(&req.user_pubkey)?;
 		let htlc_recv_expiry = BlockHeight::new(req.htlc_recv_expiry);
-		let hint = req.origin.badarg("missing account child origin")?.try_into()
-			.badarg("invalid account child origin")?;
-		let origin = self.resolve_fallback_hint(hint, user_pubkey).badarg("invalid grant origin")?;
+		let origin = self.db.read(async |t| t.fallback_origin(user_pubkey).await).await.to_status()?
+			.context("missing fallback key link").badarg("grant owner")?;
 
 		let (sub, htlcs) = self.prepare_lightning_claim(
 			payment_hash, user_pubkey, origin, htlc_recv_expiry, req.lightning_receive_anti_dos,
@@ -716,6 +765,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ClaimLightningReceiveRequest>
 	) -> Result<tonic::Response<protos::ArkoorPackageCosignResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -723,7 +775,6 @@ impl rpc::server::ArkService for Server {
 
 		let payment_preimage = Preimage::from_bytes(req.payment_preimage)?;
 		let wire = req.cosign_request.badarg("cosign request missing")?;
-		let hints = self.arkoor_origin_hints(&wire).badarg("invalid output origins")?;
 		let cosign_request = ArkoorPackageCosignRequest::try_from(wire).badarg("invalid cosign request")?;
 
 		let cosign_resp = self.claim_lightning_receive(
@@ -731,7 +782,6 @@ impl rpc::server::ArkService for Server {
 			payment_preimage,
 			cosign_request,
 			pver,
-			hints,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(cosign_resp.into()))
@@ -742,6 +792,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::CancelLightningReceiveRequest>,
 	) -> Result<tonic::Response<protos::Empty>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let req = req.into_inner();
 
 		let payment_hash = PaymentHash::from_bytes(req.payment_hash)?;
@@ -804,6 +858,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::SubmitPaymentRequest>,
 	) -> Result<tonic::Response<protos::SubmitPaymentResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -826,15 +883,15 @@ impl rpc::server::ArkService for Server {
 			}
 			let request = signed.vtxo.as_ref().context("missing signed output").badarg("round origin")?;
 			let key = VtxoPolicy::deserialize(&request.policy).badarg("invalid round policy")?.user_pubkey();
-			let hint = request.origin.clone().context("missing account child origin").badarg("round origin")?.try_into()?;
-			let origin = self.resolve_fallback_hint(hint, key).badarg("invalid round origin")?;
+			let origin = self.db.read(async |t| t.fallback_origin(key).await).await.to_status()?
+				.context("missing fallback key link").badarg("round owner")?;
 			if let Some(previous) = output_origins.insert(key, origin) {
 				if previous != origin { macros::badarg!("conflicting round origins for the same coin key"); }
 			}
 			vtxo_requests.push(signed.try_into().badarg("invalid signed vtxo request")?);
 		}
 		self.db.read(async |tx| {
-			for (key, origin) in &output_origins { tx.verify_fallback_child(*origin, *key).await?; }
+			for (key, origin) in &output_origins { tx.verify_fallback_link(*origin, *key, self.config.network).await?; }
 			Ok(())
 		}).await.to_status()?;
 
@@ -871,6 +928,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::VtxoSignaturesRequest>,
 	) -> Result<tonic::Response<protos::Empty>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -903,6 +964,9 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::RoundParticipationRequest>,
 	) -> Result<tonic::Response<protos::RoundParticipationResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -922,8 +986,8 @@ impl rpc::server::ArkService for Server {
 		let mut outputs = Vec::with_capacity(req.vtxo_requests.len());
 		for request in req.vtxo_requests {
 			let key = VtxoPolicy::deserialize(&request.policy).badarg("invalid round policy")?.user_pubkey();
-			let hint = request.origin.clone().context("missing account child origin").badarg("round origin")?.try_into()?;
-			let origin = self.resolve_fallback_hint(hint, key).badarg("invalid round origin")?;
+			let origin = self.db.read(async |t| t.fallback_origin(key).await).await.to_status()?
+				.context("missing fallback key link").badarg("round owner")?;
 			outputs.push(StoredRoundOutput {
 				vtxo_request: request.try_into().badarg("invalid vtxo request")?, origin: Some(origin),
 				unblinded_mailbox_id: Some(MailboxIdentifier::from_pubkey(origin.mailbox_pk())),
@@ -1003,6 +1067,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::LeafVtxoCosignRequest>,
 	) -> Result<tonic::Response<protos::LeafVtxoCosignResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -1025,6 +1093,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ForfeitNoncesRequest>,
 	) -> Result<tonic::Response<protos::ForfeitNoncesResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -1052,6 +1124,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ForfeitVtxosRequest>,
 	) -> Result<tonic::Response<protos::ForfeitVtxosResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -1076,6 +1152,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::PrepareOffboardRequest>,
 	) -> Result<tonic::Response<protos::PrepareOffboardResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let pver = req.pver()?;
 		let req = req.into_inner();
 
@@ -1116,6 +1196,10 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::FinishOffboardRequest>,
 	) -> Result<tonic::Response<protos::FinishOffboardResponse>, tonic::Status> {
+		if req.pver()? != server_rpc::pver::PROTOCOL_VERSION_PER_KEY_FALLBACK {
+			macros::badarg!("per-key fallback protocol version 6 is required");
+		}
+
 		let req = req.into_inner();
 
 		let offboard_txid = Txid::from_bytes(req.offboard_txid)?;

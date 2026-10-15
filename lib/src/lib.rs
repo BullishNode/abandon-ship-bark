@@ -14,6 +14,7 @@ pub mod connectors;
 pub mod encode;
 pub mod error;
 pub mod fallback;
+pub mod per_key;
 pub mod fees;
 pub mod forfeit;
 pub mod lightning;

@@ -157,3 +157,31 @@ impl Wallet {
 			self.inner.onchain.as_ref().context("onchain wallet required")?, &mut connection, &self.inner.fallback_spk).await
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn restore_requires_exact_seed_binding_and_network() {
+		let seed = WalletSeed::new_from_seed(Network::Regtest, &[17; 64]);
+		let expected = seed.fallback_script(Network::Regtest).unwrap();
+		let record = FallbackRecord::new(Network::Regtest, expected.clone(), &seed.to_mailbox_keypair()).unwrap();
+		assert!(authenticate_binding(&record, &seed, Network::Regtest, &expected).is_ok());
+		assert!(authenticate_binding(&record, &seed, Network::Signet, &expected).is_err());
+		let wrong_script = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+		let wrong = FallbackRecord::new(Network::Regtest, wrong_script, &seed.to_mailbox_keypair()).unwrap();
+		assert!(authenticate_binding(&wrong, &seed, Network::Regtest, &expected).is_err());
+		let other = WalletSeed::new_from_seed(Network::Regtest, &[18; 64]);
+		let wrong = FallbackRecord::new(Network::Regtest, expected.clone(), &other.to_mailbox_keypair()).unwrap();
+		assert!(authenticate_binding(&wrong, &seed, Network::Regtest, &expected).is_err());
+	}
+
+	#[test]
+	fn native_recovery_index_boundary_is_non_hardened() {
+		assert_eq!(next_key_index(None).unwrap(), 0);
+		assert_eq!(next_key_index(Some((1 << 31) - 2)).unwrap(), (1 << 31) - 1);
+		assert!(next_key_index(Some((1 << 31) - 1)).is_err());
+		assert!(next_key_index(Some(u32::MAX)).is_err());
+	}
+}

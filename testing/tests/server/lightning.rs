@@ -150,9 +150,9 @@ async fn count_htlc_recv_vtxos(db: &Db) -> usize {
 }
 
 /// Derive a new child of the wallet that actually owns the invoice.
-async fn invoice_owner_key(wallet: &Wallet) -> (Keypair, protos::AccountChildHint) {
+async fn invoice_owner_key(wallet: &Wallet) -> (Keypair, ark::fallback::KeyLink) {
 	let (key, _) = wallet.derive_store_next_keypair().await.unwrap();
-	let origin = wallet.fallback_child_hint(key.public_key()).await.unwrap().into();
+	let origin = wallet.fallback_key_link(key.public_key()).await.unwrap();
 	(key, origin)
 }
 
@@ -163,11 +163,11 @@ async fn receive_pool_snapshot(db: &Db) -> (Vec<(i64, Option<String>, i64)>, usi
 	(lots, count_htlc_recv_vtxos(db).await)
 }
 
-async fn receive_claim_origins(wallet: &Wallet, mut request: protos::ArkoorPackageCosignRequest) -> protos::ArkoorPackageCosignRequest {
-	for part in &mut request.parts {
-		for output in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
+async fn receive_claim_key_links(wallet: &Wallet, request: protos::ArkoorPackageCosignRequest) -> protos::ArkoorPackageCosignRequest {
+	for part in &request.parts {
+		for output in part.outputs.iter().chain(part.isolated_outputs.iter()) {
 			let key = ark::VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey();
-			output.origin = Some(wallet.fallback_child_hint(key).await.unwrap().into());
+			wallet.fallback_key_link(key).await.unwrap();
 		}
 	}
 	request
@@ -1511,9 +1511,8 @@ async fn server_returned_htlc_recv_vtxos_identical(
 			let db = Db::connect(&srv.config().postgres).await.unwrap();
 			let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(receive.payment_hash).await).await.unwrap().unwrap();
 			let expiry = sub.lowest_incoming_htlc_expiry.unwrap().saturating_sub(srv.config().htlc_expiry_delta).to_u32();
-			let (keypair, origin) = invoice_owner_key(&owner).await;
+			let (keypair, _proof) = invoice_owner_key(&owner).await;
 			let req_1 = protos::PrepareLightningReceiveClaimRequest {
-			origin: Some(origin.clone()),
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
 				htlc_recv_expiry: expiry,
@@ -1531,9 +1530,8 @@ async fn server_returned_htlc_recv_vtxos_identical(
 			assert!(vtxos_2.iter().all(|v| v.has_all_witnesses()), "retry call vtxos should be fully signed");
 
 			// we change keypair to make sure server don't use it on second request
-			let (keypair, origin) = invoice_owner_key(&owner).await;
+			let (keypair, _proof) = invoice_owner_key(&owner).await;
 			let req_2 = protos::PrepareLightningReceiveClaimRequest {
-			origin: Some(origin.clone()),
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
 				htlc_recv_expiry: expiry,
@@ -1607,10 +1605,9 @@ async fn server_concurrent_prepare_lightning_claim(
 
 	// Fire all requests at once, each over its own connection. Every call
 	// uses a fresh user pubkey from the invoice account.
-	let results = join_all(keys.iter().map(|(key, origin)| async {
+	let results = join_all(keys.iter().map(|(key, _proof)| async {
 		let mut client = srv.get_public_rpc().await;
 		client.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-			origin: Some(origin.clone()),
 			payment_hash: receive.payment_hash.to_vec(),
 			user_pubkey: key.public_key().serialize().to_vec(),
 			htlc_recv_expiry: expiry,
@@ -1653,10 +1650,9 @@ async fn server_concurrent_prepare_lightning_claim(
 
 	// The losers are told to retry, so a retry after the storm must
 	// return the winner's vtxos instead of allocating a new set.
-	let (retry_key, origin) = invoice_owner_key(&owner).await;
+	let (retry_key, _proof) = invoice_owner_key(&owner).await;
 	let retry = client
 		.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-			origin: Some(origin.clone()),
 			payment_hash: receive.payment_hash.to_vec(),
 			user_pubkey: retry_key.public_key().serialize().to_vec(),
 			htlc_recv_expiry: expiry,
@@ -1719,10 +1715,10 @@ async fn refuses_htlc_recv_expiry_past_lowest_incoming_htlc_expiry(
 				Some(MailboxIdentifier::from_pubkey(owner.mailbox_keypair().public_key())));
 			// A valid child from another account is refused before allocating,
 			// even when its requested expiry satisfies the timing rule.
-			let (foreign, foreign_origin) = registered_fallback_key(&mut client).await;
+			let (foreign, _proof) = registered_fallback_key(&mut client).await;
 			let before = receive_pool_snapshot(&db).await;
 			let err = client.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-				origin: Some(foreign_origin), payment_hash: receive.payment_hash.to_vec(),
+				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: foreign.public_key().serialize().to_vec(),
 				htlc_recv_expiry: lowest.saturating_sub(htlc_expiry_delta).to_u32(), lightning_receive_anti_dos: None,
 			}).await.expect_err("a foreign account must not receive the invoice grant");
@@ -1731,9 +1727,8 @@ async fn refuses_htlc_recv_expiry_past_lowest_incoming_htlc_expiry(
 			assert_eq!(receive_pool_snapshot(&db).await, before, "wrong-owner rejection changed pool capital or created a grant");
 			// Boundary: requested + delta == lowest + 1. Server must refuse.
 			let attacker_expiry = lowest.saturating_sub(htlc_expiry_delta).to_u32() + 1;
-			let (keypair, origin) = invoice_owner_key(&owner).await;
+			let (keypair, _proof) = invoice_owner_key(&owner).await;
 			let req = protos::PrepareLightningReceiveClaimRequest {
-			origin: Some(origin.clone()),
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
 				htlc_recv_expiry: attacker_expiry,
@@ -1752,9 +1747,8 @@ async fn refuses_htlc_recv_expiry_past_lowest_incoming_htlc_expiry(
 
 			// Just below the boundary: requested + delta == lowest. Must accept.
 			let safe_expiry = lowest.saturating_sub(htlc_expiry_delta).to_u32();
-			let (keypair, origin) = invoice_owner_key(&owner).await;
+			let (keypair, _proof) = invoice_owner_key(&owner).await;
 			let req_safe = protos::PrepareLightningReceiveClaimRequest {
-			origin: Some(origin.clone()),
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
 				htlc_recv_expiry: safe_expiry,
@@ -1782,7 +1776,7 @@ async fn missing_invoice_mailbox_refuses_prepare_without_pool_allocation(
 	srv.wait_for_vtxopool(ctx).await;
 	let bark = ctx.bark("receiver", srv).create().await;
 	let owner = bark.client().await;
-	let (key, origin) = invoice_owner_key(&owner).await;
+	let (key, _proof) = invoice_owner_key(&owner).await;
 	let hash = ark::lightning::Preimage::random().compute_payment_hash();
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
@@ -1799,7 +1793,7 @@ async fn missing_invoice_mailbox_refuses_prepare_without_pool_allocation(
 			assert!(db.read(async |t| t.get_lightning_receiver_mailbox_id(hash).await).await.unwrap().is_none());
 			let before = receive_pool_snapshot(&db).await;
 			let err = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-				origin: Some(origin), payment_hash: hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
+				payment_hash: hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
 				htlc_recv_expiry: sub.lowest_incoming_htlc_expiry.unwrap().saturating_sub(srv.config().htlc_expiry_delta).to_u32(),
 				lightning_receive_anti_dos: None,
 			}).await.expect_err("missing receiver must not be replaced by the claim account");
@@ -1895,10 +1889,9 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 	// HTLC-recv VTXOs are now outstanding value of the server. The keys are
 	// linked to the wallet's fallback record, as the server requires.
 	let (keypair, _) = client.derive_store_next_keypair().await.unwrap();
-	let origin: protos::AccountChildHint = client.fallback_child_hint(keypair.public_key()).await.unwrap().into();
+	client.fallback_key_link(keypair.public_key()).await.unwrap();
 	let granted = rpc
 		.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-			origin: Some(origin.clone()),
 			payment_hash: payment_hash.as_ref().to_vec(),
 			user_pubkey: keypair.public_key().serialize().to_vec(),
 			htlc_recv_expiry: lowest.saturating_sub(srv.config().htlc_expiry_delta).into(),
@@ -1938,7 +1931,7 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 		.claim_lightning_receive(protos::ClaimLightningReceiveRequest {
 			payment_hash: payment_hash.as_ref().to_vec(),
 			payment_preimage: preimage.as_ref().to_vec(),
-			cosign_request: Some(receive_claim_origins(&client, protos::ArkoorPackageCosignRequest::from(
+			cosign_request: Some(receive_claim_key_links(&client, protos::ArkoorPackageCosignRequest::from(
 				builder.cosign_request(),
 			)).await),
 		})
@@ -2101,9 +2094,8 @@ async fn settled_hash_cannot_be_granted_htlc_recv_vtxos() {
 		.expect("Accepted subscription must record lowest incoming HTLC expiry");
 
 	let (keypair, _) = client.derive_store_next_keypair().await.unwrap();
-	let origin: protos::AccountChildHint = client.fallback_child_hint(keypair.public_key()).await.unwrap().into();
+	client.fallback_key_link(keypair.public_key()).await.unwrap();
 	let err = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-		origin: Some(origin.clone()),
 		payment_hash: payment_hash.as_ref().to_vec(),
 		user_pubkey: keypair.public_key().serialize().to_vec(),
 		htlc_recv_expiry: lowest.saturating_sub(srv.config().htlc_expiry_delta).into(),
@@ -2127,6 +2119,11 @@ async fn settled_hash_cannot_be_granted_htlc_recv_vtxos() {
 		Some("canceled"),
 	);
 	pay_receive.await.unwrap().expect_err("inbound payment for the receive must be refunded");
+	assert_eq!(lightning_attempt_status(&db, payment_hash).await.as_deref(), Some("succeeded"),
+		"refunding a no-grant receive must not fail the unrelated successful outgoing payment");
+	assert!(is_preimage_recorded(&db, payment_hash).await,
+		"the unrelated outgoing settlement remains recorded after the incoming refund");
+	assert_eq!(count_htlc_recv_vtxos(&db).await, 0);
 
 	assert_vtxopool_consistency(&srv).await;
 }

@@ -80,7 +80,7 @@ async fn blocklist_board_cosign_rejected() {
 	let tip_height = ctx.bitcoind().get_block_count().await as u32;
 	let expiry_height = BlockHeight::new(tip_height) + ark_info.vtxo_lifetime;
 
-	let (user_key, origin) = crate::fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
+	let (user_key, _proof) = crate::fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
 	let board_amount = btc(1) - sat(2_000);
 	let board_builder = ark::board::BoardBuilder::new(
 		user_key.public_key(),
@@ -103,7 +103,6 @@ async fn blocklist_board_cosign_rejected() {
 
 	let mut rpc = srv.get_public_rpc().await;
 	let err = rpc.request_board_cosign(protos::BoardCosignRequest {
-		origin: Some(origin),
 		amount: board_amount.to_sat(),
 		utxo: board_utxo.serialize(),
 		expiry_height: expiry_height.into(),
@@ -150,7 +149,7 @@ async fn blocklist_board_register_rejected() {
 	let tip_height = ctx.bitcoind().get_block_count().await as u32;
 	let expiry_height = BlockHeight::new(tip_height) + ark_info.vtxo_lifetime;
 
-	let (user_key, origin) = crate::fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
+	let (user_key, _proof) = crate::fallback::registered_fallback_key(&mut srv.get_public_rpc().await).await;
 	let board_amount = btc(1) - sat(2_000);
 	let board_builder = ark::board::BoardBuilder::new(
 		user_key.public_key(),
@@ -171,7 +170,6 @@ async fn blocklist_board_register_rejected() {
 	// An old client sends no funding tx, so the cosign has nothing to check.
 	let mut rpc = srv.get_public_rpc().await;
 	let cosign_response = rpc.request_board_cosign(protos::BoardCosignRequest {
-		origin: Some(origin),
 		amount: board_amount.to_sat(),
 		utxo: board_utxo.serialize(),
 		expiry_height: expiry_height.into(),

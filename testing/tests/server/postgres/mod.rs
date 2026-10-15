@@ -1172,27 +1172,37 @@ async fn round_queries_empty() {
 	assert!(db.read(async |t| t.get_expired_round_ids(BlockHeight::MAX).await).await.unwrap().is_empty());
 }
 
-// DB-query fixtures have no RPC server. Use real possession signatures and
-// an actual derived child, then let the production participation transaction
-// verify and retain its origin; never insert a forged key_link row.
-async fn admitted_round_output(db: &Db) -> StoredRoundOutput {
-	let account = bitcoin::bip32::Xpriv::new_master(bitcoin::Network::Regtest, &[41; 32]).unwrap();
+// DB-query fixtures have no RPC server. Retain real V4/V1 possession proofs;
+// production admission verifies each stored proof and owner.
+async fn retain_fixture_fallback(db: &Db, key: &bitcoin::secp256k1::Keypair) -> bitcoin::secp256k1::PublicKey {
 	let mailbox = bitcoin::secp256k1::Keypair::from_seckey_slice(&ark::SECP, &[42; 32]).unwrap();
 	let spk = bitcoin::ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
-	let record = ark::fallback::FallbackRecord::new(bitcoin::Network::Regtest, spk, &account, &mailbox).unwrap();
+	let record = ark::fallback::FallbackRecord::new(bitcoin::Network::Regtest, spk, &mailbox).unwrap();
+	let link = ark::fallback::KeyLink::new(bitcoin::Network::Regtest, mailbox.public_key(), &record, &key, Some(0)).unwrap();
 	record.verify(bitcoin::Network::Regtest, mailbox.public_key()).unwrap();
+	link.verify(bitcoin::Network::Regtest, mailbox.public_key(), &record).unwrap();
 	db.write(async |tx| {
-		tx.execute("INSERT INTO fallback_record (mailbox_pk,spk,account_xpub,mailbox_sig,account_sig)
-			VALUES ($1,$2,$3,$4,$5) ON CONFLICT (mailbox_pk) DO NOTHING",
-			&[&mailbox.public_key().serialize().as_slice(), &record.spk.as_bytes(), &record.account_xpub.encode().as_slice(),
-				&record.mailbox_signature.serialize().as_slice(), &record.account_signature.serialize().as_slice()]).await?;
+		tx.execute("INSERT INTO fallback_record (mailbox_pk,spk,mailbox_sig)
+			VALUES ($1,$2,$3) ON CONFLICT (mailbox_pk) DO NOTHING",
+			&[&mailbox.public_key().serialize().as_slice(), &record.spk.as_bytes(),
+				&record.mailbox_signature.serialize().as_slice()]).await?;
+		tx.execute("INSERT INTO key_link (user_pubkey,mailbox_pk,sig,recovery_index)
+			VALUES ($1,$2,$3,$4) ON CONFLICT (user_pubkey) DO NOTHING",
+			&[&key.public_key().serialize().as_slice(), &mailbox.public_key().serialize().as_slice(),
+				&link.signature.serialize().as_slice(), &0i32]).await?;
 		Ok(())
 	}).await.unwrap();
-	let origin = ark::fallback::AccountChild::new(mailbox.public_key(), 0).unwrap();
+	mailbox.public_key()
+}
+
+async fn admitted_round_output(db: &Db) -> StoredRoundOutput {
+	let key = bitcoin::secp256k1::Keypair::from_seckey_slice(&ark::SECP, &[43; 32]).unwrap();
+	let mailbox = retain_fixture_fallback(db, &key).await;
 	StoredRoundOutput {
-		vtxo_request: VtxoRequest { policy: VtxoPolicy::new_pubkey(origin.derive_pubkey(&record.account_xpub).unwrap()),
+		vtxo_request: VtxoRequest { policy: VtxoPolicy::new_pubkey(key.public_key()),
 			amount: bitcoin::Amount::from_sat(1000) },
-		unblinded_mailbox_id: Some(MailboxIdentifier::from_pubkey(mailbox.public_key())), origin: Some(origin),
+		unblinded_mailbox_id: Some(MailboxIdentifier::from_pubkey(mailbox)),
+		origin: Some(ark::fallback::KeyLinkOrigin::new(mailbox)),
 	}
 }
 
@@ -2115,11 +2125,15 @@ async fn htlc_vtxo_chain_resolution_cleared_above_fork_height() {
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.arkoor_htlc_out_vtxo.clone());
+	// Public test-vector owner from lib/src/test_util/vectors.rs.
+	let key = bitcoin::secp256k1::Keypair::from_str("33b6f3ede430a1a53229f55da7117242d8392cbfc64a57249ba70731dba71408").unwrap();
+	assert_eq!(vtxo.vtxo.policy().user_pubkey(), Some(key.public_key()));
+	retain_fixture_fallback(&db, &key).await;
 	db.write(async |t| t.upsert_vtxos([vtxo.clone()]).await).await.unwrap();
 
 	let payment_hash = Preimage::random().compute_payment_hash();
 	db.write(async |t| htlc_vtxo::create_htlc_vtxos(
-		t, &[(vtxo.id(), payment_hash, BlockHeight::new(100))], HtlcDirection::Incoming,
+		t, &[(vtxo.id(), payment_hash, BlockHeight::new(100))], HtlcDirection::Incoming, bitcoin::Network::Regtest,
 	).await).await.unwrap();
 
 	db.write(async |t| htlc_vtxo::set_htlc_vtxo_chain_resolution(
@@ -2151,11 +2165,15 @@ async fn htlc_vtxo_chain_resolution_kept_at_fork_height() {
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.arkoor_htlc_out_vtxo.clone());
+	// Public test-vector owner from lib/src/test_util/vectors.rs.
+	let key = bitcoin::secp256k1::Keypair::from_str("33b6f3ede430a1a53229f55da7117242d8392cbfc64a57249ba70731dba71408").unwrap();
+	assert_eq!(vtxo.vtxo.policy().user_pubkey(), Some(key.public_key()));
+	retain_fixture_fallback(&db, &key).await;
 	db.write(async |t| t.upsert_vtxos([vtxo.clone()]).await).await.unwrap();
 
 	let payment_hash = Preimage::random().compute_payment_hash();
 	db.write(async |t| htlc_vtxo::create_htlc_vtxos(
-		t, &[(vtxo.id(), payment_hash, BlockHeight::new(100))], HtlcDirection::Incoming,
+		t, &[(vtxo.id(), payment_hash, BlockHeight::new(100))], HtlcDirection::Incoming, bitcoin::Network::Regtest,
 	).await).await.unwrap();
 
 	db.write(async |t| htlc_vtxo::set_htlc_vtxo_chain_resolution(

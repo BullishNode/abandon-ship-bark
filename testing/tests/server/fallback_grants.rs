@@ -14,7 +14,7 @@ async fn grant_rows(db: &Db) -> i64 {
 	).await?.get(0))).await.unwrap()
 }
 
-async fn server_grant_requires_origin(
+async fn server_grant_requires_enrolled_key(
 	ctx: &TestContext, _lightning: &LightningPaymentSetup, srv: &Captaind,
 	pay: impl AsyncFn(String),
 ) {
@@ -32,20 +32,18 @@ async fn server_grant_requires_origin(
 			}).wait_millis(10_000).await.unwrap();
 		} => {},
 	}
-	let wallet = issuer.client().await;
-	let boarded_key = wallet.vtxos().await.unwrap()[0].user_pubkey();
-	let (_, key) = wallet.pubkey_keypair(&boarded_key).await.unwrap().unwrap();
+	let key = bitcoin::secp256k1::Keypair::new(&ark::SECP, &mut bitcoin::secp256k1::rand::thread_rng());
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let before = grant_rows(&db).await;
 	let error = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 		payment_hash: receive.payment_hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
-		htlc_recv_expiry: ctx.bitcoind().get_block_count().await as u32 + 1, lightning_receive_anti_dos: None, origin: None,
-	}).await.expect_err("an unproven grant must not allocate customer coins");
+		htlc_recv_expiry: ctx.bitcoind().get_block_count().await as u32 + 1, lightning_receive_anti_dos: None,
+	}).await.expect_err("an unregistered policy key must not allocate customer coins");
 	assert_eq!(error.code(), tonic::Code::InvalidArgument);
-	assert!(error.message().contains("missing account child origin"), "{error}");
+	assert!(error.message().contains("missing fallback key link"), "{error}");
 	assert_eq!(grant_rows(&db).await, before, "a refused grant must not allocate HTLCs");
 }
-lightning_test!(server_grant_requires_origin);
+lightning_test!(server_grant_requires_enrolled_key);
 
 async fn server_grant_refuses_another_account(
 	ctx: &TestContext, _lightning: &LightningPaymentSetup, srv: &Captaind,
@@ -59,7 +57,7 @@ async fn server_grant_refuses_another_account(
 	let other_wallet = other.client().await;
 	let other_pubkey = other_wallet.vtxos().await.unwrap()[0].user_pubkey();
 	let (_, other_key) = other_wallet.pubkey_keypair(&other_pubkey).await.unwrap().unwrap();
-	let other_origin = other_wallet.fallback_child_hint(other_pubkey).await.unwrap().into();
+	other_wallet.fallback_key_link(other_pubkey).await.unwrap();
 	let invoice = issuer.bolt11_invoice(btc(1)).await;
 	let receive = issuer.lightning_receive_status(&invoice.invoice).await.unwrap();
 	let mut rpc = srv.get_public_rpc().await;
@@ -73,7 +71,7 @@ async fn server_grant_refuses_another_account(
 	}
 	let request = protos::PrepareLightningReceiveClaimRequest {
 		payment_hash: receive.payment_hash.to_vec(), user_pubkey: other_key.public_key().serialize().to_vec(),
-		htlc_recv_expiry: ctx.bitcoind().get_block_count().await as u32 + 1, lightning_receive_anti_dos: None, origin: Some(other_origin),
+		htlc_recv_expiry: ctx.bitcoind().get_block_count().await as u32 + 1, lightning_receive_anti_dos: None,
 	};
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let before = grant_rows(&db).await;
@@ -88,10 +86,10 @@ async fn server_grant_refuses_another_account(
 	// phone destination belongs to the later claim, not to grant preparation.
 	let wallet = issuer.client().await;
 	let (key, _) = wallet.derive_store_next_keypair().await.unwrap();
-	let origin = wallet.fallback_child_hint(key.public_key()).await.unwrap();
+	wallet.fallback_key_link(key.public_key()).await.unwrap();
 	let granted = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 		payment_hash: receive.payment_hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
-		htlc_recv_expiry: ctx.bitcoind().get_block_count().await as u32 + 1, lightning_receive_anti_dos: None, origin: Some(origin.into()),
+		htlc_recv_expiry: ctx.bitcoind().get_block_count().await as u32 + 1, lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner();
 	assert!(!granted.htlc_vtxos.is_empty());
 	for raw in &granted.htlc_vtxos {

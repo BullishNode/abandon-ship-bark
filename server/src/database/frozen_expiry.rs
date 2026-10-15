@@ -20,6 +20,10 @@ impl Db {
 	/// The caller must hydrate every durable fee reservation before new work;
 	/// a large backlog must not turn the page size into a permanent refusal.
 	pub async fn frozen_expiry_group_ids(&self, limit: usize) -> anyhow::Result<Vec<String>> {
+		self.expiry_group_ids(limit, false).await
+	}
+
+	pub(crate) async fn expiry_group_ids(&self, limit: usize, include_confirmed: bool) -> anyhow::Result<Vec<String>> {
 		ensure!(limit > 0, "frozen group limit must be positive");
 		let page_size = i64::try_from(limit).context("frozen group limit overflow")?;
 		self.read(async |t| {
@@ -28,10 +32,10 @@ impl Db {
 			let mut groups = Vec::new();
 			loop {
 				let rows = t.query("SELECT DISTINCT a.freeze_set FROM expiry_allocation a
-					WHERE ($1::text IS NULL OR a.freeze_set > $1) AND NOT EXISTS (
+					WHERE ($1::text IS NULL OR a.freeze_set > $1) AND ($3 OR NOT EXISTS (
 						SELECT 1 FROM expiry_carrier_allocation m JOIN expiry_carrier c ON c.txid=m.txid
-						WHERE m.allocation_id=a.id AND c.confirmed_height IS NOT NULL)
-					ORDER BY a.freeze_set LIMIT $2", &[&after, &page_size]).await?;
+						WHERE m.allocation_id=a.id AND c.confirmed_height IS NOT NULL))
+					ORDER BY a.freeze_set LIMIT $2", &[&after, &page_size, &include_confirmed]).await?;
 				let full_page = rows.len() == limit;
 				groups.extend(rows.into_iter().map(|r| r.get::<_, String>("freeze_set")));
 				if !full_page { break; }

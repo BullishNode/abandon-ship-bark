@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use anyhow::Context;
-use bitcoin::{Network, Txid};
+use bitcoin::{Amount, FeeRate, Network, Txid};
 use bitcoin_ext::{BlockRef, TxStatus};
 use bitcoind_async_client::Client;
 
@@ -76,27 +76,8 @@ impl DirectDelivery {
 	/// One bounded observation/submission pass. A timeout/error retains guards;
 	/// reconcile these same bytes on the next call rather than creating payment.
 	pub async fn observe_and_submit(&self, node: &Client) -> anyhow::Result<DeliveryState> {
-		self.check_generation_frontier().await?;
-		self.witness.record_group(&self.db, &self.freeze_set).await?;
-		self.check_generation_frontier().await?;
-		let mut confirmed = Vec::new();
-		let mut pending = BTreeSet::new();
-		for version in &self.versions {
-			let txid = version.tx.compute_txid();
-			match bcd::tx_status(node, txid).await? {
-				TxStatus::Confirmed(block) => confirmed.push((version, block)),
-				TxStatus::Mempool => { pending.insert(txid); },
-				TxStatus::NotFound => {},
-			}
-			ensure!(version.recorded_confirmation.is_none() || confirmed.iter().any(|(v,b)|
-				v.tx.compute_txid() == txid && Some(*b) == version.recorded_confirmation),
-				"recorded direct confirmation is absent or different on the active chain");
-		}
-		ensure!(confirmed.len() <= 1, "multiple physical carrier versions are confirmed");
-		if let Some((winner, block)) = confirmed.into_iter().next() {
-			self.db.confirm_direct_delivery(&self.freeze_set, winner, block).await?;
-			return Ok(DeliveryState::Confirmed { txid: winner.tx.compute_txid(), block });
-		}
+		let (winner, pending) = self.observe_versions(node).await?;
+		if let Some(winner) = winner { return Ok(winner); }
 		let generation = self.versions.iter().map(|v| v.generation).max().context("empty direct delivery group")?;
 		let latest = self.versions.iter().filter(|v| v.generation == generation).collect::<Vec<_>>();
 		ensure!(latest.len() == 1, "direct carrier generation is ambiguous; caller reconciliation required");
@@ -120,5 +101,49 @@ impl DirectDelivery {
 			TxStatus::Mempool => Ok(DeliveryState::Pending { txid }),
 			TxStatus::NotFound => bail!("submitted direct carrier outcome is unknown; reservations retained"),
 		}
+	}
+
+	/// A rising policy may replace only this complete retained economic group.
+	/// Absence from Core alone never authorizes reconstruction. Every signed
+	/// version is checked for an actual winner before another can be produced.
+	pub(crate) async fn replacement_fee(&self, node: &Client, rate: FeeRate) -> anyhow::Result<Option<Amount>> {
+		if self.versions.iter().any(|v| rate.fee_wu(v.tx.weight()).is_none_or(|fee| fee <= v.miner_fee)) {
+			return Ok(None);
+		}
+		if self.observe_versions(node).await?.0.is_some() { return Ok(None); }
+		let latest = self.versions.last().context("empty direct delivery group")?;
+		// Reserve a conservative complete standard transaction plus textual
+		// prevout/root metadata before signing, rather than exceed readback's
+		// retained-history budget after an uncertain publication.
+		let capacity = usize::try_from(self.policy.max_weight.to_wu())?.checked_mul(4)
+			.context("replacement history capacity overflow")?;
+		ensure!(latest.remaining_rows > 0 && latest.remaining_bytes >= capacity,
+			"direct replacement history budget exhausted; original versions and reservations retained");
+		Ok(self.versions.iter().map(|v| v.miner_fee).max())
+	}
+
+	async fn observe_versions(&self, node: &Client) -> anyhow::Result<(Option<DeliveryState>, BTreeSet<Txid>)> {
+		self.check_generation_frontier().await?;
+		self.witness.record_group(&self.db, &self.freeze_set).await?;
+		self.check_generation_frontier().await?;
+		let mut confirmed = Vec::new();
+		let mut pending = BTreeSet::new();
+		for version in &self.versions {
+			let txid = version.tx.compute_txid();
+			match bcd::tx_status(node, txid).await? {
+				TxStatus::Confirmed(block) => confirmed.push((version, block)),
+				TxStatus::Mempool => { pending.insert(txid); },
+				TxStatus::NotFound => {},
+			}
+			ensure!(version.recorded_confirmation.is_none() || confirmed.iter().any(|(v,b)|
+				v.tx.compute_txid() == txid && Some(*b) == version.recorded_confirmation),
+				"recorded direct confirmation is absent or different on the active chain");
+		}
+		ensure!(confirmed.len() <= 1, "multiple physical carrier versions are confirmed");
+		if let Some((winner, block)) = confirmed.into_iter().next() {
+			self.db.confirm_direct_delivery(&self.freeze_set, winner, block).await?;
+			return Ok((Some(DeliveryState::Confirmed { txid: winner.tx.compute_txid(), block }), pending));
+		}
+		Ok((None, pending))
 	}
 }

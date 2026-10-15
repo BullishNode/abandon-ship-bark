@@ -24,6 +24,8 @@ pub(crate) struct StoredCarrier {
 	pub recorded_confirmation: Option<BlockRef>,
 	pub allocation_hash: sha256::Hash,
 	pub carrier_hash: sha256::Hash,
+	pub remaining_rows: usize,
+	pub remaining_bytes: usize,
 }
 
 impl Db {
@@ -99,6 +101,9 @@ impl Db {
 					usize::try_from(root_size.get::<_, i64>("bytes")).ok()?)).is_some_and(|n| n <= limits.max_serialized_bytes),
 				"direct delivery backing is missing or exceeds byte budget");
 			let mut server_pubkey = None;
+			let remaining_rows = limits.max_rows - count - versions - retirement.len();
+			let remaining_bytes = limits.max_serialized_bytes - allocation_bytes - carrier_bytes -
+				usize::try_from(root_size.get::<_, i64>("bytes"))?;
 			let mut backing_amount = Amount::ZERO;
 			for row in t.query("SELECT vtxo_id,vtxo,server_pubkey,amount FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id", &[&root_ids]).await? {
 				let root: ServerVtxo = ServerVtxo::deserialize(&row.get::<_, Vec<u8>>("vtxo"))?;
@@ -172,7 +177,8 @@ impl Db {
 				ensure!(generation > 0, "invalid direct carrier generation");
 				let carrier_hash = sha256::Hash::hash(row.get::<_, String>("witness").as_bytes());
 				result.push(StoredCarrier { tx, bytes, fee_inputs, generation, server_pubkey, allocation_hash, carrier_hash,
-					miner_fee: Amount::from_sat(u64::try_from(row.get::<_, i64>("miner_fee_sat"))?), recorded_confirmation });
+					miner_fee: Amount::from_sat(u64::try_from(row.get::<_, i64>("miner_fee_sat"))?), recorded_confirmation,
+					remaining_rows, remaining_bytes });
 			}
 			Ok(result)
 		}).await

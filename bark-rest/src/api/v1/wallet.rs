@@ -15,7 +15,7 @@ use ark::VtxoId;
 use ark::lightning::{Bolt11Invoice, Offer};
 use ark::ProtocolEncoding;
 
-use bark::{ImportVtxoError, LightningSendOptions};
+use bark::ImportVtxoError;
 use bark::lnurllib::lightning_address::LightningAddress;
 use bark::lnurllib::lnurl::LnUrl;
 use bark::payment_request::ArkAddressType;
@@ -778,8 +778,9 @@ pub async fn send(
 	let wallet = state.require_wallet()?;
 
 	let amount = body.amount_sat.map(|a| Amount::from_sat(a));
-	let opts = LightningSendOptions::default()
-		.retry_for(body.retry_for_secs.map(Duration::from_secs));
+	let opts = state.lightning_send_options(
+		body.retry_for_secs.map(Duration::from_secs), body.require_lnurl_metadata,
+	);
 
 	match ArkAddressType::from_str(&body.destination) {
 		Ok(ArkAddressType::Bark(addr)) => {

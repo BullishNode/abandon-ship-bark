@@ -429,6 +429,10 @@ pub struct SendRequest {
 	/// default when empty.
 	#[serde(default)]
 	pub retry_for_secs: Option<u64>,
+	/// Require LNURL invoice metadata, recipient callback and amount binding.
+	/// Omitted preserves the generic LNURL compatibility policy.
+	#[serde(default)]
+	pub require_lnurl_metadata: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -578,6 +582,10 @@ pub struct LightningPayRequest {
 	/// the server's maximum. The server picks its default when empty.
 	#[serde(default)]
 	pub retry_for_secs: Option<u64>,
+	/// Require LNURL invoice metadata, recipient callback and amount binding.
+	/// Omitted preserves the generic LNURL compatibility policy.
+	#[serde(default)]
+	pub require_lnurl_metadata: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -931,6 +939,33 @@ mod invoice_description_hash_tests {
 			assert!(serde_json::from_value::<LightningInvoiceForAddressRequest>(
 				json!({"amount_sat": 330, "address": "opaque fixture", "description_hash": hash}),
 			).is_err());
+		}
+	}
+}
+
+#[cfg(test)]
+mod strict_lnurl_payer_optin_tests {
+	use super::{LightningPayRequest, SendRequest};
+	use serde_json::json;
+
+	#[test]
+	fn both_payer_dtos_preserve_default_and_explicit_strict_optin() {
+		for strict in [None, Some(false), Some(true)] {
+			let mut request = json!({"destination": "alice@example.test", "amount_sat": 1000});
+			if let Some(strict) = strict { request["require_lnurl_metadata"] = json!(strict); }
+			let send: SendRequest = serde_json::from_value(request.clone()).unwrap();
+			let pay: LightningPayRequest = serde_json::from_value(request).unwrap();
+			assert_eq!(send.require_lnurl_metadata, strict.unwrap_or(false));
+			assert_eq!(pay.require_lnurl_metadata, strict.unwrap_or(false));
+		}
+	}
+
+	#[test]
+	fn both_payer_dtos_refuse_non_boolean_strict_optin() {
+		for strict in [json!(null), json!("true"), json!(1), json!({}), json!([])] {
+			let request = json!({"destination": "alice@example.test", "amount_sat": 1000, "require_lnurl_metadata": strict});
+			assert!(serde_json::from_value::<SendRequest>(request.clone()).is_err());
+			assert!(serde_json::from_value::<LightningPayRequest>(request).is_err());
 		}
 	}
 }

@@ -124,6 +124,7 @@ async fn pay_with_retry_for() {
 		amount_sat: None,
 		comment: None,
 		retry_for_secs: Some(max + 1),
+		require_lnurl_metadata: false,
 	}).await.expect("lightning pay");
 
 	let send_invoice = lightning.external.invoice(Some(btc(0.1)), "send", "send").await;

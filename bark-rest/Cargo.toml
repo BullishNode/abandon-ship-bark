@@ -35,6 +35,8 @@ tracing.workspace = true
 tower.workspace = true
 log.workspace = true
 parking_lot.workspace = true
+# Exact existing lnurl transport package; no dependency version upgrade.
+reqwest-lnurl = { package = "reqwest", version = "=0.12.28", default-features = false, features = ["rustls-tls"] }
 subtle.workspace = true
 
 axum = { version = "0.8.4", features = ["macros", "tokio", "http2", "query", "json", "ws"], default-features = false }

@@ -182,6 +182,7 @@ pub struct ServerState {
 	wallet: parking_lot::RwLock<Option<ServerWallet>>,
 	shutdown: CancellationToken,
 	auth_token: Option<AuthToken>,
+	lnurl_root_ca_pem: Option<Vec<u8>>,
 
 	/// A hook to be called when a wallet is created, returning a
 	/// [Wallet] to be added to the server state
@@ -223,6 +224,7 @@ pub struct ServerState {
 pub struct ServerStateBuilder {
 	wallet: Option<Wallet>,
 	auth_token: Option<AuthToken>,
+	lnurl_root_ca_pem: Option<Vec<u8>>,
 	on_wallet_create: Option<Box<OnWalletCreate>>,
 	on_wallet_delete: Option<Box<OnWalletDelete>>,
 	on_get_mnemonic: Option<Box<OnGetMnemonic>>,
@@ -235,6 +237,7 @@ impl ServerStateBuilder {
 		Self {
 			wallet: None,
 			auth_token: None,
+			lnurl_root_ca_pem: None,
 			on_wallet_create: None,
 			on_wallet_delete: None,
 			on_get_mnemonic: None,
@@ -251,6 +254,13 @@ impl ServerStateBuilder {
 	pub fn auth_token(mut self, token: impl Into<Option<AuthToken>>) -> Self {
 		self.auth_token = token.into();
 		self
+	}
+
+	/// Operator-provisioned public roots, never supplied by a payment request.
+	pub fn lnurl_root_ca_pem(mut self, pem: Option<Vec<u8>>) -> anyhow::Result<Self> {
+		if let Some(pem) = pem.as_ref() { config::validate_lnurl_root_ca_pem(pem)?; }
+		self.lnurl_root_ca_pem = pem;
+		Ok(self)
 	}
 
 	pub fn on_wallet_create(mut self, hook: impl Into<Option<Box<OnWalletCreate>>>) -> Self {
@@ -283,6 +293,7 @@ impl ServerStateBuilder {
 			wallet: parking_lot::RwLock::new(wallet_opt),
 			shutdown: shutdown,
 			auth_token: self.auth_token,
+			lnurl_root_ca_pem: self.lnurl_root_ca_pem,
 			on_wallet_create: self.on_wallet_create,
 			on_wallet_delete: self.on_wallet_delete,
 			on_get_mnemonic: self.on_get_mnemonic,
@@ -303,6 +314,19 @@ impl Default for ServerStateBuilder {
 impl ServerState {
 	pub fn builder() -> ServerStateBuilder {
 		ServerStateBuilder::new()
+	}
+
+	pub(crate) fn lightning_send_options(
+		&self, retry_for: Option<std::time::Duration>, require_metadata: bool,
+	) -> bark::LightningSendOptions {
+		let opts = bark::LightningSendOptions::default()
+			.retry_for(retry_for).require_lnurl_metadata(require_metadata);
+		if require_metadata {
+			if let Some(pem) = self.lnurl_root_ca_pem.as_ref() {
+				return opts.lnurl_root_ca_pem(pem.clone());
+			}
+		}
+		opts
 	}
 
 	pub fn require_wallet(&self) -> Result<Wallet, ErrorResponse> {
@@ -434,3 +458,32 @@ impl RestServer {
 	)
 )]
 pub async fn ping() -> &'static str { "pong" }
+
+#[cfg(test)]
+mod lnurl_operator_root_tests {
+	use super::*;
+
+	#[test]
+	fn configured_root_applies_only_to_explicit_strict_payers() {
+		let pem = include_bytes!("../tests/fixtures/isrg-root-x1.pem").to_vec();
+		let state = ServerState::builder().lnurl_root_ca_pem(Some(pem.clone())).unwrap()
+			.build(CancellationToken::new());
+		let retry = Some(std::time::Duration::from_secs(7));
+		let generic = state.lightning_send_options(retry, false);
+		assert!(!generic.require_lnurl_metadata);
+		assert!(generic.lnurl_root_ca_pem.is_none());
+		assert_eq!(generic.retry_for, retry);
+		let strict = state.lightning_send_options(retry, true);
+		assert!(strict.require_lnurl_metadata);
+		assert_eq!(strict.lnurl_root_ca_pem, Some(pem));
+		assert_eq!(strict.retry_for, retry);
+	}
+
+	#[test]
+	fn default_state_has_no_extra_trust_and_builder_refuses_bad_roots() {
+		let state = ServerState::builder().build(CancellationToken::new());
+		assert!(state.lightning_send_options(None, true).lnurl_root_ca_pem.is_none());
+		assert!(ServerState::builder().lnurl_root_ca_pem(Some(b"invalid".to_vec())).is_err());
+		assert!(ServerState::builder().lnurl_root_ca_pem(Some(vec![0; 65537])).is_err());
+	}
+}

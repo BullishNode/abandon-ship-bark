@@ -10,7 +10,6 @@ use anyhow::Context;
 use utoipa::OpenApi;
 
 use ark::lightning::Offer;
-use bark::LightningSendOptions;
 use bark::lightning_invoice::Bolt11Invoice;
 use bark::lnurllib::lightning_address::LightningAddress;
 use bark::lnurllib::lnurl::LnUrl;
@@ -307,8 +306,9 @@ pub async fn pay(
 	let wallet = state.require_wallet()?;
 
 	let amount = body.amount_sat.map(|a| Amount::from_sat(a));
-	let opts = LightningSendOptions::default()
-		.retry_for(body.retry_for_secs.map(Duration::from_secs));
+	let opts = state.lightning_send_options(
+		body.retry_for_secs.map(Duration::from_secs), body.require_lnurl_metadata,
+	);
 
 	let invoice = if let Ok(invoice) = Bolt11Invoice::from_str(&body.destination) {
 		if body.comment.is_some() {

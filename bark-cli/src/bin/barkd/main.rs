@@ -112,6 +112,11 @@ struct Cli {
 	#[arg(long, env = "BARKD_ALLOWED_ORIGINS", value_delimiter = ',')]
 	allowed_origins: Vec<String>,
 
+	/// Additional public root CA PEM for explicitly strict LNURL payers.
+	/// Read once at startup; payment requests cannot override this trust.
+	#[arg(long, env = "BARKD_LNURL_ROOT_CA_PEM")]
+	lnurl_root_ca_pem: Option<PathBuf>,
+
 	/// Expose `GET /api/v1/wallet/mnemonic`, which returns the wallet's BIP-39
 	/// mnemonic phrase. Disabled by default; while disabled the endpoint
 	/// responds with 404. Pass `--expose-mnemonic` (or set
@@ -377,6 +382,7 @@ fn wallet_create_request_to_create_opts(req: CreateWalletRequest) -> anyhow::Res
 #[tokio::main]
 async fn main() -> anyhow::Result<()>{
 	let cli = Cli::parse();
+	let lnurl_root_ca_pem = bark_rest::config::read_lnurl_root_ca_pem(cli.lnurl_root_ca_pem.as_deref())?;
 
 	let datadir = PathBuf::from_str(&cli.datadir).unwrap();
 
@@ -517,7 +523,8 @@ async fn main() -> anyhow::Result<()>{
 		.auth_token(auth_token)
 		.on_wallet_create(on_wallet_create)
 		.on_wallet_delete(on_wallet_delete)
-		.on_get_mnemonic(on_get_mnemonic);
+		.on_get_mnemonic(on_get_mnemonic)
+		.lnurl_root_ca_pem(lnurl_root_ca_pem)?;
 
 	// Serve the embedded bark-web SPA from the same origin as the REST API.
 	#[cfg(feature = "barkd-web-ui")]
@@ -628,5 +635,22 @@ mod test {
 			check_remote_no_auth(addr(host), true)
 				.unwrap_or_else(|e| panic!("{host} should be allowed by the flag: {e:#}"));
 		}
+	}
+}
+
+#[cfg(test)]
+mod lnurl_operator_ca_cli_tests {
+	use super::*;
+
+	#[test]
+	fn absent_ca_preserves_default_and_operator_path_is_explicit() {
+		assert!(Cli::try_parse_from(["barkd"]).unwrap().lnurl_root_ca_pem.is_none());
+		let cli = Cli::try_parse_from(["barkd", "--lnurl-root-ca-pem", "public-root.pem"]).unwrap();
+		assert_eq!(cli.lnurl_root_ca_pem, Some(PathBuf::from("public-root.pem")));
+	}
+
+	#[test]
+	fn ca_flag_requires_a_path() {
+		assert!(Cli::try_parse_from(["barkd", "--lnurl-root-ca-pem"]).is_err());
 	}
 }

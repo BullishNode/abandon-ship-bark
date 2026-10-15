@@ -547,6 +547,7 @@ dependencies = [
  "futures",
  "log",
  "parking_lot",
+ "reqwest 0.12.28",
  "rust-embed",
  "serde",
  "serde_json",

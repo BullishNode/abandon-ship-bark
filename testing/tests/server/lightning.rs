@@ -808,8 +808,11 @@ impl ParkedReceive {
 				Err(status) => {
 					assert!(tip <= self.htlc_recv_expiry,
 						"revoke refused after the HTLC-recv vtxos expired: {status:?}");
-					assert!(status.message().contains("already committed"),
-						"unexpected refusal: {status:?}");
+					assert_eq!(status.code(), tonic::Code::InvalidArgument);
+					assert_eq!(status.message(), format!(
+						"This lightning payment is not eligible for revocation yet: the recipient can claim until height {}",
+						self.htlc_recv_expiry,
+					));
 				},
 			}
 			ctx.generate_blocks_unsynced(1).await;

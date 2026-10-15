@@ -16,6 +16,7 @@ use tokio::sync::broadcast;
 use bitcoin::Amount;
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::PublicKey;
+use lightning_invoice::{Bolt11InvoiceDescription, Bolt11InvoiceDescriptionRef};
 use tracing::{error, info, trace, warn};
 
 use ark::{Vtxo, VtxoId, VtxoPolicy, VtxoRequest, ServerVtxo};
@@ -736,7 +737,10 @@ impl Server {
 		min_cltv_delta: BlockDelta,
 		mailbox_id: Option<ark::mailbox::MailboxIdentifier>,
 		description: Option<String>,
+		description_hash: Option<Vec<u8>>,
 	) -> anyhow::Result<protos::StartLightningReceiveResponse> {
+		let description = node_manager::parse_invoice_description(description, description_hash)
+			.badarg("invalid invoice description")?;
 		info!("Starting bolt11 board with payment_hash: {}", payment_hash.as_hex());
 
 		check_max_amount("lightning receive", amount, self.config.max_ln_receive_amount)?;
@@ -759,13 +763,6 @@ impl Server {
 
 		if amount == Amount::ZERO {
 			return badarg!("Cannot create invoice for 0 sats (this would create an explicit 0 sat invoice, not an any-amount invoice)");
-		}
-
-		// Pre-check the description so we reject invalid input before reaching cln.
-		if let Some(desc) = description.as_ref() {
-			if let Err(e) = lightning_invoice::Description::new(desc.clone()) {
-				return badarg!("invalid invoice description: {}", e);
-			}
 		}
 
 		if min_cltv_delta > self.config.max_user_invoice_cltv_delta {
@@ -792,6 +789,11 @@ impl Server {
 		if let Some(subscription) = subscription {
 			match subscription.status {
 				LightningHtlcSubscriptionStatus::Created => {
+					if let Some(Bolt11InvoiceDescription::Hash(expected)) = description.as_ref() {
+						if !matches!(subscription.invoice.description(), Bolt11InvoiceDescriptionRef::Hash(actual) if actual.0 == expected.0) {
+							return badarg!("description_hash does not match the existing invoice");
+						}
+					}
 					trace!("Found existing created subscription, returning invoice: {}",
 						subscription.invoice.to_string(),
 					);

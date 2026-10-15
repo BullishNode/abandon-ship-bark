@@ -9,8 +9,9 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::Context;
-use bitcoin::{Amount, SignedAmount};
-use lightning_invoice::Bolt11Invoice;
+use bitcoin::{Amount, Network, SignedAmount};
+use bitcoin::hashes::{sha256, Hash};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef, Currency};
 use log::{debug, error, info, trace, warn};
 use rand::seq::IteratorRandom;
 
@@ -333,9 +334,13 @@ pub(crate) async fn start_lightning_receive(
 	wallet: &Wallet,
 	amount: Amount,
 	description: Option<String>,
+	description_hash: Option<sha256::Hash>,
 	token: Option<String>,
 	claim_destination: Option<ark::Address>,
 ) -> anyhow::Result<LightningReceive> {
+	if description.is_some() && description_hash.is_some() {
+		bail!("description and description_hash are mutually exclusive");
+	}
 	if amount == Amount::ZERO {
 		bail!("Cannot create invoice for 0 sats (this would create an explicit 0 sat invoice, not an any-amount invoice)");
 	}
@@ -382,6 +387,7 @@ pub(crate) async fn start_lightning_receive(
 		min_cltv_delta: requested_min_cltv_delta.into(),
 		mailbox_id: Some(mailbox_id.serialize()),
 		description,
+		description_hash: description_hash.map(|h| h.to_byte_array().to_vec()),
 	};
 
 	let (_, key_index) = wallet.derive_store_next_keypair().await?;
@@ -392,6 +398,18 @@ pub(crate) async fn start_lightning_receive(
 	let invoice = Bolt11Invoice::from_str(&resp.bolt11)
 		.context("invalid bolt11 invoice returned by Ark server")?;
 	validate_bolt11_payment_hash(&invoice, payment_hash)?;
+	let requested_msat = amount.to_sat().checked_mul(1_000).context("invoice amount overflows millisatoshis")?;
+	if invoice.amount_milli_satoshis() != Some(requested_msat) {
+		bail!("invoice amount does not match the requested amount");
+	}
+	if invoice.currency() != invoice_currency_for_network(wallet.network().await?) {
+		bail!("invoice currency does not match the wallet network");
+	}
+	if let Some(expected) = description_hash {
+		if !matches!(invoice.description(), Bolt11InvoiceDescriptionRef::Hash(actual) if actual.0 == expected) {
+			bail!("invoice description hash does not match the requested description_hash");
+		}
+	}
 
 	Ok(LightningReceive {
 		invoice,
@@ -1049,5 +1067,30 @@ mod tests {
 			BlockDelta::new(144), BlockDelta::new(40), &config,
 		).unwrap();
 		assert!(htlc_recv_tree_blocks_needed(&config) < needed);
+	}
+}
+
+// CLN uses the testnet BOLT11 currency for signet and testnet4. Do not infer
+// a separate invoice prefix from the wallet's Bitcoin chain identity.
+fn invoice_currency_for_network(network: Network) -> Currency {
+	match network {
+		Network::Signet | Network::Testnet4 => Currency::BitcoinTestnet,
+		network => Currency::from(network),
+	}
+}
+
+#[cfg(test)]
+mod invoice_response_network_tests {
+	use super::invoice_currency_for_network;
+	use bitcoin::Network;
+	use lightning_invoice::Currency;
+
+	#[test]
+	fn invoice_network_uses_cln_testnet_currency_for_signet() {
+		assert_eq!(invoice_currency_for_network(Network::Signet), Currency::BitcoinTestnet);
+		assert_eq!(invoice_currency_for_network(Network::Testnet4), Currency::BitcoinTestnet);
+		assert_eq!(invoice_currency_for_network(Network::Testnet), Currency::BitcoinTestnet);
+		assert_eq!(invoice_currency_for_network(Network::Bitcoin), Currency::Bitcoin);
+		assert_eq!(invoice_currency_for_network(Network::Regtest), Currency::Regtest);
 	}
 }

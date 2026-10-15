@@ -59,6 +59,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 	request_body = bark_json::web::LightningInvoiceRequest,
 	responses(
 		(status = 200, description = "Returns the created invoice", body = bark_json::cli::InvoiceInfo),
+		(status = 400, description = "Ambiguous invoice description", body = error::BadRequestError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
 	description = "Generates a new BOLT11 invoice for the specified amount via the Ark server, \
@@ -70,10 +71,17 @@ pub async fn generate_invoice(
 	State(state): State<Arc<ServerState>>,
 	Json(body): Json<bark_json::web::LightningInvoiceRequest>,
 ) -> HandlerResult<Json<bark_json::cli::InvoiceInfo>> {
+	if body.description.is_some() && body.description_hash.is_some() {
+		badarg!("description and description_hash are mutually exclusive");
+	}
 	let wallet = state.require_wallet()?;
 
 	let amount = Amount::from_sat(body.amount_sat);
-	let invoice = wallet.bolt11_invoice(amount, body.description, body.token).await
+	let invoice = if let Some(hash) = body.description_hash {
+		wallet.bolt11_invoice_with_description_hash(amount, hash, body.token).await
+	} else {
+		wallet.bolt11_invoice(amount, body.description, body.token).await
+	}
 		.context("Failed to create invoice")?;
 
 	Ok(axum::Json(bark_json::cli::InvoiceInfo {
@@ -100,6 +108,9 @@ pub async fn generate_invoice_for_address(
 	State(state): State<Arc<ServerState>>,
 	Json(body): Json<bark_json::web::LightningInvoiceForAddressRequest>,
 ) -> HandlerResult<Json<bark_json::cli::InvoiceInfo>> {
+	if body.description.is_some() && body.description_hash.is_some() {
+		badarg!("description and description_hash are mutually exclusive");
+	}
 	let wallet = state.require_wallet()?;
 
 	let amount = Amount::from_sat(body.amount_sat);
@@ -107,7 +118,11 @@ pub async fn generate_invoice_for_address(
 		.badarg("address is not a valid Ark address")?;
 	wallet.validate_arkoor_address(&address).await
 		.badarg("invalid arkoor address")?;
-	let invoice = wallet.bolt11_invoice_for_address(amount, address, body.description, None).await
+	let invoice = if let Some(hash) = body.description_hash {
+		wallet.bolt11_invoice_for_address_with_description_hash(amount, address, hash, None).await
+	} else {
+		wallet.bolt11_invoice_for_address(amount, address, body.description, None).await
+	}
 		.context("Failed to create invoice for address")?;
 
 	Ok(axum::Json(bark_json::cli::InvoiceInfo {
@@ -319,4 +334,32 @@ pub async fn pay(
 		message: "Payment initiated successfully".to_string(),
 		payment_hash: Some(invoice.payment_hash()),
 	}))
+}
+
+#[cfg(test)]
+mod invoice_description_tests {
+	use std::sync::Arc;
+
+	use axum::{extract::State, Json};
+	use bitcoin::hashes::{sha256, Hash};
+	use tokio_util::sync::CancellationToken;
+
+	use super::{generate_invoice, generate_invoice_for_address};
+	use crate::{error::ErrorResponse, ServerState};
+
+	#[tokio::test]
+	async fn ambiguous_invoice_description_refuses_before_wallet_access() {
+		let state = Arc::new(ServerState::builder().build(CancellationToken::new()));
+		let hash = Some(sha256::Hash::from_byte_array([7; 32]));
+		let request = bark_json::web::LightningInvoiceRequest {
+			amount_sat: 330, description: Some("memo".into()), description_hash: hash, token: None,
+		};
+		let err = generate_invoice(State(state.clone()), Json(request)).await.unwrap_err();
+		assert!(matches!(err, ErrorResponse::BadRequest(e) if e.message.contains("mutually exclusive")));
+		let request = bark_json::web::LightningInvoiceForAddressRequest {
+			amount_sat: 330, address: "not parsed".into(), description: Some("memo".into()), description_hash: hash,
+		};
+		let err = generate_invoice_for_address(State(state), Json(request)).await.unwrap_err();
+		assert!(matches!(err, ErrorResponse::BadRequest(e) if e.message.contains("mutually exclusive")));
+	}
 }

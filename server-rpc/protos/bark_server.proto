@@ -410,6 +410,8 @@ message StartLightningReceiveRequest {
 	uint32 min_cltv_delta = 3;
 	optional bytes mailbox_id = 4;
 	optional string description = 5;
+	// Exact SHA-256 commitment, mutually exclusive with description.
+	optional bytes description_hash = 6;
 }
 
 message StartLightningReceiveResponse {

@@ -198,3 +198,25 @@ pub trait RequestExt<T>: BorrowMut<tonic::Request<T>> {
 	}
 }
 impl<T> RequestExt<T> for tonic::Request<T> {}
+
+#[cfg(test)]
+mod invoice_description_wire_tests {
+	use prost::Message;
+	use super::protos::StartLightningReceiveRequest;
+
+	#[test]
+	fn invoice_description_hash_uses_additive_wire_field_six() {
+		let mut wire = vec![0x0a, 32];
+		wire.extend([7; 32]);
+		wire.extend([0x10, 0x90, 0x4e, 0x18, 18, 0x32, 32]);
+		wire.extend([9; 32]);
+		let request = StartLightningReceiveRequest::decode(wire.as_slice()).unwrap();
+		assert_eq!(request.payment_hash, vec![7; 32]);
+		assert_eq!(request.amount_sat, 10_000);
+		assert_eq!(request.min_cltv_delta, 18);
+		assert_eq!(request.description_hash, Some(vec![9; 32]));
+		assert_eq!(request.mailbox_id, None);
+		assert_eq!(request.description, None);
+		assert_eq!(request.encode_to_vec(), wire);
+	}
+}

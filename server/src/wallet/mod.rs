@@ -377,8 +377,8 @@ impl PersistedWallet {
 			) {
 				Ok(candidate) => candidate,
 				Err(error) => {
-					if !matches!(error.downcast_ref::<bdk_wallet::CreateTxError>(),
-						Some(bdk_wallet::CreateTxError::CoinSelection(_))) { return Err(error); }
+					if !matches!(error.downcast_ref::<bdk_wallet::error::CreateTxError>(),
+						Some(bdk_wallet::error::CreateTxError::CoinSelection(_))) { return Err(error); }
 					last_error = Some(error);
 					continue;
 				},

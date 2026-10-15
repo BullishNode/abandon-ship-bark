@@ -1662,8 +1662,7 @@ impl Wallet {
 		&self,
 		queries: &[(VtxoId, &Keypair)],
 	) -> anyhow::Result<HashMap<VtxoId, VtxoSpendState>> {
-		ensure!(queries.iter().map(|(id, _)| *id).collect::<HashSet<_>>().len() == queries.len(),
-			"duplicate VTXO ids in status query");
+		let queries = unique_status_queries(queries)?;
 		let mut ret = HashMap::with_capacity(queries.len());
 		if queries.is_empty() {
 			return Ok(ret);
@@ -2690,6 +2689,21 @@ impl std::ops::Drop for WalletInner {
 	}
 }
 
+/// Mailbox recovery may repeat the same coin. Keep its first owner proof and
+/// request order, while refusing contradictory keys for one local identity.
+fn unique_status_queries<'a>(queries: &[(VtxoId, &'a Keypair)]) -> anyhow::Result<Vec<(VtxoId, &'a Keypair)>> {
+	let mut seen = HashMap::new();
+	let mut unique = Vec::with_capacity(queries.len());
+	for &(id, keypair) in queries {
+		if let Some(first) = seen.insert(id, keypair.public_key()) {
+			ensure!(first == keypair.public_key(), "conflicting owner keys for status query {id}");
+			continue;
+		}
+		unique.push((id, keypair));
+	}
+	Ok(unique)
+}
+
 fn checked_batch_spend_states(
 	requested: &[VtxoId], resp: &protos::GetVtxosStatusByIdsResponse,
 ) -> anyhow::Result<HashMap<VtxoId, VtxoSpendState>> {
@@ -2875,4 +2889,17 @@ mod batch_status_tests {
 		assert_eq!(ret.len(), 1); assert_eq!(ret.get(&a), Some(&VtxoSpendState::Spent)); assert!(!ret.contains_key(&b));
 		assert!(checked_batch_spend_states(&[a], &response(&[], &[a])).unwrap().is_empty());
 	}
+	#[test]
+	fn repeated_query_ids_keep_first_order_and_matching_owner_proof() {
+		use bitcoin::secp256k1::{Secp256k1, SecretKey};
+		let secp = Secp256k1::new();
+		let first = Keypair::from_secret_key(&secp, &SecretKey::from_slice(&[7; 32]).unwrap());
+		let other = Keypair::from_secret_key(&secp, &SecretKey::from_slice(&[8; 32]).unwrap());
+		let a = id(1); let b = id(2);
+		let queries = unique_status_queries(&[(b, &first), (a, &first), (b, &first), (a, &first)]).unwrap();
+		assert_eq!(queries.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![b, a]);
+		assert!(std::ptr::eq(queries[0].1, &first));
+		assert!(unique_status_queries(&[(a, &first), (a, &other)]).is_err());
+	}
+
 }

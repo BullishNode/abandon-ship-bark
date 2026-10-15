@@ -151,8 +151,13 @@ impl Server {
 							ensure!(sub.accepted_at.is_some_and(|at| at < chrono::Local::now() - self.config.receive_htlc_forward_timeout)
 								&& sub.lowest_incoming_htlc_expiry.is_some_and(|height| tip.height > height),
 								"expiry intra-Ark receive setup timeout or claim deadline has not passed");
-							ensure!(t.cancel_revocable_htlc_subscription(hash, tip.height).await?
-								== Some(LightningHtlcSubscriptionStatus::Canceled), "expiry receive cancellation lost its source predicate");
+							let htlcs = crate::database::htlc_vtxo::get_htlc_vtxo_states_by_payment_hash(&t, hash).await?;
+							let watchman_tip = t.get_highest_block(crate::database::block::BlockTable::Watchmand).await?
+								.map(|block| block.height);
+							let expired = crate::ln::htlc_recvs_expired(&htlcs, tip.height, watchman_tip);
+							ensure!(t.cancel_revocable_htlc_subscription(hash, expired).await?
+								== Some((LightningHtlcSubscriptionStatus::Accepted, false)),
+								"expiry receive cancellation lost its source predicate");
 							for attempt in attempts.iter().filter(|a| !a.status.is_final()) {
 								ensure!(t.update_lightning_payment_attempt_status(attempt, LightningPaymentStatus::Failed,
 									Some("htlc vtxo setup timed out")).await?.is_some(), "expiry intra-Ark cancellation lost its attempt predicate");

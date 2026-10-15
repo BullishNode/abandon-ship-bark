@@ -12,7 +12,7 @@ use bitcoin::secp256k1::PublicKey;
 use chrono::{DateTime, Local};
 use lightning_invoice::Bolt11Invoice;
 use tracing::{debug, trace, warn};
-use ark::{ProtocolEncoding, Vtxo, VtxoId};
+use ark::VtxoId;
 use ark::lightning::{Invoice, PaymentHash, Preimage};
 use ark::mailbox::MailboxIdentifier;
 use bitcoin_ext::{AmountExt, BlockHeight};

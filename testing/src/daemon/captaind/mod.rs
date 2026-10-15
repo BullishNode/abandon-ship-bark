@@ -21,7 +21,6 @@ use server_log::{parse_record, FinishedPoolIssuance, ParsedRecord, LogMsg, Synce
 use server_rpc::{self as rpc, protos};
 use server::database::Db;
 pub use server::config::{self, Config};
-use server::database::Db;
 use server::database::htlc_vtxo::{self, HtlcVtxo};
 
 use crate::daemon::captaind::proxy::{ArkRpcProxy, ArkRpcProxyServer, MailboxRpcProxy};

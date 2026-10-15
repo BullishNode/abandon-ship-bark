@@ -1358,7 +1358,7 @@ mod tests {
 	use ark::test_util::VTXO_VECTORS;
 
 	use crate::database::htlc_vtxo::Htlc;
-	use crate::database::model::{SpendState, VtxoState};
+	use crate::database::{SpendState, VtxoState};
 	use super::*;
 
 	/// Typical config delta used in tests.

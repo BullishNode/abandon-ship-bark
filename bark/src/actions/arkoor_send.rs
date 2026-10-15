@@ -423,7 +423,15 @@ async fn remove_settled_outputs(
 		match run_registration(wallet, std::slice::from_ref(vtxo), &[]).await {
 			Ok(()) => remaining.push(vtxo.clone()),
 			Err(AdvanceError::Server(status)) if status.is_expiry_settled() => {
-				let stored = wallet.fetch_vtxo(vtxo.id()).await?;
+				let stored = if change { wallet.fetch_vtxo(vtxo.id()).await? } else {
+					// The recipient's derivation does not belong in the sender's
+					// keystore. Authenticate against the saved payment and chain below.
+					let (mut srv, _) = wallet.require_server().await?;
+					let response = srv.client.get_vtxo(protos::GetVtxoRequest {
+						vtxo_id: vtxo.id().to_bytes().to_vec(),
+					}).await.map_err(AdvanceError::Server)?.into_inner();
+					Vtxo::<Full>::deserialize(&response.vtxo).context("invalid settled destination VTXO")?
+				};
 				if stored.to_bare() != vtxo.to_bare() {
 					return Err(anyhow!("settled VTXO differs from saved payment").into());
 				}

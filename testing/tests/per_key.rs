@@ -428,3 +428,6 @@ async fn per_key_fresh_seed_key50_preserves_entitlements_and_original_proof() {
 	assert_eq!(restored.peek_next_keypair().await.unwrap().1, 52, "idempotent recovery never unissues the newly allocated51");
 	assert_eq!(restored.spendable_vtxos().await.unwrap().iter().map(|v| v.id()).collect::<std::collections::BTreeSet<_>>(), expected_ids);
 }
+
+#[path = "per_key_historical.rs"]
+mod historical;

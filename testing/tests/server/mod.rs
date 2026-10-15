@@ -5,7 +5,6 @@ mod forfeit;
 mod fallback;
 mod fallback_grants;
 mod fixtures;
-mod forfeit;
 mod lightning;
 mod mailbox;
 mod nursery;

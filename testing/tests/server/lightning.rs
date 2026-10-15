@@ -2264,6 +2264,7 @@ async fn intra_ark_payment_refused_while_same_hash_send_is_open() {
 		min_cltv_delta: 6,
 		mailbox_id: None,
 		description: None,
+		description_hash: None,
 	}).await.expect("receive should be allowed while H is unsettled").into_inner().bolt11;
 
 	let err = payer.try_pay_lightning(&receive_invoice, None, false).await
@@ -3257,6 +3258,7 @@ async fn self_payment_claim_rejected_after_sender_onchain_refund() {
 		min_cltv_delta: 18,
 		mailbox_id: None,
 		description: None,
+		description_hash: None,
 	}).await.unwrap().into_inner().bolt11;
 
 	let sender_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
@@ -3281,6 +3283,7 @@ async fn self_payment_claim_rejected_after_sender_onchain_refund() {
 	let receiver_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 	let mut grants = rpc.prepare_lightning_receive_claim(
 		protos::PrepareLightningReceiveClaimRequest {
+			origin: None,
 			payment_hash: payment_hash.to_vec(),
 			user_pubkey: receiver_key.public_key().serialize().to_vec(),
 			htlc_recv_expiry: send_expiry.saturating_sub(srv.config().htlc_expiry_delta).into(),

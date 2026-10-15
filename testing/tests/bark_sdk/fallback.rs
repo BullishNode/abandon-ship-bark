@@ -42,6 +42,7 @@ impl bark::onchain::OnchainWalletTrait for ExternalOnchain {
 	async fn evict_tx(&mut self, txid: Txid) -> anyhow::Result<()> { self.0.evict_tx(txid).await }
 	async fn prepare_tx(&mut self, destinations: &[(Address, bitcoin::Amount)], rate: FeeRate) -> anyhow::Result<bitcoin::Psbt> { self.0.prepare_tx(destinations, rate).await }
 	async fn prepare_drain_tx(&mut self, address: Address, rate: FeeRate) -> anyhow::Result<bitcoin::Psbt> { self.0.prepare_drain_tx(address, rate).await }
+	async fn sign_psbt(&mut self, psbt: bitcoin::Psbt) -> anyhow::Result<bitcoin::Psbt> { self.0.sign_psbt(psbt).await }
 	async fn finish_psbt(&mut self, psbt: bitcoin::Psbt) -> anyhow::Result<bitcoin::Psbt> { self.0.finish_psbt(psbt).await }
 	async fn make_signed_p2a_cpfp(&mut self, tx: &Transaction, fees: bark::onchain::MakeCpfpFees) -> Result<Transaction, bark::onchain::CpfpError> { self.0.make_signed_p2a_cpfp(tx, fees).await }
 	async fn store_signed_p2a_cpfp(&mut self, tx: &Transaction) -> Result<(), bark::onchain::CpfpError> { self.0.store_signed_p2a_cpfp(tx).await }

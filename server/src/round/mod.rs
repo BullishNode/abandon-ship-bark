@@ -899,6 +899,7 @@ impl CollectingPayments {
 				value: vtxos_spec.total_required_value(),
 			},
 			fee_rate: srv.fee_estimator.fast(),
+			max_fee_rate: srv.config.fee_estimator.max_fee_rate,
 			pinned_input: self.common_round_tx_input.take(),
 		}.build(&srv.rounds_wallet).await.map_err(RoundError::Recoverable)?;
 
@@ -1142,20 +1143,40 @@ impl SigningVtxoTree {
 		persist_round(&mut self, srv, &signed_vtxos).await?;
 
 		// Sign the funding tx.
-		let signed_round_tx = {
-			let mut wallet = self.rounds_wallet.lock().await;
-			self.funding_tx.sign(&mut wallet)
-				.map_err(|e| RoundError::Recoverable(e))?
-		};
+		let mut funding_wallet = self.rounds_wallet.lock().await;
+		let signed_round_tx = self.funding_tx.sign(&mut funding_wallet)
+			.map_err(|e| RoundError::Recoverable(e))?;
+		let funding_metadata = funding_wallet.staged().cloned();
 
 		// Persist the signed funding tx to the database.
 		let update = VtxoTreeUpdate::new()
 			.upsert_funding_tx(&signed_round_tx.tx);
 		let signed_tx = signed_round_tx.tx.clone();
-		srv.db.write(async |t| {
+		let published = srv.db.write(async |t| {
+			if let Some(metadata) = &funding_metadata {
+				t.store_changeset(crate::wallet::WalletKind::Rounds, metadata).await?;
+			}
 			t.execute_vtxo_tree_update(update).await?;
 			t.update_round_funding_tx(&signed_tx).await
-		}).await.map_err(|e| RoundError::Fatal(e.context("failed to persist signed funding tx")))?;
+		}).await;
+		if let Err(error) = published {
+			let outcome = srv.db.write(async |t| {
+				t.execute("LOCK TABLE round, virtual_transaction IN SHARE MODE", &[]).await?;
+				let row = t.query_opt("SELECT v.signed_tx FROM round r JOIN virtual_transaction v ON v.txid = r.funding_txid WHERE r.funding_txid = $1 AND v.signed_tx IS NOT NULL", &[&signed_tx.compute_txid().to_string()]).await?;
+				Ok(row.map(|row| row.get::<_, Vec<u8>>(0)))
+			}).await.unwrap_or_else(|error| {
+				error!("round funding commit outcome unknown; exiting: {error:#}");
+				std::process::exit(1);
+			});
+			match outcome {
+				Some(raw) if raw == bitcoin::consensus::serialize(&signed_tx) => {},
+				None => return Err(RoundError::Fatal(error.context("signed funding transaction not committed"))),
+				Some(_) => {
+					error!("round funding committed different signed bytes; exiting for reconciliation");
+					std::process::exit(1);
+				},
+			}
+		}
 
 		let finished = RoundFinished {
 			round_seq: self.round_step.round_seq(),
@@ -1165,13 +1186,11 @@ impl SigningVtxoTree {
 		};
 
 		// Persist the signed tx to BDK wallet.
-		{
-			let mut wallet_lock = self.rounds_wallet.lock().await;
-			wallet_lock.commit_tx(&signed_round_tx.tx);
-			if let Err(e) = wallet_lock.persist().await {
-				warn!("Failed to persist BDK wallet to db: {:?}", e);
-			}
+		funding_wallet.commit_tx(&signed_round_tx.tx);
+		if let Err(e) = funding_wallet.persist().await {
+			warn!("Failed to persist BDK wallet to db: {:?}", e);
 		}
+		drop(funding_wallet);
 
 		// Broadcast the transaction.
 		let confirm_target = srv.nursery_confirm_target();

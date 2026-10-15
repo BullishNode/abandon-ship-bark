@@ -213,6 +213,33 @@ Compare both fee columns for each txid; a mismatch needs investigation. This que
 alone does not prove a payout confirmed, paid the correct key holder, or contains
 no omitted obligation. Use the raw signed transaction and ownership evidence.
 
+### Read-only owning-wallet inventory
+
+`wallet-inventory` observes the public descriptor, canonical UTXOs, derivation
+positions and actual temporary input locks under the owning daemon's wallet guard.
+It does not synchronize, reveal an address, write wallet state or export signing
+keys. Query the two existing private admin endpoints separately:
+
+```sh
+captaind -C /etc/ark/captaind.toml rpc --addr 127.0.0.1:3536 wallet-inventory
+```
+
+Use the same command with watchmand's configured private admin address to read
+its source. Captaind returns only `rounds`; watchmand returns only `watchman` and
+refuses the address-revealing `WalletStatus` RPC. Each response leaves top-level `complete=false`: separate guards
+are not a globally atomic financial snapshot. Responses are bounded by row and
+serialized-byte budgets and refuse over-budget inventories without truncating.
+
+The canonical graph can omit a confirmed input after a pending spend. Public
+pending transaction and known parent bodies retain the original transaction IDs
+and prevouts with every witness removed. `signed_weight_wu` reports the stored
+transaction's original weight. Missing parents are explicit. These rows cover only
+the owning canonical wallet graph; collect nursery and round sources separately.
+An independent Core reader must check `gettxout` without mempool effects for the
+confirmed-tip treasury, then with mempool effects for immediately available funds.
+Do not count pending change beside its confirmed inputs. Native trust/maturity/lock
+flags do not subtract customer obligations or establish a fee-budget reservation.
+
 ## Start, stop, upgrades and rollback
 
 [code/owner] Run captaind and watchmand under supervised restart policies. Signal

@@ -26,5 +26,6 @@ mod mailbox;
 mod offboard;
 mod payment_request;
 mod recovery;
+mod recovery_reserve;
 mod round;
 mod vtxo_lock;

@@ -241,6 +241,11 @@ impl Daemon {
 		})
 	}
 
+	/// Observe this daemon's wallet under its existing owning guard.
+	pub(crate) async fn wallet_inventory(&self) -> anyhow::Result<server_rpc::protos::WalletInventory> {
+		self.watchman_wallet.lock().await.inventory()
+	}
+
 	pub fn watchman_handle(&self) -> &WatchmanHandle {
 		&self.watchman_handle
 	}

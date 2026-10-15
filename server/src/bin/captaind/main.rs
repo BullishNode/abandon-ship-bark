@@ -4,6 +4,7 @@ mod common;
 
 
 use std::path::PathBuf;
+use std::io::Write;
 use std::process;
 use std::str::FromStr;
 use anyhow::{bail, Context};
@@ -118,6 +119,10 @@ enum RpcCommand {
 	/// Report server wallet status
 	#[command()]
 	Wallet,
+
+	/// Read public canonical inventory from the owning daemon without wallet mutation
+	#[command()]
+	WalletInventory,
 
 	/// Start a new round
 	#[command()]
@@ -687,6 +692,49 @@ async fn run_rpc(addr: &str, cmd: RpcCommand) -> anyhow::Result<()> {
 			serde_json::to_writer_pretty(std::io::stdout(), &ret).unwrap();
 			println!("");
 		},
+		RpcCommand::WalletInventory => {
+			let mut rpc = rpc::admin::WalletAdminServiceClient::connect(endpoint)
+				.await.context("failed to connect to rpc")?;
+			let response = rpc.wallet_inventory(protos::Empty {}).await?.into_inner();
+			anyhow::ensure!(response.rounds.is_some() || response.watchman.is_some(), "owning wallet inventory absent");
+			let inventory_json = |wallet: protos::WalletInventory| {
+				let utxos = wallet.utxos.iter().map(|u| serde_json::json!({
+					"outpoint": u.outpoint, "value_sat": u.value_sat, "script_pubkey": u.script_pubkey.as_hex().to_string(),
+					"keychain": u.keychain, "derivation_index": u.derivation_index,
+					"confirmed_height_upper_bound": u.confirmed_height_upper_bound,
+					"confirmation_block_hash": u.confirmation_block_hash, "confirming_descendant_txid": u.confirming_descendant_txid,
+					"confirmation_time": u.confirmation_time,
+					"unconfirmed_first_seen": u.unconfirmed_first_seen, "unconfirmed_last_seen": u.unconfirmed_last_seen,
+					"coinbase": u.coinbase, "confirmations": u.confirmations, "mature": u.mature,
+					"trusted": u.trusted, "reserved": u.reserved,
+					"transaction_eligible": u.transaction_eligible, "confirmed_fee_eligible": u.confirmed_fee_eligible,
+				})).collect::<Vec<_>>();
+				let transaction_json = |tx: protos::WalletInventoryTransaction| serde_json::json!({
+					"txid":tx.txid,"transaction_body":tx.transaction_body.as_hex().to_string(),
+					"signed_weight_wu":tx.signed_weight_wu,"encoding":"bitcoin-stripped-body-v1",
+				});
+				serde_json::json!({
+					"wallet": wallet.wallet, "network": wallet.network, "public_descriptor": wallet.public_descriptor,
+					"tip_height": wallet.tip_height, "tip_hash": wallet.tip_hash,
+					"min_trusted_confirmations": wallet.min_trusted_confirmations,
+					"complete": wallet.complete, "reserved_outpoints": wallet.reserved_outpoints,
+					"last_revealed_index": wallet.last_revealed_index, "utxos": utxos,
+					"pending_transaction_scope":"canonical_wallet_graph_only",
+					"pending_transactions":wallet.pending_transactions.into_iter().map(transaction_json).collect::<Vec<_>>(),
+					"pending_parents":wallet.pending_parents.into_iter().map(transaction_json).collect::<Vec<_>>(),
+					"unavailable_parent_txids":wallet.unavailable_parent_txids,
+				})
+			};
+			let output = serde_json::json!({
+				"rounds": response.rounds.map(inventory_json), "watchman": response.watchman.map(inventory_json),
+				"complete": response.complete, "missing_sources": response.missing_sources,
+			});
+			let encoded = serde_json::to_vec_pretty(&output)?;
+			anyhow::ensure!(encoded.len() < 2 * 1024 * 1024, "complete wallet inventory JSON exceeds serialized byte budget");
+			std::io::stdout().write_all(&encoded)?;
+			println!("");
+		},
+
 		RpcCommand::TriggerRound => {
 			let mut rpc = rpc::admin::RoundAdminServiceClient::connect(endpoint)
 				.await.context("failed to connect to rpc")?;

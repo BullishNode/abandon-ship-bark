@@ -509,9 +509,32 @@ impl Server {
 		// nb catch the error and don't return it, as it might contain the signed offboard tx
 		let vtxo_refs = vtxos.iter().map(|v| &v.vtxo).collect::<Vec<_>>();
 		let user_fee_sat = user_fee.to_sat();
-		if let Err(e) = self.db.write(async |t| t.register_offboard(&vtxo_refs, &signed_tx, &forfeit_txs, user_fee_sat).await).await {
-			error!("Failed to register offboard {} in db: {:#}", offboard_txid, e);
-			bail!("failed to register offboard in db, please start over");
+		let funding_metadata = wallet_guard.staged().cloned();
+		if let Err(e) = self.db.write(async |t| {
+			if let Some(metadata) = &funding_metadata {
+				t.store_changeset(crate::wallet::WalletKind::Rounds, metadata).await?;
+			}
+			t.register_offboard(&vtxo_refs, &signed_tx, &forfeit_txs, user_fee_sat).await
+		}).await {
+			let outcome = self.db.write(async |t| {
+				t.execute("LOCK TABLE offboards IN SHARE MODE", &[]).await?;
+				Ok(t.query_opt("SELECT signed_tx FROM offboards WHERE txid = $1", &[&offboard_txid.to_string()]).await?
+					.map(|row| row.get::<_, Vec<u8>>(0)))
+			}).await.unwrap_or_else(|error| {
+				error!("offboard commit outcome unknown; exiting: {error:#}");
+				std::process::exit(1);
+			});
+			match outcome {
+				Some(raw) if raw == bitcoin::consensus::serialize(&signed_tx) => {},
+				None => {
+					error!("Failed to register offboard {} in db: {:#}", offboard_txid, e);
+					bail!("failed to register offboard in db, please start over");
+				},
+				Some(_) => {
+					error!("offboard committed different signed bytes; exiting for reconciliation");
+					std::process::exit(1);
+				},
+			}
 		}
 
 		// From here on the offboard is durable: even if the commit below

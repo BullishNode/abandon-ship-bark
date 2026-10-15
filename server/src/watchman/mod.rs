@@ -370,7 +370,9 @@ impl Watchman {
 		}
 
 		if !work.claims.is_empty() {
-			self.process_claims(work.claims).await?;
+			// Deadline claims retain their existing escalation; an ordinary sweep ceiling
+			// must not prevent beating a counterparty timelock.
+			self.process_claims(work.claims, None).await?;
 		}
 		if !work.progress.is_empty() {
 			self.process_progress_txs(work.progress).await?;
@@ -391,7 +393,7 @@ impl Watchman {
 		}
 
 		if !work.sweeps.is_empty() {
-			self.process_claims(work.sweeps).await?;
+			self.process_claims(work.sweeps, self.fee_estimator.max_fee_rate()).await?;
 		}
 
 		Ok(())
@@ -402,7 +404,11 @@ impl Watchman {
 	///
 	/// Filters vtxos by broadcast status (skipping those already broadcast with good feerate),
 	/// then builds and broadcasts claim txs in chunks.
-	async fn process_claims(&self, mut vtxos: Vec<ServerVtxo>) -> anyhow::Result<()> {
+	async fn process_claims(
+		&self,
+		mut vtxos: Vec<ServerVtxo>,
+		fee_ceiling: Option<FeeRate>,
+	) -> anyhow::Result<()> {
 		//TODO(stevenroose) adapt feerate to how close the deadline is
 		let min_feerate = self.fee_estimator.regular();
 
@@ -452,7 +458,7 @@ impl Watchman {
 			chunk
 		});
 		for chunk in replacements.values().map(Vec::as_slice).chain(fresh_chunks) {
-			if let Err(e) = self.build_and_broadcast_claim(chunk, feerate).await {
+			if let Err(e) = self.build_and_broadcast_claim(chunk, feerate, fee_ceiling).await {
 				slog!(ClaimChunkBroadcastFailure, error: e.to_string(),
 					vtxos: chunk.iter().map(|v| v.id()).collect(),
 				);
@@ -460,7 +466,7 @@ impl Watchman {
 				// retry each claim individually to find the culprit
 				for vtxo in chunk {
 					let slice = std::slice::from_ref(vtxo);
-					if let Err(e) = self.build_and_broadcast_claim(slice, feerate).await {
+					if let Err(e) = self.build_and_broadcast_claim(slice, feerate, fee_ceiling).await {
 						slog!(ClaimBroadcastFailure, error: e.to_string(), vtxo_id: vtxo.id());
 					}
 				}
@@ -560,15 +566,23 @@ impl Watchman {
 		&self,
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
+		fee_ceiling: Option<FeeRate>,
 	) -> anyhow::Result<()> {
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
 		let txid = tx.compute_txid();
-		bcd::broadcast_tx(&self.bitcoind, &tx).await?;
 
 		let total_output_value = tx.output.iter().map(|o| o.value).sum::<Amount>();
 		let total_input_value = vtxos.iter().map(|v| v.amount()).sum::<Amount>();
 		let fee = total_input_value.checked_sub(total_output_value)
 			.context("output larger than input amount")?;
+		if let Some(max) = fee_ceiling {
+			let limit = max.fee_wu(tx.weight()).context("signed fee ceiling overflow")?;
+			if fee > limit {
+				bail!("signed sweep fee {} exceeds configured maximum {} for weight {}",
+					fee, limit, tx.weight());
+			}
+		}
+		bcd::broadcast_tx(&self.bitcoind, &tx).await?;
 		slog!(ClaimBroadcast, txid, fee_rate, total_output_value, fee,
 			total_input_value, vtxo_ids: vtxos.iter().map(|v| v.id()).collect(),
 		);

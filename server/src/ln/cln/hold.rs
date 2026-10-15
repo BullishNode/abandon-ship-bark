@@ -556,19 +556,6 @@ impl ClnHoldProcess {
 		htlc_subscription: &LightningHtlcSubscription,
 		reason: &str,
 	) -> anyhow::Result<()> {
-		// A server that knows the preimage collects the incoming HTLCs, it
-		// never fails them back. A prepared claim is settled by the hold
-		// settler; any other receive stays open for its claim.
-		let known = self.db.read(async |t|
-			t.get_htlc_settlement_by_payment_hash(PaymentHash::from(*payment_hash)).await
-		).await?;
-		if known.is_some() {
-			debug!("Lightning htlc subscription ({}) not canceled ({}): its preimage is known.",
-				htlc_subscription.id, reason,
-			);
-			return Ok(());
-		}
-
 		hold_client.cancel(hold::CancelRequest {
 			payment_hash: payment_hash.to_byte_array().to_vec(),
 		}).await?;

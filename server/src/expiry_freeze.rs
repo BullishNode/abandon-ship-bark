@@ -151,8 +151,11 @@ impl Server {
 							ensure!(sub.accepted_at.is_some_and(|at| at < chrono::Local::now() - self.config.receive_htlc_forward_timeout)
 								&& sub.lowest_incoming_htlc_expiry.is_some_and(|height| tip.height > height),
 								"expiry intra-Ark receive setup timeout or claim deadline has not passed");
-							ensure!(t.cancel_revocable_htlc_subscription(hash, tip.height).await?
-								== Some(LightningHtlcSubscriptionStatus::Canceled), "expiry receive cancellation lost its source predicate");
+							// No receive grant exists and this locked row is Accepted.
+							// Do not infer grant maturity; the helper returns its pre-cancel state.
+							ensure!(t.cancel_revocable_htlc_subscription(hash, false).await?
+								== Some((LightningHtlcSubscriptionStatus::Accepted, false)),
+								"expiry receive cancellation lost its source predicate");
 							for attempt in attempts.iter().filter(|a| !a.status.is_final()) {
 								ensure!(t.update_lightning_payment_attempt_status(attempt, LightningPaymentStatus::Failed,
 									Some("htlc vtxo setup timed out")).await?.is_some(), "expiry intra-Ark cancellation lost its attempt predicate");

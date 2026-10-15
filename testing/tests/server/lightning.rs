@@ -244,13 +244,20 @@ async fn try_request_htlc_revocation(
 	// Use a linked output so a missing fallback record cannot mask the
 	// settlement refusal these tests are meant to exercise.
 	let revocation_pubkey = client.derive_store_next_keypair().await.unwrap().0.public_key();
+	let origin = client.fallback_child_hint(revocation_pubkey).await.unwrap();
 	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
 		htlc_vtxos.iter().cloned(),
 		ark::VtxoPolicy::new_pubkey(revocation_pubkey),
 	).unwrap().generate_user_nonces(&keypairs).unwrap();
 
-	let cosign_request =
+	let mut cosign_request =
 		protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	for part in &mut cosign_request.parts {
+		for output in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
+			assert_eq!(ark::VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey(), revocation_pubkey);
+			output.origin = Some(origin.into());
+		}
+	}
 
 	let mut srv_rpc = srv.get_public_rpc().await;
 	srv_rpc.request_lightning_pay_htlc_revocation(cosign_request).await.map(|_| ())

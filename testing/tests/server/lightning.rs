@@ -700,6 +700,8 @@ struct ParkedReceive {
 	htlc_recv_expiry: BlockHeight,
 	release: Arc<tokio::sync::Notify>,
 	payee_task: tokio::task::JoinHandle<anyhow::Result<()>>,
+	// Owning daemons must outlive the parked operation; a gRPC channel does not.
+	_lightning: LightningPaymentSetup,
 }
 
 fn direct_receive_watchman_config(cfg: &mut server::config::watchmand::Config) {
@@ -797,7 +799,7 @@ impl ParkedReceive {
 		}
 
 		let payer = bark_payer.client().await;
-		ParkedReceive { hold_client, srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task }
+		ParkedReceive { hold_client, srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task, _lightning: lightning }
 	}
 
 	async fn revoke(&self) -> Result<(), tonic::Status> {

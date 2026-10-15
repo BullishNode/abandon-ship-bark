@@ -160,6 +160,32 @@ async fn confirm_and_return(case: SavedSendCase) {
 		}
 	}).await.unwrap();
 	assert!(core.get_raw_transaction_info(&carrier.compute_txid(), None).unwrap().confirmations.unwrap() >= 1);
+	// Confirmation must not bypass the existing full signed-chain checks.
+	let tx = signed[0].transactions().last().unwrap().tx;
+	let signature = tx.input[0].witness.iter().find(|w| w.len() == 64).unwrap();
+	let mut invalid = signed[0].serialize();
+	let position = invalid.windows(64).position(|w| w == signature).unwrap();
+	invalid[position] ^= 1;
+	let invalid_coin: ark::Vtxo = ark::Vtxo::deserialize(&invalid).unwrap();
+	assert_eq!(invalid_coin.id(), signed[0].id());
+	assert!(invalid_coin.has_all_witnesses());
+	let invalid_refusal = srv.get_public_rpc().await.register_vtxo_transactions(
+		protos::RegisterVtxoTransactionsRequest { vtxos: vec![invalid] },
+	).await.unwrap_err();
+	assert!(invalid_refusal.message().contains("vtxo validation failed"));
+	assert!(!invalid_refusal.is_expiry_settled());
+	for vtxo in &signed {
+		let before = db.read(async |t| t.get_user_vtxo_by_id(vtxo.id()).await).await.unwrap();
+		assert_eq!(before.vtxo.has_all_witnesses(), registered);
+		let request = protos::RegisterVtxoTransactionsRequest { vtxos: vec![vtxo.serialize()] };
+		let current = srv.get_public_rpc().await.register_vtxo_transactions(request.clone()).await.unwrap_err();
+		assert!(current.is_expiry_settled());
+		let alias = srv.get_public_rpc().await.register_vtxos(request).await.unwrap_err();
+		assert!(alias.is_expiry_settled(), "the deprecated registration alias must preserve the same terminal result");
+		let after = db.read(async |t| t.get_user_vtxo_by_id(vtxo.id()).await).await.unwrap();
+		assert_eq!(after.vtxo.serialize(), before.vtxo.serialize(), "terminal refusal preserves the actual registration outcome");
+		assert_eq!(after.spend_state, before.spend_state);
+	}
 	let returning = ctx.bark_sdk("absent", &srv).mnemonic(mnemonic.clone())
 		.cfg(|c| c.daemon_manual_sync = true).create().await;
 	returning.stop_daemon_wait().await.unwrap();

@@ -84,25 +84,30 @@ fn client_spend_state(spend_state: SpendState) -> Option<protos::VtxoSpendState>
 impl Server {
 	/// A confirmed carrier retires this exact frozen allocation. Spent describes
 	/// retirement, including forfeiture; it does not claim a customer payment.
-	async fn expiry_allocation_confirmed(&self, id: VtxoId) -> anyhow::Result<bool> {
-		let freeze_set = self.db.read(async |t| Ok(t.query_opt(
-			"SELECT a.freeze_set FROM expiry_allocation a WHERE a.id=$1 AND EXISTS (
+	pub(crate) async fn any_expiry_allocation_confirmed(&self, ids: &[VtxoId]) -> anyhow::Result<bool> {
+		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+		let freeze_sets = self.db.read(async |t| Ok(t.query(
+			"SELECT DISTINCT a.freeze_set FROM expiry_allocation a WHERE a.id=ANY($1) AND EXISTS (
 				SELECT 1 FROM expiry_carrier_allocation m JOIN expiry_carrier c ON c.txid=m.txid
 				WHERE m.allocation_id=a.id AND c.confirmed_height IS NOT NULL)",
-			&[&id.to_string()],
-		).await?.map(|row| row.get::<_, String>("freeze_set")))).await?;
-		let Some(freeze_set) = freeze_set else { return Ok(false); };
-		// Reuse complete signed-version and authenticated-output validation. A
-		// freeze, submission, or an unmapped transaction cannot retire the coin.
-		let versions = self.db.read_direct_delivery(&freeze_set, self.config.network,
-			BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 16 * 1024 * 1024 },
-		).await?;
-		let mut confirmed = versions.iter().filter_map(|v| v.recorded_confirmation.map(|b| (v, b)));
-		let Some((winner, recorded)) = confirmed.next() else { return Ok(false); };
-		ensure!(confirmed.next().is_none(), "multiple recorded expiry carrier winners");
-		// The direct delivery record means an actual active-chain confirmation;
-		// the legacy two-step sweep depth is not this route's adoption policy.
-		Ok(crate::bitcoind::tx_status(&self.bitcoind, winner.tx.compute_txid()).await? == TxStatus::Confirmed(recorded))
+			&[&ids],
+		).await?.into_iter().map(|row| row.get::<_, String>("freeze_set")).collect::<Vec<_>>())).await?;
+		for freeze_set in freeze_sets {
+			// Validate each complete signed group once per request, including its
+			// authenticated outputs. A recorded flag or submission is insufficient.
+			let versions = self.db.read_direct_delivery(&freeze_set, self.config.network,
+				BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 16 * 1024 * 1024 },
+			).await?;
+			let mut confirmed = versions.iter().filter_map(|v| v.recorded_confirmation.map(|b| (v, b)));
+			let Some((winner, recorded)) = confirmed.next() else { continue; };
+			ensure!(confirmed.next().is_none(), "multiple recorded expiry carrier winners");
+			// The direct route adopts the exact active-chain winner without the
+			// legacy two-step sweep depth. Call outside financial transaction locks.
+			if crate::bitcoind::tx_status(&self.bitcoind, winner.tx.compute_txid()).await? == TxStatus::Confirmed(recorded) {
+				return Ok(true);
+			}
+		}
+		Ok(false)
 	}
 }
 
@@ -218,7 +223,7 @@ impl rpc::server::ArkService for Server {
 		let Some(mut spend_state) = client_spend_state(spend_state) else {
 			macros::not_found!([id], "VTXO not found");
 		};
-		if spend_state != protos::VtxoSpendState::Spent && self.expiry_allocation_confirmed(id).await.to_status()? {
+		if spend_state != protos::VtxoSpendState::Spent && self.any_expiry_allocation_confirmed(&[id]).await.to_status()? {
 			spend_state = protos::VtxoSpendState::Spent;
 		}
 

@@ -1072,6 +1072,14 @@ impl Server {
 			registered_ids.push(vtxo_id);
 		}
 
+		// A saved action can reconcile confirmed direct retirement without
+		// reactivating its outputs or overwriting the registration outcome.
+		// Every supplied signed chain was validated above; node observations
+		// happen before acquiring the financial transaction's source locks.
+		if self.any_expiry_allocation_confirmed(&registered_ids).await? {
+			return badarg!("{}", server_rpc::EXPIRY_SETTLED_ERROR);
+		}
+
 		// Persist the fully-signed vtxos (so the server can later serve them to
 		// a wallet recovering from seed), upsert the signed chain, and flip the
 		// vtxos from `unregistered` to `spendable` in a single tx. The state

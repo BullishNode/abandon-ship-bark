@@ -200,7 +200,7 @@ impl Watchman {
 
 	async fn process_direct_expiry(&self, runtime: &expiry_runtime::DirectExpiryRuntime) -> anyhow::Result<()> {
 		runtime.tick(&self.signer, &self.bitcoind,
-			self.fee_estimator.regular(), self.config.claim_chunksize.get()).await
+			self.fee_estimator.regular(), self.config.incremental_relay_fee, self.config.claim_chunksize.get()).await
 	}
 
 	pub fn sync_height(&self) -> BlockRef {

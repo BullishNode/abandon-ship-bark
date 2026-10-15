@@ -71,13 +71,24 @@ struct BackingInput {
 /// Chain eligibility and allocation durability remain the caller's responsibility.
 pub async fn build_direct_carrier(
 	signer: &WatchmanSigner,
-	mut wallet: InstrumentedOwnedLockGuard<PersistedWallet>,
+	wallet: InstrumentedOwnedLockGuard<PersistedWallet>,
 	backing: &[ServerVtxo],
 	recipients: &[TxOut],
 	operator_script: ScriptBuf,
 	height: BlockHeight,
 	fee_rate: FeeRate,
 	limits: CarrierLimits,
+) -> anyhow::Result<(InstrumentedOwnedLockGuard<PersistedWallet>, DirectCarrier)> {
+	build_direct_carrier_with_replacement(signer, wallet, backing, recipients,
+		operator_script, height, fee_rate, limits, None).await
+}
+
+pub(crate) async fn build_direct_carrier_with_replacement(
+	signer: &WatchmanSigner,
+	mut wallet: InstrumentedOwnedLockGuard<PersistedWallet>,
+	backing: &[ServerVtxo], recipients: &[TxOut], operator_script: ScriptBuf,
+	height: BlockHeight, fee_rate: FeeRate, limits: CarrierLimits,
+	replacement: Option<(Amount, FeeRate)>,
 ) -> anyhow::Result<(InstrumentedOwnedLockGuard<PersistedWallet>, DirectCarrier)> {
 	ensure!(wallet.kind() == WalletKind::Watchman, "carrier requires the existing watchman wallet");
 	validate_request(backing, recipients, &operator_script, fee_rate, limits)?;
@@ -110,7 +121,11 @@ pub async fn build_direct_carrier(
 		wallet = held;
 		let (tx, prevouts) = signed?;
 		let actual_fee = carrier_fee(&tx, &prevouts)?;
-		let needed = validate_fee_policy(&tx, actual_fee, fee_rate, limits)?;
+		let mut needed = validate_fee_policy(&tx, actual_fee, fee_rate, limits)?;
+		if let Some((previous, incremental)) = replacement {
+			needed = needed.max(previous.checked_add(incremental.fee_wu(tx.weight())
+				.context("carrier incremental relay fee overflow")?).context("carrier replacement fee overflow")?);
+		}
 		if actual_fee < needed {
 			ensure!(needed <= limits.max_miner_fee, "carrier required miner fee exceeds ceiling");
 			fee = needed;

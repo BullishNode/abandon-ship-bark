@@ -10,16 +10,17 @@ use std::time::Duration;
 use std::sync::Arc;
 
 use anyhow::Context;
-use bitcoin::{FeeRate, Network, ScriptBuf, Txid};
+use bitcoin::{Amount, FeeRate, Network, ScriptBuf, Txid};
 use bitcoin_ext::{BlockHeight, rpc::BitcoinAsyncRpcExt};
 use bitcoind_async_client::Client;
+use bitcoind_async_client::traits::Reader;
 
 use crate::database::{Db, carrier_snapshot::BackingSnapshotLimits, frozen_expiry::FrozenExpiryGroup};
 use crate::payout_witness::DirectPayoutWitness;
 use crate::utils::{InstrumentedLock, InstrumentedOwnedLockGuard};
 use crate::wallet::{BdkWalletExt, PersistedWallet};
 use super::WatchmanSigner;
-use super::carrier::{build_direct_carrier, CarrierLimits, DirectCarrier};
+use super::carrier::{build_direct_carrier_with_replacement, CarrierLimits, DirectCarrier};
 use super::direct_delivery::{DeliveryState, DirectDelivery};
 
 struct UncertainPublication {
@@ -60,8 +61,11 @@ impl FrozenExpiryProcessor {
 	/// This is journal hydration, not qualification of a stale restored database.
 	pub async fn recover_durable_groups(&mut self) -> anyhow::Result<()> {
 		ensure!(self.uncertain.is_none(), "uncertain publication retains the exclusive wallet; probe it first");
+		// A recorded winner can precede owning-wallet sync and process death.
+		// Restore all groups at startup, including those no longer pending.
+		let include_confirmed = !self.hydrated;
 		self.hydrated = false;
-		let groups = self.db.frozen_expiry_group_ids(self.budget.max_rows).await?;
+		let groups = self.db.expiry_group_ids(self.budget.max_rows, include_confirmed).await?;
 		let held = self.wallet.lock_owned().await;
 		for id in groups {
 			if let Some(delivery) = self.deliveries.get(&id) {
@@ -100,6 +104,7 @@ impl FrozenExpiryProcessor {
 		ensure!(versions.iter().any(|v| v.tx == held.carrier.tx), "uncertain signed carrier is not durably present; wallet retained");
 		// All readback validation happened before releasing the original fee guard.
 		// The exclusive wallet remains held throughout the reservation transfer.
+		self.deliveries.remove(id);
 		let original_reservation = std::mem::replace(&mut held.carrier.fee_reservation,
 			held.wallet.lock_wallet_utxos(std::iter::empty())?);
 		drop(original_reservation);
@@ -122,21 +127,47 @@ impl FrozenExpiryProcessor {
 		&mut self, signer: &WatchmanSigner, node: &Client, id: &str,
 		height: BlockHeight, rate: FeeRate,
 	) -> anyhow::Result<Txid> {
+		self.prepare_version(signer, node, id, height, rate, None).await
+	}
+
+	pub(crate) async fn accelerate_group(
+		&mut self, signer: &WatchmanSigner, node: &Client, id: &str,
+		height: BlockHeight, rate: FeeRate, incremental: FeeRate,
+	) -> anyhow::Result<()> {
+		ensure!(self.hydrated && self.uncertain.is_none(), "reconcile publication and reservations before acceleration");
+		let delivery = self.deliveries.get(id).context("replacement has no complete retained history")?;
+		let Some(previous) = delivery.replacement_fee(node, rate).await? else { return Ok(()); };
+		let relay = node.get_mempool_info().await?.incremental_relay_fee
+			.context("Core incremental relay fee is unknown; retained versions deferred")?;
+		let incremental = incremental.max(relay);
+		ensure!(incremental > FeeRate::ZERO, "incremental replacement fee is zero");
+		self.prepare_version(signer, node, id, height, rate, Some((previous, incremental))).await?;
+		Ok(())
+	}
+
+	async fn prepare_version(
+		&mut self, signer: &WatchmanSigner, node: &Client, id: &str,
+		height: BlockHeight, rate: FeeRate, replacement: Option<(Amount, FeeRate)>,
+	) -> anyhow::Result<Txid> {
 		ensure!(self.hydrated && self.uncertain.is_none(), "restore durable reservations and reconcile publication before construction");
 		for delivery in self.deliveries.values() { delivery.check_generation_frontier().await?; }
-		ensure!(!self.deliveries.contains_key(id) && self.db.direct_delivery_generation(id).await?.is_none(),
-			"frozen group already has durable signed bytes; recover them without rebuilding principal");
+		let generation = self.db.direct_delivery_generation(id).await?;
+		ensure!(if replacement.is_some() { self.deliveries.contains_key(id) && generation.is_some() }
+			else { !self.deliveries.contains_key(id) && generation.is_none() },
+			"construction requires either a fresh group or its complete retained replacement history");
 		crate::bitcoind::require_network(node, self.network).await?;
 		let group = self.db.read_frozen_expiry_group(id, self.network, self.budget).await?;
 		let held = self.wallet.lock_owned().await;
 		for root in &group.backing {
-			let actual = node.try_get_tx_out(root.point(), true).await?.context("frozen backing is not currently unspent")?;
+			// A replacement necessarily conflicts with its known pending versions.
+			// Its complete original root still must exist on the active chain.
+			let actual = node.try_get_tx_out(root.point(), replacement.is_none()).await?.context("frozen backing is not currently unspent")?;
 			ensure!(actual.confirmations > 0 && actual.value == root.amount() && actual.script_pub_key.hex == root.txout().script_pubkey.as_bytes(),
 				"frozen backing differs from confirmed live output");
 		}
-		ensure!(self.db.direct_delivery_generation(id).await?.is_none(), "frozen generation changed before construction");
-		let (mut held, carrier) = build_direct_carrier(signer, held, &group.backing,
-			&group.plan.recipients, self.operator_script.clone(), height, rate, self.policy).await?;
+		ensure!(self.db.direct_delivery_generation(id).await? == generation, "frozen generation changed before construction");
+		let (mut held, carrier) = build_direct_carrier_with_replacement(signer, held, &group.backing,
+			&group.plan.recipients, self.operator_script.clone(), height, rate, self.policy, replacement).await?;
 		held.commit_tx(&carrier.tx);
 		let txid = carrier.tx.compute_txid();
 		// Retain before the publication await: cancelling its future must not

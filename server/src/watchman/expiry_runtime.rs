@@ -45,7 +45,7 @@ impl DirectExpiryRuntime {
 	}
 
 	pub async fn tick(&self, signer: &WatchmanSigner, node: &Client,
-		rate: FeeRate, limit: usize,
+		rate: FeeRate, incremental: FeeRate, limit: usize,
 	) -> anyhow::Result<()> {
 		ensure!(limit > 0, "direct expiry work limit is zero");
 		// The startup sync checkpoint can lag the mature backing. Signing with
@@ -69,6 +69,8 @@ impl DirectExpiryRuntime {
 			let result = async {
 				if self.db.direct_delivery_generation(&id).await?.is_none() {
 					work.processor.prepare_group(signer, node, &id, height, rate).await?;
+				} else {
+					work.processor.accelerate_group(signer, node, &id, height, rate, incremental).await?;
 				}
 				match work.processor.observe_and_submit(node, &id).await? {
 					DeliveryState::Pending { .. } => { submitted += 1; },

@@ -110,7 +110,10 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 			let available = wallet.confirmed_unlocked_utxos();
 			let result = build_candidate(&mut wallet, &available, &preflight_inputs,
 				&preflight_recipients, &preflight_operator, height, remainder, limits.max_miner_fee)
-				.and_then(|(psbt, _)| validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, reserve));
+				.and_then(|(psbt, _)| {
+					validate_unsigned_miner_fee(&psbt, limits.max_miner_fee)?;
+					validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, reserve)
+				});
 			(wallet, result)
 		}).await.context("ordinary fee reserve preflight task failed")?;
 		wallet = held;
@@ -133,6 +136,7 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 		}).await.context("carrier wallet build task failed")?;
 		wallet = held;
 		let (mut psbt, roles) = built?;
+		validate_unsigned_miner_fee(&psbt, limits.max_miner_fee)?;
 		if let Some(budget) = ordinary_budget {
 			validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, budget.urgent_reserve())?;
 		}
@@ -184,6 +188,14 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 		}));
 	}
 	bail!("carrier fee construction did not converge")
+}
+
+/// Prevouts determine the absolute fee before witnesses exist. Omitted operator
+/// dust or fee-wallet change must not produce an over-ceiling signed transaction.
+fn validate_unsigned_miner_fee(psbt: &Psbt, ceiling: Amount) -> anyhow::Result<()> {
+	ensure!(psbt.fee().context("carrier unsigned fee cannot be determined")? <= ceiling,
+		"carrier unsigned miner fee exceeds ceiling");
+	Ok(())
 }
 
 fn validate_urgent_reserve(wallet: &Wallet, available: &[OutPoint], tx: &Transaction, reserve: Amount) -> anyhow::Result<()> {
@@ -438,6 +450,30 @@ mod tests {
 		insert_checkpoint(&mut wallet, BlockId { height: 1_000, hash: BlockHash::all_zeros() });
 		let points = coins.iter().map(|v| receive_output_in_latest_block(&mut wallet, *v)).collect();
 		(wallet, points)
+	}
+
+	#[test]
+	fn unsigned_carrier_fee_checks_omitted_dust_before_signing() {
+		let backing = fixture_backing(1, Amount::from_sat(40_000));
+		let inputs = vec![BackingInput { vtxo: backing[0].clone(), clause: None }];
+		let (mut wallet, available) = fixture_wallet(&[]);
+		let recipients = vec![TxOut { value: Amount::from_sat(19_900), script_pubkey: script(2) }];
+		let (psbt, roles) = build_candidate(&mut wallet, &available, &inputs, &recipients, &script(3),
+			BlockHeight::new(1_000), Amount::from_sat(20_100), Amount::from_sat(20_000)).unwrap();
+		assert_eq!(roles.operator, None, "100-sat operator surplus is dust");
+		assert_eq!(psbt.fee().unwrap(), Amount::from_sat(20_100), "actual fee includes omitted dust");
+		assert!(validate_unsigned_miner_fee(&psbt, Amount::from_sat(20_000)).is_err());
+		assert!(validate_unsigned_miner_fee(&psbt, Amount::from_sat(20_099)).is_err());
+		validate_unsigned_miner_fee(&psbt, Amount::from_sat(20_100)).unwrap();
+		validate_unsigned_miner_fee(&psbt, Amount::from_sat(20_101)).unwrap();
+		assert!(psbt.unsigned_tx.input.iter().all(|i| i.witness.is_empty()));
+		assert!(psbt.inputs.iter().all(|i| i.final_script_witness.is_none()));
+
+		let recipients = vec![TxOut { value: Amount::from_sat(20_000), script_pubkey: script(2) }];
+		let (exact, _) = build_candidate(&mut wallet, &available, &inputs, &recipients, &script(3),
+			BlockHeight::new(1_000), Amount::from_sat(20_000), Amount::from_sat(20_000)).unwrap();
+		assert_eq!(exact.fee().unwrap(), Amount::from_sat(20_000));
+		validate_unsigned_miner_fee(&exact, Amount::from_sat(20_000)).unwrap();
 	}
 
 	#[test]

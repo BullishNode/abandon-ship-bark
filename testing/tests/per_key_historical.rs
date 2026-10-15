@@ -176,3 +176,125 @@ async fn per_key_historical_af52_board_arkoor_snapshot_producer() {
 	}
 	// Context tears down only its own remaining PG after the independent dump ACK.
 }
+
+fn private_file(root: &Path, path: &Path, max_bytes: u64) -> Vec<u8> {
+	assert!(path.starts_with(root) && fs::canonicalize(path).unwrap().starts_with(root));
+	let metadata=fs::symlink_metadata(path).unwrap();
+	assert!(metadata.is_file() && metadata.len()<=max_bytes);
+	assert_eq!(metadata.permissions().mode() & 0o777,0o600);
+	fs::read(path).unwrap()
+}
+async fn fresh_seed_wallet(root: &Path, name: &str, seed: &Path, handoff: &Path, cfg: &bark::Config) -> bark::Wallet {
+	use std::sync::Arc;
+	use bark::{OpenWalletArgs,WalletSeed,onchain::OnchainWallet,persist::{BarkPersister,sqlite::SqliteClient}};
+	let bytes=private_file(handoff,seed,1024);
+	let mnemonic:bip39::Mnemonic=std::str::from_utf8(&bytes).unwrap().trim().parse().unwrap();
+	let directory=root.join(name);fs::create_dir(&directory).unwrap();fs::set_permissions(&directory,fs::Permissions::from_mode(0o700)).unwrap();
+	let db:Arc<dyn BarkPersister>=Arc::new(SqliteClient::open(directory.join("fresh.sqlite")).unwrap());
+	let onchain=Arc::new(tokio::sync::RwLock::new(OnchainWallet::load_or_create(Network::Regtest,mnemonic.to_seed(""),db.clone()).await.unwrap()));
+	// No old SQLite, VTXO ID, derivation index, expected body, changeset or auditor
+	// map is supplied. Native recovery receives only this seed and real endpoints.
+	let wallet=bark::Wallet::open(Network::Regtest,WalletSeed::new_from_mnemonic(Network::Regtest,&mnemonic),cfg.clone(),OpenWalletArgs {
+		datadir:Some(directory),persister:Some(db),onchain:Some(onchain),run_daemon:false,create_if_not_exists:true,..Default::default()
+	}).await.unwrap();
+	assert_eq!(wallet.network().await.unwrap(),Network::Regtest);
+	wallet.sync().await;
+	wallet.sync_mailbox().await.unwrap(); // expose an actual RPC failure, rather than relying on sync warnings
+	wallet
+}
+async fn discovered_signed_rights(wallet: &bark::Wallet) -> BTreeMap<String,Value> {
+	let coins=wallet.spendable_vtxos().await.unwrap();assert!(!coins.is_empty() && coins.len()<=32);
+	let balance=wallet.balance().await.unwrap();
+	let sum=coins.iter().map(|v|v.amount()).sum::<bitcoin::Amount>();
+	assert_eq!(balance.spendable,sum);assert_eq!(balance.total(),sum);
+	assert_eq!(balance.needs_refresh,bitcoin::Amount::ZERO);assert_eq!(balance.pending(),bitcoin::Amount::ZERO);
+	let unspent=wallet.vtxos().await.unwrap();
+	assert_eq!(unspent.iter().map(|v|v.id()).collect::<std::collections::BTreeSet<_>>(),coins.iter().map(|v|v.id()).collect::<std::collections::BTreeSet<_>>(),"no extra held or unknown unspent rights may hide outside the positive map");
+	let mailbox=wallet.mailbox_keypair().public_key();
+	let record=wallet.fallback_destination().await.unwrap();record.verify(Network::Regtest,mailbox).unwrap();
+	let server=wallet.require_ark_info().await.unwrap().server_pubkey;
+	let mut result=BTreeMap::new();
+	for coin in coins {
+		let full=wallet.get_full_vtxo(coin.id()).await.unwrap();
+		assert_eq!(full.server_pubkey(),server);
+		let key=wallet.get_vtxo_key(&full).await.unwrap();assert_eq!(key.public_key(),full.user_pubkey());
+		let link=wallet.fallback_key_link(full.user_pubkey()).await.unwrap();
+		link.verify(Network::Regtest,mailbox,&record).unwrap();assert_eq!(link.user_pubkey,full.user_pubkey());
+		wallet.validate_vtxo(&full).await.unwrap();
+		assert!(full.amount()>bitcoin::Amount::ZERO);
+		assert!(result.insert(full.id().to_string(),json!({"amount_sat":full.amount().to_sat(),"user_pubkey":full.user_pubkey().to_string(),"mailbox_pk":mailbox.to_string(),"vtxo":full.serialize(),"fallback_record":record.serialize(),"key_link":link.serialize()})).is_none());
+	}
+	result
+}
+
+#[tokio::test]
+async fn per_key_historical_af52_seed_restore_after_strict_upgrade() {
+	const NEW: &str="8c4478cfbfac8a193d0a6549387229dfedee06de";
+	const SDK: &str="ca568d5a28aa16a2a4fbb853531d869ad22a9724";
+	let handoff=admitted_directory("C_FUNDED_UPGRADE_HANDOFF");
+	assert_eq!(fs::metadata(&handoff).unwrap().permissions().mode() & 0o777,0o700);
+	let verify=admitted_directory("C_FUNDED_UPGRADE_VERIFY_ROOT");
+	assert!(verify.starts_with(&handoff));assert_eq!(fs::metadata(&verify).unwrap().permissions().mode() & 0o777,0o700);
+	assert_eq!(fs::read_dir(&verify).unwrap().count(),0,"preserve any prior restore; no unchanged retry");
+	let clone:Value=serde_json::from_slice(&private_file(&handoff,&handoff.join("CLONE-8C-READY.json"),16_384)).unwrap();
+	assert_eq!(clone["schema_version"],1);assert_eq!(clone["new_production"],NEW);
+	assert_eq!(clone["strict_Db_connect_calls"],2);assert_eq!(clone["old_history_rows_preserved"],76);
+	assert_eq!(clone["final_history_rows"],78);assert_eq!(clone["application_tables_unchanged"],true);
+	assert_eq!(clone["database_name"],"c_funded_own_clone_8c");
+	let runtime:Value=serde_json::from_slice(&private_file(&handoff,&handoff.join("NEW-8C-RUNTIME.json"),16_384)).unwrap();
+	assert_eq!(runtime["schema_version"],1);assert_eq!(runtime["new_production"],NEW);assert_eq!(runtime["sdk_source"],SDK);
+	assert_eq!(runtime["source_ready_sha256"],clone["source_ready_sha256"]);
+	assert_eq!(runtime["source_signed_rights_sha256"],clone["source_signed_rights_sha256"]);
+	assert_eq!(runtime["network"],"regtest");
+	assert_eq!(runtime["genesis"],bitcoin::blockdata::constants::genesis_block(Network::Regtest).block_hash().to_string());
+	let pid=u32::try_from(runtime["captaind_pid"].as_u64().unwrap()).unwrap();assert!(pid>1);
+	let exe=fs::read_link(format!("/proc/{pid}/exe")).unwrap();
+	assert_eq!(digest(&fs::read(&exe).unwrap()),runtime["captaind_exe_sha256"].as_str().unwrap());
+	let version=tokio::time::timeout(Duration::from_secs(3),tokio::process::Command::new(&exe).arg("--version").output()).await.unwrap().unwrap();
+	assert!(version.status.success() && version.stdout.len()<=4096);
+	assert!(std::str::from_utf8(&version.stdout).unwrap().contains(NEW),"actual running executable must report exact retained qualified new pin");
+	let cap_config=PathBuf::from(runtime["captaind_config_path"].as_str().unwrap());
+	assert_eq!(digest(&private_file(&handoff,&cap_config,65_536)),runtime["captaind_config_sha256"].as_str().unwrap());
+	let cmdline=fs::read(format!("/proc/{pid}/cmdline")).unwrap();
+	assert!(cmdline.split(|b|*b==0).any(|arg|arg==cap_config.as_os_str().as_encoded_bytes()));
+	let cfg_bytes=private_file(&handoff,&handoff.join("new-client-config.toml"),65_536);
+	assert_eq!(digest(&cfg_bytes),runtime["new_client_config_sha256"].as_str().unwrap());
+	let mut cfg:bark::Config=toml::from_str(std::str::from_utf8(&cfg_bytes).unwrap()).unwrap();
+	assert_eq!(cfg.server_address,runtime["server_address"].as_str().unwrap());
+	assert!(cfg.server_address.starts_with("http://127.0.0.1:"));
+	assert!(cfg.esplora_address.is_none());
+	let core_url=cfg.bitcoind_address.as_ref().unwrap();assert!(core_url.starts_with("http://127.0.0.1:"));
+	let cookie=cfg.bitcoind_cookiefile.as_ref().unwrap();assert!(fs::canonicalize(cookie).unwrap().starts_with(&handoff));
+	let core=bitcoincore_rpc::Client::new(core_url,bitcoincore_rpc::Auth::CookieFile(cookie.clone())).unwrap();
+	let chain=core.get_blockchain_info().unwrap();assert_eq!(chain.chain,Network::Regtest);assert!(!chain.initial_block_download);
+	assert_eq!(core.get_block_hash(0).unwrap(),bitcoin::blockdata::constants::genesis_block(Network::Regtest).block_hash());
+	cfg.daemon_manual_sync=true;
+	let payer_seed=PathBuf::from(std::env::var_os("C_FUNDED_UPGRADE_PAYER_SEED_FILE").expect("private source seed only"));
+	let recipient_seed=PathBuf::from(std::env::var_os("C_FUNDED_UPGRADE_RECIPIENT_SEED_FILE").expect("private source seed only"));
+	let payer=fresh_seed_wallet(&verify,"fresh-payer",&payer_seed,&handoff,&cfg).await;
+	let recipient=fresh_seed_wallet(&verify,"fresh-recipient",&recipient_seed,&handoff,&cfg).await;
+	let payer_discovered=discovered_signed_rights(&payer).await;
+	let recipient_discovered=discovered_signed_rights(&recipient).await;
+	let payer_sat=payer_discovered.values().map(|v|v["amount_sat"].as_u64().unwrap()).sum::<u64>();
+	let recipient_sat=recipient_discovered.values().map(|v|v["amount_sat"].as_u64().unwrap()).sum::<u64>();
+	assert_eq!((payer_sat,recipient_sat),(74_670,25_000));
+	let mut discovered=payer_discovered.clone();for (id,coin) in &recipient_discovered {assert!(discovered.insert(id.clone(),coin.clone()).is_none(),"same right cannot belong to both fresh seeds");}
+	assert!(discovered.len()<=32);assert_eq!(payer_sat+recipient_sat,99_670);
+	// Native seed-only discovery is now complete for BOTH owners. Only now read
+	// any original READY/expected ID/body/proof map to audit what was recovered.
+	let ready_bytes=private_file(&handoff,&handoff.join("READY.json"),1_048_576);
+	assert_eq!(digest(&ready_bytes),clone["source_ready_sha256"].as_str().unwrap());
+	let ready:Value=serde_json::from_slice(&ready_bytes).unwrap();assert_eq!(ready["old_commit"],OLD);
+	let expected_bytes=private_file(&handoff,&handoff.join("signed-rights-private.json"),8_388_608);
+	assert_eq!(digest(&expected_bytes),clone["source_signed_rights_sha256"].as_str().unwrap());
+	assert_eq!(ready["rights_sha256"],clone["source_signed_rights_sha256"]);
+	let expected:BTreeMap<String,Value>=serde_json::from_slice(&expected_bytes).unwrap();
+	assert_eq!(discovered.keys().collect::<Vec<_>>(),expected.keys().collect::<Vec<_>>());
+	for (id,actual) in &discovered {for field in ["amount_sat","user_pubkey","mailbox_pk","vtxo","fallback_record","key_link"] {assert_eq!(actual[field],expected[id][field],"original signed entitlement/proof field {field} changed");}}
+	// The same exact native sync, with no auditor hints injected, is idempotent.
+	payer.sync().await;recipient.sync().await;
+	payer.sync_mailbox().await.unwrap();recipient.sync_mailbox().await.unwrap();
+	assert_eq!(discovered_signed_rights(&payer).await,payer_discovered);
+	assert_eq!(discovered_signed_rights(&recipient).await,recipient_discovered);
+	exclusive(&verify.join("RESULT.json"),&serde_json::to_vec(&json!({"schema_version":1,"result":"PASS","source_ready_sha256":clone["source_ready_sha256"],"source_signed_rights_sha256":clone["source_signed_rights_sha256"],"new_production":NEW,"sdk_source":SDK,"native_discovery_before_expected_lookup":true,"old_wallet_database_opened":false,"payer_sat":payer_sat,"recipient_sat":recipient_sat,"total_sat":payer_sat+recipient_sat,"rights_count":discovered.len(),"restored_public_map_sha256":digest(&serde_json::to_vec(&discovered).unwrap()),"repeat_sync_identical":true,"post_upgrade_spend":false})).unwrap());
+}

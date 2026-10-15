@@ -39,6 +39,7 @@ pub struct CaptaindBuilder<'a> {
 	watchmand: bool,
 	mod_watchmand_cfg: Option<Box<dyn FnOnce(&mut server::config::watchmand::Config)>>,
 	exec: Option<PathBuf>,
+	regtest_fee_declaration: Option<Vec<u8>>,
 }
 
 impl<'a> CaptaindBuilder<'a> {
@@ -54,6 +55,7 @@ impl<'a> CaptaindBuilder<'a> {
 			watchmand: false,
 			mod_watchmand_cfg: None,
 			exec: None,
+			regtest_fee_declaration: None,
 		}
 	}
 
@@ -62,6 +64,13 @@ impl<'a> CaptaindBuilder<'a> {
 	pub fn exec(mut self, exec: PathBuf) -> Self {
 		self.exec = Some(exec);
 		self
+	}
+
+	/// Stage independently frozen public bytes after fresh directory creation,
+	/// before native create. Native code still validates chain, digest and policy.
+	pub fn regtest_fee_declaration(mut self, bytes: Vec<u8>) -> Self {
+		assert!(!bytes.is_empty() && bytes.len() <= 4096);
+		self.regtest_fee_declaration = Some(bytes); self
 	}
 
 	/// Stop the vtxo pool from issuing. Offboards are funded from the rounds
@@ -131,6 +140,7 @@ impl<'a> CaptaindBuilder<'a> {
 		}
 
 		let ret = Captaind::new(&self.name, bitcoind.clone(), cfg);
+		if let Some(bytes) = self.regtest_fee_declaration { ret.set_regtest_fee_declaration(bytes); }
 		if let Some(exec) = self.exec {
 			ret.set_exec(Some(exec));
 		}

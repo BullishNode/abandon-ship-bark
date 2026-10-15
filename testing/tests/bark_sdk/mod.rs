@@ -28,3 +28,5 @@ mod payment_request;
 mod recovery;
 mod round;
 mod vtxo_lock;
+
+mod sweep_scale;

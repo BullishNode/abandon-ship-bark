@@ -141,6 +141,7 @@ pub struct CaptaindHelper {
 	/// Path to the captaind binary to run. When None, the
 	/// CAPTAIND_EXEC env var is used.
 	exec: parking_lot::Mutex<Option<PathBuf>>,
+	regtest_fee_declaration: parking_lot::Mutex<Option<Vec<u8>>>,
 }
 
 impl Captaind {
@@ -197,6 +198,7 @@ impl Captaind {
 			state: Arc::new(parking_lot::Mutex::new(State::default())),
 			watchmand: std::sync::OnceLock::new(),
 			exec: parking_lot::Mutex::new(None),
+			regtest_fee_declaration: parking_lot::Mutex::new(None),
 		};
 
 		Daemon::wrap(helper)
@@ -207,6 +209,10 @@ impl Captaind {
 	/// (re)start; pass None to return to the CAPTAIND_EXEC binary.
 	pub fn set_exec(&self, exec: Option<PathBuf>) {
 		*self.inner.exec.lock() = exec;
+	}
+
+	pub fn set_regtest_fee_declaration(&self, bytes: Vec<u8>) {
+		*self.inner.regtest_fee_declaration.lock() = Some(bytes);
 	}
 
 	pub async fn get_custom_command(&self, args: &[&str]) -> anyhow::Result<Command> {
@@ -597,6 +603,8 @@ impl DaemonHelper for CaptaindHelper {
 			.with_context(|| format!("error writing server config to '{}'", config_path.display()))?;
 		info!("Configuration file successfully created at: {}", config_path.display());
 
+		stage_test_declaration(&data_dir, first_run, self.regtest_fee_declaration.lock().as_deref())?;
+
 		if first_run {
 			info!("Initializing new {} instance", self.name.to_string());
 			self.create().await?;
@@ -843,4 +851,50 @@ async fn spawn_slf_pipe(datadir: PathBuf) {
 		drop(stdin);
 		let _ = child.wait().await;
 	});
+}
+
+// Test harness only: never supplies policy defaults or chooses an allowance.
+fn stage_test_declaration(directory: &std::path::Path, first_run: bool, bytes: Option<&[u8]>) -> anyhow::Result<()> {
+	use std::{io::Write, os::unix::fs::OpenOptionsExt};
+	let Some(bytes) = bytes else { return Ok(()); };
+	anyhow::ensure!(!bytes.is_empty() && bytes.len() <= 4096, "bounded public declaration required");
+	let path = directory.join("regtest-qualification-declaration.json");
+	if !first_run {
+		anyhow::ensure!(std::fs::read(path)? == bytes, "restart cannot replace immutable declaration");
+		return Ok(());
+	}
+	let mut file = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)?;
+	file.write_all(bytes)?; file.sync_all()?; std::fs::File::open(directory)?.sync_all()?;
+	Ok(())
+}
+
+#[cfg(test)]
+mod declaration_staging_tests {
+	use super::stage_test_declaration;
+	use std::os::unix::fs::{MetadataExt, PermissionsExt};
+	#[test]
+	fn declaration_staging_preserves_create_cut_and_immutable_restart() {
+		let dir = std::env::temp_dir().join(format!("ark-test-declaration-{}", uuid::Uuid::new_v4()));
+		let first_run = !dir.exists(); assert!(first_run);
+		std::fs::create_dir(&dir).unwrap();
+		stage_test_declaration(&dir, first_run, Some(b"independently-frozen-public-bytes")).unwrap();
+		assert!(first_run, "declaration staging does not precreate the directory before native create decision");
+		let path=dir.join("regtest-qualification-declaration.json");
+		let before=std::fs::metadata(&path).unwrap(); assert_eq!(before.permissions().mode() & 0o777, 0o600);
+		assert!(stage_test_declaration(&dir,true,Some(b"replacement")).is_err());
+		assert!(stage_test_declaration(&dir,false,Some(b"replacement")).is_err());
+		stage_test_declaration(&dir,false,Some(b"independently-frozen-public-bytes")).unwrap();
+		let after=std::fs::metadata(&path).unwrap(); assert_eq!((before.ino(),before.mtime(),before.mtime_nsec()),(after.ino(),after.mtime(),after.mtime_nsec()));
+		assert_eq!(std::fs::read(&path).unwrap(),b"independently-frozen-public-bytes");
+		std::fs::remove_dir_all(&dir).unwrap();
+	}
+	#[test]
+	fn default_staging_never_creates_qualification_authority() {
+		let dir=std::env::temp_dir().join(format!("ark-test-default-declaration-{}",uuid::Uuid::new_v4()));
+		std::fs::create_dir(&dir).unwrap(); stage_test_declaration(&dir,true,None).unwrap();
+		assert_eq!(std::fs::read_dir(&dir).unwrap().count(),0);
+		assert_eq!(server::watchman::ordinary_fee::OrdinaryFeePolicy::default().ordinary_budget_sat,60000);
+		assert_eq!(server::watchman::ordinary_fee::OrdinaryFeePolicy::default().urgent_reserve_sat,40000);
+		std::fs::remove_dir(&dir).unwrap();
+	}
 }

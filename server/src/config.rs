@@ -748,6 +748,29 @@ mod test {
 	}
 
 	#[test]
+	fn captaind_config_refuses_legacy_payout_producer() {
+		let mut cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
+		cfg.bitcoind.cookie = Some(".cookie".into());
+		cfg.expiry_payout.enabled = true;
+		let error = cfg.validate().unwrap_err();
+		assert!(error.to_string().contains("legacy expiry_payout producer is unavailable"));
+	}
+
+	#[tokio::test]
+	async fn start_refuses_legacy_payout_before_loading_wallet() {
+		let mut cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
+		cfg.data_dir = std::env::temp_dir().join(format!("legacy-payout-missing-{}",
+			bitcoin::secp256k1::rand::random::<u64>()));
+		assert!(!cfg.data_dir.exists());
+		cfg.expiry_payout.enabled = true;
+		let error = match crate::Server::start(cfg).await {
+			Ok(_) => panic!("legacy payout producer must refuse before wallet access"),
+			Err(error) => error,
+		};
+		assert!(error.to_string().contains("legacy expiry_payout producer is unavailable"));
+	}
+
+	#[test]
 	fn default_offboard_fixed_vb_covers_a_two_in_three_out_keyspend() {
 		let cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
 

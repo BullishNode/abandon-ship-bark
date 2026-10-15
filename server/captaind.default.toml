@@ -1,7 +1,7 @@
 #
 # This is a template config file for captaind.
 # All required values have a default value provided in this file.
-# All optional values are included here but are commented out.
+# Selected optional values are shown as commented examples.
 #
 
 
@@ -332,6 +332,16 @@ fallback_fee_rate_slow = "4sat/vb"
 # Accepts the same units as the fallback rates (e.g. "1000sat/vb").
 # Unset by default (no ceiling).
 # max_fee_rate = "1000sat/vb"
+
+# Direct expiry discovery is disabled by default. Enable it only with matching
+# watchmand direct delivery, complete recovery history and approved fee capital.
+#[direct_expiry]
+#enabled = false
+#interval = "30s"
+#grace_blocks = 6
+#max_groups_per_tick = 32
+# Direct delivery also requires an explicit positive fee_estimator.max_fee_rate
+# in both daemon configurations; choose it against the approved operating limits.
 
 
 ##################

@@ -1,7 +1,7 @@
 #
 # This is a template config file for watchmand.
 # All required values have a default value provided in this file.
-# All optional values are included here but are commented out.
+# Selected optional values are shown as commented examples.
 #
 
 # The directory all watchmand data is stored
@@ -69,6 +69,14 @@ fallback_fee_rate_slow = "4sat/vb"
 # Optional ceiling for fetched fee rates. Any rate returned by the backend
 # above this value is clamped down to it. Unset by default (no ceiling).
 # max_fee_rate = "1000sat/vb"
+
+# Presence of this whole block selects direct delivery. Leave it commented until
+# captaind direct discovery and the matching recovery history are configured.
+#[watchman.direct_expiry]
+#history_dir = "/absolute/path/to/captaind-data"
+#max_miner_fee = "10000 sat"
+# The absolute amount above is an example, not a funded operating allowance.
+# Set an explicit positive fee_estimator.max_fee_rate in both configurations too.
 
 
 #################

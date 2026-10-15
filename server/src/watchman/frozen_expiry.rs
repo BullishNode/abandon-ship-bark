@@ -194,8 +194,10 @@ impl FrozenExpiryProcessor {
 		let DeliveryState::Confirmed { txid, block } = state else { bail!("direct group is still pending"); };
 		let held = self.wallet.lock_owned().await;
 		let has_fee_inputs = !self.deliveries.get(id).context("confirmed delivery disappeared")?.reserved_fee_inputs().is_empty();
-		ensure!(held.latest_checkpoint().height() >= block.height.to_u32() && (!has_fee_inputs || held.transactions().any(|t|
-			t.tx_node.txid == txid && t.chain_position.is_confirmed())), "owning wallet must sync the actual confirmed carrier before releasing fee inputs");
+		// A winner without wallet inputs/outputs is retained as a conflict of a
+		// losing fee-funded version. transactions() hides such canonical txs.
+		ensure!(held.latest_checkpoint().height() >= block.height.to_u32() && (!has_fee_inputs || held.get_tx(txid)
+			.is_some_and(|t| t.chain_position.is_confirmed())), "owning wallet must sync the actual confirmed carrier before releasing fee inputs");
 		self.deliveries.remove(id);
 		Ok(())
 	}

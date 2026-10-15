@@ -26,7 +26,7 @@ use bark::lightning_invoice::Bolt11Invoice;
 use bark_json::primitives::{VtxoStateInfo, WalletVtxoInfo};
 use server_log::{LightningReceiveCanceled, LightningReceiveKeptCommitted};
 use server_rpc::protos;
-use server::database::Db;
+use server::database::{BlockTable, Db};
 use server::database::htlc_vtxo::HtlcDirection;
 use server::vtxopool::VtxoTarget;
 
@@ -702,14 +702,46 @@ struct ParkedReceive {
 	payee_task: tokio::task::JoinHandle<anyhow::Result<()>>,
 }
 
+fn direct_receive_watchman_config(cfg: &mut server::config::watchmand::Config) {
+	cfg.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+		ordinary_fee_policy: Default::default(),
+		history_dir: cfg.data_dir.parent().unwrap().join("server"),
+		max_miner_fee: sat(20_000),
+	});
+	cfg.fee_estimator.max_fee_rate = Some(bitcoin::FeeRate::from_sat_per_vb(25).unwrap());
+}
+
 impl ParkedReceive {
 	async fn setup(ctx: &TestContext) -> ParkedReceive {
+		Self::setup_with_watchman(ctx, false, true).await
+	}
+
+	async fn setup_with_watchman(ctx: &TestContext, direct: bool, start_watchman: bool) -> ParkedReceive {
 		let lightning = ctx.new_lightning_setup("lightningd").await;
 
-		// The watchman tells the server the HTLC-recv vtxos expired unexited.
-		let srv = ctx.captaind("server").lightningd(&lightning.internal).watchmand().cfg(|cfg| {
+		// Preserve the legacy fixture; direct controls explicitly select both producers.
+		let mut builder = ctx.captaind("server").lightningd(&lightning.internal).cfg(move |cfg| {
 			cfg.invoice_check_interval = Duration::from_secs(1);
-		}).create().await;
+			if direct {
+				cfg.expiry_payout.enabled = false;
+				cfg.direct_expiry.enabled = true;
+			}
+		});
+		if direct { builder = builder.bitcoind(ctx.bitcoind_arc()); }
+		if start_watchman {
+			builder = if direct { builder.watchmand_cfg(direct_receive_watchman_config) }
+				else { builder.watchmand() };
+		}
+		let srv = builder.create().await;
+		if direct {
+			assert!(srv.config().direct_expiry.enabled);
+			assert!(!srv.config().expiry_payout.enabled);
+			let history = srv.config().data_dir.join("direct-expiry-witness");
+			let policy: serde_json::Value = serde_json::from_slice(&std::fs::read(
+				history.join("ordinary-fee-policy.json")).unwrap()).unwrap();
+			assert_eq!(policy, serde_json::json!({"urgent_reserve_sat":40000,"ordinary_budget_sat":60000}));
+			assert!(std::fs::read(history.join("ordinary-fee-budget")).unwrap().is_empty());
+		}
 		ctx.fund_captaind(&srv, btc(10)).await;
 		srv.wait_for_vtxopool(ctx).await;
 
@@ -861,6 +893,81 @@ async fn intra_ark_revoke_refused_while_watchman_is_behind() {
 	parked.srv.watchmand().start().await.unwrap();
 	parked.srv.watchmand().wait_for_sync_height(tip).await;
 	parked.revoke().await.expect("revoke should be cosigned once the watchman caught up");
+	parked.assert_claim_refused().await;
+}
+
+/// Read the actual persisted processing boundary, not daemon health or an admin override.
+async fn persisted_watchman_height(srv: &Captaind) -> Option<BlockHeight> {
+	let postgres = srv.config().postgres.clone();
+	let db = Db::connect(&postgres).await.unwrap();
+	db.read(async |t| Ok(t.get_highest_block(BlockTable::Watchmand).await?.map(|block| block.height)))
+		.await.unwrap()
+}
+
+fn assert_direct_receive_watchman(srv: &Captaind) {
+	let history_dir = srv.config().data_dir.clone();
+	let cfg = srv.watchmand().config();
+	let direct = cfg.watchman.direct_expiry.as_ref()
+		.expect("control must run the direct watchman");
+	assert_eq!(direct.history_dir, history_dir);
+	assert_eq!(direct.max_miner_fee, sat(20_000));
+}
+
+/// A real direct daemon must retain its old processed tip while stopped, hold an
+/// otherwise expired receive, then advance through normal listeners before revocation.
+#[tokio::test]
+async fn direct_intra_ark_revoke_waits_for_watchman_tip_catchup() {
+	require_bark_version!(> "0.5.0");
+
+	let ctx = TestContext::new("server/direct_intra_ark_revoke_waits_for_watchman_tip_catchup").await;
+	let parked = ParkedReceive::setup_with_watchman(&ctx, true, true).await;
+	assert_direct_receive_watchman(&parked.srv);
+	let initial_tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	parked.srv.watchmand().wait_for_sync_height(initial_tip).await;
+	parked.srv.watchmand().stop().await.unwrap();
+	let old_tip = persisted_watchman_height(&parked.srv).await.expect("watchman processed its initial chain");
+	assert_eq!(old_tip, initial_tip);
+	assert!(old_tip <= parked.htlc_recv_expiry);
+
+	let before = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let tip = ctx.generate_blocks(parked.htlc_recv_expiry.to_u32() + 1 - before.to_u32()).await;
+	parked.srv.wait_for_sync_height(tip).await;
+	assert!(tip > parked.htlc_recv_expiry);
+	assert_eq!(persisted_watchman_height(&parked.srv).await, Some(old_tip));
+	let status = parked.revoke().await.expect_err("direct revoke passed a lagging processed tip");
+	assert!(status.message().contains("already committed"), "unexpected refusal: {status:?}");
+
+	parked.srv.watchmand().start().await.unwrap();
+	parked.srv.watchmand().wait_for_sync_height(tip).await;
+	assert_eq!(persisted_watchman_height(&parked.srv).await, Some(tip));
+	parked.revoke().await.expect("eligible receive must progress after direct watchman processing");
+	parked.assert_claim_refused().await;
+}
+
+/// With no watchman ever started the row is naturally absent. Starting the actual
+/// direct daemon, rather than manufacturing a row, must make the expired receive eligible.
+#[tokio::test]
+async fn direct_intra_ark_revoke_waits_for_missing_watchman_tip() {
+	require_bark_version!(> "0.5.0");
+
+	let ctx = TestContext::new("server/direct_intra_ark_revoke_waits_for_missing_watchman_tip").await;
+	let parked = ParkedReceive::setup_with_watchman(&ctx, true, false).await;
+	assert_eq!(persisted_watchman_height(&parked.srv).await, None);
+	let before = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let tip = ctx.generate_blocks(parked.htlc_recv_expiry.to_u32() + 1 - before.to_u32()).await;
+	parked.srv.wait_for_sync_height(tip).await;
+	assert!(tip > parked.htlc_recv_expiry);
+	assert_eq!(persisted_watchman_height(&parked.srv).await, None);
+	let status = parked.revoke().await.expect_err("direct revoke passed a missing processed tip");
+	assert!(status.message().contains("already committed"), "unexpected refusal: {status:?}");
+
+	let watchman = ctx.watchmand("server-watchmand").bitcoind(ctx.bitcoind_arc())
+		.cfg(direct_receive_watchman_config).create(&parked.srv).await;
+	parked.srv.attach_watchmand(watchman);
+	assert_direct_receive_watchman(&parked.srv);
+	parked.srv.watchmand().wait_for_sync_height(tip).await;
+	assert_eq!(persisted_watchman_height(&parked.srv).await, Some(tip));
+	parked.revoke().await.expect("eligible receive must progress after actual direct startup/catchup");
 	parked.assert_claim_refused().await;
 }
 

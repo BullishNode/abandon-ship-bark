@@ -1,5 +1,7 @@
 
-use ark_testing::{Barkd, TestContext};
+use std::time::Duration;
+
+use ark_testing::{require_bark_version, Barkd, TestContext};
 use ark_testing::ports::pick_port;
 use bark_rest_client::apis::configuration::Configuration;
 use bark_rest_client::apis::wallet_api;
@@ -197,4 +199,73 @@ async fn no_auth_remote_bind_refuses_to_start() {
 		stderr.contains("refusing to start"),
 		"expected refusal on stderr, got: {}", stderr,
 	);
+}
+
+/// The wallet-fallback web client uses native BIP84 recovery, not separate sweeps.
+#[tokio::test]
+async fn wallet_fallback_web_contract_barkd() {
+	require_bark_version!(> "0.7.1");
+	let ctx = TestContext::new("barkd/wallet_fallback_web_contract_barkd").await;
+	let srv = ctx.captaind("server").create().await;
+	let barkd = ctx.barkd("barkd1", &srv).create().await;
+	let config = barkd.client_config();
+	let url = |path: &str| format!("{}/api/v1{}", barkd.base_url(), path);
+
+	let unauthed = reqwest::Client::new().get(url("/wallet/fallback-destination"))
+		.timeout(Duration::from_secs(15)).send().await.unwrap();
+	assert_eq!(unauthed.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+	let response = config.client.get(url("/wallet/fallback-destination"))
+		.timeout(Duration::from_secs(15)).send().await.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let destination: serde_json::Value = response.json().await.unwrap();
+	let fields = destination.as_object().expect("fallback destination must be an object");
+	assert_eq!(fields.len(), 2);
+	let address: bitcoin::Address<bitcoin::address::NetworkUnchecked> =
+		destination["address"].as_str().unwrap().parse().unwrap();
+	let address = address.require_network(bitcoin::Network::Regtest).unwrap();
+	assert_eq!(address.address_type(), Some(bitcoin::AddressType::P2wpkh));
+	assert!(destination["seq"].as_u64().unwrap() <= 9_007_199_254_740_991);
+
+	// Exercise both real routes in the same order as the client. No funds or
+	// pending transactions are created in this fresh wallet.
+	for path in ["/onchain/sync", "/wallet/sync"] {
+		let response = config.client.post(url(path))
+			.timeout(Duration::from_secs(15)).send().await.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::OK, "{path}");
+	}
+	let response = config.client.post(url("/wallet/vtxos/adopt-server-status"))
+		.json(&serde_json::json!({"vtxo_ids": []}))
+		.timeout(Duration::from_secs(15)).send().await.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	assert_eq!(response.json::<serde_json::Value>().await.unwrap(), serde_json::json!([]));
+
+	let response = config.client.post(url("/wallet/vtxos/adopt-server-status"))
+		.json(&serde_json::json!({"vtxo_ids": ["not-a-vtxo-id"]}))
+		.timeout(Duration::from_secs(15)).send().await.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+	let response = config.client.post(url("/wallet/vtxos/adopt-server-status"))
+		.json(&serde_json::json!({"vtxos": []}))
+		.timeout(Duration::from_secs(15)).send().await.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::UNPROCESSABLE_ENTITY);
+
+	// The first old path matches the read-only /vtxos/{id} route, so its
+	// unsupported POST is 405; the absent sweep path is 404.
+	for (path, status) in [
+		("/wallet/vtxos/expiry-payouts", reqwest::StatusCode::METHOD_NOT_ALLOWED),
+		("/onchain/sweep-expiry-payouts", reqwest::StatusCode::NOT_FOUND),
+	] {
+		let response = config.client.post(url(path)).json(&serde_json::json!({}))
+			.timeout(Duration::from_secs(15)).send().await.unwrap();
+		assert_eq!(response.status(), status, "{path}");
+	}
+
+	let response = config.client.get(url("/wallet/fallback-destination"))
+		.timeout(Duration::from_secs(15)).send().await.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	assert_eq!(response.json::<serde_json::Value>().await.unwrap(), destination);
+	assert_eq!(barkd.onchain_balance().await, bitcoin::Amount::ZERO);
+	assert!(barkd.onchain_utxos().await.is_empty());
+	assert!(barkd.onchain_transactions().await.is_empty());
+	assert!(barkd.vtxos(Some(true)).await.is_empty());
 }

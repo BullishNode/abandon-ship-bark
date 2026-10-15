@@ -526,6 +526,7 @@ impl Server {
 			return badarg!("pay htlcs revocation policy must be pubkey");
 		}
 
+		let tip = self.chain_tip().height;
 		let htlc_vtxo_ids = cosign_request.inputs().cloned().collect::<Vec<VtxoId>>();
 		let htlc_vtxo_states = self.db.read(async |t| t.get_user_vtxos_by_id(&htlc_vtxo_ids).await).await?;
 		for v in &htlc_vtxo_states {
@@ -578,7 +579,6 @@ impl Server {
 			.insert_oor_spent_vtxos(builder.build_unsigned_internal_vtxos())
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
-		let tip = self.chain_tip().height;
 		self.db.write(async |t| {
 			// Re-check the settlement inside the write tx: the early gate and
 			// the eligibility read above both run in their own (read)

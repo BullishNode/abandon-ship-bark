@@ -1,4 +1,4 @@
-//! One authenticated, immutable expiry destination and public coin account.
+//! One authenticated immutable expiry destination and durable individual key links.
 
 #[cfg(feature = "onchain-bdk")]
 use std::any::Any;
@@ -29,8 +29,6 @@ pub(crate) fn next_key_index(last: Option<u32>) -> anyhow::Result<u32> {
 fn authenticate_binding(record: &FallbackRecord, seed: &WalletSeed, network: Network, expected: &Script) -> anyhow::Result<()> {
 	record.verify(network, seed.to_mailbox_keypair().public_key())?;
 	ensure!(record.spk.as_script() == expected, "fallback record differs from the exact expected destination");
-	ensure!(record.account_xpub == bitcoin::bip32::Xpub::from_priv(&crate::SECP, &seed.vtxo),
-		"fallback record is not this seed's coin account");
 	Ok(())
 }
 
@@ -71,8 +69,6 @@ async fn mark_reserved(onchain: &Arc<RwLock<dyn OnchainWalletTrait>>, spk: &Scri
 }
 
 async fn persist_native_identity(db: &dyn BarkPersister, seed: &WalletSeed, record: &FallbackRecord) -> anyhow::Result<()> {
-	// Child zero is the existing stable phone-login identity and the account
-	// possession signer. Reserve it once, not as a replenishable signing pool.
 	db.store_vtxo_key(0, seed.derive_vtxo_keypair(0).public_key()).await?;
 	db.store_fallback_record(record).await
 }
@@ -82,70 +78,82 @@ pub(crate) async fn register(
 	onchain: &Arc<RwLock<dyn OnchainWalletTrait>>, connection: &mut ServerConnection,
 	expected: &Script,
 ) -> anyhow::Result<()> {
-	let spk = expected.to_owned();
-	ensure!(onchain.read().await.is_mine(&spk).await?, "fallback destination is not owned by the onchain wallet");
+	ensure!(onchain.read().await.is_mine(expected).await?, "fallback destination is not owned by the onchain wallet");
 	if let Some(stored) = db.get_fallback_record().await? { authenticate_binding(&stored, seed, network, expected)?; }
-	let key = seed.to_mailbox_keypair();
-	let proposed = FallbackRecord::new(network, spk, &seed.vtxo, &key)?;
-	// Deterministic binding makes a lost reply safe to retry, including from a
-	// different device. Adopt its canonical signatures only after authenticating
-	// the exact seed-derived fields; a mismatch never overwrites local state.
+	let mailbox = seed.to_mailbox_keypair();
+	let proposed = FallbackRecord::new(network, expected.to_owned(), &mailbox)?;
+	let first = next_key_index(db.get_last_vtxo_key_index().await?)?.max(1);
+	let end = first.checked_add(50).context("fallback key pool exhausted")?.min(1 << 31);
+	let indexes = std::iter::once(0).chain(first..end);
+	let mut requested = Vec::new();
+	for index in indexes {
+		let coin = seed.derive_vtxo_keypair(index);
+		if let Some(link) = db.get_vtxo_key_link(&coin.public_key()).await? {
+			link.verify(network, mailbox.public_key(), &proposed)?;
+			ensure!(link.recovery_index == Some(index), "stored key link index differs from this seed");
+			continue;
+		}
+		requested.push((index, ark::fallback::KeyLink::new(network, mailbox.public_key(), &proposed, &coin, Some(index))?));
+	}
 	let reply = connection.client.set_fallback(protos::SetFallbackRequest {
-		mailbox_pk: key.public_key().serialize().to_vec(), record: proposed.serialize(),
-	}).await.context("failed to register immutable fallback account")?.into_inner();
+		mailbox_pk: mailbox.public_key().serialize().to_vec(), record: proposed.serialize(),
+		key_links: requested.iter().map(|(_, link)| link.serialize()).collect(),
+	}).await.context("failed to register fallback destination and key links")?.into_inner();
 	let current = FallbackRecord::deserialize(&reply.record)?;
 	authenticate_binding(&current, seed, network, expected)?;
+	ensure!(reply.key_links.len() == requested.len(), "fallback acknowledgment has a different key set");
+	let mut canonical = Vec::with_capacity(requested.len());
+	for ((index, expected), bytes) in requested.iter().zip(&reply.key_links) {
+		let link = ark::fallback::KeyLink::deserialize(bytes)?;
+		link.verify(network, mailbox.public_key(), &current)?;
+		ensure!(link.same_binding(expected), "fallback acknowledgment changes the requested key");
+		canonical.push((*index, link));
+	}
 	persist_native_identity(db, seed, &current).await?;
+	db.store_linked_vtxo_keys(&canonical).await?;
 	mark_reserved(onchain, &current.spk).await
 }
 
 impl Wallet {
-	pub(crate) async fn attach_arkoor_origins(
-		&self, request: &mut protos::ArkoorPackageCosignRequest,
-		recipient: Option<(bitcoin::secp256k1::PublicKey, ark::fallback::AccountChildHint)>,
-	) -> anyhow::Result<()> {
-		for part in &mut request.parts {
-			for output in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
-				let policy_key = ark::VtxoPolicy::deserialize(&output.policy)?.user_pubkey();
-				let hint = match recipient {
-					Some((key, hint)) if key == policy_key => hint,
-					_ => self.fallback_child_hint(policy_key).await?,
-				};
-				output.origin = Some(hint.into());
-			}
-		}
-		Ok(())
+	/// Return the exact canonical proof acknowledged before this key was used.
+	pub async fn fallback_key_link(&self, key: bitcoin::secp256k1::PublicKey) -> anyhow::Result<ark::fallback::KeyLink> {
+		let record = self.fallback_destination().await?;
+		let link = self.inner.db.get_vtxo_key_link(&key).await?.context("coin key is not linked to its fallback destination")?;
+		link.verify(self.network().await?, self.mailbox_keypair().public_key(), &record)?;
+		ensure!(link.user_pubkey == key, "fallback link is for another policy key");
+		Ok(link)
 	}
 
-	/// Public attribution for an already allocated native coin key. It carries
-	/// no secret and never registers or replenishes a server-side key pool.
-	pub async fn fallback_child_hint(&self, policy_key: bitcoin::secp256k1::PublicKey) -> anyhow::Result<ark::fallback::AccountChildHint> {
-		self.fallback_destination().await?;
-		let index = self.inner.db.get_public_key_idx(&policy_key).await?.context("coin key has no persisted derivation index")?;
-		ensure!(index < (1 << 31), "hardened coin keys are not supported");
-		let keypair = self.inner.seed.derive_vtxo_keypair(index);
-		ensure!(keypair.public_key() == policy_key, "coin key does not match this seed");
-		let properties = self.properties().await?;
-		let server_mailbox_key = match properties.server_mailbox_pubkey {
-			Some(key) => key,
-			None => self.require_server().await?.1.mailbox_pubkey,
-		};
-		let blinded = self.mailbox_identifier().to_blinded(server_mailbox_key, &keypair)?;
-		Ok(ark::fallback::AccountChildHint::new(blinded, index)?)
+	/// Return every retained canonical link, ordered by native derivation index.
+	/// This reads existing acknowledgments only. The caller's bound applies to
+	/// all stored key mappings; an oversized inventory fails without truncation.
+	pub async fn fallback_key_links(&self, max_keys: usize) -> anyhow::Result<Vec<ark::fallback::KeyLink>> {
+		ensure!((1..=4096).contains(&max_keys), "key inventory bound must be between 1 and 4096");
+		let _guard = self.inner.lock_manager.lock(&format!("{}.key-pool", self.fingerprint()), Duration::from_secs(30)).await?;
+		let record = self.fallback_destination().await?;
+		let network = self.network().await?;
+		let mailbox = self.mailbox_keypair().public_key();
+		let retained = self.inner.db.get_linked_vtxo_keys(max_keys).await?;
+		let mut links = Vec::with_capacity(retained.len());
+		for (index, link) in retained {
+			ensure!(index < (1 << 31), "hardened key inventory index");
+			ensure!(link.recovery_index == Some(index), "retained link index mismatch");
+			ensure!(link.user_pubkey == self.inner.seed.derive_vtxo_keypair(index).public_key(), "retained link differs from seed key");
+			link.verify(network, mailbox, &record)?;
+			links.push(link);
+		}
+		Ok(links)
 	}
 
 	pub async fn fallback_destination(&self) -> anyhow::Result<FallbackRecord> {
-		let record = self.inner.db.get_fallback_record().await?.context("no fallback account registered")?;
+		let record = self.inner.db.get_fallback_record().await?.context("no fallback destination registered")?;
 		authenticate_binding(&record, &self.inner.seed, self.network().await?, &self.inner.fallback_spk)?;
 		Ok(record)
 	}
 
 	pub async fn set_fallback_destination(&self, spk: ScriptBuf) -> anyhow::Result<()> {
 		ensure!(spk == self.inner.fallback_spk, "immutable fallback destination mismatch");
-		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30)).await?;
-		let (mut connection, _) = self.require_server().await?;
-		register(self.network().await?, &self.inner.seed, &*self.inner.db,
-			self.inner.onchain.as_ref().context("onchain wallet required")?, &mut connection, &self.inner.fallback_spk).await
+		self.sync_fallback().await
 	}
 
 	pub(crate) async fn open_fallback(&self, requested: Option<ScriptBuf>) -> anyhow::Result<()> {
@@ -156,13 +164,15 @@ impl Wallet {
 			persist_native_identity(&*self.inner.db, &self.inner.seed, &record).await?;
 			return mark_reserved(onchain, &record.spk).await;
 		}
-		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30)).await?;
-		let (mut connection, _) = self.require_server().await?;
-		register(self.network().await?, &self.inner.seed, &*self.inner.db, onchain, &mut connection, &self.inner.fallback_spk).await
+		self.sync_fallback().await
 	}
 
 	pub(crate) async fn sync_fallback(&self) -> anyhow::Result<()> {
-		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30)).await?;
+		let _guard = self.inner.lock_manager.lock(&format!("{}.key-pool", self.fingerprint()), Duration::from_secs(30)).await?;
+		self.sync_fallback_locked().await
+	}
+
+	pub(crate) async fn sync_fallback_locked(&self) -> anyhow::Result<()> {
 		let (mut connection, _) = self.require_server().await?;
 		register(self.network().await?, &self.inner.seed, &*self.inner.db,
 			self.inner.onchain.as_ref().context("onchain wallet required")?, &mut connection, &self.inner.fallback_spk).await
@@ -176,18 +186,23 @@ mod tests {
 	#[test]
 	fn restore_requires_exact_seed_binding_and_network() {
 		let seed = WalletSeed::new_from_seed(Network::Regtest, &[17; 64]);
-		let record = FallbackRecord::new(Network::Regtest, seed.fallback_script(Network::Regtest).unwrap(),
-			&seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
-		assert!(authenticate_binding(&record, &seed, Network::Regtest, &seed.fallback_script(Network::Regtest).unwrap()).is_ok());
-		assert!(authenticate_binding(&record, &seed, Network::Signet, &seed.fallback_script(Network::Signet).unwrap()).is_err());
-		let other_script = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
-		let wrong = FallbackRecord::new(Network::Regtest, other_script, &seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
-		assert!(authenticate_binding(&wrong, &seed, Network::Regtest, &seed.fallback_script(Network::Regtest).unwrap()).is_err());
+		let expected = seed.fallback_script(Network::Regtest).unwrap();
+		let record = FallbackRecord::new(Network::Regtest, expected.clone(), &seed.to_mailbox_keypair()).unwrap();
+		assert!(authenticate_binding(&record, &seed, Network::Regtest, &expected).is_ok());
+		assert!(authenticate_binding(&record, &seed, Network::Signet, &expected).is_err());
+		let wrong_script = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+		let wrong = FallbackRecord::new(Network::Regtest, wrong_script, &seed.to_mailbox_keypair()).unwrap();
+		assert!(authenticate_binding(&wrong, &seed, Network::Regtest, &expected).is_err());
 		let other = WalletSeed::new_from_seed(Network::Regtest, &[18; 64]);
-		let wrong = FallbackRecord::new(Network::Regtest, record.spk.clone(), &other.vtxo, &seed.to_mailbox_keypair()).unwrap();
-		assert!(authenticate_binding(&wrong, &seed, Network::Regtest, &seed.fallback_script(Network::Regtest).unwrap()).is_err());
+		let wrong = FallbackRecord::new(Network::Regtest, expected.clone(), &other.to_mailbox_keypair()).unwrap();
+		assert!(authenticate_binding(&wrong, &seed, Network::Regtest, &expected).is_err());
+	}
+
+	#[test]
+	fn native_recovery_index_boundary_is_non_hardened() {
 		assert_eq!(next_key_index(None).unwrap(), 0);
 		assert_eq!(next_key_index(Some((1 << 31) - 2)).unwrap(), (1 << 31) - 1);
 		assert!(next_key_index(Some((1 << 31) - 1)).is_err());
+		assert!(next_key_index(Some(u32::MAX)).is_err());
 	}
 }

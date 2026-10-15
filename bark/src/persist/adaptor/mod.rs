@@ -214,8 +214,12 @@ impl Query<std::ops::RangeFull> {
 }
 
 async fn last_issued_key<S: StorageAdaptor>(guard: &S) -> anyhow::Result<Option<u32>> {
-	let records = guard.query_sorted(Query::new_full_range(partition::PUBLIC_KEY).limit(1)).await?;
-	records.first().map(|r| r.to_data::<SerdeVtxoKey>().map(|k| k.index)).transpose()
+	let mut issued = None;
+	for record in guard.get_all(partition::PUBLIC_KEY).await? {
+		let key = record.to_data::<SerdeVtxoKey>()?;
+		if key.issued { issued = Some(issued.map_or(key.index, |last: u32| last.max(key.index))); }
+	}
+	Ok(issued)
 }
 
 async fn write_vtxo_key<S: StorageAdaptor>(guard: &mut S, index: u32, public_key: PublicKey) -> anyhow::Result<()> {
@@ -227,8 +231,10 @@ async fn write_vtxo_key<S: StorageAdaptor>(guard: &mut S, index: u32, public_key
 		ensure!(record.to_data::<SerdeVtxoKey>()?.public_key == public_key,
 			"vtxo key index {index} already stored under a different public key");
 	}
+	let link = guard.get(partition::PUBLIC_KEY, &public_key.serialize()).await?
+		.map(|r| r.to_data::<SerdeVtxoKey>().map(|k| k.link)).transpose()?.flatten();
 	guard.put(Record::from_data(partition::PUBLIC_KEY, &public_key.serialize(), Some(sort_key),
-		&SerdeVtxoKey { index, public_key })?).await
+		&SerdeVtxoKey { index, public_key, issued: true, link })?).await
 }
 
 fn serialize_payment_method(pm: &PaymentMethod) -> Vec<u8> {
@@ -981,6 +987,59 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 
 	async fn get_last_vtxo_key_index(&self) -> anyhow::Result<Option<u32>> {
 		last_issued_key(&*self.inner.read().await).await
+	}
+
+	async fn store_linked_vtxo_keys(&self, keys: &[(u32, ark::fallback::KeyLink)]) -> anyhow::Result<()> {
+		let mut guard = self.inner.write().await;
+		let mut records = Vec::new();
+		for (index, link) in keys {
+			ensure!(link.recovery_index == Some(*index), "native key link index mismatch");
+			let key = link.user_pubkey;
+			let old = guard.get(partition::PUBLIC_KEY, &key.serialize()).await?;
+			let issued = if let Some(row) = old {
+				let old = row.to_data::<SerdeVtxoKey>()?;
+				ensure!(old.index == *index, "key index mismatch");
+				old.issued
+			} else { false };
+			for row in guard.query_sorted(Query::new(partition::PUBLIC_KEY,
+				SortKey::u64_desc(u64::from(*index))..=SortKey::u64_desc(u64::from(*index)))).await? {
+				ensure!(row.to_data::<SerdeVtxoKey>()?.public_key == key, "conflicting key index");
+			}
+			records.push(Record::from_data(partition::PUBLIC_KEY, &key.serialize(),
+				Some(SortKey::u64_desc(u64::from(*index))),
+				&SerdeVtxoKey { index: *index, public_key: key, link: Some(link.clone()), issued })?);
+		}
+		guard.put_batch(records).await
+	}
+	async fn get_vtxo_key_link(&self, key: &PublicKey) -> anyhow::Result<Option<ark::fallback::KeyLink>> {
+		Ok(self.inner.read().await.get(partition::PUBLIC_KEY, &key.serialize()).await?
+			.map(|r| r.to_data::<SerdeVtxoKey>().map(|k| k.link)).transpose()?.flatten())
+	}
+	async fn get_linked_vtxo_keys(&self, max_keys: usize) -> anyhow::Result<Vec<(u32, ark::fallback::KeyLink)>> {
+		let limit = max_keys.checked_add(1).context("key inventory bound overflow")?;
+		let rows = self.inner.read().await.query_sorted(Query::new_full_range(partition::PUBLIC_KEY).limit(limit)).await?;
+		ensure!(rows.len() <= max_keys, "stored key inventory exceeds caller bound");
+		let mut links = Vec::new();
+		for row in rows {
+			let key = row.to_data::<SerdeVtxoKey>()?;
+			if let Some(link) = key.link {
+				ensure!(link.user_pubkey == key.public_key && link.recovery_index == Some(key.index), "stored key link mapping mismatch");
+				links.push((key.index, link));
+			}
+		}
+		links.sort_by_key(|(index, _)| *index);
+		Ok(links)
+	}
+	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>> {
+		let mut guard = self.inner.write().await;
+		let mut keys = guard.get_all(partition::PUBLIC_KEY).await?.into_iter()
+			.map(|row| row.to_data::<SerdeVtxoKey>()).collect::<anyhow::Result<Vec<_>>>()?;
+		keys.sort_by_key(|key| key.index);
+		let Some(mut key) = keys.into_iter().find(|key| !key.issued && key.link.is_some()) else { return Ok(None); };
+		key.issued = true;
+		guard.put(Record::from_data(partition::PUBLIC_KEY, &key.public_key.serialize(),
+			Some(SortKey::u64_desc(u64::from(key.index))), &key)?).await?;
+		Ok(Some((key.index, key.public_key)))
 	}
 
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {

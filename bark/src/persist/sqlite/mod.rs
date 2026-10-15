@@ -271,6 +271,27 @@ impl BarkPersister for SqliteClient {
 		query::store_vtxo_key(&conn, index, public_key)
 	}
 
+	async fn store_linked_vtxo_keys(&self, keys: &[(u32, ark::fallback::KeyLink)]) -> anyhow::Result<()> {
+		let mut conn = self.connect()?;
+		let tx = conn.transaction()?;
+		query::store_linked_vtxo_keys(&tx, keys)?;
+		tx.commit()?;
+		Ok(())
+	}
+	async fn get_vtxo_key_link(&self, key: &PublicKey) -> anyhow::Result<Option<ark::fallback::KeyLink>> {
+		query::get_vtxo_key_link(&self.connect()?, key)
+	}
+	async fn get_linked_vtxo_keys(&self, max_keys: usize) -> anyhow::Result<Vec<(u32, ark::fallback::KeyLink)>> {
+		query::get_linked_vtxo_keys(&self.connect()?, max_keys)
+	}
+	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>> {
+		let mut conn = self.connect()?;
+		let tx = conn.transaction()?;
+		let key = query::take_next_linked_vtxo_key(&tx)?;
+		tx.commit()?;
+		Ok(key)
+	}
+
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {
 		query::get_fallback_record(&self.connect()?)
 	}

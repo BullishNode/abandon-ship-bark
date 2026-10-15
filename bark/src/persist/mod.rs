@@ -424,11 +424,21 @@ pub trait BarkPersister: Send + Sync + 'static {
 	/// - Returns an error if the mapping cannot be stored.
 	async fn store_vtxo_key(&self, index: u32, public_key: PublicKey) -> anyhow::Result<()>;
 
+	/// Persist canonical authenticated links without clearing issued state.
+	async fn store_linked_vtxo_keys(&self, keys: &[(u32, ark::fallback::KeyLink)]) -> anyhow::Result<()>;
+	/// Read a retained canonical public proof, without allocating a key.
+	async fn get_vtxo_key_link(&self, key: &PublicKey) -> anyhow::Result<Option<ark::fallback::KeyLink>>;
+	/// Read every retained link in native-index order. Fail if the total stored
+	/// key mappings exceed `max_keys`; never return a truncated inventory.
+	async fn get_linked_vtxo_keys(&self, max_keys: usize) -> anyhow::Result<Vec<(u32, ark::fallback::KeyLink)>>;
+	/// Atomically issue the first linked unused key before returning it.
+	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>>;
+
 	/// Read the last signed fallback destination.
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>>;
 
 	/// Persist an immutable binding; canonical signatures may be adopted only
-	/// when the address and account are unchanged.
+	/// when the destination is unchanged.
 	async fn store_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()>;
 
 	/// Get the last revealed/used [Vtxo] key index.

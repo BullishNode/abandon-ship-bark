@@ -353,7 +353,6 @@ async fn run_cosign(wallet: &Wallet, send: &ArkoorSend) -> Result<Progress, Adva
 	// rejection to on_rejection instead of retrying forever.
 	let arkoor = wallet.create_checkpointed_arkoor_with_vtxos(
 		dest, inputs, change_keypair, send.change_pieces.clone(),
-		send.destination.account_child().context("invalid stored recipient origin")?,
 	).await?;
 
 	let initial_update = MovementUpdate::new()

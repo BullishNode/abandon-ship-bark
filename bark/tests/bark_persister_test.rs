@@ -133,6 +133,13 @@ impl BarkPersister for Dummy {
 		Ok(())
 	}
 
+	async fn store_linked_vtxo_keys(&self, _: &[(u32, ark::fallback::KeyLink)]) -> anyhow::Result<()> {
+		anyhow::bail!("dummy persister cannot store key links")
+	}
+	async fn get_vtxo_key_link(&self, _: &PublicKey) -> anyhow::Result<Option<ark::fallback::KeyLink>> { Ok(None) }
+	async fn get_linked_vtxo_keys(&self, _: usize) -> anyhow::Result<Vec<(u32, ark::fallback::KeyLink)>> { Ok(Vec::new()) }
+	async fn take_next_linked_vtxo_key(&self) -> anyhow::Result<Option<(u32, PublicKey)>> { Ok(None) }
+
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<bark::persist::models::FallbackRecord>> {
 		Ok(None)
 	}

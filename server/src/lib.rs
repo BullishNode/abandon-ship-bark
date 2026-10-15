@@ -682,7 +682,7 @@ impl Server {
 		utxo: OutPoint,
 		funding_tx: Option<&Transaction>,
 		user_pub_nonce: PublicNonce,
-		origin: ark::fallback::AccountChild,
+		origin: ark::fallback::KeyLinkOrigin,
 	) -> anyhow::Result<ark::board::BoardCosignResponse> {
 		check_max_amount("board", amount, self.config.max_board_amount)?;
 
@@ -814,8 +814,8 @@ impl Server {
 			.upsert_unsigned_tx([pending.point().txid])
 			.insert_oor_spent_vtxos([(anchor, pending.point().txid)]);
 		self.db.write(async |t| {
-			t.admit_fallback_child(origin, user_pubkey).await?;
-			t.require_fallback(&[user_pubkey]).await?;
+			t.verify_fallback_link(origin, user_pubkey, self.config.network).await?;
+			t.require_fallback(&[user_pubkey], self.config.network).await?;
 			t.store_pending_board(&pending).await?;
 			t.execute_vtxo_tree_update(update).await?;
 			t.add_funding_vtxos_to_frontier(utxo.txid, None).await?;
@@ -838,7 +838,7 @@ impl Server {
 	/// - The VTXO is actually a board (not another VTXO type)
 	#[tracing::instrument(skip(self, vtxo))]
 	pub async fn register_board(&self, vtxo: Vtxo<Full>) -> anyhow::Result<()> {
-		self.db.read(async |t| t.require_fallback(&[vtxo.user_pubkey()]).await).await?;
+		self.db.read(async |t| t.require_fallback(&[vtxo.user_pubkey()], self.config.network).await).await?;
 		let funding_txid = vtxo.chain_anchor().txid;
 		let funding_vout = vtxo.chain_anchor().vout;
 		let tx_info = bcd::custom_get_raw_transaction_info(&self.bitcoind, funding_txid, None).await
@@ -908,6 +908,7 @@ impl Server {
 			.mark_vtxos_oor_spent(builder.spend_info());
 		let inserted = self.db.write(async |t| {
 			t.lock_board_registration(&vtxo).await?;
+			t.require_fallback(&[vtxo.user_pubkey()], self.config.network).await?;
 			let inserted = t.execute_vtxo_tree_update(update).await?;
 			t.add_funding_vtxos_to_frontier(funding_txid, Some(confirmed_height)).await
 				.context("failed to add board vtxos to frontier")?;
@@ -1028,24 +1029,19 @@ impl Server {
 		// overwritten regardless of state, which is safe because each vtxo was
 		// validated above as a fully-signed version of that id, and any valid
 		// fully-signed version serves recovery equally well.
+		let output_keys = vtxos.iter().map(|v| v.user_pubkey()).collect::<Vec<_>>();
 		let update = VtxoTreeUpdate::new()
 			.upsert_signed_tx(signed_txs)
 			.provide_signatures(vtxos)
 			.mark_vtxos_registered(registered_ids.iter().copied());
 		self.db.write(async |t| {
 			t.lock_vtxo_registration(&registered_ids).await?;
+			t.require_fallback(&output_keys, self.config.network).await?;
 			t.execute_vtxo_tree_update(update).await?;
-			htlc_vtxo::create_htlc_vtxos(&t, &htlc_sends, HtlcDirection::Incoming).await?;
+			htlc_vtxo::create_htlc_vtxos(&t, &htlc_sends, HtlcDirection::Incoming, self.config.network).await?;
 			Ok(())
 		}).await?;
 		Ok(())
-	}
-
-	/// Resolve the existing blinded mailbox context without trusting a clear
-	/// wallet ID or extending a derivation scan/horizon.
-	pub(crate) fn resolve_fallback_hint(&self, hint: ark::fallback::AccountChildHint, policy_key: PublicKey) -> anyhow::Result<ark::fallback::AccountChild> {
-		let mailbox = self.unblind_mailbox_id(hint.blinded_mailbox_id(), policy_key)?;
-		Ok(ark::fallback::AccountChild::new(mailbox.as_pubkey(), hint.child_index())?)
 	}
 
 	/// Unblind a [BlindedMailboxIdentifier].

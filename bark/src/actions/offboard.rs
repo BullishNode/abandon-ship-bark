@@ -599,7 +599,7 @@ async fn arkoor_split_offboard(
 	};
 	let arkoor = wallet
 		.create_checkpointed_arkoor_with_vtxos(
-			split_destination, inputs.into_iter(), change_keypair, change_pieces.clone(), None,
+			split_destination, inputs.into_iter(), change_keypair, change_pieces.clone(),
 		)
 		.await
 		.context("error preparing offboard vtxos with arkoor")?;

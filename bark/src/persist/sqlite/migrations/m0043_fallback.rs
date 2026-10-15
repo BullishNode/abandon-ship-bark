@@ -13,11 +13,12 @@ impl Migration for Migration0043 {
 
 	fn do_migration(&self, conn: &Transaction) -> anyhow::Result<()> {
 		conn.execute_batch("
+			ALTER TABLE bark_vtxo_key ADD COLUMN linked_proof BLOB;
+			ALTER TABLE bark_vtxo_key ADD COLUMN issued INTEGER NOT NULL DEFAULT 1;
 			CREATE TABLE bark_fallback_record (
 				id INTEGER PRIMARY KEY CHECK (id = 1),
 				record BLOB NOT NULL,
-				spk BLOB NOT NULL,
-				account_xpub BLOB NOT NULL
+				spk BLOB NOT NULL
 			);
 		")?;
 		Ok(())

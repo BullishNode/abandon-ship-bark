@@ -1,3 +1,4 @@
+mod spending;
 
 use bitcoincore_rpc::RpcApi;
 
@@ -6,7 +7,7 @@ use ark_testing::TestContext;
 #[tokio::test]
 async fn backing_spends_require_a_synchronized_reverse_index() {
 	let ctx = TestContext::new("bitcoind/backing_spends_require_a_synchronized_reverse_index").await;
-	let error = server::bitcoind::spending::require_spender_index(&ctx.bitcoind().async_client()).await
+	let error = self::spending::require_spender_index(&ctx.bitcoind().async_client()).await
 		.expect_err("txindex alone must never establish confirmed-spender coverage");
 	assert!(format!("{error:#}").contains("txospenderindex"));
 }
@@ -17,7 +18,7 @@ async fn backing_spends_find_confirmed_transactions_with_empty_mempool() {
 	use ark_testing::sat;
 	use bitcoin::OutPoint;
 	use bitcoind_async_client::traits::Reader;
-	use server::bitcoind::spending::{backing_spends, require_spender_index};
+	use self::spending::{backing_spends, require_spender_index};
 
 	let ctx = TestContext::new("bitcoind/backing_spends_find_confirmed_transactions_with_empty_mempool").await;
 	let mut config = ctx.bitcoind_default_cfg("indexed");

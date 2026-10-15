@@ -289,12 +289,12 @@ async fn per_key_historical_af52_seed_restore_after_strict_upgrade() {
 	assert_eq!(digest(&expected_bytes),clone["source_signed_rights_sha256"].as_str().unwrap());
 	assert_eq!(ready["rights_sha256"],clone["source_signed_rights_sha256"]);
 	let expected:BTreeMap<String,Value>=serde_json::from_slice(&expected_bytes).unwrap();
-	assert_eq!(discovered.keys().collect::<Vec<_>>(),expected.keys().collect::<Vec<_>>());
-	for (id,actual) in &discovered {for field in ["amount_sat","user_pubkey","mailbox_pk","vtxo","fallback_record","key_link"] {assert_eq!(actual[field],expected[id][field],"original signed entitlement/proof field {field} changed");}}
+	assert!(discovered.keys().eq(expected.keys()),"native discovered ID set differs from original private snapshot");
+	for (id,actual) in &discovered {for field in ["amount_sat","user_pubkey","mailbox_pk","vtxo","fallback_record","key_link"] {assert!(actual[field]==expected[id][field],"original signed entitlement/proof field {field} changed");}}
 	// The same exact native sync, with no auditor hints injected, is idempotent.
 	payer.sync().await;recipient.sync().await;
 	payer.sync_mailbox().await.unwrap();recipient.sync_mailbox().await.unwrap();
-	assert_eq!(discovered_signed_rights(&payer).await,payer_discovered);
-	assert_eq!(discovered_signed_rights(&recipient).await,recipient_discovered);
+	assert!(discovered_signed_rights(&payer).await==payer_discovered,"payer repeat sync changed original private rights");
+	assert!(discovered_signed_rights(&recipient).await==recipient_discovered,"recipient repeat sync changed original private rights");
 	exclusive(&verify.join("RESULT.json"),&serde_json::to_vec(&json!({"schema_version":1,"result":"PASS","source_ready_sha256":clone["source_ready_sha256"],"source_signed_rights_sha256":clone["source_signed_rights_sha256"],"new_production":NEW,"sdk_source":SDK,"native_discovery_before_expected_lookup":true,"old_wallet_database_opened":false,"payer_sat":payer_sat,"recipient_sat":recipient_sat,"total_sat":payer_sat+recipient_sat,"rights_count":discovered.len(),"restored_public_map_sha256":digest(&serde_json::to_vec(&discovered).unwrap()),"repeat_sync_identical":true,"post_upgrade_spend":false})).unwrap());
 }

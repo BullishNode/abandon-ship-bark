@@ -265,10 +265,19 @@ impl Wallet {
 		let vtxo = Vtxo::<Full>::deserialize(&resp.vtxo)
 			.with_context(|| format!("server returned an undecodable vtxo for {id}"))?;
 		ensure!(vtxo.id() == id, "server returned another vtxo for recovery");
-		if let Some(index) = resp.child_index {
-			let origin = ark::fallback::AccountChild::new(self.mailbox_keypair().public_key(), index)?;
-			let account = bitcoin::bip32::Xpub::from_priv(&crate::SECP, &self.inner.seed.vtxo);
-			origin.verify_pubkey(&account, vtxo.user_pubkey()).context("untrusted recovery child does not match this seed")?;
+		let record = ark::fallback::FallbackRecord::deserialize(&resp.fallback_record)?;
+		let link = ark::fallback::KeyLink::deserialize(&resp.key_link)?;
+		let mailbox = self.mailbox_keypair().public_key();
+		let expected = self.fallback_destination().await?;
+		record.verify(self.network().await?, mailbox)?;
+		ensure!(record.same_binding(&expected), "recovery record changes the immutable destination");
+		link.verify(self.network().await?, mailbox, &record)?;
+		ensure!(link.user_pubkey == vtxo.user_pubkey(), "recovery link is for another policy key");
+		ensure!(resp.child_index == link.recovery_index, "recovery index differs from signed link");
+		if let Some(index) = link.recovery_index {
+			ensure!(self.inner.seed.derive_vtxo_keypair(index).public_key() == vtxo.user_pubkey(),
+				"untrusted recovery index does not match this seed");
+			self.inner.db.store_linked_vtxo_keys(&[(index, link)]).await?;
 			self.inner.db.store_vtxo_key(index, vtxo.user_pubkey()).await?;
 		}
 		Ok(vtxo)

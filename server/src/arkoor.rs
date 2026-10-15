@@ -1,8 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use anyhow::Context;
 use bitcoin::Txid;
-use bitcoin::secp256k1::PublicKey;
 
 use ark::util::IteratorExt;
 use ark::{ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy, ServerVtxo};
@@ -89,32 +88,6 @@ impl Server {
 		Ok(ret)
 	}
 
-	/// Supplemental attribution is separate from the upstream signed request.
-	pub(crate) fn arkoor_origin_hints(&self, request: &server_rpc::protos::ArkoorPackageCosignRequest) -> anyhow::Result<BTreeMap<PublicKey, ark::fallback::AccountChildHint>> {
-		let mut origins = BTreeMap::new();
-		for part in &request.parts {
-			ensure!(part.outputs.len().saturating_add(part.isolated_outputs.len()) <= self.config.max_arkoor_fanout,
-				"too many hinted outputs for one input");
-			for output in part.outputs.iter().chain(part.isolated_outputs.iter()) {
-				let key = VtxoPolicy::deserialize(&output.policy)?.user_pubkey();
-				let hint = output.origin.clone().context("missing account child origin")?.try_into()?;
-				if let Some(previous) = origins.insert(key, hint) {
-					ensure!(previous == hint, "conflicting origin hints for the same coin key");
-				}
-			}
-		}
-		Ok(origins)
-	}
-
-	pub(crate) fn resolve_output_origins(
-		&self, keys: &[PublicKey], hints: &BTreeMap<PublicKey, ark::fallback::AccountChildHint>,
-	) -> anyhow::Result<Vec<(PublicKey, ark::fallback::AccountChild)>> {
-		keys.iter().map(|key| {
-			let hint = *hints.get(key).context("missing account child origin for output")?;
-			Ok((*key, self.resolve_fallback_hint(hint, *key)?))
-		}).collect()
-	}
-
 	/// Returns the signed builder along with the number of VTXO rows actually
 	/// inserted by the tree update. Callers gate retry-sensitive metrics on
 	/// this count: `> 0` means the inputs/outputs were freshly persisted,
@@ -123,12 +96,11 @@ impl Server {
 		&self,
 		builder: ArkoorPackageBuilder<ServerCanCosign>,
 	) -> anyhow::Result<(ArkoorPackageBuilder<ServerSigned>, u64)> {
-		self.cosign_oor_with_builder_and_hints(builder, &BTreeMap::new()).await
+		self.cosign_oor_with_builder_and_links(builder).await
 	}
 
-	pub(crate) async fn cosign_oor_with_builder_and_hints(
+	pub(crate) async fn cosign_oor_with_builder_and_links(
 		&self, builder: ArkoorPackageBuilder<ServerCanCosign>,
-		hints: &BTreeMap<PublicKey, ark::fallback::AccountChildHint>,
 	) -> anyhow::Result<(ArkoorPackageBuilder<ServerSigned>, u64)> {
 		let vtxo_guard = self.vtxos_in_flux.try_lock(builder.input_ids()).map_err(|e| {
 			slog!(ArkoorInputAlreadyInFlux, vtxo: e.id);
@@ -155,10 +127,8 @@ impl Server {
 			.insert_oor_spent_vtxos(builder.build_unsigned_internal_vtxos())
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
-		let origins = self.resolve_output_origins(&output_keys, hints)?;
 		let inserted = self.db.write(async |t| {
-			for (key, origin) in &origins { t.admit_fallback_child(*origin, *key).await?; }
-			t.require_fallback(&output_keys).await?;
+			t.require_fallback(&output_keys, self.config.network).await?;
 			let inserted = t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::set_htlc_vtxo_resolutions(
 				&t, &claimed_htlc_recvs, HtlcResolution::Fulfilled,
@@ -176,7 +146,6 @@ impl Server {
 	pub async fn cosign_oor(
 		&self,
 		request: ArkoorPackageCosignRequest<VtxoId>,
-		hints: BTreeMap<PublicKey, ark::fallback::AccountChildHint>,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		let input_vtxo_ids = request.inputs().cloned().collect::<Vec<VtxoId>>();
 		let input_vtxo_states = self.db.read(async |t| t.get_user_vtxos_by_id(&input_vtxo_ids).await).await?;
@@ -228,7 +197,7 @@ impl Server {
 			v.check_spendable_for_oor(chain_tip, *spending_txid)?;
 		}
 
-		let (builder, inserted) = self.cosign_oor_with_builder_and_hints(builder, &hints).await?;
+		let (builder, inserted) = self.cosign_oor_with_builder_and_links(builder).await?;
 
 		slog!(ArkoorCosign, input_ids: input_vtxo_ids,
 			output_ids: builder.build_unsigned_vtxos().into_iter().map(|v| v.id()).collect(),

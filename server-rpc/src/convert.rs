@@ -479,27 +479,12 @@ impl TryFrom<protos::WalletStatus> for crate::WalletStatus {
 }
 
 
-impl From<ark::fallback::AccountChildHint> for protos::AccountChildHint {
-	fn from(hint: ark::fallback::AccountChildHint) -> Self {
-		Self { blinded_mailbox_id: hint.blinded_mailbox_id().serialize(), child_index: hint.child_index() }
-	}
-}
-
-impl TryFrom<protos::AccountChildHint> for ark::fallback::AccountChildHint {
-	type Error = ConvertError;
-	fn try_from(hint: protos::AccountChildHint) -> Result<Self, Self::Error> {
-		let blinded = BlindedMailboxIdentifier::deserialize(&hint.blinded_mailbox_id)
-			.map_err(|_| "invalid blinded mailbox point")?;
-		Self::new(blinded, hint.child_index).map_err(|_| "invalid account child hint".into())
-	}
-}
-
 impl<'a> From<&'a VtxoRequest> for protos::VtxoRequest {
 	fn from(v: &'a VtxoRequest) -> Self {
 		protos::VtxoRequest {
 			amount: v.amount.to_sat(),
 			policy: v.policy.serialize(),
-			origin: None,
+
 		}
 	}
 }
@@ -529,7 +514,7 @@ impl From<ArkoorDestination> for protos::ArkoorDestination {
 		Self {
 			total_amount: v.total_amount.to_sat(),
 			policy: v.policy.serialize(),
-			origin: None,
+
 		}
 	}
 }
@@ -540,7 +525,7 @@ impl From<SignedVtxoRequest> for protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
 				amount: v.vtxo.amount.to_sat(),
 				policy: v.vtxo.policy.serialize(),
-				origin: None,
+
 			}),
 			cosign_pubkey: v.cosign_pubkey.serialize().to_vec(),
 			public_nonces: v.nonces.iter().map(|n| n.serialize().to_vec()).collect(),

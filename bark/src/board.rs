@@ -265,7 +265,6 @@ impl Wallet {
 			user_pubkey: user_keypair.public_key().serialize().to_vec(),
 			pub_nonce: builder.user_pub_nonce().serialize().to_vec(),
 			funding_tx: bitcoin::consensus::serialize(&board_psbt.unsigned_tx),
-			origin: Some(self.fallback_child_hint(user_keypair.public_key()).await?.into()),
 		}).await.context("error requesting board cosign")?
 			.into_inner().try_into().context("invalid cosign response from server")?;
 

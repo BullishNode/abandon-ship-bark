@@ -30,7 +30,6 @@ use crate::serde_utils;
 #[cfg_attr(feature = "utoipa", derive(ToSchema))]
 pub struct FallbackDestination {
 	pub address: String,
-	pub account_xpub: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -239,9 +238,6 @@ pub struct DebugInfo {
 	/// The ID of the wallet's server mailbox
 	#[cfg_attr(feature = "utoipa", schema(value_type = String))]
 	pub mailbox_id: PublicKey,
-	/// The xpub from which all VTXO keypairs are derived
-	#[cfg_attr(feature = "utoipa", schema(value_type = String))]
-	pub vtxo_xpub: bitcoin::bip32::Xpub,
 }
 
 /// The different balances of a Bark wallet.
@@ -315,7 +311,6 @@ impl From<bark::DebugInfo> for DebugInfo {
 		DebugInfo {
 			network: v.network,
 			mailbox_id: v.mailbox_id.as_pubkey(),
-			vtxo_xpub: v.vtxo_xpub,
 		}
 	}
 }

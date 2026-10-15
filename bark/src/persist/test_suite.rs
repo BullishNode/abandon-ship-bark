@@ -69,6 +69,7 @@ macro_rules! bark_persister_tests {
 			test_vtxo_key_last_index_advances,
 			test_concurrent_key_index_collision,
 			test_fallback_record_ordering,
+			test_per_key_pool_ack_never_unissues,
 
 			test_store_and_get_vtxo,
 			test_get_vtxos_by_state,
@@ -186,7 +187,6 @@ fn empty_round_state() -> RoundState {
 	RoundState {
 		done: false,
 		participation: RoundParticipation {
-			output_origins: Default::default(),
 			inputs: vec![],
 			outputs: vec![],
 			unblinded_mailbox_id: None,
@@ -386,15 +386,44 @@ pub async fn test_fallback_record_ordering(db: &impl BarkPersister) {
 	assert_eq!(db.get_fallback_record().await.unwrap(), None);
 	let seed = crate::WalletSeed::new_from_seed(Network::Regtest, &[17; 64]);
 	let record = FallbackRecord::new(Network::Regtest, seed.fallback_script(Network::Regtest).unwrap(),
-		&seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
+		&seed.to_mailbox_keypair()).unwrap();
 	db.store_fallback_record(&record).await.unwrap();
-	let canonical = FallbackRecord::new(Network::Regtest, record.spk.clone(), &seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
+	let canonical = FallbackRecord::new(Network::Regtest, record.spk.clone(), &seed.to_mailbox_keypair()).unwrap();
 	db.store_fallback_record(&canonical).await.unwrap();
 	assert_eq!(db.get_fallback_record().await.unwrap(), Some(canonical.clone()));
 	let mut other = canonical;
 	other.spk = ScriptBuf::new();
 	assert!(db.store_fallback_record(&other).await.is_err());
 	assert_eq!(db.get_fallback_record().await.unwrap().unwrap().spk, record.spk);
+}
+
+/// Acknowledgments can arrive after issuance and must never reissue that key.
+/// This common contract runs for SQLite and every StorageAdaptor backend.
+pub async fn test_per_key_pool_ack_never_unissues(db: &impl BarkPersister) {
+	let seed = crate::WalletSeed::new_from_seed(Network::Regtest, &[29; 64]);
+	let mailbox = seed.to_mailbox_keypair();
+	let record = FallbackRecord::new(Network::Regtest, seed.fallback_script(Network::Regtest).unwrap(), &mailbox).unwrap();
+	db.store_fallback_record(&record).await.unwrap();
+	let links = [1, 2].into_iter().map(|index| {
+		(index, ark::fallback::KeyLink::new(Network::Regtest, mailbox.public_key(), &record,
+			&seed.derive_vtxo_keypair(index), Some(index)).unwrap())
+	}).collect::<Vec<_>>();
+	db.store_linked_vtxo_keys(&links).await.unwrap();
+	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), None, "prelinking does not issue keys");
+	let first = db.take_next_linked_vtxo_key().await.unwrap().unwrap();
+	assert_eq!(first, (1, seed.derive_vtxo_keypair(1).public_key()));
+	// A late retry acknowledgment must preserve the issued bit.
+	db.store_linked_vtxo_keys(&links).await.unwrap();
+	let second = db.take_next_linked_vtxo_key().await.unwrap().unwrap();
+	assert_eq!(second, (2, seed.derive_vtxo_keypair(2).public_key()));
+	assert!(db.take_next_linked_vtxo_key().await.unwrap().is_none());
+	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), Some(2));
+	assert_eq!(db.get_vtxo_key_link(&first.1).await.unwrap(), Some(links[0].1.clone()));
+	let foreign = crate::WalletSeed::new_from_seed(Network::Regtest, &[30; 64]);
+	let conflicting = ark::fallback::KeyLink::new(Network::Regtest, mailbox.public_key(), &record,
+		&foreign.derive_vtxo_keypair(1), Some(1)).unwrap();
+	assert!(db.store_linked_vtxo_keys(&[(1, conflicting)]).await.is_err());
+	assert_eq!(db.get_vtxo_key_link(&first.1).await.unwrap(), Some(links[0].1.clone()));
 }
 
 // ---------------------------------------------------------------------------

@@ -38,13 +38,14 @@ CREATE TABLE bark_exit_states (
 			, movement_id INTEGER REFERENCES bark_movements(id));
 CREATE TABLE bark_vtxo_key (
 				public_key TEXT NOT NULL PRIMARY KEY,
-				idx INTEGER NOT NULL UNIQUE
+				idx INTEGER NOT NULL UNIQUE,
+				linked_proof BLOB,
+				issued INTEGER NOT NULL DEFAULT 1
 			);
 CREATE TABLE bark_fallback_record (
 	id INTEGER PRIMARY KEY CHECK (id = 1),
 	record BLOB NOT NULL,
-	spk BLOB NOT NULL,
-	account_xpub BLOB NOT NULL
+	spk BLOB NOT NULL
 );
 CREATE TABLE bark_exit_child_transactions (
 				exit_id TEXT PRIMARY KEY,

@@ -608,8 +608,6 @@ pub struct DebugInfo {
 	pub network: Network,
 	/// The ID of the wallet's server mailbox
 	pub mailbox_id: MailboxIdentifier,
-	/// The xpub from which all VTXO keypairs are derived
-	pub vtxo_xpub: bip32::Xpub,
 }
 
 pub struct UtxoInfo {
@@ -1017,13 +1015,18 @@ impl Wallet {
 	/// Derive and store the keypair directly after currently last revealed one,
 	/// together with its index.
 	pub async fn derive_store_next_keypair(&self) -> anyhow::Result<(Keypair, u32)> {
-		let _guard = self.inner.lock_manager.lock(
-			&format!("{}.key-allocation", self.fingerprint()), Duration::from_secs(30),
-		).await.context("key allocation is busy")?;
-		self.fallback_destination().await.context("register the immutable fallback account before deriving coin keys")?;
-		let (keypair, index) = self.peek_next_keypair().await?;
-		self.inner.db.store_vtxo_key(index, keypair.public_key()).await?;
-		Ok((keypair, index))
+		let _guard = self.inner.lock_manager.lock(&format!("{}.key-pool", self.fingerprint()), Duration::from_secs(30)).await?;
+		let (index, key) = match self.inner.db.take_next_linked_vtxo_key().await? {
+			Some(key) => key,
+			None => {
+				self.sync_fallback_locked().await.context("no linked keys available; connect to the Ark server")?;
+				self.inner.db.take_next_linked_vtxo_key().await?.context("no linked keys available")?
+			},
+		};
+		let pair = self.inner.seed.derive_vtxo_keypair(index);
+		ensure!(pair.public_key() == key, "linked key does not match this seed");
+		self.fallback_key_link(key).await?;
+		Ok((pair, index))
 	}
 
 	#[deprecated(note = "use peek_keypair instead")]
@@ -1171,10 +1174,11 @@ impl Wallet {
 	///
 	/// May return an error if the address at the given index has not been derived yet.
 	pub async fn peek_address(&self, index: u32) -> anyhow::Result<ark::Address> {
+		let _guard = self.inner.lock_manager.lock(&format!("{}.key-pool", self.fingerprint()), Duration::from_secs(30)).await?;
 		let properties = self.properties().await?;
 		let network = properties.network;
 		let keypair = self.peek_keypair(index).await?;
-		self.fallback_destination().await?;
+		self.fallback_key_link(keypair.public_key()).await?;
 		self.inner.db.store_vtxo_key(index, keypair.public_key()).await?;
 		let mailbox = self.mailbox_identifier();
 
@@ -1193,7 +1197,6 @@ impl Wallet {
 			.pubkey_policy(keypair.public_key())
 			.mailbox(mailbox_pubkey, mailbox, &keypair)
 			.context("failed to assign mailbox")?
-			.account_child(ark::fallback::AccountChild::new(mailbox.as_pubkey(), index)?)
 			.into_address()
 			.context("failed to build address")?)
 	}
@@ -1476,17 +1479,11 @@ impl Wallet {
 		self.inner.seed.fingerprint()
 	}
 
-	/// Returns the xpub from which all VTXO keypairs are derived.
-	pub fn vtxo_xpub(&self) -> bip32::Xpub {
-		bip32::Xpub::from_priv(&SECP, &self.inner.seed.vtxo)
-	}
-
 	/// Returns wallet information that helps to debug issues.
 	pub async fn debug_info(&self) -> anyhow::Result<DebugInfo> {
 		Ok(DebugInfo {
 			network: self.network().await?,
 			mailbox_id: self.mailbox_identifier(),
-			vtxo_xpub: self.vtxo_xpub(),
 		})
 	}
 
@@ -2276,7 +2273,6 @@ impl Wallet {
 		};
 
 		Ok(Some(RoundParticipation {
-			output_origins: Default::default(),
 			inputs: vtxos,
 			outputs: vec![req],
 			unblinded_mailbox_id: None,

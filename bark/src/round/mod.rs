@@ -67,9 +67,6 @@ pub struct RoundParticipation {
 	/// The output VTXOs that we request in the round,
 	/// including change
 	pub outputs: Vec<VtxoRequest>,
-	/// Explicit origins for external recipients; native outputs derive their own.
-	#[serde(default)]
-	pub output_origins: HashMap<PublicKey, ark::fallback::AccountChildHint>,
 	/// Optional mailbox identifier for round completion notification
 	#[serde(default, skip_serializing_if = "Option::is_none", with = "ark::encode::serde::opt")]
 	pub unblinded_mailbox_id: Option<ark::mailbox::MailboxIdentifier>,
@@ -1136,17 +1133,7 @@ async fn start_attempt(
 	wallet.register_vtxo_transactions_with_server(&participation.inputs).await
 		.map_err(HarkForfeitError::Err)?;
 
-	let mut vtxo_requests = signed_reqs.into_iter().map(Into::into).collect::<Vec<protos::SignedVtxoRequest>>();
-	for request in &mut vtxo_requests {
-		let output = request.vtxo.as_mut().context("missing signed output")?;
-		let key = VtxoPolicy::deserialize(&output.policy)?.user_pubkey();
-		let hint = match participation.output_origins.get(&key) {
-			Some(hint) => *hint,
-			None => wallet.fallback_child_hint(key).await?,
-		};
-		output.origin = Some(hint.into());
-	}
-
+	let vtxo_requests = signed_reqs.into_iter().map(Into::into).collect::<Vec<protos::SignedVtxoRequest>>();
 	let resp = srv.client.submit_payment(protos::SubmitPaymentRequest {
 		input_vtxos: input_vtxos,
 		vtxo_requests,
@@ -2199,13 +2186,8 @@ impl Wallet {
 
 		let mut vtxo_requests = Vec::with_capacity(participation.outputs.len());
 		for request in &participation.outputs {
-			let key = request.policy.user_pubkey();
-			let hint = match participation.output_origins.get(&key) {
-				Some(hint) => *hint,
-				None => self.fallback_child_hint(key).await?,
-			};
 			vtxo_requests.push(protos::VtxoRequest {
-				policy: request.policy.serialize(), amount: request.amount.to_sat(), origin: Some(hint.into()),
+				policy: request.policy.serialize(), amount: request.amount.to_sat(),
 			});
 		}
 
@@ -2356,7 +2338,6 @@ impl Wallet {
 		}).collect();
 
 		let participation = RoundParticipation {
-			output_origins: HashMap::new(),
 			inputs,
 			outputs,
 			unblinded_mailbox_id: Some(self.mailbox_identifier()),

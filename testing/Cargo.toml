@@ -40,6 +40,10 @@ path = "tests/upgrade/mod.rs"
 name = "carrier-builder"
 path = "tests/carrier.rs"
 
+[[test]]
+name = "per-key"
+path = "tests/per_key.rs"
+
 [features]
 slow_test = []
 

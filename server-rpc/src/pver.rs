@@ -37,3 +37,6 @@ pub const PROTOCOL_VERSION_BOARD_FUNDING_TX: u64 = 4;
 /// scripts, so the server rejects Lightning sends and receives and round
 /// participations from clients below this version with an upgrade error.
 pub const PROTOCOL_VERSION_HASHLOCK_CLAUSES: u64 = 5;
+
+/// Individually signed immutable expiry fallback ownership.
+pub const PROTOCOL_VERSION_PER_KEY_FALLBACK: u64 = 6;

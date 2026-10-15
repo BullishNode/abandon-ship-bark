@@ -249,6 +249,8 @@ impl Server {
 			);
 		}
 		let fee_chain = bcd::verify_fee_chain(&bitcoind, cfg.network).await?;
+		cfg.direct_expiry.regtest_qualification_fee_policy.unwrap_or_default()
+			.declaration_bytes(&cfg.data_dir, &fee_chain)?;
 		let deep_tip = bcd::deep_tip(&bitcoind).await
 			.context("failed to fetch deep tip from bitcoind")?;
 
@@ -392,8 +394,11 @@ impl Server {
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		bcd::require_network(&bitcoind, cfg.network).await?;
 		let fee_chain = bcd::verify_fee_chain(&bitcoind, cfg.network).await?;
-		cfg.direct_expiry.regtest_qualification_fee_policy.unwrap_or_default().require_stored(
-			&cfg.data_dir.join(payout_witness::DIRECT_DIRECTORY), &fee_chain)?;
+		let fee_history = cfg.data_dir.join(payout_witness::DIRECT_DIRECTORY);
+		match cfg.direct_expiry.regtest_qualification_fee_policy {
+			Some(policy) => policy.require_stored(&fee_history, &fee_chain)?,
+			None => { watchman::ordinary_fee::OrdinaryFeePolicy::require_live_stored(&fee_history)?; },
+		}
 		bcd::require_version(&bitcoind).await?;
 		bitcoind.require_txindex().await?;
 

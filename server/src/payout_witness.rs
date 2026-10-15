@@ -187,7 +187,7 @@ struct DirectRecord {
 impl DirectPayoutWitness {
 	/// Called only during fresh server creation, before any direct journal rows.
 	pub async fn initialize(datadir: &Path, network: Network, key: PublicKey, db: &Db) -> anyhow::Result<()> {
-		Self::initialize_policy(datadir, network, key, db, crate::watchman::ordinary_fee::OrdinaryFeePolicy::default(), None).await
+		Self::initialize_policy(datadir, network, key, db, crate::watchman::ordinary_fee::OrdinaryFeePolicy::default(), None, None).await
 	}
 
 	pub(crate) async fn initialize_with_fee_policy(
@@ -196,12 +196,14 @@ impl DirectPayoutWitness {
 	) -> anyhow::Result<()> {
 		ensure!(chain.matches(network), "direct history fee authority differs from witness network");
 		policy.validate_config(network)?;
-		Self::initialize_policy(datadir, network, key, db, policy, Some(chain)).await
+		let declaration = policy.declaration_bytes(datadir, chain)?;
+		Self::initialize_policy(datadir, network, key, db, policy, Some(chain), declaration).await
 	}
 
 	async fn initialize_policy(
 		datadir: &Path, network: Network, key: PublicKey, db: &Db,
 		policy: crate::watchman::ordinary_fee::OrdinaryFeePolicy, chain: Option<&crate::bitcoind::VerifiedFeeChain>,
+		declaration: Option<Vec<u8>>,
 	) -> anyhow::Result<()> {
 		let empty = db.read(async |t| Ok(t.query_one("SELECT NOT EXISTS (SELECT 1 FROM expiry_allocation)
 			AND NOT EXISTS (SELECT 1 FROM expiry_carrier) AS empty", &[]).await?.get::<_, bool>("empty"))).await?;
@@ -209,6 +211,11 @@ impl DirectPayoutWitness {
 		let directory = datadir.join(DIRECT_DIRECTORY);
 		fs::create_dir(&directory).context("creating direct payout history")?;
 		fs_perms::harden(&directory, 0o700)?;
+		if let Some(bytes) = declaration {
+			let path = directory.join(crate::watchman::ordinary_fee::DECLARATION_FILE);
+			fs_perms::create_new_owner_only(&path, &bytes)?;
+			File::open(path)?.sync_all()?;
+		}
 		match chain {
 			Some(chain) => policy.initialize_verified(&directory, chain)?,
 			None => policy.initialize(&directory)?,
@@ -241,7 +248,7 @@ impl DirectPayoutWitness {
 		for entry in fs::read_dir(&witness.files.directory)? {
 			let path = entry?.path();
 			let name = path.file_name().and_then(|n| n.to_str()).context("invalid direct history filename")?;
-			if name == "identity.json" || name == "history" ||
+			if name == crate::watchman::ordinary_fee::DECLARATION_FILE || name == "identity.json" || name == "history" ||
 				name == crate::watchman::ordinary_fee::POLICY_FILE || name == crate::watchman::ordinary_fee::BUDGET_FILE ||
 				(name.starts_with('.') && name.ends_with(".tmp")) { continue; }
 			let txid: Txid = name.strip_suffix(".json").context("invalid direct history filename")?.parse()?;

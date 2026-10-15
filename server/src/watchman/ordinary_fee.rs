@@ -17,6 +17,24 @@ use crate::fs_perms;
 pub(crate) const POLICY_FILE: &str = "ordinary-fee-policy.json";
 pub(crate) const BUDGET_FILE: &str = "ordinary-fee-budget";
 const MAX_HISTORY_BYTES: u64 = 2 * 1024 * 1024;
+pub(crate) const DECLARATION_FILE: &str = "regtest-qualification-declaration.json";
+const MAX_DECLARATION_BYTES: u64 = 4096;
+
+/// Canonical public declaration bytes are independently frozen before a run.
+/// Exact compact serde JSON, including field order, is the canonical encoding.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RegtestFeeDeclaration {
+	version: u8,
+	purpose: String,
+	network: Network,
+	genesis: bitcoin::BlockHash,
+	max_attempts: u32,
+	per_attempt_ceiling_sat: u64,
+	ordinary_budget_sat: u64,
+	urgent_reserve_sat: u64,
+	workload_sha256: sha256::Hash,
+}
 
 /// Explicit virtual qualification authority. A digest identifies the immutable
 /// common declaration; none of these values has a production/default allowance.
@@ -92,8 +110,43 @@ impl OrdinaryFeePolicy {
 		Ok(())
 	}
 
-	pub(crate) fn require_stored(self, directory: &Path, chain: &VerifiedFeeChain) -> anyhow::Result<()> {
+	pub(crate) fn declaration_bytes(self, directory: &Path, chain: &VerifiedFeeChain) -> anyhow::Result<Option<Vec<u8>>> {
 		self.validate_verified(chain)?;
+		let Some(expected) = self.regtest_qualification else { return Ok(None); };
+		let file = File::open(directory.join(DECLARATION_FILE)).context("canonical REGTEST declaration missing")?;
+		ensure!(file.metadata()?.len() <= MAX_DECLARATION_BYTES, "REGTEST declaration exceeds byte bound");
+		let mut bytes = Vec::new();
+		file.take(MAX_DECLARATION_BYTES + 1).read_to_end(&mut bytes)?;
+		ensure!(bytes.len() as u64 <= MAX_DECLARATION_BYTES, "REGTEST declaration exceeds byte bound");
+		ensure!(sha256::Hash::hash(&bytes) == expected.declaration_sha256, "REGTEST declaration digest mismatch");
+		let declaration: RegtestFeeDeclaration = serde_json::from_slice(&bytes)?;
+		ensure!(serde_json::to_vec(&declaration)? == bytes, "REGTEST declaration is not canonical JSON");
+		ensure!(declaration.version == 1 && declaration.purpose == "common-regtest-scale-qualification",
+			"unsupported REGTEST declaration purpose or version");
+		ensure!(declaration.network == Network::Regtest && chain.matches(declaration.network)
+			&& declaration.genesis == bitcoin::blockdata::constants::genesis_block(Network::Regtest).block_hash(),
+			"REGTEST declaration differs from actual verified chain");
+		ensure!(declaration.max_attempts == expected.max_attempts
+			&& declaration.per_attempt_ceiling_sat == expected.per_attempt_ceiling_sat
+			&& declaration.ordinary_budget_sat == self.ordinary_budget_sat
+			&& declaration.urgent_reserve_sat == self.urgent_reserve_sat,
+			"REGTEST declaration differs from exact policy counts or amounts");
+		ensure!(declaration.workload_sha256.to_byte_array().iter().any(|b| *b != 0), "REGTEST workload digest missing");
+		Ok(Some(bytes))
+	}
+
+	/// Absence of a qualification marker preserves the actual immutable live
+	/// allowance, including the deployed 58000 native + 2000 external split.
+	pub(crate) fn require_live_stored(directory: &Path) -> anyhow::Result<Self> {
+		let path = directory.join(POLICY_FILE);
+		ensure!(path.metadata()?.len() <= 1024, "ordinary fee policy exceeds size limit");
+		let stored: Self = serde_json::from_slice(&std::fs::read(path)?)?;
+		stored.validate()?;
+		Ok(stored)
+	}
+
+	pub(crate) fn require_stored(self, directory: &Path, chain: &VerifiedFeeChain) -> anyhow::Result<()> {
+		self.declaration_bytes(directory, chain)?;
 		let path = directory.join(POLICY_FILE);
 		ensure!(path.metadata()?.len() <= 1024, "ordinary fee policy exceeds size limit");
 		let stored: OrdinaryFeePolicy = serde_json::from_slice(&std::fs::read(path)?)?;
@@ -108,7 +161,7 @@ impl OrdinaryFeePolicy {
 	}
 
 	pub(crate) fn initialize_verified(self, directory: &Path, chain: &VerifiedFeeChain) -> anyhow::Result<()> {
-		self.validate_verified(chain)?;
+		self.declaration_bytes(directory, chain)?;
 		self.initialize_checked(directory)
 	}
 
@@ -216,15 +269,88 @@ mod tests {
 
 	// Synthetic finite values exercise admission/exhaustion, not authority for
 	// the real common benchmark. No shared workload declaration exists here.
+	fn synthetic_declaration(attempts: u32, ceiling: u64) -> Vec<u8> {
+		serde_json::to_vec(&RegtestFeeDeclaration {
+			version: 1, purpose: "common-regtest-scale-qualification".into(),
+			network: Network::Regtest,
+			genesis: bitcoin::blockdata::constants::genesis_block(Network::Regtest).block_hash(),
+			max_attempts: attempts, per_attempt_ceiling_sat: ceiling,
+			ordinary_budget_sat: u64::from(attempts).checked_mul(ceiling).unwrap(),
+			urgent_reserve_sat: 40_000,
+			workload_sha256: sha256::Hash::hash(b"SYNTHETIC UNIT WORKLOAD, NOT COMMON RUN AUTHORITY"),
+		}).unwrap()
+	}
+
 	fn synthetic_qualification(attempts: u32, ceiling: u64) -> OrdinaryFeePolicy {
 		OrdinaryFeePolicy {
 			urgent_reserve_sat: 40_000,
 			ordinary_budget_sat: u64::from(attempts).checked_mul(ceiling).unwrap(),
 			regtest_qualification: Some(RegtestQualificationBudget {
 				max_attempts: attempts, per_attempt_ceiling_sat: ceiling,
-				declaration_sha256: sha256::Hash::hash(b"SYNTHETIC UNIT DECLARATION, NOT COMMON RUN AUTHORITY"),
+				declaration_sha256: sha256::Hash::hash(&synthetic_declaration(attempts, ceiling)),
 			}),
 		}
+	}
+
+	#[test]
+	fn absent_qualification_preserves_real_58000_live_policy_without_writes() {
+		let directory = std::env::temp_dir().join(format!("ark-live-58k-{}-{}",
+			std::process::id(), bitcoin::secp256k1::rand::random::<u64>()));
+		std::fs::create_dir(&directory).unwrap();
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat:58_000, ..Default::default() };
+		policy.initialize(&directory).unwrap();
+		let before_policy = std::fs::read(directory.join(POLICY_FILE)).unwrap();
+		let before_ledger = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+		assert_eq!(OrdinaryFeePolicy::require_live_stored(&directory).unwrap(),policy);
+		assert_eq!(std::fs::read(directory.join(POLICY_FILE)).unwrap(),before_policy);
+		assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(),before_ledger);
+		std::fs::write(directory.join(POLICY_FILE),serde_json::to_vec(&OrdinaryFeePolicy {
+			ordinary_budget_sat:60_001, ..Default::default()
+		}).unwrap()).unwrap();
+		assert!(OrdinaryFeePolicy::require_live_stored(&directory).is_err());
+		std::fs::write(directory.join(POLICY_FILE),serde_json::to_vec(&synthetic_qualification(4,30_000)).unwrap()).unwrap();
+		assert!(OrdinaryFeePolicy::require_live_stored(&directory).is_err(), "absence of opt-in cannot inherit qualification authority");
+		std::fs::remove_dir_all(directory).unwrap();
+	}
+
+	#[test]
+	fn qualification_requires_actual_canonical_declaration_bytes_and_exact_fields() {
+		let directory = std::env::temp_dir().join(format!("ark-regtest-declaration-{}-{}",
+			std::process::id(), bitcoin::secp256k1::rand::random::<u64>()));
+		std::fs::create_dir(&directory).unwrap();
+		let policy = synthetic_qualification(4,30_000);
+		let chain = crate::bitcoind::synthetic_fee_chain(Network::Regtest);
+		let path = directory.join(DECLARATION_FILE);
+		assert!(policy.declaration_bytes(&directory,&chain).is_err());
+		let original = synthetic_declaration(4,30_000);
+		std::fs::write(&path,&original).unwrap();
+		assert_eq!(policy.declaration_bytes(&directory,&chain).unwrap(),Some(original.clone()));
+		for field in ["max_attempts","per_attempt_ceiling_sat","ordinary_budget_sat","urgent_reserve_sat","network","genesis"] {
+			let mut value: serde_json::Value = serde_json::from_slice(&original).unwrap();
+			value[field] = match field {
+				"network" => serde_json::json!("signet"),
+				"genesis" => serde_json::json!(bitcoin::blockdata::constants::genesis_block(Network::Signet).block_hash()),
+				_ => serde_json::json!(value[field].as_u64().unwrap()+1),
+			};
+			let changed:RegtestFeeDeclaration=serde_json::from_value(value).unwrap();
+			let bytes=serde_json::to_vec(&changed).unwrap();
+			std::fs::write(&path,&bytes).unwrap();
+			// Even a digest matching the supplied wrong document cannot bless its fields.
+			let matching_hash=OrdinaryFeePolicy { regtest_qualification:Some(RegtestQualificationBudget {
+				declaration_sha256:sha256::Hash::hash(&bytes), ..policy.regtest_qualification.unwrap()
+			}), ..policy };
+			assert!(matching_hash.declaration_bytes(&directory,&chain).is_err(),"wrong {field}");
+		}
+		let mut noncanonical=original.clone();noncanonical.push(b'\n');
+		std::fs::write(&path,&noncanonical).unwrap();
+		assert!(policy.declaration_bytes(&directory,&chain).is_err(),"wrong raw digest");
+		let matching_hash=OrdinaryFeePolicy { regtest_qualification:Some(RegtestQualificationBudget {
+			declaration_sha256:sha256::Hash::hash(&noncanonical), ..policy.regtest_qualification.unwrap()
+		}), ..policy };
+		assert!(matching_hash.declaration_bytes(&directory,&chain).is_err(),"noncanonical even with matching digest");
+		std::fs::write(&path,vec![b' ';4097]).unwrap();
+		assert!(policy.declaration_bytes(&directory,&chain).is_err(),"bounded complete document, no truncation");
+		std::fs::remove_dir_all(directory).unwrap();
 	}
 
 	#[test]
@@ -275,6 +401,8 @@ mod tests {
 		assert!(policy.initialize_verified(&directory, &signet).is_err());
 		assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 0,
 			"invalid network cannot create policy or ledger files");
+		assert!(policy.initialize_verified(&directory, &regtest).is_err(), "bare marker is not a declaration");
+		std::fs::write(directory.join(DECLARATION_FILE), synthetic_declaration(4,30_000)).unwrap();
 		policy.initialize_verified(&directory, &regtest).unwrap();
 		assert!(OrdinaryFeeBudget::load(&directory, policy).is_err());
 		assert!(OrdinaryFeeBudget::load_verified(&directory, policy, &signet).is_err());

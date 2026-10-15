@@ -140,7 +140,7 @@ impl PersistedWallet {
 		}
 
 		let recovery_reserve = if kind == WalletKind::Rounds {
-			recovery_reserve::RecoveryReserve::load(&db, &wallet).await?
+			recovery_reserve::RecoveryReserve::load(&db, &mut wallet).await?
 		} else { None };
 
 		Ok(Self {
@@ -193,6 +193,21 @@ impl PersistedWallet {
 			reserve.unknown_gross = unknown_gross;
 		}
 		Ok(())
+	}
+
+	/// Issue ordinary addresses without returning the configured recovery script,
+	/// including an owned script not yet inside BDK's indexed lookahead.
+	pub fn reveal_next_address(&mut self, keychain: bdk_wallet::KeychainKind) -> bdk_wallet::AddressInfo {
+		loop {
+			let address = self.wallet.reveal_next_address(keychain);
+			if self.recovery_reserve.as_ref().is_some_and(|reserve| {
+				address.address.script_pubkey() == reserve.script
+			}) {
+				self.wallet.mark_used(address.keychain, address.index);
+				continue;
+			}
+			return address;
+		}
 	}
 
 	pub fn status(&mut self) -> server_rpc::WalletStatus {
@@ -342,32 +357,58 @@ impl PersistedWallet {
 		self.ensure_recovery_spending_allowed()?;
 		let canon = TrustedCanonicalization::from_wallet(&self.wallet, self.min_trusted_confs);
 		let mut unspendable = self.unspendable_outputs(&canon);
-		// A first LargestFirst selection can consume the only confirmed reserve
-		// even when a smaller funded subset is valid. Retry excluding the largest
-		// selected confirmed input; the final guard remains authoritative. Bound
-		// work and report selection refusal, never infer global unaffordability.
+		unspendable.sort_unstable();
+		unspendable.dedup();
+		// A rejected candidate may have selected several confirmed coins. Explore
+		// each single-input exclusion instead of permanently discarding the largest:
+		// that branch can be insufficient while a sibling retains the fee reserve.
+		// Bound all candidate sets and builds; refusal is not global unaffordability.
+		let mut seen = HashSet::from([unspendable.clone()]);
+		let mut pending = std::collections::VecDeque::from([unspendable]);
 		let mut selected = None;
+		let mut last_error = None;
 		for _ in 0..16 {
-			let (psbt, ancestors) = build_at_chunk_feerate(
+			let Some(unspendable) = pending.pop_front() else { break; };
+			if let Some(reserve) = &self.recovery_reserve {
+				recovery_reserve::reserve_destination(&mut self.wallet, &reserve.script);
+			}
+			let (psbt, ancestors) = match build_at_chunk_feerate(
 				&mut self.wallet, &canon, coin_selection.clone(), target, &unspendable, &configure,
-			)?;
+			) {
+				Ok(candidate) => candidate,
+				Err(error) => {
+					if !matches!(error.downcast_ref::<bdk_wallet::CreateTxError>(),
+						Some(bdk_wallet::CreateTxError::CoinSelection(_))) { return Err(error); }
+					last_error = Some(error);
+					continue;
+				},
+			};
 			match self.check_recovery_spend(&psbt, credit) {
 				Ok(()) => { selected = Some((psbt, ancestors)); break; },
 				Err(error) => {
 					if !error.is::<recovery_reserve::RecoveryLiquidityShortfall>() { return Err(error); }
 					self.wallet.mark_output_keys_unused(&psbt.unsigned_tx);
-					let largest = psbt.unsigned_tx.input.iter().filter_map(|input| {
+					let mut choices = psbt.unsigned_tx.input.iter().filter_map(|input| {
 						let point = input.previous_output;
 						let tx = canon.get(point.txid)?;
 						if !tx.chain_position.is_confirmed() || unspendable.contains(&point) { return None; }
 						Some((tx.tx.output.get(point.vout as usize)?.value, point))
-					}).max_by_key(|(value, point)| (*value, *point));
-					let Some((_, point)) = largest else { return Err(error); };
-					unspendable.push(point);
-				}
+					}).collect::<Vec<_>>();
+					choices.sort_unstable_by_key(|item| std::cmp::Reverse(*item));
+					for (_, point) in choices {
+						if seen.len() >= 16 { break; }
+						let mut next = unspendable.clone();
+						next.push(point);
+						next.sort_unstable();
+						if seen.insert(next.clone()) { pending.push_back(next); }
+					}
+					last_error = Some(error);
+				},
 			}
 		}
-		let (psbt, _) = selected.context("protected confirmed-input selection budget exhausted; no global affordability conclusion")?;
+		let (psbt, _) = selected.ok_or_else(|| last_error.unwrap_or_else(|| {
+			anyhow::anyhow!("no protected funding candidate")
+		})).context("protected confirmed-input selection budget exhausted; no global affordability conclusion")?;
 		let psbt = if let Some(max) = max_fee_rate {
 			match enforce_quiet_funding_fee(
 				&mut self.wallet, &canon, psbt.clone(), coin_selection, target, max, &configure,

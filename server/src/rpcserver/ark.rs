@@ -132,8 +132,9 @@ impl Server {
 		self.db.read(async |tx| {
 			let mut states = tx.get_existing_server_vtxos_by_id(ids).await?;
 			let mut ret = HashMap::with_capacity(ids.len());
+			let mut seen = HashSet::with_capacity(ids.len());
 			for id in ids {
-				if ret.contains_key(id) { continue; }
+				if !seen.insert(*id) { continue; }
 				if let Some(state) = states.remove(id) {
 					if client_spend_state(state.spend_state).is_none() { continue; }
 					if let Ok(user) = state.vtxo.try_into_user_vtxo() {

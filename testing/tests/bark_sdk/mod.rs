@@ -24,6 +24,7 @@ mod lightning;
 mod mailbox;
 mod offboard;
 mod payment_request;
+mod payout_fee_safety;
 mod recovery;
 mod recovery_reserve;
 mod round;

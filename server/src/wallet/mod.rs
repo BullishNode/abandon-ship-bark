@@ -241,8 +241,10 @@ impl PersistedWallet {
 		self.finish_reserved_tx(psbt, None, max_fee_rate)
 	}
 
-	pub(crate) fn finish_payout_tx(&mut self, psbt: Psbt, credit: &PayoutCapitalCredit) -> anyhow::Result<Transaction> {
-		self.finish_reserved_tx(psbt, Some(credit), None)
+	pub(crate) fn finish_payout_tx(
+		&mut self, psbt: Psbt, credit: &PayoutCapitalCredit, max_fee_rate: Option<FeeRate>,
+	) -> anyhow::Result<Transaction> {
+		self.finish_reserved_tx(psbt, Some(credit), max_fee_rate)
 	}
 
 	fn finish_reserved_tx(

@@ -173,6 +173,7 @@ impl Server {
 		let build_credit = capital_credit.clone();
 		let expected_build = expected.clone();
 		let minimum = cfg.min_payout_sat;
+		let max_fee_rate = self.fee_estimator.max_fee_rate();
 		let built = self.rounds_wallet.build_blocking(move |wallet| {
 			ensure!(expected_build.keys().all(|spk| !wallet.is_mine(spk.clone())),
 				"expiry destination belongs to the rounds wallet");
@@ -213,7 +214,7 @@ impl Server {
 					.filter(|v| *v >= change.script_pubkey.minimal_non_dust())
 					.context("operator change cannot pay for its own weight")?;
 				ensure!(per_script.is_empty() && psbt.fee()?.to_sat() == fee, "payout deductions do not equal its full mining fee");
-				let tx = wallet.finish_payout_tx(psbt, &build_credit)?;
+				let tx = wallet.finish_payout_tx(psbt, &build_credit, max_fee_rate)?;
 				ensure!(tx.weight() == weight, "unexpected signed payout weight");
 				// Settlement rows record what the recipients paid.
 				Ok((tx, fee - operator_fee))
@@ -438,7 +439,10 @@ impl Server {
 			warn!("no real fee estimate; expiry payouts wait"); return Ok(());
 		};
 		let rate = FeeRate::from_amount_per_kvb_ceil(rate);
-		ensure!(rate > FeeRate::ZERO, "zero expiry fee estimate");
+		// Payouts use the requested economical target, but its raw Core rate
+		// must obey the same configured quiet-transaction ceiling.
+		let rate = self.fee_estimator.max_fee_rate().map_or(rate, |max| rate.min(max));
+		ensure!(rate > FeeRate::ZERO, "zero expiry fee estimate or configured ceiling");
 		if let Err(e) = self.bump_stalled_expiry_payouts(rate).await {
 			warn!("expiry payout bump deferred: {e:#}");
 		}
@@ -645,6 +649,7 @@ impl Server {
 	/// Without funds the payout is only rebroadcast, as before.
 	async fn bump_stalled_expiry_payouts(&self, rate: FeeRate) -> anyhow::Result<()> {
 		let tip = self.chain_tip().height;
+		let max_fee_rate = self.fee_estimator.max_fee_rate();
 		for report in self.tx_nursery.list_txs(false, false).await? {
 			let txid = report.tx.txid;
 			if report.tx.kind != NurseryTxKind::ExpiryPayout || tip < report.tx.confirm_target_height
@@ -659,12 +664,14 @@ impl Server {
 				// A round may be spending it.
 				let lock = wallet.lock_wallet_utxo(change).map_err(|_| anyhow!("payout change is locked"))?;
 				let drain = wallet.next_unused_address(KEYCHAIN).script_pubkey();
-				let psbt = wallet.build_tx_at_chunk_feerate(LargestFirstCoinSelection, rate, |b| {
+				// The package target and the signed child's ceiling are separate:
+				// ancestor subsidy must fit the child cap too, or this bump waits.
+				let psbt = wallet.build_quiet_tx_at_chunk_feerate(LargestFirstCoinSelection, rate, max_fee_rate, |b| {
 					b.add_utxo(change)?;
 					b.drain_to(drain.clone());
 					Ok(())
 				})?;
-				Ok((wallet.finish_tx(psbt)?, lock))
+				Ok((wallet.finish_tx_with_max_fee_rate(psbt, max_fee_rate)?, lock))
 			}).await;
 			let (mut wallet, (child, _lock)) = match built {
 				Ok(built) => built,

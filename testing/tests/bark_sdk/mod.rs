@@ -29,3 +29,5 @@ mod recovery;
 mod recovery_reserve;
 mod round;
 mod vtxo_lock;
+
+mod payout_fee_safety;

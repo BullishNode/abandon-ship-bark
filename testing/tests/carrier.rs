@@ -195,9 +195,14 @@ async fn automatic_board_fixture(name: &str) -> AutomaticBoardFixture {
 }
 
 async fn automatic_board_fixture_with_fee(name: &str, board_fee: Amount) -> AutomaticBoardFixture {
+	automatic_board_fixture_with_funding(name, board_fee, ark_testing::btc(1)).await
+}
+
+async fn automatic_board_fixture_with_funding(name: &str, board_fee: Amount, rounds_funding: Amount) -> AutomaticBoardFixture {
 	let ctx = TestContext::new(format!("carrier-builder/{name}")).await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
-		.funded(ark_testing::btc(1)).cfg(move |c| {
+		.funded(rounds_funding).cfg(move |c| {
+			c.round_interval = std::time::Duration::from_secs(3600);
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.fees.board.base_fee = board_fee;
 			c.direct_expiry.enabled = true;

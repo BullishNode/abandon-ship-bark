@@ -28,7 +28,7 @@ async fn wait_pending(ctx: &TestContext, tx: &bitcoin::Transaction) {
 #[tokio::test]
 async fn automatic_fee_acceleration_replaces_stalled_registered_board() {
 	let AutomaticBoardFixture { ctx, srv, mnemonic, coin, record } =
-		automatic_board_fixture_with_fee("automatic_fee_acceleration_replaces_stalled_registered_board", sat(1_000)).await;
+		automatic_board_fixture_with_funding("automatic_fee_acceleration_replaces_stalled_registered_board", sat(1_000), sat(200_000)).await;
 	// One finite reserve, funded before absence/expiry; no later topups.
 	let address = srv.watchmand().wait_wallet_address().await;
 	ctx.bitcoind().fund_addr(address, sat(50_000)).await;

@@ -259,7 +259,7 @@ async fn per_key_historical_af52_seed_restore_after_strict_upgrade() {
 	assert!(cmdline.split(|b|*b==0).any(|arg|arg==cap_config.as_os_str().as_encoded_bytes()));
 	let cfg_bytes=private_file(&handoff,&handoff.join("new-client-config.toml"),65_536);
 	assert_eq!(digest(&cfg_bytes),runtime["new_client_config_sha256"].as_str().unwrap());
-	let mut cfg:bark::Config=toml::from_str(std::str::from_utf8(&cfg_bytes).unwrap()).unwrap();
+	let cfg:bark::Config=toml::from_str(std::str::from_utf8(&cfg_bytes).unwrap()).unwrap();
 	assert_eq!(cfg.server_address,runtime["server_address"].as_str().unwrap());
 	assert!(cfg.server_address.starts_with("http://127.0.0.1:"));
 	assert!(cfg.esplora_address.is_none());
@@ -268,7 +268,7 @@ async fn per_key_historical_af52_seed_restore_after_strict_upgrade() {
 	let core=bitcoincore_rpc::Client::new(core_url,bitcoincore_rpc::Auth::CookieFile(cookie.clone())).unwrap();
 	let chain=core.get_blockchain_info().unwrap();assert_eq!(chain.chain,Network::Regtest);assert!(!chain.initial_block_download);
 	assert_eq!(core.get_block_hash(0).unwrap(),bitcoin::blockdata::constants::genesis_block(Network::Regtest).block_hash());
-	cfg.daemon_manual_sync=true;
+	assert!(cfg.daemon_manual_sync,"the exact hashed client configuration must declare manual sync");
 	let payer_seed=PathBuf::from(std::env::var_os("C_FUNDED_UPGRADE_PAYER_SEED_FILE").expect("private source seed only"));
 	let recipient_seed=PathBuf::from(std::env::var_os("C_FUNDED_UPGRADE_RECIPIENT_SEED_FILE").expect("private source seed only"));
 	let payer=fresh_seed_wallet(&verify,"fresh-payer",&payer_seed,&handoff,&cfg).await;

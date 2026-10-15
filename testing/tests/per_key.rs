@@ -287,6 +287,42 @@ async fn per_key_two_devices_converge_without_duplicate_principal() {
 /// claimed to be necessary for discovery in this case.
 #[tokio::test]
 async fn per_key_fresh_seed_key50_preserves_entitlements_and_original_proof() {
+	// This oracle reads the actual committed send before the fresh restore.
+	// No IDs, bodies, amounts or derivation hints enter Wallet::open below.
+	async fn committed_outputs(
+		db: &Db, rpc: &mut ark_testing::daemon::captaind::ArkClient, payer: &bark::Wallet,
+		mailbox: bitcoin::secp256k1::PublicKey, key: bitcoin::secp256k1::PublicKey,
+		record: &FallbackRecord, canonical: &KeyLink,
+	) -> std::collections::BTreeMap<ark::VtxoId, (Amount, Vec<u8>)> {
+		let rows = db.read(async |tx| Ok(tx.query("SELECT DISTINCT m.vtxo_id,v.amount,v.spend_state::text
+			FROM mailbox m JOIN vtxo v ON v.vtxo_id=m.vtxo_id
+			WHERE m.unblinded_mailbox_id=$1 AND m.vtxo_id IS NOT NULL ORDER BY m.vtxo_id",
+			&[&mailbox.to_string()]).await?.into_iter().map(|row| (
+			row.get::<_, String>(0).parse::<ark::VtxoId>().unwrap(), row.get::<_, i64>(1),
+			row.get::<_, String>(2),
+		)).collect::<Vec<_>>())).await.unwrap();
+		assert!(rows.len() <= 16, "two funded sends have a bounded physical output frontier");
+		let mut result = std::collections::BTreeMap::new();
+		for (id, amount, state) in rows {
+			assert_eq!(state, "spendable");
+			let public = rpc.get_vtxo(protos::GetVtxoRequest { vtxo_id: id.to_bytes().to_vec() }).await.unwrap().into_inner();
+			assert_eq!(public.child_index, Some(50));
+			assert_eq!(public.fallback_record, record.serialize());
+			assert_eq!(public.key_link, canonical.serialize());
+			FallbackRecord::deserialize(&public.fallback_record).unwrap().verify(Network::Regtest, mailbox).unwrap();
+			KeyLink::deserialize(&public.key_link).unwrap().verify(Network::Regtest, mailbox, record).unwrap();
+			let coin = ark::Vtxo::<ark::vtxo::Full>::deserialize(&public.vtxo).unwrap();
+			assert_eq!(coin.serialize(), public.vtxo, "retain the exact complete signed native object");
+			assert_eq!(coin.id(), id);
+			assert_eq!(coin.user_pubkey(), key);
+			assert_eq!(coin.policy(), &ark::VtxoPolicy::new_pubkey(key));
+			assert!(coin.amount() > Amount::ZERO);
+			assert_eq!(coin.amount().to_sat(), u64::try_from(amount).unwrap());
+			payer.validate_vtxo(&coin).await.unwrap(); // actual anchor and entire signed chain; no adoption
+			assert!(result.insert(id, (coin.amount(), public.vtxo)).is_none());
+		}
+		result
+	}
 	let ctx = TestContext::new("per-key/fresh_seed_key50_preserves_entitlements_and_original_proof").await;
 	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1))
 		.cfg(|c| c.fees.board.min_fee = sat(330)).create().await;
@@ -317,34 +353,36 @@ async fn per_key_fresh_seed_key50_preserves_entitlements_and_original_proof() {
 	assert!(payer_before.iter().all(|coin| coin.amount() == sat(29_670)));
 	let payer_principal = payer_before.iter().map(|coin| coin.amount()).sum::<Amount>();
 	assert_eq!(payer_principal, sat(60_000 - 2 * 330));
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mut rpc = srv.get_public_rpc().await;
+	assert!(committed_outputs(&db, &mut rpc, &payer, mailbox.as_pubkey(), key, &record, &canonical).await.is_empty());
 	payer.send_arkoor_payment(&address, sat(25_000)).await.unwrap();
+	let first_send = committed_outputs(&db, &mut rpc, &payer, mailbox.as_pubkey(), key, &record, &canonical).await;
+	assert!(!first_send.is_empty());
+	assert_eq!(first_send.values().map(|(amount, _)| *amount).sum::<Amount>(), sat(25_000));
 	payer.send_arkoor_payment(&address, sat(25_000)).await.unwrap();
+	let expected = committed_outputs(&db, &mut rpc, &payer, mailbox.as_pubkey(), key, &record, &canonical).await;
+	for (id, original) in &first_send {
+		assert_eq!(expected.get(id), Some(original), "the second payment must preserve every first-send object");
+	}
+	let second_send = expected.iter().filter(|(id, _)| !first_send.contains_key(*id))
+		.map(|(id, value)| (*id, value.clone())).collect::<std::collections::BTreeMap<_, _>>();
+	assert!(!second_send.is_empty());
+	assert_eq!(second_send.values().map(|(amount, _)| *amount).sum::<Amount>(), sat(25_000));
+	assert_eq!(expected.len(), first_send.len() + second_send.len(), "two economic sends retain every physical piece exactly once");
+	assert_eq!(expected.values().map(|(amount, _)| *amount).sum::<Amount>(), sat(50_000));
 	let payer_after = payer.spendable_vtxos().await.unwrap();
 	let payer_change = payer_after.iter().map(|coin| coin.amount()).sum::<Amount>();
 	assert_eq!(payer_change, sat(9_340));
 	assert!(payer_after.iter().all(|coin| coin.user_pubkey() != key));
 	let payer_change_ids = payer_after.iter().map(|coin| coin.id()).collect::<std::collections::BTreeSet<_>>();
 	drop(payer);
-	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	let expected_ids = db.read(async |t| Ok(t.query("SELECT DISTINCT vtxo_id FROM mailbox
-		WHERE unblinded_mailbox_id=$1 AND vtxo_id IS NOT NULL ORDER BY vtxo_id", &[&mailbox.to_string()]).await?
-		.into_iter().map(|row| row.get::<_, String>(0).parse::<ark::VtxoId>().unwrap())
-		.collect::<std::collections::BTreeSet<_>>())).await.unwrap();
-	assert_eq!(expected_ids.len(), 2);
+	let expected_ids = expected.keys().copied().collect::<std::collections::BTreeSet<_>>();
+	let expected_amounts = expected.iter().map(|(id, (amount, _))| (*id, *amount)).collect::<std::collections::BTreeMap<_, _>>();
+	assert_eq!(expected_ids.len(), first_send.len() + second_send.len());
 	assert!(expected_ids.is_disjoint(&payer_change_ids));
 	assert_eq!(payer_change + sat(50_000), payer_principal,
-		"two exact recipient entitlements plus payer change conserve net Board principal");
-	let mut rpc = srv.get_public_rpc().await;
-	for id in &expected_ids {
-		let public = rpc.get_vtxo(protos::GetVtxoRequest { vtxo_id: id.to_bytes().to_vec() }).await.unwrap().into_inner();
-		assert_eq!(public.child_index, Some(50));
-		assert_eq!(public.fallback_record, record.serialize());
-		assert_eq!(public.key_link, canonical.serialize());
-		let coin = ark::Vtxo::<ark::vtxo::Full>::deserialize(&public.vtxo).unwrap();
-		assert_eq!(coin.id(), *id);
-		assert_eq!(coin.user_pubkey(), key);
-		assert_eq!(coin.amount(), sat(25_000));
-	}
+		"two exact 25k economic payments plus payer change conserve net Board principal");
 	let fresh_datadir = ctx.datadir.join("fresh-seed");
 	assert!(!fresh_datadir.exists(), "recovery starts from a genuinely new dataset");
 	// Only the mnemonic/config enter this open. No original DB, coin IDs or
@@ -356,7 +394,12 @@ async fn per_key_fresh_seed_key50_preserves_entitlements_and_original_proof() {
 	).await.unwrap();
 	let coins = restored.spendable_vtxos().await.unwrap();
 	assert_eq!(coins.iter().map(|v| v.id()).collect::<std::collections::BTreeSet<_>>(), expected_ids);
-	assert_eq!(coins.len(), 2);
+	assert_eq!(coins.len(), expected_ids.len());
+	assert_eq!(coins.iter().map(|coin| (coin.id(), coin.amount())).collect::<std::collections::BTreeMap<_, _>>(), expected_amounts);
+	for (id, (_, signed)) in &expected {
+		assert_eq!(restored.get_full_vtxo(*id).await.unwrap().serialize(), *signed,
+			"fresh recovery must preserve every independently committed signed object");
+	}
 	assert_eq!(coins.iter().map(|v| v.amount()).sum::<Amount>(), sat(50_000));
 	assert!(coins.iter().all(|v| v.user_pubkey() == key));
 	assert_eq!(restored.fallback_destination().await.unwrap(), record);

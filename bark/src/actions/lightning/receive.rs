@@ -9,9 +9,9 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::Context;
-use bitcoin::{Amount, Network, SignedAmount};
+use bitcoin::{Amount, SignedAmount};
 use bitcoin::hashes::{sha256, Hash};
-use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef, Currency};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
 use log::{debug, error, info, trace, warn};
 use rand::seq::IteratorRandom;
 
@@ -26,6 +26,7 @@ use server_rpc::{protos, StatusExt};
 use server_rpc::protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos;
 
 use crate::{Config, Wallet};
+use crate::lightning::bolt11_currency_matches_network;
 use crate::actions::{
 	Advance, AdvanceError, BASE_RETRY_BACKOFF, WalletAction, WalletActionId, park_with_backoff,
 };
@@ -402,7 +403,7 @@ pub(crate) async fn start_lightning_receive(
 	if invoice.amount_milli_satoshis() != Some(requested_msat) {
 		bail!("invoice amount does not match the requested amount");
 	}
-	if invoice.currency() != invoice_currency_for_network(wallet.network().await?) {
+	if !bolt11_currency_matches_network(invoice.currency(), wallet.network().await?) {
 		bail!("invoice currency does not match the wallet network");
 	}
 	if let Some(expected) = description_hash {
@@ -1067,30 +1068,5 @@ mod tests {
 			BlockDelta::new(144), BlockDelta::new(40), &config,
 		).unwrap();
 		assert!(htlc_recv_tree_blocks_needed(&config) < needed);
-	}
-}
-
-// CLN uses the testnet BOLT11 currency for signet and testnet4. Do not infer
-// a separate invoice prefix from the wallet's Bitcoin chain identity.
-fn invoice_currency_for_network(network: Network) -> Currency {
-	match network {
-		Network::Signet | Network::Testnet4 => Currency::BitcoinTestnet,
-		network => Currency::from(network),
-	}
-}
-
-#[cfg(test)]
-mod invoice_response_network_tests {
-	use super::invoice_currency_for_network;
-	use bitcoin::Network;
-	use lightning_invoice::Currency;
-
-	#[test]
-	fn invoice_network_uses_cln_testnet_currency_for_signet() {
-		assert_eq!(invoice_currency_for_network(Network::Signet), Currency::BitcoinTestnet);
-		assert_eq!(invoice_currency_for_network(Network::Testnet4), Currency::BitcoinTestnet);
-		assert_eq!(invoice_currency_for_network(Network::Testnet), Currency::BitcoinTestnet);
-		assert_eq!(invoice_currency_for_network(Network::Bitcoin), Currency::Bitcoin);
-		assert_eq!(invoice_currency_for_network(Network::Regtest), Currency::Regtest);
 	}
 }

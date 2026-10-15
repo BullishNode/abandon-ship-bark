@@ -1,9 +1,9 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn stage5_unclaimed_hark_source() {
 	require_operating_build();
+	let authority=ScaleFeeAuthority::from_env();
 	let ctx = TestContext::new("bark_sdk/stage5_unclaimed_hark_source").await;
 	let out = Out::new();
-	let authority=ScaleFeeAuthority::from_env();
 	let srv = scale_builder(ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(sat(100_000_000)).watchmand(),&ctx,&authority).cfg(move |c| {
 		authority.apply(c);
@@ -494,10 +494,10 @@ async fn soak_inner() {
 	match std::env::var("STAGE5_SCOPE").expect("declare full or pilot cycle scope").as_str(){"full"=>assert_eq!((capital_cycles,mixed_cycles),(10,10)),"pilot"=>assert_eq!((capital_cycles,mixed_cycles),(1,1)),_=>panic!("unknown Stage5 scope")};
 	let seed = env_u64("STAGE5_SEED", 20261011);
 	require_operating_build();
+	let authority=ScaleFeeAuthority::from_env();
 	let ctx = TestContext::new("bark_sdk/stage5_soak").await;
 	let out = Out::new();
 	let lightning = Some(ctx.new_lightning_setup("lightningd").await);
-	let authority=ScaleFeeAuthority::from_env();
 	let srv = scale_builder(ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).funded(sat(100_000_000))
 		.lightningd(&lightning.as_ref().unwrap().internal).watchmand(),&ctx,&authority).cfg(move |c| {
 		authority.apply(c);

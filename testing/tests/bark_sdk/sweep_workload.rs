@@ -149,7 +149,7 @@ impl Params {
 // document/policy and workload bytes must exist before the fresh native create;
 // native944 independently verifies actual Core network/genesis and exact fields.
 #[derive(Clone)]
-struct ScaleFeeAuthority { bytes: Vec<u8>, policy: server::watchman::ordinary_fee::OrdinaryFeePolicy }
+struct ScaleFeeAuthority { bytes: Vec<u8>, policy: server::watchman::ordinary_fee::OrdinaryFeePolicy, max_fee_rate:FeeRate }
 impl ScaleFeeAuthority {
 	fn from_env() -> Self {
 		use bitcoin::hashes::{Hash,sha256};
@@ -164,7 +164,8 @@ impl ScaleFeeAuthority {
 		let workload=std::fs::read(std::env::var("SCALE_COMMON_WORKLOAD_MANIFEST").expect("frozen COMMON workload required")).unwrap();
 		assert!(workload.len()<=1024*1024);
 		assert_eq!(declared["workload_sha256"].as_str().unwrap(),sha256::Hash::hash(&workload).to_string());
-		Self{bytes:document,policy}
+		let max_fee_rate=common_fee_rate(&serde_json::from_slice::<Value>(&workload).unwrap()).unwrap();
+		Self{bytes:document,policy,max_fee_rate}
 	}
 	fn apply(&self,c:&mut server::Config) {
 		assert!(!c.expiry_payout.enabled);
@@ -173,10 +174,33 @@ impl ScaleFeeAuthority {
 		c.direct_expiry.regtest_qualification_fee_policy=Some(self.policy);
 	}
 }
+// Exact workload field is a positive integer in sat/vB. Match native serde's
+// checked FeeRate conversion; reject units/type ambiguity and arithmetic overflow.
+fn common_fee_rate(workload:&Value)->anyhow::Result<FeeRate> {
+	let sat_vb=workload["financial_limits"]["max_fee_rate_sat_vb"].as_u64()
+		.ok_or_else(||anyhow::anyhow!("COMMON max_fee_rate_sat_vb must be an explicit integer"))?;
+	anyhow::ensure!(sat_vb>0,"COMMON fee-rate ceiling must be positive");
+	let rate=FeeRate::from_sat_per_vb(sat_vb).ok_or_else(||anyhow::anyhow!("COMMON fee-rate conversion overflows"))?;
+	rate.fee_wu(bitcoin::Weight::from_wu(400_000)).ok_or_else(||anyhow::anyhow!("COMMON standard-weight fee arithmetic overflows"))?;
+	Ok(rate)
+}
+#[test]
+fn common_fee_rate_requires_exact_declared_units_and_checked_maximum() {
+	// These are parser controls, not a COMMON declaration or run allowance.
+	for invalid in [Value::Null,json!(0),json!(-1),json!("3sat/vb"),json!(3.5),json!(true),json!(u64::MAX)] {
+		assert!(common_fee_rate(&json!({"financial_limits":{"max_fee_rate_sat_vb":invalid}})).is_err());
+	}
+	assert!(common_fee_rate(&json!({})).is_err());
+	assert!(common_fee_rate(&json!({"financial_limits":{"max_fee_rate_sat_kvb":3000}})).is_err(),"wrong units cannot silently reinterpret a rate");
+	assert_eq!(common_fee_rate(&json!({"financial_limits":{"max_fee_rate_sat_vb":3}})).unwrap(),FeeRate::from_sat_per_vb(3).unwrap());
+	assert_eq!(common_fee_rate(&json!({"financial_limits":{"max_fee_rate_sat_vb":500}})).unwrap(),FeeRate::from_sat_per_vb(500).unwrap());
+}
+
 fn scale_builder<'a>(builder:ark_testing::context::builders::CaptaindBuilder<'a>,ctx:&TestContext,authority:&ScaleFeeAuthority)->ark_testing::context::builders::CaptaindBuilder<'a> {
-	let policy=authority.policy;let history=ctx.datadir.join("server");
+	let policy=authority.policy;let history=ctx.datadir.join("server");let max_fee_rate=authority.max_fee_rate;
 	let ceiling=policy.regtest_qualification.unwrap().per_attempt_ceiling_sat;
 	builder.regtest_fee_declaration(authority.bytes.clone()).watchmand_cfg(move|c| {
+		c.fee_estimator.max_fee_rate=Some(max_fee_rate);
 		c.watchman.direct_expiry=Some(server::watchman::DirectExpiryConfig{ordinary_fee_policy:policy,history_dir:history,max_miner_fee:sat(ceiling)});
 	})
 }

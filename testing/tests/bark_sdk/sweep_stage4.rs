@@ -7,8 +7,8 @@ async fn stage4_scale() {
 	out.json("params-effective.json", &serde_json::to_value(&p).unwrap());
 	let started = Instant::now();
 	require_operating_build();
-	let ctx = TestContext::new("bark_sdk/stage4_scale").await;
 	let authority=ScaleFeeAuthority::from_env();
+	let ctx = TestContext::new("bark_sdk/stage4_scale").await;
 	let core = ctx.bitcoind().sync_client();
 
 	// ── Core capital, mined before anything is funded ──

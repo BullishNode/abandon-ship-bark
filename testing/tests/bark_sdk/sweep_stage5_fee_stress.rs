@@ -54,8 +54,8 @@ async fn stress_add_board(env: &Env, ctx: &TestContext, owner: &mut Owner, walle
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn stage5_fee_stress() {
 	require_operating_build();
-	let ctx=TestContext::new("bark_sdk/stage5_fee_stress").await;let out=Out::new();
 	let authority=ScaleFeeAuthority::from_env();
+	let ctx=TestContext::new("bark_sdk/stage5_fee_stress").await;let out=Out::new();
 	let srv=scale_builder(ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
 		.funded(sat(100_000_000)).watchmand(),&ctx,&authority).cfg(move |c| {authority.apply(c);c.vtxo_lifetime=BlockDelta::new(128);
 			c.min_board_amount=sat(330);c.round_interval=Duration::from_secs(3600);}).create().await;
@@ -119,9 +119,8 @@ async fn stage5_fee_stress() {
 // a funding shortfall at the declared 30 sat/vB. Same build, new isolated case.
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn stage5_fee_reserve_and_progression() {
-	require_operating_build();let ctx=TestContext::new("bark_sdk/stage5_fee_reserve_and_progression").await;let out=Out::new();
+	require_operating_build();let authority=ScaleFeeAuthority::from_env();let ctx=TestContext::new("bark_sdk/stage5_fee_reserve_and_progression").await;let out=Out::new();
 	let profile=std::env::var("STAGE5_FEE_PROFILE").unwrap();assert!(["insufficient","fragmented"].contains(&profile.as_str()));
-	let authority=ScaleFeeAuthority::from_env();
 	let srv=scale_builder(ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().funded(sat(100_000_000)).watchmand(),&ctx,&authority)
 		.cfg(move |c|{authority.apply(c);c.vtxo_lifetime=BlockDelta::new(432);c.min_board_amount=sat(330);c.round_interval=Duration::from_secs(3600);}).create().await;
 	let db=Db::connect(&srv.config().postgres).await.unwrap();let env=Env{bitcoind:ctx.bitcoind_arc(),datadir:ctx.datadir.clone(),

@@ -1,0 +1,1 @@
+- Include public pending transactions and immediate parents in read-only owning-wallet inventory, with explicit gaps and whole-response bounds.

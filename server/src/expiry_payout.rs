@@ -431,6 +431,9 @@ impl Server {
 	}
 
 	async fn expiry_payout_tick(&self, stats: &mut TickStats) -> anyhow::Result<()> {
+		// Confirmed operator-only relief needs no new funding fee estimate.
+		// Keep incomplete/mixed sources held and preserve normal customer flow.
+		self.close_unused_operator_pool().await?;
 		let cfg = &self.config.expiry_payout;
 		let estimate: bitcoin_ext::rpc::json::EstimateSmartFeeResult = self.bitcoind.call_raw(
 			"estimatesmartfee", &[cfg.conf_target_blocks.into(), "economical".into()],

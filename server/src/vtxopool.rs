@@ -1,6 +1,6 @@
 
 use std::{fmt, str};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{self, AtomicBool};
 use std::time::Duration;
@@ -12,7 +12,7 @@ use bitcoin::{Amount, OutPoint, Transaction};
 use futures::{stream, StreamExt, TryStreamExt};
 use tracing::{debug, error, info, warn};
 
-use ark::{ServerVtxo, Vtxo, VtxoId, VtxoPolicy, VtxoRequest};
+use ark::{ProtocolEncoding, ServerVtxo, Vtxo, VtxoId, VtxoPolicy, VtxoRequest};
 use ark::arkoor::ArkoorDestination;
 use ark::vtxo::Full;
 use ark::arkoor::package::ArkoorPackageBuilder;
@@ -279,6 +279,18 @@ pub struct VtxoPool {
 }
 
 impl VtxoPool {
+	pub(crate) fn remove_retired(&self, ids: &[VtxoId]) {
+		let ids = ids.iter().copied().collect::<BTreeSet<_>>();
+		{
+			let mut data = self.data.lock();
+			for buckets in data.pool.values_mut() {
+				for members in buckets.values_mut() { members.retain(|id| !ids.contains(id)); }
+			}
+			data.prune();
+		}
+		update_all_bucket_metrics(&self.data);
+	}
+
 	/// Create a VTXO from pool
 	///
 	/// The caller is responsible for requesting arkoor preparation
@@ -297,17 +309,16 @@ impl VtxoPool {
 		F: AsyncFnOnce(&database::Tx<'_>, &[Vtxo<Full>]) -> anyhow::Result<()>,
 	{
 		let input_ids = inputs.iter().map(|v| v.0).collect::<Vec<_>>();
-		let mut input_vtxos = srv.db.read(async |t| t.get_pool_vtxos_by_ids(&input_ids).await).await?;
-
-		// We sort the vtxos in order of increasing amounts
-		// This ensures we spend the smallest vtxos first and
-		// we don't have any vtxo that serves as change
-		input_vtxos.sort_by(|v1, v2| v1.amount().cmp(&v2.amount()));
-
 		// Validate that the inputs are still usable and unlocked
 		let _vtxo_guard = srv.vtxos_in_flux.try_lock(&input_ids).map_err(|e| {
 			anyhow::anyhow!("some VTXO is already locked by another process: {}", e.id)
 		})?;
+		// Fetch after the local flux admission; native SQL row locks recheck the
+		// exact same input set before ANY signed children can be persisted.
+		let mut input_vtxos = srv.db.read(async |t| t.get_pool_vtxos_by_ids(&input_ids).await).await?;
+		let expected_inputs = input_vtxos.iter().map(|v| (v.id(), v.serialize())).collect::<BTreeMap<_, _>>();
+		input_vtxos.sort_by_key(|v| v.amount());
+
 
 		let keys = {
 			let mut ret = Vec::with_capacity(input_vtxos.len());
@@ -322,8 +333,9 @@ impl VtxoPool {
 			ret
 		};
 
-		let input_sum = input_vtxos.iter().map(|v| v.amount()).sum::<Amount>();
-		let change_amount = input_sum - dest.total_amount;
+		let input_sum = input_vtxos.iter().try_fold(Amount::ZERO, |sum, v| sum.checked_add(v.amount()))
+			.context("pool input amount overflow")?;
+		let change_amount = input_sum.checked_sub(dest.total_amount).context("pool inputs no longer cover destination")?;
 		// Omit the change output when the inputs exactly cover the destination.
 		// A zero-value change output would produce a valueless VTXO, which
 		// arkoor construction rejects.
@@ -386,6 +398,10 @@ impl VtxoPool {
 			.collect::<Vec<_>>();
 
 		srv.db.write(async |t| {
+			t.lock_original_pool_inputs(&input_ids).await?;
+			let actual = t.get_pool_vtxos_by_ids(&input_ids).await?;
+			ensure!(actual.iter().map(|v| (v.id(), v.serialize())).collect::<BTreeMap<_, _>>() == expected_inputs,
+				"pool input bytes changed before publication");
 			t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::create_htlc_vtxos(&t, &htlc_recvs, HtlcDirection::Outgoing).await?;
 			t.mark_vtxopool_vtxos_spent(inputs.iter().map(|v| v.0)).await
@@ -458,10 +474,25 @@ impl VtxoPool {
 				Ok(v)
 			},
 			Err(e) => {
-				let mut guard = self.data.lock();
-				for (v, h, a) in inputs {
-					guard.insert(v, h, a);
+				// An ambiguous native COMMIT or another process's retirement must
+				// never put stale selected inputs back into the in-memory pool.
+				let ids = inputs.iter().map(|v| v.0).collect::<Vec<_>>();
+				if let Err(error) = srv.db.write(async |t| {
+					t.lock_original_pool_inputs(&ids).await?;
+					let eligible = t.eligible_pool_vtxos(&ids).await?;
+					let eligible = eligible.iter().map(|v| v.id()).collect::<BTreeSet<_>>();
+					// Restore the proven subset WHILE its native rows remain
+					// locked, before a competing retirement can commit. No
+					// await occurs while holding this short cache guard.
+					let mut guard = self.data.lock();
+					for (v, h, a) in &inputs {
+						if eligible.contains(v) { guard.insert(*v, *h, *a); }
+					}
+					Ok(())
+				}).await {
+					warn!("pool input restoration unqualified; authoritative input checks remain required: {error:#}");
 				}
+				update_all_bucket_metrics(&self.data);
 				Err(e)
 			},
 		}

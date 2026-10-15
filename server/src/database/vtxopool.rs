@@ -1,5 +1,6 @@
 
 use std::ops::Deref;
+use std::collections::BTreeSet;
 
 use futures::{Stream, TryStreamExt};
 use postgres_types::Type;
@@ -45,18 +46,26 @@ impl TryFrom<Row> for PoolVtxo {
 }
 
 impl<'t> Tx<'t> {
-	pub async fn get_pool_vtxos_by_ids(&self, ids: &[VtxoId]) -> anyhow::Result<Vec<PoolVtxo>> {
-		let stmt = self.prepare_typed(
-			"SELECT vtxo FROM vtxo_pool WHERE vtxo_id = ANY($1)",
-			&[Type::TEXT_ARRAY],
+	/// Returns only still-native pool inputs. Exact callers must separately
+	/// require complete cardinality; error recovery may restore a proven subset.
+	pub(crate) async fn eligible_pool_vtxos(&self, ids: &[VtxoId]) -> anyhow::Result<Vec<PoolVtxo>> {
+		let rows = self.query(
+			"SELECT p.vtxo FROM vtxo_pool p JOIN vtxo v ON v.vtxo_id = p.vtxo_id
+			 WHERE p.vtxo_id = ANY($1) AND p.spent_at IS NULL AND v.spend_state = 'pool'
+			 AND v.oor_spent_txid IS NULL AND v.spent_in_round IS NULL AND v.offboarded_in IS NULL
+			 AND v.confirmed_height IS NULL AND v.onchain_spent_txid IS NULL AND v.onchain_spent_height IS NULL
+			 AND v.lightning_htlc_subscription_id IS NULL ORDER BY p.vtxo_id",
+			&[&ids.iter().map(ToString::to_string).collect::<Vec<_>>()],
 		).await?;
-		let rows = self.query(&stmt, &[&ids.iter().map(|id| id.to_string()).collect::<Vec<_>>()]).await?;
+		rows.into_iter().map(PoolVtxo::try_from).collect()
+	}
 
-		let mut vtxos = vec![];
-		for row in rows {
-			vtxos.push(PoolVtxo::try_from(row)?);
-		}
-
+	pub async fn get_pool_vtxos_by_ids(&self, ids: &[VtxoId]) -> anyhow::Result<Vec<PoolVtxo>> {
+		let expected = ids.iter().copied().collect::<BTreeSet<_>>();
+		ensure!(!ids.is_empty() && expected.len() == ids.len(), "pool input ids are empty or duplicate");
+		let vtxos = self.eligible_pool_vtxos(ids).await?;
+		ensure!(vtxos.len() == ids.len() && vtxos.iter().map(|v| v.id()).collect::<BTreeSet<_>>() == expected,
+			"pool input membership is missing, consumed or retired");
 		Ok(vtxos)
 	}
 
@@ -105,12 +114,13 @@ impl<'t> Tx<'t> {
 		ids: impl IntoIterator<Item = VtxoId>,
 	) -> anyhow::Result<()> {
 		let stmt = self.prepare_typed(
-			"UPDATE vtxo_pool SET spent_at = NOW() WHERE vtxo_id = ANY($1)",
+			"UPDATE vtxo_pool SET spent_at = NOW() WHERE vtxo_id = ANY($1) AND spent_at IS NULL",
 			&[Type::TEXT_ARRAY],
 		).await?;
 
 		let ids = ids.into_iter().map(|id| id.to_string()).collect::<Vec<_>>();
-		self.execute(&stmt, &[&ids]).await?;
+		let count = self.execute(&stmt, &[&ids]).await?;
+		ensure!(count == ids.len() as u64, "pool spend membership changed");
 		Ok(())
 	}
 }
@@ -122,7 +132,10 @@ impl Db {
 		let conn = self.get_conn().await?;
 		// fetch without keys
 		let stmt = conn.prepare(
-			"SELECT vtxo_id, vtxo, expiry_height, amount FROM vtxo_pool WHERE spent_at IS NULL",
+			"SELECT p.vtxo FROM vtxo_pool p JOIN vtxo v ON v.vtxo_id = p.vtxo_id
+			 WHERE p.spent_at IS NULL AND v.spend_state = 'pool' AND v.oor_spent_txid IS NULL
+			 AND v.spent_in_round IS NULL AND v.offboarded_in IS NULL AND v.confirmed_height IS NULL
+			 AND v.onchain_spent_txid IS NULL AND v.onchain_spent_height IS NULL AND v.lightning_htlc_subscription_id IS NULL",
 		).await?;
 
 		let rows = conn.query_raw(&stmt, NOARG).await?;

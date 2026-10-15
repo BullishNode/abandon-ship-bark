@@ -36,6 +36,7 @@ mod offboards;
 pub mod recovery;
 pub mod expiry_payout;
 mod payout_witness;
+mod operator_residual;
 mod round;
 pub mod telemetry;
 pub mod utils;
@@ -225,6 +226,7 @@ pub struct Server {
 	lightning_manager: LightningManager,
 	htlc_settler: Arc<HtlcSettler>,
 	vtxopool: VtxoPool,
+	operator_witness: Option<operator_residual::OperatorWitness>,
 	pending_offboards: parking_lot::Mutex<TimedEntryMap<Txid, offboards::OffboardSession>>,
 	fee_estimator: Arc<FeeEstimator>,
 	/// scriptPubkeys in the bitcoin address blocklist
@@ -269,6 +271,8 @@ impl Server {
 		let master_xpriv = bip32::Xpriv::new_master(cfg.network, &seed).unwrap();
 		let server_key = master_xpriv.derive_priv(&SECP, &SERVER_KEY_PATH.parse::<bip32::DerivationPath>()?)?;
 		payout_witness::PayoutWitness::initialize(&cfg.data_dir, cfg.network,
+			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key())?;
+		operator_residual::OperatorWitness::initialize(&cfg.data_dir, cfg.network,
 			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key())?;
 
 		// Store initial wallet states to avoid full chain sync.
@@ -372,6 +376,18 @@ impl Server {
 		bcd::require_network(&bitcoind, cfg.network).await?;
 		bcd::require_version(&bitcoind).await?;
 		bitcoind.require_txindex().await?;
+		// Disabling dispatch cannot disable the independent proof of capital
+		// already made available by a durable operator disposition.
+		let operator_released = db.read(async |t| Ok(t.query_one(
+			"SELECT EXISTS (SELECT 1 FROM recovery_capital_release WHERE kind = 'unused-pool')", &[],
+		).await?.get::<_, bool>(0))).await?;
+		let operator_witness = if operator_released || cfg.expiry_payout.enabled
+			|| cfg.data_dir.join(operator_residual::DIRECTORY).exists() {
+			Some(operator_residual::OperatorWitness::load(&cfg.data_dir, cfg.network, server_key.public_key(),
+				&db, &bitcoind, cfg.expiry_payout.sweep_min_confs).await
+				.context("operator capital witness validation failed")?)
+		} else { None };
+
 
 		let bitcoin_address_blocklist = if let Some(ref path) = cfg.bitcoin_address_blocklist {
 			Some(BitcoinAddressBlocklist::new(cfg.network, bitcoind.clone(), path).await
@@ -522,6 +538,7 @@ impl Server {
 			lightning_manager: cln,
 			htlc_settler,
 			vtxopool,
+			operator_witness,
 			pending_offboards: parking_lot::Mutex::new(TimedEntryMap::new()),
 			fee_estimator,
 			bitcoin_address_blocklist,

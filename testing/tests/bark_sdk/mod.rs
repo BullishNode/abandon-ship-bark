@@ -27,6 +27,7 @@ mod offboard;
 mod payment_request;
 mod recovery;
 mod recovery_reserve;
+mod recovery_residual;
 mod round;
 mod vtxo_lock;
 

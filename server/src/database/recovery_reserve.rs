@@ -405,3 +405,14 @@ impl<'t> Tx<'t> {
 		Ok(Some(transaction))
 	}
 }
+
+impl Tx<'_> {
+	/// Serialize only the append-only operator journal across processes. The
+	/// existing native/source row locks remain the financial authority.
+	pub(crate) async fn lock_operator_witness(&self) -> anyhow::Result<()> {
+		self.execute("SET LOCAL lock_timeout = '5s'", &[]).await?;
+		self.execute(&format!("SELECT pg_advisory_xact_lock({})",
+			super::AdvisoryLock::OperatorCapitalWitnessWrite as i64), &[]).await?;
+		Ok(())
+	}
+}

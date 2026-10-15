@@ -79,6 +79,7 @@ const DEFAULT_DATABASE: &str = "postgres";
 enum AdvisoryLock {
 	MailboxWrite = 1,
 	HtlcSettlementWrite = 2,
+	OperatorCapitalWitnessWrite = 3,
 }
 
 /// An uncommitted offboard fetched for the retry-task commit path. Carries

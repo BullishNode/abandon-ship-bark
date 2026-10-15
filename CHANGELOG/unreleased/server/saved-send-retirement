@@ -1,0 +1,1 @@
+- Complete saved out-of-round sends after confirmed direct retirement without importing the recipient's keys into the sender wallet.

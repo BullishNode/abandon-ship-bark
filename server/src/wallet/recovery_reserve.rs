@@ -31,7 +31,7 @@ pub(super) struct RecoveryReserve {
 }
 
 impl RecoveryReserve {
-	pub(super) async fn load(db: &Db, wallet: &Wallet) -> anyhow::Result<Option<Self>> {
+	pub(super) async fn load(db: &Db, wallet: &mut Wallet) -> anyhow::Result<Option<Self>> {
 		let state = db.read(async |t| t.recovery_reserve_state().await).await?;
 		let Some(state) = state else { return Ok(None); };
 		let script = state.script;
@@ -46,6 +46,7 @@ impl RecoveryReserve {
 			for transaction in &transactions { t.check_recovery_receipt(transaction).await?; }
 			Ok(())
 		}).await?;
+		reserve_destination(wallet, &script);
 		Ok(Some(Self { script, held: state.held, fee_headroom: state.fee_headroom, unknown_gross: state.unknown_gross, staged: Vec::new() }))
 	}
 
@@ -56,11 +57,22 @@ impl RecoveryReserve {
 	}
 }
 
+// BDK's manual used marker is ephemeral. Reapply it on load and before builds.
+// Revealing the owned destination also advances ordinary fresh-address issuance
+// past it; reveal_next_address itself does not consult the used marker.
+pub(super) fn reserve_destination(wallet: &mut Wallet, script: &ScriptBuf) {
+	if let Some((keychain, index)) = wallet.derivation_of_spk(script.clone()) {
+		wallet.reveal_addresses_to(keychain, index).for_each(drop);
+		wallet.mark_used(keychain, index);
+	}
+}
+
 impl PersistedWallet {
 	pub(crate) async fn enable_recovery_reserve(&mut self, script: ScriptBuf, fee_headroom: Amount) -> anyhow::Result<()> {
 		if let Some(reserve) = &self.recovery_reserve {
 			ensure!(reserve.script == script && reserve.fee_headroom == fee_headroom,
 				"recovery reserve script or fee policy changed; declared maintenance transition required");
+			reserve_destination(&mut self.wallet, &reserve.script);
 			return Ok(());
 		}
 		// Never initialize an old receipt history as an empty reserve. Backfill is
@@ -68,6 +80,7 @@ impl PersistedWallet {
 		ensure!(!self.wallet.tx_graph().full_txs().any(|node| {
 			node.tx.output.iter().any(|output| output.script_pubkey == script)
 		}), "existing sweep receipts require explicit recovery reserve backfill");
+		reserve_destination(&mut self.wallet, &script);
 		self.recovery_reserve = Some(RecoveryReserve { script, unknown_gross: true, held: Amount::ZERO, fee_headroom, staged: Vec::new() });
 		self.persist().await.context("initializing recovery reserve")
 	}

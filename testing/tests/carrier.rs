@@ -7,6 +7,8 @@ mod pool_retirement;
 
 #[path = "carrier/returning_client.rs"]
 mod returning_client;
+#[path = "carrier/frozen_pending.rs"]
+mod frozen_pending;
 #[path = "carrier/client_stack.rs"]
 mod client_stack;
 #[path = "carrier/cap_freeze.rs"]

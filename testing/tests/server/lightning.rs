@@ -26,7 +26,7 @@ use bark::lightning_invoice::Bolt11Invoice;
 use bark_json::primitives::{VtxoStateInfo, WalletVtxoInfo};
 use server_log::{LightningReceiveCanceled, LightningReceiveKeptCommitted};
 use server_rpc::protos;
-use server::database::Db;
+use server::database::{BlockTable, Db};
 use server::database::htlc_vtxo::HtlcDirection;
 use server::vtxopool::VtxoTarget;
 
@@ -704,12 +704,34 @@ struct ParkedReceive {
 
 impl ParkedReceive {
 	async fn setup(ctx: &TestContext) -> ParkedReceive {
+		Self::setup_with_direct_watchman(ctx, false).await
+	}
+
+	async fn setup_with_direct_watchman(ctx: &TestContext, direct: bool) -> ParkedReceive {
 		let lightning = ctx.new_lightning_setup("lightningd").await;
 
 		// The watchman tells the server the HTLC-recv vtxos expired unexited.
-		let srv = ctx.captaind("server").lightningd(&lightning.internal).watchmand().cfg(|cfg| {
+		let srv = ctx.captaind("server").lightningd(&lightning.internal).watchmand().cfg(move |cfg| {
 			cfg.invoice_check_interval = Duration::from_secs(1);
+			if direct {
+				cfg.direct_expiry.enabled = true;
+				cfg.direct_expiry.interval = Duration::from_secs(1);
+			}
+		}).watchmand_cfg(move |cfg| {
+			if direct {
+				cfg.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+					history_dir: cfg.data_dir.parent().unwrap().join("server"),
+					max_miner_fee: sat(10_000),
+				});
+				cfg.fee_estimator.max_fee_rate = Some(bitcoin::FeeRate::from_sat_per_vb(50).unwrap());
+			}
 		}).create().await;
+		if direct {
+			assert!(srv.config().direct_expiry.enabled);
+			assert!(!srv.config().expiry_payout.enabled);
+			let history_dir = srv.config().data_dir.clone();
+			assert_eq!(srv.watchmand().config().watchman.direct_expiry.as_ref().unwrap().history_dir, history_dir);
+		}
 		ctx.fund_captaind(&srv, btc(10)).await;
 		srv.wait_for_vtxopool(ctx).await;
 
@@ -861,6 +883,63 @@ async fn intra_ark_revoke_refused_while_watchman_is_behind() {
 	parked.srv.watchmand().start().await.unwrap();
 	parked.srv.watchmand().wait_for_sync_height(tip).await;
 	parked.revoke().await.expect("revoke should be cosigned once the watchman caught up");
+	parked.assert_claim_refused().await;
+}
+
+/// The matched direct captaind/watchmand route must persist its processed tip
+/// before an expired receive can release the payer's HTLCs. The parked harness
+/// marks the payer attempt failed, but never writes either daemon's tip.
+#[tokio::test]
+async fn intra_ark_revoke_refused_while_direct_watchman_is_behind() {
+	require_bark_version!(> "0.5.0");
+
+	let ctx = TestContext::new("server/intra_ark_revoke_refused_while_direct_watchman_is_behind").await;
+	let parked = ParkedReceive::setup_with_direct_watchman(&ctx, true).await;
+	let pending = parked.payer.lightning_send_checkpoint(parked.payment_hash).await.unwrap()
+		.expect("payer must retain its original send checkpoint");
+	assert!(matches!(&pending.progress,
+		bark::actions::lightning::pay::Progress::PaymentInitiated(_) |
+		bark::actions::lightning::pay::Progress::RevocableHtlcs { .. } |
+		bark::actions::lightning::pay::Progress::RevocationStuck { .. }
+	), "refund check must not initiate another payment");
+	let before = parked.payer.balance().await.unwrap();
+	let mut refund_amount = Amount::ZERO;
+	let htlcs = htlc_send_vtxo_ids(&parked.payer, parked.payment_hash).await;
+	assert!(!htlcs.is_empty());
+	for id in htlcs {
+		refund_amount += parked.payer.get_full_vtxo(id).await.unwrap().amount();
+	}
+
+	parked.srv.watchmand().stop().await.unwrap();
+	let db = Db::connect(&parked.srv.config().postgres.clone()).await.unwrap();
+	let stopped_tip = db.read(async |t| t.get_highest_block(BlockTable::Watchmand).await)
+		.await.unwrap().expect("direct watchman must have a durable processed tip");
+	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let tip = ctx.generate_blocks(parked.htlc_recv_expiry.to_u32() + 1 - tip.to_u32()).await;
+	parked.srv.wait_for_sync_height(tip).await;
+	assert!(stopped_tip.height < tip);
+	assert_eq!(db.read(async |t| t.get_highest_block(BlockTable::Watchmand).await)
+		.await.unwrap(), Some(stopped_tip));
+
+	let status = parked.revoke().await.expect_err("direct revoke cosigned while the watchman is behind");
+	assert!(status.message().contains("already committed"), "unexpected refusal: {status:?}");
+
+	parked.srv.watchmand().start().await.unwrap();
+	parked.srv.watchmand().wait_for_sync_height(tip).await;
+	let caught_up = db.read(async |t| t.get_highest_block(BlockTable::Watchmand).await)
+		.await.unwrap().expect("direct watchman lost its durable processed tip");
+	assert_eq!(caught_up.height, tip);
+	let state = parked.payer.check_lightning_payment(parked.payment_hash, true)
+		.wait_millis(30_000).await.unwrap();
+	assert_eq!(state, bark::actions::lightning::pay::LightningSendState::Unknown);
+	let refunded = parked.payer.balance().await.unwrap();
+	assert_eq!(refunded.spendable, before.spendable + refund_amount);
+	assert_eq!(refunded.pending_lightning_send, Amount::ZERO);
+	assert!(parked.payer.pending_lightning_sends().await.unwrap().is_empty());
+
+	// A completed native refund must not be applied twice.
+	parked.payer.check_lightning_payment(parked.payment_hash, true).await.unwrap();
+	assert_eq!(parked.payer.balance().await.unwrap().spendable, refunded.spendable);
 	parked.assert_claim_refused().await;
 }
 

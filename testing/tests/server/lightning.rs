@@ -1003,7 +1003,11 @@ async fn direct_background_cancel_watch_boundary(ctx: &TestContext, missing: boo
 	assert!(!original.is_empty());
 	assert!(parked.srv.htlc_vtxos(hash).await.iter()
 		.any(|h| h.direction() == HtlcDirection::Outgoing && h.amount() > Amount::ZERO));
-	assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Unpaid);
+	// Actual intra-Ark admission cancels the CLN invoice immediately while
+	// retaining the Accepted/HtlcsReady SQL subscription and Requested attempt.
+	// Watcher controls below prove those durable state transitions, not a
+	// later CLN invoice transition that this payment route never performs.
+	assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Cancelled);
 	assert!(!is_preimage_recorded(&db, hash).await);
 	let old_tip = if missing {
 		assert_eq!(persisted_watchman_height(&parked.srv).await, None);
@@ -1028,7 +1032,7 @@ async fn direct_background_cancel_watch_boundary(ctx: &TestContext, missing: boo
 		assert_eq!(persisted_watchman_height(&parked.srv).await, old_tip);
 		assert_eq!(lightning_subscription_status(&db, hash).await.as_deref(), Some("htlcs-ready"));
 		assert_eq!(lightning_attempt_status(&db, hash).await.as_deref(), Some("requested"));
-		assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Unpaid);
+		assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Cancelled);
 		assert!(!is_preimage_recorded(&db, hash).await);
 		assert_eq!(direct_background_grant_bodies(&parked.srv, hash).await, original);
 		tokio::time::sleep(Duration::from_millis(200)).await;

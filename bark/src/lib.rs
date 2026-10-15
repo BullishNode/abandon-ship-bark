@@ -1655,13 +1655,15 @@ impl Wallet {
 	///
 	/// Each keypair must be its VTXO's private key so we can prove ownership.
 	///
-	/// A VTXO the server does not know, whose batch request failed, or whose
-	/// answer is unusable, is absent from the result. Only a server that cannot
-	/// be reached is an error.
+	/// Unknown VTXOs, failed batches and unknown status enums stay unanswered.
+	/// Malformed response identities abort the fetch before any result reaches
+	/// the caller. An unreachable server is also an error.
 	pub(crate) async fn fetch_vtxo_spend_states(
 		&self,
 		queries: &[(VtxoId, &Keypair)],
 	) -> anyhow::Result<HashMap<VtxoId, VtxoSpendState>> {
+		ensure!(queries.iter().map(|(id, _)| *id).collect::<HashSet<_>>().len() == queries.len(),
+			"duplicate VTXO ids in status query");
 		let mut ret = HashMap::with_capacity(queries.len());
 		if queries.is_empty() {
 			return Ok(ret);
@@ -1683,29 +1685,9 @@ impl Wallet {
 				},
 			};
 
-			// The caller decides what an unanswered id means and logs it.
-			for raw in &resp.missing_vtxo_ids {
-				match VtxoId::from_slice(raw) {
-					Ok(id) => debug!("Server does not know vtxo {id}, no status returned"),
-					Err(_) => debug!("Server reported an undecodable missing vtxo id: {raw:?}"),
-				}
-			}
-
-			for status in &resp.vtxos {
-				let Ok(id) = VtxoId::from_slice(&status.vtxo_id) else {
-					warn!("Server returned a status for an undecodable vtxo id: {:?}", status.vtxo_id);
-					continue;
-				};
-				match VtxoSpendState::try_from(status.spend_state) {
-					Ok(state) => {
-						ret.insert(id, state);
-					},
-					Err(_) => warn!(
-						"server returned unknown spend state {} for vtxo {id}; this wallet may \
-						need updating", status.spend_state,
-					),
-				}
-			}
+			let requested = chunk.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+			ret.extend(checked_batch_spend_states(&requested, &resp)
+				.context("rejecting malformed VTXO status batch before wallet mutation")?);
 		}
 
 		Ok(ret)
@@ -2708,6 +2690,31 @@ impl std::ops::Drop for WalletInner {
 	}
 }
 
+fn checked_batch_spend_states(
+	requested: &[VtxoId], resp: &protos::GetVtxosStatusByIdsResponse,
+) -> anyhow::Result<HashMap<VtxoId, VtxoSpendState>> {
+	let expected = requested.iter().copied().collect::<HashSet<_>>();
+	let mut seen: HashMap<VtxoId, Option<i32>> = HashMap::new();
+	for raw in &resp.missing_vtxo_ids {
+		let id = VtxoId::from_slice(raw).context("server returned invalid missing VTXO id")?;
+		ensure!(expected.contains(&id), "server returned unexpected missing VTXO {id}");
+		seen.insert(id, None);
+	}
+	let mut ret = HashMap::new();
+	for status in &resp.vtxos {
+		let id = VtxoId::from_slice(&status.vtxo_id).context("server returned invalid VTXO id")?;
+		ensure!(expected.contains(&id), "server returned unexpected VTXO {id}");
+		if let Some(previous) = seen.insert(id, Some(status.spend_state)) {
+			ensure!(previous == Some(status.spend_state), "server returned conflicting status for VTXO {id}");
+		}
+		match VtxoSpendState::try_from(status.spend_state) {
+			Ok(state) => { ret.insert(id, state); },
+			Err(_) => warn!("server returned unknown spend state {} for vtxo {id}; leaving it unanswered", status.spend_state),
+		}
+	}
+	Ok(ret)
+}
+
 #[cfg(test)]
 mod tests {
 	use bitcoin::{Amount, FeeRate, Network};
@@ -2840,4 +2847,32 @@ mod tests {
 		assert!(err.contains("nb_round_nonces"), "unexpected error: {err}");
 	}
 
+}
+
+#[cfg(test)]
+mod batch_status_tests {
+	use super::*;
+	fn id(tag: u8) -> VtxoId { VtxoId::from_slice(&[tag; 36]).unwrap() }
+	fn response(rows: &[(VtxoId, i32)], missing: &[VtxoId]) -> protos::GetVtxosStatusByIdsResponse {
+		protos::GetVtxosStatusByIdsResponse {
+			vtxos: rows.iter().map(|(id, state)| protos::VtxoStatus { vtxo_id: id.to_bytes().to_vec(), spend_state: *state }).collect(),
+			missing_vtxo_ids: missing.iter().map(|id| id.to_bytes().to_vec()).collect(),
+		}
+	}
+	#[test]
+	fn rejects_unrequested_and_conflicting_ids_before_exposing_any_status() {
+		let a = id(1); let b = id(2);
+		let spent = VtxoSpendState::Spent as i32; let free = VtxoSpendState::Spendable as i32;
+		assert!(checked_batch_spend_states(&[a], &response(&[(a, spent), (b, spent)], &[])).is_err());
+		assert!(checked_batch_spend_states(&[a], &response(&[(a, spent), (a, free)], &[])).is_err());
+		assert!(checked_batch_spend_states(&[a], &response(&[(a, spent)], &[a])).is_err());
+		assert!(checked_batch_spend_states(&[a], &response(&[], &[b])).is_err());
+	}
+	#[test]
+	fn unknown_and_missing_stay_unanswered_and_duplicates_are_idempotent() {
+		let a = id(1); let b = id(2); let spent = VtxoSpendState::Spent as i32;
+		let ret = checked_batch_spend_states(&[a, b], &response(&[(a, spent), (a, spent), (b, i32::MAX)], &[])).unwrap();
+		assert_eq!(ret.len(), 1); assert_eq!(ret.get(&a), Some(&VtxoSpendState::Spent)); assert!(!ret.contains_key(&b));
+		assert!(checked_batch_spend_states(&[a], &response(&[], &[a])).unwrap().is_empty());
+	}
 }

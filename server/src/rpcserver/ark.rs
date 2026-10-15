@@ -1,5 +1,5 @@
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -81,18 +81,29 @@ fn client_spend_state(spend_state: SpendState) -> Option<protos::VtxoSpendState>
 	}
 }
 
+/// Call only after ownership authentication. Freeze/publication is not paid;
+/// only exact ids with a checked signed winner on the current chain retire.
+fn client_disposition(id: VtxoId, state: SpendState, confirmed: &HashSet<VtxoId>) -> Option<protos::VtxoSpendState> {
+	let state = client_spend_state(state)?;
+	Some(if confirmed.contains(&id) { protos::VtxoSpendState::Spent } else { state })
+}
+
 impl Server {
 	/// A confirmed carrier retires this exact frozen allocation. Spent describes
 	/// retirement, including forfeiture; it does not claim a customer payment.
-	pub(crate) async fn any_expiry_allocation_confirmed(&self, ids: &[VtxoId]) -> anyhow::Result<bool> {
+	async fn confirmed_expiry_allocations(&self, ids: &[VtxoId]) -> anyhow::Result<HashSet<VtxoId>> {
 		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
 		let freeze_sets = self.db.read(async |t| Ok(t.query(
-			"SELECT DISTINCT a.freeze_set FROM expiry_allocation a WHERE a.id=ANY($1) AND EXISTS (
+			"SELECT a.id,a.freeze_set FROM expiry_allocation a WHERE a.id=ANY($1) AND EXISTS (
 				SELECT 1 FROM expiry_carrier_allocation m JOIN expiry_carrier c ON c.txid=m.txid
 				WHERE m.allocation_id=a.id AND c.confirmed_height IS NOT NULL)",
 			&[&ids],
-		).await?.into_iter().map(|row| row.get::<_, String>("freeze_set")).collect::<Vec<_>>())).await?;
-		for freeze_set in freeze_sets {
+		).await?.into_iter().map(|row| Ok((row.get::<_, String>("freeze_set"),
+			row.get::<_, &str>("id").parse::<VtxoId>()?))).collect::<anyhow::Result<Vec<_>>>()?)).await?;
+		let mut by_group: HashMap<String, HashSet<VtxoId>> = HashMap::new();
+		for (group, id) in freeze_sets { by_group.entry(group).or_default().insert(id); }
+		let mut retired = HashSet::new();
+		for (freeze_set, group_ids) in by_group {
 			// Validate each complete signed group once per request, including its
 			// authenticated outputs. A recorded flag or submission is insufficient.
 			let versions = self.db.read_direct_delivery(&freeze_set, self.config.network,
@@ -104,10 +115,36 @@ impl Server {
 			// The direct route adopts the exact active-chain winner without the
 			// legacy two-step sweep depth. Call outside financial transaction locks.
 			if crate::bitcoind::tx_status(&self.bitcoind, winner.tx.compute_txid()).await? == TxStatus::Confirmed(recorded) {
-				return Ok(true);
+				retired.extend(group_ids);
 			}
 		}
-		Ok(false)
+		Ok(retired)
+	}
+
+	/// Spend admission asks whether any input is retired. Status replies must
+	/// use the exact set so one winner cannot mark unrelated ids spent.
+	pub(crate) async fn any_expiry_allocation_confirmed(&self, ids: &[VtxoId]) -> anyhow::Result<bool> {
+		Ok(!self.confirmed_expiry_allocations(ids).await?.is_empty())
+	}
+
+	/// A registered ordinary row takes precedence over its retained Board.
+	async fn client_status_vtxos(&self, ids: &[VtxoId]) -> anyhow::Result<HashMap<VtxoId, (Vtxo, SpendState)>> {
+		self.db.read(async |tx| {
+			let mut states = tx.get_existing_server_vtxos_by_id(ids).await?;
+			let mut ret = HashMap::with_capacity(ids.len());
+			for id in ids {
+				if ret.contains_key(id) { continue; }
+				if let Some(state) = states.remove(id) {
+					if client_spend_state(state.spend_state).is_none() { continue; }
+					if let Ok(user) = state.vtxo.try_into_user_vtxo() {
+						ret.insert(*id, (user, state.spend_state));
+					}
+				} else if let Some(user) = tx.pending_board_status_vtxo(*id).await? {
+					ret.insert(*id, (user, SpendState::Unregistered));
+				}
+			}
+			Ok(ret)
+		}).await
 	}
 }
 
@@ -205,27 +242,14 @@ impl rpc::server::ArkService for Server {
 		let id = VtxoId::from_bytes(req.vtxo_id)?;
 		let attestation = VtxoStatusAttestation::from_bytes(&req.attestation)?;
 
-		let pending = self.db.read(async |t| t.pending_board_status_vtxo(id).await).await.to_status()?;
-		let (user_vtxo, spend_state) = if let Some(vtxo) = pending {
-			(vtxo, SpendState::Unregistered)
-		} else {
-			let state = self.db.read(async |t| t.get_server_vtxo_by_id(id).await).await.to_status()?;
-			let user = match state.vtxo.try_into_user_vtxo() {
-				Ok(v) => v,
-				Err(_) => { macros::not_found!([id], "VTXO not found"); },
-			};
-			(user, state.spend_state)
-		};
-
-		attestation.verify(&user_vtxo)
-			.badarg("invalid VTXO status attestation")?;
-
-		let Some(mut spend_state) = client_spend_state(spend_state) else {
+		let Some((user_vtxo, state)) = self.client_status_vtxos(&[id]).await.to_status()?.remove(&id) else {
 			macros::not_found!([id], "VTXO not found");
 		};
-		if spend_state != protos::VtxoSpendState::Spent && self.any_expiry_allocation_confirmed(&[id]).await.to_status()? {
-			spend_state = protos::VtxoSpendState::Spent;
-		}
+		attestation.verify(&user_vtxo).badarg("invalid VTXO status attestation")?;
+		let confirmed = self.confirmed_expiry_allocations(&[id]).await.to_status()?;
+		let Some(spend_state) = client_disposition(id, state, &confirmed) else {
+			macros::not_found!([id], "VTXO not found");
+		};
 
 		Ok(tonic::Response::new(protos::GetVtxoStatusResponse {
 			spend_state: spend_state as i32,
@@ -285,35 +309,33 @@ impl rpc::server::ArkService for Server {
 			.collect::<Result<Vec<_>, tonic::Status>>()?;
 
 		let ids = queries.iter().map(|(id, _)| *id).collect::<Vec<_>>();
-		let states = self.db.read(async |t| t.get_existing_server_vtxos_by_id(&ids).await).await
-			.to_status()?;
-
-		// An id without a client-visible user vtxo is reported as missing,
-		// not as an error, so one bad id does not cost the client the batch.
-		// Only ids the server knows get their attestation checked.
-		let mut by_id = HashMap::with_capacity(states.len());
-		for (id, state) in states {
-			let Ok(user_vtxo) = state.vtxo.try_into_user_vtxo() else { continue };
-			let Some(spend_state) = client_spend_state(state.spend_state) else { continue };
-			by_id.insert(id, (user_vtxo, spend_state));
+		let by_id = self.client_status_vtxos(&ids).await.to_status()?;
+		// Authenticate every known query before inspecting carrier confirmations.
+		for (id, attestation) in &queries {
+			if let Some((user_vtxo, _)) = by_id.get(id) {
+				attestation.verify(user_vtxo).badarg("invalid VTXO status attestation")?;
+			}
 		}
+		let known = by_id.keys().copied().collect::<Vec<_>>();
+		let confirmed = self.confirmed_expiry_allocations(&known).await.to_status()?;
 
 		let mut vtxos = Vec::with_capacity(queries.len());
 		let mut missing = Vec::new();
-		for (id, attestation) in queries {
-			let Some((user_vtxo, spend_state)) = by_id.get(&id) else {
+		for (id, _) in queries {
+			let Some((_, state)) = by_id.get(&id) else {
 				if !missing.contains(&id) {
 					missing.push(id);
 				}
 				continue;
 			};
 
-			attestation.verify(user_vtxo)
-				.badarg("invalid VTXO status attestation")?;
-
+			let Some(spend_state) = client_disposition(id, *state, &confirmed) else {
+				if !missing.contains(&id) { missing.push(id); }
+				continue;
+			};
 			vtxos.push(protos::VtxoStatus {
 				vtxo_id: id.to_bytes().to_vec(),
-				spend_state: *spend_state as i32,
+				spend_state: spend_state as i32,
 			});
 		}
 
@@ -362,9 +384,11 @@ impl rpc::server::ArkService for Server {
 		// from, so their status needs no attestation of its own. A VTXO in a
 		// server-internal state is left out, as GetVtxoStatus reports it as
 		// not found.
+		let ids = res.vtxos.iter().map(|v| v.vtxo.id()).collect::<Vec<_>>();
+		let confirmed = self.confirmed_expiry_allocations(&ids).await.to_status()?;
 		let vtxos = res.vtxos.into_iter().filter_map(|v| {
 			Some(protos::RecoveredVtxo {
-				spend_state: client_spend_state(v.spend_state)? as i32,
+				spend_state: client_disposition(v.vtxo.id(), v.spend_state, &confirmed)? as i32,
 				vtxo: v.vtxo.serialize(),
 				derivation_index: v.derivation_index,
 			})
@@ -1199,4 +1223,16 @@ mod test {
 		assert_eq!(client_spend_state(SpendState::OffboardForfeit), None);
 		assert_eq!(client_spend_state(SpendState::OffboardConnector), None);
 	}
+	#[test]
+	fn confirmed_disposition_is_per_id_and_pending_is_not_paid() {
+		let a = VtxoId::from_slice(&[1; 36]).unwrap();
+		let b = VtxoId::from_slice(&[2; 36]).unwrap();
+		let confirmed = HashSet::from([a]);
+		assert_eq!(client_disposition(a, SpendState::Unregistered, &confirmed), Some(protos::VtxoSpendState::Spent));
+		assert_eq!(client_disposition(b, SpendState::Unregistered, &confirmed), Some(protos::VtxoSpendState::Unregistered));
+		assert_eq!(client_disposition(b, SpendState::Spendable, &confirmed), Some(protos::VtxoSpendState::Spendable));
+		assert_eq!(client_disposition(a, SpendState::Unregistered, &HashSet::new()), Some(protos::VtxoSpendState::Unregistered));
+		assert_eq!(client_disposition(a, SpendState::Pool, &confirmed), None);
+	}
+
 }

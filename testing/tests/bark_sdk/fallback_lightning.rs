@@ -1526,9 +1526,28 @@ async fn abandoned_intra_ark_receive(returning_sender: bool) {
 		let refused = sender.check_lightning_payment(payment_hash, false).await;
 		let state = sender.lightning_send_state(payment_hash).await.unwrap();
 		assert!(matches!(state, bark::actions::lightning::pay::LightningSendState::InProgress(_)), "{state:?}");
-		assert_eq!(db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
-			.await.unwrap().unwrap().status, server::database::ln::LightningHtlcSubscriptionStatus::HtlcsReady,
-			"a refund before the granted receive is swept would let both parties keep the value");
+		let held_sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
+			.await.unwrap().unwrap();
+		assert_eq!(held_sub.status, server::database::ln::LightningHtlcSubscriptionStatus::Canceled,
+			"invoice cancellation must retain the granted receive's unilateral backing liability");
+		assert_eq!(held_sub.htlc_vtxos.iter().map(ToString::to_string).collect::<BTreeSet<_>>(),
+			granted_ids.iter().cloned().collect::<BTreeSet<_>>());
+		let held_grants = db.read(async |t| t.get_user_vtxos_by_id(&held_sub.htlc_vtxos).await).await.unwrap();
+		assert_eq!(held_grants.len(), granted.len());
+		for g in &held_grants {
+			assert_eq!(g.spend_state, server::database::SpendState::HtlcRecvUnclaimed);
+			assert!(g.oor_spent_txid.is_none());
+			let original = granted.iter().find(|v| v.id() == g.vtxo_id).unwrap();
+			assert_eq!(g.vtxo.serialize(), original.serialize());
+			let anchor = original.chain_anchor();
+			assert!(core.get_tx_out(&anchor.txid, anchor.vout, Some(true)).unwrap().is_some(),
+				"the granted receive retains real unswept backing before refund");
+		}
+		assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(payment_hash).await).await.unwrap().is_none());
+		assert_eq!(sender.balance().await.unwrap().pending_lightning_send, sat(htlc_principal));
+		assert_eq!(sender.all_vtxos().await.unwrap().into_iter()
+			.filter(|w| w.vtxo.policy().as_server_htlc_send().is_some_and(|p| p.payment_hash == payment_hash))
+			.map(|w| w.vtxo.id().to_string()).collect::<BTreeSet<_>>(), htlc_ids.iter().cloned().collect::<BTreeSet<_>>());
 		println!("sender refund refused while the granted receive can still be claimed: {:?}", refused.err());
 
 		expire_and_confirm_sweeps(&ctx, &db, &granted).await;

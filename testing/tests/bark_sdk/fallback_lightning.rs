@@ -1565,13 +1565,34 @@ async fn abandoned_intra_ark_receive(returning_sender: bool) {
 	if returning_sender {
 		// Past both HTLC deadlines, but the granted vtxos are not swept: the
 		// recipient can still exit them and claim with the preimage.
-		ctx.generate_blocks(send_expiry.saturating_sub(core.get_block_count().unwrap() as u32) + 2).await;
+		let tip = ctx.generate_blocks(send_expiry.saturating_sub(core.get_block_count().unwrap() as u32) + 2).await;
+		srv.wait_for_sync_height(tip).await;
+		srv.watchmand().wait_for_sync_height(tip).await;
+		// Cancellation is the actual background outcome after both HTLC deadlines;
+		// it does not destroy the recipient's still-unspent unilateral grant.
+		tokio::time::timeout(Duration::from_secs(30), async {
+			loop {
+				let (sub, attempt) = db.read(async |t| Ok((
+					t.get_htlc_subscription_by_payment_hash(payment_hash).await?.unwrap(),
+					t.get_latest_payment_attempt_by_payment_hash(payment_hash).await?.unwrap(),
+				))).await.unwrap();
+				if sub.status == server::database::ln::LightningHtlcSubscriptionStatus::Canceled
+					&& attempt.status == server::database::ln::LightningPaymentStatus::Failed { break; }
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}).await.expect("genuine background cancellation must conclude the payer attempt");
+		for grant in &granted {
+			assert!(grant.expiry_height() > tip, "HTLC expiry is not physical VTXO expiry");
+			let root = grant.chain_anchor();
+			assert!(core.get_tx_out(&root.txid, root.vout, Some(true)).unwrap().is_some(),
+				"the complete granted backing must still be physically unspent before refusal");
+		}
 		// The client revokes past the HTLC expiry; a refusal parks its action.
 		let refused = sender.check_lightning_payment(payment_hash, false).await;
 		let state = sender.lightning_send_state(payment_hash).await.unwrap();
 		assert!(matches!(state, bark::actions::lightning::pay::LightningSendState::InProgress(_)), "{state:?}");
 		assert_eq!(db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await)
-			.await.unwrap().unwrap().status, server::database::ln::LightningHtlcSubscriptionStatus::HtlcsReady,
+			.await.unwrap().unwrap().status, server::database::ln::LightningHtlcSubscriptionStatus::Canceled,
 			"a refund before the granted receive is swept would let both parties keep the value");
 		println!("sender refund refused while the granted receive can still be claimed: {:?}", refused.err());
 

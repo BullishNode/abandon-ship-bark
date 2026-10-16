@@ -145,7 +145,7 @@ async fn capture(t: &Tx<'_>, policy: &Policy, candidate: &Candidate) -> anyhow::
 	let (id, _) = candidate.checked(policy)?;
 	let funding: Transaction = deserialize(&candidate.raw)?;
 	let txid = funding.compute_txid().to_string();
-	let bounds = t.query_one("SELECT count(*), COALESCE(sum(octet_length(v.vtxo)+octet_length(i.vtxo_id)+COALESCE(octet_length(a.signed_tx),0)),0)::bigint, count(a.signed_tx) AS anchors FROM round_participation p JOIN round_part_input i ON i.participation_id=p.id JOIN vtxo v ON v.vtxo_id=i.vtxo_id LEFT JOIN virtual_transaction a ON a.txid=split_part(v.anchor_point,':',1) WHERE p.round_id=$1", &[&txid]).await?;
+	let bounds = t.query_one("SELECT count(*), COALESCE(sum(octet_length(v.vtxo)+octet_length(i.vtxo_id)+octet_length(v.anchor_point)+COALESCE(octet_length(a.signed_tx),0)),0)::bigint, count(a.signed_tx) AS anchors FROM round_participation p JOIN round_part_input i ON i.participation_id=p.id JOIN vtxo v ON v.vtxo_id=i.vtxo_id LEFT JOIN virtual_transaction a ON a.txid=split_part(v.anchor_point,':',1) WHERE p.round_id=$1", &[&txid]).await?;
 	ensure!(bounds.get::<_,i64>(0) <= MAX_RECORDS as i64 && bounds.get::<_,i64>(1) <= MAX_RECORD_BYTES as i64 && bounds.get::<_,i64>(0)==bounds.get::<_,i64>("anchors"), "round original input read bound exceeded");
 	let bound = t.query_one("SELECT octet_length(r.signed_tree) AS tree_bytes,octet_length(r.funding_tx) AS funding_bytes,octet_length(v.signed_tx) AS virtual_bytes FROM round r JOIN virtual_transaction v ON v.txid=r.funding_txid WHERE r.funding_txid=$1", &[&txid]).await?;
 	ensure!(bound.get::<_,i32>("tree_bytes") <= MAX_RECORD_BYTES as i32 && bound.get::<_,i32>("funding_bytes") <= MAX_RECORD_BYTES as i32 && bound.get::<_,Option<i32>>("virtual_bytes").is_some_and(|n|n<=MAX_RECORD_BYTES as i32), "round source byte bound exceeded");
@@ -162,9 +162,9 @@ async fn capture(t: &Tx<'_>, policy: &Policy, candidate: &Candidate) -> anyhow::
 		u64::try_from(allocation_bounds.get::<_,i64>(1))?].into_iter()
 		.try_fold(0u64,|n,next|n.checked_add(next)).context("combined round original byte overflow")?;
 	ensure!(combined<=MAX_RECORD_BYTES as u64,"combined original round payload read bound exceeded");
-	let row = t.query_one("SELECT r.seq,r.expiry,r.funding_tx,r.signed_tree,v.signed_tx FROM round r JOIN virtual_transaction v ON v.txid=r.funding_txid WHERE r.funding_txid=$1", &[&txid]).await?;
-	let raw_funding: Vec<u8> = row.get("funding_tx"); let virtual_funding: Option<Vec<u8>> = row.get("signed_tx");
-	ensure!(raw_funding == candidate.raw && virtual_funding.as_ref() == Some(&raw_funding), "round signed funding differs from original permit");
+	let row = t.query_one("SELECT r.seq,r.expiry,r.funding_tx,r.signed_tree,(v.signed_tx=r.funding_tx) AS same_funding FROM round r JOIN virtual_transaction v ON v.txid=r.funding_txid WHERE r.funding_txid=$1", &[&txid]).await?;
+	let raw_funding: Vec<u8> = row.get("funding_tx"); let same_funding: Option<bool> = row.get("same_funding");
+	ensure!(raw_funding == candidate.raw && same_funding == Some(true), "round signed funding differs from original permit");
 	let tree_raw: Vec<u8> = row.get("signed_tree");
 	let tree = authenticate_tree(&tree_raw,&funding,&policy.server_pubkey)?;
 	ensure!(tree.spec.utxo.txid == funding.compute_txid(), "round tree anchor differs");
@@ -179,7 +179,7 @@ async fn capture(t: &Tx<'_>, policy: &Policy, candidate: &Candidate) -> anyhow::
 	ensure!(total_bytes<=MAX_RECORD_BYTES,"round original funding/tree byte bound exceeded");
 	for part in parts {
 		let part_id: i64 = part.get("id"); let hash: String = part.get("unlock_hash");
-		let source = t.query("SELECT i.vtxo_id,v.vtxo,v.anchor_point AS stored_anchor,r.funding_txid AS spent_round FROM round_part_input i JOIN vtxo v ON v.vtxo_id=i.vtxo_id LEFT JOIN round r ON r.id=v.spent_in_round WHERE i.participation_id=$1 AND octet_length(v.vtxo)<=4194304 AND octet_length(i.vtxo_id)<=80 ORDER BY i.vtxo_id LIMIT 100001", &[&part_id]).await?;
+		let source = t.query("SELECT i.vtxo_id,v.vtxo,v.anchor_point AS stored_anchor,r.funding_txid AS spent_round FROM round_part_input i JOIN vtxo v ON v.vtxo_id=i.vtxo_id LEFT JOIN round r ON r.id=v.spent_in_round AND r.funding_txid=$2 WHERE i.participation_id=$1 AND octet_length(v.vtxo)<=4194304 AND octet_length(i.vtxo_id)<=80 AND octet_length(v.anchor_point)<=80 ORDER BY i.vtxo_id LIMIT 100001", &[&part_id,&txid]).await?;
 		ensure!(!source.is_empty() && source.len() <= MAX_RECORDS, "round input membership absent or over bound");
 		let mut ids = Vec::new(); let mut value = 0u64;
 		for input in source {

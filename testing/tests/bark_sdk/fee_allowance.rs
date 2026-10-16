@@ -12,7 +12,7 @@ use bitcoin_ext::{BlockDelta, TransactionExt};
 use bitcoin_ext::rpc::RpcApi;
 use serde_json::json;
 use server::database::Db;
-use server_log::{ClaimBroadcast,ProgressBroadcast,RoundFinished};
+use server_log::{ClaimBroadcast,ProgressBroadcast,ProgressCpfpFailure,RoundFinished};
 use server_rpc::protos;
 
 use ark_testing::{sat, TestContext};
@@ -318,16 +318,21 @@ async fn confirmed_sweep_opening_imports_original_debit_once_after_database_rest
 /// independently confirmed spare fee coin; this does not qualify retained-input RBF.
 #[tokio::test]
 async fn urgent_progress_rbf_and_claim_debit_full_fees_without_ordinary_quote_cap() {
-	urgent_progress_claim_control(true).await;
+	urgent_progress_claim_control(true,false).await;
 }
 
 #[tokio::test]
 async fn urgent_confirmed_progress_and_claim_debit_actual_signed_fees() {
-	urgent_progress_claim_control(false).await;
+	urgent_progress_claim_control(false,false).await;
 }
 
-async fn urgent_progress_claim_control(exercise_rbf: bool) {
-	let ctx=TestContext::new(if exercise_rbf {"bark_sdk/urgent_epoch_progress_rbf_claim"} else {"bark_sdk/urgent_epoch_progress_confirmed_claim"}).await;
+#[tokio::test]
+async fn urgent_progress_persist_failure_prevents_package_relay_and_retains_debit() {
+	urgent_progress_claim_control(false,true).await;
+}
+
+async fn urgent_progress_claim_control(exercise_rbf: bool, fail_persist: bool) {
+	let ctx=TestContext::new(if fail_persist {"bark_sdk/urgent_epoch_persist_failure"} else if exercise_rbf {"bark_sdk/urgent_epoch_progress_rbf_claim"} else {"bark_sdk/urgent_epoch_progress_confirmed_claim"}).await;
 	let quiet=FeeRate::from_sat_per_vb_u32(1);
 	let urgent=FeeRate::from_sat_per_vb_u32(2);
 	let srv=ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
@@ -360,7 +365,50 @@ async fn urgent_progress_claim_control(exercise_rbf: bool) {
 	wm.wait_for_sync_height(tip).await;
 	let mut progress=wm.subscribe_log::<ProgressBroadcast>();
 	let mut claims=wm.subscribe_log::<ClaimBroadcast>();
+	let mut failures=wm.subscribe_log::<ProgressCpfpFailure>();
+	let wallet_rows_before=db.read(async|t|Ok(t.query_one("SELECT count(*) FROM wallet_changeset WHERE kind='watchman'",&[]).await?.get::<_,i64>(0))).await.unwrap();
+	if fail_persist {
+		// Fault injection in this fresh native PG only, after a real fee permit.
+		db.write(async|t| {
+			t.batch_execute("CREATE FUNCTION refuse_progress_wallet_persist() RETURNS trigger AS $$
+				BEGIN
+				IF NEW.kind='watchman' AND EXISTS(SELECT 1 FROM fee_allowance_candidate
+					WHERE urgent AND convert_from(candidate_bytes,'UTF8')::jsonb->>'path'='ProgressChild') THEN
+					RAISE EXCEPTION 'fixture-progress-wallet-persist-refused';
+				END IF;
+				RETURN NEW; END; $$ LANGUAGE plpgsql;
+				CREATE TRIGGER refuse_progress_wallet_persist BEFORE INSERT ON wallet_changeset
+				FOR EACH ROW EXECUTE PROCEDURE refuse_progress_wallet_persist();").await?;Ok(())
+		}).await.unwrap();
+	}
 	wm.trigger_sweep().await;
+	if fail_persist {
+		let failure=failures.recv().wait(Duration::from_secs(20)).await.expect("real persistence refusal must be observed");
+		assert!(failure.error.contains("persisting permitted progress child before relay"),"unexpected refusal: {failure:?}");
+		let rows=db.read(async|t|Ok(t.query("SELECT candidate_bytes,fee_sat FROM fee_allowance_candidate WHERE urgent ORDER BY id",&[]).await?)).await.unwrap();
+		let core=wm.bitcoind().sync_client();let mut total=0i64;let mut original=None;let mut frames=Vec::new();
+		for row in rows {
+			let value:serde_json::Value=serde_json::from_slice(&row.get::<_,Vec<u8>>(0)).unwrap();
+			total+=row.get::<_,i64>(1);
+			if value["path"]=="ProgressChild" {assert!(original.is_none());original=Some(value.clone());}
+			frames.push(value);
+		}
+		let original=original.expect("actual signed urgent child permit must precede failed persistence");
+		let raw:Vec<u8>=serde_json::from_value(original["raw"].clone()).unwrap();
+		let tx:Transaction=deserialize(&raw).unwrap();
+		assert!(total>0 && total<=4000);assert!(actual_fee(&core,&tx)>quiet.fee_wu(tx.weight()).unwrap().to_sat());
+		assert!(!core.get_raw_mempool().unwrap().contains(&tx.compute_txid()),"persistence failure must abort child relay");
+		assert_eq!(db.read(async|t|Ok(t.query_one("SELECT count(*) FROM wallet_changeset WHERE kind='watchman'",&[]).await?.get::<_,i64>(0))).await.unwrap(),wallet_rows_before,"failed owning-wallet write must not commit");
+		assert!(progress.try_recv().is_err(),"no completed Progress event on persistence failure");
+		private_original(&ctx.datadir.join("urgent-persist-failure-originals.json"),&serde_json::to_vec(&json!({
+			"scope":"synthetic native PG persistence fault; genuine signed candidate; no relay/refund",
+			"failure":failure.error,"child_txid":tx.compute_txid().to_string(),"signed_fee_sat":actual_fee(&core,&tx),
+			"signed_weight_wu":tx.weight().to_wu(),"original_urgent_debit_sat":total,"wallet_rows_before":wallet_rows_before,
+			"child_absent_from_actual_Core_mempool":true,"no_completed_Progress_event":true,"rows":frames
+		})).unwrap());
+		return;
+	}
+
 	let first=progress.recv().wait(Duration::from_secs(20)).await.expect("actual epoch progression must publish");
 	ctx.await_transactions_across_nodes([first.cpfp_txid],[wm.bitcoind().as_ref()]).await;
 	let core=wm.bitcoind().sync_client();

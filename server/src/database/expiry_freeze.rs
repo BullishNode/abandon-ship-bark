@@ -59,6 +59,58 @@ fn receive_dependency_retired(
 }
 
 impl Tx<'_> {
+	/// A conservative physical fence: any frozen member/retirement root under
+	/// the same original anchor holds this entire anchor. Logical leaf IDs alone
+	/// cannot authorize consuming an ancestor. Disjoint siblings may defer.
+	pub(crate) async fn lock_unfrozen_urgent_sources(&self, sources: &[ServerVtxo]) -> anyhow::Result<()> {
+		ensure!(!sources.is_empty(), "urgent reaction has no authenticated sources");
+		self.lock_htlc_settlements().await?;
+		self.lock_expiry_carriers().await?;
+		let ids = sources.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
+		let anchors = sources.iter().map(|v| v.chain_anchor().to_string()).collect::<Vec<_>>();
+		self.lock_expiry_inputs(&ids).await?;
+		for source in sources {
+			let stored = self.get_bare_vtxo_by_id(source.id()).await?.vtxo;
+			ensure!(stored.chain_anchor() == source.chain_anchor() && stored.txout() == source.txout()
+				&& stored.policy() == source.policy(), "urgent source identity changed");
+		}
+		let frozen = self.query_opt("SELECT a.id FROM expiry_allocation a
+			WHERE a.id=ANY($1) OR a.retirement_ids && $1::text[]
+			OR EXISTS (SELECT 1 FROM vtxo v WHERE v.anchor_point=ANY($2)
+				AND (v.vtxo_id=a.id OR v.vtxo_id=ANY(a.retirement_ids)))
+			OR EXISTS (SELECT 1 FROM pending_board p WHERE p.id=ANY($2)
+				AND (p.vtxo_id=a.id OR p.vtxo_id=ANY(a.retirement_ids))) LIMIT 1",
+			&[&ids, &anchors]).await?;
+		ensure!(frozen.is_none(), "urgent reaction overlaps a frozen physical anchor or retirement dependency");
+		Ok(())
+	}
+
+	/// Reciprocal fence for a previously retained urgent publication. The
+	/// existing nursery stores exact signed bytes before any Core await, under
+	/// the same carrier lock. Confirmation/abandonment never erases those bytes.
+	/// Only internal nursery transactions can be urgent; direct payout entries
+	/// retain their existing complete allocation authorization independently.
+	pub(crate) async fn refuse_retained_urgent_overlap(
+		&self, snapshot: &super::carrier_snapshot::BackingSnapshot, budget: BackingSnapshotLimits,
+	) -> anyhow::Result<()> {
+		let anchors = snapshot.roots.iter().map(|v| v.chain_anchor().to_string()).collect::<Vec<_>>();
+		let ids = snapshot.regular.iter().map(|v| v.state.vtxo_id.to_string())
+			.chain(snapshot.pending_boards.iter().map(|v| v.vtxo.id().to_string())).collect::<BTreeSet<_>>();
+		let size = self.query_one("SELECT count(*)::bigint AS rows, COALESCE(sum(octet_length(tx)),0)::bigint AS bytes
+			FROM nursery_tx WHERE kind='internal'", &[]).await?;
+		ensure!(usize::try_from(size.get::<_, i64>("rows"))? <= budget.max_rows &&
+			usize::try_from(size.get::<_, i64>("bytes"))? <= budget.max_serialized_bytes,
+			"retained urgent publication inventory exceeds freeze read bounds");
+		for row in self.query("SELECT tx FROM nursery_tx WHERE kind='internal' ORDER BY txid", &[]).await? {
+			let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(&row.get::<_, Vec<u8>>("tx"))?;
+			let inputs = tx.input.iter().map(|i| i.previous_output.to_string()).collect::<Vec<_>>();
+			ensure!(!inputs.iter().any(|id| ids.contains(id)), "expiry freeze overlaps retained urgent signed inputs");
+			ensure!(self.query_opt("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) AND anchor_point=ANY($2) LIMIT 1",
+				&[&inputs, &anchors]).await?.is_none(), "expiry freeze shares retained urgent physical backing");
+		}
+		Ok(())
+	}
+
 	pub(crate) async fn check_not_expiry_frozen(&self, ids: &[VtxoId]) -> anyhow::Result<()> {
 		let keys = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
 		check_not_expiry_frozen(self, &keys).await
@@ -102,6 +154,7 @@ impl Tx<'_> {
 			.chain(before.pending_boards.iter().map(|f| f.vtxo.id().to_string())).collect::<Vec<_>>();
 		self.lock_expiry_inputs(&keys).await?;
 		let snapshot = self.backing_snapshot(roots, budget).await?;
+		self.refuse_retained_urgent_overlap(&snapshot, budget).await?;
 		ensure!(snapshot.regular.iter().filter(|f| roots.iter().any(|r| r.id() == f.state.vtxo_id))
 			.all(|f| f.onchain_spent_txid.is_none()), "expiry backing already consumed");
 		let funding = context.funding.values().cloned().collect::<Vec<_>>();

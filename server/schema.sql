@@ -2989,3 +2989,7 @@ CREATE TABLE fee_allowance_candidate (
 );
 -- No confirmations, retries, abandoned-state or clock-based credits.
 -- Exact signed candidate identity includes witness. No UPDATE/DELETE API.
+
+-- Append-only V74: preserve the exact nonzero source-opening identity.
+ALTER TABLE fee_allowance_policy ADD COLUMN opening_digest TEXT
+ CHECK (opening_digest IS NULL OR opening_digest ~ '^[0-9a-f]{64}$');

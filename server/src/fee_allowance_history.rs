@@ -30,6 +30,26 @@ impl FeeHistory {
 		write_identical(&directory.join("history"),b"")?;
 		File::open(datadir)?.sync_all()?;Ok(())
 	}
+	// An externally validated opening may recover a partially created original
+	// directory after an interrupted fsync/COMMIT. Every existing byte is exact.
+	pub(crate) fn initialize_original(datadir:&Path,p:&Policy)->anyhow::Result<()> {
+		let directory=datadir.join(DIRECTORY);
+		match fs::create_dir(&directory) {
+			Ok(())=>crate::fs_perms::harden(&directory,0o700)?,
+			Err(e) if e.kind()==std::io::ErrorKind::AlreadyExists=>ensure!(fs::symlink_metadata(&directory)?.is_dir(),"opening history is not a directory"),
+			Err(e)=>return Err(e.into()),
+		}
+		write_identical(&directory.join("identity.json"),&serde_json::to_vec(p)?)?;
+		if !directory.join("history").exists() {write_identical(&directory.join("history"),b"")?;}
+		File::open(datadir)?.sync_all()?;Ok(())
+	}
+	pub(crate) async fn import_originals_locked(&self,t:&Tx<'_>,p:&Policy,originals:&[Candidate])->anyhow::Result<()> {
+		let mut snapshot=self.reconcile_locked(t,p).await?;
+		for original in originals {
+			t.reserve_fee_candidate(p,original).await?;
+			self.record_reserved_locked(t,p,original,&mut snapshot).await?;
+		}Ok(())
+	}
 	pub(crate) fn load(datadir:&Path,p:&Policy)->anyhow::Result<Self> {
 		let directory=datadir.join(DIRECTORY);
 		ensure!(fs::symlink_metadata(&directory)?.is_dir(),"fee history directory absent");

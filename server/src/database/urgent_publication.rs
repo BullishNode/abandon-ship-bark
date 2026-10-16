@@ -242,7 +242,6 @@ mod tests {
 	async fn urgent_pg_nursery_first_gap_exact_restart_and_reciprocal_overlap() {
 		use ark::test_util::dummy::{DummyTestVtxoSpec, DUMMY_SERVER_KEY, DUMMY_USER_KEY};
 		use ark::vtxo::Full;
-		use ark::vtxo::policy::clause::TapScriptClause;
 		use ark::vtxo::policy::signing::VtxoSigner;
 		use bitcoin::{Network, sighash};
 		use crate::database::Db;
@@ -273,7 +272,8 @@ mod tests {
 			lock_time: bitcoin::absolute::LockTime::from_height(10_001).unwrap(),
 			input: vec![TxIn { previous_output: bare.point(), script_sig: ScriptBuf::new(),
 				sequence: clause.sequence().unwrap_or(Sequence::ZERO), witness: Witness::new() }],
-			output: vec![TxOut { value: Amount::from_sat(19_000), script_pubkey: ScriptBuf::new() }] };
+			output: vec![TxOut { value: Amount::from_sat(19_000), script_pubkey:
+				ScriptBuf::new_p2tr(&ark::SECP, DUMMY_SERVER_KEY.x_only_public_key().0, None) }] };
 		let outputs = [bare.txout()]; let prevouts = sighash::Prevouts::All(&outputs);
 		let mut cache = sighash::SighashCache::new(&mut tx);
 		let witness = signer.sign_input_with_clause(&bare, &clause, 0, &mut cache, &prevouts).await.unwrap();
@@ -309,16 +309,28 @@ mod tests {
 		assert_eq!(reopened.read(async |t| t.urgent_publications(DIRECT_HISTORY_LIMITS).await).await.unwrap(), retained);
 		// Reciprocal freeze guard sees the actual retained signed input before
 		// allocating any source. No artificial paid/settled record is inserted.
-		assert!(reopened.write(async |t| {
+		let held = reopened.write(async |t| {
 			t.lock_htlc_settlements().await?; t.lock_expiry_carriers().await?;
 			let snapshot = t.backing_snapshot(std::slice::from_ref(&bare), DIRECT_HISTORY_LIMITS).await?;
 			t.refuse_retained_urgent_overlap(&snapshot, DIRECT_HISTORY_LIMITS).await
-		}).await.is_err());
+		}).await.unwrap_err();
+		assert!(held.to_string().contains("expiry freeze overlaps retained urgent signed inputs"), "unexpected guard failure: {held:#}");
 		// A separate empty historical DB models DB-only rollback without deleting
 		// any original nursery row, reservation, witness or signed byte.
 		let mut old_cfg = cfg.clone(); old_cfg.name = "urgent_publication_control_old".into();
 		let old_db = Db::create(&old_cfg).await.unwrap();
-		assert!(DirectPayoutWitness::load(&directory, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &old_db, DIRECT_HISTORY_LIMITS).await.is_err());
+		let refused = DirectPayoutWitness::load(&directory, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &old_db, DIRECT_HISTORY_LIMITS).await.err().expect("DB-only rollback was accepted");
+		assert!(refused.to_string().contains("retained urgent signed intent missing from restored nursery"), "unexpected restore failure: {refused:#}");
+		// Missing independent budget is tested against an ACTUAL populated DB.
+		// Copy only the original immutable identity/empty direct history into a
+		// separate directory; the real complete budget/journal remains untouched.
+		let prebudget = path.parent().unwrap().join("prebudget-identity-copy");
+		std::fs::create_dir(&prebudget).unwrap(); std::fs::create_dir(prebudget.join(DIRECT_DIRECTORY)).unwrap();
+		for name in ["identity.json", "history"] {
+			std::fs::copy(directory.join(DIRECT_DIRECTORY).join(name), prebudget.join(DIRECT_DIRECTORY).join(name)).unwrap();
+		}
+		let missing = DirectPayoutWitness::load(&prebudget, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &reopened, DIRECT_HISTORY_LIMITS).await.err().expect("urgent metadata without independent budget was accepted");
+		assert!(missing.to_string().contains("urgent DB metadata requires the missing independent budget"), "unexpected missing-budget failure: {missing:#}");
 		assert_eq!(std::fs::read(history_path).unwrap(), original_history);
 		println!("actual PG nursery-first gap, exact replay/reconnect and retained-input freeze refusal; chain/funding/automatic routing NOT qualified");
 	}

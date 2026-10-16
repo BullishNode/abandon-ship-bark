@@ -95,10 +95,12 @@ impl Daemon {
 		// Store initial wallet states to avoid full chain sync.
 		let wallet_xpriv = seed_xpriv.derive_priv(&*SECP, &[WalletKind::Watchman.child_number()])
 			.expect("can't error");
-		let _wallet = PersistedWallet::load_from_xpriv(
-			db.clone(), bitcoind.clone(), cfg.network, &wallet_xpriv, WalletKind::Watchman, deep_tip,
-			cfg.min_trusted_confs,
-		);
+		if cfg.watchman.direct_expiry.is_some() {
+			PersistedWallet::load_from_xpriv(
+				db.clone(), bitcoind.clone(), cfg.network, &wallet_xpriv, WalletKind::Watchman, deep_tip,
+				cfg.min_trusted_confs,
+			).await.context("initializing fresh direct Watchman metadata")?;
+		}
 
 		Ok(())
 	}
@@ -197,6 +199,7 @@ impl Daemon {
 				"SELECT COALESCE(SUM(miner_fee_sat),0)::BIGINT AS total FROM expiry_carrier", &[],
 			).await?.get::<_, i64>("total"))).await?;
 			ordinary.require_retained_fees(Amount::from_sat(u64::try_from(retained)?))?;
+			ordinary.require_native_epoch()?;
 			ordinary_fee_budget = Some(ordinary.clone());
 			let policy = CarrierLimits { max_fee_rate: cfg.fee_estimator.max_fee_rate.context("missing direct fee ceiling")?,
 				max_miner_fee: direct.max_miner_fee, max_weight: Weight::from_wu(400_000) };

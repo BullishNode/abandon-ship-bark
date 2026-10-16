@@ -102,7 +102,9 @@ impl NativeFeeEpoch {
 			}
 			Ok(())
 		}).await?;
-		Ok(Self { identity })
+		let epoch = Self { identity };
+		budget.bind_native_epoch(&epoch)?;
+		Ok(epoch)
 	}
 }
 

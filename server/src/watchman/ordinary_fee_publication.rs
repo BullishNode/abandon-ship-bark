@@ -47,7 +47,7 @@ pub(crate) struct PublicationEntry {
 impl PublicationEntry {
 	pub(crate) fn parse(bytes: &str) -> anyhow::Result<Self> {
 		let entry: Self = serde_json::from_str(bytes)?;
-		ensure!(entry.version == 1 && serde_json::to_string(&entry)? == bytes,
+		ensure!((entry.version == 1 || entry.version == 2) && serde_json::to_string(&entry)? == bytes,
 			"noncanonical ordinary publication entry");
 		Ok(entry)
 	}
@@ -59,9 +59,11 @@ impl PublicationEntry {
 	pub(crate) fn charge(&self, policy: OrdinaryFeePolicy) -> anyhow::Result<u64> {
 		let expected = match policy.regtest_qualification {
 			Some(marker) => marker.per_attempt_ceiling_sat,
-			None => self.fee_sat,
+			None if self.version == 1 => self.fee_sat,
+			None => self.charge_sat,
 		};
-		ensure!(self.fee_sat > 0 && self.fee_sat <= expected && self.charge_sat == expected,
+		ensure!((self.version == 1 || self.version == 2) && self.fee_sat > 0
+			&& self.fee_sat <= expected && self.charge_sat == expected && expected <= policy.ordinary_budget_sat,
 			"ordinary publication charge differs from existing policy");
 		Ok(self.charge_sat)
 	}
@@ -79,6 +81,16 @@ impl PublicationRecord {
 		record.entry(policy)?;
 		Ok(record)
 	}
+	/// A new precommit publication retains the FULL configured signed-weight
+	/// ceiling. Historical v1 actual-fee entries retain their original meaning.
+	pub(crate) fn new_precommit(path: PublicationPath, policy: OrdinaryFeePolicy,
+		tx: &Transaction, parents: &[Transaction], max_fee_rate: FeeRate,
+	) -> anyhow::Result<Self> {
+		let mut record = Self::new(path, policy, tx, parents, max_fee_rate)?;
+		record.version = 2;
+		record.entry(policy)?;
+		Ok(record)
+	}
 	pub(crate) fn transaction(&self) -> anyhow::Result<Transaction> { Ok(deserialize(&self.raw)?) }
 	pub(crate) fn input_parents(&self) -> &[Vec<u8>] { &self.input_parents }
 	pub(crate) fn policy_hash(&self) -> sha256::Hash { self.policy_sha256 }
@@ -87,7 +99,7 @@ impl PublicationRecord {
 		Ok(())
 	}
 	pub(crate) fn entry(&self, policy: OrdinaryFeePolicy) -> anyhow::Result<PublicationEntry> {
-		ensure!(self.version == 1 && self.policy_sha256 == sha256::Hash::hash(&serde_json::to_vec(&policy)?),
+		ensure!((self.version == 1 || self.version == 2) && self.policy_sha256 == sha256::Hash::hash(&serde_json::to_vec(&policy)?),
 			"ordinary publication policy identity differs");
 		ensure!(self.raw.len() as u64 <= MAX_RECORD_BYTES && self.input_parents.len() <= 4096,
 			"ordinary publication input proof exceeds bound");
@@ -122,8 +134,9 @@ impl PublicationRecord {
 		let fee = gross.checked_sub(outputs).context("ordinary outputs exceed original inputs")?;
 		let ceiling = self.max_fee_rate.fee_wu(tx.weight()).context("ordinary signed rate ceiling overflow")?;
 		ensure!(fee > Amount::ZERO && fee <= ceiling, "actual signed ordinary fee exceeds rate ceiling or is zero");
-		let charge = policy.regtest_qualification.map_or(fee.to_sat(), |marker| marker.per_attempt_ceiling_sat);
-		let entry = PublicationEntry { version: 1, path: self.path, wtxid: tx.compute_wtxid(),
+		let live_charge = if self.version == 1 { fee.to_sat() } else { ceiling.to_sat() };
+		let charge = policy.regtest_qualification.map_or(live_charge, |marker| marker.per_attempt_ceiling_sat);
+		let entry = PublicationEntry { version: self.version, path: self.path, wtxid: tx.compute_wtxid(),
 			record_sha256: sha256::Hash::hash(&bytes), fee_sat: fee.to_sat(), charge_sat: charge };
 		entry.charge(policy)?;
 		Ok(entry)

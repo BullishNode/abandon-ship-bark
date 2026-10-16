@@ -113,7 +113,7 @@ impl NativeFeeBroker {
 					"native fee preflight crossed the owning source tip");
 				Ok::<_, anyhow::Error>(parents)
 			}).await.context("native fee source preflight deadline exceeded before debit")??;
-			let record = PublicationRecord::new(request.purpose(), self.budget.policy(), &tx, &parents, self.max_fee_rate)?;
+			let record = PublicationRecord::new_precommit(request.purpose(), self.budget.policy(), &tx, &parents, self.max_fee_rate)?;
 			// The durable input intent and exact fee witness are checked together.
 			// No timer/caller cancellation is introduced around the financial COMMIT.
 			t.stage_native_fee_intent(&record, self.budget.policy(), self.epoch.identity().opening_sha256).await?;

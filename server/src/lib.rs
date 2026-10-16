@@ -283,11 +283,13 @@ impl Server {
 			cfg.direct_expiry.regtest_qualification_fee_policy.unwrap_or_default(), &fee_chain).await?;
 
 		// Store initial wallet states to avoid full chain sync.
-		for wallet in [WalletKind::Rounds, WalletKind::Watchman] {
-			let _wallet = PersistedWallet::load_derive_from_master_xpriv(
-				db.clone(), bitcoind.clone(), cfg.network, &master_xpriv, wallet, deep_tip,
-				cfg.min_trusted_confs,
-			);
+		if cfg.direct_expiry.enabled {
+			for wallet in [WalletKind::Rounds, WalletKind::Watchman] {
+				PersistedWallet::load_derive_from_master_xpriv(
+					db.clone(), bitcoind.clone(), cfg.network, &master_xpriv, wallet, deep_tip,
+					cfg.min_trusted_confs,
+				).await.with_context(|| format!("initializing fresh direct {wallet} metadata"))?;
+			}
 		}
 
 		Ok(())
@@ -392,6 +394,12 @@ impl Server {
 		} else { None };
 
 		expiry_dispatch::require_no_legacy_payout(&db, cfg.direct_expiry.enabled).await?;
+		if !cfg.direct_expiry.enabled && !cfg.expiry_payout.enabled {
+			let retained_direct: Option<bool> = db.read(async |t| Ok(t.query_opt(
+				"SELECT direct FROM expiry_route WHERE id=1", &[]).await?.map(|row| row.get(0)))).await?;
+			ensure!(retained_direct != Some(true), "retained direct financial route cannot disable its native fee guards");
+		}
+
 
 		let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;
 		bcd::require_network(&bitcoind, cfg.network).await?;

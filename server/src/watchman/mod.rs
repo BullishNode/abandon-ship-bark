@@ -594,6 +594,7 @@ impl Watchman {
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
 	) -> anyhow::Result<()> {
+		ensure!(self.direct_expiry.is_none(), "direct urgent claims require the bound native urgent publication path");
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
 		let txid = tx.compute_txid();
 		bcd::broadcast_tx(&self.bitcoind, &tx).await?;
@@ -792,6 +793,7 @@ impl Watchman {
 		vtxo: &ServerVtxo,
 		fee_rate: FeeRate,
 	) -> anyhow::Result<()> {
+		ensure!(self.direct_expiry.is_none(), "direct urgent progression requires the bound native urgent publication path");
 		// Get the progress transaction from the database
 		let vtx = self.db.read(async |t| t.get_virtual_transaction_by_txid(txid).await).await?
 			.context(txid)

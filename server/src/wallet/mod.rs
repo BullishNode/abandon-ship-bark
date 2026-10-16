@@ -206,13 +206,26 @@ impl PersistedWallet {
 		&mut self, psbt: Psbt, max_fee_rate: Option<FeeRate>,
 	) -> anyhow::Result<Transaction> {
 		let fee = psbt.fee().context("error calculating fee")?;
-		let ret = sign_funding_psbt(&self.wallet, psbt, max_fee_rate)?;
+		let ret = self.finish_tx_private_with_max_fee_rate(psbt, max_fee_rate)?;
+		self.log_signed_funding_tx(&ret, fee);
+		Ok(ret)
+	}
+
+	/// Private materialization only: no graph commit, persistence, raw signed
+	/// log, nursery insertion or relay. DIRECT producers obtain the exact
+	/// owning fee permit BEFORE exposing tree commitments or these signed bytes.
+	pub(crate) fn finish_tx_private_with_max_fee_rate(
+		&mut self, psbt: Psbt, max_fee_rate: Option<FeeRate>,
+	) -> anyhow::Result<Transaction> {
+		sign_funding_psbt(&self.wallet, psbt, max_fee_rate)
+	}
+
+	pub(crate) fn log_signed_funding_tx(&self, ret: &Transaction, fee: Amount) {
 		let txid = ret.compute_txid();
-		let raw_tx = bitcoin::consensus::serialize(&ret);
+		let raw_tx = bitcoin::consensus::serialize(ret);
 		slog!(WalletSignedTx, wallet: self.kind.name().into(), txid, fee, raw_tx,
 			inputs: ret.input.iter().map(|i| i.previous_output).collect(),
 		);
-		Ok(ret)
 	}
 
 

@@ -205,7 +205,7 @@ pub fn verify_native_fee_source(raw: &[u8]) -> anyhow::Result<Vec<u8>> {
 			"fee_sat":fee.to_sat(),"transactions":transactions}));
 	}
 	ensure!(parsed.urgent.iter().all(|(i,a)| a.signed.is_none() || attempts.contains(i)), "retained urgent journal lost original SQL publication");
-	let unrelated_nursery_txids=nursery.keys().filter(|id|!members.contains(id)).collect::<Vec<_>>();
+	let unrelated_nursery_txids=nursery.keys().filter(|id|!members.contains(*id)).collect::<Vec<_>>();
 	let snapshot=super::public_snapshot::project_history(parsed,stored.policy,&opening,hashes[0],originals.journal_raw.as_bytes(),0,0)?;
 	let mut snapshot: Value=serde_json::from_slice(&snapshot)?;
 	let snapshot_object=snapshot.as_object_mut().context("native snapshot object missing")?;
@@ -357,6 +357,24 @@ mod tests {
 	fn offline_native_fee_refuses_whole_input_overflow_without_partial_parse() {
 		assert!(verify_native_fee_source(&vec![b' ';MAX_REQUEST_BYTES+1]).is_err());
 		assert!(verify(&request("1".repeat(MAX_HISTORY_BYTES as usize+1),empty())).is_err());
+	}
+
+	#[test]
+	fn offline_native_fee_owner_projection_matches_pure_codec() {
+		use std::os::unix::fs::PermissionsExt;
+		let dir=std::env::temp_dir().join(format!("b-native-fee-source-unit-{}-{}",std::process::id(),
+			std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+		std::fs::create_dir(&dir).unwrap();std::fs::set_permissions(&dir,std::fs::Permissions::from_mode(0o700)).unwrap();
+		let policy=OrdinaryFeePolicy::default();
+		policy.initialize_fresh(&dir,Network::Regtest,ark::test_util::dummy::DUMMY_SERVER_KEY.public_key()).unwrap();
+		let owner=OrdinaryFeeBudget::load(&dir,policy).unwrap();
+		let actual=owner.public_snapshot().unwrap();let mut semantic:Value=serde_json::from_slice(&actual).unwrap();
+		semantic.as_object_mut().unwrap().remove("journal_device");semantic.as_object_mut().unwrap().remove("journal_inode");
+		let input=request(String::new(),empty());let output=verify(&input).unwrap();assert_eq!(semantic,output["snapshot"]);
+		if let Some(directory)=std::env::var_os("NATIVE_FEE_GOLDEN_DIR") {
+			std::fs::write(Path::new(&directory).join("native-empty-owner-snapshot.json"),&actual).unwrap();
+		}
+		drop(owner);std::fs::remove_dir_all(dir).unwrap();
 	}
 
 }

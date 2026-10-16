@@ -375,7 +375,7 @@ impl Watchman {
 		if !work.claims.is_empty() {
 			// Deadline claims retain their existing escalation; an ordinary sweep ceiling
 			// must not prevent beating a counterparty timelock.
-			self.process_claims(work.claims, None).await?;
+			self.process_claims(work.claims, None, crate::fee_allowance::Path::Claim).await?;
 		}
 		if !work.progress.is_empty() {
 			self.process_progress_txs(work.progress).await?;
@@ -396,7 +396,7 @@ impl Watchman {
 		}
 
 		if !work.sweeps.is_empty() {
-			self.process_claims(work.sweeps, self.fee_estimator.max_fee_rate()).await?;
+			self.process_claims(work.sweeps, self.fee_estimator.max_fee_rate(), crate::fee_allowance::Path::Sweep).await?;
 		}
 
 		Ok(())
@@ -411,6 +411,7 @@ impl Watchman {
 		&self,
 		mut vtxos: Vec<ServerVtxo>,
 		fee_ceiling: Option<FeeRate>,
+		path: crate::fee_allowance::Path,
 	) -> anyhow::Result<()> {
 		//TODO(stevenroose) adapt feerate to how close the deadline is
 		let min_feerate = self.fee_estimator.regular();
@@ -461,7 +462,7 @@ impl Watchman {
 			chunk
 		});
 		for chunk in replacements.values().map(Vec::as_slice).chain(fresh_chunks) {
-			if let Err(e) = self.build_and_broadcast_claim(chunk, feerate, fee_ceiling).await {
+			if let Err(e) = self.build_and_broadcast_claim(chunk, feerate, fee_ceiling, path).await {
 				slog!(ClaimChunkBroadcastFailure, error: e.to_string(),
 					vtxos: chunk.iter().map(|v| v.id()).collect(),
 				);
@@ -469,7 +470,7 @@ impl Watchman {
 				// retry each claim individually to find the culprit
 				for vtxo in chunk {
 					let slice = std::slice::from_ref(vtxo);
-					if let Err(e) = self.build_and_broadcast_claim(slice, feerate, fee_ceiling).await {
+					if let Err(e) = self.build_and_broadcast_claim(slice, feerate, fee_ceiling, path).await {
 						slog!(ClaimBroadcastFailure, error: e.to_string(), vtxo_id: vtxo.id());
 					}
 				}
@@ -570,10 +571,11 @@ impl Watchman {
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
 		fee_ceiling: Option<FeeRate>,
+		path: crate::fee_allowance::Path,
 	) -> anyhow::Result<()> {
+		ensure!(matches!(path,crate::fee_allowance::Path::Sweep | crate::fee_allowance::Path::Claim),
+			"claim publication has an invalid fee source class");
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
-		let path = if fee_ceiling.is_some() { crate::fee_allowance::Path::Sweep }
-			else { crate::fee_allowance::Path::Claim };
 		let fee_permit = match (&self.fee_allowance, path) {
 			(Some(gate),crate::fee_allowance::Path::Claim) => Some(gate.urgent_claim(&self.db,&self.bitcoind,&tx).await?),
 			_ => crate::fee_allowance::ordinary_permit(self.fee_allowance.as_ref(),&self.db,&self.bitcoind,path,&tx).await?,

@@ -193,28 +193,36 @@ pub(crate) fn read_record(path: &Path, owner: u32) -> anyhow::Result<Vec<u8>> {
 pub(crate) fn validate_witnesses(history: &Path, policy: OrdinaryFeePolicy,
 	entries: &BTreeMap<Wtxid, PublicationEntry>,
 ) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
-	validate_witnesses_with_urgent(history, policy, entries, &BTreeMap::new())
+	validate_witnesses_with_urgent(history, policy, entries, &BTreeMap::new(), &BTreeMap::new())
 }
 pub(crate) fn validate_witnesses_with_urgent(history: &Path, policy: OrdinaryFeePolicy,
 	entries: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>,
+	urgent_signed: &BTreeMap<u64, sha256::Hash>,
 ) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
 	let directory = directory(history)?;
 	let owner = fs::symlink_metadata(history)?.uid();
 	match fs::symlink_metadata(&directory) {
 		Ok(_) => {},
 		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-			ensure!(entries.is_empty() && urgent_candidates.is_empty(), "indexed publication witness missing"); return Ok(BTreeMap::new());
+			ensure!(entries.is_empty() && urgent_candidates.is_empty() && urgent_signed.is_empty(), "indexed publication witness missing"); return Ok(BTreeMap::new());
 		},
 		Err(error) => return Err(error.into()),
 	}
 	let (root, root_before) = private_root(&directory, owner)?;
-	let mut present = BTreeSet::new(); let mut urgent_present = BTreeSet::new(); let mut records = BTreeMap::new(); let mut bytes = 0u64;
+	let mut present = BTreeSet::new(); let mut urgent_present = BTreeSet::new(); let mut signed_present = BTreeSet::new(); let mut records = BTreeMap::new(); let mut bytes = 0u64;
 	for (index, item) in fs::read_dir(&directory)?.enumerate() {
 		ensure!(index < MAX_RECORDS, "ordinary publication witness count exceeds bound");
 		let item = item?; let name = item.file_name(); let name = name.to_str().context("invalid publication filename")?;
 		let raw = read_record(&item.path(), owner)?;
 		bytes = bytes.checked_add(raw.len() as u64).context("ordinary witness byte overflow")?;
 		ensure!(bytes <= MAX_TOTAL_BYTES, "ordinary publication witness bytes exceed bound");
+		if let Some(index) = name.strip_prefix("urgent-").and_then(|name| name.strip_suffix(".signed.json")) {
+			let index: u64 = index.parse()?;
+			ensure!(index > 0 && name == format!("urgent-{index}.signed.json") && signed_present.insert(index)
+				&& urgent_candidates.contains_key(&index) && urgent_signed.get(&index) == Some(&sha256::Hash::hash(&raw)),
+				"unindexed, duplicate or changed urgent signed witness");
+			continue;
+		}
 		if let Some(index) = name.strip_prefix("urgent-").and_then(|name| name.strip_suffix(".candidate.json")) {
 			let index: u64 = index.parse()?;
 			ensure!(index > 0 && name == format!("urgent-{index}.candidate.json") && urgent_present.insert(index)
@@ -232,7 +240,7 @@ pub(crate) fn validate_witnesses_with_urgent(history: &Path, policy: OrdinaryFee
 		ensure!(*entry == expected && present.insert(id), "ordinary publication witness differs from retained fee entry");
 		records.insert(id, record);
 	}
-	ensure!(present.len() == entries.len() && urgent_present.len() == urgent_candidates.len(), "indexed publication witness missing");
+	ensure!(present.len() == entries.len() && urgent_present.len() == urgent_candidates.len() && signed_present.len() == urgent_signed.len(), "indexed publication witness missing");
 	ensure!(identity(&root_before) == identity(&root.metadata()?)
 		&& identity(&root_before) == identity(&fs::symlink_metadata(&directory)?),
 		"ordinary publication root changed during complete scan");
@@ -243,27 +251,45 @@ pub(crate) fn validate_witnesses_with_urgent(history: &Path, policy: OrdinaryFee
 pub(crate) fn write_witness(history: &Path, policy: OrdinaryFeePolicy,
 	existing: &BTreeMap<Wtxid, PublicationEntry>, record: &PublicationRecord,
 ) -> anyhow::Result<PublicationEntry> {
-	write_witness_with_urgent(history, policy, existing, &BTreeMap::new(), record)
+	write_witness_with_urgent(history, policy, existing, &BTreeMap::new(), &BTreeMap::new(), record)
 }
 
 pub(crate) fn write_witness_with_urgent(history: &Path, policy: OrdinaryFeePolicy,
-	existing: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>, record: &PublicationRecord,
+	existing: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>,
+	urgent_signed: &BTreeMap<u64, sha256::Hash>, record: &PublicationRecord,
 ) -> anyhow::Result<PublicationEntry> {
-	validate_witnesses_with_urgent(history, policy, existing, urgent_candidates)?;
+	validate_witnesses_with_urgent(history, policy, existing, urgent_candidates, urgent_signed)?;
 	let entry = record.entry(policy)?;
 	write_new_record(history, &format!("{}.json", entry.id()), &serde_json::to_vec(record)?)?;
 	Ok(entry)
 }
 pub(crate) fn write_urgent_candidate(history: &Path, policy: OrdinaryFeePolicy,
 	existing: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>,
-	entry: &super::urgent_publication::UrgentReservationEntry, raw: &[u8],
+	urgent_signed: &BTreeMap<u64, sha256::Hash>, entry: &super::urgent_publication::UrgentReservationEntry, raw: &[u8],
 ) -> anyhow::Result<()> {
-	validate_witnesses_with_urgent(history, policy, existing, urgent_candidates)?;
+	validate_witnesses_with_urgent(history, policy, existing, urgent_candidates, urgent_signed)?;
 	ensure!(!urgent_candidates.contains_key(&entry.attempt_index)
 		&& sha256::Hash::hash(raw) == entry.candidate_sha256, "urgent candidate already indexed or digest differs");
 	super::urgent_publication::UrgentCandidate::decode_reserved(raw, entry, policy)?;
 	write_new_record(history, &entry.filename(), raw)
 }
+pub(crate) fn write_urgent_signed(history: &Path, policy: OrdinaryFeePolicy,
+	existing: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>,
+	urgent_signed: &BTreeMap<u64, sha256::Hash>, entry: &super::urgent_publication::UrgentSignedEntry, raw: &[u8],
+) -> anyhow::Result<()> {
+	validate_witnesses_with_urgent(history, policy, existing, urgent_candidates, urgent_signed)?;
+	ensure!(!urgent_signed.contains_key(&entry.attempt_index)
+		&& urgent_candidates.get(&entry.attempt_index) == Some(&entry.candidate_sha256)
+		&& sha256::Hash::hash(raw) == entry.record_sha256, "urgent signed witness differs from indexed original attempt");
+	write_new_record(history, &format!("urgent-{}.signed.json", entry.attempt_index), raw)
+}
+pub(crate) fn read_urgent_signed(history: &Path, index: u64) -> anyhow::Result<Vec<u8>> {
+	ensure!(index > 0, "urgent signed index absent");
+	let root = directory(history)?; let owner = fs::symlink_metadata(history)?.uid();
+	let (_root, _) = private_root(&root, owner)?;
+	read_record(&root.join(format!("urgent-{index}.signed.json")), owner)
+}
+
 pub(crate) fn read_urgent_candidate(history: &Path, index: u64) -> anyhow::Result<Vec<u8>> {
 	ensure!(index > 0, "urgent candidate index absent");
 	let root = directory(history)?; let owner = fs::symlink_metadata(history)?.uid();

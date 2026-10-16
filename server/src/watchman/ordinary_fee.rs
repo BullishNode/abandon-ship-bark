@@ -15,7 +15,7 @@ use crate::bitcoind::VerifiedFeeChain;
 
 use crate::fs_perms;
 use super::ordinary_fee_publication::{self, PublicationEntry, PublicationRecord};
-use super::urgent_publication::{UrgentCandidate, UrgentReservationEntry};
+use super::urgent_publication::{BoundUrgentPublication, UrgentCandidate, UrgentReservationEntry, UrgentSignedEntry};
 
 pub(crate) const POLICY_FILE: &str = "ordinary-fee-policy.json";
 pub(crate) const BUDGET_FILE: &str = "ordinary-fee-budget";
@@ -184,6 +184,7 @@ struct Ledger {
 	carrier_charged: u64,
 	publications: BTreeMap<Wtxid, PublicationEntry>,
 	urgent: BTreeMap<u64, UrgentReservationEntry>,
+	urgent_signed: BTreeMap<u64, UrgentSignedEntry>,
 	length: u64,
 	// An uncertain witness/append must poison this owner, including carrier
 	// signing. Restart must reconcile the original bytes, never reset history.
@@ -229,10 +230,10 @@ impl OrdinaryFeeBudget {
 		(&mut file).take(MAX_HISTORY_BYTES + 1).read_to_string(&mut history)?;
 		ensure!(history.len() as u64 == length, "ordinary fee history changed during bounded read");
 		let parsed = parse_joint_history(&history, policy)?;
-		validate_joint_witnesses(directory, policy, &parsed.publications, &parsed.urgent)?;
+		validate_joint_witnesses(directory, policy, &parsed.publications, &parsed.urgent, &parsed.urgent_signed)?;
 		Ok(Self { directory: directory.into(), policy, ledger: Mutex::new(Ledger {
 			file, charged: parsed.charged, carrier_charged: parsed.carrier_charged,
-			publications: parsed.publications, urgent: parsed.urgent, length, uncertain: false, requires_epoch: false, active_epoch: None, active_identity: None, urgent_headroom: None,
+			publications: parsed.publications, urgent: parsed.urgent, urgent_signed: parsed.urgent_signed, length, uncertain: false, requires_epoch: false, active_epoch: None, active_identity: None, urgent_headroom: None,
 		}) })
 	}
 
@@ -241,7 +242,7 @@ impl OrdinaryFeeBudget {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
 		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
 			"ordinary fee history uncertain or changed; reconcile original history");
-		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent)?;
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
 		ensure!(retained.to_sat() <= ledger.carrier_charged,
 			"ordinary carrier reservations do not cover retained signed carrier history");
 		Ok(())
@@ -305,7 +306,7 @@ impl OrdinaryFeeBudget {
 		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
 		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
 			"ordinary fee history uncertain or changed; restart and reconcile");
-		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent)?;
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
 		ensure!(!ledger.requires_epoch || ledger.active_epoch.is_some(), "direct carrier construction requires native fee activation");
 		let charged = checked_charge(ledger.charged, ceiling.to_sat(), self.policy)?;
 		self.require_discretionary_headroom(&ledger, charged)?;
@@ -364,7 +365,7 @@ impl OrdinaryFeeBudget {
 		let entry = record.entry(self.policy)?;
 		if let Some(old) = ledger.publications.get(&entry.id()) {
 			ensure!(*old == entry, "same signed ordinary publication has conflicting reservation");
-			validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent)?;
+			validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
 			return Ok(());
 		}
 		let charged = checked_charge(ledger.charged, entry.charge(self.policy)?, self.policy)?;
@@ -376,7 +377,7 @@ impl OrdinaryFeeBudget {
 		// leaves an unindexed original witness and blocks the next native loader.
 		ledger.uncertain = true;
 		let actual = ordinary_fee_publication::write_witness_with_urgent(&self.directory, self.policy,
-			&ledger.publications, &urgent_candidate_hashes(&ledger.urgent), record)?;
+			&ledger.publications, &urgent_candidate_hashes(&ledger.urgent), &urgent_signed_hashes(&ledger.urgent_signed), record)?;
 		ensure!(actual == entry, "ordinary publication witness differs");
 		ledger.file.write_all(line.as_bytes())?;
 		ledger.file.sync_all()?;
@@ -409,22 +410,56 @@ impl OrdinaryFeeBudget {
 		ensure!(entry.ceiling_sat == ceiling && entry.attempt_index == u64::try_from(ledger.urgent.len())?.checked_add(1).context("urgent attempt index overflow")?
 			&& ledger.urgent.values().all(|old| old.publication_txid != entry.publication_txid),
 			"urgent attempt already reserved or differs from actual full configured ceiling; retain original, never re-sign");
-		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent)?;
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
 		let charged = checked_charge(ledger.charged, entry.ceiling_sat, self.policy)?;
 		let line = entry.line(self.policy)?;
 		ensure!(ledger.length.checked_add(line.len() as u64).is_some_and(|length| length <= MAX_HISTORY_BYTES), "urgent pre-sign history capacity exhausted");
 		ledger.uncertain = true;
 		ordinary_fee_publication::write_urgent_candidate(&self.directory, self.policy, &ledger.publications,
-			&urgent_candidate_hashes(&ledger.urgent), &entry, &serde_json::to_vec(candidate)?)?;
+			&urgent_candidate_hashes(&ledger.urgent), &urgent_signed_hashes(&ledger.urgent_signed), &entry, &serde_json::to_vec(candidate)?)?;
 		ledger.file.write_all(line.as_bytes())?; ledger.file.sync_all()?;
 		ledger.length += line.len() as u64; ledger.charged = charged;
 		ledger.urgent.insert(entry.attempt_index, entry); ledger.uncertain = false;
 		Ok(())
 	}
+	/// Bind private original signed bytes to their already-paid full ceiling.
+	/// No new debit, permission to re-sign, source eligibility or nursery relay
+	/// follows. Actual source locks and reciprocal DB publication are still
+	/// required by the later owner hook; that path remains held in this child.
+	pub(crate) fn bind_urgent_signed(&self, publication: &BoundUrgentPublication,
+		limits: super::carrier::CarrierLimits,
+	) -> anyhow::Result<()> {
+		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length, "urgent signed binding history is uncertain");
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
+		let original = ledger.urgent.get(&publication.attempt_index()).context("urgent signed package lacks original paid attempt")?.clone();
+		let candidate = UrgentCandidate::decode_reserved(&ordinary_fee_publication::read_urgent_candidate(
+			&self.directory, original.attempt_index)?, &original, self.policy)?;
+		let identity = match &ledger.active_identity {
+			Some(identity) => identity.clone(),
+			None => { ensure!(!ledger.requires_epoch, "urgent actual activated owner missing"); candidate.identity() },
+		};
+		let (matched, signed) = publication.signed_entry(&identity, limits, self.policy)?;
+		ensure!(matched == original, "urgent signed package differs from original pre-sign full ceiling");
+		if let Some(existing) = ledger.urgent_signed.get(&original.attempt_index) {
+			ensure!(*existing == signed, "urgent original signed binding differs; retain original and do not re-sign");
+			return Ok(());
+		}
+		let line = signed.line(&original)?;
+		ensure!(ledger.length.checked_add(line.len() as u64).is_some_and(|length| length <= MAX_HISTORY_BYTES), "urgent signed history capacity exhausted");
+		ledger.uncertain = true;
+		ordinary_fee_publication::write_urgent_signed(&self.directory, self.policy, &ledger.publications,
+			&urgent_candidate_hashes(&ledger.urgent), &urgent_signed_hashes(&ledger.urgent_signed), &signed, &serde_json::to_vec(publication)?)?;
+		ledger.file.write_all(line.as_bytes())?; ledger.file.sync_all()?;
+		ledger.length += line.len() as u64;
+		ledger.urgent_signed.insert(original.attempt_index, signed); ledger.uncertain = false;
+		Ok(())
+	}
+
 	pub(crate) fn reserved_urgent_candidates(&self) -> anyhow::Result<Vec<UrgentCandidate>> {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
 		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length, "urgent original history is uncertain");
-		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent)?;
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
 		ledger.urgent.values().map(|entry| UrgentCandidate::decode_reserved(
 			&ordinary_fee_publication::read_urgent_candidate(&self.directory, entry.attempt_index)?, entry, self.policy)).collect()
 	}
@@ -457,7 +492,7 @@ impl OrdinaryFeeBudget {
 		let mut actual = Vec::new(); (&mut ledger.file).take(MAX_HISTORY_BYTES + 1).read_to_end(&mut actual)?;
 		let parsed = parse_joint_history(std::str::from_utf8(&actual)?, self.policy)?;
 		ensure!(parsed.charged == ledger.charged && parsed.carrier_charged == ledger.carrier_charged
-			&& parsed.publications == ledger.publications && parsed.urgent == ledger.urgent, "original import cached ledger differs from exact file");
+			&& parsed.publications == ledger.publications && parsed.urgent == ledger.urgent && parsed.urgent_signed == ledger.urgent_signed, "original import cached ledger differs from exact file");
 		ensure!(actual.len() as u64 == ledger.length && actual.starts_with(opening.original_history())
 			&& expected.starts_with(&actual), "native fee history is not the exact original import prefix");
 		for record in opening.publications() { self.reserve_publication_locked(&mut ledger, record, true)?; }
@@ -469,7 +504,7 @@ impl OrdinaryFeeBudget {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
 		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
 			"native publication history uncertain or changed");
-		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent)
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)
 	}
 
 	/// Exact original-candidate check for a caller's publication transaction.
@@ -482,7 +517,7 @@ impl OrdinaryFeeBudget {
 		let entry = record.entry(self.policy)?;
 		ensure!(ledger.publications.get(&entry.id()) == Some(&entry),
 			"ordinary publication lacks its exact durable reservation");
-		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent)?;
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
 		Ok(())
 	}
 }
@@ -510,13 +545,27 @@ fn checked_charge(charged: u64, ceiling: u64, policy: OrdinaryFeePolicy) -> anyh
 fn urgent_candidate_hashes(entries: &BTreeMap<u64, UrgentReservationEntry>) -> BTreeMap<u64, sha256::Hash> {
 	entries.iter().map(|(&index, entry)| (index, entry.candidate_sha256)).collect()
 }
+
+fn urgent_signed_hashes(entries: &BTreeMap<u64, UrgentSignedEntry>) -> BTreeMap<u64, sha256::Hash> {
+	entries.iter().map(|(&index, entry)| (index, entry.record_sha256)).collect()
+}
 fn validate_joint_witnesses(history: &Path, policy: OrdinaryFeePolicy,
 	publications: &BTreeMap<Wtxid, PublicationEntry>, urgent: &BTreeMap<u64, UrgentReservationEntry>,
+	urgent_signed: &BTreeMap<u64, UrgentSignedEntry>,
 ) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
-	let records = ordinary_fee_publication::validate_witnesses_with_urgent(history, policy, publications, &urgent_candidate_hashes(urgent))?;
+	let records = ordinary_fee_publication::validate_witnesses_with_urgent(history, policy, publications,
+		&urgent_candidate_hashes(urgent), &urgent_signed_hashes(urgent_signed))?;
 	for entry in urgent.values() {
-		UrgentCandidate::decode_reserved(&ordinary_fee_publication::read_urgent_candidate(history, entry.attempt_index)?, entry, policy)?;
+		let candidate = UrgentCandidate::decode_reserved(&ordinary_fee_publication::read_urgent_candidate(history, entry.attempt_index)?, entry, policy)?;
+		if let Some(signed) = urgent_signed.get(&entry.attempt_index) {
+			let identity = candidate.identity(); let limits = candidate.limits();
+			let publication = BoundUrgentPublication::decode(&ordinary_fee_publication::read_urgent_signed(history, entry.attempt_index)?,
+				signed.record_sha256, &identity, limits, policy)?;
+			let (actual_original, actual_signed) = publication.signed_entry(&identity, limits, policy)?;
+			ensure!(actual_original == *entry && actual_signed == *signed, "urgent signed witness differs from original journal binding");
+		}
 	}
+	ensure!(urgent_signed.keys().all(|index| urgent.contains_key(index)), "urgent signed witness has no original paid attempt");
 	Ok(records)
 }
 
@@ -525,11 +574,19 @@ struct ParsedHistory {
 	carrier_charged: u64,
 	publications: BTreeMap<Wtxid, PublicationEntry>,
 	urgent: BTreeMap<u64, UrgentReservationEntry>,
+	urgent_signed: BTreeMap<u64, UrgentSignedEntry>,
 }
 fn parse_joint_history(history: &str, policy: OrdinaryFeePolicy) -> anyhow::Result<ParsedHistory> {
 	ensure!(history.is_empty() || history.ends_with('\n'), "ordinary fee history has a torn append");
-	let mut parsed = ParsedHistory { charged: 0, carrier_charged: 0, publications: BTreeMap::new(), urgent: BTreeMap::new() };
+	let mut parsed = ParsedHistory { charged: 0, carrier_charged: 0, publications: BTreeMap::new(), urgent: BTreeMap::new(), urgent_signed: BTreeMap::new() };
 	for line in history.lines() {
+		if let Some(bytes) = line.strip_prefix("u2\t") {
+			let index = serde_json::from_str::<UrgentSignedEntry>(bytes)?.attempt_index;
+			let original = parsed.urgent.get(&index).context("urgent signed binding lacks original pre-sign reservation")?;
+			let signed = UrgentSignedEntry::parse(bytes, original)?;
+			ensure!(parsed.urgent_signed.insert(index, signed).is_none(), "duplicate urgent signed binding");
+			continue; // Original u1 retained the FULL charge; binding never charges twice.
+		}
 		let amount = if let Some(bytes) = line.strip_prefix("u1\t") {
 			let entry = UrgentReservationEntry::parse(bytes, policy)?;
 			ensure!(entry.attempt_index == u64::try_from(parsed.urgent.len())?.checked_add(1).context("urgent index overflow")?

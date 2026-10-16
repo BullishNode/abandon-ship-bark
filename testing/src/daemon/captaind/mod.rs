@@ -563,7 +563,7 @@ impl DaemonHelper for CaptaindHelper {
 		let admin_port = pick_port();
 		let integration_port = pick_port();
 
-		let public_address = format!("0.0.0.0:{}", public_port);
+		let public_address = SocketAddr::new(self.cfg.lock().rpc.public_address.ip(), public_port);
 		let admin_address = format!("127.0.0.1:{}", admin_port);
 		let integration_address = format!("127.0.0.1:{}", integration_port);
 		trace!("public rpc address: {}", public_address.to_string());
@@ -571,7 +571,7 @@ impl DaemonHelper for CaptaindHelper {
 		trace!("integration rpc address: {}", integration_port.to_string());
 
 		self.cfg.lock().rpc = config::Rpc {
-			public_address: SocketAddr::from_str(public_address.as_str())?,
+			public_address,
 			max_pending_accept_reset_streams: None,
 			admin_address: Some(SocketAddr::from_str(admin_address.as_str())?),
 			integration_address: Some(SocketAddr::from_str(integration_address.as_str())?),

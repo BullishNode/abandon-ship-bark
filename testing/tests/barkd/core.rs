@@ -1,5 +1,6 @@
 
 use std::io::Write;
+use std::net::Ipv4Addr;
 use std::os::unix::fs::OpenOptionsExt;
 use std::time::Duration;
 
@@ -285,7 +286,10 @@ async fn wallet_fallback_web_browser_pairing_barkd() {
 	let marker = output.with_extension("client-finished");
 	assert!(!output.exists() && !marker.exists(), "fresh private handoff paths required");
 	let ctx = TestContext::new("barkd/wallet_fallback_web_browser_pairing_barkd").await;
-	let srv = ctx.captaind("server").create().await;
+	let srv = ctx.captaind("server")
+		.cfg(|cfg| cfg.rpc.public_address.set_ip(Ipv4Addr::LOCALHOST.into()))
+		.create().await;
+	assert!(srv.config().rpc.public_address.ip().is_loopback());
 	let barkd = ctx.barkd("barkd1", &srv).create().await;
 	let cfg: bark::Config = toml::from_str(
 		&std::fs::read_to_string(barkd.datadir().join("config.toml")).unwrap()

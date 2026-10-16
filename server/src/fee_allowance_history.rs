@@ -19,6 +19,7 @@ struct HistorySnapshot {
 	originals:BTreeMap<String,Candidate>,
 	indexed:BTreeSet<String>,
 	bytes:usize,
+	rights_records:usize,
 }
 impl FeeHistory {
 	// ONLY the existing genuine server-create path may call this. Enabling an
@@ -28,6 +29,7 @@ impl FeeHistory {
 		crate::fs_perms::harden(&directory,0o700)?;
 		write_identical(&directory.join("identity.json"),&serde_json::to_vec(p)?)?;
 		write_identical(&directory.join("history"),b"")?;
+		crate::round_rights_intent::initialize(&directory,p)?;
 		File::open(datadir)?.sync_all()?;Ok(())
 	}
 	// An externally validated opening may recover a partially created original
@@ -41,6 +43,24 @@ impl FeeHistory {
 		}
 		write_identical(&directory.join("identity.json"),&serde_json::to_vec(p)?)?;
 		if !directory.join("history").exists() {write_identical(&directory.join("history"),b"")?;}
+		if !directory.join(crate::round_rights_intent::DIRECTORY).exists() {
+			// Only the explicit original confirmed-Sweep opening may upgrade a
+			// legacy namespace. Never classify an old Round as abandoned.
+			let owner=Self{directory:directory.clone()};let mut seen=BTreeSet::new();let mut bytes=0usize;
+			for (number,entry) in fs::read_dir(&directory)?.enumerate() {
+				ensure!(number<=MAX_RECORDS+3,"legacy history count bound exceeded");
+				let entry=entry?;let name=entry.file_name();let name=name.to_str().context("invalid legacy fee name")?;
+				if name=="identity.json"||name=="history"||(name.starts_with('.')&&name.ends_with(".tmp")){continue;}
+				ensure!(name.ends_with(".json"),"unknown legacy history entry");
+				let raw=read_bounded(&entry.path(),MAX_RECORD_BYTES)?;bytes=bytes.checked_add(raw.len()).context("legacy history bytes overflow")?;
+				ensure!(bytes<=MAX_BYTES,"legacy history byte bound exceeded");
+				let c:Candidate=serde_json::from_slice(&raw)?;
+				let id=c.checked(p)?.0;ensure!(name==format!("{id}.json")&&seen.insert(id),"legacy history identity differs");
+				ensure!(matches!(c.path,crate::fee_allowance::Path::Sweep),"legacy non-Sweep fee history requires original round reconciliation");
+			}
+			ensure!(owner.indexed()?.is_subset(&seen),"legacy indexed original fee file missing");
+			crate::round_rights_intent::initialize(&directory,p)?;
+		}
 		File::open(datadir)?.sync_all()?;Ok(())
 	}
 	pub(crate) async fn import_originals_locked(&self,t:&Tx<'_>,p:&Policy,originals:&[Candidate])->anyhow::Result<()> {
@@ -68,12 +88,14 @@ impl FeeHistory {
 		}Ok(ids)
 	}
 	fn snapshot_locked(&self,p:&Policy)->anyhow::Result<HistorySnapshot> {
-		let mut bytes=0usize;let mut originals=BTreeMap::new();
+		let (rights_records,mut bytes)=crate::round_rights_intent::inventory(&self.directory,p)?;
+		let mut originals=BTreeMap::new();
 		for (entry_number,entry) in fs::read_dir(&self.directory)?.enumerate() {
 			ensure!(entry_number<=MAX_RECORDS+3,"fee history directory entry bound exceeded");
 			let entry=entry?;let name=entry.file_name();let name=name.to_str().context("invalid fee filename")?;
+			if name==crate::round_rights_intent::DIRECTORY {ensure!(fs::symlink_metadata(entry.path())?.is_dir(),"round rights namespace is not a directory");continue;}
 			if name=="identity.json"||name=="history"||(name.starts_with('.')&&name.ends_with(".tmp")){continue}
-			ensure!(originals.len()<MAX_RECORDS,"fee history record bound exceeded");
+			ensure!(originals.len()+rights_records<MAX_RECORDS,"combined history record bound exceeded");
 			let id=name.strip_suffix(".json").context("unknown fee history file")?;
 			let raw=read_bounded(&entry.path(),MAX_RECORD_BYTES)?;
 			bytes=bytes.checked_add(raw.len()).context("fee history byte overflow")?;
@@ -83,7 +105,7 @@ impl FeeHistory {
 		}
 		let indexed=self.indexed()?;
 		ensure!(indexed.iter().all(|id| originals.contains_key(id)),"indexed fee reservation file missing");
-		Ok(HistorySnapshot{originals,indexed,bytes})
+		Ok(HistorySnapshot{originals,indexed,bytes,rights_records})
 	}
 	// Caller holds GLOBAL fee SQL advisory lock, not only an in-process mutex.
 	// Exact-file verification remains bounded; do not rescan other records.
@@ -96,7 +118,7 @@ impl FeeHistory {
 			None=>true,
 		};
 		let total=if is_new {
-			ensure!(snapshot.originals.len()<MAX_RECORDS,"fee history record capacity exhausted");
+			ensure!(snapshot.originals.len()+snapshot.rights_records<MAX_RECORDS,"combined history record capacity exhausted");
 			snapshot.bytes.checked_add(raw.len()).context("fee history sum overflow")?
 		}else{snapshot.bytes};
 		ensure!(total<=MAX_BYTES,"fee history capacity exhausted");
@@ -238,4 +260,20 @@ impl FeeHistory {
 			Ok(())
 		}).await
 	}
+	pub(crate) async fn record_round_rights_locked(&self,t:&Tx<'_>,p:&Policy,c:&Candidate,inputs:&BTreeSet<String>)->anyhow::Result<()> {
+		t.lock_fee_allowance().await?;
+		let snapshot=self.snapshot_locked(p)?;
+		ensure!(snapshot.originals.get(&c.checked(p)?.0)==Some(c),"round rights original fee witness absent");
+		crate::round_rights_intent::record(&self.directory,t,p,c,inputs,
+			snapshot.originals.len()+snapshot.rights_records,snapshot.bytes).await
+	}
+	pub(crate) async fn validate_round_rights(&self,db:&Db,p:&Policy)->anyhow::Result<()> {
+		db.write(async|t| {
+			t.lock_fee_allowance().await?;
+			t.execute("LOCK TABLE round, round_participation, round_part_input, round_part_output, vtxo, virtual_transaction IN SHARE MODE",&[]).await?;
+			let snapshot=self.reconcile_locked(t,p).await?;
+			crate::round_rights_intent::validate_all(&self.directory,t,p,&snapshot.originals).await
+		}).await
+	}
+
 }

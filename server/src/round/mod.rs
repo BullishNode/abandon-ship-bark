@@ -1344,6 +1344,10 @@ async fn persist_round(
 			}
 		}
 
+		// Last fallible operation before COMMIT: retain complete original rights
+		// independently before a SQL reader can see signed funding.
+		crate::fee_allowance::record_round_rights(t,srv.fee_allowance.as_ref(),signed_tx,
+			state.fee_permit.as_ref(),&state.all_inputs.keys().map(ToString::to_string).collect()).await?;
 		Ok(())
 	}).await;
 

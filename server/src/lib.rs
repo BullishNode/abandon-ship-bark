@@ -37,6 +37,7 @@ pub mod recovery;
 pub mod expiry_payout;
 pub mod fee_allowance;
 mod fee_allowance_history;
+mod round_rights_intent;
 pub mod fee_allowance_opening;
 mod payout_witness;
 mod operator_residual;

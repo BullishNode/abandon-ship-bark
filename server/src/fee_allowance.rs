@@ -305,6 +305,8 @@ impl Gate {
 		let history = crate::fee_allowance_history::FeeHistory::load(&config.history_dir, &policy)?;
 		// Both processes must reconcile before wallet replay, nursery or workers.
 		history.reserve_and_witness(db, &policy, None).await?;
+		tokio::time::timeout(std::time::Duration::from_secs(120),history.validate_round_rights(db,&policy))
+			.await.context("bounded original round rights startup check timed out")??;
 		crate::operator_residual::write_identical(&marker, &serde_json::to_vec(&serde_json::json!({
 			"policy_sha256":config.policy_sha256,"history_dir":config.history_dir,
 		}))?)?;
@@ -492,6 +494,23 @@ pub(crate) async fn require_ordinary_publication(
 		_ => bail!("ordinary publication lacks current owning-source revalidation"),
 	}
 	require_permit(t,tx,permit).await
+}
+
+// The marker is the final fallible step of the original rights SQL closure.
+// It precedes signed-funding SQL visibility and never adds another fee debit.
+pub(crate) async fn record_round_rights(
+	t:&crate::database::Tx<'_>,gate:Option<&Gate>,tx:&Transaction,permit:Option<&Permit>,
+	inputs:&BTreeSet<String>,
+)->anyhow::Result<()> {
+	match (gate,permit) {
+		(Some(gate),Some(permit))=>{
+			permit.matches(tx)?;
+			require_permit(t,tx,Some(permit)).await?;
+			gate.history.record_round_rights_locked(t,&gate.policy,&permit.candidate,inputs).await
+		},
+		(None,None)=>Ok(()),
+		_=>bail!("round rights intent gate and original permit differ"),
+	}
 }
 
 pub(crate) async fn require_permit(

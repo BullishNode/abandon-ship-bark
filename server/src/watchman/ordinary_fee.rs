@@ -39,10 +39,10 @@ impl Default for OrdinaryFeePolicy {
 
 impl OrdinaryFeePolicy {
 	pub(crate) fn validate(self) -> anyhow::Result<()> {
-		ensure!(self.urgent_reserve_sat >= 15_000 && self.urgent_reserve_sat <= Amount::MAX_MONEY.to_sat(),
-			"ordinary direct fees require at least 15000 sats protected urgent reserve");
-		ensure!(self.ordinary_budget_sat > 0 && self.ordinary_budget_sat <= 60_000,
-			"ordinary lifetime budget must be positive and at most 60000 sats");
+		ensure!(self.urgent_reserve_sat > 0 && self.urgent_reserve_sat <= Amount::MAX_MONEY.to_sat(),
+			"ordinary direct fees require a positive monetary urgent reserve");
+		ensure!(self.ordinary_budget_sat > 0 && self.ordinary_budget_sat <= Amount::MAX_MONEY.to_sat(),
+			"ordinary lifetime budget must be positive and within monetary bounds");
 		ensure!(self.external_future_reserved_sat <= self.ordinary_budget_sat,
 			"external future partition exceeds ordinary lifetime allowance");
 		ensure!(self.opening_sha256 != Some(sha256::Hash::all_zeros()), "missing adopted opening digest");
@@ -329,6 +329,14 @@ mod tests {
 		assert!(policy.initialize_fresh(&dir, Network::Regtest, DUMMY_SERVER_KEY.public_key()).is_err());
 		let budget = OrdinaryFeeBudget::load(&dir, policy).unwrap();
 		assert_eq!(budget.urgent_reserve(), Amount::from_sat(15_000));
+		let finite = OrdinaryFeePolicy { ordinary_budget_sat: 40_960_000, urgent_reserve_sat: 40_000,
+			external_future_reserved_sat: 0, opening_sha256: None };
+		finite.validate().unwrap();
+		OrdinaryFeePolicy { ordinary_budget_sat: 500, ..finite }.validate().unwrap();
+		assert!(OrdinaryFeeBudget::load(&dir, finite).is_err(), "new declaration cannot raise an existing lifetime allowance");
+		assert!(OrdinaryFeePolicy { urgent_reserve_sat: 0, ..finite }.validate().is_err());
+		assert!(OrdinaryFeePolicy { ordinary_budget_sat: Amount::MAX_MONEY.to_sat() + 1, ..finite }.validate().is_err());
+
 		budget.require_retained_fees(Amount::ZERO, Amount::ZERO, 0).unwrap();
 		assert!(budget.require_retained_fees(Amount::ZERO, Amount::ZERO, 65).is_err());
 		drop(budget); std::fs::remove_dir_all(dir).unwrap();

@@ -23,7 +23,7 @@ use crate::fs_perms;
 use crate::database::carrier_snapshot::BackingSnapshotLimits;
 
 pub(crate) const DIRECTORY: &str = "expiry-payout-witness";
-const DIRECT_DIRECTORY: &str = "direct-expiry-witness";
+pub(crate) const DIRECT_DIRECTORY: &str = "direct-expiry-witness";
 pub(crate) const DIRECT_HISTORY_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits {
 	max_rows: 10_000,
 	max_serialized_bytes: 16 * 1024 * 1024,

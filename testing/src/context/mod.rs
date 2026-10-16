@@ -426,6 +426,7 @@ impl TestContext {
 			data_dir: data_dir.clone(),
 			expiry_payout: Default::default(),
 			direct_expiry: Default::default(),
+			direct_expiry_fee_policy: Default::default(),
 			network: Network::Regtest,
 			vtxo_lifetime: BlockDelta::new(432),
 			vtxo_exit_delta: BlockDelta::new(12),

@@ -81,6 +81,16 @@ impl CheckedOriginalOpening {
 	pub(crate) fn canonical_bytes(&self) -> &[u8] { &self.canonical_bytes }
 }
 
+/// Decode captured original bytes with the same canonical/accounting checks as
+/// activation. These returned facts carry no DB/Core/source validation or
+/// authority to import charges, activate an epoch, sign, or publish.
+pub(crate) fn decode_captured_original(raw: &[u8], expected: sha256::Hash,
+	policy: OrdinaryFeePolicy, server: PublicKey, network: Network,
+) -> anyhow::Result<(Vec<u8>, Vec<PublicationRecord>)> {
+	let opening = OriginalOpening::decode(raw, expected, policy, server, network)?;
+	Ok((opening.original_history, opening.publications))
+}
+
 /// The caller supplies only independently protected original bytes/hash and
 /// actual native runtime identity. A parsed document alone is not a capability.
 pub(crate) async fn verify_original(raw: &[u8], expected: sha256::Hash,
@@ -376,5 +386,34 @@ mod tests {
 		assert!(OriginalOpening::decode(&padded, sha256::Hash::hash(&padded), policy, value.server_pubkey, Network::Regtest).is_err());
 		let mut torn = value; torn.original_history.pop();
 		assert!(torn.accounting(policy, torn.server_pubkey, Network::Regtest).is_err());
+	}
+	#[test]
+	fn captured_original_preserves_nonzero_history_and_refuses_rewritten_or_unbound_opening() {
+		let (value, policy) = opening();
+		let raw = serde_json::to_vec(&value).unwrap();
+		let expected = sha256::Hash::hash(&raw);
+		let (history, publications) = decode_captured_original(&raw, expected, policy,
+			value.server_pubkey, Network::Regtest).unwrap();
+		assert_eq!(history, b"10000\n");
+		assert!(publications.is_empty());
+		assert!(decode_captured_original(&raw, sha256::Hash::all_zeros(), policy,
+			value.server_pubkey, Network::Regtest).is_err());
+		assert!(decode_captured_original(&raw, expected, policy,
+			value.server_pubkey, Network::Signet).is_err());
+		for which in 0..5 {
+			let mut bad = value.clone();
+			match which {
+				0 => { bad.original_history.clear(); bad.previously_charged_sat = 0; },
+				1 => bad.remaining_ordinary_sat += 1,
+				2 => { bad.wallets.remove("watchman"); },
+				3 => bad.publication_logs_sha256.clear(),
+				_ => { bad.original_history.pop(); },
+			}
+			let changed = serde_json::to_vec(&bad).unwrap();
+			// Even a matching capture digest cannot authorize rewritten accounting
+			// or omitted original source bindings.
+			assert!(decode_captured_original(&changed, sha256::Hash::hash(&changed), policy,
+				value.server_pubkey, Network::Regtest).is_err());
+		}
 	}
 }

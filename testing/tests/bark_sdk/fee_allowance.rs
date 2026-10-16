@@ -98,6 +98,7 @@ async fn ordinary_round_allowance_survives_restart_and_refuses_second_publicatio
 	let before=db.read(async|t| Ok(t.query_one("SELECT count(*),COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE urgent=false",&[]).await?
 		.get::<_,i64>(1))).await.unwrap();assert_eq!(before,fee as i64);
 	srv.stop().await.unwrap();srv.start().await.unwrap();
+	bark.set_ark_url(&srv).await;
 	let mut rpc=srv.get_wallet_rpc().await;
 	let inputs=rpc.wallet_inventory(protos::Empty{}).await.unwrap().into_inner().rounds.unwrap();
 	rejected_refresh(&ctx,&srv,&bark,"durable epoch fee allowance exhausted").await;

@@ -13,6 +13,7 @@ mod expiry_runtime;
 pub mod ordinary_fee;
 pub(crate) mod ordinary_fee_publication;
 pub(crate) mod ordinary_fee_auth;
+pub(crate) mod ordinary_fee_opening;
 mod config;
 mod daemon;
 mod frontier;

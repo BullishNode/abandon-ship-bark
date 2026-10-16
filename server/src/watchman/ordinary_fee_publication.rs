@@ -80,6 +80,7 @@ impl PublicationRecord {
 		Ok(record)
 	}
 	pub(crate) fn transaction(&self) -> anyhow::Result<Transaction> { Ok(deserialize(&self.raw)?) }
+	pub(crate) fn input_parents(&self) -> &[Vec<u8>] { &self.input_parents }
 	pub(crate) fn policy_hash(&self) -> sha256::Hash { self.policy_sha256 }
 	pub(crate) fn matches(&self, tx: &Transaction) -> anyhow::Result<()> {
 		ensure!(self.raw == serialize(tx), "ordinary permit signed bytes differ");

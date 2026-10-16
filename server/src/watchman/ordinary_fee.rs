@@ -309,6 +309,13 @@ impl OrdinaryFeeBudget {
 	}
 }
 
+pub(crate) fn opening_numeric_charges(raw: &[u8], policy: OrdinaryFeePolicy) -> anyhow::Result<u64> {
+	let history = std::str::from_utf8(raw)?;
+	let parsed = parse_joint_history(history, policy)?;
+	ensure!(parsed.publications.is_empty(), "original opening contains another native publication epoch");
+	Ok(parsed.carrier_charged)
+}
+
 fn checked_charge(charged: u64, ceiling: u64, policy: OrdinaryFeePolicy) -> anyhow::Result<u64> {
 	ensure!(ceiling > 0, "ordinary fee reservation ceiling is zero");
 	if let Some(declaration) = policy.regtest_qualification {

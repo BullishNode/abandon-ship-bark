@@ -436,6 +436,12 @@ pub trait BarkPersister: Send + Sync + 'static {
 		Ok(())
 	}
 
+	/// Read the immutable signed fallback destination.
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>>;
+
+	/// Adopt canonical signatures only when the immutable binding is unchanged.
+	async fn store_fallback_record(&self, record: &ark::fallback::FallbackRecord) -> anyhow::Result<()>;
+
 	/// Get the last revealed/used [Vtxo] key index.
 	///
 	/// Returns:

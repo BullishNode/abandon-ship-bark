@@ -72,7 +72,7 @@ use crate::movement::{
 use crate::movement::update::MovementUpdate;
 use crate::persist::BarkPersister;
 use crate::persist::models::{
-	PaidInvoice, RoundStateId, SerdeExitChildTx, SerdeRoundState, SerdeVtxo, SerdeVtxoKey,
+	FallbackRecord,	PaidInvoice, RoundStateId, SerdeExitChildTx, SerdeRoundState, SerdeVtxo, SerdeVtxoKey,
 	SettledLightningReceive, StoredExit, StoredRoundState, Unlocked, wallet_vtxo_from_full,
 };
 use crate::round::RoundState;
@@ -117,6 +117,8 @@ pub mod partition {
 	/// An index from [WalletActionId] to the movement that action owns, so a
 	/// re-driven action step reuses its movement instead of duplicating it.
 	pub const MOVEMENT_ACTION: u8 = 17;
+
+	pub const FALLBACK_RECORD: u8 = 18;
 
 	pub const LAST_IDS: u8 = u8::MAX;
 }
@@ -967,6 +969,20 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 			None => Ok(None),
 		}
 	}
+
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {
+		self.inner.read().await.get(partition::FALLBACK_RECORD, &[]).await?
+			.map(|r| r.to_data()).transpose()
+	}
+
+	async fn store_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()> {
+		let mut guard = self.inner.write().await;
+		if let Some(stored) = guard.get(partition::FALLBACK_RECORD, &[]).await? {
+			ensure!(stored.to_data::<FallbackRecord>()?.same_binding(record), "immutable fallback record mismatch");
+		}
+		guard.put(Record::from_data(partition::FALLBACK_RECORD, &[], None, record)?).await
+	}
+
 
 	async fn get_public_key_idx(&self, public_key: &PublicKey) -> anyhow::Result<Option<u32>> {
 		match self.inner.read().await

@@ -160,7 +160,7 @@ impl DerefMut for OnchainWallet {
 impl OnchainWallet {
 	pub async fn load_or_create(network: Network, seed: [u8; 64], db: Arc<dyn BarkPersister>) -> anyhow::Result<Self> {
 		let xpriv = bip32::Xpriv::new_master(network, &seed).expect("valid seed");
-		let desc = bdk_wallet::template::Bip86(xpriv, KeychainKind::External);
+		let desc = bdk_wallet::template::Bip84(xpriv, KeychainKind::External);
 
 		let changeset = db.initialize_bdk_wallet().await.context("error reading bdk wallet state")?;
 		let wallet_opt = bdk_wallet::Wallet::load()
@@ -176,8 +176,19 @@ impl OnchainWallet {
 				.create_wallet_no_persist()?,
 		};
 
-		Ok(Self { inner: wallet, db })
+		let mut ret = Self { inner: wallet, db };
+		let spk = ret.inner.peek_address(KeychainKind::External, 0).address.script_pubkey();
+		ret.mark_fallback_used(&spk).await?;
+		Ok(ret)
 	}
+	pub(crate) async fn mark_fallback_used(&mut self, spk: &Script) -> anyhow::Result<()> {
+		let expected = self.inner.peek_address(KeychainKind::External, 0).address.script_pubkey();
+		ensure!(spk == expected.as_script(), "native fallback must be BIP84 external index 0");
+		self.inner.reveal_addresses_to(KeychainKind::External, 0).for_each(drop);
+		self.inner.mark_used(KeychainKind::External, 0);
+		self.persist().await
+	}
+
 }
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
@@ -614,5 +625,28 @@ impl OnchainWallet {
 			let _ = self.inner.take_staged();
 		}
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod fallback_tests {
+	use crate::persist::adaptor::StorageAdaptorWrapper;
+	use super::*;
+
+	#[tokio::test]
+	async fn fixed_index_zero_remains_reserved_after_reload() {
+		let db = Arc::new(StorageAdaptorWrapper::new_memory());
+		let seed = [17; 64];
+		let mut wallet = OnchainWallet::load_or_create(Network::Regtest, seed, db.clone()).await.unwrap();
+		let reserved = wallet.inner.peek_address(KeychainKind::External, 0).address.script_pubkey();
+		assert_eq!(reserved, crate::WalletSeed::new_from_seed(Network::Regtest, &seed)
+			.fallback_script(Network::Regtest).unwrap());
+		for _ in 0..30 { assert_ne!(wallet.address().await.unwrap().script_pubkey(), reserved); }
+		drop(wallet);
+		let mut wallet = OnchainWallet::load_or_create(Network::Regtest, seed, db).await.unwrap();
+		assert_ne!(wallet.inner.next_unused_address(KeychainKind::External).address.script_pubkey(), reserved);
+		assert_ne!(wallet.address().await.unwrap().script_pubkey(), reserved);
+		let other = wallet.inner.peek_address(KeychainKind::External, 1).address.script_pubkey();
+		assert!(wallet.mark_fallback_used(&other).await.is_err());
 	}
 }

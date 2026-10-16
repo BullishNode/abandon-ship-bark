@@ -397,6 +397,7 @@ mod balance;
 mod board;
 mod config;
 mod daemon;
+mod fallback;
 mod fees;
 mod import;
 mod lightning;
@@ -684,22 +685,22 @@ pub struct WalletProperties {
 pub struct WalletSeed {
 	master: bip32::Xpriv,
 	vtxo: bip32::Xpriv,
+	onchain_root: bip32::Xpriv,
 }
 
 impl WalletSeed {
 	/// Create a new [WalletSeed] from a given BIP-32 master seed
 	pub fn new_from_seed(network: Network, seed: &[u8; 64]) -> Self {
 		let bark_path = [ChildNumber::from_hardened_idx(BARK_PURPOSE_INDEX).unwrap()];
-		let master = bip32::Xpriv::new_master(network, seed)
-			.expect("invalid seed")
-			.derive_priv(&SECP, &bark_path)
+		let onchain_root = bip32::Xpriv::new_master(network, seed).expect("invalid seed");
+		let master = onchain_root.derive_priv(&SECP, &bark_path)
 			.expect("purpose is valid");
 
 		let vtxo_path = [ChildNumber::from_hardened_idx(VTXO_KEYS_INDEX).unwrap()];
 		let vtxo = master.derive_priv(&SECP, &vtxo_path)
 			.expect("vtxo path is valid");
 
-		Self { master, vtxo }
+		Self { master, vtxo, onchain_root }
 	}
 
 	/// Create a new [WalletSeed] from a given BIP-39 [Mnemonic]
@@ -709,6 +710,15 @@ impl WalletSeed {
 
 	pub fn fingerprint(&self) -> Fingerprint {
 		self.master.fingerprint(&SECP)
+	}
+
+	/// Native payout is seed-derived even after all local wallet state is lost.
+	fn fallback_script(&self, network: Network) -> anyhow::Result<bitcoin::ScriptBuf> {
+		let coin_type = if network == Network::Bitcoin { 0 } else { 1 };
+		let path = [ChildNumber::Hardened { index: 84 }, ChildNumber::Hardened { index: coin_type },
+			ChildNumber::Hardened { index: 0 }, ChildNumber::Normal { index: 0 }, ChildNumber::Normal { index: 0 }];
+		let key = self.onchain_root.derive_priv(&SECP, &path)?.to_priv().public_key(&SECP);
+		Ok(bitcoin::Address::p2wpkh(&bitcoin::CompressedPublicKey::try_from(key)?, network).script_pubkey())
 	}
 
 	fn derive_vtxo_keypair(&self, idx: u32) -> Keypair {
@@ -764,6 +774,10 @@ pub struct OpenWalletArgs {
 	/// Default: none
 	pub onchain: Option<Arc<tokio::sync::RwLock<dyn OnchainWalletTrait>>>,
 
+	/// Immutable payout script owned by a custom onchain wallet. Native BDK
+	/// wallets use the seed-derived BIP84 external address at index zero.
+	pub fallback_spk: Option<bitcoin::ScriptBuf>,
+
 	/// Whether to create a new wallet if no wallet exists
 	///
 	///  Default: true
@@ -795,6 +809,7 @@ impl Default for OpenWalletArgs {
 	    Self {
 			run_daemon: true,
 			onchain: None,
+			fallback_spk: None,
 			datadir: None,
 			persister: None,
 			lock_manager: None,
@@ -990,7 +1005,8 @@ impl Wallet {
 	pub async fn peek_next_keypair(&self) -> anyhow::Result<(Keypair, u32)> {
 		let last_revealed = self.inner.db.get_last_vtxo_key_index().await?;
 
-		let index = last_revealed.map(|i| i + 1).unwrap_or(u32::MIN);
+		self.fallback_destination().await?;
+		let index = fallback::next_key_index(last_revealed)?;
 		let keypair = self.inner.seed.derive_vtxo_keypair(index);
 
 		Ok((keypair, index))
@@ -1066,8 +1082,8 @@ impl Wallet {
 		}
 
 		// We should derive unrevealed keys, so we add one to the last key index.
-		let start_idx = self.inner.db.get_last_vtxo_key_index().await?.map(|i| i + 1).unwrap_or(0);
-		let mut frontier = start_idx.saturating_add(gap_limit);
+		let start_idx = fallback::next_key_index(self.inner.db.get_last_vtxo_key_index().await?)?;
+		let mut frontier = start_idx.saturating_add(gap_limit).min((1 << 31) - 1);
 		let mut idx = start_idx;
 		let mut gap = Vec::<(u32, PublicKey)>::new();
 		while idx <= frontier && !unrevealed.is_empty() {
@@ -1083,7 +1099,7 @@ impl Wallet {
 
 				// `frontier` is the last index the scan tests. This index matched,
 				// so the next run of unused indices starts at idx + 1.
-				frontier = idx.saturating_add(1).saturating_add(gap_limit);
+				frontier = idx.saturating_add(1).saturating_add(gap_limit).min((1 << 31) - 1);
 			} else {
 				gap.push((idx, pubkey));
 			}
@@ -1384,6 +1400,10 @@ impl Wallet {
 			last_force_exit_scan_tip: tokio::sync::Mutex::new(None),
 			round_secret_nonces: RoundSecretNonces::new(),
 		})};
+
+		// An existing authenticated record supports offline opens. First-time
+		// registration requires a live server and an owned onchain destination.
+		ret.open_fallback(args.fallback_spk).await?;
 
 		ret.inner.exit.load().await
 			.context("error loading exit system after opening wallet")?;

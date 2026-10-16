@@ -129,6 +129,14 @@ impl BarkPersister for Dummy {
 		Ok(())
 	}
 
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>> {
+		Ok(None)
+	}
+
+	async fn store_fallback_record(&self, _record: &ark::fallback::FallbackRecord) -> anyhow::Result<()> {
+		Ok(())
+	}
+
 	async fn get_last_vtxo_key_index(&self) -> anyhow::Result<Option<u32>> {
 		Ok(Some(0))
 	}

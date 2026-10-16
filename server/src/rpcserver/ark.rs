@@ -336,6 +336,20 @@ impl rpc::server::ArkService for Server {
 		}))
 	}
 
+	#[tracing::instrument(skip(self, req))]
+	async fn set_fallback(
+		&self, req: tonic::Request<protos::SetFallbackRequest>,
+	) -> Result<tonic::Response<protos::SetFallbackResponse>, tonic::Status> {
+		let req = req.into_inner();
+		let mailbox = PublicKey::from_bytes(&req.mailbox_pk)?;
+		let record = ark::fallback::FallbackRecord::deserialize(&req.record)
+			.badarg("invalid fallback record")?;
+		record.verify(self.config.network, mailbox).badarg("invalid fallback record")?;
+		let stored = self.db.write(async |tx| tx.set_fallback(mailbox, &record, self.config.network).await)
+			.await.to_status()?;
+		Ok(tonic::Response::new(protos::SetFallbackResponse { record: stored.serialize() }))
+	}
+
 	// boarding
 
 	#[tracing::instrument(skip(self, req), fields(

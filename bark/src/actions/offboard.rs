@@ -436,6 +436,7 @@ pub(crate) async fn start_offboard(
 	destination: bitcoin::Address,
 	spec: StartOffboardSpec,
 ) -> anyhow::Result<Offboard> {
+	wallet.fallback_destination().await?;
 	let (srv, ark) = wallet.require_server().await?;
 	let offboard_feerate = srv.offboard_feerate().await?;
 	let tip = wallet.inner.chain.tip().await?;

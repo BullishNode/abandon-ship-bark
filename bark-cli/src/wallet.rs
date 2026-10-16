@@ -504,6 +504,7 @@ async fn try_create_wallet(
 			lock_manager: Some(lock_manager),
 			create_if_not_exists: true,
 			create_without_server: opts.force,
+			onchain: Some(Arc::new(tokio::sync::RwLock::new(onchain))),
 			run_daemon: false,
 			..Default::default()
 		},

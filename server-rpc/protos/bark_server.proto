@@ -11,6 +11,8 @@ import "core.proto";
 service ArkService {
 	rpc Handshake(HandshakeRequest) returns (HandshakeResponse) {}
 	rpc GetArkInfo(core.Empty) returns (ArkInfo) {}
+	// Register an authenticated immutable mailbox/account/payout binding.
+	rpc SetFallback(SetFallbackRequest) returns (SetFallbackResponse) {}
 	rpc GetOffboardFeeRate(core.Empty) returns (OffboardFeeRateResponse) {}
 
 	rpc GetVtxo(GetVtxoRequest) returns (GetVtxoResponse) {}
@@ -771,4 +773,13 @@ message WalletStatusResponse {
 
 message LightningNodeUri {
 	string uri = 1;
+}
+
+// The record uses ark-lib's versioned, bounded FallbackRecord encoding.
+message SetFallbackRequest {
+	bytes mailbox_pk = 1;
+	bytes record = 2;
+}
+message SetFallbackResponse {
+	bytes record = 1;
 }

@@ -59,6 +59,7 @@ macro_rules! bark_persister_tests {
 	($setup:expr) => {
 		$crate::persist::test_suite::bark_persister_tests!(@tests $setup,
 			test_init_and_read_properties,
+			test_fallback_record_is_immutable,
 			test_set_server_pubkey,
 			test_set_server_mailbox_pubkey,
 
@@ -1108,4 +1109,21 @@ pub async fn test_exit_child_tx_roundtrip(db: &impl BarkPersister) {
 		Some((replacement_tx, ExitTxOrigin::Mempool)),
 		"store_exit_child_tx should replace the child of an existing exit",
 	);
+}
+
+/// Canonical signatures may change, but the seed/account/destination may not.
+pub async fn test_fallback_record_is_immutable(db: &impl BarkPersister) {
+	let account = bitcoin::bip32::Xpriv::new_master(Network::Regtest, &[3; 64]).unwrap();
+	let mailbox = Keypair::from_seckey_slice(&ark::SECP, &[7; 32]).unwrap();
+	let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+	let record = ark::fallback::FallbackRecord::new(Network::Regtest, spk.clone(), &account, &mailbox).unwrap();
+	assert!(db.get_fallback_record().await.unwrap().is_none());
+	db.store_fallback_record(&record).await.unwrap();
+	let resigned = ark::fallback::FallbackRecord::new(Network::Regtest, spk, &account, &mailbox).unwrap();
+	db.store_fallback_record(&resigned).await.unwrap();
+	assert_eq!(db.get_fallback_record().await.unwrap().unwrap(), resigned);
+	let alternate = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
+	let changed = ark::fallback::FallbackRecord::new(Network::Regtest, alternate, &account, &mailbox).unwrap();
+	assert!(db.store_fallback_record(&changed).await.is_err());
+	assert_eq!(db.get_fallback_record().await.unwrap().unwrap(), resigned);
 }

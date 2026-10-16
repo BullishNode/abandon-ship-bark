@@ -9,6 +9,7 @@
 //! lifecycle data, Lightning receives, exit tracking, and sync metadata.
 
 mod convert;
+mod fork_migrations;
 mod migrations;
 mod query;
 
@@ -64,6 +65,7 @@ impl SqliteClient {
 
 		let migrations = migrations::MigrationContext::new();
 		migrations.do_all_migrations(&mut conn)?;
+		fork_migrations::run(&mut conn)?;
 
 		Ok( Self { connection_string: path })
 	}
@@ -276,6 +278,14 @@ impl BarkPersister for SqliteClient {
 		let tx = conn.transaction().context("Failed to start transaction")?;
 		query::store_vtxo_keys(&tx, keys)?;
 		tx.commit().context("Failed to commit transaction")
+	}
+
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>> {
+		query::get_fallback_record(&self.connect()?)
+	}
+
+	async fn store_fallback_record(&self, record: &ark::fallback::FallbackRecord) -> anyhow::Result<()> {
+		query::store_fallback_record(&self.connect()?, record)
 	}
 
 	async fn get_last_vtxo_key_index(&self) -> anyhow::Result<Option<u32>> {

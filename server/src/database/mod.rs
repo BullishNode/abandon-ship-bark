@@ -8,6 +8,14 @@ mod embedded {
 	}
 }
 
+mod fork_embedded {
+	pub mod migrations {
+		include!(concat!(env!("OUT_DIR"), "/fork_migrations.rs"));
+	}
+}
+
+pub mod fallback;
+
 mod ban;
 pub mod block;
 pub mod data_migrations;
@@ -149,6 +157,9 @@ impl Db {
 	async fn run_migrations(&self) -> anyhow::Result<()> {
 		let mut conn = self.get_conn().await?;
 		embedded::migrations::runner().run_async::<Client>(&mut conn).await?;
+		fork_embedded::migrations::runner()
+			.set_migration_table_name("expiry_refinery_schema_history")
+			.run_async::<Client>(&mut conn).await?;
 		info!("All migrations got successfully run");
 		Ok(())
 	}

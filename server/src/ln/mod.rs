@@ -669,7 +669,11 @@ impl Server {
 			t.get_htlc_subscription_by_payment_hash(payment_hash).await
 		).await?;
 		match receive {
-			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady => {
+			// Cancellation only stops the cooperative receive. Already granted
+			// coins retain their unilateral preimage path until its backing is
+			// consumed, so the same proof is required before either refund path.
+			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady
+				|| (sub.status == LightningHtlcSubscriptionStatus::Canceled && !sub.htlc_vtxos.is_empty()) => {
 				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
 					return Ok(SendRefund::Undecided(reason));
 				}

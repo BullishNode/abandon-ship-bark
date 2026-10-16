@@ -814,6 +814,8 @@ impl Server {
 		if granted.is_empty() || granted.len() != sub.htlc_vtxos.len() {
 			return Ok(Some("the granted HTLC-recv vtxos are unknown".into()));
 		}
+		let direct_retired = self.confirmed_operator_receive_grants(sub.payment_hash,
+			&granted.iter().map(|vtxo| &vtxo.vtxo).collect::<Vec<_>>()).await?;
 		for vtxo in &granted {
 			let policy = vtxo.vtxo.policy().as_server_htlc_recv()
 				.context("granted receive vtxo is not an HTLC-recv")?;
@@ -823,6 +825,7 @@ impl Server {
 			if vtxo.spend_state != SpendState::HtlcRecvUnclaimed || vtxo.oor_spent_txid.is_some() {
 				return Ok(Some(format!("granted vtxo {} was claimed", vtxo.vtxo_id)));
 			}
+			if direct_retired.contains(&vtxo.vtxo_id) { continue; }
 			if vtxo.confirmed_height.is_some() {
 				let htlc = self.db.read(async |t| htlc_vtxo::get_htlc_vtxo(t, vtxo.vtxo_id).await).await?
 					.context("granted vtxo has no HTLC record")?.htlc;

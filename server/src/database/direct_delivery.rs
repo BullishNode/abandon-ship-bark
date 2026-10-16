@@ -1,6 +1,7 @@
 //! Bounded, complete readback of an already committed direct handoff.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use anyhow::Context;
 use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Transaction, TxOut, Txid};
@@ -24,6 +25,7 @@ pub(crate) struct StoredCarrier {
 	pub recorded_confirmation: Option<BlockRef>,
 	pub allocation_hash: sha256::Hash,
 	pub carrier_hash: sha256::Hash,
+	pub allocation_witnesses: Arc<BTreeMap<VtxoId, serde_json::Value>>,
 	pub remaining_rows: usize,
 	pub remaining_bytes: usize,
 }
@@ -68,6 +70,10 @@ impl Db {
 				FROM expiry_allocation WHERE freeze_set=$1 ORDER BY id", &[&freeze_set]).await?;
 			let allocation_hash = sha256::Hash::hash(&serde_json::to_vec(&rows.iter()
 				.map(|r| r.get::<_, String>("witness")).collect::<Vec<_>>())?);
+			let allocation_witnesses = Arc::new(rows.iter().map(|row| -> anyhow::Result<_> {
+				Ok((row.get::<_, &str>("id").parse::<VtxoId>()?,
+					serde_json::from_str::<serde_json::Value>(row.get("witness"))?))
+			}).collect::<anyhow::Result<BTreeMap<_, _>>>()?);
 			let mut ids = BTreeSet::new();
 			let mut retirement = BTreeSet::new();
 			let mut leaves = Vec::new();
@@ -177,6 +183,7 @@ impl Db {
 				ensure!(generation > 0, "invalid direct carrier generation");
 				let carrier_hash = sha256::Hash::hash(row.get::<_, String>("witness").as_bytes());
 				result.push(StoredCarrier { tx, bytes, fee_inputs, generation, server_pubkey, allocation_hash, carrier_hash,
+					allocation_witnesses: allocation_witnesses.clone(),
 					miner_fee: Amount::from_sat(u64::try_from(row.get::<_, i64>("miner_fee_sat"))?), recorded_confirmation,
 					remaining_rows, remaining_bytes });
 			}

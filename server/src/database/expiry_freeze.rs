@@ -13,7 +13,7 @@ use crate::ln::SendRefundEvidence;
 use crate::watchman::settlement::{allocate, CustomerLeaf, LeafAllocation};
 
 use super::carrier_snapshot::{BackingPartitionResidual, BackingSnapshotLimits};
-use super::expiry_ownership::{ExpirySource, OwnershipContext, OwnershipDisposition};
+use super::expiry_ownership::{DependencySource, ExpirySource, OwnershipContext, OwnershipDisposition, RetirementDependency, RetirementRule};
 use super::Tx;
 
 pub struct FrozenExpiryPlan {
@@ -48,6 +48,16 @@ pub(super) async fn check_not_expiry_frozen(
 	Ok(())
 }
 
+
+fn receive_dependency_retired(
+	dependency: &RetirementDependency, retired: &BTreeMap<PaymentHash, BTreeSet<VtxoId>>,
+) -> bool {
+	let DependencySource::ReceiveGrants(hash) = &dependency.source else { return false; };
+	let expected = dependency.ids.iter().copied().collect::<BTreeSet<_>>();
+	dependency.rule == RetirementRule::ConfirmedOrSameCarrier && !expected.is_empty()
+		&& expected.len() == dependency.ids.len() && retired.get(hash) == Some(&expected)
+}
+
 impl Tx<'_> {
 	pub(crate) async fn check_not_expiry_frozen(&self, ids: &[VtxoId]) -> anyhow::Result<()> {
 		let keys = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
@@ -69,6 +79,18 @@ impl Tx<'_> {
 		send_evidence: &BTreeMap<PaymentHash, SendRefundEvidence>, network: Network,
 		budget: BackingSnapshotLimits,
 	) -> anyhow::Result<FrozenExpiryPlan> {
+		self.freeze_expiry_sources_after_receive_retirement(roots, terminals, residuals, context,
+			send_evidence, network, budget, &BTreeMap::new()).await
+	}
+
+	/// Only the guarded server handoff supplies already confirmed, exact
+	/// operator grant proofs. The public storage entry keeps all dependencies held.
+	pub(crate) async fn freeze_expiry_sources_after_receive_retirement(
+		&self, roots: &[ServerVtxo], terminals: &[ServerVtxo<Full>],
+		residuals: &[BackingPartitionResidual], context: &OwnershipContext<'_>,
+		send_evidence: &BTreeMap<PaymentHash, SendRefundEvidence>, network: Network,
+		budget: BackingSnapshotLimits, retired: &BTreeMap<PaymentHash, BTreeSet<VtxoId>>,
+	) -> anyhow::Result<FrozenExpiryPlan> {
 		ensure!(!roots.is_empty() && !terminals.is_empty(), "empty expiry source freeze");
 		ensure!(roots.len() <= budget.max_rows && terminals.len() <= budget.max_rows && residuals.len() <= budget.max_rows,
 			"expiry source freeze exceeds row budget");
@@ -85,7 +107,10 @@ impl Tx<'_> {
 		let funding = context.funding.values().cloned().collect::<Vec<_>>();
 		let partition = snapshot.check_partition(terminals, &funding, residuals, budget)?;
 		let covered = terminals.iter().map(|v| v.id()).collect::<Vec<_>>();
-		let decisions = self.expiry_ownership_proposal(&snapshot, &covered, context, send_evidence).await?;
+		let mut decisions = self.expiry_ownership_proposal(&snapshot, &covered, context, send_evidence).await?;
+		for decision in &mut decisions {
+			decision.dependencies.retain(|dependency| !receive_dependency_retired(dependency, retired));
+		}
 		ensure!(decisions.iter().all(|d| d.dependencies.is_empty()), "expiry closure requires retirement reconciliation before freeze");
 		let owners = decisions.iter().filter_map(|d| match d.disposition {
 			OwnershipDisposition::Customer(input) => Some(input.owner), _ => None,
@@ -182,5 +207,24 @@ fn source_name(source: ExpirySource) -> String {
 		ExpirySource::Unregistered => "unregistered".into(),
 		ExpirySource::LightningReceive(hash) => format!("lightning-receive:{hash}"),
 		ExpirySource::LightningSend(hash) => format!("lightning-send:{hash}"),
+	}
+}
+
+#[cfg(test)]
+mod receive_retirement_tests {
+	use super::*;
+
+	#[test]
+	fn receive_dependency_requires_exact_complete_hash_bound_proof() {
+		let hash = "01".repeat(32).parse::<PaymentHash>().unwrap();
+		let other = "02".repeat(32).parse::<PaymentHash>().unwrap();
+		let first = format!("{:064x}:0", 1).parse::<VtxoId>().unwrap();
+		let second = format!("{:064x}:0", 2).parse::<VtxoId>().unwrap();
+		let dependency = RetirementDependency { source: DependencySource::ReceiveGrants(hash),
+			ids: vec![first, second], rule: RetirementRule::ConfirmedOrSameCarrier };
+		assert!(!receive_dependency_retired(&dependency, &BTreeMap::new()));
+		assert!(!receive_dependency_retired(&dependency, &BTreeMap::from([(hash, BTreeSet::from([first]))])));
+		assert!(!receive_dependency_retired(&dependency, &BTreeMap::from([(other, BTreeSet::from([first, second]))])));
+		assert!(receive_dependency_retired(&dependency, &BTreeMap::from([(hash, BTreeSet::from([first, second]))])));
 	}
 }

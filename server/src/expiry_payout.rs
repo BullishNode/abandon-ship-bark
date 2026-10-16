@@ -7,18 +7,23 @@ use std::time::{Duration, Instant};
 use std::str::FromStr;
 
 use anyhow::Context;
-use ark::{ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy};
+use ark::{ProtocolEncoding, ServerVtxo, Vtxo, VtxoId, VtxoPolicy};
+use ark::lightning::PaymentHash;
 use bdk_wallet::coin_selection::LargestFirstCoinSelection;
 use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Transaction, Txid, Weight};
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1::PublicKey;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use bitcoin_ext::bdk::{WalletExt, WithGuaranteedChange, KEYCHAIN};
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
-use bitcoin_ext::FeeRateExt;
+use bitcoin_ext::{BlockHeight, FeeRateExt};
 use tracing::{error, info, warn};
 
 use crate::database::expiry_settlement::{payout_script, ExpiryInput, ExpirySource};
 use crate::database::ln::LightningNodeId;
+use crate::database::carrier_snapshot::BackingSnapshotLimits;
+use crate::database::expiry_ownership::OperatorRecovery;
 use crate::ln::SendRefund;
 use crate::nursery::NurseryTxKind;
 use crate::wallet::{BdkWalletExt, WalletKind};
@@ -31,6 +36,41 @@ const MAX_BATCH_COINS: usize = 10_000;
 fn deferred<T>(reason: impl std::fmt::Display) -> Option<T> {
 	warn!("expiry batch deferred: {reason}");
 	None
+}
+
+
+/// This predicate supplements complete signed-group validation. An ancestor
+/// spend alone says nothing about this grant's economic disposition.
+fn operator_receive_allocation_matches(
+	grant: &Vtxo, server: PublicKey, hash: PaymentHash, witness: &serde_json::Value, roots: &BTreeSet<VtxoId>,
+) -> anyhow::Result<bool> {
+	let source = format!("operator:{:?}", OperatorRecovery::UnpaidReceive(hash));
+	let proof = ServerVtxo::from(grant.clone());
+	let digest = sha256::Hash::hash(&proof.serialize()).to_string();
+	if grant.server_pubkey() != server || witness["id"].as_str() != Some(grant.id().to_string().as_str())
+		|| witness["source"].as_str() != Some(source.as_str())
+		|| witness["disposition"].as_str() != Some("operator")
+		|| witness.get("owner") != Some(&serde_json::Value::Null)
+		|| witness.get("spk") != Some(&serde_json::Value::Null)
+		|| witness["gross"].as_u64() != Some(grant.amount().to_sat())
+		|| ["fee", "payout", "forfeited"].iter().any(|field| witness[*field].as_u64() != Some(0))
+		|| witness["evidence"]["version"].as_u64() != Some(1)
+		|| witness["evidence"]["source_path_sha256"].as_str() != Some(digest.as_str()) { return Ok(false); }
+	let recorded_ids = witness["retirement"].as_array().context("missing grant retirement roots")?;
+	let recorded = recorded_ids.iter().map(|id| -> anyhow::Result<_> { Ok(id.as_str().context("invalid grant retirement root")?.parse::<VtxoId>()?) })
+		.collect::<anyhow::Result<BTreeSet<_>>>()?;
+	if &recorded != roots || recorded.is_empty() || recorded.len() != recorded_ids.len() { return Ok(false); }
+	let path = std::iter::once(grant.chain_anchor()).chain(grant.transactions()
+		.map(|tx| OutPoint::new(tx.tx.compute_txid(), tx.output_idx as u32)));
+	let matches = path.map(|point| point.to_string().parse::<VtxoId>())
+		.collect::<Result<BTreeSet<_>, _>>()?.intersection(roots).count();
+	Ok(matches == 1)
+}
+
+
+fn receive_retirement_depth_reached(tip: BlockHeight, confirmed: BlockHeight, depth: u32) -> bool {
+	depth > 0 && tip >= confirmed && u64::from(tip.to_u32()) + 1
+		>= u64::from(confirmed.to_u32()) + u64::from(depth)
 }
 
 /// Largest remainders, tied by sorted destination script, keep all integer shares within
@@ -264,6 +304,53 @@ impl Server {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	#[test]
+	fn operator_receive_allocation_requires_exact_grant_source_and_path() {
+		let grant = ark::test_util::VTXO_VECTORS.round2_vtxo.clone();
+		let hash = match grant.policy() {
+			VtxoPolicy::ServerHtlcRecv(policy) => policy.payment_hash,
+			VtxoPolicy::ServerHtlcRecv_v0(policy) => policy.payment_hash,
+			_ => panic!("fixture must carry a receive grant"),
+		};
+		let root = grant.chain_anchor().to_string().parse::<VtxoId>().unwrap();
+		let roots = BTreeSet::from([root]);
+		let proof = ServerVtxo::from(grant.clone());
+		let witness = serde_json::json!({"id": grant.id().to_string(), "owner": null, "spk": null,
+			"disposition": "operator", "gross": grant.amount().to_sat(), "fee": 0, "payout": 0, "forfeited": 0,
+			"source": format!("operator:{:?}", OperatorRecovery::UnpaidReceive(hash)),
+			"evidence": {"version": 1, "source_path_sha256": sha256::Hash::hash(&proof.serialize()).to_string()},
+			"retirement": [root.to_string()]});
+		assert!(operator_receive_allocation_matches(&grant, grant.server_pubkey(), hash, &witness, &roots).unwrap());
+		for (field, value) in [("source", serde_json::json!("operator:Padding")),
+			("id", serde_json::json!(root.to_string())), ("gross", serde_json::json!(grant.amount().to_sat() + 1)),
+			("owner", serde_json::json!("unrelated")), ("spk", serde_json::json!("51")),
+			("payout", serde_json::json!(1)), ("forfeited", serde_json::json!(1)),
+			("disposition", serde_json::json!("pay"))] {
+			let mut changed = witness.clone(); changed[field] = value;
+			assert!(!operator_receive_allocation_matches(&grant, grant.server_pubkey(), hash, &changed, &roots).unwrap(), "{field}");
+		}
+		assert_ne!(grant.server_pubkey(), grant.user_pubkey());
+		assert!(!operator_receive_allocation_matches(&grant, grant.user_pubkey(), hash, &witness, &roots).unwrap());
+		let mut changed = witness.clone(); changed["evidence"]["source_path_sha256"] = serde_json::json!("wrong");
+		assert!(!operator_receive_allocation_matches(&grant, grant.server_pubkey(), hash, &changed, &roots).unwrap());
+		let mut changed = witness.clone(); changed["retirement"] = serde_json::json!([root.to_string(), root.to_string()]);
+		assert!(!operator_receive_allocation_matches(&grant, grant.server_pubkey(), hash, &changed, &roots).unwrap());
+		let wrong_hash = (if hash.to_string() == "01".repeat(32) { "02" } else { "01" })
+			.repeat(32).parse::<PaymentHash>().unwrap();
+		assert!(!operator_receive_allocation_matches(&grant, grant.server_pubkey(), wrong_hash, &witness, &roots).unwrap());
+	}
+
+	#[test]
+	fn operator_receive_retirement_preserves_configured_confirmation_depth() {
+		let at = BlockHeight::new(100);
+		assert!(!receive_retirement_depth_reached(BlockHeight::new(99), at, 1));
+		assert!(!receive_retirement_depth_reached(at, at, 0));
+		assert!(receive_retirement_depth_reached(at, at, 1));
+		assert!(!receive_retirement_depth_reached(at, at, 100));
+		assert!(!receive_retirement_depth_reached(BlockHeight::new(198), at, 100));
+		assert!(receive_retirement_depth_reached(BlockHeight::new(199), at, 100));
+	}
+
 	#[test]
 	fn config_preserves_mainnet_floors_and_explicit_test_timing() {
 		let mut cfg = Config::default();
@@ -563,6 +650,63 @@ impl Server {
 				"cancelled swept delegated exchange; original swept entitlements released");
 		}
 		Ok(())
+	}
+
+	/// Only exact unpaid-receive operator allocations in a checked, confirmed
+	/// direct group retire grants. Customer payouts and fee change may coexist.
+	pub(crate) async fn confirmed_operator_receive_grants(
+		&self, hash: PaymentHash, grants: &[&Vtxo],
+	) -> anyhow::Result<BTreeSet<VtxoId>> {
+		ensure!(!grants.is_empty() && grants.len() <= MAX_BATCH_COINS, "invalid receive grant proof budget");
+		ensure!(grants.iter().all(|grant| grant.policy().as_server_htlc_recv()
+			.is_some_and(|policy| policy.payment_hash == hash)), "receive grant policy or payment hash differs");
+		let ids = grants.iter().map(|grant| grant.id().to_string()).collect::<Vec<_>>();
+		ensure!(ids.iter().collect::<BTreeSet<_>>().len() == ids.len(), "duplicate receive grant proof id");
+		crate::bitcoind::require_network(&self.bitcoind, self.config.network).await?;
+		let tip = crate::bitcoind::tip(&self.bitcoind).await?;
+		let groups = self.db.read(async |t| {
+			Ok(t.query("SELECT a.id,a.freeze_set FROM expiry_allocation a WHERE a.id=ANY($1)
+				AND a.disposition='operator' AND EXISTS (SELECT 1 FROM expiry_carrier_allocation m
+				JOIN expiry_carrier c ON c.txid=m.txid WHERE m.allocation_id=a.id
+				AND c.confirmed_height IS NOT NULL)", &[&ids]).await?.into_iter()
+				.map(|row| (row.get::<_, String>("id"), row.get::<_, String>("freeze_set"))).collect::<Vec<_>>())
+		}).await?;
+		let mut grouped = BTreeMap::<String, BTreeSet<VtxoId>>::new();
+		for (id, group) in groups { grouped.entry(group).or_default().insert(id.parse()?); }
+		let mut retired = BTreeSet::new();
+		let mut funding = BTreeMap::new();
+		for (group, grant_ids) in grouped {
+			let versions = self.db.read_direct_delivery(&group, self.config.network,
+				BackingSnapshotLimits { max_rows: MAX_BATCH_COINS, max_serialized_bytes: 16 * 1024 * 1024 }).await?;
+			ensure!(versions.iter().all(|version| version.server_pubkey == self.server_pubkey),
+				"receive grant carrier belongs to another server");
+			ensure!(self.db.direct_delivery_generation(&group).await? == versions.iter().map(|v| v.generation).max(),
+				"receive grant carrier generation changed");
+			let mut winners = versions.iter().filter_map(|v| v.recorded_confirmation.map(|block| (v, block)));
+			let Some((winner, block)) = winners.next() else { continue; };
+			ensure!(winners.next().is_none(), "multiple confirmed receive grant carrier winners");
+			if crate::bitcoind::tx_status(&self.bitcoind, winner.tx.compute_txid()).await?
+				!= bitcoin_ext::TxStatus::Confirmed(block) || !receive_retirement_depth_reached(
+					tip.height, block.height, self.config.expiry_payout.sweep_min_confs) { continue; }
+			let fees = winner.fee_inputs.iter().map(|(point, _)| *point).collect::<BTreeSet<_>>();
+			let roots = winner.tx.input.iter().filter(|input| !fees.contains(&input.previous_output))
+				.map(|input| input.previous_output.to_string().parse::<VtxoId>())
+				.collect::<Result<BTreeSet<_>, _>>()?;
+			for grant in grants.iter().filter(|grant| grant_ids.contains(&grant.id())) {
+				let Some(witness) = winner.allocation_witnesses.get(&grant.id()) else { continue; };
+				if !operator_receive_allocation_matches(grant, self.server_pubkey, hash, witness, &roots)? { continue; }
+				let anchor = grant.chain_anchor().txid;
+				if !funding.contains_key(&anchor) {
+					let Some(info) = crate::bitcoind::custom_get_raw_transaction_info(&self.bitcoind, anchor, None).await?
+						else { continue; };
+					funding.insert(anchor, bitcoin::consensus::deserialize::<Transaction>(&info.hex)?);
+				}
+				grant.validate_unsigned(&funding[&anchor]).context("invalid retired receive grant path")?;
+				retired.insert(grant.id());
+			}
+		}
+		ensure!(crate::bitcoind::tip(&self.bitcoind).await? == tip, "chain tip changed during receive grant retirement proof");
+		Ok(retired)
 	}
 
 	/// Whether a confirmed sweep spent this coin's own backing path into the

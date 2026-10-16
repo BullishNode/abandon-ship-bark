@@ -238,7 +238,40 @@ impl DirectPayoutWitness {
 		// A crash between durable rename and the index append cannot have passed
 		// the publication gate. Verify its DB state before completing that append.
 		for txid in present { witness.files.index(txid).await?; }
+		// Captaind starts before watchmand in the normal operator sequence.
+		// Verify every retained urgent intent BEFORE its financial/freezer workers,
+		// without taking the watchman's exclusive signing-history ownership lock.
+		witness.verify_urgent_publications(db).await?;
 		Ok(witness)
+	}
+
+	pub(crate) async fn verify_urgent_publications(&self, db: &Db) -> anyhow::Result<()> {
+		let (policy, reservations) = crate::watchman::ordinary_fee::urgent_snapshot(&self.files.directory)?;
+		let publications = db.read(async |t| t.urgent_publications(self.budget).await).await?;
+		for (metadata, txs) in &publications {
+			let (attempt, ceiling, binding) = reservations.iter().find(|(attempt, _, _)| *attempt == metadata.attempt())
+				.context("urgent outbox has no independently charged original attempt")?;
+			ensure!(attempt.policy_sha256 == policy && *ceiling == metadata.ceiling_sat,
+				"urgent outbox policy/ceiling differs from independent history");
+			let permitted = db.read(async |t| t.urgent_publication_bound(metadata).await).await?;
+			ensure!(!permitted || binding.is_some(), "urgent publication permitted without independent signed binding");
+			if let Some((source_hash, signed)) = binding {
+				ensure!(*source_hash == sha256::Hash::hash(&serde_json::to_vec(metadata)?) && signed == txs,
+					"urgent signed bytes/source association differ from independent history");
+			}
+			// A nursery-first crash may have committed the charged package before
+			// binding it. Its durable rows already exclude a reciprocal freeze;
+			// only watchmand may complete the exact original binding before Core.
+		}
+		let retained = publications.iter().map(|(metadata, txs)| Ok((metadata.attempt(),
+			sha256::Hash::hash(&serde_json::to_vec(metadata)?), txs))).collect::<anyhow::Result<Vec<_>>>()?;
+		for (attempt, _, binding) in &reservations {
+			if let Some((source_hash, signed)) = binding {
+				ensure!(retained.iter().any(|(original, hash, txs)| original == attempt && hash == source_hash && *txs == signed),
+					"retained urgent signed intent missing from restored nursery; startup refused before financial workers");
+			}
+		}
+		Ok(())
 	}
 
 	pub(crate) async fn ordinary_fee_budget(&self, db: &Db,

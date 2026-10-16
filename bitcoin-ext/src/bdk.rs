@@ -397,7 +397,18 @@ pub trait WalletExt: BorrowMut<Wallet> {
 		tx: &Transaction,
 		fees: MakeCpfpFees,
 	) -> Result<Transaction, CpfpInternalError> {
+		self.make_signed_p2a_cpfp_with_limits(tx, fees, None, None)
+	}
+
+	/// Preserve the existing signed-weight convergence while allowing the caller
+	/// to exclude independently reserved whole inputs and cap fees BEFORE signing.
+	fn make_signed_p2a_cpfp_with_limits(
+		&mut self, tx: &Transaction, fees: MakeCpfpFees,
+		available: Option<&[OutPoint]>, maximum_fee: Option<Amount>,
+	) -> Result<Transaction, CpfpInternalError> {
 		let wallet = self.borrow_mut();
+		let excluded = available.map(|available| wallet.list_unspent()
+			.filter(|u| !available.contains(&u.outpoint)).map(|u| u.outpoint).collect::<Vec<_>>());
 		let (fee_anchor_point, fee_anchor_txout) = tx.fee_anchor()
 			.ok_or_else(|| CpfpInternalError::NoFeeAnchor(tx.compute_txid()))?;
 
@@ -414,11 +425,15 @@ pub trait WalletExt: BorrowMut<Wallet> {
 		let mut final_child_weight = Weight::ZERO;
 		let mut fee_needed = extra_fee_needed;
 		for i in 0..100 {
+			if maximum_fee.is_some_and(|maximum| fee_needed > maximum) {
+				return Err(CpfpInternalError::General("CPFP fee exceeds pre-signing reservation".into()));
+			}
 			// The change is this transaction's only output, so use a coin selection that
 			// guarantees it stays above the dust limit.
 			let mut b = wallet.build_tx()
 				.coin_selection(WithGuaranteedChange(DefaultCoinSelectionAlgorithm::default()));
 			b.only_witness_utxo();
+			if let Some(excluded) = &excluded { b.unspendable(excluded.clone()); }
 			b.exclude_unconfirmed();
 			b.version(3); // for 1p1c package relay, all inputs must be confirmed
 			b.add_fee_anchor_spend(fee_anchor_point, fee_anchor_txout);
@@ -430,6 +445,12 @@ pub trait WalletExt: BorrowMut<Wallet> {
 				CreateTxError::CoinSelection(e) => CpfpInternalError::InsufficientConfirmedFunds(e),
 				_ => CpfpInternalError::Create(e),
 			})?;
+			if let Some(maximum) = maximum_fee {
+				let actual = psbt.fee().map_err(|e| CpfpInternalError::General(format!("CPFP prevout fee unavailable: {e}")))?;
+				if actual > maximum {
+					return Err(CpfpInternalError::General("CPFP candidate fee exceeds pre-signing reservation".into()));
+				}
+			}
 			#[allow(deprecated)]
 			let opts = bdk_wallet::SignOptions {
 				trust_witness_utxo: true,
@@ -632,6 +653,39 @@ mod test {
 		}
 		assert!(inputs.contains(&unconfirmed), "unconfirmed UTXO must be pulled in");
 	}
+
+	fn urgent_parent() -> Transaction {
+		Transaction { version: bitcoin::transaction::Version(3),
+			lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: vec![bitcoin::TxIn { previous_output: OutPoint::null(), script_sig: bitcoin::ScriptBuf::new(),
+				sequence: bitcoin::Sequence::ZERO, witness: Witness::from_slice(&[[1_u8; 64]]) }],
+			output: vec![TxOut { value: Amount::ZERO, script_pubkey: crate::fee::P2A_SCRIPT.to_owned() }] }
+	}
+
+	#[test]
+	fn cpfp_urgent_excludes_reserved_whole_inputs_and_unconfirmed_change() {
+		let (mut wallet, confirmed, unconfirmed) = mixed_confirmation_wallet();
+		let parent = urgent_parent();
+		let allowed = [confirmed[1]];
+		let child = wallet.make_signed_p2a_cpfp_with_limits(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), Some(&allowed), Some(Amount::from_sat(1_000))).unwrap();
+		let anchor = parent.fee_anchor().unwrap().0;
+		assert!(child.input.iter().all(|i| i.previous_output == anchor || allowed.contains(&i.previous_output)));
+		assert!(!child.input.iter().any(|i| i.previous_output == confirmed[0] || i.previous_output == unconfirmed));
+		let outputs = child.output.iter().map(|o| o.value).sum::<Amount>();
+		assert!(Amount::from_sat(4_000) - outputs <= Amount::from_sat(1_000));
+	}
+
+	#[test]
+	fn cpfp_urgent_rejects_fee_ceiling_and_empty_input_allowlist() {
+		let (mut wallet, confirmed, _) = mixed_confirmation_wallet();
+		let parent = urgent_parent();
+		assert!(wallet.make_signed_p2a_cpfp_with_limits(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), Some(&confirmed), Some(Amount::ZERO)).is_err());
+		assert!(wallet.make_signed_p2a_cpfp_with_limits(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), Some(&[]), Some(Amount::from_sat(1_000))).is_err());
+	}
+
 }
 
 impl WalletExt for Wallet {}

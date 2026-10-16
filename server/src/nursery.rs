@@ -20,6 +20,8 @@
 //! broadcasting txs, so it also runs the follow-up.
 //!
 
+use crate::database::urgent_publication::UrgentRelay;
+
 use std::collections::HashSet;
 
 use anyhow::Context;
@@ -175,6 +177,19 @@ impl TxNursery {
 	/// next mempool update.
 	async fn broadcast(&self, tx: &Transaction, kind: NurseryTxKind) {
 		let txid = tx.compute_txid();
+		if kind == NurseryTxKind::Internal {
+			match self.db.read(async |t| t.urgent_relay(txid).await).await {
+				Ok(UrgentRelay::Unrelated) => {},
+				Ok(UrgentRelay::Unbound) => return,
+				Ok(UrgentRelay::Bound(package)) => {
+					let result = if package.len() == 1 { bcd::broadcast_tx(&self.bitcoind, &package[0]).await.map(|_| ()) }
+						else { bcd::submit_package(&self.bitcoind, &package).await.map(|_| ()) };
+					if let Err(error) = result { warn!(%txid, %error, "bound urgent package relay deferred; exact bytes retained"); }
+					return;
+				},
+				Err(error) => { warn!(%txid, %error, "urgent membership unknown; internal relay held"); return; },
+			}
+		}
 		if kind == NurseryTxKind::ExpiryPayout {
 			if let Err(e) = self.witness_payout(tx).await {
 				warn!(%txid, "payout recovery witness not durable; keep committed payout pending: {e:#}");

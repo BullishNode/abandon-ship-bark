@@ -73,15 +73,23 @@ impl<'t> Tx<'t> {
 		kind: NurseryTxKind,
 		confirm_target_height: BlockHeight,
 	) -> anyhow::Result<()> {
+		self.upsert_nursery_tx_with_attempt(tx, kind, confirm_target_height, None).await
+	}
+
+	pub(crate) async fn upsert_nursery_tx_with_attempt(
+		&self, tx: &Transaction, kind: NurseryTxKind, confirm_target_height: BlockHeight,
+		attempt: Option<&serde_json::Value>,
+	) -> anyhow::Result<()> {
+		let metadata = attempt.map(serde_json::to_string).transpose()?;
 		let stmt = self.prepare_typed("
-			INSERT INTO nursery_tx (txid, kind, tx, confirm_target_height, created_at, updated_at)
-			VALUES ($1, $2::TEXT::nursery_tx_kind, $3, $4, NOW(), NOW())
+			INSERT INTO nursery_tx (txid, kind, tx, confirm_target_height, created_at, updated_at, urgent_fee_attempt)
+			VALUES ($1, $2::TEXT::nursery_tx_kind, $3, $4, NOW(), NOW(), $5::TEXT::jsonb)
 			ON CONFLICT (txid) DO NOTHING
-		", &[Type::TEXT, Type::TEXT, Type::BYTEA, Type::INT4]).await?;
+		", &[Type::TEXT, Type::TEXT, Type::BYTEA, Type::INT4, Type::TEXT]).await?;
 
 		self.execute(&stmt, &[
 			&tx.compute_txid().to_string(), &kind.name(), &serialize(tx),
-			&height_to_sql(confirm_target_height)?,
+			&height_to_sql(confirm_target_height)?, &metadata,
 		]).await?;
 
 		Ok(())

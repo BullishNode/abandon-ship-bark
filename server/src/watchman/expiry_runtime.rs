@@ -28,20 +28,27 @@ pub(crate) struct DirectExpiryRuntime {
 	db: Db,
 	budget: BackingSnapshotLimits,
 	work: tokio::sync::Mutex<Work>,
+	pub(super) ordinary: Arc<super::ordinary_fee::OrdinaryFeeBudget>,
+	pub(super) policy: CarrierLimits,
+	pub(super) urgent_work: tokio::sync::Mutex<super::urgent::UrgentWork>,
 }
 
 impl DirectExpiryRuntime {
 	pub async fn new(
 		db: Db, wallet: InstrumentedLock<PersistedWallet>, network: Network,
 		operator_script: ScriptBuf, budget: BackingSnapshotLimits, policy: CarrierLimits,
-		history: Arc<DirectPayoutWitness>, ordinary: super::ordinary_fee::OrdinaryFeeBudget,
+		history: Arc<DirectPayoutWitness>, ordinary: super::ordinary_fee::OrdinaryFeeBudget, node: &Client,
 	) -> anyhow::Result<Self> {
+		let ordinary = Arc::new(ordinary);
+		let mut urgent = super::urgent::UrgentWork::default();
+		super::urgent::hydrate_urgent_publications(&db, &wallet, &ordinary, budget, node, &mut urgent.reservations).await?;
 		let mut processor = FrozenExpiryProcessor::new(db.clone(), wallet, network,
-			operator_script, budget, policy, history).with_ordinary_fee_budget(ordinary);
+			operator_script, budget, policy, history).with_ordinary_fee_budget(ordinary.clone());
 		// No daemon may construct new fee spends until every viable signed
 		// version's existing input reservation is restored.
 		processor.recover_durable_groups().await?;
-		Ok(Self { db, budget, work: tokio::sync::Mutex::new(Work { processor, cursor: None }) })
+		Ok(Self { db, budget, work: tokio::sync::Mutex::new(Work { processor, cursor: None }),
+			ordinary, policy, urgent_work: tokio::sync::Mutex::new(urgent) })
 	}
 
 	pub async fn tick(&self, signer: &WatchmanSigner, node: &Client,

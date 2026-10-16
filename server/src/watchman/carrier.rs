@@ -105,7 +105,7 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 		let preflight_inputs = inputs.clone();
 		let preflight_recipients = recipients.to_vec();
 		let preflight_operator = operator_script.clone();
-		let reserve = budget.urgent_reserve();
+		let reserve = budget.urgent_reserve()?;
 		let (held, result) = tokio::task::spawn_blocking(move || {
 			let available = wallet.confirmed_unlocked_utxos();
 			let result = build_candidate(&mut wallet, &available, &preflight_inputs,
@@ -135,7 +135,7 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 		wallet = held;
 		let (mut psbt, roles) = built?;
 		if let Some(budget) = ordinary_budget {
-			validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, budget.urgent_reserve())?;
+			validate_urgent_reserve(&wallet, &available, &psbt.unsigned_tx, budget.urgent_reserve()?)?;
 		}
 		sign_backing(signer, &inputs, &mut psbt).await?;
 		let (held, signed) = tokio::task::spawn_blocking(move || {

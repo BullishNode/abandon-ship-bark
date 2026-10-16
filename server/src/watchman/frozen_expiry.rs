@@ -41,7 +41,7 @@ pub struct FrozenExpiryProcessor {
 	deliveries: BTreeMap<String, DirectDelivery>,
 	uncertain: Option<UncertainPublication>,
 	hydrated: bool,
-	ordinary_fee: Option<super::ordinary_fee::OrdinaryFeeBudget>,
+	ordinary_fee: Option<Arc<super::ordinary_fee::OrdinaryFeeBudget>>,
 }
 
 impl FrozenExpiryProcessor {
@@ -57,11 +57,11 @@ impl FrozenExpiryProcessor {
 	/// signed-history coverage and exclusive budget owner as daemon startup.
 	/// Missing metadata is never initialized by this method.
 	pub async fn with_ordinary_fee_policy(mut self, policy: super::ordinary_fee::OrdinaryFeePolicy) -> anyhow::Result<Self> {
-		self.ordinary_fee = Some(self.witness.ordinary_fee_budget(&self.db, policy).await?);
+		self.ordinary_fee = Some(Arc::new(self.witness.ordinary_fee_budget(&self.db, policy).await?));
 		Ok(self)
 	}
 
-	pub(crate) fn with_ordinary_fee_budget(mut self, budget: super::ordinary_fee::OrdinaryFeeBudget) -> Self {
+	pub(crate) fn with_ordinary_fee_budget(mut self, budget: Arc<super::ordinary_fee::OrdinaryFeeBudget>) -> Self {
 		self.ordinary_fee = Some(budget);
 		self
 	}
@@ -182,7 +182,7 @@ impl FrozenExpiryProcessor {
 		ensure!(self.db.direct_delivery_generation(id).await? == generation, "frozen generation changed before construction");
 		let (mut held, carrier) = build_direct_carrier_with_replacement(signer, held, &group.backing,
 			&group.plan.recipients, self.operator_script.clone(), height, rate, self.policy, replacement,
-			Some(self.ordinary_fee.as_ref().context("ordinary direct construction requires durable fee budget")?)).await?;
+			Some(self.ordinary_fee.as_deref().context("ordinary direct construction requires durable fee budget")?)).await?;
 		held.commit_tx(&carrier.tx);
 		let txid = carrier.tx.compute_txid();
 		// Retain before the publication await: cancelling its future must not
@@ -211,8 +211,7 @@ impl FrozenExpiryProcessor {
 		let has_fee_inputs = !self.deliveries.get(id).context("confirmed delivery disappeared")?.reserved_fee_inputs().is_empty();
 		// A winner without wallet inputs/outputs is retained as a conflict of a
 		// losing fee-funded version. transactions() hides such canonical txs.
-		ensure!(held.latest_checkpoint().height() >= block.height.to_u32() && (!has_fee_inputs || held.get_tx(txid)
-			.is_some_and(|t| t.chain_position.is_confirmed())), "owning wallet must sync the actual confirmed carrier before releasing fee inputs");
+		held.require_confirmed_fee_winner(txid, block, has_fee_inputs)?;
 		self.deliveries.remove(id);
 		Ok(())
 	}

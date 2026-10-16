@@ -128,7 +128,7 @@ struct Ledger {
 	urgent_charged: u64, urgent: BTreeMap<u64, UrgentReservation>,
 }
 
-struct UrgentReservation { ceiling: u64, signed: Option<Vec<Transaction>> }
+struct UrgentReservation { ceiling: u64, signed: Option<(sha256::Hash, Vec<Transaction>)> }
 
 /// Same immutable policy and journal as ordinary reservations. The kind is
 /// explicit: an ordinary attempt index cannot authorize an urgent publication.
@@ -185,8 +185,23 @@ impl OrdinaryFeeBudget {
 		Ok(())
 	}
 
-	pub(crate) fn urgent_reserve(&self) -> Amount { Amount::from_sat(self.policy.urgent_reserve_sat) }
+	pub(crate) fn urgent_reserve(&self) -> anyhow::Result<Amount> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
+		ensure!(ledger.file.metadata()?.len() == ledger.length, "fee history changed before cash reserve check");
+		Ok(Amount::from_sat(self.policy.urgent_reserve_sat.checked_sub(ledger.urgent_charged)
+			.context("urgent allowance already exceeded")?))
+	}
 
+
+	pub(crate) fn urgent_ceiling_limit(&self, maximum: Amount) -> anyhow::Result<Amount> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
+		let remaining = self.policy.urgent_reserve_sat.checked_sub(ledger.urgent_charged)
+			.context("urgent lifetime budget exceeded")?;
+		let shared = self.policy.ordinary_budget_sat.checked_sub(ledger.charged).context("lifetime budget exceeded")?;
+		let limit = maximum.to_sat().min(remaining).min(shared);
+		ensure!(limit > 0, "urgent lifetime allowance exhausted; funding cannot refill history");
+		Ok(Amount::from_sat(limit))
+	}
 
 	/// Urgent attempts consume the same lifetime total, with an additional urgent
 	/// sub-limit. This deliberately cannot create a second independent allowance.
@@ -204,30 +219,28 @@ impl OrdinaryFeeBudget {
 
 	/// Retain the exact package independently BEFORE its DB publication/Core await.
 	/// A retry of identical bytes is free; a different witness/package is refused.
-	pub(crate) fn bind_urgent_signed(&self, attempt: UrgentFeeAttempt, txs: &[Transaction], fee: Amount) -> anyhow::Result<()> {
-		ensure!(attempt.policy_sha256 == self.identity, "urgent attempt policy differs");
+	pub(crate) fn bind_urgent_signed(&self, attempt: UrgentFeeAttempt, txs: &[Transaction], fee: Amount, source_binding: sha256::Hash) -> anyhow::Result<()> {
+		ensure!(attempt.policy_sha256 == self.identity && source_binding != sha256::Hash::all_zeros(), "urgent attempt/source identity differs");
 		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
 		ensure!(ledger.file.metadata()?.len() == ledger.length, "fee history changed before urgent binding");
 		let reservation = ledger.urgent.get(&attempt.index).context("urgent attempt was not reserved")?;
 		ensure!(fee.to_sat() <= reservation.ceiling, "urgent signed fee exceeds reserved ceiling");
 		let encoded = encode_package(txs)?;
-		if let Some(retained) = &reservation.signed {
-			ensure!(encode_package(retained)? == encoded, "urgent exact-byte retry differs");
+		if let Some((binding, retained)) = &reservation.signed {
+			ensure!(*binding == source_binding && encode_package(retained)? == encoded, "urgent exact-byte retry differs");
 			return Ok(());
 		}
-		ensure!(!ledger.urgent.values().filter_map(|r| r.signed.as_ref()).flatten()
-			.any(|old| txs.iter().any(|new| old.compute_txid() == new.compute_txid())),
-			"urgent transaction already belongs to another attempt");
-		append_entry(&mut ledger, format!("p:{}:{encoded}\n", attempt.index).as_bytes())?;
-		ledger.urgent.get_mut(&attempt.index).expect("reserved above").signed = Some(txs.to_vec());
+		check_shared_package_bytes(&ledger.urgent, txs)?;
+		append_entry(&mut ledger, format!("p:{}:{source_binding}:{encoded}\n", attempt.index).as_bytes())?;
+		ledger.urgent.get_mut(&attempt.index).expect("reserved above").signed = Some((source_binding, txs.to_vec()));
 		Ok(())
 	}
 
-	pub(crate) fn retained_urgent(&self) -> anyhow::Result<Vec<(UrgentFeeAttempt, Vec<Transaction>)>> {
+	pub(crate) fn retained_urgent(&self) -> anyhow::Result<Vec<(UrgentFeeAttempt, sha256::Hash, Vec<Transaction>)>> {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
 		ensure!(ledger.file.metadata()?.len() == ledger.length, "fee history changed before urgent replay");
 		Ok(ledger.urgent.iter().filter_map(|(&index, reservation)| reservation.signed.clone()
-			.map(|txs| (UrgentFeeAttempt { policy_sha256: self.identity, index }, txs))).collect())
+			.map(|(binding, txs)| (UrgentFeeAttempt { policy_sha256: self.identity, index }, binding, txs))).collect())
 	}
 
 	/// One immutable identity per external prepare invocation. Failed attempts stay
@@ -246,6 +259,31 @@ impl OrdinaryFeeBudget {
 		ledger.attempts = index;
 		Ok(OrdinaryFeeAttempt { policy_sha256: self.identity, index })
 	}
+}
+
+/// Read-only startup cross-check for BOTH captaind and watchmand. It grants no
+/// signing authority and never repairs missing history from database contents.
+pub(crate) fn urgent_snapshot(directory: &Path)
+	-> anyhow::Result<(sha256::Hash, Vec<(UrgentFeeAttempt, u64, Option<(sha256::Hash, Vec<Transaction>)>)>)>
+{
+	let policy_raw = read_bounded(&directory.join(POLICY_FILE), 2048)?;
+	let stored: StoredPolicy = serde_json::from_slice(&policy_raw)?;
+	ensure!(serde_json::to_vec(&stored)? == policy_raw, "noncanonical immutable fee policy");
+	stored.policy.validate()?;
+	let opening_raw = read_bounded(&directory.join(OPENING_FILE), 2048)?;
+	ensure!(sha256::Hash::hash(&opening_raw) == stored.opening_sha256 &&
+		stored.policy.opening_sha256.is_none_or(|h| h == stored.opening_sha256), "urgent opening digest differs");
+	let opening: OrdinaryFeeOpening = serde_json::from_slice(&opening_raw)?;
+	ensure!(serde_json::to_vec(&opening)? == opening_raw, "noncanonical immutable fee opening");
+	opening.validate(stored.policy)?;
+	let path = directory.join(BUDGET_FILE); let before = std::fs::metadata(&path)?;
+	let raw = read_bounded(&path, MAX_HISTORY_BYTES)?; let after = std::fs::metadata(&path)?;
+	ensure!(before.len() == after.len() && before.modified()? == after.modified()? && raw.len() as u64 == after.len(),
+		"fee history changed during startup observation");
+	let (_, _, _, reservations) = parse_history(std::str::from_utf8(&raw)?, opening.initial_charge(stored.policy)?, stored.policy)?;
+	let policy_sha256 = sha256::Hash::hash(&policy_raw);
+	Ok((policy_sha256, reservations.into_iter().map(|(index, r)|
+		(UrgentFeeAttempt { policy_sha256, index }, r.ceiling, r.signed)).collect()))
 }
 
 fn read_bounded(path: &Path, limit: u64) -> anyhow::Result<Vec<u8>> {
@@ -290,6 +328,17 @@ fn append_entry(ledger: &mut Ledger, entry: &[u8]) -> anyhow::Result<()> {
 	Ok(())
 }
 
+fn check_shared_package_bytes(retained: &BTreeMap<u64, UrgentReservation>, candidate: &[Transaction]) -> anyhow::Result<()> {
+	for (_, previous) in retained.values().filter_map(|r| r.signed.as_ref()) {
+		ensure!(previous.last().zip(candidate.last()).is_none_or(|(old,new)| old.compute_txid() != new.compute_txid()),
+			"urgent publication transaction already belongs to another attempt");
+		for old in previous { for new in candidate {
+			ensure!(old.compute_txid() != new.compute_txid() || old == new, "shared urgent ancestor witness differs");
+		} }
+	}
+	Ok(())
+}
+
 fn encode_package(txs: &[Transaction]) -> anyhow::Result<String> {
 	ensure!(!txs.is_empty() && txs.len() <= 2 && txs.iter().all(|tx| tx.weight().to_wu() <= 400_000),
 		"urgent signed package exceeds bounds");
@@ -315,15 +364,17 @@ fn parse_history(history: &str, opening: u64, policy: OrdinaryFeePolicy)
 		} else if let Some(record) = line.strip_prefix("p:") {
 			let (index, bytes) = record.split_once(':').context("invalid urgent signed binding")?;
 			let index = index.parse::<u64>()?;
+			let (binding, bytes) = bytes.split_once(':').context("urgent source binding missing")?;
+			let binding = binding.parse::<sha256::Hash>()?;
+			ensure!(binding != sha256::Hash::all_zeros(), "urgent source binding missing");
 			let raw: Vec<Vec<u8>> = serde_json::from_str(bytes)?;
 			let txs = raw.iter().map(|bytes| bitcoin::consensus::deserialize(bytes))
 				.collect::<Result<Vec<Transaction>, _>>()?;
-			ensure!(line == format!("p:{index}:{}", encode_package(&txs)?), "noncanonical urgent signed binding");
-			ensure!(!urgent.values().filter_map(|r| r.signed.as_ref()).flatten()
-				.any(|old| txs.iter().any(|new| old.compute_txid() == new.compute_txid())), "duplicate urgent signed transaction");
+			ensure!(line == format!("p:{index}:{binding}:{}", encode_package(&txs)?), "noncanonical urgent signed binding");
+			check_shared_package_bytes(&urgent, &txs)?;
 			let reservation = urgent.get_mut(&index).context("signed urgent attempt has no prior reservation")?;
 			ensure!(reservation.signed.is_none(), "duplicate urgent binding");
-			reservation.signed = Some(txs);
+			reservation.signed = Some((binding, txs));
 		} else {
 			let amount = line.parse::<u64>().context("invalid ordinary fee reservation")?;
 			ensure!(line == amount.to_string(), "noncanonical ordinary fee reservation");
@@ -448,7 +499,7 @@ mod tests {
 		policy.initialize_fresh(&dir, Network::Regtest, DUMMY_SERVER_KEY.public_key()).unwrap();
 		assert!(policy.initialize_fresh(&dir, Network::Regtest, DUMMY_SERVER_KEY.public_key()).is_err());
 		let budget = OrdinaryFeeBudget::load(&dir, policy).unwrap();
-		assert_eq!(budget.urgent_reserve(), Amount::from_sat(15_000));
+		assert_eq!(budget.urgent_reserve().unwrap(), Amount::from_sat(15_000));
 		let finite = OrdinaryFeePolicy { ordinary_budget_sat: 40_960_000, urgent_reserve_sat: 40_000,
 			external_future_reserved_sat: 0, opening_sha256: None };
 		finite.validate().unwrap();
@@ -479,15 +530,15 @@ mod tests {
 		let bound = budget.reserve_urgent_ceiling(Amount::from_sat(10_000)).unwrap();
 		assert_ne!(failed.index, bound.index);
 		let tx = urgent_tx(8);
-		budget.bind_urgent_signed(bound, &[tx.clone()], Amount::from_sat(500)).unwrap();
+		budget.bind_urgent_signed(bound, &[tx.clone()], Amount::from_sat(500), sha256::Hash::hash(b"unit source binding")).unwrap();
 		let bytes = std::fs::read(dir.join(BUDGET_FILE)).unwrap();
-		budget.bind_urgent_signed(bound, &[tx.clone()], Amount::from_sat(500)).unwrap();
+		budget.bind_urgent_signed(bound, &[tx.clone()], Amount::from_sat(500), sha256::Hash::hash(b"unit source binding")).unwrap();
 		assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(), bytes);
-		assert!(budget.bind_urgent_signed(bound, &[urgent_tx(9)], Amount::from_sat(500)).is_err());
+		assert!(budget.bind_urgent_signed(bound, &[urgent_tx(9)], Amount::from_sat(500), sha256::Hash::hash(b"unit source binding")).is_err());
 		drop(budget);
 		let budget = OrdinaryFeeBudget::load(&dir, policy).unwrap();
 		assert!(budget.reserve_urgent_ceiling(Amount::from_sat(1)).is_err());
-		assert_eq!(budget.retained_urgent().unwrap(), vec![(bound, vec![tx])]);
+		assert_eq!(budget.retained_urgent().unwrap(), vec![(bound, sha256::Hash::hash(b"unit source binding"), vec![tx])]);
 		assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(), bytes);
 		drop(budget); std::fs::remove_dir_all(dir).unwrap();
 	}
@@ -523,9 +574,9 @@ mod tests {
 		let first = budget.reserve_urgent_ceiling(Amount::from_sat(1_000)).unwrap();
 		let second = budget.reserve_urgent_ceiling(Amount::from_sat(1_000)).unwrap();
 		let tx = urgent_tx(10);
-		assert!(budget.bind_urgent_signed(first, &[tx.clone()], Amount::from_sat(1_001)).is_err());
-		budget.bind_urgent_signed(first, &[tx.clone()], Amount::from_sat(1_000)).unwrap();
-		assert!(budget.bind_urgent_signed(second, &[tx], Amount::from_sat(1_000)).is_err());
+		assert!(budget.bind_urgent_signed(first, &[tx.clone()], Amount::from_sat(1_001), sha256::Hash::hash(b"unit source binding")).is_err());
+		budget.bind_urgent_signed(first, &[tx.clone()], Amount::from_sat(1_000), sha256::Hash::hash(b"unit source binding")).unwrap();
+		assert!(budget.bind_urgent_signed(second, &[tx], Amount::from_sat(1_000), sha256::Hash::hash(b"unit source binding")).is_err());
 		drop(budget);
 		let valid = std::fs::read(dir.join(BUDGET_FILE)).unwrap();
 		let mut torn = valid.clone(); torn.extend_from_slice(b"p:2:");
@@ -544,6 +595,26 @@ mod tests {
 		budget.reserve_ceiling(Amount::from_sat(19_136)).unwrap();
 		assert!(budget.reserve_ceiling(Amount::from_sat(1)).is_err(),
 			"discretionary signing consumed authorization reserved for urgent defense");
+		drop(budget); std::fs::remove_dir_all(dir).unwrap();
+	}
+
+
+	#[test]
+	fn urgent_shared_parent_keeps_every_version_and_cannot_change_witness() {
+		let dir = directory(); let (policy, _) = adopted(&dir);
+		let budget = OrdinaryFeeBudget::load(&dir, policy).unwrap();
+		let parent = urgent_tx(20); let first_child = urgent_tx(21); let second_child = urgent_tx(22);
+		let first = budget.reserve_urgent_ceiling(Amount::from_sat(5_000)).unwrap();
+		budget.bind_urgent_signed(first, &[parent.clone(),first_child], Amount::from_sat(500), sha256::Hash::hash(b"first source")).unwrap();
+		let second = budget.reserve_urgent_ceiling(Amount::from_sat(5_000)).unwrap();
+		assert_eq!(budget.urgent_reserve().unwrap(), Amount::from_sat(5_000));
+		let mut changed = parent.clone(); changed.input[0].witness = bitcoin::Witness::from_slice(&[[2_u8;64]]);
+		assert!(budget.bind_urgent_signed(second, &[changed,second_child.clone()], Amount::from_sat(500), sha256::Hash::hash(b"second source")).is_err());
+		budget.bind_urgent_signed(second, &[parent,second_child], Amount::from_sat(500), sha256::Hash::hash(b"second source")).unwrap();
+		drop(budget);
+		let budget = OrdinaryFeeBudget::load(&dir, policy).unwrap();
+		assert_eq!(budget.retained_urgent().unwrap().len(),2);
+		assert_eq!(budget.urgent_reserve().unwrap(), Amount::from_sat(5_000));
 		drop(budget); std::fs::remove_dir_all(dir).unwrap();
 	}
 

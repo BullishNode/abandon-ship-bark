@@ -1082,7 +1082,9 @@ CREATE TABLE public.nursery_tx (
     abandoned_at timestamp with time zone,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL,
-    kind public.nursery_tx_kind NOT NULL
+    kind public.nursery_tx_kind NOT NULL,
+    urgent_fee_attempt jsonb,
+    urgent_fee_bound boolean DEFAULT false NOT NULL
 );
 
 

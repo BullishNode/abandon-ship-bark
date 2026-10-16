@@ -11,6 +11,7 @@ pub mod ordinary_fee;
 pub mod direct_delivery;
 pub mod frozen_expiry;
 mod expiry_runtime;
+mod urgent;
 mod config;
 mod daemon;
 mod frontier;
@@ -200,6 +201,7 @@ impl Watchman {
 	}
 
 	async fn process_direct_expiry(&self, runtime: &expiry_runtime::DirectExpiryRuntime) -> anyhow::Result<()> {
+		self.recover_urgent_publications(runtime, true).await?;
 		runtime.tick(&self.signer, &self.bitcoind,
 			self.fee_estimator.regular(), self.config.incremental_relay_fee, self.config.claim_chunksize.get()).await
 	}
@@ -380,7 +382,7 @@ impl Watchman {
 	/// This is the time-critical half of the watchman's work and runs on the
 	/// short [Config::reaction_interval].
 	pub async fn process_reactions(&self) -> anyhow::Result<()> {
-		if let Some(runtime) = &self.direct_expiry { return self.process_direct_expiry(runtime).await; }
+		if let Some(runtime) = &self.direct_expiry { self.recover_urgent_publications(runtime, true).await?; }
 		let work = self.scan_frontier().await;
 
 		let vtxos = work.claims.iter().chain(work.progress.iter().map(|(_, v)| v));
@@ -389,12 +391,13 @@ impl Watchman {
 		}
 
 		if !work.claims.is_empty() {
-			self.process_claims(work.claims).await?;
+			self.process_claims(work.claims, true).await?;
 		}
 		if !work.progress.is_empty() {
 			self.process_progress_txs(work.progress).await?;
 		}
 
+		if let Some(runtime) = &self.direct_expiry { self.process_direct_expiry(runtime).await?; }
 		Ok(())
 	}
 
@@ -411,7 +414,7 @@ impl Watchman {
 		}
 
 		if !work.sweeps.is_empty() {
-			self.process_claims(work.sweeps).await?;
+			self.process_claims(work.sweeps, false).await?;
 		}
 
 		Ok(())
@@ -422,8 +425,8 @@ impl Watchman {
 	///
 	/// Filters vtxos by broadcast status (skipping those already broadcast with good feerate),
 	/// then builds and broadcasts claim txs in chunks.
-	async fn process_claims(&self, mut vtxos: Vec<ServerVtxo>) -> anyhow::Result<()> {
-		ensure!(self.direct_expiry.is_none(), "direct expiry backing cannot enter legacy claims");
+	async fn process_claims(&self, mut vtxos: Vec<ServerVtxo>, urgent: bool) -> anyhow::Result<()> {
+		ensure!(self.direct_expiry.is_none() || urgent, "direct expiry backing cannot enter legacy principal sweeps");
 		//TODO(stevenroose) adapt feerate to how close the deadline is
 		let min_feerate = self.fee_estimator.regular();
 
@@ -582,6 +585,9 @@ impl Watchman {
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
 	) -> anyhow::Result<()> {
+		if let Some(runtime) = &self.direct_expiry {
+			return self.publish_urgent_claim(runtime, vtxos, fee_rate).await;
+		}
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
 		let txid = tx.compute_txid();
 		bcd::broadcast_tx(&self.bitcoind, &tx).await?;
@@ -745,6 +751,10 @@ impl Watchman {
 			}
 		});
 
+		if let Some(runtime) = &self.direct_expiry {
+			for (txid, vtxo) in txs { self.publish_urgent_progress(runtime, txid, &vtxo, fee_rate).await?; }
+			return Ok(());
+		}
 		let mut wallet = self.watchman_wallet.lock().await;
 
 		//TODO(stevenroose) consider a safe strategy for batching here as well

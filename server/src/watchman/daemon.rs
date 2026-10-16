@@ -192,7 +192,7 @@ impl Daemon {
 			let policy = CarrierLimits { max_fee_rate: cfg.fee_estimator.max_fee_rate.context("missing direct fee ceiling")?,
 				max_miner_fee: direct.max_miner_fee, max_weight: Weight::from_wu(400_000) };
 			Some(DirectExpiryRuntime::new(db.clone(), watchman_wallet.clone(), cfg.network,
-				drain_address.script_pubkey(), DIRECT_HISTORY_LIMITS, policy, history, ordinary).await
+				drain_address.script_pubkey(), DIRECT_HISTORY_LIMITS, policy, history, ordinary, &bitcoind).await
 				.context("restoring direct expiry reservations")?)
 		} else { None };
 

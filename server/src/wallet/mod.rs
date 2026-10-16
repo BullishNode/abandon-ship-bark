@@ -159,6 +159,15 @@ impl PersistedWallet {
 		Self::load_from_xpriv(db, bitcoind, network, &wallet_xpriv, kind, deep_tip, min_trusted_confs).await
 	}
 
+	/// A known confirmed winner must be present in this owning wallet before
+	/// releasing any losing-version fee inputs. A tip alone is insufficient.
+	pub(crate) fn require_confirmed_fee_winner(&self, txid: Txid, block: BlockRef, has_fee_inputs: bool) -> anyhow::Result<()> {
+		ensure!(self.latest_checkpoint().height() >= block.height.to_u32() && (!has_fee_inputs || self.get_tx(txid)
+			.is_some_and(|tx| tx.chain_position.is_confirmed())),
+			"owning wallet must sync the actual confirmed carrier before releasing fee inputs");
+		Ok(())
+	}
+
 	/// Set the address blocklist for this wallet
 	pub fn set_address_blocklist(&mut self, blocklist: BitcoinAddressBlocklist) {
 		self.address_blocklist = Some(blocklist);

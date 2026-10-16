@@ -102,13 +102,18 @@ c=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); c.load_cert_chain(p/'cert.pem',p/'key
 }
 
 fn signed_test_invoice(raw_metadata: &str, amount: Amount, currency: Currency, direct: bool) -> String {
+	signed_test_invoice_at(raw_metadata, amount, currency, direct,
+		SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap())
+}
+
+fn signed_test_invoice_at(raw_metadata: &str, amount: Amount, currency: Currency, direct: bool, timestamp: Duration) -> String {
 	let key = SecretKey::from_slice(&[3; 32]).unwrap();
 	let builder = InvoiceBuilder::new(currency);
 	let builder = if direct { builder.description("direct description".into()) }
 		else { builder.description_hash(sha256::Hash::hash(raw_metadata.as_bytes())) };
 	builder.payment_hash(sha256::Hash::hash(b"strict TLS test only synthetic payment hash"))
 		.payment_secret(PaymentSecret([5; 32]))
-		.duration_since_epoch(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap())
+		.duration_since_epoch(timestamp)
 		.min_final_cltv_expiry_delta(18).amount_milli_satoshis(amount.to_sat() * 1000)
 		.build_signed(|message: &Message| Secp256k1::new().sign_ecdsa_recoverable(message, &key)).unwrap().to_string()
 }
@@ -166,6 +171,7 @@ async fn strict_lnurl_private_tls_refusals_preserve_checkpoint_then_real_payment
 		("wrong-network", normal.clone(), signed_test_invoice(metadata, amount, Currency::Bitcoin, false), None),
 		("simnet-is-not-regtest", normal.clone(), signed_test_invoice(metadata, amount, Currency::Simnet, false), None),
 		("invalid-invoice", normal.clone(), "not a signed invoice".into(), None),
+		("expired-signed-invoice", normal.clone(), signed_test_invoice_at(metadata, amount, Currency::Regtest, false, Duration::from_secs(1_700_000_000)), None),
 		("malformed-metadata", fixture.metadata("invalid JSON", None), valid.clone(), None),
 		("foreign-callback", fixture.metadata(metadata, Some("https://foreign.invalid/pay")), valid.clone(), None),
 		("http-callback", fixture.metadata(metadata, Some("http://localhost/pay")), valid.clone(), None),
@@ -184,6 +190,7 @@ async fn strict_lnurl_private_tls_refusals_preserve_checkpoint_then_real_payment
 			"wrong-amount" => "but we requested",
 			"wrong-network" | "simnet-is-not-regtest" => "Invoice is for wrong network",
 			"invalid-invoice" => "received invalid invoice",
+			"expired-signed-invoice" => "strict lnurl invoice is expired",
 			"malformed-metadata" => "invalid strict lnurl metadata",
 			"foreign-callback" => "callback does not match the requested recipient endpoint",
 			"http-callback" => "requires an HTTPS endpoint",

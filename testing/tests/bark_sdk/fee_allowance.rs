@@ -81,7 +81,7 @@ async fn ordinary_round_allowance_survives_restart_and_refuses_second_publicatio
 		}).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	ctx.fund_captaind(&srv,sat(49_980_000)).await;
 	ctx.bitcoind().fund_addr(srv.watchmand().wait_wallet_address().await,sat(30_000)).await;
-	enable_fixture_epoch(&ctx,&srv,500).await;
+	enable_fixture_epoch(&ctx,&srv,260).await;
 	let db=Db::connect(&srv.config().postgres).await.unwrap();
 	let core=ctx.bitcoind().sync_client();
 	let bark=ctx.bark("receiver",&srv).funded(sat(1_000_000)).create().await;
@@ -92,7 +92,7 @@ async fn ordinary_round_allowance_survives_restart_and_refuses_second_publicatio
 	ctx.await_transaction(txid).await;
 	let signed=core.get_raw_transaction(&txid,None).unwrap();
 	let fee=actual_fee(&core,&signed);
-	assert!((251..=500).contains(&fee),"setup-unqualified: fixed500 allowance needs one genuine round above250");
+	assert!((131..=260).contains(&fee),"setup-unqualified: fixed260 allowance needs one genuine round above130");
 	assert!(fee<=FeeRate::from_sat_per_vb_u32(1).fee_wu(signed.weight()).unwrap().to_sat());
 	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;bark.sync().await;
 	let before=db.read(async|t| Ok(t.query_one("SELECT count(*),COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE urgent=false",&[]).await?
@@ -115,7 +115,8 @@ async fn ordinary_round_allowance_survives_restart_and_refuses_second_publicatio
 async fn ordinary_round_refuses_actual_empty_urgent_wallet() {
 	let ctx=TestContext::new("bark_sdk/ordinary_round_refuses_actual_empty_urgent_wallet").await;
 	let srv=ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().funded(sat(50_020_000))
-		.cfg(|c|{c.vtxo_lifetime=BlockDelta::new(128);c.round_interval=Duration::from_secs(3600);})
+		.cfg(|c|{c.vtxo_lifetime=BlockDelta::new(128);c.round_interval=Duration::from_secs(3600);
+			c.fee_estimator.max_fee_rate=Some(FeeRate::from_sat_per_vb_u32(1));})
 		.watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	ctx.fund_captaind(&srv,sat(49_980_000)).await;
 	enable_fixture_epoch(&ctx,&srv,100_000).await;

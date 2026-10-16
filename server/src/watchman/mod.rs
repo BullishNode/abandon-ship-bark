@@ -8,6 +8,7 @@
 
 pub mod carrier;
 pub mod ordinary_fee;
+pub(crate) mod ordinary_funding;
 pub mod direct_delivery;
 pub mod frozen_expiry;
 mod expiry_runtime;

@@ -14,6 +14,7 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::PublicKey;
 
 use crate::fs_perms;
+use super::ordinary_funding::{FundingCandidate, FundingReservation};
 
 pub(crate) const POLICY_FILE: &str = "ordinary-fee-policy.json";
 pub(crate) const OPENING_FILE: &str = "ordinary-fee-opening.json";
@@ -126,7 +127,11 @@ struct StoredPolicy { policy: OrdinaryFeePolicy, opening_sha256: sha256::Hash }
 struct Ledger {
 	file: File, charged: u64, length: u64, attempts: u64,
 	urgent_charged: u64, urgent: BTreeMap<u64, UrgentReservation>,
+	funding: BTreeMap<sha256::Hash, FundingState>, funding_charged: u64, native_uncertain: bool,
 }
+
+#[derive(Clone)]
+pub(crate) struct FundingState { pub reservation: FundingReservation, pub signed: Option<Transaction> }
 
 struct UrgentReservation { ceiling: u64, signed: Option<(sha256::Hash, Vec<Transaction>)> }
 
@@ -167,9 +172,10 @@ impl OrdinaryFeeBudget {
 		let mut history = String::new();
 		(&mut file).take(MAX_HISTORY_BYTES + 1).read_to_string(&mut history)?;
 		ensure!(history.len() as u64 == length, "ordinary fee history changed during load");
-		let (charged, attempts, urgent_charged, urgent) = parse_history(&history, opening.initial_charge(policy)?, policy)?;
+		let (charged, attempts, urgent_charged, urgent, funding, funding_charged) = parse_history(&history, opening.initial_charge(policy)?, policy)?;
+		ensure!(funding.values().all(|s|s.reservation.policy_sha256 == sha256::Hash::hash(&policy_bytes)), "native funding stored policy identity differs");
 		Ok(Self { policy, opening, identity: sha256::Hash::hash(&policy_bytes),
-			ledger: Mutex::new(Ledger { file, charged, length, attempts, urgent_charged, urgent }) })
+			ledger: Mutex::new(Ledger { file, charged, length, attempts, urgent_charged, urgent, funding, funding_charged, native_uncertain: false }) })
 	}
 
 	/// Call after independent witness validation, before construction/recovery.
@@ -179,6 +185,7 @@ impl OrdinaryFeeBudget {
 		ensure!(ledger.attempts > 0 || history_bytes == self.opening.history_prefix_bytes,
 			"initial adoption prefix omits existing signed history");
 		let native_charged = ledger.charged.checked_sub(ledger.urgent_charged)
+			.and_then(|n| n.checked_sub(ledger.funding_charged))
 			.and_then(|n| n.checked_sub(self.opening.external_spent_sat))
 			.and_then(|n| n.checked_sub(self.policy.external_future_reserved_sat)).context("invalid native fee charge")?;
 		ensure!(retained.to_sat() <= native_charged, "ordinary reservations do not cover all retained signed versions");
@@ -244,6 +251,57 @@ impl OrdinaryFeeBudget {
 			.map(|(binding, txs)| (UrgentFeeAttempt { policy_sha256: self.identity, index }, binding, txs))).collect())
 	}
 
+	pub(crate) fn identity(&self) -> sha256::Hash { self.identity }
+	pub(crate) fn opening_digest(&self) -> anyhow::Result<sha256::Hash> { Ok(sha256::Hash::hash(&serde_json::to_vec(&self.opening)?)) }
+	pub(crate) fn mark_native_uncertain(&self) -> anyhow::Result<()> {
+		self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?.native_uncertain = true; Ok(())
+	}
+	pub(crate) fn funding_states(&self) -> anyhow::Result<Vec<FundingState>> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
+		ensure!(ledger.file.metadata()?.len() == ledger.length, "funding fee history changed");
+		Ok(ledger.funding.values().cloned().collect())
+	}
+	pub(crate) fn reserve_funding(&self, candidate: FundingCandidate, maximum: bitcoin::FeeRate) -> anyhow::Result<FundingReservation> {
+		candidate.require_rate(maximum)?;
+		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
+		ensure!(!ledger.native_uncertain, "native funding outcome unknown; original inputs retained");
+		let key = candidate.key();
+		if let Some(old) = ledger.funding.get(&key) {
+			ensure!(old.reservation.candidate == candidate && old.reservation.max_fee_rate == maximum, "native attempt candidate or fee ceiling changed");
+			return Ok(old.reservation.clone());
+		}
+		ensure!(ledger.funding.len() < 4096, "native funding reservation count bound");
+		let points = candidate.transaction()?.input.into_iter().map(|i| i.previous_output).collect::<std::collections::BTreeSet<_>>();
+		for old in ledger.funding.values() {
+			if old.reservation.candidate.transaction()?.input.iter().any(|i| points.contains(&i.previous_output)) {
+				ensure!(old.signed.is_none() && candidate.follows_unsigned_round(&old.reservation.candidate), "native input belongs to a foreign, signed or noncurrent family");
+			}
+		}
+		let fee = candidate.fee()?.to_sat();
+		let charged = discretionary_charge(ledger.charged, fee, ledger.urgent_charged, self.policy)?;
+		let index = ledger.attempts.checked_add(1).context("ordinary attempt count overflow")?;
+		let reservation = FundingReservation { policy_sha256:self.identity,index,candidate,max_fee_rate:maximum };
+		append_entry(&mut ledger,format!("f:{}\n",serde_json::to_string(&reservation)?).as_bytes())?;
+		ledger.charged=charged;ledger.attempts=index;ledger.funding_charged=ledger.funding_charged.checked_add(fee).context("native funding fee overflow")?;
+		ledger.funding.insert(key,FundingState { reservation:reservation.clone(),signed:None });Ok(reservation)
+	}
+	pub(crate) fn bind_funding(&self, reservation: &FundingReservation, tx: &Transaction) -> anyhow::Result<()> {
+		reservation.candidate.verify_signed(tx)?;
+		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
+		ensure!(!ledger.native_uncertain, "native funding outcome unknown; original inputs retained");
+		let key=reservation.candidate.key();
+		let old=ledger.funding.get(&key).context("native funding was never reserved")?;
+		ensure!(old.reservation == *reservation && reservation.policy_sha256 == self.identity, "native funding reservation differs");
+		if let Some(signed)=&old.signed { ensure!(signed == tx,"native signed retry differs");return Ok(()); }
+		for (other,state) in &ledger.funding {
+			if *other != key && state.reservation.candidate.family == reservation.candidate.family {
+				ensure!(state.signed.is_none() && state.reservation.candidate.generation < reservation.candidate.generation,"competing signed/newer native Round intent exists");
+			}
+		}
+		append_entry(&mut ledger,format!("g:{}:{}\n",reservation.index,serde_json::to_string(&bitcoin::consensus::serialize(tx))?).as_bytes())?;
+		ledger.funding.get_mut(&key).expect("checked above").signed=Some(tx.clone());Ok(())
+	}
+
 	/// One immutable identity per external prepare invocation. Failed attempts stay
 	/// charged; exact retained-byte publication never calls this method.
 	pub(crate) fn reserve_ceiling(&self, ceiling: Amount) -> anyhow::Result<OrdinaryFeeAttempt> {
@@ -307,7 +365,8 @@ pub(crate) fn urgent_snapshot(directory: &Path)
 	let raw = read_bounded(&path, MAX_HISTORY_BYTES)?; let after = std::fs::metadata(&path)?;
 	ensure!(before.len() == after.len() && before.modified()? == after.modified()? && raw.len() as u64 == after.len(),
 		"fee history changed during startup observation");
-	let (_, _, _, reservations) = parse_history(std::str::from_utf8(&raw)?, opening.initial_charge(stored.policy)?, stored.policy)?;
+	let (_, _, _, reservations, funding, _) = parse_history(std::str::from_utf8(&raw)?, opening.initial_charge(stored.policy)?, stored.policy)?;
+	ensure!(funding.values().all(|s| s.reservation.policy_sha256 == sha256::Hash::hash(&policy_raw)), "native funding stored policy identity differs");
 	let policy_sha256 = sha256::Hash::hash(&policy_raw);
 	Ok((policy_sha256, reservations.into_iter().map(|(index, r)|
 		(UrgentFeeAttempt { policy_sha256, index }, r.ceiling, r.signed)).collect()))
@@ -376,13 +435,34 @@ fn encode_package(txs: &[Transaction]) -> anyhow::Result<String> {
 }
 
 fn parse_history(history: &str, opening: u64, policy: OrdinaryFeePolicy)
-	-> anyhow::Result<(u64, u64, u64, BTreeMap<u64, UrgentReservation>)>
+	-> anyhow::Result<(u64, u64, u64, BTreeMap<u64, UrgentReservation>, BTreeMap<sha256::Hash, FundingState>, u64)>
 {
 	ensure!(history.is_empty() || history.ends_with('\n'), "ordinary fee history has a torn append");
 	let (mut charged, mut attempts, mut urgent_charged) = (opening, 0_u64, 0_u64);
 	let mut urgent = BTreeMap::<u64, UrgentReservation>::new();
+	let mut funding = BTreeMap::<sha256::Hash, FundingState>::new();let mut funding_charged=0u64;
 	for line in history.lines() {
-		if let Some(record) = line.strip_prefix("u:") {
+		if let Some(raw) = line.strip_prefix("f:") {
+			let record: FundingReservation=serde_json::from_str(raw)?;
+			ensure!(serde_json::to_string(&record)? == raw && record.index == attempts+1 && funding.len()<4096,"noncanonical native funding reservation");
+			let fee=record.fee()?.to_sat();
+			let points=record.candidate.transaction()?.input.into_iter().map(|i|i.previous_output).collect::<std::collections::BTreeSet<_>>();
+			for old in funding.values() { if old.reservation.candidate.transaction()?.input.iter().any(|i|points.contains(&i.previous_output)) {
+				ensure!(old.signed.is_none() && record.candidate.follows_unsigned_round(&old.reservation.candidate),"retained native funding input/family conflict");
+			} }
+			charged=checked_charge(charged,fee,policy)?;funding_charged=funding_charged.checked_add(fee).context("native funding charge overflow")?;attempts+=1;
+			ensure!(funding.insert(record.candidate.key(),FundingState { reservation:record,signed:None }).is_none(),"duplicate native funding attempt");
+		} else if let Some(raw)=line.strip_prefix("g:") {
+			let (index,bytes)=raw.split_once(':').context("native signed funding binding missing")?;let index=index.parse::<u64>()?;
+			let raw: Vec<u8>=serde_json::from_str(bytes)?;let tx:Transaction=bitcoin::consensus::deserialize(&raw)?;
+			ensure!(line==format!("g:{index}:{}",serde_json::to_string(&bitcoin::consensus::serialize(&tx))?),"noncanonical native signed binding");
+			let candidate=funding.values().find(|s|s.reservation.index==index).context("native signed binding was never reserved")?.reservation.candidate.clone();
+			ensure!(funding.values().filter(|s|s.reservation.index!=index).all(|s|
+				s.reservation.candidate.family!=candidate.family || (s.signed.is_none() && s.reservation.candidate.generation<candidate.generation)),
+				"retained competing native funding family binding");
+			let state=funding.values_mut().find(|s|s.reservation.index==index).context("native signed binding was never reserved")?;
+			ensure!(state.signed.is_none(),"duplicate native signed binding");state.reservation.candidate.verify_signed(&tx)?;state.signed=Some(tx);
+		} else if let Some(record) = line.strip_prefix("u:") {
 			let (index, amount) = record.split_once(':').context("invalid urgent reservation")?;
 			let index = index.parse::<u64>()?; let amount = amount.parse::<u64>()?;
 			ensure!(line == format!("u:{index}:{amount}") && index == urgent.len() as u64 + 1, "noncanonical urgent index/amount");
@@ -411,7 +491,7 @@ fn parse_history(history: &str, opening: u64, policy: OrdinaryFeePolicy)
 		}
 	}
 	require_urgent_headroom(charged, urgent_charged, policy)?;
-	Ok((charged, attempts, urgent_charged, urgent))
+	Ok((charged, attempts, urgent_charged, urgent, funding, funding_charged))
 }
 
 #[cfg(test)]
@@ -682,4 +762,22 @@ mod tests {
 		std::fs::remove_dir_all(dir).unwrap();
 	}
 
+
+	#[test]
+	fn early_funding_same_retry_free_later_round_full_fee_and_signed_family_park() {
+		use super::super::ordinary_funding::test_candidate;
+		let dir=directory();let (policy,history)=adopted(&dir);let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();let rate=bitcoin::FeeRate::from_sat_per_vb(100).unwrap();
+		let (first,_)=test_candidate(0,500);let permit=budget.reserve_funding(first.clone(),rate).unwrap();let bytes=std::fs::read(dir.join(BUDGET_FILE)).unwrap();assert_eq!(budget.reserve_funding(first.clone(),rate).unwrap(),permit);assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(),bytes);
+		let (mut changed,_)=test_candidate(0,501);assert!(budget.reserve_funding(changed.clone(),rate).is_err());changed.generation=1;let permit2=budget.reserve_funding(changed,rate).unwrap();assert_eq!(permit2.index,permit.index+1);
+		let (second,signed)=test_candidate(2,600);let permit3=budget.reserve_funding(second,rate).unwrap();budget.bind_funding(&permit3,&signed).unwrap();let bound=std::fs::read(dir.join(BUDGET_FILE)).unwrap();budget.bind_funding(&permit3,&signed).unwrap();assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(),bound);
+		assert!(budget.reserve_funding(test_candidate(3,700).0,rate).is_err());
+		assert!(budget.require_retained_fees(Amount::from_sat(4_986),Amount::from_sat(4_985),history.len()as u64).is_err(),"Round funding fees cannot cover a missing direct debit");
+		drop(budget);let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();assert_eq!(budget.funding_states().unwrap().len(),3);assert!(budget.reserve_funding(test_candidate(3,700).0,rate).is_err());drop(budget);std::fs::remove_dir_all(dir).unwrap();
+	}
+	#[test]
+	fn early_native_exhaustion_and_unknown_never_refill_or_authorize() {
+		use super::super::ordinary_funding::test_candidate;
+		let dir=directory();let (policy,_)=adopted(&dir);let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();let rate=bitcoin::FeeRate::from_sat_per_vb(100).unwrap();budget.reserve_ceiling(Amount::from_sat(19_136)).unwrap();let before=std::fs::read(dir.join(BUDGET_FILE)).unwrap();assert!(budget.reserve_funding(test_candidate(0,500).0,rate).is_err());assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(),before);drop(budget);
+		let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();assert!(budget.reserve_funding(test_candidate(0,500).0,rate).is_err());budget.mark_native_uncertain().unwrap();assert!(budget.reserve_funding(test_candidate(1,500).0,rate).is_err());budget.reserve_urgent_ceiling(Amount::from_sat(1000)).unwrap();drop(budget);std::fs::remove_dir_all(dir).unwrap();
+	}
 }

@@ -120,6 +120,114 @@ struct ExchangeEvidence {
 	inputs: Vec<VtxoId>,
 }
 
+struct ExchangeInputFacts { id: VtxoId, forfeited: bool, missing: bool, exited: bool }
+
+fn summarize_exchange(hash: UnlockHash, issued: bool, complete: bool,
+	inputs: Vec<ExchangeInputFacts>,
+) -> ExchangeEvidence {
+	let any_forfeited = inputs.iter().any(|input| input.forfeited);
+	let all_forfeited = !inputs.is_empty() && inputs.iter().all(|input| input.forfeited);
+	let missing = inputs.is_empty() || inputs.iter().any(|input| input.missing) || (complete && !all_forfeited);
+	ExchangeEvidence { hash, issued, complete: complete && all_forfeited && !missing,
+		partial_forfeits: any_forfeited && !(complete && all_forfeited),
+		exited: inputs.iter().any(|input| input.exited), missing,
+		inputs: inputs.into_iter().map(|input| input.id).collect() }
+}
+
+fn required_nullable<'de, D: serde::Deserializer<'de>, T: serde::Deserialize<'de>>(raw: D) -> Result<Option<T>,D::Error> {
+	<Option<T> as serde::Deserialize>::deserialize(raw)
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CapturedExchangeParticipation {
+	pub id: i64,
+	pub unlock_hash: String,
+	#[serde(deserialize_with = "required_nullable")]
+	pub round_id: Option<Txid>,
+	#[serde(deserialize_with = "required_nullable")]
+	pub forfeited_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CapturedExchangeSource {
+	pub vtxo_id: VtxoId,
+	#[serde(deserialize_with = "required_nullable")]
+	pub confirmed_height: Option<i32>,
+	#[serde(deserialize_with = "required_nullable")]
+	pub offboarded_in: Option<Txid>,
+	#[serde(deserialize_with = "required_nullable")]
+	pub oor_spent_txid: Option<Txid>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CapturedExchangeInput {
+	pub participation_id: i64,
+	pub vtxo_id: VtxoId,
+	#[serde(deserialize_with = "required_nullable")]
+	pub signed_forfeit_tx: Option<Vec<u8>>,
+	#[serde(deserialize_with = "required_nullable")]
+	pub source: Option<CapturedExchangeSource>,
+}
+
+/// Persisted dependency observations only, never Operator/paid/refund/retirement
+/// authorization. Even an unfinished exchange with no pending parse error still
+/// requires its complete physical retirement; it is not unencumbered principal.
+pub(crate) struct CapturedExchangeClosure {
+	pub unlock_hash: UnlockHash,
+	pub inputs: Vec<VtxoId>,
+	pub round_assigned: bool,
+	pub completion_fields_present: bool,
+	pub requires_complete_exchange_closure: bool,
+	pub partial_forfeits: bool,
+	pub exited: bool,
+	pub missing: bool,
+	pub pending: Option<OwnershipPending>,
+}
+
+/// Use the SAME native aggregation as exchange_evidence. The captured caller
+/// must separately prove the complete original same-RR membership, actual Full
+/// originals/forfeit signatures, linked Round rights, chain and current state.
+/// No preimage is accepted, returned or inferred to be a signed forfeit.
+pub(crate) fn captured_exchange_closure(participation: &CapturedExchangeParticipation,
+	inputs: &[CapturedExchangeInput], limit: usize,
+) -> anyhow::Result<CapturedExchangeClosure> {
+	ensure!(participation.id > 0 && limit > 0 && limit <= crate::payout_witness::DIRECT_HISTORY_LIMITS.max_rows
+		&& inputs.len() <= limit, "captured complete exchange exceeds native source bound");
+	let mut ids = BTreeSet::new(); let mut bytes = 0usize;
+	for input in inputs {
+		ensure!(input.participation_id == participation.id && ids.insert(input.vtxo_id),
+			"captured exchange input association is foreign or repeated");
+		if let Some(raw) = &input.signed_forfeit_tx {
+			bytes = bytes.checked_add(raw.len()).context("captured exchange original bytes overflow")?;
+			ensure!(raw.len() <= 4 * 1024 * 1024 && bytes <= 16 * 1024 * 1024,
+				"complete captured original forfeits exceed native byte bound");
+		}
+		if let Some(source) = &input.source {
+			ensure!(source.vtxo_id == input.vtxo_id && source.confirmed_height.is_none_or(|height| height >= 0),
+				"captured exchange original source identity or height differs");
+		}
+	}
+	for input in inputs {
+		if let Some(raw) = &input.signed_forfeit_tx {
+			let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(raw)?;
+			ensure!(bitcoin::consensus::serialize(&tx) == *raw && !tx.input.is_empty()
+				&& tx.input.iter().all(|point| !point.witness.is_empty()), "captured signed-forfeit original body is malformed");
+		}
+	}
+	let hash = UnlockHash::from_str(&participation.unlock_hash)?;
+	let evidence = summarize_exchange(hash, participation.round_id.is_some(), participation.forfeited_at.is_some(),
+		inputs.iter().map(|input| ExchangeInputFacts { id:input.vtxo_id, forfeited:input.signed_forfeit_tx.is_some(),
+			missing:input.source.is_none(), exited:input.source.as_ref().is_some_and(|source| source.confirmed_height.is_some()
+				|| source.offboarded_in.is_some() || source.oor_spent_txid.is_some()) }).collect());
+	let pending = evidence.pending();
+	Ok(CapturedExchangeClosure { unlock_hash:evidence.hash,inputs:evidence.inputs,round_assigned:evidence.issued,
+		completion_fields_present:evidence.complete,requires_complete_exchange_closure:!evidence.complete,
+		partial_forfeits:evidence.partial_forfeits,exited:evidence.exited,missing:evidence.missing,pending })
+}
+
 impl ExchangeEvidence {
 	fn dependency(&self, original: bool) -> RetirementDependency {
 		RetirementDependency { source: DependencySource::Exchange(self.hash), ids: self.inputs.clone(),
@@ -346,18 +454,11 @@ impl Tx<'_> {
 			FROM round_part_input i LEFT JOIN vtxo v ON v.vtxo_id=i.vtxo_id WHERE i.participation_id=$1 ORDER BY i.vtxo_id LIMIT $2",
 			&[&row.get::<_, i64>("id"), &limit_plus_one]).await?;
 		ensure!(inputs.len() <= limit, "complete exchange closure exceeds dependency budget");
-		let complete: bool = row.get("complete");
-		let any_forfeited = inputs.iter().any(|r| r.get::<_, bool>("forfeited"));
-		let all_forfeited = !inputs.is_empty() && inputs.iter().all(|r| r.get::<_, bool>("forfeited"));
-		let missing = inputs.is_empty() || inputs.iter().any(|r| r.get::<_, bool>("missing")) || (complete && !all_forfeited);
-		Ok(ExchangeEvidence {
-			hash: UnlockHash::from_str(row.get("unlock_hash"))?, issued: row.get("issued"),
-			complete: complete && all_forfeited && !missing,
-			partial_forfeits: any_forfeited && !(complete && all_forfeited),
-			exited: inputs.iter().any(|r| r.get::<_, Option<bool>>("exited").unwrap_or(false)),
-			missing,
-			inputs: inputs.iter().map(|r| VtxoId::from_str(r.get("vtxo_id"))).collect::<Result<_, _>>()?,
-		})
+		let facts = inputs.iter().map(|input| Ok(ExchangeInputFacts {
+			id:VtxoId::from_str(input.get("vtxo_id"))?,forfeited:input.get("forfeited"),missing:input.get("missing"),
+			exited:input.get::<_,Option<bool>>("exited").unwrap_or(false),
+		})).collect::<anyhow::Result<Vec<_>>>()?;
+		Ok(summarize_exchange(UnlockHash::from_str(row.get("unlock_hash"))?,row.get("issued"),row.get("complete"),facts))
 	}
 
 	async fn receive_ownership(&self, mut decision: OwnershipDecision, fact: &BackingVtxoFact, vtxo: &Vtxo, context: &OwnershipContext<'_>) -> anyhow::Result<OwnershipDecision> {
@@ -508,4 +609,83 @@ pub(super) fn is_padding(vtxo: &ark::ServerVtxo<ark::vtxo::Full>) -> bool {
 		&& policy.user_pubkey().to_string() == "02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c"
 		&& vtxo.unlock_hash().is_some_and(|h| h.to_string() == "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 		&& vtxo.amount() == Amount::from_sat(330)
+}
+
+#[cfg(test)]
+mod captured_exchange_tests {
+	use super::*;
+	use bitcoin::hashes::Hash;
+	fn fixture() -> (CapturedExchangeParticipation,Vec<CapturedExchangeInput>) {
+		let id=VtxoId::from(bitcoin::OutPoint::new(Txid::from_byte_array([7;32]),0));
+		(CapturedExchangeParticipation {id:7,unlock_hash:UnlockHash::from_byte_array([9;32]).to_string(),
+			round_id:Some(Txid::from_byte_array([8;32])),forfeited_at:None},
+			vec![CapturedExchangeInput {participation_id:7,vtxo_id:id,signed_forfeit_tx:None,
+				source:Some(CapturedExchangeSource {vtxo_id:id,confirmed_height:None,offboarded_in:None,oor_spent_txid:None})}])
+	}
+	fn retained_signed_body(point: VtxoId) -> Vec<u8> {
+		// Canonical synthetic body only. No signature/forfeit/ownership authority.
+		bitcoin::consensus::serialize(&bitcoin::Transaction {version:bitcoin::transaction::Version::TWO,
+			lock_time:bitcoin::absolute::LockTime::ZERO,input:vec![bitcoin::TxIn {previous_output:point.to_point(),
+				script_sig:bitcoin::ScriptBuf::new(),sequence:bitcoin::Sequence::ZERO,
+				witness:bitcoin::Witness::from_slice(&[vec![1;64]])}],
+			output:vec![bitcoin::TxOut {value:Amount::from_sat(10_000),script_pubkey:bitcoin::ScriptBuf::new()}]})
+	}
+	#[test]
+	fn captured_exchange_keeps_unfinished_original_dependency_instead_of_free_operator_principal() {
+		let (mut participation,mut inputs)=fixture();
+		let observed=captured_exchange_closure(&participation,&inputs,10).unwrap();
+		assert!(observed.round_assigned && !observed.completion_fields_present && observed.requires_complete_exchange_closure);
+		assert_eq!(observed.pending,None);
+		assert_eq!(observed.inputs,vec![inputs[0].vtxo_id]);
+		assert_eq!(observed.unlock_hash,participation.unlock_hash.parse().unwrap());
+		inputs[0].signed_forfeit_tx=Some(retained_signed_body(inputs[0].vtxo_id));
+		let partial=captured_exchange_closure(&participation,&inputs,10).unwrap();
+		assert!(partial.partial_forfeits && partial.requires_complete_exchange_closure);
+		assert_eq!(partial.pending,Some(OwnershipPending::PartialForfeits(observed.unlock_hash)));
+		participation.forfeited_at=Some(chrono::Utc::now());
+		let retained=captured_exchange_closure(&participation,&inputs,10).unwrap();
+		assert!(retained.completion_fields_present && !retained.requires_complete_exchange_closure);
+		assert!(!retained.missing && !retained.partial_forfeits);
+		// This records native persisted presence only, not valid forfeit signatures
+		// or physical retirement; the return type has no owner/payment capability.
+	}
+	#[test]
+	fn captured_exchange_missing_partial_unissued_or_exited_states_remain_explicit() {
+		for which in 0..5 {
+			let (mut participation,mut inputs)=fixture();
+			let hash:UnlockHash=participation.unlock_hash.parse().unwrap();
+			let expected=match which {
+				0 => {inputs.clear();OwnershipPending::MissingExchange},
+				1 => {inputs[0].source=None;OwnershipPending::MissingExchange},
+				2 => {participation.round_id=None;OwnershipPending::ExchangeNotIssued(hash)},
+				3 => {participation.forfeited_at=Some(chrono::Utc::now());OwnershipPending::MissingExchange},
+				_ => {inputs[0].source.as_mut().unwrap().confirmed_height=Some(1);OwnershipPending::ExchangeCancellation(hash)},
+			};
+			let observed=captured_exchange_closure(&participation,&inputs,10).unwrap();
+			assert!(!observed.completion_fields_present && observed.requires_complete_exchange_closure);
+			assert_eq!(observed.pending,Some(expected));
+			if which==4 {assert!(observed.exited);}
+		}
+	}
+	#[test]
+	fn captured_exchange_refuses_missing_nullable_columns_foreign_join_duplicate_or_malformed_originals() {
+		let (participation,inputs)=fixture();
+		let mut raw=serde_json::to_value(&participation).unwrap();raw.as_object_mut().unwrap().remove("round_id");
+		assert!(serde_json::from_value::<CapturedExchangeParticipation>(raw).is_err());
+		for field in ["source","signed_forfeit_tx"] {
+			let mut raw=serde_json::to_value(&inputs[0]).unwrap();raw.as_object_mut().unwrap().remove(field);
+			assert!(serde_json::from_value::<CapturedExchangeInput>(raw).is_err());
+		}
+		for which in 0..5 {
+			let mut changed=inputs.clone();
+			match which {
+				0 => changed[0].participation_id+=1,
+				1 => changed.push(changed[0].clone()),
+				2 => changed[0].signed_forfeit_tx=Some(vec![]),
+				3 => changed[0].source.as_mut().unwrap().confirmed_height=Some(-1),
+				_ => changed[0].source.as_mut().unwrap().vtxo_id=VtxoId::from(bitcoin::OutPoint::new(Txid::from_byte_array([3;32]),0)),
+			}
+			assert!(captured_exchange_closure(&participation,&changed,10).is_err());
+		}
+	}
 }

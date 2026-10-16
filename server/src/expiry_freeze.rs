@@ -208,7 +208,7 @@ impl Server {
 			ensure!(bcd::tip(&self.bitcoind).await? == tip, "expiry node tip changed before freeze; retry the complete cut");
 			let context = OwnershipContext { tip: tip.height.to_u32(), grace: self.config.expiry_payout.grace_blocks,
 				max_dependencies: budget.max_rows, server_pubkey: self.server_pubkey, funding: &funding, canceled_receives: &canceled };
-			t.freeze_expiry_sources(&roots, &terminals, &residuals, &context, &sends, self.config.network, budget).await
+			t.freeze_expiry_sources_at_tip(&roots, &terminals, &residuals, &context, &sends, self.config.network, budget, Some(tip)).await
 		}).await;
 		if result.is_ok() {
 			for hash in &hashes { self.lightning_manager.notify_payment_update(*hash); }

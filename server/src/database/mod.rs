@@ -12,6 +12,7 @@ pub mod carrier_snapshot;
 pub mod expiry_carrier;
 pub(crate) mod direct_delivery;
 pub mod expiry_freeze;
+mod fresh_hark_expiry;
 mod expiry_route;
 pub mod frozen_expiry;
 pub mod expiry_ownership;

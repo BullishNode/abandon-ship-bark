@@ -691,9 +691,16 @@ impl Server {
 			t.get_htlc_subscription_by_payment_hash(payment_hash).await
 		).await?;
 		match receive {
-			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady => {
+			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady
+				|| (sub.status == LightningHtlcSubscriptionStatus::Canceled && !sub.htlc_vtxos.is_empty()) => {
+				// Cancellation refuses cooperative claims; it does not retire
+				// previously granted unilateral rights or their physical backing.
 				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
 					return Ok(SendRefundEvidence::Unresolved(reason));
+				}
+				// Preserve the existing canceled-receive open-attempt veto.
+				if sub.status == LightningHtlcSubscriptionStatus::Canceled && open {
+					return Ok(SendRefundEvidence::Unresolved("the payment attempt is not concluded".into()));
 				}
 			},
 			_ if open => return Ok(SendRefundEvidence::Unresolved("the payment attempt is not concluded".into())),

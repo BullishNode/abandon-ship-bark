@@ -51,6 +51,8 @@ pub enum OperatorRecovery {
 	/// Unused operator pool principal, including authenticated allocation change.
 	UnusedPool,
 	CompletedExchange(UnlockHash),
+	/// Reserved operator principal, retired atomically with the sole replacement payout.
+	SameCarrierFreshExchange(UnlockHash),
 	PaidLightningSend(PaymentHash),
 	UnpaidReceive(PaymentHash),
 }
@@ -500,7 +502,7 @@ fn validate_source(vtxo: &Vtxo, context: &OwnershipContext<'_>) -> anyhow::Resul
 	Ok(None)
 }
 
-fn is_padding(vtxo: &ark::ServerVtxo<ark::vtxo::Full>) -> bool {
+pub(super) fn is_padding(vtxo: &ark::ServerVtxo<ark::vtxo::Full>) -> bool {
 	let ServerVtxoPolicy::User(policy) = vtxo.policy() else { return false; };
 	policy.as_pubkey().is_some()
 		&& policy.user_pubkey().to_string() == "02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c"

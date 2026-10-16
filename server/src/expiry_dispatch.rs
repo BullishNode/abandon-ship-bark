@@ -112,15 +112,16 @@ impl Server {
 			*cursor = Some(anchor.clone()); // A blocked/oversized cut advances the fair cursor.
 			let result = async {
 				let roots = self.db.read(async |t| {
+                    let closure_anchors=t.fresh_hark_expiry_anchors(anchor).await?;
 					let bound = i64::try_from(LIMITS.max_rows)?.checked_add(1).context("root budget overflow")?;
 					let sql = format!("WITH inventory AS ({INVENTORY}), bounded AS (
-						SELECT vtxo_id, anchor_point, expiry, vtxo FROM inventory WHERE anchor_point=$1 ORDER BY vtxo_id LIMIT $2
+						SELECT vtxo_id, anchor_point, expiry, vtxo FROM inventory WHERE anchor_point=ANY($1) ORDER BY vtxo_id LIMIT $2
 					), sized AS (
 						SELECT vtxo_id, anchor_point, expiry, vtxo, count(*) OVER () AS row_count,
 							sum(octet_length(vtxo)::bigint) OVER ()::bigint AS byte_count FROM bounded
 					) SELECT vtxo_id, anchor_point, expiry, row_count, byte_count,
 						CASE WHEN row_count < $2 AND byte_count <= $3 THEN vtxo ELSE NULL END AS vtxo FROM sized");
-					let rows = t.query(&sql, &[&anchor, &bound, &i64::try_from(LIMITS.max_serialized_bytes)?]).await?;
+					let rows = t.query(&sql, &[&closure_anchors, &bound, &i64::try_from(LIMITS.max_serialized_bytes)?]).await?;
 					let mut roots = Vec::new();
 					for row in rows {
 						ensure!(usize::try_from(row.get::<_, i64>("row_count"))? <= LIMITS.max_rows

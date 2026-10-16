@@ -55,6 +55,15 @@ impl NativeFeeEpoch {
 			config.original_opening_sha256, &source, &logs).await
 	}
 
+	/// Partial urgent recovery is an unconditional HOLD, including setup without
+	/// an opening config. Both actual startup and activation use this SAME guard.
+	pub(crate) async fn require_no_unreconciled_urgent(db: &Db, budget: &OrdinaryFeeBudget) -> anyhow::Result<()> {
+		budget.require_no_unreconciled_urgent()?;
+		ensure!(!db.read(async |t| Ok(t.query_one("SELECT EXISTS(SELECT 1 FROM native_urgent_attempt) OR EXISTS(SELECT 1 FROM native_urgent_input)", &[])
+			.await?.get::<_, bool>(0))).await?, "retained urgent SQL source requires complete original package/input/nursery reconciliation before activation");
+		Ok(())
+	}
+
 	/// Paused startup, before sharing the budget Arc or starting any worker.
 	/// A failed/unknown COMMIT retains original files/debits/input intents. It
 	/// never initializes a new ledger, lowers prior charges or reconstructs VTXOs.
@@ -64,9 +73,7 @@ impl NativeFeeEpoch {
 	) -> anyhow::Result<Self> {
 		ensure!(raw.len() <= 4 * 1024 * 1024 && sha256::Hash::hash(raw) == expected,
 			"native fee activation original bytes/hash differ");
-		budget.require_no_unreconciled_urgent()?;
-		ensure!(!db.read(async |t| Ok(t.query_one("SELECT EXISTS(SELECT 1 FROM native_urgent_attempt) OR EXISTS(SELECT 1 FROM native_urgent_input)", &[])
-			.await?.get::<_, bool>(0))).await?, "retained urgent SQL source requires complete original package/input/nursery reconciliation before activation");
+		Self::require_no_unreconciled_urgent(db,budget).await?;
 		let genesis = core.get_block_hash(0).await?;
 		ensure!(genesis == bitcoin::constants::genesis_block(network).block_hash(),
 			"native fee activation actual Core genesis differs");

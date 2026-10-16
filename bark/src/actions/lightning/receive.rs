@@ -1096,7 +1096,7 @@ mod invoice_response_network_tests {
 			(Currency::Simnet, [false, false, false, false, false]),
 		] {
 			let key = SecretKey::from_slice(&[2; 32]).unwrap();
-			let invoice = InvoiceBuilder::new(currency).description_hash(sha256::Hash::hash(b"core currency control"))
+			let invoice = InvoiceBuilder::new(currency.clone()).description_hash(sha256::Hash::hash(b"core currency control"))
 				.payment_hash(sha256::Hash::hash(b"core currency test-only payment hash"))
 				.payment_secret(PaymentSecret([42; 32]))
 				.duration_since_epoch(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap())

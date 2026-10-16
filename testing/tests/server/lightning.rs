@@ -700,6 +700,7 @@ impl captaind::proxy::ArkRpcProxy for HoldClaim {
 /// invoice-expiry sweep used to leave behind, so only the receive side
 /// decides whether a revoke goes through.
 struct ParkedReceive {
+	hold_client: hold::hold_client::HoldClient<tonic::transport::Channel>,
 	srv: Arc<Captaind>,
 	payer: Wallet,
 	payee: Arc<Bark>,
@@ -707,6 +708,32 @@ struct ParkedReceive {
 	htlc_recv_expiry: BlockHeight,
 	release: Arc<tokio::sync::Notify>,
 	payee_task: tokio::task::JoinHandle<anyhow::Result<()>>,
+	// Owning daemons must outlive the parked operation; a gRPC channel does not.
+	_lightning: LightningPaymentSetup,
+}
+
+fn direct_receive_watchman_config(cfg: &mut server::config::watchmand::Config) {
+	cfg.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+		history_dir: cfg.data_dir.parent().unwrap().join("server"),
+		max_miner_fee: sat(10_000),
+	});
+	cfg.fee_estimator.max_fee_rate = Some(bitcoin::FeeRate::from_sat_per_vb(50).unwrap());
+}
+
+async fn persisted_watchman_height(srv: &Captaind) -> Option<BlockHeight> {
+	let postgres = srv.config().postgres.clone();
+	let db = Db::connect(&postgres).await.unwrap();
+	db.read(async |t| Ok(t.get_highest_block(BlockTable::Watchmand).await?.map(|block| block.height)))
+		.await.unwrap()
+}
+
+fn assert_direct_receive_watchman(srv: &Captaind) {
+	let history_dir = srv.config().data_dir.clone();
+	let cfg = srv.watchmand().config();
+	let direct = cfg.watchman.direct_expiry.as_ref()
+		.expect("control must run the direct watchman");
+	assert_eq!(direct.history_dir, history_dir);
+	assert_eq!(direct.max_miner_fee, sat(10_000));
 }
 
 impl ParkedReceive {
@@ -715,29 +742,37 @@ impl ParkedReceive {
 	}
 
 	async fn setup_with_direct_watchman(ctx: &TestContext, direct: bool) -> ParkedReceive {
-		let lightning = ctx.new_lightning_setup("lightningd").await;
+		Self::setup_with_attempt(ctx, direct, true, true).await
+	}
 
-		// The watchman tells the server the HTLC-recv vtxos expired unexited.
-		let srv = ctx.captaind("server").lightningd(&lightning.internal).watchmand().cfg(move |cfg| {
+	async fn setup_with_attempt(
+		ctx: &TestContext, direct: bool, start_watchman: bool, force_failed: bool,
+	) -> ParkedReceive {
+		let lightning = ctx.new_lightning_setup("lightningd").await;
+		let hold_client = lightning.internal.hold_client().await;
+
+		// Legacy callers keep their failed attempt; the new background controls
+		// leave the actual Requested attempt untouched and control the real watcher.
+		let mut builder = ctx.captaind("server").lightningd(&lightning.internal).cfg(move |cfg| {
 			cfg.invoice_check_interval = Duration::from_secs(1);
 			if direct {
 				cfg.direct_expiry.enabled = true;
 				cfg.direct_expiry.interval = Duration::from_secs(1);
 			}
-		}).watchmand_cfg(move |cfg| {
-			if direct {
-				cfg.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
-					history_dir: cfg.data_dir.parent().unwrap().join("server"),
-					max_miner_fee: sat(10_000),
-				});
-				cfg.fee_estimator.max_fee_rate = Some(bitcoin::FeeRate::from_sat_per_vb(50).unwrap());
-			}
-		}).create().await;
+		});
+		if direct { builder = builder.bitcoind(ctx.bitcoind_arc()); }
+		if start_watchman {
+			builder = if direct { builder.watchmand().watchmand_cfg(direct_receive_watchman_config) }
+				else { builder.watchmand() };
+		}
+		let srv = builder.create().await;
 		if direct {
 			assert!(srv.config().direct_expiry.enabled);
 			assert!(!srv.config().expiry_payout.enabled);
 			let history_dir = srv.config().data_dir.clone();
-			assert_eq!(srv.watchmand().config().watchman.direct_expiry.as_ref().unwrap().history_dir, history_dir);
+			if start_watchman {
+				assert_eq!(srv.watchmand().config().watchman.direct_expiry.as_ref().unwrap().history_dir, history_dir);
+			}
 		}
 		ctx.fund_captaind(&srv, btc(10)).await;
 		srv.wait_for_vtxopool(ctx).await;
@@ -775,17 +810,19 @@ impl ParkedReceive {
 			.max()
 			.expect("the payee was granted HTLC-recv vtxos");
 
-		let db = Db::connect(&srv.config().postgres.clone()).await.unwrap();
-		db.write(async |t| {
-			t.query(
-				"UPDATE lightning_payment_attempt SET status = 'failed', updated_at = NOW() WHERE payment_hash = $1",
-				&[&payment_hash.to_string()],
-			).await?;
-			Ok(())
-		}).await.unwrap();
+		if force_failed {
+			let db = Db::connect(&srv.config().postgres.clone()).await.unwrap();
+			db.write(async |t| {
+				t.query(
+					"UPDATE lightning_payment_attempt SET status = 'failed', updated_at = NOW() WHERE payment_hash = $1",
+					&[&payment_hash.to_string()],
+				).await?;
+				Ok(())
+			}).await.unwrap();
+		}
 
 		let payer = bark_payer.client().await;
-		ParkedReceive { srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task }
+		ParkedReceive { hold_client, srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task, _lightning: lightning }
 	}
 
 	async fn revoke(&self) -> Result<(), tonic::Status> {
@@ -829,6 +866,133 @@ impl ParkedReceive {
 			.expect_err("claim should be refused after the revoke");
 		assert_eq!(self.payee.spendable_balance().await, Amount::ZERO);
 	}
+}
+
+/// This checks the background cancellation boundary only. It neither requests a
+/// cooperative refund nor claims that the granted backing was physically retired.
+async fn direct_background_cancel_watch_boundary(ctx: &TestContext, missing: bool) {
+	let mut parked = ParkedReceive::setup_with_attempt(ctx, true, !missing, false).await;
+	let db = Db::connect(&parked.srv.config().postgres.clone()).await.unwrap();
+	let hash = parked.payment_hash;
+	assert_eq!(lightning_subscription_status(&db, hash).await.as_deref(), Some("htlcs-ready"));
+	assert_eq!(lightning_attempt_status(&db, hash).await.as_deref(), Some("requested"));
+	// Prove this is the actual attempt initiated against this exact subscription.
+	let association = db.read(async |t| {
+		let sub = t.get_htlc_subscription_by_payment_hash(hash).await?.unwrap();
+		let attempt = t.get_open_lightning_payment_attempt_by_subscription_id(sub.id).await?.unwrap();
+		assert_eq!(attempt.payment_hash, hash);
+		assert_eq!(attempt.lightning_htlc_subscription_id, Some(sub.id));
+		assert_eq!(attempt.final_amount_msat, None); // no CLN send for intra-Ark
+		Ok((sub.id, attempt.id))
+	}).await.unwrap();
+	let original = direct_background_grant_bodies(&parked.srv, hash).await;
+	assert!(!original.is_empty());
+	assert!(parked.srv.htlc_vtxos(hash).await.iter()
+		.any(|h| h.direction() == HtlcDirection::Outgoing && h.amount() > Amount::ZERO));
+	// Actual intra-Ark admission cancels the CLN invoice immediately while
+	// retaining the Accepted/HtlcsReady SQL subscription and Requested attempt.
+	// Watcher controls below prove those durable state transitions, not a
+	// later CLN invoice transition that this payment route never performs.
+	assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Cancelled);
+	assert!(!is_preimage_recorded(&db, hash).await);
+	let old_tip = if missing {
+		assert_eq!(persisted_watchman_height(&parked.srv).await, None);
+		None
+	} else {
+		assert_direct_receive_watchman(&parked.srv);
+		let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		parked.srv.watchmand().wait_for_sync_height(tip).await;
+		parked.srv.watchmand().stop().await.unwrap();
+		assert_eq!(persisted_watchman_height(&parked.srv).await, Some(tip));
+		assert!(tip <= parked.htlc_recv_expiry);
+		Some(tip)
+	};
+	let mut canceled = parked.srv.subscribe_log::<LightningReceiveCanceled>();
+	let before = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let tip = ctx.generate_blocks(parked.htlc_recv_expiry.to_u32() + 1 - before.to_u32()).await;
+	parked.srv.wait_for_sync_height(tip).await;
+	assert!(tip > parked.htlc_recv_expiry);
+	// Three seconds cover multiple configured one-second checks. The later real
+	// cancellation is the positive control for a functioning background worker.
+	for _ in 0..15 {
+		assert_eq!(persisted_watchman_height(&parked.srv).await, old_tip);
+		assert_eq!(lightning_subscription_status(&db, hash).await.as_deref(), Some("htlcs-ready"));
+		assert_eq!(lightning_attempt_status(&db, hash).await.as_deref(), Some("requested"));
+		assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Cancelled);
+		assert!(!is_preimage_recorded(&db, hash).await);
+		assert_eq!(direct_background_grant_bodies(&parked.srv, hash).await, original);
+		tokio::time::sleep(Duration::from_millis(200)).await;
+	}
+	if missing {
+		let watchman = ctx.watchmand("server-watchmand").bitcoind(ctx.bitcoind_arc())
+			.cfg(direct_receive_watchman_config).create(&parked.srv).await;
+		parked.srv.attach_watchmand(watchman);
+	} else {
+		parked.srv.watchmand().start().await.unwrap();
+	}
+	assert_direct_receive_watchman(&parked.srv);
+	parked.srv.watchmand().wait_for_sync_height(tip).await;
+	assert_eq!(persisted_watchman_height(&parked.srv).await, Some(tip));
+	let log = async {
+		loop {
+			let log = canceled.recv().await.expect("cancellation log stream closed");
+			if log.payment_hash == hash { break log; }
+		}
+	}.wait_millis(30_000).await;
+	assert_eq!(log.reason, "htlc-recv vtxos expired");
+	wait_for_subscription_status(&db, hash, "canceled").await;
+	wait_for_attempt_status(&db, hash, "failed").await;
+	assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Cancelled);
+	assert!(!is_preimage_recorded(&db, hash).await);
+	assert_eq!(direct_background_grant_bodies(&parked.srv, hash).await, original);
+	let terminal = db.read(async |t| {
+		let sub = t.get_htlc_subscription_by_payment_hash(hash).await?.unwrap();
+		let rows = t.query("SELECT id, lightning_htlc_subscription_id, final_amount_msat FROM lightning_payment_attempt WHERE payment_hash = $1", &[&hash.to_string()]).await?;
+		assert_eq!(rows.len(), 1);
+		Ok((sub.id, rows[0].get::<_, i64>(0), rows[0].get::<_, Option<i64>>(1), rows[0].get::<_, Option<i64>>(2)))
+	}).await.unwrap();
+	assert_eq!(terminal, (association.0, association.1, Some(association.0), None));
+	// Releasing the originally parked cooperative claim must not credit the payee.
+	// Existing granted obligations remain in the exact canonical bodies above.
+	parked.assert_claim_refused().await;
+}
+
+async fn direct_background_grant_bodies(
+	srv: &Captaind, hash: PaymentHash,
+) -> std::collections::BTreeMap<String, Vec<u8>> {
+	let rows = srv.htlc_vtxos(hash).await;
+	assert!(!rows.is_empty() && rows.len() <= 64, "bounded genuine grant fixture");
+	let bodies: std::collections::BTreeMap<_, _> = rows.iter()
+		.map(|h| (h.vtxo.vtxo_id.to_string(), h.vtxo.vtxo.serialize())).collect();
+	assert_eq!(bodies.len(), rows.len(), "duplicate HTLC ids must not disappear in the oracle");
+	bodies
+}
+
+async fn direct_background_hold_state(
+	client: &mut hold::hold_client::HoldClient<tonic::transport::Channel>, hash: PaymentHash,
+) -> hold::InvoiceState {
+	let invoices = client.list(hold::ListRequest {
+		constraint: Some(hold::list_request::Constraint::PaymentHash(hash.to_vec())),
+	}).await.expect("read actual hold invoice").into_inner().invoices;
+	assert_eq!(invoices.len(), 1);
+	assert_eq!(invoices[0].payment_hash, hash.to_vec());
+	assert_eq!(invoices[0].preimage, None);
+	assert!(invoices[0].htlcs.is_empty(), "intra-Ark fixture must not have a CLN incoming payment");
+	invoices[0].state()
+}
+
+#[tokio::test]
+async fn direct_background_receive_cancellation_waits_for_lagging_watchman() {
+	require_bark_version!(> "0.5.0");
+	let ctx = TestContext::new("server/direct_background_receive_cancellation_waits_for_lagging_watchman").await;
+	direct_background_cancel_watch_boundary(&ctx, false).await;
+}
+
+#[tokio::test]
+async fn direct_background_receive_cancellation_waits_for_missing_watchman() {
+	require_bark_version!(> "0.5.0");
+	let ctx = TestContext::new("server/direct_background_receive_cancellation_waits_for_missing_watchman").await;
+	direct_background_cancel_watch_boundary(&ctx, true).await;
 }
 
 /// The payer of an intra-ark payment tries to revoke at every block height

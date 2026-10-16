@@ -156,7 +156,7 @@ async fn checked_winner(core:&Client,view:&bdk_wallet::Wallet,state:&super::ordi
 	let Some(own)=view.get_tx(id) else{return Ok(None);};
 	let bdk_wallet::chain::ChainPosition::Confirmed {anchor,..}=own.chain_position else{return Ok(None);};
 	if anchor.block_id.height!=block.height.to_u32() || anchor.block_id.hash!=block.hash || view.latest_checkpoint().height()<block.height.to_u32(){return Ok(None);}
-	let actual=crate::bitcoind::custom_get_raw_transaction_info(core,id,Some(block.hash)).await?.context("confirmed native winning transaction missing")?;
+	let actual=crate::bitcoind::custom_get_raw_transaction_info(core,id,Some(&block.hash)).await?.context("confirmed native winning transaction missing")?;
 	ensure!(actual.hex.len()<=400_000 && actual.hex==bitcoin::consensus::serialize(signed)
 		&& core.get_block_hash(u64::from(block.height.to_u32())).await?==block.hash,"native winning body/current block differs");
 	Ok(Some(FundingResolution {winner_index:state.reservation.index,block_height:block.height.to_u32(),block_hash:block.hash}))

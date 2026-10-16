@@ -11,7 +11,7 @@ use bitcoin_ext::BlockRef;
 
 use ark::{ProtocolEncoding, ServerVtxo, VtxoId};
 use crate::database::carrier_snapshot::BackingSnapshotLimits;
-use crate::watchman::settlement::{allocate, CustomerLeaf, LeafAllocation};
+use crate::watchman::settlement::{allocate, CustomerLeaf, LeafAllocation, SettlementPlan};
 use super::Db;
 
 pub(crate) struct StoredCarrier {
@@ -35,6 +35,59 @@ pub(crate) fn allocation_witness_hash(witnesses: &[String]) -> anyhow::Result<sh
 }
 pub(crate) fn carrier_witness_hash(witness: &str) -> sha256::Hash {
 	sha256::Hash::hash(witness.as_bytes())
+}
+
+/// Shared native amount policy, not an ownership or source-authentication
+/// capability. The caller must independently prove the actual customer leaves.
+pub(crate) fn require_direct_allocation_policy(leaves: Vec<CustomerLeaf>,
+	amounts: &BTreeMap<VtxoId, (LeafAllocation, String)>,
+) -> anyhow::Result<SettlementPlan> {
+	ensure!(leaves.iter().map(|leaf| leaf.id).collect::<BTreeSet<_>>() == amounts.iter()
+		.filter(|(_,(_,disposition))| disposition != "operator").map(|(id,_)| *id).collect(),
+		"direct delivery supplied customer leaf membership differs");
+	let plan = allocate(leaves)?;
+	for leaf in plan.recipients.iter().flat_map(|r| &r.leaves) {
+		ensure!(amounts.get(&leaf.id).is_some_and(|(stored,disposition)| stored == leaf && disposition == "pay"),
+			"direct delivery payout allocation differs from policy");
+	}
+	for leaf in &plan.forfeits {
+		ensure!(amounts.get(&leaf.id).is_some_and(|(stored,disposition)| stored == leaf && disposition == "forfeit"),
+			"direct delivery forfeiture differs from policy");
+	}
+	Ok(plan)
+}
+
+/// Preserve actual native payout grouping and nullable non-payment mappings.
+/// No missing/NULL mapping is replaced with a guessed transaction output.
+pub(crate) fn require_direct_output_mappings(tx: &Transaction, plan: &SettlementPlan,
+	amounts: &BTreeMap<VtxoId, (LeafAllocation, String)>, ids: &BTreeSet<VtxoId>,
+	mapping: &BTreeMap<VtxoId, Option<i32>>,
+) -> anyhow::Result<()> {
+	ensure!(amounts.keys().copied().collect::<BTreeSet<_>>() == *ids && plan.recipients.iter()
+		.all(|recipient| !recipient.leaves.is_empty() && recipient.leaves.iter().all(|leaf| ids.contains(&leaf.id))),
+		"direct delivery supplied plan/allocation identities differ");
+	ensure!(mapping.keys().copied().collect::<BTreeSet<_>>() == *ids, "direct delivery allocation mappings are incomplete");
+	let mut payout_outputs = BTreeSet::new();
+	for recipient in &plan.recipients {
+		let vout = mapping[&recipient.leaves[0].id].context("direct payout has no output mapping")?;
+		ensure!(vout >= 0 && payout_outputs.insert(vout) && tx.output.get(vout as usize) == Some(&recipient.output) &&
+			recipient.leaves.iter().all(|a| mapping[&a.id] == Some(vout)), "direct delivery output mapping or amount differs");
+	}
+	for (id,(_,disposition)) in amounts {
+		ensure!(disposition == "pay" || mapping[id].is_none(), "direct non-payment has a customer output mapping");
+	}
+	Ok(())
+}
+
+/// Exact physical input partition only; prevout validity/current ownership and
+/// confirmation, fees, reservation history and retirement need separate proofs.
+pub(crate) fn require_direct_input_partition(tx: &Transaction, backing: &BTreeSet<VtxoId>,
+	fee_inputs: &[(OutPoint, TxOut)],
+) -> anyhow::Result<()> {
+	let points = backing.iter().map(VtxoId::to_point).chain(fee_inputs.iter().map(|(p,_)| *p)).collect::<BTreeSet<_>>();
+	ensure!(points.len() == backing.len()+fee_inputs.len() && points == tx.input.iter().map(|i| i.previous_output).collect() &&
+		points.len() == tx.input.len(), "direct delivery reserved inputs differ from signed transaction");
+	Ok(())
 }
 
 impl Db {
@@ -128,15 +181,7 @@ impl Db {
 			let server_pubkey = server_pubkey.context("direct delivery has no backing server identity")?;
 			let authenticated = t.authenticated_fallback_scripts(&owners.iter().map(|(p,_)| *p).collect::<Vec<_>>(), network).await?;
 			ensure!(owners.iter().all(|(key,spk)| authenticated.get(key) == Some(spk)), "direct delivery record or account child mismatch");
-			let plan = allocate(leaves)?;
-			for leaf in plan.recipients.iter().flat_map(|r| &r.leaves) {
-				ensure!(amounts.get(&leaf.id).is_some_and(|(stored,disposition)| stored == leaf && disposition == "pay"),
-					"direct delivery payout allocation differs from policy");
-			}
-			for leaf in &plan.forfeits {
-				ensure!(amounts.get(&leaf.id).is_some_and(|(stored,disposition)| stored == leaf && disposition == "forfeit"),
-					"direct delivery forfeiture differs from policy");
-			}
+			let plan = require_direct_allocation_policy(leaves, &amounts)?;
 			let carriers = t.query("SELECT txid,signed_tx,backing_ids,fee_inputs::text AS fee_inputs,
 				miner_fee_sat,generation,confirmed_height,confirmed_block,jsonb_build_object('generation',generation,
 				'backing',backing_ids,'fee_inputs',fee_inputs,'miner',miner_fee_sat,'subsidy',funding_subsidy_sat,
@@ -157,16 +202,7 @@ impl Db {
 				let mapping = t.query("SELECT allocation_id,vout FROM expiry_carrier_allocation WHERE txid=$1", &[&txid.to_string()]).await?
 					.into_iter().map(|r| -> anyhow::Result<_> { Ok((r.get::<_, &str>("allocation_id").parse::<VtxoId>()?, r.get::<_, Option<i32>>("vout"))) })
 					.collect::<anyhow::Result<BTreeMap<_, _>>>()?;
-				ensure!(mapping.keys().copied().collect::<BTreeSet<_>>() == ids, "direct delivery allocation mappings are incomplete");
-				let mut payout_outputs = BTreeSet::new();
-				for recipient in &plan.recipients {
-					let vout = mapping[&recipient.leaves[0].id].context("direct payout has no output mapping")?;
-					ensure!(vout >= 0 && payout_outputs.insert(vout) && tx.output.get(vout as usize) == Some(&recipient.output) &&
-						recipient.leaves.iter().all(|a| mapping[&a.id] == Some(vout)), "direct delivery output mapping or amount differs");
-				}
-				for (id,(_,disposition)) in &amounts {
-					ensure!(disposition == "pay" || mapping[id].is_none(), "direct non-payment has a customer output mapping");
-				}
+				require_direct_output_mappings(&tx, &plan, &amounts, &ids, &mapping)?;
 				let input_json: serde_json::Value = serde_json::from_str(row.get("fee_inputs"))?;
 				let mut fee_inputs = Vec::new();
 				for input in input_json.as_array().context("invalid direct fee reservations")? {
@@ -175,9 +211,7 @@ impl Db {
 					let script = ScriptBuf::from_hex(input["script_pubkey"].as_str().context("missing direct fee script")?)?;
 					fee_inputs.push((point, TxOut { value: Amount::from_sat(value), script_pubkey: script }));
 				}
-				let points = backing.iter().map(VtxoId::to_point).chain(fee_inputs.iter().map(|(p,_)| *p)).collect::<BTreeSet<_>>();
-				ensure!(points.len() == backing.len()+fee_inputs.len() && points == tx.input.iter().map(|i| i.previous_output).collect() &&
-					points.len() == tx.input.len(), "direct delivery reserved inputs differ from signed transaction");
+				require_direct_input_partition(&tx, &backing, &fee_inputs)?;
 				let recorded_confirmation = row.get::<_, Option<i32>>("confirmed_height").map(|h| -> anyhow::Result<_> {
 					Ok(BlockRef { height: bitcoin_ext::BlockHeight::new(u32::try_from(h)?),
 						hash: row.get::<_, &str>("confirmed_block").parse()? })
@@ -207,5 +241,65 @@ impl Db {
 				&[&txid,&i32::try_from(block.height.to_u32())?,&block.hash.to_string()]).await?;
 			Ok(())
 		}).await
+	}
+}
+
+#[cfg(test)]
+mod captured_policy_tests {
+	use super::*;
+	use bitcoin::{Sequence, TxIn, Witness, WPubkeyHash};
+
+	fn leaves() -> Vec<CustomerLeaf> {
+		let script = ScriptBuf::new_p2wpkh(&WPubkeyHash::from_byte_array([3;20]));
+		[1,2].into_iter().map(|n| CustomerLeaf { id: VtxoId::from(OutPoint::new(Txid::from_byte_array([n;32]),0)),
+			script: script.clone(), amount: Amount::from_sat(10_000) }).collect()
+	}
+	fn stored_amounts() -> BTreeMap<VtxoId, (LeafAllocation,String)> {
+		allocate(leaves()).unwrap().recipients.into_iter().flat_map(|recipient| recipient.leaves)
+			.map(|leaf| (leaf.id,(leaf,"pay".into()))).collect()
+	}
+	fn transaction(output: TxOut, inputs: &[OutPoint]) -> Transaction {
+		Transaction { version: bitcoin::transaction::Version::TWO, lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: inputs.iter().map(|point| TxIn { previous_output:*point, script_sig:ScriptBuf::new(),
+				sequence:Sequence::ZERO, witness:Witness::new() }).collect(), output:vec![output] }
+	}
+	#[test]
+	fn captured_shared_policy_preserves_flat_group_fee_null_nonpayment_and_exact_output() {
+		let mut amounts = stored_amounts();
+		let plan = require_direct_allocation_policy(leaves(), &amounts).unwrap();
+		assert_eq!(plan.recipients.len(),1);
+		assert_eq!(plan.recipients[0].output.value,Amount::from_sat(19_000));
+		assert_eq!(plan.recipients[0].leaves.iter().map(|leaf| leaf.fee.to_sat()).sum::<u64>(),1_000);
+		let operator = VtxoId::from(OutPoint::new(Txid::from_byte_array([9;32]),0));
+		amounts.insert(operator,(LeafAllocation { id:operator,gross:Amount::from_sat(330),fee:Amount::ZERO,
+			payout:Amount::ZERO,forfeited:Amount::ZERO },"operator".into()));
+		let ids = amounts.keys().copied().collect::<BTreeSet<_>>();
+		let mut mapping = ids.iter().map(|id| (*id,if *id==operator {None}else{Some(0)})).collect::<BTreeMap<_,_>>();
+		let mut tx = transaction(plan.recipients[0].output.clone(),&[]);
+		require_direct_output_mappings(&tx,&plan,&amounts,&ids,&mapping).unwrap();
+		mapping.insert(operator,Some(0));
+		assert!(require_direct_output_mappings(&tx,&plan,&amounts,&ids,&mapping).is_err());
+		mapping.insert(operator,None);tx.output[0].value-=Amount::from_sat(1);
+		assert!(require_direct_output_mappings(&tx,&plan,&amounts,&ids,&mapping).is_err());
+		let mut changed = stored_amounts();
+		changed.values_mut().next().unwrap().0.fee+=Amount::from_sat(1);
+		assert!(require_direct_allocation_policy(leaves(),&changed).is_err());
+		let mut incomplete = leaves();incomplete.pop();
+		assert!(require_direct_allocation_policy(incomplete,&stored_amounts()).is_err());
+	}
+	#[test]
+	fn captured_shared_policy_refuses_incomplete_mapping_and_duplicate_or_missing_physical_inputs() {
+		let amounts = stored_amounts();let plan = require_direct_allocation_policy(leaves(),&amounts).unwrap();
+		let ids = amounts.keys().copied().collect::<BTreeSet<_>>();
+		let mut mapping = ids.iter().map(|id| (*id,Some(0))).collect::<BTreeMap<_,_>>();
+		let points = ids.iter().map(VtxoId::to_point).collect::<Vec<_>>();
+		let mut tx = transaction(plan.recipients[0].output.clone(),&points);
+		require_direct_input_partition(&tx,&ids,&[]).unwrap();
+		mapping.remove(ids.first().unwrap());
+		assert!(require_direct_output_mappings(&tx,&plan,&amounts,&ids,&mapping).is_err());
+		tx.input.pop();assert!(require_direct_input_partition(&tx,&ids,&[]).is_err());
+		tx.input.push(tx.input[0].clone());assert!(require_direct_input_partition(&tx,&ids,&[]).is_err());
+		let tx = transaction(plan.recipients[0].output.clone(),&points);
+		assert!(require_direct_input_partition(&tx,&ids,&[(points[0],tx.output[0].clone())]).is_err());
 	}
 }

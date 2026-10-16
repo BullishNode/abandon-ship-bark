@@ -717,13 +717,13 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 	);
 }
 
-/// Parks the first `claim_lightning_receive` until the test releases it, so
+/// Parks every `claim_lightning_receive`, including retries, until explicit release, so
 /// the preimage never reaches the server while the payee holds its grant.
 #[derive(Clone)]
 struct HoldClaim {
 	held: Arc<std::sync::atomic::AtomicBool>,
 	arrived: Arc<tokio::sync::Notify>,
-	release: Arc<tokio::sync::Notify>,
+	release: tokio::sync::watch::Sender<bool>,
 }
 
 #[async_trait::async_trait]
@@ -735,7 +735,12 @@ impl captaind::proxy::ArkRpcProxy for HoldClaim {
 	) -> Result<protos::ArkoorPackageCosignResponse, tonic::Status> {
 		if !self.held.swap(true, std::sync::atomic::Ordering::SeqCst) {
 			self.arrived.notify_one();
-			self.release.notified().await;
+		}
+		let mut released = self.release.subscribe();
+		loop {
+			let allowed = *released.borrow();
+			if allowed { break; }
+			released.changed().await.map_err(|_| tonic::Status::internal("test claim release closed"))?;
 		}
 		Ok(upstream.claim_lightning_receive(req).await?.into_inner())
 	}
@@ -751,7 +756,7 @@ struct ParkedReceive {
 	payee: Arc<Bark>,
 	payment_hash: PaymentHash,
 	htlc_recv_expiry: BlockHeight,
-	release: Arc<tokio::sync::Notify>,
+	release: tokio::sync::watch::Sender<bool>,
 	payee_task: tokio::task::JoinHandle<anyhow::Result<()>>,
 	_proxy: captaind::proxy::ArkRpcProxyServer,
 	_lightning: LightningPaymentSetup,
@@ -771,7 +776,7 @@ impl ParkedReceive {
 		srv.wait_for_vtxopool(ctx).await;
 
 		let arrived = Arc::new(tokio::sync::Notify::new());
-		let release = Arc::new(tokio::sync::Notify::new());
+		let (release, _initial_receiver) = tokio::sync::watch::channel(false);
 		let proxy = srv.start_proxy_no_mailbox(HoldClaim {
 			held: Arc::new(std::sync::atomic::AtomicBool::new(false)),
 			arrived: arrived.clone(),
@@ -910,7 +915,7 @@ impl ParkedReceive {
 			}
 			assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(self.payment_hash).await).await.unwrap().is_none());
 			assert_eq!(htlc_send_vtxo_ids(&self.payer, self.payment_hash).await, payer_ids);
-			assert_eq!(self.payee.spendable_balance().await, Amount::ZERO);
+			assert_eq!(self.payee.spendable_balance_no_sync().await, Amount::ZERO);
 			if tip == self.htlc_recv_expiry + BlockDelta::new(1) { break; }
 			ctx.generate_blocks_unsynced(1).await;
 			tip = tip + BlockDelta::new(1);
@@ -972,7 +977,7 @@ impl ParkedReceive {
 	/// Release the parked claim, which must be refused, leaving the payee
 	/// unpaid.
 	async fn assert_claim_refused(self) {
-		self.release.notify_one();
+		let _ = self.release.send_replace(true);
 		self.payee_task.wait_millis(300_000).await
 			.expect("payee claim task panicked")
 			.expect_err("claim should be refused after the revoke");

@@ -4,7 +4,7 @@ use super::*;
 use crate::database::native_funding::{decode_funding_row, require_funding_inputs, require_funding_history};
 use crate::database::urgent_publication::UrgentPublication;
 use crate::payout_witness::DIRECT_HISTORY_LIMITS;
-use bitcoin::{BlockHash, OutPoint, TxOut, Txid};
+use bitcoin::{BlockHash, TxOut, Txid};
 use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::hex::{DisplayHex, FromHex};
 use serde_json::{Value, json};
@@ -223,6 +223,7 @@ pub fn verify_native_fee_source(raw: &[u8]) -> anyhow::Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use bitcoin::OutPoint;
 	use crate::watchman::ordinary_funding::test_candidate;
 
 	fn request(journal: String, database: Value) -> Value {
@@ -241,6 +242,13 @@ mod tests {
 				"opening_sha256":sha256::Hash::hash(opening_raw.as_bytes()),"journal_sha256":sha256::Hash::hash(journal.as_bytes()),
 				"database_sha256":sha256::Hash::hash(database_raw.as_bytes())},
 			"originals":{"policy_raw":policy_raw,"opening_raw":opening_raw,"journal_raw":journal,"database_raw":database_raw}})
+	}
+	fn golden(name: &str, input: &Value, output: &Value) {
+		if let Some(directory)=std::env::var_os("NATIVE_FEE_GOLDEN_DIR") {
+			let directory=Path::new(&directory);
+			std::fs::write(directory.join(format!("native-{name}-request.json")),serde_json::to_vec(input).unwrap()).unwrap();
+			std::fs::write(directory.join(format!("native-{name}-reply.json")),serde_json::to_vec(output).unwrap()).unwrap();
+		}
 	}
 	fn empty() -> Value {json!({"native_funding_fee_intent":[],"native_funding_fee_input":[],"native_funding_fee_resolution":[],"nursery_tx":[]})}
 	fn verify(value: &Value) -> anyhow::Result<Value> {
@@ -301,7 +309,7 @@ mod tests {
 	}
 	#[test]
 	fn offline_native_fee_signed_funding_uses_native_signature_and_exact_inputs() {
-		let (input,mut database)=funding();let out=verify(&input).unwrap();
+		let (input,mut database)=funding();let out=verify(&input).unwrap();golden("funding",&input,&out);
 		assert_eq!(out["funding_rows"][0]["signed"]["fee_sat"],500);
 		database["native_funding_fee_input"]=json!([]);let mut changed=input.clone();replace_database(&mut changed,database);assert!(verify(&changed).is_err());
 		let (mut input,mut database)=funding();let row=database["native_funding_fee_input"][0].clone();database["native_funding_fee_input"].as_array_mut().unwrap().push(row);
@@ -316,7 +324,7 @@ mod tests {
 	}
 	#[test]
 	fn offline_native_fee_preserves_shared_null_parent_and_rejects_missing_member() {
-		let (input,mut database)=urgent();let out=verify(&input).unwrap();assert_eq!(out["urgent_rows"][0]["transactions"].as_array().unwrap().len(),2);
+		let (input,mut database)=urgent();let out=verify(&input).unwrap();golden("urgent",&input,&out);assert_eq!(out["urgent_rows"][0]["transactions"].as_array().unwrap().len(),2);
 		assert_eq!(out["urgent_rows"][0]["fee_sat"],1000);assert!(out["unrelated_nursery_txids"].as_array().unwrap().is_empty());
 		database["nursery_tx"].as_array_mut().unwrap().remove(0);let mut changed=input.clone();replace_database(&mut changed,database);assert!(verify(&changed).is_err());
 	}

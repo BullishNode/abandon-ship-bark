@@ -2,6 +2,8 @@
 //! Conditional source rights require complete retirement evidence.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
+use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::{OutPoint, ScriptBuf};
@@ -191,7 +193,10 @@ impl Server {
 				if self.htlc_settler.is_settled(hash).await?.is_some() { continue; }
 				if let Some(sub) = t.get_htlc_subscription_by_payment_hash(hash).await? {
 					if unavailable.contains(&sub.lightning_node_id) { continue; }
-					match self.lightning_manager.hold_invoice_state(sub.lightning_node_id, hash).await {
+					// A timeout leaves this cut unresolved and rolls back the write body.
+					// It is never an incoming cancellation or a reason to forfeit.
+					match bounded_receive_observation(Duration::from_secs(10),
+						self.lightning_manager.hold_invoice_state(sub.lightning_node_id, hash)).await? {
 						Ok(Some(cln_rpc::plugins::hold::InvoiceState::Cancelled)) => { canceled.insert(hash); },
 						Ok(_) => {},
 						Err(_) => { unavailable.insert(sub.lightning_node_id); },
@@ -276,4 +281,79 @@ fn transition_residuals(roots: &[ServerVtxo], terminals: &[ServerVtxo<Full>]) ->
 		}
 	}
 	residuals.into_iter().map(|(outpoint, txout)| BackingPartitionResidual { outpoint, txout }).collect()
+}
+
+/// Bound only the external observation, not transaction publication or COMMIT.
+/// Preserve the node result; only a missing answer aborts the freeze transaction.
+async fn bounded_receive_observation<T>(
+	limit: Duration, observation: impl Future<Output = T>,
+) -> anyhow::Result<T> {
+	tokio::time::timeout(limit, observation).await
+		.context("expiry incoming hold node did not answer; source remains unresolved")
+}
+
+#[cfg(test)]
+mod receive_observation_tests {
+	use std::sync::Arc;
+	use std::sync::atomic::{AtomicBool, Ordering};
+
+	use cln_rpc::plugins::hold::InvoiceState;
+	use tokio::sync::Mutex;
+
+	use super::{bounded_receive_observation, Duration};
+
+	struct DropFlag(Arc<AtomicBool>);
+
+	impl Drop for DropFlag {
+		fn drop(&mut self) { self.0.store(true, Ordering::SeqCst); }
+	}
+
+	#[tokio::test]
+	async fn receive_observation_preserves_authoritative_state() {
+		for expected in [None, Some(InvoiceState::Cancelled), Some(InvoiceState::Paid)] {
+			let observed = bounded_receive_observation(Duration::from_secs(1), async {
+				Ok::<_, anyhow::Error>(expected)
+			}).await.unwrap().unwrap();
+			assert_eq!(observed, expected);
+		}
+	}
+
+	#[tokio::test]
+	async fn receive_observation_preserves_node_error() {
+		let observed = bounded_receive_observation(Duration::from_secs(1), async {
+			Err::<Option<InvoiceState>, _>(anyhow!("own hold observation unavailable"))
+		}).await.unwrap();
+		assert_eq!(observed.unwrap_err().to_string(), "own hold observation unavailable");
+	}
+
+	#[tokio::test]
+	async fn receive_observation_timeout_drops_future_and_releases_local_guard() {
+		let lock = Arc::new(Mutex::new(()));
+		let dropped = Arc::new(AtomicBool::new(false));
+		let local_lock = lock.clone();
+		let local_dropped = dropped.clone();
+		let result = bounded_receive_observation(Duration::from_millis(5), async move {
+			let _guard = local_lock.lock_owned().await;
+			let _drop = DropFlag(local_dropped);
+			tokio::time::sleep(Duration::from_secs(60)).await;
+			Some(InvoiceState::Cancelled)
+		}).await;
+		let error = result.unwrap_err();
+		assert!(error.downcast_ref::<tokio::time::error::Elapsed>().is_some());
+		assert!(error.to_string().contains("source remains unresolved"));
+		assert!(dropped.load(Ordering::SeqCst));
+		assert!(lock.try_lock().is_ok());
+	}
+
+	#[tokio::test]
+	async fn receive_observation_caller_cancellation_drops_future() {
+		let dropped = Arc::new(AtomicBool::new(false));
+		let local_dropped = dropped.clone();
+		let observation = bounded_receive_observation(Duration::from_secs(60), async move {
+			let _drop = DropFlag(local_dropped);
+			std::future::pending::<Option<InvoiceState>>().await
+		});
+		assert!(tokio::time::timeout(Duration::from_millis(5), observation).await.is_err());
+		assert!(dropped.load(Ordering::SeqCst));
+	}
 }

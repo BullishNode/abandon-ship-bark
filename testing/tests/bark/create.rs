@@ -156,7 +156,7 @@ async fn cli_short_profile_create_restore_preserves_private_config() {
 		let config_file = datadir.join("config.toml");
 		bark::fs_perms::write_atomic_owner_only(&config_file, toml::to_string_pretty(&config).unwrap().as_bytes()).unwrap();
 		let output = tokio::time::timeout(Duration::from_secs(30), Command::new(&executable)
-			.arg("--datadir").arg(&datadir).args(["--no-logfile", "create", "--regtest", "--mnemonic-file"])
+			.arg("--datadir").arg(&datadir).args(["--no-logfile", "create", "--regtest", "--birthday-height", "0", "--mnemonic-file"])
 			.arg(&seed_file).kill_on_drop(true).output()).await.expect("native creation timed out").unwrap();
 		assert!(output.status.success(), "native create/restore failed: {}", String::from_utf8_lossy(&output.stderr));
 		let actual = bark::Config::load(Network::Regtest, &config_file).unwrap();

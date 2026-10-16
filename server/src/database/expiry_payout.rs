@@ -1,13 +1,87 @@
 //! Exact signed payout parents and their independently replaceable fee children.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use anyhow::Context;
-use bitcoin::{Amount, ScriptBuf, Transaction, TxOut};
+use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut, Txid};
 use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::hex::DisplayHex;
-use ark::{ProtocolEncoding, ServerVtxo};
+use bitcoin::secp256k1::PublicKey;
+use bitcoin_ext::TxOutExt;
+use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoPolicy};
 
 use super::expiry_chain::ExpiryViewToken;
+use super::expiry_inventory::{BackingSnapshot, BackingSnapshotLimits};
 use super::Tx;
+
+struct SplitRecoveryPaths {
+	rows: BTreeSet<usize>,
+	transactions: BTreeSet<Txid>,
+	keys: BTreeSet<PublicKey>,
+}
+
+/// A signed next transaction alone is insufficient. For example, a board's
+/// next transaction ends at a user-only leaf: publishing it would destroy our
+/// expiry path for an abandoned wallet. Follow every branch until there is an
+/// actual server recovery path, accounting for each sibling and anchor.
+fn split_recovery_paths(
+	root: &ServerVtxo, snapshot: &BackingSnapshot,
+	signed: &BTreeMap<Txid, Transaction>, owned: &BTreeSet<PublicKey>,
+) -> anyhow::Result<Option<SplitRecoveryPaths>> {
+	let facts = snapshot.regular.iter().enumerate()
+		.map(|(i, f)| (f.state.vtxo.point(), i)).collect::<BTreeMap<_, _>>();
+	ensure!(facts.len() == snapshot.regular.len(), "split inventory has duplicate outputs");
+	let mut pending = vec![(root.point(), root.txout())];
+	let mut visited = BTreeSet::new();
+	let mut transactions = BTreeSet::new();
+	let mut keys = BTreeSet::new();
+	while let Some((point, output)) = pending.pop() {
+		let Some(&index) = facts.get(&point) else { return Ok(None); };
+		ensure!(visited.insert(index), "split recovery paths overlap or cycle");
+		let fact = &snapshot.regular[index];
+		let vtxo = &fact.state.vtxo;
+		ensure!(vtxo.txout() == output && vtxo.server_pubkey() == root.server_pubkey()
+			&& vtxo.chain_anchor() == root.chain_anchor(), "split recovery metadata differs from its signed path");
+		if fact.onchain_spent_height.is_some() || fact.onchain_spent_txid.is_some() {
+			return Ok(None);
+		}
+		if point != root.point() {
+			match vtxo.policy() {
+				ServerVtxoPolicy::ServerOwned | ServerVtxoPolicy::Expiry(_)
+					| ServerVtxoPolicy::Checkpoint(_) | ServerVtxoPolicy::HarkLeaf(_)
+					| ServerVtxoPolicy::HarkLeaf_v0(_) => continue,
+				// Receive contracts retain the server's timeout signature path.
+				// Send contracts instead refund to the user's key; an unknown
+				// preimage cannot be substituted for a server recovery path.
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv(_)
+					| VtxoPolicy::ServerHtlcRecv_v0(_)) => continue,
+				ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) if fact.state.oor_spent_txid.is_none() => {
+					if policy.user_pubkey == root.server_pubkey() { continue; }
+					if owned.contains(&policy.user_pubkey) {
+						keys.insert(policy.user_pubkey);
+						continue;
+					}
+				},
+				_ => {},
+			}
+		}
+		let Some(next) = fact.state.oor_spent_txid.and_then(|id| signed.get(&id)) else { return Ok(None); };
+		ensure!(next.input.len() == 1 && next.input[0].previous_output == point,
+			"split recovery step is not a signed single-input spend of its backing");
+		let value = next.output.iter().try_fold(Amount::ZERO, |sum, o| sum.checked_add(o.value))
+			.context("split recovery output amount overflow")?;
+		ensure!(value == output.value, "split recovery step does not conserve all backing");
+		let txid = next.compute_txid();
+		ensure!(Some(txid) == fact.state.oor_spent_txid, "split recovery transaction has the wrong id");
+		transactions.insert(txid);
+		for (vout, child) in next.output.iter().enumerate() {
+			if !child.is_p2a_fee_anchor() {
+				pending.push((OutPoint::new(txid, u32::try_from(vout)?), child.clone()));
+			}
+		}
+	}
+	Ok(Some(SplitRecoveryPaths { rows: visited, transactions, keys }))
+}
 
 pub struct PendingExpiryPayout {
 	pub id: i64,
@@ -106,18 +180,75 @@ impl Tx<'_> {
 	pub async fn request_expiry_split(
 		&self, view: ExpiryViewToken, root: &ServerVtxo,
 	) -> anyhow::Result<bool> {
+		// Prepare without coin or chain-view locks. Only the short recheck below
+		// serializes against a new obligation, a key drop or a changed chain view.
+		let limits = BackingSnapshotLimits { max_rows: 250_000, max_serialized_bytes: 256 * 1024 * 1024 };
+		let snapshot = self.backing_snapshot(std::slice::from_ref(root), limits).await?;
+		let txids = snapshot.regular.iter().filter_map(|f| f.state.oor_spent_txid)
+			.map(|id| id.to_string()).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+		// Bound the returned bytes before loading transaction blobs. This is a
+		// single statement, so a concurrent registration cannot change its size
+		// between a metadata query and the blob query.
+		let raw = self.query("WITH txs AS (SELECT txid,signed_tx FROM virtual_transaction WHERE txid=ANY($1) AND signed_tx IS NOT NULL), sized AS (SELECT txid,signed_tx,SUM(octet_length(signed_tx)::bigint) OVER ()::bigint AS bytes FROM txs) SELECT txid,bytes,CASE WHEN bytes<=$2 THEN signed_tx ELSE NULL END AS signed_tx FROM sized", &[&txids, &i64::try_from(limits.max_serialized_bytes)?]).await?;
+		let mut signed = BTreeMap::new();
+		for row in raw {
+			ensure!(usize::try_from(row.get::<_, i64>("bytes"))? <= limits.max_serialized_bytes,
+				"split signed paths exceed byte budget");
+			let id = row.get::<_, &str>("txid").parse()?;
+			let tx: Transaction = deserialize(row.get::<_, &[u8]>("signed_tx"))?;
+			ensure!(tx.compute_txid() == id, "stored split transaction has the wrong id");
+			signed.insert(id, tx);
+		}
+		let pubkeys = snapshot.regular.iter().filter_map(|f| match f.state.vtxo.policy() {
+			ServerVtxoPolicy::User(VtxoPolicy::Pubkey(p)) => Some(p.user_pubkey.to_string()),
+			_ => None,
+		}).collect::<Vec<_>>();
+		let owned = self.query("SELECT pubkey FROM ephemeral_tweak WHERE pubkey=ANY($1)", &[&pubkeys]).await?
+			.into_iter().map(|r| r.get::<_, &str>("pubkey").parse()).collect::<Result<BTreeSet<_>, _>>()?;
+		let backing = root.clone();
+		let (snapshot, signed, paths) = tokio::task::spawn_blocking(move || {
+			let paths = split_recovery_paths(&backing, &snapshot, &signed, &owned)?;
+			Ok::<_, anyhow::Error>((snapshot, signed, paths))
+		}).await.context("split recovery preparation task failed")??;
+		let Some(paths) = paths else {
+			return Ok(false);
+		};
+
 		self.lock_valid_expiry_view(view).await?;
-		let row = self.query_one("SELECT oor_spent_txid FROM vtxo WHERE vtxo_id=$1 FOR UPDATE", &[&root.id().to_string()]).await?;
+		let expected = paths.rows.iter().map(|&i| {
+			let state = &snapshot.regular[i].state;
+			(state.vtxo_id.to_string(), (state.updated_at, state.spend_state.as_str().to_owned()))
+		}).collect::<BTreeMap<_, _>>();
+		let ids = expected.keys().cloned().collect::<Vec<_>>();
+		let rows = self.query("SELECT vtxo_id,updated_at,spend_state::TEXT AS spend_state,onchain_spent_height,onchain_spent_txid FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&ids]).await?;
+		let actual = rows.into_iter().map(|r| {
+			ensure!(r.get::<_, Option<i32>>("onchain_spent_height").is_none()
+				&& r.get::<_, Option<&str>>("onchain_spent_txid").is_none(), "split recovery path has been spent");
+			Ok((r.get("vtxo_id"), (r.get("updated_at"), r.get("spend_state"))))
+		}).collect::<anyhow::Result<BTreeMap<_, _>>>()?;
+		ensure!(expected == actual, "split recovery path changed during preparation");
+		let signed_ids = paths.transactions.iter().map(ToString::to_string).collect::<Vec<_>>();
+		let locked = self.query("SELECT txid,signed_tx FROM virtual_transaction WHERE txid=ANY($1) ORDER BY txid FOR SHARE", &[&signed_ids]).await?;
+		ensure!(locked.len() == paths.transactions.len(), "split recovery signed path disappeared");
+		for row in locked {
+			let id: Txid = row.get::<_, &str>("txid").parse()?;
+			ensure!(row.get::<_, Option<&[u8]>>("signed_tx") == Some(serialize(&signed[&id]).as_slice()),
+				"split recovery signed path changed during preparation");
+		}
+		let keys = paths.keys.iter().map(ToString::to_string).collect::<Vec<_>>();
+		let locked_keys = self.query("SELECT pubkey FROM ephemeral_tweak WHERE pubkey=ANY($1) ORDER BY pubkey FOR SHARE", &[&keys]).await?;
+		ensure!(locked_keys.len() == keys.len(), "split recovery key was dropped during preparation");
 		ensure!(root.expiry_height() <= view.captaind.height && root.expiry_height() <= view.watchmand.height,
 			"expiry split backing is not mature");
+		let row = self.query_one("SELECT oor_spent_txid FROM vtxo WHERE vtxo_id=$1", &[&root.id().to_string()]).await?;
 		let Some(txid) = row.get::<_, Option<&str>>("oor_spent_txid") else { return Ok(false); };
 		let txid = txid.parse()?;
 		let tx = self.get_virtual_transaction_by_txid(txid).await?.context("expiry split transaction missing")?
 			.signed_tx.context("expiry split transaction is unsigned")?;
 		ensure!(tx.input.len() == 1 && tx.input[0].previous_output == root.point(),
 			"expiry split is not a single-input step on its backing path");
-		ensure!(self.query_opt("SELECT i.vtxo_id FROM expiry_allocation_input i JOIN expiry_allocation a ON a.id=i.allocation_id WHERE i.vtxo_id=$1 AND a.status='pending' LIMIT 1", &[&root.id().to_string()]).await?.is_none(),
-			"cannot split backing reserved for a pending payout");
+		ensure!(self.query_opt("SELECT i.vtxo_id FROM expiry_allocation_input i JOIN expiry_allocation a ON a.id=i.allocation_id WHERE i.vtxo_id=ANY($1) AND a.status='pending' LIMIT 1", &[&ids]).await?.is_none(),
+			"cannot split a recovery path reserved for a pending payout");
 		self.execute("INSERT INTO expiry_split_request(vtxo_id,progress_txid,generation) VALUES($1,$2,$3) ON CONFLICT(vtxo_id) DO UPDATE SET progress_txid=EXCLUDED.progress_txid,generation=EXCLUDED.generation",
 			&[&root.id().to_string(),&txid.to_string(),&view.generation]).await?;
 		Ok(true)
@@ -141,5 +272,95 @@ impl Tx<'_> {
 		ensure!(self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1) ORDER BY vtxo_id LIMIT 1", &[&ids]).await?.is_none(),
 			"watchman claim backing is reserved for expiry payouts");
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use ark::arkoor::{ArkoorDestination, package::ArkoorPackageBuilder};
+	use ark::board::BoardBuilder;
+	use ark::lightning::PaymentHash;
+	use ark::test_util::dummy::DummyTestVtxoSpec;
+	use ark::vtxo::Full;
+	use bitcoin_ext::BlockDelta;
+	use crate::database::{SpendState, VtxoState};
+	use crate::database::expiry_inventory::{BackingVtxoFact, SnapshotGenesis};
+
+	fn fact(vtxo: ark::ServerVtxo<Full>, spent: Option<Txid>) -> BackingVtxoFact {
+		BackingVtxoFact {
+			state: VtxoState {
+				id: 1, vtxo_id: vtxo.id(), vtxo: vtxo.to_bare(), oor_spent_txid: spent,
+				spent_in_round: None, offboarded_in: None, banned_until_height: None,
+				spend_state: SpendState::Spendable, confirmed_height: None, decided_for_fallback: false,
+				created_at: chrono::Local::now(), updated_at: chrono::Local::now(),
+			},
+			full_vtxo: Some(vtxo), genesis: SnapshotGenesis::EncodedPath,
+			frontier_at: None, onchain_spent_height: None, onchain_spent_txid: None,
+			lightning_htlc_subscription_id: None,
+		}
+	}
+
+	fn board() -> (DummyTestVtxoSpec, ark::Vtxo<Full>, BackingSnapshot, BTreeMap<Txid, Transaction>) {
+		let spec = DummyTestVtxoSpec { amount: Amount::from_sat(100_330), fee: Amount::from_sat(330), ..Default::default() };
+		let (funding, board) = spec.build();
+		let builder = BoardBuilder::new_from_vtxo(&board, &funding, board.server_pubkey()).unwrap();
+		let mut rows = builder.build_server_vtxos();
+		let root = rows.remove(0);
+		let source = rows.remove(0);
+		let signed = board.transactions().map(|item| (item.tx.compute_txid(), item.tx)).collect();
+		let snapshot = BackingSnapshot {
+			roots: vec![root.to_bare()], serialized_bytes: 0,
+			regular: vec![fact(root, Some(board.point().txid)), fact(source, None)],
+		};
+		(spec, board, snapshot, signed)
+	}
+
+	#[test]
+	fn expiry_split_never_exposes_an_abandoned_user_only_board_leaf() {
+		let (_, _, snapshot, signed) = board();
+		assert!(split_recovery_paths(&snapshot.roots[0], &snapshot, &signed, &BTreeSet::new()).unwrap().is_none());
+	}
+
+	#[test]
+	fn expiry_split_follows_real_signed_steps_to_preserve_mixed_siblings() {
+		let (spec, board, mut snapshot, mut signed) = board();
+		let package = ArkoorPackageBuilder::new_with_checkpoints([board], vec![
+			ArkoorDestination {
+				total_amount: Amount::from_sat(50_000),
+				policy: VtxoPolicy::new_pubkey(spec.user_keypair.public_key()),
+			},
+			ArkoorDestination {
+				total_amount: Amount::from_sat(50_000),
+				policy: VtxoPolicy::new_server_htlc_send(spec.user_keypair.public_key(),
+					PaymentHash::from([12; 32]), spec.expiry_height + BlockDelta::new(12)),
+			},
+		]).unwrap().cosign_both(&[spec.user_keypair], &spec.server_keypair).unwrap();
+		for (id, txid) in package.input_spend_info() {
+			snapshot.regular.iter_mut().find(|f| f.state.vtxo_id == id).unwrap().state.oor_spent_txid = Some(txid);
+		}
+		for tx in package.signed_virtual_transactions() { signed.insert(tx.compute_txid(), tx); }
+		let internal = package.build_signed_internal_vtxos();
+		for (vtxo, spent) in internal {
+			if let Some(old) = snapshot.regular.iter_mut().find(|f| f.state.vtxo_id == vtxo.id()) {
+				*old = fact(vtxo, Some(spent));
+			} else { snapshot.regular.push(fact(vtxo, Some(spent))); }
+		}
+		for leaf in package.build_signed_vtxos() { snapshot.regular.push(fact(leaf.into(), None)); }
+		let paths = split_recovery_paths(&snapshot.roots[0], &snapshot, &signed, &BTreeSet::new())
+			.unwrap().expect("both branches retain their server expiry checkpoint");
+		assert!(paths.rows.iter().any(|&i| matches!(snapshot.regular[i].state.vtxo.policy(), ServerVtxoPolicy::Checkpoint(_))));
+		assert!(!paths.rows.iter().any(|&i| matches!(snapshot.regular[i].state.vtxo.policy(), ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(_)))));
+		assert_eq!(paths.rows.iter().filter(|&&i| matches!(snapshot.regular[i].state.vtxo.policy(), ServerVtxoPolicy::Checkpoint(_))).count(), 2);
+		let sibling = snapshot.regular.iter().position(|f| matches!(f.state.vtxo.policy(), ServerVtxoPolicy::Checkpoint(_))).unwrap();
+		let removed = snapshot.regular.remove(sibling);
+		assert!(split_recovery_paths(&snapshot.roots[0], &snapshot, &signed, &BTreeSet::new()).unwrap().is_none(),
+			"every sibling needs its actual output metadata, including the ordinary branch");
+		snapshot.regular.insert(sibling, removed);
+		// Removing the actual signed bridge must not be substituted by the
+		// unsigned geometry available in the descendant's full encoding.
+		let bridge = snapshot.regular[1].state.oor_spent_txid.unwrap();
+		signed.remove(&bridge);
+		assert!(split_recovery_paths(&snapshot.roots[0], &snapshot, &signed, &BTreeSet::new()).unwrap().is_none());
 	}
 }

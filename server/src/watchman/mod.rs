@@ -410,7 +410,12 @@ impl Watchman {
 				fee_rate = fee_rate.max(saturating_add_feerates(spend.fee_rate,self.config.incremental_relay_fee));
 			}
 			if let Err(error) = self.db.write(async |t| {
-				t.lock_valid_expiry_view(view).await?;
+				// A request may outlive a later refresh, offboard or key drop.
+				// Reprove preservation and retain its sorted path locks through
+				// publication, rather than trusting the old request's txid alone.
+				if !t.request_expiry_split(view, &root).await? { return Ok(()); }
+				let current = t.query_one("SELECT progress_txid FROM expiry_split_request WHERE vtxo_id=$1", &[&root.id().to_string()]).await?;
+				ensure!(current.get::<_, &str>("progress_txid") == txid.to_string(), "expiry split instruction changed");
 				t.lock_unallocated_watchman_inputs(&ids).await?;
 				self.process_progress_tx(&mut wallet,txid,&root,fee_rate).await
 			}).await {
@@ -764,9 +769,12 @@ impl Watchman {
 				break;
 			}
 
-			if let Err(e) = self.process_progress_tx(
-				&mut wallet, progress_txid, &vtxo, fee_rate,
-			).await {
+			if let Err(e) = self.db.write(async |t| {
+				// Normal exit progression competes with payouts for the same
+				// physical backing too. Hold its coin locks through publication.
+				t.lock_unallocated_watchman_inputs(&[vtxo.id()]).await?;
+				self.process_progress_tx(&mut wallet, progress_txid, &vtxo, fee_rate).await
+			}).await {
 				slog!(ProgressCpfpFailure, vtxo_id: vtxo.id(), txid: progress_txid,
 					error: e.to_string(),
 				);

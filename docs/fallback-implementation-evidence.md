@@ -56,14 +56,81 @@ The product executable hashes match the first successful ordinary payout run.
 Earlier W2 and W3 evidence remains in their commits. Their manually inserted spend-fence fixtures establish the shared database writer boundary.
 They do not prove every actual payout-decision race against native refresh completion, offboard registration or Lightning grants.
 
+## Authenticated history and external BIP84 recovery
+
+The real server endpoint accepts either the existing server-bound xpub recovery authorization
+or the existing per-VTXO status attestation. Account history uses permanent economic-owner associations.
+Each page uses one repeatable-read database snapshot. A ledger token detects a changed view across pages.
+A metadata-only size check limits transaction-proof bytes before the server loads them.
+The server can return a smaller page with the correct cursor. An oversized single history entry fails explicitly.
+A long-history pagination or transaction-deduplication design remains an acceptance requirement.
+
+The actual PostgreSQL ledger test passes: run `1091fd95-278a-4b82-b14c-b82a1a43d4a6`.
+A transaction with a lower allocated revision commits after another transaction with a higher revision.
+The visible commit count changes although the maximum revision does not. A no-op update does not change it.
+The same native run checks that cached undecided value remains owned but unavailable for new spends
+when Core is actually offline. Both tests pass. The external app test is excluded from this default-feature run.
+
+The feature-specific external app test is
+`fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend`.
+Run it with `just int "--features fallback-test-bip84 --test bark-sdk fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend"`.
+Its first complete attempt reaches a real payout, six confirmations, fresh app and Ark databases,
+and authenticated account history. It then fails because a historical recovered Spent row causes an extra Ark debit.
+Failed run: `cf45a5b9-1838-4d77-8a30-8b1f9b503434`, 23.251 seconds.
+No recovery-spend credit is assigned to that failed run.
+
+The corrected client creates a debit only for previously held spendable, exited or action-locked value.
+It retains an earlier recorded debit after adoption. Mere presence of a recovery-only Spent row does not create another debit.
+The unchanged acceptance assertion requires zero extra debit in the fresh restored database.
+
+The complete retry passes: `8f297156-7884-47da-8a19-640730082b72`, 24.186 seconds.
+The external app and Ark wallet use distinct original seeds. Both databases are new on restore.
+Core verifies a 99,000-sat payout with at least six confirmations, and then confirms the app's recovery spend.
+The spend uses an actual two-item BIP84 witness. Authenticated history returns the real parent and output association.
+The local sanitized proof is `test/evidence/external-bip84-pass-8f297-proof.json`.
+Its SHA256 is `c8171ae2f3e577e284639464a2acd1806807ce923c38897ab36a2d805815d728`.
+The exact source and native test executable hashes are retained beside it.
+The test reuses unchanged server executables and compiles the actual BIP84 SDK feature.
+It does not qualify BIP84 CLI, barkd, browser, Lightning or Signet operation.
+
+## Requested mixed-tree split
+
+The native test `expiry_requested_split_preserves_mixed_siblings_and_eventual_refund`
+passes in run `9d9ee14a-71c4-41da-a18e-32c6189dc6a6`, 42.928 seconds.
+The test creates an actual signed mixed tree, explicitly requests its first split,
+then requires normal watchman progression and automatic payouts.
+The ordinary sibling receives 49,000 sats while the HTLC remains unresolved.
+The never-initiated HTLC later receives its own 49,000-sat refund without a client revocation.
+Both actual payouts have at least six confirmations and spend distinct physical backing.
+The actual database guard refuses normal watchman progression of backing reserved by a payout.
+
+The split authorization proves every non-anchor child retains an unconditional server expiry path
+through conserving signed transitions. Publication revalidates those paths under sorted source locks.
+A board exit ending in a user-only leaf cannot authorize destructive progression.
+The first native run, `5c716a33-566f-4765-8759-2d4ea3e0260c`, failed because its fixture
+advanced one block while the configured watchman grace period required two.
+The retry advances the actual configured grace; the original failure is retained.
+
+Full workspace units pass 780 tests with one upstream skip in run
+`533a0b9f-68eb-46d3-a284-fdec7c51a310`, 13.193 seconds.
+That unit run preceded the final normal-watchman guard hook.
+The final source passes fresh mandatory workspace checks and the native mixed-tree test above.
+The exact 41 source files, four product executables and native test executable are captured locally
+in `runtime-mixed-split-9d9ee/manifest.json` under the shared build cache.
+No code formatting or normalization is applied between that capture and publication.
+
+This test explicitly requests the first split. It does not prove automatic first-split discovery,
+a completed external payment's terminal refund, cross-tree Lightning settlement or oversized-tree capacity.
+The external BIP84 restore and confirmed-spend result remains its separately captured run above.
+
 ## Remaining acceptance work
 
 - Actual payout-decision races against refresh completion, offboard registration and Lightning grants, with both winners and transaction rollback checks.
 - Full settlement coverage, including cross-tree Lightning provenance and actual payment attempts.
-- Mixed-tree progress that preserves ordinary customer recovery. A pure public-key leaf has no server expiry clause. A signed progress transaction alone does not prove automatic fallback remains possible.
+- Automatic first-split discovery, wider mixed-tree geometries and actual oversized-tree capacity, beyond the passed explicitly requested split case.
 - Actual oversized-tree split, conflict, regroup, fee replacement, fee-wallet depletion and replenishment, restart and reorg cases.
-- Authenticated payout history and coherent pagination with the paired client implementation.
-- The external BIP84 app adapter's full fallback payout, seed restore and confirmed spend.
+- Authenticated history boundary tests under actual reorg and regroup between pages, and response-size scale measurements.
+- BIP84 CLI, barkd and browser acceptance, distinct from the passed external app callback test.
 - Abandonment before board registration. Upstream board co-sign does not persist a pending-board record.
 - Attribution and operational scale measurements, bounded response sizes, old payout retention and successful public Signet campaigns.
 

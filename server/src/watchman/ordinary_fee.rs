@@ -236,6 +236,7 @@ impl OrdinaryFeeBudget {
 		Ok(())
 	}
 
+	#[cfg(test)]
 	pub(crate) fn retained_urgent(&self) -> anyhow::Result<Vec<(UrgentFeeAttempt, sha256::Hash, Vec<Transaction>)>> {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
 		ensure!(ledger.file.metadata()?.len() == ledger.length, "fee history changed before urgent replay");
@@ -259,6 +260,32 @@ impl OrdinaryFeeBudget {
 		ledger.attempts = index;
 		Ok(OrdinaryFeeAttempt { policy_sha256: self.identity, index })
 	}
+}
+
+/// No-budget compatibility is only for a verifiably empty legacy installation.
+/// The caller supplies the count from its actual bounded durable DB inventory.
+pub(crate) fn urgent_budget_required(directory: &Path, retained_count: usize) -> anyhow::Result<bool> {
+	let mut present = false;
+	for name in [POLICY_FILE, OPENING_FILE, BUDGET_FILE] {
+		match std::fs::symlink_metadata(directory.join(name)) {
+			Ok(metadata) => {
+				ensure!(metadata.file_type().is_file(), "fee budget metadata is not a regular file");
+				present = true;
+			},
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+			Err(error) => return Err(error).context("fee budget absence is not verifiable"),
+		}
+	}
+	ensure!(present || retained_count == 0, "urgent DB metadata requires the missing independent budget");
+	Ok(present)
+}
+
+/// Read-only admission for captaind, which must not acquire watchmand's FLOCK.
+pub(crate) fn require_installed_policy(directory: &Path, expected: OrdinaryFeePolicy) -> anyhow::Result<OrdinaryFeeOpening> {
+	let stored: StoredPolicy = serde_json::from_slice(&read_bounded(&directory.join(POLICY_FILE), 2048)?)?;
+	ensure!(stored.policy == expected, "configured direct fee policy differs from immutable installation");
+	urgent_snapshot(directory)?;
+	Ok(serde_json::from_slice(&read_bounded(&directory.join(OPENING_FILE), 2048)?)?)
 }
 
 /// Read-only startup cross-check for BOTH captaind and watchmand. It grants no
@@ -287,6 +314,7 @@ pub(crate) fn urgent_snapshot(directory: &Path)
 }
 
 fn read_bounded(path: &Path, limit: u64) -> anyhow::Result<Vec<u8>> {
+	ensure!(std::fs::symlink_metadata(path)?.file_type().is_file(), "fee budget path is not a regular file");
 	let file = File::open(path)?;
 	ensure!(file.metadata()?.len() <= limit, "ordinary fee metadata exceeds size limit");
 	let mut bytes = Vec::new(); file.take(limit + 1).read_to_end(&mut bytes)?;
@@ -616,6 +644,42 @@ mod tests {
 		assert_eq!(budget.retained_urgent().unwrap().len(),2);
 		assert_eq!(budget.urgent_reserve().unwrap(), Amount::from_sat(5_000));
 		drop(budget); std::fs::remove_dir_all(dir).unwrap();
+	}
+
+	#[test]
+	fn ordinary_legacy_absence_refuses_retained_metadata_and_partial_installation() {
+		let dir = directory();
+		assert!(!urgent_budget_required(&dir, 0).unwrap());
+		assert!(urgent_budget_required(&dir, 1).is_err());
+		std::fs::write(dir.join(POLICY_FILE), b"{}").unwrap();
+		assert!(urgent_budget_required(&dir, 0).unwrap());
+		assert!(urgent_snapshot(&dir).is_err());
+		std::fs::remove_dir_all(dir).unwrap();
+	}
+
+	#[test]
+	fn ordinary_legacy_absence_does_not_follow_dangling_or_unreadable_paths() {
+		use std::os::unix::fs::{symlink, PermissionsExt};
+		let dir = directory();
+		symlink(dir.join("absent"), dir.join(BUDGET_FILE)).unwrap();
+		assert!(urgent_budget_required(&dir, 0).is_err());
+		std::fs::remove_file(dir.join(BUDGET_FILE)).unwrap();
+		let (policy, _) = adopted(&dir);
+		std::fs::set_permissions(dir.join(BUDGET_FILE), std::fs::Permissions::from_mode(0)).unwrap();
+		assert!(require_installed_policy(&dir, policy).is_err());
+		std::fs::set_permissions(dir.join(BUDGET_FILE), std::fs::Permissions::from_mode(0o600)).unwrap();
+		std::fs::remove_dir_all(dir).unwrap();
+	}
+
+	#[test]
+	fn ordinary_cap_readonly_admission_requires_actual_immutable_policy() {
+		let dir = directory(); let (policy, _) = adopted(&dir);
+		assert!(urgent_budget_required(&dir, 0).unwrap());
+		require_installed_policy(&dir, policy).unwrap();
+		assert!(require_installed_policy(&dir, OrdinaryFeePolicy { ordinary_budget_sat: 60_001, ..policy }).is_err());
+		std::fs::remove_file(dir.join(OPENING_FILE)).unwrap();
+		assert!(require_installed_policy(&dir, policy).is_err());
+		std::fs::remove_dir_all(dir).unwrap();
 	}
 
 }

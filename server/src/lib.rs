@@ -378,9 +378,13 @@ impl Server {
 		// A fresh server creates this history independently of PostgreSQL. Check
 		// it before any wallet, round or Lightning worker can create successors
 		// from a restored database. Disabling the legacy payout task cannot bypass it.
-		payout_witness::DirectPayoutWitness::load(&cfg.data_dir, cfg.network,
+		let direct_witness = payout_witness::DirectPayoutWitness::load(&cfg.data_dir, cfg.network,
 			server_key.public_key(), &db, payout_witness::DIRECT_HISTORY_LIMITS).await
 			.context("direct payout recovery witness validation failed")?;
+		if cfg.direct_expiry.enabled {
+			direct_witness.require_ordinary_fee_policy(&db, cfg.direct_expiry_fee_policy).await
+				.context("direct financial workers require the installed immutable fee budget")?;
+		}
 		// Refuse a database-only rollback before wallets or payout/round workers
 		// can spend funds. Never initialize missing history during startup.
 		let payout_witness = if cfg.expiry_payout.enabled || cfg.data_dir.join(payout_witness::DIRECTORY).exists() {

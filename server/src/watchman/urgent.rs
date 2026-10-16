@@ -158,6 +158,12 @@ impl Watchman {
 	async fn submit_urgent_package(&self, txs: &[Transaction]) -> anyhow::Result<()> {
 		if txs.len() == 1 { bcd::broadcast_tx(&self.bitcoind, &txs[0]).await?; }
 		else { bcd::submit_package(&self.bitcoind, txs).await?; }
+		// submitpackage can return a successful RPC containing policy rejection.
+		// Actual public Core presence is required; unknown keeps exact bytes held.
+		for tx in txs {
+			ensure!(!matches!(bcd::tx_status(&self.bitcoind, tx.compute_txid()).await?, TxStatus::NotFound),
+				"urgent signed package not accepted; original attempt and bytes retained");
+		}
 		Ok(())
 	}
 

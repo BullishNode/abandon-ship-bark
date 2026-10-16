@@ -246,8 +246,9 @@ impl DirectPayoutWitness {
 	}
 
 	pub(crate) async fn verify_urgent_publications(&self, db: &Db) -> anyhow::Result<()> {
-		let (policy, reservations) = crate::watchman::ordinary_fee::urgent_snapshot(&self.files.directory)?;
 		let publications = db.read(async |t| t.urgent_publications(self.budget).await).await?;
+		if !crate::watchman::ordinary_fee::urgent_budget_required(&self.files.directory, publications.len())? { return Ok(()); }
+		let (policy, reservations) = crate::watchman::ordinary_fee::urgent_snapshot(&self.files.directory)?;
 		for (metadata, txs) in &publications {
 			let (attempt, ceiling, binding) = reservations.iter().find(|(attempt, _, _)| *attempt == metadata.attempt())
 				.context("urgent outbox has no independently charged original attempt")?;
@@ -271,6 +272,14 @@ impl DirectPayoutWitness {
 					"retained urgent signed intent missing from restored nursery; startup refused before financial workers");
 			}
 		}
+		Ok(())
+	}
+
+	pub(crate) async fn require_ordinary_fee_policy(&self, db: &Db,
+		policy: crate::watchman::ordinary_fee::OrdinaryFeePolicy,
+	) -> anyhow::Result<()> {
+		let opening = crate::watchman::ordinary_fee::require_installed_policy(&self.files.directory, policy)?;
+		self.verify_fee_opening(db, &opening).await?;
 		Ok(())
 	}
 

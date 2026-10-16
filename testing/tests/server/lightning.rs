@@ -582,7 +582,7 @@ async fn intra_ark_invoice_expiry_after_grant_does_not_allow_revoke() {
 	let cloned_payee = bark_payee.clone();
 	let cloned_invoice = invoice_info.invoice.clone();
 	let payee_task = tokio::spawn(async move {
-		cloned_payee.try_lightning_receive(&cloned_invoice).wait_millis(120_000).await
+		cloned_payee.try_lightning_receive(&cloned_invoice).wait_millis(300_000).await
 	});
 	arrived.notified().wait_millis(60_000).await;
 
@@ -764,6 +764,8 @@ impl ParkedReceive {
 		// The watchman tells the server the HTLC-recv vtxos expired unexited.
 		let srv = ctx.captaind("server").lightningd(&lightning.internal).watchmand().cfg(|cfg| {
 			cfg.invoice_check_interval = Duration::from_secs(1);
+			cfg.vtxo_lifetime = BlockDelta::new(1000);
+			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(400);
 		}).create().await;
 		ctx.fund_captaind(&srv, btc(10)).await;
 		srv.wait_for_vtxopool(ctx).await;
@@ -791,7 +793,7 @@ impl ParkedReceive {
 		let cloned_payee = payee.clone();
 		let cloned_invoice = invoice_info.invoice.clone();
 		let payee_task = tokio::spawn(async move {
-			cloned_payee.try_lightning_receive(&cloned_invoice).wait_millis(120_000).await
+			cloned_payee.try_lightning_receive(&cloned_invoice).wait_millis(300_000).await
 		});
 		arrived.notified().wait_millis(60_000).await;
 
@@ -875,42 +877,103 @@ impl ParkedReceive {
 		file.write_all(&bytes).unwrap(); file.write_all(b"\n").unwrap(); file.sync_all().unwrap();
 	}
 
-	/// Try a revoke at every height until one is cosigned, which must happen
-	/// the block after the HTLC-recv vtxos expired.
+	/// HTLC expiry alone cannot remove granted unilateral backing. Preserve
+	/// the refusal through HTLC+1, then consume the actual backing and wait
+	/// the configured sweep depth before requiring one legitimate revoke.
 	async fn revoke_every_block_until_cosigned(&self, ctx: &TestContext) {
+		let db = Db::connect(&self.srv.config().postgres).await.unwrap();
+		let grants = self.srv.htlc_vtxos(self.payment_hash).await.into_iter()
+			.filter(|g| g.direction() == HtlcDirection::Outgoing).map(|g| g.vtxo.vtxo)
+			.collect::<Vec<_>>();
+		assert!(!grants.is_empty());
+		let grant_ids = grants.iter().map(|v| v.id()).collect::<Vec<_>>();
+		let payer_ids = htlc_send_vtxo_ids(&self.payer, self.payment_hash).await;
 		let mut tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		assert!(tip <= self.htlc_recv_expiry + BlockDelta::new(1));
 		loop {
 			self.srv.wait_for_sync_height(tip).await;
 			self.srv.watchmand().wait_for_sync_height(tip).await;
-			self.record_refund_observation(ctx, "before-revoke", None).await;
+			self.record_refund_observation(ctx, "before-unsafe-refund-refusal", None).await;
 			let result = self.revoke().await;
-			self.record_refund_observation(ctx, "after-revoke", Some(&result)).await;
-			match result {
-				Ok(()) => {
-					assert_eq!(tip, self.htlc_recv_expiry + BlockDelta::new(1),
-						"the first revoke should be cosigned right after the HTLC-recv vtxos expired");
-					return;
-				},
-				Err(status) => {
-					assert!(tip <= self.htlc_recv_expiry,
-						"revoke refused after the HTLC-recv vtxos expired: {status:?}");
-					assert_eq!(status.code(), tonic::Code::InvalidArgument);
-					assert_eq!(status.message(), format!(
-						"bad user input: This lightning payment is not eligible for revocation yet: the recipient can claim until height {}",
-						self.htlc_recv_expiry,
-					));
-				},
+			self.record_refund_observation(ctx, "after-unsafe-refund-refusal", Some(&result)).await;
+			let status = result.expect_err("granted backing is still spendable, including at HTLC expiry+1");
+			assert_eq!(status.code(), tonic::Code::InvalidArgument);
+			assert!(status.message().contains("not eligible for revocation"), "unexpected refusal: {status:?}");
+			let held = db.read(async |t| t.get_user_vtxos_by_id(&grant_ids).await).await.unwrap();
+			assert_eq!(held.len(), grants.len());
+			for row in &held {
+				assert_eq!(row.spend_state, server::database::SpendState::HtlcRecvUnclaimed);
+				assert!(row.oor_spent_txid.is_none());
+				assert_eq!(row.vtxo.serialize(), grants.iter().find(|v| v.id() == row.vtxo_id).unwrap().serialize());
+				let anchor = row.vtxo.chain_anchor();
+				assert!(ctx.bitcoind().sync_client().get_tx_out(&anchor.txid, anchor.vout, Some(true)).unwrap().is_some());
 			}
+			assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(self.payment_hash).await).await.unwrap().is_none());
+			assert_eq!(htlc_send_vtxo_ids(&self.payer, self.payment_hash).await, payer_ids);
+			assert_eq!(self.payee.spendable_balance().await, Amount::ZERO);
+			if tip == self.htlc_recv_expiry + BlockDelta::new(1) { break; }
 			ctx.generate_blocks_unsynced(1).await;
 			tip = tip + BlockDelta::new(1);
 		}
+
+		let core = ctx.bitcoind().sync_client();
+		let expiry = grants.iter().map(|v| v.expiry_height().to_u32()).max().unwrap();
+		assert!(expiry > self.htlc_recv_expiry.to_u32(), "fixture must retain a real post-HTLC backing interval");
+		ctx.generate_blocks(expiry.saturating_sub(core.get_block_count().unwrap() as u32) + 3).await;
+		let anchors = grants.iter().map(|v| v.chain_anchor().to_string()).collect::<HashSet<_>>()
+			.into_iter().collect::<Vec<_>>();
+		let confirmed = tokio::time::timeout(Duration::from_secs(90), async {
+			loop {
+				let rows = db.read(async |t| Ok(t.query(
+					"SELECT vtxo_id,onchain_spent_txid FROM vtxo WHERE vtxo_id=ANY($1)", &[&anchors],
+				).await?)).await.unwrap();
+				assert_eq!(rows.len(), anchors.len());
+				let depths = rows.iter().map(|row| {
+					let txid = row.get::<_, Option<String>>("onchain_spent_txid")?;
+					let txid = bitcoin::Txid::from_str(&txid).unwrap();
+					let info = core.get_raw_transaction_info(&txid, None).unwrap();
+					let tx = core.get_raw_transaction(&txid, None).unwrap();
+					let anchor = bitcoin::OutPoint::from_str(&row.get::<_, String>("vtxo_id")).unwrap();
+					let depth = info.confirmations.unwrap_or(0);
+					if depth == 0 { return None; }
+					assert!(tx.input.iter().any(|i| i.previous_output == anchor));
+					assert!(core.get_tx_out(&anchor.txid, anchor.vout, Some(true)).unwrap().is_none());
+					Some(depth)
+				}).collect::<Option<Vec<_>>>();
+				if let Some(depths) = depths { break depths.into_iter().min().unwrap(); }
+				tokio::time::sleep(Duration::from_secs(1)).await;
+				ctx.generate_blocks(1).await;
+			}
+		}).await.expect("every granted backing anchor must be consumed by an actual confirmed sweep");
+		let required = self.srv.config().expiry_payout.sweep_min_confs;
+		assert_eq!(required, 100, "retain the original safety depth");
+		ctx.generate_blocks(required.saturating_sub(confirmed)).await;
+		let tip = BlockHeight::new(core.get_block_count().unwrap() as u32);
+		self.srv.wait_for_sync_height(tip).await;
+		self.srv.watchmand().wait_for_sync_height(tip).await;
+		for id in &payer_ids {
+			assert!(self.payer.get_full_vtxo(*id).await.unwrap().expiry_height() > tip,
+				"payer rights must remain live through the recipient backing safety depth");
+		}
+		for anchor in &anchors {
+			let row = db.read(async |t| Ok(t.query_one(
+				"SELECT onchain_spent_txid FROM vtxo WHERE vtxo_id=$1", &[&anchor],
+			).await?)).await.unwrap();
+			let txid = bitcoin::Txid::from_str(&row.get::<_, String>("onchain_spent_txid")).unwrap();
+			assert!(core.get_raw_transaction_info(&txid, None).unwrap().confirmations.unwrap_or(0) >= required);
+		}
+		self.record_refund_observation(ctx, "before-safe-terminal-revoke", None).await;
+		let result = self.revoke().await;
+		self.record_refund_observation(ctx, "after-safe-terminal-revoke", Some(&result)).await;
+		result.expect("real consumed backing at the configured depth must allow legitimate refund");
+		assert!(self.revoke().await.is_err(), "the same original HTLC rights must not be cosigned twice");
 	}
 
 	/// Release the parked claim, which must be refused, leaving the payee
 	/// unpaid.
 	async fn assert_claim_refused(self) {
 		self.release.notify_one();
-		self.payee_task.wait_millis(120_000).await
+		self.payee_task.wait_millis(300_000).await
 			.expect("payee claim task panicked")
 			.expect_err("claim should be refused after the revoke");
 		assert_eq!(self.payee.spendable_balance().await, Amount::ZERO);
@@ -920,7 +983,7 @@ impl ParkedReceive {
 /// The payer of an intra-ark payment tries to revoke at every block height
 /// while the payee holds granted HTLC-recv vtxos and withholds the preimage.
 /// Every revoke must be refused while the payee can still claim them, and the
-/// first one the server cosigns must come right after they expired. The
+/// first cosign requires their backing consumed at the configured depth. The
 /// parked claim is then refused.
 #[tokio::test]
 async fn intra_ark_revoke_refused_until_htlc_recvs_expire() {
@@ -977,11 +1040,12 @@ async fn intra_ark_revoke_refused_while_watchman_is_behind() {
 	let result = parked.revoke().await;
 	parked.record_refund_observation(&ctx, "watchman-behind-after-revoke", Some(&result)).await;
 	let status = result.expect_err("revoke cosigned while the watchman is behind");
-	assert!(status.message().contains("already committed"), "unexpected refusal: {status:?}");
+	assert_eq!(status.code(), tonic::Code::InvalidArgument);
+	assert!(status.message().contains("not eligible for revocation"), "unexpected refusal: {status:?}");
 
 	parked.srv.watchmand().start().await.unwrap();
 	parked.srv.watchmand().wait_for_sync_height(tip).await;
-	parked.revoke().await.expect("revoke should be cosigned once the watchman caught up");
+	parked.revoke_every_block_until_cosigned(&ctx).await;
 	parked.assert_claim_refused().await;
 }
 

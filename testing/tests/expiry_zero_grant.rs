@@ -1,6 +1,5 @@
 //! Native intra-Ark source arbitration without a receive grant.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -61,8 +60,8 @@ async fn zero_grant_timeout_case(stop_incoming_node: bool) {
 	let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap();
 	assert!(attempt.is_self_payment() && !attempt.status.is_final());
 	let (key, _) = receiver.derive_store_next_keypair().await.unwrap();
+	receiver.fallback_key_link(key.public_key()).await.unwrap();
 	let stale_prepare = protos::PrepareLightningReceiveClaimRequest {
-		origin: Some(receiver.fallback_child_hint(key.public_key()).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: sub.lowest_incoming_htlc_expiry.unwrap().saturating_sub(srv.config().htlc_expiry_delta).into(),
 		lightning_receive_anti_dos: None,
@@ -153,7 +152,7 @@ async fn zero_grant_timeout_case(stop_incoming_node: bool) {
 		input: send_ids[0], outputs: vec![destination.clone()], isolated_outputs: vec![], user_pub_nonces: vec![], use_checkpoint: true,
 		attestation: ArkoorCosignAttestation::new(send_ids[0], &[&destination], &key),
 	}] };
-	let refused = server.claim_lightning_receive(hash, preimage, request, 1, BTreeMap::new()).await.unwrap_err();
+	let refused = server.claim_lightning_receive(hash, preimage, request, 1).await.unwrap_err();
 	assert!(format!("{refused:#}").contains("incorrect state: canceled"), "{refused:#}");
 	// Returning SDK drives the actual canceled invoice; it cannot prepare a
 	// grant or collect the sender's already frozen value.
@@ -196,8 +195,8 @@ async fn zero_grant_actual_collection_wins_and_sender_is_never_refunded() {
 	// or merely missing grant as already retired.
 	let preimage = receiver.lightning_receive_checkpoint(hash).await.unwrap().unwrap().payment_preimage;
 	let (key, _) = receiver.derive_store_next_keypair().await.unwrap();
+	receiver.fallback_key_link(key.public_key()).await.unwrap();
 	let granted = srv.get_public_rpc().await.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-		origin: Some(receiver.fallback_child_hint(key.public_key()).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: sub.lowest_incoming_htlc_expiry.unwrap().saturating_sub(srv.config().htlc_expiry_delta).into(),
 		lightning_receive_anti_dos: None,
@@ -206,11 +205,11 @@ async fn zero_grant_actual_collection_wins_and_sender_is_never_refunded() {
 	let (output, _) = receiver.derive_store_next_keypair().await.unwrap();
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(granted.into_iter(), VtxoPolicy::new_pubkey(output.public_key()))
 		.unwrap().generate_user_nonces(&[key]).unwrap();
-	let mut cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
-	for part in &mut cosign_request.parts {
-		for destination in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
+	let cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	for part in &cosign_request.parts {
+		for destination in part.outputs.iter().chain(part.isolated_outputs.iter()) {
 			let pubkey = VtxoPolicy::deserialize(&destination.policy).unwrap().user_pubkey();
-			destination.origin = Some(receiver.fallback_child_hint(pubkey).await.unwrap().into());
+			receiver.fallback_key_link(pubkey).await.unwrap();
 		}
 	}
 

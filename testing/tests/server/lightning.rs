@@ -816,6 +816,60 @@ impl ParkedReceive {
 		try_request_htlc_revocation(&self.srv, &self.payer, self.payment_hash).await
 	}
 
+	/// Read-only native state around a refund decision. The stored Full hash
+	/// binds the actual issued expiry; this is not a new signature verdict.
+	async fn record_refund_observation(&self, ctx: &TestContext, phase: &str, result: Option<&Result<(), tonic::Status>>) {
+		use std::io::Write;
+		use std::os::unix::fs::OpenOptionsExt;
+		use server::database::block::BlockTable;
+		let chain_before = ctx.bitcoind().get_block_count().await;
+		let db = Db::connect(&self.srv.config().postgres).await.unwrap();
+		let watchman = db.read(async |t| t.get_highest_block(BlockTable::Watchmand).await).await.unwrap();
+		let core = ctx.bitcoind().sync_client();
+		let mut grants = Vec::new();
+		for grant in self.srv.htlc_vtxos(self.payment_hash).await.into_iter().filter(|g| g.direction() == HtlcDirection::Outgoing) {
+			let vtxo = &grant.vtxo.vtxo;
+			let mut path = vec![vtxo.chain_anchor()];
+			path.extend(vtxo.transactions().map(|item| bitcoin::OutPoint::new(item.tx.compute_txid(), item.output_idx as u32)));
+			let ids = path.iter().map(ToString::to_string).collect::<Vec<_>>();
+			let spenders = db.read(async |t| t.query(
+				"SELECT v.onchain_spent_txid FROM UNNEST($1::text[]) WITH ORDINALITY AS requested(id,position) LEFT JOIN vtxo v ON v.vtxo_id=requested.id ORDER BY requested.position",
+				&[&ids],
+			).await).await.unwrap();
+			assert_eq!(spenders.len(), path.len());
+			let mut backing = Vec::new();
+			for (outpoint, row) in path.into_iter().zip(spenders) {
+				let unspent = core.get_tx_out(&outpoint.txid, outpoint.vout, Some(true)).unwrap();
+				let spender: Option<String> = row.get(0);
+				let confirmation = spender.as_ref().map(|txid| {
+					let txid = bitcoin::Txid::from_str(txid).unwrap();
+					match core.get_raw_transaction_info(&txid, None) {
+						Ok(info) => serde_json::json!({"found":true,"confirmations":info.confirmations}),
+						Err(_) => serde_json::json!({"found":false,"meaning":"not-found-or-RPC-error; not sweep proof"}),
+					}
+				});
+				backing.push(serde_json::json!({"outpoint":outpoint.to_string(),"core_unspent":unspent.is_some(),
+					"core_unspent_value_sat":unspent.as_ref().map(|o| o.value.to_sat()),"stored_spender":spender,"core_spender_observation":confirmation}));
+			}
+			grants.push(serde_json::json!({"id":grant.vtxo.vtxo_id.to_string(),"htlc_expiry":grant.htlc_expiry().to_u32(),
+				"issued_vtxo_expiry":grant.vtxo_expiry().to_u32(),"stored_full_sha256":sha256::Hash::hash(&vtxo.serialize()).to_string(),
+				"spend_state":format!("{:?}",grant.vtxo.spend_state),"confirmed_height":grant.vtxo.confirmed_height.map(|h| h.to_u32()),
+				"offchain_resolution":format!("{:?}",grant.htlc.offchain_resolution),"chain_resolution":format!("{:?}",grant.htlc.chain_resolution),
+				"chain_resolution_height":grant.htlc.chain_resolution_height.map(|h| h.to_u32()),"backing":backing}));
+		}
+		let chain_after = ctx.bitcoind().get_block_count().await;
+		let status = result.map(|r| match r { Ok(()) => serde_json::json!({"cosigned":true}),
+			Err(e) => serde_json::json!({"cosigned":false,"code":format!("{:?}",e.code()),"reason":e.message()}) });
+		let row = serde_json::json!({"phase":phase,"payment_hash":self.payment_hash.to_string(),"chain_before":chain_before,"chain_after":chain_after,
+			"watchman_height":watchman.map(|b| b.height.to_u32()),"sweep_min_confs":self.srv.config().expiry_payout.sweep_min_confs,"grants":grants,"decision":status});
+		let bytes = serde_json::to_vec(&row).unwrap();
+		assert!(bytes.len() <= 65536);
+		let mut file = std::fs::OpenOptions::new().create(true).append(true).mode(0o600)
+			.open(ctx.datadir.join("parked-receive-refund-observations.private.jsonl")).unwrap();
+		assert!(file.metadata().unwrap().len() + bytes.len() as u64 <= 1_048_576);
+		file.write_all(&bytes).unwrap(); file.write_all(b"\n").unwrap(); file.sync_all().unwrap();
+	}
+
 	/// Try a revoke at every height until one is cosigned, which must happen
 	/// the block after the HTLC-recv vtxos expired.
 	async fn revoke_every_block_until_cosigned(&self, ctx: &TestContext) {
@@ -823,7 +877,10 @@ impl ParkedReceive {
 		loop {
 			self.srv.wait_for_sync_height(tip).await;
 			self.srv.watchmand().wait_for_sync_height(tip).await;
-			match self.revoke().await {
+			self.record_refund_observation(ctx, "before-revoke", None).await;
+			let result = self.revoke().await;
+			self.record_refund_observation(ctx, "after-revoke", Some(&result)).await;
+			match result {
 				Ok(()) => {
 					assert_eq!(tip, self.htlc_recv_expiry + BlockDelta::new(1),
 						"the first revoke should be cosigned right after the HTLC-recv vtxos expired");
@@ -832,8 +889,11 @@ impl ParkedReceive {
 				Err(status) => {
 					assert!(tip <= self.htlc_recv_expiry,
 						"revoke refused after the HTLC-recv vtxos expired: {status:?}");
-					assert!(status.message().contains("already committed"),
-						"unexpected refusal: {status:?}");
+					assert_eq!(status.code(), tonic::Code::InvalidArgument);
+					assert_eq!(status.message(), format!(
+						"bad user input: This lightning payment is not eligible for revocation yet: the recipient can claim until height {}",
+						self.htlc_recv_expiry,
+					));
 				},
 			}
 			ctx.generate_blocks_unsynced(1).await;
@@ -908,7 +968,10 @@ async fn intra_ark_revoke_refused_while_watchman_is_behind() {
 	let tip = ctx.generate_blocks(parked.htlc_recv_expiry.to_u32() + 1 - tip.to_u32()).await;
 	parked.srv.wait_for_sync_height(tip).await;
 
-	let status = parked.revoke().await.expect_err("revoke cosigned while the watchman is behind");
+	parked.record_refund_observation(&ctx, "watchman-behind-before-revoke", None).await;
+	let result = parked.revoke().await;
+	parked.record_refund_observation(&ctx, "watchman-behind-after-revoke", Some(&result)).await;
+	let status = result.expect_err("revoke cosigned while the watchman is behind");
 	assert!(status.message().contains("already committed"), "unexpected refusal: {status:?}");
 
 	parked.srv.watchmand().start().await.unwrap();

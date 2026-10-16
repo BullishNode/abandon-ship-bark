@@ -126,7 +126,14 @@ async fn current_owner_progress() {
 	assert_eq!(core.get_raw_transaction(&checkpoint_id, None).unwrap(), *checkpoint);
 	ctx.await_transactions_across_nodes(txids.clone(), [wm.bitcoind().as_ref()]).await;
 	let tip = ctx.generate_blocks(1).await; srv.wait_for_sync_height(tip).await; wm.wait_for_sync_height(tip).await;
-	for id in &txids { assert!(core.get_raw_transaction_info(id, None).unwrap().confirmations.unwrap_or(0) > 0); }
+	for id in &txids {
+		// Core 31 names P2A scripts `anchor`; the old typed RPC enum cannot
+		// decode it. Keep the exact positive confirmation requirement.
+		let actual: serde_json::Value = core.call("getrawtransaction", &[serde_json::json!(id), serde_json::json!(true)]).unwrap();
+		assert!(actual["confirmations"].as_u64().unwrap_or(0) > 0);
+	}
+	assert!(core.get_raw_transaction(&path.last().unwrap().compute_txid(), None).is_err(), "watchman forced the current-owner leaf");
+	assert_eq!(recipient.raw_vtxo(ids[0]).await, full, "original signed current-owner proof changed");
 	let journal = std::fs::read(&journal_path).unwrap(); let text = std::str::from_utf8(&journal).unwrap();
 	assert_eq!(text.lines().filter(|l|l.starts_with("u:")).count(), 1);
 	assert_eq!(text.lines().filter(|l|l.starts_with("p:")).count(), 1);

@@ -261,11 +261,13 @@ mod tests {
 		let policy = OrdinaryFeePolicy::default();
 		policy.initialize_fresh(&directory.join(DIRECT_DIRECTORY), Network::Regtest, DUMMY_SERVER_KEY.public_key()).unwrap();
 		let budget = OrdinaryFeeBudget::load(&directory.join(DIRECT_DIRECTORY), policy).unwrap();
+		// This PG-only fixture must actually own the ordinary policy key it signs.
 		let (_, full) = DummyTestVtxoSpec { amount: Amount::from_sat(20_000), fee: Amount::ZERO,
-			..Default::default() }.build();
+			user_keypair: *DUMMY_SERVER_KEY, ..Default::default() }.build();
 		let source: ark::ServerVtxo<Full> = full.into();
 		db.write(async |t| t.upsert_vtxos([&source]).await).await.unwrap();
 		let bare = source.to_bare();
+		assert_eq!(bare.policy().user_pubkey(), Some(DUMMY_SERVER_KEY.public_key()));
 		let signer = WatchmanSigner::new(Secret::new(*DUMMY_SERVER_KEY), Secret::new(*DUMMY_USER_KEY), db.clone());
 		let clause = signer.find_signable_clause(&bare).await.unwrap();
 		let mut tx = Transaction { version: transaction::Version::TWO,

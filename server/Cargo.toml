@@ -66,6 +66,7 @@ bitcoind-async-client.workspace = true
 lightning.workspace = true
 
 tonic = { workspace = true, features = ["tls-ring"] }
+prost.workspace = true
 tonic-health.workspace = true
 tonic-web = { workspace = true }
 tower.workspace = true

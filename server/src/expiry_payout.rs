@@ -17,7 +17,7 @@ use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
 use bitcoin_ext::FeeRateExt;
 use tracing::{error, info, warn};
 
-use crate::database::expiry_settlement::{payout_script, ExpiryInput, ExpirySource};
+use crate::database::expiry_settlement::{payout_script, ExpiryInput, ExpirySource, SweptBacking};
 use crate::database::ln::LightningNodeId;
 use crate::ln::SendRefund;
 use crate::nursery::NurseryTxKind;
@@ -169,6 +169,8 @@ impl Server {
 				if list.check_spk(script).await { return Ok(deferred("destination is blocklisted")); }
 			}
 		}
+		let capital_credit = self.db.read(async |t| t.prepare_payout_capital_credit(&inputs, &coins).await).await?;
+		let build_credit = capital_credit.clone();
 		let expected_build = expected.clone();
 		let minimum = cfg.min_payout_sat;
 		let built = self.rounds_wallet.build_blocking(move |wallet| {
@@ -185,7 +187,7 @@ impl Server {
 			// Select the gross debit with zero fee, then deduct the exact fee:
 			// change pays for its own weight, recipients for the rest. Every
 			// payout keeps operator change, which can bump it.
-			let mut psbt = wallet.build_tx_at_chunk_feerate(WithGuaranteedChange(LargestFirstCoinSelection), FeeRate::ZERO, configure)?;
+			let mut psbt = wallet.build_payout_at_chunk_feerate(WithGuaranteedChange(LargestFirstCoinSelection), FeeRate::ZERO, configure, &build_credit)?;
 			ensure!(psbt.fee()? == Amount::ZERO, "change must not charge an operator fee");
 			let unused = psbt.unsigned_tx.clone();
 			let result = (|| {
@@ -211,7 +213,7 @@ impl Server {
 					.filter(|v| *v >= change.script_pubkey.minimal_non_dust())
 					.context("operator change cannot pay for its own weight")?;
 				ensure!(per_script.is_empty() && psbt.fee()?.to_sat() == fee, "payout deductions do not equal its full mining fee");
-				let tx = wallet.finish_tx(psbt)?;
+				let tx = wallet.finish_payout_tx(psbt, &build_credit)?;
 				ensure!(tx.weight() == weight, "unexpected signed payout weight");
 				// Settlement rows record what the recipients paid.
 				Ok((tx, fee - operator_fee))
@@ -237,7 +239,8 @@ impl Server {
 			if let Some(change) = &wallet_metadata {
 				t.store_changeset(WalletKind::Rounds, change).await?;
 			}
-			t.store_expiry_payment(&inputs, &scripts, &tx, fee, tip, cfg.grace_blocks, target).await
+			t.store_expiry_payment(&inputs, &scripts, &tx, fee, tip, cfg.grace_blocks, target).await?;
+			t.store_payout_capital_release(&capital_credit, &tx).await
 		}).await;
 		if let Err(error) = stored {
 			// A lost COMMIT response does not mean rollback. Wait for the original
@@ -245,7 +248,11 @@ impl Server {
 			// not answer, exit: startup waits for that COMMIT and reapplies it.
 			let committed = self.db.write(async |t| {
 				t.lock_expiry_inputs(&keys).await?;
-				Ok(t.get_nursery_raw_tx(tx.compute_txid()).await?.is_some())
+				let raw = t.get_nursery_raw_tx(tx.compute_txid()).await?;
+				if raw.is_none() { return Ok(false); }
+				ensure!(raw.as_ref() == Some(&tx) && t.payout_capital_release_matches(&capital_credit, &tx).await?,
+					"committed payout/recovery capital outcome differs; reconciliation required");
+				Ok(true)
 			}).await.unwrap_or_else(|e| {
 				error!("expiry commit outcome unknown; exiting: {e:#}");
 				std::process::exit(1);
@@ -270,6 +277,8 @@ mod tests {
 		assert!(!cfg.enabled);
 		cfg.validate(bitcoin::Network::Bitcoin).unwrap();
 		cfg.enabled = true;
+		assert!(cfg.validate(bitcoin::Network::Bitcoin).is_err(), "no implicit fee headroom policy");
+		cfg.recovery_fee_headroom_sat = Some(20_000);
 		cfg.validate(bitcoin::Network::Bitcoin).unwrap();
 		cfg.grace_blocks = 0;
 		cfg.sweep_min_confs = 1;
@@ -280,6 +289,18 @@ mod tests {
 		cfg.interval = Duration::from_secs(1);
 		cfg.conf_target_blocks = 2;
 		assert!(cfg.validate(bitcoin::Network::Regtest).is_err());
+	}
+
+	#[test]
+	fn recovery_fee_headroom_requires_explicit_positive_ledger_bounded_policy() {
+		let mut config = Config::default();
+		config.enabled = true;
+		for value in [None, Some(0), Some(Amount::MAX_MONEY.to_sat() + 1), Some(u64::MAX)] {
+			config.recovery_fee_headroom_sat = value;
+			assert!(config.validate(bitcoin::Network::Regtest).is_err());
+		}
+		config.recovery_fee_headroom_sat = Some(20_000);
+		config.validate(bitcoin::Network::Regtest).unwrap();
 	}
 
 	#[test]
@@ -343,6 +364,9 @@ pub struct Config {
 	pub grace_blocks: u32,
 	pub sweep_min_confs: u32,
 	pub min_payout_sat: u64,
+	/// Declared confirmed operator fee headroom in the existing rounds wallet.
+	/// No default policy; activation requires a funded, positive explicit amount.
+	pub recovery_fee_headroom_sat: Option<u64>,
 	/// Existing estimator targets: 1, 3 or 6 blocks.
 	pub conf_target_blocks: u16,
 	/// The same configuration file mounted into the watchmand process.
@@ -352,14 +376,20 @@ pub struct Config {
 impl Default for Config {
 	fn default() -> Self {
 		Self { enabled: false, interval: Duration::from_secs(60), grace_blocks: 1008,
-			sweep_min_confs: 100, min_payout_sat: 1_000,
+			sweep_min_confs: 100, min_payout_sat: 1_000, recovery_fee_headroom_sat: None,
 			conf_target_blocks: 6, watchman_config: None }
 	}
 }
 
 impl Config {
 	pub fn validate(&self, network: bitcoin::Network) -> anyhow::Result<()> {
+		if let Some(headroom) = self.recovery_fee_headroom_sat {
+			ensure!(headroom > 0 && headroom <= Amount::MAX_MONEY.to_sat() && i64::try_from(headroom).is_ok(),
+				"recovery_fee_headroom_sat must be positive and at most Bitcoin MAX_MONEY");
+		}
 		if !self.enabled { return Ok(()); }
+		self.recovery_fee_headroom_sat
+			.context("enabled expiry payouts require an explicit recovery_fee_headroom_sat policy; declared maintenance transition required")?;
 		ensure!(!self.interval.is_zero(), "expiry_payout.interval must be positive");
 		ensure!(self.min_payout_sat >= 330 && self.min_payout_sat <= i64::MAX as u64,
 			"expiry_payout.min_payout_sat must fit the ledger and be at least 330");
@@ -460,7 +490,7 @@ impl Server {
 					},
 				};
 				if !allowed { stats.waiting += 1; continue; }
-				if !self.expiry_path_swept(&vtxo).await? { stats.waiting += 1; continue; }
+				let Some(backing) = self.expiry_backing_swept(&vtxo).await? else { stats.waiting += 1; continue; };
 				if let ExpirySource::LightningSend(hash) = coin.source {
 					let refundable = match send_refunds.get(&hash) {
 						Some(refundable) => *refundable,
@@ -502,7 +532,7 @@ impl Server {
 					groups.len() - 1
 				});
 				let group = &mut groups[index];
-				group.inputs.push(ExpiryInput { id: coin.id, source: coin.source, owner });
+				group.inputs.push(ExpiryInput { id: coin.id, source: coin.source, owner, backing });
 				group.gross = group.gross.checked_add(vtxo.amount().to_sat()).context("expiry group overflow")?;
 			}
 		}
@@ -568,20 +598,28 @@ impl Server {
 	/// Whether a confirmed sweep spent this coin's own backing path into the
 	/// rounds wallet, at the configured depth.
 	pub(crate) async fn expiry_path_swept(&self, vtxo: &Vtxo) -> anyhow::Result<bool> {
+		Ok(self.expiry_backing_swept(vtxo).await?.is_some())
+	}
+
+	async fn expiry_backing_swept(&self, vtxo: &Vtxo) -> anyhow::Result<Option<SweptBacking>> {
 		let anchor = vtxo.chain_anchor();
-		if self.bitcoind.try_get_tx_out(anchor, true).await?.is_some() { return Ok(false); }
+		if self.bitcoind.try_get_tx_out(anchor, true).await?.is_some() { return Ok(None); }
 		// A crash can leave a persisted unsigned round that Core never saw.
 		// Keep that candidate waiting without starving later funded coins.
 		let Some(anchor_info) = crate::bitcoind::custom_get_raw_transaction_info(
 			&self.bitcoind, anchor.txid, None,
-		).await? else { return Ok(false); };
-		let anchor_tx = bitcoin::consensus::deserialize(&anchor_info.hex)?;
+		).await? else { return Ok(None); };
+		let anchor_tx: Transaction = bitcoin::consensus::deserialize(&anchor_info.hex)?;
 		vtxo.validate_unsigned(&anchor_tx).context("invalid expiry path")?;
-		let path = std::iter::once(anchor).chain(vtxo.transactions()
-			.map(|t| OutPoint::new(t.tx.compute_txid(), t.output_idx as u32))).collect::<Vec<_>>();
-		let ids = path.iter().map(|op| op.to_string().parse::<VtxoId>()).collect::<Result<Vec<_>,_>>()?;
+		let anchor_value = anchor_tx.output.get(anchor.vout as usize).context("anchor output missing")?.value;
+		let mut path = vec![(anchor, anchor_value)];
+		for item in vtxo.transactions() {
+			let output = item.tx.output.get(item.output_idx).context("expiry path output missing")?;
+			path.push((OutPoint::new(item.tx.compute_txid(), item.output_idx as u32), output.value));
+		}
+		let ids = path.iter().map(|(op, _)| op.to_string().parse::<VtxoId>()).collect::<Result<Vec<_>,_>>()?;
 		let hints = self.db.read(async |t| t.expiry_settlement_spenders(&ids).await).await?;
-		for (outpoint, spender) in path.into_iter().zip(hints) {
+		for ((outpoint, source_value), spender) in path.into_iter().zip(hints) {
 			if outpoint != anchor && self.bitcoind.try_get_tx_out(outpoint, true).await?.is_some() { break; }
 			let Some(spender) = spender else { continue; };
 			let spender = Txid::from_str(&spender)?;
@@ -592,9 +630,12 @@ impl Server {
 			let wallet = self.rounds_wallet.lock().await;
 			let outputs = tx.output.iter().filter(|o| !o.script_pubkey.is_op_return()
 				&& o.script_pubkey.as_bytes() != [0x51, 0x02, 0x4e, 0x73]).collect::<Vec<_>>();
-			if !outputs.is_empty() && outputs.iter().all(|o| wallet.is_mine(o.script_pubkey.clone())) { return Ok(true); }
+			if !outputs.is_empty() && outputs.iter().all(|o| wallet.is_mine(o.script_pubkey.clone())) {
+				let block_hash = info.blockhash.context("confirmed sweep has no block identity")?;
+				return Ok(Some(SweptBacking { source: outpoint, source_value, receipt: spender, block_hash }));
+			}
 		}
-		Ok(false)
+		Ok(None)
 	}
 
 	/// Accelerate each payout past its confirmation target whose mempool chunk
@@ -629,11 +670,30 @@ impl Server {
 				Ok(built) => built,
 				Err(e) => { warn!(%txid, "expiry payout bump not built, unfunded or busy: {e:#}"); continue; },
 			};
-			// The nursery first: after a crash it rebroadcasts the child.
-			self.tx_nursery.broadcast_tx(child.clone(), NurseryTxKind::Internal, self.nursery_confirm_target()).await?;
+			// Publish exact child bytes and its derivation metadata together.
+			// Do not relay while an unknown COMMIT could leave the live wallet's
+			// inputs free; startup replays this same durable publication.
+			let metadata = wallet.staged().cloned();
+			let target = self.nursery_confirm_target();
+			let stored = self.db.write(async |t| {
+				if let Some(metadata) = &metadata { t.store_changeset(WalletKind::Rounds, metadata).await?; }
+				t.upsert_nursery_tx(&child, NurseryTxKind::Internal, target).await
+			}).await;
+			if let Err(error) = stored {
+				let outcome = self.db.write(async |t| {
+					t.execute("LOCK TABLE nursery_tx IN SHARE MODE", &[]).await?;
+					t.get_nursery_raw_tx(child.compute_txid()).await
+				}).await.unwrap_or_else(|error| {
+					error!("expiry bump commit outcome unknown; exiting: {error:#}");
+					std::process::exit(1);
+				});
+				ensure!(outcome.as_ref().is_none_or(|raw| raw == &child), "expiry bump committed different bytes");
+				if outcome.is_none() { return Err(error); }
+			}
 			wallet.commit_tx(&child);
 			if let Err(e) = wallet.persist().await { warn!("expiry bump wallet persist deferred to restart: {e:#}"); }
 			drop(wallet);
+			self.tx_nursery.broadcast_tx(child.clone(), NurseryTxKind::Internal, target).await?;
 			if !report.in_mempool {
 				// An evicted payout is relayed with the child that pays for it.
 				let payout = self.db.read(async |t| t.get_nursery_raw_tx(txid).await).await?

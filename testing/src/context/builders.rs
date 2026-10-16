@@ -18,7 +18,7 @@ use tokio::fs;
 
 use crate::constants::BOARD_CONFIRMATIONS;
 use crate::daemon::barkd::{Barkd, BarkdChainSource};
-use crate::daemon::watchmand::Watchmand;
+use crate::daemon::watchmand::{Watchmand, WATCHMAND_CONFIG_FILE};
 use crate::{Bark, Bitcoind, Captaind, Lightningd, LightningdConfig};
 use crate::util::{poll_interval, FutureExt};
 use super::TestContext;
@@ -37,6 +37,7 @@ pub struct CaptaindBuilder<'a> {
 	mod_cfg: Option<Box<dyn FnOnce(&mut server::Config)>>,
 	no_vtxo_pool: bool,
 	watchmand: bool,
+	recovery_fee_headroom: Option<Amount>,
 	mod_watchmand_cfg: Option<Box<dyn FnOnce(&mut server::config::watchmand::Config)>>,
 	exec: Option<PathBuf>,
 }
@@ -52,6 +53,7 @@ impl<'a> CaptaindBuilder<'a> {
 			mod_cfg: None,
 			no_vtxo_pool: false,
 			watchmand: false,
+			recovery_fee_headroom: None,
 			mod_watchmand_cfg: None,
 			exec: None,
 		}
@@ -102,6 +104,14 @@ impl<'a> CaptaindBuilder<'a> {
 		self
 	}
 
+	/// Declare this fixture's funded rounds fee reserve and activate it before
+	/// any client board/sweep setup, independently of the payout task's timing.
+	pub fn recovery_fee_headroom(mut self, amount: Amount) -> Self {
+		self.watchmand = true;
+		self.recovery_fee_headroom = Some(amount);
+		self
+	}
+
 	/// Adjust the config of the watchmand that accompanies this captaind.
 	/// Implies [`Self::watchmand`].
 	pub fn watchmand_cfg(
@@ -146,7 +156,28 @@ impl<'a> CaptaindBuilder<'a> {
 		}
 
 		if let Some(amount) = self.fund_amount {
-			self.ctx.fund_captaind(&ret, amount).await;
+			if let Some(headroom) = self.recovery_fee_headroom {
+				let operating = amount.checked_sub(headroom).filter(|amount| *amount > Amount::ZERO)
+					.expect("declared fixture capital must exceed its fee reserve");
+				// Same declared total capital, two actual confirmed funding coins.
+				// A later transaction's unconfirmed change is not fee liquidity.
+				self.ctx.fund_captaind(&ret, operating).await;
+				self.ctx.fund_captaind(&ret, headroom).await;
+			} else {
+				self.ctx.fund_captaind(&ret, amount).await;
+			}
+		}
+		if let Some(headroom) = self.recovery_fee_headroom {
+			assert!(headroom > Amount::ZERO && ret.wallet_status().await.rounds.trusted_balance >= headroom,
+				"fixture must actually fund its declared recovery fee headroom");
+			ret.stop().await.unwrap();
+			{
+				let path = ret.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE);
+				let mut cfg = ret.config_mut();
+				cfg.expiry_payout.recovery_fee_headroom_sat = Some(headroom.to_sat());
+				cfg.expiry_payout.watchman_config = Some(path);
+			}
+			ret.start().await.unwrap();
 		}
 
 		ret

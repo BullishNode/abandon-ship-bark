@@ -28,7 +28,7 @@ async fn fallback_delegated_signed_refresh_fee_is_reconciled() {
 
 async fn absence(name: &str, scheduled: bool, repeated: bool, refresh_fee: u64) {
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
-	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(move |c| {
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(move |c| {
 		c.vtxo_lifetime = BlockDelta::new(300);
 		c.round_interval = Duration::from_secs(3600);
 		c.fees.refresh.base_fee = sat(refresh_fee);
@@ -138,7 +138,7 @@ async fn fallback_delegated_return_before_payout_spends_replacements() {
 }
 async fn return_before_payout() {
 	let ctx = TestContext::new("bark_sdk/fallback_delegated_return_before_payout_spends_replacements").await;
-	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().cfg(|c| {
+	let srv = ctx.captaind("server").no_vtxo_pool().funded(btc(1)).watchmand().recovery_fee_headroom(sat(20_000)).cfg(|c| {
 		c.vtxo_lifetime = BlockDelta::new(300);
 		c.round_interval = Duration::from_secs(3600);
 	}).create().await;

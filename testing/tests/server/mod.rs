@@ -13,6 +13,8 @@ mod postgres_migrations;
 mod registration;
 mod settler;
 mod watchman;
+mod wallet_inventory;
+mod wallet_inventory_cli;
 
 use std::iter;
 use std::str::FromStr;

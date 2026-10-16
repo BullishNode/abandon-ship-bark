@@ -6,7 +6,7 @@ use ark::{ProtocolEncoding, ServerVtxo, VtxoId, Vtxo};
 use ark::lightning::PaymentHash;
 use ark::vtxo::policy::ServerVtxoPolicy;
 use ark::tree::signed::UnlockHash;
-use bitcoin::{ScriptBuf, Transaction};
+use bitcoin::{Amount, BlockHash, OutPoint, ScriptBuf, Transaction, Txid};
 use bitcoin::consensus::deserialize;
 use bitcoin::secp256k1::PublicKey;
 use tokio_postgres::Row;
@@ -19,10 +19,19 @@ use super::tree::VtxoTreeUpdate;
 use super::Tx;
 
 #[derive(Clone, Copy)]
+pub(crate) struct SweptBacking {
+	pub source: OutPoint,
+	pub source_value: Amount,
+	pub receipt: Txid,
+	pub block_hash: BlockHash,
+}
+
+#[derive(Clone, Copy)]
 pub(crate) struct ExpiryInput {
 	pub id: VtxoId,
 	pub source: ExpirySource,
 	pub owner: PublicKey,
+	pub backing: SweptBacking,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

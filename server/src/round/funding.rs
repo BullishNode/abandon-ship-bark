@@ -27,6 +27,8 @@ pub struct FundingTxSpec {
 	pub tree_output: TxOut,
 	/// Feerate for the funding tx.
 	pub fee_rate: FeeRate,
+	/// Existing configured ceiling, applied to the actual signed funding tx.
+	pub max_fee_rate: Option<FeeRate>,
 	/// If `Some`, the wallet is forced to include this input in the new tx.
 	/// `None` on the first attempt.
 	pub pinned_input: Option<WalletUtxoGuard>,
@@ -54,7 +56,7 @@ impl FundingTxSpec {
 		let selection = WithGuaranteedChange(
 			PreferConfirmedCoinSelection(DefaultCoinSelectionAlgorithm::default()),
 		);
-		let psbt = wallet.build_tx_at_chunk_feerate(selection, self.fee_rate, |b| {
+		let psbt = wallet.build_quiet_tx_at_chunk_feerate(selection, self.fee_rate, self.max_fee_rate, |b| {
 			// `Untouched` keeps insertion order: `tree_output` is added first, so
 			// it lands at vout `ROUND_TX_VTXO_TREE_VOUT` (0), as the round tx requires.
 			b.ordering(bdk_wallet::TxOrdering::Untouched);
@@ -97,7 +99,7 @@ impl FundingTxSpec {
 			pinned_input: pinned_input.utxo(),
 			build_time: start.elapsed(),
 		);
-		Ok(UnsignedFundingTx { psbt, txid, pinned_input, _extra_inputs })
+		Ok(UnsignedFundingTx { psbt, txid, max_fee_rate: self.max_fee_rate, pinned_input, _extra_inputs })
 	}
 }
 
@@ -106,6 +108,7 @@ impl FundingTxSpec {
 /// consumes. Built by [`FundingTxSpec::build`].
 pub struct UnsignedFundingTx {
 	psbt: Psbt,
+	max_fee_rate: Option<FeeRate>,
 	txid: Txid,
 	pinned_input: WalletUtxoGuard,
 	/// Held only for its Drop impl: releases the locks on the extra inputs
@@ -146,7 +149,7 @@ impl UnsignedFundingTx {
 	}
 
 	pub fn sign(self, wallet: &mut PersistedWallet) -> anyhow::Result<SignedFundingTx> {
-		match wallet.finish_tx(self.psbt().clone()) {
+		match wallet.finish_tx_with_max_fee_rate(self.psbt().clone(), self.max_fee_rate) {
 			Ok(tx) => Ok(SignedFundingTx {
 				tx,
 				txid: self.txid,

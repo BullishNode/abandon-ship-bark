@@ -60,7 +60,7 @@ async fn server(name: &str) -> (TestContext, Arc<Captaind>, Db) {
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
 			c.min_board_amount = sat(330);
-		}).watchmand().create().await;
+		}).watchmand().recovery_fee_headroom(sat(20_000)).create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	(ctx, srv, db)
 }
@@ -138,6 +138,7 @@ fn configure_payouts(srv: &Captaind, min_payout_sat: u64) {
 	let watchman = srv.watchmand().config().data_dir.join(WATCHMAND_CONFIG_FILE);
 	let mut config = srv.config_mut();
 	config.expiry_payout.enabled = true;
+		config.expiry_payout.recovery_fee_headroom_sat = Some(20_000);
 	config.expiry_payout.interval = Duration::from_secs(1);
 	config.expiry_payout.grace_blocks = 0;
 	config.expiry_payout.sweep_min_confs = 1;

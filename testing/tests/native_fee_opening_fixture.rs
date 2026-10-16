@@ -261,6 +261,84 @@ async fn current_original_tables(db: &Db) -> anyhow::Result<serde_json::Value> {
 	}).await
 }
 
+// This Core-only faucet is not a native fee allowance or an SDK payment.
+// Resolve the actual one-input body and absolute fee before signing or relay.
+fn bounded_component_faucet(
+	ctx: &TestContext, address: &bitcoin::Address, root: &Path,
+) -> anyhow::Result<(bitcoin::Txid, serde_json::Value)> {
+	use bitcoin::{absolute::LockTime, transaction::Version, OutPoint, ScriptBuf, Sequence, TxIn, TxOut, Witness};
+	const PRINCIPAL: u64 = 40_000;
+	const EXACT_FEE: u64 = 1_000;
+	const MAX_FEE: u64 = 20_000;
+	const MAX_DEBIT: u64 = 60_000;
+	let checked = address.to_string().parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>()?
+		.require_network(Network::Regtest)?;
+	ensure!(checked == *address, "faucet destination network differs");
+	let core = ctx.bitcoind().sync_client();
+	ensure!(core.get_block_hash(0)? == bitcoin::constants::genesis_block(Network::Regtest).block_hash(),
+		"faucet Core genesis differs");
+	let coin = core.list_unspent(Some(100), None, None, None, None)?.into_iter()
+		.find(|u| u.spendable && u.safe && u.amount.to_sat() > MAX_DEBIT)
+		.context("confirmed safe original Core faucet input unavailable")?;
+	let point = OutPoint::new(coin.txid, coin.vout);
+	let parent = core.get_raw_transaction(&point.txid, None)?;
+	let original = parent.output.get(point.vout as usize).context("faucet original vout absent")?;
+	let unspent = core.get_tx_out(&point.txid, point.vout, Some(true))?
+		.context("faucet actual original input is spent")?;
+	ensure!(original.value == coin.amount && original.script_pubkey == coin.script_pub_key
+		&& unspent.value == original.value && unspent.script_pub_key.hex.as_slice() == original.script_pubkey.as_bytes()
+		&& unspent.confirmations >= 100, "actual faucet parent, wallet and Core UTXO disagree");
+	let change = core.get_new_address(None, None)?.require_network(Network::Regtest)?;
+	let owned: serde_json::Value = core.call("getaddressinfo", &[serde_json::json!(change.to_string())])?;
+	ensure!(owned["ismine"] == true && owned["solvable"] == true
+		&& change.script_pubkey() != address.script_pubkey(), "faucet change is not independently Core owned");
+	let change_sat = original.value.to_sat().checked_sub(PRINCIPAL).and_then(|v| v.checked_sub(EXACT_FEE))
+		.context("faucet funding amount exceeds actual input")?;
+	let unsigned = Transaction { version: Version::TWO, lock_time: LockTime::ZERO,
+		input: vec![TxIn { previous_output: point, script_sig: ScriptBuf::new(),
+			sequence: Sequence::ENABLE_RBF_NO_LOCKTIME, witness: Witness::new() }],
+		output: vec![TxOut { value: bitcoin::Amount::from_sat(PRINCIPAL), script_pubkey: address.script_pubkey() },
+			TxOut { value: bitcoin::Amount::from_sat(change_sat), script_pubkey: change.script_pubkey() }] };
+	let output_sum = unsigned.output.iter().try_fold(0u64, |sum, o| sum.checked_add(o.value.to_sat()))
+		.context("faucet actual output sum overflow")?;
+	let fee = original.value.to_sat().checked_sub(output_sum).context("faucet actual fee is negative")?;
+	let debit = original.value.to_sat().checked_sub(change_sat).context("faucet debit underflow")?;
+	ensure!(fee == EXACT_FEE && fee <= MAX_FEE && debit == PRINCIPAL + fee && debit <= MAX_DEBIT
+		&& unsigned.output.len() == 2 && unsigned.output[0].value.to_sat() == PRINCIPAL,
+		"faucet absolute fee, principal, change or total debit exceeds declared component bounds");
+	let directory = root.join("bounded-core-faucet"); fs::DirBuilder::new().mode(0o700).create(&directory)?;
+	private_new(&directory.join("unsigned.tx"), &serialize(&unsigned))?;
+	let proposal = serde_json::json!({"input":point,"input_sat":original.value.to_sat(),
+		"owner_principal_sat":PRINCIPAL,"change_sat":change_sat,"actual_miner_fee_sat":fee,
+		"absolute_miner_fee_bound_sat":MAX_FEE,"input_minus_change_debit_sat":debit,
+		"total_debit_bound_sat":MAX_DEBIT,"native_fee_debits_sat":0,
+		"unsigned_body_sha256":sha256::Hash::hash(&serialize(&unsigned))});
+	private_new(&directory.join("PROPOSAL.json"), &serde_json::to_vec(&proposal)?)?;
+	let signed = core.sign_raw_transaction_with_wallet(&unsigned, None, None)?;
+	ensure!(signed.complete, "Core faucet signing incomplete; no relay");
+	let signed = signed.transaction()?;
+	let mut stripped = signed.clone();
+	for input in &mut stripped.input { input.script_sig = ScriptBuf::new(); input.witness = Witness::new(); }
+	ensure!(stripped == unsigned && signed.input.iter().all(|i| !i.witness.is_empty() || !i.script_sig.is_empty()),
+		"Core signing changed the bounded faucet body or left it unsigned");
+	let signed_bytes = serialize(&signed); let txid = signed.compute_txid();
+	private_new(&directory.join("signed.tx.private"), &signed_bytes)?;
+	private_new(&directory.join("ONCE-BROADCAST-INTENT.json"), &serde_json::to_vec(&serde_json::json!({
+		"txid":txid,"signed_sha256":sha256::Hash::hash(&signed_bytes),"actual_miner_fee_sat":fee,
+		"input_minus_change_debit_sat":debit,"retry":false,"resign":false}))?)?;
+	fs::File::open(&directory)?.sync_all()?;
+	// Exactly one relay. Any unknown/error preserves the intent and fails; never retry.
+	ensure!(core.send_raw_transaction(&signed)? == txid, "Core faucet returned another txid");
+	ensure!(serialize(&core.get_raw_transaction(&txid, None)?) == signed_bytes,
+		"Core accepted body differs from once signed faucet transaction");
+	let result = serde_json::json!({"status":"ACCEPTED_ONCE","txid":txid,
+		"signed_sha256":sha256::Hash::hash(&signed_bytes),"actual_miner_fee_sat":fee,
+		"absolute_miner_fee_bound_sat":MAX_FEE,"owner_principal_sat":PRINCIPAL,"change_sat":change_sat,
+		"input_minus_change_debit_sat":debit,"total_debit_bound_sat":MAX_DEBIT,"native_fee_debits_sat":0});
+	private_new(&directory.join("RESULT.json"), &serde_json::to_vec(&result)?)?;
+	Ok((txid, result))
+}
+
 #[tokio::test]
 async fn genuine_stopped_original_opening_activates_actual_owner_before_cap() {
 	use std::time::Duration;
@@ -277,6 +355,10 @@ async fn genuine_stopped_original_opening_activates_actual_owner_before_cap() {
 	assert_eq!(workload["nominal_ordinary_budget_sat"], 60_000); assert_eq!(workload["physical_floor_sat"], 40_000);
 	assert_eq!(workload["native_publications"], 0); assert_eq!(workload["customers"], 0);
 	assert_eq!(workload["live_58k_qualification"], false);
+	assert_eq!(workload["Core_faucet_principal_sat"], 40_000);
+	assert_eq!(workload["Core_faucet_exact_miner_fee_sat"], 1_000);
+	assert_eq!(workload["Core_faucet_max_miner_fee_sat"], 20_000);
+	assert_eq!(workload["Core_faucet_max_input_minus_change_debit_sat"], 60_000);
 	let declaration_bytes = read_original(&inputs.join("declaration.json"), 4096).unwrap();
 	let declaration: ComponentDeclaration = serde_json::from_slice(&declaration_bytes).unwrap();
 	assert!(serde_json::to_vec(&declaration).unwrap() == declaration_bytes, "native declaration must be canonical");
@@ -312,7 +394,7 @@ async fn genuine_stopped_original_opening_activates_actual_owner_before_cap() {
 	let watch = srv.watchmand();
 	// ONLY the explicit original physical operator floor: no customer or native publication.
 	let address = watch.wait_wallet_address().await;
-	let funding = ctx.bitcoind().fund_addr(&address, sat(40_000)).await;
+	let (funding, faucet_receipt) = bounded_component_faucet(&ctx, &address, &ctx.datadir).unwrap();
 	ctx.generate_blocks(1).await;
 	let tx = ctx.bitcoind().sync_client().get_raw_transaction(&funding, None).unwrap();
 	let vout = tx.output.iter().position(|o| o.value == sat(40_000) && o.script_pubkey == address.script_pubkey()).unwrap();
@@ -391,6 +473,7 @@ async fn genuine_stopped_original_opening_activates_actual_owner_before_cap() {
 		"native_opening_sha256":opening.original_opening_sha256, "original_24_table_cut_unchanged":true,
 		"ordinary_native_debits_sat":0,"synthetic_nominal_budget_sat":60000,"physical_unspent_sat":40000,
 		"live_58k_qualification":false,"financial_readiness":false,"native_publications":0,
+		"Core_faucet":faucet_receipt,
 		"missing_source_binding_refused":true,"changed_source_refused":true,"watchman_endpoint":endpoint,
 	})).unwrap()).unwrap();
 }

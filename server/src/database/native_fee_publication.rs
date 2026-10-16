@@ -57,7 +57,7 @@ impl Tx<'_> {
 		self.lock_htlc_settlements().await?;
 		self.lock_expiry_carriers().await?;
 		self.lock_native_fee_publication().await?;
-		self.batch_execute("LOCK TABLE wallet_changeset,native_fee_publication,native_fee_input,expiry_carrier IN SHARE MODE;").await?;
+		self.batch_execute("LOCK TABLE wallet_changeset,native_fee_publication,native_fee_input,expiry_carrier,native_urgent_attempt,native_urgent_input IN SHARE MODE;").await?;
 		Ok(())
 	}
 	/// Every DIRECT nursery insertion, including alternate callers, must bind
@@ -123,6 +123,8 @@ impl Tx<'_> {
 		for input in &signed.input {
 			let point = input.previous_output.to_string();
 			ensure!(inputs.insert(point.clone()), "duplicate native fee intent input");
+			ensure!(self.query_opt("SELECT attempt_index FROM native_urgent_input WHERE outpoint=$1", &[&point]).await?.is_none(),
+				"ordinary native input retained by an original urgent attempt");
 			self.execute("INSERT INTO native_fee_input(outpoint,wtxid) VALUES($1,$2) ON CONFLICT(outpoint) DO NOTHING", &[&point,&id]).await?;
 			let owner = self.query_one("SELECT wtxid FROM native_fee_input WHERE outpoint=$1", &[&point]).await?.get::<_, String>(0);
 			ensure!(owner == id, "native fee input already retained by a different signed candidate");

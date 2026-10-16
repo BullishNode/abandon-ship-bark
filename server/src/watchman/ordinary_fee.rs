@@ -456,6 +456,39 @@ impl OrdinaryFeeBudget {
 		Ok(())
 	}
 
+	/// Read-only paid-original checks for SQL retention. These expose no signing
+	/// or relay capability; the actual source locks must surround the caller.
+	pub(crate) fn require_urgent_candidate(&self, candidate: &UrgentCandidate) -> anyhow::Result<()> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length, "urgent original history uncertain");
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
+		let expected = candidate.reservation_entry(self.policy)?;
+		ensure!(ledger.urgent.get(&expected.attempt_index) == Some(&expected), "urgent SQL intent lacks original paid candidate");
+		if ledger.requires_epoch {
+			expected.require_identity(ledger.active_identity.as_ref().context("urgent actual activated owner missing")?)?;
+		}
+		Ok(())
+	}
+	pub(crate) fn retained_urgent_publications(&self) -> anyhow::Result<Vec<(UrgentCandidate, Option<BoundUrgentPublication>)>> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length, "urgent retained history uncertain");
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
+		ledger.urgent.values().map(|entry| {
+			let candidate = UrgentCandidate::decode_reserved(&ordinary_fee_publication::read_urgent_candidate(
+				&self.directory, entry.attempt_index)?, entry, self.policy)?;
+			let signed = ledger.urgent_signed.get(&entry.attempt_index).map(|signed| BoundUrgentPublication::decode(
+				&ordinary_fee_publication::read_urgent_signed(&self.directory, entry.attempt_index)?, signed.record_sha256,
+				&candidate.identity(), candidate.limits(), self.policy)).transpose()?;
+			Ok((candidate, signed))
+		}).collect()
+	}
+	pub(crate) fn require_urgent_signed(&self, publication: &BoundUrgentPublication) -> anyhow::Result<()> {
+		let retained = self.retained_urgent_publications()?;
+		ensure!(retained.iter().any(|(_, signed)| signed.as_ref() == Some(publication)),
+			"urgent SQL signed binding lacks exact original retained u2 record");
+		Ok(())
+	}
+
 	pub(crate) fn reserved_urgent_candidates(&self) -> anyhow::Result<Vec<UrgentCandidate>> {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
 		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length, "urgent original history is uncertain");

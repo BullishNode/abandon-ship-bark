@@ -77,13 +77,17 @@ fn now_ms() -> anyhow::Result<u64> {
 // Fixed projections only. Hash the actual BYTEA in PostgreSQL17 using built-in
 // sha256(bytea), not a new extension or a caller-supplied SQL expression.
 // https://www.postgresql.org/docs/17/functions-binarystring.html
-const SOURCES: [(&str, &str, &str); 4] = [
+const SOURCES: [(&str, &str, &str); 6] = [
 	("wallet_changeset", "SELECT count(*) FROM wallet_changeset",
 		"SELECT id,kind::text,octet_length(content) AS bytes,encode(sha256(content),'hex') AS hash FROM wallet_changeset ORDER BY id"),
 	("native_fee_publication", "SELECT count(*) FROM native_fee_publication",
 		"SELECT wtxid,txid,purpose,record_hash,policy_hash,opening_hash,octet_length(signed_tx) AS bytes,encode(sha256(signed_tx),'hex') AS hash,published_at IS NOT NULL AS published FROM native_fee_publication ORDER BY wtxid"),
 	("native_fee_input", "SELECT count(*) FROM native_fee_input",
 		"SELECT outpoint,wtxid FROM native_fee_input ORDER BY outpoint"),
+	("native_urgent_attempt", "SELECT count(*) FROM native_urgent_attempt",
+		"SELECT attempt_index,candidate_hash,publication_txid,purpose,policy_hash,opening_hash,octet_length(reservation_entry) AS entry_bytes,encode(sha256(reservation_entry),'hex') AS entry_hash,octet_length(candidate) AS candidate_bytes,encode(sha256(candidate),'hex') AS candidate_body_hash,octet_length(signed_entry) AS signed_entry_bytes,encode(sha256(signed_entry),'hex') AS signed_entry_hash,octet_length(signed_record) AS signed_bytes,encode(sha256(signed_record),'hex') AS signed_hash FROM native_urgent_attempt ORDER BY attempt_index"),
+	("native_urgent_input", "SELECT count(*) FROM native_urgent_input",
+		"SELECT outpoint,attempt_index FROM native_urgent_input ORDER BY outpoint"),
 	("expiry_carrier", "SELECT count(*) FROM expiry_carrier",
 		"SELECT txid,octet_length(signed_tx) AS bytes,encode(sha256(signed_tx),'hex') AS hash,backing_ids,fee_inputs,miner_fee_sat,funding_subsidy_sat,confirmed_height,confirmed_block FROM expiry_carrier ORDER BY txid"),
 ];

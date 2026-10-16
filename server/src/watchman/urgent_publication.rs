@@ -277,6 +277,15 @@ impl UrgentCandidate {
 		Ok(value)
 	}
 
+	pub(crate) fn purpose_name(&self) -> &'static str {
+		match self.purpose { UrgentPurpose::Claim => "claim", UrgentPurpose::Progression => "progression" }
+	}
+	/// Retain every EXTERNAL whole input. The parent-created P2A anchor is an
+	/// internal package edge, never an independent wallet coin or fee source.
+	pub(crate) fn external_inputs(&self, policy: OrdinaryFeePolicy) -> anyhow::Result<BTreeSet<OutPoint>> {
+		self.reservation_entry(policy)?;
+		Ok(self.sources.iter().map(|source| source.point).chain(self.fee_inputs.keys().copied()).collect())
+	}
 	pub(crate) fn id(&self) -> anyhow::Result<sha256::Hash> { Ok(sha256::Hash::hash(&serde_json::to_vec(self)?)) }
 	pub(crate) fn bind_signed(self, signed: &[Transaction], identity: &FeeServiceIdentity,
 		limits: CarrierLimits, policy: OrdinaryFeePolicy,
@@ -352,13 +361,20 @@ impl BoundUrgentPublication {
 }
 
 #[cfg(test)]
+pub(crate) fn synthetic_urgent_vector(progression: bool, limits: CarrierLimits)
+	-> (UrgentCandidate, Vec<Transaction>, FeeServiceIdentity, OrdinaryFeePolicy)
+{
+	tests::vector(progression, limits)
+}
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use bitcoin::{absolute, transaction, Sequence, TxIn, Txid, Witness};
 	use bitcoin::secp256k1::Keypair;
 	use super::super::ordinary_fee::{OrdinaryFeeBudget, BUDGET_FILE};
 
-	fn vector(progression: bool, limits: CarrierLimits) -> (UrgentCandidate, Vec<Transaction>, FeeServiceIdentity, OrdinaryFeePolicy) {
+	pub(super) fn vector(progression: bool, limits: CarrierLimits) -> (UrgentCandidate, Vec<Transaction>, FeeServiceIdentity, OrdinaryFeePolicy) {
 		let key = Keypair::new(&crate::SECP, &mut bitcoin::secp256k1::rand::thread_rng());
 		let operator = ScriptBuf::new_p2tr(&crate::SECP, key.x_only_public_key().0, None);
 		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };

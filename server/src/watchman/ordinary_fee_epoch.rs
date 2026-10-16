@@ -65,6 +65,8 @@ impl NativeFeeEpoch {
 		ensure!(raw.len() <= 4 * 1024 * 1024 && sha256::Hash::hash(raw) == expected,
 			"native fee activation original bytes/hash differ");
 		budget.require_no_unreconciled_urgent()?;
+		ensure!(!db.read(async |t| Ok(t.query_one("SELECT EXISTS(SELECT 1 FROM native_urgent_attempt) OR EXISTS(SELECT 1 FROM native_urgent_input)", &[])
+			.await?.get::<_, bool>(0))).await?, "retained urgent SQL source requires complete original package/input/nursery reconciliation before activation");
 		let genesis = core.get_block_hash(0).await?;
 		ensure!(genesis == bitcoin::constants::genesis_block(network).block_hash(),
 			"native fee activation actual Core genesis differs");

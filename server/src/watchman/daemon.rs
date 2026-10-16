@@ -172,6 +172,35 @@ impl Daemon {
 		}
 
 
+		let drain_address = cfg.sweep_address.clone()
+			.context("sweep_address is required for watchman")?.require_network(cfg.network)
+			.context("sweep_address network mismatch")?;
+		// Reconcile the original owning journal/opening BEFORE loading or
+		// replaying the owning wallet. Activation needs DB/Core/original files,
+		// not a wallet or a running worker. Every existing urgent/unknown HOLD
+		// therefore fails before wallet metadata can change.
+		let mut ordinary_fee_budget = None;
+		let mut native_fee_epoch = None;
+		if let Some(direct) = &cfg.watchman.direct_expiry {
+			let ordinary = Arc::new(super::ordinary_fee::OrdinaryFeeBudget::load_verified(
+				&direct.history_dir.join(crate::payout_witness::DIRECT_DIRECTORY), direct.ordinary_fee_policy, &fee_chain)?);
+			let retained = db.read(async |tx| Ok(tx.query_one(
+				"SELECT COALESCE(SUM(miner_fee_sat),0)::BIGINT AS total FROM expiry_carrier", &[],
+			).await?.get::<_, i64>("total"))).await?;
+			ordinary.require_retained_fees(Amount::from_sat(u64::try_from(retained)?))?;
+			ordinary.require_native_epoch()?;
+			super::ordinary_fee_epoch::NativeFeeEpoch::require_no_unreconciled_urgent(&db,&ordinary).await?;
+			// SAME native allowance, never the separate physical 40k floor.
+			// Protect a full configured claim + progression ceiling before any
+			// new discretionary carrier, Round or Pool reservation.
+			ordinary.protect_urgent_attempts(direct.max_miner_fee)?;
+			if let Some(opening) = &cfg.native_fee_opening {
+				native_fee_epoch = Some(super::ordinary_fee_epoch::NativeFeeEpoch::activate_config(&db, &bitcoind,
+					&ordinary, server_key.public_key(), cfg.network, opening).await?);
+			}
+			ordinary_fee_budget = Some(ordinary);
+		}
+
 		// *******************
 		// * START PROCESSES *
 		// *******************
@@ -195,27 +224,11 @@ impl Daemon {
 		}
 		telemetry::set_wallet_balance(WalletKind::Watchman, watchman_wallet.balance());
 		let watchman_wallet = InstrumentedLock::new("watchman_wallet", watchman_wallet);
-		let drain_address = cfg.sweep_address.clone()
-			.context("sweep_address is required for watchman")?.require_network(cfg.network)
-			.context("sweep_address network mismatch")?;
-		let mut ordinary_fee_budget = None;
 		let mut native_fee_broker = None;
 		let direct_expiry = if let Some(history) = history {
 			let direct = cfg.watchman.direct_expiry.as_ref().context("direct expiry configuration disappeared")?;
-			let ordinary = Arc::new(super::ordinary_fee::OrdinaryFeeBudget::load_verified(
-				&direct.history_dir.join(crate::payout_witness::DIRECT_DIRECTORY), direct.ordinary_fee_policy, &fee_chain)?);
-			let retained = db.read(async |tx| Ok(tx.query_one(
-				"SELECT COALESCE(SUM(miner_fee_sat),0)::BIGINT AS total FROM expiry_carrier", &[],
-			).await?.get::<_, i64>("total"))).await?;
-			ordinary.require_retained_fees(Amount::from_sat(u64::try_from(retained)?))?;
-			ordinary.require_native_epoch()?;
-			// SAME native allowance, never the separate physical 40k floor.
-			// Protect a full configured claim + progression ceiling before any
-			// new discretionary carrier, Round or Pool reservation.
-			ordinary.protect_urgent_attempts(direct.max_miner_fee)?;
-			if let Some(opening) = &cfg.native_fee_opening {
-				let epoch = super::ordinary_fee_epoch::NativeFeeEpoch::activate_config(&db, &bitcoind,
-					&ordinary, server_key.public_key(), cfg.network, opening).await?;
+			let ordinary = ordinary_fee_budget.as_ref().context("original native fee owner was not reconciled before wallet load")?.clone();
+			if let Some(epoch) = native_fee_epoch.take() {
 				// Same existing Rounds descriptor, derived only in memory: no
 				// address reveal or second DB-backed owning wallet process.
 				let rounds_xpriv = master_xpriv.derive_priv(&SECP, &[WalletKind::Rounds.child_number()])?;
@@ -228,7 +241,6 @@ impl Daemon {
 					cfg.fee_estimator.max_fee_rate.context("native owner rate ceiling missing")?,
 					bitcoin::hashes::sha256::Hash::hash(descriptor.as_bytes()), rtmgr.clone(), server_key)?));
 			}
-			ordinary_fee_budget = Some(ordinary.clone());
 			let policy = CarrierLimits { max_fee_rate: cfg.fee_estimator.max_fee_rate.context("missing direct fee ceiling")?,
 				max_miner_fee: direct.max_miner_fee, max_weight: Weight::from_wu(400_000) };
 			Some(DirectExpiryRuntime::new(db.clone(), watchman_wallet.clone(), cfg.network,

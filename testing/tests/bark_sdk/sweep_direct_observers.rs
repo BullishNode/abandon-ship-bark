@@ -225,9 +225,9 @@ async fn treasury_edge_inner(env: &Env, srv: &Captaind, label: &str) -> Treasury
 		let cs=env.db.read(async |t| {
 			let size=t.query_one("SELECT count(*),coalesce(sum(octet_length(content)),0)::BIGINT FROM wallet_changeset WHERE kind=$1::TEXT::wallet_kind",&[&kind.name()]).await?;
 			assert!(size.get::<_,i64>(0)<=100_000 && size.get::<_,i64>(1)<=128*1024*1024,"complete wallet descriptor source budget");t.read_aggregate_changeset(kind).await }).await.unwrap().expect("actual persisted descriptors");
-		let public_desc=[cs.descriptor.unwrap().to_string(),cs.change_descriptor.unwrap().to_string()];
-		assert!(public_desc.iter().all(|d|!d.contains("prv")),"no private descriptors in evidence");
-		descriptors.push(json!({"account":account,"both_actual_public_descriptors":public_desc,"public_descriptor":inventory.public_descriptor,
+		let public_desc=persisted_public_descriptors(cs.descriptor.map(|d|d.to_string()),
+			cs.change_descriptor.map(|d|d.to_string()),&inventory.public_descriptor);
+		descriptors.push(json!({"account":account,"actual_public_descriptors":public_desc,"public_descriptor":inventory.public_descriptor,
 			"tip":inventory.tip_hash,"reserved_outpoints":inventory.reserved_outpoints}));
 		for u in inventory.utxos { assert!(Instant::now()<deadline,"bounded complete treasury observation");if let Some(a)=canonical_asset(&core,u.outpoint.parse().unwrap(),account) { assert_eq!(a["value_sat"],u.value_sat); add(a); } }
 	}
@@ -430,4 +430,31 @@ async fn provision_fee_reserve(ctx: &TestContext, env: &Env, srv: &Captaind) {
 		if eligible>=total { assert!(inventory.utxos.iter().filter(|u|u.confirmed_fee_eligible).count()>=2,"whole-input urgent reserve needs distinct eligible outputs"); env.out.json("fee-reserve-ready.json",&json!({"eligible_sat":eligible,"declared_sat":total,"fragments":fragments,"utc":utc(),"qualified":false}));break; }
 		assert!(Instant::now()<deadline,"declared actual confirmed fee reserve must become eligible");tokio::time::sleep(Duration::from_millis(200)).await;
 	}
+}
+
+// The owning server creates a single-keychain BDK wallet. A missing internal
+// descriptor is its actual layout, not missing treasury evidence. The external
+// descriptor remains mandatory and independently matches the owning inventory.
+fn persisted_public_descriptors(external:Option<String>, internal:Option<String>, owning:&str)->Vec<String> {
+	let external=external.expect("actual persisted external descriptor required");
+	assert_eq!(external,owning,"persisted source must match the independently owning daemon");
+	let mut descriptors=vec![external];
+	if let Some(internal)=internal { descriptors.push(internal); }
+	assert!(descriptors.iter().all(|d|!d.contains("prv")),"no private descriptors in evidence");
+	descriptors
+}
+
+#[test]
+fn treasury_single_keychain_requires_actual_persisted_owning_descriptor() {
+	let key=bitcoin::secp256k1::Keypair::from_secret_key(&bitcoin::secp256k1::Secp256k1::new(),
+		&bitcoin::secp256k1::SecretKey::from_slice(&[1;32]).unwrap());
+	let mut wallet=bdk_wallet::Wallet::create_single(format!("tr({})",key.x_only_public_key().0))
+		.network(Network::Regtest).create_wallet_no_persist().unwrap();
+	let actual=wallet.public_descriptor(bitcoin_ext::bdk::KEYCHAIN).to_string();
+	let cs=wallet.take_staged().unwrap();
+	assert!(cs.change_descriptor.is_none(),"genuine single-keychain creation has no fabricated internal descriptor");
+	let external=cs.descriptor.unwrap().to_string();
+	assert_eq!(persisted_public_descriptors(Some(external.clone()),None,&actual),vec![actual.clone()]);
+	assert!(std::panic::catch_unwind(||persisted_public_descriptors(None,None,&actual)).is_err());
+	assert!(std::panic::catch_unwind(||persisted_public_descriptors(Some(external),None,"wrong owning descriptor")).is_err());
 }

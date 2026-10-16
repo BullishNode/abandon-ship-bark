@@ -27,6 +27,7 @@ pub mod intman;
 pub mod ln;
 pub mod nursery;
 pub(crate) mod urgent_publication;
+pub(crate) mod native_funding;
 pub mod rounds;
 pub mod tree;
 pub mod vtxopool;
@@ -87,6 +88,7 @@ enum AdvisoryLock {
 	MailboxWrite = 1,
 	HtlcSettlementWrite = 2,
 	ExpiryCarrierWrite = 3,
+	NativeFunding = 4,
 }
 
 /// An uncommitted offboard fetched for the retry-task commit path. Carries

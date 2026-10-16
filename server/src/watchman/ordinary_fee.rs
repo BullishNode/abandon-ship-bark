@@ -780,4 +780,41 @@ mod tests {
 		let dir=directory();let (policy,_)=adopted(&dir);let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();let rate=bitcoin::FeeRate::from_sat_per_vb(100).unwrap();budget.reserve_ceiling(Amount::from_sat(19_136)).unwrap();let before=std::fs::read(dir.join(BUDGET_FILE)).unwrap();assert!(budget.reserve_funding(test_candidate(0,500).0,rate).is_err());assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(),before);drop(budget);
 		let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();assert!(budget.reserve_funding(test_candidate(0,500).0,rate).is_err());budget.mark_native_uncertain().unwrap();assert!(budget.reserve_funding(test_candidate(1,500).0,rate).is_err());budget.reserve_urgent_ceiling(Amount::from_sat(1000)).unwrap();drop(budget);std::fs::remove_dir_all(dir).unwrap();
 	}
+	#[test]
+	fn native_replay_cannot_bind_a_superseded_unsigned_round_or_foreign_policy() {
+		use super::super::ordinary_funding::test_candidate;
+		let dir=directory();let(policy,_)=adopted(&dir);let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();
+		let(first,signed)=test_candidate(0,500);let(next,_)=test_candidate(1,600);let rate=bitcoin::FeeRate::from_sat_per_vb(10).unwrap();
+		let old=budget.reserve_funding(first,rate).unwrap();budget.reserve_funding(next,rate).unwrap();
+		assert!(budget.bind_funding(&old,&signed).is_err());drop(budget);
+		let valid=std::fs::read(dir.join(BUDGET_FILE)).unwrap();let bad=format!("g:{}:{}\n",old.index,serde_json::to_string(&bitcoin::consensus::serialize(&signed)).unwrap());
+		let mut corrupted=valid.clone();corrupted.extend(bad.as_bytes());std::fs::write(dir.join(BUDGET_FILE),corrupted).unwrap();
+		assert!(OrdinaryFeeBudget::load(&dir,policy).is_err(),"restart must retain newer-family refusal");
+		std::fs::write(dir.join(BUDGET_FILE),&valid).unwrap();let mut lines=String::from_utf8(valid).unwrap().lines().map(str::to_owned).collect::<Vec<_>>();
+		let mut reservation:FundingReservation=serde_json::from_str(lines[0].strip_prefix("f:").unwrap()).unwrap();reservation.policy_sha256=sha256::Hash::hash(b"foreign policy");lines[0]=format!("f:{}",serde_json::to_string(&reservation).unwrap());
+		std::fs::write(dir.join(BUDGET_FILE),lines.join("\n")+"\n").unwrap();
+		assert!(urgent_snapshot(&dir).is_err(),"read-only startup cannot adopt foreign native policy");
+		std::fs::remove_dir_all(dir).unwrap();
+	}
+
+}
+
+/// Stable read-only identities for the authenticated caller. No second FLOCK owner.
+pub(crate) fn installed_identity(directory:&Path)->anyhow::Result<(sha256::Hash,sha256::Hash)> {
+	let raw=read_bounded(&directory.join(POLICY_FILE),2048)?;let stored:StoredPolicy=serde_json::from_slice(&raw)?;
+	ensure!(serde_json::to_vec(&stored)?==raw,"noncanonical native funding policy");
+	require_installed_policy(directory,stored.policy)?;Ok((sha256::Hash::hash(&raw),stored.opening_sha256))
+}
+
+pub(crate) fn funding_snapshot(directory:&Path)->anyhow::Result<Vec<FundingState>> {
+	let policy_raw=read_bounded(&directory.join(POLICY_FILE),2048)?;let stored:StoredPolicy=serde_json::from_slice(&policy_raw)?;
+	ensure!(serde_json::to_vec(&stored)?==policy_raw,"native funding policy is not canonical");
+	let opening_raw=read_bounded(&directory.join(OPENING_FILE),2048)?;
+	ensure!(sha256::Hash::hash(&opening_raw)==stored.opening_sha256,"native funding opening differs");
+	let opening:OrdinaryFeeOpening=serde_json::from_slice(&opening_raw)?;opening.validate(stored.policy)?;
+	let path=directory.join(BUDGET_FILE);let before=std::fs::metadata(&path)?;let raw=read_bounded(&path,MAX_HISTORY_BYTES)?;let after=std::fs::metadata(&path)?;
+	ensure!(before.len()==after.len() && before.modified()?==after.modified()? && raw.len()as u64==after.len(),"native fee history changed at startup");
+	let (_,_,_,_,funding,_)=parse_history(std::str::from_utf8(&raw)?,opening.initial_charge(stored.policy)?,stored.policy)?;
+	ensure!(funding.values().all(|s|s.reservation.policy_sha256==sha256::Hash::hash(&policy_raw)),"native funding policy identity differs");
+	Ok(funding.into_values().collect())
 }

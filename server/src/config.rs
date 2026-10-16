@@ -213,6 +213,9 @@ pub struct Config {
 	/// Immutable fee policy installed only during fresh server creation.
 	#[serde(default)]
 	pub direct_expiry_fee_policy: crate::watchman::ordinary_fee::OrdinaryFeePolicy,
+	/// Explicit privileged address of the SAME Watchman fee owner.
+	#[serde(default)]
+	pub native_funding_owner_address: Option<std::net::SocketAddr>,
 	pub network: bitcoin::Network,
 	/// The number of blocks after which a VTXO expires, by default 6*24*30 so that
 	/// a VTXO can live for up to 30 days.

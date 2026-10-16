@@ -117,6 +117,8 @@ pub struct UnsignedFundingTx {
 }
 
 impl UnsignedFundingTx {
+	pub fn pinned_input(&self) -> OutPoint { self.pinned_input.utxo() }
+
 	pub fn psbt(&self) -> &Psbt {
 		&self.psbt
 	}

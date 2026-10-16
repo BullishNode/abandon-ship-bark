@@ -911,6 +911,15 @@ impl CollectingPayments {
 			pinned_input: self.common_round_tx_input.take(),
 		}.build(&srv.rounds_wallet).await.map_err(RoundError::Recoverable)?;
 
+		// Full immutable fee/input authorization precedes the first public tree promise.
+		let native_funding = if srv.config.direct_expiry.enabled {
+			use crate::watchman::ordinary_funding::{FundingCandidate,FundingFamily,FundingPurpose};
+			let candidate=FundingCandidate::from_psbt(FundingPurpose::Round,FundingFamily::Round {
+				round_seq:round_step.round_seq().inner(),pinned_input:funding_tx.pinned_input(),
+			},u32::try_from(round_step.attempt_seq()).map_err(|e|RoundError::Fatal(e.into()))?,funding_tx.psbt()).map_err(RoundError::Fatal)?;
+			srv.native_funding_owner(candidate,None).await.map_err(RoundError::Fatal)?
+		} else {None};
+
 		// Generate vtxo nonces and combine with user's nonces.
 		let (cosign_sec_nonces, cosign_pub_nonces) = {
 			let nb_internal = vtxos_spec.nb_internal_nodes();
@@ -983,7 +992,7 @@ impl CollectingPayments {
 			real_outputs,
 			cosign_part_sigs: HashMap::with_capacity(unsigned_vtxo_tree.nb_leaves()),
 			unsigned_vtxo_tree,
-			funding_tx,
+			funding_tx, native_funding,
 			user_cosign_nonces,
 			inputs_per_cosigner: self.inputs_per_cosigner,
 			output_mailbox_ids,
@@ -1017,6 +1026,7 @@ pub struct SigningVtxoTree {
 	cosign_agg_nonces: Vec<musig::AggregatedNonce>,
 	unsigned_vtxo_tree: UnsignedVtxoTree,
 	funding_tx: UnsignedFundingTx,
+	native_funding:Option<crate::watchman::ordinary_funding::FundingReservation>,
 
 	// data from earlier
 	all_inputs: HashMap<VtxoId, Vtxo<Full>>,
@@ -1157,11 +1167,17 @@ impl SigningVtxoTree {
 				.map_err(|e| RoundError::Recoverable(e))?
 		};
 
+		if let Some(original)=&self.native_funding {
+			let bound=srv.native_funding_owner(original.candidate.clone(),Some(&signed_round_tx.tx)).await.map_err(RoundError::Fatal)?;
+			if bound.as_ref()!=Some(original) {return Err(RoundError::Fatal(anyhow!("native Round signed binding changed original reservation")));}
+		}
+
 		// Persist the signed funding tx to the database.
 		let update = VtxoTreeUpdate::new()
 			.upsert_funding_tx(&signed_round_tx.tx);
 		let signed_tx = signed_round_tx.tx.clone();
 		srv.db.write(async |t| {
+			if let Some(original)=&self.native_funding {t.require_native_funding_binding(original,&signed_tx).await?;}
 			t.execute_vtxo_tree_update(update).await?;
 			t.update_round_funding_tx(&signed_tx).await
 		}).await.map_err(|e| RoundError::Fatal(e.context("failed to persist signed funding tx")))?;

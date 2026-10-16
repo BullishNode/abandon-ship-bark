@@ -199,3 +199,61 @@ mod tests {
 		let mut changed: FundingRequest=serde_json::from_slice(&raw).unwrap();changed.candidate.generation+=1;assert!(FundingRequest::authenticate(&serde_json::to_vec(&changed).unwrap(),false,key.public_key(),genesis,hash,hash).is_err());
 	}
 }
+
+#[derive(Serialize,Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FundingReply { reservation:FundingReservation, signature:schnorr::Signature }
+impl FundingReply {
+	fn message(reservation:&FundingReservation,server:PublicKey,genesis:bitcoin::BlockHash)->anyhow::Result<Message> {
+		let mut engine=sha256::Hash::engine();engine.input(b"bark/native-funding-reply/v1");engine.input(&serde_json::to_vec(&(server,genesis,reservation))?);Ok(Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array()))
+	}
+}
+pub(crate) fn sign_reply(reservation:FundingReservation,key:&Keypair,genesis:bitcoin::BlockHash)->anyhow::Result<Vec<u8>> {
+	let signature=crate::SECP.sign_schnorr(&FundingReply::message(&reservation,key.public_key(),genesis)?,key);
+	Ok(serde_json::to_vec(&FundingReply {reservation,signature})?)
+}
+pub(crate) fn verify_reply(raw:&[u8],candidate:&FundingCandidate,server:PublicKey,genesis:bitcoin::BlockHash,policy:sha256::Hash)->anyhow::Result<FundingReservation> {
+	ensure!(raw.len()<=2*1024*1024,"native owner response bound");let reply:FundingReply=serde_json::from_slice(raw)?;
+	ensure!(serde_json::to_vec(&reply)?==raw && reply.reservation.candidate==*candidate && reply.reservation.policy_sha256==policy,"native owner response candidate/policy differs");
+	reply.reservation.fee()?;crate::SECP.verify_schnorr(&reply.signature,&FundingReply::message(&reply.reservation,server,genesis)?,&server.x_only_public_key().0)?;Ok(reply.reservation)
+}
+
+impl crate::Server {
+	pub(crate) async fn native_funding_owner(&self,candidate:FundingCandidate,signed:Option<&Transaction>)->anyhow::Result<Option<FundingReservation>> {
+		if !self.config.direct_expiry.enabled {return Ok(None);}
+		let address=self.config.native_funding_owner_address.context("direct Round/Pool requires explicit owning Watchman fee endpoint")?;
+		let (policy,opening)=super::ordinary_fee::installed_identity(&self.config.data_dir)?;
+		let genesis=bitcoin::constants::genesis_block(self.config.network).block_hash();
+		let raw=FundingRequest::sign(candidate.clone(),signed,self.server_key.leak_ref(),genesis,policy,opening)?;
+		let maximum=self.config.fee_estimator.max_fee_rate.context("native funding needs explicit actual rate ceiling")?;
+		candidate.require_rate(maximum)?;
+		let endpoint=tonic::transport::Endpoint::from_shared(format!("http://{address}"))?
+			.connect_timeout(std::time::Duration::from_secs(5)).timeout(std::time::Duration::from_secs(30));
+		let mut client=server_rpc::admin::NativeFundingAdminServiceClient::new(endpoint.connect().await?);
+		let request=server_rpc::protos::NativeFundingOwnerRequest {authenticated_request:raw};
+		// A lost reply is uncertainty, never permission to retry a different body.
+		let response=tokio::time::timeout(std::time::Duration::from_secs(30),async {
+			if signed.is_some(){client.bind_native_funding(request).await}else{client.reserve_native_funding(request).await}
+		}).await.context("native funding owner reply unknown; retain original candidate")??.into_inner();
+		let reservation=verify_reply(&response.authenticated_response,&candidate,self.server_pubkey,genesis,policy)?;
+		ensure!(reservation.max_fee_rate<=maximum,"native owner rate ceiling exceeds caller configuration");
+		Ok(Some(reservation))
+	}
+}
+
+#[cfg(test)]
+mod reply_tests {
+	use super::*;
+	#[test]
+	fn early_promise_requires_authentic_owner_reply_for_exact_attempt() {
+		use ark::test_util::dummy::{DUMMY_SERVER_KEY,DUMMY_USER_KEY};
+		let(candidate,_)=test_candidate(0,500);let key=*DUMMY_SERVER_KEY;let genesis=bitcoin::constants::genesis_block(bitcoin::Network::Regtest).block_hash();
+		let policy=sha256::Hash::hash(b"existing actual policy fixture");
+		let reservation=FundingReservation {policy_sha256:policy,index:7,candidate:candidate.clone(),max_fee_rate:FeeRate::from_sat_per_vb(10).unwrap()};
+		let raw=sign_reply(reservation.clone(),&key,genesis).unwrap();assert_eq!(verify_reply(&raw,&candidate,key.public_key(),genesis,policy).unwrap(),reservation);
+		assert!(verify_reply(&raw,&candidate,DUMMY_USER_KEY.public_key(),genesis,policy).is_err());
+		let(mut different,_)=test_candidate(1,500);assert!(verify_reply(&raw,&different,key.public_key(),genesis,policy).is_err());
+		different=candidate.clone();different.prevouts[0].value=Amount::from_sat(10001);assert!(verify_reply(&raw,&different,key.public_key(),genesis,policy).is_err());
+		let mut reply:FundingReply=serde_json::from_slice(&raw).unwrap();reply.reservation.index+=1;assert!(verify_reply(&serde_json::to_vec(&reply).unwrap(),&candidate,key.public_key(),genesis,policy).is_err());
+	}
+}

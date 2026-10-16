@@ -42,6 +42,7 @@ const SERVER_KEY_PATH: &str = "m/2'/0'";
 
 /// Server struct that runs all non-user-facing background services
 pub struct Daemon {
+	pub(crate) funding_owner: Option<Arc<super::funding_owner::FundingOwner>>,
 	rtmgr: RuntimeManager,
 	#[allow(unused)]
 	sync_manager: SyncManager,
@@ -196,6 +197,12 @@ impl Daemon {
 				.context("restoring direct expiry reservations")?)
 		} else { None };
 
+		let funding_owner = if let Some(runtime) = &direct_expiry {
+			Some(Arc::new(super::funding_owner::FundingOwner::new(db.clone(),bitcoind.clone(),runtime.ordinary.clone(),
+				watchman_wallet.clone(),server_key,cfg.network,&master_xpriv,runtime.policy.max_fee_rate,rtmgr.clone()).await
+				.context("restoring original native funding input intents")?))
+		} else {None};
+
 		// The settler writes preimages to the htlc_settlement WAL table but
 		// does NOT spawn a CLN settlement subscriber — watchmand has no CLN
 		// access. Captaind's settler polls the shared table periodically and
@@ -260,7 +267,7 @@ impl Daemon {
 		let watchman_handle = watchman.start(rtmgr.clone());
 
 		Ok(Self {
-			rtmgr, sync_manager, watchman_wallet, frontier, watchman_handle,
+			rtmgr, sync_manager, watchman_wallet, frontier, watchman_handle, funding_owner,
 			bitcoin_address_blocklist,
 		})
 	}

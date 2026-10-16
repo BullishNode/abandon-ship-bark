@@ -856,3 +856,12 @@ message WalletInventoryResponse {
 message LightningNodeUri {
 	string uri = 1;
 }
+
+// Privileged existing Watchman admin plane. Each bounded request/reply is
+// additionally signed against the actual shared server/chain/policy identity.
+service NativeFundingAdminService {
+ rpc ReserveNativeFunding(NativeFundingOwnerRequest) returns (NativeFundingOwnerResponse);
+ rpc BindNativeFunding(NativeFundingOwnerRequest) returns (NativeFundingOwnerResponse);
+}
+message NativeFundingOwnerRequest { bytes authenticated_request = 1; }
+message NativeFundingOwnerResponse { bytes authenticated_response = 1; }

@@ -209,6 +209,7 @@ async fn automatic_board_fixture_with_funding(name: &str, board_fee: Amount, rou
 			c.direct_expiry.grace_blocks = 0;
 			c.direct_expiry.interval = std::time::Duration::from_secs(3600);
 		}).watchmand_cfg(move |c| {
+			c.min_trusted_confs = 3;
 			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(),
 				history_dir: c.data_dir.parent().unwrap().join("server"), max_miner_fee: sat(10_000),
 			});
@@ -227,15 +228,20 @@ async fn automatic_board_fixture_with_funding(name: &str, board_fee: Amount, rou
 	let mailbox = wallet.mailbox_keypair().public_key().serialize().to_vec();
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let stored = db.read(async |t| Ok(t.query_one(
-		"SELECT spk, account_xpub FROM fallback_record WHERE mailbox_pk=$1", &[&mailbox],
+		"SELECT spk, mailbox_sig FROM fallback_record WHERE mailbox_pk=$1", &[&mailbox],
 	).await?)).await.unwrap();
 	assert_eq!(stored.get::<_, Vec<u8>>("spk"), record.spk.as_bytes());
-	assert_eq!(stored.get::<_, Vec<u8>>("account_xpub"), record.account_xpub.encode());
+	assert_eq!(stored.get::<_, Vec<u8>>("mailbox_sig"), record.mailbox_signature.serialize());
+	record.verify(Network::Regtest, wallet.mailbox_keypair().public_key()).unwrap();
+	let retained = wallet.fallback_key_link(coin.user_pubkey()).await.unwrap();
+	retained.verify(Network::Regtest, wallet.mailbox_keypair().public_key(), &record).unwrap();
 	let coin_key = coin.user_pubkey().serialize().to_vec();
 	let linked = db.read(async |t| Ok(t.query_one(
-		"SELECT mailbox_pk FROM key_link WHERE user_pubkey=$1", &[&coin_key],
+		"SELECT mailbox_pk,sig,recovery_index FROM key_link WHERE user_pubkey=$1", &[&coin_key],
 	).await?)).await.unwrap();
 	assert_eq!(linked.get::<_, Vec<u8>>("mailbox_pk"), mailbox);
+	assert_eq!(linked.get::<_, Vec<u8>>("sig"), retained.signature.serialize());
+	assert_eq!(linked.get::<_, Option<i32>>("recovery_index"), retained.recovery_index.map(|i| i as i32));
 	let core = ctx.bitcoind().sync_client();
 	assert!(core.get_tx_out(&coin.chain_anchor().txid, coin.chain_anchor().vout, Some(true)).unwrap().is_some());
 	drop(wallet); // Original client stays absent through claim, confirmation and fresh recovery.
@@ -473,7 +479,8 @@ async fn confirmed_user_leaf_refuses_expiry_freeze_and_remains_owner_spendable()
 	// its SQLite keys. This fixture's fresh Board is within a bounded scan.
 	let user_master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
 	let account = user_master.derive_priv(&ark::SECP, &DerivationPath::from_str("m/350'/0'").unwrap()).unwrap();
-	assert_eq!(bitcoin::bip32::Xpub::from_priv(&ark::SECP, &account), record.account_xpub);
+	let mailbox = user_master.derive_priv(&ark::SECP, &DerivationPath::from_str("m/350'/1'").unwrap()).unwrap().to_keypair(&ark::SECP);
+	record.verify(Network::Regtest, mailbox.public_key()).unwrap();
 	let user_key = (0..32).map(|i| account.derive_priv(&ark::SECP, &[bitcoin::bip32::ChildNumber::Normal { index: i }])
 		.unwrap().to_keypair(&ark::SECP)).find(|k| k.public_key() == coin.user_pubkey()).unwrap();
 	let claim_clause = coin.policy().as_pubkey().unwrap().user_pubkey_claim_clause(coin.exit_delta());
@@ -546,7 +553,31 @@ async fn automatic_expired_board_pays_registered_recipient_from_actual_backing()
 	// already stopped; neither daemon receives a manual freeze/sweep request.
 	let fee_address = tokio::time::timeout(std::time::Duration::from_secs(30),
 		srv.watchmand().wait_wallet_address()).await.expect("matching direct watchmand must start with a valid fee ceiling");
-	ctx.bitcoind().fund_addr(fee_address, sat(50_000)).await;
+	// Same finite 50000-sat opening, split so selecting a complete fee input
+	// can leave the native 40000-sat confirmed urgent floor untouched.
+	let core = ctx.bitcoind().sync_client();
+	let mut funding_points = BTreeSet::new();
+	for _ in 0..5 {
+		let txid = ctx.bitcoind().fund_addr(fee_address.clone(), sat(10_000)).await;
+		let tx = core.get_raw_transaction(&txid, None).unwrap();
+		let vout = tx.output.iter().position(|o| o.script_pubkey == fee_address.script_pubkey() && o.value == sat(10_000)).unwrap();
+		assert!(funding_points.insert(OutPoint::new(txid, vout as u32)));
+	}
+	ctx.generate_blocks(3).await;
+	srv.watchmand().wait_for_sync_height(BlockHeight::new(core.get_block_count().unwrap() as u32)).await;
+	let before = server_rpc::admin::WalletAdminServiceClient::connect(format!("http://{}",srv.watchmand().config().admin_address.unwrap()))
+		.await.unwrap().wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner().watchman.unwrap();
+	assert!(before.complete && before.network == "regtest" && before.min_trusted_confirmations == 3);
+	assert_eq!(before.utxos.len(), 5);
+	assert!(before.reserved_outpoints.is_empty());
+	assert_eq!(before.utxos.iter().map(|u|u.outpoint.parse::<OutPoint>().unwrap()).collect::<BTreeSet<_>>(),funding_points);
+	assert!(before.utxos.iter().all(|u|u.value_sat==10_000 && u.confirmed_fee_eligible && u.confirmations>=3));
+	let history = srv.config().data_dir.join("direct-expiry-witness");
+	let policy_bytes = std::fs::read(history.join("ordinary-fee-policy.json")).unwrap();
+	let policy:server::watchman::ordinary_fee::OrdinaryFeePolicy=serde_json::from_slice(&policy_bytes).unwrap();
+	assert_eq!(policy,server::watchman::ordinary_fee::OrdinaryFeePolicy::default());
+	let ledger_before = std::fs::read_to_string(history.join("ordinary-fee-budget")).unwrap();
+	assert!(ledger_before.is_empty(),"fresh fixture must have its real empty history; never reset it");
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
 	let cap_cfg = srv.config().clone();
@@ -610,10 +641,142 @@ async fn automatic_expired_board_pays_registered_recipient_from_actual_backing()
 	}).await.expect("actual daemon must reconcile the confirmed winner before recovery");
 	assert_eq!(db.read(async |t| Ok(t.query_one("SELECT count(*)::bigint FROM expiry_carrier", &[]).await?
 		.get::<_, i64>(0))).await.unwrap(), 1, "one automatic carrier, no second principal payout");
+	let observed_height = core.get_block_count().unwrap();
+	let observed_tip = core.get_block_hash(observed_height).unwrap().to_string();
+	let after = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+		let mut client = server_rpc::admin::WalletAdminServiceClient::connect(format!("http://{}",watch.admin_address.unwrap())).await.unwrap();
+		loop {
+			let inventory = client.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner().watchman.unwrap();
+			if inventory.complete && u64::from(inventory.tip_height)==observed_height && inventory.tip_hash==observed_tip { break inventory; }
+			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+		}
+	}).await.expect("owning fee wallet must actually observe the independent confirmed carrier tip");
+	assert!(after.complete && after.network=="regtest" && after.min_trusted_confirmations==3);
 	cap_daemon.kill().await.unwrap();
 	cap_daemon.wait().await.unwrap();
 	watch_daemon.kill().await.unwrap();
 	watch_daemon.wait().await.unwrap();
+	// Read the independent ledger only after both financial writers have stopped.
+	// No reset, topup or reconstruction is performed to improve a measurement.
+	let ledger_path = history.join("ordinary-fee-budget");
+	assert!(std::fs::metadata(&ledger_path).unwrap().len()<=2*1024*1024);
+	let ledger_after = std::fs::read_to_string(&ledger_path).unwrap();
+	assert!(ledger_after.starts_with(&ledger_before) && ledger_after.ends_with('\n'));
+	let charges = ledger_after.lines().map(|line| {
+		let amount=line.parse::<u64>().unwrap();
+		assert_eq!(line,amount.to_string());assert_eq!(amount,10_000);
+		amount
+	}).collect::<Vec<_>>();
+	assert!(!charges.is_empty() && charges.len()<=6);
+	assert!(charges.iter().sum::<u64>()<=60_000);
+	assert_eq!(std::fs::read(history.join("ordinary-fee-policy.json")).unwrap(),policy_bytes);
+	let versions = db.read(async |t| t.query("SELECT txid,generation,signed_tx,backing_ids,fee_inputs::text,miner_fee_sat,funding_subsidy_sat,confirmed_height FROM expiry_carrier ORDER BY generation",&[])
+		.await.map_err(Into::into)).await.unwrap();
+	assert_eq!(versions.len(),1,"preserve this original single-carrier fixture; RBF is not exercised here");
+	assert!(versions.len()<=charges.len());
+	let mut selected=BTreeSet::new();let mut measured=Vec::new();
+	for row in &versions {
+		let txid:bitcoin::Txid=row.get::<_,String>(0).parse().unwrap();
+		assert_eq!(row.get::<_,Vec<String>>(3),vec![ark::VtxoId::from(backing).to_string()]);
+		let signed:bitcoin::Transaction=bitcoin::consensus::deserialize(&row.get::<_,Vec<u8>>(2)).unwrap();
+		let observed=core.get_raw_transaction(&txid,None).unwrap();
+		assert_eq!(bitcoin::consensus::serialize(&signed),bitcoin::consensus::serialize(&observed));
+		let input_sat=observed.input.iter().map(|i|core.get_raw_transaction(&i.previous_output.txid,None).unwrap()
+			.output[i.previous_output.vout as usize].value.to_sat()).sum::<u64>();
+		let output_sat=observed.output.iter().map(|o|o.value.to_sat()).sum::<u64>();
+		let miner_fee=input_sat.checked_sub(output_sat).unwrap();
+		assert_eq!(row.get::<_,i64>(5),miner_fee as i64);assert!(miner_fee<=10_000);
+		assert!(observed.weight().to_wu()<=400_000);
+		assert!(sat(miner_fee)<=FeeRate::from_sat_per_vb(50).unwrap().fee_wu(observed.weight()).unwrap());
+		let fee_inputs:serde_json::Value=serde_json::from_str(&row.get::<_,String>(4)).unwrap();
+		for item in fee_inputs.as_array().unwrap() {
+			let point:OutPoint=item["outpoint"].as_str().unwrap().parse().unwrap();
+			assert!(funding_points.contains(&point) && observed.input.iter().any(|i|i.previous_output==point));
+			assert_eq!(item["value_sat"].as_u64(),Some(10_000));selected.insert(point);
+		}
+		assert_eq!(observed.input.iter().filter(|i|i.previous_output!=backing).map(|i|i.previous_output).collect::<BTreeSet<_>>(),selected);
+		let fee_input_sat=fee_inputs.as_array().unwrap().iter().map(|i|i["value_sat"].as_u64().unwrap()).sum::<u64>();
+		let change=after.utxos.iter().filter(|u|u.outpoint.parse::<OutPoint>().unwrap().txid==txid).collect::<Vec<_>>();
+		let change_sat=change.iter().map(|u|u.value_sat).sum::<u64>();
+		for u in &change {
+			let point:OutPoint=u.outpoint.parse().unwrap();let out=&observed.output[point.vout as usize];
+			assert_eq!(out.value.to_sat(),u.value_sat);assert_eq!(out.script_pubkey.as_bytes(),u.script_pubkey.as_slice());
+		}
+		let subsidy=u64::try_from(row.get::<_,i64>(6)).unwrap();
+		assert_eq!(fee_input_sat.checked_sub(change_sat),Some(subsidy));
+		let operator_script=watch.sweep_address.clone().unwrap().require_network(Network::Regtest).unwrap().script_pubkey();
+		let change_indices=change.iter().map(|u|u.outpoint.parse::<OutPoint>().unwrap().vout as usize).collect::<BTreeSet<_>>();
+		assert!(!change_indices.contains(&recipient_vout));
+		let operator_sat=observed.output.iter().enumerate().filter(|(vout,_)| *vout!=recipient_vout && !change_indices.contains(vout))
+			.map(|(_,out)| { assert_eq!(out.script_pubkey,operator_script);out.value.to_sat() }).sum::<u64>();
+		assert_eq!(output_sat,expected.value.to_sat()+operator_sat+change_sat);
+		let backing_sat=core.get_raw_transaction(&backing.txid,None).unwrap().output[backing.vout as usize].value.to_sat();
+		assert_eq!(backing_sat+fee_input_sat,expected.value.to_sat()+operator_sat+change_sat+miner_fee);
+		measured.push(serde_json::json!({"txid":txid,"generation":row.get::<_,i64>(1),
+			"backing_ids":row.get::<_,Vec<String>>(3),"signed_weight_wu":observed.weight().to_wu(),
+			"signed_vbytes":observed.vsize(),"actual_miner_fee_sat":miner_fee,
+			"effective_sat_per_vbyte":{"numerator":miner_fee,"denominator":observed.vsize()},
+			"funding_subsidy_sat":subsidy,"fee_wallet_change_sat":change_sat,"operator_surplus_sat":operator_sat,"confirmed_height":row.get::<_,Option<i32>>(7),
+			"actual_fee_inputs":fee_inputs}));
+	}
+	let excluded=funding_points.difference(&selected).copied().collect::<Vec<_>>();
+	assert!(excluded.len()>=4,"whole selected fee inputs must leave at least40000 confirmed unselected sats");
+	for point in &excluded {
+		let source=after.utxos.iter().find(|u|u.outpoint==point.to_string()).unwrap();
+		assert!(source.confirmed_fee_eligible && source.value_sat==10_000 && source.confirmations>=3);
+		let actual=core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().unwrap();
+		assert!(actual.confirmations>=3 && actual.value==sat(10_000));
+	}
+	let mappings=db.read(async |t| t.query("SELECT a.id,a.freeze_set,a.spk,a.gross_sat,a.fee_sat,a.payout_sat,m.txid,m.vout,a.disposition,a.owner_pubkey FROM expiry_allocation a JOIN expiry_carrier_allocation m ON m.allocation_id=a.id ORDER BY a.id,m.txid",&[])
+		.await.map_err(Into::into)).await.unwrap();
+	let paid=mappings.iter().filter(|r|r.get::<_,Option<i32>>(7).is_some()).collect::<Vec<_>>();
+	assert_eq!(paid.len(),1);let map=paid[0];
+	assert_eq!(map.get::<_,String>(8),"pay");
+	assert_eq!(map.get::<_,Vec<u8>>(9),coin.user_pubkey().serialize());
+	for residual in mappings.iter().filter(|r|r.get::<_,Option<i32>>(7).is_none()) {
+		assert_eq!(residual.get::<_,String>(8),"operator");
+		assert_eq!(residual.get::<_,Option<Vec<u8>>>(2),None);
+		assert_eq!(residual.get::<_,Option<Vec<u8>>>(9),None);
+		assert_eq!((residual.get::<_,i64>(4),residual.get::<_,i64>(5)),(0,0));
+		assert_eq!(residual.get::<_,String>(1),map.get::<_,String>(1));
+		assert_eq!(residual.get::<_,String>(6),carrier.compute_txid().to_string());
+	}
+	let frozen_gross=mappings.iter().map(|r|u64::try_from(r.get::<_,i64>(3)).unwrap()).sum::<u64>();
+	assert_eq!(frozen_gross,core.get_raw_transaction(&backing.txid,None).unwrap().output[backing.vout as usize].value.to_sat());
+	assert_eq!(map.get::<_,String>(0),coin.id().to_string());
+	assert_eq!(map.get::<_,Vec<u8>>(2),expected.script_pubkey.as_bytes());
+	assert_eq!((map.get::<_,i64>(3),map.get::<_,i64>(4),map.get::<_,i64>(5)),(20_000,1_000,19_000));
+	assert_eq!(map.get::<_,String>(6),carrier.compute_txid().to_string());
+	assert_eq!(map.get::<_,Option<i32>>(7),Some(recipient_vout as i32));
+	let setup_fee_sat=funding_points.iter().map(|p|p.txid).collect::<BTreeSet<_>>().iter().map(|id| {
+		let tx=core.get_raw_transaction(id,None).unwrap();
+		let ins=tx.input.iter().map(|i|core.get_raw_transaction(&i.previous_output.txid,None).unwrap().output[i.previous_output.vout as usize].value.to_sat()).sum::<u64>();
+		ins.checked_sub(tx.output.iter().map(|o|o.value.to_sat()).sum::<u64>()).unwrap()
+	}).sum::<u64>();
+	let estimate:serde_json::Value=core.call("estimatesmartfee",&[serde_json::json!(6)]).unwrap();
+	let measurement=serde_json::json!({"scope":"one genuine registered Board/one direct carrier; not fullcase authority",
+		"group_id":map.get::<_,String>(1),"allocation_id":coin.id().to_string(),
+		"canonical_actual_output":{"txid":carrier.compute_txid(),"vout":recipient_vout,"spk":format!("{:?}",expected.script_pubkey)},
+		"gross_sat":20_000,"flat_actual_output_fee_sat":1_000,"payout_sat":19_000,
+		"watchman_fee_wallet_opening_sat":50_000,"rounds_fixture_initial_funding_sat":ark_testing::btc(1).to_sat(),
+		"setup_funding_miner_fee_sat":setup_fee_sat,"ordinary_policy":policy,
+		"owning_before":{"wallet":before.wallet,"network":before.network,"tip_height":before.tip_height,"tip_hash":before.tip_hash,
+			"reserved":before.reserved_outpoints,"utxos":before.utxos.iter().map(|u|serde_json::json!({"outpoint":u.outpoint,"value_sat":u.value_sat,"confirmations":u.confirmations,"confirmed_fee_eligible":u.confirmed_fee_eligible})).collect::<Vec<_>>()},
+		"owning_after":{"wallet":after.wallet,"network":after.network,"tip_height":after.tip_height,"tip_hash":after.tip_hash,
+			"reserved":after.reserved_outpoints,"utxos":after.utxos.iter().map(|u|serde_json::json!({"outpoint":u.outpoint,"value_sat":u.value_sat,"confirmations":u.confirmations,"confirmed_fee_eligible":u.confirmed_fee_eligible})).collect::<Vec<_>>()},
+		"independent_Core":{"genesis":core.get_block_hash(0).unwrap(),"height":core.get_block_count().unwrap(),"tip":core.get_best_block_hash().unwrap()},
+		"per_attempt_ceiling_sat":10_000,"source_derived_max_charged_attempts":6,
+		"ledger_before":ledger_before,"ledger_after":ledger_after,"full_charge_entries_sat":charges,
+		"charged_without_retained_version":charges.len()-versions.len(),"failed_build_attempts":serde_json::Value::Null,"failed_or_uncertain_attempt_classification":"requires original daemon logs; never infer failed-build count from signed rows alone",
+		"retained_versions":measured,"observed_RBF_versions":0,
+		"selected_fee_outpoints":selected.iter().map(ToString::to_string).collect::<Vec<_>>(),
+		"unselected_confirmed_eligible_outpoints":excluded.iter().map(ToString::to_string).collect::<Vec<_>>(),
+		"minimum_unselected_urgent_sat":40_000,"actual_unselected_sat":excluded.len()*10_000,
+		"independent_Core_estimate6":estimate,"configured_max_rate_sat_vb":50,
+		"fullcase_N":serde_json::Value::Null,"fullcase_C":serde_json::Value::Null,"fullcase_r":serde_json::Value::Null,
+		"fixture_completion_pending_seed_recovery":true,"full_scale_or_stress_credit":false});
+	let mut output=OpenOptions::new().write(true).create_new(true).mode(0o600).open(ctx.datadir.join("direct-fee-weight-ledger-measurement.json")).unwrap();
+	output.write_all(&serde_json::to_vec_pretty(&measurement).unwrap()).unwrap();output.sync_all().unwrap();
 	let (discovered, recovered_spend) = recover_all_bip84_and_spend(&ctx, &mnemonic).await;
 	// Compare only after the independent mnemonic-only scan and spend have finished.
 	let payout = OutPoint::new(carrier.compute_txid(), recipient_vout as u32);

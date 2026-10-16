@@ -1003,9 +1003,9 @@ async fn intra_ark_unclaimed_grant_direct_retirement_releases_sender() {
 	assert!(expiry > parked.htlc_recv_expiry + BlockDelta::new(1));
 	info!("direct grant fixture source hash={} grant={} htlc_expiry={} backing_expiry={}",
 		hash, grant_id, parked.htlc_recv_expiry, expiry);
-	let initial = db.read(async |t| t.query_one(
+	let initial = db.read(async |t| Ok(t.query_one(
 		"SELECT s.status::text, (SELECT count(*) FROM lightning_payment_attempt p WHERE p.payment_hash=s.payment_hash AND p.status='requested') AS requested FROM lightning_htlc_subscription s WHERE s.payment_hash=$1",
-		&[&hash]).await).await.unwrap();
+		&[&hash]).await?)).await.unwrap();
 	assert_eq!(initial.get::<_, &str>("status"), "htlcs-ready");
 	assert_eq!(initial.get::<_, i64>("requested"), 1);
 
@@ -1053,9 +1053,9 @@ async fn intra_ark_unclaimed_grant_direct_retirement_releases_sender() {
 	// Wait for the actual daemon-produced allocation for THIS grant.
 	let operator = async {
 		loop {
-			let row = db.read(async |t| t.query_opt(
+			let row = db.read(async |t| Ok(t.query_opt(
 				"SELECT a.disposition,a.gross_sat,a.payout_sat,a.spk,m.vout,c.txid,c.signed_tx,c.miner_fee_sat FROM expiry_allocation a JOIN expiry_carrier_allocation m ON m.allocation_id=a.id JOIN expiry_carrier c ON c.txid=m.txid WHERE a.id=$1 ORDER BY c.generation DESC LIMIT 1",
-				&[&grant_id]).await).await.unwrap();
+				&[&grant_id]).await?)).await.unwrap();
 			if let Some(row) = row { break row; }
 			tokio::time::sleep(poll_interval()).await;
 		}
@@ -1075,9 +1075,9 @@ async fn intra_ark_unclaimed_grant_direct_retirement_releases_sender() {
 	let operator_block = confirmed.blockhash.expect("operator carrier must be on the actual chain");
 	async {
 		loop {
-			let row = db.read(async |t| t.query_one(
+			let row = db.read(async |t| Ok(t.query_one(
 				"SELECT confirmed_height,confirmed_block FROM expiry_carrier WHERE txid=$1",
-				&[&operator_txid.to_string()]).await).await.unwrap();
+				&[&operator_txid.to_string()]).await?)).await.unwrap();
 			if let (Some(height), Some(block)) = (row.get::<_, Option<i32>>(0), row.get::<_, Option<String>>(1)) {
 				assert_eq!(block, operator_block.to_string());
 				assert_eq!(ctx.bitcoind().sync_client().get_block_hash(height as u64).unwrap(), operator_block);
@@ -1091,9 +1091,9 @@ async fn intra_ark_unclaimed_grant_direct_retirement_releases_sender() {
 	let source = format!("lightning-send:{hash}");
 	let refunds = async {
 		loop {
-			let rows = db.read(async |t| t.query(
+			let rows = db.read(async |t| Ok(t.query(
 				"SELECT a.id,a.gross_sat,a.fee_sat,a.payout_sat,a.spk,m.vout,c.txid,c.signed_tx,c.miner_fee_sat FROM expiry_allocation a JOIN expiry_carrier_allocation m ON m.allocation_id=a.id JOIN expiry_carrier c ON c.txid=m.txid WHERE a.source=$1 AND a.disposition='pay' ORDER BY a.id,c.generation DESC",
-				&[&source]).await).await.unwrap();
+				&[&source]).await?)).await.unwrap();
 			if rows.len() == sender_ids.len() { break rows; }
 			tokio::time::sleep(poll_interval()).await;
 		}
@@ -1139,8 +1139,8 @@ async fn intra_ark_unclaimed_grant_direct_retirement_releases_sender() {
 	let final_grant: Vec<u8> = db.read(async |t| Ok(t.query_one(
 		"SELECT vtxo FROM vtxo WHERE vtxo_id=$1", &[&grant_id]).await?.get(0))).await.unwrap();
 	assert_eq!(final_grant, grant_bytes);
-	let final_sub = db.read(async |t| t.query_one(
-		"SELECT status::text FROM lightning_htlc_subscription WHERE payment_hash=$1", &[&hash]).await).await.unwrap();
+	let final_sub = db.read(async |t| Ok(t.query_one(
+		"SELECT status::text FROM lightning_htlc_subscription WHERE payment_hash=$1", &[&hash]).await?)).await.unwrap();
 	assert_eq!(final_sub.get::<_, &str>(0), "canceled");
 	let failed_attempts: i64 = db.read(async |t| Ok(t.query_one(
 		"SELECT count(*) FROM lightning_payment_attempt WHERE payment_hash=$1 AND status='failed'",

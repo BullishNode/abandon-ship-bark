@@ -764,6 +764,24 @@ mod test {
 	}
 
 	#[test]
+	fn expiry_owner_scan_defaults_are_bounded_and_zero_is_rejected() {
+		let mut cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
+		cfg.bitcoind.cookie = Some(".cookie".into());
+		let mut fields = serde_json::to_value(&cfg).unwrap();
+		fields.as_object_mut().unwrap().remove("expiry_owner_scan_chunk_size");
+		fields.as_object_mut().unwrap().remove("expiry_owner_scan_workers");
+		let mut cfg: Config = serde_json::from_value(fields).unwrap();
+		assert_eq!(cfg.expiry_owner_scan_chunk_size, 10_000);
+		assert_eq!(cfg.expiry_owner_scan_workers, 2);
+		cfg.validate().unwrap();
+		cfg.expiry_owner_scan_chunk_size = 0;
+		assert!(cfg.validate().unwrap_err().to_string().contains("expiry owner scan"));
+		cfg.expiry_owner_scan_chunk_size = 10_000;
+		cfg.expiry_owner_scan_workers = 0;
+		assert!(cfg.validate().unwrap_err().to_string().contains("expiry owner scan"));
+	}
+
+	#[test]
 	fn default_offboard_fixed_vb_covers_a_two_in_three_out_keyspend() {
 		let cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
 

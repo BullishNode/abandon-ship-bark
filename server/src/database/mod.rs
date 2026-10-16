@@ -15,6 +15,7 @@ mod fork_embedded {
 }
 
 pub mod fallback;
+pub mod expiry_attribution;
 pub(crate) mod expiry_guard;
 pub mod expiry_inventory;
 

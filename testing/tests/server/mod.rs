@@ -5,6 +5,8 @@ mod blocklist;
 mod block_index;
 mod forfeit;
 mod fallback;
+mod expiry_attribution;
+mod expiry_owner_scan;
 mod lightning;
 mod mailbox;
 mod nursery;

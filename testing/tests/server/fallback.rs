@@ -69,10 +69,17 @@ async fn fallback_migrations_do_not_share_upstream_history() {
 	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
 	let count = client.query_one("SELECT COUNT(*) FROM refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0);
 	assert!(count > 0);
-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0), 2);
+	let fork_count = client.query_one("SELECT COUNT(*) FROM expiry_refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0);
+	assert!(fork_count >= 4);
 	// Return the database to exactly the plain-upstream schema/history. The
 	// fork build must add its own schema without changing an upstream checksum.
-	client.batch_execute("DROP TABLE expiry_decided_coin; DROP TABLE expiry_entitlement; DROP TABLE expiry_cancelled_participation; DROP INDEX expiry_vtxo_anchor_point_ix; DROP TABLE fallback_record; DROP TABLE expiry_refinery_schema_history;").await.unwrap();
+	let tables = client.query("SELECT tablename FROM pg_tables WHERE schemaname='public'
+		AND (LEFT(tablename, 7)='expiry_' OR tablename='fallback_record')", &[]).await.unwrap();
+	for table in tables {
+		let name: &str = table.get(0);
+		client.batch_execute(&format!("DROP TABLE IF EXISTS \"{}\" CASCADE", name.replace('"', "\"\""))).await.unwrap();
+	}
+	client.batch_execute("DROP INDEX expiry_vtxo_anchor_point_ix;").await.unwrap();
 	let before = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
 		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
 	let db = server::database::Db::connect(&config).await.unwrap();
@@ -80,6 +87,6 @@ async fn fallback_migrations_do_not_share_upstream_history() {
 	let after = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
 		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
 	assert_eq!(before, after);
-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0), 2);
+	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0), fork_count);
 	server::database::Db::connect(&config).await.unwrap();
 }

@@ -363,7 +363,7 @@ mod tests {
 				'allocations',(SELECT json_agg(a ORDER BY id) FROM expiry_allocation a),
 				'carriers',(SELECT json_agg(c ORDER BY id) FROM expiry_carrier c),
 				'nursery',(SELECT json_agg(n ORDER BY id) FROM nursery_tx n),
-				'wallet',(SELECT json_agg(w) FROM wallet_changeset w),
+				'wallet',(SELECT json_agg(w ORDER BY id) FROM wallet_changeset w),
 				'vtxos',(SELECT json_agg(v ORDER BY vtxo_id) FROM vtxo v))::text AS state", &[]).await?.get("state"))).await.unwrap()
 		}
 		let before = projection(&db).await;

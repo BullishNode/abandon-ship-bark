@@ -44,11 +44,15 @@ async fn frozen_ancestor() {
 	let mut expected = Vec::new();
 	for (wallet, fallback) in [(&sender, sender_fallback), (&recipient, recipient_fallback)] {
 		let coins = wallet.spendable_vtxos().await.unwrap();
+		let mut gross = Amount::ZERO;
 		for coin in coins {
 			let full = wallet.get_full_vtxo(coin.id()).await.unwrap();
 			assert_eq!(full.chain_anchor(), original.chain_anchor());
-			expected.push(TxOut { value: full.amount() - sat(1_000), script_pubkey: fallback.clone() });
+			gross += full.amount();
 		}
+		// Existing policy charges once per actual canonical fallback output,
+		// including when this owner has multiple actual change leaves.
+		expected.push(TxOut { value: gross - sat(1_000), script_pubkey: fallback });
 	}
 	assert_eq!(expected.iter().map(|o|o.value + sat(1_000)).sum::<Amount>(), sat(20_000));
 	sender.stop_daemon_wait().await.unwrap(); recipient.stop_daemon_wait().await.unwrap();

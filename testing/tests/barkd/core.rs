@@ -1,4 +1,6 @@
 
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::time::Duration;
 
 use ark_testing::{require_bark_version, Barkd, TestContext};
@@ -267,5 +269,55 @@ async fn wallet_fallback_web_contract_barkd() {
 	assert_eq!(barkd.onchain_balance().await, bitcoin::Amount::ZERO);
 	assert!(barkd.onchain_utxos().await.is_empty());
 	assert!(barkd.onchain_transactions().await.is_empty());
+	assert!(barkd.vtxos(Some(true)).await.is_empty());
+}
+
+/// Run the selected web source in a real browser against this fresh authenticated daemon.
+/// This is an explicit fixture; a missing browser is a failure, never a skip/pass.
+#[tokio::test]
+#[ignore = "requires the admitted owned browser/web pairing runner"]
+async fn wallet_fallback_web_browser_pairing_barkd() {
+	require_bark_version!(> "0.7.1");
+	let output = std::path::PathBuf::from(
+		std::env::var("BARK_WEB_PAIR_CONTEXT").expect("BARK_WEB_PAIR_CONTEXT required")
+	);
+	assert!(output.is_absolute());
+	let marker = output.with_extension("client-finished");
+	assert!(!output.exists() && !marker.exists(), "fresh private handoff paths required");
+	let ctx = TestContext::new("barkd/wallet_fallback_web_browser_pairing_barkd").await;
+	let srv = ctx.captaind("server").create().await;
+	let barkd = ctx.barkd("barkd1", &srv).create().await;
+	let cfg: bark::Config = toml::from_str(
+		&std::fs::read_to_string(barkd.datadir().join("config.toml")).unwrap()
+	).unwrap();
+	assert!(cfg.bitcoind_address.is_some(), "owned Core fixture required");
+	assert!(cfg.esplora_address.is_none(), "no external chain fixture");
+	assert_eq!(barkd.onchain_balance().await, bitcoin::Amount::ZERO);
+	assert!(barkd.vtxos(Some(true)).await.is_empty());
+	let context = serde_json::json!({
+		"schema_version": 1, "network": "regtest",
+		"completion_marker": marker,
+		"barkd_url": barkd.base_url(), "ark_server": cfg.server_address,
+		"bitcoind_url": cfg.bitcoind_address.unwrap(),
+		"bitcoind_cookie_file": cfg.bitcoind_cookiefile.unwrap(),
+		"barkd_token_file": barkd.datadir().join("auth_token"),
+		"test_name": "core::wallet_fallback_web_browser_pairing_barkd",
+		"expected_onchain_sat": 0, "expected_ark_sat": 0,
+	});
+	let path = output;
+	let mut file = std::fs::OpenOptions::new().write(true).create_new(true)
+		.mode(0o600).open(&path).unwrap();
+	file.write_all(&serde_json::to_vec(&context).unwrap()).unwrap();
+	file.sync_all().unwrap();
+	// This marker only releases the fixture. It is never a browser/financial verdict;
+	// the outer pinned runner independently checks the real browser result and exit.
+	tokio::time::timeout(Duration::from_secs(240), async {
+		while !marker.exists() {
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}).await.expect("owned browser client did not release fixture within240s");
+	assert_eq!(barkd.onchain_balance().await, bitcoin::Amount::ZERO);
+	assert!(barkd.onchain_transactions().await.is_empty());
+	assert!(barkd.onchain_utxos().await.is_empty());
 	assert!(barkd.vtxos(Some(true)).await.is_empty());
 }

@@ -1477,104 +1477,6 @@ mod tests {
 		std::fs::remove_dir_all(dir).unwrap();
 	}
 
-}
-
-/// Stable read-only identities for the authenticated caller. No second FLOCK owner.
-pub(crate) fn installed_identity(datadir: &Path) -> anyhow::Result<(sha256::Hash, sha256::Hash)> {
-	let directory = datadir.join(crate::payout_witness::DIRECT_DIRECTORY);
-	let raw = read_bounded(&directory.join(POLICY_FILE), 2048)?;
-	let stored: StoredPolicy = serde_json::from_slice(&raw)?;
-	ensure!(
-		serde_json::to_vec(&stored)? == raw,
-		"noncanonical native funding policy"
-	);
-	require_installed_policy(&directory, stored.policy)?;
-	Ok((sha256::Hash::hash(&raw), stored.opening_sha256))
-}
-
-pub(crate) fn funding_snapshot(
-	directory: &Path,
-) -> anyhow::Result<(Vec<FundingState>, Vec<FundingResolution>)> {
-	let policy_raw = read_bounded(&directory.join(POLICY_FILE), 2048)?;
-	let stored: StoredPolicy = serde_json::from_slice(&policy_raw)?;
-	ensure!(
-		serde_json::to_vec(&stored)? == policy_raw,
-		"native funding policy is not canonical"
-	);
-	let opening_raw = read_bounded(&directory.join(OPENING_FILE), 2048)?;
-	ensure!(
-		sha256::Hash::hash(&opening_raw) == stored.opening_sha256,
-		"native funding opening differs"
-	);
-	let opening: OrdinaryFeeOpening = serde_json::from_slice(&opening_raw)?;
-	opening.validate(stored.policy)?;
-	let path = directory.join(BUDGET_FILE);
-	let before = std::fs::metadata(&path)?;
-	let raw = read_bounded(&path, MAX_HISTORY_BYTES)?;
-	let after = std::fs::metadata(&path)?;
-	ensure!(
-		before.len() == after.len()
-			&& before.modified()? == after.modified()?
-			&& raw.len() as u64 == after.len(),
-		"native fee history changed at startup"
-	);
-	let history = parse_history(
-		std::str::from_utf8(&raw)?,
-		opening.initial_charge(stored.policy)?,
-		stored.policy,
-	)?;
-	ensure!(
-		history
-			.funding
-			.values()
-			.all(|s| s.reservation.policy_sha256 == sha256::Hash::hash(&policy_raw)),
-		"native funding policy identity differs"
-	);
-	Ok((
-		history.funding.into_values().collect(),
-		history.resolutions.into_values().collect(),
-	))
-}
-
-pub(crate) fn validate_resolution(
-	resolution: &FundingResolution,
-	states: &BTreeMap<sha256::Hash, FundingState>,
-) -> anyhow::Result<()> {
-	ensure!(
-		resolution.block_height > 0 && resolution.block_hash != bitcoin::BlockHash::all_zeros(),
-		"native funding resolution lacks actual confirmed block"
-	);
-	let winner = states
-		.values()
-		.find(|s| s.reservation.index == resolution.winner_index)
-		.context("native resolution winner was never reserved")?;
-	ensure!(
-		matches!(
-			winner.reservation.candidate.family,
-			super::ordinary_funding::FundingFamily::Round { .. }
-		),
-		"only actual Round retry family may release extras"
-	);
-	winner.reservation.candidate.verify_signed(
-		winner
-			.signed
-			.as_ref()
-			.context("unsigned or mempool intent cannot authorize input release")?,
-	)?;
-	Ok(())
-}
-pub(crate) fn resolved_family(
-	old: &FundingState,
-	states: &BTreeMap<sha256::Hash, FundingState>,
-	resolutions: &BTreeMap<u64, FundingResolution>,
-) -> bool {
-	resolutions.values().any(|r| {
-		states.values().any(|winner| {
-			winner.reservation.index == r.winner_index
-				&& winner.signed.is_some()
-				&& winner.reservation.candidate.family == old.reservation.candidate.family
-		})
-	})
 	#[test]
 	fn public_fee_snapshot_separates_direct_round_pool_urgent_without_raw_packages() {
 		use super::super::ordinary_funding::{FundingFamily, FundingPurpose, test_candidate};
@@ -1677,4 +1579,102 @@ pub(crate) fn resolved_family(
 		}
 	}
 
+}
+
+/// Stable read-only identities for the authenticated caller. No second FLOCK owner.
+pub(crate) fn installed_identity(datadir: &Path) -> anyhow::Result<(sha256::Hash, sha256::Hash)> {
+	let directory = datadir.join(crate::payout_witness::DIRECT_DIRECTORY);
+	let raw = read_bounded(&directory.join(POLICY_FILE), 2048)?;
+	let stored: StoredPolicy = serde_json::from_slice(&raw)?;
+	ensure!(
+		serde_json::to_vec(&stored)? == raw,
+		"noncanonical native funding policy"
+	);
+	require_installed_policy(&directory, stored.policy)?;
+	Ok((sha256::Hash::hash(&raw), stored.opening_sha256))
+}
+
+pub(crate) fn funding_snapshot(
+	directory: &Path,
+) -> anyhow::Result<(Vec<FundingState>, Vec<FundingResolution>)> {
+	let policy_raw = read_bounded(&directory.join(POLICY_FILE), 2048)?;
+	let stored: StoredPolicy = serde_json::from_slice(&policy_raw)?;
+	ensure!(
+		serde_json::to_vec(&stored)? == policy_raw,
+		"native funding policy is not canonical"
+	);
+	let opening_raw = read_bounded(&directory.join(OPENING_FILE), 2048)?;
+	ensure!(
+		sha256::Hash::hash(&opening_raw) == stored.opening_sha256,
+		"native funding opening differs"
+	);
+	let opening: OrdinaryFeeOpening = serde_json::from_slice(&opening_raw)?;
+	opening.validate(stored.policy)?;
+	let path = directory.join(BUDGET_FILE);
+	let before = std::fs::metadata(&path)?;
+	let raw = read_bounded(&path, MAX_HISTORY_BYTES)?;
+	let after = std::fs::metadata(&path)?;
+	ensure!(
+		before.len() == after.len()
+			&& before.modified()? == after.modified()?
+			&& raw.len() as u64 == after.len(),
+		"native fee history changed at startup"
+	);
+	let history = parse_history(
+		std::str::from_utf8(&raw)?,
+		opening.initial_charge(stored.policy)?,
+		stored.policy,
+	)?;
+	ensure!(
+		history
+			.funding
+			.values()
+			.all(|s| s.reservation.policy_sha256 == sha256::Hash::hash(&policy_raw)),
+		"native funding policy identity differs"
+	);
+	Ok((
+		history.funding.into_values().collect(),
+		history.resolutions.into_values().collect(),
+	))
+}
+
+pub(crate) fn validate_resolution(
+	resolution: &FundingResolution,
+	states: &BTreeMap<sha256::Hash, FundingState>,
+) -> anyhow::Result<()> {
+	ensure!(
+		resolution.block_height > 0 && resolution.block_hash != bitcoin::BlockHash::all_zeros(),
+		"native funding resolution lacks actual confirmed block"
+	);
+	let winner = states
+		.values()
+		.find(|s| s.reservation.index == resolution.winner_index)
+		.context("native resolution winner was never reserved")?;
+	ensure!(
+		matches!(
+			winner.reservation.candidate.family,
+			super::ordinary_funding::FundingFamily::Round { .. }
+		),
+		"only actual Round retry family may release extras"
+	);
+	winner.reservation.candidate.verify_signed(
+		winner
+			.signed
+			.as_ref()
+			.context("unsigned or mempool intent cannot authorize input release")?,
+	)?;
+	Ok(())
+}
+pub(crate) fn resolved_family(
+	old: &FundingState,
+	states: &BTreeMap<sha256::Hash, FundingState>,
+	resolutions: &BTreeMap<u64, FundingResolution>,
+) -> bool {
+	resolutions.values().any(|r| {
+		states.values().any(|winner| {
+			winner.reservation.index == r.winner_index
+				&& winner.signed.is_some()
+				&& winner.reservation.candidate.family == old.reservation.candidate.family
+		})
+	})
 }

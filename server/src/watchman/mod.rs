@@ -11,6 +11,7 @@ pub mod direct_delivery;
 pub mod frozen_expiry;
 mod expiry_runtime;
 pub mod ordinary_fee;
+pub(crate) mod ordinary_fee_publication;
 mod config;
 mod daemon;
 mod frontier;

@@ -2,17 +2,19 @@
 //! Reservations deliberately charge the complete fee ceiling, even if construction
 //! fails. Neither confirmation, a new group id nor a restart replenishes it.
 
+use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use anyhow::Context;
-use bitcoin::{Amount, Network};
+use bitcoin::{Amount, Network, Transaction, Wtxid};
 use bitcoin::hashes::{sha256, Hash};
 use crate::bitcoind::VerifiedFeeChain;
 
 use crate::fs_perms;
+use super::ordinary_fee_publication::{self, PublicationEntry, PublicationRecord};
 
 pub(crate) const POLICY_FILE: &str = "ordinary-fee-policy.json";
 pub(crate) const BUDGET_FILE: &str = "ordinary-fee-budget";
@@ -178,10 +180,16 @@ impl OrdinaryFeePolicy {
 struct Ledger {
 	file: File,
 	charged: u64,
+	carrier_charged: u64,
+	publications: BTreeMap<Wtxid, PublicationEntry>,
 	length: u64,
+	// An uncertain witness/append must poison this owner, including carrier
+	// signing. Restart must reconcile the original bytes, never reset history.
+	uncertain: bool,
 }
 
 pub(crate) struct OrdinaryFeeBudget {
+	directory: PathBuf,
 	policy: OrdinaryFeePolicy,
 	ledger: Mutex<Ledger>,
 }
@@ -211,15 +219,23 @@ impl OrdinaryFeeBudget {
 		let mut history = String::new();
 		file.seek(SeekFrom::Start(0))?;
 		(&mut file).take(MAX_HISTORY_BYTES + 1).read_to_string(&mut history)?;
-		let charged = parse_history(&history, policy)?;
-		Ok(Self { policy, ledger: Mutex::new(Ledger { file, charged, length }) })
+		ensure!(history.len() as u64 == length, "ordinary fee history changed during bounded read");
+		let parsed = parse_joint_history(&history, policy)?;
+		ordinary_fee_publication::validate_witnesses(directory, policy, &parsed.publications)?;
+		Ok(Self { directory: directory.into(), policy, ledger: Mutex::new(Ledger {
+			file, charged: parsed.charged, carrier_charged: parsed.carrier_charged,
+			publications: parsed.publications, length, uncertain: false,
+		}) })
 	}
 
 	/// Every retained version is charged conservatively, including conflicts.
 	pub(crate) fn require_retained_fees(&self, retained: Amount) -> anyhow::Result<()> {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
-		ensure!(retained.to_sat() <= ledger.charged,
-			"ordinary fee reservations do not cover retained signed carrier history");
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
+			"ordinary fee history uncertain or changed; reconcile original history");
+		ordinary_fee_publication::validate_witnesses(&self.directory, self.policy, &ledger.publications)?;
+		ensure!(retained.to_sat() <= ledger.carrier_charged,
+			"ordinary carrier reservations do not cover retained signed carrier history");
 		Ok(())
 	}
 
@@ -229,14 +245,66 @@ impl OrdinaryFeeBudget {
 	/// An uncertain fsync/append leaves length mismatched and prevents retry signing.
 	pub(crate) fn reserve_ceiling(&self, ceiling: Amount) -> anyhow::Result<()> {
 		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
-		ensure!(ledger.file.metadata()?.len() == ledger.length, "ordinary fee history changed; restart and reconcile");
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
+			"ordinary fee history uncertain or changed; restart and reconcile");
+		ordinary_fee_publication::validate_witnesses(&self.directory, self.policy, &ledger.publications)?;
 		let charged = checked_charge(ledger.charged, ceiling.to_sat(), self.policy)?;
 		let entry = format!("{}\n", ceiling.to_sat());
 		ensure!(ledger.length + entry.len() as u64 <= MAX_HISTORY_BYTES, "ordinary fee history capacity exhausted");
+		ledger.uncertain = true;
 		ledger.file.write_all(entry.as_bytes())?;
 		ledger.file.sync_all()?;
 		ledger.length += entry.len() as u64;
 		ledger.charged = charged;
+		ledger.carrier_charged = ledger.carrier_charged.checked_add(ceiling.to_sat())
+			.context("carrier reservation sum overflow")?;
+		ledger.uncertain = false;
+		Ok(())
+	}
+
+	/// Accounting primitive for the SAME owning Watchman process. The broker
+	/// must first hold its actual wallet guard and verify physical urgent funds.
+	/// This method alone does not authorize signing, publication or a cached R/F token.
+	pub(crate) fn reserve_publication(&self, record: &PublicationRecord) -> anyhow::Result<()> {
+		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
+			"ordinary fee history uncertain or changed; reconcile original reservation");
+		let entry = record.entry(self.policy)?;
+		if let Some(old) = ledger.publications.get(&entry.id()) {
+			ensure!(*old == entry, "same signed ordinary publication has conflicting reservation");
+			ordinary_fee_publication::validate_witnesses(&self.directory, self.policy, &ledger.publications)?;
+			return Ok(());
+		}
+		let charged = checked_charge(ledger.charged, entry.charge(self.policy)?, self.policy)?;
+		let line = entry.line()?;
+		ensure!(ledger.length + line.len() as u64 <= MAX_HISTORY_BYTES,
+			"ordinary fee history capacity exhausted");
+		// The immutable intent precedes the indexed charge. A crash in between
+		// leaves an unindexed original witness and blocks the next native loader.
+		ledger.uncertain = true;
+		let actual = ordinary_fee_publication::write_witness(&self.directory, self.policy,
+			&ledger.publications, record)?;
+		ensure!(actual == entry, "ordinary publication witness differs");
+		ledger.file.write_all(line.as_bytes())?;
+		ledger.file.sync_all()?;
+		ledger.length += line.len() as u64;
+		ledger.charged = charged;
+		ledger.publications.insert(entry.id(), entry);
+		ledger.uncertain = false;
+		Ok(())
+	}
+
+	/// Exact original-candidate check for a caller's publication transaction.
+	/// It does not grant a reusable balance token and does not free its debit.
+	pub(crate) fn require_publication(&self, record: &PublicationRecord, signed: &Transaction) -> anyhow::Result<()> {
+		record.matches(signed)?;
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
+			"ordinary publication history uncertain or changed");
+		let entry = record.entry(self.policy)?;
+		ensure!(ledger.publications.get(&entry.id()) == Some(&entry),
+			"ordinary publication lacks its exact durable reservation");
+		ordinary_fee_publication::validate_witnesses(&self.directory, self.policy, &ledger.publications)?;
 		Ok(())
 	}
 }
@@ -254,18 +322,40 @@ fn checked_charge(charged: u64, ceiling: u64, policy: OrdinaryFeePolicy) -> anyh
 	Ok(next)
 }
 
-fn parse_history(history: &str, policy: OrdinaryFeePolicy) -> anyhow::Result<u64> {
+struct ParsedHistory {
+	charged: u64,
+	carrier_charged: u64,
+	publications: BTreeMap<Wtxid, PublicationEntry>,
+}
+fn parse_joint_history(history: &str, policy: OrdinaryFeePolicy) -> anyhow::Result<ParsedHistory> {
 	ensure!(history.is_empty() || history.ends_with('\n'), "ordinary fee history has a torn append");
-	history.lines().try_fold(0, |charged, line| {
-		let amount = line.parse::<u64>().context("invalid ordinary fee reservation")?;
-		ensure!(line == amount.to_string(), "noncanonical ordinary fee reservation");
-		checked_charge(charged, amount, policy)
-	})
+	let mut parsed = ParsedHistory { charged: 0, carrier_charged: 0, publications: BTreeMap::new() };
+	for line in history.lines() {
+		let amount = if let Some(bytes) = line.strip_prefix("p1\t") {
+			let entry = PublicationEntry::parse(bytes)?;
+			let charge = entry.charge(policy)?;
+			ensure!(parsed.publications.insert(entry.id(), entry).is_none(),
+				"duplicate ordinary publication reservation");
+			charge
+		} else {
+			let amount = line.parse::<u64>().context("invalid ordinary fee reservation")?;
+			ensure!(line == amount.to_string(), "noncanonical ordinary fee reservation");
+			parsed.carrier_charged = parsed.carrier_charged.checked_add(amount)
+				.context("carrier reservation sum overflow")?;
+			amount
+		};
+		parsed.charged = checked_charge(parsed.charged, amount, policy)?;
+	}
+	Ok(parsed)
+}
+fn parse_history(history: &str, policy: OrdinaryFeePolicy) -> anyhow::Result<u64> {
+	Ok(parse_joint_history(history, policy)?.charged)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::os::unix::fs::PermissionsExt;
 
 	// Synthetic finite values exercise admission/exhaustion, not authority for
 	// the real common benchmark. No shared workload declaration exists here.
@@ -479,4 +569,209 @@ mod tests {
 		assert!(parse_history("020000\n", policy).is_err());
 		assert!(checked_charge(60_000, 1, policy).is_err());
 	}
+	fn publication_directory(name: &str) -> std::path::PathBuf {
+		let path = std::env::temp_dir().join(format!("c-native-publication-{name}-{}-{}",
+			std::process::id(), bitcoin::secp256k1::rand::random::<u64>()));
+		std::fs::create_dir(&path).unwrap(); path
+	}
+	fn remove_publication_directory(path: &Path) {
+		let name = path.file_name().unwrap().to_str().unwrap();
+		let witnesses = path.with_file_name(format!("{name}.ordinary-native-publications"));
+		if witnesses.exists() { std::fs::remove_dir_all(witnesses).unwrap(); }
+		std::fs::remove_dir_all(path).unwrap();
+	}
+	fn publication_transaction(fee: u64, height: u32) -> (Transaction, Transaction) {
+		let parent = Transaction { version: bitcoin::transaction::Version::TWO,
+			lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: vec![bitcoin::TxIn { previous_output: bitcoin::OutPoint::null(),
+				script_sig: bitcoin::ScriptBuf::new(), sequence: bitcoin::Sequence::MAX, witness: bitcoin::Witness::default() }],
+			output: vec![bitcoin::TxOut { value: Amount::from_sat(10_000), script_pubkey: bitcoin::ScriptBuf::new() }] };
+		let tx = Transaction { version: bitcoin::transaction::Version::TWO,
+			lock_time: bitcoin::absolute::LockTime::from_height(height).unwrap(),
+			input: vec![bitcoin::TxIn { previous_output: bitcoin::OutPoint::new(parent.compute_txid(), 0),
+				script_sig: bitcoin::ScriptBuf::new(), sequence: bitcoin::Sequence::MAX,
+				witness: bitcoin::Witness::from_slice(&[vec![0; 64]]) }],
+			output: vec![bitcoin::TxOut { value: Amount::from_sat(10_000 - fee), script_pubkey: bitcoin::ScriptBuf::new() }] };
+		(parent, tx)
+	}
+	fn publication_record(policy: OrdinaryFeePolicy, path: super::ordinary_fee_publication::PublicationPath,
+		fee: u64, height: u32,
+	) -> (PublicationRecord, Transaction) {
+		let (parent, tx) = publication_transaction(fee, height);
+		let record = PublicationRecord::new(path, policy, &tx, &[parent], bitcoin::FeeRate::from_sat_per_vb_u32(100)).unwrap();
+		(record, tx)
+	}
+
+	#[test]
+	fn exact_publication_restart_keeps_native_58000_and_carrier_coverage_separate() {
+		let directory = publication_directory("restart");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };
+		policy.initialize(&directory).unwrap();
+		let (record, tx) = publication_record(policy, super::ordinary_fee_publication::PublicationPath::Round, 5_000, 1);
+		{
+			let budget = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+			budget.reserve_ceiling(Amount::from_sat(50_000)).unwrap();
+			assert!(budget.require_publication(&record, &tx).is_err());
+			budget.reserve_publication(&record).unwrap();
+			budget.require_publication(&record, &tx).unwrap();
+			let before = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+			budget.reserve_publication(&record).unwrap();
+			assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(), before, "same candidate cannot renew or double debit");
+			budget.require_retained_fees(Amount::from_sat(50_000)).unwrap();
+			assert!(budget.require_retained_fees(Amount::from_sat(50_001)).is_err(), "pool/round charge cannot conceal missing carrier reservation");
+		}
+		let before = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+		{
+			let budget = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+			budget.require_publication(&record, &tx).unwrap();
+			let (next, _) = publication_record(policy, super::ordinary_fee_publication::PublicationPath::Pool, 5_000, 2);
+			assert!(budget.reserve_publication(&next).is_err());
+			let (wrong_class, _) = publication_record(policy, super::ordinary_fee_publication::PublicationPath::Pool, 5_000, 1);
+			assert!(budget.reserve_publication(&wrong_class).is_err());
+			let mut changed = tx.clone(); changed.input[0].witness.push([1]);
+			assert!(budget.require_publication(&record, &changed).is_err());
+			assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(), before);
+		}
+		remove_publication_directory(&directory);
+	}
+
+	#[test]
+	fn concurrent_publications_share_the_existing_native_remainder() {
+		let directory = publication_directory("concurrent");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };
+		policy.initialize(&directory).unwrap();
+		let budget = std::sync::Arc::new(OrdinaryFeeBudget::load(&directory, policy).unwrap());
+		budget.reserve_ceiling(Amount::from_sat(50_000)).unwrap();
+		let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+		let workers = [super::ordinary_fee_publication::PublicationPath::Round, super::ordinary_fee_publication::PublicationPath::Pool]
+			.into_iter().enumerate().map(|(index, path)| {
+				let budget = budget.clone(); let barrier = barrier.clone();
+				std::thread::spawn(move || {
+					let (record, _) = publication_record(policy, path, 5_000, index as u32 + 1);
+					barrier.wait(); budget.reserve_publication(&record).is_ok()
+				})
+			}).collect::<Vec<_>>();
+		assert_eq!(workers.into_iter().map(|worker| worker.join().expect("native ledger worker panicked"))
+			.filter(|ok| *ok).count(), 1);
+		assert_eq!(parse_history(&std::fs::read_to_string(directory.join(BUDGET_FILE)).unwrap(), policy).unwrap(), 55_000);
+		drop(budget);
+		OrdinaryFeeBudget::load(&directory, policy).unwrap();
+		remove_publication_directory(&directory);
+	}
+
+	#[test]
+	fn unindexed_original_publication_intent_blocks_restart_without_reset() {
+		let directory = publication_directory("pending-intent");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };
+		policy.initialize(&directory).unwrap();
+		let (record, _) = publication_record(policy, super::ordinary_fee_publication::PublicationPath::Pool, 5_000, 1);
+		{
+			let budget = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+			budget.reserve_ceiling(Amount::from_sat(50_000)).unwrap();
+			// Exact filesystem boundary after original witness fsync and before
+			// charge append. This is not claimed as a full daemon crash test.
+			ordinary_fee_publication::write_witness(&directory, policy, &BTreeMap::new(), &record).unwrap();
+		}
+		let before = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+		assert!(OrdinaryFeeBudget::load(&directory, policy).is_err());
+		assert!(OrdinaryFeeBudget::load(&directory, policy).is_err());
+		assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(), before);
+		assert_eq!(before, b"50000\n");
+		remove_publication_directory(&directory);
+	}
+
+	#[test]
+	fn exact_publication_witness_torn_and_unknown_records_cannot_authorize() {
+		let directory = publication_directory("corruption");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };
+		policy.initialize(&directory).unwrap();
+		let (record, tx) = publication_record(policy, super::ordinary_fee_publication::PublicationPath::Round, 500, 1);
+		{
+			let budget = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+			budget.reserve_publication(&record).unwrap();
+		}
+		let complete = std::fs::read_to_string(directory.join(BUDGET_FILE)).unwrap();
+		assert!(parse_joint_history(complete.trim_end_matches('\n'), policy).is_err());
+		assert!(parse_joint_history(&format!("{complete}{complete}"), policy).is_err());
+		let name = directory.file_name().unwrap().to_str().unwrap();
+		let witness = directory.with_file_name(format!("{name}.ordinary-native-publications"))
+			.join(format!("{}.json", tx.compute_wtxid()));
+		let original = std::fs::read(&witness).unwrap();
+		std::fs::write(&witness, b"{}").unwrap();
+		assert!(OrdinaryFeeBudget::load(&directory, policy).is_err());
+		std::fs::write(&witness, &original).unwrap();
+		let budget = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+		budget.require_publication(&record, &tx).unwrap(); drop(budget);
+		remove_publication_directory(&directory);
+	}
+
+	#[test]
+	fn qualified_publication_uses_existing_full_ceiling_without_extra_allowance() {
+		let directory = publication_directory("qualification");
+		let policy = synthetic_qualification(2, 10_000);
+		let chain = crate::bitcoind::synthetic_fee_chain(Network::Regtest);
+		std::fs::write(directory.join(DECLARATION_FILE), synthetic_declaration(2, 10_000)).unwrap();
+		policy.initialize_verified(&directory, &chain).unwrap();
+		let (record, tx) = publication_record(policy, super::ordinary_fee_publication::PublicationPath::Round, 500, 1);
+		{
+			let budget = OrdinaryFeeBudget::load_verified(&directory, policy, &chain).unwrap();
+			budget.reserve_ceiling(Amount::from_sat(10_000)).unwrap();
+			budget.reserve_publication(&record).unwrap();
+			budget.require_publication(&record, &tx).unwrap();
+			let (next, _) = publication_record(policy, super::ordinary_fee_publication::PublicationPath::Pool, 500, 2);
+			assert!(budget.reserve_publication(&next).is_err());
+			budget.require_retained_fees(Amount::from_sat(10_000)).unwrap();
+			assert!(budget.require_retained_fees(Amount::from_sat(10_001)).is_err());
+		}
+		let budget = OrdinaryFeeBudget::load_verified(&directory, policy, &chain).unwrap();
+		budget.require_publication(&record, &tx).unwrap(); drop(budget);
+		remove_publication_directory(&directory);
+	}
+
+	#[test]
+	fn publication_prices_original_parents_and_actual_signed_weight() {
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };
+		let (parent, tx) = publication_transaction(500, 1);
+		let path = super::ordinary_fee_publication::PublicationPath::Round;
+		let rate = bitcoin::FeeRate::from_sat_per_vb_u32(100);
+		assert!(PublicationRecord::new(path, policy, &tx, &[], rate).is_err());
+		let mut wrong = parent.clone(); wrong.output[0].value = Amount::from_sat(20_000);
+		assert!(PublicationRecord::new(path, policy, &tx, &[wrong], rate).is_err());
+		let mut duplicate = tx.clone(); duplicate.input.push(duplicate.input[0].clone());
+		assert!(PublicationRecord::new(path, policy, &duplicate, &[parent.clone()], rate).is_err());
+		assert!(PublicationRecord::new(path, policy, &tx, &[parent], bitcoin::FeeRate::from_sat_per_vb_u32(1)).is_err());
+	}
+
+	#[test]
+	fn publication_witness_refuses_links_and_nonprivate_permissions() {
+		let directory = publication_directory("private-witness");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };
+		policy.initialize(&directory).unwrap();
+		let (record, tx) = publication_record(policy, super::ordinary_fee_publication::PublicationPath::Round, 500, 1);
+		{
+			let budget = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+			budget.reserve_publication(&record).unwrap();
+		}
+		let name = directory.file_name().unwrap().to_str().unwrap();
+		let root = directory.with_file_name(format!("{name}.ordinary-native-publications"));
+		let witness = root.join(format!("{}.json", tx.compute_wtxid()));
+		std::fs::set_permissions(&witness, std::fs::Permissions::from_mode(0o644)).unwrap();
+		assert!(OrdinaryFeeBudget::load(&directory, policy).is_err());
+		std::fs::set_permissions(&witness, std::fs::Permissions::from_mode(0o600)).unwrap();
+		let alias = directory.join("extra-link");
+		std::fs::hard_link(&witness, &alias).unwrap();
+		assert!(OrdinaryFeeBudget::load(&directory, policy).is_err());
+		std::fs::remove_file(&alias).unwrap();
+		let saved = directory.join("original-witness");
+		std::fs::rename(&witness, &saved).unwrap();
+		std::os::unix::fs::symlink(&saved, &witness).unwrap();
+		assert!(OrdinaryFeeBudget::load(&directory, policy).is_err());
+		std::fs::remove_file(&witness).unwrap(); std::fs::rename(&saved, &witness).unwrap();
+		std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).unwrap();
+		assert!(OrdinaryFeeBudget::load(&directory, policy).is_err());
+		std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
+		OrdinaryFeeBudget::load(&directory, policy).unwrap().require_publication(&record, &tx).unwrap();
+		remove_publication_directory(&directory);
+	}
+
 }

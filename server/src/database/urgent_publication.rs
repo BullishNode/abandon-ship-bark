@@ -316,13 +316,13 @@ mod tests {
 			let snapshot = t.backing_snapshot(std::slice::from_ref(&bare), DIRECT_HISTORY_LIMITS).await?;
 			t.refuse_retained_urgent_overlap(&snapshot, DIRECT_HISTORY_LIMITS).await
 		}).await.unwrap_err();
-		assert!(held.to_string().contains("expiry freeze overlaps retained urgent signed inputs"), "unexpected guard failure: {held:#}");
+		assert!(format!("{held:#}").contains("expiry freeze overlaps retained urgent signed inputs"), "unexpected guard failure: {held:#}");
 		// A separate empty historical DB models DB-only rollback without deleting
 		// any original nursery row, reservation, witness or signed byte.
 		let mut old_cfg = cfg.clone(); old_cfg.name = "urgent_publication_control_old".into();
 		let old_db = Db::create(&old_cfg).await.unwrap();
 		let refused = DirectPayoutWitness::load(&directory, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &old_db, DIRECT_HISTORY_LIMITS).await.err().expect("DB-only rollback was accepted");
-		assert!(refused.to_string().contains("retained urgent signed intent missing from restored nursery"), "unexpected restore failure: {refused:#}");
+		assert!(format!("{refused:#}").contains("retained urgent signed intent missing from restored nursery"), "unexpected restore failure: {refused:#}");
 		// Missing independent budget is tested against an ACTUAL populated DB.
 		// Copy only the original immutable identity/empty direct history into a
 		// separate directory; the real complete budget/journal remains untouched.
@@ -332,7 +332,7 @@ mod tests {
 			std::fs::copy(directory.join(DIRECT_DIRECTORY).join(name), prebudget.join(DIRECT_DIRECTORY).join(name)).unwrap();
 		}
 		let missing = DirectPayoutWitness::load(&prebudget, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &reopened, DIRECT_HISTORY_LIMITS).await.err().expect("urgent metadata without independent budget was accepted");
-		assert!(missing.to_string().contains("urgent DB metadata requires the missing independent budget"), "unexpected missing-budget failure: {missing:#}");
+		assert!(format!("{missing:#}").contains("urgent DB metadata requires the missing independent budget"), "unexpected missing-budget failure: {missing:#}");
 		assert_eq!(std::fs::read(history_path).unwrap(), original_history);
 		println!("actual PG nursery-first gap, exact replay/reconnect and retained-input freeze refusal; chain/funding/automatic routing NOT qualified");
 	}

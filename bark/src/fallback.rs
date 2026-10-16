@@ -1,5 +1,11 @@
 //! One authenticated, immutable expiry destination and public coin account.
 
+pub(crate) mod payouts;
+mod refusal;
+mod sync;
+mod reconcile;
+pub use refusal::FallbackRefusal;
+
 use std::time::Duration;
 
 use anyhow::Context;

@@ -35,6 +35,7 @@ use ark::tree::signed::{LeafVtxoCosignContext, UnlockHash, VtxoTreeSpec};
 use bitcoin_ext::{BlockDelta, BlockHeight, TxStatus};
 use server_rpc::{protos, ServerConnection, TryFromBytes, MAX_NB_FORFEIT_NONCE_IDS};
 
+use crate::FallbackRefusal;
 use crate::import::ImportVtxoArgs;
 use crate::movement::manager::OnDropStatus;
 use crate::{Wallet, WalletVtxo, SECP, SUBSCRIBE_REQUEST_TIMEOUT};
@@ -212,6 +213,9 @@ pub struct RoundState {
 
 	/// The ID of the [Movement] associated with this round
 	pub(crate) movement_id: Option<MovementId>,
+
+	/// Stable refusal received from the server before the round failed.
+	pub(crate) fallback_refusal: Option<FallbackRefusal>,
 }
 
 impl RoundState {
@@ -226,6 +230,7 @@ impl RoundState {
 			new_vtxos: Vec::new(),
 			sent_forfeit_sigs: false,
 			done: false,
+			fallback_refusal: None,
 		}
 	}
 
@@ -242,6 +247,7 @@ impl RoundState {
 			new_vtxos: Vec::new(),
 			sent_forfeit_sigs: false,
 			done: false,
+			fallback_refusal: None,
 		}
 	}
 
@@ -552,6 +558,8 @@ impl RoundState {
 		wallet: &Wallet,
 		attempt: &RoundAttempt,
 	) {
+		self.fallback_refusal = None;
+
 		// Drop the previous attempt's stashed nonces: the new attempt
 		// regenerates cosign keys, so the old key becomes unreachable.
 		if let RoundFlowState::InteractiveOngoing {
@@ -594,6 +602,7 @@ impl RoundState {
 				};
 			},
 			Err(e) => {
+				self.fallback_refusal = FallbackRefusal::from_error(&e);
 				self.flow = RoundFlowState::Failed {
 					error: format!("{:#}", e),
 				};
@@ -664,6 +673,7 @@ impl RoundState {
 					},
 					AttemptProgressResult::Failed(e) => {
 						warn!("Round failed with error: {:#}", e);
+						self.fallback_refusal = FallbackRefusal::from_error(&e);
 						self.flow = RoundFlowState::Failed {
 							error: format!("{:#}", e),
 						};
@@ -1114,7 +1124,7 @@ async fn start_attempt(
 		#[allow(deprecated)]
 		offboard_requests: vec![],
 		unblinded_mailbox_id: Some(unblinded_mailbox_id.serialize()),
-	}).await.context("Ark server refused our payment submission")?;
+	}).await.map_err(crate::FallbackRefusal::map_status).context("Ark server refused our payment submission")?;
 	let unlock_hash = UnlockHash::from_bytes(&resp.into_inner().unlock_hash)?;
 
 	// Stash nonces in memory only. Empty `cosign_keys` means no VTXO
@@ -1255,7 +1265,7 @@ async fn hark_vtxo_swap(
 
 	let preimage = srv.client.forfeit_vtxos(protos::ForfeitVtxosRequest {
 		forfeit_bundles: forfeit_bundles.iter().map(|b| b.serialize()).collect(),
-	}).await
+	}).await.map_err(crate::FallbackRefusal::map_status)
 		.context("forfeit vtxos call failed")
 		.map_err(HarkForfeitError::SentForfeits)?
 		.into_inner().unlock_preimage.as_slice().try_into()
@@ -2149,7 +2159,7 @@ impl Wallet {
 			vtxo_requests,
 			unblinded_mailbox_id: Some(unblinded_mailbox_id.serialize()),
 			scheduled_height: scheduled_height.map(|h| h.into()),
-		}).await.context("error submitting round participation to server")?.into_inner();
+		}).await.map_err(crate::FallbackRefusal::map_status).context("error submitting round participation to server")?.into_inner();
 
 		let unlock_hash = UnlockHash::from_bytes(resp.unlock_hash)
 			.context("invalid unlock hash from server")?;
@@ -2751,7 +2761,13 @@ impl Wallet {
 			if !state.state().ongoing_participation() {
 				let status = state.state_mut().sync(self).await?;
 				match status {
-					RoundStatus::Failed { error } => bail!("round failed: {}", error),
+					RoundStatus::Failed { error } => {
+						// sync has already persisted failure and released the inputs.
+						if let Some(refusal) = state.state().fallback_refusal {
+							return Err(refusal.into());
+						}
+						bail!("round failed: {}", error);
+					},
 					RoundStatus::Canceled => bail!("round canceled"),
 					status => return Ok(status),
 				}

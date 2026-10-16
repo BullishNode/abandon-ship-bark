@@ -26,6 +26,7 @@ use ark::lightning::{PaymentHash, Preimage};
 use ark::rounds::RoundSeq;
 
 use crate::WalletVtxo;
+use crate::FallbackRefusal;
 use crate::exit::{ExitState, ExitTxOrigin, ExitVtxo};
 use crate::movement::MovementId;
 use crate::lock_manager::LockGuard;
@@ -494,6 +495,8 @@ pub struct SerdeRoundState<'a> {
 	#[serde(with = "ark::encode::serde::cow::vec")]
 	new_vtxos: Cow<'a, [Vtxo<Full>]>,
 	sent_forfeit_sigs: bool,
+	#[serde(default)]
+	fallback_refusal: Option<FallbackRefusal>,
 }
 
 impl<'a> From<&'a RoundState> for SerdeRoundState<'a> {
@@ -505,6 +508,7 @@ impl<'a> From<&'a RoundState> for SerdeRoundState<'a> {
 			flow: (&state.flow).into(),
 			new_vtxos: Cow::Borrowed(&state.new_vtxos),
 			sent_forfeit_sigs: state.sent_forfeit_sigs,
+			fallback_refusal: state.fallback_refusal,
 		}
 	}
 }
@@ -518,6 +522,7 @@ impl<'a> From<SerdeRoundState<'a>> for RoundState {
 			flow: state.flow.into(),
 			new_vtxos: state.new_vtxos.into_owned(),
 			sent_forfeit_sigs: state.sent_forfeit_sigs,
+			fallback_refusal: state.fallback_refusal,
 		}
 	}
 }

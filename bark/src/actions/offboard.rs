@@ -687,7 +687,7 @@ async fn prepare_offboard(
 			.map(|id| id.to_bytes().to_vec())
 			.collect(),
 		attestation,
-	}).await.retry_unless_rejected()?.into_inner();
+	}).await.map_err(crate::FallbackRefusal::map_status).retry_unless_rejected()?.into_inner();
 
 	// A replayed prepare returns the same response, so a response we can't
 	// use aborts: nothing of ours is forfeited before finish, so `abort`
@@ -782,7 +782,7 @@ async fn finish_offboard(
 		partial_signatures: sigs.partial_signatures.iter()
 			.map(|s| s.serialize().to_vec())
 			.collect(),
-	}).await.retry_unless_rejected()?.into_inner();
+	}).await.map_err(crate::FallbackRefusal::map_status).retry_unless_rejected()?.into_inner();
 
 	// The server holds our forfeits by now, so a response we can't use
 	// retries: the session is still intact and the server replays its

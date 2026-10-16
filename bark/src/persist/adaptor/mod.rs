@@ -119,6 +119,7 @@ pub mod partition {
 	pub const MOVEMENT_ACTION: u8 = 17;
 
 	pub const FALLBACK_RECORD: u8 = 18;
+	pub const FALLBACK_SNAPSHOT: u8 = 19;
 
 	pub const LAST_IDS: u8 = u8::MAX;
 }
@@ -968,6 +969,15 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 			}
 			None => Ok(None),
 		}
+	}
+
+	async fn get_fallback_snapshot(&self) -> anyhow::Result<crate::FallbackSnapshot> {
+		Ok(self.inner.read().await.get(partition::FALLBACK_SNAPSHOT, &[]).await?
+			.map(|record| record.to_data()).transpose()?.unwrap_or_default())
+	}
+
+	async fn store_fallback_snapshot(&self, snapshot: &crate::FallbackSnapshot) -> anyhow::Result<()> {
+		self.inner.write().await.put(Record::from_data(partition::FALLBACK_SNAPSHOT, &[], None, snapshot)?).await
 	}
 
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {

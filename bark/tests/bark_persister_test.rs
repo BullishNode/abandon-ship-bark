@@ -129,6 +129,14 @@ impl BarkPersister for Dummy {
 		Ok(())
 	}
 
+	async fn get_fallback_snapshot(&self) -> anyhow::Result<bark::FallbackSnapshot> {
+		Ok(bark::FallbackSnapshot::default())
+	}
+
+	async fn store_fallback_snapshot(&self, _snapshot: &bark::FallbackSnapshot) -> anyhow::Result<()> {
+		Ok(())
+	}
+
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>> {
 		Ok(None)
 	}

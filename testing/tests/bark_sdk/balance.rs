@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use bitcoin::Amount;
+use bark::persist::{BarkPersister, sqlite::SqliteClient};
 use bitcoin_ext::BlockDelta;
 use server_log::RoundFinished;
 
@@ -161,4 +162,49 @@ async fn balance_sets_aside_expired_vtxos() {
 	let balance = sync_until(&ctx, &wallet, |b| b.pending_in_round == Amount::ZERO).await;
 	assert_eq!(balance.spendable, AMOUNT, "refreshed: {balance:?}");
 	assert_eq!(balance.needs_refresh, Amount::ZERO, "refreshed: {balance:?}");
+}
+
+/// Client-cache projection, not evidence of a server payout. The real admitted
+/// coin remains locally Spendable while durable receipt/status metadata must
+/// fence its available balance independently of the latest observed chain tip.
+#[tokio::test]
+async fn fallback_balance_keeps_unknown_value_owned_without_advertising_it_spendable() {
+	let ctx = TestContext::new("bark_sdk/fallback_balance_cached_settlement").await;
+	let srv = ctx.captaind("server").create().await;
+	let wallet = boarded_wallet(&ctx, &srv).await;
+	let coin = wallet.spendable_vtxos().await.unwrap().remove(0);
+	assert!(wallet.chain().tip().await.unwrap() < coin.expiry_height());
+	let db = SqliteClient::open(ctx.datadir.join("bark/db.sqlite")).unwrap();
+	let mut snapshot = db.get_fallback_snapshot().await.unwrap();
+	snapshot.awaiting_settlement.insert(coin.id());
+	db.store_fallback_snapshot(&snapshot).await.unwrap();
+	let balance = wallet.balance().await.unwrap();
+	assert_eq!(balance.spendable, Amount::ZERO);
+	assert_eq!(balance.needs_refresh, Amount::ZERO, "unknown is not a promise that refresh is allowed");
+	assert_eq!(balance.awaiting_settlement, coin.amount());
+	assert_eq!(balance.total(), coin.amount(), "an unresolved status cannot erase owned funds");
+	assert_eq!(balance.summary().pending, coin.amount());
+	assert!(wallet.spendable_vtxos().await.unwrap().is_empty());
+
+	// This is the same pre-expiry tip a rollback can expose. With Core
+	// actually unavailable the cached fence must still win over that tip.
+	wallet.stop_daemon();
+	srv.stop().await.unwrap();
+	ctx.bitcoind().stop().await.unwrap();
+	wallet.chain().invalidate_caches().await;
+	let offline = wallet.balance().await.unwrap();
+	assert_eq!(offline.spendable, Amount::ZERO);
+	assert_eq!(offline.awaiting_settlement, coin.amount());
+	assert_eq!(offline.total(), coin.amount());
+
+	let now = chrono::Local::now();
+	snapshot.entitlements.insert(1, bark::FallbackEntitlement {
+		entitlement_id: 1, vtxo_id: coin.id(), gross: coin.amount(), chain_view_valid: false,
+		attempts: vec![], terminal_claim: None, first_seen: now, last_updated: now,
+	});
+	db.store_fallback_snapshot(&snapshot).await.unwrap();
+	let decided = wallet.balance().await.unwrap();
+	assert_eq!(decided.spendable, Amount::ZERO);
+	assert_eq!(decided.awaiting_settlement, Amount::ZERO);
+	assert_eq!(decided.total(), Amount::ZERO, "permanent obligations are receipts, not a second Ark balance");
 }

@@ -436,6 +436,12 @@ pub trait BarkPersister: Send + Sync + 'static {
 		Ok(())
 	}
 
+	/// The last complete, coherently paginated account receipt snapshot.
+	async fn get_fallback_snapshot(&self) -> anyhow::Result<crate::FallbackSnapshot>;
+
+	/// Atomically replace the visible account history generation.
+	async fn store_fallback_snapshot(&self, snapshot: &crate::FallbackSnapshot) -> anyhow::Result<()>;
+
 	/// Read the immutable signed fallback destination.
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>>;
 

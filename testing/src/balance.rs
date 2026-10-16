@@ -17,7 +17,11 @@ pub async fn assert_balance_consistent(wallet: &bark::Wallet, sync: bool) -> bar
 		wallet.sync().await;
 	}
 	let balance = wallet.balance().await.expect("balance");
-	let vtxos = wallet.vtxos().await.expect("vtxos");
+	let decided = wallet.fallback_payouts().await.expect("fallback receipts").into_iter()
+		.map(|receipt| receipt.vtxo_id).collect::<std::collections::HashSet<_>>();
+	let awaiting = wallet.awaiting_settlement_vtxos().await.expect("awaiting settlement");
+	let vtxos = wallet.vtxos().await.expect("vtxos").into_iter()
+		.filter(|coin| !decided.contains(&coin.id())).collect::<Vec<_>>();
 
 	let locked_amount_of = |ids: &[VtxoId]| -> Amount {
 		vtxos.iter()
@@ -30,9 +34,13 @@ pub async fn assert_balance_consistent(wallet: &bark::Wallet, sync: bool) -> bar
 	let max_exit_depth = wallet.ark_info().await.expect("ark info").map(|i| i.max_vtxo_exit_depth);
 	let mut spendable = Amount::ZERO;
 	let mut needs_refresh = Amount::ZERO;
+	let mut awaiting_settlement = Amount::ZERO;
 	let mut locked = Amount::ZERO;
 	for vtxo in &vtxos {
 		match vtxo.state {
+			VtxoState::Spendable if awaiting.contains(&vtxo.id()) => {
+				awaiting_settlement += vtxo.amount()
+			},
 			VtxoState::Spendable if vtxo.needs_refresh(tip, max_exit_depth) => {
 				needs_refresh += vtxo.amount()
 			},
@@ -41,6 +49,7 @@ pub async fn assert_balance_consistent(wallet: &bark::Wallet, sync: bool) -> bar
 			VtxoState::Spent | VtxoState::Exited => panic!("vtxos() returned a spent VTXO"),
 		}
 	}
+	assert_eq!(balance.awaiting_settlement, awaiting_settlement, "awaiting value stays owned and unavailable");
 	assert_eq!(balance.spendable, spendable,
 		"spendable must equal the spendable VTXOs that need no refresh: {balance:?}",
 	);
@@ -97,8 +106,8 @@ pub async fn assert_balance_consistent(wallet: &bark::Wallet, sync: bool) -> bar
 	assert!(pending_locked <= locked,
 		"pending fields count more than the locked VTXOs ({locked}): {balance:?}",
 	);
-	assert_eq!(balance.pending(), pending_locked + balance.pending_exit, "{balance:?}");
-	assert_eq!(balance.total(), spendable + needs_refresh + pending_locked + balance.pending_exit,
+	assert_eq!(balance.pending(), pending_locked + balance.pending_exit + awaiting_settlement, "{balance:?}");
+	assert_eq!(balance.total(), spendable + needs_refresh + pending_locked + balance.pending_exit + awaiting_settlement,
 		"total must be the sum of every field: {balance:?}",
 	);
 	assert_eq!(balance.has_pending(), balance.pending() > Amount::ZERO, "{balance:?}");

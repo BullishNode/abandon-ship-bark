@@ -280,6 +280,23 @@ impl BarkPersister for SqliteClient {
 		tx.commit().context("Failed to commit transaction")
 	}
 
+	async fn get_fallback_snapshot(&self) -> anyhow::Result<crate::FallbackSnapshot> {
+		use rusqlite::OptionalExtension;
+		let bytes: Option<Vec<u8>> = self.connect()?.query_row(
+			"SELECT snapshot FROM bark_fallback_snapshot WHERE id = 1", [], |row| row.get(0),
+		).optional()?;
+		Ok(bytes.map(|bytes| serde_json::from_slice(&bytes)).transpose()?.unwrap_or_default())
+	}
+
+	async fn store_fallback_snapshot(&self, snapshot: &crate::FallbackSnapshot) -> anyhow::Result<()> {
+		let bytes = serde_json::to_vec(snapshot)?;
+		self.connect()?.execute(
+			"INSERT INTO bark_fallback_snapshot (id, snapshot) VALUES (1, ?1)
+			ON CONFLICT (id) DO UPDATE SET snapshot = excluded.snapshot", [&bytes],
+		)?;
+		Ok(())
+	}
+
 	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>> {
 		query::get_fallback_record(&self.connect()?)
 	}

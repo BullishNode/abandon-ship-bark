@@ -126,6 +126,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		error::InternalServerError,
 		error::NotFoundError,
 		error::BadRequestError,
+		error::FallbackRefusalError,
 	)),
 	tags(
 		(name = "wallet", description = "Manage Ark balances and VTXOs, send payments via Ark, LN, and on-chain."),
@@ -357,6 +358,7 @@ pub async fn fallback_registration(
 	};
 	Ok(Json(bark_json::web::FallbackRegistrationInfo {
 		registered: registration.is_some(), payout_address,
+		history_awaiting_sync: wallet.fallback_history_awaiting_sync().await?,
 	}))
 }
 
@@ -563,9 +565,12 @@ pub async fn vtxos(
 		wallet.vtxos().await.context("Failed to get VTXOs")?
 	};
 
-	let vtxo_infos = wallet_vtxos.iter()
-		.map(bark_json::primitives::WalletVtxoInfo::from)
-		.collect();
+	let awaiting = wallet.awaiting_settlement_vtxos().await?;
+	let vtxo_infos = wallet_vtxos.iter().map(|vtxo| {
+		let mut info = bark_json::primitives::WalletVtxoInfo::from(vtxo);
+		info.awaiting_settlement = awaiting.contains(&vtxo.id());
+		info
+	}).collect();
 
 	Ok(axum::Json(vtxo_infos))
 }
@@ -597,7 +602,9 @@ pub async fn get_vtxo(
 	let wallet_vtxo = wallet.get_vtxo_by_id(vtxo_id).await
 		.not_found([vtxo_id], "VTXO not found")?;
 
-	Ok(axum::Json((&wallet_vtxo).into()))
+	let mut info = bark_json::primitives::WalletVtxoInfo::from(&wallet_vtxo);
+	info.awaiting_settlement = wallet.awaiting_settlement_vtxos().await?.contains(&vtxo_id);
+	Ok(axum::Json(info))
 }
 
 #[utoipa::path(

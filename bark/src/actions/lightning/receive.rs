@@ -522,7 +522,7 @@ async fn prepare_lightning_receive_htlcs(
 		htlc_recv_expiry: htlc_recv_expiry.into(),
 		lightning_receive_anti_dos,
 	};
-	let res = srv.client.prepare_lightning_receive_claim(req).await
+	let res = srv.client.prepare_lightning_receive_claim(req).await.map_err(crate::FallbackRefusal::map_status)
 		.retry_unless_rejected()?.into_inner();
 
 	// The server hands back this very same grant on every later request for
@@ -710,7 +710,7 @@ async fn claim_lightning_receive_htlcs(
 		payment_hash: recv.payment_hash.to_byte_array().to_vec(),
 		payment_preimage: recv.payment_preimage.to_vec(),
 		cosign_request: Some(package_cosign_request),
-	}).await.retry_unless_rejected()?.into_inner();
+	}).await.map_err(crate::FallbackRefusal::map_status).retry_unless_rejected()?.into_inner();
 
 	// The preimage is out, so from here on only retry: the server's
 	// claim_lightning_receive is idempotent and hands out fresh cosign

@@ -22,6 +22,7 @@ pub mod expiry_chain;
 pub mod expiry_decision;
 pub mod expiry_ownership;
 pub mod expiry_payout;
+pub mod expiry_details;
 pub(crate) mod expiry_geometry;
 
 mod ban;
@@ -63,7 +64,7 @@ use bitcoin::consensus::{serialize, deserialize};
 use bitcoin::secp256k1::{self, PublicKey};
 use chrono::Local;
 use futures::Stream;
-use tokio_postgres::{Client, NoTls, RowStream};
+use tokio_postgres::{Client, IsolationLevel, NoTls, RowStream};
 use tokio_postgres::types::Type;
 use tracing::{info, warn};
 use ark::{ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
@@ -320,13 +321,14 @@ impl Db {
 	}
 
 	/// Perform db operations in a tx
-	async fn do_in_tx<R, F>(&self, read_only: bool, f: F) -> anyhow::Result<R>
+	async fn do_in_tx<R, F>(&self, read_only: bool, isolation: IsolationLevel, f: F) -> anyhow::Result<R>
 	where
 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
 	{
 		let mut conn = self.get_conn().await.context("unable to get db connection")?;
 		let pgtx = conn.build_transaction()
 			.read_only(read_only)
+			.isolation_level(isolation)
 			.start().await
 			.context("unable to start db tx")?;
 		let tx = Tx { inner: &pgtx };
@@ -350,7 +352,16 @@ impl Db {
 	where
 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
 	{
-		self.do_in_tx(true, f).await
+		self.do_in_tx(true, IsolationLevel::ReadCommitted, f).await
+	}
+
+	/// One bounded RPC page observes one immutable database snapshot. The
+	/// transaction ends with the page; callers never retain it across requests.
+	pub async fn read_snapshot<R, F>(&self, f: F) -> anyhow::Result<R>
+	where
+		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
+	{
+		self.do_in_tx(true, IsolationLevel::RepeatableRead, f).await
 	}
 
 	/// Perform db operations in write mode
@@ -358,7 +369,7 @@ impl Db {
 	where
 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
 	{
-		self.do_in_tx(false, f).await
+		self.do_in_tx(false, IsolationLevel::ReadCommitted, f).await
 	}
 }
 

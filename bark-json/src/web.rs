@@ -841,6 +841,9 @@ impl PendingRoundInfo {
 pub struct FallbackRegistrationInfo {
 	pub registered: bool,
 	pub payout_address: Option<String>,
+	/// The prior coherent history is retained until server sync succeeds.
+	#[serde(default)]
+	pub history_awaiting_sync: bool,
 }
 
 #[derive(Serialize, Deserialize)]

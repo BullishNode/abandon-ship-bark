@@ -84,6 +84,8 @@ impl ToStatus for anyhow::Error {
 				metadata.insert("identifiers", ids);
 			}
 			tonic::Status::with_metadata(tonic::Code::NotFound, format!("{:#}", self), metadata)
+		} else if self.is::<crate::error::FallbackHistoryTooLarge>() {
+			tonic::Status::resource_exhausted(format!("{:#}", self))
 		} else if self.is::<FallbackHistoryViewChanged>() {
 			let mut metadata = tonic::metadata::MetadataMap::new();
 			metadata.insert("abandon-reason", tonic::metadata::MetadataValue::from_static("payout_view_changed"));

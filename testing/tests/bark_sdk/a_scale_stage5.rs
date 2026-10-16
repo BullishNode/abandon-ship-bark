@@ -6,12 +6,14 @@ async fn stage5_unclaimed_hark_source() {
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(sat(100_000_000)).recovery_fee_headroom(sat(20_000)).watchmand_cfg(|c|c.fee_estimator.max_fee_rate=Some(FeeRate::from_sat_per_vb_u32(5))).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
+			c.fee_estimator.max_fee_rate=Some(FeeRate::from_sat_per_vb_u32(5));
 			c.round_interval = Duration::from_secs(3600);
 		}).create().await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let env = Env { bitcoind: ctx.bitcoind_arc(), datadir: ctx.datadir.clone(),
 		cfg: ctx.bark_default_cfg(&srv.ark_url(), Some(ctx.bitcoind())), db: db.clone(), out: out.clone(),ln_client:None,hold_client:None };
 	provision_fee_reserve(&ctx,&env,&srv).await;
+	enable_scale_native_epoch(&ctx,&env,&srv,Vec::new()).await;
 	let opening=treasury_edge(&env,&srv,"opening").await;
 	let (mut owner, wallet) = create_owner(env.clone(), 0, Profile::Registered, srv.ark_url()).await;
 	owner.cohort="hark";
@@ -504,7 +506,7 @@ async fn soak_inner() {
 	let ctx = TestContext::new("bark_sdk/stage5_soak").await;
 	let out = Out::new();
 	let lightning = Some(ctx.new_lightning_setup("lightningd").await);
-	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).funded(sat(100_000_000))
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).funded(sat(100_000_000)).no_vtxo_pool()
 		.lightningd(&lightning.as_ref().unwrap().internal).recovery_fee_headroom(sat(20_000)).watchmand_cfg(|c|c.fee_estimator.max_fee_rate=Some(FeeRate::from_sat_per_vb_u32(5))).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(432);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(432);
@@ -517,7 +519,7 @@ async fn soak_inner() {
 			c.fee_estimator.max_fee_rate=Some(FeeRate::from_sat_per_vb_u32(5));
 			c.round_interval = Duration::from_secs(2);
 		}).create().await;
-	srv.wait_for_vtxopool(&ctx).await;
+
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let env = Env { bitcoind: ctx.bitcoind_arc(), datadir: ctx.datadir.clone(),
 		cfg: ctx.bark_default_cfg(&srv.ark_url(), Some(ctx.bitcoind())), db, out: out.clone(),
@@ -525,6 +527,10 @@ async fn soak_inner() {
 		hold_client:Some(lightning.as_ref().unwrap().internal.hold_client().await) };
 	record_ln_boundary(&env,&lightning).await;
 	provision_fee_reserve(&ctx,&env,&srv).await;
+	enable_scale_native_epoch(&ctx,&env,&srv,vec![
+		server::vtxopool::VtxoTarget {amount:sat(100_000),count:8},
+		server::vtxopool::VtxoTarget {amount:sat(10_000),count:4},
+	]).await;
 	train_fee_estimator_recorded(&ctx,&env).await;
 	srv.wait_for_sync_height(bitcoin_ext::BlockHeight::new(env.core().get_block_count().unwrap() as u32)).await;
 	let core_open: Value = env.core().call("getbalances", &[]).unwrap();

@@ -28,7 +28,8 @@ async fn stage4_scale() {
 	let mut builder = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.funded(sat(p.server_funding_sat)).recovery_fee_headroom(sat(20_000)).watchmand_cfg(|c|c.fee_estimator.max_fee_rate=Some(FeeRate::from_sat_per_vb_u32(5)));
 	if let Some(ln) = &lightning { builder = builder.lightningd(&ln.internal); }
-	if p.ln_receive == 0 { builder = builder.no_vtxo_pool(); }
+	// Bootstrap the native epoch before the first operator pool publication.
+	builder = builder.no_vtxo_pool();
 	let (lifetime, round_interval) = (p.vtxo_lifetime, p.round_interval_s);
 	let (pool_amount, pool_count) = (p.ln_receive_sat, p.ln_receive + 2);
 	let srv = builder.cfg(move |c| {
@@ -47,10 +48,6 @@ async fn stage4_scale() {
 		c.fee_estimator.max_fee_rate=Some(FeeRate::from_sat_per_vb_u32(5));
 		c.round_interval = Duration::from_secs(round_interval);
 	}).create().await;
-	if p.ln_receive > 0 {
-		tokio::time::timeout(Duration::from_secs(120), srv.wait_for_vtxopool(&ctx)).await
-			.expect("the funded vtxo pool must become ready");
-	}
 	if let Some(ln) = &lightning { ln.sync().await; }
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let env = Env {
@@ -61,6 +58,8 @@ async fn stage4_scale() {
 	};
 	record_ln_boundary(&env,&lightning).await;
 	provision_fee_reserve(&ctx,&env,&srv).await;
+	let pool=if p.ln_receive>0 {vec![server::vtxopool::VtxoTarget {amount:sat(pool_amount),count:pool_count}]} else {Vec::new()};
+	enable_scale_native_epoch(&ctx,&env,&srv,pool).await;
 	out.json("environment.json", &json!({
 		"datadir": ctx.datadir, "server_config": format!("{:?}", srv.config().expiry_payout),
 		"vtxo_lifetime": p.vtxo_lifetime, "round_interval_s": p.round_interval_s,

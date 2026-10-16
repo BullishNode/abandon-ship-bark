@@ -660,6 +660,7 @@ async fn soak_wait_paid(env: &Env, owners: &[Owner], deadline: Instant) {
 
 
 include!("a_scale_observers.rs");
+include!("a_scale_fee_epoch.rs");
 
 async fn train_fee_estimator_recorded(ctx:&TestContext,env:&Env) {
 	let core=env.core();

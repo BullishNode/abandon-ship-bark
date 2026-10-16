@@ -11,8 +11,8 @@ fn require_operating_build(){
 	let path=std::env::var("SCALE_OPERATING_BUILD_RECEIPT").expect("frozen A benchmark authority required");
 	let r:Value=serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
 	assert_eq!(r["architecture_profile"],"two_step_per_key");
-	assert_eq!(r["SDK_commit"],"52ac8cccaa6797e0428c1d916960ce45cddeea0b");
-	assert_eq!(r["common_commit"],"0038abaa721d3dbb3e27653a31bb736f74d43387");
+	assert_eq!(r["SDK_commit"],"cccc3f5747ad11b07b4742df1a25fb7b3ebe29c9");
+	assert_eq!(r["common_commit"],"a486a688fc1fa544b625fec69ecaa9d1dfe3c63b");
 	assert_eq!(r["route"],"two_step_reserved_sweep_then_payout");
 }
 fn assert_fresh_key(key:String){

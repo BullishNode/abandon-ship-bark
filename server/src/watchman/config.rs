@@ -8,6 +8,9 @@ use bitcoin_ext::BlockDelta;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DirectExpiryConfig {
+	/// Lifetime ordinary allowance and actual protected urgent liquidity.
+	#[serde(default)]
+	pub ordinary_fee_policy: super::ordinary_fee::OrdinaryFeePolicy,
 	/// Captaind's independently backed-up datadir, shared with this daemon.
 	pub history_dir: PathBuf,
 	/// Absolute mining-fee ceiling for each signed direct claim.

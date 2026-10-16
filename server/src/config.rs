@@ -210,6 +210,9 @@ pub struct Config {
 	pub expiry_payout: crate::expiry_payout::Config,
 	#[serde(default)]
 	pub direct_expiry: crate::expiry_dispatch::Config,
+	/// Immutable fee policy installed only during fresh server creation.
+	#[serde(default)]
+	pub direct_expiry_fee_policy: crate::watchman::ordinary_fee::OrdinaryFeePolicy,
 	pub network: bitcoin::Network,
 	/// The number of blocks after which a VTXO expires, by default 6*24*30 so that
 	/// a VTXO can live for up to 30 days.
@@ -711,6 +714,7 @@ pub mod watchmand {
 		pub fn validate(&self) -> anyhow::Result<()> {
 			self.bitcoind.validate()?;
 			if let Some(direct) = &self.watchman.direct_expiry {
+				direct.ordinary_fee_policy.validate()?;
 				ensure!(!direct.history_dir.as_os_str().is_empty(), "direct expiry history directory is empty");
 				ensure!(direct.max_miner_fee > Amount::ZERO && direct.max_miner_fee <= Amount::MAX_MONEY,
 					"invalid direct expiry mining-fee ceiling");

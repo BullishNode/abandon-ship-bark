@@ -719,7 +719,7 @@ impl ParkedReceive {
 			}
 		}).watchmand_cfg(move |cfg| {
 			if direct {
-				cfg.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
+				cfg.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(),
 					history_dir: cfg.data_dir.parent().unwrap().join("server"),
 					max_miner_fee: sat(10_000),
 				});

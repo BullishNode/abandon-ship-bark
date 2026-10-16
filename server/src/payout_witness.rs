@@ -221,7 +221,10 @@ impl DirectPayoutWitness {
 		for entry in fs::read_dir(&witness.files.directory)? {
 			let path = entry?.path();
 			let name = path.file_name().and_then(|n| n.to_str()).context("invalid direct history filename")?;
-			if name == "identity.json" || name == "history" || (name.starts_with('.') && name.ends_with(".tmp")) { continue; }
+			if name == "identity.json" || name == "history" ||
+				name == crate::watchman::ordinary_fee::POLICY_FILE || name == crate::watchman::ordinary_fee::OPENING_FILE ||
+				name == crate::watchman::ordinary_fee::BUDGET_FILE ||
+				(name.starts_with('.') && name.ends_with(".tmp")) { continue; }
 			let txid: Txid = name.strip_suffix(".json").context("invalid direct history filename")?.parse()?;
 			ensure!(fs::metadata(&path)?.len() <= u64::try_from(budget.max_serialized_bytes)?, "direct history record exceeds byte budget");
 			let recorded: DirectRecord = serde_json::from_slice(&fs::read(&path)?)?;
@@ -236,6 +239,31 @@ impl DirectPayoutWitness {
 		// the publication gate. Verify its DB state before completing that append.
 		for txid in present { witness.files.index(txid).await?; }
 		Ok(witness)
+	}
+
+	/// Existing witness loading has authenticated all signed records against the
+	/// database. Reuse that state to authenticate the immutable adoption prefix.
+	pub(crate) async fn verify_fee_opening(&self, db: &Db,
+		opening: &crate::watchman::ordinary_fee::OrdinaryFeeOpening,
+	) -> anyhow::Result<(bitcoin::Amount, u64)> {
+		self.require_identity(self.network, self.key)?;
+		let path = self.files.directory.join("history");
+		let limit = u64::try_from(self.budget.max_rows)?.checked_mul(65).context("history prefix limit overflow")?;
+		ensure!(fs::metadata(&path)?.len() <= limit, "fee opening history exceeds row budget");
+		let history = fs::read(&path)?;
+		ensure!(history.len() as u64 <= limit, "fee opening history grew beyond row budget");
+		let prefix = opening.verify_prefix(self.network, self.key, &history)?;
+		let ids = std::str::from_utf8(&history[..prefix])?.lines()
+			.map(|id| id.parse::<Txid>().map(|id| id.to_string())).collect::<Result<Vec<_>, _>>()?;
+		let total = db.read(async |t| {
+			let rows = t.query("SELECT txid, miner_fee_sat FROM expiry_carrier WHERE txid=ANY($1)", &[&ids]).await?;
+			ensure!(rows.len() == ids.len(), "opening prefix is missing a signed carrier");
+			rows.into_iter().try_fold(0_u64, |total, row| {
+				total.checked_add(u64::try_from(row.get::<_, i64>("miner_fee_sat"))?)
+					.context("opening native fee sum overflow")
+			})
+		}).await?;
+		Ok((bitcoin::Amount::from_sat(total), history.len() as u64))
 	}
 
 	/// Bind the loaded history to the actual backing server, not a caller's

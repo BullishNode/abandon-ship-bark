@@ -41,6 +41,7 @@ pub struct FrozenExpiryProcessor {
 	deliveries: BTreeMap<String, DirectDelivery>,
 	uncertain: Option<UncertainPublication>,
 	hydrated: bool,
+	ordinary_fee: Option<super::ordinary_fee::OrdinaryFeeBudget>,
 }
 
 impl FrozenExpiryProcessor {
@@ -49,7 +50,12 @@ impl FrozenExpiryProcessor {
 		operator_script: ScriptBuf, budget: BackingSnapshotLimits, policy: CarrierLimits, witness: Arc<DirectPayoutWitness>,
 	) -> Self {
 		Self { db, witness, wallet, network, operator_script, budget, policy,
-			deliveries: BTreeMap::new(), uncertain: None, hydrated: false }
+			deliveries: BTreeMap::new(), uncertain: None, hydrated: false, ordinary_fee: None }
+	}
+
+	pub(crate) fn with_ordinary_fee_budget(mut self, budget: super::ordinary_fee::OrdinaryFeeBudget) -> Self {
+		self.ordinary_fee = Some(budget);
+		self
 	}
 
 	/// Includes confirmed groups still retaining their owning-wallet fee guards.
@@ -167,7 +173,8 @@ impl FrozenExpiryProcessor {
 		}
 		ensure!(self.db.direct_delivery_generation(id).await? == generation, "frozen generation changed before construction");
 		let (mut held, carrier) = build_direct_carrier_with_replacement(signer, held, &group.backing,
-			&group.plan.recipients, self.operator_script.clone(), height, rate, self.policy, replacement).await?;
+			&group.plan.recipients, self.operator_script.clone(), height, rate, self.policy, replacement,
+			Some(self.ordinary_fee.as_ref().context("ordinary direct construction requires durable fee budget")?)).await?;
 		held.commit_tx(&carrier.tx);
 		let txid = carrier.tx.compute_txid();
 		// Retain before the publication await: cancelling its future must not

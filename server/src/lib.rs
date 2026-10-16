@@ -275,6 +275,10 @@ impl Server {
 		payout_witness::DirectPayoutWitness::initialize(&cfg.data_dir, cfg.network,
 			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key(), &db).await?;
 
+		let ordinary_policy = cfg.direct_expiry_fee_policy;
+		ordinary_policy.initialize_fresh(&cfg.data_dir.join(payout_witness::DIRECT_DIRECTORY), cfg.network,
+			Keypair::from_secret_key(&SECP, &server_key.private_key).public_key())?;
+
 		// Store initial wallet states to avoid full chain sync.
 		for wallet in [WalletKind::Rounds, WalletKind::Watchman] {
 			let _wallet = PersistedWallet::load_derive_from_master_xpriv(

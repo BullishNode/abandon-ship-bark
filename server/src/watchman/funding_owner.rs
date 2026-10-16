@@ -496,3 +496,7 @@ pub(crate) async fn verify_current_resolutions(
 	.context("native funding retained winner verification deadline")??;
 	Ok(())
 }
+
+#[cfg(test)]
+#[path = "funding_owner_native.rs"]
+mod native;

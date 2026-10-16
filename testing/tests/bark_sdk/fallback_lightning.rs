@@ -1,3 +1,5 @@
+mod direct_operating;
+
 use std::collections::BTreeSet;
 use std::convert::Infallible;
 use std::future::{Future, poll_fn};
@@ -190,20 +192,21 @@ async fn interrupted_receive(outcome: ReceiveOutcome) {
 }
 
 async fn interrupted_receive_with(outcome: ReceiveOutcome, fault: ReturnFault) {
-	interrupted_receive_for(outcome, fault, false).await;
+	interrupted_receive_for(outcome, fault, false, false).await;
 }
 
 #[tokio::test]
 async fn fallback_edge_forwarder_grant_without_preimage_refunds_payer() {
-	interrupted_receive_for(ReceiveOutcome::UndisclosedUntilHoldDeadline, ReturnFault::None, true).await;
+	interrupted_receive_for(ReceiveOutcome::UndisclosedUntilHoldDeadline, ReturnFault::None, true, false).await;
 }
 
 #[tokio::test]
 async fn fallback_edge_forwarder_collected_unclaimed_grant_pays_forwarder() {
-	interrupted_receive_for(ReceiveOutcome::Collected, ReturnFault::None, true).await;
+	interrupted_receive_for(ReceiveOutcome::Collected, ReturnFault::None, true, false).await;
 }
 
-async fn interrupted_receive_for(outcome: ReceiveOutcome, fault: ReturnFault, forwarded: bool) {
+async fn interrupted_receive_for(outcome: ReceiveOutcome, fault: ReturnFault, forwarded: bool, direct: bool) {
+	assert!(!direct || (outcome == ReceiveOutcome::Collected && fault == ReturnFault::None && !forwarded));
 	let name = match outcome {
 		ReceiveOutcome::Collected => "fallback_settled_lightning_receive_without_claim_commit",
 		ReceiveOutcome::Undisclosed => "fallback_unsettled_lightning_receive_is_not_paid",
@@ -231,16 +234,19 @@ async fn interrupted_receive_for(outcome: ReceiveOutcome, fault: ReturnFault, fo
 	let collected = returning || matches!(outcome, ReceiveOutcome::Collected | ReceiveOutcome::CollectedStatusLost);
 	// The server settles the subscription when it collects in the claim.
 	let settled = returning || outcome == ReceiveOutcome::Collected;
+	let name = if direct { "operating_source_collected_receive_automatic_direct" } else { name };
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
-	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().cfg(|c| {
+	let builder = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand();
+	let srv = direct_operating::configure(builder, direct).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(512);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(512);
 		}).create().await;
 	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await
 		.expect("the initially funded pool must become ready");
 	lightning.sync().await;
+	if direct { direct_operating::fund_fee_wallet(&ctx, &srv).await; }
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let destination = if forwarded {
 		let recipient = ctx.bark_sdk("offline_destination", &srv)
@@ -383,6 +389,7 @@ async fn interrupted_receive_for(outcome: ReceiveOutcome, fault: ReturnFault, fo
 	assert_eq!(unresolved as usize, if claim_committed { 0 } else { coins.len() });
 	assert!(wallet.lightning_receive_checkpoint(payment_hash).await.unwrap().is_some());
 	let return_config = wallet.config().clone();
+	let direct_sources = if direct { Some(direct_operating::verify_retained(&wallet, &db, &coins, &record).await) } else { None };
 	drop(wallet);
 	drop(proxy);
 	if !claim_committed { db.write(async |t| {
@@ -397,6 +404,15 @@ async fn interrupted_receive_for(outcome: ReceiveOutcome, fault: ReturnFault, fo
 	println!("interrupted receive: outcome={outcome:?}, external_paid={collected}, preimage_recorded={disclosed}, \
 		granted_sat={principal}, unresolved_htlcs={}", coins.len());
 
+	if direct {
+		let payouts = direct_operating::settle(&ctx, &db, &srv, &coins, &record.spk, direct_sources.as_ref().unwrap()).await;
+		let request = claim_request.lock().unwrap().take().unwrap();
+		srv.get_public_rpc().await.claim_lightning_receive(request).await
+			.expect_err("a late cooperative claim cannot spend the directly paid receive twice");
+		srv.stop().await.unwrap();
+		for payout in payouts { restore_and_spend(&ctx, &mnemonic, payout).await; }
+		return;
+	}
 	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
 	enable_payouts(&ctx, &srv).await;
 	match outcome {
@@ -650,13 +666,21 @@ async fn fallback_completed_lightning_send_without_recorded_preimage_is_not_refu
 }
 
 async fn absent_sender(completed: bool) {
+	absent_sender_route(completed, false).await;
+}
+
+async fn absent_sender_route(completed: bool, direct: bool) {
+	assert!(!direct || !completed, "this direct source fixture covers a genuinely failed payment only");
 	let name = if completed { "fallback_completed_lightning_send_without_recorded_preimage_is_not_refunded" }
 		else { "fallback_failed_lightning_send_refunds_absent_sender" };
+	let name = if direct { "operating_source_failed_send_automatic_direct" } else { name };
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
-	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
-		.lightningd(&lightning.internal).funded(btc(10)).watchmand().create().await;
+	let builder = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal).funded(btc(10)).watchmand();
+	let srv = direct_operating::configure(builder, direct).create().await;
 	lightning.sync().await;
+	if direct { direct_operating::fund_fee_wallet(&ctx, &srv).await; }
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let reached = Arc::new(Notify::new());
 	let revocation = Arc::new(Mutex::new(None));
@@ -771,10 +795,20 @@ async fn absent_sender(completed: bool) {
 			.await.expect_err("the server refunded a payment its node completed");
 		println!("completed send: ordinary refund refused: {}", status.message());
 	}
+	let direct_sources = if direct { Some(direct_operating::verify_retained(&wallet, &db, &coins, &record).await) } else { None };
 	drop(wallet);
 	drop(proxy);
 	println!("absent sender: completed={completed}, htlc_sat={principal}, coins={}", coins.len());
 
+	if direct {
+		let payouts = direct_operating::settle(&ctx, &db, &srv, &coins, &record.spk, direct_sources.as_ref().unwrap()).await;
+		let request = revocation.lock().unwrap().take().unwrap();
+		srv.get_public_rpc().await.request_lightning_pay_htlc_revocation(request).await
+			.expect_err("a late refund cannot spend the directly refunded HTLC twice");
+		srv.stop().await.unwrap();
+		for payout in payouts { restore_and_spend(&ctx, &mnemonic, payout).await; }
+		return;
+	}
 	expire_and_confirm_sweeps(&ctx, &db, &coins).await;
 	enable_payouts(&ctx, &srv).await;
 	if completed {

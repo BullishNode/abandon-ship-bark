@@ -12,7 +12,7 @@ fn require_operating_build(){
 	let r:Value=serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
 	assert_eq!(r["architecture_profile"],"two_step_per_key");
 	assert_eq!(r["SDK_commit"],"52ac8cccaa6797e0428c1d916960ce45cddeea0b");
-	assert_eq!(r["common_commit"],"6ae7e6f7c3595571e366027528f3192bec9c2cfb");
+	assert_eq!(r["common_commit"],"0038abaa721d3dbb3e27653a31bb736f74d43387");
 	assert_eq!(r["route"],"two_step_reserved_sweep_then_payout");
 }
 fn assert_fresh_key(key:String){

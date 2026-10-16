@@ -841,3 +841,7 @@ mod transaction_weight_tests {
 		}
 	}
 }
+
+// Source-only defensive prototype; no financial worker uses this protocol.
+#[cfg(test)]
+mod joint_native_fee_proposal;

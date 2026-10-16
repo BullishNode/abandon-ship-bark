@@ -64,6 +64,33 @@ pub(crate) enum UrgentRelay {
 }
 
 impl Tx<'_> {
+	/// Bound the COMPLETE distinct package inventory before fetching any raw
+	/// parent/member. Publication-row bytes alone omit shared signed parents.
+	async fn check_urgent_package_bounds(&self, budget: BackingSnapshotLimits) -> anyhow::Result<()> {
+		let metadata = self.query_one("SELECT count(*)::bigint AS rows,
+			COALESCE(sum(octet_length(urgent_fee_attempt::text)),0)::bigint AS bytes
+			FROM nursery_tx WHERE urgent_fee_attempt IS NOT NULL", &[]).await?;
+		let metadata_bytes = usize::try_from(metadata.get::<_, i64>("bytes"))?;
+		ensure!(usize::try_from(metadata.get::<_, i64>("rows"))? <= budget.max_rows &&
+			metadata_bytes <= budget.max_serialized_bytes, "urgent metadata exceeds read bounds");
+		ensure!(self.query_opt("SELECT id FROM nursery_tx WHERE urgent_fee_attempt IS NOT NULL AND
+			(jsonb_typeof(urgent_fee_attempt->'txids') IS DISTINCT FROM 'array' OR
+			jsonb_array_length(urgent_fee_attempt->'txids') NOT BETWEEN 1 AND 2) LIMIT 1", &[]).await?.is_none(),
+			"urgent package membership is not bounded");
+		let members = self.query_one("SELECT count(*)::bigint AS rows, COALESCE(sum(bytes),0)::bigint AS bytes,
+			COALESCE(max(bytes),0)::bigint AS largest FROM (
+			SELECT DISTINCT member.txid, octet_length(member.tx) AS bytes FROM nursery_tx publication
+			CROSS JOIN LATERAL jsonb_array_elements_text(publication.urgent_fee_attempt->'txids') package(txid)
+			JOIN nursery_tx member ON member.txid=package.txid WHERE publication.urgent_fee_attempt IS NOT NULL
+			) complete_members", &[]).await?;
+		let raw_bytes = usize::try_from(members.get::<_, i64>("bytes"))?;
+		ensure!(usize::try_from(members.get::<_, i64>("rows"))? <= budget.max_rows &&
+			usize::try_from(members.get::<_, i64>("largest"))? <= 400_000 &&
+			metadata_bytes.checked_add(raw_bytes).is_some_and(|n| n <= budget.max_serialized_bytes),
+			"complete urgent package bytes exceed read bounds");
+		Ok(())
+	}
+
 	/// Called only after the SAME complete independent history binding is durable.
 	pub(crate) async fn permit_bound_urgent_publication(&self, meta: &UrgentPublication) -> anyhow::Result<()> {
 		let publication = meta.txids.last().context("urgent publication has no transaction")?;
@@ -84,10 +111,7 @@ impl Tx<'_> {
 	/// the immutable publication's package IDs. An older bound package may still
 	/// relay its original parent while a new replacement remains unbound.
 	pub(crate) async fn urgent_relay(&self, txid: Txid) -> anyhow::Result<UrgentRelay> {
-		let bounds = crate::payout_witness::DIRECT_HISTORY_LIMITS;
-		let size = self.query_one("SELECT count(*)::bigint AS rows, COALESCE(sum(octet_length(urgent_fee_attempt::text)),0)::bigint AS bytes FROM nursery_tx WHERE urgent_fee_attempt->'txids' ? $1", &[&txid.to_string()]).await?;
-		ensure!(usize::try_from(size.get::<_, i64>("rows"))? <= bounds.max_rows &&
-			usize::try_from(size.get::<_, i64>("bytes"))? <= bounds.max_serialized_bytes, "urgent relay metadata exceeds read bounds");
+		self.check_urgent_package_bounds(crate::payout_witness::DIRECT_HISTORY_LIMITS).await?;
 		let rows = self.query("SELECT urgent_fee_attempt::text AS attempt,urgent_fee_bound FROM nursery_tx
 			WHERE urgent_fee_attempt->'txids' ? $1 ORDER BY id DESC LIMIT 10001", &[&txid.to_string()]).await?;
 		ensure!(rows.len() <= 10000, "urgent relay membership exceeds bound");
@@ -122,7 +146,7 @@ impl Tx<'_> {
 		for (position, tx) in txs.iter().enumerate() {
 			let publication = position + 1 == txs.len();
 			self.upsert_nursery_tx_with_attempt(tx, NurseryTxKind::Internal, target, publication.then_some(&value)).await?;
-			let row = self.query_one("SELECT tx,kind::text,urgent_fee_attempt::text AS attempt FROM nursery_tx WHERE txid=$1",
+			let row = self.query_one("SELECT tx,kind::text,urgent_fee_attempt::text AS attempt FROM nursery_tx WHERE txid=$1 AND octet_length(tx)<=400000",
 				&[&tx.compute_txid().to_string()]).await?;
 			ensure!(row.get::<_, Vec<u8>>("tx") == serialize(tx) && row.get::<_, &str>("kind") == "internal" &&
 				if publication {
@@ -133,10 +157,7 @@ impl Tx<'_> {
 	}
 
 	pub(crate) async fn urgent_publications(&self, budget: BackingSnapshotLimits) -> anyhow::Result<Vec<(UrgentPublication, Vec<Transaction>)>> {
-		let size = self.query_one("SELECT count(*)::bigint AS rows, COALESCE(sum(octet_length(tx)+octet_length(urgent_fee_attempt::text)),0)::bigint AS bytes
-			FROM nursery_tx WHERE urgent_fee_attempt IS NOT NULL", &[]).await?;
-		ensure!(usize::try_from(size.get::<_, i64>("rows"))? <= budget.max_rows &&
-			usize::try_from(size.get::<_, i64>("bytes"))? <= budget.max_serialized_bytes, "urgent publication inventory exceeds read bounds");
+		self.check_urgent_package_bounds(budget).await?;
 		let mut result = Vec::new();
 		for row in self.query("SELECT DISTINCT urgent_fee_attempt::text AS attempt FROM nursery_tx WHERE urgent_fee_attempt IS NOT NULL ORDER BY attempt", &[]).await? {
 			let text: &str = row.get("attempt"); let meta: UrgentPublication = serde_json::from_str(text)?;

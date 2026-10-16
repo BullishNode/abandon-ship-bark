@@ -36,8 +36,8 @@ impl Tx<'_> {
 		for state in old {if state.reservation.candidate.transaction()?.input.iter().any(|i|points.contains(&i.previous_output)) {
 			ensure!(state.signed.is_none() && reservation.candidate.follows_unsigned_round(&state.reservation.candidate),"native funding DB input belongs to another or signed family");
 		}}
-		let value=serde_json::to_value(reservation)?;
-		self.execute("INSERT INTO native_funding_fee_intent(attempt_key,reservation)VALUES($1,$2)",&[&key,&value]).await?;
+		let value=serde_json::to_string(reservation)?;
+		self.execute("INSERT INTO native_funding_fee_intent(attempt_key,reservation)VALUES($1,$2::text::jsonb)",&[&key,&value]).await?;
 		for point in points {self.execute("INSERT INTO native_funding_fee_input(outpoint,attempt_key)VALUES($1,$2)",&[&point.to_string(),&key]).await?;}
 		Ok(())
 	}

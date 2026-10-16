@@ -34,7 +34,7 @@ impl DirectExpiryRuntime {
 	pub async fn new(
 		db: Db, wallet: InstrumentedLock<PersistedWallet>, network: Network,
 		operator_script: ScriptBuf, budget: BackingSnapshotLimits, policy: CarrierLimits,
-		history: Arc<DirectPayoutWitness>, ordinary: super::ordinary_fee::OrdinaryFeeBudget,
+		history: Arc<DirectPayoutWitness>, ordinary: Arc<super::ordinary_fee::OrdinaryFeeBudget>,
 	) -> anyhow::Result<Self> {
 		let mut processor = FrozenExpiryProcessor::new(db.clone(), wallet, network,
 			operator_script, budget, policy, history).with_ordinary_fee_budget(ordinary);

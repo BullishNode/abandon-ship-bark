@@ -12,6 +12,7 @@ pub mod frozen_expiry;
 mod expiry_runtime;
 pub mod ordinary_fee;
 pub(crate) mod ordinary_fee_publication;
+pub(crate) mod ordinary_fee_auth;
 mod config;
 mod daemon;
 mod frontier;
@@ -164,6 +165,7 @@ pub struct Watchman {
 	/// Includes claims, progress txs, and foreign spends (e.g. user exits).
 	mempool_spends: parking_lot::RwLock<HashMap<VtxoId, MempoolSpend>>,
 	direct_expiry: Option<expiry_runtime::DirectExpiryRuntime>,
+	ordinary_fee_budget: Option<Arc<ordinary_fee::OrdinaryFeeBudget>>,
 }
 
 impl Watchman {
@@ -192,7 +194,13 @@ impl Watchman {
 			sync_height,
 			mempool_spends: parking_lot::RwLock::new(HashMap::new()),
 			direct_expiry: None,
+			ordinary_fee_budget: None,
 		}
+	}
+
+	pub(crate) fn with_ordinary_fee_budget(mut self, budget: Option<Arc<ordinary_fee::OrdinaryFeeBudget>>) -> Self {
+		self.ordinary_fee_budget = budget;
+		self
 	}
 
 	pub(crate) fn with_direct_expiry(mut self, runtime: Option<expiry_runtime::DirectExpiryRuntime>) -> Self {

@@ -41,7 +41,7 @@ pub struct FrozenExpiryProcessor {
 	deliveries: BTreeMap<String, DirectDelivery>,
 	uncertain: Option<UncertainPublication>,
 	hydrated: bool,
-	ordinary_fee_budget: Option<super::ordinary_fee::OrdinaryFeeBudget>,
+	ordinary_fee_budget: Option<Arc<super::ordinary_fee::OrdinaryFeeBudget>>,
 }
 
 impl FrozenExpiryProcessor {
@@ -53,7 +53,7 @@ impl FrozenExpiryProcessor {
 			deliveries: BTreeMap::new(), uncertain: None, hydrated: false, ordinary_fee_budget: None }
 	}
 
-	pub(crate) fn with_ordinary_fee_budget(mut self, budget: super::ordinary_fee::OrdinaryFeeBudget) -> Self {
+	pub(crate) fn with_ordinary_fee_budget(mut self, budget: Arc<super::ordinary_fee::OrdinaryFeeBudget>) -> Self {
 		self.ordinary_fee_budget = Some(budget);
 		self
 	}

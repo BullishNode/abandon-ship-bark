@@ -51,6 +51,7 @@ pub struct Daemon {
 	frontier: Arc<tokio::sync::RwLock<VtxoExitFrontier>>,
 	watchman_handle: WatchmanHandle,
 	bitcoin_address_blocklist: Option<BitcoinAddressBlocklist>,
+	ordinary_fee_budget: Option<Arc<super::ordinary_fee::OrdinaryFeeBudget>>,
 }
 
 impl Daemon {
@@ -187,14 +188,16 @@ impl Daemon {
 		let drain_address = cfg.sweep_address.clone()
 			.context("sweep_address is required for watchman")?.require_network(cfg.network)
 			.context("sweep_address network mismatch")?;
+		let mut ordinary_fee_budget = None;
 		let direct_expiry = if let Some(history) = history {
 			let direct = cfg.watchman.direct_expiry.as_ref().context("direct expiry configuration disappeared")?;
-			let ordinary = super::ordinary_fee::OrdinaryFeeBudget::load_verified(
-				&direct.history_dir.join(crate::payout_witness::DIRECT_DIRECTORY), direct.ordinary_fee_policy, &fee_chain)?;
+			let ordinary = Arc::new(super::ordinary_fee::OrdinaryFeeBudget::load_verified(
+				&direct.history_dir.join(crate::payout_witness::DIRECT_DIRECTORY), direct.ordinary_fee_policy, &fee_chain)?);
 			let retained = db.read(async |tx| Ok(tx.query_one(
 				"SELECT COALESCE(SUM(miner_fee_sat),0)::BIGINT AS total FROM expiry_carrier", &[],
 			).await?.get::<_, i64>("total"))).await?;
 			ordinary.require_retained_fees(Amount::from_sat(u64::try_from(retained)?))?;
+			ordinary_fee_budget = Some(ordinary.clone());
 			let policy = CarrierLimits { max_fee_rate: cfg.fee_estimator.max_fee_rate.context("missing direct fee ceiling")?,
 				max_miner_fee: direct.max_miner_fee, max_weight: Weight::from_wu(400_000) };
 			Some(DirectExpiryRuntime::new(db.clone(), watchman_wallet.clone(), cfg.network,
@@ -261,13 +264,13 @@ impl Daemon {
 			watchman_wallet.clone(),
 			frontier.clone(),
 			sync_height_watcher,
-		).with_direct_expiry(direct_expiry);
+		).with_direct_expiry(direct_expiry).with_ordinary_fee_budget(ordinary_fee_budget.clone());
 
 		let watchman_handle = watchman.start(rtmgr.clone());
 
 		Ok(Self {
 			rtmgr, sync_manager, watchman_wallet, frontier, watchman_handle,
-			bitcoin_address_blocklist,
+			bitcoin_address_blocklist, ordinary_fee_budget,
 		})
 	}
 

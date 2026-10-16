@@ -629,6 +629,7 @@ impl<'a> BarkSdkBuilder<'a> {
 			persister: Some(db),
 			create_if_not_exists: true,
 			onchain: Some(onchain.clone()),
+			fallback_spk: Some(onchain.read().await.fallback_script()),
 			..Default::default()
 		}).await.context("creating bark wallet")?;
 

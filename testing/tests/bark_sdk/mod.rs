@@ -13,6 +13,8 @@ mod balance;
 mod board;
 mod exit;
 mod fallback;
+#[cfg(feature = "fallback-test-bip84")]
+mod fallback_external;
 mod import;
 mod lightning;
 mod mailbox;

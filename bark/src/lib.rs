@@ -685,7 +685,6 @@ pub struct WalletProperties {
 pub struct WalletSeed {
 	master: bip32::Xpriv,
 	vtxo: bip32::Xpriv,
-	onchain_root: bip32::Xpriv,
 }
 
 impl WalletSeed {
@@ -700,7 +699,7 @@ impl WalletSeed {
 		let vtxo = master.derive_priv(&SECP, &vtxo_path)
 			.expect("vtxo path is valid");
 
-		Self { master, vtxo, onchain_root }
+		Self { master, vtxo }
 	}
 
 	/// Create a new [WalletSeed] from a given BIP-39 [Mnemonic]
@@ -712,14 +711,6 @@ impl WalletSeed {
 		self.master.fingerprint(&SECP)
 	}
 
-	/// Native payout is seed-derived even after all local wallet state is lost.
-	fn fallback_script(&self, network: Network) -> anyhow::Result<bitcoin::ScriptBuf> {
-		let coin_type = if network == Network::Bitcoin { 0 } else { 1 };
-		let path = [ChildNumber::Hardened { index: 84 }, ChildNumber::Hardened { index: coin_type },
-			ChildNumber::Hardened { index: 0 }, ChildNumber::Normal { index: 0 }, ChildNumber::Normal { index: 0 }];
-		let key = self.onchain_root.derive_priv(&SECP, &path)?.to_priv().public_key(&SECP);
-		Ok(bitcoin::Address::p2wpkh(&bitcoin::CompressedPublicKey::try_from(key)?, network).script_pubkey())
-	}
 
 	fn derive_vtxo_keypair(&self, idx: u32) -> Keypair {
 		self.vtxo.derive_priv(&SECP, &[idx.into()]).unwrap().to_keypair(&SECP)
@@ -774,8 +765,9 @@ pub struct OpenWalletArgs {
 	/// Default: none
 	pub onchain: Option<Arc<tokio::sync::RwLock<dyn OnchainWalletTrait>>>,
 
-	/// Immutable payout script owned by a custom onchain wallet. Native BDK
-	/// wallets use the seed-derived BIP84 external address at index zero.
+	/// Immutable standard payout script selected by the app. The SDK binds
+	/// it to this seed's coin account, without imposing an onchain wallet,
+	/// seed or derivation path. A cached record may reopen without this field.
 	pub fallback_spk: Option<bitcoin::ScriptBuf>,
 
 	/// Whether to create a new wallet if no wallet exists

@@ -16,6 +16,8 @@ path = "src/bin/barkd/main.rs"
 
 [features]
 default = ["tls-native-roots", "barkd-swagger-ui"]
+# Product-like BIP84 wallet for the fallback test client.
+fallback-test-bip84 = ["bark-wallet/fallback-test-bip84"]
 
 # TLS certificate verification options (pick one)
 tls-native-roots = ["bark-wallet/tls-native-roots", "bark-server-rpc/tls-native-roots"]

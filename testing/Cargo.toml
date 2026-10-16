@@ -38,6 +38,7 @@ path = "tests/upgrade/mod.rs"
 
 [features]
 slow_test = []
+fallback-test-bip84 = ["bark-wallet/fallback-test-bip84"]
 
 [dependencies]
 ark-lib = { path = "../lib", features = ["test-util"] }

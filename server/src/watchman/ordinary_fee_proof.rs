@@ -49,7 +49,7 @@ struct Database {
 struct Intent { attempt_key: String, reservation: FundingReservation, signed_tx_hex: Option<String> }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Input { outpoint: OutPoint, attempt_key: sha256::Hash }
+struct Input { outpoint: String, attempt_key: String }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Resolution { winner_index: u64, proof: FundingResolution }
@@ -116,9 +116,9 @@ pub fn verify_native_fee_source(raw: &[u8]) -> anyhow::Result<Vec<u8>> {
 		&& database.native_funding_fee_input.len() <= DIRECT_HISTORY_LIMITS.max_rows
 		&& database.nursery_tx.len() <= DIRECT_HISTORY_LIMITS.max_rows, "complete SQL row inventory exceeds bound");
 
-	let mut inputs = BTreeMap::<sha256::Hash,BTreeSet<String>>::new();
+	let mut inputs = BTreeMap::<String,BTreeSet<String>>::new();
 	for row in &database.native_funding_fee_input {
-		ensure!(inputs.entry(row.attempt_key).or_default().insert(row.outpoint.to_string()), "duplicate native input row");
+		ensure!(inputs.entry(row.attempt_key.clone()).or_default().insert(row.outpoint.clone()), "duplicate native input row");
 	}
 	let mut states = Vec::new(); let mut funding_rows = Vec::new(); let mut keys = BTreeSet::new(); let mut bytes = 0usize;
 	for row in &database.native_funding_fee_intent {
@@ -131,7 +131,7 @@ pub fn verify_native_fee_source(raw: &[u8]) -> anyhow::Result<Vec<u8>> {
 		let state = decode_funding_row(&row.attempt_key, &reservation, signed_bytes.as_deref())?;
 		let key = state.reservation.candidate.key();
 		ensure!(keys.insert(key), "duplicate native funding intent");
-		require_funding_inputs(&state, &inputs.remove(&key).unwrap_or_default())?;
+		require_funding_inputs(&state, &inputs.remove(&key.to_string()).unwrap_or_default())?;
 		let candidate = &state.reservation.candidate;
 		let tx = candidate.transaction()?;
 		funding_rows.push(json!({"attempt_key":key,"index":state.reservation.index,"purpose":candidate.purpose,
@@ -375,6 +375,17 @@ mod tests {
 			std::fs::write(Path::new(&directory).join("native-empty-owner-snapshot.json"),&actual).unwrap();
 		}
 		drop(owner);std::fs::remove_dir_all(dir).unwrap();
+	}
+
+	#[test]
+	fn offline_native_fee_preserves_original_sql_text_input_identity() {
+		let (mut input,mut database)=funding();
+		let original=database["native_funding_fee_input"][0]["outpoint"].as_str().unwrap();
+		// Same parsed outpoint, different original SQL TEXT. The existing DB
+		// reader compares literal rows, so the offline codec must do so too.
+		let (txid,vout)=original.rsplit_once(':').unwrap();
+		database["native_funding_fee_input"][0]["outpoint"]=json!(format!("{txid}:0{vout}"));
+		replace_database(&mut input,database);assert!(verify(&input).is_err());
 	}
 
 }

@@ -33,7 +33,9 @@ fn ledger(root: &Path, stage: &str) -> anyhow::Result<()> {
 	)
 }
 async fn rpc(core: &Client, method: &str, params: &[Value]) -> anyhow::Result<Value> {
-	Ok(core.call_raw(method, params).await?)
+	core.call_raw(method, params)
+		.await
+		.with_context(|| format!("owned regtest RPC {method}"))
 }
 async fn sync(wallet: &mut PersistedWallet, core: &Client) -> anyhow::Result<()> {
 	let end = u32::try_from(core.get_block_count().await?)?;
@@ -159,17 +161,39 @@ async fn ordinary_owner_regtest_retry_bind_restart_and_confirmed_unused_extra() 
 		.context("faucet address missing")?
 		.to_owned();
 	rpc(&core, "generatetoaddress", &[json!(101), json!(faucet)]).await?;
-	rpc(&core, "settxfee", &[json!(0.00001000)]).await?;
+	let sendmany_help = rpc(&core, "help", &[json!("sendmany")]).await?;
+	evidence(&root, "core31_sendmany_help", sendmany_help.clone())?;
+	ensure!(
+		sendmany_help
+			.as_str()
+			.context("sendmany help missing")?
+			.contains("fee_rate"),
+		"Core sendmany explicit fee rate unsupported"
+	);
 	let outputs = std::collections::BTreeMap::from([
 		(round_a.to_string(), 0.001),
 		(round_b.to_string(), 0.002),
 		(watch_a.to_string(), 0.001),
 	]);
-	let funding: Txid = rpc(&core, "sendmany", &[json!(""), json!(outputs)])
-		.await?
-		.as_str()
-		.context("funding txid missing")?
-		.parse()?;
+	let funding: Txid = rpc(
+		&core,
+		"sendmany",
+		&[
+			json!(""),
+			json!(outputs),
+			json!(1),
+			json!(""),
+			json!([]),
+			json!(false),
+			Value::Null,
+			json!("unset"),
+			json!(1),
+		],
+	)
+	.await?
+	.as_str()
+	.context("funding txid missing")?
+	.parse()?;
 	rpc(&core, "generatetoaddress", &[json!(1), json!(faucet)]).await?;
 	let funding_raw = crate::bitcoind::custom_get_raw_transaction_info(&core, funding, None)
 		.await?

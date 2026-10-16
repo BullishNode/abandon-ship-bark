@@ -196,6 +196,9 @@ pub struct Config {
 	/// Explicit paused fresh opening only; never inferred from an empty DB.
 	#[serde(default)]
 	pub initialize_empty: bool,
+	/// Explicit SHA-pinned nonzero opening; never combined with empty initialization.
+	#[serde(default)]
+	pub opening: Option<crate::fee_allowance_opening::Config>,
 	pub policy_file: std::path::PathBuf,
 	pub policy_sha256: String,
 	pub history_dir: std::path::PathBuf,
@@ -242,6 +245,23 @@ impl Gate {
 		ensure!(actual_genesis==bitcoin::constants::genesis_block(network).block_hash().to_string(),
 			"actual Core genesis differs from configured network");
 		policy.validate(&actual_genesis, &key.to_string())?;
+		ensure!(!(config.initialize_empty && config.opening.is_some()), "empty and imported fee openings conflict");
+		if let Some(opening) = &config.opening {
+			// Persist the policy intent before an import can fsync reservations or
+			// COMMIT. A crash before the final load must not permit config removal.
+			crate::operator_residual::write_identical(&marker, &serde_json::to_vec(&serde_json::json!({
+				"policy_sha256":config.policy_sha256,"history_dir":config.history_dir,
+			}))?)?;
+			tokio::time::timeout(std::time::Duration::from_secs(120), crate::fee_allowance_opening::load(
+				opening, &config.history_dir, &config.policy_sha256, &policy, db, core, &history_identity,
+			)).await.context("bounded fee opening verification timed out; preserve original intent")??;
+			row=Some(serde_json::to_vec(&policy)?);
+		} else {
+			let imported=db.read(async|t|Ok(t.query_opt("SELECT opening_digest FROM fee_allowance_policy WHERE id='active'",&[])
+				.await?.and_then(|r|r.get::<_,Option<String>>(0)))).await?;
+			ensure!(imported.is_none() && !config.history_dir.join("fee-opening-certificate.json").exists()
+				&& !config.history_dir.join("fee-opening-validated.json").exists(), "retained nonzero opening requires its original certificate");
+		}
 		if row.is_none() && config.history_dir.join("fee-allowance-witness").exists() {
 			// Retained identity is an ORIGINAL epoch, not permission to reset it.
 			// Rebook every retained reservation below before any worker/replay.
@@ -270,6 +290,9 @@ impl Gate {
 					"fee policy initialized concurrently; restart same original configuration");
 				crate::fee_allowance_history::FeeHistory::initialize(&config.history_dir,&policy)?;
 				t.execute("INSERT INTO fee_allowance_policy(id,policy_bytes,history_identity) VALUES('active',$1,$2)", &[&serde_json::to_vec(&policy)?,&history_identity]).await?;
+				crate::operator_residual::write_identical(&marker, &serde_json::to_vec(&serde_json::json!({
+					"policy_sha256":config.policy_sha256,"history_dir":config.history_dir,
+				}))?)?;
 				Ok(())
 			}).await?;
 			row=Some(serde_json::to_vec(&policy)?);

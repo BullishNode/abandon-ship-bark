@@ -297,6 +297,10 @@ impl OrdinaryFeeBudget {
 		Ok(())
 	}
 
+	pub(crate) fn mark_uncertain(&self) -> anyhow::Result<()> {
+		self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?.uncertain = true;
+		Ok(())
+	}
 	pub(crate) fn policy(&self) -> OrdinaryFeePolicy { self.policy }
 	pub(crate) fn directory(&self) -> &Path { &self.directory }
 

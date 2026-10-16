@@ -28,7 +28,7 @@ async fn frozen_ancestor() {
 		}
 	}
 	assert_eq!(funding.len(), 1, "exact explicit SDK funding, no automatic fee buffer");
-	let ledger = config.data_dir.join("FROZEN-ORDINARY-PUBLIC-CHAIN-LEDGER.json");
+	let ledger = srv.config().data_dir.join("FROZEN-ORDINARY-PUBLIC-CHAIN-LEDGER.json");
 	let fees = super::urgent_progress::chain_receipt(&core, baseline, &funding, &ledger);
 	assert!(fees <= 10_000);
 	let _keep_chain = super::urgent_progress::KeepChain { core: &core, baseline, funding: &funding, path: ledger.clone() };

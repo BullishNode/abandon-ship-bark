@@ -19,6 +19,7 @@ pub(crate) mod ordinary_fee_broker;
 pub(crate) mod ordinary_fee_client;
 pub(crate) mod ordinary_fee_source;
 pub(crate) mod urgent_publication;
+pub(crate) mod urgent_source;
 mod config;
 mod daemon;
 mod frontier;

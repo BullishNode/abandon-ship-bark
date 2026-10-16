@@ -1,4 +1,5 @@
 
+use anyhow::Context;
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::{Amount, Transaction, Txid};
 
@@ -337,6 +338,79 @@ impl ActionContextFetcher<'_> {
 		}
 
 		action
+	}
+
+	/// Read current action evidence from the caller's SAME transaction after
+	/// its owning-wallet and settlement/expiry/publication source locks. This
+	/// supplies policy evidence only, never a signing or fee capability.
+	/// Unlike the old observation scanner, an unknown DB/native parent is an
+	/// error; it cannot become a missing progress path or absent preimage.
+	pub(crate) async fn get_action_locked(&self, t: &crate::database::Tx<'_>,
+		vtxo: &ServerVtxo, confirmed_at: BlockHeight,
+	) -> anyhow::Result<Action> {
+		let params = self.build_params(vtxo, confirmed_at).await;
+		let action = match vtxo.policy() {
+			ServerVtxoPolicy::ServerOwned => decide_server_owned(&params),
+			ServerVtxoPolicy::Expiry(_) | ServerVtxoPolicy::Checkpoint(_)
+				| ServerVtxoPolicy::HarkLeaf(_) | ServerVtxoPolicy::HarkLeaf_v0(_) => decide_action_expiry(&params),
+			ServerVtxoPolicy::HarkForfeit(_) | ServerVtxoPolicy::HarkForfeit_v0(_) => decide_action_hark_forfeit(&params),
+			ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) => {
+				let params = params.with_policy_extras(PubkeyExtra {
+					next_tx: self.fetch_progress_locked(t, vtxo).await?,
+					server_knows_key: t.fetch_ephemeral_tweak(policy.user_pubkey).await?.is_some(),
+				});
+				decide_action_pubkey(&params)
+			},
+			ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(policy)) => {
+				let params = params.with_policy_extras(HtlcSendExtra {
+					next_tx: self.fetch_progress_locked(t, vtxo).await?, htlc_expiry: policy.htlc_expiry,
+					has_preimage: t.get_htlc_settlement_by_payment_hash(policy.payment_hash).await?.is_some(),
+				});
+				decide_action_server_htlc_send(&params)
+			},
+			ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend_v0(policy)) => {
+				let params = params.with_policy_extras(HtlcSendExtra {
+					next_tx: self.fetch_progress_locked(t, vtxo).await?, htlc_expiry: policy.htlc_expiry,
+					has_preimage: t.get_htlc_settlement_by_payment_hash(policy.payment_hash).await?.is_some(),
+				});
+				decide_action_server_htlc_send(&params)
+			},
+			ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv(policy)) => {
+				let params = params.with_policy_extras(HtlcRecvExtra {
+					next_tx: self.fetch_progress_locked(t, vtxo).await?, htlc_expiry: policy.htlc_expiry,
+					htlc_expiry_delta: policy.htlc_expiry_delta,
+				});
+				decide_action_server_htlc_recv(&params)
+			},
+			ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv_v0(policy)) => {
+				let params = params.with_policy_extras(HtlcRecvExtra {
+					next_tx: self.fetch_progress_locked(t, vtxo).await?, htlc_expiry: policy.htlc_expiry,
+					htlc_expiry_delta: policy.htlc_expiry_delta,
+				});
+				decide_action_server_htlc_recv(&params)
+			},
+		};
+		Ok(action)
+	}
+	async fn fetch_progress_locked(&self, t: &crate::database::Tx<'_>, vtxo: &ServerVtxo) -> anyhow::Result<Option<ProgressSpec>> {
+		let state = t.get_server_vtxo_by_id(vtxo.id()).await?;
+		let Some(txid) = state.oor_spent_txid else { return Ok(None); };
+		let transaction = t.get_virtual_transaction_by_txid(txid).await?
+			.context("current urgent source references a missing native progress transaction")?;
+		if let Some(signed) = &transaction.signed_tx {
+			if is_ignorable_dust(signed, vtxo.amount()) { return Ok(None); }
+			ensure!(signed.input.len() <= 2, "current urgent source requires unsupported wider parent dependency");
+			if signed.input.len() > 1 {
+				let parent = signed.input[1].previous_output.txid;
+				if !bcd::tx_status(self.bitcoind, parent).await?.is_confirmed() {
+					let parent = t.get_virtual_transaction_by_txid(parent).await?
+						.context("current urgent connector source is missing")?;
+					ensure!(parent.signed_tx.is_some(), "current urgent connector source lacks its original signature");
+					return Ok(Some(ProgressSpec { next_txid: parent.txid, is_signed: true }));
+				}
+			}
+		}
+		Ok(Some(ProgressSpec { next_txid: txid, is_signed: transaction.signed_tx.is_some() }))
 	}
 
 	async fn build_params(

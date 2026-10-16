@@ -283,6 +283,14 @@ impl OrdinaryFeeBudget {
 		}
 		Ok(())
 	}
+	pub(crate) fn actual_owner_identity(&self) -> anyhow::Result<super::ordinary_fee_auth::FeeServiceIdentity> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length && ledger.urgent_headroom.is_some(),
+			"urgent actual owner history or configured headroom missing");
+		let identity = ledger.active_identity.as_ref().context("urgent actual original opening is not activated")?;
+		ensure!(ledger.active_epoch == Some(identity.opening_sha256), "urgent original owner epoch differs");
+		Ok(identity.clone())
+	}
 	pub(crate) fn require_active_owner(&self) -> anyhow::Result<()> {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
 		ensure!(!ledger.uncertain && (!ledger.requires_epoch || (ledger.active_epoch.is_some() && ledger.urgent_headroom.is_some())),

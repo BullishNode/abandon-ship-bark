@@ -208,7 +208,7 @@ impl NativeFeeBroker {
 fn purpose_name(path: PublicationPath) -> &'static str {
 	match path { PublicationPath::Round => "round", PublicationPath::Pool => "pool" }
 }
-async fn checked_urgent_source(core: &Client, wallet: &server_rpc::protos::WalletInventory,
+pub(super) async fn checked_urgent_source(core: &Client, wallet: &server_rpc::protos::WalletInventory,
 	genesis: bitcoin::BlockHash,
 ) -> anyhow::Result<BTreeMap<OutPoint, TxOut>> {
 	let tip = crate::bitcoind::tip(core).await?;

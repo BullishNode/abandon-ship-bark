@@ -36,6 +36,14 @@ pub(super) fn configure<'a>(
 	})
 }
 
+// Match native watchman/daemon.rs: the independent ledger lives in the
+// witness subdirectory of the ACTUAL configured history root, not beside it.
+fn fee_history(srv: &Captaind) -> std::path::PathBuf {
+	let root = srv.watchmand().config().watchman.direct_expiry.as_ref().unwrap().history_dir.clone();
+	assert_eq!(root, srv.config().data_dir, "both actual daemons share the declared independent history root");
+	root.join("direct-expiry-witness")
+}
+
 pub(super) async fn fund_fee_wallet(ctx: &TestContext, srv: &Captaind) {
 	let address = tokio::time::timeout(Duration::from_secs(30), srv.watchmand().wait_wallet_address())
 		.await.expect("real owning fee wallet receive address");
@@ -51,7 +59,7 @@ pub(super) async fn fund_fee_wallet(ctx: &TestContext, srv: &Captaind) {
 		assert!(funded.insert(OutPoint::new(txid, outputs[0].0 as u32).to_string()));
 	}
 	ctx.generate_blocks(3).await;
-	let history = ctx.datadir.join("server");
+	let history = fee_history(srv);
 	assert!(std::fs::read_to_string(history.join("ordinary-fee-budget")).unwrap().is_empty(),
 		"no preparation may charge the source fixture before expiry");
 	let policy: serde_json::Value = serde_json::from_slice(&std::fs::read(history.join("ordinary-fee-policy.json")).unwrap()).unwrap();
@@ -118,7 +126,7 @@ pub(super) async fn settle(
 	proofs: &BTreeMap<String, Vtxo<Full>>,
 ) -> Vec<OutPoint> {
 	let core = ctx.bitcoind().sync_client();
-	let history = ctx.datadir.join("server");
+	let history = fee_history(srv);
 	let policy_before = std::fs::read(history.join("ordinary-fee-policy.json")).unwrap();
 	let ledger_before = std::fs::read_to_string(history.join("ordinary-fee-budget")).unwrap();
 	assert!(ledger_before.is_empty());

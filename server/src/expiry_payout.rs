@@ -226,6 +226,12 @@ impl Server {
 			Ok(b) => b,
 			Err(e) => return Ok(deferred(format!("payout funding/fee deferred: {e:#}"))),
 		};
+		let fee_permit = match crate::fee_allowance::ordinary_permit(self.fee_allowance.as_ref(),
+			&self.db, &self.bitcoind, crate::fee_allowance::Path::Payout, &tx).await {
+			Ok(permit) => permit,
+			Err(error) => { wallet.mark_output_keys_unused(&tx); return Ok(deferred(error)); },
+		};
+		wallet.log_permitted_tx(&tx,fee_permit.as_ref())?;
 		let accepted = crate::bitcoind::test_mempool_accept(&self.bitcoind, &[&tx]).await?;
 		if !accepted[0].allowed {
 			wallet.mark_output_keys_unused(&tx);
@@ -237,6 +243,7 @@ impl Server {
 		let target = self.nursery_confirm_target();
 		// The payment guards, coin and wallet locks are held through COMMIT.
 		let stored = self.db.write(async |t| {
+			crate::fee_allowance::require_permit(t, &tx, fee_permit.as_ref()).await?;
 			if let Some(change) = &wallet_metadata {
 				t.store_changeset(WalletKind::Rounds, change).await?;
 			}
@@ -680,12 +687,19 @@ impl Server {
 				Ok(built) => built,
 				Err(e) => { warn!(%txid, "expiry payout bump not built, unfunded or busy: {e:#}"); continue; },
 			};
+			let fee_permit = match crate::fee_allowance::ordinary_permit(self.fee_allowance.as_ref(),
+				&self.db, &self.bitcoind, crate::fee_allowance::Path::PayoutChild, &child).await {
+				Ok(permit) => permit,
+				Err(error) => { wallet.mark_output_keys_unused(&child); warn!(%txid,"payout fee permit refused: {error:#}"); continue; },
+			};
+			wallet.log_permitted_tx(&child,fee_permit.as_ref())?;
 			// Publish exact child bytes and its derivation metadata together.
 			// Do not relay while an unknown COMMIT could leave the live wallet's
 			// inputs free; startup replays this same durable publication.
 			let metadata = wallet.staged().cloned();
 			let target = self.nursery_confirm_target();
 			let stored = self.db.write(async |t| {
+				crate::fee_allowance::require_permit(t, &child, fee_permit.as_ref()).await?;
 				if let Some(metadata) = &metadata { t.store_changeset(WalletKind::Rounds, metadata).await?; }
 				t.upsert_nursery_tx(&child, NurseryTxKind::Internal, target).await
 			}).await;

@@ -204,6 +204,8 @@ mod defaults {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
+	#[serde(default)]
+	pub fee_allowance: Option<crate::fee_allowance::Config>,
 	pub data_dir: PathBuf,
 	#[serde(default)]
 	pub expiry_payout: crate::expiry_payout::Config,
@@ -548,6 +550,11 @@ impl Config {
 	pub fn validate(&self) -> anyhow::Result<()> {
 		self.bitcoind.validate()?;
 		self.expiry_payout.validate(self.network)?;
+		if self.fee_allowance.is_some() {
+			ensure!(self.expiry_payout.recovery_fee_headroom_sat.is_some()
+				&& self.expiry_payout.watchman_config.is_some(),
+				"enforced fee epochs require the native R+F recovery reserve");
+		}
 		self.fees.validate()?;
 
 		if self.offboard_check_interval > self.offboard_session_timeout {
@@ -622,6 +629,8 @@ pub mod watchmand {
 
 	#[derive(Debug, Clone, Deserialize, Serialize)]
 	pub struct Config {
+		#[serde(default)]
+		pub fee_allowance: Option<crate::fee_allowance::Config>,
 		pub data_dir: PathBuf,
 		pub network: bitcoin::Network,
 

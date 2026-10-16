@@ -34,3 +34,5 @@ mod vtxo_lock;
 mod payout_fee_safety;
 
 mod a_scale;
+
+mod fee_allowance;

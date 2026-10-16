@@ -35,6 +35,8 @@ pub mod nursery;
 mod offboards;
 pub mod recovery;
 pub mod expiry_payout;
+pub mod fee_allowance;
+mod fee_allowance_history;
 mod payout_witness;
 mod operator_residual;
 mod round;
@@ -227,6 +229,7 @@ pub struct Server {
 	htlc_settler: Arc<HtlcSettler>,
 	vtxopool: VtxoPool,
 	operator_witness: Option<operator_residual::OperatorWitness>,
+	fee_allowance: Option<fee_allowance::Gate>,
 	pending_offboards: parking_lot::Mutex<TimedEntryMap<Txid, offboards::OffboardSession>>,
 	fee_estimator: Arc<FeeEstimator>,
 	/// scriptPubkeys in the bitcoin address blocklist
@@ -376,6 +379,8 @@ impl Server {
 		bcd::require_network(&bitcoind, cfg.network).await?;
 		bcd::require_version(&bitcoind).await?;
 		bitcoind.require_txindex().await?;
+		let fee_allowance = fee_allowance::Gate::load(cfg.fee_allowance.as_ref(), &cfg.data_dir,
+			cfg.network, server_key.public_key(), &db, &bitcoind).await?;
 		// Disabling dispatch cannot disable the independent proof of capital
 		// already made available by a durable operator disposition.
 		let operator_released = db.read(async |t| Ok(t.query_one(
@@ -539,6 +544,7 @@ impl Server {
 			htlc_settler,
 			vtxopool,
 			operator_witness,
+			fee_allowance,
 			pending_offboards: parking_lot::Mutex::new(TimedEntryMap::new()),
 			fee_estimator,
 			bitcoin_address_blocklist,

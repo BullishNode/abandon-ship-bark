@@ -230,6 +230,12 @@ impl DaemonHelper for WatchmandHelper {
 	}
 
 	async fn make_reservations(&self) -> anyhow::Result<()> {
+		{
+			let cfg=self.cfg.lock();
+			// The external immutable fee policy pins this actual owning-wallet
+			// endpoint. An epoch restart must retain its configured address.
+			if cfg.fee_allowance.is_some() && cfg.admin_address.is_some() {return Ok(());}
+		}
 		let admin_port = pick_port();
 		let admin_address = format!("127.0.0.1:{}", admin_port);
 		trace!("admin rpc address: {}", admin_address.to_string());

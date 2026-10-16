@@ -10,7 +10,7 @@ use bdk_wallet::coin_selection::{
 	Excess, InsufficientFunds,
 };
 use bdk_wallet::error::CreateTxError;
-use bitcoin::consensus::encode::{serialize, serialize_hex};
+use bitcoin::consensus::encode::serialize;
 use bitcoin::{
 	Amount, BlockHash, FeeRate, OutPoint, Script, Transaction, TxOut, Txid, Weight, Witness,
 };
@@ -438,7 +438,7 @@ pub trait WalletExt: BorrowMut<Wallet> {
 			let tx = psbt.extract_tx()
 				.map_err(|e| CpfpInternalError::Extract(e))?;
 			assert!(tx.input.iter().any(|i| i.previous_output == fee_anchor_point),
-				"Missing anchor spend, tx is {}", serialize_hex(&tx),
+				"Missing anchor spend in transaction {}", tx.compute_txid(),
 			);
 
 			// We can finally check the fees and weight

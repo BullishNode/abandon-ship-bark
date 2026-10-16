@@ -147,6 +147,7 @@ pub struct Watchman {
 	drain_spk: ScriptBuf,
 	/// Wallet used to pay fees for progress transactions.
 	watchman_wallet: InstrumentedLock<PersistedWallet>,
+	fee_allowance: Option<crate::fee_allowance::Gate>,
 	/// The set of VTXOs the watchman is responsible for monitoring and claiming.
 	/// Shared with SyncManager for chain event handling.
 	frontier: Arc<tokio::sync::RwLock<VtxoExitFrontier>>,
@@ -159,7 +160,7 @@ pub struct Watchman {
 }
 
 impl Watchman {
-	pub fn new(
+	pub(crate) fn new(
 		config: Config,
 		signer: WatchmanSigner,
 		bitcoind: BitcoindClient,
@@ -168,6 +169,7 @@ impl Watchman {
 		fee_estimator: Arc<FeeEstimator>,
 		drain_address: Address,
 		wallet: InstrumentedLock<PersistedWallet>,
+		fee_allowance: Option<crate::fee_allowance::Gate>,
 		frontier: Arc<tokio::sync::RwLock<VtxoExitFrontier>>,
 		sync_height: watch::Receiver<BlockRef>,
 	) -> Self {
@@ -180,6 +182,7 @@ impl Watchman {
 			fee_estimator,
 			drain_spk: drain_address.script_pubkey(),
 			watchman_wallet: wallet,
+			fee_allowance,
 			frontier,
 			sync_height,
 			mempool_spends: parking_lot::RwLock::new(HashMap::new()),
@@ -372,7 +375,7 @@ impl Watchman {
 		if !work.claims.is_empty() {
 			// Deadline claims retain their existing escalation; an ordinary sweep ceiling
 			// must not prevent beating a counterparty timelock.
-			self.process_claims(work.claims, None).await?;
+			self.process_claims(work.claims, None, crate::fee_allowance::Path::Claim).await?;
 		}
 		if !work.progress.is_empty() {
 			self.process_progress_txs(work.progress).await?;
@@ -393,7 +396,7 @@ impl Watchman {
 		}
 
 		if !work.sweeps.is_empty() {
-			self.process_claims(work.sweeps, self.fee_estimator.max_fee_rate()).await?;
+			self.process_claims(work.sweeps, self.fee_estimator.max_fee_rate(), crate::fee_allowance::Path::Sweep).await?;
 		}
 
 		Ok(())
@@ -408,6 +411,7 @@ impl Watchman {
 		&self,
 		mut vtxos: Vec<ServerVtxo>,
 		fee_ceiling: Option<FeeRate>,
+		path: crate::fee_allowance::Path,
 	) -> anyhow::Result<()> {
 		//TODO(stevenroose) adapt feerate to how close the deadline is
 		let min_feerate = self.fee_estimator.regular();
@@ -458,7 +462,7 @@ impl Watchman {
 			chunk
 		});
 		for chunk in replacements.values().map(Vec::as_slice).chain(fresh_chunks) {
-			if let Err(e) = self.build_and_broadcast_claim(chunk, feerate, fee_ceiling).await {
+			if let Err(e) = self.build_and_broadcast_claim(chunk, feerate, fee_ceiling, path).await {
 				slog!(ClaimChunkBroadcastFailure, error: e.to_string(),
 					vtxos: chunk.iter().map(|v| v.id()).collect(),
 				);
@@ -466,7 +470,7 @@ impl Watchman {
 				// retry each claim individually to find the culprit
 				for vtxo in chunk {
 					let slice = std::slice::from_ref(vtxo);
-					if let Err(e) = self.build_and_broadcast_claim(slice, feerate, fee_ceiling).await {
+					if let Err(e) = self.build_and_broadcast_claim(slice, feerate, fee_ceiling, path).await {
 						slog!(ClaimBroadcastFailure, error: e.to_string(), vtxo_id: vtxo.id());
 					}
 				}
@@ -567,8 +571,15 @@ impl Watchman {
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
 		fee_ceiling: Option<FeeRate>,
+		path: crate::fee_allowance::Path,
 	) -> anyhow::Result<()> {
+		ensure!(matches!(path,crate::fee_allowance::Path::Sweep | crate::fee_allowance::Path::Claim),
+			"claim publication has an invalid fee source class");
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
+		let fee_permit = match (&self.fee_allowance, path) {
+			(Some(gate),crate::fee_allowance::Path::Claim) => Some(gate.urgent_claim(&self.db,&self.bitcoind,&tx).await?),
+			_ => crate::fee_allowance::ordinary_permit(self.fee_allowance.as_ref(),&self.db,&self.bitcoind,path,&tx).await?,
+		};
 		let txid = tx.compute_txid();
 
 		let total_output_value = tx.output.iter().map(|o| o.value).sum::<Amount>();
@@ -582,6 +593,7 @@ impl Watchman {
 					fee, limit, tx.weight());
 			}
 		}
+		self.db.read(async |t| crate::fee_allowance::require_permit(t,&tx,fee_permit.as_ref()).await).await?;
 		bcd::broadcast_tx(&self.bitcoind, &tx).await?;
 		slog!(ClaimBroadcast, txid, fee_rate, total_output_value, fee,
 			total_input_value, vtxo_ids: vtxos.iter().map(|v| v.id()).collect(),
@@ -799,6 +811,12 @@ impl Watchman {
 		let cpfp_tx = wallet.make_signed_p2a_cpfp(&progress_tx, fees)
 			.with_context(|| format!("failed to create CPFP for vtx {}", txid))?;
 
+		let fee_permit = match &self.fee_allowance {
+			Some(gate) => Some(gate.urgent_progress(&self.db,&self.bitcoind,&cpfp_tx,&progress_tx,&wallet.inventory()?).await?),
+			None => crate::fee_allowance::ordinary_permit(None,&self.db,&self.bitcoind,
+				crate::fee_allowance::Path::ProgressChild,&cpfp_tx).await?,
+		};
+		self.db.read(async |t| crate::fee_allowance::require_permit(t,&cpfp_tx,fee_permit.as_ref()).await).await?;
 		// Broadcast the progress tx and CPFP as a package
 		let cpfp_txid = cpfp_tx.compute_txid();
 		bcd::submit_package(&self.bitcoind, &[progress_tx, cpfp_tx]).await?;

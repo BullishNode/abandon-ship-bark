@@ -677,6 +677,9 @@ impl Server {
 				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
 					return Ok(SendRefund::Undecided(reason));
 				}
+				if sub.status == LightningHtlcSubscriptionStatus::Canceled && open {
+					return Ok(SendRefund::Undecided("the payment attempt is not concluded".into()));
+				}
 			},
 			_ if open => return Ok(SendRefund::Undecided("the payment attempt is not concluded".into())),
 			_ => {},

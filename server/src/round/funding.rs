@@ -99,7 +99,8 @@ impl FundingTxSpec {
 			pinned_input: pinned_input.utxo(),
 			build_time: start.elapsed(),
 		);
-		Ok(UnsignedFundingTx { psbt, txid, max_fee_rate: self.max_fee_rate, pinned_input, _extra_inputs })
+		Ok(UnsignedFundingTx { psbt, txid, max_fee_rate: self.max_fee_rate, pinned_input, _extra_inputs,
+			prepared: None, native_permit: None })
 	}
 }
 
@@ -114,9 +115,29 @@ pub struct UnsignedFundingTx {
 	/// Held only for its Drop impl: releases the locks on the extra inputs
 	/// when this `UnsignedFundingTx` is dropped (e.g. on round restart).
 	_extra_inputs: WalletUtxosGuard,
+	prepared: Option<Transaction>,
+	native_permit: Option<crate::watchman::ordinary_fee_publication::PublicationRecord>,
 }
 
 impl UnsignedFundingTx {
+	pub(crate) fn prepare_private(&mut self, wallet: &mut PersistedWallet) -> anyhow::Result<Transaction> {
+		if let Some(original) = &self.prepared { return Ok(original.clone()); }
+		let signed = wallet.finish_tx_private_with_max_fee_rate(self.psbt.clone(), self.max_fee_rate)?;
+		ensure!(signed.compute_txid() == self.txid, "private funding signature changed original txid");
+		wallet.retain_native_candidate_inputs(&signed)?;
+		self.prepared = Some(signed.clone());
+		Ok(signed)
+	}
+	pub(crate) fn bind_native_permit(&mut self, permit: crate::watchman::ordinary_fee_publication::PublicationRecord) -> anyhow::Result<()> {
+		permit.matches(self.prepared.as_ref().context("native funding candidate was not privately materialized")?)?;
+		ensure!(self.native_permit.as_ref().is_none_or(|old| *old == permit), "native funding permit changed");
+		self.native_permit = Some(permit);
+		Ok(())
+	}
+	pub(crate) fn prepared(&self) -> Option<&Transaction> { self.prepared.as_ref() }
+	pub(crate) fn native_permit(&self) -> Option<&crate::watchman::ordinary_fee_publication::PublicationRecord> {
+		self.native_permit.as_ref()
+	}
 	pub fn psbt(&self) -> &Psbt {
 		&self.psbt
 	}
@@ -148,8 +169,15 @@ impl UnsignedFundingTx {
 		self.pinned_input
 	}
 
-	pub fn sign(self, wallet: &mut PersistedWallet) -> anyhow::Result<SignedFundingTx> {
-		match wallet.finish_tx_with_max_fee_rate(self.psbt().clone(), self.max_fee_rate) {
+	pub fn sign(mut self, wallet: &mut PersistedWallet) -> anyhow::Result<SignedFundingTx> {
+		let signed = if let Some(original) = self.prepared.take() {
+			self.native_permit.as_ref().context("private native candidate lacks its precommit permit")?.matches(&original)?;
+			// The caller rechecks the original owner/DB permit before entering
+			// this step. No signature is recomputed and no fee debit is renewed.
+			wallet.log_signed_funding_tx(&original, self.fee());
+			Ok(original)
+		} else { wallet.finish_tx_with_max_fee_rate(self.psbt().clone(), self.max_fee_rate) };
+		match signed {
 			Ok(tx) => Ok(SignedFundingTx {
 				tx,
 				txid: self.txid,

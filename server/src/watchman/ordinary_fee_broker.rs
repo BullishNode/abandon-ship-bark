@@ -31,19 +31,25 @@ pub(crate) struct NativeFeeBroker {
 	rounds_descriptor_sha256: sha256::Hash,
 	runtime: crate::system::RuntimeManager,
 	requests: Arc<tokio::sync::Semaphore>,
+	server_key: crate::secret::Secret<bitcoin::secp256k1::Keypair>,
 }
 impl NativeFeeBroker {
 	pub(crate) fn new(db: Db, core: Client, budget: Arc<OrdinaryFeeBudget>,
 		wallet: InstrumentedLock<PersistedWallet>, epoch: NativeFeeEpoch,
 		max_fee_rate: FeeRate, rounds_descriptor_sha256: sha256::Hash,
 		runtime: crate::system::RuntimeManager,
+		server_key: bitcoin::secp256k1::Keypair,
 	) -> anyhow::Result<Self> {
 		ensure!(max_fee_rate > FeeRate::ZERO && rounds_descriptor_sha256 != sha256::Hash::all_zeros(),
 			"native fee broker requires actual rate and owning descriptor identities");
 		ensure!(epoch.identity().policy_sha256 == sha256::Hash::hash(&serde_json::to_vec(&budget.policy())?),
 			"native fee owner policy differs from original active epoch");
+		ensure!(server_key.public_key() == epoch.identity().server_pubkey, "native fee response key differs from actual epoch");
 		Ok(Self { db, core, budget, wallet, epoch, max_fee_rate, rounds_descriptor_sha256,
-			runtime, requests: Arc::new(tokio::sync::Semaphore::new(4)) })
+			runtime, requests: Arc::new(tokio::sync::Semaphore::new(4)), server_key: crate::secret::Secret::new(server_key) })
+	}
+	pub(crate) fn response_bytes(&self, request: &[u8], record: PublicationRecord) -> anyhow::Result<Vec<u8>> {
+		super::ordinary_fee_auth::FeeReply::sign(request, record, self.epoch.identity(), self.server_key.leak_ref())
 	}
 	fn retained(&self, tx: &Transaction, purpose: PublicationPath) -> anyhow::Result<Option<PublicationRecord>> {
 		let records = self.budget.publication_records()?;
@@ -114,6 +120,8 @@ impl NativeFeeBroker {
 				Ok::<_, anyhow::Error>(parents)
 			}).await.context("native fee source preflight deadline exceeded before debit")??;
 			let record = PublicationRecord::new_precommit(request.purpose(), self.budget.policy(), &tx, &parents, self.max_fee_rate)?;
+			ensure!(serde_json::to_vec(&record)?.len() <= 4 * 1024 * 1024 - 1024,
+				"native publication leaves no bounded authenticated response space");
 			// The durable input intent and exact fee witness are checked together.
 			// No timer/caller cancellation is introduced around the financial COMMIT.
 			t.stage_native_fee_intent(&record, self.budget.policy(), self.epoch.identity().opening_sha256).await?;

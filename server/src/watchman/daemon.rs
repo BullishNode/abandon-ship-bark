@@ -52,6 +52,7 @@ pub struct Daemon {
 	watchman_handle: WatchmanHandle,
 	bitcoin_address_blocklist: Option<BitcoinAddressBlocklist>,
 	ordinary_fee_budget: Option<Arc<super::ordinary_fee::OrdinaryFeeBudget>>,
+	native_fee_broker: Option<Arc<super::ordinary_fee_broker::NativeFeeBroker>>,
 }
 
 impl Daemon {
@@ -191,6 +192,7 @@ impl Daemon {
 			.context("sweep_address is required for watchman")?.require_network(cfg.network)
 			.context("sweep_address network mismatch")?;
 		let mut ordinary_fee_budget = None;
+		let mut native_fee_broker = None;
 		let direct_expiry = if let Some(history) = history {
 			let direct = cfg.watchman.direct_expiry.as_ref().context("direct expiry configuration disappeared")?;
 			let ordinary = Arc::new(super::ordinary_fee::OrdinaryFeeBudget::load_verified(
@@ -200,6 +202,21 @@ impl Daemon {
 			).await?.get::<_, i64>("total"))).await?;
 			ordinary.require_retained_fees(Amount::from_sat(u64::try_from(retained)?))?;
 			ordinary.require_native_epoch()?;
+			if let Some(opening) = &cfg.native_fee_opening {
+				let epoch = super::ordinary_fee_epoch::NativeFeeEpoch::activate_config(&db, &bitcoind,
+					&ordinary, server_key.public_key(), cfg.network, opening).await?;
+				// Same existing Rounds descriptor, derived only in memory: no
+				// address reveal or second DB-backed owning wallet process.
+				let rounds_xpriv = master_xpriv.derive_priv(&SECP, &[WalletKind::Rounds.child_number()])?;
+				let expected = bdk_wallet::Wallet::create_single(format!("tr({}/0/*)", rounds_xpriv))
+					.network(cfg.network).create_wallet_no_persist()?;
+				let descriptor = expected.public_descriptor(bitcoin_ext::bdk::KEYCHAIN).to_string();
+				use bitcoin::hashes::Hash;
+				native_fee_broker = Some(Arc::new(super::ordinary_fee_broker::NativeFeeBroker::new(
+					db.clone(), bitcoind.clone(), ordinary.clone(), watchman_wallet.clone(), epoch,
+					cfg.fee_estimator.max_fee_rate.context("native owner rate ceiling missing")?,
+					bitcoin::hashes::sha256::Hash::hash(descriptor.as_bytes()), rtmgr.clone(), server_key)?));
+			}
 			ordinary_fee_budget = Some(ordinary.clone());
 			let policy = CarrierLimits { max_fee_rate: cfg.fee_estimator.max_fee_rate.context("missing direct fee ceiling")?,
 				max_miner_fee: direct.max_miner_fee, max_weight: Weight::from_wu(400_000) };
@@ -273,13 +290,16 @@ impl Daemon {
 
 		Ok(Self {
 			rtmgr, sync_manager, watchman_wallet, frontier, watchman_handle,
-			bitcoin_address_blocklist, ordinary_fee_budget,
+			bitcoin_address_blocklist, ordinary_fee_budget, native_fee_broker,
 		})
 	}
 
 	/// Observe only this daemon's wallet under its actual owning guard.
 	pub(crate) async fn wallet_inventory(&self) -> anyhow::Result<server_rpc::protos::WalletInventory> {
 		self.watchman_wallet.lock().await.inventory()
+	}
+	pub(crate) fn native_fee_broker(&self) -> Option<Arc<super::ordinary_fee_broker::NativeFeeBroker>> {
+		self.native_fee_broker.clone()
 	}
 
 	pub fn watchman_handle(&self) -> &WatchmanHandle {

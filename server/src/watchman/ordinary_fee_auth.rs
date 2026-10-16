@@ -6,10 +6,49 @@ use bitcoin::secp256k1::{schnorr, Keypair, Message, PublicKey};
 use bitcoin::{BlockHash, Transaction};
 
 use super::ordinary_fee_publication::PublicationPath;
+use super::ordinary_fee_publication::PublicationRecord;
 
 const MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
 const MAX_TRANSACTION_BYTES: usize = 400_000;
 const DOMAIN: &[u8] = b"bark/track-c/native-fee-reservation/v1";
+const REPLY_DOMAIN: &[u8] = b"bark/track-c/native-fee-reservation/reply/v1";
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FeeReply {
+	version: u8,
+	request_sha256: sha256::Hash,
+	original_publication: PublicationRecord,
+	signature: schnorr::Signature,
+}
+fn reply_message(identity: &FeeServiceIdentity, request: sha256::Hash, record: &PublicationRecord) -> anyhow::Result<Message> {
+	let mut engine = sha256::Hash::engine(); engine.input(REPLY_DOMAIN);
+	engine.input(&identity.server_pubkey.serialize()); engine.input(identity.genesis.as_byte_array());
+	engine.input(identity.policy_sha256.as_byte_array()); engine.input(identity.opening_sha256.as_byte_array());
+	engine.input(request.as_byte_array()); engine.input(sha256::Hash::hash(&serde_json::to_vec(record)?).as_byte_array());
+	Ok(Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array()))
+}
+impl FeeReply {
+	pub(crate) fn sign(request: &[u8], record: PublicationRecord, identity: &FeeServiceIdentity,
+		key: &Keypair,
+	) -> anyhow::Result<Vec<u8>> {
+		ensure!(key.public_key() == identity.server_pubkey, "native owner response key differs");
+		let request_sha256 = sha256::Hash::hash(request);
+		let signature = crate::SECP.sign_schnorr(&reply_message(identity, request_sha256, &record)?, key);
+		let bytes = serde_json::to_vec(&Self { version: 1, request_sha256, original_publication: record, signature })?;
+		ensure!(bytes.len() <= 4 * 1024 * 1024, "native owner response exceeds bound");
+		Ok(bytes)
+	}
+	pub(crate) fn authenticate(bytes: &[u8], request: &[u8], identity: &FeeServiceIdentity) -> anyhow::Result<PublicationRecord> {
+		ensure!(bytes.len() <= 4 * 1024 * 1024, "native owner response exceeds bound");
+		let reply: Self = serde_json::from_slice(bytes)?;
+		ensure!(serde_json::to_vec(&reply)? == bytes && reply.version == 1
+			&& reply.request_sha256 == sha256::Hash::hash(request), "native owner reply differs from exact request");
+		crate::SECP.verify_schnorr(&reply.signature, &reply_message(identity, reply.request_sha256, &reply.original_publication)?,
+			&identity.server_pubkey.x_only_public_key().0)?;
+		Ok(reply.original_publication)
+	}
+}
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -143,4 +182,44 @@ mod tests {
 		assert!(FeeRequest::authenticate(&padded, FeeRequestAction::Reserve, &identity).is_err());
 		assert!(FeeRequest::authenticate(&vec![b' '; MAX_REQUEST_BYTES + 1], FeeRequestAction::Reserve, &identity).is_err());
 	}
+	fn reply_vector() -> (Keypair, FeeServiceIdentity, Transaction, PublicationRecord) {
+		let (key, mut identity, mut tx) = source();
+		let policy = super::super::ordinary_fee::OrdinaryFeePolicy::default();
+		identity.policy_sha256 = sha256::Hash::hash(&serde_json::to_vec(&policy).unwrap());
+		let parent = Transaction { version: bitcoin::transaction::Version::TWO, lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: vec![bitcoin::TxIn { previous_output: bitcoin::OutPoint::null(), script_sig: bitcoin::ScriptBuf::new(),
+				sequence: bitcoin::Sequence::MAX, witness: bitcoin::Witness::new() }],
+			output: vec![bitcoin::TxOut { value: bitcoin::Amount::from_sat(11_000), script_pubkey: bitcoin::ScriptBuf::new() }] };
+		tx.input[0].previous_output = bitcoin::OutPoint::new(parent.compute_txid(), 0);
+		let record = PublicationRecord::new_precommit(PublicationPath::Round, policy, &tx, &[parent],
+			bitcoin::FeeRate::from_sat_per_vb_u32(100)).unwrap();
+		(key, identity, tx, record)
+	}
+	#[test]
+	fn owner_reply_requires_actual_endpoint_key_and_exact_action_candidate_request() {
+		let (key, identity, tx, record) = reply_vector();
+		let request = FeeRequest::sign(FeeRequestAction::Reserve, PublicationPath::Round, &identity, &tx, &key).unwrap();
+		let reply = FeeReply::sign(&request, record.clone(), &identity, &key).unwrap();
+		assert_eq!(FeeReply::authenticate(&reply, &request, &identity).unwrap(), record);
+		let verify = FeeRequest::sign(FeeRequestAction::Verify, PublicationPath::Round, &identity, &tx, &key).unwrap();
+		assert!(FeeReply::authenticate(&reply, &verify, &identity).is_err());
+		let mut changed = tx; changed.lock_time = bitcoin::absolute::LockTime::from_height(7).unwrap();
+		let another = FeeRequest::sign(FeeRequestAction::Reserve, PublicationPath::Round, &identity, &changed, &key).unwrap();
+		assert!(FeeReply::authenticate(&reply, &another, &identity).is_err());
+		let mut foreign = identity.clone(); foreign.server_pubkey = source().0.public_key();
+		assert!(FeeReply::authenticate(&reply, &request, &foreign).is_err());
+	}
+	#[test]
+	fn owner_reply_refuses_reencoded_duplicate_and_foreign_original_opening() {
+		let (key, identity, tx, record) = reply_vector();
+		let request = FeeRequest::sign(FeeRequestAction::Reserve, PublicationPath::Round, &identity, &tx, &key).unwrap();
+		let reply = FeeReply::sign(&request, record, &identity, &key).unwrap();
+		let duplicate = String::from_utf8(reply.clone()).unwrap().replacen("{", "{\"version\":1,", 1);
+		assert!(FeeReply::authenticate(duplicate.as_bytes(), &request, &identity).is_err());
+		let mut padded = reply.clone(); padded.push(b' ');
+		assert!(FeeReply::authenticate(&padded, &request, &identity).is_err());
+		let mut foreign = identity; foreign.opening_sha256 = sha256::Hash::hash(b"another actual original opening");
+		assert!(FeeReply::authenticate(&reply, &request, &foreign).is_err());
+	}
+
 }

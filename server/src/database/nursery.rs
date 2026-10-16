@@ -73,6 +73,7 @@ impl<'t> Tx<'t> {
 		kind: NurseryTxKind,
 		confirm_target_height: BlockHeight,
 	) -> anyhow::Result<()> {
+		self.bind_native_fee_nursery(tx, kind).await?;
 		let stmt = self.prepare_typed("
 			INSERT INTO nursery_tx (txid, kind, tx, confirm_target_height, created_at, updated_at)
 			VALUES ($1, $2::TEXT::nursery_tx_kind, $3, $4, NOW(), NOW())

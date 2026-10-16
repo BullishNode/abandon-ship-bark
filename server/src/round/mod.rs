@@ -901,7 +901,8 @@ impl CollectingPayments {
 			vtxos_spec.hashlock_version = HashlockVersion::V0;
 		}
 
-		let funding_tx = FundingTxSpec {
+		srv.require_native_fee_owner().map_err(RoundError::Recoverable)?;
+		let mut funding_tx = FundingTxSpec {
 			tree_output: TxOut {
 				script_pubkey: vtxos_spec.funding_tx_script_pubkey(),
 				value: vtxos_spec.total_required_value(),
@@ -910,6 +911,17 @@ impl CollectingPayments {
 			max_fee_rate: srv.config.fee_estimator.max_fee_rate,
 			pinned_input: self.common_round_tx_input.take(),
 		}.build(&srv.rounds_wallet).await.map_err(RoundError::Recoverable)?;
+		if srv.config.direct_expiry.enabled {
+			let signed = {
+				let mut wallet = srv.rounds_wallet.lock().await;
+				funding_tx.prepare_private(&mut wallet).map_err(RoundError::Recoverable)?
+			};
+			let permit = srv.reserve_native_publication(&signed,
+				crate::watchman::ordinary_fee_publication::PublicationPath::Round).await
+				.map_err(RoundError::Recoverable)?.context("DIRECT round original precommit permit missing")
+				.map_err(RoundError::Recoverable)?;
+			funding_tx.bind_native_permit(permit).map_err(RoundError::Recoverable)?;
+		}
 
 		// Generate vtxo nonces and combine with user's nonces.
 		let (cosign_sec_nonces, cosign_pub_nonces) = {
@@ -1123,6 +1135,15 @@ impl SigningVtxoTree {
 		)
 	)]
 	async fn finish(mut self, srv: &Server) -> Result<RoundFinished, RoundError> {
+		if srv.config.direct_expiry.enabled {
+			let original = self.funding_tx.prepared().context("DIRECT round lost original signed funding")
+				.map_err(RoundError::Recoverable)?;
+			let permit = srv.require_native_publication(original,
+				crate::watchman::ordinary_fee_publication::PublicationPath::Round).await.map_err(RoundError::Recoverable)?;
+			if permit.as_ref() != self.funding_tx.native_permit() {
+				return Err(RoundError::Fatal(anyhow!("DIRECT round original precommit permit changed")));
+			}
+		}
 		// Combine the vtxo signatures.
 		self.next_step(RoundStep::CombineVtxoSignatures);
 
@@ -1161,10 +1182,12 @@ impl SigningVtxoTree {
 		let update = VtxoTreeUpdate::new()
 			.upsert_funding_tx(&signed_round_tx.tx);
 		let signed_tx = signed_round_tx.tx.clone();
-		srv.db.write(async |t| {
-			t.execute_vtxo_tree_update(update).await?;
-			t.update_round_funding_tx(&signed_tx).await
-		}).await.map_err(|e| RoundError::Fatal(e.context("failed to persist signed funding tx")))?;
+		if !srv.config.direct_expiry.enabled {
+			srv.db.write(async |t| {
+				t.execute_vtxo_tree_update(update).await?;
+				t.update_round_funding_tx(&signed_tx).await
+			}).await.map_err(|e| RoundError::Fatal(e.context("failed to persist signed funding tx")))?;
+		}
 
 		let finished = RoundFinished {
 			round_seq: self.round_step.round_seq(),
@@ -1298,6 +1321,13 @@ async fn persist_round(
 	}
 	let real_output_keys = state.real_outputs.iter().map(|v| v.policy.user_pubkey()).collect::<Vec<_>>();
 	let result = srv.db.write(async |t| {
+		if srv.config.direct_expiry.enabled {
+			let owner = srv.native_fee_client.as_ref().context("native round owner disappeared")?;
+			let signed = state.funding_tx.prepared().context("native round original signed funding missing")?;
+			let permit = state.funding_tx.native_permit().context("native round original permit missing")?;
+			t.lock_native_fee_publication().await?;
+			t.require_native_fee_intent(permit, owner.policy(), owner.identity().opening_sha256, signed).await?;
+		}
 		// Recheck every real output, including absent delegated participants.
 		// The real-output snapshot excludes server tree-shape padding.
 		t.require_fallback(&real_output_keys, srv.config.network).await?;
@@ -1308,6 +1338,15 @@ async fn persist_round(
 			signed_vtxos,
 			&state.interactive_participants, srv.config.network,
 		).await?;
+		if srv.config.direct_expiry.enabled {
+			let owner = srv.native_fee_client.as_ref().context("native round owner disappeared")?;
+			let signed = state.funding_tx.prepared().context("native round signed funding missing")?;
+			let permit = state.funding_tx.native_permit().context("native round original permit missing")?;
+			t.execute_vtxo_tree_update(VtxoTreeUpdate::new().upsert_funding_tx(signed)).await?;
+			t.update_round_funding_tx(signed).await?;
+			t.publish_native_fee_intent(permit, owner.policy(), owner.identity().opening_sha256, signed).await?;
+			t.upsert_nursery_tx(signed, NurseryTxKind::Round, srv.nursery_confirm_target()).await?;
+		}
 
 		// Post VTXOs to mailboxes for wallet recovery support.
 		// This is done after the round is persisted so VTXOs exist in the DB.

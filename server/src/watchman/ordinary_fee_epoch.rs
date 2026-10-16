@@ -19,6 +19,15 @@ use super::ordinary_fee_publication::{private_root, open_record, read_record};
 
 pub(crate) struct NativeFeeEpoch { identity: FeeServiceIdentity }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFeeOpeningConfig {
+	pub original_opening: PathBuf,
+	pub original_opening_sha256: sha256::Hash,
+	pub source_manifest: PathBuf,
+	pub original_publication_logs: Vec<PathBuf>,
+}
+
 // Only the protected complete original journal constructs this replay token.
 // It waives capture AGE alone; source equality and all old debits still apply.
 pub(crate) struct ValidatedOpeningJournal { digest: sha256::Hash }
@@ -27,6 +36,24 @@ impl ValidatedOpeningJournal {
 }
 impl NativeFeeEpoch {
 	pub(crate) fn identity(&self) -> &FeeServiceIdentity { &self.identity }
+	pub(crate) async fn activate_config(db: &Db, core: &Client, budget: &OrdinaryFeeBudget,
+		server: PublicKey, network: Network, config: &NativeFeeOpeningConfig,
+	) -> anyhow::Result<Self> {
+		let owner = fs::symlink_metadata(budget.directory())?.uid();
+		ensure!(config.original_publication_logs.len() <= 4096, "original publication log count exceeds bound");
+		let original = read_record(&config.original_opening, owner)?;
+		let source = read_record(&config.source_manifest, owner)?;
+		let mut bytes = original.len().checked_add(source.len()).context("original input byte overflow")?;
+		let mut logs = Vec::new();
+		for path in &config.original_publication_logs {
+			let raw = read_record(path, owner)?;
+			bytes = bytes.checked_add(raw.len()).context("original publication log sum overflow")?;
+			ensure!(bytes <= 16 * 1024 * 1024, "original activation input exceeds total byte bound");
+			logs.push(raw);
+		}
+		Self::activate(db, core, budget, server, network, &original,
+			config.original_opening_sha256, &source, &logs).await
+	}
 
 	/// Paused startup, before sharing the budget Arc or starting any worker.
 	/// A failed/unknown COMMIT retains original files/debits/input intents. It

@@ -691,6 +691,16 @@ service WalletAdminService {
 	rpc WalletInventory(core.Empty) returns (WalletInventoryResponse) {}
 }
 
+// Fixed internal owner operation. The opaque canonical request is authenticated
+// against the actual server key, chain, original fee opening and exact signed
+// candidate. Transport access alone never grants a reservation.
+service NativeFeeService {
+	rpc Reserve(NativeFeeRequest) returns (NativeFeeResponse) {}
+	rpc Verify(NativeFeeRequest) returns (NativeFeeResponse) {}
+}
+message NativeFeeRequest { bytes authenticated_request = 1; }
+message NativeFeeResponse { bytes signed_owner_response = 1; }
+
 service RoundAdminService {
 	rpc TriggerRound(core.Empty) returns (core.Empty) {}
 }

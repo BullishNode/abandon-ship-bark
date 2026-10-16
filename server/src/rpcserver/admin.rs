@@ -141,6 +141,28 @@ impl rpc::server::SweepAdminService for crate::watchman::Daemon {
 	}
 }
 
+#[async_trait]
+impl rpc::server::NativeFeeService for crate::watchman::Daemon {
+	async fn reserve(&self, request: tonic::Request<protos::NativeFeeRequest>)
+		-> Result<tonic::Response<protos::NativeFeeResponse>, tonic::Status> {
+		let broker = self.native_fee_broker().ok_or_else(|| tonic::Status::failed_precondition("actual native fee epoch is not activated"))?;
+		let bytes = request.into_inner().authenticated_request;
+		let record = broker.clone().reserve(bytes.clone()).await
+			.map_err(|error| tonic::Status::failed_precondition(format!("{error:#}")))?;
+		let signed_owner_response = broker.response_bytes(&bytes, record).map_err(|_| tonic::Status::internal("native fee signed response failed"))?;
+		Ok(tonic::Response::new(protos::NativeFeeResponse { signed_owner_response }))
+	}
+	async fn verify(&self, request: tonic::Request<protos::NativeFeeRequest>)
+		-> Result<tonic::Response<protos::NativeFeeResponse>, tonic::Status> {
+		let broker = self.native_fee_broker().ok_or_else(|| tonic::Status::failed_precondition("actual native fee epoch is not activated"))?;
+		let bytes = request.into_inner().authenticated_request;
+		let record = broker.verify(&bytes).await
+			.map_err(|error| tonic::Status::failed_precondition(format!("{error:#}")))?;
+		let signed_owner_response = broker.response_bytes(&bytes, record).map_err(|_| tonic::Status::internal("native fee signed response failed"))?;
+		Ok(tonic::Response::new(protos::NativeFeeResponse { signed_owner_response }))
+	}
+}
+
 async fn reload_blocklist(
 	list: Option<&BitcoinAddressBlocklist>,
 ) -> Result<tonic::Response<protos::ReloadBlocklistResponse>, tonic::Status> {
@@ -303,6 +325,9 @@ pub async fn run_watchmand_admin_rpc_server(
 
 	let routes = tonic::service::Routes::default()
 		.add_service(rpc::server::WalletAdminServiceServer::from_arc(daemon.clone()))
+		.add_service(rpc::server::NativeFeeServiceServer::from_arc(daemon.clone())
+			.max_decoding_message_size(2 * 1024 * 1024 + 16)
+			.max_encoding_message_size(4 * 1024 * 1024 + 16))
 		.add_service(rpc::server::SweepAdminServiceServer::from_arc(daemon.clone()))
 		.add_service(rpc::server::BlocklistAdminServiceServer::from_arc(daemon));
 

@@ -43,7 +43,7 @@ impl PersistedWallet {
 	/// canonical graph and reservation index, not future spend authorization.
 	/// No address reveal, sync, commit, persistence or private-key export occurs.
 	pub fn inventory(&self) -> anyhow::Result<protos::WalletInventory> {
-		let locked = self.locked_outputs.utxos();
+		let locked = self.reserved_outputs();
 		read_inventory(&self.wallet, self.kind, self.min_trusted_confs, &locked,
 			MAX_WALLET_INVENTORY_ROWS, MAX_WALLET_INVENTORY_BYTES)
 	}

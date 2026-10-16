@@ -21,6 +21,7 @@
 //!
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use anyhow::Context;
 use bitcoin::{FeeRate, Transaction, Txid};
@@ -97,13 +98,17 @@ pub struct TxNursery {
 	db: Db,
 	bitcoind: BitcoindClient,
 	payout_witness: Option<crate::payout_witness::PayoutWitness>,
+	direct: bool,
+	native_fee_client: Option<Arc<crate::watchman::ordinary_fee_client::NativeFeeClient>>,
 }
 
 impl TxNursery {
 	/// Create a new nursery. It follows up through chain events, so
 	/// register it as a [ChainEventListener] with the SyncManager.
-	pub(crate) fn new(db: Db, bitcoind: BitcoindClient, payout_witness: Option<crate::payout_witness::PayoutWitness>) -> TxNursery {
-		TxNursery { db, bitcoind, payout_witness }
+	pub(crate) fn new(db: Db, bitcoind: BitcoindClient, payout_witness: Option<crate::payout_witness::PayoutWitness>,
+		direct: bool, native_fee_client: Option<Arc<crate::watchman::ordinary_fee_client::NativeFeeClient>>,
+	) -> TxNursery {
+		TxNursery { db, bitcoind, payout_witness, direct, native_fee_client }
 	}
 
 	/// Broadcast a tx that is expected to confirm by the given block
@@ -175,6 +180,12 @@ impl TxNursery {
 	/// next mempool update.
 	async fn broadcast(&self, tx: &Transaction, kind: NurseryTxKind) {
 		let txid = tx.compute_txid();
+		if self.direct && matches!(kind, NurseryTxKind::Round | NurseryTxKind::VtxoPool) {
+			if let Err(error) = self.require_native_permission(tx, kind).await {
+				warn!(%txid, "native fee publication remains held before raw log/relay: {error:#}");
+				return;
+			}
+		}
 		if kind == NurseryTxKind::ExpiryPayout {
 			if let Err(e) = self.witness_payout(tx).await {
 				warn!(%txid, "payout recovery witness not durable; keep committed payout pending: {e:#}");
@@ -187,6 +198,18 @@ impl TxNursery {
 				raw_tx: serialize(tx), error: e.to_string(),
 			);
 		}
+	}
+	async fn require_native_permission(&self, tx: &Transaction, kind: NurseryTxKind) -> anyhow::Result<()> {
+		use crate::watchman::ordinary_fee_auth::FeeRequestAction;
+		use crate::watchman::ordinary_fee_publication::PublicationPath;
+		let purpose = match kind { NurseryTxKind::Round => PublicationPath::Round,
+			NurseryTxKind::VtxoPool => PublicationPath::Pool, _ => return Ok(()) };
+		let owner = self.native_fee_client.as_ref().context("DIRECT nursery has no active owner endpoint")?;
+		let record = owner.request(FeeRequestAction::Verify, purpose, tx).await?;
+		self.db.write(async |t| {
+			t.lock_native_fee_publication().await?;
+			t.require_native_fee_intent(&record, owner.policy(), owner.identity().opening_sha256, tx).await
+		}).await
 	}
 
 	/// Also covers package submission, which can relay an evicted parent without

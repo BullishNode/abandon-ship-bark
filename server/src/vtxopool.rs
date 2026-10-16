@@ -589,6 +589,7 @@ impl Process {
 		let max_fee_rate = self.srv.config.fee_estimator.max_fee_rate;
 
 		let funding_txout = builder.funding_txout();
+		self.srv.require_native_fee_owner()?;
 
 		let txout = funding_txout.clone();
 		let (mut wallet, funding_psbt) = self.srv.rounds_wallet.build_blocking(
@@ -600,6 +601,14 @@ impl Process {
 				}).context("failed to build signed tree funding tx")
 			},
 		).await?;
+		let prepared_funding = if self.srv.config.direct_expiry.enabled {
+			let signed = wallet.finish_tx_private_with_max_fee_rate(funding_psbt.clone(), max_fee_rate)?;
+			wallet.retain_native_candidate_inputs(&signed)?;
+			let permit = self.srv.reserve_native_publication(&signed,
+				crate::watchman::ordinary_fee_publication::PublicationPath::Pool).await?
+				.context("DIRECT pool original precommit permit missing")?;
+			Some((signed, permit))
+		} else { None };
 
 		let funding_txid = funding_psbt.unsigned_tx.compute_txid();
 		let total_amount = builder.total_required_value();
@@ -639,7 +648,15 @@ impl Process {
 		}
 
 		// finish and broadcast the tx
-		let tx = wallet.finish_tx_with_max_fee_rate(funding_psbt, max_fee_rate).context("error finishing tree funding tx")?;
+		let (tx, native_permit) = if let Some((original, permit)) = prepared_funding {
+			let verified = self.srv.require_native_publication(&original,
+				crate::watchman::ordinary_fee_publication::PublicationPath::Pool).await?;
+			ensure!(verified.as_ref() == Some(&permit), "DIRECT pool original precommit permit changed");
+			wallet.log_signed_funding_tx(&original, funding_psbt.fee()?);
+			(original, Some(permit))
+		} else {
+			(wallet.finish_tx_with_max_fee_rate(funding_psbt, max_fee_rate).context("error finishing tree funding tx")?, None)
+		};
 
 		// Create the vtxos and virtual transactions in the database
 		// before committing the funding tx to the wallet. The funding tx
@@ -657,6 +674,10 @@ impl Process {
 				database::SpendState::Pool,
 			);
 		self.srv.db.write(async |t| {
+			if let Some(record) = &native_permit {
+				let owner = self.srv.native_fee_client.as_ref().context("native pool owner disappeared")?;
+				t.publish_native_fee_intent(record, owner.policy(), owner.identity().opening_sha256, &tx).await?;
+			}
 			t.execute_vtxo_tree_update(update).await?;
 			t.upsert_nursery_tx(&tx, NurseryTxKind::VtxoPool, confirm_target).await
 		}).await?;

@@ -96,6 +96,9 @@ pub struct PersistedWallet {
 	db: database::Db,
 	bitcoind: BitcoindClient,
 	locked_outputs: LockedWalletUtxosIndex,
+	// Exact privately signed candidates stay excluded even if their ordinary
+	// scope guards drop after an unknown RPC/COMMIT or failed round attempt.
+	retained_native_inputs: HashSet<OutPoint>,
 	min_trusted_confs: u32,
 	address_blocklist: Option<BitcoinAddressBlocklist>,
 }
@@ -139,6 +142,7 @@ impl PersistedWallet {
 		Ok(Self {
 			wallet, kind, db, bitcoind, min_trusted_confs,
 			locked_outputs: LockedWalletUtxosIndex::new(),
+			retained_native_inputs: HashSet::new(),
 			address_blocklist: None,
 		})
 	}
@@ -262,13 +266,14 @@ impl PersistedWallet {
 			.filter(|utxo| !utxo.is_trusted)
 			.map(|utxo| utxo.outpoint)
 			.chain(self.locked_outputs.utxos())
+			.chain(self.retained_native_inputs.iter().copied())
 			.collect::<Vec<_>>()
 	}
 
 	/// Confirmed, trusted and unlocked inputs available for direct-carrier fees.
 	pub(crate) fn confirmed_unlocked_utxos(&self) -> Vec<OutPoint> {
 		let canon = TrustedCanonicalization::from_wallet(&self.wallet, self.min_trusted_confs);
-		let locked = self.locked_outputs.utxos();
+		let locked = self.reserved_outputs();
 		let tip = self.wallet.latest_checkpoint().height();
 		canon.list_unspent()
 			.filter(|u| u.is_trusted && u.chain_position.is_confirmed() && !locked.contains(&u.outpoint))
@@ -286,6 +291,17 @@ impl PersistedWallet {
 		utxo: OutPoint,
 	) -> Result<WalletUtxoGuard, UtxoAlreadyLockedError> {
 		WalletUtxoGuard::new(self.locked_outputs.clone(), utxo)
+	}
+	pub(crate) fn reserved_outputs(&self) -> HashSet<OutPoint> {
+		self.locked_outputs.utxos().into_iter().chain(self.retained_native_inputs.iter().copied()).collect()
+	}
+	pub(crate) fn retain_native_candidate_inputs(&mut self, signed: &Transaction) -> anyhow::Result<()> {
+		let points = signed.input.iter().map(|i| i.previous_output).collect::<HashSet<_>>();
+		ensure!(!points.is_empty() && points.len() == signed.input.len()
+			&& self.retained_native_inputs.union(&points).count() <= 50_000,
+			"native retained input set is empty, duplicate or exceeds existing intent bound");
+		self.retained_native_inputs.extend(points);
+		Ok(())
 	}
 
 	pub fn lock_wallet_utxos(
@@ -843,6 +859,26 @@ mod builder_test {
 
 	fn sat_per_vb(rate: u64) -> FeeRate {
 		FeeRate::from_sat_per_vb(rate).unwrap()
+	}
+
+	#[test]
+	fn private_materialization_preserves_original_psbt_graph_and_fixed_funding_body() {
+		let (mut wallet, _) = wallet_with_coins(&[Amount::from_sat(1_000_000)]);
+		let mut builder = wallet.build_tx();
+		builder.add_recipient(foreign_spk(91), Amount::from_sat(500_000));
+		builder.fee_rate(sat_per_vb(5));
+		let psbt = builder.finish().unwrap();
+		let original = psbt.clone(); let staged = wallet.staged().cloned();
+		let fee = psbt.fee().unwrap();
+		let signed = sign_funding_psbt(&wallet, psbt.clone(), Some(sat_per_vb(100))).unwrap();
+		assert_eq!(psbt, original);
+		assert_eq!(signed.compute_txid(), original.unsigned_tx.compute_txid());
+		assert_eq!(signed.output, original.unsigned_tx.output);
+		assert!(signed.input.iter().all(|input| input.witness.len() == 1
+			&& input.witness.iter().next().unwrap().len() == 64));
+		assert!(wallet.staged() == staged.as_ref());
+		assert!(wallet.tx_graph().get_tx(signed.compute_txid()).is_none(), "private signing cannot commit unbroadcast change");
+		assert!(fee <= sat_per_vb(100).fee_wu(signed.weight()).unwrap());
 	}
 
 	#[test]

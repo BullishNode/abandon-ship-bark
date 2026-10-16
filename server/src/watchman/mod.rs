@@ -16,6 +16,7 @@ pub(crate) mod ordinary_fee_auth;
 pub(crate) mod ordinary_fee_opening;
 pub(crate) mod ordinary_fee_epoch;
 pub(crate) mod ordinary_fee_broker;
+pub(crate) mod ordinary_fee_client;
 mod config;
 mod daemon;
 mod frontier;
@@ -27,6 +28,8 @@ pub use self::config::{Config, DirectExpiryConfig};
 pub use self::daemon::Daemon;
 pub use self::frontier::VtxoExitFrontier;
 pub use self::signer::WatchmanSigner;
+pub use self::ordinary_fee_client::NativeFeeOwnerConfig;
+pub use self::ordinary_fee_epoch::NativeFeeOpeningConfig;
 
 /// Control messages that can be sent to a running [Watchman].
 pub enum Ctrl {

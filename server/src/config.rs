@@ -205,6 +205,10 @@ mod defaults {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
 	pub data_dir: PathBuf,
+	/// Optional owning Watchman service for DIRECT Round/Pool publications.
+	/// Absence permits setup/read-only startup, never publication.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub native_fee_owner: Option<crate::watchman::NativeFeeOwnerConfig>,
 	#[serde(default)]
 	pub expiry_payout: crate::expiry_payout::Config,
 	#[serde(default)]
@@ -549,6 +553,10 @@ impl Config {
 	/// It also checks if all required configurations are available
 	pub fn validate(&self) -> anyhow::Result<()> {
 		self.bitcoind.validate()?;
+		if let Some(owner) = &self.native_fee_owner {
+			owner.validate()?;
+			ensure!(self.direct_expiry.enabled, "native fee owner requires explicit DIRECT route");
+		}
 		self.direct_expiry.validate(self.expiry_payout.enabled, self.network)?;
 		self.expiry_payout.validate(self.network)?;
 		self.fees.validate()?;
@@ -626,6 +634,9 @@ pub mod watchmand {
 	#[derive(Debug, Clone, Deserialize, Serialize)]
 	pub struct Config {
 		pub data_dir: PathBuf,
+		/// Explicit paused original-source activation of the SAME fee ledger.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub native_fee_opening: Option<crate::watchman::NativeFeeOpeningConfig>,
 		pub network: bitcoin::Network,
 
 		/// The interval at which the SyncManager polls for new blocks.
@@ -709,6 +720,10 @@ pub mod watchmand {
 		/// It also checks if all required configurations are available
 		pub fn validate(&self) -> anyhow::Result<()> {
 			self.bitcoind.validate()?;
+			if self.native_fee_opening.is_some() {
+				ensure!(self.watchman.direct_expiry.is_some() && self.admin_address.is_some_and(|a| a.ip().is_loopback()),
+					"native fee opening requires DIRECT owner and loopback admin service");
+			}
 			if let Some(direct) = &self.watchman.direct_expiry {
 				direct.ordinary_fee_policy.validate_config(self.network)?;
 				direct.ordinary_fee_policy.validate_ceiling(direct.max_miner_fee)?;

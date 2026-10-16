@@ -46,6 +46,36 @@ fn retained_candidate(id: &str, raw: &[u8], published: bool,
 }
 
 impl Tx<'_> {
+	/// Every DIRECT nursery insertion, including alternate callers, must bind
+	/// the exact signed body/input set to the original fee epoch. No allowance
+	/// is created here; the independent owning journal is checked at relay.
+	pub(crate) async fn bind_native_fee_nursery(&self, signed: &Transaction, kind: crate::nursery::NurseryTxKind) -> anyhow::Result<()> {
+		let purpose = match kind {
+			crate::nursery::NurseryTxKind::Round => "round",
+			crate::nursery::NurseryTxKind::VtxoPool => "pool",
+			_ => return Ok(()),
+		};
+		let direct = self.query_opt("SELECT direct FROM expiry_route WHERE id=1", &[]).await?
+			.is_some_and(|row| row.get::<_, bool>(0));
+		if !direct { return Ok(()); }
+		self.lock_native_fee_publication().await?;
+		let id = signed.compute_wtxid().to_string();
+		let row = self.query_opt("SELECT p.signed_tx,p.purpose,p.policy_hash,p.opening_hash,o.opening_hash,o.policy_bytes
+			FROM native_fee_publication p CROSS JOIN native_fee_opening o
+			WHERE p.wtxid=$1 AND o.id=1 FOR UPDATE OF p", &[&id]).await?
+			.context("DIRECT nursery candidate lacks its actual original native fee intent/opening")?;
+		ensure!(row.get::<_, Vec<u8>>(0) == serialize(signed) && row.get::<_, String>(1) == purpose
+			&& row.get::<_, String>(3) == row.get::<_, String>(4)
+			&& row.get::<_, String>(2) == sha256::Hash::hash(&row.get::<_, Vec<u8>>(5)).to_string(),
+			"DIRECT nursery body, purpose or original fee identity differs");
+		let actual = signed.input.iter().map(|input| input.previous_output.to_string()).collect::<BTreeSet<_>>();
+		let retained = self.query("SELECT outpoint FROM native_fee_input WHERE wtxid=$1 ORDER BY outpoint", &[&id]).await?
+			.into_iter().map(|row| row.get::<_, String>(0)).collect::<BTreeSet<_>>();
+		ensure!(!actual.is_empty() && actual.len() == signed.input.len() && actual == retained,
+			"DIRECT nursery whole-input intent differs");
+		self.execute("UPDATE native_fee_publication SET published_at=COALESCE(published_at,NOW()) WHERE wtxid=$1", &[&id]).await?;
+		Ok(())
+	}
 	pub(crate) async fn lock_native_fee_publication(&self) -> anyhow::Result<()> {
 		self.query_one("SELECT pg_advisory_xact_lock($1)", &[&(AdvisoryLock::NativeFeePublication as i64)]).await?;
 		Ok(())

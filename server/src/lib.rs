@@ -3,6 +3,8 @@
 #[macro_use] extern crate serde;
 #[macro_use] extern crate server_log;
 
+use bitcoin::hashes::Hash;
+
 // We assume a 64-bit target throughout the codebase, primarily so
 // that u32 and u64 values can be converted into usize using `as`
 // without truncation.
@@ -212,6 +214,7 @@ pub struct Server {
 	rounds_wallet: InstrumentedLock<PersistedWallet>,
 	// Unpublished exact candidates retain whole inputs for this process lifetime.
 	_native_fee_input_guards: Vec<wallet::WalletUtxosGuard>,
+	native_fee_client: Option<Arc<watchman::ordinary_fee_client::NativeFeeClient>>,
 	bitcoind: BitcoindClient,
 	// NB needs to be Arc so tasks started before Server is constructed can share it
 	sync_manager: Arc<SyncManager>,
@@ -332,6 +335,39 @@ impl Server {
 	pub fn database(&self) -> &database::Db {
 		&self.db
 	}
+	pub(crate) fn require_native_fee_owner(&self) -> anyhow::Result<()> {
+		ensure!(!self.config.direct_expiry.enabled || self.native_fee_client.is_some(),
+			"DIRECT funding requires its actual activated native fee owner; setup/read-only mode cannot publish");
+		Ok(())
+	}
+	pub(crate) async fn reserve_native_publication(&self, signed: &bitcoin::Transaction,
+		purpose: watchman::ordinary_fee_publication::PublicationPath,
+	) -> anyhow::Result<Option<watchman::ordinary_fee_publication::PublicationRecord>> {
+		self.require_native_fee_owner()?;
+		if !self.config.direct_expiry.enabled { return Ok(None); }
+		let owner = self.native_fee_client.as_ref().context("native fee owner missing")?;
+		let record = owner.request(watchman::ordinary_fee_auth::FeeRequestAction::Reserve, purpose, signed).await?;
+		// Authenticate the actual owner response AND its original durable DB
+		// intent before any outward VtxoProposal or pool tree cosign.
+		self.db.write(async |t| {
+			t.lock_native_fee_publication().await?;
+			t.require_native_fee_intent(&record, owner.policy(), owner.identity().opening_sha256, signed).await
+		}).await?;
+		Ok(Some(record))
+	}
+	pub(crate) async fn require_native_publication(&self, signed: &bitcoin::Transaction,
+		purpose: watchman::ordinary_fee_publication::PublicationPath,
+	) -> anyhow::Result<Option<watchman::ordinary_fee_publication::PublicationRecord>> {
+		self.require_native_fee_owner()?;
+		if !self.config.direct_expiry.enabled { return Ok(None); }
+		let owner = self.native_fee_client.as_ref().context("native fee owner missing")?;
+		let record = owner.request(watchman::ordinary_fee_auth::FeeRequestAction::Verify, purpose, signed).await?;
+		self.db.write(async |t| {
+			t.lock_native_fee_publication().await?;
+			t.require_native_fee_intent(&record, owner.policy(), owner.identity().opening_sha256, signed).await
+		}).await?;
+		Ok(Some(record))
+	}
 
 	/// Whether a hold-capable lightning node is currently registered as online.
 	/// LightningManager connects asynchronously, so this may return false right
@@ -409,6 +445,17 @@ impl Server {
 			Some(policy) => policy.require_stored(&fee_history, &fee_chain)?,
 			None => { watchman::ordinary_fee::OrdinaryFeePolicy::require_live_stored(&fee_history)?; },
 		}
+		let native_fee_client = if let Some(owner) = &cfg.native_fee_owner {
+			let policy = match cfg.direct_expiry.regtest_qualification_fee_policy {
+				Some(policy) => policy,
+				None => watchman::ordinary_fee::OrdinaryFeePolicy::require_live_stored(&fee_history)?,
+			};
+			let identity = watchman::ordinary_fee_auth::FeeServiceIdentity { server_pubkey: server_key.public_key(),
+				genesis: bitcoind.get_block_hash(0).await?,
+				policy_sha256: bitcoin::hashes::sha256::Hash::hash(&serde_json::to_vec(&policy)?),
+				opening_sha256: owner.original_opening_sha256 };
+			Some(Arc::new(watchman::ordinary_fee_client::NativeFeeClient::new(owner, identity, policy, server_key)?))
+		} else { None };
 		bcd::require_version(&bitcoind).await?;
 		bitcoind.require_txindex().await?;
 
@@ -489,7 +536,8 @@ impl Server {
 		let _startup_worker = rtmgr.spawn("Bootstrapping");
 		rtmgr.run_shutdown_signal_listener(Duration::from_secs(60));
 
-		let tx_nursery = TxNursery::new(db.clone(), bitcoind.clone(), payout_witness);
+		let tx_nursery = TxNursery::new(db.clone(), bitcoind.clone(), payout_witness,
+			cfg.direct_expiry.enabled, native_fee_client.clone());
 
 		let fee_estimator = fee_estimator::start(
 			rtmgr.clone(),
@@ -547,6 +595,7 @@ impl Server {
 
 		let srv = Server {
 			rounds_wallet,
+			native_fee_client,
 			_native_fee_input_guards: native_fee_input_guards,
 			rounds: RoundHandle {
 				round_event_tx,

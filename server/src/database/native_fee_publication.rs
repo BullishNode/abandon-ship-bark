@@ -64,6 +64,9 @@ impl Tx<'_> {
 	/// the exact signed body/input set to the original fee epoch. No allowance
 	/// is created here; the independent owning journal is checked at relay.
 	pub(crate) async fn bind_native_fee_nursery(&self, signed: &Transaction, kind: crate::nursery::NurseryTxKind) -> anyhow::Result<()> {
+		if kind == crate::nursery::NurseryTxKind::NativeUrgent {
+			return self.bind_native_urgent_nursery(signed).await;
+		}
 		let purpose = match kind {
 			crate::nursery::NurseryTxKind::Round => "round",
 			crate::nursery::NurseryTxKind::VtxoPool => "pool",

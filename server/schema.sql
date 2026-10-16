@@ -3058,3 +3058,6 @@ CREATE TABLE public.native_urgent_input (
 	attempt_index BIGINT NOT NULL REFERENCES public.native_urgent_attempt(attempt_index)
 );
 CREATE INDEX native_urgent_input_attempt ON public.native_urgent_input (attempt_index, outpoint);
+
+-- Exact original urgent package nursery class.
+ALTER TYPE nursery_tx_kind ADD VALUE 'native-urgent';

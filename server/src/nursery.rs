@@ -51,6 +51,8 @@ pub enum NurseryTxKind {
 	Internal,
 	/// Recipient-funded settlement of expired user coins.
 	ExpiryPayout,
+	/// Exact originally paid and signed native urgent package.
+	NativeUrgent,
 }
 
 impl NurseryTxKind {
@@ -61,6 +63,7 @@ impl NurseryTxKind {
 			Self::VtxoPool => "vtxopool",
 			Self::Internal => "internal",
 			Self::ExpiryPayout => "expiry-payout",
+			Self::NativeUrgent => "native-urgent",
 		}
 	}
 }
@@ -74,6 +77,7 @@ impl std::str::FromStr for NurseryTxKind {
 			"vtxopool" => Ok(Self::VtxoPool),
 			"internal" => Ok(Self::Internal),
 			"expiry-payout" => Ok(Self::ExpiryPayout),
+			"native-urgent" => Ok(Self::NativeUrgent),
 			other => Err(anyhow::anyhow!("unknown nursery tx kind: {}", other)),
 		}
 	}
@@ -180,6 +184,13 @@ impl TxNursery {
 	/// next mempool update.
 	async fn broadcast(&self, tx: &Transaction, kind: NurseryTxKind) {
 		let txid = tx.compute_txid();
+		if kind == NurseryTxKind::NativeUrgent {
+			// Metadata can be retained before the authenticated exact-package
+			// owner replay hook is implemented. No raw log, individual child
+			// relay or package relay is permitted by this partial child.
+			warn!(%txid, "native urgent package remains held before owner replay binding");
+			return;
+		}
 		if self.direct && matches!(kind, NurseryTxKind::Round | NurseryTxKind::VtxoPool) {
 			if let Err(error) = self.require_native_permission(tx, kind).await {
 				warn!(%txid, "native fee publication remains held before raw log/relay: {error:#}");

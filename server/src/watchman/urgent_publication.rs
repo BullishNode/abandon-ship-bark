@@ -298,6 +298,12 @@ impl UrgentCandidate {
 
 impl BoundUrgentPublication {
 	pub(crate) fn attempt_index(&self) -> u64 { self.candidate.attempt_index }
+	pub(crate) fn transactions(&self) -> anyhow::Result<Vec<Transaction>> {
+		self.signed.iter().map(|raw| decoded(raw)).collect()
+	}
+	pub(crate) fn last_transaction(&self) -> anyhow::Result<Transaction> {
+		decoded(self.signed.last().context("urgent original signed publication missing")?)
+	}
 	pub(crate) fn decode(raw: &[u8], original_record_sha256: sha256::Hash, identity: &FeeServiceIdentity, limits: CarrierLimits,
 		policy: OrdinaryFeePolicy,
 	) -> anyhow::Result<Self> {

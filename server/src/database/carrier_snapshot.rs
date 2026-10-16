@@ -366,6 +366,72 @@ fn genesis_availability<P: ark::vtxo::Policy>(vtxo: &ark::Vtxo<Full, P>) -> Snap
 	else { SnapshotGenesis::MissingPath }
 }
 
+/// Original private native bodies and their exact original funding transaction.
+/// Missing Full paths are errors, never reconstructed from bare user metadata.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CapturedBoardPath {
+	pub user_vtxo: Vec<u8>,
+	pub funding_transaction: Vec<u8>,
+	pub physical_root: Vec<u8>,
+}
+
+/// Validate genuine signed Board paths BEFORE using native Board construction
+/// or geometric helpers. The result is geometry/amounts ONLY: it does not prove
+/// source completeness, current liabilities, maturity, ownership or retirement.
+pub(crate) fn validate_captured_board_geometry(paths: &[CapturedBoardPath],
+	server: bitcoin::secp256k1::PublicKey, limits: BackingSnapshotLimits,
+) -> anyhow::Result<BackingPartition> {
+	use bitcoin::consensus::{deserialize, serialize};
+	ensure!(!paths.is_empty() && limits.max_rows > 0 && limits.max_serialized_bytes > 0
+		&& limits.max_rows <= crate::payout_witness::DIRECT_HISTORY_LIMITS.max_rows
+		&& limits.max_serialized_bytes <= crate::payout_witness::DIRECT_HISTORY_LIMITS.max_serialized_bytes,
+		"captured Board geometry requires finite native bounds");
+	let mut bytes = 0usize;
+	ensure!(paths.len() <= limits.max_rows, "captured Board paths exceed row bound");
+	for path in paths {
+		bytes = bytes.checked_add(path.user_vtxo.len()).and_then(|n| n.checked_add(path.funding_transaction.len()))
+			.and_then(|n| n.checked_add(path.physical_root.len())).context("captured Board byte overflow")?;
+		ensure!(bytes <= limits.max_serialized_bytes, "complete captured Board bodies exceed native bound");
+	}
+	let mut roots = Vec::new(); let mut terminals = Vec::new();
+	let mut funding = BTreeMap::new(); let mut residuals = Vec::new();
+	for path in paths {
+		let full = ServerVtxo::<Full>::deserialize(&path.user_vtxo)?;
+		ensure!(full.serialize() == path.user_vtxo && full.server_pubkey() == server,
+			"captured Board native Full body or server differs");
+		let anchor: Transaction = deserialize(&path.funding_transaction)?;
+		ensure!(serialize(&anchor) == path.funding_transaction && anchor.compute_txid() == full.chain_anchor().txid,
+			"captured Board original funding bytes differ");
+		full.validate(&anchor).context("captured Board full signed path is invalid or incomplete")?;
+		let user = full.clone().try_into_user_vtxo().map_err(|_| anyhow::anyhow!("captured Board path is not a native user VTXO"))?;
+		let constructed = ark::board::BoardBuilder::new_from_vtxo(&user, &anchor, server)?
+			.build_server_vtxos().into_iter().next().context("native Board physical root is missing")?;
+		let root = ServerVtxo::<Full>::deserialize(&path.physical_root)?;
+		ensure!(root.serialize() == path.physical_root && matches!(root.policy(), ServerVtxoPolicy::Expiry(_))
+			&& root.to_bare().serialize() == constructed.to_bare().serialize(),
+			"captured physical Board expiry root differs from actual native construction");
+		root.validate(&anchor).context("captured physical Board root is invalid")?;
+		if let Some(previous) = funding.insert(anchor.compute_txid(), anchor.clone()) {
+			ensure!(serialize(&previous) == serialize(&anchor), "captured Board funding witness differs between paths");
+		}
+		for item in full.transactions() {
+			let txid = item.tx.compute_txid();
+			for (vout, txout) in item.tx.output.into_iter().enumerate().filter(|(_,out)| out.is_p2a_fee_anchor()) {
+				residuals.push(BackingPartitionResidual { outpoint: OutPoint::new(txid,u32::try_from(vout)?), txout });
+			}
+		}
+		roots.push(root.to_bare()); terminals.push(full);
+	}
+	let snapshot = BackingSnapshot { roots, regular:Vec::new(),pending_boards:Vec::new(),serialized_bytes:bytes };
+	let funding = funding.into_values().collect::<Vec<_>>();
+	for source in &terminals {
+		let anchor = funding.iter().find(|tx| tx.compute_txid() == source.chain_anchor().txid).context("captured Board anchor missing")?;
+		ensure!(snapshot.path_root(source,anchor)?.is_some(), "captured Board path is outside physical root");
+	}
+	snapshot.check_partition(&terminals,&funding,&residuals,limits)
+}
+
 /// Missing path is an explicit source representation. Every other decode error
 /// refuses the complete inventory; we never substitute a guessed genesis.
 fn decode_genesis(bytes: &[u8]) -> anyhow::Result<(Option<ServerVtxo<Full>>, SnapshotGenesis)> {
@@ -393,6 +459,56 @@ mod test {
 	use super::*;
 	use ark::test_util::VTXO_VECTORS;
 	use ark::board::BoardBuilder;
+
+	fn captured_board_path() -> CapturedBoardPath {
+		let vector = &*VTXO_VECTORS; let board = &vector.board_vtxo;
+		let root = BoardBuilder::new_from_vtxo(board,&vector.anchor_tx,board.server_pubkey())
+			.unwrap().build_server_vtxos().remove(0);
+		CapturedBoardPath { user_vtxo:ServerVtxo::from(board.clone()).serialize(),
+			funding_transaction:bitcoin::consensus::serialize(&vector.anchor_tx),physical_root:root.serialize() }
+	}
+	#[test]
+	fn captured_board_geometry_uses_validated_native_full_and_exact_physical_padding() {
+		let path = captured_board_path(); let board = &VTXO_VECTORS.board_vtxo;
+		let limits = BackingSnapshotLimits {max_rows:100,max_serialized_bytes:1_000_000};
+		let partition = validate_captured_board_geometry(&[path.clone()],board.server_pubkey(),limits).unwrap();
+		assert_eq!(partition.roots.len(),1);
+		assert_eq!(partition.roots[0].root,ServerVtxo::<Full>::deserialize(&path.physical_root).unwrap().id());
+		assert_eq!(partition.roots[0].terminal_amount,board.amount());
+		assert_eq!(partition.roots[0].anchor_residual_amount,Amount::from_sat(330));
+		let full = ServerVtxo::<Full>::deserialize(&path.physical_root).unwrap();
+		assert_eq!(full.amount(),board.amount()+Amount::from_sat(330));
+		assert!(validate_captured_board_geometry(&[path.clone(),path],board.server_pubkey(),limits).is_err());
+	}
+	#[test]
+	fn captured_board_geometry_refuses_missing_full_wrong_root_funding_and_server() {
+		let board = &VTXO_VECTORS.board_vtxo;
+		let limits = BackingSnapshotLimits {max_rows:100,max_serialized_bytes:1_000_000};
+		for which in 0..4 {
+			let mut path = captured_board_path();
+			match which {
+				0 => path.user_vtxo = ServerVtxo::from(board.to_bare()).serialize(),
+				1 => path.physical_root = path.user_vtxo.clone(),
+				2 => { let mut funding = VTXO_VECTORS.anchor_tx.clone();funding.output[0].value+=Amount::from_sat(1);
+					path.funding_transaction=bitcoin::consensus::serialize(&funding); },
+				_ => { path.user_vtxo.pop(); },
+			}
+			assert!(validate_captured_board_geometry(&[path],board.server_pubkey(),limits).is_err());
+		}
+		let other = bitcoin::secp256k1::Keypair::new(&crate::SECP,&mut bitcoin::secp256k1::rand::thread_rng()).public_key();
+		assert!(validate_captured_board_geometry(&[captured_board_path()],other,limits).is_err());
+		let mut changed = captured_board_path();
+		let exit = board.transactions().next().unwrap().tx;
+		let signature = exit.input[0].witness.iter().next().unwrap();
+		assert_eq!(signature.len(),64);
+		let start = changed.user_vtxo.windows(signature.len()).position(|bytes|bytes==signature).unwrap();
+		changed.user_vtxo[start+63]^=1;
+		let corrupt = ServerVtxo::<Full>::deserialize(&changed.user_vtxo).unwrap();
+		corrupt.validate_unsigned(&VTXO_VECTORS.anchor_tx).unwrap();
+		assert!(corrupt.validate(&VTXO_VECTORS.anchor_tx).is_err());
+		let error = validate_captured_board_geometry(&[changed],board.server_pubkey(),limits).unwrap_err();
+		assert!(format!("{error:#}").contains("full signed path is invalid"));
+	}
 
 	#[test]
 	fn backing_snapshot_genesis_availability_does_not_invent_bare_paths() {

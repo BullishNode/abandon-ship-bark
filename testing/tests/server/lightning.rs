@@ -700,6 +700,8 @@ struct ParkedReceive {
 	htlc_recv_expiry: BlockHeight,
 	release: Arc<tokio::sync::Notify>,
 	payee_task: tokio::task::JoinHandle<anyhow::Result<()>>,
+	_lightning: LightningPaymentSetup,
+	urgent_reserve: Option<bitcoin::OutPoint>,
 }
 
 impl ParkedReceive {
@@ -708,21 +710,33 @@ impl ParkedReceive {
 	}
 
 	async fn setup_with_direct_watchman(ctx: &TestContext, direct: bool) -> ParkedReceive {
+		Self::setup_with_attempt(ctx, direct, true).await
+	}
+
+	async fn setup_with_attempt(ctx: &TestContext, direct: bool, force_failed: bool) -> ParkedReceive {
 		let lightning = ctx.new_lightning_setup("lightningd").await;
 
 		// The watchman tells the server the HTLC-recv vtxos expired unexited.
-		let srv = ctx.captaind("server").lightningd(&lightning.internal).watchmand().cfg(move |cfg| {
+		let mut builder = ctx.captaind("server");
+		if !force_failed { builder = builder.bitcoind(ctx.bitcoind_arc()); }
+		let srv = builder.lightningd(&lightning.internal).watchmand().cfg(move |cfg| {
 			cfg.invoice_check_interval = Duration::from_secs(1);
 			if direct {
 				cfg.direct_expiry.enabled = true;
 				cfg.direct_expiry.interval = Duration::from_secs(1);
+				if !force_failed {
+					cfg.direct_expiry.grace_blocks = 0;
+					cfg.expiry_payout.grace_blocks = 0;
+					cfg.expiry_payout.sweep_min_confs = 1;
+				}
 			}
 		}).watchmand_cfg(move |cfg| {
 			if direct {
-				cfg.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(),
-					history_dir: cfg.data_dir.parent().unwrap().join("server"),
-					max_miner_fee: sat(10_000),
-				});
+				// Known fields deserialize on both the 69 parent and the C11 policy child.
+				cfg.watchman.direct_expiry = Some(serde_json::from_value(serde_json::json!({
+					"history_dir": cfg.data_dir.parent().unwrap().join("server"),
+					"max_miner_fee": sat(10_000).to_string(),
+				})).unwrap());
 				cfg.fee_estimator.max_fee_rate = Some(bitcoin::FeeRate::from_sat_per_vb(50).unwrap());
 			}
 		}).create().await;
@@ -731,6 +745,28 @@ impl ParkedReceive {
 			assert!(!srv.config().expiry_payout.enabled);
 			let history_dir = srv.config().data_dir.clone();
 			assert_eq!(srv.watchmand().config().watchman.direct_expiry.as_ref().unwrap().history_dir, history_dir);
+		}
+		let mut urgent_reserve = None;
+		if direct && !force_failed {
+			// C11 fresh initialization is a prerequisite, never synthesized by this test.
+			let witness = srv.config().data_dir.join("direct-expiry-witness");
+			let policy: serde_json::Value = serde_json::from_slice(
+				&std::fs::read(witness.join("ordinary-fee-policy.json")).unwrap()).unwrap();
+			assert_eq!(policy["policy"]["ordinary_budget_sat"], 60_000);
+			assert_eq!(policy["policy"]["urgent_reserve_sat"], 15_000);
+			assert_eq!(policy["policy"]["external_future_reserved_sat"], 20_000);
+			assert!(std::fs::read(witness.join("ordinary-fee-budget")).unwrap().is_empty());
+			let address = srv.watchmand().wait_wallet_address().await;
+			let ordinary_txid = ctx.bitcoind().fund_addr(address.clone(), sat(35_000)).await;
+			let urgent_txid = ctx.bitcoind().fund_addr(address.clone(), sat(15_000)).await;
+			let urgent_tx = ctx.bitcoind().sync_client().get_raw_transaction(&urgent_txid, None).unwrap();
+			let outputs = urgent_tx.output.iter().enumerate().filter(|(_, o)|
+				o.value == sat(15_000) && o.script_pubkey == address.script_pubkey()).collect::<Vec<_>>();
+			assert_eq!(outputs.len(), 1);
+			urgent_reserve = Some(bitcoin::OutPoint::new(urgent_txid, outputs[0].0 as u32));
+			info!("direct grant fixture watch funding ordinary={} urgent={}", ordinary_txid, urgent_txid);
+			let height = ctx.generate_blocks(1).await;
+			srv.watchmand().wait_for_sync_height(height).await;
 		}
 		ctx.fund_captaind(&srv, btc(10)).await;
 		srv.wait_for_vtxopool(ctx).await;
@@ -768,17 +804,18 @@ impl ParkedReceive {
 			.max()
 			.expect("the payee was granted HTLC-recv vtxos");
 
-		let db = Db::connect(&srv.config().postgres.clone()).await.unwrap();
-		db.write(async |t| {
-			t.query(
-				"UPDATE lightning_payment_attempt SET status = 'failed', updated_at = NOW() WHERE payment_hash = $1",
-				&[&payment_hash.to_string()],
-			).await?;
-			Ok(())
-		}).await.unwrap();
-
+		if force_failed {
+			let db = Db::connect(&srv.config().postgres.clone()).await.unwrap();
+			db.write(async |t| {
+				t.query(
+					"UPDATE lightning_payment_attempt SET status = 'failed', updated_at = NOW() WHERE payment_hash = $1",
+					&[&payment_hash.to_string()],
+				).await?;
+				Ok(())
+			}).await.unwrap();
+		}
 		let payer = bark_payer.client().await;
-		ParkedReceive { srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task }
+		ParkedReceive { srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task, _lightning: lightning, urgent_reserve }
 	}
 
 	async fn revoke(&self) -> Result<(), tonic::Status> {
@@ -941,6 +978,188 @@ async fn intra_ark_revoke_refused_while_direct_watchman_is_behind() {
 	parked.payer.check_lightning_payment(parked.payment_hash, true).await.unwrap();
 	assert_eq!(parked.payer.balance().await.unwrap().spendable, refunded.spendable);
 	parked.assert_claim_refused().await;
+}
+
+/// One ordinary unclaimed grant: its own confirmed operator retirement must
+/// precede the payer's automatic expiry payout. No claim/revoke retry is used.
+/// Requires the separately qualified fresh C11 fee-policy initializer on BOTH
+/// compared runtimes; a missing policy is a setup failure, never the parent RED.
+#[tokio::test]
+async fn intra_ark_unclaimed_grant_direct_retirement_releases_sender() {
+	let ctx = TestContext::new("server/intra_ark_unclaimed_grant_direct_retirement_releases_sender").await;
+	let parked = Box::pin(ParkedReceive::setup_with_attempt(&ctx, true, false)).await;
+	let db = Db::connect(&parked.srv.config().postgres.clone()).await.unwrap();
+	let hash = parked.payment_hash.to_string();
+	let original = parked.srv.htlc_vtxos(parked.payment_hash).await;
+	let grants = original.iter().filter(|h| h.direction() == HtlcDirection::Outgoing).collect::<Vec<_>>();
+	assert_eq!(grants.len(), 1, "this fixture requires exactly one ordinary grant");
+	let grant_id = grants[0].vtxo.vtxo.id().to_string();
+	let grant_bytes: Vec<u8> = db.read(async |t| Ok(t.query_one(
+		"SELECT vtxo FROM vtxo WHERE vtxo_id=$1", &[&grant_id]).await?.get(0))).await.unwrap();
+	let sender_ids = htlc_send_vtxo_ids(&parked.payer, parked.payment_hash).await;
+	let payer_destination = parked.payer.fallback_destination().await.unwrap().spk;
+	assert!(!sender_ids.is_empty());
+	let expiry = original.iter().map(|h| h.vtxo_expiry()).max().unwrap();
+	assert!(expiry > parked.htlc_recv_expiry + BlockDelta::new(1));
+	info!("direct grant fixture source hash={} grant={} htlc_expiry={} backing_expiry={}",
+		hash, grant_id, parked.htlc_recv_expiry, expiry);
+	let initial = db.read(async |t| t.query_one(
+		"SELECT s.status::text, (SELECT count(*) FROM lightning_payment_attempt p WHERE p.payment_hash=s.payment_hash AND p.status='requested') AS requested FROM lightning_htlc_subscription s WHERE s.payment_hash=$1",
+		&[&hash]).await).await.unwrap();
+	assert_eq!(initial.get::<_, &str>("status"), "htlcs-ready");
+	assert_eq!(initial.get::<_, i64>("requested"), 1);
+
+	// The early cooperative request is refused. We never release the parked
+	// recipient claim or perform a second payment/claim attempt.
+	let early = parked.htlc_recv_expiry + BlockDelta::new(1);
+	let tip = ctx.bitcoind().get_block_count().await as u32;
+	let height = ctx.generate_blocks(early.to_u32().saturating_sub(tip)).await;
+	parked.srv.watchmand().wait_for_sync_height(height).await;
+	parked.srv.wait_for_sync_height(height).await;
+	// Authenticate each output's exact native account child. The legacy
+	// helper predates these wire origins and must not mask this money guard.
+	let mut inputs = Vec::with_capacity(sender_ids.len());
+	let mut keys = Vec::with_capacity(sender_ids.len());
+	for id in &sender_ids {
+		let input = parked.payer.get_full_vtxo(*id).await.unwrap();
+		keys.push(parked.payer.get_vtxo_key(&input).await.unwrap());
+		inputs.push(input);
+	}
+	let output_key = parked.payer.derive_store_next_keypair().await.unwrap().0.public_key();
+	let origin = parked.payer.fallback_child_hint(output_key).await.unwrap();
+	let proposal = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
+		inputs, ark::VtxoPolicy::new_pubkey(output_key),
+	).unwrap().generate_user_nonces(&keys).unwrap();
+	let mut request = protos::ArkoorPackageCosignRequest::from(proposal.cosign_request());
+	for part in &mut request.parts {
+		for output in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
+			assert_eq!(ark::VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey(), output_key);
+			output.origin = Some(origin.into());
+		}
+	}
+	let refused = parked.srv.get_public_rpc().await.request_lightning_pay_htlc_revocation(request)
+		.await.expect_err("live granted backing must still refuse the payer refund");
+	assert_eq!(refused.code(), tonic::Code::InvalidArgument);
+	assert_eq!(refused.message(), format!(
+		"bad user input: This lightning payment is not eligible for revocation yet: granted vtxo {} can still be exited", grant_id));
+	let before_expiry: i64 = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_allocation WHERE id=$1 OR source=$2",
+		&[&grant_id, &format!("lightning-send:{hash}")]).await?.get(0))).await.unwrap();
+	assert_eq!(before_expiry, 0);
+	parked.payee_task.abort(); // kill-on-drop Bark command; never forward the held claim.
+	let remaining = expiry.to_u32().saturating_sub(ctx.bitcoind().get_block_count().await as u32);
+	ctx.generate_blocks(remaining).await;
+
+	// Wait for the actual daemon-produced allocation for THIS grant.
+	let operator = async {
+		loop {
+			let row = db.read(async |t| t.query_opt(
+				"SELECT a.disposition,a.gross_sat,a.payout_sat,a.spk,m.vout,c.txid,c.signed_tx,c.miner_fee_sat FROM expiry_allocation a JOIN expiry_carrier_allocation m ON m.allocation_id=a.id JOIN expiry_carrier c ON c.txid=m.txid WHERE a.id=$1 ORDER BY c.generation DESC LIMIT 1",
+				&[&grant_id]).await).await.unwrap();
+			if let Some(row) = row { break row; }
+			tokio::time::sleep(poll_interval()).await;
+		}
+	}.wait_millis(60_000).await;
+	assert_eq!(operator.get::<_, &str>("disposition"), "operator");
+	assert_eq!(operator.get::<_, i64>("gross_sat"), grants[0].amount().to_sat() as i64);
+	assert_eq!(operator.get::<_, i64>("payout_sat"), 0);
+	assert!(operator.get::<_, Option<Vec<u8>>>("spk").is_none());
+	assert!(operator.get::<_, Option<i32>>("vout").is_none());
+	let operator_txid = operator.get::<_, &str>("txid").parse::<bitcoin::Txid>().unwrap();
+	info!("direct grant fixture operator retirement grant={} txid={} miner_fee={}",
+		grant_id, operator_txid, operator.get::<_, i64>("miner_fee_sat"));
+	ctx.await_transaction(operator_txid).await;
+	ctx.generate_blocks(1).await; // declared sweep_min_confs=1, real chain confirmation.
+	let confirmed = ctx.bitcoind().sync_client().get_raw_transaction_info(&operator_txid, None).unwrap();
+	assert!(confirmed.confirmations.unwrap_or(0) >= 1);
+	let operator_block = confirmed.blockhash.expect("operator carrier must be on the actual chain");
+	async {
+		loop {
+			let row = db.read(async |t| t.query_one(
+				"SELECT confirmed_height,confirmed_block FROM expiry_carrier WHERE txid=$1",
+				&[&operator_txid.to_string()]).await).await.unwrap();
+			if let (Some(height), Some(block)) = (row.get::<_, Option<i32>>(0), row.get::<_, Option<String>>(1)) {
+				assert_eq!(block, operator_block.to_string());
+				assert_eq!(ctx.bitcoind().sync_client().get_block_hash(height as u64).unwrap(), operator_block);
+				break;
+			}
+			tokio::time::sleep(poll_interval()).await;
+		}
+	}.wait_millis(30_000).await;
+	info!("direct grant fixture operator confirmed txid={} block={}", operator_txid, operator_block);
+
+	let source = format!("lightning-send:{hash}");
+	let refunds = async {
+		loop {
+			let rows = db.read(async |t| t.query(
+				"SELECT a.id,a.gross_sat,a.fee_sat,a.payout_sat,a.spk,m.vout,c.txid,c.signed_tx,c.miner_fee_sat FROM expiry_allocation a JOIN expiry_carrier_allocation m ON m.allocation_id=a.id JOIN expiry_carrier c ON c.txid=m.txid WHERE a.source=$1 AND a.disposition='pay' ORDER BY a.id,c.generation DESC",
+				&[&source]).await).await.unwrap();
+			if rows.len() == sender_ids.len() { break rows; }
+			tokio::time::sleep(poll_interval()).await;
+		}
+	}.wait_millis(60_000).await;
+	assert_eq!(refunds.iter().map(|r| r.get::<_, String>("id")).collect::<HashSet<_>>(),
+		sender_ids.iter().map(ToString::to_string).collect());
+	let refund_txids = refunds.iter().map(|r| r.get::<_, String>("txid").parse::<bitcoin::Txid>().unwrap()).collect::<HashSet<_>>();
+	assert!(!refund_txids.contains(&operator_txid), "grant must retire in an earlier confirmed carrier");
+	for txid in &refund_txids { ctx.await_transaction(*txid).await; }
+	ctx.generate_blocks(1).await;
+
+	// Check exact signed bytes, actual prevouts/miner fees and the original
+	// recipient's zero allocation, independently of native balance reporting.
+	let core = ctx.bitcoind().sync_client();
+	for (txid, bytes, expected_fee) in std::iter::once((operator_txid,
+		operator.get::<_, Vec<u8>>("signed_tx"), operator.get::<_, i64>("miner_fee_sat")))
+		.chain(refunds.iter().map(|r| (r.get::<_, &str>("txid").parse().unwrap(),
+			r.get::<_, Vec<u8>>("signed_tx"), r.get::<_, i64>("miner_fee_sat")))) {
+		let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(&bytes).unwrap();
+		assert_eq!(tx.compute_txid(), txid);
+		assert_eq!(core.get_raw_transaction(&txid, None).unwrap(), tx);
+		assert!(core.get_raw_transaction_info(&txid, None).unwrap().confirmations.unwrap_or(0) >= 1);
+		let inputs: Amount = tx.input.iter().map(|i| core.get_raw_transaction(&i.previous_output.txid, None).unwrap()
+			.output[i.previous_output.vout as usize].value).sum();
+		let outputs: Amount = tx.output.iter().map(|o| o.value).sum();
+		assert_eq!((inputs - outputs).to_sat(), expected_fee as u64);
+	}
+	for row in &refunds {
+		let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(&row.get::<_, Vec<u8>>("signed_tx")).unwrap();
+		let out = &tx.output[row.get::<_, i32>("vout") as usize];
+		assert_eq!(out.script_pubkey.as_bytes(), row.get::<_, Vec<u8>>("spk"));
+		assert_eq!(out.script_pubkey, payer_destination);
+		assert_eq!(row.get::<_, i64>("gross_sat"), row.get::<_, i64>("fee_sat") + row.get::<_, i64>("payout_sat"));
+		// Include every allocation coalesced into this exact output, rather than
+		// comparing one refund leaf with the payer's additional ordinary change.
+		let txid = row.get::<_, &str>("txid");
+		let vout = row.get::<_, i32>("vout");
+		let allocated: i64 = db.read(async |t| Ok(t.query_one(
+			"SELECT COALESCE(sum(a.payout_sat),0)::bigint FROM expiry_allocation a JOIN expiry_carrier_allocation m ON m.allocation_id=a.id WHERE m.txid=$1 AND m.vout=$2",
+			&[&txid, &vout]).await?.get(0))).await.unwrap();
+		assert_eq!(out.value.to_sat(), allocated as u64);
+	}
+	let final_grant: Vec<u8> = db.read(async |t| Ok(t.query_one(
+		"SELECT vtxo FROM vtxo WHERE vtxo_id=$1", &[&grant_id]).await?.get(0))).await.unwrap();
+	assert_eq!(final_grant, grant_bytes);
+	let final_sub = db.read(async |t| t.query_one(
+		"SELECT status::text FROM lightning_htlc_subscription WHERE payment_hash=$1", &[&hash]).await).await.unwrap();
+	assert_eq!(final_sub.get::<_, &str>(0), "canceled");
+	let failed_attempts: i64 = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM lightning_payment_attempt WHERE payment_hash=$1 AND status='failed'",
+		&[&hash]).await?.get(0))).await.unwrap();
+	assert_eq!(failed_attempts, 1, "the original requested attempt must fail through the real background worker");
+	let payee_allocations: i64 = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_allocation WHERE (id=$1 OR source=$2) AND disposition='pay'", &[&grant_id, &format!("lightning-receive:{hash}")]).await?.get(0))).await.unwrap();
+	assert_eq!(payee_allocations, 0);
+	let count: i64 = db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_allocation WHERE source=$1", &[&source]).await?.get(0))).await.unwrap();
+	ctx.generate_blocks(1).await;
+	tokio::time::sleep(Duration::from_secs(2)).await;
+	assert_eq!(db.read(async |t| Ok(t.query_one(
+		"SELECT count(*) FROM expiry_allocation WHERE source=$1", &[&source]).await?.get::<_, i64>(0))).await.unwrap(), count);
+	assert_eq!(count as usize, sender_ids.len(), "one original entitlement per sender HTLC");
+	let urgent = parked.urgent_reserve.expect("declared separate urgent reserve");
+	assert_eq!(core.get_tx_out(&urgent.txid, urgent.vout, Some(true)).unwrap()
+		.expect("ordinary carriers must leave the declared urgent UTXO unspent").value, sat(15_000));
+	info!("direct grant fixture complete source={} sender_allocations={} refund_txids={:?}", hash, count, refund_txids);
 }
 
 /// Requests the server to sign a HTLC while using a HTCL VTXO as an input

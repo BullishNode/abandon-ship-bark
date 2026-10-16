@@ -666,6 +666,46 @@ impl<P: Policy> Vtxo<Full, P> {
 		self.genesis.items.iter().all(|g| g.transition.has_all_witnesses())
 	}
 
+	/// Whether this representation only completes the original final hArk leaf.
+	///
+	/// All previous commitments and known witness fields must remain identical,
+	/// including a partial signature whose missing preimage hides its witness.
+	/// This compares representations; the caller must separately validate the
+	/// completed signatures and path against the actual funding transaction.
+	pub fn is_final_hark_leaf_completion_of(&self, original: &Self) -> bool
+	where P: ProtocolEncoding {
+		if self.exit_depth() != original.exit_depth()
+			|| self.to_bare().serialize() != original.to_bare().serialize() {
+			return false;
+		}
+		let Some((completed, ancestors)) = self.genesis.items.split_last() else { return false; };
+		let Some((previous, old_ancestors)) = original.genesis.items.split_last() else { return false; };
+		if ancestors != old_ancestors || completed.output_idx != previous.output_idx
+			|| completed.other_outputs != previous.other_outputs || completed.fee_amount != previous.fee_amount {
+			return false;
+		}
+		let preserves_witness = |signature: Option<schnorr::Signature>, unlock: MaybePreimage,
+			completed_signature: Option<schnorr::Signature>, completed_unlock: MaybePreimage| {
+			let MaybePreimage::Preimage(preimage) = completed_unlock else { return false; };
+			completed_signature.is_some()
+				&& signature.is_none_or(|known| completed_signature == Some(known))
+				&& match unlock {
+					MaybePreimage::Hash(hash) => sha256::Hash::hash(&preimage) == hash,
+					MaybePreimage::Preimage(known) => preimage == known,
+				}
+		};
+		match (&previous.transition, &completed.transition) {
+			(GenesisTransition::HashLockedCosigned(old), GenesisTransition::HashLockedCosigned(new)) => {
+				old.user_pubkey == new.user_pubkey && preserves_witness(old.signature, old.unlock, new.signature, new.unlock)
+			},
+			(GenesisTransition::HashLockedCosigned_v0(old), GenesisTransition::HashLockedCosigned_v0(new)) => {
+				old.user_pubkey == new.user_pubkey && preserves_witness(old.signature, old.unlock, new.signature, new.unlock)
+			},
+			_ => false,
+		}
+	}
+
+
 	/// Check if this VTXO is standard for relay purposes
 	///
 	/// A VTXO is standard if:
@@ -847,6 +887,135 @@ impl<P: Policy> Vtxo<Full, P> {
 			.take(ancestor_count)
 			.map(|item| OutPoint::new(item.tx.compute_txid(), item.output_idx as u32).into())
 			.collect()
+	}
+}
+
+#[cfg(test)]
+mod final_hark_completion_tests {
+	use super::*;
+	use bitcoin::secp256k1::{Keypair, Message, SecretKey};
+	use crate::{SECP, VtxoRequest};
+	use crate::tree::signed::{LeafVtxoCosignContext, LeafVtxoCosignResponse};
+	use crate::tree::signed::builder::SignedTreeBuilder;
+
+	fn key(byte: u8) -> Keypair {
+		Keypair::from_secret_key(&SECP, &SecretKey::from_slice(&[byte; 32]).unwrap())
+	}
+
+	fn signed_pool_leaf() -> (Transaction, Vtxo, Vtxo) {
+		// Exercise the real signed-tree and leaf-cosign builders. This is a
+		// cryptographic representation control, not a funded Core/DB scenario.
+		let leaf_key = key(1);
+		let user_cosign = key(2);
+		let server = key(3);
+		let server_cosign = key(4);
+		let preimage = [7; 32];
+		let expiry = BlockHeight::new(128);
+		let delta = BlockDelta::new(12);
+		let requests = [10_000, 20_000].map(|amount| VtxoRequest {
+			amount: Amount::from_sat(amount),
+			policy: VtxoPolicy::new_pubkey(leaf_key.public_key()),
+		});
+		let builder = SignedTreeBuilder::new(requests.iter().cloned(), user_cosign.public_key(), preimage,
+			expiry, server.public_key(), server_cosign.public_key(), delta).unwrap();
+		let funding = Transaction { version: bitcoin::transaction::Version::TWO,
+			lock_time: bitcoin::absolute::LockTime::ZERO, input: vec![], output: vec![builder.funding_txout()] };
+		let point = OutPoint::new(funding.compute_txid(), 0);
+		let builder = builder.set_utxo(point).generate_user_nonces(&user_cosign);
+		let response = SignedTreeBuilder::new_for_cosign(requests.iter().cloned(), user_cosign.public_key(),
+			preimage, expiry, server.public_key(), server_cosign.public_key(), delta, point,
+			builder.user_pub_nonces().to_vec()).unwrap().server_cosign(&server_cosign);
+		builder.verify_cosign_response(&response).unwrap();
+		let tree = builder.build_tree(&response, &user_cosign).unwrap().into_cached_tree();
+		let original = tree.output_vtxos().next().unwrap();
+		let mut complete = original.clone();
+		let (context, request) = LeafVtxoCosignContext::new(&complete, &funding, &leaf_key).unwrap();
+		let response = LeafVtxoCosignResponse::new_cosign(&request, &complete, &funding, &server).unwrap();
+		assert!(context.finalize(&mut complete, response));
+		assert!(complete.provide_unlock_preimage(preimage));
+		assert!(original.exit_depth() > 1);
+		original.validate_unsigned(&funding).unwrap();
+		assert!(original.validate(&funding).is_err());
+		complete.validate(&funding).unwrap();
+		(funding, original, complete)
+	}
+
+	fn unrelated_signature() -> schnorr::Signature {
+		SECP.sign_schnorr_no_aux_rand(&Message::from_digest([99; 32]), &key(5))
+	}
+
+	#[test]
+	fn final_hark_completion_accepts_native_leaf_and_known_partial_fields() {
+		let (_, original, complete) = signed_pool_leaf();
+		assert!(complete.is_final_hark_leaf_completion_of(&original));
+		assert!(complete.is_final_hark_leaf_completion_of(&complete));
+		let GenesisTransition::HashLockedCosigned(completed) = &complete.genesis.items.last().unwrap().transition else { panic!(); };
+		let mut signature_only = original.clone();
+		assert!(signature_only.provide_unlock_signature(completed.signature.unwrap()));
+		assert!(signature_only.transactions().last().unwrap().tx.input[0].witness.is_empty());
+		assert!(complete.is_final_hark_leaf_completion_of(&signature_only));
+		let mut preimage_only = original;
+		assert!(preimage_only.provide_unlock_preimage([7; 32]));
+		assert!(preimage_only.transactions().last().unwrap().tx.input[0].witness.is_empty());
+		assert!(complete.is_final_hark_leaf_completion_of(&preimage_only));
+	}
+
+	#[test]
+	fn final_hark_completion_refuses_changed_commitments_and_known_ancestor_signature() {
+		let (_, original, complete) = signed_pool_leaf();
+		let mut changed = original.clone(); changed.amount += Amount::from_sat(1);
+		assert!(!complete.is_final_hark_leaf_completion_of(&changed));
+		let mut changed = original.clone(); changed.genesis.items.last_mut().unwrap().fee_amount += Amount::from_sat(1);
+		assert!(!complete.is_final_hark_leaf_completion_of(&changed));
+		let mut changed = original.clone(); changed.genesis.items.last_mut().unwrap().output_idx += 1;
+		assert!(!complete.is_final_hark_leaf_completion_of(&changed));
+		let mut changed = original.clone();
+		changed.genesis.items.last_mut().unwrap().other_outputs.push(TxOut {
+			value: Amount::ZERO, script_pubkey: ScriptBuf::new_op_return(&[1]),
+		});
+		assert!(!complete.is_final_hark_leaf_completion_of(&changed));
+		let mut changed = original;
+		let GenesisTransition::Cosigned(ancestor) = &mut changed.genesis.items[0].transition else { panic!(); };
+		ancestor.signature = Some(unrelated_signature());
+		assert!(!complete.is_final_hark_leaf_completion_of(&changed));
+	}
+
+	#[test]
+	fn final_hark_completion_refuses_missing_ancestor_witness_and_path() {
+		let (_, original, complete) = signed_pool_leaf();
+		let mut changed = original.clone();
+		let GenesisTransition::Cosigned(ancestor) = &mut changed.genesis.items[0].transition else { panic!(); };
+		ancestor.signature = None;
+		assert!(!complete.is_final_hark_leaf_completion_of(&changed));
+		let mut changed = original; changed.genesis.items.remove(0);
+		assert!(!complete.is_final_hark_leaf_completion_of(&changed));
+	}
+
+	#[test]
+	fn final_hark_completion_refuses_hidden_corrupt_partial_signature() {
+		let (funding, mut original, complete) = signed_pool_leaf();
+		assert!(original.provide_unlock_signature(unrelated_signature()));
+		// A generic witness comparison would miss this conflicting known field:
+		// the absent preimage hides even an existing signature from witness().
+		assert!(original.transactions().last().unwrap().tx.input[0].witness.is_empty());
+		original.validate_unsigned(&funding).unwrap();
+		complete.validate(&funding).unwrap();
+		assert!(!complete.is_final_hark_leaf_completion_of(&original));
+	}
+
+	#[test]
+	fn final_hark_completion_refuses_wrong_preimage_and_transition_version() {
+		let (_, original, complete) = signed_pool_leaf();
+		let mut changed = complete.clone();
+		let GenesisTransition::HashLockedCosigned(leaf) = &mut changed.genesis.items.last_mut().unwrap().transition else { panic!(); };
+		leaf.unlock = MaybePreimage::Preimage([8; 32]);
+		assert!(!changed.is_final_hark_leaf_completion_of(&original));
+		let mut changed = original;
+		let GenesisTransition::HashLockedCosigned(leaf) = &changed.genesis.items.last().unwrap().transition else { panic!(); };
+		let old = genesis::HashLockedCosignedGenesis_v0 { user_pubkey: leaf.user_pubkey,
+			signature: leaf.signature, unlock: leaf.unlock };
+		changed.genesis.items.last_mut().unwrap().transition = GenesisTransition::HashLockedCosigned_v0(old);
+		assert!(!complete.is_final_hark_leaf_completion_of(&changed));
 	}
 }
 

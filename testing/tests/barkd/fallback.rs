@@ -58,6 +58,13 @@ async fn fallback_expired_lightning_refusal_has_a_stable_native_rest_code() {
 	let error: serde_json::Value = response.json().await.unwrap();
 	assert_eq!(error["code"], "expired_new_lightning");
 	assert_eq!(error["message"], "This coin expired. Refresh it first, then send.");
+	// Expiry without a real payout decision must never claim the coin was
+	// decided for fallback, including the local arkoor selection failure path.
+	let unknown = config.client.post(format!("{}/api/v1/wallet/send", config.base_path))
+		.json(&serde_json::json!({ "destination": barkd.ark_address().await, "amount_sat": 1_000 }))
+		.send().await.unwrap();
+	assert!(!unknown.status().is_success());
+	assert_ne!(unknown.json::<serde_json::Value>().await.unwrap()["code"], "decided_for_fallback");
 	assert_eq!(barkd.get_vtxo(&coin.vtxo.id.to_string()).await.state, bark_json::primitives::VtxoStateInfo::Spendable);
 	assert!(barkd.history(None, None).await.iter().all(|movement| movement.subsystem.name != "abandon.fallback_payout"));
 }

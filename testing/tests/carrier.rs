@@ -1130,3 +1130,6 @@ async fn complete_pending_group_listing_survives_more_groups_than_its_query_page
 		assert_eq!(group.plan.recipients[0].value, sat(19_000));
 	}
 }
+
+#[path = "carrier/urgent_startup.rs"]
+mod urgent_startup;

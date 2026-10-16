@@ -235,4 +235,92 @@ mod tests {
 		meta.source_anchors.push(meta.source_anchors[0]);
 		assert!(meta.validate(&txs).is_err());
 	}
+	/// PostgreSQL/witness seam only. The library's public dummy keys and
+	/// synthetic anchor do not represent funded coins or a chain outcome.
+	#[tokio::test]
+	#[ignore = "requires an explicitly isolated Unix-socket PostgreSQL control fixture"]
+	async fn urgent_pg_nursery_first_gap_exact_restart_and_reciprocal_overlap() {
+		use ark::test_util::dummy::{DummyTestVtxoSpec, DUMMY_SERVER_KEY, DUMMY_USER_KEY};
+		use ark::vtxo::Full;
+		use ark::vtxo::policy::clause::TapScriptClause;
+		use ark::vtxo::policy::signing::VtxoSigner;
+		use bitcoin::{Network, sighash};
+		use crate::database::Db;
+		use crate::payout_witness::{DirectPayoutWitness, DIRECT_DIRECTORY, DIRECT_HISTORY_LIMITS};
+		use crate::watchman::{WatchmanSigner, ordinary_fee::{OrdinaryFeePolicy, OrdinaryFeeBudget}};
+		use crate::secret::Secret;
+
+		let path = std::path::PathBuf::from(std::env::var_os("ARK_TEST_URGENT_PG_CONFIG")
+			.expect("explicit isolated PG configuration is required"));
+		let cfg: crate::config::Postgres = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+		assert!(cfg.host.starts_with('/') && std::path::Path::new(&cfg.host).is_dir());
+		assert_eq!(cfg.name, "urgent_publication_control");
+		let directory = path.parent().unwrap().join("urgent-control-history");
+		std::fs::create_dir(&directory).unwrap(); // create-new only; never reset.
+		let db = Db::create(&cfg).await.unwrap();
+		DirectPayoutWitness::initialize(&directory, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &db).await.unwrap();
+		let policy = OrdinaryFeePolicy::default();
+		policy.initialize_fresh(&directory.join(DIRECT_DIRECTORY), Network::Regtest, DUMMY_SERVER_KEY.public_key()).unwrap();
+		let budget = OrdinaryFeeBudget::load(&directory.join(DIRECT_DIRECTORY), policy).unwrap();
+		let (_, full) = DummyTestVtxoSpec { amount: Amount::from_sat(20_000), fee: Amount::ZERO,
+			..Default::default() }.build();
+		let source: ark::ServerVtxo<Full> = full.into();
+		db.write(async |t| t.upsert_vtxos([&source]).await).await.unwrap();
+		let bare = source.to_bare();
+		let signer = WatchmanSigner::new(Secret::new(*DUMMY_SERVER_KEY), Secret::new(*DUMMY_USER_KEY), db.clone());
+		let clause = signer.find_signable_clause(&bare).await.unwrap();
+		let mut tx = Transaction { version: transaction::Version::TWO,
+			lock_time: bitcoin::absolute::LockTime::from_height(10_001).unwrap(),
+			input: vec![TxIn { previous_output: bare.point(), script_sig: ScriptBuf::new(),
+				sequence: clause.sequence().unwrap_or(Sequence::ZERO), witness: Witness::new() }],
+			output: vec![TxOut { value: Amount::from_sat(19_000), script_pubkey: ScriptBuf::new() }] };
+		let outputs = [bare.txout()]; let prevouts = sighash::Prevouts::All(&outputs);
+		let mut cache = sighash::SighashCache::new(&mut tx);
+		let witness = signer.sign_input_with_clause(&bare, &clause, 0, &mut cache, &prevouts).await.unwrap();
+		cache.witness_mut(0).unwrap().clone_from(&witness);
+		assert!(!tx.input[0].witness.is_empty());
+		let attempt = budget.reserve_urgent_ceiling(Amount::from_sat(2_000)).unwrap();
+		let meta = UrgentPublication { version: 1, policy_sha256: attempt.policy_sha256, attempt_index: attempt.index,
+			ceiling_sat: 2_000, source_anchors: vec![bare.chain_anchor()], txids: vec![tx.compute_txid()],
+			prevouts: vec![vec![bare.txout()]] };
+		let txs = vec![tx]; let actual_fee = meta.validate(&txs).unwrap();
+		assert_eq!(actual_fee, Amount::from_sat(1_000));
+		db.write(async |t| t.store_urgent_publication(&meta, &txs, BlockHeight::new(10_001)).await).await.unwrap();
+		assert!(matches!(db.read(async |t| t.urgent_relay(meta.txids[0]).await).await.unwrap(), UrgentRelay::Unbound));
+		// Genuine DB-first/p-gap: cap-side witness validation sees the original
+		// charged reservation, and the generic nursery cannot relay these bytes.
+		DirectPayoutWitness::load(&directory, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &db, DIRECT_HISTORY_LIMITS).await.unwrap();
+		let binding = sha256::Hash::hash(&serde_json::to_vec(&meta).unwrap());
+		budget.bind_urgent_signed(attempt, &txs, actual_fee, binding).unwrap();
+		db.write(async |t| t.permit_bound_urgent_publication(&meta).await).await.unwrap();
+		let retained = db.read(async |t| t.urgent_publications(DIRECT_HISTORY_LIMITS).await).await.unwrap();
+		assert_eq!(retained, vec![(meta.clone(), txs.clone())]);
+		assert!(matches!(db.read(async |t| t.urgent_relay(meta.txids[0]).await).await.unwrap(),
+			UrgentRelay::Bound(ref actual) if actual == &txs));
+		let history_path = directory.join(DIRECT_DIRECTORY).join("ordinary-fee-budget");
+		let original_history = std::fs::read(&history_path).unwrap();
+		budget.bind_urgent_signed(attempt, &txs, actual_fee, binding).unwrap();
+		assert_eq!(std::fs::read(&history_path).unwrap(), original_history);
+		drop(budget);
+		let reopened = Db::connect(&cfg).await.unwrap();
+		let budget = OrdinaryFeeBudget::load(&directory.join(DIRECT_DIRECTORY), policy).unwrap();
+		assert_eq!(budget.urgent_reserve().unwrap(), Amount::from_sat(13_000));
+		DirectPayoutWitness::load(&directory, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &reopened, DIRECT_HISTORY_LIMITS).await.unwrap();
+		assert_eq!(reopened.read(async |t| t.urgent_publications(DIRECT_HISTORY_LIMITS).await).await.unwrap(), retained);
+		// Reciprocal freeze guard sees the actual retained signed input before
+		// allocating any source. No artificial paid/settled record is inserted.
+		assert!(reopened.write(async |t| {
+			t.lock_htlc_settlements().await?; t.lock_expiry_carriers().await?;
+			let snapshot = t.backing_snapshot(std::slice::from_ref(&bare), DIRECT_HISTORY_LIMITS).await?;
+			t.refuse_retained_urgent_overlap(&snapshot, DIRECT_HISTORY_LIMITS).await
+		}).await.is_err());
+		// A separate empty historical DB models DB-only rollback without deleting
+		// any original nursery row, reservation, witness or signed byte.
+		let mut old_cfg = cfg.clone(); old_cfg.name = "urgent_publication_control_old".into();
+		let old_db = Db::create(&old_cfg).await.unwrap();
+		assert!(DirectPayoutWitness::load(&directory, Network::Regtest, DUMMY_SERVER_KEY.public_key(), &old_db, DIRECT_HISTORY_LIMITS).await.is_err());
+		assert_eq!(std::fs::read(history_path).unwrap(), original_history);
+		println!("actual PG nursery-first gap, exact replay/reconnect and retained-input freeze refusal; chain/funding/automatic routing NOT qualified");
+	}
+
 }

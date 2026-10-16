@@ -810,7 +810,7 @@ impl ParkedReceive {
 						"revoke refused after the HTLC-recv vtxos expired: {status:?}");
 					assert_eq!(status.code(), tonic::Code::InvalidArgument);
 					assert_eq!(status.message(), format!(
-						"This lightning payment is not eligible for revocation yet: the recipient can claim until height {}",
+						"bad user input: This lightning payment is not eligible for revocation yet: the recipient can claim until height {}",
 						self.htlc_recv_expiry,
 					));
 				},

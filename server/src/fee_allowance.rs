@@ -8,6 +8,7 @@ use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::hashes::{sha256, Hash};
 use crate::database::Tx;
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
+use bitcoind_async_client::traits::Reader;
 use std::str::FromStr;
 use std::os::unix::fs::MetadataExt;
 

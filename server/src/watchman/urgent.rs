@@ -9,7 +9,8 @@ use bitcoin::{Amount, FeeRate, OutPoint, Transaction, TxOut, Txid};
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin_ext::{BlockRef, TxStatus, TransactionExt, cpfp::MakeCpfpFees};
 use bitcoin_ext::bdk::WalletExt;
-use bitcoind_async_client::{Client, traits::Reader};
+use bitcoind_async_client::Client;
+use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
 
 use ark::ServerVtxo;
 use crate::bitcoind as bcd;

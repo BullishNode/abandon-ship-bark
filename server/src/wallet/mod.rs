@@ -13,7 +13,7 @@ use bdk_wallet::{TxBuilder, Wallet};
 use bdk_wallet::coin_selection::CoinSelectionAlgorithm;
 use bip39::Mnemonic;
 use bitcoin::{
-	bip32, Address, Amount, FeeRate, Network, OutPoint, Psbt, Transaction, Weight,
+	bip32, Address, Amount, FeeRate, Network, OutPoint, Psbt, Transaction, Txid, Weight,
 };
 use bitcoind_async_client::Client as BitcoindClient;
 use tracing::{error, warn};

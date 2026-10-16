@@ -15,7 +15,7 @@ use anyhow::Context;
 use bitcoin::{Network, Transaction, Txid};
 use bitcoin::constants::ChainHash;
 use bitcoin::consensus::{deserialize, serialize};
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::PublicKey;
 
 use crate::database::{Db, Tx};

@@ -163,3 +163,55 @@ impl Tx<'_> {
 		Ok(result)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use bitcoin::{absolute, transaction, ScriptBuf, Sequence, TxIn, Witness};
+	use bitcoin::hashes::Hash;
+
+	fn actual_package() -> (UrgentPublication, Vec<Transaction>) {
+		let point = OutPoint { txid: Txid::from_byte_array([7; 32]), vout: 0 };
+		let tx = Transaction { version: transaction::Version::TWO, lock_time: absolute::LockTime::ZERO,
+			input: vec![TxIn { previous_output: point, script_sig: ScriptBuf::new(), sequence: Sequence::MAX, witness: Witness::new() }],
+			output: vec![TxOut { value: Amount::from_sat(9_000), script_pubkey: ScriptBuf::new() }] };
+		let meta = UrgentPublication { version: 1, policy_sha256: sha256::Hash::from_byte_array([9;32]), attempt_index: 1,
+			ceiling_sat: 1_000, source_anchors: vec![point], txids: vec![tx.compute_txid()],
+			prevouts: vec![vec![TxOut { value: Amount::from_sat(10_000), script_pubkey: ScriptBuf::new() }]] };
+		(meta, vec![tx])
+	}
+
+	#[test]
+	fn urgent_publication_charges_actual_prevouts_not_a_supplied_fee() {
+		let (mut meta, txs) = actual_package();
+		assert_eq!(meta.validate(&txs).unwrap(), Amount::from_sat(1_000));
+		meta.ceiling_sat = 999;
+		assert!(meta.validate(&txs).is_err());
+		meta.ceiling_sat = 1_000;
+		meta.prevouts[0][0].value = Amount::from_sat(9_999);
+		assert_eq!(meta.validate(&txs).unwrap(), Amount::from_sat(999));
+		// Prevout ownership is separately authenticated against original source
+		// rows/Core by storage; this pure reducer never claims that proof.
+	}
+
+	#[test]
+	fn urgent_publication_refuses_missing_prevout_and_changed_transaction() {
+		let (meta, mut txs) = actual_package();
+		txs[0].output[0].value = Amount::from_sat(8_999);
+		assert!(meta.validate(&txs).is_err());
+		let (mut meta, txs) = actual_package();
+		meta.prevouts[0].clear();
+		assert!(meta.validate(&txs).is_err());
+	}
+
+	#[test]
+	fn urgent_publication_refuses_output_inflation_and_noncanonical_anchors() {
+		let (mut meta, mut txs) = actual_package();
+		txs[0].output[0].value = Amount::from_sat(10_001);
+		meta.txids = txs.iter().map(Transaction::compute_txid).collect();
+		assert!(meta.validate(&txs).is_err());
+		let (mut meta, txs) = actual_package();
+		meta.source_anchors.push(meta.source_anchors[0]);
+		assert!(meta.validate(&txs).is_err());
+	}
+}

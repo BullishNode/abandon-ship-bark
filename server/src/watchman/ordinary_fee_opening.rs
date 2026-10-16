@@ -335,10 +335,18 @@ pub(crate) fn synthetic_checked_opening(original_history: Vec<u8>, publications:
 		publications, original_history, canonical_bytes: b"synthetic-only".to_vec() }
 }
 
+/// Native serialization fixture only: no checked-opening capability or actual
+/// source authority. Reuses the nonzero original accounting fixture below.
+#[cfg(test)]
+pub(crate) fn synthetic_captured_opening_facts() -> (Vec<u8>, OrdinaryFeePolicy, PublicKey, Network) {
+	let (opening, policy) = tests::opening();
+	(serde_json::to_vec(&opening).unwrap(), policy, opening.server_pubkey, Network::Regtest)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	fn opening() -> (OriginalOpening, OrdinaryFeePolicy) {
+	pub(super) fn opening() -> (OriginalOpening, OrdinaryFeePolicy) {
 		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, urgent_reserve_sat: 40_000, regtest_qualification: None };
 		let key = bitcoin::secp256k1::Keypair::new(&crate::SECP, &mut bitcoin::secp256k1::rand::thread_rng()).public_key();
 		let value = OriginalOpening { version: 1, server_pubkey: key,

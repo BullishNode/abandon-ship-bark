@@ -510,4 +510,37 @@ mod tests {
 		assert!(combined_witness_bound(None,Some(&BTreeMap::new())).is_err());
 	}
 
+	#[test]
+	fn captured_audit_complete_byte_pipeline_retains_nonzero_history_without_financial_authority() {
+		let (certificate,policy,key,network)=crate::watchman::ordinary_fee_opening::synthetic_captured_opening_facts();
+		let original:Value=serde_json::from_slice(&certificate).unwrap();
+		let policy_raw=serde_json::to_vec(&policy).unwrap();
+		let opening_hash=sha256::Hash::hash(&certificate).to_string();
+		let as_hex=|bytes:&[u8]|bytes.iter().map(|byte|format!("{byte:02x}")).collect::<String>();
+		let cut=serde_json::json!({"snapshot":"1:2:","backend_pid":12,"database":"trackc","role":"trackcbodyobserver","read_only":"on","isolation":"repeatable read"});
+		let mut joint=cut.clone();let mut body=cut;
+		for table in ["native_fee_publication","native_fee_input","native_fee_opening","native_urgent_attempt","native_urgent_input","nursery_tx","wallet_changeset","expiry_carrier","rounds","round_participation","round_part_input","round_part_output","virtual_transaction"] {
+			joint[table]=serde_json::json!([]);
+		}
+		for table in ["coins","pending_boards","pool","pool_retirements","payment_links"] {body[table]=serde_json::json!([]);}
+		joint["native_fee_opening"]=serde_json::json!([{"id":1,"opening_hash":opening_hash,"policy_bytes_hex":as_hex(&policy_raw),
+			"opening_bytes_hex":as_hex(&certificate),"history_identity":"synthetic unchanged native source identity","created_at":"synthetic unit only"}]);
+		let mut request=serde_json::json!({"format":FORMAT,"expected":{"server_pubkey":key.to_string(),
+			"genesis":bitcoin::constants::genesis_block(network).block_hash().to_string(),"policy_sha256":sha256::Hash::hash(&policy_raw).to_string(),"opening_sha256":opening_hash},
+			"policy_utf8":String::from_utf8(policy_raw).unwrap(),"history_utf8":"10000\n","publication_files":null,"round_rights_files":null,
+			"opening_files":{"certificate.json":String::from_utf8(certificate).unwrap(),"validated.sha256":opening_hash},"joint_rows":joint,"body_rows":body});
+		let raw=serde_json::to_vec(&request).unwrap();let result=audit_captured(&raw).unwrap();
+		assert_eq!(result.request_sha256,sha256::Hash::hash(&raw));
+		assert_eq!(result.charged_sat,10_000);assert_eq!(result.carrier_charged_sat,10_000);
+		assert_eq!(result.ordinary_publications,0);assert_eq!(result.coin_rows,0);
+		assert!(!result.complete && !result.qualified && !result.financial_readiness);
+		// Complete byte reconciliation with zero SQL rows cannot erase the
+		// retained nonzero legacy charge or become a monetary readiness proof.
+		request["history_utf8"]="".into();assert!(audit_captured(&serde_json::to_vec(&request).unwrap()).is_err());
+		request["history_utf8"]="10000\n".into();
+		request["joint_rows"]["native_fee_opening"][0]["opening_hash"]=sha256::Hash::hash(b"other original").to_string().into();
+		assert!(audit_captured(&serde_json::to_vec(&request).unwrap()).is_err());
+		assert_eq!(original["previously_charged_sat"],10_000);
+	}
+
 }

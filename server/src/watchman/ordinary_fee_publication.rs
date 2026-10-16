@@ -146,7 +146,7 @@ fn identity(meta: &fs::Metadata) -> (u64, u64, u32, u32, u64, u64, i64, i64, i64
 	(meta.dev(), meta.ino(), meta.uid(), meta.mode(), meta.nlink(), meta.len(),
 		meta.mtime(), meta.mtime_nsec(), meta.ctime(), meta.ctime_nsec())
 }
-fn private_root(path: &Path, owner: u32) -> anyhow::Result<(File, fs::Metadata)> {
+pub(crate) fn private_root(path: &Path, owner: u32) -> anyhow::Result<(File, fs::Metadata)> {
 	let before = fs::symlink_metadata(path)?;
 	ensure!(before.is_dir() && before.uid() == owner && before.mode() & 0o7777 == 0o700,
 		"ordinary publication root must be a real owner-private directory");
@@ -156,7 +156,7 @@ fn private_root(path: &Path, owner: u32) -> anyhow::Result<(File, fs::Metadata)>
 		"ordinary publication root changed during open");
 	Ok((file, before))
 }
-fn open_record(path: &Path, owner: u32) -> anyhow::Result<(File, fs::Metadata)> {
+pub(crate) fn open_record(path: &Path, owner: u32) -> anyhow::Result<(File, fs::Metadata)> {
 	let before = fs::symlink_metadata(path)?;
 	ensure!(before.is_file() && before.nlink() == 1 && before.uid() == owner
 		&& before.mode() & 0o7777 == 0o600 && before.len() <= MAX_RECORD_BYTES,
@@ -167,7 +167,7 @@ fn open_record(path: &Path, owner: u32) -> anyhow::Result<(File, fs::Metadata)> 
 		"ordinary publication proof changed during open");
 	Ok((file, before))
 }
-fn read_record(path: &Path, owner: u32) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn read_record(path: &Path, owner: u32) -> anyhow::Result<Vec<u8>> {
 	let (file, before) = open_record(path, owner)?;
 	let mut bytes = Vec::new(); (&file).take(MAX_RECORD_BYTES + 1).read_to_end(&mut bytes)?;
 	ensure!(bytes.len() as u64 == before.len() && bytes.len() as u64 <= MAX_RECORD_BYTES
@@ -179,18 +179,18 @@ fn read_record(path: &Path, owner: u32) -> anyhow::Result<Vec<u8>> {
 
 pub(crate) fn validate_witnesses(history: &Path, policy: OrdinaryFeePolicy,
 	entries: &BTreeMap<Wtxid, PublicationEntry>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
 	let directory = directory(history)?;
 	let owner = fs::symlink_metadata(history)?.uid();
 	match fs::symlink_metadata(&directory) {
 		Ok(_) => {},
 		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-			ensure!(entries.is_empty(), "indexed ordinary publication witness missing"); return Ok(());
+			ensure!(entries.is_empty(), "indexed ordinary publication witness missing"); return Ok(BTreeMap::new());
 		},
 		Err(error) => return Err(error.into()),
 	}
 	let (root, root_before) = private_root(&directory, owner)?;
-	let mut present = BTreeSet::new(); let mut bytes = 0u64;
+	let mut present = BTreeSet::new(); let mut records = BTreeMap::new(); let mut bytes = 0u64;
 	for (index, item) in fs::read_dir(&directory)?.enumerate() {
 		ensure!(index < MAX_RECORDS, "ordinary publication witness count exceeds bound");
 		let item = item?; let name = item.file_name(); let name = name.to_str().context("invalid publication filename")?;
@@ -205,12 +205,13 @@ pub(crate) fn validate_witnesses(history: &Path, policy: OrdinaryFeePolicy,
 		ensure!(expected.id() == id, "ordinary publication witness id differs");
 		let entry = entries.get(&id).context("unindexed ordinary publication intent; preserve and reconcile original reservation before workers")?;
 		ensure!(*entry == expected && present.insert(id), "ordinary publication witness differs from retained fee entry");
+		records.insert(id, record);
 	}
 	ensure!(present.len() == entries.len(), "indexed ordinary publication witness missing");
 	ensure!(identity(&root_before) == identity(&root.metadata()?)
 		&& identity(&root_before) == identity(&fs::symlink_metadata(&directory)?),
 		"ordinary publication root changed during complete scan");
-	Ok(())
+	Ok(records)
 }
 
 pub(crate) fn write_witness(history: &Path, policy: OrdinaryFeePolicy,

@@ -267,6 +267,9 @@ impl OrdinaryFeeBudget {
 	/// This method alone does not authorize signing, publication or a cached R/F token.
 	pub(crate) fn reserve_publication(&self, record: &PublicationRecord) -> anyhow::Result<()> {
 		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		self.reserve_publication_locked(&mut ledger, record)
+	}
+	fn reserve_publication_locked(&self, ledger: &mut Ledger, record: &PublicationRecord) -> anyhow::Result<()> {
 		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
 			"ordinary fee history uncertain or changed; reconcile original reservation");
 		let entry = record.entry(self.policy)?;
@@ -292,6 +295,39 @@ impl OrdinaryFeeBudget {
 		ledger.publications.insert(entry.id(), entry);
 		ledger.uncertain = false;
 		Ok(())
+	}
+
+	pub(crate) fn policy(&self) -> OrdinaryFeePolicy { self.policy }
+	pub(crate) fn directory(&self) -> &Path { &self.directory }
+
+	/// Paused startup only. Retain the original numeric prefix and serialize
+	/// the entire import against every existing ordinary/carrier reservation.
+	/// A half-completed import may replay exact originals, never new credit.
+	pub(crate) fn import_original(&self, opening: &super::ordinary_fee_opening::CheckedOriginalOpening) -> anyhow::Result<()> {
+		let mut expected = opening.original_history().to_vec();
+		for record in opening.publications() { expected.extend_from_slice(record.entry(self.policy)?.line()?.as_bytes()); }
+		ensure!(expected.len() as u64 <= MAX_HISTORY_BYTES, "original import exceeds native journal bound");
+		parse_joint_history(std::str::from_utf8(&expected)?, self.policy)?;
+		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
+			"original import found uncertain native fee history");
+		ledger.file.seek(SeekFrom::Start(0))?;
+		let mut actual = Vec::new(); (&mut ledger.file).take(MAX_HISTORY_BYTES + 1).read_to_end(&mut actual)?;
+		let parsed = parse_joint_history(std::str::from_utf8(&actual)?, self.policy)?;
+		ensure!(parsed.charged == ledger.charged && parsed.carrier_charged == ledger.carrier_charged
+			&& parsed.publications == ledger.publications, "original import cached ledger differs from exact file");
+		ensure!(actual.len() as u64 == ledger.length && actual.starts_with(opening.original_history())
+			&& expected.starts_with(&actual), "native fee history is not the exact original import prefix");
+		for record in opening.publications() { self.reserve_publication_locked(&mut ledger, record)?; }
+		ensure!(ledger.length == expected.len() as u64, "original import has an unexpected retained debit");
+		Ok(())
+	}
+
+	pub(crate) fn publication_records(&self) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
+			"native publication history uncertain or changed");
+		ordinary_fee_publication::validate_witnesses(&self.directory, self.policy, &ledger.publications)
 	}
 
 	/// Exact original-candidate check for a caller's publication transaction.
@@ -779,6 +815,53 @@ mod tests {
 		std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700)).unwrap();
 		OrdinaryFeeBudget::load(&directory, policy).unwrap().require_publication(&record, &tx).unwrap();
 		remove_publication_directory(&directory);
+	}
+
+	#[test]
+	fn original_import_keeps_prior_debits_across_replay_restart_and_refused_future_reset() {
+		let directory = publication_directory("opening-replay");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..OrdinaryFeePolicy::default() };
+		policy.initialize(&directory).unwrap();
+		let (record, signed) = publication_record(policy, super::super::ordinary_fee_publication::PublicationPath::Pool, 5_000, 91);
+		let opening = super::super::ordinary_fee_opening::synthetic_checked_opening(b"10000\n".to_vec(), vec![record.clone()]);
+		{
+			let owner = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+			owner.reserve_ceiling(Amount::from_sat(10_000)).unwrap();
+			owner.import_original(&opening).unwrap();
+			let exact = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+			owner.import_original(&opening).unwrap();
+			assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(), exact);
+			owner.require_publication(&record, &signed).unwrap();
+			owner.require_retained_fees(Amount::from_sat(10_000)).unwrap();
+			assert!(owner.require_retained_fees(Amount::from_sat(15_000)).is_err());
+		}
+		{
+			let owner = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+			owner.import_original(&opening).unwrap();
+			owner.reserve_ceiling(Amount::from_sat(43_000)).unwrap();
+			assert!(owner.reserve_ceiling(Amount::from_sat(1)).is_err());
+			let full = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+			assert!(owner.import_original(&opening).is_err());
+			assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(), full);
+		}
+		remove_publication_directory(&directory);
+	}
+	#[test]
+	fn original_import_cannot_erase_a_competing_carrier_reservation() {
+		let directory = publication_directory("opening-concurrent");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..OrdinaryFeePolicy::default() };
+		policy.initialize(&directory).unwrap();
+		let (record, _) = publication_record(policy, super::super::ordinary_fee_publication::PublicationPath::Round, 5_000, 92);
+		let opening = super::super::ordinary_fee_opening::synthetic_checked_opening(Vec::new(), vec![record]);
+		let owner = std::sync::Arc::new(OrdinaryFeeBudget::load(&directory, policy).unwrap());
+		let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+		let other = owner.clone(); let start = barrier.clone();
+		let worker = std::thread::spawn(move || { start.wait(); other.reserve_ceiling(Amount::from_sat(10_000)) });
+		barrier.wait(); let imported = owner.import_original(&opening).is_ok();
+		worker.join().unwrap().unwrap();
+		owner.require_retained_fees(Amount::from_sat(10_000)).unwrap();
+		assert_eq!(owner.ledger.lock().unwrap().charged, if imported { 15_000 } else { 10_000 });
+		drop(owner); remove_publication_directory(&directory);
 	}
 
 }

@@ -86,9 +86,12 @@ impl CheckedOriginalOpening {
 pub(crate) async fn verify_original(raw: &[u8], expected: sha256::Hash,
 	policy: OrdinaryFeePolicy, server: PublicKey, network: Network,
 	t: &Tx<'_>, core: &Client, source_manifest: &[u8], publication_logs: &[Vec<u8>],
+	replay: Option<&super::ordinary_fee_epoch::ValidatedOpeningJournal>,
 ) -> anyhow::Result<CheckedOriginalOpening> {
 	let opening = OriginalOpening::decode(raw, expected, policy, server, network)?;
-	opening.validate_original(t, core, policy, source_manifest, publication_logs).await
+	let replay_original = replay.is_some_and(|proof| proof.matches(expected));
+	ensure!(replay.is_none() || replay_original, "original opening replay journal identity differs");
+	opening.validate_original(t, core, policy, source_manifest, publication_logs, replay_original).await
 }
 
 impl OriginalOpening {
@@ -143,17 +146,17 @@ impl OriginalOpening {
 	/// Fresh activation must not waive capture age; only an already committed
 	/// original activation may later replay its authenticated retained binding.
 	async fn validate_original(&self, t: &Tx<'_>, core: &Client,
-		policy: OrdinaryFeePolicy, source_manifest: &[u8], publication_logs: &[Vec<u8>],
+		policy: OrdinaryFeePolicy, source_manifest: &[u8], publication_logs: &[Vec<u8>], replay_original: bool,
 	) -> anyhow::Result<CheckedOriginalOpening> {
 		tokio::time::timeout(std::time::Duration::from_secs(120),
-			self.validate_original_inner(t, core, policy, source_manifest, publication_logs)).await
+			self.validate_original_inner(t, core, policy, source_manifest, publication_logs, replay_original)).await
 			.context("original native fee opening absolute deadline exceeded")?
 	}
 	async fn validate_original_inner(&self, t: &Tx<'_>, core: &Client,
-		policy: OrdinaryFeePolicy, source_manifest: &[u8], publication_logs: &[Vec<u8>],
+		policy: OrdinaryFeePolicy, source_manifest: &[u8], publication_logs: &[Vec<u8>], replay_original: bool,
 	) -> anyhow::Result<CheckedOriginalOpening> {
 		let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-		ensure!(now >= self.created_at_unix && now - self.created_at_unix <= 120,
+		ensure!(replay_original || (now >= self.created_at_unix && now - self.created_at_unix <= 120),
 			"original native fee opening requires a fresh paused source cut");
 		ensure!(source_manifest.len() <= MAX_BYTES && sha256::Hash::hash(source_manifest) == self.source_manifest_sha256,
 			"original paused source manifest differs");
@@ -171,11 +174,11 @@ impl OriginalOpening {
 		t.execute(&format!("LOCK TABLE {} IN SHARE MODE", TABLES.join(",")), &[]).await?;
 		ensure!(snapshot(t).await? == self.tables, "original native/customer source cut differs");
 		ensure!(core.get_block_hash(0).await? == self.genesis
-			&& core.get_block_count().await? == u64::from(self.tip_height)
+			&& (replay_original || core.get_block_count().await? == u64::from(self.tip_height))
 			&& core.get_block_hash(u64::from(self.tip_height)).await? == self.tip_hash,
 			"original Core source identity or tip differs");
 		self.validate_publications(t, core, policy).await?;
-		ensure!(core.get_block_count().await? == u64::from(self.tip_height)
+		ensure!((replay_original || core.get_block_count().await? == u64::from(self.tip_height))
 			&& core.get_block_hash(u64::from(self.tip_height)).await? == self.tip_hash,
 			"original Core source cut changed during validation");
 		Ok(CheckedOriginalOpening { sha256: sha256::Hash::hash(&serde_json::to_vec(self)?),
@@ -312,6 +315,14 @@ async fn confirmed(core: &Client, raw: &[u8], minimum: u32) -> anyhow::Result<()
 	let height = core.get_block_height(&block).await?;
 	ensure!(core.get_block_hash(height).await? == block, "original native transaction block is not active");
 	Ok(())
+}
+
+// Synthetic in-process ledger fixture only. Never compiled into a daemon and
+// never establishes actual original-source admission or runtime authority.
+#[cfg(test)]
+pub(crate) fn synthetic_checked_opening(original_history: Vec<u8>, publications: Vec<PublicationRecord>) -> CheckedOriginalOpening {
+	CheckedOriginalOpening { sha256: sha256::Hash::hash(b"synthetic opening, NOT admission"),
+		publications, original_history, canonical_bytes: b"synthetic-only".to_vec() }
 }
 
 #[cfg(test)]

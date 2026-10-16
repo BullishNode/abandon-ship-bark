@@ -32,3 +32,5 @@ mod round;
 mod vtxo_lock;
 
 mod payout_fee_safety;
+#[cfg(unix)]
+mod strict_lnurl;

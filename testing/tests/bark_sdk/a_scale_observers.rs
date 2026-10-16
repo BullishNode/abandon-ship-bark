@@ -1,3 +1,10 @@
+fn quantile(values: &[f64], p: f64) -> Option<f64> {
+	if values.is_empty() { return None; }
+	let mut v = values.to_vec();
+	v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+	Some(v[((v.len() as f64 * p).ceil() as usize).max(1) - 1])
+}
+
 use bitcoin::hex::DisplayHex;
 const DIRECT_TERMINAL_COUNT:&str="SELECT count(*),count(DISTINCT txid) FROM expiry_settlement WHERE id=ANY($1)";
 fn require_operating_build(){

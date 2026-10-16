@@ -64,3 +64,5 @@ tokio-util.workspace = true
 dialoguer = "0.12"
 home = "=0.5.9"
 
+[dev-dependencies]
+ark-lib = { version = "0.7.1", path = "../lib", features = ["test-util"] }

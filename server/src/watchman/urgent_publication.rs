@@ -33,6 +33,7 @@ struct SourceInput { point: OutPoint, output: TxOut, anchor: OutPoint, native_me
 pub(crate) struct UrgentCandidate {
 	version: u8,
 	purpose: UrgentPurpose,
+	server_pubkey: bitcoin::secp256k1::PublicKey,
 	genesis: bitcoin::BlockHash,
 	policy_sha256: sha256::Hash,
 	opening_sha256: sha256::Hash,
@@ -40,6 +41,7 @@ pub(crate) struct UrgentCandidate {
 	attempt_index: u64,
 	ceiling_sat: u64,
 	max_fee_rate: FeeRate,
+	max_weight_wu: u64,
 	requested_fee_rate: FeeRate,
 	operator_script: ScriptBuf,
 	sources: Vec<SourceInput>,
@@ -57,6 +59,45 @@ pub(crate) struct BoundUrgentPublication {
 	version: u8,
 	candidate: UrgentCandidate,
 	signed: Vec<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct UrgentReservationEntry {
+	version: u8,
+	pub attempt_index: u64,
+	purpose: UrgentPurpose,
+	server_pubkey: bitcoin::secp256k1::PublicKey,
+	genesis: bitcoin::BlockHash,
+	policy_sha256: sha256::Hash,
+	pub opening_sha256: sha256::Hash,
+	pub candidate_sha256: sha256::Hash,
+	pub publication_txid: bitcoin::Txid,
+	pub ceiling_sat: u64,
+}
+impl UrgentReservationEntry {
+	pub(crate) fn filename(&self) -> String { format!("urgent-{}.candidate.json", self.attempt_index) }
+	pub(crate) fn parse(raw: &str, policy: OrdinaryFeePolicy) -> anyhow::Result<Self> {
+		let value: Self = serde_json::from_str(raw)?;
+		ensure!(serde_json::to_string(&value)? == raw, "urgent pre-sign entry is not canonical");
+		value.check(policy)?; Ok(value)
+	}
+	fn check(&self, policy: OrdinaryFeePolicy) -> anyhow::Result<()> {
+		ensure!(self.version == 1 && self.attempt_index > 0
+			&& self.candidate_sha256 != sha256::Hash::all_zeros() && self.opening_sha256 != sha256::Hash::all_zeros()
+			&& self.policy_sha256 == sha256::Hash::hash(&serde_json::to_vec(&policy)?), "urgent pre-sign identity differs");
+		policy.validate_ceiling(Amount::from_sat(self.ceiling_sat))
+	}
+	pub(crate) fn require_identity(&self, identity: &FeeServiceIdentity) -> anyhow::Result<()> {
+		ensure!(self.server_pubkey == identity.server_pubkey && self.genesis == identity.genesis
+			&& self.policy_sha256 == identity.policy_sha256 && self.opening_sha256 == identity.opening_sha256,
+			"urgent pre-sign intent differs from actual activated owner");
+		Ok(())
+	}
+
+	pub(crate) fn line(&self, policy: OrdinaryFeePolicy) -> anyhow::Result<String> {
+		self.check(policy)?; Ok(format!("u1\t{}\n", serde_json::to_string(self)?))
+	}
 }
 
 pub(crate) struct UrgentPackagePrice {
@@ -119,9 +160,9 @@ impl UrgentCandidate {
 		let templates = transactions.iter().enumerate().map(|(index, tx)| {
 			serialize(&if index + 1 == transactions.len() { unsigned(tx.clone()) } else { tx.clone() })
 		}).collect::<Vec<_>>();
-		let mut value = Self { version: 1, purpose, genesis: identity.genesis,
+		let mut value = Self { version: 2, purpose, server_pubkey: identity.server_pubkey, genesis: identity.genesis,
 			policy_sha256: identity.policy_sha256, opening_sha256: identity.opening_sha256,
-			attempt_index, ceiling_sat: limits.max_miner_fee.to_sat(), max_fee_rate: limits.max_fee_rate,
+			attempt_index, ceiling_sat: limits.max_miner_fee.to_sat(), max_fee_rate: limits.max_fee_rate, max_weight_wu: limits.max_weight.to_wu(),
 			requested_fee_rate, operator_script, sources, fee_inputs, templates, prevouts: Vec::new() };
 		value.prevouts = value.expected_prevouts()?;
 		value.check(identity, limits, policy)?;
@@ -160,7 +201,7 @@ impl UrgentCandidate {
 		Ok(result)
 	}
 	fn check(&self, identity: &FeeServiceIdentity, limits: CarrierLimits, policy: OrdinaryFeePolicy) -> anyhow::Result<()> {
-		ensure!(self.version == 1 && self.attempt_index > 0 && self.genesis == identity.genesis
+		ensure!(self.version == 2 && self.attempt_index > 0 && self.server_pubkey == identity.server_pubkey && self.genesis == identity.genesis
 			&& self.policy_sha256 == identity.policy_sha256 && self.opening_sha256 == identity.opening_sha256
 			&& self.opening_sha256 != sha256::Hash::all_zeros()
 			&& self.policy_sha256 == sha256::Hash::hash(&serde_json::to_vec(&policy)?), "urgent actual policy/opening/chain/attempt differs");
@@ -171,7 +212,7 @@ impl UrgentCandidate {
 		policy.validate_ceiling(Amount::from_sat(self.ceiling_sat))?;
 		ensure!(self.ceiling_sat == limits.max_miner_fee.to_sat() && self.max_fee_rate == limits.max_fee_rate
 			&& limits.max_miner_fee <= Amount::MAX_MONEY && self.requested_fee_rate > FeeRate::ZERO && self.requested_fee_rate <= self.max_fee_rate
-			&& limits.max_weight.to_wu() > 0 && limits.max_weight.to_wu() <= 400_000,
+			&& self.max_weight_wu == limits.max_weight.to_wu() && limits.max_weight.to_wu() > 0 && limits.max_weight.to_wu() <= 400_000,
 			"urgent configured full ceiling/rate/weight differs");
 		ensure!(serde_json::to_vec(self)?.len() <= MAX_BYTES && self.expected_prevouts()? == self.prevouts,
 			"urgent complete original prevouts or byte bound differs");
@@ -179,11 +220,29 @@ impl UrgentCandidate {
 		ensure!(last.input.iter().all(|input| input.witness.is_empty()), "new urgent signature was exposed before original candidate binding");
 		Ok(())
 	}
+	pub(crate) fn reservation_entry(&self, policy: OrdinaryFeePolicy) -> anyhow::Result<UrgentReservationEntry> {
+		let identity = FeeServiceIdentity { server_pubkey: self.server_pubkey, genesis: self.genesis,
+			policy_sha256: self.policy_sha256, opening_sha256: self.opening_sha256 };
+		let limits = CarrierLimits { max_fee_rate: self.max_fee_rate, max_miner_fee: Amount::from_sat(self.ceiling_sat), max_weight: Weight::from_wu(self.max_weight_wu) };
+		self.check(&identity, limits, policy)?;
+		Ok(UrgentReservationEntry { version: 1, attempt_index: self.attempt_index, purpose: self.purpose,
+			server_pubkey: self.server_pubkey, genesis: self.genesis, policy_sha256: self.policy_sha256,
+			opening_sha256: self.opening_sha256, candidate_sha256: self.id()?,
+			publication_txid: decoded(self.templates.last().context("urgent template absent")?)?.compute_txid(), ceiling_sat: self.ceiling_sat })
+	}
+	pub(crate) fn decode_reserved(raw: &[u8], entry: &UrgentReservationEntry, policy: OrdinaryFeePolicy) -> anyhow::Result<Self> {
+		ensure!(raw.len() <= MAX_BYTES && sha256::Hash::hash(raw) == entry.candidate_sha256, "urgent original candidate digest/bound differs");
+		let value: Self = serde_json::from_slice(raw)?;
+		ensure!(serde_json::to_vec(&value)? == raw && value.reservation_entry(policy)? == *entry,
+			"urgent original candidate differs from retained pre-sign debit");
+		Ok(value)
+	}
+
 	pub(crate) fn id(&self) -> anyhow::Result<sha256::Hash> { Ok(sha256::Hash::hash(&serde_json::to_vec(self)?)) }
 	pub(crate) fn bind_signed(self, signed: &[Transaction], identity: &FeeServiceIdentity,
 		limits: CarrierLimits, policy: OrdinaryFeePolicy,
 	) -> anyhow::Result<BoundUrgentPublication> {
-		let value = BoundUrgentPublication { version: 1, candidate: self, signed: signed.iter().map(serialize).collect() };
+		let value = BoundUrgentPublication { version: 2, candidate: self, signed: signed.iter().map(serialize).collect() };
 		value.validate(identity, limits, policy)?;
 		Ok(value)
 	}
@@ -204,7 +263,7 @@ impl BoundUrgentPublication {
 	pub(crate) fn validate(&self, identity: &FeeServiceIdentity, limits: CarrierLimits,
 		policy: OrdinaryFeePolicy,
 	) -> anyhow::Result<UrgentPackagePrice> {
-		ensure!(self.version == 1 && serde_json::to_vec(self)?.len() <= MAX_BYTES
+		ensure!(self.version == 2 && serde_json::to_vec(self)?.len() <= MAX_BYTES
 			&& self.signed.len() == self.candidate.templates.len(), "urgent signed package record bound differs");
 		self.candidate.check(identity, limits, policy)?;
 		let mut fee = Amount::ZERO; let mut weight = Weight::ZERO; let mut ids = BTreeSet::new();
@@ -244,6 +303,7 @@ mod tests {
 	use super::*;
 	use bitcoin::{absolute, transaction, Sequence, TxIn, Txid, Witness};
 	use bitcoin::secp256k1::Keypair;
+	use super::super::ordinary_fee::{OrdinaryFeeBudget, BUDGET_FILE};
 
 	fn vector(progression: bool, limits: CarrierLimits) -> (UrgentCandidate, Vec<Transaction>, FeeServiceIdentity, OrdinaryFeePolicy) {
 		let key = Keypair::new(&crate::SECP, &mut bitcoin::secp256k1::rand::thread_rng());
@@ -326,4 +386,70 @@ mod tests {
 		let (candidate, txs, identity, policy) = vector(false, tight);
 		assert!(candidate.bind_signed(&txs, &identity, tight, policy).is_err());
 	}
+	fn owner_directory(name: &str) -> std::path::PathBuf {
+		let path = std::env::temp_dir().join(format!("c-urgent-ledger-{name}-{}-{}", std::process::id(), bitcoin::secp256k1::rand::random::<u64>()));
+		std::fs::create_dir(&path).unwrap(); path
+	}
+	fn cleanup_owner(path: &std::path::Path) {
+		let name = path.file_name().unwrap().to_str().unwrap();
+		let witness = path.with_file_name(format!("{name}.ordinary-native-publications"));
+		if witness.exists() { std::fs::remove_dir_all(witness).unwrap(); }
+		std::fs::remove_dir_all(path).unwrap();
+	}
+	#[test]
+	fn urgent_original_full_ceiling_shares_58k_with_carriers_and_survives_restart_without_resign_credit() {
+		let (candidate, _, _, policy) = vector(false, limits()); let path = owner_directory("restart");
+		policy.initialize(&path).unwrap();
+		{
+			let owner = OrdinaryFeeBudget::load(&path, policy).unwrap();
+			owner.protect_urgent_attempts(Amount::from_sat(20_000)).unwrap();
+			owner.reserve_ceiling(Amount::from_sat(18_000)).unwrap();
+			assert_eq!(owner.next_urgent_attempt_index().unwrap(), 1);
+			owner.reserve_urgent_candidate(&candidate).unwrap();
+			owner.require_retained_fees(Amount::from_sat(18_000)).unwrap();
+			let original = std::fs::read(path.join(super::super::ordinary_fee::BUDGET_FILE)).unwrap();
+			assert!(owner.reserve_urgent_candidate(&candidate).is_err());
+			assert!(owner.reserve_ceiling(Amount::from_sat(1)).is_err());
+			assert_eq!(std::fs::read(path.join(super::super::ordinary_fee::BUDGET_FILE)).unwrap(), original);
+			assert_eq!(owner.reserved_urgent_candidates().unwrap(), vec![candidate.clone()]);
+			assert!(owner.require_no_unreconciled_urgent().is_err());
+		}
+		let owner = OrdinaryFeeBudget::load(&path, policy).unwrap();
+		owner.protect_urgent_attempts(Amount::from_sat(20_000)).unwrap();
+		assert_eq!(owner.reserved_urgent_candidates().unwrap(), vec![candidate.clone()]);
+		assert!(owner.reserve_urgent_candidate(&candidate).is_err());
+		let (mut second, _, _, _) = vector(true, limits()); second.attempt_index = 2;
+		owner.reserve_urgent_candidate(&second).unwrap();
+		let before = std::fs::read(path.join(super::super::ordinary_fee::BUDGET_FILE)).unwrap();
+		let (mut third, _, _, _) = vector(false, limits()); third.attempt_index = 3;
+		assert!(owner.reserve_urgent_candidate(&third).is_err(), "18k+20k+20k consumes original58k; no new urgent allowance");
+		assert_eq!(std::fs::read(path.join(super::super::ordinary_fee::BUDGET_FILE)).unwrap(), before);
+		drop(owner); cleanup_owner(&path);
+	}
+	#[test]
+	fn urgent_same_original_candidate_concurrency_has_one_full_ceiling_and_no_second_signature_authority() {
+		let (candidate, _, _, policy) = vector(false, limits()); let path = owner_directory("concurrent"); policy.initialize(&path).unwrap();
+		let owner = std::sync::Arc::new(OrdinaryFeeBudget::load(&path, policy).unwrap());
+		owner.protect_urgent_attempts(Amount::from_sat(20_000)).unwrap();
+		let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+		let threads = (0..2).map(|_| { let owner = owner.clone(); let barrier = barrier.clone(); let candidate = candidate.clone();
+			std::thread::spawn(move || { barrier.wait(); owner.reserve_urgent_candidate(&candidate).is_ok() }) }).collect::<Vec<_>>();
+		barrier.wait(); assert_eq!(threads.into_iter().map(|thread| thread.join().unwrap()).filter(|passed| *passed).count(), 1);
+		assert_eq!(owner.reserved_urgent_candidates().unwrap().len(), 1);
+		drop(owner); cleanup_owner(&path);
+	}
+	#[test]
+	fn urgent_partial_or_replaced_candidate_witness_and_torn_history_hold_before_activation() {
+		let (candidate, _, _, policy) = vector(false, limits()); let path = owner_directory("witness"); policy.initialize(&path).unwrap();
+		{ let owner = OrdinaryFeeBudget::load(&path, policy).unwrap(); owner.protect_urgent_attempts(Amount::from_sat(20_000)).unwrap(); owner.reserve_urgent_candidate(&candidate).unwrap(); }
+		let name = path.file_name().unwrap().to_str().unwrap();
+		let file = path.with_file_name(format!("{name}.ordinary-native-publications")).join("urgent-1.candidate.json");
+		let original = std::fs::read(&file).unwrap(); std::fs::write(&file, b"{}").unwrap();
+		assert!(OrdinaryFeeBudget::load(&path, policy).is_err()); std::fs::write(&file, &original).unwrap();
+		let history = std::fs::read(path.join(BUDGET_FILE)).unwrap(); std::fs::write(path.join(BUDGET_FILE), &history[..history.len()-1]).unwrap();
+		assert!(OrdinaryFeeBudget::load(&path, policy).is_err()); std::fs::write(path.join(BUDGET_FILE), &history).unwrap();
+		std::fs::remove_file(&file).unwrap(); assert!(OrdinaryFeeBudget::load(&path, policy).is_err());
+		cleanup_owner(&path);
+	}
+
 }

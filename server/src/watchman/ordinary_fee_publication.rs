@@ -193,25 +193,37 @@ pub(crate) fn read_record(path: &Path, owner: u32) -> anyhow::Result<Vec<u8>> {
 pub(crate) fn validate_witnesses(history: &Path, policy: OrdinaryFeePolicy,
 	entries: &BTreeMap<Wtxid, PublicationEntry>,
 ) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
+	validate_witnesses_with_urgent(history, policy, entries, &BTreeMap::new())
+}
+pub(crate) fn validate_witnesses_with_urgent(history: &Path, policy: OrdinaryFeePolicy,
+	entries: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>,
+) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
 	let directory = directory(history)?;
 	let owner = fs::symlink_metadata(history)?.uid();
 	match fs::symlink_metadata(&directory) {
 		Ok(_) => {},
 		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-			ensure!(entries.is_empty(), "indexed ordinary publication witness missing"); return Ok(BTreeMap::new());
+			ensure!(entries.is_empty() && urgent_candidates.is_empty(), "indexed publication witness missing"); return Ok(BTreeMap::new());
 		},
 		Err(error) => return Err(error.into()),
 	}
 	let (root, root_before) = private_root(&directory, owner)?;
-	let mut present = BTreeSet::new(); let mut records = BTreeMap::new(); let mut bytes = 0u64;
+	let mut present = BTreeSet::new(); let mut urgent_present = BTreeSet::new(); let mut records = BTreeMap::new(); let mut bytes = 0u64;
 	for (index, item) in fs::read_dir(&directory)?.enumerate() {
 		ensure!(index < MAX_RECORDS, "ordinary publication witness count exceeds bound");
 		let item = item?; let name = item.file_name(); let name = name.to_str().context("invalid publication filename")?;
-		let id: Wtxid = name.strip_suffix(".json").context("unknown ordinary publication file")?.parse()?;
-		ensure!(name == format!("{id}.json"), "noncanonical publication filename");
 		let raw = read_record(&item.path(), owner)?;
 		bytes = bytes.checked_add(raw.len() as u64).context("ordinary witness byte overflow")?;
 		ensure!(bytes <= MAX_TOTAL_BYTES, "ordinary publication witness bytes exceed bound");
+		if let Some(index) = name.strip_prefix("urgent-").and_then(|name| name.strip_suffix(".candidate.json")) {
+			let index: u64 = index.parse()?;
+			ensure!(index > 0 && name == format!("urgent-{index}.candidate.json") && urgent_present.insert(index)
+				&& urgent_candidates.get(&index) == Some(&sha256::Hash::hash(&raw)),
+				"unindexed, duplicate or changed urgent candidate witness");
+			continue;
+		}
+		let id: Wtxid = name.strip_suffix(".json").context("unknown ordinary publication file")?.parse()?;
+		ensure!(name == format!("{id}.json"), "noncanonical publication filename");
 		let record: PublicationRecord = serde_json::from_slice(&raw)?;
 		ensure!(serde_json::to_vec(&record)? == raw, "noncanonical ordinary publication witness");
 		let expected = record.entry(policy)?;
@@ -220,18 +232,50 @@ pub(crate) fn validate_witnesses(history: &Path, policy: OrdinaryFeePolicy,
 		ensure!(*entry == expected && present.insert(id), "ordinary publication witness differs from retained fee entry");
 		records.insert(id, record);
 	}
-	ensure!(present.len() == entries.len(), "indexed ordinary publication witness missing");
+	ensure!(present.len() == entries.len() && urgent_present.len() == urgent_candidates.len(), "indexed publication witness missing");
 	ensure!(identity(&root_before) == identity(&root.metadata()?)
 		&& identity(&root_before) == identity(&fs::symlink_metadata(&directory)?),
 		"ordinary publication root changed during complete scan");
 	Ok(records)
 }
 
+
 pub(crate) fn write_witness(history: &Path, policy: OrdinaryFeePolicy,
 	existing: &BTreeMap<Wtxid, PublicationEntry>, record: &PublicationRecord,
 ) -> anyhow::Result<PublicationEntry> {
-	validate_witnesses(history, policy, existing)?;
+	write_witness_with_urgent(history, policy, existing, &BTreeMap::new(), record)
+}
+
+pub(crate) fn write_witness_with_urgent(history: &Path, policy: OrdinaryFeePolicy,
+	existing: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>, record: &PublicationRecord,
+) -> anyhow::Result<PublicationEntry> {
+	validate_witnesses_with_urgent(history, policy, existing, urgent_candidates)?;
 	let entry = record.entry(policy)?;
+	write_new_record(history, &format!("{}.json", entry.id()), &serde_json::to_vec(record)?)?;
+	Ok(entry)
+}
+pub(crate) fn write_urgent_candidate(history: &Path, policy: OrdinaryFeePolicy,
+	existing: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>,
+	entry: &super::urgent_publication::UrgentReservationEntry, raw: &[u8],
+) -> anyhow::Result<()> {
+	validate_witnesses_with_urgent(history, policy, existing, urgent_candidates)?;
+	ensure!(!urgent_candidates.contains_key(&entry.attempt_index)
+		&& sha256::Hash::hash(raw) == entry.candidate_sha256, "urgent candidate already indexed or digest differs");
+	super::urgent_publication::UrgentCandidate::decode_reserved(raw, entry, policy)?;
+	write_new_record(history, &entry.filename(), raw)
+}
+pub(crate) fn read_urgent_candidate(history: &Path, index: u64) -> anyhow::Result<Vec<u8>> {
+	ensure!(index > 0, "urgent candidate index absent");
+	let root = directory(history)?; let owner = fs::symlink_metadata(history)?.uid();
+	let (_root, _) = private_root(&root, owner)?;
+	read_record(&root.join(format!("urgent-{index}.candidate.json")), owner)
+}
+
+// Only fixed native filename constructors above reach this helper. The SAME
+// private witness root, total limits, create-new/readback/fsync rules cover both
+// classes; no new financial ledger or allowance is initialized here.
+fn write_new_record(history: &Path, name: &str, raw: &[u8]) -> anyhow::Result<()> {
+	ensure!(raw.len() as u64 <= MAX_RECORD_BYTES, "publication witness exceeds byte bound");
 	let root = directory(history)?;
 	match fs::symlink_metadata(&root) {
 		Ok(_) => {},
@@ -243,19 +287,21 @@ pub(crate) fn write_witness(history: &Path, policy: OrdinaryFeePolicy,
 	}
 	let owner = fs::symlink_metadata(history)?.uid();
 	let (root_file, _) = private_root(&root, owner)?;
-	let raw = serde_json::to_vec(record)?;
-	let current = existing.values().try_fold(0u64, |sum, entry| {
-		let len = fs::metadata(root.join(format!("{}.json", entry.id())))?.len();
-		sum.checked_add(len).context("ordinary witness sum overflow")
-	})?;
-	ensure!(existing.len() < MAX_RECORDS && current.checked_add(raw.len() as u64)
-		.is_some_and(|sum| sum <= MAX_TOTAL_BYTES), "ordinary publication witness capacity exhausted");
-	let path = root.join(format!("{}.json", entry.id()));
-	crate::fs_perms::create_new_owner_only(&path, &raw)?;
-	ensure!(read_record(&path, owner)? == raw, "new ordinary witness readback differs");
+	let mut count = 0usize; let mut current = 0u64;
+	for item in fs::read_dir(&root)? {
+		count = count.checked_add(1).context("publication record count overflow")?;
+		ensure!(count < MAX_RECORDS, "publication witness capacity exhausted");
+		let file = item?;
+		let (_, metadata) = open_record(&file.path(), owner)?;
+		current = current.checked_add(metadata.len()).context("publication witness size overflow")?;
+	}
+	ensure!(current.checked_add(raw.len() as u64).is_some_and(|sum| sum <= MAX_TOTAL_BYTES), "publication witness byte capacity exhausted");
+	let path = root.join(name);
+	crate::fs_perms::create_new_owner_only(&path, raw)?;
+	ensure!(read_record(&path, owner)? == raw, "new publication witness readback differs");
 	let (proof, _) = open_record(&path, owner)?;
 	proof.sync_all()?; root_file.sync_all()?;
 	ensure!(identity(&root_file.metadata()?) == identity(&fs::symlink_metadata(&root)?),
-		"ordinary publication root changed during durable write");
-	Ok(entry)
+		"publication root changed during durable write");
+	Ok(())
 }

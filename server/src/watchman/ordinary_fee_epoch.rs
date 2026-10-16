@@ -64,6 +64,7 @@ impl NativeFeeEpoch {
 	) -> anyhow::Result<Self> {
 		ensure!(raw.len() <= 4 * 1024 * 1024 && sha256::Hash::hash(raw) == expected,
 			"native fee activation original bytes/hash differ");
+		budget.require_no_unreconciled_urgent()?;
 		let genesis = core.get_block_hash(0).await?;
 		ensure!(genesis == bitcoin::constants::genesis_block(network).block_hash(),
 			"native fee activation actual Core genesis differs");

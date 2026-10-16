@@ -99,6 +99,7 @@ impl Config {
 ///
 /// The fee rates are updated periodically by a background process.
 pub struct FeeEstimator {
+	urgent_fee_rates: parking_lot::RwLock<OnchainFeeRates>,
 	fee_rates: parking_lot::RwLock<VecDeque<(OnchainFeeRates, Instant)>>,
 	history_duration: Duration,
 	max_fee_rate: Option<FeeRate>,
@@ -110,10 +111,12 @@ impl FeeEstimator {
 		history_duration: Duration,
 		max_fee_rate: Option<FeeRate>,
 	) -> Self {
+		let urgent_rates = initial;
 		if let Some(max) = max_fee_rate {
 			initial.clamp(max);
 		}
 		Self {
+			urgent_fee_rates: parking_lot::RwLock::new(urgent_rates),
 			fee_rates: parking_lot::RwLock::new([(initial, Instant::now())].into()),
 			history_duration, max_fee_rate,
 		}
@@ -132,6 +135,12 @@ impl FeeEstimator {
 	/// Returns the regular fee rate (3-block confirmation target).
 	pub fn regular(&self) -> FeeRate {
 		self.get_current_rates().regular
+	}
+
+	/// Current regular quote for time-critical claims and exit progression.
+	/// Signed urgent candidates remain subject to their separate allowance.
+	pub(crate) fn urgent_regular(&self) -> FeeRate {
+		self.urgent_fee_rates.read().regular
 	}
 
 	/// Returns the slow fee rate (6-block confirmation target).
@@ -213,6 +222,7 @@ impl FeeEstimator {
 	}
 
 	fn update(&self, mut rates: OnchainFeeRates) {
+		*self.urgent_fee_rates.write() = rates;
 		if let Some(max) = self.max_fee_rate {
 			rates.clamp(max);
 		}
@@ -422,4 +432,30 @@ mod test {
 		// 4 meets the new floor and stays within a regular rate in history.
 		assert_eq!(est.check_offboard_fee_rate(rate(4), d), Ok(()));
 	}
+
+	#[test]
+	fn urgent_quote_preserves_startup_estimate_without_ordinary_history_credit() {
+		let est = FeeEstimator::new(
+			OnchainFeeRates { fast: rate(50), regular: rate(20), slow: rate(10) },
+			Duration::from_secs(3600), Some(rate(3)),
+		);
+		assert_eq!((est.fast(), est.regular(), est.slow()), (rate(3), rate(3), rate(3)));
+		assert_eq!(est.urgent_regular(), rate(20));
+		assert!(!est.is_historical_regular_rate(rate(20), Duration::from_secs(3600)));
+	}
+
+	#[test]
+	fn urgent_quote_tracks_updates_without_raising_ordinary_offboard_ceiling() {
+		let d = Duration::from_secs(3600);
+		let est = FeeEstimator::new(
+			OnchainFeeRates { fast: rate(3), regular: rate(3), slow: rate(1) }, d, Some(rate(3)),
+		);
+		est.update(OnchainFeeRates { fast: rate(600), regular: rate(500), slow: rate(100) });
+		assert_eq!((est.regular(), est.urgent_regular()), (rate(3), rate(500)));
+		assert_eq!(est.check_offboard_fee_rate(rate(500), d), Err(OffboardFeeRateError::TooHigh));
+		est.update(OnchainFeeRates { fast: rate(2), regular: rate(1), slow: rate(1) });
+		assert_eq!((est.regular(), est.urgent_regular()), (rate(1), rate(1)));
+		assert!(!est.is_historical_regular_rate(rate(500), d));
+	}
+
 }

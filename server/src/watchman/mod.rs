@@ -414,7 +414,11 @@ impl Watchman {
 		path: crate::fee_allowance::Path,
 	) -> anyhow::Result<()> {
 		//TODO(stevenroose) adapt feerate to how close the deadline is
-		let min_feerate = self.fee_estimator.regular();
+		let min_feerate = if path == crate::fee_allowance::Path::Claim {
+			self.fee_estimator.urgent_regular()
+		} else {
+			self.fee_estimator.regular()
+		};
 
 		// make sure we always increment with the minimum incremental feerate
 		let mut feerate = min_feerate;
@@ -739,7 +743,7 @@ impl Watchman {
 	/// is the pre-computed progress transaction that should be broadcast.
 	async fn process_progress_txs(&self, mut txs: Vec<(Txid, ServerVtxo)>) -> anyhow::Result<()> {
 		//TODO(stevenroose) adapt feerate to how close the deadline is
-		let min_fee_rate = self.fee_estimator.regular();
+		let min_fee_rate = self.fee_estimator.urgent_regular();
 
 		// make sure we always increment with the minimum incremental feerate
 		let mut fee_rate = min_fee_rate;

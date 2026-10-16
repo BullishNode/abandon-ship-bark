@@ -53,7 +53,7 @@ async fn enable_fixture_epoch(ctx:&TestContext,srv:&Captaind,ordinary:u64) {
 	srv.watchmand().start().await.unwrap();srv.start().await.unwrap();
 }
 
-fn actual_fee(core:&bitcoin_ext::rpc::Client,tx:&Transaction)->u64 {
+fn actual_fee(core:&bitcoin_ext::rpc::BitcoinRpcClient,tx:&Transaction)->u64 {
 	let gross=tx.input.iter().map(|i| {
 		let p=core.get_raw_transaction(&i.previous_output.txid,None).unwrap();
 		p.output[i.previous_output.vout as usize].value.to_sat()

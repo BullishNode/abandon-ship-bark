@@ -11,6 +11,7 @@ mod embedded {
 pub mod carrier_snapshot;
 pub mod expiry_carrier;
 pub(crate) mod direct_delivery;
+pub(crate) mod native_fee_publication;
 pub mod expiry_freeze;
 mod fresh_hark_expiry;
 mod expiry_route;
@@ -87,6 +88,7 @@ enum AdvisoryLock {
 	MailboxWrite = 1,
 	HtlcSettlementWrite = 2,
 	ExpiryCarrierWrite = 3,
+	NativeFeePublication = 4,
 }
 
 /// An uncommitted offboard fetched for the retry-task commit path. Carries

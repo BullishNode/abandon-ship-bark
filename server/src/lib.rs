@@ -210,6 +210,8 @@ pub struct Server {
 	/// The keypair used to generate ephemeral keys using tweaks
 	ephemeral_master_key: Secret<Keypair>,
 	rounds_wallet: InstrumentedLock<PersistedWallet>,
+	// Unpublished exact candidates retain whole inputs for this process lifetime.
+	_native_fee_input_guards: Vec<wallet::WalletUtxosGuard>,
 	bitcoind: BitcoindClient,
 	// NB needs to be Arc so tasks started before Server is constructed can share it
 	sync_manager: Arc<SyncManager>,
@@ -440,6 +442,20 @@ impl Server {
 			ensure!(cfg.rpc.admin_address.is_none_or(|a| a.ip().is_loopback()),
 				"expiry payouts require the admin RPC to be disabled or bound to loopback");
 		}
+		// Wait for prior intent COMMITs and bind each published intent to the
+		// exact original nursery body before admitting it to the wallet graph.
+		// An unpublished candidate is NEVER replayed as a wallet transaction.
+		let native_fee_intents = db.write(async |t| t.retained_native_fee_inputs().await).await
+			.context("reconciling retained native publication inputs")?;
+		for intent in native_fee_intents.iter().filter(|intent| intent.published) {
+			rounds_wallet.commit_tx(&intent.transaction);
+		}
+		let mut native_fee_input_guards = Vec::new();
+		for intent in native_fee_intents.iter().filter(|intent| !intent.published) {
+			native_fee_input_guards.push(rounds_wallet.lock_wallet_utxos(
+				intent.transaction.input.iter().map(|input| input.previous_output))
+				.context("retaining unpublished native candidate inputs")?);
+		}
 		// Reapply durable nursery spends before any worker can select their inputs.
 		for tx in db.read(async |t| t.pending_expiry_payments(rounds_wallet.latest_checkpoint().height()).await).await? {
 			rounds_wallet.commit_tx(&tx);
@@ -523,6 +539,7 @@ impl Server {
 
 		let srv = Server {
 			rounds_wallet,
+			_native_fee_input_guards: native_fee_input_guards,
 			rounds: RoundHandle {
 				round_event_tx,
 				last_round_event: parking_lot::Mutex::new(None),

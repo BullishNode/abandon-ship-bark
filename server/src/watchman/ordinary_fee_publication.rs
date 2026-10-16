@@ -53,6 +53,9 @@ impl PublicationEntry {
 	}
 	pub(crate) fn line(&self) -> anyhow::Result<String> { Ok(format!("p1\t{}\n", serde_json::to_string(self)?)) }
 	pub(crate) fn id(&self) -> Wtxid { self.wtxid }
+	pub(crate) fn record_hash(&self) -> sha256::Hash { self.record_sha256 }
+	pub(crate) fn purpose(&self) -> &'static str { match self.path { PublicationPath::Round => "round", PublicationPath::Pool => "pool" } }
+
 	pub(crate) fn charge(&self, policy: OrdinaryFeePolicy) -> anyhow::Result<u64> {
 		let expected = match policy.regtest_qualification {
 			Some(marker) => marker.per_attempt_ceiling_sat,
@@ -76,6 +79,8 @@ impl PublicationRecord {
 		record.entry(policy)?;
 		Ok(record)
 	}
+	pub(crate) fn transaction(&self) -> anyhow::Result<Transaction> { Ok(deserialize(&self.raw)?) }
+	pub(crate) fn policy_hash(&self) -> sha256::Hash { self.policy_sha256 }
 	pub(crate) fn matches(&self, tx: &Transaction) -> anyhow::Result<()> {
 		ensure!(self.raw == serialize(tx), "ordinary permit signed bytes differ");
 		Ok(())

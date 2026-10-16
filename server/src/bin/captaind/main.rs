@@ -696,7 +696,7 @@ async fn run_rpc(addr: &str, cmd: RpcCommand) -> anyhow::Result<()> {
 			println!("");
 		},
 		RpcCommand::NativeFeeBudget => {
-			let channel = tonic::transport::Endpoint::from_shared(endpoint)?
+			let channel = tonic::transport::Endpoint::from_shared(endpoint.to_string())?
 				.connect_timeout(Duration::from_secs(5))
 				.timeout(Duration::from_secs(8)).connect().await?;
 			let mut rpc = rpc::admin::NativeFundingAdminServiceClient::new(channel)

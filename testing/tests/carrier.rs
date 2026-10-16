@@ -756,7 +756,7 @@ async fn automatic_expired_board_pays_registered_recipient_from_actual_backing()
 	let estimate:serde_json::Value=core.call("estimatesmartfee",&[serde_json::json!(6)]).unwrap();
 	let measurement=serde_json::json!({"scope":"one genuine registered Board/one direct carrier; not fullcase authority",
 		"group_id":map.get::<_,String>(1),"allocation_id":coin.id().to_string(),
-		"canonical_actual_output":{"txid":carrier.compute_txid(),"vout":recipient_vout,"spk":format!("{:?}",expected.script_pubkey)},
+		"canonical_actual_output":{"txid":carrier.compute_txid(),"vout":recipient_vout,"spk":expected.script_pubkey.to_hex_string()},
 		"gross_sat":20_000,"flat_actual_output_fee_sat":1_000,"payout_sat":19_000,
 		"watchman_fee_wallet_opening_sat":50_000,"rounds_fixture_initial_funding_sat":ark_testing::btc(1).to_sat(),
 		"setup_funding_miner_fee_sat":setup_fee_sat,"ordinary_policy":policy,

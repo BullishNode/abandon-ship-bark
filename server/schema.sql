@@ -1070,6 +1070,38 @@ CREATE TABLE public.mailbox (
 
 
 --
+-- Name: native_funding_fee_input; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.native_funding_fee_input (
+    outpoint text NOT NULL,
+    attempt_key text NOT NULL
+);
+
+
+--
+-- Name: native_funding_fee_intent; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.native_funding_fee_intent (
+    attempt_key text NOT NULL,
+    reservation jsonb NOT NULL,
+    signed_tx bytea
+);
+
+
+--
+-- Name: native_funding_fee_resolution; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.native_funding_fee_resolution (
+    winner_index bigint NOT NULL,
+    proof jsonb NOT NULL,
+    CONSTRAINT native_funding_fee_resolution_winner_index_check CHECK ((winner_index > 0))
+);
+
+
+--
 -- Name: nursery_tx; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2205,6 +2237,30 @@ ALTER TABLE ONLY public.lightning_payment_attempt
 
 
 --
+-- Name: native_funding_fee_input native_funding_fee_input_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.native_funding_fee_input
+    ADD CONSTRAINT native_funding_fee_input_pkey PRIMARY KEY (outpoint, attempt_key);
+
+
+--
+-- Name: native_funding_fee_intent native_funding_fee_intent_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.native_funding_fee_intent
+    ADD CONSTRAINT native_funding_fee_intent_pkey PRIMARY KEY (attempt_key);
+
+
+--
+-- Name: native_funding_fee_resolution native_funding_fee_resolution_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.native_funding_fee_resolution
+    ADD CONSTRAINT native_funding_fee_resolution_pkey PRIMARY KEY (winner_index);
+
+
+--
 -- Name: nursery_tx nursery_tx_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2856,6 +2912,14 @@ ALTER TABLE ONLY public.lightning_payment_attempt
 
 ALTER TABLE ONLY public.lightning_payment_attempt
     ADD CONSTRAINT lightning_payment_attempt_lightning_node_id_fkey FOREIGN KEY (lightning_node_id) REFERENCES public.lightning_node(id);
+
+
+--
+-- Name: native_funding_fee_input native_funding_fee_input_attempt_key_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.native_funding_fee_input
+    ADD CONSTRAINT native_funding_fee_input_attempt_key_fkey FOREIGN KEY (attempt_key) REFERENCES public.native_funding_fee_intent(attempt_key);
 
 
 --

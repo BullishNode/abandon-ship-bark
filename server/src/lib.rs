@@ -398,6 +398,10 @@ impl Server {
 		bcd::require_network(&bitcoind, cfg.network).await?;
 		bcd::require_version(&bitcoind).await?;
 		bitcoind.require_txindex().await?;
+		if cfg.direct_expiry.enabled {
+			let(states,resolutions)=watchman::ordinary_fee::funding_snapshot(&cfg.data_dir.join(payout_witness::DIRECT_DIRECTORY))?;
+			watchman::funding_owner::verify_current_resolutions(&db,&bitcoind,cfg.network,&master_xpriv,&states,&resolutions).await?;
+		}
 
 		let bitcoin_address_blocklist = if let Some(ref path) = cfg.bitcoin_address_blocklist {
 			Some(BitcoinAddressBlocklist::new(cfg.network, bitcoind.clone(), path).await

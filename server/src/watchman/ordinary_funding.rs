@@ -256,3 +256,13 @@ mod reply_tests {
 		let mut reply:FundingReply=serde_json::from_slice(&raw).unwrap();reply.reservation.index+=1;assert!(verify_reply(&serde_json::to_vec(&reply).unwrap(),&candidate,key.public_key(),genesis,policy).is_err());
 	}
 }
+
+/// A source-derived current-chain/own-wallet checkpoint, never a payment flag.
+/// It can release only unused inputs of the SAME signed-winning Round family.
+#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FundingResolution {
+	pub winner_index:u64,
+	pub block_height:u32,
+	pub block_hash:bitcoin::BlockHash,
+}

@@ -280,8 +280,8 @@ impl DirectPayoutWitness {
 	) -> anyhow::Result<()> {
 		let opening = crate::watchman::ordinary_fee::require_installed_policy(&self.files.directory, policy)?;
 		self.verify_fee_opening(db, &opening).await?;
-		let funding=crate::watchman::ordinary_fee::funding_snapshot(&self.files.directory)?;
-		db.write(async |t|t.require_native_funding_history(&funding).await).await?;
+		let (funding,resolutions)=crate::watchman::ordinary_fee::funding_snapshot(&self.files.directory)?;
+		db.write(async |t|t.require_native_funding_history(&funding,&resolutions).await).await?;
 		Ok(())
 	}
 

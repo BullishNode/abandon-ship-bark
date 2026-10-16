@@ -202,6 +202,10 @@ impl Daemon {
 			).await?.get::<_, i64>("total"))).await?;
 			ordinary.require_retained_fees(Amount::from_sat(u64::try_from(retained)?))?;
 			ordinary.require_native_epoch()?;
+			// SAME native allowance, never the separate physical 40k floor.
+			// Protect a full configured claim + progression ceiling before any
+			// new discretionary carrier, Round or Pool reservation.
+			ordinary.protect_urgent_attempts(direct.max_miner_fee)?;
 			if let Some(opening) = &cfg.native_fee_opening {
 				let epoch = super::ordinary_fee_epoch::NativeFeeEpoch::activate_config(&db, &bitcoind,
 					&ordinary, server_key.public_key(), cfg.network, opening).await?;

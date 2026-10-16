@@ -188,6 +188,9 @@ struct Ledger {
 	uncertain: bool,
 	requires_epoch: bool,
 	active_epoch: Option<sha256::Hash>,
+	// Runtime protection is derived from the actual enforced urgent ceiling.
+	// It does not change stored allowance/history or create spend authority.
+	urgent_headroom: Option<(u64, u32)>,
 }
 
 pub(crate) struct OrdinaryFeeBudget {
@@ -226,7 +229,7 @@ impl OrdinaryFeeBudget {
 		ordinary_fee_publication::validate_witnesses(directory, policy, &parsed.publications)?;
 		Ok(Self { directory: directory.into(), policy, ledger: Mutex::new(Ledger {
 			file, charged: parsed.charged, carrier_charged: parsed.carrier_charged,
-			publications: parsed.publications, length, uncertain: false, requires_epoch: false, active_epoch: None,
+			publications: parsed.publications, length, uncertain: false, requires_epoch: false, active_epoch: None, urgent_headroom: None,
 		}) })
 	}
 
@@ -249,9 +252,35 @@ impl OrdinaryFeeBudget {
 		self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?.requires_epoch = true;
 		Ok(())
 	}
+	/// One claim and one progression can represent distinct required exposures.
+	/// Their FULL configured ceilings remain inside this SAME native allowance,
+	/// independently of the physical urgent wallet floor. No unused debit is
+	/// refunded. More campaign exposures still require an independently priced
+	/// complete source; this minimum is not a full-cohort coverage certificate.
+	pub(crate) fn protect_urgent_attempts(&self, ceiling: Amount) -> anyhow::Result<()> {
+		const REQUIRED_ATTEMPTS: u32 = 2;
+		self.policy.validate_ceiling(ceiling)?;
+		let headroom = ceiling.to_sat().checked_mul(u64::from(REQUIRED_ATTEMPTS)).context("urgent headroom overflow")?;
+		ensure!(headroom <= self.policy.ordinary_budget_sat,
+			"native allowance cannot cover one full claim and one full progression attempt");
+		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		let protection = (ceiling.to_sat(), REQUIRED_ATTEMPTS);
+		ensure!(ledger.urgent_headroom.is_none_or(|old| old == protection), "active urgent protection cannot be changed");
+		ledger.urgent_headroom = Some(protection);
+		Ok(())
+	}
+	fn require_discretionary_headroom(&self, ledger: &Ledger, next_charge: u64) -> anyhow::Result<()> {
+		ensure!(!ledger.requires_epoch || ledger.urgent_headroom.is_some(), "actual DIRECT urgent fee headroom is not configured");
+		if let Some((ceiling, attempts)) = ledger.urgent_headroom {
+			let headroom = ceiling.checked_mul(u64::from(attempts)).context("urgent headroom overflow")?;
+			ensure!(next_charge.checked_add(headroom).is_some_and(|total| total <= self.policy.ordinary_budget_sat),
+				"discretionary publication would consume protected SAME-ledger urgent fee authority");
+		}
+		Ok(())
+	}
 	pub(crate) fn require_active_owner(&self) -> anyhow::Result<()> {
 		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
-		ensure!(!ledger.uncertain && (!ledger.requires_epoch || ledger.active_epoch.is_some()),
+		ensure!(!ledger.uncertain && (!ledger.requires_epoch || (ledger.active_epoch.is_some() && ledger.urgent_headroom.is_some())),
 			"direct fee owner lacks its actual reconciled native epoch");
 		Ok(())
 	}
@@ -274,6 +303,7 @@ impl OrdinaryFeeBudget {
 		ordinary_fee_publication::validate_witnesses(&self.directory, self.policy, &ledger.publications)?;
 		ensure!(!ledger.requires_epoch || ledger.active_epoch.is_some(), "direct carrier construction requires native fee activation");
 		let charged = checked_charge(ledger.charged, ceiling.to_sat(), self.policy)?;
+		self.require_discretionary_headroom(&ledger, charged)?;
 		let entry = format!("{}\n", ceiling.to_sat());
 		ensure!(ledger.length + entry.len() as u64 <= MAX_HISTORY_BYTES, "ordinary fee history capacity exhausted");
 		ledger.uncertain = true;
@@ -321,9 +351,9 @@ impl OrdinaryFeeBudget {
 	pub(crate) fn reserve_publication(&self, record: &PublicationRecord) -> anyhow::Result<()> {
 		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
 		ensure!(!ledger.requires_epoch || ledger.active_epoch.is_some(), "native publication requires actual fee activation");
-		self.reserve_publication_locked(&mut ledger, record)
+		self.reserve_publication_locked(&mut ledger, record, false)
 	}
-	fn reserve_publication_locked(&self, ledger: &mut Ledger, record: &PublicationRecord) -> anyhow::Result<()> {
+	fn reserve_publication_locked(&self, ledger: &mut Ledger, record: &PublicationRecord, validated_historical_import: bool) -> anyhow::Result<()> {
 		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length,
 			"ordinary fee history uncertain or changed; reconcile original reservation");
 		let entry = record.entry(self.policy)?;
@@ -333,6 +363,7 @@ impl OrdinaryFeeBudget {
 			return Ok(());
 		}
 		let charged = checked_charge(ledger.charged, entry.charge(self.policy)?, self.policy)?;
+		if !validated_historical_import { self.require_discretionary_headroom(ledger, charged)?; }
 		let line = entry.line()?;
 		ensure!(ledger.length + line.len() as u64 <= MAX_HISTORY_BYTES,
 			"ordinary fee history capacity exhausted");
@@ -376,7 +407,7 @@ impl OrdinaryFeeBudget {
 			&& parsed.publications == ledger.publications, "original import cached ledger differs from exact file");
 		ensure!(actual.len() as u64 == ledger.length && actual.starts_with(opening.original_history())
 			&& expected.starts_with(&actual), "native fee history is not the exact original import prefix");
-		for record in opening.publications() { self.reserve_publication_locked(&mut ledger, record)?; }
+		for record in opening.publications() { self.reserve_publication_locked(&mut ledger, record, true)?; }
 		ensure!(ledger.length == expected.len() as u64, "original import has an unexpected retained debit");
 		Ok(())
 	}
@@ -996,6 +1027,52 @@ mod tests {
 		assert_eq!(tasks.into_iter().map(|t| t.join().unwrap()).filter(|ok| *ok).count(), 1);
 		assert_eq!(budget.ledger.lock().unwrap().charged, 58_000);
 		drop(budget); remove_publication_directory(&directory);
+	}
+
+	#[test]
+	fn urgent_two_exposure_headroom_uses_same_58k_and_refuses_20k_discretionary_without_writes() {
+		let directory = publication_directory("urgent-headroom");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };
+		policy.initialize(&directory).unwrap();
+		let owner = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+		owner.protect_urgent_attempts(Amount::from_sat(20_000)).unwrap();
+		let original = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+		assert!(owner.reserve_ceiling(Amount::from_sat(20_000)).is_err());
+		assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(), original);
+		owner.reserve_ceiling(Amount::from_sat(18_000)).unwrap();
+		assert!(owner.reserve_ceiling(Amount::from_sat(1)).is_err());
+		let (next_native, _) = publication_record(policy, super::super::ordinary_fee_publication::PublicationPath::Round, 1, 142);
+		let charged = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+		assert!(owner.reserve_publication(&next_native).is_err());
+		assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(), charged);
+		assert_eq!(owner.ledger.lock().unwrap().charged, 18_000);
+		assert_eq!(owner.urgent_reserve().to_sat(), 40_000);
+		drop(owner);
+		let restored = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+		restored.protect_urgent_attempts(Amount::from_sat(20_000)).unwrap();
+		assert!(restored.reserve_ceiling(Amount::from_sat(1)).is_err());
+		drop(restored); remove_publication_directory(&directory);
+	}
+	#[test]
+	fn urgent_headroom_preserves_historical_import_without_granting_new_ordinary_credit() {
+		let directory = publication_directory("urgent-historical");
+		let policy = OrdinaryFeePolicy { ordinary_budget_sat: 58_000, ..Default::default() };
+		policy.initialize(&directory).unwrap();
+		let (record, signed) = publication_record(policy, super::super::ordinary_fee_publication::PublicationPath::Pool, 5_000, 141);
+		let opening = super::super::ordinary_fee_opening::synthetic_checked_opening(b"14000\n".to_vec(), vec![record.clone()]);
+		let owner = OrdinaryFeeBudget::load(&directory, policy).unwrap();
+		owner.reserve_ceiling(Amount::from_sat(14_000)).unwrap();
+		owner.protect_urgent_attempts(Amount::from_sat(20_000)).unwrap();
+		// Already-committed original fees remain charged even when past the new
+		// discretionary frontier. Exact original replay adds no new debit.
+		owner.import_original(&opening).unwrap(); owner.require_publication(&record, &signed).unwrap();
+		let historical = std::fs::read(directory.join(BUDGET_FILE)).unwrap();
+		owner.import_original(&opening).unwrap();
+		assert_eq!(std::fs::read(directory.join(BUDGET_FILE)).unwrap(), historical);
+		assert!(owner.reserve_ceiling(Amount::from_sat(1)).is_err());
+		assert_eq!(owner.ledger.lock().unwrap().charged, 19_000);
+		assert!(owner.protect_urgent_attempts(Amount::from_sat(19_999)).is_err());
+		drop(owner); remove_publication_directory(&directory);
 	}
 
 }

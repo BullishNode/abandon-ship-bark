@@ -59,7 +59,7 @@ use crate::database::{BlockTable, Db};
 use crate::fee_estimator::FeeEstimator;
 use crate::system::RuntimeManager;
 use crate::utils::InstrumentedLock;
-use crate::wallet::PersistedWallet;
+use crate::wallet::{BdkWalletExt, PersistedWallet};
 use crate::watchman::policy::ActionContextFetcher;
 
 /// The kind of mempool spend.
@@ -821,9 +821,17 @@ impl Watchman {
 				crate::fee_allowance::Path::ProgressChild,&cpfp_tx).await?,
 		};
 		self.db.read(async |t| crate::fee_allowance::require_permit(t,&cpfp_tx,fee_permit.as_ref()).await).await?;
-		// Broadcast the progress tx and CPFP as a package
+		// Persist the permitted original package in its owning wallet before relay.
+		// A failed or unknown relay retains the original pending entry and debit.
+		let mut update = bdk_wallet::Update::default();
+		update.tx_update.txs.push(Arc::new(progress_tx.clone()));
+		wallet.apply_update(update).context("retaining original progress parent")?;
+		wallet.commit_tx(&cpfp_tx);
+		wallet.persist().await.context("persisting permitted progress child before relay")?;
+
 		let cpfp_txid = cpfp_tx.compute_txid();
-		bcd::submit_package(&self.bitcoind, &[progress_tx, cpfp_tx]).await?;
+		let package = bcd::submit_package(&self.bitcoind, &[progress_tx, cpfp_tx]).await?;
+		ensure!(package.package_msg == "success", "progress package relay refused: {package:?}");
 
 		slog!(ProgressBroadcast, vtxo_id: vtxo.id(), txid, cpfp_txid);
 

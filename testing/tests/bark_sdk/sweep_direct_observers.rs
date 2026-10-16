@@ -60,6 +60,38 @@ async fn read_owning_wallets(srv: &Captaind) -> Value {
 		"tip":w.tip_height,"reserved_outpoints":w.reserved_outpoints },"atomic":false,"treasury_complete":false })
 }
 
+// An absent hArk owner never supplied the final leaf signature/forfeit, so
+// the retained terminal must remain locked. Authenticate its complete native
+// body against the independently retained signed tree, and FULLY validate its
+// signed immediate ancestor; never insert a preimage or invent a leaf witness.
+fn verify_unclaimed_hark_path(
+	full: &Vtxo, tree: &ark::tree::signed::CachedSignedVtxoTree,
+	parent: &ark::ServerVtxo<ark::vtxo::Full>, funding: &bitcoin::Transaction,
+) -> anyhow::Result<()> {
+	anyhow::ensure!(tree.spec.spec.vtxos.len()==2,"fresh hArk tree must contain replacement and padding only");
+	anyhow::ensure!(full.chain_anchor()==tree.spec.utxo,"hArk tree funding differs");
+	anyhow::ensure!(full.unlock_hash().is_some(),"hArk terminal must remain hash locked");
+	let matching=tree.output_vtxos().filter(|v|v.id()==full.id()).collect::<Vec<_>>();
+	anyhow::ensure!(matching.len()==1 && matching[0].serialize()==full.serialize(),"hArk terminal body differs from native signed tree");
+	full.validate_unsigned(funding)?;
+	let steps=full.transactions().collect::<Vec<_>>();
+	anyhow::ensure!(!steps.is_empty(),"hArk path has no final transition");
+	match full.validate(funding) {
+		Err(ark::vtxo::VtxoValidationError::GenesisTransition{error:"missing preimage",genesis_idx,genesis_len,transition_kind})
+			if genesis_len==steps.len() && genesis_idx+1==genesis_len &&
+				transition_kind=="hash-locked-cosigned-v1"=>{},
+		other=>anyhow::bail!("expected only the unissued final hArk witness, got {other:?}"),
+	}
+	let leaf=&steps.last().unwrap().tx;
+	anyhow::ensure!(leaf.input.len()==1,"hArk leaf must have exactly one signed parent");
+	let parent_id=ark::VtxoId::from(leaf.input[0].previous_output);
+	anyhow::ensure!(parent.id()==parent_id && parent.chain_anchor()==full.chain_anchor() && parent.server_pubkey()==full.server_pubkey(),"hArk parent identity differs");
+	let matching_parent=tree.internal_vtxos().filter(|(v,_)|v.id()==parent_id).collect::<Vec<_>>();
+	anyhow::ensure!(matching_parent.len()==1 && matching_parent[0].0.serialize()==parent.serialize(),"hArk parent body differs from native signed tree");
+	parent.validate(funding)?;
+	Ok(())
+}
+
 async fn reconcile(env: &Env, owners: &[Owner], enabled_utc: f64) -> Value {
 	let core = env.core();
 	let mut failures = Vec::<String>::new();
@@ -111,7 +143,23 @@ async fn reconcile(env: &Env, owners: &[Owner], enabled_utc: f64) -> Value {
 		let link=ark::fallback::KeyLink{user_pubkey:key,recovery_index:proof.get::<_,Option<i32>>(2).map(|i|u32::try_from(i).unwrap()),signature:bitcoin::secp256k1::schnorr::Signature::from_slice(&proof.get::<_,Vec<u8>>(1)).unwrap()};
 		assert_eq!(record.spk,owner.spk);record.verify(Network::Regtest,mailbox).unwrap();link.verify(Network::Regtest,mailbox,&record).unwrap();
 		let funding = core.get_raw_transaction(&full.chain_anchor().txid,None).unwrap();
-		full.validate(&funding).unwrap();
+		if coin.source=="hark_unclaimed" {
+			let round=env.db.read(async |t|t.get_round(full.chain_anchor().txid.into()).await).await.unwrap().expect("retained native hArk round");
+			assert_eq!(round.funding_tx.compute_txid(),funding.compute_txid());
+			let tree=round.into_cached_tree().unwrap();
+			let parent_id=ark::VtxoId::from(full.transactions().last().unwrap().tx.input[0].previous_output);
+			let parent=tree.internal_vtxos().find(|(v,_)|v.id()==parent_id).expect("retained signed immediate parent").0;
+			verify_unclaimed_hark_path(full,&tree,&parent,&funding).unwrap();
+			// Exercise actual-path refusal controls, not a generic malformed RPC.
+			let mut wrong_tree=tree.spec.clone();wrong_tree.utxo.vout^=1;
+			assert!(verify_unclaimed_hark_path(full,&wrong_tree.into_cached_tree(),&parent,&funding).is_err());
+			let mut wrong_body=tree.spec.clone();wrong_body.spec.vtxos[0].vtxo.amount+=sat(1);
+			assert!(verify_unclaimed_hark_path(full,&wrong_body.into_cached_tree(),&parent,&funding).is_err());
+			assert!(verify_unclaimed_hark_path(full,&tree,&ark::ServerVtxo::from(full.clone()),&funding).is_err());
+			let mut wrong_funding=funding.clone();wrong_funding.output[0].value+=sat(1);
+			assert!(verify_unclaimed_hark_path(full,&tree,&parent,&wrong_funding).is_err());
+			env.out.event("hark-retained-signed-path-authenticated",json!({"id":full.id(),"signed_parent":parent.id(),"funding_txid":funding.compute_txid(),"unclaimed_final_witness_retained":true,"wrong_tree_body_parent_funding_refused":true,"preimage_inserted":false}));
+		} else { full.validate(&funding).unwrap(); }
 		let path = std::iter::once(full.chain_anchor().to_string()).chain(full.transactions().map(|v|
 			OutPoint::new(v.tx.compute_txid(),u32::try_from(v.output_idx).unwrap()).to_string())).collect::<BTreeSet<_>>();
 		if !retirement.iter().any(|i|path.contains(i)) { failures.push(format!("{id}: carrier never consumes an actual entitled funding path")); }
@@ -245,7 +293,7 @@ async fn treasury_edge_inner(env: &Env, srv: &Captaind, label: &str) -> Treasury
 	for row in source_rows {
 		assert!(row.get::<_,i64>(0)<=100_000 && row.get::<_,i64>(1)<=128*1024*1024,"complete full-source row/byte budget");
 		if let Some(bytes)=row.get::<_,Option<Vec<u8>>>(2) {
-			let full:Vtxo=Vtxo::deserialize(&bytes).expect("actual full source proof");physical_points.insert(full.chain_anchor());
+			let full:ark::ServerVtxo<ark::vtxo::Full>=ark::ServerVtxo::deserialize(&bytes).expect("actual full server source proof");physical_points.insert(full.chain_anchor());
 			for node in full.transactions() {
 				for index in 0..node.tx.output.len() {physical_points.insert(OutPoint::new(node.tx.compute_txid(),u32::try_from(index).unwrap()));}
 			}

@@ -65,7 +65,6 @@ async fn collected_external_receive_lost_claim_reply_freezes_original_recipient(
 	let (foreign_key, _) = foreign.derive_store_next_keypair().await.unwrap();
 	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(hash).await).await.unwrap().unwrap();
 	let refused = srv.get_public_rpc().await.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-		origin: Some(foreign.fallback_child_hint(foreign_key.public_key()).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: foreign_key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: sub.lowest_incoming_htlc_expiry.unwrap().saturating_sub(srv.config().htlc_expiry_delta).into(),
 		lightning_receive_anti_dos: None,

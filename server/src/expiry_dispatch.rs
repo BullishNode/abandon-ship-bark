@@ -112,7 +112,7 @@ impl Server {
 			*cursor = Some(anchor.clone()); // A blocked/oversized cut advances the fair cursor.
 			let result = async {
 				let roots = self.db.read(async |t| {
-                    let closure_anchors=t.fresh_hark_expiry_anchors(anchor).await?;
+					let closure_anchors=t.fresh_hark_expiry_anchors(anchor).await?;
 					let bound = i64::try_from(LIMITS.max_rows)?.checked_add(1).context("root budget overflow")?;
 					let sql = format!("WITH inventory AS ({INVENTORY}), bounded AS (
 						SELECT vtxo_id, anchor_point, expiry, vtxo FROM inventory WHERE anchor_point=ANY($1) ORDER BY vtxo_id LIMIT $2

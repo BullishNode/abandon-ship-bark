@@ -284,14 +284,14 @@ impl Tx<'_> {
 			replacement: replacement.id(),
 			roots,
 			evidence: serde_json::json!({"version":1,"kind":"fresh-single-hark-same-carrier-retirement","unlock_hash":hash.to_string(),
-                "original":original.id().to_string(),"replacement":replacement.id().to_string(),"round":round_id.to_string(),
-                "original_path_sha256":sha256::Hash::hash(&original.serialize()).to_string(),
-                "replacement_path_sha256":sha256::Hash::hash(&replacement.serialize()).to_string(),
-                "original_record_sha256":sha256::Hash::hash(&old_record.serialize()).to_string(),
-                "replacement_record_sha256":sha256::Hash::hash(&new_record.serialize()).to_string(),
-                "original_link_sha256":sha256::Hash::hash(&old_link.serialize()).to_string(),
-                "replacement_link_sha256":sha256::Hash::hash(&new_link.serialize()).to_string(),
-                "retirement":"both-physical-roots-in-every-version; payment-only-on-canonical-confirmation", "participation_marked_complete":false}),
+				"original":original.id().to_string(),"replacement":replacement.id().to_string(),"round":round_id.to_string(),
+				"original_path_sha256":sha256::Hash::hash(&original.serialize()).to_string(),
+				"replacement_path_sha256":sha256::Hash::hash(&replacement.serialize()).to_string(),
+				"original_record_sha256":sha256::Hash::hash(&old_record.serialize()).to_string(),
+				"replacement_record_sha256":sha256::Hash::hash(&new_record.serialize()).to_string(),
+				"original_link_sha256":sha256::Hash::hash(&old_link.serialize()).to_string(),
+				"replacement_link_sha256":sha256::Hash::hash(&new_link.serialize()).to_string(),
+				"retirement":"both-physical-roots-in-every-version; payment-only-on-canonical-confirmation", "participation_marked_complete":false}),
 		};
 		ensure!(
 			decisions.iter().all(|d| if d.dependencies.is_empty() {

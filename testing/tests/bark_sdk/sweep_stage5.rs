@@ -1,3 +1,5 @@
+use server_rpc::TryFromBytes as _;
+use bitcoin::hashes::Hash as _;
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn stage5_unclaimed_hark_source() {
 	require_operating_build();
@@ -12,7 +14,16 @@ async fn operating_source_hark_unclaimed_automatic_direct() {
 	unclaimed_hark_source_journey("bark_sdk/operating_source_hark_unclaimed_automatic_direct").await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn fresh_hark_watch_lag_then_signed_late_forfeit_keeps_closure() {
+	unclaimed_hark_source_controlled("bark_sdk/fresh_hark_watch_lag_signed_late_forfeit",true).await;
+}
+
 async fn unclaimed_hark_source_journey(context_name: &str) {
+	unclaimed_hark_source_controlled(context_name,false).await;
+}
+
+async fn unclaimed_hark_source_controlled(context_name: &str, negative_controls: bool) {
 	// A finite frozen case-specific declaration is still mandatory before create.
 	let authority=ScaleFeeAuthority::from_env();
 	let ctx = TestContext::new(context_name).await;
@@ -35,10 +46,12 @@ async fn unclaimed_hark_source_journey(context_name: &str) {
 	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
 	let input = wait_spendable(&wallet, 1, Duration::from_secs(120)).await.unwrap().remove(0);
 	let full_input = wallet.get_full_vtxo(input.id()).await.unwrap();
+	let original_key=if negative_controls {Some(wallet.get_vtxo_key(&full_input).await.unwrap())} else {None};
 	let scheduled = ctx.bitcoind().get_block_count().await as u32 + 10;
 	let round = wallet.refresh_vtxos_scheduled(vec![input.id()], bitcoin_ext::BlockHeight::new(scheduled))
 		.await.unwrap().expect("scheduled participation");
 	assert!(round.state().unlock_hash().is_some());
+	let original_unlock_hash=round.state().unlock_hash().unwrap();
 	let accepted_input=round.state().participation().total_in().unwrap().to_sat();
 	let accepted_output=round.state().participation().total_out().unwrap().to_sat();
 	// Disappear before the scheduled height and before any claim/forfeit RPC.
@@ -71,6 +84,10 @@ async fn unclaimed_hark_source_journey(context_name: &str) {
 	assert_eq!(owner.coins.iter().map(|c|c.amount).sum::<u64>(),accepted_output);
 	out.line("hark-economic-groups.jsonl",&json!({"owner":owner.index,"original_id":full_input.id(),"replacement_ids":owner.coins.iter().map(|c|&c.id).collect::<Vec<_>>(),"accepted_input_sat":accepted_input,"accepted_output_sat":accepted_output,"customer_consented_protocol_delta_sat":accepted_input.checked_sub(accepted_output).unwrap(),"protocol_delta_is_not_miner_cost":true}));
 	let expiry = owner.anchors.iter().chain([&full_input]).map(|v| v.expiry_height().to_u32()).max().unwrap();
+	let watch_before=if negative_controls {
+		let tip=db.read(async |t|t.get_highest_block(server::database::BlockTable::Watchmand).await).await.unwrap().unwrap();
+		srv.watchmand().stop().await.unwrap();Some(tip)
+	}else{None};
 	let tip = ctx.bitcoind().get_block_count().await as u32;
 	ctx.generate_blocks(expiry.saturating_sub(tip) + 6).await;
 	super::fallback_lightning::train_fee_estimator(&ctx).await;
@@ -85,6 +102,40 @@ async fn unclaimed_hark_source_journey(context_name: &str) {
 
 	}
 	srv.start().await.unwrap();
+	if let Some(watch_before)=watch_before {
+		let source_ids=[full_input.id().to_string(),owner.coins[0].id.clone()];
+		let before=hark_source_fingerprint(&db,original_unlock_hash,&source_ids).await;
+		let witness=srv.watchmand().config().watchman.direct_expiry.as_ref().unwrap().history_dir.join("direct-expiry-witness");
+		let budget=std::fs::read(witness.join("ordinary-fee-budget")).unwrap();assert!(budget.is_empty());
+		let policy=std::fs::read(witness.join("ordinary-fee-policy.json")).unwrap();
+		let deadline=Instant::now()+Duration::from_secs(30);
+		loop {
+			let cap=db.read(async |t|t.get_highest_block(server::database::BlockTable::Captaind).await).await.unwrap().unwrap();
+			let watch=db.read(async |t|t.get_highest_block(server::database::BlockTable::Watchmand).await).await.unwrap().unwrap();
+			assert_eq!(watch,watch_before,"stopped owning watch cannot advance by a supplied label");
+			assert!(cap.height>watch.height);
+			let log=ctx.datadir.join("server/stdout.log");
+			assert!(std::fs::metadata(&log).unwrap().len()<=16*1024*1024,"bounded actual native log");
+			if std::fs::read_to_string(log).unwrap().contains("fresh hArk awaits matching owning watch and Core-height source") {break;}
+			assert!(Instant::now()<deadline,"actual native fresh-hArk watch barrier was not reached");
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+		let counts=db.read(async |t|Ok(t.query_one("SELECT (SELECT count(*) FROM expiry_allocation),(SELECT count(*) FROM expiry_carrier)",&[]).await?)).await.unwrap();
+		assert_eq!((counts.get::<_,i64>(0),counts.get::<_,i64>(1)),(0,0));
+		assert_eq!(hark_source_fingerprint(&db,original_unlock_hash,&source_ids).await,before,"watch lag must not partially reserve/change the exchange");
+		assert_eq!(std::fs::read(witness.join("ordinary-fee-budget")).unwrap(),budget);
+		assert_eq!(std::fs::read(witness.join("ordinary-fee-policy.json")).unwrap(),policy);
+		out.event("hark-watch-lag-held",json!({"height":watch_before.height.to_u32(),"allocations":0,"carriers":0,"native_guard_reached":true,"source_and_ledger_unchanged":true}));
+		srv.watchmand().start().await.unwrap();
+		let deadline=Instant::now()+Duration::from_secs(60);
+		loop {
+			let cap=db.read(async |t|t.get_highest_block(server::database::BlockTable::Captaind).await).await.unwrap().unwrap();
+			let watch=db.read(async |t|t.get_highest_block(server::database::BlockTable::Watchmand).await).await.unwrap();
+			if watch==Some(cap){break;}
+			assert!(Instant::now()<deadline,"actual owning watch failed to catch up");
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}
 	let enabled = utc();
 	let ids = owner.coins.iter().map(|c| c.id.clone()).collect::<Vec<_>>();
 	let deadline = Instant::now() + Duration::from_secs(180);
@@ -98,6 +149,24 @@ async fn unclaimed_hark_source_journey(context_name: &str) {
 		tokio::time::sleep(Duration::from_secs(1)).await;
 	}
 	ctx.generate_blocks(2).await;
+	if let Some(original_key)=original_key {
+		let source_ids=[full_input.id().to_string(),owner.coins[0].id.clone()];
+		let target=bitcoin_ext::BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		srv.watchmand().wait_for_sync_height(target).await;
+		let before=hark_source_fingerprint(&db,original_unlock_hash,&source_ids).await;
+		let witness=srv.watchmand().config().watchman.direct_expiry.as_ref().unwrap().history_dir.join("direct-expiry-witness");
+		let ledger=std::fs::read(witness.join("ordinary-fee-budget")).unwrap();
+		let mut rpc=srv.get_public_rpc().await;
+		let nonces=rpc.request_forfeit_nonces(protos::ForfeitNoncesRequest{unlock_hash:original_unlock_hash.to_byte_array().to_vec(),vtxo_ids:vec![full_input.id().to_bytes().to_vec()]}).await.unwrap().into_inner().public_nonces;
+		assert_eq!(nonces.len(),1);
+		let nonce=ark::musig::PublicNonce::from_bytes(nonces.into_iter().next().unwrap()).unwrap();
+		let bundle=ark::forfeit::HashLockedForfeitBundle::new(&full_input,original_unlock_hash,&original_key,&nonce);
+		let error=rpc.forfeit_vtxos(protos::ForfeitVtxosRequest{forfeit_bundles:vec![bundle.serialize()]}).await.expect_err("genuine signed late forfeit cannot release unlock or mutate frozen rights");
+		assert!(error.message().contains(server_rpc::EXPIRY_FROZEN_ERROR),"must reach actual direct freeze fence: {error}");
+		assert_eq!(hark_source_fingerprint(&db,original_unlock_hash,&source_ids).await,before);
+		assert_eq!(std::fs::read(witness.join("ordinary-fee-budget")).unwrap(),ledger);
+		out.event("hark-signed-late-forfeit-refused",json!({"actual_signature":true,"unlock_released":false,"source_and_ledger_unchanged":true,"code":format!("{:?}",error.code())}));
+	}
 	out.line("owners.jsonl", &owner.public());
 	let owners = vec![owner];
 	let reconciliation = reconcile(&env, &owners, enabled).await;
@@ -113,15 +182,69 @@ async fn unclaimed_hark_source_journey(context_name: &str) {
 	assert_eq!(old_state.get::<_, String>(0), "spent");
 	assert!(old_state.get::<_, Option<i64>>(1).is_some());
 	let remaining = db.read(async |t| Ok(t.query(
-		"SELECT vtxo FROM vtxo WHERE policy_type='pubkey' AND spend_state IN ('spendable','unclaimed','unregistered')", &[],
+		"SELECT vtxo,spend_state::TEXT AS source_state FROM vtxo WHERE policy_type='pubkey' AND spend_state IN ('spendable','unclaimed','unregistered')", &[],
 	).await?)).await.unwrap();
 	let mut padding = Vec::new();
 	for r in remaining {
+		let source_state:String=r.get("source_state");
 		let v: Vtxo = Vtxo::deserialize(&r.get::<_, Vec<u8>>(0)).unwrap();
 		let key = v.user_pubkey().serialize().to_vec();
 		let linked = db.read(async |t| Ok(t.query_opt("SELECT mailbox_pk FROM key_link WHERE user_pubkey=$1", &[&key]).await?))
 			.await.unwrap();
-		assert!(linked.is_none(), "no actual user entitlement remains unsettled");
+		if linked.is_some() {
+			// Source spend_state is historical. Direct settlement records the
+			// canonical carrier, not a fabricated cooperative claim/forfeit.
+			// Every remaining linked source must independently prove its exact
+			// intended entitlement already retired in that one whole carrier.
+			let intended=owners.iter().flat_map(|o|o.anchors.iter()).find(|full|full.id()==v.id())
+				.expect("unexpected linked entitlement remains unsettled");
+			assert_eq!(v.serialize(),intended.serialize(),"historical replacement signed body changed");
+			let core=env.core();
+			let rows=db.read(async |t|Ok(t.query("SELECT a.freeze_set,a.disposition,a.gross_sat,a.fee_sat,a.payout_sat,a.forfeited_sat,a.retirement_ids,a.source_evidence::TEXT,m.txid,m.vout,c.backing_ids,c.confirmed_height,c.confirmed_block FROM expiry_allocation a JOIN expiry_carrier_allocation m ON m.allocation_id=a.id JOIN expiry_carrier c ON c.txid=m.txid WHERE a.id=$1 ORDER BY c.generation",&[&v.id().to_string()]).await?)).await.unwrap();
+			let mut winner=None;
+			for row in rows {
+				let txid:Txid=row.get::<_,String>(8).parse().unwrap();
+				let info=core.get_raw_transaction_info(&txid,None).unwrap();
+				if info.confirmations.unwrap_or(0)>0 {
+					assert!(winner.is_none(),"one replacement cannot have two canonical winning carriers");
+					let tx=core.get_raw_transaction(&txid,None).unwrap();
+					winner=Some((row,tx,info));
+				}
+			}
+			let(row,tx,info)=winner.expect("linked historical replacement lacks confirmed canonical retirement");
+			let expected_roots=BTreeSet::from([full_input.chain_anchor().to_string(),v.chain_anchor().to_string()]);
+			assert_eq!(expected_roots.len(),2,"fresh hArk genuinely has two physical cuts");
+			let retirement=row.get::<_,Vec<String>>(6).into_iter().collect::<BTreeSet<_>>();
+			let backing=row.get::<_,Vec<String>>(10).into_iter().collect::<BTreeSet<_>>();
+			assert_eq!(retirement,expected_roots,"all original and replacement roots must retire atomically");
+			assert_eq!(backing,expected_roots);
+			let input_points=tx.input.iter().map(|i|i.previous_output.to_string()).collect::<BTreeSet<_>>();
+			assert!(expected_roots.is_subset(&input_points));
+			assert_eq!(row.get::<_,String>(1),"pay");
+			assert_eq!(u64::try_from(row.get::<_,i64>(2)).unwrap(),v.amount().to_sat());
+			assert_eq!(row.get::<_,i64>(3),1000);
+			let net=v.amount().to_sat().checked_sub(1000).unwrap();
+			assert_eq!(u64::try_from(row.get::<_,i64>(4)).unwrap(),net);
+			assert_eq!(row.get::<_,i64>(5),0);
+			let vout=usize::try_from(row.get::<_,Option<i32>>(9).expect("payout vout")).unwrap();
+			assert_eq!(tx.output[vout].value,sat(net));
+			assert_eq!(tx.output[vout].script_pubkey,owners[0].spk);
+			assert_eq!(tx.output.iter().filter(|out|out.script_pubkey==owners[0].spk).count(),1);
+			let block=info.blockhash.expect("confirmed winning block");
+			assert_eq!(row.get::<_,Option<String>>(12),Some(block.to_string()));
+			assert_eq!(u64::try_from(row.get::<_,Option<i32>>(11).unwrap()).unwrap(),core.get_block_header_info(&block).unwrap().height as u64);
+			let evidence:Value=serde_json::from_str(&row.get::<_,String>(7)).unwrap();
+			assert_eq!(evidence["same_carrier_retirement"]["original"],full_input.id().to_string());
+			assert_eq!(evidence["same_carrier_retirement"]["replacement"],v.id().to_string());
+			assert_eq!(evidence["same_carrier_retirement"]["participation_marked_complete"],false);
+			let old=db.read(async |t|Ok(t.query_one("SELECT freeze_set,disposition,gross_sat,payout_sat FROM expiry_allocation WHERE id=$1",&[&full_input.id().to_string()]).await?)).await.unwrap();
+			assert_eq!(old.get::<_,String>(0),row.get::<_,String>(0));
+			assert_eq!(old.get::<_,String>(1),"operator");
+			assert_eq!(u64::try_from(old.get::<_,i64>(2)).unwrap(),full_input.amount().to_sat());
+			assert_eq!(old.get::<_,i64>(3),0);
+			out.line("hark-confirmed-retired-sources.jsonl",&json!({"id":v.id(),"canonical_carrier":tx.compute_txid(),"retirement_roots":retirement,"gross_sat":v.amount().to_sat(),"payout_sat":net,"historical_spend_state":source_state,"cooperative_forfeit_invented":false}));
+			continue;
+		}
 		let hash = v.unlock_hash().expect("remaining output is a locked padding leaf");
 		let participation = db.read(async |t| t.get_round_participation_by_unlock_hash(hash).await).await.unwrap();
 		assert!(participation.is_none(), "padding has no user's participation");
@@ -750,4 +873,12 @@ async fn soak_hark_owner(ctx: &TestContext, srv: &Captaind, env: &Env, index: us
 		"replacement_ids":matched,"original_sat":original.amount().to_sat(),"replacement_sat":replacement,"accepted_input_sat":accepted_input,"accepted_output_sat":accepted_output,"customer_consented_protocol_delta_sat":accepted_input.checked_sub(accepted_output).unwrap(),"protocol_delta_is_not_miner_cost":true,
 		"original_and_replacement_not_separate_rights":true,"user_absent_before_forfeits":true,"qualified":false}));
 	owner.anchors.push(original);env.out.line("owners.jsonl",&owner.public());owner
+}
+
+// Fixed complete source projection for this finite fresh fixture only. Hash in
+// process: no unlock secret, signed body, or ownership blob is exported to logs.
+async fn hark_source_fingerprint(db:&Db,hash:ark::tree::signed::UnlockHash,ids:&[String])->String {
+	let row=db.read(async |t|Ok(t.query_one("SELECT jsonb_build_object('participation',(SELECT to_jsonb(p) FROM round_participation p WHERE p.unlock_hash=$1),'inputs',(SELECT jsonb_agg(to_jsonb(i) ORDER BY i.vtxo_id) FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id WHERE p.unlock_hash=$1),'outputs',(SELECT jsonb_agg(to_jsonb(o) ORDER BY o.policy,o.amount) FROM round_part_output o JOIN round_participation p ON p.id=o.participation_id WHERE p.unlock_hash=$1),'sources',(SELECT jsonb_agg(to_jsonb(v) ORDER BY v.vtxo_id) FROM vtxo v WHERE v.vtxo_id=ANY($2)),'allocations',(SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM expiry_allocation a),'carriers',(SELECT jsonb_agg(to_jsonb(c) ORDER BY c.generation) FROM expiry_carrier c),'mappings',(SELECT jsonb_agg(to_jsonb(m) ORDER BY m.txid,m.allocation_id) FROM expiry_carrier_allocation m))::TEXT",&[&hash.to_string(),&ids]).await?)).await.unwrap();
+	let raw:String=row.get(0);assert!(raw.len()<=4*1024*1024,"bounded complete fresh source projection");
+	<bitcoin::hashes::sha256::Hash as bitcoin::hashes::Hash>::hash(raw.as_bytes()).to_string()
 }

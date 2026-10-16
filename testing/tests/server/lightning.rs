@@ -692,6 +692,7 @@ impl captaind::proxy::ArkRpcProxy for HoldClaim {
 /// its claim. Legacy revocation fixtures force the payer attempt to `failed`;
 /// background cancellation controls retain the actual untouched attempt.
 struct ParkedReceive {
+	_lightning: LightningPaymentSetup,
 	hold_client: hold::hold_client::HoldClient<tonic::transport::Channel>,
 	srv: Arc<Captaind>,
 	payer: Wallet,
@@ -797,7 +798,7 @@ impl ParkedReceive {
 		}
 
 		let payer = bark_payer.client().await;
-		ParkedReceive { hold_client, srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task }
+		ParkedReceive { _lightning: lightning, hold_client, srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task }
 	}
 
 	async fn revoke(&self) -> Result<(), tonic::Status> {
@@ -1001,7 +1002,7 @@ async fn direct_background_cancel_watch_boundary(ctx: &TestContext, missing: boo
 	assert!(!original.is_empty());
 	assert!(parked.srv.htlc_vtxos(hash).await.iter()
 		.any(|h| h.direction() == HtlcDirection::Outgoing && h.amount() > Amount::ZERO));
-	assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Unpaid);
+	assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Cancelled);
 	assert!(!is_preimage_recorded(&db, hash).await);
 	let old_tip = if missing {
 		assert_eq!(persisted_watchman_height(&parked.srv).await, None);
@@ -1026,7 +1027,7 @@ async fn direct_background_cancel_watch_boundary(ctx: &TestContext, missing: boo
 		assert_eq!(persisted_watchman_height(&parked.srv).await, old_tip);
 		assert_eq!(lightning_subscription_status(&db, hash).await.as_deref(), Some("htlcs-ready"));
 		assert_eq!(lightning_attempt_status(&db, hash).await.as_deref(), Some("requested"));
-		assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Unpaid);
+		assert_eq!(direct_background_hold_state(&mut parked.hold_client, hash).await, hold::InvoiceState::Cancelled);
 		assert!(!is_preimage_recorded(&db, hash).await);
 		assert_eq!(direct_background_grant_bodies(&parked.srv, hash).await, original);
 		tokio::time::sleep(Duration::from_millis(200)).await;
@@ -3554,4 +3555,191 @@ async fn self_payment_claim_rejected_after_sender_onchain_refund() {
 
 	let err = result.expect_err("claim must be refused after the sender refunded on-chain");
 	assert!(err.message().contains("too close to the current chaintip"), "unexpected error: {err:?}");
+}
+
+
+// Current financial regression: cancellation is real background processing,
+// never an UPDATE that invents a terminal receive/attempt or a physical exit.
+async fn wait_actual_canceled_failed(db: &Db, hash: PaymentHash) {
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			if lightning_subscription_status(db, hash).await.as_deref() == Some("canceled")
+				&& lightning_attempt_status(db, hash).await.as_deref() == Some("failed")
+			{
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	})
+	.await
+	.expect("actual background cancellation and payer failure must finish");
+}
+async fn refund_htlc_money_digest(db: &Db, hash: PaymentHash) -> sha256::Hash {
+	let rows=db.read(async|t|Ok(t.query("SELECT row_to_json(q)::TEXT FROM (SELECT v.vtxo_id,v.spend_state::TEXT,v.oor_spent_txid,v.offboarded_in,v.confirmed_height,h.offchain_resolution::TEXT,h.chain_resolution::TEXT,h.chain_resolution_height FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE h.payment_hash=$1 ORDER BY v.vtxo_id LIMIT 129) q",&[&hash.to_string()]).await?)).await.unwrap();
+	assert!(
+		!rows.is_empty() && rows.len() <= 128,
+		"complete bounded actual HTLC money cut"
+	);
+	sha256::Hash::hash(
+		&serde_json::to_vec(
+			&rows
+				.iter()
+				.map(|r| r.get::<_, String>(0))
+				.collect::<Vec<_>>(),
+		)
+		.unwrap(),
+	)
+}
+#[tokio::test]
+async fn canceled_granted_receive_refund_waits_for_physical_retirement() {
+	require_bark_version!(> "0.5.0");
+	let ctx =
+		TestContext::new("server/canceled_granted_receive_refund_waits_for_physical_retirement")
+			.await;
+	let parked = ParkedReceive::setup_with_attempt(&ctx, true, true, false).await;
+	let db = Db::connect(&parked.srv.config().postgres).await.unwrap();
+	let hash = parked.payment_hash;
+	assert_direct_receive_watchman(&parked.srv);
+	let grants = parked
+		.srv
+		.htlc_vtxos(hash)
+		.await
+		.into_iter()
+		.filter(|h| h.direction() == HtlcDirection::Outgoing)
+		.collect::<Vec<_>>();
+	assert!(!grants.is_empty());
+	let bodies = direct_background_grant_bodies(&parked.srv, hash).await;
+	let old = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let tip = ctx
+		.generate_blocks(parked.htlc_recv_expiry.to_u32() + 1 - old.to_u32())
+		.await;
+	parked.srv.wait_for_sync_height(tip).await;
+	parked.srv.watchmand().wait_for_sync_height(tip).await;
+	wait_actual_canceled_failed(&db, hash).await;
+	assert!(
+		grants.iter().all(|h| h.vtxo.vtxo.expiry_height() > tip),
+		"receive HTLC deadline is not physical VTXO expiry"
+	);
+	let core = ctx.bitcoind().sync_client();
+	for grant in &grants {
+		let root = grant.vtxo.vtxo.chain_anchor();
+		assert!(
+			core.get_tx_out(&root.txid, root.vout, Some(true))
+				.unwrap()
+				.is_some(),
+			"actual grant funding must still be unspent, not assumed retired"
+		);
+	}
+	let sub = db
+		.read(async |t| t.get_htlc_subscription_by_payment_hash(hash).await)
+		.await
+		.unwrap()
+		.unwrap();
+	assert!(!sub.htlc_vtxos.is_empty());
+	assert!(!is_preimage_recorded(&db, hash).await);
+	let before = refund_htlc_money_digest(&db, hash).await;
+	let witness = parked.srv.config().data_dir.join("direct-expiry-witness");
+	let budget = std::fs::read(witness.join("ordinary-fee-budget")).unwrap();
+	let policy = std::fs::read(witness.join("ordinary-fee-policy.json")).unwrap();
+	let error = parked
+		.revoke()
+		.await
+		.expect_err("canceled grants retain unilateral rights until actual retirement");
+	assert!(
+		error.message().contains("can still be exited"),
+		"must reach actual physical claimability gate, not an unrelated refusal: {error}"
+	);
+	assert_eq!(refund_htlc_money_digest(&db, hash).await, before);
+	assert_eq!(
+		direct_background_grant_bodies(&parked.srv, hash).await,
+		bodies
+	);
+	assert_eq!(
+		lightning_subscription_status(&db, hash).await.as_deref(),
+		Some("canceled")
+	);
+	assert_eq!(
+		lightning_attempt_status(&db, hash).await.as_deref(),
+		Some("failed")
+	);
+	assert!(!is_preimage_recorded(&db, hash).await);
+	assert_eq!(
+		std::fs::read(witness.join("ordinary-fee-budget")).unwrap(),
+		budget
+	);
+	assert_eq!(
+		std::fs::read(witness.join("ordinary-fee-policy.json")).unwrap(),
+		policy
+	);
+	parked.assert_claim_refused().await;
+}
+#[tokio::test]
+async fn canceled_receive_without_grant_keeps_legitimate_refund() {
+	require_bark_version!(> "0.5.0");
+	let ctx =
+		TestContext::new("server/canceled_receive_without_grant_keeps_legitimate_refund").await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx
+		.captaind("server")
+		.bitcoind(ctx.bitcoind_arc())
+		.lightningd(&lightning.internal)
+		.funded(btc(10))
+		.watchmand_cfg(direct_receive_watchman_config)
+		.cfg(|c| {
+			c.expiry_payout.enabled = false;
+			c.direct_expiry.enabled = true;
+			c.invoice_check_interval = Duration::from_secs(1);
+			c.receive_htlc_forward_timeout = Duration::from_secs(1);
+		})
+		.create()
+		.await;
+	srv.wait_for_vtxopool(&ctx).await;
+	assert_direct_receive_watchman(&srv);
+	let payer = ctx.bark("payer", &srv).funded(btc(3)).create().await;
+	let payee = ctx.bark("payee", &srv).create().await;
+	payer.board_and_confirm_and_register(&ctx, btc(2)).await;
+	let invoice = payee.bolt11_invoice(btc(1)).await;
+	let hash = PaymentHash::from(&Bolt11Invoice::from_str(&invoice.invoice).unwrap());
+	payer.pay_lightning(invoice.invoice, None).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	wait_actual_canceled_failed(&db, hash).await;
+	let sub = db
+		.read(async |t| t.get_htlc_subscription_by_payment_hash(hash).await)
+		.await
+		.unwrap()
+		.unwrap();
+	assert!(sub.htlc_vtxos.is_empty(), "payee never requested a grant");
+	let actual_grants = db
+		.read(async |t| {
+			Ok(t.query_one(
+				"SELECT count(*) FROM vtxo WHERE lightning_htlc_subscription_id=$1",
+				&[&sub.id],
+			)
+			.await?
+			.get::<_, i64>(0))
+		})
+		.await
+		.unwrap();
+	assert_eq!(actual_grants, 0);
+	assert!(!is_preimage_recorded(&db, hash).await);
+	let client = payer.client().await;
+	try_request_htlc_revocation(&srv, &client, hash)
+		.await
+		.expect("canceled actual no-grant receive must retain legitimate refund eligibility");
+	assert_eq!(
+		lightning_subscription_status(&db, hash).await.as_deref(),
+		Some("canceled")
+	);
+	assert!(!is_preimage_recorded(&db, hash).await);
+	let sends = srv.htlc_vtxos(hash).await;
+	let incoming = sends
+		.iter()
+		.filter(|h| h.direction() == HtlcDirection::Incoming)
+		.collect::<Vec<_>>();
+	assert!(!incoming.is_empty());
+	assert!(incoming.iter().all(|h| h.htlc.offchain_resolution
+		== Some(server::database::htlc_vtxo::HtlcResolution::Revoked)));
+	assert_eq!(payee.spendable_balance().await, Amount::ZERO);
+	// This proves native refund cosign/atomic debit; no completed user spend or
+	// actual payout is inferred from a response the client has not finalized.
 }

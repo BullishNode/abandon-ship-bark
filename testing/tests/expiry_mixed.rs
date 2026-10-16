@@ -220,8 +220,9 @@ async fn mixed_case(local_retry: bool) {
 	}).await.unwrap();
 	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(hash).await).await.unwrap().unwrap();
 	let (key, _) = receiver.derive_store_next_keypair().await.unwrap();
+	// Require the canonical per-key acknowledgment before preparing the grant.
+	receiver.fallback_key_link(key.public_key()).await.unwrap();
 	let grants = srv.get_public_rpc().await.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-		origin: Some(receiver.fallback_child_hint(key.public_key()).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: sub.lowest_incoming_htlc_expiry.unwrap().saturating_sub(srv.config().htlc_expiry_delta).into(),
 		lightning_receive_anti_dos: None,
@@ -245,10 +246,10 @@ async fn mixed_case(local_retry: bool) {
 	let output = sender.derive_store_next_keypair().await.unwrap().0.public_key();
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(full_inputs, VtxoPolicy::new_pubkey(output))
 		.unwrap().generate_user_nonces(&keys).unwrap();
-	let mut revocation = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
-	for part in &mut revocation.parts {
-		for requested in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
-			requested.origin = Some(sender.fallback_child_hint(VtxoPolicy::deserialize(&requested.policy).unwrap().user_pubkey()).await.unwrap().into());
+	let revocation = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	for part in &revocation.parts {
+		for requested in part.outputs.iter().chain(part.isolated_outputs.iter()) {
+			sender.fallback_key_link(VtxoPolicy::deserialize(&requested.policy).unwrap().user_pubkey()).await.unwrap();
 		}
 	}
 	let deadline = htlcs.iter().map(|v| v.policy().as_server_htlc_send().unwrap().htlc_expiry)

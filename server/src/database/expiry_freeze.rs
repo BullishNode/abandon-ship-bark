@@ -69,18 +69,18 @@ impl Tx<'_> {
 		send_evidence: &BTreeMap<PaymentHash, SendRefundEvidence>, network: Network,
 		budget: BackingSnapshotLimits,
 	) -> anyhow::Result<FrozenExpiryPlan> {
-        self.freeze_expiry_sources_at_tip(roots,terminals,residuals,context,send_evidence,network,budget,None).await
-    }
+		self.freeze_expiry_sources_at_tip(roots,terminals,residuals,context,send_evidence,network,budget,None).await
+	}
 
-    /// Actual Core identity is supplied only by the native guarded server path.
-    /// The old source-proposal API cannot claim a fresh hArk closure by providing
-    /// a height alone; every other existing source retains its prior behavior.
-    pub(crate) async fn freeze_expiry_sources_at_tip(
-        &self, roots: &[ServerVtxo], terminals: &[ServerVtxo<Full>],
-        residuals: &[BackingPartitionResidual], context: &OwnershipContext<'_>,
-        send_evidence: &BTreeMap<PaymentHash, SendRefundEvidence>, network: Network,
-        budget: BackingSnapshotLimits, actual_core_tip: Option<bitcoin_ext::BlockRef>,
-    ) -> anyhow::Result<FrozenExpiryPlan> {
+	/// Actual Core identity is supplied only by the native guarded server path.
+	/// The old source-proposal API cannot claim a fresh hArk closure by providing
+	/// a height alone; every other existing source retains its prior behavior.
+	pub(crate) async fn freeze_expiry_sources_at_tip(
+		&self, roots: &[ServerVtxo], terminals: &[ServerVtxo<Full>],
+		residuals: &[BackingPartitionResidual], context: &OwnershipContext<'_>,
+		send_evidence: &BTreeMap<PaymentHash, SendRefundEvidence>, network: Network,
+		budget: BackingSnapshotLimits, actual_core_tip: Option<bitcoin_ext::BlockRef>,
+	) -> anyhow::Result<FrozenExpiryPlan> {
 		ensure!(!roots.is_empty() && !terminals.is_empty(), "empty expiry source freeze");
 		ensure!(roots.len() <= budget.max_rows && terminals.len() <= budget.max_rows && residuals.len() <= budget.max_rows,
 			"expiry source freeze exceeds row budget");
@@ -99,15 +99,15 @@ impl Tx<'_> {
 		let covered = terminals.iter().map(|v| v.id()).collect::<Vec<_>>();
 		let mut decisions = self.expiry_ownership_proposal(&snapshot, &covered, context, send_evidence).await?;
 		let fresh_hark = self.fresh_hark_retirement(&snapshot, terminals, &decisions, context, budget, network, actual_core_tip).await?;
-        let retirement_roots = roots.iter().map(|r| r.id()).collect::<BTreeSet<_>>();
-        ensure!(decisions.iter().all(|d| d.dependencies.is_empty() || fresh_hark.as_ref().is_some_and(|proof| proof.covers(d, &retirement_roots))), "expiry closure requires retirement reconciliation before freeze");
-        if let Some(proof) = &fresh_hark {
-            for decision in &mut decisions {
-                if matches!(decision.disposition, OwnershipDisposition::ConditionalOriginalRecovery(_)) {
-                    decision.disposition = OwnershipDisposition::Operator(proof.operator_reason());
-                }
-            }
-        }
+		let retirement_roots = roots.iter().map(|r| r.id()).collect::<BTreeSet<_>>();
+		ensure!(decisions.iter().all(|d| d.dependencies.is_empty() || fresh_hark.as_ref().is_some_and(|proof| proof.covers(d, &retirement_roots))), "expiry closure requires retirement reconciliation before freeze");
+		if let Some(proof) = &fresh_hark {
+			for decision in &mut decisions {
+				if matches!(decision.disposition, OwnershipDisposition::ConditionalOriginalRecovery(_)) {
+					decision.disposition = OwnershipDisposition::Operator(proof.operator_reason());
+				}
+			}
+		}
 		let owners = decisions.iter().filter_map(|d| match d.disposition {
 			OwnershipDisposition::Customer(input) => Some(input.owner), _ => None,
 		}).collect::<Vec<_>>();
@@ -118,7 +118,7 @@ impl Tx<'_> {
 			let proof = terminals.iter().find(|v| v.id() == decision.id).context("missing covered expiry terminal")?;
 			ensure!(decision.gross == proof.amount(), "expiry source gross differs from physical terminal");
 			let mut evidence = serde_json::json!({"version":1,"source_path_sha256":sha256::Hash::hash(&proof.serialize()).to_string()});
-            if let Some(closure) = &fresh_hark { evidence["same_carrier_retirement"] = closure.evidence.clone(); }
+			if let Some(closure) = &fresh_hark { evidence["same_carrier_retirement"] = closure.evidence.clone(); }
 			match decision.disposition {
 				OwnershipDisposition::Customer(input) => {
 					let script = scripts.get(&input.owner).context("expiry source has no authenticated address")?.clone();

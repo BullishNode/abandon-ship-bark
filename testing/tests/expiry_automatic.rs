@@ -177,11 +177,11 @@ async fn automatic_expiry_unregistered_arkoor_pays_exact_actual_input_owner() {
 	let builder = ArkoorPackageBuilder::new_with_checkpoints(vec![input.clone()], vec![
 		ArkoorDestination { total_amount: input.amount(), policy: address.policy().clone() },
 	]).unwrap().generate_user_nonces(&[key]).unwrap();
-	let mut request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
-	for part in &mut request.parts {
-		for output in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
+	let request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	for part in &request.parts {
+		for output in part.outputs.iter().chain(part.isolated_outputs.iter()) {
 			assert_eq!(VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey(), address.policy().user_pubkey());
-			output.origin = Some(address.account_child().unwrap().unwrap().into());
+			receiver.fallback_key_link(VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey()).await.unwrap();
 		}
 	}
 	let response = srv.get_public_rpc().await.request_arkoor_cosign(request).await.unwrap().into_inner();

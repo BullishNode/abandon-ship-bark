@@ -121,7 +121,7 @@ fn inspect(request: Request, input_sha: &str) -> Result<Value> {
 	let mut views=Vec::new();
 	for (kind,aggregate) in changes {
 		let mut encoded=Limited(Vec::new());serde_json::to_writer(&mut encoded,&aggregate)?;let aggregate_sha=digest(&encoded.0);
-		ensure!(aggregate.local_chain.len()<=MAX_NODES && aggregate.tx_graph.txs.len()<=MAX_ROWS && aggregate.tx_graph.txouts.len()<=MAX_NODES && aggregate.tx_graph.anchors.len()<=MAX_NODES,"merged graph budget exceeded");
+		ensure!(aggregate.local_chain.blocks.len()<=MAX_NODES && aggregate.tx_graph.txs.len()<=MAX_ROWS && aggregate.tx_graph.txouts.len()<=MAX_NODES && aggregate.tx_graph.anchors.len()<=MAX_NODES,"merged graph budget exceeded");
 		let has_change=aggregate.change_descriptor.is_some();
 		let wallet=Wallet::load().check_network(network).load_wallet_no_persist(aggregate)?.context("original public wallet incomplete")?;
 		let checkpoints=wallet.latest_checkpoint().iter().map(|p|p.block_id()).collect::<Vec<_>>();ensure!(checkpoints.len()<=MAX_NODES,"checkpoint budget exceeded");

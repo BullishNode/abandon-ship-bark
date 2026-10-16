@@ -43,8 +43,8 @@ impl OrdinaryFeePolicy {
 			"ordinary direct fees require at least 15000 sats protected urgent reserve");
 		ensure!(self.ordinary_budget_sat > 0 && self.ordinary_budget_sat <= 60_000,
 			"ordinary lifetime budget must be positive and at most 60000 sats");
-		ensure!(self.external_future_reserved_sat >= 20_000 && self.external_future_reserved_sat <= self.ordinary_budget_sat,
-			"ordinary fees require the fixed external future partition of at least 20000 sats");
+		ensure!(self.external_future_reserved_sat <= self.ordinary_budget_sat,
+			"external future partition exceeds ordinary lifetime allowance");
 		ensure!(self.opening_sha256 != Some(sha256::Hash::all_zeros()), "missing adopted opening digest");
 		Ok(())
 	}
@@ -90,8 +90,7 @@ impl OrdinaryFeeOpening {
 		match policy.opening_sha256 {
 			Some(_) => {
 				ensure!(self.history_prefix_bytes > 0, "adoption requires the complete original signed history prefix");
-				ensure!(self.native_spent_sat == 4_985 && self.external_spent_sat == 879,
-					"adoption must preserve original native4985 plus external879 costs");
+				ensure!(self.native_spent_sat > 0, "adoption requires the original signed native fee debit");
 				ensure!(self.accounting_receipt_sha256.is_some_and(|h| h != sha256::Hash::all_zeros()),
 					"adoption requires independently authenticated accounting receipt digest");
 			},
@@ -314,7 +313,8 @@ mod tests {
 		let mut changed = history.clone(); changed[0] ^= 1;
 		assert!(opening.verify_prefix(Network::Signet, DUMMY_SERVER_KEY.public_key(), &changed).is_err());
 		let mut changed = opening.clone(); changed.external_spent_sat = 0;
-		assert!(changed.validate(policy).is_err());
+		std::fs::write(dir.join(OPENING_FILE), serde_json::to_vec(&changed).unwrap()).unwrap();
+		assert!(OrdinaryFeeBudget::load(&dir, policy).is_err(), "explicit historical amounts are digest-bound");
 		changed = opening.clone(); changed.accounting_receipt_sha256 = None;
 		assert!(changed.validate(policy).is_err());
 		std::fs::write(dir.join(OPENING_FILE), serde_json::to_vec(&changed).unwrap()).unwrap();

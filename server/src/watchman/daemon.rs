@@ -188,13 +188,7 @@ impl Daemon {
 			.context("sweep_address network mismatch")?;
 		let direct_expiry = if let Some(history) = history {
 			let direct = cfg.watchman.direct_expiry.as_ref().context("direct expiry configuration disappeared")?;
-			let ordinary = super::ordinary_fee::OrdinaryFeeBudget::load(
-				&direct.history_dir.join(crate::payout_witness::DIRECT_DIRECTORY), direct.ordinary_fee_policy)?;
-			let (original_fees, history_bytes) = history.verify_fee_opening(&db, &ordinary.opening).await?;
-			let retained = db.read(async |tx| Ok(tx.query_one(
-				"SELECT COALESCE(SUM(miner_fee_sat),0)::BIGINT AS total FROM expiry_carrier", &[],
-			).await?.get::<_, i64>("total"))).await?;
-			ordinary.require_retained_fees(Amount::from_sat(u64::try_from(retained)?), original_fees, history_bytes)?;
+			let ordinary = history.ordinary_fee_budget(&db, direct.ordinary_fee_policy).await?;
 			let policy = CarrierLimits { max_fee_rate: cfg.fee_estimator.max_fee_rate.context("missing direct fee ceiling")?,
 				max_miner_fee: direct.max_miner_fee, max_weight: Weight::from_wu(400_000) };
 			Some(DirectExpiryRuntime::new(db.clone(), watchman_wallet.clone(), cfg.network,

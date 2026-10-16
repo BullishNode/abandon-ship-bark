@@ -241,6 +241,18 @@ impl DirectPayoutWitness {
 		Ok(witness)
 	}
 
+	pub(crate) async fn ordinary_fee_budget(&self, db: &Db,
+		policy: crate::watchman::ordinary_fee::OrdinaryFeePolicy,
+	) -> anyhow::Result<crate::watchman::ordinary_fee::OrdinaryFeeBudget> {
+		let ordinary = crate::watchman::ordinary_fee::OrdinaryFeeBudget::load(&self.files.directory, policy)?;
+		let (original, history_bytes) = self.verify_fee_opening(db, &ordinary.opening).await?;
+		let retained = db.read(async |tx| Ok(tx.query_one(
+			"SELECT COALESCE(SUM(miner_fee_sat),0)::BIGINT AS total FROM expiry_carrier", &[],
+		).await?.get::<_, i64>("total"))).await?;
+		ordinary.require_retained_fees(bitcoin::Amount::from_sat(u64::try_from(retained)?), original, history_bytes)?;
+		Ok(ordinary)
+	}
+
 	/// Existing witness loading has authenticated all signed records against the
 	/// database. Reuse that state to authenticate the immutable adoption prefix.
 	pub(crate) async fn verify_fee_opening(&self, db: &Db,

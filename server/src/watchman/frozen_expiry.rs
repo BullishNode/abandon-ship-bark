@@ -53,6 +53,14 @@ impl FrozenExpiryProcessor {
 			deliveries: BTreeMap::new(), uncertain: None, hydrated: false, ordinary_fee: None }
 	}
 
+	/// Explicit component admission uses the same authenticated opening, retained
+	/// signed-history coverage and exclusive budget owner as daemon startup.
+	/// Missing metadata is never initialized by this method.
+	pub async fn with_ordinary_fee_policy(mut self, policy: super::ordinary_fee::OrdinaryFeePolicy) -> anyhow::Result<Self> {
+		self.ordinary_fee = Some(self.witness.ordinary_fee_budget(&self.db, policy).await?);
+		Ok(self)
+	}
+
 	pub(crate) fn with_ordinary_fee_budget(mut self, budget: super::ordinary_fee::OrdinaryFeeBudget) -> Self {
 		self.ordinary_fee = Some(budget);
 		self

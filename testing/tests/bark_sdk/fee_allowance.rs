@@ -318,7 +318,16 @@ async fn confirmed_sweep_opening_imports_original_debit_once_after_database_rest
 /// independently confirmed spare fee coin; this does not qualify retained-input RBF.
 #[tokio::test]
 async fn urgent_progress_rbf_and_claim_debit_full_fees_without_ordinary_quote_cap() {
-	let ctx=TestContext::new("bark_sdk/urgent_epoch_progress_rbf_claim").await;
+	urgent_progress_claim_control(true).await;
+}
+
+#[tokio::test]
+async fn urgent_confirmed_progress_and_claim_debit_actual_signed_fees() {
+	urgent_progress_claim_control(false).await;
+}
+
+async fn urgent_progress_claim_control(exercise_rbf: bool) {
+	let ctx=TestContext::new(if exercise_rbf {"bark_sdk/urgent_epoch_progress_rbf_claim"} else {"bark_sdk/urgent_epoch_progress_confirmed_claim"}).await;
 	let quiet=FeeRate::from_sat_per_vb_u32(1);
 	let urgent=FeeRate::from_sat_per_vb_u32(2);
 	let srv=ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
@@ -364,19 +373,23 @@ async fn urgent_progress_rbf_and_claim_debit_full_fees_without_ordinary_quote_ca
 	let original_fee=actual_fee(&core,&original);
 	assert!(original_fee>quiet.fee_wu(original.weight()).unwrap().to_sat(),"actual urgent child exceeds ordinary quote cap");
 	let before=db.read(async|t|Ok(t.query_one("SELECT COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE urgent",&[]).await?.get::<_,i64>(0))).await.unwrap();
-	// Wait for the real owning wallet to exclude the old pending spend. The
-	// replacement must use a distinct confirmed spare, never unconfirmed change.
+	// Capture the actual owner view; CPFP construction does not commit its child
+	// to BDK, so waiting alone cannot establish replacement eligibility.
 	let endpoint=wm.config().admin_address.unwrap();
 	let mut rpc=WalletAdminClient::connect(format!("http://{endpoint}")).await.unwrap();
-	tokio::time::timeout(Duration::from_secs(20),async {
-		loop {
-			let inventory=rpc.wallet_inventory(protos::Empty{}).await.unwrap().into_inner().watchman.unwrap();
-			let eligible=inventory.utxos.iter().filter(|u|u.confirmed_fee_eligible)
-				.map(|u|u.outpoint.clone()).collect::<BTreeSet<_>>();
-			if !eligible.is_empty() && old_inputs.iter().all(|p|!eligible.contains(&p.to_string())) {break}
-			tokio::time::sleep(Duration::from_millis(100)).await;
-		}
-	}).await.expect("setup-unqualified: native wallet must observe pending child and confirmed spare");
+	let inventory=rpc.wallet_inventory(protos::Empty{}).await.unwrap().into_inner().watchman.unwrap();
+	let input_states=old_inputs.iter().map(|point|json!({"outpoint":point.to_string(),
+		"core_unspent_with_mempool":core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_some(),
+		"core_unspent_confirmed_chain":core.get_tx_out(&point.txid,point.vout,Some(false)).unwrap().is_some()})).collect::<Vec<_>>();
+	let input_parents=parent.input.iter().chain(original.input.iter()).map(|i|i.previous_output.txid)
+		.collect::<BTreeSet<_>>().iter().map(|id|serialize(&core.get_raw_transaction(id,None).unwrap())).collect::<Vec<_>>();
+	private_original(&ctx.datadir.join("urgent-before-replacement-originals.json"),&serde_json::to_vec(&json!({
+		"exercise_rbf":exercise_rbf,"parent_raw":serialize(&parent),"child_raw":serialize(&original),"input_parents_raw":input_parents,
+		"parent_signed_fee_sat":actual_fee(&core,&parent),"child_signed_fee_sat":original_fee,"child_signed_weight_wu":original.weight().to_wu(),
+		"native_urgent_debit_sat":before,"owner_inventory":format!("{inventory:?}"),"selected_input_core_states":input_states,
+		"eligible_owner_outpoints":inventory.utxos.iter().filter(|u|u.confirmed_fee_eligible).map(|u|u.outpoint.clone()).collect::<Vec<_>>()
+	})).unwrap());
+	let (replacement,new_inputs,replacement_fee)=if exercise_rbf {
 	for point in &old_inputs {assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_none());}
 	let delta=-i64::try_from(original_fee/2).unwrap();assert!(delta<0);
 	core.call::<bool>("prioritisetransaction",&[json!(first.cpfp_txid),json!(0),json!(delta)]).unwrap();
@@ -394,6 +407,8 @@ async fn urgent_progress_rbf_and_claim_debit_full_fees_without_ordinary_quote_ca
 	let replacement_fee=actual_fee(&core,&replacement);assert!(replacement_fee>original_fee);
 	let after=db.read(async|t|Ok(t.query_one("SELECT COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE urgent",&[]).await?.get::<_,i64>(0))).await.unwrap();
 	assert_eq!(after-before,replacement_fee as i64,"RBF charges full new signed fee and never renews the parent debit");
+	(replacement,new_inputs,replacement_fee)
+	} else {(original.clone(),old_inputs.clone(),original_fee)};
 	let tip=ctx.generate_blocks(1).await;wm.wait_for_sync_height(tip).await;
 	wm.trigger_sweep().await;
 	let claim=claims.recv().wait(Duration::from_secs(20)).await.expect("actual urgent forfeit claim must publish");
@@ -423,10 +438,10 @@ async fn urgent_progress_rbf_and_claim_debit_full_fees_without_ordinary_quote_ca
 		}
 		frames.push(value);
 	}
-	assert_eq!((parents,children,claim_count),(1,2,1));assert!(total<=4000);
+	assert_eq!((parents,children,claim_count),(1,if exercise_rbf {2} else {1},1));assert!(total<=4000);
 	assert!(db.read(async|t|Ok(t.query_one("SELECT COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE NOT urgent",&[]).await?.get::<_,i64>(0))).await.unwrap()>0);
 	private_original(&ctx.datadir.join("urgent-epoch-actual-originals.json"),&serde_json::to_vec(&json!({
-		"scope":"real confirmed-spare RBF; retained same-input unqualified","old_inputs":old_inputs,"new_inputs":new_inputs,
+		"scope":if exercise_rbf {"real confirmed-spare RBF; retained same-input unqualified"} else {"real confirmed progression and Claim; replacement not exercised"},"old_inputs":old_inputs,"new_inputs":new_inputs,
 		"first_child_raw":serialize(&original),"replacement_raw":serialize(&replacement),"parent_raw":serialize(&parent),
 		"claim_raw":serialize(&claimed),"original_signed_fee_sat":original_fee,"replacement_signed_fee_sat":replacement_fee,
 		"native_urgent_total_sat":total,"rows":frames})).unwrap());

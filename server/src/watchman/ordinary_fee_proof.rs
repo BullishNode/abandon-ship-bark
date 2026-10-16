@@ -206,6 +206,7 @@ pub fn verify_native_fee_source(raw: &[u8]) -> anyhow::Result<Vec<u8>> {
 	}
 	ensure!(parsed.urgent.iter().all(|(i,a)| a.signed.is_none() || attempts.contains(i)), "retained urgent journal lost original SQL publication");
 	let unrelated_nursery_txids=nursery.keys().filter(|id|!members.contains(*id)).collect::<Vec<_>>();
+	let direct_reservations=parsed.direct.iter().map(|(line,ceiling)|json!({"line":line,"ceiling_sat":ceiling})).collect::<Vec<_>>();
 	let snapshot=super::public_snapshot::project_history(parsed,stored.policy,&opening,hashes[0],originals.journal_raw.as_bytes(),0,0)?;
 	let mut snapshot: Value=serde_json::from_slice(&snapshot)?;
 	let snapshot_object=snapshot.as_object_mut().context("native snapshot object missing")?;
@@ -213,7 +214,7 @@ pub fn verify_native_fee_source(raw: &[u8]) -> anyhow::Result<Vec<u8>> {
 	let response=json!({"schema":1,"kind":"b-native-fee-source-proof","sdk_commit":env!("GIT_HASH"),
 		"input_sha256":sha256::Hash::hash(raw),"source_observation":request.source_observation,
 		"original_sha256":{"policy_raw":hashes[0],"opening_raw":hashes[1],"journal_raw":hashes[2],"database_raw":hashes[3]},
-		"snapshot":snapshot,"funding_rows":funding_rows,"urgent_rows":urgent_rows,"resolutions":resolutions,
+		"snapshot":snapshot,"direct_reservations":direct_reservations,"funding_rows":funding_rows,"urgent_rows":urgent_rows,"resolutions":resolutions,
 		"nursery_inventory":nursery_inventory,"unrelated_nursery_txids":unrelated_nursery_txids});
 	let output=serde_json::to_vec(&response)?;
 	ensure!(output.len()<=MAX_RESPONSE_BYTES,"native fee response exceeds whole bound");
@@ -394,6 +395,18 @@ mod tests {
 		let (txid,vout)=original.rsplit_once(':').unwrap();
 		database["native_funding_fee_input"][0]["outpoint"]=json!(format!("{txid}:0{vout}"));
 		replace_database(&mut input,database);assert!(verify(&input).is_err());
+	}
+
+	#[test]
+	fn offline_native_fee_direct_rows_keep_original_lines_and_unpublished_charges() {
+		let input=request("100\nu:1:1000\n200\n".into(),empty());let output=verify(&input).unwrap();
+		assert_eq!(output["direct_reservations"],json!([{"line":1,"ceiling_sat":100},{"line":3,"ceiling_sat":200}]));
+		assert_eq!(output["snapshot"]["direct_attempt_count"],2);assert_eq!(output["snapshot"]["direct_reserved_sat"],300);
+		golden("direct",&input,&output);
+		let other=verify(&request("150\nu:1:1000\n150\n".into(),empty())).unwrap();
+		assert_eq!(other["snapshot"]["direct_reserved_sat"],output["snapshot"]["direct_reserved_sat"]);
+		assert_ne!(other["direct_reservations"],output["direct_reservations"]);
+		assert!(verify(&request("0100\n".into(),empty())).is_err());
 	}
 
 }

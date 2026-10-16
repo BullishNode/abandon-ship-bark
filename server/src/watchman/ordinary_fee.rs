@@ -742,6 +742,7 @@ pub use proof::verify_native_fee_source;
 mod public_snapshot;
 
 struct ParsedHistory {
+	direct: Vec<(u64, u64)>,
 	charged: u64,
 	attempts: u64,
 	urgent_charged: u64,
@@ -765,7 +766,8 @@ fn parse_history(
 	let mut funding = BTreeMap::<sha256::Hash, FundingState>::new();
 	let mut funding_charged = 0u64;
 	let mut resolutions = BTreeMap::<u64, FundingResolution>::new();
-	for line in history.lines() {
+	let mut direct = Vec::new();
+	for (line_number, line) in history.lines().enumerate() {
 		if let Some(raw) = line.strip_prefix("r:") {
 			let resolution: FundingResolution = serde_json::from_str(raw)?;
 			ensure!(
@@ -929,6 +931,7 @@ fn parse_history(
 				"noncanonical ordinary fee reservation"
 			);
 			charged = checked_charge(charged, amount, policy)?;
+			direct.push((u64::try_from(line_number)?.checked_add(1).context("direct line overflow")?, amount));
 			attempts = attempts
 				.checked_add(1)
 				.context("ordinary attempt count overflow")?;
@@ -936,6 +939,7 @@ fn parse_history(
 	}
 	require_urgent_headroom(charged, urgent_charged, policy)?;
 	Ok(ParsedHistory {
+		direct,
 		charged,
 		attempts,
 		urgent_charged,

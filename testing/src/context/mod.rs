@@ -424,6 +424,7 @@ impl TestContext {
 		// to force us to evaluate every value in test context.
 		server::config::Config {
 			data_dir: data_dir.clone(),
+			native_fee_owner: None,
 			expiry_payout: Default::default(),
 			direct_expiry: Default::default(),
 			network: Network::Regtest,
@@ -559,6 +560,7 @@ impl TestContext {
 		// NB we don't auto-complete `..Default::default()` here
 		// to force us to evaluate every value in test context.
 		server::config::watchmand::Config {
+			native_fee_opening: None,
 			postgres: srv.config().postgres.clone(),
 			watchman: server::watchman::Config {
 				direct_expiry: None,

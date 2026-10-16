@@ -234,6 +234,12 @@ impl PersistedWallet {
 		self.finish_reserved_tx(psbt, None, None)
 	}
 
+	/// Recheck current recovery liquidity for an already privately signed PSBT.
+	/// This does not sign, commit wallet state, log raw bytes or publish.
+	pub(crate) fn validate_private_funding_psbt(&self, psbt: &Psbt) -> anyhow::Result<()> {
+		self.check_recovery_spend(psbt, None)
+	}
+
 	/// Sign a quiet funding transaction without exceeding its configured ceiling.
 	pub fn finish_tx_with_max_fee_rate(
 		&mut self, psbt: Psbt, max_fee_rate: Option<FeeRate>,

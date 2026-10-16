@@ -46,7 +46,7 @@ use crate::telemetry::{RoundStep, TimedRoundStep};
 use crate::utils::InstrumentedLock;
 use crate::wallet::{BdkWalletExt, PersistedWallet, WalletUtxoGuard};
 
-use self::funding::{UnsignedFundingTx, FundingTxSpec};
+use self::funding::{SignedFundingTx, FundingTxSpec};
 
 #[macro_export]
 macro_rules! server_rslog {
@@ -931,6 +931,17 @@ impl CollectingPayments {
 			))),
 		};
 
+		// The fixed funding body stays private. Reserve its full actual signed
+		// fee before any proposal; an abandoned attempt never refunds this debit.
+		let (funding_tx, fee_permit) = {
+			let mut wallet = srv.rounds_wallet.lock().await;
+			let signed = funding_tx.sign(&mut wallet).map_err(RoundError::Recoverable)?;
+			let permit = crate::fee_allowance::ordinary_permit(srv.fee_allowance.as_ref(),
+				&srv.db, &srv.bitcoind, crate::fee_allowance::Path::Round, &signed.tx).await
+				.map_err(RoundError::Recoverable)?;
+			(signed, permit)
+		};
+
 		server_rslog!(ConstructingRoundVtxoTree, round_step,
 			tip_block_height: tip,
 			vtxo_expiry_block_height: expiry_height,
@@ -976,6 +987,7 @@ impl CollectingPayments {
 			cosign_part_sigs: HashMap::with_capacity(unsigned_vtxo_tree.nb_leaves()),
 			unsigned_vtxo_tree,
 			funding_tx,
+			fee_permit,
 			user_cosign_nonces,
 			inputs_per_cosigner: self.inputs_per_cosigner,
 			output_mailbox_ids,
@@ -1008,7 +1020,8 @@ pub struct SigningVtxoTree {
 	cosign_part_sigs: HashMap<PublicKey, Vec<musig::PartialSignature>>,
 	cosign_agg_nonces: Vec<musig::AggregatedNonce>,
 	unsigned_vtxo_tree: UnsignedVtxoTree,
-	funding_tx: UnsignedFundingTx,
+	funding_tx: SignedFundingTx,
+	fee_permit: Option<crate::fee_allowance::Permit>,
 
 	// data from earlier
 	all_inputs: HashMap<VtxoId, Vtxo<Full>>,
@@ -1139,49 +1152,21 @@ impl SigningVtxoTree {
 		// Construct the final signed vtxo tree.
 		let signed_vtxos = create_signed_vtxo_tree(&mut self, cosign_sigs);
 
-		// Persist round to database before signing and broadcasting.
-		persist_round(&mut self, srv, &signed_vtxos).await?;
-
-		// Sign the funding tx.
-		let mut funding_wallet = self.rounds_wallet.lock().await;
-		let signed_round_tx = self.funding_tx.sign(&mut funding_wallet)
-			.map_err(|e| RoundError::Recoverable(e))?;
-		let fee_permit = crate::fee_allowance::ordinary_permit(srv.fee_allowance.as_ref(),
-			&srv.db, &srv.bitcoind, crate::fee_allowance::Path::Round, &signed_round_tx.tx).await
+		// Recheck current liquidity without signing again, then stage fresh owning
+		// urgent inventory outside SQL. The final SQL lock covers rights+funding.
+		let rounds_wallet = self.rounds_wallet.clone();
+		let mut funding_wallet = rounds_wallet.lock().await;
+		self.funding_tx.validate_current_recovery(&funding_wallet)
 			.map_err(RoundError::Recoverable)?;
-		funding_wallet.log_permitted_tx(&signed_round_tx.tx,fee_permit.as_ref()).map_err(RoundError::Recoverable)?;
-		let funding_metadata = funding_wallet.staged().cloned();
-
-		// Persist the signed funding tx to the database.
-		let update = VtxoTreeUpdate::new()
-			.upsert_funding_tx(&signed_round_tx.tx);
-		let signed_tx = signed_round_tx.tx.clone();
-		let published = srv.db.write(async |t| {
-			crate::fee_allowance::require_permit(t, &signed_tx, fee_permit.as_ref()).await?;
-			if let Some(metadata) = &funding_metadata {
-				t.store_changeset(crate::wallet::WalletKind::Rounds, metadata).await?;
-			}
-			t.execute_vtxo_tree_update(update).await?;
-			t.update_round_funding_tx(&signed_tx).await
-		}).await;
-		if let Err(error) = published {
-			let outcome = srv.db.write(async |t| {
-				t.execute("LOCK TABLE round, virtual_transaction IN SHARE MODE", &[]).await?;
-				let row = t.query_opt("SELECT v.signed_tx FROM round r JOIN virtual_transaction v ON v.txid = r.funding_txid WHERE r.funding_txid = $1 AND v.signed_tx IS NOT NULL", &[&signed_tx.compute_txid().to_string()]).await?;
-				Ok(row.map(|row| row.get::<_, Vec<u8>>(0)))
-			}).await.unwrap_or_else(|error| {
-				error!("round funding commit outcome unknown; exiting: {error:#}");
-				std::process::exit(1);
-			});
-			match outcome {
-				Some(raw) if raw == bitcoin::consensus::serialize(&signed_tx) => {},
-				None => return Err(RoundError::Fatal(error.context("signed funding transaction not committed"))),
-				Some(_) => {
-					error!("round funding committed different signed bytes; exiting for reconciliation");
-					std::process::exit(1);
-				},
-			}
-		}
+		let readiness = crate::fee_allowance::stage_ordinary_publication(
+			srv.fee_allowance.as_ref(), &srv.db, &srv.bitcoind,
+			&self.funding_tx.tx, self.fee_permit.as_ref(),
+		).await.map_err(RoundError::Recoverable)?;
+		persist_round(&mut self, srv, &signed_vtxos, &funding_wallet, readiness.as_ref()).await?;
+		let signed_round_tx = self.funding_tx;
+		let fee_permit = self.fee_permit;
+		funding_wallet.log_permitted_tx(&signed_round_tx.tx, fee_permit.as_ref())
+			.map_err(RoundError::Fatal)?;
 
 		let finished = RoundFinished {
 			round_seq: self.round_step.round_seq(),
@@ -1283,7 +1268,7 @@ fn create_signed_vtxo_tree(
 }
 
 #[tracing::instrument(
-	skip(state, srv, signed_vtxos),
+	skip(state, srv, signed_vtxos, funding_wallet, readiness),
 	name = "Persist",
 	fields(
 		{ telemetry::ATTRIBUTE_ROUND_SEQ } = %state.round_step.round_seq(),
@@ -1296,11 +1281,16 @@ async fn persist_round(
 	state: &mut SigningVtxoTree,
 	srv: &Server,
 	signed_vtxos: &CachedSignedVtxoTree,
+	funding_wallet: &PersistedWallet,
+	readiness: Option<&crate::fee_allowance::OrdinaryPublicationReadiness>,
 ) -> Result<(), RoundError> {
 	let round_step = state.round_step.proceed(RoundStep::Persist);
 	state.round_step = round_step;
 
 	let unsigned_funding_tx = state.funding_tx.unsigned_tx();
+	let signed_tx = &state.funding_tx.tx;
+	let funding_metadata = funding_wallet.staged().cloned();
+	let update = VtxoTreeUpdate::new().upsert_funding_tx(signed_tx);
 
 	trace!("Storing round result");
 	if tracing::enabled!(RoundVtxoCreated::LEVEL) {
@@ -1312,6 +1302,8 @@ async fn persist_round(
 		}
 	}
 	let result = srv.db.write(async |t| {
+		crate::fee_allowance::require_ordinary_publication(t, srv.fee_allowance.as_ref(),
+			signed_tx, state.fee_permit.as_ref(), readiness).await?;
 		t.finish_round(
 			round_step.round_seq(),
 			unsigned_funding_tx,
@@ -1319,6 +1311,14 @@ async fn persist_round(
 			signed_vtxos,
 			&state.interactive_participants,
 		).await?;
+
+		// Rights and their exact signed funding become durable in one COMMIT.
+		if let Some(metadata) = &funding_metadata {
+			t.store_changeset(crate::wallet::WalletKind::Rounds, metadata).await?;
+		}
+		crate::fee_allowance::require_permit(t, signed_tx, state.fee_permit.as_ref()).await?;
+		t.execute_vtxo_tree_update(update).await?;
+		t.update_round_funding_tx(signed_tx).await?;
 
 		// Post VTXOs to mailboxes for wallet recovery support.
 		// This is done after the round is persisted so VTXOs exist in the DB.
@@ -1346,6 +1346,30 @@ async fn persist_round(
 
 		Ok(())
 	}).await;
+
+	// An unknown COMMIT must not free rights or silently create another intent.
+	// A matching signed body proves this same atomic rights+funding commit.
+	let result = match result {
+		Ok(()) => Ok(()),
+		Err(error) => {
+			let outcome = srv.db.write(async |t| {
+				t.execute("LOCK TABLE round, virtual_transaction IN SHARE MODE", &[]).await?;
+				let row = t.query_opt("SELECT v.signed_tx FROM round r JOIN virtual_transaction v ON v.txid = r.funding_txid WHERE r.funding_txid = $1 AND v.signed_tx IS NOT NULL", &[&signed_tx.compute_txid().to_string()]).await?;
+				Ok(row.map(|row| row.get::<_, Vec<u8>>(0)))
+			}).await.unwrap_or_else(|error| {
+				error!("round funding commit outcome unknown; exiting: {error:#}");
+				std::process::exit(1);
+			});
+			match outcome {
+				Some(raw) if raw == bitcoin::consensus::serialize(signed_tx) => Ok(()),
+				None => Err(error.context("signed round rights and funding not committed")),
+				Some(_) => {
+					error!("round funding committed different signed bytes; exiting for reconciliation");
+					std::process::exit(1);
+				},
+			}
+		},
+	};
 
 	telemetry::set_round_step_duration(round_step);
 

@@ -121,48 +121,24 @@ impl UnsignedFundingTx {
 		&self.psbt
 	}
 
-	/// The unsigned transaction.
-	pub fn unsigned_tx(&self) -> &Transaction {
-		&self.psbt.unsigned_tx
-	}
-
-	pub fn txid(&self) -> Txid {
-		self.txid
-	}
-
-	/// The outpoint in which the vtxo tree is rooted (vout
-	/// [`ROUND_TX_VTXO_TREE_VOUT`] of the funding tx).
-	pub fn tree_outpoint(&self) -> OutPoint {
-		OutPoint::new(self.txid, ROUND_TX_VTXO_TREE_VOUT)
-	}
-
 	pub fn fee(&self) -> Amount {
 		self.psbt.fee().expect("freshly built psbt has a valid fee")
 	}
 
-	/// Consume `self`, releasing the lock on every extra input and returning
-	/// the guard for the pinned one. Used between round attempts: we keep
-	/// the pinned input locked, but free the rest so the wallet can pick
-	/// again on the next attempt.
-	pub fn into_pinned_input(self) -> WalletUtxoGuard {
-		self.pinned_input
-	}
-
 	pub fn sign(self, wallet: &mut PersistedWallet) -> anyhow::Result<SignedFundingTx> {
-		match wallet.finish_tx_with_max_fee_rate(self.psbt().clone(), self.max_fee_rate) {
-			Ok(tx) => Ok(SignedFundingTx {
-				tx,
-				txid: self.txid,
-				fee: self.fee(),
-				_pinned_input: self.pinned_input,
-				_extra_inputs: self._extra_inputs,
-			}),
-			Err(e) => bail!("Failed to sign funding transaction: {:?}", e),
-		}
+		let fee = self.fee();
+		let tx = wallet.finish_tx_with_max_fee_rate(self.psbt().clone(), self.max_fee_rate)
+			.context("failed to sign funding transaction")?;
+		ensure!(tx.compute_txid() == self.txid, "signed funding body differs from fixed PSBT");
+		Ok(SignedFundingTx {
+			tx, psbt: self.psbt, txid: self.txid, fee,
+			_pinned_input: self.pinned_input, _extra_inputs: self._extra_inputs,
+		})
 	}
 }
 
 pub struct SignedFundingTx {
+	psbt: Psbt,
 	pub tx: Transaction,
 	pub txid: Txid,
 	pub fee: Amount,
@@ -176,3 +152,17 @@ pub struct SignedFundingTx {
 
 
 
+
+impl SignedFundingTx {
+	pub fn unsigned_tx(&self) -> &Transaction { &self.psbt.unsigned_tx }
+	pub fn txid(&self) -> Txid { self.txid }
+	pub fn tree_outpoint(&self) -> OutPoint {
+		OutPoint::new(self.txid, ROUND_TX_VTXO_TREE_VOUT)
+	}
+	pub fn into_pinned_input(self) -> WalletUtxoGuard { self._pinned_input }
+	pub fn validate_current_recovery(&self, wallet: &PersistedWallet) -> anyhow::Result<()> {
+		ensure!(self.tx.compute_txid() == self.psbt.unsigned_tx.compute_txid(),
+			"retained signed funding differs from fixed PSBT");
+		wallet.validate_private_funding_psbt(&self.psbt)
+	}
+}

@@ -458,6 +458,42 @@ pub(crate) async fn ordinary_permit(
 	}
 }
 
+// Core/owning-wallet reads happen before the SQL transaction. Its generation
+// is rechecked under the same allowance lock as the irreversible rights writes.
+pub(crate) struct OrdinaryPublicationReadiness { source: UrgentInputs }
+
+pub(crate) async fn stage_ordinary_publication(
+	gate:Option<&Gate>, db:&crate::database::Db, core:&bitcoind_async_client::Client,
+	tx:&Transaction, permit:Option<&Permit>,
+)->anyhow::Result<Option<OrdinaryPublicationReadiness>> {
+	match (gate,permit) {
+		(Some(gate),Some(permit)) => {
+			permit.matches(tx)?;
+			ensure!(matches!(permit.candidate.path,Path::Round), "round publication requires its original round permit");
+			Ok(Some(OrdinaryPublicationReadiness {source:gate.stage_urgent_inputs(db,core).await?}))
+		},
+		(None,None) => Ok(None),
+		_ => bail!("ordinary publication gate and original permit differ"),
+	}
+}
+
+pub(crate) async fn require_ordinary_publication(
+	t:&Tx<'_>, gate:Option<&Gate>, tx:&Transaction, permit:Option<&Permit>,
+	readiness:Option<&OrdinaryPublicationReadiness>,
+)->anyhow::Result<()> {
+	match (gate,permit,readiness) {
+		(Some(gate),Some(permit),Some(readiness)) => {
+			permit.matches(tx)?;
+			ensure!(matches!(permit.candidate.path,Path::Round), "ordinary publication class differs");
+			gate.history.reserve_with_urgent_source_locked(t,&gate.policy,&permit.candidate,
+				readiness.source.generation,&readiness.source.inputs).await?;
+		},
+		(None,None,None) => {},
+		_ => bail!("ordinary publication lacks current owning-source revalidation"),
+	}
+	require_permit(t,tx,permit).await
+}
+
 pub(crate) async fn require_permit(
 	t: &Tx<'_>, tx: &Transaction, permit: Option<&Permit>,
 ) -> anyhow::Result<()> {

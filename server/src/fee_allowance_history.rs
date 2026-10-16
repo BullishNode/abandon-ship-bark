@@ -168,30 +168,38 @@ impl FeeHistory {
 		inputs:&std::collections::BTreeMap<bitcoin::OutPoint,u64>,
 	)->anyhow::Result<()> {
 		db.write(async|t| {
-			t.lock_fee_allowance().await?;
-			let mut snapshot=self.reconcile_locked(t,p).await?;
-			ensure!(t.query_one("SELECT count(*) FROM fee_allowance_candidate WHERE urgent=true",&[])
-				.await?.get::<_,i64>(0)==generation,"urgent reservation generation changed; restage native proof");
-			Self::assert_ledger_bounds(t).await?;
-			let rows=t.query("SELECT candidate_bytes FROM fee_allowance_candidate WHERE urgent=true ORDER BY id LIMIT 100001",&[]).await?;
-			ensure!(rows.len()<=MAX_RECORDS,"urgent reservation row bound exceeded");
-			let mut reserved=BTreeSet::new();let mut bytes=0usize;
-			for row in rows {
-				let raw:Vec<u8>=row.get(0);bytes=bytes.checked_add(raw.len()).context("urgent reservation bytes overflow")?;
-				ensure!(raw.len()<=MAX_RECORD_BYTES&&bytes<=MAX_BYTES,"urgent reservation byte bound exceeded");
-				let old:Candidate=serde_json::from_slice(&raw)?;
-				let tx:bitcoin::Transaction=bitcoin::consensus::deserialize(&old.raw)?;
-				reserved.extend(tx.input.iter().map(|i|i.previous_output));
-			}
-			let available=inputs.iter().filter(|(id,_)|!reserved.contains(id))
-				.try_fold(0u64,|total,(_,value)|total.checked_add(*value)).context("urgent liquidity overflow")?;
-			ensure!(available>=p.urgent_required_confirmed_sat,"confirmed unreserved urgent inputs below declared floor");
-			let tx:bitcoin::Transaction=bitcoin::consensus::deserialize(&c.raw)?;
-			ensure!(tx.input.iter().all(|i|!inputs.contains_key(&i.previous_output)),
-				"ordinary transaction selects declared urgent input");
-			t.reserve_fee_candidate(p,c).await?;self.record_reserved_locked(t,p,c,&mut snapshot).await?;
-			Ok(())
+			self.reserve_with_urgent_source_locked(t,p,c,generation,inputs).await
 		}).await
+	}
+	// Used by the final owning transaction: hold the existing global allowance
+	// lock through the same COMMIT that changes rights and stores signed funding.
+	pub(crate) async fn reserve_with_urgent_source_locked(
+		&self,t:&Tx<'_>,p:&Policy,c:&Candidate,generation:i64,
+		inputs:&std::collections::BTreeMap<bitcoin::OutPoint,u64>,
+	)->anyhow::Result<()> {
+		t.lock_fee_allowance().await?;
+		let mut snapshot=self.reconcile_locked(t,p).await?;
+		ensure!(t.query_one("SELECT count(*) FROM fee_allowance_candidate WHERE urgent=true",&[])
+			.await?.get::<_,i64>(0)==generation,"urgent reservation generation changed; restage native proof");
+		Self::assert_ledger_bounds(t).await?;
+		let rows=t.query("SELECT candidate_bytes FROM fee_allowance_candidate WHERE urgent=true ORDER BY id LIMIT 100001",&[]).await?;
+		ensure!(rows.len()<=MAX_RECORDS,"urgent reservation row bound exceeded");
+		let mut reserved=BTreeSet::new();let mut bytes=0usize;
+		for row in rows {
+			let raw:Vec<u8>=row.get(0);bytes=bytes.checked_add(raw.len()).context("urgent reservation bytes overflow")?;
+			ensure!(raw.len()<=MAX_RECORD_BYTES&&bytes<=MAX_BYTES,"urgent reservation byte bound exceeded");
+			let old:Candidate=serde_json::from_slice(&raw)?;
+			let tx:bitcoin::Transaction=bitcoin::consensus::deserialize(&old.raw)?;
+			reserved.extend(tx.input.iter().map(|i|i.previous_output));
+		}
+		let available=inputs.iter().filter(|(id,_)|!reserved.contains(id))
+			.try_fold(0u64,|total,(_,value)|total.checked_add(*value)).context("urgent liquidity overflow")?;
+		ensure!(available>=p.urgent_required_confirmed_sat,"confirmed unreserved urgent inputs below declared floor");
+		let tx:bitcoin::Transaction=bitcoin::consensus::deserialize(&c.raw)?;
+		ensure!(tx.input.iter().all(|i|!inputs.contains_key(&i.previous_output)),
+			"ordinary transaction selects declared urgent input");
+		t.reserve_fee_candidate(p,c).await?;self.record_reserved_locked(t,p,c,&mut snapshot).await?;
+		Ok(())
 	}
 	pub(crate) async fn reserve_urgent(
 		&self,db:&Db,p:&Policy,c:&Candidate,generation:i64,selected:&BTreeSet<bitcoin::OutPoint>,

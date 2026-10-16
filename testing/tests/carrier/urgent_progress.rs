@@ -6,7 +6,7 @@ use bitcoin::Txid;
 use bitcoin::hashes::Hash;
 use std::time::Duration;
 
-fn chain_receipt(core: &impl RpcApi, baseline: u64, funding: &[(String, Txid, u64)], path: &Path) -> u64 {
+pub(super) fn chain_receipt(core: &impl RpcApi, baseline: u64, funding: &[(String, Txid, u64)], path: &Path) -> u64 {
 	let tip = core.get_block_count().unwrap();
 	assert!(tip - baseline <= 512);
 	let mut txs = BTreeMap::new();

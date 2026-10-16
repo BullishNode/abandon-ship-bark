@@ -337,4 +337,43 @@ mod tests {
 		println!("actual PG nursery-first gap, exact replay/reconnect and retained-input freeze refusal; chain/funding/automatic routing NOT qualified");
 	}
 
+	/// Only connects to the fresh ordinary native fixture named explicitly by
+	/// the caller. No source/state is manufactured by this guard control.
+	#[tokio::test]
+	#[ignore = "requires an actual isolated frozen ordinary native fixture"]
+	async fn urgent_pg_actual_frozen_ancestor_refuses_without_money_change() {
+		use crate::database::Db;
+		let cfg: crate::config::Postgres = toml::from_str(&std::fs::read_to_string(
+			std::env::var_os("ARK_TEST_FROZEN_GUARD_PG").unwrap()).unwrap()).unwrap();
+		assert!(cfg.host.starts_with('/') && std::path::Path::new(&cfg.host).is_dir());
+		let id: ark::VtxoId = std::env::var("ARK_TEST_FROZEN_GUARD_ID").unwrap().parse().unwrap();
+		let anchor = std::env::var("ARK_TEST_FROZEN_GUARD_ANCHOR").unwrap();
+		let db = Db::connect(&cfg).await.unwrap();
+		let source = db.read(async |t| Ok(t.get_bare_vtxo_by_id(id).await?.vtxo)).await.unwrap();
+		assert_eq!(source.chain_anchor().to_string(), anchor);
+		let allocation: i64 = db.read(async |t| Ok(t.query_one(
+			"SELECT count(*)::bigint AS n FROM expiry_allocation WHERE id=$1", &[&id.to_string()]).await?.get("n"))).await.unwrap();
+		assert_eq!(allocation, 0, "ancestor probe must not short-circuit a direct pay allocation");
+		let frozen: i64 = db.read(async |t| Ok(t.query_one(
+			"SELECT count(*)::bigint AS n FROM expiry_allocation a WHERE a.retirement_ids && $1::text[] OR EXISTS (SELECT 1 FROM vtxo v WHERE v.anchor_point=$2 AND (v.vtxo_id=a.id OR v.vtxo_id=ANY(a.retirement_ids)))",
+			&[&vec![id.to_string()], &anchor]).await?.get("n"))).await.unwrap();
+		assert!(frozen > 0, "no real frozen physical/retirement dependency");
+		async fn projection(db: &Db) -> String {
+			db.read(async |t| Ok(t.query_one("SELECT json_build_object(
+				'allocations',(SELECT json_agg(a ORDER BY id) FROM expiry_allocation a),
+				'carriers',(SELECT json_agg(c ORDER BY id) FROM expiry_carrier c),
+				'nursery',(SELECT json_agg(n ORDER BY id) FROM nursery_tx n),
+				'wallet',(SELECT json_agg(w) FROM wallet_changeset w),
+				'vtxos',(SELECT json_agg(v ORDER BY vtxo_id) FROM vtxo v))::text AS state", &[]).await?.get("state"))).await.unwrap()
+		}
+		let before = projection(&db).await;
+		let refused = db.write(async |t| t.lock_unfrozen_urgent_sources(&[source]).await).await.unwrap_err();
+		assert!(format!("{refused:#}").contains("urgent reaction overlaps a frozen physical anchor or retirement dependency"), "unexpected refusal: {refused:#}");
+		assert_eq!(projection(&db).await, before, "refused urgent source changed frozen rights or money");
+		let result = serde_json::json!({"probe_id":id,"anchor":anchor,"direct_allocation_count":allocation,"frozen_dependency_count":frozen,"money_unchanged":true,"reason":"urgent reaction overlaps a frozen physical anchor or retirement dependency","scope":"actual frozen ordinary DB guard; no Claim/chain urgent transaction credit"});
+		let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(std::env::var_os("ARK_TEST_FROZEN_GUARD_RESULT").unwrap()).unwrap();
+		use std::io::Write;
+		f.write_all(&serde_json::to_vec_pretty(&result).unwrap()).unwrap(); f.sync_all().unwrap();
+	}
+
 }

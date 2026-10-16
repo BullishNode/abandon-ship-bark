@@ -1136,3 +1136,6 @@ mod urgent_startup;
 
 #[path = "carrier/urgent_progress.rs"]
 mod urgent_progress;
+
+#[path = "carrier/urgent_frozen.rs"]
+mod urgent_frozen;

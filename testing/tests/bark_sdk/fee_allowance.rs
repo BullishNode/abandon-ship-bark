@@ -15,6 +15,8 @@ use server::database::Db;
 use server_log::{ClaimBroadcast,ProgressBroadcast,ProgressCpfpFailure,RoundFinished};
 use server_rpc::protos;
 
+use ark::{ProtocolEncoding, Vtxo};
+use ark::vtxo::Full;
 use ark_testing::{sat, TestContext};
 use ark_testing::constants::{BOARD_CONFIRMATIONS, ROUND_CONFIRMATIONS};
 use ark_testing::daemon::captaind::{Captaind, WalletAdminClient};
@@ -94,6 +96,9 @@ async fn ordinary_round_allowance_survives_restart_and_refuses_second_publicatio
 	let core=ctx.bitcoind().sync_client();
 	let bark=ctx.bark("receiver",&srv).funded(sat(1_000_000)).create().await;
 	bark.board(sat(80_000)).await;ctx.generate_blocks(BOARD_CONFIRMATIONS).await;bark.sync().await;
+	// Preserve the real completed client Full before its refresh spends it.
+	let original_ids=bark.vtxo_ids_no_sync().await;assert_eq!(original_ids.len(),1);
+	let original_input=bark.raw_vtxo(original_ids[0]).await;
 	let mut rounds=srv.subscribe_log::<RoundFinished>();
 	ctx.refresh_all(&srv,&[&bark]).await;
 	let txid=rounds.recv().wait(Duration::from_secs(30)).await.unwrap().txid;
@@ -103,6 +108,7 @@ async fn ordinary_round_allowance_survives_restart_and_refuses_second_publicatio
 	assert!((131..=260).contains(&fee),"setup-unqualified: fixed260 allowance needs one genuine round above130");
 	assert!(fee<=FeeRate::from_sat_per_vb_u32(1).fee_wu(signed.weight()).unwrap().to_sat());
 	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;bark.sync().await;
+	capture_original_round_forfeit(&ctx,&db,&bark,&original_input,txid).await;
 	let before=db.read(async|t| Ok(t.query_one("SELECT count(*),COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE urgent=false",&[]).await?
 		.get::<_,i64>(1))).await.unwrap();assert_eq!(before,fee as i64);
 	srv.stop().await.unwrap();srv.start().await.unwrap();
@@ -510,4 +516,118 @@ async fn urgent_progress_claim_control(exercise_rbf: bool, fail_persist: bool) {
 		"first_child_raw":serialize(&original),"replacement_raw":serialize(&replacement),"parent_raw":serialize(&parent),
 		"claim_raw":serialize(&claimed),"original_signed_fee_sat":original_fee,"replacement_signed_fee_sat":replacement_fee,
 		"native_urgent_total_sat":total,"rows":frames})).unwrap());
+}
+
+
+// TEST-ONLY original capture from the already-existing first successful round.
+// No policy, amount, publication, timeout, restart or refusal assertion changes.
+async fn capture_original_round_forfeit(
+	ctx:&TestContext,db:&Db,bark:&ark_testing::Bark,input:&Vtxo<Full>,round_txid:bitcoin::Txid,
+) {
+	fn hex(bytes:&[u8])->String {bytes.iter().map(|v|format!("{v:02x}")).collect()}
+	let core=ctx.bitcoind().sync_client();
+	let before=core.get_blockchain_info().unwrap();
+	assert_eq!(core.get_block_hash(0).unwrap(),bitcoin::blockdata::constants::genesis_block(bitcoin::Network::Regtest).block_hash());
+	let input_id=input.id().to_string();let round_id=round_txid.to_string();
+	let round=core.get_raw_transaction(&round_txid,None).unwrap();
+	let output_ids=bark.vtxo_ids_no_sync().await.into_iter().filter(|id|*id!=input.id()).collect::<Vec<_>>();
+	assert!(!output_ids.is_empty() && output_ids.len()<=16);
+	let mut output_fulls=Vec::new();
+	for id in output_ids {
+		let full=bark.raw_vtxo(id).await;
+		assert_eq!(full.chain_anchor().txid,round_txid);
+		assert!(full.validate(&round).is_ok(),"actual final client output Full must validate");
+		assert_eq!(full.server_pubkey(),input.server_pubkey());output_fulls.push(full);
+	}
+	let output_id_strings=output_fulls.iter().map(|v|v.id().to_string()).collect::<Vec<_>>();
+	let (unlock_hash,forfeit_raw,native_input_raw,native_output_raws,allocation,source)=db.read(async |t| {
+		t.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",&[]).await?;
+		let base="FROM round_participation p JOIN round_part_input i ON i.participation_id=p.id
+			JOIN vtxo v ON v.vtxo_id=i.vtxo_id JOIN round r ON r.funding_txid=p.round_id
+			WHERE p.round_id=$1 AND i.vtxo_id=$2";
+		let bound=t.query_one(&format!("SELECT count(*) AS n,
+			COALESCE(max(octet_length(v.vtxo)),0)::bigint AS full_bytes,
+			COALESCE(max(octet_length(i.signed_forfeit_tx)),0)::bigint AS forfeit_bytes,
+			COALESCE(max(octet_length(r.funding_tx)),0)::bigint AS funding_bytes {base}"),&[&round_id,&input_id]).await?;
+		assert_eq!(bound.get::<_,i64>("n"),1,"exact one real input participation required");
+		assert!((1..=2_097_152).contains(&bound.get::<_,i64>("full_bytes")));
+		assert!((1..=4096).contains(&bound.get::<_,i64>("forfeit_bytes")));
+		assert!((1..=1_048_576).contains(&bound.get::<_,i64>("funding_bytes")));
+		let row=t.query_one(&format!("SELECT p.id,p.unlock_hash,p.round_id,
+			p.forfeited_at::text AS forfeited_at,(p.unlock_preimage IS NOT NULL) AS unlock_preimage_present,
+			i.signed_forfeit_tx,v.vtxo,v.spent_in_round,v.oor_spent_txid,
+			r.id AS round_db_id,r.funding_tx {base}"),&[&round_id,&input_id]).await?;
+		let part:i64=row.get("id");let unlock:String=row.get("unlock_hash");
+		let forfeited:Option<String>=row.get("forfeited_at");assert!(forfeited.is_some());
+		let unlock_preimage_present:bool=row.get("unlock_preimage_present");assert!(unlock_preimage_present);
+		let round_db_id:i64=row.get("round_db_id");
+		assert_eq!(row.get::<_,Option<i64>>("spent_in_round"),Some(round_db_id));
+		let forfeit:Vec<u8>=row.get("signed_forfeit_tx");
+		let tx:Transaction=deserialize(&forfeit).unwrap();assert_eq!(tx.input.len(),1);
+		assert_eq!(tx.input[0].previous_output,input.id().to_point());
+		assert_eq!(tx.input[0].witness.len(),1);
+		assert_eq!(tx.input[0].witness.iter().next().unwrap().len(),64);
+		assert_eq!(row.get::<_,Option<String>>("oor_spent_txid"),Some(tx.compute_txid().to_string()));
+		let count=t.query_one("SELECT count(*) FROM round_part_input WHERE participation_id=$1",&[&part]).await?.get::<_,i64>(0);assert_eq!(count,1);
+		let count=t.query_one("SELECT count(*) FROM round_part_output WHERE participation_id=$1",&[&part]).await?.get::<_,i64>(0);assert!((1..=16).contains(&count));
+		let outputs=t.query("SELECT policy,amount FROM round_part_output WHERE participation_id=$1 ORDER BY encode(policy,'hex'),amount",&[&part]).await?;
+		let allocation=outputs.iter().map(|r|(r.get::<_,Vec<u8>>("policy"),r.get::<_,i64>("amount"))).collect::<Vec<_>>();
+		let native:Vec<u8>=row.get("vtxo");let funding:Vec<u8>=row.get("funding_tx");
+		let bound=t.query_one("SELECT count(*),COALESCE(max(octet_length(vtxo)),0)::bigint,
+			COALESCE(sum(octet_length(vtxo)),0)::bigint FROM vtxo WHERE vtxo_id=ANY($1)",&[&output_id_strings]).await?;
+		assert_eq!(bound.get::<_,i64>(0),output_id_strings.len() as i64);
+		assert!((1..=2_097_152).contains(&bound.get::<_,i64>(1)) && bound.get::<_,i64>(2)<=4_194_304);
+		let native_outputs=t.query("SELECT vtxo_id,vtxo FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id",&[&output_id_strings]).await?;
+		let native_output_raws=native_outputs.iter().map(|r|(r.get::<_,String>("vtxo_id"),r.get::<_,Vec<u8>>("vtxo"))).collect::<Vec<_>>();
+		let source=json!({"round_db_id":round_db_id,"round_id":round_id,"participation_id":part,
+			"unlock_hash":unlock,"forfeited_at":forfeited,"unlock_preimage_present":unlock_preimage_present,
+			"input_vtxo_id":input_id,"forfeit_txid":tx.compute_txid().to_string(),
+			"native_input_full_sha256":sha256::Hash::hash(&native).to_string(),
+			"native_output_full_originals":native_output_raws.iter().map(|(id,raw)|json!({"id":id,"sha256":sha256::Hash::hash(raw).to_string()})).collect::<Vec<_>>(),
+			"round_funding_raw_sha256":sha256::Hash::hash(&funding).to_string(),
+			"allocation":allocation.iter().map(|(policy,amount)|json!({"policy_hex":hex(policy),"amount_sat":amount})).collect::<Vec<_>>()});
+		Ok((unlock,forfeit,native,native_output_raws,allocation,source))
+	}).await.unwrap();
+	let input_anchor=core.get_raw_transaction(&input.chain_anchor().txid,None).unwrap();
+	assert!(input.validate(&input_anchor).is_ok(),"original client input Full must validate against actual Core anchor");
+	let input_info=core.get_raw_transaction_info(&input.chain_anchor().txid,None).unwrap();
+	assert!(input_info.confirmations.unwrap_or(0)>=BOARD_CONFIRMATIONS);
+	assert_eq!(sha256::Hash::hash(&serialize(&round)).to_string(),source["round_funding_raw_sha256"].as_str().unwrap());
+	let round_info=core.get_raw_transaction_info(&round_txid,None).unwrap();
+	assert!(round_info.confirmations.unwrap_or(0)>=ROUND_CONFIRMATIONS);
+	let mut requests=Vec::new();let mut actual_allocation=Vec::new();
+	for full in output_fulls {
+		assert_eq!(full.unlock_hash().map(|h|h.to_string()).as_deref(),Some(unlock_hash.as_str()));
+		actual_allocation.push((full.policy().serialize(),i64::try_from(full.amount().to_sat()).unwrap()));
+		requests.push(json!({"signed_vtxo":hex(&full.serialize()),"anchor_raw":hex(&serialize(&round)),"server_pubkey":full.server_pubkey().to_string()}));
+	}
+	actual_allocation.sort();let mut expected_allocation=allocation;expected_allocation.sort();
+	assert!(actual_allocation==expected_allocation,"all actual signed outputs must match exact original participation requests");
+	let input_request=json!({"signed_vtxo":hex(&input.serialize()),"anchor_raw":hex(&serialize(&input_anchor)),
+		"server_pubkey":input.server_pubkey().to_string(),"forfeit_raw":hex(&forfeit_raw),"forfeit_unlock_hash":unlock_hash});
+	let mut files=vec![("input-forfeit.private.json".to_string(),serde_json::to_vec(&input_request).unwrap()),
+		("native-source.private.json".to_string(),serde_json::to_vec(&source).unwrap()),
+		("native-input-full.private.hex".to_string(),hex(&native_input_raw).into_bytes()),
+		("input-anchor-Core.private.json".to_string(),serde_json::to_vec(&input_info).unwrap()),
+		("output-anchor-Core.private.json".to_string(),serde_json::to_vec(&round_info).unwrap())];
+	for (index,request) in requests.into_iter().enumerate() {files.push((format!("output-{index:02}.private.json"),serde_json::to_vec(&request).unwrap()));}
+	for (index,(id,raw)) in native_output_raws.into_iter().enumerate() {
+		files.push((format!("native-output-{index:02}.private.json"),serde_json::to_vec(&json!({"id":id,"signed_vtxo_hex":hex(&raw),
+			"scope":"literal native stored form, may be pre-completion; no signed-path verdict"})).unwrap()));
+	}
+	assert!(files.iter().all(|(_,b)|b.len()<=2_097_152));
+	assert!(files.iter().map(|(_,b)|b.len()).sum::<usize>()<=4_194_304);
+	let after=core.get_blockchain_info().unwrap();assert_eq!(before.blocks,after.blocks);assert_eq!(before.best_block_hash,after.best_block_hash);
+	let manifest=serde_json::to_vec(&json!({
+		"scope":"actual existing regtest ordinary round fixture originals; no helper qualification or payment verdict",
+		"genesis":core.get_block_hash(0).unwrap().to_string(),"height":before.blocks,"tip_hash":before.best_block_hash,
+		"source_native_commit":option_env!("GIT_HASH"),"input_id":input.id().to_string(),"round_txid":round_txid.to_string(),
+		"source_body":source,"files":files.iter().map(|(name,bytes)|json!({"file":name,"size_bytes":bytes.len(),"sha256":sha256::Hash::hash(bytes).to_string()})).collect::<Vec<_>>()
+	})).unwrap();
+	assert!(manifest.len()<=2_097_152);
+	assert!(files.iter().map(|(_,b)|b.len()).sum::<usize>()+manifest.len()<=4_194_304);
+	let dir=ctx.datadir.join("original-forfeit-fixture-private");fs::DirBuilder::new().mode(0o700).create(&dir).unwrap();
+	for (name,bytes) in &files {private_original(&dir.join(name),bytes);}
+	private_original(&dir.join("manifest.private.json"),&manifest);
+	fs::File::open(&dir).unwrap().sync_all().unwrap();
 }

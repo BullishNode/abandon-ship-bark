@@ -427,7 +427,7 @@ impl Tx<'_> {
 		Ok(decision)
 	}
 
-	async fn receive_grant_ids(&self, hash: PaymentHash, limit: usize) -> anyhow::Result<Option<Vec<VtxoId>>> {
+	pub(crate) async fn receive_grant_ids(&self, hash: PaymentHash, limit: usize) -> anyhow::Result<Option<Vec<VtxoId>>> {
 		let attempts = self.get_payment_attempts_by_payment_hash(hash).await?;
 		let subscriptions = attempts.iter().filter_map(|a| a.lightning_htlc_subscription_id).collect::<BTreeSet<_>>();
 		let row = self.query_opt("SELECT id, status::text FROM lightning_htlc_subscription WHERE payment_hash=$1", &[&hash.to_string()]).await?;

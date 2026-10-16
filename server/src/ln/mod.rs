@@ -100,9 +100,20 @@ fn send_refund_attempt_evidence(
 
 
 fn receive_refund_requires_retirement(
-	status: &LightningHtlcSubscriptionStatus, _grants: Option<&[VtxoId]>,
+	status: &LightningHtlcSubscriptionStatus, grants: Option<&[VtxoId]>,
 ) -> bool {
-	*status == LightningHtlcSubscriptionStatus::HtlcsReady
+	*status == LightningHtlcSubscriptionStatus::HtlcsReady || grants.is_some()
+}
+
+
+/// `None` means a known never-prepared association. A prepared history needs
+/// its complete, nonempty grant set; missing rows do not prove retirement.
+fn receive_grant_facts_match(expected: &[VtxoId], grants: Option<&[VtxoId]>) -> bool {
+	let Some(grants) = grants else { return expected.is_empty(); };
+	let expected_set = expected.iter().copied().collect::<BTreeSet<_>>();
+	let grant_set = grants.iter().copied().collect::<BTreeSet<_>>();
+	!grants.is_empty() && expected_set.len() == expected.len()
+		&& grant_set.len() == grants.len() && expected_set == grant_set
 }
 
 /// Bound the requested HTLC-recv VTXO expiry of a receive whose incoming
@@ -700,8 +711,17 @@ impl Server {
 		let receive = self.db.read(async |t|
 			t.get_htlc_subscription_by_payment_hash(payment_hash).await
 		).await?;
+		let requires_retirement = if let Some(sub) = &receive {
+			let grants = self.db.read(async |t|
+				t.receive_grant_ids(payment_hash, sub.htlc_vtxos.len()).await
+			).await?;
+			if !receive_grant_facts_match(&sub.htlc_vtxos, grants.as_deref()) {
+				return Ok(SendRefundEvidence::Unresolved("the complete granted receive history is unknown".into()));
+			}
+			receive_refund_requires_retirement(&sub.status, grants.as_deref())
+		} else { false };
 		match receive {
-			Some(sub) if receive_refund_requires_retirement(&sub.status, None) => {
+			Some(sub) if requires_retirement => {
 				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
 					return Ok(SendRefundEvidence::Unresolved(reason));
 				}
@@ -1481,6 +1501,27 @@ mod tests {
 	fn receive_refund_retirement_allows_known_never_prepared_cancel() {
 		assert!(!receive_refund_requires_retirement(
 			&LightningHtlcSubscriptionStatus::Canceled, None));
+	}
+
+	#[test]
+	fn receive_refund_retirement_requires_exact_complete_grant_facts() {
+		let first = format!("{:064x}:0", 1).parse::<VtxoId>().unwrap();
+		let second = format!("{:064x}:0", 2).parse::<VtxoId>().unwrap();
+		assert!(receive_grant_facts_match(&[], None), "known never-prepared");
+		assert!(receive_grant_facts_match(&[first, second], Some(&[second, first])));
+		assert!(!receive_grant_facts_match(&[], Some(&[])), "missing prepared facts");
+		assert!(!receive_grant_facts_match(&[first], None), "lost grant association");
+		assert!(!receive_grant_facts_match(&[first, second], Some(&[first])), "partial facts");
+		assert!(!receive_grant_facts_match(&[first], Some(&[second])), "different grant");
+		assert!(!receive_grant_facts_match(&[first, first], Some(&[first, first])), "duplicate facts");
+	}
+
+	#[test]
+	fn receive_refund_retirement_keeps_paid_and_unknown_evidence_nonrefundable() {
+		assert!(matches!(SendRefund::from(SendRefundEvidence::Paid("recorded preimage".into())),
+			SendRefund::Refused(_)));
+		assert!(matches!(SendRefund::from(SendRefundEvidence::Unresolved("node unavailable".into())),
+			SendRefund::Undecided(_)));
 	}
 
 	/// Build a signed bolt11 invoice, standing in for one we issued via cln.

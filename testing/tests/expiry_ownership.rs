@@ -128,13 +128,15 @@ async fn ownership_real_arkoor_unregistered_outputs_keep_each_actual_input_owner
 		ArkoorDestination { total_amount: sat(40_000), policy: address.policy().clone() },
 		ArkoorDestination { total_amount: sat(15_000), policy: VtxoPolicy::new_pubkey(change.public_key()) },
 	]).unwrap().generate_user_nonces(&keys).unwrap();
-	let mut cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
-	for part in &mut cosign_request.parts {
-		for output in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
+	let cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	for part in &cosign_request.parts {
+		for output in part.outputs.iter().chain(part.isolated_outputs.iter()) {
 			let key = VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey();
-			let hint = if key == address.policy().user_pubkey() { address.account_child().unwrap().unwrap() }
-				else { wallets[1].fallback_child_hint(key).await.unwrap() };
-			output.origin = Some(hint.into());
+			if key == address.policy().user_pubkey() {
+				receiver.fallback_key_link(key).await.unwrap();
+			} else {
+				wallets[1].fallback_key_link(key).await.unwrap();
+			}
 		}
 	}
 	let response = srv.get_public_rpc().await.request_arkoor_cosign(cosign_request).await.unwrap().into_inner();
@@ -243,8 +245,8 @@ async fn ownership_real_intra_ark_send_and_unclaimed_grants_require_complete_ret
 	sender.pay_lightning_invoice(invoice.to_string(), None, false).await.unwrap();
 	let sub = db.read(async |t| t.get_htlc_subscription_by_payment_hash(hash).await).await.unwrap().unwrap();
 	let (key, _) = receiver.derive_store_next_keypair().await.unwrap();
+	receiver.fallback_key_link(key.public_key()).await.unwrap();
 	let granted = srv.get_public_rpc().await.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-		origin: Some(receiver.fallback_child_hint(key.public_key()).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: sub.lowest_incoming_htlc_expiry.unwrap().saturating_sub(srv.config().htlc_expiry_delta).into(),
 		lightning_receive_anti_dos: None,
@@ -418,8 +420,8 @@ async fn ownership_real_collected_receive_survives_cooperative_claim_rollback() 
 		}
 	}).await.unwrap();
 	let (key, _) = receiver.derive_store_next_keypair().await.unwrap();
+	receiver.fallback_key_link(key.public_key()).await.unwrap();
 	let granted = srv.get_public_rpc().await.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-		origin: Some(receiver.fallback_child_hint(key.public_key()).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: sub.lowest_incoming_htlc_expiry.unwrap().saturating_sub(srv.config().htlc_expiry_delta).into(),
 		lightning_receive_anti_dos: None,
@@ -442,11 +444,11 @@ async fn ownership_real_collected_receive_survives_cooperative_claim_rollback() 
 	let (output, _) = receiver.derive_store_next_keypair().await.unwrap();
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(granted.clone().into_iter(), VtxoPolicy::new_pubkey(output.public_key()))
 		.unwrap().generate_user_nonces(&[key]).unwrap();
-	let mut cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
-	for part in &mut cosign_request.parts {
-		for output in part.outputs.iter_mut().chain(part.isolated_outputs.iter_mut()) {
+	let cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	for part in &cosign_request.parts {
+		for output in part.outputs.iter().chain(part.isolated_outputs.iter()) {
 			let key = VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey();
-			output.origin = Some(receiver.fallback_child_hint(key).await.unwrap().into());
+			receiver.fallback_key_link(key).await.unwrap();
 		}
 	}
 	assert!(srv.get_public_rpc().await.claim_lightning_receive(protos::ClaimLightningReceiveRequest {

@@ -734,6 +734,10 @@ fn encode_package(txs: &[Transaction]) -> anyhow::Result<String> {
 	Ok(serde_json::to_string(&txs.iter().map(bitcoin::consensus::serialize).collect::<Vec<_>>())?)
 }
 
+#[path = "ordinary_fee_proof.rs"]
+mod proof;
+pub use proof::verify_native_fee_source;
+
 #[path = "ordinary_fee_snapshot.rs"]
 mod public_snapshot;
 

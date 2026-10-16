@@ -50,6 +50,9 @@ struct Cli {
 
 #[derive(clap::Subcommand)]
 enum Command {
+	/// Validate one captured private fee source offline; no configuration or wallet is opened.
+	NativeFeeSourceProof,
+
 	/// Create and configure the server
 	#[command()]
 	Create,
@@ -341,6 +344,24 @@ async fn main() {
 
 async fn inner_main() -> anyhow::Result<()> {
 	let cli = Cli::parse();
+	if matches!(cli.command, Command::NativeFeeSourceProof) {
+		// Include blocked stdin/stdout in the bound. On error the existing main
+		// exits the process, so an unfinished IO worker cannot outlive refusal.
+		let (send, receive) = std::sync::mpsc::sync_channel(1);
+		std::thread::spawn(move || {
+			let result = (|| -> anyhow::Result<()> {
+				let mut raw = Vec::new();
+				std::io::Read::read_to_end(&mut std::io::Read::take(std::io::stdin(), 64 * 1024 * 1024 + 1), &mut raw)?;
+				let output = server::watchman::ordinary_fee::verify_native_fee_source(&raw)?;
+				std::io::stdout().lock().write_all(&output)?;
+				Ok(())
+			})();
+			let _ = send.send(result.is_ok());
+		});
+		anyhow::ensure!(receive.recv_timeout(std::time::Duration::from_secs(30)) == Ok(true),
+			"offline native fee source refused");
+		return Ok(());
+	}
 	let config_path: Option<&PathBuf> = cli.config.as_ref();
 
 	if let Command::CheckConfig { path, watchman } = cli.command {
@@ -394,7 +415,7 @@ async fn inner_main() -> anyhow::Result<()> {
 	tracing_subscriber::fmt::init();
 
 	match cli.command {
-		Command::CheckConfig { .. } => unreachable!(),
+		Command::NativeFeeSourceProof | Command::CheckConfig { .. } => unreachable!(),
 		Command::Rpc { .. } => unreachable!(),
 		Command::Start => unreachable!(),
 		Command::Create => {

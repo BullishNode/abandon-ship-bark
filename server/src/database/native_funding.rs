@@ -26,14 +26,10 @@ impl Tx<'_> {
 		);
 		let mut result = Vec::new();
 		for row in self.query("SELECT attempt_key,reservation::text,signed_tx FROM native_funding_fee_intent ORDER BY attempt_key",&[]).await? {
-			let reservation:FundingReservation=serde_json::from_str(row.get(1))?;
-			ensure!(reservation.candidate.key().to_string()==row.get::<_,String>(0),"native funding DB key differs");
-			reservation.fee()?;
-			let signed=row.get::<_,Option<Vec<u8>>>(2).map(|raw| -> anyhow::Result<Transaction> { let tx=deserialize(&raw)?;ensure!(serialize(&tx)==raw,"noncanonical native signed DB bytes");reservation.candidate.verify_signed(&tx)?;Ok(tx) }).transpose()?;
-			let points=reservation.candidate.transaction()?.input.into_iter().map(|i|i.previous_output.to_string()).collect::<std::collections::BTreeSet<_>>();
-			let stored=self.query("SELECT outpoint FROM native_funding_fee_input WHERE attempt_key=$1 ORDER BY outpoint",&[&reservation.candidate.key().to_string()]).await?.into_iter().map(|r|r.get::<_,String>(0)).collect::<std::collections::BTreeSet<_>>();
-			ensure!(stored==points,"native funding input intent coverage differs");
-			result.push(FundingState {reservation,signed});
+			let state = decode_funding_row(row.get(0), row.get(1), row.get::<_,Option<Vec<u8>>>(2).as_deref())?;
+			let stored=self.query("SELECT outpoint FROM native_funding_fee_input WHERE attempt_key=$1 ORDER BY outpoint",&[&state.reservation.candidate.key().to_string()]).await?.into_iter().map(|r|r.get::<_,String>(0)).collect::<std::collections::BTreeSet<_>>();
+			require_funding_inputs(&state, &stored)?;
+			result.push(state);
 		}
 		Ok(result)
 	}
@@ -172,18 +168,8 @@ impl Tx<'_> {
 	) -> anyhow::Result<()> {
 		self.lock_native_funding().await?;
 		let states = self.native_funding_states().await?;
-		ensure!(
-			states.len() == history.len()
-				&& states.iter().all(|s| history
-					.iter()
-					.any(|h| h.reservation == s.reservation && h.signed == s.signed)),
-			"native funding DB/independent ledger diverged; retain original input intents"
-		);
 		let actual = self.native_funding_resolutions().await?;
-		ensure!(
-			actual.len() == resolutions.len() && actual.iter().all(|r| resolutions.contains(r)),
-			"native funding resolution DB/history diverged"
-		);
+		require_funding_history(&states, &actual, history, resolutions)?;
 		Ok(())
 	}
 	pub(crate) async fn native_funding_resolutions(
@@ -237,4 +223,34 @@ impl Tx<'_> {
 		.await?;
 		Ok(())
 	}
+}
+
+/// Exact row checks shared with the offline private source codec.
+pub(crate) fn decode_funding_row(key: &str, raw: &str, signed: Option<&[u8]>) -> anyhow::Result<FundingState> {
+	let reservation: FundingReservation = serde_json::from_str(raw)?;
+	ensure!(reservation.candidate.key().to_string() == key, "native funding DB key differs");
+	reservation.fee()?;
+	let signed = signed.map(|raw| -> anyhow::Result<Transaction> {
+		let tx = deserialize(raw)?;
+		ensure!(serialize(&tx) == raw, "noncanonical native signed DB bytes");
+		reservation.candidate.verify_signed(&tx)?;
+		Ok(tx)
+	}).transpose()?;
+	Ok(FundingState { reservation, signed })
+}
+
+pub(crate) fn require_funding_inputs(state: &FundingState, stored: &std::collections::BTreeSet<String>) -> anyhow::Result<()> {
+	let points = state.reservation.candidate.transaction()?.input.into_iter()
+		.map(|i| i.previous_output.to_string()).collect::<std::collections::BTreeSet<_>>();
+	ensure!(*stored == points, "native funding input intent coverage differs");
+	Ok(())
+}
+
+pub(crate) fn require_funding_history(states: &[FundingState], actual: &[FundingResolution], history: &[FundingState], resolutions: &[FundingResolution]) -> anyhow::Result<()> {
+	ensure!(states.len() == history.len() && states.iter().all(|s| history.iter()
+		.any(|h| h.reservation == s.reservation && h.signed == s.signed)),
+		"native funding DB/independent ledger diverged; retain original input intents");
+	ensure!(actual.len() == resolutions.len() && actual.iter().all(|r| resolutions.contains(r)),
+		"native funding resolution DB/history diverged");
+	Ok(())
 }

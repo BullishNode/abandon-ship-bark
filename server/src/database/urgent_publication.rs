@@ -31,6 +31,13 @@ impl UrgentPublication {
 		UrgentFeeAttempt { policy_sha256: self.policy_sha256, index: self.attempt_index }
 	}
 
+	pub(crate) fn require_member(&self, position: usize, kind: &str, attempt: Option<&str>) -> anyhow::Result<()> {
+		ensure!(position < self.txids.len() && kind == "internal" && if position + 1 == self.txids.len() {
+			serde_json::from_str::<Self>(attempt.context("urgent publication metadata missing")?)? == *self
+		} else { attempt.is_none() }, "urgent package members have conflicting attempt identity");
+		Ok(())
+	}
+
 	pub fn validate(&self, txs: &[Transaction]) -> anyhow::Result<Amount> {
 		ensure!(self.version == 1 && self.attempt_index > 0 && self.ceiling_sat > 0 &&
 			self.ceiling_sat <= Amount::MAX_MONEY.to_sat(), "invalid urgent publication identity/ceiling");
@@ -165,10 +172,7 @@ impl Tx<'_> {
 			for (position, txid) in meta.txids.iter().enumerate() {
 				let stored = self.query_opt("SELECT tx,kind::text,urgent_fee_attempt::text AS attempt FROM nursery_tx WHERE txid=$1", &[&txid.to_string()]).await?
 					.context("urgent signed package member missing")?;
-				ensure!(stored.get::<_, &str>("kind") == "internal" && if position + 1 == meta.txids.len() {
-						serde_json::from_str::<UrgentPublication>(stored.get::<_, Option<&str>>("attempt").context("urgent publication metadata missing")?)? == meta
-					} else { stored.get::<_, Option<&str>>("attempt").is_none() },
-					"urgent package members have conflicting attempt identity");
+				meta.require_member(position, stored.get("kind"), stored.get::<_, Option<&str>>("attempt"))?;
 				txs.push(deserialize(&stored.get::<_, Vec<u8>>("tx"))?);
 			}
 			meta.validate(&txs)?;

@@ -90,27 +90,27 @@ fn write_identical(path: &Path, owner: u32, raw: &[u8]) -> anyhow::Result<()> {
 	Ok(())
 }
 fn indexed(path: &Path, owner: u32) -> anyhow::Result<BTreeSet<String>> {
-    let (_, metadata) = open_record(&path.join("history"), owner)?;
-    ensure!(
-        metadata.len() <= (MAX_RECORDS * 65) as u64,
-        "native rights index exceeds complete bound"
-    );
-    let raw = read_record(&path.join("history"), owner)?;
-    parse_index(&raw)
+	let (_, metadata) = open_record(&path.join("history"), owner)?;
+	ensure!(
+		metadata.len() <= (MAX_RECORDS * 65) as u64,
+		"native rights index exceeds complete bound"
+	);
+	let raw = read_record(&path.join("history"), owner)?;
+	parse_index(&raw)
 }
 fn parse_index(raw: &[u8]) -> anyhow::Result<BTreeSet<String>> {
-    ensure!(
-        raw.len() <= MAX_RECORDS * 65 && (raw.is_empty() || raw.last() == Some(&b'\n')),
-        "native rights index is torn or exceeds bound"
-    );
-    let mut ids = BTreeSet::new();
-    for line in std::str::from_utf8(&raw)?.lines() {
-        ensure!(
-            line.parse::<Wtxid>()?.to_string() == line && ids.insert(line.to_owned()),
-            "native rights index repeats or changes original id"
-        );
-    }
-    Ok(ids)
+	ensure!(
+		raw.len() <= MAX_RECORDS * 65 && (raw.is_empty() || raw.last() == Some(&b'\n')),
+		"native rights index is torn or exceeds bound"
+	);
+	let mut ids = BTreeSet::new();
+	for line in std::str::from_utf8(&raw)?.lines() {
+		ensure!(
+			line.parse::<Wtxid>()?.to_string() == line && ids.insert(line.to_owned()),
+			"native rights index repeats or changes original id"
+		);
+	}
+	Ok(ids)
 }
 fn append_index(path: &Path, owner: u32, id: &str, ids: &BTreeSet<String>) -> anyhow::Result<()> {
 	if ids.contains(id) { return Ok(()); }
@@ -185,496 +185,496 @@ impl Write for BoundedRecord {
 // closed captured-row adapter. These are private originals, not proof that a
 // capture was authentic, complete, current or economically backed.
 pub(crate) struct CapturedRoundInput {
-    pub id: String,
-    pub original: Vec<u8>,
-    pub stored_anchor: String,
-    pub spent_round: Option<String>,
-    pub anchor: Vec<u8>,
+	pub id: String,
+	pub original: Vec<u8>,
+	pub stored_anchor: String,
+	pub spent_round: Option<String>,
+	pub anchor: Vec<u8>,
 }
 pub(crate) struct CapturedRoundOutput {
-    pub policy: Vec<u8>,
-    pub amount: u64,
-    pub mailbox: Option<String>,
+	pub policy: Vec<u8>,
+	pub amount: u64,
+	pub mailbox: Option<String>,
 }
 pub(crate) struct CapturedRoundParticipation {
-    pub unlock_hash: String,
-    pub inputs: Vec<CapturedRoundInput>,
-    pub outputs: Vec<CapturedRoundOutput>,
+	pub unlock_hash: String,
+	pub inputs: Vec<CapturedRoundInput>,
+	pub outputs: Vec<CapturedRoundOutput>,
 }
 pub(crate) struct CapturedRoundProjection {
-    pub sequence: i64,
-    pub expiry: i32,
-    pub funding: Vec<u8>,
-    pub virtual_funding: Option<Vec<u8>>,
-    pub tree: Vec<u8>,
-    pub participations: Vec<CapturedRoundParticipation>,
-    pub leaves: BTreeMap<String, Vec<u8>>,
+	pub sequence: i64,
+	pub expiry: i32,
+	pub funding: Vec<u8>,
+	pub virtual_funding: Option<Vec<u8>>,
+	pub tree: Vec<u8>,
+	pub participations: Vec<CapturedRoundParticipation>,
+	pub leaves: BTreeMap<String, Vec<u8>>,
 }
 
 // All projections omit unlock_preimage and mutable confirmation/forfeit fields.
 async fn capture(
-    t: &Tx<'_>,
-    policy: OrdinaryFeePolicy,
-    identity: &FeeServiceIdentity,
-    candidate: &PublicationRecord,
+	t: &Tx<'_>,
+	policy: OrdinaryFeePolicy,
+	identity: &FeeServiceIdentity,
+	candidate: &PublicationRecord,
 ) -> anyhow::Result<Intent> {
-    ensure!(
-        candidate.entry(policy)?.purpose() == "round",
-        "rights stage needs original Round candidate"
-    );
-    let funding = candidate.transaction()?;
-    let txid = funding.compute_txid().to_string();
-    let bounds = t.query_one("SELECT count(*), COALESCE(sum(octet_length(v.vtxo)+octet_length(i.vtxo_id)+octet_length(v.anchor_point)+COALESCE(octet_length(a.signed_tx),0)),0)::bigint, count(a.signed_tx) AS anchors FROM round_participation p JOIN round_part_input i ON i.participation_id=p.id JOIN vtxo v ON v.vtxo_id=i.vtxo_id LEFT JOIN virtual_transaction a ON a.txid=split_part(v.anchor_point,':',1) WHERE p.round_id=$1", &[&txid]).await?;
-    ensure!(
-        bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
-            && bounds.get::<_, i64>(1) <= MAX_RECORD_BYTES as i64
-            && bounds.get::<_, i64>(0) == bounds.get::<_, i64>("anchors"),
-        "round original input read bound exceeded"
-    );
-    let bound = t.query_one("SELECT octet_length(r.signed_tree) AS tree_bytes,octet_length(r.funding_tx) AS funding_bytes,octet_length(v.signed_tx) AS virtual_bytes FROM round r JOIN virtual_transaction v ON v.txid=r.funding_txid WHERE r.funding_txid=$1", &[&txid]).await?;
-    ensure!(
-        bound.get::<_, i32>("tree_bytes") <= MAX_RECORD_BYTES as i32
-            && bound.get::<_, i32>("funding_bytes") <= MAX_RECORD_BYTES as i32
-            && bound
-                .get::<_, Option<i32>>("virtual_bytes")
-                .is_some_and(|n| n <= MAX_RECORD_BYTES as i32),
-        "round source byte bound exceeded"
-    );
-    let original_bytes = u64::try_from(bounds.get::<_, i64>(1))?;
-    ensure!(
-        original_bytes
-            .checked_add(u64::try_from(bound.get::<_, i32>("tree_bytes"))?)
-            .and_then(|n| n.checked_add(u64::try_from(bound.get::<_, i32>("funding_bytes")).ok()?))
-            .is_some_and(|n| n <= MAX_RECORD_BYTES as u64),
-        "aggregate original inputs/anchors/tree/funding read bound exceeded"
-    );
-    let part_bounds=t.query_one("SELECT count(*),COALESCE(sum(octet_length(unlock_hash)),0)::bigint FROM round_participation WHERE round_id=$1",&[&txid]).await?;
-    ensure!(
-        part_bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
-            && part_bounds.get::<_, i64>(1) <= MAX_RECORD_BYTES as i64,
-        "participation metadata read bound exceeded"
-    );
-    let allocation_bounds=t.query_one("SELECT count(*),COALESCE(sum(octet_length(o.policy)+COALESCE(octet_length(o.unblinded_mailbox_id),0)),0)::bigint FROM round_part_output o JOIN round_participation p ON p.id=o.participation_id WHERE p.round_id=$1",&[&txid]).await?;
-    ensure!(
-        allocation_bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
-            && allocation_bounds.get::<_, i64>(1) <= MAX_RECORD_BYTES as i64,
-        "round allocation metadata read bound exceeded"
-    );
-    let combined = [
-        original_bytes,
-        u64::try_from(bound.get::<_, i32>("tree_bytes"))?,
-        u64::try_from(bound.get::<_, i32>("funding_bytes"))?,
-        u64::try_from(part_bounds.get::<_, i64>(1))?,
-        u64::try_from(allocation_bounds.get::<_, i64>(1))?,
-    ]
-    .into_iter()
-    .try_fold(0u64, |n, next| n.checked_add(next))
-    .context("combined round original byte overflow")?;
-    ensure!(
-        combined <= MAX_RECORD_BYTES as u64,
-        "combined original round payload read bound exceeded"
-    );
-    let complete_nonleaf_bytes = combined.checked_add(u64::try_from(bound.get::<_,Option<i32>>("virtual_bytes").context("original virtual funding absent")?)?)
-        .and_then(|n|n.checked_add(u64::try_from(bounds.get::<_,i64>(0)).ok()?.checked_mul(txid.len() as u64)?))
-        .context("complete Round projection byte overflow")?;
-    ensure!(complete_nonleaf_bytes <= MAX_RECORD_BYTES as u64, "complete Round projection virtual funding/input metadata exceeds existing bound");
-    let row = t.query_one("SELECT r.seq,r.expiry,r.funding_tx,r.signed_tree,v.signed_tx AS virtual_funding FROM round r JOIN virtual_transaction v ON v.txid=r.funding_txid WHERE r.funding_txid=$1", &[&txid]).await?;
-    let raw_funding: Vec<u8> = row.get("funding_tx");
-    let tree_raw: Vec<u8> = row.get("signed_tree");
-    let tree = authenticate_tree(&tree_raw, &funding, &identity.server_pubkey.to_string())?;
-    let parts = t.query("SELECT id,unlock_hash FROM round_participation WHERE round_id=$1 ORDER BY unlock_hash LIMIT 4097", &[&txid]).await?;
-    ensure!(
-        parts.len() <= MAX_RECORDS,
-        "round participation bound exceeded"
-    );
-    let mut participations = Vec::new();
-    let mut total_bytes = raw_funding
-        .len()
-        .checked_add(tree_raw.len())
-        .context("round record byte overflow")?;
-    for part in parts {
-        let part_id: i64 = part.get("id");
-        let source = t.query("SELECT i.vtxo_id,v.vtxo,v.anchor_point AS stored_anchor,r.funding_txid AS spent_round FROM round_part_input i JOIN vtxo v ON v.vtxo_id=i.vtxo_id LEFT JOIN round r ON r.id=v.spent_in_round AND r.funding_txid=$2 WHERE i.participation_id=$1 AND octet_length(v.vtxo)<=4194304 AND octet_length(i.vtxo_id)<=80 AND octet_length(v.anchor_point)<=80 ORDER BY i.vtxo_id LIMIT 4097", &[&part_id,&txid]).await?;
-        ensure!(
-            !source.is_empty() && source.len() <= MAX_RECORDS,
-            "round input membership absent or over bound"
-        );
-        let mut inputs = Vec::new();
-        for input in source {
-            let original: Vec<u8> = input.get("vtxo");
-            let original_vtxo = decode_user_full(&original)?;
-            let anchor_id = original_vtxo.chain_anchor().txid.to_string();
-            let anchor = t.query_one("SELECT signed_tx FROM virtual_transaction WHERE txid=$1 AND octet_length(signed_tx) BETWEEN 1 AND 4194304", &[&anchor_id]).await.context("input original anchor absent or over bound")?;
-            let anchor = anchor
-                .get::<_, Option<Vec<u8>>>("signed_tx")
-                .context("original signed anchor absent")?;
-            total_bytes = total_bytes
-                .checked_add(original.len())
-                .and_then(|n| n.checked_add(anchor.len()))
-                .context("round original byte overflow")?;
-            ensure!(
-                total_bytes <= MAX_RECORD_BYTES,
-                "round original aggregate byte bound exceeded"
-            );
-            inputs.push(CapturedRoundInput {
-                id: input.get("vtxo_id"),
-                original,
-                stored_anchor: input.get("stored_anchor"),
-                spent_round: input.get("spent_round"),
-                anchor,
-            });
-        }
-        let bounds = t.query_one("SELECT count(*),COALESCE(sum(octet_length(policy)+COALESCE(octet_length(unblinded_mailbox_id),0)),0)::bigint FROM round_part_output WHERE participation_id=$1", &[&part_id]).await?;
-        ensure!(
-            bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
-                && bounds.get::<_, i64>(1) <= MAX_RECORD_BYTES as i64,
-            "round output read bound exceeded"
-        );
-        let mut outputs = Vec::new();
-        for output in t.query("SELECT policy,amount,unblinded_mailbox_id FROM round_part_output WHERE participation_id=$1 LIMIT 4097", &[&part_id]).await? {
-            let policy: Vec<u8> = output.get("policy"); let mailbox: Option<String> = output.get("unblinded_mailbox_id");
-            total_bytes = total_bytes.checked_add(policy.len()).and_then(|n| n.checked_add(mailbox.as_ref().map_or(0,String::len))).context("round output bytes overflow")?;
-            ensure!(total_bytes <= MAX_RECORD_BYTES, "round aggregate output bytes exceeded");
-            outputs.push(CapturedRoundOutput { policy, amount: u64::try_from(output.get::<_,i64>("amount"))?, mailbox });
-        }
-        participations.push(CapturedRoundParticipation {
-            unlock_hash: part.get("unlock_hash"),
-            inputs,
-            outputs,
-        });
-    }
-    let leaf_ids = tree
-        .output_vtxos()
-        .map(|leaf| leaf.id().to_string())
-        .collect::<Vec<_>>();
-    let leaf_bounds = t.query_one("SELECT count(*),COALESCE(sum(octet_length(vtxo)+octet_length(vtxo_id)),0)::bigint FROM vtxo WHERE vtxo_id=ANY($1)", &[&leaf_ids]).await?;
-    ensure!(
-        leaf_bounds.get::<_, i64>(0) == i64::try_from(leaf_ids.len())?
-            && u64::try_from(leaf_bounds.get::<_, i64>(1))?
-                .checked_add(complete_nonleaf_bytes)
-                .is_some_and(|n| n <= MAX_RECORD_BYTES as u64),
-        "complete Round projection including retained output bodies exceeds existing byte bound"
-    );
+	ensure!(
+		candidate.entry(policy)?.purpose() == "round",
+		"rights stage needs original Round candidate"
+	);
+	let funding = candidate.transaction()?;
+	let txid = funding.compute_txid().to_string();
+	let bounds = t.query_one("SELECT count(*), COALESCE(sum(octet_length(v.vtxo)+octet_length(i.vtxo_id)+octet_length(v.anchor_point)+COALESCE(octet_length(a.signed_tx),0)),0)::bigint, count(a.signed_tx) AS anchors FROM round_participation p JOIN round_part_input i ON i.participation_id=p.id JOIN vtxo v ON v.vtxo_id=i.vtxo_id LEFT JOIN virtual_transaction a ON a.txid=split_part(v.anchor_point,':',1) WHERE p.round_id=$1", &[&txid]).await?;
+	ensure!(
+		bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
+			&& bounds.get::<_, i64>(1) <= MAX_RECORD_BYTES as i64
+			&& bounds.get::<_, i64>(0) == bounds.get::<_, i64>("anchors"),
+		"round original input read bound exceeded"
+	);
+	let bound = t.query_one("SELECT octet_length(r.signed_tree) AS tree_bytes,octet_length(r.funding_tx) AS funding_bytes,octet_length(v.signed_tx) AS virtual_bytes FROM round r JOIN virtual_transaction v ON v.txid=r.funding_txid WHERE r.funding_txid=$1", &[&txid]).await?;
+	ensure!(
+		bound.get::<_, i32>("tree_bytes") <= MAX_RECORD_BYTES as i32
+			&& bound.get::<_, i32>("funding_bytes") <= MAX_RECORD_BYTES as i32
+			&& bound
+				.get::<_, Option<i32>>("virtual_bytes")
+				.is_some_and(|n| n <= MAX_RECORD_BYTES as i32),
+		"round source byte bound exceeded"
+	);
+	let original_bytes = u64::try_from(bounds.get::<_, i64>(1))?;
+	ensure!(
+		original_bytes
+			.checked_add(u64::try_from(bound.get::<_, i32>("tree_bytes"))?)
+			.and_then(|n| n.checked_add(u64::try_from(bound.get::<_, i32>("funding_bytes")).ok()?))
+			.is_some_and(|n| n <= MAX_RECORD_BYTES as u64),
+		"aggregate original inputs/anchors/tree/funding read bound exceeded"
+	);
+	let part_bounds=t.query_one("SELECT count(*),COALESCE(sum(octet_length(unlock_hash)),0)::bigint FROM round_participation WHERE round_id=$1",&[&txid]).await?;
+	ensure!(
+		part_bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
+			&& part_bounds.get::<_, i64>(1) <= MAX_RECORD_BYTES as i64,
+		"participation metadata read bound exceeded"
+	);
+	let allocation_bounds=t.query_one("SELECT count(*),COALESCE(sum(octet_length(o.policy)+COALESCE(octet_length(o.unblinded_mailbox_id),0)),0)::bigint FROM round_part_output o JOIN round_participation p ON p.id=o.participation_id WHERE p.round_id=$1",&[&txid]).await?;
+	ensure!(
+		allocation_bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
+			&& allocation_bounds.get::<_, i64>(1) <= MAX_RECORD_BYTES as i64,
+		"round allocation metadata read bound exceeded"
+	);
+	let combined = [
+		original_bytes,
+		u64::try_from(bound.get::<_, i32>("tree_bytes"))?,
+		u64::try_from(bound.get::<_, i32>("funding_bytes"))?,
+		u64::try_from(part_bounds.get::<_, i64>(1))?,
+		u64::try_from(allocation_bounds.get::<_, i64>(1))?,
+	]
+	.into_iter()
+	.try_fold(0u64, |n, next| n.checked_add(next))
+	.context("combined round original byte overflow")?;
+	ensure!(
+		combined <= MAX_RECORD_BYTES as u64,
+		"combined original round payload read bound exceeded"
+	);
+	let complete_nonleaf_bytes = combined.checked_add(u64::try_from(bound.get::<_,Option<i32>>("virtual_bytes").context("original virtual funding absent")?)?)
+		.and_then(|n|n.checked_add(u64::try_from(bounds.get::<_,i64>(0)).ok()?.checked_mul(txid.len() as u64)?))
+		.context("complete Round projection byte overflow")?;
+	ensure!(complete_nonleaf_bytes <= MAX_RECORD_BYTES as u64, "complete Round projection virtual funding/input metadata exceeds existing bound");
+	let row = t.query_one("SELECT r.seq,r.expiry,r.funding_tx,r.signed_tree,v.signed_tx AS virtual_funding FROM round r JOIN virtual_transaction v ON v.txid=r.funding_txid WHERE r.funding_txid=$1", &[&txid]).await?;
+	let raw_funding: Vec<u8> = row.get("funding_tx");
+	let tree_raw: Vec<u8> = row.get("signed_tree");
+	let tree = authenticate_tree(&tree_raw, &funding, &identity.server_pubkey.to_string())?;
+	let parts = t.query("SELECT id,unlock_hash FROM round_participation WHERE round_id=$1 ORDER BY unlock_hash LIMIT 4097", &[&txid]).await?;
+	ensure!(
+		parts.len() <= MAX_RECORDS,
+		"round participation bound exceeded"
+	);
+	let mut participations = Vec::new();
+	let mut total_bytes = raw_funding
+		.len()
+		.checked_add(tree_raw.len())
+		.context("round record byte overflow")?;
+	for part in parts {
+		let part_id: i64 = part.get("id");
+		let source = t.query("SELECT i.vtxo_id,v.vtxo,v.anchor_point AS stored_anchor,r.funding_txid AS spent_round FROM round_part_input i JOIN vtxo v ON v.vtxo_id=i.vtxo_id LEFT JOIN round r ON r.id=v.spent_in_round AND r.funding_txid=$2 WHERE i.participation_id=$1 AND octet_length(v.vtxo)<=4194304 AND octet_length(i.vtxo_id)<=80 AND octet_length(v.anchor_point)<=80 ORDER BY i.vtxo_id LIMIT 4097", &[&part_id,&txid]).await?;
+		ensure!(
+			!source.is_empty() && source.len() <= MAX_RECORDS,
+			"round input membership absent or over bound"
+		);
+		let mut inputs = Vec::new();
+		for input in source {
+			let original: Vec<u8> = input.get("vtxo");
+			let original_vtxo = decode_user_full(&original)?;
+			let anchor_id = original_vtxo.chain_anchor().txid.to_string();
+			let anchor = t.query_one("SELECT signed_tx FROM virtual_transaction WHERE txid=$1 AND octet_length(signed_tx) BETWEEN 1 AND 4194304", &[&anchor_id]).await.context("input original anchor absent or over bound")?;
+			let anchor = anchor
+				.get::<_, Option<Vec<u8>>>("signed_tx")
+				.context("original signed anchor absent")?;
+			total_bytes = total_bytes
+				.checked_add(original.len())
+				.and_then(|n| n.checked_add(anchor.len()))
+				.context("round original byte overflow")?;
+			ensure!(
+				total_bytes <= MAX_RECORD_BYTES,
+				"round original aggregate byte bound exceeded"
+			);
+			inputs.push(CapturedRoundInput {
+				id: input.get("vtxo_id"),
+				original,
+				stored_anchor: input.get("stored_anchor"),
+				spent_round: input.get("spent_round"),
+				anchor,
+			});
+		}
+		let bounds = t.query_one("SELECT count(*),COALESCE(sum(octet_length(policy)+COALESCE(octet_length(unblinded_mailbox_id),0)),0)::bigint FROM round_part_output WHERE participation_id=$1", &[&part_id]).await?;
+		ensure!(
+			bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
+				&& bounds.get::<_, i64>(1) <= MAX_RECORD_BYTES as i64,
+			"round output read bound exceeded"
+		);
+		let mut outputs = Vec::new();
+		for output in t.query("SELECT policy,amount,unblinded_mailbox_id FROM round_part_output WHERE participation_id=$1 LIMIT 4097", &[&part_id]).await? {
+			let policy: Vec<u8> = output.get("policy"); let mailbox: Option<String> = output.get("unblinded_mailbox_id");
+			total_bytes = total_bytes.checked_add(policy.len()).and_then(|n| n.checked_add(mailbox.as_ref().map_or(0,String::len))).context("round output bytes overflow")?;
+			ensure!(total_bytes <= MAX_RECORD_BYTES, "round aggregate output bytes exceeded");
+			outputs.push(CapturedRoundOutput { policy, amount: u64::try_from(output.get::<_,i64>("amount"))?, mailbox });
+		}
+		participations.push(CapturedRoundParticipation {
+			unlock_hash: part.get("unlock_hash"),
+			inputs,
+			outputs,
+		});
+	}
+	let leaf_ids = tree
+		.output_vtxos()
+		.map(|leaf| leaf.id().to_string())
+		.collect::<Vec<_>>();
+	let leaf_bounds = t.query_one("SELECT count(*),COALESCE(sum(octet_length(vtxo)+octet_length(vtxo_id)),0)::bigint FROM vtxo WHERE vtxo_id=ANY($1)", &[&leaf_ids]).await?;
+	ensure!(
+		leaf_bounds.get::<_, i64>(0) == i64::try_from(leaf_ids.len())?
+			&& u64::try_from(leaf_bounds.get::<_, i64>(1))?
+				.checked_add(complete_nonleaf_bytes)
+				.is_some_and(|n| n <= MAX_RECORD_BYTES as u64),
+		"complete Round projection including retained output bodies exceeds existing byte bound"
+	);
 
-    let mut leaves = BTreeMap::new();
-    for leaf in tree.output_vtxos() {
-        let id = leaf.id().to_string();
-        let output = t
-            .query_one(
-                "SELECT vtxo FROM vtxo WHERE vtxo_id=$1 AND octet_length(vtxo)<=4194304",
-                &[&id],
-            )
-            .await?;
-        ensure!(
-            leaves
-                .insert(id, output.get::<_, Vec<u8>>("vtxo"))
-                .is_none(),
-            "duplicate round leaf source"
-        );
-    }
-    capture_projection(
-        policy,
-        identity,
-        candidate,
-        &CapturedRoundProjection {
-            sequence: row.get("seq"),
-            expiry: row.get("expiry"),
-            funding: raw_funding,
-            virtual_funding: row.get("virtual_funding"),
-            tree: tree_raw,
-            participations,
-            leaves,
-        },
-    )
+	let mut leaves = BTreeMap::new();
+	for leaf in tree.output_vtxos() {
+		let id = leaf.id().to_string();
+		let output = t
+			.query_one(
+				"SELECT vtxo FROM vtxo WHERE vtxo_id=$1 AND octet_length(vtxo)<=4194304",
+				&[&id],
+			)
+			.await?;
+		ensure!(
+			leaves
+				.insert(id, output.get::<_, Vec<u8>>("vtxo"))
+				.is_none(),
+			"duplicate round leaf source"
+		);
+	}
+	capture_projection(
+		policy,
+		identity,
+		candidate,
+		&CapturedRoundProjection {
+			sequence: row.get("seq"),
+			expiry: row.get("expiry"),
+			funding: raw_funding,
+			virtual_funding: row.get("virtual_funding"),
+			tree: tree_raw,
+			participations,
+			leaves,
+		},
+	)
 }
 
 /// Reuses genuine native tree verification before the captured-row adapter
 /// selects current leaf bodies from the complete original SQL body table.
 pub(crate) fn captured_leaf_ids(
-    raw: &[u8],
-    funding: &Transaction,
-    identity: &FeeServiceIdentity,
+	raw: &[u8],
+	funding: &Transaction,
+	identity: &FeeServiceIdentity,
 ) -> anyhow::Result<BTreeSet<String>> {
-    Ok(
-        authenticate_tree(raw, funding, &identity.server_pubkey.to_string())?
-            .output_vtxos()
-            .map(|leaf| leaf.id().to_string())
-            .collect(),
-    )
+	Ok(
+		authenticate_tree(raw, funding, &identity.server_pubkey.to_string())?
+			.output_vtxos()
+			.map(|leaf| leaf.id().to_string())
+			.collect(),
+	)
 }
 fn projection_bound(source: &CapturedRoundProjection) -> anyhow::Result<()> {
-    ensure!(
-        source.participations.len() <= MAX_RECORDS && source.leaves.len() <= MAX_RECORDS,
-        "complete Round projection count exceeds bound"
-    );
-    let mut bytes = source
-        .funding
-        .len()
-        .checked_add(source.tree.len())
-        .and_then(|n|n.checked_add(source.virtual_funding.as_ref().map_or(0,Vec::len)))
-        .context("Round projection byte overflow")?;
-    let mut inputs = 0usize;
-    let mut outputs = 0usize;
-    for part in &source.participations {
-        inputs = inputs
-            .checked_add(part.inputs.len())
-            .context("Round projection input overflow")?;
-        outputs = outputs
-            .checked_add(part.outputs.len())
-            .context("Round projection output overflow")?;
-        bytes = bytes
-            .checked_add(part.unlock_hash.len())
-            .context("Round projection metadata overflow")?;
-        ensure!(
-            inputs <= MAX_RECORDS && outputs <= MAX_RECORDS,
-            "complete Round projection input/output bound exceeded"
-        );
-        for input in &part.inputs {
-            ensure!(
-                input.id.len() <= 80 && input.stored_anchor.len() <= 80,
-                "captured original input identifier exceeds bound"
-            );
-            bytes = bytes
-                .checked_add(input.original.len())
-                .and_then(|n| n.checked_add(input.anchor.len()))
-                .and_then(|n| n.checked_add(input.id.len()))
-                .and_then(|n| n.checked_add(input.stored_anchor.len()))
-                .and_then(|n| n.checked_add(input.spent_round.as_ref().map_or(0,String::len)))
-                .context("Round projection original byte overflow")?;
-        }
-        for output in &part.outputs {
-            bytes = bytes
-                .checked_add(output.policy.len())
-                .and_then(|n| n.checked_add(output.mailbox.as_ref().map_or(0, String::len)))
-                .context("Round projection output byte overflow")?;
-        }
-    }
-    for (id, body) in &source.leaves {
-        ensure!(
-            id.len() <= 80,
-            "captured original output identifier exceeds bound"
-        );
-        bytes = bytes
-            .checked_add(body.len())
-            .and_then(|n| n.checked_add(id.len()))
-            .context("Round projection leaf byte overflow")?;
-    }
-    ensure!(
-        bytes <= MAX_RECORD_BYTES,
-        "complete Round projection including retained output bodies exceeds existing byte bound"
-    );
-    Ok(())
+	ensure!(
+		source.participations.len() <= MAX_RECORDS && source.leaves.len() <= MAX_RECORDS,
+		"complete Round projection count exceeds bound"
+	);
+	let mut bytes = source
+		.funding
+		.len()
+		.checked_add(source.tree.len())
+		.and_then(|n|n.checked_add(source.virtual_funding.as_ref().map_or(0,Vec::len)))
+		.context("Round projection byte overflow")?;
+	let mut inputs = 0usize;
+	let mut outputs = 0usize;
+	for part in &source.participations {
+		inputs = inputs
+			.checked_add(part.inputs.len())
+			.context("Round projection input overflow")?;
+		outputs = outputs
+			.checked_add(part.outputs.len())
+			.context("Round projection output overflow")?;
+		bytes = bytes
+			.checked_add(part.unlock_hash.len())
+			.context("Round projection metadata overflow")?;
+		ensure!(
+			inputs <= MAX_RECORDS && outputs <= MAX_RECORDS,
+			"complete Round projection input/output bound exceeded"
+		);
+		for input in &part.inputs {
+			ensure!(
+				input.id.len() <= 80 && input.stored_anchor.len() <= 80,
+				"captured original input identifier exceeds bound"
+			);
+			bytes = bytes
+				.checked_add(input.original.len())
+				.and_then(|n| n.checked_add(input.anchor.len()))
+				.and_then(|n| n.checked_add(input.id.len()))
+				.and_then(|n| n.checked_add(input.stored_anchor.len()))
+				.and_then(|n| n.checked_add(input.spent_round.as_ref().map_or(0,String::len)))
+				.context("Round projection original byte overflow")?;
+		}
+		for output in &part.outputs {
+			bytes = bytes
+				.checked_add(output.policy.len())
+				.and_then(|n| n.checked_add(output.mailbox.as_ref().map_or(0, String::len)))
+				.context("Round projection output byte overflow")?;
+		}
+	}
+	for (id, body) in &source.leaves {
+		ensure!(
+			id.len() <= 80,
+			"captured original output identifier exceeds bound"
+		);
+		bytes = bytes
+			.checked_add(body.len())
+			.and_then(|n| n.checked_add(id.len()))
+			.context("Round projection leaf byte overflow")?;
+	}
+	ensure!(
+		bytes <= MAX_RECORD_BYTES,
+		"complete Round projection including retained output bodies exceeds existing byte bound"
+	);
+	Ok(())
 }
 
 /// The SAME native tree/signature/allocation/Full validation for locked SQL and
 /// immutable captured SQL. No database, filesystem, activation or fee owner is
 /// opened here. Only the caller can authenticate the actual source cut.
 fn capture_projection(
-    policy: OrdinaryFeePolicy,
-    identity: &FeeServiceIdentity,
-    candidate: &PublicationRecord,
-    source: &CapturedRoundProjection,
+	policy: OrdinaryFeePolicy,
+	identity: &FeeServiceIdentity,
+	candidate: &PublicationRecord,
+	source: &CapturedRoundProjection,
 ) -> anyhow::Result<Intent> {
-    projection_bound(source)?;
-    let entry = candidate.entry(policy)?;
-    ensure!(
-        entry.purpose() == "round",
-        "rights stage needs original Round candidate"
-    );
-    let funding = candidate.transaction()?;
-    let txid = funding.compute_txid().to_string();
-    ensure!(
-        source.funding == bitcoin::consensus::serialize(&funding)
-            && source.virtual_funding.as_ref() == Some(&source.funding),
-        "round signed funding differs from original permit"
-    );
-    ensure!(
-        source.expiry >= 0
-            && source.participations.len() <= MAX_RECORDS
-            && source.leaves.len() <= MAX_RECORDS,
-        "captured Round shape exceeds bound"
-    );
-    let tree = authenticate_tree(&source.tree, &funding, &identity.server_pubkey.to_string())?;
-    ensure!(
-        tree.spec.spec.expiry_height.to_u32() == source.expiry as u32,
-        "round expiry differs"
-    );
-    let leaves = tree.output_vtxos().collect::<Vec<_>>();
-    ensure!(
-        leaves
-            .iter()
-            .map(|leaf| leaf.id().to_string())
-            .collect::<BTreeSet<_>>()
-            == source.leaves.keys().cloned().collect(),
-        "complete original Round leaf set differs"
-    );
-    let mut participations = Vec::new();
-    let mut inputs = BTreeMap::new();
-    let mut allocated = BTreeSet::new();
-    let mut hashes = BTreeSet::new();
-    let mut total_bytes = source
-        .funding
-        .len()
-        .checked_add(source.tree.len())
-        .context("round record byte overflow")?;
-    for part in &source.participations {
-        ensure!(
-            hashes.insert(part.unlock_hash.clone())
-                && !part.inputs.is_empty()
-                && part.inputs.len() <= MAX_RECORDS
-                && !part.outputs.is_empty()
-                && part.outputs.len() <= MAX_RECORDS,
-            "round participation duplicate, absent or over bound"
-        );
-        let mut ids = Vec::new();
-        let mut value = 0u64;
-        for input in &part.inputs {
-            let original = decode_user_full(&input.original)?;
-            ensure!(
-                original.server_pubkey() == identity.server_pubkey
-                    && original.id().to_string() == input.id
-                    && input.spent_round.as_deref() == Some(&txid),
-                "original input server or consumption differs"
-            );
-            ensure!(
-                input.stored_anchor == original.chain_anchor().to_string(),
-                "original anchor differs from bounded source projection"
-            );
-            total_bytes = total_bytes
-                .checked_add(input.original.len())
-                .and_then(|n| n.checked_add(input.anchor.len()))
-                .context("round original byte overflow")?;
-            ensure!(
-                inputs.len() < MAX_RECORDS && total_bytes <= MAX_RECORD_BYTES,
-                "round original aggregate input bound exceeded"
-            );
-            validate_original(&original, &input.anchor)?;
-            value = value
-                .checked_add(original.amount().to_sat())
-                .context("round input amount overflow")?;
-            ids.push(input.id.clone());
-            ensure!(
-                inputs
-                    .insert(
-                        input.id.clone(),
-                        Input {
-                            id: input.id.clone(),
-                            original: input.original.clone(),
-                            anchor: input.anchor.clone()
-                        }
-                    )
-                    .is_none(),
-                "duplicate round input ownership"
-            );
-        }
-        ids.sort();
-        let mut outputs = part
-            .outputs
-            .iter()
-            .map(|o| Output {
-                policy: o.policy.clone(),
-                amount: o.amount,
-                mailbox: o.mailbox.clone(),
-            })
-            .collect::<Vec<_>>();
-        outputs.sort();
-        for output in &outputs {
-            total_bytes = total_bytes
-                .checked_add(output.policy.len())
-                .and_then(|n| n.checked_add(output.mailbox.as_ref().map_or(0, String::len)))
-                .context("round output bytes overflow")?;
-        }
-        ensure!(
-            total_bytes <= MAX_RECORD_BYTES,
-            "round aggregate output bytes exceeded"
-        );
-        let indexes = leaves
-            .iter()
-            .enumerate()
-            .filter(|(_, v)| {
-                v.unlock_hash()
-                    .is_some_and(|h| h.to_string() == part.unlock_hash)
-            })
-            .map(|(i, _)| i)
-            .collect::<Vec<_>>();
-        let mut expected = indexes
-            .iter()
-            .map(|i| {
-                (
-                    leaves[*i].policy().serialize(),
-                    leaves[*i].amount().to_sat(),
-                )
-            })
-            .collect::<Vec<_>>();
-        expected.sort();
-        let mut actual = outputs
-            .iter()
-            .map(|o| (o.policy.clone(), o.amount))
-            .collect::<Vec<_>>();
-        actual.sort();
-        ensure!(
-            actual == expected,
-            "complete indexed round allocation differs"
-        );
-        let sum = outputs
-            .iter()
-            .try_fold(0u64, |n, o| n.checked_add(o.amount))
-            .context("round output amount overflow")?;
-        ensure!(
-            sum <= value,
-            "round participation creates unsupported excess value"
-        );
-        for index in &indexes {
-            ensure!(allocated.insert(*index), "round leaf allocated twice");
-        }
-        participations.push(Participation {
-            unlock_hash: part.unlock_hash.clone(),
-            inputs: ids,
-            outputs,
-            leaves: indexes,
-        });
-    }
-    participations.sort_by(|a, b| a.unlock_hash.cmp(&b.unlock_hash));
-    for (index, leaf) in leaves.iter().enumerate() {
-        if !allocated.contains(&index) {
-            ensure!(
-                leaf.policy()
-                    == &ark::VtxoPolicy::new_pubkey(
-                        "02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c"
-                            .parse()?
-                    )
-                    && leaf.amount() == bitcoin_ext::P2WSH_DUST
-                    && leaf.unlock_hash().is_some_and(|h| h.to_string()
-                        == "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
-                "non-padding entitlement missing from round participation"
-            );
-        }
-        let current = decode_user_full(
-            source
-                .leaves
-                .get(&leaf.id().to_string())
-                .context("original Round leaf absent")?,
-        )?;
-        validate_representation(&current, leaf, &source.funding)?;
-    }
-    let result = Intent {
-        format: FORMAT.into(),
-        policy_sha256: identity.policy_sha256.to_string(),
-        server_pubkey: identity.server_pubkey.to_string(),
-        genesis: identity.genesis.to_string(),
-        opening_sha256: identity.opening_sha256.to_string(),
-        candidate_id: entry.id().to_string(),
-        candidate_sha256: digest(&serde_json::to_vec(candidate)?),
-        sequence: source.sequence,
-        expiry: source.expiry,
-        funding: source.funding.clone(),
-        tree: source.tree.clone(),
-        participations,
-        inputs: inputs.into_values().collect(),
-    };
-    let mut bounded = BoundedRecord(Vec::new());
-    serde_json::to_writer(&mut bounded, &result)?;
-    Ok(result)
+	projection_bound(source)?;
+	let entry = candidate.entry(policy)?;
+	ensure!(
+		entry.purpose() == "round",
+		"rights stage needs original Round candidate"
+	);
+	let funding = candidate.transaction()?;
+	let txid = funding.compute_txid().to_string();
+	ensure!(
+		source.funding == bitcoin::consensus::serialize(&funding)
+			&& source.virtual_funding.as_ref() == Some(&source.funding),
+		"round signed funding differs from original permit"
+	);
+	ensure!(
+		source.expiry >= 0
+			&& source.participations.len() <= MAX_RECORDS
+			&& source.leaves.len() <= MAX_RECORDS,
+		"captured Round shape exceeds bound"
+	);
+	let tree = authenticate_tree(&source.tree, &funding, &identity.server_pubkey.to_string())?;
+	ensure!(
+		tree.spec.spec.expiry_height.to_u32() == source.expiry as u32,
+		"round expiry differs"
+	);
+	let leaves = tree.output_vtxos().collect::<Vec<_>>();
+	ensure!(
+		leaves
+			.iter()
+			.map(|leaf| leaf.id().to_string())
+			.collect::<BTreeSet<_>>()
+			== source.leaves.keys().cloned().collect(),
+		"complete original Round leaf set differs"
+	);
+	let mut participations = Vec::new();
+	let mut inputs = BTreeMap::new();
+	let mut allocated = BTreeSet::new();
+	let mut hashes = BTreeSet::new();
+	let mut total_bytes = source
+		.funding
+		.len()
+		.checked_add(source.tree.len())
+		.context("round record byte overflow")?;
+	for part in &source.participations {
+		ensure!(
+			hashes.insert(part.unlock_hash.clone())
+				&& !part.inputs.is_empty()
+				&& part.inputs.len() <= MAX_RECORDS
+				&& !part.outputs.is_empty()
+				&& part.outputs.len() <= MAX_RECORDS,
+			"round participation duplicate, absent or over bound"
+		);
+		let mut ids = Vec::new();
+		let mut value = 0u64;
+		for input in &part.inputs {
+			let original = decode_user_full(&input.original)?;
+			ensure!(
+				original.server_pubkey() == identity.server_pubkey
+					&& original.id().to_string() == input.id
+					&& input.spent_round.as_deref() == Some(&txid),
+				"original input server or consumption differs"
+			);
+			ensure!(
+				input.stored_anchor == original.chain_anchor().to_string(),
+				"original anchor differs from bounded source projection"
+			);
+			total_bytes = total_bytes
+				.checked_add(input.original.len())
+				.and_then(|n| n.checked_add(input.anchor.len()))
+				.context("round original byte overflow")?;
+			ensure!(
+				inputs.len() < MAX_RECORDS && total_bytes <= MAX_RECORD_BYTES,
+				"round original aggregate input bound exceeded"
+			);
+			validate_original(&original, &input.anchor)?;
+			value = value
+				.checked_add(original.amount().to_sat())
+				.context("round input amount overflow")?;
+			ids.push(input.id.clone());
+			ensure!(
+				inputs
+					.insert(
+						input.id.clone(),
+						Input {
+							id: input.id.clone(),
+							original: input.original.clone(),
+							anchor: input.anchor.clone()
+						}
+					)
+					.is_none(),
+				"duplicate round input ownership"
+			);
+		}
+		ids.sort();
+		let mut outputs = part
+			.outputs
+			.iter()
+			.map(|o| Output {
+				policy: o.policy.clone(),
+				amount: o.amount,
+				mailbox: o.mailbox.clone(),
+			})
+			.collect::<Vec<_>>();
+		outputs.sort();
+		for output in &outputs {
+			total_bytes = total_bytes
+				.checked_add(output.policy.len())
+				.and_then(|n| n.checked_add(output.mailbox.as_ref().map_or(0, String::len)))
+				.context("round output bytes overflow")?;
+		}
+		ensure!(
+			total_bytes <= MAX_RECORD_BYTES,
+			"round aggregate output bytes exceeded"
+		);
+		let indexes = leaves
+			.iter()
+			.enumerate()
+			.filter(|(_, v)| {
+				v.unlock_hash()
+					.is_some_and(|h| h.to_string() == part.unlock_hash)
+			})
+			.map(|(i, _)| i)
+			.collect::<Vec<_>>();
+		let mut expected = indexes
+			.iter()
+			.map(|i| {
+				(
+					leaves[*i].policy().serialize(),
+					leaves[*i].amount().to_sat(),
+				)
+			})
+			.collect::<Vec<_>>();
+		expected.sort();
+		let mut actual = outputs
+			.iter()
+			.map(|o| (o.policy.clone(), o.amount))
+			.collect::<Vec<_>>();
+		actual.sort();
+		ensure!(
+			actual == expected,
+			"complete indexed round allocation differs"
+		);
+		let sum = outputs
+			.iter()
+			.try_fold(0u64, |n, o| n.checked_add(o.amount))
+			.context("round output amount overflow")?;
+		ensure!(
+			sum <= value,
+			"round participation creates unsupported excess value"
+		);
+		for index in &indexes {
+			ensure!(allocated.insert(*index), "round leaf allocated twice");
+		}
+		participations.push(Participation {
+			unlock_hash: part.unlock_hash.clone(),
+			inputs: ids,
+			outputs,
+			leaves: indexes,
+		});
+	}
+	participations.sort_by(|a, b| a.unlock_hash.cmp(&b.unlock_hash));
+	for (index, leaf) in leaves.iter().enumerate() {
+		if !allocated.contains(&index) {
+			ensure!(
+				leaf.policy()
+					== &ark::VtxoPolicy::new_pubkey(
+						"02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c"
+							.parse()?
+					)
+					&& leaf.amount() == bitcoin_ext::P2WSH_DUST
+					&& leaf.unlock_hash().is_some_and(|h| h.to_string()
+						== "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+				"non-padding entitlement missing from round participation"
+			);
+		}
+		let current = decode_user_full(
+			source
+				.leaves
+				.get(&leaf.id().to_string())
+				.context("original Round leaf absent")?,
+		)?;
+		validate_representation(&current, leaf, &source.funding)?;
+	}
+	let result = Intent {
+		format: FORMAT.into(),
+		policy_sha256: identity.policy_sha256.to_string(),
+		server_pubkey: identity.server_pubkey.to_string(),
+		genesis: identity.genesis.to_string(),
+		opening_sha256: identity.opening_sha256.to_string(),
+		candidate_id: entry.id().to_string(),
+		candidate_sha256: digest(&serde_json::to_vec(candidate)?),
+		sequence: source.sequence,
+		expiry: source.expiry,
+		funding: source.funding.clone(),
+		tree: source.tree.clone(),
+		participations,
+		inputs: inputs.into_values().collect(),
+	};
+	let mut bounded = BoundedRecord(Vec::new());
+	serde_json::to_writer(&mut bounded, &result)?;
+	Ok(result)
 }
 
 fn validate_original(vtxo:&Vtxo,anchor:&[u8])->anyhow::Result<()> {
@@ -773,18 +773,18 @@ fn same_rights(old: &Intent, new: &Intent) -> anyhow::Result<()> {
 }
 
 fn decode_original_intent(raw: &[u8], id: &str) -> anyhow::Result<Intent> {
-    ensure!(
-        raw.len() <= MAX_RECORD_BYTES,
-        "original Round rights record exceeds bound"
-    );
-    let original: Intent = serde_json::from_slice(raw)?;
-    let mut bounded = BoundedRecord(Vec::new());
-    serde_json::to_writer(&mut bounded, &original)?;
-    ensure!(
-        bounded.0 == raw && original.candidate_id == id,
-        "original Round rights record is noncanonical"
-    );
-    Ok(original)
+	ensure!(
+		raw.len() <= MAX_RECORD_BYTES,
+		"original Round rights record exceeds bound"
+	);
+	let original: Intent = serde_json::from_slice(raw)?;
+	let mut bounded = BoundedRecord(Vec::new());
+	serde_json::to_writer(&mut bounded, &original)?;
+	ensure!(
+		bounded.0 == raw && original.candidate_id == id,
+		"original Round rights record is noncanonical"
+	);
+	Ok(original)
 }
 
 /// Validate original rights against complete captured Round projections using
@@ -792,200 +792,200 @@ fn decode_original_intent(raw: &[u8], id: &str) -> anyhow::Result<Intent> {
 /// returns a count only, never readiness, chain ownership or settlement proof.
 /// SQL opening/fee/nursery joins are separately mandatory at the caller.
 pub(crate) fn verify_captured_rounds(
-    policy: OrdinaryFeePolicy,
-    identity: &FeeServiceIdentity,
-    originals: &BTreeMap<Wtxid, PublicationRecord>,
-    files: Option<&BTreeMap<String, String>>,
-    projections: &BTreeMap<String, CapturedRoundProjection>,
-    published_rounds: &BTreeSet<String>,
+	policy: OrdinaryFeePolicy,
+	identity: &FeeServiceIdentity,
+	originals: &BTreeMap<Wtxid, PublicationRecord>,
+	files: Option<&BTreeMap<String, String>>,
+	projections: &BTreeMap<String, CapturedRoundProjection>,
+	published_rounds: &BTreeSet<String>,
 ) -> anyhow::Result<usize> {
-    ensure!(
-        projections.len() <= MAX_RECORDS && published_rounds.len() <= MAX_RECORDS,
-        "captured Round set exceeds complete bound"
-    );
-    let Some(files) = files else {
-        ensure!(
-            projections.is_empty()
-                && published_rounds.is_empty()
-                && originals.values().all(|candidate| candidate
-                    .entry(policy)
-                    .is_ok_and(|entry| entry.purpose() != "round")),
-            "missing independent Round rights history on retained Round or fee history"
-        );
-        return Ok(0);
-    };
-    ensure!(
-        files.len() >= 2 && files.len() <= MAX_RECORDS + 2,
-        "captured Round rights namespace bound differs"
-    );
-    let raw = files
-        .get("identity.json")
-        .context("original Round rights identity absent")?
-        .as_bytes();
-    ensure!(raw.len() <= 4096, "native rights identity exceeds bound");
-    let original_identity: Identity = serde_json::from_slice(raw)?;
-    ensure!(
-        serde_json::to_vec(&original_identity)? == raw
-            && original_identity == Identity::original(identity)
-            && identity.policy_sha256 == sha256::Hash::hash(&serde_json::to_vec(&policy)?)
-            && identity.opening_sha256 != sha256::Hash::all_zeros(),
-        "captured Round original identity differs"
-    );
-    let ids = parse_index(
-        files
-            .get("history")
-            .context("original Round index absent")?
-            .as_bytes(),
-    )?;
-    ensure!(
-        files.len() == ids.len() + 2
-            && ids
-                .iter()
-                .all(|id| files.contains_key(&format!("{id}.json"))),
-        "native rights original file/index sets differ; preserve partial evidence and hold"
-    );
-    let bytes = ids
-        .iter()
-        .try_fold(0usize, |n, id| {
-            n.checked_add(files[&format!("{id}.json")].len())
-        })
-        .context("captured original rights byte overflow")?;
-    ensure!(
-        bytes <= MAX_BYTES,
-        "captured original rights byte capacity exceeded"
-    );
-    let mut retained_rounds = BTreeSet::new();
-    for id in &ids {
-        let original = decode_original_intent(files[&format!("{id}.json")].as_bytes(), id)?;
-        let candidate = originals
-            .get(&id.parse::<Wtxid>()?)
-            .context("original Round rights lost its exact fee candidate")?;
-        let txid = candidate.transaction()?.compute_txid().to_string();
-        let source = projections
-            .get(&txid)
-            .context("original Round obligations absent from complete captured SQL")?;
-        let current = capture_projection(policy, identity, candidate, source)?;
-        same_rights(&original, &current)?;
-        ensure!(
-            retained_rounds.insert(txid),
-            "Round rights repeats one funding transaction"
-        );
-    }
-    ensure!(
-        projections.keys().cloned().collect::<BTreeSet<_>>() == retained_rounds
-            && published_rounds.is_subset(&retained_rounds),
-        "captured database Round or published candidate lacks complete independent original rights"
-    );
-    Ok(ids.len())
+	ensure!(
+		projections.len() <= MAX_RECORDS && published_rounds.len() <= MAX_RECORDS,
+		"captured Round set exceeds complete bound"
+	);
+	let Some(files) = files else {
+		ensure!(
+			projections.is_empty()
+				&& published_rounds.is_empty()
+				&& originals.values().all(|candidate| candidate
+					.entry(policy)
+					.is_ok_and(|entry| entry.purpose() != "round")),
+			"missing independent Round rights history on retained Round or fee history"
+		);
+		return Ok(0);
+	};
+	ensure!(
+		files.len() >= 2 && files.len() <= MAX_RECORDS + 2,
+		"captured Round rights namespace bound differs"
+	);
+	let raw = files
+		.get("identity.json")
+		.context("original Round rights identity absent")?
+		.as_bytes();
+	ensure!(raw.len() <= 4096, "native rights identity exceeds bound");
+	let original_identity: Identity = serde_json::from_slice(raw)?;
+	ensure!(
+		serde_json::to_vec(&original_identity)? == raw
+			&& original_identity == Identity::original(identity)
+			&& identity.policy_sha256 == sha256::Hash::hash(&serde_json::to_vec(&policy)?)
+			&& identity.opening_sha256 != sha256::Hash::all_zeros(),
+		"captured Round original identity differs"
+	);
+	let ids = parse_index(
+		files
+			.get("history")
+			.context("original Round index absent")?
+			.as_bytes(),
+	)?;
+	ensure!(
+		files.len() == ids.len() + 2
+			&& ids
+				.iter()
+				.all(|id| files.contains_key(&format!("{id}.json"))),
+		"native rights original file/index sets differ; preserve partial evidence and hold"
+	);
+	let bytes = ids
+		.iter()
+		.try_fold(0usize, |n, id| {
+			n.checked_add(files[&format!("{id}.json")].len())
+		})
+		.context("captured original rights byte overflow")?;
+	ensure!(
+		bytes <= MAX_BYTES,
+		"captured original rights byte capacity exceeded"
+	);
+	let mut retained_rounds = BTreeSet::new();
+	for id in &ids {
+		let original = decode_original_intent(files[&format!("{id}.json")].as_bytes(), id)?;
+		let candidate = originals
+			.get(&id.parse::<Wtxid>()?)
+			.context("original Round rights lost its exact fee candidate")?;
+		let txid = candidate.transaction()?.compute_txid().to_string();
+		let source = projections
+			.get(&txid)
+			.context("original Round obligations absent from complete captured SQL")?;
+		let current = capture_projection(policy, identity, candidate, source)?;
+		same_rights(&original, &current)?;
+		ensure!(
+			retained_rounds.insert(txid),
+			"Round rights repeats one funding transaction"
+		);
+	}
+	ensure!(
+		projections.keys().cloned().collect::<BTreeSet<_>>() == retained_rounds
+			&& published_rounds.is_subset(&retained_rounds),
+		"captured database Round or published candidate lacks complete independent original rights"
+	);
+	Ok(ids.len())
 }
 
 async fn validate_locked(
-    t: &Tx<'_>,
-    history: &Path,
-    policy: OrdinaryFeePolicy,
-    server: PublicKey,
-    genesis: BlockHash,
-    expected_opening: Option<sha256::Hash>,
+	t: &Tx<'_>,
+	history: &Path,
+	policy: OrdinaryFeePolicy,
+	server: PublicKey,
+	genesis: BlockHash,
+	expected_opening: Option<sha256::Hash>,
 ) -> anyhow::Result<()> {
-    let records = super::ordinary_fee::original_publications_locked(history, policy)?;
-    let bounds = t
-        .query_one(
-            "SELECT count(*),COALESCE(sum(octet_length(funding_txid)),0)::bigint FROM round",
-            &[],
-        )
-        .await?;
-    ensure!(
-        bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
-            && bounds.get::<_, i64>(1) <= (MAX_RECORDS * 64) as i64,
-        "Round identity projection exceeds complete bound"
-    );
-    let rounds = t
-        .query(
-            "SELECT funding_txid FROM round ORDER BY funding_txid LIMIT 4097",
-            &[],
-        )
-        .await?
-        .into_iter()
-        .map(|row| row.get::<_, String>(0))
-        .collect::<BTreeSet<_>>();
-    let Some((path, original_identity)) = directory(history, policy)? else {
-        ensure!(
-            rounds.is_empty()
-                && records.values().all(|record| record
-                    .entry(policy)
-                    .is_ok_and(|entry| entry.purpose() != "round")),
-            "missing independent Round rights history on retained Round or fee history"
-        );
-        return Ok(());
-    };
-    ensure!(
-        original_identity.server_pubkey == server
-            && original_identity.genesis == genesis
-            && expected_opening.is_none_or(|opening| opening == original_identity.opening_sha256),
-        "Round rights original server, chain or opening differs"
-    );
-    let identity = FeeServiceIdentity {
-        server_pubkey: server,
-        genesis,
-        policy_sha256: original_identity.policy_sha256,
-        opening_sha256: original_identity.opening_sha256,
-    };
-    inventory(history, policy)?;
-    let owner = fs::symlink_metadata(history)?.uid();
-    let ids = indexed(&path, owner)?;
-    if !ids.is_empty() || !rounds.is_empty() {
-        let opening = t
-            .query_opt(
-                "SELECT opening_hash,policy_bytes FROM native_fee_opening WHERE id=1",
-                &[],
-            )
-            .await?
-            .context("original Round rights lost its original native opening")?;
-        ensure!(
-            opening.get::<_, String>(0) == identity.opening_sha256.to_string()
-                && opening.get::<_, Vec<u8>>(1) == serde_json::to_vec(&policy)?,
-            "Round rights original opening SQL differs"
-        );
-    }
-    let mut retained_rounds = BTreeSet::new();
-    for id in ids {
-        let raw = read_record(&path.join(format!("{id}.json")), owner)?;
-        let original = decode_original_intent(&raw, &id)?;
-        let candidate = records
-            .get(&id.parse::<Wtxid>()?)
-            .context("original Round rights lost its exact fee candidate")?;
-        t.require_native_fee_intent(
-            candidate,
-            policy,
-            identity.opening_sha256,
-            &candidate.transaction()?,
-        )
-        .await?;
-        let current = capture(t, policy, &identity, candidate)
-            .await
-            .context("original Round obligations absent or mismatched; financial startup held")?;
-        same_rights(&original, &current)?;
-        ensure!(
-            retained_rounds.insert(candidate.transaction()?.compute_txid().to_string()),
-            "Round rights repeats one funding transaction"
-        );
-    }
-    ensure!(
-        rounds == retained_rounds,
-        "database Round has no complete independent original rights witness"
-    );
-    // Unused precommit permits remain reserved but grant no rights. Every SQL
-    // publication is already nursery-bound by the existing complete startup
-    // reader, and each published Round must also have its independent marker.
-    let published = t.query("SELECT txid FROM native_fee_publication WHERE purpose='round' AND published_at IS NOT NULL ORDER BY txid LIMIT 4097", &[]).await?;
-    ensure!(
-        published.len() <= MAX_RECORDS
-            && published
-                .into_iter()
-                .all(|row| retained_rounds.contains(&row.get::<_, String>(0))),
-        "published Round candidate lacks its original rights marker"
-    );
-    Ok(())
+	let records = super::ordinary_fee::original_publications_locked(history, policy)?;
+	let bounds = t
+		.query_one(
+			"SELECT count(*),COALESCE(sum(octet_length(funding_txid)),0)::bigint FROM round",
+			&[],
+		)
+		.await?;
+	ensure!(
+		bounds.get::<_, i64>(0) <= MAX_RECORDS as i64
+			&& bounds.get::<_, i64>(1) <= (MAX_RECORDS * 64) as i64,
+		"Round identity projection exceeds complete bound"
+	);
+	let rounds = t
+		.query(
+			"SELECT funding_txid FROM round ORDER BY funding_txid LIMIT 4097",
+			&[],
+		)
+		.await?
+		.into_iter()
+		.map(|row| row.get::<_, String>(0))
+		.collect::<BTreeSet<_>>();
+	let Some((path, original_identity)) = directory(history, policy)? else {
+		ensure!(
+			rounds.is_empty()
+				&& records.values().all(|record| record
+					.entry(policy)
+					.is_ok_and(|entry| entry.purpose() != "round")),
+			"missing independent Round rights history on retained Round or fee history"
+		);
+		return Ok(());
+	};
+	ensure!(
+		original_identity.server_pubkey == server
+			&& original_identity.genesis == genesis
+			&& expected_opening.is_none_or(|opening| opening == original_identity.opening_sha256),
+		"Round rights original server, chain or opening differs"
+	);
+	let identity = FeeServiceIdentity {
+		server_pubkey: server,
+		genesis,
+		policy_sha256: original_identity.policy_sha256,
+		opening_sha256: original_identity.opening_sha256,
+	};
+	inventory(history, policy)?;
+	let owner = fs::symlink_metadata(history)?.uid();
+	let ids = indexed(&path, owner)?;
+	if !ids.is_empty() || !rounds.is_empty() {
+		let opening = t
+			.query_opt(
+				"SELECT opening_hash,policy_bytes FROM native_fee_opening WHERE id=1",
+				&[],
+			)
+			.await?
+			.context("original Round rights lost its original native opening")?;
+		ensure!(
+			opening.get::<_, String>(0) == identity.opening_sha256.to_string()
+				&& opening.get::<_, Vec<u8>>(1) == serde_json::to_vec(&policy)?,
+			"Round rights original opening SQL differs"
+		);
+	}
+	let mut retained_rounds = BTreeSet::new();
+	for id in ids {
+		let raw = read_record(&path.join(format!("{id}.json")), owner)?;
+		let original = decode_original_intent(&raw, &id)?;
+		let candidate = records
+			.get(&id.parse::<Wtxid>()?)
+			.context("original Round rights lost its exact fee candidate")?;
+		t.require_native_fee_intent(
+			candidate,
+			policy,
+			identity.opening_sha256,
+			&candidate.transaction()?,
+		)
+		.await?;
+		let current = capture(t, policy, &identity, candidate)
+			.await
+			.context("original Round obligations absent or mismatched; financial startup held")?;
+		same_rights(&original, &current)?;
+		ensure!(
+			retained_rounds.insert(candidate.transaction()?.compute_txid().to_string()),
+			"Round rights repeats one funding transaction"
+		);
+	}
+	ensure!(
+		rounds == retained_rounds,
+		"database Round has no complete independent original rights witness"
+	);
+	// Unused precommit permits remain reserved but grant no rights. Every SQL
+	// publication is already nursery-bound by the existing complete startup
+	// reader, and each published Round must also have its independent marker.
+	let published = t.query("SELECT txid FROM native_fee_publication WHERE purpose='round' AND published_at IS NOT NULL ORDER BY txid LIMIT 4097", &[]).await?;
+	ensure!(
+		published.len() <= MAX_RECORDS
+			&& published
+				.into_iter()
+				.all(|row| retained_rounds.contains(&row.get::<_, String>(0))),
+		"published Round candidate lacks its original rights marker"
+	);
+	Ok(())
 }
 
 /// Both owning daemons call before wallet replay or financial workers. This
@@ -1133,313 +1133,313 @@ mod tests {
 		let mut changed=value(); changed.opening_sha256="other-opening".into(); assert!(same_rights(&value(),&changed).is_err());
 	}
 
-    #[test]
-    fn captured_original_namespace_preserves_absence_and_exact_index_file_sets() {
-        let (root, policy) = fixture();
-        let directory = rights_path(&root);
-        let raw = read_record(&directory.join("identity.json"), owner(&root)).unwrap();
-        let original: Identity = serde_json::from_slice(&raw).unwrap();
-        let identity = FeeServiceIdentity {
-            server_pubkey: original.server_pubkey,
-            genesis: original.genesis,
-            policy_sha256: original.policy_sha256,
-            opening_sha256: original.opening_sha256,
-        };
-        let mut files = BTreeMap::from([
-            ("identity.json".into(), String::from_utf8(raw).unwrap()),
-            ("history".into(), String::new()),
-        ]);
-        assert_eq!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &BTreeMap::new(),
-                Some(&files),
-                &BTreeMap::new(),
-                &BTreeSet::new()
-            )
-            .unwrap(),
-            0
-        );
-        assert_eq!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &BTreeMap::new(),
-                None,
-                &BTreeMap::new(),
-                &BTreeSet::new()
-            )
-            .unwrap(),
-            0
-        );
-        let published = BTreeSet::from(["11".repeat(32)]);
-        assert!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &BTreeMap::new(),
-                None,
-                &BTreeMap::new(),
-                &published
-            )
-            .is_err()
-        );
-        files.insert("unknown".into(), String::new());
-        assert!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &BTreeMap::new(),
-                Some(&files),
-                &BTreeMap::new(),
-                &BTreeSet::new()
-            )
-            .is_err()
-        );
-        files.remove("unknown");
-        files.insert("history".into(), "11".repeat(32));
-        assert!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &BTreeMap::new(),
-                Some(&files),
-                &BTreeMap::new(),
-                &BTreeSet::new()
-            )
-            .is_err()
-        );
-        files.insert("history".into(), format!("{}\n", "11".repeat(32)));
-        assert!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &BTreeMap::new(),
-                Some(&files),
-                &BTreeMap::new(),
-                &BTreeSet::new()
-            )
-            .is_err()
-        );
-    }
-    #[test]
-    fn captured_original_identity_never_rebinds_another_opening_chain_or_policy() {
-        let (root, policy) = fixture();
-        let raw = read_record(&rights_path(&root).join("identity.json"), owner(&root)).unwrap();
-        let original: Identity = serde_json::from_slice(&raw).unwrap();
-        let identity = FeeServiceIdentity {
-            server_pubkey: original.server_pubkey,
-            genesis: original.genesis,
-            policy_sha256: original.policy_sha256,
-            opening_sha256: original.opening_sha256,
-        };
-        let files = BTreeMap::from([
-            ("identity.json".into(), String::from_utf8(raw).unwrap()),
-            ("history".into(), String::new()),
-        ]);
-        let mut wrong = identity.clone();
-        wrong.opening_sha256 = sha256::Hash::hash(b"other opening");
-        assert!(
-            verify_captured_rounds(
-                policy,
-                &wrong,
-                &BTreeMap::new(),
-                Some(&files),
-                &BTreeMap::new(),
-                &BTreeSet::new()
-            )
-            .is_err()
-        );
-        let mut wrong = identity.clone();
-        wrong.genesis = bitcoin::constants::genesis_block(bitcoin::Network::Signet).block_hash();
-        assert!(
-            verify_captured_rounds(
-                policy,
-                &wrong,
-                &BTreeMap::new(),
-                Some(&files),
-                &BTreeMap::new(),
-                &BTreeSet::new()
-            )
-            .is_err()
-        );
-        let mut wrong_policy = policy;
-        wrong_policy.ordinary_budget_sat += 1;
-        assert!(
-            verify_captured_rounds(
-                wrong_policy,
-                &identity,
-                &BTreeMap::new(),
-                Some(&files),
-                &BTreeMap::new(),
-                &BTreeSet::new()
-            )
-            .is_err()
-        );
-    }
+	#[test]
+	fn captured_original_namespace_preserves_absence_and_exact_index_file_sets() {
+		let (root, policy) = fixture();
+		let directory = rights_path(&root);
+		let raw = read_record(&directory.join("identity.json"), owner(&root)).unwrap();
+		let original: Identity = serde_json::from_slice(&raw).unwrap();
+		let identity = FeeServiceIdentity {
+			server_pubkey: original.server_pubkey,
+			genesis: original.genesis,
+			policy_sha256: original.policy_sha256,
+			opening_sha256: original.opening_sha256,
+		};
+		let mut files = BTreeMap::from([
+			("identity.json".into(), String::from_utf8(raw).unwrap()),
+			("history".into(), String::new()),
+		]);
+		assert_eq!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&BTreeMap::new(),
+				Some(&files),
+				&BTreeMap::new(),
+				&BTreeSet::new()
+			)
+			.unwrap(),
+			0
+		);
+		assert_eq!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&BTreeMap::new(),
+				None,
+				&BTreeMap::new(),
+				&BTreeSet::new()
+			)
+			.unwrap(),
+			0
+		);
+		let published = BTreeSet::from(["11".repeat(32)]);
+		assert!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&BTreeMap::new(),
+				None,
+				&BTreeMap::new(),
+				&published
+			)
+			.is_err()
+		);
+		files.insert("unknown".into(), String::new());
+		assert!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&BTreeMap::new(),
+				Some(&files),
+				&BTreeMap::new(),
+				&BTreeSet::new()
+			)
+			.is_err()
+		);
+		files.remove("unknown");
+		files.insert("history".into(), "11".repeat(32));
+		assert!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&BTreeMap::new(),
+				Some(&files),
+				&BTreeMap::new(),
+				&BTreeSet::new()
+			)
+			.is_err()
+		);
+		files.insert("history".into(), format!("{}\n", "11".repeat(32)));
+		assert!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&BTreeMap::new(),
+				Some(&files),
+				&BTreeMap::new(),
+				&BTreeSet::new()
+			)
+			.is_err()
+		);
+	}
+	#[test]
+	fn captured_original_identity_never_rebinds_another_opening_chain_or_policy() {
+		let (root, policy) = fixture();
+		let raw = read_record(&rights_path(&root).join("identity.json"), owner(&root)).unwrap();
+		let original: Identity = serde_json::from_slice(&raw).unwrap();
+		let identity = FeeServiceIdentity {
+			server_pubkey: original.server_pubkey,
+			genesis: original.genesis,
+			policy_sha256: original.policy_sha256,
+			opening_sha256: original.opening_sha256,
+		};
+		let files = BTreeMap::from([
+			("identity.json".into(), String::from_utf8(raw).unwrap()),
+			("history".into(), String::new()),
+		]);
+		let mut wrong = identity.clone();
+		wrong.opening_sha256 = sha256::Hash::hash(b"other opening");
+		assert!(
+			verify_captured_rounds(
+				policy,
+				&wrong,
+				&BTreeMap::new(),
+				Some(&files),
+				&BTreeMap::new(),
+				&BTreeSet::new()
+			)
+			.is_err()
+		);
+		let mut wrong = identity.clone();
+		wrong.genesis = bitcoin::constants::genesis_block(bitcoin::Network::Signet).block_hash();
+		assert!(
+			verify_captured_rounds(
+				policy,
+				&wrong,
+				&BTreeMap::new(),
+				Some(&files),
+				&BTreeMap::new(),
+				&BTreeSet::new()
+			)
+			.is_err()
+		);
+		let mut wrong_policy = policy;
+		wrong_policy.ordinary_budget_sat += 1;
+		assert!(
+			verify_captured_rounds(
+				wrong_policy,
+				&identity,
+				&BTreeMap::new(),
+				Some(&files),
+				&BTreeMap::new(),
+				&BTreeSet::new()
+			)
+			.is_err()
+		);
+	}
 
-    #[test]
-    fn captured_complete_signed_round_reuses_native_crypto_and_rejects_changed_consumption_and_allocation()
-     {
-        use super::super::ordinary_fee_publication::PublicationPath;
-        use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Sequence, TxIn, TxOut, Witness};
-        let (old_tree, old_funding, server) = signed_tree_fixture();
-        let old_leaves = authenticate_tree(&old_tree.serialize(), &old_funding, &server)
-            .unwrap()
-            .output_vtxos()
-            .collect::<Vec<_>>();
-        let (_, template, _) = signed_tree_fixture();
-        let total = template
-            .output
-            .iter()
-            .map(|o| o.value.to_sat())
-            .sum::<u64>();
-        let parent = Transaction {
-            version: bitcoin::transaction::Version::TWO,
-            lock_time: bitcoin::absolute::LockTime::ZERO,
-            input: vec![],
-            output: vec![TxOut {
-                value: Amount::from_sat(total + 1_000),
-                script_pubkey: ScriptBuf::new(),
-            }],
-        };
-        let (signed, funding, _) = signed_tree_fixture_with_inputs(vec![TxIn {
-            previous_output: OutPoint::new(parent.compute_txid(), 0),
-            script_sig: ScriptBuf::new(),
-            sequence: Sequence::MAX,
-            witness: Witness::from_slice(&[vec![0; 64]]),
-        }]);
-        let policy = OrdinaryFeePolicy {
-            ordinary_budget_sat: 58_000,
-            ..Default::default()
-        };
-        let identity = FeeServiceIdentity {
-            server_pubkey: server.parse().unwrap(),
-            genesis: bitcoin::constants::genesis_block(bitcoin::Network::Regtest).block_hash(),
-            policy_sha256: sha256::Hash::hash(&serde_json::to_vec(&policy).unwrap()),
-            opening_sha256: sha256::Hash::hash(b"synthetic capture; no runtime authority"),
-        };
-        let candidate = PublicationRecord::new(
-            PublicationPath::Round,
-            policy,
-            &funding,
-            &[parent],
-            FeeRate::from_sat_per_vb_u32(100),
-        )
-        .unwrap();
-        let leaves = authenticate_tree(&signed.serialize(), &funding, &server)
-            .unwrap()
-            .output_vtxos()
-            .collect::<Vec<_>>();
-        let hash = leaves.iter().find_map(|v|v.unlock_hash().filter(|h|h.to_string()!="deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).unwrap().to_string();
-        let inputs = old_leaves
-            .iter()
-            .map(|v| CapturedRoundInput {
-                id: v.id().to_string(),
-                original: v.serialize(),
-                stored_anchor: v.chain_anchor().to_string(),
-                spent_round: Some(funding.compute_txid().to_string()),
-                anchor: bitcoin::consensus::serialize(&old_funding),
-            })
-            .collect();
-        let outputs = leaves
-            .iter()
-            .filter(|v|v.unlock_hash().is_some_and(|h|h.to_string()==hash))
-            .map(|v| CapturedRoundOutput {
-                policy: v.policy().serialize(),
-                amount: v.amount().to_sat(),
-                mailbox: Some("synthetic actual SQL mailbox".into()),
-            })
-            .collect();
-        let mut projection = CapturedRoundProjection {
-            sequence: 7,
-            expiry: 128,
-            funding: bitcoin::consensus::serialize(&funding),
-            virtual_funding: Some(bitcoin::consensus::serialize(&funding)),
-            tree: signed.serialize(),
-            participations: vec![CapturedRoundParticipation {
-                unlock_hash: hash,
-                inputs,
-                outputs,
-            }],
-            leaves: leaves
-                .iter()
-                .map(|v| (v.id().to_string(), v.serialize()))
-                .collect(),
-        };
-        let original = capture_projection(policy, &identity, &candidate, &projection).unwrap();
-        let id = candidate.entry(policy).unwrap().id();
-        let files = BTreeMap::from([
-            (
-                "identity.json".into(),
-                serde_json::to_string(&Identity::original(&identity)).unwrap(),
-            ),
-            ("history".into(), format!("{id}\n")),
-            (
-                format!("{id}.json"),
-                serde_json::to_string(&original).unwrap(),
-            ),
-        ]);
-        let originals = BTreeMap::from([(id, candidate)]);
-        let txid = funding.compute_txid().to_string();
-        projection.participations[0].outputs[0].amount += 1;
-        let mut projections = BTreeMap::from([(txid.clone(), projection)]);
-        assert!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &originals,
-                Some(&files),
-                &projections,
-                &BTreeSet::new()
-            )
-            .is_err()
-        );
-        projections.get_mut(&txid).unwrap().participations[0].outputs[0].amount -= 1;
-        assert_eq!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &originals,
-                Some(&files),
-                &projections,
-                &BTreeSet::from([txid.clone()])
-            )
-            .unwrap(),
-            1
-        );
-        projections.get_mut(&txid).unwrap().participations[0].inputs[0].spent_round = None;
-        assert!(
-            verify_captured_rounds(
-                policy,
-                &identity,
-                &originals,
-                Some(&files),
-                &projections,
-                &BTreeSet::new()
-            )
-            .is_err()
-        );
-    }
-    #[test]
-    fn captured_projection_checks_whole_byte_bound_before_any_native_decode() {
-        let mut projection = CapturedRoundProjection {
-            sequence: 0,
-            expiry: 0,
-            funding: vec![],
-            virtual_funding: None,
-            tree: vec![],
-            participations: vec![],
-            leaves: BTreeMap::new(),
-        };
-        assert!(projection_bound(&projection).is_ok());
-        projection
-            .leaves
-            .insert("id".into(), vec![0; MAX_RECORD_BYTES]);
-        assert!(projection_bound(&projection).is_err());
-        projection.leaves.clear();projection.funding.push(0);
-        projection.virtual_funding=Some(vec![0;MAX_RECORD_BYTES]);
-        assert!(projection_bound(&projection).is_err());
-    }
+	#[test]
+	fn captured_complete_signed_round_reuses_native_crypto_and_rejects_changed_consumption_and_allocation()
+	 {
+		use super::super::ordinary_fee_publication::PublicationPath;
+		use bitcoin::{Amount, FeeRate, OutPoint, ScriptBuf, Sequence, TxIn, TxOut, Witness};
+		let (old_tree, old_funding, server) = signed_tree_fixture();
+		let old_leaves = authenticate_tree(&old_tree.serialize(), &old_funding, &server)
+			.unwrap()
+			.output_vtxos()
+			.collect::<Vec<_>>();
+		let (_, template, _) = signed_tree_fixture();
+		let total = template
+			.output
+			.iter()
+			.map(|o| o.value.to_sat())
+			.sum::<u64>();
+		let parent = Transaction {
+			version: bitcoin::transaction::Version::TWO,
+			lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: vec![],
+			output: vec![TxOut {
+				value: Amount::from_sat(total + 1_000),
+				script_pubkey: ScriptBuf::new(),
+			}],
+		};
+		let (signed, funding, _) = signed_tree_fixture_with_inputs(vec![TxIn {
+			previous_output: OutPoint::new(parent.compute_txid(), 0),
+			script_sig: ScriptBuf::new(),
+			sequence: Sequence::MAX,
+			witness: Witness::from_slice(&[vec![0; 64]]),
+		}]);
+		let policy = OrdinaryFeePolicy {
+			ordinary_budget_sat: 58_000,
+			..Default::default()
+		};
+		let identity = FeeServiceIdentity {
+			server_pubkey: server.parse().unwrap(),
+			genesis: bitcoin::constants::genesis_block(bitcoin::Network::Regtest).block_hash(),
+			policy_sha256: sha256::Hash::hash(&serde_json::to_vec(&policy).unwrap()),
+			opening_sha256: sha256::Hash::hash(b"synthetic capture; no runtime authority"),
+		};
+		let candidate = PublicationRecord::new(
+			PublicationPath::Round,
+			policy,
+			&funding,
+			&[parent],
+			FeeRate::from_sat_per_vb_u32(100),
+		)
+		.unwrap();
+		let leaves = authenticate_tree(&signed.serialize(), &funding, &server)
+			.unwrap()
+			.output_vtxos()
+			.collect::<Vec<_>>();
+		let hash = leaves.iter().find_map(|v|v.unlock_hash().filter(|h|h.to_string()!="deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).unwrap().to_string();
+		let inputs = old_leaves
+			.iter()
+			.map(|v| CapturedRoundInput {
+				id: v.id().to_string(),
+				original: v.serialize(),
+				stored_anchor: v.chain_anchor().to_string(),
+				spent_round: Some(funding.compute_txid().to_string()),
+				anchor: bitcoin::consensus::serialize(&old_funding),
+			})
+			.collect();
+		let outputs = leaves
+			.iter()
+			.filter(|v|v.unlock_hash().is_some_and(|h|h.to_string()==hash))
+			.map(|v| CapturedRoundOutput {
+				policy: v.policy().serialize(),
+				amount: v.amount().to_sat(),
+				mailbox: Some("synthetic actual SQL mailbox".into()),
+			})
+			.collect();
+		let mut projection = CapturedRoundProjection {
+			sequence: 7,
+			expiry: 128,
+			funding: bitcoin::consensus::serialize(&funding),
+			virtual_funding: Some(bitcoin::consensus::serialize(&funding)),
+			tree: signed.serialize(),
+			participations: vec![CapturedRoundParticipation {
+				unlock_hash: hash,
+				inputs,
+				outputs,
+			}],
+			leaves: leaves
+				.iter()
+				.map(|v| (v.id().to_string(), v.serialize()))
+				.collect(),
+		};
+		let original = capture_projection(policy, &identity, &candidate, &projection).unwrap();
+		let id = candidate.entry(policy).unwrap().id();
+		let files = BTreeMap::from([
+			(
+				"identity.json".into(),
+				serde_json::to_string(&Identity::original(&identity)).unwrap(),
+			),
+			("history".into(), format!("{id}\n")),
+			(
+				format!("{id}.json"),
+				serde_json::to_string(&original).unwrap(),
+			),
+		]);
+		let originals = BTreeMap::from([(id, candidate)]);
+		let txid = funding.compute_txid().to_string();
+		projection.participations[0].outputs[0].amount += 1;
+		let mut projections = BTreeMap::from([(txid.clone(), projection)]);
+		assert!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&originals,
+				Some(&files),
+				&projections,
+				&BTreeSet::new()
+			)
+			.is_err()
+		);
+		projections.get_mut(&txid).unwrap().participations[0].outputs[0].amount -= 1;
+		assert_eq!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&originals,
+				Some(&files),
+				&projections,
+				&BTreeSet::from([txid.clone()])
+			)
+			.unwrap(),
+			1
+		);
+		projections.get_mut(&txid).unwrap().participations[0].inputs[0].spent_round = None;
+		assert!(
+			verify_captured_rounds(
+				policy,
+				&identity,
+				&originals,
+				Some(&files),
+				&projections,
+				&BTreeSet::new()
+			)
+			.is_err()
+		);
+	}
+	#[test]
+	fn captured_projection_checks_whole_byte_bound_before_any_native_decode() {
+		let mut projection = CapturedRoundProjection {
+			sequence: 0,
+			expiry: 0,
+			funding: vec![],
+			virtual_funding: None,
+			tree: vec![],
+			participations: vec![],
+			leaves: BTreeMap::new(),
+		};
+		assert!(projection_bound(&projection).is_ok());
+		projection
+			.leaves
+			.insert("id".into(), vec![0; MAX_RECORD_BYTES]);
+		assert!(projection_bound(&projection).is_err());
+		projection.leaves.clear();projection.funding.push(0);
+		projection.virtual_funding=Some(vec![0;MAX_RECORD_BYTES]);
+		assert!(projection_bound(&projection).is_err());
+	}
 }

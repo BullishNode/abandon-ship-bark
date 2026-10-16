@@ -41,7 +41,6 @@ pub struct Daemon {
 	rtmgr: RuntimeManager,
 	#[allow(unused)]
 	sync_manager: SyncManager,
-	#[allow(unused)]
 	watchman_wallet: InstrumentedLock<PersistedWallet>,
 	#[allow(unused)]
 	frontier: Arc<tokio::sync::RwLock<VtxoExitFrontier>>,
@@ -239,6 +238,10 @@ impl Daemon {
 			rtmgr, sync_manager, watchman_wallet, frontier, watchman_handle,
 			bitcoin_address_blocklist,
 		})
+	}
+
+	pub(crate) fn watchman_wallet(&self) -> &InstrumentedLock<PersistedWallet> {
+		&self.watchman_wallet
 	}
 
 	pub fn watchman_handle(&self) -> &WatchmanHandle {

@@ -681,9 +681,11 @@ async fn run_rpc(addr: &str, cmd: RpcCommand) -> anyhow::Result<()> {
 				.await.context("failed to connect to rpc")?;
 
 			let res = rpc.wallet_status(protos::Empty {}).await?.into_inner();
-			let ret = serde_json::json!({
-				"rounds": WalletStatus(res.rounds.unwrap().try_into().expect("invalid response")),
-			});
+			let rounds = res.rounds.map(rpc::WalletStatus::try_from).transpose()
+				.context("invalid rounds wallet status")?.map(WalletStatus);
+			let watchman = res.watchman.map(rpc::WalletStatus::try_from).transpose()
+				.context("invalid watchman wallet status")?.map(WalletStatus);
+			let ret = serde_json::json!({ "rounds": rounds, "watchman": watchman });
 			serde_json::to_writer_pretty(std::io::stdout(), &ret).unwrap();
 			println!("");
 		},

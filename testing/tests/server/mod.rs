@@ -17,6 +17,7 @@ mod recovery;
 mod registration;
 mod settler;
 mod watchman;
+mod watchman_wallet;
 
 use std::iter;
 use std::str::FromStr;

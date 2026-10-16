@@ -80,6 +80,30 @@ async fn rejected_refresh(ctx:&TestContext,srv:&Captaind,bark:&ark_testing::Bark
 	assert!(logs.contains(needle),"must corroborate the actual native guard, not an unrelated refusal");
 }
 
+// Observe unchanged rights in the already-existing refusal fixtures. No
+// new payment, forced race, or fabricated monetary row is introduced.
+async fn current_unspent_rights(db:&Db,ids:&[ark::VtxoId])->Vec<String> {
+	assert!(!ids.is_empty() && ids.len()<=64);
+	let names=ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+	assert_eq!(names.iter().collect::<BTreeSet<_>>().len(),names.len());
+	db.read(async |t| {
+		let rows=t.query("SELECT row_to_json(x)::text AS original,
+			(spent_in_round IS NULL AND oor_spent_txid IS NULL AND offboarded_in IS NULL
+			 AND lightning_htlc_subscription_id IS NULL AND onchain_spent_height IS NULL
+			 AND onchain_spent_txid IS NULL) AS unspent FROM (
+			 SELECT vtxo_id,encode(vtxo,'hex') AS full_original,expiry,amount,policy_type,
+			 encode(policy,'hex') AS policy_original,server_pubkey,anchor_point,spend_state,
+			 spent_in_round,oor_spent_txid,offboarded_in,lightning_htlc_subscription_id,
+			 onchain_spent_height,onchain_spent_txid FROM vtxo WHERE vtxo_id=ANY($1)
+			) x ORDER BY vtxo_id",&[&names]).await?;
+		assert_eq!(rows.len(),names.len(),"every original right must remain present");
+		Ok(rows.iter().map(|row| {
+			assert!(row.get::<_,bool>("unspent"),"refused publication must not consume original rights");
+			let original:String=row.get("original");assert!(original.len()<=2_097_152);original
+		}).collect())
+	}).await.unwrap()
+}
+
 #[tokio::test]
 async fn ordinary_round_allowance_survives_restart_and_refuses_second_publication() {
 	let ctx=TestContext::new("bark_sdk/ordinary_round_allowance_survives_restart").await;
@@ -115,7 +139,14 @@ async fn ordinary_round_allowance_survives_restart_and_refuses_second_publicatio
 	bark.set_ark_url(&srv).await;
 	let mut rpc=srv.get_wallet_rpc().await;
 	let inputs=rpc.wallet_inventory(protos::Empty{}).await.unwrap().into_inner().rounds.unwrap();
+	let refused_ids=bark.vtxo_ids_no_sync().await;
+	let original_rights=current_unspent_rights(&db,&refused_ids).await;
 	rejected_refresh(&ctx,&srv,&bark,"durable epoch fee allowance exhausted").await;
+	assert_eq!(current_unspent_rights(&db,&refused_ids).await,original_rights);
+	assert_eq!(bark.vtxo_ids_no_sync().await.into_iter().collect::<BTreeSet<_>>(),
+		refused_ids.into_iter().collect::<BTreeSet<_>>());
+	assert_eq!(db.read(async |t|Ok(t.query_one("SELECT count(*) FROM round",&[]).await?.get::<_,i64>(0))).await.unwrap(),1,
+		"refusal cannot create an unfunded replacement round");
 	let after=db.read(async|t| Ok(t.query_one("SELECT count(*),COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE urgent=false",&[]).await?
 		.get::<_,i64>(1))).await.unwrap();assert_eq!(before,after,"restart and refusal cannot renew or debit another allowance");
 	for input in inputs.utxos.iter().filter(|u|u.confirmed_fee_eligible) {
@@ -142,7 +173,13 @@ async fn ordinary_round_refuses_actual_empty_urgent_wallet() {
 	let mut rpc=WalletAdminClient::connect(format!("http://{endpoint}")).await.unwrap();
 	let inventory=rpc.wallet_inventory(protos::Empty{}).await.unwrap().into_inner().watchman.unwrap();
 	assert!(inventory.utxos.is_empty(),"genuine fresh watchman receives no funding in this case");
+	let refused_ids=bark.vtxo_ids_no_sync().await;
+	let original_rights=current_unspent_rights(&db,&refused_ids).await;
 	rejected_refresh(&ctx,&srv,&bark,"confirmed unreserved urgent inputs below declared floor").await;
+	assert_eq!(current_unspent_rights(&db,&refused_ids).await,original_rights);
+	assert_eq!(bark.vtxo_ids_no_sync().await.into_iter().collect::<BTreeSet<_>>(),
+		refused_ids.into_iter().collect::<BTreeSet<_>>());
+	assert_eq!(db.read(async |t|Ok(t.query_one("SELECT count(*) FROM round",&[]).await?.get::<_,i64>(0))).await.unwrap(),0);
 	assert_eq!(db.read(async|t|Ok(t.query_one("SELECT count(*) FROM fee_allowance_candidate",&[]).await?.get::<_,i64>(0))).await.unwrap(),0);
 	assert_eq!(db.read(async|t|Ok(t.query_one("SELECT count(*) FROM nursery_tx WHERE kind='round'",&[]).await?.get::<_,i64>(0))).await.unwrap(),0);
 }
@@ -540,7 +577,7 @@ async fn capture_original_round_forfeit(
 		assert_eq!(full.server_pubkey(),input.server_pubkey());output_fulls.push(full);
 	}
 	let output_id_strings=output_fulls.iter().map(|v|v.id().to_string()).collect::<Vec<_>>();
-	let (unlock_hash,forfeit_raw,native_input_raw,native_output_raws,allocation,source)=db.read(async |t| {
+	let (unlock_hash,forfeit_raw,native_input_raw,native_output_raws,allocation,signed_tree_raw,source)=db.read(async |t| {
 		t.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ",&[]).await?;
 		let base="FROM round_participation p JOIN round_part_input i ON i.participation_id=p.id
 			JOIN vtxo v ON v.vtxo_id=i.vtxo_id JOIN round r ON r.funding_txid=p.round_id
@@ -548,15 +585,17 @@ async fn capture_original_round_forfeit(
 		let bound=t.query_one(&format!("SELECT count(*) AS n,
 			COALESCE(max(octet_length(v.vtxo)),0)::bigint AS full_bytes,
 			COALESCE(max(octet_length(i.signed_forfeit_tx)),0)::bigint AS forfeit_bytes,
-			COALESCE(max(octet_length(r.funding_tx)),0)::bigint AS funding_bytes {base}"),&[&round_id,&input_id]).await?;
+			COALESCE(max(octet_length(r.funding_tx)),0)::bigint AS funding_bytes,
+			COALESCE(max(octet_length(r.signed_tree)),0)::bigint AS signed_tree_bytes {base}"),&[&round_id,&input_id]).await?;
 		assert_eq!(bound.get::<_,i64>("n"),1,"exact one real input participation required");
 		assert!((1..=2_097_152).contains(&bound.get::<_,i64>("full_bytes")));
 		assert!((1..=4096).contains(&bound.get::<_,i64>("forfeit_bytes")));
 		assert!((1..=1_048_576).contains(&bound.get::<_,i64>("funding_bytes")));
+		assert!((1..=524_288).contains(&bound.get::<_,i64>("signed_tree_bytes")));
 		let row=t.query_one(&format!("SELECT p.id,p.unlock_hash,p.round_id,
 			p.forfeited_at::text AS forfeited_at,(p.unlock_preimage IS NOT NULL) AS unlock_preimage_present,
 			i.signed_forfeit_tx,v.vtxo,v.spent_in_round,v.oor_spent_txid,
-			r.id AS round_db_id,r.funding_tx {base}"),&[&round_id,&input_id]).await?;
+			r.id AS round_db_id,r.funding_tx,r.signed_tree {base}"),&[&round_id,&input_id]).await?;
 		let part:i64=row.get("id");let unlock:String=row.get("unlock_hash");
 		let forfeited:Option<String>=row.get("forfeited_at");assert!(forfeited.is_some());
 		let unlock_preimage_present:bool=row.get("unlock_preimage_present");assert!(unlock_preimage_present);
@@ -573,6 +612,7 @@ async fn capture_original_round_forfeit(
 		let outputs=t.query("SELECT policy,amount FROM round_part_output WHERE participation_id=$1 ORDER BY encode(policy,'hex'),amount",&[&part]).await?;
 		let allocation=outputs.iter().map(|r|(r.get::<_,Vec<u8>>("policy"),r.get::<_,i64>("amount"))).collect::<Vec<_>>();
 		let native:Vec<u8>=row.get("vtxo");let funding:Vec<u8>=row.get("funding_tx");
+		let signed_tree_raw:Vec<u8>=row.get("signed_tree");
 		let bound=t.query_one("SELECT count(*),COALESCE(max(octet_length(vtxo)),0)::bigint,
 			COALESCE(sum(octet_length(vtxo)),0)::bigint FROM vtxo WHERE vtxo_id=ANY($1)",&[&output_id_strings]).await?;
 		assert_eq!(bound.get::<_,i64>(0),output_id_strings.len() as i64);
@@ -585,8 +625,9 @@ async fn capture_original_round_forfeit(
 			"native_input_full_sha256":sha256::Hash::hash(&native).to_string(),
 			"native_output_full_originals":native_output_raws.iter().map(|(id,raw)|json!({"id":id,"sha256":sha256::Hash::hash(raw).to_string()})).collect::<Vec<_>>(),
 			"round_funding_raw_sha256":sha256::Hash::hash(&funding).to_string(),
+			"signed_tree_raw_sha256":sha256::Hash::hash(&signed_tree_raw).to_string(),
 			"allocation":allocation.iter().map(|(policy,amount)|json!({"policy_hex":hex(policy),"amount_sat":amount})).collect::<Vec<_>>()});
-		Ok((unlock,forfeit,native,native_output_raws,allocation,source))
+		Ok((unlock,forfeit,native,native_output_raws,allocation,signed_tree_raw,source))
 	}).await.unwrap();
 	let input_anchor=core.get_raw_transaction(&input.chain_anchor().txid,None).unwrap();
 	assert!(input.validate(&input_anchor).is_ok(),"original client input Full must validate against actual Core anchor");
@@ -595,17 +636,25 @@ async fn capture_original_round_forfeit(
 	assert_eq!(sha256::Hash::hash(&serialize(&round)).to_string(),source["round_funding_raw_sha256"].as_str().unwrap());
 	let round_info=core.get_raw_transaction_info(&round_txid,None).unwrap();
 	assert!(round_info.confirmations.unwrap_or(0)>=ROUND_CONFIRMATIONS);
-	let mut requests=Vec::new();let mut actual_allocation=Vec::new();
+	let mut requests=Vec::new();let mut request_ids=Vec::new();let mut actual_allocation=Vec::new();
 	for full in output_fulls {
 		assert_eq!(full.unlock_hash().map(|h|h.to_string()).as_deref(),Some(unlock_hash.as_str()));
 		actual_allocation.push((full.policy().serialize(),i64::try_from(full.amount().to_sat()).unwrap()));
+		request_ids.push(full.id().to_string());
 		requests.push(json!({"signed_vtxo":hex(&full.serialize()),"anchor_raw":hex(&serialize(&round)),"server_pubkey":full.server_pubkey().to_string()}));
 	}
 	actual_allocation.sort();let mut expected_allocation=allocation;expected_allocation.sort();
 	assert!(actual_allocation==expected_allocation,"all actual signed outputs must match exact original participation requests");
+	let allocation_outputs=requests.iter().zip(&request_ids).map(|(request,request_id)| {
+		let native=native_output_raws.iter().find(|(id,_)|id==request_id).unwrap();
+		json!({"signed_vtxo":request["signed_vtxo"],"native_vtxo":hex(&native.1)})
+	}).collect::<Vec<_>>();
+	let allocation_request=json!({"signed_tree":hex(&signed_tree_raw),"anchor_raw":hex(&serialize(&round)),
+		"server_pubkey":input.server_pubkey().to_string(),"participation_unlock_hash":unlock_hash,"outputs":allocation_outputs});
 	let input_request=json!({"signed_vtxo":hex(&input.serialize()),"anchor_raw":hex(&serialize(&input_anchor)),
 		"server_pubkey":input.server_pubkey().to_string(),"forfeit_raw":hex(&forfeit_raw),"forfeit_unlock_hash":unlock_hash});
-	let mut files=vec![("input-forfeit.private.json".to_string(),serde_json::to_vec(&input_request).unwrap()),
+	let mut files=vec![("round-allocation.private.json".to_string(),serde_json::to_vec(&allocation_request).unwrap()),
+		("input-forfeit.private.json".to_string(),serde_json::to_vec(&input_request).unwrap()),
 		("native-source.private.json".to_string(),serde_json::to_vec(&source).unwrap()),
 		("native-input-full.private.hex".to_string(),hex(&native_input_raw).into_bytes()),
 		("input-anchor-Core.private.json".to_string(),serde_json::to_vec(&input_info).unwrap()),

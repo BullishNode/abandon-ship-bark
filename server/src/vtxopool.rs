@@ -653,6 +653,11 @@ impl Process {
 		// finish and broadcast the tx
 		let tx = wallet.finish_tx_with_max_fee_rate(funding_psbt, max_fee_rate).context("error finishing tree funding tx")?;
 
+		let fee_permit = crate::fee_allowance::ordinary_permit(self.srv.fee_allowance.as_ref(),
+			&self.srv.db, &self.srv.bitcoind, crate::fee_allowance::Path::Pool, &tx).await?;
+
+		wallet.log_permitted_tx(&tx,fee_permit.as_ref())?;
+
 		// Create the vtxos and virtual transactions in the database
 		// before committing the funding tx to the wallet. The funding tx
 		// is handed to the nursery in the same db tx, so that once the
@@ -670,6 +675,7 @@ impl Process {
 			);
 		let funding_metadata = wallet.staged().cloned();
 		let published = self.srv.db.write(async |t| {
+			crate::fee_allowance::require_permit(t, &tx, fee_permit.as_ref()).await?;
 			if let Some(metadata) = &funding_metadata {
 				t.store_changeset(crate::wallet::WalletKind::Rounds, metadata).await?;
 			}

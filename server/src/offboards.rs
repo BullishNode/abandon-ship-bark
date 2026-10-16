@@ -482,6 +482,10 @@ impl Server {
 		let signed_tx = wallet_guard.finish_tx(state.offboard_tx)
 			.context("error signing offboard tx")?;
 
+		let fee_permit = crate::fee_allowance::ordinary_permit(self.fee_allowance.as_ref(),
+			&self.db, &self.bitcoind, crate::fee_allowance::Path::Offboard, &signed_tx).await?;
+
+		wallet_guard.log_permitted_tx(&signed_tx,fee_permit.as_ref())?;
 		let [mempool_accept] = bcd::test_mempool_accept(&self.bitcoind, &[&signed_tx]).await
 			.context("bitcoin node down")?.try_into().unwrap();
 		if !mempool_accept.allowed {
@@ -511,6 +515,7 @@ impl Server {
 		let user_fee_sat = user_fee.to_sat();
 		let funding_metadata = wallet_guard.staged().cloned();
 		if let Err(e) = self.db.write(async |t| {
+			crate::fee_allowance::require_permit(t, &signed_tx, fee_permit.as_ref()).await?;
 			if let Some(metadata) = &funding_metadata {
 				t.store_changeset(crate::wallet::WalletKind::Rounds, metadata).await?;
 			}

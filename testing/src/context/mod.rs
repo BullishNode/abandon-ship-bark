@@ -421,6 +421,7 @@ impl TestContext {
 		// NB we don't auto-complete `..Default::default()` here
 		// to force us to evaluate every value in test context.
 		server::config::Config {
+			fee_allowance: None,
 			data_dir: data_dir.clone(),
 			expiry_payout: Default::default(),
 			network: Network::Regtest,
@@ -556,6 +557,7 @@ impl TestContext {
 		// NB we don't auto-complete `..Default::default()` here
 		// to force us to evaluate every value in test context.
 		server::config::watchmand::Config {
+			fee_allowance: None,
 			postgres: srv.config().postgres.clone(),
 			watchman: server::watchman::Config {
 				reaction_interval: std::time::Duration::from_secs(1),

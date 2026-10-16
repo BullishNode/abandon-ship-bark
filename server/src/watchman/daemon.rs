@@ -135,6 +135,8 @@ impl Daemon {
 
 		let deep_tip = bcd::deep_tip(&bitcoind).await
 			.context("failed to query node for deep tip")?;
+		let fee_allowance = crate::fee_allowance::Gate::load(cfg.fee_allowance.as_ref(), &cfg.data_dir,
+			cfg.network, server_key.public_key(), &db, &bitcoind).await?;
 
 		let bitcoin_address_blocklist = if let Some(ref path) = cfg.bitcoin_address_blocklist {
 			Some(BitcoinAddressBlocklist::new(cfg.network, bitcoind.clone(), path).await
@@ -229,6 +231,7 @@ impl Daemon {
 			fee_estimator,
 			drain_address,
 			watchman_wallet.clone(),
+			fee_allowance,
 			frontier.clone(),
 			sync_height_watcher,
 		);

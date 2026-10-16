@@ -251,14 +251,21 @@ impl PersistedWallet {
 		&mut self, psbt: Psbt, credit: Option<&PayoutCapitalCredit>, max_fee_rate: Option<FeeRate>,
 	) -> anyhow::Result<Transaction> {
 		self.check_recovery_spend(&psbt, credit)?;
-		let fee = psbt.fee().context("error calculating fee")?;
 		let ret = sign_funding_psbt(&self.wallet, psbt, max_fee_rate)?;
-		let txid = ret.compute_txid();
-		let raw_tx = bitcoin::consensus::serialize(&ret);
-		slog!(WalletSignedTx, wallet: self.kind.name().into(), txid, fee, raw_tx,
-			inputs: ret.input.iter().map(|i| i.previous_output).collect(),
-		);
+		// Construction stays private. The owning publication path obtains a durable
+		// epoch permit before exposing signed bytes or writing any raw transaction log.
 		Ok(ret)
+	}
+
+
+	pub(crate) fn log_permitted_tx(
+		&self, tx:&Transaction, permit:Option<&crate::fee_allowance::Permit>,
+	) -> anyhow::Result<()> {
+		if let Some(permit)=permit { permit.matches(tx)?; }
+		let fee=self.wallet.calculate_fee(tx).context("pricing permitted native transaction")?;
+		slog!(WalletSignedTx, wallet:self.kind.name().into(),txid:tx.compute_txid(),fee,
+			raw_tx:bitcoin::consensus::serialize(tx),inputs:tx.input.iter().map(|i|i.previous_output).collect());
+		Ok(())
 	}
 
 
@@ -268,6 +275,10 @@ impl PersistedWallet {
 		&mut self,
 		address: Address<bitcoin::address::NetworkUnchecked>,
 	) -> anyhow::Result<Transaction> {
+		let enforced = self.db.read(async |t| Ok(t.query_one(
+			"SELECT EXISTS(SELECT 1 FROM fee_allowance_policy)", &[],
+		).await?.get::<_,bool>(0))).await?;
+		ensure!(!enforced, "dev drain is disabled while a fee epoch is enforced");
 		//TODO(stevenroose) also claim all expired round vtxos here!
 
 		let addr = address.require_network(self.wallet.network())?;

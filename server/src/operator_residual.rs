@@ -423,7 +423,7 @@ pub(crate) struct OperatorWitness {
 	cursor: Arc<tokio::sync::Mutex<String>>,
 }
 
-fn read_bounded(path: &Path, limit: usize) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn read_bounded(path: &Path, limit: usize) -> anyhow::Result<Vec<u8>> {
 	let before = fs::symlink_metadata(path)?;
 	ensure!(before.is_file() && before.nlink() == 1 && before.len() <= limit as u64,
 		"operator witness is not a bounded regular file");
@@ -440,7 +440,7 @@ fn read_bounded(path: &Path, limit: usize) -> anyhow::Result<Vec<u8>> {
 	Ok(bytes)
 }
 
-fn write_identical(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
+pub(crate) fn write_identical(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
 	match read_bounded(path, bytes.len()) {
 		Ok(previous) => ensure!(previous == bytes, "conflicting operator capital witness"),
 		Err(error) if error.downcast_ref::<std::io::Error>()

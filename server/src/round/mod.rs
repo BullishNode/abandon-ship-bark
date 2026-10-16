@@ -1146,6 +1146,10 @@ impl SigningVtxoTree {
 		let mut funding_wallet = self.rounds_wallet.lock().await;
 		let signed_round_tx = self.funding_tx.sign(&mut funding_wallet)
 			.map_err(|e| RoundError::Recoverable(e))?;
+		let fee_permit = crate::fee_allowance::ordinary_permit(srv.fee_allowance.as_ref(),
+			&srv.db, &srv.bitcoind, crate::fee_allowance::Path::Round, &signed_round_tx.tx).await
+			.map_err(RoundError::Recoverable)?;
+		funding_wallet.log_permitted_tx(&signed_round_tx.tx,fee_permit.as_ref()).map_err(RoundError::Recoverable)?;
 		let funding_metadata = funding_wallet.staged().cloned();
 
 		// Persist the signed funding tx to the database.
@@ -1153,6 +1157,7 @@ impl SigningVtxoTree {
 			.upsert_funding_tx(&signed_round_tx.tx);
 		let signed_tx = signed_round_tx.tx.clone();
 		let published = srv.db.write(async |t| {
+			crate::fee_allowance::require_permit(t, &signed_tx, fee_permit.as_ref()).await?;
 			if let Some(metadata) = &funding_metadata {
 				t.store_changeset(crate::wallet::WalletKind::Rounds, metadata).await?;
 			}

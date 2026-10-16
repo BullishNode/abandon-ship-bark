@@ -147,6 +147,7 @@ pub struct Watchman {
 	drain_spk: ScriptBuf,
 	/// Wallet used to pay fees for progress transactions.
 	watchman_wallet: InstrumentedLock<PersistedWallet>,
+	fee_allowance: Option<crate::fee_allowance::Gate>,
 	/// The set of VTXOs the watchman is responsible for monitoring and claiming.
 	/// Shared with SyncManager for chain event handling.
 	frontier: Arc<tokio::sync::RwLock<VtxoExitFrontier>>,
@@ -159,7 +160,7 @@ pub struct Watchman {
 }
 
 impl Watchman {
-	pub fn new(
+	pub(crate) fn new(
 		config: Config,
 		signer: WatchmanSigner,
 		bitcoind: BitcoindClient,
@@ -168,6 +169,7 @@ impl Watchman {
 		fee_estimator: Arc<FeeEstimator>,
 		drain_address: Address,
 		wallet: InstrumentedLock<PersistedWallet>,
+		fee_allowance: Option<crate::fee_allowance::Gate>,
 		frontier: Arc<tokio::sync::RwLock<VtxoExitFrontier>>,
 		sync_height: watch::Receiver<BlockRef>,
 	) -> Self {
@@ -180,6 +182,7 @@ impl Watchman {
 			fee_estimator,
 			drain_spk: drain_address.script_pubkey(),
 			watchman_wallet: wallet,
+			fee_allowance,
 			frontier,
 			sync_height,
 			mempool_spends: parking_lot::RwLock::new(HashMap::new()),
@@ -569,6 +572,12 @@ impl Watchman {
 		fee_ceiling: Option<FeeRate>,
 	) -> anyhow::Result<()> {
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
+		let path = if fee_ceiling.is_some() { crate::fee_allowance::Path::Sweep }
+			else { crate::fee_allowance::Path::Claim };
+		let fee_permit = match (&self.fee_allowance, path) {
+			(Some(gate),crate::fee_allowance::Path::Claim) => Some(gate.urgent_claim(&self.db,&self.bitcoind,&tx).await?),
+			_ => crate::fee_allowance::ordinary_permit(self.fee_allowance.as_ref(),&self.db,&self.bitcoind,path,&tx).await?,
+		};
 		let txid = tx.compute_txid();
 
 		let total_output_value = tx.output.iter().map(|o| o.value).sum::<Amount>();
@@ -582,6 +591,7 @@ impl Watchman {
 					fee, limit, tx.weight());
 			}
 		}
+		self.db.read(async |t| crate::fee_allowance::require_permit(t,&tx,fee_permit.as_ref()).await).await?;
 		bcd::broadcast_tx(&self.bitcoind, &tx).await?;
 		slog!(ClaimBroadcast, txid, fee_rate, total_output_value, fee,
 			total_input_value, vtxo_ids: vtxos.iter().map(|v| v.id()).collect(),
@@ -799,6 +809,12 @@ impl Watchman {
 		let cpfp_tx = wallet.make_signed_p2a_cpfp(&progress_tx, fees)
 			.with_context(|| format!("failed to create CPFP for vtx {}", txid))?;
 
+		let fee_permit = match &self.fee_allowance {
+			Some(gate) => Some(gate.urgent_progress(&self.db,&self.bitcoind,&cpfp_tx,&progress_tx,&wallet.inventory()?).await?),
+			None => crate::fee_allowance::ordinary_permit(None,&self.db,&self.bitcoind,
+				crate::fee_allowance::Path::ProgressChild,&cpfp_tx).await?,
+		};
+		self.db.read(async |t| crate::fee_allowance::require_permit(t,&cpfp_tx,fee_permit.as_ref()).await).await?;
 		// Broadcast the progress tx and CPFP as a package
 		let cpfp_txid = cpfp_tx.compute_txid();
 		bcd::submit_package(&self.bitcoind, &[progress_tx, cpfp_tx]).await?;

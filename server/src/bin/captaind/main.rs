@@ -399,6 +399,7 @@ async fn inner_main() -> anyhow::Result<()> {
 			Server::create(cfg).await?;
 		}
 		Command::Drain { address } => {
+			anyhow::ensure!(cfg.fee_allowance.is_none(), "dev drain disabled by external fee epoch configuration");
 			info!("Running with config: {:#?}", cfg);
 			let db = server::database::Db::connect(&cfg.postgres).await?;
 			let bitcoind = bcd::build_client(&cfg.bitcoind.url, cfg.bitcoind.auth())?;

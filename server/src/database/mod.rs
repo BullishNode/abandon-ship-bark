@@ -80,6 +80,7 @@ enum AdvisoryLock {
 	MailboxWrite = 1,
 	HtlcSettlementWrite = 2,
 	OperatorCapitalWitnessWrite = 3,
+	FeeAllowanceWrite = 4,
 }
 
 /// An uncommitted offboard fetched for the retry-task commit path. Carries
@@ -362,6 +363,11 @@ impl<'t> std::ops::Deref for Tx<'t> {
 }
 
 impl<'t> Tx<'t> {
+	pub(crate) async fn lock_fee_allowance(&self) -> anyhow::Result<()> {
+		self.execute("SELECT pg_advisory_xact_lock($1)", &[&(AdvisoryLock::FeeAllowanceWrite as i64)]).await?;
+		Ok(())
+	}
+
 	/**
 	 * VTXOs
 	*/

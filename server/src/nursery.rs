@@ -174,6 +174,10 @@ impl TxNursery {
 	/// caller can't act on a failure anyway: the nursery retries on the
 	/// next mempool update.
 	async fn broadcast(&self, tx: &Transaction, kind: NurseryTxKind) {
+		if let Err(error) = self.db.read(async |t| crate::fee_allowance::require_record(t,tx).await).await {
+			warn!("nursery fee permit missing; keep original transaction held: {error:#}");
+			return;
+		}
 		let txid = tx.compute_txid();
 		if kind == NurseryTxKind::ExpiryPayout {
 			if let Err(e) = self.witness_payout(tx).await {

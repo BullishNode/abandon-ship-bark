@@ -19,8 +19,10 @@ const MAX_ATTEMPTS: i64 = 4096;
 const MAX_INPUTS: i64 = 50_000;
 const MAX_TOTAL_BYTES: i64 = 64 * 1024 * 1024;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct UrgentSqlIntent {
+	#[serde(rename = "attempt_index")]
 	index: i64,
 	candidate_hash: String,
 	publication_txid: String,
@@ -86,6 +88,21 @@ fn require_nursery_tuple(signed: &Transaction, kind: &str, raw: &[u8], abandoned
 		"urgent original nursery body, class or retained state differs");
 	Ok(())
 }
+/// Exact closed captured SQL row DTO, no database/file access or mutation.
+/// Bytea fields are raw Vec<u8> JSON integer arrays, with true NULL preserved.
+/// Complete source/attempt/input/nursery set equality remains the caller's
+/// separate native audit obligation; this validates one original reciprocal row.
+pub(crate) fn validate_captured_urgent_intent(raw: &[u8], candidate: &UrgentCandidate,
+	publication: Option<&BoundUrgentPublication>, identity: &FeeServiceIdentity, policy: OrdinaryFeePolicy,
+) -> anyhow::Result<()> {
+	ensure!(raw.len() <= 32 * 1024 * 1024 + 32 * 1024, "captured urgent SQL JSON exceeds bounded bytea expansion");
+	let row: UrgentSqlIntent = serde_json::from_slice(raw)?;
+	ensure!(serde_json::to_vec(&row)? == raw, "captured urgent SQL DTO is not exact canonical closed serialization");
+	let (actual, signed) = row.decode(identity,policy)?;
+	ensure!(actual == *candidate && signed.as_ref() == publication, "captured urgent SQL row differs from original independent source");
+	row.require_exact(&UrgentSqlIntent::original(candidate,publication,identity,policy)?)
+}
+
 const COLUMNS: &str = "attempt_index,candidate_hash,publication_txid,purpose,policy_hash,opening_hash,reservation_entry,candidate,signed_entry,signed_record";
 
 impl Tx<'_> {
@@ -364,4 +381,23 @@ mod tests {
 		let (claim, claim_transactions, _, policy) = synthetic_urgent_vector(false, limit);
 		assert_eq!(claim.external_inputs(policy).unwrap(), claim_transactions[0].input.iter().map(|input| input.previous_output).collect());
 	}
+	#[test]
+	fn captured_urgent_sql_delegate_preserves_null_and_rejects_changed_original_or_partial_signed_state() {
+		let limit=limits();let (candidate,transactions,identity,policy)=synthetic_urgent_vector(true,limit);
+		let signed=candidate.clone().bind_signed(&transactions,&identity,limit,policy).unwrap();
+		let unsigned=UrgentSqlIntent::original(&candidate,None,&identity,policy).unwrap();
+		let full=UrgentSqlIntent::original(&candidate,Some(&signed),&identity,policy).unwrap();
+		let before=serde_json::to_vec(&unsigned).unwrap();
+		validate_captured_urgent_intent(&before,&candidate,None,&identity,policy).unwrap();
+		assert!(validate_captured_urgent_intent(&before,&candidate,Some(&signed),&identity,policy).is_err());
+		validate_captured_urgent_intent(&serde_json::to_vec(&full).unwrap(),&candidate,Some(&signed),&identity,policy).unwrap();
+		let mut partial=full.clone();partial.signed_entry=None;
+		assert!(validate_captured_urgent_intent(&serde_json::to_vec(&partial).unwrap(),&candidate,Some(&signed),&identity,policy).is_err());
+		let mut changed=full;changed.purpose="claim".into();
+		assert!(validate_captured_urgent_intent(&serde_json::to_vec(&changed).unwrap(),&candidate,Some(&signed),&identity,policy).is_err());
+		assert_eq!(serde_json::to_vec(&unsigned).unwrap(),before,"read-only validation cannot mutate original NULL state");
+		let unknown=String::from_utf8(before).unwrap().replacen("{","{\"unknown\":0,",1);
+		assert!(validate_captured_urgent_intent(unknown.as_bytes(),&candidate,None,&identity,policy).is_err());
+	}
+
 }

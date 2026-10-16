@@ -679,6 +679,71 @@ pub(crate) fn original_publications_locked(directory: &Path, policy: OrdinaryFee
 	Ok(records)
 }
 
+/// Native arithmetic/binding result ONLY. The protected collector separately
+/// proves source ownership, whole fixed file/SQL cut, chain and declaration.
+/// This cannot activate an owner or authorize signing/publication/readiness.
+pub(crate) struct CapturedJointHistory {
+	pub(crate) charged_sat: u64,
+	pub(crate) carrier_charged_sat: u64,
+	pub(crate) publication_entries: BTreeMap<Wtxid, PublicationEntry>,
+	pub(crate) publications: BTreeMap<Wtxid, PublicationRecord>,
+	pub(crate) urgent_entries: BTreeMap<u64, UrgentReservationEntry>,
+	pub(crate) urgent_signed_entries: BTreeMap<u64, UrgentSignedEntry>,
+	pub(crate) urgent: BTreeMap<u64, (UrgentCandidate, Option<BoundUrgentPublication>)>,
+}
+
+/// Read-only captured counterpart to the SAME original parser/witness checks.
+/// `publications` is ONLY the complete original fixed publication sibling:
+/// canonical filename -> exact UTF8 JSON bytes, not rights/header/source flags.
+/// No path, owner, allowance, SQL row, or missing witness is created/repaired.
+/// Caller independently validates actual network/declaration and source pins.
+pub(crate) fn validate_captured_joint_history(history: &str, policy: OrdinaryFeePolicy,
+	publications: &BTreeMap<String,String>,
+) -> anyhow::Result<CapturedJointHistory> {
+	policy.validate_config(if policy.regtest_qualification.is_some() { Network::Regtest } else { Network::Signet })?;
+	ensure!(history.len() as u64 <= MAX_HISTORY_BYTES && publications.len() <= 4096,
+		"captured joint original source exceeds count or history bound");
+	let mut bytes = 0usize;
+	for raw in publications.values() {
+		ensure!(raw.len() <= 4 * 1024 * 1024, "captured original witness exceeds per-record bound");
+		bytes = bytes.checked_add(raw.len()).context("captured original witness size overflow")?;
+		ensure!(bytes <= 64 * 1024 * 1024, "captured original witness aggregate exceeds existing bound");
+	}
+	let parsed = parse_joint_history(history,policy)?;
+	let mut used = std::collections::BTreeSet::new(); let mut originals = BTreeMap::new();
+	for (id,entry) in &parsed.publications {
+		let name = format!("{id}.json"); let raw = publications.get(&name).context("captured original p1 witness absent")?;
+		let record: PublicationRecord = serde_json::from_slice(raw.as_bytes())?;
+		ensure!(serde_json::to_vec(&record)? == raw.as_bytes() && record.entry(policy)? == *entry,
+			"captured p1 original record differs from retained exact native entry");
+		used.insert(name); originals.insert(*id,record);
+	}
+	let mut urgent = BTreeMap::new();
+	for (index,entry) in &parsed.urgent {
+		let name = format!("urgent-{index}.candidate.json");
+		let raw = publications.get(&name).context("captured original u1 candidate absent")?;
+		let candidate = UrgentCandidate::decode_reserved(raw.as_bytes(),entry,policy)?; used.insert(name);
+		let signed = match parsed.urgent_signed.get(index) {
+			None => None,
+			Some(signed) => {
+				let name = format!("urgent-{index}.signed.json");
+				let raw = publications.get(&name).context("captured original u2 signed package absent")?;
+				let identity = candidate.identity(); let limits = candidate.limits();
+				let publication = BoundUrgentPublication::decode(raw.as_bytes(),signed.record_sha256,&identity,limits,policy)?;
+				let (original,actual) = publication.signed_entry(&identity,limits,policy)?;
+				ensure!(original == *entry && actual == *signed, "captured urgent original package differs from retained u1/u2");
+				used.insert(name); Some(publication)
+			},
+		};
+		urgent.insert(*index,(candidate,signed));
+	}
+	ensure!(used.len() == publications.len() && publications.keys().all(|name| used.contains(name)),
+		"captured witness set contains unknown, unindexed or unrelated original files");
+	Ok(CapturedJointHistory { charged_sat:parsed.charged,carrier_charged_sat:parsed.carrier_charged,
+		publication_entries:parsed.publications,publications:originals,urgent_entries:parsed.urgent,
+		urgent_signed_entries:parsed.urgent_signed,urgent })
+}
+
 fn parse_history(history: &str, policy: OrdinaryFeePolicy) -> anyhow::Result<u64> {
 	Ok(parse_joint_history(history, policy)?.charged)
 }
@@ -1272,6 +1337,47 @@ mod tests {
 		assert_eq!(owner.ledger.lock().unwrap().charged, 19_000);
 		assert!(owner.protect_urgent_attempts(Amount::from_sat(19_999)).is_err());
 		drop(owner); remove_publication_directory(&directory);
+	}
+
+	#[test]
+	fn captured_native_history_preserves_v1_v2_numeric_and_single_urgent_debit_without_io() {
+		let policy = OrdinaryFeePolicy {ordinary_budget_sat:58_000,..Default::default()};
+		let (old,_) = publication_record(policy,super::ordinary_fee_publication::PublicationPath::Round,1000,1);
+		let (parent,tx) = publication_transaction(1000,2);
+		let new = PublicationRecord::new_precommit(super::ordinary_fee_publication::PublicationPath::Pool,policy,&tx,&[parent],
+			bitcoin::FeeRate::from_sat_per_vb_u32(100)).unwrap();
+		let limits = super::super::carrier::CarrierLimits {max_fee_rate:bitcoin::FeeRate::from_sat_per_vb_u32(100),
+			max_miner_fee:Amount::from_sat(20_000),max_weight:bitcoin::Weight::from_wu(400_000)};
+		let (candidate,signed,identity,actual_policy) = super::super::urgent_publication::synthetic_urgent_vector(false,limits);
+		assert_eq!(actual_policy,policy);
+		let publication = candidate.clone().bind_signed(&signed,&identity,limits,policy).unwrap();
+		let (urgent,signed) = publication.signed_entry(&identity,limits,policy).unwrap();
+		let history = format!("100\n{}{}{}{}",old.entry(policy).unwrap().line().unwrap(),new.entry(policy).unwrap().line().unwrap(),
+			urgent.line(policy).unwrap(),signed.line(&urgent).unwrap());
+		let files = BTreeMap::from([(format!("{}.json",old.entry(policy).unwrap().id()),serde_json::to_string(&old).unwrap()),
+			(format!("{}.json",new.entry(policy).unwrap().id()),serde_json::to_string(&new).unwrap()),
+			(urgent.filename(),serde_json::to_string(&candidate).unwrap()),
+			(format!("urgent-{}.signed.json",urgent.attempt_index),serde_json::to_string(&publication).unwrap())]);
+		let checked = validate_captured_joint_history(&history,policy,&files).unwrap();
+		assert_eq!(checked.charged_sat,100+1000+new.entry(policy).unwrap().charge(policy).unwrap()+20_000);
+		assert_eq!(checked.carrier_charged_sat,100);assert_eq!(checked.publications.len(),2);
+		assert_eq!(checked.urgent.len(),1);assert_eq!(checked.urgent_signed_entries.len(),1);
+		let mut absent=files.clone();absent.remove(&urgent.filename());assert!(validate_captured_joint_history(&history,policy,&absent).is_err());
+		let mut extra=files.clone();extra.insert("unindexed.json".into(),"{}".into());assert!(validate_captured_joint_history(&history,policy,&extra).is_err());
+		let mut changed=files;changed.insert(urgent.filename(),"{}".into());assert!(validate_captured_joint_history(&history,policy,&changed).is_err());
+	}
+	#[test]
+	fn captured_native_history_rejects_torn_duplicate_or_orphan_sources_without_zero_alias() {
+		let policy = OrdinaryFeePolicy {ordinary_budget_sat:58_000,..Default::default()};
+		let (record,_) = publication_record(policy,super::ordinary_fee_publication::PublicationPath::Round,1000,1);
+		let line=record.entry(policy).unwrap().line().unwrap();
+		let files=BTreeMap::from([(format!("{}.json",record.entry(policy).unwrap().id()),serde_json::to_string(&record).unwrap())]);
+		assert!(validate_captured_joint_history("",policy,&files).is_err());
+		assert!(validate_captured_joint_history(line.trim_end(),policy,&files).is_err());
+		assert!(validate_captured_joint_history(&(line.clone()+&line),policy,&files).is_err());
+		assert!(validate_captured_joint_history("58001\n",policy,&BTreeMap::new()).is_err());
+		assert!(validate_captured_joint_history("unknown\n",policy,&BTreeMap::new()).is_err());
+		assert!(validate_captured_joint_history(&line,policy,&BTreeMap::new()).is_err());
 	}
 
 }

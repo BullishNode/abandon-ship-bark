@@ -33,6 +33,7 @@ pub enum SnapshotGenesis {
 	MissingPath,
 }
 
+#[derive(Clone)]
 pub struct BackingVtxoFact {
 	pub state: VtxoState<Bare, ServerVtxoPolicy>,
 	/// Present only when the actual stored encoding supplies a complete path.

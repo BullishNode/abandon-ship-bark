@@ -89,7 +89,7 @@ impl FromStr for SpendState {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VtxoState<G = Full, P: Policy = VtxoPolicy> {
 	pub id: i64,
 	/// The id of the VTXO

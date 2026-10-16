@@ -18,6 +18,7 @@ pub mod fallback;
 pub mod expiry_attribution;
 pub(crate) mod expiry_guard;
 pub mod expiry_inventory;
+pub(crate) mod expiry_geometry;
 
 mod ban;
 pub mod block;

@@ -23,7 +23,7 @@ use tracing::{trace, warn};
 
 use server_rpc::{pver, RequestExt};
 
-use crate::error::{BadArgument, NotFound, UnusableInputs};
+use crate::error::{BadArgument, FallbackHistoryViewChanged, FallbackRefusal, NotFound, UnusableInputs};
 
 
 /// The minimum protocol version supported by the server.
@@ -84,6 +84,15 @@ impl ToStatus for anyhow::Error {
 				metadata.insert("identifiers", ids);
 			}
 			tonic::Status::with_metadata(tonic::Code::NotFound, format!("{:#}", self), metadata)
+		} else if self.is::<FallbackHistoryViewChanged>() {
+			let mut metadata = tonic::metadata::MetadataMap::new();
+			metadata.insert("abandon-reason", tonic::metadata::MetadataValue::from_static("payout_view_changed"));
+			tonic::Status::with_metadata(tonic::Code::Aborted, format!("{:#}", self), metadata)
+		} else if let Some(refusal) = self.downcast_ref::<FallbackRefusal>() {
+			let mut metadata = tonic::metadata::MetadataMap::new();
+			metadata.insert("abandon-reason", tonic::metadata::MetadataValue::from_static(refusal.reason()));
+			metadata.insert("identifiers", refusal.vtxo_id().to_string().parse().expect("VTXO identifiers are ASCII"));
+			tonic::Status::with_metadata(tonic::Code::InvalidArgument, format!("{:#}", self), metadata)
 		} else if let Some(ui) = self.downcast_ref::<UnusableInputs>() {
 			// Like a bad argument, but we attach the offending VTXO ids so the
 			// client can drop exactly those inputs and retry without them.
@@ -223,3 +232,22 @@ fn validate_pver<T>(req: &tonic::Request<T>) -> Result<u64, tonic::Status> {
 	Ok(pver)
 }
 
+
+#[cfg(test)]
+mod fallback_tests {
+	use super::*;
+	use ::ark::test_util::VTXO_VECTORS;
+
+	#[test]
+	fn fallback_refusal_metadata_survives_error_context() {
+		let id = VTXO_VECTORS.board_vtxo.id();
+		for refusal in [FallbackRefusal::DecidedForFallback(id), FallbackRefusal::ExpiredNewLightning(id)] {
+			let reason = refusal.reason();
+			let error = anyhow::Error::new(refusal).context("outer operation failed");
+			let status = error.to_status();
+			assert_eq!(status.code(), tonic::Code::InvalidArgument);
+			assert_eq!(status.metadata().get("abandon-reason").unwrap().to_str().unwrap(), reason);
+			assert_eq!(status.metadata().get("identifiers").unwrap().to_str().unwrap(), id.to_string());
+		}
+	}
+}

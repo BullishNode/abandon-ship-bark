@@ -104,7 +104,7 @@ mod tests {
 			state: VtxoState {
 				id: 1, vtxo_id: full.id(), vtxo: full.to_bare(), oor_spent_txid: spent,
 				spent_in_round: None, offboarded_in: None, banned_until_height: None,
-				spend_state: SpendState::Spendable, confirmed_height: None,
+				spend_state: SpendState::Spendable, confirmed_height: None, decided_for_fallback: false,
 				created_at: chrono::Local::now(), updated_at: chrono::Local::now(),
 			},
 			full_vtxo: Some(full), genesis: SnapshotGenesis::EncodedPath,

@@ -442,6 +442,7 @@ impl CollectingPayments {
 				let mut unusable = Vec::new();
 				for v in vtxos {
 					if let Err(e) = v.check_spendable(chain_tip) {
+						if e.is::<crate::error::FallbackRefusal>() { return Err(e); }
 						debug!("round input vtxo {} is not spendable: {:#}", v.vtxo_id, e);
 						unusable.push(v.vtxo_id);
 					} else {
@@ -1963,6 +1964,7 @@ impl Server {
 		let mut unusable = Vec::new();
 		for vtxo in &vtxos {
 			if let Err(e) = vtxo.check_spendable(chain_tip) {
+				if e.is::<crate::error::FallbackRefusal>() { return Err(e); }
 				debug!("delegated round input {} is not spendable: {:#}", vtxo.vtxo_id, e);
 				unusable.push(vtxo.vtxo_id);
 			}

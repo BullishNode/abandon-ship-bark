@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{ensure, Context};
-use bitcoin::{Amount, ScriptBuf, TxOut};
+use bitcoin::{Amount, ScriptBuf, SignedAmount, Transaction, TxOut};
 
 use ark::VtxoId;
 
@@ -33,6 +33,30 @@ pub(crate) struct Recipient {
 pub(crate) struct SettlementPlan {
 	pub recipients: Vec<Recipient>,
 	pub forfeits: Vec<LeafAllocation>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct PayoutFeeAccounting {
+	pub operator_remainder: Amount,
+	pub miner_fee: Amount,
+	pub subsidy: Amount,
+	pub net_operator_result: SignedAmount,
+}
+
+/// Customer outputs are the committed prefix. Everything remaining belongs to
+/// the operator, whether paid directly to its drain or through a nonzero P2A.
+/// Apply this to the one canonically confirmed fee child, not all RBF versions.
+pub(crate) fn payout_fee_accounting(
+	parent: &Transaction, customer_outputs: usize, miner_fee: Amount,
+) -> anyhow::Result<PayoutFeeAccounting> {
+	ensure!(customer_outputs <= parent.output.len(), "payout accounting omits customer outputs");
+	let operator_remainder = parent.output[customer_outputs..].iter().try_fold(Amount::ZERO, |sum, output|
+		sum.checked_add(output.value).context("operator payout remainder overflow"),
+	)?;
+	let net_operator_result = operator_remainder.to_signed()?.checked_sub(miner_fee.to_signed()?)
+		.context("net operator payout result overflow")?;
+	let subsidy = miner_fee.checked_sub(operator_remainder).unwrap_or(Amount::ZERO);
+	Ok(PayoutFeeAccounting { operator_remainder, miner_fee, subsidy, net_operator_result })
 }
 
 /// Group by actual output, with stable per-leaf amounts for persisted attribution.
@@ -171,6 +195,35 @@ mod tests {
 			assert!(separate.recipients.is_empty());
 			assert_eq!(separate.forfeits[0].forfeited.to_sat(), 1_200);
 		}
+	}
+
+	#[test]
+	fn expiry_fee_accounting_includes_the_drain_and_nonzero_anchor() {
+		let mut parent = Transaction {
+			version: bitcoin::transaction::Version::non_standard(3),
+			lock_time: bitcoin::absolute::LockTime::ZERO, input: vec![],
+			output: vec![
+				TxOut { value: Amount::from_sat(9_000), script_pubkey: wpkh() },
+				TxOut { value: Amount::from_sat(1_000), script_pubkey: wpkh() },
+				bitcoin_ext::fee::fee_anchor(),
+			],
+		};
+		let ordinary = payout_fee_accounting(&parent,1,Amount::from_sat(250)).unwrap();
+		assert_eq!(ordinary.operator_remainder.to_sat(),1_000);
+		assert_eq!(ordinary.subsidy,Amount::ZERO);
+		assert_eq!(ordinary.net_operator_result.to_sat(),750);
+		assert_eq!(9_000+ordinary.net_operator_result.to_sat()+250,10_000);
+		parent.output.truncate(1);
+		parent.output.push(bitcoin_ext::fee::fee_anchor_with_amount(Amount::from_sat(200)));
+		let small = payout_fee_accounting(&parent,1,Amount::from_sat(300)).unwrap();
+		assert_eq!(small.operator_remainder.to_sat(),200);
+		assert_eq!(small.subsidy.to_sat(),100);
+		assert_eq!(small.net_operator_result.to_sat(),-100);
+		assert_eq!(9_000+small.net_operator_result.to_sat()+300,9_200);
+		// The final version replaces the earlier fee, it is never added to it.
+		let replacement = payout_fee_accounting(&parent,1,Amount::from_sat(450)).unwrap();
+		assert_eq!(replacement.miner_fee.to_sat(),450);
+		assert_eq!(replacement.subsidy.to_sat(),250);
 	}
 
 }

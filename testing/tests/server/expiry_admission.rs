@@ -45,3 +45,52 @@ async fn expiry_refuses_unbounded_requested_lightning_duration() {
 	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 	assert!(states[0].check_spendable(tip).is_ok());
 }
+
+/// Both early request rejection and the final writer fence must carry the same
+/// stable reason. The durable decision here is an explicit isolated fixture;
+/// allocation-operation races are covered separately when W5 is integrated.
+#[tokio::test]
+async fn expiry_native_rpc_refusals_have_stable_reasons() {
+	let ctx = TestContext::new("server/expiry_typed_refusals").await;
+	let srv = ctx.captaind("server").funded(btc(10)).no_vtxo_pool()
+		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).create().await;
+	let sender = ctx.bark("sender", &srv).funded(sat(500_000)).create().await;
+	let ids = sender.board_and_confirm_and_register(&ctx,sat(100_000)).await;
+	let wallet = sender.client().await;
+	let source = wallet.get_full_vtxo(ids[0]).await.unwrap();
+	let key = wallet.get_vtxo_key(&source).await.unwrap();
+	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let expired = ctx.generate_blocks(source.expiry_height().to_u32()+1-tip.to_u32()).await;
+	srv.wait_for_sync_height(expired).await;
+	let request = || {
+		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([source.clone()],
+			VtxoPolicy::new_server_htlc_send(key.public_key(),
+				PaymentHash::from(sha256::Hash::hash(b"typed expiry refusal").to_byte_array()),
+				expired+srv.config().htlc_send_expiry_delta+BlockDelta::new(1)),
+		).unwrap().generate_user_nonces(&[key]).unwrap();
+		protos::LightningPayHtlcCosignRequest {
+			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		}
+	};
+	let mut rpc = srv.get_public_rpc().await;
+	let error = rpc.request_lightning_pay_htlc_cosign(request()).await.expect_err("new obligation on expired backing");
+	assert_eq!(error.metadata().get("abandon-reason").unwrap().to_str().unwrap(), "expired_new_lightning");
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	db.write(async |t| {
+		let entitlement: i64 = t.query_one("INSERT INTO expiry_entitlement(vtxo_id,gross_sat) VALUES($1,$2) RETURNING id",
+			&[&source.id().to_string(),&100_000_i64]).await?.get(0);
+		t.execute("INSERT INTO expiry_decided_coin(vtxo_id,entitlement_id) VALUES($1,$2)", &[&source.id().to_string(),&entitlement]).await?;
+		t.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW() WHERE vtxo_id=$1", &[&source.id().to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
+	let (full,bare,policy) = db.read(async |t| Ok((
+		t.get_user_vtxo_by_id(source.id()).await?,
+		t.get_bare_vtxo_by_id(source.id()).await?,
+		t.get_vtxos_by_policy(&[source.policy().clone()]).await?,
+	))).await.unwrap();
+	assert!(full.decided_for_fallback && bare.decided_for_fallback);
+	assert!(policy.iter().find(|v| v.vtxo_id==source.id()).unwrap().decided_for_fallback);
+	let error = rpc.request_lightning_pay_htlc_cosign(request()).await.expect_err("already-decided source must have a specific refusal");
+	assert_eq!(error.metadata().get("abandon-reason").unwrap().to_str().unwrap(), "decided_for_fallback");
+	assert_eq!(full.vtxo.amount(),sat(100_000));
+}

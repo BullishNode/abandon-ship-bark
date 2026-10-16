@@ -247,20 +247,21 @@ WITH inventory AS (
 	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
 		confirmed_height, spend_state::text AS spend_state, created_at, updated_at,
+		EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback,
 		frontier_at, onchain_spent_height, onchain_spent_txid,
 		lightning_htlc_subscription_id, vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
 	FROM vtxo WHERE anchor_point = ANY($1)
 ), bounded AS (
 	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
-		confirmed_height, spend_state, created_at, updated_at, frontier_at,
+		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
 		onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
 		vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
 	FROM inventory ORDER BY anchor_point, vtxo_id LIMIT $2
 ), sized AS (
 	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
-		confirmed_height, spend_state, created_at, updated_at, frontier_at,
+		confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
 		onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
 		vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount,
 		count(*) OVER () AS row_count,
@@ -269,7 +270,7 @@ WITH inventory AS (
 SELECT vtxo_id, anchor_point, id,
 	CASE WHEN row_count < $2 AND byte_count <= $3 THEN vtxo ELSE NULL END AS vtxo,
 	expiry, oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
-	confirmed_height, spend_state, created_at, updated_at, frontier_at,
+	confirmed_height, spend_state, created_at, updated_at, decided_for_fallback, frontier_at,
 	onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
 	vtxo_txid, exit_delta, policy_type,
 	CASE WHEN row_count < $2 AND byte_count <= $3 THEN policy ELSE NULL END AS policy,

@@ -17,7 +17,7 @@ pub(crate) async fn guard_obligation_changes(
 		"SELECT vtxo_id FROM expiry_decided_coin WHERE vtxo_id = ANY($1) ORDER BY vtxo_id LIMIT 1",
 		&[&ids],
 	).await? {
-		return badarg!("vtxo {} is reserved for expiry recovery", row.get::<_, &str>("vtxo_id"));
+		return Err(crate::error::FallbackRefusal::DecidedForFallback(row.get::<_, &str>("vtxo_id").parse()?).into());
 	}
 	Ok(())
 }
@@ -47,7 +47,7 @@ pub(crate) async fn guard_new_lightning_inputs(
 	if let Some(row) = tx.query_opt(
 		"SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) AND 			expiry <= COALESCE((SELECT MAX(height) FROM captaind_block), 0) 		ORDER BY vtxo_id LIMIT 1", &[&ids],
 	).await? {
-		return badarg!("vtxo {} has expired backing for a new Lightning obligation", row.get::<_, &str>("vtxo_id"));
+		return Err(crate::error::FallbackRefusal::ExpiredNewLightning(row.get::<_, &str>("vtxo_id").parse()?).into());
 	}
 	Ok(())
 }

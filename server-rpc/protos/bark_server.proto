@@ -862,7 +862,7 @@ message LightningNodeUri {
 service NativeFundingAdminService {
  rpc ReserveNativeFunding(NativeFundingOwnerRequest) returns (NativeFundingOwnerResponse);
  rpc BindNativeFunding(NativeFundingOwnerRequest) returns (NativeFundingOwnerResponse);
- rpc GetNativeFeeBudgetSnapshot(Empty) returns (NativeFeeBudgetSnapshot);
+ rpc GetNativeFeeBudgetSnapshot(core.Empty) returns (NativeFeeBudgetSnapshot);
 }
 message NativeFundingOwnerRequest { bytes authenticated_request = 1; }
 message NativeFundingOwnerResponse { bytes authenticated_response = 1; }

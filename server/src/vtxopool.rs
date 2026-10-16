@@ -603,16 +603,36 @@ impl Process {
 
 		// This caller ALREADY holds the rounds wallet guard. The remote owner
 		// uses its own Watchman guard and DB public descriptor, never this mutex.
-		let _native_inputs=if self.srv.config.direct_expiry.enabled {
-			Some(wallet.lock_wallet_utxos(funding_psbt.unsigned_tx.input.iter().map(|i|i.previous_output).collect::<Vec<_>>())?)
-		} else {None};
-		let native_funding=if self.srv.config.direct_expiry.enabled {
-			use crate::watchman::ordinary_funding::{FundingCandidate,FundingFamily,FundingPurpose};
-			let candidate=FundingCandidate::from_psbt(FundingPurpose::Pool,FundingFamily::Pool {
-				funding_txid:funding_psbt.unsigned_tx.compute_txid(),
-			},0,&funding_psbt)?;
-			self.srv.native_funding_owner(candidate,None).await?
-		} else {None};
+		let _native_inputs = if self.srv.config.direct_expiry.enabled {
+			Some(
+				wallet.lock_wallet_utxos(
+					funding_psbt
+						.unsigned_tx
+						.input
+						.iter()
+						.map(|i| i.previous_output)
+						.collect::<Vec<_>>(),
+				)?,
+			)
+		} else {
+			None
+		};
+		let native_funding = if self.srv.config.direct_expiry.enabled {
+			use crate::watchman::ordinary_funding::{
+				FundingCandidate, FundingFamily, FundingPurpose,
+			};
+			let candidate = FundingCandidate::from_psbt(
+				FundingPurpose::Pool,
+				FundingFamily::Pool {
+					funding_txid: funding_psbt.unsigned_tx.compute_txid(),
+				},
+				0,
+				&funding_psbt,
+			)?;
+			self.srv.native_funding_owner(candidate, None).await?
+		} else {
+			None
+		};
 
 		let funding_txid = funding_psbt.unsigned_tx.compute_txid();
 		let total_amount = builder.total_required_value();
@@ -654,9 +674,14 @@ impl Process {
 		// finish and broadcast the tx
 		let tx = wallet.finish_tx_with_max_fee_rate(funding_psbt, max_fee_rate).context("error finishing tree funding tx")?;
 
-		if let Some(original)=&native_funding {
-			ensure!(self.srv.native_funding_owner(original.candidate.clone(),Some(&tx)).await?.as_ref()==Some(original),
-				"native Pool signed binding changed original reservation");
+		if let Some(original) = &native_funding {
+			ensure!(
+				self.srv
+					.native_funding_owner(original.candidate.clone(), Some(&tx))
+					.await?
+					.as_ref() == Some(original),
+				"native Pool signed binding changed original reservation"
+			);
 		}
 
 		// Create the vtxos and virtual transactions in the database

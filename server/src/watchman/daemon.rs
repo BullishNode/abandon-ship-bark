@@ -198,10 +198,24 @@ impl Daemon {
 		} else { None };
 
 		let funding_owner = if let Some(runtime) = &direct_expiry {
-			Some(Arc::new(super::funding_owner::FundingOwner::new(db.clone(),bitcoind.clone(),runtime.ordinary.clone(),
-				watchman_wallet.clone(),server_key,cfg.network,&master_xpriv,runtime.policy.max_fee_rate,rtmgr.clone()).await
-				.context("restoring original native funding input intents")?))
-		} else {None};
+			Some(Arc::new(
+				super::funding_owner::FundingOwner::new(
+					db.clone(),
+					bitcoind.clone(),
+					runtime.ordinary.clone(),
+					watchman_wallet.clone(),
+					server_key,
+					cfg.network,
+					&master_xpriv,
+					runtime.policy.max_fee_rate,
+					rtmgr.clone(),
+				)
+				.await
+				.context("restoring original native funding input intents")?,
+			))
+		} else {
+			None
+		};
 
 		// The settler writes preimages to the htlc_settlement WAL table but
 		// does NOT spawn a CLN settlement subscriber — watchmand has no CLN

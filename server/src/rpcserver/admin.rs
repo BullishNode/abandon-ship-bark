@@ -322,14 +322,34 @@ pub async fn run_watchmand_admin_rpc_server(
 
 #[async_trait]
 impl rpc::server::NativeFundingAdminService for crate::watchman::Daemon {
-	async fn reserve_native_funding(&self,req:tonic::Request<protos::NativeFundingOwnerRequest>)->Result<tonic::Response<protos::NativeFundingOwnerResponse>,tonic::Status> {
-		let owner=self.funding_owner.clone().ok_or_else(||tonic::Status::failed_precondition("direct native fee owner unavailable"))?;
-		let authenticated_response=owner.execute(req.into_inner().authenticated_request,false).await.map_err(|e|tonic::Status::failed_precondition(format!("{e:#}")))?;
-		Ok(tonic::Response::new(protos::NativeFundingOwnerResponse {authenticated_response}))
+	async fn reserve_native_funding(
+		&self,
+		req: tonic::Request<protos::NativeFundingOwnerRequest>,
+	) -> Result<tonic::Response<protos::NativeFundingOwnerResponse>, tonic::Status> {
+		let owner = self.funding_owner.clone().ok_or_else(|| {
+			tonic::Status::failed_precondition("direct native fee owner unavailable")
+		})?;
+		let authenticated_response = owner
+			.execute(req.into_inner().authenticated_request, false)
+			.await
+			.map_err(|e| tonic::Status::failed_precondition(format!("{e:#}")))?;
+		Ok(tonic::Response::new(protos::NativeFundingOwnerResponse {
+			authenticated_response,
+		}))
 	}
-	async fn bind_native_funding(&self,req:tonic::Request<protos::NativeFundingOwnerRequest>)->Result<tonic::Response<protos::NativeFundingOwnerResponse>,tonic::Status> {
-		let owner=self.funding_owner.clone().ok_or_else(||tonic::Status::failed_precondition("direct native fee owner unavailable"))?;
-		let authenticated_response=owner.execute(req.into_inner().authenticated_request,true).await.map_err(|e|tonic::Status::failed_precondition(format!("{e:#}")))?;
-		Ok(tonic::Response::new(protos::NativeFundingOwnerResponse {authenticated_response}))
+	async fn bind_native_funding(
+		&self,
+		req: tonic::Request<protos::NativeFundingOwnerRequest>,
+	) -> Result<tonic::Response<protos::NativeFundingOwnerResponse>, tonic::Status> {
+		let owner = self.funding_owner.clone().ok_or_else(|| {
+			tonic::Status::failed_precondition("direct native fee owner unavailable")
+		})?;
+		let authenticated_response = owner
+			.execute(req.into_inner().authenticated_request, true)
+			.await
+			.map_err(|e| tonic::Status::failed_precondition(format!("{e:#}")))?;
+		Ok(tonic::Response::new(protos::NativeFundingOwnerResponse {
+			authenticated_response,
+		}))
 	}
 }

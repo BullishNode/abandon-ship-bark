@@ -913,12 +913,25 @@ impl CollectingPayments {
 
 		// Full immutable fee/input authorization precedes the first public tree promise.
 		let native_funding = if srv.config.direct_expiry.enabled {
-			use crate::watchman::ordinary_funding::{FundingCandidate,FundingFamily,FundingPurpose};
-			let candidate=FundingCandidate::from_psbt(FundingPurpose::Round,FundingFamily::Round {
-				round_seq:round_step.round_seq().inner(),pinned_input:funding_tx.pinned_input(),
-			},u32::try_from(round_step.attempt_seq()).map_err(|e|RoundError::Fatal(e.into()))?,funding_tx.psbt()).map_err(RoundError::Fatal)?;
-			srv.native_funding_owner(candidate,None).await.map_err(RoundError::Fatal)?
-		} else {None};
+			use crate::watchman::ordinary_funding::{
+				FundingCandidate, FundingFamily, FundingPurpose,
+			};
+			let candidate = FundingCandidate::from_psbt(
+				FundingPurpose::Round,
+				FundingFamily::Round {
+					round_seq: round_step.round_seq().inner(),
+					pinned_input: funding_tx.pinned_input(),
+				},
+				u32::try_from(round_step.attempt_seq()).map_err(|e| RoundError::Fatal(e.into()))?,
+				funding_tx.psbt(),
+			)
+			.map_err(RoundError::Fatal)?;
+			srv.native_funding_owner(candidate, None)
+				.await
+				.map_err(RoundError::Fatal)?
+		} else {
+			None
+		};
 
 		// Generate vtxo nonces and combine with user's nonces.
 		let (cosign_sec_nonces, cosign_pub_nonces) = {
@@ -1167,9 +1180,16 @@ impl SigningVtxoTree {
 				.map_err(|e| RoundError::Recoverable(e))?
 		};
 
-		if let Some(original)=&self.native_funding {
-			let bound=srv.native_funding_owner(original.candidate.clone(),Some(&signed_round_tx.tx)).await.map_err(RoundError::Fatal)?;
-			if bound.as_ref()!=Some(original) {return Err(RoundError::Fatal(anyhow!("native Round signed binding changed original reservation")));}
+		if let Some(original) = &self.native_funding {
+			let bound = srv
+				.native_funding_owner(original.candidate.clone(), Some(&signed_round_tx.tx))
+				.await
+				.map_err(RoundError::Fatal)?;
+			if bound.as_ref() != Some(original) {
+				return Err(RoundError::Fatal(anyhow!(
+					"native Round signed binding changed original reservation"
+				)));
+			}
 		}
 
 		// Persist the signed funding tx to the database.

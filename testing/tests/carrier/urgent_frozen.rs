@@ -19,28 +19,6 @@ async fn frozen_ancestor() {
 	let sender = Box::pin(ctx.bark_sdk("fresh-sender", &srv).cfg(|c| c.daemon_manual_sync = true)
 		.funded(sat(100_000)).boarded(sat(21_000)).create()).await;
 	let recipient = Box::pin(ctx.bark_sdk("fresh-recipient", &srv).cfg(|c| c.daemon_manual_sync = true).create()).await;
-	let original = sender.get_full_vtxo(sender.spendable_vtxos().await.unwrap()[0].id()).await.unwrap();
-	let sender_fallback = sender.fallback_destination().await.unwrap().spk;
-	let recipient_fallback = recipient.fallback_destination().await.unwrap().spk;
-	sender.send_arkoor_payment(&recipient.new_address().await.unwrap(), sat(5_000)).await.unwrap();
-	recipient.sync().await;
-	let mut terminals = sender.spendable_vtxos().await.unwrap().into_iter().map(|v|v.id()).collect::<Vec<_>>();
-	terminals.extend(recipient.spendable_vtxos().await.unwrap().into_iter().map(|v|v.id()));
-	assert_eq!(terminals.len(), 2);
-	assert!(!terminals.contains(&original.id()));
-	let mut expected = Vec::new();
-	for (wallet, fallback) in [(&sender, sender_fallback), (&recipient, recipient_fallback)] {
-		let coins = wallet.spendable_vtxos().await.unwrap(); assert_eq!(coins.len(), 1);
-		let coin = wallet.get_full_vtxo(coins[0].id()).await.unwrap();
-		assert_eq!(coin.chain_anchor(), original.chain_anchor());
-		expected.push(TxOut { value: coin.amount() - sat(1_000), script_pubkey: fallback });
-	}
-	sender.stop_daemon_wait().await.unwrap(); recipient.stop_daemon_wait().await.unwrap();
-	drop(sender); drop(recipient);
-	let config = srv.config().clone();
-	let grace = config.expiry_payout.grace_blocks;
-	let target = original.expiry_height().to_u32() + grace + 3;
-	ctx.generate_blocks(target.saturating_sub(core.get_block_count().unwrap() as u32)).await;
 	let mut funding = Vec::new();
 	for height in baseline..=core.get_block_count().unwrap() {
 		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
@@ -53,12 +31,40 @@ async fn frozen_ancestor() {
 	let ledger = config.data_dir.join("FROZEN-ORDINARY-PUBLIC-CHAIN-LEDGER.json");
 	let fees = super::urgent_progress::chain_receipt(&core, baseline, &funding, &ledger);
 	assert!(fees <= 10_000);
+	let _keep_chain = super::urgent_progress::KeepChain { core: &core, baseline, funding: &funding, path: ledger.clone() };
+	let original = sender.get_full_vtxo(sender.spendable_vtxos().await.unwrap()[0].id()).await.unwrap();
+	let sender_fallback = sender.fallback_destination().await.unwrap().spk;
+	let recipient_fallback = recipient.fallback_destination().await.unwrap().spk;
+	sender.send_arkoor_payment(&recipient.new_address().await.unwrap(), sat(5_000)).await.unwrap();
+	sender.sync().await; recipient.sync().await;
+	let mut terminals = sender.spendable_vtxos().await.unwrap().into_iter().map(|v|v.id()).collect::<Vec<_>>();
+	terminals.extend(recipient.spendable_vtxos().await.unwrap().into_iter().map(|v|v.id()));
+	assert_eq!(terminals.len(), 3, "retain both actual upstream change leaves and the recipient");
+	assert!(!terminals.contains(&original.id()));
+	let mut expected = Vec::new();
+	for (wallet, fallback) in [(&sender, sender_fallback), (&recipient, recipient_fallback)] {
+		let coins = wallet.spendable_vtxos().await.unwrap();
+		for coin in coins {
+			let full = wallet.get_full_vtxo(coin.id()).await.unwrap();
+			assert_eq!(full.chain_anchor(), original.chain_anchor());
+			expected.push(TxOut { value: full.amount() - sat(1_000), script_pubkey: fallback.clone() });
+		}
+	}
+	assert_eq!(expected.iter().map(|o|o.value + sat(1_000)).sum::<Amount>(), sat(20_000));
+	sender.stop_daemon_wait().await.unwrap(); recipient.stop_daemon_wait().await.unwrap();
+	drop(sender); drop(recipient);
+	let config = srv.config().clone();
+	let grace = config.expiry_payout.grace_blocks;
+	let target = original.expiry_height().to_u32() + grace + 3;
+	ctx.generate_blocks(target.saturating_sub(core.get_block_count().unwrap() as u32)).await;
 	srv.stop().await.unwrap();
 	let server = server::Server::start(config.clone()).await.unwrap();
 	let plan = server.freeze_current_expiry_backing(&[original.chain_anchor().into()], &terminals,
 		BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 }).await.unwrap();
-	assert_eq!(plan.recipients.len(), 2);
-	for output in &expected { assert!(plan.recipients.contains(output), "wrong recipient or payout amount"); }
+	let mut actual = plan.recipients.clone();
+	actual.sort_by_key(|o|(o.script_pubkey.clone(), o.value));
+	expected.sort_by_key(|o|(o.script_pubkey.clone(), o.value));
+	assert_eq!(actual, expected, "wrong canonical recipients, multiplicity or payout amounts");
 	assert!(!plan.allocation_ids.contains(&original.id()), "probe must be a retirement/physical ancestor, not a pay allocation");
 	let config_path = config.data_dir.join("FROZEN-GUARD-PG.toml");
 	let mut f = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&config_path).unwrap();

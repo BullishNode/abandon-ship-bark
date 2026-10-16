@@ -36,11 +36,11 @@ pub(super) fn chain_receipt(core: &impl RpcApi, baseline: u64, funding: &[(Strin
 
 // Preserve public transaction evidence even if a later assertion fails, while
 // this fixture's Core is still alive. Never print wallet/seed/private SQL data.
-struct KeepChain<'a> {
-	core: &'a bitcoin_ext::rpc::BitcoinRpcClient,
-	baseline: u64,
-	funding: &'a [(String, Txid, u64)],
-	path: PathBuf,
+pub(super) struct KeepChain<'a> {
+	pub(super) core: &'a bitcoin_ext::rpc::BitcoinRpcClient,
+	pub(super) baseline: u64,
+	pub(super) funding: &'a [(String, Txid, u64)],
+	pub(super) path: PathBuf,
 }
 impl Drop for KeepChain<'_> {
 	fn drop(&mut self) {

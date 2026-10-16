@@ -832,6 +832,7 @@ async fn grouped_expiry_without_client(
 	let arkoor = unregistered_case || posted || registration_wins || payout_wins || returning_arkoor;
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let mut mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let sender_mnemonic = mnemonic.clone();
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);

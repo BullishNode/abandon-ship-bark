@@ -10,7 +10,12 @@ async fn fallback_native_registration_survives_seed_only_second_device_and_reope
 		.cfg(|c| c.daemon_manual_sync = true).create().await;
 	first.stop_daemon_wait().await.unwrap();
 	let record = first.fallback_destination().await.unwrap();
-	assert!(record.spk.is_p2wpkh());
+	let onchain = first.onchain().unwrap();
+	let expected = {
+		let guard = onchain.read().await;
+		(&*guard as &dyn std::any::Any).downcast_ref::<bark::onchain::OnchainWallet>().unwrap().fallback_script()
+	};
+	assert_eq!(record.spk, expected);
 	let identity = first.peek_keypair(0).await.unwrap().public_key();
 	assert_eq!(first.new_address_with_index().await.unwrap().1, 1);
 	let config = first.config().clone();

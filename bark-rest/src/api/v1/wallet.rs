@@ -35,6 +35,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		.route("/create", post(create_wallet))
 		.route("/mnemonic", get(mnemonic))
 		.route("/ark-info", get(ark_info))
+		.route("/fallback", get(fallback_registration))
 		.route("/next-round", get(next_round))
 		.route("/addresses/next", post(address))
 		.route("/addresses/index/{index}", get(peek_address))
@@ -68,6 +69,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		create_wallet,
 		mnemonic,
 		ark_info,
+		fallback_registration,
 		next_round,
 		address,
 		peek_address,
@@ -97,6 +99,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		bark_json::web::Bip321UriQuery,
 		bark_json::web::Bip321UriResponse,
 		bark_json::web::WalletExistsResponse,
+		bark_json::web::FallbackRegistrationInfo,
 		bark_json::web::WalletDeleteRequest,
 		bark_json::web::WalletDeleteResponse,
 		bark_json::web::ConnectedResponse,
@@ -328,6 +331,33 @@ pub async fn ark_info(
 		Some(ark_info) => Ok(axum::Json(ark_info.into())),
 		None => not_found!(["ark server"], "Wallet not connected to an Ark server"),
 	}
+}
+
+#[utoipa::path(
+	get,
+	path = "/fallback",
+	summary = "Get fallback registration and payout address",
+	responses(
+		(status = 200, description = "Authenticated fallback registration, if present", body = bark_json::web::FallbackRegistrationInfo),
+		(status = 404, description = "No wallet is loaded", body = error::NotFoundError),
+		(status = 500, description = "Registration cannot be authenticated", body = error::InternalServerError)
+	),
+	tag = "wallet"
+)]
+#[debug_handler]
+pub async fn fallback_registration(
+	State(state): State<Arc<ServerState>>,
+) -> HandlerResult<Json<bark_json::web::FallbackRegistrationInfo>> {
+	let wallet = state.require_wallet()?;
+	let registration = wallet.fallback_registration().await?;
+	let payout_address = match registration.as_ref() {
+		Some(record) => Some(bitcoin::Address::from_script(&record.spk, wallet.network().await?)
+			.context("invalid authenticated fallback address")?.to_string()),
+		None => None,
+	};
+	Ok(Json(bark_json::web::FallbackRegistrationInfo {
+		registered: registration.is_some(), payout_address,
+	}))
 }
 
 #[utoipa::path(

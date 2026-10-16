@@ -427,6 +427,7 @@ impl TestContext {
 			expiry_payout: Default::default(),
 			direct_expiry: Default::default(),
 			direct_expiry_fee_policy: Default::default(),
+			native_funding_owner_address: None,
 			network: Network::Regtest,
 			vtxo_lifetime: BlockDelta::new(432),
 			vtxo_exit_delta: BlockDelta::new(12),

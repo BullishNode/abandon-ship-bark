@@ -322,6 +322,16 @@ pub async fn run_watchmand_admin_rpc_server(
 
 #[async_trait]
 impl rpc::server::NativeFundingAdminService for crate::watchman::Daemon {
+	async fn get_native_fee_budget_snapshot(
+		&self,
+		_req: tonic::Request<protos::Empty>,
+	) -> Result<tonic::Response<protos::NativeFeeBudgetSnapshot>, tonic::Status> {
+		let owner = self.funding_owner.clone().ok_or_else(|| tonic::Status::failed_precondition("direct native fee owner unavailable"))?;
+		let canonical_public_snapshot = owner.public_snapshot().await
+			.map_err(|e| tonic::Status::failed_precondition(format!("{e:#}")))?;
+		Ok(tonic::Response::new(protos::NativeFeeBudgetSnapshot { canonical_public_snapshot }))
+	}
+
 	async fn reserve_native_funding(
 		&self,
 		req: tonic::Request<protos::NativeFundingOwnerRequest>,

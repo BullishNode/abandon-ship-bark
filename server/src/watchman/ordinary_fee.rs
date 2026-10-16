@@ -734,6 +734,9 @@ fn encode_package(txs: &[Transaction]) -> anyhow::Result<String> {
 	Ok(serde_json::to_string(&txs.iter().map(bitcoin::consensus::serialize).collect::<Vec<_>>())?)
 }
 
+#[path = "ordinary_fee_snapshot.rs"]
+mod public_snapshot;
+
 struct ParsedHistory {
 	charged: u64,
 	attempts: u64,
@@ -1572,4 +1575,106 @@ pub(crate) fn resolved_family(
 				&& winner.reservation.candidate.family == old.reservation.candidate.family
 		})
 	})
+	#[test]
+	fn public_fee_snapshot_separates_direct_round_pool_urgent_without_raw_packages() {
+		use super::super::ordinary_funding::{FundingFamily, FundingPurpose, test_candidate};
+		let dir = directory();
+		let (policy, _) = adopted(&dir);
+		let budget = OrdinaryFeeBudget::load(&dir, policy).unwrap();
+		budget.reserve_ceiling(Amount::from_sat(200)).unwrap();
+		let rate = bitcoin::FeeRate::from_sat_per_vb(100).unwrap();
+		let (candidate, signed) = test_candidate(0, 500);
+		let attempt = budget.reserve_funding(candidate, rate).unwrap();
+		budget.bind_funding(&attempt, &signed).unwrap();
+		let (mut pool, _) = test_candidate(0, 600);
+		let mut tx = pool.transaction().unwrap();
+		tx.input[0].previous_output.txid = bitcoin::Txid::from_byte_array([47; 32]);
+		pool.unsigned = bitcoin::consensus::serialize(&tx);
+		pool.purpose = FundingPurpose::Pool;
+		pool.family = FundingFamily::Pool {
+			funding_txid: tx.compute_txid(),
+		};
+		budget.reserve_funding(pool, rate).unwrap();
+		let urgent = budget
+			.reserve_urgent_ceiling(Amount::from_sat(1000))
+			.unwrap();
+		budget
+			.bind_urgent_signed(
+				urgent,
+				&[urgent_tx(84)],
+				Amount::from_sat(300),
+				sha256::Hash::hash(b"public source"),
+			)
+			.unwrap();
+		let before = std::fs::read(dir.join(BUDGET_FILE)).unwrap();
+		let raw = budget.public_snapshot().unwrap();
+		let value: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+		assert_eq!(value["direct_attempt_count"], 1);
+		assert_eq!(value["direct_reserved_sat"], 200);
+		assert_eq!(value["round_reserved_sat"], 500);
+		assert_eq!(value["pool_reserved_sat"], 600);
+		assert_eq!(value["funding_reserved_sat"], 1100);
+		assert_eq!(value["urgent_reserved_sat"], 1000);
+		assert_eq!(value["charged_sat"], 5864 + 20000 + 200 + 1100 + 1000);
+		assert_eq!(value["funding"].as_array().unwrap().len(), 2);
+		assert!(value["funding"][0]["signed_wtxid"].is_string());
+		assert!(value["funding"][1]["signed_wtxid"].is_null());
+		assert!(value["urgent"][0]["source_binding_sha256"].is_string());
+		assert_eq!(
+			value["journal_sha256"],
+			sha256::Hash::hash(&before).to_string()
+		);
+		assert_eq!(value["policy_sha256"], budget.identity().to_string());
+		assert_eq!(
+			value["opening_sha256"],
+			budget.opening_digest().unwrap().to_string()
+		);
+		assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(), before);
+		assert_eq!(budget.public_snapshot().unwrap(), raw);
+		let text = std::str::from_utf8(&raw).unwrap();
+		for forbidden in [
+			"\"unsigned\"",
+			"\"prevouts\"",
+			"\"witness\"",
+			"\"signature\"",
+			"\"ready\"",
+			"\"complete\"",
+		] {
+			assert!(!text.contains(forbidden));
+		}
+		drop(budget);
+		std::fs::remove_dir_all(dir).unwrap();
+	}
+
+	#[test]
+	fn public_fee_snapshot_refuses_same_length_changed_or_uncertain_owner() {
+		let dir = directory();
+		let (policy, _) = adopted(&dir);
+		let budget = OrdinaryFeeBudget::load(&dir, policy).unwrap();
+		budget.reserve_ceiling(Amount::from_sat(200)).unwrap();
+		std::fs::write(dir.join(BUDGET_FILE), b"201\n").unwrap();
+		assert!(budget.public_snapshot().is_err());
+		std::fs::write(dir.join(BUDGET_FILE), b"200\n").unwrap();
+		budget.mark_native_uncertain().unwrap();
+		assert!(budget.public_snapshot().is_err());
+		drop(budget);
+		std::fs::remove_dir_all(dir).unwrap();
+	}
+
+	#[test]
+	fn public_fee_snapshot_refuses_torn_unknown_or_changed_length() {
+		for invalid in ["200", "unknown:1\n", "200\n"] {
+			let dir = directory();
+			let (policy, _) = adopted(&dir);
+			let budget = OrdinaryFeeBudget::load(&dir, policy).unwrap();
+			std::fs::write(dir.join(BUDGET_FILE), invalid).unwrap();
+			assert!(budget.public_snapshot().is_err());
+			drop(budget);
+			if invalid != "200\n" {
+				assert!(OrdinaryFeeBudget::load(&dir, policy).is_err());
+			}
+			std::fs::remove_dir_all(dir).unwrap();
+		}
+	}
+
 }

@@ -862,6 +862,10 @@ message LightningNodeUri {
 service NativeFundingAdminService {
  rpc ReserveNativeFunding(NativeFundingOwnerRequest) returns (NativeFundingOwnerResponse);
  rpc BindNativeFunding(NativeFundingOwnerRequest) returns (NativeFundingOwnerResponse);
+ rpc GetNativeFeeBudgetSnapshot(Empty) returns (NativeFeeBudgetSnapshot);
 }
 message NativeFundingOwnerRequest { bytes authenticated_request = 1; }
 message NativeFundingOwnerResponse { bytes authenticated_response = 1; }
+
+// Complete bounded canonical schema-1 public fee projection. No signed packages.
+message NativeFeeBudgetSnapshot { bytes canonical_public_snapshot = 1; }

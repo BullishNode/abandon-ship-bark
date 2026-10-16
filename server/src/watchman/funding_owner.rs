@@ -106,6 +106,14 @@ impl FundingOwner {
 		.await
 		.context("native funding owner interrupted; original intent retained")?
 	}
+	pub(crate) async fn public_snapshot(self: Arc<Self>) -> anyhow::Result<Vec<u8>> {
+		ensure!(!self.runtime.shutdown_requested(), "native fee owner unavailable");
+		let permit = self.requests.clone().try_acquire_owned().context("native fee snapshot request bound")?;
+		tokio::task::spawn_blocking(move || {
+			let _permit = permit;
+			self.budget.public_snapshot()
+		}).await.context("native fee snapshot interrupted")?
+	}
 	async fn execute_original(&self, raw: &[u8], bind: bool) -> anyhow::Result<FundingReservation> {
 		let request = FundingRequest::authenticate(
 			raw,

@@ -6,6 +6,7 @@ mod common;
 use std::path::PathBuf;
 use std::io::Write;
 use std::process;
+use std::time::Duration;
 use std::str::FromStr;
 use anyhow::{bail, Context};
 use bitcoin::consensus::serialize;
@@ -122,6 +123,9 @@ enum RpcCommand {
 
 	/// Read the connected daemon's public wallet inventory without revealing an address
 	WalletInventory,
+
+	/// Read the owning watchmand fee journal without changing any reservation
+	NativeFeeBudget,
 
 	/// Start a new round
 	#[command()]
@@ -690,6 +694,19 @@ async fn run_rpc(addr: &str, cmd: RpcCommand) -> anyhow::Result<()> {
 			});
 			serde_json::to_writer_pretty(std::io::stdout(), &ret).unwrap();
 			println!("");
+		},
+		RpcCommand::NativeFeeBudget => {
+			let channel = tonic::transport::Endpoint::from_shared(endpoint)?
+				.connect_timeout(Duration::from_secs(5))
+				.timeout(Duration::from_secs(8)).connect().await?;
+			let mut rpc = rpc::admin::NativeFundingAdminServiceClient::new(channel)
+				.max_decoding_message_size(2 * 1024 * 1024 + 64);
+			let raw = rpc.get_native_fee_budget_snapshot(protos::Empty {}).await?.into_inner().canonical_public_snapshot;
+			anyhow::ensure!(raw.len() <= 2 * 1024 * 1024, "native fee snapshot exceeds output bound");
+			let value: serde_json::Value = serde_json::from_slice(&raw)?;
+			anyhow::ensure!(value["schema"] == 1 && serde_json::to_vec(&value)?.len() <= 2 * 1024 * 1024, "unsupported native fee snapshot");
+			std::io::stdout().lock().write_all(&raw)?;
+			println!();
 		},
 		RpcCommand::WalletInventory => {
 			let mut rpc = rpc::admin::WalletAdminServiceClient::connect(endpoint)

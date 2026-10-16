@@ -266,6 +266,15 @@ pub struct Config {
 	/// Whether server allows spending expired VTXOs in arkoor
 	#[serde(default)]
 	pub allow_expired_arkoor: bool,
+	/// Bound the duration of new Lightning obligations; settlement can take longer.
+	#[serde(default = "default_max_htlc_expiry_delta")]
+	pub max_htlc_expiry_delta: BlockDelta,
+	/// Children derived in one resumable owner-search chunk.
+	#[serde(default = "default_expiry_owner_scan_chunk_size")]
+	pub expiry_owner_scan_chunk_size: u32,
+	/// Maximum simultaneous owner-search derivation workers.
+	#[serde(default = "default_expiry_owner_scan_workers")]
+	pub expiry_owner_scan_workers: usize,
 
 	#[serde(with = "utils::serde::duration")]
 	pub round_interval: Duration,
@@ -469,6 +478,10 @@ pub struct Config {
 	pub round_legacy_hashlock_clauses: bool,
 }
 
+fn default_max_htlc_expiry_delta() -> BlockDelta { BlockDelta::new(288) }
+fn default_expiry_owner_scan_chunk_size() -> u32 { 10_000 }
+fn default_expiry_owner_scan_workers() -> usize { 2 }
+
 impl Config {
 	fn load_with_custom_env(
 		config_file: impl AsRef<Path>,
@@ -546,6 +559,13 @@ impl Config {
 	pub fn validate(&self) -> anyhow::Result<()> {
 		self.bitcoind.validate()?;
 		self.fees.validate()?;
+
+		if self.expiry_owner_scan_chunk_size == 0 || self.expiry_owner_scan_workers == 0 {
+			bail!("expiry owner scan chunk size and worker count must be positive");
+		}
+		if self.max_htlc_expiry_delta < self.htlc_send_expiry_delta {
+			bail!("max_htlc_expiry_delta must cover htlc_send_expiry_delta");
+		}
 
 		if self.offboard_check_interval > self.offboard_session_timeout {
 			bail!("Invalid configuration: offboard_check_interval ({:?}) may not \

@@ -54,9 +54,13 @@ impl WatchmanSigner {
 			VtxoClause::HashSign(HashSignClause { hash, ..})
 				| VtxoClause::HashSign_v0(HashSignClause_v0 { hash, ..}) =>
 			{
-				let hark = self.db.read(async |t|
-					t.get_round_participation_by_unlock_hash(*hash).await
-				).await.ok()??;
+				let hark = self.db.read(async |t| {
+					if t.query_opt("SELECT participation_id FROM expiry_cancelled_participation WHERE unlock_hash=$1", &[&hash.to_string()]).await?.is_some() {
+						return Ok(None);
+					}
+					Ok(t.get_round_participation_by_unlock_hash(*hash).await?
+						.filter(|part| part.forfeited_at.is_some()))
+				}).await.ok()??;
 				self.log_if_duplicate_hash(*hash, true).await;
 				Some(hark.unlock_preimage)
 			},

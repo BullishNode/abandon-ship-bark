@@ -120,7 +120,16 @@ impl Server {
 			.insert_oor_spent_vtxos(builder.build_unsigned_internal_vtxos())
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
+		let source_ids = builder.input_ids().collect::<Vec<_>>();
+		let new_lightning_send = builder.build_unsigned_vtxos().any(|v| v.policy().as_server_htlc_send().is_some());
 		let inserted = self.db.write(async |t| {
+			if new_lightning_send {
+				// A retry has already committed all the identical input spends.
+				let states = t.get_user_vtxos_by_id(&source_ids).await?;
+				if states.iter().any(|v| v.spend_state != crate::database::SpendState::Spent) {
+					crate::database::expiry_guard::guard_new_lightning_inputs(t, &source_ids).await?;
+				}
+			}
 			let inserted = t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::set_htlc_vtxo_resolutions(
 				&t, &claimed_htlc_recvs, HtlcResolution::Fulfilled,

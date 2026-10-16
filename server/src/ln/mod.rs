@@ -75,6 +75,16 @@ fn validate_htlc_recv_expiry(
 	Ok(())
 }
 
+/// Limit requested timelocks rather than requiring them to precede backing
+/// expiry. An admitted payment can delay only its own tree until resolution.
+fn validate_htlc_duration(tip: BlockHeight, requested: BlockHeight, maximum: BlockDelta) -> anyhow::Result<()> {
+	let last = tip.checked_add(maximum).badarg("HTLC expiry limit overflows")?;
+	if requested <= tip || requested > last {
+		return badarg!("requested HTLC expiry {} must be after tip {} and at most {}", requested, tip, last);
+	}
+	Ok(())
+}
+
 /// Whether the HTLC-recv vtxos granted for a receive no longer commit the
 /// server to it.
 ///
@@ -242,7 +252,9 @@ impl Server {
 		// Verify that the proposed expiry makes sense for us
 		let tip = self.sync_manager.chain_tip().height;
 		let expiry = tip + self.config.htlc_send_expiry_delta;
-		if requested_policy.htlc_expiry < expiry.saturating_sub(BlockDelta::new(1)) {
+		let retry = input_vtxos.iter().all(|v| v.spend_state == crate::database::SpendState::Spent);
+		if !retry { validate_htlc_duration(tip, requested_policy.htlc_expiry, self.config.max_htlc_expiry_delta)?; }
+		if !retry && requested_policy.htlc_expiry < expiry.saturating_sub(BlockDelta::new(1)) {
 			return badarg!(
 				"requested expiry is too low. our tip is {tip}. \
 				sync your node and try again",
@@ -271,6 +283,9 @@ impl Server {
 		for vtxo in input_vtxos {
 			let spending_txid = spend_map.get(&vtxo.vtxo_id)
 				.context("missing spend info for input vtxo")?;
+			if vtxo.spend_state != crate::database::SpendState::Spent || vtxo.oor_spent_txid != Some(*spending_txid) {
+				vtxo.check_new_lightning_admission(chain_tip)?;
+			}
 			vtxo.check_spendable_for_oor(chain_tip, *spending_txid)?;
 		}
 
@@ -305,6 +320,7 @@ impl Server {
 		// while the payment is validated and handed to the lightning node.
 		let _guard = self.payment_guards.lock(payment_hash).await;
 
+		let admitted_attempt = self.db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await).await?.is_some();
 		let htlc_vtxos = self.db.read(async |t| t.get_user_vtxos_by_id(&htlc_vtxo_ids).await).await?;
 
 		slog!(LightningPaymentInitRequested, payment_hash, htlc_vtxo_ids: htlc_vtxo_ids.clone());
@@ -312,6 +328,7 @@ impl Server {
 		let chain_tip = self.sync_manager.chain_tip().height;
 		let mut vtxos = vec![];
 		for htlc_vtxo in htlc_vtxos {
+			if !admitted_attempt { htlc_vtxo.check_new_lightning_admission(chain_tip)?; }
 			htlc_vtxo.check_htlc_send_spendable(chain_tip)?;
 
 			let vtxo = htlc_vtxo.vtxo.clone();
@@ -521,6 +538,10 @@ impl Server {
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
 		self.db.write(async |t| {
+			// Match expiry allocation's lock order: coins, settlement barrier,
+			// then receive subscription. No preimage can race the final check.
+			crate::database::expiry_guard::guard_obligation_changes(t, &htlc_vtxo_ids).await?;
+			t.lock_htlc_settlements().await?;
 			// Re-check the settlement inside the write tx: the early gate and
 			// the eligibility read above both run in their own (read)
 			// transactions, so a payment can settle between them and this write.
@@ -836,6 +857,7 @@ impl Server {
 			htlc_recv_expiry,
 		)?;
 
+		validate_htlc_duration(self.chain_tip().height, htlc_recv_expiry, self.config.max_htlc_expiry_delta)?;
 		let dest = ArkoorDestination {
 			total_amount: htlc_amount,
 			policy: VtxoPolicy::new_server_htlc_recv(
@@ -1107,6 +1129,17 @@ mod tests {
 			updated_at: now,
 			htlc_vtxos: vec![],
 		}
+	}
+
+	#[test]
+	fn new_htlc_duration_is_finite_and_tip_relative() {
+		let tip = BlockHeight::new(1_000);
+		let maximum = BlockDelta::new(288);
+		assert!(validate_htlc_duration(tip, BlockHeight::new(1_001), maximum).is_ok());
+		assert!(validate_htlc_duration(tip, BlockHeight::new(1_288), maximum).is_ok());
+		assert!(validate_htlc_duration(tip, tip, maximum).is_err());
+		assert!(validate_htlc_duration(tip, BlockHeight::new(1_289), maximum).is_err());
+		assert!(validate_htlc_duration(BlockHeight::MAX, BlockHeight::MAX, maximum).is_err());
 	}
 
 	#[test]

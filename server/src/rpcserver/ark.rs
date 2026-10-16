@@ -881,8 +881,12 @@ impl rpc::server::ArkService for Server {
 		let req = req.into_inner();
 
 		let unlock_hash = UnlockHash::from_bytes(&req.unlock_hash)?;
-		let part = self.db.read(async |t| t.get_round_participation_by_unlock_hash(unlock_hash).await).await.to_status()?
-			.not_found([unlock_hash], "round participation not found")?;
+		let part = self.db.read(async |t| {
+			if t.query_opt("SELECT participation_id FROM expiry_cancelled_participation WHERE unlock_hash=$1", &[&unlock_hash.to_string()]).await?.is_some() {
+				return Ok(None);
+			}
+			t.get_round_participation_by_unlock_hash(unlock_hash).await
+		}).await.to_status()?.not_found([unlock_hash], "round participation not found")?;
 		let input_vtxo_ids = part.inputs.iter().map(|i| i.vtxo_id.to_bytes().to_vec()).collect();
 
 		let res = if let Some(round_id) = part.round_id {
@@ -906,7 +910,11 @@ impl rpc::server::ArkService for Server {
 				output_vtxos.push(tree.build_vtxo(idx).serialize());
 			}
 
-			if part.inputs.iter().all(|i| i.is_forfeited()) {
+			// The marker is committed atomically with every accepted forfeit.
+			// Multiple READ COMMITTED reads may see removed child rows after
+			// reading a superseded parent; an empty set is never acceptance.
+			if part.forfeited_at.is_some() && !part.inputs.is_empty()
+				&& part.inputs.iter().all(|i| i.is_forfeited()) {
 				protos::RoundParticipationStatusResponse {
 					status: protos::RoundParticipationStatus::RoundPartReleased.into(),
 					unlock_preimage: Some(part.unlock_preimage.leak_ref().to_vec()),

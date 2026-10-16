@@ -10,6 +10,11 @@ data_dir = "./bark-server"
 
 # The bitcoin network this server runs on
 network = "regtest"
+# Bound new Lightning timelocks. This is not a wall-clock settlement guarantee.
+max_htlc_expiry_delta = 288
+# Bounded background owner derivation work.
+expiry_owner_scan_chunk_size = 10000
+expiry_owner_scan_workers = 2
 
 # The lifetime of VTXOs in blocks
 vtxo_lifetime = 4320

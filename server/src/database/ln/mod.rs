@@ -263,6 +263,10 @@ impl<'t> Tx<'t> {
 			bail!("open payment attempt already exists for payment hash {}", payment_hash);
 		}
 
+		// This is a new attempt, not an in-flight retry. Serialize its admission
+		// with expiry allocation before the Lightning node can receive the task.
+		super::expiry_guard::guard_new_lightning_inputs(self, htlc_vtxo_ids).await?;
+
 		let stmt = self.prepare("
 			INSERT INTO lightning_payment_attempt (
 				lightning_node_id,
@@ -933,6 +937,14 @@ impl<'t> Tx<'t> {
 	/// Call this INSIDE the write transaction that releases the funds so a
 	/// settlement racing between an earlier read-check and the write cannot
 	/// slip through.
+	/// Hold after coin locks through any fund-releasing decision so a preimage
+	/// cannot be inserted between its final check and the decision commit.
+	pub async fn lock_htlc_settlements(&self) -> anyhow::Result<()> {
+		self.execute("SELECT pg_advisory_xact_lock_shared($1)",
+			&[&(super::AdvisoryLock::HtlcSettlementWrite as i64)]).await?;
+		Ok(())
+	}
+
 	pub async fn ensure_not_settled(
 		&self,
 		payment_hash: PaymentHash,

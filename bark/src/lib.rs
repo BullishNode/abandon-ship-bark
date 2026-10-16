@@ -2718,6 +2718,22 @@ mod tests {
 	}
 
 	#[test]
+	fn short_signet_profile_loads_explicit_refresh_and_exit_margins() {
+		let directory = std::env::temp_dir().join(format!("bark-short-signet-{}", std::process::id()));
+		std::fs::create_dir_all(&directory).unwrap();
+		let path = directory.join("config.toml");
+		std::fs::write(&path, "server_address = \"http://127.0.0.1:3535\"\nesplora_address = \"http://127.0.0.1:3002\"\nvtxo_refresh_expiry_threshold = 4\nvtxo_exit_margin = 2\n").unwrap();
+		let config = crate::Config::load(Network::Signet, &path).unwrap();
+		assert_eq!(config.vtxo_refresh_expiry_threshold, BlockDelta::new(4));
+		assert_eq!(config.vtxo_exit_margin, BlockDelta::new(2));
+		let mut advertised = ark_info_with_lifetime(12, 3);
+		advertised.network = Network::Signet;
+		advertised.vtxo_exit_delta = BlockDelta::new(3);
+		check_ark_info_safe(&advertised, config.vtxo_exit_margin).unwrap();
+		std::fs::remove_dir_all(directory).unwrap();
+	}
+
+	#[test]
 	fn ark_info_with_zero_lifetime_is_rejected() {
 		let mut ai = ark_info_with_lifetime(0, 6);
 		ai.network = Network::Bitcoin;

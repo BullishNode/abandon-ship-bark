@@ -3,6 +3,7 @@ mod boards;
 mod core;
 mod exits;
 mod fallback;
+mod fallback_browser;
 mod helpers;
 mod history;
 mod lifecycle;

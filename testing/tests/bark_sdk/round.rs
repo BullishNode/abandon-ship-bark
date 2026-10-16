@@ -63,13 +63,13 @@ async fn reordered_delegated_outputs(duplicate_leaf: bool) {
 	let mut outputs = Vec::new();
 	for _ in 0..3 {
 		let (key, _) = wallet.derive_store_next_keypair().await.unwrap();
+		wallet.fallback_key_link(key.public_key()).await.unwrap();
 		outputs.push(ark::VtxoRequest {
 			amount: sat(100_000), policy: ark::VtxoPolicy::new_pubkey(key.public_key()),
 		});
 	}
 	let wanted = outputs.iter().map(|o| o.policy.user_pubkey()).collect::<Vec<_>>();
 	wallet.join_next_round_delegated(bark::round::RoundParticipation {
-			output_origins: Default::default(),
 		inputs: vec![input], outputs, unblinded_mailbox_id: None,
 	}, None).await.unwrap();
 	let mut finished = srv.subscribe_log::<RoundFinished>();

@@ -42,6 +42,7 @@ impl bark::onchain::OnchainWalletTrait for ExternalOnchain {
 	async fn evict_tx(&mut self, txid: Txid) -> anyhow::Result<()> { self.0.evict_tx(txid).await }
 	async fn prepare_tx(&mut self, destinations: &[(Address, bitcoin::Amount)], rate: FeeRate) -> anyhow::Result<bitcoin::Psbt> { self.0.prepare_tx(destinations, rate).await }
 	async fn prepare_drain_tx(&mut self, address: Address, rate: FeeRate) -> anyhow::Result<bitcoin::Psbt> { self.0.prepare_drain_tx(address, rate).await }
+	async fn sign_psbt(&mut self, psbt: bitcoin::Psbt) -> anyhow::Result<bitcoin::Psbt> { OnchainWalletTrait::sign_psbt(&mut self.0, psbt).await }
 	async fn finish_psbt(&mut self, psbt: bitcoin::Psbt) -> anyhow::Result<bitcoin::Psbt> { self.0.finish_psbt(psbt).await }
 	async fn make_signed_p2a_cpfp(&mut self, tx: &Transaction, fees: bark::onchain::MakeCpfpFees) -> Result<Transaction, bark::onchain::CpfpError> { self.0.make_signed_p2a_cpfp(tx, fees).await }
 	async fn store_signed_p2a_cpfp(&mut self, tx: &Transaction) -> Result<(), bark::onchain::CpfpError> { self.0.store_signed_p2a_cpfp(tx).await }
@@ -106,10 +107,11 @@ async fn fallback_register_board_fixed_destination_and_offline_addresses() {
 	assert!(record.spk.is_p2wpkh());
 	let mailbox = wallet.mailbox_keypair().public_key().serialize().to_vec();
 	let stored = db.read(async |t| Ok(t.query_one(
-		"SELECT spk, account_xpub FROM fallback_record WHERE mailbox_pk = $1", &[&mailbox],
+		"SELECT spk, mailbox_sig FROM fallback_record WHERE mailbox_pk = $1", &[&mailbox],
 	).await?)).await.unwrap();
 	assert_eq!(stored.get::<_, Vec<u8>>(0), record.spk.as_bytes());
-	assert_eq!(stored.get::<_, Vec<u8>>(1), record.account_xpub.encode());
+	assert_eq!(stored.get::<_, Vec<u8>>(1), record.mailbox_signature.serialize().to_vec());
+	record.verify(Network::Regtest, wallet.mailbox_keypair().public_key()).unwrap();
 	for vtxo in wallet.spendable_vtxos().await.unwrap() {
 		let pk = vtxo.user_pubkey().serialize().to_vec();
 		let linked = db.read(async |t| Ok(t.query_one(
@@ -175,10 +177,10 @@ async fn fallback_invalid_record_refused_without_overwrite() {
 	corrupt[4] ^= 1;
 	let mut rpc = srv.get_public_rpc().await;
 	assert!(rpc.set_fallback(protos::SetFallbackRequest {
-		mailbox_pk: wallet.mailbox_keypair().public_key().serialize().to_vec(), record: corrupt,
+		mailbox_pk: wallet.mailbox_keypair().public_key().serialize().to_vec(), record: corrupt, key_links: vec![],
 	}).await.is_err());
 	let canonical = rpc.set_fallback(protos::SetFallbackRequest {
-		mailbox_pk: wallet.mailbox_keypair().public_key().serialize().to_vec(), record: record.serialize(),
+		mailbox_pk: wallet.mailbox_keypair().public_key().serialize().to_vec(), record: record.serialize(), key_links: vec![],
 	}).await.unwrap().into_inner().record;
 	assert_eq!(canonical, record.serialize());
 	assert_eq!(wallet.fallback_destination().await.unwrap(), record);
@@ -830,7 +832,6 @@ async fn grouped_expiry_without_client(
 	let arkoor = unregistered_case || posted || registration_wins || payout_wins || returning_arkoor;
 	let ctx = TestContext::new(format!("bark_sdk/{name}")).await;
 	let mut mnemonic = bip39::Mnemonic::generate(12).unwrap();
-	let sender_mnemonic = mnemonic.clone();
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(btc(1)).cfg(|c| {
 			c.vtxo_lifetime = BlockDelta::new(128);
@@ -853,8 +854,9 @@ async fn grouped_expiry_without_client(
 			info.server_pubkey, info.vtxo_exit_delta);
 		let vout = funding.output.iter().position(|o| o.script_pubkey == builder.funding_script_pubkey()).unwrap();
 		let (_, nonce) = ark::musig::nonce_pair(&key);
+		// The SDK retained the server's authenticated per-key acknowledgment.
+		wallet.fallback_key_link(key.public_key()).await.unwrap();
 		let request = protos::BoardCosignRequest {
-			origin: Some(wallet.fallback_child_hint(key.public_key()).await.unwrap().into()),
 			amount: 40_000, utxo: OutPoint::new(funding.compute_txid(), vout as u32).serialize(),
 			expiry_height: expiry.into(), user_pubkey: key.public_key().serialize().to_vec(),
 			pub_nonce: nonce.serialize().to_vec(), funding_tx: bitcoin::consensus::serialize(funding),
@@ -1332,16 +1334,14 @@ async fn grouped_expiry_without_client(
 	assert_eq!(ctx.bitcoind().get_received_by_address(&destination), spend.output[0].value);
 	println!("mnemonic-only BIP84 recovery: lookahead=20, payout={payout}, confirmed_spend={spend_txid}");
 
-	// A later valid two-party binding cannot replace the immutable destination.
+	// A later valid mailbox-signed binding cannot replace the immutable destination.
 	srv.start().await.unwrap();
 	let next_spk = restored.next_unused_address(KeychainKind::External).script_pubkey();
 	assert_ne!(next_spk, record.spk);
-	let root = Xpriv::new_master(Network::Regtest, &sender_mnemonic.to_seed("")).unwrap();
-	let account = root.derive_priv(&Secp256k1::new(), &"m/350'/0'".parse::<bitcoin::bip32::DerivationPath>().unwrap()).unwrap();
-	let attempted = FallbackRecord::new(Network::Regtest, next_spk, &account, &mailbox_key).unwrap();
+	let attempted = FallbackRecord::new(Network::Regtest, next_spk, &mailbox_key).unwrap();
 	assert_eq!(srv.get_public_rpc().await.set_fallback(protos::SetFallbackRequest {
 		mailbox_pk: mailbox_key.public_key().serialize().to_vec(),
-		record: attempted.serialize(),
+		record: attempted.serialize(), key_links: vec![],
 	}).await.unwrap().into_inner().record, record.serialize());
 	let rows = db.read(async |t| Ok(t.query(
 		"SELECT id, txid, fee_sat, spk FROM expiry_settlement WHERE id = ANY($1) ORDER BY id", &[&ids],
@@ -1521,8 +1521,8 @@ async fn fallback_edge_same_seed_two_devices_converge() {
 	assert_eq!(second.spendable_vtxos().await.unwrap().iter().map(|v| v.id()).collect::<BTreeSet<_>>(),
 		coins.iter().map(|v| v.id()).collect::<BTreeSet<_>>());
 	let ids = coins.iter().map(|v| v.id().to_string()).collect::<Vec<_>>();
-	println!("two devices: address_key_reused={}, same_mailbox=true, same_spendable_view=true, account={}",
-		a.policy().user_pubkey() == b.policy().user_pubkey(), record_a.account_xpub);
+	println!("two devices: address_key_reused={}, same_mailbox=true, same_spendable_view=true, destination={:?}",
+		a.policy().user_pubkey() == b.policy().user_pubkey(), record_a.spk);
 	drop(first);
 	drop(second);
 	drop(payer);

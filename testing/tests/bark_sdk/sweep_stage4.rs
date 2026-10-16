@@ -261,7 +261,7 @@ async fn stage4_scale() {
 			let invoice = payee.invoice(hold::InvoiceRequest {
 				payment_hash: hash.as_ref().to_vec(), amount_msat: p.ln_send_sat * 1_000,
 				description: Some(hold::invoice_request::Description::Memo(format!("stage4 {}", owner.name))),
-				min_final_cltv_expiry: Some(18), expiry: Some(3600), routing_hints: vec![], description_hash: None,
+				min_final_cltv_expiry: Some(18), expiry: Some(3600), routing_hints: vec![],
 			}).await.unwrap().into_inner().bolt11;
 			ln.sync().await;
 			wallet.pay_lightning_invoice(invoice, None, false).await

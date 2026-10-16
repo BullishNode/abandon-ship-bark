@@ -1117,9 +1117,10 @@ async fn prepare_claim(
 	let sub_expiry = Db::connect(&srv.config().postgres).await.unwrap()
 		.read(async |t| t.get_htlc_subscription_by_payment_hash(receive.payment_hash).await)
 		.await.unwrap().unwrap().lowest_incoming_htlc_expiry.unwrap();
+	// Admission uses the canonical link already retained before key allocation.
+	wallet.fallback_key_link(keypair.public_key()).await.unwrap();
 	let granted = srv.get_public_rpc().await.prepare_lightning_receive_claim(
 		protos::PrepareLightningReceiveClaimRequest {
-			origin: Some(wallet.fallback_child_hint(keypair.public_key()).await.unwrap().into()),
 			payment_hash: receive.payment_hash.to_vec(),
 			user_pubkey: keypair.public_key().serialize().to_vec(),
 			htlc_recv_expiry: sub_expiry.saturating_sub(srv.config().htlc_expiry_delta).into(),

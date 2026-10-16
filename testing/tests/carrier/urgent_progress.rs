@@ -113,10 +113,10 @@ async fn current_owner_progress() {
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let metadata = tokio::time::timeout(Duration::from_secs(45), async {
 		loop {
-			let rows = db.read(async |t| Ok(t.query("SELECT urgent_fee_attempt, urgent_fee_bound FROM nursery_tx WHERE urgent_fee_attempt IS NOT NULL ORDER BY id LIMIT 2", &[]).await?)).await.unwrap();
+			let rows = db.read(async |t| Ok(t.query("SELECT urgent_fee_attempt::text AS urgent_fee_attempt, urgent_fee_bound FROM nursery_tx WHERE urgent_fee_attempt IS NOT NULL ORDER BY id LIMIT 2", &[]).await?)).await.unwrap();
 			assert!(rows.len() <= 1);
 			if let Some(row) = rows.first() {
-				if row.get::<_, bool>("urgent_fee_bound") { break row.get::<_, serde_json::Value>("urgent_fee_attempt"); }
+				if row.get::<_, bool>("urgent_fee_bound") { break serde_json::from_str::<serde_json::Value>(&row.get::<_, String>("urgent_fee_attempt")).unwrap(); }
 			}
 			tokio::time::sleep(Duration::from_millis(100)).await;
 		}

@@ -37,6 +37,51 @@ pub(crate) fn carrier_witness_hash(witness: &str) -> sha256::Hash {
 	sha256::Hash::hash(witness.as_bytes())
 }
 
+/// Exact joined public proof columns from the original captured fallback/key
+/// rows. The nullable signed recovery hint is not an inferred allocator index.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CapturedFallbackRow {
+	pub user_pubkey: Vec<u8>,
+	pub mailbox_pk: Vec<u8>,
+	pub sig: Vec<u8>,
+	#[serde(deserialize_with = "required_recovery_index")]
+	pub recovery_index: Option<i32>,
+	pub spk: Vec<u8>,
+	pub mailbox_sig: Vec<u8>,
+}
+fn required_recovery_index<'de, D: serde::Deserializer<'de>>(value: D) -> Result<Option<i32>,D::Error> {
+	<Option<i32> as serde::Deserialize>::deserialize(value)
+}
+
+/// Use the SAME native constructors and link.verify as the actual joined DB
+/// reader. This authenticates a key's signed destination only, not its current
+/// economic ownership, any captured source, or a right to pay/forfeit it.
+pub(crate) fn authenticate_captured_fallback_scripts(rows: &[CapturedFallbackRow],
+	expected: &BTreeSet<PublicKey>, network: Network,
+) -> anyhow::Result<BTreeMap<PublicKey, ScriptBuf>> {
+	use ark::fallback::{FallbackRecord, KeyLink};
+	use bitcoin::secp256k1::schnorr;
+	ensure!(rows.len() == expected.len() && rows.len() <= crate::payout_witness::DIRECT_HISTORY_LIMITS.max_rows,
+		"captured fallback proof set is incomplete or exceeds native bound");
+	let mut scripts = BTreeMap::new();
+	for row in rows {
+		ensure!(row.user_pubkey.len() == 33 && row.mailbox_pk.len() == 33 && row.sig.len() == 64
+			&& row.mailbox_sig.len() == 64 && row.spk.len() <= 42, "captured native fallback proof column bounds differ");
+		let mailbox = PublicKey::from_slice(&row.mailbox_pk)?;
+		let record = FallbackRecord { spk: ScriptBuf::from(row.spk.clone()),
+			mailbox_signature: schnorr::Signature::from_slice(&row.mailbox_sig)? };
+		let link = KeyLink { user_pubkey: PublicKey::from_slice(&row.user_pubkey)?,
+			recovery_index: row.recovery_index.map(u32::try_from).transpose()?,
+			signature: schnorr::Signature::from_slice(&row.sig)? };
+		link.verify(network, mailbox, &record)?;
+		ensure!(expected.contains(&link.user_pubkey) && scripts.insert(link.user_pubkey, record.spk).is_none(),
+			"captured fallback proof key is unexpected or repeated");
+	}
+	ensure!(scripts.keys().copied().collect::<BTreeSet<_>>() == *expected, "captured fallback signed key membership differs");
+	Ok(scripts)
+}
+
 /// Shared native amount policy, not an ownership or source-authentication
 /// capability. The caller must independently prove the actual customer leaves.
 pub(crate) fn require_direct_allocation_policy(leaves: Vec<CustomerLeaf>,
@@ -248,6 +293,49 @@ impl Db {
 mod captured_policy_tests {
 	use super::*;
 	use bitcoin::{Sequence, TxIn, Witness, WPubkeyHash};
+	fn fallback_row(index: Option<u32>) -> (CapturedFallbackRow,PublicKey,ScriptBuf) {
+		use ark::fallback::{FallbackRecord,KeyLink};
+		let mailbox=bitcoin::secp256k1::Keypair::new(&crate::SECP,&mut bitcoin::secp256k1::rand::thread_rng());
+		let user=bitcoin::secp256k1::Keypair::new(&crate::SECP,&mut bitcoin::secp256k1::rand::thread_rng());
+		let record=FallbackRecord::new(Network::Regtest,ScriptBuf::new_p2wpkh(&WPubkeyHash::from_byte_array([3;20])),&mailbox).unwrap();
+		let link=KeyLink::new(Network::Regtest,mailbox.public_key(),&record,&user,index).unwrap();
+		(CapturedFallbackRow {user_pubkey:link.user_pubkey.serialize().to_vec(),mailbox_pk:mailbox.public_key().serialize().to_vec(),
+			sig:link.signature.serialize().to_vec(),recovery_index:index.map(|value|i32::try_from(value).unwrap()),
+			spk:record.spk.as_bytes().to_vec(),mailbox_sig:record.mailbox_signature.serialize().to_vec()},user.public_key(),record.spk)
+	}
+	#[test]
+	fn captured_fallback_uses_native_signatures_and_preserves_signed_null_or_zero_hint() {
+		for index in [None,Some(0),Some(50)] {
+			let (row,key,script)=fallback_row(index);
+			let mut encoded=serde_json::to_value(&row).unwrap();
+			assert!(serde_json::from_value::<CapturedFallbackRow>(encoded.clone()).is_ok());
+			encoded.as_object_mut().unwrap().remove("recovery_index");
+			assert!(serde_json::from_value::<CapturedFallbackRow>(encoded).is_err(),"missing column is not signed NULL");
+			let mut rows=vec![row];let expected=[key].into_iter().collect();
+			assert_eq!(authenticate_captured_fallback_scripts(&rows,&expected,Network::Regtest).unwrap().get(&key),Some(&script));
+			rows[0].recovery_index=if index.is_none(){Some(0)}else{None};
+			assert!(authenticate_captured_fallback_scripts(&rows,&expected,Network::Regtest).is_err());
+		}
+	}
+	#[test]
+	fn captured_fallback_refuses_foreign_chain_mailbox_destination_missing_or_duplicate_keys() {
+		for which in 0..6 {
+			let (row,key,_)=fallback_row(Some(0));let mut rows=vec![row];let expected=[key].into_iter().collect();
+			if which==0 {assert!(authenticate_captured_fallback_scripts(&rows,&expected,Network::Signet).is_err());continue;}
+			match which {
+				1 => rows[0].mailbox_pk=fallback_row(None).1.serialize().to_vec(),
+				2 => rows[0].spk=ScriptBuf::new_p2wpkh(&WPubkeyHash::from_byte_array([4;20])).into_bytes(),
+				3 => rows.clear(),
+				4 => rows.push(fallback_row(None).0),
+				_ => rows[0].recovery_index=Some(-1),
+			}
+			assert!(authenticate_captured_fallback_scripts(&rows,&expected,Network::Regtest).is_err());
+		}
+		let (row,key,_)=fallback_row(None);
+		let duplicate=vec![row.clone(),row];
+		let expected=[key,fallback_row(None).1].into_iter().collect();
+		assert!(authenticate_captured_fallback_scripts(&duplicate,&expected,Network::Regtest).is_err());
+	}
 
 	fn leaves() -> Vec<CustomerLeaf> {
 		let script = ScriptBuf::new_p2wpkh(&WPubkeyHash::from_byte_array([3;20]));

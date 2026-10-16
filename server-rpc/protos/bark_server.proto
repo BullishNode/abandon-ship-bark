@@ -684,6 +684,8 @@ service RoundAdminService {
 }
 
 service LightningAdminService {
+	// Private operator source: candidates are observations, never reservations.
+	rpc PoolInventory(core.Empty) returns (PoolInventoryResponse) {}
 	rpc StartLightningNode(LightningNodeUri) returns (core.Empty) {}
 	rpc StopLightningNode(LightningNodeUri) returns (core.Empty) {}
 }
@@ -842,4 +844,36 @@ message WalletInventoryResponse {
 
 message LightningNodeUri {
 	string uri = 1;
+}
+
+// This source deliberately does not assert raw-chain or payment readiness.
+message PoolInventoryResponse {
+	uint32 schema_version = 1;
+	string network = 2;
+	string genesis = 3;
+	string server_pubkey = 4;
+	uint32 height = 5;
+	string tip_hash = 6;
+	uint32 pool_pre_expiry_blocks = 7;
+	uint32 max_exit_depth = 8;
+	bool candidate_snapshot_complete = 9;
+	bool complete = 10;
+	repeated string missing_sources = 11;
+	repeated PoolInventoryCandidate candidates = 12;
+}
+
+message PoolInventoryCandidate {
+	string id = 1;
+	uint64 amount_sat = 2;
+	uint32 expiry_height = 3;
+	uint32 exit_depth = 4;
+	bool runtime_member = 5;
+	bool pool_spent = 6;
+	string spend_state = 7;
+	bool has_spend_reference = 8;
+	bool key_present = 9;
+	bool key_matches = 10;
+	bool in_flux = 11;
+	// Full signed ancestry is PRIVATE source material; never publish this field.
+	bytes signed_vtxo = 12;
 }

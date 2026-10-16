@@ -78,6 +78,20 @@ impl rpc::server::RoundAdminService for Server {
 
 #[async_trait]
 impl rpc::server::LightningAdminService for Server {
+	#[tracing::instrument(skip(self, _req))]
+	async fn pool_inventory(
+		&self, _req: tonic::Request<protos::Empty>,
+	) -> Result<tonic::Response<protos::PoolInventoryResponse>, tonic::Status> {
+		let response = tokio::time::timeout(std::time::Duration::from_secs(10), self.vtxopool.inventory(self)).await
+			.map_err(|_| tonic::Status::deadline_exceeded("pool inventory observation timed out"))?
+			.map_err(|error| tonic::Status::failed_precondition(format!("{error:#}")))?;
+		if response.encoded_len() > 2 * 1024 * 1024 {
+			return Err(tonic::Status::resource_exhausted("pool inventory exceeds serialized byte budget"));
+		}
+		Ok(tonic::Response::new(response))
+	}
+
+
 	#[tracing::instrument(skip(self, req))]
 	async fn start_lightning_node(
 		&self,

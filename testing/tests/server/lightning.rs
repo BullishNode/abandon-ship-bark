@@ -760,7 +760,7 @@ impl ParkedReceive {
 				cfg.direct_expiry.interval = Duration::from_secs(1);
 			}
 		});
-		if direct { builder = builder.bitcoind(ctx.bitcoind_arc()); }
+		if direct && !force_failed { builder = builder.bitcoind(ctx.bitcoind_arc()); }
 		if start_watchman {
 			builder = if direct { builder.watchmand().watchmand_cfg(direct_receive_watchman_config) }
 				else { builder.watchmand() };

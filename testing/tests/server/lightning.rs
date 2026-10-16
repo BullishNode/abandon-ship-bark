@@ -753,6 +753,8 @@ struct ParkedReceive {
 	htlc_recv_expiry: BlockHeight,
 	release: Arc<tokio::sync::Notify>,
 	payee_task: tokio::task::JoinHandle<anyhow::Result<()>>,
+	_proxy: captaind::proxy::ArkRpcProxyServer,
+	_lightning: LightningPaymentSetup,
 }
 
 impl ParkedReceive {
@@ -809,7 +811,10 @@ impl ParkedReceive {
 		}).await.unwrap();
 
 		let payer = bark_payer.client().await;
-		ParkedReceive { srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task }
+		ParkedReceive {
+			srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task,
+			_proxy: proxy, _lightning: lightning,
+		}
 	}
 
 	async fn revoke(&self) -> Result<(), tonic::Status> {

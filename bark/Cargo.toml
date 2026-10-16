@@ -124,6 +124,8 @@ libc = "0.2"
 # tokio/fs is not available on wasm32 (no filesystem).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["fs"] }
+# Same reqwest package already selected by lnurl-rs; enforce strict native transport.
+reqwest-lnurl = { package = "reqwest", version = "=0.12.28", default-features = false, features = ["json", "rustls-tls"] }
 
 [dev-dependencies]
 ark-lib = { path = "../lib", features = [ "test-util" ] }

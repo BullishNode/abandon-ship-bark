@@ -1,22 +1,25 @@
 //! Real native epoch admission: no fabricated wallet or monetary SQL state.
+use std::collections::BTreeSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::time::Duration;
 
 use bitcoin::{FeeRate, Transaction};
+use bitcoin::consensus::{deserialize,serialize};
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin_ext::BlockDelta;
+use bitcoin_ext::{BlockDelta, TransactionExt};
 use bitcoin_ext::rpc::RpcApi;
 use serde_json::json;
 use server::database::Db;
-use server_log::RoundFinished;
+use server_log::{ClaimBroadcast,ProgressBroadcast,RoundFinished};
 use server_rpc::protos;
 
 use ark_testing::{sat, TestContext};
 use ark_testing::constants::{BOARD_CONFIRMATIONS, ROUND_CONFIRMATIONS};
 use ark_testing::daemon::captaind::{Captaind, WalletAdminClient};
 use ark_testing::util::FutureExt;
+use ark_testing::exit::progress_exit_until_awaiting_delta;
 
 async fn prepare_fixture_epoch(ctx:&TestContext,srv:&Captaind,ordinary:u64)->server::fee_allowance::Config {
 	let core=ctx.bitcoind().sync_client();
@@ -308,4 +311,123 @@ async fn confirmed_sweep_opening_imports_original_debit_once_after_database_rest
 		"original_signed_fee_sat":fee,"imported_fee_sat":row.get::<_,i64>(1),"candidate_count":row.get::<_,i64>(0),
 		"total_ordinary_sat":10000,"remaining_ordinary_sat":10000-fee,"customer_frontier_preserved":after["vtxo"]==customer_cut,
 		"reserve_frontier_preserved":after["recovery_source_hold"]==held_cut,"payout_count":after["expiry_settlement"]["rows"]})).unwrap());
+}
+
+
+/// Real deadline progression and claim with the epoch enabled. RBF uses an
+/// independently confirmed spare fee coin; this does not qualify retained-input RBF.
+#[tokio::test]
+async fn urgent_progress_rbf_and_claim_debit_full_fees_without_ordinary_quote_cap() {
+	let ctx=TestContext::new("bark_sdk/urgent_epoch_progress_rbf_claim").await;
+	let quiet=FeeRate::from_sat_per_vb_u32(1);
+	let urgent=FeeRate::from_sat_per_vb_u32(2);
+	let srv=ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
+		.funded(sat(50_020_000)).cfg(move|c| {
+			c.vtxo_lifetime=BlockDelta::new(128);c.round_interval=Duration::from_secs(3600);
+			c.fee_estimator.max_fee_rate=Some(quiet);
+		}).watchmand_cfg(move|c| {
+			c.watchman.reaction_interval=Duration::from_secs(3600);
+			c.watchman.sweep_interval=Duration::from_secs(3600);
+			c.watchman.incremental_relay_fee=urgent;
+			c.fee_estimator.fallback_fee_rate_fast=urgent;
+			c.fee_estimator.fallback_fee_rate_regular=urgent;
+			c.fee_estimator.fallback_fee_rate_slow=urgent;
+			c.fee_estimator.max_fee_rate=Some(quiet);
+		}).recovery_fee_headroom(sat(20_000)).create().await;
+	ctx.fund_captaind(&srv,sat(49_980_000)).await;
+	let wm=srv.watchmand();
+	for _ in 0..2 {ctx.bitcoind().fund_addr(wm.wait_wallet_address().await,sat(30_000)).await;}
+	enable_fixture_epoch(&ctx,&srv,100_000).await;
+	let db=Db::connect(&srv.config().postgres).await.unwrap();
+	let bark=ctx.bark("honest",&srv).funded(sat(1_000_000)).create().await;
+	bark.board_and_confirm_and_register(&ctx,sat(200_000)).await;bark.sync().await;
+	let exit_point=bark.vtxo_ids().await[0].to_point();
+	let evil=bark.full_clone("stale").await;
+	ctx.refresh_all(&srv,&[&bark]).await;
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;bark.sync().await;
+	evil.start_exit_all().await;
+	progress_exit_until_awaiting_delta(&ctx,&evil).await;
+	let tip=ctx.generate_blocks(wm.config().watchman.progress_grace_period.to_u32()).await;
+	wm.wait_for_sync_height(tip).await;
+	let mut progress=wm.subscribe_log::<ProgressBroadcast>();
+	let mut claims=wm.subscribe_log::<ClaimBroadcast>();
+	wm.trigger_sweep().await;
+	let first=progress.recv().wait(Duration::from_secs(20)).await.expect("actual epoch progression must publish");
+	ctx.await_transactions_across_nodes([first.cpfp_txid],[wm.bitcoind().as_ref()]).await;
+	let core=wm.bitcoind().sync_client();
+	let parent=core.get_raw_transaction(&first.txid,None).unwrap();
+	let original=core.get_raw_transaction(&first.cpfp_txid,None).unwrap();
+	let (anchor,_)=parent.fee_anchor().unwrap();
+	let old_inputs=original.input.iter().filter(|i|i.previous_output!=anchor)
+		.map(|i|i.previous_output).collect::<BTreeSet<_>>();
+	assert_eq!(old_inputs.len(),1,"source fixture must use exactly one original confirmed fee input");
+	let original_fee=actual_fee(&core,&original);
+	assert!(original_fee>quiet.fee_wu(original.weight()).unwrap().to_sat(),"actual urgent child exceeds ordinary quote cap");
+	let before=db.read(async|t|Ok(t.query_one("SELECT COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE urgent",&[]).await?.get::<_,i64>(0))).await.unwrap();
+	// Wait for the real owning wallet to exclude the old pending spend. The
+	// replacement must use a distinct confirmed spare, never unconfirmed change.
+	let endpoint=wm.config().admin_address.unwrap();
+	let mut rpc=WalletAdminClient::connect(format!("http://{endpoint}")).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(20),async {
+		loop {
+			let inventory=rpc.wallet_inventory(protos::Empty{}).await.unwrap().into_inner().watchman.unwrap();
+			let eligible=inventory.utxos.iter().filter(|u|u.confirmed_fee_eligible)
+				.map(|u|u.outpoint.clone()).collect::<BTreeSet<_>>();
+			if !eligible.is_empty() && old_inputs.iter().all(|p|!eligible.contains(&p.to_string())) {break}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}).await.expect("setup-unqualified: native wallet must observe pending child and confirmed spare");
+	for point in &old_inputs {assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_none());}
+	let delta=-i64::try_from(original_fee/2).unwrap();assert!(delta<0);
+	core.call::<bool>("prioritisetransaction",&[json!(first.cpfp_txid),json!(0),json!(delta)]).unwrap();
+	let entry:serde_json::Value=core.call("getmempoolentry",&[json!(first.cpfp_txid)]).unwrap();
+	let modified=bitcoin::Amount::from_btc(entry["fees"]["chunk"].as_f64().unwrap()).unwrap().to_sat();
+	assert!(modified>0 && modified<original_fee,"actual Core chunk estimate must require replacement");
+	wm.trigger_sweep().await;
+	let second=progress.recv().wait(Duration::from_secs(20)).await.expect("epoch-backed RBF must publish from actual spare");
+	assert_eq!(second.txid,first.txid);assert_ne!(second.cpfp_txid,first.cpfp_txid);
+	ctx.await_transactions_across_nodes([second.cpfp_txid],[wm.bitcoind().as_ref()]).await;
+	let replacement=core.get_raw_transaction(&second.cpfp_txid,None).unwrap();
+	let new_inputs=replacement.input.iter().filter(|i|i.previous_output!=anchor)
+		.map(|i|i.previous_output).collect::<BTreeSet<_>>();
+	assert!(!new_inputs.is_empty() && old_inputs.is_disjoint(&new_inputs),"this finite control qualifies fresh-spare RBF only");
+	let replacement_fee=actual_fee(&core,&replacement);assert!(replacement_fee>original_fee);
+	let after=db.read(async|t|Ok(t.query_one("SELECT COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE urgent",&[]).await?.get::<_,i64>(0))).await.unwrap();
+	assert_eq!(after-before,replacement_fee as i64,"RBF charges full new signed fee and never renews the parent debit");
+	let tip=ctx.generate_blocks(1).await;wm.wait_for_sync_height(tip).await;
+	wm.trigger_sweep().await;
+	let claim=claims.recv().wait(Duration::from_secs(20)).await.expect("actual urgent forfeit claim must publish");
+	assert!(claim.vtxo_ids.iter().any(|v|v.to_point().txid==first.txid));
+	ctx.await_transactions_across_nodes([claim.txid],[wm.bitcoind().as_ref()]).await;
+	let claimed=core.get_raw_transaction(&claim.txid,None).unwrap();
+	assert!(actual_fee(&core,&claimed)>quiet.fee_wu(claimed.weight()).unwrap().to_sat(),"actual Claim also bypasses ordinary quote cap");
+	let tip=ctx.generate_blocks(1).await;wm.wait_for_sync_height(tip).await;
+	assert!(core.get_tx_out(&exit_point.txid,exit_point.vout,Some(true)).unwrap().is_none(),"forfeited exit cannot remain spendable by attacker");
+	let rows=db.read(async|t|Ok(t.query("SELECT candidate_bytes,fee_sat FROM fee_allowance_candidate WHERE urgent ORDER BY id",&[]).await?)).await.unwrap();
+	let mut total=0u64;let mut children=0;let mut parents=0;let mut claim_count=0;let mut frames=Vec::new();
+	let ceiling=FeeRate::from_sat_per_kwu(2000);
+	for row in rows {
+		let value:serde_json::Value=serde_json::from_slice(&row.get::<_,Vec<u8>>(0)).unwrap();
+		let bytes:Vec<u8>=serde_json::from_value(value["raw"].clone()).unwrap();
+		let tx:Transaction=deserialize(&bytes).unwrap();let fee=actual_fee(&core,&tx);
+		assert_eq!(row.get::<_,i64>(1),fee as i64);total=total.checked_add(fee).unwrap();
+		assert!(fee<=ceiling.fee_wu(tx.weight()).unwrap().to_sat() && fee<=2000);
+		match value["path"].as_str().unwrap() {
+			"ProgressParent"=>{assert_eq!(tx,parent);parents+=1;},
+			"ProgressChild"=>{
+				assert!(tx==original || tx==replacement);children+=1;
+				assert!(fee+actual_fee(&core,&parent)<=ceiling.fee_wu(tx.weight()+parent.weight()).unwrap().to_sat());
+			},
+			"Claim"=>{assert_eq!(tx,claimed);claim_count+=1;},
+			other=>panic!("unexpected native urgent class {other}"),
+		}
+		frames.push(value);
+	}
+	assert_eq!((parents,children,claim_count),(1,2,1));assert!(total<=4000);
+	assert!(db.read(async|t|Ok(t.query_one("SELECT COALESCE(sum(fee_sat),0)::bigint FROM fee_allowance_candidate WHERE NOT urgent",&[]).await?.get::<_,i64>(0))).await.unwrap()>0);
+	private_original(&ctx.datadir.join("urgent-epoch-actual-originals.json"),&serde_json::to_vec(&json!({
+		"scope":"real confirmed-spare RBF; retained same-input unqualified","old_inputs":old_inputs,"new_inputs":new_inputs,
+		"first_child_raw":serialize(&original),"replacement_raw":serialize(&replacement),"parent_raw":serialize(&parent),
+		"claim_raw":serialize(&claimed),"original_signed_fee_sat":original_fee,"replacement_signed_fee_sat":replacement_fee,
+		"native_urgent_total_sat":total,"rows":frames})).unwrap());
 }

@@ -1,8 +1,21 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn stage5_unclaimed_hark_source() {
 	require_operating_build();
+	unclaimed_hark_source_journey("bark_sdk/stage5_unclaimed_hark_source").await;
+}
+
+// This genuine source journey supplies prerequisite evidence for the operating
+// build. It cannot require the certificate that its own result helps establish.
+// The full stage-5 campaign above retains that certificate gate unchanged.
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn operating_source_hark_unclaimed_automatic_direct() {
+	unclaimed_hark_source_journey("bark_sdk/operating_source_hark_unclaimed_automatic_direct").await;
+}
+
+async fn unclaimed_hark_source_journey(context_name: &str) {
+	// A finite frozen case-specific declaration is still mandatory before create.
 	let authority=ScaleFeeAuthority::from_env();
-	let ctx = TestContext::new("bark_sdk/stage5_unclaimed_hark_source").await;
+	let ctx = TestContext::new(context_name).await;
 	let out = Out::new();
 	let srv = scale_builder(ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.no_vtxo_pool().funded(sat(100_000_000)).watchmand(),&ctx,&authority).cfg(move |c| {

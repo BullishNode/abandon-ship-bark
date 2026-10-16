@@ -69,3 +69,31 @@ async fn startup_control() {
 	assert!(!directory.join("ordinary-fee-opening.json").exists());
 	println!("actual empty legacy App ready; missing direct and partial legacy budget refused before financial state change; principal=0");
 }
+
+#[tokio::test]
+async fn urgent_budget_fresh_direct_app_loads_actual_matching_installation() {
+	Box::pin(valid_direct_startup()).await;
+}
+
+async fn valid_direct_startup() {
+	let ctx = Box::pin(TestContext::new("carrier/urgent_budget_fresh_direct_app")).await;
+	// Existing native CLI creation installs policy from this fresh server's
+	// actual key. No metadata/identity, DB tip or loaded flag is fabricated.
+	let srv = Box::pin(ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
+		.cfg(|cfg| cfg.direct_expiry.enabled = true).create()).await;
+	let cfg = srv.config().clone();
+	let db = Db::connect(&cfg.postgres).await.unwrap();
+	let rows = empty_money_rows(&db).await;
+	assert_eq!((rows.0, rows.1, rows.2), (0, 0, 0));
+	assert_eq!(srv.wallet_status().await.total(), Amount::ZERO);
+	let directory = cfg.data_dir.join("direct-expiry-witness");
+	let stored: serde_json::Value = serde_json::from_slice(&std::fs::read(directory.join("ordinary-fee-policy.json")).unwrap()).unwrap();
+	assert_eq!(stored["policy"], serde_json::to_value(cfg.direct_expiry_fee_policy).unwrap());
+	let opening: serde_json::Value = serde_json::from_slice(&std::fs::read(directory.join("ordinary-fee-opening.json")).unwrap()).unwrap();
+	assert_eq!(opening["server_pubkey"], serde_json::to_value(srv.ark_info().await.server_pubkey).unwrap());
+	assert_eq!(opening["native_spent_sat"], 0);
+	assert_eq!(opening["external_spent_sat"], 0);
+	assert!(std::fs::read(directory.join("ordinary-fee-budget")).unwrap().is_empty());
+	srv.stop().await.unwrap();
+	println!("actual fresh direct App ready with native-installed matching policy/server key; principal=0; no chain-claim credit");
+}

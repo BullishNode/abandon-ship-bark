@@ -28,6 +28,15 @@ pub(crate) struct StoredCarrier {
 	pub remaining_bytes: usize,
 }
 
+// These exact original PostgreSQL JSONB text representations are part of the
+// independent witness contract. Do not decode/re-encode them before hashing.
+pub(crate) fn allocation_witness_hash(witnesses: &[String]) -> anyhow::Result<sha256::Hash> {
+	Ok(sha256::Hash::hash(&serde_json::to_vec(witnesses)?))
+}
+pub(crate) fn carrier_witness_hash(witness: &str) -> sha256::Hash {
+	sha256::Hash::hash(witness.as_bytes())
+}
+
 impl Db {
 	pub(crate) async fn direct_delivery_generation(&self, freeze_set: &str) -> anyhow::Result<Option<i64>> {
 		self.read(async |t| Ok(t.query_one("SELECT max(c.generation) AS generation FROM expiry_carrier c
@@ -66,8 +75,8 @@ impl Db {
 				'disposition',disposition,'gross',gross_sat,'fee',fee_sat,'payout',payout_sat,
 				'forfeited',forfeited_sat,'source',source,'evidence',source_evidence,'retirement',retirement_ids)::text AS witness
 				FROM expiry_allocation WHERE freeze_set=$1 ORDER BY id", &[&freeze_set]).await?;
-			let allocation_hash = sha256::Hash::hash(&serde_json::to_vec(&rows.iter()
-				.map(|r| r.get::<_, String>("witness")).collect::<Vec<_>>())?);
+			let allocation_hash = allocation_witness_hash(&rows.iter()
+				.map(|r| r.get::<_, String>("witness")).collect::<Vec<_>>())?;
 			let mut ids = BTreeSet::new();
 			let mut retirement = BTreeSet::new();
 			let mut leaves = Vec::new();
@@ -175,7 +184,7 @@ impl Db {
 				}).transpose()?;
 				let generation = row.get::<_, i64>("generation");
 				ensure!(generation > 0, "invalid direct carrier generation");
-				let carrier_hash = sha256::Hash::hash(row.get::<_, String>("witness").as_bytes());
+				let carrier_hash = carrier_witness_hash(&row.get::<_, String>("witness"));
 				result.push(StoredCarrier { tx, bytes, fee_inputs, generation, server_pubkey, allocation_hash, carrier_hash,
 					miner_fee: Amount::from_sat(u64::try_from(row.get::<_, i64>("miner_fee_sat"))?), recorded_confirmation,
 					remaining_rows, remaining_bytes });

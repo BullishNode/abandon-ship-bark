@@ -5,7 +5,7 @@
 //! workers, require every witnessed payout to survive in the database. This
 //! cannot detect restoring the database and the witness to an older point together.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -184,6 +184,74 @@ struct DirectRecord {
 	carrier_hash: sha256::Hash,
 }
 
+/// Captured original facts only. This is not a validated delivery, ownership
+/// proof, confirmed transaction, fee reservation or publication capability.
+pub(crate) struct CapturedDirectRecord {
+	pub freeze_set: String,
+	pub transaction: Transaction,
+}
+
+/// Bind the complete captured legacy namespace to its original PG witness
+/// strings with the SAME hashing as the actual native delivery reader. Source
+/// provenance, the PG row projection, allocation/ownership policy, Full paths,
+/// current chain and reservation accounting must be independently validated.
+pub(crate) fn decode_captured_direct_history(identity_raw: &[u8], history: &str,
+	records: &BTreeMap<String, String>, allocation_witnesses: &BTreeMap<String, Vec<String>>,
+	carrier_witnesses: &BTreeMap<String, String>, signed_transactions: &BTreeMap<String, Vec<u8>>,
+	network: Network, key: PublicKey,
+) -> anyhow::Result<BTreeMap<Txid, CapturedDirectRecord>> {
+	let max_rows = DIRECT_HISTORY_LIMITS.max_rows;
+	let max_bytes = DIRECT_HISTORY_LIMITS.max_serialized_bytes;
+	ensure!(identity_raw.len() <= 4096 && history.len() <= max_rows * 65,
+		"captured direct identity/index exceeds native bound");
+	let stored: Identity = serde_json::from_slice(identity_raw)?;
+	ensure!(stored == identity(network, key) && serde_json::to_vec(&stored)? == identity_raw,
+		"captured direct original server/network identity differs or is not canonical");
+	ensure!(history.is_empty() || history.ends_with('\n'), "captured direct index is torn");
+	let mut indexed = BTreeSet::new();
+	for line in history.lines() {
+		let txid: Txid = line.parse()?;
+		ensure!(txid.to_string() == line && indexed.insert(txid), "captured direct index is noncanonical or repeated");
+	}
+	ensure!(records.len() == indexed.len() && carrier_witnesses.len() == indexed.len()
+		&& signed_transactions.len() == indexed.len(),
+		"captured direct original record/carrier membership differs from index");
+	let mut bytes = identity_raw.len().checked_add(history.len()).context("captured direct bytes overflow")?;
+	let mut rows = indexed.len();
+	for raw in records.values().chain(carrier_witnesses.values()).chain(allocation_witnesses.values().flatten()) {
+		bytes = bytes.checked_add(raw.len()).context("captured direct bytes overflow")?;
+		rows = rows.checked_add(1).context("captured direct rows overflow")?;
+		ensure!(bytes <= max_bytes && rows <= max_rows, "complete captured direct originals exceed native bounds");
+	}
+	for raw in signed_transactions.values() {
+		bytes = bytes.checked_add(raw.len()).context("captured direct signed bytes overflow")?;
+		ensure!(bytes <= max_bytes, "complete captured direct signed bodies exceed native bound");
+	}
+	let mut result = BTreeMap::new();
+	let mut groups = BTreeSet::new();
+	for txid in indexed {
+		let raw = records.get(&format!("{txid}.json")).context("captured direct original file is missing")?;
+		let record: DirectRecord = serde_json::from_str(raw)?;
+		ensure!(serde_json::to_string(&record)? == *raw && !record.freeze_set.is_empty(),
+			"captured direct original record is not canonical or lacks its group");
+		let transaction: Transaction = deserialize(&record.tx)?;
+		ensure!(transaction.compute_txid() == txid && serialize(&transaction) == record.tx
+			&& signed_transactions.get(&txid.to_string()) == Some(&record.tx)
+			&& !transaction.input.is_empty() && transaction.input.iter().all(|input| !input.witness.is_empty()),
+			"captured direct signed transaction bytes or identity differ");
+		let allocations = allocation_witnesses.get(&record.freeze_set).context("captured direct original allocation group is missing")?;
+		let carrier = carrier_witnesses.get(&txid.to_string()).context("captured direct original carrier witness is missing")?;
+		ensure!(!allocations.is_empty()
+			&& crate::database::direct_delivery::allocation_witness_hash(allocations)? == record.allocation_hash
+			&& crate::database::direct_delivery::carrier_witness_hash(carrier) == record.carrier_hash,
+			"captured direct original allocation/carrier witness differs");
+		groups.insert(record.freeze_set.clone());
+		result.insert(txid, CapturedDirectRecord { freeze_set: record.freeze_set, transaction });
+	}
+	ensure!(groups == allocation_witnesses.keys().cloned().collect(), "captured direct original allocation group set differs");
+	Ok(result)
+}
+
 impl DirectPayoutWitness {
 	/// Called only during fresh server creation, before any direct journal rows.
 	pub async fn initialize(datadir: &Path, network: Network, key: PublicKey, db: &Db) -> anyhow::Result<()> {
@@ -304,6 +372,83 @@ impl DirectPayoutWitness {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, TxIn, TxOut, Witness};
+	use bitcoin::hashes::Hash;
+
+	struct CapturedFixture {
+		key: PublicKey, identity: Vec<u8>, history: String,
+		records: BTreeMap<String, String>, allocations: BTreeMap<String, Vec<String>>,
+		carriers: BTreeMap<String, String>, signed: BTreeMap<String, Vec<u8>>,
+	}
+	impl CapturedFixture {
+		fn new() -> Self {
+			let key = bitcoin::secp256k1::Keypair::new(&crate::SECP,
+				&mut bitcoin::secp256k1::rand::thread_rng()).public_key();
+			// Synthetic original-byte transport fixture, not a spend/signature or
+			// current financial ownership proof.
+			let tx = Transaction { version: bitcoin::transaction::Version::TWO,
+				lock_time: bitcoin::absolute::LockTime::ZERO,
+				input: vec![TxIn { previous_output: OutPoint::new(Txid::from_byte_array([7;32]), 0),
+					script_sig: ScriptBuf::new(), sequence: Sequence::ZERO, witness: Witness::from_slice(&[vec![1;64]]) }],
+				output: vec![TxOut { value: Amount::from_sat(9_000), script_pubkey: ScriptBuf::new() }] };
+			let txid = tx.compute_txid(); let bytes = serialize(&tx);
+			let allocations = vec!["{\"id\": \"synthetic\", \"owner\": null, \"spk\": null, \"disposition\": \"operator\", \"gross\": 10000, \"fee\": 0, \"payout\": 0, \"forfeited\": 0, \"source\": \"operator\", \"evidence\": {}, \"retirement\": []}".to_owned()];
+			let carrier = "{\"generation\": 1, \"backing\": [], \"fee_inputs\": [], \"miner\": 1000, \"subsidy\": 0, \"mappings\": [{\"id\": \"synthetic\", \"vout\": null}]}".to_owned();
+			let record = DirectRecord { freeze_set: "synthetic-group".into(), tx: bytes.clone(),
+				allocation_hash: crate::database::direct_delivery::allocation_witness_hash(&allocations).unwrap(),
+				carrier_hash: crate::database::direct_delivery::carrier_witness_hash(&carrier) };
+			Self { key, identity: serde_json::to_vec(&identity(Network::Regtest, key)).unwrap(), history: format!("{txid}\n"),
+				records: [(format!("{txid}.json"), serde_json::to_string(&record).unwrap())].into_iter().collect(),
+				allocations: [(record.freeze_set, allocations)].into_iter().collect(),
+				carriers: [(txid.to_string(), carrier)].into_iter().collect(),
+				signed: [(txid.to_string(), bytes)].into_iter().collect() }
+		}
+		fn decode(&self) -> anyhow::Result<BTreeMap<Txid, CapturedDirectRecord>> {
+			decode_captured_direct_history(&self.identity, &self.history, &self.records,
+				&self.allocations, &self.carriers, &self.signed, Network::Regtest, self.key)
+		}
+	}
+
+	#[test]
+	fn captured_direct_originals_bind_exact_pg_text_nulls_and_signed_bytes_without_financial_authority() {
+		let fixture = CapturedFixture::new();
+		let records = fixture.decode().unwrap();
+		assert_eq!(records.len(), 1);
+		for (id, record) in records {
+			assert_eq!(record.freeze_set, "synthetic-group");
+			assert_eq!(serialize(&record.transaction), fixture.signed[&id.to_string()]);
+		}
+		let mut changed = CapturedFixture::new();
+		changed.allocations.get_mut("synthetic-group").unwrap()[0].push(' ');
+		assert!(changed.decode().is_err(), "equivalent JSON is not original PG witness text");
+		let mut changed = CapturedFixture::new();
+		for raw in changed.carriers.values_mut() { *raw = raw.replace("null", "0"); }
+		assert!(changed.decode().is_err(), "NULL non-payment mapping must not become an output");
+		let mut changed = CapturedFixture::new();
+		for raw in changed.records.values_mut() {
+			let mut record: DirectRecord = serde_json::from_str(raw).unwrap();
+			let mut tx: Transaction = deserialize(&record.tx).unwrap();
+			tx.input[0].witness = Witness::from_slice(&[vec![2;64]]);
+			record.tx = serialize(&tx); *raw = serde_json::to_string(&record).unwrap();
+		}
+		assert!(changed.decode().is_err(), "same txid with different witness must fail the original SQL-body join");
+	}
+	#[test]
+	fn captured_direct_originals_refuse_torn_missing_duplicate_unindexed_or_foreign_sources() {
+		for which in 0..7 {
+			let mut fixture = CapturedFixture::new();
+			match which {
+				0 => { fixture.history.pop(); },
+				1 => fixture.history.push_str(&fixture.history.clone()),
+				2 => fixture.records.clear(),
+				3 => { fixture.records.insert("unindexed.json".into(), "{}".into()); },
+				4 => fixture.identity = serde_json::to_vec(&identity(Network::Signet, fixture.key)).unwrap(),
+				5 => { fixture.allocations.insert("unknown-group".into(), Vec::new()); },
+				_ => fixture.signed.clear(),
+			}
+			assert!(fixture.decode().is_err());
+		}
+	}
 
 	struct Directory(PathBuf);
 	impl Directory {

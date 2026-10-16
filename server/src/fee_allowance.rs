@@ -239,7 +239,7 @@ impl Gate {
 			"external fee policy SHA differs");
 		let policy: Policy = serde_json::from_slice(&bytes)?;
 		let actual_genesis=core.get_block_hash(0).await?.to_string();
-		ensure!(actual_genesis==bitcoin::constants::ChainHash::using_genesis_block(network).to_string(),
+		ensure!(actual_genesis==bitcoin::constants::genesis_block(network).block_hash().to_string(),
 			"actual Core genesis differs from configured network");
 		policy.validate(&actual_genesis, &key.to_string())?;
 		if row.is_none() && config.history_dir.join("fee-allowance-witness").exists() {

@@ -19,6 +19,15 @@ use super::ordinary_fee_auth::FeeServiceIdentity;
 use super::policy::ActionContextFetcher;
 use super::urgent_publication::UrgentPurpose;
 
+/// Actual locked source cut, not a permission token. A later signing phase must
+/// independently obtain a NEW cut while retaining the owning guard and SQL locks.
+pub(crate) struct CheckedUrgentSourceCut { tip: BlockRef, lower: BlockHeight, deadline: BlockHeight }
+impl CheckedUrgentSourceCut {
+	pub(crate) fn tip(&self) -> BlockRef { self.tip }
+	pub(crate) fn lower_height(&self) -> BlockHeight { self.lower }
+	pub(crate) fn deadline(&self) -> BlockHeight { self.deadline }
+}
+
 fn require_action(action: &Action, purpose: UrgentPurpose, parent: Option<Txid>) -> anyhow::Result<()> {
 	ensure!(match (purpose, action, parent) {
 		(UrgentPurpose::Claim, Action::Claim { .. }, None) => true,
@@ -55,14 +64,14 @@ pub(crate) async fn require_current_sources(t: &Tx<'_>, core: &Client, wallet: &
 	db: &crate::database::Db, config: &Config, budget: &super::ordinary_fee::OrdinaryFeeBudget, identity: &FeeServiceIdentity,
 	sources: &[ServerVtxo], fee_inputs: &BTreeMap<OutPoint, TxOut>,
 	purpose: UrgentPurpose, parent: Option<&Transaction>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CheckedUrgentSourceCut> {
 	tokio::time::timeout(Duration::from_secs(15), require_bounded(t, core, wallet, db, config, budget,
 		identity, sources, fee_inputs, purpose, parent)).await.context("aggregate urgent source SQL/Core deadline exceeded")?
 }
 async fn require_bounded(t: &Tx<'_>, core: &Client, wallet: &PersistedWallet,
 	db: &crate::database::Db, config: &Config, budget: &super::ordinary_fee::OrdinaryFeeBudget, identity: &FeeServiceIdentity,
 	sources: &[ServerVtxo], fee_inputs: &BTreeMap<OutPoint, TxOut>, purpose: UrgentPurpose, parent: Option<&Transaction>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<CheckedUrgentSourceCut> {
 	t.lock_final_fee_sources().await?;
 	ensure!(budget.actual_owner_identity()? == *identity, "urgent actual owner opening identity differs");
 	ensure!(!sources.is_empty() && sources.len() <= 4096 && fee_inputs.len() <= 4096,
@@ -98,6 +107,7 @@ async fn require_bounded(t: &Tx<'_>, core: &Client, wallet: &PersistedWallet,
 		let stored = t.get_virtual_transaction_by_txid(parent.compute_txid()).await?.context("urgent original native signed parent missing")?;
 		ensure!(stored.signed_tx.as_deref() == Some(parent), "urgent progress parent differs from native original signed bytes");
 	}
+	let mut deadline: Option<BlockHeight> = None;
 	for source in sources {
 		let current = t.get_server_vtxo_by_id(source.id()).await?;
 		ensure!(current.vtxo.to_bare() == *source && source.server_pubkey() == identity.server_pubkey
@@ -120,6 +130,9 @@ async fn require_bounded(t: &Tx<'_>, core: &Client, wallet: &PersistedWallet,
 		let context = ActionContextFetcher { config, db, bitcoind: core, chain_tip_height: lower };
 		let action = context.get_action_locked(t, source, confirmed).await?;
 		require_action(&action, purpose, parent.map(Transaction::compute_txid))?;
+		let bound = match action { Action::Claim { deadline } | Action::Progress { deadline, .. } => deadline,
+			_ => bail!("urgent current source has no actual native deadline"), };
+		deadline = Some(deadline.map_or(bound, |old| old.min(bound)));
 		if purpose == UrgentPurpose::Claim {
 			let hash = match source.policy() {
 				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(policy)) => policy.payment_hash,
@@ -139,7 +152,7 @@ async fn require_bounded(t: &Tx<'_>, core: &Client, wallet: &PersistedWallet,
 		}
 	}
 	ensure!(crate::bitcoind::tip(core).await? == before, "urgent actual source crossed independent Core tip");
-	Ok(())
+	Ok(CheckedUrgentSourceCut { tip: before, lower, deadline: deadline.context("urgent source deadline missing")? })
 }
 
 #[cfg(test)]

@@ -284,6 +284,10 @@ impl Daemon {
 		);
 		}
 
+		let urgent_fee_limits = cfg.watchman.direct_expiry.as_ref().map(|direct| -> anyhow::Result<CarrierLimits> { Ok(CarrierLimits {
+			max_fee_rate: cfg.fee_estimator.max_fee_rate.context("urgent actual configured max fee rate missing")?,
+			max_miner_fee: direct.max_miner_fee, max_weight: Weight::from_wu(400_000),
+		}) }).transpose()?;
 		let watchman = Watchman::new(
 			cfg.watchman,
 			signer,
@@ -295,7 +299,8 @@ impl Daemon {
 			watchman_wallet.clone(),
 			frontier.clone(),
 			sync_height_watcher,
-		).with_direct_expiry(direct_expiry).with_ordinary_fee_budget(ordinary_fee_budget.clone());
+		).with_direct_expiry(direct_expiry).with_ordinary_fee_budget(ordinary_fee_budget.clone())
+			.with_urgent_fee_limits(urgent_fee_limits);
 
 		let watchman_handle = watchman.start(rtmgr.clone());
 

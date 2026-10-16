@@ -148,6 +148,22 @@ impl Tx<'_> {
 		self.require_urgent_input_set(original.index, &inputs).await?; self.urgent_intent_bounds().await?;
 		Ok(())
 	}
+	/// Read only the EXACT acknowledged unsigned intent before the first
+	/// signature. This cannot insert/reconstruct a lost pre-sign SQL tuple.
+	pub(crate) async fn require_native_urgent_unsigned(&self, candidate: &UrgentCandidate,
+		budget: &OrdinaryFeeBudget, identity: &FeeServiceIdentity,
+	) -> anyhow::Result<()> {
+		self.lock_native_fee_publication().await?; self.urgent_intent_bounds().await?;
+		budget.require_urgent_candidate(candidate)?; self.require_urgent_opening(identity,budget.policy()).await?;
+		let original = UrgentSqlIntent::original(candidate,None,identity,budget.policy())?;
+		let query = format!("SELECT {COLUMNS} FROM native_urgent_attempt WHERE attempt_index=$1 FOR UPDATE");
+		UrgentSqlIntent::from_row(&self.query_opt(&query,&[&original.index]).await?
+			.context("paid urgent signature lacks original acknowledged pre-sign SQL intent")?).require_exact(&original)?;
+		self.require_urgent_input_set(original.index,&candidate.external_inputs(budget.policy())?).await?;
+		ensure!(self.query_opt("SELECT txid FROM nursery_tx WHERE txid=$1",&[&original.publication_txid]).await?.is_none(),
+			"paid urgent unsigned candidate already has a nursery publication");
+		Ok(())
+	}
 	/// Private signed bytes already fsynced as u2 bind to the same SQL attempt
 	/// once. This neither marks publication nor inserts/reconstructs nursery or
 	/// customer rows. The actual atomic publisher is deliberately still held.

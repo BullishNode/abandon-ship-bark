@@ -406,6 +406,16 @@ impl OrdinaryFeeBudget {
 	/// hold Watchman then financial SQL4 plus source guards, and retain every
 	/// original input on a lost acknowledgement. This method is NOT an urgent
 	/// signing/relay capability; those entry points remain explicitly held.
+	/// Used only while the actual owning wallet and Native4 are held. The
+	/// reservation itself still checks this sequence and all retained bytes.
+	pub(crate) fn next_urgent_attempt(&self) -> anyhow::Result<u64> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.file.metadata()?.len() == ledger.length
+			&& ledger.active_identity.is_some() && ledger.urgent_headroom.is_some(),
+			"urgent attempt lacks actual active owner or exact original history");
+		validate_joint_witnesses(&self.directory, self.policy, &ledger.publications, &ledger.urgent, &ledger.urgent_signed)?;
+		u64::try_from(ledger.urgent.len())?.checked_add(1).context("urgent attempt index overflow")
+	}
 	pub(crate) fn reserve_urgent_candidate(&self, candidate: &UrgentCandidate) -> anyhow::Result<()> {
 		let entry = candidate.reservation_entry(self.policy)?;
 		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;

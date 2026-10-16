@@ -21,6 +21,7 @@ pub(crate) mod ordinary_fee_client;
 pub(crate) mod ordinary_fee_source;
 pub(crate) mod urgent_publication;
 pub(crate) mod urgent_source;
+mod urgent_owner;
 mod config;
 mod daemon;
 mod frontier;
@@ -176,6 +177,7 @@ pub struct Watchman {
 	mempool_spends: parking_lot::RwLock<HashMap<VtxoId, MempoolSpend>>,
 	direct_expiry: Option<expiry_runtime::DirectExpiryRuntime>,
 	ordinary_fee_budget: Option<Arc<ordinary_fee::OrdinaryFeeBudget>>,
+	urgent_fee_limits: Option<carrier::CarrierLimits>,
 }
 
 impl Watchman {
@@ -205,11 +207,17 @@ impl Watchman {
 			mempool_spends: parking_lot::RwLock::new(HashMap::new()),
 			direct_expiry: None,
 			ordinary_fee_budget: None,
+			urgent_fee_limits: None,
 		}
 	}
 
 	pub(crate) fn with_ordinary_fee_budget(mut self, budget: Option<Arc<ordinary_fee::OrdinaryFeeBudget>>) -> Self {
 		self.ordinary_fee_budget = budget;
+		self
+	}
+
+	pub(crate) fn with_urgent_fee_limits(mut self, limits: Option<carrier::CarrierLimits>) -> Self {
+		self.urgent_fee_limits = limits;
 		self
 	}
 

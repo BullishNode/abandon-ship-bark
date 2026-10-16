@@ -1,5 +1,9 @@
 
-use bitcoin::hashes::sha256;
+use std::time::Instant;
+
+use anyhow::Context;
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::sighash::{Prevouts, SighashCache, TapSighashType};
 use bitcoin::secp256k1::schnorr;
 use bitcoin::secp256k1::Keypair;
 use bitcoin::taproot::ControlBlock;
@@ -39,6 +43,51 @@ impl WatchmanSigner {
 		db: Db,
 	) -> Self {
 		Self { server_keypair, ephemeral_master_key, db }
+	}
+
+	/// Private supported paid-send claim only. Uses the SAME already-locked SQL
+	/// transaction for authoritative preimages, never another pool connection or
+	/// a caller-supplied secret. All clauses/preimages are checked before signing.
+	pub(super) async fn sign_paid_send_claim_locked(&self, t: &crate::database::Tx<'_>,
+		sources: &[ark::ServerVtxo], once: super::urgent_owner::AcknowledgedPaidClaim<'_>,
+		deadline: Instant,
+	) -> anyhow::Result<bitcoin::Transaction> {
+		let unsigned = once.transaction();
+		ensure!(!sources.is_empty() && sources.len() == unsigned.input.len()
+			&& unsigned.input.iter().all(|input| input.witness.is_empty() && input.script_sig.is_empty()),
+			"paid urgent claim input coverage or unsigned shape differs");
+		let key = self.server_keypair.leak_ref();
+		let mut signing = Vec::with_capacity(sources.len());
+		for (source,input) in sources.iter().zip(&unsigned.input) {
+			ensure!(source.server_pubkey() == key.public_key() && source.point() == input.previous_output,
+				"paid urgent claim input or actual signer differs");
+			let (hash,clause) = super::urgent_owner::paid_send_clause(source)?;
+			ensure!(clause.pubkey() == key.public_key() && input.sequence == clause.sequence().unwrap_or(bitcoin::Sequence::ZERO),
+				"paid urgent claim does not use its original native clause");
+			let preimage: [u8;32] = t.get_htlc_settlement_by_payment_hash(hash).await?
+				.context("paid urgent claim authoritative settlement preimage disappeared")?.into();
+			ensure!(sha256::Hash::hash(&preimage) == hash.to_sha256_hash(), "paid urgent claim settlement preimage hash differs");
+			signing.push((clause,Secret::new(preimage)));
+		}
+		let mut signed = unsigned.clone();
+		let prevouts = sources.iter().map(|source| source.txout()).collect::<Vec<_>>();
+		let prevouts = Prevouts::All(&prevouts); let mut cache = SighashCache::new(&mut signed);
+		for (index,(source,(clause,preimage))) in sources.iter().zip(&signing).enumerate() {
+			ensure!(std::time::Instant::now() < deadline, "paid urgent private signing deadline exceeded; preserve original attempt");
+			let control = clause.control_block(source);
+			let leaf = bitcoin::taproot::TapLeafHash::from_script(&clause.tapscript(),bitcoin::taproot::LeafVersion::TapScript);
+			let sighash = cache.taproot_script_spend_signature_hash(index,&prevouts,leaf,TapSighashType::Default)?;
+			let signature = crate::SECP.sign_schnorr(&sighash.into(),key);
+			crate::SECP.verify_schnorr(&signature,&sighash.into(),&key.x_only_public_key().0)?;
+			let witness = match clause {
+				VtxoClause::HashDelaySign(c) => c.witness(&(signature,*preimage.leak_ref()),&control),
+				VtxoClause::HashDelaySign_v0(c) => c.witness(&(signature,*preimage.leak_ref()),&control),
+				_ => bail!("unsupported urgent paid-send clause; no generic signing fallback"),
+			};
+			ensure!(witness.size() == clause.witness_size(source), "urgent paid-send signed weight differs from original plan");
+			*cache.witness_mut(index).context("paid urgent signature input missing")? = witness;
+		}
+		Ok(signed)
 	}
 
 	/// Get the preimage for a hash-locked clause from the database.

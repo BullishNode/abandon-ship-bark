@@ -396,13 +396,30 @@ async fn urgent_progress_claim_control(exercise_rbf: bool, fail_persist: bool) {
 		let original=original.expect("actual signed urgent child permit must precede failed persistence");
 		let raw:Vec<u8>=serde_json::from_value(original["raw"].clone()).unwrap();
 		let tx:Transaction=deserialize(&raw).unwrap();
-		assert!(total>0 && total<=4000);assert!(actual_fee(&core,&tx)>quiet.fee_wu(tx.weight()).unwrap().to_sat());
+		let bodies:Vec<Vec<u8>>=serde_json::from_value(original["input_parents"].clone()).unwrap();
+		let sources=bodies.iter().map(|raw|{let parent:Transaction=deserialize(raw).unwrap();(parent.compute_txid(),parent)})
+			.collect::<std::collections::BTreeMap<_,_>>();
+		let packages:Vec<Vec<u8>>=serde_json::from_value(original["package_parents"].clone()).unwrap();
+		let package:Transaction=deserialize(&packages[0]).unwrap();let (anchor,_)=package.fee_anchor().unwrap();
+		let mut confirmed_fee_inputs=0;let mut input_sat=0u64;
+		for input in &tx.input {
+			let point=input.previous_output;let previous=&sources[&point.txid].output[point.vout as usize];
+			input_sat=input_sat.checked_add(previous.value.to_sat()).unwrap();
+			if point==anchor {assert_eq!(sources[&point.txid],package);} else {
+				let live=core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().expect("unrelayed fee input remains unspent in actual Core");
+				assert_eq!(live.value,previous.value);assert_eq!(live.script_pub_key.hex,previous.script_pubkey.as_bytes());
+				assert!(live.confirmations>=1);confirmed_fee_inputs+=1;
+			}
+		}
+		assert!(confirmed_fee_inputs>0);
+		let signed_fee=input_sat.checked_sub(tx.output.iter().map(|o|o.value.to_sat()).sum::<u64>()).unwrap();
+		assert!(total>0 && total<=4000);assert!(signed_fee>quiet.fee_wu(tx.weight()).unwrap().to_sat());
 		assert!(!core.get_raw_mempool().unwrap().contains(&tx.compute_txid()),"persistence failure must abort child relay");
 		assert_eq!(db.read(async|t|Ok(t.query_one("SELECT count(*) FROM wallet_changeset WHERE kind='watchman'",&[]).await?.get::<_,i64>(0))).await.unwrap(),wallet_rows_before,"failed owning-wallet write must not commit");
 		assert!(progress.try_recv().is_err(),"no completed Progress event on persistence failure");
 		private_original(&ctx.datadir.join("urgent-persist-failure-originals.json"),&serde_json::to_vec(&json!({
 			"scope":"synthetic native PG persistence fault; genuine signed candidate; no relay/refund",
-			"failure":failure.error,"child_txid":tx.compute_txid().to_string(),"signed_fee_sat":actual_fee(&core,&tx),
+			"failure":failure.error,"child_txid":tx.compute_txid().to_string(),"signed_fee_sat":signed_fee,
 			"signed_weight_wu":tx.weight().to_wu(),"original_urgent_debit_sat":total,"wallet_rows_before":wallet_rows_before,
 			"child_absent_from_actual_Core_mempool":true,"no_completed_Progress_event":true,"rows":frames
 		})).unwrap());

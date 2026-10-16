@@ -248,6 +248,46 @@ async fn automatic_board_fixture_with_funding(name: &str, board_fee: Amount, rou
 	AutomaticBoardFixture { ctx, srv, mnemonic, coin, record }
 }
 
+// Same finite fee-wallet opening as the original returning-source fixtures.
+// Five confirmed inputs let the FULL10000 ceiling preflight leave the actual
+// 40000 urgent floor unselected; unconfirmed prospective change is never credit.
+async fn fund_confirmed_split_fee_reserve(ctx: &TestContext, srv: &ark_testing::Captaind) {
+	let address = tokio::time::timeout(std::time::Duration::from_secs(30),
+		srv.watchmand().wait_wallet_address()).await.unwrap();
+	let core = ctx.bitcoind().sync_client();
+	let mut points = BTreeSet::new();
+	for _ in 0..5 {
+		let txid = ctx.bitcoind().fund_addr(address.clone(), sat(10_000)).await;
+		let tx = core.get_raw_transaction(&txid, None).unwrap();
+		let vout = tx.output.iter().position(|o| o.script_pubkey == address.script_pubkey() && o.value == sat(10_000)).unwrap();
+		assert!(points.insert(OutPoint::new(txid, vout as u32)));
+	}
+	ctx.generate_blocks(3).await;
+	let inventory = wait_fee_inventory_tip(ctx,srv.watchmand().config().admin_address.unwrap()).await;
+	assert_eq!(inventory.utxos.len(),5);
+	assert_eq!(inventory.utxos.iter().map(|u|u.outpoint.parse::<OutPoint>().unwrap()).collect::<BTreeSet<_>>(),points);
+	assert!(inventory.reserved_outpoints.is_empty());
+	assert!(inventory.utxos.iter().all(|u|u.value_sat==10_000 && u.confirmed_fee_eligible && u.confirmations>=3));
+}
+
+async fn wait_fee_inventory_tip(ctx: &TestContext, address: std::net::SocketAddr) -> server_rpc::protos::WalletInventory {
+	let core = ctx.bitcoind().sync_client();
+	let height = core.get_block_count().unwrap();
+	let tip = core.get_block_hash(height).unwrap().to_string();
+	let inventory = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+		let mut client = server_rpc::admin::WalletAdminServiceClient::connect(
+			format!("http://{address}")).await.unwrap();
+		loop {
+			let inventory = client.wallet_inventory(server_rpc::protos::Empty {}).await.unwrap().into_inner().watchman.unwrap();
+			if inventory.complete && u64::from(inventory.tip_height)==height && inventory.tip_hash==tip { break inventory; }
+			tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+		}
+	}).await.expect("actual owning fee wallet must reach the independent confirmed split-funding tip");
+	assert!(inventory.network=="regtest" && inventory.min_trusted_confirmations==3);
+	assert!(inventory.utxos.iter().filter(|u|u.confirmed_fee_eligible).map(|u|u.value_sat).sum::<u64>()>=40_000);
+	inventory
+}
+
 #[tokio::test]
 async fn automatic_board_creation_is_registered_before_absence() {
 	let fixture = automatic_board_fixture("automatic_board_creation_is_registered_before_absence").await;

@@ -59,6 +59,7 @@ async fn pending_case() -> PendingCase {
 			c.direct_expiry.grace_blocks = 0;
 			c.direct_expiry.interval = Duration::from_secs(3600);
 		}).watchmand_cfg(|c| {
+			c.min_trusted_confs = 3;
 			c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig { ordinary_fee_policy: Default::default(),
 				history_dir: c.data_dir.parent().unwrap().join("server"), max_miner_fee: sat(10_000),
 			});
@@ -66,9 +67,7 @@ async fn pending_case() -> PendingCase {
 			c.watchman.reaction_interval = Duration::from_secs(3600);
 			c.watchman.sweep_interval = Duration::from_secs(3600);
 		}).create().await;
-	let fee_address = tokio::time::timeout(Duration::from_secs(30), srv.watchmand().wait_wallet_address()).await.unwrap();
-	ctx.bitcoind().fund_addr(fee_address, sat(50_000)).await;
-	ctx.generate_blocks(3).await;
+	fund_confirmed_split_fee_reserve(&ctx, &srv).await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let original = ctx.bark_sdk("original", &srv).mnemonic(mnemonic.clone())
 		.cfg(|c| c.daemon_manual_sync = true).funded(sat(121_000)).create().await;
@@ -81,6 +80,9 @@ async fn pending_case() -> PendingCase {
 	assert_eq!(original.balance().await.unwrap().pending_board, coin.amount());
 	assert_eq!(original.get_vtxo_by_id(coin.id()).await.unwrap().state.kind(), VtxoStateKind::Locked);
 	let record = original.fallback_destination().await.unwrap();
+	record.verify(bitcoin::Network::Regtest,original.mailbox_keypair().public_key()).unwrap();
+	let link=original.fallback_key_link(coin.user_pubkey()).await.unwrap();
+	link.verify(bitcoin::Network::Regtest,original.mailbox_keypair().public_key(),&record).unwrap();
 	let status = {
 		let (_, key) = original.pubkey_keypair(&coin.user_pubkey()).await.unwrap().unwrap();
 		protos::GetVtxoStatusRequest { vtxo_id: coin.id().to_bytes().to_vec(),
@@ -166,6 +168,7 @@ async fn confirm_and_return(case: PendingCase) {
 		}
 	}).await.unwrap();
 	assert!(core.get_raw_transaction_info(&carrier.compute_txid(), None).unwrap().confirmations.unwrap() >= 1);
+	wait_fee_inventory_tip(&ctx,watch.admin_address.unwrap()).await;
 	assert!(core.get_tx_out(&coin.chain_anchor().txid, coin.chain_anchor().vout, Some(true)).unwrap().is_none());
 	assert_pending_only(&db, &coin).await;
 	let returning = ctx.bark_sdk("original", &srv).mnemonic(mnemonic.clone())

@@ -109,9 +109,7 @@ async fn saved_send_case(registered: bool) -> SavedSendCase {
 async fn confirm_and_return(case: SavedSendCase) {
 	let SavedSendCase { fixture, recipient_seed, recipient_script, signed, registered, onchain_before } = case;
 	let AutomaticBoardFixture { ctx, srv, mnemonic, coin, record } = fixture;
-	let fee_address = tokio::time::timeout(Duration::from_secs(30), srv.watchmand().wait_wallet_address()).await.unwrap();
-	ctx.bitcoind().fund_addr(fee_address, sat(50_000)).await;
-	ctx.generate_blocks(3).await;
+	fund_confirmed_split_fee_reserve(&ctx, &srv).await;
 	srv.watchmand().stop().await.unwrap(); srv.stop().await.unwrap();
 	let mut cap = srv.config().clone();
 	cap.direct_expiry.interval = Duration::from_millis(100);
@@ -160,6 +158,7 @@ async fn confirm_and_return(case: SavedSendCase) {
 		}
 	}).await.unwrap();
 	assert!(core.get_raw_transaction_info(&carrier.compute_txid(), None).unwrap().confirmations.unwrap() >= 1);
+	wait_fee_inventory_tip(&ctx,watch.admin_address.unwrap()).await;
 	// Confirmation must not bypass the existing full signed-chain checks.
 	let tx = signed[0].transactions().last().unwrap().tx;
 	let signature = tx.input[0].witness.iter().find(|w| w.len() == 64).unwrap();

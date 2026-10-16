@@ -55,6 +55,7 @@ use ark_testing::constants::BOARD_CONFIRMATIONS;
 
 #[path = "carrier/direct_delivery.rs"]
 mod direct_delivery;
+mod browser_return;
 
 fn operator_backing(
 	operator: &Keypair, server: &Keypair, expiry: BlockHeight, amount: Amount, point: OutPoint,

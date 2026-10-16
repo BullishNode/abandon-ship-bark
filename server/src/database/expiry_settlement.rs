@@ -262,14 +262,14 @@ impl Tx<'_> {
 	pub(crate) async fn cancel_expired_participation(
 		&self, hash: UnlockHash, round_id: i64, inputs: &[VtxoId], outputs: &[VtxoId], exited: &[VtxoId],
 	) -> anyhow::Result<bool> {
-        // A direct same-carrier retirement reserves both original and accepted
-        // replacement rights. Legacy cancellation must never restore those
-        // originals or remove their participation after that reservation.
-        let closure_ids = inputs.iter().chain(outputs).copied().collect::<Vec<_>>();
-        self.check_not_expiry_frozen(&closure_ids).await?;
-        // The complete source-row arbitration above matches direct freeze and
-        // forfeit registration. Keep association rows locked through all CAS
-        // predicates and source restoration below.
+		// A direct same-carrier retirement reserves both original and accepted
+		// replacement rights. Legacy cancellation must never restore those
+		// originals or remove their participation after that reservation.
+		let closure_ids = inputs.iter().chain(outputs).copied().collect::<Vec<_>>();
+		self.check_not_expiry_frozen(&closure_ids).await?;
+		// The complete source-row arbitration above matches direct freeze and
+		// forfeit registration. Keep association rows locked through all CAS
+		// predicates and source restoration below.
 		let associations = self.query("SELECT i.vtxo_id FROM round_part_input i
 			JOIN round_participation p ON p.id=i.participation_id
 			WHERE p.unlock_hash=$1 ORDER BY i.vtxo_id FOR UPDATE OF i", &[&hash.to_string()]).await?;

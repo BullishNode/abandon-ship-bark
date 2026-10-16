@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::os::unix::fs::MetadataExt;
 use std::sync::Mutex;
 
 use anyhow::Context;
@@ -653,6 +654,21 @@ fn parse_joint_history(history: &str, policy: OrdinaryFeePolicy) -> anyhow::Resu
 	}
 	Ok(parsed)
 }
+/// Read-only complete original snapshot under the caller's NativeFeePublication
+/// SQL lock. This never takes Watchman's exclusive file lock or creates an owner.
+pub(crate) fn original_publications_locked(directory: &Path, policy: OrdinaryFeePolicy)
+	-> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
+	let owner = std::fs::symlink_metadata(directory)?.uid();
+	let before = super::ordinary_fee_source::JournalStamp::read(&directory.join(BUDGET_FILE), owner)?;
+	let raw = ordinary_fee_publication::read_record(&directory.join(BUDGET_FILE), owner)?;
+	ensure!(raw.len() as u64 <= MAX_HISTORY_BYTES, "original fee snapshot exceeds journal bound");
+	let parsed = parse_joint_history(std::str::from_utf8(&raw)?, policy)?;
+	let records = validate_joint_witnesses(directory, policy, &parsed.publications, &parsed.urgent, &parsed.urgent_signed)?;
+	ensure!(before == super::ordinary_fee_source::JournalStamp::read(&directory.join(BUDGET_FILE), owner)?,
+		"original fee snapshot changed under global lock");
+	Ok(records)
+}
+
 fn parse_history(history: &str, policy: OrdinaryFeePolicy) -> anyhow::Result<u64> {
 	Ok(parse_joint_history(history, policy)?.charged)
 }

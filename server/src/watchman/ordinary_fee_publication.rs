@@ -190,6 +190,27 @@ pub(crate) fn read_record(path: &Path, owner: u32) -> anyhow::Result<Vec<u8>> {
 	Ok(bytes)
 }
 
+/// Fixed protected record sizing, shared with the independent Round-rights
+/// namespace. No journal parsing or debit authority follows from this count.
+pub(crate) fn witness_usage(history: &Path) -> anyhow::Result<(usize, usize)> {
+	let path = directory(history)?; let owner = fs::symlink_metadata(history)?.uid();
+	match fs::symlink_metadata(&path) {
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0,0)),
+		Err(error) => return Err(error.into()), Ok(_) => {},
+	}
+	let (root, before) = private_root(&path, owner)?;
+	let mut count = 0usize; let mut bytes = 0usize;
+	for item in fs::read_dir(&path)? {
+		count = count.checked_add(1).context("publication witness count overflow")?;
+		ensure!(count <= MAX_RECORDS, "publication witness capacity exceeded");
+		bytes = bytes.checked_add(read_record(&item?.path(), owner)?.len()).context("publication witness bytes overflow")?;
+		ensure!(bytes as u64 <= MAX_TOTAL_BYTES, "publication witness byte capacity exceeded");
+	}
+	ensure!(identity(&before) == identity(&root.metadata()?) && identity(&before) == identity(&fs::symlink_metadata(&path)?),
+		"publication witness namespace changed during complete sizing");
+	Ok((count, bytes))
+}
+
 pub(crate) fn validate_witnesses(history: &Path, policy: OrdinaryFeePolicy,
 	entries: &BTreeMap<Wtxid, PublicationEntry>,
 ) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
@@ -199,6 +220,11 @@ pub(crate) fn validate_witnesses_with_urgent(history: &Path, policy: OrdinaryFee
 	entries: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>,
 	urgent_signed: &BTreeMap<u64, sha256::Hash>,
 ) -> anyhow::Result<BTreeMap<Wtxid, PublicationRecord>> {
+	let rights = super::ordinary_round_rights::inventory(history, policy)?;
+	let usage = witness_usage(history)?;
+	ensure!(usage.0.checked_add(rights.0).is_some_and(|count| count <= MAX_RECORDS)
+		&& usage.1.checked_add(rights.1).is_some_and(|bytes| bytes as u64 <= MAX_TOTAL_BYTES),
+		"combined original fee and Round-rights witness capacity exceeded");
 	let directory = directory(history)?;
 	let owner = fs::symlink_metadata(history)?.uid();
 	match fs::symlink_metadata(&directory) {
@@ -260,7 +286,7 @@ pub(crate) fn write_witness_with_urgent(history: &Path, policy: OrdinaryFeePolic
 ) -> anyhow::Result<PublicationEntry> {
 	validate_witnesses_with_urgent(history, policy, existing, urgent_candidates, urgent_signed)?;
 	let entry = record.entry(policy)?;
-	write_new_record(history, &format!("{}.json", entry.id()), &serde_json::to_vec(record)?)?;
+	write_new_record(history, policy, &format!("{}.json", entry.id()), &serde_json::to_vec(record)?)?;
 	Ok(entry)
 }
 pub(crate) fn write_urgent_candidate(history: &Path, policy: OrdinaryFeePolicy,
@@ -271,7 +297,7 @@ pub(crate) fn write_urgent_candidate(history: &Path, policy: OrdinaryFeePolicy,
 	ensure!(!urgent_candidates.contains_key(&entry.attempt_index)
 		&& sha256::Hash::hash(raw) == entry.candidate_sha256, "urgent candidate already indexed or digest differs");
 	super::urgent_publication::UrgentCandidate::decode_reserved(raw, entry, policy)?;
-	write_new_record(history, &entry.filename(), raw)
+	write_new_record(history, policy, &entry.filename(), raw)
 }
 pub(crate) fn write_urgent_signed(history: &Path, policy: OrdinaryFeePolicy,
 	existing: &BTreeMap<Wtxid, PublicationEntry>, urgent_candidates: &BTreeMap<u64, sha256::Hash>,
@@ -281,7 +307,7 @@ pub(crate) fn write_urgent_signed(history: &Path, policy: OrdinaryFeePolicy,
 	ensure!(!urgent_signed.contains_key(&entry.attempt_index)
 		&& urgent_candidates.get(&entry.attempt_index) == Some(&entry.candidate_sha256)
 		&& sha256::Hash::hash(raw) == entry.record_sha256, "urgent signed witness differs from indexed original attempt");
-	write_new_record(history, &format!("urgent-{}.signed.json", entry.attempt_index), raw)
+	write_new_record(history, policy, &format!("urgent-{}.signed.json", entry.attempt_index), raw)
 }
 pub(crate) fn read_urgent_signed(history: &Path, index: u64) -> anyhow::Result<Vec<u8>> {
 	ensure!(index > 0, "urgent signed index absent");
@@ -300,7 +326,7 @@ pub(crate) fn read_urgent_candidate(history: &Path, index: u64) -> anyhow::Resul
 // Only fixed native filename constructors above reach this helper. The SAME
 // private witness root, total limits, create-new/readback/fsync rules cover both
 // classes; no new financial ledger or allowance is initialized here.
-fn write_new_record(history: &Path, name: &str, raw: &[u8]) -> anyhow::Result<()> {
+fn write_new_record(history: &Path, policy: OrdinaryFeePolicy, name: &str, raw: &[u8]) -> anyhow::Result<()> {
 	ensure!(raw.len() as u64 <= MAX_RECORD_BYTES, "publication witness exceeds byte bound");
 	let root = directory(history)?;
 	match fs::symlink_metadata(&root) {
@@ -313,7 +339,8 @@ fn write_new_record(history: &Path, name: &str, raw: &[u8]) -> anyhow::Result<()
 	}
 	let owner = fs::symlink_metadata(history)?.uid();
 	let (root_file, _) = private_root(&root, owner)?;
-	let mut count = 0usize; let mut current = 0u64;
+	let rights = super::ordinary_round_rights::inventory(history, policy)?;
+	let mut count = rights.0; let mut current = u64::try_from(rights.1)?;
 	for item in fs::read_dir(&root)? {
 		count = count.checked_add(1).context("publication record count overflow")?;
 		ensure!(count < MAX_RECORDS, "publication witness capacity exhausted");

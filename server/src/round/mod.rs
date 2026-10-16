@@ -1378,6 +1378,16 @@ async fn persist_round(
 			}
 		}
 
+		if srv.config.direct_expiry.enabled {
+			let owner = srv.native_fee_client.as_ref().context("native Round rights owner disappeared")?;
+			let permit = state.funding_tx.native_permit().context("native Round rights original permit missing")?;
+			let history = srv.config.data_dir.join(crate::payout_witness::DIRECT_DIRECTORY);
+			let expected_inputs = state.all_inputs.keys().map(ToString::to_string).collect();
+			// LAST fallible step before COMMIT. An unknown/aborted COMMIT retains
+			// the independent marker and holds startup; no SQL reconstruction.
+			crate::watchman::ordinary_round_rights::record(&history, t, owner.policy(), owner.identity(),
+				permit, &expected_inputs).await?;
+		}
 		Ok(())
 	}).await;
 

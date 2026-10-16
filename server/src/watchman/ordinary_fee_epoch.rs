@@ -132,6 +132,14 @@ impl NativeFeeEpoch {
 			}
 			Ok(())
 		}).await?;
+		// Only this checked original activation may initialize a genuinely empty
+		// Round-rights namespace. Booked or partially written history stays HOLD.
+		db.write(async |t| {
+			t.lock_native_fee_publication().await?;
+			super::ordinary_round_rights::initialize_original(t, budget.directory(), policy, &identity).await
+		}).await?;
+		super::ordinary_round_rights::validate_startup(db, budget.directory(), policy,
+			server, genesis, Some(expected)).await?;
 		let epoch = Self { identity };
 		budget.bind_native_epoch(&epoch)?;
 		Ok(epoch)

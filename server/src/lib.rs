@@ -480,6 +480,16 @@ impl Server {
 				opening_sha256: owner.original_opening_sha256 };
 			Some(Arc::new(watchman::ordinary_fee_client::NativeFeeClient::new(owner, identity, policy, server_key)?))
 		} else { None };
+		if cfg.direct_expiry.enabled {
+			let policy = match cfg.direct_expiry.regtest_qualification_fee_policy {
+				Some(policy) => policy,
+				None => watchman::ordinary_fee::OrdinaryFeePolicy::require_live_stored(&fee_history)?,
+			};
+			watchman::ordinary_round_rights::validate_startup(&db, &fee_history, policy,
+				server_key.public_key(), bitcoind.get_block_hash(0).await?,
+				cfg.native_fee_owner.as_ref().map(|owner| owner.original_opening_sha256)).await
+				.context("original Round rights startup validation failed before wallet replay")?;
+		}
 		bcd::require_version(&bitcoind).await?;
 		bitcoind.require_txindex().await?;
 

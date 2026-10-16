@@ -15,6 +15,7 @@ pub(crate) mod ordinary_fee_publication;
 pub(crate) mod ordinary_fee_auth;
 pub(crate) mod ordinary_fee_opening;
 pub(crate) mod ordinary_fee_epoch;
+pub(crate) mod ordinary_round_rights;
 pub(crate) mod ordinary_fee_broker;
 pub(crate) mod ordinary_fee_client;
 pub(crate) mod ordinary_fee_source;

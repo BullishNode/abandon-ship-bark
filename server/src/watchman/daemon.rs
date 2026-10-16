@@ -163,6 +163,13 @@ impl Daemon {
 			None
 		};
 		db.require_expiry_route(cfg.watchman.direct_expiry.is_some()).await?;
+		if let Some(direct) = &cfg.watchman.direct_expiry {
+			super::ordinary_round_rights::validate_startup(&db,
+				&direct.history_dir.join(crate::payout_witness::DIRECT_DIRECTORY), direct.ordinary_fee_policy,
+				server_key.public_key(), bitcoind.get_block_hash(0).await?,
+				cfg.native_fee_opening.as_ref().map(|opening| opening.original_opening_sha256)).await
+				.context("original Round rights startup validation failed before owning wallet replay")?;
+		}
 
 
 		// *******************

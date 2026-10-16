@@ -51,6 +51,38 @@ impl NativeFeeBroker {
 	pub(crate) fn response_bytes(&self, request: &[u8], record: PublicationRecord) -> anyhow::Result<Vec<u8>> {
 		super::ordinary_fee_auth::FeeReply::sign(request, record, self.epoch.identity(), self.server_key.leak_ref())
 	}
+	pub(crate) fn source_response_bytes(&self, request: &[u8], record: PublicationRecord,
+		source: super::ordinary_fee_source::FinalFeeSource,
+	) -> anyhow::Result<Vec<u8>> {
+		super::ordinary_fee_auth::FeeReply::sign_current(request, record, source, self.epoch.identity(), self.server_key.leak_ref())
+	}
+	/// Read-only, candidate-bound CURRENT source. No new debit or release of
+	/// original retained input exclusions follows from this observation.
+	pub(crate) async fn revalidate(&self, bytes: &[u8])
+		-> anyhow::Result<(PublicationRecord, super::ordinary_fee_source::FinalFeeSource)> {
+		let request = FeeRequest::authenticate(bytes, FeeRequestAction::Revalidate, self.epoch.identity())?;
+		let tx = request.transaction()?;
+		let record = self.retained(&tx, request.purpose())?.context("current source lacks original reservation")?;
+		let _bound = self.requests.clone().try_acquire_owned().context("native fee owner request bound reached")?;
+		let wallet = self.wallet.lock().await;
+		ensure!(wallet.kind() == WalletKind::Watchman, "current source is not actual owning Watchman");
+		let source = tokio::time::timeout(Duration::from_secs(20), self.db.write(async |t| {
+			t.lock_final_fee_sources().await?;
+			t.require_native_fee_intent(&record, self.budget.policy(), self.epoch.identity().opening_sha256, &tx).await?;
+			self.budget.require_publication(&record, &tx)?;
+			let inventory = wallet.inventory()?;
+			let reserve = checked_urgent_source(&self.core, &inventory, self.epoch.identity().genesis).await?;
+			let total = reserve.values().try_fold(0u64, |sum, output| sum.checked_add(output.value.to_sat()).context("current source sum overflow"))?;
+			ensure!(total >= self.budget.urgent_reserve().to_sat(), "current source lacks protected physical urgent floor");
+			ensure!(tx.input.iter().all(|input| !reserve.contains_key(&input.previous_output)
+				&& !inventory.reserved_outpoints.contains(&input.previous_output.to_string())), "ordinary candidate selects protected current input");
+			self.checked_rounds_parents(t, &tx).await?;
+			let journal = self.budget.current_source_journal()?;
+			super::ordinary_fee_source::FinalFeeSource::capture(t, &self.core, self.epoch.identity(), &tx, &inventory, reserve, journal).await
+		})).await.context("aggregate native current-source deadline exceeded")??;
+		Ok((record, source))
+	}
+
 	fn retained(&self, tx: &Transaction, purpose: PublicationPath) -> anyhow::Result<Option<PublicationRecord>> {
 		let records = self.budget.publication_records()?;
 		let Some(record) = records.get(&tx.compute_wtxid()) else { return Ok(None); };
@@ -108,7 +140,7 @@ impl NativeFeeBroker {
 			let parents = tokio::time::timeout(Duration::from_secs(15), async {
 				let inventory = wallet.inventory()?;
 				let reserve = checked_urgent_source(&self.core, &inventory, self.epoch.identity().genesis).await?;
-				ensure!(reserve.values().try_fold(0u64, |sum, amount| sum.checked_add(*amount).context("urgent source sum overflow"))?
+				ensure!(reserve.values().try_fold(0u64, |sum, amount| sum.checked_add(amount.value.to_sat()).context("urgent source sum overflow"))?
 					>= self.budget.urgent_reserve().to_sat(), "ordinary publication would lack confirmed unreserved urgent funds");
 				ensure!(tx.input.iter().all(|input| !reserve.contains_key(&input.previous_output)
 					&& !inventory.reserved_outpoints.contains(&input.previous_output.to_string())),
@@ -178,7 +210,7 @@ fn purpose_name(path: PublicationPath) -> &'static str {
 }
 async fn checked_urgent_source(core: &Client, wallet: &server_rpc::protos::WalletInventory,
 	genesis: bitcoin::BlockHash,
-) -> anyhow::Result<BTreeMap<OutPoint, u64>> {
+) -> anyhow::Result<BTreeMap<OutPoint, TxOut>> {
 	let tip = crate::bitcoind::tip(core).await?;
 	let network: bitcoin::Network = wallet.network.parse()?;
 	ensure!(bitcoin::constants::genesis_block(network).block_hash() == genesis, "urgent wallet network differs");
@@ -200,7 +232,7 @@ async fn checked_urgent_source(core: &Client, wallet: &server_rpc::protos::Walle
 			&& actual.confirmations >= wallet.min_trusted_confirmations
 			&& (!actual.coinbase || actual.confirmations >= bitcoin::constants::COINBASE_MATURITY),
 			"urgent input differs from independent Core source");
-		result.insert(point, output.value_sat);
+		result.insert(point, TxOut { value: actual.value, script_pubkey: actual.script_pub_key.script()? });
 	}
 	ensure!(crate::bitcoind::tip(core).await? == tip, "urgent source proof crossed Core tip");
 	Ok(result)

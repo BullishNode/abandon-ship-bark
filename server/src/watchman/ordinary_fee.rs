@@ -286,6 +286,34 @@ impl OrdinaryFeeBudget {
 		ledger.uncertain = false;
 		Ok(())
 	}
+	/// The actual carrier caller retains its Watchman wallet guard. The SAME
+	/// independent full-C debit now serializes with final publication fences.
+	/// Cancellation/unknown COMMIT poisons the owner even when fsync completed;
+	/// no physical signature follows a missing acknowledgement.
+	pub(crate) async fn reserve_carrier_ceiling(&self, db: &crate::database::Db, ceiling: Amount) -> anyhow::Result<()> {
+		struct Pending<'a> { owner: &'a OrdinaryFeeBudget, written: std::sync::atomic::AtomicBool, acknowledged: bool }
+		impl Drop for Pending<'_> {
+			fn drop(&mut self) {
+				if self.written.load(std::sync::atomic::Ordering::SeqCst) && !self.acknowledged { let _ = self.owner.mark_uncertain(); }
+			}
+		}
+		let mut pending = Pending { owner: self, written: std::sync::atomic::AtomicBool::new(false), acknowledged: false };
+		db.write(async |t| {
+			t.lock_native_fee_publication().await?;
+			self.reserve_ceiling(ceiling)?;
+			pending.written.store(true, std::sync::atomic::Ordering::SeqCst);
+			Ok(())
+		}).await?;
+		pending.acknowledged = true;
+		Ok(())
+	}
+	pub(crate) fn current_source_journal(&self) -> anyhow::Result<super::ordinary_fee_source::JournalStamp> {
+		let ledger = self.ledger.lock().map_err(|_| anyhow!("ordinary fee ledger lock poisoned"))?;
+		ensure!(!ledger.uncertain && ledger.active_epoch.is_some() && ledger.file.metadata()?.len() == ledger.length,
+			"native final source journal is uncertain or lacks active epoch");
+		let owner = std::os::unix::fs::MetadataExt::uid(&std::fs::symlink_metadata(&self.directory)?);
+		super::ordinary_fee_source::JournalStamp::read(&self.directory.join(BUDGET_FILE), owner)
+	}
 
 	/// Accounting primitive for the SAME owning Watchman process. The broker
 	/// must first hold its actual wallet guard and verify physical urgent funds.

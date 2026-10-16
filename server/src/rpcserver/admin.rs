@@ -161,6 +161,17 @@ impl rpc::server::NativeFeeService for crate::watchman::Daemon {
 		let signed_owner_response = broker.response_bytes(&bytes, record).map_err(|_| tonic::Status::internal("native fee signed response failed"))?;
 		Ok(tonic::Response::new(protos::NativeFeeResponse { signed_owner_response }))
 	}
+	async fn revalidate(&self, request: tonic::Request<protos::NativeFeeRequest>)
+		-> Result<tonic::Response<protos::NativeFeeResponse>, tonic::Status> {
+		let broker = self.native_fee_broker().ok_or_else(|| tonic::Status::failed_precondition("actual native fee epoch is not activated"))?;
+		let bytes = request.into_inner().authenticated_request;
+		let (record, source) = broker.revalidate(&bytes).await
+			.map_err(|error| tonic::Status::failed_precondition(format!("{error:#}")))?;
+		let signed_owner_response = broker.source_response_bytes(&bytes, record, source)
+			.map_err(|_| tonic::Status::internal("native current-source signed response failed"))?;
+		Ok(tonic::Response::new(protos::NativeFeeResponse { signed_owner_response }))
+	}
+
 }
 
 async fn reload_blocklist(

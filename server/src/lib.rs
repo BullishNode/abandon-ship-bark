@@ -369,6 +369,30 @@ impl Server {
 		Ok(Some(record))
 	}
 
+	pub(crate) async fn current_native_publication(&self, signed: &bitcoin::Transaction,
+		purpose: watchman::ordinary_fee_publication::PublicationPath,
+	) -> anyhow::Result<Option<(watchman::ordinary_fee_publication::PublicationRecord, watchman::ordinary_fee_source::FinalFeeSource)>> {
+		self.require_native_fee_owner()?;
+		if !self.config.direct_expiry.enabled { return Ok(None); }
+		// This RPC MUST precede every publication SQL/advisory lock.
+		let owner = self.native_fee_client.as_ref().context("native fee owner missing")?;
+		Ok(Some(owner.revalidate(purpose, signed).await?))
+	}
+	pub(crate) async fn require_final_native_source(&self, t: &database::Tx<'_>, signed: &bitcoin::Transaction,
+		record: &watchman::ordinary_fee_publication::PublicationRecord,
+		source: &watchman::ordinary_fee_source::FinalFeeSource,
+	) -> anyhow::Result<()> {
+		let owner = self.native_fee_client.as_ref().context("final native owner missing")?;
+		// One absolute deadline covers ALL Core prevouts and fixed SQL reads;
+		// statement_timeout alone cannot bound network awaits. This is before
+		// any financial SQL mutation; cancellation rolls the read-only prefix back.
+		tokio::time::timeout(std::time::Duration::from_secs(15), async {
+			t.require_native_fee_intent(record, owner.policy(), owner.identity().opening_sha256, signed).await?;
+			source.require_final(t, &self.bitcoind, owner.identity(), signed, record,
+				&self.config.data_dir.join(payout_witness::DIRECT_DIRECTORY), owner.policy().urgent_reserve_sat).await
+		}).await.context("aggregate final native source deadline exceeded")?
+	}
+
 	/// Whether a hold-capable lightning node is currently registered as online.
 	/// LightningManager connects asynchronously, so this may return false right
 	/// after [`Self::start`] returns even if a node is configured.

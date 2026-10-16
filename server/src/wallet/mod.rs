@@ -104,6 +104,7 @@ pub struct PersistedWallet {
 }
 
 impl PersistedWallet {
+	pub(crate) fn database(&self) -> &database::Db { &self.db }
 	/// Load a wallet from the database, or create if it doesn't exist yet.
 	pub async fn load_from_xpriv(
 		db: database::Db,

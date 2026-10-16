@@ -648,14 +648,15 @@ impl Process {
 		}
 
 		// finish and broadcast the tx
-		let (tx, native_permit) = if let Some((original, permit)) = prepared_funding {
-			let verified = self.srv.require_native_publication(&original,
-				crate::watchman::ordinary_fee_publication::PublicationPath::Pool).await?;
-			ensure!(verified.as_ref() == Some(&permit), "DIRECT pool original precommit permit changed");
+		let (tx, native_permit, current_source) = if let Some((original, permit)) = prepared_funding {
+			let (verified, source) = self.srv.current_native_publication(&original,
+				crate::watchman::ordinary_fee_publication::PublicationPath::Pool).await?
+				.context("DIRECT pool current owner source missing")?;
+			ensure!(verified == permit, "DIRECT pool original precommit permit changed");
 			wallet.log_signed_funding_tx(&original, funding_psbt.fee()?);
-			(original, Some(permit))
+			(original, Some(permit), Some(source))
 		} else {
-			(wallet.finish_tx_with_max_fee_rate(funding_psbt, max_fee_rate).context("error finishing tree funding tx")?, None)
+			(wallet.finish_tx_with_max_fee_rate(funding_psbt, max_fee_rate).context("error finishing tree funding tx")?, None, None)
 		};
 
 		// Create the vtxos and virtual transactions in the database
@@ -675,6 +676,9 @@ impl Process {
 			);
 		self.srv.db.write(async |t| {
 			if let Some(record) = &native_permit {
+				t.lock_final_fee_sources().await?;
+				self.srv.require_final_native_source(t, &tx, record,
+					current_source.as_ref().context("DIRECT pool final source missing")?).await?;
 				let owner = self.srv.native_fee_client.as_ref().context("native pool owner disappeared")?;
 				t.publish_native_fee_intent(record, owner.policy(), owner.identity().opening_sha256, &tx).await?;
 			}

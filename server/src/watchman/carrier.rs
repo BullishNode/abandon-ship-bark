@@ -118,7 +118,7 @@ pub(crate) async fn build_direct_carrier_with_replacement(
 		}).await.context("ordinary fee reserve preflight task failed")?;
 		wallet = held;
 		result?;
-		budget.reserve_ceiling(limits.max_miner_fee)?;
+		budget.reserve_carrier_ceiling(wallet.database(), limits.max_miner_fee).await?;
 	}
 	let mut fee = Amount::ZERO;
 

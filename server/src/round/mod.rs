@@ -1135,15 +1135,6 @@ impl SigningVtxoTree {
 		)
 	)]
 	async fn finish(mut self, srv: &Server) -> Result<RoundFinished, RoundError> {
-		if srv.config.direct_expiry.enabled {
-			let original = self.funding_tx.prepared().context("DIRECT round lost original signed funding")
-				.map_err(RoundError::Recoverable)?;
-			let permit = srv.require_native_publication(original,
-				crate::watchman::ordinary_fee_publication::PublicationPath::Round).await.map_err(RoundError::Recoverable)?;
-			if permit.as_ref() != self.funding_tx.native_permit() {
-				return Err(RoundError::Fatal(anyhow!("DIRECT round original precommit permit changed")));
-			}
-		}
 		// Combine the vtxo signatures.
 		self.next_step(RoundStep::CombineVtxoSignatures);
 
@@ -1168,8 +1159,22 @@ impl SigningVtxoTree {
 		// Construct the final signed vtxo tree.
 		let signed_vtxos = create_signed_vtxo_tree(&mut self, cosign_sigs);
 
+		// Hold the actual Rounds graph against local changes from current-owner
+		// observation through atomic rights/funding publication. Owner RPC is
+		// completed BEFORE any publication SQL/advisory lock is acquired.
+		let final_rounds_wallet = self.rounds_wallet.clone();
+		let final_wallet = if srv.config.direct_expiry.enabled { Some(final_rounds_wallet.lock().await) } else { None };
+		let current_source = if let Some(original) = self.funding_tx.prepared() {
+			let current = srv.current_native_publication(original,
+				crate::watchman::ordinary_fee_publication::PublicationPath::Round).await.map_err(RoundError::Recoverable)?;
+			if current.as_ref().map(|(record, _)| record) != self.funding_tx.native_permit() {
+				return Err(RoundError::Fatal(anyhow!("DIRECT round original precommit permit changed")));
+			}
+			current.map(|(_, source)| source)
+		} else { None };
 		// Persist round to database before signing and broadcasting.
-		persist_round(&mut self, srv, &signed_vtxos).await?;
+		persist_round(&mut self, srv, &signed_vtxos, current_source.as_ref()).await?;
+		drop(final_wallet);
 
 		// Sign the funding tx.
 		let signed_round_tx = {
@@ -1304,6 +1309,7 @@ async fn persist_round(
 	state: &mut SigningVtxoTree,
 	srv: &Server,
 	signed_vtxos: &CachedSignedVtxoTree,
+	current_source: Option<&crate::watchman::ordinary_fee_source::FinalFeeSource>,
 ) -> Result<(), RoundError> {
 	let round_step = state.round_step.proceed(RoundStep::Persist);
 	state.round_step = round_step;
@@ -1322,11 +1328,11 @@ async fn persist_round(
 	let real_output_keys = state.real_outputs.iter().map(|v| v.policy.user_pubkey()).collect::<Vec<_>>();
 	let result = srv.db.write(async |t| {
 		if srv.config.direct_expiry.enabled {
-			let owner = srv.native_fee_client.as_ref().context("native round owner disappeared")?;
 			let signed = state.funding_tx.prepared().context("native round original signed funding missing")?;
 			let permit = state.funding_tx.native_permit().context("native round original permit missing")?;
-			t.lock_native_fee_publication().await?;
-			t.require_native_fee_intent(permit, owner.policy(), owner.identity().opening_sha256, signed).await?;
+			t.lock_final_fee_sources().await?;
+			let source = current_source.context("native round current owner source missing")?;
+			srv.require_final_native_source(t, signed, permit, source).await?;
 		}
 		// Recheck every real output, including absent delegated participants.
 		// The real-output snapshot excludes server tree-shape padding.

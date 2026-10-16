@@ -1,5 +1,6 @@
 //! Authentication for the fixed internal fee-reservation service. No balance,
 //! ownership or permission to publish follows from authenticating a request.
+use anyhow::Context;
 use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::secp256k1::{schnorr, Keypair, Message, PublicKey};
@@ -7,6 +8,7 @@ use bitcoin::{BlockHash, Transaction};
 
 use super::ordinary_fee_publication::PublicationPath;
 use super::ordinary_fee_publication::PublicationRecord;
+use super::ordinary_fee_source::FinalFeeSource;
 
 const MAX_REQUEST_BYTES: usize = 2 * 1024 * 1024;
 const MAX_TRANSACTION_BYTES: usize = 400_000;
@@ -19,13 +21,18 @@ pub(crate) struct FeeReply {
 	version: u8,
 	request_sha256: sha256::Hash,
 	original_publication: PublicationRecord,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	current_source: Option<FinalFeeSource>,
 	signature: schnorr::Signature,
 }
-fn reply_message(identity: &FeeServiceIdentity, request: sha256::Hash, record: &PublicationRecord) -> anyhow::Result<Message> {
+fn reply_message(identity: &FeeServiceIdentity, request: sha256::Hash, record: &PublicationRecord, source: Option<&FinalFeeSource>) -> anyhow::Result<Message> {
 	let mut engine = sha256::Hash::engine(); engine.input(REPLY_DOMAIN);
 	engine.input(&identity.server_pubkey.serialize()); engine.input(identity.genesis.as_byte_array());
 	engine.input(identity.policy_sha256.as_byte_array()); engine.input(identity.opening_sha256.as_byte_array());
 	engine.input(request.as_byte_array()); engine.input(sha256::Hash::hash(&serde_json::to_vec(record)?).as_byte_array());
+	if let Some(source) = source {
+		engine.input(b"current-source-v1"); engine.input(sha256::Hash::hash(&serde_json::to_vec(source)?).as_byte_array());
+	}
 	Ok(Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array()))
 }
 impl FeeReply {
@@ -34,25 +41,46 @@ impl FeeReply {
 	) -> anyhow::Result<Vec<u8>> {
 		ensure!(key.public_key() == identity.server_pubkey, "native owner response key differs");
 		let request_sha256 = sha256::Hash::hash(request);
-		let signature = crate::SECP.sign_schnorr(&reply_message(identity, request_sha256, &record)?, key);
-		let bytes = serde_json::to_vec(&Self { version: 1, request_sha256, original_publication: record, signature })?;
+		let signature = crate::SECP.sign_schnorr(&reply_message(identity, request_sha256, &record, None)?, key);
+		let bytes = serde_json::to_vec(&Self { version: 1, request_sha256, original_publication: record, current_source: None, signature })?;
 		ensure!(bytes.len() <= 4 * 1024 * 1024, "native owner response exceeds bound");
 		Ok(bytes)
 	}
-	pub(crate) fn authenticate(bytes: &[u8], request: &[u8], identity: &FeeServiceIdentity) -> anyhow::Result<PublicationRecord> {
+	pub(crate) fn sign_current(request: &[u8], record: PublicationRecord, source: FinalFeeSource,
+		identity: &FeeServiceIdentity, key: &Keypair,
+	) -> anyhow::Result<Vec<u8>> {
+		ensure!(key.public_key() == identity.server_pubkey, "native source response key differs");
+		let request_sha256 = sha256::Hash::hash(request);
+		let signature = crate::SECP.sign_schnorr(&reply_message(identity, request_sha256, &record, Some(&source))?, key);
+		let bytes = serde_json::to_vec(&Self { version: 2, request_sha256, original_publication: record, current_source: Some(source), signature })?;
+		ensure!(bytes.len() <= 4 * 1024 * 1024, "native source response exceeds bound");
+		Ok(bytes)
+	}
+	fn decode(bytes: &[u8], request: &[u8], identity: &FeeServiceIdentity) -> anyhow::Result<Self> {
 		ensure!(bytes.len() <= 4 * 1024 * 1024, "native owner response exceeds bound");
 		let reply: Self = serde_json::from_slice(bytes)?;
-		ensure!(serde_json::to_vec(&reply)? == bytes && reply.version == 1
-			&& reply.request_sha256 == sha256::Hash::hash(request), "native owner reply differs from exact request");
-		crate::SECP.verify_schnorr(&reply.signature, &reply_message(identity, reply.request_sha256, &reply.original_publication)?,
+		ensure!(serde_json::to_vec(&reply)? == bytes
+			&& ((reply.version == 1 && reply.current_source.is_none()) || (reply.version == 2 && reply.current_source.is_some()))
+			&& reply.request_sha256 == sha256::Hash::hash(request), "native owner reply differs from exact request or source contract");
+		crate::SECP.verify_schnorr(&reply.signature, &reply_message(identity, reply.request_sha256, &reply.original_publication, reply.current_source.as_ref())?,
 			&identity.server_pubkey.x_only_public_key().0)?;
+		Ok(reply)
+	}
+	pub(crate) fn authenticate(bytes: &[u8], request: &[u8], identity: &FeeServiceIdentity) -> anyhow::Result<PublicationRecord> {
+		let reply = Self::decode(bytes, request, identity)?;
+		ensure!(reply.current_source.is_none(), "final source evidence requires source-aware consumer");
 		Ok(reply.original_publication)
+	}
+	pub(crate) fn authenticate_current(bytes: &[u8], request: &[u8], identity: &FeeServiceIdentity)
+		-> anyhow::Result<(PublicationRecord, FinalFeeSource)> {
+		let reply = Self::decode(bytes, request, identity)?;
+		Ok((reply.original_publication, reply.current_source.context("native final source evidence missing")?))
 	}
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub(crate) enum FeeRequestAction { Reserve, Verify }
+pub(crate) enum FeeRequestAction { Reserve, Verify, Revalidate }
 
 // The service builds its expected identity from actual verified Core, the
 // existing server key, stored native policy and immutable original opening.
@@ -80,7 +108,7 @@ pub(crate) struct FeeRequest {
 fn message(action: FeeRequestAction, purpose: PublicationPath, identity: &FeeServiceIdentity, raw: &[u8]) -> Message {
 	let mut engine = sha256::Hash::engine();
 	engine.input(DOMAIN); engine.input(&[1]);
-	engine.input(&[match action { FeeRequestAction::Reserve => 1, FeeRequestAction::Verify => 2 }]);
+	engine.input(&[match action { FeeRequestAction::Reserve => 1, FeeRequestAction::Verify => 2, FeeRequestAction::Revalidate => 3 }]);
 	engine.input(&[match purpose { PublicationPath::Round => 1, PublicationPath::Pool => 2 }]);
 	engine.input(&identity.server_pubkey.serialize()); engine.input(identity.genesis.as_byte_array());
 	engine.input(identity.policy_sha256.as_byte_array()); engine.input(identity.opening_sha256.as_byte_array());
@@ -220,6 +248,23 @@ mod tests {
 		assert!(FeeReply::authenticate(&padded, &request, &identity).is_err());
 		let mut foreign = identity; foreign.opening_sha256 = sha256::Hash::hash(b"another actual original opening");
 		assert!(FeeReply::authenticate(&reply, &request, &foreign).is_err());
+	}
+
+	#[test]
+	fn current_owner_reply_cannot_be_discarded_replayed_as_verify_or_changed() {
+		let (key, identity, tx, record) = reply_vector();
+		let request = FeeRequest::sign(FeeRequestAction::Revalidate, PublicationPath::Round, &identity, &tx, &key).unwrap();
+		let source = FinalFeeSource::synthetic_for_test(&identity, &tx, 40_000);
+		let reply = FeeReply::sign_current(&request, record.clone(), source.clone(), &identity, &key).unwrap();
+		assert_eq!(FeeReply::authenticate_current(&reply, &request, &identity).unwrap(), (record.clone(), source));
+		assert!(FeeReply::authenticate(&reply, &request, &identity).is_err());
+		let verify = FeeRequest::sign(FeeRequestAction::Verify, PublicationPath::Round, &identity, &tx, &key).unwrap();
+		assert!(FeeReply::authenticate_current(&reply, &verify, &identity).is_err());
+		let old = FeeReply::sign(&request, record, &identity, &key).unwrap();
+		assert!(FeeReply::authenticate_current(&old, &request, &identity).is_err());
+		let mut changed: FeeReply = serde_json::from_slice(&reply).unwrap();
+		changed.current_source = Some(FinalFeeSource::synthetic_for_test(&identity, &tx, 40_001));
+		assert!(FeeReply::authenticate_current(&serde_json::to_vec(&changed).unwrap(), &request, &identity).is_err());
 	}
 
 }

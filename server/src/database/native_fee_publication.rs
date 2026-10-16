@@ -46,6 +46,20 @@ fn retained_candidate(id: &str, raw: &[u8], published: bool,
 }
 
 impl Tx<'_> {
+	/// Must be the FIRST operation in a new source/publication transaction.
+	/// Explicit READ COMMITTED avoids an inherited stale snapshot while waiting
+	/// on advisory locks. No owning-wallet RPC is allowed under these locks.
+	pub(crate) async fn lock_final_fee_sources(&self) -> anyhow::Result<()> {
+		self.batch_execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED; SET LOCAL statement_timeout='8s'; SET LOCAL lock_timeout='5s';").await?;
+		ensure!(self.query_one("SHOW transaction_isolation", &[]).await?.get::<_, String>(0) == "read committed",
+			"native final source requires actual READ COMMITTED isolation");
+		self.query_one("SELECT pg_advisory_xact_lock($1)", &[&(AdvisoryLock::MailboxWrite as i64)]).await?;
+		self.lock_htlc_settlements().await?;
+		self.lock_expiry_carriers().await?;
+		self.lock_native_fee_publication().await?;
+		self.batch_execute("LOCK TABLE wallet_changeset,native_fee_publication,native_fee_input,expiry_carrier IN SHARE MODE;").await?;
+		Ok(())
+	}
 	/// Every DIRECT nursery insertion, including alternate callers, must bind
 	/// the exact signed body/input set to the original fee epoch. No allowance
 	/// is created here; the independent owning journal is checked at relay.

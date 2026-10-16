@@ -12,6 +12,7 @@ use server_rpc::{admin::NativeFeeServiceClient, protos};
 use super::ordinary_fee::OrdinaryFeePolicy;
 use super::ordinary_fee_auth::{FeeReply, FeeRequest, FeeRequestAction, FeeServiceIdentity};
 use super::ordinary_fee_publication::{PublicationPath, PublicationRecord};
+use super::ordinary_fee_source::FinalFeeSource;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -52,6 +53,21 @@ impl NativeFeeClient {
 	pub(crate) async fn request(&self, action: FeeRequestAction, purpose: PublicationPath,
 		signed: &Transaction,
 	) -> anyhow::Result<PublicationRecord> {
+		ensure!(action != FeeRequestAction::Revalidate, "source-aware consumer required");
+		let (original_request, response) = self.exchange(action, purpose, signed).await?;
+		let record = FeeReply::authenticate(&response, &original_request, &self.identity)?;
+		self.check_record(&record, purpose, signed)?;
+		Ok(record)
+	}
+	pub(crate) async fn revalidate(&self, purpose: PublicationPath, signed: &Transaction)
+		-> anyhow::Result<(PublicationRecord, FinalFeeSource)> {
+		let (request, response) = self.exchange(FeeRequestAction::Revalidate, purpose, signed).await?;
+		let (record, source) = FeeReply::authenticate_current(&response, &request, &self.identity)?;
+		self.check_record(&record, purpose, signed)?;
+		Ok((record, source))
+	}
+	async fn exchange(&self, action: FeeRequestAction, purpose: PublicationPath, signed: &Transaction)
+		-> anyhow::Result<(Vec<u8>, Vec<u8>)> {
 		let authenticated_request = FeeRequest::sign(action, purpose, &self.identity, signed, self.server_key.leak_ref())?;
 		let mut client = NativeFeeServiceClient::new(self.channel.clone())
 			.max_decoding_message_size(4 * 1024 * 1024)
@@ -61,13 +77,16 @@ impl NativeFeeClient {
 		let response = match action {
 			FeeRequestAction::Reserve => client.reserve(request).await,
 			FeeRequestAction::Verify => client.verify(request).await,
+			FeeRequestAction::Revalidate => client.revalidate(request).await,
 		}.context("native fee owner did not acknowledge original candidate; retain its signed bytes/input exclusions")?
 			.into_inner().signed_owner_response;
 		ensure!(response.len() <= 4 * 1024 * 1024, "native fee response exceeds proof bound");
-		let record = FeeReply::authenticate(&response, &original_request, &self.identity)?;
+		Ok((original_request, response))
+	}
+	fn check_record(&self, record: &PublicationRecord, purpose: PublicationPath, signed: &Transaction) -> anyhow::Result<()> {
 		record.matches(signed)?;
 		ensure!(record.entry(self.policy)?.purpose() == match purpose { PublicationPath::Round => "round", PublicationPath::Pool => "pool" },
 			"native fee response has another publication purpose");
-		Ok(record)
+		Ok(())
 	}
 }

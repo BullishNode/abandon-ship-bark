@@ -697,6 +697,7 @@ service WalletAdminService {
 service NativeFeeService {
 	rpc Reserve(NativeFeeRequest) returns (NativeFeeResponse) {}
 	rpc Verify(NativeFeeRequest) returns (NativeFeeResponse) {}
+	rpc Revalidate(NativeFeeRequest) returns (NativeFeeResponse) {}
 }
 message NativeFeeRequest { bytes authenticated_request = 1; }
 message NativeFeeResponse { bytes signed_owner_response = 1; }

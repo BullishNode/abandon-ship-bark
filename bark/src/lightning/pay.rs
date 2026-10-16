@@ -34,9 +34,26 @@ pub struct LightningSendOptions {
 	/// How long the server keeps trying to pay, capped to the server's
 	/// maximum. `None` leaves it to the server.
 	pub retry_for: Option<Duration>,
+	/// Require a signed invoice to commit to the exact advertised LNURL metadata.
+	/// Also bind the callback endpoint and, for an address, its advertised identifier.
+	/// The default preserves the generic LNURL service compatibility policy.
+	pub require_lnurl_metadata: bool,
+	/// Additional trusted public root certificate for a strict native LNURL profile.
+	/// TLS verification, HTTPS-only requests and redirect refusal remain enforced.
+	pub lnurl_root_ca_pem: Option<Vec<u8>>,
 }
 
 impl LightningSendOptions {
+	pub fn require_lnurl_metadata(mut self, required: bool) -> Self {
+		self.require_lnurl_metadata = required;
+		self
+	}
+
+	pub fn lnurl_root_ca_pem(mut self, pem: impl Into<Vec<u8>>) -> Self {
+		self.lnurl_root_ca_pem = Some(pem.into());
+		self
+	}
+
 	pub fn wait(mut self, wait: bool) -> Self {
 		self.wait = wait;
 		self
@@ -243,7 +260,7 @@ impl Wallet {
 		opts: LightningSendOptions,
 	) -> anyhow::Result<Invoice> {
 		let comment = comment.as_ref();
-		let invoice: Invoice = lnaddr_invoice(addr, amount, comment).await
+		let invoice: Invoice = lnaddr_invoice(addr, amount, comment, &opts).await
 			.context("lightning address error")?.into();
 		info!("Sending {} to lightning address {}", amount, addr);
 		self.make_lightning_payment_with(&invoice, addr.clone().into(), None, opts).await?;
@@ -274,7 +291,7 @@ impl Wallet {
 		comment: Option<impl AsRef<str>>,
 		opts: LightningSendOptions,
 	) -> anyhow::Result<Invoice> {
-		let invoice: Invoice = lnurlp_invoice(&lnurl.url, amount, comment).await
+		let invoice: Invoice = lnurlp_invoice(&lnurl.url, amount, comment, &opts, None).await
 			.context("lnurl-pay error")?.into();
 		info!("Sending {} to lnurl {}", amount, lnurl);
 		self.make_lightning_payment_with(&invoice, lnurl.clone().into(), None, opts).await?;

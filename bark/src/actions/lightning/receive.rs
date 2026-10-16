@@ -26,6 +26,7 @@ use server_rpc::{protos, StatusExt};
 use server_rpc::protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos;
 
 use crate::{Config, Wallet};
+use crate::lightning::bolt11_currency_matches_network;
 use crate::actions::{
 	Advance, AdvanceError, BASE_RETRY_BACKOFF, WalletAction, WalletActionId, park_with_backoff,
 };
@@ -398,6 +399,13 @@ pub(crate) async fn start_lightning_receive(
 	let invoice = Bolt11Invoice::from_str(&resp.bolt11)
 		.context("invalid bolt11 invoice returned by Ark server")?;
 	validate_bolt11_payment_hash(&invoice, payment_hash)?;
+	let requested_msat = amount.to_sat().checked_mul(1_000).context("invoice amount overflows millisatoshis")?;
+	if invoice.amount_milli_satoshis() != Some(requested_msat) {
+		bail!("invoice amount does not match the requested amount");
+	}
+	if !bolt11_currency_matches_network(invoice.currency(), wallet.network().await?) {
+		bail!("invoice currency does not match the wallet network");
+	}
 	if let Some(expected) = description_hash {
 		if !matches!(invoice.description(), Bolt11InvoiceDescriptionRef::Hash(actual) if actual.0 == expected) {
 			bail!("invoice description hash does not match the requested description_hash");

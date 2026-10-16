@@ -10,7 +10,7 @@ use bitcoin_ext::{BlockHeight, TxOutExt};
 use chrono::{DateTime, Utc};
 use tokio_postgres::Row;
 
-use ark::{ProtocolDecodingError, ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoId};
+use ark::{ProtocolDecodingError, ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId};
 use ark::vtxo::{Bare, Full, VtxoValidationError};
 
 use super::{Tx, VtxoState};
@@ -18,7 +18,7 @@ use super::{Tx, VtxoState};
 #[derive(Debug, Clone, Copy)]
 pub struct BackingSnapshotLimits {
 	pub max_rows: usize,
-	/// Sum of the stored VTXO encodings (including pending Board encodings).
+	/// Sum of the stored VTXO encodings.
 	pub max_serialized_bytes: usize,
 }
 
@@ -45,12 +45,6 @@ pub struct BackingVtxoFact {
 	pub lightning_htlc_subscription_id: Option<i64>,
 }
 
-pub struct BackingPendingBoardFact {
-	pub anchor: OutPoint,
-	pub vtxo: Vtxo,
-	pub genesis: SnapshotGenesis,
-}
-
 /// Complete known rows for the queried anchors, including spent and intermediate
 /// representations. A progressed backing's anchor lookup is only a superset:
 /// the caller must validate actual full genesis/path containment before treating
@@ -59,7 +53,6 @@ pub struct BackingPendingBoardFact {
 pub struct BackingSnapshot {
 	pub roots: Vec<ServerVtxo>,
 	pub regular: Vec<BackingVtxoFact>,
-	pub pending_boards: Vec<BackingPendingBoardFact>,
 	pub serialized_bytes: usize,
 }
 
@@ -250,29 +243,21 @@ impl BackingSnapshot {
 // a single oversized bytea must not be copied into the client before refusal.
 const SNAPSHOT: &str = "
 WITH inventory AS (
-	SELECT false AS pending, vtxo_id, anchor_point, id, vtxo, expiry,
+	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
 		confirmed_height, spend_state::text AS spend_state, created_at, updated_at,
 		frontier_at, onchain_spent_height, onchain_spent_txid,
 		lightning_htlc_subscription_id, vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
 	FROM vtxo WHERE anchor_point = ANY($1)
-	UNION ALL
-	SELECT true, p.vtxo_id, p.id, NULL::bigint, p.vtxo, p.expiry,
-		NULL::text, NULL::bigint, NULL::text, NULL::int4,
-		NULL::int4, NULL::text, NULL::timestamptz, NULL::timestamptz,
-		NULL::timestamptz, NULL::int4, NULL::text, NULL::bigint,
-		NULL::text, NULL::int4, NULL::text, NULL::bytea, NULL::text, NULL::bigint
-	FROM pending_board p WHERE p.id = ANY($1)
-	AND NOT EXISTS (SELECT 1 FROM vtxo v WHERE v.vtxo_id = p.vtxo_id)
 ), bounded AS (
-	SELECT pending, vtxo_id, anchor_point, id, vtxo, expiry,
+	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
 		confirmed_height, spend_state, created_at, updated_at, frontier_at,
 		onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
 		vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
-	FROM inventory ORDER BY anchor_point, vtxo_id, pending LIMIT $2
+	FROM inventory ORDER BY anchor_point, vtxo_id LIMIT $2
 ), sized AS (
-	SELECT pending, vtxo_id, anchor_point, id, vtxo, expiry,
+	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
 		confirmed_height, spend_state, created_at, updated_at, frontier_at,
 		onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id,
@@ -280,7 +265,7 @@ WITH inventory AS (
 		count(*) OVER () AS row_count,
 		sum(octet_length(vtxo)::bigint) OVER ()::bigint AS byte_count FROM bounded
 )
-SELECT pending, vtxo_id, anchor_point, id,
+SELECT vtxo_id, anchor_point, id,
 	CASE WHEN row_count < $2 AND byte_count <= $3 THEN vtxo ELSE NULL END AS vtxo,
 	expiry, oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
 	confirmed_height, spend_state, created_at, updated_at, frontier_at,
@@ -288,7 +273,7 @@ SELECT pending, vtxo_id, anchor_point, id,
 	vtxo_txid, exit_delta, policy_type,
 	CASE WHEN row_count < $2 AND byte_count <= $3 THEN policy ELSE NULL END AS policy,
 	server_pubkey, amount, row_count, byte_count
-FROM sized ORDER BY anchor_point, vtxo_id, pending";
+FROM sized ORDER BY anchor_point, vtxo_id";
 
 impl Tx<'_> {
 	/// Read the whole bounded anchor inventory or refuse it. No partial payable
@@ -314,41 +299,32 @@ impl Tx<'_> {
 		ensure!(count <= limits.max_rows, "complete backing snapshot exceeds row budget");
 		ensure!(serialized_bytes <= limits.max_serialized_bytes, "complete backing snapshot exceeds serialized byte budget");
 		let mut snapshot = BackingSnapshot {
-			roots: roots.to_vec(), regular: Vec::new(), pending_boards: Vec::new(), serialized_bytes,
+			roots: roots.to_vec(), regular: Vec::new(), serialized_bytes,
 		};
 		for row in rows {
 			let id = VtxoId::from_str(row.get::<_, &str>("vtxo_id"))?;
 			let anchor = OutPoint::from_str(row.get::<_, &str>("anchor_point"))?;
-			if row.get::<_, bool>("pending") {
-				let vtxo = Vtxo::deserialize(row.get::<_, &[u8]>("vtxo"))?;
-				ensure!(vtxo.id() == id && vtxo.chain_anchor() == anchor &&
-					vtxo.expiry_height().to_u32() == u32::try_from(row.get::<_, i32>("expiry"))?,
-					"backing snapshot pending Board facts disagree");
-				let genesis = genesis_availability(&vtxo);
-				snapshot.pending_boards.push(BackingPendingBoardFact { anchor, vtxo, genesis });
-			} else {
-				let frontier_at = row.get("frontier_at");
-				let onchain_spent_height = optional_height(&row, "onchain_spent_height")?;
-				let onchain_spent_txid = row.get::<_, Option<&str>>("onchain_spent_txid").map(Txid::from_str).transpose()?;
-				let lightning_htlc_subscription_id = row.get("lightning_htlc_subscription_id");
-				let data = row.get::<_, &[u8]>("vtxo");
-				let encoded: ServerVtxo = ServerVtxo::deserialize(data)?;
-				let (full_vtxo, genesis) = decode_genesis(data)?;
-				ensure!(encoded.id() == id && encoded.chain_anchor() == anchor &&
-					encoded.expiry_height().to_u32() == u32::try_from(row.get::<_, i32>("expiry"))? &&
-					encoded.point().txid.to_string() == row.get::<_, &str>("vtxo_txid") &&
-					i32::from(encoded.exit_delta().to_u16()) == row.get::<_, i32>("exit_delta") &&
-					encoded.policy_type().to_string() == row.get::<_, &str>("policy_type") &&
-					encoded.policy().serialize() == row.get::<_, &[u8]>("policy") &&
-					encoded.server_pubkey().to_string() == row.get::<_, &str>("server_pubkey") &&
-					encoded.amount().to_sat() == u64::try_from(row.get::<_, i64>("amount"))?,
-					"backing snapshot source metadata disagrees with encoded VTXO");
-				let state = VtxoState::<Bare, ServerVtxoPolicy>::try_from(row)?;
-				ensure!(state.vtxo.id() == id && state.vtxo.chain_anchor() == anchor,
-					"backing snapshot source facts disagree");
-				snapshot.regular.push(BackingVtxoFact { state, full_vtxo, genesis, frontier_at,
-					onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id });
-			}
+			let frontier_at = row.get("frontier_at");
+			let onchain_spent_height = optional_height(&row, "onchain_spent_height")?;
+			let onchain_spent_txid = row.get::<_, Option<&str>>("onchain_spent_txid").map(Txid::from_str).transpose()?;
+			let lightning_htlc_subscription_id = row.get("lightning_htlc_subscription_id");
+			let data = row.get::<_, &[u8]>("vtxo");
+			let encoded: ServerVtxo = ServerVtxo::deserialize(data)?;
+			let (full_vtxo, genesis) = decode_genesis(data)?;
+			ensure!(encoded.id() == id && encoded.chain_anchor() == anchor &&
+				encoded.expiry_height().to_u32() == u32::try_from(row.get::<_, i32>("expiry"))? &&
+				encoded.point().txid.to_string() == row.get::<_, &str>("vtxo_txid") &&
+				i32::from(encoded.exit_delta().to_u16()) == row.get::<_, i32>("exit_delta") &&
+				encoded.policy_type().to_string() == row.get::<_, &str>("policy_type") &&
+				encoded.policy().serialize() == row.get::<_, &[u8]>("policy") &&
+				encoded.server_pubkey().to_string() == row.get::<_, &str>("server_pubkey") &&
+				encoded.amount().to_sat() == u64::try_from(row.get::<_, i64>("amount"))?,
+				"backing snapshot source metadata disagrees with encoded VTXO");
+			let state = VtxoState::<Bare, ServerVtxoPolicy>::try_from(row)?;
+			ensure!(state.vtxo.id() == id && state.vtxo.chain_anchor() == anchor,
+				"backing snapshot source facts disagree");
+			snapshot.regular.push(BackingVtxoFact { state, full_vtxo, genesis, frontier_at,
+				onchain_spent_height, onchain_spent_txid, lightning_htlc_subscription_id });
 		}
 		for root in roots {
 			let fact = snapshot.regular.iter().find(|f| f.state.vtxo.id() == root.id())
@@ -423,7 +399,7 @@ mod test {
 			item.tx.output.into_iter().enumerate().filter(|(_, out)| out.is_p2a_fee_anchor())
 				.map(move |(vout, txout)| BackingPartitionResidual { outpoint: OutPoint::new(txid, vout as u32), txout })
 		}).collect();
-		(BackingSnapshot { roots: vec![root], regular: vec![], pending_boards: vec![], serialized_bytes: 0 },
+		(BackingSnapshot { roots: vec![root], regular: vec![], serialized_bytes: 0 },
 			source, vector.anchor_tx.clone(), residuals)
 	}
 
@@ -451,7 +427,7 @@ mod test {
 			root.amount() + Amount::from_sat(1), root.expiry_height(), root.server_pubkey(),
 			root.exit_delta(), root.chain_anchor());
 		assert_eq!(bad_root.point(), snapshot.roots[0].point());
-		let wrong_metadata = BackingSnapshot { roots: vec![bad_root], regular: vec![], pending_boards: vec![], serialized_bytes: 0 };
+		let wrong_metadata = BackingSnapshot { roots: vec![bad_root], regular: vec![], serialized_bytes: 0 };
 		let error = wrong_metadata.check_partition(&[source.clone()], &[funding.clone()], &residuals, limits).unwrap_err();
 		assert!(format!("{error:#}").contains("root metadata differs"), "actual funding identity alone cannot authorize different TxOut metadata");
 

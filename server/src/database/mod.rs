@@ -15,6 +15,7 @@ mod fork_embedded {
 }
 
 pub mod fallback;
+pub mod expiry_inventory;
 
 mod ban;
 pub mod block;

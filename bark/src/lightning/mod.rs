@@ -23,6 +23,9 @@ fn verify_lnurlp_invoice(
 	resp: &PayResponse,
 	require_metadata: bool,
 ) -> anyhow::Result<()> {
+	if require_metadata && invoice.is_expired() {
+		bail!("strict lnurl invoice has expired");
+	}
 	match invoice.amount_milli_satoshis() {
 		Some(msat) if msat == amount.to_msat() => {},
 		Some(msat) => bail!(
@@ -325,6 +328,11 @@ mod strict_lnurl_tests {
 	}
 
 	fn signed_invoice_for_currency(metadata: &str, amount_msat: u64, direct: bool, currency: Currency) -> Bolt11Invoice {
+		let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap();
+		signed_invoice_at(metadata, amount_msat, direct, currency, now)
+	}
+
+	fn signed_invoice_at(metadata: &str, amount_msat: u64, direct: bool, currency: Currency, timestamp: std::time::Duration) -> Bolt11Invoice {
 		let key = SecretKey::from_slice(&[2; 32]).unwrap();
 		let secp = Secp256k1::new();
 		let builder = InvoiceBuilder::new(currency);
@@ -332,9 +340,25 @@ mod strict_lnurl_tests {
 			else { builder.description_hash(sha256::Hash::hash(metadata.as_bytes())) };
 		builder.payment_hash(sha256::Hash::hash(b"test-only preimage"))
 			.payment_secret(PaymentSecret([42; 32]))
-			.duration_since_epoch(std::time::Duration::from_secs(1_700_000_000))
+			.duration_since_epoch(timestamp).expiry_time(std::time::Duration::from_secs(3_600))
 			.min_final_cltv_expiry_delta(18).amount_milli_satoshis(amount_msat)
 			.build_signed(|hash: &Message| secp.sign_ecdsa_recoverable(hash, &key)).unwrap()
+	}
+
+	#[test]
+	fn strict_lnurl_expired_signed_invoice_refuses_and_current_invoice_passes() {
+		let resp = response();
+		let expired = signed_invoice_at(&resp.metadata, 10_000_000, false, Currency::BitcoinTestnet,
+			std::time::Duration::from_secs(1_700_000_000));
+		expired.check_signature().unwrap();
+		assert!(expired.is_expired());
+		let error = verify_lnurlp_invoice(&expired, Amount::from_sat(10_000), &resp, true).unwrap_err();
+		assert!(error.to_string().contains("strict lnurl invoice has expired"));
+		verify_lnurlp_invoice(&expired, Amount::from_sat(10_000), &resp, false).unwrap();
+		let current = signed_invoice(&resp.metadata, 10_000_000, false);
+		current.check_signature().unwrap();
+		assert!(!current.is_expired());
+		verify_lnurlp_invoice(&current, Amount::from_sat(10_000), &resp, true).unwrap();
 	}
 
 	#[test]

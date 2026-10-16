@@ -832,10 +832,10 @@ impl ParkedReceive {
 			let mut path = vec![vtxo.chain_anchor()];
 			path.extend(vtxo.transactions().map(|item| bitcoin::OutPoint::new(item.tx.compute_txid(), item.output_idx as u32)));
 			let ids = path.iter().map(ToString::to_string).collect::<Vec<_>>();
-			let spenders = db.read(async |t| t.query(
+			let spenders = db.read(async |t| Ok(t.query(
 				"SELECT v.onchain_spent_txid FROM UNNEST($1::text[]) WITH ORDINALITY AS requested(id,position) LEFT JOIN vtxo v ON v.vtxo_id=requested.id ORDER BY requested.position",
 				&[&ids],
-			).await).await.unwrap();
+			).await?)).await.unwrap();
 			assert_eq!(spenders.len(), path.len());
 			let mut backing = Vec::new();
 			for (outpoint, row) in path.into_iter().zip(spenders) {

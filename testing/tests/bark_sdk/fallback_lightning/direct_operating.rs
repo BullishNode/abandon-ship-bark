@@ -18,13 +18,7 @@ pub(super) fn configure<'a>(
 	builder: ark_testing::context::builders::CaptaindBuilder<'a>, direct: bool,
 ) -> ark_testing::context::builders::CaptaindBuilder<'a> {
 	if !direct { return builder; }
-	builder.cfg(|c| {
-		assert!(!c.expiry_payout.enabled);
-		c.direct_expiry.enabled = true;
-		c.direct_expiry.grace_blocks = 6;
-		c.direct_expiry.interval = Duration::from_secs(3600);
-		c.round_interval = Duration::from_secs(3600);
-	}).watchmand_cfg(|c| {
+	builder.cfg(configure_cap).watchmand_cfg(|c| {
 		c.min_trusted_confs = 3;
 		c.watchman.direct_expiry = Some(server::watchman::DirectExpiryConfig {
 			ordinary_fee_policy: Default::default(),
@@ -34,6 +28,16 @@ pub(super) fn configure<'a>(
 		c.watchman.sweep_interval = Duration::from_secs(3600);
 		c.watchman.reaction_interval = Duration::from_secs(3600);
 	})
+}
+
+// CaptaindBuilder.cfg replaces its closure. A journey adding lifetime settings
+// must call this same fixed setter inside its final configuration closure.
+pub(super) fn configure_cap(c: &mut server::Config) {
+	assert!(!c.expiry_payout.enabled);
+	c.direct_expiry.enabled = true;
+	c.direct_expiry.grace_blocks = 6;
+	c.direct_expiry.interval = Duration::from_secs(3600);
+	c.round_interval = Duration::from_secs(3600);
 }
 
 // Match native watchman/daemon.rs: the independent ledger lives in the

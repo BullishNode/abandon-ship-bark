@@ -239,10 +239,18 @@ async fn interrupted_receive_for(outcome: ReceiveOutcome, fault: ReturnFault, fo
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let builder = ctx.captaind("server").bitcoind(ctx.bitcoind_arc())
 		.lightningd(&lightning.internal).funded(btc(10)).watchmand();
-	let srv = direct_operating::configure(builder, direct).cfg(|c| {
+	let srv = direct_operating::configure(builder, direct).cfg(move |c| {
 			c.vtxo_lifetime = BlockDelta::new(512);
 			c.vtxopool.vtxo_lifetime = BlockDelta::new(512);
+			if direct { direct_operating::configure_cap(c); }
 		}).create().await;
+	if direct {
+		let c = srv.config();
+		assert!(!c.expiry_payout.enabled && c.direct_expiry.enabled,
+			"the actual first-start cap configuration must retain the direct route");
+		assert_eq!(c.vtxo_lifetime, BlockDelta::new(512));
+		assert_eq!(c.vtxopool.vtxo_lifetime, BlockDelta::new(512));
+	}
 	tokio::time::timeout(Duration::from_secs(45), srv.wait_for_vtxopool(&ctx)).await
 		.expect("the initially funded pool must become ready");
 	lightning.sync().await;

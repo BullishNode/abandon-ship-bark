@@ -402,7 +402,7 @@ pub(crate) async fn start_lightning_receive(
 	if invoice.amount_milli_satoshis() != Some(requested_msat) {
 		bail!("invoice amount does not match the requested amount");
 	}
-	if invoice.currency() != invoice_currency_for_network(wallet.network().await?) {
+	if !invoice_currency_matches_network(wallet.network().await?, invoice.currency()) {
 		bail!("invoice currency does not match the wallet network");
 	}
 	if let Some(expected) = description_hash {
@@ -1070,27 +1070,42 @@ mod tests {
 	}
 }
 
-// CLN uses the testnet BOLT11 currency for signet and testnet4. Do not infer
-// a separate invoice prefix from the wallet's Bitcoin chain identity.
-fn invoice_currency_for_network(network: Network) -> Currency {
-	match network {
-		Network::Signet | Network::Testnet4 => Currency::BitcoinTestnet,
-		network => Currency::from(network),
-	}
+// Signet nodes can issue Signet or testnet BOLT11 currencies. Currency alone
+// cannot establish signet identity; the independent chain/server gates remain.
+fn invoice_currency_matches_network(network: Network, currency: Currency) -> bool {
+	matches!((network, currency),
+		(Network::Bitcoin, Currency::Bitcoin) |
+		(Network::Testnet | Network::Testnet4, Currency::BitcoinTestnet) |
+		(Network::Signet, Currency::Signet | Currency::BitcoinTestnet) |
+		(Network::Regtest, Currency::Regtest))
 }
 
 #[cfg(test)]
 mod invoice_response_network_tests {
-	use super::invoice_currency_for_network;
-	use bitcoin::Network;
-	use lightning_invoice::Currency;
+	use super::invoice_currency_matches_network;
+	use bitcoin::{Network, hashes::{sha256, Hash}, secp256k1::{Message, Secp256k1, SecretKey}};
+	use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 
 	#[test]
-	fn invoice_network_uses_cln_testnet_currency_for_signet() {
-		assert_eq!(invoice_currency_for_network(Network::Signet), Currency::BitcoinTestnet);
-		assert_eq!(invoice_currency_for_network(Network::Testnet4), Currency::BitcoinTestnet);
-		assert_eq!(invoice_currency_for_network(Network::Testnet), Currency::BitcoinTestnet);
-		assert_eq!(invoice_currency_for_network(Network::Bitcoin), Currency::Bitcoin);
-		assert_eq!(invoice_currency_for_network(Network::Regtest), Currency::Regtest);
+	fn signed_invoice_network_accepts_only_declared_signet_and_other_network_currencies() {
+		for (currency, expected) in [
+			(Currency::Bitcoin, [true, false, false, false, false]),
+			(Currency::BitcoinTestnet, [false, true, true, true, false]),
+			(Currency::Signet, [false, false, false, true, false]),
+			(Currency::Regtest, [false, false, false, false, true]),
+			(Currency::Simnet, [false, false, false, false, false]),
+		] {
+			let key = SecretKey::from_slice(&[2; 32]).unwrap();
+			let invoice = InvoiceBuilder::new(currency).description_hash(sha256::Hash::hash(b"core currency control"))
+				.payment_hash(sha256::Hash::hash(b"core currency test-only payment hash"))
+				.payment_secret(PaymentSecret([42; 32]))
+				.duration_since_epoch(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap())
+				.min_final_cltv_expiry_delta(18).amount_milli_satoshis(10_000_000)
+				.build_signed(|hash: &Message| Secp256k1::new().sign_ecdsa_recoverable(hash, &key)).unwrap();
+			invoice.check_signature().unwrap();
+			for (network, allowed) in [Network::Bitcoin, Network::Testnet, Network::Testnet4, Network::Signet, Network::Regtest].into_iter().zip(expected) {
+				assert_eq!(invoice_currency_matches_network(network, invoice.currency()), allowed, "{network:?}/{currency:?}");
+			}
+		}
 	}
 }

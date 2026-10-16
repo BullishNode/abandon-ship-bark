@@ -21,6 +21,7 @@ pub mod database;
 pub mod filters;
 pub mod mailbox_manager;
 pub mod fee_estimator;
+pub mod native_fee_audit;
 pub mod rpcserver;
 pub mod vtxopool;
 pub mod wallet;

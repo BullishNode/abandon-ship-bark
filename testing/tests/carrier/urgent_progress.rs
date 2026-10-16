@@ -7,8 +7,14 @@ use bitcoin::hashes::Hash;
 use std::time::Duration;
 
 pub(super) fn chain_receipt(core: &impl RpcApi, baseline: u64, funding: &[(String, Txid, u64)], path: &Path) -> u64 {
+	chain_receipt_bounded(core, baseline, funding, path, 512)
+}
+
+// The expiry guard uses the unchanged 1,008-block grace; Progress stays512.
+pub(super) fn chain_receipt_bounded(core: &impl RpcApi, baseline: u64, funding: &[(String, Txid, u64)], path: &Path, max_blocks: u64) -> u64 {
+	assert!((1..=2048).contains(&max_blocks));
 	let tip = core.get_block_count().unwrap();
-	assert!(tip - baseline <= 512);
+	assert!(tip - baseline <= max_blocks);
 	let mut txs = BTreeMap::new();
 	for height in 0..=tip {
 		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
@@ -41,11 +47,12 @@ pub(super) struct KeepChain<'a> {
 	pub(super) baseline: u64,
 	pub(super) funding: &'a [(String, Txid, u64)],
 	pub(super) path: PathBuf,
+	pub(super) max_blocks: u64,
 }
 impl Drop for KeepChain<'_> {
 	fn drop(&mut self) {
 		let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(||
-			chain_receipt(self.core, self.baseline, self.funding, &self.path)));
+			chain_receipt_bounded(self.core, self.baseline, self.funding, &self.path, self.max_blocks)));
 		if result.is_err() {
 			let _ = std::fs::write(self.path.with_extension("capture-error.json"),
 				b"{\"complete\":false,\"reason\":\"public Core capture failed; no scalar cost credit\"}");
@@ -87,7 +94,7 @@ async fn current_owner_progress() {
 	}
 	let receipt = srv.config().data_dir.join("CURRENT-OWNER-PUBLIC-CHAIN-LEDGER.json");
 	assert_eq!(funding.iter().map(|r|r.2).sum::<u64>(), 400_000);
-	let _keep_chain = KeepChain { core: &core, baseline, funding: &funding, path: receipt.clone() };
+	let _keep_chain = KeepChain { core: &core, baseline, funding: &funding, path: receipt.clone(), max_blocks: 512 };
 	let tip = ctx.generate_blocks(3).await; srv.wait_for_sync_height(tip).await; wm.wait_for_sync_height(tip).await;
 	assert!(chain_receipt(&core, baseline, &funding, &receipt) <= 10_000);
 	sender.sync().await; recipient.sync().await;

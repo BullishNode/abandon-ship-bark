@@ -29,9 +29,9 @@ async fn frozen_ancestor() {
 	}
 	assert_eq!(funding.len(), 1, "exact explicit SDK funding, no automatic fee buffer");
 	let ledger = srv.config().data_dir.join("FROZEN-ORDINARY-PUBLIC-CHAIN-LEDGER.json");
-	let fees = super::urgent_progress::chain_receipt(&core, baseline, &funding, &ledger);
+	let fees = super::urgent_progress::chain_receipt_bounded(&core, baseline, &funding, &ledger, 2048);
 	assert!(fees <= 10_000);
-	let _keep_chain = super::urgent_progress::KeepChain { core: &core, baseline, funding: &funding, path: ledger.clone() };
+	let _keep_chain = super::urgent_progress::KeepChain { core: &core, baseline, funding: &funding, path: ledger.clone(), max_blocks: 2048 };
 	let original = sender.get_full_vtxo(sender.spendable_vtxos().await.unwrap()[0].id()).await.unwrap();
 	let sender_fallback = sender.fallback_destination().await.unwrap().spk;
 	let recipient_fallback = recipient.fallback_destination().await.unwrap().spk;
@@ -60,6 +60,7 @@ async fn frozen_ancestor() {
 	let config = srv.config().clone();
 	let grace = config.expiry_payout.grace_blocks;
 	let target = original.expiry_height().to_u32() + grace + 3;
+	assert!(u64::from(target).saturating_sub(baseline) <= 2048, "actual configured expiry exceeds this finite capture");
 	ctx.generate_blocks(target.saturating_sub(core.get_block_count().unwrap() as u32)).await;
 	srv.stop().await.unwrap();
 	let server = server::Server::start(config.clone()).await.unwrap();
@@ -86,6 +87,6 @@ async fn frozen_ancestor() {
 	assert_eq!(result["money_unchanged"], true);
 	let history = config.data_dir.join("direct-expiry-witness/ordinary-fee-budget");
 	assert!(std::fs::read(history).unwrap().is_empty(), "refusal charged a fee or signed an urgent publication");
-	assert_eq!(super::urgent_progress::chain_receipt(&core, baseline, &funding, &ledger), fees);
+	assert_eq!(super::urgent_progress::chain_receipt_bounded(&core, baseline, &funding, &ledger, 2048), fees);
 	println!("actual mature ordinary freeze; canonical owners preserved; authenticated non-pay ancestor refused for frozen physical/retirement overlap; no money change; originalFull={}", sha256::Hash::hash(&original.serialize()));
 }

@@ -361,7 +361,7 @@ mod tests {
 		async fn projection(db: &Db) -> String {
 			db.read(async |t| Ok(t.query_one("SELECT json_build_object(
 				'allocations',(SELECT json_agg(a ORDER BY id) FROM expiry_allocation a),
-				'carriers',(SELECT json_agg(c ORDER BY id) FROM expiry_carrier c),
+				'carriers',(SELECT json_agg(c ORDER BY txid) FROM expiry_carrier c),
 				'nursery',(SELECT json_agg(n ORDER BY id) FROM nursery_tx n),
 				'wallet',(SELECT json_agg(w ORDER BY id) FROM wallet_changeset w),
 				'vtxos',(SELECT json_agg(v ORDER BY vtxo_id) FROM vtxo v))::text AS state", &[]).await?.get("state"))).await.unwrap()

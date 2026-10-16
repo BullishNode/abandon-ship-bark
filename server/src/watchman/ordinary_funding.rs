@@ -54,7 +54,6 @@ impl FundingCandidate {
 		engine.input(&serde_json::to_vec(&self.family).expect("typed native family serializes")); engine.input(&self.generation.to_le_bytes());
 		sha256::Hash::from_engine(engine)
 	}
-	pub(crate) fn binding(&self) -> anyhow::Result<sha256::Hash> { Ok(sha256::Hash::hash(&serde_json::to_vec(self)?)) }
 	pub(crate) fn transaction(&self) -> anyhow::Result<Transaction> {
 		ensure!(self.unsigned.len() <= MAX_BYTES && self.prevouts.len() <= 4096, "native funding candidate bound");
 		let tx: Transaction = deserialize(&self.unsigned)?;

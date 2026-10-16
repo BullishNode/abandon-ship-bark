@@ -50,7 +50,8 @@ impl FundingOwner {
 		let retained=old.iter().find(|s|s.reservation.candidate.key()==request.candidate.key());
 		if let Some(state)=retained {ensure!(state.reservation.candidate==request.candidate,"native funding retry changed body");}
 		// Fresh source observations run before any global financial SQL lock.
-		if retained.is_none() {
+		ensure!(!bind || retained.is_some(),"native funding must reserve before the first signature/promise");
+		if !bind || retained.is_none() {
 			tokio::time::timeout(Duration::from_secs(15),self.check_sources(&wallet,&request.candidate)).await.context("native funding source deadline before reservation")??;
 		}
 		let debit_attempted=AtomicBool::new(false);
@@ -58,14 +59,14 @@ impl FundingOwner {
 			t.batch_execute("SET LOCAL statement_timeout='8s'; SET LOCAL lock_timeout='5s';").await?;
 			t.require_native_funding_history(&old).await?;
 			let reservation=if let Some(state)=retained {state.reservation.clone()} else {
-				debit_attempted.store(true,Ordering::SeqCst);
-				self.budget.reserve_funding(request.candidate.clone(),self.max_rate)?
+				let reservation=self.budget.reserve_funding(request.candidate.clone(),self.max_rate)?;
+				debit_attempted.store(true,Ordering::SeqCst);reservation
 			};
 			t.stage_native_funding(&reservation).await?;
 			if let Some(raw)=&request.signed {
 				let signed:Transaction=deserialize(raw)?;
-				debit_attempted.store(true,Ordering::SeqCst);
 				self.budget.bind_funding(&reservation,&signed)?;
+				if retained.is_none_or(|s|s.signed.is_none()) {debit_attempted.store(true,Ordering::SeqCst);}
 				t.bind_native_funding(&reservation,&signed).await?;
 			}
 			Ok(reservation)

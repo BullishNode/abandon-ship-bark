@@ -265,6 +265,7 @@ impl OrdinaryFeeBudget {
 		candidate.require_rate(maximum)?;
 		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
 		ensure!(!ledger.native_uncertain, "native funding outcome unknown; original inputs retained");
+		ensure!(ledger.file.metadata()?.len()==ledger.length,"native fee history changed before retry or append");
 		let key = candidate.key();
 		if let Some(old) = ledger.funding.get(&key) {
 			ensure!(old.reservation.candidate == candidate && old.reservation.max_fee_rate == maximum, "native attempt candidate or fee ceiling changed");
@@ -281,7 +282,7 @@ impl OrdinaryFeeBudget {
 		let charged = discretionary_charge(ledger.charged, fee, ledger.urgent_charged, self.policy)?;
 		let index = ledger.attempts.checked_add(1).context("ordinary attempt count overflow")?;
 		let reservation = FundingReservation { policy_sha256:self.identity,index,candidate,max_fee_rate:maximum };
-		append_entry(&mut ledger,format!("f:{}\n",serde_json::to_string(&reservation)?).as_bytes())?;
+		append_native_entry(&mut ledger,format!("f:{}\n",serde_json::to_string(&reservation)?).as_bytes())?;
 		ledger.charged=charged;ledger.attempts=index;ledger.funding_charged=ledger.funding_charged.checked_add(fee).context("native funding fee overflow")?;
 		ledger.funding.insert(key,FundingState { reservation:reservation.clone(),signed:None });Ok(reservation)
 	}
@@ -289,6 +290,7 @@ impl OrdinaryFeeBudget {
 		reservation.candidate.verify_signed(tx)?;
 		let mut ledger = self.ledger.lock().map_err(|_| anyhow!("fee ledger lock poisoned"))?;
 		ensure!(!ledger.native_uncertain, "native funding outcome unknown; original inputs retained");
+		ensure!(ledger.file.metadata()?.len()==ledger.length,"native fee history changed before retry or append");
 		let key=reservation.candidate.key();
 		let old=ledger.funding.get(&key).context("native funding was never reserved")?;
 		ensure!(old.reservation == *reservation && reservation.policy_sha256 == self.identity, "native funding reservation differs");
@@ -298,7 +300,7 @@ impl OrdinaryFeeBudget {
 				ensure!(state.signed.is_none() && state.reservation.candidate.generation < reservation.candidate.generation,"competing signed/newer native Round intent exists");
 			}
 		}
-		append_entry(&mut ledger,format!("g:{}:{}\n",reservation.index,serde_json::to_string(&bitcoin::consensus::serialize(tx))?).as_bytes())?;
+		append_native_entry(&mut ledger,format!("g:{}:{}\n",reservation.index,serde_json::to_string(&bitcoin::consensus::serialize(tx))?).as_bytes())?;
 		ledger.funding.get_mut(&key).expect("checked above").signed=Some(tx.clone());Ok(())
 	}
 
@@ -405,6 +407,17 @@ fn checked_urgent_charge(charged: u64, ceiling: u64, policy: OrdinaryFeePolicy) 
 	let next = charged.checked_add(ceiling).context("urgent fee budget overflow")?;
 	ensure!(ceiling > 0 && next <= policy.urgent_reserve_sat, "urgent lifetime budget exhausted");
 	Ok(next)
+}
+
+fn append_native_entry(ledger:&mut Ledger,entry:&[u8])->anyhow::Result<()> {
+	// Definitive no-write refusals leave exact retries available. Once actual
+	// IO starts, any failure is uncertainty even if metadata still looks equal.
+	ensure!(ledger.file.metadata()?.len()==ledger.length,"fee history changed; restart and reconcile");
+	ensure!(ledger.length.checked_add(entry.len() as u64).is_some_and(|n|n<=MAX_HISTORY_BYTES),"fee history capacity exhausted");
+	if let Err(error)=ledger.file.write_all(entry).and_then(|_|ledger.file.sync_all()) {
+		ledger.native_uncertain=true;return Err(error).context("native fee append outcome uncertain; retain inputs");
+	}
+	ledger.length+=entry.len()as u64;Ok(())
 }
 
 fn append_entry(ledger: &mut Ledger, entry: &[u8]) -> anyhow::Result<()> {
@@ -797,13 +810,49 @@ mod tests {
 		std::fs::remove_dir_all(dir).unwrap();
 	}
 
+	#[test]
+	fn native_caller_reads_only_the_real_nested_direct_witness_installation() {
+		let root=directory();let policy=OrdinaryFeePolicy::default();
+		policy.initialize_fresh(&root,Network::Regtest,DUMMY_SERVER_KEY.public_key()).unwrap();
+		assert!(installed_identity(&root).is_err(),"top-level lookalike files are not the installed witness");
+		let nested=root.join(crate::payout_witness::DIRECT_DIRECTORY);std::fs::create_dir(&nested).unwrap();
+		policy.initialize_fresh(&nested,Network::Regtest,DUMMY_SERVER_KEY.public_key()).unwrap();
+		let(identity,opening)=installed_identity(&root).unwrap();assert_eq!(identity,sha256::Hash::hash(&std::fs::read(nested.join(POLICY_FILE)).unwrap()));
+		assert_eq!(opening,sha256::Hash::hash(&std::fs::read(nested.join(OPENING_FILE)).unwrap()));
+		std::fs::remove_dir_all(root).unwrap();
+	}
+	#[test]
+	fn native_budget_exhaustion_has_no_write_and_keeps_old_exact_retry_usable() {
+		use super::super::ordinary_funding::test_candidate;
+		let dir=directory();let(policy,_)=adopted(&dir);let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();
+		let(candidate,_)=test_candidate(0,500);let rate=bitcoin::FeeRate::from_sat_per_vb(10).unwrap();let original=budget.reserve_funding(candidate.clone(),rate).unwrap();
+		budget.reserve_ceiling(Amount::from_sat(18_636)).unwrap();let before=std::fs::read(dir.join(BUDGET_FILE)).unwrap();
+		let(next,_)=test_candidate(1,501);assert!(budget.reserve_funding(next,rate).is_err());
+		assert_eq!(budget.reserve_funding(candidate,rate).unwrap(),original);
+		assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(),before);drop(budget);std::fs::remove_dir_all(dir).unwrap();
+	}
+
+	#[test]
+	fn native_failed_actual_append_parks_even_an_old_exact_retry() {
+		use super::super::ordinary_funding::test_candidate;
+		let dir=directory();let(policy,_)=adopted(&dir);let budget=OrdinaryFeeBudget::load(&dir,policy).unwrap();
+		let(first,_)=test_candidate(0,500);let rate=bitcoin::FeeRate::from_sat_per_vb(10).unwrap();budget.reserve_funding(first.clone(),rate).unwrap();
+		let before=std::fs::read(dir.join(BUDGET_FILE)).unwrap();
+		// Local IO control: the actual append call fails on a read-only FD.
+		budget.ledger.lock().unwrap().file=File::open(dir.join(BUDGET_FILE)).unwrap();
+		let(next,_)=test_candidate(1,500);assert!(budget.reserve_funding(next,rate).is_err());
+		assert!(budget.reserve_funding(first,rate).is_err(),"IO uncertainty cannot masquerade as definitive no-write refusal");
+		assert_eq!(std::fs::read(dir.join(BUDGET_FILE)).unwrap(),before);drop(budget);std::fs::remove_dir_all(dir).unwrap();
+	}
+
 }
 
 /// Stable read-only identities for the authenticated caller. No second FLOCK owner.
-pub(crate) fn installed_identity(directory:&Path)->anyhow::Result<(sha256::Hash,sha256::Hash)> {
+pub(crate) fn installed_identity(datadir:&Path)->anyhow::Result<(sha256::Hash,sha256::Hash)> {
+	let directory=datadir.join(crate::payout_witness::DIRECT_DIRECTORY);
 	let raw=read_bounded(&directory.join(POLICY_FILE),2048)?;let stored:StoredPolicy=serde_json::from_slice(&raw)?;
 	ensure!(serde_json::to_vec(&stored)?==raw,"noncanonical native funding policy");
-	require_installed_policy(directory,stored.policy)?;Ok((sha256::Hash::hash(&raw),stored.opening_sha256))
+	require_installed_policy(&directory,stored.policy)?;Ok((sha256::Hash::hash(&raw),stored.opening_sha256))
 }
 
 pub(crate) fn funding_snapshot(directory:&Path)->anyhow::Result<Vec<FundingState>> {

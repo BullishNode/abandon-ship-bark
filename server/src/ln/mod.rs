@@ -99,6 +99,11 @@ fn send_refund_attempt_evidence(
 }
 
 
+fn receive_refund_requires_retirement(
+	status: &LightningHtlcSubscriptionStatus, _grants: Option<&[VtxoId]>,
+) -> bool {
+	*status == LightningHtlcSubscriptionStatus::HtlcsReady
+}
 
 /// Bound the requested HTLC-recv VTXO expiry of a receive whose incoming
 /// HTLCs are already collected: no inbound expiry limits it any more, but it
@@ -696,7 +701,7 @@ impl Server {
 			t.get_htlc_subscription_by_payment_hash(payment_hash).await
 		).await?;
 		match receive {
-			Some(sub) if sub.status == LightningHtlcSubscriptionStatus::HtlcsReady => {
+			Some(sub) if receive_refund_requires_retirement(&sub.status, None) => {
 				if let Some(reason) = self.granted_receive_claimable(&sub).await? {
 					return Ok(SendRefundEvidence::Unresolved(reason));
 				}
@@ -1446,6 +1451,36 @@ mod tests {
 			assert!(send_refund_attempt_evidence([], tip.into(), 100u32.into()).is_none(),
 				"absence of attempts cannot replace the prepared-receive check");
 		}
+	}
+
+	#[test]
+	fn receive_refund_retirement_keeps_prepared_grants_committed() {
+		let grant = format!("{:064x}:0", 1).parse::<VtxoId>().unwrap();
+		assert!(receive_refund_requires_retirement(
+			&LightningHtlcSubscriptionStatus::HtlcsReady, Some(&[grant])));
+		assert!(receive_refund_requires_retirement(
+			&LightningHtlcSubscriptionStatus::HtlcsReady, Some(&[])));
+	}
+
+	#[test]
+	fn receive_refund_retirement_keeps_canceled_grants_committed() {
+		let grant = format!("{:064x}:0", 1).parse::<VtxoId>().unwrap();
+		assert!(receive_refund_requires_retirement(
+			&LightningHtlcSubscriptionStatus::Canceled, Some(&[grant])),
+			"cancellation does not consume a granted recipient claim");
+	}
+
+	#[test]
+	fn receive_refund_retirement_refuses_incomplete_prepared_history() {
+		assert!(receive_refund_requires_retirement(
+			&LightningHtlcSubscriptionStatus::Canceled, Some(&[])),
+			"missing prepared grant rows cannot authorize a refund");
+	}
+
+	#[test]
+	fn receive_refund_retirement_allows_known_never_prepared_cancel() {
+		assert!(!receive_refund_requires_retirement(
+			&LightningHtlcSubscriptionStatus::Canceled, None));
 	}
 
 	/// Build a signed bolt11 invoice, standing in for one we issued via cln.

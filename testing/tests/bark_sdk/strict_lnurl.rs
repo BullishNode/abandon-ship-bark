@@ -23,13 +23,30 @@ impl StrictTlsFixture {
 	async fn start(dir: PathBuf) -> Self {
 		std::fs::create_dir(&dir).unwrap();
 		let log = std::fs::File::create(dir.join("openssl.stderr.log")).unwrap();
-		let status = Command::new("openssl").args([
+		let openssl = |args: &[&str]| {
+			let status = Command::new("openssl").current_dir(&dir).args(args)
+				.stdout(Stdio::null()).stderr(log.try_clone().unwrap()).status().unwrap();
+			assert!(status.success(), "actual openssl fixture command failed: {args:?}");
+		};
+		openssl(&[
 			"req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
-			"-days", "1", "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
-			"-addext", "basicConstraints=critical,CA:TRUE", "-keyout",
-		]).arg(dir.join("key.pem")).arg("-out").arg(dir.join("cert.pem"))
-			.stdout(Stdio::null()).stderr(log).status().unwrap();
-		assert!(status.success(), "actual openssl test certificate generation failed");
+			"-days", "1", "-subj", "/CN=strict LNURL ephemeral test CA",
+			"-addext", "basicConstraints=critical,CA:TRUE",
+			"-addext", "keyUsage=critical,keyCertSign,cRLSign",
+			"-keyout", "ca-key.pem", "-out", "ca.pem",
+		]);
+		openssl(&[
+			"req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
+			"-subj", "/CN=localhost", "-keyout", "key.pem", "-out", "leaf.csr",
+		]);
+		std::fs::write(dir.join("leaf-extensions.cnf"),
+			"basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost,IP:127.0.0.1\nauthorityKeyIdentifier=keyid,issuer\n").unwrap();
+		openssl(&[
+			"x509", "-req", "-in", "leaf.csr", "-CA", "ca.pem", "-CAkey", "ca-key.pem",
+			"-CAcreateserial", "-days", "1", "-extfile", "leaf-extensions.cnf", "-out", "cert.pem",
+		]);
+		openssl(&["verify", "-CAfile", "ca.pem", "-purpose", "sslserver", "-verify_hostname", "localhost", "cert.pem"]);
+		openssl(&["verify", "-CAfile", "ca.pem", "-purpose", "sslserver", "-verify_ip", "127.0.0.1", "cert.pem"]);
 		let script = dir.join("server.py");
 		std::fs::write(&script, r#"import http.server,json,ssl,sys,pathlib,urllib.parse
 p=pathlib.Path(sys.argv[1])
@@ -53,7 +70,7 @@ c=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); c.load_cert_chain(p/'cert.pem',p/'key
 		let stderr = std::fs::File::create(dir.join("https-server.stderr.log")).unwrap();
 		let child = Command::new("python3").arg(&script).arg(&dir)
 			.stdout(Stdio::null()).stderr(stderr).spawn().unwrap();
-		let mut fixture = Self { child, ca: std::fs::read(dir.join("cert.pem")).unwrap(), dir, endpoint: String::new() };
+		let mut fixture = Self { child, ca: std::fs::read(dir.join("ca.pem")).unwrap(), dir, endpoint: String::new() };
 		async {
 			while !fixture.dir.join("port").exists() {
 				assert!(fixture.child.try_wait().unwrap().is_none(), "TLS fixture exited before binding");

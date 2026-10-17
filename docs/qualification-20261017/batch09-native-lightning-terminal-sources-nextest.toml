@@ -1,0 +1,6 @@
+[store]
+dir = "/fresh-cache/testing-track-20261017/batch09-native-lightning-terminal-sources/nextest-store"
+
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 3 }
+retries = 0

@@ -1,0 +1,37 @@
+   Compiling bark-rest v0.7.1 (/home/francis/abandon-ship-fresh-integration/bark-rest)
+   Compiling bark-server v0.7.1 (/home/francis/abandon-ship-fresh-integration/server)
+   Compiling bark-rest-client v0.7.1 (/home/francis/abandon-ship-fresh-integration/bark-rest-client)
+   Compiling ark-testing v0.0.0 (/home/francis/abandon-ship-fresh-integration/testing)
+error[E0624]: method `ckd_priv` is private
+   --> testing/tests/server/qualification_oversize.rs:46:20
+    |
+ 46 |       let key = account.ckd_priv(&SECP, ChildNumber::from_normal_idx(1).unwrap()).unwrap().to_keypair(&SECP);
+    |                         ^^^^^^^^ private method
+    |
+   ::: /fresh-cache/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitcoin-0.32.9/src/bip32.rs:619:5
+    |
+619 | /     fn ckd_priv<C: secp256k1::Signing>(
+620 | |         &self,
+621 | |         secp: &Secp256k1<C>,
+622 | |         i: ChildNumber,
+623 | |     ) -> Result<Xpriv, Error> {
+    | |_____________________________- private method defined here
+
+error[E0624]: method `ckd_priv` is private
+   --> testing/tests/server/qualification_oversize.rs:47:24
+    |
+ 47 |       let mailbox = account.ckd_priv(&SECP, ChildNumber::from_hardened_idx(1).unwrap()).unwrap().to_keypair(&SECP);
+    |                             ^^^^^^^^ private method
+    |
+   ::: /fresh-cache/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitcoin-0.32.9/src/bip32.rs:619:5
+    |
+619 | /     fn ckd_priv<C: secp256k1::Signing>(
+620 | |         &self,
+621 | |         secp: &Secp256k1<C>,
+622 | |         i: ChildNumber,
+623 | |     ) -> Result<Xpriv, Error> {
+    | |_____________________________- private method defined here
+
+For more information about this error, try `rustc --explain E0624`.
+error: could not compile `ark-testing` (test "server") due to 2 previous errors
+error: command `/nix/store/2pnm32h5wvyxxwv1gg01y6himifvz8xm-rust-mixed/bin/cargo test --no-run --message-format json-render-diagnostics --package ark-testing --test server --features ark-testing/fallback-test-bip84` exited with code 101

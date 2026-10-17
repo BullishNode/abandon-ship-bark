@@ -1,0 +1,29 @@
+{
+  "at": "2026-10-17T15:37:49.340166+00:00",
+  "read_only": true,
+  "original_run": "930221cb (external testing)",
+  "original_case": "expiry_actual_no_part_external_send_pays_offline_owner",
+  "original_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch09-native-lightning-terminal-sources",
+  "cln_sqlite_counts": {
+    "matching_payment_parts": 0,
+    "all_payment_parts": 0,
+    "unchanged_sqlite_sha256": "f192ffb4e277a5baa9c5ae97af3fe4f5acd8d09dc7368dda02af82e34dc42958",
+    "method": "sqlite URI mode=ro&immutable=1; no WAL sidecar exists"
+  },
+  "actual_plugin_config": "important-plugin=/nix/store/4fz67203z7rkbaxfyz590w58mv0cw3j8-plugins/cln-grpc",
+  "actual_plugin_sha256": "421c19f3b0a2cf1c19b2d2f61737be7264c9ecca673e735f5fcb114198e362ea",
+  "qualified_structured_plugin_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+  "actual_response": {
+    "time": "2026-10-17T15:32:03.062Z",
+    "grpc_code": "Unknown",
+    "text_contains_jsonrpc_code": 205,
+    "message": "Failed: Unknown source node",
+    "later_coarse_attempt_status": "failed"
+  },
+  "inference": "Original config and independently rehashed plugin are stock, whose Xpay handler emits only Unknown status text. Backend requires authenticated typed metadata abandon-cln-jsonrpc-error-code and intentionally does not parse text. Thus no-part terminal receipt cannot be admitted from this runtime; actual absence of CLN parts does not itself prove dispatch quiescence. This is a runtime capability/provenance gap, not evidence the qualified adapter stopped working. Wire metadata was not independently captured.",
+  "actions": "No node restarted, payment retried, financial row changed, or original data copied/modified. Only original logs/config/immutable SQLite were read.",
+  "diagnosis_source_path": "/home/francis/.cache/abandon-fresh/backend-no-part-original-diagnosis-20261017/diagnosis.json",
+  "diagnosis_source_sha256": "e99b2370e1a13a3bf26a5b0eaf6360ce71bd0ba5f99e5357ce3c55e7d183ff99",
+  "private_original_input_hashes_retained": true,
+  "scope": "Read-only original evidence. Zero stored CLN payment parts is corroboration, not typed dispatch-quiescence proof. Original timeout stays FAIL."
+}

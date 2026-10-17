@@ -1,0 +1,11 @@
+{
+  "state": "PASS",
+  "exit_code": 0,
+  "at": "2026-10-17T16:03:54.874928+00:00",
+  "head": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+  "source_manifest_sha256": "fd82d64a8d03f1fa61d52fb3b39d73f0d0de6b9ce1f725f8bed96ccaf9eb0e53",
+  "scope": "canonical justchecks: prechecks, clippy, wasm, workspace tests/examples typecheck; no unit-suite execution",
+  "log_sha256": "39cbdc69fae9090d3cc53b905b4c8bf818e4fb9aeaf6c7a1ab050be0a23a3f09",
+  "existing_warnings": "ExistingdeprecatedChainSource calls; no newtestcompileerror",
+  "source_unchanged_after_checks": true
+}

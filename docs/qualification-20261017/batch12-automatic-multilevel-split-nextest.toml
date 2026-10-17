@@ -1,0 +1,8 @@
+[store]
+dir = "/fresh-cache/testing-track-20261017/batch12-automatic-multilevel-split/nextest-store"
+[profile.default]
+slow-timeout = { period="60s",terminate-after=3 }
+retries=0
+[profile.fallback-scale]
+slow-timeout = { period="60s",terminate-after=11 }
+retries=0

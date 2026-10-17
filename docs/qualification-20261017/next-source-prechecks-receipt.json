@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-17T15:51:55.364267+00:00",
+  "source_code_commit": "2cc925ed1",
+  "result": "PASS",
+  "scope": "Four source prechecks only; noCargo, target write, compile or runtime",
+  "checks": {
+    "rust_no_spaces_for_indent": 0,
+    "rust_no_whitespace_on_empty_lines": 0,
+    "unused_server_logs": 0,
+    "conflicting_migration_scripts": 0
+  },
+  "command": "bash contrib/prechecks.sh <each check name>",
+  "cwd": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
+  "mandatory_just_checks": "NOT RUN for new3testsource; canonical shared writer lease pending"
+}

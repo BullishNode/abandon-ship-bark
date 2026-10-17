@@ -2,7 +2,7 @@
 
 Base: `e44ddf95741478508908c17adc61752832d75c6a`.
 
-Current checkpoint: 17/17 case executions passed across 16 unique names and eight nextest invocations. One current-cut case was repeated with stronger history assertions. The two mailbox cases are component coverage; the other 15 executions use native operations. Mandatory `just checks` passed. Per-product/runtime pins differ and are explicit in the receipts. Production readiness remains open.
+First checkpoint: 17/17 case executions passed across 16 unique names and eight nextest invocations. Latest aggregate:22PASS/2FAIL across24executions,23unique names and12nextest invocations. One current-cut case was repeated with stronger history assertions. The two mailbox cases are component coverage; the other 15 executions use native operations. Mandatory `just checks` passed. Per-product/runtime pins differ and are explicit in the receipts. Production readiness remains open.
 
 No new product verdict exists at startup. The explicit disk hold prevents builds, native test runs, large copies, services, funding and campaigns until coordinator release. The three workers inspect source and prepare a small inventory.
 
@@ -52,3 +52,29 @@ The prior 10K wrong-mailbox search result is a failed 120-second bounded run. It
 The test changes contain no product patch. Source review found an initial cross-subsystem debit blind spot and missing explicit canonical child confirmation; both were fixed and re-reviewed before the passing build/run. There were no new product-test failures in this checkpoint. The preserved original S03 and wrong-mailbox failures remain open under their exact oracles.
 
 The bounded passing cases do not qualify automatic oversized/multilevel splitting, split/conflict/chain-only ownership rollback, native cross-root discharge or ambiguous Lightning dispatch, complete client finality on the newer published pin, stock Noah offline LNURL, sustained production scale, migrations/backup/restore or all original scenarios. Read CHECKPOINT.md for complete counts and pin limits.
+
+
+## Lightning batch09: original no-part failure preserved
+
+Run `930221cb-38b3-46f9-b88d-9c826febe4d8` finished in155.849seconds:3PASS,1FAIL. Real accepted-then-cancelled external payment and two same-hash source-liability/refund cases passed. The real no-channel/no-part case failed its unchanged30second terminal-proof wait (`Elapsed(())`),44.737seconds wholecase. Its raw state and original logs remain private and preserved. No retry or payment replay occurred.
+
+Pre-run hashes show stock CLN26.06.6 gRPC plugin `421c19f3b0a2cf1c19b2d2f61737be7264c9ecca673e735f5fcb114198e362ea`. Genuine CLN returned RPC205, Unknown source node; stock gRPC returned Unknown text without `abandon-cln-jsonrpc-error-code`. Backend deliberately requires the typed metadata and retains ambiguity otherwise. The dispatch-terminal handoff requires adapter `6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1` with the exact hold plugin. This run did not satisfy that environment contract. It remains FAIL, and supplies no qualified no-part PASS or established product defect. Original-dispatch reconciliation is read-only with the backend lead. Any later qualified pairing needs a separately pinned run; it cannot replace this failed receipt.
+
+Three next-source paths are prioritized: authentic source-bound external settlement during product downtime, registered recipient forwarding interrupted before mailbox delivery, and genuinely automatic327-payee multilevel splitting. These drafts are uncompiled/unrun. Stock Noah LNURL metadata-hash compatibility remains a separate unqualified gate. Restore/conflict drafts are preserved and frozen after the coordinator's Lightning priority.
+
+
+The backend lead independently opened the original CLN SQLite with `mode=ro&immutable=1`, verified no WAL sidecar, and found zero matching and zero total payment parts. SHA256 was unchanged after observation. This corroborates the no-part reply but does not replace typed dispatch-quiescence proof. No node/payment/wallet was restarted or original financial row changed. Full sanitized reconciliation is in `batch09-original-dispatch-reconciliation.json`. The coordinator assigned a separately isolated exact-adapter positive gate to the backend lead; this track will not duplicate it. Stock transport packaging/capability qualification remains open even if that separate pairing passes.
+
+
+The separate backend-owned adapter run `c0a5f364-a775-4ed0-9fe7-22286ec2eeb9` passed in 28.777 seconds. Independent source-manifest comparison verifies the original Lightning fixture bytes are identical, while the whole native test bundle differs. Actual typed 205 receipts and a 99,000-sat Core-confirmed payout support this exact adapter pairing. The confirmed ledger projection was not complete at shutdown. This result is excluded from our counts, preserves the original stock failure, and leaves default Nix packaging open. See `external-backend-adapter-positive-receipt.json`. All four source prechecks for the three new tests passed; compilation and runtime remain pending.
+
+
+## Canonical second native batch and primary money invariant
+
+Canonical source99a0553ac plus owned test patch/public-API correction compiled in51.41seconds; mandatory justchecks passed with unchanged captured1078sourcefiles. ImmutabletestELF50b881/source-manifestfd82 retain exactfullhashes in next-canonical-runtime-manifest.json. Firstcompilefailed on2private Xpriv.ckd_priv calls; same-singlechild publicderive_priv correction preserved originalfailedsource/log and changed no moneyoracle.
+
+- PASS restart56.310seconds, ec0030d3:100kexternalsettlement duringcap/watchdowntime recoveredtheoriginalsource-labelleddispatch; no customerrefundanywherepaidanchor; unusedsamehashsource99kCore>=6confirmed. That refund is unusedgrantliability, not receivedswap proceeds or failed-dispatchedswap.
+- PASS nativeforwarding/providerreopen28.617seconds,e380c4ca:actualregisteredrecipientoutputs/durableDelivering/exactrecipientmailbox/signedbytes/zero-net forwarding. Supportingonly: no expiry/rightfulrecipientfallback credit.
+- FAIL automaticoversize16.359seconds,4a930d92:fixturewronglyassumed1checkpoint for4destinations; actualnativebuilderhas4checkpointoutputs and5signedtransactions.327recordsregistered; assertionbeforeinitialpathregistration andexpiry. Allfailedrawstate preserved. Automaticpayoutoracle not reached; no productverdict. Actualnativegraph source repair must keep10kvB/fanout4/depth100/600seconds and genuine327payees.
+
+The user's primary invariant is the rightful user's real fallback for swap-received or refundable failed-swap value. The next primary normal acceptance case stops provider at POSTregistration Delivering, keeps recipientabsent, proves actual registeredrecipient payout atactualbackingexpiry withCore>=6confirmations, then freshseed-only discovery/confirmedrecoveryspend. A complementary accepted-swap cancellation duringproductdowntime tests actual failedsender99k refund. Backend pre-registration risk remains source-level/unconfirmed; its incorrect-payout reproduction is stopped and this track does not duplicate it.

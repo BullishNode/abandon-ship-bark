@@ -1,0 +1,20 @@
+{
+  "updated_at": "2026-10-17T18:34:07.452920+00:00",
+  "scenarios": 200,
+  "coverage_states": {
+    "PARTIAL": 145,
+    "NOT_RUN": 53,
+    "PASS": 2
+  },
+  "execution_states": {
+    "NOT_RUN_FOR_FULL_SCENARIO": 198,
+    "PASS_ON_PINNED_BOUNDED_CANDIDATE": 2
+  },
+  "accepted_bounded_pass_ids": [
+    "ML165",
+    "ML166"
+  ],
+  "independent_mapping_sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
+  "ledger_sha256": "707a749b8f1998c0ebe44ca94da36d87ed0a860709bd78860c99f599b34d2118",
+  "limits": "Two complete bounded split cases on source7041. Partial component results do not establish a full scenario pass. Current candidate evolves; final release qualification remains open."
+}

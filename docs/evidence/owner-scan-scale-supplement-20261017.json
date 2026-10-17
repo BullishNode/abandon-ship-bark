@@ -1,0 +1,148 @@
+{
+  "status": "PASS",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "candidate_manifest_sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
+  "source_equivalence": "Captured three owner-scan source files published in8fb729a2f; HEAD label814d7b0 plus reviewed dirty overlay, not clean-commit qualification.",
+  "summary_sha256": "e8cc45d61d4dd67dfba5f0f70151fe73d4c34fbf9a7978eba28dedebe08418ed",
+  "report_sha256": "b924fd5731a0c531df808b022124d7b6e45b92dab83334ad21b28745bb419ad1",
+  "summary": {
+    "status": "PASS",
+    "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+    "candidate_manifest_sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
+    "metadata_sha256": "cf273b091bee345a3d66027abe091ac5951ea04f8c6bb06053e78e4167d12a90",
+    "phases": [
+      {
+        "phase": "cursor-and-registry",
+        "profile": "default",
+        "command": [
+          "just",
+          "--set",
+          "JUSTFILE_DIR",
+          "/fresh-cache/root-owner-gates-20261017/cursor-and-registry",
+          "int-binaries",
+          "/fresh-cache/runtime-owner-scan-split-v1-20261017/nextest-binaries-immutable.json",
+          "--config-file /fresh-cache/root-owner-gates-20261017/cursor-and-registry/nextest.toml expiry_attribution --retries 0 --test-threads 1"
+        ],
+        "started_at": "2026-10-17T18:01:13.408165+00:00",
+        "status": "PASS",
+        "exit_code": 0,
+        "seconds": 20.351579759000742,
+        "ended_at": "2026-10-17T18:01:33.759879+00:00",
+        "log_sha256": "3a6b11f9d558ddd205fe1bad5db7d55d57bbb77c2be4b845b911d4835bcfceb9"
+      },
+      {
+        "phase": "authenticated-scale",
+        "profile": "fallback-scale",
+        "command": [
+          "just",
+          "--set",
+          "JUSTFILE_DIR",
+          "/fresh-cache/root-owner-gates-20261017/authenticated-scale",
+          "int-binaries",
+          "/fresh-cache/runtime-owner-scan-split-v1-20261017/nextest-binaries-immutable.json",
+          "--config-file /fresh-cache/root-owner-gates-20261017/authenticated-scale/nextest.toml expiry_registration_scale::expiry_registration_authenticated_scale --run-ignored only --retries 0 --test-threads 1"
+        ],
+        "started_at": "2026-10-17T18:01:33.760534+00:00",
+        "status": "PASS",
+        "exit_code": 0,
+        "seconds": 412.88816823100206,
+        "ended_at": "2026-10-17T18:08:26.649933+00:00",
+        "log_sha256": "9f5f67b9f27be30f5078ab34e00f93ac0a2cba9886e5b37b8ddfa62dafcccbdd"
+      }
+    ],
+    "prior_120_second_failure_preserved": true
+  },
+  "runs": [
+    {
+      "id": "e868e1e6-8173-4a48-83a0-cb072e38b075",
+      "phase": "Postgres cursor/registry/concurrency",
+      "passed": 6,
+      "seconds": 19.61
+    },
+    {
+      "id": "004601e9-a35e-42ad-bede-46bf3f84d6de",
+      "phase": "authenticated registration/lookup scale",
+      "passed": 1,
+      "lookup_cases": 9,
+      "seconds": 411.83
+    }
+  ],
+  "per_lookup_seconds_budget": 120,
+  "all_nine_lookup_cases_passed": true,
+  "measurements": [
+    {
+      "records": 100,
+      "case": "verified_mailbox_priority",
+      "elapsed_seconds": 0.106871122,
+      "work_visits": 2,
+      "child_index": 17
+    },
+    {
+      "records": 100,
+      "case": "absent_mailbox_fallback",
+      "elapsed_seconds": 1.3614670709999999,
+      "work_visits": 100,
+      "child_index": 18
+    },
+    {
+      "records": 100,
+      "case": "wrong_mailbox_fallback",
+      "elapsed_seconds": 5.029204698,
+      "work_visits": 116,
+      "child_index": 19
+    },
+    {
+      "records": 1000,
+      "case": "verified_mailbox_priority",
+      "elapsed_seconds": 0.051861139,
+      "work_visits": 2,
+      "child_index": 17
+    },
+    {
+      "records": 1000,
+      "case": "absent_mailbox_fallback",
+      "elapsed_seconds": 9.702520912,
+      "work_visits": 1000,
+      "child_index": 18
+    },
+    {
+      "records": 1000,
+      "case": "wrong_mailbox_fallback",
+      "elapsed_seconds": 15.631339932,
+      "work_visits": 1016,
+      "child_index": 19
+    },
+    {
+      "records": 10000,
+      "case": "verified_mailbox_priority",
+      "elapsed_seconds": 0.325656294,
+      "work_visits": 2,
+      "child_index": 17
+    },
+    {
+      "records": 10000,
+      "case": "absent_mailbox_fallback",
+      "elapsed_seconds": 117.384831411,
+      "work_visits": 10000,
+      "child_index": 18
+    },
+    {
+      "records": 10000,
+      "case": "wrong_mailbox_fallback",
+      "elapsed_seconds": 116.875138548,
+      "work_visits": 10016,
+      "child_index": 19
+    }
+  ],
+  "independent_scope_review": "Simulation owner independently rehashed report and read benchmark source.",
+  "limits": [
+    "Debug assertions enabled; shared14CPU workstation, not isolated production benchmark.",
+    "100/1000/10000 registrations use genuine authenticated SetFallback RPC; lookup keys are synthetic children17/18/19 queued in real Postgres after captaind stops.",
+    "No native wallets, user/server funding, fallback payouts, sustained arrival stream or concurrent user traffic in this benchmark.",
+    "records_scanned is scanner work visits, not distinct registrations or owners.",
+    "10000 absent/wrong lookup took117.384831411/116.875138548seconds; only2.615/3.125seconds below original120second bound.",
+    "No exhaustive negative2^31keyspace or high-index search proof; no funded attribution liveness or production TPS qualification.",
+    "Original indexed7562wrong-mailbox120.139secondFAIL and absent103.265secondPASS remain unchanged.",
+    "Raw report source_pin is null; this supplemental envelope pins the verified executable/source pairing."
+  ]
+}

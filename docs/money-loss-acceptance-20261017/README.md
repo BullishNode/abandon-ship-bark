@@ -6,6 +6,8 @@ Use [ACCEPTANCE.csv](ACCEPTANCE.csv) as the scenario acceptance ledger. Preserve
 
 The [research snapshot](research/README.md), [complete catalogue](research/MONEY_LOSS_SCENARIOS.md) and [priorities](research/PRIORITIES.md) are unchanged source material. [INTAKE.json](INTAKE.json) records their hashes and the research revision. References in the original research can point to workspace files outside this repository. Preserve these references as provenance. New evidence must use durable receipt paths and exact candidate pins.
 
+The first reconciled [progress report](PROGRESS.json) records two complete bounded passes, 145 partial mappings and 53 scenarios without executed coverage. The two passes are ML165 and ML166 on captured source `70417933`, run `63a761b8`. The coordinator reviewed their full oracles against the actual multilevel fixture, canonical package order, 327-owner payout CSV and complete DAG conservation. This result does not qualify other shapes, restart, reorg or sustained load. The received independent evidence map is retained separately. `INTAKE.json` preserves the original intake state; `PROGRESS.json` reports the current ledger state.
+
 ## Work ownership
 
 - The backend owner handles settlement, attribution, dispatch, payout decisions, splitting and chain state.

@@ -1,0 +1,401 @@
+{
+  "cases": [
+    {
+      "captaind_memory": {
+        "pid": 230627,
+        "process_lifetime_peak_rss_kib": 44624,
+        "rss_kib": 44624
+      },
+      "case": "signed_public_rpc_registration",
+      "client_signing_seconds": 0.01167226,
+      "records": 100,
+      "records_per_second": 83.11833128433071,
+      "registration_seconds": 1.203104038,
+      "rpc_p50_seconds": 0.012542042,
+      "rpc_p95_seconds": 0.017089289,
+      "rpc_p99_seconds": 0.021087246,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 54716,
+        "rss_kib": 54716
+      },
+      "storage": {
+        "cursor_bytes": 32768,
+        "cursors": 0,
+        "matched_keys": 0,
+        "record_bytes": 245760,
+        "records": 100
+      }
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.172740812,
+      "case": "verified_mailbox_priority",
+      "child_index": 17,
+      "children_derived": 64,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 0.106871122,
+      "owner_sorted_position": 99,
+      "passes": 1,
+      "queued_storage": {
+        "cursor_bytes": 155648,
+        "cursors": 100,
+        "matched_keys": 0,
+        "record_bytes": 245760,
+        "records": 100
+      },
+      "records": 100,
+      "records_scanned": 2,
+      "remaining_storage": {
+        "cursor_bytes": 155648,
+        "cursors": 0,
+        "matched_keys": 1,
+        "record_bytes": 245760,
+        "records": 100
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 57192,
+        "rss_kib": 57192
+      },
+      "workers": 2
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.149701649,
+      "case": "absent_mailbox_fallback",
+      "child_index": 18,
+      "children_derived": 3200,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 1.3614670709999999,
+      "owner_sorted_position": 99,
+      "passes": 50,
+      "queued_storage": {
+        "cursor_bytes": 204800,
+        "cursors": 100,
+        "matched_keys": 1,
+        "record_bytes": 245760,
+        "records": 100
+      },
+      "records": 100,
+      "records_scanned": 100,
+      "remaining_storage": {
+        "cursor_bytes": 212992,
+        "cursors": 0,
+        "matched_keys": 2,
+        "record_bytes": 245760,
+        "records": 100
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 57212,
+        "rss_kib": 57212
+      },
+      "workers": 2
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.165536631,
+      "case": "wrong_mailbox_fallback",
+      "child_index": 19,
+      "children_derived": 111008,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 5.029204698,
+      "owner_sorted_position": 99,
+      "passes": 58,
+      "queued_storage": {
+        "cursor_bytes": 262144,
+        "cursors": 100,
+        "matched_keys": 2,
+        "record_bytes": 245760,
+        "records": 100
+      },
+      "records": 100,
+      "records_scanned": 116,
+      "remaining_storage": {
+        "cursor_bytes": 262144,
+        "cursors": 0,
+        "matched_keys": 3,
+        "record_bytes": 245760,
+        "records": 100
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 57240,
+        "rss_kib": 57240
+      },
+      "workers": 2
+    },
+    {
+      "captaind_memory": {
+        "pid": 230676,
+        "process_lifetime_peak_rss_kib": 45332,
+        "rss_kib": 45332
+      },
+      "case": "signed_public_rpc_registration",
+      "client_signing_seconds": 0.186875403,
+      "records": 1000,
+      "records_per_second": 76.0230862076168,
+      "registration_seconds": 13.153899031,
+      "rpc_p50_seconds": 0.010886628,
+      "rpc_p95_seconds": 0.019958006,
+      "rpc_p99_seconds": 0.045955135,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 57868,
+        "rss_kib": 57868
+      },
+      "storage": {
+        "cursor_bytes": 32768,
+        "cursors": 0,
+        "matched_keys": 0,
+        "record_bytes": 1294336,
+        "records": 1000
+      }
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.198187397,
+      "case": "verified_mailbox_priority",
+      "child_index": 17,
+      "children_derived": 64,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 0.051861139,
+      "owner_sorted_position": 999,
+      "passes": 1,
+      "queued_storage": {
+        "cursor_bytes": 745472,
+        "cursors": 1000,
+        "matched_keys": 0,
+        "record_bytes": 1294336,
+        "records": 1000
+      },
+      "records": 1000,
+      "records_scanned": 2,
+      "remaining_storage": {
+        "cursor_bytes": 745472,
+        "cursors": 0,
+        "matched_keys": 1,
+        "record_bytes": 1294336,
+        "records": 1000
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 57880,
+        "rss_kib": 57880
+      },
+      "workers": 2
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.183149922,
+      "case": "absent_mailbox_fallback",
+      "child_index": 18,
+      "children_derived": 32000,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 9.702520912,
+      "owner_sorted_position": 999,
+      "passes": 500,
+      "queued_storage": {
+        "cursor_bytes": 1343488,
+        "cursors": 1000,
+        "matched_keys": 1,
+        "record_bytes": 1294336,
+        "records": 1000
+      },
+      "records": 1000,
+      "records_scanned": 1000,
+      "remaining_storage": {
+        "cursor_bytes": 1523712,
+        "cursors": 0,
+        "matched_keys": 2,
+        "record_bytes": 1294336,
+        "records": 1000
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 57880,
+        "rss_kib": 57880
+      },
+      "workers": 2
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.153037705,
+      "case": "wrong_mailbox_fallback",
+      "child_index": 19,
+      "children_derived": 139808,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 15.631339932,
+      "owner_sorted_position": 999,
+      "passes": 508,
+      "queued_storage": {
+        "cursor_bytes": 2080768,
+        "cursors": 1000,
+        "matched_keys": 2,
+        "record_bytes": 1294336,
+        "records": 1000
+      },
+      "records": 1000,
+      "records_scanned": 1016,
+      "remaining_storage": {
+        "cursor_bytes": 2097152,
+        "cursors": 0,
+        "matched_keys": 3,
+        "record_bytes": 1294336,
+        "records": 1000
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 57904,
+        "rss_kib": 57904
+      },
+      "workers": 2
+    },
+    {
+      "captaind_memory": {
+        "pid": 230728,
+        "process_lifetime_peak_rss_kib": 44196,
+        "rss_kib": 42208
+      },
+      "case": "signed_public_rpc_registration",
+      "client_signing_seconds": 1.604311764,
+      "records": 10000,
+      "records_per_second": 83.88300133954331,
+      "registration_seconds": 119.213664751,
+      "rpc_p50_seconds": 0.010340219,
+      "rpc_p95_seconds": 0.017878641,
+      "rpc_p99_seconds": 0.041770809,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 64828,
+        "rss_kib": 56868
+      },
+      "storage": {
+        "cursor_bytes": 32768,
+        "cursors": 0,
+        "matched_keys": 0,
+        "record_bytes": 11821056,
+        "records": 10000
+      }
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.176414349,
+      "case": "verified_mailbox_priority",
+      "child_index": 17,
+      "children_derived": 64,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 0.325656294,
+      "owner_sorted_position": 9999,
+      "passes": 1,
+      "queued_storage": {
+        "cursor_bytes": 5652480,
+        "cursors": 10000,
+        "matched_keys": 0,
+        "record_bytes": 11821056,
+        "records": 10000
+      },
+      "records": 10000,
+      "records_scanned": 2,
+      "remaining_storage": {
+        "cursor_bytes": 5652480,
+        "cursors": 0,
+        "matched_keys": 1,
+        "record_bytes": 11821056,
+        "records": 10000
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 64828,
+        "rss_kib": 57416
+      },
+      "workers": 2
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.244269106,
+      "case": "absent_mailbox_fallback",
+      "child_index": 18,
+      "children_derived": 320000,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 117.384831411,
+      "owner_sorted_position": 9999,
+      "passes": 5000,
+      "queued_storage": {
+        "cursor_bytes": 11223040,
+        "cursors": 10000,
+        "matched_keys": 1,
+        "record_bytes": 11821056,
+        "records": 10000
+      },
+      "records": 10000,
+      "records_scanned": 10000,
+      "remaining_storage": {
+        "cursor_bytes": 12206080,
+        "cursors": 0,
+        "matched_keys": 2,
+        "record_bytes": 11821056,
+        "records": 10000
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 64828,
+        "rss_kib": 56584
+      },
+      "workers": 2
+    },
+    {
+      "budget_seconds": 120,
+      "cached_100_lookup_seconds": 0.154886783,
+      "case": "wrong_mailbox_fallback",
+      "child_index": 19,
+      "children_derived": 427808,
+      "chunk_size_max": 10000,
+      "elapsed_seconds": 116.875138548,
+      "owner_sorted_position": 9999,
+      "passes": 5008,
+      "queued_storage": {
+        "cursor_bytes": 14303232,
+        "cursors": 10000,
+        "matched_keys": 2,
+        "record_bytes": 11821056,
+        "records": 10000
+      },
+      "records": 10000,
+      "records_scanned": 10016,
+      "remaining_storage": {
+        "cursor_bytes": 13246464,
+        "cursors": 0,
+        "matched_keys": 3,
+        "record_bytes": 11821056,
+        "records": 10000
+      },
+      "resolved": true,
+      "scanner_memory": {
+        "pid": 230497,
+        "process_lifetime_peak_rss_kib": 64828,
+        "rss_kib": 56740
+      },
+      "workers": 2
+    }
+  ],
+  "debug_assertions": true,
+  "not_measured": [
+    "exhaustive 2^31-key negative search",
+    "payout throughput",
+    "concurrent user traffic",
+    "Postgres/Core RSS"
+  ],
+  "rss_scope": "test/scanner process and isolated captaind; HWM is process lifetime, not phase delta",
+  "scope": "real signed SetFallback RPC; real bounded owner scanner; no user/server funding or payouts",
+  "source_pin": null
+}

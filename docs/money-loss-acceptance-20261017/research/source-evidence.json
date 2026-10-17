@@ -1,0 +1,552 @@
+[
+  {
+    "id": "E01",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "lib/src/fallback.rs",
+    "symbol": "FallbackRecord",
+    "line": 41,
+    "sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+    "fact": "Signatures bind network, mailbox, script and account; account child zero proves account possession, not destination spendability."
+  },
+  {
+    "id": "E02",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/fallback.rs",
+    "symbol": "set_fallback",
+    "line": 38,
+    "sha256": "71b8dfae45ddad92f9c69a32f9b0d474f4c928f202c9b1aed647b83993b23fe9",
+    "fact": "First mailbox record is immutable; exclusive registry advisory lock serializes insertion; account pubkey plus chain code deduplicated."
+  },
+  {
+    "id": "E03",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_attribution.rs",
+    "symbol": "queue_expiry_owner",
+    "line": 67,
+    "sha256": "b5b35072a0f5e4bba16113a725126784e9b76799a5e4b81845edef6ef7d5acbc",
+    "fact": "Per-key/per-record coverage; bounded priority and fair scans; compare-and-advance cursors; NoRegisteredOwner requires complete registered coverage. Final 8fb729a2f publication adds registry writer fence and atomic bounded-pass commit; original wrong-mailbox timing failure remains historical evidence, not a benchmark of this change."
+  },
+  {
+    "id": "E04",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/expiry_readiness.rs",
+    "symbol": "prepare_expiry_coin",
+    "line": 40,
+    "sha256": "6d2b4b7b46fb2300ffa2949fc8d0a6e6eae3d6cf7dcaebf01e3871728cc57a10",
+    "fact": "NoRegisteredOwner remains Hold; no operator sweep is authorized. Pass batches 64 roots with hard inventory budgets."
+  },
+  {
+    "id": "E05",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_ownership.rs",
+    "symbol": "propose_expiry_ownership",
+    "line": 87,
+    "sha256": "e1723bb6efc0db4f18e5438f6882fd5e5d98bc58b470baa1b48f65e51c49e68a",
+    "fact": "Ownership distinguishes binding refresh/offboard, pool, unregistered input owner, receive bindings and per-source Lightning state."
+  },
+  {
+    "id": "E06",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_lightning.rs",
+    "symbol": "lightning_source_state",
+    "line": 82,
+    "sha256": "5eadc1562006545d130ee113b49ead0b75c6bf86aa09ee62652a575fe85745e5",
+    "fact": "Actual source-to-attempt links, external receipts and internal funding determine discharge; global preimage alone cannot discharge sends. Now-committed c52056a4c repair handles completed internal receives."
+  },
+  {
+    "id": "E07",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_receive.rs",
+    "symbol": "prepare_receive_claims",
+    "line": 65,
+    "sha256": "c4431df885cd4756a64dce01875437151e0ff1d173f37c68920c257b45c8d195",
+    "fact": "Immutable validated final-output intent precedes collection; materialization requires matching actual output and Fulfilled grant."
+  },
+  {
+    "id": "E08",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/mod.rs",
+    "symbol": "claim_lightning_receive",
+    "line": 928,
+    "sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+    "fact": "Validate grant set and deadline; bind destination, store preimage, settle native hold, then materialize/cosign. These are separate transactions."
+  },
+  {
+    "id": "E09",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/mod.rs",
+    "symbol": "prepare_lightning_claim",
+    "line": 763,
+    "sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+    "fact": "Process-local hash guard; allocate actual pool grant set and subscription update together; refuse previously settled hash."
+  },
+  {
+    "id": "E10",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/mod.rs",
+    "symbol": "request_lightning_pay_htlc_cosign",
+    "line": 207,
+    "sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+    "fact": "New grant admission and duration bound; idempotent old spends handled separately."
+  },
+  {
+    "id": "E11",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/ln/mod.rs",
+    "symbol": "admit_lightning_dispatch",
+    "line": 242,
+    "sha256": "4080bb5ea63fc873652a40f0c423dcf8fff9905aa1bc9fa018b48dce0d0611c1",
+    "fact": "Dispatch row commits before network call; one row per attempt forbids replay, including after restart."
+  },
+  {
+    "id": "E12",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/cln/xpay.rs",
+    "symbol": "sync_payment_attempt_status_locked",
+    "line": 165,
+    "sha256": "7ea3fcee5ab94b9e74759171ef55fbe2c12b9a814de83d8513377901779a3ceb",
+    "fact": "Success/failure receipts require dispatch label; typed 205/207 plus history and exact CLN version gate no-part failure; latest shared-hash payment still drives coarse state."
+  },
+  {
+    "id": "E13",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/node_manager.rs",
+    "symbol": "settle_invoice",
+    "line": 28,
+    "sha256": "06aafa0b1641e7a8e294896876d7a3c622bce4386aad87e1fbaa8a8853d3698d",
+    "fact": "Native settlement and subscription update are separate; internal funding must survive coarse attempt completion. run_hold_settler serially retries nondeferred errors."
+  },
+  {
+    "id": "E14",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/payment_handler.rs",
+    "symbol": "process_payment_attempt",
+    "line": 76,
+    "sha256": "ac6da2446dece70ce724cca06dfc3e78316e69615e8cfe94a04f2c49378f69fa",
+    "fact": "Preimage storage precedes optimistic attempt update; only updated linked coins become ln-spent; notifications follow DB commit."
+  },
+  {
+    "id": "E15",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/mod.rs",
+    "symbol": "revoke_lightning_pay_htlcs",
+    "line": 461,
+    "sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+    "fact": "Sorted source guards and settlement barrier precede source-state checks; only source-funded internal subscriptions may be canceled."
+  },
+  {
+    "id": "E16",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/mod.rs",
+    "symbol": "htlc_recvs_expired",
+    "line": 101,
+    "sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+    "fact": "All outgoing grants must be strictly past deadline in both views; exited grants need chain Revoked."
+  },
+  {
+    "id": "E17",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/actions/lightning/receive.rs",
+    "symbol": "claim_lightning_receive_htlcs",
+    "line": 144,
+    "sha256": "993c294f1f506b04474e86a554fad8772f61551f82f0c8970026a337b7c19ef0",
+    "fact": "PreimageRevealed checkpoint before wire; signed output registration precedes Delivering; local input/output/history/settled writes are separate."
+  },
+  {
+    "id": "E18",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/actions/lightning/pay.rs",
+    "symbol": "check_lightning_send_payment_status",
+    "line": 152,
+    "sha256": "55daadb631de69c322d79b767ff2808f537c55f94fe8b39858fff632169478a6",
+    "fact": "Expired Pending/transport error collapses to local Failed; revocation and exit still need authentic protection. Refund registration failure is warned, then local outputs stored."
+  },
+  {
+    "id": "E19",
+    "repository": "/home/francis/noah-fresh-backend-20261016",
+    "head": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+    "file": "server/src/routes/public_api_v0.rs",
+    "symbol": "lnurlp_request",
+    "line": 350,
+    "sha256": "a4aec467fff068c603045093a0eabce16accd4fb4f91dbc93fc99f831b865209",
+    "fact": "Metadata is serialized JSON string; provider receives a plain memo. Each callback re-reads user; timeout errors fall through to push path."
+  },
+  {
+    "id": "E20",
+    "repository": "/home/francis/noah-fresh-backend-20261016",
+    "head": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+    "file": "server/src/barkd_client.rs",
+    "symbol": "create_invoice_for_address",
+    "line": 25,
+    "sha256": "65d91a1acea67f8eb7022d1a2955876a60fb7e3e89760754a66438a1363d9215",
+    "fact": "Provider validates network and exact amount; no metadata hash, invoice age or recipient proof is checked here; redirects disabled."
+  },
+  {
+    "id": "E21",
+    "repository": "/home/francis/noah-fresh-backend-20261016",
+    "head": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+    "file": "server/src/routes/gated_api_v0.rs",
+    "symbol": "submit_invoice",
+    "line": 225,
+    "sha256": "15d08dc9c4046516fb0db0afef426debf3c807dbd78dfb0386dec9de25c1f1ff",
+    "fact": "Authenticated submit stores arbitrary invoice by caller-provided transaction ID; auth identity is unused by handler."
+  },
+  {
+    "id": "E22",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_guard.rs",
+    "symbol": "guard_obligation_changes",
+    "line": 9,
+    "sha256": "b9e2eaa67d93bed53195371239ce420b15baa0a98c8a2aecb7a33a55e3557747",
+    "fact": "Shared coin-row locks and permanent decided fence guard obligations; participation cancellation is durable and restores only undecided other inputs."
+  },
+  {
+    "id": "E23",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_decision.rs",
+    "symbol": "commit_expiry_group",
+    "line": 156,
+    "sha256": "ffd9db09f222c73a2f6944bb5b85a9915ee58dca60ace67e14e21628faa22629",
+    "fact": "Ready outputs revalidated under view, registry, coin and settlement locks; dropped outputs removed before allocate; stable entitlements and Spent written atomically."
+  },
+  {
+    "id": "E24",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_inventory.rs",
+    "symbol": "check_partition",
+    "line": 124,
+    "sha256": "c4944ee82addf3369875be81d8a55e286472e961f2d6c941342f28f28a54bb94",
+    "fact": "Complete bounded anchor inventory; disjoint conserving geometric partition; actual paths and residuals required. Geometry alone is not economic ownership."
+  },
+  {
+    "id": "E25",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_geometry.rs",
+    "symbol": "economic_cut",
+    "line": 22,
+    "sha256": "06e99d7ed905de8fd745868e9c3ddacefaf915099945c4654af22544e4629d0e",
+    "fact": "Current round/offboard settlement stops traversal; all selected paths checked. Historical descendants are candidates rather than eagerly validated current claims."
+  },
+  {
+    "id": "E26",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/watchman/settlement.rs",
+    "symbol": "allocate",
+    "line": 65,
+    "sha256": "d09a4c2a303ed9d3f853fdd351b9e6e81ca89929642e573df6fddeb57d2f3d36",
+    "fact": "Group by exact script, one 1000-sat fee per paying output; script dust; stable per-leaf fee/payout/forfeit partition."
+  },
+  {
+    "id": "E27",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/watchman/payout.rs",
+    "symbol": "process_expiry_payout",
+    "line": 74,
+    "sha256": "6c62a55dcdd76aba427de36a14f37b546beb57dc8667cbd71958426d5e92883e",
+    "fact": "Immutable zero-fee v3 parent; exact confirmed inputs; watchman sponsor; fee-child-only replacement; view lock spans submit_package."
+  },
+  {
+    "id": "E28",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_payout.rs",
+    "symbol": "request_expiry_split",
+    "line": 180,
+    "sha256": "67b9740800f62fea5ea1b5781d6071c51df534b42456314b898df078f8766342",
+    "fact": "Split requires signed real path, every sibling and server recovery path; user-only board leaf is refused; physical reservations protect allocations."
+  },
+  {
+    "id": "E29",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/watchman/recovery.rs",
+    "symbol": "rebuild_expiry_state",
+    "line": 36,
+    "sha256": "ee4534800f0b6845a90dc6f557682c9fc9049c23a4b7693fdf10d12b8301b4c0",
+    "fact": "Global chain re-observation rebuilds derived state; exact terminal claim clause; all allocation/fee txids scanned; unchanged allocation ID set rechecked."
+  },
+  {
+    "id": "E30",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_chain.rs",
+    "symbol": "lock_valid_expiry_view",
+    "line": 131,
+    "sha256": "a20f49ca1edcec080db441fe5152a273e509b0141c34bf3de91cd02b0ed76e0c",
+    "fact": "Durable invalidation generations, two daemon completion ACKs and canonical hashes; restart invalidates before work resumes."
+  },
+  {
+    "id": "E31",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/fallback.rs",
+    "symbol": "open_fallback",
+    "line": 87,
+    "sha256": "57cabf9b3eea09024e59c901067f1f5bb6bc2cc93f4fe376fa295ba9c81d546d",
+    "fact": "App supplies destination; cached binding can open offline. Automatic re-registration with cached record requires explicit requested address."
+  },
+  {
+    "id": "E32",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/fallback/adoption.rs",
+    "symbol": "adopt_reported_spent",
+    "line": 38,
+    "sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+    "fact": "After post-status complete history, absent entitlement allows ordinary Spent adoption without an explicit chain payment check in this method."
+  },
+  {
+    "id": "E33",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/fallback/protection.rs",
+    "symbol": "verify_fallback_chain_evidence",
+    "line": 50,
+    "sha256": "4cb7198e8bb98871b378a9a7ae9e32a9ed0849bb774e9b8a0818982ef2212253",
+    "fact": "Six confirmations, registered script and group value; local full body enables ancestry check; unknown body skips that ancestry check."
+  },
+  {
+    "id": "E34",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/fallback/act_by.rs",
+    "symbol": "exit_protection_schedule",
+    "line": 67,
+    "sha256": "4d2087abf492f2d54cef2638f2dea281a27299ac51eb4b5584a7615d03edc5b7",
+    "fact": "Pubkey Spendable/Locked protection only; derives path/CSV deadlines; operation locks retained; manual-sync applications must call protection."
+  },
+  {
+    "id": "E35",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/expiry_details.rs",
+    "symbol": "fallback_payout_details_by_account",
+    "line": 99,
+    "sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+    "fact": "Account-owned history uses immutable registration, stable IDs and global view token; 2MiB page budget and 20,001-row guard."
+  },
+  {
+    "id": "E36",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/fallback/sync.rs",
+    "symbol": "sync_fallback_payouts",
+    "line": 148,
+    "sha256": "dc24a84878eaf20b4158836c2503881797a792fae699a442f47f3731ee6bfe26",
+    "fact": "Complete consistent paginated history replaces visible snapshot; previous observations retained; concurrent snapshot base checked."
+  },
+  {
+    "id": "E37",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bitcoin-ext/src/bdk.rs",
+    "symbol": "make_signed_p2a_cpfp",
+    "line": 390,
+    "sha256": "12bce48a0b62e24c0fc27892d872544fb28f8e8ce75ec4db7841d224278a5f93",
+    "fact": "Confirmed-only BDK selection, guaranteed non-dust change, version3 child and iterative actual weight."
+  },
+  {
+    "id": "E38",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/arkoor.rs",
+    "symbol": "cosign_oor_with_builder",
+    "line": 95,
+    "sha256": "32056594c0db2a387b761bf140240f15c647d716200e35a265aa458350cf7fbc",
+    "fact": "Unsigned outputs, checkpoint links, Fulfilled receive and binding materialization commit before server signatures return."
+  },
+  {
+    "id": "E39",
+    "repository": "/home/francis/sweep-to-payout-src",
+    "head": "994aede0ca7b2631e65ec3857f48b71888e0316f",
+    "file": "server/src/database/expiry_ownership.rs",
+    "symbol": "send_ownership",
+    "line": 394,
+    "sha256": "b45b467f5a4484ce997f796cbd7683415e74f0281d903c314a2c45822d5e9c77",
+    "fact": "Historical B treats any same-hash preimage/succeeded attempt as paid send; receive ownership also uses hash-level evidence."
+  },
+  {
+    "id": "E40",
+    "repository": "/home/francis/sweep-to-payout-per-key-src-9cb02072",
+    "head": "af52be109466e47de96b0fed0e42c7688420a06c",
+    "file": "server/src/database/fallback.rs",
+    "symbol": "set_fallback",
+    "line": 39,
+    "sha256": "ca60b98bb1e1649089ad7365dd816b9a254d4c72770a4de56c9d899cc55a5825",
+    "fact": "Historical C relies on mailbox-signed per-key links and missing-link refusal, not fresh exhaustive xpub attribution."
+  },
+  {
+    "id": "E41",
+    "repository": "/home/francis/abandon-ship-bark-two-step-comparison",
+    "head": "3d3b28428cd33eb5e703342a8441c1a8d5f4a71b",
+    "file": "server/src/database/expiry_settlement.rs",
+    "symbol": "store_expiry_payment",
+    "line": 190,
+    "sha256": "377bee85dc542ec86957a00b7ca2e7fea58e6182f564e3de1a14f1bd97db841e",
+    "fact": "Historical A persists signed payout in nursery and settlement rows; refund path cancels subscriptions by hash."
+  },
+  {
+    "id": "E42",
+    "repository": "/home/francis/abandon-ship-bark-two-step-comparison",
+    "head": "3d3b28428cd33eb5e703342a8441c1a8d5f4a71b",
+    "file": "server/src/expiry_payout.rs",
+    "symbol": "expiry_payout_tick",
+    "line": 402,
+    "sha256": "5a2a5c62e1691f77df2bdc0565b05b94e434e5ff7aabf70d700138f9a2d0a566",
+    "fact": "Historical two-step route requires real fee estimate and swept-path proof; default sweep minimum100 confirmations; different fee/minimum policy."
+  },
+  {
+    "id": "E43",
+    "repository": "/home/francis/bark-simulator-signet-rework",
+    "head": "d8cdb3b66c44df62cd946c57d18c3ffa8c544fab",
+    "file": "simulator/signet_lightning.py",
+    "symbol": "stage",
+    "line": 89,
+    "sha256": "b5c9bfb025494a8efb221e58075dc36c4c2caca78326cf8a50f0f7836f2e9e85",
+    "fact": "Controller pins operation/runtime/profile; unknown post-effect outcomes held; source is supervision, not evidence that native money moved."
+  },
+  {
+    "id": "E44",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/watchman/mod.rs",
+    "symbol": "process_claims",
+    "line": 377,
+    "sha256": "ebfd93238b0bd27248b2eaccacccaed7b1d621b4da59d54480417904377c2c6a",
+    "fact": "Upstream claims chunking and individual retry coexist with fork grouped payout/split paths; fee wallet and progress share resources."
+  },
+  {
+    "id": "E45",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/fork_migrations/V5__expiry_allocations.sql",
+    "symbol": "expiry_ledger_commit",
+    "line": 91,
+    "sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+    "fact": "Permanent one-active allocation index; append-only visible-transaction revision/count; triggers across payout ledger."
+  },
+  {
+    "id": "E46",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/sync/block_index.rs",
+    "symbol": "on_sync_complete",
+    "line": 180,
+    "sha256": "0c8670bf923c002f8884dee6983b847c839341956378efe82d1c909f89cc042f",
+    "fact": "Concurrent listener work precedes completed tip and completion ACK callbacks; listener order alone is not a rollback barrier."
+  },
+  {
+    "id": "E47",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/bitcoind.rs",
+    "symbol": "submit_package",
+    "line": 202,
+    "sha256": "189ae26c24b2f37f165bc2908ee93cb559683c9e87e536dbed21acd8f0cb7623",
+    "fact": "Returns raw Core SubmitPackageResult; transport success is distinct from package/transaction admission."
+  },
+  {
+    "id": "E48",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/ln/cln/hold.rs",
+    "symbol": "cancel_reason",
+    "line": 225,
+    "sha256": "5625df4688feaa0efb27555153d919e35376b1162709497af88096d428bb6d0b",
+    "fact": "Hold lifecycle has Accepted setup timeout and HtlcsReady expiry cancellation; internal funding markers live in separate fork tables."
+  },
+  {
+    "id": "E49",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "server/src/database/fork_migrations/V9__lightning_source_discharge.sql",
+    "symbol": "expiry_lightning_queued_attempt",
+    "line": 3,
+    "sha256": "b85b63c0020886d9abea607ab40a16a18acc439057c6add8918622378351a11c",
+    "fact": "Source-provenance marker tables start empty; legacy attempts are not silently asserted to be never dispatched."
+  },
+  {
+    "id": "E50",
+    "repository": "/home/francis/noah-fresh-backend-20261016",
+    "head": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+    "file": "server/src/cache/invoice_store.rs",
+    "symbol": "store",
+    "line": 18,
+    "sha256": "2fd8570a21c55f9168714b7458596876ea59b3bf9af9ffb7e20289ab25c66a46",
+    "fact": "Redis SETEX60 seconds accepts caller request ID/invoice; get and remove are separate unversioned operations."
+  },
+  {
+    "id": "E51",
+    "repository": "/home/francis/noah-fresh-backend-20261016",
+    "head": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+    "file": "server/src/db/user_repo.rs",
+    "symbol": "update_lightning_identity",
+    "line": 238,
+    "sha256": "3e92f349b17faf49dbe58bfe4ca4c17de92986ab6d7f33d5830fcd751de71288",
+    "fact": "Hosted identity/address persistence and uniqueness are distinct from signed Ark key ownership."
+  },
+  {
+    "id": "E52",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/round/protection.rs",
+    "symbol": "binding_preimage",
+    "line": 91,
+    "sha256": "cf2ce06468b00e1db087b0c0e6123f17a6a6bc7523e4e847945a5b735fcdbbc4",
+    "fact": "Binding recovery reads authentic revealing chain spends, retains learned preimage and existing original/replacement holder."
+  },
+  {
+    "id": "E53",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/lightning/receive.rs",
+    "symbol": "attempt_lightning_receive_exit",
+    "line": 216,
+    "sha256": "f713f8aa16d07924de8fe358910718af3c745400be272209b54601f73c3c2fb6",
+    "fact": "Escalates PreimageRevealed grants without a forwarding-destination branch, permanently records settled receive and removes action."
+  },
+  {
+    "id": "E54",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/exit/mod.rs",
+    "symbol": "drain_exits",
+    "line": 47,
+    "sha256": "b69b2aae81a418cec280073a1f28d2e853afeea86039e4e507baaf9c6c1ed33f",
+    "fact": "Claims signable exit inputs to a caller-supplied address; this generic API does not receive forwarding identity."
+  },
+  {
+    "id": "E55",
+    "repository": "/home/francis/abandon-ship-fresh-integration",
+    "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+    "file": "bark/src/persist/models.rs",
+    "symbol": "SettledLightningReceive",
+    "line": 222,
+    "sha256": "71fff6d8ba7d97902b586dfe12fe283810c6c922d81f710202812fd92cfb14ff",
+    "fact": "Permanent settled receive contains hash, preimage, invoice, amount and time, with no forwarding destination."
+  }
+]

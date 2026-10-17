@@ -1,0 +1,37 @@
+[
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/coordinator-2026-10-15/JOURNAL-EVENTS.jsonl",
+    "bytes": 17214,
+    "sha256": "e8b19eec9f370ade60b3041c15b61e75fc2d7f2a91fd023604cedd9fefbf2755",
+    "lines": 48,
+    "scope": "Metadata inventory; financial findings use separately cited original receipts and source. Not exhaustive session transcript audit."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/coordinator-2026-10-15/events.jsonl",
+    "bytes": 103280,
+    "sha256": "00d98a711b9e8473b88989d3cf4a7e06251294b79281e56fa030626abdd01e7b",
+    "lines": 502,
+    "scope": "Metadata inventory; financial findings use separately cited original receipts and source. Not exhaustive session transcript audit."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/coordinator-2026-10-15/control-log.jsonl",
+    "bytes": 5017,
+    "sha256": "6b40b4e62c0261078b7442bd2579d63e0bf78e8744ef444acfff3f3e1b68a546",
+    "lines": 9,
+    "scope": "Metadata inventory; financial findings use separately cited original receipts and source. Not exhaustive session transcript audit."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/coordinator-2026-10-15/postmortem-20261016T151155Z/PUBLIC-MESSAGES.jsonl",
+    "bytes": 117665,
+    "sha256": "da0037c4d2676f4afa2902b09d0fbecae55852695837e8dc5dfc0f567fd61e48",
+    "lines": 220,
+    "scope": "Metadata inventory; financial findings use separately cited original receipts and source. Not exhaustive session transcript audit."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/coordinator-2026-10-15/signet-retirement-20261016/STATE.json",
+    "bytes": 4550,
+    "sha256": "540f3a9082f14942ae42c11783310c0fc0660b5dc292bab9c06fd7ff74b56d38",
+    "lines": 93,
+    "scope": "Metadata inventory; financial findings use separately cited original receipts and source. Not exhaustive session transcript audit."
+  }
+]

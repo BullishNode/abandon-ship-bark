@@ -6,7 +6,9 @@ use std::time::Duration;
 use futures::StreamExt;
 
 use ark::lightning::{PaymentHash, Preimage};
-use bitcoin_ext::BlockDelta;
+use ark::attestations::VtxoStatusAttestation;
+use ark::ProtocolEncoding;
+use bitcoin_ext::{BlockDelta, TxOutExt};
 use ark_testing::{TestContext, btc, util::{FutureExt, poll_interval}};
 use ark_testing::balance::assert_balance_consistent;
 
@@ -18,6 +20,9 @@ use bark::{LightningSendOptions, OpenWalletArgs, Wallet, WalletSeed};
 use bark::onchain::OnchainWallet;
 use bark::persist::sqlite::SqliteClient;
 use bitcoin::Network;
+use bitcoin::{FeeRate, OutPoint, Transaction};
+use bitcoin::consensus::deserialize;
+use bitcoin_ext::rpc::RpcApi;
 use cln_rpc::plugins::hold;
 use server::database::Db;
 use server_rpc::protos;
@@ -516,9 +521,31 @@ impl captaind::proxy::ArkRpcProxy for HoldSuccessfulReceiveClaim {
 
 #[tokio::test]
 async fn receive_claim_reply_loss_is_durable_before_wire_and_recovers_after_reopen() {
-	let ctx = TestContext::new("bark_sdk/receive_claim_reply_loss_reopen").await;
+	receive_claim_reply_loss_reopen(false).await;
+}
+
+/// The same actually settled, reply-lost claim must also retain its rightful
+/// fallback after reopening, registering the signed leaf, and going absent.
+#[cfg(feature = "fallback-test-bip84")]
+#[tokio::test]
+async fn receive_claim_reply_loss_reopen_abandon_fallback_and_seed_recovery() {
+	receive_claim_reply_loss_reopen(true).await;
+}
+
+async fn receive_claim_reply_loss_reopen(fallback: bool) {
+	let ctx = TestContext::new(if fallback {
+		"bark_sdk/receive_claim_reply_loss_fallback_seed_recovery"
+	} else {
+		"bark_sdk/receive_claim_reply_loss_reopen"
+	}).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
-	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10)).create().await;
+	let mut builder = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10));
+	if fallback { builder = builder.bitcoind(ctx.bitcoind_arc()).watchmand(); }
+	let srv = builder.create().await;
+	if fallback {
+		assert_eq!(srv.config().fees.lightning_receive.base_fee, bitcoin::Amount::ZERO);
+		assert_eq!(srv.config().fees.lightning_receive.ppm, ark::fees::PpmFeeRate::ZERO);
+	}
 	srv.wait_for_vtxopool(&ctx).await;
 	let gate = HoldSuccessfulReceiveClaim { hold: Arc::new(AtomicBool::new(true)),
 		arrived: Arc::new(tokio::sync::Notify::new()), requests: Arc::new(AtomicUsize::new(0)) };
@@ -598,4 +625,171 @@ async fn receive_claim_reply_loss_is_durable_before_wire_and_recovers_after_reop
 		assert_eq!(receives[0].status, MovementStatus::Successful);
 		assert_eq!(receives[0].effective_balance, amount.to_signed().unwrap());
 	}
+	if !fallback { return; }
+
+	// Settled is not sufficient: independently authenticate that the signed
+	// receive leaf was registered, validated, and is ordinarily spendable.
+	let coins = reopened.spendable_vtxos().await.unwrap();
+	assert_eq!(coins.len(), 1);
+	let source = reopened.get_full_vtxo(coins[0].id()).await.unwrap();
+	reopened.validate_vtxo(&source).await.unwrap();
+	assert_eq!(source.amount(), amount);
+	let key = reopened.get_vtxo_key(&source).await.unwrap();
+	let mut rpc = srv.get_public_rpc().await;
+	let status = rpc.get_vtxo_status(protos::GetVtxoStatusRequest {
+		vtxo_id: source.id().to_bytes().to_vec(),
+		attestation: VtxoStatusAttestation::new(source.id(), &key).serialize(),
+	}).await.unwrap().into_inner();
+	assert_eq!(status.spend_state, protos::VtxoSpendState::Spendable as i32);
+	let registration = reopened.fallback_destination().await.unwrap();
+	assert!(registration.spk.is_p2wpkh());
+	let expected = source.amount() - ark_testing::sat(1_000);
+	let absent_height = ctx.bitcoind().get_block_count().await;
+	drop(reopened);
+
+	// Two distinct confirmed sponsor UTXOs also permit unrelated operator
+	// pool roots to expire. Neither is a deposit into the absent receiver.
+	for _ in 0..2 {
+		ctx.bitcoind().fund_addr(srv.watchmand().wait_wallet_address().await, ark_testing::sat(100_000)).await;
+	}
+	ctx.generate_blocks(2).await;
+	let height = ctx.bitcoind().get_block_count().await as u32;
+	assert!(height < source.expiry_height().to_u32());
+	let expired = ctx.generate_blocks(source.expiry_height().to_u32() + 1 - height).await;
+	srv.wait_for_sync_height(expired).await;
+	srv.watchmand().wait_for_sync_height(expired).await;
+
+	// Read the real background journal; the test never inserts a decision,
+	// ownership result, registration, or payout transaction into Postgres.
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let (parent, child, recorded_child_fee) = tokio::time::timeout(Duration::from_secs(60), async {
+		loop {
+			let row = db.read(async |t| Ok(t.query_opt(
+				"SELECT a.sweep_tx,f.raw_tx,f.fee_sat FROM expiry_allocation a \
+				JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+				JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				JOIN expiry_fee_child f ON f.allocation_id=a.id \
+				WHERE e.vtxo_id=$1 AND c.active AND a.broadcast_at IS NOT NULL \
+				ORDER BY f.id DESC LIMIT 1", &[&source.id().to_string()],
+			).await?)).await.unwrap();
+			if let Some(row) = row {
+				break (deserialize::<Transaction>(row.get("sweep_tx")).unwrap(),
+					deserialize::<Transaction>(row.get("raw_tx")).unwrap(), row.get::<_, i64>("fee_sat"));
+			}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("the registered received leaf never reached an actual background payout");
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+	assert_eq!(ctx.bitcoind().await_transaction(child.compute_txid()).await, child);
+	assert_eq!(parent.version.0, 3);
+	assert!(parent.vsize() <= 10_000);
+	let anchors = parent.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor()).collect::<Vec<_>>();
+	assert_eq!(anchors.len(), 1);
+	let anchor = OutPoint::new(parent.compute_txid(), anchors[0].0 as u32);
+	assert!(child.input.iter().any(|input| input.previous_output == anchor),
+		"the measured fee subsidy must actually spend this payout parent's P2A");
+	let outputs = parent.output.iter().enumerate().filter(|(_, out)| out.script_pubkey == registration.spk).collect::<Vec<_>>();
+	assert_eq!(outputs.len(), 1);
+	assert_eq!(outputs[0].1.value, expected);
+	let point = OutPoint::new(parent.compute_txid(), outputs[0].0 as u32);
+	let mut parent_input_sat = 0;
+	for input in &parent.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		parent_input_sat += previous.output[input.previous_output.vout as usize].value.to_sat();
+	}
+	assert_eq!(parent_input_sat, parent.output.iter().map(|out| out.value.to_sat()).sum::<u64>());
+	let mut child_input_sat = 0;
+	for input in &child.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		child_input_sat += previous.output[input.previous_output.vout as usize].value.to_sat();
+	}
+	let subsidy = child_input_sat - child.output.iter().map(|out| out.value.to_sat()).sum::<u64>();
+	assert!(subsidy > 0);
+	assert_eq!(subsidy, u64::try_from(recorded_child_fee).unwrap());
+	let confirmed = ctx.generate_blocks(6).await;
+	srv.wait_for_sync_height(confirmed).await;
+	srv.watchmand().wait_for_sync_height(confirmed).await;
+	// Core 31 reports P2A as `anchor`; raw JSON avoids the old RPC model's
+	// unsupported script-type decoder while checking the actual canonical block.
+	let core = ctx.bitcoind().sync_client();
+	let parent_chain: serde_json::Value = core.call("getrawtransaction", &[
+		serde_json::json!(parent.compute_txid().to_string()), serde_json::json!(true),
+	]).unwrap();
+	let child_chain: serde_json::Value = core.call("getrawtransaction", &[
+		serde_json::json!(child.compute_txid().to_string()), serde_json::json!(true),
+	]).unwrap();
+	assert!(parent_chain["confirmations"].as_u64().unwrap() >= 6);
+	assert!(child_chain["confirmations"].as_u64().unwrap() >= 6);
+	let payout_block = parent_chain["blockhash"].as_str().unwrap();
+	assert_eq!(child_chain["blockhash"].as_str().unwrap(), payout_block);
+	let header: serde_json::Value = core.call("getblockheader", &[
+		serde_json::json!(payout_block), serde_json::json!(true),
+	]).unwrap();
+	assert!(header["confirmations"].as_u64().unwrap() >= 6);
+	assert_eq!(core.get_block_hash(header["height"].as_u64().unwrap()).unwrap().to_string(), payout_block);
+	let payout = ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+	assert!(payout.confirmations >= 6);
+	assert_eq!(payout.value, expected);
+	// The payout script belongs to the absent SDK wallet, not Core's test
+	// treasury. Count actual chain outputs without wallet import/accounting.
+	let mut received = bitcoin::Amount::ZERO;
+	for height in absent_height + 1..=u64::from(confirmed.to_u32()) {
+		let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
+		for tx in block.txdata {
+			received += tx.output.iter().filter(|output| output.script_pubkey == registration.spk)
+				.map(|output| output.value).sum::<bitcoin::Amount>();
+		}
+	}
+	assert_eq!(received, expected,
+		"the old receive HTLC must not create another payout to the same owner");
+
+	// New Ark and BDK databases, original seed only; no leaf IDs, receipts,
+	// or payout transaction are supplied to the restored wallet.
+	let restored = ctx.bark_sdk("seed_only", &srv).mnemonic(mnemonic)
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	assert_eq!(restored.fallback_destination().await.unwrap(), registration);
+	restored.sync_onchain().await.unwrap();
+	let onchain = restored.onchain().unwrap();
+	assert_eq!(onchain.read().await.balance().await, expected);
+	restored.sync_fallback_payouts().await.unwrap();
+	let receipts = restored.fallback_payouts().await.unwrap();
+	let receipt = receipts.iter().find(|receipt| receipt.vtxo_id == source.id()).unwrap();
+	assert!(receipt.attempts.iter().any(|attempt| attempt.active && attempt.payout == expected &&
+		attempt.output_index == Some(point.vout) && attempt.parent.as_ref().is_some_and(|tx| tx.compute_txid() == point.txid)));
+	let destination = ctx.bitcoind().get_new_address();
+	let psbt = onchain.write().await.prepare_drain_tx(destination.clone(), FeeRate::from_sat_per_vb(2).unwrap()).await.unwrap();
+	let recovery_fee = psbt.fee().unwrap();
+	assert!(recovery_fee > bitcoin::Amount::ZERO);
+	let signed = onchain.write().await.sign_psbt(psbt).await.unwrap();
+	let recovery = onchain.write().await.finish_psbt(signed).await.unwrap().extract_tx().unwrap();
+	assert_eq!(recovery.input.len(), 1, "seed recovery must spend only its actual fallback outpoint");
+	assert_eq!(recovery.input[0].previous_output, point);
+	assert_eq!(recovery.input[0].witness.len(), 2, "actual BIP84 ownership must authorize the recovery spend");
+	assert_eq!(recovery.output.len(), 1);
+	assert_eq!(recovery.output[0].script_pubkey, destination.script_pubkey());
+	let recovered_value = expected - recovery_fee;
+	assert_eq!(recovery.output[0].value, recovered_value);
+	assert_eq!(payout.value, recovery.output.iter().map(|output| output.value).sum::<bitcoin::Amount>() + recovery_fee);
+	restored.chain().broadcast_tx(&recovery).await.unwrap();
+	assert_eq!(ctx.bitcoind().await_transaction(recovery.compute_txid()).await, recovery);
+	ctx.generate_blocks(6).await;
+	let recovered = core.get_tx_out(&recovery.compute_txid(), 0, Some(true)).unwrap().unwrap();
+	assert!(recovered.confirmations >= 6);
+	assert_eq!(recovered.value, recovered_value);
+	assert_eq!(ctx.bitcoind().get_received_by_address(&destination), recovered_value);
+	assert!(ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_none());
+	std::fs::write(ctx.datadir.join("actual-lightning-fallback-recovery.json"), serde_json::to_vec_pretty(&serde_json::json!({
+		"status": "PASS", "scope": "own_wallet_paid_claim_reply_lost_reopened_registered_abandoned",
+		"payment_hash": hash, "received_vtxo": source.id(), "expiry_height": source.expiry_height(),
+		"received_sat": source.amount().to_sat(), "payout_fee_sat": 1_000, "payout_sat": expected.to_sat(),
+		"watchman_subsidy_sat": subsidy, "fallback_outpoint": point,
+		"payout_and_fee_child_confirmations": child_chain["confirmations"], "payout_and_fee_child_block": payout_block,
+		"recovery_fee_sat": recovery_fee.to_sat(), "recovered_sat": recovered_value.to_sat(),
+		"recovery_confirmations": recovered.confirmations,
+		"parent": bitcoin::consensus::encode::serialize_hex(&parent),
+		"fee_child": bitcoin::consensus::encode::serialize_hex(&child),
+		"recovery": bitcoin::consensus::encode::serialize_hex(&recovery),
+		"fresh_ark_and_bdk_databases": true, "original_seed_only": true,
+		"distinct_recipient": false, "financial_sql_writes": false,
+	})).unwrap()).unwrap();
 }

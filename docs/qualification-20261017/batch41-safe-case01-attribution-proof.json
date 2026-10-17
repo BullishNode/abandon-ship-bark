@@ -1,0 +1,1312 @@
+{
+  "actual_board_roots": 3,
+  "both_daemons_live_throughout": true,
+  "chunk_size": 32,
+  "extra_records_max": 16,
+  "funded_accounts": 2,
+  "independent_control_payout": "e5221639c2c49989ec54e26b612c7be507779875dbf8ca566101e38c74b22d8e:0",
+  "initial_authenticated_registrations": 100,
+  "limits": [
+    "bounded two-leg cohort, not sustained open-ended arrivals or fairness proof",
+    "unfunded records are authenticated registrations, not funded-user throughput",
+    "fresh seed recovery uses the live Ark endpoint",
+    "no high-index/exhaustive-negative envelope"
+  ],
+  "lookup_budget_seconds_per_leg": 120,
+  "mailbox_outage": "recovery post only",
+  "no_manual_scanner_or_queue_calls": true,
+  "phases": [
+    {
+      "actual_payout": "16c581540706092e50f29b4a0b2cec6128c0b509e435440fcc4ca8be8baceef6:0",
+      "allocation": 2,
+      "child_index": 80,
+      "cursor_samples": [
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 100,
+          "seconds": 0.009222314
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 101,
+          "seconds": 0.078567535
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 102,
+          "seconds": 0.147787316
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 103,
+          "seconds": 0.215520379
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 104,
+          "seconds": 0.288382144
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 105,
+          "seconds": 0.363398792
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 106,
+          "seconds": 0.441691537
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 107,
+          "seconds": 0.51873806
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 0.594720109
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 0.658873907
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 0.7200676
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 0.782305661
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 0.846996458
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 0.908110583
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 0.973285506
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.030155238
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.09049317
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.150182476
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.211392614
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.27174239
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.334656825
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.397811335
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.460688678
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.521801441
+        },
+        {
+          "cursors": 108,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.583887801
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.647043156
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.7078064419999999
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.7703295369999998
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.8368526250000001
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.898630198
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 1.96517404
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.033784171
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.09566936
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.162296332
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.222070045
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.284045201
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.347846526
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.409250397
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.469889599
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.5313270340000003
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.591857322
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.654669689
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.726770168
+        },
+        {
+          "cursors": 108,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 108,
+          "seconds": 2.786095646
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 2.845305642
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 2.909691993
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 2.970888992
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.03441384
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.122930628
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.184961961
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.243106778
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.3054713700000002
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.367381289
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.436036775
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.4974207489999998
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.567113256
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.631283462
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.7005920679999997
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.764581521
+        },
+        {
+          "cursors": 108,
+          "maximum": 64,
+          "minimum": 32,
+          "registrations": 108,
+          "seconds": 3.821734702
+        },
+        {
+          "cursors": 108,
+          "maximum": 96,
+          "minimum": 64,
+          "registrations": 108,
+          "seconds": 3.884601241
+        },
+        {
+          "cursors": 108,
+          "maximum": 96,
+          "minimum": 64,
+          "registrations": 108,
+          "seconds": 3.94445516
+        },
+        {
+          "cursors": 108,
+          "maximum": 96,
+          "minimum": 64,
+          "registrations": 108,
+          "seconds": 4.006818312
+        },
+        {
+          "cursors": 108,
+          "maximum": 96,
+          "minimum": 64,
+          "registrations": 108,
+          "seconds": 4.069618148
+        },
+        {
+          "cursors": 108,
+          "maximum": 96,
+          "minimum": 64,
+          "registrations": 108,
+          "seconds": 4.130653513
+        },
+        {
+          "cursors": 108,
+          "maximum": 96,
+          "minimum": 64,
+          "registrations": 108,
+          "seconds": 4.193930238
+        },
+        {
+          "cursors": 108,
+          "maximum": 96,
+          "minimum": 64,
+          "registrations": 108,
+          "seconds": 4.261865375
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.32361547
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.3881842970000005
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.4530119169999995
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.518881712
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.583095909
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.647861004
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.712494072
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.778980915
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.8440522139999995
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.905282164
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 4.969405499
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.032277661
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.098488693
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.160943569
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.23650157
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.298014285
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.362262227
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.421239805
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.482453513
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.547572758
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.61179882
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.672683754
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.731828921
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.792777529
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.855064598
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.912991894
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 5.971968517
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 6.035586013
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 6.098345676
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 6.164108734
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 6.225991556
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 6.289213664
+        }
+      ],
+      "fee_sat": 1000,
+      "lookup_and_publication_seconds": 9.583789559,
+      "mailbox_rows": 0,
+      "miner_fee_sat": 2281,
+      "parent_and_child_same_block_6conf": true,
+      "payout_sat": 99000,
+      "registration_rpc_seconds": [
+        0.012060858,
+        0.013595297,
+        0.010876171,
+        0.015652731,
+        0.018161699,
+        0.018877257,
+        0.017784501,
+        0.01689377,
+        0.009108474,
+        0.006077524,
+        0.006187172,
+        0.008838493,
+        0.008090612,
+        0.011263757,
+        0.003954204,
+        0.005616333,
+        0.006326731,
+        0.00713792,
+        0.005020342,
+        0.00490051,
+        0.006848565,
+        0.007646101,
+        0.005618268,
+        0.006473294,
+        0.007936171,
+        0.00648724,
+        0.008360983,
+        0.009748525,
+        0.006165712,
+        0.008380378,
+        0.011445012,
+        0.007264177,
+        0.008903899,
+        0.005354444,
+        0.00707624,
+        0.008465086,
+        0.007904032,
+        0.006783025,
+        0.00643322,
+        0.005598565,
+        0.007540239,
+        0.017333465,
+        0.005952399,
+        0.003541366,
+        0.010917635,
+        0.006813115,
+        0.008573822,
+        0.031988705,
+        0.006720022,
+        0.004547739,
+        0.007596528,
+        0.006615528,
+        0.013063816,
+        0.005963749,
+        0.013565017,
+        0.006129534,
+        0.008099311,
+        0.007382729,
+        0.00465156,
+        0.007974451,
+        0.005222549,
+        0.005773298,
+        0.005247021,
+        0.007950245,
+        0.006757564,
+        0.014118526,
+        0.006505254,
+        0.007969807,
+        0.009001902,
+        0.007320229,
+        0.007059047,
+        0.008293032,
+        0.007671029,
+        0.008542377,
+        0.011210322,
+        0.005557687,
+        0.008791602,
+        0.007716294,
+        0.009671033,
+        0.009231621,
+        0.020189576,
+        0.006560085,
+        0.008589456,
+        0.004862557,
+        0.005634419,
+        0.005890518,
+        0.008934146,
+        0.007428223,
+        0.005280246,
+        0.007212389,
+        0.005495673,
+        0.004254284,
+        0.003531013,
+        0.006757113,
+        0.006028944,
+        0.008879732,
+        0.007441422,
+        0.00715613
+      ],
+      "source": "b731e6d222d12721f8a000cdc460f51ba1630f7cc2573bff6a911349712c508b:0"
+    },
+    {
+      "actual_payout": "fd882f18720039994dbe42cd319f83b11cd8bef4860e4c8dd8d3568637548bf5:0",
+      "allocation": 3,
+      "child_index": 1,
+      "cursor_samples": [
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 108,
+          "seconds": 0.002979996
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 109,
+          "seconds": 0.068304479
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 110,
+          "seconds": 0.135481354
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 111,
+          "seconds": 0.204922926
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 112,
+          "seconds": 0.279375296
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 113,
+          "seconds": 0.351420824
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 114,
+          "seconds": 0.42184687
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 115,
+          "seconds": 0.490137664
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 0.559176344
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 0.620006447
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 0.685199949
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 0.746713032
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 0.810959008
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 0.872058933
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 0.933112654
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 0.992856606
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 1.05761968
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 1.118833635
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 1.178866096
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.241766624
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.300373761
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.363403533
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.426202148
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.48979316
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.556921402
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.622181448
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.68814317
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.754526228
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.823331273
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.888175955
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 1.949490681
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.009032303
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.070033215
+        },
+        {
+          "cursors": 116,
+          "maximum": 0,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.133724733
+        },
+        {
+          "cursors": 116,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.19574527
+        },
+        {
+          "cursors": 116,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.257623938
+        },
+        {
+          "cursors": 116,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.322645894
+        },
+        {
+          "cursors": 116,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.386524653
+        },
+        {
+          "cursors": 116,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.447774971
+        },
+        {
+          "cursors": 116,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.509682932
+        },
+        {
+          "cursors": 116,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.567958382
+        },
+        {
+          "cursors": 116,
+          "maximum": 32,
+          "minimum": 0,
+          "registrations": 116,
+          "seconds": 2.6368735599999997
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 2.696381112
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 2.755539212
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 2.818704964
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 2.881091745
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 2.943510304
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.006815466
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.07071144
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.130335207
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.189430004
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.253322401
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.316603293
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.3788425650000002
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.439699435
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.499502724
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.563696018
+        },
+        {
+          "cursors": 0,
+          "maximum": null,
+          "minimum": null,
+          "registrations": 116,
+          "seconds": 3.627875225
+        }
+      ],
+      "fee_sat": 1000,
+      "lookup_and_publication_seconds": 6.808592701,
+      "mailbox_rows": 0,
+      "miner_fee_sat": 2281,
+      "parent_and_child_same_block_6conf": true,
+      "payout_sat": 99000,
+      "registration_rpc_seconds": [
+        0.011777727,
+        0.012075087,
+        0.013085095,
+        0.015656997,
+        0.016041943,
+        0.015528113,
+        0.012495201,
+        0.013821704,
+        0.005886771,
+        0.008366148,
+        0.006473948,
+        0.007880541,
+        0.004765944,
+        0.005110309,
+        0.004681867,
+        0.008525515,
+        0.007227828,
+        0.006328359,
+        0.006946929,
+        0.004187392,
+        0.008494815,
+        0.007428973,
+        0.008124515,
+        0.008754592,
+        0.008850433,
+        0.009558323,
+        0.007093766,
+        0.009795979,
+        0.0082508,
+        0.008217075,
+        0.005040903,
+        0.006452511,
+        0.006702871,
+        0.007839889,
+        0.00677793,
+        0.00995315,
+        0.007614926,
+        0.006435043,
+        0.007269839,
+        0.005202665,
+        0.015248288,
+        0.005140613,
+        0.005803048,
+        0.006684584,
+        0.006535778,
+        0.006141707,
+        0.007556231,
+        0.008645802,
+        0.005463345,
+        0.003862148,
+        0.007929724,
+        0.009627229,
+        0.004641874,
+        0.006160248,
+        0.004946507,
+        0.008845583,
+        0.007255781
+      ],
+      "source": "cb0055ad4a8b5d431dfb86a4548445e82494a9cda8bc060a0f54e98b64f50996:0"
+    }
+  ],
+  "recovery_6conf": true,
+  "recovery_fee_sat": 491,
+  "registration_pressure_max_requests_per_leg": 2048,
+  "seed_only_recovery_txid": "7145a5063311de6dadd1d1bd8e67d377302e2d128c39add04ee621120ee389a2",
+  "status": "PASS",
+  "workers": 2
+}

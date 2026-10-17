@@ -1,0 +1,4 @@
+ Nextest run ID 928e5203-5a36-4489-967e-dcdbef965b4c with nextest profile: fallback-scale
+    Starting 1 test across 3 binaries (566 tests skipped)
+        PASS [  47.490s] (1/1) ark-testing::server expiry_owner_load::expiry_owner_live_funded_100_registrations
+     Summary [  47.492s] 1 test run: 1 passed, 566 skipped

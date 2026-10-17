@@ -1,0 +1,8 @@
+[store]
+dir = "/fresh-cache/testing-track-20261017/batch41-live-funded-v7/case02/nextest-store"
+[profile.default]
+slow-timeout = { period="60s",terminate-after=3 }
+retries=0
+[profile.fallback-scale]
+slow-timeout = { period="60s",terminate-after=29 }
+retries=0

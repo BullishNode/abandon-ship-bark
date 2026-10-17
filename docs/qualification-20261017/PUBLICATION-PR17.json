@@ -1,0 +1,36 @@
+{
+  "verified_at": "2026-10-17T22:15:50.507585+00:00",
+  "pr": 17,
+  "url": "https://github.com/BullishNode/abandon-ship-bark/pull/17",
+  "state": "DRAFT OPEN",
+  "branch": "work/fresh-test-report-checkpoint13-20261017",
+  "verified_remote_head": "e36fff479b8c9b29452677316becfbe014172f3d",
+  "dependency": {
+    "pr": 16,
+    "fixed_head": "f2ff4ece0d0c6874851925c9f4bd09409efe31f0",
+    "head_preserved_and_GH_verified": true,
+    "state": "DRAFT OPEN"
+  },
+  "latest_verified_merged": {
+    "pr": 15,
+    "merge_commit": "a2961be8376fe236b9a6788e831884e05d425f0e",
+    "merged_at": "2026-10-17T22:05:44Z"
+  },
+  "new_commit_report_paths": 36,
+  "PR_report_only_paths_at_verification": 69,
+  "payload_manifest": "publication-checkpoint13-files.json",
+  "payload_manifest_sha256": "72e9b20ae1be03b98576207e135687b03bd10429cee876a724908deb2d7a5c9b",
+  "cutoff": {
+    "executions": 223,
+    "PASS": 209,
+    "FAIL": 14,
+    "unique_binary_test_pairs": 217,
+    "nextest_invocations": 196,
+    "native": 211,
+    "component": 12,
+    "coverage_rows": 434
+  },
+  "validation": "Parent35payloadhashes+manifest/17JSON/3TOML/3PythonAST/2bashsyntax/1JSONL/CSVcounts/strongsecretpatterns/exact36report-only stagedpaths/ownedRustunchanged/remotehead/GHdraftandPRfiles; PR16head separatelyverifiedunchanged.",
+  "excluded": "Newv7benchmarkpreparation/runtime and alluntestedsource-onlyoverlays; no completeML/gate/production claim.",
+  "authority": "Coordinator directed next newreportbranch preservingfixedPR16; no merge/deployment bytestingtrack."
+}

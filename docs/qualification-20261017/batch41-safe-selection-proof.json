@@ -1,0 +1,53 @@
+{
+  "state": "ROOT_ALLOCATED_ONCE_PENDING_PARENT_LAUNCH",
+  "batch": "batch41-live-funded-v7",
+  "source_manifest_sha256": "d05d3d5c7a24584fc9893f6601d9c0b243784f9bb16602feca699b4e532c3db0",
+  "bundle_manifest_sha256": "04b05a11e01b3b0af46e812cf3cb94d053d2a3bd79d4c7b25ac234948fa3eb33",
+  "runtime_metadata_sha256": "748a2f9fc21d008ad3a7bdc166363c04b524461b3339d084c2b9481a37a08b1d",
+  "metadata_path": "/fresh-cache/runtime-owner-funded-v7-20261017/nextest-binaries-runtime.json",
+  "expected_names_in_execution_order": [
+    "expiry_owner_load::expiry_owner_live_funded_100_registrations",
+    "expiry_owner_load::expiry_owner_live_funded_1000_registrations"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::server",
+    "ark-testing::server"
+  ],
+  "expected_ignored": true,
+  "run_ignored": "only",
+  "profile": "fallback-scale",
+  "per_test_timeout_seconds": 1740,
+  "per_lookup_poll_seconds": 120,
+  "threads": 1,
+  "retries": 0,
+  "maximum_global_case_executions": 2,
+  "actual_bark_version": "bark 0.7.1-dev (759f12c1f0c7586c597557f422374415f330b9f8)",
+  "root_authorization": "Root explicitlyallocates exactignored100 then1000 ONCEeach/serial1/retries0/firstFAIL/globalmax2; ignoredONLY and existingfallback-scale1740 exception;120postexpirylookup pollunchanged; parentlaunchonlyafterfinalhashgate.",
+  "source_peer_binding": {
+    "state": "ACK_BOUND_TO_EXACT_FROZEN_SOURCE",
+    "patch_path": "/tmp/fresh-owner-live-funded-20261017-v1.patch",
+    "patch_sha256": "55d5aab5f34f8100f536212df933e51e8d4ce8a910d0fefc6d13a5b1c436144a",
+    "packet_manifest_path": "/tmp/fresh-owner-live-funded-20261017-v1.json",
+    "packet_manifest_sha256": "ae608c9e96f35a51010d36cab870516b9e9bdf3e029f0972c6e0c68851a894da",
+    "peer_path": "/home/francis/abandon-ship-fresh-pre-obligation/reviews/owner-live-funded-20261017-v1.md",
+    "peer_sha256": "b567058ebf5bcddf24333e84f7e23869732e5098acc202b5060a0d40a810334a",
+    "addfile_patch_bytes_equal_archive": true,
+    "source_file_sha256": "a7361097f02126425342e575b95f9c681dc853fd2496197c11cd8fd98dce34a9",
+    "module_present_in_archive": true
+  },
+  "source_functions": [
+    {
+      "test_name": "expiry_owner_load::expiry_owner_live_funded_100_registrations",
+      "path": "testing/tests/server/expiry_owner_load.rs",
+      "source_file_sha256": "a7361097f02126425342e575b95f9c681dc853fd2496197c11cd8fd98dce34a9",
+      "wrapper_sha256": "b1a051bb9f90215cf5721fa36d3ae8d8025551a6571f4653f205cc35c746978b"
+    },
+    {
+      "test_name": "expiry_owner_load::expiry_owner_live_funded_1000_registrations",
+      "path": "testing/tests/server/expiry_owner_load.rs",
+      "source_file_sha256": "a7361097f02126425342e575b95f9c681dc853fd2496197c11cd8fd98dce34a9",
+      "wrapper_sha256": "4843f0fbf61420496a56cbb6c3d79accdf7ad2cb5181cf4ca5fc1330d8c335e8"
+    }
+  ],
+  "scope": "Boundedlivefundedtwolegattribution;100/1000authenticatedregistrations includes2fundedaccounts/3roots, notfundeduserthroughput/fairness. Owneridlemanualheldleg1/droppedleg2; controlabsent.120s clock startsafterexpirymining+daemonsync; progress.pollseconds vs phaseelapsedafterCore6 differ. FreshseedrecoveryusesliveArkendpoint andmayincludeordinarychange; no fullcustody/subsidy cut orpureofflineArkrestoreclaim."
+}

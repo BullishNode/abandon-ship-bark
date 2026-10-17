@@ -1,0 +1,52 @@
+{
+  "kind": "BATCH41_ADDITIVE_COVERAGE_LINE_ENDING_CORRECTION",
+  "at": "2026-10-17T22:35:43.344029+00:00",
+  "scope": "Formatting only: remove CR from the two appended batch41 row terminators; preserve all parsed fields and the entire prior 434-row prefix. No native failure, retry, execution credit or evidence change.",
+  "file": "COVERAGE.csv",
+  "old_sha256": "5d9396b6ce4c1ceb5cedf7c027305959af330cf84976a8a6cd34fb1a89417c56",
+  "new_sha256": "1d883d67354df23c5ccc339bc5127db4c5dd2db344e41944ea9b7902ba43cf91",
+  "old_bytes": 306576,
+  "new_bytes": 306574,
+  "bytes_removed": 2,
+  "changed_row_ids": [
+    "FT-SERVER-012",
+    "FT-SERVER-013"
+  ],
+  "old_newline": "Two appended CRLF terminators",
+  "new_newline": "LF, matching the existing prefix",
+  "prior_434_row_prefix_sha256": "39d59f9f6f27e0dcca1c5cb1410cbc4772ab3781e1bb31707c515c7a0bf97160",
+  "prior_434_row_prefix_byte_identical": true,
+  "parsed_rows": 436,
+  "parsed_fields_and_values_identical": true,
+  "private_preservation": "Private cache batch41/coverage-before-line-ending-fix.csv, mode 0600; excluded from publication.",
+  "initial_native_receipt": {
+    "file": "batch41-live-funded-v7-receipt.json",
+    "sha256": "0909c1cc68919394d7af238da42900946b2519093868332dc1d17fe8db3c8428",
+    "unchanged": true
+  },
+  "historical_append_receipt": {
+    "file": "batch41-coverage-append.json",
+    "sha256": "3b87f48bfe9bd4d3a4751f1c82e354df1a561814681936e9e8206ae47df4a80c",
+    "unchanged": true,
+    "historical_after_sha256": "5d9396b6ce4c1ceb5cedf7c027305959af330cf84976a8a6cd34fb1a89417c56",
+    "disposition": "Immutable initial append receipt records the pre-correction CRLF snapshot. This separate correction supplies the current LF snapshot."
+  },
+  "historical_safe_checksum_manifest": {
+    "file": "batch41-live-funded-v7-safe-files.sha256",
+    "sha256": "ac1f02a211615dfead966585cd366dc76bd6b353343856e2e9c2b55ac5a5b2bf",
+    "includes_COVERAGE": false,
+    "unchanged": true
+  },
+  "execution_totals_unchanged": {
+    "executions": 225,
+    "PASS": 211,
+    "FAIL": 14,
+    "unique_pairs": 219,
+    "nextest_invocations": 198,
+    "native": 213,
+    "components": 12,
+    "coverage_rows": 436
+  },
+  "STATUS_changed": false,
+  "native_source_runtime_evidence_changed": false
+}

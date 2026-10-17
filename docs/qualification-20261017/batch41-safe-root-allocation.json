@@ -1,0 +1,24 @@
+{
+  "state": "ROOT_ALLOCATED_ONCE",
+  "batch": "batch41-live-funded-v7",
+  "source_manifest_sha256": "d05d3d5c7a24584fc9893f6601d9c0b243784f9bb16602feca699b4e532c3db0",
+  "bundle_manifest_sha256": "04b05a11e01b3b0af46e812cf3cb94d053d2a3bd79d4c7b25ac234948fa3eb33",
+  "expected_selection": [
+    [
+      "ark-testing::server",
+      "expiry_owner_load::expiry_owner_live_funded_100_registrations"
+    ],
+    [
+      "ark-testing::server",
+      "expiry_owner_load::expiry_owner_live_funded_1000_registrations"
+    ]
+  ],
+  "native_launch_owner": "parent/root only",
+  "preparer_native_execution_authorized": false,
+  "maximum_global_case_executions": 2,
+  "run_ignored": "only",
+  "profile": "fallback-scale",
+  "outer_seconds": 1740,
+  "lookup_poll_seconds": 120,
+  "root_thread_instruction": "Exactignored100 then1000 ONCEeach/serial1/zeroRetry/firstFAIL/resources/max2global. ExplicitrunignoredONLY exception existingfallback-scale1740;120PERLOOKUPunchanged. PREPAREONLY+read-onlypreflight/listing, parentlaunchonly."
+}

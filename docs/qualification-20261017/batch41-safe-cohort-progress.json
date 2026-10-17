@@ -1,0 +1,52 @@
+[
+  {
+    "index": 1,
+    "name": "expiry_owner_load::expiry_owner_live_funded_100_registrations",
+    "state": "PASS",
+    "command": [
+      "just",
+      "--set",
+      "JUSTFILE_DIR",
+      "/fresh-cache/testing-track-20261017/batch41-live-funded-v7",
+      "int-binaries",
+      "/fresh-cache/runtime-owner-funded-v7-20261017/nextest-binaries-runtime.json",
+      "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch41-live-funded-v7/case01/nextest.toml --run-ignored only -- expiry_owner_load::expiry_owner_live_funded_100_registrations --exact"
+    ],
+    "started_at": "2026-10-17T22:19:02.768151+00:00",
+    "per_test_timeout_seconds": 1740,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 110074,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "928e5203-5a36-4489-967e-dcdbef965b4c",
+    "test_seconds": 47.49,
+    "wall_seconds": 48.071,
+    "ended_at": "2026-10-17T22:19:50.839026+00:00"
+  },
+  {
+    "index": 2,
+    "name": "expiry_owner_load::expiry_owner_live_funded_1000_registrations",
+    "state": "PASS",
+    "command": [
+      "just",
+      "--set",
+      "JUSTFILE_DIR",
+      "/fresh-cache/testing-track-20261017/batch41-live-funded-v7",
+      "int-binaries",
+      "/fresh-cache/runtime-owner-funded-v7-20261017/nextest-binaries-runtime.json",
+      "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch41-live-funded-v7/case02/nextest.toml --run-ignored only -- expiry_owner_load::expiry_owner_live_funded_1000_registrations --exact"
+    ],
+    "started_at": "2026-10-17T22:19:50.841064+00:00",
+    "per_test_timeout_seconds": 1740,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 110365,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "ec8b5641-6b09-4abd-a319-04a11b538ac1",
+    "test_seconds": 80.781,
+    "wall_seconds": 81.614,
+    "ended_at": "2026-10-17T22:21:12.454892+00:00"
+  }
+]

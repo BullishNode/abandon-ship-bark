@@ -1,0 +1,94 @@
+{
+  "kind": "BATCH41_ADDITIVE_FINANCIAL_SUPPLEMENT",
+  "at": "2026-10-17T22:29:28.114051+00:00",
+  "references_sha256": {
+    "batch41-live-funded-v7-receipt.json": "0909c1cc68919394d7af238da42900946b2519093868332dc1d17fe8db3c8428",
+    "batch41-client-postflight.json": "ab64656e0889f0303aa61aab01ee17705a550190c830b124eb360c80e333880a",
+    "batch41-client-postflight-supplement.json": "d65a310833721543061fc8ebd1bf3cd4e36c85c67f551e61278285588478345c",
+    "batch41-retained-core-reconciliation.json": "502c1cd68860481dc7f2c78cb702455be6b4ccb4d6d638f4cc04c5d2e3935b66",
+    "batch41-retained-core-reconciliation.md": "c309c651904486208cc0206aa21fa900df98528e4ae9d864a5b2f8a683a6ec17"
+  },
+  "initial_native_and_client_supplement_pending_labels_preserved": true,
+  "independent_client_postflight": "COMPLETE_PASS",
+  "independent_retained_Core_financial_audit": "COMPLETE_BOTH_COHORTS",
+  "cohorts": [
+    {
+      "initial_registrations": 100,
+      "run_id": "928e5203-5a36-4489-967e-dcdbef965b4c",
+      "retained_tip": {
+        "hash": "30f873fd47403150d72d85bd1ef3b2da50a4be7cbc32233267370e74ac493f55",
+        "height": 177
+      },
+      "graph_transactions": 10,
+      "terminal_unspent_outputs": 9,
+      "bounded_money": {
+        "customer_external_sat": 700000,
+        "fee_sponsor_external_sat": 300000,
+        "source_gross_sat": 300000,
+        "owner_payouts_gross_sat": 198000,
+        "control_payout_sat": 99000,
+        "customer_charged_payout_fees_sat": 3000,
+        "board_miner_fees_sat": 2289,
+        "package_child_miner_fees_sat": 6843,
+        "seed_drain_input_sat": 496474,
+        "seed_drain_output_sat": 495983,
+        "seed_drain_miner_fee_sat": 491,
+        "other_terminal_observed_sat_NO_CUSTODY_INFERENCE": 395394,
+        "all_graph_miner_fees_sat": 9623,
+        "physical_equation": "1000000 = 495983 recovery + 99000 control + 395394 other_observed_leaves + 9623 actual_miner_fees"
+      },
+      "canonical_owner_payouts": 2,
+      "canonical_control_payouts": 1,
+      "canonical_duplicate_spends": 0,
+      "unused_original_100k_sponsors": 1,
+      "actual_child_change_reuse": true,
+      "retained_inputs_unchanged": true
+    },
+    {
+      "initial_registrations": 1000,
+      "run_id": "ec8b5641-6b09-4abd-a319-04a11b538ac1",
+      "retained_tip": {
+        "hash": "4e210e098f5d851c0d5b64889629a11f7f192de9d6fc2575722b9a4c62943b7e",
+        "height": 177
+      },
+      "graph_transactions": 10,
+      "terminal_unspent_outputs": 9,
+      "bounded_money": {
+        "customer_external_sat": 700000,
+        "fee_sponsor_external_sat": 300000,
+        "source_gross_sat": 300000,
+        "owner_payouts_gross_sat": 198000,
+        "control_payout_sat": 99000,
+        "customer_charged_payout_fees_sat": 3000,
+        "board_miner_fees_sat": 2289,
+        "package_child_miner_fees_sat": 6843,
+        "seed_drain_input_sat": 496474,
+        "seed_drain_output_sat": 495983,
+        "seed_drain_miner_fee_sat": 491,
+        "other_terminal_observed_sat_NO_CUSTODY_INFERENCE": 395394,
+        "all_graph_miner_fees_sat": 9623,
+        "physical_equation": "1000000 = 495983 recovery + 99000 control + 395394 other_observed_leaves + 9623 actual_miner_fees"
+      },
+      "canonical_owner_payouts": 2,
+      "canonical_control_payouts": 1,
+      "canonical_duplicate_spends": 0,
+      "unused_original_100k_sponsors": 1,
+      "actual_child_change_reuse": true,
+      "retained_inputs_unchanged": true
+    }
+  ],
+  "review_method": "Only immutable safe proofs/progress/results, retained blk/xor and final debug UpdateTip; no Core start/RPC/SQL/wallet/seed/identity/actor calls. Actor absence confirmed by parent/client before reading blocks.",
+  "parser_assumption_correction": "Initial offline decoder attempt assumed every child nonanchor input was an original100k sponsor; actual100cohort reuses confirmed earlierchildchange. Corrected to follow canonical DAG and include all3 original same-script100k sponsors/unusedone. A second rejected assumption was nominal600k customerfunding/900k total: actual board inputs prove700k customer (200kcontrol+500kowner), plus300k original sponsors=1M. Historicalsourceadmission nominalhelper/900k wording is superseded by this actualCore evidence. Initial parser assertions were not native-test failures and no native retry occurred.",
+  "evidence_boundary": "Independent retained-block evidence establishes exact canonical scripts, values, prevouts, fees, unique spends, confirmations and bounded 1,000,000-sat graph conservation. Native assertions/source/public proofs supply recipient identity, seed-key control, mailbox behavior and registration semantics. Other observed leaves carry NO custody inference. No mempool or new node/consensus validation.",
+  "limitations": [
+    "Canonical chain is independently reconstructed from retained finalUpdateTip ancestry/headerhashes and transactionMerkleroots; this is not a new consensus/signature validation or RPC/node recheck. No mempool data were opened, so no pending/dropped/noncanonical payment claims.",
+    "Core proves exact scripts/values/prevouts/unique canonical spends, confirmations/terminalunspentness and bounded1M physicalcut. It cannot infer BDK/watchmanoperatorcustody or truthfulrecipientidentity/privatekeyownership from scripts; native source/assertion/proof provides those semantics. Otherobservedleaves are not globallyoperatorowned or solvent by inference.",
+    "Native freshseed/newDB/liveArk restore, mailboxoutage, registrationauthentication/ownerindexmapping, background/scannercadence and actorabsence are preservedsource/publicproof/clientreceipt provenance, not independently established by blockdata.",
+    "No privatewallet/seed/config/identity/TLS/token/SQL/PG/backup/rawnative logs opened; only finaldebugUpdateTip interpreted. No actors/services/Core/RPC/mining/builds invoked.",
+    "120s poll budget vs proof elapsed afterconfirmations distinguished. No highindex/negative/wrongmailbox/load/fairness/throughputmax/fullML/production credit or originalreceipt/status mutations."
+  ],
+  "execution_count_increment": 0,
+  "coverage_mutations": 0,
+  "full_ML_promotions": 0,
+  "original_failures_unchanged": true
+}

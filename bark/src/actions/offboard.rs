@@ -228,6 +228,11 @@ impl WalletAction for Offboard {
 	fn id(&self) -> WalletActionId { Offboard::id(self) }
 
 	async fn advance(self, wallet: &Wallet) -> Result<Advance<Self>, AdvanceError> {
+		if let Progress::OffboardTxPrepared { ref offboard_vtxo_ids, movement_id, .. } = self.progress {
+			if reconcile_fallback_payout(wallet, &self, offboard_vtxo_ids, movement_id).await.retry()? {
+				return Ok(Advance::Failed(crate::FallbackRefusal::DecidedForFallback.into()));
+			}
+		}
 		let new_progress = match self.progress {
 			Progress::Start => {
 				lock_vtxos(wallet, &self).await?
@@ -390,8 +395,11 @@ impl WalletAction for Offboard {
 				or_retry!(self, fail_offboard_movement(wallet, &self).await);
 				Advance::Failed(error)
 			},
-			Progress::OffboardTxPrepared { offboard_vtxo_ids, offboard_tx, .. } => {
+			Progress::OffboardTxPrepared { offboard_vtxo_ids, offboard_tx, movement_id, .. } => {
 				if crate::FallbackRefusal::from_error(&error) == Some(crate::FallbackRefusal::DecidedForFallback) {
+					// The requested offboard did not complete. Its pending debit
+					// must not duplicate the fallback receipt's eventual debit.
+					or_retry!(self, cancel_superseded_movement(wallet, *movement_id).await);
 					// This is an admission fence, not evidence of payment or
 					// a lost session. Retain the full checkpoint and its holder
 					// while returning the authentic refusal to the caller.
@@ -1071,4 +1079,64 @@ async fn fail_offboard_movement(
 		MovementUpdate::new().effective_balance(SignedAmount::ZERO),
 	).await.context("failed to mark offboard movement as failed").retry()?;
 	Ok(())
+}
+
+
+/// A refused offboard is a failed intent even while its input's financial
+/// claim still needs protection. Cancelling its history entry releases no lock.
+async fn cancel_superseded_movement(wallet: &Wallet, movement: MovementId) -> anyhow::Result<()> {
+	let current = wallet.inner.db.get_movement_by_id(movement).await?;
+	if current.status == MovementStatus::Canceled && current.effective_balance == SignedAmount::ZERO
+		&& current.offchain_fee == Amount::ZERO
+		&& current.metadata.get("superseded_by_fallback") == Some(&serde_json::Value::Bool(true)) { return Ok(()); }
+	wallet.inner.movements.finish_movement_with_update(
+		movement, MovementStatus::Canceled,
+		MovementUpdate::new().effective_balance(SignedAmount::ZERO).fee(Amount::ZERO)
+			.metadata([("superseded_by_fallback".into(), serde_json::Value::Bool(true))]),
+	).await.context("failed to reconcile the superseded offboard movement")
+}
+
+/// Retire only this action's inputs, after our own chain independently proves
+/// every actual fallback output. The full signed coin bodies remain in storage;
+/// the durable adoption marker reopens their protection if that payout reorgs.
+async fn reconcile_fallback_payout(
+	wallet: &Wallet, action: &Offboard, inputs: &[VtxoId], movement: MovementId,
+) -> anyhow::Result<bool> {
+	if inputs.is_empty() { return Ok(false); }
+	let snapshot = wallet.inner.db.get_fallback_snapshot().await?;
+	if inputs.iter().any(|id| !snapshot.entitlements.values().any(|entry| entry.vtxo_id == *id)) {
+		return Ok(false);
+	}
+	let Some(record) = wallet.fallback_registration().await? else { return Ok(false); };
+	let _history = wallet.inner.lock_manager.lock(
+		&format!("{}.fallback-history", wallet.fingerprint()), CONFIRMATION_POLL_INTERVAL,
+	).await?;
+	let mut snapshot = wallet.inner.db.get_fallback_snapshot().await?;
+	wallet.verify_fallback_chain_evidence(&mut snapshot, &record.spk).await?;
+	let paid = snapshot.entitlements.iter().filter(|(id, _)| snapshot.verified_payouts.contains_key(*id))
+		.map(|(_, entry)| entry.vtxo_id).collect::<HashSet<_>>();
+	if !inputs.iter().all(|id| paid.contains(id)) {
+		wallet.inner.db.store_fallback_snapshot(&snapshot).await?;
+		return Ok(false);
+	}
+	let holder = VtxoLockHolder::Action { id: action.id.clone() };
+	for id in inputs {
+		let coin = wallet.inner.db.get_wallet_vtxo(*id).await?.context("offboard input is unavailable")?;
+		ensure!(coin.state == (VtxoState::Locked { holder: Some(holder.clone()) })
+			|| (coin.state == VtxoState::Spent && snapshot.adopted_payout_vtxos.contains(id)),
+			"fallback payout cannot retire another operation's holder");
+	}
+	// Persist recovery ownership before touching any input. Exact-holder
+	// release cannot steal a foreign lock, and the following state update
+	// refuses Locked entirely. Permanent entitlements exclude the brief
+	// Spendable transition from ordinary input selection.
+	snapshot.adopted_payout_vtxos.extend(inputs.iter().copied());
+	wallet.inner.db.store_fallback_snapshot(&snapshot).await?;
+	for id in inputs {
+		wallet.inner.db.release_vtxo_lock(*id, Some(&holder)).await?;
+		wallet.inner.db.update_vtxo_state_checked(*id, VtxoState::Spent,
+			&[VtxoStateKind::Spendable, VtxoStateKind::Spent]).await?;
+	}
+	cancel_superseded_movement(wallet, movement).await?;
+	Ok(true)
 }

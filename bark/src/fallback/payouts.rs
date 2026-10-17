@@ -184,9 +184,27 @@ impl FallbackSnapshot {
 	pub(crate) fn project(&self, stored: Vec<Movement>, network: Network) -> anyhow::Result<Vec<Movement>> {
 		let mut known = HashMap::new();
 		let mut result = Vec::new();
-		for movement in stored {
+		let verified_coins = self.entitlements.iter().filter(|(id, _)| self.verified_payouts.contains_key(*id))
+			.map(|(_, entry)| entry.vtxo_id).collect::<BTreeSet<_>>();
+		let mut reserved_by_exit = BTreeSet::new();
+		for mut movement in stored {
 			if movement.subsystem.name == FALLBACK_SUBSYSTEM { known.insert(movement.id, movement); }
-			else { result.push(movement); }
+			else {
+				if movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true))
+					&& !movement.input_vtxos.is_empty() {
+					let paid = movement.input_vtxos.iter().all(|id| verified_coins.contains(id));
+					if paid || matches!(movement.status, MovementStatus::Canceled | MovementStatus::Failed) {
+						// The fallback, rather than this protective intent, paid
+						// the principal. Reorgs rebuild this projection from the
+						// retained exit movement and actual current chain proof.
+						movement.effective_balance = bitcoin::SignedAmount::ZERO;
+						if paid { movement.status = MovementStatus::Canceled; }
+					} else if movement.effective_balance < bitcoin::SignedAmount::ZERO {
+						reserved_by_exit.extend(movement.input_vtxos.iter().copied());
+					}
+				}
+				result.push(movement);
+			}
 		}
 		for (key, entitlements) in self.groups()? {
 			let id = *self.movement_ids.get(&key).context("fallback group lacks reserved history ID")?;
@@ -204,8 +222,10 @@ impl FallbackSnapshot {
 			let mut valid = true;
 			let reference = first.active_attempt()?;
 			for entitlement in &entitlements {
-				debit = debit.checked_add(self.local_debits.get(&entitlement.entitlement_id).copied().unwrap_or(Amount::ZERO))
-					.context("fallback history debit overflow")?;
+				if !reserved_by_exit.contains(&entitlement.vtxo_id) {
+					debit = debit.checked_add(self.local_debits.get(&entitlement.entitlement_id).copied().unwrap_or(Amount::ZERO))
+						.context("fallback history debit overflow")?;
+				}
 				valid &= entitlement.chain_view_valid;
 				if let Some(attempt) = entitlement.active_attempt()? {
 					let reference = reference.context("mixed pending and allocated fallback group")?;
@@ -335,6 +355,34 @@ mod tests {
 		assert_eq!(history[0].status, MovementStatus::Pending);
 		assert_eq!(history[0].metadata["fallback"]["stage"], "awaiting_settlement");
 		assert_eq!(history[0].metadata["fallback"]["chain_verified"], false);
+	}
+
+	#[test]
+	fn protective_exit_and_fallback_reserve_the_same_principal_once_across_reorg() {
+		let mut snapshot = FallbackSnapshot::default();
+		let entitlement = entry(1, 10, 4_000, 1_000);
+		let coin = entitlement.vtxo_id;
+		snapshot.entitlements.insert(1, entitlement.clone());
+		snapshot.local_debits.insert(1, Amount::from_sat(5_000));
+		reserve(&mut snapshot);
+		let mut exit = Movement::new(MovementId::new(20), MovementStatus::Pending,
+			&MovementSubsystem { name: "bark.exit".into(), kind: "exit".into() }, Local::now());
+		exit.input_vtxos = vec![coin];
+		exit.effective_balance = bitcoin::SignedAmount::from_sat(-5_000);
+		exit.metadata.insert("protective_exit".into(), serde_json::Value::Bool(true));
+		let total = |snapshot: &FallbackSnapshot| snapshot.project(vec![exit.clone()], Network::Regtest).unwrap()
+			.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>();
+		assert_eq!(total(&snapshot), -5_000);
+		snapshot.verified_payouts.insert(1, FallbackVerifiedPayout { allocation_id: 10,
+			outpoint: OutPoint::null(), attempt: entitlement.attempts[0].clone(),
+			confirmation: FallbackBlock { height: 123.into(), hash: BlockHash::all_zeros() } });
+		assert_eq!(total(&snapshot), -5_000);
+		let history = snapshot.project(vec![exit.clone()], Network::Regtest).unwrap();
+		assert_eq!(history.iter().find(|entry| entry.id == exit.id).unwrap().status, MovementStatus::Canceled);
+		snapshot.verified_payouts.clear();
+		assert_eq!(total(&snapshot), -5_000);
+		assert_eq!(snapshot.project(vec![exit.clone()], Network::Regtest).unwrap().iter()
+			.find(|entry| entry.id == exit.id).unwrap().status, MovementStatus::Pending);
 	}
 
 	#[test]

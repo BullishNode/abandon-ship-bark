@@ -14,7 +14,7 @@ use bitcoin::consensus::deserialize;
 use bitcoin::hashes::Hash;
 use bitcoin_ext::BlockDelta;
 use bitcoin_ext::BlockHeight;
-use bitcoin_ext::rpc::RpcApi;
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::{Db, Tx};
 use server_rpc::protos;
 use tokio::sync::{Notify, oneshot};
@@ -56,8 +56,9 @@ async fn wait_for_query_lock(tx: &Tx<'_>, prefix: &str) -> anyhow::Result<()> {
 	}).await.expect("real competing operation never reached its PostgreSQL row lock")
 }
 
-async fn offboard_race(offboard_wins: bool) {
-	let name = if offboard_wins { "server/expiry_native_offboard_wins" }
+async fn offboard_race(offboard_wins: bool, finality: bool) {
+	let name = if finality { "server/expiry_native_offboard_fallback_finality" }
+		else if offboard_wins { "server/expiry_native_offboard_wins" }
 		else { "server/expiry_native_decision_wins" };
 	let ctx = TestContext::new(name).await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool().funded(btc(1))
@@ -66,8 +67,15 @@ async fn offboard_race(offboard_wins: bool) {
 	let gate = HoldFinish { arrived: Arc::new(Mutex::new(Some(send))), release: Arc::new(Notify::new()), response: Arc::new(Mutex::new(None)) };
 	let proxy = srv.start_proxy_no_mailbox(gate.clone()).await;
 	// This actor follows the test's explicit RPC/height schedule.
-	let wallet = Arc::new(ctx.bark_sdk("owner", &proxy)
-		.cfg(|config| config.daemon_manual_sync = true).boarded(sat(100_000)).create().await);
+	let builder = ctx.bark_sdk("owner", &proxy).cfg(move |config| {
+		config.daemon_manual_sync = true;
+		if finality {
+			config.vtxo_refresh_expiry_threshold = BlockDelta::new(4);
+			config.vtxo_exit_margin = BlockDelta::new(2);
+		}
+	});
+	let builder = if finality { builder.funded(sat(500_000)) } else { builder };
+	let wallet = Arc::new(builder.boarded(sat(100_000)).create().await);
 	let coin = wallet.spendable_vtxos().await.unwrap().pop().unwrap();
 	let id = coin.id();
 	let destination = wallet.fallback_destination().await.unwrap();
@@ -146,20 +154,70 @@ async fn offboard_race(offboard_wins: bool) {
 		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
 		let (index, output) = parent.output.iter().enumerate().find(|(_,o)| o.script_pubkey == destination.spk).unwrap();
 		assert_eq!(output.value, coin.amount() - sat(1_000));
+		if finality {
+			let movement = match &prepared.progress {
+				Progress::OffboardTxPrepared { movement_id, .. } => *movement_id,
+				_ => unreachable!(),
+			};
+			let cancelled = wallet_db.get_movement_by_id(movement).await.unwrap();
+			assert_eq!(cancelled.status, bark::movement::MovementStatus::Canceled);
+			assert_eq!(cancelled.effective_balance, bitcoin::SignedAmount::ZERO);
+			assert_eq!(cancelled.offchain_fee, bitcoin::Amount::ZERO);
+			wallet.sync_fallback_payouts().await.unwrap();
+			assert_eq!(wallet.offboard_checkpoint(&prepared.id).await.unwrap(), Some(prepared.clone()));
+			let history = wallet.history().await.unwrap();
+			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0,
+				"a refused offboard and its pending fallback must not debit the same principal twice");
+		}
 		ctx.generate_blocks(6).await;
 		assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
 		assert_eq!(ctx.bitcoind().get_received_by_address(&offboard_address), bitcoin::Amount::ZERO);
+		if finality {
+			let signed = wallet.get_full_vtxo(id).await.unwrap();
+			wallet.chain().invalidate_caches().await;
+			wallet.sync_fallback_payouts().await.unwrap();
+			srv.watchmand().stop().await.unwrap();
+			srv.stop().await.unwrap();
+			wallet.sync_pending_offboards().await.unwrap();
+			assert_eq!(wallet.offboard_checkpoint(&prepared.id).await.unwrap(), None,
+				"independent payment must finish the superseded intent even while Ark is unavailable");
+			assert_eq!(wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap().state, VtxoState::Spent);
+			assert_eq!(wallet.get_full_vtxo(id).await.unwrap(), signed, "payment must retain signed recovery material");
+			let history = wallet.history().await.unwrap();
+			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0);
+			assert_eq!(history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").count(), 1);
+			let rpc = ctx.bitcoind().sync_client();
+			let confirmed = rpc.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap();
+			rpc.invalidate_block(&confirmed.blockhash.unwrap()).unwrap();
+			wallet.chain().invalidate_caches().await;
+			let protection = wallet.protect_expiring_vtxos().await.unwrap();
+			assert_eq!(protection.exits_started, vec![id], "an undone payout must restore actual signed-path protection");
+			let protected = wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap();
+			assert!(matches!(&protected.state, VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { .. }) }));
+			assert!(wallet.sync_fallback_payouts().await.is_err(), "Ark is physically unavailable");
+			wallet.protect_expiring_vtxos().await.unwrap();
+			assert_eq!(wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap().state, protected.state,
+				"receipt retry must not steal the actual protective exit holder");
+			assert_eq!(wallet.get_full_vtxo(id).await.unwrap(), signed);
+			let history = wallet.history().await.unwrap();
+			let fallback = history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
+			assert_eq!(fallback.len(), 1);
+			assert_eq!(fallback[0].status, bark::movement::MovementStatus::Pending);
+			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0,
+				"reorg protection and the pending receipt reserve one principal");
+		}
+
 	}
 }
 
 #[tokio::test]
 async fn expiry_decision_wins_over_prepared_native_offboard() {
-	offboard_race(false).await;
+	offboard_race(false, false).await;
 }
 
 #[tokio::test]
 async fn expiry_registered_native_offboard_wins_over_waiting_decision() {
-	offboard_race(true).await;
+	offboard_race(true, false).await;
 }
 
 /// A user returning after backing expiry can close a never-initiated grant
@@ -225,4 +283,9 @@ async fn expiry_uninitiated_grant_can_revoke_after_backing_expiry() {
 	ctx.generate_blocks(6).await;
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
 	assert!((ctx.bitcoind().get_block_count().await as u32) < deadline.to_u32());
+}
+
+#[tokio::test]
+async fn expiry_prepared_offboard_reconciles_real_payout_then_reprotects_after_reorg() {
+	offboard_race(false, true).await;
 }

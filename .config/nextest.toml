@@ -4,6 +4,10 @@
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 3 }
 
+# Explicit, ignored registration/attribution envelope; ordinary tests stay short.
+[profile.fallback-scale]
+slow-timeout = { period = "60s", terminate-after = 29 }
+
 [profile.ci]
 slow-timeout = { period = "60s", terminate-after = 5 }
 

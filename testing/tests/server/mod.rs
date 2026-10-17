@@ -14,6 +14,7 @@ mod block_index;
 mod forfeit;
 mod fallback;
 mod expiry_attribution;
+mod expiry_registration_scale;
 mod expiry_owner_scan;
 mod lightning;
 mod mailbox;

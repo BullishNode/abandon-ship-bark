@@ -1,0 +1,80 @@
+{
+  "classification": "INVENTORY_ONLY",
+  "suite_execution_status": "NOT_EXECUTED_BY_INVENTORY",
+  "head": "814d7b0deb6a5f2a6758d34ca4313589f948f4e3",
+  "dirty": true,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "inventory_manifest_sha256": "814533119b3eb24295fafb685ad02071c1b87aa2cb5b4351db8b97fd8658dbde",
+  "metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "test_list_sha256": "16adbb314708184af6aefbbd5248656fb6ac419f2b5b71ae34e5532936f368e8",
+  "paired_candidate_manifest_sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
+  "csv_sha256": "9dd77db32ecd9adc433a1b740fcb81f83bd3f7a02567c03fd07956058b1d7845",
+  "listed": 643,
+  "ignored": 5,
+  "default_selected": 638,
+  "binaries": [
+    {
+      "binary": "bark",
+      "listed": 202,
+      "ignored": 1,
+      "default_selected": 201,
+      "elf_sha256": "f3e33f52d458f5dc5f0dcd98f99ca363b266d4e35f979a418d47e8830dcd46f7"
+    },
+    {
+      "binary": "bark-sdk",
+      "listed": 77,
+      "ignored": 0,
+      "default_selected": 77,
+      "elf_sha256": "aaf60430b2517f0b4151ad3f869ec81339ac4a65cd8687884d13e505e57eb2d9"
+    },
+    {
+      "binary": "barkd",
+      "listed": 78,
+      "ignored": 1,
+      "default_selected": 77,
+      "elf_sha256": "1fd1f89bc795f770890b10342325f7b41214bfe9cda3d4cc792bf0bdb3239e12"
+    },
+    {
+      "binary": "core",
+      "listed": 16,
+      "ignored": 0,
+      "default_selected": 16,
+      "elf_sha256": "1257380815888d2a60ad86252f5ef5c66d546a987c045778e5e0eb126de7ce8b"
+    },
+    {
+      "binary": "server",
+      "listed": 270,
+      "ignored": 3,
+      "default_selected": 267,
+      "elf_sha256": "cd9c13c01726ce785398d254ab05d8da3d28773ddba502150a0e4a712ff41a08"
+    }
+  ],
+  "ignored_tests": [
+    {
+      "binary": "bark",
+      "test_name": "recover::recover_mnemonic"
+    },
+    {
+      "binary": "barkd",
+      "test_name": "fallback_browser::fallback_barkd_web_actual_payout_and_seed_restore"
+    },
+    {
+      "binary": "server",
+      "test_name": "expiry_attribution::expiry_attribution_resolution_scale"
+    },
+    {
+      "binary": "server",
+      "test_name": "expiry_registration_scale::expiry_registration_authenticated_scale"
+    },
+    {
+      "binary": "server",
+      "test_name": "qualification_oversize::expiry_automatic_real_limit_multilevel_split_pays_every_owner"
+    }
+  ],
+  "verification": "Recomputed all supplied metadata/list/candidate-manifest and five local immutable ELF hashes; exact suite keys, binary paths, flags, filter status and totals agree. No Cargo/metadata/native execution by this inventory step.",
+  "limitations": [
+    "Runtime version/feature/backend gates can still prevent behavior from executing; SELECTED is nextest selection, not PASS.",
+    "Existing independently executed named cases remain separate receipts; no full-suite credit.",
+    "Tor, actual-release server migrations and client upgrades are outside these five binaries."
+  ]
+}

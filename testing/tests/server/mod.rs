@@ -11,6 +11,7 @@ mod expiry_payout_flow;
 mod expiry_split;
 mod expiry_reorg;
 mod expiry_conflict;
+mod qualification_readiness;
 mod ban;
 mod blocklist;
 mod block_index;

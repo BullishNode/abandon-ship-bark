@@ -1,0 +1,26 @@
+{
+  "actual_board_miner_fee_sat": 763,
+  "actual_package_miner_fee_sat": 2281,
+  "actual_recovery_miner_fee_sat": 888,
+  "backing": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197:0",
+  "customer_fee_sat": 1000,
+  "gross_sat": 100000,
+  "operator_retained_sat": 98719,
+  "parent_block": {
+    "hash": "55167da987c7f13a3968e5bd696cec7bda07c93da59e0c6b7d49301f4d56fc95",
+    "height": 139
+  },
+  "payout": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6:0",
+  "payout_sat": 99000,
+  "physical_cluster_file_count": 1605,
+  "prebackup_blockhash": "1f680656ec025cb9e33117506c59ec6a637b4fe9aa565ee83ccb84b8b261b52b",
+  "prebackup_height": 114,
+  "private_manifest_sha256": "8710059316a664be00fbceff6a9d458f38c3bc78366af79a9ff5bffba7cc8f6c",
+  "recovery_input_sat": 198237,
+  "recovery_output_sat": 197349,
+  "recovery_txid": "272f6ef76b8a9d4f54da5a97a164ddcdd917076647b9b97b727a971ab3815966",
+  "scope": "same-candidate orderly physical PostgreSQL and service-identity backup; same continuing Core; seed-only BIP84 customer recovery",
+  "source_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "sponsor": "a14053cb95f61ff07e5fc067c311c5b63fa4c8087dfb639c4f65e86f724e3c01:0",
+  "watchman_changesets_preserved": 111
+}

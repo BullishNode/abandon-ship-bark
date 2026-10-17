@@ -1,0 +1,104 @@
+{
+  "state": "TERMINAL_PASS",
+  "batch": 38,
+  "started": 1,
+  "passed": 1,
+  "failed": 0,
+  "controller_exit": 0,
+  "parent_reported_session": 55622,
+  "test_binary": "ark-testing::server",
+  "test_name": "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery",
+  "coverage_case_id": "FT-SERVER-010",
+  "run_id": "874f3d92-bea4-4599-955e-be88b2b4c2fd",
+  "native_test_seconds": 28.352,
+  "nextest_summary_seconds": 28.354,
+  "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+  "source_body_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "bundle_manifest_sha256": "740da075ad58542352fea1b2ce6c93e3827cf02381d9b88f2c99c76f8e4c25b6",
+  "candidate_head": "e443d415ee7b0d512203bd56f85e22cdec69d35f",
+  "candidate_dirty": true,
+  "actual_git_diff_sha256": "7d61324da7ccc276a836ddf26060d91de0ad0de929447e0fe2dc6b52ae55b870",
+  "test_elf_sha256": "26d701e21e623889f9cba0e0af76d6084e032f9aa8b96dfa9a098e8a471f7387",
+  "metadata_sha256": "aa3f342eb4d4a191946550c3e1899afa35be2d96bca6248c6110b14f2e824f63",
+  "metadata_path": "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-runtime.json",
+  "actual_bark_version": "bark 0.7.1-dev (9ea05f9680be2757e875ee81f4546fd24e5b6354)",
+  "version_provenance": "Root ACK cached9ea label; sourceHEAD/diff/manifest/ELF/build evidence authoritative, not a clean release claim. Dev version gate true.",
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/captaind",
+      "sha256": "3f271e4dbf2fb08f4c4cd3f072814c12103e6611cf602ba8d8e79f2991e171d1"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/watchmand",
+      "sha256": "8bf707d1b26fb019271f1443873d03d3678a52a80635a94557122b674ada4c81"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/bark",
+      "sha256": "d787c51786c91e9ce8c10502d797b8911100e8dd0f3e3535d1536bf1123d9527",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/barkd",
+      "sha256": "93011e42f99787341b8a54e55af0f7540e8407c91354f0865d0d628bfd099366",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "ark-testing::bark": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-bark",
+      "sha256": "3f56d0874a296128fa9c74d64689f04fa58f0ad7ca28512acc55ac9b754e10e5"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-bark-sdk",
+      "sha256": "41b5e69fdaf3fa01fe92ec602795fc428f6431665a42ad89504cf2ad0e2c8ef1"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-server",
+      "sha256": "26d701e21e623889f9cba0e0af76d6084e032f9aa8b96dfa9a098e8a471f7387"
+    }
+  },
+  "features": "actual bark/barkd and nativearktesting fallback-test-bip84 verified in bundlemanifest metadata build command; source independently assertsP2WPKH and BIP84witness",
+  "new_compilation_in_test_run": false,
+  "build_scope": "Root compiled this new87e/740 bundle separately before this one native execution; it is not frozen source7041 or a clean release label. Historical capture native_result NOT RUN predates this terminal receipt.",
+  "retries": 0,
+  "per_test_timeout_seconds": 180,
+  "command": [
+    "just",
+    "--set",
+    "JUSTFILE_DIR",
+    "/fresh-cache/testing-track-20261017/batch38-cold-backup-v5",
+    "int-binaries",
+    "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-runtime.json",
+    "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch38-cold-backup-v5/case01/nextest.toml -- qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery --exact"
+  ],
+  "started_at": "2026-10-17T21:27:49.646138+00:00",
+  "ended_at": "2026-10-17T21:28:18.688881+00:00",
+  "sanitized_public_receipt": "batch38-cold-backup-public-receipt.json",
+  "sanitized_public_receipt_sha256": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+  "native_result_sha256": "594d728b83251d51eadc38c9dc44d9756c89d7455a69e4cc8b10193b1dc297a1",
+  "raw_native_log_sha256": "23429443c261a7a135e9b110f6f7726db5b615f9cb0f319faea5ccc9be53e24d",
+  "raw_native_log_published": false,
+  "raw_summary_sha256": "9e5801db2b8ea364fd789a87f23e543a2b4356d20e0d0300b6fdd8e96d47ec0d",
+  "raw_progress_sha256": "38fc23e9a7c1e055235aedcdecc2f30652b926bcfb69b380e495225c649a05dc",
+  "selection_proof_sha256": "7c3fe5cdf69c414be54ad42c34758ddeabe4f0c101bc3d3161069a2f181572c0",
+  "resource_preflight_sha256": "07cd720725b098d3ef3a04a1b2ab41a546f159d6bea6db26a668b93b20c12546",
+  "environment_receipt_sha256": "0dcbaa652f36f52bc370f6603ea1a72907d6ce0f6ee48e96491880c7c781d77c",
+  "actual_context_exists": true,
+  "completed_assertion_evidence": "Compiled exactced8 source writes this public receipt only after clean physicalPG identity/watch-state restore on continuingCore; real99k canonical payout/feechild; seed-only complete BIP84 input map/drain; canonical>=6confirmation checks and full300k conservation. Native PASS also completed subsequent owned-service teardown. These are reached test assertions; independent client retained-Core reconciliation is separate and pending at this checkpoint.",
+  "accounting": {
+    "customer_initial_sat": 200000,
+    "sponsor_initial_sat": 100000,
+    "customer_payout_sat": 99000,
+    "customer_fee_sat": 1000,
+    "board_miner_fee_sat": 763,
+    "package_miner_fee_sat": 2281,
+    "recovery_input_sat": 198237,
+    "recovery_output_sat": 197349,
+    "recovery_miner_fee_sat": 888,
+    "operator_retained_sat": 98719,
+    "customer_conservation": "200000 = 197349 recovered destination + 888 recovery miner fee + 763 board miner fee + 1000 customer fallback fee",
+    "complete_declared_cut": "300000 = 98719 operator retained + 197349 recovered destination + 763 board miner fee + 2281 package miner fee + 888 recovery miner fee"
+  },
+  "scope": "One ordinary same-candidate orderly physical operator backup plus absent-original seed-only BIP84 customer recovery, same continuing Core. No LN backup, universal/PITR/crash/upgrade backup, globalwalletsolvency, fullsuite, production or automatic FULLML credit. Private backups, identities, seeds, wallet databases and full native logs not read or published by curator.",
+  "independent_financial_reconciliation_at_native_checkpoint": "PENDING; add separate receipt later without rewriting this native checkpoint."
+}

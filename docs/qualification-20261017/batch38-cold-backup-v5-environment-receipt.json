@@ -1,0 +1,55 @@
+{
+  "scope": "Read-only native tool path/hash/version receipt; no node or database actor opened",
+  "checked_at_utc": "2026-10-17T21:27:01.889821+00:00",
+  "runtime_container": "abandon-fresh-runtime-20261017",
+  "nix": "impure",
+  "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+  "tools": {
+    "bitcoind": {
+      "path": "/nix/store/4jp97jchzr68qp0rlkykp5qk5gbhr5gq-bitcoind-31.0/bin/bitcoind",
+      "sha256": "6a05cdfb3943fd528911b2c8cefd0b45951c9da0f97546f0fbbf09270f07f513",
+      "version": "Bitcoin Core daemon version v31.0.0 bitcoind",
+      "version_command_args": [
+        "-nosettings",
+        "--version"
+      ],
+      "exit_code": 0
+    },
+    "postgres": {
+      "path": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin/postgres",
+      "sha256": "775e4f3334af8589f924a4c38037d9711de9d63e98ecfd0c0f6858e64154291f",
+      "version": "postgres (PostgreSQL) 17.11",
+      "version_command_args": [
+        "--version"
+      ],
+      "exit_code": 0
+    },
+    "initdb": {
+      "path": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin/initdb",
+      "sha256": "84851a211ef398fce58fc645ec5cea172691a36f0c32518afb44e21cbd38b383",
+      "version": "initdb (PostgreSQL) 17.11",
+      "version_command_args": [
+        "--version"
+      ],
+      "exit_code": 0
+    },
+    "pg_ctl": {
+      "path": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin/pg_ctl",
+      "sha256": "d5759764cb621b23111ab9bfdf6e6fbbd05fba0e2e8498a9b8f895b9ed292c92",
+      "version": "pg_ctl (PostgreSQL) 17.11",
+      "version_command_args": [
+        "--version"
+      ],
+      "exit_code": 0
+    },
+    "pg_controldata": {
+      "path": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin/pg_controldata",
+      "sha256": "6b8304e7827e26ff3e5f00661ad00da51ee5329c032c19b2660ccc9fcb8a2d63",
+      "version": "pg_controldata (PostgreSQL) 17.11",
+      "version_command_args": [
+        "--version"
+      ],
+      "exit_code": 0
+    }
+  }
+}

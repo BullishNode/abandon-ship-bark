@@ -1,0 +1,224 @@
+{
+  "status": "CANDIDATE MAPPING ONLY \u2014 NO INTAKE/COUNT/STATUS EDITS",
+  "native_case": {
+    "name": "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery",
+    "run_id": "874f3d92-bea4-4599-955e-be88b2b4c2fd",
+    "result": "PASS",
+    "native_seconds": 28.352,
+    "parent_exec_session": 55622,
+    "parent_terminal_exit": 0,
+    "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+    "source_body_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+    "public_receipt_sha256": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+    "result_receipt_sha256": "594d728b83251d51eadc38c9dc44d9756c89d7455a69e4cc8b10193b1dc297a1",
+    "independent_retained_Core_reconciliation_sha256": "0ed90ac81dea6f1c7329355e45b7a6587f4ebf84ff71fdd20f1792b802678c9b"
+  },
+  "fully_demonstrated_bounded_scenario": "One same-candidate orderly whole-owned-PG/serviceidentity restore to freshservices on continuingCore; ordinaryregistered100k, originalclientabsent, retainedwatchsponsor/111changesets, real99k+1k canonicalparent+child6, freshseed/genesisBIP84 exactpayout+ordinarychange nativefullinputdrain6, complete300k declaredmoneycut. Nativecopy/signingsemantics and independentCoremoneyproof are distinct evidence layers.",
+  "ordinary_oracle": {
+    "actual_board_miner_fee_sat": 763,
+    "actual_package_miner_fee_sat": 2281,
+    "actual_recovery_miner_fee_sat": 888,
+    "backing": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197:0",
+    "customer_fee_sat": 1000,
+    "gross_sat": 100000,
+    "operator_retained_sat": 98719,
+    "parent_block": {
+      "hash": "55167da987c7f13a3968e5bd696cec7bda07c93da59e0c6b7d49301f4d56fc95",
+      "height": 139
+    },
+    "payout": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6:0",
+    "payout_sat": 99000,
+    "physical_cluster_file_count": 1605,
+    "prebackup_blockhash": "1f680656ec025cb9e33117506c59ec6a637b4fe9aa565ee83ccb84b8b261b52b",
+    "prebackup_height": 114,
+    "private_manifest_sha256": "8710059316a664be00fbceff6a9d458f38c3bc78366af79a9ff5bffba7cc8f6c",
+    "recovery_input_sat": 198237,
+    "recovery_output_sat": 197349,
+    "recovery_txid": "272f6ef76b8a9d4f54da5a97a164ddcdd917076647b9b97b727a971ab3815966",
+    "scope": "same-candidate orderly physical PostgreSQL and service-identity backup; same continuing Core; seed-only BIP84 customer recovery",
+    "source_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+    "sponsor": "a14053cb95f61ff07e5fc067c311c5b63fa4c8087dfb639c4f65e86f724e3c01:0",
+    "watchman_changesets_preserved": 111
+  },
+  "ML_mapping_candidates": [
+    {
+      "case_id": "ML195",
+      "title": "Backup omits watchman signing keys although ledger and raw transactions restore cleanly",
+      "existing_execution_status": "NOT RUN",
+      "existing_evidence_scope": "NONE",
+      "incremental_evidence_scope_candidate": "PARTIAL",
+      "full_catalogue_case_demonstrated": false,
+      "exact_full_requirements": {
+        "B": "The rightful owner retains a usable eventual recovery path; database ownership or a standard output script alone does not establish spendability.",
+        "D": "Cold backup has productDB/entitlements and some transaction bytes but not watchman wallet or ephemeral signing-key database at matching point.",
+        "E": "Restore passes schema/hash checks; new fee/progress/payout signatures cannot be created for existing branches; original users absent.",
+        "F": "Exercise real restore of all signing dependencies and actual customer spend, not merely database readability.",
+        "J": "Fresh isolated restore using documented backups only; produce actual valid parent/sponsor and confirmed99k then seed recovery spend; never print key material. Apply the full-lineage and eventual-progress baseline above."
+      },
+      "bounded_support": "Complete ordinary F/J positive restore-sign-spend path; fullcluster, exactwatchjournal/sponsor, realparent/child and seeddrain.",
+      "missing_full_oracle": "D/E missing or mismatched signing-key backup was not exercised; no material existing entitlements/rawparent at backup, ephemeral multilevel/key-pruning branch, or Lightning wallet/history boundary.",
+      "candidate_only": true
+    },
+    {
+      "case_id": "ML188",
+      "title": "Restoration birthday starts after the actual fallback payout",
+      "existing_execution_status": "NOT RUN",
+      "existing_evidence_scope": "PARTIAL",
+      "incremental_evidence_scope_candidate": "PARTIAL",
+      "full_catalogue_case_demonstrated": false,
+      "exact_full_requirements": {
+        "B": "The rightful owner retains a usable eventual recovery path; database ownership or a standard output script alone does not establish spendability.",
+        "D": "User lost original DB; backup/restore chooses current date/height as birthday; payout99k confirmed earlier at original external index0.",
+        "E": "Fresh BDK scan omits earlier history; server history unavailable or incompatible; wallet reportszero despite actual ownedUTXO.",
+        "F": "Seed-only recovery must use supported original/genesis birthday or another authentic complete discovery mechanism.",
+        "J": "With only documented backup, discover exact99k outpoint without hints then confirm spend; report missing birthday requirement honestly. Apply the full-lineage and eventual-progress baseline above."
+      },
+      "bounded_support": "Fresh original-DB-free seed restore with native genesisbirthday; exact99k plusoriginal99237change recovered and fullyspentCore6.",
+      "missing_full_oracle": "D/E wrong/new current birthday and unavailable/incompatible server history were not exercised; documented backup/genesis happy path only.",
+      "candidate_only": true
+    },
+    {
+      "case_id": "ML090",
+      "title": "Cached registration survives a server restore that lost the permanent registry",
+      "existing_execution_status": "NOT RUN",
+      "existing_evidence_scope": "NONE",
+      "incremental_evidence_scope_candidate": "PARTIAL",
+      "full_catalogue_case_demonstrated": false,
+      "exact_full_requirements": {
+        "B": "Every valid entitlement remains accounted for and eventually reaches its rightful beneficiary; indefinite safe blocking is insufficient.",
+        "D": "Client retains valid cached record and opens without requested destination; server restored backup lacks registration; wallet later disappears.",
+        "E": "open_fallback accepts cached record and does not re-register unless app supplies address; owner scanner cannot find record for live coin.",
+        "F": "Restore permanent registry consistently or reliably re-establish it before accepting more financial obligations.",
+        "J": "Compare restored server record set with prebackup live owners, then actual99k payout without returning client. Apply the full-lineage and eventual-progress baseline above."
+      },
+      "bounded_support": "Exact original authenticated permanentfallbackrecord restored, original owner absent through automatic99kpayout; positive consistent-registry branch ofF/J.",
+      "missing_full_oracle": "D/E nonaligned serverbackup lacking registry whileclientcachedbinding survives was not exercised; no loss/detection/re-registration recovery proof.",
+      "candidate_only": true
+    },
+    {
+      "case_id": "ML113",
+      "title": "Bare intermediate rows replace the only complete signed recovery path",
+      "existing_execution_status": "NOT RUN",
+      "existing_evidence_scope": "PARTIAL",
+      "incremental_evidence_scope_candidate": "PARTIAL",
+      "full_catalogue_case_demonstrated": false,
+      "exact_full_requirements": {
+        "B": "The rightful owner retains a usable eventual recovery path; database ownership or a standard output script alone does not establish spendability.",
+        "D": "DB restore retains bare root/leaf rows but loses full genesis or signed virtual transaction; customer100k valid in original state.",
+        "E": "Snapshot returns MissingPath; resolver safely refuses; no surviving autonomous producer can reconstruct missing signatures.",
+        "F": "Back up all required signed paths or recover authentic copies before declaring restore complete.",
+        "J": "Restore backup then independently validate original source and spend actual99k; unavailable proof remains explicit unpaid100k, never operator value. Apply the full-lineage and eventual-progress baseline above."
+      },
+      "bounded_support": "Complete ordinary signedboard path survives physicalrestore and actualrightful99k/Core6spend succeeds with absentoldclient.",
+      "missing_full_oracle": "D/E bare-only/missinggenesis or signedintermediate partialbackup was not exercised; no multilevel path/key restoration or explicitunpaid100k accounting undermissingproof.",
+      "candidate_only": true
+    },
+    {
+      "case_id": "ML193",
+      "title": "Fresh fork migration recreates empty entitlement tables around already-Spent source rows",
+      "existing_execution_status": "NOT RUN",
+      "existing_evidence_scope": "NONE",
+      "incremental_evidence_scope_candidate": "NONE",
+      "full_catalogue_case_demonstrated": false,
+      "exact_full_requirements": {
+        "B": "An accepted customer right survives settlement, cancellation, recovery and migration until a justified actual discharge.",
+        "D": "Restore includes upstream vtxoSpent rows after decisions but fork tables from before them or absent; migration creates empty new fork schema.",
+        "E": "No expiry_decided_coin/entitlement exists; resolver sees nonterminalSpent without evidence; cached clients/history may falsely infer ordinary spend.",
+        "F": "Restore financial stable layer consistently or reconstruct authentic obligations before accepting new settlement.",
+        "J": "Compare prebackup signed sources and all stable entitlements/fences after restore; every100k accounted, canonical99k or explicit outstanding debt. Apply the full-lineage and eventual-progress baseline above."
+      },
+      "bounded_support": "A consistent pre-expiry whole-cluster backup is a useful ordinarycontrol only.",
+      "missing_full_oracle": "Backup contains zeroentitlements beforedecision and noalreadySpent upstream/fork-ledger mismatch; no financial legacy migration/reconstruction oracle.",
+      "candidate_only": true
+    },
+    {
+      "case_id": "ML182",
+      "title": "Seed-only receipt accepts an unrelated confirmed deposit as its fallback payout",
+      "existing_execution_status": "NOT RUN",
+      "existing_evidence_scope": "PARTIAL",
+      "incremental_evidence_scope_candidate": "NONE",
+      "full_catalogue_case_demonstrated": false,
+      "exact_full_requirements": {
+        "B": "Financial status/history must not discharge an entitlement without independently observed actual receipt by the rightful beneficiary.",
+        "D": "Fresh restored wallet has account history but no original full VTXO body; malicious/misconfigured server maps100k entitlement to earlier99k payment to same script.",
+        "E": "verify_fallback_chain_evidence checks output/script/value but skips ancestry when full coin absent; history labels unrelated deposit as current discharge.",
+        "F": "Even seed-only proof must bind actual paying transaction to actual original signed obligation/lineage, not just amount/address.",
+        "J": "Independent original funding/path oracle distinguishes deposit from fallback; no paid status without that binding and original liability remains recoverable. Apply the full-lineage and eventual-progress baseline above."
+      },
+      "bounded_support": "Honestactualpayout ancestry and source/root value are independently bound by testcasecontroller/Core.",
+      "missing_full_oracle": "No malicious/unrelated99k same-script deposit mapped to unknown-body history; does not testSDKfalsepaid rejection. ExistingPARTIAL baseline unchanged.",
+      "candidate_only": true
+    },
+    {
+      "case_id": "ML089",
+      "title": "Release build restores the wrong native onchain descriptor family",
+      "existing_execution_status": "NOT RUN",
+      "existing_evidence_scope": "NONE",
+      "incremental_evidence_scope_candidate": "NONE",
+      "full_catalogue_case_demonstrated": false,
+      "exact_full_requirements": {
+        "B": "The rightful owner retains a usable eventual recovery path; database ownership or a standard output script alone does not establish spendability.",
+        "D": "Test client uses fallback-test-bip84, release defaults BIP86; user restores same seed after payout.",
+        "E": "Recovery wallet scans default descriptor while permanent fallback points to BIP84 index0; tests used different feature/artifact.",
+        "F": "Preserve exact payout descriptor/network/address integration through release and restoration.",
+        "J": "Rehash actual release wallet features, derive original script independently, restore and spend exact99k without original DB. Apply the full-lineage and eventual-progress baseline above."
+      },
+      "bounded_support": "ActualBIP84feature/nativeartifact and restoredP2WPKH/witness2 spending demonstrated.",
+      "missing_full_oracle": "No BIP86release-default artifact, descriptor-family mismatch/crossfeature restore or release-equivalence proof. Existing NONE unchanged.",
+      "candidate_only": true
+    },
+    {
+      "case_id": "ML088",
+      "title": "Ark-seed-only restore lacks the separate external BIP84 seed",
+      "existing_execution_status": "NOT RUN",
+      "existing_evidence_scope": "NONE",
+      "incremental_evidence_scope_candidate": "NONE",
+      "full_catalogue_case_demonstrated": false,
+      "exact_full_requirements": {
+        "B": "The rightful owner retains a usable eventual recovery path; database ownership or a standard output script alone does not establish spendability.",
+        "D": "App embeds independently seeded external OnchainWalletTrait wallet; only Ark seed backed up; fallback99k already confirmed.",
+        "E": "Fresh Ark restore authenticates record/history but cannot reconstruct external destination spending key.",
+        "F": "State recovery requirements honestly: independent external wallet backup is necessary for this supported integration.",
+        "J": "Restore with exact documented backup set; confirm actual99k outpoint spend. Ark seed alone must not be claimed sufficient when seeds differ. Apply the full-lineage and eventual-progress baseline above."
+      },
+      "bounded_support": "One nativeBIP84 seed recovers its own onchainaccount only.",
+      "missing_full_oracle": "No separatelyseeded externalwallet omitted frombackup; cannotclaim oneArkseed recovers unrelatedexternalkeys.",
+      "candidate_only": true
+    }
+  ],
+  "full_original_ML_scenarios_credited_by_this_mapping": 0,
+  "gate_mapping": [
+    {
+      "id": "P07",
+      "requirement": "Crash and authentic backup recovery",
+      "acceptance": "Actual operator artifacts restore into fresh services against continuing Core; original clients remain absent; rightful payouts and seed-only customer spends confirm with complete conservation. Test both ordinary and material Lightning state boundaries.",
+      "existing_state": "OPEN",
+      "bounded_ordinary_clause": "FULL \u2014 actualordinaryoperatorartifacts/freshservices/continuingCore/absentoldclient/rightfulpayout+seedspend/completeconservation",
+      "full_gate_evidence_scope": "PARTIAL",
+      "missing": "MaterialLightningstatebackup/restore plus crash/unclean boundaries nottested; noP07closure."
+    },
+    {
+      "id": "P11",
+      "requirement": "Operational readiness and independent review",
+      "acceptance": "Review custom money-state code and upstream interaction independently; practice backup/restore, safe shutdown, alerting, funded fee-wallet operation, upgrade/migration and incident handling. No unresolved critical/high money-safety finding.",
+      "existing_state": "OPEN",
+      "bounded_component": "Actualordinarybackup/restorepractice, independentlycleanPGshutdown, fundedretainedfeewallet signing and confirmedspending; sourcefixturepeerreviews and separateofflineCoremoneyreconciliation.",
+      "full_gate_evidence_scope": "PARTIAL",
+      "missing": "Independentfullrelease/custommoneystate/upstreamreview, completegracefulexitproof, materialLNrestore, productionoperatorrunbook/alerting, upgrades/migrations/incidentexercise, unresolvedcritical/high disposition andNoahsupportdecision."
+    }
+  ],
+  "forbidden_inferences": [
+    "No malformed/missingbackupfaultreproduction or negativecontrol",
+    "No materialLNbackup, crossversion/unclean/disaster/Corebackup/branchrestore",
+    "No defaultdaemon or wholeoperatorsolvency/productionreadiness claim",
+    "No globalcasecount/status/MLintakeupdate; root decidesacceptance"
+  ],
+  "read_inputs_sha256": {
+    "/home/francis/bark-integration-2026-10-01/money-loss-research-2026-10-17/MONEY_LOSS_SCENARIOS.md": "344eccacd76f8e7e1f63ba00db6baf14fd96c9770c41803da91b57045fcf5ff3",
+    "/home/francis/bark-integration-2026-10-01/money-loss-research-2026-10-17/MONEY_LOSS_SCENARIOS.csv": "0a819a6e5631eb6f3e9c154cf1733dc89254cddd5aa44185558b6ed7f5bf6885",
+    "/home/francis/bark-integration-2026-10-01/money-loss-research-2026-10-17/README.md": "77d8f4736924a303f5a5f52197b809c98174f830a1599498746d8f1bc3981cd0",
+    "/home/francis/bark-integration-2026-10-01/money-loss-research-2026-10-17/PRIORITIES.md": "bd80f8f6de14c0037266e983498883326b576bbde1cca2932c613f0d660cda41",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML-COVERAGE.csv": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
+    "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/PRODUCTION_GATES.json": "968f9fb475ce7265a64eb93046acc5574ea3db64454c305e402dedab260d0b5c"
+  }
+}

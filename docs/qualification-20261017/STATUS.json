@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-17T21:15:43.986224+00:00",
+  "updated_at": "2026-10-17T21:34:04.108777+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "COMPLETED_APPROVED_REGRESSION_QUEUE_REPORT_CHECKPOINT10_PENDING",
+  "state": "COLD_BACKUP_V5_COMPLETED_RECONCILED_CHECKPOINT11_PREPARING",
   "branch": "work/fresh-test-qualification-20261017",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
@@ -42,11 +42,11 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Prepare report-only tenth checkpoint through batch37, with source-only notes and the stopped-helper review erratum. Await root admission and exact artifact gates for any future compiled cold-backup case; no native launch by this reporting agent.",
+  "next_action": "Prepare report-only eleventh checkpoint through reconciled batch38; parent owns publication. No active native case or additional runtime allocation.",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
-  "runtime_allocation": "Approved ordinary/server/SDK/block-index queue completed. No active native case or cold-backup runtime admission.",
+  "runtime_allocation": "One allocated cold-backup run completed; no active native case or additional allocation.",
   "inventory_rows_by_file": {
     "legacy-inventory.csv": 103,
     "backend-inventory.csv": 72,
@@ -69,12 +69,11 @@
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
   "new_test_source_review": "Published earlier fixtures compiled and ran on recorded pairings. New failed-send v3 is source-only and excluded from this checkpoint.",
-  "coverage_rows": 426,
-  "coverage_warning": "426 mixed inventory, requirement and executed rows through batch37; not 426 distinct tests or financial scenarios. Published ninth snapshot remains 395 rows and 184 executions until the next report publication.",
+  "coverage_rows": 427,
+  "coverage_warning": "427 mixed inventory, requirement and executed rows through batch38; not 427 financial scenarios. Fixed PR14 report cutoff remains215 executions/426rows.",
   "current_batch": {
     "state": "NONE_ACTIVE",
-    "approved_queue_completed": true,
-    "cold_backup_admitted": false
+    "last_terminal_parent_session": 55622
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -109,10 +108,10 @@
     "wall_seconds_approx": 159.375
   },
   "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
-  "case_executions": 215,
-  "unique_executed_test_names": 211,
-  "nextest_invocations": 188,
-  "native_case_executions": 203,
+  "case_executions": 216,
+  "unique_executed_test_names": 212,
+  "nextest_invocations": 189,
+  "native_case_executions": 204,
   "component_case_executions": 12,
   "new_test_results": {
     "readiness": "PASS26.184s",
@@ -127,10 +126,10 @@
     "verified_remote_head": "5635b5a95b636894b1e1aae9117eac3d057329a9",
     "test_code_commit": "bc3d02835e0aa539d5a5dd8f7c1385ed85227ce5",
     "working_tree_was_clean_at_push": true,
-    "state": "PR6 merged by coordinator per direct message; second checkpoint pending",
+    "state": "Latest published report PR14 verified merged by parent; reconciled batch38 awaits the eleventh report publication.",
     "merged_by_coordinator": "0f932806513a8dcefb5a3f3e841b98b73d02d3a1",
     "verified_merged_at": "2026-10-17T15:33:13Z",
-    "next_checkpoint": "Tenth report-only checkpoint in preparation: fixed 215 executions, 201 PASS, 14 FAIL and 426 coverage rows through batch37. Parent owns publication.",
+    "next_checkpoint": "Report-only eleventh checkpoint preparing:216executions202PASS14FAIL212unique189inv204native12components427coverage, including separate cold financial supplement. Earlier PR14 fixed215/426 unchanged.",
     "next_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/7",
     "next_verified_remote_head": "e509f35169b8ee409310c1361305c1e1942565f2",
     "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN",
@@ -142,41 +141,41 @@
     },
     "primary_local_code_commit": "0870bbbb915f133b98b00b5c3d7dc2a2a2ac0bc5",
     "primary_code_publication": "PUSHED and verified in draftPR8; no merge/promotion/deployment by testing track",
-    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/13",
-    "latest_verified_remote_head": "26f7e727ca0d9d21cb82603d31b21a2fbf40c223",
-    "latest_receipt": "PUBLICATION-PR13.json",
+    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/14",
+    "latest_verified_remote_head": "ce654bc853c06e605ad88cf18b16d4f7ecf93a41",
+    "latest_receipt": "PUBLICATION-PR14.json",
     "oversize_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/9",
     "oversize_verified_remote_head": "013bed49bc5cd0d7d839b1726ebf9e71b5170301",
     "oversize_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
     "oversize_review": "3reviewers complete; NOT compiled/run; no newexecutioncredit",
     "prior_PR8": "Verified merged by coordinator as751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
     "oversize_source_PR9_state": "MERGED814d7b0d",
-    "latest_scope": "REPORT_ONLY ninth checkpoint;132payloadhashes+publicationmanifest=133docfiles, noRust, fixed184executions171PASS13FAIL180unique157inv173native11components/395coverage.",
+    "latest_scope": "REPORT_ONLY tenth checkpoint; 105 payload files plus publication manifest = 106 report paths, no Rust. Fixed 215 executions / 426 coverage rows.",
     "latest_pr_verified_merged": {
-      "pr": 13,
-      "head": "26f7e727ca0d9d21cb82603d31b21a2fbf40c223",
-      "merge_commit": "8d45ffdf326f5da2f4408eb45d6518cd4f17be24",
-      "merged_at": "2026-10-17T21:02:35Z",
+      "pr": 14,
+      "head": "ce654bc853c06e605ad88cf18b16d4f7ecf93a41",
+      "merge_commit": "3d17b09ef646c3bf74037f796bc002da43685076",
+      "merged_at": "2026-10-17T21:32:22Z",
       "remote_branch_verified": true
     },
     "latest_published_checkpoint": {
-      "checkpoint": 9,
-      "pr": 13,
-      "head": "26f7e727ca0d9d21cb82603d31b21a2fbf40c223",
-      "case_executions": 184,
-      "pass": 171,
-      "fail": 13,
-      "unique_names": 180,
-      "nextest_invocations": 157,
-      "native_cases": 173,
-      "components": 11,
-      "coverage_rows": 395,
-      "verification": "Parent independently verified remote head and all132payloadhashes. No merge/deployment claim."
+      "checkpoint": 10,
+      "pr": 14,
+      "head": "ce654bc853c06e605ad88cf18b16d4f7ecf93a41",
+      "case_executions": 215,
+      "pass": 201,
+      "fail": 14,
+      "unique_names": 211,
+      "nextest_invocations": 188,
+      "native_cases": 203,
+      "components": 12,
+      "coverage_rows": 426,
+      "verification": "Parent verified remote head, all 105 payload hashes and all 106 GitHub report paths. Draft/open; no merge or deployment claim."
     }
   },
   "next_batch": {
     "automatic_oversize": "Actualcorrectedfixturepassedonfrozen814+ownerpatch/source7041; original16.359sFAIL preserved. Notproductioncapacity.",
-    "backup_restore": "New ordinary physicalPG/operatoridentity backup + seed-onlycustomerrecovery sourceced8c436 reviewed; uncompiled/NOTRUN; olderlogicalrestore/conflictdrafts frozen.",
+    "backup_restore": "Ordinary coldPG/operatoridentity plus seed-only completeBIP84 recovery PASS28.352s/run874f3d92 on NEW87e/740/ced8; exactCore6/full300k assertions reached. Independent financial audit pending; no LN/universal/globalproduction/fullML claim.",
     "conflict_reorg": "Frozen source-only draft after Lightning priority",
     "lightning_restart": "Completed source-labelled success recovery; stronger failed-send cancellation-during-downtime draft reviewed but uncompiled/unrun",
     "noah_forwarding": "Native provider-reopen and actual post-registration recipient fallback passed; stock Noah LNURL metadata-hash compatibility unqualified",
@@ -191,7 +190,7 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 201,
+  "passed_case_executions": 202,
   "failed_case_executions": 14,
   "first_checkpoint": {
     "executions": 17,
@@ -399,19 +398,20 @@
     "coverage_sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
     "full_pass_limitation": "Only ML165/166 bounded327-owner shape. No expansion to restart/reorg/heterogeneous-history cases."
   },
-  "counts_warning": "215 completed executions = 201 PASS + 14 preserved FAIL; 211 unique (binary, name) pairs, 188 nextest invocations, 203 native and 12 component cases. Published PR13 remains fixed at 184 executions and 395 coverage rows until a new publication.",
-  "execution_counts_through": "Terminal batch37. Approved CLI continuation, server8, SDK6 and block-index retry queue complete; no active native case in this track.",
+  "counts_warning": "216 completed executions = 202 PASS + 14 preserved FAIL; 212 unique(binary,name),189nextest invocations,204native+12components. Batch38 uses NEW87e candidate, not frozen7041; no fullsuite/production qualification.",
+  "execution_counts_through": "Terminal batch38: one ordinary physical cold-backup native PASS on new87e/740 bundle. Fixed PR14 throughbatch37 remains215/426.",
   "execution_outcomes": {
-    "PASS": 201,
+    "PASS": 202,
     "FAIL": 14
   },
   "last_completed_batch": {
-    "name": "next-upstream-server-reorg-retry1",
-    "batch": 37,
-    "result": "1 PASS, native PostgreSQL/Core infrastructure",
-    "parent_exec_session": 87423,
+    "name": "batch38-cold-backup-v5",
+    "batch": 38,
+    "result": "1 PASS, ordinary physical backup/seed-only recovery",
+    "parent_exec_session": 55622,
     "terminal_exit": 0,
-    "receipt": "batch37-server-reorg-retry1-receipt.json"
+    "receipt": "batch38-cold-backup-v5-receipt.json",
+    "independent_financial_reconciliation": "COMPLETE; separate batch38-cold-backup-financial-supplement.json, original native receipt unchanged"
   },
   "historical_fields_notice": "Phase-specific build/publication/source fields below remain historical. Current top-level totals are the explicit checkpoint9 receipt cutoff; newer current_batch counts are separately excluded pending curation. Pinned receipts control all execution claims. No historical receipt is rewritten to replace pending financial reconciliation with a later supplement.",
   "fee_failure_reconciliation": {
@@ -436,8 +436,8 @@
     "wallet_independent_reconciliation": "COMPLETE immutableSQLite+rawtx inputs1m=100k+899237+763, database unchanged",
     "original_retried": false
   },
-  "publication_checkpoint": 9,
-  "publication_checkpoint_scope": "REPORT_ONLY PR13 published at fixed184executions/395coverage throughbatch32. External current totals188/399 include newerbatch33; public documents/commit remain unchanged.",
+  "publication_checkpoint": 10,
+  "publication_checkpoint_scope": "Report-only tenth checkpoint: fixed 215 executions, 201 PASS, 14 FAIL, 211 unique names, 188 nextest invocations, 203 native cases, 12 components and 426 coverage rows.",
   "barkd_board_all_reconciliation": {
     "original_run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
     "original_status": "FAIL",
@@ -495,5 +495,20 @@
     ],
     "scope": "Ordinary upstream whitelist only; no full CLI binary or adapted-fixture PASS claim."
   },
-  "next_public_checkpoint_required_correction": "stopped-captaind-wait-review-correction.json; historical PR13 notes remain unchanged."
+  "next_public_checkpoint_required_correction": "stopped-captaind-wait-review-correction.json; historical PR13 notes remain unchanged.",
+  "source_handoff_notice": "See current-source-ownership-handoff.md/json. Earlier next_uncompiled_sources fields are historical packet-stage notes, not current build or execution authority.",
+  "cold_version_label_notice": "Coordinator confirmed actual embedded 0.7.1-dev Git label9ea05f is cached metadata. Source capture HEAD e443 plus declared dirty87e archive, logged builds and ELF hashes are authoritative; no clean-release claim.",
+  "cold_backup_financial_reconciliation": {
+    "state": "COMPLETE",
+    "native_result": "PASS",
+    "native_receipt": "batch38-cold-backup-v5-receipt.json",
+    "supplement": "batch38-cold-backup-financial-supplement.json",
+    "independent_report": "cold-backup-retained-core-reconciliation-client.json",
+    "independent_report_sha256": "0ed90ac81dea6f1c7329355e45b7a6587f4ebf84ff71fdd20f1792b802678c9b",
+    "retained_tip": 150,
+    "parent_child_confirmations": 12,
+    "drain_confirmations": 6,
+    "complete_declared_cut_sat": 300000,
+    "no_new_execution_credit": true
+  }
 }

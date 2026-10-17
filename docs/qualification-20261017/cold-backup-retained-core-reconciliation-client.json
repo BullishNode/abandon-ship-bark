@@ -1,0 +1,200 @@
+{
+  "scope": "Independent offline retained Core canonical-chain and physical-money reconciliation of one admitted cold-backup native PASS. No actor calls, service reopening, SQL/backup/seed reads or native log printing.",
+  "test_name": "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery",
+  "run_id": "874f3d92-bea4-4599-955e-be88b2b4c2fd",
+  "actual_result": "PASS",
+  "native_seconds": 28.352,
+  "wall_seconds": 29.043,
+  "source_body_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "public_receipt_sha256": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+  "owned_actor_absence": {
+    "checked_proc_comm_cmdline_cwd": true,
+    "matching_native_actors": [],
+    "argv_values_not_published": true
+  },
+  "chain": {
+    "retained_canonical_tip": "1bae613dbd52508a13bdd4a2b32a01a70016566b1e00bb12aa824311ff0ee796",
+    "retained_tip_height": 150,
+    "prebackup_height": 114,
+    "prebackup_blockhash": "1f680656ec025cb9e33117506c59ec6a637b4fe9aa565ee83ccb84b8b261b52b",
+    "prebackup_block_canonical": true
+  },
+  "board": {
+    "txid": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197",
+    "chain": {
+      "block_hash": "3cb3f218cf175156e9f60173b07c8f328a10f64c416e372c0dc4cc9201c1bbfe",
+      "height": 106,
+      "confirmations": 45
+    },
+    "raw_signed_bytes": 234,
+    "inputs": [
+      {
+        "txid": "9c80992c04a24159b7ba8314357eb350c2aa1373e34f791c852ad6becf976578",
+        "vout": 0,
+        "value_sat": 200000,
+        "script_hex": "0014358c18d95579032ffdf83b54bc79d45f06eca877"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 100000,
+        "script_hex": "51204b4bd62d3d5f2c13bc4e082a98f1d4d0ebf70bbf1e206aed500bd3dd7437872a"
+      },
+      {
+        "vout": 1,
+        "value_sat": 99237,
+        "script_hex": "001482d34e1a51d45717af2c01d50e4a79627205f24c"
+      }
+    ],
+    "actual_miner_fee_sat": 763
+  },
+  "parent": {
+    "txid": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6",
+    "chain": {
+      "block_hash": "55167da987c7f13a3968e5bd696cec7bda07c93da59e0c6b7d49301f4d56fc95",
+      "height": 139,
+      "confirmations": 12
+    },
+    "raw_signed_bytes": 280,
+    "inputs": [
+      {
+        "txid": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197",
+        "vout": 0,
+        "value_sat": 100000,
+        "script_hex": "51204b4bd62d3d5f2c13bc4e082a98f1d4d0ebf70bbf1e206aed500bd3dd7437872a"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 99000,
+        "script_hex": "0014b298a092c0db6484b698758d421d4bfd8dd678e7"
+      },
+      {
+        "vout": 1,
+        "value_sat": 1000,
+        "script_hex": "5120f35f33a3ff0cef4ea3cb841003b66704b21f26e964b98c86f1e533b2b05e668a"
+      },
+      {
+        "vout": 2,
+        "value_sat": 0,
+        "script_hex": "51024e73"
+      }
+    ],
+    "actual_miner_fee_sat": 0
+  },
+  "same_block_anchor_child": {
+    "txid": "cc5e145dfab550752c820418f6dee269386784c2bfb2b76cae5c2daeeb34d051",
+    "chain": {
+      "block_hash": "55167da987c7f13a3968e5bd696cec7bda07c93da59e0c6b7d49301f4d56fc95",
+      "height": 139,
+      "confirmations": 12
+    },
+    "raw_signed_bytes": 204,
+    "inputs": [
+      {
+        "txid": "a14053cb95f61ff07e5fc067c311c5b63fa4c8087dfb639c4f65e86f724e3c01",
+        "vout": 0,
+        "value_sat": 100000,
+        "script_hex": "51208adfa5ab46f8e86aa12691b4cb5370ddc0a3dbc2bbebea2a2ffda26ff7b1af48"
+      },
+      {
+        "txid": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6",
+        "vout": 2,
+        "value_sat": 0,
+        "script_hex": "51024e73"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 97719,
+        "script_hex": "51207ba5b224e117aceb5c0a2fc027877488c44e9f23dc01746ac3030151750e2e40"
+      }
+    ],
+    "actual_miner_fee_sat": 2281
+  },
+  "recovery_drain": {
+    "txid": "272f6ef76b8a9d4f54da5a97a164ddcdd917076647b9b97b727a971ab3815966",
+    "chain": {
+      "block_hash": "46b8a6b4e66f7ebf87fc85b583397a766d2306286191f9173f39eb6935cc60e4",
+      "height": 145,
+      "confirmations": 6
+    },
+    "raw_signed_bytes": 339,
+    "inputs": [
+      {
+        "txid": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6",
+        "vout": 0,
+        "value_sat": 99000,
+        "script_hex": "0014b298a092c0db6484b698758d421d4bfd8dd678e7"
+      },
+      {
+        "txid": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197",
+        "vout": 1,
+        "value_sat": 99237,
+        "script_hex": "001482d34e1a51d45717af2c01d50e4a79627205f24c"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 197349,
+        "script_hex": "00145c293ec4159c805409980c9223cdeae6d9d4298d"
+      }
+    ],
+    "actual_miner_fee_sat": 888
+  },
+  "terminal_outputs": [
+    {
+      "txid": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6",
+      "vout": 1,
+      "value_sat": 1000,
+      "script_hex": "5120f35f33a3ff0cef4ea3cb841003b66704b21f26e964b98c86f1e533b2b05e668a",
+      "unspent_at_retained_canonical_tip": true
+    },
+    {
+      "txid": "272f6ef76b8a9d4f54da5a97a164ddcdd917076647b9b97b727a971ab3815966",
+      "vout": 0,
+      "value_sat": 197349,
+      "script_hex": "00145c293ec4159c805409980c9223cdeae6d9d4298d",
+      "unspent_at_retained_canonical_tip": true
+    },
+    {
+      "txid": "cc5e145dfab550752c820418f6dee269386784c2bfb2b76cae5c2daeeb34d051",
+      "vout": 0,
+      "value_sat": 97719,
+      "script_hex": "51207ba5b224e117aceb5c0a2fc027877488c44e9f23dc01746ac3030151750e2e40",
+      "unspent_at_retained_canonical_tip": true
+    }
+  ],
+  "money": {
+    "initial_customer_sat": 200000,
+    "original_watchman_sponsor_sat": 100000,
+    "board_miner_fee_sat": 763,
+    "payout_sat": 99000,
+    "customer_fallback_fee_sat": 1000,
+    "ordinary_change_sat": 99237,
+    "actual_recovery_input_sat": 198237,
+    "actual_recovery_output_sat": 197349,
+    "actual_package_miner_fee_sat": 2281,
+    "actual_recovery_miner_fee_sat": 888,
+    "operator_retained_sat": 98719,
+    "full_physical_equation": "300000 = 197349 + 98719 + 763 + 2281 + 888",
+    "customer_equation": "200000 = 197349 + 763 + 888 + 1000",
+    "operator_equation": "100000 + 1000 = 98719 + 2281",
+    "source_and_restored_copies_counted_once": true
+  },
+  "input_hashes_before_after_equal": true,
+  "input_hashes": {
+    "case01/result.json": "594d728b83251d51eadc38c9dc44d9756c89d7455a69e4cc8b10193b1dc297a1",
+    "cohort-progress.json": "38fc23e9a7c1e055235aedcdecc2f30652b926bcfb69b380e495225c649a05dc",
+    "cohort-summary.json": "9e5801db2b8ea364fd789a87f23e543a2b4356d20e0d0300b6fdd8e96d47ec0d",
+    "case01/test-data/server/qualification_orderly_physical_backup/cold-backup-public-receipt.json": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+    "case01/test-data/server/qualification_orderly_physical_backup/bitcoind/regtest/debug.log": "c3273f3268333fd3f7dc7716e8f0d665a16a3d4a8e0ad82535bd8b715062e89d",
+    "case01/test-data/server/qualification_orderly_physical_backup/bitcoind/regtest/blocks/xor.dat": "d430ab58ae481a0109f8e5aeef37a957f2ffd2a2f259e2d24363d33b7cb29bb5",
+    "case01/test-data/server/qualification_orderly_physical_backup/bitcoind/regtest/blocks/blk00000.dat": "a29a12df3b6d9766e1190393b616728825dc7c14fa96ef2dd9fbf863ccee5acf"
+  },
+  "limitations": "Core independently proves canonical bytes, prevout amounts/scripts, actual fees, confirmations, unique graph spends and terminal-output unspentness. Configured sweep-script ownership, restored BDK child-change ownership, clean physical PostgreSQL shutdown/copy and seed-only recovery control are native source/assertion/public-receipt provenance, not independently inferred from offline Core. No PostgreSQL cluster, private backup/identity/config/seed or native full log read. No generic wallet-solvency, crash-recovery, cross-version restore, full-suite or FULL ML credit."
+}

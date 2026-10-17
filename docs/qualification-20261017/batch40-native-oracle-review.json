@@ -1,0 +1,107 @@
+{
+  "kind": "batch40_native_oracle_review",
+  "at": "2026-10-17T22:06:02.418003+00:00",
+  "review_scope": "READ ONLY immutable779archive functions/nativehelpersemantics and actualsafe terminalreceipts. No private fullnative logs/DB/actors/runtime calls/build/source/public/count/ML mutations.",
+  "candidate": {
+    "captured_HEAD": "828863b21a21a10d3d26ae5f29479be3ee87a233",
+    "dirty_source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+    "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+    "runtime_metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+    "native_bark_sha256": "577f6db2f7b196aeac182116249c33a861c6b954866482392a2c1565d03fee27",
+    "source_match_attachment": {
+      "file": "source-intake-three-existing-v6-match.json",
+      "sha256": "a6d124519a6e83581b5267a0b9d2b8764d713e7d60201e68e4dc32747ba2c467"
+    },
+    "selection_proof_sha256": "3ffb20400ac03886974ab21685e99b203b4dd2b265486ab37d875185a2b6099e"
+  },
+  "parent_terminal": {
+    "session": 85000,
+    "exit_code": 0,
+    "authority": "Parent terminalnotice; independentlychecked3safe casePASS receipts and controllerterminalsummary.",
+    "cohort_summary_sha256": "1851e72b31fefd17200b399e80e81187cc3f069a7ea7be872441a4bfc2875259",
+    "actual_tests": 3,
+    "PASS": 3,
+    "FAIL": 0,
+    "threads": 1,
+    "retries": 0,
+    "default_timeout_seconds": 180
+  },
+  "cases": [
+    {
+      "sequence": 1,
+      "literal_name": "create::bark_address_works_offline",
+      "source_file": "testing/tests/bark/create.rs",
+      "file_sha256": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+      "target_body_sha256": "0abf12c02392b1e95fc5ff954e6a331654fae518aa2449c929d5610c3edd9422",
+      "actual_result": "PASS",
+      "run_id": "447ee5ed-b589-47bd-a13f-bd30682cb5a4",
+      "test_seconds": 9.169,
+      "safe_result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/case01/result.json",
+      "safe_result_sha256": "9a487f26bd7c62d88da32bba165decfc0718c8a9670bf8bd1b1566bacfe4db8d",
+      "source_lines": "create.rs96-125",
+      "demonstrated": [
+        "Fresh native CLI wallet: reserved identity index0 and first fresh receive index1 produce different Ark addresses; freshaddress equals explicitindex1.",
+        "Actual server stops; explicitindices0/1 exactly reproduce their onlineaddresses; a subsequent fresh receive address works with server down and differs from identity and oldfreshaddress."
+      ],
+      "limits": [
+        "Ark receive-address/keyindex test despite adjacent onchain naming; no onchain deposit, board, payment or fallback/recovery money.",
+        "Same retained wallet directory/cache after server stop; no coldcreate, seedrestore, lostDB/registrationreply or crosswallet/keyderivationexhaustion scenario.",
+        "No defaultdaemon/fallbackBIP84/onchainownership/chainproof credit. Original same-source7041 firstfreshindex0 contract FAIL remains separate from this corrected828 source PASS."
+      ]
+    },
+    {
+      "sequence": 2,
+      "literal_name": "onchain::bark_address_changes",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "file_sha256": "bf323688aab8746678bbf73f886ba4cbfaf13f9c3083c5dfd0e60d61b1d9c015",
+      "target_body_sha256": "03c6106d4b35637ff29d35c2347bcf9f5001cc658c33566480879515ce7ed8b8",
+      "actual_result": "PASS",
+      "run_id": "0edcfebe-9c42-4366-b5d1-9e9ad35fc579",
+      "test_seconds": 6.738,
+      "safe_result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/case02/result.json",
+      "safe_result_sha256": "bc8dade45ec09b6dac00871eaf8c8dd94b809fb3ad9d25cae87dcfd39b8e15cf",
+      "source_lines": "onchain.rs8-27",
+      "demonstrated": [
+        "Native CLI first2 fresh Arkreceive addresses are distinct, neither equals reservedidentity0; they equal explicitindices1/2 respectively."
+      ],
+      "limits": [
+        "Despite module onchain, calls are `bark address`, not `onchain address`; this does not exercise BIP84/BIP86 onchain address rotation.",
+        "One new retained wallet, online server; no offline, restart, restore, registrationrace or principal path. Original old-index oracle status remains unchanged."
+      ]
+    },
+    {
+      "sequence": 3,
+      "literal_name": "fees::send_onchain_fee_deducted",
+      "source_file": "testing/tests/bark/fees.rs",
+      "file_sha256": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+      "target_body_sha256": "94e4213a886ccfae696c445bf01b118465fab5d39b56ebea09e0f26e760a4154",
+      "actual_result": "PASS",
+      "run_id": "16bc85a2-be21-4d2e-a1c3-d8b9ffcf8eb8",
+      "test_seconds": 18.798,
+      "safe_result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/case03/result.json",
+      "safe_result_sha256": "d28e9404ba3e7b8e3a289722727925a1d88079fc124473095827404cb4eada11",
+      "source_lines": "fees.rs764-829",
+      "demonstrated": [
+        "Genuine fundedserver/nativewallet: senderfunded1m, actual800k board/register; initial singleVTXO captured. Recipient freshonchainaddress determines actualscriptlength.",
+        "Public RPC offboardfeerate sat_vkb converted withceil; configuredbase3000sat + quotedrate\u00d7weight(100+actualdestinationscriptlength vB), emptyexpiryppm. Pre-send estimate captured.",
+        "Native send_onchain300000 succeeds; movement offchainfee equals computedpublicquote, firstdestination has exactrequestedaddress/300000amount. Actual remainingchangeVTXOs count2 and amount=actualinput\u2212300000\u2212chargedfee.",
+        "After total3generatedblocks, recipient CLI onchainbalance.total equals300000; estimate fee/gross/net/inputVTXOset matches movement."
+      ],
+      "limits": [
+        "This validates customerchargedfee under the declaredscript-awarequote contract, NOT actualBitcoinminerfee. Formula shares samepublicfee schedule/units as implementation; no independentfee-estimator adequacy proof.",
+        "No rawcanonical transaction/actualprevout/txid/blockhash/confirmationdepth/Core6 check, no package/feechild/cpfp/watchwallet/subsidy/fullphysicaloperatorcut. CLI onchainbalance.total can includeunconfirmed funds; mined3blocks is not a directcanonicalconfirmationassertion.",
+        "Exactoutputreceipt is via freshrecipient CLIbalance plus requestedmovementfirstdestination, not independent Core outputscan/wholechain+allrecipientduplicate exclusion.",
+        "Only initialsingle800kVTXO\u2192recipient300k+offchainchange+chargedfee conserved. Senderinitial1m boardminer/ordinarychange, server10BTC funding/residualchange/actualminerfee and globalfullDAG are outsidecut.",
+        "Explicit testfees(base3000/fixed100/emptyppm), noVTXOpool, bitcoind/nativeBIP84build; not defaultfees or scriptmatrix/near-expiry/feevolatility/fault/reorg coverage. Original oldfixed3854 customerfee FAIL remains preserved separately."
+      ]
+    }
+  ],
+  "helper_semantics": {
+    "testing/src/bark.rs675-680": "address/address_at_idx invoke native `bark address`/`bark address --index`, returnstrings",
+    "testing/src/bark.rs504-507": "onchain_balance returns parsed CLI onchainbalance.total; no directgettxout/confirmationassertion",
+    "testing/src/bark.rs591-594": "get_onchain_address parses CLI onchainaddress and checksRegtestnetwork",
+    "lib/src/fees.rs148-161": "productionconfiguredfeeformula = base+(fixedadditionalvb+scriptlength)\u00d7rate+expiryppm; fixturedeclares emptyppm",
+    "server/src/rpcserver/ark.rs171-177": "publicquote returns regularfeerate in sat_vkb"
+  },
+  "intake_limit": "Three exact adaptedtest PASS on779v6, not wholeCLI suite/fullML/gate productionapproval. Original earlier failures/heldrecords and PR16 fixed220/431 remainimmutable. No counts/status/promotion changed here. FinancialPASS supports customerfeequote and scopedoffchainchange/CLIreceipt, not truephysicalminerfee/fullchainconservation."
+}

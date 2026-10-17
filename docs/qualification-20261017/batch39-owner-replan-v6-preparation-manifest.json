@@ -1,0 +1,116 @@
+{
+  "kind": "batch39_four_case_frozen_preparation",
+  "state": "FINAL_CONTROLS_FROZEN_NOT_EXECUTED",
+  "at": "2026-10-17T21:46:06.318761+00:00",
+  "host_private_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6",
+  "container_private_context": "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+  "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+  "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+  "runtime_metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+  "expected_selection": [
+    [
+      "ark-testing::server",
+      "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet"
+    ]
+  ],
+  "controls": [
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/selection-proof.json",
+      "sha256": "f64171842da38045db81a3e9328fcc0105308733cdc2a2ba7b75aab74f2a4af4"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/runtime-pins.sha256",
+      "sha256": "e502eb334339d903705ccda4c2c75bc8a4ebe1ea9a9c4ec2a0d2a4f7d653a7e8"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/server-cohort.py",
+      "sha256": "24f1e67d1151e06dd57cc24df9216c6b8f6b91737d9808c691caecaccad97be9"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/preflight-static.py",
+      "sha256": "e3f334304c1c858f2c3452d88c935025318ec823d0e2cadb9f76ad29c2bd9532"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/fresh-listings.py",
+      "sha256": "e765209f63d5f2f911387291ba005a4a9551716533eb6419f31e92bbe95fd00a"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/preflight.sh",
+      "sha256": "7f048e2984d57ad9f9eba48153e66de8d664cc7edeb5c58a42a15ba329638ecf"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/run.sh",
+      "sha256": "2f9d2605b9276ced075c00e185bf1fb7180380a7f5e31c5f7a8b93fbef948127"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/case01/nextest.toml",
+      "sha256": "d06bd087218f5c2f419e9517317e8bb306c02aec0894b2c436cb2b34cb260cf4"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/case02/nextest.toml",
+      "sha256": "84aa39449bd3cb5e4b899fa196918b099c4459e46c0b6a297bd1055d106a9479"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/case03/nextest.toml",
+      "sha256": "df252aba192e1be7ace5ae2bad3286300ba6eb47a99fc2f5d7ebef8a644e15e1"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/case04/nextest.toml",
+      "sha256": "f8f66d2a3203fa5732dcd6043c580a5e8ea231b1a3402d4fbe26a8a7ef9a9d6e"
+    }
+  ],
+  "primary_root_pins": 13,
+  "additional_native_CLN_pins": 3,
+  "actual_CLN_version": "v26.06.6",
+  "plugin_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+  "fresh_preparation_gate_exit_code": 0,
+  "fresh_listing": {
+    "state": "LISTING_GATE_PASS",
+    "selected_unignored": [
+      [
+        "ark-testing::server",
+        "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender"
+      ],
+      [
+        "ark-testing::bark-sdk",
+        "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent"
+      ],
+      [
+        "ark-testing::bark-sdk",
+        "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient"
+      ],
+      [
+        "ark-testing::bark-sdk",
+        "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet"
+      ]
+    ],
+    "native_tests_run": 0
+  },
+  "resource_admission": {
+    "state": "RESOURCE_GATE_PASS",
+    "shm_available_bytes": 870141952,
+    "live_owned_postgres": [],
+    "cleanup": false
+  },
+  "freshlisting_does_not_run_test_bodies": true,
+  "parent_gate": "Run frozen preflight.sh sequentially before parent-only run.sh launch. No native case started by preparer. No Cargo build/metadata, source or canonical changes.",
+  "default_seconds": 180,
+  "retries": 0,
+  "serial": 1,
+  "first_failure_stops": true,
+  "Docker": "LIGHTNINGD_DOCKER_IMAGE unset; exact native LIGHTNINGD_EXEC; private pinned plugins",
+  "context_retries": false,
+  "scope": "Exactly4 ONCE allocated names only. NOTRUN; no automatic ML/defaultdaemon/production credit."
+}

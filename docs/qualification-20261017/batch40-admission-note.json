@@ -1,0 +1,11 @@
+{
+  "state": "DISTINCT_PRE_NATIVE_PREPARATION_EVENT",
+  "parent_reported_OCI_exit_code": 127,
+  "native_tests_fired_by_that_event": 0,
+  "counts_as_native_FAIL": false,
+  "test_retry": false,
+  "scope": "Parentreportedpreparationsourceguard OCI127 occurred before native launch. No attempt was converted toPASS; it remains separate from the lateradmitted3nativeexecutions. No raw OCIlog/identity/environment content read/published by curator.",
+  "later_native_session": 85000,
+  "later_native_outcome": "3PASS0FAIL",
+  "receipt": "batch40-three-existing-v6-receipt.json"
+}

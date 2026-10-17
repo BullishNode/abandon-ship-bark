@@ -1,0 +1,130 @@
+{
+  "kind": "BATCH41_LIVE_FUNDED_V7_PREPARATION_ONLY",
+  "at": "2026-10-17T22:15:51.083846+00:00",
+  "state": "READY_FOR_PARENT_FINAL_HASH_GATE_NOT_LAUNCHED",
+  "host_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7",
+  "container_directory": "/fresh-cache/testing-track-20261017/batch41-live-funded-v7",
+  "source_manifest_sha256": "d05d3d5c7a24584fc9893f6601d9c0b243784f9bb16602feca699b4e532c3db0",
+  "bundle_manifest_sha256": "04b05a11e01b3b0af46e812cf3cb94d053d2a3bd79d4c7b25ac234948fa3eb33",
+  "runtime_metadata_sha256": "748a2f9fc21d008ad3a7bdc166363c04b524461b3339d084c2b9481a37a08b1d",
+  "source_archive_sha256": "075ff0cc936936574b4e015ad23f496a9b66dd5316340ae5fc86924c0d38d83f",
+  "source_proof": {
+    "file": "batch41-live-funded-v7-source-proof.json",
+    "sha256": "2779a376fcc6d8c264e9fbac901eb43aff02d542317dc4f2a26e0d0034c304a0"
+  },
+  "independent_source_budget_review": {
+    "file": "batch41-source-admission-review.json",
+    "sha256": "915480a4eee30951ee734b869efe761e0170d00206ed48b81aeecd77feffb86a"
+  },
+  "expected_selection": [
+    [
+      "ark-testing::server",
+      "expiry_owner_load::expiry_owner_live_funded_100_registrations"
+    ],
+    [
+      "ark-testing::server",
+      "expiry_owner_load::expiry_owner_live_funded_1000_registrations"
+    ]
+  ],
+  "exact_each_selected": 1,
+  "expected_ignored": true,
+  "run_ignored": "only",
+  "profile": "fallback-scale",
+  "outer_timeout_seconds": 1740,
+  "unchanged_postexpiry_poll_budget_seconds_per_leg": 120,
+  "serial": 1,
+  "retries": 0,
+  "maximum_global_executions": 2,
+  "first_failure_prevents_1000_case": true,
+  "runtime_pins": {
+    "count": 13,
+    "file": "runtime-pins.sha256",
+    "sha256": "a834e6e29348e21879b457ba81496ba88112b98dfbc4698ef68666d3ff7bdb9b",
+    "read_only_actualsha256sum_preflight": "PASS",
+    "CLN_extra_pins_required": false,
+    "reason": "BothsourcecasesuseCore/PG/captaind/watchman/SDKboard paths; no Lightningd/CLNoperation."
+  },
+  "actual_cached_Nix_before_controlcode": {
+    "IN_NIX_SHELL": "impure",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)"
+  },
+  "static_validation": {
+    "python_AST": 3,
+    "bash_n": 2,
+    "status": "PASS",
+    "guard_before_native_spawn": true
+  },
+  "authorized_read_only_preflight": {
+    "exit_code": 0,
+    "log_file": "preparation-preflight.log",
+    "log_sha256": "66942fa55d24ed5f2e32f6b6956a8bc386c29880bf2193118a55f7bf66c0deff",
+    "products_version_head": "759f12c1f0c7586c597557f422374415f330b9f8",
+    "selection": "PASS exact1ignored perliteral using--run-ignored only",
+    "resource": {
+      "state": "RESOURCE_GATE_PASS",
+      "shm_available_bytes": 861523968,
+      "live_owned_postgres": [],
+      "cleanup": false
+    },
+    "native_tests_started": 0
+  },
+  "parent_freeze_required_control_and_admission_hashes": {
+    "selection-proof.json": "1754e3fa03e85b32114a7b37fcb13399af2d87f560b6e2df9063407ca5c47c09",
+    "root-allocation.json": "95bc5a2214045ece8d736d0784a369f9b6d27e8784fbba5b762fd5fa8919c0e5",
+    "runtime-pins.sha256": "a834e6e29348e21879b457ba81496ba88112b98dfbc4698ef68666d3ff7bdb9b",
+    "server-cohort.py": "8b8eddf4426a67200134b9f6b94566dae3a5464f7901e2effdfae639596db22a",
+    "preflight-static.py": "d756db6ea9ea5225239f0e8748927c23ec7cd5a8a63b4e79fae66d908f3c78d0",
+    "fresh-listings.py": "a305c22e36bce5ea2d53f58bcce7af0a31c42b5b3fc6ff76c0fc720fd2a68d49",
+    "preflight.sh": "5fa545aa0a5fd1e0c1622a55d6d831898c96be2cb04bede22f20e6f1fc4766e0",
+    "run.sh": "930f8d3d8203b9a61cb94bf6064969ca3b691a57807c830bb08e8e9d238f03aa",
+    "case01/nextest.toml": "d4776824149e320bc10d3b86ba5b2c3c095d753dd227af8f9624afcf6a0caecf",
+    "case02/nextest.toml": "e1d0b1b8618378fa896b3e63083a9518d463dc8fe426002c6a3b3246b5c04418",
+    "fresh-listing-admission.json": "deaa52d3500059c625862261b1a9de528e2c27f6722e5b25f3ffbc3272b61250",
+    "resource-admission.json": "1de884b6fcd128ee24844398546bc79912bd9a28c9da777a414aa0ffdb0cd466"
+  },
+  "launch_guard": {
+    "pending_marker_present": true,
+    "actual_parent_admission_absent": true,
+    "required_record": "parent-launch-admission.json statePARENT_HASH_GATE_PASSED/exact2/source+detailed12hashes; parentremovespendingmarker onlyafterownfinalgate",
+    "nonlaunchable_template_sha256": "7214573de3dc968980b4a09b492ad01eea14a57ac3238faffc57df3e130595a9"
+  },
+  "no_native_artifacts": {
+    "progress_absent": true,
+    "case_results_absent": true,
+    "test_data_absent": true
+  },
+  "mutations": {
+    "native_execution": 0,
+    "Cargo_build_metadata_target_writes": 0,
+    "source_frozencontrols_priorreports": 0,
+    "COVERAGE_STATUS_publicmanifest": 0
+  },
+  "review_limits": {
+    "lookup_poll_seconds_per_leg": 120,
+    "lookup_clock_starts": "After actualexpirymining and captaind/watchmand sync; not entirecase or entireexpiry-to-payout deadline.",
+    "progress_seconds": "Immediatelyafterpollcompletion; retained onpolltimeout.",
+    "phase_lookup_and_publication_seconds": "SampledafteractualCoreconfirmationwork, so includeslaterconfirmationoverhead and is notthe120spollmetric.",
+    "initial_authenticated_registrations": [
+      100,
+      1000
+    ],
+    "funded_accounts": 2,
+    "actual_board_roots": 3,
+    "new_pressure_records_max_total": 16,
+    "pressure_requests_per_leg_max": 2048,
+    "scan_chunk": 32,
+    "scan_workers": 2,
+    "lifetime_blocks": 24,
+    "owner_presence": "Leg1: originalwalletheldidlemanual; betweenlegs genuineclientlateboard; leg2: originaldropped; independentcontrolabsent.",
+    "recovery": "Freshseed+DB usingliveArkendpoint; draincanincludeordinaryfundingchange.",
+    "not_proven": [
+      "100/1000fundeduserthroughput",
+      "sustainedarrival/general fairness",
+      "high-index/exhaustivenegativebound",
+      "wholephysicalDAG/operatorwalletsolvency/subsidy",
+      "Ark-offline recovery",
+      "FULL ML orproduction capacity"
+    ]
+  },
+  "parent_only_launch": true
+}

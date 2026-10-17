@@ -1,0 +1,5 @@
+{
+  "state": "PENDING_PARENT_FINAL_HASH_GATE",
+  "batch": "batch41-live-funded-v7",
+  "launch_authorization_file": "parent-launch-admission.json"
+}

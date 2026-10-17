@@ -1,0 +1,1052 @@
+{
+  "kind": "batch41_independent_offline_retained_Core_reconciliation",
+  "at": "2026-10-17T22:26:54.197296+00:00",
+  "source_manifest_sha256": "d05d3d5c7a24584fc9893f6601d9c0b243784f9bb16602feca699b4e532c3db0",
+  "bundle_manifest_sha256": "04b05a11e01b3b0af46e812cf3cb94d053d2a3bd79d4c7b25ac234948fa3eb33",
+  "metadata_sha256": "748a2f9fc21d008ad3a7bdc166363c04b524461b3339d084c2b9481a37a08b1d",
+  "source_admission_review_sha256": "915480a4eee30951ee734b869efe761e0170d00206ed48b81aeecd77feffb86a",
+  "decoder_helper_sha256": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+  "script_path": "/tmp/batch41-retained-core-reconcile-backend.py",
+  "script_sha256": "eb1c6f01352a2a19296a3a405c26bf7eb17fa5fa39b69dc94059139c92121315",
+  "actor_absence_receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch41-client-postflight.json",
+  "actor_absence_receipt_sha256": "ab64656e0889f0303aa61aab01ee17705a550190c830b124eb360c80e333880a",
+  "mode": "Only immutable safe proofs/progress/results, retained blk/xor and final debug UpdateTip; no Core start/RPC/SQL/wallet/seed/identity/actor calls. Actor absence confirmed by parent/client before reading blocks.",
+  "cohorts": [
+    {
+      "initial_registrations": 100,
+      "result": "PASS",
+      "run_id": "928e5203-5a36-4489-967e-dcdbef965b4c",
+      "native_seconds": 47.49,
+      "safe_proof_sha256": "762a602e3c02a616529cc681af7d1d60816b15ac59085485f095d98d4d90b124",
+      "retained_tip": {
+        "hash": "30f873fd47403150d72d85bd1ef3b2da50a4be7cbc32233267370e74ac493f55",
+        "height": 177
+      },
+      "phases": [
+        {
+          "kind": "owner_child80",
+          "physical_board_root": "8da279325c2b46508ecb9a99cba7f3c776459d03481993156e9610c15373a5e8:0",
+          "payout_point": "16c581540706092e50f29b4a0b2cec6128c0b509e435440fcc4ca8be8baceef6:0",
+          "gross_sat": 100000,
+          "customer_payout_sat": 99000,
+          "customer_charged_fee_sat": 1000,
+          "board": {
+            "txid": "8da279325c2b46508ecb9a99cba7f3c776459d03481993156e9610c15373a5e8",
+            "canonical": {
+              "block_hash": "0af78584e968fdbb7113b82724e20ea7c09420803700b917ca18afb100eed1d0",
+              "height": 110,
+              "confirmations": 68
+            },
+            "version": 2,
+            "signed_raw_sha256": "6be2767188e4e789601d45b603ff022bb1e38e8aff0a0110b4e931e332e63933",
+            "signed_bytes": 234,
+            "inputs": [
+              {
+                "point": "07d5404305e6f4c891abfb46b7c18e9b586be21fb93549e7bea91b445e9a1a3a:1",
+                "value_sat": 500000,
+                "script_hex": "001448b5a496d1df7ded8dcbe8c0ee3b0197a42eb2b5"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 100000,
+                "script_hex": "512070f692ae1096fea3455a2cc3edf2aa61cadc7b8c2d39d41c48719b50fee680ef"
+              },
+              {
+                "vout": 1,
+                "value_sat": 399237,
+                "script_hex": "0014b5bc9f350a24b608b2c361f0fe43fb0c85b7fc8e"
+              }
+            ],
+            "actual_miner_fee_sat": 763
+          },
+          "parent": {
+            "txid": "16c581540706092e50f29b4a0b2cec6128c0b509e435440fcc4ca8be8baceef6",
+            "canonical": {
+              "block_hash": "7f23f77120925f5ff6598233f9913f91762e2461a024b21cc973c73475ff6020",
+              "height": 135,
+              "confirmations": 43
+            },
+            "version": 3,
+            "signed_raw_sha256": "81e0eb7e08aed817bffe7e679d28e9e0ae920b2838db2fdd8a562cda8c56f48a",
+            "signed_bytes": 280,
+            "inputs": [
+              {
+                "point": "8da279325c2b46508ecb9a99cba7f3c776459d03481993156e9610c15373a5e8:0",
+                "value_sat": 100000,
+                "script_hex": "512070f692ae1096fea3455a2cc3edf2aa61cadc7b8c2d39d41c48719b50fee680ef"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 99000,
+                "script_hex": "0014ac12bb8311f53fd4f66922f2b2ff5180f425fcfd"
+              },
+              {
+                "vout": 1,
+                "value_sat": 1000,
+                "script_hex": "5120bbd9f0733194ccb471eeb342bccc68595f05483764b722d94e7f2cfacc71634f"
+              },
+              {
+                "vout": 2,
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "actual_miner_fee_sat": 0
+          },
+          "same_block_canonical_fee_child": {
+            "txid": "577f63aa9f36144fc39723f182ee0eabdd952149accebe7974cdcbbd999f5212",
+            "canonical": {
+              "block_hash": "7f23f77120925f5ff6598233f9913f91762e2461a024b21cc973c73475ff6020",
+              "height": 135,
+              "confirmations": 43
+            },
+            "version": 3,
+            "signed_raw_sha256": "4316d579f2e2f964049ece65c1a2ddc4edf2a0d8cdadb7b0f586708c5c06d773",
+            "signed_bytes": 204,
+            "inputs": [
+              {
+                "point": "16c581540706092e50f29b4a0b2cec6128c0b509e435440fcc4ca8be8baceef6:2",
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              },
+              {
+                "point": "bb5a3749698eba1446cface259439c4bdce5b6107911ad16f3b53032724e783f:1",
+                "value_sat": 100000,
+                "script_hex": "51201a727edb8b2293a766e26417f72cd53e9c6c2b024991f8eca4a9ab1bc55b17b7"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 97719,
+                "script_hex": "5120c732449e0fb7d0f28bbe2ab7a5a72260ef0aa24fcb8c1ee214055c962f5b783d"
+              }
+            ],
+            "actual_miner_fee_sat": 2281
+          }
+        },
+        {
+          "kind": "owner_child1",
+          "physical_board_root": "1301b04046300f135b1ff5cf06ff7063c6e57000e421dce533ecd7ab3b79636a:0",
+          "payout_point": "fd882f18720039994dbe42cd319f83b11cd8bef4860e4c8dd8d3568637548bf5:0",
+          "gross_sat": 100000,
+          "customer_payout_sat": 99000,
+          "customer_charged_fee_sat": 1000,
+          "board": {
+            "txid": "1301b04046300f135b1ff5cf06ff7063c6e57000e421dce533ecd7ab3b79636a",
+            "canonical": {
+              "block_hash": "0bf950fe3b5812c5407ab45a636047601238362f5b8abb1d32d2db95532b88b3",
+              "height": 141,
+              "confirmations": 37
+            },
+            "version": 2,
+            "signed_raw_sha256": "bf3d3fd7e80b391483317a561f99d828b8b15af0b297cb4dd7d1ab7d333035ab",
+            "signed_bytes": 234,
+            "inputs": [
+              {
+                "point": "8da279325c2b46508ecb9a99cba7f3c776459d03481993156e9610c15373a5e8:1",
+                "value_sat": 399237,
+                "script_hex": "0014b5bc9f350a24b608b2c361f0fe43fb0c85b7fc8e"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 100000,
+                "script_hex": "5120802cd466118d8b8cf15feaa09225f732fe09d4ec5266a0961d739c8fa473e5a3"
+              },
+              {
+                "vout": 1,
+                "value_sat": 298474,
+                "script_hex": "00147e9dfff66958c6469c800936c0497cc96b163b22"
+              }
+            ],
+            "actual_miner_fee_sat": 763
+          },
+          "parent": {
+            "txid": "fd882f18720039994dbe42cd319f83b11cd8bef4860e4c8dd8d3568637548bf5",
+            "canonical": {
+              "block_hash": "7849ce0f40de2731628bb7637f58f1f84b9c029de8c0214b6187da2e59b65c9b",
+              "height": 166,
+              "confirmations": 12
+            },
+            "version": 3,
+            "signed_raw_sha256": "8280dad1788cd51b108b6c7b86e1879665d3b4c343a712c3286c7f1e060ff3bb",
+            "signed_bytes": 280,
+            "inputs": [
+              {
+                "point": "1301b04046300f135b1ff5cf06ff7063c6e57000e421dce533ecd7ab3b79636a:0",
+                "value_sat": 100000,
+                "script_hex": "5120802cd466118d8b8cf15feaa09225f732fe09d4ec5266a0961d739c8fa473e5a3"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 99000,
+                "script_hex": "0014ac12bb8311f53fd4f66922f2b2ff5180f425fcfd"
+              },
+              {
+                "vout": 1,
+                "value_sat": 1000,
+                "script_hex": "5120bbd9f0733194ccb471eeb342bccc68595f05483764b722d94e7f2cfacc71634f"
+              },
+              {
+                "vout": 2,
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "actual_miner_fee_sat": 0
+          },
+          "same_block_canonical_fee_child": {
+            "txid": "36b545b1abe5a89c3e5f647652e41414512dccc664bd4ef9ef0c9164e1261872",
+            "canonical": {
+              "block_hash": "7849ce0f40de2731628bb7637f58f1f84b9c029de8c0214b6187da2e59b65c9b",
+              "height": 166,
+              "confirmations": 12
+            },
+            "version": 3,
+            "signed_raw_sha256": "ff63d930ccb3305fd171f51714d2dfe1a2ed12b437d0def394bcb8f617752350",
+            "signed_bytes": 204,
+            "inputs": [
+              {
+                "point": "577f63aa9f36144fc39723f182ee0eabdd952149accebe7974cdcbbd999f5212:0",
+                "value_sat": 97719,
+                "script_hex": "5120c732449e0fb7d0f28bbe2ab7a5a72260ef0aa24fcb8c1ee214055c962f5b783d"
+              },
+              {
+                "point": "fd882f18720039994dbe42cd319f83b11cd8bef4860e4c8dd8d3568637548bf5:2",
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 95438,
+                "script_hex": "512001157d933643143680aa4ea75176ea66746c017e5f5c3a8402293bfa07d41874"
+              }
+            ],
+            "actual_miner_fee_sat": 2281
+          }
+        },
+        {
+          "kind": "independent_control",
+          "physical_board_root": "defda162536c8c3d96502037599d48462b97b5ad8fb0f3cbe85a788f30d5143f:0",
+          "payout_point": "e5221639c2c49989ec54e26b612c7be507779875dbf8ca566101e38c74b22d8e:0",
+          "gross_sat": 100000,
+          "customer_payout_sat": 99000,
+          "customer_charged_fee_sat": 1000,
+          "board": {
+            "txid": "defda162536c8c3d96502037599d48462b97b5ad8fb0f3cbe85a788f30d5143f",
+            "canonical": {
+              "block_hash": "142d33f2dd34a177f665fb3a6898abc5fe9fbe6912789c08bdff97a5f8d5eeee",
+              "height": 106,
+              "confirmations": 72
+            },
+            "version": 2,
+            "signed_raw_sha256": "7b49cd1899a19d2dc9f18f15b3cc27fb844e8cec072421c06a16af2b3c5c2577",
+            "signed_bytes": 234,
+            "inputs": [
+              {
+                "point": "e9ee05f1f38c47ba21cacd9148f37f2ac3918f802f9d95d8a7bff20279c38398:1",
+                "value_sat": 200000,
+                "script_hex": "001418baf005faefe5f0836e9b0fe431432ffa2c15ae"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 100000,
+                "script_hex": "5120ba415d982f3b739e8ccd0e22faf5abf64ba7e6610b125ea14ed10d2b3f9d5ba3"
+              },
+              {
+                "vout": 1,
+                "value_sat": 99237,
+                "script_hex": "0014eaf4ffa12f26ed94ad344662e8fb8de8141acf9c"
+              }
+            ],
+            "actual_miner_fee_sat": 763
+          },
+          "parent": {
+            "txid": "e5221639c2c49989ec54e26b612c7be507779875dbf8ca566101e38c74b22d8e",
+            "canonical": {
+              "block_hash": "7f23f77120925f5ff6598233f9913f91762e2461a024b21cc973c73475ff6020",
+              "height": 135,
+              "confirmations": 43
+            },
+            "version": 3,
+            "signed_raw_sha256": "ed7849a1ee2303348d8f814c54b346c1c4add219c1c547747838206d49dab16f",
+            "signed_bytes": 280,
+            "inputs": [
+              {
+                "point": "defda162536c8c3d96502037599d48462b97b5ad8fb0f3cbe85a788f30d5143f:0",
+                "value_sat": 100000,
+                "script_hex": "5120ba415d982f3b739e8ccd0e22faf5abf64ba7e6610b125ea14ed10d2b3f9d5ba3"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 99000,
+                "script_hex": "0014eec1766a4c20567d5ba004a45b559da8a23a500e"
+              },
+              {
+                "vout": 1,
+                "value_sat": 1000,
+                "script_hex": "5120bbd9f0733194ccb471eeb342bccc68595f05483764b722d94e7f2cfacc71634f"
+              },
+              {
+                "vout": 2,
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "actual_miner_fee_sat": 0
+          },
+          "same_block_canonical_fee_child": {
+            "txid": "e861718b66648d009efc4236d3530533383377b8907222dd81a226e941f9957e",
+            "canonical": {
+              "block_hash": "7f23f77120925f5ff6598233f9913f91762e2461a024b21cc973c73475ff6020",
+              "height": 135,
+              "confirmations": 43
+            },
+            "version": 3,
+            "signed_raw_sha256": "20a6286c07927348f1af9b55018db9ab14267eb3b67141ee2d1fe74d8b86a532",
+            "signed_bytes": 204,
+            "inputs": [
+              {
+                "point": "e5221639c2c49989ec54e26b612c7be507779875dbf8ca566101e38c74b22d8e:2",
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              },
+              {
+                "point": "f8735883e892dfad6e779b32e7b74dd723ebc32cef80f443f2ab999ccf401d56:1",
+                "value_sat": 100000,
+                "script_hex": "51201a727edb8b2293a766e26417f72cd53e9c6c2b024991f8eca4a9ab1bc55b17b7"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 97719,
+                "script_hex": "512098b4291a330e700020ab96a8d40094c0f4f4b7f60066cec5cfd4b9d0034b2ece"
+              }
+            ],
+            "actual_miner_fee_sat": 2281
+          }
+        }
+      ],
+      "seed_recovery_drain": {
+        "txid": "7145a5063311de6dadd1d1bd8e67d377302e2d128c39add04ee621120ee389a2",
+        "canonical": {
+          "block_hash": "3fa97c6ade00c9ca53935a8d80d715f3093d384ae21c3dbfcb2c5637a7e4d552",
+          "height": 172,
+          "confirmations": 6
+        },
+        "version": 2,
+        "signed_raw_sha256": "d0233c5d4068fbc04ca4d1df0e1dcebdd08c4f8b4aecef1185a80c8617b8afd0",
+        "signed_bytes": 487,
+        "inputs": [
+          {
+            "point": "16c581540706092e50f29b4a0b2cec6128c0b509e435440fcc4ca8be8baceef6:0",
+            "value_sat": 99000,
+            "script_hex": "0014ac12bb8311f53fd4f66922f2b2ff5180f425fcfd"
+          },
+          {
+            "point": "1301b04046300f135b1ff5cf06ff7063c6e57000e421dce533ecd7ab3b79636a:1",
+            "value_sat": 298474,
+            "script_hex": "00147e9dfff66958c6469c800936c0497cc96b163b22"
+          },
+          {
+            "point": "fd882f18720039994dbe42cd319f83b11cd8bef4860e4c8dd8d3568637548bf5:0",
+            "value_sat": 99000,
+            "script_hex": "0014ac12bb8311f53fd4f66922f2b2ff5180f425fcfd"
+          }
+        ],
+        "outputs": [
+          {
+            "vout": 0,
+            "value_sat": 495983,
+            "script_hex": "00143916146e7f13ade8cdcc2a3495fa4db19eb35654"
+          }
+        ],
+        "actual_miner_fee_sat": 491
+      },
+      "poll_and_pressure": [
+        {
+          "child_index": 80,
+          "poll_publication_seconds": 6.289394708,
+          "proof_after_confirmations_seconds": 9.583789559,
+          "pressure_writes": 98,
+          "registration_count_min": 100,
+          "registration_count_max": 108
+        },
+        {
+          "child_index": 1,
+          "poll_publication_seconds": 3.628056472,
+          "proof_after_confirmations_seconds": 6.808592701,
+          "pressure_writes": 57,
+          "registration_count_min": 108,
+          "registration_count_max": 116
+        }
+      ],
+      "graph": {
+        "transactions": 10,
+        "external_inputs": [
+          {
+            "point": "07d5404305e6f4c891abfb46b7c18e9b586be21fb93549e7bea91b445e9a1a3a:1",
+            "value_sat": 500000,
+            "script_hex": "001448b5a496d1df7ded8dcbe8c0ee3b0197a42eb2b5",
+            "role": "customer_funding_boundary",
+            "spent_by_graph": true
+          },
+          {
+            "point": "3702ecee9bd4cb86042e9d1a32c11e7e51134c55710f4746f73ceffe3bc9d6a1:0",
+            "value_sat": 100000,
+            "script_hex": "51201a727edb8b2293a766e26417f72cd53e9c6c2b024991f8eca4a9ab1bc55b17b7",
+            "role": "declared_sponsor",
+            "spent_by_graph": false
+          },
+          {
+            "point": "bb5a3749698eba1446cface259439c4bdce5b6107911ad16f3b53032724e783f:1",
+            "value_sat": 100000,
+            "script_hex": "51201a727edb8b2293a766e26417f72cd53e9c6c2b024991f8eca4a9ab1bc55b17b7",
+            "role": "declared_sponsor",
+            "spent_by_graph": true
+          },
+          {
+            "point": "e9ee05f1f38c47ba21cacd9148f37f2ac3918f802f9d95d8a7bff20279c38398:1",
+            "value_sat": 200000,
+            "script_hex": "001418baf005faefe5f0836e9b0fe431432ffa2c15ae",
+            "role": "customer_funding_boundary",
+            "spent_by_graph": true
+          },
+          {
+            "point": "f8735883e892dfad6e779b32e7b74dd723ebc32cef80f443f2ab999ccf401d56:1",
+            "value_sat": 100000,
+            "script_hex": "51201a727edb8b2293a766e26417f72cd53e9c6c2b024991f8eca4a9ab1bc55b17b7",
+            "role": "declared_sponsor",
+            "spent_by_graph": true
+          }
+        ],
+        "terminal_unspent_outputs": [
+          {
+            "point": "16c581540706092e50f29b4a0b2cec6128c0b509e435440fcc4ca8be8baceef6:1",
+            "value_sat": 1000,
+            "script_hex": "5120bbd9f0733194ccb471eeb342bccc68595f05483764b722d94e7f2cfacc71634f",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "36b545b1abe5a89c3e5f647652e41414512dccc664bd4ef9ef0c9164e1261872:0",
+            "value_sat": 95438,
+            "script_hex": "512001157d933643143680aa4ea75176ea66746c017e5f5c3a8402293bfa07d41874",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "3702ecee9bd4cb86042e9d1a32c11e7e51134c55710f4746f73ceffe3bc9d6a1:0",
+            "value_sat": 100000,
+            "script_hex": "51201a727edb8b2293a766e26417f72cd53e9c6c2b024991f8eca4a9ab1bc55b17b7",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "7145a5063311de6dadd1d1bd8e67d377302e2d128c39add04ee621120ee389a2:0",
+            "value_sat": 495983,
+            "script_hex": "00143916146e7f13ade8cdcc2a3495fa4db19eb35654",
+            "classification": "seed_drain_output"
+          },
+          {
+            "point": "defda162536c8c3d96502037599d48462b97b5ad8fb0f3cbe85a788f30d5143f:1",
+            "value_sat": 99237,
+            "script_hex": "0014eaf4ffa12f26ed94ad344662e8fb8de8141acf9c",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "e5221639c2c49989ec54e26b612c7be507779875dbf8ca566101e38c74b22d8e:0",
+            "value_sat": 99000,
+            "script_hex": "0014eec1766a4c20567d5ba004a45b559da8a23a500e",
+            "classification": "control_payout"
+          },
+          {
+            "point": "e5221639c2c49989ec54e26b612c7be507779875dbf8ca566101e38c74b22d8e:1",
+            "value_sat": 1000,
+            "script_hex": "5120bbd9f0733194ccb471eeb342bccc68595f05483764b722d94e7f2cfacc71634f",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "e861718b66648d009efc4236d3530533383377b8907222dd81a226e941f9957e:0",
+            "value_sat": 97719,
+            "script_hex": "512098b4291a330e700020ab96a8d40094c0f4f4b7f60066cec5cfd4b9d0034b2ece",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "fd882f18720039994dbe42cd319f83b11cd8bef4860e4c8dd8d3568637548bf5:1",
+            "value_sat": 1000,
+            "script_hex": "5120bbd9f0733194ccb471eeb342bccc68595f05483764b722d94e7f2cfacc71634f",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          }
+        ],
+        "canonical_duplicate_spends": 0,
+        "canonical_owner_payout_outputs": 2,
+        "canonical_control_payout_outputs": 1,
+        "ordinary_customer_funding_same_scripts_excluded_from_duplicate_payout_count": 0,
+        "unused_confirmed_sponsor_outputs": 1
+      },
+      "bounded_money": {
+        "customer_external_sat": 700000,
+        "fee_sponsor_external_sat": 300000,
+        "source_gross_sat": 300000,
+        "owner_payouts_gross_sat": 198000,
+        "control_payout_sat": 99000,
+        "customer_charged_payout_fees_sat": 3000,
+        "board_miner_fees_sat": 2289,
+        "package_child_miner_fees_sat": 6843,
+        "seed_drain_input_sat": 496474,
+        "seed_drain_output_sat": 495983,
+        "seed_drain_miner_fee_sat": 491,
+        "other_terminal_observed_sat_NO_CUSTODY_INFERENCE": 395394,
+        "all_graph_miner_fees_sat": 9623,
+        "physical_equation": "1000000 = 495983 recovery + 99000 control + 395394 other_observed_leaves + 9623 actual_miner_fees"
+      },
+      "retained_hashes_before_after_equal": true,
+      "retained_input_hashes": {
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case01/test-data/server/expiry_owner_live_funded_100/live-funded-attribution-proof.json": "762a602e3c02a616529cc681af7d1d60816b15ac59085485f095d98d4d90b124",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case01/test-data/server/expiry_owner_live_funded_100/live-funded-owner-80-progress.json": "15a3f07dc57569d5107ffaa6860cf461d0eb533b66a5662560efac8ba50966ff",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case01/test-data/server/expiry_owner_live_funded_100/live-funded-owner-1-progress.json": "23e2817a6655ad5b54124b328e29b64a3413b9edf567633f68147b51a5633a77",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case01/result.json": "4967a8a4633dc5209df28ce2a967e2ccf3c5835d2536a7679969c7436e49a083",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case01/test-data/server/expiry_owner_live_funded_100/bitcoind/regtest/debug.log": "fdb8dc61d82c1dd1abd177676c0e59e6c2c10dbded4d7e0fd09b4c5a5ed50cd7",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case01/test-data/server/expiry_owner_live_funded_100/bitcoind/regtest/blocks/xor.dat": "c0134b9ff21e66c48f2592a58090eeae4c8518a88fdb07feb3da0e872319cee0",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case01/test-data/server/expiry_owner_live_funded_100/bitcoind/regtest/blocks/blk00000.dat": "5ad812ae3fb542a6ff75c6dded6a028d25072ce0e6105bb33fb94b546784b276"
+      }
+    },
+    {
+      "initial_registrations": 1000,
+      "result": "PASS",
+      "run_id": "ec8b5641-6b09-4abd-a319-04a11b538ac1",
+      "native_seconds": 80.781,
+      "safe_proof_sha256": "6dc1d995c81eb7156656d8211014d0f88dbbb932ed2ef5f3ca05bdc196666632",
+      "retained_tip": {
+        "hash": "4e210e098f5d851c0d5b64889629a11f7f192de9d6fc2575722b9a4c62943b7e",
+        "height": 177
+      },
+      "phases": [
+        {
+          "kind": "owner_child80",
+          "physical_board_root": "faf740646db85b20bef7871c417b51126cfa7569ee8f3f5975347327a2e00b43:0",
+          "payout_point": "66cd75b811c36982fbed494e1ef09f0c6cdc5c71b3e988841722c241f6e2e82a:0",
+          "gross_sat": 100000,
+          "customer_payout_sat": 99000,
+          "customer_charged_fee_sat": 1000,
+          "board": {
+            "txid": "faf740646db85b20bef7871c417b51126cfa7569ee8f3f5975347327a2e00b43",
+            "canonical": {
+              "block_hash": "10f75471064be28d3e85b627f221d24a2da1fbba9365901623e062bdbdcb3641",
+              "height": 110,
+              "confirmations": 68
+            },
+            "version": 2,
+            "signed_raw_sha256": "979f993cb2274f99cf6cc59546b471b2bb53f80a8a2c26e3bd7904280c6b4722",
+            "signed_bytes": 234,
+            "inputs": [
+              {
+                "point": "d2a8c0249a45ea2a5fef74d3b36560e1d458fb885e58f62e224b559cabe46284:0",
+                "value_sat": 500000,
+                "script_hex": "001449adbcf6d9886c8bcd7ff520a45054eedbd554ee"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 100000,
+                "script_hex": "5120955c2689738c382532ee8e6e6a2c6101442e1e78df765a507bbd8ccc3c757ddb"
+              },
+              {
+                "vout": 1,
+                "value_sat": 399237,
+                "script_hex": "0014a45a823887cff25c4fd70f815041b7727e188600"
+              }
+            ],
+            "actual_miner_fee_sat": 763
+          },
+          "parent": {
+            "txid": "66cd75b811c36982fbed494e1ef09f0c6cdc5c71b3e988841722c241f6e2e82a",
+            "canonical": {
+              "block_hash": "16fc0fca775ec2a1f90ef405d8eecf5d0062b517377f79909fe907a7fb84e5c1",
+              "height": 135,
+              "confirmations": 43
+            },
+            "version": 3,
+            "signed_raw_sha256": "1ffe03b65971d562df563d564c47624647dde411da99b9409366634d8bc91e05",
+            "signed_bytes": 280,
+            "inputs": [
+              {
+                "point": "faf740646db85b20bef7871c417b51126cfa7569ee8f3f5975347327a2e00b43:0",
+                "value_sat": 100000,
+                "script_hex": "5120955c2689738c382532ee8e6e6a2c6101442e1e78df765a507bbd8ccc3c757ddb"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 99000,
+                "script_hex": "00140573cb77fc9e0bc7870b24fc8f6c6010d614c9a5"
+              },
+              {
+                "vout": 1,
+                "value_sat": 1000,
+                "script_hex": "51201c5ff3dd5fc6beef5f99f504ac235fdf21835e1982ec121e716688314ef9dc32"
+              },
+              {
+                "vout": 2,
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "actual_miner_fee_sat": 0
+          },
+          "same_block_canonical_fee_child": {
+            "txid": "f6e9f8d69de69569aa9f55bf93ea7f344702ff29bdadc64216f7eff4fed50841",
+            "canonical": {
+              "block_hash": "16fc0fca775ec2a1f90ef405d8eecf5d0062b517377f79909fe907a7fb84e5c1",
+              "height": 135,
+              "confirmations": 43
+            },
+            "version": 3,
+            "signed_raw_sha256": "aa5f9249a969611564d92ac742dbba6bc668f06bb54b9cbd29c2cac3ea785d71",
+            "signed_bytes": 204,
+            "inputs": [
+              {
+                "point": "b29e6a0680130ca2460c988ea93ea0e6496ecf9b7788758b50ac04cf7e901ab5:0",
+                "value_sat": 100000,
+                "script_hex": "51207da9381e6bbf3fc0161f44c6a0099b3823c1d58dcdf4b5d5c2ac5350f40c958e"
+              },
+              {
+                "point": "66cd75b811c36982fbed494e1ef09f0c6cdc5c71b3e988841722c241f6e2e82a:2",
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 97719,
+                "script_hex": "51209f7dc84ed251ada6bc516f1e0e3fb27954fdbf76b0c77f73bb83061f6a55bfc9"
+              }
+            ],
+            "actual_miner_fee_sat": 2281
+          }
+        },
+        {
+          "kind": "owner_child1",
+          "physical_board_root": "9af897143d03551127c4b57e4b09278356f2d6b4ece8e2658e73f6af40c147eb:0",
+          "payout_point": "423c263e4b70fcffa8225de81f6a1344ebcf4355eb9e146deaa0f3b31f32ca4b:0",
+          "gross_sat": 100000,
+          "customer_payout_sat": 99000,
+          "customer_charged_fee_sat": 1000,
+          "board": {
+            "txid": "9af897143d03551127c4b57e4b09278356f2d6b4ece8e2658e73f6af40c147eb",
+            "canonical": {
+              "block_hash": "54895018461977160acf3399a1511381025ca0dd7e7620483828cc1dd09453b5",
+              "height": 141,
+              "confirmations": 37
+            },
+            "version": 2,
+            "signed_raw_sha256": "5208ed2534818e5562fae5933ee2c8e02008e49cf852f4d6556bd7585c15aa43",
+            "signed_bytes": 234,
+            "inputs": [
+              {
+                "point": "faf740646db85b20bef7871c417b51126cfa7569ee8f3f5975347327a2e00b43:1",
+                "value_sat": 399237,
+                "script_hex": "0014a45a823887cff25c4fd70f815041b7727e188600"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 100000,
+                "script_hex": "51200f61374bcc77f21440a70c68d6e39536fceada725288d68afec82999a67dea9d"
+              },
+              {
+                "vout": 1,
+                "value_sat": 298474,
+                "script_hex": "00147485f3d7e605ae58cb4f028e5cc1df0f180a8e93"
+              }
+            ],
+            "actual_miner_fee_sat": 763
+          },
+          "parent": {
+            "txid": "423c263e4b70fcffa8225de81f6a1344ebcf4355eb9e146deaa0f3b31f32ca4b",
+            "canonical": {
+              "block_hash": "660efd9e3e1631417ac2853f8c57a290a03d5a8b2c301b1de24360ca1fabec55",
+              "height": 166,
+              "confirmations": 12
+            },
+            "version": 3,
+            "signed_raw_sha256": "61a876ebe83c9e32ebee9f80b9d404bd9faa5ddc28c69071720d669c4efe620d",
+            "signed_bytes": 280,
+            "inputs": [
+              {
+                "point": "9af897143d03551127c4b57e4b09278356f2d6b4ece8e2658e73f6af40c147eb:0",
+                "value_sat": 100000,
+                "script_hex": "51200f61374bcc77f21440a70c68d6e39536fceada725288d68afec82999a67dea9d"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 99000,
+                "script_hex": "00140573cb77fc9e0bc7870b24fc8f6c6010d614c9a5"
+              },
+              {
+                "vout": 1,
+                "value_sat": 1000,
+                "script_hex": "51201c5ff3dd5fc6beef5f99f504ac235fdf21835e1982ec121e716688314ef9dc32"
+              },
+              {
+                "vout": 2,
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "actual_miner_fee_sat": 0
+          },
+          "same_block_canonical_fee_child": {
+            "txid": "8e277058821384bc856f984d2b59c7983e3c87c74fe9e5245bb2d49af02c9f61",
+            "canonical": {
+              "block_hash": "660efd9e3e1631417ac2853f8c57a290a03d5a8b2c301b1de24360ca1fabec55",
+              "height": 166,
+              "confirmations": 12
+            },
+            "version": 3,
+            "signed_raw_sha256": "e2c63847bc397ec6bd5a95a37880ba665263cd9dfed7ce76453bf03c92f6198d",
+            "signed_bytes": 204,
+            "inputs": [
+              {
+                "point": "f6e9f8d69de69569aa9f55bf93ea7f344702ff29bdadc64216f7eff4fed50841:0",
+                "value_sat": 97719,
+                "script_hex": "51209f7dc84ed251ada6bc516f1e0e3fb27954fdbf76b0c77f73bb83061f6a55bfc9"
+              },
+              {
+                "point": "423c263e4b70fcffa8225de81f6a1344ebcf4355eb9e146deaa0f3b31f32ca4b:2",
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 95438,
+                "script_hex": "5120cd1094e537b9e367ef47adaf6f98063827c5598133133ed4399c06a11925cb27"
+              }
+            ],
+            "actual_miner_fee_sat": 2281
+          }
+        },
+        {
+          "kind": "independent_control",
+          "physical_board_root": "abe8eb42fee67a1a50e295307376a8778aa5b748d344febaabc048049778c985:0",
+          "payout_point": "dac65e0f34573001302005e9bd1cf0131a172d4a9263f8960fc8631efc971168:0",
+          "gross_sat": 100000,
+          "customer_payout_sat": 99000,
+          "customer_charged_fee_sat": 1000,
+          "board": {
+            "txid": "abe8eb42fee67a1a50e295307376a8778aa5b748d344febaabc048049778c985",
+            "canonical": {
+              "block_hash": "0ee983f298aa78c978d3b1e42befcb26dc93afa49bf5caa832921b10bb9e76e1",
+              "height": 106,
+              "confirmations": 72
+            },
+            "version": 2,
+            "signed_raw_sha256": "b49918f075bff22c630a5004d4ea771d99dfd6cb2ec6720d2314a96c4bac8286",
+            "signed_bytes": 234,
+            "inputs": [
+              {
+                "point": "dbe5a0ace2838b8c01b9735c7b14050c34c081d3cb35405225eaab7047b69ebb:1",
+                "value_sat": 200000,
+                "script_hex": "0014f996773bce58d1c1bfd3a62d62bb7e3c8822b444"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 100000,
+                "script_hex": "51202a484690c02881cf8df5f0f03a72583dbde6cb17cdd74748f24200593c730f4b"
+              },
+              {
+                "vout": 1,
+                "value_sat": 99237,
+                "script_hex": "0014a0f1e62ed357567e441ac94b040efea7e0086ccd"
+              }
+            ],
+            "actual_miner_fee_sat": 763
+          },
+          "parent": {
+            "txid": "dac65e0f34573001302005e9bd1cf0131a172d4a9263f8960fc8631efc971168",
+            "canonical": {
+              "block_hash": "16fc0fca775ec2a1f90ef405d8eecf5d0062b517377f79909fe907a7fb84e5c1",
+              "height": 135,
+              "confirmations": 43
+            },
+            "version": 3,
+            "signed_raw_sha256": "67a6496f07fb33bce672ce3ffb8b49836545a0a6292e927a63f4212d2b45eea9",
+            "signed_bytes": 280,
+            "inputs": [
+              {
+                "point": "abe8eb42fee67a1a50e295307376a8778aa5b748d344febaabc048049778c985:0",
+                "value_sat": 100000,
+                "script_hex": "51202a484690c02881cf8df5f0f03a72583dbde6cb17cdd74748f24200593c730f4b"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 99000,
+                "script_hex": "0014a4d5f004e407bff5c0c1eca0bc848fa0c621c945"
+              },
+              {
+                "vout": 1,
+                "value_sat": 1000,
+                "script_hex": "51201c5ff3dd5fc6beef5f99f504ac235fdf21835e1982ec121e716688314ef9dc32"
+              },
+              {
+                "vout": 2,
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              }
+            ],
+            "actual_miner_fee_sat": 0
+          },
+          "same_block_canonical_fee_child": {
+            "txid": "d53d7d1cd52720f07eb5a2477c7c1b0ea79848232cbd96a5bd41853f14e54b6e",
+            "canonical": {
+              "block_hash": "16fc0fca775ec2a1f90ef405d8eecf5d0062b517377f79909fe907a7fb84e5c1",
+              "height": 135,
+              "confirmations": 43
+            },
+            "version": 3,
+            "signed_raw_sha256": "0325cdcc8268cd44680d64bf5f4dfa3044a07fa3bf6eb7ea98edec47e6ddc2e5",
+            "signed_bytes": 204,
+            "inputs": [
+              {
+                "point": "dac65e0f34573001302005e9bd1cf0131a172d4a9263f8960fc8631efc971168:2",
+                "value_sat": 0,
+                "script_hex": "51024e73"
+              },
+              {
+                "point": "1d68a6566cffdc82b34915c132893e34e4e4c59d4b1aac353f79048613ad322e:1",
+                "value_sat": 100000,
+                "script_hex": "51207da9381e6bbf3fc0161f44c6a0099b3823c1d58dcdf4b5d5c2ac5350f40c958e"
+              }
+            ],
+            "outputs": [
+              {
+                "vout": 0,
+                "value_sat": 97719,
+                "script_hex": "5120b222f009b28acffde8de1d41187167195a76f1a3f8fa8c2e50ccd1e444b937a5"
+              }
+            ],
+            "actual_miner_fee_sat": 2281
+          }
+        }
+      ],
+      "seed_recovery_drain": {
+        "txid": "52282c3e97061d29faca40c5e34c177febcdff731c1af523af85637ced222e85",
+        "canonical": {
+          "block_hash": "36834681cd37a106008e419b731c7c8a47f988003cdab207bce640e20b5b06b5",
+          "height": 172,
+          "confirmations": 6
+        },
+        "version": 2,
+        "signed_raw_sha256": "c6c870b358a6aca42690a232f1ed0ba77f20b8098f1680a8a3428546fff96c69",
+        "signed_bytes": 487,
+        "inputs": [
+          {
+            "point": "9af897143d03551127c4b57e4b09278356f2d6b4ece8e2658e73f6af40c147eb:1",
+            "value_sat": 298474,
+            "script_hex": "00147485f3d7e605ae58cb4f028e5cc1df0f180a8e93"
+          },
+          {
+            "point": "66cd75b811c36982fbed494e1ef09f0c6cdc5c71b3e988841722c241f6e2e82a:0",
+            "value_sat": 99000,
+            "script_hex": "00140573cb77fc9e0bc7870b24fc8f6c6010d614c9a5"
+          },
+          {
+            "point": "423c263e4b70fcffa8225de81f6a1344ebcf4355eb9e146deaa0f3b31f32ca4b:0",
+            "value_sat": 99000,
+            "script_hex": "00140573cb77fc9e0bc7870b24fc8f6c6010d614c9a5"
+          }
+        ],
+        "outputs": [
+          {
+            "vout": 0,
+            "value_sat": 495983,
+            "script_hex": "00143916146e7f13ade8cdcc2a3495fa4db19eb35654"
+          }
+        ],
+        "actual_miner_fee_sat": 491
+      },
+      "poll_and_pressure": [
+        {
+          "child_index": 80,
+          "poll_publication_seconds": 24.682620104,
+          "proof_after_confirmations_seconds": 27.984201384,
+          "pressure_writes": 394,
+          "registration_count_min": 1000,
+          "registration_count_max": 1008
+        },
+        {
+          "child_index": 1,
+          "poll_publication_seconds": 7.674280174,
+          "proof_after_confirmations_seconds": 11.058509732,
+          "pressure_writes": 122,
+          "registration_count_min": 1008,
+          "registration_count_max": 1016
+        }
+      ],
+      "graph": {
+        "transactions": 10,
+        "external_inputs": [
+          {
+            "point": "1d68a6566cffdc82b34915c132893e34e4e4c59d4b1aac353f79048613ad322e:1",
+            "value_sat": 100000,
+            "script_hex": "51207da9381e6bbf3fc0161f44c6a0099b3823c1d58dcdf4b5d5c2ac5350f40c958e",
+            "role": "declared_sponsor",
+            "spent_by_graph": true
+          },
+          {
+            "point": "92f0cf113d3545cf4fcdf0f4d5f74be36537ff310539a18041a7bfd49d4d497b:0",
+            "value_sat": 100000,
+            "script_hex": "51207da9381e6bbf3fc0161f44c6a0099b3823c1d58dcdf4b5d5c2ac5350f40c958e",
+            "role": "declared_sponsor",
+            "spent_by_graph": false
+          },
+          {
+            "point": "b29e6a0680130ca2460c988ea93ea0e6496ecf9b7788758b50ac04cf7e901ab5:0",
+            "value_sat": 100000,
+            "script_hex": "51207da9381e6bbf3fc0161f44c6a0099b3823c1d58dcdf4b5d5c2ac5350f40c958e",
+            "role": "declared_sponsor",
+            "spent_by_graph": true
+          },
+          {
+            "point": "d2a8c0249a45ea2a5fef74d3b36560e1d458fb885e58f62e224b559cabe46284:0",
+            "value_sat": 500000,
+            "script_hex": "001449adbcf6d9886c8bcd7ff520a45054eedbd554ee",
+            "role": "customer_funding_boundary",
+            "spent_by_graph": true
+          },
+          {
+            "point": "dbe5a0ace2838b8c01b9735c7b14050c34c081d3cb35405225eaab7047b69ebb:1",
+            "value_sat": 200000,
+            "script_hex": "0014f996773bce58d1c1bfd3a62d62bb7e3c8822b444",
+            "role": "customer_funding_boundary",
+            "spent_by_graph": true
+          }
+        ],
+        "terminal_unspent_outputs": [
+          {
+            "point": "423c263e4b70fcffa8225de81f6a1344ebcf4355eb9e146deaa0f3b31f32ca4b:1",
+            "value_sat": 1000,
+            "script_hex": "51201c5ff3dd5fc6beef5f99f504ac235fdf21835e1982ec121e716688314ef9dc32",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "52282c3e97061d29faca40c5e34c177febcdff731c1af523af85637ced222e85:0",
+            "value_sat": 495983,
+            "script_hex": "00143916146e7f13ade8cdcc2a3495fa4db19eb35654",
+            "classification": "seed_drain_output"
+          },
+          {
+            "point": "66cd75b811c36982fbed494e1ef09f0c6cdc5c71b3e988841722c241f6e2e82a:1",
+            "value_sat": 1000,
+            "script_hex": "51201c5ff3dd5fc6beef5f99f504ac235fdf21835e1982ec121e716688314ef9dc32",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "8e277058821384bc856f984d2b59c7983e3c87c74fe9e5245bb2d49af02c9f61:0",
+            "value_sat": 95438,
+            "script_hex": "5120cd1094e537b9e367ef47adaf6f98063827c5598133133ed4399c06a11925cb27",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "92f0cf113d3545cf4fcdf0f4d5f74be36537ff310539a18041a7bfd49d4d497b:0",
+            "value_sat": 100000,
+            "script_hex": "51207da9381e6bbf3fc0161f44c6a0099b3823c1d58dcdf4b5d5c2ac5350f40c958e",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "abe8eb42fee67a1a50e295307376a8778aa5b748d344febaabc048049778c985:1",
+            "value_sat": 99237,
+            "script_hex": "0014a0f1e62ed357567e441ac94b040efea7e0086ccd",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "d53d7d1cd52720f07eb5a2477c7c1b0ea79848232cbd96a5bd41853f14e54b6e:0",
+            "value_sat": 97719,
+            "script_hex": "5120b222f009b28acffde8de1d41187167195a76f1a3f8fa8c2e50ccd1e444b937a5",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          },
+          {
+            "point": "dac65e0f34573001302005e9bd1cf0131a172d4a9263f8960fc8631efc971168:0",
+            "value_sat": 99000,
+            "script_hex": "0014a4d5f004e407bff5c0c1eca0bc848fa0c621c945",
+            "classification": "control_payout"
+          },
+          {
+            "point": "dac65e0f34573001302005e9bd1cf0131a172d4a9263f8960fc8631efc971168:1",
+            "value_sat": 1000,
+            "script_hex": "51201c5ff3dd5fc6beef5f99f504ac235fdf21835e1982ec121e716688314ef9dc32",
+            "classification": "other_observed_leaf_NO_CUSTODY_INFERENCE"
+          }
+        ],
+        "canonical_duplicate_spends": 0,
+        "canonical_owner_payout_outputs": 2,
+        "canonical_control_payout_outputs": 1,
+        "ordinary_customer_funding_same_scripts_excluded_from_duplicate_payout_count": 0,
+        "unused_confirmed_sponsor_outputs": 1
+      },
+      "bounded_money": {
+        "customer_external_sat": 700000,
+        "fee_sponsor_external_sat": 300000,
+        "source_gross_sat": 300000,
+        "owner_payouts_gross_sat": 198000,
+        "control_payout_sat": 99000,
+        "customer_charged_payout_fees_sat": 3000,
+        "board_miner_fees_sat": 2289,
+        "package_child_miner_fees_sat": 6843,
+        "seed_drain_input_sat": 496474,
+        "seed_drain_output_sat": 495983,
+        "seed_drain_miner_fee_sat": 491,
+        "other_terminal_observed_sat_NO_CUSTODY_INFERENCE": 395394,
+        "all_graph_miner_fees_sat": 9623,
+        "physical_equation": "1000000 = 495983 recovery + 99000 control + 395394 other_observed_leaves + 9623 actual_miner_fees"
+      },
+      "retained_hashes_before_after_equal": true,
+      "retained_input_hashes": {
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case02/test-data/server/expiry_owner_live_funded_1000/live-funded-attribution-proof.json": "6dc1d995c81eb7156656d8211014d0f88dbbb932ed2ef5f3ca05bdc196666632",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case02/test-data/server/expiry_owner_live_funded_1000/live-funded-owner-80-progress.json": "7f1a9301aa99cdfb609dc1bdd497a43f5c6ec83b1b7f1cd328055bb65e167aad",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case02/test-data/server/expiry_owner_live_funded_1000/live-funded-owner-1-progress.json": "2a78097dc4350c639cba2a73806e8ccd0e0a5ebac6aac0642d4650c0c936f50f",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case02/result.json": "63cb507c8a2cb3342135e0e96c838893569b71075420c74748e73c93a400c36d",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case02/test-data/server/expiry_owner_live_funded_1000/bitcoind/regtest/debug.log": "a58c85b25937dc09cd2c25a9f24662a78a136f7627b2f490898bba4f3cba6eaf",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case02/test-data/server/expiry_owner_live_funded_1000/bitcoind/regtest/blocks/xor.dat": "c0134b9ff21e66c48f2592a58090eeae4c8518a88fdb07feb3da0e872319cee0",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch41-live-funded-v7/case02/test-data/server/expiry_owner_live_funded_1000/bitcoind/regtest/blocks/blk00000.dat": "587df5987c196aaedc5bbcb671113c15f5643a36715438d75dea9c782b4db474"
+      }
+    }
+  ],
+  "parser_assumption_correction": "Initial offline decoder attempt assumed every child nonanchor input was an original100k sponsor; actual100cohort reuses confirmed earlierchildchange. Corrected to follow canonical DAG and include all3 original same-script100k sponsors/unusedone. A second rejected assumption was nominal600k customerfunding/900k total: actual board inputs prove700k customer (200kcontrol+500kowner), plus300k original sponsors=1M. Historicalsourceadmission nominalhelper/900k wording is superseded by this actualCore evidence. Initial parser assertions were not native-test failures and no native retry occurred.",
+  "limitations": [
+    "Canonical chain is independently reconstructed from retained finalUpdateTip ancestry/headerhashes and transactionMerkleroots; this is not a new consensus/signature validation or RPC/node recheck. No mempool data were opened, so no pending/dropped/noncanonical payment claims.",
+    "Core proves exact scripts/values/prevouts/unique canonical spends, confirmations/terminalunspentness and bounded1M physicalcut. It cannot infer BDK/watchmanoperatorcustody or truthfulrecipientidentity/privatekeyownership from scripts; native source/assertion/proof provides those semantics. Otherobservedleaves are not globallyoperatorowned or solvent by inference.",
+    "Native freshseed/newDB/liveArk restore, mailboxoutage, registrationauthentication/ownerindexmapping, background/scannercadence and actorabsence are preservedsource/publicproof/clientreceipt provenance, not independently established by blockdata.",
+    "No privatewallet/seed/config/identity/TLS/token/SQL/PG/backup/rawnative logs opened; only finaldebugUpdateTip interpreted. No actors/services/Core/RPC/mining/builds invoked.",
+    "120s poll budget vs proof elapsed afterconfirmations distinguished. No highindex/negative/wrongmailbox/load/fairness/throughputmax/fullML/production credit or originalreceipt/status mutations."
+  ],
+  "source_archive_sha256": "075ff0cc936936574b4e015ad23f496a9b66dd5316340ae5fc86924c0d38d83f",
+  "native_server_sha256": "c0078f00a577b2caa55c2ac09ce26289d7ada00c5872eaf02698da9dd94974bd",
+  "archived_expiry_owner_load_rs_sha256": "a7361097f02126425342e575b95f9c681dc853fd2496197c11cd8fd98dce34a9",
+  "postprocessing": "Only source/archive/native ELF fingerprints added after pure offline decoder completed; original retained inputs/proofs remain unmodified."
+}

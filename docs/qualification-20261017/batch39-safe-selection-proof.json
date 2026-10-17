@@ -1,0 +1,121 @@
+{
+  "state": "PREPARED_NOT_EXECUTED",
+  "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+  "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+  "runtime_metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+  "metadata_path": "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+  "expected_names_in_execution_order": [
+    "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+    "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+    "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+    "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::server",
+    "ark-testing::bark-sdk",
+    "ark-testing::bark-sdk",
+    "ark-testing::bark-sdk"
+  ],
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "actual_bark_version": "bark 0.7.1-dev (828863b21a21a10d3d26ae5f29479be3ee87a233)",
+  "root_authorization": "Exactly four allocated cases ONCE, fresh contexts; parent only launches after frozen controls and fresh gate.",
+  "scope": "Narrow internal refund/current frontier and recipient binding cases. No automatic full ML, universal recovery, defaultdaemon or broadproduction credit.",
+  "commands": [
+    {
+      "sequence": 1,
+      "test_name": "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+      "test_binary": "ark-testing::server",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case01/nextest.toml -- expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case01/test-data"
+      },
+      "cwd": "/home/francis/abandon-ship-fresh-integration"
+    },
+    {
+      "sequence": 2,
+      "test_name": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+      "test_binary": "ark-testing::bark-sdk",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case02/nextest.toml -- lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case02/test-data"
+      },
+      "cwd": "/home/francis/abandon-ship-fresh-integration"
+    },
+    {
+      "sequence": 3,
+      "test_name": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+      "test_binary": "ark-testing::bark-sdk",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case03/nextest.toml -- lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case03/test-data"
+      },
+      "cwd": "/home/francis/abandon-ship-fresh-integration"
+    },
+    {
+      "sequence": 4,
+      "test_name": "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet",
+      "test_binary": "ark-testing::bark-sdk",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case04/nextest.toml -- lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case04/test-data"
+      },
+      "cwd": "/home/francis/abandon-ship-fresh-integration"
+    }
+  ],
+  "source_functions": [
+    {
+      "test_name": "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+      "path": "testing/tests/server/expiry_lightning_terminal.rs",
+      "sha256": "428645d5de580f1fed6311ef394781f5b5e82b3d0e581da98a93267c89be3dac"
+    },
+    {
+      "test_name": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+      "path": "testing/tests/bark_sdk/lightning_receive_binding.rs",
+      "sha256": "1228622a40fd28512440777aeefc134b3afb5d1af40fe542b598e16c3ff34203"
+    },
+    {
+      "test_name": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+      "path": "testing/tests/bark_sdk/lightning_receive_binding.rs",
+      "sha256": "1228622a40fd28512440777aeefc134b3afb5d1af40fe542b598e16c3ff34203"
+    },
+    {
+      "test_name": "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet",
+      "path": "testing/tests/bark_sdk/lightning_receive_binding.rs",
+      "sha256": "1228622a40fd28512440777aeefc134b3afb5d1af40fe542b598e16c3ff34203"
+    }
+  ]
+}

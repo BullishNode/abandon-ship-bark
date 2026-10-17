@@ -1,0 +1,135 @@
+{
+  "kind": "ROOT_ALLOCATED_BATCH40_CONTROLS_PREPARATION_ONLY",
+  "state": "READY_FOR_PARENT_FINAL_HASH_GATE_NOT_LAUNCHED",
+  "private_host_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6",
+  "private_container_directory": "/fresh-cache/testing-track-20261017/batch40-three-existing-v6",
+  "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+  "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+  "runtime_metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+  "source_match_attachment": {
+    "file": "source-intake-three-existing-v6-match.json",
+    "sha256": "a6d124519a6e83581b5267a0b9d2b8764d713e7d60201e68e4dc32747ba2c467"
+  },
+  "expected_selection": [
+    [
+      "ark-testing::bark",
+      "create::bark_address_works_offline"
+    ],
+    [
+      "ark-testing::bark",
+      "onchain::bark_address_changes"
+    ],
+    [
+      "ark-testing::bark",
+      "fees::send_onchain_fee_deducted"
+    ]
+  ],
+  "controls_and_admission_hashes": [
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/selection-proof.json",
+      "sha256": "3ffb20400ac03886974ab21685e99b203b4dd2b265486ab37d875185a2b6099e"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/root-allocation.json",
+      "sha256": "1c65631c9ad5cc362b64e76e44b9a0b676099d94f6a275e0b51d7af4bbe772e0"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/runtime-pins.sha256",
+      "sha256": "e502eb334339d903705ccda4c2c75bc8a4ebe1ea9a9c4ec2a0d2a4f7d653a7e8"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/server-cohort.py",
+      "sha256": "accb50fe8fad16181827ecfffd62ff543561e8588b82b9ace479c95ae08a9bc6"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/preflight-static.py",
+      "sha256": "1abe84f7200fd93e6db05acbc62b370168ede6f4458bea4c40ec35b4f3d22292"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/fresh-listings.py",
+      "sha256": "d9745e106069565411be4d3719abf1853d8c22d4610a8d6028b58429384a74dd"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/preflight.sh",
+      "sha256": "e19051794c17978e6847f61c8d449146d8c3d591c9c161d4b84093a87f32a205"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/run.sh",
+      "sha256": "1639b7b24028a9212ec6bc72f3455fd834a932d393e1a91ea6cdceb04a358e5c"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/case01/nextest.toml",
+      "sha256": "ff2a595e8f093a79d660c7bab0ab24531bbecbafe5e152ed20b903ded0f64194"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/case02/nextest.toml",
+      "sha256": "d8f52d272683745afcf7ea6382970bc2dd70b9f43f0b0f8a4a3e548b68dd4bc5"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/case03/nextest.toml",
+      "sha256": "5979ed1806749b3fa7a1a4e870cdd2fa3aa40111d86ad5a074e17262e667e8d4"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/fresh-listing-admission.json",
+      "sha256": "71046cea486967e242c2ef1d243b7d30196fff35a1d89bf827c9e8ab012ab9c4"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch40-three-existing-v6/resource-admission.json",
+      "sha256": "b169914fab80f723d2b1930b065f257c7f8e549d509e00828bff97b0def88c6c"
+    }
+  ],
+  "runtime_pin_count": 16,
+  "actual_Nix_confirmation": {
+    "IN_NIX_SHELL": "impure",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)",
+    "before_control_code": true
+  },
+  "static_checks": {
+    "python_AST_files": 3,
+    "bash_n_files": 2,
+    "state": "PASS",
+    "runner_guard_precedes_native_spawn": true
+  },
+  "authorized_read_only_preflight": {
+    "exit_code": 0,
+    "native_tests_started": 0,
+    "fresh_exact_singleton_listing_pass": true,
+    "all_selected_unignored": true,
+    "resource": {
+      "state": "RESOURCE_GATE_PASS",
+      "shm_available_bytes": 866910208,
+      "live_owned_postgres": [],
+      "cleanup": false
+    },
+    "all16immutablepins": "PASS via actualsha256sum",
+    "versions": "bark/barkd/captaind/watchmand exact828863, CLN26.06.6; allshelltests reached exit0"
+  },
+  "launch_guard": {
+    "pending_marker": "launch-authorization-pending.json",
+    "pending_marker_sha256": "b6bd6e6644b1229a432626379ae6894a2718ee9334bbadb47f6c9072ac320748",
+    "pending_marker_present": true,
+    "actual_parent_launch_admission_absent": true,
+    "required_parent_record": "parent-launch-admission.json with statePARENT_HASH_GATE_PASSED, exact3/source779 and all13frozencontrol+admissionhashes",
+    "nonlaunchable_template_sha256": "8efd5f0c30d21c6c645834247bb6778c753d4d71c91e78301200574ffd1ad4b2",
+    "parent_only_action": "Independently review/freshgate, writeparent record/removependingmarker, then parentalone invokesrun.sh. Neither preparernorpeer launches."
+  },
+  "policy": {
+    "default_seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "first_failure_stops": true,
+    "fresh_private_contexts": true,
+    "resource_guard_bytes": 12582912,
+    "shared_target_writes": 0,
+    "native_execution": 0,
+    "COVERAGE_STATUS_mutations": 0,
+    "source_or_frozen_prior_control_mutations": 0
+  },
+  "no_run_evidence": {
+    "progress_absent": true,
+    "case_results_absent": true,
+    "test_data_absent": true
+  },
+  "prior_controls_template": "batch39-owner-replan-v6, frozenprior untouched",
+  "scope_limit": "Only3already-integrated nativeCLI adapters; not the12pending ordinary or3SDK policy adaptations. Original FAIL/heldrecords preserved; no executionPASS/fullML credit."
+}

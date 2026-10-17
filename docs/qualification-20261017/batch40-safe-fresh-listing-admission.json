@@ -1,0 +1,1 @@
+{"state": "LISTING_GATE_PASS", "selected_unignored": [["ark-testing::bark", "create::bark_address_works_offline"], ["ark-testing::bark", "onchain::bark_address_changes"], ["ark-testing::bark", "fees::send_onchain_fee_deducted"]], "native_tests_run": 0}

@@ -1,0 +1,5 @@
+PARENT_LAUNCH_HASH_GATE_PASS
+START expiry_owner_load::expiry_owner_live_funded_100_registrations
+PASS expiry_owner_load::expiry_owner_live_funded_100_registrations
+START expiry_owner_load::expiry_owner_live_funded_1000_registrations
+PASS expiry_owner_load::expiry_owner_live_funded_1000_registrations

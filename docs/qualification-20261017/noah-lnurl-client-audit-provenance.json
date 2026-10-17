@@ -1,0 +1,56 @@
+{
+  "scope": "SOURCE/EVIDENCE ONLY; no verifier execution, callback request, payment, build, service or source mutation. No secrets/privateidentity/environment/TLS/token files or identity logs read.",
+  "canonical_commit_snapshot": "828863b21a21a10d3d26ae5f29479be3ee87a233",
+  "upstream_commit": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "immutable_runtime7041_source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "upstream_current_exact_block_equivalence": [
+    {
+      "path": "bark/src/lightning/mod.rs",
+      "selection": "fn verify_lnurlp_invoice(",
+      "upstream_current_equal": true,
+      "selected_block_sha256": "b0e63fc49e130b268b79844449394155d1051de47bee24a2302fce6548924760"
+    },
+    {
+      "path": "bark/src/lightning/receive.rs",
+      "selection": "pub async fn bolt11_invoice_for_address(",
+      "upstream_current_equal": true,
+      "selected_block_sha256": "c99c61505eae475f1c3b50c1ede2b8a70387862fc298f134edaa4b4abb79be2e"
+    },
+    {
+      "path": "server-rpc/protos/bark_server.proto",
+      "selection": "message StartLightningReceiveRequest {",
+      "upstream_current_equal": true,
+      "selected_block_sha256": "4bb35909ff76409baeeed250890fae059fef8ca62067b55a1d1a7b6baea811af"
+    },
+    {
+      "path": "server/src/ln/node_manager.rs",
+      "selection": "pub async fn generate_invoice(",
+      "upstream_current_equal": true,
+      "selected_block_sha256": "070d716a433839d39db31da6faf43c4724b99973c2d9cc3d36aa35d807774bf3"
+    },
+    {
+      "path": "bark-json/src/web.rs",
+      "selection": "pub struct LightningInvoiceForAddressRequest {",
+      "upstream_current_equal": true,
+      "selected_block_sha256": "bd990c428758a7a133e3ccb695205bc2b5e478aef2de9042ba69fac1e637e22f"
+    },
+    {
+      "path": "cln-rpc/protos/hold.proto",
+      "selection": "message InvoiceRequest {",
+      "upstream_current_equal": true,
+      "selected_block_sha256": "09ea82e3e68a3fa2f47c048390ba30d9a1182b85a2103f0ff2459e369a3c8042"
+    }
+  ],
+  "artifact_hashes": {
+    "/home/francis/.cache/abandon-fresh/noah-invoice-proof-artifact-20261017/noah-public-proof": "e97c422b5ee894b3d5486ff139039d46107cc0e723adb9dea5a94ccd501798b1",
+    "/home/francis/.cache/abandon-fresh/noah-invoice-proof-artifact-20261017/manifest.json": "4dc30edeb2fae69e4bc9d423d1e42aad869eefd7723ec03b51c1977d03bacd5b",
+    "/home/francis/.cache/abandon-fresh/noah-invoice-proof-artifact-20261017/source-manifest.json": "fe1618a618b883868cba9bb6eea1d23a582bceaa9d3251c108e7ccea049b02a7",
+    "/home/francis/.cache/abandon-fresh/noah-invoice-proof-source-20261017/src/lib.rs": "b38f60804f3698cc19ab67637cb1c88ab9b6b2aa2be5b87a31b4606eb95dd041",
+    "/home/francis/.cache/abandon-fresh/noah-invoice-proof-source-20261017/src/main.rs": "015ab139ee80e00e8f2b8d1a8b0d341be15da4d40c390c3fbd7ceb729e843165",
+    "/home/francis/.cache/abandon-fresh/noah-invoice-proof-source-20261017/tests/invoice.rs": "1736c891efba57c3113e7ff51c1142a75ab8c6ce26cb410745f8d8cbe9c913cd",
+    "/home/francis/.cache/abandon-fresh/noah-invoice-proof-source-20261017/Cargo.lock": "8b3137c824f6dfbd03d361dee8f0bafabd37d38a1ebe24038fea72f068251a0a"
+  },
+  "provided_artifact_limitation": "Provided directory is frozen standalone verifier build/protocol-test provenance, not an original stock-Noah metadata/callback invoice observation. Actual8e68 failure packet pending parent; do not label source prediction as newly observed callback FAIL.",
+  "noah_fixture_sha256": "4ec45e896ed5e126e1e439542f72a13f9eb45188d78b5794f5a9e81d6d9128be",
+  "noah_fixture_scope": "Direct native provider BOLT11, registered recipient Delivering interruption/reopen/exact mailbox post; no stock Noah/LNURL metadata request or payer validation."
+}

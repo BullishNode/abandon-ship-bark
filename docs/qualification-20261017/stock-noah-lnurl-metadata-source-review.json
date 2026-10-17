@@ -1,0 +1,122 @@
+{
+  "kind": "stock_noah_lnurl_metadata_source_diagnosis",
+  "at": "2026-10-17T21:41:10.318953+00:00",
+  "scope": "READ ONLY SOURCE REVIEW; no callback/payment/new case/build/runtime/source mutation",
+  "stock_noah_commit": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+  "downstream_provider_source_commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+  "current_canonical_HEAD_at_review": "828863b21a21a10d3d26ae5f29479be3ee87a233",
+  "source_files": [
+    {
+      "repository": "/home/francis/noah-fresh-backend-20261016",
+      "commit": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+      "path": "server/src/routes/public_api_v0.rs",
+      "sha256": "a4aec467fff068c603045093a0eabce16accd4fb4f91dbc93fc99f831b865209",
+      "working_file_matches_git": true
+    },
+    {
+      "repository": "/home/francis/noah-fresh-backend-20261016",
+      "commit": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+      "path": "server/src/barkd_client.rs",
+      "sha256": "65d91a1acea67f8eb7022d1a2955876a60fb7e3e89760754a66438a1363d9215",
+      "working_file_matches_git": true
+    },
+    {
+      "repository": "/home/francis/abandon-ship-fresh-integration",
+      "commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "path": "bark-rest/src/api/v1/lightning.rs",
+      "sha256": "d07ddecf437de259922553623707940f19e08bdfb3ba665ab9fb81187dfdd0ff",
+      "working_file_matches_git": true
+    },
+    {
+      "repository": "/home/francis/abandon-ship-fresh-integration",
+      "commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "path": "bark-json/src/web.rs",
+      "sha256": "0ac4055ca499e3f919b41c453a661ea911c729750052eb6585da04ff314456b6",
+      "working_file_matches_git": false
+    },
+    {
+      "repository": "/home/francis/abandon-ship-fresh-integration",
+      "commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "path": "bark/src/lightning/receive.rs",
+      "sha256": "f713f8aa16d07924de8fe358910718af3c745400be272209b54601f73c3c2fb6",
+      "working_file_matches_git": true
+    },
+    {
+      "repository": "/home/francis/abandon-ship-fresh-integration",
+      "commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "path": "bark/src/actions/lightning/receive.rs",
+      "sha256": "da5faf113411e5d2134d76a971979e50a2ab95fb5aeabcdd1969df7c725bbc46",
+      "working_file_matches_git": false
+    },
+    {
+      "repository": "/home/francis/abandon-ship-fresh-integration",
+      "commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "path": "server-rpc/protos/bark_server.proto",
+      "sha256": "4853b54b00fc2ee7059af3c3159313a19da156d12806092f40429700e4044619",
+      "working_file_matches_git": false
+    },
+    {
+      "repository": "/home/francis/abandon-ship-fresh-integration",
+      "commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "path": "server/src/ln/node_manager.rs",
+      "sha256": "a51df0ae016f921871245295057e24007cb2c57b3f16d763615fb9bd268120df",
+      "working_file_matches_git": false
+    },
+    {
+      "repository": "/home/francis/abandon-ship-fresh-integration",
+      "commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "path": "cln-rpc/protos/hold.proto",
+      "sha256": "90edc8c0322b1b512a4d1c48459015d6b50d1b2002c459422416baabbe90e238",
+      "working_file_matches_git": true
+    },
+    {
+      "repository": "/home/francis/abandon-ship-fresh-integration",
+      "commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "path": "bark/src/lightning/mod.rs",
+      "sha256": "cb2731c3850a44694676be02067800999be531eb81a6b547282949f42e297052",
+      "working_file_matches_git": true
+    }
+  ],
+  "stock_binary_declared_in_bootstrap": {
+    "path": "/opt/abandon-fresh/noah/server-8e68ba5c3f03",
+    "sha256": "87b2c181e5ba6e57bdb9ac715d2cb56602f2edc6f621c42ef7c6fd397489d187",
+    "verification_scope": "local bootstrap source expectation, not independently rehashed remote binary"
+  },
+  "source_supported_finding": {
+    "discovery": "public_api_v0.rs385-392 serializes the entire two-entry JSON array text/identifier then text/plain as metadata",
+    "callback": "public_api_v0.rs445-449 passes only the text/plain value as description",
+    "provider_client": "barkd_client.rs115-120 JSON request has only description;163-216 validates returned invoice network/amount but not metadata hash",
+    "rest_sdk": "REST passes body.description into bolt11_invoice_for_address; SDK/action forwards Option<String> unchanged into StartLightningReceiveRequest.description",
+    "ark_rpc": "bark_server.proto399-405 defines only optional string description, not a description hash",
+    "invoice_construction": "7055 node_manager.rs529-546 explicitly maps description to hold InvoiceRequest.Description.Memo; hold.proto47-54 already supports distinct Memo/Hash variants",
+    "conclusion": "The stock forwarded LNURL path cannot ask this integration to bind the invoice h tag to SHA256(exact advertised metadata UTF-8). Its current request is a plain memo, and even hashing that memo would commit to different bytes than the advertised metadata."
+  },
+  "legitimate_proposed_fix": [
+    "Share one exact metadata serialization between stock LNURL discovery and callback; hash the exact UTF-8 metadata string given to the payer, including entry order/escaping/spacing.",
+    "Add an explicit optional 32-byte description-hash path through Noah provider request, REST DTO, SDK and Ark RPC/server, terminating in existing hold Description::Hash. Preserve existing memo-only callers; reject both memo+hash and malformed hash lengths before creating/persisting an invoice. Never reinterpret every existing memo as a hash.",
+    "Before returning callback pr, validate signed BOLT11 network, exact amount, expiry and h equals the advertised metadata digest; retain strict standalone verifier. Sending metadata JSON or digest hex through the existing memo field does not implement this fix.",
+    "Test exact captured discovery metadata/callback invoice binding, negative plain d/wrong h/malformed or ambiguous hash, unchanged memo API, and offline recipient native delivery separately. No tests run by this review."
+  ],
+  "proof_artifacts": [
+    {
+      "path": "/home/francis/.cache/abandon-fresh/noah-invoice-proof-artifact-20261017/manifest.json",
+      "sha256": "4dc30edeb2fae69e4bc9d423d1e42aad869eefd7723ec03b51c1977d03bacd5b"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/noah-invoice-proof-artifact-20261017/source-manifest.json",
+      "sha256": "fe1618a618b883868cba9bb6eea1d23a582bceaa9d3251c108e7ccea049b02a7"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/noah-invoice-proof-artifact-20261017/noah-public-proof",
+      "sha256": "e97c422b5ee894b3d5486ff139039d46107cc0e723adb9dea5a94ccd501798b1"
+    }
+  ],
+  "proof_contract": "helper src/lib.rs30-33 hashes policy.metadata.as_bytes(), requires h, rejects mismatch; helper is not evidence a live callback was attempted",
+  "evidence_limits": [
+    "No public-proof subdirectory exists in the supplied artifact directory at review. Original failing callback/invoice/metadata packet has not been supplied locally. Cannot independently identify the observed invoice tag d versus mismatched h, actual error string, exact discovery bytes, or actual issuing captaind/CLN runtime provenance.",
+    "noah-native-preparation-7055.json explicitly records invoice_or_payment_attempted=false and forwarding disabled at preparation. It is setup/source attribution, not the original failure proof.",
+    "No remote VM read was needed/performed; local stock source is byte-identical to git8e68. Provider source7055 is attributed by preparation; it is not substituted for verification of the original issuing runtime.",
+    "SDK metadata mismatch warning-only behavior and direct-provider qualification_noah fixture do not satisfy the strict stock-LNURL callback gate.",
+    "No relaxed verification, source changes, service changes, reruns, builds, mobile/Android inspection or new case credit."
+  ]
+}

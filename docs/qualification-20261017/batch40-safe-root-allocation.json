@@ -1,0 +1,24 @@
+{
+  "state": "ROOT_ALLOCATED_ONCE",
+  "batch": "batch40-three-existing-v6",
+  "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+  "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+  "expected_selection": [
+    [
+      "ark-testing::bark",
+      "create::bark_address_works_offline"
+    ],
+    [
+      "ark-testing::bark",
+      "onchain::bark_address_changes"
+    ],
+    [
+      "ark-testing::bark",
+      "fees::send_onchain_fee_deducted"
+    ]
+  ],
+  "native_launch_owner": "parent/root only",
+  "preparer_native_execution_authorized": false,
+  "authorized_preparation": "AST/bash/static checks and read-only preflight/fresh exactlisting only",
+  "root_thread_instruction": "ROOT NOW EXPLICITLY ALLOCATES batch40three exactONCE serialv6: same3literalnames. ParentONLYlaunchesafteryourreadycontrols/hashgate."
+}

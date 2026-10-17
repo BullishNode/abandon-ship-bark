@@ -1,0 +1,40 @@
+{
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch40-three-existing-v6",
+  "expected_selection": [
+    [
+      "ark-testing::bark",
+      "create::bark_address_works_offline"
+    ],
+    [
+      "ark-testing::bark",
+      "onchain::bark_address_changes"
+    ],
+    [
+      "ark-testing::bark",
+      "fees::send_onchain_fee_deducted"
+    ]
+  ],
+  "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+  "sha256": {
+    "selection-proof.json": "3ffb20400ac03886974ab21685e99b203b4dd2b265486ab37d875185a2b6099e",
+    "root-allocation.json": "1c65631c9ad5cc362b64e76e44b9a0b676099d94f6a275e0b51d7af4bbe772e0",
+    "runtime-pins.sha256": "e502eb334339d903705ccda4c2c75bc8a4ebe1ea9a9c4ec2a0d2a4f7d653a7e8",
+    "server-cohort.py": "accb50fe8fad16181827ecfffd62ff543561e8588b82b9ace479c95ae08a9bc6",
+    "preflight-static.py": "1abe84f7200fd93e6db05acbc62b370168ede6f4458bea4c40ec35b4f3d22292",
+    "fresh-listings.py": "d9745e106069565411be4d3719abf1853d8c22d4610a8d6028b58429384a74dd",
+    "preflight.sh": "e19051794c17978e6847f61c8d449146d8c3d591c9c161d4b84093a87f32a205",
+    "run.sh": "1639b7b24028a9212ec6bc72f3455fd834a932d393e1a91ea6cdceb04a358e5c",
+    "case01/nextest.toml": "ff2a595e8f093a79d660c7bab0ab24531bbecbafe5e152ed20b903ded0f64194",
+    "case02/nextest.toml": "d8f52d272683745afcf7ea6382970bc2dd70b9f43f0b0f8a4a3e548b68dd4bc5",
+    "case03/nextest.toml": "5979ed1806749b3fa7a1a4e870cdd2fa3aa40111d86ad5a074e17262e667e8d4",
+    "fresh-listing-admission.json": "71046cea486967e242c2ef1d243b7d30196fff35a1d89bf827c9e8ab012ab9c4",
+    "resource-admission.json": "b169914fab80f723d2b1930b065f257c7f8e549d509e00828bff97b0def88c6c"
+  },
+  "admitted_at": "2026-10-17T22:03:44.378614+00:00",
+  "root_authorization_thread": "01a14133-d4bf-7d72-bd69-d0f9762d007f",
+  "parent_preflight_session": 77623,
+  "parent_preflight_exit": 0,
+  "parent_preflight_log_sha256": "a34eac2133337104925cff5ddcf4aff6ae119cdc66b628e9cf929e29ab05b368",
+  "independent_guard_review_sha256": "8a1a216f610206ace1278cb5430f583cd1ca96e59dce8f87c40e7181044ddf44"
+}

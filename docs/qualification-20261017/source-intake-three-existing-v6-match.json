@@ -1,0 +1,60 @@
+{
+  "kind": "SOURCE_MATCH_ATTACHMENT_THREE_EXISTING_V6_CLI_ADAPTATIONS",
+  "scope": "Read-only immutable source/compiled artifact provenance only; no new nextest listing, metadata generation, test invocation, Cargo or mutation.",
+  "canonical_commit": "828863b21a21a10d3d26ae5f29479be3ee87a233",
+  "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+  "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+  "source_archive_sha256": "72beca79fa2d31113c0f1070d90ec7f2461dbd63e8b05664a622edbc0326383d",
+  "source_archive_hash_freshly_verified_in": "batch39-client-postflight.json SHA7a4b27de0a395b766c87b1ce1910f87565c48ca36fc0a3f57d8983343bec7b69",
+  "native_binary": {
+    "name": "ark-testing::bark",
+    "path": "/fresh-cache/runtime-owner-replan-v6-20261017/native-bark",
+    "sha256": "577f6db2f7b196aeac182116249c33a861c6b954866482392a2c1565d03fee27",
+    "existing_listing_sha256": "6e18744526e7d42450bb5edf004894f8d1c2502a1397cdc37fb77df6bd935f78",
+    "existing_runtime_metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+    "provenance_limit": "ELF linked to frozen source by admitted build manifest/source verification and runtime metadata; this read does not decompile/prove source equivalence of machinecode."
+  },
+  "targets": [
+    {
+      "literal_name": "create::bark_address_works_offline",
+      "source_file": "testing/tests/bark/create.rs",
+      "exact_target_body_sha256": "0abf12c02392b1e95fc5ff954e6a331654fae518aa2449c929d5610c3edd9422",
+      "archived_canonical_owned_target_bytes_equal": true,
+      "archived_file_sha256": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+      "canonical_file_sha256": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+      "owned_file_sha256": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+      "archived_canonical_fullfile_equal": true,
+      "existing_batch39_fresh_listing_contains_compiled_unignored_literal": true,
+      "historical_listing_filter_status": "mismatch",
+      "new_execution_status": "NOT RUN"
+    },
+    {
+      "literal_name": "onchain::bark_address_changes",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "exact_target_body_sha256": "03c6106d4b35637ff29d35c2347bcf9f5001cc658c33566480879515ce7ed8b8",
+      "archived_canonical_owned_target_bytes_equal": true,
+      "archived_file_sha256": "bf323688aab8746678bbf73f886ba4cbfaf13f9c3083c5dfd0e60d61b1d9c015",
+      "canonical_file_sha256": "bf323688aab8746678bbf73f886ba4cbfaf13f9c3083c5dfd0e60d61b1d9c015",
+      "owned_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "archived_canonical_fullfile_equal": true,
+      "existing_batch39_fresh_listing_contains_compiled_unignored_literal": true,
+      "historical_listing_filter_status": "mismatch",
+      "new_execution_status": "NOT RUN"
+    },
+    {
+      "literal_name": "fees::send_onchain_fee_deducted",
+      "source_file": "testing/tests/bark/fees.rs",
+      "exact_target_body_sha256": "94e4213a886ccfae696c445bf01b118465fab5d39b56ebea09e0f26e760a4154",
+      "archived_canonical_owned_target_bytes_equal": true,
+      "archived_file_sha256": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+      "canonical_file_sha256": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+      "owned_file_sha256": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+      "archived_canonical_fullfile_equal": true,
+      "existing_batch39_fresh_listing_contains_compiled_unignored_literal": true,
+      "historical_listing_filter_status": "mismatch",
+      "new_execution_status": "NOT RUN"
+    }
+  ],
+  "disposition": "All three exact adapted targets already present in canonical828863 and v6 source779. Existing compiled native-bark/listing contains the unignored names. Original historical FAIL/held records remain; these adapted three cases have NOT RUN in this allocation. Skip reapplying original patches; a future ONCE exact-three allocation requires fresh parent admission.",
+  "other_queue_scope": "Remaining12 ordinary targets, expired-Lightning adaptation and watchman pair remain separate source-only intake; no build/runtime status inferred for them."
+}

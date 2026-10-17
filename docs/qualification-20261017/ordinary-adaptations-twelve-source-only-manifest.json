@@ -1,0 +1,62 @@
+{
+  "created_at": "2026-10-17T22:06:03.628842+00:00",
+  "state": "SOURCE ONLY; NOT INTEGRATED/COMPILED/RUN; no new execution credit",
+  "base_commit": "828863b21a21a10d3d26ae5f29479be3ee87a233",
+  "patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ordinary-adaptations-twelve-source-only.patch",
+  "patch_sha256": "3aeb8840d040a67cee0bc423a3ab80953df3b795229d864e8be2fd6bee1ea165",
+  "files": [
+    {
+      "path": "testing/tests/bark/onchain.rs",
+      "published_base_sha256": "bf323688aab8746678bbf73f886ba4cbfaf13f9c3083c5dfd0e60d61b1d9c015",
+      "reviewed_result_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d"
+    },
+    {
+      "path": "testing/tests/bark/movement.rs",
+      "published_base_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827",
+      "reviewed_result_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06"
+    },
+    {
+      "path": "testing/tests/bark/offboard.rs",
+      "published_base_sha256": "3b332ccfa1db013e11abce7ea87043742786dae1f686868939df38974a17ee35",
+      "reviewed_result_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22"
+    },
+    {
+      "path": "testing/tests/barkd/boards.rs",
+      "published_base_sha256": "9daaf65eed620a073f5ef16bff5315968c5334156a910f92730f3bc934482d58",
+      "reviewed_result_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e"
+    },
+    {
+      "path": "testing/tests/barkd/recovery.rs",
+      "published_base_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464",
+      "reviewed_result_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296"
+    }
+  ],
+  "target_count": 12,
+  "CLI_targets": [
+    "onchain::list_utxos",
+    "onchain::onchain_drain",
+    "movement::board_board",
+    "movement::movement_offboard",
+    "movement::movement_send_onchain",
+    "offboard::bark_send_onchain",
+    "offboard::bark_rejects_offboarding_dust_amount"
+  ],
+  "barkd_targets": [
+    "boards::board_all_barkd",
+    "recovery::recovered_wallet_finds_boarded_vtxo",
+    "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "recovery::recovered_wallet_finds_round_vtxo",
+    "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+  ],
+  "review_basis": "All target patches previously source/peer-reviewed; client intakec9048094 verifies12patchcontexts/in-memorycombinedfiles. This is an aggregation of identical frozen source, no new code.",
+  "canonical_git_apply_check": "PASS read-only; no application",
+  "already_integrated_and_excluded": [
+    "create::bark_address_works_offline",
+    "onchain::bark_address_changes",
+    "fees::send_onchain_fee_deducted"
+  ],
+  "source_review": "source-only-build-intake-client.json",
+  "source_review_sha256": "c90480941224883eb260566565240343131b736c2751c3cd8cffe98d5a72d21c",
+  "build_note": "Coordinator must integrate deliberately and capture exact new binaries; barkd integration test binary also required, not just barkd product. No private target/build by this track.",
+  "preservation": "All original failures/heldcases and frozen sources unchanged; policy-sensitive SDK/newservermoney tests excluded; no fullML/production promotion."
+}

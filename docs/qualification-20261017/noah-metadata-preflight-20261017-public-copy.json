@@ -1,0 +1,37 @@
+{
+  "observed_at": "2026-10-17T15:34:43.004829+00:00",
+  "kind": "stock_noah_lnurl_metadata_preflight",
+  "scope": "Read-only metadata and CLN liquidity observation; no callback invoice, payment, recipient claim or delivery demonstrated.",
+  "noah_source_reported_by_coordinator": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+  "actual_backend_elf_sha256": "87b2c181e5ba6e57bdb9ac715d2cb56602f2edc6f621c42ef7c6fd397489d187",
+  "origin": "https://noah-fresh-signet.test",
+  "origin_scope": "Controlled private DNS and private CA; HTTPS verification enabled, no public-DNS claim.",
+  "request_path": "/.well-known/lnurlp/offline-recipient",
+  "ark_negotiation_requested": false,
+  "metadata_response_sha256": "2d3719154023a8bdf5c87dd2de9267c35f0d7eea698e8c002500f42ec97c6d24",
+  "exact_metadata_utf8_sha256": "947f229a83bc7b8748c4dc770969be349e384ea6cef7c34648c5130802462f8f",
+  "metadata": "[[\"text/identifier\",\"offline-recipient@noah-fresh-signet.test\"],[\"text/plain\",\"Paying satoshis to offline-recipient@noah-fresh-signet.test\"]]",
+  "amount_bounds_msat": {
+    "minimum": 1000,
+    "maximum": 1000000000
+  },
+  "next_proposed_callback_amount_msat": 5000000,
+  "invoice_requested": false,
+  "payment_attempted": false,
+  "CLN": {
+    "network": "public Signet",
+    "height": 326769,
+    "both_peer_channels": "CHANNELD_NORMAL",
+    "channel_total_sat": 200000,
+    "external_spendable_sat": 98000,
+    "internal_receivable_sat": 98000,
+    "scope": "Infrastructure only; no native Bark or Noah payment credit."
+  },
+  "next_dependencies": [
+    "Coordinator-admitted separate Lightning Ark profile and actual pool issuance.",
+    "New native authenticated provider/recipient identities; preserve old long-profile wallets.",
+    "Normal Noah API recipient binding and explicit provider listener handoff.",
+    "Exactly one real callback invoice; unchanged independent description-hash verifier."
+  ],
+  "case_verdict": "INCOMPLETE"
+}

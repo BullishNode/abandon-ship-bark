@@ -1,0 +1,112 @@
+{
+  "result": "PASS",
+  "passed": 4,
+  "failed": 0,
+  "cases": [
+    {
+      "index": 1,
+      "name": "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case01/nextest.toml -- expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender --exact"
+      ],
+      "started_at": "2026-10-17T21:47:16.670751+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 97341,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "2dfc746e-61f8-40b1-87bc-08d0b703dc14",
+      "test_seconds": 42.519,
+      "wall_seconds": 43.06,
+      "ended_at": "2026-10-17T21:47:59.731007+00:00"
+    },
+    {
+      "index": 2,
+      "name": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case02/nextest.toml -- lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent --exact"
+      ],
+      "started_at": "2026-10-17T21:47:59.735414+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 99977,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "b610c1d3-dec8-4495-9745-2612c54252b2",
+      "test_seconds": 26.331,
+      "wall_seconds": 27.047,
+      "ended_at": "2026-10-17T21:48:26.782841+00:00"
+    },
+    {
+      "index": 3,
+      "name": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case03/nextest.toml -- lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient --exact"
+      ],
+      "started_at": "2026-10-17T21:48:26.786211+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 100934,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "b5ae3cf9-4ee4-4869-848d-1773dd64844e",
+      "test_seconds": 27.849,
+      "wall_seconds": 28.542,
+      "ended_at": "2026-10-17T21:48:55.328921+00:00"
+    },
+    {
+      "index": 4,
+      "name": "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch39-owner-replan-v6",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch39-owner-replan-v6/case04/nextest.toml -- lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet --exact"
+      ],
+      "started_at": "2026-10-17T21:48:55.331436+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 101810,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "d4edfcfe-ca7f-46b1-aade-963126f8b31b",
+      "test_seconds": 60.151,
+      "wall_seconds": 61.09,
+      "ended_at": "2026-10-17T21:49:56.421393+00:00"
+    }
+  ],
+  "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+  "metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+  "runtime_scope": "Four allocated current-frontier/binding native cases; no automatic ML qualification",
+  "resource_cleanup": "NONE; all raw evidence retained",
+  "retries": 0
+}

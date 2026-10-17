@@ -1,0 +1,41 @@
+{
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch41-live-funded-v7",
+  "expected_selection": [
+    [
+      "ark-testing::server",
+      "expiry_owner_load::expiry_owner_live_funded_100_registrations"
+    ],
+    [
+      "ark-testing::server",
+      "expiry_owner_load::expiry_owner_live_funded_1000_registrations"
+    ]
+  ],
+  "source_manifest_sha256": "d05d3d5c7a24584fc9893f6601d9c0b243784f9bb16602feca699b4e532c3db0",
+  "sha256": {
+    "selection-proof.json": "1754e3fa03e85b32114a7b37fcb13399af2d87f560b6e2df9063407ca5c47c09",
+    "root-allocation.json": "95bc5a2214045ece8d736d0784a369f9b6d27e8784fbba5b762fd5fa8919c0e5",
+    "runtime-pins.sha256": "a834e6e29348e21879b457ba81496ba88112b98dfbc4698ef68666d3ff7bdb9b",
+    "server-cohort.py": "8b8eddf4426a67200134b9f6b94566dae3a5464f7901e2effdfae639596db22a",
+    "preflight-static.py": "d756db6ea9ea5225239f0e8748927c23ec7cd5a8a63b4e79fae66d908f3c78d0",
+    "fresh-listings.py": "a305c22e36bce5ea2d53f58bcce7af0a31c42b5b3fc6ff76c0fc720fd2a68d49",
+    "preflight.sh": "5fa545aa0a5fd1e0c1622a55d6d831898c96be2cb04bede22f20e6f1fc4766e0",
+    "run.sh": "930f8d3d8203b9a61cb94bf6064969ca3b691a57807c830bb08e8e9d238f03aa",
+    "case01/nextest.toml": "d4776824149e320bc10d3b86ba5b2c3c095d753dd227af8f9624afcf6a0caecf",
+    "case02/nextest.toml": "e1d0b1b8618378fa896b3e63083a9518d463dc8fe426002c6a3b3246b5c04418",
+    "fresh-listing-admission.json": "deaa52d3500059c625862261b1a9de528e2c27f6722e5b25f3ffbc3272b61250",
+    "resource-admission.json": "aa434cf819048199836f0109f72ee8d249232fab658576ff213901857ee7970e"
+  },
+  "admitted_at": "2026-10-17T22:18:52.829749+00:00",
+  "root_authorization_thread": "01a14133-d4bf-7d72-bd69-d0f9762d007f",
+  "parent_preflight_session": 57015,
+  "parent_preflight_exit": 0,
+  "parent_preflight_log_sha256": "66942fa55d24ed5f2e32f6b6956a8bc386c29880bf2193118a55f7bf66c0deff",
+  "independent_guard_review_sha256": "9e1f16bbb19ac2e68976bc470e4c48116927ee189955148bde00fef340ff92a2",
+  "independent_source_review_sha256": "915480a4eee30951ee734b869efe761e0170d00206ed48b81aeecd77feffb86a",
+  "source_proof_sha256": "2779a376fcc6d8c264e9fbac901eb43aff02d542317dc4f2a26e0d0034c304a0",
+  "profile": "fallback-scale",
+  "outer_timeout_seconds": 1740,
+  "unchanged_lookup_poll_budget_seconds_per_leg": 120,
+  "global_concurrent_native_case_limit": 2
+}

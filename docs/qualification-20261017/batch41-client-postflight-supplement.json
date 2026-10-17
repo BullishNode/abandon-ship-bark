@@ -1,0 +1,28 @@
+{
+  "kind": "BATCH41_ADDITIVE_CLIENT_POSTFLIGHT_SUPPLEMENT",
+  "at": "2026-10-17T22:24:32.644788+00:00",
+  "initial_immutable_receipt": "batch41-live-funded-v7-receipt.json",
+  "initial_receipt_sha256": "0909c1cc68919394d7af238da42900946b2519093868332dc1d17fe8db3c8428",
+  "initial_pending_state_preserved": true,
+  "review_file": "batch41-client-postflight.json",
+  "review_sha256": "ab64656e0889f0303aa61aab01ee17705a550190c830b124eb360c80e333880a",
+  "independent_client_postflight": "COMPLETE_PASS",
+  "independent_Core_financial_audit": "PENDING",
+  "verified_scope": {
+    "exact_ignored_singletons": 2,
+    "profile": "fallback-scale",
+    "outer_seconds": 1740,
+    "post_sync_poll_seconds_per_leg": 120,
+    "retries": 0,
+    "all13_actual_container_pins_unchanged": true,
+    "all10_static_controls_unchanged": true,
+    "all12_parent_admission_hashes_unchanged": true,
+    "owned_group_session_members_remaining": 0,
+    "batch_scoped_processes_remaining": 0,
+    "shm_available_bytes": 860446720,
+    "public_proof_copies_match": true
+  },
+  "execution_count_increment": 0,
+  "coverage_or_STATUS_mutations": 0,
+  "limitation": "Client postflight validates exact execution/provenance/resource/public-proof metadata only; it does not independently decode Core finances. Retained-Core audit remains pending. No new full ML, funded-user-throughput, fairness, global custody/subsidy or production qualification."
+}

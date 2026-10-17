@@ -1,0 +1,86 @@
+{
+  "kind": "batch41_source_admission_review",
+  "at": "2026-10-17T22:14:42.149502+00:00",
+  "status": "SOURCE/EVIDENCE ADMISSION ACK; no concrete source blocker for bounded first qualification; no execution credit",
+  "scope": "Read-only frozen patch/peer/archived source/provenance and filehashes; no Cargo/build/test/listing/actors/services/private logs/financialDB reads or mutations. Client prepares controls, parent alone gates/launches.",
+  "candidate": {
+    "captured_HEAD": "759f12c1f0c7586c597557f422374415f330b9f8",
+    "dirty_source_manifest_sha256": "d05d3d5c7a24584fc9893f6601d9c0b243784f9bb16602feca699b4e532c3db0",
+    "bundle_manifest_sha256": "04b05a11e01b3b0af46e812cf3cb94d053d2a3bd79d4c7b25ac234948fa3eb33",
+    "source_archive_sha256": "075ff0cc936936574b4e015ad23f496a9b66dd5316340ae5fc86924c0d38d83f",
+    "runtime_metadata_sha256": "748a2f9fc21d008ad3a7bdc166363c04b524461b3339d084c2b9481a37a08b1d",
+    "native_server_sha256": "c0078f00a577b2caa55c2ac09ce26289d7ada00c5872eaf02698da9dd94974bd",
+    "all7_manifest_product_ELF_hashes_independently_verified": true,
+    "provenance_limit": "Source checks/builds are declared in immutable manifest; none rerun by this review. Explicit product759label is not a substitute for dirtyd05 archive. Earlier v6 refund FAILs remain separate; PRE-obligation WIP excluded."
+  },
+  "peer_binding": {
+    "patch_path": "/tmp/fresh-owner-live-funded-20261017-v1.patch",
+    "patch_sha256": "55d5aab5f34f8100f536212df933e51e8d4ce8a910d0fefc6d13a5b1c436144a",
+    "source_manifest_path": "/tmp/fresh-owner-live-funded-20261017-v1.json",
+    "source_manifest_sha256": "ae608c9e96f35a51010d36cab870516b9e9bdf3e029f0972c6e0c68851a894da",
+    "peer_path": "/home/francis/abandon-ship-fresh-pre-obligation/reviews/owner-live-funded-20261017-v1.md",
+    "peer_sha256": "b567058ebf5bcddf24333e84f7e23869732e5098acc202b5060a0d40a810334a",
+    "newfile_payload_bytes": 18422,
+    "archived_source_path": "testing/tests/server/expiry_owner_load.rs",
+    "archived_source_sha256": "a7361097f02126425342e575b95f9c681dc853fd2496197c11cd8fd98dce34a9",
+    "payload_equals_archived_source": true,
+    "module_declared_in_archive": true,
+    "historical_peer_status": "SOURCE ONLY/uncompiled/unrun at original peer review, superseded for buildprovenance by v7 capture only; no native PASS implied"
+  },
+  "exact_cases": [
+    "expiry_owner_load::expiry_owner_live_funded_100_registrations",
+    "expiry_owner_load::expiry_owner_live_funded_1000_registrations"
+  ],
+  "required_admission": {
+    "binary": "ark-testing::server",
+    "ignored_selection": "--run-ignored only; exact one literal per invocation",
+    "profile": "fallback-scale",
+    "outer_timeout_seconds": 1740,
+    "outer_profile_source": ".config/nextest.toml8-9 period60s terminate-after29",
+    "per_lookup_leg_seconds": 120,
+    "inner_budget_unchanged": true,
+    "retries": 0,
+    "serial": 1,
+    "fresh_private_contexts": true,
+    "parent_controls_required": "Fresh exactignored-singleton listing + primarypins/actualversions/resource/nativePG guards before launch. No default180 claim; no automatic retries or budgetextensions."
+  },
+  "dataset_and_native_events": {
+    "source_lines": "205-279",
+    "initial_registry_counts": [
+      100,
+      1000
+    ],
+    "registry_composition": "2 genuine funded-account registrations (control+owner), plus N-2 unfunded signed syntheticrecords inserted by actual SetFallback RPC; count asserted before lookup.",
+    "funded_accounts": 2,
+    "actual_native_board_roots": 3,
+    "boards": "Control genuine boarded(100k) helper uses netavailablebalance; two ownerboards use publicapp prepare/sign100kPSBT->board_psbt->Coreconfirm->actualFullVTXO funding/signaturevalidation, first storedchild80 then genuinelylaterunusedchild1. Sourceamount-derived payout expected, no inventedfinancialrows.",
+    "funding": "Owner native500k, controlnominal100k helperfunding; three distinct100k watchfundingtransactions mined2blocks before payout. Not Nfundedusers; no full900k custody/conservation claim.",
+    "registration_pressure": "Each leg cycles8 signedrecords, adding atmost8 newrecords and otherwise normalcanonical retries. Atmost16 additionalregistryrecords total; <=2048writes perleg; sleep50ms between polls. >=1 pressureRPC required. Actual achieved counts/latencies are runtime receipts, not inferred here.",
+    "background": "Captaind/watchmand continuously available/no explicitstop or manualscanner/queue calls. Sourceforceschunk32 andworkers2, lifetime24 vs defaultchunk10000/lifetime432 harness.",
+    "mailbox_fault": "Only genuine recovery-post transport replies Unavailable throughownedproxy, >=2calls. Board/cosign/register normal; read-only queries assert eachtargetmailboxrows0.",
+    "wallet_presence": "Controlwallet dropped before targetsearch. Owner manualsync/idle but stillheld through firstleg, returns once to make lateboard, then dropped before secondleg. No bothoriginalwalletsabsentthroughout claim.",
+    "healthy_control": "Separately funded earlier-expiry control must have matching sourceamount\u22121000 output Core6 by endoffirstleg. No independent latencybudget/sameexpiry isolation/general fairness proof."
+  },
+  "oracles_if_PASS": [
+    "Lines76-95: actualownedkeys/fullysignedboardpaths validate against realfunding; genuine child80 then child1 key/source IDs and laterexpiry distinct; child1 ownercache absent before lateboard.",
+    "Lines103-158: after actualexpirymining+both syncwaits, actualbackgroundpublication must complete within120s with mailboxrows0 and authenticatedowner mailbox+exactindex80/1; no scanner/queue helper invoked. Partialprogress written before timeout panic.",
+    "Lines159-197: storedparent/selectedchild bytes exist in Core; parentV3<=10kvB, exactonephysicalboardrootinput, one rightfuldestination value=sourceamount\u22121000, actualprevout-derivedparentfee0. Child actuallyspendsparentP2A, actualprevoutfee>0 equals storedfee; both actualtx confirmations>=6 and sameblockhash; customeroutput exactscript/value unspent6+.",
+    "Lines251-264: independently absentcontrol has actualparent/outputsourcevalue\u22121000 unspentCore6.",
+    "Lines280-311: freshseed/newDB re-registers canonicalbinding via liveArk, syncsonchain, nativeapp signsdrainincluding eachactualtargetpayout input exactlyonce; allactualdrainprevoutvalues, onechosenoutput, measuredpositivefee, outputCore6 and bothpayoutpoints spent."
+  ],
+  "measurement_and_financial_limits": [
+    "120s starts AFTER expirymining and bothsyncwaits; it bounds poll/publication underpressure, not boardsetup/registration/mining/sync endtoend. Per-leg progress.seconds records polling elapsed. Phases.lookup_and_publication_seconds is appended after Core6/checks, so includes confirmation/check overhead; do not label it purelookupduration.",
+    "Lateststored attemptedchild is selected, not dynamically selecting canonicalreplacement. Mandatory actualchild6/sameblock check prevents staleattempt falsePASS; replacement can cause preservedfixtureFAIL. No assumedchildchange shape.",
+    "Oneoutput in eachparent and exactroot enforced, but no graph-wideduplicate/otherpayee scan, fullentitlement/owner/payingledgerfields, canonicalheader/blocktx scan, watchwalletoperatorchangeownership, fullparent/childremainingleaf/balances conservedcut. Actualchildminerfee is correct for selectedconfirmedchild, not global operator subsidy/solvency.",
+    "Seeddrain checks eachpayout input exactlyonce and actualinputfee/output; doesnot compare complete predrainUTXOmap/inputset, explicitlyassert BIP84script+witnessshape, or reconcile wholeinitialcustomer/control/operatorfunding and bothboardfees. Drain can include legitimate ordinaryfundingchange; fee is not payout-only cost.",
+    "Freshseed restore depends on liveArk registry/canonicalrecord and endpoint. FallbackRecord randomizedsignatures do not break equality here because registration adopts authenticated canonicalserverrecord; this is not Arkoffline/serverbackup/disaster recovery.",
+    "Backgroundalive source means nofixturestop/manualmaintenance; this is not processuptime/health/shutdown/crash/restart/backup qualification. Harness teardown ownership and postflight actors/resources still need parent/client gate.",
+    "No sustainednew arrivals, arbitrarypending-keyfanout, exhaustive/highindex/negativeowner bound, wrongmailbox leg, CPU/RAM/DB/disk costs, maxTPS or productionheadroom measured. Extra unfundedrecords/repeatedputs are not100/1000fundedcustomers. Runtimeactualfailure retains120s budget/progress; no rerun authorization."
+  ],
+  "security_and_evidence_limits": [
+    "Authenticated genuineFallbackRecord signatures/standard script and publicSetFallback remain intact; syntheticdecoy keys are deterministic qualificationdata and deliberately unfunded, never productioncustody.",
+    "Originalowner mnemonic is read only insidefixture for freshseedrestore, not serialized into progress/proof. Reviewer opened no mnemonic/identity/config/TLS/token/privateDB/rawlogs. Publicevidence must keeponlysanitizedproof/pins/latencies/IDs, never seeds or wallet/serviceclusters.",
+    "No financial SQL fabricated; SQL onlyreads scanner/registry/allocations andnativeRPC drives financialevents. Proxyoutage is explicitlyowned andtransport-only."
+  ],
+  "credit": "AdmissionACK only. No PASS/results/counts/fullML/productiongate/maximumthroughput/default180 credit. Preserve historical peer and alloriginalFAIL receipts; root decides eventual intake."
+}

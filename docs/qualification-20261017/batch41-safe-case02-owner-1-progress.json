@@ -1,0 +1,992 @@
+{
+  "cursor_samples": [
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1008,
+      "seconds": 0.009049679
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1009,
+      "seconds": 0.079590768
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1010,
+      "seconds": 0.151568895
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1011,
+      "seconds": 0.217347098
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1012,
+      "seconds": 0.281827435
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1013,
+      "seconds": 0.353384156
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1014,
+      "seconds": 0.423144378
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1015,
+      "seconds": 0.489782391
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 0.5556746
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 0.622003987
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 0.684442345
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 0.747997238
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 0.810645665
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 0.875254238
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 0.94006108
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.005689167
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.070038694
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.135711575
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.198995983
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.258597221
+    },
+    {
+      "cursors": 1016,
+      "maximum": 0,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.3183610159999999
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.377721802
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.4418178
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.5049120889999998
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.570652465
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.6344561739999999
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.6957322719999999
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.764187725
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.828604785
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.890210466
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 1.95567944
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.018053158
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.079877121
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.1439503699999998
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.207976703
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.27160957
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.331052905
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.390899617
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.452351146
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.512704275
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.574056939
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.642717772
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.702914028
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.762215607
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.819808183
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.8836353040000002
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 2.943558788
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.015354896
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.078354067
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.137173157
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.200515341
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.261623949
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.328911013
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.398090215
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.461363982
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.51887048
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.577625439
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.6453099890000003
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.707629425
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.7696583
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.851662258
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.90913384
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 3.970092369
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.031752589
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.095428198
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.15387911
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.21425491
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.276617859
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.336414124
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.394906216
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.453160289
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.513786873
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.570511337
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.628549922
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.690140632
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.751096427
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.812724986
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.876259564
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 4.939026303
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.003000379
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.064693651
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.128184323
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.190645009
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.260060813
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.322023325
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.383074193
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.4434369910000004
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.510243046
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.5696073980000005
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.627039685
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.689488428
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.750719822
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.814756133
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.8768116599999995
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 5.946090819
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 6.00976286
+    },
+    {
+      "cursors": 1016,
+      "maximum": 32,
+      "minimum": 0,
+      "registrations": 1016,
+      "seconds": 6.071091685
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.145003935
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.211339837
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.276571384
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.34387958
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.40802916
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.470195787
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.5302606
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.594984804
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.658961563
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.719057039
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.778241404
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.837817974
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.89952624
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 6.9579822270000005
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.019902952
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.079745932
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.140507921
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.200050216
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.260847151
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.321168464
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.380177536
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.441311326
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.500611639
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.557612061
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.615982367
+    },
+    {
+      "cursors": 0,
+      "maximum": null,
+      "minimum": null,
+      "registrations": 1016,
+      "seconds": 7.674188463
+    }
+  ],
+  "published": true,
+  "registration_rpc_seconds": [
+    0.013997765,
+    0.017760538,
+    0.012666948,
+    0.011291039,
+    0.015883257,
+    0.014021062,
+    0.011604805,
+    0.010070071,
+    0.007313348,
+    0.005118556,
+    0.007271707,
+    0.005425158,
+    0.008613462,
+    0.006583363,
+    0.007949434,
+    0.008507412,
+    0.004966595,
+    0.008931827,
+    0.003928795,
+    0.004743424,
+    0.00440117,
+    0.010626646,
+    0.006915991,
+    0.009337255,
+    0.007089765,
+    0.005494016,
+    0.012254649,
+    0.008605432,
+    0.006979759,
+    0.00489567,
+    0.006522614,
+    0.005961329,
+    0.007058684,
+    0.007145366,
+    0.010381318,
+    0.005506011,
+    0.004528052,
+    0.006169882,
+    0.005276823,
+    0.005670503,
+    0.011177807,
+    0.005867414,
+    0.005473409,
+    0.004198244,
+    0.008336954,
+    0.004325296,
+    0.015552563,
+    0.005107879,
+    0.004419296,
+    0.007820461,
+    0.005845451,
+    0.010037072,
+    0.015021785,
+    0.009243367,
+    0.004081649,
+    0.004245038,
+    0.012928748,
+    0.00838026,
+    0.006376034,
+    0.024175193,
+    0.003783465,
+    0.007324094,
+    0.004782553,
+    0.005420171,
+    0.004238057,
+    0.005044987,
+    0.005684968,
+    0.004839385,
+    0.004031763,
+    0.004361866,
+    0.003050428,
+    0.0038971,
+    0.003839557,
+    0.003893587,
+    0.005667915,
+    0.005215255,
+    0.006666619,
+    0.005964202,
+    0.006765254,
+    0.006199232,
+    0.006178838,
+    0.007224344,
+    0.012178501,
+    0.007957888,
+    0.004722278,
+    0.004485853,
+    0.012648866,
+    0.00480455,
+    0.005068099,
+    0.007739398,
+    0.006182241,
+    0.009088078,
+    0.00622934,
+    0.01426969,
+    0.007846595,
+    0.004422462,
+    0.01387115,
+    0.008281841,
+    0.00786632,
+    0.00950995,
+    0.008329246,
+    0.0048255,
+    0.0033334,
+    0.007785006,
+    0.007540413,
+    0.005434912,
+    0.004922101,
+    0.004192431,
+    0.005957619,
+    0.004766714,
+    0.006426743,
+    0.005776542,
+    0.006833691,
+    0.004715523,
+    0.005849147,
+    0.004279399,
+    0.004588325,
+    0.008309634,
+    0.003804797,
+    0.003825531,
+    0.003185458,
+    0.00395305
+  ],
+  "seconds": 7.674280174,
+  "source": "c39f5098714202de6baddb06297d16deceb8642a88b00b3ebb194b49a086a251:0"
+}

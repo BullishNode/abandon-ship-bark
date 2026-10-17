@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use ark::fallback::FallbackRecord;
 use ark::mailbox::MailboxIdentifier;
 use ark::SECP;
@@ -48,6 +50,86 @@ async fn expiry_attribution_batches_keys_and_recovers_late_lower_keys_after_rest
 	assert_eq!(owner(&db, late).await, Attribution::Unresolved);
 	assert_eq!(db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap().children_derived, 32);
 	assert!(matches!(owner(&db, late).await, Attribution::Owned { child_index: 8, .. }));
+}
+
+async fn coverage(db: &Db, key: PublicKey) -> BTreeMap<PublicKey, i64> {
+	db.read(async |tx| {
+		Ok(tx.query("SELECT mailbox_pk, scanned_up_to FROM expiry_scan WHERE user_pubkey=$1",
+			&[&key.to_string()]).await?.into_iter().map(|row|
+			(row.get::<_, &str>("mailbox_pk").parse().unwrap(), row.get("scanned_up_to"))).collect())
+	}).await.unwrap()
+}
+
+#[tokio::test]
+async fn expiry_attribution_requeue_preserves_coverage_without_reinitializing_accounts() {
+	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_requeue_coverage").await;
+	ctx.init_central_postgres().await;
+	let config = ctx.new_postgres("expiry_requeue_coverage").await;
+	Db::create(&config).await.unwrap();
+	let db = Db::connect(&config).await.unwrap();
+	let (account, mailbox) = register(&db, 21).await;
+	let old = key(&account, 80);
+	let future_account = Xpriv::new_master(Network::Regtest, &[22; 64]).unwrap();
+	let future = key(&future_account, 7);
+	for key in [old, future] {
+		db.write(async |tx| tx.queue_expiry_owner(key, None).await).await.unwrap();
+	}
+	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
+	let initial = BTreeMap::from([(mailbox.as_pubkey(), 32)]);
+	assert_eq!(coverage(&db, old).await, initial);
+	assert_eq!(coverage(&db, future).await, initial);
+
+	db.write(async |tx| {
+		// An already initialized key must not access the cross-account cursor
+		// table. This real relation lock blocks the old INSERT...ON CONFLICT
+		// path even when every proposed cursor would already exist.
+		tx.execute("LOCK TABLE expiry_scan IN ACCESS EXCLUSIVE MODE", &[]).await?;
+		let queued = db.clone();
+		tokio::time::timeout(std::time::Duration::from_secs(5), async move {
+			queued.write(async |tx| {
+				for _ in 0..3 {
+					tx.queue_expiry_owner(old, Some(mailbox)).await?;
+					tx.queue_expiry_owner(future, None).await?;
+				}
+				Ok(())
+			}).await
+		}).await.expect("requeue must not reinitialize cross-account cursors")?;
+		Ok(())
+	}).await.unwrap();
+	assert_eq!(coverage(&db, old).await, initial);
+	assert_eq!(coverage(&db, future).await, initial);
+
+	let (_, new_mailbox) = register(&db, 22).await;
+	let appended = BTreeMap::from([(mailbox.as_pubkey(), 32), (new_mailbox.as_pubkey(), 0)]);
+	assert_eq!(coverage(&db, old).await, appended);
+	assert_eq!(coverage(&db, future).await, appended);
+	// A later different hint cannot replace the first nonempty candidate or
+	// reset either account's coverage. It is never an ownership assertion.
+	db.write(async |tx| tx.queue_expiry_owner(old, Some(new_mailbox)).await).await.unwrap();
+	let candidate = db.read(async |tx| Ok(tx.query_one(
+		"SELECT mailbox_pk FROM expiry_pending_key WHERE user_pubkey=$1", &[&old.to_string()],
+	).await?.get::<_, String>(0))).await.unwrap();
+	assert_eq!(candidate, mailbox.as_pubkey().to_string());
+	assert_eq!(coverage(&db, old).await, appended);
+
+	let work = db.prepare_expiry_owner_scan(32, 2).await.unwrap();
+	let late = key(&account, 8);
+	db.write(async |tx| tx.queue_expiry_owner(late, None).await).await.unwrap();
+	let zero = BTreeMap::from([(mailbox.as_pubkey(), 0), (new_mailbox.as_pubkey(), 0)]);
+	assert_eq!(coverage(&db, late).await, zero);
+	for work in work { db.commit_expiry_owner_scan(Network::Regtest, &work.derive().unwrap()).await.unwrap(); }
+	assert_eq!(coverage(&db, late).await, zero, "older work must not advance a late key");
+	assert!(matches!(owner(&db, future).await, Attribution::Owned { mailbox_pk, child_index: 7, .. }
+		if mailbox_pk == new_mailbox.as_pubkey()));
+	for _ in 0..3 { db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap(); }
+	assert!(matches!(owner(&db, late).await, Attribution::Owned { mailbox_pk, child_index: 8, .. }
+		if mailbox_pk == mailbox.as_pubkey()));
+	assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
+		if mailbox_pk == mailbox.as_pubkey()));
+	// A cached match is not queued again, even when another record arrives.
+	db.write(async |tx| tx.queue_expiry_owner(old, Some(new_mailbox)).await).await.unwrap();
+	register(&db, 23).await;
+	assert!(coverage(&db, old).await.is_empty());
 }
 
 #[tokio::test]

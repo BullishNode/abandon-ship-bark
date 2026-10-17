@@ -69,11 +69,21 @@ impl Tx<'_> {
 	) -> anyhow::Result<()> {
 		// Pair initialization cannot race a registration's pending-key query.
 		self.lock_fallback_registry().await?;
-		self.execute("INSERT INTO expiry_pending_key (user_pubkey, mailbox_pk)
+		let key = user_pubkey.to_string();
+		let candidate = mailbox.map(|id| id.as_pubkey().to_string());
+		let inserted = self.query_opt("INSERT INTO expiry_pending_key (user_pubkey, mailbox_pk)
 			SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM expiry_owner_key WHERE user_pubkey=$1)
-			ON CONFLICT (user_pubkey) DO UPDATE
-			SET mailbox_pk = COALESCE(expiry_pending_key.mailbox_pk, EXCLUDED.mailbox_pk)",
-			&[&user_pubkey.to_string(), &mailbox.map(|id| id.as_pubkey().to_string())]).await?;
+			ON CONFLICT (user_pubkey) DO NOTHING RETURNING user_pubkey", &[&key, &candidate]).await?.is_some();
+		if !inserted {
+			if candidate.is_some() {
+				self.execute("UPDATE expiry_pending_key SET mailbox_pk=$2 WHERE user_pubkey=$1 AND mailbox_pk IS NULL",
+					&[&key, &candidate]).await?;
+			}
+			return Ok(());
+		}
+		// The pending row and its complete initial cursor set commit together.
+		// Registrations append their own zero cursors under the writer fence,
+		// so a repeated readiness pass need not conflict-check every account.
 		self.execute("INSERT INTO expiry_scan (user_pubkey, mailbox_pk, scanned_up_to)
 			SELECT $1, r.mailbox_pk, 0 FROM fallback_record r WHERE NOT EXISTS
 				(SELECT 1 FROM expiry_owner_key o WHERE o.user_pubkey=$1)

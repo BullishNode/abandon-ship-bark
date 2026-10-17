@@ -1,0 +1,32 @@
+{
+  "state": "SEPARATE_READ_ONLY_FINANCIAL_RECONCILIATION",
+  "native_result_unchanged": "FAIL",
+  "case_id": "FT-CLI-059",
+  "run_id": "7a6f0ea0-1685-4abd-bfbe-664ed76582ad",
+  "native_receipt": "batch32-bark-unstarted18-receipt.json",
+  "native_receipt_sha256": "928a72617305e8c4b8632b185797bd377d1b32ecd4422db00396d9d57af81f71",
+  "native_pending_checkpoint_preserved": true,
+  "financial_reconciliation": "offboard-send-onchain-retained-reconciliation.json",
+  "financial_reconciliation_sha256": "68fe920a63adfc03bd26cf2bb9d8ebabc16c53263870642fcc90cd1740959bd8",
+  "customer_accounting": {
+    "consumed_original_vtxo_sat": 800000,
+    "internal_historical_offboard_child_sat": 300854,
+    "internal_historical_child_additive": false,
+    "actual_destination_output_sat": 300000,
+    "customer_fee_sat": 854,
+    "retained_spendable_change_sat": 499146,
+    "conservation": "800000 = 499146 + 300000 + 854; customer fee is separate from physical miner fee."
+  },
+  "chain_scope": {
+    "retained_tip": "5d457bf5a1cb90d1fdaf707196388ea02226fe37ab9c8cbb31c00de94beea324",
+    "retained_tip_height": 111,
+    "target_inclusion_block": "2eb7663fed7c6a462ae364f838967203e307ceb336fcbb76ca24ef40056c6b57",
+    "target_inclusion_height": 110,
+    "confirmations_at_retained_tip": 2,
+    "source_mines_two_blocks_before_failed_assertion": true
+  },
+  "limitation": "No Core6, later original assertion, synchronized recipient onchain wallet balance, whole-wallet solvency or adapted execution/fullML claim. Retained actual native800kcut only.",
+  "curator_scope": "Receipt identity/pins/hash crosscheck only; client performed retained DB/offlineCore decoding. No independent rawwallet audit/native call by curator.",
+  "no_execution_or_retry": true,
+  "no_full_ml_credit": true
+}

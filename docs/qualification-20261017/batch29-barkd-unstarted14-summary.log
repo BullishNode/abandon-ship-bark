@@ -1,0 +1,15 @@
+FT-BARKD-023 PASS 32.963s run_id=c26398d2-9f4c-47db-ade7-bbbbd731d6c1 ark-testing::barkd recovery::recovered_wallet_finds_offboard_change
+FT-BARKD-024 PASS 39.832s run_id=ff1a0941-1372-4a0a-bfb8-ec26983c60b7 ark-testing::barkd recovery::recovered_wallet_finds_scheduled_delegated_refresh_output
+FT-BARKD-025 PASS 25.791s run_id=85d79b52-4e7b-4cf2-8854-a44feb8efd9e ark-testing::barkd recovery::recovered_wallet_is_empty_when_fully_spent
+FT-BARKD-026 PASS 37.038s run_id=a862e8ca-5df5-4bc3-9b12-a5b97c107fda ark-testing::barkd recovery::recovered_wallet_keeps_spent_round_vtxo_spent
+FT-BARKD-027 PASS 25.799s run_id=89674038-8e7d-4d09-a44d-e5224827624b ark-testing::barkd recovery::recovered_wallet_locks_vtxos_without_a_status
+FT-BARKD-028 PASS 19.080s run_id=e29c84f9-fc4b-48f9-9756-17ea3852df1a ark-testing::barkd recovery::recovered_wallet_reads_paginated_mailbox
+FT-BARKD-029 PASS 25.119s run_id=82a2515e-2764-4592-9bd0-834c93f0adb8 ark-testing::barkd recovery::recovered_wallet_recovery_is_repeatable
+FT-BARKD-030 PASS 20.971s run_id=98e0fd0a-c468-4de0-9756-11865c7340ce ark-testing::barkd recovery::recovered_wallet_skips_invalid_vtxo
+FT-BARKD-031 PASS 28.411s run_id=fb4d9db6-16a6-4055-a000-fd1a11f89e5b ark-testing::barkd recovery::recovered_wallet_skips_unownable_vtxo
+FT-BARKD-032 PASS 19.726s run_id=0c3a7581-3ad7-4727-964a-1889ab825b37 ark-testing::barkd recovery::recovered_wallet_tolerates_undecodable_vtxo_id
+FT-BARKD-033 PASS 10.401s run_id=5be64cdf-68dd-45a7-b7e5-df86f42a06b4 ark-testing::barkd signmessage::sign_message_with_address
+FT-BARKD-034 PASS 10.015s run_id=5de0fd63-13d8-4aa2-bc2e-8390b1fd9db1 ark-testing::barkd vtxo::get_vtxo_barkd
+FT-BARKD-035 PASS 10.068s run_id=dd06d227-12ca-4a15-94a3-cbcccecfa589 ark-testing::barkd vtxo::get_vtxo_encoded_barkd
+FT-BARKD-036 PASS 12.608s run_id=6c502b56-675d-4280-9dc6-76da39a1052f ark-testing::barkd vtxo::import_vtxo_barkd
+14 PASS; 0 FAIL; 0 unstarted. Exact named native barkd cases only. No FULL ML/full-suite credit.

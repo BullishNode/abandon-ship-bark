@@ -1,0 +1,252 @@
+{
+  "state": "TERMINAL_PARTIAL_FIRST_FAILURE",
+  "selected_queue_size": 23,
+  "started": 2,
+  "passed": 1,
+  "failed": 1,
+  "unstarted": 21,
+  "result": "FAIL",
+  "parent_reported_session": "64267",
+  "controller_exit": 100,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "metadata_sha256": "3143345c36e85938ec424916f01ea0bd28ebce8aeb1b0d63b787aa3c850b3363",
+  "upstream_pin": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "test_binary": "ark-testing::bark",
+  "test_elf_sha256": "f3e33f52d458f5dc5f0dcd98f99ca363b266d4e35f979a418d47e8830dcd46f7",
+  "bark_product_sha256": "d971db9547a3bb6c8ebd0413404ed886d3d1157f233c259ab905945ad0a96444",
+  "retries": 0,
+  "normal_timeout_seconds": 180,
+  "new_compilation": false,
+  "pass_duration_sum_seconds": 29.112,
+  "all_started_duration_sum_seconds": 45.49,
+  "per_case_wall_sum_seconds": 47.577,
+  "execution_layer_counts": {
+    "daemon_backed_native_fixture": 2
+  },
+  "raw_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch26-upstream-bark-unstarted23",
+  "raw_progress_sha256": "b141ef4eff41030646557476ddb1743f2eba6a3748492cbe54c1e8a53a3743e4",
+  "unstarted_names": [
+    "movement::movement_send_onchain",
+    "movement::round_refresh",
+    "offboard::bark_rejects_offboarding_dust_amount",
+    "offboard::bark_send_onchain",
+    "offboard::bark_send_onchain_too_much",
+    "offboard::offboard_all",
+    "offboard::offboard_vtxos",
+    "onchain::list_utxos",
+    "onchain::onchain_drain",
+    "onchain::onchain_send",
+    "onchain::onchain_send_many",
+    "recover::recovered_wallet_continues_xpub_lookup_past_server_range",
+    "recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+    "recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+    "recover::recovered_wallet_xpub_lookup_returns_spent_vtxos",
+    "recover::recovery_catchup_survives_rejected_vtxo",
+    "recover::recovery_state_catches_up_on_sync",
+    "vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+    "vtxos::compute_balance",
+    "vtxos::drop_vtxos",
+    "vtxos::list_vtxos"
+  ],
+  "deferred_original_case": {
+    "index": 61,
+    "name": "onchain::bark_address_changes",
+    "state": "NOT_RUN_PENDING_REVIEWED_ADAPTATION"
+  },
+  "original_whitelist_indices": [
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75
+  ],
+  "cases": [
+    {
+      "index": 1,
+      "name": "movement::list_movements",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch26-upstream-bark-unstarted23",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/batch26-upstream-bark-unstarted23/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch26-upstream-bark-unstarted23/case01/nextest.toml -- movement::list_movements --exact"
+      ],
+      "started_at": "2026-10-17T20:19:27.255853+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 49257,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "5aac7311-0318-4a17-b614-4feb64ae538c",
+      "test_seconds": 29.112,
+      "wall_seconds": 30.05,
+      "ended_at": "2026-10-17T20:19:57.305920+00:00",
+      "test_seconds_from_log": 29.112,
+      "coverage_case_id": "FT-CLI-054",
+      "original_sequence": 52,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch26-upstream-bark-unstarted23/case01/result.json",
+      "result_sha256": "02e3307feffc776c43e98ffe4c0318e0d4f4d4352f3c28c8d7a579d18d121c37",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch26-upstream-bark-unstarted23/case01/nextest.log",
+      "raw_log_sha256": "e7fe35ec5a3e9af82bb41d0c6b00d4de9b76c28688c2d658a884cba8bef131e8",
+      "config_sha256": "10aade31c4b15b9081a5564517d9318f8426407d63323f87608d7fd7ca9b0afd",
+      "resource_preflight": {
+        "at": "2026-10-17T20:19:27.255142+00:00",
+        "shm_available_bytes": 942317568,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "e74ddc6d7fc8cc6a3e192f1ba90aa2d3e8e43740cafd4d45c446358bf00ea6b6",
+      "actual_context_directory_exists": true
+    },
+    {
+      "index": 2,
+      "name": "movement::movement_offboard",
+      "state": "FAIL",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch26-upstream-bark-unstarted23",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/batch26-upstream-bark-unstarted23/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch26-upstream-bark-unstarted23/case02/nextest.toml -- movement::movement_offboard --exact"
+      ],
+      "started_at": "2026-10-17T20:19:57.309130+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 49872,
+      "exit_code": 100,
+      "resource_error": null,
+      "run_id": "67572fd5-4452-4303-b66e-57b2902c1bf4",
+      "test_seconds": null,
+      "wall_seconds": 17.527,
+      "ended_at": "2026-10-17T20:20:14.836644+00:00",
+      "test_seconds_from_log": 16.378,
+      "coverage_case_id": "FT-CLI-055",
+      "original_sequence": 53,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch26-upstream-bark-unstarted23/case02/result.json",
+      "result_sha256": "c4341429385d83868d75a125f04a4c6b327c8a813afe15f0f461828c0d7574a9",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch26-upstream-bark-unstarted23/case02/nextest.log",
+      "raw_log_sha256": "dc1dadd32f444570db2718d220653c65790ad2c259805175d56896980ecd1a16",
+      "config_sha256": "6575dcbe837bc5fb64cd4cd46c9864bedf60267f99da3635ef14b51de532b6db",
+      "resource_preflight": {
+        "at": "2026-10-17T20:19:57.308676+00:00",
+        "shm_available_bytes": 941240320,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "09149897ceb704fffedfa8416c4adea09debe5847a0b7797bcf9b4efbfd06088",
+      "actual_context_directory_exists": true
+    }
+  ],
+  "financial_reconciliation": "PENDING; native movementfee854 vs expected938 only. Laterdestination/input/output/metadata assertions unexecuted; no independent settledfinancial/Core/solvency claim.",
+  "money_loss_credit": "No FULLML/fullCLI credit; originalFAIL unchanged; no retry/adaptedexecution.",
+  "coverage_case_ids": [
+    "FT-CLI-054",
+    "FT-CLI-055"
+  ],
+  "coverage_append_event": {
+    "previous_rows": 389,
+    "appended_rows": 2,
+    "final_rows": 391,
+    "before_sha256": "be12fd35af53830af73705dcbbbbcb3de1af6a36f5f0040cae06a4da9aef1941",
+    "lineterminator": "LF",
+    "prior_bytes_preserved": true,
+    "after_sha256": "2e4fbefba95e39a5d6ba1c29084c5a2911d8f2805f0520bf4a56442884c82523"
+  },
+  "artifacts": [
+    {
+      "file": "batch26-upstream-bark-unstarted23-run.sh",
+      "sha256": "f667e493901685fdf477cfa5b653b8af89693fc1f609f67b463af387383ac5c2"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-controller.log",
+      "sha256": "1931fc67b76db92b7fe16a82b7b0e21c077b7ed242b7083190bd6f6fece2fe01"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-runtime-pins.sha256",
+      "sha256": "167c71e85701538f0b6e4fe4cbb2b84a4a81349e3acf0f796278a1e3ff89af35"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-selection-proof.json",
+      "sha256": "4ce289c8c6540d832b1cb610925b3205bb6b0dc226eeb5653898c8c1021e9dcc"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-bark-version.txt",
+      "sha256": "4b9318f9b0e3751b1b86e5d85297e22947ecb6e5792177a78282467a1a05a282"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-preflight-parent.log",
+      "sha256": "fe8cf0539a2538904278f8602a37bce1f9428197a803587d837f13562e3b6223"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-resource-admission.json",
+      "sha256": "6eb966368efa6aad10f07c631f3fc6a3817177a181f8d370e0405cc40b53466c"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-fresh-listing-admission.json",
+      "sha256": "3ce3398fb3b91733b1be244d5f475c2485b2a218cd4d6b9737e71ee088faf946"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-preflight.sh",
+      "sha256": "fd47b6d41ca8712270a2493183407291aa16d151be1eb734e2e9dae12009feec"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-preflight-static.py",
+      "sha256": "6de30d800a30c0907723c630ea5d888dc38512c788b730ee6ff33df67b5839f7"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-verify-first-selection.py",
+      "sha256": "1af0642ac1514a7b8827fad610b0b693e68a03d241f93ad89a06741e3799976e"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-runner.py",
+      "sha256": "7ce928c817901f37c3b3e1b91e08dd271e2dc51cd74e5260374fde68de93720a"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-source-provenance.json",
+      "sha256": "4018c7bcca1127c32105e901ebf2fa7a99d72e7dcecd3eb06647ee1af2adaff4"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-version-gates.json",
+      "sha256": "30ec711074cec6011c7f3f3c4a5184e32897093a7b8bd23249b6c75078ced0cd"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-runtime-admission.json",
+      "sha256": "60a263630c3098bcb7a98d6ea7fc7db7653b2fad4715481529065f49f89244bd"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-failure-redacted.json",
+      "sha256": "bcf70c8d344d62d63b7640d60b0de23173e0111ed907b9ab0a5256c262b6a4ec"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-summary.log",
+      "sha256": "ebc4aeb2b9a155e0799a921344dc459f4b0635111a0e66d1360e7fa2a598563a"
+    }
+  ]
+}

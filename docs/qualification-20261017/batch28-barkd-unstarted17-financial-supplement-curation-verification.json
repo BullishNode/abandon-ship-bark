@@ -1,0 +1,47 @@
+{
+  "checked_at_utc": "2026-10-17T20:12:35.242255+00:00",
+  "restricted_original_case": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-unstarted17/case01/test-data/barkd/recovered_wallet_finds_mixed_origin_vtxos",
+  "sqlite_hashes_before": {
+    "bark": "97d9ef668b3d676b557fc74674bf8ce5eaed87f34f515126a6510817d6c7b2e9",
+    "bark_recovered": "f7a0e072b3088d664d15815d30e66252043427dfa3efc39e2590043970d373eb",
+    "recipient": "e400072d8a3d4efad87b0e1fe6ec7f527c6d86d988fde3c4881cd2a7aa727815",
+    "sender": "3604213404e5dd38f460790e99b81ee3ff3f40bd5e8b72f2f3b81c296ea13e43"
+  },
+  "sqlite_hashes_after": {
+    "bark": "97d9ef668b3d676b557fc74674bf8ce5eaed87f34f515126a6510817d6c7b2e9",
+    "bark_recovered": "f7a0e072b3088d664d15815d30e66252043427dfa3efc39e2590043970d373eb",
+    "recipient": "e400072d8a3d4efad87b0e1fe6ec7f527c6d86d988fde3c4881cd2a7aa727815",
+    "sender": "3604213404e5dd38f460790e99b81ee3ff3f40bd5e8b72f2f3b81c296ea13e43"
+  },
+  "specific_sidecars_at_check": {
+    "bark": {
+      "-wal": false,
+      "-shm": false,
+      "-journal": false
+    },
+    "bark_recovered": {
+      "-wal": false,
+      "-shm": false,
+      "-journal": false
+    },
+    "recipient": {
+      "-wal": false,
+      "-shm": false,
+      "-journal": false
+    },
+    "sender": {
+      "-wal": false,
+      "-shm": false,
+      "-journal": false
+    }
+  },
+  "raw_nextest_sha256": "f7618b89cd25dc01c1b541a9061b341a1a87e5241bb720227e90c8b6512f25b0",
+  "source_baseline_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464",
+  "source_scope": "Frozen7041 baseline source only; preexisting_owned_source_sha in clientpacket does not identify tested ELF or supply adapted execution credit.",
+  "exact_run_log_and_source_binding_matches": true,
+  "same_coin_sets_and_spent_exclusion_checked": true,
+  "source_funding_arithmetic_checked": true,
+  "earlier_sender_receive_change_conservation_checked": true,
+  "curator_SQLite_process_or_parser_reopen": false,
+  "derivation_scope": "Client SQLite/rawtransaction/prevout decode facts independently bound to four restricted unchanged DB hashes plus originalrawlog. Curator checks IDs/bodyhash equality/cut arithmetic/movementlinks/nativeerror values only; no new Corefinality/wholewallet proof."
+}

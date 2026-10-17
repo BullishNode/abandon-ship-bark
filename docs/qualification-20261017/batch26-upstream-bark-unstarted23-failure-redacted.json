@@ -1,0 +1,19 @@
+{
+  "test_name": "movement::movement_offboard",
+  "run_id": "67572fd5-4452-4303-b66e-57b2902c1bf4",
+  "original_result": "FAIL",
+  "actual_duration_seconds": 16.378,
+  "summary_seconds": 16.383,
+  "source_assertion": "testing/tests/bark/movement.rs:403",
+  "actual_offchain_fee_sat": 854,
+  "original_expected_offchain_fee_sat": 938,
+  "earlier_assertions_scope": "Three boards/confirm/register native setup and3VTXO assertion389 completed; actual offboard call392returned, movementSuccessful/subsystem/intended/effective assertions398-402 completed before fee403. These native assertions are not independent Core/finalmoney proof.",
+  "not_executed": [
+    "destination count/value/address assertions404-408",
+    "received/input/output/exited/completion fields409-415",
+    "metadata presence and txid/rawtransaction identity417-425"
+  ],
+  "financial_reconciliation": "PENDING client restricted retained-state verification; no settled financial/recipient/confirmation/wholewallet conservation claim.",
+  "original_raw_log_sha256": "dc1dadd32f444570db2718d220653c65790ad2c259805175d56896980ecd1a16",
+  "limit": "OriginalFAIL remainsFAIL, no retry/adaptedexecution/FULLML; no seeds/config/rawDB copied."
+}

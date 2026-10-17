@@ -1,0 +1,231 @@
+{
+  "state": "TERMINAL_PARTIAL_FIRST_FAILURE",
+  "selected_queue_size": 38,
+  "started": 2,
+  "passed": 1,
+  "failed": 1,
+  "unstarted": 36,
+  "result": "FAIL",
+  "controller_exit": 100,
+  "parent_reported_session": "63400",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "metadata_sha256": "ca5f652c8b0bfd0dc7c4dd921933a815d974d4ce7af4ac70cbace0bb7d1c9deb",
+  "upstream_pin": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "test_binary": "ark-testing::barkd",
+  "test_elf_sha256": "1fd1f89bc795f770890b10342325f7b41214bfe9cda3d4cc792bf0bdb3239e12",
+  "bark_product_sha256": "d971db9547a3bb6c8ebd0413404ed886d3d1157f233c259ab905945ad0a96444",
+  "retries": 0,
+  "normal_timeout_seconds": 180,
+  "new_compilation": false,
+  "pass_duration_sum_seconds": 6.579,
+  "all_started_duration_sum_seconds": 12.65,
+  "per_case_wall_sum_seconds": 14.523,
+  "execution_layer_counts": {
+    "daemon_backed_native_fixture": 2
+  },
+  "raw_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-ordinary38",
+  "raw_progress_sha256": "df57c1dccd82f369e88f246007afb64dd2b83fb4934dd6230269c5bb961c8cb8",
+  "cases": [
+    {
+      "index": 1,
+      "name": "bip321::bip321_uri_ark_only_barkd",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38/nextest-binaries-barkd-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38/case01/nextest.toml -- bip321::bip321_uri_ark_only_barkd --exact"
+      ],
+      "started_at": "2026-10-17T19:49:31.832433+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 29125,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "ba22d93c-a0f0-4727-afa0-e07d971fb529",
+      "test_seconds": 6.579,
+      "wall_seconds": 7.514,
+      "ended_at": "2026-10-17T19:49:39.346124+00:00",
+      "coverage_case_id": "FT-BARKD-001",
+      "test_seconds_from_log": 6.579,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-ordinary38/case01/result.json",
+      "result_sha256": "067cc6a7814dc8adba1fc9f7dcc5616ad59b35616634fbaaa75999a8b577f30d",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-ordinary38/case01/nextest.log",
+      "raw_log_sha256": "2ab2dd7ec772d82d967c133485e50f691916c3d57600e2d7af91a0aaf06a5244",
+      "config_sha256": "b7d61d5af5ed51fb647df255ea070d821536addcf84d16e65e2481c9d4a82ff9",
+      "resource_preflight": {
+        "at": "2026-10-17T19:49:31.832107+00:00",
+        "shm_available_bytes": 999411712,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "f35834dc54bccbd61e2146d869bc887035d81d81f7cdba5d3347f4f7efebf043",
+      "context_directory_exists": true
+    },
+    {
+      "index": 2,
+      "name": "boards::board_all_barkd",
+      "state": "FAIL",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38/nextest-binaries-barkd-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38/case02/nextest.toml -- boards::board_all_barkd --exact"
+      ],
+      "started_at": "2026-10-17T19:49:39.358036+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 29543,
+      "exit_code": 100,
+      "resource_error": null,
+      "run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
+      "test_seconds": null,
+      "wall_seconds": 7.009,
+      "ended_at": "2026-10-17T19:49:46.367622+00:00",
+      "coverage_case_id": "FT-BARKD-002",
+      "test_seconds_from_log": 6.071,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-ordinary38/case02/result.json",
+      "result_sha256": "7c49bfe88087efcfada00ce317e520021f9d3a4ba2a1f819e1be6e48097ee2f0",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-ordinary38/case02/nextest.log",
+      "raw_log_sha256": "864237406e985ce23f7a4007463a3ba7c83a343a1727db364e9ae73bd8743f1e",
+      "config_sha256": "44136587ab927cf28b58aae8b393f522dba95e175186945d978c0057c036b534",
+      "resource_preflight": {
+        "at": "2026-10-17T19:49:39.357568+00:00",
+        "shm_available_bytes": 998334464,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "e4351f9e44f82f04f4820f7c0d7ec76ae2521530dec33f933fd24b58ecc1727b",
+      "context_directory_exists": true
+    }
+  ],
+  "unstarted_names": [
+    "boards::board_amount_barkd",
+    "boards::board_auto_sync_barkd",
+    "boards::board_fee_estimate_barkd",
+    "boards::pending_boards_barkd",
+    "core::bitcoin_tip_barkd",
+    "core::ping_barkd",
+    "core::wallet_ark_info_barkd",
+    "core::wallet_connected_barkd",
+    "core::wallet_next_round_barkd",
+    "history::history_filter_by_payment_method",
+    "lightning::lightning_send_status_unknown_for_unseen_hash",
+    "mnemonic::mnemonic_disabled_by_default",
+    "mnemonic::mnemonic_returned_when_enabled",
+    "notifications::barkd_long_poll_rejects_unauthenticated",
+    "notifications::barkd_long_polls_notification_on_arkoor_received",
+    "notifications::barkd_pushes_notification_on_arkoor_received",
+    "onchain::onchain_address_and_balance_barkd",
+    "onchain::onchain_utxos_and_transactions_barkd",
+    "recovery::recovered_wallet_finds_boarded_vtxo",
+    "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "recovery::recovered_wallet_finds_offboard_change",
+    "recovery::recovered_wallet_finds_round_vtxo",
+    "recovery::recovered_wallet_finds_scheduled_delegated_refresh_output",
+    "recovery::recovered_wallet_is_empty_when_fully_spent",
+    "recovery::recovered_wallet_keeps_spent_round_vtxo_spent",
+    "recovery::recovered_wallet_locks_vtxos_without_a_status",
+    "recovery::recovered_wallet_reads_paginated_mailbox",
+    "recovery::recovered_wallet_recovery_is_repeatable",
+    "recovery::recovered_wallet_skips_invalid_vtxo",
+    "recovery::recovered_wallet_skips_unownable_vtxo",
+    "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+    "recovery::recovered_wallet_tolerates_undecodable_vtxo_id",
+    "signmessage::sign_message_with_address",
+    "vtxo::get_vtxo_barkd",
+    "vtxo::get_vtxo_encoded_barkd",
+    "vtxo::import_vtxo_barkd"
+  ],
+  "financial_reconciliation": "PENDING; original net-amount assertion values only, no settled financial/Core/solvency claim.",
+  "money_loss_credit": "No FULL ML/fullbarkd credit; originalFAIL unchanged; no retry/adapted execution.",
+  "coverage_case_ids": [
+    "FT-BARKD-001",
+    "FT-BARKD-002"
+  ],
+  "coverage_append_event": {
+    "previous_rows": 353,
+    "appended_rows": 2,
+    "final_rows": 355,
+    "before_sha256": "972d547b79da0cbcd740c22291cbb321da0e773dc882440d711cb2a04e366c10",
+    "lineterminator": "LF",
+    "prior_bytes_preserved": true,
+    "after_sha256": "e0eb058d6c4eb3ad8f968f8ad596c345bd46b26884ddd5210f3fbcf947a75d6e"
+  },
+  "artifacts": [
+    {
+      "file": "batch25-barkd-ordinary38-run.sh",
+      "sha256": "488f30c8d7405fec815be33c63080a69df86e3172c5551904179483058f4cbf8"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-controller.log",
+      "sha256": "80437bbe381c2492149cb1f936e9a336bd1cbb725416e0e0a0392e8da930272d"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-runtime-pins.sha256",
+      "sha256": "6e5e3f99c8e7c6bf2f2e486d424870191880f0295635a094c4f3d9120e011521"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-selection-proof.json",
+      "sha256": "68df9b95251bb83dec104392bd7b65efce1f8f71ea961c78e677326c4e86d090"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-preflight-parent.log",
+      "sha256": "1cafd33c27f3b4589921784f212ea993a525369bca135b08fc60355cf18ef4dc"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-resource-admission.json",
+      "sha256": "0fcac10279cad2727015f4be703f6e7bf87f535133dcc422624d3f6670c7f1f6"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-fresh-listing-admission.json",
+      "sha256": "fb9e99661b2559acfdb9d2ac4b33f62ecd03caacafd8472863928424311b9395"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-preflight.sh",
+      "sha256": "fe2def8c5c9e2ac4e9c91fd647db17a848a965cd38fd072656f7d7616a640a96"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-preflight-static.py",
+      "sha256": "e8e30799f4089b7975bfeb19913cf722aec7fadc76c2ca19111f7a0728ac59c6"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-verify-first-selection.py",
+      "sha256": "bdc1105a22840130c90ab482fc49928fcc1e5d95a0268fc26bbb4388c253b533"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-runner.py",
+      "sha256": "77b3223a98f5011691e8591a9909cd144aa903a3b3ca2416202c54de25dba7ef"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-source-provenance.json",
+      "sha256": "5379a9c89cb5116f156dbbaf1371a14030179326b008e9841fd525cab2305237"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-version-gates.json",
+      "sha256": "69e8f6646e527f0b63f390980d8927faca25dbbb50a486a90662bde6a2c627f2"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-runtime-admission.json",
+      "sha256": "d6c3cd91b36159ebbb2116a960609229179752c8349da4de7c44ae7e9d81e4e6"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-failure-redacted.json",
+      "sha256": "66e92a41fef7bec4d6e2225052cee1312ed6a33932f898d4d936199b5a47acd4"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-summary.log",
+      "sha256": "af348a9f2e2bdc03fc5f3fc74d4eb34e946b9fe5deb68718870ed52e0223b592"
+    }
+  ]
+}

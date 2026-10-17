@@ -1,0 +1,20 @@
+{
+  "frozen_actual_version": "bark0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+  "started_function_macro_count": 1,
+  "started_require_macros": [
+    {
+      "macro": "require_bark_version",
+      "operator": ">",
+      "required_literal": "0.5.0",
+      "actual_parsed": "Dev",
+      "required_parsed": "Release",
+      "evaluated_condition": true,
+      "causes_early_return": false,
+      "source_line": 661
+    }
+  ],
+  "all_required_conditions_true": true,
+  "gate_early_return_observed": false,
+  "actual_body_directory_exists": true,
+  "future_unstarted_cases_not_credited": 16
+}

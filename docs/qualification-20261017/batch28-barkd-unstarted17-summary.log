@@ -1,0 +1,6 @@
+Batch28 barkd unstarted17 terminal prefix
+Source 704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06
+17selected;1started;0PASS1FAIL;16NOTSTARTED. Native daemon fixture.
+Default180s/test,retries0,onethread,no compilation; parent session55528terminal100.
+01 FAIL 36.531s ark-testing::barkd recovery::recovered_wallet_finds_mixed_origin_vtxos run=551dd1bb-ab3b-4629-a333-40a5f4ad9a97
+Mixed-origin recovery spendablecount/spent/nonempty/allVTXOidentity assertions passed; finalfixed649443send HTTP500 available649392FAILED. Clientfinancialreconciliationpending; no successfulfinalpayment/Core/conservation/FULLML credit.

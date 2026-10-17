@@ -1,0 +1,24 @@
+Batch27 barkd unstarted36 terminal prefix
+Source 704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06
+36selected;19started;18PASS1FAIL;17NOTSTARTED. All19daemon-backed native fixtures.
+Default180s/test,retries0,onethread,no compilation; parent session50474terminal100.
+01 PASS 12.040s ark-testing::barkd boards::board_amount_barkd run=ac57d905-2161-4a19-8aba-951c956141bf
+02 PASS 10.623s ark-testing::barkd boards::board_auto_sync_barkd run=64e85df9-206c-48a6-a823-15f5eece7b3a
+03 PASS 11.197s ark-testing::barkd boards::board_fee_estimate_barkd run=554c4194-2262-4941-8525-09a341b78658
+04 PASS 13.755s ark-testing::barkd boards::pending_boards_barkd run=22a3651d-67bc-4df1-b26d-9fd7845c25f0
+05 PASS 6.145s ark-testing::barkd core::bitcoin_tip_barkd run=22c4cb07-38d1-45b7-9bb0-62ffcef61976
+06 PASS 13.417s ark-testing::barkd core::ping_barkd run=a3d26b7e-5c39-4140-8135-9a733c0abf34
+07 PASS 8.207s ark-testing::barkd core::wallet_ark_info_barkd run=4d36d9f4-3387-4faa-85b1-747048c9f719
+08 PASS 5.826s ark-testing::barkd core::wallet_connected_barkd run=135c8adc-a725-4358-8a7f-a2d8b3c61f78
+09 PASS 6.879s ark-testing::barkd core::wallet_next_round_barkd run=ffcafa95-a833-4dff-8c6d-4ee9f481fc78
+10 PASS 12.977s ark-testing::barkd history::history_filter_by_payment_method run=0bfe13ff-6cec-46b1-ba01-b1b05aa82a53
+11 PASS 5.684s ark-testing::barkd lightning::lightning_send_status_unknown_for_unseen_hash run=2028e6e5-7f9b-41d9-95dd-3c09193ab80b
+12 PASS 5.975s ark-testing::barkd mnemonic::mnemonic_disabled_by_default run=39676249-21cf-490c-a79f-dff7cf3f0510
+13 PASS 7.146s ark-testing::barkd mnemonic::mnemonic_returned_when_enabled run=28ffc08a-8bc2-422a-8e70-36a67e74567f
+14 PASS 5.898s ark-testing::barkd notifications::barkd_long_poll_rejects_unauthenticated run=aa031f04-a12d-4bb3-9394-404d1abdf784
+15 PASS 74.197s ark-testing::barkd notifications::barkd_long_polls_notification_on_arkoor_received run=9d499593-98cc-47a7-9351-96dc718983e4
+16 PASS 16.072s ark-testing::barkd notifications::barkd_pushes_notification_on_arkoor_received run=f08271d1-1ea1-49f9-9446-cd1e936630ae
+17 PASS 7.107s ark-testing::barkd onchain::onchain_address_and_balance_barkd run=b1b06a85-add3-4a31-9a27-05de747a1b5a
+18 PASS 11.155s ark-testing::barkd onchain::onchain_utxos_and_transactions_barkd run=5a623d3a-c35e-43fe-a05f-96ad37d58777
+19 FAIL 18.294s ark-testing::barkd recovery::recovered_wallet_finds_boarded_vtxo run=a17a9bb2-7a91-4d52-8105-712c68404cfb
+Original recovery identity/count assertions passed, but final fixed99443sat send failed HTTP500 available99392sat. Finalpayment didNOTsucceed. Independent financial reconciliation pending; no Core/conservation/FULLML/fullbarkd credit.

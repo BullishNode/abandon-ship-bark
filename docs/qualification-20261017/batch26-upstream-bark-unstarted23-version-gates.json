@@ -1,0 +1,75 @@
+{
+  "actual_version": "bark 0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+  "parser_basis": {
+    "reported_actual_version": "0.7.1-dev",
+    "version_basis": "Retained actual frozen BARK_EXEC output and identical immutable product hash; this preparation never invoked the product. Fresh admitted preflight must validate the pins.",
+    "parser": "testing/src/util.rs:354-359 maps any string containing -dev and DIRTY to BarkVersion::Dev; Ord:380-385 makes Dev greater than every Release and equal to Dev.",
+    "gate": "testing/src/lib.rs:95-105 logs skipping test and returns only when parsed condition false. A nextest PASS after that return is not behavior coverage.",
+    "frozen_helper_proofs": {
+      "testing/src/lib.rs": {
+        "sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+        "frozen_manifest_match": true
+      },
+      "testing/src/util.rs": {
+        "sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+        "frozen_manifest_match": true
+      }
+    },
+    "counts": {
+      "remaining": 23,
+      "require_gate_tests": 13,
+      "require_gate_occurrences": 13,
+      "branch_macro_tests": 2,
+      "branch_macro_occurrences": 2,
+      "excluded": 0
+    },
+    "all_required_gates_pass": true,
+    "all_branch_conditions_true_for_this_version": true,
+    "default_selected_names_verified_against_immutable_listing": true
+  },
+  "started_cases": [
+    {
+      "sequence": 1,
+      "test_name": "movement::list_movements",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 533
+        },
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 591
+        }
+      ],
+      "body_context_exists": true,
+      "version_skip_log": false
+    },
+    {
+      "sequence": 2,
+      "test_name": "movement::movement_offboard",
+      "macros": [],
+      "body_context_exists": true,
+      "version_skip_log": false
+    }
+  ],
+  "all_declared_comparisons_true_for_0_7_1_dev": true,
+  "no_version_early_return_observed": true,
+  "counts": {
+    "require_macros": 1,
+    "branch_macros": 1,
+    "started_tests": 2
+  },
+  "scope": "list_movements require>0.5.0 and branch>0.7.1 pass forDev and entireactualtestcompleted. movement_offboard hasnogates."
+}

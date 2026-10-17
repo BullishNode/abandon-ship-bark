@@ -1,0 +1,114 @@
+{
+  "container": "abandon-fresh-runtime-20261017",
+  "parent_reported_session": "63400",
+  "terminal_controller_exit": 100,
+  "preflight_parent_log_sha256": "1cafd33c27f3b4589921784f212ea993a525369bca135b08fc60355cf18ef4dc",
+  "retained_actual_runtime_pin_checks": 14,
+  "fresh_host_visible_rehashes": 11,
+  "pin_evidence": [
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-barkd",
+      "sha256": "1fd1f89bc795f770890b10342325f7b41214bfe9cda3d4cc792bf0bdb3239e12",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/captaind",
+      "sha256": "175dc56e2177cbda495e2cb5c56bae2061d0590dc2481ddb40a944e68e5dd0fb",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/watchmand",
+      "sha256": "4d1d52778032aed837bfc4e28ddcf637458837635a62ad3f6436be3adc4311d5",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/bark",
+      "sha256": "d971db9547a3bb6c8ebd0413404ed886d3d1157f233c259ab905945ad0a96444",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/barkd",
+      "sha256": "5194c687beb3e17a637dcb2754402daca5d6a1a90174a8c12d7091706500e114",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/support/debug/lock-holder",
+      "sha256": "abf0fd823c45d2b8635c7e9a7245186a5e8cd30bac31d77e37a807dce3f57b2d",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/manifest.json",
+      "sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/source-manifest.json",
+      "sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+      "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+      "host_visible_rehashed_match": false,
+      "retained_actual_runtime_preflight_only_if_not_visible": true
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+      "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "host_visible_rehashed_match": false,
+      "retained_actual_runtime_preflight_only_if_not_visible": true
+    },
+    {
+      "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+      "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+      "host_visible_rehashed_match": false,
+      "retained_actual_runtime_preflight_only_if_not_visible": true
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38/nextest-binaries-barkd-only-exact.json",
+      "sha256": "53cd474ef7b6f295a146a8df8f1523b23384931813056b4532d4cf2e3fe6cdee",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38/nextest-binaries-barkd-runtime-immutable.json",
+      "sha256": "ca5f652c8b0bfd0dc7c4dd921933a815d974d4ce7af4ac70cbace0bb7d1c9deb",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/next-upstream-barkd-ordinary38/selection-proof.json",
+      "sha256": "68df9b95251bb83dec104392bd7b65efce1f8f71ea961c78e677326c4e86d090",
+      "host_visible_rehashed_match": true,
+      "retained_actual_runtime_preflight_only_if_not_visible": false
+    }
+  ],
+  "resource_admission": {
+    "state": "RESOURCE_GATE_PASS",
+    "shm_available_bytes": 999411712,
+    "live_owned_postgres": [],
+    "cleanup": false
+  },
+  "first_selection_admission": {
+    "state": "LISTING_GATE_PASS",
+    "selected_unignored": [
+      "bip321::bip321_uri_ark_only_barkd"
+    ],
+    "native_tests_run": 0
+  },
+  "per_case_resource_preflights_in_receipt": true,
+  "resource_errors": 0,
+  "retries": 0,
+  "timeout_seconds": 180,
+  "new_compilation": false,
+  "curation_runtime_actions": 0,
+  "resource_checkpoints": "No fourth-case checkpoint reached; two actual per-case resource preflights retained."
+}

@@ -1,0 +1,40 @@
+{
+  "checked_at_utc": "2026-10-17T20:03:43.898012+00:00",
+  "restricted_original_case": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-unstarted36/case19/test-data/barkd/recovered_wallet_finds_boarded_vtxo",
+  "sqlite_hashes_before": {
+    "bark": "4c0941c7d9ac0a9981a7be797de390634a4ec447485ac88a7c52cdb86206b2c3",
+    "bark_recovered": "70ad337996e9652eaab69cb6726c84f4e6c7468bbb6d1f41dbb6d130c009c760",
+    "recipient": "1e47eac82b39f05e87eb7d859496cf56d4ae15c9b5e1f704614ae5e1d3f2c010"
+  },
+  "sqlite_hashes_after": {
+    "bark": "4c0941c7d9ac0a9981a7be797de390634a4ec447485ac88a7c52cdb86206b2c3",
+    "bark_recovered": "70ad337996e9652eaab69cb6726c84f4e6c7468bbb6d1f41dbb6d130c009c760",
+    "recipient": "1e47eac82b39f05e87eb7d859496cf56d4ae15c9b5e1f704614ae5e1d3f2c010"
+  },
+  "specific_sidecar_existence_at_check": {
+    "bark": {
+      "-wal": false,
+      "-shm": false,
+      "-journal": false
+    },
+    "bark_recovered": {
+      "-wal": false,
+      "-shm": false,
+      "-journal": false
+    },
+    "recipient": {
+      "-wal": false,
+      "-shm": false,
+      "-journal": false
+    }
+  },
+  "raw_nextest_sha256": "19ae98c79969c2540c3116e675702176c04117cffd493fdec7a5d81505180f54",
+  "source_file_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464",
+  "original_receipt_raw_log_binding_matches": true,
+  "native_error_values_99443_and_99392_present": true,
+  "packet_internal_same_coin_identity_body_genesis_amount_equality_checked": true,
+  "point_in_time_scope": "Three specific originalcase19 wallet DB hashes/sidecar observations only; no continuous absence claim.",
+  "curator_SQLite_or_process_reopen": false,
+  "curator_raw_transaction_decode": false,
+  "derivation_scope": "Signedtx/prevout/DB row decode attributed to clientpacket, independently bound to restricted unchanged DB/log hashes. Curator verifies exact economic identity/fee/deficit arithmetic and source/run/log bindings, without SQLite/actor access."
+}

@@ -1,0 +1,7 @@
+Batch26 ordinaryCLI unstarted23 terminal prefix
+Source 704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06
+23selected;2started;1PASS1FAIL;21NOTSTARTED; original75seq61deferred separately.
+Bothdaemon-backed nativeCLI fixtures. Default180s/test,retries0,onethread,no compilation; parent64267terminal100.
+01 PASS 29.112s ark-testing::bark movement::list_movements run=5aac7311-0318-4a17-b614-4feb64ae538c
+02 FAIL 16.378s ark-testing::bark movement::movement_offboard run=67572fd5-4452-4303-b66e-57b2902c1bf4
+Originaloffboardfee403actual854sat vs expected938sat FAIL; laterdestination/input/output/metadata assertions notrun. Financialreconciliation pending, no settledfinancial/Core/FULLML/fullCLI claim.

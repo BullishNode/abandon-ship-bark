@@ -1,0 +1,15 @@
+{
+  "test_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+  "run_id": "551dd1bb-ab3b-4629-a333-40a5f4ad9a97",
+  "original_result": "FAIL",
+  "actual_test_seconds": 36.531,
+  "summary_seconds": 36.544,
+  "panic_helper_source": "testing/src/daemon/barkd.rs:731",
+  "native_test_call_source": "testing/tests/barkd/recovery.rs:718",
+  "failure": "Final recovered.send HTTP500 insufficientmoney: needed649443sat/available649392sat,51satshortfall. Finalpayment didNOTsucceed.",
+  "earlier_original_assertions_completed": "Native board,secondboard/roundrefresh and genuineotherwallet50kArkoorreceive produced3coins. Beforelen3 at696, recoveredspendablecount708, nonemptyspent710 and alloriginalVTXOid equality712 passed before finalfixed649443send718.",
+  "not_executed": "Successful finalpayment; no postpayment money/conservation assertions exist in this originalcase.",
+  "financial_reconciliation": "PENDING independent client retained-evidence review. API needed/available values are not independent whole-wallet/chain proof.",
+  "source_classification": "Unchanged upstream fixed649443sat finalsend assumption; no version skip. OriginalFAIL preserved.",
+  "limitation": "No retry/adaptation execution, seed-only/originalabsence/fullML/fullbarkd credit; no rawseed/config/DB copied."
+}

@@ -1,0 +1,25 @@
+{
+  "scope": "Immutable financial supplement; original terminal receipt remains unchanged with then-pending financial state.",
+  "original_receipt_file": "batch27-barkd-unstarted36-receipt.json",
+  "original_receipt_sha256": "8a11ea9b14a244b45eecb9829e38f0cede64d8e8579459d0a4f39a3beb3eabbe",
+  "source_client_packet_file": "barkd-recovery-boarded-retained-reconciliation.json",
+  "source_client_packet_sha256": "2fd1a593e0cd2e467bbcef70d83c4f5a5257071b03fa17bb72263689571075f3",
+  "original_result": "FAIL",
+  "original_run_id": "a17a9bb2-7a91-4d52-8105-712c68404cfb",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "native_economic_observation": "Actual100000sat input at realprevout vout1 =99392sat boardoutput +608sat minerfee; originalboard offchainfee0. Original and recovered retain identical oneVTXOid/body/genesis99392sat: SAME economic coin, never additive198784sat.",
+  "rejected_request": "Native HTTP500 requested99443sat, available99392sat; deficit51sat. Retained recoveredwallet has no sendmovement/action; recipient has no coin/movement/action. Finalpayment didNOTsucceed; no observed monetary loss from this rejected request.",
+  "setup_limit": "Distinct same-seed datadirs using authentic API while originalwallet remained alive. No originalabsence, in-place wipe, full seed-only/offline recovery qualification or wallet protection claim.",
+  "proof_limit": "Client signedtx/prevout/SQLite decode bound to unchanged restricted hashes; curator performs narrowhash/source/run/log/arithmetic checks only. No new Core inclusion/confirmation, successful finalpayment, full lifecycle, wholewalletsolvency, FULLML or adaptedexecution claim.",
+  "test_oracles": "Earlier original onecoin and recoveredcount+sameVTXOid assertions passed; originalfinalfixed99443send stillFAIL.",
+  "files": [
+    {
+      "file": "batch27-barkd-unstarted36-financial-supplement-retained-reconciliation.json",
+      "sha256": "2fd1a593e0cd2e467bbcef70d83c4f5a5257071b03fa17bb72263689571075f3"
+    },
+    {
+      "file": "batch27-barkd-unstarted36-financial-supplement-curation-verification.json",
+      "sha256": "d56469a831345a91baf8f5881e6afa1fa703c71bec80f9c8869ce9ba0c8b643d"
+    }
+  ]
+}

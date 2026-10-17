@@ -8,6 +8,7 @@ mod expiry_hash_provenance;
 mod expiry_payout_flow;
 mod expiry_split;
 mod expiry_reorg;
+mod expiry_conflict;
 mod ban;
 mod blocklist;
 mod block_index;

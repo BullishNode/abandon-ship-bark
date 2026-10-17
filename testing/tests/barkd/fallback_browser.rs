@@ -109,9 +109,20 @@ async fn fallback_barkd_web_actual_payout_and_seed_restore() {
 	let refusal: serde_json::Value = refusal.json().await.unwrap();
 	assert_eq!(refusal["code"], "decided_for_fallback");
 	assert_eq!(refusal["message"], "This coin expired and is being paid to your fallback address.");
-	barkd.sync().await;
+	// Core confirmation precedes the background ledger's observation. Wait
+	// for the actual native receipt instead of assuming a tip ACK means the
+	// payout projection has already caught up.
+	let history = tokio::time::timeout(Duration::from_secs(10), async {
+		loop {
+			barkd.sync().await;
+			let history = barkd.history(None, None).await;
+			if history.iter().any(|movement| movement.subsystem.name == "abandon.fallback_payout"
+				&& movement.metadata.as_ref().and_then(|metadata| metadata.get("fallback"))
+					.is_some_and(|receipt| receipt["stage"] == "confirmed")) { break history; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("the native confirmed payout receipt did not catch up with Core");
 	barkd.onchain_sync().await;
-	let history = barkd.history(None, None).await;
 	let receipts = history.iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
 	assert_eq!(receipts.len(), 1);
 	assert_eq!(receipts[0].sent_to[0].amount, expected);

@@ -30,6 +30,7 @@ impl FallbackRefusal {
 
 	/// Classify a refusal through SDK context and action error wrappers.
 	pub fn from_error(error: &anyhow::Error) -> Option<Self> {
+		if let Some(refusal) = error.downcast_ref::<Self>() { return Some(*refusal); }
 		for cause in error.chain() {
 			if let Some(refusal) = cause.downcast_ref::<Self>() {
 				return Some(*refusal);
@@ -52,6 +53,17 @@ impl FallbackRefusal {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn typed_anyhow_context_without_tonic_is_classified() {
+		for refusal in [FallbackRefusal::DecidedForFallback, FallbackRefusal::ExpiredNewLightning] {
+			let error = anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+				.context(refusal).context("outer action context");
+			assert!(error.downcast_ref::<tonic::Status>().is_none());
+			assert_eq!(FallbackRefusal::from_error(&error), Some(refusal));
+			assert_eq!(error.downcast_ref::<std::io::Error>().unwrap().kind(), std::io::ErrorKind::PermissionDenied);
+		}
+	}
 
 	#[test]
 	fn metadata_alone_selects_the_typed_refusal_and_preserves_original_status() {

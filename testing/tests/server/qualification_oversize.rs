@@ -43,8 +43,8 @@ fn owner() -> Owner {
 	let mut seed = [0; 64];
 	thread_rng().fill_bytes(&mut seed);
 	let account = Xpriv::new_master(Network::Regtest, &seed).unwrap();
-	let key = account.ckd_priv(&SECP, ChildNumber::from_normal_idx(1).unwrap()).unwrap().to_keypair(&SECP);
-	let mailbox = account.ckd_priv(&SECP, ChildNumber::from_hardened_idx(1).unwrap()).unwrap().to_keypair(&SECP);
+	let key = account.derive_priv(&SECP, &[ChildNumber::from_normal_idx(1).unwrap()]).unwrap().to_keypair(&SECP);
+	let mailbox = account.derive_priv(&SECP, &[ChildNumber::from_hardened_idx(1).unwrap()]).unwrap().to_keypair(&SECP);
 	thread_rng().fill_bytes(&mut seed);
 	let payout = Xpriv::new_master(Network::Regtest, &seed).unwrap().to_keypair(&SECP);
 	let script = ScriptBuf::new_p2wpkh(&WPubkeyHash::hash(&payout.public_key().serialize()));

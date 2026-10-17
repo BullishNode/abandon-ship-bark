@@ -24,6 +24,11 @@ impl Tx<'_> {
 		Ok(())
 	}
 
+	pub(super) async fn lock_fallback_registry_writer(&self) -> anyhow::Result<()> {
+		self.execute("SELECT pg_advisory_xact_lock($1)", &[&REGISTRY_LOCK]).await?;
+		Ok(())
+	}
+
 	pub async fn fallback_registry_version(&self) -> anyhow::Result<i64> {
 		Ok(self.query_one("SELECT COALESCE(MAX(id), 0) FROM fallback_record", &[]).await?.get(0))
 	}
@@ -34,7 +39,7 @@ impl Tx<'_> {
 		&self, mailbox_pk: PublicKey, record: &FallbackRecord, network: Network,
 	) -> anyhow::Result<FallbackRecord> {
 		record.verify(network, mailbox_pk).badarg("invalid fallback record")?;
-		self.execute("SELECT pg_advisory_xact_lock($1)", &[&REGISTRY_LOCK]).await?;
+		self.lock_fallback_registry_writer().await?;
 		if let Some(stored) = self.get_fallback(mailbox_pk).await? { return Ok(stored); }
 		let account_xpub = record.account_xpub.to_string();
 		let account_pubkey = record.account_xpub.public_key.to_string();

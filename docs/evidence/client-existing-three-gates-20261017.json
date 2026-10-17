@@ -1,0 +1,143 @@
+{
+  "status": "THREE_PASS_SEPARATE_SERIAL_INVOCATIONS",
+  "source": {
+    "published_base_at_build": "751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
+    "overlay": "approved4-file internal receive reconciliationv2; no client product/test modifications for these existing gates",
+    "actual_source_manifest_sha256": "f70bdd0dc7f46576b8b688a8b45e61779afb2831afeec44f2dcd6c8775099f5b",
+    "candidate_artifact_directory": "/fresh-cache/runtime-internal-receive-v2-20261017",
+    "captured_source_file_count": 1150,
+    "feature": "ark-testing/fallback-test-bip84",
+    "metadata_sha256": "c91f32c252653eab2c964afd1d7836779acb4c0b3326ba84ffab057db5ae63d6"
+  },
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-internal-receive-v2-20261017/captaind",
+      "sha256": "196e13f2434c1910e7648396aff9d8f48e0c56a2af777625ba7704f3b4238f39",
+      "rebuilt": true
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-internal-receive-v2-20261017/watchmand",
+      "sha256": "8a81949af80ac290c2f81d06e803bf6720232f074985bc48821e2fa644d4812f",
+      "rebuilt": true
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-internal-receive-v2-20261017/native-bark-sdk",
+      "sha256": "7f822f0d40cdc2de30e32e7fa557d5ac544d2c2d70e68ef61d85b95adcdb3006",
+      "rebuilt": true
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/bark",
+      "sha256": "7a240c143bb103b67c360a75316034211d6212947e0b65571ceaebe19fc06ba4",
+      "rebuilt": false,
+      "origin": "prior c60c BIP84+embeddedweb candidate"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/barkd",
+      "sha256": "570ecf6cbbdc441b1262e68ee84035718ac9f72a5f881038b9ca51812a342218",
+      "rebuilt": false,
+      "origin": "prior c60c BIP84+embeddedweb candidate"
+    }
+  },
+  "pins": {
+    "captaind": "196e13f2434c1910e7648396aff9d8f48e0c56a2af777625ba7704f3b4238f39",
+    "watchmand": "8a81949af80ac290c2f81d06e803bf6720232f074985bc48821e2fa644d4812f",
+    "native-bark-sdk": "7f822f0d40cdc2de30e32e7fa557d5ac544d2c2d70e68ef61d85b95adcdb3006",
+    "nextest-binaries-immutable.json": "c91f32c252653eab2c964afd1d7836779acb4c0b3326ba84ffab057db5ae63d6",
+    "source-manifest.json": "f70bdd0dc7f46576b8b688a8b45e61779afb2831afeec44f2dcd6c8775099f5b"
+  },
+  "reused_cli": {
+    "bark": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/bark",
+      "sha256": "7a240c143bb103b67c360a75316034211d6212947e0b65571ceaebe19fc06ba4"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/barkd",
+      "sha256": "570ecf6cbbdc441b1262e68ee84035718ac9f72a5f881038b9ca51812a342218"
+    },
+    "note": "Explicit previous paired CLI reuse, no current CLI rebuild or CLI acceptance credit; allthree cases link current actual native SDK."
+  },
+  "actual_results": [
+    {
+      "index": 1,
+      "run_id": "a7a8cf3b-edb8-497e-a0e8-796b950e4695",
+      "result": "PASS",
+      "seconds": 12.737,
+      "test": "recovery::recovered_wallet_keeps_spent_vtxo_spent",
+      "log_sha256": "ac6c728cb949d2eeb2537ffe498153de16415185c30dd0ca732efd4568220820",
+      "selected": 1,
+      "skipped": 76
+    },
+    {
+      "index": 2,
+      "run_id": "22f91b89-f70e-4afc-9939-3bed38437ebd",
+      "result": "PASS",
+      "seconds": 17.518,
+      "test": "recovery::recovered_wallet_keeps_arkoor_batch_inputs_spent",
+      "log_sha256": "00e1de287a16679ea7e8f7e4a6304aff5af67b4e0fa1866c4aaf74b65d12e266",
+      "selected": 1,
+      "skipped": 76
+    },
+    {
+      "test": "fallback_external::fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend",
+      "result": "PASS",
+      "run_id": "42206305-1b1d-47cb-abde-1dda2334bbff",
+      "seconds": 22.533,
+      "selected": 1,
+      "skipped": 76,
+      "log_sha256": "4ab81fd321ab298304b60e84e39fb540eeb0d94279dd1d1efa24dd7b655f8353",
+      "money_proof_sha256": "a371b7e83a7dd763edcbee9ff19a793e62cc73bfa8cda9ccc5c3b32b6c96d0e3",
+      "money_proof": {
+        "fallback_outpoint": "10d4ace92c1f25cbc4e7411de7b6651c2de8ff6052b61a51d361d80214fa4ab1:0",
+        "fresh_ark_and_app_databases": true,
+        "original_vtxo": "fccf0168b41b1d2157145a7b7aac5e91e41793eeef9650f2930a884fca297084:0",
+        "payout_parent": "03000000000101d6762ad42b41bdee03820a6f6353749afdb00f8611af887e19c7b79c2d4feaa000000000000000000003b8820100000000001600141d746332cd199cbf8c47edd93213106de225cdbde803000000000000225120a23b9e5263020987e800f2c8024d49c205fbf8e8cfa4e886d44f558061e62e5400000000000000000451024e7303405977c6e95ebb9cbdecd19d8b60805dcdb2c1376345a4cf7adc83c11a34f3e72dfcfe90e0f2860b46e8ca4be1ebac9f8600df005c3aa54eef0f98b9de16b7920327028100b17520ba29dc33c11e7e7b1162e10bc4765b19c490b369389b2f1f749f6f2780efb320ac21c1cd60c5e9ce9b644c3d98efa8bcc784d5f40076cc3daeae134be587c51c0a1e3382000000",
+        "payout_sat": 99000,
+        "recovery_tx": "02000000000102b14afa1402d861d3511ab65260ffe82d1c65b6e71d41e7c4cb251f2ce9acd4100000000000fdffffffd6762ad42b41bdee03820a6f6353749afdb00f8611af887e19c7b79c2d4feaa00100000000fdffffff01fa040300000000001600144fe81ee35eef08dd14b4085b2dd3ba677d688005024730440220756ca552793476d5a607f976fefefce6b39366cd5609f8dfd82bb885ff8835a00220451e9395f2914f67ab733f9d65744f354cedf3837dd78ddfe9d2b9cbe6e9d2c6012103c491faa3a059f6dedde85207ab454bce58d5d5559e311cc90ca3bb0dde37551b024730440220377a53528926527f2a465cd8090a9c52ee334fba5689849a3fed710786faa40402205354f76a4ea4a81e50979604c8a80577acd6257a34fb6ed116ac0289f6d93362012103c4015e7fedd2e5246014140b0d46b5ef4de2665ea1a31aebf4996ae90de6358f88000000",
+        "separate_original_seeds_only": true,
+        "status": "PASS"
+      }
+    }
+  ],
+  "preserved_environment_failure": {
+    "index": 3,
+    "run_id": "45be6f42-8bb5-409d-bebd-b258062708ea",
+    "result": "FAIL",
+    "seconds": 3.453,
+    "test": "fallback_external::fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend",
+    "log_sha256": "0c573abae174fa4aba8e9ff7c469a83d418429acdbe0d263068836f9145d87f8",
+    "selected": 1,
+    "skipped": 76,
+    "classification": "initdb bootstrap only; no product/actor funding executed",
+    "cause": "Privatecontainer /dev/shm64MiB full; root archived+hashverified125stalePGsegments with no livePG and unlinkedexactarchivedpaths",
+    "cleanup_receipt": "/fresh-cache/shm-cleanup-20261017/cleanup-receipt.json",
+    "cleanup_archive_sha256": "cf8adc3717717dd07567e7adaa2c1861caa2ca96c12bb5ea96621337d31786d9",
+    "retry": "Explicitlyauthorized ONE fresh third-only scenario/store/Tdir on identical binaries/oracle/timers; no originalactor retried"
+  },
+  "execution": {
+    "runtime_max": 1,
+    "no_product_build": true,
+    "no_source_or_git_mutation": true,
+    "no_test_oracle_changes": true,
+    "profile": "default existing60s/terminate-after3; no larger timeout",
+    "retries": 0,
+    "preflight": "actual immutable nextestlist matched exactthree requested names before first funding",
+    "first_nextest_config_sha256": "98cad07aa2afa7b175cffd4eb81e90ac1bc3aaa96a014265f883c2e0b67db068",
+    "retry_nextest_config_sha256": "c07465ef1e53cd3dfba9a2e56c9c7b23befbb84157551ee448c9fc58081f9e96",
+    "first_test_directory": "/home/francis/abandon-ship-fresh-attribution/lightning-fallback-worktree/test-existing-three-internal-v2-20261017",
+    "third_retry_test_directory": "/home/francis/abandon-ship-fresh-attribution/lightning-fallback-worktree/test-external-bip84-internal-v2-retry1-20261017",
+    "all_owned_runtime_ended": true
+  },
+  "oracles": {
+    "single_spent_restore": "Real100k receive/fullsendback; recoveryposts acknowledgedbutnotstored; originalseed freshDB must recover receivedID Spent viaordinarymailbox/xpub.",
+    "batch_spent_restore": "Ten genuine1k receives/full10kbatchsendback; seed-onlynewDB recovers>=10coins and allSpent.",
+    "external_BIP84_callback": "Distinct Ark/app originalseeds and actual external AppBip84Wallet OnchainWalletTrait object; appselectedBIP84script; genuine100kboard\u2192absent99kfallback>=6confs; fresh app+Ark DBs recover exact payout+authenticated accountreceipt with zero invented historical Arkdebit; actual callbackBIP84witness spends payout; recoveryconfirms."
+  },
+  "limits": [
+    "Firsttwo ordinaryrestore cases assert recoveredstate, not explicit separate balance/protective-exit absence; no fallbackexpiry in thosecases.",
+    "External app recovery drain may include original board change; no exact-only-payout-input, complete recoveryfee conservation or exact recovered destination amount assertion.",
+    "External fallback payout>=6confirmations; recovery onlyoneblock mined and positive destinationreceipt/payoutspent asserted.",
+    "Actual external feechild subsidy/sameblock confirmation not asserted by this existing callback fixture.",
+    "Arkserver online for fresh seed registration/accountreceipt/restore; no server-independent fresh recovery proof.",
+    "No mobile/browser/Signet/Noah or production acceptance claim; historical independent proof limits retained."
+  ]
+}

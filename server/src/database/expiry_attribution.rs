@@ -215,6 +215,9 @@ impl Db {
 	/// commits atomically; keys queued after preparation retain their own prefix.
 	pub async fn commit_expiry_owner_scan(&self, network: Network, result: &OwnerScanResult) -> anyhow::Result<usize> {
 		self.write(async |tx| {
+			// Do not let queue initialization or a new registration race the
+			// match's pending-row deletion and its cascading cursor cleanup.
+			tx.lock_fallback_registry_writer().await?;
 			tx.get_fallback(result.work.mailbox_pk).await?.context("scan registration disappeared")?
 				.verify(network, result.work.mailbox_pk)?;
 			tx.commit_expiry_scan(result).await
@@ -230,13 +233,22 @@ impl Db {
 		let results = stream::iter(work).map(|work| async move {
 			tokio::task::spawn_blocking(move || work.derive()).await.context("owner derivation worker failed")?
 		}).buffer_unordered(workers).try_collect::<Vec<_>>().await?;
-		let mut stats = ScanStatistics::default();
-		for result in results {
-			stats.keys_matched += self.commit_expiry_owner_scan(network, &result).await?;
-			stats.records_scanned += 1;
-			stats.children_derived += u64::from(result.work.end - result.work.start);
-		}
-		Ok(stats)
+		if results.is_empty() { return Ok(ScanStatistics::default()); }
+		// Derivation is already complete. Commit this bounded pass together,
+		// rather than paying a durable transaction for every account. The short
+		// writer fence also keeps a late queue from recreating resolved work.
+		self.write(async |tx| {
+			tx.lock_fallback_registry_writer().await?;
+			let mut stats = ScanStatistics::default();
+			for result in results {
+				tx.get_fallback(result.work.mailbox_pk).await?.context("scan registration disappeared")?
+					.verify(network, result.work.mailbox_pk)?;
+				stats.keys_matched += tx.commit_expiry_scan(&result).await?;
+				stats.records_scanned += 1;
+				stats.children_derived += u64::from(result.work.end - result.work.start);
+			}
+			Ok(stats)
+		}).await
 	}
 }
 

@@ -81,6 +81,62 @@ async fn expiry_attribution_duplicate_cursors_do_not_starve_other_accounts() {
 }
 
 #[tokio::test]
+async fn expiry_attribution_match_serializes_with_requeue_and_registration() {
+	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_match_registry_race").await;
+	ctx.init_central_postgres().await;
+	let config = ctx.new_postgres("expiry_match_registry_race").await;
+	Db::create(&config).await.unwrap();
+	let db = Db::connect(&config).await.unwrap();
+	let (account, mailbox) = register(&db, 3).await;
+	let wanted = key(&account, 17);
+	db.write(async |tx| tx.queue_expiry_owner(wanted, None).await).await.unwrap();
+	let work = db.prepare_expiry_owner_scan(32, 1).await.unwrap().remove(0).derive().unwrap();
+	let (commit, queue, registration) = db.write(async |tx| {
+		// Stop the real commit at its cursor write, after it has acquired the
+		// registry writer fence. No coverage or match is fabricated.
+		tx.query_one("SELECT scanned_up_to FROM expiry_scan WHERE user_pubkey=$1 FOR UPDATE",
+			&[&wanted.to_string()]).await?;
+		let scan_db = db.clone();
+		let commit = tokio::spawn(async move {
+			scan_db.commit_expiry_owner_scan(Network::Regtest, &work).await.unwrap()
+		});
+		tokio::time::timeout(std::time::Duration::from_secs(5), async {
+			loop {
+				tx.query_one("SELECT pg_stat_clear_snapshot()", &[]).await?;
+				let waiting = tx.query_one("SELECT EXISTS(SELECT 1 FROM pg_stat_activity
+					WHERE datname=current_database() AND wait_event_type='Lock'
+					AND query LIKE 'UPDATE expiry_scan SET scanned_up_to=%')", &[]).await?.get::<_, bool>(0);
+				if waiting { return Ok::<_, anyhow::Error>(()); }
+				tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+			}
+		}).await.expect("owner commit never reached its real cursor lock")?;
+		let queue_db = db.clone();
+		let queue = tokio::spawn(async move {
+			queue_db.write(async |tx| tx.queue_expiry_owner(wanted, Some(mailbox)).await).await.unwrap()
+		});
+		let registration_db = db.clone();
+		let registration = tokio::spawn(async move { register(&registration_db, 7).await });
+		tokio::time::timeout(std::time::Duration::from_secs(5), async {
+			loop {
+				let waiting = tx.query_one("SELECT COUNT(*) FROM pg_locks WHERE locktype='advisory'
+					AND database=(SELECT oid FROM pg_database WHERE datname=current_database())
+					AND objid=3 AND NOT granted", &[]).await?.get::<_, i64>(0);
+				if waiting == 2 { return Ok::<_, anyhow::Error>(()); }
+				tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+			}
+		}).await.expect("requeue and registration must wait behind the actual match")?;
+		Ok((commit, queue, registration))
+	}).await.unwrap();
+	assert_eq!(commit.await.unwrap(), 1);
+	queue.await.unwrap();
+	let (_, new_mailbox) = registration.await.unwrap();
+	assert!(db.read(async |tx| tx.get_fallback(new_mailbox.as_pubkey()).await).await.unwrap().is_some());
+	assert!(matches!(owner(&db, wanted).await, Attribution::Owned { child_index: 17, .. }));
+	let queued = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_pending_key", &[]).await?.get::<_, i64>(0))).await.unwrap();
+	assert_eq!(queued, 0, "a concurrent queue must not recreate a resolved key and strand other work");
+}
+
+#[tokio::test]
 async fn expiry_attribution_prepared_work_never_advances_a_new_pending_key() {
 	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_prepared_work_never_advances_a_new_pending_key").await;
 	ctx.init_central_postgres().await;

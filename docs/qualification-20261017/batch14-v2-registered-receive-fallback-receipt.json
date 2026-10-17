@@ -1,0 +1,79 @@
+{
+  "prepared_at": "2026-10-17T16:53:32.589793+00:00",
+  "state": "COMPLETED",
+  "name": "batch14-v2-registered-receive-fallback",
+  "test": "qualification_registered_forwarded_receive_pays_absent_recipient_after_provider_stops",
+  "expected_selected_count": 1,
+  "network": "regtest",
+  "candidate": "FINALreceive-bindingv2, matched6archivedELFs/freshALL4products",
+  "source_head_label": "6950be5a6855625d76d04e33c86a6b030cd9406e",
+  "dirty": true,
+  "source_manifest_sha256": "c60c5cd4c9d8cc0fbeaa8f8f6a71ba4102a46075cd2d9515fb505d9ba2dc882b",
+  "candidate_manifest_path": "/fresh-cache/runtime-receive-binding-v2-20261017/manifest.json",
+  "candidate_manifest_sha256": "3c4df44d92a60683fcc6923e6e36a1eb1696e2f3755a0b3256086c9fce5bfee9",
+  "metadata_path": "/fresh-cache/runtime-receive-binding-v2-20261017/nextest-binaries-immutable.json",
+  "metadata_sha256": "d307ebbd308b9e7087edf240f12ed94ea1fb911bbe023e33c0c249c0e47adbfb",
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/captaind",
+      "sha256": "592df297c9b58b22261b7487c57a4076bba72b735232707d98275f84981642a8"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/watchmand",
+      "sha256": "edf59b0b352f8aa0a5ef76e8cc306b3c591836b73181baf48b3ce46da0764bbf"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/native-bark-sdk",
+      "sha256": "e14ca0432313af170fc9e063e7afe6c37789970cad9897ed081c14489fa0b547"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/native-server",
+      "sha256": "9913a696a7754cc68f4792e09c531330cf252de380ef031aff758c0367a8104c"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/bark",
+      "sha256": "7a240c143bb103b67c360a75316034211d6212947e0b65571ceaebe19fc06ba4",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/barkd",
+      "sha256": "570ecf6cbbdc441b1262e68ee84035718ac9f72a5f881038b9ca51812a342218",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    }
+  },
+  "runtime_pins": {
+    "/fresh-cache/runtime-receive-binding-v2-20261017/captaind": "592df297c9b58b22261b7487c57a4076bba72b735232707d98275f84981642a8",
+    "/fresh-cache/runtime-receive-binding-v2-20261017/watchmand": "edf59b0b352f8aa0a5ef76e8cc306b3c591836b73181baf48b3ce46da0764bbf",
+    "/fresh-cache/runtime-receive-binding-v2-20261017/native-bark-sdk": "e14ca0432313af170fc9e063e7afe6c37789970cad9897ed081c14489fa0b547",
+    "/fresh-cache/runtime-receive-binding-v2-20261017/native-server": "9913a696a7754cc68f4792e09c531330cf252de380ef031aff758c0367a8104c",
+    "/fresh-cache/runtime-receive-binding-v2-20261017/bark": "7a240c143bb103b67c360a75316034211d6212947e0b65571ceaebe19fc06ba4",
+    "/fresh-cache/runtime-receive-binding-v2-20261017/barkd": "570ecf6cbbdc441b1262e68ee84035718ac9f72a5f881038b9ca51812a342218",
+    "/fresh-cache/runtime-receive-binding-v2-20261017/nextest-binaries-immutable.json": "d307ebbd308b9e7087edf240f12ed94ea1fb911bbe023e33c0c249c0e47adbfb",
+    "/fresh-cache/runtime-receive-binding-v2-20261017/manifest.json": "3c4df44d92a60683fcc6923e6e36a1eb1696e2f3755a0b3256086c9fce5bfee9",
+    "/fresh-cache/runtime-receive-binding-v2-20261017/source-manifest.json": "c60c5cd4c9d8cc0fbeaa8f8f6a71ba4102a46075cd2d9515fb505d9ba2dc882b",
+    "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+    "/fresh-cache/cln-adapter-evidence/plugins/hold": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+    "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+  },
+  "source_case_unchanged_from_baseline": true,
+  "runtime_allocation": "Coordinatorfinalv2handoff: exactly2serialnativecases,1ownedslot/max2globalwithclient; no compile/sourcechanges",
+  "compile_checks_units": "Backendowner798unitPASS/mandatorychecks/productbuild captured; not counted in testing-track native executions",
+  "nix_limit": "existing sourced environment; changed CLN Nix derivation not built",
+  "exact_command": "docker exec -u1000:1000 -w /home/francis/abandon-ship-fresh-integration abandon-fresh-dev-20261016 bash /fresh-cache/testing-track-20261017/batch14-v2-registered-receive-fallback/run.sh",
+  "baseline_case": "batch13registeredreceivePASS34.497s",
+  "deadline": "Unchanged240sinner/outer>240",
+  "execution_started_at": "2026-10-17T16:53:32.617677+00:00",
+  "result": "PASS",
+  "passed": 1,
+  "failed": 0,
+  "run_id": "61d55416-31d6-4704-8f17-dbc8036178bd",
+  "runtime_seconds": 36.185,
+  "test_seconds": 36.184,
+  "execution_ended_at": "2026-10-17T16:54:10.920637+00:00",
+  "oracle": "UnchangednormalPOSTregisteredreceivedswap10k/actualnativezero receivefee; originalproviderandrecipientabsent; actualrecipient9kP2WPKHCore>=6+one1koutputfee/parentCoreprevoutconservation; wholeanchorno provider/ancestorcustomerrefund throughactualHTLCdeadline+completedrebuild; NEWseed-onlyDBauthenticreceipt/exactUTXO andactualBIP84drainCore>=6/positiveactualminerfee/exactvalueconservation",
+  "limitations": "Normalnativeforwarding, not stockNoah/LNURL/Signet110fee/pre-registrationinterruption/requiredproof/reorg; candidatehasdirtysource labelled6950. ChangedNixderivationnotbuilt, exact6aadhocexecutable separatelypinned. No productionreadiness claim.",
+  "paired_products": "All4freshproducts andpairedserverSDKbuiltfromsameexactc60csource; currentCLI7a240/570ec, no historical9eaa substitution",
+  "no_original_actor_retry": true
+}

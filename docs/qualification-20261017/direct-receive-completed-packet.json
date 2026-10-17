@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-17T16:29:13.637540+00:00",
+  "state": "ACTUALPASS34.497s",
+  "pr7_remote_branch": "work/fresh-test-qualification-20261017",
+  "pr7_exact_published_head": "b9f23f5bfb0c0d92911cb00287a70d80a497a92c",
+  "pr7_scope": "Existing3tests/APIfix+completed2PASS/oversizefixtureFAIL checkpoint; latestpublishedremoteONLY",
+  "direct_local_code_commit": "0870bbbb9",
+  "direct_local_code_scope": "ONLY307line source+1moddecl, newdirectsourcecommitnotpushed; localbranch aheadremote, doNOTuseitslocaltipforPR7merge",
+  "direct_test_source_sha256": "56b1553c67864161ea3266d9f51e38d50f3939d2de8b32f697352e68447e911a",
+  "runtime_source_manifest_sha256": "f296180173fcce528f9aadca937fcd7bf6163666c0892a1ee7a98addce477a1a",
+  "runtime_native_elf_sha256": "2a749d53db58fc4be70bcb85589c2045570feffb8069980020a71346dc774c6b",
+  "actual_run_id": "ffa4d760-e441-4ab5-991e-251bdb9e42b9",
+  "evidence_files": {
+    "direct-registered-receive-fallback-v1.patch": "b255efdd1768744fe5b8614bcc3094c9f0cf1ed7ddeef0e85813ed08c157b078",
+    "direct-registered-receive-fallback-v1.json": "99eb3e047fb16231d038e1978ebb0fc74b06c91acedf6c222ea5f32751426441",
+    "direct-receive-runtime-manifest.json": "3a53ebe4211d2928e5b8491a08abd6ebd1bb7fbb0bfb522eee0c988771d56366",
+    "direct-receive-checks-receipt.json": "57826c6a57724932a4a8d4c91440a4c534a610ba3c2b1444824a612c5a7e18b4",
+    "batch13-registered-receive-fallback-receipt.json": "224d3b3f642a28a0eaf2a96558929cd0385a1219f65c0721c150884ea4d87ba2",
+    "batch13-registered-receive-fallback-run.sh": "670ef41d3bd1e54750aefc7f2208bdf727362395e2803b652c9378a0d00848c2",
+    "batch13-registered-receive-fallback-nextest.toml": "a07a404312b60e3708ff31416df89f86d9d79ee9d9e75d2e6e7b54ee7032c391",
+    "batch13-registered-receive-fallback-summary.log": "b7a49c1690663155345ff0597cc73b20d98a7a48656d289d5d2f7150fd44db23",
+    "receive-fallback-cross-review.md": "b90acc738c7e452e2812c629ec31bb0c690839df4072cddd7940446ccadda0d7"
+  },
+  "excluded": "Uncompiledfailedswapdraft, deferredoversizegraphrewrite, frozenrestore/conflict, clientownwalletsource, backenddefensivebinding"
+}

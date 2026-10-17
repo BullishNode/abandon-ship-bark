@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-17T16:21:26.040103+00:00",
+  "head": "3606fa78e78463ca0d46d073ab1e907d51b9681e",
+  "source_files": 1080,
+  "source_manifest_sha256": "f296180173fcce528f9aadca937fcd7bf6163666c0892a1ee7a98addce477a1a",
+  "source_tar_sha256": "0885621173e41709a50c2acf26c4c71b37276ed799f79f0df7f873fe71cf1a0c",
+  "state": "PASS",
+  "lease": "Coordinator reviewedappliedb255efdd+grantednextcanonical servermetadata/checks lease; frozenuntilimmutablecapture",
+  "ended_at": "2026-10-17T16:22:51.582350+00:00",
+  "build_seconds_display": 84.0,
+  "native_server_sha256": "2a749d53db58fc4be70bcb85589c2045570feffb8069980020a71346dc774c6b",
+  "metadata_immutable_sha256": "de04cd55da0b3b650c580c3033db426ff8e45c6c677dbb3181fe5de7f73e5ffe",
+  "metadata_original_sha256": "b24919a5da2504e2f3a4fac38bc0f841a3def8444bac5b8dfd4b0e0b0d542c3a",
+  "source_unchanged_after_build": true,
+  "checks": {
+    "state": "PASS",
+    "exit_code": 0,
+    "at": "2026-10-17T16:25:09.168788+00:00",
+    "head": "3606fa78e78463ca0d46d073ab1e907d51b9681e",
+    "source_manifest_sha256": "f296180173fcce528f9aadca937fcd7bf6163666c0892a1ee7a98addce477a1a",
+    "scope": "canonical justchecks: prechecks/clippy/wasm/workspace tests/examples typecheck; no unit-suite execution",
+    "log_sha256": "08f81ec98e50f7929d70e1461651cf69b3ac49a1877a35f646e5fb99464279b9",
+    "source_unchanged_after_checks": true
+  },
+  "runtime_pins": {
+    "/fresh-cache/testing-track-20261017/runtime-testing-direct-receive-v1/native-server": "2a749d53db58fc4be70bcb85589c2045570feffb8069980020a71346dc774c6b",
+    "/fresh-cache/testing-track-20261017/runtime-testing-direct-receive-v1/nextest-binaries-immutable.json": "de04cd55da0b3b650c580c3033db426ff8e45c6c677dbb3181fe5de7f73e5ffe",
+    "/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4",
+    "/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06",
+    "/fresh-cache/runtime-operation-client-20261017/bark": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f",
+    "/fresh-cache/runtime-operation-client-20261017/barkd": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce",
+    "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+    "/fresh-cache/cln-adapter-evidence/plugins/hold": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+    "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+  },
+  "artifacts_captured": true
+}

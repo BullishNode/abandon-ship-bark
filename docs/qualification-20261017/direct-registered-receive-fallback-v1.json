@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-17T16:19:01.894748+00:00",
+  "source_sha256": "56b1553c67864161ea3266d9f51e38d50f3939d2de8b32f697352e68447e911a",
+  "patch_sha256": "b255efdd1768744fe5b8614bcc3094c9f0cf1ed7ddeef0e85813ed08c157b078",
+  "source_file": "testing/tests/server/qualification_receive_fallback.rs",
+  "includes": "ONLY new307line normalregisteredreceivefallback test+1moddecl; no product/oversize/failedsend change",
+  "test": "qualification_receive_fallback::qualification_registered_forwarded_receive_pays_absent_recipient_after_provider_stops",
+  "whole_case_deadline_seconds": 240,
+  "review": "Root+legacyindependentpeer: no substantiveblocker; receive-fallback-cross-review.md",
+  "network": "regtest",
+  "resource": "1ownedserialnativecase2CLN,2pool100k and2confirmedwatchman100k; real10k invoice, default0receivefee, actual9k customerfallback+1kfee; BIP84recoveryminerfee separate",
+  "scope": "POSTregistered normalreceive; bothoriginalactorsabsent; actualrecipientCore>=6fallback+freshseedonlyrecovery; no pre-registrationincorrect-payoutrepro or stockNoah/LNURL claim",
+  "canonical_apply_owner": "coordinator; nextmetadata lease granted onlyafterrootapplies"
+}

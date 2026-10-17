@@ -1,0 +1,10 @@
+{
+  "state": "PASS",
+  "exit_code": 0,
+  "at": "2026-10-17T16:25:09.168788+00:00",
+  "head": "3606fa78e78463ca0d46d073ab1e907d51b9681e",
+  "source_manifest_sha256": "f296180173fcce528f9aadca937fcd7bf6163666c0892a1ee7a98addce477a1a",
+  "scope": "canonical justchecks: prechecks/clippy/wasm/workspace tests/examples typecheck; no unit-suite execution",
+  "log_sha256": "08f81ec98e50f7929d70e1461651cf69b3ac49a1877a35f646e5fb99464279b9",
+  "source_unchanged_after_checks": true
+}

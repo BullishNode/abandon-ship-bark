@@ -77,3 +77,41 @@ archived product and native-test binaries. It replaced the mempool fee child
 without changing the parent or payees, independently summed actual input
 values, and counted only the canonical confirmed child's miner fee. It tested
 a configured regtest fee rise and restart, not public-network congestion.
+
+## Indexed scheduler measurement, 17 October 2026
+
+Commit `3d7a3fd4a` selects bounded candidate accounts before aggregating their
+pending keys and adds an account/prefix index. Per-key coverage, wrong-mailbox
+verification and the 120-second budget are unchanged. The original failure is
+preserved; its full private data archive was verified against all 3,250 regular
+files before this separate measurement.
+
+Run `7562d5ea-279e-4dbc-9a8c-1abf3086639c` still **failed**, after 358.637 seconds.
+All registrations succeeded. The missing-mailbox case now reaches its owner at
+10,000 records, but the wrong-mailbox case remains unresolved at the budget.
+
+| Registered accounts | Registration records/s | Verified mailbox | No mailbox | Wrong mailbox |
+|---|---:|---:|---:|---:|
+| 100 | 94.79 | 0.039 s | 1.036 s | 3.163 s |
+| 1,000 | 109.82 | 0.033 s | 9.577 s | 12.022 s |
+| 10,000 | 108.71 | 0.194 s | 103.265 s | Failed at 120.139 s |
+
+The last case scanned 9,902 records and derived 424,128 children before timing
+out. It was not retried or reclassified as no owner. More performance work is
+required; the missing-mailbox success alone does not qualify the registry scale.
+No other agent compilation or native workload ran during this measurement, but
+it remains a debug build on the shared workstation, rather than a production
+capacity measurement.
+
+The [complete indexed report](evidence/owner-scheduler-indexed-20261017.json)
+contains the actual measurements, executable hashes, source manifest hash and
+precise scope. On that aggregate source, mandatory checks and 789 workspace unit
+tests passed. Native run `26ee4435-cdda-476d-acc3-d41c8acbe64d` passed nine cases:
+late-key/restart and registry-fence attribution, duplicate-cursor progress,
+the automatic scanner worker, both genuine offboard/payout decision orders and
+post-expiry uninitiated Lightning grant revocation through confirmed payout.
+The prepared-offboard refusal retains the original checkpoint and action holder;
+its later action finalization and history accounting remain separate client work.
+
+This measurement does not fix or qualify the separate historical-forfeit
+geometry failure observed in public-Signet campaign S03.

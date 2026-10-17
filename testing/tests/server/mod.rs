@@ -4,6 +4,7 @@ mod expiry_state;
 mod expiry_ownership;
 mod expiry_payout_flow;
 mod expiry_split;
+mod expiry_reorg;
 mod ban;
 mod blocklist;
 mod block_index;

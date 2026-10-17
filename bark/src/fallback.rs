@@ -6,6 +6,7 @@ mod sync;
 mod reconcile;
 mod protection;
 mod act_by;
+mod adoption;
 pub use act_by::{ExitProtectionOutcome, ExitProtectionSchedule};
 pub use refusal::FallbackRefusal;
 

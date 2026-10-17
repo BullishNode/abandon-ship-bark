@@ -165,6 +165,7 @@ impl Wallet {
 				verified_payouts: previous.verified_payouts.clone(),
 				payout_observations: previous.payout_observations.clone(),
 				adopted_payout_vtxos: previous.adopted_payout_vtxos.clone(),
+				quarantined_vtxos: previous.quarantined_vtxos.clone(),
 			};
 			for entitlement in snapshot.entitlements.values_mut() {
 				entitlement.verify(&record.spk)?;
@@ -180,7 +181,8 @@ impl Wallet {
 					// uncertain rows without an action holder. Mere presence does
 					// not prove another local Ark balance was consumed. A debit
 					// already recorded before adoption remains in local_debits.
-					if matches!(coin.state, VtxoState::Spendable | VtxoState::Exited | VtxoState::Locked { holder: Some(_) }) {
+					if !snapshot.quarantined_vtxos.contains(&coin.id())
+						&& matches!(coin.state, VtxoState::Spendable | VtxoState::Exited | VtxoState::Locked { holder: Some(_) }) {
 						snapshot.local_debits.entry(entitlement.entitlement_id).or_insert(entitlement.gross);
 					}
 				}

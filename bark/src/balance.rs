@@ -217,6 +217,17 @@ impl Wallet {
 			}
 		}
 
+		// Validated recovered bodies without an action holder remain owned,
+		// unavailable value. A preparatory offboard's None lock is not ours.
+		let claimed = self.operation_input_ids().await?;
+		for id in &fallback.quarantined_vtxos {
+			let Some(vtxo) = vtxos.get(id) else { continue; };
+			if vtxo.state == (VtxoState::Locked { holder: None }) && !claimed.contains(id)
+				&& counted.insert(*id) {
+				balance.awaiting_settlement += vtxo.amount();
+			}
+		}
+
 		// Read the exits from the database rather than the exit manager, whose
 		// lock may be held for a while by an exit in progress.
 		let exits = self.inner.db

@@ -112,11 +112,13 @@ impl Wallet {
 			if let Some(entitlement) = snapshot.entitlements.get_mut(id) { entitlement.last_updated = chrono::Local::now(); }
 		}
 		snapshot.verified_payouts = verified;
+		let claimed = self.operation_input_ids().await?;
 		for (id, entitlement) in &snapshot.entitlements {
 			if snapshot.verified_payouts.contains_key(id) {
 				snapshot.awaiting_settlement.remove(&entitlement.vtxo_id);
 				if self.inner.db.get_wallet_vtxo(entitlement.vtxo_id).await?.is_some_and(|coin|
-					coin.state.kind() == VtxoStateKind::Spendable) {
+					coin.state.kind() == VtxoStateKind::Spendable || (coin.state == (VtxoState::Locked { holder: None })
+						&& snapshot.quarantined_vtxos.contains(&coin.id()) && !claimed.contains(&coin.id()))) {
 					snapshot.adopted_payout_vtxos.insert(entitlement.vtxo_id);
 				}
 			} else {
@@ -131,9 +133,15 @@ impl Wallet {
 	pub(crate) async fn apply_fallback_chain_states(&self, snapshot: &FallbackSnapshot) -> anyhow::Result<()> {
 		let discharged = snapshot.entitlements.iter().filter(|(id, _)| snapshot.verified_payouts.contains_key(*id))
 			.map(|(_, entitlement)| entitlement.vtxo_id).collect::<BTreeSet<_>>();
+		let claimed = self.operation_input_ids().await?;
 		for id in &snapshot.adopted_payout_vtxos {
 			let Some(coin) = self.inner.db.get_wallet_vtxo(*id).await? else { continue; };
-			if matches!(coin.state.kind(), VtxoStateKind::Locked | VtxoStateKind::Exited) { continue; }
+			if coin.state == (VtxoState::Locked { holder: None }) && discharged.contains(id)
+				&& snapshot.quarantined_vtxos.contains(id) && !claimed.contains(id) {
+				// Both the authenticated proof and our recovery ownership marker
+				// are durable before releasing this specific orphan None holder.
+				self.inner.db.release_vtxo_lock(*id, None).await?;
+			} else if matches!(coin.state.kind(), VtxoStateKind::Locked | VtxoStateKind::Exited) { continue; }
 			let state = if discharged.contains(id) { VtxoState::Spent } else { VtxoState::Spendable };
 			self.inner.db.update_vtxo_state_checked(*id, state,
 				&[VtxoStateKind::Spendable, VtxoStateKind::Spent]).await?;

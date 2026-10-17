@@ -120,6 +120,16 @@ impl Wallet {
 				}
 			}
 			let Some(stored) = self.inner.db.get_wallet_vtxo(schedule.vtxo_id).await? else { continue; };
+			if stored.state == (VtxoState::Locked { holder: None }) {
+				let snapshot = self.inner.db.get_fallback_snapshot().await?;
+				if snapshot.quarantined_vtxos.contains(&stored.id())
+					&& !self.operation_input_ids().await?.contains(&stored.id()) {
+					// This validated recovery lock has no action owner. The
+					// actual exit movement takes its own checked holder next.
+					self.inner.db.release_vtxo_lock(stored.id(), None).await?;
+				}
+			}
+			let Some(stored) = self.inner.db.get_wallet_vtxo(schedule.vtxo_id).await? else { continue; };
 			if stored.state != VtxoState::Spendable { outcome.blocked.push(schedule.vtxo_id); continue; }
 			self.exit_mgr().start_protective_exit(&stored.vtxo, self).await?;
 			outcome.exits_started.push(schedule.vtxo_id);
@@ -139,6 +149,10 @@ impl Wallet {
 		for stored in self.inner.db.get_vtxos_by_state(&[VtxoStateKind::Spendable, VtxoStateKind::Locked]).await? {
 			if discharged.contains(&stored.id()) || !matches!(stored.policy(), VtxoPolicy::Pubkey(_)) { continue; }
 			let full = self.get_full_vtxo(stored.id()).await?;
+			if stored.state == (VtxoState::Locked { holder: None }) {
+				if !snapshot.quarantined_vtxos.contains(&stored.id()) { continue; }
+				self.validate_vtxo(&full).await.context("recovery exit body is not validated")?;
+			}
 			let clause = self.find_signable_clause(&full).await.context("coin has no locally signable exit clause")?;
 			let sequence = clause.sequence().context("standard coin has no delayed claim clause")?;
 			ensure!(sequence.0 & (1 << 22) == 0, "time-based claim delay needs a separate protection schedule");

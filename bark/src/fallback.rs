@@ -4,6 +4,7 @@ pub(crate) mod payouts;
 mod refusal;
 mod sync;
 mod reconcile;
+mod protection;
 pub use refusal::FallbackRefusal;
 
 use std::time::Duration;

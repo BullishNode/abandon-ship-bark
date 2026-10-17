@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::Context;
-use bitcoin::{Amount, BlockHash, Network, ScriptBuf, Transaction, Txid};
+use bitcoin::{Amount, BlockHash, Network, OutPoint, ScriptBuf, Transaction, Txid};
 use bitcoin::hex::DisplayHex;
 use chrono::{DateTime, Local};
 
@@ -64,6 +64,15 @@ pub struct FallbackEntitlement {
 	pub last_updated: DateTime<Local>,
 }
 
+/// Evidence obtained independently from the wallet's own chain backend.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FallbackVerifiedPayout {
+	pub allocation_id: i64,
+	pub attempt: FallbackAttempt,
+	pub outpoint: OutPoint,
+	pub confirmation: FallbackBlock,
+}
+
 /// This one persisted record is the visible history generation. IDs reserved
 /// for output movements are not visible until the complete account snapshot
 /// commits. A crash during pagination or ID reservation preserves the prior
@@ -79,6 +88,17 @@ pub struct FallbackSnapshot {
 	pub view_token: Vec<u8>,
 	pub awaiting_sync: bool,
 	pub awaiting_settlement: BTreeSet<VtxoId>,
+	/// A server confirmation is never copied here without a chain lookup.
+	#[serde(default)]
+	pub verified_payouts: BTreeMap<i64, FallbackVerifiedPayout>,
+	/// Previously observed outputs remain reserved to the same claims even
+	/// while reorged out. A later server regroup cannot reuse their value.
+	#[serde(default)]
+	pub payout_observations: BTreeMap<i64, Vec<FallbackVerifiedPayout>>,
+	/// Only coins this client itself adopted may be restored after a reorg.
+	/// Persisted before changing their local state, so interruption is safe.
+	#[serde(default)]
+	pub adopted_payout_vtxos: BTreeSet<VtxoId>,
 }
 
 pub(crate) const FALLBACK_SUBSYSTEM: &str = "abandon.fallback_payout";
@@ -124,12 +144,13 @@ impl FallbackEntitlement {
 	}
 
 	fn group_key(&self) -> anyhow::Result<Option<String>> {
-		if self.terminal_claim.is_some() { return Ok(None); }
+		// A server-reported exit is not proof that this client's claim paid.
+		if self.terminal_claim.is_some() { return Ok(Some(format!("pending/{}", self.entitlement_id))); }
 		let Some(attempt) = self.active_attempt()? else {
 			return Ok(Some(format!("pending/{}", self.entitlement_id)));
 		};
 		match attempt.disposition {
-			FallbackDisposition::Operator => Ok(None),
+			FallbackDisposition::Operator => Ok(Some(format!("pending/{}", self.entitlement_id))),
 			FallbackDisposition::CustomerPayout => {
 				let index = attempt.output_index.context("customer allocation lacks output index")?;
 				Ok(Some(format!("allocation/{}/output/{}", attempt.allocation_id, index)))
@@ -202,24 +223,28 @@ impl FallbackSnapshot {
 					FallbackPayoutStage::Confirmed => "confirmed", FallbackPayoutStage::Conflicted => "conflicted",
 				};
 				if attempt.disposition == FallbackDisposition::BelowDust {
-					stage = "below_dust";
-					movement.status = MovementStatus::Successful;
+					stage = "awaiting_settlement";
 				} else if let Some(script) = &attempt.script {
 					let address = bitcoin::Address::from_script(script, network)?;
 					movement.sent_to.push(MovementDestination::bitcoin(address, payout));
-					if attempt.stage == FallbackPayoutStage::Confirmed && attempt.confirmation.is_some() {
+					if entitlements.iter().all(|e| self.verified_payouts.get(&e.entitlement_id).is_some_and(|proof|
+						proof.allocation_id == attempt.allocation_id
+						&& Some(proof.outpoint.vout) == attempt.output_index
+						&& attempt.parent.as_ref().is_some_and(|parent| parent.compute_txid() == proof.outpoint.txid))) {
+						stage = "confirmed";
 						movement.status = MovementStatus::Successful;
 					}
 				}
 			}
-			if !valid { stage = "awaiting_settlement"; movement.status = MovementStatus::Pending; }
+			if movement.status == MovementStatus::Pending && stage == "confirmed" { stage = "awaiting_settlement"; }
+			if !valid && movement.status != MovementStatus::Successful { stage = "awaiting_settlement"; }
 			movement.time.completed_at = if movement.status == MovementStatus::Successful { Some(movement.time.updated_at) } else { None };
 			movement.metadata.insert("fallback".to_owned(), serde_json::json!({
 				"txid": reference.and_then(|a| a.parent.as_ref()).map(Transaction::compute_txid),
 				"output_index": reference.and_then(|a| a.output_index),
 				"allocation_id": reference.map(|a| a.allocation_id),
 				"stage": stage, "payout_sat": payout.to_sat(), "forfeited_sat": forfeited.to_sat(),
-				"chain_view_valid": valid, "entitlements": entitlements,
+				"chain_view_valid": valid, "chain_verified": movement.status == MovementStatus::Successful, "entitlements": entitlements,
 			}));
 			result.push(movement);
 		}
@@ -230,6 +255,7 @@ impl FallbackSnapshot {
 
 #[cfg(test)]
 mod tests {
+	use bitcoin::hashes::Hash;
 	use super::*;
 	use std::str::FromStr;
 
@@ -288,6 +314,21 @@ mod tests {
 		assert!(history.iter().all(|m| m.status == MovementStatus::Pending && m.metadata["fallback"]["stage"] == "awaiting_settlement"));
 		assert_eq!(total_debit(&snapshot), -10_000);
 		assert!(history.iter().all(|m| m.metadata["fallback"]["entitlements"][0]["attempts"].as_array().unwrap().len() == 2));
+	}
+
+	#[test]
+	fn server_confirmed_without_independent_chain_observation_stays_pending() {
+		let mut snapshot = FallbackSnapshot::default();
+		let mut entitlement = entry(1, 10, 4_000, 1_000);
+		let attempt = &mut entitlement.attempts[0];
+		attempt.stage = FallbackPayoutStage::Confirmed;
+		attempt.confirmation = Some(FallbackBlock { height: 123.into(), hash: BlockHash::all_zeros() });
+		snapshot.entitlements.insert(1, entitlement);
+		reserve(&mut snapshot);
+		let history = snapshot.project(vec![], Network::Regtest).unwrap();
+		assert_eq!(history[0].status, MovementStatus::Pending);
+		assert_eq!(history[0].metadata["fallback"]["stage"], "awaiting_settlement");
+		assert_eq!(history[0].metadata["fallback"]["chain_verified"], false);
 	}
 
 	#[test]

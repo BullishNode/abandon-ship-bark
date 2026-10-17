@@ -1,0 +1,8 @@
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/testing-track-20261017/runtime-testing-e44-tests-v1/nextest-binaries-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' expiry_ready_root_does_not_wait_for_unresolved_same_expiry_root --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch07-readiness-isolation/nextest.toml
+────────────
+ Nextest run ID b4597c9f-0b79-40c5-9b2b-4865174a9791 with nextest profile: default
+    Starting 1 test across 1 binary (260 tests skipped)
+        PASS [  26.183s] (1/1) ark-testing::server qualification_readiness::expiry_ready_root_does_not_wait_for_unresolved_same_expiry_root
+────────────
+     Summary [  26.184s] 1 test run: 1 passed, 260 skipped

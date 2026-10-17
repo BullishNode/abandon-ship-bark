@@ -1,0 +1,8 @@
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/runtime-s03-current-cut-correction-20261017/nextest-binaries-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' expiry_decision_wins_over_prepared_native_offboard --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch02-offboard-decision/nextest.toml
+────────────
+ Nextest run ID 98579530-8ac9-46eb-a016-2abdf0c3d271 with nextest profile: default
+    Starting 1 test across 1 binary (259 tests skipped)
+        PASS [  22.445s] (1/1) ark-testing::server expiry_operation_races::expiry_decision_wins_over_prepared_native_offboard
+────────────
+     Summary [  22.446s] 1 test run: 1 passed, 259 skipped

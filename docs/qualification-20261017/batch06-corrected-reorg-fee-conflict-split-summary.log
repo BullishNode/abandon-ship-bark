@@ -1,0 +1,12 @@
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/runtime-s03-current-cut-correction-20261017/nextest-binaries-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' expiry_actual_payout_reorg_preserves_receipt_and_fence expiry_actual_deep_payout_reorg_preserves_receipt_and_fence expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_child expiry_actual_partial_exit_conflict_regroups_after_restart expiry_requested_split_preserves_mixed_siblings_and_eventual_refund --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch06-corrected-reorg-fee-conflict-split/nextest.toml
+────────────
+ Nextest run ID fd8577c8-bb26-481e-a56c-b6ff84661ce0 with nextest profile: default
+    Starting 5 tests across 1 binary (255 tests skipped)
+        PASS [  30.655s] (1/5) ark-testing::server expiry_conflict::expiry_actual_partial_exit_conflict_regroups_after_restart
+        PASS [  33.463s] (2/5) ark-testing::server expiry_reorg::expiry_actual_deep_payout_reorg_preserves_receipt_and_fence
+        PASS [  20.581s] (3/5) ark-testing::server expiry_reorg::expiry_actual_payout_reorg_preserves_receipt_and_fence
+        PASS [  20.890s] (4/5) ark-testing::server expiry_reorg::expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_child
+        PASS [  37.109s] (5/5) ark-testing::server expiry_split::expiry_requested_split_preserves_mixed_siblings_and_eventual_refund
+────────────
+     Summary [ 142.702s] 5 tests run: 5 passed, 255 skipped

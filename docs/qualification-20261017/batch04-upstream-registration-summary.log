@@ -1,0 +1,9 @@
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/runtime-s03-current-cut-correction-20261017/nextest-binaries-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' register_vtxo_transactions_ --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch04-upstream-registration/nextest.toml
+────────────
+ Nextest run ID b3e80702-16a0-424c-b862-45acf86ae950 with nextest profile: default
+    Starting 2 tests across 1 binary (258 tests skipped)
+        PASS [  13.758s] (1/2) ark-testing::server registration::register_vtxo_transactions_accepts_duplicate_ids
+        PASS [  32.612s] (2/2) ark-testing::server registration::register_vtxo_transactions_refuses_child_of_exited_input
+────────────
+     Summary [  46.373s] 2 tests run: 2 passed, 258 skipped

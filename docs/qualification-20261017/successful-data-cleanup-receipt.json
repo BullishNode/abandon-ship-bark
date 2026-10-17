@@ -1,0 +1,132 @@
+{
+  "recorded_at": "2026-10-17T14:59:38.228142+00:00",
+  "scope": "testing-track owned successful raw data only",
+  "runs": [
+    {
+      "run": "batch01-current-cut",
+      "run_id": "1949f9ef-8ab4-4d27-adcb-1fa7624f80fa",
+      "verified_no_live_owned_test_processes": true,
+      "removed_only_successful_private_data": [
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch01-current-cut/test-data",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch01-current-cut/test"
+      ],
+      "preserved_file_count": 1856,
+      "recorded_raw_bytes": 116877231,
+      "private_hash_manifest": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch01-current-cut/successful-data-hashes.private.json",
+      "hash_manifest_sha256": "7deab220f0657d2c5754ef421a8c4ed66b68c0f805a33f0ae50f08c8c6f934e8",
+      "preserved": [
+        "receipt",
+        "exact runner",
+        "nextest store",
+        "summary log",
+        "source/product provenance"
+      ],
+      "outcome": "No product failures existed in these runs; failed preflight attempts remain recorded"
+    },
+    {
+      "run": "batch02-offboard-decision",
+      "run_id": "98579530-8ac9-46eb-a016-2abdf0c3d271",
+      "verified_no_live_owned_test_processes": true,
+      "removed_only_successful_private_data": [
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch02-offboard-decision/test-data",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch02-offboard-decision/test"
+      ],
+      "preserved_file_count": 1804,
+      "recorded_raw_bytes": 114233016,
+      "private_hash_manifest": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch02-offboard-decision/successful-data-hashes.private.json",
+      "hash_manifest_sha256": "800d7602d91c00ddb5eb68f38a8d20d03bfdbf93bf915e327ef4315b8589066f",
+      "preserved": [
+        "receipt",
+        "exact runner",
+        "nextest store",
+        "summary log",
+        "source/product provenance"
+      ],
+      "outcome": "No product failures existed in these runs; failed preflight attempts remain recorded"
+    },
+    {
+      "run": "batch03-offboard-registration",
+      "run_id": "9de48e15-978a-43aa-9eb4-eee2f68c4da1",
+      "verified_no_live_owned_test_processes": true,
+      "removed_only_successful_private_data": [
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch03-offboard-registration/test-data",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch03-offboard-registration/test"
+      ],
+      "preserved_file_count": 1805,
+      "recorded_raw_bytes": 114056680,
+      "private_hash_manifest": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch03-offboard-registration/successful-data-hashes.private.json",
+      "hash_manifest_sha256": "79b765320f1809ee7c0305b69d01de0c099e652cb979ee27bf6e52d1231addc9",
+      "preserved": [
+        "receipt",
+        "exact runner",
+        "nextest store",
+        "summary log",
+        "source/product provenance"
+      ],
+      "outcome": "No product failures existed in these runs; failed preflight attempts remain recorded"
+    },
+    {
+      "run": "batch04-upstream-registration",
+      "run_id": "b3e80702-16a0-424c-b862-45acf86ae950",
+      "verified_no_live_owned_test_processes": true,
+      "removed_only_successful_private_data": [
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch04-upstream-registration/test-data",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch04-upstream-registration/test"
+      ],
+      "preserved_file_count": 3732,
+      "recorded_raw_bytes": 247123957,
+      "private_hash_manifest": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch04-upstream-registration/successful-data-hashes.private.json",
+      "hash_manifest_sha256": "7bb665ecd84ec7ba705ab736028436976741bb696ced4e45405d652a1946bb5d",
+      "preserved": [
+        "receipt",
+        "exact runner",
+        "nextest store",
+        "summary log",
+        "source/product provenance"
+      ],
+      "outcome": "No product failures existed in these runs; failed preflight attempts remain recorded"
+    },
+    {
+      "run": "batch05-upstream-offboard-mailbox",
+      "run_id": "4324f39d-9124-404c-a98d-52f1fe760b3f",
+      "verified_no_live_owned_test_processes": true,
+      "removed_only_successful_private_data": [
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch05-upstream-offboard-mailbox/test-data",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch05-upstream-offboard-mailbox/test"
+      ],
+      "preserved_file_count": 9086,
+      "recorded_raw_bytes": 571049673,
+      "private_hash_manifest": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch05-upstream-offboard-mailbox/successful-data-hashes.private.json",
+      "hash_manifest_sha256": "3c8ab2f2f4d1696f767c2aeb7048cc6a190ff729e4f379304181bd2a295ae655",
+      "preserved": [
+        "receipt",
+        "exact runner",
+        "nextest store",
+        "summary log",
+        "source/product provenance"
+      ],
+      "outcome": "No product failures existed in these runs; failed preflight attempts remain recorded"
+    },
+    {
+      "run": "batch06-corrected-reorg-fee-conflict-split",
+      "run_id": "fd8577c8-bb26-481e-a56c-b6ff84661ce0",
+      "verified_no_live_owned_test_processes": true,
+      "removed_only_successful_private_data": [
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch06-corrected-reorg-fee-conflict-split/test-data",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch06-corrected-reorg-fee-conflict-split/test"
+      ],
+      "preserved_file_count": 9039,
+      "recorded_raw_bytes": 530283885,
+      "private_hash_manifest": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch06-corrected-reorg-fee-conflict-split/successful-data-hashes.private.json",
+      "hash_manifest_sha256": "6db852218d48ad0af36d0aa9ccf536fbc4d536a3d9ad91d4ba4fc529694bef61",
+      "preserved": [
+        "receipt",
+        "exact runner",
+        "nextest store",
+        "summary log",
+        "source/product provenance"
+      ],
+      "outcome": "No product failures existed in these runs; failed preflight attempts remain recorded"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source /fresh-cache/default-env.sh >/dev/null
+export CARGO_HOME=/fresh-cache/cargo
+export CARGO_TARGET_DIR=/fresh-cache/target
+export CARGO_NET_OFFLINE=true
+export CAPTAIND_EXEC=/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind
+export WATCHMAND_EXEC=/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand
+export BARK_EXEC=/fresh-cache/runtime-operation-client-20261017/bark
+export BARKD_EXEC=/fresh-cache/runtime-operation-client-20261017/barkd
+export TEST_DIRECTORY=/fresh-cache/testing-track-20261017/batch04-upstream-registration/test-data
+export KEEP_ALL_TEST_DATA=1
+export NEXTEST_NO_TESTS=fail
+cd /home/francis/abandon-ship-fresh-integration
+exec just --set JUSTFILE_DIR /fresh-cache/testing-track-20261017/batch04-upstream-registration int-binaries /fresh-cache/runtime-s03-current-cut-correction-20261017/nextest-binaries-immutable.json 'register_vtxo_transactions_ --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch04-upstream-registration/nextest.toml'

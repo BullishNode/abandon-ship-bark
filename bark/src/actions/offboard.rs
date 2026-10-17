@@ -391,6 +391,15 @@ impl WalletAction for Offboard {
 				Advance::Failed(error)
 			},
 			Progress::OffboardTxPrepared { offboard_vtxo_ids, offboard_tx, .. } => {
+				if crate::FallbackRefusal::from_error(&error) == Some(crate::FallbackRefusal::DecidedForFallback) {
+					// This is an admission fence, not evidence of payment or
+					// a lost session. Retain the full checkpoint and its holder
+					// while returning the authentic refusal to the caller.
+					return Advance::Park {
+						state: self, wake_after: Some(CONFIRMATION_POLL_INTERVAL),
+						error: Some(error),
+					};
+				}
 				// The server no longer holds a session for this offboard
 				// (finish sessions only survive the server's session
 				// timeout). Either our finish went through and we lost the

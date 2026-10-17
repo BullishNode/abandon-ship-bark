@@ -1,0 +1,412 @@
+{
+  "kind": "independent_offline_orphan_fee_child_reconciliation",
+  "at": "2026-10-17T23:11:36.660184+00:00",
+  "mode": "Public retained blk/xor, final debug UpdateTip, exact immutable code/metadata/products, native summary ONLY. No service/node/PG/wallet/RPC/native action. No privatewallet/seed/config/auth/mempool files opened.",
+  "run": {
+    "run_id": "6289189c-5a27-40cd-b10b-9c692e7985ae",
+    "selected": [
+      [
+        "ark-testing::server",
+        "expiry_reorg::expiry_payout_replaces_orphan_funding_child_without_changing_parent"
+      ]
+    ],
+    "native_seconds": 23.801,
+    "parent_reported_wrapper_seconds": 24.304,
+    "status_from_native_log": "PASS1/1"
+  },
+  "provenance": {
+    "head": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+    "dirty": true,
+    "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+    "source_archive_sha256": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+    "archived_expiry_reorg_rs_sha256": "a96cdc801166197e906b0a2528799ac2becb2003e8150e3349bb638921a0ef0d",
+    "metadata_sha256": "ca163caf8629bad6f7b28e399d796762f0ca8ccf7a296558c522fd62d32a1d9c",
+    "products": {
+      "captaind": {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/captaind",
+        "sha256": "79dc4e8ac031c3c83e98e3818354c25f90217db2ed75d6250f227247c21f4d88",
+        "actual_version": "captaind 0.7.1-dev+f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0"
+      },
+      "watchmand": {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/watchmand",
+        "sha256": "12833888b556987c7c975fec155189589cb471fc31ca2e4e90c4c54d01fc9dea",
+        "actual_version": "watchmand 0.7.1-dev+f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0"
+      },
+      "bark": {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/bark",
+        "sha256": "0ac32573d1684401a90acf630ddfee355ed3633c3f594d95d4b1f8644f63d980",
+        "actual_version": "bark 0.7.1-dev (f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0)",
+        "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+        "web_dist": "/fresh-cache/web-dist-4c1c979"
+      },
+      "barkd": {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/barkd",
+        "sha256": "32efdb7b014e1ed3afe985e40aec59f28f9abeaeaf5a87dea42c27c35bd3d4be",
+        "actual_version": "barkd 0.7.1-dev (f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0)",
+        "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+        "web_dist": "/fresh-cache/web-dist-4c1c979"
+      },
+      "ark-testing::server": {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-server",
+        "sha256": "579c6b2dbd1b06edcef6e50b63c8e36b1e7d49fd68f0b66e853bb473259c8fe4"
+      }
+    },
+    "decoder_helper_sha256": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+    "script_sha256": "27b52b814416d91377c9d7cf8b93e308847d05e704117d0fa5826cb8bde71b76"
+  },
+  "chain": {
+    "final_update_tip": "179591f79958c9038548f0823eaa1f091d25ab36e700a4d315f4bde327700cb7",
+    "height": 138,
+    "canonical_blocks": 139,
+    "all_retained_blocks": 146,
+    "verified_transaction_merkle_roots": 146,
+    "verified_witness_commitments": 145,
+    "canonical_duplicate_noncoinbase_spends": 0
+  },
+  "immutable_parent": {
+    "txid": "cb8266b5fe5300361c0bcd1227011f7895da1f51fb944c964bb4f1ed354e42c3",
+    "wtxid": "7360a904b0897bc706e19901dbb861cc9b643c1f6c09043068051f8627a23243",
+    "version": 3,
+    "signed_raw_sha256": "05f1f40b828767fa1c858358aab2bf96ac17f47491ba4633a167400ca10d8fb6",
+    "raw_bytes": 280,
+    "canonical": {
+      "height": 133,
+      "block_hash": "16763c67ab9c2322a89b85f1dce0a18d2c5a732f25648da57610d194e2b0214e",
+      "confirmations": 6
+    },
+    "retained_occurrences": [
+      {
+        "block_hash": "26e29cbf38432e93ce54aa159fbfd810260adcb7fcc34117e6c468a029fcf14e",
+        "signed_raw_sha256": "05f1f40b828767fa1c858358aab2bf96ac17f47491ba4633a167400ca10d8fb6",
+        "wtxid": "7360a904b0897bc706e19901dbb861cc9b643c1f6c09043068051f8627a23243"
+      },
+      {
+        "block_hash": "16763c67ab9c2322a89b85f1dce0a18d2c5a732f25648da57610d194e2b0214e",
+        "signed_raw_sha256": "05f1f40b828767fa1c858358aab2bf96ac17f47491ba4633a167400ca10d8fb6",
+        "wtxid": "7360a904b0897bc706e19901dbb861cc9b643c1f6c09043068051f8627a23243"
+      }
+    ],
+    "inputs": [
+      {
+        "point": "3812660cbac8de682653abe40a02a64b0e88f3af4a7e32db32b62ae5388ab228:0",
+        "value_sat": 100000,
+        "script_hex": "51206a1e0c3b2ba6ab10ea97cfa5b5dbb05be922a18f9c237a2946a246d88c2a15b8"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 99000,
+        "script_hex": "0014417e0ac7bbd59c5e5175ecdb6c345e631eb22933"
+      },
+      {
+        "vout": 1,
+        "value_sat": 1000,
+        "script_hex": "5120c277d5569bebba0d6dfdd60b0758c0fd26c320933dfe3ac9cfc48a7a371d3aa7"
+      },
+      {
+        "vout": 2,
+        "value_sat": 0,
+        "script_hex": "51024e73"
+      }
+    ],
+    "measured_miner_fee_sat": 0
+  },
+  "board": {
+    "txid": "3812660cbac8de682653abe40a02a64b0e88f3af4a7e32db32b62ae5388ab228",
+    "wtxid": "94a24320d45ff65a3b9bbb055b27d5c89814344772cb2d9cfdc816e9d1335151",
+    "version": 2,
+    "signed_raw_sha256": "aa1bb982f02faceaa5a10101a6531a5224dd08e798f78b4503c9a3f22d9c86ac",
+    "raw_bytes": 234,
+    "canonical": {
+      "height": 106,
+      "block_hash": "5d56f890d507f6b5bf6b4b409b59fb7d4f6951989cd5c35c88a6c568c8ec3a30",
+      "confirmations": 33
+    },
+    "retained_occurrences": [
+      {
+        "block_hash": "5d56f890d507f6b5bf6b4b409b59fb7d4f6951989cd5c35c88a6c568c8ec3a30",
+        "signed_raw_sha256": "aa1bb982f02faceaa5a10101a6531a5224dd08e798f78b4503c9a3f22d9c86ac",
+        "wtxid": "94a24320d45ff65a3b9bbb055b27d5c89814344772cb2d9cfdc816e9d1335151"
+      }
+    ],
+    "inputs": [
+      {
+        "point": "7c23ae644aa52151fa161007add4cea003cc45c462a43106634f4b78e63e5a32:1",
+        "value_sat": 200000,
+        "script_hex": "001416292f82726451a94f22b7c3fd7d6b5826bc2cbd"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 100000,
+        "script_hex": "51206a1e0c3b2ba6ab10ea97cfa5b5dbb05be922a18f9c237a2946a246d88c2a15b8"
+      },
+      {
+        "vout": 1,
+        "value_sat": 99237,
+        "script_hex": "00145197f6c9f8e1adbd64e7b5f04bdda410d5892938"
+      }
+    ],
+    "measured_miner_fee_sat": 763
+  },
+  "canonical_fee_child": {
+    "txid": "d16d9552c3168291826cc0ae12440a21c4cfadb7b895b5afe7ae24a3afa2052f",
+    "wtxid": "5c9b855e31149d6966ae82b5cc154c825fdb1cbb13d38d5f0fc90cd811572824",
+    "version": 3,
+    "signed_raw_sha256": "b0b1929f86c877bab9cd3d47ba3040797f0d00cc3d72b0c1c18d2dc9ce904f10",
+    "raw_bytes": 204,
+    "canonical": {
+      "height": 133,
+      "block_hash": "16763c67ab9c2322a89b85f1dce0a18d2c5a732f25648da57610d194e2b0214e",
+      "confirmations": 6
+    },
+    "retained_occurrences": [
+      {
+        "block_hash": "16763c67ab9c2322a89b85f1dce0a18d2c5a732f25648da57610d194e2b0214e",
+        "signed_raw_sha256": "b0b1929f86c877bab9cd3d47ba3040797f0d00cc3d72b0c1c18d2dc9ce904f10",
+        "wtxid": "5c9b855e31149d6966ae82b5cc154c825fdb1cbb13d38d5f0fc90cd811572824"
+      }
+    ],
+    "inputs": [
+      {
+        "point": "cb8266b5fe5300361c0bcd1227011f7895da1f51fb944c964bb4f1ed354e42c3:2",
+        "value_sat": 0,
+        "script_hex": "51024e73"
+      },
+      {
+        "point": "d07c366a2371c2f3c2ac8497516efa4eec61a8942d362896da4f2e1144375afc:1",
+        "value_sat": 100000,
+        "script_hex": "51200335482c42f29fd83c3e41e8cfe03c1ac86623dc6f6ff44005fc660657e9d3f9"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 97719,
+        "script_hex": "5120f3fd86f948acb6a9f60148f72f62bc91f74e7c40282a1ad72331e76611bdf3bf"
+      }
+    ],
+    "measured_miner_fee_sat": 2281
+  },
+  "orphan_fee_child": {
+    "txid": "75dd8cb4ca73c5a3db42d27643c322a8a870817034ebb79f690ccc3a0f70e380",
+    "wtxid": "ac9553a9656bd1e1c84bcc1d239aebe72143c9e7dadfea97414ce72e525b9351",
+    "version": 3,
+    "signed_raw_sha256": "7eecf9c8964b7000ccf4f4a8ddc68d77df66c48ab9ccaef374f3d955c26a549e",
+    "raw_bytes": 204,
+    "canonical": null,
+    "retained_occurrences": [
+      {
+        "block_hash": "26e29cbf38432e93ce54aa159fbfd810260adcb7fcc34117e6c468a029fcf14e",
+        "signed_raw_sha256": "7eecf9c8964b7000ccf4f4a8ddc68d77df66c48ab9ccaef374f3d955c26a549e",
+        "wtxid": "ac9553a9656bd1e1c84bcc1d239aebe72143c9e7dadfea97414ce72e525b9351"
+      }
+    ],
+    "inputs": [
+      {
+        "point": "cb8266b5fe5300361c0bcd1227011f7895da1f51fb944c964bb4f1ed354e42c3:2",
+        "value_sat": 0,
+        "script_hex": "51024e73"
+      },
+      {
+        "point": "2dbbe3e4ca7e49d2d6883f099c8eb94cddcab3cbca10b601675c57e56cc23a8d:1",
+        "value_sat": 100000,
+        "script_hex": "51200335482c42f29fd83c3e41e8cfe03c1ac86623dc6f6ff44005fc660657e9d3f9"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 97719,
+        "script_hex": "5120ae80263f0c26229222d393fb104969a06158ccd156f3cefcc22b451eedd6d80b"
+      }
+    ],
+    "measured_miner_fee_sat": 2281
+  },
+  "funding_rbf": {
+    "original_noncanonical": {
+      "txid": "2dbbe3e4ca7e49d2d6883f099c8eb94cddcab3cbca10b601675c57e56cc23a8d",
+      "wtxid": "a322d83cd1cae6b971590be185c950612acee8b7c458e94878d7093b962768c7",
+      "version": 2,
+      "signed_raw_sha256": "1372733affe11c3b5be2d28e623ba47354bd0837e8fb6d2e740f278c040cc0c2",
+      "raw_bytes": 246,
+      "canonical": null,
+      "retained_occurrences": [
+        {
+          "block_hash": "3ab657cb45b4e1422a440076005d05d1d70e814481809203bccec2dd56601d14",
+          "signed_raw_sha256": "1372733affe11c3b5be2d28e623ba47354bd0837e8fb6d2e740f278c040cc0c2",
+          "wtxid": "a322d83cd1cae6b971590be185c950612acee8b7c458e94878d7093b962768c7"
+        }
+      ],
+      "inputs": [
+        {
+          "point": "7c23ae644aa52151fa161007add4cea003cc45c462a43106634f4b78e63e5a32:0",
+          "value_sat": 4999799859,
+          "script_hex": "00140191d301e32019079bc58a8017027db087faf642"
+        }
+      ],
+      "outputs": [
+        {
+          "vout": 0,
+          "value_sat": 4999699694,
+          "script_hex": "5120bbfcacdb8f16c02be8741b186cac41a8bfe9a3269df16976235ab74069d7a0dc"
+        },
+        {
+          "vout": 1,
+          "value_sat": 100000,
+          "script_hex": "51200335482c42f29fd83c3e41e8cfe03c1ac86623dc6f6ff44005fc660657e9d3f9"
+        }
+      ],
+      "measured_miner_fee_sat": 165
+    },
+    "canonical_replacement": {
+      "txid": "d07c366a2371c2f3c2ac8497516efa4eec61a8942d362896da4f2e1144375afc",
+      "wtxid": "83fddbca0bc2cc0d0a142af704f423f79835e3587c9499e9b76b4063bab65d17",
+      "version": 2,
+      "signed_raw_sha256": "010927c5d7908f473443d2c53e21afbbfeb530d596fa6a0e1558f90b0702e3c4",
+      "raw_bytes": 246,
+      "canonical": {
+        "height": 131,
+        "block_hash": "013ebb89db45159aae9377b8d31ddd089eaadabce731f727ff812358a60aef1b",
+        "confirmations": 8
+      },
+      "retained_occurrences": [
+        {
+          "block_hash": "013ebb89db45159aae9377b8d31ddd089eaadabce731f727ff812358a60aef1b",
+          "signed_raw_sha256": "010927c5d7908f473443d2c53e21afbbfeb530d596fa6a0e1558f90b0702e3c4",
+          "wtxid": "83fddbca0bc2cc0d0a142af704f423f79835e3587c9499e9b76b4063bab65d17"
+        }
+      ],
+      "inputs": [
+        {
+          "point": "7c23ae644aa52151fa161007add4cea003cc45c462a43106634f4b78e63e5a32:0",
+          "value_sat": 4999799859,
+          "script_hex": "00140191d301e32019079bc58a8017027db087faf642"
+        }
+      ],
+      "outputs": [
+        {
+          "vout": 0,
+          "value_sat": 4999691609,
+          "script_hex": "5120bbfcacdb8f16c02be8741b186cac41a8bfe9a3269df16976235ab74069d7a0dc"
+        },
+        {
+          "vout": 1,
+          "value_sat": 100000,
+          "script_hex": "51200335482c42f29fd83c3e41e8cfe03c1ac86623dc6f6ff44005fc660657e9d3f9"
+        }
+      ],
+      "measured_miner_fee_sat": 8250
+    }
+  },
+  "payout": {
+    "point": "cb8266b5fe5300361c0bcd1227011f7895da1f51fb944c964bb4f1ed354e42c3:0",
+    "script_hex": "0014417e0ac7bbd59c5e5175ecdb6c345e631eb22933",
+    "gross_sat": 100000,
+    "paid_sat": 99000,
+    "charged_output_fee_sat": 1000,
+    "terminal_unspent": true,
+    "canonical_matching_99k_outputs": 1,
+    "recipient_identity_limit": "Exact script/value established from block bytes. Rightful registered-recipient binding is inherited native source/assertion evidence; no independent public authenticated registration record exported here."
+  },
+  "fees": {
+    "current_parent_miner_fee_sat": 0,
+    "current_child_miner_fee_sat": 2281,
+    "current_package_miner_fee_sat": 2281,
+    "orphan_child_miner_fee_sat_NOT_CURRENT_EXPENSE": 2281,
+    "parent_operator_remainder_sat": 1000,
+    "same_block_depth": {
+      "height": 133,
+      "block_hash": "16763c67ab9c2322a89b85f1dce0a18d2c5a732f25648da57610d194e2b0214e",
+      "confirmations": 6
+    },
+    "native_journal_limit": "Actual canonical old/new fee occurrence is independently reconciled; old confirmed_hash NULL, sole new confirmed journal row and recorded fee equality are native assertions only. No retained PostgreSQL/privatewallet opened or public journal export found."
+  },
+  "physical_cut": {
+    "transactions": [
+      "3812660cbac8de682653abe40a02a64b0e88f3af4a7e32db32b62ae5388ab228",
+      "cb8266b5fe5300361c0bcd1227011f7895da1f51fb944c964bb4f1ed354e42c3",
+      "d16d9552c3168291826cc0ae12440a21c4cfadb7b895b5afe7ae24a3afa2052f"
+    ],
+    "external_inputs": [
+      {
+        "point": "7c23ae644aa52151fa161007add4cea003cc45c462a43106634f4b78e63e5a32:1",
+        "value_sat": 200000,
+        "script_hex": "001416292f82726451a94f22b7c3fd7d6b5826bc2cbd"
+      },
+      {
+        "point": "d07c366a2371c2f3c2ac8497516efa4eec61a8942d362896da4f2e1144375afc:1",
+        "value_sat": 100000,
+        "script_hex": "51200335482c42f29fd83c3e41e8cfe03c1ac86623dc6f6ff44005fc660657e9d3f9"
+      }
+    ],
+    "terminal_outputs": [
+      {
+        "point": "3812660cbac8de682653abe40a02a64b0e88f3af4a7e32db32b62ae5388ab228:1",
+        "value_sat": 99237,
+        "script_hex": "00145197f6c9f8e1adbd64e7b5f04bdda410d5892938"
+      },
+      {
+        "point": "cb8266b5fe5300361c0bcd1227011f7895da1f51fb944c964bb4f1ed354e42c3:0",
+        "value_sat": 99000,
+        "script_hex": "0014417e0ac7bbd59c5e5175ecdb6c345e631eb22933"
+      },
+      {
+        "point": "cb8266b5fe5300361c0bcd1227011f7895da1f51fb944c964bb4f1ed354e42c3:1",
+        "value_sat": 1000,
+        "script_hex": "5120c277d5569bebba0d6dfdd60b0758c0fd26c320933dfe3ac9cfc48a7a371d3aa7"
+      },
+      {
+        "point": "d16d9552c3168291826cc0ae12440a21c4cfadb7b895b5afe7ae24a3afa2052f:0",
+        "value_sat": 97719,
+        "script_hex": "5120f3fd86f948acb6a9f60148f72f62bc91f74e7c40282a1ad72331e76611bdf3bf"
+      }
+    ],
+    "customer_funding_sat": 200000,
+    "used_sponsor_sat": 100000,
+    "total_input_sat": 300000,
+    "board_miner_fee_sat": 763,
+    "current_package_miner_fee_sat": 2281,
+    "all_graph_miner_fee_sat": 3044,
+    "all_terminal_value_sat": 296956,
+    "equation": "300000 = 296956 terminal_outputs + 3044 actual_miner_fees",
+    "additional_same_script_confirmed_sponsors": [
+      {
+        "point": "4622f40d765a8486a9a528e3b7da42875d0403b0a3010d05091d6c1c1b496bdf:0",
+        "value_sat": 100000,
+        "canonical": {
+          "height": 131,
+          "block_hash": "013ebb89db45159aae9377b8d31ddd089eaadabce731f727ff812358a60aef1b",
+          "confirmations": 8
+        }
+      }
+    ],
+    "extended_equation": "400000 = 296956 graph_terminal + 100000 unused_sponsor + 3044 graph_fees"
+  },
+  "limits": [
+    "Reconstructed final branch anchored to retained Core UpdateTip; header linkage, stripped tx merkle roots and segwit witness commitments checked. No new consensus/script/signature validation, proof-of-work or independent live RPC performed.",
+    "No mempool.dat or wallet/seed/descriptor/PG data opened; absence from final canonical chain does not prove a transaction is absent from a current mempool.",
+    "Funding-key custody, authentic registration/payee identity, native background scheduling, genuine local signing, persisted journal rows and restart behavior inherit source/test evidence; block scripts alone do not prove custody or complete operator solvency.",
+    "Bounded actual board+same parent+new child cut. Controller funding/RBF fees are outside this cut, not asserted zero or included as payout cost. Other test/global balances and all catalogue/prod readiness are not qualified."
+  ],
+  "retained_input_hashes_before_after_equal": true,
+  "retained_input_hashes": {
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+    "/home/francis/.cache/abandon-fresh/root-reorg-admission-v8e-20261017/orphan-fee-child/run.log": "ad9d8d4e137ab52c258b1809737962aa460c85e23e9a8b44bf92c86f9b83a715",
+    "/home/francis/.cache/abandon-fresh/root-reorg-admission-v8e-20261017/orphan-fee-child/selection.json": "932249a95a23714f3fcd36b40bc8748f6be2f33b6dddc31a1576866135bbf0b0",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/manifest.json": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/source-manifest.json": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/source.tar.gz": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/nextest-binaries-immutable.json": "ca163caf8629bad6f7b28e399d796762f0ca8ccf7a296558c522fd62d32a1d9c",
+    "/home/francis/.cache/abandon-fresh/root-reorg-admission-v8e-20261017/orphan-fee-child/test-data/server/expiry_payout_orphan_funding_child/bitcoind/regtest/debug.log": "e8bf7566f5071a5db13cfcae7a400669b3be403f99b8fba5fd4e3cb7af25a0a2",
+    "/home/francis/.cache/abandon-fresh/root-reorg-admission-v8e-20261017/orphan-fee-child/test-data/server/expiry_payout_orphan_funding_child/bitcoind/regtest/blocks/xor.dat": "db968143c130bc72eca3d90ca9a569508535e532ae17c09dac5814e4c325d402",
+    "/home/francis/.cache/abandon-fresh/root-reorg-admission-v8e-20261017/orphan-fee-child/test-data/server/expiry_payout_orphan_funding_child/bitcoind/regtest/blocks/blk00000.dat": "f40eee5cce8d2feef7343a294332de1c965e377250e0db9c51408d29cf0fcb9a",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/captaind": "79dc4e8ac031c3c83e98e3818354c25f90217db2ed75d6250f227247c21f4d88",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/watchmand": "12833888b556987c7c975fec155189589cb471fc31ca2e4e90c4c54d01fc9dea",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/bark": "0ac32573d1684401a90acf630ddfee355ed3633c3f594d95d4b1f8644f63d980",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/barkd": "32efdb7b014e1ed3afe985e40aec59f28f9abeaeaf5a87dea42c27c35bd3d4be",
+    "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/native-server": "579c6b2dbd1b06edcef6e50b63c8e36b1e7d49fd68f0b66e853bb473259c8fe4"
+  }
+}

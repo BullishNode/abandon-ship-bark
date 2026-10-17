@@ -1,0 +1,17 @@
+{
+  "state": "PREFLIGHT_PASS",
+  "at": "2026-10-17T18:56:42.614804+00:00",
+  "container": "abandon-fresh-runtime-20261017",
+  "runtime_pins": "14/14PASS",
+  "selected": [
+    "board::board_bark",
+    "arkoor::send_simple_arkoor"
+  ],
+  "listed_per_binary": 202,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "bark_version": "bark 0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+  "no_compilation": true,
+  "all41_prior_sdk_pass": true,
+  "retries": 0,
+  "per_test_timeout_seconds": 180
+}

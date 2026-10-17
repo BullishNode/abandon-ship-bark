@@ -1,0 +1,11 @@
+Batch24 stopped original ordinary bark regression cohort
+Source 704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06
+29 selected;6 started;5 PASS;1 FAIL;23 NOT STARTED; original75seq61 deferred separately.
+All6 daemon-backed native fixtures; original180s/test,retries0,one thread,no compilation; parent session1741 terminal100.
+01 PASS 29.169s ark-testing::bark mailbox::accept_mailbox run=63f8f320-cb9d-4d26-8228-da95369e94f5
+02 PASS 11.225s ark-testing::bark mailbox::concurrent_mailbox_consumers_do_not_duplicate_arkoor_movement run=327fef4d-cc78-46e5-850d-9d8eb72c9b73
+03 PASS 13.039s ark-testing::bark mailbox::recovery_mailbox_receives_vtxo_ids run=ca6d80c3-044c-4d63-92e0-e9d4f40312ad
+04 PASS 13.440s ark-testing::bark mailbox::reject_arkoor_with_bad_signature run=a8a72575-7cc4-4d74-8cb2-e043cf3501cf
+05 PASS 15.193s ark-testing::bark movement::arkoor_send_receive run=6b938101-2d1c-4b61-b069-74fccce88ef9
+06 FAIL 11.082s ark-testing::bark movement::board_board run=85c49b07-b0e1-4eaf-9709-3eb55920515a
+Original board metadatafee comparison FAIL763sat actual vs772sat expected at movement.rs116. Financial reconciliation pending; chain_anchor assertion117-120 not executed. No settled financial/Core/FULLML/fullCLI claim.

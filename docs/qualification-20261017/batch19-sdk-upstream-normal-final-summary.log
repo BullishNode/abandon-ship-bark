@@ -1,0 +1,51 @@
+FINAL batch19:41/41PASS;0test failures;0test retries;41unique Nextest runs.
+Source7041 frozen products only; normal180s singleton runs; no new compilation.
+Original development container:28PASS, test sum336.983s, resource guard exit75 BEFORE case29 started.
+Verified init+1GiB-shm snapshot container:13PASS, test sum242.752s, controller exit0.
+Actual41test duration sum:579.735s; sum of per-case wall times:616.506s.
+Timing is observed and not an isolated performance benchmark.
+All28 earlier result/log/config hashes and all5 prefix receipt files unchanged.
+Exactly13 coverage rows appended:FT-SDK-033..045; existing coverage bytes preserved;LF terminator.
+Scope:exact existing upstream assertions only; no automatic FULL ML/full SDK/Signet/scale/production claim.
+
+01 FT-SDK-005 PASS 11.103s 2d3d33be-be1a-44b1-ad1f-531825765b66 mailbox::recovery_leaves_regular_mailbox_checkpoint_untouched
+02 FT-SDK-006 PASS 8.802s e8035f0a-a1ab-4f37-a782-99173091f037 mailbox::subscribe_delivers_preexisting_messages
+03 FT-SDK-007 PASS 11.204s 2801699f-44b3-4aa7-bfda-7823ba90a141 offboard::offboard_cancels_when_fees_change_after_lost_session
+04 FT-SDK-008 PASS 9.858s 536c165c-6870-4051-8df7-71149afc9d80 offboard::offboard_rebroadcasts_evicted_tx_within_grace_period
+05 FT-SDK-009 PASS 21.187s a7b8f0d4-a24a-47fe-9d10-54f6c646ec72 offboard::offboard_recovers_expired_session_by_repreparing
+06 FT-SDK-010 PASS 21.086s 88fab39d-64cd-4cf8-b3ee-36cae0cd83bf offboard::offboard_recovers_lost_finish_by_adopting_chain_tx
+07 FT-SDK-011 PASS 11.122s b63ae492-9b71-4920-aa2b-f0c84b7c6c29 offboard::offboard_rejects_unsigned_finish_response
+08 FT-SDK-012 PASS 10.784s 04614b3d-bf88-48ff-9efb-60ce142128b6 offboard::offboard_replays_identical_prepare_request
+09 FT-SDK-013 PASS 9.320s 89a0f2ad-2534-4d3d-ba9a-1438846ee8e1 offboard::offboard_reports_lost_tx_after_grace_period
+10 FT-SDK-014 PASS 14.228s 9342202d-1c61-4198-bb28-144d4e957cbf recovery::recovered_wallet_keeps_spent_vtxo_spent
+11 FT-SDK-015 PASS 11.043s a20c7db5-b9e4-4dc0-a83e-96918ded6caf recovery::recovery_finds_vtxos_separated_by_the_gap_limit
+12 FT-SDK-016 PASS 11.391s c5042832-8581-497b-abe9-ac650429aa9a recovery::recovery_retries_a_failed_status_batch
+13 FT-SDK-017 PASS 10.746s 4b8c798b-6a70-47a9-804a-40dda5dc54ef recovery::recovery_tolerates_an_unknown_vtxo_id
+14 FT-SDK-018 PASS 15.202s 84e4015d-4eb9-4fad-a937-8d5879b55b8f recovery::recovery_uses_batch_rpcs
+15 FT-SDK-019 PASS 8.321s cd7242e9-5e30-40e5-91b4-8f9003dbf6c4 vtxo_lock::batch_lock_is_atomic
+16 FT-SDK-020 PASS 8.704s 508e3d6b-d68b-4ac4-b12c-60a3987158ec vtxo_lock::can_only_lock_spendable_vtxo
+17 FT-SDK-021 PASS 7.575s ed606a3e-85ae-4c87-b2f8-ff87485a7492 vtxo_lock::locks_cannot_be_stolen
+18 FT-SDK-022 PASS 9.457s ca868b76-61bc-4ec2-b56c-06b3893fecc2 vtxo_lock::unlock_leaves_spent_vtxo_alone
+19 FT-SDK-023 PASS 9.812s c19f1fdb-725a-44f5-99b8-37fe39972978 vtxo_lock::unlock_returns_vtxo_to_spendable
+20 FT-SDK-024 PASS 7.228s aae2a99d-8cac-4ced-b05d-27caa61a3f39 arkoor::send_to_address_without_delivery_succeeds
+21 FT-SDK-025 PASS 8.701s b8bb6532-bb37-46bf-8e22-d039947b8254 import::import_can_skip_the_status_check
+22 FT-SDK-026 PASS 6.744s 76dc4d1a-0040-4551-a4dd-228f1bb66eff exit::exit_estimate_rejects_invalid_fee_margin
+23 FT-SDK-027 PASS 9.028s 483be7c1-f09e-44e3-bde6-69a5aa2cc194 exit::exit_estimate_rejects_spent_vtxo
+24 FT-SDK-028 PASS 14.841s a9e8f80c-7320-4bb2-90fa-9df593cc56ff balance::balance_follows_delegated_round
+25 FT-SDK-029 PASS 16.489s facaba28-6952-42c4-8efc-12eb1e578e1c balance::balance_follows_interactive_round
+26 FT-SDK-030 PASS 19.201s c7b91e8d-6c01-4de9-aa55-e47ffd61f1fc balance::balance_sets_aside_expired_vtxos
+27 FT-SDK-031 PASS 15.087s a3c0d65f-c4e7-404f-9783-da2b3f835e60 round::delegated_participation_is_redelegated_when_input_consumed
+28 FT-SDK-032 PASS 18.719s 1e217eea-260e-4d80-b8d1-3c2be6dcbada round::delegated_refresh_completes_with_expired_inputs
+29 FT-SDK-033 PASS 15.892s bcf03441-db8a-40af-ac13-5f77c1442523 round::delegated_round_locks_inputs_once_issued
+30 FT-SDK-034 PASS 21.047s dcee6fee-0504-422e-bdb2-b13aa173e9df round::finished_round_supersedes_pending_delegated_participation
+31 FT-SDK-035 PASS 16.343s 9430ae20-5eb2-4735-bd20-fdbda8629b78 round::interactive_participation_wins_over_delegated
+32 FT-SDK-036 PASS 31.289s 8426863f-64a6-435e-bdc0-80daf3f80586 round::maintenance_refresh_delegated_drops_server_rejected_vtxo
+33 FT-SDK-037 PASS 19.109s 8856cc38-9e70-4419-b973-b611fc6900ba round::maintenance_refresh_delegated_errors_when_all_inputs_unspendable
+34 FT-SDK-038 PASS 28.953s fe41ef23-931f-47bd-901a-4843a32e7542 round::manual_maintenance_refresh_drops_server_rejected_vtxo
+35 FT-SDK-039 PASS 13.842s 88acb124-f27e-4818-9ce2-4ae71bd95bfe round::manual_refresh_delegated_does_not_drop_rejected_vtxo
+36 FT-SDK-040 PASS 14.222s c0b07eda-71ed-42c2-9f2f-8f6fa55da56d round::participation_is_canceled_when_the_remainder_cannot_stand_alone
+37 FT-SDK-041 PASS 10.711s 01247fcf-cd58-4ba6-96c4-92d788a88107 round::pending_participation_drops_consumed_inputs_on_sync
+38 FT-SDK-042 PASS 16.862s e57c4b41-3846-4295-921e-992c047a1111 round::round_inputs_locked_only_from_attempt_start
+39 FT-SDK-043 PASS 15.139s 1cae8172-7962-4e08-9023-a034a23fb50f round::round_participation_shrinks_when_inputs_are_taken
+40 FT-SDK-044 PASS 19.345s 509840d3-945f-4a01-9bcb-4d4ed1a38879 round::scheduled_delegated_refresh_refuses_unexitable_replacements
+41 FT-SDK-045 PASS 19.998s 129f5bad-f365-4cd5-afb1-aef0914899e8 round::scheduled_delegated_refresh_waits_for_height

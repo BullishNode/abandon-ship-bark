@@ -1,0 +1,88 @@
+{
+  "state": "PREPARED_NOT_EXECUTED",
+  "parent_five_metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "exact_bark_subset_sha256": "b7c90f817bd780efcbc721ff8ad86d0519b1a519690b91171f687b683294685f",
+  "runtime_metadata_sha256": "3143345c36e85938ec424916f01ea0bd28ebce8aeb1b0d63b787aa3c850b3363",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "expected_names_in_execution_order": [
+    "board::board_bark",
+    "arkoor::send_simple_arkoor"
+  ],
+  "test_binary": "ark-testing::bark",
+  "root_authorization": "Coordinator directmessage: after13SDKPASS,2barksingletons sameconstraints",
+  "source_provenance": [
+    {
+      "binary": "bark",
+      "test_name": "arkoor::send_simple_arkoor",
+      "is_ignored": false,
+      "default_selected": true,
+      "execution_status": "NOT RUN",
+      "classification": "INVENTORY_ONLY",
+      "provenance": "UPSTREAM_BYTE_IDENTICAL_FUNCTION",
+      "function_name": "send_simple_arkoor",
+      "parameter_variant": null,
+      "source_file": "testing/tests/bark/arkoor.rs",
+      "source_line": 9,
+      "source_end_line": 53,
+      "source_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+      "frozen_manifest_file_match": true,
+      "upstream_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+      "whole_file_byte_identical_to_upstream": true,
+      "function_sha256": "ad3c960ee4192d7cb05ac9b73c0e7fb0ed5e3909031bc24c9a754ace8ed6d8df",
+      "upstream_function_sha256": "ad3c960ee4192d7cb05ac9b73c0e7fb0ed5e3909031bc24c9a754ace8ed6d8df",
+      "upstream_source_line": 9,
+      "phase": "ordinary-cli",
+      "reason": "Small ordinary native fixture; review actual selection/results when allocated.",
+      "source_dependency_evidence": [],
+      "dependencies": [
+        "owned regtest Core",
+        "owned fixture Postgres/captaind",
+        "native bark CLI"
+      ],
+      "prior24_match": false,
+      "cohort_id": "bark-02-first-receive",
+      "queued_for_ordinary_next_allocation": true
+    },
+    {
+      "binary": "bark",
+      "test_name": "board::board_bark",
+      "is_ignored": false,
+      "default_selected": true,
+      "execution_status": "NOT RUN",
+      "classification": "INVENTORY_ONLY",
+      "provenance": "UPSTREAM_BYTE_IDENTICAL_FUNCTION",
+      "function_name": "board_bark",
+      "parameter_variant": null,
+      "source_file": "testing/tests/bark/board.rs",
+      "source_line": 21,
+      "source_end_line": 38,
+      "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+      "frozen_manifest_file_match": true,
+      "upstream_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+      "whole_file_byte_identical_to_upstream": true,
+      "function_sha256": "c2a441528f034fe17d83d842ad5a0aaf0948164d2b441f6c6539d713c65f1788",
+      "upstream_function_sha256": "c2a441528f034fe17d83d842ad5a0aaf0948164d2b441f6c6539d713c65f1788",
+      "upstream_source_line": 21,
+      "phase": "ordinary-cli",
+      "reason": "Small ordinary native fixture; review actual selection/results when allocated.",
+      "source_dependency_evidence": [
+        {
+          "line": 33,
+          "text": "ctx.generate_blocks(BOARD_CONFIRMATIONS).await;"
+        }
+      ],
+      "dependencies": [
+        "owned regtest Core",
+        "owned fixture Postgres/captaind",
+        "native bark CLI"
+      ],
+      "prior24_match": false,
+      "cohort_id": "bark-01-first-board",
+      "queued_for_ordinary_next_allocation": true
+    }
+  ],
+  "scope": "Two ordinary upstream CLI cases; not automatic MLacceptance",
+  "threads": 1,
+  "retries": 0,
+  "per_test_timeout_seconds": 180
+}

@@ -1,0 +1,12 @@
+START mailbox::accept_mailbox
+PASS mailbox::accept_mailbox
+START mailbox::concurrent_mailbox_consumers_do_not_duplicate_arkoor_movement
+PASS mailbox::concurrent_mailbox_consumers_do_not_duplicate_arkoor_movement
+START mailbox::recovery_mailbox_receives_vtxo_ids
+PASS mailbox::recovery_mailbox_receives_vtxo_ids
+START mailbox::reject_arkoor_with_bad_signature
+PASS mailbox::reject_arkoor_with_bad_signature
+START movement::arkoor_send_receive
+PASS movement::arkoor_send_receive
+START movement::board_board
+FAIL movement::board_board

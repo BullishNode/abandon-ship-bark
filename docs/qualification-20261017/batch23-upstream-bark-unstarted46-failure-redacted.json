@@ -1,0 +1,22 @@
+{
+  "test_name": "fees::send_onchain_fee_deducted",
+  "run_id": "352e12d4-ac04-40ce-b2e3-28401ceebf8b",
+  "original_result": "FAIL",
+  "actual_duration_seconds": 13.196,
+  "assertion_source": "testing/tests/bark/fees.rs:795",
+  "actual_customer_fee_sat": 3854,
+  "original_expected_customer_fee_sat": 3938,
+  "retained_financial_reconciliation_file": "batch23-case17-retained-financial-reconciliation.json",
+  "retained_financial_reconciliation_sha256": "cfa6908f1c64bf7fce450420bc00e29f42f5cb5bfc1da3324af929bce47ed2a5",
+  "retained_core_reconciliation_file": "batch23-upstream-bark-unstarted46-retained-core-reconciliation.json",
+  "retained_core_reconciliation_sha256": "8efec65f542576ca09519f0b50bea47796a660d72e3c33cce90199dcad42bde2",
+  "financial_observation": "Actual PreparedOffboard rate7sat/vB, P2WPKH script22bytes, customerfee3000+(100+22)*7=3854; original expected3938 uses34byteP2TR. Read-only sender movement effective303854/intended300000 plus two248073change satisfy800000=300000+3854+248073+248073. These retained observations do not rerun later assertions.",
+  "core_observation": "Parent retained block/debug parser proves exact300000sat output in canonicalheight110 at retainedtip111 (2confirmations); resolved previous outputs yield actual minerfee1298sat, separate from customerfee3854. Curation verified identifiers/arithmetic/input hashes; did not execute parser or open a node.",
+  "not_executed": [
+    "sent_to destination/amount assertion797-804",
+    "change count/conservation assertion808-812",
+    "third block and receiver wallet balance sync/assertion815-816",
+    "estimate/history identity assertions819-822"
+  ],
+  "limitations": "Original FAIL remains FAIL; no retry/adapted source execution, six-confirmation, full receiver lifecycle, whole-wallet solvency or FULL ML claim. No raw seeds/config/DB copied."
+}

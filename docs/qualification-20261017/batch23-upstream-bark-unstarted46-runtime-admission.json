@@ -1,0 +1,148 @@
+{
+  "container": "abandon-fresh-runtime-20261017",
+  "recorded_preflight": {
+    "state": "PREFLIGHT_PASS",
+    "at": "2026-10-17T19:28:06.433281+00:00",
+    "pins_pass": 14,
+    "selected_unignored": 46,
+    "first_exact_selected": [
+      "create::bark_create_is_atomic"
+    ],
+    "bark_version": "bark 0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+    "source_proof": "Copied46 verified immutablearchive function/upstream hashes fromgate47; sameELF/source/metadata SHAverifiedfresh",
+    "justification": "Independentunstartedordinarycasesafterexplainedemptywalletfailure; rootownerfixassigned, nofailedcaseretried",
+    "old_failures_preserved": [
+      "46a2b233-8a96-4b12-8ca2-df654fc0cd26",
+      "c5640527-12f8-45df-8dff-47798cc91637"
+    ],
+    "deferred": "onchain::bark_address_changes",
+    "retries": 0,
+    "per_test_timeout_seconds": 180,
+    "no_compilation": true
+  },
+  "recorded_preflight_sha256": "4915a9b497b802ffc6b66c6b4b10a3c409169137aa9978a85c1b0ad6fac51f10",
+  "runtime_pin_file_sha256": "b248b1a36b4e2ae17e7e623b638419b45803bd3877754afe3123ff9c8e5a7e8e",
+  "pin_evidence": [
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-bark",
+      "sha256": "f3e33f52d458f5dc5f0dcd98f99ca363b266d4e35f979a418d47e8830dcd46f7",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/captaind",
+      "sha256": "175dc56e2177cbda495e2cb5c56bae2061d0590dc2481ddb40a944e68e5dd0fb",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/watchmand",
+      "sha256": "4d1d52778032aed837bfc4e28ddcf637458837635a62ad3f6436be3adc4311d5",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/bark",
+      "sha256": "d971db9547a3bb6c8ebd0413404ed886d3d1157f233c259ab905945ad0a96444",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/barkd",
+      "sha256": "5194c687beb3e17a637dcb2754402daca5d6a1a90174a8c12d7091706500e114",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/support/debug/lock-holder",
+      "sha256": "abf0fd823c45d2b8635c7e9a7245186a5e8cd30bac31d77e37a807dce3f57b2d",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/manifest.json",
+      "sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/source-manifest.json",
+      "sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+      "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+      "host_visible_rehashed_match": false,
+      "retained_runtime_preflight_only_if_not_host_visible": true
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+      "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "host_visible_rehashed_match": false,
+      "retained_runtime_preflight_only_if_not_host_visible": true
+    },
+    {
+      "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+      "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+      "host_visible_rehashed_match": false,
+      "retained_runtime_preflight_only_if_not_host_visible": true
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/batch23-upstream-bark-unstarted46/nextest-binaries-bark-only-exact.json",
+      "sha256": "b7c90f817bd780efcbc721ff8ad86d0519b1a519690b91171f687b683294685f",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/batch23-upstream-bark-unstarted46/nextest-binaries-bark-runtime-immutable.json",
+      "sha256": "3143345c36e85938ec424916f01ea0bd28ebce8aeb1b0d63b787aa3c850b3363",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/batch23-upstream-bark-unstarted46/selection-proof.json",
+      "sha256": "1136036fd6286c48d6278f7af59a6c78270431ac21ab48c96689896025e12aed",
+      "host_visible_rehashed_match": true,
+      "retained_runtime_preflight_only_if_not_host_visible": false
+    }
+  ],
+  "retained_actual_preflight_pin_count": 14,
+  "curation_host_visible_rehashes": 11,
+  "curation_new_runtime_invocations": 0,
+  "parent_reported_exec_session": "56688",
+  "terminal_controller_exit": 100,
+  "per_case_resource_preflights_in_receipt": true,
+  "resource_checkpoints": [
+    {
+      "completed": 4,
+      "available_shm_bytes": 1020956672,
+      "at": "2026-10-17T19:28:32.103241+00:00",
+      "cleanup": false
+    },
+    {
+      "completed": 8,
+      "available_shm_bytes": 1016647680,
+      "at": "2026-10-17T19:29:05.168218+00:00",
+      "cleanup": false
+    },
+    {
+      "completed": 12,
+      "available_shm_bytes": 1012338688,
+      "at": "2026-10-17T19:29:46.236118+00:00",
+      "cleanup": false
+    },
+    {
+      "completed": 16,
+      "available_shm_bytes": 1008029696,
+      "at": "2026-10-17T19:30:51.342145+00:00",
+      "cleanup": false
+    }
+  ],
+  "minimum_recorded_shm_available_bytes": 1008029696,
+  "timeout_seconds": 180,
+  "retries": 0,
+  "new_compilation": false,
+  "scope": "Terminal original assertion failure; static evidence curation only, no services, wallets, DBs, RPCs, source edits or retry."
+}

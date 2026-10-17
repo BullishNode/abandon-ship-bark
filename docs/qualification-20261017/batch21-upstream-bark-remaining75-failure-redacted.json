@@ -1,0 +1,20 @@
+{
+  "result": "FAIL",
+  "test_name": "create::bark_address_works_offline",
+  "run_id": "46a2b233-8a96-4b12-8ca2-df654fc0cd26",
+  "actual_seconds": 10.652,
+  "panic_location": "testing/tests/bark/create.rs:107:5",
+  "observed": "Same first-created unfunded wallet: online fresh address and explicit offline index0 both returned successfully but differ. Equality failed; later fresh-offline check did not execute.",
+  "source_inference": "Accepted fallback identity reserves Ark coin key0; first fresh coin key follows it. Upstream fixture assumes first fresh key0. Actual derivedindex is not claimed from DB counts.",
+  "followup": "Separate reviewed fork-aware fixture adaptation; original source-identical FAIL remains unchanged.",
+  "customer_money_scope": "Retained prior read-only reconciliation reports zero VTXOs/boards/payment rows/BDKtransactions. No funding or payment was exercised.",
+  "reconciliation_scope": "Previously recorded read-only counts/hash observation; curation reads its JSON only, never opens SQLite or wallets.",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "raw_log_sha256": "85f11229e5b600e91b6f92994889a99a8d7654dd4bed228242bfbcbb9bfe205b",
+  "raw_result_sha256": "8ee4df02b21e96b60422d2c5bdfe0adabe6f6df69f2771204c2058a32e79bd5a",
+  "original_controller_test_seconds": null,
+  "timeout": false,
+  "resource_abort": false,
+  "retries": 0,
+  "redaction": "No actual addresses, keys, mnemonic, seed, invoice, raw configuration, rawDB or verbose command dump copied."
+}

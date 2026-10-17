@@ -1,0 +1,14 @@
+{
+  "test_name": "movement::board_board",
+  "run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+  "original_result": "FAIL",
+  "actual_duration_seconds": 11.082,
+  "source_assertion": "testing/tests/bark/movement.rs:116",
+  "actual_onchain_fee_metadata_sat": 763,
+  "original_expected_onchain_fee_metadata_sat": 772,
+  "earlier_assertions_scope": "Native board helper returned, one VTXO and Successful board movement/status/subsystem/intended+effective100000sat/offchainfee0/input-output fields/completion/metadata assertions95-112 completed before metadatafee comparison116. These are test assertions, not an independently resolved Core money proof.",
+  "not_executed": "chain_anchor metadata parse/is_some assertion117-120.",
+  "financial_reconciliation": "PENDING; no settled transaction fee/confirmation/whole-wallet solvency claim.",
+  "original_raw_log_sha256": "bb270b37b9fb460ac3fc92ac022aed9cacf40156707c9c5d0ea58babdd731b0f",
+  "limit": "Original failure retained; no retry or source adaptation execution; no FULL ML credit; no seeds/config/rawDB copied."
+}

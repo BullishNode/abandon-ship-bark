@@ -1,0 +1,33 @@
+{
+  "actual_miner_fee_sat": 763,
+  "all_outputs_total_sat": 999237,
+  "board_funding_txid": "417861fd474791dc80c377796fc3654c59be8600278a7dd07ef93e33b513da6d",
+  "canonical_tip": "2acb3e7d6bf171edce7e423c85b99be351d7fed2443d07ce68503ae309b90cb2",
+  "canonical_tip_height": 109,
+  "confirmations_at_retained_tip": 3,
+  "exact_board_outputs": [
+    {
+      "script_hex": "5120b1680af76c68051ee594706ad26fd90fdc721e53c70fcd31636ca4668c23cc4d",
+      "value_sat": 100000,
+      "vout": 0
+    }
+  ],
+  "inclusion_block": "03682d86bfc0aea0818a9413428bbf29d5e3dd67e94f54c858edaa63649303bd",
+  "inclusion_height": 107,
+  "input_hashes_before_and_after": {
+    "blocks/blk00000.dat": "4e43609ec322d51c3c265e22ff2ef8605517f530ab86fda6efe023e35d1aeb90",
+    "blocks/xor.dat": "f395a46fc9b902cd164231475326ddeb0c516dcb588d9ba00f323b26225ae5dc",
+    "debug.log": "0dcb3213df3df7aff7fbb5167bbf164deb4ff33807c8c8666d42aff6f36395ea"
+  },
+  "input_total_sat": 1000000,
+  "limitations": "Bounded original transaction only. No claim about final unexecuted test assertion, whole-wallet solvency or adapted-source execution. Only the original funding transaction and actual canonical chain are reconciled.",
+  "mode": "retained block files and debug log, read-only; no process or wallet reopened",
+  "original_run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+  "resolved_input_prevouts": [
+    {
+      "txid": "0496505de4e5ee88f67fb09ab1d183f4afe25990deaa452797c083ef6648f860",
+      "value_sat": 1000000,
+      "vout": 0
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "source_archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "compiled_head_label": "814d7b0deb6a5f2a6758d34ca4313589f948f4e3 dirty owner-scan patch",
+  "clean_equivalent_canonical_head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+  "equivalence_limit": "Existing all1156-file clean-equivalence provenance is recorded by batch17; original7041 capture remains runtime identity, not a newbuild/currentHEAD relabel.",
+  "upstream_provenance_pin": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "independently_checked_scope": "Both full source files and exact named function byte hashes from immutable archive; compare manifest and pinned upstream Git objects. Read all named-function statements: no version-gate macro or earlyreturn. Other functions in these files may be gated; those are not credited.",
+  "board_confirmations": 3,
+  "board_confirmations_source": "source7041 testing/src/constants.rs:3",
+  "source_proofs": [
+    {
+      "test_name": "board::board_bark",
+      "source_file": "testing/tests/bark/board.rs",
+      "function_line": 21,
+      "function_end_line": 38,
+      "archive_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+      "manifest_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+      "upstream_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+      "function_sha256": "c2a441528f034fe17d83d842ad5a0aaf0948164d2b441f6c6539d713c65f1788",
+      "function_hash_definition": "Signature through closing brace, inclusive; join source lines with LF, no trailing LF.",
+      "whole_file_byte_identical": true,
+      "named_function_has_version_gate_or_early_return": false,
+      "core_assertion_scope": "Native CLI boards90,000sat from100,000sat funding; returned ID equals the initially Locked VTXO; after3 Core blocks the spendable balance is90,000sat and pending-board balance iszero.",
+      "limitation": "Exact ordinary CLI board state/balance oracle after3 Core blocks; no direct gettxout/Core6 payout, expiry, seed restore or fallback qualification."
+    },
+    {
+      "test_name": "arkoor::send_simple_arkoor",
+      "source_file": "testing/tests/bark/arkoor.rs",
+      "function_line": 9,
+      "function_end_line": 53,
+      "archive_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+      "manifest_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+      "upstream_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+      "function_sha256": "ad3c960ee4192d7cb05ac9b73c0e7fb0ed5e3909031bc24c9a754ace8ed6d8df",
+      "function_hash_definition": "Signature through closing brace, inclusive; join source lines with LF, no trailing LF.",
+      "whole_file_byte_identical": true,
+      "named_function_has_version_gate_or_early_return": false,
+      "core_assertion_scope": "After actual80,000sat board, sender CLI pays20,000sat; receiver SDK notification names the actual Ark address/amount, with60,000sat sender and20,000sat receiver spendable. A second CLI30,000sat send yields exactly2 address-history entries with20k/30k intended amounts and matching destination; unused-address history is empty.",
+      "limitation": "Exact ordinary arkoor fixture mixes sender CLI and receiver SDK plus CLI history commands. No claim that every operation used CLI; no expiry/absent-recipient/Core6 fallback oracle."
+    }
+  ],
+  "parent_metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "exact_bark_subset_sha256": "b7c90f817bd780efcbc721ff8ad86d0519b1a519690b91171f687b683294685f",
+  "runtime_metadata_sha256": "3143345c36e85938ec424916f01ea0bd28ebce8aeb1b0d63b787aa3c850b3363",
+  "metadata_verification": "Parsed parent retains only original ark-testing::bark binary record and identical buildmeta; runtime overlay changes only original non-test lock-holder path to archived identical helper.",
+  "actual_bark_version": "bark 0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+  "scope": "Unchanged upstream source with source7041 fork products; sender/board CLI fixture, mixed receiver SDK in arkoor test. No FULL ML or wholeCLI qualification."
+}

@@ -1,0 +1,878 @@
+{
+  "state": "PREPARED_NOT_EXECUTED",
+  "parent_five_metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "exact_bark_subset_sha256": "b7c90f817bd780efcbc721ff8ad86d0519b1a519690b91171f687b683294685f",
+  "runtime_metadata_sha256": "3143345c36e85938ec424916f01ea0bd28ebce8aeb1b0d63b787aa3c850b3363",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "expected_names_in_execution_order": [
+    "create::bark_create_is_atomic",
+    "create::cli_create_refuses_another_cli_create",
+    "create::cli_create_releases_lock_after_failure",
+    "dust::bark_allows_sending_dust_arkoor_but_errors_on_dust_refresh",
+    "estimate::estimate_lightning_send_fee_without_funds",
+    "estimate::estimate_send_onchain_fee_without_funds",
+    "fees::board_fee_base_and_ppm",
+    "fees::board_fee_min_fee_applies",
+    "fees::board_fee_rejects_when_fee_exceeds_amount",
+    "fees::offboard_all_rejects_dust_output",
+    "fees::offboard_fee_base_deducted",
+    "fees::offboard_fee_with_ppm_expiry",
+    "fees::refresh_fee_base_only",
+    "fees::refresh_fee_rejects_dust_output",
+    "fees::refresh_fee_with_multiple_vtxos",
+    "fees::refresh_fee_with_ppm_expiry",
+    "fees::send_onchain_fee_deducted",
+    "mailbox::accept_mailbox",
+    "mailbox::concurrent_mailbox_consumers_do_not_duplicate_arkoor_movement",
+    "mailbox::recovery_mailbox_receives_vtxo_ids",
+    "mailbox::reject_arkoor_with_bad_signature",
+    "movement::arkoor_send_receive",
+    "movement::board_board",
+    "movement::list_movements",
+    "movement::movement_offboard",
+    "movement::movement_send_onchain",
+    "movement::round_refresh",
+    "offboard::bark_rejects_offboarding_dust_amount",
+    "offboard::bark_send_onchain",
+    "offboard::bark_send_onchain_too_much",
+    "offboard::offboard_all",
+    "offboard::offboard_vtxos",
+    "onchain::list_utxos",
+    "onchain::onchain_drain",
+    "onchain::onchain_send",
+    "onchain::onchain_send_many",
+    "recover::recovered_wallet_continues_xpub_lookup_past_server_range",
+    "recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+    "recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+    "recover::recovered_wallet_xpub_lookup_returns_spent_vtxos",
+    "recover::recovery_catchup_survives_rejected_vtxo",
+    "recover::recovery_state_catches_up_on_sync",
+    "vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+    "vtxos::compute_balance",
+    "vtxos::drop_vtxos",
+    "vtxos::list_vtxos"
+  ],
+  "test_binary": "ark-testing::bark",
+  "root_authorization": "Coordinator conditionalcontinue46afterfailureunderstoodandnextgatejustified; twoindependentsourcereviews+rootfixassignment; originalfailedcasesnotretried",
+  "source_provenance": [
+    {
+      "test_name": "create::bark_create_is_atomic",
+      "source_file": "testing/tests/bark/create.rs",
+      "source_file_sha256": "f4faad8cf5f4b07669bb3afe2e52b3513bc927f3cc736ef545403df1449ada6a",
+      "function_sha256": "b59d8833c5d4500772a8a4bf2d05330d32882f7b06095022f5db7243cb12100b",
+      "upstream_function_sha256": "b59d8833c5d4500772a8a4bf2d05330d32882f7b06095022f5db7243cb12100b",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "create::cli_create_refuses_another_cli_create",
+      "source_file": "testing/tests/bark/create.rs",
+      "source_file_sha256": "f4faad8cf5f4b07669bb3afe2e52b3513bc927f3cc736ef545403df1449ada6a",
+      "function_sha256": "00643db567fe9c0b8e5fb93c2db3de8ac34a0b133a48752d7a59ea876f8919f1",
+      "upstream_function_sha256": "00643db567fe9c0b8e5fb93c2db3de8ac34a0b133a48752d7a59ea876f8919f1",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 44
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "create::cli_create_releases_lock_after_failure",
+      "source_file": "testing/tests/bark/create.rs",
+      "source_file_sha256": "f4faad8cf5f4b07669bb3afe2e52b3513bc927f3cc736ef545403df1449ada6a",
+      "function_sha256": "7be74b9fd5816308d3983afa13361b73fbfa60eece6a80629df25ffd785334c0",
+      "upstream_function_sha256": "7be74b9fd5816308d3983afa13361b73fbfa60eece6a80629df25ffd785334c0",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 19
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "dust::bark_allows_sending_dust_arkoor_but_errors_on_dust_refresh",
+      "source_file": "testing/tests/bark/dust.rs",
+      "source_file_sha256": "0b49f84e07ffdee3a55e465ab2954b19686d2c2fe32aa6cb8cddc8ce89adc38e",
+      "function_sha256": "86017731ecb7a8d08fa1c2e163a33300de57eec8e7916ffa19407bc663c775fb",
+      "upstream_function_sha256": "86017731ecb7a8d08fa1c2e163a33300de57eec8e7916ffa19407bc663c775fb",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "estimate::estimate_lightning_send_fee_without_funds",
+      "source_file": "testing/tests/bark/estimate.rs",
+      "source_file_sha256": "f7fa278578df8a79bfe1fc5fc4e88d486329c472a11a624f6965de6741da521b",
+      "function_sha256": "5e3bf1f2f779e8503f62d86e423b57e149762c546f79496e8acfd67fb21a5da7",
+      "upstream_function_sha256": "5e3bf1f2f779e8503f62d86e423b57e149762c546f79496e8acfd67fb21a5da7",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 9
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "estimate::estimate_send_onchain_fee_without_funds",
+      "source_file": "testing/tests/bark/estimate.rs",
+      "source_file_sha256": "f7fa278578df8a79bfe1fc5fc4e88d486329c472a11a624f6965de6741da521b",
+      "function_sha256": "79c5a5c5462698b126e3884ba6b29adf8c1d344be2a591776c07d3f67bea3f21",
+      "upstream_function_sha256": "79c5a5c5462698b126e3884ba6b29adf8c1d344be2a591776c07d3f67bea3f21",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::board_fee_base_and_ppm",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "fbef7bd12ac58c4254929f8622b6ed23c9c19edcd4d1ffc2d3887d5d6a62adcb",
+      "upstream_function_sha256": "fbef7bd12ac58c4254929f8622b6ed23c9c19edcd4d1ffc2d3887d5d6a62adcb",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::board_fee_min_fee_applies",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "283e5f5849546be592237ed717b5fe6c65e5765f7d174816d813b7a106998cd4",
+      "upstream_function_sha256": "283e5f5849546be592237ed717b5fe6c65e5765f7d174816d813b7a106998cd4",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::board_fee_rejects_when_fee_exceeds_amount",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "cd40896e076694e2f0f764028c8aa89a44b003d41f36565eaa8520cb9c553bd5",
+      "upstream_function_sha256": "cd40896e076694e2f0f764028c8aa89a44b003d41f36565eaa8520cb9c553bd5",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::offboard_all_rejects_dust_output",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "5c287584e13ce81e32cfce6c8537c971e63b9f829d76e19204569db4d15429c3",
+      "upstream_function_sha256": "5c287584e13ce81e32cfce6c8537c971e63b9f829d76e19204569db4d15429c3",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::offboard_fee_base_deducted",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "434def6a0f793af6a265a90282b06518181b2657e7bdee7db9045f095ca4c0a9",
+      "upstream_function_sha256": "434def6a0f793af6a265a90282b06518181b2657e7bdee7db9045f095ca4c0a9",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::offboard_fee_with_ppm_expiry",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "a1eeb6923de792fc0175fc53e7e99a8c90c46798d73bc34cc8d098ed5275ee40",
+      "upstream_function_sha256": "a1eeb6923de792fc0175fc53e7e99a8c90c46798d73bc34cc8d098ed5275ee40",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::refresh_fee_base_only",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "e4748110f50cf6f6a207b349b04a33dbe8c006cf7de41e46446bbd4a018c18dc",
+      "upstream_function_sha256": "e4748110f50cf6f6a207b349b04a33dbe8c006cf7de41e46446bbd4a018c18dc",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 265
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::refresh_fee_rejects_dust_output",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "0fe09585fec627a3f847d7d17282aee84ad1fdab0f1dfe868da23221ef833895",
+      "upstream_function_sha256": "0fe09585fec627a3f847d7d17282aee84ad1fdab0f1dfe868da23221ef833895",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 575
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::refresh_fee_with_multiple_vtxos",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "2a4f36a50b4b109c06ddb51c0e02b9063814eea018fb75dd253a4100f163b2d7",
+      "upstream_function_sha256": "2a4f36a50b4b109c06ddb51c0e02b9063814eea018fb75dd253a4100f163b2d7",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 366
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::refresh_fee_with_ppm_expiry",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "b780c6707b166ac87ce2b5fbf2e9c8bd526f13c65489bee16f9c758f6af21aee",
+      "upstream_function_sha256": "b780c6707b166ac87ce2b5fbf2e9c8bd526f13c65489bee16f9c758f6af21aee",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 306
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "fees::send_onchain_fee_deducted",
+      "source_file": "testing/tests/bark/fees.rs",
+      "source_file_sha256": "8821b067cf24c295095239f48af39a349caf42efb3c3247733c01166c707410e",
+      "function_sha256": "ec59163583fa379a66178d626951fa4e9503a9639f964f58ca598e5c339e1a35",
+      "upstream_function_sha256": "ec59163583fa379a66178d626951fa4e9503a9639f964f58ca598e5c339e1a35",
+      "version_macros": [
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.6.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 808
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "mailbox::accept_mailbox",
+      "source_file": "testing/tests/bark/mailbox.rs",
+      "source_file_sha256": "40968773ae7916ceb43a9fd8ae31d61bba784dc46af6bb8676bcebebb16e20b0",
+      "function_sha256": "5e4c1b41a7c328d5bf819f40cfff59335a5ab3b52b1f793476514c45b0c22126",
+      "upstream_function_sha256": "5e4c1b41a7c328d5bf819f40cfff59335a5ab3b52b1f793476514c45b0c22126",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 125
+        },
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 154
+        },
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.6.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 172
+        },
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 208
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "mailbox::concurrent_mailbox_consumers_do_not_duplicate_arkoor_movement",
+      "source_file": "testing/tests/bark/mailbox.rs",
+      "source_file_sha256": "40968773ae7916ceb43a9fd8ae31d61bba784dc46af6bb8676bcebebb16e20b0",
+      "function_sha256": "e3836aaa99889ff2bb67f2009ad551772f2623476fe3fec3394d05b083d24bc1",
+      "upstream_function_sha256": "e3836aaa99889ff2bb67f2009ad551772f2623476fe3fec3394d05b083d24bc1",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "mailbox::recovery_mailbox_receives_vtxo_ids",
+      "source_file": "testing/tests/bark/mailbox.rs",
+      "source_file_sha256": "40968773ae7916ceb43a9fd8ae31d61bba784dc46af6bb8676bcebebb16e20b0",
+      "function_sha256": "74fd6b37f81f482b42dce3c88331946293b6b871c3881d357a4fea174c2baabd",
+      "upstream_function_sha256": "74fd6b37f81f482b42dce3c88331946293b6b871c3881d357a4fea174c2baabd",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 253
+        },
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.6.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 290
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "mailbox::reject_arkoor_with_bad_signature",
+      "source_file": "testing/tests/bark/mailbox.rs",
+      "source_file_sha256": "40968773ae7916ceb43a9fd8ae31d61bba784dc46af6bb8676bcebebb16e20b0",
+      "function_sha256": "9a101458df3e6cd7f62ad63e333751391a08699ab112c9dbcc19aef6f230beb6",
+      "upstream_function_sha256": "9a101458df3e6cd7f62ad63e333751391a08699ab112c9dbcc19aef6f230beb6",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "movement::arkoor_send_receive",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827",
+      "function_sha256": "61f8ab0138a0b66d16a1fe460085d0848589f0f96a815b656ad9cfee6d0f2bd7",
+      "upstream_function_sha256": "61f8ab0138a0b66d16a1fe460085d0848589f0f96a815b656ad9cfee6d0f2bd7",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "movement::board_board",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827",
+      "function_sha256": "95597f414e1979f8a98271174c89227e4385316d2d71b7865228b3c09980ceab",
+      "upstream_function_sha256": "95597f414e1979f8a98271174c89227e4385316d2d71b7865228b3c09980ceab",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "movement::list_movements",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827",
+      "function_sha256": "4bf3d3f260ce3e8ec9ab0b73295a1063d0e5353c99ead6d7fe5654451c64b48f",
+      "upstream_function_sha256": "4bf3d3f260ce3e8ec9ab0b73295a1063d0e5353c99ead6d7fe5654451c64b48f",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 533
+        },
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 591
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "movement::movement_offboard",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827",
+      "function_sha256": "0e78d719da1cab658d04404e7ecfa8aacca38d2d37e334c4ea27d9a0da560ee6",
+      "upstream_function_sha256": "0e78d719da1cab658d04404e7ecfa8aacca38d2d37e334c4ea27d9a0da560ee6",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "movement::movement_send_onchain",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827",
+      "function_sha256": "0e4b9862c789ff2cf69f3050923d325bd3ff75edd426cecb6129a5664fcc41cc",
+      "upstream_function_sha256": "0e4b9862c789ff2cf69f3050923d325bd3ff75edd426cecb6129a5664fcc41cc",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 472
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "movement::round_refresh",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827",
+      "function_sha256": "501197c6ae50c49743cc6d1101d7ea19bf898e23a51b3a8596bfe1addd3c6c13",
+      "upstream_function_sha256": "501197c6ae50c49743cc6d1101d7ea19bf898e23a51b3a8596bfe1addd3c6c13",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 431
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "offboard::bark_rejects_offboarding_dust_amount",
+      "source_file": "testing/tests/bark/offboard.rs",
+      "source_file_sha256": "3b332ccfa1db013e11abce7ea87043742786dae1f686868939df38974a17ee35",
+      "function_sha256": "7f2f5d7bb37c9e6db1c6084ccee1acf66742180981c9bff9019d57cfe114ea03",
+      "upstream_function_sha256": "7f2f5d7bb37c9e6db1c6084ccee1acf66742180981c9bff9019d57cfe114ea03",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "offboard::bark_send_onchain",
+      "source_file": "testing/tests/bark/offboard.rs",
+      "source_file_sha256": "3b332ccfa1db013e11abce7ea87043742786dae1f686868939df38974a17ee35",
+      "function_sha256": "ee24ae310637ca058b273af10ecac4d6afbc7d10f7b392d020f59f352cbf9832",
+      "upstream_function_sha256": "ee24ae310637ca058b273af10ecac4d6afbc7d10f7b392d020f59f352cbf9832",
+      "version_macros": [
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.6.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 139
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "offboard::bark_send_onchain_too_much",
+      "source_file": "testing/tests/bark/offboard.rs",
+      "source_file_sha256": "3b332ccfa1db013e11abce7ea87043742786dae1f686868939df38974a17ee35",
+      "function_sha256": "db74fc21d9df12ada317286fe4faed0c990dfec3704e8873f99901eb357d5987",
+      "upstream_function_sha256": "db74fc21d9df12ada317286fe4faed0c990dfec3704e8873f99901eb357d5987",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "offboard::offboard_all",
+      "source_file": "testing/tests/bark/offboard.rs",
+      "source_file_sha256": "3b332ccfa1db013e11abce7ea87043742786dae1f686868939df38974a17ee35",
+      "function_sha256": "5b7fe55dad6d4f74aa04bc3fb10b5d26e13c3667a8824c2cde8e4f6684170573",
+      "upstream_function_sha256": "5b7fe55dad6d4f74aa04bc3fb10b5d26e13c3667a8824c2cde8e4f6684170573",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 13
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "offboard::offboard_vtxos",
+      "source_file": "testing/tests/bark/offboard.rs",
+      "source_file_sha256": "3b332ccfa1db013e11abce7ea87043742786dae1f686868939df38974a17ee35",
+      "function_sha256": "603c9e7d4d95466e74ce77f398162d8597d4b7c729198a2eaeb19a9f3fb15319",
+      "upstream_function_sha256": "603c9e7d4d95466e74ce77f398162d8597d4b7c729198a2eaeb19a9f3fb15319",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 62
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "onchain::list_utxos",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "source_file_sha256": "422fcd12fcba52c7e4e46c9b90b4f02fac67b7b8f1e63418d9607be35cd6360e",
+      "function_sha256": "015eba04a5fa5ba9adffc7bfe4a9d838291b4d4ddd452f5e850d22f2024fedcd",
+      "upstream_function_sha256": "015eba04a5fa5ba9adffc7bfe4a9d838291b4d4ddd452f5e850d22f2024fedcd",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 23
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "onchain::onchain_drain",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "source_file_sha256": "422fcd12fcba52c7e4e46c9b90b4f02fac67b7b8f1e63418d9607be35cd6360e",
+      "function_sha256": "6c74e648662f5fd1f5f8f38fd50beda3afdd6d06eea35feb2f4d83d16427521e",
+      "upstream_function_sha256": "6c74e648662f5fd1f5f8f38fd50beda3afdd6d06eea35feb2f4d83d16427521e",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "onchain::onchain_send",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "source_file_sha256": "422fcd12fcba52c7e4e46c9b90b4f02fac67b7b8f1e63418d9607be35cd6360e",
+      "function_sha256": "259d91d11a1ff9b99bcbe764591a0755230d24b713cc74409ebc1be181243bef",
+      "upstream_function_sha256": "259d91d11a1ff9b99bcbe764591a0755230d24b713cc74409ebc1be181243bef",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "onchain::onchain_send_many",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "source_file_sha256": "422fcd12fcba52c7e4e46c9b90b4f02fac67b7b8f1e63418d9607be35cd6360e",
+      "function_sha256": "6f0ee1441033416a5fdb14b50ab3c0631c8a673de96dcf2dbfd9962fee43a9d2",
+      "upstream_function_sha256": "6f0ee1441033416a5fdb14b50ab3c0631c8a673de96dcf2dbfd9962fee43a9d2",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "recover::recovered_wallet_continues_xpub_lookup_past_server_range",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "a5d002ae6e80dd2618d36d6e168eee37cda8b3c9ccd21262a90a2ce05ee8ddd6",
+      "upstream_function_sha256": "a5d002ae6e80dd2618d36d6e168eee37cda8b3c9ccd21262a90a2ce05ee8ddd6",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 560
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "147ab2a3140bb0c17ae2610ca924b505396d9868750acbeaabe5a6e79088844d",
+      "upstream_function_sha256": "147ab2a3140bb0c17ae2610ca924b505396d9868750acbeaabe5a6e79088844d",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 532
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "0d4288c99d88c9e7af6237c1c94ac1c48999dc64c4b0c923f2f299341ed15dff",
+      "upstream_function_sha256": "0d4288c99d88c9e7af6237c1c94ac1c48999dc64c4b0c923f2f299341ed15dff",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 483
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "recover::recovered_wallet_xpub_lookup_returns_spent_vtxos",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "5e8f3450b0555ecb4565f03dc5652064d8a9fba4df09c39167bdf24825bd9e6f",
+      "upstream_function_sha256": "5e8f3450b0555ecb4565f03dc5652064d8a9fba4df09c39167bdf24825bd9e6f",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 606
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "recover::recovery_catchup_survives_rejected_vtxo",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "2615a03e5b2e1d3bc69343dbca841c0c778aa6cac0a376a9aed93197b06c6642",
+      "upstream_function_sha256": "2615a03e5b2e1d3bc69343dbca841c0c778aa6cac0a376a9aed93197b06c6642",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "recover::recovery_state_catches_up_on_sync",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "9b6103a96a541dc837060f90bced204e8ee552b181b96405cfeebc323c39ece7",
+      "upstream_function_sha256": "9b6103a96a541dc837060f90bced204e8ee552b181b96405cfeebc323c39ece7",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+      "source_file": "testing/tests/bark/vtxos.rs",
+      "source_file_sha256": "c9ae223cc1cc7bd36298817a3e44d9fe14429a52d2d0da3811455a893ff69133",
+      "function_sha256": "454517e26ad77822307c2fb551cc1e8fa39f834dba9fc11757e757100ebb79eb",
+      "upstream_function_sha256": "454517e26ad77822307c2fb551cc1e8fa39f834dba9fc11757e757100ebb79eb",
+      "version_macros": [],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "vtxos::compute_balance",
+      "source_file": "testing/tests/bark/vtxos.rs",
+      "source_file_sha256": "c9ae223cc1cc7bd36298817a3e44d9fe14429a52d2d0da3811455a893ff69133",
+      "function_sha256": "1bef09b7bfabdeb7da2c55114e993693986df590cb1edd014ca1166491ceb677",
+      "upstream_function_sha256": "1bef09b7bfabdeb7da2c55114e993693986df590cb1edd014ca1166491ceb677",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 49
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "vtxos::drop_vtxos",
+      "source_file": "testing/tests/bark/vtxos.rs",
+      "source_file_sha256": "c9ae223cc1cc7bd36298817a3e44d9fe14429a52d2d0da3811455a893ff69133",
+      "function_sha256": "670755148e9c441651f4c433d78524665a1836697e594e9be8b45b764dc6cbb2",
+      "upstream_function_sha256": "670755148e9c441651f4c433d78524665a1836697e594e9be8b45b764dc6cbb2",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 99
+        }
+      ],
+      "version_gate_excluded": false
+    },
+    {
+      "test_name": "vtxos::list_vtxos",
+      "source_file": "testing/tests/bark/vtxos.rs",
+      "source_file_sha256": "c9ae223cc1cc7bd36298817a3e44d9fe14429a52d2d0da3811455a893ff69133",
+      "function_sha256": "4217a0224bfd358621e9f5b4b6024acdf00b9ebd484471ad0c62206a8516decf",
+      "upstream_function_sha256": "4217a0224bfd358621e9f5b4b6024acdf00b9ebd484471ad0c62206a8516decf",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 8
+        }
+      ],
+      "version_gate_excluded": false
+    }
+  ],
+  "scope": "46 independent still-unstarted ordinaryCLI cases; noforce/offlinefailedfixture orknown61",
+  "threads": 1,
+  "retries": 0,
+  "per_test_timeout_seconds": 180,
+  "version_audit": {
+    "reported_actual_version": "0.7.1-dev",
+    "version_basis": "Coordinator-reported actual frozen BARK_EXEC output; this review never invoked the binary. Existing product hash must be verified during admitted preflight.",
+    "parser": "testing/src/util.rs:354-359 maps any string containing -dev and DIRTY to BarkVersion::Dev; Ord:380-385 makes Dev greater than every Release and equal to Dev.",
+    "gate": "testing/src/lib.rs:95-105 logs skipping test and returns only when parsed condition false. A nextest PASS after that return is not behavior coverage.",
+    "frozen_helper_proofs": {
+      "testing/src/lib.rs": {
+        "sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+        "frozen_manifest_match": true
+      },
+      "testing/src/util.rs": {
+        "sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+        "frozen_manifest_match": true
+      }
+    },
+    "counts": {
+      "remaining": 75,
+      "require_gate_tests": 32,
+      "require_gate_occurrences": 32,
+      "branch_macro_tests": 5,
+      "branch_macro_occurrences": 7,
+      "no_version_macro_tests": 41,
+      "excluded": 0
+    },
+    "all_required_gates_pass": true,
+    "all_branch_conditions_true_for_this_version": true,
+    "default_selected_names_verified_against_immutable_listing": true
+  },
+  "queue_sha256": "7675e6d68e0eb383683fdab42758e226378ba8d83f31082563d379e372829e3e",
+  "original_whitelist_indices": [
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75
+  ],
+  "prior_stopped_batch": "batch22-upstream-bark-unstarted47",
+  "prior_outcome": "FirstforceofflinecaseFAILc564preserved;46remainingunstarted",
+  "deferred_original_case": {
+    "index": 61,
+    "name": "onchain::bark_address_changes",
+    "state": "NOT_RUN_PENDING_REVIEWED_ADAPTATION"
+  },
+  "archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "archive_function_verification": "47/47 file/function/upstream SHAverified without extraction",
+  "justification": "Originalfailedcaseonlyfirstofflineforcecreation; no customerfunding/payment; unchangedotherordinaryfunctions source7041; independent privatecontexts, oldfailures preserved; rootownerfixisolated"
+}

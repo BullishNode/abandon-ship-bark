@@ -1,0 +1,23 @@
+Batch23 stopped original ordinary bark regression cohort
+Source manifest 704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06
+46 selected;17 started;16 PASS;1 FAIL;29 NOT STARTED; original75seq61 additionally deferred.
+14 daemon-backed PASS +2 CLI-process PASS +1 daemon-backed FAIL.
+Default180s/test; retries0; one thread; no compilation; parent session56688 terminal100.
+01 PASS 8.867s ark-testing::bark create::bark_create_is_atomic run=40b03dc4-5cef-4210-8c20-502e2ed82832
+02 PASS 0.039s ark-testing::bark create::cli_create_refuses_another_cli_create run=4050f9c7-8a25-4ea0-ba71-db622bb9163d
+03 PASS 0.041s ark-testing::bark create::cli_create_releases_lock_after_failure run=13fd8368-8841-4987-be6c-ce5bfabc1f06
+04 PASS 11.387s ark-testing::bark dust::bark_allows_sending_dust_arkoor_but_errors_on_dust_refresh run=ba03da84-45bd-4543-8dd3-1a390884e08e
+05 PASS 5.906s ark-testing::bark estimate::estimate_lightning_send_fee_without_funds run=c217c192-eaa7-40f8-ba07-2a679a756a38
+06 PASS 5.729s ark-testing::bark estimate::estimate_send_onchain_fee_without_funds run=784819b3-63fc-4fde-9d2a-6f558db9042d
+07 PASS 9.408s ark-testing::bark fees::board_fee_base_and_ppm run=d3c50a83-8d32-4187-83f2-dd2d1f2afa3f
+08 PASS 9.231s ark-testing::bark fees::board_fee_min_fee_applies run=26f420ec-4586-436d-9ee9-0abec034bca2
+09 PASS 7.225s ark-testing::bark fees::board_fee_rejects_when_fee_exceeds_amount run=c257cb1d-8695-4cb9-a5c4-b3e0c080a567
+10 PASS 9.266s ark-testing::bark fees::offboard_all_rejects_dust_output run=936093ea-ab54-4aea-bb70-e0c2b3b4da4e
+11 PASS 11.299s ark-testing::bark fees::offboard_fee_base_deducted run=364fb317-af93-43fc-92fd-03caeb4812d4
+12 PASS 10.464s ark-testing::bark fees::offboard_fee_with_ppm_expiry run=94b9a41c-8729-46c4-92da-2a080848306d
+13 PASS 16.488s ark-testing::bark fees::refresh_fee_base_only run=dceebda5-c470-4fb5-a259-6168b876f78f
+14 PASS 9.355s ark-testing::bark fees::refresh_fee_rejects_dust_output run=4709e35f-0bd4-4df7-8bc0-c224135693ae
+15 PASS 20.230s ark-testing::bark fees::refresh_fee_with_multiple_vtxos run=c0b50598-230f-45f3-9186-dd516db7d8cc
+16 PASS 15.871s ark-testing::bark fees::refresh_fee_with_ppm_expiry run=cebe7b13-bf5a-41d1-b93f-a44a5b43a56d
+17 FAIL 13.196s ark-testing::bark fees::send_onchain_fee_deducted run=352e12d4-ac04-40ce-b2e3-28401ceebf8b
+Original fee assertion FAILED3854sat actual vs3938sat expected. Retained canonical block evidence: requested300000sat exact output,2 confirmations; actual minerfee1298sat separatecustomerfee3854sat. Later assertions not executed; noCore6/noFULLML or fullCLI credit.

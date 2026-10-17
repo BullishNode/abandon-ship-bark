@@ -1,0 +1,280 @@
+{
+  "reported_frozen_version": "bark 0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+  "retained_preflight_version_audit": {
+    "reported_actual_version": "0.7.1-dev",
+    "version_basis": "Coordinator-reported actual frozen BARK_EXEC output; this review never invoked the binary. Existing product hash must be verified during admitted preflight.",
+    "parser": "testing/src/util.rs:354-359 maps any string containing -dev and DIRTY to BarkVersion::Dev; Ord:380-385 makes Dev greater than every Release and equal to Dev.",
+    "gate": "testing/src/lib.rs:95-105 logs skipping test and returns only when parsed condition false. A nextest PASS after that return is not behavior coverage.",
+    "frozen_helper_proofs": {
+      "testing/src/lib.rs": {
+        "sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+        "frozen_manifest_match": true
+      },
+      "testing/src/util.rs": {
+        "sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+        "frozen_manifest_match": true
+      }
+    },
+    "counts": {
+      "remaining": 75,
+      "require_gate_tests": 32,
+      "require_gate_occurrences": 32,
+      "branch_macro_tests": 5,
+      "branch_macro_occurrences": 7,
+      "no_version_macro_tests": 41,
+      "excluded": 0
+    },
+    "all_required_gates_pass": true,
+    "all_branch_conditions_true_for_this_version": true,
+    "default_selected_names_verified_against_immutable_listing": true
+  },
+  "started_required_gate_pass_occurrences": 10,
+  "started_branch_test_count": 0,
+  "started_cases_with_skip_marker": 0,
+  "scope": "Prepared true gates for unstarted cases are not executed coverage. For daemon-backed started cases actual retained TestContextdirectories exist; gated PASS rows match independent source classification/audit.",
+  "started_cases": [
+    {
+      "case_id": "FT-CLI-003",
+      "test_name": "access_token::access_token_is_sent",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-004",
+      "test_name": "arkoor::max_arkoor_amount",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-005",
+      "test_name": "arkoor::oor_change_split",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(> 0.6.1)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-006",
+      "test_name": "arkoor::send_arkoor_package",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-007",
+      "test_name": "arkoor::send_full_arkoor",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-008",
+      "test_name": "arkoor::send_to_arkade_address_is_rejected",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-009",
+      "test_name": "arkoor::test_ark_address_other_ark",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-010",
+      "test_name": "base::bark_ark_info",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(== DIRTY)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-011",
+      "test_name": "base::bark_config_json",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(== DIRTY)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-012",
+      "test_name": "base::bark_version",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-013",
+      "test_name": "board::bark_recover_unregistered_board",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-014",
+      "test_name": "board::bark_rejects_boarding_below_minimum_board_amount",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-015",
+      "test_name": "board::bark_rejects_boarding_subdust_amount",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-016",
+      "test_name": "board::board_all_bark",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-017",
+      "test_name": "board::board_fails_when_funding_tx_double_spent",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(> 0.5.0)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-018",
+      "test_name": "board::board_fails_when_input_double_spent_before_broadcast",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(> 0.6.2)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-019",
+      "test_name": "board::board_psbt_confirms_when_other_party_broadcasts",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(> 0.6.2)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-020",
+      "test_name": "board::board_psbt_full_flow",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(> 0.6.1)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-021",
+      "test_name": "board::board_psbt_output_at_any_index",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(> 0.6.1)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-022",
+      "test_name": "board::board_psbt_rejects_dust_amount",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-023",
+      "test_name": "board::board_psbt_rejects_wrong_expiry_height",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-024",
+      "test_name": "board::board_psbt_rejects_wrong_funding_address",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-025",
+      "test_name": "board::board_psbt_unfinalized_fails_when_input_double_spent",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(> 0.6.2)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-026",
+      "test_name": "board::board_psbt_unfinalized_is_not_broadcast",
+      "result": "PASS",
+      "required_gates": 1,
+      "gate_evaluation": "require_bark_version!(> 0.6.1)=true",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-027",
+      "test_name": "board::board_twice_bark",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    },
+    {
+      "case_id": "FT-CLI-028",
+      "test_name": "chain_source::chain_source_without_explicit_protocol",
+      "result": "PASS",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": null,
+      "execution_layer": "library_component"
+    },
+    {
+      "case_id": "FT-CLI-029",
+      "test_name": "create::bark_address_works_offline",
+      "result": "FAIL",
+      "required_gates": 0,
+      "gate_evaluation": "none",
+      "actual_context_directory_exists": true,
+      "execution_layer": "daemon_backed_native_fixture"
+    }
+  ]
+}

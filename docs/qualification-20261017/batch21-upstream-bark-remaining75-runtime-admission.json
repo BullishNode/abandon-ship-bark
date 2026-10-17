@@ -1,0 +1,147 @@
+{
+  "container": "abandon-fresh-runtime-20261017",
+  "recorded_preflight": {
+    "state": "PREFLIGHT_PASS",
+    "at": "2026-10-17T19:02:54.908785+00:00",
+    "container": "abandon-fresh-runtime-20261017",
+    "source_functions_independently_rehashed": 75,
+    "all75_upstream_function_bytes_identical": true,
+    "native_listed": 202,
+    "exact_unignored_whitelist": 75,
+    "first_exact_selection": [
+      "access_token::access_token_is_sent"
+    ],
+    "bark_version": "bark 0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+    "runtime_pins_verified": 14,
+    "version_gate_audit": {
+      "reported_actual_version": "0.7.1-dev",
+      "version_basis": "Coordinator-reported actual frozen BARK_EXEC output; this review never invoked the binary. Existing product hash must be verified during admitted preflight.",
+      "parser": "testing/src/util.rs:354-359 maps any string containing -dev and DIRTY to BarkVersion::Dev; Ord:380-385 makes Dev greater than every Release and equal to Dev.",
+      "gate": "testing/src/lib.rs:95-105 logs skipping test and returns only when parsed condition false. A nextest PASS after that return is not behavior coverage.",
+      "frozen_helper_proofs": {
+        "testing/src/lib.rs": {
+          "sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+          "frozen_manifest_match": true
+        },
+        "testing/src/util.rs": {
+          "sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+          "frozen_manifest_match": true
+        }
+      },
+      "counts": {
+        "remaining": 75,
+        "require_gate_tests": 32,
+        "require_gate_occurrences": 32,
+        "branch_macro_tests": 5,
+        "branch_macro_occurrences": 7,
+        "no_version_macro_tests": 41,
+        "excluded": 0
+      },
+      "all_required_gates_pass": true,
+      "all_branch_conditions_true_for_this_version": true,
+      "default_selected_names_verified_against_immutable_listing": true
+    },
+    "no_compilation": true,
+    "retries": 0,
+    "per_test_timeout_seconds": 180
+  },
+  "recorded_preflight_sha256": "6baf33bc70120a35b0396b2ec1d406b7b801eeac8333ec2d713868a070ca780b",
+  "runtime_pin_file_sha256": "17b7481da3072902cfc623f57cebac04e34a3c2cf621f5e66d94180ebf26e904",
+  "retained_actual_preflight_pin_count": 14,
+  "curation_host_visible_rehashes": 11,
+  "curation_new_runtime_invocations": 0,
+  "pin_evidence": [
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-bark",
+      "sha256": "f3e33f52d458f5dc5f0dcd98f99ca363b266d4e35f979a418d47e8830dcd46f7",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/captaind",
+      "sha256": "175dc56e2177cbda495e2cb5c56bae2061d0590dc2481ddb40a944e68e5dd0fb",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/watchmand",
+      "sha256": "4d1d52778032aed837bfc4e28ddcf637458837635a62ad3f6436be3adc4311d5",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/bark",
+      "sha256": "d971db9547a3bb6c8ebd0413404ed886d3d1157f233c259ab905945ad0a96444",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/barkd",
+      "sha256": "5194c687beb3e17a637dcb2754402daca5d6a1a90174a8c12d7091706500e114",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/support/debug/lock-holder",
+      "sha256": "abf0fd823c45d2b8635c7e9a7245186a5e8cd30bac31d77e37a807dce3f57b2d",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/manifest.json",
+      "sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/source-manifest.json",
+      "sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+      "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+      "host_visible_rehashed_match": false,
+      "evidence_if_not_host_visible": "Nix-backed target: retained actual14-pin runtime preflight; no new runtime invocation during curation."
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+      "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "host_visible_rehashed_match": false,
+      "evidence_if_not_host_visible": "Nix-backed target: retained actual14-pin runtime preflight; no new runtime invocation during curation."
+    },
+    {
+      "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+      "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+      "host_visible_rehashed_match": false,
+      "evidence_if_not_host_visible": "Nix-backed target: retained actual14-pin runtime preflight; no new runtime invocation during curation."
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/batch21-upstream-bark-remaining75/nextest-binaries-bark-only-exact.json",
+      "sha256": "b7c90f817bd780efcbc721ff8ad86d0519b1a519690b91171f687b683294685f",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/batch21-upstream-bark-remaining75/nextest-binaries-bark-runtime-immutable.json",
+      "sha256": "3143345c36e85938ec424916f01ea0bd28ebce8aeb1b0d63b787aa3c850b3363",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    },
+    {
+      "path": "/fresh-cache/testing-track-20261017/batch21-upstream-bark-remaining75/selection-proof.json",
+      "sha256": "9aad9c17b42ae3db2ad21cee6f541e9641ff159bf5dd2a75b981476b9618fa35",
+      "host_visible_rehashed_match": true,
+      "evidence_if_not_host_visible": null
+    }
+  ],
+  "profile": "default",
+  "normal_timeout_seconds": 180,
+  "retries": 0,
+  "new_compilation": false,
+  "terminal_controller_exit": 100,
+  "parent_reported_exec_cell": "73397",
+  "terminal_reason": "Actual test assertion/creation failure, not timeout or resource refusal.",
+  "source_only_curation": "No services, wallet/DB opening, test retry, source or runtime process executed."
+}

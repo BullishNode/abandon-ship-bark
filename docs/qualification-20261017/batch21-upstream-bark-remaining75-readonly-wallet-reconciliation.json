@@ -1,0 +1,30 @@
+{
+  "state": "READ_ONLY_SQLITE_COUNTS",
+  "db_sha256": "642d121952c64edca372e1fc3bc151ff74c8a01a0a49026142b2ec102158875a",
+  "sidecars": [
+    "db.sqlite"
+  ],
+  "counts": {
+    "bark_vtxo_state": 0,
+    "bark_vtxo_key": 2,
+    "vtxo_forfeited_in_round": 0,
+    "bark_pending_board": 0,
+    "bark_lightning_send": 0,
+    "bark_pending_lightning_receive": 0,
+    "bark_vtxo": 0,
+    "bark_movements": 0,
+    "bark_movements_input_vtxos": 0,
+    "bark_movements_output_vtxos": 0,
+    "bark_movements_exited_vtxos": 0,
+    "bark_mailbox_checkpoint": 1,
+    "bark_movements_sent_to": 0,
+    "bark_movements_received_on": 0,
+    "bark_wallet_action_checkpoint": 0,
+    "bark_settled_lightning_receive": 0,
+    "bdk_txs": 0,
+    "bdk_txouts": 0
+  },
+  "db_hash_unchanged": true,
+  "source_scope": "Unfunded ctx.bark create, address, productstop, explicitaddress0; no transfer/board/offboard/Lightning call in test body",
+  "limitation": "Static wallet DB counts and unchanged source sequence; no new wallet/chain process or payment invocation"
+}

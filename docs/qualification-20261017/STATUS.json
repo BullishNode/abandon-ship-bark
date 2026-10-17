@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-17T17:03:11.158807+00:00",
+  "updated_at": "2026-10-17T17:14:57.709333+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "COMPLETED_ALLOCATED_FINAL_V2_CHECKPOINT_PUBLICATION",
+  "state": "OVERSIZE_SOURCE_REVIEW_COMPLETE_PENDING_ALLOCATION",
   "branch": "work/fresh-test-qualification-20261017",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
@@ -42,7 +42,7 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Publish direct recipient test and sanitized evidence as a new draft PR; no additional native runtime allocated.",
+  "next_action": "Publish source-only corrected actual-graph fixture/reviews for coordinator integration; internal settlement owns next compiler allocation. No own Cargo/native runtime authorized.",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
@@ -72,10 +72,17 @@
   "coverage_rows": 239,
   "coverage_warning": "239 mixed inventory/requirement/executed rows; 80 original legacy IDs retained. 24 unique executed names across 27 executions; whole legacy cases require their complete original oracle.",
   "current_batch": {
-    "name": "batch15-v2-failed-send-refund",
-    "state": "COMPLETED",
-    "result": "PASS",
-    "run_id": "e968e1cf-20d6-43a9-aad8-24f592bee113"
+    "name": "oversize-current-source-review",
+    "state": "SOURCE_REVIEW_COMPLETE",
+    "test_result": "NOT RUN",
+    "inspected_head": "751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
+    "initial_corrected_source_sha256": "9942a9f6d80a3c535e90ea3601b43ba0286b2677663386a12c45c3bad54cf066",
+    "original_failed_run": "4a930d92-ac3d-4ec7-b344-38d7b23d2d9a",
+    "final_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+    "reviewers": 3,
+    "compile": "NOT RUN",
+    "runtime": "NOT RUN",
+    "original_failed_result_preserved": true
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -142,10 +149,13 @@
       "merged_at": "2026-10-17T16:33:58Z"
     },
     "primary_local_code_commit": "0870bbbb915f133b98b00b5c3d7dc2a2a2ac0bc5",
-    "primary_code_publication": "Local source commit0870 plus final sanitized report checkpoint ready for new draft PR; PR7 verified merged."
+    "primary_code_publication": "PUSHED and verified in draftPR8; no merge/promotion/deployment by testing track",
+    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/8",
+    "latest_verified_remote_head": "ba92c39adbbaac6992db2b8631520a5a7a3c4e99",
+    "latest_receipt": "PUBLICATION-PR8.json"
   },
   "next_batch": {
-    "automatic_oversize": "Corrected actual graph source-only; uncompiled/unrun, deferred pending owner integration and lease",
+    "automatic_oversize": "Actual native graph corrected and re-reviewed by3agents; finalsource1d708; UNCOMPILED/UNRUN pending coordinator integration and lease.",
     "backup_restore": "Frozen source-only draft after Lightning priority",
     "conflict_reorg": "Frozen source-only draft after Lightning priority",
     "lightning_restart": "Completed source-labelled success recovery; stronger failed-send cancellation-during-downtime draft reviewed but uncompiled/unrun",

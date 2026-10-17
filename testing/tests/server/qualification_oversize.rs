@@ -33,10 +33,15 @@ struct Owner {
 
 struct Node {
 	input: OutPoint,
-	checkpoint: OutPoint,
 	checkpoint_tx: Transaction,
-	fanout_tx: Transaction,
+	branches: Vec<Branch>,
 	payees: usize,
+}
+
+struct Branch {
+	checkpoint: OutPoint,
+	exit_tx: Transaction,
+	output: OutPoint,
 }
 
 fn owner() -> Owner {
@@ -64,6 +69,9 @@ async fn native_node(
 	assert!(input.exit_depth() < 100);
 	assert!(!destinations.is_empty() && destinations.len() <= 4);
 	let input_point = input.point();
+	let input_expiry = input.expiry_height();
+	let input_exit_delta = input.exit_delta();
+	let input_server = input.server_pubkey();
 	let expected = destinations.iter().map(|d| (d.policy.clone(), d.total_amount)).collect::<Vec<_>>();
 	let builder = ArkoorPackageBuilder::new_with_checkpoints([input], destinations).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
@@ -72,21 +80,42 @@ async fn native_node(
 	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	let checkpoints = signed.build_signed_internal_vtxos().into_iter()
 		.filter(|(v, _)| matches!(v.policy(), ServerVtxoPolicy::Checkpoint(_))).collect::<Vec<_>>();
-	assert_eq!(checkpoints.len(), 1, "non-dust checkpointed fanout has one actual checkpoint");
-	let checkpoint = checkpoints[0].0.point();
+	// The native checkpoint transaction fans out into one independently
+	// recoverable checkpoint per destination. Each has its own signed exit
+	// transaction; there is no single checkpoint containing all destinations.
+	assert_eq!(checkpoints.len(), expected.len());
 	let transactions = signed.signed_virtual_transactions();
-	assert_eq!(transactions.len(), 2);
+	assert_eq!(transactions.len(), expected.len() + 1);
 	let checkpoint_tx = transactions.iter().find(|tx| tx.input[0].previous_output == input_point).unwrap().clone();
-	let fanout_tx = transactions.iter().find(|tx| tx.input[0].previous_output == checkpoint).unwrap().clone();
+	assert_eq!(checkpoint_tx.input.len(), 1);
+	assert_eq!(checkpoint_tx.output.len(), expected.len() + 1);
+	assert_eq!(checkpoint_tx.output.iter().filter(|out| out.is_p2a_fee_anchor()).count(), 1);
 	let outputs = signed.build_signed_vtxos();
 	assert_eq!(outputs.len(), expected.len());
-	for (vtxo, (policy, amount)) in outputs.iter().zip(expected) {
+	let mut branches = Vec::new();
+	for (index, (vtxo, (policy, amount))) in outputs.iter().zip(expected).enumerate() {
 		assert_eq!(vtxo.policy(), &policy);
 		assert_eq!(vtxo.amount(), amount);
 		assert!(vtxo.exit_depth() < 100);
+		let point = OutPoint::new(checkpoint_tx.compute_txid(), index as u32);
+		let (checkpoint, exit_txid) = checkpoints.iter().find(|(v, _)| v.point() == point).unwrap();
+		assert_eq!(checkpoint.policy(), &ServerVtxoPolicy::new_checkpoint(key.public_key()));
+		assert_eq!(checkpoint.amount(), amount);
+		assert_eq!(checkpoint.expiry_height(), input_expiry);
+		assert_eq!(checkpoint.exit_delta(), input_exit_delta);
+		assert_eq!(checkpoint.server_pubkey(), input_server);
+		assert_eq!(checkpoint.txout(), checkpoint_tx.output[index]);
+		let exit_tx = transactions.iter().find(|tx| tx.compute_txid() == *exit_txid).unwrap().clone();
+		assert_eq!(exit_tx.input.len(), 1);
+		assert_eq!(exit_tx.input[0].previous_output, point);
+		assert_eq!(exit_tx.output.len(), 2);
+		assert_eq!(vtxo.point(), OutPoint::new(exit_tx.compute_txid(), 0));
+		assert_eq!(exit_tx.output[0], vtxo.txout());
+		assert!(exit_tx.output[1].is_p2a_fee_anchor());
+		branches.push(Branch { checkpoint: point, exit_tx, output: vtxo.point() });
 	}
 	client.register_vtxo_transactions_with_server(&outputs).await.unwrap();
-	(outputs, Node { input: input_point, checkpoint, checkpoint_tx, fanout_tx, payees })
+	(outputs, Node { input: input_point, checkpoint_tx, branches, payees })
 }
 
 async fn actual_fee(ctx: &TestContext, tx: &Transaction) -> u64 {
@@ -186,8 +215,8 @@ async fn automatic_multilevel_split() {
 		"source_actors": 1, "source_funding_sat": 2_000_000, "watchman_funding_sat": 3_200_000,
 		"total_reserved_funding_sat": 5_200_000, "payee_records_registered": 0,
 		"completed_native_cosign_registration_pairs": 0, "mailbox_posts": 0,
-		"expected_explicit_rpc_workload": {"payee_registration": 327, "native_cosign": 157,
-			"native_output_registration": 157, "initial_source_path_registration": 1, "mailbox_post": 327},
+		"expected_explicit_rpc_workload": {"payee_registration": 327, "native_cosign": 154,
+			"native_output_registration": 154, "initial_source_path_registration": 1, "mailbox_post": 327},
 		"packages": [], "payouts": [], "automatic_split_requests": [], "phase": "registration",
 	});
 	save(&ctx, &report).await;
@@ -250,18 +279,22 @@ async fn automatic_multilevel_split() {
 	let root_groups = [Vec::from_iter(0..324), vec![324], vec![325], vec![326]];
 	let mut child_keys = Vec::new();
 	for group in &root_groups {
-		let key = client.derive_store_next_keypair().await.unwrap().0;
+		let key = if group.len() == 1 { owners[group[0]].key }
+			else { client.derive_store_next_keypair().await.unwrap().0 };
 		destinations.push(ArkoorDestination {
 			total_amount: sat(group.len() as u64 * LEAF_SAT), policy: ark::VtxoPolicy::new_pubkey(key.public_key()),
 		});
-		child_keys.push(key);
+		child_keys.push((group.len() > 1).then_some(key));
 	}
 	let (outputs, root_node) = native_node(&client, &mut rpc, source.clone(), source_key, destinations, PAYEES).await;
+	report["completed_native_cosign_registration_pairs"] = json!(1);
+	save(&ctx, &report).await;
+	let mut terminals = Vec::new();
 	for ((output, key), group) in outputs.into_iter().zip(child_keys).zip(root_groups) {
-		jobs.push_back((output, key, group));
+		if let Some(key) = key { jobs.push_back((output, key, group)); }
+		else { terminals.push((group[0], output)); }
 	}
 	let mut nodes = vec![root_node];
-	let mut terminals = Vec::new();
 	while let Some((input, key, group)) = jobs.pop_front() {
 		let mut destinations = Vec::new();
 		let mut children = Vec::new();
@@ -297,13 +330,21 @@ async fn automatic_multilevel_split() {
 		report["completed_native_cosign_registration_pairs"] = json!(nodes.len());
 		if nodes.len() % 16 == 0 { save(&ctx, &report).await; }
 	}
-	assert_eq!(nodes.len(), 157);
+	assert_eq!(nodes.len(), 154);
 	assert_eq!(terminals.len(), PAYEES);
 	assert_eq!(terminals.iter().map(|(i, _)| *i).collect::<BTreeSet<_>>().len(), PAYEES);
 	report["native_path_nodes"] = json!(nodes.iter().map(|node| json!({
-		"input": node.input, "checkpoint": node.checkpoint, "payees": node.payees,
-		"checkpoint_txid": node.checkpoint_tx.compute_txid(), "fanout_txid": node.fanout_tx.compute_txid(),
+		"input": node.input, "payees": node.payees, "checkpoint_fanout_txid": node.checkpoint_tx.compute_txid(),
+		"branches": node.branches.iter().map(|branch| json!({
+			"checkpoint": branch.checkpoint, "exit_txid": branch.exit_tx.compute_txid(), "output": branch.output,
+		})).collect::<Vec<_>>(),
 	})).collect::<Vec<_>>());
+	let mut signed_paths = BTreeMap::from([(board_exit.compute_txid(), board_exit.clone())]);
+	for node in &nodes {
+		signed_paths.insert(node.checkpoint_tx.compute_txid(), node.checkpoint_tx.clone());
+		for branch in &node.branches { signed_paths.insert(branch.exit_tx.compute_txid(), branch.exit_tx.clone()); }
+	}
+	assert_eq!(signed_paths.len(), 635, "154 native operations sign 634 path transactions, plus the board exit");
 	let mut mailbox = srv.get_mailbox_public_rpc().await;
 	let mailbox_pubkey = srv.ark_info().await.mailbox_pubkey;
 	for (posted, (index, leaf)) in terminals.iter().enumerate() {
@@ -331,40 +372,58 @@ async fn automatic_multilevel_split() {
 	confirm_package(&ctx, &srv, &board_exit, &mut graph, &mut report).await;
 	let grace = srv.watchmand().config().watchman.progress_grace_period.to_u32();
 	ctx.generate_blocks(grace).await;
+	// The source's ordinary pubkey output is progressed by the native
+	// watchtower, after the real grace period. Its one checkpoint transaction
+	// creates all four independently recoverable branch outputs together.
 	confirm_package(&ctx, &srv, &nodes[0].checkpoint_tx, &mut graph, &mut report).await;
-	confirm_package(&ctx, &srv, &nodes[0].fanout_tx, &mut graph, &mut report).await;
-	ctx.generate_blocks(grace).await;
-	for node in nodes.iter().filter(|n| n.payees == 324 || n.payees == 1) {
-		confirm_package(&ctx, &srv, &node.checkpoint_tx, &mut graph, &mut report).await;
-	}
 	let large = nodes.iter().find(|node| node.payees == 324).unwrap();
-	confirm_package(&ctx, &srv, &large.fanout_tx, &mut graph, &mut report).await;
+	let large_branch = nodes[0].branches.iter().find(|branch| branch.output == large.input).unwrap();
+	assert_eq!(large_branch.checkpoint.txid, nodes[0].checkpoint_tx.compute_txid());
+	// This physical checkpoint still represents 324 distinct recipients and
+	// cannot fit a payout at the production size limit. Only the automatic
+	// readiness/split path can authorize its actual signed branch exit.
+	confirm_package(&ctx, &srv, &large_branch.exit_tx, &mut graph, &mut report).await;
 	ctx.generate_blocks(grace).await;
+	confirm_package(&ctx, &srv, &large.checkpoint_tx, &mut graph, &mut report).await;
 	let ready_nodes = nodes.iter().filter(|node| node.payees == 81).collect::<Vec<_>>();
 	assert_eq!(ready_nodes.len(), 4);
 	for node in ready_nodes {
-		confirm_package(&ctx, &srv, &node.checkpoint_tx, &mut graph, &mut report).await;
+		assert!(large.branches.iter().any(|branch| branch.output == node.input));
 	}
-	for (point, progress) in [
+	let required_splits = [
 		(source.chain_anchor(), board_exit.compute_txid()),
-		(nodes[0].checkpoint, nodes[0].fanout_tx.compute_txid()),
-		(large.checkpoint, large.fanout_tx.compute_txid()),
-	] {
-		let actual = db.read(async |tx| Ok(tx.query_one(
-			"SELECT progress_txid FROM expiry_split_request WHERE vtxo_id=$1", &[&ark::VtxoId::from(point).to_string()],
-		).await?.get::<_, String>(0))).await.unwrap();
-		assert_eq!(actual, progress.to_string(), "the daemon must create each actual oversized split instruction");
+		(large_branch.checkpoint, large_branch.exit_tx.compute_txid()),
+	];
+	let requests = db.read(async |tx| Ok(tx.query("SELECT s.vtxo_id,s.progress_txid \
+		FROM expiry_split_request s JOIN vtxo v ON v.vtxo_id=s.vtxo_id WHERE v.anchor_point=$1",
+		&[&source.chain_anchor().to_string()],
+	).await?)).await.unwrap();
+	let mut observed_requests = BTreeSet::new();
+	for request in requests {
+		let backing = request.get::<_, String>("vtxo_id");
+		let progress: Txid = request.get::<_, &str>("progress_txid").parse().unwrap();
+		let path = signed_paths.get(&progress).expect("each automatic request must name a genuine signed native path");
+		assert_eq!(path.input.len(), 1);
+		assert_eq!(ark::VtxoId::from(path.input[0].previous_output).to_string(), backing);
+		observed_requests.insert((backing.clone(), progress));
 		report["automatic_split_requests"].as_array_mut().unwrap().push(json!({
-			"backing": point, "progress_txid": progress,
+			"backing": backing, "progress_txid": progress,
 		}));
 	}
-	assert_eq!(large.input.txid, nodes[0].fanout_tx.compute_txid());
+	for (point, progress) in required_splits {
+		assert!(observed_requests.contains(&(ark::VtxoId::from(point).to_string(), progress)),
+			"the daemon must create both actual oversized backing requests, independently of extra legitimate substeps");
+	}
+	report["required_oversized_physical_levels"] = json!([
+		{"backing": source.chain_anchor(), "recipients": 327},
+		{"backing": large_branch.checkpoint, "recipients": 324},
+	]);
 	report["phase"] = json!("all_owner_payouts");
 	save(&ctx, &report).await;
 	let terminal_ids = terminals.iter().map(|(_, leaf)| leaf.id().to_string()).collect::<Vec<_>>();
 	let payout_rows = loop {
 		let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,a.id,a.sweep_tx,c.gross_sat,c.fee_sat, \
-			c.payout_sat,c.forfeited_sat,c.spk FROM expiry_entitlement e \
+			c.payout_sat,c.forfeited_sat,c.spk,c.owner_mailbox,c.user_pubkey FROM expiry_entitlement e \
 			JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
 			JOIN expiry_allocation a ON a.id=c.allocation_id \
 			WHERE e.vtxo_id=ANY($1) AND c.active AND a.broadcast_at IS NOT NULL", &[&terminal_ids],
@@ -387,9 +446,19 @@ async fn automatic_multilevel_split() {
 	srv.wait_for_sync_height(final_height).await;
 	srv.watchmand().wait_for_sync_height(final_height).await;
 	let core = ctx.bitcoind().sync_client();
+	// Native progression can publish additional signed substeps alongside
+	// packages already observed. Include every canonical path transaction and
+	// its actual sponsor, so change/drain accounting never omits a real edge.
+	for (txid, path) in &signed_paths {
+		if graph.contains_key(txid) { continue; }
+		let Some(info) = core.custom_get_raw_transaction_info(*txid, None).unwrap() else { continue; };
+		if info.confirmations.unwrap_or(0) > 0 {
+			confirm_package(&ctx, &srv, path, &mut graph, &mut report).await;
+		}
+	}
 	for (index, leaf) in &terminals {
 		let owner = &owners[*index];
-		let matches = payouts.values().flat_map(|tx| tx.output.iter().enumerate().filter_map(move |(vout, out)|
+		let matches = graph.values().flat_map(|tx| tx.output.iter().enumerate().filter_map(move |(vout, out)|
 			(out.script_pubkey == owner.record.spk).then_some((tx.compute_txid(), vout, out))
 		)).collect::<Vec<_>>();
 		assert_eq!(matches.len(), 1, "each actual owner must have exactly one economic payout output");
@@ -401,6 +470,8 @@ async fn automatic_multilevel_split() {
 		assert_eq!(actual.script_pub_key.script().unwrap(), owner.record.spk);
 		let row = payout_rows.iter().find(|r| r.get::<_, String>("vtxo_id") == leaf.id().to_string()).unwrap();
 		assert_eq!(row.get::<_, String>("spk"), owner.record.spk.as_bytes().to_lower_hex_string());
+		assert_eq!(row.get::<_, String>("owner_mailbox"), owner.mailbox.as_pubkey().to_string());
+		assert_eq!(row.get::<_, String>("user_pubkey"), owner.key.public_key().to_string());
 		let associated_parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
 		assert_eq!(associated_parent.compute_txid(), txid,
 			"each terminal's stored parent must contain that owner's actual payout output");

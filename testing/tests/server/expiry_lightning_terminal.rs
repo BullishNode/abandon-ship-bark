@@ -150,17 +150,43 @@ async fn expiry_actual_no_part_external_send_pays_offline_owner() {
 /// the original 100k source less its single 1k output fee.
 #[tokio::test]
 async fn expiry_internal_zero_grant_timeout_pays_absent_sender() {
-	let ctx = TestContext::new("server/expiry_internal_zero_grant_timeout").await;
+	internal_zero_grant_timeout(false).await;
+}
+
+/// An actually funded incoming attempt must still refund its absent owner
+/// when the existing pool can only create a one-satoshi final receive grant.
+#[tokio::test]
+async fn expiry_internal_unsafe_fragmented_pool_leaves_zero_grants_and_refunds_owner() {
+	internal_zero_grant_timeout(true).await;
+}
+
+#[inline(never)]
+fn internal_zero_grant_timeout(refuse_fragmented_pool: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> {
+	Box::pin(async move {
+	let name = if refuse_fragmented_pool { "server/expiry_internal_unsafe_fragmented_pool" }
+		else { "server/expiry_internal_zero_grant_timeout" };
+	let ctx = TestContext::new(name).await;
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
-	let srv = ctx.captaind("server").lightningd(&lightning.internal).no_vtxo_pool()
-		.funded(btc(10)).cfg(|cfg| {
+	let builder = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc());
+	let builder = if refuse_fragmented_pool { builder } else { builder.no_vtxo_pool() };
+	let srv = builder
+		.funded(btc(10)).cfg(move |cfg| {
 			cfg.vtxo_lifetime = BlockDelta::new(24);
-			cfg.receive_htlc_forward_timeout = Duration::from_secs(2);
+			cfg.receive_htlc_forward_timeout = Duration::from_secs(if refuse_fragmented_pool { 15 } else { 2 });
+			if refuse_fragmented_pool {
+				cfg.rpc_rich_errors = true; // Assert the exact admission error chain in this fixture.
+				cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
+				cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
+				cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(45_000), count: 4 }];
+			}
 			cfg.invoice_check_interval = Duration::from_secs(1);
 		}).watchmand().create().await;
+	if refuse_fragmented_pool { srv.wait_for_vtxopool(&ctx).await; }
 	let recipient = ctx.bark_sdk("absent-recipient", &srv)
 		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
-	let invoice = recipient.bolt11_invoice(sat(90_000), None, None).await.unwrap();
+	let invoice_amount = if refuse_fragmented_pool { 90_001 } else { 90_000 };
+	let receiver_key = recipient.new_address().await.unwrap().policy().user_pubkey();
+	let invoice = recipient.bolt11_invoice(sat(invoice_amount), None, None).await.unwrap();
 	let hash = PaymentHash::from(&invoice);
 	drop(recipient); // No prepare-claim, claim, revoke or later wallet call.
 	let sender = ctx.bark("absent-sender", &srv).funded(sat(200_000)).create().await;
@@ -186,10 +212,34 @@ async fn expiry_internal_zero_grant_timeout_pays_absent_sender() {
 	drop(client);
 	lightning.sync().await;
 	rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
-		invoice: invoice.to_string(), payment_amount_sat: 90_000,
+		invoice: invoice.to_string(), payment_amount_sat: invoice_amount,
 		htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
 	}).await.unwrap();
-	drop(rpc); // The sender does not poll or ask for cooperative revocation.
+	if refuse_fragmented_pool {
+		let db = Db::connect(&srv.config().postgres).await.unwrap();
+		let available = db.read(async |t| Ok(t.query_one(
+			"SELECT COUNT(*) FROM vtxo_pool WHERE spent_at IS NULL AND amount=45000 AND expiry_height>$1",
+			&[&i32::try_from(tip.to_u32()).unwrap()]).await?.get::<_, i64>(0))).await.unwrap();
+		assert!(available >= 3, "this is a genuine unsafe cover, not an empty or expired pool");
+		let response = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			payment_hash: hash.to_vec(), user_pubkey: receiver_key.serialize().to_vec(),
+			htlc_recv_expiry: (tip + BlockDelta::new(36)).to_u32(), lightning_receive_anti_dos: None,
+		}).await;
+		let error = response.expect_err("a one-satoshi receive grant must be refused before cosigning");
+		assert_eq!(error.code(), tonic::Code::Internal);
+		assert!(error.message().contains("vtxo pool has no standard cover within the receive refund budget"),
+			"the actual budget refusal must win, not an unrelated deadline, anti-DoS or transport error: {error}");
+		let state = Db::connect(&srv.config().postgres).await.unwrap().read(async |t| Ok(t.query_one(
+			"SELECT s.status::TEXT,(SELECT COUNT(*) FROM vtxo WHERE lightning_htlc_subscription_id=s.id) AS grants \
+			FROM lightning_htlc_subscription s WHERE s.payment_hash=$1", &[&hash.to_string()]).await?)).await.unwrap();
+		assert_eq!(state.get::<_, &str>("status"), "accepted");
+		assert_eq!(state.get::<_, i64>("grants"), 0);
+		let remaining = db.read(async |t| Ok(t.query_one(
+			"SELECT COUNT(*) FROM vtxo_pool WHERE spent_at IS NULL AND amount=45000 AND expiry_height>$1",
+			&[&i32::try_from(tip.to_u32()).unwrap()]).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(remaining, available, "refusal must not consume a pool input");
+	}
+	drop(rpc); // No second prepare, cooperative revoke, claim or wallet return.
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let (attempt, subscription) = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
@@ -221,7 +271,12 @@ async fn expiry_internal_zero_grant_timeout_pays_absent_sender() {
 	assert_eq!(unclaimed.get::<_, i64>("bindings"), 0);
 	assert!(!unclaimed.get::<_, bool>("dispatched") && !unclaimed.get::<_, bool>("wal"));
 	let fee_address = srv.watchmand().wait_wallet_address().await;
-	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
+	// The fragmented case also has genuine operator-only pool expiries.
+	// Each concurrent parent needs its own CONFIRMED fee input at the held tip.
+	let fee_inputs = if refuse_fragmented_pool { 3 } else { 1 };
+	for _ in 0..fee_inputs {
+		ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;
+	}
 	ctx.generate_blocks(2).await;
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	let expired = ctx.generate_blocks(deadline.to_u32() + 1 - height).await;
@@ -260,6 +315,7 @@ async fn expiry_internal_zero_grant_timeout_pays_absent_sender() {
 	assert_eq!(kept.get::<_, i64>("paid_once"), 1);
 	let original = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, source).await).await.unwrap().unwrap();
 	assert_eq!(original.htlc.resolution(), None, "automatic closure never invents a signed revocation");
+	})
 }
 
 /// ML030 NEW-state component: both actors disappear after real signed receive
@@ -267,20 +323,37 @@ async fn expiry_internal_zero_grant_timeout_pays_absent_sender() {
 /// the original sender refund, not by an unrelated earlier cold-drain return.
 #[tokio::test]
 async fn expiry_internal_signed_grants_joint_timeout_pays_absent_sender() {
-	let ctx = TestContext::new("server/expiry_internal_signed_grants_joint_timeout").await;
+	internal_safe_pool_grants(false).await;
+}
+
+#[tokio::test]
+async fn expiry_internal_existing_large_pool_cover_refunds_absent_owner() {
+	internal_safe_pool_grants(true).await;
+}
+
+#[inline(never)]
+fn internal_safe_pool_grants(large_cover: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> {
+	Box::pin(async move {
+	let name = if large_cover { "server/expiry_internal_existing_large_pool_cover" }
+		else { "server/expiry_internal_signed_grants_joint_timeout" };
+	let ctx = TestContext::new(name).await;
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
-		.funded(btc(10)).cfg(|cfg| {
+		.funded(btc(10)).cfg(move |cfg| {
 			cfg.vtxo_lifetime = BlockDelta::new(24);
 			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
-			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 4 }];
+			cfg.vtxopool.vtxo_targets = if large_cover { vec![
+				server::vtxopool::VtxoTarget { amount: sat(45_000), count: 4 },
+				server::vtxopool::VtxoTarget { amount: sat(100_000), count: 2 },
+			] } else { vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 4 }] };
 			cfg.invoice_check_interval = Duration::from_secs(1);
 		}).watchmand().create().await;
 	srv.wait_for_vtxopool(&ctx).await;
 	let recipient = ctx.bark_sdk("absent-recipient", &srv)
 		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
-	let invoice = recipient.bolt11_invoice(sat(90_000), None, None).await.unwrap();
+	let invoice_amount = if large_cover { 90_001 } else { 90_000 };
+	let invoice = recipient.bolt11_invoice(sat(invoice_amount), None, None).await.unwrap();
 	let hash = PaymentHash::from(&invoice);
 	let receiver_key = recipient.new_address().await.unwrap().policy().user_pubkey();
 	let receiver_destination = recipient.fallback_destination().await.unwrap();
@@ -308,7 +381,7 @@ async fn expiry_internal_signed_grants_joint_timeout_pays_absent_sender() {
 	let source = incoming[0].id();
 	lightning.sync().await;
 	rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
-		invoice: invoice.to_string(), payment_amount_sat: 90_000,
+		invoice: invoice.to_string(), payment_amount_sat: invoice_amount,
 		htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
 	}).await.unwrap();
 	let granted = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
@@ -316,8 +389,9 @@ async fn expiry_internal_signed_grants_joint_timeout_pays_absent_sender() {
 		htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner();
 	let grants = granted.htlc_vtxos.iter().map(|bytes| Vtxo::<Full>::deserialize(bytes).unwrap()).collect::<Vec<_>>();
-	assert!(grants.len() >= 2, "this case must cover the ENTIRE multi-grant receive, not a one-input shortcut");
-	assert_eq!(grants.iter().map(|g| g.amount()).sum::<bitcoin::Amount>(), sat(90_000));
+	assert_eq!(grants.len(), if large_cover { 1 } else { 2 },
+		"admission must retain the standard existing cover, including the normal two-grant control");
+	assert_eq!(grants.iter().map(|g| g.amount()).sum::<bitcoin::Amount>(), sat(invoice_amount));
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	assert_stored_grant_ancestry(&db, &grants).await;
 	drop(client);
@@ -325,7 +399,8 @@ async fn expiry_internal_signed_grants_joint_timeout_pays_absent_sender() {
 	drop(rpc); // No preimage disclosure, cooperative revoke, or returning wallet.
 	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
 	let fee_address = srv.watchmand().wait_wallet_address().await;
-	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
+	ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;
+	if large_cover { ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await; }
 	ctx.generate_blocks(2).await;
 	// Normal watchman progress has to reach every actual HTLC leaf. Mine only
 	// through completed sync cycles and leave reaction/readiness time each block.
@@ -363,6 +438,7 @@ async fn expiry_internal_signed_grants_joint_timeout_pays_absent_sender() {
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
 	let state = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, source).await).await.unwrap().unwrap();
 	assert!(state.htlc.offchain_resolution.is_none(), "joint timeout must not manufacture the absent user's revocation");
+	})
 }
 
 /// Two genuinely different internal payments share one original customer
@@ -461,12 +537,76 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	ctx.bitcoind().fund_addr(fee_address, sat(150_000)).await;
 	ctx.generate_blocks(2).await;
+	let grant_ids = grants.iter().map(|grant| grant.id().to_string()).collect::<Vec<_>>();
+	let mut final_fee_sponsored = false;
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {
 		for _ in 0..100 {
-			let height = ctx.generate_blocks(1).await;
+			// Publication can consume the grant inputs between observations.
+			// Accept the real parent before re-reading their current UTXOs;
+			// the unchanged checks below still prove every timeout and Core6.
+			let published = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
+				WHERE a.broadcast_at IS NOT NULL AND (SELECT COUNT(DISTINCT e.vtxo_id) FROM expiry_allocation_coin c \
+				JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE c.allocation_id=a.id AND e.vtxo_id=ANY($1))=2",
+				&[&ids]).await?)).await.unwrap();
+			if let Some(row) = published { return deserialize(row.get("sweep_tx")).unwrap(); }
+			// The initial single sponsor also pays genuine grant progression
+			// and other pool expiries. Its change can be unconfirmed when the
+			// complete joint decision finally exists. Holding the mature tip
+			// then cannot make that change usable for the payout fee child.
+			let committed = if final_fee_sponsored { false } else {
+				db.read(async |t| Ok(t.query_opt("SELECT a.id FROM expiry_allocation a \
+					WHERE a.status='pending' AND a.sweep_tx IS NOT NULL AND a.broadcast_at IS NULL \
+					AND (SELECT COUNT(DISTINCT e.vtxo_id) FROM expiry_allocation_coin c \
+					JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+					WHERE c.allocation_id=a.id AND c.active AND e.vtxo_id=ANY($1))=2",
+					&[&ids]).await?.is_some())).await.unwrap()
+			};
+			if committed {
+				final_fee_sponsored = true;
+				let address = srv.watchmand().wait_wallet_address().await;
+				ctx.bitcoind().fund_addr(address.clone(), sat(150_000)).await;
+				ctx.bitcoind().fund_addr(address, sat(150_000)).await;
+				let height = ctx.generate_blocks(2).await;
+				srv.wait_for_sync_height(height).await;
+				srv.watchmand().wait_for_sync_height(height).await;
+				continue;
+			}
+			// Keep automatic watchman progression until ALL actual grant leaves
+			// confirm. Then mine only their exact remaining signed CSV/CLTV
+			// maturity and hold that tip for readiness. Repeated one-block syncs
+			// otherwise consume this same 150s budget before one mature pass.
+			let rows = db.read(async |t| Ok(t.query("SELECT vtxo_id,confirmed_height FROM vtxo \
+				WHERE vtxo_id=ANY($1) AND onchain_spent_height IS NULL AND onchain_spent_txid IS NULL",
+				&[&grant_ids]).await?)).await.unwrap();
+			let confirmed = rows.into_iter().filter_map(|row| row.get::<_, Option<i32>>("confirmed_height")
+				.map(|height| (row.get::<_, String>("vtxo_id"),BlockHeight::try_from(height).unwrap())))
+				.collect::<std::collections::BTreeMap<_,_>>();
+			let maturity = if confirmed.len()==grants.len() {
+				grants.iter().map(|grant| {
+					let output = ctx.bitcoind().sync_client().get_tx_out(&grant.point().txid,grant.point().vout,Some(true))
+						.unwrap()?;
+					if output.confirmations==0 { return None; }
+					assert_eq!(output.value,grant.amount());
+					let deadline = grant.policy().as_server_htlc_recv().unwrap().htlc_expiry;
+					Some(confirmed[&grant.id().to_string()].checked_add(grant.exit_delta()).unwrap().max(deadline))
+				}).collect::<Option<Vec<_>>>().and_then(|heights| heights.into_iter().max())
+			} else { None };
+			let current = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+			let height = match maturity {
+				Some(target) if target>current => ctx.generate_blocks(target.to_u32()-current.to_u32()).await,
+				Some(_) => current,
+				None => ctx.generate_blocks(1).await,
+			};
 			srv.wait_for_sync_height(height).await;
 			srv.watchmand().wait_for_sync_height(height).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
+			if let Some(target) = maturity {
+				let mature_view = db.read(async |t| {
+					let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
+					Ok(view.captaind.height>=target && view.watchmand.height>=target && t.expiry_view_is_rebuilt(view).await?)
+				}).await.unwrap();
+				if !mature_view { continue; }
+			} else { continue; }
 			let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
 				WHERE a.broadcast_at IS NOT NULL AND (SELECT COUNT(DISTINCT e.vtxo_id) FROM expiry_allocation_coin c \
 				JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE c.allocation_id=a.id AND e.vtxo_id=ANY($1))=2",

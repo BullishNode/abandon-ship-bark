@@ -28,6 +28,9 @@ use crate::wallet::BdkWalletExt;
 use crate::{database, telemetry, Server, SECP};
 use crate::nursery::NurseryTxKind;
 
+mod grant_budget;
+use grant_budget::ReceiveGrantBudget;
+
 
 /// Type used to express a vtxo issuance target for the [VtxoPool]
 ///
@@ -191,6 +194,41 @@ impl Data {
 		 });
 	}
 
+	/// Keep the existing expiry order when both its count and final grant
+	/// amounts are safe. Otherwise try a bounded largest-coin cover. Failed
+	/// selection returns every coin; it creates no receive obligation.
+	fn take_receive_inputs(
+		&mut self, required: Amount, minimum_expiry: BlockHeight, maximum_inputs: usize,
+	) -> Vec<(VtxoId, BlockHeight, Amount)> {
+		if maximum_inputs == 0 || required == Amount::ZERO { return Vec::new(); }
+		let original = self.take_inputs(required, minimum_expiry);
+		if grant_budget::cover_fits(&original, required, maximum_inputs) { return original; }
+		for (id, height, amount) in original { self.insert(id, height, amount); }
+		// Work on denomination buckets, not full signed paths or every coin.
+		let mut buckets = self.pool.range(minimum_expiry..).flat_map(|(height, amounts)|
+			amounts.keys().map(move |amount| (*height, *amount))).collect::<Vec<_>>();
+		buckets.sort_unstable_by(|(lh, la), (rh, ra)| ra.cmp(la).then(lh.cmp(rh)));
+		let mut remaining = required;
+		let mut selected = Vec::new();
+		'outer: for (height, amount) in buckets {
+			let coins = self.pool.get_mut(&height).expect("selected height exists")
+				.get_mut(&amount).expect("selected denomination exists");
+			while selected.len() < maximum_inputs {
+				let Some(id) = coins.pop() else { break; };
+				selected.push((id, height, amount));
+				remaining = remaining.checked_sub(amount).unwrap_or(Amount::ZERO);
+				if remaining == Amount::ZERO { break 'outer; }
+			}
+			if selected.len() == maximum_inputs { break; }
+		}
+		if !grant_budget::cover_fits(&selected, required, maximum_inputs) {
+			for (id, height, amount) in selected { self.insert(id, height, amount); }
+			return Vec::new();
+		}
+		self.prune();
+		selected
+	}
+
 	/// Take inputs from the pool to match the required amount
 	///
 	/// Will always prioritize VTXOs that are closer to expiry.
@@ -286,12 +324,13 @@ impl VtxoPool {
 	/// with correct destination: [`VtxoPolicy::ServerHtlcRecv`]
 	///
 	/// See [Self::send_arkoor] for `commit`.
-	#[tracing::instrument(skip(self, srv, commit))]
+	#[tracing::instrument(skip(self, srv, budget, commit))]
 	async fn prepare_arkoor<F>(
 		&self,
 		srv: &Server,
 		dest: ArkoorDestination,
 		inputs: &[(VtxoId, BlockHeight, Amount)],
+		budget: &ReceiveGrantBudget,
 		commit: F,
 	) -> anyhow::Result<Vec<Vtxo<Full>>>
 	where
@@ -350,6 +389,8 @@ impl VtxoPool {
 			input_vtxos.into_iter().map(|v| v.into_inner()),
 			outputs,
 		).context("arkoor builder error")?;
+		// Inspect the actual final policies, values and witnesses BEFORE signing.
+		budget.check_grants(builder.build_unsigned_vtxos().filter(|v| *v.policy() == dest.policy))?;
 		let builder = builder.cosign_both(&keys, srv.server_key.leak_ref())
 			.context("error cosigning arkoor")?;
 
@@ -389,6 +430,12 @@ impl VtxoPool {
 			.collect::<Vec<_>>();
 
 		srv.db.write(async |t| {
+			// All original funding/checkpoint and pool locks precede WAL/subscription
+			// locks taken by the tree update and Accepted compare-and-set.
+			let mut locked = budget.source_ids().chain(input_ids.iter().copied()).collect::<Vec<_>>();
+			locked.sort_unstable(); locked.dedup();
+			crate::database::expiry_guard::guard_obligation_changes(t, &locked).await?;
+			budget.revalidate(t, &dest.policy).await?;
 			crate::database::expiry_guard::guard_new_lightning_inputs(t, &input_ids).await?;
 			t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::create_htlc_vtxos(&t, &htlc_recvs, HtlcDirection::Outgoing).await?;
@@ -445,6 +492,7 @@ impl VtxoPool {
 		&self,
 		srv: &Server,
 		dest: ArkoorDestination,
+		subscription_id: i64,
 		commit: F,
 	) -> anyhow::Result<Vec<Vtxo<Full>>>
 	where
@@ -452,13 +500,15 @@ impl VtxoPool {
 	{
 		let minimum_expiry = srv.chain_tip().height.checked_add(BlockDelta::new(1))
 			.context("receive pool expiry requirement overflows")?;
-		let inputs = self.data.lock().take_inputs(dest.total_amount, minimum_expiry);
+		let budget = srv.db.read(async |t| ReceiveGrantBudget::load(t, subscription_id, &dest.policy).await).await?;
+		let maximum_inputs = budget.maximum_grants(&dest.policy, srv.server_pubkey())?;
+		let inputs = self.data.lock().take_receive_inputs(dest.total_amount, minimum_expiry, maximum_inputs);
 		if inputs.is_empty() {
-			bail!("vtxo pool is empty");
+			bail!("vtxo pool has no standard cover within the receive refund budget");
 		}
 
 		// we try, but if we fail, we place back the inputs
-		match self.prepare_arkoor(srv, dest, &inputs, commit).await {
+		match self.prepare_arkoor(srv, dest, &inputs, &budget, commit).await {
 			Ok(v) => {
 				update_all_bucket_metrics(&self.data);
 				Ok(v)
@@ -853,6 +903,57 @@ mod test {
 		let sel = data.take_inputs(Amount::MAX_MONEY, BlockHeight::ZERO);
 		assert!(sel.is_empty());
 		assert_eq!(data.len(), len);
+	}
+
+}
+
+#[cfg(test)]
+mod receive_selection_tests {
+	use std::collections::BTreeSet;
+	use super::*;
+	use ark::ProtocolEncoding;
+
+	fn id(index: u32) -> VtxoId {
+		let mut bytes = [0; VtxoId::ENCODE_SIZE];
+		bytes[..4].copy_from_slice(&index.to_le_bytes());
+		VtxoId::from_slice(&bytes).unwrap()
+	}
+	#[test]
+	fn receive_selection_uses_large_coin_instead_of_unrelayable_fragment_count() {
+		let mut pool = Data { pool: BTreeMap::new() };
+		for index in 0..115 { pool.insert(id(index), BlockHeight::new(100), Amount::from_sat(1_000)); }
+		pool.insert(id(115), BlockHeight::new(101), Amount::from_sat(120_000));
+		assert_eq!(pool.take_receive_inputs(Amount::from_sat(115_000), BlockHeight::new(99), 64),
+			vec![(id(115), BlockHeight::new(101), Amount::from_sat(120_000))]);
+		assert_eq!(pool.count_amount(Amount::from_sat(1_000)), 115);
+	}
+	#[test]
+	fn receive_selection_restores_all_fragments_when_no_bounded_cover_exists() {
+		let mut pool = Data { pool: BTreeMap::new() };
+		for index in 0..115 { pool.insert(id(index), BlockHeight::new(100), Amount::from_sat(1_000)); }
+		let before = pool.pool.values().flat_map(|v| v.values()).flatten().copied().collect::<BTreeSet<_>>();
+		assert!(pool.take_receive_inputs(Amount::from_sat(115_000), BlockHeight::new(99), 64).is_empty());
+		let after = pool.pool.values().flat_map(|v| v.values()).flatten().copied().collect::<BTreeSet<_>>();
+		assert_eq!(before, after);
+	}
+	#[test]
+	fn receive_selection_keeps_safe_expiry_order_and_avoids_one_sat_tail() {
+		let mut pool = Data { pool: BTreeMap::new() };
+		for index in 0..3 { pool.insert(id(index), BlockHeight::new(100), Amount::from_sat(45_000)); }
+		pool.insert(id(3), BlockHeight::new(101), Amount::from_sat(100_000));
+		assert_eq!(pool.take_receive_inputs(Amount::from_sat(90_001), BlockHeight::new(99), 64),
+			vec![(id(3), BlockHeight::new(101), Amount::from_sat(100_000))]);
+		assert_eq!(pool.take_receive_inputs(Amount::from_sat(90_000), BlockHeight::new(99), 64).len(), 2);
+		assert_eq!(pool.count_amount(Amount::from_sat(45_000)), 1);
+	}
+	#[test]
+	fn receive_selection_avoids_dust_operator_change_using_existing_large_cover() {
+		let mut pool = Data { pool: BTreeMap::new() };
+		pool.insert(id(0), BlockHeight::new(100), Amount::from_sat(90_000));
+		pool.insert(id(1), BlockHeight::new(101), Amount::from_sat(100_000));
+		assert_eq!(pool.take_receive_inputs(Amount::from_sat(89_999), BlockHeight::new(99), 64),
+			vec![(id(1), BlockHeight::new(101), Amount::from_sat(100_000))]);
+		assert_eq!(pool.count_amount(Amount::from_sat(90_000)), 1);
 	}
 
 }

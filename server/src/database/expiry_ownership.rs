@@ -49,6 +49,7 @@ pub enum OwnershipEvidence {
 	/// upstream off-chain revocation.
 	HtlcUnattemptedExpired { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
 	HtlcExternalFailed { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
+	HtlcInternalZeroGrantCancelled { payment_hash: PaymentHash, htlc_expiry: BlockHeight, attempt_id: i64, subscription_id: i64 },
 	HtlcChain { payment_hash: PaymentHash, resolution: HtlcResolution, block: BlockRef },
 }
 
@@ -111,7 +112,7 @@ impl Tx<'_> {
 			if let Some(row) = self.query_opt("SELECT e.id,e.irreversible_facts::TEXT AS irreversible_facts FROM expiry_decided_coin d JOIN expiry_entitlement e ON e.id=d.entitlement_id WHERE d.vtxo_id=$1", &[&state.vtxo_id.to_string()]).await? {
 				let facts: serde_json::Value = serde_json::from_str(row.get("irreversible_facts"))?;
 				let kind = facts.get("kind").and_then(serde_json::Value::as_str);
-				if matches!(kind, Some("pubkey"|"input_owner"|"lightning_receive_claim"|"pool"|"padding"|"forfeit"|"offboard"|"exchange"|"htlc_unattempted_expired"|"htlc_external_failed"|"htlc_source_discharged")) {
+				if matches!(kind, Some("pubkey"|"input_owner"|"lightning_receive_claim"|"pool"|"padding"|"forfeit"|"offboard"|"exchange"|"htlc_unattempted_expired"|"htlc_external_failed"|"htlc_internal_zero_grant_cancelled"|"htlc_source_discharged")) {
 					proposal.disposition = if let Some(key) = facts.get("customer_key").and_then(serde_json::Value::as_str) {
 						self.expiry_customer(state.vtxo_id, key.parse()?).await?
 					} else if facts.get("operator") == Some(&serde_json::Value::Bool(true)) {
@@ -266,14 +267,15 @@ impl Tx<'_> {
 				}
 				// A same-hash receive funded by another source cannot retain
 				// this sender's money. Unknown legacy attempts still wait.
-				if matches!(source, LightningSourceState::Unattempted | LightningSourceState::Failed)
+				if matches!(source, LightningSourceState::Unattempted | LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. })
 					&& fact.onchain_spent_height.is_none() && htlc.htlc.chain_resolution.is_none()
 					&& htlc.htlc.htlc_expiry <= tip && watchman_tip.is_some_and(|h| htlc.htlc.htlc_expiry <= h) {
 					proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
-					proposal.evidence = Some(if source == LightningSourceState::Failed {
-						OwnershipEvidence::HtlcExternalFailed { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry }
-					} else {
-						OwnershipEvidence::HtlcUnattemptedExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry }
+					proposal.evidence = Some(match source {
+						LightningSourceState::InternalZeroGrantCancelled { attempt_id, subscription_id } =>
+							OwnershipEvidence::HtlcInternalZeroGrantCancelled { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry, attempt_id, subscription_id },
+						LightningSourceState::Failed => OwnershipEvidence::HtlcExternalFailed { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry },
+						_ => OwnershipEvidence::HtlcUnattemptedExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry },
 					});
 				} else {
 					proposal.disposition = OwnershipDisposition::Unresolved("Lightning settlement pending");

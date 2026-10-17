@@ -1,0 +1,236 @@
+{
+  "scope": "One exact combined backend/client source candidate. Component gates only; not production readiness or full money-loss-catalogue qualification.",
+  "source": {
+    "head": "676a9efb16c5a40b10c67c50857966163e36a07e",
+    "dirty": true,
+    "source_manifest_sha256": "12f166a04846edae989c0262381c0625b829a9f23109371f780a93cb729debe1",
+    "source_archive_sha256": "039df9f0a5fe3bbfff852a7459ef352f85942c6a9fabedfa69e3862144b5fdec",
+    "actual_git_diff_sha256": "7643690183316a08306f4a7138152b5719001726ec3df33b8644b7b8a0d85df8",
+    "source_scope": "Backend63494806 exact original receive replay+atomic internal ordering, root E0382 read-before-move correction; root-reviewed d1606813 zero-grant authentic internal cancellation. Client8ff43b2a nonpayout finality plus731ded11 genuine1200sat normalpayment fixture. No fixes to ML030/ML181; no new exited UI support. No deployed-profile mutation. Root unit-oracle correction: preserve full stored request and validate resumed upstream signing response against original single nonce session, transaction IDs, policy and amounts; upstream randomness is unchanged. Previous5539 source809unitrun808PASS/1FAIL/1ignored remains preserved."
+  },
+  "manifest_sha256": "914da5879d6af0fd1be40b6d562de46443ff11bea4e47998abc865108f0a035c",
+  "checks": {
+    "checks": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "checks"
+      ],
+      "started_at": "2026-10-17T19:00:54.017854+00:00",
+      "exit_code": 0,
+      "seconds": 72.7,
+      "ended_at": "2026-10-17T19:02:06.718145+00:00"
+    },
+    "units": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/runtime-receive-closure-client-v6-20261017",
+        "unit",
+        "--test-threads 4"
+      ],
+      "started_at": "2026-10-17T19:02:06.843358+00:00",
+      "exit_code": 0,
+      "seconds": 61.381,
+      "ended_at": "2026-10-17T19:03:08.224456+00:00"
+    },
+    "products": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "bark-server",
+        "--bin",
+        "captaind",
+        "--bin",
+        "watchmand",
+        "--package",
+        "bark-cli",
+        "--bin",
+        "bark",
+        "--bin",
+        "barkd",
+        "--features",
+        "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui"
+      ],
+      "started_at": "2026-10-17T19:03:08.373878+00:00",
+      "exit_code": 0,
+      "seconds": 96.381,
+      "ended_at": "2026-10-17T19:04:44.754957+00:00"
+    },
+    "metadata": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "nextest",
+        "list",
+        "--package",
+        "ark-testing",
+        "--test",
+        "bark-sdk",
+        "--test",
+        "server",
+        "--features",
+        "ark-testing/fallback-test-bip84",
+        "--list-type",
+        "binaries-only",
+        "--message-format",
+        "json"
+      ],
+      "started_at": "2026-10-17T19:04:45.407072+00:00",
+      "exit_code": 0,
+      "seconds": 174.135,
+      "ended_at": "2026-10-17T19:07:39.541882+00:00"
+    }
+  },
+  "units": {
+    "passed": 809,
+    "ignored": 1,
+    "log_sha256": "9f80ccd851523558bd3a4cd0f6a5a28243ee2dc560317f5868408656c62e7258"
+  },
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-receive-closure-client-v6-20261017/captaind",
+      "sha256": "e6ab502f6823c9e79cad36f7fdc2b4816c7ce3c022b305a929b25a2af583f2ee"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-receive-closure-client-v6-20261017/watchmand",
+      "sha256": "0c5741f95d226eddf4a04fe434ab1814d91e1fce90ba1b55f8c63da661f65bd2"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-receive-closure-client-v6-20261017/bark",
+      "sha256": "11345ebf8cbeb6c02a145ccc9e7d11a2375bb1d3b42f415e844695da8ac8696c",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-receive-closure-client-v6-20261017/barkd",
+      "sha256": "ce8bccc6dd9ab8c6c4c3268370f3443b86332418204ccccbf4c7deda81406b54",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-receive-closure-client-v6-20261017/native-bark-sdk",
+      "sha256": "405c9257014d6390a07a644c28b8f087721bff5e825e77a47188a305585a9efc"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-receive-closure-client-v6-20261017/native-server",
+      "sha256": "3d41cb88c3111c7ef39cccdedc0e386e30060ece914b579af3ad7bc85e393c30"
+    }
+  },
+  "runtime": {
+    "container": "abandon-fresh-runtime-20261017",
+    "init": true,
+    "shm_bytes": 1073741824,
+    "same_nix_tools_as_build_container": true,
+    "cln_adapter": "Existing reviewed owned-regtest adapter; public Signet uses separately pinned stock transport."
+  },
+  "native": {
+    "source_manifest_sha256": "12f166a04846edae989c0262381c0625b829a9f23109371f780a93cb729debe1",
+    "started_at": "2026-10-17T19:13:10.848443+00:00",
+    "state": "PASS",
+    "retries": 0,
+    "container": "abandon-fresh-runtime-20261017",
+    "cases": [
+      {
+        "test": "fallback_protection::fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server",
+        "started_at": "2026-10-17T19:13:11.641037+00:00",
+        "state": "PASS",
+        "selected": [
+          "fallback_protection::fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server"
+        ],
+        "exit_code": 0,
+        "seconds": 26.643,
+        "ended_at": "2026-10-17T19:13:38.284435+00:00",
+        "log_sha256": "937402da97370d4c0efb66192292de75ca53bbcd508208ecf6b649fae9ec361e",
+        "run_id": "a2d3e75e-8199-48ed-8a4a-814dfb08bbb8"
+      },
+      {
+        "test": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+        "started_at": "2026-10-17T19:13:38.771435+00:00",
+        "state": "PASS",
+        "selected": [
+          "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient"
+        ],
+        "exit_code": 0,
+        "seconds": 30.682,
+        "ended_at": "2026-10-17T19:14:09.453543+00:00",
+        "log_sha256": "89c4f4a23943b8579d3273ff7497a8cd9939333fbe23cf86e654d4374fdd3f77",
+        "run_id": "43239197-ed8e-47ed-ba20-e0cfe21dbf67"
+      },
+      {
+        "test": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+        "started_at": "2026-10-17T19:14:09.925051+00:00",
+        "state": "PASS",
+        "selected": [
+          "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent"
+        ],
+        "exit_code": 0,
+        "seconds": 27.526,
+        "ended_at": "2026-10-17T19:14:37.451416+00:00",
+        "log_sha256": "bd8293202bb60ee38039b08ef60346575051a2fdfbc2a636d6c55cbf86c05602",
+        "run_id": "ed1a7b4d-fc6b-4491-b3cf-a112ef19b79f"
+      },
+      {
+        "test": "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet",
+        "started_at": "2026-10-17T19:14:37.972387+00:00",
+        "state": "PASS",
+        "selected": [
+          "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet"
+        ],
+        "exit_code": 0,
+        "seconds": 65.023,
+        "ended_at": "2026-10-17T19:15:42.996024+00:00",
+        "log_sha256": "a0ee4962b36751f7c7e11a0d8baa2f1b5e85efe16e73a099b455f17a0e9e1ce0",
+        "run_id": "019a2eae-fd31-4641-a919-15b195a34783"
+      },
+      {
+        "test": "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+        "started_at": "2026-10-17T19:15:43.499182+00:00",
+        "state": "PASS",
+        "selected": [
+          "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender"
+        ],
+        "exit_code": 0,
+        "seconds": 43.844,
+        "ended_at": "2026-10-17T19:16:27.343590+00:00",
+        "log_sha256": "2bc9460956f103be0d5a906e3febe8cce792ebf445390764fb66778541f75598",
+        "run_id": "173f325d-9e1c-4988-9982-80fa015f8379"
+      }
+    ],
+    "ended_at": "2026-10-17T19:16:27.344399+00:00"
+  },
+  "native_result_sha256": "d8306d6e565ff2bfaf2aaee688bd5d33f6a76e929634e605e462dd59bf22f55a",
+  "limits": [
+    "Original request restart proves autonomous exact recipient materialization and settlement, not confirmed final fallback or historical unsigned-request synthesis.",
+    "Zero-grant refund proves actual original internal cancellation with no receive grant ever issued; signed outgoing grants remain a separate unresolved dependency problem.",
+    "Dust case uses a genuine 20000-sat board and a genuine 1200-sat native payment; unchanged minimum board policy. Actual chain discharge, reorg, and server-offline protection are checked.",
+    "Current embedded web bundle remains 10ecfb9. New exited-stage web companion is separately tested and not embedded here.",
+    "ML181 unsupported-Spent client correction remains isolated and unqualified.",
+    "These results do not change the 2 full bounded PASS entries in the 200-scenario ledger."
+  ],
+  "preserved_failures": [
+    {
+      "candidate": "client-nonpayout-v3",
+      "failure": "Native dust setup tried a 1200-sat board below unchanged 20000-sat minimum. Original failure preserved; corrected genuine payment fixture executed on v6."
+    },
+    {
+      "candidate": "receive-atomic-client-v4",
+      "failure": "Compile E0382 row use after move. Fixed before v5; original log retained."
+    },
+    {
+      "candidate": "receive-closure-client-v5",
+      "failure": "One new codec unit incorrectly required byte-identical server partial signatures; upstream helper uses new random nonces. Corrected oracle validates original request/nonces/session and resulting exact transaction identities, values and policies."
+    },
+    {
+      "candidate": "receive-closure-client-v6",
+      "failure": "All build phases passed; final manifest serialization lacked local web manifest copy. Supplement verified every unchanged web input and completed manifest without rebuild or native retry."
+    }
+  ],
+  "raw_local_directory": "/home/francis/.cache/abandon-fresh/root-receive-closure-client-v6-20261017",
+  "build_local_directory": "/home/francis/.cache/abandon-fresh/runtime-receive-closure-client-v6-20261017",
+  "captured_at": "2026-10-17T19:18:34.892282+00:00"
+}

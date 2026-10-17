@@ -4,12 +4,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
 use bitcoin::{Amount, OutPoint, Script, Transaction};
-use bitcoin_ext::{BlockDelta, TxStatus};
+use bitcoin_ext::{BlockDelta, BlockRef, TxStatus};
+
+use ark::{Vtxo, VtxoPolicy};
+use ark::vtxo::{Full, TapScriptClause};
 
 use crate::Wallet;
 use crate::vtxo::{VtxoState, VtxoStateKind};
 use super::payouts::{FallbackAttempt, FallbackBlock, FallbackDisposition, FallbackSnapshot,
-	FallbackVerifiedPayout};
+	FallbackVerifiedPayout, FallbackVerifiedTerminal, FallbackTerminalDisposition};
 
 const PAYOUT_CONFIRMATIONS: BlockDelta = BlockDelta::new(6);
 const PAYOUT_OUTPUT_FEE: Amount = Amount::from_sat(1_000);
@@ -46,13 +49,78 @@ fn verify_output_group(
 	Ok(())
 }
 
+/// The fee/dust test is per output group, rather than per coin. No output is
+/// created for dust, so its entire gross is forfeited and no output fee charged.
+fn verify_dust_group(attempts: &[&FallbackAttempt], expected: &Script) -> anyhow::Result<()> {
+	ensure!(!attempts.is_empty(), "empty dust evidence group");
+	let mut gross = Amount::ZERO;
+	let allocation = attempts[0].allocation_id;
+	for attempt in attempts {
+		ensure!(attempt.disposition == FallbackDisposition::BelowDust && attempt.allocation_id == allocation,
+			"dust evidence combines different allocation groups");
+		ensure!(attempt.script.as_deref() == Some(expected) && attempt.output_index.is_none()
+			&& attempt.output_amount.is_none() && attempt.payout == Amount::ZERO
+			&& attempt.fee == Amount::ZERO && attempt.forfeited == attempt.gross,
+			"dust receipt names a payout, charges a fee or changes its principal");
+		gross = gross.checked_add(attempt.gross).context("dust principal overflow")?;
+	}
+	let net = gross.checked_sub(PAYOUT_OUTPUT_FEE).unwrap_or(Amount::ZERO);
+	ensure!(net < expected.minimal_non_dust(), "dust group is large enough to pay out");
+	Ok(())
+}
+
+/// An intermediate tree transaction spends the same ancestry but does not
+/// discharge its descendant. Require the actual server expiry clause too.
+fn spends_expiry_path(coin: &Vtxo<Full>, actual: &Transaction) -> bool {
+	let path = std::iter::once(coin.chain_anchor()).chain(coin.transactions().map(|step|
+		OutPoint::new(step.tx.compute_txid(), step.output_idx as u32))).collect::<BTreeSet<_>>();
+	let expected = ark::tree::signed::expiry_clause(coin.server_pubkey(), coin.expiry_height());
+	actual.input.iter().any(|input| path.contains(&input.previous_output)
+		&& input.witness.taproot_leaf_script().is_some_and(|leaf|
+			leaf.version == bitcoin::taproot::LeafVersion::TapScript && leaf.script == expected.as_script()))
+}
+
+fn spends_user_claim(coin: &Vtxo<Full>, actual: &Transaction) -> bool {
+	let VtxoPolicy::Pubkey(policy) = coin.policy() else { return false; };
+	let expected = policy.user_pubkey_claim_clause(coin.exit_delta()).tapscript();
+	actual.input.iter().any(|input| input.previous_output == coin.point()
+		&& input.witness.taproot_leaf_script().is_some_and(|leaf|
+			leaf.version == bitcoin::taproot::LeafVersion::TapScript && leaf.script == expected.as_script()))
+}
+
+impl FallbackSnapshot {
+	fn publish_chain_proofs(
+		&mut self, initial_tip: BlockRef, observed_tip: BlockRef,
+		payouts: BTreeMap<i64, FallbackVerifiedPayout>, terminals: BTreeMap<i64, FallbackVerifiedTerminal>,
+	) -> anyhow::Result<()> {
+		// Error handlers deliberately persist this snapshot to rearm protection.
+		// A rejected chain view must leave neither proof class current.
+		self.verified_payouts.clear();
+		self.verified_terminals.clear();
+		ensure!(initial_tip == observed_tip, "chain changed while verifying fallback evidence");
+		for (id, proof) in &payouts {
+			let observations = self.payout_observations.entry(*id).or_default();
+			if !observations.iter().any(|prior| prior.outpoint == proof.outpoint) { observations.push(proof.clone()); }
+		}
+		for (id, proof) in &terminals {
+			let observations = self.terminal_observations.entry(*id).or_default();
+			if !observations.iter().any(|old| old.disposition == proof.disposition
+				&& old.transaction.compute_txid() == proof.transaction.compute_txid()) { observations.push(proof.clone()); }
+		}
+		self.verified_payouts = payouts;
+		self.verified_terminals = terminals;
+		Ok(())
+	}
+}
+
 impl Wallet {
 	pub(crate) async fn verify_fallback_chain_evidence(
 		&self, snapshot: &mut FallbackSnapshot, expected: &Script,
 	) -> anyhow::Result<()> {
 		let previous_verified = std::mem::take(&mut snapshot.verified_payouts);
+		let previous_terminals = std::mem::take(&mut snapshot.verified_terminals);
 		snapshot.awaiting_settlement.extend(snapshot.entitlements.values().map(|entitlement| entitlement.vtxo_id));
-		let tip = self.chain().tip_ref().await?;
+		let tip = self.chain().tip_ref_uncached().await?;
 		let mut candidates = BTreeMap::<OutPoint, Vec<(i64, FallbackAttempt)>>::new();
 		for (id, entitlement) in &snapshot.entitlements {
 			if let Some(coin) = self.inner.db.get_wallet_vtxo(entitlement.vtxo_id).await? {
@@ -99,22 +167,22 @@ impl Wallet {
 				verified.entry(id).or_insert(proof);
 			}
 		}
-		// Do not publish observations collected across a reorg.
-		ensure!(self.chain().block_ref(tip.height).await? == tip, "chain changed while verifying payout evidence");
-		for (id, proof) in &verified {
-			if previous_verified.get(id) != Some(proof) {
-				if let Some(entitlement) = snapshot.entitlements.get_mut(id) { entitlement.last_updated = chrono::Local::now(); }
-			}
-			let observations = snapshot.payout_observations.entry(*id).or_default();
-			if !observations.iter().any(|prior| prior.outpoint == proof.outpoint) { observations.push(proof.clone()); }
+		let verified_terminals = self.verify_fallback_terminal_evidence(snapshot, expected, tip).await?;
+		// Neither proof class nor its observations may survive a rejected view:
+		// sync persists the cleared stale snapshot even when verification fails.
+		let observed_tip = self.chain().block_ref(tip.height).await?;
+		snapshot.publish_chain_proofs(tip, observed_tip, verified, verified_terminals)?;
+		let changed = previous_verified.keys().chain(snapshot.verified_payouts.keys()).filter(|id|
+			previous_verified.get(*id) != snapshot.verified_payouts.get(*id)).chain(
+			previous_terminals.keys().chain(snapshot.verified_terminals.keys()).filter(|id|
+				previous_terminals.get(*id) != snapshot.verified_terminals.get(*id)))
+			.copied().collect::<BTreeSet<_>>();
+		for id in changed {
+			if let Some(entitlement) = snapshot.entitlements.get_mut(&id) { entitlement.last_updated = chrono::Local::now(); }
 		}
-		for id in previous_verified.keys().filter(|id| !verified.contains_key(*id)) {
-			if let Some(entitlement) = snapshot.entitlements.get_mut(id) { entitlement.last_updated = chrono::Local::now(); }
-		}
-		snapshot.verified_payouts = verified;
 		let claimed = self.operation_input_ids().await?;
 		for (id, entitlement) in &snapshot.entitlements {
-			if snapshot.verified_payouts.contains_key(id) {
+			if snapshot.is_discharged(*id) {
 				snapshot.awaiting_settlement.remove(&entitlement.vtxo_id);
 				if self.inner.db.get_wallet_vtxo(entitlement.vtxo_id).await?.is_some_and(|coin|
 					coin.state.kind() == VtxoStateKind::Spendable || (coin.state == (VtxoState::Locked { holder: None })
@@ -128,10 +196,61 @@ impl Wallet {
 		Ok(())
 	}
 
+	/// Only these two non-payout outcomes can retire a locally owned claim.
+	/// Operator classification alone supplies no independent discharge proof.
+	async fn verify_fallback_terminal_evidence(
+		&self, snapshot: &FallbackSnapshot, expected: &Script, tip: BlockRef,
+	) -> anyhow::Result<BTreeMap<i64, FallbackVerifiedTerminal>> {
+		let mut verified = BTreeMap::new();
+		for (id, entitlement) in &snapshot.entitlements {
+			let Some(coin) = self.inner.db.get_full_vtxo(entitlement.vtxo_id).await? else { continue; };
+			let mut candidates = snapshot.terminal_observations.get(id).into_iter().flatten()
+				.map(|proof| (proof.disposition.clone(), proof.transaction.compute_txid())).collect::<Vec<_>>();
+			if let Some(claim) = &entitlement.terminal_claim {
+				candidates.push((FallbackTerminalDisposition::Exited, claim.txid));
+			}
+			if let Some(attempt) = entitlement.active_attempt()? {
+				if attempt.disposition == FallbackDisposition::BelowDust {
+					if let Some(parent) = &attempt.parent {
+						candidates.push((FallbackTerminalDisposition::BelowDust(attempt.clone()), parent.compute_txid()));
+					}
+				}
+			}
+			for (disposition, txid) in candidates {
+				let TxStatus::Confirmed(block) = self.chain().tx_status(txid).await? else { continue; };
+				if tip.height.checked_blocks_since(block.height).is_none_or(|depth|
+					depth.saturating_add(1) < PAYOUT_CONFIRMATIONS.to_u32())
+					|| self.chain().block_ref(block.height).await? != block { continue; }
+				let Some(actual) = self.chain().get_tx(&txid).await? else { continue; };
+				ensure!(actual.compute_txid() == txid, "chain returned another terminal transaction");
+				match &disposition {
+					FallbackTerminalDisposition::Exited => {
+						if !spends_user_claim(&coin, &actual) { continue; }
+					},
+					FallbackTerminalDisposition::BelowDust(attempt) => {
+						let mut group = vec![attempt];
+						for (other_id, other) in &snapshot.entitlements {
+							if other_id == id { continue; }
+							if let Some(other_attempt) = other.attempts.iter().find(|prior|
+								prior.allocation_id == attempt.allocation_id && prior.script.as_deref() == Some(expected)) {
+								group.push(other_attempt);
+							}
+						}
+						if verify_dust_group(&group, expected).is_err() || !spends_expiry_path(&coin, &actual) { continue; }
+					},
+				}
+				verified.insert(*id, FallbackVerifiedTerminal { disposition,
+					transaction: actual, confirmation: FallbackBlock { height: block.height, hash: block.hash } });
+				break;
+			}
+		}
+		Ok(verified)
+	}
+
 	/// The recovery marker is persisted before changing coin states. It is
 	/// retained after a reorg so an interrupted restore is retried on next sync.
 	pub(crate) async fn apply_fallback_chain_states(&self, snapshot: &FallbackSnapshot) -> anyhow::Result<()> {
-		let discharged = snapshot.entitlements.iter().filter(|(id, _)| snapshot.verified_payouts.contains_key(*id))
+		let discharged = snapshot.entitlements.iter().filter(|(id, _)| snapshot.is_discharged(**id))
 			.map(|(_, entitlement)| entitlement.vtxo_id).collect::<BTreeSet<_>>();
 		let claimed = self.operation_input_ids().await?;
 		for id in &snapshot.adopted_payout_vtxos {
@@ -201,4 +320,83 @@ mod tests {
 		another.fee = Amount::ZERO;
 		assert!(verify_output_group(&[&first, &another], &parent, point, &script).is_ok());
 	}
+	#[test]
+	fn dust_threshold_is_applied_to_the_whole_output_group() {
+		let (script, _, mut dust) = group();
+		dust.disposition = FallbackDisposition::BelowDust;
+		dust.output_index = None;
+		dust.output_amount = None;
+		dust.fee = Amount::ZERO;
+		dust.payout = Amount::ZERO;
+		dust.gross = Amount::from_sat(1_200);
+		dust.forfeited = dust.gross;
+		assert!(verify_dust_group(&[&dust], &script).is_ok());
+		assert!(verify_dust_group(&[&dust, &dust], &script).is_err(),
+			"two individually sub-dust coins must pay when the group clears dust");
+		dust.gross = PAYOUT_OUTPUT_FEE + script.minimal_non_dust();
+		dust.forfeited = dust.gross;
+		assert!(verify_dust_group(&[&dust], &script).is_err(), "the exact dust threshold must pay");
+		dust.gross -= Amount::from_sat(1);
+		dust.forfeited = dust.gross;
+		assert!(verify_dust_group(&[&dust], &script).is_ok());
+		dust.fee = Amount::from_sat(1);
+		dust.forfeited -= dust.fee;
+		assert!(verify_dust_group(&[&dust], &script).is_err(), "a forfeiture has no payout-output fee");
+	}
+
+	#[test]
+	fn terminal_script_classifier_rejects_intermediate_progress_and_wrong_leaf() {
+		let coin = &ark::test_util::VTXO_VECTORS.round1_vtxo;
+		let mut actual = group().1;
+		let input = bitcoin::TxIn { previous_output: coin.point(), script_sig: ScriptBuf::new(),
+			sequence: bitcoin::Sequence::ZERO, witness: bitcoin::Witness::new() };
+		actual.input.push(input);
+		assert!(!spends_user_claim(coin, &actual));
+		assert!(!spends_expiry_path(coin, &actual));
+		let VtxoPolicy::Pubkey(policy) = coin.policy() else { panic!("standard vector expected"); };
+		let user_script = policy.user_pubkey_claim_clause(coin.exit_delta()).tapscript();
+		let witness = |script: &Script| bitcoin::Witness::from_slice(&[
+			vec![0u8; 64], script.as_bytes().to_vec(), vec![0xc0; 33],
+		]);
+		// This is a script/path classifier test, not a chain-valid signature.
+		actual.input[0].witness = witness(&user_script);
+		assert!(spends_user_claim(coin, &actual));
+		actual.input[0].previous_output = coin.chain_anchor();
+		assert!(!spends_user_claim(coin, &actual), "a user-like script on an ancestor is not the leaf's claim");
+		let expiry = ark::tree::signed::expiry_clause(coin.server_pubkey(), coin.expiry_height());
+		actual.input[0].witness = witness(&expiry);
+		assert!(spends_expiry_path(coin, &actual));
+		actual.input[0].previous_output = OutPoint::null();
+		assert!(!spends_expiry_path(coin, &actual), "another root cannot retire this coin");
+	}
+
+	#[test]
+	fn rejected_final_chain_barrier_clears_both_proof_classes_before_stale_snapshot_persistence() {
+		let (_, parent, attempt) = group();
+		let block = FallbackBlock { height: 100.into(), hash: bitcoin::BlockHash::from_byte_array([1; 32]) };
+		let payout = FallbackVerifiedPayout { allocation_id: attempt.allocation_id,
+			attempt, outpoint: OutPoint::new(parent.compute_txid(), 0), confirmation: block.clone() };
+		let terminal = FallbackVerifiedTerminal { disposition: FallbackTerminalDisposition::Exited,
+			transaction: parent, confirmation: block.clone() };
+		let payouts = BTreeMap::from([(1, payout)]);
+		let terminals = BTreeMap::from([(2, terminal)]);
+		let mut snapshot = FallbackSnapshot::default();
+		snapshot.verified_payouts = payouts.clone();
+		snapshot.verified_terminals = terminals.clone();
+		let initial = BlockRef { height: block.height, hash: block.hash };
+		let changed = BlockRef { height: block.height, hash: bitcoin::BlockHash::from_byte_array([2; 32]) };
+		assert!(snapshot.publish_chain_proofs(initial, changed, payouts.clone(), terminals.clone()).is_err());
+		assert!(!snapshot.is_discharged(1) && !snapshot.is_discharged(2));
+		assert!(snapshot.payout_observations.is_empty() && snapshot.terminal_observations.is_empty(),
+			"a rejected view may not add observations either");
+		// Match sync's error-handler persistence boundary, including JSON.
+		let persisted = serde_json::to_vec(&snapshot).unwrap();
+		let mut stale: FallbackSnapshot = serde_json::from_slice(&persisted).unwrap();
+		assert!(!stale.is_discharged(1) && !stale.is_discharged(2));
+		stale.publish_chain_proofs(initial, initial, payouts, terminals).unwrap();
+		assert!(stale.is_discharged(1) && stale.is_discharged(2));
+		assert_eq!(stale.payout_observations[&1].len(), 1);
+		assert_eq!(stale.terminal_observations[&2].len(), 1);
+	}
+
 }

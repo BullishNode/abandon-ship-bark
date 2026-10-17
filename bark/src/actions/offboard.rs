@@ -1097,8 +1097,8 @@ async fn cancel_superseded_movement(wallet: &Wallet, movement: MovementId) -> an
 }
 
 /// Retire only this action's inputs, after our own chain independently proves
-/// every actual fallback output. The full signed coin bodies remain in storage;
-/// the durable adoption marker reopens their protection if that payout reorgs.
+/// a payout or terminal disposition for every input. The full signed bodies
+/// remain in storage; the adoption marker reopens protection after a reorg.
 async fn reconcile_fallback_payout(
 	wallet: &Wallet, action: &Offboard, inputs: &[VtxoId], movement: MovementId,
 ) -> anyhow::Result<bool> {
@@ -1113,7 +1113,7 @@ async fn reconcile_fallback_payout(
 	).await?;
 	let mut snapshot = wallet.inner.db.get_fallback_snapshot().await?;
 	wallet.verify_fallback_chain_evidence(&mut snapshot, &record.spk).await?;
-	let paid = snapshot.entitlements.iter().filter(|(id, _)| snapshot.verified_payouts.contains_key(*id))
+	let paid = snapshot.entitlements.iter().filter(|(id, _)| snapshot.is_discharged(**id))
 		.map(|(_, entry)| entry.vtxo_id).collect::<HashSet<_>>();
 	if !inputs.iter().all(|id| paid.contains(id)) {
 		wallet.inner.db.store_fallback_snapshot(&snapshot).await?;
@@ -1124,7 +1124,7 @@ async fn reconcile_fallback_payout(
 		let coin = wallet.inner.db.get_wallet_vtxo(*id).await?.context("offboard input is unavailable")?;
 		ensure!(coin.state == (VtxoState::Locked { holder: Some(holder.clone()) })
 			|| (coin.state == VtxoState::Spent && snapshot.adopted_payout_vtxos.contains(id)),
-			"fallback payout cannot retire another operation's holder");
+			"fallback evidence cannot retire another operation's holder");
 	}
 	// Persist recovery ownership before touching any input. Exact-holder
 	// release cannot steal a foreign lock, and the following state update

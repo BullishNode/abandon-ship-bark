@@ -81,7 +81,7 @@ impl Wallet {
 			let id = coin.id();
 			if !validated.contains(&id) { continue; }
 			let entitlement = snapshot.entitlements.iter().find(|(_, entry)| entry.vtxo_id == id);
-			let paid = entitlement.is_some_and(|(key, _)| snapshot.verified_payouts.contains_key(key));
+			let paid = entitlement.is_some_and(|(key, _)| snapshot.is_discharged(*key));
 			if entitlement.is_some() && !paid { continue; }
 			let Some(stored) = self.inner.db.get_wallet_vtxo(id).await? else { continue; };
 			match stored.state {

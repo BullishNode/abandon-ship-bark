@@ -6,6 +6,7 @@ pub mod ledger;
 pub mod settler;
 
 mod payment_handler;
+mod receive_replay;
 
 use std::cmp;
 use std::collections::HashMap;
@@ -522,7 +523,7 @@ impl Server {
 					LightningSourceState::Discharged => return badarg!("invoice has already been paid"),
 					LightningSourceState::Pending => return badarg!("source payment outcome is not yet terminal"),
 					LightningSourceState::InternalCommitted => internal_funding = true,
-					LightningSourceState::Unattempted | LightningSourceState::Failed => {},
+					LightningSourceState::Unattempted | LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. } => {},
 				}
 			}
 
@@ -932,10 +933,20 @@ impl Server {
 		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
 		pver: u64,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
-		// Held for the whole call, so no other call decides on this payment
-		// while the claim is validated, settled and cosigned.
 		let _guard = self.payment_guards.lock(payment_hash).await;
+		self.claim_lightning_receive_inner(payment_hash, payment_preimage, cosign_request, pver, false).await
+	}
 
+	/// Both entry points hold the original payment guard through collection and
+	/// materialization. Recovery must not recursively acquire that same guard.
+	async fn claim_lightning_receive_inner(
+		&self,
+		payment_hash: PaymentHash,
+		payment_preimage: Preimage,
+		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
+		pver: u64,
+		collected_replay: bool,
+	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		if payment_hash != payment_preimage.compute_payment_hash() {
 			return badarg!("preimage doesn't match payment hash");
 		}
@@ -947,11 +958,23 @@ impl Server {
 
 		let sub = self.db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await).await?
 			.not_found([payment_hash], "no pending payment with this payment hash")?;
+		let original_request = crate::database::expiry_receive::ReceiveClaimRequest {
+			payment_hash, preimage: payment_preimage, request: cosign_request.clone(), protocol_version: pver,
+		};
+		if collected_replay {
+			// Only callerless recovery with independently proved collection can
+			// reach this branch. Destination equivalence alone never waives time.
+			let stored = self.db.read(async |t| t.receive_claim_request(sub.id).await).await?
+				.context("collected replay has no admitted original request")?;
+			ensure!(stored.protocol_version == pver && stored.encode()? == original_request.encode()?,
+				"collected replay differs from admitted original request");
+		}
 
 		let is_self_payment = self.db.read(async |t|
 			t.funded_internal_receive(sub.id, payment_hash).await
 		).await?.is_some();
 
+		let mut collection_deadline = None;
 		match sub.status {
 			// Cosigning releases the granted HTLC-recv VTXOs; that is only safe
 			// while the incoming side can still be collected. For external
@@ -969,15 +992,32 @@ impl Server {
 				} else {
 					RECEIVE_CLAIM_EXPIRY_MARGIN
 				};
-				validate_receive_claim(
-					lowest_incoming_htlc_expiry,
-					self.sync_manager.chain_tip().height,
-					margin,
-				)?;
+				if !collected_replay {
+					validate_receive_claim(
+						lowest_incoming_htlc_expiry,
+						self.sync_manager.chain_tip().height,
+						margin,
+					)?;
+					collection_deadline = Some((lowest_incoming_htlc_expiry, margin));
+				}
 			},
 			// Idempotent retry of an already-settled claim; the value was
 			// released with the first claim, nothing new is at stake.
-			LightningHtlcSubscriptionStatus::Settled => {},
+			LightningHtlcSubscriptionStatus::Settled => {
+				if !collected_replay && !self.db.read(async |t| t.receive_request_materialized(sub.id).await).await? {
+					// A coarse completed attempt can precede its own claim. It
+					// must not make an unmaterialized fresh request timeless.
+					let expiry = sub.lowest_incoming_htlc_expiry.context("settled receive has no incoming expiry")?;
+					let margin = if is_self_payment { self.config.htlc_expiry_delta } else { RECEIVE_CLAIM_EXPIRY_MARGIN };
+					validate_receive_claim(
+						expiry,
+						self.sync_manager.chain_tip().height,
+						margin,
+					)?;
+					collection_deadline = Some((expiry, margin));
+				}
+			},
+			LightningHtlcSubscriptionStatus::Canceled if collected_replay => {},
 			_ => return badarg!("payment status in incorrect state: {}", sub.status),
 		}
 		// Only the first claim records the fee; Settled-replay must not.
@@ -1026,23 +1066,29 @@ impl Server {
 		let receive_claims = crate::database::expiry_receive::ReceiveClaimBinding::from_package(&builder)
 			.badarg("invalid receive claim destination")?;
 		ensure!(receive_claims.len() == htlc_ids.len(), "receive claim contains a non-receive source");
-		self.db.write(async |t| t.prepare_receive_claims(&receive_claims).await).await?;
+		self.db.write(async |t| t.prepare_receive_request(&original_request, &receive_claims, collection_deadline).await).await?;
 
 		// Record the preimage in the settler so the watchman signer/policy
 		// can find it if this VTXO ends up being claimed on-chain.
 		// The settler is the single source of truth for preimages; all
 		// settlement paths (cooperative and on-chain) converge here.
-		self.htlc_settler.settle(payment_preimage).await
-			.context("could not record htlc settlement")?;
+		if !is_self_payment {
+			self.htlc_settler.settle(payment_preimage).await
+				.context("could not record htlc settlement")?;
+		}
 
 		// Settle the hold invoice before releasing the grant, so the inbound
 		// HTLC is collected while it is still live.
-		if !is_self_payment && matches!(sub.status, LightningHtlcSubscriptionStatus::HtlcsReady) {
+		if !is_self_payment && (matches!(sub.status, LightningHtlcSubscriptionStatus::HtlcsReady) || collected_replay) {
 			self.lightning_manager.settle_invoice(sub.id, payment_preimage).await
 				.context("could not settle hold invoice, refusing to release the claim")?;
 		}
 
-		let (builder, _) = self.cosign_oor_with_builder(builder).await?;
+		let (builder, _) = if is_self_payment {
+			self.cosign_internal_receive(builder, sub.id, payment_preimage).await?
+		} else {
+			self.cosign_oor_with_builder(builder).await?
+		};
 		let vtxo_request = VtxoRequest {
 			amount: sub.amount(),
 			policy: vtxo_policy,

@@ -6,6 +6,7 @@ use bitcoin::Txid;
 use ark::util::IteratorExt;
 use ark::{Vtxo, VtxoId, VtxoPolicy, ServerVtxo};
 use ark::vtxo::Full;
+use ark::lightning::Preimage;
 use ark::arkoor::state::{ServerCanCosign, ServerSigned};
 use ark::arkoor::package::{
 	ArkoorPackageCosignRequest, ArkoorPackageCosignResponse, ArkoorPackageBuilder,
@@ -96,6 +97,20 @@ impl Server {
 		&self,
 		builder: ArkoorPackageBuilder<ServerCanCosign>,
 	) -> anyhow::Result<(ArkoorPackageBuilder<ServerSigned>, u64)> {
+		self.cosign_oor_with_settlement(builder, None).await
+	}
+
+	/// The internal recipient promise and the preimage which completes its
+	/// original funding source must be committed together (ML031).
+	pub(crate) async fn cosign_internal_receive(
+		&self, builder: ArkoorPackageBuilder<ServerCanCosign>, subscription_id: i64, preimage: Preimage,
+	) -> anyhow::Result<(ArkoorPackageBuilder<ServerSigned>, u64)> {
+		self.cosign_oor_with_settlement(builder, Some((subscription_id, preimage))).await
+	}
+
+	async fn cosign_oor_with_settlement(
+		&self, builder: ArkoorPackageBuilder<ServerCanCosign>, internal: Option<(i64, Preimage)>,
+	) -> anyhow::Result<(ArkoorPackageBuilder<ServerSigned>, u64)> {
 		let vtxo_guard = self.vtxos_in_flux.try_lock(builder.input_ids()).map_err(|e| {
 			slog!(ArkoorInputAlreadyInFlux, vtxo: e.id);
 			badarg_err!("some VTXO is already locked by another process: {}", e.id)
@@ -125,6 +140,10 @@ impl Server {
 		let source_ids = builder.input_ids().collect::<Vec<_>>();
 		let new_lightning_send = builder.build_unsigned_vtxos().any(|v| v.policy().as_server_htlc_send().is_some());
 		let inserted = self.db.write(async |t| {
+			if let Some((subscription, preimage)) = internal {
+				ensure!(receive_claims.len() == source_ids.len(), "internal settlement has a non-receive input");
+				t.lock_internal_receive_claim(subscription, preimage, &source_ids, self.config.htlc_expiry_delta).await?;
+			}
 			if new_lightning_send {
 				// A retry has already committed all the identical input spends.
 				let states = t.get_user_vtxos_by_id(&source_ids).await?;
@@ -137,6 +156,11 @@ impl Server {
 				&t, &claimed_htlc_recvs, HtlcResolution::Fulfilled,
 			).await?;
 			t.materialize_receive_claims(&receive_claims).await?;
+			if let Some((_, preimage)) = internal {
+				// All coin locks precede the existing WAL advisory lock. Nothing
+				// can observe this witness without the recipient's own output.
+				t.store_htlc_settlement(preimage).await?;
+			}
 			Ok(inserted)
 		}).await?;
 		drop(vtxo_guard);

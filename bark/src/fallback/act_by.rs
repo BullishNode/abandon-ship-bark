@@ -149,7 +149,7 @@ impl Wallet {
 		let tip = self.chain().tip_ref_uncached().await?;
 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
 		let discharged = snapshot.entitlements.iter()
-			.filter(|(id, _)| snapshot.verified_payouts.contains_key(*id))
+			.filter(|(id, _)| snapshot.is_discharged(**id))
 			.map(|(_, entitlement)| entitlement.vtxo_id).collect::<std::collections::HashSet<_>>();
 		let mut result = Vec::new();
 		for stored in self.inner.db.get_vtxos_by_state(&[VtxoStateKind::Spendable, VtxoStateKind::Locked]).await? {

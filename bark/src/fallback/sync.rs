@@ -164,6 +164,8 @@ impl Wallet {
 				awaiting_sync: false, awaiting_settlement: previous.awaiting_settlement.clone(),
 				verified_payouts: previous.verified_payouts.clone(),
 				payout_observations: previous.payout_observations.clone(),
+				verified_terminals: previous.verified_terminals.clone(),
+				terminal_observations: previous.terminal_observations.clone(),
 				adopted_payout_vtxos: previous.adopted_payout_vtxos.clone(),
 				quarantined_vtxos: previous.quarantined_vtxos.clone(),
 			};

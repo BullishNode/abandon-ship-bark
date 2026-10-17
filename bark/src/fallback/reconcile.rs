@@ -11,7 +11,7 @@ use ark::vtxo::VtxoRef;
 use server_rpc::protos::VtxoSpendState;
 
 use crate::Wallet;
-use crate::vtxo::{VtxoState, VtxoStateKind};
+use crate::vtxo::VtxoStateKind;
 
 impl Wallet {
 	/// Wallet/UI projection of expired coins whose owner or in-flight operation
@@ -49,33 +49,22 @@ impl Wallet {
 		};
 		let decided = snapshot.entitlements.values().map(|e| e.vtxo_id).collect::<HashSet<_>>();
 		let mut eligible = HashSet::new();
-		let mut spent = Vec::new();
+
 		for id in ids {
 			match statuses.get(id) {
 				Some(VtxoSpendState::Spendable) if !decided.contains(id) => {
 					snapshot.awaiting_settlement.remove(id);
 					eligible.insert(*id);
 				},
+				// The admission fence says nothing about financial finality.
+				// Only the independent chain-evidence path may adopt Spent.
 				Some(VtxoSpendState::Spent) if decided.contains(id) => {
-					snapshot.awaiting_settlement.remove(id);
-					spent.push(*id);
+					snapshot.awaiting_settlement.insert(*id);
 				},
 				_ => { snapshot.awaiting_settlement.insert(*id); },
 			}
 		}
 		self.inner.db.store_fallback_snapshot(&snapshot).await?;
-		for id in spent {
-			// An action that acquired the coin since the read keeps its local
-			// lock. Its real server refusal/resolution releases that action;
-			// the permanent receipt still excludes this coin from new selection.
-			if let Err(error) = self.inner.db.update_vtxo_state_checked(id, VtxoState::Spent,
-				&[VtxoStateKind::Spendable, VtxoStateKind::Spent]).await {
-				let current = self.inner.db.get_wallet_vtxo(id).await?;
-				if !current.is_some_and(|coin| matches!(coin.state.kind(), VtxoStateKind::Locked | VtxoStateKind::Exited)) {
-					return Err(error).context("failed to adopt decided coin without taking an action lock");
-				}
-			}
-		}
 		Ok(eligible)
 	}
 

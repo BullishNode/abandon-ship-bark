@@ -13,6 +13,7 @@ mod balance;
 mod board;
 mod exit;
 mod fallback;
+mod fallback_protection;
 #[cfg(feature = "fallback-test-bip84")]
 mod fallback_external;
 mod import;

@@ -1,0 +1,19 @@
+ Nextest run ID 629ac31c-8432-42fe-a844-1c20734f8e41 with nextest profile: default
+    Starting 16 tests across 1 binary
+        PASS [   3.319s] ( 1/16) ark-testing::core bitcoind::fund_bitcoind
+        PASS [   2.655s] ( 2/16) ark-testing::core bitcoind::start_bitcoind
+        PASS [   3.572s] ( 3/16) ark-testing::core bitcoind::submitblock_null_result_needs_sync_client
+        PASS [  13.289s] ( 4/16) ark-testing::core lightning::cln_can_pay_lightning
+        PASS [   4.240s] ( 5/16) ark-testing::core lightning::start_lightningd
+        PASS [   0.228s] ( 6/16) ark-testing::core pid_lock::only_one_of_ten_concurrent_holders_succeeds
+        PASS [   0.020s] ( 7/16) ark-testing::core pid_lock::pid_file_contains_holder_pid
+        PASS [   0.019s] ( 8/16) ark-testing::core pid_lock::pid_lock_is_released_after_sigint
+        PASS [   0.018s] ( 9/16) ark-testing::core pid_lock::pid_lock_is_released_after_sigkill
+        PASS [   0.015s] (10/16) ark-testing::core pid_lock::pid_lock_is_released_after_sigterm
+        PASS [   0.011s] (11/16) ark-testing::core pid_lock::stale_pid_file_does_not_prevent_acquisition
+        PASS [   0.744s] (12/16) ark-testing::core tip_watcher::polling_watcher_detects_new_blocks
+        PASS [   0.646s] (13/16) ark-testing::core tip_watcher::zmq_watcher_detects_new_blocks
+        PASS [   3.061s] (14/16) ark-testing::core wallet_ext::balance_perf_deep_unconfirmed_fanout
+        PASS [   2.646s] (15/16) ark-testing::core wallet_ext::deep_reorg_wallet_sync
+        PASS [   2.751s] (16/16) ark-testing::core wallet_ext::is_trusted
+     Summary [  37.237s] 16 tests run: 16 passed, 0 skipped

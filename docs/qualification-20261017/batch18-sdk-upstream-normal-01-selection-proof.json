@@ -1,0 +1,20 @@
+{
+  "parent_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "literal_sdk_subset_sha256": "4db79800d184993365aea9a7e490335b109eddd770f80ddf5da030c9a330bafa",
+  "runtime_metadata_sha256": "faaa21775c92a77890b3c61f5af28d04c3e59d751c12868348e4a0f5b0c912b4",
+  "runtime_overlay": "ONLYoriginal non-test lock-holder path replaced by captured immutable identicalbytes;SDK binary/buildmeta otherwiseunchanged",
+  "helper_sha256": "abf0fd823c45d2b8635c7e9a7245186a5e8cd30bac31d77e37a807dce3f57b2d",
+  "expected_names_in_execution_order": [
+    "board::failed_board_leaves_the_onchain_wallet_untouched",
+    "arkoor::send_to_unsupported_delivery_is_refused",
+    "mailbox::arkoor_receive_replay_does_not_restore_a_spent_vtxo",
+    "import::import_stores_spent_vtxo_as_spent"
+  ],
+  "exact_selection": "nextest args BEFORE --, followed FULL_LITERAL --exact; no extra-E",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "allocation": "Coordinatorapprovedexact4aftercore16terminal;max2globalnative, rootmaycompile",
+  "status": "PREPARED_NOT_EXECUTED"
+}

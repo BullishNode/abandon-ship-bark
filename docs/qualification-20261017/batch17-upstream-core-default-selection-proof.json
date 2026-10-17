@@ -1,0 +1,46 @@
+{
+  "prepared_at": "2026-10-17T18:11:27.401970+00:00",
+  "parent_metadata_path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/nextest-binaries-default-five-immutable.json",
+  "parent_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "exact_core_subset_sha256": "6c670633d2b1230a3175fb9ec9ad73f5cb19f72b9b285698fc12e6df02671989",
+  "exact_subset_rule": "Deep-copy parent; keep ONLY original ark-testing::core rust-binaries record; all rust-build-meta byte-equivalent afterJSONparse",
+  "runtime_metadata_sha256": "4cc1f26e7147eee03d4ffd590517a4e64111d0f33e92b3798ef3a3b5c1a11ff6",
+  "runtime_helper_overlay": [
+    {
+      "package": "path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0",
+      "name": "lock-holder",
+      "old_path": "debug/lock-holder",
+      "new_path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/support/debug/lock-holder"
+    }
+  ],
+  "runtime_overlay_rule": "ONLY one non-test helper path rewritten to archived identical bytes; core binary and all other fields unchanged",
+  "helper_sha256": "abf0fd823c45d2b8635c7e9a7245186a5e8cd30bac31d77e37a807dce3f57b2d",
+  "core_elf_sha256": "1257380815888d2a60ad86252f5ef5c66d546a987c045778e5e0eb126de7ce8b",
+  "expected_selected_count": 16,
+  "expected_test_names": [
+    "bitcoind::fund_bitcoind",
+    "bitcoind::start_bitcoind",
+    "bitcoind::submitblock_null_result_needs_sync_client",
+    "lightning::cln_can_pay_lightning",
+    "lightning::start_lightningd",
+    "pid_lock::only_one_of_ten_concurrent_holders_succeeds",
+    "pid_lock::pid_file_contains_holder_pid",
+    "pid_lock::pid_lock_is_released_after_sigint",
+    "pid_lock::pid_lock_is_released_after_sigkill",
+    "pid_lock::pid_lock_is_released_after_sigterm",
+    "pid_lock::stale_pid_file_does_not_prevent_acquisition",
+    "tip_watcher::polling_watcher_detects_new_blocks",
+    "tip_watcher::zmq_watcher_detects_new_blocks",
+    "wallet_ext::balance_perf_deep_unconfirmed_fanout",
+    "wallet_ext::deep_reorg_wallet_sync",
+    "wallet_ext::is_trusted"
+  ],
+  "ignore_behavior": "default, noneof16ignored",
+  "test_threads": 1,
+  "retries": 0,
+  "per_test_timeout_seconds": 180,
+  "run_state": "PREPARED_NOT_EXECUTED",
+  "primary_source_pin": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "classification": "Core infrastructure/component regression; not16customer money scenarios",
+  "raw_retention": "KEEP_ALL_TEST_DATA=1 forfirst16, preserveallfailures and logs/manifests; no cleanup bythistrack"
+}

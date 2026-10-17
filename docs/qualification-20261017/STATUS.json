@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-17T15:48:26.724859+00:00",
+  "updated_at": "2026-10-17T15:57:10.450617+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
   "state": "ACTIVE_AWAITING_CANONICAL_TEST_COMPILE_SLOT",
   "branch": "work/fresh-test-qualification-20261017",
@@ -69,7 +69,7 @@
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
   "new_test_source_review": "First2tests fixed,compiled,andpassed; next Lightning/oversize drafts uncompiled",
-  "coverage_rows": 237,
+  "coverage_rows": 238,
   "coverage_warning": "Mixed source tests/requirements/scenarios;80originallegacyIDs.20uniqueexecutednames; no wholelegacycase automaticallycredited.",
   "current_batch": {
     "name": "batch09-native-lightning-terminal-sources",
@@ -130,7 +130,10 @@
     "state": "PR6 merged by coordinator per direct message; second checkpoint pending",
     "merged_by_coordinator": "0f932806513a8dcefb5a3f3e841b98b73d02d3a1",
     "verified_merged_at": "2026-10-17T15:33:13Z",
-    "next_checkpoint": "Draft source/report publication; new3tests uncompiled/unrun"
+    "next_checkpoint": "Draft source/report publication; new3tests uncompiled/unrun",
+    "next_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/7",
+    "next_verified_remote_head": "8fcae773bbacf2ea96f9d53b2ed2bb47d01d08e9",
+    "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN"
   },
   "next_batch": {
     "automatic_oversize": "Reviewed source only327realpayees;600sserialslot approved; awaiting canonicalintegration/compilerlease",
@@ -250,5 +253,15 @@
     "runtime": "NOT RUN",
     "code_commit": "2cc925ed1"
   },
-  "next_test_code_commit": "2cc925ed1"
+  "next_test_code_commit": "2cc925ed1",
+  "next_source_prechecks": "PASS4/4; compile/runtime/mandatorychecks pending canonical lease",
+  "external_backend_adapter_positive": {
+    "result": "PASS1/1,28.777s",
+    "run_id": "c0a5f364-a775-4ed0-9fe7-22286ec2eeb9",
+    "receipt": "external-backend-adapter-positive-receipt.json",
+    "included_in_testing_track_counts": false,
+    "originalFAIL_unchanged": true,
+    "packaging_gate": "OPEN",
+    "confirmed_ledger_projection": "NOT claimed"
+  }
 }

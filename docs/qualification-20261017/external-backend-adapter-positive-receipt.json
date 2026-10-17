@@ -1,0 +1,53 @@
+{
+  "at": "2026-10-17T15:57:10.450617+00:00",
+  "owner": "coordinator backend lead; not rerun by testing-track",
+  "run_id": "c0a5f364-a775-4ed0-9fe7-22286ec2eeb9",
+  "result": "PASS",
+  "runtime_seconds": 28.777,
+  "test": "expiry_lightning_terminal::expiry_actual_no_part_external_send_pays_offline_owner",
+  "source_manifest_sha256": "6e3260e038f50115ea4eb458dc10ac20648c3ca94077b8114b73e66fcc6da8e7",
+  "native_test_elf_sha256": "a535cec7865ae74e9418b2a5b180eed6d197b89736008dfea0bc26ccbe814435",
+  "adapter_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind",
+      "sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand",
+      "sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-operation-client-20261017/bark",
+      "sha256": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-operation-client-20261017/barkd",
+      "sha256": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce"
+    }
+  },
+  "fixture_source_sha256": "7511a38dd772c57f753c26731df86e39824d3163642f5be30e7db282e4e612d9",
+  "fixture_source_matches_original_failed_run": true,
+  "whole_test_bundle_matches_original": false,
+  "actual_receipt": {
+    "rejection": 205,
+    "terminal": 205,
+    "created_index": null
+  },
+  "core_result": "Actual99,000sat payout with>=6Coreconfirmations and zero-fee conserving parent asserted by unchangedfixture",
+  "ledger_projection_at_shutdown": "confirmed_height null; no confirmed ledger claim",
+  "wire_packet_captured": false,
+  "original_stock_run_result": "FAIL unchanged",
+  "counting": "Excluded from testing-track21executions/20names/9invocations",
+  "exact_runner_path": "/home/francis/.cache/abandon-fresh/backend-no-part-adapter-positive-20261017/run.sh",
+  "manifest_path": "/home/francis/.cache/abandon-fresh/backend-no-part-adapter-positive-20261017/manifest.json",
+  "manifest_sha256": "11421bf2d2932e2f12160df3dc5c420f2d882b9cedb68c8035298f7df8a08ae9",
+  "handoff": "/home/francis/bark-integration-2026-10-01/fresh-backend-lightning-next-20261017.md",
+  "limitations": [
+    "No ambiguous transport/node-quiescence recovery qualification",
+    "No actual receive pool or Noah application credit",
+    "No default stock automatic no-part refund claim",
+    "No confirmed ledger projection claim; actual Core six confirmations asserted by native test",
+    "No live node/plugin changes"
+  ]
+}

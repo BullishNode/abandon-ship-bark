@@ -1,0 +1,8 @@
+START offboard::bark_send_onchain_too_much
+PASS offboard::bark_send_onchain_too_much
+START offboard::offboard_all
+PASS offboard::offboard_all
+START offboard::offboard_vtxos
+PASS offboard::offboard_vtxos
+START onchain::onchain_drain
+FAIL onchain::onchain_drain

@@ -1,0 +1,102 @@
+[
+  {
+    "index": 1,
+    "name": "offboard::bark_send_onchain_too_much",
+    "state": "PASS",
+    "command": [
+      "just",
+      "--set",
+      "JUSTFILE_DIR",
+      "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16",
+      "int-binaries",
+      "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16/nextest-binaries-bark-runtime-immutable.json",
+      "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16/case01/nextest.toml -- offboard::bark_send_onchain_too_much --exact"
+    ],
+    "started_at": "2026-10-17T20:53:56.301136+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 63179,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "ddfc9513-178c-4301-8c90-7c03759c1c4a",
+    "test_seconds": 15.805,
+    "wall_seconds": 16.523,
+    "ended_at": "2026-10-17T20:54:12.823749+00:00"
+  },
+  {
+    "index": 2,
+    "name": "offboard::offboard_all",
+    "state": "PASS",
+    "command": [
+      "just",
+      "--set",
+      "JUSTFILE_DIR",
+      "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16",
+      "int-binaries",
+      "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16/nextest-binaries-bark-runtime-immutable.json",
+      "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16/case02/nextest.toml -- offboard::offboard_all --exact"
+    ],
+    "started_at": "2026-10-17T20:54:12.829697+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 63601,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "c6071f86-ef24-43ef-a494-add2024afff9",
+    "test_seconds": 27.93,
+    "wall_seconds": 28.538,
+    "ended_at": "2026-10-17T20:54:41.367984+00:00"
+  },
+  {
+    "index": 3,
+    "name": "offboard::offboard_vtxos",
+    "state": "PASS",
+    "command": [
+      "just",
+      "--set",
+      "JUSTFILE_DIR",
+      "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16",
+      "int-binaries",
+      "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16/nextest-binaries-bark-runtime-immutable.json",
+      "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16/case03/nextest.toml -- offboard::offboard_vtxos --exact"
+    ],
+    "started_at": "2026-10-17T20:54:41.371405+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 64206,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "501f50d6-a990-4a84-a0f7-d216218e3789",
+    "test_seconds": 29.102,
+    "wall_seconds": 30.04,
+    "ended_at": "2026-10-17T20:55:11.411515+00:00"
+  },
+  {
+    "index": 4,
+    "name": "onchain::onchain_drain",
+    "state": "FAIL",
+    "command": [
+      "just",
+      "--set",
+      "JUSTFILE_DIR",
+      "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16",
+      "int-binaries",
+      "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16/nextest-binaries-bark-runtime-immutable.json",
+      "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted16/case04/nextest.toml -- onchain::onchain_drain --exact"
+    ],
+    "started_at": "2026-10-17T20:55:11.419287+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 64696,
+    "exit_code": 100,
+    "resource_error": null,
+    "run_id": "9601bb92-202a-4151-92fb-8d19fef22d2d",
+    "test_seconds": null,
+    "wall_seconds": 12.52,
+    "ended_at": "2026-10-17T20:55:23.939701+00:00"
+  }
+]

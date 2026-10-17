@@ -1,0 +1,24 @@
+{
+  "status": "CORRECTION \u2014 EARLIER DEFINITE-HANG FINDING WITHDRAWN",
+  "finding": "The prior backend review inferred a hang from TestContext::await_block_count_sync iterating all registered captainds, without inspecting the called method completely. That inference was incorrect.",
+  "verified_actual_api": {
+    "file": "testing/src/daemon/captaind/mod.rs",
+    "sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+    "scope": [
+      "immutable7041 source.tar.gz",
+      "owned worktree",
+      "current canonical inspected8d45ffdf"
+    ],
+    "lines": "513\u2013532",
+    "behavior": "wait_for_sync_height returns immediately when daemon state is Stopping, Stopped or Error; lines523\u2013528 explicitly skip stopped daemons."
+  },
+  "affected_interpretations": [
+    "backend-restore-reorg-gap-followup.md definite scheduling blocker at old conflict draft279",
+    "cold-backup-native-v1-notes.md description of direct mining as fixing a hang",
+    "cold-backup-native-v1-peer-acceptance.json mining-hang wording",
+    "cold-backup draft helper comment rationale and corresponding parent progress messages"
+  ],
+  "corrected_conclusion": "No hang is established merely by registered srv being stopped during ctx.generate_blocks. The old conflict draft is not blocked for this reason. Direct owned-Core generation plus explicit post-start waits remains a reasonable explicit schedule and avoids implicit context behavior, but is a test choice, not a proven bug fix.",
+  "source_and_execution_effect": "No compiled/runtime result is invalidated or credited; all affected new drafts are source-only. Accepted ced8 cold source remains unchanged and semantically valid; original conflict source remains unchanged. No product defect is claimed.",
+  "preservation": "Earlier packets/reports retained unchanged; this append-only external correction supersedes only the overstated hang inference. V2 conflict money/DAG hardening proceeds under parent authorization, with accurately described scheduling change."
+}

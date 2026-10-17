@@ -1,0 +1,107 @@
+{
+  "state": "PREPARED_NOT_EXECUTED",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "parent_five_metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "exact_server_subset_sha256": "a3ea05fc04cc1848cf49b10ee407a82a06487ffbacfd2e9765bdfc318f39cf2e",
+  "runtime_metadata_sha256": "07b743691e057389f538ee7c2989dd21f84e1bd5e80db988adc876a197f2cde9",
+  "test_binary": "ark-testing::server",
+  "test_elf_sha256": "cd9c13c01726ce785398d254ab05d8da3d28773ddba502150a0e4a712ff41a08",
+  "archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "upstream_pin": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "source_inventory_sha256": "c82eac1953bbfc86afc54807067759cae9ed96f1b726d97f9a809fc563ce1699",
+  "expected_names_in_execution_order": [
+    "block_index::test_block_index_reorg_retry"
+  ],
+  "source_provenance": [
+    {
+      "inventory_index": 7,
+      "test_name": "block_index::test_block_index_reorg_retry",
+      "is_ignored": false,
+      "default_selected": true,
+      "classification": "adapted",
+      "classification_reason": "Adds completed-sync publication ordering, failed-listener no-ack and equal-tip completion assertions; listener helper also adapted.",
+      "source_file": "testing/tests/server/block_index.rs",
+      "source_line": 229,
+      "source_end_line": 274,
+      "source_file_sha256": "0bcdecb5001087438e63ea384d17ab3fcb5978bbbf8e4899ae11f163b5bca9e5",
+      "function_sha256": "79bba09315f90fd7d48e174e1ec2c6baccde51a19e28f4175e7ca51ea2e6fd3d",
+      "upstream_function_sha256": "092191a0007d8ee7289a3c293ee02cedbc47a7e0e48ca73d61163f39111d9798",
+      "upstream_file_sha256": "bb14cd5e5510aff681e3889ae4cee807a6105d80574152b0e52aa40423ba2be3",
+      "whole_file_byte_identical_to_upstream": false,
+      "underlying_source_function": "test_block_index_reorg_retry",
+      "macro_variant": null,
+      "dependency_tags": [
+        "NO_NATIVE_MONEY_ORACLE",
+        "REAL_POSTGRES_COMPONENT",
+        "REORG_OR_ROLLBACK"
+      ],
+      "version_macros": [],
+      "other_require_macros": [],
+      "prior_named_evidence": [],
+      "proposed_wave": "ADAPTED_UPSTREAM_SEPARATE_REVIEW",
+      "execution_status": "NOT RUN",
+      "literal_unique_across_retained_five_binaries": true,
+      "expected_selected_count": 1,
+      "private_state_directory": "/fresh-cache/testing-track-20261017/next-regression-server/case007",
+      "test_directory": "/fresh-cache/testing-track-20261017/next-regression-server/case007/test-data",
+      "config_path": "/fresh-cache/testing-track-20261017/next-regression-server/case007/nextest.toml",
+      "config_text": "[store]\ndir = \"/fresh-cache/testing-track-20261017/next-regression-server/case007/nextest-store\"\n\n[profile.default]\nslow-timeout = { period = \"60s\", terminate-after = 3 }\nretries = 0\n",
+      "argv_after_coordinator_staging": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-regression-server",
+        "int-binaries",
+        "/fresh-cache/runtime-owner-scan-split-v1-20261017/nextest-binaries-default-five-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-regression-server/case007/nextest.toml -- block_index::test_block_index_reorg_retry --exact"
+      ],
+      "command_after_coordinator_staging": "TEST_DIRECTORY=/fresh-cache/testing-track-20261017/next-regression-server/case007/test-data just --set JUSTFILE_DIR /fresh-cache/testing-track-20261017/next-regression-server int-binaries /fresh-cache/runtime-owner-scan-split-v1-20261017/nextest-binaries-default-five-immutable.json '--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-regression-server/case007/nextest.toml -- block_index::test_block_index_reorg_retry --exact'",
+      "staging_required": true,
+      "success_oracle": "Real PostgreSQL/Core BlockIndex listener first-reorg failure returns Err with completed count unchanged1; successful retry has reorg calls2/completed2 and compares every retained DB block hash to Core; equal-tip sync returns false yet completion increments3. on_sync_complete independently requires highest stored DB tip already equals supplied completion point. No customer funds, payout, canonical6 or money conservation assertion.",
+      "repeat_new_case_credit": null,
+      "sequence": 1,
+      "declared_context": "block_index/reorg_retry",
+      "execution_layer": "native_real_postgres_core_sync_component",
+      "archive_file_and_function_reverified": true,
+      "upstream_identity_basis": "Adapted, NOT unchanged. Retained inventory pinnedbfbe upstream function SHA092191a0 differs from actual frozen7041 function79bba093; full native source archive independently rehashed.",
+      "shared_listener_extract_sha256": "9fe0571e74c3c77d39f319ce8b460b289ca1374510fa6d53dffa5de19e4282c8"
+    }
+  ],
+  "scoped_archived_api_sha256": {
+    "server/src/sync/block_index.rs": "0c8670bf923c002f8884dee6983b847c839341956378efe82d1c909f89cc042f",
+    "testing/src/context/mod.rs": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+    "testing/src/daemon/postgres.rs": "d0b8e6000b39d657bb7d5ee277305df358f0ee0707308a90c0c5a3508fda9090",
+    "server/src/database/mod.rs": "002b8c81a0b791fed25d814a0dc9e3dcce7086fd66b382be21e73c09d69593ba"
+  },
+  "commands": [
+    {
+      "sequence": 1,
+      "test_name": "block_index::test_block_index_reorg_retry",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-server-reorg-retry1",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-server-reorg-retry1/nextest-binaries-server-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-server-reorg-retry1/case01/nextest.toml -- block_index::test_block_index_reorg_retry --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-server-reorg-retry1/case01/test-data"
+      },
+      "expected_selected_count": 1,
+      "expected_binary_count": 1,
+      "expected_nonmatching_tests_in_binary": 269,
+      "execution_status": "NOT RUN"
+    }
+  ],
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "threads": 1,
+  "stop_on_first_failure": true,
+  "root_authorization": "Parent explicitly approved source preparation and fresh listing/preflight only, not launch by this agent. Intended after currentCLI16 then approvedserver8/SDK6; parent controls actual queue/admission.",
+  "scope": "One adapted upstream real PostgreSQL/Core sync component, not a customer money test. No ML/fullsuite credit.",
+  "no_prior_named_executions": true,
+  "existing_inventory_row": "B-T038 is retained NOT RUN source inventory, not an execution; unchanged.",
+  "environment": "abandon-fresh-runtime-20261017 cachedNix; candidate remains immutable7041; root fresh resource guard required before launch."
+}

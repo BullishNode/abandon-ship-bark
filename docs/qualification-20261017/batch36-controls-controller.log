@@ -1,0 +1,12 @@
+START lightning::receive_claim_on_mailbox_notification
+PASS lightning::receive_claim_on_mailbox_notification
+START lightning::receive_claim_after_hold_invoice_already_settled
+PASS lightning::receive_claim_after_hold_invoice_already_settled
+START lightning::pay_hold_succeeds
+PASS lightning::pay_hold_succeeds
+START lightning::pay_hold_refused
+PASS lightning::pay_hold_refused
+START lightning::pay_with_retry_for
+PASS lightning::pay_with_retry_for
+START payment_request::build_valid_bip321_uri
+PASS payment_request::build_valid_bip321_uri

@@ -1,0 +1,107 @@
+{
+  "original_test": "ark-testing::bark onchain::onchain_drain",
+  "original_run_id": "9601bb92-202a-4151-92fb-8d19fef22d2d",
+  "actual_result": "FAIL",
+  "native_seconds": 11.74,
+  "summary_seconds": 11.744,
+  "failure": "onchain.rs126 actualrecipient999452 vs fixed999443; senderbalancezero assertion passed",
+  "inspection": "Retained immutable sender+recipient SQLite without sidecars, selective native CLI output and independent offline XOR block/canonical header ancestry/prevout decoding; no node/wallet/service reopened.",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "wallets": {
+    "bark_sender": {
+      "target_raw_sha256": "68887385e1b0852086c7e35af65d25c15e5d9bda122089dfe6b81aa2d9a3e894",
+      "target_anchors": [
+        {
+          "txid": "46cf13cf3f58ed1d6bd869606cbd022f3cde6860954d014333c8c7b7a32d88aa",
+          "block_height": 107,
+          "block_hash": "5dcfdd8a864a4a07ac9a8419655a0690bb949bfc71e84482543d6b7ee29d71bf",
+          "confirmation_time": 1792270523
+        }
+      ],
+      "offchain_coin_count": 0,
+      "movement_count": 0,
+      "actual_last_native_onchain_balance": {
+        "total_sat": 0,
+        "trusted_spendable_sat": 0,
+        "immature_sat": 0,
+        "trusted_pending_sat": 0,
+        "untrusted_pending_sat": 0,
+        "confirmed_sat": 0
+      }
+    },
+    "bark_recipient": {
+      "target_raw_sha256": "68887385e1b0852086c7e35af65d25c15e5d9bda122089dfe6b81aa2d9a3e894",
+      "target_anchors": [
+        {
+          "txid": "46cf13cf3f58ed1d6bd869606cbd022f3cde6860954d014333c8c7b7a32d88aa",
+          "block_height": 107,
+          "block_hash": "5dcfdd8a864a4a07ac9a8419655a0690bb949bfc71e84482543d6b7ee29d71bf",
+          "confirmation_time": 1792270523
+        }
+      ],
+      "offchain_coin_count": 0,
+      "movement_count": 0,
+      "actual_last_native_onchain_balance": {
+        "total_sat": 999452,
+        "trusted_spendable_sat": 999452,
+        "immature_sat": 0,
+        "trusted_pending_sat": 0,
+        "untrusted_pending_sat": 0,
+        "confirmed_sat": 999452
+      }
+    }
+  },
+  "drain": {
+    "txid": "46cf13cf3f58ed1d6bd869606cbd022f3cde6860954d014333c8c7b7a32d88aa",
+    "raw_signed_sha256": "68887385e1b0852086c7e35af65d25c15e5d9bda122089dfe6b81aa2d9a3e894",
+    "raw_signed_bytes": 191,
+    "stripped_bytes": 82,
+    "weight_wu": 437,
+    "vsize_vb": 110,
+    "input_witness_element_lengths": [
+      [
+        71,
+        33
+      ]
+    ],
+    "inputs": [
+      {
+        "txid": "d7db04c92085972a8a73c6f5a90e1ff6f923967608e5df243a3176a51b7de93d",
+        "vout": 0,
+        "value_sat": 1000000,
+        "script_hex": "00141ecfb8f9e363e95b368d1cdbb47ea08763d3f7df"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 999452,
+        "script_hex": "0014ebf1d29573a3585e94cb5e63c238538fa2cca606"
+      }
+    ],
+    "actual_input_sum_sat": 1000000,
+    "actual_recipient_sum_sat": 999452,
+    "actual_miner_fee_sat": 548,
+    "conservation": "1000000 = 999452 + 548; only one physical input/output, senderactualbalance0."
+  },
+  "chain": {
+    "canonical_tip": "5dcfdd8a864a4a07ac9a8419655a0690bb949bfc71e84482543d6b7ee29d71bf",
+    "canonical_tip_height": 107,
+    "inclusion_block": "5dcfdd8a864a4a07ac9a8419655a0690bb949bfc71e84482543d6b7ee29d71bf",
+    "inclusion_height": 107,
+    "confirmations_at_retained_tip": 1
+  },
+  "input_hashes_before_after_equal": true,
+  "input_hashes": {
+    "test-data/bark/onchain_drain/bark_sender/db.sqlite": "1b36035955840c2828e0c67558622a4d1d2f7ad423c5beb403fc46ec8a12c02a",
+    "test-data/bark/onchain_drain/bark_recipient/db.sqlite": "7e936efda144e9e663b27cbf34f4c730c8b604ed289b2ce3d684afcc6f47f004",
+    "result.json": "cc6fdc12895243e30061a51256b77b924d9e7d75960809eb9eff2beba5d4b37d",
+    "nextest.log": "9e529df69c76cca6b9262c29daa17c5034aaf3ea228d7f7d8e0f8d8c26ec4a3c",
+    "test-data/bark/onchain_drain/bark_sender/commands.log": "0ecf9a2aaf1db19cebbb5f80a2c47493da185e92712c7ac4cf83834028b32b79",
+    "test-data/bark/onchain_drain/bark_recipient/commands.log": "9515a0e9349c3bec5a7a661022a2eb1e8f4b60645a468778d3b0edef6d86f530",
+    "test-data/bark/onchain_drain/bitcoind/regtest/debug.log": "544735b13b44d3e9df27ff02319afea877de7fea2fee5e759518c6ddef0cb1ad",
+    "test-data/bark/onchain_drain/bitcoind/regtest/blocks/xor.dat": "9184db7accb275c02354d0c7d3c217a4d4650dcd27c0f802330f2d9f14398603",
+    "test-data/bark/onchain_drain/bitcoind/regtest/blocks/blk00000.dat": "67d0560472f2a700042604561725d75bf6171fe200c85ac3733b455ee41e4142"
+  },
+  "limitations": "Original namedtestFAIL preserved. No Core6, new adapted execution, optimalfeerate/fullwalletsolvency/FULLML claim. Actual recipient and zero sender nativebalances were reached, but original exactrecipient legacy literalfailed."
+}

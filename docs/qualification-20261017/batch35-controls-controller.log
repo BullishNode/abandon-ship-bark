@@ -1,0 +1,16 @@
+START check_captaind_version
+PASS check_captaind_version
+START grpc_health_check
+PASS grpc_health_check
+START bitcoind_cookie_connection
+PASS bitcoind_cookie_connection
+START bitcoind_auth_connection
+PASS bitcoind_auth_connection
+START restart_fresh_server
+PASS restart_fresh_server
+START restart_custom_cfg_server
+PASS restart_custom_cfg_server
+START restart_key_stability
+PASS restart_key_stability
+START fund_captaind
+PASS fund_captaind

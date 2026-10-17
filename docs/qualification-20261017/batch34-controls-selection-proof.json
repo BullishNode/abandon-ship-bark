@@ -1,0 +1,624 @@
+{
+  "parent_five_metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "exact_bark_subset_sha256": "b7c90f817bd780efcbc721ff8ad86d0519b1a519690b91171f687b683294685f",
+  "runtime_metadata_sha256": "3143345c36e85938ec424916f01ea0bd28ebce8aeb1b0d63b787aa3c850b3363",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "test_binary": "ark-testing::bark",
+  "threads": 1,
+  "retries": 0,
+  "per_test_timeout_seconds": 180,
+  "runtime_container": "abandon-fresh-runtime-20261017",
+  "runtime_container_id": "7b3925c9c69800497043ee57023bed5bf432d48e49e61a95a6ac9262b880845a",
+  "state": "PREPARED_NOT_EXECUTED",
+  "expected_names_in_execution_order": [
+    "onchain::onchain_send",
+    "onchain::onchain_send_many",
+    "recover::recovered_wallet_continues_xpub_lookup_past_server_range",
+    "recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+    "recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+    "recover::recovered_wallet_xpub_lookup_returns_spent_vtxos",
+    "recover::recovery_catchup_survives_rejected_vtxo",
+    "recover::recovery_state_catches_up_on_sync",
+    "vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+    "vtxos::compute_balance",
+    "vtxos::drop_vtxos",
+    "vtxos::list_vtxos"
+  ],
+  "root_authorization": "Parent standing continuation authority after terminal21103 exit100 and reconciled original onchain_drain fee assertion. Preparation/fresh listing only by this agent; parent controls launch.",
+  "source_provenance": [
+    {
+      "test_name": "onchain::onchain_send",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "source_file_sha256": "422fcd12fcba52c7e4e46c9b90b4f02fac67b7b8f1e63418d9607be35cd6360e",
+      "function_sha256": "259d91d11a1ff9b99bcbe764591a0755230d24b713cc74409ebc1be181243bef",
+      "upstream_function_sha256": "259d91d11a1ff9b99bcbe764591a0755230d24b713cc74409ebc1be181243bef",
+      "version_macros": [],
+      "version_gate_excluded": false,
+      "sequence": 1,
+      "original_21_sequence": 10,
+      "original_75_sequence": 64,
+      "declared_context": "bark/onchain_send",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 9,
+      "source_start_line": 51,
+      "source_end_line": 70,
+      "original_18_sequence": 7,
+      "original_17_sequence": 6,
+      "original_16_sequence": 5
+    },
+    {
+      "test_name": "onchain::onchain_send_many",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "source_file_sha256": "422fcd12fcba52c7e4e46c9b90b4f02fac67b7b8f1e63418d9607be35cd6360e",
+      "function_sha256": "6f0ee1441033416a5fdb14b50ab3c0631c8a673de96dcf2dbfd9962fee43a9d2",
+      "upstream_function_sha256": "6f0ee1441033416a5fdb14b50ab3c0631c8a673de96dcf2dbfd9962fee43a9d2",
+      "version_macros": [],
+      "version_gate_excluded": false,
+      "sequence": 2,
+      "original_21_sequence": 11,
+      "original_75_sequence": 65,
+      "declared_context": "bark/onchain_send_many",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 10,
+      "source_start_line": 73,
+      "source_end_line": 110,
+      "original_18_sequence": 8,
+      "original_17_sequence": 7,
+      "original_16_sequence": 6
+    },
+    {
+      "test_name": "recover::recovered_wallet_continues_xpub_lookup_past_server_range",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "a5d002ae6e80dd2618d36d6e168eee37cda8b3c9ccd21262a90a2ce05ee8ddd6",
+      "upstream_function_sha256": "a5d002ae6e80dd2618d36d6e168eee37cda8b3c9ccd21262a90a2ce05ee8ddd6",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 560
+        }
+      ],
+      "version_gate_excluded": false,
+      "sequence": 3,
+      "original_21_sequence": 12,
+      "original_75_sequence": 66,
+      "declared_context": "bark/recovered_wallet_continues_xpub_lookup_past_server_range",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 11,
+      "source_start_line": 559,
+      "source_end_line": 599,
+      "original_18_sequence": 9,
+      "original_17_sequence": 8,
+      "original_16_sequence": 7
+    },
+    {
+      "test_name": "recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "147ab2a3140bb0c17ae2610ca924b505396d9868750acbeaabe5a6e79088844d",
+      "upstream_function_sha256": "147ab2a3140bb0c17ae2610ca924b505396d9868750acbeaabe5a6e79088844d",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 532
+        }
+      ],
+      "version_gate_excluded": false,
+      "sequence": 4,
+      "original_21_sequence": 13,
+      "original_75_sequence": 67,
+      "declared_context": "bark/recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 12,
+      "source_start_line": 531,
+      "source_end_line": 553,
+      "original_18_sequence": 10,
+      "original_17_sequence": 9,
+      "original_16_sequence": 8
+    },
+    {
+      "test_name": "recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "0d4288c99d88c9e7af6237c1c94ac1c48999dc64c4b0c923f2f299341ed15dff",
+      "upstream_function_sha256": "0d4288c99d88c9e7af6237c1c94ac1c48999dc64c4b0c923f2f299341ed15dff",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 483
+        }
+      ],
+      "version_gate_excluded": false,
+      "sequence": 5,
+      "original_21_sequence": 14,
+      "original_75_sequence": 68,
+      "declared_context": "bark/recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 13,
+      "source_start_line": 482,
+      "source_end_line": 526,
+      "original_18_sequence": 11,
+      "original_17_sequence": 10,
+      "original_16_sequence": 9
+    },
+    {
+      "test_name": "recover::recovered_wallet_xpub_lookup_returns_spent_vtxos",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "5e8f3450b0555ecb4565f03dc5652064d8a9fba4df09c39167bdf24825bd9e6f",
+      "upstream_function_sha256": "5e8f3450b0555ecb4565f03dc5652064d8a9fba4df09c39167bdf24825bd9e6f",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 606
+        }
+      ],
+      "version_gate_excluded": false,
+      "sequence": 6,
+      "original_21_sequence": 15,
+      "original_75_sequence": 69,
+      "declared_context": "bark/recovered_wallet_xpub_lookup_returns_spent_vtxos",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 14,
+      "source_start_line": 605,
+      "source_end_line": 686,
+      "original_18_sequence": 12,
+      "original_17_sequence": 11,
+      "original_16_sequence": 10
+    },
+    {
+      "test_name": "recover::recovery_catchup_survives_rejected_vtxo",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "2615a03e5b2e1d3bc69343dbca841c0c778aa6cac0a376a9aed93197b06c6642",
+      "upstream_function_sha256": "2615a03e5b2e1d3bc69343dbca841c0c778aa6cac0a376a9aed93197b06c6642",
+      "version_macros": [],
+      "version_gate_excluded": false,
+      "sequence": 7,
+      "original_21_sequence": 16,
+      "original_75_sequence": 70,
+      "declared_context": "bark/recovery_catchup_survives_rejected_vtxo",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 15,
+      "source_start_line": 228,
+      "source_end_line": 337,
+      "original_18_sequence": 13,
+      "original_17_sequence": 12,
+      "original_16_sequence": 11
+    },
+    {
+      "test_name": "recover::recovery_state_catches_up_on_sync",
+      "source_file": "testing/tests/bark/recover.rs",
+      "source_file_sha256": "bbdf4c6fa8b554b660b4afea2b19a10485821c15e20a9df8f5255a2b6c2f3f6d",
+      "function_sha256": "9b6103a96a541dc837060f90bced204e8ee552b181b96405cfeebc323c39ece7",
+      "upstream_function_sha256": "9b6103a96a541dc837060f90bced204e8ee552b181b96405cfeebc323c39ece7",
+      "version_macros": [],
+      "version_gate_excluded": false,
+      "sequence": 8,
+      "original_21_sequence": 17,
+      "original_75_sequence": 71,
+      "declared_context": "bark/recovery_state_catches_up_on_sync",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 16,
+      "source_start_line": 107,
+      "source_end_line": 222,
+      "original_18_sequence": 14,
+      "original_17_sequence": 13,
+      "original_16_sequence": 12
+    },
+    {
+      "test_name": "vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+      "source_file": "testing/tests/bark/vtxos.rs",
+      "source_file_sha256": "c9ae223cc1cc7bd36298817a3e44d9fe14429a52d2d0da3811455a893ff69133",
+      "function_sha256": "454517e26ad77822307c2fb551cc1e8fa39f834dba9fc11757e757100ebb79eb",
+      "upstream_function_sha256": "454517e26ad77822307c2fb551cc1e8fa39f834dba9fc11757e757100ebb79eb",
+      "version_macros": [],
+      "version_gate_excluded": false,
+      "sequence": 9,
+      "original_21_sequence": 18,
+      "original_75_sequence": 72,
+      "declared_context": "bark/bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 17,
+      "source_start_line": 82,
+      "source_end_line": 95,
+      "original_18_sequence": 15,
+      "original_17_sequence": 14,
+      "original_16_sequence": 13
+    },
+    {
+      "test_name": "vtxos::compute_balance",
+      "source_file": "testing/tests/bark/vtxos.rs",
+      "source_file_sha256": "c9ae223cc1cc7bd36298817a3e44d9fe14429a52d2d0da3811455a893ff69133",
+      "function_sha256": "1bef09b7bfabdeb7da2c55114e993693986df590cb1edd014ca1166491ceb677",
+      "upstream_function_sha256": "1bef09b7bfabdeb7da2c55114e993693986df590cb1edd014ca1166491ceb677",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 49
+        }
+      ],
+      "version_gate_excluded": false,
+      "sequence": 10,
+      "original_21_sequence": 19,
+      "original_75_sequence": 73,
+      "declared_context": "bark/compute_balance",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 18,
+      "source_start_line": 48,
+      "source_end_line": 79,
+      "original_18_sequence": 16,
+      "original_17_sequence": 15,
+      "original_16_sequence": 14
+    },
+    {
+      "test_name": "vtxos::drop_vtxos",
+      "source_file": "testing/tests/bark/vtxos.rs",
+      "source_file_sha256": "c9ae223cc1cc7bd36298817a3e44d9fe14429a52d2d0da3811455a893ff69133",
+      "function_sha256": "670755148e9c441651f4c433d78524665a1836697e594e9be8b45b764dc6cbb2",
+      "upstream_function_sha256": "670755148e9c441651f4c433d78524665a1836697e594e9be8b45b764dc6cbb2",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 99
+        }
+      ],
+      "version_gate_excluded": false,
+      "sequence": 11,
+      "original_21_sequence": 20,
+      "original_75_sequence": 74,
+      "declared_context": "bark/drop_vtxos",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 19,
+      "source_start_line": 98,
+      "source_end_line": 115,
+      "original_18_sequence": 17,
+      "original_17_sequence": 16,
+      "original_16_sequence": 15
+    },
+    {
+      "test_name": "vtxos::list_vtxos",
+      "source_file": "testing/tests/bark/vtxos.rs",
+      "source_file_sha256": "c9ae223cc1cc7bd36298817a3e44d9fe14429a52d2d0da3811455a893ff69133",
+      "function_sha256": "4217a0224bfd358621e9f5b4b6024acdf00b9ebd484471ad0c62206a8516decf",
+      "upstream_function_sha256": "4217a0224bfd358621e9f5b4b6024acdf00b9ebd484471ad0c62206a8516decf",
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 8
+        }
+      ],
+      "version_gate_excluded": false,
+      "sequence": 12,
+      "original_21_sequence": 21,
+      "original_75_sequence": 75,
+      "declared_context": "bark/list_vtxos",
+      "actual_execution_status": "PREPARED_NOT_RUN",
+      "original_20_sequence": 20,
+      "source_start_line": 7,
+      "source_end_line": 45,
+      "original_18_sequence": 18,
+      "original_17_sequence": 17,
+      "original_16_sequence": 16
+    }
+  ],
+  "scope": "Only12 actual unstarted ordinary CLI names in preserved order; no failure retry or automatic ML credit.",
+  "version_audit": {
+    "reported_actual_version": "0.7.1-dev",
+    "version_basis": "Actual fresh frozen BARK_EXEC --version 0.7.1-dev was checked during allowed preparation; immutable product hash is unchanged. Parent must repeat pins/version gate immediately before launch.",
+    "parser": "testing/src/util.rs:354-359 maps any string containing -dev and DIRTY to BarkVersion::Dev; Ord:380-385 makes Dev greater than every Release and equal to Dev.",
+    "gate": "testing/src/lib.rs:95-105 logs skipping test and returns only when parsed condition false. A nextest PASS after that return is not behavior coverage.",
+    "frozen_helper_proofs": {
+      "testing/src/lib.rs": {
+        "sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+        "frozen_manifest_match": true
+      },
+      "testing/src/util.rs": {
+        "sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+        "frozen_manifest_match": true
+      }
+    },
+    "counts": {
+      "remaining": 12,
+      "require_gate_tests": 7,
+      "require_gate_occurrences": 7,
+      "branch_macro_tests": 0,
+      "branch_macro_occurrences": 0,
+      "excluded_by_version": 0,
+      "deferred_by_root_sourceclass": 1
+    },
+    "all_required_gates_pass": true,
+    "all_branch_conditions_true_for_this_version": true,
+    "default_selected_names_verified_against_immutable_listing": true
+  },
+  "commands": [
+    {
+      "sequence": 1,
+      "original_16_sequence": 5,
+      "name": "onchain::onchain_send",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case01/nextest.toml -- onchain::onchain_send --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case01/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 2,
+      "original_16_sequence": 6,
+      "name": "onchain::onchain_send_many",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case02/nextest.toml -- onchain::onchain_send_many --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case02/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 3,
+      "original_16_sequence": 7,
+      "name": "recover::recovered_wallet_continues_xpub_lookup_past_server_range",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case03/nextest.toml -- recover::recovered_wallet_continues_xpub_lookup_past_server_range --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case03/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 4,
+      "original_16_sequence": 8,
+      "name": "recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case04/nextest.toml -- recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case04/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 5,
+      "original_16_sequence": 9,
+      "name": "recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case05/nextest.toml -- recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case05/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 6,
+      "original_16_sequence": 10,
+      "name": "recover::recovered_wallet_xpub_lookup_returns_spent_vtxos",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case06/nextest.toml -- recover::recovered_wallet_xpub_lookup_returns_spent_vtxos --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case06/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 7,
+      "original_16_sequence": 11,
+      "name": "recover::recovery_catchup_survives_rejected_vtxo",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case07/nextest.toml -- recover::recovery_catchup_survives_rejected_vtxo --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case07/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 8,
+      "original_16_sequence": 12,
+      "name": "recover::recovery_state_catches_up_on_sync",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case08/nextest.toml -- recover::recovery_state_catches_up_on_sync --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case08/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 9,
+      "original_16_sequence": 13,
+      "name": "vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case09/nextest.toml -- vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case09/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 10,
+      "original_16_sequence": 14,
+      "name": "vtxos::compute_balance",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case10/nextest.toml -- vtxos::compute_balance --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case10/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 11,
+      "original_16_sequence": 15,
+      "name": "vtxos::drop_vtxos",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case11/nextest.toml -- vtxos::drop_vtxos --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case11/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    },
+    {
+      "sequence": 12,
+      "original_16_sequence": 16,
+      "name": "vtxos::list_vtxos",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case12/nextest.toml -- vtxos::list_vtxos --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/next-upstream-bark-unstarted12/case12/test-data"
+      },
+      "execution_status": "PREPARED_NOT_RUN"
+    }
+  ],
+  "prior_stopped_batch": "next-upstream-bark-unstarted16",
+  "prior_progress_sha256": "1056593b181f9e7dc17bd47e9e330a40222b8f323999e0356f195b37c1d32fd9",
+  "derived_parent_proof_sha256": "ff047d240efaca2d937a9ba9ff544088bb50bc5b2eb8546e6971910c1941bae5",
+  "archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "archive_function_verification": "All12 selected full archive file/function hashes match retained upstream-function proofs; all selected currentDev version conditions true.",
+  "original_whitelist_indices": [
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75
+  ],
+  "preparation_state": "Exactly priorCLI16 cases05-16; actual3PASS+1FAIL prefix excluded, no retries.",
+  "guard": "Exact prior4 results3PASS1FAIL/onchain_drain/exit100/noresourceerror; no latercase started; retained originals unchanged.",
+  "deferred": [
+    {
+      "name": "onchain::list_utxos",
+      "status": "ADAPTED_NOT_RUN",
+      "reason": "Frozenonchain.rs41/47 fixed938offboardcharge and45 fixed799228change/772boardfee; truthfulfixturepending; no originalexecution/PASS/FAILclaim."
+    }
+  ],
+  "prior_source_preparation_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-bark-unstarted16",
+  "queue_sha256": "d9505fe93085b27c655348eab6073150f4f3fba0056d40932ac385b16e76472b"
+}

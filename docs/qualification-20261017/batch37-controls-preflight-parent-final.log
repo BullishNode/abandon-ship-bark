@@ -1,0 +1,15 @@
+IN_NIX_SHELL=impure
+/fresh-cache/runtime-owner-scan-split-v1-20261017/native-server: OK
+/fresh-cache/runtime-owner-scan-split-v1-20261017/captaind: OK
+/fresh-cache/runtime-owner-scan-split-v1-20261017/watchmand: OK
+/fresh-cache/runtime-owner-scan-split-v1-20261017/bark: OK
+/fresh-cache/runtime-owner-scan-split-v1-20261017/barkd: OK
+/fresh-cache/runtime-owner-scan-split-v1-20261017/support/debug/lock-holder: OK
+/fresh-cache/runtime-owner-scan-split-v1-20261017/manifest.json: OK
+/fresh-cache/runtime-owner-scan-split-v1-20261017/source-manifest.json: OK
+/fresh-cache/cln-adapter-evidence/plugins/cln-grpc: OK
+/fresh-cache/cln-adapter-evidence/plugins/hold: OK
+/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd: OK
+/fresh-cache/testing-track-20261017/next-upstream-server-reorg-retry1/nextest-binaries-server-only-exact.json: OK
+/fresh-cache/testing-track-20261017/next-upstream-server-reorg-retry1/nextest-binaries-server-runtime-immutable.json: OK
+/fresh-cache/testing-track-20261017/next-upstream-server-reorg-retry1/selection-proof.json: OK

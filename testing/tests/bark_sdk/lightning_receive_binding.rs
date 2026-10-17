@@ -71,3 +71,54 @@ async fn receive_binding_normal_external_claim_keeps_the_actual_recipient() {
 	let count = db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM expiry_lightning_receive_claim WHERE payment_hash=$1", &[&hash.to_string()]).await?.get::<_, i64>(0))).await.unwrap();
 	assert_eq!(count, bindings.len() as i64);
 }
+
+/// A normal intra-Ark receive uses its durable funding link after the payer's
+/// attempt completes. Replaying maintenance must not consult the canceled native
+/// hold invoice, duplicate the binding, or write another identical status row.
+#[tokio::test]
+async fn receive_binding_normal_internal_claim_and_reconciliation_are_idempotent() {
+	let ctx = TestContext::new("bark_sdk/receive_binding_normal_internal_claim").await;
+	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10)).create().await;
+	srv.wait_for_vtxopool(&ctx).await;
+	let sender = ctx.bark_sdk("sender", &srv).boarded(sat(200_000))
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	let recipient = ctx.bark_sdk("recipient", &srv)
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	let invoice = recipient.bolt11_invoice(sat(50_000), None, None).await.unwrap();
+	let hash = PaymentHash::from(&invoice);
+	let (paid, claimed) = tokio::time::timeout(Duration::from_secs(60), async {
+		tokio::join!(
+			sender.pay_lightning_invoice(invoice, None, true),
+			recipient.try_claim_lightning_receive(hash, true),
+		)
+	}).await.expect("normal internal receive did not complete");
+	paid.unwrap();
+	assert!(matches!(claimed.unwrap(), LightningReceiveState::Settled(_)));
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let row = tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let row = db.read(async |t| Ok(t.query_one("SELECT s.id,s.status::TEXT,s.updated_at,a.status::TEXT AS attempt_status, \
+				COUNT(c.source_vtxo_id) AS bindings,BOOL_AND(c.materialized) AS materialized \
+				FROM lightning_htlc_subscription s JOIN expiry_lightning_internal_funding f ON f.subscription_id=s.id \
+				JOIN lightning_payment_attempt a ON a.id=f.id AND a.lightning_htlc_subscription_id=s.id \
+				JOIN expiry_lightning_receive_claim c ON c.subscription_id=s.id AND c.payment_hash=s.payment_hash \
+				WHERE s.payment_hash=$1 GROUP BY s.id,a.status", &[&hash.to_string()]).await?)).await.unwrap();
+			if row.get::<_, &str>("status") == "settled" { break row; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("internal receive did not reach its actual settled subscription");
+	assert_eq!(row.get::<_, &str>("attempt_status"), "succeeded");
+	assert!(row.get::<_, i64>("bindings") > 0 && row.get::<_, bool>("materialized"));
+	let before: chrono::DateTime<chrono::Local> = row.get("updated_at");
+	assert!(db.write(async |t| t.reconcile_completed_internal_receives(128).await).await.unwrap().is_empty());
+	let after = db.read(async |t| Ok(t.query_one("SELECT updated_at FROM lightning_htlc_subscription WHERE id=$1", &[&row.get::<_, i64>("id")]).await?.get::<_, chrono::DateTime<chrono::Local>>(0))).await.unwrap();
+	assert_eq!(before, after, "identical reconciliation must not change status history");
+	let receipt = recipient.spendable_vtxos().await.unwrap();
+	assert_eq!(receipt.iter().map(|coin| coin.amount()).sum::<bitcoin::Amount>(), sat(50_000));
+	let mut external = lightning.internal.grpc_client().await;
+	let pays = external.list_send_pays(cln_rpc::ListsendpaysRequest {
+		payment_hash: Some(hash.to_vec()), ..Default::default()
+	}).await.unwrap().into_inner();
+	assert!(pays.payments.is_empty(), "actual internal receive must not be sent through external CLN");
+}

@@ -949,7 +949,7 @@ impl Server {
 			.not_found([payment_hash], "no pending payment with this payment hash")?;
 
 		let is_self_payment = self.db.read(async |t|
-			t.get_open_lightning_payment_attempt_by_subscription_id(sub.id).await
+			t.funded_internal_receive(sub.id, payment_hash).await
 		).await?.is_some();
 
 		match sub.status {

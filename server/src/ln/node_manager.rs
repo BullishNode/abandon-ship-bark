@@ -84,6 +84,15 @@ enum PayInvoiceRace {
 	Canceled,
 }
 
+/// The original claim may still materialize later. This is neither a failed
+/// external collection nor permission to complete/refund the internal payment.
+/// Its durable funding/claim facts are revisited by manager maintenance.
+#[derive(Debug, thiserror::Error)]
+#[error("internal receive {subscription_id} awaits its recorded recipient claim")]
+struct DeferredInternalReceive {
+	subscription_id: i64,
+}
+
 /// Handle for the cln manager process.
 pub struct LightningManager {
 	db: database::Db,
@@ -600,22 +609,33 @@ impl LightningManager {
 			.read(async |t| t.get_htlc_subscription_by_id(subscription_id).await).await?
 			.expect("can only settle known invoice");
 
-		// If an open self-payment attempt exists for the payment hash, it is an
-		// intra-Ark lightning payment so we can mark it as succeeded,
-		// then skip hold invoice settlement.
-		let attempt = self.db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await).await?
-			.filter(|attempt| attempt.is_self_payment());
-		let is_self_payment = attempt.is_some();
-		if let Some(attempt) = attempt {
-			// NB: the xpay reconciliation loop may also post the mailbox notification
-			// for the same payment hash. The DB insert is idempotent (ON CONFLICT DO NOTHING).
-			self.payment_handler().process_payment_attempt(
-				&self.settler, &attempt,
-				LightningPaymentStatus::Succeeded,
-				None,
-				None,
-				Some(preimage),
-			).await?;
+		ensure!(htlc_subscription.payment_hash == payment_hash, "receive settlement preimage does not match subscription");
+		// The durable funding link survives completion. A closed internal
+		// attempt must never be rerouted to its intentionally canceled hold.
+		let funding = self.db.read(async |t| t.funded_internal_receive(subscription_id, payment_hash).await).await?;
+		let is_self_payment = funding.is_some();
+		if let Some(funding) = funding {
+			let attempt = funding.attempt;
+			if !database::expiry_lightning::internal_settlement_is_ready(attempt.status, funding.claim_complete) {
+				return Err(DeferredInternalReceive { subscription_id }.into());
+			}
+			if !attempt.status.is_final() {
+				// Mailbox notifications remain idempotent through the existing handler.
+				self.payment_handler().process_payment_attempt(
+					&self.settler, &attempt,
+					LightningPaymentStatus::Succeeded,
+					None,
+					None,
+					Some(preimage),
+				).await?;
+				let current = self.db.read(async |t| t.funded_internal_receive(subscription_id, payment_hash).await).await?
+					.context("internal funding disappeared during settlement")?;
+				if !database::expiry_lightning::internal_settlement_is_ready(current.attempt.status, current.claim_complete) {
+					return Err(DeferredInternalReceive { subscription_id }.into());
+				}
+				ensure!(current.attempt.status == LightningPaymentStatus::Succeeded || current.claim_complete,
+					"internal attempt did not commit settlement");
+			}
 		} else {
 			// Settle the hold invoice on the node that created the
 			// subscription - that's where the HTLCs are locked. The user has
@@ -795,8 +815,10 @@ async fn try_settle_hold_invoice(
 	};
 
 	if !matches!(sub.status, LightningHtlcSubscriptionStatus::HtlcsReady) {
-		// Safe to skip: no HTLC-recv vtxos were granted, so the server has
-		// nothing to recover. A subscription that is only Accepted can never
+		// Completed internal claims in another coarse state are repaired by
+		// the manager's source-specific maintenance pass. Other non-ready
+		// subscriptions need no new external collection here.
+		// A subscription that is only Accepted can never
 		// reach HtlcsReady now, because the grant refuses a settled hash. It
 		// stays Accepted until the forward timeout cancels it and the inbound
 		// HTLC fails back to the payer.
@@ -804,6 +826,13 @@ async fn try_settle_hold_invoice(
 	}
 
 	if let Err(e) = srv.lightning_manager.settle_invoice(sub.id, preimage).await {
+		if e.downcast_ref::<DeferredInternalReceive>().is_some() {
+			// This cursor records observation, not financial completion. The
+			// manager's bounded maintenance pass revisits actual claim facts;
+			// do not pin unrelated subscriptions behind this deferred receive.
+			debug!("Deferring internal receive settlement for {}: {:#}", payment_hash, e);
+			return true;
+		}
 		warn!("Hold invoice settlement failed for {}, will retry: {:#}", payment_hash, e);
 		return false;
 	}
@@ -1170,6 +1199,13 @@ impl LightningManagerProcess {
 					self.check_nodes().await;
 				},
 				_ = interval.tick() => {
+					// Recheck durable completed internal claims even when their
+					// old preimage cursor passed before materialization or the
+					// subscription's coarse status was already terminal.
+					match self.db.write(async |t| t.reconcile_completed_internal_receives(128).await).await {
+						Ok(hashes) => for hash in hashes { let _ = self.payment_update_tx.send(hash); },
+						Err(e) => warn!("Failed to reconcile completed internal receives: {:#}", e),
+					}
 					trace!("LightningManagerProcess checking nodes on interval");
 					self.check_nodes().await;
 				},
@@ -1189,5 +1225,21 @@ impl LightningManagerProcess {
 				},
 			};
 		}
+	}
+}
+
+#[cfg(test)]
+mod internal_receive_tests {
+	use super::*;
+
+	#[test]
+	fn internal_receive_deferral_remains_typed_through_context() {
+		let deferred = anyhow::Error::new(DeferredInternalReceive { subscription_id: 7 })
+			.context("normal receive reconciliation");
+		assert_eq!(deferred.downcast_ref::<DeferredInternalReceive>().unwrap().subscription_id, 7);
+		let database_failure = anyhow::anyhow!("database connection unavailable");
+		assert!(database_failure.downcast_ref::<DeferredInternalReceive>().is_none());
+		let transport_failure = anyhow::Error::new(tonic::Status::unavailable("hold connection unavailable"));
+		assert!(transport_failure.downcast_ref::<DeferredInternalReceive>().is_none());
 	}
 }

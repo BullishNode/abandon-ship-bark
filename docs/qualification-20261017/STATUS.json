@@ -76,7 +76,7 @@
     "state": "PAUSED_RESOURCE_PREFLIGHT",
     "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch19-sdk-upstream-normal-remaining",
     "progress_receipt": "cohort-progress.json",
-    "all_completed_counts_exclude_this_active_batch": true,
+    "all_completed_counts_exclude_this_active_batch": false,
     "passed": 28,
     "failed": 0,
     "not_started": 13,
@@ -183,7 +183,7 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 42,
+  "passed_case_executions": 74,
   "failed_case_executions": 2,
   "first_checkpoint": {
     "executions": 17,

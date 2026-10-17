@@ -2,7 +2,7 @@
 
 Base: `e44ddf95741478508908c17adc61752832d75c6a`.
 
-First checkpoint: 17/17 case executions passed across 16 unique names and eight nextest invocations. Latest aggregate:20PASS/1FAIL across21executions,20unique names and9nextest invocations. One current-cut case was repeated with stronger history assertions. The two mailbox cases are component coverage; the other 15 executions use native operations. Mandatory `just checks` passed. Per-product/runtime pins differ and are explicit in the receipts. Production readiness remains open.
+First checkpoint: 17/17 case executions passed across 16 unique names and eight nextest invocations. Latest aggregate:22PASS/2FAIL across24executions,23unique names and12nextest invocations. One current-cut case was repeated with stronger history assertions. The two mailbox cases are component coverage; the other 15 executions use native operations. Mandatory `just checks` passed. Per-product/runtime pins differ and are explicit in the receipts. Production readiness remains open.
 
 No new product verdict exists at startup. The explicit disk hold prevents builds, native test runs, large copies, services, funding and campaigns until coordinator release. The three workers inspect source and prepare a small inventory.
 
@@ -67,3 +67,14 @@ The backend lead independently opened the original CLN SQLite with `mode=ro&immu
 
 
 The separate backend-owned adapter run `c0a5f364-a775-4ed0-9fe7-22286ec2eeb9` passed in 28.777 seconds. Independent source-manifest comparison verifies the original Lightning fixture bytes are identical, while the whole native test bundle differs. Actual typed 205 receipts and a 99,000-sat Core-confirmed payout support this exact adapter pairing. The confirmed ledger projection was not complete at shutdown. This result is excluded from our counts, preserves the original stock failure, and leaves default Nix packaging open. See `external-backend-adapter-positive-receipt.json`. All four source prechecks for the three new tests passed; compilation and runtime remain pending.
+
+
+## Canonical second native batch and primary money invariant
+
+Canonical source99a0553ac plus owned test patch/public-API correction compiled in51.41seconds; mandatory justchecks passed with unchanged captured1078sourcefiles. ImmutabletestELF50b881/source-manifestfd82 retain exactfullhashes in next-canonical-runtime-manifest.json. Firstcompilefailed on2private Xpriv.ckd_priv calls; same-singlechild publicderive_priv correction preserved originalfailedsource/log and changed no moneyoracle.
+
+- PASS restart56.310seconds, ec0030d3:100kexternalsettlement duringcap/watchdowntime recoveredtheoriginalsource-labelleddispatch; no customerrefundanywherepaidanchor; unusedsamehashsource99kCore>=6confirmed. That refund is unusedgrantliability, not receivedswap proceeds or failed-dispatchedswap.
+- PASS nativeforwarding/providerreopen28.617seconds,e380c4ca:actualregisteredrecipientoutputs/durableDelivering/exactrecipientmailbox/signedbytes/zero-net forwarding. Supportingonly: no expiry/rightfulrecipientfallback credit.
+- FAIL automaticoversize16.359seconds,4a930d92:fixturewronglyassumed1checkpoint for4destinations; actualnativebuilderhas4checkpointoutputs and5signedtransactions.327recordsregistered; assertionbeforeinitialpathregistration andexpiry. Allfailedrawstate preserved. Automaticpayoutoracle not reached; no productverdict. Actualnativegraph source repair must keep10kvB/fanout4/depth100/600seconds and genuine327payees.
+
+The user's primary invariant is the rightful user's real fallback for swap-received or refundable failed-swap value. The next primary normal acceptance case stops provider at POSTregistration Delivering, keeps recipientabsent, proves actual registeredrecipient payout atactualbackingexpiry withCore>=6confirmations, then freshseed-only discovery/confirmedrecoveryspend. A complementary accepted-swap cancellation duringproductdowntime tests actual failedsender99k refund. Backend pre-registration risk remains source-level/unconfirmed; its incorrect-payout reproduction is stopped and this track does not duplicate it.

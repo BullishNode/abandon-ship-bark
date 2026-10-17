@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-17T15:57:10.450617+00:00",
+  "updated_at": "2026-10-17T16:19:44.960020+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "ACTIVE_AWAITING_CANONICAL_TEST_COMPILE_SLOT",
+  "state": "ACTIVE_PRIMARY_SWAP_FALLBACK_SOURCE_AUTHORING",
   "branch": "work/fresh-test-qualification-20261017",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
@@ -42,7 +42,7 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Coordinator integrate reviewed3testpacket933033...; next canonical metadata/build gate after client archive. Read-only original dispatch reconciliation complete; qualified adapter positive belongs backend lead.",
+  "next_action": "Author2normalmoney-path tests: receivedswapPOSTregisteredrightfulrecipientfallback/seedrecovery, and Accepted->Cancelwhileproductsdown rightfulfailedsenderfallback. Oversizeactualgraphrepair sourceonly. Requestnextcanonicalcompilelease afterreview.",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
@@ -65,17 +65,16 @@
     "same-expiry ready root/unresolved HTLC root isolation",
     "current-cut return history exact two-root debit and sync/reopen idempotence"
   ],
-  "build_lease": "RELEASED back to coordinator; no Cargo/build writer remains",
+  "build_lease": "RELEASED after servermetadata/mandatorychecks/immutablearchive; no targetwriter",
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
   "new_test_source_review": "First2tests fixed,compiled,andpassed; next Lightning/oversize drafts uncompiled",
   "coverage_rows": 238,
   "coverage_warning": "Mixed source tests/requirements/scenarios;80originallegacyIDs.20uniqueexecutednames; no wholelegacycase automaticallycredited.",
   "current_batch": {
-    "name": "batch09-native-lightning-terminal-sources",
+    "name": "batch12-automatic-multilevel-split",
     "state": "COMPLETED",
-    "result": "FAIL3PASS1FAIL",
-    "original_failure_preserved": true
+    "result": "FAIL fixturegraphassertion"
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -109,10 +108,10 @@
     "wall_seconds_approx": 159.375
   },
   "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
-  "case_executions": 21,
-  "unique_executed_test_names": 20,
-  "nextest_invocations": 9,
-  "native_case_executions": 19,
+  "case_executions": 24,
+  "unique_executed_test_names": 23,
+  "nextest_invocations": 12,
+  "native_case_executions": 22,
   "component_case_executions": 2,
   "new_test_results": {
     "readiness": "PASS26.184s",
@@ -132,7 +131,7 @@
     "verified_merged_at": "2026-10-17T15:33:13Z",
     "next_checkpoint": "Draft source/report publication; new3tests uncompiled/unrun",
     "next_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/7",
-    "next_verified_remote_head": "8fcae773bbacf2ea96f9d53b2ed2bb47d01d08e9",
+    "next_verified_remote_head": "e509f35169b8ee409310c1361305c1e1942565f2",
     "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN"
   },
   "next_batch": {
@@ -150,8 +149,8 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 20,
-  "failed_case_executions": 1,
+  "passed_case_executions": 22,
+  "failed_case_executions": 2,
   "first_checkpoint": {
     "executions": 17,
     "passed": 17,
@@ -249,11 +248,11 @@
     "sha256": "933033846a365459d51f75f6263442038b4f7422b0a059fb33c18b09a4a0eeb1",
     "canonical_apply_check": "PASS",
     "source_peer_review": "COMPLETE",
-    "compile": "NOT RUN; shared canonical compiler queue pending",
-    "runtime": "NOT RUN",
+    "compile": "PASS51.41s correctedfixture",
+    "runtime": "2PASS,1fixtureFAIL; unchangedoriginalreceipts",
     "code_commit": "2cc925ed1"
   },
-  "next_test_code_commit": "2cc925ed1",
+  "next_test_code_commit": "8fc4b1d7c",
   "next_source_prechecks": "PASS4/4; compile/runtime/mandatorychecks pending canonical lease",
   "external_backend_adapter_positive": {
     "result": "PASS1/1,28.777s",
@@ -263,5 +262,28 @@
     "originalFAIL_unchanged": true,
     "packaging_gate": "OPEN",
     "confirmed_ledger_projection": "NOT claimed"
+  },
+  "canonical_next_candidate": {
+    "head": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+    "dirty": "coordinator-applied reviewed3testpatch only",
+    "source_manifest_sha256": "fd82d64a8d03f1fa61d52fb3b39d73f0d0de6b9ce1f725f8bed96ccaf9eb0e53"
+  },
+  "next_builds": {
+    "v1": "FAIL101:testfixture2privateckd_priv calls; fullfailedsource/log preserved; no runtime",
+    "v2": "PASS51.41s"
+  },
+  "next_mandatory_checks": "PASS canonical99a0553ac+ownedpatch/publicAPI fix",
+  "new_runtime_results": {
+    "lightning_restart": "PASS56.310s; unusedsamehashsource99kCore>=6conf; no paidrootrefund",
+    "native_forwarding": "PASS28.617s; exactmailbox/signedbytes/providerreopen; no expirycredit",
+    "automatic_oversize": "FAIL16.359s fixture1checkpoint assumption vsactual4 beforepathregistration/expiry; productoracle not reached"
+  },
+  "primary_next_patch": {
+    "path": "direct-registered-receive-fallback-v1.patch",
+    "sha256": "b255efdd1768744fe5b8614bcc3094c9f0cf1ed7ddeef0e85813ed08c157b078",
+    "review": "COMPLETE",
+    "compile": "NOT RUN",
+    "runtime": "NOT RUN",
+    "canonical_apply": "awaitcoordinator"
   }
 }

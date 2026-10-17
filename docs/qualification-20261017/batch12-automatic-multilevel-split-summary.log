@@ -1,0 +1,5 @@
+ Nextest run ID 4a930d92-ac3d-4ec7-b344-38d7b23d2d9a with nextest profile: fallback-scale
+        FAIL [  16.359s] (1/1) ark-testing::server qualification_oversize::expiry_automatic_real_limit_multilevel_split_pays_every_owner
+     Summary [  16.365s] 1 test run: 0 passed, 1 failed, 267 skipped
+        FAIL [  16.359s] (1/1) ark-testing::server qualification_oversize::expiry_automatic_real_limit_multilevel_split_pays_every_owner
+Fixture assertion: expected1checkpoint, actual4; automatic payout oracle not reached.

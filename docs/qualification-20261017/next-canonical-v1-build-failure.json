@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-17T15:58:44.405227+00:00",
+  "head": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+  "source_files": 1078,
+  "source_manifest_sha256": "1723118b8de11e30e1485778f411b7b6cfc3097a83a757218dd19393f9097773",
+  "source_tar_sha256": "8b888256e867a2ece4ca469b355b8ebdd92ab2deff34bb8b5d32a34e70597feb",
+  "state": "FAILED",
+  "lease": "Explicitcoordinator15:58UTC; canonical servermetadata+justchecks, no product/SDK build",
+  "command": "docker exec -u1000:1000 -w /home/francis/abandon-ship-fresh-integration abandon-fresh-dev-20261016 bash /fresh-cache/testing-track-20261017/runtime-testing-canonical-lightning-v1/build-server-metadata.sh",
+  "exit_code": 101,
+  "ended_at": "2026-10-17T15:59:54.075436+00:00",
+  "failure": "Test-only source uses2privateXpriv.ckd_priv calls; publicderive_priv needed. No nativecase/payment ran. Original log/source preserved."
+}

@@ -27,6 +27,7 @@ mod fallback;
 mod expiry_attribution;
 mod expiry_registration_scale;
 mod expiry_owner_scan;
+mod expiry_owner_load;
 mod lightning;
 mod mailbox;
 mod nursery;

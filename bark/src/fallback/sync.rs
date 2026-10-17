@@ -147,10 +147,15 @@ impl Wallet {
 	/// never replaces the last complete local receipt snapshot.
 	pub async fn sync_fallback_payouts(&self) -> anyhow::Result<()> {
 		let Some(record) = self.fallback_registration().await? else { return Ok(()); };
+		let collection_base = self.inner.db.get_fallback_snapshot().await?.view_token;
+		// Remote pagination must not hold the local protection lock. A
+		// stalled server cannot prevent cached chain checks or act-by work.
+		let collected = self.collect_fallback_pages().await;
 		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback-history", self.fingerprint()), Duration::from_secs(30)).await?;
 		let previous = self.inner.db.get_fallback_snapshot().await?;
 		let result: anyhow::Result<()> = async {
-			let pages = self.collect_fallback_pages().await?;
+			ensure!(previous.view_token == collection_base, "concurrent fallback collection changed the local ledger view");
+			let pages = collected?;
 			ensure!(previous.entitlements.keys().all(|id| pages.entitlements.contains_key(id)),
 				"complete fallback history dropped a permanent account entitlement");
 			let mut snapshot = FallbackSnapshot {

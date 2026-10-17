@@ -718,7 +718,7 @@ pub async fn pending_rounds(
 			continue;
 		};
 
-		let sync = round.state_mut().sync(&wallet).await;
+		let sync = round.sync(&wallet).await;
 		infos.push(PendingRoundInfo::new(&round, sync));
 	}
 	Ok(axum::Json(infos))
@@ -853,7 +853,7 @@ pub async fn refresh_vtxos(
 				.join_next_round(participation, Some(RoundMovement::Refresh)).await
 				.context("Failed to store round participation")?;
 
-			let sync = round.state_mut().sync(&wallet).await;
+			let sync = round.sync(&wallet).await;
 			Ok(axum::Json(PendingRoundInfo::new(&round, sync)))
 		}
 		None => {
@@ -949,7 +949,7 @@ pub async fn refresh_all(
 				.join_next_round(participation, Some(RoundMovement::Refresh)).await
 				.context("Failed to store round participation")?;
 
-			let sync = round.state_mut().sync(&wallet).await;
+			let sync = round.sync(&wallet).await;
 			Ok(axum::Json(PendingRoundInfo::new(&round, sync)))
 		}
 		None => {
@@ -996,7 +996,7 @@ pub async fn refresh_counterparty(
 				.join_next_round(participation, Some(RoundMovement::Refresh)).await
 				.context("Failed to store round participation")?;
 
-			let sync = round.state_mut().sync(&wallet).await;
+			let sync = round.sync(&wallet).await;
 			Ok(axum::Json(PendingRoundInfo::new(&round, sync)))
 		}
 		None => {

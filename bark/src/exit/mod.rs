@@ -212,6 +212,7 @@ impl ExitInner {
 		&mut self,
 		vtxos: &[impl Borrow<Vtxo<Bare>>],
 		skip_standardness_checks: bool,
+		protective: bool,
 	) -> anyhow::Result<()> {
 		if vtxos.is_empty() {
 			return Ok(());
@@ -272,7 +273,8 @@ impl ExitInner {
 				MovementUpdate::new()
 					.intended_and_effective_balance(balance)
 					.consumed_vtxo(vtxo_id)
-					.sent_to([MovementDestination::new(payment_method, vtxo.amount())]),
+					.sent_to([MovementDestination::new(payment_method, vtxo.amount())])
+					.metadata(protective.then(|| ("protective_exit".into(), serde_json::Value::Bool(true)))),
 			).await.context("Failed to register exit movement")?;
 
 			// We avoid composing the TXID vector since that requires access to the onchain wallet,
@@ -600,7 +602,7 @@ impl Exit {
 			return Ok(());
 		}
 
-		guard.start_exit_for_vtxos(&eligible, false).await
+		guard.start_exit_for_vtxos(&eligible, false, false).await
 	}
 
 	/// Starts the unilateral exit process for the given VTXOs.
@@ -614,7 +616,19 @@ impl Exit {
 		vtxos: &[impl Borrow<Vtxo<Bare>>],
 	) -> anyhow::Result<()> {
 		let mut guard = self.inner.write().await;
-		guard.start_exit_for_vtxos(vtxos, false).await
+		guard.start_exit_for_vtxos(vtxos, false, false).await
+	}
+
+	/// Reserve a safety exit under its real durable movement. The intent is
+	/// stored before the lock, so a crash can resume it; progression must
+	/// obtain this same lock before broadcasting and never steals an action.
+	pub(crate) async fn start_protective_exit(&self, vtxo: &Vtxo<Bare>, wallet: &Wallet) -> anyhow::Result<()> {
+		let mut inner = self.inner.write().await;
+		inner.start_exit_for_vtxos(&[vtxo], false, true).await?;
+		let exit = inner.exit_vtxos.iter().find(|exit| exit.id() == vtxo.id())
+			.context("protective exit was not stored")?;
+		let holder = exit.movement_id().context("protective exit has no movement")?;
+		wallet.lock_vtxos([vtxo.id()], Some(holder.into())).await
 	}
 
 	/// Similar to [Exit::start_exit_for_vtxos], but it skips any dust/standardness checks.
@@ -626,7 +640,7 @@ impl Exit {
 		vtxos: &[impl Borrow<Vtxo<Bare>>],
 	) -> anyhow::Result<()> {
 		let mut guard = self.inner.write().await;
-		guard.start_exit_for_vtxos(vtxos, true).await
+		guard.start_exit_for_vtxos(vtxos, true, false).await
 	}
 
 	/// Cancels the unilateral exit for the given VTXO.
@@ -679,6 +693,15 @@ impl Exit {
 
 		let tip = inner.chain_source.tip().await
 			.map_err(|e| ExitError::TipRetrievalFailure { error: e.to_string() })?;
+
+		if let Some(movement_id) = inner.exit_vtxos[idx].movement_id() {
+			let movement = inner.persister.get_movement_by_id(movement_id).await
+				.map_err(|e| ExitError::InternalError { error: e.to_string() })?;
+			if movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true)) {
+				inner.persister.release_vtxo_lock(vtxo_id, Some(&movement_id.into())).await
+					.map_err(|e| ExitError::InternalError { error: e.to_string() })?;
+			}
+		}
 
 		// Record the cancellation first, so it survives even if a later best-effort step fails.
 		inner.exit_vtxos[idx].cancel(tip, &*inner.persister).await?;

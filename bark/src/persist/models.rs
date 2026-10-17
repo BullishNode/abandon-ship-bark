@@ -12,6 +12,7 @@ pub use ark::fallback::FallbackRecord;
 
 use std::borrow::Cow;
 use std::fmt;
+use std::sync::Arc;
 
 use bitcoin::{Amount, Transaction};
 use bitcoin::secp256k1::{Keypair, PublicKey};
@@ -115,7 +116,27 @@ impl fmt::Display for RoundStateId {
 }
 
 #[allow(unused)]
-pub struct Locked(Box<dyn LockGuard>);
+pub struct Locked(Arc<dyn LockGuard>);
+
+/// A checkpoint shares the real named round lock. It never manufactures a
+/// second lock or changes the persistence contract for application backends.
+pub(crate) struct RoundCheckpoint {
+	id: RoundStateId,
+	guard: Arc<dyn LockGuard>,
+	participation: RoundParticipation,
+	movement_id: Option<MovementId>,
+	fallback_refusal: Option<FallbackRefusal>,
+}
+
+impl RoundCheckpoint {
+	pub(crate) fn before_forfeits(&self, outputs: &[Vtxo<Full>], funding_tx: &Transaction, unlock_hash: UnlockHash) -> StoredRoundState {
+		let state = RoundState { done: false, participation: self.participation.clone(),
+			flow: RoundFlowState::Finished { funding_tx: funding_tx.clone(), unlock_hash },
+			new_vtxos: outputs.to_vec(), sent_forfeit_sigs: true,
+			movement_id: self.movement_id, fallback_refusal: self.fallback_refusal };
+		StoredRoundState { id: self.id, state, _guard: Locked(self.guard.clone()) }
+	}
+}
 
 pub struct Unlocked;
 
@@ -136,16 +157,24 @@ impl<G> StoredRoundState<G> {
 }
 
 impl StoredRoundState<Unlocked> {
+	pub(crate) fn into_state(self) -> RoundState { self.state }
+
 	pub fn new(id: RoundStateId, state: RoundState) -> Self {
 		Self { id, state, _guard: Unlocked }
 	}
 
 	pub fn lock(self, guard: Box<dyn LockGuard>) -> StoredRoundState {
-		StoredRoundState { id: self.id, state: self.state, _guard: Locked(guard) }
+		StoredRoundState { id: self.id, state: self.state, _guard: Locked(Arc::from(guard)) }
 	}
 }
 
 impl StoredRoundState<Locked> {
+	pub(crate) fn checkpoint(&self) -> RoundCheckpoint {
+		RoundCheckpoint { id: self.id, guard: self._guard.0.clone(),
+			participation: self.state.participation.clone(), movement_id: self.state.movement_id,
+			fallback_refusal: self.state.fallback_refusal }
+	}
+
 	pub fn state_mut(&mut self) -> &mut RoundState {
 		&mut self.state
 	}

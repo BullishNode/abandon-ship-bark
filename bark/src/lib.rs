@@ -398,7 +398,7 @@ mod board;
 mod config;
 mod daemon;
 mod fallback;
-pub use fallback::FallbackRefusal;
+pub use fallback::{FallbackRefusal, ExitProtectionOutcome, ExitProtectionSchedule};
 pub use fallback::payouts::{
 	FallbackAttempt, FallbackBlock, FallbackDisposition, FallbackEntitlement,
 	FallbackPayoutStage, FallbackSnapshot, FallbackTerminalClaim,

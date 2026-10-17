@@ -120,6 +120,7 @@ pub mod partition {
 
 	pub const FALLBACK_RECORD: u8 = 18;
 	pub const FALLBACK_SNAPSHOT: u8 = 19;
+	pub const PENDING_FALLBACK_RECORD: u8 = 20;
 
 	pub const LAST_IDS: u8 = u8::MAX;
 }
@@ -686,6 +687,10 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 		let mut lock = self.inner.write().await;
 
 		for (vtxo, state) in vtxos {
+			// BarkPersister::store_vtxos is insert-only. In particular a
+			// recovery retry must never replace a live operation's holder or
+			// resurrect a Spent row. Keep lookup+insert under this same lock.
+			if get_vtxo(&*lock, vtxo.id()).await?.is_some() { continue; }
 			let serde_vtxo = SerdeVtxo {
 				vtxo: (*vtxo).clone(),
 				states: vec![(*state).clone()],
@@ -863,6 +868,18 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 		Ok(())
 	}
 
+	async fn retire_vtxo_lock(
+		&self, vtxo_id: VtxoId, holder: Option<&VtxoLockHolder>,
+	) -> anyhow::Result<bool> {
+		let mut lock = self.inner.write().await;
+		let Some(coin) = get_vtxo(&*lock, vtxo_id).await? else { return Ok(false); };
+		if coin.current_state() == Some(&VtxoState::Spent) { return Ok(true); }
+		let expected = VtxoState::Locked { holder: holder.cloned() };
+		if coin.current_state() != Some(&expected) { return Ok(false); }
+		update_vtxo_state_checked(&mut *lock, vtxo_id, VtxoState::Spent, &[VtxoStateKind::Locked]).await?;
+		Ok(true)
+	}
+
 	async fn update_vtxo_states_checked(
 		&self,
 		vtxo_ids: &[VtxoId],
@@ -987,10 +1004,31 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 
 	async fn store_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()> {
 		let mut guard = self.inner.write().await;
-		if let Some(stored) = guard.get(partition::FALLBACK_RECORD, &[]).await? {
-			ensure!(stored.to_data::<FallbackRecord>()?.same_binding(record), "immutable fallback record mismatch");
+		for partition in [partition::FALLBACK_RECORD, partition::PENDING_FALLBACK_RECORD] {
+			if let Some(stored) = guard.get(partition, &[]).await? {
+				ensure!(stored.to_data::<FallbackRecord>()?.same_binding(record), "immutable fallback record mismatch");
+			}
 		}
-		guard.put(Record::from_data(partition::FALLBACK_RECORD, &[], None, record)?).await
+		guard.put(Record::from_data(partition::FALLBACK_RECORD, &[], None, record)?).await?;
+		guard.delete(partition::PENDING_FALLBACK_RECORD, &[]).await?;
+		Ok(())
+	}
+
+	async fn get_pending_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {
+		let guard = self.inner.read().await;
+		if guard.get(partition::FALLBACK_RECORD, &[]).await?.is_some() { return Ok(None); }
+		guard.get(partition::PENDING_FALLBACK_RECORD, &[]).await?.map(|r| r.to_data()).transpose()
+	}
+
+	async fn store_pending_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()> {
+		let mut guard = self.inner.write().await;
+		for partition in [partition::FALLBACK_RECORD, partition::PENDING_FALLBACK_RECORD] {
+			if let Some(stored) = guard.get(partition, &[]).await? {
+				ensure!(stored.to_data::<FallbackRecord>()?.same_binding(record), "immutable fallback record mismatch");
+			}
+		}
+		if guard.get(partition::FALLBACK_RECORD, &[]).await?.is_some() { return Ok(()); }
+		guard.put(Record::from_data(partition::PENDING_FALLBACK_RECORD, &[], None, record)?).await
 	}
 
 

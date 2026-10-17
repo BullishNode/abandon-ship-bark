@@ -307,7 +307,20 @@ impl ExitInner {
 			}
 		}
 		self.exit_vtxos = exit_vtxos;
-		self.tx_manager.sync().await?;
+		let snapshot = self.persister.get_fallback_snapshot().await?;
+		let mut candidates = HashSet::<Txid>::new();
+		let mut live = HashSet::<Txid>::new();
+		for exit in &self.exit_vtxos {
+			if let Some(txids) = exit.txids() {
+				if snapshot.verified_ordinary_spends.contains(&exit.id()) { candidates.extend(txids.iter().copied()); }
+				else { live.extend(txids.iter().copied()); }
+			}
+		}
+		// Status synchronization itself can rebroadcast a saved fee child.
+		// Suppress spent-only packages before that pass; a shared ancestor
+		// needed by another genuine exit remains eligible.
+		let no_rebroadcast = candidates.difference(&live).copied().collect();
+		self.tx_manager.sync(&no_rebroadcast).await?;
 		Ok(())
 	}
 
@@ -629,16 +642,36 @@ impl Exit {
 		guard.start_exit_for_vtxos(vtxos, false, false, None).await
 	}
 
+	/// Serialize immutable ordinary-spend publication with this wallet's
+	/// native reservations and progression. Acquire BEFORE fallback-history;
+	/// no caller may acquire this write guard while holding that named lock.
+	pub(crate) async fn lock_ordinary_spend_publication(&self) -> tokio::sync::RwLockWriteGuard<'_, ExitInner> {
+		self.inner.write().await
+	}
+
 	/// Reserve a safety exit under its real durable movement. The intent is
 	/// stored before the lock, so a crash can resume it; progression must
 	/// obtain this same lock before broadcasting and never steals an action.
-	pub(crate) async fn start_protective_exit(&self, vtxo: &Vtxo<Bare>, wallet: &Wallet) -> anyhow::Result<()> {
+	pub(crate) async fn start_protective_exit(&self, vtxo: &Vtxo<Bare>, wallet: &Wallet) -> anyhow::Result<bool> {
 		let mut inner = self.inner.write().await;
+		let _history = wallet.lock_automatic_exit_ownership(vtxo.id()).await?;
+		let snapshot = wallet.inner.db.get_fallback_snapshot().await?;
+		let Some(stored) = wallet.inner.db.get_wallet_vtxo(vtxo.id()).await? else { return Ok(false); };
+		// A recovery quarantine is ours only when no native action claims it.
+		// Release it inside the SAME critical section as intent+holder storage.
+		if stored.state == (crate::vtxo::VtxoState::Locked { holder: None })
+			&& snapshot.quarantined_vtxos.contains(&vtxo.id())
+			&& !wallet.operation_input_ids().await?.contains(&vtxo.id()) {
+			wallet.inner.db.release_vtxo_lock(vtxo.id(), None).await?;
+		}
+		let Some(stored) = wallet.inner.db.get_wallet_vtxo(vtxo.id()).await? else { return Ok(false); };
+		if stored.state != crate::vtxo::VtxoState::Spendable { return Ok(false); }
 		inner.start_exit_for_vtxos(&[vtxo], false, true, None).await?;
 		let exit = inner.exit_vtxos.iter().find(|exit| exit.id() == vtxo.id())
 			.context("protective exit was not stored")?;
 		let holder = exit.movement_id().context("protective exit has no movement")?;
-		wallet.lock_vtxos([vtxo.id()], Some(holder.into())).await
+		wallet.lock_vtxos([vtxo.id()], Some(holder.into())).await?;
+		Ok(true)
 	}
 
 	/// A binding refresh retains its round holder. The movement stores the
@@ -648,6 +681,7 @@ impl Exit {
 		&self, vtxo: &Vtxo<Bare>, wallet: &Wallet, round: u32, holder: MovementId,
 	) -> anyhow::Result<()> {
 		let mut inner = self.inner.write().await;
+		let _history = wallet.lock_automatic_exit_ownership(vtxo.id()).await?;
 		inner.start_exit_for_vtxos(&[vtxo], false, true, Some((round, holder))).await?;
 		wallet.lock_vtxos([vtxo.id()], Some(holder.into())).await
 	}
@@ -906,7 +940,25 @@ impl Exit {
 			ExitState::VtxoAlreadySpent(_) => MovementStatus::Canceled,
 			_ => return,
 		};
-		if let Err(e) = movements.finish_movement(movement_id, new_status).await {
+		let ordinary_cancel = if matches!(ev.state(), ExitState::VtxoAlreadySpent(_)) {
+			let snapshot = match wallet.inner.db.get_fallback_snapshot().await {
+				Ok(snapshot) => snapshot,
+				Err(error) => { error!("Exit retirement proof could not be read: {:#}", error); return; },
+			};
+			if snapshot.verified_ordinary_spends.contains(&ev.id()) {
+				let movement = match wallet.inner.db.get_movement_by_id(movement_id).await {
+					Ok(movement) => movement,
+					Err(error) => { error!("Exit retirement intent could not be read: {:#}", error); return; },
+				};
+				movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true))
+					&& movement.input_vtxos == [ev.id()]
+			} else { false }
+		} else { false };
+		let result = if ordinary_cancel {
+			movements.finish_movement_with_update(movement_id, new_status,
+				MovementUpdate::new().effective_balance(bitcoin::SignedAmount::ZERO)).await
+		} else { movements.finish_movement(movement_id, new_status).await };
+		if let Err(e) = result {
 			error!(
 				"Failed to finalize exit movement {} as {:?}: {:#}",
 				movement_id, new_status, e,
@@ -1013,6 +1065,18 @@ impl Exit {
 		let origin = ExitTxOrigin::Wallet { confirmed_in: None };
 		let mut guard = self.inner.write().await;
 		let inner = &mut *guard;
+		let snapshot = inner.persister.get_fallback_snapshot().await
+			.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
+		// A child may have been prepared before a complete ordinary proof was
+		// checkpointed. Check BEFORE the broadcast, not only in later progress.
+		// A genuinely live sibling may still need this exact shared ancestor.
+		let owners = inner.exit_vtxos.iter().filter(|exit|
+			exit.txids().is_some_and(|txids| txids.contains(&exit_txid))).map(|exit| exit.id());
+		if ordinary_proof_blocks_cpfp(owners, &snapshot.verified_ordinary_spends) {
+			return Err(ExitError::InvalidWalletState {
+				error: format!("exit package {exit_txid} has only verified ordinary-spent owners; stale CPFP is not broadcast"),
+			});
+		}
 
 		// Broadcast the package first and only commit the child if it's accepted
 		if !inner.tx_manager.broadcast_and_set_child(exit_txid, child_tx, origin).await? {
@@ -1298,5 +1362,72 @@ impl Exit {
 			groups.push(UnconfirmedExitParents { vtxo, parents });
 		}
 		Ok(groups)
+	}
+}
+
+/// Only this exact, still-abortable safety intent can yield its holder to an
+/// independently validated complete ordinary transfer. Binding refreshes and
+/// all other operations retain their signed material and their own holders.
+pub(crate) fn ordinary_proof_retires_protective_exit(
+	entry: &crate::persist::models::StoredExit, movement: &crate::movement::Movement,
+	holder: &crate::vtxo::VtxoLockHolder,
+) -> bool {
+	entry.movement_id == Some(movement.id) && *holder == movement.id.into()
+		&& movement.status == MovementStatus::Pending && entry.state.is_cancelable()
+		&& movement.subsystem.name == Subsystem::EXIT.as_name()
+		&& movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true))
+		&& !movement.metadata.contains_key("protective_round_state")
+		&& !movement.metadata.contains_key("protective_round_movement")
+		&& movement.input_vtxos == [entry.vtxo_id]
+}
+
+fn ordinary_proof_blocks_cpfp(
+	owners: impl IntoIterator<Item = VtxoId>, proven: &std::collections::BTreeSet<VtxoId>,
+) -> bool {
+	let mut spent_owner = false;
+	for id in owners {
+		if !proven.contains(&id) { return false; }
+		spent_owner = true;
+	}
+	spent_owner
+}
+
+#[cfg(test)]
+mod ordinary_proof_tests {
+	use super::*;
+	use crate::movement::{Movement, MovementSubsystem};
+	use crate::persist::models::StoredExit;
+
+	#[test]
+	fn stale_cpfp_is_blocked_without_starving_a_live_shared_ancestor_owner() {
+		let spent = VtxoId::from_slice(&[1; 36]).unwrap();
+		let healthy = VtxoId::from_slice(&[2; 36]).unwrap();
+		let proven = [spent].into_iter().collect();
+		assert!(ordinary_proof_blocks_cpfp([spent], &proven));
+		assert!(!ordinary_proof_blocks_cpfp([spent, healthy], &proven));
+		assert!(!ordinary_proof_blocks_cpfp([healthy, spent], &proven));
+		assert!(!ordinary_proof_blocks_cpfp([], &proven));
+	}
+
+	#[test]
+	fn ordinary_proof_retires_only_its_exact_abortable_nonbinding_safety_holder() {
+		let id = VtxoId::from_slice(&[7; 36]).unwrap();
+		let mut entry = StoredExit { vtxo_id: id, state: ExitState::new_start(BlockHeight::new(1)),
+			history: vec![], movement_id: Some(MovementId(7)) };
+		let mut movement = Movement::new(MovementId(7), MovementStatus::Pending,
+			&MovementSubsystem { name: Subsystem::EXIT.as_name().into(), kind: "exit".into() }, chrono::Local::now());
+		movement.input_vtxos.push(id);
+		movement.metadata.insert("protective_exit".into(), serde_json::Value::Bool(true));
+		let holder = movement.id.into();
+		assert!(ordinary_proof_retires_protective_exit(&entry, &movement, &holder));
+		assert!(!ordinary_proof_retires_protective_exit(&entry, &movement, &MovementId(8).into()));
+		movement.metadata.insert("protective_round_state".into(), serde_json::json!(1));
+		assert!(!ordinary_proof_retires_protective_exit(&entry, &movement, &holder));
+		movement.metadata.remove("protective_round_state");
+		movement.input_vtxos.push(VtxoId::from_slice(&[8; 36]).unwrap());
+		assert!(!ordinary_proof_retires_protective_exit(&entry, &movement, &holder));
+		movement.input_vtxos.pop();
+		entry.state = ExitState::new_vtxo_already_spent(BlockHeight::new(1));
+		assert!(!ordinary_proof_retires_protective_exit(&entry, &movement, &holder));
 	}
 }

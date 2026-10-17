@@ -1,5 +1,8 @@
 use ark_testing::TestContext;
-use bitcoin::Network;
+use bitcoin::{Network, ScriptBuf};
+use std::sync::Arc;
+
+use bark::persist::{BarkPersister, sqlite::SqliteClient};
 
 #[tokio::test]
 async fn fallback_native_registration_survives_seed_only_second_device_and_reopen() {
@@ -74,4 +77,59 @@ async fn fallback_native_retries_a_lost_registration_reply() {
 	let canonical = db.read(async |tx| tx.get_fallback(wallet.mailbox_identifier().as_pubkey()).await).await.unwrap().unwrap();
 	assert_eq!(record, canonical);
 	assert_eq!(wallet.new_address_with_index().await.unwrap().1, 1);
+}
+
+/// Offline creation retains an exact local destination, without treating the
+/// locally signed record as an authenticated server acknowledgement.
+#[tokio::test]
+async fn fallback_offline_creation_retains_identity_and_registers_on_online_reopen() {
+	let ctx = TestContext::new("bark_sdk/fallback_offline_creation_pending_registration").await;
+	let srv = ctx.captaind("server").no_vtxo_pool().create().await;
+	let mut config = ctx.bark_default_cfg(&srv, Some(ctx.bitcoind()));
+	config.daemon_manual_sync = true;
+	srv.stop().await.unwrap();
+	let directory = ctx.datadir.join("offline-wallet");
+	tokio::fs::create_dir_all(&directory).await.unwrap();
+	let db = Arc::new(SqliteClient::open(directory.join("db.sqlite")).unwrap());
+	let seed = || bark::WalletSeed::new_from_seed(Network::Regtest, &[23; 64]);
+	let onchain = bark::onchain::OnchainWallet::load_or_create(Network::Regtest, [23; 64], db.clone()).await.unwrap();
+	let expected = onchain.fallback_script();
+	let wallet = bark::Wallet::open(Network::Regtest, seed(), config.clone(), bark::OpenWalletArgs {
+		persister: Some(db.clone()), datadir: Some(directory.clone()), fallback_spk: Some(expected.clone()),
+		create_without_server: true, run_daemon: false, skip_recovery: true, ..Default::default()
+	}).await.unwrap();
+	assert!(wallet.fallback_registration().await.unwrap().is_none());
+	assert!(wallet.fallback_destination().await.is_err());
+	assert!(wallet.peek_address(0).await.is_err());
+	assert!(wallet.new_address_with_index().await.is_err());
+	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), Some(0));
+	let pending = db.get_pending_fallback_record().await.unwrap().unwrap();
+	assert_eq!(pending.spk, expected);
+	assert_eq!(pending.account_xpub, wallet.vtxo_xpub());
+	drop(wallet);
+	let offline = bark::Wallet::open(Network::Regtest, seed(), config.clone(), bark::OpenWalletArgs {
+		persister: Some(db.clone()), datadir: Some(directory.clone()), run_daemon: false, ..Default::default()
+	}).await.unwrap();
+	assert!(offline.fallback_registration().await.unwrap().is_none());
+	assert_eq!(db.get_pending_fallback_record().await.unwrap(), Some(pending.clone()));
+	drop(offline);
+	let changed = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
+	assert!(bark::Wallet::open(Network::Regtest, seed(), config.clone(), bark::OpenWalletArgs {
+		persister: Some(db.clone()), datadir: Some(directory.clone()), fallback_spk: Some(changed),
+		run_daemon: false, ..Default::default()
+	}).await.is_err());
+	assert_eq!(db.get_pending_fallback_record().await.unwrap(), Some(pending));
+	srv.start().await.unwrap();
+	config.server_address = srv.ark_url();
+	let online = bark::Wallet::open(Network::Regtest, seed(), config, bark::OpenWalletArgs {
+		persister: Some(db.clone()), datadir: Some(directory), run_daemon: false, ..Default::default()
+	}).await.unwrap();
+	let registered = online.fallback_destination().await.unwrap();
+	assert_eq!(registered.spk, expected);
+	assert_eq!(registered.account_xpub, online.vtxo_xpub());
+	assert!(db.get_pending_fallback_record().await.unwrap().is_none());
+	let canonical = server::database::Db::connect(&srv.config().postgres).await.unwrap()
+		.read(async |tx| tx.get_fallback(online.mailbox_identifier().as_pubkey()).await).await.unwrap().unwrap();
+	assert_eq!(registered, canonical);
+	assert_eq!(online.new_address_with_index().await.unwrap().1, 1);
 }

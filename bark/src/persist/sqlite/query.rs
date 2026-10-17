@@ -687,6 +687,22 @@ pub fn release_vtxo_lock(
 	Ok(())
 }
 
+/// Holder-scoped retirement, with no intermediate Spendable state.
+pub fn retire_vtxo_lock(
+	conn: &Connection, vtxo_id: VtxoId, holder: Option<&VtxoLockHolder>,
+) -> anyhow::Result<bool> {
+	let changed = conn.execute("INSERT INTO bark_vtxo_state (vtxo_id,state_kind,state) \
+		SELECT :id,:kind,:next FROM most_recent_vtxo_state \
+		WHERE vtxo_id=:id AND state=:expected", named_params! {
+		":id": vtxo_id.to_string(),
+		":kind": VtxoStateKind::Spent.as_str(),
+		":next": serde_json::to_vec(&VtxoState::Spent)?,
+		":expected": serde_json::to_vec(&VtxoState::Locked { holder: holder.cloned() })?,
+	})?;
+	ensure!(changed <= 1, "corrupted database: multiple locked-coin retirements");
+	Ok(changed == 1 || get_wallet_vtxo_by_id(conn, vtxo_id)?.is_some_and(|coin| coin.state == VtxoState::Spent))
+}
+
 /// Set the `registered` flag on the given vtxos, recording that their
 /// recovery state (mailbox ID post + signed transaction chain) has been
 /// asserted with the server. The flag only moves from unset to set.
@@ -819,16 +835,30 @@ pub fn get_last_vtxo_key_index(conn: &Connection) -> anyhow::Result<Option<u32>>
 }
 
 pub fn get_fallback_record(conn: &Connection) -> anyhow::Result<Option<FallbackRecord>> {
-	let bytes: Option<Vec<u8>> = conn.query_row("SELECT record FROM bark_fallback_record WHERE id=1", [],
+	let bytes: Option<Vec<u8>> = conn.query_row("SELECT record FROM bark_fallback_record WHERE id=1 AND registered=1", [],
 		|row| row.get(0)).optional()?;
 	bytes.map(|bytes| FallbackRecord::deserialize(&bytes).map_err(Into::into)).transpose()
 }
 
+pub fn get_pending_fallback_record(conn: &Connection) -> anyhow::Result<Option<FallbackRecord>> {
+	let bytes: Option<Vec<u8>> = conn.query_row("SELECT record FROM bark_fallback_record WHERE id=1 AND registered=0", [],
+		|row| row.get(0)).optional()?;
+	bytes.map(|bytes| FallbackRecord::deserialize(&bytes).map_err(Into::into)).transpose()
+}
+
+pub fn store_pending_fallback_record(conn: &Connection, record: &FallbackRecord) -> anyhow::Result<()> {
+	store_fallback_binding(conn, record, false)
+}
+
 pub fn store_fallback_record(conn: &Connection, record: &FallbackRecord) -> anyhow::Result<()> {
-	let changed = conn.execute("INSERT INTO bark_fallback_record (id, record, spk, account_xpub) VALUES (1,?1,?2,?3)
-		ON CONFLICT (id) DO UPDATE SET record=excluded.record
+	store_fallback_binding(conn, record, true)
+}
+
+fn store_fallback_binding(conn: &Connection, record: &FallbackRecord, registered: bool) -> anyhow::Result<()> {
+	let changed = conn.execute("INSERT INTO bark_fallback_record (id, record, spk, account_xpub, registered) VALUES (1,?1,?2,?3,?4)
+		ON CONFLICT (id) DO UPDATE SET record=excluded.record, registered=MAX(bark_fallback_record.registered,excluded.registered)
 		WHERE bark_fallback_record.spk=excluded.spk AND bark_fallback_record.account_xpub=excluded.account_xpub",
-		params![record.serialize(), record.spk.as_bytes(), record.account_xpub.encode().as_slice()])?;
+		params![record.serialize(), record.spk.as_bytes(), record.account_xpub.encode().as_slice(), registered])?;
 	ensure!(changed == 1, "immutable fallback record mismatch");
 	Ok(())
 }
@@ -1317,6 +1347,27 @@ mod test {
 		release_vtxo_lock(&tx, vtxo.id(), None).unwrap();
 		let wv = get_wallet_vtxo_by_id(&tx, vtxo.id()).unwrap().unwrap();
 		assert_eq!(wv.state, theirs_state, "None holder must not release a Some lock");
+	}
+
+	#[test]
+	fn retirement_never_releases_a_foreign_holder_or_passes_through_spendable() {
+		let (_, mut conn) = in_memory_db();
+		MigrationContext{}.do_all_migrations(&mut conn).unwrap();
+		let tx = conn.transaction().unwrap();
+		let coin = &VTXO_VECTORS.board_vtxo;
+		store_vtxo_with_initial_state(&tx, coin, &VtxoState::Locked { holder: None }).unwrap();
+		assert!(retire_vtxo_lock(&tx, coin.id(), None).unwrap());
+		assert_eq!(get_wallet_vtxo_by_id(&tx, coin.id()).unwrap().unwrap().state, VtxoState::Spent);
+		let available: i64 = tx.query_row("SELECT COUNT(*) FROM bark_vtxo_state \
+			WHERE vtxo_id=?1 AND state_kind='spendable'", [coin.id().to_string()], |row| row.get(0)).unwrap();
+		assert_eq!(available, 0, "retirement cannot expose an available state");
+		let holder = VtxoLockHolder::Movement { id: MovementId::new(7) };
+		let foreign = VtxoState::Locked { holder: Some(holder.clone()) };
+		update_vtxo_state_checked(&tx, coin.id(), foreign.clone(), &[VtxoStateKind::Spent]).unwrap();
+		assert!(!retire_vtxo_lock(&tx, coin.id(), None).unwrap());
+		assert_eq!(get_wallet_vtxo_by_id(&tx, coin.id()).unwrap().unwrap().state, foreign);
+		assert!(retire_vtxo_lock(&tx, coin.id(), Some(&holder)).unwrap());
+		assert!(retire_vtxo_lock(&tx, coin.id(), None).unwrap(), "already Spent is idempotent");
 	}
 
 	#[test]

@@ -121,12 +121,23 @@ pub struct FallbackSnapshot {
 	/// Persisted before changing their local state, so interruption is safe.
 	#[serde(default)]
 	pub adopted_payout_vtxos: BTreeSet<VtxoId>,
-	/// Validated recovery bodies kept unavailable while post-status history
+	/// Recovery bodies kept unavailable while validation, post-status history
 	/// or their independently confirmed payout is missing. The marker survives
 	/// a later protective exit or payout adoption to avoid inventing a prior
 	/// Ark debit after fresh recovery. Only orphan None holders may be released.
 	#[serde(default)]
 	pub quarantined_vtxos: BTreeSet<VtxoId>,
+	/// Fresh/historical Spent bodies without a prior owned local state remain
+	/// recovery material, not a new owned balance or historical debit.
+	#[serde(default)]
+	pub unproven_spent_vtxos: BTreeSet<VtxoId>,
+	/// Bounded proof retries rotate past unsupported historical sources.
+	#[serde(default)]
+	pub ordinary_spend_cursor: Option<VtxoId>,
+	/// Immutable owner-authorized ordinary transfer facts, stored only after
+	/// validating the complete signed branch proof. No chain finality is inferred.
+	#[serde(default)]
+	pub verified_ordinary_spends: BTreeSet<VtxoId>,
 }
 
 pub(crate) const FALLBACK_SUBSYSTEM: &str = "abandon.fallback_payout";

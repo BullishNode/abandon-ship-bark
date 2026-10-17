@@ -19,7 +19,8 @@ impl Wallet {
 	/// as either spendable or already paid.
 	pub async fn awaiting_settlement_vtxos(&self) -> anyhow::Result<HashSet<VtxoId>> {
 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
-		Ok(snapshot.awaiting_settlement.into_iter().collect())
+		let pending = self.fallback_pending_principal(&snapshot).await?;
+		Ok(snapshot.awaiting_settlement.into_iter().chain(pending.into_keys()).collect())
 	}
 
 	pub async fn fallback_history_awaiting_sync(&self) -> anyhow::Result<bool> {
@@ -28,10 +29,14 @@ impl Wallet {
 
 	pub(crate) async fn reconcile_expired_inputs(&self, ids: &[VtxoId]) -> anyhow::Result<HashSet<VtxoId>> {
 		if ids.is_empty() { return Ok(HashSet::new()); }
+		let snapshot = self.inner.db.get_fallback_snapshot().await?;
+		let principal = self.fallback_pending_principal(&snapshot).await?;
+		let mut signed_parents = HashSet::new();
 		let mut keyed = Vec::new();
 		for id in ids {
 			let Some(stored) = self.inner.db.get_wallet_vtxo(*id).await? else { continue; };
 			if stored.state.kind() != VtxoStateKind::Spendable { continue; }
+			if principal.get(id).is_some_and(|amount| *amount < stored.amount()) { signed_parents.insert(*id); }
 			let key = self.get_vtxo_key(&stored.vtxo).await?;
 			keyed.push((*id, key));
 		}
@@ -54,7 +59,7 @@ impl Wallet {
 
 		for id in ids {
 			match statuses.get(id) {
-				Some(VtxoSpendState::Spendable) if !decided.contains(id) => {
+				Some(VtxoSpendState::Spendable) if !decided.contains(id) && !signed_parents.contains(id) => {
 					snapshot.awaiting_settlement.remove(id);
 					eligible.insert(*id);
 				},
@@ -74,7 +79,7 @@ impl Wallet {
 		&self, inputs: Vec<V>,
 	) -> anyhow::Result<Vec<V>> {
 		let tip = self.inner.chain.tip().await?;
-		let pending = self.inner.db.get_fallback_snapshot().await?.awaiting_settlement;
+		let pending = self.awaiting_settlement_vtxos().await?;
 		let mut expired = HashSet::new();
 		for input in &inputs {
 			if let Some(stored) = self.inner.db.get_wallet_vtxo(input.vtxo_id()).await? {
@@ -87,12 +92,15 @@ impl Wallet {
 		}
 		let ids = expired.iter().copied().collect::<Vec<_>>();
 		let eligible = self.reconcile_expired_inputs(&ids).await?;
-		Ok(inputs.into_iter().filter(|input| !expired.contains(&input.vtxo_id()) || eligible.contains(&input.vtxo_id())).collect())
+		let snapshot = self.inner.db.get_fallback_snapshot().await?;
+		let pending = self.fallback_pending_principal(&snapshot).await?;
+		Ok(inputs.into_iter().filter(|input| !pending.contains_key(&input.vtxo_id())
+			&& (!expired.contains(&input.vtxo_id()) || eligible.contains(&input.vtxo_id()))).collect())
 	}
 
 	pub(crate) async fn reconcile_all_expired_vtxos(&self) -> anyhow::Result<()> {
 		let tip = self.inner.chain.tip().await?;
-		let pending = self.inner.db.get_fallback_snapshot().await?.awaiting_settlement;
+		let pending = self.awaiting_settlement_vtxos().await?;
 		let ids = self.inner.db.get_vtxos_by_state(&[VtxoStateKind::Spendable]).await?
 			.into_iter().filter(|vtxo| vtxo.expiry_height() <= tip || pending.contains(&vtxo.id())).map(|vtxo| vtxo.id()).collect::<Vec<_>>();
 		self.reconcile_expired_inputs(&ids).await?;

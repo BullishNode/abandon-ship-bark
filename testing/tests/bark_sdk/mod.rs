@@ -27,3 +27,7 @@ mod payment_request;
 mod recovery;
 mod round;
 mod vtxo_lock;
+
+mod qualification_protection_isolation;
+
+mod qualification_ordinary_exit_atomic;

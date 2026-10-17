@@ -163,6 +163,17 @@ impl ExitVtxo {
 		}
 
 		let mut vtxo = self.get_vtxo(&*wallet.inner.db).await?;
+		// The caller holds Exit.inner throughout this progression. New complete
+		// ordinary facts need that same guard before publication. A resumed
+		// intent must never reacquire/broadcast over an already durable fact.
+		let ordinary_spent = wallet.inner.db.get_fallback_snapshot().await
+			.map_err(|error| ExitError::InternalError { error: error.to_string() })?
+			.verified_ordinary_spends.contains(&self.id());
+		if ordinary_spent && vtxo.state.kind() != crate::vtxo::VtxoStateKind::Spent {
+			return Err(ExitError::InvalidWalletState {
+				error: format!("verified ordinary spend of {} awaits exact holder retirement; exit is paused", self.id()),
+			});
+		}
 		if !self.state.warrants_exited_vtxo() && vtxo.state.kind() != crate::vtxo::VtxoStateKind::Spent {
 			if let Some(movement_id) = self.movement_id {
 				let movement = wallet.inner.db.get_movement_by_id(movement_id).await

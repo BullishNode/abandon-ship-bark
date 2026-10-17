@@ -305,6 +305,14 @@ impl BarkPersister for SqliteClient {
 		query::store_fallback_record(&self.connect()?, record)
 	}
 
+	async fn get_pending_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>> {
+		query::get_pending_fallback_record(&self.connect()?)
+	}
+
+	async fn store_pending_fallback_record(&self, record: &ark::fallback::FallbackRecord) -> anyhow::Result<()> {
+		query::store_pending_fallback_record(&self.connect()?, record)
+	}
+
 	async fn get_last_vtxo_key_index(&self) -> anyhow::Result<Option<u32>> {
 		let conn = self.connect()?;
 		query::get_last_vtxo_key_index(&conn)
@@ -466,6 +474,13 @@ impl BarkPersister for SqliteClient {
 	) -> anyhow::Result<()> {
 		let conn = self.connect()?;
 		query::release_vtxo_lock(&conn, vtxo_id, holder)
+	}
+
+	async fn retire_vtxo_lock(
+		&self, vtxo_id: VtxoId, holder: Option<&VtxoLockHolder>,
+	) -> anyhow::Result<bool> {
+		let conn = self.connect()?;
+		query::retire_vtxo_lock(&conn, vtxo_id, holder)
 	}
 
 	async fn update_vtxo_states_checked(

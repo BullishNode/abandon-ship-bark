@@ -200,11 +200,91 @@ async fn fallback_balance_keeps_unknown_value_owned_without_advertising_it_spend
 	let now = chrono::Local::now();
 	snapshot.entitlements.insert(1, bark::FallbackEntitlement {
 		entitlement_id: 1, vtxo_id: coin.id(), gross: coin.amount(), chain_view_valid: false,
-		attempts: vec![], terminal_claim: None, first_seen: now, last_updated: now,
+		attempts: vec![bark::FallbackAttempt {
+			allocation_id: 1, active: true, stage: bark::FallbackPayoutStage::Committed,
+			disposition: bark::FallbackDisposition::CustomerPayout, output_index: Some(0),
+			script: Some(wallet.fallback_destination().await.unwrap().spk),
+			gross: coin.amount(), fee: Amount::from_sat(1_000), payout: coin.amount() - Amount::from_sat(1_000),
+			forfeited: Amount::ZERO, output_amount: Some(coin.amount() - Amount::from_sat(1_000)),
+			parent: None, confirmation: None,
+		}], terminal_claim: None, first_seen: now, last_updated: now,
 	});
 	db.store_fallback_snapshot(&snapshot).await.unwrap();
 	let decided = wallet.balance().await.unwrap();
 	assert_eq!(decided.spendable, Amount::ZERO);
-	assert_eq!(decided.awaiting_settlement, Amount::ZERO);
-	assert_eq!(decided.total(), Amount::ZERO, "permanent obligations are receipts, not a second Ark balance");
+	assert_eq!(decided.needs_refresh, Amount::ZERO);
+	assert_eq!(decided.awaiting_settlement, coin.amount());
+	assert_eq!(decided.total(), coin.amount(), "a decision without actual discharge retains one owned pending claim");
+	assert_eq!(decided.pending(), coin.amount());
+	// ML199 (client projection only): receipt creation cannot make an unpaid
+	// locally held principal disappear. This is not the global monitor oracle.
+	// ML181 remains open: an unsupported Spent report with NO entitlement is
+	// a separate adoption path, not proved by this cached balance fixture.
+	snapshot.adopted_payout_vtxos.insert(coin.id());
+	db.store_fallback_snapshot(&snapshot).await.unwrap();
+	db.update_vtxo_state_checked(coin.id(), bark::vtxo::VtxoState::Spent,
+		&[bark::vtxo::VtxoStateKind::Spendable]).await.unwrap();
+	let interrupted_rearm = wallet.balance().await.unwrap();
+	assert_eq!(interrupted_rearm.spendable, Amount::ZERO);
+	assert_eq!(interrupted_rearm.awaiting_settlement, coin.amount());
+	assert_eq!(interrupted_rearm.total(), coin.amount(), "own prior adoption survives an interrupted reorg rearm");
+	// An ordinary historic spent body without our adoption marker is not a
+	// second owned claim merely because the client retained its signed bytes.
+	snapshot.adopted_payout_vtxos.clear();
+	db.store_fallback_snapshot(&snapshot).await.unwrap();
+	assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO);
+	// An Operator association must never turn a formerly adopted input into
+	// a new customer claim, even while signed protection bytes are retained.
+	snapshot.adopted_payout_vtxos.insert(coin.id());
+	let attempt = &mut snapshot.entitlements.get_mut(&1).unwrap().attempts[0];
+	attempt.disposition = bark::FallbackDisposition::Operator;
+	attempt.fee = Amount::ZERO;
+	attempt.payout = Amount::ZERO;
+	attempt.output_index = None;
+	attempt.output_amount = None;
+	attempt.script = None;
+	db.store_fallback_snapshot(&snapshot).await.unwrap();
+	assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO);
+}
+
+/// Actual accepted refresh replaces one principal; its operator-owned old
+/// backing must not add the old source to the customer's replacement balance.
+#[tokio::test]
+async fn fallback_balance_completed_refresh_and_operator_backing_conserve_one_principal() {
+	let ctx = TestContext::new("bark_sdk/fallback_balance_refresh_operator").await;
+	let srv = ctx.captaind("server").funded(btc(10)).no_vtxo_pool()
+		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(48)).watchmand().create().await;
+	let wallet = boarded_wallet(&ctx, &srv).await;
+	let original = wallet.spendable_vtxos().await.unwrap();
+	assert_eq!(original.len(), 1);
+	let (result, _) = tokio::join!(wallet.refresh_vtxos(original.iter()), async {
+		tokio::time::sleep(Duration::from_secs(2)).await;
+		srv.trigger_round().await;
+	});
+	result.unwrap().unwrap();
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	let complete = sync_until(&ctx, &wallet, |balance| balance.pending_in_round == Amount::ZERO).await;
+	assert_eq!(complete.total(), AMOUNT);
+	let local = SqliteClient::open(ctx.datadir.join("bark/db.sqlite")).unwrap();
+	assert_eq!(local.get_wallet_vtxo(original[0].id()).await.unwrap().unwrap().state, bark::vtxo::VtxoState::Spent);
+	assert_eq!(wallet.spendable_vtxos().await.unwrap().iter().map(|coin| coin.amount()).sum::<Amount>(), AMOUNT);
+
+	let height = ctx.bitcoind().get_block_count().await as u32;
+	let mature = ctx.generate_blocks(original[0].expiry_height().to_u32() + 1 - height).await;
+	srv.wait_for_sync_height(mature).await;
+	srv.watchmand().wait_for_sync_height(mature).await;
+	let database = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let operator = database.read(async |tx| Ok(tx.query_opt("SELECT e.id FROM expiry_entitlement e \
+				JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE v.anchor_point=$1 \
+				AND e.irreversible_facts->>'operator'='true' LIMIT 1", &[&original[0].chain_anchor().to_string()]).await?)).await.unwrap();
+			if operator.is_some() { break; }
+			tokio::time::sleep(poll_interval()).await;
+		}
+	}).await.expect("actual old backing did not receive its operator disposition");
+	wallet.sync().await;
+	let after_operator = wallet.balance().await.unwrap();
+	assert_eq!(after_operator.total(), AMOUNT, "old source plus its replacement cannot become two owned principals");
+	assert_eq!(local.get_wallet_vtxo(original[0].id()).await.unwrap().unwrap().state, bark::vtxo::VtxoState::Spent);
 }

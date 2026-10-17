@@ -7,7 +7,9 @@ mod reconcile;
 mod protection;
 mod act_by;
 mod adoption;
-pub use act_by::{ExitProtectionOutcome, ExitProtectionSchedule};
+mod spend_proof;
+pub use act_by::{ExitProtectionOutcome, ExitProtectionSchedule, ExitProtectionReport,
+	ExitProtectionIssue, ExitProtectionIncomplete};
 pub use refusal::FallbackRefusal;
 
 use std::time::Duration;
@@ -17,6 +19,9 @@ use bitcoin::{Network, Script, ScriptBuf};
 
 use ark::ProtocolEncoding;
 use server_rpc::{ServerConnection, protos};
+use server_rpc::client::ConnectError;
+#[cfg(feature = "native")]
+use server_rpc::client::CreateEndpointError;
 
 use crate::{Wallet, WalletSeed};
 use crate::persist::BarkPersister;
@@ -42,6 +47,29 @@ fn validate_destination(network: Network, script: &Script) -> anyhow::Result<()>
 	Ok(())
 }
 
+/// Only a failed connection/temporary handshake can defer registration.
+/// Configuration, protocol, server identity and local storage failures must
+/// still stop open; a pending local signature cannot override those checks.
+fn registration_server_unavailable(error: &anyhow::Error) -> bool {
+	match error.downcast_ref::<ConnectError>() {
+		Some(ConnectError::Handshake(status) | ConnectError::GetArkInfo(status)
+			| ConnectError::GetOffboardFeeRate(status)) => matches!(status.code(),
+				tonic::Code::Unavailable | tonic::Code::DeadlineExceeded),
+		#[cfg(feature = "native")]
+		Some(ConnectError::CreateEndpoint(CreateEndpointError::Transport(_))) => {
+			// A transport variant can also wrap invalid TLS configuration.
+			// Require a typed network I/O cause, not arbitrary error text.
+			error.chain().filter_map(|cause| cause.downcast_ref::<std::io::Error>())
+				.any(|io| matches!(io.kind(), std::io::ErrorKind::ConnectionRefused
+					| std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted
+					| std::io::ErrorKind::NotConnected | std::io::ErrorKind::TimedOut
+					| std::io::ErrorKind::NetworkDown | std::io::ErrorKind::NetworkUnreachable
+					| std::io::ErrorKind::HostUnreachable | std::io::ErrorKind::BrokenPipe))
+		},
+		_ => false,
+	}
+}
+
 async fn persist_native_identity(db: &dyn BarkPersister, seed: &WalletSeed, record: &FallbackRecord) -> anyhow::Result<()> {
 	// Child zero is the existing stable wallet identity and the account
 	// possession signer. Reserve it once, not as a replenishable signing pool.
@@ -57,6 +85,7 @@ pub(crate) async fn register(
 	let spk = expected.to_owned();
 	validate_destination(network, &spk)?;
 	if let Some(stored) = db.get_fallback_record().await? { authenticate_binding(&stored, seed, network, expected)?; }
+	if let Some(pending) = db.get_pending_fallback_record().await? { authenticate_binding(&pending, seed, network, expected)?; }
 	let key = seed.to_mailbox_keypair();
 	let proposed = FallbackRecord::new(network, spk, &seed.vtxo, &key)?;
 	// Deterministic binding makes a lost reply safe to retry, including from a
@@ -84,7 +113,15 @@ impl Wallet {
 		self.fallback_registration().await?.context("no fallback account registered")
 	}
 
-	pub(crate) async fn open_fallback(&self, requested: Option<ScriptBuf>) -> anyhow::Result<()> {
+	pub(crate) async fn retry_pending_fallback_registration(&self) -> anyhow::Result<()> {
+		if self.inner.db.get_pending_fallback_record().await?.is_some() {
+			self.open_fallback(None, true).await?;
+		}
+		Ok(())
+	}
+
+	pub(crate) async fn open_fallback(&self, requested: Option<ScriptBuf>, allow_offline: bool) -> anyhow::Result<()> {
+		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30)).await?;
 		let stored = self.inner.db.get_fallback_record().await?;
 		let network = self.network().await?;
 		if let Some(record) = stored {
@@ -96,19 +133,38 @@ impl Wallet {
 			// opens. An app that supplies its destination retries registration
 			// when connected, including after a server restore.
 			if requested.is_some() {
-				if let Ok((mut connection, _)) = self.require_server().await {
-					register(network, &self.inner.seed, &*self.inner.db, &mut connection, expected).await?;
+				match self.require_server().await {
+					Ok((mut connection, _)) => register(network, &self.inner.seed, &*self.inner.db, &mut connection, expected).await?,
+					Err(error) if registration_server_unavailable(&error) => {},
+					Err(error) => return Err(error),
 				}
 			}
 			return Ok(());
 		}
-		// Choosing and restoring the destination belongs to the app. Opening
-		// without one remains useful for read-only recovery/status, while the
-		// existing registration fence prevents issuing or spending coin keys.
-		let Some(expected) = requested else { return Ok(()); };
+		// Keep the app's exact choice locally even when --force creates the
+		// wallet offline. A local signature is not a server acknowledgement:
+		// registration/destination getters and coin issuance remain fenced.
+		let pending = self.inner.db.get_pending_fallback_record().await?;
+		let reopening_pending = pending.is_some();
+		let expected = requested.or_else(|| pending.as_ref().map(|record| record.spk.clone()));
+		let Some(expected) = expected else { return Ok(()); };
 		validate_destination(network, &expected)?;
-		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30)).await?;
-		let (mut connection, _) = self.require_server().await?;
+		let proposed = if let Some(record) = pending {
+			authenticate_binding(&record, &self.inner.seed, network, &expected)?;
+			record
+		} else {
+			FallbackRecord::new(network, expected.clone(), &self.inner.seed.vtxo,
+				&self.inner.seed.to_mailbox_keypair())?
+		};
+		if allow_offline || reopening_pending {
+			self.inner.db.store_vtxo_key(0, self.inner.seed.derive_vtxo_keypair(0).public_key()).await?;
+			self.inner.db.store_pending_fallback_record(&proposed).await?;
+		}
+		let (mut connection, _) = match self.require_server().await {
+			Ok(server) => server,
+			Err(error) if (allow_offline || reopening_pending) && registration_server_unavailable(&error) => return Ok(()),
+			Err(error) => return Err(error),
+		};
 		register(network, &self.inner.seed, &*self.inner.db, &mut connection, &expected).await
 	}
 }
@@ -116,6 +172,46 @@ impl Wallet {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn offline_registration_defers_only_typed_temporary_connection_errors() {
+		for status in [tonic::Status::unavailable("temporary"), tonic::Status::deadline_exceeded("temporary")] {
+			let error = anyhow::Error::from(ConnectError::Handshake(status)).context("wallet connection failed");
+			assert!(registration_server_unavailable(&error));
+		}
+		for error in [
+			anyhow::Error::from(ConnectError::Handshake(tonic::Status::invalid_argument("invalid client"))),
+			anyhow::Error::from(ConnectError::ProtocolVersionMismatchClientTooOld { client_max: 1, server_min: 2 }),
+			anyhow::Error::from(ConnectError::NetworkMismatch { expected: Network::Regtest, got: Network::Bitcoin }),
+			anyhow::Error::from(server_rpc::client::CreateEndpointError::NoTransportBackend),
+			anyhow::Error::from(ConnectError::CreateEndpoint(server_rpc::client::CreateEndpointError::InvalidScheme("file".into()))),
+			anyhow::anyhow!("server public key changed"),
+			anyhow::anyhow!("unsafe server exit margin"),
+			anyhow::anyhow!("wallet properties read failed"),
+			anyhow::Error::from(tonic::Status::unavailable("not a connection error")).context("local persister failed"),
+		] {
+			assert!(!registration_server_unavailable(&error), "must preserve {error:#}");
+		}
+	}
+
+	#[cfg(feature = "native")]
+	#[test]
+	fn offline_registration_preserves_endpoint_configuration_errors() {
+		let transport = tonic::transport::Endpoint::from_shared("http://[".to_owned()).err().unwrap();
+		let error = anyhow::Error::from(ConnectError::CreateEndpoint(CreateEndpointError::Transport(transport)));
+		assert!(!registration_server_unavailable(&error));
+	}
+
+	#[cfg(feature = "native")]
+	#[tokio::test]
+	async fn offline_registration_recognizes_an_actual_refused_loopback_connection() {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let address = format!("http://{}", listener.local_addr().unwrap());
+		drop(listener);
+		let error = ServerConnection::builder().address(&address).network(Network::Regtest)
+			.connect().await.err().expect("closed loopback endpoint must refuse the connection");
+		assert!(registration_server_unavailable(&anyhow::Error::from(error).context("wallet connection failed")));
+	}
 
 	#[test]
 	fn fallback_accepts_application_standard_scripts_without_derivation_rules() {

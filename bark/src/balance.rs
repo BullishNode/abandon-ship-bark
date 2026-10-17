@@ -6,17 +6,20 @@
 //! operation in progress which VTXOs it holds, so a VTXO is counted once, in
 //! the field of the operation that holds it.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::time::Duration;
 
+use anyhow::Context;
 use bitcoin::Amount;
 use bitcoin_ext::BlockHeight;
 use log::{debug, warn};
 
-use ark::VtxoId;
+use ark::{ProtocolEncoding, VtxoId};
 
 use crate::{Wallet, WalletVtxo};
 use crate::actions::{WalletAction, WalletActionCheckpoint};
 use crate::exit::ExitStateKind;
+use crate::fallback::payouts::FallbackSnapshot;
 use crate::vtxo::{VtxoState, VtxoStateKind};
 
 /// The different balances of a Bark wallet.
@@ -129,6 +132,89 @@ pub struct BalanceSummary {
 }
 
 impl Wallet {
+	/// Only pending positive sources need this exceptional overlap check.
+	/// Previously validated retained bodies supply their actual signed paths;
+	/// no server call or chain lookup can block ordinary balance reporting.
+	async fn retained_pending_principal(
+		&self, owned: &HashMap<VtxoId, WalletVtxo>, pending: &BTreeSet<VtxoId>,
+	) -> anyhow::Result<HashMap<VtxoId, Amount>> {
+		let result = owned.iter().filter(|(id, _)| pending.contains(*id))
+			.map(|(id, coin)| (*id, coin.amount())).collect::<HashMap<_, _>>();
+		if result.is_empty() { return Ok(result); }
+		if owned.len() <= 1 { return Ok(result); }
+		ensure!(owned.len() <= 256, "pending balance overlap exceeds the 256-body verification budget");
+		let ids = owned.keys().copied().collect::<Vec<_>>();
+		let mut bytes = 0usize;
+		let mut steps = 0usize;
+		let mut paths = Vec::new();
+		for id in ids {
+			let body = self.get_full_vtxo(id).await?;
+			bytes = bytes.checked_add(body.serialize().len()).context("pending balance path size overflow")?;
+			steps = steps.checked_add(usize::from(body.exit_depth())).context("pending balance path work overflow")?;
+			ensure!(bytes <= 1_048_576 && steps <= 8_192,
+				"pending balance overlap exceeds its signed-path verification budget");
+			paths.push((id, body.ancestor_ids()));
+		}
+		let amounts = owned.iter().map(|(id, coin)| (*id, coin.amount())).collect();
+		let cut = owned_pending_cut(&amounts, pending, &paths)?;
+		let inferred = cut.keys().filter(|id| !pending.contains(*id)).copied().collect::<Vec<_>>();
+		if !inferred.is_empty() {
+			// Keep this fence after the original pending ancestor is resolved.
+			// Proof derivation above is local and outside the short history lock;
+			// never replace a concurrently refreshed account snapshot.
+			let _guard = self.inner.lock_manager.lock(
+				&format!("{}.fallback-history", self.fingerprint()), Duration::from_secs(30),
+			).await?;
+			let mut latest = self.inner.db.get_fallback_snapshot().await?;
+			for id in inferred {
+				if latest.verified_ordinary_spends.contains(&id) { continue; }
+				if self.inner.db.get_wallet_vtxo(id).await?.is_some_and(|coin| coin.state != VtxoState::Spent) {
+					latest.awaiting_settlement.insert(id);
+				}
+			}
+			self.inner.db.store_fallback_snapshot(&latest).await?;
+		}
+		Ok(cut)
+	}
+
+	async fn retained_owned_principal(&self, fallback: &FallbackSnapshot) -> anyhow::Result<HashMap<VtxoId, WalletVtxo>> {
+		let retained = self.inner.db.get_vtxos_by_state(
+			&[VtxoStateKind::Spendable, VtxoStateKind::Locked, VtxoStateKind::Exited],
+		).await?.into_iter().map(|v| (v.id(), v)).collect::<HashMap<_, _>>();
+		// A signed body retained for historic recovery is not another owned
+		// claim. Keep only current positive local ownership and actual customer
+		// receipt principal; an Operator label cannot synthesize either.
+		let mut owned = retained.iter().filter(|(id, _)| !fallback.unproven_spent_vtxos.contains(id)
+			&& !fallback.verified_ordinary_spends.contains(id)).map(|(id, coin)| (*id, coin.clone()))
+			.collect::<HashMap<_, _>>();
+		for (id, receipt) in &fallback.entitlements {
+			let customer = receipt.active_attempt()?.is_some_and(|attempt| matches!(attempt.disposition,
+				crate::FallbackDisposition::CustomerPayout | crate::FallbackDisposition::BelowDust));
+			if !customer || fallback.is_discharged(*id) || fallback.verified_ordinary_spends.contains(&receipt.vtxo_id) {
+				owned.remove(&receipt.vtxo_id);
+				continue;
+			}
+			if let Some(coin) = retained.get(&receipt.vtxo_id) {
+				owned.insert(coin.id(), coin.clone());
+			} else if !owned.contains_key(&receipt.vtxo_id) && fallback.adopted_payout_vtxos.contains(&receipt.vtxo_id) {
+				if let Some(coin) = self.inner.db.get_wallet_vtxo(receipt.vtxo_id).await? {
+					if coin.state == VtxoState::Spent { owned.insert(coin.id(), coin); }
+				}
+			}
+		}
+		Ok(owned)
+	}
+
+	/// Availability uses the same bounded ancestry cut as the balance. A known
+	/// signed descendant also fences a stale intermediate on another device.
+	pub(crate) async fn fallback_pending_principal(
+		&self, fallback: &FallbackSnapshot,
+	) -> anyhow::Result<HashMap<VtxoId, Amount>> {
+		if fallback.awaiting_settlement.is_empty() { return Ok(HashMap::new()); }
+		let owned = self.retained_owned_principal(fallback).await?;
+		self.retained_pending_principal(&owned, &fallback.awaiting_settlement).await
+	}
+
 	/// Return the [Balance] of the wallet.
 	///
 	/// When not running the daemon, make sure you sync before calling this method.
@@ -153,15 +239,22 @@ impl Wallet {
 		let fallback = self.inner.db.get_fallback_snapshot().await?;
 		let decided = fallback.entitlements.values().map(|receipt| receipt.vtxo_id).collect::<HashSet<_>>();
 
-		// Every VTXO the balance can count, read once. Permanent decided coins
-		// are represented by their payout/claim receipts, not available Ark value.
-		let vtxos = self.inner.db.get_vtxos_by_state(
-			&[VtxoStateKind::Spendable, VtxoStateKind::Locked, VtxoStateKind::Exited],
-		).await?.into_iter().filter(|v| !decided.contains(&v.id()))
-			.map(|v| (v.id(), v)).collect::<HashMap<_, _>>();
+		// A permanent decision removes ordinary Ark availability, not the
+		// owned claim while its actual settlement is still unconfirmed.
+		let owned = self.retained_owned_principal(&fallback).await?;
+		let pending_principal = self.retained_pending_principal(&owned, &fallback.awaiting_settlement).await?;
+		let mut awaiting_decided = Amount::ZERO;
+		let mut pending_ids = HashSet::new();
+		for receipt in fallback.entitlements.values() {
+			if !pending_ids.insert(receipt.vtxo_id) { continue; }
+			if let Some(coin) = owned.get(&receipt.vtxo_id) {
+				awaiting_decided += principal(coin, &pending_principal);
+			}
+		}
+		let vtxos = owned.into_iter().filter(|(id, _)| !decided.contains(id)).collect::<HashMap<_, _>>();
 
 		let mut balance = Balance {
-			awaiting_settlement: Amount::ZERO,
+			awaiting_settlement: awaiting_decided,
 			spendable: Amount::ZERO,
 			needs_refresh: Amount::ZERO,
 			pending_in_round: Amount::ZERO,
@@ -176,8 +269,8 @@ impl Wallet {
 		for vtxo in vtxos.values().filter(|v| v.state == VtxoState::Spendable) {
 			// Without a tip only the depth can be judged; a tip of zero
 			// expires nothing.
-			if fallback.awaiting_settlement.contains(&vtxo.id()) {
-				balance.awaiting_settlement += vtxo.amount();
+			if pending_principal.contains_key(&vtxo.id()) {
+				balance.awaiting_settlement += principal(vtxo, &pending_principal);
 			} else if vtxo.needs_refresh(tip.unwrap_or(BlockHeight::ZERO), max_exit_depth) {
 				balance.needs_refresh += vtxo.amount();
 			} else {
@@ -192,7 +285,7 @@ impl Wallet {
 				let Some(vtxo) = vtxos.get(&input.id()) else { continue };
 				let held = matches!(&vtxo.state, VtxoState::Locked { holder: h } if *h == holder);
 				if held && counted.insert(vtxo.id()) {
-					balance.pending_in_round += vtxo.amount();
+					balance.pending_in_round += principal(vtxo, &pending_principal);
 				}
 			}
 		}
@@ -200,19 +293,19 @@ impl Wallet {
 		for action in self.inner.db.get_all_wallet_action_checkpoints().await? {
 			match &action {
 				WalletActionCheckpoint::LightningSend(a) => {
-					balance.pending_lightning_send += held_by(a, &vtxos, &mut counted);
+					balance.pending_lightning_send += held_by(a, &vtxos, &mut counted, &pending_principal);
 				},
 				WalletActionCheckpoint::LightningReceive(a) => {
-					balance.claimable_lightning_receive += held_by(a, &vtxos, &mut counted);
+					balance.claimable_lightning_receive += held_by(a, &vtxos, &mut counted, &pending_principal);
 				},
 				WalletActionCheckpoint::ArkoorSend(a) => {
-					balance.pending_arkoor_send += held_by(a, &vtxos, &mut counted);
+					balance.pending_arkoor_send += held_by(a, &vtxos, &mut counted, &pending_principal);
 				},
 				WalletActionCheckpoint::Board(a) => {
-					balance.pending_board += held_by(a, &vtxos, &mut counted);
+					balance.pending_board += held_by(a, &vtxos, &mut counted, &pending_principal);
 				},
 				WalletActionCheckpoint::Offboard(a) => {
-					balance.pending_offboard += held_by(a, &vtxos, &mut counted);
+					balance.pending_offboard += held_by(a, &vtxos, &mut counted, &pending_principal);
 				},
 			}
 		}
@@ -224,7 +317,7 @@ impl Wallet {
 			let Some(vtxo) = vtxos.get(id) else { continue; };
 			if vtxo.state == (VtxoState::Locked { holder: None }) && !claimed.contains(id)
 				&& counted.insert(*id) {
-				balance.awaiting_settlement += vtxo.amount();
+				balance.awaiting_settlement += principal(vtxo, &pending_principal);
 			}
 		}
 
@@ -238,7 +331,7 @@ impl Wallet {
 				continue;
 			}
 			match vtxos.get(&exit.vtxo_id) {
-				Some(v) if v.state == VtxoState::Exited => balance.pending_exit += v.amount(),
+				Some(v) if v.state == VtxoState::Exited => balance.pending_exit += principal(v, &pending_principal),
 				Some(v) => warn!("Exit of VTXO {} has committed but the VTXO is {:?}",
 					exit.vtxo_id, v.state,
 				),
@@ -252,12 +345,39 @@ impl Wallet {
 	}
 }
 
+/// A transient projection of existing local principal, not a new ledger.
+/// One nearest-owned-ancestor assignment per signed path is linear in the
+/// bounded number of path entries, including shared/transitive branches.
+fn owned_pending_cut(
+	owned: &HashMap<VtxoId, Amount>, pending: &BTreeSet<VtxoId>,
+	paths: &[(VtxoId, Vec<VtxoId>)],
+) -> anyhow::Result<HashMap<VtxoId, Amount>> {
+	let mut result = owned.iter().filter(|(id, _)| pending.contains(*id))
+		.map(|(id, amount)| (*id, *amount)).collect::<HashMap<_, _>>();
+	let mut seen = HashSet::new();
+	for (child, path) in paths {
+		ensure!(seen.insert(*child), "pending balance path repeats an owned coin");
+		let amount = owned.get(child).context("pending balance path is not locally owned")?;
+		if let Some(parent) = path.iter().rev().copied().find(|id| *id != *child && owned.contains_key(id)) {
+			let value = result.entry(parent).or_insert(owned[&parent]);
+			*value = value.checked_sub(*amount)
+				.context("signed owned descendants exceed their retained source principal")?;
+		}
+	}
+	Ok(result)
+}
+
+fn principal(coin: &WalletVtxo, pending: &HashMap<VtxoId, Amount>) -> Amount {
+	pending.get(&coin.id()).copied().unwrap_or_else(|| coin.amount())
+}
+
 /// The sats `action` holds: the locked VTXOs among the ones it reports,
 /// leaving out any already `counted` by another operation.
 fn held_by<A: WalletAction>(
 	action: &A,
 	vtxos: &HashMap<VtxoId, WalletVtxo>,
 	counted: &mut HashSet<VtxoId>,
+	pending_principal: &HashMap<VtxoId, Amount>,
 ) -> Amount {
 	let mut amount = Amount::ZERO;
 	for id in action.pending_balance_vtxo_ids() {
@@ -268,7 +388,7 @@ fn held_by<A: WalletAction>(
 		// A spent VTXO is not in the map: the action is done with it.
 		let Some(vtxo) = vtxos.get(&id) else { continue };
 		match vtxo.state {
-			VtxoState::Locked { .. } => amount += vtxo.amount(),
+			VtxoState::Locked { .. } => amount += principal(vtxo, pending_principal),
 			// An exit took it from the action; it counts in pending_exit.
 			VtxoState::Exited => {},
 			// Released by the action, or not locked by it yet.
@@ -277,4 +397,46 @@ fn held_by<A: WalletAction>(
 		}
 	}
 	amount
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn id(value: u8) -> VtxoId { VtxoId::from_slice(&[value; 36]).unwrap() }
+
+	#[test]
+	fn pending_signed_cut_does_not_double_subtract_shared_transitive_descendants() {
+		let owned = [(id(1), 100), (id(2), 40), (id(3), 30), (id(4), 60)]
+			.into_iter().map(|(id, value)| (id, Amount::from_sat(value))).collect();
+		let pending = [id(1), id(2)].into_iter().collect();
+		let paths = vec![(id(1), vec![]), (id(2), vec![id(1)]),
+			(id(3), vec![id(1), id(2)]), (id(4), vec![id(1)])];
+		let cut = owned_pending_cut(&owned, &pending, &paths).unwrap();
+		assert_eq!(cut[&id(1)], Amount::ZERO);
+		assert_eq!(cut[&id(2)], Amount::from_sat(10));
+		assert_eq!(cut.values().copied().sum::<Amount>() + owned[&id(3)] + owned[&id(4)], Amount::from_sat(100));
+	}
+
+	#[test]
+	fn pending_signed_cut_fences_a_stale_middle_parent_without_an_existing_pending_marker() {
+		let owned = [(id(1), 100), (id(2), 40), (id(3), 30)]
+			.into_iter().map(|(id, value)| (id, Amount::from_sat(value))).collect();
+		let pending = [id(1)].into_iter().collect();
+		let paths = vec![(id(1), vec![]), (id(2), vec![id(1)]), (id(3), vec![id(1), id(2)])];
+		let cut = owned_pending_cut(&owned, &pending, &paths).unwrap();
+		assert_eq!(cut[&id(1)], Amount::from_sat(60));
+		assert_eq!(cut[&id(2)], Amount::from_sat(10));
+		assert!(!cut.contains_key(&id(3)), "only the current leaf remains available");
+		assert_eq!(cut.values().copied().sum::<Amount>() + owned[&id(3)], Amount::from_sat(100));
+	}
+
+	#[test]
+	fn pending_signed_cut_preserves_local_principal_without_adding_its_known_change_twice() {
+		let owned = [(id(1), Amount::from_sat(100)), (id(2), Amount::from_sat(40))].into_iter().collect();
+		let pending = [id(1)].into_iter().collect();
+		let cut = owned_pending_cut(&owned, &pending, &[(id(1), vec![]), (id(2), vec![id(1)])]).unwrap();
+		assert_eq!(cut[&id(1)], Amount::from_sat(60));
+		assert_eq!(cut[&id(1)] + owned[&id(2)], Amount::from_sat(100));
+	}
 }

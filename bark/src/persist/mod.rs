@@ -448,6 +448,17 @@ pub trait BarkPersister: Send + Sync + 'static {
 	/// Adopt canonical signatures only when the immutable binding is unchanged.
 	async fn store_fallback_record(&self, record: &ark::fallback::FallbackRecord) -> anyhow::Result<()>;
 
+	/// An authenticated local destination which has not received a server acknowledgement.
+	/// It must not authorize coin issuance or be reported as registered.
+	async fn get_pending_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>> {
+		Ok(None)
+	}
+
+	/// Keep the exact local binding immutable while registration is unavailable.
+	async fn store_pending_fallback_record(&self, _record: &ark::fallback::FallbackRecord) -> anyhow::Result<()> {
+		bail!("persister does not support pending fallback registration")
+	}
+
 	/// Get the last revealed/used [Vtxo] key index.
 	///
 	/// Returns:
@@ -678,6 +689,18 @@ pub trait BarkPersister: Send + Sync + 'static {
 		vtxo_id: VtxoId,
 		holder: Option<&VtxoLockHolder>,
 	) -> anyhow::Result<()>;
+
+	/// Retire precisely `holder`'s lock directly to Spent, without making the
+	/// coin temporarily Spendable. Return false for any foreign holder/state;
+	/// already Spent is idempotent. Implementations must compare and write
+	/// atomically; an unsupported persister must leave the coin untouched.
+	async fn retire_vtxo_lock(
+		&self,
+		_vtxo_id: VtxoId,
+		_holder: Option<&VtxoLockHolder>,
+	) -> anyhow::Result<bool> {
+		bail!("this persister does not support atomic locked-coin retirement")
+	}
 
 	/// Transition multiple VTXOs to `new_state` atomically: either every
 	/// vtxo's state changes or none does. A failure must not affect any

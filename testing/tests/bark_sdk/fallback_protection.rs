@@ -52,6 +52,10 @@ async fn fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payme
 	assert!(pending.iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout")
 		.all(|movement| movement.status != bark::movement::MovementStatus::Successful));
 	assert!(client_db.get_fallback_snapshot().await.unwrap().verified_payouts.is_empty());
+	let owed = wallet.balance().await.unwrap();
+	assert_eq!(owed.spendable, Amount::ZERO);
+	assert_eq!(owed.awaiting_settlement, coin.amount());
+	assert_eq!(owed.total(), coin.amount(), "an actual unpaid allocation retains owned principal");
 
 	// A real subsidy now permits the existing unchanged payout to confirm.
 	let address = srv.watchmand().wait_wallet_address().await;
@@ -76,7 +80,10 @@ async fn fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payme
 	let snapshot = client_db.get_fallback_snapshot().await.unwrap();
 	assert!(snapshot.verified_payouts.values().any(|proof| proof.outpoint.txid == payout));
 	assert!(!wallet.awaiting_settlement_vtxos().await.unwrap().contains(&coin.id()));
-	assert_eq!(wallet.balance().await.unwrap().spendable, Amount::ZERO);
+	let paid_balance = wallet.balance().await.unwrap();
+	assert_eq!(paid_balance.spendable, Amount::ZERO);
+	assert_eq!(paid_balance.awaiting_settlement, Amount::ZERO);
+	assert_eq!(paid_balance.total(), Amount::ZERO, "the actual settled onchain payout is not counted again as Ark value");
 
 	// No server RPC is needed to learn that the actual chain undid payment.
 	srv.stop().await.unwrap();
@@ -91,6 +98,8 @@ async fn fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payme
 
 /// Dust is a policy forfeiture, not an unconfirmed customer payment. Its exact
 /// expiry-path sweep must confirm before the wallet stops protecting the coin.
+/// ML185 component: one principal through dust settlement/reorg. This does not
+/// close ML183's separate foreign-action-holder case or ML181/ML182/ML184.
 #[tokio::test]
 async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	let ctx = TestContext::new("bark_sdk/fallback_dust_reorg").await;
@@ -127,6 +136,10 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	assert!(wallet.awaiting_settlement_vtxos().await.unwrap().contains(&coin.id()));
 	assert!(client_db.get_fallback_snapshot().await.unwrap().verified_terminals.is_empty());
 	assert_eq!(client_db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spendable);
+	let owed = wallet.balance().await.unwrap();
+	assert_eq!(owed.spendable, Amount::ZERO);
+	assert_eq!(owed.awaiting_settlement, sat(1_200));
+	assert_eq!(owed.total(), sat(1_200));
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
@@ -165,6 +178,8 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	assert_eq!(history[0].metadata["fallback"]["forfeited_sat"], 1_200);
 	assert_eq!(history[0].offchain_fee, Amount::ZERO);
 	assert!(history[0].sent_to.is_empty());
+	assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO,
+		"confirmed forfeiture cannot remain counted as another owned Ark claim");
 	srv.stop().await.unwrap();
 	ctx.bitcoind().sync_client().invalidate_block(&confirmed_hash).unwrap();
 	wallet.chain().invalidate_caches().await;
@@ -178,6 +193,10 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	assert_eq!(pending.len(), 1);
 	assert_eq!(pending[0].status, bark::movement::MovementStatus::Pending);
 	assert_eq!(pending[0].effective_balance.to_sat(), -1_200);
+	let owed_again = wallet.balance().await.unwrap();
+	assert_eq!(owed_again.spendable, Amount::ZERO);
+	assert_eq!(owed_again.awaiting_settlement, sat(1_200));
+	assert_eq!(owed_again.total(), sat(1_200));
 	// Retained authentic transaction observations can confirm again without
 	// asking the stopped Ark server for another receipt or moving principal.
 	ctx.generate_blocks(6).await;

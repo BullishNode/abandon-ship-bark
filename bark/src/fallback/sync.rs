@@ -168,6 +168,9 @@ impl Wallet {
 				terminal_observations: previous.terminal_observations.clone(),
 				adopted_payout_vtxos: previous.adopted_payout_vtxos.clone(),
 				quarantined_vtxos: previous.quarantined_vtxos.clone(),
+				unproven_spent_vtxos: previous.unproven_spent_vtxos.clone(),
+				ordinary_spend_cursor: previous.ordinary_spend_cursor,
+				verified_ordinary_spends: previous.verified_ordinary_spends.clone(),
 			};
 			for entitlement in snapshot.entitlements.values_mut() {
 				entitlement.verify(&record.spk)?;

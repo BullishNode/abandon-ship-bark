@@ -398,7 +398,8 @@ mod board;
 mod config;
 mod daemon;
 mod fallback;
-pub use fallback::{FallbackRefusal, ExitProtectionOutcome, ExitProtectionSchedule};
+pub use fallback::{FallbackRefusal, ExitProtectionOutcome, ExitProtectionSchedule,
+	ExitProtectionReport, ExitProtectionIssue, ExitProtectionIncomplete};
 pub use fallback::payouts::{
 	FallbackAttempt, FallbackBlock, FallbackDisposition, FallbackEntitlement,
 	FallbackPayoutStage, FallbackSnapshot, FallbackTerminalClaim,
@@ -1158,6 +1159,7 @@ impl Wallet {
 	///
 	/// May return an error if the address at the given index has not been derived yet.
 	pub async fn peek_address(&self, index: u32) -> anyhow::Result<ark::Address> {
+		self.fallback_destination().await?;
 		let properties = self.properties().await?;
 		let network = properties.network;
 		let keypair = self.peek_keypair(index).await?;
@@ -1398,9 +1400,9 @@ impl Wallet {
 			round_secret_nonces: RoundSecretNonces::new(),
 		})};
 
-		// An existing authenticated record supports offline opens. First-time
-		// registration requires a live server and an owned onchain destination.
-		ret.open_fallback(args.fallback_spk).await?;
+		// Offline creation retains a pending local identity. Coin issuance only
+		// becomes available after an authenticated registration acknowledgement.
+		ret.open_fallback(args.fallback_spk, args.create_without_server).await?;
 
 		ret.inner.exit.load().await
 			.context("error loading exit system after opening wallet")?;
@@ -1808,8 +1810,10 @@ impl Wallet {
 	pub async fn spendable_vtxos(&self) -> anyhow::Result<Vec<WalletVtxo>> {
 		let mut vtxos = self.vtxos_with(&VtxoStateKind::Spendable).await?;
 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
+		let pending = self.fallback_pending_principal(&snapshot).await?;
 		let decided = snapshot.entitlements.values().map(|entitlement| entitlement.vtxo_id).collect::<HashSet<_>>();
-		vtxos.retain(|vtxo| !decided.contains(&vtxo.id()) && !snapshot.awaiting_settlement.contains(&vtxo.id()));
+		vtxos.retain(|vtxo| !decided.contains(&vtxo.id()) && !snapshot.awaiting_settlement.contains(&vtxo.id())
+			&& !pending.contains_key(&vtxo.id()));
 		Ok(vtxos)
 	}
 
@@ -2060,6 +2064,9 @@ impl Wallet {
 	/// Notes:
 	/// - Exits are only synced if we detect onchain activity which has force-exited our VTXO.
 	pub async fn sync(&self) {
+		if let Err(error) = self.retry_pending_fallback_registration().await {
+			warn!("Fallback registration remains pending: {:#}", error);
+		}
 		self.inner.chain.invalidate_caches().await;
 		if let Err(error) = self.sync_fallback_payouts().await {
 			warn!("Fallback payout history awaits sync: {:#}", error);

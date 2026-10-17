@@ -8,7 +8,7 @@ pub(super) fn run(conn: &mut Connection) -> anyhow::Result<()> {
 		id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL
 	);")?;
 	let version = tx.query_row("SELECT COALESCE(MAX(version), 0) FROM bark_expiry_migration", [], |row| row.get::<_, i64>(0))?;
-	ensure!(version <= 2, "fallback schema is newer than this wallet build");
+	ensure!(version <= 3, "fallback schema is newer than this wallet build");
 	if version == 0 {
 		tx.execute_batch("CREATE TABLE bark_fallback_record (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -23,6 +23,10 @@ pub(super) fn run(conn: &mut Connection) -> anyhow::Result<()> {
 			id INTEGER PRIMARY KEY CHECK (id = 1), snapshot BLOB NOT NULL
 		);
 		UPDATE bark_expiry_migration SET version = 2 WHERE id = 1;")?;
+	}
+	if version < 3 {
+		tx.execute_batch("ALTER TABLE bark_fallback_record ADD COLUMN registered INTEGER NOT NULL DEFAULT 1;
+		UPDATE bark_expiry_migration SET version = 3 WHERE id = 1;")?;
 	}
 	tx.commit()?;
 	Ok(())

@@ -183,6 +183,7 @@ fn test_time() -> chrono::DateTime<chrono::Local> {
 fn empty_round_state() -> RoundState {
 	RoundState {
 		done: false,
+		onchain_recovery: false,
 		participation: RoundParticipation {
 			inputs: vec![],
 			outputs: vec![],

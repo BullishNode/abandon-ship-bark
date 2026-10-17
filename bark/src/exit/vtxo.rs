@@ -168,7 +168,9 @@ impl ExitVtxo {
 				let movement = wallet.inner.db.get_movement_by_id(movement_id).await
 					.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
 				if movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true)) {
-					wallet.lock_vtxos([self.id()], Some(movement_id.into())).await
+					let holder = wallet.protective_exit_holder(&movement, self.id()).await
+						.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
+					wallet.lock_vtxos([self.id()], Some(holder)).await
 						.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
 					vtxo = self.get_vtxo(&*wallet.inner.db).await?;
 				}

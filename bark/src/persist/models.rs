@@ -130,7 +130,7 @@ pub(crate) struct RoundCheckpoint {
 
 impl RoundCheckpoint {
 	pub(crate) fn before_forfeits(&self, outputs: &[Vtxo<Full>], funding_tx: &Transaction, unlock_hash: UnlockHash) -> StoredRoundState {
-		let state = RoundState { done: false, participation: self.participation.clone(),
+		let state = RoundState { done: false, onchain_recovery: false, participation: self.participation.clone(),
 			flow: RoundFlowState::Finished { funding_tx: funding_tx.clone(), unlock_hash },
 			new_vtxos: outputs.to_vec(), sent_forfeit_sigs: true,
 			movement_id: self.movement_id, fallback_refusal: self.fallback_refusal };
@@ -526,12 +526,17 @@ pub struct SerdeRoundState<'a> {
 	sent_forfeit_sigs: bool,
 	#[serde(default)]
 	fallback_refusal: Option<FallbackRefusal>,
+	// MessagePack stores this struct positionally. New optional fields must
+	// remain at the end so existing binding checkpoints keep their meaning.
+	#[serde(default)]
+	onchain_recovery: bool,
 }
 
 impl<'a> From<&'a RoundState> for SerdeRoundState<'a> {
 	fn from(state: &'a RoundState) -> Self {
 		Self {
 			done: state.done,
+			onchain_recovery: state.onchain_recovery,
 			participation: (&state.participation).into(),
 			movement_id: state.movement_id,
 			flow: (&state.flow).into(),
@@ -546,6 +551,7 @@ impl<'a> From<SerdeRoundState<'a>> for RoundState {
 	fn from(state: SerdeRoundState<'a>) -> Self {
 		Self {
 			done: state.done,
+			onchain_recovery: state.onchain_recovery,
 			participation: state.participation.into(),
 			movement_id: state.movement_id,
 			flow: state.flow.into(),
@@ -558,11 +564,15 @@ impl<'a> From<SerdeRoundState<'a>> for RoundState {
 
 #[cfg(test)]
 mod test {
+	use std::borrow::Cow;
+
 	use bitcoin_ext::BlockHeight;
 
 	use crate::exit::{ExitState, ExitTxOrigin};
 	use crate::vtxo::VtxoState;
-	use super::SerdeAttemptState;
+	use crate::movement::MovementId;
+	use crate::FallbackRefusal;
+	use super::{SerdeAttemptState, SerdeRoundState, SerdeRoundParticipation, SerdeRoundFlowState};
 
 	#[test]
 	/// Each struct stored as JSON in the database should have test to check for backwards compatibility
@@ -661,6 +671,20 @@ mod test {
 		rmp_serde::from_slice::<SerdeAttemptState>(
 			&Vec::<u8>::from_hex(serialised).unwrap(),
 		).unwrap();
+	}
+
+	#[test]
+	fn test_serialized_round_state_before_onchain_recovery() {
+		let old = rmp_serde::to_vec(&(false, SerdeRoundParticipation {
+			inputs: Cow::Borrowed(&[]), outputs: vec![], unblinded_mailbox_id: None,
+		}, None::<MovementId>, SerdeRoundFlowState::InteractivePending,
+			Vec::<u8>::new(), false, None::<FallbackRefusal>)).unwrap();
+		let mut restored = rmp_serde::from_slice::<SerdeRoundState>(&old).unwrap();
+		assert!(!restored.onchain_recovery);
+		assert!(!restored.done);
+		restored.onchain_recovery = true;
+		let current = rmp_serde::to_vec(&restored).unwrap();
+		assert!(rmp_serde::from_slice::<SerdeRoundState>(&current).unwrap().onchain_recovery);
 	}
 
 	/// `NonInteractivePending` gained a trailing `scheduled_height` field. Since

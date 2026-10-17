@@ -2,6 +2,8 @@
 //! Round State Machine
 //!
 
+mod protection;
+
 use std::collections::HashMap;
 use std::fmt;
 use std::iter;
@@ -111,6 +113,8 @@ pub enum RoundStatus {
 	Unconfirmed {
 		funding_txid: Txid,
 	},
+	/// A self-refresh recovered on chain; retain its signed checkpoint for reorgs.
+	OnchainRecovery { claim_confirmed: bool },
 	/// Round didn't finish yet
 	Pending,
 	/// The round failed
@@ -127,6 +131,7 @@ impl RoundStatus {
 		match self {
 			Self::Confirmed { .. } => true,
 			Self::Unconfirmed { .. } => false,
+			Self::OnchainRecovery { .. } => false,
 			Self::Pending => false,
 			Self::Failed { .. } => true,
 			Self::Canceled => true,
@@ -138,6 +143,7 @@ impl RoundStatus {
 		match self {
 			Self::Confirmed { .. } => true,
 			Self::Unconfirmed { .. } => true,
+			Self::OnchainRecovery { claim_confirmed } => *claim_confirmed,
 			Self::Pending => false,
 			Self::Failed { .. } => false,
 			Self::Canceled => false,
@@ -188,6 +194,9 @@ impl fmt::Display for RoundFlowKind {
 pub struct RoundState {
 	/// Round is fully done
 	pub(crate) done: bool,
+
+	/// This emergency self-refresh is monitored against our own chain after recovery.
+	pub(crate) onchain_recovery: bool,
 
 	/// Our participation in this round
 	pub(crate) participation: RoundParticipation,
@@ -242,7 +251,11 @@ impl StoredRoundState {
 	pub async fn sync(&mut self, wallet: &Wallet) -> anyhow::Result<RoundStatus> {
 		let checkpoint = self.checkpoint();
 		let budget = Duration::from_secs(wallet.config().daemon_sync_interval_secs.max(1));
-		let result = match bark_runtime::timeout(budget, self.state_mut().sync(wallet, &checkpoint)).await {
+		let progress = async {
+			if let Some(status) = self.recover_binding_refresh(wallet).await? { return Ok(status); }
+			self.state_mut().sync(wallet, &checkpoint).await
+		};
+		let result = match bark_runtime::timeout(budget, progress).await {
 			Ok(result) => result,
 			Err(error) => Err(anyhow::Error::new(error).context("round sync exceeded its interval; durable state retained")),
 		};
@@ -269,6 +282,7 @@ impl RoundState {
 			new_vtxos: Vec::new(),
 			sent_forfeit_sigs: false,
 			done: false,
+			onchain_recovery: false,
 			fallback_refusal: None,
 		}
 	}
@@ -286,12 +300,18 @@ impl RoundState {
 			new_vtxos: Vec::new(),
 			sent_forfeit_sigs: false,
 			done: false,
+			onchain_recovery: false,
 			fallback_refusal: None,
 		}
 	}
 
 	/// A durable before-wire marker, including requests whose reply was lost.
 	pub fn forfeits_may_be_exposed(&self) -> bool { self.sent_forfeit_sigs }
+
+	/// Chain recovery remains monitored even after its current claim confirms.
+	pub fn onchain_recovery_status(&self) -> Option<RoundStatus> {
+		self.onchain_recovery.then_some(RoundStatus::OnchainRecovery { claim_confirmed: self.done })
+	}
 
 	/// Our participation in this round
 	pub fn participation(&self) -> &RoundParticipation {
@@ -943,6 +963,9 @@ impl RoundState {
 	/// Returns the input VTXOs that are locked in this round, but only
 	/// if no output VTXOs were issued yet.
 	pub fn locked_pending_inputs(&self) -> &[Vtxo<Full>] {
+		if self.onchain_recovery {
+			return if self.done { &[] } else { &self.new_vtxos };
+		}
 		//TODO(stevenroose) consider if we can't just drop the state after forfeit exchange
 		match self.flow {
 			// These are candidates, not a claim that the inputs are locked: a
@@ -976,7 +999,7 @@ impl RoundState {
 	///
 	/// This becomes zero once the new round VTXOs are unlocked.
 	pub fn pending_balance(&self) -> Amount {
-		if self.done {
+		if self.done || self.onchain_recovery {
 			return Amount::ZERO;
 		}
 
@@ -2574,7 +2597,7 @@ impl Wallet {
 							warn!("Error updating pending round state in db: {:#}", e);
 						}
 					},
-					RoundStatus::Pending => {
+					RoundStatus::Pending | RoundStatus::OnchainRecovery { .. } => {
 						if let Err(e) = self.inner.db.update_round_state(&state).await {
 							warn!("Error updating pending round state in db: {:#}", e);
 						}

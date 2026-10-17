@@ -111,14 +111,20 @@ impl Wallet {
 		let tip = self.chain().tip_ref_uncached().await?.height;
 		for schedule in self.exit_protection_schedule().await? {
 			if tip < schedule.act_by || self.exit_mgr().is_exiting(schedule.vtxo_id).await { continue; }
+			let mut conditional_exit = false;
 			for pending in self.pending_round_states().await? {
 				if !pending.state().participation().inputs.iter().any(|coin| coin.id() == schedule.vtxo_id) { continue; }
 				if let Some(mut pending) = self.try_lock_round_state(pending.id()).await? {
 					if !pending.cancel_for_protection(self).await? {
-						log::warn!("VTXO {} has a binding exchange; retaining both signed paths", schedule.vtxo_id);
+						match pending.protect_binding_refresh_input(self, schedule.vtxo_id).await {
+							Ok(true) => { conditional_exit = true; break; },
+							Ok(false) => {},
+							Err(error) => log::warn!("Binding refresh protection for {} awaits retry: {:#}", schedule.vtxo_id, error),
+						}
 					}
 				}
 			}
+			if conditional_exit { outcome.exits_started.push(schedule.vtxo_id); continue; }
 			let Some(stored) = self.inner.db.get_wallet_vtxo(schedule.vtxo_id).await? else { continue; };
 			if stored.state == (VtxoState::Locked { holder: None }) {
 				let snapshot = self.inner.db.get_fallback_snapshot().await?;

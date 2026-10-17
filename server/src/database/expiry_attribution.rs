@@ -125,9 +125,26 @@ impl Tx<'_> {
 	}
 
 	async fn prepare_expiry_scans(&self, chunk_size: u32, workers: usize) -> anyhow::Result<Vec<OwnerScanBatch>> {
-		let records = self.query("SELECT r.mailbox_pk, r.account_xpub, MIN(s.scanned_up_to) AS start_index,
+		// Bound the candidate accounts before joining their pending keys. A
+		// matched key deletes its pending row and cascades every scan cursor,
+		// so the indexed fair prefix contains only unfinished owner searches.
+		// Several keys can select the same account; deriving it once still
+		// compares all of its keys in the selected interval below.
+		let records = self.query("WITH preferred AS MATERIALIZED (
+			SELECT s.mailbox_pk FROM expiry_pending_key p JOIN expiry_scan s
+				ON s.user_pubkey=p.user_pubkey AND s.mailbox_pk=p.mailbox_pk
+			WHERE p.mailbox_pk IS NOT NULL AND s.scanned_up_to < $3
+			ORDER BY s.scanned_up_to, s.mailbox_pk LIMIT $2
+		), fair AS MATERIALIZED (
+			SELECT s.mailbox_pk FROM expiry_scan s WHERE s.scanned_up_to < $1
+			ORDER BY s.scanned_up_to, s.mailbox_pk LIMIT $2
+		), candidates AS MATERIALIZED (
+			SELECT mailbox_pk FROM preferred UNION SELECT mailbox_pk FROM fair
+		)
+			SELECT r.mailbox_pk, r.account_xpub, MIN(s.scanned_up_to) AS start_index,
 			BOOL_OR(p.mailbox_pk=r.mailbox_pk) AS candidate
-			FROM expiry_scan s JOIN fallback_record r ON r.mailbox_pk=s.mailbox_pk
+			FROM candidates c JOIN fallback_record r ON r.mailbox_pk=c.mailbox_pk
+			JOIN expiry_scan s ON s.mailbox_pk=r.mailbox_pk
 			JOIN expiry_pending_key p ON p.user_pubkey=s.user_pubkey
 			WHERE s.scanned_up_to < $1 AND NOT EXISTS
 				(SELECT 1 FROM expiry_owner_key o WHERE o.user_pubkey=s.user_pubkey)

@@ -51,6 +51,36 @@ async fn expiry_attribution_batches_keys_and_recovers_late_lower_keys_after_rest
 }
 
 #[tokio::test]
+async fn expiry_attribution_duplicate_cursors_do_not_starve_other_accounts() {
+	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_duplicate_cursors").await;
+	ctx.init_central_postgres().await;
+	let config = ctx.new_postgres("expiry_duplicate_cursors").await;
+	Db::create(&config).await.unwrap();
+	let db = Db::connect(&config).await.unwrap();
+	let mut wanted = Vec::new();
+	for byte in [11, 12, 13] {
+		let (account, mailbox) = register(&db, byte).await;
+		for index in [17, 25] {
+			let key = key(&account, index);
+			db.write(async |tx| tx.queue_expiry_owner(key, None).await).await.unwrap();
+			wanted.push((key, mailbox, index));
+		}
+	}
+	let mut derived = 0;
+	// The bounded scheduler may select one account more than once from its
+	// first cursor rows. It must batch that work, then reach every other
+	// account without re-deriving a prefix or stranding its pending keys.
+	for _ in 0..3 {
+		derived += db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap().children_derived;
+	}
+	assert_eq!(derived, 3 * 32);
+	for (key, mailbox, index) in wanted {
+		assert!(matches!(owner(&db, key).await, Attribution::Owned { mailbox_pk, child_index, .. }
+			if mailbox_pk==mailbox.as_pubkey() && child_index==index));
+	}
+}
+
+#[tokio::test]
 async fn expiry_attribution_prepared_work_never_advances_a_new_pending_key() {
 	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_prepared_work_never_advances_a_new_pending_key").await;
 	ctx.init_central_postgres().await;

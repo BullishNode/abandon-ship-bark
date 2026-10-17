@@ -1,0 +1,150 @@
+{
+  "scope": "Own-wallet Lightning receive crash durability; not recipient/provider fallback ownership qualification.",
+  "source_base": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+  "source_files_changed": [
+    "bark/src/actions/lightning/receive.rs",
+    "testing/tests/bark_sdk/lightning.rs"
+  ],
+  "fix_patch_sha256": "2fa2cf753ff99b87285c1cce5e4202c02f07821de24955918f2e5c0f66b3f12f",
+  "test_patch_sha256": "40dc045a2e3c2a0aa78e68a0f2c8327e495c810fecb2fdf2d9185bf6ca988256",
+  "baseline": {
+    "head": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+    "source_note": "Published binding client99a0553 plus root external PR7 test-only source and this client test. Product receive.rs is UNFIXED baseline.",
+    "build": "ONLY linked SDK native test executable; no product rebuild",
+    "source_files": 1078,
+    "source_manifest_sha256": "33ebbb1f049a81d9a396f40bc11632935e5073b13187dc986ea9def8a0daabc7",
+    "source_tar_sha256": "5bb3a96752f09ce18fc84d405a5fe594290118465734827974f12be7803ba456",
+    "client_overlay_sha256": "40dc045a2e3c2a0aa78e68a0f2c8327e495c810fecb2fdf2d9185bf6ca988256",
+    "total_tracked_overlay_sha256": "32acf6262845037a6e71f176c6ed23498982c4c681c0dd6aeb71fbd34badecfa",
+    "sdk_test_sha256": "923b8311a153fcae88f333f53830f5c522b499bb4d10e910350bf3f51a14fabe",
+    "metadata_sha256": "0b2d1b6f3cf3745d017247df7250bb49abb425267b75c7fca8606e985f98771f",
+    "products": {
+      "captaind": {
+        "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind",
+        "sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4"
+      },
+      "watchmand": {
+        "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand",
+        "sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06"
+      },
+      "bark": {
+        "path": "/fresh-cache/runtime-operation-client-20261017/bark",
+        "sha256": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f"
+      },
+      "barkd": {
+        "path": "/fresh-cache/runtime-operation-client-20261017/barkd",
+        "sha256": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce"
+      }
+    },
+    "cln": {
+      "plugin_dir": "/fresh-cache/cln-adapter-evidence/plugins",
+      "grpc_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+      "hold_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "lightningd_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+    },
+    "checks": "80288 mandatoryPASS44.50s/native SDK metadataPASS48.57s",
+    "native": {
+      "run_id": "dfe36992-02e6-499e-afa4-0bbb6c0a9c68",
+      "passed": 0,
+      "failed": 1,
+      "skipped": 73,
+      "seconds": 21.81,
+      "log_sha256": "ec261a979352f447256da10a6edee1dfe5a2830ff096a8d99d49878e3a878fc1",
+      "result": "EXPECTED baseline regression failure: actual external xpay success and real internal hold invoice Paid passed, first successful claim reply held, captured checkpoint still HtlcsReady rather than PreimageRevealed. No restart/fallback claim."
+    },
+    "build_env": {
+      "GIT_HASH": "99a0553ac-ln-baseline-working",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_BUILD_JOBS": "4",
+      "BARK_WEB_DIST": "/fresh-cache/web-dist-10ecfb9",
+      "features": "ark-testing/fallback-test-bip84",
+      "metadata_scope": "--package ark-testing --test bark-sdk",
+      "nix_env_file_sha256": "5b15a3556f1f6b43511645e7a7c8e8dcf356633cd87ff30c86c507739cb14afe"
+    },
+    "runtime_env": {
+      "NEXTEST_TEST_THREADS": "1",
+      "KEEP_ALL_TEST_DATA": "1",
+      "TEST_DIRECTORY": "/home/francis/abandon-ship-fresh-attribution/lightning-worktree/test-ln-baseline-v3-20261017",
+      "LIGHTNINGD_PLUGIN_DIR": "/fresh-cache/cln-adapter-evidence/plugins",
+      "LD_LIBRARY_PATH_prefix": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+    }
+  },
+  "fixed": {
+    "head": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+    "source_note": "Same actual baseline test/server/CLN pins; ONLY product receive.rs changed by narrow before-wire checkpoint patch.",
+    "build": "ONLY linked SDK native test executable; no product rebuild",
+    "source_files": 1078,
+    "source_manifest_sha256": "7373dd1b2f0ada334c9c0e7d2f32aba35f6fdf8e9ff1de27568f06f37ac50560",
+    "source_tar_sha256": "92993f8039117942e03fcc2da651413542924f39c4f8e2923ddf744490b65dd0",
+    "client_overlay_sha256": "40dc045a2e3c2a0aa78e68a0f2c8327e495c810fecb2fdf2d9185bf6ca988256",
+    "total_tracked_overlay_sha256": "725837c7dec090248393d2ae5e69b0711f216eeb300e062c29cc9c3269c8eb15",
+    "sdk_test_sha256": "2d60336354a87a5618bc0f52095d6c680fca3ac2e02c23132e5a4ab4871325e6",
+    "metadata_sha256": "a15c0c9ca615009ae7033889767c21bfbc93d2fa98751d1efd3190da0666ec75",
+    "products": {
+      "captaind": {
+        "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind",
+        "sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4"
+      },
+      "watchmand": {
+        "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand",
+        "sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06"
+      },
+      "bark": {
+        "path": "/fresh-cache/runtime-operation-client-20261017/bark",
+        "sha256": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f"
+      },
+      "barkd": {
+        "path": "/fresh-cache/runtime-operation-client-20261017/barkd",
+        "sha256": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce"
+      }
+    },
+    "cln": {
+      "plugin_dir": "/fresh-cache/cln-adapter-evidence/plugins",
+      "grpc_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+      "hold_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "lightningd_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+    },
+    "checks": "85258 mandatoryPASS55.36s/native SDK metadataPASS1m07",
+    "native": {
+      "run_id": "4cf835a6-ef7e-48c8-8e1b-339683e28d37",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 73,
+      "seconds": 15.652,
+      "log_sha256": "2659a00de51d6d0f47d53d67c510ca8272154174a4fa1ac598217ea1721b1aa4",
+      "result": "Actual external payment and internal hold Paid; successful first claim reply lost with durable PreimageRevealed; original private seed/app+Ark DB reopen; genuine idempotent claim; exactly one receive credit and no pending HTLC across repeated sync."
+    },
+    "source_changes_vs_baseline": [
+      "bark/src/actions/lightning/receive.rs"
+    ],
+    "fix_patch_sha256": "2fa2cf753ff99b87285c1cce5e4202c02f07821de24955918f2e5c0f66b3f12f",
+    "test_patch_sha256": "40dc045a2e3c2a0aa78e68a0f2c8327e495c810fecb2fdf2d9185bf6ca988256",
+    "baseline": "dfe36992 expected FAIL21.810s after real external/internal settlement, captured HtlcsReady, original preserved",
+    "build_env": {
+      "GIT_HASH": "99a0553ac-ln-fixed-working",
+      "CARGO_INCREMENTAL": "0",
+      "CARGO_PROFILE_DEV_DEBUG": "0",
+      "CARGO_BUILD_JOBS": "4",
+      "BARK_WEB_DIST": "/fresh-cache/web-dist-10ecfb9",
+      "features": "ark-testing/fallback-test-bip84",
+      "metadata_scope": "--package ark-testing --test bark-sdk",
+      "nix_env_file_sha256": "5b15a3556f1f6b43511645e7a7c8e8dcf356633cd87ff30c86c507739cb14afe"
+    },
+    "runtime_env": {
+      "NEXTEST_TEST_THREADS": "1",
+      "KEEP_ALL_TEST_DATA": "1",
+      "TEST_DIRECTORY": "/home/francis/abandon-ship-fresh-attribution/lightning-worktree/test-ln-fixed-v3-20261017",
+      "LIGHTNINGD_PLUGIN_DIR": "/fresh-cache/cln-adapter-evidence/plugins",
+      "LD_LIBRARY_PATH_prefix": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+    }
+  },
+  "limits": [
+    "One local receiving wallet: claim_destination=None; provider and recipient are the same account.",
+    "No expiry, abandonment, actual fallback payout, distinct-recipient forwarding or public-Signet behavior is proved by this test.",
+    "Distinct-recipient pre-registration attribution is a source-level risk with no native reproduction result in this increment; external owns its full registered-recipient fallback test.",
+    "No native CLI/barkd/web products were rebuilt or deployed. Only linked SDK native test executables changed.",
+    "No new full-workspace unit run; mandatory native/WASM checks and the actual before/after native regression passed as recorded."
+  ],
+  "execution": "Baseline failure and fixed success use separate retained private TestDirectories; all product/server/CLN adapter pins are identical. Only receive.rs differs between the captured complete source manifests."
+}

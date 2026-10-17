@@ -1,0 +1,16 @@
+{
+  "result": "PASS",
+  "exit_code": 0,
+  "command": "docker exec -u 1000:1000 -w /home/francis/abandon-ship-fresh-integration/testing-track-worktree abandon-fresh-dev-20261016 bash /fresh-cache/testing-track-20261017/checks.sh",
+  "repository_command": "just checks",
+  "started_at": "2026-10-17T15:04:34+00:00",
+  "ended_at": "2026-10-17T15:07:13.374843+00:00",
+  "wall_seconds_approx": 159.375,
+  "timing_method": "filesystem birth at shell redirection and last output timestamp",
+  "log_sha256": "bf4fac041ccf593b47b22c6cce78babcd8b2b5716216f9d97ad77f41ce03e5d0",
+  "log_private_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/just-checks.log",
+  "source_manifest_sha256": "3f52d4f99a55097698c698b012d035f0037328d8baf392f4d13e18047fbad0ae",
+  "scope": "Repository mandatory style/prechecks, clippy arithmetic, wasm test compile, all workspace test/example type checks; not a full unit test execution",
+  "warnings": "Existing deprecation/unused-variable warnings retained in full log",
+  "runner_script": "checks-run.sh"
+}

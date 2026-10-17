@@ -1,0 +1,8 @@
+{
+  "recorded_at": "2026-10-17T15:09:22.547407+00:00",
+  "published_code_commit": "bc3d02835e0aa539d5a5dd8f7c1385ed85227ce5",
+  "artifact_base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
+  "artifact_source_manifest_sha256": "3f52d4f99a55097698c698b012d035f0037328d8baf392f4d13e18047fbad0ae",
+  "verified_files": 1021,
+  "result": "All source file paths/bytes in the build snapshot match the test-code commit. Git build label remains the original e44 dirty label; no binary/manifest was rewritten."
+}

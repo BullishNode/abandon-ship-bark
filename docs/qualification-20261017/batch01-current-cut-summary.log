@@ -1,0 +1,8 @@
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/runtime-s03-current-cut-correction-20261017/nextest-binaries-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' expiry_frozen_recipient_is_paid_after_sender_change_refresh --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch01-current-cut/nextest.toml
+────────────
+ Nextest run ID 1949f9ef-8ab4-4d27-adcb-1fa7624f80fa with nextest profile: default
+    Starting 1 test across 1 binary (259 tests skipped)
+        PASS [  33.741s] (1/1) ark-testing::server expiry_transfer_refresh::expiry_frozen_recipient_is_paid_after_sender_change_refresh
+────────────
+     Summary [  33.743s] 1 test run: 1 passed, 259 skipped

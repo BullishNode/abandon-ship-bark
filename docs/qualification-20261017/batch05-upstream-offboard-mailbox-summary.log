@@ -1,0 +1,12 @@
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/runtime-s03-current-cut-correction-20261017/nextest-binaries-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' finish_offboard_replays_for_identical_retry max_offboard_amount utxos_unlock_after_pending_offboard_expiry mailbox_post_arkoor_ --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch05-upstream-offboard-mailbox/nextest.toml
+────────────
+ Nextest run ID 4324f39d-9124-404c-a98d-52f1fe760b3f with nextest profile: default
+    Starting 5 tests across 1 binary (255 tests skipped)
+        PASS [   6.216s] (1/5) ark-testing::server mailbox::mailbox_post_arkoor_caps_vtxos_per_request
+        PASS [   4.696s] (2/5) ark-testing::server mailbox::mailbox_post_arkoor_requires_known_vtxos
+        PASS [  13.066s] (3/5) ark-testing::server offboard::finish_offboard_replays_for_identical_retry
+        PASS [  16.130s] (4/5) ark-testing::server offboard::max_offboard_amount
+        PASS [  22.495s] (5/5) ark-testing::server offboard::utxos_unlock_after_pending_offboard_expiry
+────────────
+     Summary [  62.605s] 5 tests run: 5 passed, 255 skipped

@@ -1,0 +1,6 @@
+[store]
+dir = "/fresh-cache/testing-track-20261017/batch01-current-cut/nextest-store"
+
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 3 }
+retries = 0

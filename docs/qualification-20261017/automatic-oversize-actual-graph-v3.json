@@ -1,0 +1,47 @@
+{
+  "prepared_at": "2026-10-17T17:14:25.831206+00:00",
+  "state": "SOURCE_REVIEW_COMPLETE_UNCOMPILED_UNRUN",
+  "inspected_canonical_head": "751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
+  "scope": [
+    "testing/tests/server/qualification_oversize.rs"
+  ],
+  "canonical_original_source_sha256": "d61438dc6050c754db04969983d5bd5e204fb33f22ebe7e0a980671bca9c9f1e",
+  "previous_corrected_source_sha256": "9942a9f6d80a3c535e90ea3601b43ba0286b2677663386a12c45c3bad54cf066",
+  "corrected_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+  "patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/automatic-oversize-actual-graph-v3.patch",
+  "patch_sha256": "55971b55d9d53aac57423cb25d5195177b537a8aa582065985143f3e7e2638a9",
+  "canonical_read_only_apply_check": "PASS after all3review fixes",
+  "original_failed_run_id": "4a930d92-ac3d-4ec7-b344-38d7b23d2d9a",
+  "original_receipt_untouched": true,
+  "native_geometry": {
+    "payees": 327,
+    "root_groups": [
+      324,
+      1,
+      1,
+      1
+    ],
+    "cosign_output_registration_pairs": 154,
+    "signed_path_transactions_including_board_exit": 635,
+    "required_oversized_physical_levels": 2,
+    "heavy_payout_output_bytes_alone": 10044
+  },
+  "limits_preserved": {
+    "payout_parent_vbytes": 10000,
+    "sponsor_child_vbytes": 1000,
+    "fanout": 4,
+    "max_exit_depth": 100,
+    "deadline_seconds": 600,
+    "reserved_regtest_satoshis": 5200000
+  },
+  "additional_review_strengthening": "Exact owner_mailbox/user_pubkey checks; persisted root completed-pair count; exactly one owner payout searched across full canonical graph including sponsor children. No graph assertion removed.",
+  "runtime": "NOT RUN; no Cargo/metadata/native/canonical mutation authorized",
+  "next_step": "Finish3source reviews, handoff isolated patch to coordinator; internal settlement owns next Cargo allocation.",
+  "reviewers": {
+    "oversize-review-current-backend.md": "8fb53fe51769c95b118dedd2c479c3655107df12264e7c195a000cb4211566b9",
+    "oversize-review-current-money.md": "e50fbee6c3e1facf2976b5fc2d49ee7072e0ef07985cbd41436bfc8768ab5c7a",
+    "oversize-review-current-shape.md": "fcfcba3ae64b7d36bb7f2182f62be8b34847ddd52db91fad0657a7d732a26dae"
+  },
+  "review_disposition": "All3reviews complete; no open substantive source blocker in scoped review. Compilation/runtime remain required. Two money-oracle gaps and one receipt-counter issue addressed and re-reviewed.",
+  "supersedes": "Earlier9942,b0aa,d7a source-only intermediate hashes; final fixture1d708 only. Original batch12 failed attempt unchanged."
+}

@@ -1,0 +1,650 @@
+{
+  "scope": "Bounded native pool-refund and client ownership/protection evidence; not production qualification or complete money-loss catalogue coverage.",
+  "published_product_source_head": "3d71fcb64172e5c79e24cb363426ff22a1a81bd1",
+  "product_source_matches_captured87e_files": true,
+  "embedded_actual_versions": {
+    "captaind": "captaind 0.7.1-dev+9ea05f9680be2757e875ee81f4546fd24e5b6354",
+    "watchmand": "watchmand 0.7.1-dev+9ea05f9680be2757e875ee81f4546fd24e5b6354",
+    "bark": "bark 0.7.1-dev (9ea05f9680be2757e875ee81f4546fd24e5b6354)",
+    "barkd": "barkd 0.7.1-dev (9ea05f9680be2757e875ee81f4546fd24e5b6354)"
+  },
+  "version_label_limit": "Build scripts watch build.rs/environment, not Git HEAD; version hash is stale cached metadata. Actual source snapshots, logged builds, executable hashes and native outcomes are recorded separately. Do not infer source from the embedded label. Future release build will pin GIT_HASH explicitly.",
+  "combined_v4": {
+    "build_manifest": {
+      "head": "2f070b60a870b5d02edd8b5b0a5b0289a2edd11c",
+      "dirty": true,
+      "source_manifest_sha256": "1e28b175d8ee83aed24246b229831cfb926dc8003e4a40a049f262e5fa3f6dff",
+      "source_archive_sha256": "17170b3e8c4fa657a70ce4f96e2bef86bc0ca9f81df3e8a4cf37850d3db8efc1",
+      "source_scope": "Combined01772a + reviewed finalized pool ancestor persistence b1896506 + client ordinary-proof atomicv2 d1467554 + adaptor insert-only9c104c49 + genuine reserve-first/crash native fixture97602f89. Historical pool backfill, oversize and joint-refund partial-conflict replan remain open; no production claim.",
+      "actual_git_diff_sha256": "8bc31f1c6f5f744b90a720b417902a8ac7a1a8e2cfbd7f7a7f4350a678c31928",
+      "products": {
+        "captaind": {
+          "path": "/fresh-cache/runtime-pool-atomic-v4-20261017/captaind",
+          "sha256": "3f271e4dbf2fb08f4c4cd3f072814c12103e6611cf602ba8d8e79f2991e171d1"
+        },
+        "watchmand": {
+          "path": "/fresh-cache/runtime-pool-atomic-v4-20261017/watchmand",
+          "sha256": "8bf707d1b26fb019271f1443873d03d3678a52a80635a94557122b674ada4c81"
+        },
+        "bark": {
+          "path": "/fresh-cache/runtime-pool-atomic-v4-20261017/bark",
+          "sha256": "ac26c2c9aebf5e5d64b478d1c0c4a51562894c71daa0e0c0290660b99a2f4775",
+          "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+          "web_dist": "/fresh-cache/web-dist-4c1c979"
+        },
+        "barkd": {
+          "path": "/fresh-cache/runtime-pool-atomic-v4-20261017/barkd",
+          "sha256": "4205f109db09907947becd47ca09eb606d126ec798a06c599f7502e1a39ba868",
+          "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+          "web_dist": "/fresh-cache/web-dist-4c1c979"
+        },
+        "ark-testing::bark": {
+          "path": "/fresh-cache/runtime-pool-atomic-v4-20261017/native-bark",
+          "sha256": "089eb60cc14707b1f66223c26bb97c083b7c973be3656c3f9436906edccc0a10"
+        },
+        "ark-testing::bark-sdk": {
+          "path": "/fresh-cache/runtime-pool-atomic-v4-20261017/native-bark-sdk",
+          "sha256": "5a4f1e38a63f22a313f42eebf79874e0cab0f026de958dc8e9742369f9a42966"
+        },
+        "ark-testing::server": {
+          "path": "/fresh-cache/runtime-pool-atomic-v4-20261017/native-server",
+          "sha256": "1194d973b773b1871f7d67f0abf65275defd9d520711c90ccfc6ea006afd8999"
+        }
+      },
+      "metadata_path": "/fresh-cache/runtime-pool-atomic-v4-20261017/nextest-binaries-immutable.json",
+      "metadata_sha256": "8d37dad036f6d99c5a6696fed4938090741d92828076d517ce30cb0e7943236b",
+      "web_dist_manifest_sha256": "51c1f05e4c64bfe62f4edb31bee514da53f7e2f5fb7ec94546266500ebb865e5",
+      "build_phases": {
+        "checks": {
+          "state": "PASS",
+          "command": [
+            "just",
+            "checks"
+          ],
+          "started_at": "2026-10-17T20:56:54.758395+00:00",
+          "exit_code": 0,
+          "seconds": 85.542,
+          "ended_at": "2026-10-17T20:58:20.300300+00:00"
+        },
+        "units": {
+          "state": "PASS",
+          "command": [
+            "just",
+            "--set",
+            "JUSTFILE_DIR",
+            "/fresh-cache/runtime-pool-atomic-v4-20261017",
+            "unit",
+            "--test-threads 4"
+          ],
+          "started_at": "2026-10-17T20:58:20.446324+00:00",
+          "exit_code": 0,
+          "seconds": 122.844,
+          "ended_at": "2026-10-17T21:00:23.290241+00:00"
+        },
+        "products": {
+          "state": "PASS",
+          "command": [
+            "cargo",
+            "build",
+            "--package",
+            "bark-server",
+            "--bin",
+            "captaind",
+            "--bin",
+            "watchmand",
+            "--package",
+            "bark-cli",
+            "--bin",
+            "bark",
+            "--bin",
+            "barkd",
+            "--features",
+            "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui"
+          ],
+          "started_at": "2026-10-17T21:00:23.435309+00:00",
+          "exit_code": 0,
+          "seconds": 88.11,
+          "ended_at": "2026-10-17T21:01:51.545245+00:00"
+        },
+        "metadata": {
+          "state": "PASS",
+          "command": [
+            "cargo",
+            "nextest",
+            "list",
+            "--package",
+            "ark-testing",
+            "--test",
+            "bark-sdk",
+            "--test",
+            "bark",
+            "--test",
+            "server",
+            "--features",
+            "ark-testing/fallback-test-bip84",
+            "--list-type",
+            "binaries-only",
+            "--message-format",
+            "json"
+          ],
+          "started_at": "2026-10-17T21:01:52.255999+00:00",
+          "exit_code": 0,
+          "seconds": 160.25,
+          "ended_at": "2026-10-17T21:04:32.505568+00:00"
+        }
+      },
+      "support_capture_sha256": "7c550f32d2f2c9b5a31a0dcf99f6c31c341a1ecc3923f434db4cdca2fb8a366d",
+      "source_verification": "All1347trackedfiles,HEADanddirtydiff unchanged before/after every phase and final capture",
+      "native_result": "NOT RUN; exact client ownership+isolation, backend single/shared internalrefund and unchangedcontrols next; no broadproductionclaim",
+      "nix": "Existing cached sourced environment; no Nix derivation built; exact actual CLN adapter separately pinned where used",
+      "captured_at": "2026-10-17T21:04:33.328814+00:00"
+    },
+    "native_results": {
+      "source_manifest_sha256": "1e28b175d8ee83aed24246b229831cfb926dc8003e4a40a049f262e5fa3f6dff",
+      "started_at": "2026-10-17T21:05:22.543164+00:00",
+      "state": "FAIL",
+      "retries": 0,
+      "container": "abandon-fresh-runtime-20261017",
+      "cases": [
+        {
+          "test": "expiry_lightning_terminal::expiry_internal_signed_grants_joint_timeout_pays_absent_sender",
+          "started_at": "2026-10-17T21:05:23.038471+00:00",
+          "state": "PASS",
+          "selected": [
+            "expiry_lightning_terminal::expiry_internal_signed_grants_joint_timeout_pays_absent_sender"
+          ],
+          "exit_code": 0,
+          "seconds": 163.797,
+          "ended_at": "2026-10-17T21:08:06.836486+00:00",
+          "log_sha256": "5c721180ce8f9146b4f4dedc689ca2305b191ea399d5a20b23c9c3fbc06d3bf9"
+        },
+        {
+          "test": "expiry_lightning_terminal::expiry_internal_shared_incoming_root_refunds_both_absent_attempts",
+          "started_at": "2026-10-17T21:08:07.268015+00:00",
+          "state": "FAIL",
+          "selected": [
+            "expiry_lightning_terminal::expiry_internal_shared_incoming_root_refunds_both_absent_attempts"
+          ],
+          "exit_code": 100,
+          "seconds": 179.454,
+          "ended_at": "2026-10-17T21:11:06.722592+00:00",
+          "log_sha256": "b776043c2bb3e670c59be8603013a2f876c5fb6e2c05329419c99b53ecc91aa7"
+        },
+        {
+          "test": "qualification_ordinary_exit_atomic::verified_ordinary_checkpoint_serializes_with_automatic_exit_reservation",
+          "started_at": "2026-10-17T21:11:07.311217+00:00",
+          "state": "PASS",
+          "selected": [
+            "qualification_ordinary_exit_atomic::verified_ordinary_checkpoint_serializes_with_automatic_exit_reservation"
+          ],
+          "exit_code": 0,
+          "seconds": 24.45,
+          "ended_at": "2026-10-17T21:11:31.761481+00:00",
+          "log_sha256": "bd3448a5f5d210a34492747aa876fa7c32f9355791a7197b038e0934d2f07781"
+        },
+        {
+          "test": "qualification_ordinary_exit_atomic::ordinary_proof_retires_an_earlier_own_safety_reservation_without_touching_healthy_sibling",
+          "started_at": "2026-10-17T21:11:32.467947+00:00",
+          "state": "PASS",
+          "selected": [
+            "qualification_ordinary_exit_atomic::ordinary_proof_retires_an_earlier_own_safety_reservation_without_touching_healthy_sibling"
+          ],
+          "exit_code": 0,
+          "seconds": 25.095,
+          "ended_at": "2026-10-17T21:11:57.563480+00:00",
+          "log_sha256": "79f4fc86be6baa2ff50b93f3035fecf096d27fb6098b63b34e6d085455fcde62"
+        },
+        {
+          "test": "qualification_ordinary_exit_atomic::ordinary_proof_checkpoint_reopens_without_relocking_its_retained_safety_intent",
+          "started_at": "2026-10-17T21:11:58.499337+00:00",
+          "state": "PASS",
+          "selected": [
+            "qualification_ordinary_exit_atomic::ordinary_proof_checkpoint_reopens_without_relocking_its_retained_safety_intent"
+          ],
+          "exit_code": 0,
+          "seconds": 27.115,
+          "ended_at": "2026-10-17T21:12:25.614968+00:00",
+          "log_sha256": "7b02a9270fbf7849931ecab4762d75ef2bc8a64a1c50729b3b6bc8ad17b55623"
+        },
+        {
+          "test": "fallback_adoption::fallback_ml181_spent_without_complete_signed_proof_retains_body_without_inventing_balance",
+          "started_at": "2026-10-17T21:12:26.245719+00:00",
+          "state": "PASS",
+          "selected": [
+            "fallback_adoption::fallback_ml181_spent_without_complete_signed_proof_retains_body_without_inventing_balance"
+          ],
+          "exit_code": 0,
+          "seconds": 37.33,
+          "ended_at": "2026-10-17T21:13:03.576404+00:00",
+          "log_sha256": "ef6cfd811559fb3af58416ccd8dc2386a35d82340b772b70e534427fa3e15016"
+        },
+        {
+          "test": "fallback_adoption::fallback_ml181_locally_owned_unpaid_spent_retains_principal_with_missing_history",
+          "started_at": "2026-10-17T21:13:04.374182+00:00",
+          "state": "PASS",
+          "selected": [
+            "fallback_adoption::fallback_ml181_locally_owned_unpaid_spent_retains_principal_with_missing_history"
+          ],
+          "exit_code": 0,
+          "seconds": 25.136,
+          "ended_at": "2026-10-17T21:13:29.511100+00:00",
+          "log_sha256": "a735727182612cbab529f24543669accfcb58979032066adf39e8a51973e4fbe"
+        },
+        {
+          "test": "qualification_protection_isolation::missing_coin_body_does_not_starve_a_healthy_coins_protective_exit",
+          "started_at": "2026-10-17T21:13:30.227972+00:00",
+          "state": "PASS",
+          "selected": [
+            "qualification_protection_isolation::missing_coin_body_does_not_starve_a_healthy_coins_protective_exit"
+          ],
+          "exit_code": 0,
+          "seconds": 19.582,
+          "ended_at": "2026-10-17T21:13:49.810130+00:00",
+          "log_sha256": "e9a6742f8b9b47333678848acfc9ac5abd94fa126fcc1a04d6ef5ade092e17d8"
+        },
+        {
+          "test": "fallback_adoption::fallback_adoption_history_failure_quarantines_then_reconciles_an_ordinary_spend",
+          "started_at": "2026-10-17T21:13:50.683002+00:00",
+          "state": "PASS",
+          "selected": [
+            "fallback_adoption::fallback_adoption_history_failure_quarantines_then_reconciles_an_ordinary_spend"
+          ],
+          "exit_code": 0,
+          "seconds": 26.242,
+          "ended_at": "2026-10-17T21:14:16.926026+00:00",
+          "log_sha256": "a7d0eabebdcdb1cdedcac6e8411a9262b5e25e04594fe78138bae56d270f2e0a"
+        },
+        {
+          "test": "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+          "started_at": "2026-10-17T21:14:17.628856+00:00",
+          "state": "PASS",
+          "selected": [
+            "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender"
+          ],
+          "exit_code": 0,
+          "seconds": 51.195,
+          "ended_at": "2026-10-17T21:15:08.824076+00:00",
+          "log_sha256": "b8fc45fe9d5bd7245d97ef9a67fff882b8c091f82710e72c1d5d00df504df1ce"
+        },
+        {
+          "test": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+          "started_at": "2026-10-17T21:15:09.926116+00:00",
+          "state": "PASS",
+          "selected": [
+            "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent"
+          ],
+          "exit_code": 0,
+          "seconds": 33.628,
+          "ended_at": "2026-10-17T21:15:43.554704+00:00",
+          "log_sha256": "858f9796290263fd38582c4634900e387c58f94c31a33ba5a82ec72a7834bb9e"
+        },
+        {
+          "test": "fallback_protection::fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payment",
+          "started_at": "2026-10-17T21:15:44.456792+00:00",
+          "state": "PASS",
+          "selected": [
+            "fallback_protection::fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payment"
+          ],
+          "exit_code": 0,
+          "seconds": 25.191,
+          "ended_at": "2026-10-17T21:16:09.649723+00:00",
+          "log_sha256": "7e064817c35c69c0d1a91453cf6ab361573638c8558a17223c208279602b210d"
+        },
+        {
+          "test": "fallback_protection::fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server",
+          "started_at": "2026-10-17T21:16:10.634320+00:00",
+          "state": "PASS",
+          "selected": [
+            "fallback_protection::fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server"
+          ],
+          "exit_code": 0,
+          "seconds": 31.907,
+          "ended_at": "2026-10-17T21:16:42.542527+00:00",
+          "log_sha256": "2a4b5e6d57f45f76d7d6de70a11b845f4aa1f3ca21c669979ab2e8f88da3c0f9"
+        },
+        {
+          "test": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+          "started_at": "2026-10-17T21:16:42.994797+00:00",
+          "state": "PASS",
+          "selected": [
+            "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient"
+          ],
+          "exit_code": 0,
+          "seconds": 33.083,
+          "ended_at": "2026-10-17T21:17:16.078405+00:00",
+          "log_sha256": "289428a581c9d3b559cfa87b84111463d9fd50930dc13495328163de58cb7882"
+        }
+      ],
+      "ended_at": "2026-10-17T21:17:16.079123+00:00"
+    },
+    "summary": {
+      "pass": 13,
+      "fail": 1,
+      "retries": 0
+    },
+    "shared_failure_diagnosis": {
+      "status": "READ_ONLY_LOG_DIAGNOSIS_NOT_A_PASS",
+      "inputs_sha256": {
+        "test-data/server/expiry_internal_shared_incoming_root/server/stdout.log": "536970a6c8e3b4a8c6075c817ef115de3c685f0f2651d4a551bf6795c830b68a",
+        "test-data/server/expiry_internal_shared_incoming_root/server-watchmand/stdout.log": "134e003f47bd63821b90f5b9a24e1782aca1ddd83827e973ad0e5da6900760b9",
+        "diagnostic-graph.json": "871956abcaff5a103f3324b40918a9c4b3080262ffd9e86a2aee4c05139a69c7",
+        "run.log": "b776043c2bb3e670c59be8603013a2f876c5fb6e2c05329419c99b53ecc91aa7"
+      },
+      "actual_completed_tips": {
+        "captaind": 187,
+        "watchmand": 187
+      },
+      "grants": [
+        {
+          "id": "895a8f5fbfccbba7721aa9e81e6b1173a4a746698f722cfe5c3059b22e6c140d:0",
+          "state": "htlc-recv-unclaimed",
+          "amount": 50000,
+          "expiry": 137,
+          "deadline": 153,
+          "confirmed": 175,
+          "resolved_chain": false,
+          "resolved_offchain": false
+        },
+        {
+          "id": "440bd96c1148b34bc4a6c2c3aff6a090daad561801ca957740a6af222ee3946c:0",
+          "state": "htlc-recv-unclaimed",
+          "amount": 40000,
+          "expiry": 137,
+          "deadline": 153,
+          "confirmed": 170,
+          "resolved_chain": false,
+          "resolved_offchain": false
+        },
+        {
+          "id": "08037a50673027fc88abb39805795641df5eb2d37865e6385308e28213020196:0",
+          "state": "htlc-recv-unclaimed",
+          "amount": 50000,
+          "expiry": 137,
+          "deadline": 153,
+          "confirmed": 168,
+          "resolved_chain": false,
+          "resolved_offchain": false
+        },
+        {
+          "id": "87a1a6a94f20db9ebefb8e08ab2dd71834218d4a0cbd5de1c4f86b40b3bb2493:0",
+          "state": "htlc-recv-unclaimed",
+          "amount": 40000,
+          "expiry": 137,
+          "deadline": 153,
+          "confirmed": 174,
+          "resolved_chain": false,
+          "resolved_offchain": false
+        }
+      ],
+      "configured_exit_delta_blocks": 12,
+      "first_whole_component_maturity_height": 187,
+      "last_logged_component_preparation_before_maturity": 186,
+      "last_process_log_timestamps": {
+        "server": "2026-10-17T21:11:06.342Z",
+        "server-watchmand": "2026-10-17T21:11:06.509Z"
+      },
+      "timeline": [
+        {
+          "timestamp": "2026-10-17T21:11:05.238Z",
+          "message": "Whole internal refund component remains pending",
+          "attempt_id": 1,
+          "error": "tx body error\n\nCaused by:\n    joint refund timeout is not mature in both completed views",
+          "process": "server"
+        },
+        {
+          "timestamp": "2026-10-17T21:11:05.335Z",
+          "message": "Whole internal refund component remains pending",
+          "attempt_id": 2,
+          "error": "tx body error\n\nCaused by:\n    joint refund timeout is not mature in both completed views",
+          "process": "server"
+        },
+        {
+          "timestamp": "2026-10-17T21:11:06.278Z",
+          "message": "synced to height",
+          "process": "server",
+          "height": 187
+        },
+        {
+          "timestamp": "2026-10-17T21:11:06.321Z",
+          "message": "synced to height",
+          "process": "server-watchmand",
+          "height": 187
+        },
+        {
+          "timestamp": "2026-10-17T21:11:06.340Z",
+          "message": "Expiry readiness pass failed; no incomplete payout authorized: tx body error: expiry view token does not identify the rebuilt view",
+          "process": "server"
+        },
+        {
+          "timestamp": "2026-10-17T21:11:06.342Z",
+          "message": "Internal timeout refund pass remains pending",
+          "error": "tx body error",
+          "process": "server"
+        }
+      ],
+      "conclusion": "Both concrete component rejections precede the first fully mature tip. At187 the final readiness call rejected the not-yet-rebuilt view; no later eligible component preparation is recorded before teardown. This does not establish a successful refund or rule out a later component bug.",
+      "proposed_fixture_only_change": "Retain150s and every oracle; after all actual grants confirm, fast-forward only their exact remaining signed CSV/CLTV maturity blocks and hold that mature tip for autonomous publication. No change applied by this reviewer."
+    },
+    "limit": "Shared-case failure retained; no completed eligible rebuilt view pass observed before teardown. Fixture-only exact maturity correction authored, not yet rerun."
+  },
+  "balance_backup_v5": {
+    "build_manifest": {
+      "head": "e443d415ee7b0d512203bd56f85e22cdec69d35f",
+      "dirty": true,
+      "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+      "source_archive_sha256": "ed164c50d7ec3e0c9077c2ac84099fb37dd17d2f47cb01935dabd031d9fcc5b6",
+      "source_scope": "Publishede443d415e product source matching1e28b175 plus reviewed prepared safety-exit balanceb07012fd (test imports moved to modulehead), authentic physical coldbackup ced8c436 and module registration, remove unused pool Transaction import. Existing LN historical/capacity/partial-replan limits remain open.",
+      "actual_git_diff_sha256": "7d61324da7ccc276a836ddf26060d91de0ad0de929447e0fe2dc6b52ae55b870",
+      "products": {
+        "captaind": {
+          "path": "/fresh-cache/runtime-balance-backup-v5-20261017/captaind",
+          "sha256": "3f271e4dbf2fb08f4c4cd3f072814c12103e6611cf602ba8d8e79f2991e171d1"
+        },
+        "watchmand": {
+          "path": "/fresh-cache/runtime-balance-backup-v5-20261017/watchmand",
+          "sha256": "8bf707d1b26fb019271f1443873d03d3678a52a80635a94557122b674ada4c81"
+        },
+        "bark": {
+          "path": "/fresh-cache/runtime-balance-backup-v5-20261017/bark",
+          "sha256": "d787c51786c91e9ce8c10502d797b8911100e8dd0f3e3535d1536bf1123d9527",
+          "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+          "web_dist": "/fresh-cache/web-dist-4c1c979"
+        },
+        "barkd": {
+          "path": "/fresh-cache/runtime-balance-backup-v5-20261017/barkd",
+          "sha256": "93011e42f99787341b8a54e55af0f7540e8407c91354f0865d0d628bfd099366",
+          "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+          "web_dist": "/fresh-cache/web-dist-4c1c979"
+        },
+        "ark-testing::bark": {
+          "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-bark",
+          "sha256": "3f56d0874a296128fa9c74d64689f04fa58f0ad7ca28512acc55ac9b754e10e5"
+        },
+        "ark-testing::bark-sdk": {
+          "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-bark-sdk",
+          "sha256": "41b5e69fdaf3fa01fe92ec602795fc428f6431665a42ad89504cf2ad0e2c8ef1"
+        },
+        "ark-testing::server": {
+          "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-server",
+          "sha256": "26d701e21e623889f9cba0e0af76d6084e032f9aa8b96dfa9a098e8a471f7387"
+        }
+      },
+      "metadata_path": "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-immutable.json",
+      "metadata_sha256": "bcf9f8e887cd1b1e13cb6871bdef6d365b9e90a9c53cd992c17e61809a3b8113",
+      "web_dist_manifest_sha256": "51c1f05e4c64bfe62f4edb31bee514da53f7e2f5fb7ec94546266500ebb865e5",
+      "build_phases": {
+        "checks": {
+          "state": "PASS",
+          "command": [
+            "just",
+            "checks"
+          ],
+          "started_at": "2026-10-17T21:09:36.840587+00:00",
+          "exit_code": 0,
+          "seconds": 107.56,
+          "ended_at": "2026-10-17T21:11:24.400368+00:00"
+        },
+        "units": {
+          "state": "PASS",
+          "command": [
+            "just",
+            "--set",
+            "JUSTFILE_DIR",
+            "/fresh-cache/runtime-balance-backup-v5-20261017",
+            "unit",
+            "--test-threads 4"
+          ],
+          "started_at": "2026-10-17T21:11:24.634615+00:00",
+          "exit_code": 0,
+          "seconds": 133.654,
+          "ended_at": "2026-10-17T21:13:38.288330+00:00"
+        },
+        "products": {
+          "state": "PASS",
+          "command": [
+            "cargo",
+            "build",
+            "--package",
+            "bark-server",
+            "--bin",
+            "captaind",
+            "--bin",
+            "watchmand",
+            "--package",
+            "bark-cli",
+            "--bin",
+            "bark",
+            "--bin",
+            "barkd",
+            "--features",
+            "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui"
+          ],
+          "started_at": "2026-10-17T21:13:38.444556+00:00",
+          "exit_code": 0,
+          "seconds": 94.756,
+          "ended_at": "2026-10-17T21:15:13.201003+00:00"
+        },
+        "metadata": {
+          "state": "PASS",
+          "command": [
+            "cargo",
+            "nextest",
+            "list",
+            "--package",
+            "ark-testing",
+            "--test",
+            "bark-sdk",
+            "--test",
+            "bark",
+            "--test",
+            "server",
+            "--features",
+            "ark-testing/fallback-test-bip84",
+            "--list-type",
+            "binaries-only",
+            "--message-format",
+            "json"
+          ],
+          "started_at": "2026-10-17T21:15:13.824213+00:00",
+          "exit_code": 0,
+          "seconds": 165.864,
+          "ended_at": "2026-10-17T21:17:59.687878+00:00"
+        }
+      },
+      "support_capture_sha256": "128c5649d8d0ed94190dd320f923027f1b9c9452f071da00e2f60b2f7508fffc",
+      "source_verification": "All1479trackedfiles,HEADanddirtydiff unchanged before/after every phase and final capture",
+      "native_result": "NOT RUN; exact client ownership+isolation, backend single/shared internalrefund and unchangedcontrols next; no broadproductionclaim",
+      "nix": "Existing cached sourced environment; no Nix derivation built; exact actual CLN adapter separately pinned where used",
+      "captured_at": "2026-10-17T21:18:00.449095+00:00"
+    },
+    "units": {
+      "passed": 840,
+      "skipped": 1
+    },
+    "native_client_results": {
+      "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+      "started_at": "2026-10-17T21:19:49.324357+00:00",
+      "state": "PASS",
+      "retries": 0,
+      "container": "abandon-fresh-runtime-20261017",
+      "cases": [
+        {
+          "test": "qualification_ordinary_exit_atomic::verified_ordinary_checkpoint_serializes_with_automatic_exit_reservation",
+          "started_at": "2026-10-17T21:19:49.806105+00:00",
+          "state": "PASS",
+          "selected": [
+            "qualification_ordinary_exit_atomic::verified_ordinary_checkpoint_serializes_with_automatic_exit_reservation"
+          ],
+          "exit_code": 0,
+          "seconds": 19.724,
+          "ended_at": "2026-10-17T21:20:09.530228+00:00",
+          "log_sha256": "d84de6e5bac5d36f4912421c5749289f82bc014d84e8a727caf00cd3481866db"
+        },
+        {
+          "test": "qualification_ordinary_exit_atomic::ordinary_proof_retires_an_earlier_own_safety_reservation_without_touching_healthy_sibling",
+          "started_at": "2026-10-17T21:20:10.059442+00:00",
+          "state": "PASS",
+          "selected": [
+            "qualification_ordinary_exit_atomic::ordinary_proof_retires_an_earlier_own_safety_reservation_without_touching_healthy_sibling"
+          ],
+          "exit_code": 0,
+          "seconds": 17.122,
+          "ended_at": "2026-10-17T21:20:27.181459+00:00",
+          "log_sha256": "ef8d95769e9ed3e1ef5fd756fad66b0962e0fd559be28e2ef9b75de65559ed77"
+        },
+        {
+          "test": "qualification_ordinary_exit_atomic::ordinary_proof_checkpoint_reopens_without_relocking_its_retained_safety_intent",
+          "started_at": "2026-10-17T21:20:27.571510+00:00",
+          "state": "PASS",
+          "selected": [
+            "qualification_ordinary_exit_atomic::ordinary_proof_checkpoint_reopens_without_relocking_its_retained_safety_intent"
+          ],
+          "exit_code": 0,
+          "seconds": 16.882,
+          "ended_at": "2026-10-17T21:20:44.454324+00:00",
+          "log_sha256": "3bc0a68b7902faaaf69950a44e6c76af7e3d183b4860c16955a817332bd52991"
+        },
+        {
+          "test": "fallback_adoption::fallback_ml181_spent_without_complete_signed_proof_retains_body_without_inventing_balance",
+          "started_at": "2026-10-17T21:20:44.843440+00:00",
+          "state": "PASS",
+          "selected": [
+            "fallback_adoption::fallback_ml181_spent_without_complete_signed_proof_retains_body_without_inventing_balance"
+          ],
+          "exit_code": 0,
+          "seconds": 24.408,
+          "ended_at": "2026-10-17T21:21:09.251816+00:00",
+          "log_sha256": "ef1b2643df1fc23f4612b0181a4a6bca064727c67f1f5e082244d4efef7d5783"
+        },
+        {
+          "test": "fallback_adoption::fallback_ml181_locally_owned_unpaid_spent_retains_principal_with_missing_history",
+          "started_at": "2026-10-17T21:21:09.704543+00:00",
+          "state": "PASS",
+          "selected": [
+            "fallback_adoption::fallback_ml181_locally_owned_unpaid_spent_retains_principal_with_missing_history"
+          ],
+          "exit_code": 0,
+          "seconds": 18.245,
+          "ended_at": "2026-10-17T21:21:27.949939+00:00",
+          "log_sha256": "7e720d594515bc12a0d33a3ec262e531873aa6b6fe3d45affca6f3ac704b2e8e"
+        },
+        {
+          "test": "fallback_protection::fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payment",
+          "started_at": "2026-10-17T21:21:28.344461+00:00",
+          "state": "PASS",
+          "selected": [
+            "fallback_protection::fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payment"
+          ],
+          "exit_code": 0,
+          "seconds": 22.229,
+          "ended_at": "2026-10-17T21:21:50.574042+00:00",
+          "log_sha256": "0fec5937add627d90653a2f833ac9273327090f046d4b92a31b9e2ff08597203"
+        }
+      ],
+      "ended_at": "2026-10-17T21:21:50.574351+00:00"
+    },
+    "cold_backup": "Compiled authentic sourceced8; independent allocated one-shot native execution underway, no result credited here."
+  },
+  "catalogue": "Unchanged2boundedfullPASS/145partial/53notrun; no component count promotes a full scenario.",
+  "production_readiness": "NO; historical/oversize/partial-terminal joint closure, broader chain recovery/backup, full client/live LN and sustained load remain open."
+}

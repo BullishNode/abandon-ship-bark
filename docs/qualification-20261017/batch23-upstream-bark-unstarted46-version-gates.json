@@ -1,0 +1,278 @@
+{
+  "actual_version": "bark 0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+  "parser_and_gate_source": {
+    "reported_actual_version": "0.7.1-dev",
+    "version_basis": "Coordinator-reported actual frozen BARK_EXEC output; this review never invoked the binary. Existing product hash must be verified during admitted preflight.",
+    "parser": "testing/src/util.rs:354-359 maps any string containing -dev and DIRTY to BarkVersion::Dev; Ord:380-385 makes Dev greater than every Release and equal to Dev.",
+    "gate": "testing/src/lib.rs:95-105 logs skipping test and returns only when parsed condition false. A nextest PASS after that return is not behavior coverage.",
+    "frozen_helper_proofs": {
+      "testing/src/lib.rs": {
+        "sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+        "frozen_manifest_match": true
+      },
+      "testing/src/util.rs": {
+        "sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+        "frozen_manifest_match": true
+      }
+    },
+    "counts": {
+      "remaining": 75,
+      "require_gate_tests": 32,
+      "require_gate_occurrences": 32,
+      "branch_macro_tests": 5,
+      "branch_macro_occurrences": 7,
+      "no_version_macro_tests": 41,
+      "excluded": 0
+    },
+    "all_required_gates_pass": true,
+    "all_branch_conditions_true_for_this_version": true,
+    "default_selected_names_verified_against_immutable_listing": true
+  },
+  "started_only_macro_count": 8,
+  "started_require_gate_count": 7,
+  "not_reached_branch_count": 1,
+  "started_cases": [
+    {
+      "sequence": 1,
+      "test_name": "create::bark_create_is_atomic",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case01/test-data/bark/bark_create_is_atomic",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 2,
+      "test_name": "create::cli_create_refuses_another_cli_create",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 44
+        }
+      ],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case02/test-data/bark/cli_create_refuses_another_cli_create",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 3,
+      "test_name": "create::cli_create_releases_lock_after_failure",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 19
+        }
+      ],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case03/test-data/bark/cli_create_releases_lock_after_failure",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 4,
+      "test_name": "dust::bark_allows_sending_dust_arkoor_but_errors_on_dust_refresh",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case04/test-data/bark/bark_allows_sending_dust_arkoor_but_errors_on_dust_refresh",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 5,
+      "test_name": "estimate::estimate_lightning_send_fee_without_funds",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 9
+        }
+      ],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case05/test-data/bark/estimate_lightning_send_fee_without_funds",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 6,
+      "test_name": "estimate::estimate_send_onchain_fee_without_funds",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case06/test-data/bark/estimate_send_onchain_fee_without_funds",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 7,
+      "test_name": "fees::board_fee_base_and_ppm",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case07/test-data/fees/board_fee_base_and_ppm",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 8,
+      "test_name": "fees::board_fee_min_fee_applies",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case08/test-data/fees/board_fee_min_fee_applies",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 9,
+      "test_name": "fees::board_fee_rejects_when_fee_exceeds_amount",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case09/test-data/fees/board_fee_rejects_when_fee_exceeds_amount",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 10,
+      "test_name": "fees::offboard_all_rejects_dust_output",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case10/test-data/fees/offboard_all_rejects_dust_output",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 11,
+      "test_name": "fees::offboard_fee_base_deducted",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case11/test-data/fees/offboard_fee_base_deducted",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 12,
+      "test_name": "fees::offboard_fee_with_ppm_expiry",
+      "macros": [],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case12/test-data/fees/offboard_fee_with_ppm_expiry",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 13,
+      "test_name": "fees::refresh_fee_base_only",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 265
+        }
+      ],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case13/test-data/fees/refresh_fee_base_only",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 14,
+      "test_name": "fees::refresh_fee_rejects_dust_output",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 575
+        }
+      ],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case14/test-data/fees/refresh_fee_rejects_dust_output",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 15,
+      "test_name": "fees::refresh_fee_with_multiple_vtxos",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 366
+        }
+      ],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case15/test-data/fees/refresh_fee_with_multiple_vtxos",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 16,
+      "test_name": "fees::refresh_fee_with_ppm_expiry",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 306
+        }
+      ],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case16/test-data/fees/refresh_fee_with_ppm_expiry",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": null
+    },
+    {
+      "sequence": 17,
+      "test_name": "fees::send_onchain_fee_deducted",
+      "macros": [
+        {
+          "macro": "is_bark_version",
+          "operator": ">",
+          "required_literal": "0.6.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 808
+        }
+      ],
+      "actual_context_directory_exists": true,
+      "context_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46/case17/test-data/fees/send_onchain_fee_deducted",
+      "log_reports_version_skip": false,
+      "branch_runtime_limit": "is_bark_version at source808 occurs after failure795 and was NOT reached"
+    }
+  ],
+  "scope": "Dev parser/gate comparison and retained body directories checked; case17 source808 branch not executed because failure795."
+}

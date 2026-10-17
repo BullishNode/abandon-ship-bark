@@ -1,0 +1,12 @@
+{
+  "status": "DEPENDENCIES_PASS",
+  "at": "2026-10-17T18:48:34.312229+00:00",
+  "container_id": "7b3925c9c69800497043ee57023bed5bf432d48e49e61a95a6ac9262b880845a",
+  "image": "sha256:8ff8b71e01b76a308ce8428e7769565ff8574c4b5c8f72eb847719bc04370f79",
+  "init": true,
+  "shm_bytes": 1073741824,
+  "dependencies": "Exact old/new Nix paths, ELF hashes and versions equal for cargo,rustc,just,bitcoind,postgres,lightningd,cargo-nextest",
+  "native_result": "NOT RUN; immutable metadata listing still required",
+  "shared_target": "/fresh-cache/target; sole root compiler in original development container",
+  "preserved_original_container": true
+}

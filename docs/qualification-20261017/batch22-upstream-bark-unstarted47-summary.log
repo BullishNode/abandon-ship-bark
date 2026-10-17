@@ -1,0 +1,12 @@
+batch22-upstream-bark-unstarted47: stopped at first actual test failure.
+0PASS /1FAIL /46NOTSTARTED; controller exit100; retries0; normal180s; no new compilation.
+1daemon-backedFAIL;46queue cases unstarted plus original61 deferred; no CLIprocess components started.
+Source7041; passed test sum0.000s; all started test sum15.259s; wall sum16.520s.
+First creation of a new unfunded wallet with force enabled while Ark is offline; healthy owned Core completes initial scan, then fallback open requires unavailable Ark and returns Connection refused.
+No retained customer DB exists to query. No zero-database-row, persistent-half-created-wallet or retained-record claim is made.
+Original FAIL retained. Source-fix proposals and any later conditional outcomes remain separate.
+No raw seed/key/address/config/DB copied; reconciliation reads retained JSON only.
+No FULL ML/fullCLI or lost-customer-money claim.
+
+Original75 case61 onchain::bark_address_changes remains deferred; it was not started or counted.
+01 FT-CLI-030 FAIL 15.259s c5640527-12f8-45df-8dff-47798cc91637 create::bark_create_force_flag [daemon_backed_native_fixture]

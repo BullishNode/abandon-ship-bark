@@ -1,0 +1,19 @@
+===== FT-CLI-001: raw case01/nextest.log =====
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/testing-track-20261017/batch20-upstream-bark-first-two/nextest-binaries-bark-runtime-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch20-upstream-bark-first-two/case01/nextest.toml -- board::board_bark --exact
+────────────
+ Nextest run ID 36c2b67e-d125-482d-befc-c420049ac3b5 with nextest profile: default
+    Starting 1 test across 1 binary (201 tests skipped)
+        PASS [   9.190s] (1/1) ark-testing::bark board::board_bark
+────────────
+     Summary [   9.191s] 1 test run: 1 passed, 201 skipped
+
+===== FT-CLI-002: raw case02/nextest.log =====
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/testing-track-20261017/batch20-upstream-bark-first-two/nextest-binaries-bark-runtime-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch20-upstream-bark-first-two/case02/nextest.toml -- arkoor::send_simple_arkoor --exact
+────────────
+ Nextest run ID 9c2c67ac-28c2-4c2f-9abd-346cee4f0358 with nextest profile: default
+    Starting 1 test across 1 binary (201 tests skipped)
+        PASS [  14.147s] (1/1) ark-testing::bark arkoor::send_simple_arkoor
+────────────
+     Summary [  14.148s] 1 test run: 1 passed, 201 skipped

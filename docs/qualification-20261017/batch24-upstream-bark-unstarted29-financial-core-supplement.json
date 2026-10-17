@@ -1,0 +1,22 @@
+{
+  "scope": "New retained-Core evidence supplement only; earlier terminal receipt remains immutable with its then-pending financial state.",
+  "original_receipt_file": "batch24-upstream-bark-unstarted29-receipt.json",
+  "original_receipt_sha256": "0b8277272aaeb80e43e5f8e3726bc0754ae24ae368a39ef692f185cec7f70b5b",
+  "original_result": "FAIL",
+  "original_run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "observation": "Parent offline retained block/debug parser resolves original board funding transaction with100000sat exact board output and899237sat other-output total;1Minput minus999237outputs yields763sat actual minerfee, matching failed test metadata763sat (expected772). Inclusionheight107/retainedtip109 gives3confirmations.",
+  "curation_verification": "Crosschecked receipt identifiers/arithmetic, copied exact parser/receipt, independently rehashed original block/xor/debug inputs. Did not execute parser or reopen any node/wallet/DB.",
+  "client_sqlite_reconciliation": "PENDING independent client review; no claim of performed SQLite query.",
+  "limits": "OriginalFAIL remainsFAIL. Finalchain_anchor test assertion not executed; no six-confirmation, whole-wallet solvency, adapted-source execution or FULL ML claim. Other-output total is not an independent custody proof.",
+  "files": [
+    {
+      "file": "batch24-upstream-bark-unstarted29-financial-core-supplement-retained-core-reconciliation.json",
+      "sha256": "5cc013b31dc36983d5ac6fa9eeea34aaab38e4621b0bdb5185ab7d003efb0d40"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-financial-core-supplement-reconcile-core-blocks.py",
+      "sha256": "d9480ef237ba99f818051980bb1ccd7ced1985cd387eeed5007f23cdf3bac573"
+    }
+  ]
+}

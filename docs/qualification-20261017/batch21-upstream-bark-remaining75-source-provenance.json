@@ -1,0 +1,601 @@
+{
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "upstream_pin": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "source_archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "verification": "All28 started functions across both batches independently rehashed from frozen source lines and matched verbatim in pinned upstream. Five sourcefiles wholly equal; create.rs is extended but both executed function bodies are unchanged. No current source substituted for compiled source7041.",
+  "started_cases": [
+    {
+      "case_id": "FT-CLI-003",
+      "original_75_sequence": 1,
+      "test_name": "access_token::access_token_is_sent",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Access-token propagation through real fixture; no customer payment asserted.",
+      "source": {
+        "test_name": "access_token::access_token_is_sent",
+        "source_file": "testing/tests/bark/access_token.rs",
+        "source_file_sha256": "ca88cc2dc833f8351f450b3e7084165b546e4ec15f9d23b4fc6f6d2a273607d2",
+        "function_sha256": "480ae9f0ef074f5802ec2c72eca47b22899ef67fddeb990a3d8075cb61e732d2",
+        "upstream_function_sha256": "480ae9f0ef074f5802ec2c72eca47b22899ef67fddeb990a3d8075cb61e732d2",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-004",
+      "original_75_sequence": 2,
+      "test_name": "arkoor::max_arkoor_amount",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "arkoor::max_arkoor_amount",
+        "source_file": "testing/tests/bark/arkoor.rs",
+        "source_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+        "function_sha256": "75c43f539aa639cbd2f562bc2df7d85b6a8f03b2d5c497e48b87417bd6438514",
+        "upstream_function_sha256": "75c43f539aa639cbd2f562bc2df7d85b6a8f03b2d5c497e48b87417bd6438514",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-005",
+      "original_75_sequence": 3,
+      "test_name": "arkoor::oor_change_split",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "arkoor::oor_change_split",
+        "source_file": "testing/tests/bark/arkoor.rs",
+        "source_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+        "function_sha256": "7bde74fc958d6ea243a72004cb43d3d33ed4510cfa5a1924a12764a6e089422d",
+        "upstream_function_sha256": "7bde74fc958d6ea243a72004cb43d3d33ed4510cfa5a1924a12764a6e089422d",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": ">",
+            "required_literal": "0.6.1",
+            "actual_parsed": "Dev",
+            "required_parsed": "Release",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 128
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-006",
+      "original_75_sequence": 4,
+      "test_name": "arkoor::send_arkoor_package",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "arkoor::send_arkoor_package",
+        "source_file": "testing/tests/bark/arkoor.rs",
+        "source_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+        "function_sha256": "dc4626328a9eb26c08a20757ba32b9de2a2541d522c1d5739df7b2c7fac8c81c",
+        "upstream_function_sha256": "dc4626328a9eb26c08a20757ba32b9de2a2541d522c1d5739df7b2c7fac8c81c",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-007",
+      "original_75_sequence": 5,
+      "test_name": "arkoor::send_full_arkoor",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "arkoor::send_full_arkoor",
+        "source_file": "testing/tests/bark/arkoor.rs",
+        "source_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+        "function_sha256": "953f260ecf55a5dc7680e717872d78ac8d7f66816179e1c0494bd42725fad359",
+        "upstream_function_sha256": "953f260ecf55a5dc7680e717872d78ac8d7f66816179e1c0494bd42725fad359",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-008",
+      "original_75_sequence": 6,
+      "test_name": "arkoor::send_to_arkade_address_is_rejected",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Genuine native fixture with refusal/state/balance assertions; does not itself qualify final fallback payment.",
+      "source": {
+        "test_name": "arkoor::send_to_arkade_address_is_rejected",
+        "source_file": "testing/tests/bark/arkoor.rs",
+        "source_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+        "function_sha256": "f28dd5687e95722eb23b2d9a41b73b8c8162d7b4c24eb7b4d60d662ae73659d2",
+        "upstream_function_sha256": "f28dd5687e95722eb23b2d9a41b73b8c8162d7b4c24eb7b4d60d662ae73659d2",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-009",
+      "original_75_sequence": 7,
+      "test_name": "arkoor::test_ark_address_other_ark",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "arkoor::test_ark_address_other_ark",
+        "source_file": "testing/tests/bark/arkoor.rs",
+        "source_file_sha256": "d1cd8369a8ff79c153289376e69870d1d12e74633b341cf461efd2e2f144e666",
+        "function_sha256": "4ccda9e89f518c002035d7cee1ff33530a200cf7836448926fac69e29ee11b5a",
+        "upstream_function_sha256": "4ccda9e89f518c002035d7cee1ff33530a200cf7836448926fac69e29ee11b5a",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-010",
+      "original_75_sequence": 8,
+      "test_name": "base::bark_ark_info",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native fixture but ark-info JSON component oracle only.",
+      "source": {
+        "test_name": "base::bark_ark_info",
+        "source_file": "testing/tests/bark/base.rs",
+        "source_file_sha256": "52a1bcceef84c5023b0abaaa59678b3c7012c14527661b4528cd9a58e29d6f2b",
+        "function_sha256": "c37e95935ab5b4c703281ffab178c2569c98c4b5d38be1655a39e997e832a9a0",
+        "upstream_function_sha256": "c37e95935ab5b4c703281ffab178c2569c98c4b5d38be1655a39e997e832a9a0",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": "==",
+            "required_literal": "DIRTY",
+            "actual_parsed": "Dev",
+            "required_parsed": "Dev",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 15
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-011",
+      "original_75_sequence": 9,
+      "test_name": "base::bark_config_json",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native fixture but config JSON component oracle only.",
+      "source": {
+        "test_name": "base::bark_config_json",
+        "source_file": "testing/tests/bark/base.rs",
+        "source_file_sha256": "52a1bcceef84c5023b0abaaa59678b3c7012c14527661b4528cd9a58e29d6f2b",
+        "function_sha256": "29dc388b8fa559519d10d43ce05e3e96f736ca0a7c3f33edf47ae6d326391951",
+        "upstream_function_sha256": "29dc388b8fa559519d10d43ce05e3e96f736ca0a7c3f33edf47ae6d326391951",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": "==",
+            "required_literal": "DIRTY",
+            "actual_parsed": "Dev",
+            "required_parsed": "Dev",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 26
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-012",
+      "original_75_sequence": 10,
+      "test_name": "base::bark_version",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native fixture but version-prefix component oracle only.",
+      "source": {
+        "test_name": "base::bark_version",
+        "source_file": "testing/tests/bark/base.rs",
+        "source_file_sha256": "52a1bcceef84c5023b0abaaa59678b3c7012c14527661b4528cd9a58e29d6f2b",
+        "function_sha256": "bb181977abd67e3ee7bdedcb3c1bd10ab5cf41e91685bac2ff2fb6a80b82d3bf",
+        "upstream_function_sha256": "bb181977abd67e3ee7bdedcb3c1bd10ab5cf41e91685bac2ff2fb6a80b82d3bf",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-013",
+      "original_75_sequence": 11,
+      "test_name": "board::bark_recover_unregistered_board",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "board::bark_recover_unregistered_board",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "5ff24a2797921fed9926772bf9e803d643c2efe1d8b7bd5e0012067b2ae11120",
+        "upstream_function_sha256": "5ff24a2797921fed9926772bf9e803d643c2efe1d8b7bd5e0012067b2ae11120",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-014",
+      "original_75_sequence": 12,
+      "test_name": "board::bark_rejects_boarding_below_minimum_board_amount",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Genuine native fixture with refusal/state/balance assertions; does not itself qualify final fallback payment.",
+      "source": {
+        "test_name": "board::bark_rejects_boarding_below_minimum_board_amount",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "23389b13419f2a728dc4edd011a490dde40e3142ce0a13e275861a6e9f18db75",
+        "upstream_function_sha256": "23389b13419f2a728dc4edd011a490dde40e3142ce0a13e275861a6e9f18db75",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-015",
+      "original_75_sequence": 13,
+      "test_name": "board::bark_rejects_boarding_subdust_amount",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Genuine native fixture with refusal/state/balance assertions; does not itself qualify final fallback payment.",
+      "source": {
+        "test_name": "board::bark_rejects_boarding_subdust_amount",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "d0b199eb48b3e1d4e5d6dc721494c038eed85759f2364de4abd43c4bd23f155c",
+        "upstream_function_sha256": "d0b199eb48b3e1d4e5d6dc721494c038eed85759f2364de4abd43c4bd23f155c",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-016",
+      "original_75_sequence": 14,
+      "test_name": "board::board_all_bark",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "board::board_all_bark",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "2406c8b116561c54ec2ea6b850f69ca9d06f2207aeacecd202854ac1bf768310",
+        "upstream_function_sha256": "2406c8b116561c54ec2ea6b850f69ca9d06f2207aeacecd202854ac1bf768310",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-017",
+      "original_75_sequence": 15,
+      "test_name": "board::board_fails_when_funding_tx_double_spent",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "board::board_fails_when_funding_tx_double_spent",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "53461c6aacaaa3187b4ecc43aa2f4f58c36eceaed33210d7cc0058a6a31b4648",
+        "upstream_function_sha256": "53461c6aacaaa3187b4ecc43aa2f4f58c36eceaed33210d7cc0058a6a31b4648",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": ">",
+            "required_literal": "0.5.0",
+            "actual_parsed": "Dev",
+            "required_parsed": "Release",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 100
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-018",
+      "original_75_sequence": 16,
+      "test_name": "board::board_fails_when_input_double_spent_before_broadcast",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "board::board_fails_when_input_double_spent_before_broadcast",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "2e170c66643efc42523bf2be09b49c94fb6f4103bba77cd0b599e8faaf86abc0",
+        "upstream_function_sha256": "2e170c66643efc42523bf2be09b49c94fb6f4103bba77cd0b599e8faaf86abc0",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": ">",
+            "required_literal": "0.6.2",
+            "actual_parsed": "Dev",
+            "required_parsed": "Release",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 628
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-019",
+      "original_75_sequence": 17,
+      "test_name": "board::board_psbt_confirms_when_other_party_broadcasts",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native board proposal/signed PSBT/state/chain behavior; several operations call linked SDK rather than CLI.",
+      "source": {
+        "test_name": "board::board_psbt_confirms_when_other_party_broadcasts",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "ffc165da6de0e225db62d1fcda700f1453debb0b3732f221a98adece1300ea78",
+        "upstream_function_sha256": "ffc165da6de0e225db62d1fcda700f1453debb0b3732f221a98adece1300ea78",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": ">",
+            "required_literal": "0.6.2",
+            "actual_parsed": "Dev",
+            "required_parsed": "Release",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 515
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-020",
+      "original_75_sequence": 18,
+      "test_name": "board::board_psbt_full_flow",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native board proposal/signed PSBT/state/chain behavior; several operations call linked SDK rather than CLI.",
+      "source": {
+        "test_name": "board::board_psbt_full_flow",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "a54c5fe3ef546cf08330dafffd3d7c14fac2107b7c1759092d802410e08f6881",
+        "upstream_function_sha256": "a54c5fe3ef546cf08330dafffd3d7c14fac2107b7c1759092d802410e08f6881",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": ">",
+            "required_literal": "0.6.1",
+            "actual_parsed": "Dev",
+            "required_parsed": "Release",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 360
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-021",
+      "original_75_sequence": 19,
+      "test_name": "board::board_psbt_output_at_any_index",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native board proposal/signed PSBT/state/chain behavior; several operations call linked SDK rather than CLI.",
+      "source": {
+        "test_name": "board::board_psbt_output_at_any_index",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "9c973a1f381cbd30b721775276cce7651f72e123dbbe7416b71ea0545d5b74ba",
+        "upstream_function_sha256": "9c973a1f381cbd30b721775276cce7651f72e123dbbe7416b71ea0545d5b74ba",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": ">",
+            "required_literal": "0.6.1",
+            "actual_parsed": "Dev",
+            "required_parsed": "Release",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 428
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-022",
+      "original_75_sequence": 20,
+      "test_name": "board::board_psbt_rejects_dust_amount",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Genuine native fixture with refusal/state/balance assertions; does not itself qualify final fallback payment.",
+      "source": {
+        "test_name": "board::board_psbt_rejects_dust_amount",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "d938dc290d15571c5eb8db2a4b012bab3a42c9fc40c7af99be2156ec6d86e44e",
+        "upstream_function_sha256": "d938dc290d15571c5eb8db2a4b012bab3a42c9fc40c7af99be2156ec6d86e44e",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-023",
+      "original_75_sequence": 21,
+      "test_name": "board::board_psbt_rejects_wrong_expiry_height",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Genuine native fixture with refusal/state/balance assertions; does not itself qualify final fallback payment.",
+      "source": {
+        "test_name": "board::board_psbt_rejects_wrong_expiry_height",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "fb1f3403b443b0684a5c9076470730181404e8cb6438bc1a6a6e45c59db2382f",
+        "upstream_function_sha256": "fb1f3403b443b0684a5c9076470730181404e8cb6438bc1a6a6e45c59db2382f",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-024",
+      "original_75_sequence": 22,
+      "test_name": "board::board_psbt_rejects_wrong_funding_address",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Genuine native fixture with refusal/state/balance assertions; does not itself qualify final fallback payment.",
+      "source": {
+        "test_name": "board::board_psbt_rejects_wrong_funding_address",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "26aa4033e74f7d399ddc8722a13ae8c158f527e5d6766f171bbe9c0f50ac235d",
+        "upstream_function_sha256": "26aa4033e74f7d399ddc8722a13ae8c158f527e5d6766f171bbe9c0f50ac235d",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-025",
+      "original_75_sequence": 23,
+      "test_name": "board::board_psbt_unfinalized_fails_when_input_double_spent",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native board proposal/signed PSBT/state/chain behavior; several operations call linked SDK rather than CLI.",
+      "source": {
+        "test_name": "board::board_psbt_unfinalized_fails_when_input_double_spent",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "3081d151802aae489237bac006d1aad82c5fb106ed2fdf72fbcfa8173f624526",
+        "upstream_function_sha256": "3081d151802aae489237bac006d1aad82c5fb106ed2fdf72fbcfa8173f624526",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": ">",
+            "required_literal": "0.6.2",
+            "actual_parsed": "Dev",
+            "required_parsed": "Release",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 575
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-026",
+      "original_75_sequence": 24,
+      "test_name": "board::board_psbt_unfinalized_is_not_broadcast",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native board proposal/signed PSBT/state/chain behavior; several operations call linked SDK rather than CLI.",
+      "source": {
+        "test_name": "board::board_psbt_unfinalized_is_not_broadcast",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "dc29a1fb089005435a700ed6e9c5c9e14fa25c15cc196025e0d5e923e9110ed6",
+        "upstream_function_sha256": "dc29a1fb089005435a700ed6e9c5c9e14fa25c15cc196025e0d5e923e9110ed6",
+        "version_macros": [
+          {
+            "macro": "require_bark_version",
+            "operator": ">",
+            "required_literal": "0.6.1",
+            "actual_parsed": "Dev",
+            "required_parsed": "Release",
+            "evaluated_condition": true,
+            "causes_early_return": false,
+            "source_line": 475
+          }
+        ],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-027",
+      "original_75_sequence": 25,
+      "test_name": "board::board_twice_bark",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native funded board/arkoor/refresh/offboard/history assertions at exact source lines; no automatic ML/full monetary lifecycle credit.",
+      "source": {
+        "test_name": "board::board_twice_bark",
+        "source_file": "testing/tests/bark/board.rs",
+        "source_file_sha256": "a19e70bd851aa20a9947565375322763a6a8a524b6dbd37d59e8a3f167e86c19",
+        "function_sha256": "f96f48da3617f334e9021b56672ce9f1ac3204e90262f9b4cdf8d45000442a98",
+        "upstream_function_sha256": "f96f48da3617f334e9021b56672ce9f1ac3204e90262f9b4cdf8d45000442a98",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-028",
+      "original_75_sequence": 26,
+      "test_name": "chain_source::chain_source_without_explicit_protocol",
+      "execution_layer": "library_component",
+      "oracle_scope": "Library chain-source URL validation; no TestContext/Core/Postgres/captaind/CLI process.",
+      "source": {
+        "test_name": "chain_source::chain_source_without_explicit_protocol",
+        "source_file": "testing/tests/bark/chain_source.rs",
+        "source_file_sha256": "6ff4bb81b38c69484cb99c3e5787796889b95cc67f0197af8d4cc32a4f0fd908",
+        "function_sha256": "4a7f591ee217cdfc0dd392bf5a08035e957058cdf962af36b5a0ef29928e1045",
+        "upstream_function_sha256": "4a7f591ee217cdfc0dd392bf5a08035e957058cdf962af36b5a0ef29928e1045",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    },
+    {
+      "case_id": "FT-CLI-029",
+      "original_75_sequence": 27,
+      "test_name": "create::bark_address_works_offline",
+      "execution_layer": "daemon_backed_native_fixture",
+      "oracle_scope": "Native fixture address derivation with Ark stopped; no customer payment asserted.",
+      "source": {
+        "test_name": "create::bark_address_works_offline",
+        "source_file": "testing/tests/bark/create.rs",
+        "source_file_sha256": "f4faad8cf5f4b07669bb3afe2e52b3513bc927f3cc736ef545403df1449ada6a",
+        "function_sha256": "8c403186d61227913637db49ab72fbe694e9f06c7337600470ba55fbce6ad2ad",
+        "upstream_function_sha256": "8c403186d61227913637db49ab72fbe694e9f06c7337600470ba55fbce6ad2ad",
+        "version_macros": [],
+        "version_gate_excluded": false
+      }
+    }
+  ],
+  "original_source_classification_sha256": "ad81a2919d4ac17335cb722bc5f3bb0bd46c86fb9512e49416cfd607e467bd10",
+  "unstarted_names": [
+    "create::bark_create_force_flag",
+    "create::bark_create_is_atomic",
+    "create::cli_create_refuses_another_cli_create",
+    "create::cli_create_releases_lock_after_failure",
+    "dust::bark_allows_sending_dust_arkoor_but_errors_on_dust_refresh",
+    "estimate::estimate_lightning_send_fee_without_funds",
+    "estimate::estimate_send_onchain_fee_without_funds",
+    "fees::board_fee_base_and_ppm",
+    "fees::board_fee_min_fee_applies",
+    "fees::board_fee_rejects_when_fee_exceeds_amount",
+    "fees::offboard_all_rejects_dust_output",
+    "fees::offboard_fee_base_deducted",
+    "fees::offboard_fee_with_ppm_expiry",
+    "fees::refresh_fee_base_only",
+    "fees::refresh_fee_rejects_dust_output",
+    "fees::refresh_fee_with_multiple_vtxos",
+    "fees::refresh_fee_with_ppm_expiry",
+    "fees::send_onchain_fee_deducted",
+    "mailbox::accept_mailbox",
+    "mailbox::concurrent_mailbox_consumers_do_not_duplicate_arkoor_movement",
+    "mailbox::recovery_mailbox_receives_vtxo_ids",
+    "mailbox::reject_arkoor_with_bad_signature",
+    "movement::arkoor_send_receive",
+    "movement::board_board",
+    "movement::list_movements",
+    "movement::movement_offboard",
+    "movement::movement_send_onchain",
+    "movement::round_refresh",
+    "offboard::bark_rejects_offboarding_dust_amount",
+    "offboard::bark_send_onchain",
+    "offboard::bark_send_onchain_too_much",
+    "offboard::offboard_all",
+    "offboard::offboard_vtxos",
+    "onchain::bark_address_changes",
+    "onchain::list_utxos",
+    "onchain::onchain_drain",
+    "onchain::onchain_send",
+    "onchain::onchain_send_many",
+    "recover::recovered_wallet_continues_xpub_lookup_past_server_range",
+    "recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+    "recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+    "recover::recovered_wallet_xpub_lookup_returns_spent_vtxos",
+    "recover::recovery_catchup_survives_rejected_vtxo",
+    "recover::recovery_state_catches_up_on_sync",
+    "vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+    "vtxos::compute_balance",
+    "vtxos::drop_vtxos",
+    "vtxos::list_vtxos"
+  ]
+}

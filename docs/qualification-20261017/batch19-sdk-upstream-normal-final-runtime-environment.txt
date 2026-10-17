@@ -1,0 +1,20 @@
+NIX=impure
+cargo /nix/store/2pnm32h5wvyxxwv1gg01y6himifvz8xm-rust-mixed/bin/cargo
+43665fe93cef65ff2da6ad5fe518c53425f323feb95e3ab5d576962c86b50799  /nix/store/2pnm32h5wvyxxwv1gg01y6himifvz8xm-rust-mixed/bin/cargo
+rustc /nix/store/2pnm32h5wvyxxwv1gg01y6himifvz8xm-rust-mixed/bin/rustc
+d1b46e8bc3943fa26305a8a6a7e6b003b5e679808f6029d7d69e895c08f863c5  /nix/store/2pnm32h5wvyxxwv1gg01y6himifvz8xm-rust-mixed/bin/rustc
+just /nix/store/45pnp6136ycrm4yr627lslfi2cmj492i-just-1.51.0/bin/just
+ba7e1f40e293276e6f84def41b8910ffc10d4202744e20d7ef4d4d0bfbd4c159  /nix/store/45pnp6136ycrm4yr627lslfi2cmj492i-just-1.51.0/bin/just
+bitcoind /nix/store/4jp97jchzr68qp0rlkykp5qk5gbhr5gq-bitcoind-31.0/bin/bitcoind
+6a05cdfb3943fd528911b2c8cefd0b45951c9da0f97546f0fbbf09270f07f513  /nix/store/4jp97jchzr68qp0rlkykp5qk5gbhr5gq-bitcoind-31.0/bin/bitcoind
+postgres /nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin/postgres
+775e4f3334af8589f924a4c38037d9711de9d63e98ecfd0c0f6858e64154291f  /nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin/postgres
+lightningd /nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd
+0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc  /nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd
+cargo-nextest /nix/store/frhl3k499fr2d9l015apazmslpaxvpd5-cargo-nextest-0.9.136/bin/cargo-nextest
+67e244a89b536e2d86e35cda679f302cf58880a5772210f2c5418e52b60e7c02  /nix/store/frhl3k499fr2d9l015apazmslpaxvpd5-cargo-nextest-0.9.136/bin/cargo-nextest
+cargo 1.90.0 (840b83a10 2025-07-30)
+rustc 1.90.0 (1159e78c4 2025-09-14)
+postgres (PostgreSQL) 17.11
+Bitcoin Core daemon version v31.0.0 bitcoind
+v26.06.6

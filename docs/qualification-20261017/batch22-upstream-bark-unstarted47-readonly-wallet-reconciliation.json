@@ -1,0 +1,11 @@
+{
+  "state": "READ_ONLY_NO_CUSTOMER_PAYMENT",
+  "customer_datadir_exists_after_failure": false,
+  "sqlite_files_found": 0,
+  "no_database_count_claim": "CLIerrorcleanup removed newly created datadir; there is no retainedwalletDB toquery",
+  "actual_BDK_zero_balance_logged": true,
+  "source_actions": "Newunfundedwallet/forcewhileArkoffline/Coreinitialscan; nofunded/board/send/offboard/Lightningoperation",
+  "original_log_sha256": "3eb69ac86c5e48311a4f33699c5b3c13df2b5675b7cf360f9b75bfff3f338153",
+  "no_wallet_or_node_reopen": true,
+  "no_retry": true
+}

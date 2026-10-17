@@ -1,0 +1,20 @@
+{
+  "result": "FAIL",
+  "test_name": "create::bark_create_force_flag",
+  "run_id": "c5640527-12f8-45df-8dff-47798cc91637",
+  "actual_seconds": 15.259,
+  "panic_location": "testing/tests/bark/create.rs:130:13",
+  "observed": "First creation of a new unfunded wallet with force enabled while Ark is offline; healthy owned Core completes initial scan, then fallback open requires unavailable Ark and returns Connection refused.",
+  "followup": "Separate public offline-create compatibility/product decision. No implementation or rerun by this curation; original FAIL preserved.",
+  "customer_money_scope": "Source invokes no funding/board/send/offboard/Lightning operation. Existing reconciliation reports actual BDKzero balance log; newly created datadir was removed by CLIerror cleanup.",
+  "database_limit": "No retained customer DB exists to query. No zero-database-row, persistent-half-created-wallet or retained-record claim is made.",
+  "reconciliation_scope": "Read retained JSON only; no new wallet, database, node or chain invocation.",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "raw_log_sha256": "3eb69ac86c5e48311a4f33699c5b3c13df2b5675b7cf360f9b75bfff3f338153",
+  "raw_result_sha256": "0f8a9feff824a65b149b2507693b67190477d948d081ca572da00e17691ffa67",
+  "original_controller_test_seconds": null,
+  "timeout": false,
+  "resource_abort": false,
+  "retries": 0,
+  "redaction": "No actual addresses, keys, mnemonic, seed, invoice, raw configuration, rawDB or verbose command dump copied."
+}

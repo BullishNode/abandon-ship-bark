@@ -1,0 +1,33 @@
+{
+  "actual_miner_fee_sat": 1298,
+  "all_outputs_total_sat": 999998702,
+  "canonical_tip": "0b6b678677e799a890f23f6294773e2d661a518c03f5a765e12bd783cc6cc269",
+  "canonical_tip_height": 111,
+  "confirmations_at_retained_tip": 2,
+  "exact_recipient_outputs": [
+    {
+      "script_hex": "00147a2a3f2ce33c2c6d316bdfcec0646ffbdfee4e66",
+      "value_sat": 300000,
+      "vout": 0
+    }
+  ],
+  "inclusion_block": "4603858c220216d39a679981fc75248466e024fba57aeff18f1bee4ae3af7190",
+  "inclusion_height": 110,
+  "input_hashes_before_and_after": {
+    "blocks/blk00000.dat": "01a2838096819cb27ee86641a9a4643e3a56d26b435128e129e28bff66205e8f",
+    "blocks/xor.dat": "452e8d2a0d87738f077ab2912ce542e9ffa46c63d7bc30fca624686df012f194",
+    "debug.log": "afa0c21b6db755d2b035b0f5c6b8ec8533503e57afb8b60fc80242790f33cba3"
+  },
+  "input_total_sat": 1000000000,
+  "limitations": "Bounded original transaction only. No six-confirmation, receiver wallet sync, later test assertion, whole-wallet solvency or adapted-source execution claim.",
+  "mode": "retained block files and debug log, read-only; no process or wallet reopened",
+  "offboard_txid": "50220caa0015059ae15b32468fc7913341c4e0d07a3204ad7b30c8715488818c",
+  "original_run_id": "352e12d4-ac04-40ce-b2e3-28401ceebf8b",
+  "resolved_input_prevouts": [
+    {
+      "txid": "5950673216f73100114357a228bb613adae6743d476ff2c573f2855bf80a8f0f",
+      "value_sat": 1000000000,
+      "vout": 0
+    }
+  ]
+}

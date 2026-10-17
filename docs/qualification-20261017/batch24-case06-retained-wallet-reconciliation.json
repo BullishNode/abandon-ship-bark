@@ -1,0 +1,83 @@
+{
+  "scope": "Independent retained signed transaction/prevouts, read-only immutable SQLite movement and CLI VTXO reconciliation; canonical inclusion separately attributed to parent offline Core parser",
+  "original_test": "movement::board_board",
+  "original_run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+  "original_result": "FAIL11.082s; expected772 actual763",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "signed_funding_transaction": {
+    "txid": "417861fd474791dc80c377796fc3654c59be8600278a7dd07ef93e33b513da6d",
+    "inputs": [
+      {
+        "txid": "0496505de4e5ee88f67fb09ab1d183f4afe25990deaa452797c083ef6648f860",
+        "vout": 0
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 100000,
+        "script_hex": "5120b1680af76c68051ee594706ad26fd90fdc721e53c70fcd31636ca4668c23cc4d",
+        "script_bytes": 34
+      },
+      {
+        "vout": 1,
+        "value_sat": 899237,
+        "script_hex": "0014e2577c0b027824709ccc7b11585fef5886a84716",
+        "script_bytes": 22
+      }
+    ],
+    "has_witness": true,
+    "witness_item_counts": [
+      2
+    ],
+    "weight_wu": 609
+  },
+  "resolved_prevouts": [
+    {
+      "txid": "0496505de4e5ee88f67fb09ab1d183f4afe25990deaa452797c083ef6648f860",
+      "vout": 0,
+      "value_sat": 1000000,
+      "script_hex": "0014670d9be8a5782a36afe54b8e01ff865b78906a39",
+      "script_bytes": 22
+    }
+  ],
+  "actual_input_sum_sat": 1000000,
+  "actual_output_sum_sat": 999237,
+  "actual_miner_fee_sat": 763,
+  "fee_model_note": "Actual fee independently resolved from original signed transaction inputs minus outputs. Native BIP84 funding input/change have22byteP2WPKH scripts while board anchor is34byteP2TR; no exact fixed772/763 fee or exact signed-weight-rate relationship is assumed.",
+  "movement": {
+    "status": "successful",
+    "intended_balance_sat": 100000,
+    "effective_balance_sat": 100000,
+    "offchain_fee_sat": 0,
+    "metadata": {
+      "chain_anchor": "417861fd474791dc80c377796fc3654c59be8600278a7dd07ef93e33b513da6d:0",
+      "onchain_fee_sat": 763
+    }
+  },
+  "native_vtxo": {
+    "id": "1c1f01c2628acd452eea2cf4104f97cb37c35812cebe85fecb78ea9c94b81c7d:0",
+    "amount_sat": 100000,
+    "chain_anchor": "417861fd474791dc80c377796fc3654c59be8600278a7dd07ef93e33b513da6d:0"
+  },
+  "sqlite_read_only": {
+    "mode": "ro&immutable=1",
+    "no_wal_or_journal": true,
+    "sha256_before_and_after": "cfcc71b9b5d149d1bb5a84df95e7969c85406e30a2be2270500bf367566f6e41"
+  },
+  "parent_canonical_evidence": {
+    "private_receipt": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case06/retained-core-reconciliation.json",
+    "sha256": "5cc013b31dc36983d5ac6fa9eeea34aaab38e4621b0bdb5185ab7d003efb0d40",
+    "inclusion_height": 107,
+    "canonical_tip_height": 109,
+    "confirmations_at_retained_tip": 3,
+    "scope": "Reviewed parent receipt; did not rerun parent block parser"
+  },
+  "limitation": "Original movement checks through metadata-presence passed, then fee equality failed. Original final anchor-is-present check was not reached. No wholewallet/6confirmation/recovery/fullML/adapted-source credit.",
+  "private_input_hashes": {
+    "bark/cmd/001/stdout.log": "60af9c5b6d4659aa80ad51773f011914b228a910bac01408295e77d95e0c39a1",
+    "bark/cmd/004/stdout.log": "ba447bf27fb7fe970424cd239bd4a14202e7f503924a345f763e513ac0ece20d",
+    "bark/cmd/005/stdout.log": "994d8f19860b3095bdeaa0c95b9cc43ab94f62b84ae6cae026e144d6eb9c0a2b"
+  },
+  "reviewer_runtime_actions": "NONE: no service/node/wallet reopen or original mutation"
+}

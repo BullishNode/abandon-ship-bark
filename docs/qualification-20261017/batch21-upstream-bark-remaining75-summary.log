@@ -1,0 +1,37 @@
+batch21-upstream-bark-remaining75: stopped at first actual test failure.
+26PASS /1FAIL /48NOTSTARTED; controller exit100; retries0; normal180s; no new compilation.
+25daemon-backedPASS +1libraryPASS(seq26) +1daemon-backedFAIL; process cases30/31 unstarted.
+Source7041; passed test sum356.926s; all started test sum367.578s; wall sum392.703s.
+Same first-created unfunded wallet: online fresh address and explicit offline index0 both returned successfully but differ. Equality failed; later fresh-offline check did not execute.
+Retained prior read-only reconciliation reports zero VTXOs/boards/payment rows/BDKtransactions. No funding or payment was exercised.
+Original FAIL retained. Source-fix proposals and any later conditional outcomes remain separate.
+No raw seed/key/address/config/DB copied; reconciliation reads retained JSON only.
+No FULL ML/fullCLI or lost-customer-money claim.
+
+01 FT-CLI-003 PASS 15.465s a8fbdd95-3f87-461f-bfd2-514d87a1a8b4 access_token::access_token_is_sent [daemon_backed_native_fixture]
+02 FT-CLI-004 PASS 22.408s 777e9336-9728-4ff3-9662-d25e225a455b arkoor::max_arkoor_amount [daemon_backed_native_fixture]
+03 FT-CLI-005 PASS 20.078s c0b96fba-5963-43a3-88f4-ee9f861d26fb arkoor::oor_change_split [daemon_backed_native_fixture]
+04 FT-CLI-006 PASS 24.639s add4330d-68c5-4d1e-8207-bf3dab5b8c89 arkoor::send_arkoor_package [daemon_backed_native_fixture]
+05 FT-CLI-007 PASS 20.148s 2fe8bb82-c3e6-4ef9-9348-5b9c8a386c23 arkoor::send_full_arkoor [daemon_backed_native_fixture]
+06 FT-CLI-008 PASS 9.792s 7d719a17-e301-4f4b-85b5-9fa16f481705 arkoor::send_to_arkade_address_is_rejected [daemon_backed_native_fixture]
+07 FT-CLI-009 PASS 24.836s 64af7aea-bebf-41bc-b48e-01378771d91e arkoor::test_ark_address_other_ark [daemon_backed_native_fixture]
+08 FT-CLI-010 PASS 8.377s 5818a617-cef5-49b2-9db1-3a8fce5c2caf base::bark_ark_info [daemon_backed_native_fixture]
+09 FT-CLI-011 PASS 9.250s a099bb1c-4885-4b66-ae4e-603bfba487ee base::bark_config_json [daemon_backed_native_fixture]
+10 FT-CLI-012 PASS 9.869s 7116dbca-c750-48c8-970a-a8078ac30856 base::bark_version [daemon_backed_native_fixture]
+11 FT-CLI-013 PASS 20.000s db08bba8-c450-4ac5-9d63-e4dd242aff0f board::bark_recover_unregistered_board [daemon_backed_native_fixture]
+12 FT-CLI-014 PASS 10.325s 45cb3eb0-03d7-447f-9065-935ab50da431 board::bark_rejects_boarding_below_minimum_board_amount [daemon_backed_native_fixture]
+13 FT-CLI-015 PASS 12.626s fca94975-b4e6-47dd-b334-59dfe0b168f6 board::bark_rejects_boarding_subdust_amount [daemon_backed_native_fixture]
+14 FT-CLI-016 PASS 15.313s 0f2eac8a-e454-4619-a8dc-0972366c6e26 board::board_all_bark [daemon_backed_native_fixture]
+15 FT-CLI-017 PASS 10.976s ba5e1c42-ff6b-40a1-a9e4-20b61eca06f4 board::board_fails_when_funding_tx_double_spent [daemon_backed_native_fixture]
+16 FT-CLI-018 PASS 13.407s 8f589627-4738-4e1a-94ba-1d6d220783ff board::board_fails_when_input_double_spent_before_broadcast [daemon_backed_native_fixture]
+17 FT-CLI-019 PASS 14.688s 07917ab5-83b1-40dc-aee2-7eef5c14519d board::board_psbt_confirms_when_other_party_broadcasts [daemon_backed_native_fixture]
+18 FT-CLI-020 PASS 14.997s 208ce474-67e1-4f9a-a655-06cda706db7b board::board_psbt_full_flow [daemon_backed_native_fixture]
+19 FT-CLI-021 PASS 9.043s 9b5a88df-5f7b-48cf-9ae6-f6554756a21f board::board_psbt_output_at_any_index [daemon_backed_native_fixture]
+20 FT-CLI-022 PASS 6.849s c99811d6-b1dc-4cb6-8b11-536a4a173fa5 board::board_psbt_rejects_dust_amount [daemon_backed_native_fixture]
+21 FT-CLI-023 PASS 11.168s 273a224a-30ab-4905-96e9-64fac2cc917e board::board_psbt_rejects_wrong_expiry_height [daemon_backed_native_fixture]
+22 FT-CLI-024 PASS 11.859s 1913f514-fabe-4e79-a197-deb58e9a4da0 board::board_psbt_rejects_wrong_funding_address [daemon_backed_native_fixture]
+23 FT-CLI-025 PASS 14.097s 7914021c-e167-41e6-973d-9392fb0e0926 board::board_psbt_unfinalized_fails_when_input_double_spent [daemon_backed_native_fixture]
+24 FT-CLI-026 PASS 13.896s b124d9d1-b243-4b73-be51-c07eb25e450c board::board_psbt_unfinalized_is_not_broadcast [daemon_backed_native_fixture]
+25 FT-CLI-027 PASS 12.809s 5bd6d652-6ca8-4ec6-abc3-4685e98fe537 board::board_twice_bark [daemon_backed_native_fixture]
+26 FT-CLI-028 PASS 0.011s 3ec4bff8-bb90-4aee-86e2-a5c6a62d9562 chain_source::chain_source_without_explicit_protocol [library_component]
+27 FT-CLI-029 FAIL 10.652s 46a2b233-8a96-4b12-8ca2-df654fc0cd26 create::bark_address_works_offline [daemon_backed_native_fixture]

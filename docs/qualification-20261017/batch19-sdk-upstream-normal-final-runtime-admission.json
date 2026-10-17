@@ -1,0 +1,88 @@
+{
+  "state": "VERIFIED_NEW_CONTAINER_RESUME_OF_UNSTARTED_CASES_ONLY",
+  "old_prefix_passes": 28,
+  "resource_controller_exit": 75,
+  "resource_guard": {
+    "state": "BLOCKED_RESOURCE_PREFLIGHT",
+    "case_index": 29,
+    "name": "round::delegated_round_locks_inputs_once_issued",
+    "test_started": false,
+    "retry": false,
+    "at": "2026-10-17T18:39:34.959819+00:00",
+    "reason": "resource preflight blocked; preserve state and request coordinator cleanup"
+  },
+  "resource_guard_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch19-sdk-upstream-normal-remaining/case29/resource-stop-1792262374959828974.json",
+  "resource_guard_sha256": "b9a7dd68743fc9a464680854302e2d964656b73d475ca51caeb5b21a8ce8499b",
+  "old_prefix_receipt_sha256": "7c40fea356aee3d768b12753a2b55a394f7d507701b42a97449fb98f7e3a0e7a",
+  "recorded_resume_admission": {
+    "state": "ADMITTED_RESUME_UNSTARTED_ONLY",
+    "at": "2026-10-17T18:50:37.119478+00:00",
+    "old_container": "abandon-fresh-dev-20261016",
+    "new_container": "abandon-fresh-runtime-20261017",
+    "root_admission": {
+      "status": "DEPENDENCIES_PASS",
+      "at": "2026-10-17T18:48:34.312229+00:00",
+      "container_id": "7b3925c9c69800497043ee57023bed5bf432d48e49e61a95a6ac9262b880845a",
+      "image": "sha256:8ff8b71e01b76a308ce8428e7769565ff8574c4b5c8f72eb847719bc04370f79",
+      "init": true,
+      "shm_bytes": 1073741824,
+      "dependencies": "Exact old/new Nix paths, ELF hashes and versions equal for cargo,rustc,just,bitcoind,postgres,lightningd,cargo-nextest",
+      "native_result": "NOT RUN; immutable metadata listing still required",
+      "shared_target": "/fresh-cache/target; sole root compiler in original development container",
+      "preserved_original_container": true
+    },
+    "root_admission_sha256": "6a403333130cd829de9a0f386fe7dacf80d5ec58e84db95a692a9c24087705ce",
+    "own_immutable_runtime_pins": "14/14 sha256sum checks PASS",
+    "selection_file": "new-container-case29-selection.json",
+    "selection_sha256": "6964a8cc1b525643510b434289f1d5c13545de2464292dae4d6291bc83706a1e",
+    "selected": [
+      "round::delegated_round_locks_inputs_once_issued"
+    ],
+    "old_completed_passes": 28,
+    "old_resource_stop_unchanged": true,
+    "first_unstarted_case": 29,
+    "retries": 0,
+    "per_test_timeout_seconds": 180,
+    "root_authorization": "Coordinator direct delegation: authorize own listing/pins then resume onlySDK29-41; after13PASS twoCLI singleton cases",
+    "new_compilation": false,
+    "old_shm_deleted": false
+  },
+  "recorded_resume_admission_sha256": "cfd060ba22eca7944d9e1d526d28b9a170693814dde2f5e53267d23df5f92c72",
+  "root_admission_file": "/home/francis/.cache/abandon-fresh/runtime-container-admission-20261017/admission.json",
+  "root_initial_pretest_attempts": {
+    "at": "2026-10-17T18:45:00.527163+00:00",
+    "old_container": "abandon-fresh-dev-20261016",
+    "old_shm_bytes": 67108864,
+    "old_runtime_terminal": "External SDK28PASS prefix then resource-stop75 beforecase29; rootnative15242terminal100, rootbuild4562terminal101. docker-top onlysleep before snapshot.",
+    "attempts": [
+      {
+        "approach": "Bind old/proc/root/nix readonly into sameimage runtime",
+        "state": "FAILED_BEFORE_START",
+        "reason": "runc bindmount /proc/71322/root/nix invalid argument; createdfalse/PID0 container removed withoutvolumes."
+      },
+      {
+        "approach": "Reuse original5c4909image withinit/1GiBshm",
+        "state": "RUNTIME_PROBE_FAILED",
+        "reason": "Originalimage lacks updatedNixstore dependencies; fallbackcargo1.90 available but bitcoind/Postgresabsent. No tests/actors executed."
+      }
+    ],
+    "next": "Snapshot actual owned development container filesystem into local-only image, with all build/data/source bind mounts excluded; verify full cachedNix environment and exactsame binaries before anyruntime."
+  },
+  "root_initial_pretest_attempts_sha256": "cbffa8a671973484d3e1dd15297a46ed69b546d984e59b35981ff21286b54a70",
+  "old_and_new_environment_bytes_equal": true,
+  "environment_old_sha256": "73c115fcff6eb4e187adf988a4733b7dd0f24f3bddbd639592b3d2c171cd4c80",
+  "environment_new_sha256": "73c115fcff6eb4e187adf988a4733b7dd0f24f3bddbd639592b3d2c171cd4c80",
+  "independent_final_runtime_pin_recheck": {
+    "container": "abandon-fresh-runtime-20261017",
+    "command": "source /fresh-cache/default-env.sh; sha256sum -c runtime-pins.sha256",
+    "exit_code": 0,
+    "matched": 14,
+    "total": 14,
+    "native_or_build_execution": false
+  },
+  "new_actual_passes": 13,
+  "original_tests_retried": false,
+  "old_container_and_shm_preserved": true,
+  "cleanup_by_this_curation": false,
+  "limitation": "Admission initially recorded dependencies only, not native PASS. Exact singleton new-container listing and13 actual raw logs separately establish the resumed tests."
+}

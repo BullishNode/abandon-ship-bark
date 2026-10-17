@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-17T18:41:02.683145+00:00",
+  "updated_at": "2026-10-17T19:47:30.744328+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "ACTIVE_SOURCE_WORK_SDK29_RESOURCE_PAUSE",
+  "state": "ACTIVE_BOARD_FEE_RECONCILIATION",
   "branch": "work/fresh-test-qualification-20261017",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
@@ -17,13 +17,13 @@
   "execution": {
     "disk_hold_released": true,
     "shared_target_write_allocated": false,
-    "runtime_capacity_allocated": "One serial16corebatch now; rootmax2nativeglobal; no Cargo/sharedtargetwrites",
+    "runtime_capacity_allocated": "One serial29ordinaryCLIbatch; max1ours+1rootnative; rootsoleCargo writer",
     "new_signet_campaign_allocated": false,
     "next_shared_target_write_allocated": false
   },
   "environment": {
     "host_nix_loaded": false,
-    "container": "abandon-fresh-dev-20261016",
+    "container": "abandon-fresh-runtime-20261017",
     "cached_environment": "/fresh-cache/default-env.sh",
     "verified": "IN_NIX_SHELL=impure; rustc 1.90.0; bitcoind 31.0.0; just 1.51.0",
     "test_worktree_container_mount": "Visible at coordinator-corrected nested path; future compilation only canonical"
@@ -42,11 +42,11 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Continue source review/report publication while root validates SHM; resume only unstarted case29 after explicit allocation, no retries.",
+  "next_action": "Complete originalboard financial reconciliation and source-only truthfulfee oracle; publish hourlyreport; prepare fresh barkd38 with pins/gates before runtime",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
-  "runtime_allocation": "Coordinator cleanup/resume requested; no live owned nextest; root-only staleSHM cleanup, no Cargo writes",
+  "runtime_allocation": "No active native; root approved prepare ordinarybarkd38, financial reconciliation/source review ongoing, no ownCargo",
   "inventory_rows_by_file": {
     "legacy-inventory.csv": 103,
     "backend-inventory.csv": 72,
@@ -69,19 +69,26 @@
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
   "new_test_source_review": "Published earlier fixtures compiled and ran on recorded pairings. New failed-send v3 is source-only and excluded from this checkpoint.",
-  "coverage_rows": 287,
-  "coverage_warning": "287 mixed inventory/requirement/executed rows. Executed names and completed main-track totals are reported separately;200ML full-oracle status is in ML-COVERAGE.csv.",
+  "coverage_rows": 353,
+  "coverage_warning": "353 mixed inventory/requirement/executed rows through batch24terminal6. ML200 full-oracle map separate; current totals not MLscenarios.",
   "current_batch": {
-    "name": "batch19-sdk-upstream-normal-remaining",
-    "state": "PAUSED_RESOURCE_PREFLIGHT",
-    "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch19-sdk-upstream-normal-remaining",
-    "progress_receipt": "cohort-progress.json",
+    "name": "batch24-upstream-bark-unstarted29",
+    "state": "STOPPED_FIRST_FAILURE",
+    "total": 29,
+    "parent_exec_session": 1741,
+    "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+    "known61_and_all_failed_cases_excluded": true,
+    "retries": 0,
+    "per_test_timeout_seconds": 180,
     "all_completed_counts_exclude_this_active_batch": false,
-    "passed": 28,
-    "failed": 0,
-    "not_started": 13,
-    "controller_exit": 75,
-    "receipt": "batch19-sdk-upstream-normal-prefix28-receipt.json"
+    "passed": 5,
+    "failed": 1,
+    "not_started": 23,
+    "failure": "movement::board_board",
+    "run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+    "native_seconds": 11.082,
+    "controller_exit": 100,
+    "resource_error": null
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -116,11 +123,11 @@
     "wall_seconds_approx": 159.375
   },
   "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
-  "case_executions": 76,
-  "unique_executed_test_names": 72,
-  "nextest_invocations": 49,
-  "native_case_executions": 68,
-  "component_case_executions": 8,
+  "case_executions": 142,
+  "unique_executed_test_names": 138,
+  "nextest_invocations": 115,
+  "native_case_executions": 131,
+  "component_case_executions": 11,
   "new_test_results": {
     "readiness": "PASS26.184s",
     "two_root_return_history": "PASS44.926s",
@@ -149,21 +156,22 @@
     },
     "primary_local_code_commit": "0870bbbb915f133b98b00b5c3d7dc2a2a2ac0bc5",
     "primary_code_publication": "PUSHED and verified in draftPR8; no merge/promotion/deployment by testing track",
-    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/10",
-    "latest_verified_remote_head": "3e72e9ebcb8f9696dd3b6b1daa3ecd8ba54f8d17",
-    "latest_receipt": "PUBLICATION-PR10.json",
+    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/11",
+    "latest_verified_remote_head": "1ddaad0e8cf67402554a4eac7e90f67ae2f1e592",
+    "latest_receipt": "PUBLICATION-PR11.json",
     "oversize_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/9",
     "oversize_verified_remote_head": "013bed49bc5cd0d7d839b1726ebf9e71b5170301",
     "oversize_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
     "oversize_review": "3reviewers complete; NOT compiled/run; no newexecutioncredit",
     "prior_PR8": "Verified merged by coordinator as751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
     "oversize_source_PR9_state": "MERGED814d7b0d",
-    "latest_scope": "REPORT_ONLY",
+    "latest_scope": "REPORT_ONLY; PR11 merged by coordinator, next hourly report checkpoint preparing",
     "latest_pr_verified_merged": {
-      "pr": 10,
-      "head": "3e72e9ebcb8f9696dd3b6b1daa3ecd8ba54f8d17",
-      "merge_commit": "544f28b50bd9db9d4bc11b324763d27da33901db",
-      "merged_at": "2026-10-17T18:26:12Z"
+      "pr": 11,
+      "head": "1ddaad0e8cf67402554a4eac7e90f67ae2f1e592",
+      "merge_commit": "dec1fef26d3d2fa90889f65be1ec08c28ab5a763",
+      "merged_at": "2026-10-17T19:43:22Z",
+      "remote_branch_verified": "git ls-remote fresh/xpub-sweep = dec1fef26d3d2fa90889f65be1ec08c28ab5a763"
     }
   },
   "next_batch": {
@@ -173,7 +181,7 @@
     "lightning_restart": "Completed source-labelled success recovery; stronger failed-send cancellation-during-downtime draft reviewed but uncompiled/unrun",
     "noah_forwarding": "Native provider-reopen and actual post-registration recipient fallback passed; stock Noah LNURL metadata-hash compatibility unqualified",
     "failed_send_restart": "Reviewed isolated source-only packet, no module registration/compile/runtime",
-    "upstream_sdk": "SDK18 first4PASS; SDK19 first28PASS,13unstarted at resourcepreflight stop before29. Full57upstream SDK names not yet run."
+    "upstream_sdk": "45ordinaryupstreamSDKPASS=4+41; batch19newruntime13onlyunstarted no retry.12deferred+20forknotautomaticallyqualified."
   },
   "next_compile_policy": "Author/review in own isolated worktree; submit reviewed patch/PR increment for coordinator integration; compile from canonical stable package path only after explicit writerlease. No new own-worktree metadata.",
   "source_review_fixes": [
@@ -183,8 +191,8 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 74,
-  "failed_case_executions": 2,
+  "passed_case_executions": 136,
+  "failed_case_executions": 6,
   "first_checkpoint": {
     "executions": 17,
     "passed": 17,
@@ -352,9 +360,11 @@
   },
   "primary_raw_retained": "Completebatch13state retained for source/chain/subsidyreview, no node/DB/RPCreopen",
   "next_uncompiled_sources": {
-    "failed_send": "qualification_failed_swap.rs51bf1828, hardening-v2 patche8b95a7; second review pending, uncompiled/unrun",
+    "failed_send": "Reviewed v3 fixture55bb4efb/fullpatch772b835c; coordinator handoff, uncompiled/unrun",
     "oversize_graph": "qualification_oversize.rs9942a9f6; OWNworktreeonlyDEFERRED; canonicalstilltestedAPI-fixd61438dc",
-    "restore_conflict": "Frozenuntracked files; no currentwork"
+    "restore_conflict": "Frozenuntracked files; no currentwork",
+    "ML126": "qualification_offboard_restart.rs6512e1ed; source/peer/parentACK, applycheckPASS, no module/compile/run",
+    "ML190": "qualification_protection_isolation.rsa6309348; source/peer/parentACK, applycheckPASS; expected source-predictedred, not executed"
   },
   "current_units": {
     "passed": 800,
@@ -389,18 +399,42 @@
     "coverage_sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
     "full_pass_limitation": "Only ML165/166 bounded327-owner shape. No expansion to restart/reorg/heterogeneous-history cases."
   },
-  "counts_warning": "76 completed main-track executions include10 core daemon infrastructure and8 process components; not76 ML cases. Units and external benchmarks excluded.",
-  "execution_counts_through": "batch19 first28 terminalPASS; remaining13 not started",
+  "counts_warning": "142executions136PASS6FAIL138unique(binary,name),115nextestinvocations,131nativeincluding10infrastructure+11components. Not142MLscenarios; six originalfailedattempts preserved.",
+  "execution_counts_through": "batch24 first6 terminal:5PASS1FAIL23unstarted; known61separate",
   "execution_outcomes": {
-    "PASS": 74,
-    "FAIL": 2
+    "PASS": 136,
+    "FAIL": 6
   },
   "last_completed_batch": {
-    "name": "batch18-sdk-upstream-normal-01",
-    "result": "PASS4/4",
-    "receipt_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch18-sdk-upstream-normal-01",
+    "name": "batch23-upstream-bark-unstarted46",
+    "result": "16PASS1FAIL29unstarted",
+    "receipt_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46",
     "retries": 0,
     "per_test_timeout_seconds": 180
   },
-  "historical_fields_notice": "Older phase-specific fields remain historical. Current top-level state/current_batch/execution totals and money_loss_catalogue define latest state; individual pinned receipts remain authoritative."
+  "historical_fields_notice": "Older phase-specific fields remain historical. Current top-level state/current_batch/execution totals and money_loss_catalogue define latest state; individual pinned receipts remain authoritative.",
+  "fee_failure_reconciliation": {
+    "original_run_id": "352e12d4-ac04-40ce-b2e3-28401ceebf8b",
+    "original_status": "FAIL",
+    "exact_recipient_sat": 300000,
+    "retained_confirmations": 2,
+    "actual_miner_fee_sat": 1298,
+    "customer_fee_sat": 3854,
+    "accounting": "800000=300000+3854+496146",
+    "reason": "34byteP2TRvs22byteBIP84P2WPKH:12*7sat/vB=84sat",
+    "source_adapter_status": "peer-reviewed source-only ADAPTED/NOT RUN/uncompiled",
+    "original_retried": false
+  },
+  "board_fee_failure_reconciliation": {
+    "original_run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+    "original_status": "FAIL",
+    "actual_miner_fee_sat": 763,
+    "retained_confirmations": 3,
+    "accounting": "1000000=100000+899237+763",
+    "hardcoded_expected_sat": 772,
+    "wallet_independent_reconciliation": "COMPLETE immutableSQLite+rawtx inputs1m=100k+899237+763, database unchanged",
+    "original_retried": false
+  },
+  "publication_checkpoint": 8,
+  "publication_checkpoint_scope": "REPORT_ONLY; through batch24terminal6 and read-only financial reconciliation; all source adapters uncompiled/unrun"
 }

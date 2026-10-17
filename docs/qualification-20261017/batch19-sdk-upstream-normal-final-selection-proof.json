@@ -1,0 +1,581 @@
+{
+  "parent_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "literal_sdk_subset_sha256": "4db79800d184993365aea9a7e490335b109eddd770f80ddf5da030c9a330bafa",
+  "runtime_metadata_sha256": "faaa21775c92a77890b3c61f5af28d04c3e59d751c12868348e4a0f5b0c912b4",
+  "runtime_overlay": "ONLYoriginal non-test lock-holder path replaced by captured immutable identicalbytes;SDK binary/buildmeta otherwiseunchanged",
+  "helper_sha256": "abf0fd823c45d2b8635c7e9a7245186a5e8cd30bac31d77e37a807dce3f57b2d",
+  "expected_names_in_execution_order": [
+    "mailbox::recovery_leaves_regular_mailbox_checkpoint_untouched",
+    "mailbox::subscribe_delivers_preexisting_messages",
+    "offboard::offboard_cancels_when_fees_change_after_lost_session",
+    "offboard::offboard_rebroadcasts_evicted_tx_within_grace_period",
+    "offboard::offboard_recovers_expired_session_by_repreparing",
+    "offboard::offboard_recovers_lost_finish_by_adopting_chain_tx",
+    "offboard::offboard_rejects_unsigned_finish_response",
+    "offboard::offboard_replays_identical_prepare_request",
+    "offboard::offboard_reports_lost_tx_after_grace_period",
+    "recovery::recovered_wallet_keeps_spent_vtxo_spent",
+    "recovery::recovery_finds_vtxos_separated_by_the_gap_limit",
+    "recovery::recovery_retries_a_failed_status_batch",
+    "recovery::recovery_tolerates_an_unknown_vtxo_id",
+    "recovery::recovery_uses_batch_rpcs",
+    "vtxo_lock::batch_lock_is_atomic",
+    "vtxo_lock::can_only_lock_spendable_vtxo",
+    "vtxo_lock::locks_cannot_be_stolen",
+    "vtxo_lock::unlock_leaves_spent_vtxo_alone",
+    "vtxo_lock::unlock_returns_vtxo_to_spendable",
+    "arkoor::send_to_address_without_delivery_succeeds",
+    "import::import_can_skip_the_status_check",
+    "exit::exit_estimate_rejects_invalid_fee_margin",
+    "exit::exit_estimate_rejects_spent_vtxo",
+    "balance::balance_follows_delegated_round",
+    "balance::balance_follows_interactive_round",
+    "balance::balance_sets_aside_expired_vtxos",
+    "round::delegated_participation_is_redelegated_when_input_consumed",
+    "round::delegated_refresh_completes_with_expired_inputs",
+    "round::delegated_round_locks_inputs_once_issued",
+    "round::finished_round_supersedes_pending_delegated_participation",
+    "round::interactive_participation_wins_over_delegated",
+    "round::maintenance_refresh_delegated_drops_server_rejected_vtxo",
+    "round::maintenance_refresh_delegated_errors_when_all_inputs_unspendable",
+    "round::manual_maintenance_refresh_drops_server_rejected_vtxo",
+    "round::manual_refresh_delegated_does_not_drop_rejected_vtxo",
+    "round::participation_is_canceled_when_the_remainder_cannot_stand_alone",
+    "round::pending_participation_drops_consumed_inputs_on_sync",
+    "round::round_inputs_locked_only_from_attempt_start",
+    "round::round_participation_shrinks_when_inputs_are_taken",
+    "round::scheduled_delegated_refresh_refuses_unexitable_replacements",
+    "round::scheduled_delegated_refresh_waits_for_height"
+  ],
+  "exact_selection": "nextest args BEFORE --, followed FULL_LITERAL --exact; no extra-E",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "allocation": "Coordinatorapprovedremaining41serialAFTERactual4PASS;max1ownruntime+1root,no Cargo. Per-casepreflight/stopbeforefreeSHM<12MiB;resourcecheckpointatmost4completedcases.",
+  "status": "PREPARED_NOT_EXECUTED",
+  "prior4passed": [
+    "arkoor::send_to_unsupported_delivery_is_refused",
+    "board::failed_board_leaves_the_onchain_wallet_untouched",
+    "import::import_stores_spent_vtxo_as_spent",
+    "mailbox::arkoor_receive_replay_does_not_restore_a_spent_vtxo"
+  ],
+  "source_whitelist_proofs": [
+    {
+      "test_name": "arkoor::send_to_address_without_delivery_succeeds",
+      "source": "testing/tests/bark_sdk/arkoor.rs",
+      "line": 46,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "58c81c6fc9ec410a8d9ef75e1f763b1870da78e2dc9e5a80a1652659e5a45ef2",
+      "current_file_sha256": "cc6b7ec04f51736978d2b090591e8b2af75665f4297f8812753c0aa332daf16f",
+      "upstream_file_sha256": "cc6b7ec04f51736978d2b090591e8b2af75665f4297f8812753c0aa332daf16f"
+    },
+    {
+      "test_name": "arkoor::send_to_unsupported_delivery_is_refused",
+      "source": "testing/tests/bark_sdk/arkoor.rs",
+      "line": 14,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "d19c1a9ef6af8383f2ab76659b5019c93f2e004672b489f29e0de34331aff4b2",
+      "current_file_sha256": "cc6b7ec04f51736978d2b090591e8b2af75665f4297f8812753c0aa332daf16f",
+      "upstream_file_sha256": "cc6b7ec04f51736978d2b090591e8b2af75665f4297f8812753c0aa332daf16f"
+    },
+    {
+      "test_name": "balance::balance_follows_delegated_round",
+      "source": "testing/tests/bark_sdk/balance.rs",
+      "line": 82,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "3b442f9a2cd89168e1c087d18ef87870faa9417810f2b55dd62e537eaca75e4a",
+      "current_file_sha256": "b0b1a9cb8e8fdc90780ab806de59d6da5997c947dda30df03d6122b57ad4e20c",
+      "upstream_file_sha256": "73e0863b27f91b24a4339364b38c060e36d8ed16efc1030f69dcb3894971c716"
+    },
+    {
+      "test_name": "balance::balance_follows_interactive_round",
+      "source": "testing/tests/bark_sdk/balance.rs",
+      "line": 50,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "ee6960a7ac5f3851df3a59064b01a0582e95ac7c8dbd591ad15d56c384c513e6",
+      "current_file_sha256": "b0b1a9cb8e8fdc90780ab806de59d6da5997c947dda30df03d6122b57ad4e20c",
+      "upstream_file_sha256": "73e0863b27f91b24a4339364b38c060e36d8ed16efc1030f69dcb3894971c716"
+    },
+    {
+      "test_name": "balance::balance_sets_aside_expired_vtxos",
+      "source": "testing/tests/bark_sdk/balance.rs",
+      "line": 131,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "58c21adab51b92d3a595904e50bef9baa5c676d3e8e3f79139df9725ed0deabd",
+      "current_file_sha256": "b0b1a9cb8e8fdc90780ab806de59d6da5997c947dda30df03d6122b57ad4e20c",
+      "upstream_file_sha256": "73e0863b27f91b24a4339364b38c060e36d8ed16efc1030f69dcb3894971c716"
+    },
+    {
+      "test_name": "board::failed_board_leaves_the_onchain_wallet_untouched",
+      "source": "testing/tests/bark_sdk/board.rs",
+      "line": 18,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "bf4c9a147259f0ab660c656cee86ebfdaca4f08603659e095266c7211d553169",
+      "current_file_sha256": "08611fe0dc193bb69a14344a993970cf790c62adbe331ce70de4c61df756660b",
+      "upstream_file_sha256": "08611fe0dc193bb69a14344a993970cf790c62adbe331ce70de4c61df756660b"
+    },
+    {
+      "test_name": "exit::exit_estimate_rejects_invalid_fee_margin",
+      "source": "testing/tests/bark_sdk/exit.rs",
+      "line": 49,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "cec2d1b15b05d6a6433051897438c0d4bd70a9632a4a9a37f23d8e67d5406cdf",
+      "current_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239",
+      "upstream_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239"
+    },
+    {
+      "test_name": "exit::exit_estimate_rejects_spent_vtxo",
+      "source": "testing/tests/bark_sdk/exit.rs",
+      "line": 27,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "444852d82e3322163c36383148efaa5878041664732c9805a96e5b533d4a3a5f",
+      "current_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239",
+      "upstream_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239"
+    },
+    {
+      "test_name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "source": "testing/tests/bark_sdk/exit.rs",
+      "line": 75,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "383b2976ec7047de969b026cda9861a75fad0c9dcc67f66dc4d4c72a07d0b1f7",
+      "current_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239",
+      "upstream_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239"
+    },
+    {
+      "test_name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "source": "testing/tests/bark_sdk/exit.rs",
+      "line": 196,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "b219caa671656dddd3d0abf521fa3f52de234dd6736eb62c56f84e03b7844d5c",
+      "current_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239",
+      "upstream_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239"
+    },
+    {
+      "test_name": "import::import_can_skip_the_status_check",
+      "source": "testing/tests/bark_sdk/import.rs",
+      "line": 51,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "963f58bc72272ccd692f7c99e50247baebf79b8b77133dfffcdb2d88faa9f3e6",
+      "current_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4",
+      "upstream_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4"
+    },
+    {
+      "test_name": "import::import_refuses_an_out_of_range_gap_limit",
+      "source": "testing/tests/bark_sdk/import.rs",
+      "line": 82,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "db2d6e8a6b3bc56741084b1094deca4e9124523913c6e0a7df3681acca921b10",
+      "current_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4",
+      "upstream_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4"
+    },
+    {
+      "test_name": "import::import_stores_spent_vtxo_as_spent",
+      "source": "testing/tests/bark_sdk/import.rs",
+      "line": 15,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "e446ca7a1cdd71cf57e4654cf10282a81de213dda5e5700e0eddcacb7c3634f5",
+      "current_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4",
+      "upstream_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4"
+    },
+    {
+      "test_name": "lightning::pay_hold_refused",
+      "source": "testing/tests/bark_sdk/lightning.rs",
+      "line": 240,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "72203fdfcb08dc8e219cd9853947740dbb1e1ddaa42ec07afcae12591bc1de28",
+      "current_file_sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+      "upstream_file_sha256": "4a67cc09a89ad2cc883ce9cb194d1957f8c3a597ce36d00df1acae4af782770a"
+    },
+    {
+      "test_name": "lightning::pay_hold_succeeds",
+      "source": "testing/tests/bark_sdk/lightning.rs",
+      "line": 56,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "fc8dd3a4dfceaa4e634a1853feb879cedbd745f35da2cf11772bc8735bf963c9",
+      "current_file_sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+      "upstream_file_sha256": "4a67cc09a89ad2cc883ce9cb194d1957f8c3a597ce36d00df1acae4af782770a"
+    },
+    {
+      "test_name": "lightning::pay_hold_with_near_expiry_inputs_succeeds",
+      "source": "testing/tests/bark_sdk/lightning.rs",
+      "line": 144,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "91dbc04082c3c86a4a5b7ac99de7883505e1f5907c95788e7d357c0cd64a4ca5",
+      "current_file_sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+      "upstream_file_sha256": "4a67cc09a89ad2cc883ce9cb194d1957f8c3a597ce36d00df1acae4af782770a"
+    },
+    {
+      "test_name": "lightning::pay_with_retry_for",
+      "source": "testing/tests/bark_sdk/lightning.rs",
+      "line": 461,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "45aacc850bc0ceaa2df6b70a268d03807fcd2e04060a0dd3d3257b513ee431d8",
+      "current_file_sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+      "upstream_file_sha256": "4a67cc09a89ad2cc883ce9cb194d1957f8c3a597ce36d00df1acae4af782770a"
+    },
+    {
+      "test_name": "lightning::receive_claim_after_hold_invoice_already_settled",
+      "source": "testing/tests/bark_sdk/lightning.rs",
+      "line": 398,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "f53fa7002cea8a6a8a5b0e8263e63055a9c0397c9de88ad0e310aeb817779d66",
+      "current_file_sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+      "upstream_file_sha256": "4a67cc09a89ad2cc883ce9cb194d1957f8c3a597ce36d00df1acae4af782770a"
+    },
+    {
+      "test_name": "lightning::receive_claim_on_mailbox_notification",
+      "source": "testing/tests/bark_sdk/lightning.rs",
+      "line": 335,
+      "provenance": "FUNCTION_BODY_BYTE_IDENTICAL_IN_EXTENDED_FILE",
+      "function_sha256": "ebbbb1799fe5b8fd71ac570e4de24808f9497a7c9a88df68ad02cfd2060be116",
+      "current_file_sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+      "upstream_file_sha256": "4a67cc09a89ad2cc883ce9cb194d1957f8c3a597ce36d00df1acae4af782770a"
+    },
+    {
+      "test_name": "mailbox::arkoor_receive_replay_does_not_restore_a_spent_vtxo",
+      "source": "testing/tests/bark_sdk/mailbox.rs",
+      "line": 134,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "11ba61b9ac0fa5c99d4fac966db032e5fbdad1831fb0beac502dce1f17e33bec",
+      "current_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb",
+      "upstream_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb"
+    },
+    {
+      "test_name": "mailbox::recovery_leaves_regular_mailbox_checkpoint_untouched",
+      "source": "testing/tests/bark_sdk/mailbox.rs",
+      "line": 60,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "f377c62805033178154f92f4f5fd9d9266aea92b0131209e641340697bfa7a7e",
+      "current_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb",
+      "upstream_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb"
+    },
+    {
+      "test_name": "mailbox::subscribe_delivers_preexisting_messages",
+      "source": "testing/tests/bark_sdk/mailbox.rs",
+      "line": 19,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "a477d7a5af5ffa003232f3a844c01bab0183a549e2d96277214b06d71bba1954",
+      "current_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb",
+      "upstream_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb"
+    },
+    {
+      "test_name": "offboard::offboard_cancels_when_fees_change_after_lost_session",
+      "source": "testing/tests/bark_sdk/offboard.rs",
+      "line": 471,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "45ee1925d4d56b240548d2c2ec10ffb673eee88769aa6db96a9a878b2eab99ad",
+      "current_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+      "upstream_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e"
+    },
+    {
+      "test_name": "offboard::offboard_rebroadcasts_evicted_tx_within_grace_period",
+      "source": "testing/tests/bark_sdk/offboard.rs",
+      "line": 288,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "eb2d699a81f14b319601fddaf6aa1c6a0e427dd4fa134a5cad02fb8758b3fd85",
+      "current_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+      "upstream_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e"
+    },
+    {
+      "test_name": "offboard::offboard_recovers_expired_session_by_repreparing",
+      "source": "testing/tests/bark_sdk/offboard.rs",
+      "line": 228,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "e1efec7198d11c9eb2690b5c34bb350769ca9ca613153570b2956b461ff87040",
+      "current_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+      "upstream_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e"
+    },
+    {
+      "test_name": "offboard::offboard_recovers_lost_finish_by_adopting_chain_tx",
+      "source": "testing/tests/bark_sdk/offboard.rs",
+      "line": 415,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "78cbe3cfbf0fef3160649c5e370e1fe68733f3af515ddc2e80a4477186ca9dd5",
+      "current_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+      "upstream_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e"
+    },
+    {
+      "test_name": "offboard::offboard_rejects_unsigned_finish_response",
+      "source": "testing/tests/bark_sdk/offboard.rs",
+      "line": 187,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "b2db999fc6d5af961155c2e5f09b89bcc74e73c5fa0daea81ddb91e9619c1eb1",
+      "current_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+      "upstream_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e"
+    },
+    {
+      "test_name": "offboard::offboard_replays_identical_prepare_request",
+      "source": "testing/tests/bark_sdk/offboard.rs",
+      "line": 147,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "61a3ee322e4219886cbab40fe399d2bc52c6f530b27b911eca96b528c7a36365",
+      "current_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+      "upstream_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e"
+    },
+    {
+      "test_name": "offboard::offboard_reports_lost_tx_after_grace_period",
+      "source": "testing/tests/bark_sdk/offboard.rs",
+      "line": 349,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "5eebb9e8069ffbd5bacd5342fbb6bbe0e43055cb74daa0bc553bdf6dba8fdb15",
+      "current_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+      "upstream_file_sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e"
+    },
+    {
+      "test_name": "payment_request::build_valid_bip321_uri",
+      "source": "testing/tests/bark_sdk/payment_request.rs",
+      "line": 13,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "a84cc0ffba872eefd92e542498eac914f26e8a30772fbe1d22dc044bcea11bcb",
+      "current_file_sha256": "481c1073e8e7897624612a8038d6b34d193a16baddb2266a5eee923fa4835c0b",
+      "upstream_file_sha256": "481c1073e8e7897624612a8038d6b34d193a16baddb2266a5eee923fa4835c0b"
+    },
+    {
+      "test_name": "recovery::recovered_wallet_keeps_arkoor_batch_inputs_spent",
+      "source": "testing/tests/bark_sdk/recovery.rs",
+      "line": 133,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "84f31a6d81117c135ff304690d153c8e72353569bbb094936586863b2c8f4a7c",
+      "current_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25",
+      "upstream_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25"
+    },
+    {
+      "test_name": "recovery::recovered_wallet_keeps_spent_vtxo_spent",
+      "source": "testing/tests/bark_sdk/recovery.rs",
+      "line": 90,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "73019b58700cd3fc571c9b1e6dfb063d297ef738277780ed92b97da9c74a35ea",
+      "current_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25",
+      "upstream_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25"
+    },
+    {
+      "test_name": "recovery::recovery_finds_vtxos_separated_by_the_gap_limit",
+      "source": "testing/tests/bark_sdk/recovery.rs",
+      "line": 23,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "72350b58e5c37e797a91e39b071e93db69df4822dd1cf7182153627d21805f51",
+      "current_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25",
+      "upstream_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25"
+    },
+    {
+      "test_name": "recovery::recovery_retries_a_failed_status_batch",
+      "source": "testing/tests/bark_sdk/recovery.rs",
+      "line": 288,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "240fa3379502b85fc4b444ae5ae3fb8d07ce0649ef135b383cf3b99f18e5712c",
+      "current_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25",
+      "upstream_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25"
+    },
+    {
+      "test_name": "recovery::recovery_tolerates_an_unknown_vtxo_id",
+      "source": "testing/tests/bark_sdk/recovery.rs",
+      "line": 325,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "274beea8317aab6e7d00c21d469dab6e21fbf5f4a86bc3e24b187fd193247258",
+      "current_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25",
+      "upstream_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25"
+    },
+    {
+      "test_name": "recovery::recovery_uses_batch_rpcs",
+      "source": "testing/tests/bark_sdk/recovery.rs",
+      "line": 238,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "576083e4e877bef7ceaa95305a556d8d4b66602d06ff2ff254395517ef82a33d",
+      "current_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25",
+      "upstream_file_sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25"
+    },
+    {
+      "test_name": "round::delegated_participation_is_redelegated_when_input_consumed",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 951,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "48fa74075b1787a65b20be6cd1c542854ed6b74ac766d7596373e669ce9643bb",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::delegated_refresh_completes_with_expired_inputs",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 462,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "a0e40abf6dc85fca018468be0f1d8e3d044c75637a675919526ebaf03c3753a4",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::delegated_round_locks_inputs_once_issued",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 629,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "7b622163f44fd24b0e5d36827819b030f15e2a380568be6cdf597b914782647c",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::finished_round_supersedes_pending_delegated_participation",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 285,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "5908102330075d06f0b2f7c5c0e8118aaf41f40f8c5966047851649f1810035b",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::interactive_participation_wins_over_delegated",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 223,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "4e0bd2261e1b715233e15de6b77f2541c3138fe06f25356d6dd7ced2944a9ae7",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::maintenance_refresh_delegated_drops_server_rejected_vtxo",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 588,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "6e615c4eb0ec1226091a9a3dc29cdec247b6f82b256ec633797defc51940a11b",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::maintenance_refresh_delegated_errors_when_all_inputs_unspendable",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 554,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "0e40777e2c48ec015a844e95646f2e79341204da3b8e349bbc9820fa1e496449",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::manual_maintenance_refresh_drops_server_rejected_vtxo",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 165,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "d7572ca46c5bad644807df469ac903d92a10d87daa1b628f0728afdb9e98f5bb",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::manual_refresh_delegated_does_not_drop_rejected_vtxo",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 138,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "78880912908ffc80ffbecd721f692af191df161944d7c65338072b0b87e1c2be",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::participation_is_canceled_when_the_remainder_cannot_stand_alone",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 900,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "d63fe6f6dc9bc164e4372e752d1249c46a1ebbe8fd2902c37fb4f8e4e410f985",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::pending_participation_drops_consumed_inputs_on_sync",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 849,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "06d5d25e809900d96c88eb306ce20a606d16c465cc822347aa85aa0b30524987",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::round_inputs_locked_only_from_attempt_start",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 699,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "f6cbe7184fd540df6d879dcf0af2c53790c37da62bfe9828e4badeb0a6064ffe",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::round_participation_shrinks_when_inputs_are_taken",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 767,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "4d32fa1dbd25373b91606e14dc9881da60bf667478e94a42feb1a2a4d2d3aede",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::scheduled_delegated_refresh_refuses_unexitable_replacements",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 388,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "5299fbb9e270418211190ce5b325532eefc4ae620e6af636e03a16085bce3c6a",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "round::scheduled_delegated_refresh_waits_for_height",
+      "source": "testing/tests/bark_sdk/round.rs",
+      "line": 331,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "b80b10c1365de9810a1f52bcb63638ab9dda3c6ca8e70343ab13abaa57419316",
+      "current_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b",
+      "upstream_file_sha256": "5c5b7498e560653713b0afe06f2ecf809d732fbc61e2cf93d514f7c1512b774b"
+    },
+    {
+      "test_name": "vtxo_lock::batch_lock_is_atomic",
+      "source": "testing/tests/bark_sdk/vtxo_lock.rs",
+      "line": 47,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "644dc6eafa06d4029fbc9b3ff602c550516a34a09ed7587b238cdf6258d9b60a",
+      "current_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8",
+      "upstream_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8"
+    },
+    {
+      "test_name": "vtxo_lock::can_only_lock_spendable_vtxo",
+      "source": "testing/tests/bark_sdk/vtxo_lock.rs",
+      "line": 119,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "1a8483d1c33aff1cdef8b9d9e68258e3d82c361eb26136d8c5007f7a2d18b0f8",
+      "current_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8",
+      "upstream_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8"
+    },
+    {
+      "test_name": "vtxo_lock::concurrent_locks_serialize",
+      "source": "testing/tests/bark_sdk/vtxo_lock.rs",
+      "line": 185,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "808cfff0fd637f1378de6b18bd4bec712f301192921ced5d31ab169dca9ceca1",
+      "current_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8",
+      "upstream_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8"
+    },
+    {
+      "test_name": "vtxo_lock::locks_cannot_be_stolen",
+      "source": "testing/tests/bark_sdk/vtxo_lock.rs",
+      "line": 11,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "c94526ec43e1725fcb52c711a7fbb4215d17d096e7160f4c0a80dd4361c35b8d",
+      "current_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8",
+      "upstream_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8"
+    },
+    {
+      "test_name": "vtxo_lock::unlock_leaves_spent_vtxo_alone",
+      "source": "testing/tests/bark_sdk/vtxo_lock.rs",
+      "line": 154,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "094f43ff4029110fdc784cb1649a58f7f326922e801ff489e2160cda99655049",
+      "current_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8",
+      "upstream_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8"
+    },
+    {
+      "test_name": "vtxo_lock::unlock_returns_vtxo_to_spendable",
+      "source": "testing/tests/bark_sdk/vtxo_lock.rs",
+      "line": 90,
+      "provenance": "WHOLE_FILE_BYTE_IDENTICAL",
+      "function_sha256": "bb55f7518deea93bf6fee3457446cdf246c591b8cab408642a0499db1c57bd4e",
+      "current_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8",
+      "upstream_file_sha256": "a9f380d4d8772deaf3cb21c7517b8870924a9abaafae8867985ea3f12f2d6cc8"
+    }
+  ],
+  "plan_sha256": "221ac50985f91ee6fc1c8c40968d38d333eba61e46568dcb5074dd9c5670f81f",
+  "shm_stop_below_bytes": 12582912,
+  "case_checkpoint_interval": 4
+}

@@ -1,0 +1,432 @@
+{
+  "state": "TERMINAL_PARTIAL_FIRST_FAILURE",
+  "selected_queue_size": 29,
+  "started": 6,
+  "passed": 5,
+  "failed": 1,
+  "unstarted": 23,
+  "result": "FAIL",
+  "parent_reported_exec_session": "1741",
+  "controller_exit": 100,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "metadata_sha256": "3143345c36e85938ec424916f01ea0bd28ebce8aeb1b0d63b787aa3c850b3363",
+  "upstream_pin": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "test_binary": "ark-testing::bark",
+  "test_elf_sha256": "f3e33f52d458f5dc5f0dcd98f99ca363b266d4e35f979a418d47e8830dcd46f7",
+  "bark_product_sha256": "d971db9547a3bb6c8ebd0413404ed886d3d1157f233c259ab905945ad0a96444",
+  "retries": 0,
+  "normal_timeout_seconds": 180,
+  "new_compilation": false,
+  "pass_duration_sum_seconds": 82.066,
+  "all_started_duration_sum_seconds": 93.148,
+  "per_case_wall_sum_seconds": 98.656,
+  "execution_layer_counts": {
+    "daemon_backed_native_fixture": 6
+  },
+  "raw_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29",
+  "raw_progress_sha256": "97e15826a1fb4ec803cabd4637bb84983cf36767c3e3c8a8332306424d436c14",
+  "unstarted_names": [
+    "movement::list_movements",
+    "movement::movement_offboard",
+    "movement::movement_send_onchain",
+    "movement::round_refresh",
+    "offboard::bark_rejects_offboarding_dust_amount",
+    "offboard::bark_send_onchain",
+    "offboard::bark_send_onchain_too_much",
+    "offboard::offboard_all",
+    "offboard::offboard_vtxos",
+    "onchain::list_utxos",
+    "onchain::onchain_drain",
+    "onchain::onchain_send",
+    "onchain::onchain_send_many",
+    "recover::recovered_wallet_continues_xpub_lookup_past_server_range",
+    "recover::recovered_wallet_falls_back_to_mailbox_when_xpub_disabled",
+    "recover::recovered_wallet_finds_vtxos_via_xpub_without_mailbox",
+    "recover::recovered_wallet_xpub_lookup_returns_spent_vtxos",
+    "recover::recovery_catchup_survives_rejected_vtxo",
+    "recover::recovery_state_catches_up_on_sync",
+    "vtxos::bark_balance_shows_pending_board_sats_until_deeply_confirmed",
+    "vtxos::compute_balance",
+    "vtxos::drop_vtxos",
+    "vtxos::list_vtxos"
+  ],
+  "deferred_original_case": {
+    "index": 61,
+    "name": "onchain::bark_address_changes",
+    "state": "NOT_RUN_PENDING_REVIEWED_ADAPTATION"
+  },
+  "original_whitelist_indices": [
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73,
+    74,
+    75
+  ],
+  "cases": [
+    {
+      "index": 1,
+      "name": "mailbox::accept_mailbox",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/case01/nextest.toml -- mailbox::accept_mailbox --exact"
+      ],
+      "started_at": "2026-10-17T19:42:08.171007+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 23921,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "63f8f320-cb9d-4d26-8228-da95369e94f5",
+      "test_seconds": 29.169,
+      "wall_seconds": 30.045,
+      "ended_at": "2026-10-17T19:42:38.216449+00:00",
+      "test_seconds_from_log": 29.169,
+      "coverage_case_id": "FT-CLI-048",
+      "original_sequence": 46,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case01/result.json",
+      "result_sha256": "a9d2e25c57b8b6a7fd271a031603d16fa448ca6fdfae5f47125401a00970d261",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case01/nextest.log",
+      "raw_log_sha256": "e723abfed48540fd973c0d46d448c8d8cddef0ec6fcdd9852e092db918903abf",
+      "config_sha256": "5ab36c9b3aa6ef1fc63693121d17a44ebb8085d9df10903fa43e9b548fb41869",
+      "resource_preflight": {
+        "at": "2026-10-17T19:42:08.170397+00:00",
+        "shm_available_bytes": 1006952448,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "464193572632c7d3fcebb3ae6900672e2c09f907809c02d0c96903b2a56ff766",
+      "actual_context_directory_exists": true
+    },
+    {
+      "index": 2,
+      "name": "mailbox::concurrent_mailbox_consumers_do_not_duplicate_arkoor_movement",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/case02/nextest.toml -- mailbox::concurrent_mailbox_consumers_do_not_duplicate_arkoor_movement --exact"
+      ],
+      "started_at": "2026-10-17T19:42:38.219464+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 24708,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "327fef4d-cc78-46e5-850d-9d8eb72c9b73",
+      "test_seconds": 11.225,
+      "wall_seconds": 12.021,
+      "ended_at": "2026-10-17T19:42:50.240293+00:00",
+      "test_seconds_from_log": 11.225,
+      "coverage_case_id": "FT-CLI-049",
+      "original_sequence": 47,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case02/result.json",
+      "result_sha256": "f70f85f507d6f463f8d143d3f26d0a2a3928345b0ef13c00e1ed36b79616cd67",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case02/nextest.log",
+      "raw_log_sha256": "d78487afc7e21c6e8f472055dd2b4f5448ffda9d984db3668e3bcc3322353b04",
+      "config_sha256": "6f5bbd351f49736f21dae6030f9ca8a9c68ffa8539e3a82eb0389385dd78741d",
+      "resource_preflight": {
+        "at": "2026-10-17T19:42:38.218933+00:00",
+        "shm_available_bytes": 1005875200,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "d3f6e238c21420dea40b4fb8840aac1f92a6957d5723fc9cc0e3201a4252963d",
+      "actual_context_directory_exists": true
+    },
+    {
+      "index": 3,
+      "name": "mailbox::recovery_mailbox_receives_vtxo_ids",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/case03/nextest.toml -- mailbox::recovery_mailbox_receives_vtxo_ids --exact"
+      ],
+      "started_at": "2026-10-17T19:42:50.241655+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 25005,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "ca6d80c3-044c-4d63-92e0-e9d4f40312ad",
+      "test_seconds": 13.039,
+      "wall_seconds": 14.023,
+      "ended_at": "2026-10-17T19:43:04.265102+00:00",
+      "test_seconds_from_log": 13.039,
+      "coverage_case_id": "FT-CLI-050",
+      "original_sequence": 48,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case03/result.json",
+      "result_sha256": "4adfda8df99ec893ce51502a4f10984443236ac505714da1507b00c507760bdd",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case03/nextest.log",
+      "raw_log_sha256": "24ba6a5ce6f656bbed9470d40f92ec4435c2b62f650bc7fff9593a7b175a435f",
+      "config_sha256": "294e9eaae395540ee5650ef3e01f3ae8670ccf1f96d24d2a0631a3e2f7e989d9",
+      "resource_preflight": {
+        "at": "2026-10-17T19:42:50.241390+00:00",
+        "shm_available_bytes": 1004797952,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "a6522afa03ccacb5f818d64aba5365ea86aa5fd339d1177c7d7c3078bad2de2e",
+      "actual_context_directory_exists": true
+    },
+    {
+      "index": 4,
+      "name": "mailbox::reject_arkoor_with_bad_signature",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/case04/nextest.toml -- mailbox::reject_arkoor_with_bad_signature --exact"
+      ],
+      "started_at": "2026-10-17T19:43:04.267139+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 25394,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "a8a72575-7cc4-4d74-8cb2-e043cf3501cf",
+      "test_seconds": 13.44,
+      "wall_seconds": 14.524,
+      "ended_at": "2026-10-17T19:43:18.791118+00:00",
+      "test_seconds_from_log": 13.44,
+      "coverage_case_id": "FT-CLI-051",
+      "original_sequence": 49,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case04/result.json",
+      "result_sha256": "31abb50204a70c860af68cd5894f534ed7c1040d5f99c5a43a72576a93624bff",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case04/nextest.log",
+      "raw_log_sha256": "c130c189f82d181b5dc61910a20658fafa948ad2771d2bd15d185fcbd384627a",
+      "config_sha256": "741fb7b91c9a9f17f7d8e89205902aa6275714806e2ad7818c8ddee24f01aaa4",
+      "resource_preflight": {
+        "at": "2026-10-17T19:43:04.266658+00:00",
+        "shm_available_bytes": 1003720704,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "448731cad83ca22c1f285b1efb8135f40b18eea457aa398dba88942995f06009",
+      "actual_context_directory_exists": true
+    },
+    {
+      "index": 5,
+      "name": "movement::arkoor_send_receive",
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/case05/nextest.toml -- movement::arkoor_send_receive --exact"
+      ],
+      "started_at": "2026-10-17T19:43:18.794527+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 25707,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "6b938101-2d1c-4b61-b069-74fccce88ef9",
+      "test_seconds": 15.193,
+      "wall_seconds": 16.022,
+      "ended_at": "2026-10-17T19:43:34.816710+00:00",
+      "test_seconds_from_log": 15.193,
+      "coverage_case_id": "FT-CLI-052",
+      "original_sequence": 50,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case05/result.json",
+      "result_sha256": "21f6096947215c3d48b2c0883bb007e53c132708e05db78a97ca6d6492140210",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case05/nextest.log",
+      "raw_log_sha256": "dd567648cd6fe8e679980520c37db2c08d6e37f337330d7743b56e8f4eb21ee7",
+      "config_sha256": "97d4cfa034b3e52cb61f05332b5956e1902ee5a4a41e11654caabd4657242baf",
+      "resource_preflight": {
+        "at": "2026-10-17T19:43:18.794102+00:00",
+        "shm_available_bytes": 1002643456,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "4dd57e91de1f95380e18a3c5c79ff3e6b7ba7d316b639ebde69abbf946e035ed",
+      "actual_context_directory_exists": true
+    },
+    {
+      "index": 6,
+      "name": "movement::board_board",
+      "state": "FAIL",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29",
+        "int-binaries",
+        "/fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/nextest-binaries-bark-runtime-immutable.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch24-upstream-bark-unstarted29/case06/nextest.toml -- movement::board_board --exact"
+      ],
+      "started_at": "2026-10-17T19:43:34.818828+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 26182,
+      "exit_code": 100,
+      "resource_error": null,
+      "run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+      "test_seconds": null,
+      "wall_seconds": 12.021,
+      "ended_at": "2026-10-17T19:43:46.840168+00:00",
+      "test_seconds_from_log": 11.082,
+      "coverage_case_id": "FT-CLI-053",
+      "original_sequence": 51,
+      "execution_layer": "daemon_backed_native_fixture",
+      "result_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case06/result.json",
+      "result_sha256": "f3fafa9c913dcdaac0e03915cdb53d0155d2b71d25a2c4f785ea086c85181dbb",
+      "raw_log_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch24-upstream-bark-unstarted29/case06/nextest.log",
+      "raw_log_sha256": "bb270b37b9fb460ac3fc92ac022aed9cacf40156707c9c5d0ea58babdd731b0f",
+      "config_sha256": "05bccd02fa45aab9537294ce59a9da9ec0060efa1d20b88d9f7f3a7aeed93127",
+      "resource_preflight": {
+        "at": "2026-10-17T19:43:34.818380+00:00",
+        "shm_available_bytes": 1001566208,
+        "live_owned_postgres": [],
+        "cleanup_performed": false
+      },
+      "resource_preflight_sha256": "b089a552bef46e47c001c88f10811c84532b85c3490dfda4b0d3254bf0033887",
+      "actual_context_directory_exists": true
+    }
+  ],
+  "financial_reconciliation": "PENDING; assertion metadata values only, no independent settled financial/Core/solvency claim.",
+  "money_loss_credit": "No FULL ML/fullCLI credit; originalFAIL unchanged; no retry/adapted execution.",
+  "coverage_case_ids": [
+    "FT-CLI-048",
+    "FT-CLI-049",
+    "FT-CLI-050",
+    "FT-CLI-051",
+    "FT-CLI-052",
+    "FT-CLI-053"
+  ],
+  "coverage_append_event": {
+    "previous_rows": 347,
+    "appended_rows": 6,
+    "final_rows": 353,
+    "before_sha256": "f697f60214a4dc530bd50dde057730195c969982e2bc230e924c72ce76559c8a",
+    "lineterminator": "LF",
+    "prior_bytes_preserved": true,
+    "after_sha256": "972d547b79da0cbcd740c22291cbb321da0e773dc882440d711cb2a04e366c10"
+  },
+  "artifacts": [
+    {
+      "file": "batch24-upstream-bark-unstarted29-run.sh",
+      "sha256": "797d9a3b4c421efde47f583f7133e2d2330b7dc6cc75c25aacb60b8a59d273f7"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-controller.log",
+      "sha256": "8e836975d70cff89072c7379960a7efcffb8423b839f3ad8c5879e5882d58aa9"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-runtime-pins.sha256",
+      "sha256": "6efc6393bf7b5639ca3572c1414a2c833db0178e3dd0c51fffc68f742f6dc1d0"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-selection-proof.json",
+      "sha256": "30d44a65faae60a28bb20d55ea598bcb72ce1b938d80ba669b1640491a98c312"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-bark-version.txt",
+      "sha256": "4b9318f9b0e3751b1b86e5d85297e22947ecb6e5792177a78282467a1a05a282"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-preflight-parent.log",
+      "sha256": "06c85a08b1b3e5f9d3edc4e157b911cb68c0c3e9b7e0516b7463554e40d7a71f"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-resource-admission.json",
+      "sha256": "5f0f14e934b4b279b32f35bcc03ba5df0db5fabb600eb49cd06f6f6016d795dc"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-fresh-listing-admission.json",
+      "sha256": "89d9e964188d1580178ceac576e452e7e552fef2fadc1a92e83ff427f877e655"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-preflight.sh",
+      "sha256": "4ccc4dfa8c8153824355a0a73435b923a55ee160ac8585b0c4ab329eb11e8a56"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-preflight-static.py",
+      "sha256": "2984f0f39f4517c62ee01795ffdf25a3370978c837e748fc3f00335e1d2eadb8"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-verify-first-selection.py",
+      "sha256": "f62642960104d96e0d4f656e0e3f4dd2a5e7a1fc564c38d263743673605e289e"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-runner.py",
+      "sha256": "b55802cb54e84bafa87445caaf6f249cf081de4f5ee47ff70c4f3855b80d3aad"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-source-provenance.json",
+      "sha256": "0fd2511bc157554fe9f00fd6ba60f71069f6bbee48915c63659092ae466bcf80"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-version-gates.json",
+      "sha256": "5b8bf01df1ac3622049c8c54ca12b7e22668d7c1cd5003e6eaeaeba1cdc450d1"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-runtime-admission.json",
+      "sha256": "7259af9a047ffb12eacc0fde105ecd3490fef8bccb2babd4108f58812c79a820"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-failure-redacted.json",
+      "sha256": "16d3c067b33b674b1d6a5cdca48878ec7a30fae4872ab2aec4e85c5b8525ad4a"
+    },
+    {
+      "file": "batch24-upstream-bark-unstarted29-summary.log",
+      "sha256": "154275b2cc202627c7baf3d1dd2933c383855acf278932dad91572accb70760b"
+    }
+  ]
+}

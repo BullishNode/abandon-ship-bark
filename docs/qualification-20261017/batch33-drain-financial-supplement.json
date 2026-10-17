@@ -1,0 +1,24 @@
+{
+  "state": "SEPARATE_READ_ONLY_FINANCIAL_RECONCILIATION",
+  "native_result_unchanged": "FAIL",
+  "case_id": "FT-CLI-063",
+  "run_id": "9601bb92-202a-4151-92fb-8d19fef22d2d",
+  "native_receipt": "batch33-bark-unstarted16-receipt.json",
+  "native_receipt_sha256": "9af799a9f2b0902a2c88aa5d724141fa5ede103fed389d0423b599c0849ad814",
+  "native_pending_checkpoint_preserved": true,
+  "financial_reconciliation": "onchain-drain-retained-reconciliation.json",
+  "financial_reconciliation_sha256": "acedf10c96a694ae5a5f69238921b9bfc67936f17412c53d6eda15c8ea3315d8",
+  "actual_input_sat": 1000000,
+  "actual_recipient_sat": 999452,
+  "actual_miner_fee_sat": 548,
+  "chain_scope": {
+    "canonical_tip": "5dcfdd8a864a4a07ac9a8419655a0690bb949bfc71e84482543d6b7ee29d71bf",
+    "canonical_tip_height": 107,
+    "inclusion_block": "5dcfdd8a864a4a07ac9a8419655a0690bb949bfc71e84482543d6b7ee29d71bf",
+    "inclusion_height": 107,
+    "confirmations_at_retained_tip": 1
+  },
+  "scope": "Client retained DB/offlineCore audit, curator identity/pins/hash crosscheck only;1m=999452+548, actualsenderzero, targetCore1. OriginalFAIL unchanged; no native retry/Core6/adaptedPASS/fullML credit.",
+  "limitation": "Original namedtestFAIL preserved. No Core6, new adapted execution, optimalfeerate/fullwalletsolvency/FULLML claim. Actual recipient and zero sender nativebalances were reached, but original exactrecipient legacy literalfailed.",
+  "outside_ninth_publication_cutoff": true
+}

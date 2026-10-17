@@ -1,0 +1,37 @@
+{
+  "state": "SOURCE ACCEPTED FOR FUTURE QUALIFICATION \u2014 NOT RUN",
+  "source_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "root_ack": "Parent reports root ACK accepting this reviewed ordinary cold-backup source for future qualification. No current immutable capture, source packet, module, ELF or metadata is mutated by this addendum.",
+  "extra_required_tool": {
+    "path": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin/pg_controldata",
+    "sha256": "6b8304e7827e26ff3e5f00661ad00da51ee5329c032c19b2660ccc9fcb8a2d63",
+    "version": "pg_controldata (PostgreSQL) 17.11",
+    "reason": "Independently require Database cluster state: shut down before physical copying; stopped/reaped process alone is insufficient."
+  },
+  "verification": {
+    "parent_root_report": "Both containers verified by root; independent backend verification scoped only to admitted runtime below.",
+    "independent_runtime_container": "abandon-fresh-runtime-20261017",
+    "checked_at_utc": "2026-10-17T21:02:01.523152+00:00",
+    "cached_nix": "IN_NIX_SHELL=impure",
+    "read_only_sha256_match": true,
+    "read_only_version_match": true,
+    "docker_exec_exit_code": 0,
+    "opened_database_or_node_actor": false,
+    "native_tests_run": 0,
+    "builds": 0,
+    "tool_version_command_only": true
+  },
+  "remaining_admission": [
+    "Coordinator integration and module declaration",
+    "New exact source/build/ELF/metadata/product-feature pins",
+    "Actual BIP84 native fixture and BARK_EXEC, bitcoind chain source, locally owned PostgreSQL",
+    "Fresh resource admission including declared copy size and180-second case deadline",
+    "Add this tool to the new qualification pin set; do not rewrite frozen7041 or existing14-pin receipts"
+  ],
+  "proof_limits": [
+    "Ordinary same-candidate physical operator backup and fresh seed-only customer recovery only",
+    "No current execution/PASS/ML credit",
+    "No Lightning/Core/universal backup, crash/PITR/upgrade or global solvency claim",
+    "Original ced8 packet remains immutable; this external admission addendum supplements it"
+  ]
+}

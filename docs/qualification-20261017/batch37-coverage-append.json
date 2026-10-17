@@ -1,0 +1,25 @@
+{
+  "state": "APPEND_ONLY_COMPLETE",
+  "exclusive_writer": "legacy_inventory",
+  "before_rows": 425,
+  "after_rows": 426,
+  "appended_rows": 1,
+  "before_sha256": "aa6cac0d97dd6725a22375f8a757de054e0a091ff8ccd4e38d39a57b26c87d8e",
+  "after_sha256": "175a0c5ccbf813f213912405eb40490209aa12c756a54025e8242d368d58f2b0",
+  "prefix_byte_identical": true,
+  "append_sha256": "5e92cdcce36ccf0f88a0a887738223af69869805dd12b61937dc43e987f1c19f",
+  "case_ids": [
+    "FT-SERVER-009"
+  ],
+  "native_receipt_sha256": "d6ac1037a077ab90cd7eaaace3c9d8c851f920c4d9e52496f0b6a32db8b5a18e",
+  "aggregate_parent_confirmed_checkpoint": {
+    "executions": 215,
+    "passed": 201,
+    "failed": 14,
+    "unique_names": 211,
+    "invocations": 188,
+    "native": 203,
+    "components": 12
+  },
+  "fixed_public_PR13_docs_unchanged": true
+}

@@ -1,0 +1,28 @@
+{
+  "state": "APPEND_ONLY_COMPLETE",
+  "exclusive_writer": "legacy_inventory",
+  "before_rows": 395,
+  "after_rows": 399,
+  "appended_rows": 4,
+  "before_sha256": "0d816261693558f7dcaffd52fea114380b2732ff04da14efddd492302e63b709",
+  "after_sha256": "26a6d3ca7ddc586fa1c4f972a37cb03b24ce84d2e52510de083855172afba18c",
+  "prefix_byte_identical": true,
+  "append_sha256": "3ce4749964fef529b4f151f453c333ee7837d675a98989a252a3a511a828d3be",
+  "case_ids": [
+    "FT-CLI-060",
+    "FT-CLI-061",
+    "FT-CLI-062",
+    "FT-CLI-063"
+  ],
+  "native_receipt_sha256": "9af799a9f2b0902a2c88aa5d724141fa5ede103fed389d0423b599c0849ad814",
+  "ninth_docs_unchanged": true,
+  "aggregate_parent_confirmed_checkpoint": {
+    "executions": 188,
+    "passed": 174,
+    "failed": 14,
+    "unique_names": 184,
+    "invocations": 161,
+    "native": 177,
+    "components": 11
+  }
+}

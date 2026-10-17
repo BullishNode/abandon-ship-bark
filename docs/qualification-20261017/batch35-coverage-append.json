@@ -1,0 +1,33 @@
+{
+  "state": "APPEND_ONLY_COMPLETE",
+  "exclusive_writer": "legacy_inventory",
+  "before_rows": 411,
+  "after_rows": 419,
+  "appended_rows": 8,
+  "before_sha256": "2f2081476b365533798315b65fcaa1bec275fb9d8e955dc13dc4266b71c9e917",
+  "after_sha256": "99966f0dddda3030635ca55bb66f64ce6501981f8deb7b72f0f9378f778dae5d",
+  "prefix_byte_identical": true,
+  "append_sha256": "bba419501aba4db9430bc7dbcb60caa5e7554b919a46f87b74f74c430e06000a",
+  "case_ids": [
+    "FT-SERVER-001",
+    "FT-SERVER-002",
+    "FT-SERVER-003",
+    "FT-SERVER-004",
+    "FT-SERVER-005",
+    "FT-SERVER-006",
+    "FT-SERVER-007",
+    "FT-SERVER-008"
+  ],
+  "native_receipt_sha256": "69b4657ea432c9b1887d75fa168fa45b8d6e4319400384e1f507d96cb964cba7",
+  "aggregate_parent_confirmed_checkpoint": {
+    "executions": 208,
+    "passed": 194,
+    "failed": 14,
+    "unique_names": 204,
+    "invocations": 181,
+    "native": 196,
+    "components": 12
+  },
+  "active_sdk6_excluded": true,
+  "fixed_public_PR13_docs_unchanged": true
+}

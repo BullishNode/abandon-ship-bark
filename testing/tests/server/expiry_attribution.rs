@@ -7,7 +7,7 @@ use ark_testing::TestContext;
 use bitcoin::bip32::{ChildNumber, Xpriv, Xpub};
 use bitcoin::secp256k1::{Keypair, PublicKey};
 use bitcoin::{Network, ScriptBuf};
-use server::database::expiry_attribution::{Attribution, OWNER_KEYSPACE_END};
+use server::database::expiry_attribution::{Attribution, OWNER_KEYSPACE_END, OWNER_SCAN_MAX_KEYS};
 use server::database::Db;
 
 pub(super) fn key(account: &Xpriv, index: u32) -> PublicKey {
@@ -60,6 +60,14 @@ async fn coverage(db: &Db, key: PublicKey) -> BTreeMap<PublicKey, i64> {
 	}).await.unwrap()
 }
 
+async fn cursor_tickets(db: &Db, key: PublicKey) -> BTreeMap<PublicKey, (i64, i64)> {
+	db.read(async |tx| {
+		Ok(tx.query("SELECT mailbox_pk, scanned_up_to, service_ticket FROM expiry_scan WHERE user_pubkey=$1",
+			&[&key.to_string()]).await?.into_iter().map(|row|
+			(row.get::<_, &str>("mailbox_pk").parse().unwrap(), (row.get("scanned_up_to"), row.get("service_ticket")))).collect())
+	}).await.unwrap()
+}
+
 #[tokio::test]
 async fn expiry_attribution_requeue_preserves_coverage_without_reinitializing_accounts() {
 	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_requeue_coverage").await;
@@ -75,6 +83,7 @@ async fn expiry_attribution_requeue_preserves_coverage_without_reinitializing_ac
 		db.write(async |tx| tx.queue_expiry_owner(key, None).await).await.unwrap();
 	}
 	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
+	let initial_tickets = cursor_tickets(&db, old).await;
 	let initial = BTreeMap::from([(mailbox.as_pubkey(), 32)]);
 	assert_eq!(coverage(&db, old).await, initial);
 	assert_eq!(coverage(&db, future).await, initial);
@@ -99,10 +108,15 @@ async fn expiry_attribution_requeue_preserves_coverage_without_reinitializing_ac
 	assert_eq!(coverage(&db, old).await, initial);
 	assert_eq!(coverage(&db, future).await, initial);
 
+	assert_eq!(cursor_tickets(&db, old).await, initial_tickets, "requeue must not reset queue age");
 	let (_, new_mailbox) = register(&db, 22).await;
 	let appended = BTreeMap::from([(mailbox.as_pubkey(), 32), (new_mailbox.as_pubkey(), 0)]);
 	assert_eq!(coverage(&db, old).await, appended);
 	assert_eq!(coverage(&db, future).await, appended);
+	let added_tickets = cursor_tickets(&db, old).await;
+	assert_eq!(added_tickets.get(&mailbox.as_pubkey()), initial_tickets.get(&mailbox.as_pubkey()));
+	assert!(added_tickets[&new_mailbox.as_pubkey()].1 > initial_tickets[&mailbox.as_pubkey()].1,
+		"new registration appends zero coverage behind existing waiting work");
 	// A later different hint cannot replace the first nonempty candidate or
 	// reset either account's coverage. It is never an ownership assertion.
 	db.write(async |tx| tx.queue_expiry_owner(old, Some(new_mailbox)).await).await.unwrap();
@@ -119,9 +133,11 @@ async fn expiry_attribution_requeue_preserves_coverage_without_reinitializing_ac
 	assert_eq!(coverage(&db, late).await, zero);
 	for work in work { db.commit_expiry_owner_scan(Network::Regtest, &work.derive().unwrap()).await.unwrap(); }
 	assert_eq!(coverage(&db, late).await, zero, "older work must not advance a late key");
+	// Existing higher-prefix work may take the first bounded lane before the
+	// new registration. Both must finish without inheriting late-key coverage.
+	for _ in 0..4 { db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap(); }
 	assert!(matches!(owner(&db, future).await, Attribution::Owned { mailbox_pk, child_index: 7, .. }
 		if mailbox_pk == new_mailbox.as_pubkey()));
-	for _ in 0..3 { db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap(); }
 	assert!(matches!(owner(&db, late).await, Attribution::Owned { mailbox_pk, child_index: 8, .. }
 		if mailbox_pk == mailbox.as_pubkey()));
 	assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
@@ -240,13 +256,17 @@ async fn expiry_attribution_prepared_work_never_advances_a_new_pending_key() {
 	drop(db.prepare_expiry_owner_scan(32, 1).await.unwrap());
 	drop(db);
 	let db = Db::connect(&config).await.unwrap();
+	// Oldest waiting coverage gets the first turn after restart; the late
+	// zero-prefix key gets the next. Neither inherits the other's work.
+	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
+	assert_eq!(coverage(&db, old).await.get(&mailbox.as_pubkey()), Some(&64));
+	assert_eq!(owner(&db, late).await, Attribution::Unresolved);
+	let before_stale = cursor_tickets(&db, old).await;
+	assert_eq!(db.commit_expiry_owner_scan(Network::Regtest, &stale.derive().unwrap()).await.unwrap(), 0);
+	assert_eq!(cursor_tickets(&db, old).await, before_stale,
+		"stale work changes neither contiguous coverage nor its waiting ticket");
 	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
 	assert!(matches!(owner(&db, late).await, Attribution::Owned { child_index: 8, .. }));
-	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
-	assert_eq!(db.commit_expiry_owner_scan(Network::Regtest, &stale.derive().unwrap()).await.unwrap(), 0);
-	let prefix = db.read(async |tx| Ok(tx.query_one("SELECT scanned_up_to FROM expiry_scan WHERE user_pubkey=$1",
-		&[&old.to_string()]).await?.get::<_, i64>(0))).await.unwrap();
-	assert_eq!(prefix, 64, "a stale result must not roll back a later completed prefix");
 	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
 	assert!(matches!(owner(&db, old).await, Attribution::Owned { child_index: 80, .. }));
 }
@@ -412,4 +432,88 @@ async fn expiry_attribution_registry_fence_blocks_registration_until_decision_co
 	decision.await.unwrap();
 	registration.await.unwrap();
 	assert_eq!(owner(&db, wanted).await, Attribution::Unresolved);
+}
+
+#[tokio::test]
+async fn expiry_attribution_old_prefix_progresses_while_fresh_mailbox_keys_arrive() {
+	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_fresh_arrivals").await;
+	ctx.init_central_postgres().await;
+	for workers in [1, 2] {
+		let config = ctx.new_postgres(&format!("expiry_fresh_arrivals_{workers}")).await;
+		Db::create(&config).await.unwrap();
+		let db = Db::connect(&config).await.unwrap();
+		let (account, mailbox) = register(&db, 31).await;
+		let old = key(&account, 80);
+		db.write(async |tx| tx.queue_expiry_owner(old, Some(mailbox)).await).await.unwrap();
+		db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
+		assert_eq!(coverage(&db, old).await[&mailbox.as_pubkey()], 32);
+		// A new genuine high child arrives at zero before EVERY subsequent
+		// pass. The former per-account MIN(prefix) repeats 0..32 forever here.
+		for arrival in 0..3 {
+			let fresh = key(&account, 1_000 + arrival);
+			db.write(async |tx| tx.queue_expiry_owner(fresh, Some(mailbox)).await).await.unwrap();
+			let stats = db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
+			assert_eq!(stats.children_derived, 32, "same account is derived at most once per pass");
+			assert_eq!(owner(&db, fresh).await, Attribution::Unresolved);
+		}
+		assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
+			if mailbox_pk == mailbox.as_pubkey()), "older prefix must complete before arrivals stop");
+	}
+}
+
+#[tokio::test]
+async fn expiry_attribution_fair_lane_survives_wrong_mailbox_and_registration_pressure() {
+	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_fair_registry_pressure").await;
+	ctx.init_central_postgres().await;
+	for workers in [1, 2] {
+		let config = ctx.new_postgres(&format!("expiry_fair_pressure_{workers}")).await;
+		Db::create(&config).await.unwrap();
+		let db = Db::connect(&config).await.unwrap();
+		let (account, mailbox) = register(&db, 41).await;
+		let old = key(&account, 80);
+		db.write(async |tx| tx.queue_expiry_owner(old, None).await).await.unwrap();
+		db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
+		let (other, wrong_mailbox) = register(&db, 42).await;
+		db.write(async |tx| tx.queue_expiry_owner(old, Some(wrong_mailbox)).await).await.unwrap();
+		for arrival in 0..5 {
+			let fresh = key(&other, 1_000 + arrival);
+			db.write(async |tx| tx.queue_expiry_owner(fresh, Some(wrong_mailbox)).await).await.unwrap();
+			// Actual immutable registrations append cursors without resetting
+			// the earlier work or granting ownership from a candidate mailbox.
+			register(&db, 43 + u8::try_from(arrival).unwrap()).await;
+			db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
+			assert_eq!(owner(&db, fresh).await, Attribution::Unresolved);
+		}
+		assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
+			if mailbox_pk == mailbox.as_pubkey()), "wrong candidate cannot monopolize the oldest-work lane");
+	}
+}
+
+#[tokio::test]
+async fn expiry_attribution_limits_key_fanout_and_services_the_unselected_tail() {
+	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_key_fanout").await;
+	ctx.init_central_postgres().await;
+	let config = ctx.new_postgres("expiry_key_fanout").await;
+	Db::create(&config).await.unwrap();
+	let db = Db::connect(&config).await.unwrap();
+	let (account, mailbox) = register(&db, 51).await;
+	let keys = (0..u32::try_from(OWNER_SCAN_MAX_KEYS + 17).unwrap()).map(|i| key(&account, 1_000 + i)).collect::<Vec<_>>();
+	db.write(async |tx| {
+		for key in &keys { tx.queue_expiry_owner(*key, Some(mailbox)).await?; }
+		Ok(())
+	}).await.unwrap();
+	let stats = db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
+	assert_eq!(stats.children_derived, 32);
+	assert_eq!(stats.keys_matched, 0);
+	let prefixes = db.read(async |tx| Ok(tx.query("SELECT scanned_up_to, COUNT(*) AS n FROM expiry_scan
+		GROUP BY scanned_up_to ORDER BY scanned_up_to", &[]).await?.into_iter().map(|row|
+		(row.get::<_, i64>("scanned_up_to"), row.get::<_, i64>("n"))).collect::<BTreeMap<_, _>>())).await.unwrap();
+	assert_eq!(prefixes, BTreeMap::from([(0, 17), (32, i64::try_from(OWNER_SCAN_MAX_KEYS).unwrap())]),
+		"one pass advances only its bounded exact-prefix fanout");
+	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
+	for key in keys {
+		assert_eq!(coverage(&db, key).await[&mailbox.as_pubkey()], 32,
+			"the older unselected tail is serviced before re-deriving advanced keys");
+		assert_eq!(owner(&db, key).await, Attribution::Unresolved);
+	}
 }

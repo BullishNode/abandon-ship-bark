@@ -1,6 +1,6 @@
 //! Resumable attribution without payer hints or a bounded-search ownership guess.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
 use anyhow::Context;
@@ -16,9 +16,26 @@ use super::{Db, Tx};
 
 /// The exclusive end of the wallet's non-hardened issuance contract.
 pub const OWNER_KEYSPACE_END: u32 = 1 << 31;
-// This is a scheduling preference, never a no-owner conclusion. A mailbox
-// candidate receives a short head start before exhaustive fair scheduling.
+// A mailbox candidate can use spare lanes, never the reserved oldest-work lane.
+// This prefix is a scheduling preference, never a no-owner conclusion.
 const MAILBOX_PRIORITY_PREFIX: i64 = 100_000;
+/// A derivation pass never loads or advances an unbounded pending-key fanout.
+pub const OWNER_SCAN_MAX_KEYS: usize = 256;
+
+struct ScanAnchor {
+	mailbox_pk: PublicKey,
+	xpub: Xpub,
+	start: u32,
+}
+
+/// Reserve one lane for the oldest cursor even under continuous mailbox work.
+/// Duplicate account rows do not cause the same child range to be derived twice.
+fn select_scan_anchors(mut fair: Vec<ScanAnchor>, preferred: Vec<ScanAnchor>, workers: usize) -> Vec<ScanAnchor> {
+	let first = if fair.is_empty() { None } else { Some(fair.remove(0)) };
+	let mut accounts = BTreeSet::new();
+	first.into_iter().chain(preferred).chain(fair)
+		.filter(|anchor| accounts.insert(anchor.mailbox_pk)).take(workers).collect()
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Attribution {
@@ -135,50 +152,49 @@ impl Tx<'_> {
 	}
 
 	async fn prepare_expiry_scans(&self, chunk_size: u32, workers: usize) -> anyhow::Result<Vec<OwnerScanBatch>> {
-		// Bound the candidate accounts before joining their pending keys. A
-		// matched key deletes its pending row and cascades every scan cursor,
-		// so the indexed fair prefix contains only unfinished owner searches.
-		// Several keys can select the same account; deriving it once still
-		// compares all of its keys in the selected interval below.
-		let records = self.query("WITH preferred AS MATERIALIZED (
-			SELECT s.mailbox_pk FROM expiry_pending_key p JOIN expiry_scan s
-				ON s.user_pubkey=p.user_pubkey AND s.mailbox_pk=p.mailbox_pk
-			WHERE p.mailbox_pk IS NOT NULL AND s.scanned_up_to < $3
-			ORDER BY s.scanned_up_to, s.mailbox_pk LIMIT $2
-		), fair AS MATERIALIZED (
-			SELECT s.mailbox_pk FROM expiry_scan s WHERE s.scanned_up_to < $1
-			ORDER BY s.scanned_up_to, s.mailbox_pk LIMIT $2
-		), candidates AS MATERIALIZED (
-			SELECT mailbox_pk FROM preferred UNION SELECT mailbox_pk FROM fair
-		)
-			SELECT r.mailbox_pk, r.account_xpub, MIN(s.scanned_up_to) AS start_index,
-			BOOL_OR(p.mailbox_pk=r.mailbox_pk) AS candidate
-			FROM candidates c JOIN fallback_record r ON r.mailbox_pk=c.mailbox_pk
-			JOIN expiry_scan s ON s.mailbox_pk=r.mailbox_pk
-			JOIN expiry_pending_key p ON p.user_pubkey=s.user_pubkey
-			WHERE s.scanned_up_to < $1 AND NOT EXISTS
+		// Tickets age only after genuine compare-and-advance coverage. New keys
+		// and registrations join behind existing waiting cursors, irrespective
+		// of their prefix or an unverified mailbox candidate. Fetch bounded rows
+		// before coalescing accounts; duplicate accounts can leave spare lanes.
+		let limit = i64::try_from(workers)?;
+		let fair = self.query("SELECT s.mailbox_pk, s.scanned_up_to, r.account_xpub
+			FROM expiry_scan s JOIN fallback_record r ON r.mailbox_pk=s.mailbox_pk
+			WHERE s.scanned_up_to < 2147483648 AND NOT EXISTS
 				(SELECT 1 FROM expiry_owner_key o WHERE o.user_pubkey=s.user_pubkey)
-			GROUP BY r.mailbox_pk, r.account_xpub
-			ORDER BY CASE WHEN BOOL_OR(p.mailbox_pk=r.mailbox_pk) AND MIN(s.scanned_up_to) < $3
-				THEN 0 ELSE 1 END, start_index, candidate DESC NULLS LAST, r.mailbox_pk LIMIT $2",
-			&[&i64::from(OWNER_KEYSPACE_END), &i64::try_from(workers)?, &MAILBOX_PRIORITY_PREFIX]).await?;
+			ORDER BY s.service_ticket, s.user_pubkey, s.mailbox_pk LIMIT $1", &[&limit]).await?;
+		let preferred = if workers > 1 {
+			self.query("SELECT s.mailbox_pk, s.scanned_up_to, r.account_xpub
+				FROM expiry_scan s JOIN fallback_record r ON r.mailbox_pk=s.mailbox_pk
+				JOIN expiry_pending_key p ON p.user_pubkey=s.user_pubkey AND p.mailbox_pk=s.mailbox_pk
+				WHERE s.scanned_up_to < $1 AND NOT EXISTS
+					(SELECT 1 FROM expiry_owner_key o WHERE o.user_pubkey=s.user_pubkey)
+				ORDER BY s.service_ticket, s.user_pubkey, s.mailbox_pk LIMIT $2",
+				&[&MAILBOX_PRIORITY_PREFIX, &limit]).await?
+		} else { Vec::new() };
+		let anchors = |rows: Vec<tokio_postgres::Row>| rows.into_iter().map(|row| -> anyhow::Result<_> {
+			Ok(ScanAnchor { mailbox_pk: PublicKey::from_str(row.get("mailbox_pk"))?,
+				xpub: Xpub::from_str(row.get("account_xpub"))?,
+				start: u32::try_from(row.get::<_, i64>("scanned_up_to"))? })
+		}).collect::<anyhow::Result<Vec<_>>>();
+		let records = select_scan_anchors(anchors(fair)?, anchors(preferred)?, workers);
 		let mut work = Vec::with_capacity(records.len());
-		for row in records {
-			let mailbox: &str = row.get("mailbox_pk");
-			let start = u32::try_from(row.get::<_, i64>("start_index"))?;
-			// Small initial passes find ordinary low indices across a large
-			// registry without deriving a full maximum chunk per wrong record.
+		for anchor in records {
+			let start = anchor.start;
+			// Fresh zero-prefix arrivals cannot reset an older anchor. Coalesce
+			// only its exact prefix, in ticket order, with an indexed fixed cap.
 			let span = chunk_size.min(if start == 0 { 32 } else { start.saturating_mul(2) });
 			let end = start.saturating_add(span).min(OWNER_KEYSPACE_END);
-			let rows = self.query("SELECT s.user_pubkey, s.scanned_up_to FROM expiry_scan s WHERE s.mailbox_pk=$1
-				AND s.scanned_up_to >= $2 AND s.scanned_up_to < $3 AND NOT EXISTS
-				(SELECT 1 FROM expiry_owner_key o WHERE o.user_pubkey=s.user_pubkey)",
-				&[&mailbox, &i64::from(start), &i64::from(end)]).await?;
+			let rows = self.query("SELECT s.user_pubkey, s.scanned_up_to FROM expiry_scan s
+				WHERE s.mailbox_pk=$1 AND s.scanned_up_to=$2 AND s.scanned_up_to < 2147483648 AND NOT EXISTS
+					(SELECT 1 FROM expiry_owner_key o WHERE o.user_pubkey=s.user_pubkey)
+				ORDER BY s.service_ticket, s.user_pubkey LIMIT $3",
+				&[&anchor.mailbox_pk.to_string(), &i64::from(start), &i64::try_from(OWNER_SCAN_MAX_KEYS)?]).await?;
 			let keys = rows.into_iter().map(|row| -> anyhow::Result<_> { Ok((
 				PublicKey::from_str(row.get("user_pubkey"))?, u32::try_from(row.get::<_, i64>("scanned_up_to"))?,
 			)) }).collect::<anyhow::Result<BTreeMap<_, _>>>()?;
-			work.push(OwnerScanBatch { mailbox_pk: PublicKey::from_str(mailbox)?,
-				xpub: Xpub::from_str(row.get("account_xpub"))?, start, end, keys });
+			// A concurrent completed pass may have consumed this exact prefix.
+			if keys.is_empty() { continue; }
+			work.push(OwnerScanBatch { mailbox_pk: anchor.mailbox_pk, xpub: anchor.xpub, start, end, keys });
 		}
 		Ok(work)
 	}
@@ -190,7 +206,7 @@ impl Tx<'_> {
 			let encoded_key = key.to_string();
 			// Compare-and-advance the key's own contiguous prefix. A late key
 			// absent from this work item is never advanced by this result.
-			let updated = self.execute("UPDATE expiry_scan SET scanned_up_to=$3
+			let updated = self.execute("UPDATE expiry_scan SET scanned_up_to=$3, service_ticket=nextval('expiry_scan_service_ticket_seq')
 				WHERE user_pubkey=$1 AND mailbox_pk=$2 AND scanned_up_to=$4",
 				&[&encoded_key, &mailbox, &i64::from(result.work.end), &i64::from(*prefix)]).await?;
 			if updated == 0 { continue; }
@@ -266,6 +282,25 @@ impl Db {
 mod tests {
 	use super::*;
 	use bitcoin::bip32::Xpriv;
+
+	#[test]
+	fn expiry_owner_scan_reserves_oldest_lane_ahead_of_mailbox_candidates() {
+		let anchor = |byte: u8, start| {
+			let account = Xpriv::new_master(Network::Regtest, &[byte; 64]).unwrap();
+			let xpub = Xpub::from_priv(&SECP, &account);
+			ScanAnchor { mailbox_pk: xpub.public_key, xpub, start }
+		};
+		let oldest = anchor(1, 64).mailbox_pk;
+		let preferred = anchor(2, 0).mailbox_pk;
+		let selected = select_scan_anchors(vec![anchor(1, 64), anchor(3, 0)], vec![anchor(2, 0)], 1);
+		assert_eq!(selected.len(), 1);
+		assert_eq!((selected[0].mailbox_pk, selected[0].start), (oldest, 64));
+		let selected = select_scan_anchors(vec![anchor(1, 64), anchor(3, 0)], vec![anchor(2, 0)], 2);
+		assert_eq!(selected.iter().map(|v| v.mailbox_pk).collect::<Vec<_>>(), vec![oldest, preferred]);
+		let selected = select_scan_anchors(vec![anchor(1, 64), anchor(3, 0)], vec![anchor(1, 0)], 2);
+		assert_eq!(selected.iter().map(|v| (v.mailbox_pk, v.start)).collect::<Vec<_>>(),
+			vec![(oldest, 64), (anchor(3, 0).mailbox_pk, 0)]);
+	}
 
 	#[test]
 	fn expiry_owner_scan_reaches_the_last_normal_child_without_storing_every_key() {

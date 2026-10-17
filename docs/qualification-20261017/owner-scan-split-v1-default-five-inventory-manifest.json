@@ -1,0 +1,53 @@
+{
+  "head": "814d7b0deb6a5f2a6758d34ca4313589f948f4e3",
+  "dirty": true,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "paired_candidate_manifest_sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
+  "products": {
+    "ark-testing::bark": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-bark",
+      "sha256": "f3e33f52d458f5dc5f0dcd98f99ca363b266d4e35f979a418d47e8830dcd46f7"
+    },
+    "ark-testing::barkd": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-barkd",
+      "sha256": "1fd1f89bc795f770890b10342325f7b41214bfe9cda3d4cc792bf0bdb3239e12"
+    },
+    "ark-testing::core": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-core",
+      "sha256": "1257380815888d2a60ad86252f5ef5c66d546a987c045778e5e0eb126de7ce8b"
+    }
+  },
+  "extra_metadata_sha256": "c58958a720960c64b9f186fcdb36eabce2d50a561cd3e68668888969e8462b5e",
+  "default_five_metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "default_five_test_list_sha256": "16adbb314708184af6aefbbd5248656fb6ac419f2b5b71ae34e5532936f368e8",
+  "extra_metadata_build": {
+    "state": "PASS",
+    "command": [
+      "cargo",
+      "nextest",
+      "list",
+      "--package",
+      "ark-testing",
+      "--test",
+      "bark",
+      "--test",
+      "barkd",
+      "--test",
+      "core",
+      "--features",
+      "ark-testing/fallback-test-bip84",
+      "--list-type",
+      "binaries-only",
+      "--message-format",
+      "json"
+    ],
+    "started_at": "2026-10-17T17:52:29.251247+00:00",
+    "allocation": "Coordinator approved extra immutable metadata only after sole oversize case started; retain sole Cargo lease",
+    "exit_code": 0,
+    "seconds": 37.688,
+    "ended_at": "2026-10-17T17:53:06.939576+00:00"
+  },
+  "native_execution": "NONE; inventory only, all default integration cases NOT RUN by this metadata step",
+  "scope": "bark,barkd,core plus identical earlier SDK/server; migrations/upgrades/tor separate gates",
+  "captured_at": "2026-10-17T17:53:07.879473+00:00"
+}

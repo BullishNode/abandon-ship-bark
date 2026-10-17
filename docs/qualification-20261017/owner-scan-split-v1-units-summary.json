@@ -1,0 +1,9 @@
+{
+  "run_id": "825f6b81-f598-456b-ab42-bb844161a470",
+  "result": "PASS",
+  "passed": 800,
+  "skipped": 1,
+  "execution_seconds": 12.356,
+  "included_in_native_scenario_counts": false,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+}

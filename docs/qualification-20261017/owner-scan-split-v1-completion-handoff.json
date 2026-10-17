@@ -1,0 +1,21 @@
+{
+  "state": "ALL_ALLOCATED_WORK_TERMINAL_LEASE_RELEASED",
+  "at": "2026-10-17T17:58:19.762350+00:00",
+  "source_head_label": "814d7b0deb6a5f2a6758d34ca4313589f948f4e3",
+  "dirty": true,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "candidate_manifest_sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
+  "paired_sdk_server_metadata_sha256": "cf273b091bee345a3d66027abe091ac5951ea04f8c6bb06053e78e4167d12a90",
+  "default_five_metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "default_five_test_list_sha256": "16adbb314708184af6aefbbd5248656fb6ac419f2b5b71ae34e5532936f368e8",
+  "default_five_inventory_manifest_sha256": "814533119b3eb24295fafb685ad02071c1b87aa2cb5b4351db8b97fd8658dbde",
+  "ignored_unit_supplement_sha256": "e7e400b7f03cd205283803ab70768c494878118c6f20918430df5d83c3e4fa73",
+  "units_baseline": "800PASS1explicitignored/run825f6b81",
+  "ignored_unit": "PASS15.454s/run09ff9f23",
+  "corrected_oversize": "PASS164.064s/run63a761b8/327Coreconfirmedownerpayouts",
+  "all1156tracked_source_files_HEAD_dirtydiff_unchanged": true,
+  "all9product_test_ELF_hashes_reverified": true,
+  "active_cargo_rustc_nextest_processes": [],
+  "owned_runtime_processes": [],
+  "no_new_runtime_or_Cargo_writes_by_this_track": "Coordinator may schedule PG/race+unchanged120sscale benchmark with no othernative/compiler from us."
+}

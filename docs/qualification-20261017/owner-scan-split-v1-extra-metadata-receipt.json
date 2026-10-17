@@ -1,0 +1,27 @@
+{
+  "state": "PASS",
+  "command": [
+    "cargo",
+    "nextest",
+    "list",
+    "--package",
+    "ark-testing",
+    "--test",
+    "bark",
+    "--test",
+    "barkd",
+    "--test",
+    "core",
+    "--features",
+    "ark-testing/fallback-test-bip84",
+    "--list-type",
+    "binaries-only",
+    "--message-format",
+    "json"
+  ],
+  "started_at": "2026-10-17T17:52:29.251247+00:00",
+  "allocation": "Coordinator approved extra immutable metadata only after sole oversize case started; retain sole Cargo lease",
+  "exit_code": 0,
+  "seconds": 37.688,
+  "ended_at": "2026-10-17T17:53:06.939576+00:00"
+}

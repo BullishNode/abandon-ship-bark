@@ -18,6 +18,7 @@ mod qualification_lightning;
 mod qualification_noah;
 mod qualification_oversize;
 mod qualification_receive_fallback;
+mod qualification_cold_backup;
 mod ban;
 mod blocklist;
 mod block_index;

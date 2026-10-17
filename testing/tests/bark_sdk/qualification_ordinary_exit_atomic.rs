@@ -226,6 +226,14 @@ async fn ordinary_proof_checkpoint_reopens_without_relocking_its_retained_safety
 		.expect("durable proof plus failed retirement must recover after reopen without broadcasting");
 }
 
+fn assert_exact_reserved_balance(balance: bark::Balance, amount: bitcoin::Amount) {
+	assert_eq!(balance.spendable, sat(0));
+	assert_eq!(balance.awaiting_settlement, sat(0));
+	assert_eq!(balance.pending_exit, amount);
+	assert_eq!(balance.pending(), amount);
+	assert_eq!(balance.total(), amount, "an unavailable native reservation remains owned exactly once");
+}
+
 async fn reserve_before_actual_ordinary_proof(interrupt_retirement: bool) {
 	let name = if interrupt_retirement { "bark_sdk/ordinary_exit_checkpoint_reopen" }
 		else { "bark_sdk/ordinary_exit_reserve_first" };
@@ -267,6 +275,9 @@ async fn reserve_before_actual_ordinary_proof(interrupt_retirement: bool) {
 		assert_eq!(database.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state,
 			VtxoState::Locked { holder: Some(exit.movement_id.unwrap().into()) });
 	}
+	assert_exact_reserved_balance(stale.balance().await.unwrap(), sat(200_000));
+	assert!(stale.protect_expiring_vtxos().await.unwrap().exits_started.is_empty());
+	assert_exact_reserved_balance(stale.balance().await.unwrap(), sat(200_000));
 	// This device has not broadcast an exit; the other genuine owner device
 	// completes a normal authorized transfer while its old copy remains locked.
 	sender.send_arkoor_payment(&recipient.new_address().await.unwrap(), sat(100_000)).await.unwrap();
@@ -303,12 +314,14 @@ async fn reserve_before_actual_ordinary_proof(interrupt_retirement: bool) {
 	assert_eq!(database.get_wallet_vtxo(healthy.id()).await.unwrap().unwrap().state, healthy_holder);
 	assert_eq!(database.get_movement_by_id(healthy_movement).await.unwrap().status, MovementStatus::Pending);
 	assert_eq!(database.get_exit_vtxo_entries().await.unwrap().len(), 2);
+	assert_exact_reserved_balance(stale.balance().await.unwrap(), sat(100_000));
 	drop(stale);
 	drop(database);
 	let database = Arc::new(StorageAdaptorWrapper::new(RetirementWriteGate {
 		inner: FileStorageAdaptor::open(&storage_path).await.unwrap(), fault: RetirementFault::default(),
 	}));
 	let reopened = open_retained_wallet(&mnemonic, cfg, database.clone()).await;
+	assert_exact_reserved_balance(reopened.balance().await.unwrap(), sat(100_000));
 	srv.stop().await.unwrap();
 	let status = reopened.exit_mgr().progress_exits(&reopened).await.unwrap().unwrap();
 	let source_status = status.iter().find(|entry| entry.vtxo_id == spent.id()).unwrap();
@@ -327,6 +340,7 @@ async fn reserve_before_actual_ordinary_proof(interrupt_retirement: bool) {
 	let ExitState::Processing(processing) = &healthy_status.state else { panic!("healthy sibling did not prepare its actual signed exit"); };
 	assert!(processing.transactions.iter().any(|tx| matches!(tx.status, ExitTxStatus::AwaitingCpfpBroadcast)));
 	assert_eq!(database.get_wallet_vtxo(healthy.id()).await.unwrap().unwrap().state, healthy_holder);
+	assert_exact_reserved_balance(reopened.balance().await.unwrap(), sat(100_000));
 	// Cached genuine proof completes exact-holder retirement even with Ark offline.
 	tokio::time::timeout(Duration::from_secs(20), reopened.sync()).await.unwrap();
 	reopened.exit_mgr().progress_exits(&reopened).await.unwrap();
@@ -344,7 +358,7 @@ async fn reserve_before_actual_ordinary_proof(interrupt_retirement: bool) {
 	assert_eq!(database.get_exit_vtxo_entries().await.unwrap().len(), 2);
 	assert_eq!(reopened.get_full_vtxo(spent.id()).await.unwrap().serialize(), full.serialize());
 	assert!(reopened.spendable_vtxos().await.unwrap().is_empty());
-	assert!(reopened.balance().await.unwrap().total() <= sat(100_000), "retained old principal must not be added beside the actual remaining source");
+	assert_exact_reserved_balance(reopened.balance().await.unwrap(), sat(100_000));
 	let history = reopened.history().await.unwrap();
 	let intents = history.iter().filter(|movement| movement.subsystem.name == "bark.exit").collect::<Vec<_>>();
 	assert_eq!(intents.len(), 2);

@@ -20,7 +20,10 @@ use crate::{Wallet, WalletVtxo};
 use crate::actions::{WalletAction, WalletActionCheckpoint};
 use crate::exit::ExitStateKind;
 use crate::fallback::payouts::FallbackSnapshot;
-use crate::vtxo::{VtxoState, VtxoStateKind};
+use crate::movement::{Movement, MovementStatus};
+use crate::persist::models::StoredExit;
+use crate::subsystem::Subsystem;
+use crate::vtxo::{VtxoLockHolder, VtxoState, VtxoStateKind};
 
 /// The different balances of a Bark wallet.
 ///
@@ -57,10 +60,11 @@ pub struct Balance {
 	/// them when a round attempt starts, a delegated one once the server has
 	/// issued the round and its funding transaction has been seen.
 	pub pending_in_round: Amount,
-	/// Sats in VTXOs whose unilateral exit has committed on-chain but which
-	/// have not been claimed to the on-chain wallet yet. These VTXOs are
-	/// [`crate::vtxo::VtxoStateKind::Exited`] and unusable in the Ark protocol.
-	/// An exit that can still be canceled isn't counted here.
+	/// Sats reserved by a native safety exit, or committed to an on-chain
+	/// unilateral exit and not yet claimed. An abortable safety exit owns an
+	/// exact Movement holder and still counts here while unavailable for Ark
+	/// spending. A manual exit intent that reserves nothing does not: its
+	/// Spendable coin remains in the ordinary balance until commitment.
 	pub pending_exit: Amount,
 	/// Sats in board VTXOs that are waiting for enough on-chain confirmations
 	/// to be registered with the Ark server. A board whose funding transaction
@@ -327,11 +331,24 @@ impl Wallet {
 			.get_exit_vtxo_entries_with_states(ExitStateKind::LIVE_STATES).await?;
 		for exit in exits {
 			if decided.contains(&exit.vtxo_id) { continue; }
+			if let Some(coin) = vtxos.get(&exit.vtxo_id)
+				&& let VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { id }) } = &coin.state
+				&& exit.movement_id == Some(*id) && !counted.contains(&coin.id()) {
+				let movement = self.inner.db.get_movement_by_id(*id).await?;
+				if owns_protective_exit_reservation(&exit, &movement, coin) && counted.insert(coin.id()) {
+					// Start/Processing safety exits already reserve real positive
+					// principal, even though their final leaf is not on chain yet.
+					balance.pending_exit += principal(coin, &pending_principal);
+					continue;
+				}
+			}
 			if !exit.state.warrants_exited_vtxo() {
 				continue;
 			}
 			match vtxos.get(&exit.vtxo_id) {
-				Some(v) if v.state == VtxoState::Exited => balance.pending_exit += principal(v, &pending_principal),
+				Some(v) if v.state == VtxoState::Exited => {
+					if counted.insert(v.id()) { balance.pending_exit += principal(v, &pending_principal); }
+				},
 				Some(v) => warn!("Exit of VTXO {} has committed but the VTXO is {:?}",
 					exit.vtxo_id, v.state,
 				),
@@ -343,6 +360,21 @@ impl Wallet {
 
 		Ok(balance)
 	}
+}
+
+/// A native intent alone is not a reservation. Require its actual pending
+/// movement and its exact live holder; a binding round or another operation
+/// remains accounted for by its own bucket. Call only for already-filtered
+/// positive-owned coins, after decided/unproven/discharged sources are removed.
+fn owns_protective_exit_reservation(exit: &StoredExit, movement: &Movement, coin: &WalletVtxo) -> bool {
+	exit.vtxo_id == coin.id() && exit.movement_id == Some(movement.id)
+		&& coin.state == (VtxoState::Locked { holder: Some(movement.id.into()) })
+		&& movement.status == MovementStatus::Pending
+		&& movement.subsystem.name == Subsystem::EXIT.as_name()
+		&& movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true))
+		&& !movement.metadata.contains_key("protective_round_state")
+		&& !movement.metadata.contains_key("protective_round_movement")
+		&& movement.input_vtxos == [coin.id()]
 }
 
 /// A transient projection of existing local principal, not a new ledger.
@@ -402,8 +434,42 @@ fn held_by<A: WalletAction>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use ark::test_util::VTXO_VECTORS;
+	use crate::exit::ExitState;
+	use crate::movement::{MovementId, MovementSubsystem};
+	use crate::persist::models::wallet_vtxo_from_full;
 
 	fn id(value: u8) -> VtxoId { VtxoId::from_slice(&[value; 36]).unwrap() }
+
+	#[test]
+	fn prepared_exit_balance_requires_its_exact_pending_nonbinding_safety_reservation() {
+		let movement_id = MovementId::new(7);
+		let mut coin = wallet_vtxo_from_full(&VTXO_VECTORS.board_vtxo,
+			VtxoState::Locked { holder: Some(movement_id.into()) }, true);
+		let exit = StoredExit { vtxo_id: coin.id(), movement_id: Some(movement_id),
+			state: ExitState::new_start(BlockHeight::new(1)), history: vec![] };
+		let mut movement = Movement::new(movement_id, MovementStatus::Pending,
+			&MovementSubsystem { name: Subsystem::EXIT.as_name().into(), kind: "exit".into() }, chrono::Local::now());
+		movement.metadata.insert("protective_exit".into(), serde_json::Value::Bool(true));
+		movement.input_vtxos.push(coin.id());
+		assert!(owns_protective_exit_reservation(&exit, &movement, &coin));
+		coin.state = VtxoState::Locked { holder: Some(MovementId::new(8).into()) };
+		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin), "a foreign holder is not this exit's principal");
+		coin.state = VtxoState::Spendable;
+		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin), "an unreserved manual intent does not add another balance");
+		coin.state = VtxoState::Locked { holder: Some(movement_id.into()) };
+		movement.metadata.insert("protective_round_state".into(), serde_json::json!(1));
+		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin), "binding principal remains in the round bucket");
+		movement.metadata.remove("protective_round_state");
+		movement.metadata.remove("protective_exit");
+		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin));
+		movement.metadata.insert("protective_exit".into(), serde_json::Value::Bool(true));
+		movement.status = MovementStatus::Canceled;
+		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin));
+		movement.status = MovementStatus::Pending;
+		movement.input_vtxos.push(id(8));
+		assert!(!owns_protective_exit_reservation(&exit, &movement, &coin), "a mismatched operation cannot synthesize this amount");
+	}
 
 	#[test]
 	fn pending_signed_cut_does_not_double_subtract_shared_transitive_descendants() {

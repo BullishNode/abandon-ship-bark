@@ -1,0 +1,56 @@
+{
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "source_archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "compiled_head_label": "814d7b0deb6a5f2a6758d34ca4313589f948f4e3 dirty owner-scan patch",
+  "clean_equivalent_canonical_head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+  "whole_capture_equivalence_reference": "batch17-upstream-core-default-receipt.json: all1156 captured tracked files byte-identical to8fb, which adds only2 evidence docs; existing provenance, not a new build.",
+  "upstream_provenance_pin": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "independently_checked_scope": "Four complete executed SDK source files from the immutable archive, manifest hashes and pinned upstream Git objects. Current dirty canonical files were not used as runtime provenance.",
+  "files": [
+    {
+      "test_name": "board::failed_board_leaves_the_onchain_wallet_untouched",
+      "source": "testing/tests/bark_sdk/board.rs",
+      "line": 18,
+      "archive_file_sha256": "08611fe0dc193bb69a14344a993970cf790c62adbe331ce70de4c61df756660b",
+      "manifest_file_sha256": "08611fe0dc193bb69a14344a993970cf790c62adbe331ce70de4c61df756660b",
+      "upstream_file_sha256": "08611fe0dc193bb69a14344a993970cf790c62adbe331ce70de4c61df756660b",
+      "byte_equivalence": "WHOLE_FILE_BYTE_IDENTICAL",
+      "verification": "Independently read source.tar.gz bytes; compare source7041 file hash and git show pinned upstream bytes; named function present."
+    },
+    {
+      "test_name": "arkoor::send_to_unsupported_delivery_is_refused",
+      "source": "testing/tests/bark_sdk/arkoor.rs",
+      "line": 14,
+      "archive_file_sha256": "cc6b7ec04f51736978d2b090591e8b2af75665f4297f8812753c0aa332daf16f",
+      "manifest_file_sha256": "cc6b7ec04f51736978d2b090591e8b2af75665f4297f8812753c0aa332daf16f",
+      "upstream_file_sha256": "cc6b7ec04f51736978d2b090591e8b2af75665f4297f8812753c0aa332daf16f",
+      "byte_equivalence": "WHOLE_FILE_BYTE_IDENTICAL",
+      "verification": "Independently read source.tar.gz bytes; compare source7041 file hash and git show pinned upstream bytes; named function present."
+    },
+    {
+      "test_name": "mailbox::arkoor_receive_replay_does_not_restore_a_spent_vtxo",
+      "source": "testing/tests/bark_sdk/mailbox.rs",
+      "line": 134,
+      "archive_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb",
+      "manifest_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb",
+      "upstream_file_sha256": "a2c156427952b774c48251540b28e925e0afe2aaec84d484fd243504aa75d4bb",
+      "byte_equivalence": "WHOLE_FILE_BYTE_IDENTICAL",
+      "verification": "Independently read source.tar.gz bytes; compare source7041 file hash and git show pinned upstream bytes; named function present."
+    },
+    {
+      "test_name": "import::import_stores_spent_vtxo_as_spent",
+      "source": "testing/tests/bark_sdk/import.rs",
+      "line": 15,
+      "archive_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4",
+      "manifest_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4",
+      "upstream_file_sha256": "69e590ce96416b359fe54eefd845f1cc43e74363f4261f1b11af5e71e7a87dd4",
+      "byte_equivalence": "WHOLE_FILE_BYTE_IDENTICAL",
+      "verification": "Independently read source.tar.gz bytes; compare source7041 file hash and git show pinned upstream bytes; named function present."
+    }
+  ],
+  "runtime_metadata_derivation": "Independently compared parsed parent metadata to exact SDK-only subset; then verified only original non-test lock-holder path changes to archived identical helper in runtime metadata.",
+  "parent_metadata_sha256": "c22e785532b29bfcda024483c669e2ade5b8e96d0038dac9309df4bed51e8ea4",
+  "literal_sdk_subset_sha256": "4db79800d184993365aea9a7e490335b109eddd770f80ddf5da030c9a330bafa",
+  "runtime_metadata_sha256": "faaa21775c92a77890b3c61f5af28d04c3e59d751c12868348e4a0f5b0c912b4",
+  "execution_provenance_limit": "Unchanged upstream test source does not mean unchanged product behavior; actual execution is pinned to source7041 fork products."
+}

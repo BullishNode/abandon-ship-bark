@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-17T17:58:19.762350+00:00",
+  "updated_at": "2026-10-17T18:41:02.683145+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "ALL_ALLOCATED_RUNS_COMPLETE_CARGO_RELEASED",
+  "state": "ACTIVE_SOURCE_WORK_SDK29_RESOURCE_PAUSE",
   "branch": "work/fresh-test-qualification-20261017",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
@@ -17,7 +17,7 @@
   "execution": {
     "disk_hold_released": true,
     "shared_target_write_allocated": false,
-    "runtime_capacity_allocated": "Allocatedcorrectedsplitcompleted; no ownnative/compiler remains",
+    "runtime_capacity_allocated": "One serial16corebatch now; rootmax2nativeglobal; no Cargo/sharedtargetwrites",
     "new_signet_campaign_allocated": false,
     "next_shared_target_write_allocated": false
   },
@@ -42,11 +42,11 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Publish sanitized corrected-split/checks/units/metadata evidence; coordinator owns next PG/race and120s scale benchmark. No owned runtime/compiler.",
+  "next_action": "Continue source review/report publication while root validates SHM; resume only unstarted case29 after explicit allocation, no retries.",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
-  "runtime_allocation": "COMPLETED; released. Additional native work requires coordinator scheduling.",
+  "runtime_allocation": "Coordinator cleanup/resume requested; no live owned nextest; root-only staleSHM cleanup, no Cargo writes",
   "inventory_rows_by_file": {
     "legacy-inventory.csv": 103,
     "backend-inventory.csv": 72,
@@ -68,22 +68,20 @@
   "build_lease": "RELEASED afterfullsource/product verification and terminal ignoredunit; completion-handoff.json allpins",
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
-  "new_test_source_review": "Published earlier tests compiled and ran; direct recipient test compiled and passed on two separately pinned runtime pairings. Deferred oversized correction and failed-send restart are source-only.",
-  "coverage_rows": 239,
-  "coverage_warning": "239 mixed inventory/requirement/executed rows; 80 original legacy IDs retained. 24 unique executed names across 27 executions; whole legacy cases require their complete original oracle.",
+  "new_test_source_review": "Published earlier fixtures compiled and ran on recorded pairings. New failed-send v3 is source-only and excluded from this checkpoint.",
+  "coverage_rows": 287,
+  "coverage_warning": "287 mixed inventory/requirement/executed rows. Executed names and completed main-track totals are reported separately;200ML full-oracle status is in ML-COVERAGE.csv.",
   "current_batch": {
-    "name": "batch16-corrected-multilevel-split",
-    "state": "COMPLETED",
-    "run_id": "63a761b8-7f82-4f73-9bd5-3433e6912403",
-    "exec_session": 35911,
-    "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
-    "candidate_manifest_sha256": "85149de281996da9a6c856e520de8b20247c9dd4b6912a0ba988543ccf6661a6",
-    "metadata_sha256": "cf273b091bee345a3d66027abe091ac5951ea04f8c6bb06053e78e4167d12a90",
-    "inner_deadline_seconds": 600,
-    "outer_timeout_seconds": 660,
-    "retries": 0,
-    "result": "PASS",
-    "runtime_seconds": 164.064
+    "name": "batch19-sdk-upstream-normal-remaining",
+    "state": "PAUSED_RESOURCE_PREFLIGHT",
+    "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch19-sdk-upstream-normal-remaining",
+    "progress_receipt": "cohort-progress.json",
+    "all_completed_counts_exclude_this_active_batch": false,
+    "passed": 28,
+    "failed": 0,
+    "not_started": 13,
+    "controller_exit": 75,
+    "receipt": "batch19-sdk-upstream-normal-prefix28-receipt.json"
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -118,11 +116,11 @@
     "wall_seconds_approx": 159.375
   },
   "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
-  "case_executions": 28,
-  "unique_executed_test_names": 24,
-  "nextest_invocations": 16,
-  "native_case_executions": 26,
-  "component_case_executions": 2,
+  "case_executions": 76,
+  "unique_executed_test_names": 72,
+  "nextest_invocations": 49,
+  "native_case_executions": 68,
+  "component_case_executions": 8,
   "new_test_results": {
     "readiness": "PASS26.184s",
     "two_root_return_history": "PASS44.926s",
@@ -151,14 +149,22 @@
     },
     "primary_local_code_commit": "0870bbbb915f133b98b00b5c3d7dc2a2a2ac0bc5",
     "primary_code_publication": "PUSHED and verified in draftPR8; no merge/promotion/deployment by testing track",
-    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/8",
-    "latest_verified_remote_head": "ba92c39adbbaac6992db2b8631520a5a7a3c4e99",
-    "latest_receipt": "PUBLICATION-PR8.json",
+    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/10",
+    "latest_verified_remote_head": "3e72e9ebcb8f9696dd3b6b1daa3ecd8ba54f8d17",
+    "latest_receipt": "PUBLICATION-PR10.json",
     "oversize_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/9",
     "oversize_verified_remote_head": "013bed49bc5cd0d7d839b1726ebf9e71b5170301",
     "oversize_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
     "oversize_review": "3reviewers complete; NOT compiled/run; no newexecutioncredit",
-    "prior_PR8": "Verified merged by coordinator as751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d"
+    "prior_PR8": "Verified merged by coordinator as751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
+    "oversize_source_PR9_state": "MERGED814d7b0d",
+    "latest_scope": "REPORT_ONLY",
+    "latest_pr_verified_merged": {
+      "pr": 10,
+      "head": "3e72e9ebcb8f9696dd3b6b1daa3ecd8ba54f8d17",
+      "merge_commit": "544f28b50bd9db9d4bc11b324763d27da33901db",
+      "merged_at": "2026-10-17T18:26:12Z"
+    }
   },
   "next_batch": {
     "automatic_oversize": "Actualcorrectedfixturepassedonfrozen814+ownerpatch/source7041; original16.359sFAIL preserved. Notproductioncapacity.",
@@ -166,7 +172,8 @@
     "conflict_reorg": "Frozen source-only draft after Lightning priority",
     "lightning_restart": "Completed source-labelled success recovery; stronger failed-send cancellation-during-downtime draft reviewed but uncompiled/unrun",
     "noah_forwarding": "Native provider-reopen and actual post-registration recipient fallback passed; stock Noah LNURL metadata-hash compatibility unqualified",
-    "failed_send_restart": "Reviewed isolated source-only packet, no module registration/compile/runtime"
+    "failed_send_restart": "Reviewed isolated source-only packet, no module registration/compile/runtime",
+    "upstream_sdk": "SDK18 first4PASS; SDK19 first28PASS,13unstarted at resourcepreflight stop before29. Full57upstream SDK names not yet run."
   },
   "next_compile_policy": "Author/review in own isolated worktree; submit reviewed patch/PR increment for coordinator integration; compile from canonical stable package path only after explicit writerlease. No new own-worktree metadata.",
   "source_review_fixes": [
@@ -176,7 +183,7 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 26,
+  "passed_case_executions": 74,
   "failed_case_executions": 2,
   "first_checkpoint": {
     "executions": 17,
@@ -345,7 +352,7 @@
   },
   "primary_raw_retained": "Completebatch13state retained for source/chain/subsidyreview, no node/DB/RPCreopen",
   "next_uncompiled_sources": {
-    "failed_send": "qualification_failed_swap.rs31ca387b; privatepatchede8ac6d; reviewednotapplied",
+    "failed_send": "qualification_failed_swap.rs51bf1828, hardening-v2 patche8b95a7; second review pending, uncompiled/unrun",
     "oversize_graph": "qualification_oversize.rs9942a9f6; OWNworktreeonlyDEFERRED; canonicalstilltestedAPI-fixd61438dc",
     "restore_conflict": "Frozenuntracked files; no currentwork"
   },
@@ -362,5 +369,38 @@
     "default_selected": 638,
     "ignored": 5,
     "status": "INVENTORY_ONLY; no fullsuiteexecutioncredit"
-  }
+  },
+  "money_loss_catalogue": {
+    "ids": "ML001-ML200",
+    "rows": 200,
+    "research_is_not_tests": true,
+    "mapping_state": "Complete own evidence map; canonical intake root-owned",
+    "canonical_intake_owner": "root coordinator",
+    "execution_status_counts": {
+      "NOT RUN": 198,
+      "PASS": 2
+    },
+    "evidence_scope_counts": {
+      "FULL": 2,
+      "PARTIAL": 145,
+      "NONE": 53
+    },
+    "coverage_receipt": "ML-COVERAGE.csv",
+    "coverage_sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
+    "full_pass_limitation": "Only ML165/166 bounded327-owner shape. No expansion to restart/reorg/heterogeneous-history cases."
+  },
+  "counts_warning": "76 completed main-track executions include10 core daemon infrastructure and8 process components; not76 ML cases. Units and external benchmarks excluded.",
+  "execution_counts_through": "batch19 first28 terminalPASS; remaining13 not started",
+  "execution_outcomes": {
+    "PASS": 74,
+    "FAIL": 2
+  },
+  "last_completed_batch": {
+    "name": "batch18-sdk-upstream-normal-01",
+    "result": "PASS4/4",
+    "receipt_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch18-sdk-upstream-normal-01",
+    "retries": 0,
+    "per_test_timeout_seconds": 180
+  },
+  "historical_fields_notice": "Older phase-specific fields remain historical. Current top-level state/current_batch/execution totals and money_loss_catalogue define latest state; individual pinned receipts remain authoritative."
 }

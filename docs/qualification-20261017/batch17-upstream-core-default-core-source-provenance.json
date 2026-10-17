@@ -1,0 +1,114 @@
+{
+  "bitcoind::fund_bitcoind": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/bitcoind.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "bitcoind::start_bitcoind": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/bitcoind.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "bitcoind::submitblock_null_result_needs_sync_client": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/bitcoind.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "lightning::cln_can_pay_lightning": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/lightning.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "lightning::start_lightningd": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/lightning.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "pid_lock::only_one_of_ten_concurrent_holders_succeeds": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/pid_lock.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "pid_lock::pid_file_contains_holder_pid": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/pid_lock.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "pid_lock::pid_lock_is_released_after_sigint": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/pid_lock.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "pid_lock::pid_lock_is_released_after_sigkill": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/pid_lock.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "pid_lock::pid_lock_is_released_after_sigterm": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/pid_lock.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "pid_lock::stale_pid_file_does_not_prevent_acquisition": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/pid_lock.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "tip_watcher::polling_watcher_detects_new_blocks": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/tip_watcher.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "tip_watcher::zmq_watcher_detects_new_blocks": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/tip_watcher.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "wallet_ext::balance_perf_deep_unconfirmed_fanout": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/wallet_ext.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "wallet_ext::deep_reorg_wallet_sync": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/wallet_ext.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  },
+  "wallet_ext::is_trusted": {
+    "pinned_upstream_base": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+    "source_path": "testing/tests/core/wallet_ext.rs",
+    "name_present_in_upstream": true,
+    "whole_source_file_byte_identical": true,
+    "classification": "upstream_present"
+  }
+}

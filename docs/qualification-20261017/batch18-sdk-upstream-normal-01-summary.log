@@ -1,0 +1,39 @@
+===== FT-SDK-001: raw case01/nextest.log =====
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/testing-track-20261017/batch18-sdk-upstream-normal-01/nextest-binaries-sdk-runtime-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch18-sdk-upstream-normal-01/case01/nextest.toml -- board::failed_board_leaves_the_onchain_wallet_untouched --exact
+────────────
+ Nextest run ID 2d607fd7-5ae1-420c-b8da-0563d27c932e with nextest profile: default
+    Starting 1 test across 1 binary (76 tests skipped)
+        PASS [  10.115s] (1/1) ark-testing::bark-sdk board::failed_board_leaves_the_onchain_wallet_untouched
+────────────
+     Summary [  10.116s] 1 test run: 1 passed, 76 skipped
+
+===== FT-SDK-002: raw case02/nextest.log =====
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/testing-track-20261017/batch18-sdk-upstream-normal-01/nextest-binaries-sdk-runtime-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch18-sdk-upstream-normal-01/case02/nextest.toml -- arkoor::send_to_unsupported_delivery_is_refused --exact
+────────────
+ Nextest run ID b0680380-1f12-4a5c-95b4-2f4192e917be with nextest profile: default
+    Starting 1 test across 1 binary (76 tests skipped)
+        PASS [   9.019s] (1/1) ark-testing::bark-sdk arkoor::send_to_unsupported_delivery_is_refused
+────────────
+     Summary [   9.020s] 1 test run: 1 passed, 76 skipped
+
+===== FT-SDK-003: raw case03/nextest.log =====
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/testing-track-20261017/batch18-sdk-upstream-normal-01/nextest-binaries-sdk-runtime-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch18-sdk-upstream-normal-01/case03/nextest.toml -- mailbox::arkoor_receive_replay_does_not_restore_a_spent_vtxo --exact
+────────────
+ Nextest run ID 0eee850e-f833-4e18-8e78-732eb5440f83 with nextest profile: default
+    Starting 1 test across 1 binary (76 tests skipped)
+        PASS [  12.712s] (1/1) ark-testing::bark-sdk mailbox::arkoor_receive_replay_does_not_restore_a_spent_vtxo
+────────────
+     Summary [  12.713s] 1 test run: 1 passed, 76 skipped
+
+===== FT-SDK-004: raw case04/nextest.log =====
+if [ -n "${LIGHTNINGD_DOCKER_IMAGE-""}" ]; then docker image inspect "$LIGHTNINGD_DOCKER_IMAGE" > /dev/null 2>&1 && echo "Image already exists locally." || (echo "Image not found locally. Pulling..." && docker pull "$LIGHTNINGD_DOCKER_IMAGE"); fi
+cargo nextest run --no-fail-fast --profile default --binaries-metadata "/fresh-cache/testing-track-20261017/batch18-sdk-upstream-normal-01/nextest-binaries-sdk-runtime-immutable.json" -E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' --test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch18-sdk-upstream-normal-01/case04/nextest.toml -- import::import_stores_spent_vtxo_as_spent --exact
+────────────
+ Nextest run ID a2d9b487-3310-4b30-8623-ca22201e9973 with nextest profile: default
+    Starting 1 test across 1 binary (76 tests skipped)
+        PASS [  10.236s] (1/1) ark-testing::bark-sdk import::import_stores_spent_vtxo_as_spent
+────────────
+     Summary [  10.237s] 1 test run: 1 passed, 76 skipped

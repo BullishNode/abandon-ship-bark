@@ -83,7 +83,7 @@ const NOARG: &[&bool] = &[];
 
 const DEFAULT_DATABASE: &str = "postgres";
 
-/// Advisory lock keys for `pg_advisory_xact_lock`.
+/// Advisory lock keys for PostgreSQL transaction and session locks.
 ///
 /// Each variant maps to a unique lock id. Using an enum avoids
 /// computing `hashtext(...)` at runtime and makes every lock site
@@ -92,6 +92,36 @@ const DEFAULT_DATABASE: &str = "postgres";
 enum AdvisoryLock {
 	MailboxWrite = 1,
 	HtlcSettlementWrite = 2,
+	// Key 3 is reserved for the fallback registration snapshot.
+	Migrations = 4,
+}
+
+/// Keep the driver alive until PostgreSQL receives a cancellation request.
+/// Closing a socket alone does not interrupt a backend that waits on a lock.
+struct MigrationConnection {
+	driver: Option<tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>>,
+	cancel: tokio_postgres::CancelToken,
+}
+
+impl MigrationConnection {
+	fn finish(mut self) {
+		if let Some(driver) = self.driver.take() { driver.abort(); }
+	}
+}
+
+impl Drop for MigrationConnection {
+	fn drop(&mut self) {
+		let Some(driver) = self.driver.take() else { return; };
+		let cancel = self.cancel.clone();
+		if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+			runtime.spawn(async move {
+				let _ = tokio::time::timeout(Duration::from_secs(5), cancel.cancel_query(NoTls)).await;
+				driver.abort();
+			});
+		} else {
+			driver.abort();
+		}
+	}
 }
 
 /// An uncommitted offboard fetched for the retry-task commit path. Carries
@@ -163,12 +193,24 @@ pub struct Db {
 }
 
 impl Db {
-	async fn run_migrations(&self) -> anyhow::Result<()> {
-		let mut conn = self.get_conn().await?;
+	async fn run_migrations(config: &PostgresConfig) -> anyhow::Result<()> {
+		// The server and watchman can start together. Refinery reads history
+		// before applying migrations, so both histories must share one lock.
+		// Use a dedicated session. Cancel its query before closing on a dropped
+		// startup future; a blocked backend may not notice a closed socket yet.
+		let pg_config = Self::config(&config.name, config);
+		let (mut conn, connection) = tokio::time::timeout(
+			Duration::from_secs(config.connection_timeout_secs), pg_config.connect(NoTls),
+		).await.context("migration database connection timed out")??;
+		let connection = MigrationConnection {
+			cancel: conn.cancel_token(), driver: Some(tokio::spawn(connection)),
+		};
+		conn.query_one("SELECT pg_advisory_lock($1)", &[&(AdvisoryLock::Migrations as i64)]).await?;
 		embedded::migrations::runner().run_async::<Client>(&mut conn).await?;
 		fork_embedded::migrations::runner()
 			.set_migration_table_name("expiry_refinery_schema_history")
 			.run_async::<Client>(&mut conn).await?;
+		connection.finish();
 		info!("All migrations got successfully run");
 		Ok(())
 	}
@@ -239,10 +281,10 @@ impl Db {
 	}
 
 	pub async fn connect(config: &PostgresConfig) -> anyhow::Result<Self> {
+		Self::run_migrations(config).await?;
 		let pool = Self::pool_connect(&config.name, config).await?;
 
 		let db = Db { pool };
-		db.run_migrations().await?;
 
 		Ok(db)
 	}

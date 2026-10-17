@@ -1,0 +1,15 @@
+# Registered receive fallback peer review
+
+Reviewed source: `/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_receive_fallback.rs`.
+SHA256: `56b1553c67864161ea3266d9f51e38d50f3939d2de8b32f697352e68447e911a`.
+Source-only disposition: no substantive blocker found. NOT RUN by this reviewer; no peer source edits, Cargo, metadata, builds, services, or shared-target writes.
+
+The interruption is genuinely after registration: native receive code registers signed claim outputs before returning Delivering; the test separately reads the exact Spendable recipient-policy server leaf. The mailbox proxy never invokes upstream, the recipient was stopped and dropped before invoice creation, and the provider stops at the durable Delivering boundary. The external payment must settle; invoice issuance alone cannot pass.
+
+Both ordinary and pool lifetimes32 are consistent with unchanged native admission. The actual requested invoice CLTV is12 exit +6 HTLC +12 margin +18 claim +2 preparation =50, below native max58. Current native backing-tree admission requires the12-block exit margin rather than the full HTLC lifespan. The test checks real remaining backing life, actual backing Core confirmations, and independently funded/confirmed watch liquidity. Anti-DoS is explicitly false as in the stock native test context; production Anti-DoS is outside this case.
+
+Financial assertions cover the whole backing anchor, including predecessor HTLCs and operator pool change. Exactly one customer row must belong to the registered recipient leaf/mailbox/key/script, with10,000 gross,1,000 fee,9,000 payout, no forfeiture, and the actual canonical paying transaction. All recorded canonical parents under the root are inspected; none may pay the provider fallback script, and the recipient canonical output set must be exactly the observed9,000-sat payout. Parent input/output sums account for operator remainder rather than treating the whole100,000-sat pool backing as recipient principal. A second completed rebuild after the real ancestor HTLC deadline guards against delayed provider attribution.
+
+The fresh seed-only CLI builder uses a different database and genesis birthday. Authenticated fallback receipt fields are reconciled with the actual parent, script, output, fee and successful chain-verified history. Zero local Ark debit is consistent with an undelivered leaf; any negative history movement consuming that source fails. Actual CLI onchain-utxos and drain both sync the real BDK wallet; a single-input signed BIP84 recovery transaction spends only this payout. Independent Core6 destination verification and recovered value +actual miner fee +1,000 =10,000 prove usable rightful-recipient money.
+
+Schema/API checks covered TEXT disposition/status/owner/script fields, BIGINT monetary fields, nullable paying_txid, native HTLC state lookup, completed expiry rebuild APIs, and actual CLI recovery helpers. Scope excludes stock Noah/LNURL and pre-registration interruption. No runtime or compile claim is made.

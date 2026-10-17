@@ -33,6 +33,13 @@ impl<'t> Tx<'t> {
 		signed_tree: &CachedSignedVtxoTree,
 		interactive_participations: &HashMap<UnlockHash, InteractiveParticipation>,
 	) -> anyhow::Result<()> {
+		let input_vtxos = input_vtxos.into_iter().collect::<Vec<_>>();
+		crate::database::expiry_guard::guard_obligation_changes(self, &input_vtxos).await?;
+		for hash in signed_tree.spec.spec.vtxos.iter().map(|v| v.unlock_hash) {
+			if let Some(row) = self.query_opt("SELECT id FROM round_participation WHERE unlock_hash=$1", &[&hash.to_string()]).await? {
+				crate::database::expiry_guard::guard_participation(self, row.get("id")).await?;
+			}
+		}
 		let funding_txid = unsigned_funding_tx.compute_txid();
 		info!("Storing finished round with funding txid {}", funding_txid);
 
@@ -271,6 +278,8 @@ impl<'t> Tx<'t> {
 			unlock_hash, inputs,
 		);
 
+		crate::database::expiry_guard::guard_obligation_changes(self, inputs).await?;
+
 		// check that all inputs are free
 		for vtxo in query::get_vtxos_by_id(&self, inputs).await? {
 			vtxo.check_spendable(chain_tip)?;
@@ -306,6 +315,11 @@ impl<'t> Tx<'t> {
 		if vtxo_ids.is_empty() {
 			return Ok(());
 		}
+
+		crate::database::expiry_guard::guard_obligation_changes(self, vtxo_ids).await?;
+		let part = self.query_opt("SELECT id FROM round_participation WHERE unlock_hash=$1", &[&unlock_hash.to_string()]).await?
+			.context("round participation disappeared before forfeit commit")?;
+		crate::database::expiry_guard::guard_participation(self, part.get("id")).await?;
 
 		let vtxo_id_strs = vtxo_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
 		let serialized = forfeits.iter().map(|ff| serialize(ff)).collect::<Vec<_>>();

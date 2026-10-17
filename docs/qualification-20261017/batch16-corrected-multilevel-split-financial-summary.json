@@ -1,0 +1,153 @@
+{
+  "outcome": "PASS",
+  "phase": "complete",
+  "payees": 327,
+  "leaf_gross_sat": 5000,
+  "deadline_seconds": 600,
+  "production_limits": {
+    "child_vsize": 1000,
+    "exit_delta": 144,
+    "exit_depth": 100,
+    "fanout": 4,
+    "lifetime_blocks": 4320,
+    "owner_scan_chunk": 10000,
+    "owner_scan_workers": 2,
+    "payout_vsize": 10000
+  },
+  "harness_cadence_seconds": {
+    "reaction": 1,
+    "sweep": 1
+  },
+  "production_timer_defaults_seconds": {
+    "reaction": 600,
+    "sweep": 7200
+  },
+  "payee_records_registered": 327,
+  "actual_registry_count": 328,
+  "completed_native_cosign_registration_pairs": 154,
+  "mailbox_posts": 327,
+  "expected_explicit_rpc_workload": {
+    "initial_source_path_registration": 1,
+    "mailbox_post": 327,
+    "native_cosign": 154,
+    "native_output_registration": 154,
+    "payee_registration": 327
+  },
+  "required_oversized_physical_levels": [
+    {
+      "backing": "3c2feba1844d3d2068dde16b377947259571c4c716cdf87181068e3da09f247f:0",
+      "recipients": 327
+    },
+    {
+      "backing": "084a2619c72d9ca1fa24f8374e0c13ea6c4e33ee7d6ec68e0e119f08aad7f57c:0",
+      "recipients": 324
+    }
+  ],
+  "automatic_split_requests": [
+    {
+      "backing": "3c2feba1844d3d2068dde16b377947259571c4c716cdf87181068e3da09f247f:0",
+      "progress_txid": "5398a1645f0a89b59f32d855fcaef393c25558bf834d462dc4c1309fee1b6b0c"
+    },
+    {
+      "backing": "084a2619c72d9ca1fa24f8374e0c13ea6c4e33ee7d6ec68e0e119f08aad7f57c:0",
+      "progress_txid": "25c35f57a7d8fd07b9ba8eddea81f1ef33f24a5b47b145178103ace6e8ed5de9"
+    }
+  ],
+  "packages": [
+    {
+      "child_miner_fee_sat": 1934,
+      "child_txid": "a0eb878724328c7a7c91c076afb3688c00f95a242ac9e2d2be11726f3cdcc718",
+      "child_vsize": 153,
+      "child_weight_wu": 609,
+      "confirmed_hash": "2dc624286a557684c738a48b277f39b4160e93a623e44105d9a1df05c6eac8ad",
+      "confirmed_height": 4427,
+      "parent_txid": "5398a1645f0a89b59f32d855fcaef393c25558bf834d462dc4c1309fee1b6b0c",
+      "parent_vsize": 124,
+      "parent_weight_wu": 496
+    },
+    {
+      "child_miner_fee_sat": 2837,
+      "child_txid": "eb2c51d47b91c4b8c7169266ec388bde0ba666727940fbaca93628792be0dbfb",
+      "child_vsize": 153,
+      "child_weight_wu": 609,
+      "confirmed_hash": "41828ac4553960022682aae2b2d78228a8bc449884639ea8f29da2dd47822fc6",
+      "confirmed_height": 4430,
+      "parent_txid": "084a2619c72d9ca1fa24f8374e0c13ea6c4e33ee7d6ec68e0e119f08aad7f57c",
+      "parent_vsize": 253,
+      "parent_weight_wu": 1012
+    },
+    {
+      "child_miner_fee_sat": 1934,
+      "child_txid": "57de069fa5bcfb65bfd34877c23d9159ca82d5821058e4d8a5222f9a675b1125",
+      "child_vsize": 153,
+      "child_weight_wu": 609,
+      "confirmed_hash": "62fcc44b11af4b59e4cf4631cd3e910db8a08f1a7b755a79e9ee3c2bfadf0545",
+      "confirmed_height": 4431,
+      "parent_txid": "25c35f57a7d8fd07b9ba8eddea81f1ef33f24a5b47b145178103ace6e8ed5de9",
+      "parent_vsize": 124,
+      "parent_weight_wu": 496
+    },
+    {
+      "child_miner_fee_sat": 2837,
+      "child_txid": "afa73e78fd2de62e8c46d6f5db6d5f7e5cb2318dcc61cd83b703ee216f95251b",
+      "child_vsize": 153,
+      "child_weight_wu": 609,
+      "confirmed_hash": "001da670fd39844f1a2e2f4a468d493265c270fceacd892593f4d5409a3d8610",
+      "confirmed_height": 4434,
+      "parent_txid": "fe9e1f90a2bc7758ba0c12eb59594cb281f33fa567a596fa907a442b3b387884",
+      "parent_vsize": 253,
+      "parent_weight_wu": 1012
+    },
+    {
+      "child_miner_fee_sat": 3779,
+      "child_txid": "ff4d6ce977abce71eb3f68c0c1c82b38fb4c7947e3acd829e4d87cc210fb3617",
+      "child_vsize": 153,
+      "child_weight_wu": 609,
+      "confirmed_hash": "62fcc44b11af4b59e4cf4631cd3e910db8a08f1a7b755a79e9ee3c2bfadf0545",
+      "confirmed_height": 4431,
+      "parent_txid": "0a68d4ee390aecce5905cdd90abbf69990dadb435ed45f406616ee9b507ebf45",
+      "parent_vsize": 388,
+      "parent_weight_wu": 1550
+    },
+    {
+      "child_miner_fee_sat": 19641,
+      "child_txid": "923c9d3a13bddb2609f1033feaad7370d96f8832c36ba26090314a785e1ffdfd",
+      "child_vsize": 153,
+      "child_weight_wu": 609,
+      "confirmed_hash": "3a674c5138aa50c51f2681ce7d80c708cb2e2f6d428ad2265205aa1d1618a4bb",
+      "confirmed_height": 4435,
+      "parent_txid": "98da3d4dffa0cb881407a7acc5852fb73f8ed4f33b575e02f9b436e76de8ed5e",
+      "parent_vsize": 2654,
+      "parent_weight_wu": 10614
+    },
+    {
+      "child_miner_fee_sat": 55859,
+      "child_txid": "e07c776cfb6ff696a23f7ebd081fa4ca0b851e0d094d337b0acf7c2a1d5e9108",
+      "child_vsize": 153,
+      "child_weight_wu": 609,
+      "confirmed_hash": "3a674c5138aa50c51f2681ce7d80c708cb2e2f6d428ad2265205aa1d1618a4bb",
+      "confirmed_height": 4435,
+      "parent_txid": "2a2a02de9762bc6d8df1a09569a9df8a6811559831d5e357c6fcc93981a62ad4",
+      "parent_vsize": 7828,
+      "parent_weight_wu": 31310
+    }
+  ],
+  "conservation": {
+    "canonical_miner_fees_sat": 88821,
+    "customer_payout_sat": 1308000,
+    "external_input_sat": 2835000,
+    "remaining_output_sat": 2746179,
+    "unique_transactions": 14
+  },
+  "actual_report_sha256": "594c1263020560a032b6e4ba85153629b7fe7c5806739c78e6d8d3dc1ade50dd",
+  "run_id": "63a761b8-7f82-4f73-9bd5-3433e6912403",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "fixture_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+  "full_private_report": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch16-corrected-multilevel-split/test-data/server/expiry_automatic_real_limit_multilevel_split/automatic-oversize.json",
+  "test_seconds": 164.064,
+  "minimum_customer_confirmations": 7,
+  "actual_owner_outputs": 327,
+  "owner_output_total_sat": 1308000,
+  "original_failure_preserved": true,
+  "no_production_capacity_claim": true
+}

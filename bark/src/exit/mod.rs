@@ -152,7 +152,7 @@ use crate::chain::ChainSource;
 use crate::exit::bdk::should_rbf;
 use crate::exit::transaction_manager::ExitTransactionManager;
 use crate::onchain::MakeCpfpFees;
-use crate::movement::{MovementDestination, MovementStatus, PaymentMethod};
+use crate::movement::{MovementDestination, MovementId, MovementStatus, PaymentMethod};
 use crate::movement::manager::MovementManager;
 use crate::movement::update::MovementUpdate;
 
@@ -160,7 +160,7 @@ use crate::persist::BarkPersister;
 use crate::persist::models::StoredExit;
 use crate::psbtext::PsbtInputExt;
 use crate::subsystem::{ExitMovement, Subsystem};
-use crate::vtxo::VtxoStateKind;
+use crate::vtxo::{VtxoState, VtxoStateKind};
 
 /// What is known about the CPFP child of a pending exit transaction.
 pub(crate) enum ChildState {
@@ -212,6 +212,8 @@ impl ExitInner {
 		&mut self,
 		vtxos: &[impl Borrow<Vtxo<Bare>>],
 		skip_standardness_checks: bool,
+		protective: bool,
+		protective_round: Option<(u32, MovementId)>,
 	) -> anyhow::Result<()> {
 		if vtxos.is_empty() {
 			return Ok(());
@@ -272,7 +274,12 @@ impl ExitInner {
 				MovementUpdate::new()
 					.intended_and_effective_balance(balance)
 					.consumed_vtxo(vtxo_id)
-					.sent_to([MovementDestination::new(payment_method, vtxo.amount())]),
+					.sent_to([MovementDestination::new(payment_method, vtxo.amount())])
+					.metadata(protective.then(|| ("protective_exit".into(), serde_json::Value::Bool(true))))
+					.metadata(protective_round.into_iter().flat_map(|(round, movement)| [
+						("protective_round_state".into(), serde_json::json!(round)),
+						("protective_round_movement".into(), serde_json::json!(movement)),
+					])),
 			).await.context("Failed to register exit movement")?;
 
 			// We avoid composing the TXID vector since that requires access to the onchain wallet,
@@ -329,6 +336,11 @@ impl ExitInner {
 			if let Some(vtxo) = vtxo {
 				let exit_vtxo = claimable.get(&vtxo.id()).context("vtxo is not claimable yet")?;
 
+				if let Some(id) = exit_vtxo.movement_id() {
+					let movement = wallet.inner.db.get_movement_by_id(id).await?;
+					ensure!(movement.metadata.get("recovered_through_round") != Some(&serde_json::Value::Bool(true)),
+						"this refresh is recovering through its replacement coin; do not claim the original as well");
+				}
 				let witness = wallet.sign_input(&vtxo, i, &mut shc, &prevouts).await
 					.map_err(|e| ExitError::ClaimSigningError { error: e.to_string() })?;
 
@@ -600,7 +612,7 @@ impl Exit {
 			return Ok(());
 		}
 
-		guard.start_exit_for_vtxos(&eligible, false).await
+		guard.start_exit_for_vtxos(&eligible, false, false, None).await
 	}
 
 	/// Starts the unilateral exit process for the given VTXOs.
@@ -614,7 +626,60 @@ impl Exit {
 		vtxos: &[impl Borrow<Vtxo<Bare>>],
 	) -> anyhow::Result<()> {
 		let mut guard = self.inner.write().await;
-		guard.start_exit_for_vtxos(vtxos, false).await
+		guard.start_exit_for_vtxos(vtxos, false, false, None).await
+	}
+
+	/// Reserve a safety exit under its real durable movement. The intent is
+	/// stored before the lock, so a crash can resume it; progression must
+	/// obtain this same lock before broadcasting and never steals an action.
+	pub(crate) async fn start_protective_exit(&self, vtxo: &Vtxo<Bare>, wallet: &Wallet) -> anyhow::Result<()> {
+		let mut inner = self.inner.write().await;
+		inner.start_exit_for_vtxos(&[vtxo], false, true, None).await?;
+		let exit = inner.exit_vtxos.iter().find(|exit| exit.id() == vtxo.id())
+			.context("protective exit was not stored")?;
+		let holder = exit.movement_id().context("protective exit has no movement")?;
+		wallet.lock_vtxos([vtxo.id()], Some(holder.into())).await
+	}
+
+	/// A binding refresh retains its round holder. The movement stores the
+	/// exact checkpoint identity atomically with the exit intent, and every
+	/// broadcast rechecks that identity without taking a second round lock.
+	pub(crate) async fn start_protective_round_exit(
+		&self, vtxo: &Vtxo<Bare>, wallet: &Wallet, round: u32, holder: MovementId,
+	) -> anyhow::Result<()> {
+		let mut inner = self.inner.write().await;
+		inner.start_exit_for_vtxos(&[vtxo], false, true, Some((round, holder))).await?;
+		wallet.lock_vtxos([vtxo.id()], Some(holder.into())).await
+	}
+
+	/// Revive this same binding exit if its recorded claim left the canonical
+	/// chain. Retain its movement and state history, rather than debit a new exit.
+	pub(crate) async fn rearm_binding_claim(
+		&self, id: VtxoId, wallet: &Wallet, round: u32, holder: MovementId,
+	) -> anyhow::Result<()> {
+		let mut inner = self.inner.write().await;
+		let mut entry = inner.persister.get_exit_vtxo_entry(&id).await?
+			.context("binding recovery exit record disappeared")?;
+		let Some(movement_id) = entry.movement_id else { bail!("binding exit has no native movement"); };
+		let movement = inner.persister.get_movement_by_id(movement_id).await?;
+		ensure!(movement.metadata.get("protective_round_state") == Some(&serde_json::json!(round))
+			&& movement.metadata.get("protective_round_movement") == Some(&serde_json::json!(holder)),
+			"recovery cannot revive another round's exit");
+		inner.movement_manager.rearm_chain_recovery(movement_id).await?;
+		let ExitState::Claimed(claim) = &entry.state else { return Ok(()); };
+		let tip = wallet.chain().tip_ref_uncached().await?;
+		if tip.height >= claim.block.height && wallet.chain().block_ref(claim.block.height).await? == claim.block {
+			return Ok(());
+		}
+		let coin = inner.persister.get_wallet_vtxo(id).await?.context("binding exit body disappeared")?;
+		ensure!(coin.state == (VtxoState::Locked { holder: Some(holder.into()) }),
+			"binding recovery cannot revive another operation's holder");
+		entry.history.push(entry.state.clone());
+		entry.state = ExitState::new_start(tip.height);
+		inner.persister.store_exit_vtxo_entry(&entry).await?;
+		inner.exit_vtxos.retain(|exit| exit.id() != id);
+		inner.exit_vtxos.push(ExitVtxo::from_entry(entry, &coin));
+		Ok(())
 	}
 
 	/// Similar to [Exit::start_exit_for_vtxos], but it skips any dust/standardness checks.
@@ -626,7 +691,7 @@ impl Exit {
 		vtxos: &[impl Borrow<Vtxo<Bare>>],
 	) -> anyhow::Result<()> {
 		let mut guard = self.inner.write().await;
-		guard.start_exit_for_vtxos(vtxos, true).await
+		guard.start_exit_for_vtxos(vtxos, true, false, None).await
 	}
 
 	/// Cancels the unilateral exit for the given VTXO.
@@ -679,6 +744,15 @@ impl Exit {
 
 		let tip = inner.chain_source.tip().await
 			.map_err(|e| ExitError::TipRetrievalFailure { error: e.to_string() })?;
+
+		if let Some(movement_id) = inner.exit_vtxos[idx].movement_id() {
+			let movement = inner.persister.get_movement_by_id(movement_id).await
+				.map_err(|e| ExitError::InternalError { error: e.to_string() })?;
+			if movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true)) {
+				inner.persister.release_vtxo_lock(vtxo_id, Some(&movement_id.into())).await
+					.map_err(|e| ExitError::InternalError { error: e.to_string() })?;
+			}
+		}
 
 		// Record the cancellation first, so it survives even if a later best-effort step fails.
 		inner.exit_vtxos[idx].cancel(tip, &*inner.persister).await?;
@@ -796,15 +870,36 @@ impl Exit {
 		ev: &ExitVtxo,
 		state_changed: bool,
 	) {
-		if ev.state().warrants_exited_vtxo() {
+		let binding = if let Some(id) = ev.movement_id() {
+			match wallet.inner.db.get_movement_by_id(id).await {
+				Ok(movement) => movement.metadata.contains_key("protective_round_state"),
+				Err(error) => { error!("Exit holder could not be checked: {:#}", error); true },
+			}
+		} else { false };
+		// Binding exchange inputs and replacements retain their original
+		// round holder until an independently verified terminal user claim.
+		if ev.state().warrants_exited_vtxo() && !binding {
 			if let Err(e) = wallet.mark_vtxos_as_exited([ev.id()]).await {
 				error!("Failed to mark VTXO {} as Exited: {:#}", ev.id(), e);
 			}
 		}
 
-		if !state_changed {
+		// A native Claimable scan also labels server forfeits as Claimed.
+		// The owning binding round verifies the actual user witness before
+		// finalizing either its old intent or replacement exit movement.
+		if binding {
+			// A normal cooperative round may have completed after the exit
+			// intent was created. Its old intent consumed no principal.
+			if state_changed && matches!(ev.state(), ExitState::VtxoAlreadySpent(_)) {
+				if let Some(id) = ev.movement_id() {
+					if let Err(error) = movements.finish_movement_with_update(id, MovementStatus::Canceled,
+						MovementUpdate::new().effective_balance(bitcoin::SignedAmount::ZERO),
+					).await { error!("Binding exit intent could not be cancelled: {:#}", error); }
+				}
+			}
 			return;
 		}
+		if !state_changed { return; }
 		let Some(movement_id) = ev.movement_id() else { return };
 		let new_status = match ev.state() {
 			ExitState::Claimed(_) => MovementStatus::Successful,

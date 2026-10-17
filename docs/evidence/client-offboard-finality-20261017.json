@@ -1,0 +1,61 @@
+{
+  "scope": "Native SDK offboard intent, actual fallback discharge and reorg protection. No CLI/REST/browser or production qualification.",
+  "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
+  "build_label": "e44ddf957-client-offboard-finality-working",
+  "source_manifest_sha256": "665425dabce96720be50abaf923417751bf53be34173585ade99eda59d8fcda2",
+  "source_tar_sha256": "69e50cec7417c566ce23ef7b563a661cfbbfc254a4cea321ce0785b78c6369c1",
+  "tested_overlay_sha256": "d9304a11d011475ccf9538d70647a20fc5a98c7aee19e76d25e346dce618211e",
+  "native_server_test_sha256": "5b46d4736c54cf6b9a35c767c3db09aba648bd87da9d12970b88bc6fc3c812ce",
+  "metadata_sha256": "8b5230caede93bd3fbec4af6c5d3cce01b93bae61b2a168cab1fa2883718b1db",
+  "products": {
+    "bark": {
+      "path": "/fresh-cache/runtime-operation-client-20261017/bark",
+      "sha256": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-operation-client-20261017/barkd",
+      "sha256": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce"
+    },
+    "captaind": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind",
+      "sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand",
+      "sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06"
+    }
+  },
+  "checks": {
+    "result": "PASS",
+    "handle": "22359",
+    "prior_failure": "18303 E0373 in new fixture closure; fixed only by move capture and retained original log"
+  },
+  "unit": {
+    "passed": 1,
+    "run_id": "a05ee743-fbd4-4aa8-98cc-00f435411cc9",
+    "skipped": 792
+  },
+  "native": {
+    "run_id": "549a55ee-545c-4d58-a06f-84cd586dde68",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 260,
+    "seconds": 20.317,
+    "log_sha256": "c3e836dcd6872109ff95990c41e982b0ade091812f31cb197a0388d091be66e6",
+    "test": "expiry_prepared_offboard_reconciles_real_payout_then_reprotects_after_reorg"
+  },
+  "observed": [
+    "Real prepared FinishOffboard lost to actual background fallback; authentic typed refusal retained original full checkpoint and native Action holder.",
+    "Cancelled offboard intent has zero realized fee/debit; pending fallback does not repeat principal.",
+    "Actual payout paid registered script 99000sat from100000sat principal and reached at least6confirmations; requested offboard address received0sat.",
+    "With Ark physically stopped, independently verified cached receipt plus own chain finished superseded action, marked exact held input Spent and retained full signed coin.",
+    "Actual Core payout-block invalidation restored real protective exit holder while Ark remained unavailable.",
+    "Failed receipt retry preserved that holder; current history retained one pending fallback receipt and counted one principal."
+  ],
+  "limits": [
+    "Single-input prepared whole-offboard case. Partial multi-input outcomes remain open.",
+    "Binding-round recovery across old and new Bitcoin roots remains open.",
+    "No independently finalized dust/operator outcomes or complete protective-exit terminal-state claim.",
+    "Checked source had1020tracked files; this public evidence document was added after runtime capture."
+  ]
+}

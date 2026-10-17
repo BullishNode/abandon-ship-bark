@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-17T15:43:24.849495+00:00",
+  "state": "SOURCE_ONLY_UNCOMPILED_UNRUN",
+  "base": "5635b5a95b636894b1e1aae9117eac3d057329a9",
+  "canonical_integration_owner": "coordinator",
+  "compile_cwd": "/home/francis/abandon-ship-fresh-integration ONLY after explicit target write lease",
+  "patch_sha256": "933033846a365459d51f75f6263442038b4f7422b0a059fb33c18b09a4a0eeb1",
+  "files": {
+    "testing/tests/server/qualification_lightning.rs": "ca5ea7806da75e6a8229af77baed34b499706a70aa855ec9a75f8241d056d91f",
+    "testing/tests/server/qualification_noah.rs": "4ec45e896ed5e126e1e439542f72a13f9eb45188d78b5794f5a9e81d6d9128be",
+    "testing/tests/server/qualification_oversize.rs": "bf4145c0617cefcb96158f3a2211d9adf62ae9254d5a427de9eaff8a7487c9f7"
+  },
+  "includes": "3newtestmodules+3moduledeclarations only; no product patch; frozenrestore/conflict omitted",
+  "tests": [
+    {
+      "name": "qualification_lightning::expiry_external_success_during_restart_is_bound_to_its_actual_source",
+      "deadline_seconds": 180,
+      "network": "regtest",
+      "ignored": false
+    },
+    {
+      "name": "qualification_noah::qualification_native_forwarding_delivery_survives_provider_reopen",
+      "deadline_seconds": 180,
+      "network": "regtest",
+      "ignored": false
+    },
+    {
+      "name": "qualification_oversize::expiry_automatic_real_limit_multilevel_split_pays_every_owner",
+      "deadline_seconds": 600,
+      "network": "regtest",
+      "ignored": true,
+      "profile": "fallback-scale; private nextest store; no default240s outerkill",
+      "capacity": "1serialtest,327payees+1source,5.2Mregtestsat"
+    }
+  ],
+  "source_code_commit": "2cc925ed1"
+}

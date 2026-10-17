@@ -1,0 +1,217 @@
+{
+  "observed_utc": "2026-10-17T17:53:06.484318+00:00",
+  "scope": "Local retained artifacts only, not live deployed process verification. No binaries executed.",
+  "runtimes": [
+    {
+      "runtime": "/home/francis/.cache/abandon-fresh/runtime-receive-binding-v2-20261017",
+      "captured_head": "6950be5a6855625d76d04e33c86a6b030cd9406e",
+      "manifest_sha256": "3c4df44d92a60683fcc6923e6e36a1eb1696e2f3755a0b3256086c9fce5bfee9",
+      "source_manifest_sha256": "c60c5cd4c9d8cc0fbeaa8f8f6a71ba4102a46075cd2d9515fb505d9ba2dc882b",
+      "files_count": 1120,
+      "verified_local_files": [
+        {
+          "name": "captaind",
+          "bytes": 74118288,
+          "sha256": "592df297c9b58b22261b7487c57a4076bba72b735232707d98275f84981642a8",
+          "manifest_expected": "592df297c9b58b22261b7487c57a4076bba72b735232707d98275f84981642a8",
+          "matches": true,
+          "manifest_key": "captaind"
+        },
+        {
+          "name": "watchmand",
+          "bytes": 46915400,
+          "sha256": "edf59b0b352f8aa0a5ef76e8cc306b3c591836b73181baf48b3ce46da0764bbf",
+          "manifest_expected": "edf59b0b352f8aa0a5ef76e8cc306b3c591836b73181baf48b3ce46da0764bbf",
+          "matches": true,
+          "manifest_key": "watchmand"
+        },
+        {
+          "name": "native-server",
+          "bytes": 169251112,
+          "sha256": "9913a696a7754cc68f4792e09c531330cf252de380ef031aff758c0367a8104c",
+          "manifest_expected": "9913a696a7754cc68f4792e09c531330cf252de380ef031aff758c0367a8104c",
+          "matches": true,
+          "manifest_key": "ark-testing::server"
+        },
+        {
+          "name": "native-bark-sdk",
+          "bytes": 89899848,
+          "sha256": "e14ca0432313af170fc9e063e7afe6c37789970cad9897ed081c14489fa0b547",
+          "manifest_expected": "e14ca0432313af170fc9e063e7afe6c37789970cad9897ed081c14489fa0b547",
+          "matches": true,
+          "manifest_key": "ark-testing::bark-sdk"
+        },
+        {
+          "name": "bark",
+          "bytes": 66425920,
+          "sha256": "7a240c143bb103b67c360a75316034211d6212947e0b65571ceaebe19fc06ba4",
+          "manifest_expected": "7a240c143bb103b67c360a75316034211d6212947e0b65571ceaebe19fc06ba4",
+          "matches": true,
+          "manifest_key": "bark"
+        },
+        {
+          "name": "barkd",
+          "bytes": 76799880,
+          "sha256": "570ecf6cbbdc441b1262e68ee84035718ac9f72a5f881038b9ca51812a342218",
+          "manifest_expected": "570ecf6cbbdc441b1262e68ee84035718ac9f72a5f881038b9ca51812a342218",
+          "matches": true,
+          "manifest_key": "barkd"
+        }
+      ],
+      "source_file_matches_current": [
+        {
+          "file": "server/src/database/expiry_lightning.rs",
+          "captured_sha256": "dc1b884df561bd08287b9dda1953d5dd7abe896cb8da7ade723c2c59e530b9bf",
+          "current_sha256": "5eadc1562006545d130ee113b49ead0b75c6bf86aa09ee62652a575fe85745e5",
+          "matches": false
+        },
+        {
+          "file": "server/src/ln/mod.rs",
+          "captured_sha256": "33df5536d14889f71f50c490d400ee0f0a05f597cda125da48a4e8bc84df6d87",
+          "current_sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+          "matches": false
+        },
+        {
+          "file": "server/src/ln/node_manager.rs",
+          "captured_sha256": "22b67e83983f85fbc376ae1008ef6f2ff887d0b63e5f21276f988ba8a916350e",
+          "current_sha256": "06aafa0b1641e7a8e294896876d7a3c622bce4386aad87e1fbaa8a8853d3698d",
+          "matches": false
+        },
+        {
+          "file": "server/src/database/expiry_receive.rs",
+          "captured_sha256": "c4431df885cd4756a64dce01875437151e0ff1d173f37c68920c257b45c8d195",
+          "current_sha256": "c4431df885cd4756a64dce01875437151e0ff1d173f37c68920c257b45c8d195",
+          "matches": true
+        },
+        {
+          "file": "bark/src/fallback/adoption.rs",
+          "captured_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+          "current_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "runtime": "/home/francis/.cache/abandon-fresh/runtime-internal-receive-v2-20261017",
+      "captured_head": "751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
+      "manifest_sha256": "181c1111c8d3c34e8ae286dd20b4265be976b4f3b89cafd2cad778bc45ad6d02",
+      "source_manifest_sha256": "f70bdd0dc7f46576b8b688a8b45e61779afb2831afeec44f2dcd6c8775099f5b",
+      "files_count": 1150,
+      "verified_local_files": [
+        {
+          "name": "captaind",
+          "bytes": 74206608,
+          "sha256": "196e13f2434c1910e7648396aff9d8f48e0c56a2af777625ba7704f3b4238f39",
+          "manifest_expected": "196e13f2434c1910e7648396aff9d8f48e0c56a2af777625ba7704f3b4238f39",
+          "matches": true,
+          "manifest_key": "captaind"
+        },
+        {
+          "name": "watchmand",
+          "bytes": 46917712,
+          "sha256": "8a81949af80ac290c2f81d06e803bf6720232f074985bc48821e2fa644d4812f",
+          "manifest_expected": "8a81949af80ac290c2f81d06e803bf6720232f074985bc48821e2fa644d4812f",
+          "matches": true,
+          "manifest_key": "watchmand"
+        },
+        {
+          "name": "native-bark-sdk",
+          "bytes": 90128448,
+          "sha256": "7f822f0d40cdc2de30e32e7fa557d5ac544d2c2d70e68ef61d85b95adcdb3006",
+          "manifest_expected": "7f822f0d40cdc2de30e32e7fa557d5ac544d2c2d70e68ef61d85b95adcdb3006",
+          "matches": true,
+          "manifest_key": "ark-testing::bark-sdk"
+        }
+      ],
+      "source_file_matches_current": [
+        {
+          "file": "server/src/database/expiry_lightning.rs",
+          "captured_sha256": "5eadc1562006545d130ee113b49ead0b75c6bf86aa09ee62652a575fe85745e5",
+          "current_sha256": "5eadc1562006545d130ee113b49ead0b75c6bf86aa09ee62652a575fe85745e5",
+          "matches": true
+        },
+        {
+          "file": "server/src/ln/mod.rs",
+          "captured_sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+          "current_sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+          "matches": true
+        },
+        {
+          "file": "server/src/ln/node_manager.rs",
+          "captured_sha256": "06aafa0b1641e7a8e294896876d7a3c622bce4386aad87e1fbaa8a8853d3698d",
+          "current_sha256": "06aafa0b1641e7a8e294896876d7a3c622bce4386aad87e1fbaa8a8853d3698d",
+          "matches": true
+        },
+        {
+          "file": "server/src/database/expiry_receive.rs",
+          "captured_sha256": "c4431df885cd4756a64dce01875437151e0ff1d173f37c68920c257b45c8d195",
+          "current_sha256": "c4431df885cd4756a64dce01875437151e0ff1d173f37c68920c257b45c8d195",
+          "matches": true
+        },
+        {
+          "file": "bark/src/fallback/adoption.rs",
+          "captured_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+          "current_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+          "matches": true
+        }
+      ]
+    },
+    {
+      "runtime": "/home/francis/.cache/abandon-fresh/runtime-s03-current-cut-correction-20261017",
+      "captured_head": "fb85d9a9c3b31b3eab1eb2113d2caec89c7f10dd",
+      "manifest_sha256": "0ac39bd852ec2b2640ea38af690b00ff04b7fd1b7baca3f9459d28903406c423",
+      "source_manifest_sha256": "0ff7819dc89062aef8c6ce43b81d99c851fd813ef0ac75f0d462ef457deb6b69",
+      "files_count": 1018,
+      "verified_local_files": [
+        {
+          "name": "captaind",
+          "bytes": 73831048,
+          "sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4",
+          "manifest_expected": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4",
+          "matches": true,
+          "manifest_key": "captaind"
+        },
+        {
+          "name": "watchmand",
+          "bytes": 47479880,
+          "sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06",
+          "manifest_expected": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06",
+          "matches": true,
+          "manifest_key": "watchmand"
+        }
+      ],
+      "source_file_matches_current": [
+        {
+          "file": "server/src/database/expiry_lightning.rs",
+          "captured_sha256": "dc1b884df561bd08287b9dda1953d5dd7abe896cb8da7ade723c2c59e530b9bf",
+          "current_sha256": "5eadc1562006545d130ee113b49ead0b75c6bf86aa09ee62652a575fe85745e5",
+          "matches": false
+        },
+        {
+          "file": "server/src/ln/mod.rs",
+          "captured_sha256": "df277717e3757cfe7927121525eb968436a0c1c41686d2e3988263b011e34eb4",
+          "current_sha256": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+          "matches": false
+        },
+        {
+          "file": "server/src/ln/node_manager.rs",
+          "captured_sha256": "22b67e83983f85fbc376ae1008ef6f2ff887d0b63e5f21276f988ba8a916350e",
+          "current_sha256": "06aafa0b1641e7a8e294896876d7a3c622bce4386aad87e1fbaa8a8853d3698d",
+          "matches": false
+        },
+        {
+          "file": "server/src/database/expiry_receive.rs",
+          "captured_sha256": null,
+          "current_sha256": "c4431df885cd4756a64dce01875437151e0ff1d173f37c68920c257b45c8d195",
+          "matches": false
+        },
+        {
+          "file": "bark/src/fallback/adoption.rs",
+          "captured_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+          "current_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+          "matches": true
+        }
+      ]
+    }
+  ]
+}

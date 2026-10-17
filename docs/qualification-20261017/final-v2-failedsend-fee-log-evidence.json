@@ -1,0 +1,164 @@
+{
+  "scope": "Read-only extraction from existing text logs only. No actor, wallet, database, RPC, source, build, or runtime opened; raw evidence preserved. This is evidence enrichment of an existing case, not another test execution.",
+  "case": "expiry_failed_external_offline_owner",
+  "reported_native_result": {
+    "status": "PASS",
+    "run_id_prefix": "e968e1cf",
+    "elapsed_seconds": 52.392,
+    "source_prefix": "c60c",
+    "artifact_prefixes": {
+      "fresh_cap": "592df",
+      "watchman": "edf59",
+      "bark": "7a240",
+      "barkd": "570ec"
+    }
+  },
+  "raw_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch15-v2-failed-send-refund/test-data/server/expiry_failed_external_offline_owner",
+  "source_logs": [
+    {
+      "relative_path": "server-watchmand/stdout.log",
+      "sha256": "74fa24d699b27632e01849e3a833b36810db945e2930a01cbd1d245c06efddc8",
+      "bytes": 1361093
+    },
+    {
+      "relative_path": "server/stdout.log",
+      "sha256": "37cdc941a0af348de64501acee678f6527e1eb3609258c63863de838bd816405",
+      "bytes": 1427136
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "sha256": "a9df338adb761023a06e308fcba6c8feb0a17b41cfa4b9a89adafb9ba3fe2523",
+      "bytes": 2648553
+    },
+    {
+      "relative_path": "server_bitcoind/regtest/debug.log",
+      "sha256": "a7f2611fbd4179c2ec0f2f35767b1adfb40ea6aae312562c446b5ec809cd62bc",
+      "bytes": 2493019
+    }
+  ],
+  "chain_log_binding": {
+    "parent_txid": "14c4f405ec15e56db71d842f1c46c6ec1856aa8ec485137acea46b41180711da",
+    "child_txid": "96ed92ef49cdb5e999e4c5f12faedd20b49a1ba3d8403b70035a89cef21d36bd",
+    "connected_block_hash": "3d5e4d5128b3274504fb897782446f537d94f8b8577fc5d5d74ef4660317183f",
+    "connected_height": 385,
+    "last_logged_tip": {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24727,
+      "block_hash": "75fdfcdd55f7ac22f9cb8dc63475203ea68674d536c4300230368b5b8362fe46",
+      "height": 390
+    },
+    "confirmations_at_last_logged_tip": 6,
+    "reorg_markers_seen": []
+  },
+  "fee_evidence": {
+    "product_cpfp_construction_events": 1,
+    "product_logged_construction_fee_sat": 2281,
+    "core_parent_logged_fee_sat": 0,
+    "core_logged_block_non_coinbase_txs": 2,
+    "core_logged_block_total_fee_sat": 2281,
+    "core_log_derived_child_fee_sat": 2281,
+    "classification": "Product logs one CPFP construction at 2,281 sat. Core explicitly accepts this parent/child package, logs the parent fee as 0 sat, then logs a 2 transaction block with 2,281 sat aggregate fee and publishes only this pair after BlockConnected. Those existing Core logs corroborate 2,281 sat for the included child. This is log-derived corroboration, not a new Core RPC query or independent reconstruction from all previous outputs."
+  },
+  "subsidy_evidence": {
+    "structured_warning_or_accounting_events": 0,
+    "actual_operator_remainder_sat": null,
+    "actual_subsidy_sat": null,
+    "classification": "No structured payout accounting event containing operator remainder/subsidy was emitted. Absence of a warning is not proof of zero subsidy. The exact operator remainder and actual subsidy are not independently recovered by this bounded log extraction; no unqualified subsidy amount is claimed."
+  },
+  "limits": [
+    "Block membership and six confirmations are supported by contiguous Core block-connect/ZMQ transaction logs, monotonically advancing to height 390 with no observed disconnect/reorganization marker. No raw-block parse or new getrawtransaction/getblock confirmation query was performed.",
+    "The 52.392s native PASS and 100k gross / 99k customer outcome are supplied coordinator metadata; this extraction adds the fee child and existing log corroboration without re-executing the case.",
+    "No secret, preimage, seed, config, raw wallet, or raw database is copied into this report."
+  ],
+  "excerpts": [
+    {
+      "relative_path": "server-watchmand/stdout.log",
+      "line": 2880,
+      "timestamp": "2026-10-17T16:56:24.641Z",
+      "event": "product_cpfp_construction",
+      "weight_wu": 1303,
+      "fee_sat": 2281,
+      "iterations": 1
+    },
+    {
+      "relative_path": "server/stdout.log",
+      "line": 2847,
+      "timestamp": "2026-10-17T16:56:24.521Z",
+      "event": "expiry_allocation_committed",
+      "allocation_id": 1,
+      "inputs": 1,
+      "dropped": 0
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24406,
+      "timestamp": "2026-10-17T16:56:26Z",
+      "event": "core_parent_zero_fee_relay_rejection",
+      "txid": "14c4f405ec15e56db71d842f1c46c6ec1856aa8ec485137acea46b41180711da",
+      "fee_sat": 0
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24410,
+      "timestamp": "2026-10-17T16:56:26Z",
+      "event": "core_package_accepted",
+      "parent_txid": "14c4f405ec15e56db71d842f1c46c6ec1856aa8ec485137acea46b41180711da",
+      "child_txid": "96ed92ef49cdb5e999e4c5f12faedd20b49a1ba3d8403b70035a89cef21d36bd"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24529,
+      "timestamp": "2026-10-17T16:56:27Z",
+      "event": "core_block_template",
+      "non_coinbase_txs": 2,
+      "total_fee_sat": 2281,
+      "weight_wu": 2207
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24550,
+      "timestamp": "2026-10-17T16:56:27Z",
+      "event": "core_mempool_block_removal",
+      "height": 385,
+      "txs_removed": 2
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24551,
+      "timestamp": "2026-10-17T16:56:27Z",
+      "event": "core_new_best",
+      "height": 385,
+      "block_hash": "3d5e4d5128b3274504fb897782446f537d94f8b8577fc5d5d74ef4660317183f"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24560,
+      "timestamp": "2026-10-17T16:56:27Z",
+      "event": "core_block_connected",
+      "height": 385,
+      "block_hash": "3d5e4d5128b3274504fb897782446f537d94f8b8577fc5d5d74ef4660317183f"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24563,
+      "timestamp": "2026-10-17T16:56:27Z",
+      "event": "core_block_connected_zmq_tx",
+      "txid": "14c4f405ec15e56db71d842f1c46c6ec1856aa8ec485137acea46b41180711da"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24565,
+      "timestamp": "2026-10-17T16:56:27Z",
+      "event": "core_block_connected_zmq_tx",
+      "txid": "96ed92ef49cdb5e999e4c5f12faedd20b49a1ba3d8403b70035a89cef21d36bd"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 24567,
+      "timestamp": "2026-10-17T16:56:27Z",
+      "event": "core_zmq_block_connect",
+      "height": 385,
+      "block_hash": "3d5e4d5128b3274504fb897782446f537d94f8b8577fc5d5d74ef4660317183f"
+    }
+  ]
+}

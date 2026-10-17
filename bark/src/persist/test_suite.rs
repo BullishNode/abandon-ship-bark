@@ -59,6 +59,8 @@ macro_rules! bark_persister_tests {
 	($setup:expr) => {
 		$crate::persist::test_suite::bark_persister_tests!(@tests $setup,
 			test_init_and_read_properties,
+			test_fallback_record_is_immutable,
+			test_fallback_snapshot_replaces_a_complete_generation,
 			test_set_server_pubkey,
 			test_set_server_mailbox_pubkey,
 
@@ -181,6 +183,7 @@ fn test_time() -> chrono::DateTime<chrono::Local> {
 fn empty_round_state() -> RoundState {
 	RoundState {
 		done: false,
+		onchain_recovery: false,
 		participation: RoundParticipation {
 			inputs: vec![],
 			outputs: vec![],
@@ -190,6 +193,7 @@ fn empty_round_state() -> RoundState {
 		new_vtxos: vec![],
 		sent_forfeit_sigs: false,
 		movement_id: None,
+		fallback_refusal: None,
 	}
 }
 
@@ -731,7 +735,9 @@ pub async fn test_get_or_create_movement_for_action(db: &impl BarkPersister) {
 // ---------------------------------------------------------------------------
 
 pub async fn test_store_and_get_round_state(db: &impl BarkPersister) {
-	let state = empty_round_state();
+	let mut state = empty_round_state();
+	state.flow = RoundFlowState::Failed { error: "diagnostic text is not a refusal code".into() };
+	state.fallback_refusal = Some(crate::FallbackRefusal::DecidedForFallback);
 
 	let id = db.store_round_state(&state).await.expect("store_round_state");
 
@@ -774,6 +780,16 @@ pub async fn test_remove_round_state(db: &impl BarkPersister) {
 	let pending = db.get_pending_round_state_ids().await
 		.expect("get_pending_round_state_ids after remove");
 	assert!(pending.is_empty(), "a removed round state is no longer pending");
+}
+
+#[test]
+fn legacy_round_state_missing_fallback_refusal_still_loads() {
+	let state = empty_round_state();
+	let mut json = serde_json::to_value(SerdeRoundState::from(&state)).unwrap();
+	assert!(json.as_object_mut().unwrap().remove("fallback_refusal").is_some());
+	let decoded: SerdeRoundState<'_> = serde_json::from_value(json).unwrap();
+	let restored = RoundState::from(decoded);
+	assert_eq!(restored.fallback_refusal, None);
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,4 +1124,53 @@ pub async fn test_exit_child_tx_roundtrip(db: &impl BarkPersister) {
 		Some((replacement_tx, ExitTxOrigin::Mempool)),
 		"store_exit_child_tx should replace the child of an existing exit",
 	);
+}
+
+/// Canonical signatures may change, but the seed/account/destination may not.
+pub async fn test_fallback_record_is_immutable(db: &impl BarkPersister) {
+	let account = bitcoin::bip32::Xpriv::new_master(Network::Regtest, &[3; 64]).unwrap();
+	let mailbox = Keypair::from_seckey_slice(&ark::SECP, &[7; 32]).unwrap();
+	let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+	let record = ark::fallback::FallbackRecord::new(Network::Regtest, spk.clone(), &account, &mailbox).unwrap();
+	assert!(db.get_fallback_record().await.unwrap().is_none());
+	db.store_fallback_record(&record).await.unwrap();
+	let resigned = ark::fallback::FallbackRecord::new(Network::Regtest, spk, &account, &mailbox).unwrap();
+	db.store_fallback_record(&resigned).await.unwrap();
+	assert_eq!(db.get_fallback_record().await.unwrap().unwrap(), resigned);
+	let alternate = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
+	let changed = ark::fallback::FallbackRecord::new(Network::Regtest, alternate, &account, &mailbox).unwrap();
+	assert!(db.store_fallback_record(&changed).await.is_err());
+	assert_eq!(db.get_fallback_record().await.unwrap().unwrap(), resigned);
+}
+
+/// Every persister replaces the canonical receipt generation as one record.
+pub async fn test_fallback_snapshot_replaces_a_complete_generation(db: &impl BarkPersister) {
+	let initial = db.get_fallback_snapshot().await.unwrap();
+	assert!(initial.entitlements.is_empty());
+	let mut snapshot = crate::FallbackSnapshot::default();
+	snapshot.view_token = vec![1; 32];
+	snapshot.awaiting_sync = true;
+	let coin = VtxoId::from_str(&format!("{:064x}:0", 1)).unwrap();
+	let now = chrono::Local::now();
+	snapshot.entitlements.insert(1, crate::FallbackEntitlement {
+		entitlement_id: 1, vtxo_id: coin, gross: Amount::from_sat(5_000), chain_view_valid: true,
+		attempts: vec![crate::FallbackAttempt {
+			allocation_id: 7, active: true, stage: crate::FallbackPayoutStage::Committed,
+			disposition: crate::FallbackDisposition::CustomerPayout, output_index: Some(0),
+			script: Some(ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap()),
+			gross: Amount::from_sat(5_000), fee: Amount::from_sat(1_000), payout: Amount::from_sat(4_000),
+			forfeited: Amount::ZERO, output_amount: Some(Amount::from_sat(4_000)),
+			parent: None, confirmation: None,
+		}], terminal_claim: None, first_seen: now, last_updated: now,
+	});
+	snapshot.local_debits.insert(1, Amount::from_sat(5_000));
+	snapshot.movement_ids.insert("allocation/7/output/0".to_owned(), MovementId::new(3));
+	snapshot.awaiting_settlement.insert(VtxoId::from_str(&format!("{:064x}:0", 1)).unwrap());
+	db.store_fallback_snapshot(&snapshot).await.unwrap();
+	assert_eq!(db.get_fallback_snapshot().await.unwrap(), snapshot);
+	snapshot.view_token = vec![2; 32];
+	snapshot.awaiting_sync = false;
+	snapshot.awaiting_settlement.clear();
+	db.store_fallback_snapshot(&snapshot).await.unwrap();
+	assert_eq!(db.get_fallback_snapshot().await.unwrap(), snapshot);
 }

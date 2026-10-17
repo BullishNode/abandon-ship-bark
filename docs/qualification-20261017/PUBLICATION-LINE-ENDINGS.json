@@ -1,0 +1,17 @@
+{
+  "reason": "Public CSV copies normalize CRLF to LF; field values unchanged. Original external receipts and their reported hashes remain preserved.",
+  "files": {
+    "ML001-ML080-coverage.csv": {
+      "original_sha256": "15b83947d60c494c1d03551da0c58286bd8895dfaf6a115f6b1796adbffe38af",
+      "public_sha256": "7ae5af61dfd854a336c11e947c9e4d0cbd850f150bb69ba95f7aa36b413b1660"
+    },
+    "ML081-ML140-coverage.csv": {
+      "original_sha256": "9a458eeaabbe72ad4d47cee1b66558a3f0c614d13a17aeaea85b397f9dfd8cca",
+      "public_sha256": "21c2f634bdeffa0f6cc4b4d1b9c40e25e61a8ccc45727a7ea8abedce8806e8b4"
+    },
+    "ML141-ML200-coverage.csv": {
+      "original_sha256": "bf927ec5bb1acca764edfb8c0842303be076419a613898d9503a22eaf9874af1",
+      "public_sha256": "bf927ec5bb1acca764edfb8c0842303be076419a613898d9503a22eaf9874af1"
+    }
+  }
+}

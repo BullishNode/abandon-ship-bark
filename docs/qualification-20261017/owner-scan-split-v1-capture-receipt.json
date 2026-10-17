@@ -1,0 +1,12 @@
+{
+  "state": "SOURCE_CAPTURED",
+  "at": "2026-10-17T17:42:34.115556+00:00",
+  "head": "814d7b0deb6a5f2a6758d34ca4313589f948f4e3",
+  "tracked_files": 1156,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "source_archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "owner_patch_actual_git_diff_sha256": "73821aa9ad1a1315d59d1a22de8e20d2a6b7e6d62bafc92b7f1c09988cb4d13b",
+  "coordinator_lease": "SoleCargoNOW; checks/fullunits/all4products/SDK+serverBIP84metadata; exactly1correctedoversizecaseaftercapture",
+  "artifact_root": "/fresh-cache/runtime-owner-scan-split-v1-20261017",
+  "no_signet_or_live_shm_cleanup": true
+}

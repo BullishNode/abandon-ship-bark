@@ -1,0 +1,78 @@
+{
+  "scope": "Serialize owner-match publication with registration/requeue; atomically commit a bounded derived pass, preserving per-pending-key cursor compare-and-swap.",
+  "build_head": "814d7b0deb6a5f2a6758d34ca4313589f948f4e3",
+  "dirty_source": true,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "changed_file_sha256": {
+    "server/src/database/fallback.rs": "71b8dfae45ddad92f9c69a32f9b0d474f4c928f202c9b1aed647b83993b23fe9",
+    "server/src/database/expiry_attribution.rs": "b5b35072a0f5e4bba16113a725126784e9b76799a5e4b81845edef6ef7d5acbc",
+    "testing/tests/server/expiry_attribution.rs": "11ac095afc2c3437f3a98979b584f903bcd6e2f2f1e75595cfbc9ec1dd20de2b"
+  },
+  "checks": "PASS58.909s",
+  "workspace_units": {
+    "passed": 800,
+    "initially_ignored": 1,
+    "run_id": "825f6b81-f598-456b-ab42-bb844161a470"
+  },
+  "ignored_unit_supplement": {
+    "test": "arkoor::test::isolate_dust_fuzz",
+    "result": "PASS15.454s",
+    "run_id": "09ff9f23-e14f-4860-b005-70fdceecfcc8",
+    "not_additional_financial_scenarios": true
+  },
+  "native_postgres": {
+    "run_id": "e868e1e6-8173-4a48-83a0-cb072e38b075",
+    "passed": 6,
+    "execution_seconds": 19.61,
+    "log_sha256": "3a6b11f9d558ddd205fe1bad5db7d55d57bbb77c2be4b845b911d4835bcfceb9",
+    "scope": [
+      "real concurrent row lock, owner match, requeue and registration",
+      "late lower keys after restart",
+      "duplicate cursor fairness",
+      "new pending keys are not advanced by old work",
+      "registration fence",
+      "wrong mailbox and no-owner invalidation"
+    ]
+  },
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/captaind",
+      "sha256": "175dc56e2177cbda495e2cb5c56bae2061d0590dc2481ddb40a944e68e5dd0fb"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/watchmand",
+      "sha256": "4d1d52778032aed837bfc4e28ddcf637458837635a62ad3f6436be3adc4311d5"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/bark",
+      "sha256": "d971db9547a3bb6c8ebd0413404ed886d3d1157f233c259ab905945ad0a96444",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/barkd",
+      "sha256": "5194c687beb3e17a637dcb2754402daca5d6a1a90174a8c12d7091706500e114",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-bark-sdk",
+      "sha256": "aaf60430b2517f0b4151ad3f869ec81339ac4a65cd8687884d13e505e57eb2d9"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-server",
+      "sha256": "cd9c13c01726ce785398d254ab05d8da3d28773ddba502150a0e4a712ff41a08"
+    }
+  },
+  "metadata_sha256": "cf273b091bee345a3d66027abe091ac5951ea04f8c6bb06053e78e4167d12a90",
+  "scale": {
+    "current": "Actual authenticated registration/attribution benchmark RUNNING at publication; same120s inner bound, no result yet",
+    "prior": "7562d5ea FAIL358.637s; 10kabsent103.265sPASS, wrong120.139sFAIL; preserved",
+    "limits": [
+      "No exhaustive2^31-child negative-search timing claim",
+      "No fundedTPS or payout-capacity claim",
+      "Batchaccount bound does not establish hard SQLtime/pending-key-count bound"
+    ]
+  },
+  "public_signet": "Current financial receive campaign remains on c60c products; this source publication does not redeploy it."
+}

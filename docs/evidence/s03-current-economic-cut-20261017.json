@@ -1,0 +1,71 @@
+{
+  "problem": "Eager validation of historical accepted-forfeit descendants blocked an unrelated registered recipient in the same backing tree before attribution.",
+  "observed_public_signet_source": "7055d1fce",
+  "exact_byte_diagnosis": {
+    "funding_txid": "6c3b62e9d8f3d3146d95577fde60778155114a2af7d3f91e0843cba116438ce4",
+    "valid_current_and_ancestor_paths": 8,
+    "historical_forfeit_paths_with_point_mismatch": 2
+  },
+  "behavior": "Candidate geometry is followed only to the current economic terminals. Their complete funding paths and conserving partition are validated before attribution, progression or allocation. Invalid selected paths remain refused.",
+  "source_base": "fb85d9a9c3b31b3eab1eb2113d2caec89c7f10dd",
+  "source_manifest_before_evidence_document_sha256": "0ff7819dc89062aef8c6ce43b81d99c851fd813ef0ac75f0d462ef457deb6b69",
+  "product_build_git_hash": "fb85d9a9c (explicit precommit source snapshot; file hashes below bind the correction)",
+  "source_files": {
+    "server/src/database/expiry_geometry.rs": "06e99d7ed905de8fd745868e9c3ddacefaf915099945c4654af22544e4629d0e",
+    "server/src/expiry_readiness.rs": "6d2b4b7b46fb2300ffa2949fc8d0a6e6eae3d6cf7dcaebf01e3871728cc57a10",
+    "testing/tests/server/expiry_transfer_refresh.rs": "49084f1a002b1aa51e203b44a0ec4137d71c50e3f7e8528af628712d2fa0674b",
+    "testing/tests/server/mod.rs": "775fff82dbe33b655a791e840f06cb573ce337cd3d0a57e106530eddd9d381f3"
+  },
+  "checks": "PASS41.29s",
+  "unit_run": {
+    "id": "ef1317b4-5c0e-4462-ac17-af4098cd67d8",
+    "passed": 791,
+    "upstream_skipped": 1,
+    "seconds": 8.943
+  },
+  "native_before": {
+    "id": "0abeab28-16ca-495d-9f2a-87d7cc5e4959",
+    "result": "FAIL52.881s",
+    "observation": "Real2x9835 accepted change forfeits; recipient payout missing;15 matching source-geometry warnings."
+  },
+  "native_after": {
+    "id": "74f395eb-f84c-42e7-b27d-3ca483d59746",
+    "result": "PASS1/1",
+    "seconds": 33.658,
+    "assertions": [
+      "same-expiry genuine boards",
+      "genuine10k transfer and2x9835 accepted change forfeits",
+      "recipient stays offline after initial receive",
+      "both customer coins have actual payouts",
+      "exact fee per actual payout output",
+      "at least6 actual Core confirmations for each payout"
+    ]
+  },
+  "retained_fixture_failures": [
+    {
+      "id": "8dab84ba-e008-47ac-abfe-c170cc5e2a55",
+      "cause": "Test zero boardfee did not match declared330-sat Signet fee."
+    },
+    {
+      "id": "f6273251-c96c-433d-9304-2d23850ed0aa",
+      "cause": "Test default144-block exit delay made client correctly refuse the short-lived refresh; corrected to declared2-block delay and actual delegated completion."
+    }
+  ],
+  "candidate_products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind",
+      "sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand",
+      "sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06"
+    }
+  },
+  "native_test_sha256": "9b0f9b2ea0dce5e70a85920d86cdff5c8b82cef16bba32e8e74b1b8740336373",
+  "private_evidence_directory": "/home/francis/.cache/abandon-fresh/runtime-s03-current-cut-correction-20261017",
+  "limits": [
+    "Local regtest proof; repaired public Signet outcome not yet observed.",
+    "Opportunistic merging may create one or two payout outputs; this is not a guaranteed whole-expiry grouping claim.",
+    "No production-readiness or complete edge-case coverage claim."
+  ]
+}

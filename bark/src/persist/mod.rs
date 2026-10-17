@@ -436,6 +436,18 @@ pub trait BarkPersister: Send + Sync + 'static {
 		Ok(())
 	}
 
+	/// The last complete, coherently paginated account receipt snapshot.
+	async fn get_fallback_snapshot(&self) -> anyhow::Result<crate::FallbackSnapshot>;
+
+	/// Atomically replace the visible account history generation.
+	async fn store_fallback_snapshot(&self, snapshot: &crate::FallbackSnapshot) -> anyhow::Result<()>;
+
+	/// Read the immutable signed fallback destination.
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>>;
+
+	/// Adopt canonical signatures only when the immutable binding is unchanged.
+	async fn store_fallback_record(&self, record: &ark::fallback::FallbackRecord) -> anyhow::Result<()>;
+
 	/// Get the last revealed/used [Vtxo] key index.
 	///
 	/// Returns:

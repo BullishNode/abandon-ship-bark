@@ -1,0 +1,148 @@
+{
+  "head": "814d7b0deb6a5f2a6758d34ca4313589f948f4e3",
+  "dirty": true,
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "source_archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "source_scope": "Frozen814d7b0d plus coordinator-applied reviewed3file owner-scan batch/fence patch; exact tracked source. Nested/untracked worktrees excluded.",
+  "actual_git_diff_sha256": "73821aa9ad1a1315d59d1a22de8e20d2a6b7e6d62bafc92b7f1c09988cb4d13b",
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/captaind",
+      "sha256": "175dc56e2177cbda495e2cb5c56bae2061d0590dc2481ddb40a944e68e5dd0fb"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/watchmand",
+      "sha256": "4d1d52778032aed837bfc4e28ddcf637458837635a62ad3f6436be3adc4311d5"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/bark",
+      "sha256": "d971db9547a3bb6c8ebd0413404ed886d3d1157f233c259ab905945ad0a96444",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/barkd",
+      "sha256": "5194c687beb3e17a637dcb2754402daca5d6a1a90174a8c12d7091706500e114",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-bark-sdk",
+      "sha256": "aaf60430b2517f0b4151ad3f869ec81339ac4a65cd8687884d13e505e57eb2d9"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/native-server",
+      "sha256": "cd9c13c01726ce785398d254ab05d8da3d28773ddba502150a0e4a712ff41a08"
+    }
+  },
+  "metadata_path": "/fresh-cache/runtime-owner-scan-split-v1-20261017/nextest-binaries-immutable.json",
+  "metadata_sha256": "cf273b091bee345a3d66027abe091ac5951ea04f8c6bb06053e78e4167d12a90",
+  "web_dist_manifest_sha256": "5179b16d0c6b46ab617fa0c17c0144c6d1b2a641c907630ad8bd2850096ee636",
+  "build_phases": {
+    "checks": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "checks"
+      ],
+      "started_at": "2026-10-17T17:43:05.718188+00:00",
+      "exit_code": 0,
+      "seconds": 58.909,
+      "ended_at": "2026-10-17T17:44:04.627694+00:00"
+    },
+    "units": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/runtime-owner-scan-split-v1-20261017",
+        "unit",
+        "--test-threads 4"
+      ],
+      "started_at": "2026-10-17T17:44:04.722130+00:00",
+      "exit_code": 0,
+      "seconds": 100.2,
+      "ended_at": "2026-10-17T17:45:44.922314+00:00"
+    },
+    "products": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "bark-server",
+        "--bin",
+        "captaind",
+        "--bin",
+        "watchmand",
+        "--package",
+        "bark-cli",
+        "--bin",
+        "bark",
+        "--bin",
+        "barkd",
+        "--features",
+        "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui"
+      ],
+      "started_at": "2026-10-17T17:45:45.018694+00:00",
+      "exit_code": 0,
+      "seconds": 147.994,
+      "ended_at": "2026-10-17T17:48:13.012284+00:00"
+    },
+    "metadata": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "nextest",
+        "list",
+        "--package",
+        "ark-testing",
+        "--test",
+        "bark-sdk",
+        "--test",
+        "server",
+        "--features",
+        "ark-testing/fallback-test-bip84",
+        "--list-type",
+        "binaries-only",
+        "--message-format",
+        "json"
+      ],
+      "started_at": "2026-10-17T17:48:13.510830+00:00",
+      "exit_code": 0,
+      "seconds": 133.348,
+      "ended_at": "2026-10-17T17:50:26.859260+00:00"
+    }
+  },
+  "support_capture_sha256": "d5b7300ff41df18dca45ad2f81e319c4dd3ea2bdcf55aa51ac5da97f6ab4b44c",
+  "source_verification": "All1156trackedfiles,HEADanddirtydiff unchanged before/after every phase and final capture",
+  "native_result": "NOT RUN; exactly one corrected oversized case allocated after capture",
+  "nix": "Existing cached sourced environment; no Nix derivation built; exact actual CLN adapter separately pinned where used",
+  "captured_at": "2026-10-17T17:50:27.326692+00:00",
+  "automated_capture_manifest_sha256_before_audit_enrichment": "87b5894343c22cd29cf28b26da7d173714597ff34b18a9b39624b8ef7b116a58",
+  "unit_summary": {
+    "run_id": "825f6b81-f598-456b-ab42-bb844161a470",
+    "result": "PASS",
+    "passed": 800,
+    "skipped": 1,
+    "execution_seconds": 12.356,
+    "included_in_native_scenario_counts": false,
+    "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+  },
+  "skipped_units": [
+    {
+      "binary": "ark-lib",
+      "test": "arkoor::test::isolate_dust_fuzz",
+      "reason": "slow; run on demand with --run-ignored all",
+      "classification": "Pre-existing explicit #[ignore]; not a failure or discovered runtime skip",
+      "current_source": "lib/src/arkoor/mod.rs:2798",
+      "present_in_prior_c60c_source_capture": true,
+      "evidence": "Only active #[ignore] outside ark-testing in frozen trackedRustsource; justunit excludesark-testing and defaultnextest skipsignored tests. Logsummary records exactly1skip. Commented-out noncompiling bark-common example is not a test.",
+      "run_id": "825f6b81-f598-456b-ab42-bb844161a470",
+      "result": "800PASS,1explicitignored",
+      "not_run": true
+    }
+  ],
+  "manifest_finalization": "Enriched automated immutable capture with exact pre-existing ignored-unit name/reason before first native run or coordinator manifest handoff; all source/products/metadata unchanged."
+}

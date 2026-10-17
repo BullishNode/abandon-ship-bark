@@ -1,0 +1,44 @@
+{
+  "scope": "Research document structural consistency only; no product tests/builds executed",
+  "counts": {
+    "total": 200,
+    "lightning": 81,
+    "statuses": {
+      "Historical regression risk": 4,
+      "Hypothesis requiring validation": 134,
+      "Source-supported risk": 58,
+      "Observed failure": 4
+    },
+    "priorities": {
+      "P1": 157,
+      "P0": 39,
+      "P2": 4
+    }
+  },
+  "checks": [
+    "200 stable sequential IDs",
+    "200 distinct titles",
+    "200 complete A\u2013K sections",
+    "CSV index matches catalogue data",
+    "81 explicitly Lightning-related scenarios",
+    "source anchor existence/symbol/hash checked separately"
+  ],
+  "deliverables": {
+    "README.md": {
+      "bytes": 20397,
+      "sha256": "77d8f4736924a303f5a5f52197b809c98174f830a1599498746d8f1bc3981cd0"
+    },
+    "MONEY_LOSS_SCENARIOS.md": {
+      "bytes": 662172,
+      "sha256": "344eccacd76f8e7e1f63ba00db6baf14fd96c9770c41803da91b57045fcf5ff3"
+    },
+    "MONEY_LOSS_SCENARIOS.csv": {
+      "bytes": 92251,
+      "sha256": "0a819a6e5631eb6f3e9c154cf1733dc89254cddd5aa44185558b6ed7f5bf6885"
+    },
+    "PRIORITIES.md": {
+      "bytes": 16175,
+      "sha256": "bd80f8f6de14c0037266e983498883326b576bbde1cca2932c613f0d660cda41"
+    }
+  }
+}

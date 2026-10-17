@@ -1,0 +1,3 @@
+ Nextest run ID ec0030d3-dc4f-45d5-a1f2-7cd40de895f0 with nextest profile: default
+        PASS [  56.310s] (1/1) ark-testing::server qualification_lightning::expiry_external_success_during_restart_is_bound_to_its_actual_source
+     Summary [  56.311s] 1 test run: 1 passed, 267 skipped

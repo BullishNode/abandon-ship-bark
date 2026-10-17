@@ -249,6 +249,10 @@ pub struct DebugInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[cfg_attr(feature = "utoipa", derive(ToSchema))]
 pub struct Balance {
+	/// Owned value awaiting settlement; included in pending, never spendable.
+	#[serde(default, rename = "awaiting_settlement_sat", with = "bitcoin::amount::serde::as_sat")]
+	#[cfg_attr(feature = "utoipa", schema(value_type = u64, required))]
+	pub awaiting_settlement: Amount,
 	/// Sats that are immediately spendable, either in-round or
 	/// out-of-round.
 	#[serde(rename = "spendable_sat", with = "bitcoin::amount::serde::as_sat")]
@@ -318,6 +322,7 @@ impl From<bark::Balance> for Balance {
 		Balance {
 			spendable: v.spendable,
 			needs_refresh: v.needs_refresh,
+			awaiting_settlement: v.awaiting_settlement,
 			pending_in_round: v.pending_in_round,
 			pending_lightning_send: v.pending_lightning_send,
 			claimable_lightning_receive: v.claimable_lightning_receive,
@@ -337,6 +342,10 @@ impl From<bark::Balance> for Balance {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[cfg_attr(feature = "utoipa", derive(ToSchema))]
 pub struct BalanceSummary {
+	/// Owned value awaiting settlement; included in pending, never spendable.
+	#[serde(default, rename = "awaiting_settlement_sat", with = "bitcoin::amount::serde::as_sat")]
+	#[cfg_attr(feature = "utoipa", schema(value_type = u64, required))]
+	pub awaiting_settlement: Amount,
 	/// Sats that can be spent right now. See `spendable_sat` of [Balance].
 	#[serde(rename = "spendable_sat", with = "bitcoin::amount::serde::as_sat")]
 	#[cfg_attr(feature = "utoipa", schema(value_type = u64))]
@@ -346,7 +355,8 @@ pub struct BalanceSummary {
 	#[serde(rename = "needs_refresh_sat", with = "bitcoin::amount::serde::as_sat")]
 	#[cfg_attr(feature = "utoipa", schema(value_type = u64))]
 	pub needs_refresh: Amount,
-	/// Sats held by operations in progress: the sum of the `pending_*_sat`
+	/// Sats awaiting settlement or held by operations: `awaiting_settlement_sat`
+	/// plus the sum of the `pending_*_sat`
 	/// fields of [Balance]. They either come back as spendable or leave the
 	/// wallet, for example to the on-chain wallet.
 	#[serde(rename = "pending_sat", with = "bitcoin::amount::serde::as_sat")]
@@ -360,7 +370,8 @@ pub struct BalanceSummary {
 
 impl From<&Balance> for BalanceSummary {
 	fn from(v: &Balance) -> Self {
-		let pending = v.pending_in_round
+		let pending = v.awaiting_settlement
+			+ v.pending_in_round
 			+ v.pending_board
 			+ v.pending_arkoor_send
 			+ v.pending_lightning_send
@@ -370,6 +381,7 @@ impl From<&Balance> for BalanceSummary {
 		BalanceSummary {
 			spendable: v.spendable,
 			needs_refresh: v.needs_refresh,
+			awaiting_settlement: v.awaiting_settlement,
 			pending,
 			total: v.spendable + v.needs_refresh + pending,
 		}
@@ -387,6 +399,7 @@ impl From<bark::BalanceSummary> for BalanceSummary {
 		BalanceSummary {
 			spendable: v.spendable,
 			needs_refresh: v.needs_refresh,
+			awaiting_settlement: v.awaiting_settlement,
 			pending: v.pending,
 			total: v.total,
 		}
@@ -511,6 +524,8 @@ pub enum RoundStatus {
 		#[cfg_attr(feature = "utoipa", schema(value_type = String))]
 		funding_txid: Txid,
 	},
+	/// Emergency self-refresh recovery remains watched for chain reorganizations.
+	OnchainRecovery { claim_confirmed: bool },
 	/// We have unsigned funding transactions that might confirm
 	Pending,
 	/// The round failed
@@ -528,6 +543,7 @@ impl RoundStatus {
 			Self::SyncError { .. } => false,
 			Self::Confirmed { .. } => true,
 			Self::Unconfirmed { .. } => false,
+			Self::OnchainRecovery { .. } => false,
 			Self::Pending { .. } => false,
 			Self::Failed { .. } => true,
 			Self::Canceled => true,
@@ -540,6 +556,7 @@ impl RoundStatus {
 			Self::SyncError { .. } => false,
 			Self::Confirmed { .. } => true,
 			Self::Unconfirmed { .. } => true,
+			Self::OnchainRecovery { claim_confirmed } => *claim_confirmed,
 			Self::Pending { .. } => false,
 			Self::Failed { .. } => false,
 			Self::Canceled => false,
@@ -556,6 +573,7 @@ impl From<bark::round::RoundStatus> for RoundStatus {
 			bark::round::RoundStatus::Unconfirmed { funding_txid } => {
 				Self::Unconfirmed { funding_txid }
 			},
+			bark::round::RoundStatus::OnchainRecovery { claim_confirmed } => Self::OnchainRecovery { claim_confirmed },
 			bark::round::RoundStatus::Pending => Self::Pending,
 			bark::round::RoundStatus::Failed { error } => Self::Failed { error },
 			bark::round::RoundStatus::Canceled => Self::Canceled,
@@ -731,6 +749,28 @@ impl From<&LightningReceive> for LightningReceiveInfo {
 mod test {
 	use bitcoin::FeeRate;
 	use super::*;
+
+	#[test]
+	fn fallback_awaiting_balance_defaults_and_counts_owned_value_once() {
+		let legacy = serde_json::json!({
+			"spendable_sat": 2_000, "needs_refresh_sat": 0,
+			"pending_in_round_sat": 0, "pending_board_sat": 0,
+			"pending_lightning_send_sat": 0, "claimable_lightning_receive_sat": 0,
+		});
+		let mut balance: Balance = serde_json::from_value(legacy).unwrap();
+		assert_eq!(balance.awaiting_settlement, Amount::ZERO);
+		balance.awaiting_settlement = Amount::from_sat(5_000);
+		let summary = BalanceSummary::from(&balance);
+		assert_eq!(summary.spendable, Amount::from_sat(2_000));
+		assert_eq!(summary.awaiting_settlement, Amount::from_sat(5_000));
+		assert_eq!(summary.pending, Amount::from_sat(5_000));
+		assert_eq!(summary.total, Amount::from_sat(7_000));
+		let encoded = serde_json::to_value(&summary).unwrap();
+		assert_eq!(encoded["awaiting_settlement_sat"], 5_000);
+		let mut legacy_summary = encoded;
+		legacy_summary.as_object_mut().unwrap().remove("awaiting_settlement_sat");
+		assert_eq!(serde_json::from_value::<BalanceSummary>(legacy_summary).unwrap().awaiting_settlement, Amount::ZERO);
+	}
 
 	fn lightning_receive_base_json() -> serde_json::Value {
 		serde_json::json!({

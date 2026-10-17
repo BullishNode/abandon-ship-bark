@@ -1,0 +1,406 @@
+{
+  "updated_at": "2026-10-17T18:41:02.683145+00:00",
+  "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+  "state": "ACTIVE_SOURCE_WORK_SDK29_RESOURCE_PAUSE",
+  "branch": "work/fresh-test-qualification-20261017",
+  "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
+  "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
+  "worktree_created": true,
+  "name_collision_check": "branch absent; worktree absent at startup",
+  "coordinator_thread": "01a14133-d4bf-7d72-bd69-d0f9762d007f",
+  "coordinator_notification": "Active direct coordination; first PR merged by coordinator, compiler queue remains backend/client owned",
+  "workers": [
+    "legacy_inventory",
+    "backend_test_gaps",
+    "client_test_gaps"
+  ],
+  "execution": {
+    "disk_hold_released": true,
+    "shared_target_write_allocated": false,
+    "runtime_capacity_allocated": "One serial16corebatch now; rootmax2nativeglobal; no Cargo/sharedtargetwrites",
+    "new_signet_campaign_allocated": false,
+    "next_shared_target_write_allocated": false
+  },
+  "environment": {
+    "host_nix_loaded": false,
+    "container": "abandon-fresh-dev-20261016",
+    "cached_environment": "/fresh-cache/default-env.sh",
+    "verified": "IN_NIX_SHELL=impure; rustc 1.90.0; bitcoind 31.0.0; just 1.51.0",
+    "test_worktree_container_mount": "Visible at coordinator-corrected nested path; future compilation only canonical"
+  },
+  "first_batch_proposed": [
+    "native historical-forfeit current-cut regression",
+    "native both offboard decision winners",
+    "client default-daemon protection with authentic offline exit"
+  ],
+  "resource_request": {
+    "concurrency": 1,
+    "network": "regtest",
+    "dataset": "one bounded native case at a time",
+    "target": "/fresh-cache/target shared; no write without build-owner agreement",
+    "artifact_reuse": "prefer immutable metadata and just int-binaries; match package IDs/source before run",
+    "worktree_creation": "deferred during disk hold"
+  },
+  "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
+  "next_action": "Continue source review/report publication while root validates SHM; resume only unstarted case29 after explicit allocation, no retries.",
+  "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
+  "remote_test_branch_exists": true,
+  "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
+  "runtime_allocation": "Coordinator cleanup/resume requested; no live owned nextest; root-only staleSHM cleanup, no Cargo writes",
+  "inventory_rows_by_file": {
+    "legacy-inventory.csv": 103,
+    "backend-inventory.csv": 72,
+    "client-inventory.csv": 48
+  },
+  "inventory_warning": "Rows include overlapping source tests and requirement candidates, not unique executed scenarios. 80 legacy scenario IDs preserved separately.",
+  "archived_batch": {
+    "current_cut": "PASS 1/1,33.743s",
+    "source": "fb85d9a9c3b31b3eab1eb2113d2caec89c7f10dd",
+    "dirty_source": true,
+    "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch01-current-cut-receipt.json",
+    "decision_wins": "PASS1/1,22.446s",
+    "registered_offboard_wins": "PASS1/1,22.579s"
+  },
+  "new_test_code": [
+    "same-expiry ready root/unresolved HTLC root isolation",
+    "current-cut return history exact two-root debit and sync/reopen idempotence"
+  ],
+  "build_lease": "RELEASED afterfullsource/product verification and terminal ignoredunit; completion-handoff.json allpins",
+  "upstream_registration": "PASS2/2,46.373s",
+  "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
+  "new_test_source_review": "Published earlier fixtures compiled and ran on recorded pairings. New failed-send v3 is source-only and excluded from this checkpoint.",
+  "coverage_rows": 287,
+  "coverage_warning": "287 mixed inventory/requirement/executed rows. Executed names and completed main-track totals are reported separately;200ML full-oracle status is in ML-COVERAGE.csv.",
+  "current_batch": {
+    "name": "batch19-sdk-upstream-normal-remaining",
+    "state": "PAUSED_RESOURCE_PREFLIGHT",
+    "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch19-sdk-upstream-normal-remaining",
+    "progress_receipt": "cohort-progress.json",
+    "all_completed_counts_exclude_this_active_batch": false,
+    "passed": 28,
+    "failed": 0,
+    "not_started": 13,
+    "controller_exit": 75,
+    "receipt": "batch19-sdk-upstream-normal-prefix28-receipt.json"
+  },
+  "build_environment": {
+    "CARGO_HOME": "/fresh-cache/cargo",
+    "CARGO_TARGET_DIR": "/fresh-cache/target",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "BARK_WEB_DIST": "/fresh-cache/web-dist-10ecfb9",
+    "preserve": "Nix default-env LD_LIBRARY_PATH; no invented RUSTFLAGS",
+    "scope": "ark-testing server metadata only; ark-testing/fallback-test-bip84; no CLI/product build"
+  },
+  "newer_candidate_notice": "Coordinator reports cbb12a268 client finality; test branch remains explicitly pinned e44ddf957, no silent rebase",
+  "successful_raw_data_cleanup": {
+    "bytes_removed": 1693624442,
+    "scope": "own six successful private datasets only; verified no owned live test processes",
+    "preserved": "complete file hash manifests, source/product pins, logs, runners, receipts, nextest store",
+    "failed_data_deleted": false,
+    "second_removed_bytes": 231545769,
+    "third_removed_bytes": 252643951
+  },
+  "native_build": {
+    "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/runtime-testing-e44-tests-v1",
+    "source_manifest_sha256": "3f52d4f99a55097698c698b012d035f0037328d8baf392f4d13e18047fbad0ae",
+    "command": "cargo nextest list --package ark-testing --test server --features ark-testing/fallback-test-bip84 --list-type binaries-only --message-format json",
+    "state": "PASS",
+    "seconds": 211,
+    "immutable_server_sha256": "81a1414d68d894b5d20a7a96a32dd56df26058b768a915f99f17ee19ae88a42f"
+  },
+  "mandatory_checks": {
+    "state": "PASS",
+    "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/just-checks-receipt.json",
+    "wall_seconds_approx": 159.375
+  },
+  "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
+  "case_executions": 76,
+  "unique_executed_test_names": 72,
+  "nextest_invocations": 49,
+  "native_case_executions": 68,
+  "component_case_executions": 8,
+  "new_test_results": {
+    "readiness": "PASS26.184s",
+    "two_root_return_history": "PASS44.926s",
+    "compile": "PASS211s"
+  },
+  "test_code_commit": "bc3d02835e0aa539d5a5dd8f7c1385ed85227ce5",
+  "source_commit_equivalence": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/source-commit-equivalence.json",
+  "publication": {
+    "draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/6",
+    "branch": "work/fresh-test-qualification-20261017",
+    "verified_remote_head": "5635b5a95b636894b1e1aae9117eac3d057329a9",
+    "test_code_commit": "bc3d02835e0aa539d5a5dd8f7c1385ed85227ce5",
+    "working_tree_was_clean_at_push": true,
+    "state": "PR6 merged by coordinator per direct message; second checkpoint pending",
+    "merged_by_coordinator": "0f932806513a8dcefb5a3f3e841b98b73d02d3a1",
+    "verified_merged_at": "2026-10-17T15:33:13Z",
+    "next_checkpoint": "Draft source/report publication; new3tests uncompiled/unrun",
+    "next_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/7",
+    "next_verified_remote_head": "e509f35169b8ee409310c1361305c1e1942565f2",
+    "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN",
+    "next_pr_verified_merged": {
+      "pr": 7,
+      "head": "b9f23f5bfb0c0d92911cb00287a70d80a497a92c",
+      "merge_commit": "6950be5a6855625d76d04e33c86a6b030cd9406e",
+      "merged_at": "2026-10-17T16:33:58Z"
+    },
+    "primary_local_code_commit": "0870bbbb915f133b98b00b5c3d7dc2a2a2ac0bc5",
+    "primary_code_publication": "PUSHED and verified in draftPR8; no merge/promotion/deployment by testing track",
+    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/10",
+    "latest_verified_remote_head": "3e72e9ebcb8f9696dd3b6b1daa3ecd8ba54f8d17",
+    "latest_receipt": "PUBLICATION-PR10.json",
+    "oversize_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/9",
+    "oversize_verified_remote_head": "013bed49bc5cd0d7d839b1726ebf9e71b5170301",
+    "oversize_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+    "oversize_review": "3reviewers complete; NOT compiled/run; no newexecutioncredit",
+    "prior_PR8": "Verified merged by coordinator as751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
+    "oversize_source_PR9_state": "MERGED814d7b0d",
+    "latest_scope": "REPORT_ONLY",
+    "latest_pr_verified_merged": {
+      "pr": 10,
+      "head": "3e72e9ebcb8f9696dd3b6b1daa3ecd8ba54f8d17",
+      "merge_commit": "544f28b50bd9db9d4bc11b324763d27da33901db",
+      "merged_at": "2026-10-17T18:26:12Z"
+    }
+  },
+  "next_batch": {
+    "automatic_oversize": "Actualcorrectedfixturepassedonfrozen814+ownerpatch/source7041; original16.359sFAIL preserved. Notproductioncapacity.",
+    "backup_restore": "Frozen source-only draft after Lightning priority",
+    "conflict_reorg": "Frozen source-only draft after Lightning priority",
+    "lightning_restart": "Completed source-labelled success recovery; stronger failed-send cancellation-during-downtime draft reviewed but uncompiled/unrun",
+    "noah_forwarding": "Native provider-reopen and actual post-registration recipient fallback passed; stock Noah LNURL metadata-hash compatibility unqualified",
+    "failed_send_restart": "Reviewed isolated source-only packet, no module registration/compile/runtime",
+    "upstream_sdk": "SDK18 first4PASS; SDK19 first28PASS,13unstarted at resourcepreflight stop before29. Full57upstream SDK names not yet run."
+  },
+  "next_compile_policy": "Author/review in own isolated worktree; submit reviewed patch/PR increment for coordinator integration; compile from canonical stable package path only after explicit writerlease. No new own-worktree metadata.",
+  "source_review_fixes": [
+    "Conflict reorg must permit any valid canonical allocation winner underC9, no original199k-onlypolicy",
+    "Postgresenum observedasString requires explicit::TEXT cast",
+    "Postreconsider must waitnewrebuild before checkingterminal/activepayerlinks",
+    "Wholecase backup deadline and exactrecoveryfee/change conservation",
+    "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
+  ],
+  "passed_case_executions": 74,
+  "failed_case_executions": 2,
+  "first_checkpoint": {
+    "executions": 17,
+    "passed": 17,
+    "unique_names": 16,
+    "checks": "PASS",
+    "commit": "5635b5a95b636894b1e1aae9117eac3d057329a9"
+  },
+  "lightning_batch": {
+    "started_preflight_at": "2026-10-17T15:29:56.800080+00:00",
+    "state": "COMPLETED",
+    "test": [
+      "expiry_actual_failed_external_send_pays_offline_owner",
+      "expiry_actual_no_part_external_send_pays_offline_owner",
+      "expiry_unused_same_hash_grant_retains_its_own_liability",
+      "expiry_unused_same_hash_grant_can_be_refunded_after_other_source_paid"
+    ],
+    "source_base": "fb85d9a9c3b31b3eab1eb2113d2caec89c7f10dd",
+    "dirty_source": true,
+    "source_manifest_sha256": "0ff7819dc89062aef8c6ce43b81d99c851fd813ef0ac75f0d462ef457deb6b69",
+    "source_scope": "current economic cut path+partition validation replaces eager irrelevant-historical descendant validation; exact native fixture unchanged from actual product baseline",
+    "test_branch_base": "e44ddf95741478508908c17adc61752832d75c6a",
+    "not_a_clean_branch_candidate_run": true,
+    "hashes": {
+      "captaind": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4",
+      "watchmand": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06",
+      "native-server": "9b0f9b2ea0dce5e70a85920d86cdff5c8b82cef16bba32e8e74b1b8740336373",
+      "nextest-binaries-immutable.json": "a493bf952f14deed6234c3b0194259629e0e7f1a2e4b38e1a9b012ae32d0acfe",
+      "source-manifest.json": "0ff7819dc89062aef8c6ce43b81d99c851fd813ef0ac75f0d462ef457deb6b69",
+      "source.tar.gz": "c2dd2f8bc22fc99c6ede136e7c4c09b53e9c9ac8af3eebfef98ba4d8bb68fb80",
+      "manifest.json": "0ac39bd852ec2b2640ea38af690b00ff04b7fd1b7baca3f9459d28903406c423",
+      "bark": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f",
+      "barkd": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce"
+    },
+    "cli_source_manifest_sha256": "b94a579404c507a13ee1373ba86b2cf1a18878d23be730875022cadb3160d065",
+    "cli_build_git_hash": "b260b53af",
+    "metadata_package_cwd": "/home/francis/abandon-ship-fresh-integration",
+    "native_state_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch09-native-lightning-terminal-sources",
+    "public_report_root": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017",
+    "oracle": "Actual external accepted->cancelled/no-part terminal proofs; authentic paid shared-hash source cannot drain/refund unused grant; offline customer99k fallback confirmed where applicable. No financialSQL state construction.",
+    "resource_allocation": "Coordinator direct message 14:41UTC; one archived native test at a time; no shared target writes",
+    "network": "regtest",
+    "execution_start_method": "Filesystem birth of run.log at shell redirection before docker exec",
+    "environment": {
+      "CARGO_HOME": "/fresh-cache/cargo",
+      "CARGO_TARGET_DIR": "/fresh-cache/target",
+      "CARGO_NET_OFFLINE": "true",
+      "KEEP_ALL_TEST_DATA": "1",
+      "network": "regtest",
+      "nix_environment": "/fresh-cache/default-env.sh",
+      "ports": "TestContext dynamically reserves process-owned ports using existing shared port locks",
+      "nextest_store": "private [store] configuration; no shared target write"
+    },
+    "expected_selected_count": 4,
+    "lightning_runtime": {
+      "version": "Core Lightning26.06.6",
+      "lightningd_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+      "hold_plugin_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "cln_grpc_plugin_sha256": "421c19f3b0a2cf1c19b2d2f61737be7264c9ecca673e735f5fcb114198e362ea",
+      "process_scope": "Two owned native CLN peers per isolated case; no VM/publicSignet changes"
+    },
+    "limitation": "Same corrected dirty archived server/test pairing; cooperative-refund variant proves signed registered refund and paid-source refusal, not an actual final on-chain refund spend. No Noah or ambiguous-dispatch restart evidence.",
+    "result": "FAIL",
+    "passed": 3,
+    "failed": 1,
+    "run_id": "930221cb-38b3-46f9-b88d-9c826febe4d8",
+    "runtime_seconds": 155.849,
+    "passed_tests": {
+      "expiry_hash_provenance::expiry_unused_same_hash_grant_can_be_refunded_after_other_source_paid": 22.966,
+      "expiry_hash_provenance::expiry_unused_same_hash_grant_retains_its_own_liability": 32.892,
+      "expiry_lightning_terminal::expiry_actual_failed_external_send_pays_offline_owner": 55.243
+    },
+    "failed_tests": {
+      "expiry_lightning_terminal::expiry_actual_no_part_external_send_pays_offline_owner": 44.737
+    },
+    "exit_code": 100,
+    "ended_at": "2026-10-17T15:32:33.119733+00:00",
+    "execution_command": "docker exec -u 1000:1000 -w /home/francis/abandon-ship-fresh-integration abandon-fresh-dev-20261016 bash /fresh-cache/testing-track-20261017/batch09-native-lightning-terminal-sources/run.sh",
+    "failure": "Original unchanged30s terminal-proof deadline elapsed. Actual CLN xpay returned structured RPC205, but STOCK gRPC transport omitted required typed error metadata. No payment or test retry performed.",
+    "classification": "Environment-contract mismatch: typed no-part path requires exact reviewed adapter. Product correctly fails closed on untyped Unknown; no qualified native no-part PASS.",
+    "required_adapter_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+    "original_failed_raw_state_preserved": true,
+    "source_of_failure_evidence": "Own preserved captaind/CLN logs; independently recorded pre-run stock plugin hashes; backend dispatch-terminal handoff; no new actor actions"
+  },
+  "original_dispatch_reconciliation": {
+    "state": "READ_ONLY_COMPLETE",
+    "receipt": "batch09-original-dispatch-reconciliation.json",
+    "matching_cln_parts": 0,
+    "all_cln_parts": 0,
+    "original_sqlite_hash_unchanged": true,
+    "wire_metadata_independently_captured": false,
+    "positive_adapter_gate_owner": "coordinator backend lead; no duplicate here"
+  },
+  "source_handoff": {
+    "patch": "lightning-oversize-native-tests-v1.patch",
+    "sha256": "933033846a365459d51f75f6263442038b4f7422b0a059fb33c18b09a4a0eeb1",
+    "canonical_apply_check": "PASS",
+    "source_peer_review": "COMPLETE",
+    "compile": "PASS51.41s correctedfixture",
+    "runtime": "2PASS,1fixtureFAIL; unchangedoriginalreceipts",
+    "code_commit": "2cc925ed1"
+  },
+  "next_test_code_commit": "8fc4b1d7c",
+  "next_source_prechecks": "Prior source prechecks passed; corresponding canonical compile/checks completed. No new shared-target write authorized.",
+  "external_backend_adapter_positive": {
+    "result": "PASS1/1,28.777s",
+    "run_id": "c0a5f364-a775-4ed0-9fe7-22286ec2eeb9",
+    "receipt": "external-backend-adapter-positive-receipt.json",
+    "included_in_testing_track_counts": false,
+    "originalFAIL_unchanged": true,
+    "packaging_gate": "OPEN",
+    "confirmed_ledger_projection": "NOT claimed"
+  },
+  "canonical_next_candidate": {
+    "head": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+    "dirty": "coordinator-applied reviewed3testpatch only",
+    "source_manifest_sha256": "fd82d64a8d03f1fa61d52fb3b39d73f0d0de6b9ce1f725f8bed96ccaf9eb0e53"
+  },
+  "next_builds": {
+    "v1": "FAIL101:testfixture2privateckd_priv calls; fullfailedsource/log preserved; no runtime",
+    "v2": "PASS51.41s"
+  },
+  "next_mandatory_checks": "PASS58.909s onfrozen814+reviewedownerpatch/source70417933",
+  "new_runtime_results": {
+    "lightning_restart": "PASS56.310s; unusedsamehashsource99kCore>=6conf; no paidrootrefund",
+    "native_forwarding": "PASS28.617s; exactmailbox/signedbytes/providerreopen; no expirycredit",
+    "automatic_oversize": "FAIL16.359s fixture1checkpoint assumption vsactual4 beforepathregistration/expiry; productoracle not reached",
+    "registered_receive_fallback": "PASS34.497s; bothoriginalactorsabsent/actual9kCore6+1kfee/wholelineagecorrectrecipient/freshseedonlyBIP84drainCore6",
+    "final_v2_registered_receive": "PASS36.184s/61d55416; samecase/freshALL4products+pairedSDK/sourcec60c",
+    "final_v2_failed_send": "PASS52.392s/e968e1cf; authentic Accepted->Cancelled, rightful99k fallback Core>=6; no sender seed recovery/confirmed-ledger/reorg/restart credit",
+    "corrected_automatic_oversize": "PASS164.064s/63a761b8;327exactownerCore>=6payouts/7canonicalpackages/14transactions/fullDAGconservation; originalfixtureFAILunchanged"
+  },
+  "primary_next_patch": {
+    "path": "direct-registered-receive-fallback-v1.patch",
+    "sha256": "b255efdd1768744fe5b8614bcc3094c9f0cf1ed7ddeef0e85813ed08c157b078",
+    "review": "COMPLETE",
+    "compile": "PASS84sdisplay",
+    "runtime": "PASS34.497s",
+    "canonical_apply": "APPLIEDbycoordinator"
+  },
+  "primary_runtime": {
+    "head": "3606fa78e78463ca0d46d073ab1e907d51b9681e",
+    "source_manifest_sha256": "f296180173fcce528f9aadca937fcd7bf6163666c0892a1ee7a98addce477a1a",
+    "native_server_sha256": "2a749d53db58fc4be70bcb85589c2045570feffb8069980020a71346dc774c6b",
+    "checks": "PASS"
+  },
+  "aggregate_candidate_notice": {
+    "coordinator_reported_prior_test_merge": "6950be5a",
+    "writer": "coordinatorbackend",
+    "scope": "V11defensiverecipientbinding+clientv3fixturefix+Nixadapterline; requiredchecks/units/cap/watch/SDK+servermetadata",
+    "our_writer": false,
+    "our_next_runtime": "None allocated; both final-v2 cases completed",
+    "required_version": "FINALv2only; candidatev1 hadno native dispatch bythistrack",
+    "v2_change": "Root16linePubkey-onlyguard/unit+existingbadarg mapping beforeintent/settlement",
+    "approved_next_cases": [
+      "unchangedqualification_registered_forwarded_receive_pays_absent_recipient_after_provider_stops",
+      "existingexpiry_actual_failed_external_send_pays_offline_owner"
+    ],
+    "capacity": "Exactly2serialcases afterfinalartifacthandoff;1ownedruntime/max2globalwithclient",
+    "artifact_handoff": "FINALv2received/verified",
+    "source_manifest_sha256": "c60c5cd4c9d8cc0fbeaa8f8f6a71ba4102a46075cd2d9515fb505d9ba2dc882b",
+    "manifest_sha256": "3c4df44d92a60683fcc6923e6e36a1eb1696e2f3755a0b3256086c9fce5bfee9",
+    "metadata_sha256": "d307ebbd308b9e7087edf240f12ed94ea1fb911bbe023e33c0c249c0e47adbfb",
+    "runtime": "Recipient fallback PASS36.184s/61d55416; failed send PASS52.392s/e968e1cf; no owned native runtime",
+    "four_products": "Freshcap592df/watch edf59/bark7a240/barkd570ec; no oldCLI"
+  },
+  "primary_raw_retained": "Completebatch13state retained for source/chain/subsidyreview, no node/DB/RPCreopen",
+  "next_uncompiled_sources": {
+    "failed_send": "qualification_failed_swap.rs51bf1828, hardening-v2 patche8b95a7; second review pending, uncompiled/unrun",
+    "oversize_graph": "qualification_oversize.rs9942a9f6; OWNworktreeonlyDEFERRED; canonicalstilltestedAPI-fixd61438dc",
+    "restore_conflict": "Frozenuntracked files; no currentwork"
+  },
+  "current_units": {
+    "passed": 800,
+    "skipped": 1,
+    "run_id": "825f6b81-f598-456b-ab42-bb844161a470",
+    "skipped_name": "arkoor::test::isolate_dust_fuzz",
+    "reason": "slow; run on demand with --run-ignored all",
+    "separate_ignored_unit_execution": "PASS15.454s/09ff9f23, exact1unit only; old800/1receipt unchanged"
+  },
+  "default_integration_inventory": {
+    "listed": 643,
+    "default_selected": 638,
+    "ignored": 5,
+    "status": "INVENTORY_ONLY; no fullsuiteexecutioncredit"
+  },
+  "money_loss_catalogue": {
+    "ids": "ML001-ML200",
+    "rows": 200,
+    "research_is_not_tests": true,
+    "mapping_state": "Complete own evidence map; canonical intake root-owned",
+    "canonical_intake_owner": "root coordinator",
+    "execution_status_counts": {
+      "NOT RUN": 198,
+      "PASS": 2
+    },
+    "evidence_scope_counts": {
+      "FULL": 2,
+      "PARTIAL": 145,
+      "NONE": 53
+    },
+    "coverage_receipt": "ML-COVERAGE.csv",
+    "coverage_sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
+    "full_pass_limitation": "Only ML165/166 bounded327-owner shape. No expansion to restart/reorg/heterogeneous-history cases."
+  },
+  "counts_warning": "76 completed main-track executions include10 core daemon infrastructure and8 process components; not76 ML cases. Units and external benchmarks excluded.",
+  "execution_counts_through": "batch19 first28 terminalPASS; remaining13 not started",
+  "execution_outcomes": {
+    "PASS": 74,
+    "FAIL": 2
+  },
+  "last_completed_batch": {
+    "name": "batch18-sdk-upstream-normal-01",
+    "result": "PASS4/4",
+    "receipt_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch18-sdk-upstream-normal-01",
+    "retries": 0,
+    "per_test_timeout_seconds": 180
+  },
+  "historical_fields_notice": "Older phase-specific fields remain historical. Current top-level state/current_batch/execution totals and money_loss_catalogue define latest state; individual pinned receipts remain authoritative."
+}

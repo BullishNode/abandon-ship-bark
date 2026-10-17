@@ -564,7 +564,7 @@ impl Bark {
 			.map(|v| v.amount)
 			.sum::<Amount>();
 
-		assert_eq!(balance.spendable + balance.needs_refresh, spendable_vtxos,
+		assert_eq!(balance.spendable + balance.needs_refresh + balance.awaiting_settlement, spendable_vtxos,
 			"{}: spendable and needs_refresh must equal the spendable VTXOs: {balance:?}",
 			self.name,
 		);
@@ -579,7 +579,7 @@ impl Bark {
 			self.name,
 		);
 		let summary = json::cli::BalanceSummary::from(&balance);
-		assert_eq!(summary.pending, pending_locked + balance.pending_exit,
+		assert_eq!(summary.pending, pending_locked + balance.pending_exit + balance.awaiting_settlement,
 			"{}: the summary's pending must be the sum of the pending fields: {balance:?}", self.name,
 		);
 		assert_eq!(summary.total, balance.spendable + balance.needs_refresh + summary.pending,

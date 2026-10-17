@@ -1,0 +1,104 @@
+{
+  "captured_utc": "2026-10-17T18:09:00.194690+00:00",
+  "repositories": [
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration",
+      "head": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+      "branch": "fresh/xpub-sweep",
+      "status": "?? backend-races-worktree/\n?? internal-settlement-worktree/\n?? lightning-admission-worktree/\n?? receive-binding-worktree/\n?? recovery-worktree/\n?? reorg-worktree/\n?? testing-track-worktree/",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-attribution",
+      "head": "cf32afccb8582e915c39cc20b6d830f1d5aecc5a",
+      "branch": "work/fresh-attribution-20261016",
+      "status": "M server/captaind.default.toml\n M server/src/bin/captaind/main.rs\n M server/src/config.rs\nA  server/src/database/expiry_attribution.rs\nM  server/src/database/fallback.rs\nA  server/src/database/fork_migrations/V3__expiry_attribution.sql\nA  server/src/database/fork_migrations/V4__expiry_chain_view.sql\nM  server/src/database/mod.rs\n A server/src/expiry_owner_scan.rs\n M server/src/lib.rs\n M server/src/rpcserver/admin.rs\n M server/src/watchman/daemon.rs\n M testing/src/context/mod.rs\nM  testing/tests/bark_sdk/fallback.rs\nAM testing/tests/server/expiry_attribution.rs\n A testing/tests/server/expiry_owner_scan.rs\nM  testing/tests/server/fallback.rs\nMM testing/tests/server/mod.rs\n A testing/tests/server/watchman_wallet.rs\n?? binding-worktree/\n?? finality-worktree/\n?? lightning-fallback-worktree/\n?? lightning-worktree/\n?? nonpayout-worktree/",
+      "tracked_diff_sha256": "f13ae80b07ba64f5abd8b8b98c7778260c3a3aee0686da0438a2af46559a3694"
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-settlement",
+      "head": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+      "branch": "work/fresh-settlement-20261016",
+      "status": "M nix/dev-shell.nix\n M server/captaind.default.toml\n M server/src/arkoor.rs\n M server/src/config.rs\n M server/src/database/data_migrations/fix_offboard_vtxos.rs\n M server/src/database/htlc_vtxo.rs\n M server/src/database/ln/mod.rs\n M server/src/database/mod.rs\n M server/src/database/model.rs\n M server/src/database/query.rs\n M server/src/database/rounds/mod.rs\n M server/src/database/tree.rs\n M server/src/error.rs\n M server/src/lib.rs\n M server/src/ln/cln/mod.rs\n M server/src/ln/cln/xpay.rs\n M server/src/ln/guard.rs\n M server/src/ln/mod.rs\n M server/src/ln/node_manager.rs\n M server/src/round/forfeit.rs\n M server/src/round/mod.rs\n M server/src/rpcserver/ark.rs\n M server/src/rpcserver/mod.rs\n M server/src/sync/block_index.rs\n M server/src/sync/mod.rs\n M server/src/vtxopool.rs\n M server/src/watchman/config.rs\n M server/src/watchman/daemon.rs\n M server/src/watchman/mod.rs\n M server/src/watchman/signer.rs\n M testing/src/context/mod.rs\n M testing/tests/server/block_index.rs\n M testing/tests/server/mod.rs\n?? contrib/cln-grpc/\n?? server/src/database/expiry_chain.rs\n?? server/src/database/expiry_decision.rs\n?? server/src/database/expiry_details.rs\n?? server/src/database/expiry_guard.rs\n?? server/src/database/expiry_inventory.rs\n?? server/src/database/expiry_ownership.rs\n?? server/src/database/expiry_payout.rs\n?? server/src/database/fork_migrations/\n?? server/src/watchman/payout.rs\n?? server/src/watchman/recovery.rs\n?? server/src/watchman/settlement.rs\n?? testing/tests/server/expiry_admission.rs\n?? testing/tests/server/expiry_dispatch.rs\n?? testing/tests/server/expiry_hash_provenance.rs\n?? testing/tests/server/expiry_lightning_terminal.rs\n?? testing/tests/server/expiry_ownership.rs\n?? testing/tests/server/expiry_races.rs\n?? testing/tests/server/expiry_state.rs",
+      "tracked_diff_sha256": "79ec5a4a256b38b28a75e01218e8902cfe9f31ebeb14b54b4446cdac485698d4"
+    },
+    {
+      "path": "/home/francis/abandon-ship-client",
+      "head": "36d1a07c3503690857fab499483f13432886ebc8",
+      "branch": "client-fixes",
+      "status": "",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-web",
+      "head": "e1a498be563d0c1121fba3b1f0e08700855c7758",
+      "branch": "fresh/fallback-web",
+      "status": "",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/francis/noah-fresh-backend-20261016",
+      "head": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+      "branch": "",
+      "status": "",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/francis/bark-simulator-signet-rework",
+      "head": "39751de3cde93e27edfba99ad40aca837613b45b",
+      "branch": "work/signet-simulation",
+      "status": "",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/francis/bark-simulator-fresh-integration",
+      "head": "c458496a6b5ced8210f0399c6fab126e48dc04a5",
+      "branch": "review/signet-simulation",
+      "status": "",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/francis/abandon-ship-bark-two-step-integrated",
+      "head": "3d3b28428cd33eb5e703342a8441c1a8d5f4a71b",
+      "branch": "work/two-step-integrated-20261014",
+      "status": "M Cargo.lock\n M docs/expiry-fallback.md\n M server-rpc/protos/bark_server.proto\n M server/Cargo.toml\n M server/schema.sql\n M server/src/bin/captaind/main.rs\n M server/src/database/expiry_settlement.rs\n M server/src/database/mod.rs\n M server/src/expiry_payout.rs\n M server/src/lib.rs\n M server/src/offboards.rs\n M server/src/payout_witness.rs\n M server/src/round/funding.rs\n M server/src/round/mod.rs\n M server/src/rpcserver/admin.rs\n M server/src/vtxopool.rs\n M server/src/wallet/mod.rs\n M server/src/wallet/sync.rs\n M server/src/watchman/daemon.rs\n M testing/src/context/builders.rs\n M testing/tests/bark_sdk/fallback.rs\n M testing/tests/bark_sdk/fallback_delegated_absence.rs\n M testing/tests/bark_sdk/fallback_faults.rs\n M testing/tests/bark_sdk/fallback_lightning.rs\n M testing/tests/bark_sdk/fallback_postissued.rs\n M testing/tests/bark_sdk/mod.rs\n M testing/tests/server/mod.rs\n M testing/tests/server/nursery.rs\n?? docs/quiet-funding-fee-ceiling.md\n?? server/src/database/migrations/V68__recovery_capital_hold.sql\n?? server/src/database/migrations/V69__recovery_selected_release.sql\n?? server/src/database/recovery_reserve.rs\n?? server/src/wallet/inventory.rs\n?? server/src/wallet/recovery_reserve.rs\n?? testing/tests/bark_sdk/recovery_reserve.rs\n?? testing/tests/server/wallet_inventory.rs\n?? testing/tests/server/wallet_inventory_cli.rs",
+      "tracked_diff_sha256": "d69140bc8c8aa17807436e80df24111a7c25c37bd8c7e6f4d9bd8da6484a8069"
+    },
+    {
+      "path": "/home/francis/abandon-ship-bark-two-step-comparison",
+      "head": "3d3b28428cd33eb5e703342a8441c1a8d5f4a71b",
+      "branch": "production/two-step-comparison",
+      "status": "",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/francis/sweep-to-payout-src",
+      "head": "994aede0ca7b2631e65ec3857f48b71888e0316f",
+      "branch": "production/track-b-direct-xpub",
+      "status": "",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/home/francis/sweep-to-payout-per-key-src-9cb02072",
+      "head": "af52be109466e47de96b0fed0e42c7688420a06c",
+      "branch": "work/c-native-fee-safety-dust-20261015",
+      "status": "",
+      "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "source_drift_reviewed": [
+    {
+      "id": "E02",
+      "file": "server/src/database/fallback.rs",
+      "reviewed_sha256": "45388819f9f1f610464f767cd8367432a6e4fd6322778ad5180f2205ec8b5925",
+      "current_sha256": "71b8dfae45ddad92f9c69a32f9b0d474f4c928f202c9b1aed647b83993b23fe9"
+    },
+    {
+      "id": "E03",
+      "file": "server/src/database/expiry_attribution.rs",
+      "reviewed_sha256": "9fd7a7541ea1fe90ee9b5b4b8c72a8ec19a75c31b515c996c6b038c9f2434091",
+      "current_sha256": "b5b35072a0f5e4bba16113a725126784e9b76799a5e4b81845edef6ef7d5acbc"
+    }
+  ],
+  "scope": "Initial inventory preserved separately; no claim that other processes stopped changing the workspace."
+}

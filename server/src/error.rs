@@ -7,6 +7,54 @@ use anyhow::Context;
 
 use ark::VtxoId;
 
+/// A paginated history collection must restart without replacing its last
+/// coherent cache when another financial transaction commits between pages.
+#[derive(Debug)]
+pub struct FallbackHistoryViewChanged;
+impl fmt::Display for FallbackHistoryViewChanged {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str("fallback payout history view changed; restart collection") }
+}
+impl StdError for FallbackHistoryViewChanged {}
+
+/// Refuse oversized historical proofs instead of sending an undecodable page.
+#[derive(Debug)]
+pub struct FallbackHistoryTooLarge;
+impl fmt::Display for FallbackHistoryTooLarge {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str("fallback payout history exceeds the response byte budget") }
+}
+impl StdError for FallbackHistoryTooLarge {}
+
+/// Stable client refusal reasons, independent of explanatory error text.
+#[derive(Debug, Clone, Copy)]
+pub enum FallbackRefusal {
+	DecidedForFallback(VtxoId),
+	ExpiredNewLightning(VtxoId),
+}
+
+impl FallbackRefusal {
+	pub fn reason(&self) -> &'static str {
+		match self {
+			Self::DecidedForFallback(_) => "decided_for_fallback",
+			Self::ExpiredNewLightning(_) => "expired_new_lightning",
+		}
+	}
+
+	pub fn vtxo_id(&self) -> VtxoId {
+		match self { Self::DecidedForFallback(id) | Self::ExpiredNewLightning(id) => *id }
+	}
+}
+
+impl fmt::Display for FallbackRefusal {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::DecidedForFallback(id) => write!(f, "vtxo {} is reserved for expiry recovery", id),
+			Self::ExpiredNewLightning(id) => write!(f, "vtxo {} has expired backing for a new Lightning obligation", id),
+		}
+	}
+}
+
+impl StdError for FallbackRefusal {}
+
 /// An error type to add context to anyhow to indicate any form
 /// of incorrect user input.
 pub struct BadArgument {

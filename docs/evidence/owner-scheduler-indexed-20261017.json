@@ -1,0 +1,510 @@
+{
+  "recorded_at": "2026-10-17T13:47:20.204766+00:00",
+  "scope": "Real signed public RPC registration and linked production owner scanner; positive low-index matches only; not payouts or maximum payment throughput",
+  "result": "FAIL wrong-mailbox at10000; absent-mailbox improvement and all smaller cases retained",
+  "source_commits": {
+    "adoption": "9384441b3",
+    "offboard": "792c8ea7d",
+    "owner_scheduler": "3d7a3fd4a"
+  },
+  "build_source_manifest_sha256": "4af4b54efb5079b87379a7322bc7d58c5bcb483e720a5d248c1de7a5fe9a4d80",
+  "source_manifest_note": "Built after9384441b3 with the exact code subsequently committed as792c8ea7d and3d7a3fd4a; all1016 captured files independently matched before later documentation changes. Manifest includes documentation at its build-time version.",
+  "artifacts": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-owner-scheduler-20261017/captaind",
+      "sha256": "edebcb6953e835301b910b88192c1908e6f0829f527583d0f5e6d935c6a8d5aa"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-owner-scheduler-20261017/watchmand",
+      "sha256": "a3deb3f9b4dd71fbe297f826650c01b3c189b1eb700a6f24ad9cd05b072f0fe3"
+    },
+    "native-server": {
+      "path": "/fresh-cache/runtime-owner-scheduler-20261017/native-server",
+      "sha256": "3309fcca545dcf4c011b49c6076c7b7209806a1ea981af77e0b0e1b5d41c91c2"
+    },
+    "source-manifest.json": {
+      "path": "/fresh-cache/runtime-owner-scheduler-20261017/source-manifest.json",
+      "sha256": "4af4b54efb5079b87379a7322bc7d58c5bcb483e720a5d248c1de7a5fe9a4d80"
+    },
+    "nextest-binaries-immutable.json": {
+      "path": "/fresh-cache/runtime-owner-scheduler-20261017/nextest-binaries-immutable.json",
+      "sha256": "0cfe8869b39a9bacec252f6e7bf96aeb6956a4eb5d6ae1beec9ca5351953f1f5"
+    }
+  },
+  "mandatory_checks": "PASS55.51s; corrected runtime library environment only after checks",
+  "units": {
+    "passed": 789,
+    "skipped": 1,
+    "seconds": 8.061,
+    "log_sha256": "7d4d6a26e9b9436da10c0fbca0aef953d217f25091335d6bad3b0b37f3ecd78b"
+  },
+  "native_regressions": {
+    "run_id": "26ee4435-cdda-476d-acc3-d41c8acbe64d",
+    "passed": 9,
+    "seconds": 36.946,
+    "cases": [
+      {
+        "seconds": 2.415,
+        "test": "expiry_attribution::expiry_attribution_duplicate_cursors_do_not_starve_other_accounts"
+      },
+      {
+        "seconds": 2.431,
+        "test": "expiry_attribution::expiry_attribution_batches_keys_and_recovers_late_lower_keys_after_restart"
+      },
+      {
+        "seconds": 2.213,
+        "test": "expiry_attribution::expiry_attribution_registry_fence_blocks_registration_until_decision_commits"
+      },
+      {
+        "seconds": 2.25,
+        "test": "expiry_attribution::expiry_attribution_prepared_work_never_advances_a_new_pending_key"
+      },
+      {
+        "seconds": 2.186,
+        "test": "expiry_attribution::expiry_attribution_wrong_mailbox_is_not_a_payee_and_registration_invalidates_no_owner"
+      },
+      {
+        "seconds": 17.87,
+        "test": "expiry_operation_races::expiry_decision_wins_over_prepared_native_offboard"
+      },
+      {
+        "seconds": 17.35,
+        "test": "expiry_operation_races::expiry_registered_native_offboard_wins_over_waiting_decision"
+      },
+      {
+        "seconds": 5.703,
+        "test": "expiry_owner_scan::expiry_owner_scan_runs_in_captaind_and_stops_gracefully"
+      },
+      {
+        "seconds": 14.41,
+        "test": "expiry_operation_races::expiry_uninitiated_grant_can_revoke_after_backing_expiry"
+      }
+    ],
+    "log_sha256": "4716181c7489e49a7e281b036094a1d6e8f2b4641500f872640cd734ed240332"
+  },
+  "scale": {
+    "run_id": "7562d5ea-279e-4dbc-9a8c-1abf3086639c",
+    "exit_code": 100,
+    "seconds": 358.637,
+    "report_sha256": "cfaaf6244a0ccbb966791858f68e0a43e9e085a26b1713f95c41681a99b79fc1",
+    "log_sha256": "2594d06b0394b2fafcf8c0bd3263d87a26b6e54cef3547f7cf0d4c23674ae89d",
+    "report": {
+      "cases": [
+        {
+          "captaind_memory": {
+            "pid": 22317,
+            "process_lifetime_peak_rss_kib": 44432,
+            "rss_kib": 44432
+          },
+          "case": "signed_public_rpc_registration",
+          "client_signing_seconds": 0.011061049,
+          "records": 100,
+          "records_per_second": 94.78998632062958,
+          "registration_seconds": 1.054963756,
+          "rpc_p50_seconds": 0.01066625,
+          "rpc_p95_seconds": 0.014253386,
+          "rpc_p99_seconds": 0.015672721,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 52388,
+            "rss_kib": 52388
+          },
+          "storage": {
+            "cursor_bytes": 32768,
+            "cursors": 0,
+            "matched_keys": 0,
+            "record_bytes": 245760,
+            "records": 100
+          }
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": 0.152302413,
+          "case": "verified_mailbox_priority",
+          "child_index": 17,
+          "children_derived": 64,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 0.039158479,
+          "owner_sorted_position": 99,
+          "passes": 1,
+          "queued_storage": {
+            "cursor_bytes": 163840,
+            "cursors": 100,
+            "matched_keys": 0,
+            "record_bytes": 245760,
+            "records": 100
+          },
+          "records": 100,
+          "records_scanned": 2,
+          "remaining_storage": {
+            "cursor_bytes": 163840,
+            "cursors": 0,
+            "matched_keys": 1,
+            "record_bytes": 245760,
+            "records": 100
+          },
+          "resolved": true,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 55168,
+            "rss_kib": 55168
+          },
+          "workers": 2
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": 0.165218188,
+          "case": "absent_mailbox_fallback",
+          "child_index": 18,
+          "children_derived": 3200,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 1.035830038,
+          "owner_sorted_position": 99,
+          "passes": 50,
+          "queued_storage": {
+            "cursor_bytes": 221184,
+            "cursors": 100,
+            "matched_keys": 1,
+            "record_bytes": 245760,
+            "records": 100
+          },
+          "records": 100,
+          "records_scanned": 100,
+          "remaining_storage": {
+            "cursor_bytes": 229376,
+            "cursors": 0,
+            "matched_keys": 2,
+            "record_bytes": 245760,
+            "records": 100
+          },
+          "resolved": true,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 55232,
+            "rss_kib": 55232
+          },
+          "workers": 2
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": 0.14530309,
+          "case": "wrong_mailbox_fallback",
+          "child_index": 19,
+          "children_derived": 111008,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 3.163073932,
+          "owner_sorted_position": 99,
+          "passes": 58,
+          "queued_storage": {
+            "cursor_bytes": 286720,
+            "cursors": 100,
+            "matched_keys": 2,
+            "record_bytes": 245760,
+            "records": 100
+          },
+          "records": 100,
+          "records_scanned": 116,
+          "remaining_storage": {
+            "cursor_bytes": 286720,
+            "cursors": 0,
+            "matched_keys": 3,
+            "record_bytes": 245760,
+            "records": 100
+          },
+          "resolved": true,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 55236,
+            "rss_kib": 55236
+          },
+          "workers": 2
+        },
+        {
+          "captaind_memory": {
+            "pid": 22368,
+            "process_lifetime_peak_rss_kib": 44944,
+            "rss_kib": 44944
+          },
+          "case": "signed_public_rpc_registration",
+          "client_signing_seconds": 0.163929872,
+          "records": 1000,
+          "records_per_second": 109.81637155144291,
+          "registration_seconds": 9.106110372,
+          "rpc_p50_seconds": 0.008879161,
+          "rpc_p95_seconds": 0.013150382,
+          "rpc_p99_seconds": 0.015265497,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 55660,
+            "rss_kib": 55660
+          },
+          "storage": {
+            "cursor_bytes": 32768,
+            "cursors": 0,
+            "matched_keys": 0,
+            "record_bytes": 1302528,
+            "records": 1000
+          }
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": 0.195657489,
+          "case": "verified_mailbox_priority",
+          "child_index": 17,
+          "children_derived": 64,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 0.032529905,
+          "owner_sorted_position": 999,
+          "passes": 1,
+          "queued_storage": {
+            "cursor_bytes": 761856,
+            "cursors": 1000,
+            "matched_keys": 0,
+            "record_bytes": 1302528,
+            "records": 1000
+          },
+          "records": 1000,
+          "records_scanned": 2,
+          "remaining_storage": {
+            "cursor_bytes": 761856,
+            "cursors": 0,
+            "matched_keys": 1,
+            "record_bytes": 1302528,
+            "records": 1000
+          },
+          "resolved": true,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 55660,
+            "rss_kib": 55660
+          },
+          "workers": 2
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": 0.162408515,
+          "case": "absent_mailbox_fallback",
+          "child_index": 18,
+          "children_derived": 32000,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 9.577036394,
+          "owner_sorted_position": 999,
+          "passes": 500,
+          "queued_storage": {
+            "cursor_bytes": 1343488,
+            "cursors": 1000,
+            "matched_keys": 1,
+            "record_bytes": 1302528,
+            "records": 1000
+          },
+          "records": 1000,
+          "records_scanned": 1000,
+          "remaining_storage": {
+            "cursor_bytes": 1548288,
+            "cursors": 0,
+            "matched_keys": 2,
+            "record_bytes": 1302528,
+            "records": 1000
+          },
+          "resolved": true,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 55736,
+            "rss_kib": 55736
+          },
+          "workers": 2
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": 0.116260376,
+          "case": "wrong_mailbox_fallback",
+          "child_index": 19,
+          "children_derived": 139808,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 12.021783343,
+          "owner_sorted_position": 999,
+          "passes": 508,
+          "queued_storage": {
+            "cursor_bytes": 2080768,
+            "cursors": 1000,
+            "matched_keys": 2,
+            "record_bytes": 1302528,
+            "records": 1000
+          },
+          "records": 1000,
+          "records_scanned": 1016,
+          "remaining_storage": {
+            "cursor_bytes": 2088960,
+            "cursors": 0,
+            "matched_keys": 3,
+            "record_bytes": 1302528,
+            "records": 1000
+          },
+          "resolved": true,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 55800,
+            "rss_kib": 55800
+          },
+          "workers": 2
+        },
+        {
+          "captaind_memory": {
+            "pid": 22419,
+            "process_lifetime_peak_rss_kib": 44960,
+            "rss_kib": 44960
+          },
+          "case": "signed_public_rpc_registration",
+          "client_signing_seconds": 0.976803557,
+          "records": 10000,
+          "records_per_second": 108.71206737231336,
+          "registration_seconds": 91.986108274,
+          "rpc_p50_seconds": 0.009161356,
+          "rpc_p95_seconds": 0.013084058,
+          "rpc_p99_seconds": 0.014685851,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 62688,
+            "rss_kib": 59936
+          },
+          "storage": {
+            "cursor_bytes": 32768,
+            "cursors": 0,
+            "matched_keys": 0,
+            "record_bytes": 11821056,
+            "records": 10000
+          }
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": 0.157237285,
+          "case": "verified_mailbox_priority",
+          "child_index": 17,
+          "children_derived": 64,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 0.193845,
+          "owner_sorted_position": 9999,
+          "passes": 1,
+          "queued_storage": {
+            "cursor_bytes": 6897664,
+            "cursors": 10000,
+            "matched_keys": 0,
+            "record_bytes": 11821056,
+            "records": 10000
+          },
+          "records": 10000,
+          "records_scanned": 2,
+          "remaining_storage": {
+            "cursor_bytes": 6897664,
+            "cursors": 0,
+            "matched_keys": 1,
+            "record_bytes": 11821056,
+            "records": 10000
+          },
+          "resolved": true,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 62688,
+            "rss_kib": 59936
+          },
+          "workers": 2
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": 0.175183321,
+          "case": "absent_mailbox_fallback",
+          "child_index": 18,
+          "children_derived": 320000,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 103.265352759,
+          "owner_sorted_position": 9999,
+          "passes": 5000,
+          "queued_storage": {
+            "cursor_bytes": 12984320,
+            "cursors": 10000,
+            "matched_keys": 1,
+            "record_bytes": 11821056,
+            "records": 10000
+          },
+          "records": 10000,
+          "records_scanned": 10000,
+          "remaining_storage": {
+            "cursor_bytes": 14680064,
+            "cursors": 0,
+            "matched_keys": 2,
+            "record_bytes": 11821056,
+            "records": 10000
+          },
+          "resolved": true,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 62688,
+            "rss_kib": 59964
+          },
+          "workers": 2
+        },
+        {
+          "budget_seconds": 120,
+          "cached_100_lookup_seconds": null,
+          "case": "wrong_mailbox_fallback",
+          "child_index": 19,
+          "children_derived": 424128,
+          "chunk_size_max": 10000,
+          "elapsed_seconds": 120.138570792,
+          "owner_sorted_position": 9999,
+          "passes": 4951,
+          "queued_storage": {
+            "cursor_bytes": 16023552,
+            "cursors": 10000,
+            "matched_keys": 2,
+            "record_bytes": 11821056,
+            "records": 10000
+          },
+          "records": 10000,
+          "records_scanned": 9902,
+          "remaining_storage": {
+            "cursor_bytes": 14753792,
+            "cursors": 10000,
+            "matched_keys": 2,
+            "record_bytes": 11821056,
+            "records": 10000
+          },
+          "resolved": false,
+          "scanner_memory": {
+            "pid": 22230,
+            "process_lifetime_peak_rss_kib": 62688,
+            "rss_kib": 59964
+          },
+          "workers": 2
+        }
+      ],
+      "debug_assertions": true,
+      "not_measured": [
+        "exhaustive 2^31-key negative search",
+        "payout throughput",
+        "concurrent user traffic",
+        "Postgres/Core RSS"
+      ],
+      "rss_scope": "test/scanner process and isolated captaind; HWM is process lifetime, not phase delta",
+      "scope": "real signed SetFallback RPC; real bounded owner scanner; no user/server funding or payouts",
+      "source_pin": null
+    }
+  },
+  "hardware": {
+    "logical_cpus_available": 14,
+    "memtotal_kib": 65249964,
+    "profile": "Nix debug/unoptimized",
+    "contention": "No other agent Cargo/native workload during measured scale; shared workstation, not production hardware"
+  },
+  "preserved_failures": [
+    "Original a8928dcf missing-mailbox120s failure retained and privately archived;3250regular files verified, archive927f9b25dc90a49d2b3ebbc0f5fc490527e4a4a88d55c2a34e82a9bf22bf8a22",
+    "Initial unit listing stopped before tests because launcher dropped Nix libstdc++ path; unchanged source then789unitsPASS",
+    "Initial scale command repeated profile flag and exited before case start; fixed NEXTEST_PROFILE environment without changing source/budget",
+    "7562 wrong-mailbox120s failure retained without retry or no-owner classification"
+  ],
+  "remaining": [
+    "Wrong-mailbox10000 misses declared120s budget",
+    "Exhaustive no-owner2^31 derivation and concurrent-load envelope unmeasured",
+    "Separate public-Signet S03 historical-forfeit source-geometry blocker is not fixed by this scheduler"
+  ]
+}

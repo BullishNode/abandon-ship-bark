@@ -1,0 +1,15 @@
+{
+  "total": 200,
+  "lightning": 81,
+  "statuses": {
+    "Historical regression risk": 4,
+    "Hypothesis requiring validation": 134,
+    "Source-supported risk": 58,
+    "Observed failure": 4
+  },
+  "priorities": {
+    "P1": 157,
+    "P0": 39,
+    "P2": 4
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "at": "2026-10-17T16:00:33.546158+00:00",
+  "head": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+  "source_files": 1078,
+  "source_manifest_sha256": "fd82d64a8d03f1fa61d52fb3b39d73f0d0de6b9ce1f725f8bed96ccaf9eb0e53",
+  "source_tar_sha256": "4944a351fcc19e45fb0130527338dfe8fab62b537ac2c5809acc8c865313c721",
+  "state": "PASS",
+  "prior_failed_build_preserved": "/home/francis/.cache/abandon-fresh/testing-track-20261017/runtime-testing-canonical-lightning-v1",
+  "lease": "Explicitcoordinator15:58UTC; canonical servermetadata+justchecks only",
+  "ended_at": "2026-10-17T16:02:35.154397+00:00",
+  "build_seconds": 51.41,
+  "native_server_sha256": "50b881db29e87af5111eb5df38e644c3348b267f800e75cd0147031b811c7a06",
+  "metadata_immutable_sha256": "2c979463ed9f6a64fe752ef6f7e9478c317e7b32188075208c2446205c9aa127",
+  "metadata_original_sha256": "b24919a5da2504e2f3a4fac38bc0f841a3def8444bac5b8dfd4b0e0b0d542c3a",
+  "source_unchanged_after_build": true,
+  "checks": {
+    "state": "PASS",
+    "exit_code": 0,
+    "at": "2026-10-17T16:03:54.874928+00:00",
+    "head": "99a0553ac1770fc692f58c5c73098b2253585dc8",
+    "source_manifest_sha256": "fd82d64a8d03f1fa61d52fb3b39d73f0d0de6b9ce1f725f8bed96ccaf9eb0e53",
+    "scope": "canonical justchecks: prechecks, clippy, wasm, workspace tests/examples typecheck; no unit-suite execution",
+    "log_sha256": "39cbdc69fae9090d3cc53b905b4c8bf818e4fb9aeaf6c7a1ab050be0a23a3f09",
+    "existing_warnings": "ExistingdeprecatedChainSource calls; no newtestcompileerror",
+    "source_unchanged_after_checks": true
+  },
+  "artifacts_captured": true
+}

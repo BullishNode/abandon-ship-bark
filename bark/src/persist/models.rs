@@ -8,8 +8,11 @@
 //! - Provide stable, serde-friendly representations for database backends.
 //! - Enable forward/backward compatibility when schema migrations occur.
 
+pub use ark::fallback::FallbackRecord;
+
 use std::borrow::Cow;
 use std::fmt;
+use std::sync::Arc;
 
 use bitcoin::{Amount, Transaction};
 use bitcoin::secp256k1::{Keypair, PublicKey};
@@ -24,6 +27,7 @@ use ark::lightning::{PaymentHash, Preimage};
 use ark::rounds::RoundSeq;
 
 use crate::WalletVtxo;
+use crate::FallbackRefusal;
 use crate::exit::{ExitState, ExitTxOrigin, ExitVtxo};
 use crate::movement::MovementId;
 use crate::lock_manager::LockGuard;
@@ -112,7 +116,27 @@ impl fmt::Display for RoundStateId {
 }
 
 #[allow(unused)]
-pub struct Locked(Box<dyn LockGuard>);
+pub struct Locked(Arc<dyn LockGuard>);
+
+/// A checkpoint shares the real named round lock. It never manufactures a
+/// second lock or changes the persistence contract for application backends.
+pub(crate) struct RoundCheckpoint {
+	id: RoundStateId,
+	guard: Arc<dyn LockGuard>,
+	participation: RoundParticipation,
+	movement_id: Option<MovementId>,
+	fallback_refusal: Option<FallbackRefusal>,
+}
+
+impl RoundCheckpoint {
+	pub(crate) fn before_forfeits(&self, outputs: &[Vtxo<Full>], funding_tx: &Transaction, unlock_hash: UnlockHash) -> StoredRoundState {
+		let state = RoundState { done: false, onchain_recovery: false, participation: self.participation.clone(),
+			flow: RoundFlowState::Finished { funding_tx: funding_tx.clone(), unlock_hash },
+			new_vtxos: outputs.to_vec(), sent_forfeit_sigs: true,
+			movement_id: self.movement_id, fallback_refusal: self.fallback_refusal };
+		StoredRoundState { id: self.id, state, _guard: Locked(self.guard.clone()) }
+	}
+}
 
 pub struct Unlocked;
 
@@ -133,16 +157,24 @@ impl<G> StoredRoundState<G> {
 }
 
 impl StoredRoundState<Unlocked> {
+	pub(crate) fn into_state(self) -> RoundState { self.state }
+
 	pub fn new(id: RoundStateId, state: RoundState) -> Self {
 		Self { id, state, _guard: Unlocked }
 	}
 
 	pub fn lock(self, guard: Box<dyn LockGuard>) -> StoredRoundState {
-		StoredRoundState { id: self.id, state: self.state, _guard: Locked(guard) }
+		StoredRoundState { id: self.id, state: self.state, _guard: Locked(Arc::from(guard)) }
 	}
 }
 
 impl StoredRoundState<Locked> {
+	pub(crate) fn checkpoint(&self) -> RoundCheckpoint {
+		RoundCheckpoint { id: self.id, guard: self._guard.0.clone(),
+			participation: self.state.participation.clone(), movement_id: self.state.movement_id,
+			fallback_refusal: self.state.fallback_refusal }
+	}
+
 	pub fn state_mut(&mut self) -> &mut RoundState {
 		&mut self.state
 	}
@@ -492,17 +524,25 @@ pub struct SerdeRoundState<'a> {
 	#[serde(with = "ark::encode::serde::cow::vec")]
 	new_vtxos: Cow<'a, [Vtxo<Full>]>,
 	sent_forfeit_sigs: bool,
+	#[serde(default)]
+	fallback_refusal: Option<FallbackRefusal>,
+	// MessagePack stores this struct positionally. New optional fields must
+	// remain at the end so existing binding checkpoints keep their meaning.
+	#[serde(default)]
+	onchain_recovery: bool,
 }
 
 impl<'a> From<&'a RoundState> for SerdeRoundState<'a> {
 	fn from(state: &'a RoundState) -> Self {
 		Self {
 			done: state.done,
+			onchain_recovery: state.onchain_recovery,
 			participation: (&state.participation).into(),
 			movement_id: state.movement_id,
 			flow: (&state.flow).into(),
 			new_vtxos: Cow::Borrowed(&state.new_vtxos),
 			sent_forfeit_sigs: state.sent_forfeit_sigs,
+			fallback_refusal: state.fallback_refusal,
 		}
 	}
 }
@@ -511,22 +551,28 @@ impl<'a> From<SerdeRoundState<'a>> for RoundState {
 	fn from(state: SerdeRoundState<'a>) -> Self {
 		Self {
 			done: state.done,
+			onchain_recovery: state.onchain_recovery,
 			participation: state.participation.into(),
 			movement_id: state.movement_id,
 			flow: state.flow.into(),
 			new_vtxos: state.new_vtxos.into_owned(),
 			sent_forfeit_sigs: state.sent_forfeit_sigs,
+			fallback_refusal: state.fallback_refusal,
 		}
 	}
 }
 
 #[cfg(test)]
 mod test {
+	use std::borrow::Cow;
+
 	use bitcoin_ext::BlockHeight;
 
 	use crate::exit::{ExitState, ExitTxOrigin};
 	use crate::vtxo::VtxoState;
-	use super::SerdeAttemptState;
+	use crate::movement::MovementId;
+	use crate::FallbackRefusal;
+	use super::{SerdeAttemptState, SerdeRoundState, SerdeRoundParticipation, SerdeRoundFlowState};
 
 	#[test]
 	/// Each struct stored as JSON in the database should have test to check for backwards compatibility
@@ -625,6 +671,20 @@ mod test {
 		rmp_serde::from_slice::<SerdeAttemptState>(
 			&Vec::<u8>::from_hex(serialised).unwrap(),
 		).unwrap();
+	}
+
+	#[test]
+	fn test_serialized_round_state_before_onchain_recovery() {
+		let old = rmp_serde::to_vec(&(false, SerdeRoundParticipation {
+			inputs: Cow::Borrowed(&[]), outputs: vec![], unblinded_mailbox_id: None,
+		}, None::<MovementId>, SerdeRoundFlowState::InteractivePending,
+			Vec::<u8>::new(), false, None::<FallbackRefusal>)).unwrap();
+		let mut restored = rmp_serde::from_slice::<SerdeRoundState>(&old).unwrap();
+		assert!(!restored.onchain_recovery);
+		assert!(!restored.done);
+		restored.onchain_recovery = true;
+		let current = rmp_serde::to_vec(&restored).unwrap();
+		assert!(rmp_serde::from_slice::<SerdeRoundState>(&current).unwrap().onchain_recovery);
 	}
 
 	/// `NonInteractivePending` gained a trailing `scheduled_height` field. Since

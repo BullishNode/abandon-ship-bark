@@ -119,6 +119,7 @@ let
 			hash = "sha256-bra45wREkyt4byY7/oemRQsmqSiVX/8vVuwYcYjcQHQ=";
 		};
 		buildAndTestSubdir = "plugins/grpc-plugin";
+		patches = [ ../contrib/cln-grpc/structured-xpay-errors.patch ];
 		nativeBuildInputs = [ rustBuildToolchain pkgs.protobuf ];
 		buildInputs = (if isDarwin then [ pkgs.darwin.apple_sdk.frameworks.Security ] else []);
 		doCheck = false;

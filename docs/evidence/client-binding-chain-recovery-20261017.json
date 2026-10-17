@@ -1,0 +1,65 @@
+{
+  "head": "0f932806513a8dcefb5a3f3e841b98b73d02d3a1",
+  "build": "ONLY linked SDK native test executable; no product rebuild",
+  "source_files": 1074,
+  "source_manifest_sha256": "4e63f5f058715236226beff5818773df26ea738af283b29d608822344f0a57a1",
+  "source_tar_sha256": "0aab2ad747efe509affb5d0b3de1b91e2d65f1cf46b94572453cfd28071f5247",
+  "overlay_sha256": "9cc7d8da85c65acb7b502a583aff948eed9ee78627a3123cc143f3ff744797ed",
+  "sdk_test_sha256": "9b1ddc9405c8d5b352c79ac9efd2112864d6e502907996359d81edb25d17ae4f",
+  "metadata_immutable_sha256": "fb216747a5afc10d37815ab60631e22a165ee5433a183a37c2dd396e05633328",
+  "metadata_original_sha256": "04afae77a1d339cb6d40c8be2663b9a89c61e275fdf7aa13331d475ae5821d38",
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind",
+      "sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand",
+      "sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-operation-client-20261017/bark",
+      "sha256": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-operation-client-20261017/barkd",
+      "sha256": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce"
+    }
+  },
+  "checks": "v7 mandatory45495 PASS native2.52s; SDK-only metadata10.29s",
+  "unit": {
+    "run_id": "d9ef5019-8de0-4910-9602-b07d66f1cdc7",
+    "passed": 1,
+    "skipped": 793,
+    "seconds": 0.014
+  },
+  "native": {
+    "run_id": "5a5c0827-8d99-42c7-b877-449cfacccec7",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 72,
+    "seconds": 37.988,
+    "log_sha256": "eb964afa327a7b4e92dfc24b5ab1f674731dfe9819addd5758929c054e8fee20",
+    "scope": "Actual accepted forfeit response lost; Ark physically offline; real watchman forfeit and chain preimage; same-holder signed replacement native claim >=6conf; actual Core claim-block invalidation, two retries with same exit/movement and principal once, unchanged claim reconfirmed."
+  },
+  "prior_failure": "6362448c FAIL25.187s preserved in sibling runtime-client-binding-recovery-20261017; incidental native exit label fixture corrected",
+  "scope": "Client automatic recovery of an interrupted same-account self-refresh from real on-chain Hark preimage; not general cross-root server discharge proof.",
+  "archive": "/fresh-cache/runtime-client-binding-recovery-v7-20261017",
+  "prior_archives": [
+    "/fresh-cache/runtime-client-binding-recovery-20261017"
+  ],
+  "unit_scope": "Focused compatibility unit on unchanged product code; v7 differs only in the actual native fixture oracle. No new full-workspace unit run.",
+  "source_overlay": "client-binding-chain-recovery-v7-20261017.patch",
+  "failures_preserved": [
+    "Initial isolated mandatory36848 E0369 in new BlockHeight fixture arithmetic; corrected to saturating_sub.",
+    "Initial actual native6362448c FAIL25.187s: forfeit/reveal succeeded, but native exit Claimed label fixture was false. Replaced with real confirmed forfeit/input and Core UTXO absence; no product change between native attempts."
+  ],
+  "limits": [
+    "Server old-user-claim before forfeit versus eventual replacement-root payout remains an open backend gate.",
+    "A completed replacement legitimately transferred to another recipient is not cancelled or adopted by this self-refresh-only recovery. No stale-device immunity claim.",
+    "Old original-user-claim draft in the test module was not executed by this bounded gate.",
+    "This is linked SDK/regtest acceptance, not a new native CLI/browser artifact or public-Signet campaign repin.",
+    "No mainnet readiness or complete Lightning restart qualification claim."
+  ],
+  "next": "Lightning receive preimage checkpoint before wire and actual successful-claim response-loss/reopen regression."
+}

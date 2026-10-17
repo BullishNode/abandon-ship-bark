@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-17T16:31:43.758526+00:00",
+  "completed_packet_sha256": "96180de2be76c676829d14b657c932aae5f0c1067f41bc1cd176941959fec9ad",
+  "additional_file": "registered-receive-fee-log-evidence-v2.json",
+  "additional_sha256": "c4e44f9892493a967625694eeac0b17d2ae6aa772d6dee02841e29243a1750d8",
+  "scope": "Existinglogs-only optionalchildfee/canonicalblock evidence; no independentchildprevoutfee/exactsubsidy claim",
+  "publication": "Awaitcoordinatorclientimmutablecapture andseparatePR7promotion; no canonical/Git writes",
+  "prior_receipt_retained_sha256": "4bef14e9fff4f1f90451d1c8d7f50fccd95703170bc7c0e2338ab9f794ab9d8e"
+}

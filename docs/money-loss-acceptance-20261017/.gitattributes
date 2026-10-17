@@ -1,0 +1,3 @@
+# Preserve byte-identical research exports, including their original line endings.
+research/MONEY_LOSS_SCENARIOS.csv whitespace=cr-at-eol
+research/MONEY_LOSS_SCENARIOS.md whitespace=-blank-at-eof

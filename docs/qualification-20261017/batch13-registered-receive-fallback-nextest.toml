@@ -1,0 +1,5 @@
+[store]
+dir = "/fresh-cache/testing-track-20261017/batch13-registered-receive-fallback/nextest-store"
+[profile.default]
+slow-timeout = { period="60s",terminate-after=5 }
+retries=0

@@ -1,0 +1,36 @@
+{
+  "recorded_at": "2026-10-17T15:04:33.268998+00:00",
+  "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
+  "dirty_test_source": true,
+  "source_manifest_sha256": "3f52d4f99a55097698c698b012d035f0037328d8baf392f4d13e18047fbad0ae",
+  "source_archive_sha256": "a802bf9c7de7ceb2a2ad838ad81aec37c77123276342da243b6beee1ca026138",
+  "test_binary_sha256": "81a1414d68d894b5d20a7a96a32dd56df26058b768a915f99f17ee19ae88a42f",
+  "metadata_sha256": "9891f8144420a0c2a2b6aab55788cc3c913a2026114d665648473fb342771d4b",
+  "metadata_package_root": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
+  "build_result": "PASS",
+  "build_seconds": 211,
+  "build_log": "/home/francis/.cache/abandon-fresh/testing-track-20261017/runtime-testing-e44-tests-v1/build.log",
+  "command": "cargo nextest list --package ark-testing --test server --features ark-testing/fallback-test-bip84 --list-type binaries-only --message-format json",
+  "build_environment": {
+    "CARGO_HOME": "/fresh-cache/cargo",
+    "CARGO_TARGET_DIR": "/fresh-cache/target",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_BUILD_JOBS": "4",
+    "CARGO_NET_OFFLINE": "true",
+    "BARK_WEB_DIST": "/fresh-cache/web-dist-10ecfb9",
+    "RUSTFLAGS": "no override; inherited cached flake environment"
+  },
+  "external_product_pins": {
+    "server_source_base": "fb85d9a9c3b31b3eab1eb2113d2caec89c7f10dd",
+    "server_dirty_source": true,
+    "server_source_manifest_sha256": "0ff7819dc89062aef8c6ce43b81d99c851fd813ef0ac75f0d462ef457deb6b69",
+    "captaind_sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4",
+    "watchmand_sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06",
+    "cli_build_git_hash": "b260b53af",
+    "cli_source_manifest_sha256": "b94a579404c507a13ee1373ba86b2cf1a18878d23be730875022cadb3160d065",
+    "bark_sha256": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f",
+    "barkd_sha256": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce"
+  },
+  "no_product_rebuild": true
+}

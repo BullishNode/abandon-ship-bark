@@ -1,0 +1,42 @@
+{
+  "scope": "Autonomous SDK protection; public-Signet simulation remains separately pinned.",
+  "source": {
+    "sdk_source_manifest_sha256": "8ad4ac83fd2909cc7f8bc621412bba5e2bb4e8dc16584ecb3eb051259607cc3f",
+    "description": "canonical fb85d9a9c plus default-daemon test and S03 fixture; mandatory checks passed before immutable metadata capture",
+    "test_patch_sha256": "3c5c3b9258b4a6be59b6cb64163dd6065d89bd3b46726d782275f9522f849ba1"
+  },
+  "test": {
+    "name": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+    "run_id": "86eaa53a-7153-4fc8-9bda-f63b2c5115d4",
+    "passed": 1,
+    "failed": 0,
+    "skipped": 330,
+    "seconds": 18.373,
+    "result": "PASS"
+  },
+  "artifacts": {
+    "sdk_elf_sha256": "c5aaca70d56f5f705bf173dc6bc1e8768bd33be5ac4b502407c3708a8862505e",
+    "metadata_sha256": "1f61182b09f72891241ee470ddb6ef2f125f1a7ade0521db581af1600c095b6d",
+    "captaind_sha256": "6c223d603724ca8755dbd7c8594ceed9807ce390dad2b373b536da6f081a6b4f",
+    "watchmand_sha256": "5084cb4dddc04e243c6d7f5e11b5090b16f2862fb4842104113cbf3a4d457fea",
+    "bark_sha256": "8f2aff06b0edfa9427b1fa7894e13da8e8d471a57836031455d3924ae7b9ff04",
+    "barkd_sha256": "2c53f1a5bdd974f74e1c1c45b497e44d7e2abfd0f2a9bfa426e06a4eccc73771",
+    "server_source": "7055d1fce; unchanged independently rehashed products"
+  },
+  "observed": [
+    "Actual default background loop initiated early refresh; no direct protection, refresh or exit invocation.",
+    "Actual round funding reached Core mempool before confirmation; background loop adopted confirmed replacement.",
+    "Healthy adopted replacement had no spurious exit at original act-by.",
+    "After physical Ark stop, background loop broadcast an actual signed replacement exit-path transaction at replacement act-by."
+  ],
+  "limits": [
+    "This test proves initiation and path broadcast, not a final claim spend.",
+    "Does not prove binding-forfeit cross-root recovery or parked action finalization.",
+    "Uses historical7055 server products for interoperability; does not requalify latest server source.",
+    "First preflight exited104 before any case because immutable metadata package IDs required canonical cwd; corrected execution used that cwd with a distinct private test directory."
+  ],
+  "log_sha256": {
+    "preflight-package-graph.log": "08fc458a4635dde265de81f3b7c23a5b2a277780c3332ed4e257de5f21c4bf48",
+    "native.log": "b07f8846e5362867be735168dca0d54ddb892a591d0263f96585f05fd5121d20"
+  }
+}

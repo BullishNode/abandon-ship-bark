@@ -33,7 +33,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::str::FromStr;
 
-use anyhow::{Context, bail};
+use anyhow::{Context, bail, ensure};
 use bark::chain::ChainSource;
 use bark::fs_perms;
 use bark::persist::adaptor::StorageAdaptorWrapper;
@@ -291,6 +291,10 @@ pub struct CreateOpts {
 	#[arg(long)]
 	pub mnemonic: Option<bip39::Mnemonic>,
 
+	/// Recover from a mnemonic file instead of putting the words in process arguments.
+	#[arg(long, conflicts_with = "mnemonic")]
+	pub mnemonic_file: Option<std::path::PathBuf>,
+
 	/// The wallet/mnemonic's birthday blockheight to start syncing when recovering.
 	#[arg(long)]
 	pub birthday_height: Option<BlockHeight>,
@@ -360,9 +364,16 @@ async fn check_clean_datadir(datadir: &Path, clean: bool) -> anyhow::Result<bool
 pub async fn create_wallet(
 	datadir: &Path,
 	user_agent: &str,
-	opts: CreateOpts,
+	mut opts: CreateOpts,
 ) -> anyhow::Result<()> {
 	debug!("Creating wallet in {}", datadir.display());
+	ensure!(opts.mnemonic.is_none() || opts.mnemonic_file.is_none(),
+		"choose either --mnemonic or --mnemonic-file");
+	if let Some(path) = opts.mnemonic_file.take() {
+		// Read and validate before a --force cleanup could remove any wallet data.
+		let words = tokio::fs::read_to_string(path).await.context("failed to read mnemonic file")?;
+		opts.mnemonic = Some(words.trim().parse().context("invalid mnemonic file")?);
+	}
 
 	let net = match (opts.mainnet, opts.signet, opts.regtest, opts.mutinynet) {
 		(true,  false, false, false) => BarkNetwork::Mainnet,
@@ -504,6 +515,8 @@ async fn try_create_wallet(
 			lock_manager: Some(lock_manager),
 			create_if_not_exists: true,
 			create_without_server: opts.force,
+			fallback_spk: Some(onchain.fallback_script()),
+			onchain: Some(Arc::new(tokio::sync::RwLock::new(onchain))),
 			run_daemon: false,
 			..Default::default()
 		},
@@ -576,6 +589,7 @@ pub async fn open_wallet(datadir: &Path, user_agent: &str) -> anyhow::Result<Opt
 			persister: Some(db),
 			lock_manager: Some(lock_manager),
 			onchain: Some(onchain.clone()),
+			fallback_spk: Some(onchain.read().await.fallback_script()),
 			run_daemon: false,
 			..Default::default()
 		},
@@ -608,9 +622,24 @@ mod test {
 			signet: true,
 			mutinynet: false,
 			mnemonic: None,
+			mnemonic_file: None,
 			birthday_height: None,
 			config: ConfigOpts::default(),
 		}
+	}
+
+	#[tokio::test]
+	async fn unreadable_recovery_file_preserves_existing_wallet_before_force_cleanup() {
+		let dir = tmp_dir();
+		let existing = dir.join("existing-wallet-data");
+		fs::write(&existing, b"preserve existing wallet").unwrap();
+		let mut opts = failing_create_opts();
+		opts.force = true;
+		opts.mnemonic_file = Some(dir.join("missing-mnemonic"));
+		let error = create_wallet(&dir, "test", opts).await.unwrap_err();
+		assert!(error.to_string().contains("read mnemonic file"));
+		assert_eq!(fs::read(&existing).unwrap(), b"preserve existing wallet");
+		fs::remove_dir_all(dir).unwrap();
 	}
 
 	/// --gap-limit is config, not a one-shot: it must land in config.toml so

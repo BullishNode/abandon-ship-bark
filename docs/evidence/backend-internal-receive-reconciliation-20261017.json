@@ -1,0 +1,106 @@
+{
+  "scope": "Durable source-specific internal receive reconciliation and typed deferred-reader progress; normal-flow qualification only",
+  "source": {
+    "build_head": "751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
+    "dirty": true,
+    "source_manifest_sha256": "f70bdd0dc7f46576b8b688a8b45e61779afb2831afeec44f2dcd6c8775099f5b",
+    "patch_sha256": "932dd6c6a232f9d0cb034f93bed2409dd23b386d397713f39280c8811b240d09",
+    "changed_file_sha256": {
+      "server/src/database/expiry_lightning.rs": "5eadc1562006545d130ee113b49ead0b75c6bf86aa09ee62652a575fe85745e5",
+      "server/src/ln/mod.rs": "e54d3010c94db288b4477da980268f043cfa09c18567868e3046fd7f8ee1bb2e",
+      "server/src/ln/node_manager.rs": "06aafa0b1641e7a8e294896876d7a3c622bce4386aad87e1fbaa8a8853d3698d",
+      "testing/tests/bark_sdk/lightning_receive_binding.rs": "3149db23a63daaa151aace6a0494fc7c3c8513f05649e6761a8d6da2a8f3141e"
+    }
+  },
+  "checks": {
+    "mandatory": "PASS42.09s",
+    "units_passed": 800,
+    "units_skipped": 1,
+    "unit_seconds": 11.577,
+    "unit_run_id": "b64ad93e-3576-45cc-b88e-234ad7e04c6e",
+    "product_build": "PASS51.04s",
+    "sdk_metadata": "PASS1m26s"
+  },
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-internal-receive-v2-20261017/captaind",
+      "sha256": "196e13f2434c1910e7648396aff9d8f48e0c56a2af777625ba7704f3b4238f39",
+      "rebuilt": true
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-internal-receive-v2-20261017/watchmand",
+      "sha256": "8a81949af80ac290c2f81d06e803bf6720232f074985bc48821e2fa644d4812f",
+      "rebuilt": true
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-internal-receive-v2-20261017/native-bark-sdk",
+      "sha256": "7f822f0d40cdc2de30e32e7fa557d5ac544d2c2d70e68ef61d85b95adcdb3006",
+      "rebuilt": true
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/bark",
+      "sha256": "7a240c143bb103b67c360a75316034211d6212947e0b65571ceaebe19fc06ba4",
+      "rebuilt": false,
+      "origin": "prior c60c BIP84+embeddedweb candidate"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/barkd",
+      "sha256": "570ecf6cbbdc441b1262e68ee84035718ac9f72a5f881038b9ca51812a342218",
+      "rebuilt": false,
+      "origin": "prior c60c BIP84+embeddedweb candidate"
+    }
+  },
+  "immutable_metadata_sha256": "c91f32c252653eab2c964afd1d7836779acb4c0b3326ba84ffab057db5ae63d6",
+  "normal_native": {
+    "status": "PASS",
+    "run_id": "f464ce5c-fc48-43c6-a716-e81f7af160dc",
+    "tests_passed": 2,
+    "tests_skipped": 75,
+    "seconds": 41.063,
+    "tests": [
+      {
+        "name": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+        "status": "PASS",
+        "seconds": 22.67,
+        "observed": [
+          "Actual external Lightning payment and normal claim complete",
+          "Different registered provider and recipient; signed receipt uses intended recipient key",
+          "Actual source Fulfilled and subscription Settled; immutable binding materialized against actual output",
+          "Completed action retry does not add another binding"
+        ]
+      },
+      {
+        "name": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+        "status": "PASS",
+        "seconds": 18.391,
+        "observed": [
+          "Actual intra-Ark payment and receive claim complete without external CLN parts",
+          "Source-specific internal funding link and completed attempt are durable",
+          "Actual receive subscription Settled with nonempty materialized bindings",
+          "Repeated maintenance returns no updates and preserves subscription updated_at",
+          "Recipient has actual 50000 sat spendable receipt"
+        ]
+      }
+    ],
+    "source_head": "751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
+    "approved_working_patch_sha256": "932dd6c6a232f9d0cb034f93bed2409dd23b386d397713f39280c8811b240d09",
+    "source_manifest_sha256": "f70bdd0dc7f46576b8b688a8b45e61779afb2831afeec44f2dcd6c8775099f5b",
+    "log_sha256": "988e91b8eb3009d99da75bb0943c25c7efd8ebe0a7e1039ddece93dc8c1678eb",
+    "limits": [
+      "Normal-flow proof only; no forced incorrect-payout or fault reproduction",
+      "Permanently absent caller before own receive-claim materialization remains an open autonomous-recovery gap",
+      "Coarse Succeeded or shared preimage alone never establishes economic discharge",
+      "No live deployment; old explicitly hashed CLI reused; Nix derivation not rebuilt",
+      "Limit128 bounds updates only and is not a measured SQL cost/throughput claim"
+    ]
+  },
+  "limitations": [
+    "No live deployment",
+    "No forced incorrect-payout reproduction",
+    "Normal cases will not prove absent pre-materialization caller recovery; that remains open",
+    "Nix derivation not rebuilt in this gate",
+    "Bound128 limits updates/locks, not historical query scan cost.",
+    "Actual missed-status repair and deferred-reader progress are not separately fault-injected native proofs.",
+    "Public Signet native financial profile retains prior c60c products and is not upgraded by this source publication."
+  ]
+}

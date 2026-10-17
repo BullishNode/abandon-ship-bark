@@ -1,0 +1,4 @@
+ Nextest run ID 09ff9f23-e14f-4860-b005-70fdceecfcc8 with nextest profile: default
+    Starting 1 test across 21 binaries (800 tests skipped)
+        PASS [  15.454s] (1/1) ark-lib arkoor::test::isolate_dust_fuzz
+     Summary [  15.455s] 1 test run: 1 passed, 800 skipped

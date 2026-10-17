@@ -28,6 +28,9 @@ use crate::vtxo::{VtxoState, VtxoStateKind};
 /// as what a user owns, or use [Balance::summary] for exactly those numbers.
 #[derive(Debug, Clone)]
 pub struct Balance {
+	/// Owned coins awaiting an authoritative settlement result. They cannot
+	/// be spent or promised refreshable while that result is unknown.
+	pub awaiting_settlement: Amount,
 	/// Sats in VTXOs that can be spent right now, in an arkoor or lightning
 	/// payment, an offboard or a round.
 	pub spendable: Amount,
@@ -76,10 +79,11 @@ impl Balance {
 		self.spendable + self.needs_refresh + self.pending()
 	}
 
-	/// The sats held by operations in progress: everything except
+	/// The sats awaiting settlement or held by operations: everything except
 	/// [Balance::spendable] and [Balance::needs_refresh].
 	pub fn pending(&self) -> Amount {
-		self.pending_in_round
+		self.awaiting_settlement
+			+ self.pending_in_round
 			+ self.pending_board
 			+ self.pending_arkoor_send
 			+ self.pending_lightning_send
@@ -88,7 +92,7 @@ impl Balance {
 			+ self.pending_exit
 	}
 
-	/// Whether any sats are held by an operation in progress.
+	/// Whether any sats await settlement or an operation in progress.
 	pub fn has_pending(&self) -> bool {
 		self.pending() > Amount::ZERO
 	}
@@ -96,6 +100,7 @@ impl Balance {
 	/// The numbers to show a user, without the breakdown.
 	pub fn summary(&self) -> BalanceSummary {
 		BalanceSummary {
+			awaiting_settlement: self.awaiting_settlement,
 			spendable: self.spendable,
 			needs_refresh: self.needs_refresh,
 			pending: self.pending(),
@@ -109,6 +114,8 @@ impl Balance {
 /// and what the user owns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BalanceSummary {
+	/// The awaiting-settlement subset of pending, not an additional total.
+	pub awaiting_settlement: Amount,
 	/// Sats that can be spent right now. See [Balance::spendable].
 	pub spendable: Amount,
 	/// Sats that need a refresh before they can be sent again. See
@@ -143,12 +150,18 @@ impl Wallet {
 			},
 		};
 
-		// Every VTXO the balance can count, read once.
+		let fallback = self.inner.db.get_fallback_snapshot().await?;
+		let decided = fallback.entitlements.values().map(|receipt| receipt.vtxo_id).collect::<HashSet<_>>();
+
+		// Every VTXO the balance can count, read once. Permanent decided coins
+		// are represented by their payout/claim receipts, not available Ark value.
 		let vtxos = self.inner.db.get_vtxos_by_state(
 			&[VtxoStateKind::Spendable, VtxoStateKind::Locked, VtxoStateKind::Exited],
-		).await?.into_iter().map(|v| (v.id(), v)).collect::<HashMap<_, _>>();
+		).await?.into_iter().filter(|v| !decided.contains(&v.id()))
+			.map(|v| (v.id(), v)).collect::<HashMap<_, _>>();
 
 		let mut balance = Balance {
+			awaiting_settlement: Amount::ZERO,
 			spendable: Amount::ZERO,
 			needs_refresh: Amount::ZERO,
 			pending_in_round: Amount::ZERO,
@@ -163,7 +176,9 @@ impl Wallet {
 		for vtxo in vtxos.values().filter(|v| v.state == VtxoState::Spendable) {
 			// Without a tip only the depth can be judged; a tip of zero
 			// expires nothing.
-			if vtxo.needs_refresh(tip.unwrap_or(BlockHeight::ZERO), max_exit_depth) {
+			if fallback.awaiting_settlement.contains(&vtxo.id()) {
+				balance.awaiting_settlement += vtxo.amount();
+			} else if vtxo.needs_refresh(tip.unwrap_or(BlockHeight::ZERO), max_exit_depth) {
 				balance.needs_refresh += vtxo.amount();
 			} else {
 				balance.spendable += vtxo.amount();
@@ -202,11 +217,23 @@ impl Wallet {
 			}
 		}
 
+		// Validated recovered bodies without an action holder remain owned,
+		// unavailable value. A preparatory offboard's None lock is not ours.
+		let claimed = self.operation_input_ids().await?;
+		for id in &fallback.quarantined_vtxos {
+			let Some(vtxo) = vtxos.get(id) else { continue; };
+			if vtxo.state == (VtxoState::Locked { holder: None }) && !claimed.contains(id)
+				&& counted.insert(*id) {
+				balance.awaiting_settlement += vtxo.amount();
+			}
+		}
+
 		// Read the exits from the database rather than the exit manager, whose
 		// lock may be held for a while by an exit in progress.
 		let exits = self.inner.db
 			.get_exit_vtxo_entries_with_states(ExitStateKind::LIVE_STATES).await?;
 		for exit in exits {
+			if decided.contains(&exit.vtxo_id) { continue; }
 			if !exit.state.warrants_exited_vtxo() {
 				continue;
 			}

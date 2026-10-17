@@ -348,6 +348,31 @@ impl DaemonProcess {
 		}
 	}
 
+	/// Safety scheduling is independent from server sync and from advancing
+	/// existing exits. An unavailable server cannot gate the act-by check.
+	async fn run_exit_protection_process(&self) {
+		loop {
+			let Some(wallet) = self.wallet() else { break };
+			futures::select! {
+				result = wallet.protect_expiring_vtxos().fuse() => {
+					match result {
+						Ok(result) if !result.blocked.is_empty() => warn!(
+							"Exit protection retains {} coin(s) in binding actions", result.blocked.len(),
+						),
+						Ok(_) => {},
+						Err(error) => warn!("Exit protection needs attention: {:#}", error),
+					}
+				},
+				_ = self.shutdown.cancelled().fuse() => break,
+			}
+			drop(wallet);
+			futures::select! {
+				_ = bark_runtime::sleep(self.sync_interval).fuse() => {},
+				_ = self.shutdown.cancelled().fuse() => break,
+			}
+		}
+	}
+
 	/// Periodically progress unilateral exits.
 	///
 	/// This deliberately runs in its own loop rather than as part of
@@ -407,7 +432,9 @@ impl DaemonProcess {
 			info!("Starting daemon for wallet {}", wallet.fingerprint());
 		}
 
-		self.run_startup_tasks().await;
+		if bark_runtime::timeout(self.sync_interval, self.run_startup_tasks()).await.is_err() {
+			warn!("Daemon startup sync exceeded its interval; starting independent protection tasks");
+		}
 		trace!("Daemon startup tasks complete, starting background processes");
 
 		if self.manual_sync {
@@ -427,6 +454,7 @@ impl DaemonProcess {
 				let p3 = Arc::clone(&proc);
 				let p4 = Arc::clone(&proc);
 				let p5 = Arc::clone(&proc);
+				let p6 = Arc::clone(&proc);
 				let _ = futures::join!(
 					supervised("server-connection", move || {
 						let p = Arc::clone(&p1);
@@ -444,6 +472,10 @@ impl DaemonProcess {
 						let p = Arc::clone(&p4);
 						async move { p.run_exit_progress_process().await }
 					}),
+					supervised("exit-protection", move || {
+						let p = Arc::clone(&p6);
+						async move { p.run_exit_protection_process().await }
+					}),
 					supervised("mailbox", move || {
 						let p = Arc::clone(&p5);
 						async move { p.run_mailbox_messages_process().await }
@@ -457,6 +489,7 @@ impl DaemonProcess {
 					self.run_round_events_process(),
 					self.run_sync_processes(),
 					self.run_exit_progress_process(),
+					self.run_exit_protection_process(),
 					self.run_mailbox_messages_process(),
 				);
 			}

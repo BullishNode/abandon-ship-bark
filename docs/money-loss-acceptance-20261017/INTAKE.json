@@ -1,0 +1,110 @@
+{
+  "created_at": "2026-10-17T18:19:37.309177+00:00",
+  "source_directory": "/home/francis/bark-integration-2026-10-01/money-loss-research-2026-10-17",
+  "research_primary_source": "8fb729a2ff5c8c83d497dcbc6b2b3abd1a0bd9dc",
+  "research_counts": {
+    "Historical regression risk": 4,
+    "Hypothesis requiring validation": 134,
+    "Source-supported risk": 58,
+    "Observed failure": 4
+  },
+  "scenario_count": 200,
+  "lightning_scenarios": 81,
+  "priorities": {
+    "P1": 157,
+    "P0": 39,
+    "P2": 4
+  },
+  "acceptance_states": {
+    "UNASSESSED": 200
+  },
+  "accepted_full_scenario_passes": 0,
+  "pass_count_scope": "New intake has no evidence mapping yet; existing test results remain valid in their own receipts.",
+  "files": [
+    {
+      "path": "research/README.md",
+      "bytes": 20397,
+      "sha256": "77d8f4736924a303f5a5f52197b809c98174f830a1599498746d8f1bc3981cd0"
+    },
+    {
+      "path": "research/MONEY_LOSS_SCENARIOS.md",
+      "bytes": 662172,
+      "sha256": "344eccacd76f8e7e1f63ba00db6baf14fd96c9770c41803da91b57045fcf5ff3"
+    },
+    {
+      "path": "research/MONEY_LOSS_SCENARIOS.csv",
+      "bytes": 92251,
+      "sha256": "0a819a6e5631eb6f3e9c154cf1733dc89254cddd5aa44185558b6ed7f5bf6885"
+    },
+    {
+      "path": "research/PRIORITIES.md",
+      "bytes": 16175,
+      "sha256": "bd80f8f6de14c0037266e983498883326b576bbde1cca2932c613f0d660cda41"
+    },
+    {
+      "path": "research/counts.json",
+      "bytes": 263,
+      "sha256": "e62440b74048fe59a3abd1a4f31cb9f15d09b74a7ffe54cc62c5918649b98f7a"
+    },
+    {
+      "path": "research/research-document-validation.json",
+      "bytes": 1250,
+      "sha256": "ec3144850dcfc0aac2f54367fe7938022a69a8b4bac5967429a2cee2c358317e"
+    },
+    {
+      "path": "research/source-evidence.json",
+      "bytes": 26428,
+      "sha256": "40c382e5ae076d9b9838d756877bcc7af047c732d2cc357bcf96cbe8d4608fb2"
+    },
+    {
+      "path": "research/test-source-inventory.json",
+      "bytes": 30600,
+      "sha256": "88b118e1f625c9cf9a900f6e6b38953506fbe70c163265aef5b12c16b2bef9d1"
+    },
+    {
+      "path": "research/document-evidence-index.json",
+      "bytes": 9394,
+      "sha256": "da56f42947c607e7fb1b0f8978e14e3ed569f73079068a64d30b91395dde17e4"
+    },
+    {
+      "path": "research/artifact-verification.json",
+      "bytes": 9651,
+      "sha256": "73dd9f3de7e5a90b711cbd834f01341089d30e339ff736b0d8debd5a85d24e43"
+    },
+    {
+      "path": "research/git-inventory.json",
+      "bytes": 138475,
+      "sha256": "1f6f7696375c576afb6c256147b8cf0ea140ae204e7c2e46cee96fea0840d77d"
+    },
+    {
+      "path": "research/scope-closeout.json",
+      "bytes": 8536,
+      "sha256": "8aa841e8430d6f74a4fd46d82901f1bde9ed7583135e7c088c976dac5d80a495"
+    },
+    {
+      "path": "research/journal-inventory.json",
+      "bytes": 1914,
+      "sha256": "5333bf0bae1d0aa1eba6bb8f980d793f46c454a6f946361d05e2945e7c40b721"
+    },
+    {
+      "path": "research/LIGHTNING_REVIEW.md",
+      "bytes": 24765,
+      "sha256": "c2bc38341022d524cfe5ad090a25b4b0175436fc724ff5f35e78032752beb322"
+    },
+    {
+      "path": "research/PAYOUT_REVIEW.md",
+      "bytes": 33464,
+      "sha256": "2ad0de551247290e2d6033f921d4e4b264627378f26a623a83b970df152e83be"
+    },
+    {
+      "path": "research/NOAH_EVIDENCE_REVIEW.md",
+      "bytes": 40498,
+      "sha256": "c86be90a7760e48d88aa3a482811611fa8eb7e2749e41a16fa9150a750076419"
+    },
+    {
+      "path": "research/catalogue_data.json",
+      "bytes": 280969,
+      "sha256": "8633330602d3d8d848b21115c36f080a7edc5948187e12f1a1ab004119625267"
+    }
+  ]
+}

@@ -215,6 +215,53 @@ impl<'t> Tx<'t> {
 		}
 	}
 
+	/// Fair bounded recovery polling for actually dispatched, expired sources.
+	/// Failed local status alone never resolves these obligations.
+	pub async fn unproven_expiry_lightning_dispatches(&self, node: LightningNodeId, limit: i64) -> anyhow::Result<Vec<LightningPaymentAttempt>> {
+		ensure!((1..=128).contains(&limit), "invalid expiry Lightning polling limit");
+		let rows = self.query("SELECT a.id,a.lightning_node_id,a.payment_hash,a.amount_msat,a.final_amount_msat, \
+			a.status,a.error,a.block_height,a.user_fee_sat,a.retry_for_secs,a.user_agent, \
+			a.lightning_htlc_subscription_id,a.created_at,a.updated_at \
+			FROM lightning_payment_attempt a JOIN expiry_lightning_dispatch d ON d.id=a.id \
+			WHERE a.lightning_node_id=$1 AND a.status IN ('failed','succeeded') AND a.lightning_htlc_subscription_id IS NULL \
+			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_terminal_failure f WHERE f.id=a.id) \
+			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_external_success s WHERE s.id=a.id) \
+			AND EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l JOIN vtxo v ON v.vtxo_id=l.vtxo_id \
+				WHERE l.lightning_payment_attempt_id=a.id AND v.expiry<=COALESCE((SELECT MAX(height) FROM captaind_block),0) \
+				AND NOT EXISTS(SELECT 1 FROM expiry_decided_coin e WHERE e.vtxo_id=v.vtxo_id)) \
+			ORDER BY d.checked_at NULLS FIRST,d.id LIMIT $2", &[&node,&limit]).await?;
+		let attempts = rows.into_iter().map(TryInto::try_into).collect::<anyhow::Result<Vec<LightningPaymentAttempt>>>()?;
+		let ids = attempts.iter().map(|attempt| attempt.id).collect::<Vec<_>>();
+		self.execute("UPDATE expiry_lightning_dispatch SET checked_at=NOW() WHERE id=ANY($1)", &[&ids]).await?;
+		Ok(attempts)
+	}
+
+	/// Recheck a queued external dispatch at its actual execution boundary.
+	/// Call under the payment hash guard. Coin and WAL locks are short-lived;
+	/// no database transaction is held while the Lightning RPC runs.
+	pub async fn admit_lightning_dispatch(&self, attempt: &LightningPaymentAttempt) -> anyhow::Result<bool> {
+		let current = self.get_open_lightning_payment_attempt_by_payment_hash(attempt.payment_hash).await?;
+		if current.as_ref().is_none_or(|current| current.id != attempt.id) { return Ok(false); }
+		let ids = self.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+			WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id", &[&attempt.id]).await?
+			.into_iter().map(|row| row.get::<_, &str>("vtxo_id").parse::<VtxoId>())
+			.collect::<Result<Vec<_>, _>>()?;
+		ensure!(!ids.is_empty(), "external Lightning attempt has no committed source coins");
+		super::expiry_guard::guard_new_lightning_inputs(self, &ids).await?;
+		if self.query_opt("SELECT id FROM lightning_payment_attempt WHERE id=$1 \
+			AND status NOT IN ('failed','succeeded') FOR UPDATE", &[&attempt.id]).await?.is_none() {
+			return Ok(false);
+		}
+		self.lock_htlc_settlements().await?;
+		self.ensure_not_settled(attempt.payment_hash).await?;
+		// The process-local payment guard is not a cross-instance fence.
+		// A committed claim prevents a second dispatcher, including after a
+		// restart, from issuing this same attempt again. It is deliberately
+		// not evidence that the remote node completed or failed a payment.
+		Ok(self.query_opt("INSERT INTO expiry_lightning_dispatch(id) VALUES($1) \
+			ON CONFLICT(id) DO NOTHING RETURNING id", &[&attempt.id]).await?.is_some())
+	}
+
 	/// Stores data after lightning payment start.
 	///
 	/// Creates a new payment attempt for the given invoice and links the
@@ -263,6 +310,10 @@ impl<'t> Tx<'t> {
 			bail!("open payment attempt already exists for payment hash {}", payment_hash);
 		}
 
+		// This is a new attempt, not an in-flight retry. Serialize its admission
+		// with expiry allocation before the Lightning node can receive the task.
+		super::expiry_guard::guard_new_lightning_inputs(self, htlc_vtxo_ids).await?;
+
 		let stmt = self.prepare("
 			INSERT INTO lightning_payment_attempt (
 				lightning_node_id,
@@ -298,6 +349,7 @@ impl<'t> Tx<'t> {
 
 		let payment_attempt_id: i64 = row.get("id");
 		let updated_at: DateTime<Local> = row.get("updated_at");
+		self.execute("INSERT INTO expiry_lightning_queued_attempt(id) VALUES($1)", &[&payment_attempt_id]).await?;
 
 		if !htlc_vtxo_ids.is_empty() {
 			let link_stmt = self.prepare("
@@ -859,11 +911,11 @@ impl<'t> Tx<'t> {
 	///
 	/// Returns the ids of linked vtxos left untouched because their
 	/// `spend_state` was no longer `spendable` at update time (e.g. already
-	/// `ln-spent` from a prior settlement of the same payment hash). An
+	/// `ln-spent` from a prior reconciliation of this attempt). An
 	/// empty vec means every linked vtxo transitioned.
 	pub async fn mark_htlc_send_vtxos_ln_spent(
 		&self,
-		payment_hash: PaymentHash,
+		attempt_id: i64,
 	) -> anyhow::Result<Vec<VtxoId>> {
 		let stmt = self.prepare("
 			WITH found AS (
@@ -871,7 +923,7 @@ impl<'t> Tx<'t> {
 				FROM vtxo
 				JOIN lightning_payment_attempt_htlc_vtxo link ON link.vtxo_id = vtxo.vtxo_id
 				JOIN lightning_payment_attempt lpa ON lpa.id = link.lightning_payment_attempt_id
-				WHERE lpa.payment_hash = $1
+				WHERE lpa.id = $1
 			),
 			updated AS (
 				UPDATE vtxo
@@ -884,7 +936,7 @@ impl<'t> Tx<'t> {
 			WHERE vtxo_id NOT IN (SELECT vtxo_id FROM updated)
 		").await?;
 
-		let rows = self.query(&stmt, &[&payment_hash.to_string()]).await
+		let rows = self.query(&stmt, &[&attempt_id]).await
 			.context("failed to mark HTLC-send vtxos as ln-spent")?;
 
 		rows.iter()
@@ -933,6 +985,14 @@ impl<'t> Tx<'t> {
 	/// Call this INSIDE the write transaction that releases the funds so a
 	/// settlement racing between an earlier read-check and the write cannot
 	/// slip through.
+	/// Hold after coin locks through any fund-releasing decision so a preimage
+	/// cannot be inserted between its final check and the decision commit.
+	pub async fn lock_htlc_settlements(&self) -> anyhow::Result<()> {
+		self.execute("SELECT pg_advisory_xact_lock_shared($1)",
+			&[&(super::AdvisoryLock::HtlcSettlementWrite as i64)]).await?;
+		Ok(())
+	}
+
 	pub async fn ensure_not_settled(
 		&self,
 		payment_hash: PaymentHash,

@@ -1,0 +1,12 @@
+{
+  "binary": "ark-lib",
+  "test": "arkoor::test::isolate_dust_fuzz",
+  "reason": "slow; run on demand with --run-ignored all",
+  "classification": "Pre-existing explicit #[ignore]; not a failure or discovered runtime skip",
+  "current_source": "lib/src/arkoor/mod.rs:2798",
+  "present_in_prior_c60c_source_capture": true,
+  "evidence": "Only active #[ignore] outside ark-testing in frozen trackedRustsource; justunit excludesark-testing and defaultnextest skipsignored tests. Logsummary records exactly1skip. Commented-out noncompiling bark-common example is not a test.",
+  "run_id": "825f6b81-f598-456b-ab42-bb844161a470",
+  "result": "800PASS,1explicitignored",
+  "not_run": true
+}

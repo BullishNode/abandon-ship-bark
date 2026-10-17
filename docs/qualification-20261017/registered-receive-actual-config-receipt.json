@@ -1,0 +1,38 @@
+{
+  "at": "2026-10-17T16:43:06.855166+00:00",
+  "case_run_id": "ffa4d760-e441-4ab5-991e-251bdb9e42b9",
+  "scope": "Read-only numeric extraction from ACTUAL retained runtimeconfigs; raw configs remain private and were not copied into publicreport",
+  "raw_server_config_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch13-registered-receive-fallback/test-data/server/qualification_registered_receive_fallback/server/config.toml",
+  "raw_server_config_sha256": "9bcbfe319ef5c00f325e29f71f8a6239a3155988b70110e0c41f0c1e786fc2b0",
+  "raw_provider_config_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch13-registered-receive-fallback/test-data/server/qualification_registered_receive_fallback/provider/config.toml",
+  "raw_provider_config_sha256": "4234a12075c0fb034f83de202e171a240fe0b19c7e13db8f25b75fd42e188f31",
+  "server_values": {
+    "vtxo_lifetime": 32,
+    "vtxo_exit_delta": 12,
+    "htlc_expiry_delta": 6,
+    "htlc_send_expiry_delta": 258,
+    "max_user_invoice_cltv_delta": 58,
+    "ln_receive_anti_dos_required": false
+  },
+  "pool_values": {
+    "vtxo_lifetime": 32,
+    "vtxo_pre_expiry": 12,
+    "vtxo_targets": [
+      "0.00100000 BTC:2"
+    ]
+  },
+  "provider_values": {
+    "vtxo_exit_margin": 12,
+    "htlc_recv_claim_delta": 18
+  },
+  "immutable_default_source": {
+    "source_manifest_sha256": "f296180173fcce528f9aadca937fcd7bf6163666c0892a1ee7a98addce477a1a",
+    "source_archive": "/home/francis/.cache/abandon-fresh/testing-track-20261017/runtime-testing-direct-receive-v1/source.tar.gz",
+    "member": "testing/src/context/mod.rs",
+    "vtxo_exit_delta_line": 426,
+    "vtxo_pre_expiry_line": 463,
+    "htlc_expiry_delta_line": 504
+  },
+  "test_cfg_overrides_only": "ordinarylifetime32,poollifetime32,targets2x100k,existingnativeantiDOSfalse; exit12/poolpre12/HTLC6 retainnative defaults",
+  "scope_limit": "Nativezero-receivefee proof, not publicSignet110fee/profile qualification"
+}

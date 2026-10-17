@@ -1,0 +1,170 @@
+[
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/abandon-ship-final-plan-2026-10-16.md",
+    "bytes": 42829,
+    "sha256": "d32c2e67e8ae7b54da6b7edf8cfe34e5ce1d7f935ecbd1f396dc87968db0caa9",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/abandon-ship-client-plan-2026-10-16.md",
+    "bytes": 14197,
+    "sha256": "f7e4d640dc3f3f1c8a0e24dad92d5acd1ed6b696e01551784727077a17ea7a54",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/simulation-rework-plan-2026-10-16.txt",
+    "bytes": 26408,
+    "sha256": "4d6a2d8077a1ee3639a5be16acb2a38b22676e3341537ebde943a08730e9d627",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-backend-dispatch-terminal-handoff-20261016.md",
+    "bytes": 6842,
+    "sha256": "aaa4865d131cab7a49f3848fe8822a6043aa638f08f96a6baf87fca23111ac24",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-backend-operation-runtime-handoff-20261017.md",
+    "bytes": 7056,
+    "sha256": "6f125630dda0d1b06f6b452ca5d894d47da3a98a59e190207175c3deb43a988c",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/client-binding-chain-recovery-handoff-20261017.md",
+    "bytes": 6010,
+    "sha256": "0398a2529778fba7345ac98c6b61da35fe48da2c4db7572bb45bb7e1e86890bb",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/client-lightning-before-wire-handoff-20261017.md",
+    "bytes": 7425,
+    "sha256": "1d3f777059a18a277a944bb02008b6d9747faa5c2144b8b085bcc280fb6abd8f",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/client-lightning-receive-fallback-handoff-20261017.md",
+    "bytes": 5525,
+    "sha256": "dc2d956a1fbcca4d0b9c417a4d97c34d22fa435eb899156a96429b8730a120b0",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-client-adoption-handoff-20261017.md",
+    "bytes": 10652,
+    "sha256": "9973684b90338949fa1d406f6b81500b304d80632e626ef10d698bd9f720eb41",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/FINDINGS.md",
+    "bytes": 16619,
+    "sha256": "c37803da70d33c2112f35bf7f9f5cd981735bf3d8ef340fe9287d3fce9f839e1",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/evidence-review.md",
+    "bytes": 8884,
+    "sha256": "6749d66c6280b3eabf9f39723f66ff8bfcb34a3d6365040575ca2574cafdb127",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/STATUS.json",
+    "bytes": 22073,
+    "sha256": "0555cdb218ad06e4ce180036c98db55f1ebad9859d666a75beca9849f17e7b22",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/SIXTH-CHECKPOINT.md",
+    "bytes": 8325,
+    "sha256": "4d2ae102088237f7ba381552226fbf4e1436614c4fc005c0a0a3ba91f237ce75",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch06-corrected-reorg-fee-conflict-split-receipt.json",
+    "bytes": 4697,
+    "sha256": "956a1e37b8ad4ab9859df522ef0492651d534264defbe6292f4c06e9b20af539",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch09-native-lightning-terminal-sources-receipt.json",
+    "bytes": 5336,
+    "sha256": "dc130a0b2fcf735254d18d010336ac2b88195d66bbff4317138c2b2a8afded5b",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch09-native-lightning-terminal-sources-summary.log",
+    "bytes": 836,
+    "sha256": "1b1eb473b22038b9ba2920eb54b44d8ad2b5be3bc7905e1b0278bf5e8874aa85",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch09-original-dispatch-reconciliation.json",
+    "bytes": 2229,
+    "sha256": "8d455ec57d5aff74d6fb2c7bc66e1c604469407a5701afffebdf5ecc55cc4f91",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/external-backend-adapter-positive-receipt.json",
+    "bytes": 2758,
+    "sha256": "395bba23311ee6ad484e76303c67f6ba91da4fb80574fbde43145f203a382fd1",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch12-automatic-multilevel-split-receipt.json",
+    "bytes": 3676,
+    "sha256": "25c776bc68b9ab3f7f0c81151ff8deefa61f5c2d105b0541ff208c555e88bff5",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch14-v2-registered-receive-fallback-receipt.json",
+    "bytes": 5841,
+    "sha256": "c3f96faa1bdb03266fbe9e087694137abe915f83f3101125c4c522503a0abb05",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch15-v2-failed-send-refund-receipt.json",
+    "bytes": 6448,
+    "sha256": "d7c63cd66eee4da6faba7ce58b4478d1c1811be68657665c579c496c90bc3dfc",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch16-corrected-multilevel-split-receipt.json",
+    "bytes": 7506,
+    "sha256": "312219c8484aa6275708acd3929f1f619da1c042a5da18a5ee7c66489ed71460",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch16-corrected-multilevel-split-financial-summary.json",
+    "bytes": 5788,
+    "sha256": "19afc44c002a0c77da3e8ebc44e7cffd89aac223fa34977af2294dc3f39b0029",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch16-corrected-multilevel-split-confirmed-payouts.csv",
+    "bytes": 47803,
+    "sha256": "e5679dec74b40437694bec66a1350e366b8d1a4acf5aac3e4ef2641aeb78180d",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-simulator-signet-rework/docs/evidence/public-signet-s03-blocker-20261017.json",
+    "bytes": 3230,
+    "sha256": "44b5760b6c37c64cdf0d385d68999d03656023304a1bb679e8d7f20765cbe047",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/bark-simulator-signet-rework/docs/evidence/noah-actual-invoice-rejection-20261017.json",
+    "bytes": 3480,
+    "sha256": "dcc4410247d48589b0ba1bd6f7f13c0725d649f663fccaad25b5373110544ab6",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/.cache/abandon-fresh/backend-internal-receive-normal-v2-20261017.log",
+    "bytes": 1180,
+    "sha256": "988e91b8eb3009d99da75bb0943c25c7efd8ebe0a7e1039ddece93dc8c1678eb",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  },
+  {
+    "path": "/home/francis/abandon-ship-fresh-integration/docs/evidence/owner-scan-atomic-pass-20261017.json",
+    "bytes": 3678,
+    "sha256": "4dd5024fc5880323dbbc055f4a35a768a8c1fa11ff40aef710c0f4527bdc2472",
+    "scope": "Selected plan, handoff, retained receipt or bounded raw log; read scope described in README."
+  }
+]

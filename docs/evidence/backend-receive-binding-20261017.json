@@ -1,0 +1,85 @@
+{
+  "candidate_head": "6950be5a6855625d76d04e33c86a6b030cd9406e",
+  "source_manifest_sha256": "c60c5cd4c9d8cc0fbeaa8f8f6a71ba4102a46075cd2d9515fb505d9ba2dc882b",
+  "backend_files": {
+    "server/src/arkoor.rs": "32056594c0db2a387b761bf140240f15c647d716200e35a265aa458350cf7fbc",
+    "server/src/database/expiry_decision.rs": "ffd9db09f222c73a2f6944bb5b85a9915ee58dca60ace67e14e21628faa22629",
+    "server/src/database/expiry_ownership.rs": "e1723bb6efc0db4f18e5438f6882fd5e5d98bc58b470baa1b48f65e51c49e68a",
+    "server/src/database/expiry_receive.rs": "c4431df885cd4756a64dce01875437151e0ff1d173f37c68920c257b45c8d195",
+    "server/src/database/fork_migrations/V11__lightning_receive_claim.sql": "291ab7471024cba148a841aa008534b4a76b94e77c7eba5b4f1ce3e5cf7c6f4c",
+    "server/src/database/mod.rs": "002b8c81a0b791fed25d814a0dc9e3dcce7086fd66b382be21e73c09d69593ba",
+    "server/src/ln/mod.rs": "33df5536d14889f71f50c490d400ee0f0a05f597cda125da48a4e8bc84df6d87",
+    "testing/tests/bark_sdk/lightning_receive_binding.rs": "3711c68c33be31849dd9b7bf72c774ac980ee6d12f9285b5739d86b421841d0e",
+    "testing/tests/bark_sdk/mod.rs": "9037831d30bb9d05551097ab548d9d9c7e24f29705aa160d3ef8dd19705e8796"
+  },
+  "publication_patch_sha256": "2421d2cfa2187ddc1b5c3caed7ba22760f731c159f25f841d74fc34e7ba7e6bd",
+  "checks": {
+    "mandatory": "PASS39.49s",
+    "unit_run": "6d036da1-d397-462c-8bf8-eafe7a8fce41",
+    "units_passed": 798,
+    "units_skipped": 1,
+    "unit_seconds": 11.964
+  },
+  "normal_flow": {
+    "run_id": "3f604a1c-6e0c-492d-ba65-d3b7d5fadbb1",
+    "result": "PASS",
+    "tests": 1,
+    "runtime_seconds": 22.727,
+    "source_manifest_sha256": "c60c5cd4c9d8cc0fbeaa8f8f6a71ba4102a46075cd2d9515fb505d9ba2dc882b",
+    "log_sha256": "a4e67d4b9b32485da0de170865a9fa1db7976b859a853851cb88f58da1c92757",
+    "test": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+    "scope": [
+      "normal successful external payment to a distinct registered recipient",
+      "durable intent/materialized final output identity and recipient",
+      "actual same-subscription Settled plus source HTLC Fulfilled",
+      "normal delivery, signed local coins and source/output amount conservation",
+      "completed SDK action replay leaves binding count unchanged"
+    ],
+    "limits": [
+      "no interrupted receive or fallback payout proof in this case",
+      "no actual conflicting-destination DB retry proof",
+      "no intra-Ark coarse-status reconciliation proof",
+      "changed Nix derivation was not built in this gate"
+    ]
+  },
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/captaind",
+      "sha256": "592df297c9b58b22261b7487c57a4076bba72b735232707d98275f84981642a8"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/watchmand",
+      "sha256": "edf59b0b352f8aa0a5ef76e8cc306b3c591836b73181baf48b3ce46da0764bbf"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/native-bark-sdk",
+      "sha256": "e14ca0432313af170fc9e063e7afe6c37789970cad9897ed081c14489fa0b547"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/native-server",
+      "sha256": "9913a696a7754cc68f4792e09c531330cf252de380ef031aff758c0367a8104c"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/bark",
+      "sha256": "7a240c143bb103b67c360a75316034211d6212947e0b65571ceaebe19fc06ba4",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-receive-binding-v2-20261017/barkd",
+      "sha256": "570ecf6cbbdc441b1262e68ee84035718ac9f72a5f881038b9ca51812a342218",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-10ecfb9"
+    }
+  },
+  "runtime_manifest": "/fresh-cache/runtime-receive-binding-v2-20261017/manifest.json",
+  "preserved_first_candidate": "/fresh-cache/runtime-receive-binding-v1-20261017",
+  "limits": [
+    "Not deployment authorization.",
+    "No universal Lightning or internal settlement qualification.",
+    "Before-destination-request intended recipient cannot be inferred by server.",
+    "Unknown internal settlement remains pending; source-only follow-up assigned.",
+    "Nix derivation patch parsed separately by root; not built by these Cargo checks.",
+    "Normal native proof does not exercise a conflicting RPC destination retry or interrupted claim."
+  ]
+}

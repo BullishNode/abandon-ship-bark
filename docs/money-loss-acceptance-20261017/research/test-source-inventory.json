@@ -1,0 +1,983 @@
+[
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_admission.rs",
+    "sha256": "6f5ea04b93dac7dc274d64b387bc4cc606bbc10d660b594e07bc9a5c126990cd",
+    "functions": [
+      {
+        "line": 12,
+        "name": "expiry_refuses_unbounded_requested_lightning_duration"
+      },
+      {
+        "line": 53,
+        "name": "expiry_native_rpc_refusals_have_stable_reasons"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_attribution.rs",
+    "sha256": "11ac095afc2c3437f3a98979b584f903bcd6e2f2f1e75595cfbc9ec1dd20de2b",
+    "functions": [
+      {
+        "line": 11,
+        "name": "key"
+      },
+      {
+        "line": 15,
+        "name": "register"
+      },
+      {
+        "line": 24,
+        "name": "owner"
+      },
+      {
+        "line": 29,
+        "name": "expiry_attribution_batches_keys_and_recovers_late_lower_keys_after_restart"
+      },
+      {
+        "line": 54,
+        "name": "expiry_attribution_duplicate_cursors_do_not_starve_other_accounts"
+      },
+      {
+        "line": 84,
+        "name": "expiry_attribution_match_serializes_with_requeue_and_registration"
+      },
+      {
+        "line": 140,
+        "name": "expiry_attribution_prepared_work_never_advances_a_new_pending_key"
+      },
+      {
+        "line": 173,
+        "name": "expiry_attribution_wrong_mailbox_is_not_a_payee_and_registration_invalidates_no_owner"
+      },
+      {
+        "line": 219,
+        "name": "expiry_attribution_resolution_scale"
+      },
+      {
+        "line": 287,
+        "name": "expiry_attribution_registry_fence_blocks_registration_until_decision_commits"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_conflict.rs",
+    "sha256": "7b47f99a2987bfda74942e0c5c716ff2f2acc0430aab9739a78bb66cb8d1e847",
+    "functions": [
+      {
+        "line": 15,
+        "name": "expiry_actual_partial_exit_conflict_regroups_after_restart"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_dispatch.rs",
+    "sha256": "2078937b987b5434aea1550e4a9c6d9ad37b87e55d00ca66153fb62d3ecf21b0",
+    "functions": [
+      {
+        "line": 19,
+        "name": "expiry_dispatch_rechecks_registered_sources_and_closed_attempts"
+      },
+      {
+        "line": 84,
+        "name": "expiry_xpay_preserves_late_preimage_after_coarse_failure"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_hash_provenance.rs",
+    "sha256": "f51d93c02fd187dc4be727653a70da5e9d62965afaeecea7e7ceda3018f5c6b6",
+    "functions": [
+      {
+        "line": 18,
+        "name": "same_hash_sources"
+      },
+      {
+        "line": 148,
+        "name": "expiry_unused_same_hash_grant_retains_its_own_liability"
+      },
+      {
+        "line": 153,
+        "name": "expiry_unused_same_hash_grant_can_be_refunded_after_other_source_paid"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_lightning_terminal.rs",
+    "sha256": "7511a38dd772c57f753c26731df86e39824d3163642f5be30e7db282e4e612d9",
+    "functions": [
+      {
+        "line": 19,
+        "name": "failed_external_payout"
+      },
+      {
+        "line": 114,
+        "name": "expiry_actual_failed_external_send_pays_offline_owner"
+      },
+      {
+        "line": 119,
+        "name": "expiry_actual_no_part_external_send_pays_offline_owner"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_operation_races.rs",
+    "sha256": "ea363782dd0f7d9b92a90f5a3b807b17deb53bb626c09f46b0634af64a1dbdac",
+    "functions": [
+      {
+        "line": 47,
+        "name": "wait_for_query_lock"
+      },
+      {
+        "line": 59,
+        "name": "offboard_race"
+      },
+      {
+        "line": 214,
+        "name": "expiry_decision_wins_over_prepared_native_offboard"
+      },
+      {
+        "line": 219,
+        "name": "expiry_registered_native_offboard_wins_over_waiting_decision"
+      },
+      {
+        "line": 226,
+        "name": "expiry_uninitiated_grant_can_revoke_after_backing_expiry"
+      },
+      {
+        "line": 289,
+        "name": "expiry_prepared_offboard_reconciles_real_payout_then_reprotects_after_reorg"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_owner_scan.rs",
+    "sha256": "92a1629d334fb099678aa4138804c76544276afec2e13a6e77179fa0bc005bca",
+    "functions": [
+      {
+        "line": 11,
+        "name": "expiry_owner_scan_runs_in_captaind_and_stops_gracefully"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_ownership.rs",
+    "sha256": "1a96d28659f00f607ea5d58ba0bb8e4eea20df11137ccdcc154c163a2af925a8",
+    "functions": [
+      {
+        "line": 13,
+        "name": "expiry_abandoned_registered_send_needs_no_client_refund"
+      },
+      {
+        "line": 79,
+        "name": "expiry_cancelled_unclaimed_output_keeps_owner_after_participation_removed"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_payout_flow.rs",
+    "sha256": "2fbe0d5b50f67f5d2afbd6d9faa7e8bb380104fdb9301162fd541ad03721bbb1",
+    "functions": [
+      {
+        "line": 14,
+        "name": "expiry_payout_native_board_seed_restore_and_confirmed_spend"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_races.rs",
+    "sha256": "c101bb783b275514d06785623567ff950c7552df221f4bf7f09e8ea5db3930cd",
+    "functions": [
+      {
+        "line": 15,
+        "name": "expiry_coin_fence_serializes_actual_tree_writes"
+      },
+      {
+        "line": 75,
+        "name": "expiry_cancels_unfinished_exchange_without_freezing_other_tree_inputs"
+      },
+      {
+        "line": 114,
+        "name": "expiry_cancelled_native_refresh_status_never_releases_preimage"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_refresh_completion.rs",
+    "sha256": "7c4b6558f493d4398b6c157279a4c4ab8fb470809df53a11146e93d8ffb1f8a1",
+    "functions": [
+      {
+        "line": 44,
+        "name": "wait_for_query_lock"
+      },
+      {
+        "line": 56,
+        "name": "refresh_completion_race"
+      },
+      {
+        "line": 216,
+        "name": "expiry_payout_decision_wins_over_prepared_native_forfeit"
+      },
+      {
+        "line": 221,
+        "name": "expiry_accepted_native_forfeit_wins_over_waiting_decision"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_registration_scale.rs",
+    "sha256": "3cc296282ecf020be15888122b3b6691fbf6590a8c0541f4a00277dff20d064b",
+    "functions": [
+      {
+        "line": 19,
+        "name": "memory"
+      },
+      {
+        "line": 26,
+        "name": "server_pid"
+      },
+      {
+        "line": 37,
+        "name": "child"
+      },
+      {
+        "line": 41,
+        "name": "owner"
+      },
+      {
+        "line": 45,
+        "name": "storage"
+      },
+      {
+        "line": 61,
+        "name": "expiry_registration_authenticated_scale"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_reorg.rs",
+    "sha256": "40785c812b8c78d5a0480cd3dbe80438b0d6915eb0d07e2ed5963c56e3f02dc7",
+    "functions": [
+      {
+        "line": 10,
+        "name": "wait_for_payout"
+      },
+      {
+        "line": 28,
+        "name": "wait_for_confirmation"
+      },
+      {
+        "line": 49,
+        "name": "payout_reorg"
+      },
+      {
+        "line": 157,
+        "name": "expiry_actual_payout_reorg_preserves_receipt_and_fence"
+      },
+      {
+        "line": 162,
+        "name": "expiry_actual_deep_payout_reorg_preserves_receipt_and_fence"
+      },
+      {
+        "line": 169,
+        "name": "expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_child"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_replacement_transfer.rs",
+    "sha256": "8e8f5b19033dc14ae11cf17479a2b93b96282cd1b8d23678012a08e59b1a7d8c",
+    "functions": [
+      {
+        "line": 18,
+        "name": "expiry_transferred_refresh_replacement_survives_old_backing_settlement"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_split.rs",
+    "sha256": "cd1fd578a644bbf52f8d936ed106671ba44a36b3b0a0b545a7528667a653dc17",
+    "functions": [
+      {
+        "line": 14,
+        "name": "payout"
+      },
+      {
+        "line": 32,
+        "name": "expiry_requested_split_preserves_mixed_siblings_and_eventual_refund"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_state.rs",
+    "sha256": "7b501e9e028d4f50e6f5636903548b810abfe136854c3eb1347ec583c5384a69",
+    "functions": [
+      {
+        "line": 14,
+        "name": "expiry_generation_rejects_stale_rebuild_and_survives_restart"
+      },
+      {
+        "line": 67,
+        "name": "expiry_ledger_detects_late_lower_revision_and_ignores_noop_updates"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_transfer_refresh.rs",
+    "sha256": "a6b52ab184288358963fc9e5183c232cbc0c602f3782aec458af4eec9adb5712",
+    "functions": [
+      {
+        "line": 20,
+        "name": "expiry_frozen_recipient_is_paid_after_sender_change_refresh"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/fallback.rs",
+    "sha256": "3b384ca7e8daf6c022678030263c9245c71dbec219466ca4a50920a43faf23e6",
+    "functions": [
+      {
+        "line": 9,
+        "name": "wait_for_migration_lock"
+      },
+      {
+        "line": 23,
+        "name": "fallback_concurrent_migrations_preserve_both_histories"
+      },
+      {
+        "line": 61,
+        "name": "fallback_cancelled_migration_releases_its_session_lock"
+      },
+      {
+        "line": 84,
+        "name": "fallback_registration_is_authenticated_immutable_and_idempotent"
+      },
+      {
+        "line": 138,
+        "name": "fallback_migrations_do_not_share_upstream_history"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/lightning.rs",
+    "sha256": "6408253c78252d098441b7f120b394fad1d0135135034adacf7bd6031738f716",
+    "functions": [
+      {
+        "line": 44,
+        "name": "assert_vtxopool_consistency_db"
+      },
+      {
+        "line": 62,
+        "name": "count_htlc_recv_vtxos"
+      },
+      {
+        "line": 71,
+        "name": "assert_vtxopool_consistency"
+      },
+      {
+        "line": 78,
+        "name": "htlc_send_vtxo_ids"
+      },
+      {
+        "line": 97,
+        "name": "force_unlock_htlc_vtxos"
+      },
+      {
+        "line": 114,
+        "name": "request_htlc_revocation"
+      },
+      {
+        "line": 124,
+        "name": "try_request_htlc_revocation"
+      },
+      {
+        "line": 161,
+        "name": "server_settles_invoice_from_on_chain_htlc_preimage"
+      },
+      {
+        "line": 246,
+        "name": "reject_revocation_on_successful_lightning_payment"
+      },
+      {
+        "line": 304,
+        "name": "reject_revocation_when_settled_but_status_regressed"
+      },
+      {
+        "line": 362,
+        "name": "intra_ark_invoice_expiry_after_grant_does_not_allow_revoke"
+      },
+      {
+        "line": 482,
+        "name": "intra_ark_granted_receive_canceled_after_htlc_recv_expiry"
+      },
+      {
+        "line": 703,
+        "name": "intra_ark_revoke_refused_until_htlc_recvs_expire"
+      },
+      {
+        "line": 717,
+        "name": "intra_ark_revoke_refused_on_canceled_receive_until_htlc_recvs_expire"
+      },
+      {
+        "line": 741,
+        "name": "intra_ark_revoke_refused_while_watchman_is_behind"
+      },
+      {
+        "line": 763,
+        "name": "request_second_htlc_cosign"
+      },
+      {
+        "line": 802,
+        "name": "refuse_generic_spends_of_htlc_send_vtxo_while_payment_in_flight"
+      },
+      {
+        "line": 879,
+        "name": "cosign_htlc_send_to_pubkey"
+      },
+      {
+        "line": 928,
+        "name": "refuse_htlc_send_vtxo_posted_to_arkoor_mailbox"
+      },
+      {
+        "line": 981,
+        "name": "refuse_generic_spends_of_htlc_send_vtxo_with_no_payment_in_flight"
+      },
+      {
+        "line": 1068,
+        "name": "refuse_revocation_of_banned_htlc_send_vtxo"
+      },
+      {
+        "line": 1130,
+        "name": "revoked_htlc_send_vtxo_can_be_offboarded"
+      },
+      {
+        "line": 1163,
+        "name": "server_refuse_claim_invoice_not_settled"
+      },
+      {
+        "line": 1202,
+        "name": "server_should_release_hold_invoice_when_subscription_is_canceled"
+      },
+      {
+        "line": 1246,
+        "name": "server_generated_invoice_has_configured_expiry"
+      },
+      {
+        "line": 1301,
+        "name": "check_lightning_receive_returns_on_canceled_subscription"
+      },
+      {
+        "line": 1331,
+        "name": "server_claim_lightning_receive_is_idempotent"
+      },
+      {
+        "line": 1377,
+        "name": "server_returned_htlc_recv_vtxos_identical"
+      },
+      {
+        "line": 1452,
+        "name": "server_concurrent_prepare_lightning_claim"
+      },
+      {
+        "line": 1562,
+        "name": "refuses_htlc_recv_expiry_past_lowest_incoming_htlc_expiry"
+      },
+      {
+        "line": 1648,
+        "name": "refuse_receive_claim_after_incoming_htlc_expiry"
+      },
+      {
+        "line": 1774,
+        "name": "settled_hash_cannot_fund_new_receive"
+      },
+      {
+        "line": 1834,
+        "name": "settled_hash_cannot_be_granted_htlc_recv_vtxos"
+      },
+      {
+        "line": 1942,
+        "name": "intra_ark_payment_refused_while_same_hash_send_is_open"
+      },
+      {
+        "line": 2004,
+        "name": "should_refuse_paying_invoice_not_matching_htlcs"
+      },
+      {
+        "line": 2045,
+        "name": "should_cap_retry_for_at_maximum"
+      },
+      {
+        "line": 2085,
+        "name": "should_refuse_paying_invoice_whose_amount_is_higher_than_htlcs"
+      },
+      {
+        "line": 2128,
+        "name": "should_refuse_ln_pay_input_vtxo_that_is_being_exited"
+      },
+      {
+        "line": 2194,
+        "name": "should_allow_dust_lightning_receive_request"
+      },
+      {
+        "line": 2215,
+        "name": "should_refuse_over_max_vtxo_amount_lightning_receive_request"
+      },
+      {
+        "line": 2255,
+        "name": "should_refuse_over_max_ln_receive_amount_invoice_request"
+      },
+      {
+        "line": 2290,
+        "name": "max_ln_send_amount"
+      },
+      {
+        "line": 2329,
+        "name": "server_can_use_multi_input_from_vtxo_pool"
+      },
+      {
+        "line": 2374,
+        "name": "server_can_use_vtxo_pool_change_for_next_receive"
+      },
+      {
+        "line": 2442,
+        "name": "vtxo_pool_allocation_stores_checkpoint_vtxos"
+      },
+      {
+        "line": 2491,
+        "name": "initiate_lightning_payment_fails_without_register_vtxo_transactions"
+      },
+      {
+        "line": 2539,
+        "name": "check_lightning_receive_poll_interval_fallback"
+      },
+      {
+        "line": 2594,
+        "name": "plant_unlock_preimage"
+      },
+      {
+        "line": 2611,
+        "name": "refuse_receive_with_unlock_hash_as_payment_hash"
+      },
+      {
+        "line": 2637,
+        "name": "refuse_send_with_unlock_hash_as_payment_hash"
+      },
+      {
+        "line": 2665,
+        "name": "lightning_subscription_status"
+      },
+      {
+        "line": 2678,
+        "name": "lightning_attempt_status"
+      },
+      {
+        "line": 2691,
+        "name": "is_preimage_recorded"
+      },
+      {
+        "line": 2704,
+        "name": "wait_for_subscription_status"
+      },
+      {
+        "line": 2719,
+        "name": "wait_for_preimage_recorded"
+      },
+      {
+        "line": 2733,
+        "name": "wait_for_attempt_status"
+      },
+      {
+        "line": 2750,
+        "name": "wait_for_hold_invoice_accepted"
+      },
+      {
+        "line": 2794,
+        "name": "prevent_double_pay_via_canceled_subscription_and_inflight_xpay"
+      },
+      {
+        "line": 2945,
+        "name": "self_payment_claim_rejected_after_sender_onchain_refund"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/offboard.rs",
+    "sha256": "b9b78d75f518bd4b73f439835a4441dba1d2cffaa8b6dd1136325f2f8db02bd0",
+    "functions": [
+      {
+        "line": 72,
+        "name": "utxos_unlock_after_pending_offboard_expiry"
+      },
+      {
+        "line": 150,
+        "name": "finish_offboard_replays_for_identical_retry"
+      },
+      {
+        "line": 172,
+        "name": "max_offboard_amount"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_lightning.rs",
+    "sha256": "ca5ea7806da75e6a8229af77baed34b499706a70aa855ec9a75f8241d056d91f",
+    "functions": [
+      {
+        "line": 22,
+        "name": "remote_pays"
+      },
+      {
+        "line": 29,
+        "name": "assert_one_source_dispatch"
+      },
+      {
+        "line": 57,
+        "name": "expiry_external_success_during_restart_is_bound_to_its_actual_source"
+      },
+      {
+        "line": 62,
+        "name": "external_success_during_restart"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_noah.rs",
+    "sha256": "4ec45e896ed5e126e1e439542f72a13f9eb45188d78b5794f5a9e81d6d9128be",
+    "functions": [
+      {
+        "line": 49,
+        "name": "qualification_native_forwarding_delivery_survives_provider_reopen"
+      },
+      {
+        "line": 54,
+        "name": "interrupted_forwarding"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_oversize.rs",
+    "sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+    "functions": [
+      {
+        "line": 47,
+        "name": "owner"
+      },
+      {
+        "line": 60,
+        "name": "save"
+      },
+      {
+        "line": 65,
+        "name": "native_node"
+      },
+      {
+        "line": 121,
+        "name": "actual_fee"
+      },
+      {
+        "line": 132,
+        "name": "confirm_package"
+      },
+      {
+        "line": 190,
+        "name": "expiry_automatic_real_limit_multilevel_split_pays_every_owner"
+      },
+      {
+        "line": 195,
+        "name": "automatic_multilevel_split"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_readiness.rs",
+    "sha256": "7aa2e8fee5e13b2edca47bf1ed2079f6334d1c0a3c5b5979ec7ad508cfd97c69",
+    "functions": [
+      {
+        "line": 15,
+        "name": "actual_transaction_fee"
+      },
+      {
+        "line": 24,
+        "name": "assert_pending_root_is_untouched"
+      },
+      {
+        "line": 54,
+        "name": "expiry_ready_root_does_not_wait_for_unresolved_same_expiry_root"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_receive_fallback.rs",
+    "sha256": "56b1553c67864161ea3266d9f51e38d50f3939d2de8b32f697352e68447e911a",
+    "functions": [
+      {
+        "line": 42,
+        "name": "qualification_registered_forwarded_receive_pays_absent_recipient_after_provider_stops"
+      },
+      {
+        "line": 47,
+        "name": "registered_receive_fallback"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/registration.rs",
+    "sha256": "abc88f6438ce21678599ca0100bcdb05d916b9e1b3e731769271af7f15ec3fd8",
+    "functions": [
+      {
+        "line": 14,
+        "name": "register_vtxo_transactions_accepts_duplicate_ids"
+      },
+      {
+        "line": 58,
+        "name": "register_vtxo_transactions_refuses_child_of_exited_input"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/fallback.rs",
+    "sha256": "1a383a3afa4d94e5c8112b40341c557e40706aa0b1636a781997d561b02771d9",
+    "functions": [
+      {
+        "line": 5,
+        "name": "fallback_native_registration_survives_seed_only_second_device_and_reopen"
+      },
+      {
+        "line": 56,
+        "name": "fallback_native_retries_a_lost_registration_reply"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/fallback_act_by.rs",
+    "sha256": "d3e79a29af1cd1c03767ac24e89960e91745a96d8e4480fbfd3f5b09fe31da70",
+    "functions": [
+      {
+        "line": 21,
+        "name": "protection_config"
+      },
+      {
+        "line": 29,
+        "name": "fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable"
+      },
+      {
+        "line": 85,
+        "name": "advance_to"
+      },
+      {
+        "line": 91,
+        "name": "fallback_protection_refreshes_a_healthy_wallet_without_a_spurious_exit"
+      },
+      {
+        "line": 124,
+        "name": "fallback_protection_late_return_with_server_offline_starts_an_actual_exit"
+      },
+      {
+        "line": 153,
+        "name": "fallback_protection_cancels_a_silent_pre_forfeit_refresh_without_stealing_its_lock"
+      },
+      {
+        "line": 204,
+        "name": "fallback_protection_lost_forfeit_reply_keeps_signed_replacements_durably"
+      },
+      {
+        "line": 244,
+        "name": "fallback_protection_binding_refresh_with_ark_offline_recovers_the_original_claim"
+      },
+      {
+        "line": 309,
+        "name": "fallback_binding_refresh_recovers_from_actual_chain_preimage_without_ark"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/fallback_adoption.rs",
+    "sha256": "5aafb400a4ed7c01c3dbb925b3ed1f52ab8fd276a07ecec803dafd9a175507dc",
+    "functions": [
+      {
+        "line": 40,
+        "name": "config"
+      },
+      {
+        "line": 46,
+        "name": "mnemonic"
+      },
+      {
+        "line": 51,
+        "name": "reopen"
+      },
+      {
+        "line": 66,
+        "name": "await_decision"
+      },
+      {
+        "line": 84,
+        "name": "fallback_adoption_fresh_seed_retains_unfunded_decision_and_protects_offline"
+      },
+      {
+        "line": 149,
+        "name": "fallback_adoption_history_failure_quarantines_then_reconciles_an_ordinary_spend"
+      },
+      {
+        "line": 176,
+        "name": "fallback_adoption_status_uses_history_newer_than_the_decision"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/fallback_external.rs",
+    "sha256": "4436f65dd044766405eda580f3dddc313b93efb9334dcc9e2e92a1780f43598a",
+    "functions": [
+      {
+        "line": 48,
+        "name": "fallback_external_bip84_wallet_registers_and_restores_without_ark_seed_assumptions"
+      },
+      {
+        "line": 108,
+        "name": "fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/fallback_protection.rs",
+    "sha256": "4f7ea65b5fb2e882cc94be2bcacc39fb14868c0372c640f7b4e71d7bef6b4ed4",
+    "functions": [
+      {
+        "line": 16,
+        "name": "fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payment"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/lightning.rs",
+    "sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+    "functions": [
+      {
+        "line": 35,
+        "name": "wait_for_hold_invoice_accepted"
+      },
+      {
+        "line": 56,
+        "name": "pay_hold_succeeds"
+      },
+      {
+        "line": 144,
+        "name": "pay_hold_with_near_expiry_inputs_succeeds"
+      },
+      {
+        "line": 240,
+        "name": "pay_hold_refused"
+      },
+      {
+        "line": 335,
+        "name": "receive_claim_on_mailbox_notification"
+      },
+      {
+        "line": 398,
+        "name": "receive_claim_after_hold_invoice_already_settled"
+      },
+      {
+        "line": 461,
+        "name": "pay_with_retry_for"
+      },
+      {
+        "line": 523,
+        "name": "receive_claim_reply_loss_is_durable_before_wire_and_recovers_after_reopen"
+      },
+      {
+        "line": 531,
+        "name": "receive_claim_reply_loss_reopen_abandon_fallback_and_seed_recovery"
+      },
+      {
+        "line": 535,
+        "name": "receive_claim_reply_loss_reopen"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/lightning_receive_binding.rs",
+    "sha256": "3149db23a63daaa151aace6a0494fc7c3c8513f05649e6761a8d6da2a8f3141e",
+    "functions": [
+      {
+        "line": 14,
+        "name": "receive_binding_normal_external_claim_keeps_the_actual_recipient"
+      },
+      {
+        "line": 79,
+        "name": "receive_binding_normal_internal_claim_and_reconciliation_are_idempotent"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  },
+  {
+    "file": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/offboard.rs",
+    "sha256": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+    "functions": [
+      {
+        "line": 138,
+        "name": "offboard_movement"
+      },
+      {
+        "line": 147,
+        "name": "offboard_replays_identical_prepare_request"
+      },
+      {
+        "line": 187,
+        "name": "offboard_rejects_unsigned_finish_response"
+      },
+      {
+        "line": 228,
+        "name": "offboard_recovers_expired_session_by_repreparing"
+      },
+      {
+        "line": 288,
+        "name": "offboard_rebroadcasts_evicted_tx_within_grace_period"
+      },
+      {
+        "line": 349,
+        "name": "offboard_reports_lost_tx_after_grace_period"
+      },
+      {
+        "line": 415,
+        "name": "offboard_recovers_lost_finish_by_adopting_chain_tx"
+      },
+      {
+        "line": 471,
+        "name": "offboard_cancels_when_fees_change_after_lost_session"
+      }
+    ],
+    "scope": "Function inventory; only test bodies specifically discussed in report/supplements were substantively inspected."
+  }
+]

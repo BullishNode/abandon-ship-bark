@@ -1,0 +1,399 @@
+{
+  "recorded_at": "2026-10-17T03:36:31.089356+00:00",
+  "run_id": "a8928dcf-a33a-400b-a37e-8306b6e5b4f0",
+  "exit_code": 100,
+  "result": "FAIL:10000-record absent-mailbox positive search exceeded120second budget",
+  "duration_seconds": 250.494,
+  "source_base": "c992bee7fe2449ef26beda17c94db061fea6d628",
+  "source_manifest_sha256": "d27d35dd169a3d8fd44109fdd1e657f8ca8ee87456667c56a0c20bcebf852e02",
+  "products": {
+    "bark": "0df28b44ae15a846890b6a3e05af24d91ff36ef3dac5d2c4788e218fe5ee5319",
+    "barkd": "4ebf34e6e68c0111a10740196067bb42c69f21812fa776d7fef6d9300c92ae62",
+    "captaind": "91a010af90e2fcf764a426e0807a40277f97cc9bce404a2a16a41ebb2c468d54",
+    "watchmand": "5efa8f9856080b2d90f6120d2da2e62d4ed226acc6f305d207264045a0e8f8a1"
+  },
+  "native_server_sha256": "721bd21ce490f5723f33cdd62f2bf0335e15724fd16d91e3f17238d20d95ed6c",
+  "harness_sha256": "3cc296282ecf020be15888122b3b6691fbf6590a8c0541f4a00277dff20d064b",
+  "scanner_sha256": "e2657e35a306f22a7fc6e9ecb2d49dd139468f1daee1caac05d9eead707d0dfc",
+  "hardware": {
+    "logical_cpus": 14,
+    "cpu": "Intel Core Ultra7 265U",
+    "ram_mib": 63720,
+    "network": "local regtest",
+    "build": "Nix Rust1.90 debug/assertions enabled; immutable ELF products",
+    "contention": "Other isolated native Lightning tests overlapped part of this measurement; no canonical source rebuild in this test. Not a dedicated hardware capacity claim."
+  },
+  "report": {
+    "cases": [
+      {
+        "captaind_memory": {
+          "pid": 12017,
+          "process_lifetime_peak_rss_kib": 44820,
+          "rss_kib": 44820
+        },
+        "case": "signed_public_rpc_registration",
+        "client_signing_seconds": 0.029690074,
+        "records": 100,
+        "records_per_second": 110.57919116777639,
+        "registration_seconds": 0.904329277,
+        "rpc_p50_seconds": 0.008714376,
+        "rpc_p95_seconds": 0.012154635,
+        "rpc_p99_seconds": 0.014316825,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 53304,
+          "rss_kib": 53304
+        },
+        "storage": {
+          "cursor_bytes": 24576,
+          "cursors": 0,
+          "matched_keys": 0,
+          "record_bytes": 237568,
+          "records": 100
+        }
+      },
+      {
+        "budget_seconds": 120,
+        "cached_100_lookup_seconds": 0.146502175,
+        "case": "verified_mailbox_priority",
+        "child_index": 17,
+        "children_derived": 64,
+        "chunk_size_max": 10000,
+        "elapsed_seconds": 0.023548095,
+        "owner_sorted_position": 99,
+        "passes": 1,
+        "queued_storage": {
+          "cursor_bytes": 131072,
+          "cursors": 100,
+          "matched_keys": 0,
+          "record_bytes": 237568,
+          "records": 100
+        },
+        "records": 100,
+        "records_scanned": 2,
+        "remaining_storage": {
+          "cursor_bytes": 131072,
+          "cursors": 0,
+          "matched_keys": 1,
+          "record_bytes": 237568,
+          "records": 100
+        },
+        "resolved": true,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 55944,
+          "rss_kib": 55944
+        },
+        "workers": 2
+      },
+      {
+        "budget_seconds": 120,
+        "cached_100_lookup_seconds": 0.14370645,
+        "case": "absent_mailbox_fallback",
+        "child_index": 18,
+        "children_derived": 3200,
+        "chunk_size_max": 10000,
+        "elapsed_seconds": 0.719289505,
+        "owner_sorted_position": 99,
+        "passes": 50,
+        "queued_storage": {
+          "cursor_bytes": 172032,
+          "cursors": 100,
+          "matched_keys": 1,
+          "record_bytes": 237568,
+          "records": 100
+        },
+        "records": 100,
+        "records_scanned": 100,
+        "remaining_storage": {
+          "cursor_bytes": 188416,
+          "cursors": 0,
+          "matched_keys": 2,
+          "record_bytes": 237568,
+          "records": 100
+        },
+        "resolved": true,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 55944,
+          "rss_kib": 55944
+        },
+        "workers": 2
+      },
+      {
+        "budget_seconds": 120,
+        "cached_100_lookup_seconds": 0.159681782,
+        "case": "wrong_mailbox_fallback",
+        "child_index": 19,
+        "children_derived": 111008,
+        "chunk_size_max": 10000,
+        "elapsed_seconds": 4.740591355,
+        "owner_sorted_position": 99,
+        "passes": 58,
+        "queued_storage": {
+          "cursor_bytes": 221184,
+          "cursors": 100,
+          "matched_keys": 2,
+          "record_bytes": 237568,
+          "records": 100
+        },
+        "records": 100,
+        "records_scanned": 116,
+        "remaining_storage": {
+          "cursor_bytes": 221184,
+          "cursors": 0,
+          "matched_keys": 3,
+          "record_bytes": 237568,
+          "records": 100
+        },
+        "resolved": true,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 55996,
+          "rss_kib": 55996
+        },
+        "workers": 2
+      },
+      {
+        "captaind_memory": {
+          "pid": 12093,
+          "process_lifetime_peak_rss_kib": 44876,
+          "rss_kib": 44876
+        },
+        "case": "signed_public_rpc_registration",
+        "client_signing_seconds": 0.125532474,
+        "records": 1000,
+        "records_per_second": 116.36369747192632,
+        "registration_seconds": 8.593745487,
+        "rpc_p50_seconds": 0.008531881,
+        "rpc_p95_seconds": 0.011857534,
+        "rpc_p99_seconds": 0.013785363,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 56484,
+          "rss_kib": 56484
+        },
+        "storage": {
+          "cursor_bytes": 24576,
+          "cursors": 0,
+          "matched_keys": 0,
+          "record_bytes": 1286144,
+          "records": 1000
+        }
+      },
+      {
+        "budget_seconds": 120,
+        "cached_100_lookup_seconds": 0.098843322,
+        "case": "verified_mailbox_priority",
+        "child_index": 17,
+        "children_derived": 64,
+        "chunk_size_max": 10000,
+        "elapsed_seconds": 0.044028417,
+        "owner_sorted_position": 999,
+        "passes": 1,
+        "queued_storage": {
+          "cursor_bytes": 532480,
+          "cursors": 1000,
+          "matched_keys": 0,
+          "record_bytes": 1286144,
+          "records": 1000
+        },
+        "records": 1000,
+        "records_scanned": 2,
+        "remaining_storage": {
+          "cursor_bytes": 540672,
+          "cursors": 0,
+          "matched_keys": 1,
+          "record_bytes": 1286144,
+          "records": 1000
+        },
+        "resolved": true,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 56484,
+          "rss_kib": 56484
+        },
+        "workers": 2
+      },
+      {
+        "budget_seconds": 120,
+        "cached_100_lookup_seconds": 0.160593919,
+        "case": "absent_mailbox_fallback",
+        "child_index": 18,
+        "children_derived": 32000,
+        "chunk_size_max": 10000,
+        "elapsed_seconds": 9.81171044,
+        "owner_sorted_position": 999,
+        "passes": 500,
+        "queued_storage": {
+          "cursor_bytes": 1007616,
+          "cursors": 1000,
+          "matched_keys": 1,
+          "record_bytes": 1286144,
+          "records": 1000
+        },
+        "records": 1000,
+        "records_scanned": 1000,
+        "remaining_storage": {
+          "cursor_bytes": 1138688,
+          "cursors": 0,
+          "matched_keys": 2,
+          "record_bytes": 1286144,
+          "records": 1000
+        },
+        "resolved": true,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 56584,
+          "rss_kib": 56584
+        },
+        "workers": 2
+      },
+      {
+        "budget_seconds": 120,
+        "cached_100_lookup_seconds": 0.139326983,
+        "case": "wrong_mailbox_fallback",
+        "child_index": 19,
+        "children_derived": 139808,
+        "chunk_size_max": 10000,
+        "elapsed_seconds": 14.498706728,
+        "owner_sorted_position": 999,
+        "passes": 508,
+        "queued_storage": {
+          "cursor_bytes": 1638400,
+          "cursors": 1000,
+          "matched_keys": 2,
+          "record_bytes": 1286144,
+          "records": 1000
+        },
+        "records": 1000,
+        "records_scanned": 1016,
+        "remaining_storage": {
+          "cursor_bytes": 1753088,
+          "cursors": 0,
+          "matched_keys": 3,
+          "record_bytes": 1286144,
+          "records": 1000
+        },
+        "resolved": true,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 56584,
+          "rss_kib": 56584
+        },
+        "workers": 2
+      },
+      {
+        "captaind_memory": {
+          "pid": 13582,
+          "process_lifetime_peak_rss_kib": 46036,
+          "rss_kib": 46036
+        },
+        "case": "signed_public_rpc_registration",
+        "client_signing_seconds": 1.381426252,
+        "records": 10000,
+        "records_per_second": 119.77445285622466,
+        "registration_seconds": 83.490258244,
+        "rpc_p50_seconds": 0.008050238,
+        "rpc_p95_seconds": 0.011965179,
+        "rpc_p99_seconds": 0.013886917,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 63396,
+          "rss_kib": 60732
+        },
+        "storage": {
+          "cursor_bytes": 24576,
+          "cursors": 0,
+          "matched_keys": 0,
+          "record_bytes": 11821056,
+          "records": 10000
+        }
+      },
+      {
+        "budget_seconds": 120,
+        "cached_100_lookup_seconds": 0.121786726,
+        "case": "verified_mailbox_priority",
+        "child_index": 17,
+        "children_derived": 64,
+        "chunk_size_max": 10000,
+        "elapsed_seconds": 0.20209817,
+        "owner_sorted_position": 9999,
+        "passes": 1,
+        "queued_storage": {
+          "cursor_bytes": 4579328,
+          "cursors": 10000,
+          "matched_keys": 0,
+          "record_bytes": 11821056,
+          "records": 10000
+        },
+        "records": 10000,
+        "records_scanned": 2,
+        "remaining_storage": {
+          "cursor_bytes": 4579328,
+          "cursors": 0,
+          "matched_keys": 1,
+          "record_bytes": 11821056,
+          "records": 10000
+        },
+        "resolved": true,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 63396,
+          "rss_kib": 60732
+        },
+        "workers": 2
+      },
+      {
+        "budget_seconds": 120,
+        "cached_100_lookup_seconds": null,
+        "case": "absent_mailbox_fallback",
+        "child_index": 18,
+        "children_derived": 123008,
+        "chunk_size_max": 10000,
+        "elapsed_seconds": 120.113797276,
+        "owner_sorted_position": 9999,
+        "passes": 1922,
+        "queued_storage": {
+          "cursor_bytes": 9101312,
+          "cursors": 10000,
+          "matched_keys": 1,
+          "record_bytes": 11821056,
+          "records": 10000
+        },
+        "records": 10000,
+        "records_scanned": 3844,
+        "remaining_storage": {
+          "cursor_bytes": 9535488,
+          "cursors": 10000,
+          "matched_keys": 1,
+          "record_bytes": 11821056,
+          "records": 10000
+        },
+        "resolved": false,
+        "scanner_memory": {
+          "pid": 11927,
+          "process_lifetime_peak_rss_kib": 63396,
+          "rss_kib": 60732
+        },
+        "workers": 2
+      }
+    ],
+    "debug_assertions": true,
+    "not_measured": [
+      "exhaustive 2^31-key negative search",
+      "payout throughput",
+      "concurrent user traffic",
+      "Postgres/Core RSS"
+    ],
+    "rss_scope": "test/scanner process and isolated captaind; HWM is process lifetime, not phase delta",
+    "scope": "real signed SetFallback RPC; real bounded owner scanner; no user/server funding or payouts",
+    "source_pin": "c992bee7fe2449ef26beda17c94db061fea6d628"
+  },
+  "not_run": [
+    "10000-record wrong-mailbox case after unresolved absent-mailbox timeout",
+    "exhaustive no-owner negative search",
+    "funded payout load",
+    "maximum TPS"
+  ]
+}

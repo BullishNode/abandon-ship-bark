@@ -12,6 +12,8 @@ readme = "README.md"
 default = ["rand", "sqlite", "native", "tls-native-roots", "bitcoind-rpc"]
 
 onchain-bdk = ["bdk_wallet", "bark-bitcoin-ext/bdk"]
+# Product-like native test client; the default reference wallet remains upstream BIP86.
+fallback-test-bip84 = ["onchain-bdk"]
 
 # Native bitcoind JSON-RPC backend for the on-chain layer.
 bitcoind-rpc = ["dep:bitcoind-async-client", "dep:zeromq", "bark-bitcoin-ext/rpc-async"]

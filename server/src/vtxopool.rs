@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::Context;
 use bdk_wallet::coin_selection::SingleRandomDraw;
 use bitcoin::secp256k1::{rand, Keypair};
-use bitcoin::{Amount, OutPoint, Transaction};
+use bitcoin::{Amount, OutPoint};
 use futures::{stream, StreamExt, TryStreamExt};
 use tracing::{debug, error, info, warn};
 

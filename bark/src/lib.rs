@@ -2067,6 +2067,9 @@ impl Wallet {
 		if let Err(error) = self.reconcile_all_expired_vtxos().await {
 			warn!("Expired coins await settlement: {:#}", error);
 		}
+		if let Err(error) = self.sync_recovery_quarantine().await {
+			warn!("Recovered coins await their post-status history: {:#}", error);
+		}
 
 		futures::join!(
 			async {

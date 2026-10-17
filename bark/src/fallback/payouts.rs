@@ -99,6 +99,12 @@ pub struct FallbackSnapshot {
 	/// Persisted before changing their local state, so interruption is safe.
 	#[serde(default)]
 	pub adopted_payout_vtxos: BTreeSet<VtxoId>,
+	/// Validated recovery bodies kept unavailable while post-status history
+	/// or their independently confirmed payout is missing. The marker survives
+	/// a later protective exit or payout adoption to avoid inventing a prior
+	/// Ark debit after fresh recovery. Only orphan None holders may be released.
+	#[serde(default)]
+	pub quarantined_vtxos: BTreeSet<VtxoId>,
 }
 
 pub(crate) const FALLBACK_SUBSYSTEM: &str = "abandon.fallback_payout";

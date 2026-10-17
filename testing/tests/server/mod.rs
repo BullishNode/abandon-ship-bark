@@ -1,5 +1,7 @@
 mod expiry_admission;
 mod expiry_races;
+mod expiry_refresh_completion;
+mod expiry_replacement_transfer;
 mod expiry_operation_races;
 mod expiry_transfer_refresh;
 mod expiry_state;

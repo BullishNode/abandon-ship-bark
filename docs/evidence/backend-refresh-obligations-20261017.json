@@ -1,0 +1,121 @@
+{
+  "recorded_at": "2026-10-17T15:29:30.397756+00:00",
+  "base_commit": "cbb12a2683b3aa6cf562a6c5bdff2b56a87ae9ac",
+  "change_scope": "Three test files only; no product implementation changes. Final source passed mandatory just checks; each native result retains its independently archived source and executable. Previously passing cases were not repeated after corrections confined to the opposite race branch.",
+  "features": "ark-testing/fallback-test-bip84",
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/captaind",
+      "sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-s03-current-cut-correction-20261017/watchmand",
+      "sha256": "b154eabb3a22d8f9ac60953466e7627c86a0815385c1149d90d71c3534268b06"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-operation-client-20261017/bark",
+      "sha256": "9eaa6a6b9edbdf6931218679d02bc0bce0681f19d78f5e69ce94242c3ce5305f"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-operation-client-20261017/barkd",
+      "sha256": "b17cd04625fcd05d40918131f64b2d66f496b25971f503f0ac56d46df69f2cce"
+    }
+  },
+  "checks": {
+    "final": "PASS just checks; native check11.71s",
+    "server_test_build": "PASS49.61s; no product build"
+  },
+  "cases": [
+    {
+      "test": "expiry_payout_decision_wins_over_prepared_native_forfeit",
+      "run_id": "a4dac24f-a68c-4c53-a392-22e0fed3901f",
+      "result": "PASS",
+      "seconds": 33.06,
+      "source_variant": "v5",
+      "provenance": {
+        "source_manifest_sha256": "2cd5c58958360b26dca0cd58bd48fc2bfbd99badf78cb30bbc36e565cf307106",
+        "native_server_sha256": "823b6d46aadd0f96856121eabd05fa9ffca56e59e2f0c5c83c36c352b1cfbd74",
+        "metadata_sha256": "880c8f5570963a898f4ff5bfce0f6b04f08519af1e152ab43cb767c6b8c1ac99"
+      },
+      "assertions": [
+        "A genuine SDK ForfeitVtxos request is held before upstream while the actual expiry decision wins.",
+        "Atomic cancellation persists; no stored forfeit, forfeited marker or released status preimage; actual later request is refused.",
+        "Original customer receives exactly99000sat with at least six independent Core confirmations.",
+        "Cancelled replacement has no customer allocation at the checked post-payout state."
+      ]
+    },
+    {
+      "test": "expiry_accepted_native_forfeit_wins_over_waiting_decision",
+      "run_id": "21a85ea0-3638-408f-9197-76a6495f7818",
+      "result": "PASS",
+      "seconds": 26.956,
+      "source_variant": "v7",
+      "provenance": {
+        "source_manifest_sha256": "6e3260e038f50115ea4eb458dc10ac20648c3ca94077b8114b73e66fcc6da8e7",
+        "native_server_sha256": "a535cec7865ae74e9418b2a5b180eed6d197b89736008dfea0bc26ccbe814435",
+        "metadata_sha256": "4341e3c45bacd32cd759a72a8079efe261142f591d8b51181b8596f5e58813c8"
+      },
+      "assertions": [
+        "Real native forfeit completion queues before the competing actual payout writer at the shared PostgreSQL source guard.",
+        "Actual returned unlock preimage matches later status; SDK-persisted fully signed replacements validate against actual Core round funding.",
+        "Wait for an operator-only old-root allocation and exact canonical parent, six Core confirmations and ledger confirmed before testing no duplicate.",
+        "No original-source customer allocation and no exchange cancellation."
+      ]
+    },
+    {
+      "test": "expiry_transferred_refresh_replacement_survives_old_backing_settlement",
+      "run_id": "956dc94f-d749-4317-bd99-6625c23caa41",
+      "result": "PASS",
+      "seconds": 33.891,
+      "source_variant": "v4",
+      "provenance": {
+        "source_manifest_sha256": "539873fa41051dfe9a000df15b24a12786d779c1cbd9d03f656955f248dbed14",
+        "native_server_sha256": "b6871042c55acf8e0f9257f77f3c3aaa7bb9c7fbfc2284b95677857babc2140d",
+        "metadata_sha256": "71d46d3a8264836c5831a9896e08ba0a4ddb8778492c881077f4513ebf8a0ab2"
+      },
+      "assertions": [
+        "Actual accepted100000sat refresh creates a fully signed replacement on a different backing root.",
+        "Its entire value is transferred through the normal native protocol to a DIFFERENT registered recipient; both actors then disappear.",
+        "The old backing actually returns to the operator with a confirmed output and no user payout.",
+        "The recipient later receives exactly99000sat on the new backing with at least six Core confirmations; no former-owner or old-source duplicate customer allocation."
+      ]
+    }
+  ],
+  "preserved_failures": [
+    {
+      "stage": "v3 mandatory checks",
+      "result": "FAIL",
+      "reason": "Fixture generic Vtxo deserialization needed explicit Vec<Vtxo> type; no native case ran."
+    },
+    {
+      "run_id": "f975f9dc-f1d8-49d4-ad20-bd12f50bf681",
+      "result": "FAIL25.942s",
+      "reason": "Fixture inherited3s SDK sync budget while intentionally holding a request through backing expiry; response cancelled.",
+      "data_archive_sha256": "9ba90d1a53351a311f4ccaf50bf76c8adca507b68aeccf98b18a1a527debf763"
+    },
+    {
+      "run_id": "7b134b41-99d6-4854-9d73-f6e290fdbb44",
+      "result": "FAIL26.921s",
+      "reason": "Same intentionally held-request fixture budget; corrected to explicit bounded60s.",
+      "data_archive_sha256": "9ba90d1a53351a311f4ccaf50bf76c8adca507b68aeccf98b18a1a527debf763"
+    },
+    {
+      "run_id": "6afce252-dba7-4f9c-92e3-9f4a68cc43c9",
+      "result": "FAIL28.800s",
+      "reason": "Fixture incorrectly validated pre-cosign status-tree skeleton instead of actual SDK signed persisted replacement.",
+      "data_archive_sha256": "cae1a33a9585b7f020baf9ca934d491a8051347ddd4dac6b6a120b841d0039ed"
+    },
+    {
+      "run_id": "a19ba6d1-04f9-4f13-a126-98e01bcb4601",
+      "result": "FAIL28.541s",
+      "reason": "Actual operator parent reached six Core confirmations; legacy verbose RPC enum rejected Core31 P2A anchor type. Fixture now reads actual depth from raw JSON, preserving exact parent-byte and ledger checks.",
+      "data_archive_sha256": "d40999a301631e9fa358c6f9175d6e87672385f49fa18f17ed4c77a50c86fc81"
+    }
+  ],
+  "limits": [
+    "Owned local regtest integration evidence, not Signet or production qualification.",
+    "The different-recipient case does not prove same-owner old-claim versus replacement discharge.",
+    "No claim of complete Lightning coverage, all expiry states, reorg races or capacity qualification.",
+    "No SQL fixture inserts supplied money, accepted-forfeit state, payout decisions or chain acknowledgements."
+  ]
+}

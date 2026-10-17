@@ -111,6 +111,8 @@ impl Server {
 			})
 			.collect::<Vec<_>>();
 
+		let receive_claims = crate::database::expiry_receive::ReceiveClaimBinding::from_package(&builder)?;
+
 		// Output user vtxos go in as `unregistered`. They become spendable
 		// once the sender uploads the signed transaction chain via
 		// register_vtxo_transactions; until then `check_spendable` rejects
@@ -134,6 +136,7 @@ impl Server {
 			htlc_vtxo::set_htlc_vtxo_resolutions(
 				&t, &claimed_htlc_recvs, HtlcResolution::Fulfilled,
 			).await?;
+			t.materialize_receive_claims(&receive_claims).await?;
 			Ok(inserted)
 		}).await?;
 		drop(vtxo_guard);

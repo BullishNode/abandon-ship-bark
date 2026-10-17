@@ -124,6 +124,9 @@ fn evidence_json(evidence: &OwnershipEvidence, preimage: bool) -> serde_json::Va
 			serde_json::json!({"kind":"irreversible_entitlement","entitlement_id":entitlement_id}),
 		OwnershipEvidence::Pubkey => serde_json::json!({"kind":"pubkey"}),
 		OwnershipEvidence::InputOwner => serde_json::json!({"kind":"input_owner"}),
+		OwnershipEvidence::LightningReceiveClaim { source, subscription_id, payment_hash, output } =>
+			serde_json::json!({"kind":"lightning_receive_claim","source":source.to_string(),
+				"subscription_id":subscription_id,"payment_hash":payment_hash.to_string(),"output":output.to_string()}),
 		OwnershipEvidence::Pool => serde_json::json!({"kind":"pool"}),
 		OwnershipEvidence::Padding => serde_json::json!({"kind":"padding"}),
 		OwnershipEvidence::Forfeit => serde_json::json!({"kind":"forfeit"}),

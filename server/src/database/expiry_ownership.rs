@@ -17,6 +17,7 @@ use ark::vtxo::Full;
 
 use super::expiry_inventory::BackingVtxoFact;
 use super::expiry_lightning::LightningSourceState;
+use super::expiry_receive::ReceiveClaimSettlement;
 use super::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use super::{BlockTable, SpendState, Tx};
 
@@ -34,6 +35,7 @@ pub enum OwnershipEvidence {
 	Pubkey,
 	IrreversibleEntitlement { entitlement_id: i64 },
 	InputOwner,
+	LightningReceiveClaim { source: VtxoId, subscription_id: i64, payment_hash: PaymentHash, output: VtxoId },
 	Pool,
 	Padding,
 	Forfeit,
@@ -109,7 +111,7 @@ impl Tx<'_> {
 			if let Some(row) = self.query_opt("SELECT e.id,e.irreversible_facts::TEXT AS irreversible_facts FROM expiry_decided_coin d JOIN expiry_entitlement e ON e.id=d.entitlement_id WHERE d.vtxo_id=$1", &[&state.vtxo_id.to_string()]).await? {
 				let facts: serde_json::Value = serde_json::from_str(row.get("irreversible_facts"))?;
 				let kind = facts.get("kind").and_then(serde_json::Value::as_str);
-				if matches!(kind, Some("pubkey"|"input_owner"|"pool"|"padding"|"forfeit"|"offboard"|"exchange"|"htlc_unattempted_expired"|"htlc_external_failed"|"htlc_source_discharged")) {
+				if matches!(kind, Some("pubkey"|"input_owner"|"lightning_receive_claim"|"pool"|"padding"|"forfeit"|"offboard"|"exchange"|"htlc_unattempted_expired"|"htlc_external_failed"|"htlc_source_discharged")) {
 					proposal.disposition = if let Some(key) = facts.get("customer_key").and_then(serde_json::Value::as_str) {
 						self.expiry_customer(state.vtxo_id, key.parse()?).await?
 					} else if facts.get("operator") == Some(&serde_json::Value::Bool(true)) {
@@ -166,6 +168,37 @@ impl Tx<'_> {
 			return Ok(proposal);
 		}
 		let Ok(user) = full.clone().try_into_user_vtxo() else { return Ok(proposal); };
+		// Receive claims carry their own authenticated destination. A provider
+		// checkpoint is not the recipient of a settled receive-for-address.
+		let mut cancelled_receive_claim = false;
+		if state.spend_state == SpendState::Unregistered || matches!(user.policy(), ark::VtxoPolicy::ServerHtlcRecv(..) | ark::VtxoPolicy::ServerHtlcRecv_v0(..)) {
+			if let Some(claim) = self.receive_claim_entitlement(state.vtxo_id).await? {
+				match claim.settlement {
+					ReceiveClaimSettlement::CancelledUncollected => {
+						// Cancellation creates no customer principal. Preserve the
+						// grant's normal terminal revocation/expiry proof below;
+						// a shared preimage cannot redirect it to the provider.
+						cancelled_receive_claim = true;
+					},
+					ReceiveClaimSettlement::Pending => {
+						proposal.disposition = OwnershipDisposition::Unresolved("receive claim settlement is not confirmed");
+						return Ok(proposal);
+					},
+					ReceiveClaimSettlement::Settled => {
+						if let Some(key) = claim.recipient {
+							proposal.disposition = self.expiry_customer(claim.output_id, key).await?;
+							proposal.evidence = Some(OwnershipEvidence::LightningReceiveClaim {
+								source: claim.source, subscription_id: claim.subscription_id,
+								payment_hash: claim.payment_hash, output: claim.output_id,
+							});
+						} else {
+							proposal.disposition = OwnershipDisposition::Unresolved("receive destination has conditional policy");
+						}
+						return Ok(proposal);
+					},
+				}
+			}
+		}
 		if state.spend_state == SpendState::Unregistered {
 			if let Some((parent, key)) = self.expiry_unregistered_input_owner(full).await? {
 				proposal.disposition = self.expiry_customer(parent, key).await?;
@@ -216,7 +249,7 @@ impl Tx<'_> {
 				&& watchman_tip.is_some_and(|height| htlc.htlc.htlc_expiry <= height)
 				&& fact.onchain_spent_height.is_none() && fact.onchain_spent_txid.is_none();
 			let Some(resolution) = htlc.htlc.resolution() else {
-				if proposal.has_stored_preimage && htlc.direction() == HtlcDirection::Outgoing {
+				if proposal.has_stored_preimage && htlc.direction() == HtlcDirection::Outgoing && !cancelled_receive_claim {
 					// A granted receive is already a signed obligation to this
 					// recipient. Sending grants require their own funding evidence.
 					proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;

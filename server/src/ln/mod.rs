@@ -1021,6 +1021,13 @@ impl Server {
 		let builder = self.validate_cosign_request(validation, cosign_request)
 			.badarg("invalid cosign request")?;
 
+		// Bind the validated final destination before collecting the invoice. The
+		// receive provider's checkpoint key is not the destination's ownership.
+		let receive_claims = crate::database::expiry_receive::ReceiveClaimBinding::from_package(&builder)
+			.badarg("invalid receive claim destination")?;
+		ensure!(receive_claims.len() == htlc_ids.len(), "receive claim contains a non-receive source");
+		self.db.write(async |t| t.prepare_receive_claims(&receive_claims).await).await?;
+
 		// Record the preimage in the settler so the watchman signer/policy
 		// can find it if this VTXO ends up being claimed on-chain.
 		// The settler is the single source of truth for preimages; all

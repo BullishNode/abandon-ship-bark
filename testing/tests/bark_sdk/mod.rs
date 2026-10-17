@@ -20,6 +20,7 @@ mod fallback_adoption;
 mod fallback_external;
 mod import;
 mod lightning;
+mod lightning_receive_binding;
 mod mailbox;
 mod offboard;
 mod payment_request;

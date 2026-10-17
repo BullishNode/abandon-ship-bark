@@ -2,7 +2,7 @@
 
 Base: `e44ddf95741478508908c17adc61752832d75c6a`.
 
-First checkpoint: 17/17 case executions passed across 16 unique names and eight nextest invocations. Latest aggregate:22PASS/2FAIL across24executions,23unique names and12nextest invocations. One current-cut case was repeated with stronger history assertions. The two mailbox cases are component coverage; the other 15 executions use native operations. Mandatory `just checks` passed. Per-product/runtime pins differ and are explicit in the receipts. Production readiness remains open.
+First checkpoint: 17/17 case executions passed across 16 unique names and eight nextest invocations. Latest aggregate:23PASS/2FAIL across25executions,24unique names and13nextest invocations. One current-cut case was repeated with stronger history assertions. The two mailbox cases are component coverage; the other 15 executions use native operations. Mandatory `just checks` passed. Per-product/runtime pins differ and are explicit in the receipts. Production readiness remains open.
 
 No new product verdict exists at startup. The explicit disk hold prevents builds, native test runs, large copies, services, funding and campaigns until coordinator release. The three workers inspect source and prepare a small inventory.
 
@@ -78,3 +78,21 @@ Canonical source99a0553ac plus owned test patch/public-API correction compiled i
 - FAIL automaticoversize16.359seconds,4a930d92:fixturewronglyassumed1checkpoint for4destinations; actualnativebuilderhas4checkpointoutputs and5signedtransactions.327recordsregistered; assertionbeforeinitialpathregistration andexpiry. Allfailedrawstate preserved. Automaticpayoutoracle not reached; no productverdict. Actualnativegraph source repair must keep10kvB/fanout4/depth100/600seconds and genuine327payees.
 
 The user's primary invariant is the rightful user's real fallback for swap-received or refundable failed-swap value. The next primary normal acceptance case stops provider at POSTregistration Delivering, keeps recipientabsent, proves actual registeredrecipient payout atactualbackingexpiry withCore>=6confirmations, then freshseed-only discovery/confirmedrecoveryspend. A complementary accepted-swap cancellation duringproductdowntime tests actual failedsender99k refund. Backend pre-registration risk remains source-level/unconfirmed; its incorrect-payout reproduction is stopped and this track does not duplicate it.
+
+
+## Primary normal registered receive fallback: actual PASS
+
+Run ffa4d760-e441-4ab5-991e-251bdb9e42b9 passed in34.497seconds. A real10,000sat external invoice (actualnativeconfigured receivefee0) produced a fullysigned registered10,000sat recipientcoin atdurableDelivering. Originalrecipient was absentbeforeinvoice; provider stoppedforeverafterregistration andneverdelivered/reopened. The recipient's standardBIP84script received9,000sat with>=6Coreconfirmations andone1,000satpayoutfee. Realparentprevouts/outputsconservedthefullparent, includingoperatorresidual. Allcustomerallocations/canonicaloutputsacrossthewholebackingroot belongedonlytotherecipient, withnoprovider/ancestorrefund, recheckedpasttheoriginalHTLCdeadlineafterbothdaemonviews/financialledgerrebuilt.
+
+ONLYafterthoseabsence/payoutoracles, a NEWdatabase/genesisbirthday usingonlyrecipientseed authenticatedtheexactreceipt anddiscoveredtheexact9,000satUTXO. ActualBIP84drainspentonlythatoutpoint, producedonechosen-scriptoutputandpositive independentlycomputedminerfee, andconfirmed>=6inCore with exactvalueconservation. This isdirectrightful-userfallbackproofforNORMALPOSTregisteredreceivedswapvalue. It givesnocredittoPREregistrationlostreply, failedsendrefund, stockNoah/LNURLorSignetfeeprofile. Noassertion/source/feepolicywasweakened andnoretryoccurred.
+
+The testsourceSHA56b1553 is frozenin source-manifestf2961801 oncanonical3606fa78eplusownedtestpatch. NewimmutableELF2a749d53 andmetadatade04cd55 bindthisresult; fullhashes/commandsarein batch13receipt anddirect-receive-runtime-manifest.json. MandatorycanonicaljustchecksPASS; compilerleasewasreturnedbeforeexecution.
+
+
+## Final paired v2: both rightful-user fallback cases pass
+
+The unchanged recipient fallback case passed again in 36.184 seconds (`61d55416-31d6-4704-8f17-dbc8036178bd`). The existing genuine Accepted-then-Cancelled external-send case passed in 52.392 seconds (`e968e1cf-20d6-43a9-aad8-24f592bee113`): its rightful registered script received 99,000 sat with at least six Core confirmations, with parent conservation and one dispatch. This failed-send case does not prove sender seed recovery, a completed confirmed-ledger projection, full-lineage absence, a reorg or cancellation during product downtime.
+
+Both runs independently verified all six archived ELFs, source/metadata/runtime manifests and actual CLN plugin hashes before execution. All four products and paired SDK/server binaries came from exact dirty source manifest `c60c5cd4c9d8cc0fbeaa8f8f6a71ba4102a46075cd2d9515fb505d9ba2dc882b`, labelled `6950be5a`. The changed Nix CLN derivation was not built; the exact separately pinned ad-hoc adapter was used. Backend units and other tracks' native runs are excluded from our counts.
+
+The 15 invocations now account for 27 executions: 25 PASS, two FAIL, 24 unique names, 25 native executions and two mailbox components. Both original failed receipts remain unchanged. The 80 original scenarios are not all qualified. See FIFTH-CHECKPOINT.md and batch14/batch15 receipts for full pins, commands and limits. No additional Cargo or native runtime remains owned by this track. Production readiness is not established.

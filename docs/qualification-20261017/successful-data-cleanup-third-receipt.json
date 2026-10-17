@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-17T16:35:26.830092+00:00",
+  "scope": "Only2completedPASS rawdatasets/snapshots; primarybatch13 andallFAILdata retained",
+  "owned_process_matches": 0,
+  "runs": [
+    {
+      "run": "batch10-lightning-restart",
+      "raw_bytes_removed": 119390168,
+      "files_hashed": 1868,
+      "private_log_archive_bytes": 1092050,
+      "hash_manifest_sha256": "27fa9f957bcd0aca12493acb68fac01ad88090f95656591531b97c63569b1e44"
+    },
+    {
+      "run": "batch11-native-forwarding-reopen",
+      "raw_bytes_removed": 133253783,
+      "files_hashed": 1876,
+      "private_log_archive_bytes": 1166765,
+      "hash_manifest_sha256": "1cfd83836fd7378113b8f57f27d2c3473373d28efa5e066e63e791dd86c57bf9"
+    }
+  ],
+  "total_raw_bytes_removed": 252643951
+}

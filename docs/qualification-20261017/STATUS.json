@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-17T16:19:44.960020+00:00",
+  "updated_at": "2026-10-17T17:03:11.158807+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "ACTIVE_PRIMARY_SWAP_FALLBACK_SOURCE_AUTHORING",
+  "state": "COMPLETED_ALLOCATED_FINAL_V2_CHECKPOINT_PUBLICATION",
   "branch": "work/fresh-test-qualification-20261017",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
@@ -17,7 +17,7 @@
   "execution": {
     "disk_hold_released": true,
     "shared_target_write_allocated": false,
-    "runtime_capacity_allocated": "ONE archived native test at a time alongside client gate",
+    "runtime_capacity_allocated": "Both explicitly allocated final-v2 serial runs completed; no owned native slot or Cargo writer remains.",
     "new_signet_campaign_allocated": false,
     "next_shared_target_write_allocated": false
   },
@@ -42,11 +42,11 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Author2normalmoney-path tests: receivedswapPOSTregisteredrightfulrecipientfallback/seedrecovery, and Accepted->Cancelwhileproductsdown rightfulfailedsenderfallback. Oversizeactualgraphrepair sourceonly. Requestnextcanonicalcompilelease afterreview.",
+  "next_action": "Publish direct recipient test and sanitized evidence as a new draft PR; no additional native runtime allocated.",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
-  "runtime_allocation": "One owned native test at a time; archived and own-code cases finished; checks active",
+  "runtime_allocation": "COMPLETED; released. Additional native work requires coordinator scheduling.",
   "inventory_rows_by_file": {
     "legacy-inventory.csv": 103,
     "backend-inventory.csv": 72,
@@ -65,16 +65,17 @@
     "same-expiry ready root/unresolved HTLC root isolation",
     "current-cut return history exact two-root debit and sync/reopen idempotence"
   ],
-  "build_lease": "RELEASED after servermetadata/mandatorychecks/immutablearchive; no targetwriter",
+  "build_lease": "RELEASED after immutablecapture+requiredchecks; no sharedtargetwriter",
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
-  "new_test_source_review": "First2tests fixed,compiled,andpassed; next Lightning/oversize drafts uncompiled",
-  "coverage_rows": 238,
-  "coverage_warning": "Mixed source tests/requirements/scenarios;80originallegacyIDs.20uniqueexecutednames; no wholelegacycase automaticallycredited.",
+  "new_test_source_review": "Published earlier tests compiled and ran; direct recipient test compiled and passed on two separately pinned runtime pairings. Deferred oversized correction and failed-send restart are source-only.",
+  "coverage_rows": 239,
+  "coverage_warning": "239 mixed inventory/requirement/executed rows; 80 original legacy IDs retained. 24 unique executed names across 27 executions; whole legacy cases require their complete original oracle.",
   "current_batch": {
-    "name": "batch12-automatic-multilevel-split",
+    "name": "batch15-v2-failed-send-refund",
     "state": "COMPLETED",
-    "result": "FAIL fixturegraphassertion"
+    "result": "PASS",
+    "run_id": "e968e1cf-20d6-43a9-aad8-24f592bee113"
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -92,7 +93,8 @@
     "scope": "own six successful private datasets only; verified no owned live test processes",
     "preserved": "complete file hash manifests, source/product pins, logs, runners, receipts, nextest store",
     "failed_data_deleted": false,
-    "second_removed_bytes": 231545769
+    "second_removed_bytes": 231545769,
+    "third_removed_bytes": 252643951
   },
   "native_build": {
     "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/runtime-testing-e44-tests-v1",
@@ -108,10 +110,10 @@
     "wall_seconds_approx": 159.375
   },
   "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
-  "case_executions": 24,
-  "unique_executed_test_names": 23,
-  "nextest_invocations": 12,
-  "native_case_executions": 22,
+  "case_executions": 27,
+  "unique_executed_test_names": 24,
+  "nextest_invocations": 15,
+  "native_case_executions": 25,
   "component_case_executions": 2,
   "new_test_results": {
     "readiness": "PASS26.184s",
@@ -132,14 +134,23 @@
     "next_checkpoint": "Draft source/report publication; new3tests uncompiled/unrun",
     "next_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/7",
     "next_verified_remote_head": "e509f35169b8ee409310c1361305c1e1942565f2",
-    "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN"
+    "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN",
+    "next_pr_verified_merged": {
+      "pr": 7,
+      "head": "b9f23f5bfb0c0d92911cb00287a70d80a497a92c",
+      "merge_commit": "6950be5a6855625d76d04e33c86a6b030cd9406e",
+      "merged_at": "2026-10-17T16:33:58Z"
+    },
+    "primary_local_code_commit": "0870bbbb915f133b98b00b5c3d7dc2a2a2ac0bc5",
+    "primary_code_publication": "Local source commit0870 plus final sanitized report checkpoint ready for new draft PR; PR7 verified merged."
   },
   "next_batch": {
-    "automatic_oversize": "Reviewed source only327realpayees;600sserialslot approved; awaiting canonicalintegration/compilerlease",
+    "automatic_oversize": "Corrected actual graph source-only; uncompiled/unrun, deferred pending owner integration and lease",
     "backup_restore": "Frozen source-only draft after Lightning priority",
     "conflict_reorg": "Frozen source-only draft after Lightning priority",
-    "lightning_restart": "Authentic internal xpay-reply loss with2samehash sources source-only; peer review active",
-    "noah_forwarding": "Native registered-but-undelivered/providerreopen prerequisite source-only; stockNoahmetadatahash compatibility still unqualified"
+    "lightning_restart": "Completed source-labelled success recovery; stronger failed-send cancellation-during-downtime draft reviewed but uncompiled/unrun",
+    "noah_forwarding": "Native provider-reopen and actual post-registration recipient fallback passed; stock Noah LNURL metadata-hash compatibility unqualified",
+    "failed_send_restart": "Reviewed isolated source-only packet, no module registration/compile/runtime"
   },
   "next_compile_policy": "Author/review in own isolated worktree; submit reviewed patch/PR increment for coordinator integration; compile from canonical stable package path only after explicit writerlease. No new own-worktree metadata.",
   "source_review_fixes": [
@@ -149,7 +160,7 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 22,
+  "passed_case_executions": 25,
   "failed_case_executions": 2,
   "first_checkpoint": {
     "executions": 17,
@@ -253,7 +264,7 @@
     "code_commit": "2cc925ed1"
   },
   "next_test_code_commit": "8fc4b1d7c",
-  "next_source_prechecks": "PASS4/4; compile/runtime/mandatorychecks pending canonical lease",
+  "next_source_prechecks": "Prior source prechecks passed; corresponding canonical compile/checks completed. No new shared-target write authorized.",
   "external_backend_adapter_positive": {
     "result": "PASS1/1,28.777s",
     "run_id": "c0a5f364-a775-4ed0-9fe7-22286ec2eeb9",
@@ -276,14 +287,49 @@
   "new_runtime_results": {
     "lightning_restart": "PASS56.310s; unusedsamehashsource99kCore>=6conf; no paidrootrefund",
     "native_forwarding": "PASS28.617s; exactmailbox/signedbytes/providerreopen; no expirycredit",
-    "automatic_oversize": "FAIL16.359s fixture1checkpoint assumption vsactual4 beforepathregistration/expiry; productoracle not reached"
+    "automatic_oversize": "FAIL16.359s fixture1checkpoint assumption vsactual4 beforepathregistration/expiry; productoracle not reached",
+    "registered_receive_fallback": "PASS34.497s; bothoriginalactorsabsent/actual9kCore6+1kfee/wholelineagecorrectrecipient/freshseedonlyBIP84drainCore6",
+    "final_v2_registered_receive": "PASS36.184s/61d55416; samecase/freshALL4products+pairedSDK/sourcec60c",
+    "final_v2_failed_send": "PASS52.392s/e968e1cf; authentic Accepted->Cancelled, rightful99k fallback Core>=6; no sender seed recovery/confirmed-ledger/reorg/restart credit"
   },
   "primary_next_patch": {
     "path": "direct-registered-receive-fallback-v1.patch",
     "sha256": "b255efdd1768744fe5b8614bcc3094c9f0cf1ed7ddeef0e85813ed08c157b078",
     "review": "COMPLETE",
-    "compile": "NOT RUN",
-    "runtime": "NOT RUN",
-    "canonical_apply": "awaitcoordinator"
+    "compile": "PASS84sdisplay",
+    "runtime": "PASS34.497s",
+    "canonical_apply": "APPLIEDbycoordinator"
+  },
+  "primary_runtime": {
+    "head": "3606fa78e78463ca0d46d073ab1e907d51b9681e",
+    "source_manifest_sha256": "f296180173fcce528f9aadca937fcd7bf6163666c0892a1ee7a98addce477a1a",
+    "native_server_sha256": "2a749d53db58fc4be70bcb85589c2045570feffb8069980020a71346dc774c6b",
+    "checks": "PASS"
+  },
+  "aggregate_candidate_notice": {
+    "coordinator_reported_prior_test_merge": "6950be5a",
+    "writer": "coordinatorbackend",
+    "scope": "V11defensiverecipientbinding+clientv3fixturefix+Nixadapterline; requiredchecks/units/cap/watch/SDK+servermetadata",
+    "our_writer": false,
+    "our_next_runtime": "None allocated; both final-v2 cases completed",
+    "required_version": "FINALv2only; candidatev1 hadno native dispatch bythistrack",
+    "v2_change": "Root16linePubkey-onlyguard/unit+existingbadarg mapping beforeintent/settlement",
+    "approved_next_cases": [
+      "unchangedqualification_registered_forwarded_receive_pays_absent_recipient_after_provider_stops",
+      "existingexpiry_actual_failed_external_send_pays_offline_owner"
+    ],
+    "capacity": "Exactly2serialcases afterfinalartifacthandoff;1ownedruntime/max2globalwithclient",
+    "artifact_handoff": "FINALv2received/verified",
+    "source_manifest_sha256": "c60c5cd4c9d8cc0fbeaa8f8f6a71ba4102a46075cd2d9515fb505d9ba2dc882b",
+    "manifest_sha256": "3c4df44d92a60683fcc6923e6e36a1eb1696e2f3755a0b3256086c9fce5bfee9",
+    "metadata_sha256": "d307ebbd308b9e7087edf240f12ed94ea1fb911bbe023e33c0c249c0e47adbfb",
+    "runtime": "Recipient fallback PASS36.184s/61d55416; failed send PASS52.392s/e968e1cf; no owned native runtime",
+    "four_products": "Freshcap592df/watch edf59/bark7a240/barkd570ec; no oldCLI"
+  },
+  "primary_raw_retained": "Completebatch13state retained for source/chain/subsidyreview, no node/DB/RPCreopen",
+  "next_uncompiled_sources": {
+    "failed_send": "qualification_failed_swap.rs31ca387b; privatepatchede8ac6d; reviewednotapplied",
+    "oversize_graph": "qualification_oversize.rs9942a9f6; OWNworktreeonlyDEFERRED; canonicalstilltestedAPI-fixd61438dc",
+    "restore_conflict": "Frozenuntracked files; no currentwork"
   }
 }

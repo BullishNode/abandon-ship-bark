@@ -1,0 +1,170 @@
+{
+  "scope": "Offline existing text-log extraction only; no node, wallet, framework, SQL, or RPC opened; raw files unchanged.",
+  "case": "qualification_registered_receive_fallback",
+  "reported_native_result": {
+    "status": "PASS",
+    "elapsed_seconds": 34.497,
+    "run_id_prefix": "ffa4d760",
+    "compiled_primary_commit_prefix": "56b1553",
+    "manifest": "runtime-testing-direct-receive-v1"
+  },
+  "raw_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch13-registered-receive-fallback/test-data/server/qualification_registered_receive_fallback",
+  "source_logs": [
+    {
+      "relative_path": "server-watchmand/stdout.log",
+      "sha256": "04c563cfba767a10cebd35faa2aa87e09be31b1c649855a64bfd410890146bba",
+      "bytes": 596962
+    },
+    {
+      "relative_path": "server/stdout.log",
+      "sha256": "51c00cd69361deead9dd23110a9a10e36d26dd704dc1f04244fa6c23ee7a37bf",
+      "bytes": 752052
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "sha256": "fe6f29f2a13134c2b2744f6eb6e5b6e11bd0399942aaa86129156589d26f9dc1",
+      "bytes": 1384494
+    },
+    {
+      "relative_path": "server_bitcoind/regtest/debug.log",
+      "sha256": "42dc89b94c9efdd01c807f16b062add3f91e207266b8050074959ea9396c79ed",
+      "bytes": 1223920
+    }
+  ],
+  "chain_log_binding": {
+    "parent_txid": "6dad45bb1c8ad2109c168527f6981bb5058271180998db0c05297e347161fe8a",
+    "child_txid": "c9a2add98010ec3c14c29b9dd3a48eac6332f84caec8fe967bee32cb7c4e9405",
+    "connected_block_hash": "0b1776c10fac266745da702e86d783827d8f46209755b52b337ebb2dde628e8a",
+    "connected_height": 153,
+    "last_logged_tip": {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 13077,
+      "block_hash": "4cdacb4667b9994d8b819b88ef7d6ff47b632965b5a53e676d8a937b24f957a1",
+      "height": 180
+    },
+    "confirmations_at_last_logged_tip_if_no_reorg": 28
+  },
+  "fee_evidence": {
+    "product_logged_cpfp_construction_fee_sat": 2281,
+    "core_logged_block_total_fee_sat": 3362,
+    "other_same_block_rounds_tx_product_logged_fee_sat": 1081,
+    "arithmetic_reconciliation_sat": 2281,
+    "classification": "2281 sat is product-logged and consistent with Core aggregate block fees minus the other transaction product-logged fee. This extraction does not independently reconstruct the selected child fee from all previous outputs. Package and block-connect logs identify the actual child, rather than an unbound construction attempt."
+  },
+  "subsidy_evidence": {
+    "actual_operator_remainder_sat": null,
+    "actual_subsidy_sat": null,
+    "reason": "The retained structured payout logs do not serialize operator remainder/accounting for this below-warning payout. No exact subsidy claimed from absence of warning. The customer 1000 sat charge is not the entire operator remainder: the source issuance anchor also contains operator-owned backing."
+  },
+  "limits": [
+    "Core package acceptance and contiguous BlockConnected/ZMQ transaction logs support parent/child inclusion in block153; this is archived log evidence, not a new Core getblock/getrawtransaction query or raw-block verification.",
+    "The existing passing native case independently checked parent previous-output conservation, recipient9000sat/charge1000sat and BIP84 recovery transaction miner fee. Those are distinct from an independent canonical CPFP child previous-output fee oracle.",
+    "No secret, preimage, seed, config, wallet contents, or raw database copied to this report."
+  ],
+  "excerpts": [
+    {
+      "relative_path": "server-watchmand/stdout.log",
+      "line": 1021,
+      "timestamp": "2026-10-17T16:25:35.992Z",
+      "event": "cpfp_construction",
+      "weight_wu": 1303,
+      "fee_sat": 2281,
+      "iterations": 1
+    },
+    {
+      "relative_path": "server/stdout.log",
+      "line": 1162,
+      "timestamp": "2026-10-17T16:25:32.262Z",
+      "event": "product_wallet_signed_rounds_tx",
+      "txid": "6bac90a4da87eb37dc8def1f1874176836125b7fe3d8bab3884c6e7c2946a786",
+      "fee_sat": 1081
+    },
+    {
+      "relative_path": "server/stdout.log",
+      "line": 1179,
+      "timestamp": "2026-10-17T16:25:35.927Z",
+      "event": "expiry_allocation_committed",
+      "allocation_id": 1,
+      "inputs": 1,
+      "dropped": 0
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10064,
+      "timestamp": "2026-10-17T16:25:38Z",
+      "event": "parent_zero_fee_relay_rejection",
+      "txid": "6dad45bb1c8ad2109c168527f6981bb5058271180998db0c05297e347161fe8a",
+      "fee_sat": 0
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10068,
+      "timestamp": "2026-10-17T16:25:38Z",
+      "event": "core_package_accepted",
+      "parent_txid": "6dad45bb1c8ad2109c168527f6981bb5058271180998db0c05297e347161fe8a",
+      "child_txid": "c9a2add98010ec3c14c29b9dd3a48eac6332f84caec8fe967bee32cb7c4e9405"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10196,
+      "timestamp": "2026-10-17T16:25:39Z",
+      "event": "core_block_template",
+      "non_coinbase_txs": 3,
+      "total_fee_sat": 3362,
+      "weight_wu": 2823
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10217,
+      "timestamp": "2026-10-17T16:25:39Z",
+      "event": "core_mempool_block_removal",
+      "height": 153,
+      "txs_removed": 3
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10218,
+      "timestamp": "2026-10-17T16:25:39Z",
+      "event": "core_new_best",
+      "height": 153,
+      "block_hash": "0b1776c10fac266745da702e86d783827d8f46209755b52b337ebb2dde628e8a"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10227,
+      "timestamp": "2026-10-17T16:25:39Z",
+      "event": "core_block_connected",
+      "height": 153,
+      "block_hash": "0b1776c10fac266745da702e86d783827d8f46209755b52b337ebb2dde628e8a"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10230,
+      "timestamp": "2026-10-17T16:25:39Z",
+      "event": "core_block_connected_zmq_tx",
+      "txid": "6bac90a4da87eb37dc8def1f1874176836125b7fe3d8bab3884c6e7c2946a786"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10232,
+      "timestamp": "2026-10-17T16:25:39Z",
+      "event": "core_block_connected_zmq_tx",
+      "txid": "6dad45bb1c8ad2109c168527f6981bb5058271180998db0c05297e347161fe8a"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10234,
+      "timestamp": "2026-10-17T16:25:39Z",
+      "event": "core_block_connected_zmq_tx",
+      "txid": "c9a2add98010ec3c14c29b9dd3a48eac6332f84caec8fe967bee32cb7c4e9405"
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "line": 10236,
+      "timestamp": "2026-10-17T16:25:39Z",
+      "event": "core_zmq_block_connect",
+      "height": 153,
+      "block_hash": "0b1776c10fac266745da702e86d783827d8f46209755b52b337ebb2dde628e8a"
+    }
+  ]
+}

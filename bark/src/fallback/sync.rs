@@ -157,6 +157,9 @@ impl Wallet {
 				entitlements: pages.entitlements, view_token: pages.token,
 				local_debits: previous.local_debits.clone(), movement_ids: previous.movement_ids.clone(),
 				awaiting_sync: false, awaiting_settlement: previous.awaiting_settlement.clone(),
+				verified_payouts: previous.verified_payouts.clone(),
+				payout_observations: previous.payout_observations.clone(),
+				adopted_payout_vtxos: previous.adopted_payout_vtxos.clone(),
 			};
 			for entitlement in snapshot.entitlements.values_mut() {
 				entitlement.verify(&record.spk)?;
@@ -177,6 +180,7 @@ impl Wallet {
 					}
 				}
 			}
+			self.verify_fallback_chain_evidence(&mut snapshot, &record.spk).await?;
 			// IDs are existing action-indexed movement IDs. Interrupted reservation
 			// leaves only hidden placeholders; publishing the one snapshot makes
 			// all current output groups visible together.
@@ -197,6 +201,11 @@ impl Wallet {
 				.map(|movement| (movement.id, movement)).collect::<std::collections::HashMap<MovementId, _>>();
 			let projected = snapshot.project(stored, network)?;
 			self.inner.db.store_fallback_snapshot(&snapshot).await?;
+			if let Err(error) = self.apply_fallback_chain_states(&snapshot).await {
+				// The durable recovery marker already committed. Never roll it
+				// back after a partial state update; next sync retries safely.
+				log::warn!("Fallback coin states await retry: {:#}", error);
+			}
 			for movement in projected.into_iter().filter(|m| m.subsystem.name == FALLBACK_SUBSYSTEM) {
 				match old.get(&movement.id) {
 					None => self.inner.notifications.dispatch_movement_created(movement),
@@ -209,7 +218,12 @@ impl Wallet {
 		if let Err(error) = result {
 			let mut stale = previous;
 			stale.awaiting_sync = true;
+			// Server availability must not suppress independent reorg checks.
+			if let Err(chain_error) = self.verify_fallback_chain_evidence(&mut stale, &record.spk).await {
+				log::warn!("Fallback chain evidence could not be refreshed: {:#}", chain_error);
+			}
 			self.inner.db.store_fallback_snapshot(&stale).await?;
+			self.apply_fallback_chain_states(&stale).await?;
 			return Err(error).context("fallback history is awaiting a coherent server view");
 		}
 		Ok(())

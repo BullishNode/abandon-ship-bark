@@ -1,0 +1,304 @@
+{
+  "state": "FINAL_EXTERNAL_PROPOSAL_READY_FOR_PARENT_PUBLICATION",
+  "prepared_payload_root": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe",
+  "proposed_report_branch": "work/fresh-test-report-checkpoint12-20261017",
+  "branch_base_and_dependency": {
+    "PR15": 15,
+    "state": "DRAFT_OPEN",
+    "head": "f34f97890975cb6789b44982e0e8a818edc5e33c",
+    "preservation": "Original PR15 branch/head/public docs remain untouched. Parent owns new report branch/PR and exact remote verification."
+  },
+  "scope": "Report-only checkpoint12 fixed220executions206PASS14FAIL216unique193nextest208native12components431coverage. Four v6 native PASS; historical Noah audit adds no new execution and promotes no fullML/productiongate.",
+  "files": {
+    "COVERAGE.csv": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+    "FINDINGS.md": "b88b506147f16b6327712eab750d9382fb3be05e051792c147e4125522911f14",
+    "NOAH-READONLY-AUDIT.md": "2ee0aee892c692d321021cc52bfb2b59ece9237afa3fd85b985014280309a34a",
+    "STATUS.json": "41d4bcf63665d6b9967c38c6de64ac260cc76e13363845f0719dbd5fa8940fe0",
+    "TWELFTH-CHECKPOINT.md": "12337236f2c63b293e7f0f39964068ca10d0a9ba0f5ecae2dfe5ebe154b80b14",
+    "batch39-client-postflight.json": "7a4b27de0a395b766c87b1ce1910f87565c48ca36fc0a3f57d8983343bec7b69",
+    "batch39-coverage-append.json": "ecd76e01cd6760f8806a27a7cae362a2c7a9bb80e85e4294ed846e8479c25c7b",
+    "batch39-native-oracle-review.json": "f402e3193ab1038da590330c9e2cda6b479659888ca938d0e8908231bfcd8641",
+    "batch39-native-oracle-review.md": "6a47d0e97b3853abdc9c5a928cb80f0d2c5d6506794aeebd180578937808b57f",
+    "batch39-owner-replan-v6-preparation-manifest.json": "97114c6c87fca3a89e5c5394fea4fce0aff319107959ab183145dd5d8e4a0d08",
+    "batch39-owner-replan-v6-receipt.json": "779d3771ce61016748db980e10eb3a3734e933cdeb7106b01d470bc1ee4d859c",
+    "batch39-owner-replan-v6-safe-files.sha256": "d03159a9161fe266c509d75e74bee8fdb8fbadc23ee70df5262d9346d5296167",
+    "batch39-safe-cohort-progress.json": "a4b1a0c62ae42e0830a72f4ade66da25b12cc26fd6ffb13d0ab3bc0bf7cb3774",
+    "batch39-safe-cohort-summary.json": "988b8140e362c62fd732cc11b2d7586abb566022f540de83c41167dac98b3d55",
+    "batch39-safe-controller.log": "71a910f938b0e782c39d45f5bfea708ce7a475b3b94e44987b7d0798b22edbe0",
+    "batch39-safe-fresh-listing-admission.json": "9e885df26a0a2832c8d693b682b848d9fa36fe20cddd56ad6b465d4ba385a2db",
+    "batch39-safe-preflight-parent-final.log": "a34eac2133337104925cff5ddcf4aff6ae119cdc66b628e9cf929e29ab05b368",
+    "batch39-safe-resource-admission.json": "f22c55c94ecec840201b0be4bab772743f9d89f4f42fd50723755da1752bc052",
+    "batch39-safe-resource-checkpoints.jsonl": "277d5eab4818ba92df8d268ee4e88f1bb93d4d90e368415548023a50562299b7",
+    "batch39-safe-runtime-pins.sha256": "e502eb334339d903705ccda4c2c75bc8a4ebe1ea9a9c4ec2a0d2a4f7d653a7e8",
+    "batch39-safe-selection-proof.json": "f64171842da38045db81a3e9328fcc0105308733cdc2a2ba7b75aab74f2a4af4",
+    "noah-actual-invoice-rejection-20261017-public-copy.json": "dcc4410247d48589b0ba1bd6f7f13c0725d649f663fccaad25b5373110544ab6",
+    "noah-failure-artifact-provenance-review.json": "95ecc9e06b56c59fc0df8101167e8d9b22ae74ff8ea41143c227fa40b2e137fd",
+    "noah-failure-artifact-provenance-review.md": "169c23b7980208abae436505dc1342aec4e2b2dc706c7f7fbb1fcc446a6bd976",
+    "noah-invoice-verifier-20261017-public-copy.json": "a9b6b3045752811d2b01701a569781c69ec82e995dcfd656e3727ee50d91a750",
+    "noah-lnurl-client-audit-provenance.json": "d64181d7de41d181cbebbb722398ca8577914156ccfca30a05bdf965430bbdff",
+    "noah-lnurl-client-observed-addendum.json": "91d750d668280448c47e88960b2c9399a4f2c813b4c762f1a3d93923932be5fe",
+    "noah-lnurl-client-observed-addendum.md": "38505d67afc1044c4499d565f3296e3559f67b7fb773484fa18df111465490cf",
+    "noah-lnurl-client-source-audit.md": "79959686ef5158c9d4f7637a02e91a251b14f97dd41cbc5422f0777871e51433",
+    "noah-lnurl-protocol-scope-addendum.md": "7f3b54f8c38f495c2728bcd243e501a6f181580e3ea29c18f4c44bb46162612c",
+    "noah-metadata-preflight-20261017-public-copy.json": "9731b8227918f34709b7789e32cf706dd209de23bf9e457594cd3709e02af969",
+    "source-intake-three-existing-v6-match.json": "a6d124519a6e83581b5267a0b9d2b8764d713e7d60201e68e4dc32747ba2c467",
+    "source-queue-post-batch39.json": "2187df586053bb7ed29fb61e35017447c04ad6432b8a5fea7e8a14b45fab34a9",
+    "stock-noah-lnurl-metadata-source-review.json": "fa3b42f1c10b56751822f481895b6092bb2489203e10ce46ad89cd7ad26b1150",
+    "stock-noah-lnurl-metadata-source-review.md": "430f276e0416eb04c5177a3ad325aa8a1cf408d85543d78ea2fbb3cc5acf3139"
+  },
+  "file_sources": {
+    "COVERAGE.csv": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/COVERAGE.csv",
+    "FINDINGS.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/FINDINGS.md",
+    "NOAH-READONLY-AUDIT.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/NOAH-READONLY-AUDIT.md",
+    "STATUS.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/STATUS.json",
+    "TWELFTH-CHECKPOINT.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/TWELFTH-CHECKPOINT.md",
+    "batch39-client-postflight.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-client-postflight.json",
+    "batch39-coverage-append.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-coverage-append.json",
+    "batch39-native-oracle-review.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-native-oracle-review.json",
+    "batch39-native-oracle-review.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-native-oracle-review.md",
+    "batch39-owner-replan-v6-preparation-manifest.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-owner-replan-v6-preparation-manifest.json",
+    "batch39-owner-replan-v6-receipt.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-owner-replan-v6-receipt.json",
+    "batch39-owner-replan-v6-safe-files.sha256": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-owner-replan-v6-safe-files.sha256",
+    "batch39-safe-cohort-progress.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-cohort-progress.json",
+    "batch39-safe-cohort-summary.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-cohort-summary.json",
+    "batch39-safe-controller.log": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-controller.log",
+    "batch39-safe-fresh-listing-admission.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-fresh-listing-admission.json",
+    "batch39-safe-preflight-parent-final.log": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-preflight-parent-final.log",
+    "batch39-safe-resource-admission.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-resource-admission.json",
+    "batch39-safe-resource-checkpoints.jsonl": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-resource-checkpoints.jsonl",
+    "batch39-safe-runtime-pins.sha256": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-runtime-pins.sha256",
+    "batch39-safe-selection-proof.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/batch39-safe-selection-proof.json",
+    "noah-actual-invoice-rejection-20261017-public-copy.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-actual-invoice-rejection-20261017-public-copy.json",
+    "noah-failure-artifact-provenance-review.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-failure-artifact-provenance-review.json",
+    "noah-failure-artifact-provenance-review.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-failure-artifact-provenance-review.md",
+    "noah-invoice-verifier-20261017-public-copy.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-invoice-verifier-20261017-public-copy.json",
+    "noah-lnurl-client-audit-provenance.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-lnurl-client-audit-provenance.json",
+    "noah-lnurl-client-observed-addendum.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-lnurl-client-observed-addendum.json",
+    "noah-lnurl-client-observed-addendum.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-lnurl-client-observed-addendum.md",
+    "noah-lnurl-client-source-audit.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-lnurl-client-source-audit.md",
+    "noah-lnurl-protocol-scope-addendum.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-lnurl-protocol-scope-addendum.md",
+    "noah-metadata-preflight-20261017-public-copy.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/noah-metadata-preflight-20261017-public-copy.json",
+    "source-intake-three-existing-v6-match.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/source-intake-three-existing-v6-match.json",
+    "source-queue-post-batch39.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/source-queue-post-batch39.json",
+    "stock-noah-lnurl-metadata-source-review.json": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/stock-noah-lnurl-metadata-source-review.json",
+    "stock-noah-lnurl-metadata-source-review.md": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint12-proposed-safe/stock-noah-lnurl-metadata-source-review.md"
+  },
+  "new_files": [
+    "NOAH-READONLY-AUDIT.md",
+    "TWELFTH-CHECKPOINT.md",
+    "batch39-client-postflight.json",
+    "batch39-coverage-append.json",
+    "batch39-native-oracle-review.json",
+    "batch39-native-oracle-review.md",
+    "batch39-owner-replan-v6-preparation-manifest.json",
+    "batch39-owner-replan-v6-receipt.json",
+    "batch39-owner-replan-v6-safe-files.sha256",
+    "batch39-safe-cohort-progress.json",
+    "batch39-safe-cohort-summary.json",
+    "batch39-safe-controller.log",
+    "batch39-safe-fresh-listing-admission.json",
+    "batch39-safe-preflight-parent-final.log",
+    "batch39-safe-resource-admission.json",
+    "batch39-safe-resource-checkpoints.jsonl",
+    "batch39-safe-runtime-pins.sha256",
+    "batch39-safe-selection-proof.json",
+    "noah-actual-invoice-rejection-20261017-public-copy.json",
+    "noah-failure-artifact-provenance-review.json",
+    "noah-failure-artifact-provenance-review.md",
+    "noah-invoice-verifier-20261017-public-copy.json",
+    "noah-lnurl-client-audit-provenance.json",
+    "noah-lnurl-client-observed-addendum.json",
+    "noah-lnurl-client-observed-addendum.md",
+    "noah-lnurl-client-source-audit.md",
+    "noah-lnurl-protocol-scope-addendum.md",
+    "noah-metadata-preflight-20261017-public-copy.json",
+    "source-intake-three-existing-v6-match.json",
+    "source-queue-post-batch39.json",
+    "stock-noah-lnurl-metadata-source-review.json",
+    "stock-noah-lnurl-metadata-source-review.md"
+  ],
+  "updated_files": [
+    "COVERAGE.csv",
+    "FINDINGS.md",
+    "STATUS.json"
+  ],
+  "unchanged_included_files": [],
+  "aggregate": {
+    "executions": 220,
+    "pass": 206,
+    "fail": 14,
+    "unique_names": 216,
+    "invocations": 193,
+    "native": 208,
+    "components": 12,
+    "coverage_rows": 431
+  },
+  "required_reviews_final_and_included": true,
+  "batch39_receipt_sha256": "779d3771ce61016748db980e10eb3a3734e933cdeb7106b01d470bc1ee4d859c",
+  "client_postflight_sha256": "7a4b27de0a395b766c87b1ce1910f87565c48ca36fc0a3f57d8983343bec7b69",
+  "backend_oracle_review_sha256": "f402e3193ab1038da590330c9e2cda6b479659888ca938d0e8908231bfcd8641",
+  "noah_consolidation_sha256": "2ee0aee892c692d321021cc52bfb2b59ece9237afa3fd85b985014280309a34a",
+  "historical_source_queue_sha256": "2187df586053bb7ed29fb61e35017447c04ad6432b8a5fea7e8a14b45fab34a9",
+  "compiled_three_NOT_RUN_correction_sha256": "a6d124519a6e83581b5267a0b9d2b8764d713e7d60201e68e4dc32747ba2c467",
+  "validation": {
+    "json": 20,
+    "jsonl": 1
+  },
+  "immutable_checksum_manifest_entries_verified": 295,
+  "historical_accumulator_exceptions": [
+    {
+      "manifest": "batch28-barkd-unstarted17-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "637308cde95afe53a1f69c6012a8e5266be1dee581405722938efec7f978147f",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    },
+    {
+      "manifest": "batch23-upstream-bark-unstarted46-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "f697f60214a4dc530bd50dde057730195c969982e2bc230e924c72ce76559c8a",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    },
+    {
+      "manifest": "batch24-upstream-bark-unstarted29-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "972d547b79da0cbcd740c22291cbb321da0e773dc882440d711cb2a04e366c10",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    },
+    {
+      "manifest": "batch26-upstream-bark-unstarted23-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "2e4fbefba95e39a5d6ba1c29084c5a2911d8f2805f0520bf4a56442884c82523",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    },
+    {
+      "manifest": "batch25-barkd-ordinary38-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "e0eb058d6c4eb3ad8f968f8ad596c345bd46b26884ddd5210f3fbcf947a75d6e",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    },
+    {
+      "manifest": "batch27-barkd-unstarted36-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "9ecdb3ceec53d13f32c407bd09aedc1757da6ae10319ce9746acc14a54eed0ac",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    },
+    {
+      "manifest": "batch22-upstream-bark-unstarted47-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "5b1bbe2106e78d21e8e901b57f9f5e4fb35fbe1fc3419e14ccc84c7e58cf9186",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    },
+    {
+      "manifest": "batch21-upstream-bark-remaining75-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "5b1bbe2106e78d21e8e901b57f9f5e4fb35fbe1fc3419e14ccc84c7e58cf9186",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    },
+    {
+      "manifest": "batch19-sdk-upstream-normal-final-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "57ced37f9a1a368f6897426b56498065aa75b4eaf9b948a35501b9e6f2b1877f",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Historical accumulator snapshot retained unchanged; this proposed checkpoint records new accumulator hashes."
+    }
+  ],
+  "earlier_publication_json_entries_verified": 352,
+  "earlier_publication_json_accumulator_exceptions": [
+    {
+      "manifest": "publication-checkpoint10-files.json",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "175a0c5ccbf813f213912405eb40490209aa12c756a54025e8242d368d58f2b0",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint10-files.json",
+      "file": "FINDINGS.md",
+      "historical_expected_sha256": "c05be215c9c0e6311a8f8467ef5fbee060702cee793f876b02a903317f54f7fd",
+      "proposed_snapshot_sha256": "b88b506147f16b6327712eab750d9382fb3be05e051792c147e4125522911f14",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint10-files.json",
+      "file": "STATUS.json",
+      "historical_expected_sha256": "b78e31973691e810495355968ec41a0500d93c079f9a11dc80af9df26610c67f",
+      "proposed_snapshot_sha256": "41d4bcf63665d6b9967c38c6de64ac260cc76e13363845f0719dbd5fa8940fe0",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint9-files.json",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "0d816261693558f7dcaffd52fea114380b2732ff04da14efddd492302e63b709",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint9-files.json",
+      "file": "STATUS.json",
+      "historical_expected_sha256": "05a353396116d41b7622d3c593039c3a778edff9fee27e4816938ae5400922f0",
+      "proposed_snapshot_sha256": "41d4bcf63665d6b9967c38c6de64ac260cc76e13363845f0719dbd5fa8940fe0",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint8-files.json",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "972d547b79da0cbcd740c22291cbb321da0e773dc882440d711cb2a04e366c10",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint8-files.json",
+      "file": "STATUS.json",
+      "historical_expected_sha256": "5f8ecf8503a07c8fa1c75716ee020a1108acf06d55d0e2fdc73d6939078c131f",
+      "proposed_snapshot_sha256": "41d4bcf63665d6b9967c38c6de64ac260cc76e13363845f0719dbd5fa8940fe0",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint11-files.json",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "proposed_snapshot_sha256": "6faa37acd6142b470bb2d5a43e9172126592b31385a1fb2161429071cc74e4c5",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint11-files.json",
+      "file": "FINDINGS.md",
+      "historical_expected_sha256": "457d64b13471383f98ae012b0672ea566a85a605f1179c22fd875b0645b937f0",
+      "proposed_snapshot_sha256": "b88b506147f16b6327712eab750d9382fb3be05e051792c147e4125522911f14",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    },
+    {
+      "manifest": "publication-checkpoint11-files.json",
+      "file": "STATUS.json",
+      "historical_expected_sha256": "23b07bfae56b6d128752f4252224f782c7f202d620e7a805a4183beb531441e4",
+      "proposed_snapshot_sha256": "41d4bcf63665d6b9967c38c6de64ac260cc76e13363845f0719dbd5fa8940fe0",
+      "disposition": "Earlier publication file list is immutable; accumulator advancement is explicit."
+    }
+  ],
+  "PR15_existing_public_payload_hashes_verified_unchanged": 30,
+  "prior_coverage427_prefix_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+  "money_loss_map_unchanged": {
+    "execution_status": {
+      "NOT RUN": 198,
+      "PASS": 2
+    },
+    "evidence_scope": {
+      "PARTIAL": 145,
+      "NONE": 53,
+      "FULL": 2
+    }
+  },
+  "source_intake_disposition": "Three exact ordinary CLI targets already captured/compiled in779v6 but NOTRUN;12other ordinarytargets and other sourcepackets remain uncompiled/unrun. Historical source queue is supplemented, not rewritten. No further runtime allocation.",
+  "sanitization": "Strong private-key/extended-private-key/secret-value scan passed. Only sanitized receipts/control summaries/hashmetadata/source and protocol reviews; no Rust,patches,fullnative logs,privatebackups/walletDB/serviceDB/identity/TLS/token/seed data.",
+  "accumulator_handling": "COVERAGE/FINDINGS were read and snapshotted only. STATUS alone updated under explicit short parent lease to record new report branch; then snapshotted and lease released. Live accumulators may later advance independently.",
+  "preparer_actions": "External report preparation and read-only safe JSON/CSV/hash/regex/source checks only. No public file copy, staging, commit,push,Cargo,metadata generation,native test/service call by preparer.",
+  "final_attribution_correction": "Consolidated Noah audit correctly labels dirtyfb85 as captaind/server source;7055 nativeprovider pin remains unchanged. Only this payload file changed; cutoff/status/coverage/findings and other34payload hashes unchanged."
+}

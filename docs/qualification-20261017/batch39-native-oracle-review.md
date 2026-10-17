@@ -1,0 +1,12 @@
+All four exact native tests PASS on source manifest779189df/runtimev6 (42.519s,26.331s,27.849s,60.151s), with zero retries and no resource errors. This read-only review checked the captured test functions and safe terminal receipts, not raw private logs/databases.
+
+| Case | Fully demonstrated bounded outcome | Main limit |
+| --- | --- | --- |
+| Zero-grant timeout | Genuine100k internal source, canceled original hold, grants0/nodepayments0, both clients cease actions, actual99k sender output Core6+, parent actualprevouts/zero fee, oneactivecustomer allocation and no invented revocation | No canonical child/fullDAG/operator/minerfee cut or whole200k funding accounting; shortened24block/2s/1s fixture |
+| Internal normal control | Actual50k recipient spendable, settled/succeeded funding/bindings, realmaintenance empty/updated_atunchanged, one replay, CLNsend0 | No lostwrite/crash/offlinefallback or fullsender/recipient/fees conservation |
+| External normal control | Realchannel payer succeeds; distinctprovider/recipient; immutable binding/outputIDs+recipientkeys, recipientspendable, repeatedcompletedclaim keepsrequest/protocol/count | No exact50k netassertion, preregistrationfreshnonce fault, offlinefallback/provider0/fullDAG or stockNoah |
+| Callerless restart | Realgrant+admittedrequest, observed blockedoriginalWALwriter, serverstop+rollback, bothclientfutures gone, restartautonomously preservesrequest/protocol and materializes50k promisedoutputIDs/keys/amounts | Not originalML031 alreadydurablepreimage/finalattempt condition; no independentfrozenrecipientkey check, eventualfallback/Corefees/seedspend/fulllineage |
+
+W5 ownership/zero-grant/interrupted-settler subsets gain evidence; W7 pay+confirm and W10 nativefallback have one bounded component. P02/P03/P04/P05 remain partial; no fullgate closes. P07 backup is not exercised by the server restart. Candidate ML029/031/032/033/040/041 mappings are PARTIAL: each fullA–Kevent chain and mandatory whole-lineage/minerfee baseline has explicit missing assertions in the JSON. No automatic fullML/count/status updates.
+
+The historical stockNoah failure is now observed separately: strictcampaign verifier rejects plain description before payment. That does not make d-only BOLT11 universally malformed or override currentLUD06; client/parent observed and policy addenda qualify the frozen earlier source audit. These4 tests add no LNURLcallback evidence.

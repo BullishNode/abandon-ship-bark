@@ -1,0 +1,76 @@
+{
+  "kind": "standalone_noah_invoice_verifier_build_and_VM_smoke",
+  "source": {
+    "repository": "BullishNode/bark-simulator",
+    "commit": "3da8a0be1324e0c4351605f3f6c72fd0dc6a561f",
+    "subdirectory": "integration/noah-public-proof",
+    "modified": false,
+    "manifest_sha256": "fe1618a618b883868cba9bb6eea1d23a582bceaa9d3251c108e7ccea049b02a7",
+    "files": [
+      {
+        "bytes": 7361,
+        "path": "Cargo.lock",
+        "sha256": "8b3137c824f6dfbd03d361dee8f0bafabd37d38a1ebe24038fea72f068251a0a"
+      },
+      {
+        "bytes": 257,
+        "path": "Cargo.toml",
+        "sha256": "488ab99a078079e3ff3a082d8dd023bc3589f8a44e91397f45a9f9fda39bc10a"
+      },
+      {
+        "bytes": 3267,
+        "path": "src/lib.rs",
+        "sha256": "b38f60804f3698cc19ab67637cb1c88ab9b6b2aa2be5b87a31b4606eb95dd041"
+      },
+      {
+        "bytes": 471,
+        "path": "src/main.rs",
+        "sha256": "015ab139ee80e00e8f2b8d1a8b0d341be15da4d40c390c3fbd7ceb729e843165"
+      },
+      {
+        "bytes": 3396,
+        "path": "tests/invoice.rs",
+        "sha256": "1736c891efba57c3113e7ff51c1142a75ab8c6ce26cb410745f8d8cbe9c913cd"
+      }
+    ]
+  },
+  "build": {
+    "rustc": "1.90.0 (1159e78c4 2025-09-14)",
+    "cargo": "1.90.0 (840b83a10 2025-07-30)",
+    "UID": 1000,
+    "offline": true,
+    "locked": true,
+    "Nix_environment_sha256": "5b15a3556f1f6b43511645e7a7c8e8dcf356633cd87ff30c86c507739cb14afe",
+    "ELF_sha256": "e97c422b5ee894b3d5486ff139039d46107cc0e723adb9dea5a94ccd501798b1",
+    "ELF_bytes": 2992616,
+    "artifact_manifest_sha256": "4dc30edeb2fae69e4bc9d423d1e42aad869eefd7723ec03b51c1977d03bacd5b",
+    "protocol_tests": {
+      "compile_seconds": 7.13,
+      "duration_seconds": 0.01,
+      "failed": 0,
+      "passed": 5
+    },
+    "test_log_sha256": "ad0343f2ab03f354ee929c4809ea6aac8443c475eee8a82bda7af5833e1c14f6",
+    "retained_first_attempt": "FAILED before build: arrayvec0.7.8 absent from container cache. Exact locked crates imported from pre-existing hostcache after SHA256 verification, no network. Original failure log retained.",
+    "previous_f96_artifact": "Not found; new independently measured ELF, no substitution under old hash."
+  },
+  "VM_smoke": {
+    "at": "2026-10-17T15:49:17.061598+00:00",
+    "ELF_hash_verified": true,
+    "stdin_JSON_contract": [
+      "invoice",
+      "amount_msat",
+      "metadata",
+      "network",
+      "now"
+    ],
+    "CLI_arguments": [],
+    "input": "malformed nonmonetary invoice literal",
+    "exit_code": 1,
+    "stdout_empty": true,
+    "expected_rejection": "invalid BOLT11 syntax/semantics/signature"
+  },
+  "live_callback_performed": false,
+  "payment_performed": false,
+  "scope": "Existing strict verifier unchanged. Offline signature/metadata policy tests and VM negative execution only; no LNURL compatibility or receive claimed."
+}

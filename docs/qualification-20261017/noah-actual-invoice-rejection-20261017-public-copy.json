@@ -1,0 +1,62 @@
+{
+  "observed_at": "2026-10-17T16:11:48.072315+00:00",
+  "kind": "actual_stock_noah_LNURL_invoice_compatibility_rejection",
+  "verdict": "FAIL",
+  "scope": "One actual callback invoice; no payment, funded swap, recipient delivery, fallback or seed-recovery result.",
+  "network": "public Signet",
+  "chain_height_at_callback": 326772,
+  "controlled_origin": "https://noah-fresh-signet.test",
+  "TLS": "Verified controlled private CA; no public DNS claim or TLS bypass.",
+  "Noah_source": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+  "Noah_ELF_sha256": "87b2c181e5ba6e57bdb9ac715d2cb56602f2edc6f621c42ef7c6fd397489d187",
+  "fresh_profile": {
+    "server_pubkey": "039db410ae274857e2252f040bd1b50bbb5dfe52bbb4e7a3008d6b3eca3b342bdd",
+    "captaind_sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4",
+    "actual_build_HEAD": "fb85d9a9c3b31b3eab1eb2113d2caec89c7f10dd",
+    "dirty_source": true,
+    "captured_source_manifest_sha256": "0ff7819dc89062aef8c6ce43b81d99c851fd813ef0ac75f0d462ef457deb6b69",
+    "published_equivalent_code": "f809bc2410b40648823caea671fe52dd0c86f11b",
+    "native_client_source": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+    "native_provider_ELF_sha256": "2c53f1a5bdd974f74e1c1c45b497e44d7e2abfd0f2a9bfa426e06a4eccc73771",
+    "profile": {
+      "vtxo_lifetime": 4320,
+      "vtxo_exit_delta": 144,
+      "board_confirmations": 3,
+      "pool_targets": []
+    },
+    "cap_config_sha256": "a8e2afc34afde45bea71f1e4e76d6e4fd396b86eb1fb3fe3e8f4394c4016182e",
+    "watchman_started": false,
+    "funding_sat": 0,
+    "fresh_native_wallets": 2,
+    "recipient_offline": true
+  },
+  "callback": {
+    "request_count": 1,
+    "path": "/.well-known/lnurlp/offline-recipient?amount=5000000",
+    "amount_msat": 5000000,
+    "ark_negotiation_requested": false,
+    "redirects_allowed": false,
+    "http_status": 200,
+    "response_sha256": "fd58daf7946c03e335e6a8637ab6d5d8e67c84067b4119f269763db0d0bb6264",
+    "invoice_sha256": "8ef568f30a6c2a4a663a832186b6821f8c19709a20dc9a49245fde1922578917",
+    "exact_metadata_utf8_sha256": "947f229a83bc7b8748c4dc770969be349e384ea6cef7c34648c5130802462f8f",
+    "invoice_regenerated": false
+  },
+  "independent_verifier": {
+    "ELF_sha256": "e97c422b5ee894b3d5486ff139039d46107cc0e723adb9dea5a94ccd501798b1",
+    "source_subdirectory": "integration/noah-public-proof",
+    "source_commit": "3da8a0be1324e0c4351605f3f6c72fd0dc6a561f",
+    "exit_code": 1,
+    "stderr": "Error: LNURL metadata hash missing; plain description is incompatible",
+    "verification_relaxed": false
+  },
+  "payment_attempted": false,
+  "original_provider_cold_archive_sha256": "7d40716a361e98df3d96d3259d39fb7e3ca51b218f78986716c0731967c98000",
+  "retained_setup_issue": "Read-only admission assertion initially expected numeric UTXO counts; actual RPC returned empty arrays. Corrected before endpoint mutation or native actor creation. Original failure retained.",
+  "financial_goal_still_required": [
+    "Actual paid native swap to offline recipient, source-specific conditional ownership and registered signed recipient claim/delivery.",
+    "Real expiry of swap-created/refundable VTXOs, rightful fallback and original-seed confirmed recovery.",
+    "Genuine failed-send/refundable path; no payment or invoice-only proxy."
+  ],
+  "production_LNURL_release_blocker": "Stock Noah callback does not supply the mandatory metadata description hash. Source prediction is now backed by an actual callback rejection."
+}

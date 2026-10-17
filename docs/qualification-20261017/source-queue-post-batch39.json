@@ -1,0 +1,174 @@
+{
+  "created_at": "2026-10-17T21:54:05.816806+00:00",
+  "scope": "Read-only current source and compilation queue snapshot; historical handoff is unchanged. No execution, acceptance-map, product or module edits.",
+  "prior_snapshot": "current-source-ownership-handoff.json",
+  "prior_snapshot_sha256": "16b15db0dc2a20b18dd82854ecfdbac876e5b372e8731a6f39197c8788f1bdba",
+  "source_and_packet_hashes_verified": true,
+  "source_files_verified": 13,
+  "sources": [
+    {
+      "id": "ordinary_cold_backup",
+      "owner": "backend_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_cold_backup.rs",
+      "source_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+      "status": "PASS on separately pinned v5 capture; no rerun requested",
+      "integration_caution": "Root allocated ONCE; backend prepares batch38-cold-backup-v5. New source87e82448\u2026/manifest740da075\u2026 pairing and final14pin gates must be recorded by parent before launch. Retain pg_controldata admission addendum; old7041 is not this new build.",
+      "packet_manifests": [
+        "cold-backup-native-v1-manifest.json"
+      ]
+    },
+    {
+      "id": "conflict_reorg_v2",
+      "owner": "backend_test_gaps",
+      "source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/conflict-reorg-v2-private/qualification_conflict_reorg.rs",
+      "source_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Canonical has no old file: use conflict-reorg-v2-add-file.patch, not relative-old diff directly. Root module/new capture/build/runtime admission required; preserved owned ef70 unchanged.",
+      "packet_manifests": [
+        "conflict-reorg-v2-manifest.json"
+      ]
+    },
+    {
+      "id": "expired_new_lightning_refusal_refresh",
+      "owner": "client_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark_sdk/lightning.rs",
+      "source_sha256": "3fef86397a648c4b11ef92f2f0c252b870e9ec766cc1ac14ff96075347964c88",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Target-only against frozen7041; owned wholefile has unrelated upstream receive differences. Preserve owned outside bytes and integrate reviewed target deliberately. Original expired-input success remains held/unrun; SDK6 PASS does not select this new literal.",
+      "packet_manifests": [
+        "sdk-expired-lightning-refusal-refresh-v1-manifest.json"
+      ]
+    },
+    {
+      "id": "failed_send_restart_v3",
+      "owner": "legacy_inventory (author); backend/client and parent reviews",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_failed_swap.rs",
+      "source_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "V3 delta applies to preserved51bf v2; do not apply directly to original31ca. Full reviewed packet chain/root registration/new exact build and runtime admission required.",
+      "packet_manifests": [
+        "failed-swap-hardening-v3-manifest.json"
+      ]
+    },
+    {
+      "id": "registered_offboard_restart_ML126",
+      "owner": "backend_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_restart.rs",
+      "source_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Root module/build/runtime admission required. Preserve originalalive/setup scope and final180s/96blocks; no financial SQL writes.",
+      "packet_manifests": [
+        "ML126-native-manifest.json"
+      ]
+    },
+    {
+      "id": "SDK_watchman_pair_v2",
+      "owner": "legacy_inventory (author), client peer",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark_sdk/exit.rs",
+      "source_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Two original names remain UNRUN. Target-only two-function overlay, no defaultfactor2/fullfeechild/globalcustody qualification. Root integration/newELF/runtime admission required.",
+      "packet_manifests": [
+        "sdk-watchman-registered-payout-v2-manifest.json"
+      ]
+    },
+    {
+      "id": "create_address",
+      "owner": "client_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark/create.rs",
+      "source_sha256": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Individual manifest whole-file hashes may be intermediate snapshots. Use exact target patches or final combined source, preserving all earlier overlays; no blind overwrite of cumulative files. Original FAIL or held NOT RUN status remains unchanged.",
+      "packet_manifests": [
+        "create-offline-address-reserved-identity-v1-manifest.json"
+      ]
+    },
+    {
+      "id": "onchain",
+      "owner": "client_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark/onchain.rs",
+      "source_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Individual manifest whole-file hashes may be intermediate snapshots. Use exact target patches or final combined source, preserving all earlier overlays; no blind overwrite of cumulative files. Original FAIL or held NOT RUN status remains unchanged.",
+      "packet_manifests": [
+        "onchain-address-reserved-identity-v1-manifest.json",
+        "onchain-list-utxos-actual-values-v1-manifest.json",
+        "onchain-drain-actual-fee-bound-v1-manifest.json"
+      ]
+    },
+    {
+      "id": "movement",
+      "owner": "client_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark/movement.rs",
+      "source_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Individual manifest whole-file hashes may be intermediate snapshots. Use exact target patches or final combined source, preserving all earlier overlays; no blind overwrite of cumulative files. Original FAIL or held NOT RUN status remains unchanged.",
+      "packet_manifests": [
+        "board-movement-actual-fee-adaptation-v1-manifest.json",
+        "movement-offboard-actual-fee-v1-manifest.json",
+        "movement-send-onchain-actual-fee-v1-manifest.json"
+      ]
+    },
+    {
+      "id": "offboard",
+      "owner": "client_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark/offboard.rs",
+      "source_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Individual manifest whole-file hashes may be intermediate snapshots. Use exact target patches or final combined source, preserving all earlier overlays; no blind overwrite of cumulative files. Original FAIL or held NOT RUN status remains unchanged.",
+      "packet_manifests": [
+        "offboard-actual-dust-v1-manifest.json",
+        "offboard-send-onchain-actual-fee-v1-manifest.json"
+      ]
+    },
+    {
+      "id": "fees",
+      "owner": "client_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark/fees.rs",
+      "source_sha256": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Individual manifest whole-file hashes may be intermediate snapshots. Use exact target patches or final combined source, preserving all earlier overlays; no blind overwrite of cumulative files. Original FAIL or held NOT RUN status remains unchanged.",
+      "packet_manifests": [
+        "send-onchain-fee-bip84-adaptation-v1-manifest.json"
+      ]
+    },
+    {
+      "id": "barkd_boards",
+      "owner": "client_test_gaps",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/barkd/boards.rs",
+      "source_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Individual manifest whole-file hashes may be intermediate snapshots. Use exact target patches or final combined source, preserving all earlier overlays; no blind overwrite of cumulative files. Original FAIL or held NOT RUN status remains unchanged.",
+      "packet_manifests": [
+        "barkd-board-all-actual-fee-adaptation-v1-manifest.json"
+      ]
+    },
+    {
+      "id": "barkd_recovery",
+      "owner": "backend_test_gaps last writer; client boarded/mixed; legacy round",
+      "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/barkd/recovery.rs",
+      "source_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "status": "REVIEWED SOURCE ONLY; NOT COMPILED / NOT RUN",
+      "integration_caution": "Individual manifest whole-file hashes may be intermediate snapshots. Use exact target patches or final combined source, preserving all earlier overlays; no blind overwrite of cumulative files. Original FAIL or held NOT RUN status remains unchanged.",
+      "packet_manifests": [
+        "barkd-recovery-boarded-actual-amount-v1-manifest.json",
+        "barkd-recovery-mixed-actual-amount-v1-manifest.json",
+        "barkd-recovery-round-actual-amount-v1-manifest.json",
+        "barkd-recovery-quarantine-v2-manifest.json"
+      ]
+    }
+  ],
+  "cold_pass_receipt": "batch38-cold-backup-v5-receipt.json",
+  "cold_financial_supplement": "batch38-cold-backup-financial-supplement.json",
+  "later_runtime": "Batch39 four approved v6 controls terminal PASS, separate from uncompiled queue. Final dedup/totals in batch39 receipt.",
+  "current_publication": {
+    "pr": 15,
+    "head": "f34f97890975cb6789b44982e0e8a818edc5e33c",
+    "state": "DRAFT OPEN verified; fixed216 executions/427coverage; no public docs changed by this snapshot"
+  },
+  "build_policy": "Coordinator sole shared-target writer and canonical integration owner. No Cargo, metadata generation or target writes performed. Runtime requires exact new candidate/allocation; existing allocation consumed.",
+  "safety_and_ownership": "Frozen old conflict/restore/unsafe original and all failures preserved. New money-safety team must check this queue before selecting overlaps. No mainnet/Signet/funding/Noah modifications.",
+  "suggested_coherent_build_intake": "15 ordinary identity/fee/recovery target overlays across7files; then separately admitted policy-sensitive SDK/server packets. Compile from current canonical deliberately; do not overwrite unrelated wholefile changes.",
+  "count_credit": 0,
+  "full_ML_credit": 0
+}

@@ -1,0 +1,246 @@
+{
+  "kind": "batch39_native_oracle_review",
+  "at": "2026-10-17T21:54:37.854860+00:00",
+  "review_scope": "READ ONLY actual4sourcefunctions from immutable archive + safe terminal controllerreceipts; no rawlog/seed/wallet/PG/runtime/source/build/ML/COVERAGE mutations",
+  "candidate": {
+    "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+    "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+    "metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+    "source_files": [
+      {
+        "test_name": "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+        "path": "testing/tests/server/expiry_lightning_terminal.rs",
+        "sha256": "428645d5de580f1fed6311ef394781f5b5e82b3d0e581da98a93267c89be3dac"
+      },
+      {
+        "test_name": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+        "path": "testing/tests/bark_sdk/lightning_receive_binding.rs",
+        "sha256": "1228622a40fd28512440777aeefc134b3afb5d1af40fe542b598e16c3ff34203"
+      },
+      {
+        "test_name": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+        "path": "testing/tests/bark_sdk/lightning_receive_binding.rs",
+        "sha256": "1228622a40fd28512440777aeefc134b3afb5d1af40fe542b598e16c3ff34203"
+      },
+      {
+        "test_name": "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet",
+        "path": "testing/tests/bark_sdk/lightning_receive_binding.rs",
+        "sha256": "1228622a40fd28512440777aeefc134b3afb5d1af40fe542b598e16c3ff34203"
+      }
+    ],
+    "captured_HEAD": "828863b21a21a10d3d26ae5f29479be3ee87a233",
+    "dirty_source": "Exact archive includes admitted native internal-refund replan/queueonce/maturity patches; productGitlabel alone is not fullsourcepin"
+  },
+  "terminal_outcome": {
+    "cases": 4,
+    "passed": 4,
+    "failed": 0,
+    "retries": 0,
+    "cohort_summary_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/cohort-summary.json",
+    "cohort_summary_sha256": "988b8140e362c62fd732cc11b2d7586abb566022f540de83c41167dac98b3d55",
+    "native_money_tests_not_new_ML_count": true
+  },
+  "mapping_inputs": [
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/money-loss-research-2026-10-17/MONEY_LOSS_SCENARIOS.md",
+      "sha256": "344eccacd76f8e7e1f63ba00db6baf14fd96c9770c41803da91b57045fcf5ff3"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/abandon-ship-final-plan-2026-10-16.md",
+      "sha256": "d32c2e67e8ae7b54da6b7edf8cfe34e5ce1d7f935ecbd1f396dc87968db0caa9"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/PRODUCTION_GATES.json",
+      "sha256": "f61a9dc5ae360bb323eb59ac6faf9154ddfd3f3239d1c7c00a7816375f29c2d2"
+    }
+  ],
+  "cases": [
+    {
+      "sequence": 1,
+      "name": "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+      "binary": "ark-testing::server",
+      "actual_result": "PASS",
+      "run_id": "2dfc746e-61f8-40b1-87bc-08d0b703dc14",
+      "test_seconds": 42.519,
+      "receipt": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/case01/result.json",
+      "receipt_sha256": "76f2d4193be422429f1d55f0b7b17f9f8b737aca29ae9103e78f4250c27b72b1",
+      "lines": "server/expiry_lightning_terminal.rs152-263",
+      "demonstrated": [
+        "Actual native100k boarded/registered sender source; genuine90k internal invoice; recipient drops before any grant, sender SDK/RPC drops after initiate; no later wallet recovery/cooperative revocation.",
+        "Source-linked subscription canceled by normal setup timeout; exact original hold invoice Cancelled; CLN listsendpays empty; grants0/bindings0/no external dispatch/no settlement WAL.",
+        "Watchman funded100k; actual source-expiry automatic allocation with evidence kind htlc_internal_zero_grant_cancelled. Stored parent equals Core transaction; exactly one output to captured sender script is99000sat; actual parent inputs resolved from Core, parent fee0.",
+        "Actual sender output unspent atCore>=6 confirmations; funding marker remains; grants still0; exactly1 active customer allocation row for source; original HTLC resolutionNone, no invented revocation."
+      ],
+      "limitations": [
+        "Sender CLI wrapper remains allocated but no further sender wallet actions run; absence is all SDK/RPC/client futures gone, not deletion of original wallet directory or seed-only recovery.",
+        "Fixture uses24-block lifetime/2s setup timeout/1s invoice poll and an explicit100k watchman top-up; production cadences/capacity not established.",
+        "No actual canonical fee-child selection/fee calculation, operator-output ownership/full terminal DAG cut, full customer200k funding+ordinarychange accounting, or graph-wide duplicate/other-recipient scan. Parent output uniqueness+active row are narrower.",
+        "No signed receive grants, shared-root refund, partial-conflict/replan, crash or chain reorg injected."
+      ],
+      "W_mapping": [
+        "W5 ownership/zero-grant Lightning resolution",
+        "W7 actual sweep pays and confirms (subset)",
+        "W10 bounded native Lightning fallback (subset)"
+      ],
+      "ML_mapping": [
+        {
+          "id": "ML029",
+          "scope": "PARTIAL",
+          "matching_conditions": "D/E zero receiver grants, both actors absent and native setup cancellation; F/J autonomous99k confirmed and no external send proven.",
+          "missing": "Mandatory catalogue full-lineage/external boundary, actual miner/operator-fee cut and graph-wide exclusion of duplicate/other-recipient payouts remain absent. No automatic FULL ML PASS."
+        }
+      ]
+    },
+    {
+      "sequence": 2,
+      "name": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+      "binary": "ark-testing::bark-sdk",
+      "actual_result": "PASS",
+      "run_id": "b610c1d3-dec8-4495-9745-2612c54252b2",
+      "test_seconds": 26.331,
+      "receipt": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/case02/result.json",
+      "receipt_sha256": "036e87597871944c310e06f135e99f8a380ffec40a6915ac007788f581f1f451",
+      "lines": "bark_sdk/lightning_receive_binding.rs224-273",
+      "demonstrated": [
+        "Native200k-boarded sender pays genuine50k internal invoice, recipient SDK claim returns Settled.",
+        "Original funding/subscription/attempt linkage reaches settled/succeeded with positive bindingcount and all materialized.",
+        "Explicit real maintenance reconcile_completed_internal_receives(128) returns empty and subscription updated_at unchanged; exactly1 nonempty replay record. Recipient actual spendable total50000sat.",
+        "Native CLN listsendpays is empty: this internal transfer was not externally dispatched."
+      ],
+      "limitations": [
+        "Normal online completion: no interrupted/final-before-materialization or lost-Settled-write boundary, no absent actors, fallback/recovery, actual hold Cancelled assertion, or chain resolution/reorg.",
+        "No complete200k sender+recipient+operator accounting/fees or whole lineage duplicate-value cut. Does not requery bindingcount after maintenance; unchanged history/replay count+empty maintenance result are exact checked idempotency oracles."
+      ],
+      "W_mapping": [
+        "W5 internal Lightning resolution (normal completed control)"
+      ],
+      "ML_mapping": [
+        {
+          "id": "ML031",
+          "scope": "PARTIAL",
+          "matching_conditions": "Normal completion control and materialization preserve50k entitlement.",
+          "missing": "Actual original final-attempt-before-materialization fault condition, absent-wallet final payout/whole lineage."
+        },
+        {
+          "id": "ML032",
+          "scope": "PARTIAL",
+          "matching_conditions": "Internal funding identity and successful50k recipient transfer with no external CLNsend.",
+          "missing": "Explicit original holdCancelled assertion, cancellation race/offline lineage and exactlyone canonical economic discharge."
+        },
+        {
+          "id": "ML033",
+          "scope": "PARTIAL",
+          "matching_conditions": "Already settled normal maintenance is idempotent.",
+          "missing": "Real interruption leaves stale subscription after signed output, then autonomous repair+canonical fallback with sender0."
+        }
+      ]
+    },
+    {
+      "sequence": 3,
+      "name": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+      "binary": "ark-testing::bark-sdk",
+      "actual_result": "PASS",
+      "run_id": "b5ae3cf9-4ee4-4869-848d-1773dd64844e",
+      "test_seconds": 27.849,
+      "receipt": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/case03/result.json",
+      "receipt_sha256": "2f3247a283f0b5ede87446f25b33337691ad9b42ff1ecc023ab084414d7d7aaa",
+      "lines": "bark_sdk/lightning_receive_binding.rs151-218",
+      "demonstrated": [
+        "Real two-node channel external payer pays50000sat invoice_for_address; provider claim Settled, recipient sync obtains nonempty spendable outputs.",
+        "Provider/recipient account_xpub differ; independently captured recipient policy key equals each promised/actual signed body key, differs from source checkpoint key. Stored/actual IDs match; source/promise amounts match; fulfilled/materialized/settled; each bound actual output is recipient-spendable.",
+        "Recipient coin sum equals sum of bound actual outputs. Repeat completed SDK claim returns Settled, bindingcount unchanged, exact request bytes+protocol unchanged."
+      ],
+      "limitations": [
+        "Online successful received/registered outcome; not offline/unregistered fallback, provider permanent absence, or legacy migration.",
+        "Does not independently assert received aggregate==50000sat or explicit receive fee; relative source/output equality and actual recipient sum are exact oracles. No payer balance/terminal-group full cost audit, canonical payout/fee child/fullDAG/drain, provider-wide zero payout scan.",
+        "Repeated completed claim is not a lost-reply fresh-nonce pre-registration replay; checkpoint survival/restart not injected. StockNoah LNURLcallback/metadata not exercised."
+      ],
+      "W_mapping": [
+        "W5 Lightning final-recipient ownership (normal control)"
+      ],
+      "ML_mapping": [
+        {
+          "id": "ML040",
+          "scope": "PARTIAL",
+          "matching_conditions": "Distinct provider checkpoint and recipient; actual stored/recipient-spendable output bound to independently captured recipient key.",
+          "missing": "Original Unregistered/offline expiry condition, actual rightful canonical netpayout and provider0 wholelineage before/after grantdeadline."
+        },
+        {
+          "id": "ML041",
+          "scope": "PARTIAL",
+          "matching_conditions": "Completed claim retry preserves exactrequest/protocol/output bindingcount.",
+          "missing": "Lost-reply/fresh-nonce original condition before registration and eventual canonical exactlyone payout."
+        }
+      ]
+    },
+    {
+      "sequence": 4,
+      "name": "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet",
+      "binary": "ark-testing::bark-sdk",
+      "actual_result": "PASS",
+      "run_id": "d4edfcfe-ca7f-46b1-aade-963126f8b31b",
+      "test_seconds": 60.151,
+      "receipt": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch39-owner-replan-v6/case04/result.json",
+      "receipt_sha256": "cd52904d819fcd0bf3889d6ab123f070bfbc09f17957dd5ebd1b416f4cd070f4",
+      "lines": "bark_sdk/lightning_receive_binding.rs41-148",
+      "demonstrated": [
+        "Genuine50k internal sender/recipient operation through public proxy; grant reply paused only after actual upstream commit.",
+        "Infrastructure advisorylock2 acquired after grants; real pg_stat/lock evidence observes original claim WALwriter blocked. Replay originalrequest/protocol/subscription retained while settlementWAL and materialization both invisible. No financial SQL fabricated.",
+        "Actual captaind stop while original writer pending; both original client futures end and all sender/recipient/proxy objects drop before restart. Bounded writer disappearance and post-release rollback verified WAL/materializationfalse.",
+        "Captaind alone restarts; same originalrequest/protocol yields settled subscription+succeeded attempt, positive all-materialized/all-fulfilled bindings, durableWAL and aggregate committed50000sat. Each actual output ID/key/amount equals its promised stored body."
+      ],
+      "limitations": [
+        "Fault point is actual transaction pending before WAL/materialization commit, not catalogueML031 durablepreimage+finalattempt with missingoutput; no claim that all crash windows handled.",
+        "Durable promise-vs-committed key equality is checked; test does not independently compare restart outputs with a separately frozen recipient destination/key.",
+        "No actual recipient client discovery, signature validation/seedspend, mailbox delivery, original hold/node completion audit, expiry fallback/canonical outputs/fee child, sender-refund0/fullDAG or full funding conservation.",
+        "This is a stopped/restarted same service and realPG transaction rollback, not physical backup/freshdirrestore, uncleanSIGKILL/crossversion or financialcorruption simulation."
+      ],
+      "W_mapping": [
+        "W5 interrupted settler write/ownership (specific native boundary)",
+        "P05 atomic economic decision crash-boundary component"
+      ],
+      "ML_mapping": [
+        {
+          "id": "ML031",
+          "scope": "PARTIAL",
+          "matching_conditions": "New original admitted request survives real writer interruption and autonomous no-wallet materialization after restart.",
+          "missing": "Research D/E exact alreadydurablepreimage+Succeeded-before-output condition; independently frozen beneficiary+eventual canonical netpayout, sender0/fulllineage."
+        }
+      ]
+    }
+  ],
+  "production_gates": [
+    {
+      "id": "P02",
+      "scope": "PARTIAL",
+      "reason": "One99k canonical zero-grant refund plus successful50k receive binding controls; no complete feechild/operator/fullgraph cuts across4 requiredflows."
+    },
+    {
+      "id": "P03",
+      "scope": "PARTIAL",
+      "reason": "Zero-grant absent-sender closure and callerless original-request materialization demonstrated. These4 do not test signedgrants/sharedbacking closure, allrequiredsuccessfulreceive/failedsend confirmedrecovery."
+    },
+    {
+      "id": "P05",
+      "scope": "PARTIAL",
+      "reason": "Specific real pendingWAL crash rollback/replay atomic boundary and normal idempotence, not all competing economic decisions."
+    },
+    {
+      "id": "P04",
+      "scope": "PARTIAL",
+      "reason": "Normal registered recipient binding only, not every admitted coin/backgroundsearch/unknownlegacy/missingmailbox policy."
+    },
+    {
+      "id": "P07",
+      "scope": "NONE",
+      "reason": "Restartcomponent is not authentic operator-artifact physicalbackup/freshservices/customerseedspend; no backupgateclosure."
+    },
+    {
+      "id": "P06/P09/P10/P11/P12",
+      "scope": "NONE",
+      "reason": "No reorg/oversize/fee-pressure, publicSignet, sustainedscale, fulloperationsreview or productionadmission in these4."
+    }
+  ],
+  "intake_decision": "Mapping candidate only. Actual exacttests PASS; fullML/requirement/gatestatus untouched. Root decides intake. Alloriginalfailures/othercandidate evidence retained.",
+  "Noah_current_understanding": "Original historical publicreceipt now found, dcc441 SHA, git a916b7ae1918c639253bba88ba95676e97d81b0d. It demonstrates strictacceptedcampaign verifier exit1/plain-description incompatibility before payment. A d-only BOLT11 is not universally malformed: client primary-source currentLUD06 review permits d-only/step7amountcheck. No claim source-only hash proposal is mandatory protocolchange; oldsourceaudit immutable; parent/client observed/policyaddenda govern. This4casecohort adds no stockNoahcallbackcredit."
+}

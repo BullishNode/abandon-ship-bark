@@ -1,0 +1,185 @@
+{
+  "state": "READ_ONLY_PROVENANCE_RESOLVED_FROM_IMMUTABLE_PUBLIC_FAILURE_RECEIPT",
+  "at": "2026-10-17T21:42:23.726564+00:00",
+  "actual_failure_packet": {
+    "requested_label": "Noah8e68",
+    "public_packet": {
+      "original_git_object": "a916b7ae1918c639253bba88ba95676e97d81b0d:docs/evidence/noah-actual-invoice-rejection-20261017.json",
+      "source_checkout": "/home/francis/bark-simulator-fresh-integration",
+      "working_tree_file_exists": false,
+      "public_copy": "noah-actual-invoice-rejection-20261017-public-copy.json",
+      "sha256": "dcc4410247d48589b0ba1bd6f7f13c0725d649f663fccaad25b5373110544ab6",
+      "bytes": 3480
+    },
+    "observed_at": "2026-10-17T16:11:48.072315+00:00",
+    "source_pin": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+    "runtime_elf_sha256": "87b2c181e5ba6e57bdb9ac715d2cb56602f2edc6f621c42ef7c6fd397489d187",
+    "backend_VM_locator_only": "/opt/abandon-fresh/noah/server-8e68ba5c3f03; services/data under /var/lib/abandon-fresh/noah, not accessed",
+    "network": "public Signet",
+    "height": 326772,
+    "native_outcome": "FAIL",
+    "scope": "One actual callback invoice; no payment, funded swap, recipient delivery, fallback or seed-recovery result.",
+    "fresh_profile": {
+      "server_pubkey": "039db410ae274857e2252f040bd1b50bbb5dfe52bbb4e7a3008d6b3eca3b342bdd",
+      "captaind_sha256": "32ea16685558bf44e55c110d3574c3bd9e93285e8ba27115b57fb3f1ae98aaf4",
+      "actual_build_HEAD": "fb85d9a9c3b31b3eab1eb2113d2caec89c7f10dd",
+      "dirty_source": true,
+      "captured_source_manifest_sha256": "0ff7819dc89062aef8c6ce43b81d99c851fd813ef0ac75f0d462ef457deb6b69",
+      "published_equivalent_code": "f809bc2410b40648823caea671fe52dd0c86f11b",
+      "native_client_source": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+      "native_provider_ELF_sha256": "2c53f1a5bdd974f74e1c1c45b497e44d7e2abfd0f2a9bfa426e06a4eccc73771",
+      "profile": {
+        "vtxo_lifetime": 4320,
+        "vtxo_exit_delta": 144,
+        "board_confirmations": 3,
+        "pool_targets": []
+      },
+      "cap_config_sha256": "a8e2afc34afde45bea71f1e4e76d6e4fd396b86eb1fb3fe3e8f4394c4016182e",
+      "watchman_started": false,
+      "funding_sat": 0,
+      "fresh_native_wallets": 2,
+      "recipient_offline": true
+    },
+    "callback": {
+      "request_count": 1,
+      "path": "/.well-known/lnurlp/offline-recipient?amount=5000000",
+      "amount_msat": 5000000,
+      "ark_negotiation_requested": false,
+      "redirects_allowed": false,
+      "http_status": 200,
+      "response_sha256": "fd58daf7946c03e335e6a8637ab6d5d8e67c84067b4119f269763db0d0bb6264",
+      "invoice_sha256": "8ef568f30a6c2a4a663a832186b6821f8c19709a20dc9a49245fde1922578917",
+      "exact_metadata_utf8_sha256": "947f229a83bc7b8748c4dc770969be349e384ea6cef7c34648c5130802462f8f",
+      "invoice_regenerated": false
+    },
+    "verifier": {
+      "ELF_sha256": "e97c422b5ee894b3d5486ff139039d46107cc0e723adb9dea5a94ccd501798b1",
+      "source_subdirectory": "integration/noah-public-proof",
+      "source_commit": "3da8a0be1324e0c4351605f3f6c72fd0dc6a561f",
+      "exit_code": 1,
+      "stderr": "Error: LNURL metadata hash missing; plain description is incompatible",
+      "verification_relaxed": false
+    },
+    "payment_attempted": false,
+    "financial_funding_sat": 0,
+    "recipient_offline": true,
+    "no_runtime_reverification": "Reported historical native pins/outcome cross-checked across public receipts and actual localvalidator binary/source hashes. No current VM/service or private invoice bytes examined."
+  },
+  "known_offline_validator": {
+    "artifact_root": "/home/francis/.cache/abandon-fresh/noah-invoice-proof-artifact-20261017",
+    "source_root": "/home/francis/.cache/abandon-fresh/noah-invoice-proof-source-20261017",
+    "manifest_sha256": "4dc30edeb2fae69e4bc9d423d1e42aad869eefd7723ec03b51c1977d03bacd5b",
+    "source_manifest_sha256": "fe1618a618b883868cba9bb6eea1d23a582bceaa9d3251c108e7ccea049b02a7",
+    "source_commit": "3da8a0be1324e0c4351605f3f6c72fd0dc6a561f",
+    "source_repository": "https://github.com/BullishNode/bark-simulator",
+    "source_subdirectory": "integration/noah-public-proof",
+    "source_modified": false,
+    "elf_sha256": "e97c422b5ee894b3d5486ff139039d46107cc0e723adb9dea5a94ccd501798b1",
+    "elf_bytes": 2992616,
+    "all_six_artifact_hashes_verified": true,
+    "all_five_source_file_hashes_verified": true,
+    "source_manifest_copies_match": true,
+    "offline_protocol_tests": {
+      "compile_seconds": 7.13,
+      "duration_seconds": 0.01,
+      "failed": 0,
+      "passed": 5
+    },
+    "original_cache_failure": "FAILED before build: arrayvec0.7.8 absent from container cache. Exact locked crates imported from pre-existing hostcache after SHA256 verification, no network. Original failure log retained.",
+    "missing_previous_f96_ELF": "NOT_FOUND; this is independently captured NEW artifact, not assumed same binary",
+    "live_callback_or_payment_performed": false,
+    "source_runtime_tools": {
+      "rustc": "1.90.0 (1159e78c4 2025-09-14)",
+      "cargo": "1.90.0 (840b83a10 2025-07-30)",
+      "Nix_environment_sha256": "5b15a3556f1f6b43511645e7a7c8e8dcf356633cd87ff30c86c507739cb14afe"
+    },
+    "stdin_field_names_only": [
+      "invoice",
+      "amount_msat",
+      "metadata",
+      "network",
+      "now"
+    ],
+    "scope": "Standalone offline invoice validator build and protocol fixtures only. Not a Noah daemon/native LNURL failed-attempt receipt; cannot establish8e68 client/backend pairing."
+  },
+  "known_earlier_native_preparation": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/noah-native-preparation-7055.json",
+    "sha256": "ae9da3bb2fd149347736b6c10af2f6b644ac9e6a071f3bb845bd089abf5d56fb",
+    "source_commit": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+    "binary_sha256": {
+      "bark": "8f2aff06b0edfa9427b1fa7894e13da8e8d471a57836031455d3924ae7b9ff04",
+      "barkd": "2c53f1a5bdd974f74e1c1c45b497e44d7e2abfd0f2a9bfa426e06a4eccc73771"
+    },
+    "at": "2026-10-17T00:43:12.603613+00:00",
+    "funding_dispatched_sat": 0,
+    "invoice_or_payment_attempted": false,
+    "provider_restarts": 0,
+    "recipient_process_running": false,
+    "scope": "zero-funded native provider readiness and offline-recipient binding; product Lightning/pool unchanged; forwarding remains disabled",
+    "limitation": "Zero-funded preparation only, no invoice/payment attempt. Different7055 source; not an8e68 failure outcome."
+  },
+  "evidence_handling": {
+    "original_files_mutated": false,
+    "native_calls": 0,
+    "builds": 0,
+    "new_test_execution_credit": 0,
+    "logs": "Hash-only verification and strict protocol-summary regex; no wholesale native logs.",
+    "excluded_reads": [
+      "Secret identity/TLS/admin/token/mnemonic/privatekey files",
+      "Raw wallet databases",
+      "Private native service data"
+    ]
+  },
+  "linked_public_receipts": {
+    "noah-actual-invoice-rejection-20261017": {
+      "original_git_object": "a916b7ae1918c639253bba88ba95676e97d81b0d:docs/evidence/noah-actual-invoice-rejection-20261017.json",
+      "source_checkout": "/home/francis/bark-simulator-fresh-integration",
+      "working_tree_file_exists": false,
+      "public_copy": "noah-actual-invoice-rejection-20261017-public-copy.json",
+      "sha256": "dcc4410247d48589b0ba1bd6f7f13c0725d649f663fccaad25b5373110544ab6",
+      "bytes": 3480
+    },
+    "noah-invoice-verifier-20261017": {
+      "original_git_object": "a916b7ae1918c639253bba88ba95676e97d81b0d:docs/evidence/noah-invoice-verifier-20261017.json",
+      "source_checkout": "/home/francis/bark-simulator-fresh-integration",
+      "working_tree_file_exists": false,
+      "public_copy": "noah-invoice-verifier-20261017-public-copy.json",
+      "sha256": "a9b6b3045752811d2b01701a569781c69ec82e995dcfd656e3727ee50d91a750",
+      "bytes": 2835
+    },
+    "noah-metadata-preflight-20261017": {
+      "original_git_object": "a916b7ae1918c639253bba88ba95676e97d81b0d:docs/evidence/noah-metadata-preflight-20261017.json",
+      "source_checkout": "/home/francis/bark-simulator-fresh-integration",
+      "working_tree_file_exists": false,
+      "public_copy": "noah-metadata-preflight-20261017-public-copy.json",
+      "sha256": "9731b8227918f34709b7789e32cf706dd209de23bf9e457594cd3709e02af969",
+      "bytes": 1943
+    }
+  },
+  "public_metadata_checks": {
+    "exact_utf8_bytes_hash_recomputed": "947f229a83bc7b8748c4dc770969be349e384ea6cef7c34648c5130802462f8f",
+    "amount_requested_msat": 5000000,
+    "amount_bounds_msat": {
+      "minimum": 1000,
+      "maximum": 1000000000
+    },
+    "requested_amount_within_public_bounds": true,
+    "metadata_preflight_height": 326769,
+    "actual_callback_height": 326772,
+    "same_metadata_digest_between_public_receipts": true,
+    "raw_invoice_not_publicly_inspected_or_decoded": true
+  },
+  "historical_status_locator": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/STATUS-before-20261017T171811Z.json",
+    "sha256": "facc8f6c6f25db03debbbd1b088146fff1312b6af149e634973df627c093bf2d",
+    "evidence_commit": "a916b7ae1918c639253bba88ba95676e97d81b0d",
+    "warning": "Current STATUS omits the historical Noah section; absence from current STATUS is not absence of the original failure."
+  },
+  "conclusion": "Measured stock Noah LNURL invoice compatibility failure is established by retained immutable public receipt. It is not an HTTP error, payment failure, funded swap, rightful fallback or absent-recipient delivery result. Preserve the one unpaid original invoice and all original evidence; no new request, verifier relaxation or runtime action was performed.",
+  "remaining_limits": [
+    "Original exact response/invoice/policy/verifier output retained privately, represented by public hashes only. No independent invoice decode by this reviewer.",
+    "Public JSON records the verifier status; full native logs were not opened.",
+    "No revalidation of current running backend or current production candidate.",
+    "Backend source and SDK invoice-contract reviews are separate owner tasks; this provenance report does not propose a bypass or assign a new financial outcome."
+  ]
+}

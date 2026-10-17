@@ -1,0 +1,48 @@
+{
+  "kind": "SEPARATE_OBSERVED_ADDENDUM_TO_FROZEN_CLIENT_SOURCE_AUDIT",
+  "read_only_native_execution_count": 0,
+  "frozen_prior_files_unchanged": {
+    "noah-lnurl-client-source-audit.md": "79959686ef5158c9d4f7637a02e91a251b14f97dd41cbc5422f0777871e51433",
+    "noah-lnurl-client-audit-provenance.json": "d64181d7de41d181cbebbb722398ca8577914156ccfca30a05bdf965430bbdff"
+  },
+  "historical_public_receipt": {
+    "file": "noah-actual-invoice-rejection-20261017-public-copy.json",
+    "sha256": "dcc4410247d48589b0ba1bd6f7f13c0725d649f663fccaad25b5373110544ab6",
+    "byte_equal_immutable_git_object": "a916b7ae1918c639253bba88ba95676e97d81b0d:docs/evidence/noah-actual-invoice-rejection-20261017.json",
+    "observed_at": "2026-10-17T16:11:48.072315+00:00",
+    "network": "public Signet",
+    "height": 326772,
+    "stock_noah_source": "8e68ba5c3f032d9fd55e2f2f1f2af1441395eff0",
+    "stock_noah_elf_sha256": "87b2c181e5ba6e57bdb9ac715d2cb56602f2edc6f621c42ef7c6fd397489d187",
+    "provider_client_source": "7055d1fce858f3112aff671d0b2a8a454d6a2214",
+    "provider_elf_sha256": "2c53f1a5bdd974f74e1c1c45b497e44d7e2abfd0f2a9bfa426e06a4eccc73771",
+    "captaind_dirty_source_manifest_sha256": "0ff7819dc89062aef8c6ce43b81d99c851fd813ef0ac75f0d462ef457deb6b69",
+    "callback_request_count": 1,
+    "amount_msat": 5000000,
+    "http_status": 200,
+    "ark_negotiation_requested": false,
+    "response_sha256": "fd58daf7946c03e335e6a8637ab6d5d8e67c84067b4119f269763db0d0bb6264",
+    "invoice_sha256": "8ef568f30a6c2a4a663a832186b6821f8c19709a20dc9a49245fde1922578917",
+    "exact_metadata_utf8_sha256_independently_recomputed": "947f229a83bc7b8748c4dc770969be349e384ea6cef7c34648c5130802462f8f",
+    "metadata_utf8_bytes": 141,
+    "verifier_elf_sha256": "e97c422b5ee894b3d5486ff139039d46107cc0e723adb9dea5a94ccd501798b1",
+    "verifier_exit": 1,
+    "verifier_failure_class": "metadata hash missing; plain description incompatible with strict campaign policy",
+    "payment_attempted": false,
+    "funding_sat": 0
+  },
+  "protocol_policy_distinction": {
+    "official_LUD06_commit": "30339780e8f709b839b639c65a50ff99f8a0abcb",
+    "official_source": "https://github.com/lnurl/luds/blob/30339780e8f709b839b639c65a50ff99f8a0abcb/06.md",
+    "current_flow_step7": "Verify invoice amount equals requested amount; no mandatory h/metadata-hash check in that step.",
+    "bolt11_d_only_valid": true,
+    "accepted_campaign_policy": "Oct12 instructions and explicit root ruling still require h=SHA256(originalmetadata UTF8) before any payment; no relaxation authorized.",
+    "classification": "HISTORICAL OBSERVED STRICT-CAMPAIGN COMPATIBILITY FAIL, not universally malformed BOLT11 or universal current-LUD06 violation."
+  },
+  "limits": [
+    "No original invoice/response/policy private bytes decoded; public immutable receipt plus local admitted verifier/source hashes only.",
+    "Historical callback is a different dirty candidate/profile, not current v5/v6 runtime or funded end-to-end proof.",
+    "No new callback/verifier/runtime/build/payment, no invoice regeneration, no product/API/validator policy changes.",
+    "No paid swap, offline signed recipient delivery, fallback, seed recovery, financial loss or FULL ML acceptance is established by this callback receipt."
+  ]
+}

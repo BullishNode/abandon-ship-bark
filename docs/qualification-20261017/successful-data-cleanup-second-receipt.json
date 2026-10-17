@@ -1,0 +1,20 @@
+{
+  "at": "2026-10-17T15:42:30.462814+00:00",
+  "scope": "only2 successful owned raw datasets/snapshots; no failed run touched",
+  "owned_process_matches": 0,
+  "runs": [
+    {
+      "run": "batch07-readiness-isolation",
+      "removed_bytes": 114309905,
+      "hashes": 1823,
+      "private_manifest_sha256": "45f011ed2f7a48d9e1099e7073035ca5d75b4ce18ae2f10f520090dfeb3ff580"
+    },
+    {
+      "run": "batch08-two-root-return-history",
+      "removed_bytes": 117235864,
+      "hashes": 1856,
+      "private_manifest_sha256": "86bf3fea2d3d58e48b4ee510cecd1cd8a136a3002057a1d574f26f231801aa15"
+    }
+  ],
+  "total_bytes_removed": 231545769
+}

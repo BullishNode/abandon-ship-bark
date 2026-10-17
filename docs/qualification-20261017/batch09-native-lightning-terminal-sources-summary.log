@@ -1,0 +1,7 @@
+        PASS [  22.966s] (1/4) ark-testing::server expiry_hash_provenance::expiry_unused_same_hash_grant_can_be_refunded_after_other_source_paid
+        PASS [  32.892s] (2/4) ark-testing::server expiry_hash_provenance::expiry_unused_same_hash_grant_retains_its_own_liability
+        PASS [  55.243s] (3/4) ark-testing::server expiry_lightning_terminal::expiry_actual_failed_external_send_pays_offline_owner
+        FAIL [  44.737s] (4/4) ark-testing::server expiry_lightning_terminal::expiry_actual_no_part_external_send_pays_offline_owner
+     Summary [ 155.849s] 4 tests run: 3 passed, 1 failed, 256 skipped
+        FAIL [  44.737s] (4/4) ark-testing::server expiry_lightning_terminal::expiry_actual_no_part_external_send_pays_offline_owner
+FAIL oracle: actual CLN dispatch never produced its own terminal failure proof: Elapsed(())

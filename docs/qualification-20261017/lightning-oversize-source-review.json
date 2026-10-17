@@ -1,0 +1,33 @@
+{
+  "at": "2026-10-17T15:45:36.756042+00:00",
+  "scope": "Read-only source review; no compile/runtime credit",
+  "source_hashes": {
+    "testing/tests/server/qualification_lightning.rs": "ca5ea7806da75e6a8229af77baed34b499706a70aa855ec9a75f8241d056d91f",
+    "testing/tests/server/qualification_noah.rs": "4ec45e896ed5e126e1e439542f72a13f9eb45188d78b5794f5a9e81d6d9128be",
+    "testing/tests/server/qualification_oversize.rs": "bf4145c0617cefcb96158f3a2211d9adf62ae9254d5a427de9eaff8a7487c9f7"
+  },
+  "reviewers": [
+    "root",
+    "backend_test_gaps automatic-oversize author/review",
+    "legacy_inventory native Lightning author/Noah reviewer",
+    "client_test_gaps Noah author/Lightning reviewer"
+  ],
+  "fixed_findings": [
+    "Require exact blinded recipient mailbox together with signed outputs, rather than bytes alone",
+    "Reject customer allocations anywhere under paid backing anchor, including historical predecessor leaves",
+    "Enumerate all actual canonical customer outputs across both backing anchors for full principal conservation"
+  ],
+  "retracted_finding": "Noah unfunded provider is not blocked in existing native ln_receive_anti_dos_required=false profile; SDK catches missingproof. Production required-proof admission remains unqualified.",
+  "remaining_source_blockers": [],
+  "frozen_drafts": [
+    "qualification_restore.rs",
+    "qualification_conflict_reorg.rs"
+  ],
+  "compile_policy": "Only canonical package path after coordinator integration and explicit shared-target writer lease",
+  "independent_final_reviewer": "backend_test_gaps: no concrete blocker; patch contents match file hashes",
+  "scope_limits": [
+    "SIGTERM shutdown with kill fallback is not deterministic abrupt process crash",
+    "Provider drop/reopen with stopped daemon is not process kill",
+    "Native forwarding does not qualify stockNoah/LNURL"
+  ]
+}

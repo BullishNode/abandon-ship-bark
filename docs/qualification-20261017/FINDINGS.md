@@ -2,7 +2,7 @@
 
 Base: `e44ddf95741478508908c17adc61752832d75c6a`.
 
-Current checkpoint: 17/17 case executions passed across 16 unique names and eight nextest invocations. One current-cut case was repeated with stronger history assertions. The two mailbox cases are component coverage; the other 15 executions use native operations. Mandatory `just checks` passed. Per-product/runtime pins differ and are explicit in the receipts. Production readiness remains open.
+First checkpoint: 17/17 case executions passed across 16 unique names and eight nextest invocations. Latest aggregate:20PASS/1FAIL across21executions,20unique names and9nextest invocations. One current-cut case was repeated with stronger history assertions. The two mailbox cases are component coverage; the other 15 executions use native operations. Mandatory `just checks` passed. Per-product/runtime pins differ and are explicit in the receipts. Production readiness remains open.
 
 No new product verdict exists at startup. The explicit disk hold prevents builds, native test runs, large copies, services, funding and campaigns until coordinator release. The three workers inspect source and prepare a small inventory.
 
@@ -52,3 +52,15 @@ The prior 10K wrong-mailbox search result is a failed 120-second bounded run. It
 The test changes contain no product patch. Source review found an initial cross-subsystem debit blind spot and missing explicit canonical child confirmation; both were fixed and re-reviewed before the passing build/run. There were no new product-test failures in this checkpoint. The preserved original S03 and wrong-mailbox failures remain open under their exact oracles.
 
 The bounded passing cases do not qualify automatic oversized/multilevel splitting, split/conflict/chain-only ownership rollback, native cross-root discharge or ambiguous Lightning dispatch, complete client finality on the newer published pin, stock Noah offline LNURL, sustained production scale, migrations/backup/restore or all original scenarios. Read CHECKPOINT.md for complete counts and pin limits.
+
+
+## Lightning batch09: original no-part failure preserved
+
+Run `930221cb-38b3-46f9-b88d-9c826febe4d8` finished in155.849seconds:3PASS,1FAIL. Real accepted-then-cancelled external payment and two same-hash source-liability/refund cases passed. The real no-channel/no-part case failed its unchanged30second terminal-proof wait (`Elapsed(())`),44.737seconds wholecase. Its raw state and original logs remain private and preserved. No retry or payment replay occurred.
+
+Pre-run hashes show stock CLN26.06.6 gRPC plugin `421c19f3b0a2cf1c19b2d2f61737be7264c9ecca673e735f5fcb114198e362ea`. Genuine CLN returned RPC205, Unknown source node; stock gRPC returned Unknown text without `abandon-cln-jsonrpc-error-code`. Backend deliberately requires the typed metadata and retains ambiguity otherwise. The dispatch-terminal handoff requires adapter `6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1` with the exact hold plugin. This run did not satisfy that environment contract. It remains FAIL, and supplies no qualified no-part PASS or established product defect. Original-dispatch reconciliation is read-only with the backend lead. Any later qualified pairing needs a separately pinned run; it cannot replace this failed receipt.
+
+Three next-source paths are prioritized: authentic source-bound external settlement during product downtime, registered recipient forwarding interrupted before mailbox delivery, and genuinely automatic327-payee multilevel splitting. These drafts are uncompiled/unrun. Stock Noah LNURL metadata-hash compatibility remains a separate unqualified gate. Restore/conflict drafts are preserved and frozen after the coordinator's Lightning priority.
+
+
+The backend lead independently opened the original CLN SQLite with `mode=ro&immutable=1`, verified no WAL sidecar, and found zero matching and zero total payment parts. SHA256 was unchanged after observation. This corroborates the no-part reply but does not replace typed dispatch-quiescence proof. No node/payment/wallet was restarted or original financial row changed. Full sanitized reconciliation is in `batch09-original-dispatch-reconciliation.json`. The coordinator assigned a separately isolated exact-adapter positive gate to the backend lead; this track will not duplicate it. Stock transport packaging/capability qualification remains open even if that separate pairing passes.

@@ -1,0 +1,390 @@
+{
+  "kind": "INDEPENDENT_READ_ONLY_BATCH40_POSTFLIGHT",
+  "at": "2026-10-17T22:06:03.136236+00:00",
+  "result": "PASS",
+  "parent_terminal": "Parent85000 verified terminal0 before inspection.",
+  "scope": "Three exact adapted nativeCLI cases only. No reruns, extra native selections, actors, kills, builds, source/admission mutation or COVERAGE/STATUS edits.",
+  "cases": [
+    {
+      "index": 1,
+      "literal_name": "create::bark_address_works_offline",
+      "binary": "ark-testing::bark",
+      "run_id": "447ee5ed-b589-47bd-a13f-bd30682cb5a4",
+      "result": "PASS",
+      "exit_code": 0,
+      "resource_error": null,
+      "native_seconds": 9.169,
+      "summary_seconds": 9.172,
+      "wall_seconds": 10.013,
+      "ended_at": "2026-10-17T22:04:08.815710+00:00",
+      "owned_group": 103479,
+      "exact_single_unignored_fresh_listing": true,
+      "actual_log_one_test_one_pass": true,
+      "other_filtered_tests_skipped": 564,
+      "unexpected_or_ignored_test_execution": false,
+      "timeout_seconds": 180,
+      "retries": 0
+    },
+    {
+      "index": 2,
+      "literal_name": "onchain::bark_address_changes",
+      "binary": "ark-testing::bark",
+      "run_id": "0edcfebe-9c42-4366-b5d1-9e9ad35fc579",
+      "result": "PASS",
+      "exit_code": 0,
+      "resource_error": null,
+      "native_seconds": 6.738,
+      "summary_seconds": 6.74,
+      "wall_seconds": 7.516,
+      "ended_at": "2026-10-17T22:04:16.340079+00:00",
+      "owned_group": 103853,
+      "exact_single_unignored_fresh_listing": true,
+      "actual_log_one_test_one_pass": true,
+      "other_filtered_tests_skipped": 564,
+      "unexpected_or_ignored_test_execution": false,
+      "timeout_seconds": 180,
+      "retries": 0
+    },
+    {
+      "index": 3,
+      "literal_name": "fees::send_onchain_fee_deducted",
+      "binary": "ark-testing::bark",
+      "run_id": "16bc85a2-be21-4d2e-a1c3-d8b9ffcf8eb8",
+      "result": "PASS",
+      "exit_code": 0,
+      "resource_error": null,
+      "native_seconds": 18.798,
+      "summary_seconds": 18.799,
+      "wall_seconds": 19.525,
+      "ended_at": "2026-10-17T22:04:35.868540+00:00",
+      "owned_group": 104155,
+      "exact_single_unignored_fresh_listing": true,
+      "actual_log_one_test_one_pass": true,
+      "other_filtered_tests_skipped": 564,
+      "unexpected_or_ignored_test_execution": false,
+      "timeout_seconds": 180,
+      "retries": 0
+    }
+  ],
+  "totals": {
+    "executed_cases": 3,
+    "passed": 3,
+    "failed": 0,
+    "native_seconds": 34.705,
+    "reviewer_new_execution_count": 0
+  },
+  "selection_caution": "564 skipped percase are ordinary filter exclusions; no full565test suite claim. Each exact case itself unignored and ranonce.",
+  "immutable_provenance": {
+    "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+    "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+    "metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+    "source_archive_sha256": "72beca79fa2d31113c0f1070d90ec7f2461dbd63e8b05664a622edbc0326383d",
+    "source_archive_matches_bundle_manifest": true,
+    "source_files": [
+      {
+        "file": "testing/tests/bark/create.rs",
+        "archived_file_sha256": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+        "target_body_sha256": "0abf12c02392b1e95fc5ff954e6a331654fae518aa2449c929d5610c3edd9422",
+        "frozen_owned_file_sha256": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+        "all_unchanged": true
+      },
+      {
+        "file": "testing/tests/bark/onchain.rs",
+        "archived_file_sha256": "bf323688aab8746678bbf73f886ba4cbfaf13f9c3083c5dfd0e60d61b1d9c015",
+        "target_body_sha256": "03c6106d4b35637ff29d35c2347bcf9f5001cc658c33566480879515ce7ed8b8",
+        "frozen_owned_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+        "all_unchanged": true
+      },
+      {
+        "file": "testing/tests/bark/fees.rs",
+        "archived_file_sha256": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+        "target_body_sha256": "94e4213a886ccfae696c445bf01b118465fab5d39b56ebea09e0f26e760a4154",
+        "frozen_owned_file_sha256": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+        "all_unchanged": true
+      }
+    ],
+    "all16pins_freshly_rehashed_in_actual_container": [
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/captaind",
+        "expected_sha256": "a69c7c0c41ba75624880dbe5bb8c3030535cceceafade9b67e4f66c93ab78c19",
+        "actual_sha256": "a69c7c0c41ba75624880dbe5bb8c3030535cceceafade9b67e4f66c93ab78c19",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/watchmand",
+        "expected_sha256": "235153c750c3c7b5a94b5fee8b068738b27c487aeee5d391797783953f504d62",
+        "actual_sha256": "235153c750c3c7b5a94b5fee8b068738b27c487aeee5d391797783953f504d62",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/bark",
+        "expected_sha256": "fb75e9be16280c0123f29bb4453d57bb89720f8daa86609f7025b50b0ff70371",
+        "actual_sha256": "fb75e9be16280c0123f29bb4453d57bb89720f8daa86609f7025b50b0ff70371",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/barkd",
+        "expected_sha256": "65ebedf024184b8d09783c1ac70df86089ead1dcabf1133a110cf14fe03f08e8",
+        "actual_sha256": "65ebedf024184b8d09783c1ac70df86089ead1dcabf1133a110cf14fe03f08e8",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/native-bark",
+        "expected_sha256": "577f6db2f7b196aeac182116249c33a861c6b954866482392a2c1565d03fee27",
+        "actual_sha256": "577f6db2f7b196aeac182116249c33a861c6b954866482392a2c1565d03fee27",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/native-bark-sdk",
+        "expected_sha256": "af0d935689d83aca5fc511b344818a6cea759fe49c5a8bb403e72481a3bf4950",
+        "actual_sha256": "af0d935689d83aca5fc511b344818a6cea759fe49c5a8bb403e72481a3bf4950",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/native-server",
+        "expected_sha256": "cc5a8e7f3678d28969f728886643b2f3f314937fad1ee41c97f323c41df8aa34",
+        "actual_sha256": "cc5a8e7f3678d28969f728886643b2f3f314937fad1ee41c97f323c41df8aa34",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/manifest.json",
+        "expected_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+        "actual_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/source-manifest.json",
+        "expected_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+        "actual_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+        "expected_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+        "actual_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/support/debug/lock-holder",
+        "expected_sha256": "e4e1c0fdc1a2c39b6de2a2448ef0d77a044f9311c5bb5113437ac72b044f01dc",
+        "actual_sha256": "e4e1c0fdc1a2c39b6de2a2448ef0d77a044f9311c5bb5113437ac72b044f01dc",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/support/debug/deps/libark.rlib",
+        "expected_sha256": "47b241d4eedb9433404075a24f5570997206f5611abc5853af895e6f8b097d0e",
+        "actual_sha256": "47b241d4eedb9433404075a24f5570997206f5611abc5853af895e6f8b097d0e",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-owner-replan-v6-20261017/support/debug/deps/libark.so",
+        "expected_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "actual_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "expected_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "actual_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "expected_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "actual_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "matches": true
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "expected_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "actual_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "matches": true
+      }
+    ],
+    "all11original_immutable_controls_unchanged": [
+      {
+        "relative_path": "selection-proof.json",
+        "sha256": "3ffb20400ac03886974ab21685e99b203b4dd2b265486ab37d875185a2b6099e",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "root-allocation.json",
+        "sha256": "1c65631c9ad5cc362b64e76e44b9a0b676099d94f6a275e0b51d7af4bbe772e0",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "runtime-pins.sha256",
+        "sha256": "e502eb334339d903705ccda4c2c75bc8a4ebe1ea9a9c4ec2a0d2a4f7d653a7e8",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "server-cohort.py",
+        "sha256": "accb50fe8fad16181827ecfffd62ff543561e8588b82b9ace479c95ae08a9bc6",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "preflight-static.py",
+        "sha256": "1abe84f7200fd93e6db05acbc62b370168ede6f4458bea4c40ec35b4f3d22292",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "fresh-listings.py",
+        "sha256": "d9745e106069565411be4d3719abf1853d8c22d4610a8d6028b58429384a74dd",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "preflight.sh",
+        "sha256": "e19051794c17978e6847f61c8d449146d8c3d591c9c161d4b84093a87f32a205",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "run.sh",
+        "sha256": "1639b7b24028a9212ec6bc72f3455fd834a932d393e1a91ea6cdceb04a358e5c",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "case01/nextest.toml",
+        "sha256": "ff2a595e8f093a79d660c7bab0ab24531bbecbafe5e152ed20b903ded0f64194",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "case02/nextest.toml",
+        "sha256": "d8f52d272683745afcf7ea6382970bc2dd70b9f43f0b0f8a4a3e548b68dd4bc5",
+        "matches_original_preparation": true
+      },
+      {
+        "relative_path": "case03/nextest.toml",
+        "sha256": "5979ed1806749b3fa7a1a4e870cdd2fa3aa40111d86ad5a074e17262e667e8d4",
+        "matches_original_preparation": true
+      }
+    ],
+    "all13parent_final_control_and_fresh_admission_hashes_unchanged": [
+      {
+        "relative_path": "selection-proof.json",
+        "sha256": "3ffb20400ac03886974ab21685e99b203b4dd2b265486ab37d875185a2b6099e",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "root-allocation.json",
+        "sha256": "1c65631c9ad5cc362b64e76e44b9a0b676099d94f6a275e0b51d7af4bbe772e0",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "runtime-pins.sha256",
+        "sha256": "e502eb334339d903705ccda4c2c75bc8a4ebe1ea9a9c4ec2a0d2a4f7d653a7e8",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "server-cohort.py",
+        "sha256": "accb50fe8fad16181827ecfffd62ff543561e8588b82b9ace479c95ae08a9bc6",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "preflight-static.py",
+        "sha256": "1abe84f7200fd93e6db05acbc62b370168ede6f4458bea4c40ec35b4f3d22292",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "fresh-listings.py",
+        "sha256": "d9745e106069565411be4d3719abf1853d8c22d4610a8d6028b58429384a74dd",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "preflight.sh",
+        "sha256": "e19051794c17978e6847f61c8d449146d8c3d591c9c161d4b84093a87f32a205",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "run.sh",
+        "sha256": "1639b7b24028a9212ec6bc72f3455fd834a932d393e1a91ea6cdceb04a358e5c",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "case01/nextest.toml",
+        "sha256": "ff2a595e8f093a79d660c7bab0ab24531bbecbafe5e152ed20b903ded0f64194",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "case02/nextest.toml",
+        "sha256": "d8f52d272683745afcf7ea6382970bc2dd70b9f43f0b0f8a4a3e548b68dd4bc5",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "case03/nextest.toml",
+        "sha256": "5979ed1806749b3fa7a1a4e870cdd2fa3aa40111d86ad5a074e17262e667e8d4",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "fresh-listing-admission.json",
+        "sha256": "71046cea486967e242c2ef1d243b7d30196fff35a1d89bf827c9e8ab012ab9c4",
+        "matches_parent_final_freeze": true
+      },
+      {
+        "relative_path": "resource-admission.json",
+        "sha256": "b169914fab80f723d2b1930b065f257c7f8e549d509e00828bff97b0def88c6c",
+        "matches_parent_final_freeze": true
+      }
+    ],
+    "parent_launch_admission_sha256": "936282729dfefbe509c853cd3af14d485706043bb71f52ba3572f0b31c2b5de6",
+    "source_match_attachment_sha256": "a6d124519a6e83581b5267a0b9d2b8764d713e7d60201e68e4dc32747ba2c467",
+    "preparation_manifest_sha256": "0c56a70c9b4a7400beb049b9bb83471f3a4f9f13ddd98eed9c4a8424c2de5b63"
+  },
+  "cleanup_resources": {
+    "owned_groups": [
+      103479,
+      103853,
+      104155
+    ],
+    "remaining_owned_group_or_session_members": [],
+    "remaining_batch_scoped_processes": [],
+    "shm_available_bytes": 863678464,
+    "guard_bytes": 12582912,
+    "resource_guard_pass": true,
+    "all16pins_unchanged": true,
+    "cleanup_performed": false
+  },
+  "inspection_method": "Container /proc PGID/SID+batchpath cmdline/cwd matching emitsonlysafe processmetadata; noargv strings. Native logs readonlythrough strict nextestsummary/runID/name/time grammar, fullpayloadneverprinted/copied.",
+  "safe_artifact_hashes": {
+    "parent-launch-admission.json": "936282729dfefbe509c853cd3af14d485706043bb71f52ba3572f0b31c2b5de6",
+    "controller.log": "21dcd5e2610b323dcf1b102bd5404da868d363303d9117d1a46637856b98e81f",
+    "selection-proof.json": "3ffb20400ac03886974ab21685e99b203b4dd2b265486ab37d875185a2b6099e",
+    "root-allocation.json": "1c65631c9ad5cc362b64e76e44b9a0b676099d94f6a275e0b51d7af4bbe772e0",
+    "runtime-pins.sha256": "e502eb334339d903705ccda4c2c75bc8a4ebe1ea9a9c4ec2a0d2a4f7d653a7e8",
+    "cohort-summary.json": "1851e72b31fefd17200b399e80e81187cc3f069a7ea7be872441a4bfc2875259",
+    "cohort-progress.json": "85927add70b2f7dc31a6a171747285083c4d10271b1b70b370937c3bb46f8bcb",
+    "resource-checkpoints.jsonl": "7f9b13901a82f0ac4ba03980ee8886b250bcda3bbf0c86d8e5bb8a3c7fb4b30c",
+    "fresh-listing-admission.json": "71046cea486967e242c2ef1d243b7d30196fff35a1d89bf827c9e8ab012ab9c4",
+    "resource-admission.json": "b169914fab80f723d2b1930b065f257c7f8e549d509e00828bff97b0def88c6c",
+    "case01/nextest.log": "aba0b9fa6526557f552fb4f63f63f94d56ddef179769d439b9d6d7d27aa0a400",
+    "case01/result.json": "9a487f26bd7c62d88da32bba165decfc0718c8a9670bf8bd1b1566bacfe4db8d",
+    "case01/selection-list-fresh.json": "8405318783dc708509a31a908312d70611ac4350476c25229505e255f275d90d",
+    "case01/resource-preflight.json": "7cbeed23548af7da8824f3597170430063cb18085b1ceb10f0bb3408c4b9dfe0",
+    "case02/nextest.log": "cf28fedfb0f967c5910ae599bf272d003a456c3c1b75a299a08acba8c33de268",
+    "case02/result.json": "bc8dade45ec09b6dac00871eaf8c8dd94b809fb3ad9d25cae87dcfd39b8e15cf",
+    "case02/selection-list-fresh.json": "22885882f7e381333055dfd58399e8eec662ec12748f3491fdd7fb78ac0936cb",
+    "case02/resource-preflight.json": "0854eefdeee41a3367cfc7a5453c592a49be3261a39a54fc003650e35f9a441d",
+    "case03/nextest.log": "750b0b92c766c59c19c0d572de4b93116bd3266223d14f44f96487d5a1c9e5df",
+    "case03/result.json": "d28e9404ba3e7b8e3a289722727925a1d88079fc124473095827404cb4eada11",
+    "case03/selection-list-fresh.json": "8b0c4b4f08be936277f256704044a80322b4dd420dc1410e9a8dfb0e615aebd9",
+    "case03/resource-preflight.json": "2a6f46c36af2c68cc8064fa4a257a00c0c31a6bddb9e215fa7c4e922ffe822d9"
+  },
+  "actual_native_assertion_scope_limits": [
+    {
+      "case": 1,
+      "scope": "Acceptedreservedindex0stableidentity plus firstfreshindex1 determinism acrossoriginalserverstop; finalofflinefresh differs fromidentity0 andfirstfresh1.",
+      "limit": "Unfundedaddress-only native fixture, not walletmoney recovery/defaultdaemon expiry."
+    },
+    {
+      "case": 2,
+      "scope": "Acceptedreservedidentity0 andfresh1/2 exact indexedpeek matching with allthree pairwise distinct.",
+      "limit": "Nativeaddressderivation/counter fixture, not transferred-money lifecycle."
+    },
+    {
+      "case": 3,
+      "scope": "Actualpublicoffboardfeerate plus actualdestinationSPK derives servicecharge; originalreceipt/change/metadata/estimate assertions preserved and reached by finalPASS.",
+      "limit": "Specificnative fee/serviceaccounting case. Minerfee independence/wholephysicalDAG/solvency/fullML is not newly inferred by this metadata postflight; backend owns separate boundedmoney review."
+    }
+  ],
+  "history": "OriginalcreateofflineandfeeFAIL receipts remain historical failures. This later adaptedconditionPASS is separate; addresschanges originallyheld/unstarted now hasitsown newexecution. Do not rewrite oldreceipts or claim pending12ordinary/3SDK adaptations executed.",
+  "invocation_note": "Parent reported one directpython OCI127 beforecachedNix guard invocation; pretestonly/no native fired. CorrectcachedNix guard thenPASS and singleparentlaunch. Reviewer postflight no failednative invocation."
+}

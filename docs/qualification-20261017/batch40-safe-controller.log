@@ -1,0 +1,7 @@
+PARENT_LAUNCH_HASH_GATE_PASS
+START create::bark_address_works_offline
+PASS create::bark_address_works_offline
+START onchain::bark_address_changes
+PASS onchain::bark_address_changes
+START fees::send_onchain_fee_deducted
+PASS fees::send_onchain_fee_deducted

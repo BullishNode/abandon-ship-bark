@@ -1,0 +1,7 @@
+All3 exact adapted CLI cases PASS on captured source779189df/runtimev6: offlineaddress9.169s, addresschanges6.738s, send-onchainfee18.798s. Parent confirms session85000 exit0; safe3terminalreceipts and summary independentlychecked. Zero retries; original priorFAIL/held records stayseparate.
+
+The first2 prove Arkreceive-address identityindex0 reservation and firstfreshindices1/2. Offlinecase actually stopsserver and derives/compares addresses with the same retainedwallet. `onchain::bark_address_changes` invokes `bark address`, so it is not BIP84/onchainaddressrotation. Neither case moves money or proves seedrestore/lostDB/defaultdaemon recovery.
+
+The fee case genuinely boards800k, sends300k and checks script-aware publicquoted customerfee, movementdestination, actualchangeVTXOs = input−300k−fee, freshrecipientCLI300k totalbalance after3minedblocks, and estimate/movement correspondence. Actualdestinationscriptlength replaces the old fixedscript assumption. This is customerchargedfee qualification, not actualBitcoinminerfee: no rawtx/prevout/Coreblock/depth/fullDAG/operatorchange/subsidy audit. CLIbalance.total can includeunconfirmed funds; threegeneratedblocks alone is not directcanonical6 evidence. Initial1m funding/boardfee/ordinarychange and serverfunding outside the scoped800kcut remain unreconciled.
+
+Exactpins/receipts/source lines/helpersemantics and furtherlimits are in the JSON. No fullCLI/fullML/production gate/count promotion; no privatefullnative logs, DB, actors, runtime, source, publicdocs or evidence-status changes by this review.

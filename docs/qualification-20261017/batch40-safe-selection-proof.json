@@ -1,0 +1,48 @@
+{
+  "state": "ROOT_ALLOCATED_ONCE_PENDING_PARENT_LAUNCH",
+  "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+  "bundle_manifest_sha256": "e66ae1dd887e7b46a33c2620544562cab1f91b8a8b6736ecec3a3e44836bbf82",
+  "runtime_metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+  "metadata_path": "/fresh-cache/runtime-owner-replan-v6-20261017/nextest-binaries-runtime.json",
+  "expected_names_in_execution_order": [
+    "create::bark_address_works_offline",
+    "onchain::bark_address_changes",
+    "fees::send_onchain_fee_deducted"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::bark",
+    "ark-testing::bark",
+    "ark-testing::bark"
+  ],
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "actual_bark_version": "bark 0.7.1-dev (828863b21a21a10d3d26ae5f29479be3ee87a233)",
+  "root_authorization": "Root thread explicitly allocated exact3 ONCE serialv6; parent alone launches after final controls/hash/fresh gates. Read-only preflight+freshlisting authorized; no native launch by preparer.",
+  "scope": "Only exactthree already-integrated identity/fee adaptations sourcebyteequal779/828/owned. Preserve original FAIL/held results; no fullCLI/fullML or other queuedadaptation credit.",
+  "commands": [],
+  "source_functions": [
+    {
+      "test_name": "create::bark_address_works_offline",
+      "path": "testing/tests/bark/create.rs",
+      "sha256": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+      "target_body_sha256": "0abf12c02392b1e95fc5ff954e6a331654fae518aa2449c929d5610c3edd9422"
+    },
+    {
+      "test_name": "onchain::bark_address_changes",
+      "path": "testing/tests/bark/onchain.rs",
+      "sha256": "bf323688aab8746678bbf73f886ba4cbfaf13f9c3083c5dfd0e60d61b1d9c015",
+      "target_body_sha256": "03c6106d4b35637ff29d35c2347bcf9f5001cc658c33566480879515ce7ed8b8"
+    },
+    {
+      "test_name": "fees::send_onchain_fee_deducted",
+      "path": "testing/tests/bark/fees.rs",
+      "sha256": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+      "target_body_sha256": "94e4213a886ccfae696c445bf01b118465fab5d39b56ebea09e0f26e760a4154"
+    }
+  ],
+  "source_match_attachment": {
+    "file": "source-intake-three-existing-v6-match.json",
+    "sha256": "a6d124519a6e83581b5267a0b9d2b8764d713e7d60201e68e4dc32747ba2c467"
+  }
+}

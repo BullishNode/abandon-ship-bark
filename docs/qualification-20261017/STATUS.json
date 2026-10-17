@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-17T21:58:23.159115+00:00",
+  "updated_at": "2026-10-17T22:09:10.153592+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "PREPARING_CHECKPOINT12_NEW_REPORT_BRANCH_NO_RUNTIME",
-  "branch": "work/fresh-test-report-checkpoint12-20261017",
+  "state": "BATCH40_COMPLETED_RECONCILED_CHECKPOINT13_PREPARING",
+  "branch": "work/fresh-test-report-checkpoint13-20261017",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
   "worktree_created": true,
@@ -42,11 +42,11 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Parent reviews frozen checkpoint12 payload and publishes it from the new report-only branch. No source/runtime/build or new test allocation; current source-intake reviews remain separate.",
+  "next_action": "Prepare smallreport-onlycheckpoint13 on newbranch preservingPR16f2ff; no activeownruntime or furtherallocation.",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
-  "runtime_allocation": "No active own runtime. Root has not allocated further native cases.",
+  "runtime_allocation": "Batch40 exactthreecasescompletedONCE; no activeownruntime or additionalallocation.",
   "inventory_rows_by_file": {
     "legacy-inventory.csv": 103,
     "backend-inventory.csv": 72,
@@ -69,11 +69,11 @@
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
   "new_test_source_review": "Published earlier fixtures compiled and ran on recorded pairings. New failed-send v3 is source-only and excluded from this checkpoint.",
-  "coverage_rows": 431,
-  "coverage_warning": "431 mixed inventory, requirement and executed rows through batch39; not431 completefinancialscenarios. FixedPR15 remains216executions/427rows.",
+  "coverage_rows": 434,
+  "coverage_warning": "434 mixedinventory/requirement/execution rows throughbatch40; not434 financialscenarios. FixedPR16 remains220executions/431rows.",
   "current_batch": {
     "state": "NONE_ACTIVE",
-    "last_terminal_parent_session": 54847
+    "last_terminal_parent_session": 85000
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -108,10 +108,10 @@
     "wall_seconds_approx": 159.375
   },
   "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
-  "case_executions": 220,
-  "unique_executed_test_names": 216,
-  "nextest_invocations": 193,
-  "native_case_executions": 208,
+  "case_executions": 223,
+  "unique_executed_test_names": 217,
+  "nextest_invocations": 196,
+  "native_case_executions": 211,
   "component_case_executions": 12,
   "new_test_results": {
     "readiness": "PASS26.184s",
@@ -126,10 +126,10 @@
     "verified_remote_head": "5635b5a95b636894b1e1aae9117eac3d057329a9",
     "test_code_commit": "bc3d02835e0aa539d5a5dd8f7c1385ed85227ce5",
     "working_tree_was_clean_at_push": true,
-    "state": "PR15 draft/open and remote head verified by parent; last verified merge remainsPR14.",
+    "state": "LatestpublishedPR16draft/headf2ff remainsfixed; lastverifiedmerge isPR15a2961be.",
     "merged_by_coordinator": "0f932806513a8dcefb5a3f3e841b98b73d02d3a1",
     "verified_merged_at": "2026-10-17T15:33:13Z",
-    "next_checkpoint": "Report-only twelfth checkpoint prepared externally at220executions/431coverage. New PR/head not yet claimed; parent verification required.",
+    "next_checkpoint": "Batch40terminal+finalpostflight/oracles ready:223/434. Newreportbranchcheckpoint13 fromPR16f2ff preservesfixedPR16cutoff220/431; parentownsnextpublication.",
     "next_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/7",
     "next_verified_remote_head": "e509f35169b8ee409310c1361305c1e1942565f2",
     "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN",
@@ -141,9 +141,9 @@
     },
     "primary_local_code_commit": "0870bbbb915f133b98b00b5c3d7dc2a2a2ac0bc5",
     "primary_code_publication": "PUSHED and verified in draftPR8; no merge/promotion/deployment by testing track",
-    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/15",
-    "latest_verified_remote_head": "f34f97890975cb6789b44982e0e8a818edc5e33c",
-    "latest_receipt": "PUBLICATION-PR15.json",
+    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/16",
+    "latest_verified_remote_head": "f2ff4ece0d0c6874851925c9f4bd09409efe31f0",
+    "latest_receipt": "PUBLICATION-PR16.json",
     "oversize_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/9",
     "oversize_verified_remote_head": "013bed49bc5cd0d7d839b1726ebf9e71b5170301",
     "oversize_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
@@ -152,36 +152,35 @@
     "oversize_source_PR9_state": "MERGED814d7b0d",
     "latest_scope": "REPORT_ONLY eleventh checkpoint;30payload files plus publicationmanifest=31safe report paths, noRust/privatebackup/fullnative logs.",
     "latest_pr_verified_merged": {
-      "pr": 14,
-      "head": "ce654bc853c06e605ad88cf18b16d4f7ecf93a41",
-      "merge_commit": "3d17b09ef646c3bf74037f796bc002da43685076",
-      "merged_at": "2026-10-17T21:32:22Z",
+      "pr": 15,
+      "head": "f34f97890975cb6789b44982e0e8a818edc5e33c",
+      "merge_commit": "a2961be8376fe236b9a6788e831884e05d425f0e",
+      "merged_at": "2026-10-17T22:05:44Z",
       "remote_branch_verified": true
     },
     "latest_published_checkpoint": {
-      "checkpoint": 11,
-      "pr": 15,
-      "head": "f34f97890975cb6789b44982e0e8a818edc5e33c",
-      "case_executions": 216,
-      "pass": 202,
-      "fail": 14,
-      "unique_names": 212,
-      "nextest_invocations": 189,
-      "native_cases": 204,
-      "components": 12,
-      "coverage_rows": 427,
-      "verification": "Parent independently verified remote head,30payload hashes and31safe report paths. Draft/open; no merge/deployment claim."
+      "checkpoint": 12,
+      "pr": 16,
+      "head": "f2ff4ece0d0c6874851925c9f4bd09409efe31f0",
+      "executions": 220,
+      "PASS": 206,
+      "FAIL": 14,
+      "unique_binary_test_pairs": 216,
+      "nextest_invocations": 193,
+      "native": 208,
+      "component": 12,
+      "coverage_rows": 431
     },
-    "next_report_branch": "work/fresh-test-report-checkpoint12-20261017",
-    "next_report_branch_base": "f34f97890975cb6789b44982e0e8a818edc5e33c",
+    "next_report_branch": "work/fresh-test-report-checkpoint13-20261017",
+    "next_report_branch_base": "f2ff4ece0d0c6874851925c9f4bd09409efe31f0",
     "next_report_dependency": "PR15 remains draft/open on its original branch/head. New report branch preserves that head; parent owns review/publication."
   },
   "next_batch": {
     "automatic_oversize": "Actualcorrectedfixturepassedonfrozen814+ownerpatch/source7041; original16.359sFAIL preserved. Notproductioncapacity.",
-    "backup_restore": "Ordinary coldPG/operatoridentity plus seed-only completeBIP84 recovery PASS28.352s/run874f3d92 on NEW87e/740/ced8; exactCore6/full300k assertions reached. Independent financial audit pending; no LN/universal/globalproduction/fullML claim.",
+    "backup_restore": "OrdinarycoldPG/operatoridentity+seed-onlyBIP84recovery PASS28.352/run874f3d92 on87e/740/ced8; independent retainedCore financialsupplement COMPLETE:tip150,parent+child12conf,drain6/full300k. No LN/universal/globalproduction/FULLML credit.",
     "conflict_reorg": "Frozen source-only draft after Lightning priority",
     "lightning_restart": "Completed source-labelled success recovery; stronger failed-send cancellation-during-downtime draft reviewed but uncompiled/unrun",
-    "noah_forwarding": "Native provider-reopen and actual post-registration recipient fallback passed; stock Noah LNURL metadata-hash compatibility unqualified",
+    "noah_forwarding": "Earlier boundednative providerreopen/recipientfallback PASS remainseparate from historicalstockNoah8e68 strictcampaign callbackFAIL beforepayment. No fundedstockNoah lifecycle/strictPASS. Protocoladdendum distinguishes reviewedcurrentLUD06/BOLT11 from preservedstrongercampaignrule; noAPI/rulechange.",
     "failed_send_restart": "Reviewed isolated source-only packet, no module registration/compile/runtime",
     "upstream_sdk": "45 ordinary upstream SDK cases plus six native CLN-dependent upstream cases PASS on frozen source7041. Six deferred original cases and source-only replacements are not automatically qualified."
   },
@@ -193,7 +192,7 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 206,
+  "passed_case_executions": 209,
   "failed_case_executions": 14,
   "first_checkpoint": {
     "executions": 17,
@@ -401,19 +400,19 @@
     "coverage_sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
     "full_pass_limitation": "Only ML165/166 bounded327-owner shape. No expansion to restart/reorg/heterogeneous-history cases."
   },
-  "counts_warning": "220 completed executions=206PASS+14preservedFAIL;216unique(binary,name),193nextest invocations,208native+12components. New779/e66 pairing is separate from earlier87e/7041; no fullsuite/production/automaticFULLML credit.",
-  "execution_counts_through": "Terminal batch39:four native PASS on new779/e66 candidate. All original FAILs and ML map dispositions retained.",
+  "counts_warning": "223executions=209PASS+14preservedFAIL;217unique(binary,name),196invocations,211native+12components. Batch40adds3executions butonly1newuniquename. OriginalFAIL/held rowsretained; nofullsuite/ML/productionpromotion.",
+  "execution_counts_through": "Terminalbatch40 threeadaptedv6PASS; distinctOCI127preparationevent startednonativetest andisnotcounted.",
   "execution_outcomes": {
-    "PASS": 206,
+    "PASS": 209,
     "FAIL": 14
   },
   "last_completed_batch": {
-    "name": "batch39-owner-replan-v6",
-    "batch": 39,
-    "result": "4PASS0FAIL, all native",
-    "parent_exec_session": 54847,
+    "name": "batch40-three-existing-v6",
+    "batch": 40,
+    "result": "3PASS0FAIL;1newunique+2repeatednames",
+    "parent_exec_session": 85000,
     "terminal_exit": 0,
-    "receipt": "batch39-owner-replan-v6-receipt.json"
+    "receipt": "batch40-three-existing-v6-receipt.json"
   },
   "historical_fields_notice": "Phase-specific build/publication/source fields below remain historical. Current top-level totals are the explicit checkpoint9 receipt cutoff; newer current_batch counts are separately excluded pending curation. Pinned receipts control all execution claims. No historical receipt is rewritten to replace pending financial reconciliation with a later supplement.",
   "fee_failure_reconciliation": {
@@ -530,12 +529,14 @@
     "historical_snapshot_sha256": "2187df586053bb7ed29fb61e35017447c04ad6432b8a5fea7e8a14b45fab34a9",
     "addendum": "source-intake-three-existing-v6-match.json",
     "addendum_sha256": "a6d124519a6e83581b5267a0b9d2b8764d713e7d60201e68e4dc32747ba2c467",
-    "compiled_in_v6_but_not_run": [
+    "compiled_in_v6_but_not_run": [],
+    "remaining_ordinary_targets_source_only": 12,
+    "new_execution_credit": 0,
+    "qualified_batch40_names": [
       "create::bark_address_works_offline",
       "onchain::bark_address_changes",
       "fees::send_onchain_fee_deducted"
     ],
-    "remaining_ordinary_targets_source_only": 12,
-    "new_execution_credit": 0
+    "batch40_status": "ThreeadaptedcasesPASS on779v6; original7041FAIL/held recordsremain; remaining12sourceonlyaggregateNOTCOMPILED/NOTRUN."
   }
 }

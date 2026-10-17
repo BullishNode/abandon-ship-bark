@@ -1,0 +1,6 @@
+{
+  "state": "PENDING_PARENT_FINAL_HASH_GATE",
+  "batch": "batch40-three-existing-v6",
+  "launch_authorization_file": "parent-launch-admission.json",
+  "instruction": "Parent alone may remove thispendingmarker and write final immutablecontrol+freshgate hashes before native launch."
+}

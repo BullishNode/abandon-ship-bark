@@ -1,0 +1,100 @@
+{
+  "kind": "SCOPED_SOURCE_ONLY_AGGREGATE_TWELVE_PEER_ACK",
+  "at": "2026-10-17T22:07:24.171713+00:00",
+  "reviewer": "client_test_gaps",
+  "verdict": "NO_CONCRETE_SOURCE_CONTEXT_OR_AGGREGATION_BLOCKER",
+  "formalizes_prior_completed_review": true,
+  "patch": {
+    "file": "ordinary-adaptations-twelve-source-only.patch",
+    "sha256": "3aeb8840d040a67cee0bc423a3ab80953df3b795229d864e8be2fd6bee1ea165"
+  },
+  "manifest": {
+    "file": "ordinary-adaptations-twelve-source-only-manifest.json",
+    "sha256": "c589354c1fdd931f5e313a531fd3c434531105156d5ffb991166c2554049bcbb"
+  },
+  "strict_base_commit": "828863b21a21a10d3d26ae5f29479be3ee87a233",
+  "method": "Completed prior purePython in-memory exactold-hunk-context application against gitshow immutable828863; no checkout application or new inspection performed by this receipt formalization.",
+  "files": [
+    {
+      "path": "testing/tests/bark/onchain.rs",
+      "strict_base_sha256": "bf323688aab8746678bbf73f886ba4cbfaf13f9c3083c5dfd0e60d61b1d9c015",
+      "reviewed_result_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "changed_logical_targets": 2
+    },
+    {
+      "path": "testing/tests/bark/movement.rs",
+      "strict_base_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827",
+      "reviewed_result_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "changed_logical_targets": 3
+    },
+    {
+      "path": "testing/tests/bark/offboard.rs",
+      "strict_base_sha256": "3b332ccfa1db013e11abce7ea87043742786dae1f686868939df38974a17ee35",
+      "reviewed_result_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "changed_logical_targets": 2
+    },
+    {
+      "path": "testing/tests/barkd/boards.rs",
+      "strict_base_sha256": "9daaf65eed620a073f5ef16bff5315968c5334156a910f92730f3bc934482d58",
+      "reviewed_result_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "changed_logical_targets": 1
+    },
+    {
+      "path": "testing/tests/barkd/recovery.rs",
+      "strict_base_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464",
+      "reviewed_result_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "changed_logical_targets": 4
+    }
+  ],
+  "exact_result_equivalence": "All5 in-memory resultfullfiles byte-identical to frozen previously reviewed owned sources; aggregate does not change their financial oracles.",
+  "targets": {
+    "logical_total": 12,
+    "CLI_count": 7,
+    "barkd_count": 5,
+    "CLI": [
+      "onchain::list_utxos",
+      "onchain::onchain_drain",
+      "movement::board_board",
+      "movement::movement_offboard",
+      "movement::movement_send_onchain",
+      "offboard::bark_send_onchain",
+      "offboard::bark_rejects_offboarding_dust_amount"
+    ],
+    "barkd": [
+      "boards::board_all_barkd",
+      "recovery::recovered_wallet_finds_boarded_vtxo",
+      "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "recovery::recovered_wallet_finds_round_vtxo",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ],
+    "rename_counting": "Old stores_spent_vtxos_on_the_servers_word -> quarantines_invalid_spent_vtxos countsasONE adaptedlogicaltarget.",
+    "all_other_test_function_bodies_unchanged": true
+  },
+  "already_integrated_excluded_and_preserved": [
+    "create::bark_address_works_offline",
+    "onchain::bark_address_changes",
+    "fees::send_onchain_fee_deducted"
+  ],
+  "build_capture_requirement": {
+    "current_v6_source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a",
+    "current_v6_metadata_sha256": "8a60ca923645b480ccbb09c8aeb1eeea83525b382163f9c76bb64aadf4180027",
+    "actual_current_v6_binary_ids": [
+      "ark-testing::bark",
+      "ark-testing::bark-sdk",
+      "ark-testing::server"
+    ],
+    "ark_testing_barkd_present": false,
+    "next_capture_must_include": "Actual ark-testing::barkd integration test ELF and matchingmetadata/source; barkd product alone is insufficient."
+  },
+  "limits": {
+    "compiled": false,
+    "run": false,
+    "new_execution_credit": 0,
+    "full_ML_credit": 0,
+    "source_or_packet_edits": 0,
+    "builds_or_runtime": 0,
+    "checkout_application": false,
+    "original_failures_and_holds": "Preserved; later aggregation/sourceACK cannot replace original outcomes.",
+    "scope": "Aggregatecomposition/source-context only; compile-dependent traits/macros/async behavior and financial runtime oracles remain unverified."
+  }
+}

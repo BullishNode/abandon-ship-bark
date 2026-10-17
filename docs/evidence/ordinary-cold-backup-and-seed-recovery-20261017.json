@@ -1,0 +1,341 @@
+{
+  "scope": "Actual ordinary operator physical backup, correct fallback and seed-only recovery; not Lightning backup or universal production qualification.",
+  "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+  "coordinator_independent_receipt_hash_and_graph_arithmetic": "PASS",
+  "input_file_sha256": {
+    "batch38-cold-backup-v5-receipt.json": "d0a0a16f8105e41e38a3ca7c11420a63ec538c00dd093ec4a217c3e893a9ea2e",
+    "batch38-cold-backup-public-receipt.json": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+    "cold-backup-retained-core-reconciliation-client.json": "0ed90ac81dea6f1c7329355e45b7a6587f4ebf84ff71fdd20f1792b802678c9b"
+  },
+  "native": {
+    "state": "TERMINAL_PASS",
+    "batch": 38,
+    "started": 1,
+    "passed": 1,
+    "failed": 0,
+    "controller_exit": 0,
+    "parent_reported_session": 55622,
+    "test_binary": "ark-testing::server",
+    "test_name": "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery",
+    "coverage_case_id": "FT-SERVER-010",
+    "run_id": "874f3d92-bea4-4599-955e-be88b2b4c2fd",
+    "native_test_seconds": 28.352,
+    "nextest_summary_seconds": 28.354,
+    "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+    "source_body_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+    "bundle_manifest_sha256": "740da075ad58542352fea1b2ce6c93e3827cf02381d9b88f2c99c76f8e4c25b6",
+    "candidate_head": "e443d415ee7b0d512203bd56f85e22cdec69d35f",
+    "candidate_dirty": true,
+    "actual_git_diff_sha256": "7d61324da7ccc276a836ddf26060d91de0ad0de929447e0fe2dc6b52ae55b870",
+    "test_elf_sha256": "26d701e21e623889f9cba0e0af76d6084e032f9aa8b96dfa9a098e8a471f7387",
+    "metadata_sha256": "aa3f342eb4d4a191946550c3e1899afa35be2d96bca6248c6110b14f2e824f63",
+    "metadata_path": "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-runtime.json",
+    "actual_bark_version": "bark 0.7.1-dev (9ea05f9680be2757e875ee81f4546fd24e5b6354)",
+    "version_provenance": "Root ACK cached9ea label; sourceHEAD/diff/manifest/ELF/build evidence authoritative, not a clean release claim. Dev version gate true.",
+    "products": {
+      "captaind": {
+        "path": "/fresh-cache/runtime-balance-backup-v5-20261017/captaind",
+        "sha256": "3f271e4dbf2fb08f4c4cd3f072814c12103e6611cf602ba8d8e79f2991e171d1"
+      },
+      "watchmand": {
+        "path": "/fresh-cache/runtime-balance-backup-v5-20261017/watchmand",
+        "sha256": "8bf707d1b26fb019271f1443873d03d3678a52a80635a94557122b674ada4c81"
+      },
+      "bark": {
+        "path": "/fresh-cache/runtime-balance-backup-v5-20261017/bark",
+        "sha256": "d787c51786c91e9ce8c10502d797b8911100e8dd0f3e3535d1536bf1123d9527",
+        "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+        "web_dist": "/fresh-cache/web-dist-4c1c979"
+      },
+      "barkd": {
+        "path": "/fresh-cache/runtime-balance-backup-v5-20261017/barkd",
+        "sha256": "93011e42f99787341b8a54e55af0f7540e8407c91354f0865d0d628bfd099366",
+        "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+        "web_dist": "/fresh-cache/web-dist-4c1c979"
+      },
+      "ark-testing::bark": {
+        "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-bark",
+        "sha256": "3f56d0874a296128fa9c74d64689f04fa58f0ad7ca28512acc55ac9b754e10e5"
+      },
+      "ark-testing::bark-sdk": {
+        "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-bark-sdk",
+        "sha256": "41b5e69fdaf3fa01fe92ec602795fc428f6431665a42ad89504cf2ad0e2c8ef1"
+      },
+      "ark-testing::server": {
+        "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-server",
+        "sha256": "26d701e21e623889f9cba0e0af76d6084e032f9aa8b96dfa9a098e8a471f7387"
+      }
+    },
+    "features": "actual bark/barkd and nativearktesting fallback-test-bip84 verified in bundlemanifest metadata build command; source independently assertsP2WPKH and BIP84witness",
+    "new_compilation_in_test_run": false,
+    "build_scope": "Root compiled this new87e/740 bundle separately before this one native execution; it is not frozen source7041 or a clean release label. Historical capture native_result NOT RUN predates this terminal receipt.",
+    "retries": 0,
+    "per_test_timeout_seconds": 180,
+    "command": [
+      "just",
+      "--set",
+      "JUSTFILE_DIR",
+      "/fresh-cache/testing-track-20261017/batch38-cold-backup-v5",
+      "int-binaries",
+      "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-runtime.json",
+      "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch38-cold-backup-v5/case01/nextest.toml -- qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery --exact"
+    ],
+    "started_at": "2026-10-17T21:27:49.646138+00:00",
+    "ended_at": "2026-10-17T21:28:18.688881+00:00",
+    "sanitized_public_receipt": "batch38-cold-backup-public-receipt.json",
+    "sanitized_public_receipt_sha256": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+    "native_result_sha256": "594d728b83251d51eadc38c9dc44d9756c89d7455a69e4cc8b10193b1dc297a1",
+    "raw_native_log_sha256": "23429443c261a7a135e9b110f6f7726db5b615f9cb0f319faea5ccc9be53e24d",
+    "raw_native_log_published": false,
+    "raw_summary_sha256": "9e5801db2b8ea364fd789a87f23e543a2b4356d20e0d0300b6fdd8e96d47ec0d",
+    "raw_progress_sha256": "38fc23e9a7c1e055235aedcdecc2f30652b926bcfb69b380e495225c649a05dc",
+    "selection_proof_sha256": "7c3fe5cdf69c414be54ad42c34758ddeabe4f0c101bc3d3161069a2f181572c0",
+    "resource_preflight_sha256": "07cd720725b098d3ef3a04a1b2ab41a546f159d6bea6db26a668b93b20c12546",
+    "environment_receipt_sha256": "0dcbaa652f36f52bc370f6603ea1a72907d6ce0f6ee48e96491880c7c781d77c",
+    "actual_context_exists": true,
+    "completed_assertion_evidence": "Compiled exactced8 source writes this public receipt only after clean physicalPG identity/watch-state restore on continuingCore; real99k canonical payout/feechild; seed-only complete BIP84 input map/drain; canonical>=6confirmation checks and full300k conservation. Native PASS also completed subsequent owned-service teardown. These are reached test assertions; independent client retained-Core reconciliation is separate and pending at this checkpoint.",
+    "accounting": {
+      "customer_initial_sat": 200000,
+      "sponsor_initial_sat": 100000,
+      "customer_payout_sat": 99000,
+      "customer_fee_sat": 1000,
+      "board_miner_fee_sat": 763,
+      "package_miner_fee_sat": 2281,
+      "recovery_input_sat": 198237,
+      "recovery_output_sat": 197349,
+      "recovery_miner_fee_sat": 888,
+      "operator_retained_sat": 98719,
+      "customer_conservation": "200000 = 197349 recovered destination + 888 recovery miner fee + 763 board miner fee + 1000 customer fallback fee",
+      "complete_declared_cut": "300000 = 98719 operator retained + 197349 recovered destination + 763 board miner fee + 2281 package miner fee + 888 recovery miner fee"
+    },
+    "scope": "One ordinary same-candidate orderly physical operator backup plus absent-original seed-only BIP84 customer recovery, same continuing Core. No LN backup, universal/PITR/crash/upgrade backup, globalwalletsolvency, fullsuite, production or automatic FULLML credit. Private backups, identities, seeds, wallet databases and full native logs not read or published by curator.",
+    "independent_financial_reconciliation_at_native_checkpoint": "PENDING; add separate receipt later without rewriting this native checkpoint."
+  },
+  "actual_public_receipt": {
+    "actual_board_miner_fee_sat": 763,
+    "actual_package_miner_fee_sat": 2281,
+    "actual_recovery_miner_fee_sat": 888,
+    "backing": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197:0",
+    "customer_fee_sat": 1000,
+    "gross_sat": 100000,
+    "operator_retained_sat": 98719,
+    "parent_block": {
+      "hash": "55167da987c7f13a3968e5bd696cec7bda07c93da59e0c6b7d49301f4d56fc95",
+      "height": 139
+    },
+    "payout": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6:0",
+    "payout_sat": 99000,
+    "physical_cluster_file_count": 1605,
+    "prebackup_blockhash": "1f680656ec025cb9e33117506c59ec6a637b4fe9aa565ee83ccb84b8b261b52b",
+    "prebackup_height": 114,
+    "private_manifest_sha256": "8710059316a664be00fbceff6a9d458f38c3bc78366af79a9ff5bffba7cc8f6c",
+    "recovery_input_sat": 198237,
+    "recovery_output_sat": 197349,
+    "recovery_txid": "272f6ef76b8a9d4f54da5a97a164ddcdd917076647b9b97b727a971ab3815966",
+    "scope": "same-candidate orderly physical PostgreSQL and service-identity backup; same continuing Core; seed-only BIP84 customer recovery",
+    "source_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+    "sponsor": "a14053cb95f61ff07e5fc067c311c5b63fa4c8087dfb639c4f65e86f724e3c01:0",
+    "watchman_changesets_preserved": 111
+  },
+  "independent_retained_core_reconciliation": {
+    "scope": "Independent offline retained Core canonical-chain and physical-money reconciliation of one admitted cold-backup native PASS. No actor calls, service reopening, SQL/backup/seed reads or native log printing.",
+    "test_name": "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery",
+    "run_id": "874f3d92-bea4-4599-955e-be88b2b4c2fd",
+    "actual_result": "PASS",
+    "native_seconds": 28.352,
+    "wall_seconds": 29.043,
+    "source_body_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+    "public_receipt_sha256": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+    "owned_actor_absence": {
+      "checked_proc_comm_cmdline_cwd": true,
+      "matching_native_actors": [],
+      "argv_values_not_published": true
+    },
+    "chain": {
+      "retained_canonical_tip": "1bae613dbd52508a13bdd4a2b32a01a70016566b1e00bb12aa824311ff0ee796",
+      "retained_tip_height": 150,
+      "prebackup_height": 114,
+      "prebackup_blockhash": "1f680656ec025cb9e33117506c59ec6a637b4fe9aa565ee83ccb84b8b261b52b",
+      "prebackup_block_canonical": true
+    },
+    "board": {
+      "txid": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197",
+      "chain": {
+        "block_hash": "3cb3f218cf175156e9f60173b07c8f328a10f64c416e372c0dc4cc9201c1bbfe",
+        "height": 106,
+        "confirmations": 45
+      },
+      "raw_signed_bytes": 234,
+      "inputs": [
+        {
+          "txid": "9c80992c04a24159b7ba8314357eb350c2aa1373e34f791c852ad6becf976578",
+          "vout": 0,
+          "value_sat": 200000,
+          "script_hex": "0014358c18d95579032ffdf83b54bc79d45f06eca877"
+        }
+      ],
+      "outputs": [
+        {
+          "vout": 0,
+          "value_sat": 100000,
+          "script_hex": "51204b4bd62d3d5f2c13bc4e082a98f1d4d0ebf70bbf1e206aed500bd3dd7437872a"
+        },
+        {
+          "vout": 1,
+          "value_sat": 99237,
+          "script_hex": "001482d34e1a51d45717af2c01d50e4a79627205f24c"
+        }
+      ],
+      "actual_miner_fee_sat": 763
+    },
+    "parent": {
+      "txid": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6",
+      "chain": {
+        "block_hash": "55167da987c7f13a3968e5bd696cec7bda07c93da59e0c6b7d49301f4d56fc95",
+        "height": 139,
+        "confirmations": 12
+      },
+      "raw_signed_bytes": 280,
+      "inputs": [
+        {
+          "txid": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197",
+          "vout": 0,
+          "value_sat": 100000,
+          "script_hex": "51204b4bd62d3d5f2c13bc4e082a98f1d4d0ebf70bbf1e206aed500bd3dd7437872a"
+        }
+      ],
+      "outputs": [
+        {
+          "vout": 0,
+          "value_sat": 99000,
+          "script_hex": "0014b298a092c0db6484b698758d421d4bfd8dd678e7"
+        },
+        {
+          "vout": 1,
+          "value_sat": 1000,
+          "script_hex": "5120f35f33a3ff0cef4ea3cb841003b66704b21f26e964b98c86f1e533b2b05e668a"
+        },
+        {
+          "vout": 2,
+          "value_sat": 0,
+          "script_hex": "51024e73"
+        }
+      ],
+      "actual_miner_fee_sat": 0
+    },
+    "same_block_anchor_child": {
+      "txid": "cc5e145dfab550752c820418f6dee269386784c2bfb2b76cae5c2daeeb34d051",
+      "chain": {
+        "block_hash": "55167da987c7f13a3968e5bd696cec7bda07c93da59e0c6b7d49301f4d56fc95",
+        "height": 139,
+        "confirmations": 12
+      },
+      "raw_signed_bytes": 204,
+      "inputs": [
+        {
+          "txid": "a14053cb95f61ff07e5fc067c311c5b63fa4c8087dfb639c4f65e86f724e3c01",
+          "vout": 0,
+          "value_sat": 100000,
+          "script_hex": "51208adfa5ab46f8e86aa12691b4cb5370ddc0a3dbc2bbebea2a2ffda26ff7b1af48"
+        },
+        {
+          "txid": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6",
+          "vout": 2,
+          "value_sat": 0,
+          "script_hex": "51024e73"
+        }
+      ],
+      "outputs": [
+        {
+          "vout": 0,
+          "value_sat": 97719,
+          "script_hex": "51207ba5b224e117aceb5c0a2fc027877488c44e9f23dc01746ac3030151750e2e40"
+        }
+      ],
+      "actual_miner_fee_sat": 2281
+    },
+    "recovery_drain": {
+      "txid": "272f6ef76b8a9d4f54da5a97a164ddcdd917076647b9b97b727a971ab3815966",
+      "chain": {
+        "block_hash": "46b8a6b4e66f7ebf87fc85b583397a766d2306286191f9173f39eb6935cc60e4",
+        "height": 145,
+        "confirmations": 6
+      },
+      "raw_signed_bytes": 339,
+      "inputs": [
+        {
+          "txid": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6",
+          "vout": 0,
+          "value_sat": 99000,
+          "script_hex": "0014b298a092c0db6484b698758d421d4bfd8dd678e7"
+        },
+        {
+          "txid": "5db46f156c45c14762022337f048cb05c2de1fb1af3871c87f7dbc635b9ee197",
+          "vout": 1,
+          "value_sat": 99237,
+          "script_hex": "001482d34e1a51d45717af2c01d50e4a79627205f24c"
+        }
+      ],
+      "outputs": [
+        {
+          "vout": 0,
+          "value_sat": 197349,
+          "script_hex": "00145c293ec4159c805409980c9223cdeae6d9d4298d"
+        }
+      ],
+      "actual_miner_fee_sat": 888
+    },
+    "terminal_outputs": [
+      {
+        "txid": "1496cbdc9a0f5698acd146c25b43a832ae47478f08b936ea513bf87c63b9c8d6",
+        "vout": 1,
+        "value_sat": 1000,
+        "script_hex": "5120f35f33a3ff0cef4ea3cb841003b66704b21f26e964b98c86f1e533b2b05e668a",
+        "unspent_at_retained_canonical_tip": true
+      },
+      {
+        "txid": "272f6ef76b8a9d4f54da5a97a164ddcdd917076647b9b97b727a971ab3815966",
+        "vout": 0,
+        "value_sat": 197349,
+        "script_hex": "00145c293ec4159c805409980c9223cdeae6d9d4298d",
+        "unspent_at_retained_canonical_tip": true
+      },
+      {
+        "txid": "cc5e145dfab550752c820418f6dee269386784c2bfb2b76cae5c2daeeb34d051",
+        "vout": 0,
+        "value_sat": 97719,
+        "script_hex": "51207ba5b224e117aceb5c0a2fc027877488c44e9f23dc01746ac3030151750e2e40",
+        "unspent_at_retained_canonical_tip": true
+      }
+    ],
+    "money": {
+      "initial_customer_sat": 200000,
+      "original_watchman_sponsor_sat": 100000,
+      "board_miner_fee_sat": 763,
+      "payout_sat": 99000,
+      "customer_fallback_fee_sat": 1000,
+      "ordinary_change_sat": 99237,
+      "actual_recovery_input_sat": 198237,
+      "actual_recovery_output_sat": 197349,
+      "actual_package_miner_fee_sat": 2281,
+      "actual_recovery_miner_fee_sat": 888,
+      "operator_retained_sat": 98719,
+      "full_physical_equation": "300000 = 197349 + 98719 + 763 + 2281 + 888",
+      "customer_equation": "200000 = 197349 + 763 + 888 + 1000",
+      "operator_equation": "100000 + 1000 = 98719 + 2281",
+      "source_and_restored_copies_counted_once": true
+    },
+    "input_hashes_before_after_equal": true,
+    "input_hashes": {
+      "case01/result.json": "594d728b83251d51eadc38c9dc44d9756c89d7455a69e4cc8b10193b1dc297a1",
+      "cohort-progress.json": "38fc23e9a7c1e055235aedcdecc2f30652b926bcfb69b380e495225c649a05dc",
+      "cohort-summary.json": "9e5801db2b8ea364fd789a87f23e543a2b4356d20e0d0300b6fdd8e96d47ec0d",
+      "case01/test-data/server/qualification_orderly_physical_backup/cold-backup-public-receipt.json": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+      "case01/test-data/server/qualification_orderly_physical_backup/bitcoind/regtest/debug.log": "c3273f3268333fd3f7dc7716e8f0d665a16a3d4a8e0ad82535bd8b715062e89d",
+      "case01/test-data/server/qualification_orderly_physical_backup/bitcoind/regtest/blocks/xor.dat": "d430ab58ae481a0109f8e5aeef37a957f2ffd2a2f259e2d24363d33b7cb29bb5",
+      "case01/test-data/server/qualification_orderly_physical_backup/bitcoind/regtest/blocks/blk00000.dat": "a29a12df3b6d9766e1190393b616728825dc7c14fa96ef2dd9fbf863ccee5acf"
+    },
+    "limitations": "Core independently proves canonical bytes, prevout amounts/scripts, actual fees, confirmations, unique graph spends and terminal-output unspentness. Configured sweep-script ownership, restored BDK child-change ownership, clean physical PostgreSQL shutdown/copy and seed-only recovery control are native source/assertion/public-receipt provenance, not independently inferred from offline Core. No PostgreSQL cluster, private backup/identity/config/seed or native full log read. No generic wallet-solvency, crash-recovery, cross-version restore, full-suite or FULL ML credit."
+  },
+  "production_readiness": "NO"
+}

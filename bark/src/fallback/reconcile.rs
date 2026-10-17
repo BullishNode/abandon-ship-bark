@@ -28,8 +28,6 @@ impl Wallet {
 
 	pub(crate) async fn reconcile_expired_inputs(&self, ids: &[VtxoId]) -> anyhow::Result<HashSet<VtxoId>> {
 		if ids.is_empty() { return Ok(HashSet::new()); }
-		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback-history", self.fingerprint()), Duration::from_secs(30)).await?;
-		let mut snapshot = self.inner.db.get_fallback_snapshot().await?;
 		let mut keyed = Vec::new();
 		for id in ids {
 			let Some(stored) = self.inner.db.get_wallet_vtxo(*id).await? else { continue; };
@@ -38,7 +36,11 @@ impl Wallet {
 			keyed.push((*id, key));
 		}
 		let queries = keyed.iter().map(|(id, key)| (*id, key)).collect::<Vec<_>>();
-		let statuses = match self.fetch_vtxo_spend_states(&queries).await {
+		let statuses = self.fetch_vtxo_spend_states(&queries).await;
+		// Remote status must not monopolize the local protection lock.
+		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback-history", self.fingerprint()), Duration::from_secs(30)).await?;
+		let mut snapshot = self.inner.db.get_fallback_snapshot().await?;
+		let statuses = match statuses {
 			Ok(statuses) => statuses,
 			Err(error) => {
 				snapshot.awaiting_settlement.extend(ids.iter().copied());

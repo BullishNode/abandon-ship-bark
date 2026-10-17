@@ -5,6 +5,8 @@ mod refusal;
 mod sync;
 mod reconcile;
 mod protection;
+mod act_by;
+pub use act_by::{ExitProtectionOutcome, ExitProtectionSchedule};
 pub use refusal::FallbackRefusal;
 
 use std::time::Duration;

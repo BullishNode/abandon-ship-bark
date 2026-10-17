@@ -162,7 +162,18 @@ impl ExitVtxo {
 			});
 		}
 
-		let vtxo = self.get_vtxo(&*wallet.inner.db).await?;
+		let mut vtxo = self.get_vtxo(&*wallet.inner.db).await?;
+		if !self.state.warrants_exited_vtxo() && vtxo.state.kind() != crate::vtxo::VtxoStateKind::Spent {
+			if let Some(movement_id) = self.movement_id {
+				let movement = wallet.inner.db.get_movement_by_id(movement_id).await
+					.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
+				if movement.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true)) {
+					wallet.lock_vtxos([self.id()], Some(movement_id.into())).await
+						.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
+					vtxo = self.get_vtxo(&*wallet.inner.db).await?;
+				}
+			}
+		}
 		const MAX_ITERATIONS: usize = 100;
 		for _ in 0..MAX_ITERATIONS {
 			let mut context = ProgressContext {

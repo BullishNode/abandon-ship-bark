@@ -44,6 +44,10 @@ impl ReadyOutput {
 	/// commit. Consensus serialization supplies the real CompactSize lengths;
 	/// the largest actual policy witness bounds the later signer's choice.
 	pub fn group_fits(outputs: &[&Self]) -> anyhow::Result<bool> {
+		Self::group_fits_with_dependencies(outputs, &[])
+	}
+
+	pub(crate) fn group_fits_with_dependencies(outputs: &[&Self], dependencies: &[ServerVtxo]) -> anyhow::Result<bool> {
 		let leaves = outputs.iter().flat_map(|o| &o.coins).filter_map(|c| c.payee.as_ref().map(|p| CustomerLeaf {
 			id: c.ownership.id, amount: c.ownership.gross, script: p.script.clone(),
 		})).collect();
@@ -56,12 +60,11 @@ impl ReadyOutput {
 		payouts.push(bitcoin_ext::fee::fee_anchor());
 		let tx = Transaction {
 			version: bitcoin::transaction::Version::non_standard(3), lock_time: bitcoin::absolute::LockTime::ZERO,
-			input: outputs.iter().map(|o| TxIn { previous_output: o.root.point(),script_sig: ScriptBuf::new(),sequence: Sequence::ZERO,witness: Witness::new() }).collect(),
+			input: outputs.iter().map(|o| &o.root).chain(dependencies).map(|root| TxIn { previous_output: root.point(),script_sig: ScriptBuf::new(),sequence: Sequence::ZERO,witness: Witness::new() }).collect(),
 			output: payouts,
 		};
 		let mut weight = tx.weight().to_wu().checked_add(2).context("expiry group weight overflow")?;
-		for output in outputs {
-			let root = &output.root;
+		for root in outputs.iter().map(|o| &o.root).chain(dependencies) {
 			let witness = root.policy().clauses(root.exit_delta(),root.expiry_height(),root.server_pubkey())
 				.iter().map(|clause| clause.witness_size(root)).max().unwrap_or(66).max(66);
 			weight = weight.checked_add(u64::try_from(witness)?).context("expiry group witness overflow")?;
@@ -70,6 +73,8 @@ impl ReadyOutput {
 	}
 
 	pub fn root(&self) -> &ServerVtxo { &self.root }
+	pub(crate) fn contains_coin(&self, id: VtxoId) -> bool { self.coins.iter().any(|coin| coin.ownership.id == id) }
+	pub(crate) fn source_ids(&self) -> impl Iterator<Item = VtxoId> + '_ { self.versions.iter().map(|v| v.0) }
 
 	/// No geometric cut supplied by an external caller can bypass the actual
 	/// partition proof. Signature and settlement evidence remain W5's job.
@@ -142,6 +147,10 @@ fn evidence_json(evidence: &OwnershipEvidence, preimage: bool) -> serde_json::Va
 		OwnershipEvidence::HtlcInternalZeroGrantCancelled { payment_hash, htlc_expiry, attempt_id, subscription_id } =>
 			serde_json::json!({"kind":"htlc_internal_zero_grant_cancelled","payment_hash":payment_hash.to_string(),
 				"htlc_expiry":htlc_expiry.to_u32(),"attempt_id":attempt_id,"subscription_id":subscription_id}),
+		OwnershipEvidence::HtlcInternalJointTimeout { payment_hash, attempt_id, subscription_id, grants } =>
+			serde_json::json!({"kind":"htlc_internal_joint_timeout","payment_hash":payment_hash.to_string(),
+				"attempt_id":attempt_id,"subscription_id":subscription_id,
+				"required_grants":grants.iter().map(ToString::to_string).collect::<Vec<_>>()}),
 		OwnershipEvidence::HtlcUnattemptedExpired { payment_hash, htlc_expiry } =>
 			serde_json::json!({"kind":"htlc_unattempted_expired","payment_hash":payment_hash.to_string(),"htlc_expiry":htlc_expiry.to_u32()}),
 		OwnershipEvidence::HtlcOffchain { payment_hash, resolution } =>
@@ -162,14 +171,42 @@ impl Tx<'_> {
 		outputs: Vec<ReadyOutput>,
 		network: Network,
 	) -> anyhow::Result<Option<CommittedExpiryGroup>> {
+		self.commit_expiry_group_context(view, outputs, network, None).await
+	}
+
+	pub(crate) async fn commit_internal_refund(
+		&self, view: ExpiryViewToken, outputs: Vec<ReadyOutput>, network: Network,
+		joint: &super::expiry_internal_refund::InternalRefundComponent,
+	) -> anyhow::Result<Option<CommittedExpiryGroup>> {
+		self.commit_expiry_group_context(view, outputs, network, Some(joint)).await
+	}
+
+	async fn commit_expiry_group_context(
+		&self, view: ExpiryViewToken, outputs: Vec<ReadyOutput>, network: Network,
+		joint: Option<&super::expiry_internal_refund::InternalRefundComponent>,
+	) -> anyhow::Result<Option<CommittedExpiryGroup>> {
 		if outputs.is_empty() { return Ok(None); }
-		ensure!(ReadyOutput::group_fits(&outputs.iter().collect::<Vec<_>>())?,
-			"expiry group exceeds version-3 sweep size; regroup or split before deciding");
+		let dependencies = joint.map(|j| j.grants().map(|g| g.vtxo.clone()).collect::<Vec<_>>()).unwrap_or_default();
+		ensure!(ReadyOutput::group_fits_with_dependencies(&outputs.iter().collect::<Vec<_>>(), &dependencies)?,
+			"expiry group exceeds version-3 sweep size; required joint inputs cannot be dropped");
+		if let Some(joint) = joint {
+			// Check complete source coverage and input disjointness before any
+			// financial write. Parent storage enforces this same exact set.
+			let parent = Transaction {
+				version: bitcoin::transaction::Version::non_standard(3),
+				lock_time: bitcoin::absolute::LockTime::ZERO,
+				input: outputs.iter().map(|o| o.root.point()).chain(dependencies.iter().map(|g| g.point()))
+					.map(|previous_output| TxIn { previous_output, ..TxIn::default() }).collect(),
+				output: vec![],
+			};
+			joint.check_parent(view, &outputs, &parent)?;
+		}
 		self.lock_valid_expiry_view(view).await?;
 		self.execute("SELECT pg_advisory_xact_lock_shared($1)", &[&3_i64]).await?;
 		let expiry = outputs[0].root.expiry_height();
-		ensure!(outputs.iter().all(|o| o.root.expiry_height() == expiry), "expiry group mixes expiry heights");
-		ensure!(expiry <= view.captaind.height && expiry <= view.watchmand.height, "expiry group is not mature in the completed view");
+		ensure!(joint.is_some() || outputs.iter().all(|o| o.root.expiry_height() == expiry), "expiry group mixes expiry heights");
+		ensure!(outputs.iter().all(|o| o.root.expiry_height() <= view.captaind.height
+			&& o.root.expiry_height() <= view.watchmand.height), "expiry group is not mature in the completed view");
 		let mut ids = outputs.iter().flat_map(|o| o.versions.iter().map(|v| v.0.to_string())).collect::<Vec<_>>();
 		let participations = outputs.iter().flat_map(|o| o.coins.iter().flat_map(|c| c.ownership.cancellations.iter().copied())).collect::<Vec<_>>();
 		if !participations.is_empty() {
@@ -189,14 +226,30 @@ impl Tx<'_> {
 				WHERE lightning_payment_attempt_id=ANY($1)", &[&internal_attempts]).await?
 				.into_iter().map(|r| r.get::<_, String>("vtxo_id")));
 		}
+		if let Some(joint) = joint {
+			ids.extend(joint.incoming_ids().into_iter().chain(joint.grant_ids()).map(|id| id.to_string()));
+		}
 		ids.sort(); ids.dedup();
 		let rows = self.query("SELECT vtxo_id,updated_at,spend_state::TEXT,onchain_spent_height IS NOT NULL OR onchain_spent_txid IS NOT NULL AS chain_spent FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&ids]).await?;
 		self.lock_htlc_settlements().await?;
+		let mut subscriptions = joint.map(|component| component.members.iter().map(|member| member.subscription_id)
+			.collect::<Vec<_>>()).unwrap_or_default();
 		if !internal_attempts.is_empty() {
-			self.query("SELECT s.id FROM expiry_lightning_internal_funding f \
-				JOIN lightning_htlc_subscription s ON s.id=f.subscription_id \
-				WHERE f.id=ANY($1) ORDER BY s.id FOR UPDATE OF s", &[&internal_attempts]).await?;
+			subscriptions.extend(self.query("SELECT subscription_id FROM expiry_lightning_internal_funding WHERE id=ANY($1)",
+				&[&internal_attempts]).await?.into_iter().map(|row| row.get::<_, i64>("subscription_id")));
 		}
+		subscriptions.sort_unstable(); subscriptions.dedup();
+		if !subscriptions.is_empty() {
+			let locked = self.query("SELECT id FROM lightning_htlc_subscription WHERE id=ANY($1) ORDER BY id FOR UPDATE",
+				&[&subscriptions]).await?;
+			ensure!(locked.len() == subscriptions.len(), "expiry settlement subscription disappeared");
+		}
+		let locked_joint = if let Some(joint) = joint {
+			// Every source/partition/dependency row and subscription is already
+			// locked above. Reacquiring that same union introduces no new row
+			// lock after WAL2, and the core reruns every original member fact.
+			Some(self.lock_unclaimed_internal_refund_component(joint, view, &outputs).await?)
+		} else { None };
 		let actual = rows.into_iter().map(|r| (r.get::<_, String>("vtxo_id"), (r.get::<_, DateTime<Local>>("updated_at"), r.get::<_, String>("spend_state"), r.get::<_, bool>("chain_spent")))).collect::<BTreeMap<_, _>>();
 		let mut accepted = Vec::new();
 		let mut existing_entitlements = BTreeMap::new();
@@ -208,7 +261,11 @@ impl Tx<'_> {
 					.context("ready coin source disappeared")?;
 				let funding = output.funding.iter().find(|t| t.compute_txid() == fact.state.vtxo.chain_anchor().txid)
 					.context("ready coin funding disappeared")?;
-				let current = self.propose_expiry_ownership(fact, funding, view.captaind.height, Some(view.watchmand.height)).await?;
+				let current = if let Some(joint) = &locked_joint {
+					self.propose_joint_refund_ownership(fact, funding, view, joint).await?
+				} else {
+					self.propose_expiry_ownership(fact, funding, view.captaind.height, Some(view.watchmand.height)).await?
+				};
 				valid &= current.disposition == coin.ownership.disposition && current.evidence == coin.ownership.evidence
 					&& current.has_stored_preimage == coin.ownership.has_stored_preimage
 					&& current.cancellations == coin.ownership.cancellations;
@@ -228,6 +285,7 @@ impl Tx<'_> {
 				let cancellations = output.coins.iter().flat_map(|c| c.ownership.cancellations.iter().copied()).collect::<Vec<_>>();
 				valid = self.cancel_expiry_participations(&cancellations).await?;
 			}
+			ensure!(valid || locked_joint.is_none(), "one joint source changed; the complete refund stays pending");
 			if valid { accepted.push(output); } else { dropped.push(output.root.id()); }
 		}
 		if accepted.is_empty() { return Ok(None); }
@@ -243,16 +301,25 @@ impl Tx<'_> {
 			self.execute("INSERT INTO expiry_allocation_payout(allocation_id,output_index,spk,amount_sat) VALUES($1,$2,$3,$4)",
 				&[&id,&i32::try_from(index)?,&recipient.output.script_pubkey.as_bytes().to_lower_hex_string(),&i64::try_from(recipient.output.value.to_sat())?]).await?;
 		}
+		if let Some(joint) = &locked_joint {
+			for grant in joint.grant_ids() {
+				self.execute("INSERT INTO expiry_allocation_input(allocation_id,vtxo_id) VALUES($1,$2)",
+					&[&id,&grant.to_string()]).await?;
+				self.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW() WHERE vtxo_id=$1",
+					&[&grant.to_string()]).await?;
+			}
+		}
 		for output in &accepted {
 			self.execute("INSERT INTO expiry_allocation_input(allocation_id,vtxo_id) VALUES($1,$2)", &[&id,&output.root.id().to_string()]).await?;
 			for coin in &output.coins {
 				let proposal = &coin.ownership;
 				let evidence = proposal.evidence.as_ref().context("ready ownership lacks evidence")?;
 				let observed = evidence_json(evidence, proposal.has_stored_preimage);
-				let mut stable = if matches!(evidence, OwnershipEvidence::HtlcChain { .. }) {
+				let conditional = matches!(evidence, OwnershipEvidence::HtlcChain { .. } | OwnershipEvidence::HtlcInternalJointTimeout { .. });
+				let mut stable = if conditional {
 					serde_json::json!({"stored_preimage": proposal.has_stored_preimage})
 				} else { observed.clone() };
-				if !matches!(evidence, OwnershipEvidence::HtlcChain { .. }) {
+				if !conditional {
 					match &proposal.disposition {
 						OwnershipDisposition::Customer { user_pubkey,.. } => stable["customer_key"] = serde_json::json!(user_pubkey.to_string()),
 						OwnershipDisposition::Operator => stable["operator"] = serde_json::json!(true),
@@ -286,7 +353,8 @@ impl Tx<'_> {
 				self.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW() WHERE vtxo_id=$1", &[&proposal.id.to_string()]).await?;
 			}
 		}
-		Ok(Some(CommittedExpiryGroup { id, inputs: accepted.iter().map(|o| o.root.id()).collect(), dropped }))
+		let inputs = accepted.iter().map(|o| o.root.id()).chain(dependencies.iter().map(|g| g.id())).collect();
+		Ok(Some(CommittedExpiryGroup { id, inputs, dropped }))
 	}
 
 	async fn revalidate_expiry_payee(&self, coin: &ReadyCoin, network: Network) -> anyhow::Result<bool> {

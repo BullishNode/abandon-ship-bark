@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
 use ark::lightning::{PaymentHash, Preimage};
-use ark::VtxoPolicy;
+use ark::{ProtocolEncoding, Vtxo, VtxoPolicy};
+use ark::vtxo::{Full, TapScriptClause};
 use ark_testing::{btc, sat, TestContext};
 use bitcoin::consensus::deserialize;
 use bitcoin::Transaction;
@@ -12,6 +13,30 @@ use cln_rpc::plugins::hold;
 use server::database::Db;
 use server_rpc::protos;
 
+
+/// Grant delivery must leave every authentic signed ancestor durable on the
+/// server, even when neither wallet ever returns to register or claim it.
+async fn assert_stored_grant_ancestry(db: &Db, grants: &[Vtxo<Full>]) {
+	let mut expected = std::collections::BTreeMap::new();
+	for grant in grants {
+		for step in grant.transactions() {
+			let raw = bitcoin::consensus::serialize(&step.tx);
+			if let Some(old) = expected.insert(step.tx.compute_txid().to_string(), raw.clone()) {
+				assert_eq!(old, raw, "shared signed grant ancestry must be exact");
+			}
+		}
+	}
+	let ids = expected.keys().cloned().collect::<Vec<_>>();
+	let actual = db.read(async |t| Ok(t.query("SELECT txid,signed_tx FROM virtual_transaction WHERE txid=ANY($1)",
+		&[&ids]).await?)).await.unwrap().into_iter().map(|row|
+		(row.get::<_, String>("txid"), row.get::<_, Option<Vec<u8>>>("signed_tx")))
+		.collect::<std::collections::BTreeMap<_,_>>();
+	assert_eq!(actual.len(), expected.len(), "server is missing a granted receive's ancestor");
+	for (txid, raw) in expected {
+		assert_eq!(actual.get(&txid).and_then(Option::as_ref), Some(&raw),
+			"server lost the actual signature/preimage for receive ancestor {txid}");
+	}
+}
 
 /// A real external HTLC is accepted and then cancelled by its receiver.
 /// No test row supplies a failure proof, entitlement, spend fence or payout.
@@ -235,4 +260,252 @@ async fn expiry_internal_zero_grant_timeout_pays_absent_sender() {
 	assert_eq!(kept.get::<_, i64>("paid_once"), 1);
 	let original = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, source).await).await.unwrap().unwrap();
 	assert_eq!(original.htlc.resolution(), None, "automatic closure never invents a signed revocation");
+}
+
+/// ML030 NEW-state component: both actors disappear after real signed receive
+/// grants. Their timeout inputs must be consumed by the SAME Bitcoin parent as
+/// the original sender refund, not by an unrelated earlier cold-drain return.
+#[tokio::test]
+async fn expiry_internal_signed_grants_joint_timeout_pays_absent_sender() {
+	let ctx = TestContext::new("server/expiry_internal_signed_grants_joint_timeout").await;
+	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
+		.funded(btc(10)).cfg(|cfg| {
+			cfg.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
+			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 4 }];
+			cfg.invoice_check_interval = Duration::from_secs(1);
+		}).watchmand().create().await;
+	srv.wait_for_vtxopool(&ctx).await;
+	let recipient = ctx.bark_sdk("absent-recipient", &srv)
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	let invoice = recipient.bolt11_invoice(sat(90_000), None, None).await.unwrap();
+	let hash = PaymentHash::from(&invoice);
+	let receiver_key = recipient.new_address().await.unwrap().policy().user_pubkey();
+	let receiver_destination = recipient.fallback_destination().await.unwrap();
+	let sender = ctx.bark("absent-sender", &srv).funded(sat(200_000)).create().await;
+	let ids = sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	let client = sender.client().await;
+	let input = client.get_full_vtxo(ids[0]).await.unwrap();
+	assert_eq!(input.amount(), sat(100_000));
+	let key = client.get_vtxo_key(&input).await.unwrap();
+	let destination = client.fallback_destination().await.unwrap();
+	assert_ne!(destination.spk, receiver_destination.spk);
+	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let incoming_deadline = tip + srv.config().htlc_send_expiry_delta + BlockDelta::new(2);
+	let outgoing_deadline = tip + BlockDelta::new(36);
+	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([input],
+		VtxoPolicy::new_server_htlc_send(key.public_key(), hash, incoming_deadline)).unwrap()
+		.generate_user_nonces(&[key]).unwrap();
+	let mut rpc = srv.get_public_rpc().await;
+	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
+		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+	}).await.unwrap().into_inner();
+	let incoming = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
+		.unwrap().build_signed_vtxos();
+	client.register_vtxo_transactions_with_server(&incoming).await.unwrap();
+	let source = incoming[0].id();
+	lightning.sync().await;
+	rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
+		invoice: invoice.to_string(), payment_amount_sat: 90_000,
+		htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
+	}).await.unwrap();
+	let granted = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		payment_hash: hash.to_vec(), user_pubkey: receiver_key.serialize().to_vec(),
+		htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
+	}).await.unwrap().into_inner();
+	let grants = granted.htlc_vtxos.iter().map(|bytes| Vtxo::<Full>::deserialize(bytes).unwrap()).collect::<Vec<_>>();
+	assert!(grants.len() >= 2, "this case must cover the ENTIRE multi-grant receive, not a one-input shortcut");
+	assert_eq!(grants.iter().map(|g| g.amount()).sum::<bitcoin::Amount>(), sat(90_000));
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert_stored_grant_ancestry(&db, &grants).await;
+	drop(client);
+	drop(recipient);
+	drop(rpc); // No preimage disclosure, cooperative revoke, or returning wallet.
+	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
+	let fee_address = srv.watchmand().wait_wallet_address().await;
+	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
+	ctx.generate_blocks(2).await;
+	// Normal watchman progress has to reach every actual HTLC leaf. Mine only
+	// through completed sync cycles and leave reaction/readiness time each block.
+	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {
+		for _ in 0..100 {
+			let height = ctx.generate_blocks(1).await;
+			srv.wait_for_sync_height(height).await;
+			srv.watchmand().wait_for_sync_height(height).await;
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
+				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				WHERE e.vtxo_id=$1 AND a.broadcast_at IS NOT NULL", &[&source.to_string()]).await?)).await.unwrap();
+			if let Some(row) = row { return deserialize(row.get("sweep_tx")).unwrap(); }
+		}
+		panic!("signed receive grants did not close in a joint normal timeout parent");
+	}).await.expect("both-absent internal timeout required a returning wallet");
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+	for grant in &grants {
+		let input = parent.input.iter().find(|i| i.previous_output == grant.point())
+			.expect("dropping even one signed receive grant severs the Bitcoin dependency");
+		let policy = grant.policy().as_server_htlc_recv().unwrap();
+		let script = policy.server_claim_after_expiry_clause(grant.server_pubkey(), grant.exit_delta()).tapscript();
+		assert_eq!(input.witness.taproot_leaf_script().unwrap().script, script.as_script());
+	}
+	let (index,paid) = parent.output.iter().enumerate().find(|(_, o)| o.script_pubkey == destination.spk).unwrap();
+	assert_eq!(paid.value, sat(99_000));
+	assert!(parent.output.iter().all(|o| o.script_pubkey != receiver_destination.spk));
+	let mut input_sat = 0;
+	for input in &parent.input {
+		let prev = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		input_sat += prev.output[input.previous_output.vout as usize].value.to_sat();
+	}
+	assert_eq!(parent.output.iter().map(|o| o.value.to_sat()).sum::<u64>(), input_sat);
+	ctx.generate_blocks(6).await;
+	assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
+	let state = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, source).await).await.unwrap().unwrap();
+	assert!(state.htlc.offchain_resolution.is_none(), "joint timeout must not manufacture the absent user's revocation");
+}
+
+/// Two genuinely different internal payments share one original customer
+/// backing. Every grant set must close together; per-attempt readiness cannot
+/// permanently hold each one behind the other's unresolved source.
+#[tokio::test]
+async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
+	let ctx = TestContext::new("server/expiry_internal_shared_incoming_root").await;
+	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
+		.funded(btc(10)).cfg(|cfg| {
+			cfg.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
+			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 8 }];
+			cfg.invoice_check_interval = Duration::from_secs(1);
+		}).watchmand().create().await;
+	srv.wait_for_vtxopool(&ctx).await;
+	let recipient = ctx.bark_sdk("absent-recipient", &srv)
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	let invoices = [recipient.bolt11_invoice(sat(90_000), None, None).await.unwrap(),
+		recipient.bolt11_invoice(sat(90_000), None, None).await.unwrap()];
+	assert_ne!(PaymentHash::from(&invoices[0]), PaymentHash::from(&invoices[1]));
+	let recipient_keys = [recipient.new_address().await.unwrap().policy().user_pubkey(),
+		recipient.new_address().await.unwrap().policy().user_pubkey()];
+	let recipient_destination = recipient.fallback_destination().await.unwrap();
+	let sender = ctx.bark_sdk("absent-sender", &srv).boarded(sat(200_000))
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	let original = sender.spendable_vtxos().await.unwrap().remove(0);
+	let original_body = sender.get_full_vtxo(original.id()).await.unwrap();
+	let anchor = original_body.chain_anchor();
+	let destination = sender.fallback_destination().await.unwrap();
+	assert_ne!(destination.spk, recipient_destination.spk);
+	// Normal signed self-payment creates two separately owned100k branches
+	// under this SAME200k board, before the distinct HTLC operations begin.
+	let own_address = sender.new_address().await.unwrap();
+	sender.send_arkoor_payment(&own_address, sat(100_000)).await.unwrap();
+	sender.sync().await;
+	let mut parts = sender.spendable_vtxos().await.unwrap();
+	parts.sort_unstable_by_key(|coin| coin.id());
+	assert_eq!(parts.len(), 2);
+	assert!(parts.iter().all(|coin| coin.amount() == sat(100_000)));
+	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let incoming_deadline = tip + srv.config().htlc_send_expiry_delta + BlockDelta::new(2);
+	let outgoing_deadline = tip + BlockDelta::new(36);
+	let mut rpc = srv.get_public_rpc().await;
+	let mut sources = Vec::new();
+	let mut source_paths = Vec::new();
+	let mut grants = Vec::new();
+	lightning.sync().await;
+	for ((part, invoice), recipient_key) in parts.into_iter().zip(invoices).zip(recipient_keys) {
+		let input = sender.get_full_vtxo(part.id()).await.unwrap();
+		assert_eq!(input.chain_anchor(), anchor);
+		let key = sender.get_vtxo_key(&input).await.unwrap();
+		let hash = PaymentHash::from(&invoice);
+		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([input],
+			VtxoPolicy::new_server_htlc_send(key.public_key(), hash, incoming_deadline)).unwrap()
+			.generate_user_nonces(&[key]).unwrap();
+		let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
+			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		}).await.unwrap().into_inner();
+		let incoming = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
+			.unwrap().build_signed_vtxos();
+		assert_eq!(incoming.len(), 1);
+		sender.register_vtxo_transactions_with_server(&incoming).await.unwrap();
+		let source = incoming[0].id();
+		sources.push(source);
+		source_paths.push(incoming[0].clone());
+		rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
+			invoice: invoice.to_string(), payment_amount_sat: 90_000,
+			htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
+		}).await.unwrap();
+		let response = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			payment_hash: hash.to_vec(), user_pubkey: recipient_key.serialize().to_vec(),
+			htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
+		}).await.unwrap().into_inner();
+		let granted = response.htlc_vtxos.iter().map(|bytes| Vtxo::<Full>::deserialize(bytes).unwrap()).collect::<Vec<_>>();
+		assert!(granted.len() >= 2);
+		assert_eq!(granted.iter().map(|grant| grant.amount()).sum::<bitcoin::Amount>(), sat(90_000));
+		assert!(granted.iter().all(|grant| grant.policy().as_server_htlc_recv().unwrap().payment_hash == hash));
+		grants.extend(granted);
+	}
+	assert!(ctx.bitcoind().sync_client().get_tx_out(&anchor.txid, anchor.vout, Some(true)).unwrap().is_some(),
+		"both native attempts must still share one actual physical incoming root");
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert_stored_grant_ancestry(&db, &grants).await;
+	drop(sender);
+	drop(recipient);
+	drop(rpc); // Neither actor reveals a preimage or returns to cancel anything.
+	let ids = sources.iter().map(ToString::to_string).collect::<Vec<_>>();
+	let actual = db.read(async |t| Ok(t.query_one("SELECT COUNT(DISTINCT f.id) AS attempts,COUNT(DISTINCT f.subscription_id) AS subscriptions \
+		FROM expiry_lightning_internal_funding f JOIN lightning_payment_attempt_htlc_vtxo l \
+		ON l.lightning_payment_attempt_id=f.id WHERE l.vtxo_id=ANY($1)", &[&ids]).await?)).await.unwrap();
+	assert_eq!(actual.get::<_, i64>("attempts"), 2);
+	assert_eq!(actual.get::<_, i64>("subscriptions"), 2);
+	let fee_address = srv.watchmand().wait_wallet_address().await;
+	ctx.bitcoind().fund_addr(fee_address, sat(150_000)).await;
+	ctx.generate_blocks(2).await;
+	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {
+		for _ in 0..100 {
+			let height = ctx.generate_blocks(1).await;
+			srv.wait_for_sync_height(height).await;
+			srv.watchmand().wait_for_sync_height(height).await;
+			tokio::time::sleep(Duration::from_secs(1)).await;
+			let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
+				WHERE a.broadcast_at IS NOT NULL AND (SELECT COUNT(DISTINCT e.vtxo_id) FROM expiry_allocation_coin c \
+				JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE c.allocation_id=a.id AND e.vtxo_id=ANY($1))=2",
+				&[&ids]).await?)).await.unwrap();
+			if let Some(row) = row { return deserialize(row.get("sweep_tx")).unwrap(); }
+		}
+		panic!("different internal attempts sharing one original backing remain mutually held");
+	}).await.expect("connected internal refunds required a returning wallet");
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+	let mut incoming_points = std::collections::BTreeSet::new();
+	for source in &source_paths {
+		let points = source.ancestor_ids().into_iter().map(|id| id.to_point())
+			.chain([source.chain_anchor(), source.point()]).collect::<std::collections::BTreeSet<_>>();
+		let matched = parent.input.iter().filter(|input| points.contains(&input.previous_output)).collect::<Vec<_>>();
+		assert_eq!(matched.len(), 1, "every original source needs one actual backing input on its signed path");
+		incoming_points.insert(matched[0].previous_output);
+	}
+	assert_eq!(parent.input.len(), incoming_points.len() + grants.len(), "no dependency or unrelated input may be hidden");
+	for grant in &grants {
+		let inputs = parent.input.iter().filter(|input| input.previous_output == grant.point()).collect::<Vec<_>>();
+		assert_eq!(inputs.len(), 1, "every grant of BOTH attempts must be spent exactly once by this parent");
+		let policy = grant.policy().as_server_htlc_recv().unwrap();
+		let timeout = policy.server_claim_after_expiry_clause(grant.server_pubkey(), grant.exit_delta()).tapscript();
+		assert_eq!(inputs[0].witness.taproot_leaf_script().unwrap().script, timeout.as_script());
+	}
+	let payouts = parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == destination.spk).collect::<Vec<_>>();
+	assert_eq!(payouts.len(), 1);
+	assert_eq!(payouts[0].1.value, sat(199_000), "same-root same-user payout charges one output fee");
+	assert!(parent.output.iter().all(|output| output.script_pubkey != recipient_destination.spk));
+	let mut input_sat = 0;
+	for input in &parent.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		input_sat += previous.output[input.previous_output.vout as usize].value.to_sat();
+	}
+	assert_eq!(parent.output.iter().map(|output| output.value.to_sat()).sum::<u64>(), input_sat);
+	ctx.generate_blocks(6).await;
+	assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), payouts[0].0 as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
+	for source in sources {
+		let original = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, source).await).await.unwrap().unwrap();
+		assert!(original.htlc.offchain_resolution.is_none(), "neither absent sender source is fictitiously revoked");
+	}
 }

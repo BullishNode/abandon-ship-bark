@@ -18,6 +18,8 @@ service ArkService {
 
 	rpc GetVtxo(GetVtxoRequest) returns (GetVtxoResponse) {}
 	rpc GetVtxoStatus(GetVtxoStatusRequest) returns (GetVtxoStatusResponse) {}
+	// Fully signed ordinary OOR descendants only; incomplete proofs are refused.
+	rpc GetVtxoSpendProof(GetVtxoStatusRequest) returns (GetVtxoSpendProofResponse) {}
 	rpc GetVtxosByIds(GetVtxosByIdsRequest) returns (GetVtxosByIdsResponse) {}
 	rpc GetVtxosStatusByIds(GetVtxosStatusByIdsRequest) returns (GetVtxosStatusByIdsResponse) {}
 	// Seed recovery without the mailbox: lists the VTXOs, in any spend state,
@@ -230,6 +232,13 @@ message GetVtxoStatusRequest {
 
 message GetVtxoStatusResponse {
 	VtxoSpendState spend_state = 1;
+}
+
+message GetVtxoSpendProofResponse {
+	// Complete immediate ordinary branches after the original checkpoint.
+	// Each full VTXO contains the owner-authorized signed path, including change.
+	// The client independently validates every signature and branch.
+	repeated bytes vtxos = 1;
 }
 
 message VtxoStatusQuery {

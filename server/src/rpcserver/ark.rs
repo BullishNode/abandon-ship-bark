@@ -231,6 +231,21 @@ impl rpc::server::ArkService for Server {
 	}
 
 	#[tracing::instrument(skip(self, req))]
+	async fn get_vtxo_spend_proof(
+		&self, req: tonic::Request<protos::GetVtxoStatusRequest>,
+	) -> Result<tonic::Response<protos::GetVtxoSpendProofResponse>, tonic::Status> {
+		let req = req.into_inner();
+		let id = VtxoId::from_bytes(req.vtxo_id)?;
+		let attestation = VtxoStatusAttestation::from_bytes(&req.attestation)?;
+		let vtxos = self.db.read(async |tx| {
+			let source = tx.get_user_vtxo_by_id(id).await?;
+			attestation.verify(&source.vtxo).badarg("invalid VTXO status attestation")?;
+			tx.ordinary_spend_proof(&source).await
+		}).await.to_status()?;
+		Ok(tonic::Response::new(protos::GetVtxoSpendProofResponse { vtxos }))
+	}
+
+	#[tracing::instrument(skip(self, req))]
 	async fn get_vtxos_by_ids(
 		&self,
 		req: tonic::Request<protos::GetVtxosByIdsRequest>,

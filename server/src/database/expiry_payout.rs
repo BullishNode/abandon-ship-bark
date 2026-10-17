@@ -269,6 +269,19 @@ impl Tx<'_> {
 	pub async fn lock_unallocated_watchman_inputs(&self, ids: &[ark::VtxoId]) -> anyhow::Result<()> {
 		super::expiry_guard::guard_obligation_changes(self, ids).await?;
 		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+		// A separately drained receive grant would sever the consensus input
+		// dependency needed to refund its original internal sender. Progress
+		// may expose the leaf, but its terminal timeout belongs to the joint
+		// financial parent while the original sender remains unresolved.
+		ensure!(self.query_opt("SELECT g.vtxo_id FROM vtxo g \
+			JOIN expiry_lightning_internal_funding f ON f.subscription_id=g.lightning_htlc_subscription_id \
+			JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=f.id \
+			JOIN vtxo source ON source.vtxo_id=l.vtxo_id JOIN htlc_vtxo h ON h.id=source.id \
+			WHERE g.vtxo_id=ANY($1) AND h.direction='incoming' \
+			AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL \
+			AND NOT EXISTS(SELECT 1 FROM htlc_settlement s WHERE s.payment_hash=h.payment_hash) \
+			LIMIT 1", &[&ids]).await?.is_none(),
+			"internal receive timeout is reserved for its complete joint refund");
 		ensure!(self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1) ORDER BY vtxo_id LIMIT 1", &[&ids]).await?.is_none(),
 			"watchman claim backing is reserved for expiry payouts");
 		Ok(())

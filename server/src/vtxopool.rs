@@ -628,6 +628,21 @@ impl Process {
 		// finish and broadcast the tx
 		let tx = wallet.finish_tx(funding_psbt).context("error finishing tree funding tx")?;
 
+		// The cached tree still holds unsigned hArk leaf transactions. The
+		// finalized VTXOs above carry their actual signatures AND preimage;
+		// persist that full path before handing any pool coin to a receive.
+		// Deduplicate shared ancestors so one INSERT cannot update one txid twice.
+		let mut signed_txs = BTreeMap::new();
+		for vtxo in &vtxos {
+			vtxo.validate(&tx).context("finalized pool VTXO has an invalid signed path")?;
+			for step in vtxo.transactions() {
+				let txid = step.tx.compute_txid();
+				if let Some(old) = signed_txs.insert(txid, step.tx.clone()) {
+					ensure!(old == step.tx, "finalized pool paths disagree on a shared transaction");
+				}
+			}
+		}
+
 		// Create the vtxos and virtual transactions in the database
 		// before committing the funding tx to the wallet. The funding tx
 		// is handed to the nursery in the same db tx, so that once the
@@ -636,11 +651,10 @@ impl Process {
 		let confirm_target = self.srv.nursery_confirm_target();
 		let update = VtxoTreeUpdate::new()
 			.upsert_funding_tx(&tx)
-			.upsert_signed_tx(tree.internal_node_txs().iter().cloned())
-			.upsert_unsigned_tx(tree.unsigned_leaf_txs().iter().map(Transaction::compute_txid))
+			.upsert_signed_tx(signed_txs.into_values())
 			.insert_oor_spent_vtxos(tree.internal_vtxos())
 			.insert_unspent_vtxos(
-				tree.output_vtxos().map(ServerVtxo::from),
+				vtxos.iter().cloned().map(ServerVtxo::from),
 				database::SpendState::Pool,
 			);
 		self.srv.db.write(async |t| {

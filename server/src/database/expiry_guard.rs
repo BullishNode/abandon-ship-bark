@@ -14,7 +14,9 @@ pub(crate) async fn guard_obligation_changes(
 	let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
 	tx.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id = ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&ids]).await?;
 	if let Some(row) = tx.query_opt(
-		"SELECT vtxo_id FROM expiry_decided_coin WHERE vtxo_id = ANY($1) ORDER BY vtxo_id LIMIT 1",
+		"SELECT vtxo_id FROM (SELECT vtxo_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1) \
+			UNION SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1)) fenced \
+			ORDER BY vtxo_id LIMIT 1",
 		&[&ids],
 	).await? {
 		return Err(crate::error::FallbackRefusal::DecidedForFallback(row.get::<_, &str>("vtxo_id").parse()?).into());

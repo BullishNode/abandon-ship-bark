@@ -50,6 +50,9 @@ pub enum OwnershipEvidence {
 	HtlcUnattemptedExpired { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
 	HtlcExternalFailed { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
 	HtlcInternalZeroGrantCancelled { payment_hash: PaymentHash, htlc_expiry: BlockHeight, attempt_id: i64, subscription_id: i64 },
+	/// Conditional on spending EVERY receive dependency in the same parent.
+	/// This evidence never becomes an independent irreversible customer owner.
+	HtlcInternalJointTimeout { payment_hash: PaymentHash, attempt_id: i64, subscription_id: i64, grants: Vec<VtxoId> },
 	HtlcChain { payment_hash: PaymentHash, resolution: HtlcResolution, block: BlockRef },
 }
 
@@ -312,6 +315,31 @@ impl Tx<'_> {
 		full.validate(funding).context("invalid customer expiry source signature")?;
 		proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
 		proposal.evidence = Some(OwnershipEvidence::Pubkey);
+		Ok(proposal)
+	}
+
+	pub(crate) async fn propose_joint_refund_ownership(
+		&self, fact: &BackingVtxoFact, funding: &Transaction, view: super::expiry_chain::ExpiryViewToken,
+		component: &super::expiry_internal_refund::InternalRefundComponent,
+	) -> anyhow::Result<OwnershipProposal> {
+		let mut proposal = self.propose_expiry_ownership(fact, funding,
+			view.captaind.height, Some(view.watchmand.height)).await?;
+		let Some(joint) = component.for_source(fact.state.vtxo_id) else { return Ok(proposal); };
+		ensure!(joint.view == view && matches!(proposal.disposition,
+			OwnershipDisposition::Unresolved("Lightning settlement pending"))
+			&& !proposal.has_stored_preimage && proposal.cancellations.is_empty(),
+			"joint refund source has another settlement premise");
+		let full = fact.full_vtxo.as_ref().context("joint refund lacks its full signed source")?;
+		full.validate(funding).context("joint refund source signature is invalid")?;
+		let user = full.clone().try_into_user_vtxo().map_err(|_| anyhow::anyhow!("joint funding is not a user contract"))?;
+		let policy = user.policy().as_server_htlc_send().context("joint source is not a send contract")?;
+		ensure!(policy.payment_hash == joint.payment_hash, "joint source has another payment hash");
+		proposal.disposition = self.expiry_customer(proposal.id, user.user_pubkey()).await?;
+		proposal.evidence = Some(OwnershipEvidence::HtlcInternalJointTimeout {
+			payment_hash: joint.payment_hash, attempt_id: joint.attempt_id,
+			subscription_id: joint.subscription_id, grants: joint.grant_ids(),
+		});
+		proposal.needs_chain_progress = false;
 		Ok(proposal)
 	}
 

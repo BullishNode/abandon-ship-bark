@@ -184,11 +184,12 @@ impl Server {
 				let cut = {
 					let snapshot = Arc::clone(&snapshot);
 					let transitions = Arc::clone(&transitions);
+					let funding = funding.clone();
 					let root = root.clone();
 					// Building the current economic cut also traverses the complete
 					// inventory. It must not starve unrelated async RPC work.
 					tokio::task::spawn_blocking(move || economic_cut(
-						&snapshot, &root, &transitions, INVENTORY_LIMITS,
+						&snapshot, &root, &funding, &transitions, INVENTORY_LIMITS,
 					)).await.context("expiry economic cut task failed")??
 				};
 				let mut coins = Vec::with_capacity(cut.terminals.len());

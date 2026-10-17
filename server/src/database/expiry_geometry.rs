@@ -22,6 +22,7 @@ pub(crate) struct EconomicCut {
 pub(crate) fn economic_cut(
 	snapshot: &BackingSnapshot,
 	root: &ServerVtxo,
+	funding: &Transaction,
 	transitions: &BTreeMap<Txid, Transaction>,
 	limits: BackingSnapshotLimits,
 ) -> anyhow::Result<EconomicCut> {
@@ -63,6 +64,16 @@ pub(crate) fn economic_cut(
 		}
 	}
 	ensure!(!cut.terminals.is_empty(), "expiry backing has no economic terminals");
+	// Transition lookup is only a candidate graph. Validate the complete current
+	// terminal paths and their conserving partition before attribution, splitting
+	// or any financial decision. Historical descendants beyond a binding round or
+	// offboard are not evidence for this cut and cannot poison its preparation.
+	let terminals = cut.terminals.iter().map(|index| snapshot.regular[*index].full_vtxo.clone()
+		.context("expiry current terminal lacks its complete source path"))
+		.collect::<anyhow::Result<Vec<_>>>()?;
+	let selected = BackingSnapshot { roots: vec![root.clone()], regular: Vec::new(), serialized_bytes: 0 };
+	selected.check_partition(&terminals, std::slice::from_ref(funding), &cut.residuals, limits)
+		.context("expiry current economic cut is invalid")?;
 	Ok(cut)
 }
 
@@ -74,7 +85,10 @@ pub(crate) fn source_transitions(
 	for fact in &snapshot.regular {
 		let Some(full) = &fact.full_vtxo else { continue; };
 		ensure!(full.chain_anchor().txid == funding_txid, "expiry source has another funding anchor");
-		full.validate_unsigned(funding).context("expiry source geometry is invalid")?;
+		// These are candidate links only. economic_cut validates every selected
+		// complete path against funding, including before requesting progression.
+		// Eagerly validating historical forfeit descendants would reject an
+		// unrelated customer's valid path before the current cut can be selected.
 		for item in full.transactions() {
 			let mut tx = item.tx;
 			for input in &mut tx.input { input.witness.clear(); }
@@ -91,9 +105,11 @@ pub(crate) fn source_transitions(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::str::FromStr;
 	use ark::board::BoardBuilder;
 	use ark::test_util::VTXO_VECTORS;
 	use ark::vtxo::Full;
+	use ark::vtxo::raw::RawVtxo;
 	use crate::database::{SpendState, VtxoState};
 	use crate::database::expiry_inventory::{BackingVtxoFact, SnapshotGenesis};
 
@@ -131,7 +147,7 @@ mod tests {
 	fn expiry_readiness_follows_registered_board_and_conserves_actual_backing() {
 		let (snapshot, funding) = board();
 		let txs = source_transitions(&snapshot, &funding).unwrap();
-		let cut = economic_cut(&snapshot, &snapshot.roots[0], &txs, TEST_LIMITS).unwrap();
+		let cut = economic_cut(&snapshot, &snapshot.roots[0], &funding, &txs, TEST_LIMITS).unwrap();
 		assert_eq!(cut.terminals, [1]);
 		assert_eq!(cut.visited, [0, 1]);
 		let leaf = snapshot.regular[1].full_vtxo.clone().unwrap();
@@ -145,13 +161,42 @@ mod tests {
 	fn expiry_readiness_refuses_unrepresented_siblings_and_wrong_funding() {
 		let (mut snapshot, funding) = board();
 		let txs = source_transitions(&snapshot, &funding).unwrap();
-		assert!(economic_cut(&snapshot, &snapshot.roots[0], &txs,
+		assert!(economic_cut(&snapshot, &snapshot.roots[0], &funding, &txs,
 			BackingSnapshotLimits { max_rows: 1, ..TEST_LIMITS }).is_err());
 		snapshot.regular.pop();
-		assert!(economic_cut(&snapshot, &snapshot.roots[0], &txs, TEST_LIMITS).is_err());
+		assert!(economic_cut(&snapshot, &snapshot.roots[0], &funding, &txs, TEST_LIMITS).is_err());
 		let (snapshot, mut wrong) = board();
 		wrong.output[0].value += bitcoin::Amount::from_sat(1);
 		assert!(source_transitions(&snapshot, &wrong).is_err());
+	}
+
+	#[test]
+	fn expiry_current_cut_ignores_invalid_unused_historical_descendant() {
+		let (mut snapshot, funding) = board();
+		let mut raw: RawVtxo = snapshot.regular[1].full_vtxo.clone().unwrap().into();
+		raw.point = OutPoint::new(bitcoin::Txid::from_str("7777777777777777777777777777777777777777777777777777777777777777").unwrap(), 0);
+		let obsolete: ServerVtxo<Full> = raw.into();
+		assert!(obsolete.validate_unsigned(&funding).is_err());
+		let mut historical = fact(obsolete, None);
+		historical.state.spend_state = SpendState::RoundForfeit;
+		snapshot.regular.push(historical);
+		let txs = source_transitions(&snapshot, &funding).unwrap();
+		let cut = economic_cut(&snapshot, &snapshot.roots[0], &funding, &txs, TEST_LIMITS).unwrap();
+		assert_eq!(cut.terminals, [1]);
+		assert!(!cut.visited.contains(&2));
+	}
+
+	#[test]
+	fn expiry_current_cut_still_rejects_invalid_selected_terminal_path() {
+		let (mut snapshot, funding) = board();
+		let mut raw: RawVtxo = snapshot.regular[1].full_vtxo.clone().unwrap().into();
+		let other: RawVtxo = ServerVtxo::from(VTXO_VECTORS.arkoor2_vtxo.clone()).into();
+		raw.genesis = other.genesis;
+		let invalid: ServerVtxo<Full> = raw.into();
+		assert!(invalid.validate_unsigned(&funding).is_err());
+		snapshot.regular[1] = fact(invalid, None);
+		let txs = source_transitions(&snapshot, &funding).unwrap();
+		assert!(economic_cut(&snapshot, &snapshot.roots[0], &funding, &txs, TEST_LIMITS).is_err());
 	}
 
 	#[test]
@@ -161,9 +206,9 @@ mod tests {
 		// Settlement remains W5's job. Even an apparently followable OOR field
 		// must not turn these old inputs into a speculative forfeit traversal.
 		snapshot.regular[0].state.offboarded_in = Some(funding.compute_txid());
-		assert_eq!(economic_cut(&snapshot, &snapshot.roots[0], &txs, TEST_LIMITS).unwrap().terminals, [0]);
+		assert_eq!(economic_cut(&snapshot, &snapshot.roots[0], &funding, &txs, TEST_LIMITS).unwrap().terminals, [0]);
 		snapshot.regular[0].state.offboarded_in = None;
 		snapshot.regular[0].state.spent_in_round = Some(9);
-		assert_eq!(economic_cut(&snapshot, &snapshot.roots[0], &txs, TEST_LIMITS).unwrap().terminals, [0]);
+		assert_eq!(economic_cut(&snapshot, &snapshot.roots[0], &funding, &txs, TEST_LIMITS).unwrap().terminals, [0]);
 	}
 }

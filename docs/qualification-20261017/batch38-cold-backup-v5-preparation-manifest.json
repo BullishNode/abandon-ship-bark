@@ -1,0 +1,66 @@
+{
+  "state": "FINAL CONTROLS FROZEN \u2014 NOT EXECUTED",
+  "root_allocation": "Source87e/ced8 ONCE; parent launches afterfresh completepreflight",
+  "private_host_root": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch38-cold-backup-v5",
+  "private_container_root": "/fresh-cache/testing-track-20261017/batch38-cold-backup-v5",
+  "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+  "source_body_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "bundle_manifest_sha256": "740da075ad58542352fea1b2ce6c93e3827cf02381d9b88f2c99c76f8e4c25b6",
+  "runtime_metadata_path": "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-runtime.json",
+  "runtime_metadata_sha256": "aa3f342eb4d4a191946550c3e1899afa35be2d96bca6248c6110b14f2e824f63",
+  "helper_metadata": "Providedimmutablehelper paths resolve target-directory/../runtime-balance-backup-v5-20261017/support; unchanged",
+  "fresh_preparation": {
+    "cached_nix": "impure",
+    "verified_primary_pins": 14,
+    "exact_selected_unignored": [
+      [
+        "ark-testing::server",
+        "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery"
+      ]
+    ],
+    "native_tests_run": 0,
+    "resource_preflight": "Not performed by preparer; parent must run afterfinalfreeze",
+    "fresh_listing_sha256": "a87e8c103eaf396be22304a58302f58c62d06670c43c2724c9fa4e73707b21ab",
+    "pin_listing_log_sha256": "5fa5f82f9e8a0f2e1fcaac7b50cc776774c9e04a0e6d2f144c6fa1fc7f4237e0"
+  },
+  "source_feature_gate": "Bundle metadata built ark-testing/fallback-test-bip84 and actualCLI products fallback-test-bip84,barkd-web-ui; actualsource containsP2WPKH/witness2assertions",
+  "version_gate": "Exactreported0.7.1-dev9ea05f label perrootACK; sourcehead/diff/manifest/ELFhashes authoritative",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "threads": 1,
+  "native_run_recipe": "just int-binaries only, canonicalcwd",
+  "files": {
+    "selection-proof.json": {
+      "sha256": "7c3fe5cdf69c414be54ad42c34758ddeabe4f0c101bc3d3161069a2f181572c0",
+      "bytes": 2455
+    },
+    "server-cohort.py": {
+      "sha256": "8d171197e766375e9cd8034ff86a33edde8def5e7f068597ec62670079b78661",
+      "bytes": 6422
+    },
+    "runtime-pins.sha256": {
+      "sha256": "01c7ca506644e071308a8bfd7da0df7e416cd434396379f66b842f35b0845cb6",
+      "bytes": 1851
+    },
+    "preflight.sh": {
+      "sha256": "bd0484dc7a3f280da053773c839a945136e52c1720327dc4824cc9090a23adab",
+      "bytes": 1155
+    },
+    "run.sh": {
+      "sha256": "dfc364ce0fa979a911e1397c9b21014810a1db55d26b6a266f3d8f58743c79c4",
+      "bytes": 1275
+    },
+    "preflight-static.py": {
+      "sha256": "cd10fccf657092b801208567528ad20270c5c14ed9cd717ce01728a187661cf5",
+      "bytes": 1214
+    },
+    "verify-first-selection.py": {
+      "sha256": "b798bb44a154272502693e08338218aefca68e81b439a7d1b5fb2f53e1afd6dc",
+      "bytes": 647
+    },
+    "case01/nextest.toml": {
+      "sha256": "8ebe2b425a4c24f1e8ba90d2cf995f9e25c1e6a406d6153ef1f283ead6f85ae2",
+      "bytes": 174
+    }
+  }
+}

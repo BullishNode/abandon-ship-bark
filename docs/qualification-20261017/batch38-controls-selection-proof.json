@@ -1,0 +1,40 @@
+{
+  "state": "PREPARED_NOT_EXECUTED",
+  "source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+  "bundle_manifest_sha256": "740da075ad58542352fea1b2ce6c93e3827cf02381d9b88f2c99c76f8e4c25b6",
+  "runtime_metadata_sha256": "aa3f342eb4d4a191946550c3e1899afa35be2d96bca6248c6110b14f2e824f63",
+  "metadata_path": "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-runtime.json",
+  "source_body_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "test_elf_sha256": "26d701e21e623889f9cba0e0af76d6084e032f9aa8b96dfa9a098e8a471f7387",
+  "test_binary": "ark-testing::server",
+  "expected_names_in_execution_order": [
+    "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery"
+  ],
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "threads": 1,
+  "actual_bark_version": "bark 0.7.1-dev (9ea05f9680be2757e875ee81f4546fd24e5b6354)",
+  "version_provenance": "Root ACK cached9ea label; sourceHEAD/diff/manifest/ELF/build evidence authoritative, not a clean release claim. Dev version gate true.",
+  "features": "actual bark/barkd and nativearktesting fallback-test-bip84 verified in bundlemanifest metadata build command; source independently assertsP2WPKH and BIP84witness",
+  "root_authorization": "Allocated87e/ced8 ONE execution only; no test retry/recapture. Parent launches after frozen final controls and fresh gate.",
+  "scope": "Ordinary same-candidate physical coldPG+serviceidentity backup; same continuingCore; genuine seed-onlyBIP84 completeUTXOdrain. No LN/universal/defaultdaemon/fullML credit.",
+  "commands": [
+    {
+      "sequence": 1,
+      "test_name": "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery",
+      "argv": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch38-cold-backup-v5",
+        "int-binaries",
+        "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch38-cold-backup-v5/case01/nextest.toml -- qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery --exact"
+      ],
+      "env": {
+        "TEST_DIRECTORY": "/fresh-cache/testing-track-20261017/batch38-cold-backup-v5/case01/test-data"
+      },
+      "cwd": "/home/francis/abandon-ship-fresh-integration"
+    }
+  ]
+}

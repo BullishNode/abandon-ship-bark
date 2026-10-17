@@ -1,0 +1,77 @@
+{
+  "state": "SANITIZED_SOURCE_BUILD_PROVENANCE_SUBSET",
+  "source_bundle_manifest_sha256": "740da075ad58542352fea1b2ce6c93e3827cf02381d9b88f2c99c76f8e4c25b6",
+  "root_source_manifest_sha256": "87e82448bbad37bc7435de89f92c20192713725c7bca61f53ab66c148218400f",
+  "source_archive_sha256": "ed164c50d7ec3e0c9077c2ac84099fb37dd17d2f47cb01935dabd031d9fcc5b6",
+  "candidate_head": "e443d415ee7b0d512203bd56f85e22cdec69d35f",
+  "dirty": true,
+  "actual_git_diff_sha256": "7d61324da7ccc276a836ddf26060d91de0ad0de929447e0fe2dc6b52ae55b870",
+  "source_scope": "Publishede443d415e product source matching1e28b175 plus reviewed prepared safety-exit balanceb07012fd (test imports moved to modulehead), authentic physical coldbackup ced8c436 and module registration, remove unused pool Transaction import. Existing LN historical/capacity/partial-replan limits remain open.",
+  "exact_test_source_path": "testing/tests/server/qualification_cold_backup.rs",
+  "exact_test_source_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/captaind",
+      "sha256": "3f271e4dbf2fb08f4c4cd3f072814c12103e6611cf602ba8d8e79f2991e171d1"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/watchmand",
+      "sha256": "8bf707d1b26fb019271f1443873d03d3678a52a80635a94557122b674ada4c81"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/bark",
+      "sha256": "d787c51786c91e9ce8c10502d797b8911100e8dd0f3e3535d1536bf1123d9527",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/barkd",
+      "sha256": "93011e42f99787341b8a54e55af0f7540e8407c91354f0865d0d628bfd099366",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "ark-testing::bark": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-bark",
+      "sha256": "3f56d0874a296128fa9c74d64689f04fa58f0ad7ca28512acc55ac9b754e10e5"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-bark-sdk",
+      "sha256": "41b5e69fdaf3fa01fe92ec602795fc428f6431665a42ad89504cf2ad0e2c8ef1"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-balance-backup-v5-20261017/native-server",
+      "sha256": "26d701e21e623889f9cba0e0af76d6084e032f9aa8b96dfa9a098e8a471f7387"
+    }
+  },
+  "original_metadata_sha256": "bcf9f8e887cd1b1e13cb6871bdef6d365b9e90a9c53cd992c17e61809a3b8113",
+  "actual_runtime_metadata_sha256": "aa3f342eb4d4a191946550c3e1899afa35be2d96bca6248c6110b14f2e824f63",
+  "runtime_metadata_path": "/fresh-cache/runtime-balance-backup-v5-20261017/nextest-binaries-runtime.json",
+  "actual_cached_bark_version": "bark 0.7.1-dev (9ea05f9680be2757e875ee81f4546fd24e5b6354)",
+  "label_limitation": "Root ACK cached9ea label; sourceHEAD/diff/manifest/ELF/build evidence authoritative, not a clean release claim. Dev version gate true.",
+  "features": "actual bark/barkd and nativearktesting fallback-test-bip84 verified in bundlemanifest metadata build command; source independently assertsP2WPKH and BIP84witness",
+  "root_build_phase_states": {
+    "checks": {
+      "state": "PASS",
+      "seconds": 107.56,
+      "exit_code": 0
+    },
+    "units": {
+      "state": "PASS",
+      "seconds": 133.654,
+      "exit_code": 0
+    },
+    "products": {
+      "state": "PASS",
+      "seconds": 94.756,
+      "exit_code": 0
+    },
+    "metadata": {
+      "state": "PASS",
+      "seconds": 165.864,
+      "exit_code": 0
+    }
+  },
+  "source_verification": "All1479trackedfiles,HEADanddirtydiff unchanged before/after every phase and final capture",
+  "build_captured_at": "2026-10-17T21:18:00.449095+00:00",
+  "scope": "Root-owned existing compiled bundle metadata subset; no source code, private config, seed, database or backup content. This report preparation performs no build or native call. Immutable capture native_result NOT RUN was a historical pre-execution state; actual batch38 outcome has its separate terminal receipt."
+}

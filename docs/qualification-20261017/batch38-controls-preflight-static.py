@@ -1,0 +1,16 @@
+import json, os
+from pathlib import Path
+root=Path('/fresh-cache/testing-track-20261017/batch38-cold-backup-v5')
+proof=json.loads((root/'selection-proof.json').read_text())
+assert proof['expected_names_in_execution_order']==['qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery']
+assert not list(root.glob('case*/result.json')) and not (root/'cohort-progress.json').exists(), 'allocated case must not be retried'
+assert not list(root.glob('case*/test-data')), 'fresh context required'
+stat=os.statvfs('/dev/shm'); available=stat.f_bavail*stat.f_frsize
+owned=[]
+for p in Path('/proc').iterdir():
+ if not p.name.isdigit(): continue
+ try:
+  if (p/'comm').read_text().strip()=='postgres' and '/fresh-cache/testing-track-20261017/' in (p/'cmdline').read_bytes().replace(b'\0',b' ').decode(errors='replace'): owned.append(int(p.name))
+ except (FileNotFoundError,PermissionError,ProcessLookupError): pass
+assert available>=12*1024*1024 and not owned, 'resource gate blocked; preserve all state and request root cleanup'
+(root/'resource-admission.json').write_text(json.dumps({'state':'RESOURCE_GATE_PASS','shm_available_bytes':available,'live_owned_postgres':owned,'cleanup':False})+'\n')

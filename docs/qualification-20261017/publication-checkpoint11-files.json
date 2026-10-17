@@ -1,0 +1,236 @@
+{
+  "scope": "Report-only eleventh checkpoint through batch38:216executions202PASS14FAIL212unique189nextest204native12components427coverage. One new87e/740 ordinary cold-backup PASS; no fullsuite/production/automaticFULLML credit.",
+  "files": {
+    "COVERAGE.csv": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+    "ELEVENTH-CHECKPOINT.md": "8ee074c71f50c53e659c985bb3862f83eb7e565fa9ca8180ab6fb42d4c588ae7",
+    "FINDINGS.md": "457d64b13471383f98ae012b0672ea566a85a605f1179c22fd875b0645b937f0",
+    "STATUS.json": "23b07bfae56b6d128752f4252224f782c7f202d620e7a805a4183beb531441e4",
+    "batch38-cold-backup-ML-gate-mapping-candidate.json": "2ad0633041df099d6e521f797d3dd050344b0a3692eb1f6d57efab50ad4fb8ee",
+    "batch38-cold-backup-ML-gate-mapping-candidate.md": "a3750cfcd2c5cebc532d56adea417fb09ee5df22bff236bdb37b958af436ea8f",
+    "batch38-cold-backup-financial-supplement.json": "dc0b653c10b795b0c1edf8b6c6a573052f4e1cbe41826c515746ca1e726d0fd0",
+    "batch38-cold-backup-public-receipt.json": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df",
+    "batch38-cold-backup-safe-files.sha256": "119a170057d660b4216dc49635fd8c5a5584d2e43e69ab8d7aa84395eaa226c1",
+    "batch38-cold-backup-v5-environment-receipt.json": "0dcbaa652f36f52bc370f6603ea1a72907d6ce0f6ee48e96491880c7c781d77c",
+    "batch38-cold-backup-v5-preparation-manifest.json": "97403edb2f8ca15a16d8f0db46715f1d801bbe3526e813b7ebe5b80f05928410",
+    "batch38-cold-backup-v5-receipt.json": "d0a0a16f8105e41e38a3ca7c11420a63ec538c00dd093ec4a217c3e893a9ea2e",
+    "batch38-cold-backup-v5-source-provenance.json": "18c309e643da280321a9a98720dfb32fb34e72f774ec5afdfab46621b94e8629",
+    "batch38-controls-cohort-progress.json": "38fc23e9a7c1e055235aedcdecc2f30652b926bcfb69b380e495225c649a05dc",
+    "batch38-controls-cohort-summary.json": "9e5801db2b8ea364fd789a87f23e543a2b4356d20e0d0300b6fdd8e96d47ec0d",
+    "batch38-controls-controller.log": "de73e680da256f832c22fb15889663f4c78293eb9286b37db1b9089fa303dde9",
+    "batch38-controls-environment-receipt.json": "0dcbaa652f36f52bc370f6603ea1a72907d6ce0f6ee48e96491880c7c781d77c",
+    "batch38-controls-fresh-listing-admission.json": "c07d11dc70b03e6db5ea4dc1d6d83c84e262507bea57491dc18bf6b73821e17d",
+    "batch38-controls-preflight-parent-final.log": "df87895880c57b578d124ce395f3676a36a2c5477f6b798ef7962770bdf63a3d",
+    "batch38-controls-preflight-static.py": "cd10fccf657092b801208567528ad20270c5c14ed9cd717ce01728a187661cf5",
+    "batch38-controls-preflight.sh": "bd0484dc7a3f280da053773c839a945136e52c1720327dc4824cc9090a23adab",
+    "batch38-controls-resource-admission.json": "0deeb69aea3b6fec7f04017944af4851776e2f570c1809390e9e735a1120eeaa",
+    "batch38-controls-resource-checkpoints.jsonl": "36bdf1580c5fe79f9724a45d2d6314acced3a11cd44c27d8e508d13228ce37c5",
+    "batch38-controls-run.sh": "dfc364ce0fa979a911e1397c9b21014810a1db55d26b6a266f3d8f58743c79c4",
+    "batch38-controls-runtime-pins.sha256": "01c7ca506644e071308a8bfd7da0df7e416cd434396379f66b842f35b0845cb6",
+    "batch38-controls-selection-proof.json": "7c3fe5cdf69c414be54ad42c34758ddeabe4f0c101bc3d3161069a2f181572c0",
+    "batch38-controls-server-cohort.py": "8d171197e766375e9cd8034ff86a33edde8def5e7f068597ec62670079b78661",
+    "batch38-controls-verify-first-selection.py": "b798bb44a154272502693e08338218aefca68e81b439a7d1b5fb2f53e1afd6dc",
+    "batch38-coverage-append.json": "ee4f0c5a0f9603301c0624c5b3974182f43479d3cce36f0ce12e1c7df0742a96",
+    "cold-backup-retained-core-reconciliation-client.json": "0ed90ac81dea6f1c7329355e45b7a6587f4ebf84ff71fdd20f1792b802678c9b"
+  },
+  "new_files": [
+    "ELEVENTH-CHECKPOINT.md",
+    "batch38-cold-backup-ML-gate-mapping-candidate.json",
+    "batch38-cold-backup-ML-gate-mapping-candidate.md",
+    "batch38-cold-backup-financial-supplement.json",
+    "batch38-cold-backup-public-receipt.json",
+    "batch38-cold-backup-safe-files.sha256",
+    "batch38-cold-backup-v5-environment-receipt.json",
+    "batch38-cold-backup-v5-preparation-manifest.json",
+    "batch38-cold-backup-v5-receipt.json",
+    "batch38-cold-backup-v5-source-provenance.json",
+    "batch38-controls-cohort-progress.json",
+    "batch38-controls-cohort-summary.json",
+    "batch38-controls-controller.log",
+    "batch38-controls-environment-receipt.json",
+    "batch38-controls-fresh-listing-admission.json",
+    "batch38-controls-preflight-parent-final.log",
+    "batch38-controls-preflight-static.py",
+    "batch38-controls-preflight.sh",
+    "batch38-controls-resource-admission.json",
+    "batch38-controls-resource-checkpoints.jsonl",
+    "batch38-controls-run.sh",
+    "batch38-controls-runtime-pins.sha256",
+    "batch38-controls-selection-proof.json",
+    "batch38-controls-server-cohort.py",
+    "batch38-controls-verify-first-selection.py",
+    "batch38-coverage-append.json",
+    "cold-backup-retained-core-reconciliation-client.json"
+  ],
+  "updated_files": [
+    "COVERAGE.csv",
+    "FINDINGS.md",
+    "STATUS.json"
+  ],
+  "unchanged_included_files": [],
+  "aggregate": {
+    "executions": 216,
+    "pass": 202,
+    "fail": 14,
+    "unique_names": 212,
+    "invocations": 189,
+    "native": 204,
+    "components": 12,
+    "coverage_rows": 427
+  },
+  "native_increment": {
+    "batch": 38,
+    "executions": 1,
+    "passed": 1,
+    "failed": 0,
+    "new_unique_names": 1,
+    "new_invocations": 1,
+    "new_native_cases": 1,
+    "new_component_cases": 0,
+    "receipt": "batch38-cold-backup-v5-receipt.json"
+  },
+  "immutable_checksum_manifest_entries_verified": 283,
+  "historical_accumulator_exceptions": [
+    {
+      "manifest": "batch28-barkd-unstarted17-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "637308cde95afe53a1f69c6012a8e5266be1dee581405722938efec7f978147f",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    },
+    {
+      "manifest": "batch23-upstream-bark-unstarted46-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "f697f60214a4dc530bd50dde057730195c969982e2bc230e924c72ce76559c8a",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    },
+    {
+      "manifest": "batch24-upstream-bark-unstarted29-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "972d547b79da0cbcd740c22291cbb321da0e773dc882440d711cb2a04e366c10",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    },
+    {
+      "manifest": "batch26-upstream-bark-unstarted23-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "2e4fbefba95e39a5d6ba1c29084c5a2911d8f2805f0520bf4a56442884c82523",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    },
+    {
+      "manifest": "batch25-barkd-ordinary38-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "e0eb058d6c4eb3ad8f968f8ad596c345bd46b26884ddd5210f3fbcf947a75d6e",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    },
+    {
+      "manifest": "batch27-barkd-unstarted36-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "9ecdb3ceec53d13f32c407bd09aedc1757da6ae10319ce9746acc14a54eed0ac",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    },
+    {
+      "manifest": "batch22-upstream-bark-unstarted47-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "5b1bbe2106e78d21e8e901b57f9f5e4fb35fbe1fc3419e14ccc84c7e58cf9186",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    },
+    {
+      "manifest": "batch21-upstream-bark-remaining75-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "5b1bbe2106e78d21e8e901b57f9f5e4fb35fbe1fc3419e14ccc84c7e58cf9186",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    },
+    {
+      "manifest": "batch19-sdk-upstream-normal-final-files.sha256",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "57ced37f9a1a368f6897426b56498065aa75b4eaf9b948a35501b9e6f2b1877f",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Historical accumulator snapshot retained unchanged; current checkpoint hash recorded separately."
+    }
+  ],
+  "earlier_publication_json_entries_verified": 325,
+  "earlier_publication_json_accumulator_exceptions": [
+    {
+      "manifest": "publication-checkpoint10-files.json",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "175a0c5ccbf813f213912405eb40490209aa12c756a54025e8242d368d58f2b0",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Earlier publication snapshot retained unchanged; current accumulator update is deliberate."
+    },
+    {
+      "manifest": "publication-checkpoint10-files.json",
+      "file": "FINDINGS.md",
+      "historical_expected_sha256": "c05be215c9c0e6311a8f8467ef5fbee060702cee793f876b02a903317f54f7fd",
+      "current_sha256": "457d64b13471383f98ae012b0672ea566a85a605f1179c22fd875b0645b937f0",
+      "disposition": "Earlier publication snapshot retained unchanged; current accumulator update is deliberate."
+    },
+    {
+      "manifest": "publication-checkpoint10-files.json",
+      "file": "STATUS.json",
+      "historical_expected_sha256": "b78e31973691e810495355968ec41a0500d93c079f9a11dc80af9df26610c67f",
+      "current_sha256": "23b07bfae56b6d128752f4252224f782c7f202d620e7a805a4183beb531441e4",
+      "disposition": "Earlier publication snapshot retained unchanged; current accumulator update is deliberate."
+    },
+    {
+      "manifest": "publication-checkpoint9-files.json",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "0d816261693558f7dcaffd52fea114380b2732ff04da14efddd492302e63b709",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Earlier publication snapshot retained unchanged; current accumulator update is deliberate."
+    },
+    {
+      "manifest": "publication-checkpoint9-files.json",
+      "file": "STATUS.json",
+      "historical_expected_sha256": "05a353396116d41b7622d3c593039c3a778edff9fee27e4816938ae5400922f0",
+      "current_sha256": "23b07bfae56b6d128752f4252224f782c7f202d620e7a805a4183beb531441e4",
+      "disposition": "Earlier publication snapshot retained unchanged; current accumulator update is deliberate."
+    },
+    {
+      "manifest": "publication-checkpoint8-files.json",
+      "file": "COVERAGE.csv",
+      "historical_expected_sha256": "972d547b79da0cbcd740c22291cbb321da0e773dc882440d711cb2a04e366c10",
+      "current_sha256": "a4ecba5d2c3a3b615b2b3e71cc73bf178b1bf258bbb571b5e0efc068ecbe9958",
+      "disposition": "Earlier publication snapshot retained unchanged; current accumulator update is deliberate."
+    },
+    {
+      "manifest": "publication-checkpoint8-files.json",
+      "file": "STATUS.json",
+      "historical_expected_sha256": "5f8ecf8503a07c8fa1c75716ee020a1108acf06d55d0e2fdc73d6939078c131f",
+      "current_sha256": "23b07bfae56b6d128752f4252224f782c7f202d620e7a805a4183beb531441e4",
+      "disposition": "Earlier publication snapshot retained unchanged; current accumulator update is deliberate."
+    }
+  ],
+  "validation": {
+    "json": 16,
+    "python_ast": 3,
+    "bash_syntax": 2,
+    "jsonl": 1
+  },
+  "prior_coverage426_prefix_sha256": "175a0c5ccbf813f213912405eb40490209aa12c756a54025e8242d368d58f2b0",
+  "native_pending_receipt_preserved": true,
+  "independent_financial_supplement_sha256": "dc0b653c10b795b0c1edf8b6c6a573052f4e1cbe41826c515746ca1e726d0fd0",
+  "money_loss_scope": {
+    "execution_status": {
+      "NOT RUN": 198,
+      "PASS": 2
+    },
+    "evidence_scope": {
+      "PARTIAL": 145,
+      "NONE": 53,
+      "FULL": 2
+    },
+    "unchanged": true,
+    "candidate_gate_mapping": "P07ordinaryclause boundedFULL only; fullP07/P11partialopen; ML195positivebranchpartial; no intake/map mutation or newFULLMLID."
+  },
+  "sanitization": "Strong private-key/extended-private-key/secret-value scan passed; safe receipt/control/summary/provenance files only. No full native logs, private PG/backups/walletDB/seed/identity data, Rust or patches.",
+  "source_evidence_boundary": "Reached native assertions establish clean backup/identity/signing control; independent retained Core establishes canonical graph/fees/confirmations/unspent terminal cut. No inference of signing ownership from Core scripts alone.",
+  "candidate_boundary": "New source87e82448/bundle740da075/bodyced8 exact pins distinct from frozen7041; cached9ea version label explicitly qualified against root source/diff/ELF/build evidence.",
+  "published_parent": "PR14 verified merged3d17b09e; its215/426 cutoff remains historical.",
+  "preparer_actions": "Report preparation, read-only safe files/hash/regex, JSON/CSV parsing, Python AST parsing and bash -n only. No Cargo, metadata generation, native actor/test/service call, staging, commit or push by preparer."
+}

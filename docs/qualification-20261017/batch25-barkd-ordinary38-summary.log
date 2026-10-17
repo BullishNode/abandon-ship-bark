@@ -1,0 +1,7 @@
+Batch25 barkd ordinary38 terminal prefix
+Source 704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06
+38selected;2started;1PASS1FAIL;36NOTSTARTED. Both native daemon-backed fixtures.
+Default180s/test,retries0,onethread,no compilation; parent session63400terminal100.
+01 PASS 6.579s ark-testing::barkd bip321::bip321_uri_ark_only_barkd run=ba22d93c-a0f0-4727-afa0-e07d971fb529
+02 FAIL 6.071s ark-testing::barkd boards::board_all_barkd run=a807d8a4-4b13-4fcc-928a-c11ac7ea7643
+Original boards.rs35 net98298sat vs expected98348sat FAIL; later confirmation/balance assertions unexecuted. Independent financial reconciliation pending, no settled financial/Core/FULLML/fullbarkd claim.

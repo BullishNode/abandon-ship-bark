@@ -1,0 +1,37 @@
+{
+  "checked_at_utc": "2026-10-17T20:29:26.504421+00:00",
+  "restricted_case": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch26-upstream-bark-unstarted23/case02",
+  "input_hashes_before": {
+    "test-data/movement/movement_offboard/bark/db.sqlite": "e35e1af5a32cfc48bf0519d746a15720d797f9311167e0bb551b9671b91f4191",
+    "result.json": "c4341429385d83868d75a125f04a4c6b327c8a813afe15f0f461828c0d7574a9",
+    "nextest.log": "dc1dadd32f444570db2718d220653c65790ad2c259805175d56896980ecd1a16",
+    "test-data/movement/movement_offboard/bark/commands.log": "30e14fe00b11e575c413c97c208895f1d0a39a92b0ad99af82f3ccd9a0c2b870",
+    "test-data/movement/movement_offboard/bark/debug.log": "52d8a8c444fde20fa6fcd4117d86ceb1d77c99211fc7c6ddcee671be27f116f2",
+    "test-data/movement/movement_offboard/server/config.toml": "a84202bdeef7fe4b3d6af9a7eee8cdbf834c7faf6c95d6c1670dc3c1611b413b",
+    "test-data/movement/movement_offboard/bitcoind/regtest/debug.log": "d0ec926a08f2c33d405484d40a31acc0ddad25f82078d25f581d56a4ac4aeac9",
+    "test-data/movement/movement_offboard/bitcoind/regtest/blocks/xor.dat": "5cb81bdd4984a3ef8bf9e38065b873ffec04d6bdf78da18cd4015d1cc057f586",
+    "test-data/movement/movement_offboard/bitcoind/regtest/blocks/blk00000.dat": "003e0a18ebc26f9f053960a1f7641b45045b724584b85cc6f843d7728a1a663d"
+  },
+  "input_hashes_after": {
+    "test-data/movement/movement_offboard/bark/db.sqlite": "e35e1af5a32cfc48bf0519d746a15720d797f9311167e0bb551b9671b91f4191",
+    "result.json": "c4341429385d83868d75a125f04a4c6b327c8a813afe15f0f461828c0d7574a9",
+    "nextest.log": "dc1dadd32f444570db2718d220653c65790ad2c259805175d56896980ecd1a16",
+    "test-data/movement/movement_offboard/bark/commands.log": "30e14fe00b11e575c413c97c208895f1d0a39a92b0ad99af82f3ccd9a0c2b870",
+    "test-data/movement/movement_offboard/bark/debug.log": "52d8a8c444fde20fa6fcd4117d86ceb1d77c99211fc7c6ddcee671be27f116f2",
+    "test-data/movement/movement_offboard/server/config.toml": "a84202bdeef7fe4b3d6af9a7eee8cdbf834c7faf6c95d6c1670dc3c1611b413b",
+    "test-data/movement/movement_offboard/bitcoind/regtest/debug.log": "d0ec926a08f2c33d405484d40a31acc0ddad25f82078d25f581d56a4ac4aeac9",
+    "test-data/movement/movement_offboard/bitcoind/regtest/blocks/xor.dat": "5cb81bdd4984a3ef8bf9e38065b873ffec04d6bdf78da18cd4015d1cc057f586",
+    "test-data/movement/movement_offboard/bitcoind/regtest/blocks/blk00000.dat": "003e0a18ebc26f9f053960a1f7641b45045b724584b85cc6f843d7728a1a663d"
+  },
+  "specific_SQLite_sidecars_at_check": {
+    "-wal": false,
+    "-shm": false,
+    "-journal": false
+  },
+  "native_run_result_rawlog_binding_matches": true,
+  "public_tx_movement_input_and_output_identifiers_match": true,
+  "exact_Core_mempool_acceptance_event_present": true,
+  "customer_vs_physical_fee_arithmetic_checked": true,
+  "curator_SQLite_node_process_or_parser_reopen": false,
+  "derivation_scope": "Client immutableSQLite/signedtransaction/prevout/canonicalblock decode bound to restricted unchanged9inputhashes. Curator checks packet IDs/amounts/scriptsizes/fee arithmetic and existingCoreacceptance event only; canonicalabsence/0conf is clientofflineparse evidence, not a new curatorparser result."
+}

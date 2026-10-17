@@ -1,0 +1,40 @@
+{
+  "status": "SOURCE REVIEW COMPLETE \u2014 NOT COMPILED / NOT RUN",
+  "source_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "scope": "One ordinary same-candidate physical operator backup with continuing Core and genuine fresh seed-only BIP84 customer recovery",
+  "peer_reviews": {
+    "legacy": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/cold-backup-source-review-legacy.md",
+      "sha256": "3af62a5ec17ab8f523d80b6435feb2108140a7e13f64818f362f7e622fc0168a",
+      "verdict": "No outstanding concrete source/API/fixture/oracle blocker; source-only"
+    },
+    "client": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/cold-backup-source-review-client.md",
+      "sha256": "7ff26c2788498b7e60f68831ed37cc24fbba3faa28c3986ae7e058608a6694c0",
+      "verdict": "No outstanding concrete source/API/fixture/oracle blocker; source-only"
+    }
+  },
+  "initial_blockers_addressed": [
+    "Four direct PostgreSQL result closures now convert to anyhow result using Ok(await?)",
+    "Post-shutdown synchronized TestContext mining would wait stopped original; same continuing Core now mined directly with explicit restored-service waits"
+  ],
+  "runtime_gates": [
+    "Coordinator integration/module declaration",
+    "New source/build/ELF/metadata and actual BARK_EXEC pins",
+    "BIP84 test feature and bitcoind source",
+    "Owned local PG; pg_controldata pin alongside PostgreSQL utilities",
+    "180-second deadline, no test retries, declared200k customer +100k watchman funding,512MiB per-tree copy bound; independent clean cluster state mandatory"
+  ],
+  "preserved": {
+    "existing_sources_match_manifest": true,
+    "module_unchanged": true,
+    "canonical_unchanged_by_this_task": true,
+    "old_failures_and_receipts_unchanged": true
+  },
+  "limits": [
+    "No source-only PASS or new execution count",
+    "Ordinary physical backup only; not crash/PITR/upgrade/Core/LN/universal backup",
+    "Native stop helper does not expose individual graceful process exit codes; independent clean PG control-state proof required",
+    "Not whole-wallet/operator solvency or FULL ML coverage"
+  ]
+}

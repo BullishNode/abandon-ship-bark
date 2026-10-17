@@ -1,0 +1,34 @@
+{
+  "state": "SEPARATE_READ_ONLY_FINANCIAL_RECONCILIATION",
+  "native_result_unchanged": "FAIL",
+  "case_id": "FT-CLI-056",
+  "test_name": "movement::movement_send_onchain",
+  "run_id": "5642a425-2b0a-41dc-a294-90e32132411b",
+  "native_receipt": "batch30-bark-unstarted21-receipt.json",
+  "native_receipt_sha256": "7dfcc443853ee75efe7b45edcd7ad84248b1755e22b46a4de716d7b444b7a74a",
+  "native_receipt_pending_checkpoint_preserved": true,
+  "financial_reconciliation": "movement-send-onchain-retained-reconciliation.json",
+  "financial_reconciliation_sha256": "6383f7d13e47cf3d63ba39426a1ce6bcd6a2ef2d7a002435ceb5502b88057317",
+  "reconciliation_author_scope": "Client read-only retained immutable SQLite/offline signed-Core decoding; curator verified receipt identity/pins/hashes, not an independent raw wallet/database audit.",
+  "customer_accounting": {
+    "consumed_original_vtxo_sat": 100000,
+    "internal_historical_offboard_child_sat": 50854,
+    "internal_historical_child_additive": false,
+    "actual_destination_output_sat": 50000,
+    "customer_fee_sat": 854,
+    "retained_spendable_change_sat": 49146,
+    "conservation": "100000 = 49146 + 50000 + 854; customer fee is separate from physical miner fee."
+  },
+  "chain_scope": {
+    "retained_tip": "3aed387ed1a29062a4a7a0b04972d213990034047d40ee0ab56b1f1420829100",
+    "retained_tip_height": 111,
+    "target_inclusion_block": "3df78e4924ef0a28a627e1e721b19579d2fd4eda2df668519f5f8ad5578ccf21",
+    "target_inclusion_height": 110,
+    "confirmations_at_retained_tip": 2,
+    "source_mines_two_blocks_before_failed_assertion": true
+  },
+  "limitation": "No Core6, later original assertion, synchronized recipient onchain wallet balance, whole-wallet solvency or adapted execution/fullML claim. Retained actual native100kcut only.",
+  "native_oracle_failure": "movement.rs500 effective_balance actual-50854 vs fixedexpected-50938; later fee/destination/input/change/metadata assertions not reached.",
+  "no_execution_or_retry": true,
+  "no_full_ml_credit": true
+}

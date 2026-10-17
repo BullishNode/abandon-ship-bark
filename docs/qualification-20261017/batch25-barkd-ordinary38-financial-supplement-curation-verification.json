@@ -1,0 +1,36 @@
+{
+  "checked_at_utc": "2026-10-17T19:57:26.238055+00:00",
+  "restricted_original_case": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-ordinary38/case02/test-data/barkd/board_all_barkd",
+  "private_input_hashes_before": {
+    "barkd1/db.sqlite": "ccda6f018da9e87cc53aceb78af12635edbb72dd04631e6af49c6c5025e2db14",
+    "server/config.toml": "81231c305a791b3c102a840f8f6a092fb2e895ba07efe8c1ea45f4805b4ed05c",
+    "barkd1/debug.log": "2e1ccd0c40c3949c109fa04595fc58612810fd38331e35f2cd391ce50e691101",
+    "bitcoind/regtest/debug.log": "a9192272af7a92290c04311494058f906bdfd481b9c3c886e35b9ff2abcb9b44",
+    "bitcoind/regtest/mempool.dat": "e1c02806993999052f2158463f61347f8294bfb2da188cbe94bbaa2556979122"
+  },
+  "private_input_hashes_after": {
+    "barkd1/db.sqlite": "ccda6f018da9e87cc53aceb78af12635edbb72dd04631e6af49c6c5025e2db14",
+    "server/config.toml": "81231c305a791b3c102a840f8f6a092fb2e895ba07efe8c1ea45f4805b4ed05c",
+    "barkd1/debug.log": "2e1ccd0c40c3949c109fa04595fc58612810fd38331e35f2cd391ce50e691101",
+    "bitcoind/regtest/debug.log": "a9192272af7a92290c04311494058f906bdfd481b9c3c886e35b9ff2abcb9b44",
+    "bitcoind/regtest/mempool.dat": "e1c02806993999052f2158463f61347f8294bfb2da188cbe94bbaa2556979122"
+  },
+  "original_case_sqlite_sidecars_at_final_check": {
+    "db.sqlite-wal": false,
+    "db.sqlite-shm": false,
+    "db.sqlite-journal": false
+  },
+  "exact_Core_acceptance_event_present": true,
+  "mempool_bytes": 27,
+  "mempool_limit": "27B retained dump cannot contain exact203B signed funding transaction; Core acceptance comes from original debug event, no structuredmempool inclusion/confirmation claim.",
+  "sqlite_opened_by_curator": false,
+  "raw_transaction_parsed_by_curator": false,
+  "financial_derivation_scope": "Client packet signedtransaction/prevout/SQLite facts independently bound to unchanged restricted file hashes; curator checked source/run/tx-anchor identifiers, actual Core acceptance event and exact fee arithmetic only.",
+  "earlier_verifier_note": {
+    "expression": "assert not (base/'barkd1/db.sqlite-wal').exists() and not (base/'barkd1/db.sqlite-shm').exists() and not (base/'barkd1/db.sqlite-journal').exists()",
+    "base": "/home/francis/.cache/abandon-fresh/testing-track-20261017/next-upstream-barkd-ordinary38/case02/test-data/barkd/board_all_barkd",
+    "aggregate_outcome": "Earlier aggregate assertion did not pass; individual false predicates were not retained. Immediate specific individual recheck and final check show allthree absent. Cause not established; no nativefailure inferred.",
+    "claim_limit": "Point-in-time final specificDB absence only; no continuously absent sidecar claim."
+  },
+  "runtime_actions": "NONE; no node/wallet/service/DB reopened and no original mutation"
+}

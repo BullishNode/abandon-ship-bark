@@ -1,0 +1,103 @@
+{
+  "status": "SOURCE ONLY \u2014 NOT RUN; pending independent source review/integration/build/admission",
+  "test_name": "qualification_cold_backup::qualification_orderly_physical_backup_seed_only_recovery",
+  "owned_source": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_cold_backup.rs",
+  "source_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+  "private_source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/cold-backup-native-private/qualification_cold_backup.rs",
+  "patch": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/cold-backup-native-v1.patch",
+    "sha256": "9a33e3c8c226c68301627cb0157132335be2a6e9e6b19f692efec32270a046bc"
+  },
+  "inspected_worktree_head": "776b70bfbfa62e6dd8d56f943edf62c250293cab",
+  "inspected_canonical_head": "2f070b60a870b5d02edd8b5b0a5b0289a2edd11c",
+  "references": {
+    "testing/src/daemon/postgres.rs": {
+      "worktree_sha256": "d0b8e6000b39d657bb7d5ee277305df358f0ee0707308a90c0c5a3508fda9090",
+      "canonical_sha256": "d0b8e6000b39d657bb7d5ee277305df358f0ee0707308a90c0c5a3508fda9090"
+    },
+    "testing/src/daemon/mod.rs": {
+      "worktree_sha256": "8787ffcb12c824573365b68ef0a2fdbfac4e2ca2c41fd0658e30ab3659e54bf4",
+      "canonical_sha256": "8787ffcb12c824573365b68ef0a2fdbfac4e2ca2c41fd0658e30ab3659e54bf4"
+    },
+    "testing/src/context/mod.rs": {
+      "worktree_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "canonical_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab"
+    },
+    "testing/src/context/builders.rs": {
+      "worktree_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "canonical_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae"
+    },
+    "testing/src/daemon/captaind/mod.rs": {
+      "worktree_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+      "canonical_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336"
+    },
+    "testing/src/daemon/watchmand.rs": {
+      "worktree_sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+      "canonical_sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6"
+    },
+    "testing/src/bark.rs": {
+      "worktree_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "canonical_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e"
+    },
+    "server/src/database/mod.rs": {
+      "worktree_sha256": "29f8b4122404b98b41b59867b33adb142e6f03534c8b039ca41535dea0bd5bb2",
+      "canonical_sha256": "e806250d0354907fb90cf5e8cb3886307fa99fafd7b3c225fe8479be8fe7b6a4"
+    },
+    "server/src/database/fallback.rs": {
+      "worktree_sha256": "45388819f9f1f610464f767cd8367432a6e4fd6322778ad5180f2205ec8b5925",
+      "canonical_sha256": "71b8dfae45ddad92f9c69a32f9b0d474f4c928f202c9b1aed647b83993b23fe9"
+    },
+    "server/src/watchman/payout.rs": {
+      "worktree_sha256": "6c62a55dcdd76aba427de36a14f37b546beb57dc8667cbd71958426d5e92883e",
+      "canonical_sha256": "6c62a55dcdd76aba427de36a14f37b546beb57dc8667cbd71958426d5e92883e"
+    },
+    "server/src/watchman/recovery.rs": {
+      "worktree_sha256": "ee4534800f0b6845a90dc6f557682c9fc9049c23a4b7693fdf10d12b8301b4c0",
+      "canonical_sha256": "ee4534800f0b6845a90dc6f557682c9fc9049c23a4b7693fdf10d12b8301b4c0"
+    },
+    "server/src/rpcserver/admin.rs": {
+      "worktree_sha256": "ef5a0c9617bedfe95f4c19b6523cab86e300761b442d7de11bbdac36076a1ebb",
+      "canonical_sha256": "ef5a0c9617bedfe95f4c19b6523cab86e300761b442d7de11bbdac36076a1ebb"
+    },
+    "bark/src/onchain/bdk.rs": {
+      "worktree_sha256": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85",
+      "canonical_sha256": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85"
+    },
+    "lib/src/fallback.rs": {
+      "worktree_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "canonical_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1"
+    },
+    "testing/tests/server/mod.rs": {
+      "worktree_sha256": "5d7d37ba46825e988876b0a6158ac363416feefe742decad975b77609565b6ee",
+      "canonical_sha256": "b96228f28a327d7d58aed9200d8db9c601653fe7c4c1887100fc15a6cbf92797"
+    }
+  },
+  "frozen_existing_sources": {
+    "testing/tests/server/qualification_restore.rs": "050535e844320b0f99f6d436fb05bb0e41872fc5f9969932d483b0d1a38dfc21",
+    "testing/tests/server/qualification_conflict_reorg.rs": "ef70f33b248620c50fd01b68126db5aca720c4184ccb1f31c85b8d884f7e113a",
+    "testing/tests/server/qualification_failed_swap.rs": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+    "testing/tests/barkd/recovery.rs": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296"
+  },
+  "runtime": {
+    "executed": false,
+    "outer_deadline_seconds": 180,
+    "test_retries": 0,
+    "source_only_module_registered": false,
+    "chain_source": "bitcoind only",
+    "postgres": "owned local whole cluster; pg_controldata must be pinned before admission",
+    "features": "fallback-test-bip84 for native test and actual BARK_EXEC; script+witness oracles fail closed otherwise",
+    "funding_sat": {
+      "customer": 200000,
+      "watchman": 100000
+    },
+    "copy_budget_each_tree_bytes": 536870912
+  },
+  "limits": [
+    "ordinary same-candidate orderly operator backup only",
+    "same continuing Core is required; Core itself not backed up",
+    "not Lightning backup, cross-version upgrade, universal backup, daemon-by-default coverage or complete ML proof",
+    "fresh customer receives only seed/genesis birthday; original customer DB not backed up/reused",
+    "native Daemon stop can fall back to SIGKILL; independently clean PostgreSQL control state is mandatory and dirty copy cannot pass",
+    "standard native service initialization may internally retry; no testcase/funding replay authorized"
+  ]
+}

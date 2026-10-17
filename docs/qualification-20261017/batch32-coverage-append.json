@@ -1,0 +1,26 @@
+{
+  "state": "APPEND_ONLY_COMPLETE",
+  "exclusive_writer": "legacy_inventory",
+  "before_rows": 394,
+  "after_rows": 395,
+  "appended_rows": 1,
+  "before_sha256": "ad9b26b37bf5aa3af61dc94c5eead581edd8756045fd83a896dce2056a94dd42",
+  "after_sha256": "0d816261693558f7dcaffd52fea114380b2732ff04da14efddd492302e63b709",
+  "prefix_byte_identical": true,
+  "before_bytes": 268577,
+  "after_bytes": 269257,
+  "append_sha256": "731beba3131179873fbd97383520c93b1e6aa8f6397d529ffe3baa17a558f323",
+  "case_id": "FT-CLI-059",
+  "native_receipt": "batch32-bark-unstarted18-receipt.json",
+  "native_receipt_sha256": "928a72617305e8c4b8632b185797bd377d1b32ecd4422db00396d9d57af81f71",
+  "aggregate_parent_reported_checkpoint": {
+    "executions": 184,
+    "pass": 171,
+    "fail": 13,
+    "unique_names": 180,
+    "invocations": 157,
+    "native": 173,
+    "components": 11
+  },
+  "no_existing_rows_modified": true
+}

@@ -1,0 +1,4 @@
+START bip321::bip321_uri_ark_only_barkd
+PASS bip321::bip321_uri_ark_only_barkd
+START boards::board_all_barkd
+FAIL boards::board_all_barkd

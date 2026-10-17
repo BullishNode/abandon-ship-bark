@@ -1,0 +1,92 @@
+{
+  "scope": "Existing failed native barkd case: static signed transaction/prevout plus immutable read-only SQLite and sanitized native/Core logs; no confirmation or later oracle credit",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "test": "boards::board_all_barkd",
+  "binary": "ark-testing::barkd",
+  "original_run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
+  "original_result": "FAIL6.071s; expected98348/actual98298;180s/retries0/resource_error null",
+  "source_file_sha256": "9daaf65eed620a073f5ef16bff5315968c5334156a910f92730f3bc934482d58",
+  "signed_funding_transaction": {
+    "txid": "5c39ef65dcca55ddebfc4bcbe94780deb5f60686415c6516d44d46d181d7dbec",
+    "inputs": [
+      {
+        "txid": "65f61874f3bed99a9b9b3bbd904573fcab197693ed814872155ea4bd12bef681",
+        "vout": 0
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 99392,
+        "script_hex": "5120635a15e4f88397309c9759b467b32672628d452e9636f181f17a5380ee3998c5",
+        "script_bytes": 34
+      }
+    ],
+    "weight_wu": 485,
+    "serialized_bytes": 203,
+    "witness_item_counts": [
+      2
+    ],
+    "raw_signed_sha256": "ae23e6e7df9513e5834abc692c6cfab2354e9f25f246e01a8c1abda8a7918fa0"
+  },
+  "actual_input_prevout": {
+    "txid": "65f61874f3bed99a9b9b3bbd904573fcab197693ed814872155ea4bd12bef681",
+    "vout": 0,
+    "value_sat": 100000,
+    "script_hex": "0014118a678fc93c6151743d179ad11969271fcf6984",
+    "script_bytes": 22
+  },
+  "physical_input_sat": 100000,
+  "gross_funding_output_sat": 99392,
+  "physical_miner_fee_sat": 608,
+  "persisted_server_board_fees": {
+    "min_fee_sat": 0,
+    "base_fee_sat": 100,
+    "ppm": 10000
+  },
+  "independent_ark_fee_sat": 1094,
+  "actual_net_vtxo_sat": 98298,
+  "conservation": "100000 =608 minerfee +1094 Arkfee +98298 pendingVTXO",
+  "native_movement": {
+    "status": "pending",
+    "metadata": {
+      "chain_anchor": "5c39ef65dcca55ddebfc4bcbe94780deb5f60686415c6516d44d46d181d7dbec:0",
+      "onchain_fee_sat": 608
+    },
+    "intended_balance_sat": 99392,
+    "effective_balance_sat": 98298,
+    "offchain_fee_sat": 1094
+  },
+  "native_vtxo": {
+    "id": "af428d2672e7045d2a5342c5592afafc62a6060c789ccd7122c5919b4d2d9c56:0",
+    "registered": 0,
+    "state": "Locked",
+    "checkpoint_progress": {
+      "Confirming": {
+        "last_park_error": null
+      }
+    }
+  },
+  "pending_evidence": {
+    "core_acceptance_log_line": "2026-10-17T19:49:45Z [mempool] AcceptToMemoryPool: peer=1: accepted 5c39ef65dcca55ddebfc4bcbe94780deb5f60686415c6516d44d46d181d7dbec (wtxid=1f768659750427ae2825f94db959b06385d1358dc89f11f83bf28678dc9341fa) (poolsz 1 txn, 1 kB)",
+    "main_core_mempool_file_sha256": "e1c02806993999052f2158463f61347f8294bfb2da188cbe94bbaa2556979122",
+    "main_core_mempool_file_bytes": 27,
+    "exact203byte_signed_transaction_occurs_in_retained_mempool_file": false,
+    "scope": "Direct exact-byte search only, not decoded structured entry. Retained mempool.dat is27bytes and contains no transaction; acceptance proved by explicit original Core debug event, not this file."
+  },
+  "core_tip_observed_in_original_debug": "height105/hash4fe8ea9d81a2d3b868f8b4f6b029f384e4003a981881e833721fd9c72e22ab34",
+  "sqlite_readonly": {
+    "mode": "ro&immutable=1",
+    "sha256_before_and_after": "ccda6f018da9e87cc53aceb78af12635edbb72dd04631e6af49c6c5025e2db14",
+    "no_wal_or_journal": true
+  },
+  "private_input_hashes": {
+    "barkd1/db.sqlite": "ccda6f018da9e87cc53aceb78af12635edbb72dd04631e6af49c6c5025e2db14",
+    "server/config.toml": "81231c305a791b3c102a840f8f6a092fb2e895ba07efe8c1ea45f4805b4ed05c",
+    "barkd1/debug.log": "2e1ccd0c40c3949c109fa04595fc58612810fd38331e35f2cd391ce50e691101",
+    "bitcoind/regtest/debug.log": "a9192272af7a92290c04311494058f906bdfd481b9c3c886e35b9ff2abcb9b44",
+    "bitcoind/regtest/mempool.dat": "e1c02806993999052f2158463f61347f8294bfb2da188cbe94bbaa2556979122"
+  },
+  "limits": "Test failed before postboard pending balance/VTXO count assertions, mining, drain-zero and confirmed-spendable assertions. Those are NOT credited. No Core confirmation, completed lifecycle, wholewalletsolvency, FULL ML or adapted-source result.",
+  "reviewer_runtime_actions": "NONE; no node/wallet/service reopened, no original files changed"
+}

@@ -1,0 +1,114 @@
+{
+  "scope": "Static retained native wallet/transaction reconciliation; no seed/private/auth output or new execution",
+  "test": "recovery::recovered_wallet_finds_boarded_vtxo",
+  "original_run_id": "a17a9bb2-7a91-4d52-8105-712c68404cfb",
+  "original_result": "FAIL18.294s /summary18.302s /exit100 /resource_error null /180s /retries0",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "source_file_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464",
+  "actual_fixture_setup": "Distinct original bark and newly recovered bark_recovered datadirs, same in-memory recovery seed supplied through existing API; original remained alive during recovery. No in-place wipe, original absence or full seed-only qualification.",
+  "sqlite_read_mode": "ro&immutable=1; no journals and hashes unchanged",
+  "wallets": {
+    "bark": {
+      "sqlite_sha256_before_and_after": "4c0941c7d9ac0a9981a7be797de390634a4ec447485ac88a7c52cdb86206b2c3",
+      "no_wal_or_journal": true,
+      "vtxos": [
+        {
+          "id": "49a65974937c902866058436fdda506481ffa35cce502ef1b5b09b635d1583d1:0",
+          "amount_sat": 99392,
+          "registered": 1,
+          "latest_state": "Spendable",
+          "bare_sha256": "45e6f62843f765037906927baf0597521e4821673ffa484e75ba2485e32dd413",
+          "genesis_sha256": "9369f9a0b5b8ad6f09c447847c1c564fe0da464c25c137e5e96dbc90952f6a46"
+        }
+      ],
+      "movements": [
+        {
+          "id": 1,
+          "status": "successful",
+          "subsystem": "bark.board",
+          "kind": "board",
+          "intended_balance_sat": 99392,
+          "effective_balance_sat": 99392,
+          "offchain_fee_sat": 0,
+          "metadata": {
+            "chain_anchor": "ed7d90adb7aaf0226deaf81d28c010b894b9e8d8f9545ff32596c09d502319a9:0",
+            "onchain_fee_sat": 608
+          }
+        }
+      ],
+      "action_ids": [],
+      "bdk_txids": [
+        "da116112ea689c5497ce5cae13ca463b18164ff939c70b9fea6f3854980ba88c",
+        "ed7d90adb7aaf0226deaf81d28c010b894b9e8d8f9545ff32596c09d502319a9"
+      ]
+    },
+    "bark_recovered": {
+      "sqlite_sha256_before_and_after": "70ad337996e9652eaab69cb6726c84f4e6c7468bbb6d1f41dbb6d130c009c760",
+      "no_wal_or_journal": true,
+      "vtxos": [
+        {
+          "id": "49a65974937c902866058436fdda506481ffa35cce502ef1b5b09b635d1583d1:0",
+          "amount_sat": 99392,
+          "registered": 1,
+          "latest_state": "Spendable",
+          "bare_sha256": "45e6f62843f765037906927baf0597521e4821673ffa484e75ba2485e32dd413",
+          "genesis_sha256": "9369f9a0b5b8ad6f09c447847c1c564fe0da464c25c137e5e96dbc90952f6a46"
+        }
+      ],
+      "movements": [],
+      "action_ids": [],
+      "bdk_txids": [
+        "da116112ea689c5497ce5cae13ca463b18164ff939c70b9fea6f3854980ba88c",
+        "ed7d90adb7aaf0226deaf81d28c010b894b9e8d8f9545ff32596c09d502319a9"
+      ]
+    },
+    "recipient": {
+      "sqlite_sha256_before_and_after": "1e47eac82b39f05e87eb7d859496cf56d4ae15c9b5e1f704614ae5e1d3f2c010",
+      "no_wal_or_journal": true,
+      "vtxos": [],
+      "movements": [],
+      "action_ids": [],
+      "bdk_txids": []
+    }
+  },
+  "original_signed_board_funding": {
+    "txid": "ed7d90adb7aaf0226deaf81d28c010b894b9e8d8f9545ff32596c09d502319a9",
+    "inputs": [
+      {
+        "txid": "da116112ea689c5497ce5cae13ca463b18164ff939c70b9fea6f3854980ba88c",
+        "vout": 1
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 99392,
+        "script_hex": "5120e038e03dfb72de8baf4c157cea208a993ae99df6e55ff014635227053b27f150"
+      }
+    ],
+    "raw_signed_sha256": "075548c9c8e0b7f4942b78c049e7263b7a163eb26dc951a72f0d3bf0aac20516"
+  },
+  "resolved_native_prevouts": [
+    {
+      "txid": "da116112ea689c5497ce5cae13ca463b18164ff939c70b9fea6f3854980ba88c",
+      "vout": 1,
+      "value_sat": 100000,
+      "script_hex": "00146251f0cbed54d384bc8955992bab46b87dd1c20f"
+    }
+  ],
+  "board_physical_conservation": "100000 input =608 actualminerfee +99392 original/recovered SAME nativeVTXO; originalboardoffchainfee0",
+  "rejected_send": {
+    "http_status": 500,
+    "message": "Insufficient money available. Needed 0.00099443 BTC but 0.00099392 BTC is available",
+    "needed_sat": 99443,
+    "available_sat": 99392,
+    "shortfall_sat": 51,
+    "scope": "Pre-input-selection failure; no recovered/recipient send movement/action/recipient coin in retained native state. No executed payment or observed money loss from this rejected request."
+  },
+  "original_oracles_reached": "Before wallet onecoin; restored count and exactsameVTXOid checks passed before final oversizedsendrequest.",
+  "original_oracles_not_proved": "Successful restored payment/recipient receipt/senderzero were not established. No wholewalletsolvency/defaultdaemonprotection/fullML claim.",
+  "private_raw_hashes": {
+    "nextest.log": "19ae98c79969c2540c3116e675702176c04117cffd493fdec7a5d81505180f54"
+  },
+  "runtime_actions_by_reviewer": "NONE; no node/wallet/service reopened; read-only proc scan found no matching case19 native processes; original files unchanged"
+}

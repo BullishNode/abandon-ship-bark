@@ -1,0 +1,41 @@
+{
+  "frozen_actual_version": "bark 0.7.1-dev (814d7b0deb6a5f2a6758d34ca4313589f948f4e3)",
+  "version_basis": "Retained actual immutable product capture; source BarkVersion parser maps -dev to Dev above released versions. No fresh product invocation.",
+  "started_function_macro_count": 2,
+  "gated_cases": [
+    {
+      "name": "recovery::recovered_wallet_finds_scheduled_delegated_refresh_output",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 116
+        }
+      ],
+      "body_directory_exists": true
+    },
+    {
+      "name": "recovery::recovered_wallet_keeps_spent_round_vtxo_spent",
+      "macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.7.1",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 78
+        }
+      ],
+      "body_directory_exists": true
+    }
+  ],
+  "gate_early_return_observed": false,
+  "all14_actual_body_directories_exist": true
+}

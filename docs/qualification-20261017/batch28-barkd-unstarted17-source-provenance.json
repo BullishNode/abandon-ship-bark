@@ -1,0 +1,89 @@
+{
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "archive_sha256": "fa5c07cff01bd72a364ac398b1704dec23b27c6e2c84bf42d0f17fae563000b9",
+  "upstream_pin": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c",
+  "started_sources": [
+    {
+      "binary": "barkd",
+      "test_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "is_ignored": false,
+      "default_selected": true,
+      "execution_status": "FAIL",
+      "classification": "INVENTORY_ONLY",
+      "provenance": "UPSTREAM_BYTE_IDENTICAL_FUNCTION",
+      "function_name": "recovered_wallet_finds_mixed_origin_vtxos",
+      "parameter_variant": null,
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "source_line": 660,
+      "source_end_line": 719,
+      "source_file_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464",
+      "frozen_manifest_file_match": true,
+      "upstream_file_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464",
+      "whole_file_byte_identical_to_upstream": true,
+      "function_sha256": "e10e28f0490745af004a4b8a0c5ff188168887428ad8a5296cb9b84e7b303e2a",
+      "upstream_function_sha256": "e10e28f0490745af004a4b8a0c5ff188168887428ad8a5296cb9b84e7b303e2a",
+      "upstream_source_line": 660,
+      "phase": "ordinary-daemon",
+      "reason": "Small ordinary native fixture; review actual selection/results when allocated.",
+      "source_dependency_evidence": [
+        {
+          "line": 661,
+          "text": "require_bark_version!(> \"0.5.0\");"
+        },
+        {
+          "line": 679,
+          "text": "ctx.generate_blocks(BOARD_CONFIRMATIONS).await;"
+        }
+      ],
+      "dependencies": [
+        "owned regtest Core",
+        "owned fixture Postgres/captaind",
+        "native bark CLI",
+        "native barkd HTTP/background daemon"
+      ],
+      "prior24_match": false,
+      "cohort_id": "barkd-58-recovery",
+      "queued_for_ordinary_next_allocation": true,
+      "sequence": 1,
+      "version_macros": [
+        {
+          "macro": "require_bark_version",
+          "operator": ">",
+          "required_literal": "0.5.0",
+          "actual_parsed": "Dev",
+          "required_parsed": "Release",
+          "evaluated_condition": true,
+          "causes_early_return": false,
+          "source_line": 661
+        }
+      ],
+      "version_gate_excluded": false,
+      "declared_context": "barkd/recovered_wallet_finds_mixed_origin_vtxos",
+      "archive_file_and_function_reverified": true,
+      "upstream_identity_basis": "Pinnedbfbe whole-file/function hashes from immutable next-regression-bark-barkd.json independently match source7041 archive. No new Git invocation.",
+      "actual_execution_status": "NOT RUN",
+      "original_38_sequence": 22,
+      "original_36_sequence": 20,
+      "archive_file_and_function_independently_reverified": true
+    }
+  ],
+  "unstarted_names": [
+    "recovery::recovered_wallet_finds_offboard_change",
+    "recovery::recovered_wallet_finds_round_vtxo",
+    "recovery::recovered_wallet_finds_scheduled_delegated_refresh_output",
+    "recovery::recovered_wallet_is_empty_when_fully_spent",
+    "recovery::recovered_wallet_keeps_spent_round_vtxo_spent",
+    "recovery::recovered_wallet_locks_vtxos_without_a_status",
+    "recovery::recovered_wallet_reads_paginated_mailbox",
+    "recovery::recovered_wallet_recovery_is_repeatable",
+    "recovery::recovered_wallet_skips_invalid_vtxo",
+    "recovery::recovered_wallet_skips_unownable_vtxo",
+    "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+    "recovery::recovered_wallet_tolerates_undecodable_vtxo_id",
+    "signmessage::sign_message_with_address",
+    "vtxo::get_vtxo_barkd",
+    "vtxo::get_vtxo_encoded_barkd",
+    "vtxo::import_vtxo_barkd"
+  ],
+  "verification_scope": "Actual archived whole-file/function independently rechecked; exact pinned upstream identity retained. No Git invocation; no runtime credit for16unstarted."
+}

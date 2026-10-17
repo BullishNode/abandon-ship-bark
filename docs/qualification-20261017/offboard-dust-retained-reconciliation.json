@@ -1,0 +1,180 @@
+{
+  "original_test": "ark-testing::bark offboard::bark_rejects_offboarding_dust_amount",
+  "original_run_id": "3d1aa01c-86f3-480c-b980-b9973e7fffa1",
+  "actual_result": "FAIL",
+  "native_seconds": 15.095,
+  "summary_seconds": 15.104,
+  "failure": "offboard.rs204 unwrap_err on Ok actualtxid; old P2TR330\u22121=329 is above actual P2WPKH294 dust threshold",
+  "inspection": "Retained immutable SQLite without sidecars and offline signed/canonical Core transaction decoding after parent93095 terminal100; no actors/services reopened, no mnemonic/seed copied.",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "sender": {
+    "coins": [
+      {
+        "id": "0a888d0973f72fffcb73da3292f22f5c10e80c477934bfd57a06e376533b9d3e:0",
+        "amount_sat": 800000,
+        "registered": 1,
+        "state_kind": "Spent"
+      },
+      {
+        "id": "24091f5635115c2183e1b074d1a47f6d936d8a227c2bc9554084c37f363dd30b:0",
+        "amount_sat": 399409,
+        "registered": 0,
+        "state_kind": "Spendable"
+      },
+      {
+        "id": "5d9faa4615840dffd969b9afa5edc423fff46bd338190a0902afaefb3ed0d3df:0",
+        "amount_sat": 399408,
+        "registered": 0,
+        "state_kind": "Spendable"
+      },
+      {
+        "id": "dd1cc7458b3e16a7fcbb8d15d1032ca6246bb103facc9003472aec00bc8c8d59:0",
+        "amount_sat": 1183,
+        "registered": 0,
+        "state_kind": "Locked"
+      }
+    ],
+    "movements": [
+      {
+        "id": 1,
+        "status": "successful",
+        "subsystem_name": "bark.board",
+        "movement_kind": "board",
+        "metadata": {
+          "chain_anchor": "b0f7e4ab90a0a2efda95b8825ae1551643e0fef399fef7a4744eafdd674a3608:0",
+          "onchain_fee_sat": 763
+        },
+        "intended_balance": 800000,
+        "effective_balance": 800000,
+        "offchain_fee": 0
+      },
+      {
+        "id": 2,
+        "status": "pending",
+        "subsystem_name": "bark.offboard",
+        "movement_kind": "send_onchain",
+        "intended_balance": -329,
+        "effective_balance": -1183,
+        "offchain_fee": 854,
+        "metadata": {
+          "offboard_txid": "a74e92f60dae91b30a238218fec3412b4a6ddc6a8c0eda1e94897a64550a883f",
+          "raw_signed_transaction_sha256": "31563402f875f6dc8df52b52e3416f07d76d749e3741a6f2c07df5e6dfa6a35c",
+          "raw_signed_transaction_bytes": 236,
+          "offboard_vtxo_ids": [
+            "dd1cc7458b3e16a7fcbb8d15d1032ca6246bb103facc9003472aec00bc8c8d59:0"
+          ]
+        }
+      }
+    ],
+    "sent_to": [
+      {
+        "movement_id": 2,
+        "destination_type": "bitcoin",
+        "destination_value": "bcrt1qsvf8tlz56jzd2m3mcmtjlsxd8q47mzvpzjkghe",
+        "amount": 329
+      }
+    ],
+    "inputs": [
+      {
+        "movement_id": 2,
+        "vtxo_id": "0a888d0973f72fffcb73da3292f22f5c10e80c477934bfd57a06e376533b9d3e:0"
+      }
+    ],
+    "outputs": [
+      {
+        "movement_id": 1,
+        "vtxo_id": "0a888d0973f72fffcb73da3292f22f5c10e80c477934bfd57a06e376533b9d3e:0"
+      },
+      {
+        "movement_id": 2,
+        "vtxo_id": "24091f5635115c2183e1b074d1a47f6d936d8a227c2bc9554084c37f363dd30b:0"
+      },
+      {
+        "movement_id": 2,
+        "vtxo_id": "5d9faa4615840dffd969b9afa5edc423fff46bd338190a0902afaefb3ed0d3df:0"
+      }
+    ]
+  },
+  "recipient_offchain_coin_count": 0,
+  "recipient_offchain_movement_count": 0,
+  "signed_transaction": {
+    "txid": "a74e92f60dae91b30a238218fec3412b4a6ddc6a8c0eda1e94897a64550a883f",
+    "sha256": "31563402f875f6dc8df52b52e3416f07d76d749e3741a6f2c07df5e6dfa6a35c",
+    "bytes": 236,
+    "inputs": [
+      {
+        "txid": "023fd8b7505cf3c3b42d08bd6e57cd0fc7979f991e584565c18784f08fc490be",
+        "vout": 0,
+        "value_sat": 699968919,
+        "script_hex": "51204c12a494f0aafd0d9073047650c8307909077aded0fe4e6c034aecf99a2ff8d5"
+      }
+    ],
+    "outputs": [
+      {
+        "vout": 0,
+        "value_sat": 329,
+        "script_hex": "0014831275fc54d484d56e3bc6d72fc0cd382bed8981"
+      },
+      {
+        "vout": 1,
+        "value_sat": 330,
+        "script_hex": "512053b30241f2f5ccbbe1cfd117bab135cdc9dff3735a1877efb9298a144403a732"
+      },
+      {
+        "vout": 2,
+        "value_sat": 699966962,
+        "script_hex": "5120bcf6f65aa501d89b95b6d000dc727fc58dd699e0c6b8d85f734f6467bd30a4c7"
+      }
+    ],
+    "actual_recipient_outputs": [
+      {
+        "vout": 0,
+        "value_sat": 329,
+        "script_hex": "0014831275fc54d484d56e3bc6d72fc0cd382bed8981"
+      }
+    ],
+    "input_sum_sat": 699968919,
+    "output_sum_sat": 699967621,
+    "actual_miner_fee_sat": 1298
+  },
+  "customer_accounting": {
+    "original_board_sat": 800000,
+    "spendable_change_sat": 798817,
+    "actual_onchain_recipient_output_sat": 329,
+    "customer_fee_sat": 854,
+    "pending_intermediate_sat": 1183,
+    "pending_intermediate_additive": false,
+    "conservation": "800000 = 798817 + 329 + 854; pending1183 is the same internal offboard lineage and is not added again.",
+    "limitation": "Native movement is pending and targetunconfirmed; this is retained prepared/broadcast accounting, not a completed lifecycle or eventual finality proof."
+  },
+  "script_policy": {
+    "actual_script_bytes": 22,
+    "actual_script_class": "P2WPKH",
+    "default_relay_dust_threshold_sat": 294,
+    "legacy_P2TR_threshold_sat": 330,
+    "original_requested_sat": 329,
+    "source_standard_api": "bitcoin::Script::minimal_non_dust() used in bark/src/actions/offboard.rs461/488 before input selection, key derivation, action/movement persistence."
+  },
+  "chain_scope": {
+    "retained_tip": "37c41dcd485a39c58e503ffad08d4d4b1955fb52935bf1ab4aac72acc2029c1f",
+    "retained_tip_height": 109,
+    "target_absent_from_canonical_chain": true,
+    "target_confirmations": 0,
+    "Core_accept_to_mempool_log": true,
+    "no_post_send_mine_in_original_source": true
+  },
+  "input_hashes_before_after_equal": true,
+  "input_hashes": {
+    "test-data/bark/bark_rejects_offboarding_dust_amount/bark1/db.sqlite": "9ca6f2bd74b74f21d310825882b136440251f5ad83b9e6e0d023441b7c262f99",
+    "test-data/bark/bark_rejects_offboarding_dust_amount/bark2/db.sqlite": "22dc011971ce1e50c1592a75e1f7e800004252dbc1021734d08d6691666fc1ec",
+    "result.json": "46bfef1314213abe2dd995be7dee3b8c5a0138bd2f97246c4b3dd81737123eaf",
+    "nextest.log": "de77e47786d2a956695dad5c2cb82c26f2f5518c3136aad06c197d3b5dced207",
+    "test-data/bark/bark_rejects_offboarding_dust_amount/bark1/commands.log": "53b195ce427f9f625d302fb637c2c27c164906cee15a04b6a3854340b6a340c1",
+    "test-data/bark/bark_rejects_offboarding_dust_amount/bark2/commands.log": "c0efd80b610d2e7a1767dfaf0069c69e4018751f834d6ccbc2e0f1243d6a92e3",
+    "test-data/bark/bark_rejects_offboarding_dust_amount/server/config.toml": "2028a6936a5ee64bfdf0411d417e473025c322d1ad4d55fad7ec28329b7f5bdb",
+    "test-data/bark/bark_rejects_offboarding_dust_amount/bitcoind/regtest/debug.log": "94388d8870cfe7c024897e449db5c2c0c9288c713e08be56f03ad314ff289a8f",
+    "test-data/bark/bark_rejects_offboarding_dust_amount/bitcoind/regtest/blocks/xor.dat": "77c49d9705d1d2bec38afc5feeef4f85d170815a66fcb04f1855f59280a3056c",
+    "test-data/bark/bark_rejects_offboarding_dust_amount/bitcoind/regtest/blocks/blk00000.dat": "4d068049b30e12fc6123522fac3e63c1b2a24ea3c6123892b297ec15ce75d071"
+  },
+  "limitations": "No wrong-payee case/retry, no Core confirmation/Core6, final wallet/movement settlement, fullcustody/FULLML or adapted execution claim."
+}

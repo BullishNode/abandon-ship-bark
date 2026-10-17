@@ -1,0 +1,15 @@
+{
+  "test_name": "recovery::recovered_wallet_finds_boarded_vtxo",
+  "run_id": "a17a9bb2-7a91-4d52-8105-712c68404cfb",
+  "original_result": "FAIL",
+  "actual_test_seconds": 18.294,
+  "summary_seconds": 18.302,
+  "panic_helper_source": "testing/src/daemon/barkd.rs:731",
+  "native_test_call_source": "testing/tests/barkd/recovery.rs:70",
+  "failure": "Final recovered.send API call HTTP500 insufficient funds; requested99443sat, available99392sat. Finalpayment did NOT succeed.",
+  "earlier_original_assertions_completed": "Initial boardedwallet has1VTXO at49; originalwallet mnemonic is used by distinct recoveredwallet, onchain_sync/sync complete; exact recoveredcount and VTXO identity checks63-65 passed before final fixed99443sat send70. No seeds published.",
+  "not_executed": "Final payment successful completion; test failed at helperexpect. No postpayment money/conservation assertion exists in this originalcase.",
+  "financial_reconciliation": "PENDING independent client retained-evidence review. Needed/available are native API error values, not independent chain/whole-wallet proof.",
+  "source_classification": "Unchanged upstream function uses fixed final payment99443sat; sourcebody/recoveryidentity checks actual. Accepted BIP84 source fee compatibility remains separate review; originalFAIL is retained.",
+  "limitation": "No retry/adaptation execution or FULL ML/fullbarkd credit; no rawseed/config/DB copied."
+}

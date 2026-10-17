@@ -1,0 +1,380 @@
+{
+  "scope": "Static retained original+recovered SAME economic coin cut, genuine earlier50k transfer and rejected finalsend; no new execution/seed output",
+  "test": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+  "original_run_id": "551dd1bb-ab3b-4629-a333-40a5f4ad9a97",
+  "original_result": "FAIL36.531s/summary36.544s/exit100/noresourceerror;180s/retries0",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "baseline_source_file_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464",
+  "preexisting_owned_source_sha256": "d765aecfbc03158e637fc3d7d3b2237d0ca8ba120a6d7d4539e050ac94efa3b8",
+  "wallets": {
+    "bark": {
+      "sqlite_sha256_before_and_after": "97d9ef668b3d676b557fc74674bf8ce5eaed87f34f515126a6510817d6c7b2e9",
+      "no_wal_or_journal": true,
+      "vtxos": [
+        {
+          "id": "0554158b06e118b01dfc6c4062eb07c0d4a134b4cab1a6addb59721c907cd8d4:0",
+          "amount_sat": 299392,
+          "latest_state": "Spendable",
+          "registered": 1,
+          "bare_sha256": "19404e6d07c53d21b9308ee9fedf27b60f7ffcdcfa460a7897bd90f160911ff5",
+          "genesis_sha256": "79a2623d7064b94d98deb370a4a4f14220b810a0e31db033943566cef04db4ec"
+        },
+        {
+          "id": "6624dc6efcd030ba760a1fdfb220eda2a9f5852e7acca6d63bae5fd2d2e67d4f:0",
+          "amount_sat": 300000,
+          "latest_state": "Spendable",
+          "registered": 1,
+          "bare_sha256": "38cce8063b33bf412b5f8b6bc2e51ed2fb9b5b37f9d5783bb1b3ded51ad0676d",
+          "genesis_sha256": "c7645d76c70c63f502f97cfd1a30a90705bceac142a9b106905e9b54f289cd70"
+        },
+        {
+          "id": "b0a8665ca018285f2b6624fa87817f41a37c051e8e6624e7a4df2ecc0cbae468:0",
+          "amount_sat": 50000,
+          "latest_state": "Spendable",
+          "registered": 1,
+          "bare_sha256": "1fdd660fcc8fc793793ef2eb7537e23b66691af6405eb668f7c232f2b6fbb372",
+          "genesis_sha256": "a361670992f28cc57d030cc0b2028c078b0c1cef75203c5ad51ae3ca02721230"
+        },
+        {
+          "id": "b40300080b341ca744a5c6cfb9596b1ed2437780ce22744b5833732cbc998394:0",
+          "amount_sat": 300000,
+          "latest_state": "Spent",
+          "registered": 0,
+          "bare_sha256": "e6c1779e90da6b912d250389cf3db9f8192949c2f3f449d8d177493e06b74809",
+          "genesis_sha256": "c6b0b5a807569ab62bb9e479704187cd1963e7fa0b48c0afb64d4681b64c33a1"
+        }
+      ],
+      "movements": [
+        {
+          "id": 1,
+          "status": "successful",
+          "subsystem": "bark.board",
+          "kind": "board",
+          "intended_balance_sat": 299392,
+          "effective_balance_sat": 299392,
+          "offchain_fee_sat": 0,
+          "metadata": {
+            "chain_anchor": "dc7fdd8a74493564831911cd61892f6cc1ae1e802c3dde37347b5e0b139566f2:0",
+            "onchain_fee_sat": 608
+          },
+          "inputs": [],
+          "outputs": [
+            "0554158b06e118b01dfc6c4062eb07c0d4a134b4cab1a6addb59721c907cd8d4:0"
+          ]
+        },
+        {
+          "id": 2,
+          "status": "successful",
+          "subsystem": "bark.board",
+          "kind": "board",
+          "intended_balance_sat": 300000,
+          "effective_balance_sat": 300000,
+          "offchain_fee_sat": 0,
+          "metadata": {
+            "chain_anchor": "805aed55e9164ab7951098b72658c7822c7c39d812bef5583ea12372cb2d95ba:0",
+            "onchain_fee_sat": 763
+          },
+          "inputs": [],
+          "outputs": [
+            "b40300080b341ca744a5c6cfb9596b1ed2437780ce22744b5833732cbc998394:0"
+          ]
+        },
+        {
+          "id": 3,
+          "status": "successful",
+          "subsystem": "bark.round",
+          "kind": "refresh",
+          "intended_balance_sat": 0,
+          "effective_balance_sat": 0,
+          "offchain_fee_sat": 0,
+          "metadata": {
+            "funding_txid": "c9dfab9cd17fc0a5d87ec3f6ec4ac502918d0eb79d7cf280968f3739ff713c3d"
+          },
+          "inputs": [
+            "b40300080b341ca744a5c6cfb9596b1ed2437780ce22744b5833732cbc998394:0"
+          ],
+          "outputs": [
+            "6624dc6efcd030ba760a1fdfb220eda2a9f5852e7acca6d63bae5fd2d2e67d4f:0"
+          ]
+        },
+        {
+          "id": 4,
+          "status": "successful",
+          "subsystem": "bark.arkoor",
+          "kind": "receive",
+          "intended_balance_sat": 50000,
+          "effective_balance_sat": 50000,
+          "offchain_fee_sat": 0,
+          "metadata": {},
+          "inputs": [],
+          "outputs": [
+            "b0a8665ca018285f2b6624fa87817f41a37c051e8e6624e7a4df2ecc0cbae468:0"
+          ]
+        }
+      ],
+      "actions": []
+    },
+    "bark_recovered": {
+      "sqlite_sha256_before_and_after": "f7a0e072b3088d664d15815d30e66252043427dfa3efc39e2590043970d373eb",
+      "no_wal_or_journal": true,
+      "vtxos": [
+        {
+          "id": "0554158b06e118b01dfc6c4062eb07c0d4a134b4cab1a6addb59721c907cd8d4:0",
+          "amount_sat": 299392,
+          "latest_state": "Spendable",
+          "registered": 1,
+          "bare_sha256": "19404e6d07c53d21b9308ee9fedf27b60f7ffcdcfa460a7897bd90f160911ff5",
+          "genesis_sha256": "79a2623d7064b94d98deb370a4a4f14220b810a0e31db033943566cef04db4ec"
+        },
+        {
+          "id": "6624dc6efcd030ba760a1fdfb220eda2a9f5852e7acca6d63bae5fd2d2e67d4f:0",
+          "amount_sat": 300000,
+          "latest_state": "Spendable",
+          "registered": 1,
+          "bare_sha256": "38cce8063b33bf412b5f8b6bc2e51ed2fb9b5b37f9d5783bb1b3ded51ad0676d",
+          "genesis_sha256": "c7645d76c70c63f502f97cfd1a30a90705bceac142a9b106905e9b54f289cd70"
+        },
+        {
+          "id": "b0a8665ca018285f2b6624fa87817f41a37c051e8e6624e7a4df2ecc0cbae468:0",
+          "amount_sat": 50000,
+          "latest_state": "Spendable",
+          "registered": 1,
+          "bare_sha256": "1fdd660fcc8fc793793ef2eb7537e23b66691af6405eb668f7c232f2b6fbb372",
+          "genesis_sha256": "a361670992f28cc57d030cc0b2028c078b0c1cef75203c5ad51ae3ca02721230"
+        },
+        {
+          "id": "b40300080b341ca744a5c6cfb9596b1ed2437780ce22744b5833732cbc998394:0",
+          "amount_sat": 300000,
+          "latest_state": "Spent",
+          "registered": 0,
+          "bare_sha256": "e6c1779e90da6b912d250389cf3db9f8192949c2f3f449d8d177493e06b74809",
+          "genesis_sha256": "c6b0b5a807569ab62bb9e479704187cd1963e7fa0b48c0afb64d4681b64c33a1"
+        }
+      ],
+      "movements": [],
+      "actions": []
+    },
+    "recipient": {
+      "sqlite_sha256_before_and_after": "e400072d8a3d4efad87b0e1fe6ec7f527c6d86d988fde3c4881cd2a7aa727815",
+      "no_wal_or_journal": true,
+      "vtxos": [],
+      "movements": [],
+      "actions": []
+    },
+    "sender": {
+      "sqlite_sha256_before_and_after": "3604213404e5dd38f460790e99b81ee3ff3f40bd5e8b72f2f3b81c296ea13e43",
+      "no_wal_or_journal": true,
+      "vtxos": [
+        {
+          "id": "7e6deb2296cdc863d0cb004a2b7282fe406efd2c8847242ecacc59be5bf36fba:0",
+          "amount_sat": 224696,
+          "latest_state": "Spendable",
+          "registered": 0,
+          "bare_sha256": "ed65806013b7c1400cb5ed65b5cf36204c8d0e2e698e2adf40dfbba9d5eb6dc5",
+          "genesis_sha256": "91e734039aeceb413d6e7725ad7c0bf3b125636c9cb3f5e212284ff672499171"
+        },
+        {
+          "id": "aa62d947e1fb967f06f2f199db59cb61ec79a0c32fbf2c72ee1ec2922d65d78c:0",
+          "amount_sat": 499392,
+          "latest_state": "Spent",
+          "registered": 1,
+          "bare_sha256": "a3fdce61d2522eb54c825c298ca7e5f050fb135b1d88d43da16dc67791232d26",
+          "genesis_sha256": "f3a38f24cd1e020cb2b3af8bcd421b569036270fcdf1d2eb0e941169b8ba15f1"
+        },
+        {
+          "id": "f3b42e6b545fda47481eafbbc0d58a1c232da27e6e2c5a0e835a8a5356842341:0",
+          "amount_sat": 224696,
+          "latest_state": "Spendable",
+          "registered": 0,
+          "bare_sha256": "d755f42df75a4569b995f1f371452a59af827ed8b2e1a5efec148bafb795db92",
+          "genesis_sha256": "27a118f4655b411a87c0bc0405d3aa7833e46b8748d716984a7ba40a4e3789a5"
+        }
+      ],
+      "movements": [
+        {
+          "id": 1,
+          "status": "successful",
+          "subsystem": "bark.board",
+          "kind": "board",
+          "intended_balance_sat": 499392,
+          "effective_balance_sat": 499392,
+          "offchain_fee_sat": 0,
+          "metadata": {
+            "chain_anchor": "06b6b894b0c015a76d859884e2204f504cf0d51f31dbd2e7e35e0d380ec0a9ad:0",
+            "onchain_fee_sat": 608
+          },
+          "inputs": [],
+          "outputs": [
+            "aa62d947e1fb967f06f2f199db59cb61ec79a0c32fbf2c72ee1ec2922d65d78c:0"
+          ]
+        },
+        {
+          "id": 2,
+          "status": "successful",
+          "subsystem": "bark.arkoor",
+          "kind": "send",
+          "intended_balance_sat": -50000,
+          "effective_balance_sat": -50000,
+          "offchain_fee_sat": 0,
+          "metadata": {},
+          "inputs": [
+            "aa62d947e1fb967f06f2f199db59cb61ec79a0c32fbf2c72ee1ec2922d65d78c:0"
+          ],
+          "outputs": [
+            "7e6deb2296cdc863d0cb004a2b7282fe406efd2c8847242ecacc59be5bf36fba:0",
+            "f3b42e6b545fda47481eafbbc0d58a1c232da27e6e2c5a0e835a8a5356842341:0"
+          ]
+        }
+      ],
+      "actions": []
+    }
+  },
+  "same_economic_cut": [
+    {
+      "id": "0554158b06e118b01dfc6c4062eb07c0d4a134b4cab1a6addb59721c907cd8d4:0",
+      "amount_sat": 299392,
+      "latest_state": "Spendable",
+      "registered": 1,
+      "bare_sha256": "19404e6d07c53d21b9308ee9fedf27b60f7ffcdcfa460a7897bd90f160911ff5",
+      "genesis_sha256": "79a2623d7064b94d98deb370a4a4f14220b810a0e31db033943566cef04db4ec"
+    },
+    {
+      "id": "6624dc6efcd030ba760a1fdfb220eda2a9f5852e7acca6d63bae5fd2d2e67d4f:0",
+      "amount_sat": 300000,
+      "latest_state": "Spendable",
+      "registered": 1,
+      "bare_sha256": "38cce8063b33bf412b5f8b6bc2e51ed2fb9b5b37f9d5783bb1b3ded51ad0676d",
+      "genesis_sha256": "c7645d76c70c63f502f97cfd1a30a90705bceac142a9b106905e9b54f289cd70"
+    },
+    {
+      "id": "b0a8665ca018285f2b6624fa87817f41a37c051e8e6624e7a4df2ecc0cbae468:0",
+      "amount_sat": 50000,
+      "latest_state": "Spendable",
+      "registered": 1,
+      "bare_sha256": "1fdd660fcc8fc793793ef2eb7537e23b66691af6405eb668f7c232f2b6fbb372",
+      "genesis_sha256": "a361670992f28cc57d030cc0b2028c078b0c1cef75203c5ad51ae3ca02721230"
+    }
+  ],
+  "same_economic_cut_sum_sat": 649392,
+  "cut_interpretation": "Count original/recovered ID sets ONCE. Exclude spent300k sourceboard replacedby300kround output. Earlier50k senderpayment is genuine and distinct from rejectedfinal649443send.",
+  "actual_signed_board_sources": [
+    {
+      "owner": "bark",
+      "movement": 1,
+      "signed_funding": {
+        "txid": "dc7fdd8a74493564831911cd61892f6cc1ae1e802c3dde37347b5e0b139566f2",
+        "inputs": [
+          {
+            "txid": "083916dc33279a1779dc7c21a8482ee4a0788afc7f4c8c4028b00a5b21563249",
+            "vout": 0
+          }
+        ],
+        "outputs": [
+          {
+            "vout": 0,
+            "value_sat": 299392,
+            "script_hex": "512051ae65c39ad3d0dab1b5b240bfcec6a8d569c42d3d4a5ba2d36a0b77ccc4fabd"
+          }
+        ],
+        "raw_signed_sha256": "ed4f3f6b6ca40686fefa159ca1ea202ce30728939fe20082abba7e334045f3c9"
+      },
+      "resolved_prevouts": [
+        {
+          "txid": "083916dc33279a1779dc7c21a8482ee4a0788afc7f4c8c4028b00a5b21563249",
+          "vout": 0,
+          "value_sat": 300000,
+          "script_hex": "0014aac1b20e3549e9ec695a5d2ab4667820f58c3f51"
+        }
+      ],
+      "physical_input_sat": 300000,
+      "physical_outputs_sat": 299392,
+      "miner_fee_sat": 608
+    },
+    {
+      "owner": "bark",
+      "movement": 2,
+      "signed_funding": {
+        "txid": "805aed55e9164ab7951098b72658c7822c7c39d812bef5583ea12372cb2d95ba",
+        "inputs": [
+          {
+            "txid": "2f5a7b7d964064583a503c2dc6ada1e703129c0f5818233f2297775bf2f4dc48",
+            "vout": 1
+          }
+        ],
+        "outputs": [
+          {
+            "vout": 0,
+            "value_sat": 300000,
+            "script_hex": "512023ae5fd65e04af52dea015a94f6297b2ae1fb62325962d501191e8a20ea45169"
+          },
+          {
+            "vout": 1,
+            "value_sat": 99237,
+            "script_hex": "001402a392fdf1fe4cabaf98d7d422780b3626ff0b76"
+          }
+        ],
+        "raw_signed_sha256": "afc35fcc49f43a5fa8273df435375e99a1d883da445a67a1fb13328a3e71302c"
+      },
+      "resolved_prevouts": [
+        {
+          "txid": "2f5a7b7d964064583a503c2dc6ada1e703129c0f5818233f2297775bf2f4dc48",
+          "vout": 1,
+          "value_sat": 400000,
+          "script_hex": "00148d6836535fe924a4f04ecc9b3aac6692ed98deeb"
+        }
+      ],
+      "physical_input_sat": 400000,
+      "physical_outputs_sat": 399237,
+      "miner_fee_sat": 763
+    },
+    {
+      "owner": "sender",
+      "movement": 1,
+      "signed_funding": {
+        "txid": "06b6b894b0c015a76d859884e2204f504cf0d51f31dbd2e7e35e0d380ec0a9ad",
+        "inputs": [
+          {
+            "txid": "a4ef54be6fdb99d217334833b24dcb27a165e8151a4e4838e4b3bdbad9a9f42a",
+            "vout": 0
+          }
+        ],
+        "outputs": [
+          {
+            "vout": 0,
+            "value_sat": 499392,
+            "script_hex": "51201d908e8f6f1b3932b4b849d6b8e0c8d60adea67b43bdcb71bb1a64d465c06afd"
+          }
+        ],
+        "raw_signed_sha256": "672bbd77a33429205b46ff1b6a07fadc2597c8330d43a352bf1a3b3d87b474e1"
+      },
+      "resolved_prevouts": [
+        {
+          "txid": "a4ef54be6fdb99d217334833b24dcb27a165e8151a4e4838e4b3bdbad9a9f42a",
+          "vout": 0,
+          "value_sat": 500000,
+          "script_hex": "001499a9bd8e96864b6d9f580782295f507770c5a27c"
+        }
+      ],
+      "physical_input_sat": 500000,
+      "physical_outputs_sat": 499392,
+      "miner_fee_sat": 608
+    }
+  ],
+  "native_refresh_accounting": "300000 oldsecondboard spent =>300000 signedroundreplacement; native refreshmovement0net/fee0, never add both",
+  "earlier_arkoor_accounting": "499392 senderboard =>50000 actualoriginal/recoveredreceive +224696+224696 senderchange, fee0. Do not add original/recovered50k twice.",
+  "rejected_final_send": {
+    "http_status": 500,
+    "message": "Insufficient money available. Needed 0.00649443 BTC but 0.00649392 BTC is available",
+    "needed_sat": 649443,
+    "available_sat": 649392,
+    "shortfall_sat": 51,
+    "final_recipient_empty": true,
+    "recovered_send_movement_or_action_present": false
+  },
+  "original_oracles_reached": "beforelen3, recoveredSpendablecount matches, spentsetnonempty and everybeforeID present; then finalamountselection rejected",
+  "setup_limits": "Distinct same-seed restoredDB withoriginaldaemonalive; notoriginalabsent/inplacewipe/fullseedonly/fullML restore. No finalpaymentacceptance, Corechainfinality or wholewalletclaim.",
+  "private_raw_hashes": {
+    "nextest.log": "f7618b89cd25dc01c1b541a9061b341a1a87e5241bb720227e90c8b6512f25b0"
+  },
+  "runtime_actions_by_reviewer": "NONE; readonlyimmutableSQLite/transactionbytes, unchangedhashes, no wallet/node/service reopen, no originalmutations"
+}

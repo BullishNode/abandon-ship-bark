@@ -1,0 +1,25 @@
+{
+  "scope": "Immutable mixed-recovery financial supplement; earlier pending terminal receipt unchanged.",
+  "original_receipt_file": "batch28-barkd-unstarted17-receipt.json",
+  "original_receipt_sha256": "8aeb0803503ffdfb0e6d650ebd1571377f590b5995e4e233315f5c21c5006bcd",
+  "original_result": "FAIL",
+  "original_run_id": "551dd1bb-ab3b-4629-a333-40a5f4ad9a97",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "client_source_packet_file": "barkd-recovery-mixed-retained-reconciliation.json",
+  "client_source_packet_sha256": "53e3853e2756f5e96ff605b98a4d4fd514d55298415ffa887a364e9bd9292f91",
+  "same_economic_cut": "Original/recovered identical3spendable IDs/body/genesis are countedONCE:299392+300000+50000=649392sat. Separate spent300000secondboard is replacedby300000roundoutput and excluded from live cut. Neveraddoriginal+recovered or spent+replacement.",
+  "earlier_actual_payment": "Genuine earlier sender499392coin =>50000receive +224696+224696senderchange (449392), fee0. This successful earlierpayment is distinct from failed final649443send.",
+  "physical_sources": "Clientdecoded authentic sourceboards:300000=>299392+608miner;400000=>300000board+99237onchainchange+763miner;500000=>499392+608miner. Restricted DB/log hashes and packet arithmetic checked, no new parser/Core proof.",
+  "final_rejection": "Fixed649443sat request rejected with649392available/51deficit. Recoveredwallet has no sendmovement/action and finalrecipient noVTXO/movement/action. FinalpaymentdidNOTsucceed.",
+  "limits": "Originalalive/same-seed distinctDB setup; no in-placewipe/originalabsence/fullseed-only/fullML restore claim. No newcanonical confirmation/finalpayment/wholewalletsolvency/adaptedexecution claim.",
+  "files": [
+    {
+      "file": "batch28-barkd-unstarted17-financial-supplement-retained-reconciliation.json",
+      "sha256": "53e3853e2756f5e96ff605b98a4d4fd514d55298415ffa887a364e9bd9292f91"
+    },
+    {
+      "file": "batch28-barkd-unstarted17-financial-supplement-curation-verification.json",
+      "sha256": "356ef19120e9a623ec43e133f7f54ad093d4308c8a2e67e9fc8545046611bd52"
+    }
+  ]
+}

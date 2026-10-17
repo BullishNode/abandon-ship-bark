@@ -1,0 +1,20 @@
+{
+  "test_name": "boards::board_all_barkd",
+  "run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
+  "original_result": "FAIL",
+  "actual_test_seconds": 6.071,
+  "summary_seconds": 6.077,
+  "assertion_source": "testing/tests/barkd/boards.rs:35",
+  "actual_board_net_amount_sat": 98298,
+  "original_expected_board_net_amount_sat": 98348,
+  "native_assertions_before_failure": "Initial onchain balance100000 helper completed; spendable0 and pending_board0 assertions25-26 completed; actual board_all REST call returned board before net comparison35. These are original test observations, not independent transaction/solvency proof.",
+  "not_executed": [
+    "pending_board balance assertion38",
+    "one-VTXO assertion40",
+    "BOARD_CONFIRMATIONS block generation and synchronization42-43",
+    "zero onchain balance assertion45",
+    "spendable and cleared pending_board assertions48-49"
+  ],
+  "financial_reconciliation": "PENDING independent client retained-evidence review. No settled money/minerfee/confirmation/whole-wallet conservation claim.",
+  "limitation": "OriginalFAIL remainsFAIL; no retry/adaptation or FULL ML/fullbarkd credit. No rawseed/config/DB copied."
+}

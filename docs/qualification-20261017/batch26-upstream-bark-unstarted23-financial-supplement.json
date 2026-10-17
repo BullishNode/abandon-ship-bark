@@ -1,0 +1,26 @@
+{
+  "scope": "Immutable retained offboard financial supplement; original pending terminal receipt unchanged.",
+  "original_receipt_file": "batch26-upstream-bark-unstarted23-receipt.json",
+  "original_receipt_sha256": "6b013dc727b2724c994489c3521fff9575c390b82a37b26542d0a5064cb3cf0d",
+  "client_packet_file": "movement-offboard-retained-reconciliation.json",
+  "client_packet_sha256": "06447bd211feaf27bc1be26bfe31d71365f14e6573f568df58e86ba06fddf319",
+  "original_result": "FAIL",
+  "original_run_id": "67572fd5-4452-4303-b66e-57b2902c1bf4",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "customer_accounting": "300000sat original3boards =200000sat retained2spendable +99146sat exactdestination output +854sat customeroffboardfee. Consumed100kcoin isSpent; never counted again.",
+  "physical_accounting": "Real operatorfunding input1000000000sat minus alloutputs999998702sat =1298sat actualminerfee, DISTINCT from854sat customerfee. Otheroutputs/fee do not imply operatorwalletcustody or wholewalletsolvency.",
+  "fee_model": "Actual22B P2WPKHdestination with100basevbytes at7sat/vB yields122*7=854; original938 fixed34B P2TRassumption remainsfailed.",
+  "chain_scope": "OriginalCoreacceptance event exists; clientoffline retainedcanonicalparse atheight109 reports targetABSENT=>0confirmations. No postoffboardmining or laterrecipientwalletsync/assertion was executed.",
+  "test_limit": "Originalmovement_offboard feeassert403 FAIL retained. Laterdestination/input/output/completion/metadata/rawtxidentity assertions404-425 didNOTexecute. Retained independentreconciliation doesnotturntestPASS.",
+  "proof_limit": "No SQLite/node/process/parser reopen bycurator. No Core6/completedrecipientlifecycle/wholewalletsolvency/FULLML/adaptedexecution claim.",
+  "files": [
+    {
+      "file": "batch26-upstream-bark-unstarted23-financial-supplement-retained-reconciliation.json",
+      "sha256": "06447bd211feaf27bc1be26bfe31d71365f14e6573f568df58e86ba06fddf319"
+    },
+    {
+      "file": "batch26-upstream-bark-unstarted23-financial-supplement-curation-verification.json",
+      "sha256": "f1b10e25b9d54a9d15ec0830d0c7dae90ed98772804d9b01bcb26797a4aedac1"
+    }
+  ]
+}

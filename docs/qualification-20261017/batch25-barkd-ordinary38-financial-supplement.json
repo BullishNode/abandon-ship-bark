@@ -1,0 +1,24 @@
+{
+  "scope": "New immutable retained financial supplement; original terminal receipt remains unchanged with its earlier pending state.",
+  "original_receipt_file": "batch25-barkd-ordinary38-receipt.json",
+  "original_receipt_sha256": "a9f8172e88cc9835c72333c960a37df7e58533353f1b8be71fa31ee51fb74744",
+  "original_result": "FAIL",
+  "original_run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
+  "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+  "source_client_packet": "barkd-board-all-retained-reconciliation.json",
+  "source_client_packet_sha256": "b196e80e9604d43b214ad14006371ee8b7f31e505116dbb8bc083f3855815108",
+  "observation": "100000sat actualinput =608sat minerfee +1094sat Arkfee +98298sat pendingVTXO. Fundingoutput99392sat; configuredArkfee100base+ceil(99392*10000/1M)=1094. Client immutable SQLite records pendingmovement, LockedVTXO/unregistered0/Confirming.",
+  "Core_scope": "Original Coredebug explicit mempool acceptance event exists. Retained mempool.dat is27B and contains no203B signedtransaction. No canonical inclusion or confirmations established.",
+  "original_test_limit": "boards.rs35 originalexpected98348vsactual98298 remainsFAIL. Laterpending balance/VTXOcount assertions, confirmation mining/sync, drainzero and confirmedspendable checks did NOT run.",
+  "proof_limit": "Signedtx/prevout/SQLite decode is clientpacket evidence; curator independently hashes/binds restricted originals and checks exactlog/arithmetic, without re-opening SQLite or parsing rawtx. No completedlifecycle/wholewalletsolvency/FULLML/adaptedexecution claim.",
+  "files": [
+    {
+      "file": "batch25-barkd-ordinary38-financial-supplement-retained-reconciliation.json",
+      "sha256": "b196e80e9604d43b214ad14006371ee8b7f31e505116dbb8bc083f3855815108"
+    },
+    {
+      "file": "batch25-barkd-ordinary38-financial-supplement-curation-verification.json",
+      "sha256": "bcfb0fd80af226404d5c83276acc186651fb6890ed4b136c75237a33c3f9029e"
+    }
+  ]
+}

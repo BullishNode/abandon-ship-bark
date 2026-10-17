@@ -1,7 +1,7 @@
 {
-  "updated_at": "2026-10-17T19:47:30.744328+00:00",
+  "updated_at": "2026-10-17T20:56:52.530937+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "ACTIVE_BOARD_FEE_RECONCILIATION",
+  "state": "CHECKPOINT9_PREPARED_NEWER_BATCH33_UNCURATED",
   "branch": "work/fresh-test-qualification-20261017",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
@@ -17,7 +17,7 @@
   "execution": {
     "disk_hold_released": true,
     "shared_target_write_allocated": false,
-    "runtime_capacity_allocated": "One serial29ordinaryCLIbatch; max1ours+1rootnative; rootsoleCargo writer",
+    "runtime_capacity_allocated": "One serial own slot; CLI16terminal newerbatch33 excluded from checkpoint9; root owns all Cargo.",
     "new_signet_campaign_allocated": false,
     "next_shared_target_write_allocated": false
   },
@@ -42,11 +42,11 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Complete originalboard financial reconciliation and source-only truthfulfee oracle; publish hourlyreport; prepare fresh barkd38 with pins/gates before runtime",
+  "next_action": "Parent publishes reviewed report-only ninth checkpoint. Then curate newerbatch33four, reconcile originalonchain_drainFAIL, prepare only12neverstarted cases; no originalretry.",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
-  "runtime_allocation": "No active native; root approved prepare ordinarybarkd38, financial reconciliation/source review ongoing, no ownCargo",
+  "runtime_allocation": "One serial own native slot; newerCLI16terminal21103 exit100. Approved server8/SDK6/blockindex follow root allocation; no own Cargo.",
   "inventory_rows_by_file": {
     "legacy-inventory.csv": 103,
     "backend-inventory.csv": 72,
@@ -69,26 +69,22 @@
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
   "new_test_source_review": "Published earlier fixtures compiled and ran on recorded pairings. New failed-send v3 is source-only and excluded from this checkpoint.",
-  "coverage_rows": 353,
-  "coverage_warning": "353 mixed inventory/requirement/executed rows through batch24terminal6. ML200 full-oracle map separate; current totals not MLscenarios.",
+  "coverage_rows": 395,
+  "coverage_warning": "395 overlapping inventory/executed/gap rows through FT-CLI-059/batch32; not395 unique executed scenarios. Newbatch33four excluded until separate curation.",
   "current_batch": {
-    "name": "batch24-upstream-bark-unstarted29",
-    "state": "STOPPED_FIRST_FAILURE",
-    "total": 29,
-    "parent_exec_session": 1741,
+    "name": "next-upstream-bark-unstarted16",
+    "batch": 33,
+    "state": "TERMINAL_UNCURATED_OUTSIDE_CHECKPOINT9",
+    "total": 16,
+    "parent_exec_session": 21103,
+    "terminal_exit": 100,
+    "reported_passed": 3,
+    "reported_failed": 1,
+    "reported_unstarted": 12,
+    "counts_excluded_from_checkpoint": true,
     "source_manifest_sha256": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
-    "known61_and_all_failed_cases_excluded": true,
     "retries": 0,
-    "per_test_timeout_seconds": 180,
-    "all_completed_counts_exclude_this_active_batch": false,
-    "passed": 5,
-    "failed": 1,
-    "not_started": 23,
-    "failure": "movement::board_board",
-    "run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
-    "native_seconds": 11.082,
-    "controller_exit": 100,
-    "resource_error": null
+    "per_test_timeout_seconds": 180
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -123,10 +119,10 @@
     "wall_seconds_approx": 159.375
   },
   "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
-  "case_executions": 142,
-  "unique_executed_test_names": 138,
-  "nextest_invocations": 115,
-  "native_case_executions": 131,
+  "case_executions": 184,
+  "unique_executed_test_names": 180,
+  "nextest_invocations": 157,
+  "native_case_executions": 173,
   "component_case_executions": 11,
   "new_test_results": {
     "readiness": "PASS26.184s",
@@ -144,7 +140,7 @@
     "state": "PR6 merged by coordinator per direct message; second checkpoint pending",
     "merged_by_coordinator": "0f932806513a8dcefb5a3f3e841b98b73d02d3a1",
     "verified_merged_at": "2026-10-17T15:33:13Z",
-    "next_checkpoint": "Draft source/report publication; new3tests uncompiled/unrun",
+    "next_checkpoint": "Checkpoint9 report-only files prepared locally; no staging/commit/push by report preparer.",
     "next_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/7",
     "next_verified_remote_head": "e509f35169b8ee409310c1361305c1e1942565f2",
     "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN",
@@ -156,27 +152,27 @@
     },
     "primary_local_code_commit": "0870bbbb915f133b98b00b5c3d7dc2a2a2ac0bc5",
     "primary_code_publication": "PUSHED and verified in draftPR8; no merge/promotion/deployment by testing track",
-    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/11",
-    "latest_verified_remote_head": "1ddaad0e8cf67402554a4eac7e90f67ae2f1e592",
-    "latest_receipt": "PUBLICATION-PR11.json",
+    "latest_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/12",
+    "latest_verified_remote_head": "776b70bfbfa62e6dd8d56f943edf62c250293cab",
+    "latest_receipt": "PUBLICATION-PR12.json",
     "oversize_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/9",
     "oversize_verified_remote_head": "013bed49bc5cd0d7d839b1726ebf9e71b5170301",
     "oversize_source_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
     "oversize_review": "3reviewers complete; NOT compiled/run; no newexecutioncredit",
     "prior_PR8": "Verified merged by coordinator as751bd5a5d8ec9bbf72f0a44c1e7d4ac371b6269d",
     "oversize_source_PR9_state": "MERGED814d7b0d",
-    "latest_scope": "REPORT_ONLY; PR11 merged by coordinator, next hourly report checkpoint preparing",
+    "latest_scope": "REPORT_ONLY checkpoint8 through142exec136PASS6FAIL; newerbarkd2terminal excludedfrompublishedcutoff",
     "latest_pr_verified_merged": {
-      "pr": 11,
-      "head": "1ddaad0e8cf67402554a4eac7e90f67ae2f1e592",
-      "merge_commit": "dec1fef26d3d2fa90889f65be1ec08c28ab5a763",
-      "merged_at": "2026-10-17T19:43:22Z",
-      "remote_branch_verified": "git ls-remote fresh/xpub-sweep = dec1fef26d3d2fa90889f65be1ec08c28ab5a763"
+      "pr": 12,
+      "head": "776b70bfbfa62e6dd8d56f943edf62c250293cab",
+      "merge_commit": "2f070b60a870b5d02edd8b5b0a5b0289a2edd11c",
+      "merged_at": "2026-10-17T20:11:40Z",
+      "remote_branch_verified": true
     }
   },
   "next_batch": {
     "automatic_oversize": "Actualcorrectedfixturepassedonfrozen814+ownerpatch/source7041; original16.359sFAIL preserved. Notproductioncapacity.",
-    "backup_restore": "Frozen source-only draft after Lightning priority",
+    "backup_restore": "New ordinary physicalPG/operatoridentity backup + seed-onlycustomerrecovery sourceced8c436 reviewed; uncompiled/NOTRUN; olderlogicalrestore/conflictdrafts frozen.",
     "conflict_reorg": "Frozen source-only draft after Lightning priority",
     "lightning_restart": "Completed source-labelled success recovery; stronger failed-send cancellation-during-downtime draft reviewed but uncompiled/unrun",
     "noah_forwarding": "Native provider-reopen and actual post-registration recipient fallback passed; stock Noah LNURL metadata-hash compatibility unqualified",
@@ -191,8 +187,8 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 136,
-  "failed_case_executions": 6,
+  "passed_case_executions": 171,
+  "failed_case_executions": 13,
   "first_checkpoint": {
     "executions": 17,
     "passed": 17,
@@ -399,20 +395,22 @@
     "coverage_sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
     "full_pass_limitation": "Only ML165/166 bounded327-owner shape. No expansion to restart/reorg/heterogeneous-history cases."
   },
-  "counts_warning": "142executions136PASS6FAIL138unique(binary,name),115nextestinvocations,131nativeincluding10infrastructure+11components. Not142MLscenarios; six originalfailedattempts preserved.",
-  "execution_counts_through": "batch24 first6 terminal:5PASS1FAIL23unstarted; known61separate",
+  "counts_warning": "Checkpoint9 cutoff184 executions=171PASS+13preservedFAIL,180unique(binary,name),157nextestinvocations,173native+11components. Not184MLscenarios; all earlier original failures retained.",
+  "execution_counts_through": "Terminal batch32 firstcaseFAIL; source7041 ordinary cohorts through2026-10-17T20:40:59Z. Newerbatch33/CLI16threePASS+oneFAIL excluded from this fixed publication cutoff.",
   "execution_outcomes": {
-    "PASS": 136,
-    "FAIL": 6
+    "PASS": 171,
+    "FAIL": 13
   },
   "last_completed_batch": {
-    "name": "batch23-upstream-bark-unstarted46",
-    "result": "16PASS1FAIL29unstarted",
-    "receipt_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch23-upstream-bark-unstarted46",
-    "retries": 0,
-    "per_test_timeout_seconds": 180
+    "name": "next-upstream-bark-unstarted18",
+    "batch": 32,
+    "result": "0PASS1FAIL17unstarted",
+    "run_id": "7a6f0ea0-1685-4abd-bfbe-664ed76582ad",
+    "parent_exec_session": 87245,
+    "terminal_exit": 100,
+    "receipt": "batch32-bark-unstarted18-receipt.json"
   },
-  "historical_fields_notice": "Older phase-specific fields remain historical. Current top-level state/current_batch/execution totals and money_loss_catalogue define latest state; individual pinned receipts remain authoritative.",
+  "historical_fields_notice": "Phase-specific build/publication/source fields below remain historical. Current top-level totals are the explicit checkpoint9 receipt cutoff; newer current_batch counts are separately excluded pending curation. Pinned receipts control all execution claims. No historical receipt is rewritten to replace pending financial reconciliation with a later supplement.",
   "fee_failure_reconciliation": {
     "original_run_id": "352e12d4-ac04-40ce-b2e3-28401ceebf8b",
     "original_status": "FAIL",
@@ -435,6 +433,43 @@
     "wallet_independent_reconciliation": "COMPLETE immutableSQLite+rawtx inputs1m=100k+899237+763, database unchanged",
     "original_retried": false
   },
-  "publication_checkpoint": 8,
-  "publication_checkpoint_scope": "REPORT_ONLY; through batch24terminal6 and read-only financial reconciliation; all source adapters uncompiled/unrun"
+  "publication_checkpoint": 9,
+  "publication_checkpoint_scope": "REPORT_ONLY prepared, not staged/committed/pushed; cutoffthroughbatch32. AllRust/patch/privateartifacts excluded; newerbatch33four excluded.",
+  "barkd_board_all_reconciliation": {
+    "original_run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
+    "original_status": "FAIL",
+    "actual_miner_fee_sat": 608,
+    "gross_board_sat": 99392,
+    "ark_fee_sat": 1094,
+    "net_credited_sat": 98298,
+    "accounting": "100000=608+1094+98298",
+    "confirmation_scope": "pending; Core acceptedmempool log, no fundingconfirmation/laterassertioncredit",
+    "database_mode": "read-only immutable, hashesunchanged",
+    "source_adapter": "Source-only actualCoreprevouts/Arkbase+ppm/net adaptation reviewed; uncompiled/NOTRUN; originalFAIL preserved."
+  },
+  "deferred_barkd_originals": {
+    "recovery::recovered_wallet_finds_round_vtxo": "ADAPTED_NOT_RUN; root-approvedsameold99443fundingfeeassumption,sourceadapteruncompiled",
+    "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word": "OriginalheldUNRUN; rootrequiresinvalidsignedbodyquarantine, authenticvaliddischargebeforeSpent. Newrenamedfixture reviewedsource-only/NOTRUN/uncompiled."
+  },
+  "latest_dust_failure": {
+    "run_id": "3d1aa01c-86f3-480c-b980-b9973e7fffa1",
+    "status": "FAIL",
+    "reason": "P2TR329dustrequestvalidforactualP2WPKHminimum294",
+    "customer_cut": "800000=798817change+329output+854fee",
+    "pending_lineage_not_additive": 1183,
+    "confirmations": 0,
+    "original_retried": false,
+    "adapter": "Source-only actual-script dust-minus1 with unchangedVTXO/balance/history rejection; independentpeer reviewed, uncompiled/NOTRUN; originalFAILpreserved."
+  },
+  "deferred_cli_originals": {
+    "onchain::bark_address_changes": "Originalknown61UNRUN; reservedidentity0/address1\u20132sourceadaptation revieweduncompiled/NOTRUN.",
+    "onchain::list_utxos": "OriginalUNRUN; rootdeferredprovensamefixed938customerfee+772boardminerfeeassumptions; actualCore/script-quote sourceadapter revieweduncompiled/NOTRUN."
+  },
+  "checkpoint9_financial_supplements": {
+    "native_original_results_unchanged": true,
+    "batch30": "batch30-send-onchain-financial-supplement.json",
+    "batch31": "batch31-dust-financial-supplement.json",
+    "batch32": "batch32-send-onchain-financial-supplement.json",
+    "scope": "Retained client DB/offlineCore reconciliation, not native retries or passed adaptations; dust target0conf/pending, sendtargets2conf notCore6."
+  }
 }

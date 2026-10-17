@@ -1,0 +1,22 @@
+{
+  "all14_result_log_run_id_duration_exact_name_summary_consistent": true,
+  "all14_source_file_function_upstream_hashes_verified": true,
+  "two_version_gates_evaluated_true": true,
+  "all14_body_directories_exist": true,
+  "all14_private_context_resource_preflights_valid": true,
+  "coverage_append_event": {
+    "existing_rows": 375,
+    "appended_rows": 14,
+    "result_rows": 389,
+    "before_sha256": "637308cde95afe53a1f69c6012a8e5266be1dee581405722938efec7f978147f",
+    "before_bytes": 254161,
+    "after_sha256": "be12fd35af53830af73705dcbbbbcb3de1af6a36f5f0040cae06a4da9aef1941",
+    "after_bytes": 265038,
+    "existing_prefix_byte_identical": true,
+    "append_sha256": "9146ef3838af3a2636806bac54c2790f5c0896fd49d938c60be92e8b00e17ade",
+    "line_endings": "LF for appended rows"
+  },
+  "source_runtime_git_status_mutations": false,
+  "new_native_invocations": 0,
+  "raw_seeds_mnemonics_databases_copied": false
+}

@@ -1,0 +1,35 @@
+{
+  "state": "SEPARATE_READ_ONLY_FINANCIAL_RECONCILIATION",
+  "native_result_unchanged": "FAIL",
+  "case_id": "FT-CLI-058",
+  "test_name": "offboard::bark_rejects_offboarding_dust_amount",
+  "run_id": "3d1aa01c-86f3-480c-b980-b9973e7fffa1",
+  "native_receipt": "batch31-bark-unstarted20-receipt.json",
+  "native_receipt_sha256": "79a644a77d9e03aac0556490e64102a6ef53f07f213fcd597e02193cbe287729",
+  "native_receipt_pending_checkpoint_preserved": true,
+  "financial_reconciliation": "offboard-dust-retained-reconciliation.json",
+  "financial_reconciliation_sha256": "88c923604c4e5a05d33c80b06ae29e73b8db362dbe85f5103a8fc15e81092160",
+  "reconciliation_author_scope": "Client read-only retained immutable SQLite/offline signed-Core decoding; curator verified receipt identity/pins/hashes, not an independent raw wallet/database audit.",
+  "customer_accounting": {
+    "original_board_sat": 800000,
+    "spendable_change_sat": 798817,
+    "actual_onchain_recipient_output_sat": 329,
+    "customer_fee_sat": 854,
+    "pending_intermediate_sat": 1183,
+    "pending_intermediate_additive": false,
+    "conservation": "800000 = 798817 + 329 + 854; pending1183 is the same internal offboard lineage and is not added again.",
+    "limitation": "Native movement is pending and targetunconfirmed; this is retained prepared/broadcast accounting, not a completed lifecycle or eventual finality proof."
+  },
+  "chain_scope": {
+    "retained_tip": "37c41dcd485a39c58e503ffad08d4d4b1955fb52935bf1ab4aac72acc2029c1f",
+    "retained_tip_height": 109,
+    "target_absent_from_canonical_chain": true,
+    "target_confirmations": 0,
+    "Core_accept_to_mempool_log": true,
+    "no_post_send_mine_in_original_source": true
+  },
+  "limitation": "No wrong-payee case/retry, no Core confirmation/Core6, final wallet/movement settlement, fullcustody/FULLML or adapted execution claim.",
+  "native_oracle_failure": "offboard.rs204 unwrap_err received Ok OffboardResult from actual329sat send; expected refusal/error-text assertions205-212 not reached.",
+  "no_execution_or_retry": true,
+  "no_full_ml_credit": true
+}

@@ -71,3 +71,43 @@ async fn expiry_abandoned_registered_send_needs_no_client_refund() {
 	let upstream = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, htlc.id()).await).await.unwrap().unwrap();
 	assert_eq!(upstream.htlc.resolution(), None);
 }
+
+/// An actual issued refresh can be cancelled before its forfeit binds. The
+/// product's participation-removal method must not erase the old unclaimed
+/// output's ownership. This tests settlement evidence, not a payout race.
+#[tokio::test]
+async fn expiry_cancelled_unclaimed_output_keeps_owner_after_participation_removed() {
+	let ctx = TestContext::new("server/expiry_cancelled_unclaimed_tombstone").await;
+	let srv = ctx.captaind("server").funded(btc(10)).no_vtxo_pool().create().await;
+	let wallet = ctx.bark("wallet", &srv).funded(sat(500_000)).create().await;
+	let originals = wallet.board_and_confirm_and_register(&ctx,sat(200_000)).await;
+	ctx.refresh_all(&srv,&[&wallet]).await;
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	let (participation,hash,leaf) = db.read(async |t| {
+		let row = t.query_one("SELECT id,unlock_hash,forfeited_at IS NOT NULL AS forfeited FROM round_participation WHERE round_id IS NOT NULL ORDER BY id DESC LIMIT 1", &[]).await?;
+		assert!(!row.get::<_, bool>("forfeited"));
+		let hash: ark::tree::signed::UnlockHash = row.get::<_, &str>("unlock_hash").parse()?;
+		let ids = t.query("SELECT vtxo_id FROM vtxo WHERE spend_state='unclaimed' ORDER BY id", &[]).await?
+			.into_iter().map(|r| r.get::<_, &str>(0).parse::<ark::VtxoId>()).collect::<Result<Vec<_>,_>>()?;
+		let states = t.get_server_vtxos_by_id(&ids).await?;
+		let leaf = states.into_iter().find(|state| state.vtxo.clone().try_into_user_vtxo()
+			.is_ok_and(|user| user.unlock_hash()==Some(hash))).expect("actual round must store its unclaimed output").vtxo;
+		Ok((row.get::<_, i64>("id"),hash,leaf))
+	}).await.unwrap();
+	assert!(db.write(async |t| t.cancel_expiry_participations(&[participation]).await).await.unwrap());
+	assert!(db.write(async |t| t.remove_round_participation(hash).await).await.unwrap());
+	let remaining = db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM round_participation WHERE id=$1", &[&participation]).await?.get::<_,i64>(0))).await.unwrap();
+	assert_eq!(remaining,0);
+	let funding = ctx.bitcoind().await_transaction(leaf.chain_anchor().txid).await;
+	let limits = server::database::expiry_inventory::BackingSnapshotLimits { max_rows: 10_000,max_serialized_bytes: 10_000_000 };
+	let root = leaf.to_bare();
+	let snapshot = db.read(async |t| t.backing_snapshot(&[root.clone()],limits).await).await.unwrap();
+	let fact = snapshot.regular.iter().find(|f| f.state.vtxo_id==root.id()).unwrap();
+	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let proposal = db.read(async |t| t.propose_expiry_ownership(fact,&funding,tip,Some(tip)).await).await.unwrap();
+	assert!(matches!(proposal.disposition,server::database::expiry_ownership::OwnershipDisposition::Operator));
+	assert!(matches!(proposal.evidence,Some(server::database::expiry_ownership::OwnershipEvidence::Exchange { participation_id,ref unlock_hash,forfeited:false }) if participation_id==participation && unlock_hash==&hash.to_string()));
+	let inputs = db.read(async |t| t.get_user_vtxos_by_id(&originals).await).await.unwrap();
+	assert!(inputs.iter().all(|input| input.spend_state==server::database::SpendState::Spendable));
+	assert_eq!(inputs.iter().map(|input| input.vtxo.amount().to_sat()).sum::<u64>(),200_000);
+}

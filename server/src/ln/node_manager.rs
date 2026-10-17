@@ -65,6 +65,7 @@ use crate::config::Config;
 use crate::database;
 use crate::database::ln::{
 	LightningNodeId, LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningPaymentStatus,
+	LightningPaymentAttempt,
 };
 use crate::telemetry;
 
@@ -325,13 +326,15 @@ impl LightningManager {
 		// label: the column has no cardinality budget.
 		let user_agent = telemetry::current_user_agent();
 
-		self.db.write(async |t|
+		let attempt = self.db.write(async |t| {
 			t.store_lightning_payment_start(
 				node.id, &invoice, amount, sender_mailbox_id, htlc_vtxo_ids,
 				lightning_htlc_subscription_id,
 				attempt_block_height, user_fee, user_agent.as_deref(), retry_for,
-			).await
-		).await?;
+			).await?;
+			t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await?
+				.context("new Lightning attempt disappeared before commit")
+		}).await?;
 
 		// If there is an existing subscription, it's an intra-Ark lightning
 		// payment so we can directly mark it as accepted, then skip cln payment.
@@ -344,7 +347,7 @@ impl LightningManager {
 			// receive registered after that check would otherwise land here
 			// unvalidated and be paid out of our vtxopool.
 			let res = match validate_intra_ark_payment(&sub, &invoice, amount) {
-				Ok(()) => self.set_created_subscription_to_accepted(sub, htlc_send_expiry_height).await,
+				Ok(()) => self.set_created_subscription_to_accepted(sub, htlc_send_expiry_height, &attempt).await,
 				Err(e) => Err(e),
 			};
 			if let Err(e) = res {
@@ -376,6 +379,7 @@ impl LightningManager {
 		let xpay_client = node.xpay.clone();
 		tokio::spawn(async move {
 			xpay_client.pay(
+				attempt,
 				invoice,
 				amount,
 				max_routing_fee,
@@ -397,18 +401,35 @@ impl LightningManager {
 		&self,
 		subscription: LightningHtlcSubscription,
 		htlc_send_expiry_height: BlockHeight,
+		attempt: &LightningPaymentAttempt,
 	) -> anyhow::Result<()> {
 		// `subscription` is a snapshot read without a lock, so its status can be
 		// stale. The promotion is guarded on `Created` in the same statement, and
 		// when it does not apply we re-read to report the race instead of acting
 		// on what we thought we saw.
 		let promoted = subscription.status == LightningHtlcSubscriptionStatus::Created
-			&& self.db.write(async |t| t.store_lightning_htlc_subscription_status(
-				subscription.id,
-				LightningHtlcSubscriptionStatus::Accepted,
-				Some(htlc_send_expiry_height),
-				Some(LightningHtlcSubscriptionStatus::Created),
-			).await).await?;
+			&& self.db.write(async |t| {
+				let ids = t.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+					WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id", &[&attempt.id]).await?
+					.into_iter().map(|row| row.get::<_, &str>("vtxo_id").parse::<VtxoId>())
+					.collect::<Result<Vec<_>, _>>()?;
+				ensure!(!ids.is_empty(), "internal Lightning attempt has no source coins");
+				crate::database::expiry_guard::guard_new_lightning_inputs(t, &ids).await?;
+				t.lock_htlc_settlements().await?;
+				t.ensure_not_settled(attempt.payment_hash).await?;
+				ensure!(t.query_opt("SELECT id FROM lightning_payment_attempt WHERE id=$1 \
+					AND lightning_htlc_subscription_id=$2 AND status NOT IN ('failed','succeeded') FOR UPDATE",
+					&[&attempt.id,&subscription.id]).await?.is_some(), "internal Lightning source attempt already closed");
+				let promoted = t.store_lightning_htlc_subscription_status(
+					subscription.id, LightningHtlcSubscriptionStatus::Accepted,
+					Some(htlc_send_expiry_height), Some(LightningHtlcSubscriptionStatus::Created),
+				).await?;
+				if promoted {
+					t.execute("INSERT INTO expiry_lightning_internal_funding(id,subscription_id) VALUES($1,$2)",
+						&[&attempt.id,&subscription.id]).await?;
+				}
+				Ok(promoted)
+			}).await?;
 
 		if !promoted {
 			let current = self.db
@@ -470,12 +491,14 @@ impl LightningManager {
 			payment_hash, attempt.status,
 		);
 
-		if attempt.status == LightningPaymentStatus::Succeeded {
-			let preimage = self.settler.is_settled(payment_hash).await?
-				.context("missing preimage on payment success")?;
+		// The settlement WAL wins over a stale coarse attempt status. A
+		// completed payment must never be reported as refundable because its
+		// final status write lost an optimistic-lock race.
+		if let Some(preimage) = self.settler.is_settled(payment_hash).await? {
 			debug!(payment_hash = %payment_hash, "CheckLightningPayment responding with success");
 			return Ok(PaymentStatus::Success(preimage));
 		}
+		ensure!(attempt.status != LightningPaymentStatus::Succeeded, "missing preimage on payment success");
 
 		if attempt.status == LightningPaymentStatus::Failed {
 			debug!(payment_hash = %payment_hash, "CheckLightningPayment responding with failed");

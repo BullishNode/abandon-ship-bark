@@ -132,6 +132,10 @@ fn evidence_json(evidence: &OwnershipEvidence, preimage: bool) -> serde_json::Va
 			serde_json::json!({"kind":"exchange","participation_id":participation_id,"unlock_hash":unlock_hash,"forfeited":forfeited}),
 		OwnershipEvidence::HtlcStoredPreimage { payment_hash } =>
 			serde_json::json!({"kind":"htlc_stored_preimage","payment_hash":payment_hash.to_string()}),
+		OwnershipEvidence::HtlcSourceDischarged { payment_hash } =>
+			serde_json::json!({"kind":"htlc_source_discharged","payment_hash":payment_hash.to_string()}),
+		OwnershipEvidence::HtlcExternalFailed { payment_hash, htlc_expiry } =>
+			serde_json::json!({"kind":"htlc_external_failed","payment_hash":payment_hash.to_string(),"htlc_expiry":htlc_expiry.to_u32()}),
 		OwnershipEvidence::HtlcUnattemptedExpired { payment_hash, htlc_expiry } =>
 			serde_json::json!({"kind":"htlc_unattempted_expired","payment_hash":payment_hash.to_string(),"htlc_expiry":htlc_expiry.to_u32()}),
 		OwnershipEvidence::HtlcOffchain { payment_hash, resolution } =>

@@ -16,6 +16,7 @@ use ark::mailbox::MailboxIdentifier;
 use ark::vtxo::Full;
 
 use super::expiry_inventory::BackingVtxoFact;
+use super::expiry_lightning::LightningSourceState;
 use super::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use super::{BlockTable, SpendState, Tx};
 
@@ -40,10 +41,12 @@ pub enum OwnershipEvidence {
 	Exchange { participation_id: i64, unlock_hash: String, forfeited: bool },
 	HtlcOffchain { payment_hash: PaymentHash, resolution: HtlcResolution },
 	HtlcStoredPreimage { payment_hash: PaymentHash },
+	HtlcSourceDischarged { payment_hash: PaymentHash },
 	/// No external payment was attempted, and the admitted refund deadline is
 	/// behind both completed views. This is an expiry decision, not a forged
 	/// upstream off-chain revocation.
 	HtlcUnattemptedExpired { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
+	HtlcExternalFailed { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
 	HtlcChain { payment_hash: PaymentHash, resolution: HtlcResolution, block: BlockRef },
 }
 
@@ -106,7 +109,7 @@ impl Tx<'_> {
 			if let Some(row) = self.query_opt("SELECT e.id,e.irreversible_facts::TEXT AS irreversible_facts FROM expiry_decided_coin d JOIN expiry_entitlement e ON e.id=d.entitlement_id WHERE d.vtxo_id=$1", &[&state.vtxo_id.to_string()]).await? {
 				let facts: serde_json::Value = serde_json::from_str(row.get("irreversible_facts"))?;
 				let kind = facts.get("kind").and_then(serde_json::Value::as_str);
-				if matches!(kind, Some("pubkey"|"input_owner"|"pool"|"padding"|"forfeit"|"offboard"|"exchange"|"htlc_unattempted_expired")) {
+				if matches!(kind, Some("pubkey"|"input_owner"|"pool"|"padding"|"forfeit"|"offboard"|"exchange"|"htlc_unattempted_expired"|"htlc_external_failed"|"htlc_source_discharged")) {
 					proposal.disposition = if let Some(key) = facts.get("customer_key").and_then(serde_json::Value::as_str) {
 						self.expiry_customer(state.vtxo_id, key.parse()?).await?
 					} else if facts.get("operator") == Some(&serde_json::Value::Bool(true)) {
@@ -179,6 +182,18 @@ impl Tx<'_> {
 				proposal.disposition = if forfeited { self.expiry_customer(state.vtxo_id, user.user_pubkey()).await? }
 					else { proposal.cancellations.push(id); OwnershipDisposition::Operator };
 				proposal.evidence = Some(OwnershipEvidence::Exchange { participation_id: id, unlock_hash: hash.to_string(), forfeited });
+			} else if let Some(cancelled) = self.query_opt(
+				"SELECT participation_id FROM expiry_cancelled_participation WHERE unlock_hash=$1",
+				&[&hash.to_string()],
+			).await? {
+				// Upstream removes superseded participation rows. Its old
+				// unclaimed output remains nonbinding: the durable cancellation
+				// also prevents its unlock preimage from ever being released.
+				proposal.disposition = OwnershipDisposition::Operator;
+				proposal.evidence = Some(OwnershipEvidence::Exchange {
+					participation_id: cancelled.get("participation_id"),
+					unlock_hash: hash.to_string(), forfeited: false,
+				});
 			} else if user.user_pubkey().to_string() == "02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c"
 				&& hash.to_string() == "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 				&& user.amount() == Amount::from_sat(330) {
@@ -201,28 +216,31 @@ impl Tx<'_> {
 				&& watchman_tip.is_some_and(|height| htlc.htlc.htlc_expiry <= height)
 				&& fact.onchain_spent_height.is_none() && fact.onchain_spent_txid.is_none();
 			let Some(resolution) = htlc.htlc.resolution() else {
-				if proposal.has_stored_preimage {
-					// The preimage itself is an immutable claim fact, even if an
-					// offline client never asks for a cooperative claim transaction.
-					proposal.disposition = if htlc.direction() == HtlcDirection::Incoming {
-						OwnershipDisposition::Operator
-					} else { self.expiry_customer(state.vtxo_id, user.user_pubkey()).await? };
+				if proposal.has_stored_preimage && htlc.direction() == HtlcDirection::Outgoing {
+					// A granted receive is already a signed obligation to this
+					// recipient. Sending grants require their own funding evidence.
+					proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
 					proposal.evidence = Some(OwnershipEvidence::HtlcStoredPreimage { payment_hash: hash });
 					return Ok(proposal);
 				}
-				// The upstream preimage settler does not resolve an abandoned
-				// registered send merely because its refund deadline passes.
-				// A first external attempt is now refused after backing expiry,
-				// under these same coin locks. An unattempted, unknown-preimage
-				// grant therefore needs no client action to return to its owner.
-				let attempted = self.query_one("SELECT EXISTS(SELECT 1 FROM lightning_payment_attempt WHERE payment_hash=$1) AS attempted", &[&hash.to_string()]).await?.get::<_, bool>("attempted");
-				if htlc.direction() == HtlcDirection::Incoming && !attempted && !proposal.has_stored_preimage
+				let source = if htlc.direction() == HtlcDirection::Incoming {
+					self.lightning_source_state(state.vtxo_id, hash).await?
+				} else { LightningSourceState::Pending };
+				if source == LightningSourceState::Discharged {
+					proposal.disposition = OwnershipDisposition::Operator;
+					proposal.evidence = Some(OwnershipEvidence::HtlcSourceDischarged { payment_hash: hash });
+					return Ok(proposal);
+				}
+				// A same-hash receive funded by another source cannot retain
+				// this sender's money. Unknown legacy attempts still wait.
+				if matches!(source, LightningSourceState::Unattempted | LightningSourceState::Failed)
 					&& fact.onchain_spent_height.is_none() && htlc.htlc.chain_resolution.is_none()
-					&& !htlcs.iter().any(|h| h.direction() == HtlcDirection::Outgoing)
 					&& htlc.htlc.htlc_expiry <= tip && watchman_tip.is_some_and(|h| htlc.htlc.htlc_expiry <= h) {
 					proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
-					proposal.evidence = Some(OwnershipEvidence::HtlcUnattemptedExpired {
-						payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry,
+					proposal.evidence = Some(if source == LightningSourceState::Failed {
+						OwnershipEvidence::HtlcExternalFailed { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry }
+					} else {
+						OwnershipEvidence::HtlcUnattemptedExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry }
 					});
 				} else {
 					proposal.disposition = OwnershipDisposition::Unresolved("Lightning settlement pending");

@@ -34,10 +34,11 @@ use bitcoin_ext::{AmountExt, BlockDelta, BlockHeight};
 
 use crate::arkoor::ArkoorCosignRequestValidationParams;
 use crate::database::block::BlockTable;
+use crate::database::expiry_lightning::LightningSourceState;
 use crate::database::htlc_vtxo::{self, HtlcDirection, HtlcResolution, HtlcVtxo};
 use crate::database::tree::VtxoTreeUpdate;
 use crate::database::ln::{
-	LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningPaymentStatus,
+	LightningHtlcSubscription, LightningHtlcSubscriptionStatus,
 };
 use crate::error::ContextExt;
 use crate::{check_max_amount, telemetry, Server, CAPTAIND_API_KEY};
@@ -462,7 +463,6 @@ impl Server {
 		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		let tip = self.chain_tip().height as BlockHeight;
-		let db = self.db.clone();
 
 		let requested_policy = cosign_request.all_outputs()
 			.all_same(|v| v.policy.clone())
@@ -493,10 +493,6 @@ impl Server {
 			htlc_vtxo_ids: htlc_vtxo_ids.clone(),
 		);
 
-		if self.htlc_settler.is_settled(payment_hash).await?.is_some() {
-			return badarg!("invoice has already been paid");
-		}
-
 		let cosign_request = cosign_request.set_vtxos(htlc_vtxos)?;
 
 		let validation = ArkoorCosignRequestValidationParams {
@@ -506,28 +502,6 @@ impl Server {
 		};
 		let builder = self.validate_cosign_request(validation, cosign_request)
 			.badarg("invalid cosign request")?;
-
-		let attempt = db.read(async |t|
-			t.get_latest_payment_attempt_by_payment_hash(payment_hash).await
-		).await?;
-
-		// If payment not found but input vtxos are found, we can allow revoke
-		if let Some(attempt) = attempt {
-			match attempt.status {
-				LightningPaymentStatus::Failed => {},
-				LightningPaymentStatus::Succeeded => {
-					error!("This lightning payment has completed, but no preimage found. Accepting revocation");
-				},
-				_ if tip > input_policy.htlc_expiry => {
-					// Check one last time to see if it completed
-					let res = self.lightning_manager.get_payment_status(payment_hash).await;
-					if let Ok(PaymentStatus::Success(_)) = res {
-						return badarg!("This lightning payment has completed");
-					}
-				},
-				_ => return badarg!("This lightning payment is not eligible for revocation yet")
-			}
-		}
 
 		// Output user vtxos from the revoke cosign go in as `unregistered`,
 		// matching the arkoor cosign path. They flip to spendable once the
@@ -542,46 +516,45 @@ impl Server {
 			// then receive subscription. No preimage can race the final check.
 			crate::database::expiry_guard::guard_obligation_changes(t, &htlc_vtxo_ids).await?;
 			t.lock_htlc_settlements().await?;
-			// Re-check the settlement inside the write tx: the early gate and
-			// the eligibility read above both run in their own (read)
-			// transactions, so a payment can settle between them and this write.
-			// `ensure_not_settled` commits the check atomically with the
-			// vtxo-tree update below, so a settled payment can no longer be
-			// refunded (which would double-pay the sender).
-			t.ensure_not_settled(payment_hash).await?;
+			let mut internal_funding = false;
+			for source in &htlc_vtxo_ids {
+				match t.lightning_source_state(*source, payment_hash).await? {
+					LightningSourceState::Discharged => return badarg!("invoice has already been paid"),
+					LightningSourceState::Pending => return badarg!("source payment outcome is not yet terminal"),
+					LightningSourceState::InternalCommitted => internal_funding = true,
+					LightningSourceState::Unattempted | LightningSourceState::Failed => {},
+				}
+			}
 
-			// For an intra-Ark payment the payee shares this payment hash via a
-			// receive subscription. The settlement check above only catches a
-			// preimage that has already been recorded; it does NOT catch the
-			// window where the payee has been granted HTLC-recv vtxos but is
-			// withholding the claim (and thus the preimage). Atomically cancel
-			// the receive here so a later claim is refused, and bail if the
-			// receive is still committed - otherwise the server would refund
-			// the sender AND pay the payee for one payment.
-			// A canceled receive only refuses the cooperative claim, so granted
-			// HTLC-recv vtxos commit it until [htlc_recvs_expired].
-			let htlc_vtxos = htlc_vtxo::get_htlc_vtxo_states_by_payment_hash(&t, payment_hash).await?;
-			let watchman_tip = t.get_highest_block(BlockTable::Watchmand).await?.map(|b| b.height);
-			let htlc_recvs_expired = htlc_recvs_expired(&htlc_vtxos, tip, watchman_tip);
-			if let Some((status, htlc_recvs_granted)) =
-				t.cancel_revocable_htlc_subscription(payment_hash, htlc_recvs_expired).await?
-			{
-				// Stays committed even once the grants expired: the sender then
-				// refunds on-chain, where our preimage clause stays an alternative
-				// only until the sender spends the timeout branch.
-				let committed = match status {
-					LightningHtlcSubscriptionStatus::Settled => true,
-					LightningHtlcSubscriptionStatus::HtlcsReady => !htlc_recvs_expired,
-					LightningHtlcSubscriptionStatus::Canceled =>
-						htlc_recvs_granted && !htlc_recvs_expired,
-					LightningHtlcSubscriptionStatus::Created
-						| LightningHtlcSubscriptionStatus::Accepted => false,
-				};
-				if committed {
-					return badarg!(
-						"invoice receive is already committed (status: {status}), \
-						cannot revoke: the payment can still be claimed",
-					);
+			// Only cancel a receive actually funded by these source coins.
+			// An unrelated receive with the same hash retains its obligation.
+			if internal_funding {
+				let subscriptions = t.lightning_source_subscriptions(&htlc_vtxo_ids).await?;
+				let current = t.get_htlc_subscription_by_payment_hash(payment_hash).await?
+					.context("funded receive subscription disappeared")?;
+				ensure!(subscriptions == [current.id], "source funding does not match receive subscription");
+				let htlc_vtxos = htlc_vtxo::get_htlc_vtxo_states_by_payment_hash(&t, payment_hash).await?;
+				let watchman_tip = t.get_highest_block(BlockTable::Watchmand).await?.map(|b| b.height);
+				let htlc_recvs_expired = htlc_recvs_expired(&htlc_vtxos, tip, watchman_tip);
+				if let Some((status, htlc_recvs_granted)) =
+					t.cancel_revocable_htlc_subscription(payment_hash, htlc_recvs_expired).await?
+				{
+					// Existing signed receiver grants must cease to be claimable
+					// before this source can receive a cooperative signed refund.
+					let committed = match status {
+						LightningHtlcSubscriptionStatus::Settled => true,
+						LightningHtlcSubscriptionStatus::HtlcsReady => !htlc_recvs_expired,
+						LightningHtlcSubscriptionStatus::Canceled =>
+							htlc_recvs_granted && !htlc_recvs_expired,
+						LightningHtlcSubscriptionStatus::Created
+							| LightningHtlcSubscriptionStatus::Accepted => false,
+					};
+					if committed {
+						return badarg!(
+							"invoice receive is already committed (status: {status}), \
+							cannot revoke: the payment can still be claimed",
+						);
+					}
 				}
 			}
 

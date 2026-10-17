@@ -162,3 +162,85 @@ async fn expiry_actual_payout_reorg_preserves_receipt_and_fence() {
 async fn expiry_actual_deep_payout_reorg_preserves_receipt_and_fence() {
 	payout_reorg(101).await;
 }
+
+/// A configured regtest fee rise drives the real watchman replacement path.
+/// This is a fee-policy/restart test, not a congested public-network claim.
+#[tokio::test]
+async fn expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_child() {
+	let ctx = TestContext::new("server/expiry_payout_fee_replacement").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
+		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).watchmand().create().await;
+	let wallet = ctx.bark("abandoned", &srv).funded(sat(200_000)).create().await;
+	let ids = wallet.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	let client = wallet.client().await;
+	let coin = client.get_full_vtxo(ids[0]).await.unwrap();
+	let destination = client.fallback_destination().await.unwrap();
+	drop(client);
+	// Two genuinely confirmed funding outputs allow a replacement to select
+	// another usable sponsor while the first child remains in the mempool.
+	let fee_address = srv.watchmand().wait_wallet_address().await;
+	for _ in 0..2 { ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await; }
+	ctx.generate_blocks(2).await;
+	let before = ctx.bitcoind().get_block_count().await as u32;
+	ctx.generate_blocks(coin.expiry_height().to_u32() + 1 - before).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let (allocation, parent) = wait_for_payout(&db, ids[0]).await;
+	let first = db.read(async |t| Ok(t.query_one("SELECT raw_tx,fee_sat FROM expiry_fee_child \
+		WHERE allocation_id=$1 ORDER BY id DESC LIMIT 1", &[&allocation]).await?)).await.unwrap();
+	let first_child: Transaction = deserialize(first.get("raw_tx")).unwrap();
+	let first_fee = u64::try_from(first.get::<_, i64>("fee_sat")).unwrap();
+	assert_eq!(ctx.bitcoind().await_transaction(first_child.compute_txid()).await, first_child);
+	let target = bitcoin::FeeRate::from_sat_per_vb(100).unwrap();
+	assert!(sat(first_fee) < target * (parent.weight() + first_child.weight()));
+	let payouts = parent.output.iter().filter(|out| out.script_pubkey == destination.spk).collect::<Vec<_>>();
+	assert_eq!(payouts.len(), 1);
+	assert_eq!(payouts[0].value, coin.amount() - sat(1_000));
+	srv.watchmand().stop().await.unwrap();
+	{
+		let mut config = srv.watchmand().config_mut();
+		config.fee_estimator.fallback_fee_rate_fast = target;
+		config.fee_estimator.fallback_fee_rate_regular = target;
+		config.fee_estimator.fallback_fee_rate_slow = target;
+	}
+	srv.watchmand().start().await.unwrap();
+	let rpc = ctx.bitcoind().sync_client();
+	let (replacement, recorded_fee) = tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let row = db.read(async |t| Ok(t.query_one("SELECT a.sweep_tx,f.raw_tx,f.fee_sat \
+				FROM expiry_allocation a JOIN expiry_fee_child f ON f.allocation_id=a.id \
+				WHERE a.id=$1 ORDER BY f.id DESC LIMIT 1", &[&allocation]).await?)).await.unwrap();
+			let saved: Transaction = deserialize(row.get("sweep_tx")).unwrap();
+			assert_eq!(saved, parent, "fee replacement must never change the payout parent");
+			let child: Transaction = deserialize(row.get("raw_tx")).unwrap();
+			if child != first_child && rpc.get_mempool_entry(&child.compute_txid()).is_ok() {
+				break (child, u64::try_from(row.get::<_, i64>("fee_sat")).unwrap());
+			}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("configured fee rise did not replace the real mempool fee child");
+	assert!(rpc.get_mempool_entry(&first_child.compute_txid()).is_err());
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+	assert!(sat(recorded_fee) >= target * (parent.weight() + replacement.weight()));
+	assert!(recorded_fee > first_fee && recorded_fee > 1_000);
+	let mut input_value = 0;
+	for input in &replacement.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		input_value += previous.output[input.previous_output.vout as usize].value.to_sat();
+	}
+	assert_eq!(recorded_fee, input_value - replacement.output.iter().map(|out| out.value.to_sat()).sum::<u64>());
+	ctx.generate_blocks(6).await;
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let rows = db.read(async |t| Ok(t.query("SELECT txid,fee_sat,operator_remainder_sat \
+				FROM expiry_fee_child WHERE allocation_id=$1 AND confirmed_hash IS NOT NULL", &[&allocation]).await?)).await.unwrap();
+			if !rows.is_empty() {
+				assert_eq!(rows.len(), 1, "superseded children must not be counted as miner costs");
+				assert_eq!(rows[0].get::<_, String>("txid"), replacement.compute_txid().to_string());
+				assert_eq!(rows[0].get::<_, i64>("fee_sat"), i64::try_from(recorded_fee).unwrap());
+				assert_eq!(rows[0].get::<_, i64>("operator_remainder_sat"), 1_000);
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("actual canonical fee child confirmation was not accounted");
+}

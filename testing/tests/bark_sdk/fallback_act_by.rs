@@ -24,6 +24,63 @@ fn protection_config(config: &mut bark::Config) {
 	config.vtxo_exit_margin = BlockDelta::new(2);
 }
 
+#[tokio::test]
+async fn fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable() {
+	let ctx = TestContext::new("bark_sdk/fallback_protection_default_daemon").await;
+	let srv = ctx.captaind("server").funded(btc(1)).no_vtxo_pool().cfg(|config| {
+		config.vtxo_lifetime = BlockDelta::new(40);
+		config.vtxo_exit_delta = BlockDelta::new(3);
+	}).create().await;
+	let wallet = ctx.bark_sdk("owner", &srv).cfg(|config| {
+		protection_config(config);
+		config.daemon_manual_sync = false;
+		config.daemon_sync_interval_secs = 1;
+	}).funded(sat(500_000)).boarded(sat(100_000)).create().await;
+	let original = wallet.spendable_vtxos().await.unwrap().remove(0);
+	let schedule = wallet.exit_protection_schedule().await.unwrap().remove(0);
+	advance_to(&ctx, schedule.refresh_by).await;
+	tokio::time::timeout(Duration::from_secs(20), async {
+		while wallet.pending_round_state_ids().await.unwrap().is_empty() {
+			tokio::time::sleep(Duration::from_millis(25)).await;
+		}
+	}).await.expect("default daemon did not initiate its own early refresh");
+	srv.trigger_round().await;
+	tokio::time::timeout(Duration::from_secs(20), async {
+		loop {
+			let pool = ctx.bitcoind().sync_client().get_raw_mempool().unwrap();
+			for pending in wallet.pending_round_states().await.unwrap() {
+				if pending.state().output_vtxos().is_some_and(|coins|
+					coins.iter().any(|coin| pool.contains(&coin.chain_anchor().txid))) { return; }
+			}
+			tokio::time::sleep(Duration::from_millis(25)).await;
+		}
+	}).await.expect("actual early-refresh funding transaction did not reach Core");
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	let replacement = tokio::time::timeout(Duration::from_secs(20), async {
+		loop {
+			if let Some(coin) = wallet.spendable_vtxos().await.unwrap().into_iter()
+				.find(|coin| coin.id() != original.id()) { return coin; }
+			tokio::time::sleep(Duration::from_millis(25)).await;
+		}
+	}).await.expect("default daemon did not adopt its actually confirmed refresh");
+	advance_to(&ctx, schedule.act_by).await;
+	assert!(wallet.exit_mgr().get_exit_vtxo_ids().await.is_empty(), "healthy confirmed replacement must not be exited");
+	let replacement_schedule = wallet.exit_protection_schedule().await.unwrap().into_iter()
+		.find(|schedule| schedule.vtxo_id == replacement.id()).unwrap();
+	let signed = wallet.get_full_vtxo(replacement.id()).await.unwrap();
+	wallet.sync_onchain().await.unwrap();
+	srv.stop().await.unwrap();
+	advance_to(&ctx, replacement_schedule.act_by).await;
+	tokio::time::timeout(Duration::from_secs(20), async {
+		loop {
+			let pool = ctx.bitcoind().sync_client().get_raw_mempool().unwrap();
+			if signed.transactions().any(|step| pool.contains(&step.tx.compute_txid())) { break; }
+			tokio::time::sleep(Duration::from_millis(25)).await;
+		}
+	}).await.expect("default daemon did not broadcast the actual signed protective path with Ark offline");
+	assert!(wallet.exit_mgr().get_exit_vtxo_ids().await.contains(&replacement.id()));
+}
+
 async fn advance_to(ctx: &TestContext, height: BlockHeight) {
 	let tip = ctx.bitcoind().get_block_count().await as u32;
 	if height.to_u32() > tip { ctx.generate_blocks(height.to_u32() - tip).await; }

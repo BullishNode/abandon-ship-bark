@@ -392,6 +392,17 @@ pub trait WalletExt: BorrowMut<Wallet> {
 		tx: &Transaction,
 		fees: MakeCpfpFees,
 	) -> Result<Transaction, CpfpInternalError> {
+		self.make_signed_p2a_cpfp_excluding(tx, fees, &[])
+	}
+
+	/// Exclude prevouts that an authoritative chain lookup found unavailable.
+	/// A wallet can still retain an orphan's old confirmation during recovery.
+	fn make_signed_p2a_cpfp_excluding(
+		&mut self,
+		tx: &Transaction,
+		fees: MakeCpfpFees,
+		excluded: &[OutPoint],
+	) -> Result<Transaction, CpfpInternalError> {
 		let wallet = self.borrow_mut();
 		let (fee_anchor_point, fee_anchor_txout) = tx.fee_anchor()
 			.ok_or_else(|| CpfpInternalError::NoFeeAnchor(tx.compute_txid()))?;
@@ -415,6 +426,7 @@ pub trait WalletExt: BorrowMut<Wallet> {
 				.coin_selection(WithGuaranteedChange(DefaultCoinSelectionAlgorithm::default()));
 			b.only_witness_utxo();
 			b.exclude_unconfirmed();
+			b.unspendable(excluded.to_vec());
 			b.version(3); // for 1p1c package relay, all inputs must be confirmed
 			b.add_fee_anchor_spend(fee_anchor_point, fee_anchor_txout);
 			b.drain_to(change_addr.address.script_pubkey());
@@ -484,6 +496,27 @@ mod test {
 		let op1 = receive_output_in_latest_block(&mut wallet, Amount::from_sat(1_000));
 		receive_output_in_latest_block(&mut wallet, Amount::from_sat(1_001));
 		(wallet, op1)
+	}
+
+	#[test]
+	fn cpfp_excludes_unavailable_funding_without_changing_parent() {
+		let (mut wallet, excluded) = two_utxo_wallet();
+		let parent = Transaction {
+			version: bitcoin::transaction::Version::non_standard(3),
+			lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: vec![bitcoin::TxIn::default()],
+			output: vec![crate::fee::fee_anchor()],
+		};
+		let original = serialize(&parent);
+		let child = wallet.make_signed_p2a_cpfp_excluding(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &[excluded]).unwrap();
+		assert_eq!(serialize(&parent), original);
+		assert!(!child.input.iter().any(|input| input.previous_output == excluded));
+		assert!(child.input.iter().any(|input| input.previous_output.txid == parent.compute_txid()));
+		assert!(child.input.iter().any(|input| input.previous_output.txid != parent.compute_txid()));
+		let all = wallet.list_unspent().map(|utxo| utxo.outpoint).collect::<Vec<_>>();
+		assert!(wallet.make_signed_p2a_cpfp_excluding(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &all).is_err());
 	}
 
 	/// Build the drain-only tx shape of a CPFP child: one mandatory input, an absolute fee it

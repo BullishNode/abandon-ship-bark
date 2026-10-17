@@ -244,3 +244,114 @@ async fn expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_ch
 		}
 	}).await.expect("actual canonical fee child confirmation was not accounted");
 }
+
+
+/// Reorged operator funding is replaceable independently of the immutable
+/// customer parent. The controller uses its normal wallet RBF operation to
+/// replace the orphaned sponsor, then supplies fresh confirmed fee funds.
+#[tokio::test]
+async fn expiry_payout_replaces_orphan_funding_child_without_changing_parent() {
+	let ctx = TestContext::new("server/expiry_payout_orphan_funding_child").await;
+	let srv = Box::pin(ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
+		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).watchmand().create()).await;
+	let wallet = ctx.bark("abandoned", &srv).funded(sat(200_000)).create().await;
+	let ids = wallet.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	let client = wallet.client().await;
+	let coin = client.get_full_vtxo(ids[0]).await.unwrap();
+	let destination = client.fallback_destination().await.unwrap();
+	drop(client);
+	let fee_address = srv.watchmand().wait_wallet_address().await;
+	let before = ctx.bitcoind().get_block_count().await as u32;
+	ctx.generate_blocks(coin.expiry_height().to_u32() + 1 - before).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let (allocation, parent) = tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let row = db.read(async |t| Ok(t.query_opt("SELECT a.id,a.sweep_tx FROM expiry_allocation a \
+				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				WHERE e.vtxo_id=$1 AND a.sweep_tx IS NOT NULL", &[&ids[0].to_string()]).await?)).await.unwrap();
+			if let Some(row) = row { break (row.get::<_, i64>("id"), deserialize::<Transaction>(row.get("sweep_tx")).unwrap()); }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("the genuine unfunded decision must retain its signed parent");
+	let funding = ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;
+	ctx.generate_blocks(1).await;
+	let rpc = ctx.bitcoind().sync_client();
+	let funding_block = rpc.custom_get_raw_transaction_info(funding, None).unwrap().unwrap().blockhash.unwrap();
+	let (published, published_parent) = wait_for_payout(&db, ids[0]).await;
+	assert_eq!((published, published_parent), (allocation, parent.clone()));
+	let original: Transaction = db.read(async |t| Ok(deserialize(t.query_one("SELECT raw_tx FROM expiry_fee_child \
+		WHERE allocation_id=$1 ORDER BY id DESC LIMIT 1", &[&allocation]).await?.get("raw_tx"))?)).await.unwrap();
+	assert!(original.input.iter().any(|input| input.previous_output.txid == funding));
+	assert_eq!(ctx.bitcoind().await_transaction(original.compute_txid()).await, original);
+	ctx.generate_blocks(6).await;
+	let first_tip = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
+	let first_block = rpc.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap().blockhash.unwrap();
+	wait_for_confirmation(&db, allocation, first_tip, first_block).await;
+
+	srv.watchmand().stop().await.unwrap();
+	rpc.invalidate_block(&funding_block).unwrap();
+	assert!(rpc.get_mempool_entry(&original.compute_txid()).is_err(), "the old v3 child cannot use an unconfirmed non-parent sponsor");
+	// A real wallet RBF replaces the orphaned sponsor's txid. There is no SQL
+	// mutation, fake funding, eviction RPC, or manufactured chain observation.
+	let replacement: serde_json::Value = rpc.call("bumpfee", &[
+		serde_json::json!(funding), serde_json::json!({ "fee_rate": 50 }),
+	]).unwrap();
+	assert!(replacement["errors"].as_array().unwrap().is_empty());
+	let replacement_funding: bitcoin::Txid = replacement["txid"].as_str().unwrap().parse().unwrap();
+	assert_ne!(replacement_funding, funding);
+	let new_funding = ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
+	ctx.generate_blocks(2).await;
+	for input in original.input.iter().filter(|input| input.previous_output.txid == funding) {
+		assert!(rpc.get_tx_out(&funding, input.previous_output.vout, Some(true)).unwrap().is_none());
+	}
+	assert!(rpc.custom_get_raw_transaction_info(new_funding, None).unwrap().unwrap().confirmations.unwrap() >= 2);
+	srv.watchmand().start().await.unwrap();
+	let child = tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let raw = db.read(async |t| Ok(t.query_one("SELECT a.sweep_tx,f.raw_tx FROM expiry_allocation a \
+				JOIN expiry_fee_child f ON f.allocation_id=a.id WHERE a.id=$1 ORDER BY f.id DESC LIMIT 1", &[&allocation]).await?)).await.unwrap();
+			assert_eq!(deserialize::<Transaction>(raw.get("sweep_tx")).unwrap(), parent);
+			let child: Transaction = deserialize(raw.get("raw_tx")).unwrap();
+			if child != original && rpc.get_mempool_entry(&child.compute_txid()).is_ok() { break child; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("fresh confirmed sponsorship must replace the orphan-funded child");
+	assert!(!child.input.iter().any(|input| input.previous_output.txid == funding));
+	for input in child.input.iter().filter(|input| input.previous_output.txid != parent.compute_txid()) {
+		assert!(rpc.get_tx_out(&input.previous_output.txid, input.previous_output.vout, Some(false))
+			.unwrap().is_some_and(|output| output.confirmations >= 2));
+	}
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+	let index = parent.output.iter().position(|output| output.script_pubkey == destination.spk).unwrap();
+	assert_eq!(parent.output[index].value, coin.amount() - sat(1_000));
+	ctx.generate_blocks(6).await;
+	assert!(rpc.get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
+	let tip = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
+	let block = rpc.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap().blockhash.unwrap();
+	wait_for_confirmation(&db, allocation, tip, block).await;
+	let child_receipt: serde_json::Value = rpc.call("getrawtransaction", &[
+		serde_json::json!(child.compute_txid()), serde_json::json!(true),
+	]).unwrap();
+	let parent_receipt: serde_json::Value = rpc.call("getrawtransaction", &[
+		serde_json::json!(parent.compute_txid()), serde_json::json!(true),
+	]).unwrap();
+	assert!(child_receipt["confirmations"].as_u64().unwrap() >= 6);
+	assert_eq!(child_receipt["blockhash"], parent_receipt["blockhash"], "the actual zero-fee parent and child must confirm together");
+	let canonical_hash: BlockHash = child_receipt["blockhash"].as_str().unwrap().parse().unwrap();
+	let header = rpc.get_block_header_info(&canonical_hash).unwrap();
+	assert!(header.confirmations >= 6);
+	assert_eq!(rpc.get_block_hash(header.height as u64).unwrap(), canonical_hash);
+	let mut input_value = sat(0);
+	for input in &child.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		input_value += previous.output[input.previous_output.vout as usize].value;
+	}
+	let measured_fee = input_value - child.output.iter().map(|output| output.value).sum::<bitcoin::Amount>();
+	let rows = db.read(async |t| Ok(t.query("SELECT txid,fee_sat,confirmed_hash FROM expiry_fee_child WHERE allocation_id=$1", &[&allocation]).await?)).await.unwrap();
+	assert!(rows.iter().any(|row| row.get::<_, String>("txid") == original.compute_txid().to_string()
+		&& row.get::<_, Option<String>>("confirmed_hash").is_none()), "retain orphaned fee history without charging it");
+	let confirmed = rows.iter().filter(|row| row.get::<_, Option<String>>("confirmed_hash").is_some()).collect::<Vec<_>>();
+	assert_eq!(confirmed.len(), 1);
+	assert_eq!(confirmed[0].get::<_, String>("txid"), child.compute_txid().to_string());
+	assert_eq!(confirmed[0].get::<_, i64>("fee_sat"), i64::try_from(measured_fee.to_sat()).unwrap());
+}

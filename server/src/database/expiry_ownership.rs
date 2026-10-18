@@ -21,6 +21,12 @@ use super::expiry_receive::ReceiveClaimSettlement;
 use super::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use super::{BlockTable, SpendState, Tx};
 
+/// Confirmations a grant reclaim needs before its sender is refunded.
+/// PoC knob: `ABANDON_INTERNAL_REFUND_DEPTH`, default 6.
+fn internal_refund_depth() -> u32 {
+	std::env::var("ABANDON_INTERNAL_REFUND_DEPTH").ok().and_then(|v| v.parse().ok()).filter(|d| *d >= 1).unwrap_or(6)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnershipDisposition {
 	Customer { user_pubkey: PublicKey, mailbox: Option<MailboxIdentifier> },
@@ -50,9 +56,9 @@ pub enum OwnershipEvidence {
 	HtlcUnattemptedExpired { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
 	HtlcExternalFailed { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
 	HtlcInternalZeroGrantCancelled { payment_hash: PaymentHash, htlc_expiry: BlockHeight, attempt_id: i64, subscription_id: i64 },
-	/// Conditional on spending EVERY receive dependency in the same parent.
-	/// This evidence never becomes an independent irreversible customer owner.
-	HtlcInternalJointTimeout { payment_hash: PaymentHash, attempt_id: i64, subscription_id: i64, grants: Vec<VtxoId> },
+	/// Every receive grant of the internal receive was taken back on chain by
+	/// the server's timeout clause. Chain-derived: invalidated with its block.
+	HtlcInternalGrantsReclaimed { payment_hash: PaymentHash, attempt_id: i64, subscription_id: i64, block: BlockRef },
 	HtlcChain { payment_hash: PaymentHash, resolution: HtlcResolution, block: BlockRef },
 }
 
@@ -268,6 +274,19 @@ impl Tx<'_> {
 					proposal.evidence = Some(OwnershipEvidence::HtlcSourceDischarged { payment_hash: hash });
 					return Ok(proposal);
 				}
+				// An uncollected internal payment: once every receive grant is
+				// back with the server on chain, the sender's source is theirs.
+				if let LightningSourceState::InternalCommitted { attempt_id, subscription_id } = source {
+					if let Some(watchman_tip) = watchman_tip.filter(|_| expired_contract && htlc.htlc.chain_resolution.is_none()) {
+						if let Some(block) = self.internal_grants_reclaimed(subscription_id, hash, tip, watchman_tip, internal_refund_depth()).await? {
+							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
+							proposal.evidence = Some(OwnershipEvidence::HtlcInternalGrantsReclaimed {
+								payment_hash: hash, attempt_id, subscription_id, block,
+							});
+							return Ok(proposal);
+						}
+					}
+				}
 				// A same-hash receive funded by another source cannot retain
 				// this sender's money. Unknown legacy attempts still wait.
 				if matches!(source, LightningSourceState::Unattempted | LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. })
@@ -315,41 +334,6 @@ impl Tx<'_> {
 		full.validate(funding).context("invalid customer expiry source signature")?;
 		proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
 		proposal.evidence = Some(OwnershipEvidence::Pubkey);
-		Ok(proposal)
-	}
-
-	pub(crate) async fn propose_joint_refund_ownership(
-		&self, fact: &BackingVtxoFact, funding: &Transaction, view: super::expiry_chain::ExpiryViewToken,
-		component: &super::expiry_internal_refund::InternalRefundComponent,
-	) -> anyhow::Result<OwnershipProposal> {
-		let mut proposal = self.propose_expiry_ownership(fact, funding,
-			view.captaind.height, Some(view.watchmand.height)).await?;
-		let Some(joint) = component.for_source(fact.state.vtxo_id) else { return Ok(proposal); };
-		let previous = component.existing_source(fact.state.vtxo_id);
-		// Only the caller's exact conflicted conditional entitlement can reuse
-		// its own spent fence. Ordinary ownership never learns this exception.
-		let premise = if let Some(scope) = previous {
-			fact.state.decided_for_fallback && fact.state.spend_state == SpendState::Spent
-				&& fact.state.vtxo.amount() == scope.gross
-				&& matches!(proposal.disposition, OwnershipDisposition::Unresolved(_))
-		} else { matches!(proposal.disposition, OwnershipDisposition::Unresolved("Lightning settlement pending")) };
-		ensure!(joint.view == view && premise && !proposal.has_stored_preimage && proposal.cancellations.is_empty(),
-			"joint refund source has another settlement premise");
-		let full = fact.full_vtxo.as_ref().context("joint refund lacks its full signed source")?;
-		full.validate(funding).context("joint refund source signature is invalid")?;
-		let user = full.clone().try_into_user_vtxo().map_err(|_| anyhow::anyhow!("joint funding is not a user contract"))?;
-		let policy = user.policy().as_server_htlc_send().context("joint source is not a send contract")?;
-		ensure!(policy.payment_hash == joint.payment_hash, "joint source has another payment hash");
-		if let Some(scope) = previous {
-			ensure!(user.user_pubkey() == scope.claimant, "joint replan changed its original claimant");
-		}
-
-		proposal.disposition = self.expiry_customer(proposal.id, user.user_pubkey()).await?;
-		proposal.evidence = Some(OwnershipEvidence::HtlcInternalJointTimeout {
-			payment_hash: joint.payment_hash, attempt_id: joint.attempt_id,
-			subscription_id: joint.subscription_id, grants: joint.grant_ids(),
-		});
-		proposal.needs_chain_progress = false;
 		Ok(proposal)
 	}
 

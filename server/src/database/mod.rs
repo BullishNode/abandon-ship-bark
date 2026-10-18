@@ -21,8 +21,6 @@ pub(crate) mod expiry_guard;
 pub mod expiry_inventory;
 pub mod expiry_chain;
 pub mod expiry_decision;
-pub(crate) mod expiry_internal_refund;
-pub(crate) mod expiry_user_claim;
 pub mod expiry_ownership;
 pub mod expiry_payout;
 pub mod expiry_details;

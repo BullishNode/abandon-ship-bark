@@ -105,7 +105,6 @@ impl VtxoExitFrontier {
 			let chain_resolution = classify_htlc_spend(&vtxo, witness);
 			self.db.write(async |t| {
 				t.register_vtxo_spend(vtxo_id, spent_height, spent_txid).await?;
-				t.retain_user_timeout_claim(&vtxo, transaction, spent).await?;
 				if let Some(resolution) = chain_resolution {
 					htlc_vtxo::set_htlc_vtxo_chain_resolution(
 						&t, vtxo_id, resolution, spent_height,
@@ -338,8 +337,6 @@ impl ChainEventListener for Arc<RwLock<VtxoExitFrontier>> {
 		// Rollback all transactions that ocurred above this block
 		frontier.db.write(async |t| {
 			t.reorg_frontier(block_ref.height).await?;
-			t.execute("UPDATE expiry_user_claim_tx SET confirmed_height=NULL,confirmed_hash=NULL WHERE confirmed_height>$1",
-				&[&i64::from(block_ref.height)]).await?;
 			htlc_vtxo::clear_htlc_vtxo_chain_resolutions_above(&t, block_ref.height).await?;
 			Ok(())
 		}).await?;

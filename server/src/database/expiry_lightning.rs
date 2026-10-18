@@ -48,7 +48,8 @@ pub(crate) enum LightningSourceState {
 	Unattempted,
 	Failed,
 	Pending,
-	InternalCommitted,
+	/// Exactly one internal attempt funded by this source has issued grants.
+	InternalCommitted { attempt_id: i64, subscription_id: i64 },
 	InternalZeroGrantCancelled { attempt_id: i64, subscription_id: i64 },
 	Discharged,
 }
@@ -195,7 +196,7 @@ impl Tx<'_> {
 		if attempts.is_empty() { return Ok(LightningSourceState::Unattempted); }
 		let preimage_known = self.get_htlc_settlement_by_payment_hash(hash).await?.is_some();
 		let mut pending = false;
-		let mut internal = false;
+		let mut internal = Vec::new();
 		let mut cancelled_internal = None;
 		for attempt in attempts {
 			if preimage_known && (attempt.get::<_, bool>("external_success")
@@ -209,7 +210,7 @@ impl Tx<'_> {
 					cancelled_internal = Some((attempt_id, subscription_id));
 					continue;
 				}
-				internal = true;
+				internal.push(attempt_id);
 				continue;
 			}
 			let never_dispatched = attempt.get::<_, bool>("queued")
@@ -217,11 +218,46 @@ impl Tx<'_> {
 			if !attempt.get::<_, bool>("terminal_failure") && !never_dispatched { pending = true; }
 		}
 		Ok(if pending { LightningSourceState::Pending }
-			else if internal { LightningSourceState::InternalCommitted }
+			else if let [attempt_id] = internal[..] {
+				let subscription_id = self.query_one("SELECT subscription_id FROM expiry_lightning_internal_funding WHERE id=$1",
+					&[&attempt_id]).await?.get("subscription_id");
+				LightningSourceState::InternalCommitted { attempt_id, subscription_id }
+			}
+			// Several internal attempts on one source never resolve automatically.
+			else if !internal.is_empty() { LightningSourceState::Pending }
 			else if let Some((attempt_id, subscription_id)) = cancelled_internal {
 				LightningSourceState::InternalZeroGrantCancelled { attempt_id, subscription_id }
 			}
 			else { LightningSourceState::Failed })
+	}
+
+	/// The block at which every receive grant of an internal receive had been
+	/// taken back through the server's timeout clause, at least `depth` blocks
+	/// deep in both completed views. Any grant still open, collected off-chain,
+	/// or claimed with the preimage keeps the sender's source unresolved.
+	pub(crate) async fn internal_grants_reclaimed(
+		&self, subscription_id: i64, hash: PaymentHash, tip: BlockHeight, watchman_tip: BlockHeight, depth: u32,
+	) -> anyhow::Result<Option<BlockRef>> {
+		if self.get_htlc_settlement_by_payment_hash(hash).await?.is_some() { return Ok(None); }
+		let grants = self.query("SELECT h.payment_hash,h.direction::TEXT,h.offchain_resolution::TEXT, \
+			h.chain_resolution::TEXT,h.chain_resolution_height FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id \
+			WHERE v.lightning_htlc_subscription_id=$1 ORDER BY v.vtxo_id", &[&subscription_id]).await?;
+		if grants.is_empty() { return Ok(None); }
+		let completed = tip.min(watchman_tip).to_u32();
+		let mut last = 0u32;
+		for grant in &grants {
+			let reclaimed = grant.get::<_, &str>("payment_hash") == hash.to_string()
+				&& grant.get::<_, &str>("direction") == "outgoing"
+				&& grant.get::<_, Option<&str>>("offchain_resolution").is_none()
+				&& grant.get::<_, Option<&str>>("chain_resolution") == Some("revoked");
+			let Some(height) = grant.get::<_, Option<i32>>("chain_resolution_height") else { return Ok(None); };
+			let height = u32::try_from(height)?;
+			if !reclaimed || height + depth.saturating_sub(1) > completed { return Ok(None); }
+			last = last.max(height);
+		}
+		let block = self.get_block_by_height(super::BlockTable::Watchmand, BlockHeight::new(last)).await?
+			.context("grant reclaim block is not in the completed watchman view")?;
+		Ok(Some(block))
 	}
 
 	/// Return only subscriptions the requested source coins actually funded.

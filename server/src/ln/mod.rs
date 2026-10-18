@@ -522,7 +522,7 @@ impl Server {
 				match t.lightning_source_state(*source, payment_hash).await? {
 					LightningSourceState::Discharged => return badarg!("invoice has already been paid"),
 					LightningSourceState::Pending => return badarg!("source payment outcome is not yet terminal"),
-					LightningSourceState::InternalCommitted => internal_funding = true,
+					LightningSourceState::InternalCommitted { .. } => internal_funding = true,
 					LightningSourceState::Unattempted | LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. } => {},
 				}
 			}
@@ -842,7 +842,7 @@ impl Server {
 		// can still settle after the check above. Doing it in the transaction
 		// that stores the HTLC-recv vtxos means a refusal leaves no vtxo behind
 		// and puts the pool inputs back.
-		let vtxos = self.vtxopool.send_arkoor(self, dest, sub.id, async |t, vtxos| {
+		let vtxos = self.vtxopool.send_arkoor(self, dest, async |t, vtxos| {
 			t.update_lightning_htlc_subscription_with_htlcs(
 				sub.id,
 				vtxos.iter().map(|v| v.id()),

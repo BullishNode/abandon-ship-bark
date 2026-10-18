@@ -39,7 +39,6 @@ impl Watchman {
 	pub(crate) async fn rebuild_expiry_state(&self) -> anyhow::Result<Option<ExpiryViewToken>> {
 		let Some(view) = self.db.read(async |t| t.expiry_rebuild_token().await).await? else { return Ok(None); };
 		self.verify_expiry_view(view).await?;
-		self.backfill_user_timeout_claims(view).await?;
 		if self.db.read(async |t| t.expiry_view_is_rebuilt(view).await).await? {
 			return Ok(Some(view));
 		}
@@ -49,7 +48,6 @@ impl Watchman {
 			let mut txids = allocations.iter().filter_map(|r| r.get::<_, Option<&str>>("sweep_txid"))
 				.map(Txid::from_str).collect::<Result<BTreeSet<_>, _>>()?;
 			for row in t.query("SELECT txid FROM expiry_fee_child", &[]).await? { txids.insert(row.get::<_, &str>("txid").parse()?); }
-			for row in t.query("SELECT txid FROM expiry_user_claim_tx", &[]).await? { txids.insert(row.get::<_,&str>("txid").parse()?); }
 			let mut claims = Vec::new();
 			for row in t.query("SELECT e.id,v.vtxo,v.onchain_spent_txid FROM expiry_entitlement e JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE v.onchain_spent_height IS NOT NULL AND v.onchain_spent_height<=$1", &[&i32::try_from(view.captaind.height.min(view.watchmand.height).to_u32())?]).await? {
 				let txid: Txid = row.get::<_, &str>("onchain_spent_txid").parse()?;
@@ -130,13 +128,11 @@ impl Watchman {
 			}
 			t.execute("UPDATE expiry_allocation SET confirmed_height=NULL,confirmed_hash=NULL,status='pending'", &[]).await?;
 			t.execute("UPDATE expiry_fee_child SET confirmed_height=NULL,confirmed_hash=NULL", &[]).await?;
-			t.execute("UPDATE expiry_user_claim_tx SET confirmed_height=NULL,confirmed_hash=NULL", &[]).await?;
 			t.execute("UPDATE expiry_allocation_coin SET paying_txid=NULL,paying_height=NULL,paying_hash=NULL", &[]).await?;
 			t.execute("DELETE FROM expiry_terminal_claim", &[]).await?;
 			for (txid,point) in &confirmed {
 				t.execute("UPDATE expiry_allocation SET status='confirmed',confirmed_height=$2,confirmed_hash=$3 WHERE sweep_txid=$1", &[&txid.to_string(),&i64::from(point.height),&point.hash.to_string()]).await?;
 				t.execute("UPDATE expiry_fee_child SET confirmed_height=$2,confirmed_hash=$3 WHERE txid=$1", &[&txid.to_string(),&i64::from(point.height),&point.hash.to_string()]).await?;
-				t.execute("UPDATE expiry_user_claim_tx SET confirmed_height=$2,confirmed_hash=$3 WHERE txid=$1", &[&txid.to_string(),&i64::from(point.height),&point.hash.to_string()]).await?;
 			}
 			// Only an observed spend in the completed prefix invalidates a
 			// parent. A mempool conflict is not a final discharge or replan.
@@ -144,35 +140,7 @@ impl Watchman {
 			// A chain-only ownership premise may have disappeared even when
 			// another input in that group remains unspent. It needs a fresh
 			// derived allocation before this process may publish its parent.
-			t.execute("UPDATE expiry_allocation a SET status='conflicted' WHERE a.status='pending' AND EXISTS(SELECT 1 FROM expiry_allocation_coin c WHERE c.allocation_id=a.id AND c.evidence->>'kind'='htlc_chain' AND NOT EXISTS(SELECT 1 FROM watchmand_block b WHERE b.height=(c.evidence->>'height')::BIGINT AND b.hash=c.evidence->>'hash'))", &[]).await?;
-			// A terminal observation is a premise, not a permanent payment fact.
-			// The exact retained user body may reconfirm in another block; match
-			// current canonical source+txid, not its old observation height/hash.
-			let premises=t.query("SELECT a.id,e.vtxo_id AS customer_source,c.evidence::TEXT FROM expiry_allocation a \
-				JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
-				JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-				WHERE a.status='pending' AND c.evidence ? 'terminal_sources' ORDER BY a.id,c.entitlement_id",&[]).await?;
-			let mut unsupported=std::collections::BTreeSet::new();
-			for row in premises {
-				let allocation:i64=row.get("id");
-				let evidence:serde_json::Value=serde_json::from_str(row.get("evidence"))?;
-				let sources=evidence["terminal_sources"].as_array().context("invalid stored terminal premise list")?;
-				for premise in sources {
-					let source= premise["source"].as_str().context("missing terminal premise source")?.parse()?;
-					let txid:bitcoin::Txid=premise["claim_txid"].as_str().context("missing terminal premise txid")?.parse()?;
-					let prior_joint=premise.get("prior_joint").and_then(serde_json::Value::as_bool)==Some(true);
-					let batch=premise.get("original_batch").and_then(serde_json::Value::as_bool)==Some(true);
-					let current=if batch && prior_joint {
-						t.rebuilding_internal_reserved_batch_claim(source,row.get::<_,&str>("customer_source").parse()?,view,&evidence).await?
-					} else if batch {
-						t.rebuilding_internal_original_batch_claim(source,row.get::<_,&str>("customer_source").parse()?,view,&evidence).await?
-					} else {t.rebuilding_internal_partial_terminal_claim(source,view,prior_joint).await?};
-					if current.is_none_or(|proof|proof.claim.compute_txid()!=txid) {unsupported.insert(allocation);}
-				}
-			}
-			for allocation in unsupported {
-				t.execute("UPDATE expiry_allocation SET status='conflicted' WHERE id=$1 AND status='pending'",&[&allocation]).await?;
-			}
+			t.execute("UPDATE expiry_allocation a SET status='conflicted' WHERE a.status='pending' AND EXISTS(SELECT 1 FROM expiry_allocation_coin c WHERE c.allocation_id=a.id AND c.evidence->>'kind' IN ('htlc_chain','htlc_internal_grants_reclaimed') AND NOT EXISTS(SELECT 1 FROM watchmand_block b WHERE b.height=(c.evidence->>'height')::BIGINT AND b.hash=c.evidence->>'hash'))", &[]).await?;
 			t.execute("UPDATE expiry_allocation_coin c SET paying_txid=a.sweep_txid,paying_height=a.confirmed_height,paying_hash=a.confirmed_hash FROM expiry_allocation a WHERE a.id=c.allocation_id AND a.status='confirmed'", &[]).await?;
 			for (id,txid,point) in &paid_claims {
 				t.execute("INSERT INTO expiry_terminal_claim(entitlement_id,txid,height,hash) VALUES($1,$2,$3,$4)", &[id,&txid.to_string(),&i64::from(point.height),&point.hash.to_string()]).await?;

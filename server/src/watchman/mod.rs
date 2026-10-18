@@ -13,7 +13,6 @@ pub(crate) mod fee_sponsor;
 mod policy;
 mod payout;
 mod recovery;
-mod user_claim;
 mod signer;
 pub(crate) mod settlement;
 
@@ -407,7 +406,6 @@ impl Watchman {
 		// Expired customer backing never reaches upstream's drain-only claim
 		// builder. Only committed financial groups can authorize these spends.
 		let Some(view) = self.rebuild_expiry_state().await? else { return Ok(()); };
-		self.replay_user_timeout_claims(view).await?;
 		self.process_expiry_payouts(view).await?;
 		let splits = self.db.read(async |t| t.pending_expiry_splits().await).await?;
 		for (txid, root) in splits {
@@ -583,17 +581,7 @@ impl Watchman {
 		let txid = tx.compute_txid();
 		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
 		self.db.write(async |t| {
-			let fenced=t.query_one("SELECT EXISTS(SELECT 1 FROM expiry_allocation_input WHERE vtxo_id=ANY($1)) AS fenced",
-				&[&ids.iter().map(ToString::to_string).collect::<Vec<_>>()]).await?.get::<_,bool>("fenced");
-			if fenced {
-				let view=t.expiry_rebuild_token().await?.context("reserved operator return needs a completed view")?;
-				t.lock_terminal_internal_grant_returns(view,&ids).await?;
-				self.verify_expiry_view(view).await?;
-			} else {
-				// A new reservation racing this read still fails the ordinary
-				// guard. Normal unreserved claims retain their existing path.
-				t.lock_unallocated_watchman_inputs(&ids).await?;
-			}
+			t.lock_unallocated_watchman_inputs(&ids).await?;
 			bcd::broadcast_tx(&self.bitcoind, &tx).await?;
 			Ok(())
 		}).await?;

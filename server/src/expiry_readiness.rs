@@ -40,13 +40,8 @@ impl Tx<'_> {
 	async fn prepare_expiry_coin(
 		&self, fact: &BackingVtxoFact,
 		funding: &Transaction, view: ExpiryViewToken, network: bitcoin::Network,
-		joint: Option<&crate::database::expiry_internal_refund::InternalRefundComponent>,
 	) -> anyhow::Result<PreparedCoin> {
-		let ownership = if let Some(joint) = joint {
-			self.propose_joint_refund_ownership(fact, funding, view, joint).await?
-		} else {
-			self.propose_expiry_ownership(fact, funding, view.captaind.height, Some(view.watchmand.height)).await?
-		};
+		let ownership = self.propose_expiry_ownership(fact, funding, view.captaind.height, Some(view.watchmand.height)).await?;
 		let payee = match &ownership.disposition {
 			OwnershipDisposition::Customer { user_pubkey, mailbox } => {
 				self.queue_expiry_owner(*user_pubkey, *mailbox).await?;
@@ -78,15 +73,10 @@ impl Server {
 		tokio::spawn(async move {
 			let _worker = worker;
 			let mut cursor = 0;
-			let mut joint_cursor = 0;
 			while !self.rtmgr.shutdown_requested() {
 				match self.expiry_readiness_pass(cursor).await {
 					Ok(next) => cursor = next,
 					Err(error) => warn!("Expiry readiness pass failed; no incomplete payout authorized: {:#}", error),
-				}
-				match self.internal_refund_readiness_pass(joint_cursor).await {
-					Ok(next) => joint_cursor = next,
-					Err(error) => warn!(%error, "Internal timeout refund pass remains pending"),
 				}
 				tokio::select! {
 					_ = self.rtmgr.shutdown_signal() => break,
@@ -132,7 +122,7 @@ impl Server {
 		let mut prepared_bytes = 0usize;
 		for (anchor, roots) in anchors {
 			if self.rtmgr.shutdown_requested() { break; }
-			if let Err(error) = self.prepare_expiry_anchor(view, anchor, roots, &mut ready, &mut prepared_bytes, None).await {
+			if let Err(error) = self.prepare_expiry_anchor(view, anchor, roots, &mut ready, &mut prepared_bytes).await {
 				warn!(%anchor, %error, "Expiry anchor remains unready; other anchors continue");
 			}
 		}
@@ -157,7 +147,6 @@ impl Server {
 		&self, view: ExpiryViewToken, anchor: OutPoint, roots: Vec<ServerVtxo>,
 		ready: &mut BTreeMap<BlockHeight, Vec<ReadyOutput>>,
 		prepared_bytes: &mut usize,
-		joint: Option<&crate::database::expiry_internal_refund::InternalRefundComponent>,
 	) -> anyhow::Result<()> {
 		// One immutable inventory per anchor per pass, including after a split.
 		// Repeating the whole anchor SQL query once per child is quadratic work.
@@ -209,7 +198,7 @@ impl Server {
 					// Release the registry lock between coins. A large tree must
 					// not block registrations while preparing all of its owners.
 					let coin = self.db.write(async |t| t.prepare_expiry_coin(
-						&snapshot.regular[*index], &funding, view, self.config.network, joint,
+						&snapshot.regular[*index], &funding, view, self.config.network,
 					).await).await?;
 					match coin {
 						PreparedCoin::Ready(coin) => coins.push(coin),
@@ -220,7 +209,7 @@ impl Server {
 				if hold || needs_htlc_progress {
 					// Owner lookup and incomplete ordinary evidence never authorize
 					// tree progression: it could remove the server's expiry path.
-					if needs_htlc_progress && !hold && joint.is_none() {
+					if needs_htlc_progress && !hold {
 						self.db.write(async |t| t.request_expiry_split(view, &root).await).await?;
 					}
 					return Ok(());

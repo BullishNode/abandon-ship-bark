@@ -1,0 +1,7 @@
+# H11 v1 source review
+
+Scoped source ACK: no concrete blocker found in the full699-line frozen source `acaaabcd…`, patch `b32d89cc…`, manifest `6d0a3018…`. Patch reconstructs exact source. All152 prior testing Rust files remain unchanged;28 actual canonical/owned API pairs and17 exact API line references match their recorded hashes.
+
+The case uses two genuine public SDK full-value100k sends A→B→C, authentic signed ordinary-spend proofs and mailbox full-body hydration. Original SDK actors are stopped/dropped before expiry. Automatic fallback must pay only C99000 with1000 fee; canonical parent and actual same-block child require Core6. A closed300k root+sponsor graph accounts for every actual fee and terminal output. Whole canonical/mempool payee checks exclude A/B or extra C payments; all allocation generations exclude predecessors/ancestors. Returning original A/B retain exact ordinary send histories without another debit. C has one100k fallback debit, full receipt, all ten balance fields zero, no exits, and repeated sync/reopen/idempotence checks.
+
+No compilation/module registration/native execution occurred;180-second/96-block feasibility is unmeasured. This is one ordinary-forwarding/manual SDK path, not split/refresh/HTLC/reorg/lost-reply/backup/seed/default-daemon or fullML/production qualification. Selected300k excludes ordinary funding change/board miner; no global operator custody claim. Current canonical and older owned product bytes are explicitly distinct.

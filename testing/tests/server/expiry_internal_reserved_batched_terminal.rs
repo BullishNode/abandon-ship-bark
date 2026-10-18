@@ -281,8 +281,9 @@ async fn reserved_batched_terminal(reorg:bool) {
 	assert!(prefix.confirmations>0); assert_eq!(prefix.value,sat(100_000));
 	mature=mature.max(sources[2].expiry_height().to_u32())
 		.max(current+1-u32::try_from(prefix.confirmations).unwrap()+sources[2].exit_delta().to_u32());
+	// Under option B the grants were already reclaimed; only unspent ones matter.
 	for grant in &grants {
-		let actual=chain.get_tx_out(&grant.point().txid,grant.point().vout,Some(true)).unwrap().unwrap();
+		let Some(actual)=chain.get_tx_out(&grant.point().txid,grant.point().vout,Some(true)).unwrap() else { continue; };
 		assert!(actual.confirmations>0);
 		mature=mature.max(grant.policy().as_server_htlc_recv().unwrap().htlc_expiry.to_u32())
 			.max(current+1-u32::try_from(actual.confirmations).unwrap()+grant.exit_delta().to_u32());

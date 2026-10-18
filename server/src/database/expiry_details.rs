@@ -219,7 +219,7 @@ impl Tx<'_> {
 			};
 			let payout = amount(&row,"payout_sat")?;
 			let disposition = match row.get::<_, &str>("disposition") {
-				"customer" if payout > Amount::ZERO => FallbackDisposition::CustomerPayout,
+				"customer" if row.get::<_, Option<i32>>("output_index").is_some() => FallbackDisposition::CustomerPayout,
 				"customer" => FallbackDisposition::BelowDust,
 				"operator" => FallbackDisposition::Operator,
 				_ => bail!("unknown stored fallback disposition"),

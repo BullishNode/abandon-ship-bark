@@ -167,6 +167,7 @@ pub struct WatchmandBuilder<'a> {
 	name: String,
 	bitcoind: Option<Arc<Bitcoind>>,
 	mod_cfg: Option<Box<dyn FnOnce(&mut server::config::watchmand::Config)>>,
+	exec: Option<PathBuf>,
 }
 
 impl<'a> WatchmandBuilder<'a> {
@@ -176,7 +177,14 @@ impl<'a> WatchmandBuilder<'a> {
 			name: name.as_ref().to_string(),
 			bitcoind: None,
 			mod_cfg: None,
+			exec: None,
 		}
+	}
+
+	/// Run the captured legacy watchman without changing process-wide env.
+	pub fn exec(mut self, exec: PathBuf) -> Self {
+		self.exec = Some(exec);
+		self
 	}
 
 	pub fn bitcoind(mut self, bitcoind: Arc<Bitcoind>) -> Self {
@@ -210,6 +218,7 @@ impl<'a> WatchmandBuilder<'a> {
 		).await.expect("failed to copy mnemonic file for watchmand");
 
 		let ret = Watchmand::new(&self.name, bitcoind, cfg);
+		if let Some(exec) = self.exec { ret.set_exec(Some(exec)); }
 		ret.start().await.unwrap();
 
 		ret

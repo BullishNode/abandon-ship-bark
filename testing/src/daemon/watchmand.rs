@@ -59,6 +59,7 @@ pub struct WatchmandHelper {
 	bitcoind: Arc<Bitcoind>,
 	slog_handler_tx: parking_lot::Mutex<Option<mpsc::Sender<Box<dyn SlogHandler>>>>,
 	state: Arc<parking_lot::Mutex<State>>,
+	exec: parking_lot::Mutex<Option<PathBuf>>,
 }
 
 impl Watchmand {
@@ -93,9 +94,16 @@ impl Watchmand {
 			bitcoind,
 			slog_handler_tx: parking_lot::Mutex::new(None),
 			state: Arc::new(parking_lot::Mutex::new(State::default())),
+			exec: parking_lot::Mutex::new(None),
 		};
 
 		Daemon::wrap(helper)
+	}
+
+	/// Override this instance for a same-database legacy upgrade.
+	/// Passing None restores WATCHMAND_EXEC on the next start.
+	pub fn set_exec(&self, exec: Option<PathBuf>) {
+		*self.inner.exec.lock() = exec;
 	}
 
 	pub async fn get_custom_command(&self, args: &[&str]) -> anyhow::Result<Command> {
@@ -217,7 +225,7 @@ impl DaemonHelper for WatchmandHelper {
 	async fn get_command(&self) -> anyhow::Result<Command> {
 		let config_file = self.get_config_file().await;
 
-		let mut cmd = Watchmand::base_cmd();
+		let mut cmd = self.base_cmd();
 		let args = vec![
 			"start",
 			"--config",
@@ -275,10 +283,17 @@ impl DaemonHelper for WatchmandHelper {
 }
 
 impl WatchmandHelper {
+	fn base_cmd(&self) -> Command {
+		match self.exec.lock().clone() {
+			Some(exec) => Command::new(exec),
+			None => Watchmand::base_cmd(),
+		}
+	}
+
 	async fn get_custom_command(&self, args: &[&str]) -> anyhow::Result<Command> {
 		let config_file = self.get_config_file().await;
 
-		let mut cmd = Watchmand::base_cmd();
+		let mut cmd = self.base_cmd();
 		let mut new_args = args.to_vec();
 		new_args.push("--config");
 		new_args.push(config_file.to_str().unwrap());

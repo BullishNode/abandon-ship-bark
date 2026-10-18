@@ -25,6 +25,8 @@ mod qualification_cold_backup;
 mod qualification_lightning_backup;
 mod qualification_offboard_reply_restore;
 mod qualification_tiny_payout_grouping;
+mod qualification_dust_later_receipt;
+mod qualification_three_owner_forwarding;
 mod ban;
 mod blocklist;
 mod block_index;
@@ -2723,3 +2725,5 @@ mod expiry_internal_terminal_return;
 mod expiry_user_claim_backfill;
 
 mod expiry_view_service;
+
+mod expiry_user_claim_legacy_upgrade;

@@ -1,0 +1,61 @@
+{
+  "at": "2026-10-18T11:31:56.438898+00:00",
+  "production_readiness": "NO",
+  "purpose": "Record actual legacy-upgrade qualification and public Signet deployment without mixing source or payment outcomes",
+  "V19_test_only_capture": {
+    "head": "4e3f916f833567d874a11453170fa1c5f7563736",
+    "dirty": true,
+    "source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+    "bundle_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+    "product_source_equivalence_sha256": "d6c65fccbf45f2871d8dd1da1a5f817a1f908b033985005a089cc9d5fe255ec1",
+    "product_version": "Actual four V18 immutable products retain57f59 dirty sourcee0b904 label; all non-test non-doc source bytes identical. New testing library and server fixtures compiled, no relabeling products.",
+    "checks_seconds": 68.137,
+    "server_compile_seconds": 113.994,
+    "unit_result": "Inherited unchanged product/unit source: V18 877PASS1skip, not rerun"
+  },
+  "legacy_upgrade": {
+    "test": "expiry_user_claim_legacy_upgrade::legacy_funded_user_claim_epoch_reaches_later_supported_source",
+    "source_patch_sha256": "3f5131816516e6717ffd74644cb0e30fe6e45413a1d8ac8c704b02fada0eb02b",
+    "state": "PASS",
+    "native_seconds": 111.368,
+    "wrapper_seconds": 112.12,
+    "log_sha256": "b72a8c7760628b6f4f8dbe1b4dc0e7a1ffc442b441fad28219d533ac56105c5b",
+    "formal_postflight_sha256": "ae1e69fcf854c28be28748baecf99c730609aecaf61a48c8ae572f762e5ff713",
+    "pins": 16,
+    "scoped_actors_after": 0,
+    "unreadable_proc_entries": 0,
+    "actual_assertions": [
+      "17 genuine oldV10 HTLC timeout observations before migration:16\u00d720k sources paid318k in one real signed receipt plus A100k paid98k;2k miner each",
+      "same database OID, signed bodies, source numeric rows and both server wallet seeds survive V10\u2192V18 migration",
+      "normal worker retains all17 exact userclaim links, including later A beyond first16 rows",
+      "remaining B100k plus ALL180k grants produces real99k rightful fallback+181k grossoperator output; actual uniqueP2A feechild, positive measured minerfee, sameblock parent/child Core6",
+      "original actors absent before upgrade; paid prefix has no second confirmed customer fallback"
+    ],
+    "limits": [
+      "Finite funded valid-prefix upgrade, not incompatible-witness starvation, sustained arrivals, all batch refund/reorg combinations, global custody or customer seed-spend proof",
+      "Independent retained-chain monetary audit assigned separately; no completed independent result claimed here"
+    ]
+  },
+  "preserved_runner_failure": {
+    "state": "FAIL",
+    "native_seconds": 14.242,
+    "wrapper_seconds": 15.075,
+    "log_sha256": "9e1048baed1e247315ae204c56bd2d66d838227425d2b00e73d5b4a07eb0321d",
+    "cause": "Root run.sh incorrectly pointed BARK_EXEC at nonexistent V19/bark despite manifest intentionally inheriting V18 products. Failed before actor wallet creation.",
+    "correction": "New isolated run controls use all4 actual inherited manifest paths; preflight verifies environment paths and hashes. Same compiled source/default180/retries0; original failure preserved.",
+    "inference": "Runner configuration failure does not establish product loss"
+  },
+  "public_Signet": {
+    "actual_deployment": "V18",
+    "post_upgrade_receipt_sha256": "28436439228d14fd4e92d295a7896da28ca8ffcce1838878ea6d77b56df4158a",
+    "runtime_manifest_sha256": "05d44d8384e7d4c6f0168f14e5baa507acb675b3279d73ebe577d1a1153d0f50",
+    "backup": "249 actual financial/config files,4 disposable SQLite integrity checks, full PostgreSQL archive decoded independently offVM and fsynced before new writer startup",
+    "migration": "cap serially committed V16; old1..15 records unchanged, same DB/seeds/identity/fees/profile",
+    "autonomous_readiness": "Actual generation10/current ledger16rev21 at326879 without manual TriggerSweep; actual load-latency still unqualified",
+    "original_receive": "Paid/claimed on V11c4890sat/E326894; new V18 recovery-only observer retains original claim/seed and waits for actual payout/Core6/seed drain. No cloned monetary ACK.",
+    "fresh_failed_Lightning": "Genuine new BIP84 wallet/cold offVM backup; ONE recovered58034 input\u219230000 newactor+27611ownedchange+423miner. Real funding tx1a4374e8aa1b5b5b533ab86dbb51071a32b77ab2f7c1e92fd30eb2825d2eea56; ONE20kboard ACK/net19670, waiting for actual3board confirmations at326881. No heldsend/fallback/recovery PASS.",
+    "old_incompatible_refresh": "Original002 remains OPEN/locked, no forcedforfeit/cancellation/second refresh. Source audit identifies inherited upstream144\u219232 geometry incompatibility; not established fork money loss.",
+    "production_qualified": false
+  },
+  "new_source_supported_gap": "Two original HTLCs repaid in one batched DEFAULT claim while a third same-attempt source still needs fallback: current single-input terminal omission proof does not establish this path. New authentic diagnostic fixture is unrun; no product change yet."
+}

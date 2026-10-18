@@ -10,9 +10,9 @@ use std::time::Duration;
 
 use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
 use ark::lightning::PaymentHash;
-use ark::vtxo::{Full, TapScriptClause};
+use ark::vtxo::Full;
 use ark::vtxo::policy::signing::VtxoSigner;
-use ark::{Vtxo, VtxoPolicy};
+use ark::{ProtocolEncoding, Vtxo, VtxoPolicy};
 use ark_testing::{btc, sat, TestContext};
 use bitcoin::{Amount, OutPoint, Transaction, TxIn, TxOut, Witness};
 use bitcoin::consensus::deserialize;

@@ -231,8 +231,15 @@ async fn run() {
 	drop(owner);
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
+	// stop() awaits/reaps the owned service. Check its actual public listener,
+	// without opening a wallet or depending on a later proxy RPC being reached.
+	let stopped_listener = ("127.0.0.1", srv.rpc_port());
+	let stopped_error = tokio::time::timeout(Duration::from_secs(2),
+		tokio::net::TcpStream::connect(stopped_listener)).await.unwrap().expect_err("stopped Ark listener must refuse connection");
+	assert_eq!(stopped_error.kind(), std::io::ErrorKind::ConnectionRefused);
 	gate.refuse.store(true, Ordering::SeqCst);
 	let alternate_miner = ctx.bitcoind().get_new_address();
+	let destination = ctx.bitcoind().get_new_address();
 	core.invalidate_block(&paid_block).unwrap();
 	let fork_height = core.get_block_count().unwrap();
 	assert_eq!(fork_height + 1, paid_height);
@@ -284,8 +291,14 @@ async fn run() {
 		}
 		tokio::time::sleep(Duration::from_millis(100)).await;
 	}
-	assert!(gate.hits.load(Ordering::SeqCst) > 0);
-	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.is_empty());
+	// A completely stopped upstream can fail the initial Ark handshake before
+	// get_fallback_payouts ever reaches the proxy. Its hit counter is diagnostic.
+	let offline = db.get_fallback_snapshot().await.unwrap();
+	assert!(offline.awaiting_sync, "the daemon must record actual unavailable authenticated history");
+	assert!(offline.verified_payouts.is_empty());
+	let still_stopped = tokio::time::timeout(Duration::from_secs(2),
+		tokio::net::TcpStream::connect(stopped_listener)).await.unwrap().expect_err("Ark must remain stopped through Claimable");
+	assert_eq!(still_stopped.kind(), std::io::ErrorKind::ConnectionRefused);
 	assert!(!onchain.read().await.list_unspent().iter().any(|coin| coin.outpoint == payout),
 		"vanished inbound payment must not remain in the onchain wallet's current UTXO cut");
 	assert!(core.get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().is_none());
@@ -299,10 +312,10 @@ async fn run() {
 		"orphan_child": child.compute_txid(), "fork_height": fork_height,
 		"current_tip": core.get_block_count().unwrap(), "movement": movement,
 		"principal_sat": 100_000, "history_refusals": gate.hits.load(Ordering::SeqCst),
+		"authenticated_history_awaiting_sync": offline.awaiting_sync, "ark_listener_connection_refused": true,
 		"original_body_sha256": sha256::Hash::hash(&owned_bytes).to_string(),
 		"ordinary_body_sha256": sha256::Hash::hash(&historic_bytes).to_string()
 	})).unwrap()).unwrap();
-	let destination = ctx.bitcoind().get_new_address();
 	let claim = wallet.exit_mgr().drain_exits(&claimable, &wallet, destination.clone(),
 		Some(bitcoin::FeeRate::from_sat_per_vb(2).unwrap())).await.unwrap().extract_tx().unwrap();
 	assert_eq!(claim.input.len(), 1);
@@ -331,7 +344,8 @@ async fn run() {
 			if matches!(exit.state, ExitState::Claimed(done) if done.txid == claim.compute_txid()
 				&& done.block.hash == final_block && u64::from(done.block.height.to_u32()) == final_height)
 				&& exit.movement_id == Some(movement)
-				&& db.get_movement_by_id(movement).await.unwrap().status == MovementStatus::Successful { break; }
+				&& db.get_movement_by_id(movement).await.unwrap().status == MovementStatus::Successful
+				&& wallet.balance().await.unwrap().total() == sat(0) { break; }
 			tokio::time::sleep(Duration::from_millis(100)).await;
 		}
 	}).await.expect("default daemon must reconcile the actual canonical own claim");

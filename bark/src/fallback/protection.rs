@@ -10,6 +10,7 @@ use ark::{Vtxo, VtxoPolicy};
 use ark::vtxo::{Full, TapScriptClause};
 
 use crate::Wallet;
+use crate::exit::ExitState;
 use crate::vtxo::{VtxoState, VtxoStateKind};
 use super::payouts::{FallbackAttempt, FallbackBlock, FallbackDisposition, FallbackSnapshot,
 	FallbackVerifiedPayout, FallbackVerifiedTerminal, FallbackTerminalDisposition};
@@ -208,6 +209,14 @@ impl Wallet {
 				.map(|proof| (proof.disposition.clone(), proof.transaction.compute_txid())).collect::<Vec<_>>();
 			if let Some(claim) = &entitlement.terminal_claim {
 				candidates.push((FallbackTerminalDisposition::Exited, claim.txid));
+			}
+			// Offline native recovery need not have a fresh server receipt. A
+			// stored Claimed label is only a lookup hint: the current canonical
+			// depth, raw transaction and exact user-claim clause are checked below.
+			if let Some(exit) = self.inner.db.get_exit_vtxo_entry(&entitlement.vtxo_id).await? {
+				if let ExitState::Claimed(claim) = exit.state {
+					candidates.push((FallbackTerminalDisposition::Exited, claim.txid));
+				}
 			}
 			if let Some(attempt) = entitlement.active_attempt()? {
 				if attempt.disposition == FallbackDisposition::BelowDust {

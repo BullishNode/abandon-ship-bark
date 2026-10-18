@@ -1,0 +1,67 @@
+{
+  "at": "2026-10-18T11:50:25.646523+00:00",
+  "production_readiness": "NO",
+  "capture": {
+    "head": "384a56aff300099a0ed865ed342c3c885f500702",
+    "dirty": true,
+    "source_manifest_sha256": "4b68fc11e3d033298da768a6a2bb60fb94c623003397828e640c3f1d3fc6c63e",
+    "source_archive_sha256": "6de88ab59c54fdebbb48b19db291916152620817cbfe18fea07d4debd00a43f4",
+    "bundle_sha256": "5e8d7db13f655181979d5da74352aa5f48c13bee7b8a4b4d95d6ebb950e39cc8",
+    "runtime_metadata_sha256": "f39ecd70c2f6f3f1682c99f5cdc140143480f6f5a768a9594a9c06591209275a",
+    "runtime_pins_sha256": "2ab66c4c18161533e8492e1e050ad96ded9930234242b39734e1f9cca585fe1f",
+    "checks_seconds": 57.768,
+    "three_native_binaries_compile_seconds": 109.273,
+    "unchanged_products": "All non-test non-doc source bytes identical to V18 per2aed09d5; four products retain actual57f59/e0b904 versions. V18 877PASS1skip inherited, not rerun.",
+    "native_binaries": [
+      "ark-testing::server",
+      "ark-testing::bark-sdk",
+      "ark-testing::barkd"
+    ]
+  },
+  "client_daemon": {
+    "state": "PASS",
+    "test": "qualification_daemon_unpaid::default_daemon_protects_owned_unpaid_principal_without_exiting_an_ordinary_spent_import",
+    "native_seconds": 30.133,
+    "wrapper_seconds": 30.942,
+    "log_sha256": "9b33c7ff17cbc91c593e7bd25f3b1b7339f756bc79f32e47c7c1c83bf297c2fa",
+    "formal_sha256": "496d6b780cf6deb33e03b1689c38962f78553554944213bb4cb58f4dce8384a0",
+    "reached": [
+      "Real admitted but unpaid100k source with authentic payout-historyUnavailable, original wallet and server daemons subsequently stopped",
+      "True background daemon alone reaches Claimable; own principal retained, historical ordinary-spent imported100k stays blocked and never exited",
+      "Exact wallet stores reopened, existing explicit app drain confirms Core6 with positive measured fee",
+      "Persisted state remains native Exited+exact Claim/exact movement Successful, all10 Ark balance buckets zero, one correct100k debit"
+    ],
+    "limits": [
+      "Final drain is explicit existing app API, not a new automatic-drain policy",
+      "No complete fee-wallet cut, postclaim reorg, browser/mobile/Noah or full P08/ML promotion"
+    ]
+  },
+  "batched_Lightning": {
+    "state": "FAIL_RELEASE_BLOCKER",
+    "test": "expiry_internal_batched_terminal::expiry_internal_two_originals_timeout_together_keeps_third_source_owed",
+    "native_seconds": 163.804,
+    "wrapper_seconds": 164.659,
+    "log_sha256": "5d4925b46f6b2d35ccc349154dd25af7ae64f7d4ca772b434c550e5f77688009",
+    "failed_artifact_actor_audit_sha256": "3322bda44cb08b60999dca22ca06167aa3b326cb15580e692ec12648d89bf941",
+    "failure": "B rightful fallback parent did not appear during positive90second publication wait, test line239",
+    "actual_premises_reached": [
+      "THREE genuine100k incoming originals in ONE internal attempt with real280k G",
+      "A1+A2 genuine DEFAULT2input timeout receipt paid198k plus2k miner with actual Core6",
+      "Both exact canonical retained source links/Revoked facts/current claim block recorded; no prior A financial fences",
+      "Original actors absent; remaining B100k source prefix and every G unspent at checkpoint before publication wait"
+    ],
+    "source_supported_suspect": "Terminal omission validator intentionally supports single-input claims; a private complete-original-component proof is needed for this fresh same-attempt batch. Retained state diagnosis is underway before the fix.",
+    "limits": [
+      "No permanent loss, wrong payee or double payment established",
+      "No fix integrated, rerun, timeout extension or failure reclassification",
+      "Fresh unfenced same-attempt case only; prior-fenced/foreign-input/reorg/general-batch coverage remains open"
+    ]
+  },
+  "execution_policy": {
+    "per_case_seconds": 180,
+    "retries": 0,
+    "global_financial_native_max": 2,
+    "independently_scoped_postflight": "Each16pins/controlhash/flagfullyabsent/scopedactors0/unreadable0. Failure audit is not a test pass."
+  },
+  "browser": "Existing ignored realbarkd/web harness compiled; host CDP controller source being reviewed, no browser/native execution yet."
+}

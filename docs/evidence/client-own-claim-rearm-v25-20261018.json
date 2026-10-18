@@ -1,0 +1,145 @@
+{
+  "recorded_at": "2026-10-18T18:11:32.612042+00:00",
+  "production_ready": false,
+  "problem": "A completed own exit retained an orphaned Claimed checkpoint and successful history, leaving its actual principal awaiting settlement with no actionable exit after a second reorg.",
+  "change": "Reconcile at most16 completed claims per pass. After verifying the same previously owned source/movement, signed own-key claim and exact currently canonical unspent leaf, rearm the same movement Pending and the native AwaitingDelta exit. Reuse native delay/spender checks; preserve ordinary-spent, foreign-holder and binding exclusions.",
+  "source_provenance": {
+    "build_head": "788515aed858c7b319a552c2d0849c18521064bc",
+    "dirty": true,
+    "source_manifest_sha256": "ed017da439f5eaa648685dd2a38ff866b70fd6a574cb0c601608e281b4919b6f",
+    "source_archive_sha256": "ddd8cac269a46a25d3a6a5f7c4324125806cc8f6e15ababe21d5763af1da7c5f",
+    "actual_git_diff_sha256": "f49c57c22a9f9342e751adf41747fe96b1a3027948b2b6e89081fb23892f87a3",
+    "product_file_sha256": "1e4409c27483cabea626e0f7f32a5450941b5d533725016a003eaf3a37afbdf8",
+    "note": "All four products and three native binaries were freshly built at captured788515 HEAD plus the reviewed source overlay. This publication commit does not relabel those artifacts."
+  },
+  "build": {
+    "checks": "PASS",
+    "units_passed": 882,
+    "units_skipped": 1,
+    "four_products": "NEW_BUILD_PASS",
+    "three_native_test_binaries": "NEW_BUILD_PASS"
+  },
+  "qualification": {
+    "native_cases": [
+      {
+        "case": "own-claim-second-reorg",
+        "test": "qualification_paid_reorg::own_claim_reorg_cold_reopen_offline_restores_actionable_exit_or_replays_exact_claim",
+        "state": "PASS",
+        "run_id": "a71be8fe-adbb-4c48-87c3-ad4438c51ed5",
+        "native_seconds": 48.094,
+        "wall_seconds": 48.905,
+        "log_sha256": "2d7910d401db56825c525aed3a4bebbe64e24699d4cd79416c6f8a0c1e8d4323",
+        "fresh_guard_sha256": "aab693d1c5c1a9eb9243ff949b1ef5d94b46adfef31771bf16a7d8d3dd97beb7",
+        "fresh_guard": {
+          "at": "2026-10-18T18:05:47.319612+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1046810624,
+          "disk_available": 998633111552
+        },
+        "exact_unignored_singleton": true
+      },
+      {
+        "case": "paid-reorg",
+        "test": "qualification_paid_reorg::paid_fallback_reorg_cold_reopen_offline_protects_and_claims_exact_original",
+        "state": "PASS",
+        "run_id": "eb83f8b6-19b7-4bc5-b1f1-e11436b90582",
+        "native_seconds": 39.27,
+        "wall_seconds": 39.892,
+        "log_sha256": "7f723af40cfa0b609b89350247343a30ec0dcb3deab23407d7ae866caf90ef37",
+        "fresh_guard_sha256": "68a513d2a475f76d5a83fd0e2ed571cdd7f399637a160258af9e2beaa10c42f9",
+        "fresh_guard": {
+          "at": "2026-10-18T18:06:42.372114+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1045733376,
+          "disk_available": 998200979456
+        },
+        "exact_unignored_singleton": true
+      },
+      {
+        "case": "unpaid-daemon",
+        "test": "qualification_daemon_unpaid::default_daemon_protects_owned_unpaid_principal_without_exiting_an_ordinary_spent_import",
+        "state": "PASS",
+        "run_id": "ca03612c-4d3e-4429-8e34-7231a71f7a27",
+        "native_seconds": 34.813,
+        "wall_seconds": 35.69,
+        "log_sha256": "a19ab08d8bd3ab607e45da822f5b3cc8a0f44f3894f08b16710d1fcbb9d3f172",
+        "fresh_guard_sha256": "09626847af4f64dcef68cf1b8168b7fd914bbbbac9c7becd12d37291e9695146",
+        "fresh_guard": {
+          "at": "2026-10-18T18:07:26.652815+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1044656128,
+          "disk_available": 997822160896
+        },
+        "exact_unignored_singleton": true
+      },
+      {
+        "case": "ordinary-spent",
+        "test": "recovery::recovered_wallet_keeps_spent_vtxo_spent",
+        "state": "PASS",
+        "run_id": "9ccae153-f894-4300-8a00-b78db6ecef60",
+        "native_seconds": 22.98,
+        "wall_seconds": 23.744,
+        "log_sha256": "645c8388e954ca2cbe8c6cb714d965e3fec2b80cbf06dcaf590a196642ca6158",
+        "fresh_guard_sha256": "b46f37991f78e4d2e94a0dab9ff8851657fe69cdff8addfc7e4c0b50e06d6c80",
+        "fresh_guard": {
+          "at": "2026-10-18T18:08:07.351309+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1043578880,
+          "disk_available": 997447282688
+        },
+        "exact_unignored_singleton": true
+      }
+    ],
+    "postflight_sha256": "9945557f7e0c10b82ecc163186b266e8cc98af75b2786642c1b565505e2a1b31",
+    "source_pins_and_controls_unchanged": true,
+    "retries": 0,
+    "recovery": {
+      "recovered_by": "actionable_exact_original",
+      "current_balance_total_sat": 100000,
+      "same_source": "d3bfa0920b16b3605af3126b6b698c1085ae832b6e2b5351de389c5d385ef688:0",
+      "same_seed_store_default_daemon_only": true,
+      "no_controller_replay_newdrain_BDK_or_Ark": true,
+      "truthful_single_principal_history_and_ordinary_negative_assertions_reached": true
+    },
+    "prior_paid_reorg": {
+      "claim_delivered_sat": 99766,
+      "claim_miner_sat": 234,
+      "claim_confirmations": 6
+    },
+    "original_failure": {
+      "run_id": "ce23fbfc-9efa-4c02-9de2-12c738ac46c0",
+      "native_seconds": 72.849,
+      "postflight_sha256": "6d360de09854dc0f7e40408e20d7e0318ead93dc0e0256eb8cb628ed14ace849"
+    }
+  },
+  "additional_V24_evidence": {
+    "address_dust_native_cases_passed": 5,
+    "fee_and_physical_backup_native_cases_passed": 4,
+    "note": "Separate currentV24 tests on qualifiedV23products; these nine passes do not qualify the laterV25 client fix. Same-candidate server money regressions separately pending."
+  },
+  "limits": [
+    "Confirmed current exact own leaf only: lost leaf/ancestor forks remain OPEN",
+    "Unavailable old signed claim raw remains OPEN; no synthetic ownership or fresh historical principal",
+    "Current actionable100k recovery is not a second payout or automatic drain policy",
+    "Existing finished metadata enumeration remains O(N), chain/body work bounded16 per pass; no scale/readiness claim",
+    "One active Wallet/Exit engine, separate Pending/state commits; existing lock/order/retry are material",
+    "No global custody, general ML/reorg, browser, Signet or production readiness promotion"
+  ],
+  "open_release_work": [
+    "Lost-leaf/ancestor reorg recovery and unavailable old claim raw remain open.",
+    "Same-candidate server money regression queue is separately allocated.",
+    "Final deployment/profile, measured operating limits and production operations/release review remain open; mainnet is not authorized."
+  ]
+}

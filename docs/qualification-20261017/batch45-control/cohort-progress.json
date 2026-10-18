@@ -1,0 +1,50 @@
+[
+  {
+    "index": 1,
+    "name": "recovery::recovered_wallet_finds_round_vtxo",
+    "state": "PASS",
+    "started_at": "2026-10-18T04:34:24.480505+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 143297,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "fad96514-47ba-4b94-9348-1c597054a1a5",
+    "test_seconds": 34.026,
+    "wall_seconds": 35.564,
+    "ended_at": "2026-10-18T04:35:00.044671+00:00"
+  },
+  {
+    "index": 2,
+    "name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "state": "PASS",
+    "started_at": "2026-10-18T04:35:00.051707+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 143753,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "02a13f8b-6088-48db-9248-9d06cd1a91e8",
+    "test_seconds": 37.976,
+    "wall_seconds": 39.581,
+    "ended_at": "2026-10-18T04:35:39.633557+00:00"
+  },
+  {
+    "index": 3,
+    "name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+    "state": "PASS",
+    "started_at": "2026-10-18T04:35:39.636616+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 144233,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "a35c677b-696f-4674-843d-87bdd2c4839f",
+    "test_seconds": 22.385,
+    "wall_seconds": 23.554,
+    "ended_at": "2026-10-18T04:36:03.191202+00:00"
+  }
+]

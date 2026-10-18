@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-18T04:57:07.225487+00:00",
+  "state": "SOURCE_ONLY_ACTOR_PHYSICAL_RESTORE_SCOPE_ACK_TWO_SQL_ENUM_CAST_BLOCKERS_PENDING_V2",
+  "source_sha256": "a3ae1fe2d62a82d147c0f4a7c885d2ab4880d737ad77ee7e561091c20aef175a",
+  "scope_reviewed": [
+    "Both original SDK/CLI authorities stop/drop before physical checkpoint; no original client DB imported into fresh seed-only recovery.",
+    "Owned cap/watch processes stop via actual helpers; final real DB state read before PG helper stop/reap; pg_controldata clean shutdown checked independently.",
+    "Whole private PG cluster including WAL and service identities copied twice into disjoint new roots, byte-hashed; wrapper avoids initdb/deletion; actual DB name retained/new PG port.",
+    "Real HTLCsReady/source/attempt/subscription/signed grant ancestry checkpoint and complete native wallet journals compared before restored service startup; no fabricated SQL financial state.",
+    "Restored exact server identity/registry/dedicated configured operator script; actual continuing Core/native CLN. Fresh seed-only BIP84 payout/drain with Core6 and whole selected finite605k graph/mempool continuation rejection.",
+    "Unchanged default180 outer/96block prospective bounds; no native feasibility credit."
+  ],
+  "ten_local_helpers_byte_identical_to_preserved_ordinary_cold_source": {
+    "file_hash": "27bec36cf3e856a1f4d4e30053657a10d5da0f3203f9874526e1bbad2a05fc70",
+    "copy_tree": "0d03b9fc26d209275cceada42565b3c2ce23f84ad735180eb955026783e66a3b",
+    "postgres_tool": "82207c5140c480aa27088354182d33a05e134e9ed4b1f903644f223bda468eef",
+    "assert_clean_cluster": "13cbacdee1e3a7997b9a126dbae9e2de3f9265e6b67855719b6d1b1a8122b485",
+    "watchman_coins": "0c4e4f52edf74481b8ece730defe0e128947f1efdf9ca49fe8d676b4a65028b4",
+    "wait_watchman_coins": "7a1040c0c84e2c2b7eb9685133e9884f20491a7c0599f978bceb099e8f7f6d01",
+    "mine_continuing_core": "67bbe47c4938dca9b69ececdb3b245e34d3d71629ca0150fead8b322ee6d8562",
+    "actual_fee": "14c3b72799bd9e5a548b14512991746f34222f4a68adacdf235d58bc21c9289c",
+    "canonical": "25b56f2afb6995ff0bfeb8299fe5170dc90b228951c6a02ddf90c9b3300f6a98",
+    "rebuilt": "ff7b54b9c94b83d459fb0d201e314af128f4ce2f85130031d4bdf763abb7ab2d"
+  },
+  "maturity_question_resolved": {
+    "actual_product": "server/src/database/expiry_internal_refund.rs:211",
+    "formula": "max(actualconfirmedheight+signedexit_delta, signedHTLCexpiry) <= min(completedcapheight,completedwatchheight)",
+    "result": "Fixture maturity-1 no-broadcast and actualbothcompletedviewM matches existing product eligibility; no new protocol margin inferred."
+  },
+  "concrete_blocker": "Both journal SELECTs must cast kind::TEXT AS kind before row.get<String>, per backend actual PostgreSQL ENUM source review. V1 source-predicted only, not an executed FAIL.",
+  "configuration_correction": "Original earlier draft could legitimately refill pool after operator returns to rounds. Frozen v1 uses supported original dedicated Core operator sweep and205k rounds funding; same exact config restored. No default replenishment qualification.",
+  "financial_scope_limit": "605k is selected four-output customer/pool/watch cut. Native no-channel CLN helper separately funds12BTC (context/mod.rs683-693), excluded from selected graph; no CLN reserve/channel/HSM audit or unchanged-reserve claim. V2 notes must state this explicitly; graph rejects any unbudgeted input entering selected cut.",
+  "all_other_protected15Rust_unchanged": true,
+  "source_mutations_by_parent": 0,
+  "Cargo_parser_native_runtime_or_module_registration_by_parent": 0,
+  "limits": "No complete branch audit, compilation/Rust AST, runtime financial, custody, full ML or P07 gate closure. Author and peers must freeze/review exact v2 before coordinator integration and immutable admission."
+}

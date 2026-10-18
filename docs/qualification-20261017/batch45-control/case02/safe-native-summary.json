@@ -1,0 +1,27 @@
+{
+  "binary": "ark-testing::barkd",
+  "name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+  "run_id": "02a13f8b-6088-48db-9248-9d06cd1a91e8",
+  "result": "PASS",
+  "native_seconds": 37.976,
+  "wall_seconds": 39.581,
+  "exit_code": 0,
+  "resource_error": null,
+  "fresh_selected": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_mixed_origin_vtxos"
+    ]
+  ],
+  "unignored": true,
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+  "target_body_sha256": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30",
+  "kind": "SAFE_NATIVE_SUMMARY_FROM_FROZEN_POSTFLIGHT",
+  "native_nextest_log_sha256_only": "2cc2d08d17b6dbbab1b292bf5d2f80529f20aa25ca847bd929884f458e3b963c",
+  "raw_log_included": false,
+  "source_postflight_sha256": "97f378ee2371aa37bfa33bf239c20d9a7d59aec74eb1c7d9f1d54a8a80d84c8e",
+  "scope": "Bounded sanitized postflight metadata only; no rawnextest/wallet log read orcopied in export. Actual assertion/independentfinancial limits unchanged."
+}

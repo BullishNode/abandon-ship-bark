@@ -1,0 +1,25 @@
+{
+  "scope": "FINAL_READ_ONLY_HASH_AND_SCOPED_QUIESCENCE_RECHECK",
+  "created_at": "2026-10-18T04:46:49.570720+00:00",
+  "audit": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/root-v10-funded-fair1000-retained-core-reconciliation-backend.json",
+    "sha256": "0385294d8c849a9daeeaa045983471d009a2f7be2636eb5ff37a85727284588c"
+  },
+  "summary": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/root-v10-funded-fair1000-retained-core-reconciliation-backend.md",
+    "sha256": "f44a36b829333700067915bec9260fa115812a419f0b7a113c44b1868a7ed6fd"
+  },
+  "input_count": 16,
+  "all_original_input_hashes_unchanged": true,
+  "owned_parser_sha256": "85308c0e88e4c24f95588978e87d50874f0250a132008bd3ba192d33a0ebb173",
+  "pre_absence_sha256": "0e7272c15328a8e49694ad3c9e9d8158736e862444ba7ebf2ac874dbe30e7c7b",
+  "post_absence": {
+    "path": "/tmp/root-v10-funded-fair1000-post-absence.json",
+    "sha256": "1b6655cc72a6fe41e225a1c36428a9563344aecb80fda0115eac02471a85131c",
+    "scoped_argv_cwd_FD_actors": 0,
+    "historical_PGID_SID": "UNKNOWN_NOT_RECORDED",
+    "explicit_parent_scoped_absence_disposition": true
+  },
+  "no_global_or_continuous_actor_absence_claim": true,
+  "no_services_RPC_SQL_wallet_or_native_execution": true
+}

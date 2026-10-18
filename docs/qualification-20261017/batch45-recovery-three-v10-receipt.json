@@ -1,0 +1,135 @@
+{
+  "kind": "BATCH45_THREE_RECOVERY_V10_INITIAL_TERMINAL_NATIVE_RECEIPT",
+  "at": "2026-10-18T04:37:28.627039+00:00",
+  "parent_exec_session": 17820,
+  "parent_terminal_exit_code": 0,
+  "result": "PASS",
+  "started": 3,
+  "PASS": 3,
+  "FAIL": 0,
+  "native_seconds_sum": 94.387,
+  "new_unique_binary_test_pairs": 1,
+  "cases": [
+    {
+      "index": 1,
+      "name": "recovery::recovered_wallet_finds_round_vtxo",
+      "state": "PASS",
+      "started_at": "2026-10-18T04:34:24.480505+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 143297,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "fad96514-47ba-4b94-9348-1c597054a1a5",
+      "test_seconds": 34.026,
+      "wall_seconds": 35.564,
+      "ended_at": "2026-10-18T04:35:00.044671+00:00",
+      "binary": "ark-testing::barkd",
+      "new_unique_binary_test_pair": true,
+      "native_log_sha256": "a4d5c9e3666758c31079854d4f010d39aa493982e32fe701e73663a8ec031d02",
+      "source_binding": {
+        "test_name": "recovery::recovered_wallet_finds_round_vtxo",
+        "path": "testing/tests/barkd/recovery.rs",
+        "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "target_body_sha256": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5"
+      }
+    },
+    {
+      "index": 2,
+      "name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "state": "PASS",
+      "started_at": "2026-10-18T04:35:00.051707+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 143753,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "02a13f8b-6088-48db-9248-9d06cd1a91e8",
+      "test_seconds": 37.976,
+      "wall_seconds": 39.581,
+      "ended_at": "2026-10-18T04:35:39.633557+00:00",
+      "binary": "ark-testing::barkd",
+      "new_unique_binary_test_pair": false,
+      "native_log_sha256": "2cc2d08d17b6dbbab1b292bf5d2f80529f20aa25ca847bd929884f458e3b963c",
+      "source_binding": {
+        "test_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+        "path": "testing/tests/barkd/recovery.rs",
+        "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "target_body_sha256": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30"
+      }
+    },
+    {
+      "index": 3,
+      "name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "state": "PASS",
+      "started_at": "2026-10-18T04:35:39.636616+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 144233,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "a35c677b-696f-4674-843d-87bdd2c4839f",
+      "test_seconds": 22.385,
+      "wall_seconds": 23.554,
+      "ended_at": "2026-10-18T04:36:03.191202+00:00",
+      "binary": "ark-testing::barkd",
+      "new_unique_binary_test_pair": false,
+      "native_log_sha256": "0cfffbbc817105182589535dd70df646a5c2cd37353626a0b878165a6e513858",
+      "source_binding": {
+        "test_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+        "path": "testing/tests/barkd/recovery.rs",
+        "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+      }
+    }
+  ],
+  "source": {
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "source_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "bundle_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+    "immutable_metadata_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5"
+  },
+  "captured_HEAD": "783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+  "dirty": true,
+  "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+  "shared_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+  "queued_doc_comment_excluded": true,
+  "actual_product_version_label": "783c0c5c explicit label plus dirty3e source; later canonical Git commits do not relabel binaries",
+  "authorization": {
+    "root_packet_sha256": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838",
+    "parent_launch_admission_sha256": "439f73b462d886017a0fd8a91b1c5379362543d8338b79dc138d238fb070748c",
+    "preflight_parent_session": 45234,
+    "preflight_parent_exit_code": 0,
+    "actual_pins": 17,
+    "frozen_control_paths": 13,
+    "exact_unignored_singleton_listings": 3,
+    "profile": "default",
+    "timeout_seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "first_fail_stops": true,
+    "global_max_native": 2,
+    "no_Cargo_by_testing_track": true
+  },
+  "native_assertion_scope": {
+    "round_and_mixed": "Exact historical round-retired board retained Locked None/None with unchanged public signed bytes; exact current-cut IDs/amounts/anchors, authentic full recipient payment/current inputs Spent, all ten public balance fields before and after, and empty persisted exit-status list. No arbitrary Locked exemption or per-VTXO awaiting flag false assertion.",
+    "quarantine_control": "Genuine invalid signed body rejected/quarantined plus authentic valid same-anchor ordinary spend recognized as Spent. Unchanged strict shared helper/control body."
+  },
+  "independent_postflight_at_receipt_creation": "PENDING; assigned backend reviewer after parent terminal confirmation; later additive formal receipt controls integrity/actor absence",
+  "independent_financial_scope": "Native bounded public-state/recipient assertions only; no independent retained DB/Core graph/signature or global custody audit claimed here. Unknown outcome not present: native all three terminal PASS.",
+  "preflight_corrections": {
+    "initial_bare_caller_shell_exit127": "Cached Nix PATH not sourced; stopped before Python/resource/list/native. Preserved diagnostic, corrected caller environment; unchanged controls and native retries0.",
+    "initial_empty_actor_probe_exit127": "Guessed interpreter path absent; no script or actor action. Actual scoped actor scan used sourced cached Nix and passed; recorded in actor admission."
+  },
+  "limits": [
+    "All earlier failures remain FAIL, including both earlier mixed recovery attempts. New candidate PASS is separate evidence.",
+    "Only round adds one unique name; mixed and quarantine repeat existing binary/name pairs. Counts and coverage remain uncurated until formal postflight and authorized append.",
+    "No future act-by protection execution, default daemon protection, production/full ML, cross-root automatic discharge or exhaustive restore evidence.",
+    "Root FAIR1000 and root unit/native results are separate lanes and excluded from this track execution count.",
+    "All original receipts, controls, raw logs and datasets retained; no private wallet data or raw command argv exported by this receipt."
+  ]
+}

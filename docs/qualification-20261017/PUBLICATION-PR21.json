@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-18T04:23:54.521418+00:00",
+  "state": "DRAFT_OPEN_REMOTE_HEAD_AND_ALL_ACTUAL_PATHS_VERIFIED",
+  "pr": {
+    "baseRefName": "fresh/xpub-sweep",
+    "headRefOid": "91bb2a188522784a465e669f2189af405c542750",
+    "isDraft": true,
+    "number": 21,
+    "state": "OPEN",
+    "url": "https://github.com/BullishNode/abandon-ship-bark/pull/21"
+  },
+  "branch": "work/fresh-test-report-checkpoint16-20261017",
+  "head": "91bb2a188522784a465e669f2189af405c542750",
+  "verified_remote_head": "91bb2a188522784a465e669f2189af405c542750",
+  "actual_paginated_PR_paths": 65,
+  "payload_files_plus_manifest": 71,
+  "unchanged_existing_payload_paths": 6,
+  "all_actual_PR_paths_exact_allowlist": true,
+  "scope": "Report-only checkpoint17 at242/227PASS15preservedFAIL/227unique/215nextest/230native12component/453mixedrows. Root-lane J01excluded. No ML/production promotion.",
+  "manifest_sha256": "135477cdf9d6c89f7e7cfbf939d291b91eafec9e9fa43546fbe18fbaa82cfe8b",
+  "publication_independent_audit_sha256": "a4441585aaecb76df8c8185c544e3425aa285d85116f2d545e41c78d1d3ce28d",
+  "owned_15_Rust_hashes_preserved_unstaged": true,
+  "safe_payload_frozen": true
+}

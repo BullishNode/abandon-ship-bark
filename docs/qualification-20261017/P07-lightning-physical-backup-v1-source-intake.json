@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "scope": "SOURCE_ONLY_PENDING_INTERNAL_HTLCS_READY_PHYSICAL_BACKUP",
+  "case_name": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+  "expected_binary": "ark-testing::server",
+  "source": {
+    "path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_lightning_backup.rs",
+    "sha256": "a3ae1fe2d62a82d147c0f4a7c885d2ab4880d737ad77ee7e561091c20aef175a",
+    "bytes": 49157,
+    "lines": 811
+  },
+  "canonical_reference_head": "d0e3a4f86d3b2689a1977c149c2a9ed1709e2a91",
+  "reference_files": [
+    {
+      "path": "testing/tests/server/qualification_cold_backup.rs",
+      "sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374"
+    },
+    {
+      "path": "testing/tests/server/expiry_lightning_terminal.rs",
+      "sha256": "b1ec6b391ad24ac162aa4722e24080a8551910052825ca5e982348a7af2534c2"
+    },
+    {
+      "path": "server/src/database/expiry_internal_refund.rs",
+      "sha256": "faf9cce753d942bf40b4b3d08da0c90b4e0dbb08bb3c4736a8057c0c3fd2ef75"
+    },
+    {
+      "path": "server/src/database/expiry_ownership.rs",
+      "sha256": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287"
+    },
+    {
+      "path": "server/src/vtxopool.rs",
+      "sha256": "82e67f9297836b353b404916a9c45bfd352c86559100e5c351e0ab71cc9b2645"
+    },
+    {
+      "path": "testing/src/context/builders.rs",
+      "sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae"
+    },
+    {
+      "path": "testing/src/context/mod.rs",
+      "sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab"
+    },
+    {
+      "path": "testing/src/daemon/postgres.rs",
+      "sha256": "d0b8e6000b39d657bb7d5ee277305df358f0ee0707308a90c0c5a3508fda9090"
+    },
+    {
+      "path": "bark/src/lib.rs",
+      "sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad"
+    }
+  ],
+  "stage": "Native internal funding attempt with linked subscription htlcs-ready; two authentic signed receive grants total90000; original sender source100000; no receive claim, settlement/preimage, timeout or customer allocation at backup",
+  "native_environment_confirmation": {
+    "method": "read-only docker cached default-env.sh",
+    "container": "abandon-fresh-runtime-20261017",
+    "IN_NIX_SHELL": "impure",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)"
+  },
+  "fixture_conditions": {
+    "server_funding_sat": 205000,
+    "customer_funding_sat": 200000,
+    "confirmed_watchman_sponsors_sat": [
+      100000,
+      100000
+    ],
+    "external_cut_sat": 605000,
+    "pool_targets": {
+      "count": 4,
+      "amount_sat": 50000
+    },
+    "top_level_and_pool_lifetime_blocks": 32,
+    "pool_pre_expiry_blocks": 2,
+    "operator_sweep": "Actual fresh continuing-Core address supplied to original public watchmand_cfg before original service start; exact configured script retained across restore; distinct from rounds wallet",
+    "refill_bound": "Actual original rounds change<5000; all expiry/operator returns route to dedicated configured sweep, so they cannot augment rounds refill funds. Funding205000 alone does not establish this."
+  },
+  "artifact_scope": "Clean owned physical PostgreSQL whole cluster including WAL plus original captaind/watchmand identity/config trees and durable wallet_changeset journal. Private hash-checked archive and disjoint restored roots; no client wallet copied; Core and native CLN continue.",
+  "limits": {
+    "outer_timeout_seconds": 180,
+    "max_postbackup_blocks": 96,
+    "max_descendant_transactions": 64,
+    "max_scanned_blocks": 160,
+    "copy_budget_bytes_per_tree": 536870912,
+    "retries": 0
+  },
+  "oracle_groups": [
+    "pre-stop original native attempt/source/grant/subscription membership; exact stored signed ancestry; no terminal action",
+    "explicit stopped/dropped original SDK/client handles; stopped/reaped original services; clean pg_controldata before physical copy",
+    "all private copied bytes verified; restored clean existing cluster without initdb; new PG port; same database/server key/registrations/journal/checkpoint",
+    "actual grant confirmed-height+CSV and signed CLTV maturity; exact completed cap/watch rebuild views; no premature customer broadcast",
+    "joint parent consumes all real grant timeout points exactly once plus one real sender100000 backing; exactly99000 authenticated sender payout, no recipient fallback anywhere in connected graph",
+    "canonical parent+actual same-block child Core>=6; zero parent fee, actual child prevout fee and operator remainder91000; exact durable owner/mailbox/key/SPK/full-value ledger",
+    "new seed-only sender directory/genesis recovery; exact ordinary board change+payout UTXO map, all10 Ark balance buckets zero; real signed BIP84 full-input one-output drain/Core>=6",
+    "closed actual605000 external funding descendant graph; all canonical actual prevout fees and all nonzero unspent leaves; configured sweep/actual wallet output attribution; no connected unconfirmed continuation"
+  ],
+  "status": {
+    "registration": "NOT REGISTERED",
+    "compiled": "NOT COMPILED",
+    "executed": "NOT RUN",
+    "financial_oracles": "PROSPECTIVE_ONLY",
+    "ML_full_credit": false
+  },
+  "limitations": [
+    "One orderly clean shutdown/copy stage; no crash/PITR/other-boundary coverage",
+    "Continuing native CLN; no CLN channel/HSM backup coverage",
+    "Dedicated operator sweep is an explicit fixture condition; no default replenishment-flow qualification",
+    "Configured operator script/actual native wallet ownership is the declared attribution scope; no general independent wallet custody/solvency claim",
+    "No performance assertion before actual admitted execution; 180-second runtime feasibility remains unverified",
+    "No source module registration or canonical mutation; parent owns compile/admission/native allocation"
+  ]
+}

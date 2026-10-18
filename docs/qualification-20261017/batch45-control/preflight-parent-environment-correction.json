@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-18T04:33:36.961071+00:00",
+  "state": "PARENT_CALLER_ENVIRONMENT_ERROR_BEFORE_PREFLIGHT_PYTHON",
+  "initial_exit": 127,
+  "initial_log_sha256": "27f121ab7c470163ebbab4eca01e6e662bd2cd4e743c4d264dbeac1563a99c25",
+  "cause": "Parent invoked bare docker bash; python3 from cached Nix was absent from default PATH. Script stopped at first line before resource/list/native.",
+  "correction": "Source existing /fresh-cache/default-env.sh in caller before executing unchanged admitted preflight.sh. No controller, profile, pin, allocation or timeout changes.",
+  "native_tests_started": 0,
+  "native_FAIL_credit": 0,
+  "controls_changed": false
+}

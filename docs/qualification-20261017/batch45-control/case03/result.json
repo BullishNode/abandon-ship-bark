@@ -1,0 +1,16 @@
+{
+  "index": 3,
+  "name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+  "state": "PASS",
+  "started_at": "2026-10-18T04:35:39.636616+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "owned_nextest_group": 144233,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "a35c677b-696f-4674-843d-87bdd2c4839f",
+  "test_seconds": 22.385,
+  "wall_seconds": 23.554,
+  "ended_at": "2026-10-18T04:36:03.191202+00:00"
+}

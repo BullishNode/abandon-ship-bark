@@ -1,0 +1,63 @@
+{
+  "at": "2026-10-18T04:48:15.857972+00:00",
+  "state": "OWN_THREE_NATIVE_PASS_FORMAL_POSTFLIGHT_CURATION_AND_ROOT_FAIR_FINITE_CUT_AUDIT_COMPLETE",
+  "artifacts": [
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch45-recovery-three-v10-receipt.json",
+      "sha256": "5d0bdfdef75d97130de60e06c82b8933cc32fe8eac05a46f29e5027131692253"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch45-client-postflight.json",
+      "sha256": "97f378ee2371aa37bfa33bf239c20d9a7d59aec74eb1c7d9f1d54a8a80d84c8e"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch45-coverage-append.json",
+      "sha256": "ba945056bbc05d5b165b3becf3fafaeb4b7d9bd8a0277337c0eb11f0ff96f02e"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/EIGHTEENTH-CHECKPOINT.md",
+      "sha256": "45b1000ac73e33d030611e2388182c0a592966ab850a9285dfdd76df1b0b2f5e"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v10-recovery-capture-source-proof-backend.json",
+      "sha256": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v10-recovery-runtime-metadata-parent-verification.json",
+      "sha256": "e5a0e100b4aa274d3fc53112a3b7819bdce5bdd3035160d2d2ab15e58eee4846"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/root-v10-funded-fair1000-retained-core-reconciliation-backend.json",
+      "sha256": "0385294d8c849a9daeeaa045983471d009a2f7be2636eb5ff37a85727284588c"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/root-v10-funded-fair1000-retained-core-reconciliation-backend.md",
+      "sha256": "f44a36b829333700067915bec9260fa115812a419f0b7a113c44b1868a7ed6fd"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/root-v10-funded-fair1000-retained-core-final-stability-backend.json",
+      "sha256": "3f26c8fadaa64cf99e8c02d7485f979b2654759df6f6bb02d5519c49562180c1"
+    }
+  ],
+  "own_counts": {
+    "executions": 245,
+    "PASS": 230,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 228,
+    "nextest_invocations": 218,
+    "native": 233,
+    "component": 12,
+    "coverage_rows": 456
+  },
+  "own_last_batch": {
+    "batch": 45,
+    "PASS": 3,
+    "native_seconds": 94.387,
+    "new_unique_pairs": 1
+  },
+  "root_FAIR_zero_own_execution_credit": true,
+  "root_FAIR_finite_cut": "1000000=495779ownerdrain+198237control+3000parentremainders+193157terminalchildchange+100000unusedsponsor+9827miners",
+  "root_FAIR_confirmations": "finaltip177:firstowner/controlparent+child43;secondownerparent+child12;drain6",
+  "root_historical_PGID_SID": "UNKNOWN explicitly; actualnamespace scopedargv/cwd/FDabsence+stable16publicinputhashes; toolsession3849 notPID",
+  "limitations": "Nativepayee/signature/seedcustodybindings distinguished from independentpublictxbytes/value/ancestry/depth. No fairness/fullML/production/globaloperatorwallet credit. Oldv9bFAIL/oldmixedFAILs unchanged. P07 source-only fixture separate."
+}

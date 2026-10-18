@@ -1,0 +1,77 @@
+{
+  "state": "DRAFT_STATIC_SCAFFOLD_STRICTLY_PENDING_UNADMITTED",
+  "at": "2026-10-18T04:27:30.998395+00:00",
+  "owner": "/root/backend_test_gaps",
+  "batch": "batch45-recovery-three-v10",
+  "expected_proposed_selection": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_round_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_mixed_origin_vtxos"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ]
+  ],
+  "source_plan_sha256": "30aec6acaa5802afcdc22578ece889588a877d98bdafb01b57802f5f417f1e1a",
+  "source_proof_sha256": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed",
+  "known_source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "known_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+  "unknown_completed_artifacts": [
+    "bundle_manifest",
+    "immutable/runtime binary metadata",
+    "actual product/test/support/tool pins and versions/features",
+    "exact root allocation/order/schema"
+  ],
+  "static_checks": {
+    "python_AST": 3,
+    "bash_n": 2,
+    "PASS": true,
+    "control_bodies_executed": false,
+    "TOML": 3
+  },
+  "hard_guards": "All3 Python paths reject candidate_ready/controls_finalized/execution_authorized before allocation/resource/list/native calls. Both shell firstactions invoke closedguard before env/hash/version checks. Real root-allocation and parent admission files are absent.",
+  "draft_files_sha256": {
+    "selection-proof.json": "942036b837222bbd7eee92baf94868d712ded542d606d31d878249df55a63653",
+    "runtime-pins.sha256": "93be275b3c9b633689548a0179a624c43ea23aafd0b09cc9f8a53809749225f0",
+    "root-allocation.pending.json": "dc662987a8c7136cccf498e987aeb60624861eddcd8ddfd0d6e3d5f97e08536e",
+    "launch-authorization-pending.json": "8e79396f8858c54779ae89351da5122e322702ea417ed6947392301a93d925a0",
+    "server-cohort.py": "0890d28e8d7b00138510abb5b36fd4e039f2aac62e5fcb4a2d49d986fad1f855",
+    "preflight-static.py": "0ca09d323e564a0656440854a27c9e8236656757bc4f8872b7fc3b9aac2766c3",
+    "fresh-listings.py": "d94cbd03b5528c280fd2714c3a0659d61865e9aa0f84660f014e0a674089c5dd",
+    "preflight.sh": "5dfb0e78fb4573093e15ce231264d48de4db49afa82cfb9ff95c512cafb41d6b",
+    "run.sh": "0cd6a1a5e439afd589ed225e31c00e1711ecd2af137083ff34f914e598ce24be",
+    "case01/nextest.toml": "118ae204b35b28f852b40f74f8b1326e28052209bdb7364ee165738787172e71",
+    "case02/nextest.toml": "94066dc292988abcc328ec562589f39aa3ba9bf7ac8b8d075bbdc04f1d474d3e",
+    "case03/nextest.toml": "9fffa2d065ca483a08ae846cf4fa333f9bf8d12c4da10be807eafeafc077e2c0"
+  },
+  "future_parent_freeze_paths": [
+    "selection-proof.json",
+    "root-allocation.json",
+    "runtime-pins.sha256",
+    "server-cohort.py",
+    "preflight-static.py",
+    "fresh-listings.py",
+    "preflight.sh",
+    "run.sh",
+    "case01/nextest.toml",
+    "case02/nextest.toml",
+    "case03/nextest.toml",
+    "fresh-listing-admission.json",
+    "resource-admission.json"
+  ],
+  "future_parent_freeze_count": 13,
+  "required_final_review": [
+    "Resolve actual completed handoff and all pin/version/env/metadata fields; do not transfer compile/PASS from sourceproof.",
+    "Apply exact root packet/order/schema and source97118-vs-queued-doc8fb provenance; no fabricated allocation.",
+    "Replace every PENDING shell bundle/version/PG/SQLite placeholder, fill actual environment and pinfile, and independently review final controls before toggling flags.",
+    "Parent fresh actual resource/version/pin/singleton-unignored listing gates then immutable13path admission; only parent may remove pending marker and launch once."
+  ],
+  "preserved_old_controls": true,
+  "native_build_Cargo_listing_resource_or_actor_actions": false,
+  "new_execution_or_unique_credit": 0
+}

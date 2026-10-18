@@ -1,0 +1,26 @@
+{
+  "scope": "SOURCE_ONLY_EXACT_P07_V2_TWO_QUERY_DELTA_REVIEW",
+  "at": "2026-10-18T05:01:03.288458+00:00",
+  "result": "ACK_NO_REMAINING_CONCRETE_SOURCE_BLOCKER_BY_INSPECTION",
+  "source_sha256": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+  "base_v1_source_sha256": "a3ae1fe2d62a82d147c0f4a7c885d2ab4880d737ad77ee7e561091c20aef175a",
+  "only_delta": "Exactly two SELECT kind::TEXT AS kind casts; reversal produces byte-exact frozen v1. All financial assertions, stop/copy/restart checkpoints, bounds and API calls otherwise unchanged.",
+  "addressed_finding": "P07-V1-BACKEND-01: both journal columns now PostgreSQL TEXT compatible with String decoding. Exact content/journal comparison preserved.",
+  "v1_review_sha256": "aef4b68c44ba7f518a449413f0472fc081dc1d4402deb5c9e3316ecd4cffc6a8",
+  "all_v1_packet_and_API_evidence_hashes_unchanged": true,
+  "v2_files": {
+    "P07-lightning-physical-backup-v2-manifest.json": "1f31d56d7e4e2df87e95f0408c2278ab48a807e1480a93d25beb36d685405429",
+    "P07-lightning-physical-backup-v2-notes.md": "b605b0329624995a19a4222a383e5bc5bc4434e56fbd1c05535276440ad99555",
+    "P07-lightning-physical-backup-v2-source-intake.json": "c995b78b3f32aec6209d2cad2a3bbb5e8d9f281c0cf7e6ff9a15423a27272825",
+    "P07-lightning-physical-backup-v2-delta.patch": "9bc85e5b2c728c97dc629ccfdd96d378813a74d2df543ceb475d80348beab4c3",
+    "P07-lightning-physical-backup-v2-aggregate.patch": "3f8ffa11f01003c154f90303da4ca2c743c72e8e7fcf5750d85e4f27bb885931"
+  },
+  "all_v2_manifest_file_hashes_and_lengths_verified": true,
+  "clarification": "Selected605000sat four-output customer/pool/watch descendant cut explicitly excludes continuing internal CLN12BTC setup reserve; no unchanged-reserve/channel/HSM audit claim. This documentation clarification adds no financial flow or source oracle.",
+  "status": "SOURCE_ONLY_UNCOMPILED_NOT_RUN",
+  "limits": [
+    "Full v1 source review plus bounded exact v2 delta only; parent integration/build/admission/allocation remain required.",
+    "No old PASS transfers, no full P07/P11/ML/production closure.",
+    "No source, frozen report/packet, runtime, Cargo, module or rolling-file mutation. New external review JSON and Markdown only."
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "at": "2026-10-18T04:28:11.024909+00:00",
+  "state": "AUTHORIZED_EXTERNAL_THREE_CLIENT_CASES_AFTER_OWN_PREFLIGHT",
+  "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+  "manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+  "metadata_immutable_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+  "metadata_runtime_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+  "pins_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+  "non_test_path_relocations": 3,
+  "all_other_metadata_unchanged": true,
+  "pins": 17,
+  "build_phase_seconds": {
+    "checks": 125.49,
+    "units": 193.189,
+    "products": 154.675,
+    "metadata": 293.906
+  },
+  "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+  "bundle_directory": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018",
+  "runtime_metadata": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/nextest-binaries-runtime.json",
+  "runtime_pins": "/home/francis/.cache/abandon-fresh/root-sponsor-partial-v10-20261018/runtime-pins.sha256",
+  "source_file": "testing/tests/barkd/recovery.rs",
+  "actual_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+  "binary": "ark-testing::barkd",
+  "cases": [
+    "recovery::recovered_wallet_finds_round_vtxo",
+    "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+  ],
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "serial": 1,
+  "global_max_native": 2,
+  "other_lane": "root serial sponsor2+partialterminal diagnostic; funded1000 only after root batch terminal",
+  "no_Cargo": true,
+  "first_fail_stops": true,
+  "scope": "Only these three exact actual unignored selections; first two corrected source246269; control body/helper unchanged. No oldFAIL relabel. Tiny doccomment not applied while cases run. No Signet actions."
+}

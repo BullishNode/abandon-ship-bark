@@ -1,0 +1,186 @@
+{
+  "scope": "SOURCE_ONLY_API_TYPE_PUBLIC_LIFECYCLE_DURABLE_CHECKPOINT_REVIEW",
+  "created_at": "2026-10-18T04:53:52.192409+00:00",
+  "status": "BLOCKED_PENDING_TEST_ONLY_ENUM_CAST_CORRECTION_AND_PARENT_BUILD",
+  "reviewed_source": {
+    "path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_lightning_backup.rs",
+    "sha256": "a3ae1fe2d62a82d147c0f4a7c885d2ab4880d737ad77ee7e561091c20aef175a",
+    "lines": 811,
+    "literal": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+    "expected_binary": "ark-testing::server",
+    "source_unchanged_at_completion": true
+  },
+  "canonical_HEAD": "d0e3a4f86d3b2689a1977c149c2a9ed1709e2a91",
+  "reference_files": [
+    {
+      "path": "testing/tests/server/qualification_cold_backup.rs",
+      "canonical_sha256": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "MATCHES"
+    },
+    {
+      "path": "testing/tests/server/expiry_lightning_terminal.rs",
+      "canonical_sha256": "b1ec6b391ad24ac162aa4722e24080a8551910052825ca5e982348a7af2534c2",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "DIFFERS"
+    },
+    {
+      "path": "server/src/database/expiry_internal_refund.rs",
+      "canonical_sha256": "faf9cce753d942bf40b4b3d08da0c90b4e0dbb08bb3c4736a8057c0c3fd2ef75",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "ABSENT"
+    },
+    {
+      "path": "server/src/database/expiry_ownership.rs",
+      "canonical_sha256": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "DIFFERS"
+    },
+    {
+      "path": "server/src/vtxopool.rs",
+      "canonical_sha256": "82e67f9297836b353b404916a9c45bfd352c86559100e5c351e0ab71cc9b2645",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "DIFFERS"
+    },
+    {
+      "path": "testing/src/context/builders.rs",
+      "canonical_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "MATCHES"
+    },
+    {
+      "path": "testing/src/context/mod.rs",
+      "canonical_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "MATCHES"
+    },
+    {
+      "path": "testing/src/daemon/postgres.rs",
+      "canonical_sha256": "d0b8e6000b39d657bb7d5ee277305df358f0ee0707308a90c0c5a3508fda9090",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "MATCHES"
+    },
+    {
+      "path": "bark/src/lib.rs",
+      "canonical_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "matches_frozen_intake": true,
+      "owned_worktree_state": "DIFFERS"
+    }
+  ],
+  "packet_hashes": {
+    "P07-lightning-physical-backup-v1.patch": "3bb693e4b31e0d2fb87c857a5cc52fc1c3066f5eac014115925ae6deac7e1108",
+    "P07-lightning-physical-backup-v1-manifest.json": "0fdbcdc443e5880ac9beebe45c78d19029913dea4ab1186a6295946a666e1153",
+    "P07-lightning-physical-backup-v1-source-intake.json": "388a67d9b8768fc269c175d5da79c14d1b1f69245c9f8f67a2daa73310330daf",
+    "P07-lightning-physical-backup-v1-notes.md": "ecde1ba644a6142a1a4892c8c133b6501f5992391547e66b6566162a6c20dd07"
+  },
+  "blocking_findings": [
+    {
+      "id": "P07-V1-BACKEND-01",
+      "kind": "DETERMINISTIC_RUNTIME_ROW_DECODE_ERROR_BY_SOURCE_INSPECTION_NOT_OBSERVED_TEST_FAILURE",
+      "locations": [
+        {
+          "fixture_query_line": 417,
+          "decode_line": 418
+        },
+        {
+          "fixture_query_line": 464,
+          "decode_line": 465
+        }
+      ],
+      "problem": "Both journal snapshots select raw PostgreSQL wallet_kind enum then row.get::<_,String>(0). String FromSql delegates accepts to str, which does not accept wallet_kind; Row::get panics WrongType before the backup.",
+      "evidence": [
+        {
+          "path": "server/schema.sql",
+          "line": 132,
+          "fact": "wallet_kind is PostgreSQL ENUM"
+        },
+        {
+          "path": "server/schema.sql",
+          "line": 1900,
+          "fact": "wallet_changeset.kind uses public.wallet_kind"
+        },
+        {
+          "path": "/home/francis/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/postgres-types-0.2.14/src/lib.rs",
+          "line": 697,
+          "fact": "String delegates to str; str accepts text types/specified extensions, not arbitrary enums (lines729-739)"
+        },
+        {
+          "path": "/home/francis/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-postgres-0.7.18/src/row.rs",
+          "line": 157,
+          "fact": "Row::get panics on decode error; accepts check raises WrongType at188-190"
+        }
+      ],
+      "minimal_proposed_fix": "Cast kind::TEXT AS kind in BOTH SELECT lists, retaining exact journal equality and all state/money assertions.",
+      "reviewer_applied_fix": false
+    }
+  ],
+  "other_concrete_blockers": [],
+  "inspected_properties": [
+    {
+      "fixture_lines": "34-51,425-478",
+      "result": "ExistingCluster avoids destructive initdb/new database helpers, delegates genuine PG command/readiness, retains DB name and asserts clean pg_controldata state/no postmaster.pid. Restored fresh directories/services use same continuing Core and copied service identities."
+    },
+    {
+      "fixture_lines": "178-225,411-424,458-483",
+      "result": "Real internal funding/attempt/subscription/hash/source join, HtlcsReady, one source input/attempt, two durable signed grants totaling90000, zero claim/dispatch/entitlement/settlement and unresolved HTLC states; byte-exact ancestry/fallback/journal preservation. Enum decode issue above prevents actual completion until fixed."
+    },
+    {
+      "fixture_lines": "295-403,644-674",
+      "result": "Both original clients stop/drop before backup. Fresh sender directory later uses mnemonic/genesis birthday, no original wallet DB/tx import; actual fallback identity and all10 Ark balance bucket checks prospective."
+    },
+    {
+      "fixture_lines": "167-170,179-190,211-225,417-418,464-465,538-543,602-637,784-785",
+      "result": "All custom Db.read query closures wrap tokio-postgres errors using Ok(query.await?), matching anyhow signature. Helper-returned DB calls already use anyhow. Payment status enum snapshots castTEXT; expiry allocation status/amount/raw/height columns match current fork TEXT/BIGINT/BYTEA types."
+    },
+    {
+      "fixture_lines": "260-278,337-378",
+      "result": "Public CLN/wallet/Arkoor/DTO APIs exist. Receive deadline tip+36 plus margin6 is below incoming tip+260, and max duration288 permits both. Actual pool geometry/admission remains native proof requirement."
+    },
+    {
+      "fixture_lines": "153-174,485-608,704-776",
+      "result": "Continuing-Core mining followed by explicit restored sync/rebuild, actual grant confirmation+CSV/CLTV barrier, unique actual same-block P2A child Core6/raw/fee/hash binding use existing public APIs; no automatic hang inference about stopped TestContext helpers."
+    },
+    {
+      "fixture_lines": "252-257,487-507,704-706",
+      "result": "Outer180s and <=96 postbackup mined blocks retained. Internal helpers do not extend outer timeout. Runtime feasibility not established."
+    }
+  ],
+  "limits": [
+    "SOURCE ONLY, UNCOMPILED, NOT RUN. No compiler/Rust AST/Cargo/listing/native/SQL/service/actor or wallet/DB open. No old native PASS transfers.",
+    "All nine source-intake references match canonical HEAD/current file bytes. Owned older worktree has differing or missing product references and was not substituted for current APIs.",
+    "One orderly same-candidate internal HtlcsReady physical backup; continuing Core/CLN, no CLN channel/HSM backup, unclean/PITR/upgrade/universal backup or full P07/P11/ML/production closure.",
+    "Dedicated configured continuing-Core operator sweep is explicit fixture scope, not default replenishment qualification. Two grants sum90000, not two90000 grants.",
+    "Financial oracle/custody scope is separately reviewed by money peer. Prospective605000 cut, actual graph, journal and native deadline/resource feasibility still require exact parent integration/build/admission/execution."
+  ],
+  "API_evidence_hashes": {
+    "server/schema.sql": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+    "server/src/database/mod.rs": "e806250d0354907fb90cf5e8cb3886307fa99fafd7b3c225fe8479be8fe7b6a4",
+    "server/src/database/htlc_vtxo.rs": "4bf7ba6d2d846f797b26f728edfaf8638c9009b8c8f1f55da0ac0b6f4d74db6e",
+    "server/src/database/ln/mod.rs": "4080bb5ea63fc873652a40f0c423dcf8fff9905aa1bc9fa018b48dce0d0611c1",
+    "server/src/database/expiry_chain.rs": "a20f49ca1edcec080db441fe5152a273e509b0141c34bf3de91cd02b0ed76e0c",
+    "server/src/database/fallback.rs": "71b8dfae45ddad92f9c69a32f9b0d474f4c928f202c9b1aed647b83993b23fe9",
+    "server/src/ln/mod.rs": "c7bd28d796c837025648f19c7c4841c164f4e991001332eb0ed1f9937ebf4eee",
+    "server/src/ln/node_manager.rs": "571f7484c503f11fe8a2284aaa1aa598aae513c362d032ffab3579ef064a43b5",
+    "testing/src/daemon/mod.rs": "8787ffcb12c824573365b68ef0a2fdbfac4e2ca2c41fd0658e30ab3659e54bf4",
+    "testing/src/daemon/captaind/mod.rs": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+    "testing/src/daemon/watchmand.rs": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+    "testing/src/postgres/mod.rs": "f6246b4892e3f68cdd0a7c18eff47acd6995dd1bc6bad350c26615e75dee845e",
+    "testing/src/postgres/test_managed.rs": "ddfd0ebe52ebde52a203d5053121bbc9d505e1892e6d1eca58243f9c59d955c4",
+    "testing/src/bark.rs": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+    "bark/src/fallback/sync.rs": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+    "bark/src/fallback/payouts.rs": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+    "server/src/database/fork_migrations/V6__lightning_dispatch.sql": "d6f232746e6b33c1efba222273e2a5b8ca036e8974e2ea7d1172f71c9b6aa8d3",
+    "server/src/database/fork_migrations/V9__lightning_source_discharge.sql": "b85b63c0020886d9abea607ab40a16a18acc439057c6add8918622378351a11c",
+    "server/src/database/fork_migrations/V11__lightning_receive_claim.sql": "291ab7471024cba148a841aa008534b4a76b94e77c7eba5b4f1ce3e5cf7c6f4c",
+    "lib/src/arkoor/package.rs": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3"
+  },
+  "external_driver_evidence_hashes": {
+    "/home/francis/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/postgres-types-0.2.14/src/lib.rs": "d6fe0c6fd074a1a562ff042c3c807d4ec656a6fb561a7a0c2f568955f99cda76",
+    "/home/francis/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-postgres-0.7.18/src/row.rs": "699579818c8b23e47d5257d99a4244ade57b3b80f58ef00a200594218c7a021d"
+  },
+  "writes": [
+    "New external review JSON and companion Markdown only"
+  ],
+  "source_original_packet_rolling_runtime_mutations": false
+}

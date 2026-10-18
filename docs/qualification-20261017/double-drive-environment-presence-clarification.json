@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-18T05:04:44.887915+00:00",
+  "state": "READ_ONLY_SOURCE_ENVIRONMENT_PRESENCE_SEMANTICS_CLARIFIED",
+  "variable": "BARK_DOUBLE_DRIVE_ACTIONS",
+  "actual_semantics": "Any presence including false/0/empty selects double-driving. Fully unset required for singleton-drive fixtures such as new ML049 ACK-after-effect-loss test.",
+  "source": "testing/src/util.rs:220",
+  "source_sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+  "ordinary_recipe": "just int-binaries invokes immutablemetadata nextest normally, does not export thisvariable; separate int-bark-int-action-reentrancy recipe sets1",
+  "justfile_sha256": "8bcf85e341c95b28ed28c3d74d735effe082d282a97bbf3f7d7dc45c2dbbc3f6",
+  "own_completed_batch45": "run.sh fullyunsets thisvariable after sourcingcachedNix and usesordinaryint-binaries; no needrerun ornativecountchange",
+  "own_completed_runsh_sha256": "c1feadae46bd5480f74722f568e67f2056c0056ea1733ea057d6ad9d84212a7e",
+  "future_policy": "Explicitly unset inrunenv and verify actualrecipe; no false/0/empty substitute. Newindependentterminal receives sameclarification fromroot.",
+  "limits": "Append-only clarification; no source/scopepacket/controls/runtime/Cargo/ML/count mutation."
+}

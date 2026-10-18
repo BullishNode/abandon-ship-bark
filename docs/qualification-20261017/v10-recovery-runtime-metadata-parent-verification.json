@@ -1,0 +1,59 @@
+{
+  "at": "2026-10-18T04:29:30.553872+00:00",
+  "state": "READ_ONLY_METADATA_OVERLAY_AND_ROOT_ARTIFACT_BINDING_PASS_NOT_LAUNCH_ADMISSION",
+  "root_allocation_sha256": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838",
+  "artifact_sha256": {
+    "source-manifest.json": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "source.tar.gz": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "manifest.json": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "nextest-binaries-immutable.json": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+    "nextest-binaries-runtime.json": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a"
+  },
+  "exact_only_three_non_test_support_path_relocations": [
+    {
+      "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/0/path",
+      "immutable": "debug/deps/libark.rlib",
+      "runtime": "../runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.rlib"
+    },
+    {
+      "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/1/path",
+      "immutable": "debug/deps/libark.so",
+      "runtime": "../runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.so"
+    },
+    {
+      "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0/0/path",
+      "immutable": "debug/lock-holder",
+      "runtime": "../runtime-sponsor-terminal-v10-20261018/support/debug/lock-holder"
+    }
+  ],
+  "all_test_binaries_package_ids_and_other_metadata_identical": true,
+  "binaries": [
+    "ark-testing::bark",
+    "ark-testing::bark-sdk",
+    "ark-testing::barkd",
+    "ark-testing::server"
+  ],
+  "build_phases": {
+    "checks": {
+      "state": "PASS",
+      "seconds": 125.49
+    },
+    "units": {
+      "state": "PASS",
+      "seconds": 193.189
+    },
+    "products": {
+      "state": "PASS",
+      "seconds": 154.675
+    },
+    "metadata": {
+      "state": "PASS",
+      "seconds": 293.906
+    }
+  },
+  "captured_HEAD": "783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+  "dirty": true,
+  "actual_diff_sha256": "07668101a86082c0a1969735aa65051e5003222c9f0b1bc7928e4b7881d9108b",
+  "source_proof_sha256": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed",
+  "limits": "No runtime/listing/preflight/Cargo or admission by this read-only proof; exact pins, versions, actor/resource gates and parent admission still required. Root unit/build results excluded from own test counts."
+}

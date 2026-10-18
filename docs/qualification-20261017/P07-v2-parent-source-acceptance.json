@@ -1,0 +1,28 @@
+{
+  "at": "2026-10-18T05:02:43.496738+00:00",
+  "state": "SOURCE_ONLY_PEERS_AND_PARENT_ACK_READY_FOR_COORDINATOR_INTEGRATION_CAPTURE",
+  "source_sha256": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+  "aggregate_patch_sha256": "3f8ffa11f01003c154f90303da4ca2c743c72e8e7fcf5750d85e4f27bb885931",
+  "manifest_sha256": "1f31d56d7e4e2df87e95f0408c2278ab48a807e1480a93d25beb36d685405429",
+  "reviews_sha256": {
+    "P07-v1-parent-source-review.json": "b42d4dc3a2432c4cbeb3f53616b21c26ac568bdd748c9d3830bc971279135e36",
+    "P07-v2-backend-source-review.json": "8cbb1fdecbca60a3b921ebb1e723caf2867b4f84fe686b51f73bca7449f420e2",
+    "P07-lightning-physical-backup-v2-peer-review-legacy.md": "8dfdbe4de51d8f9ae9355629cd63b89b03c9717ab8bd7b4ddc1a74edb12accaa"
+  },
+  "exact_only_two_SQL_enum_cast_changes_reverse_to_frozen_v1": true,
+  "all5_v2_files_and5_preserved_v1_files_hashes_verified": true,
+  "canonical_aggregate_git_apply_check_exit": 0,
+  "patch_actually_applied_by_parent": false,
+  "all15_other_owned_Rust_hashes_unchanged": true,
+  "selector": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+  "binary": "ark-testing::server",
+  "source_scope": "Genuine durable internal HtlcsReady before terminal/claim/preimage, two signed grants TOTAL90k/source100k; clean physical PG+serviceidentity+nativewalletjournal restore into new roots; continuingCore/nativeCLN; bothoriginalclientsabsent; automatic99k rightfulrefund +freshseedBIP84drain/Core6 +selected605kfinitecut.",
+  "explicit_limits": [
+    "605k selected4outputcut excludes native no-channel CLN12BTC reserve; no unchangedreserve/channel/HSM/globalcustody claim.",
+    "Dedicated Core operator sweep is original explicitfixtureconfiguration preservedexactly; no default replenishment qualification.",
+    "One clean same-candidate physicalbackup boundary; no crash/PITR/upgrade/allLightning-boundaries proof.",
+    "Unregistered/uncompiled/NOTRUN; default180/<=96blocks remains prospective. No ML/P07/readiness promotion."
+  ],
+  "next_authorized_owner_action": "Coordinator integrates exactaddfile+module, builds coherentcandidate, supplies immutablefullpins and exactsingleton default180/retry0 allocation. Testingtrack will independently preflight/list/resource/source/body/pin/actor/hash-admit before native execution.",
+  "source_mutations_or_Cargo_native_module_registration_by_parent": 0
+}

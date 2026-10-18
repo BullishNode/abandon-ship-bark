@@ -1,0 +1,18 @@
+IN_NIX_SHELL=impure
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/bark: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/barkd: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-bark: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-bark-sdk: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-barkd: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-server: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/nextest-binaries-runtime.json: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/source-manifest.json: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/manifest.json: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.rlib: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.so: OK
+/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/lock-holder: OK
+/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd: OK
+/fresh-cache/cln-adapter-evidence/plugins/cln-grpc: OK
+/fresh-cache/cln-adapter-evidence/plugins/hold: OK

@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "at": "2026-10-18T06:46:00.703742+00:00",
+  "production_readiness": "NO",
+  "candidate": {
+    "captured_head": "0496e057fe8cedde99c9b85edab67035633a8f25",
+    "dirty_source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "published_product_commit": "9397f4ee6",
+    "published_test_commit": "76815b1ff",
+    "build": "Checks,867units/1skip,4products,4native binaries PASS; later commits do not relabel captured executables."
+  },
+  "partial_terminal": {
+    "result": "ACTUAL_NATIVE_PASS",
+    "native_run": "381e68be-7c14-4e1e-895c-83a4e341873d",
+    "native_seconds": 93.234,
+    "wrapper_seconds": 94.008,
+    "A_receipt_sat": 98000,
+    "B_fallback_sat": 99000,
+    "same_parent_grants_sat": 180000,
+    "operator_gross_return_sat": 181000,
+    "three_transaction_cut_sat": {
+      "external": 528066,
+      "terminal": 521412,
+      "miners": 6654
+    },
+    "minimum_terminal_depth": 6,
+    "independent_retained_chain_audit_sha256": "16e33fc5389b092f7dde3857a437608b4d245f631c49833814dc0d9fb545d20e",
+    "independent_cut_sha256": "a08e0b161704830619b702023f97b19b722c80a518dc3fb12ead272aa7b82b28",
+    "scope": "Two original100kcustomer sources; A actual authorizedtimeout claim, then absent originalclients, all4signedgrants+actualBsource jointly pay rightfulB exactlyonce; no secondAallocation in native rebuiltledger."
+  },
+  "pending_grants_physical_backup": {
+    "result": "ACTUAL_NATIVE_PASS_WITH_FORMAL_POSTFLIGHT_AND_INDEPENDENT_RETAINED_CHAIN_AUDIT",
+    "native_run": "6376a368-f78f-4eee-9376-8a0996196c81",
+    "native_seconds": 139.775,
+    "source_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+    "public_native_receipt_sha256": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+    "formal_postflight_sha256": "18c5aace0d7a82ddb3275b2d8ee54d8ef6408b47a5c85249c9a6a3c6a4c42174",
+    "independent_chain_audit_sha256": "63ddb9488440257b0041ab47f46a4d124382893515d1d5ecadddfa21bbefd3a9",
+    "selected_cut_sat": {
+      "external": 605000,
+      "customer_final_recovery": 197349,
+      "operator_retained": 381626,
+      "miners": 26025
+    },
+    "customer_equation_sat": "200000=197349recovery+763boardminer+1000fallbackcharge+888recoveryminer",
+    "joint_parent": {
+      "txid": "323b2a071f0cbd28ee5c305dc5fcb6b788a38557e1f733a8a6ea04e4746ef603",
+      "customer_sat": 99000,
+      "operator_sat": 91000,
+      "miner_fee_sat": 0,
+      "confirmations": 12
+    },
+    "fee_child_miner_sat": 3383,
+    "seed_drain_confirmations": 6,
+    "scope": "Orderly physical PG/server identity/watch journal backup at genuineinternalHtlcsReady90kgrants/100ksource; distinct restored roots, continuing Core/CLN and absent originalclients; automatic99kfallback then freshseed actualBIP84spend."
+  },
+  "preserved_failures": [
+    {
+      "case": "originalpartialterminal v10",
+      "result": "TIMEOUT180.028",
+      "limit": "Original retainedfailure; newpass is separate code/evidence."
+    },
+    {
+      "case": "v11/v11b sourcechecks",
+      "result": "CompileFAIL; mechanical explicittypes/PaymentHash shadow correction captured separately."
+    },
+    {
+      "case": "v11c reorg",
+      "result": "FAIL66.094 beforefork: obsoleteoldroot oracle after deliberateprefixprogress."
+    },
+    {
+      "case": "v12 correctedprefixreorg",
+      "result": "FAIL73.792 after actualfork and exactAclaim replay: Core recreated deliberatelyinvalidated oldblock; not a signature/fee/settlement rejection.",
+      "diagnosis_sha256": "094de670653d22174c76760e94cecb6f1d6c313c7435057d270fd35a13fe3911"
+    }
+  ],
+  "reorg_status": "V13 freshminingaddress test-only correction compiling/running separately; no reorgPASS at this receipt cutoff. ExactV11cproductELFs inherited unchanged.",
+  "limits": [
+    "Independent rawchain arithmetic/inclusion is not independent script/signature/PoW validation; authenticatedregistration/journal/backupidentity/recipient bindings are separately native assertions.",
+    "Backup605k selected4fundingoutput descendant cut excludes continuingCLN12BTC reserve; no CLNchannel/HSM/globalcustody/crash/PITR/allboundaries proof.",
+    "Prior-fenced/batched/cold/consumed/oversized and immutable-low-fee recovery limits remain OPEN; no newprotocol introduced.",
+    "No full200moneyloss catalogue or mainnet qualification; no mainnet deployment authorized."
+  ]
+}

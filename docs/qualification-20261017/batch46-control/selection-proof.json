@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "batch": "batch46-lightning-physical-backup-v11c",
+  "state": "ROOT_CONDITIONAL_ALLOCATION_BOUND_OWN47_FORMAL_PASS_PARENT_LAUNCH_PENDING",
+  "candidate_ready": true,
+  "controls_finalized": true,
+  "execution_authorized": true,
+  "expected_names_in_execution_order": [
+    "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::server"
+  ],
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "threads": 1,
+  "maximum_case_executions": 1,
+  "maximum_global_native": 2,
+  "first_fail_stops": true,
+  "fresh_context_required": true,
+  "expected_ignored": false,
+  "run_ignored": null,
+  "CLN_required": true,
+  "native_CLN_required_version": "v26.06.6",
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+  "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+  "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+  "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+  "metadata_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json",
+  "immutable_metadata_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-immutable.json",
+  "source_archive_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/source.tar.gz",
+  "runtime_pin_count": 17,
+  "runtime_pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "native_server_sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+  "source_file": "testing/tests/server/qualification_lightning_backup.rs",
+  "source_file_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+  "source_functions": {
+    "literal": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+    "binary": "ark-testing::server",
+    "source_file": "testing/tests/server/qualification_lightning_backup.rs",
+    "source_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+    "entry": {
+      "function_sha256": "aa91855bf97abe363fc77a10dbef2001c0fc79b4e0aca114f7d302c58a1a422b",
+      "body_sha256": "8dcea71b84d731d6de9e1215a89a6f22195e3057a68c0cd002208d91c5d85b3c"
+    },
+    "async_body": {
+      "function_sha256": "b475c2b79cac32137dbb41840fa98af2213dc74be4fe1e8a7bd4388d084ed60a",
+      "body_sha256": "29508f4a0e30e1b329de4311207cd333fbcced0ca78e9f9a8ce981b50e55b85e"
+    },
+    "all13_helpers": {
+      "file_hash": {
+        "function_sha256": "b7ad4e47fda384bc788034b3e6e97acb31be992e158017839b27e7ec6a1345db",
+        "body_sha256": "256c37bb952812692cfe955f41d4e95338aff8868c8060472c2c338b184deb33"
+      },
+      "copy_tree": {
+        "function_sha256": "22b620cf4bf751b7ed7c958c8e9864d1f8300222c02334dfe90dc8349932b15c",
+        "body_sha256": "ffe82652678fe0c696d9f7d33c8cb2299f9f3ab62fc2e78cb9c617cbe272fc95"
+      },
+      "postgres_tool": {
+        "function_sha256": "d00182d1511f3f43213c38dd8be0400755c1c90b67242afc8e4acb27f6f13b11",
+        "body_sha256": "424ecbd18d8aaa96023389c5adcc7e68c56029253a3ef0f89496e0c061ff8ca2"
+      },
+      "assert_clean_cluster": {
+        "function_sha256": "465120c46ea6d367fc8078097ed5b034efd72ce2e705535c9efd29467d017eae",
+        "body_sha256": "4a047a35ffddcdc12f5b63ec5d4b2f43e9a321ad0553eec4b0d28f7535241554"
+      },
+      "watchman_coins": {
+        "function_sha256": "ad54b678330508d0952b711890b192393167e1546a3f84102d781376f885aca9",
+        "body_sha256": "89b45b06c805600248135e642ecd41d288da1b1b020351a059c898d786b4ba8a"
+      },
+      "wait_watchman_coins": {
+        "function_sha256": "1d85aaf9bd79b4d0b86138deb2582ec1fbb60779be6ddc0288b35ea373512a38",
+        "body_sha256": "29b2ddfb6072e55e34fbd8b95962d52a09ae6c63103a555ec1dfcf4c2ef00d68"
+      },
+      "mine_continuing_core": {
+        "function_sha256": "781de25833846102cbccfbcc190f723ac92d343f9386653217406a11ffb06f10",
+        "body_sha256": "2fbe6f507ed290520509ed81920ae59a03c037340aab70a1f72830521ec03aa5"
+      },
+      "actual_fee": {
+        "function_sha256": "4a26752d687c7bcdf30866f8a6ea9f6d0cbdfdf3a899a3196fa89bcf516a55cf",
+        "body_sha256": "44afaa5c95715dccfc3bb80fb62a6ee01f1cd2ab4101fdd358b0219e04ab96f3"
+      },
+      "canonical": {
+        "function_sha256": "dce96a758b4e176578f95a70b6111455120d38ff19d178255a157e01218d73a4",
+        "body_sha256": "0cb2a7f61b0eed00ff28212b500f7681cefc4c53a97ed42d67ed6791bf071fde"
+      },
+      "rebuilt": {
+        "function_sha256": "f13842f6ad21ee01d020232a14ffc2e8f35930094e357fa0eb360f59ec8b07ae",
+        "body_sha256": "186b274ab4c68ca1eb31d4fca88d8edbc3b68abf1f6d65524c1da7d05e404029"
+      },
+      "pending_checkpoint": {
+        "function_sha256": "337f67250a35464eb49d345ab760060486d27923b9354ad62051ebf4e6cb579c",
+        "body_sha256": "1fd1f972421504f183117c93c659053bc359a7017e80869b801faaf696983370"
+      },
+      "signed_grant_ancestry": {
+        "function_sha256": "94a70688caa93ff750d61566a4829d95669d15ceb2fcd777373875fe92219f71",
+        "body_sha256": "c31cb737fd0bdaecfe4176d87b68634560304f1c8c27be4b84cf3ab747e8f851"
+      },
+      "canonical_descendants": {
+        "function_sha256": "df508973e4fb606300cf8575d6e74176aad7d799765adede0acef451a8acb08c",
+        "body_sha256": "985bafe157fcc67f8407bb9a4b2aa5a6070e71acc3b9e7df0d33f1835592de0d"
+      }
+    },
+    "ExistingCluster_impl": {
+      "function_sha256": "94731d107fe97b8728d1c8f35a6548b620cedc9cdf61a7f1c8a8f6f8906d92e0",
+      "body_sha256": "bd25b683961b326705aac78f40b9a16665313e8db5bb06dd95f1e76505dfbb8d"
+    },
+    "module_source_sha256": "02143d923de98c3915d3d3bd6bfbc505774eacdf0b67a6f8dc096b931f27075f",
+    "testing_Cargo_sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+    "module_Cargo_test_feature_binding": true,
+    "exact_mechanical_delta": "Only two maturity block-hash binding lines rename hash\u2192block_hash; reversing them produces byte-exact abd0. This preserves intended later PaymentHash typed SQL/RPC, all monetary/lifecycle/timer assertions unchanged.",
+    "native_status": "NOT RUN; no listing performed; no P07 allocation inferred.",
+    "scope": "Selected605k four-output cut, continuing Core/native CLN; separate internal CLN12BTC reserve outside cut, no unchanged-reserve/channel/HSM/all-boundaries/FULLML claim."
+  },
+  "proof_sha256": {
+    "artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+    "source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+    "mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+    "batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3"
+  },
+  "root_authorization": {
+    "packet_path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/P07-v11c-root-native-allocation-20261018.json",
+    "sha256": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "state": "ALLOCATED_CONDITIONAL_ON_OWN47_FORMAL_TERMINAL_POSTFLIGHT",
+    "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+    "test_field": "test",
+    "runtime_container_field": "runtime_container"
+  },
+  "required_47_postflight": {
+    "file": "batch47-postflight.json",
+    "sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "state": "TERMINAL_3PASS_POSTFLIGHT_SOURCE_ARTIFACT_CONTROL_INTEGRITY_PASS",
+    "parent_exit_code": 0,
+    "PASS": 3,
+    "FAIL": 0
+  },
+  "execution_environment": {
+    "BARK_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark",
+    "BARKD_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd",
+    "CAPTAIND_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind",
+    "WATCHMAND_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand",
+    "BARK_VERSION": "bark 0.7.1-dev (0496e057fe8cedde99c9b85edab67035633a8f25)",
+    "BARKD_VERSION": "barkd 0.7.1-dev (0496e057fe8cedde99c9b85edab67035633a8f25)",
+    "CAPTAIND_VERSION": "captaind 0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25",
+    "WATCHMAND_VERSION": "watchmand 0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25",
+    "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+    "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib",
+    "LIGHTNINGD_EXEC": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+    "LIGHTNINGD_PLUGIN_DIR": "/fresh-cache/cln-adapter-evidence/plugins"
+  },
+  "pg_controldata_sha256": "6b8304e7827e26ff3e5f00661ad00da51ee5329c032c19b2660ccc9fcb8a2d63",
+  "scope": "Exact one clean physical internalHtlcsReady backup, Core+nativeCLN continuing, selected605kcut excluding12BTCreserve. No allboundary/CLN-HSM/globalcustody/FULLML credit. Actual47formalPASS is prerequisite, not P07result."
+}

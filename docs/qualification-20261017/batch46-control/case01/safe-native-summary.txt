@@ -1,0 +1,8 @@
+Run ID: 6376a368-f78f-4eee-9376-8a0996196c81
+Selected: 1 unignored ark-testing::server test
+PASS [ 139.775s] (1/1) ark-testing::server qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender
+Summary [139.780s] 1 test run: 1 passed (suffix omitted)
+Parent session15868 terminal exit0; native139.775s, controller140.724s.
+Formal postflight PASS;17 pins/16 controls unchanged, scoped actors absent.
+Public receipt precedes cleanup; actual terminal exit0 and formal postflight establish final native outcome.
+Scope: selected605k, continuing CLN12BTC excluded; no universal backup/custody/FULLML.

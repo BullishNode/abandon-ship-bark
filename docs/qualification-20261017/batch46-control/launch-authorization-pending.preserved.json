@@ -1,0 +1,9 @@
+{
+  "state": "PARENT_FRESH_GATES_AND_SEPARATE_LAUNCH_ADMISSION_PENDING",
+  "batch": "batch46-lightning-physical-backup-v11c",
+  "native_authorized": false,
+  "required_47_postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+  "actual47formal_receipt_bound": true,
+  "root_allocation_sha256": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+  "parent_launch_admission": null
+}

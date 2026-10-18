@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "state": "FINAL_SOURCE_CONTROLS_PARENT_FRESH_GATES_AND_LAUNCH_ADMISSION_PENDING",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c",
+  "root_allocation_sha256": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+  "root_allocation_state": "ALLOCATED_CONDITIONAL_ON_OWN47_FORMAL_TERMINAL_POSTFLIGHT",
+  "required_47_postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+  "47formal_schema_checked": "terminal28414exit0,3P0F,all15controls/17pinsunchanged,groupsSID/scopedactors/unreadableprocempty",
+  "current_static_freeze": {
+    "selection-proof.json": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+    "root-allocation.json": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+    "source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+    "mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+    "batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "server-cohort.py": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+    "preflight-static.py": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+    "fresh-listings.py": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+    "preflight.sh": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+    "run.sh": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+    "case01/nextest.toml": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2"
+  },
+  "required_parent_freeze_files": [
+    "selection-proof.json",
+    "root-allocation.json",
+    "runtime-pins.sha256",
+    "artifact-proof.json",
+    "source-proof.json",
+    "mechanical-parent.json",
+    "mechanical-peer.json",
+    "batch47-postflight.json",
+    "server-cohort.py",
+    "preflight-static.py",
+    "fresh-listings.py",
+    "preflight.sh",
+    "run.sh",
+    "case01/nextest.toml",
+    "fresh-listing-admission.json",
+    "resource-admission.json"
+  ],
+  "required_parent_freeze_count": 16,
+  "parent_admission_shape": {
+    "state": "PARENT_HASH_GATE_PASSED",
+    "batch": "batch46-lightning-physical-backup-v11c",
+    "expected_selection": [
+      [
+        "ark-testing::server",
+        "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender"
+      ]
+    ],
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "sha256": "exact16requiredfiles after fresh listing/resource gates"
+  },
+  "old_v15_closed_history": {
+    "original_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15",
+    "all9_original_files_unchanged_and_copied": {
+      "PREPARATION.pending.json": "bcc0eff57a8b58d4bb4b6453e913f3672a0f2c1a3b0de5cf0e29188c52c5bda1",
+      "fresh-listings.py": "3bc140daa54d52174c6f1f181560a4346a6001eb46336589a1cbb5d4617dcb6b",
+      "run.sh": "52c6590fdc1750a766644bae53e97ca4199c1494a24faafa48567a6f6881f89f",
+      "launch-authorization-pending.json": "8eb829dbf7feb17c232811c27e4ff3b8acc2faeac4dfac3740016120cfb992d6",
+      "preflight.sh": "5dd11dffe1120b0580d74932271d827ac2b915bc81fb59e01d960a9f62e3cc83",
+      "preflight-static.py": "b67492aa2555729fdbf1cc2dd8dd8ceaae675bf71ee8973d285eaf97e9d11899",
+      "selection-proof.json": "8e7232d7c42b782650a769b4a444c6c3403fc7aba982b866c03a325f544c4ef9",
+      "server-cohort.py": "a449286b5aa138a4b0aac0954f7799bd84696661eeeaa9b403da5270d350478b",
+      "case01/nextest.toml": "1fdd0f62b280405f4be707a8406fba248fe8544151af5277afa8d3902c6916cf"
+    },
+    "new_history_subdir": "preserved-v15-closed",
+    "note": "Originaloldv15/abd0 scaffold is historical only, never an activeartifact or allocation."
+  },
+  "validation": {
+    "cached_Nix_before_edits": "impure/Rust1.90.0",
+    "AST": 3,
+    "bash_n": 2,
+    "TOML": 1,
+    "17pin+P07source_binding": "from exact ac69proof and actual root9fff, fresh actual guard checks parent-owned",
+    "PGcontroldata_readonly_hash": "6b8304e7827e26ff3e5f00661ad00da51ee5329c032c19b2660ccc9fcb8a2d63",
+    "control_or_shell_bodies_executed": 0,
+    "preflight": 0,
+    "listing": 0,
+    "resource_actor_probe": 0,
+    "native": 0,
+    "Cargo": 0
+  },
+  "limits": [
+    "Default180/retry0/serial1/firstFAIL/onecase/global2; root8506otherlane may continue, no thirdnative case.",
+    "Full native log and failure command can contain actualmnemonic; keep logs/resultdetail private, export safe selected metadata/publicreceipt/hash only.",
+    "One prospective605kcut pending-HtlcsReady physicalbackup with continuingCore/CLN; not12BTCreserveaudit/channel-HSM/allboundaries/globalcustody/FULLML.",
+    "No P07native launched by author; exactroot permission requires independentfinalpeer and parentfreshactualgates/admission."
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "state": "SOURCE_CONTROL_PEER_ACK_NO_CONCRETE_BLOCKER_PARENT_FRESH_ADMISSION_REQUIRED",
+  "reviewed_at_utc": "2026-10-18T06:25:10.222440+00:00",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c",
+  "blockers": [],
+  "pins": {
+    "PREPARATION.json": "31e45be457b4a84f34d6547db1d96b2710c79b18078bb62bac42bec01dc9c2c4",
+    "selection-proof.json": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+    "root-allocation.json": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+    "source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+    "mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+    "batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3"
+  },
+  "static14_verified": {
+    "selection-proof.json": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+    "root-allocation.json": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+    "source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+    "mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+    "batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "server-cohort.py": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+    "preflight-static.py": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+    "fresh-listings.py": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+    "preflight.sh": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+    "run.sh": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+    "case01/nextest.toml": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2"
+  },
+  "required_parent_freeze16": [
+    "selection-proof.json",
+    "root-allocation.json",
+    "runtime-pins.sha256",
+    "artifact-proof.json",
+    "source-proof.json",
+    "mechanical-parent.json",
+    "mechanical-peer.json",
+    "batch47-postflight.json",
+    "server-cohort.py",
+    "preflight-static.py",
+    "fresh-listings.py",
+    "preflight.sh",
+    "run.sh",
+    "case01/nextest.toml",
+    "fresh-listing-admission.json",
+    "resource-admission.json"
+  ],
+  "checks": {
+    "root_actual_9fff_schema_and_string_selector": true,
+    "batch47_actual_2f6_formal_schema": true,
+    "captured_C_HEAD_0496_not_newer_canonical_relabel": true,
+    "P07_6051_b475_29508_helper13_entry_impl_module_bindings": true,
+    "native_server_and_BIP84_feature_metadata_bindings": true,
+    "primary17_pinlist_unique_entries_and_guard_bindings": true,
+    "CLN_26_06_6_lightningd_grpc_hold_guard_bindings": true,
+    "pg_controldata_expected_hash_guard": true,
+    "SQLite_and_LD_PATH_guard": true,
+    "cached_Nix_before_Python_and_full_presence_unset": true,
+    "exact_one_server_default180_retries0_serial1_max1_global2_firstFAIL_fresh_once": true,
+    "int_binaries_exact_filter_and_binary_bound_PASS": true,
+    "parent_gate_exact16_and_pending_marker": true,
+    "old_v15_original_and_preserved_nine_hashes": true,
+    "AST": 3,
+    "bash_n": 2,
+    "TOML": 1
+  },
+  "boundary_at_review": {
+    "pending_marker_present": true,
+    "parent_admission_absent": true,
+    "fresh_listing_and_resource_admissions_absent": true,
+    "native_results_absent": true
+  },
+  "required_next": [
+    "Parent fresh actual 17 pins, versions, features, Nix/environment, pg_controldata, resources and scoped actors checks.",
+    "Parent fresh exact singleton listing and resource gate, freeze exactly16 required files, create matching parent admission and remove pending marker.",
+    "Sole parent launch once under actual root9fff allocation; no retry or timeout extension."
+  ],
+  "limits": [
+    "Source/control review only; no preflight/list/version/resource/actor/controller/native/Cargo body executed. Only Python AST, bash -n, TOML parsing and file hashing/read were performed.",
+    "PG tool is container-only and was not freshly probed by this review; expected exact guard hash bound, actual check remains parent fresh admission.",
+    "Other root native lane is permitted under global2; no global actor-absence claim.",
+    "Prospective selected605k cut excludes continuing CLN12BTC reserve; no channel-HSM/universal backup/global custody/FULLML/production gate completion credit.",
+    "Earlier source proofs retain creation-time build-stage truth; this static ACK does not transfer native results or claim source is current canonical HEAD."
+  ]
+}

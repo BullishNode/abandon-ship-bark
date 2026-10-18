@@ -1,0 +1,32 @@
+{
+  "at": "2026-10-18T06:09:13.933538+00:00",
+  "state": "ALLOCATED_CONDITIONAL_ON_OWN47_FORMAL_TERMINAL_POSTFLIGHT",
+  "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+  "binary": "ark-testing::server",
+  "test": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+  "source_file": "testing/tests/server/qualification_lightning_backup.rs",
+  "source_file_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+  "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+  "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+  "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+  "runtime_pins_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "artifact_directory": "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018",
+  "runtime_container": "abandon-fresh-runtime-20261017",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "serial": 1,
+  "max_global_native": 2,
+  "requires_exact_CLN_and_both_plugins": true,
+  "conditions": [
+    "Own47native parentterminal AND formal pin/source/guard/ownedPIDgroup/SID/scopedactorabsence postflight completed before anynewP07native start",
+    "Finalize separate P07 controls for actualV11c6051, preserve oldpendingv15/abd0 sourcehistory and bind exact body/helper/module; independently peer/hashreview finalguards",
+    "Fresh actual17pins/ELFversions/features/cacheenv fullyunsetdouble-drive/metadata exactsingleton/resource/actor and parenthash gates PASS",
+    "No Cargo/build/sharedtarget/canonical/index/HEAD changes",
+    "One parentlaunch of one exact singleton only; no retry/timeoutextension/changedfundingfinancialoracle; stoponfailurepreserve receipts",
+    "Root nativebatch8506 may run concurrently as other lane; no third financialnative case",
+    "605k selected finitecut excludes continuing CLN12BTC; native assertions are not independent globalcustody proof"
+  ],
+  "authorization": "After these concrete gates pass may launch once without additional root/user go. Report actualhandle/runID/pins/result then formalpostflight+independent retained public/chain audit. No full ML/production promotion."
+}

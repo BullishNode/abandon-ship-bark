@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "batch": "batch46-lightning-physical-backup-v15",
+  "state": "PENDING_CANDIDATE_AND_ROOT_ALLOCATION",
+  "candidate_ready": false,
+  "controls_finalized": false,
+  "execution_authorized": false,
+  "proposed_fixture_source_sha256": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+  "proposed_aggregate_patch_sha256": "3f8ffa11f01003c154f90303da4ca2c743c72e8e7fcf5750d85e4f27bb885931",
+  "intended_candidate_label_only": "v15; no actual artifact path or candidate identity allocated",
+  "expected_names_in_execution_order": [
+    "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::server"
+  ],
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "threads": 1,
+  "maximum_case_executions": 1,
+  "maximum_global_native": 2,
+  "first_fail_stops": true,
+  "fresh_context_required": true,
+  "expected_ignored": false,
+  "run_ignored": null,
+  "CLN_required": true,
+  "native_CLN_required_version": "v26.06.6",
+  "source_manifest_sha256": null,
+  "source_archive_sha256": null,
+  "bundle_manifest_sha256": null,
+  "runtime_metadata_sha256": null,
+  "immutable_metadata_sha256": null,
+  "metadata_path": null,
+  "runtime_pin_count": null,
+  "runtime_pinlist_sha256": null,
+  "actual_native_ELFs": null,
+  "actual_product_versions": null,
+  "execution_environment": null,
+  "postgres_bins": null,
+  "sqlite_library_path": null,
+  "native_CLN_binary_and_two_plugin_paths_and_hashes": null,
+  "root_authorization": {
+    "state": null,
+    "cases_field": null,
+    "owner_thread": null,
+    "sha256": null,
+    "packet_path": null
+  },
+  "parent_launch_admission": null,
+  "environment_requirements": [
+    "Caller sources /fresh-cache/default-env.sh BEFORE guard Python.",
+    "FULL unset BARK_DOUBLE_DRIVE_ACTIONS AFTER sourcing cached Nix; false/0/empty are present and invalid. Both Python gates reject presence.",
+    "No Docker CLN; future exact native CLN v26.06.6 plus grpc/hold plugin paths/hashes must come from actual handoff.",
+    "Preserve exact actual future LD_LIBRARY_PATH/SQLite, POSTGRES_BINS and product paths/versions. No borrowed v10 slots or guessed v15 paths."
+  ],
+  "pending_guard": "All Python entrypoints terminate before any resource/list/native operation, even if readiness flags are changed. Exact allocation schema and immutable candidate must be integrated/reviewed before removing final closed scaffold raise."
+}

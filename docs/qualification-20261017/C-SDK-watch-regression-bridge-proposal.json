@@ -1,0 +1,350 @@
+{
+  "schema": "C-SDK-watch-regression-bridge-proposal-v1",
+  "created_utc": "2026-10-18T06:45:17.460255+00:00",
+  "state": "SOURCE_ONLY_PROPOSAL_NOT_ALLOCATED",
+  "purpose": "Repeat three existing SDK names on captured C paired claim-journal product changes as a bounded regression bridge. No new unique scenarios and no qualification of root reorg/fairness fixtures.",
+  "cases": [
+    {
+      "order": 1,
+      "binary": "ark-testing::bark-sdk",
+      "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "source_file": "testing/tests/bark_sdk/lightning.rs",
+      "full_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "function_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+      "brace_body_sha256": "139c429a0f035978ce03968c7d8cfa31ebd80c738e7c3126073cc90871fea378",
+      "start_line": 144,
+      "end_line": 345,
+      "old44_to_C": "FUNCTION_AND_FULL_FILE_BYTE_IDENTICAL",
+      "saved_listing": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "current_execution_status": "NOT RUN",
+      "new_allocation": null,
+      "native_CLN_required": true,
+      "native_oracles": [
+        "At real source expiry, reject a new signed Regtest hold invoice with typed ExpiredNewLightning/expired_new_lightning; retain exact source bytes/principal and record Failed movement with zero effective value.",
+        "Independently require zero native funding attempts, zero dispatch rows, empty payer CLN pays, and an Unpaid external invoice with no HTLCs for the rejected hash.",
+        "Perform genuine refresh, verify new signed two-BTC coin/new anchor/Core >=6 confirmations and old source Spent-in-round; pay a distinct real hold invoice for 0.5 BTC, observe Accepted, settle exact preimage, require Paid plus native CLN Complete and final 1.5 BTC spendable/no pending."
+      ],
+      "limits": [
+        "This is expired-new-Lightning admission/refusal and refresh/payment success, not an expired unilateral fallback payout.",
+        "Manual client scheduling, one-day round interval and 900-second watchman cadence isolate the boundary; it does not establish default-daemon liveness.",
+        "Declares zero Ark refresh/LN user fees. Native CLN/channel and hold plugin are essential; no CLN-only result substitutes for SDK/native DB and signed-source assertions."
+      ],
+      "old_attempt": {
+        "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-six-money-v9b-receipt.json",
+        "receipt_sha256": "528a52d36f55036009b9eb567c3346685b403b97d77ff21fc099921316e9fbdd",
+        "case_index": 4,
+        "result": "PASS",
+        "run_id": "a5bc02b0-5357-4440-98bb-59f4cb4dd5b2",
+        "native_seconds": 39.847,
+        "nextest_log_sha256": "e824bef9fce0a21031454b14ad0780714e09ac1dd718bcc8b6b2c18a6169fc5b",
+        "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3"
+      }
+    },
+    {
+      "order": 2,
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "function_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "brace_body_sha256": "50fa0dc5db6532f939a590cdcc2ef8aa8b4d669e454219e1e4243a62e42c12c1",
+      "start_line": 67,
+      "end_line": 350,
+      "old44_to_C": "FUNCTION_AND_FULL_FILE_BYTE_IDENTICAL",
+      "saved_listing": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "current_execution_status": "NOT RUN",
+      "new_allocation": null,
+      "native_CLN_required": false,
+      "native_oracles": [
+        "Native funded watchman broadcasts a registered customer payout consuming the expired actual 400000-sat funding anchor before client starts emergency exit.",
+        "Observe shallow Processing with principal unavailable/awaiting settlement, then terminal VtxoSwept; reject Claimable/Claimed; require exact 399000-sat registered customer payout plus 1000-sat charge, canonical signed parent/Core >=6 and actual unspent payout.",
+        "Reconcile ownership/mailbox/key/script across all same-anchor allocation generations; require one physical customer payment across post-setup blocks/mempool, zero-fee parent inputs restricted to actual source path, no old operator-only ClaimBroadcast, exact history and refresh/idempotence behavior."
+      ],
+      "limits": [
+        "Manual SDK wallet remains available and later drives exit/sync; this is not an absent-client or physical-backup test.",
+        "One-million-sat watchman prefunding supports native broadcasts, but assertions do not independently close the fee-child/sponsor whole-DAG financial ledger or prove a specific confirmed fee input.",
+        "Payout parent is asserted zero fee; customer charge is a separate 1000-sat economic fee, not a claim that all actual mining fees equal 1000."
+      ],
+      "old_attempt": {
+        "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-six-money-v9b-receipt.json",
+        "receipt_sha256": "528a52d36f55036009b9eb567c3346685b403b97d77ff21fc099921316e9fbdd",
+        "case_index": 5,
+        "result": "PASS",
+        "run_id": "f41b4b18-b14b-422d-ba54-513ec19240dc",
+        "native_seconds": 49.248,
+        "nextest_log_sha256": "143ebc2ce76c40d89d1f16647adbe487eb7e9795aa26ef857756851823897832",
+        "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3"
+      }
+    },
+    {
+      "order": 3,
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "function_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "brace_body_sha256": "b638a3aa3fa6099a0d7f08b37ba505c6b4080e60d1719b83ff9be8b4dc5edb56",
+      "start_line": 355,
+      "end_line": 684,
+      "old44_to_C": "FUNCTION_AND_FULL_FILE_BYTE_IDENTICAL",
+      "saved_listing": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "current_execution_status": "NOT RUN",
+      "new_allocation": null,
+      "native_CLN_required": false,
+      "native_oracles": [
+        "Create an authentic partial emergency-exit chain with some but not all transactions confirmed, plus two same-anchor registered owners: actual 300000-sat sender change and 100000-sat receiver coin.",
+        "Native watchman sweeps funding/path point; observe shallow Processing then terminal VtxoSwept, never Claimable/Claimed; require exact 299000/99000 registered payouts and two 1000 charges, each canonical parent/Core >=6 and actual unspent output.",
+        "Reconcile both owners across all same-anchor generations and all actual canonical parents; exact one customer output each across post-setup blocks/mempool, actual source-path inputs/zero-fee parents, no operator-only historical claim, no remint or duplicate history on repeated sync."
+      ],
+      "limits": [
+        "Explicit sender change_vtxo_split_factor=1 bounds two physical coins/outputs; it does not qualify default factor2 grouping.",
+        "Manual client handles and explicit watchman/progress triggers are retained; no recipient-offline/default-daemon or journal crash/reorg boundary is forced.",
+        "Actual partial-chain race and customer conservation are checked; full CPFP sponsor/child-change custody and complete external funding cut remain outside this case."
+      ],
+      "old_attempt": {
+        "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-six-money-v9b-receipt.json",
+        "receipt_sha256": "528a52d36f55036009b9eb567c3346685b403b97d77ff21fc099921316e9fbdd",
+        "case_index": 6,
+        "result": "PASS",
+        "run_id": "57fbc695-a764-4c4f-9684-432e5dac01c2",
+        "native_seconds": 57.051,
+        "nextest_log_sha256": "45c5a0e4ac073cdca4cda24c9ff5c9190bfbb9faaebc55498b00083946cb15aa",
+        "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3"
+      }
+    }
+  ],
+  "source_hash_mode": "function_sha256 covers fn declaration through closing brace (no attributes); brace_body_sha256 includes braces. Receipt44 calls its whole-function hash actual_function_body_sha256.",
+  "C_capture": {
+    "directory": "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018",
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "bundle_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+    "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "SDK_ELF_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+    "product_version": "0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25; dirty captured source authoritative",
+    "existing_artifact_proof": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/P07-v11c-artifact-runtime-proof-client.json",
+      "sha256": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b"
+    },
+    "proposed_pinlist": "/home/francis/.cache/abandon-fresh/root-terminal-replay-v11c-20261018/runtime-pins.sha256",
+    "proposed_pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "old44_archive_sha256": "f72ca371c3c575cb55da61f145bcea05065c5b87cb8ef0d49e688e0d75645bde"
+  },
+  "existing_listing_evidence": {
+    "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/selection-list-fresh.json",
+    "sha256": "8071f556c8a4ba05878f19f673faf901fd57f2742cf194c53dc9fc3f4c297486",
+    "SDK_binary_id": "ark-testing::bark-sdk",
+    "SDK_binary_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk",
+    "meaning": "All three names present and unignored in saved P07 fresh listing; all filter mismatches under P07 singleton selection, so none was selected/executed there. No fresh listing performed."
+  },
+  "full_file_helper_bindings": [
+    {
+      "path": "testing/tests/bark_sdk/lightning.rs",
+      "old44_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "C_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/tests/bark_sdk/exit.rs",
+      "old44_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "C_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/tests/bark_sdk/mod.rs",
+      "old44_sha256": "43168858bd9fd73d14387f418d9889f12a29cb7977e19eaea470691717b56c89",
+      "C_sha256": "43168858bd9fd73d14387f418d9889f12a29cb7977e19eaea470691717b56c89",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/Cargo.toml",
+      "old44_sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+      "C_sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/src/context/mod.rs",
+      "old44_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "C_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/src/context/builders.rs",
+      "old44_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "C_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/src/balance.rs",
+      "old44_sha256": "a853197fd74375191dfb5725e7edfdbc1b262e8885035ba8073996416e35ef15",
+      "C_sha256": "a853197fd74375191dfb5725e7edfdbc1b262e8885035ba8073996416e35ef15",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/src/util.rs",
+      "old44_sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+      "C_sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/src/constants.rs",
+      "old44_sha256": "58c0495f38c6cad5124b64e9a5a803c32ff2c536cef0258ea62e9cffca748f37",
+      "C_sha256": "58c0495f38c6cad5124b64e9a5a803c32ff2c536cef0258ea62e9cffca748f37",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/src/lib.rs",
+      "old44_sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+      "C_sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/src/daemon/lightningd.rs",
+      "old44_sha256": "d5e920e9e9003e9e694d68af77dccbae890ba75280ded8160a1f2157682291b6",
+      "C_sha256": "d5e920e9e9003e9e694d68af77dccbae890ba75280ded8160a1f2157682291b6",
+      "byte_identical": true
+    },
+    {
+      "path": "testing/src/daemon/watchmand.rs",
+      "old44_sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+      "C_sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+      "byte_identical": true
+    }
+  ],
+  "helper_function_bindings": [
+    {
+      "file": "testing/tests/bark_sdk/lightning.rs",
+      "function": "wait_for_hold_invoice_accepted",
+      "function_sha256": "dbe665c63e7ef9d7a4dd2a9727ff515f2528d361d737701d82eecfc0dc8bcac3",
+      "brace_body_sha256": "56a5e07859449b174c502e4a80a6f727dea2870258ca1c8926d49fa08527124c",
+      "start_line": 35,
+      "end_line": 53,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/tests/bark_sdk/lightning.rs",
+      "function": "assert_not_dispatched",
+      "function_sha256": "2f29eede989d5036db69a0f527df77d2501041bdfb63458adb331911d9c25959",
+      "brace_body_sha256": "3d640afe25c6d6bf04448bacc80d7776de2eba408430c64ff5075c86f3a415e3",
+      "start_line": 146,
+      "end_line": 167,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/tests/bark_sdk/exit.rs",
+      "function": "chain_tip",
+      "function_sha256": "4456737bd0ab9229820e29bbc12154b55dddc6b6a197494c8c1721931826686f",
+      "brace_body_sha256": "33819ca233fda418635f65c0eb17a416d8acda0a275b62abc33fe09b8df40978",
+      "start_line": 14,
+      "end_line": 17,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/tests/bark_sdk/exit.rs",
+      "function": "blocks_until",
+      "function_sha256": "7445c5759387c29eee168d5cf4e50d63ed7e4725c26015c6bebf43ceba5f0167",
+      "brace_body_sha256": "2481ef429fd2995c890a329c22ba61cd6b350ce16b72b6f2420df541ddcc94ad",
+      "start_line": 20,
+      "end_line": 22,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/balance.rs",
+      "function": "assert_balance_consistent",
+      "function_sha256": "e0472a0f3bd2be9ce6d3a017f8e283f390c0f0c7f3f995347b3f19c5c4df4856",
+      "brace_body_sha256": "41a3d972ce55b503019d6a81f963d7f7a2eeef796250cca3ba323040aa26a768",
+      "start_line": 15,
+      "end_line": 121,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/util.rs",
+      "function": "poll_interval",
+      "function_sha256": "527e68a11792afec909b2135d3322679b49c2db6ba58c0cddd3fd406e0127cf3",
+      "brace_body_sha256": "914a5cde27c007feb397720b9dbcb41e84cbceb351c90e8d2a967406ee8043c7",
+      "start_line": 192,
+      "end_line": 199,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/util.rs",
+      "function": "wait_millis",
+      "function_sha256": "8d180f39ff3046dabe019eb59122ecaef7d94505a3d6f18960b9d9f36a3e0dd3",
+      "brace_body_sha256": "da999b714154b435926ebfc0b2b4ca63214ab3befadd6934204cde65f69e589e",
+      "start_line": 267,
+      "end_line": 269,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/context/mod.rs",
+      "function": "new_lightning_setup",
+      "function_sha256": "d04d691a1722d95d96dce734c4318e33081ab7fe0856720811b11c5538852920",
+      "brace_body_sha256": "ed37d3516d4d0f73743f86e7688aedf74d92a69cf9bf0e84c62b69f86574130b",
+      "start_line": 698,
+      "end_line": 702,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/context/mod.rs",
+      "function": "new_lightning_setup_no_channel",
+      "function_sha256": "10aff716b05a6d89236fd0d6d2455ee5187cd3108e18b485a5bfc449b660e875",
+      "brace_body_sha256": "c1e45e450b8ae649583f352e339db19a456c6c19625cecb369de7b48ae71ff5b",
+      "start_line": 683,
+      "end_line": 694,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/daemon/watchmand.rs",
+      "function": "trigger_sweep",
+      "function_sha256": "c90aa9b5e715303b0b98af680ec8f1f72f7cf7373623f8cd07c2df069b9d5bbf",
+      "brace_body_sha256": "319c90c8caa6d36b48da8f7bcdf6425cc3f8da13e9a6ecea760f4ac0baa2c4b1",
+      "start_line": 113,
+      "end_line": 115,
+      "old44_to_C": "BYTE_IDENTICAL"
+    }
+  ],
+  "future_prerequisites": {
+    "actual_root_allocation": null,
+    "artifact_readiness": null,
+    "fresh_listing_readiness": null,
+    "parent_launch_admission": null,
+    "new_candidate": null,
+    "per_case_timeout_seconds": 180,
+    "retries": 0,
+    "serial_cases": 1,
+    "stop_on_first_failure": true,
+    "global_max_native_cohorts": 2,
+    "needed": "Explicit root exact-three allocation and parent fresh gates: immutable C source/body/ELF/metadata+17 pins, all three exact single unignored selections, supported public-chain profile, native CLN26.06.6 plus matching grpc/hold plugins for first case, SQLite/PG/native cached-Nix environment, no incompatible presence env, fresh private contexts/resources/actor cleanup, parent sole once-only launch."
+  },
+  "credit": {
+    "current_native_runs": 0,
+    "new_unique_scenarios": 0,
+    "existing_three_names_repeated": true,
+    "full_ML_credit": false,
+    "old_PASS_transfer_to_C": false,
+    "current_root_reorg_fixture_qualification": false
+  },
+  "actions": "Only read existing source archives, receipt, saved listing and artifact proof; wrote these two new proposal reports. No source/controls/global reports, Cargo/build/listing/preflight/resources/native/actors/SQL changes."
+}

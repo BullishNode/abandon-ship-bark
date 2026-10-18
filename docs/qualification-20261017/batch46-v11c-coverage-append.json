@@ -1,0 +1,129 @@
+{
+  "kind": "BATCH46_V11C_ADDITIVE_TERMINAL_CURATION",
+  "at": "2026-10-18T06:40:55.737638+00:00",
+  "state": "ONE_NATIVE_PASS_FORMAL_AND_SELECTED_CORE_STABILITY_AUDITS_COMPLETE_APPEND_ONLY",
+  "baseline": {
+    "executions": 248,
+    "PASS": 233,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 231,
+    "nextest_invocations": 221,
+    "native": 236,
+    "component": 12,
+    "coverage_rows": 459,
+    "coverage_sha256": "1e55694d41b337e8008ed68701a2f11ee1f1e7f07f51a1f3464dd5f404102d24",
+    "coverage_prefix_bytes": 336702
+  },
+  "baseline_sha256": {
+    "COVERAGE.csv": "1e55694d41b337e8008ed68701a2f11ee1f1e7f07f51a1f3464dd5f404102d24",
+    "FINDINGS.md": "500c49c085449416724631f38c63205f30571bae18ad441533c709bdca910238",
+    "STATUS.json": "6fbe277e32a4791d8c8ab255836005414c615e374b320e5218216ddc308e0bfb"
+  },
+  "after": {
+    "aggregate": {
+      "executions": 249,
+      "PASS": 234,
+      "FAIL": 15,
+      "unique_binary_test_pairs": 232,
+      "nextest_invocations": 222,
+      "native": 237,
+      "component": 12,
+      "coverage_rows": 460
+    },
+    "coverage_sha256": "3e40c57525b3e69c08f29e28d2e0022a8cf0e9cd3ab5a0be6dbb558ad83ca71b",
+    "coverage_bytes": 339233,
+    "FINDINGS_sha256": "e96d9b8571f9963c54fb7869fb73272a5b8c5925ba9b048d9fefa996d29418ac",
+    "STATUS_sha256": "27896e5337305e3e9be29856d68b6cdc33194c3f40b75657d688716607a7147d",
+    "checkpoint_sha256": "4222010b66459f11069cb1e6e2381580996a82c6396d5d499a9991f9f198d02b"
+  },
+  "append": {
+    "case_id": "FT-SERVER-017",
+    "row": {
+      "case_id": "FT-SERVER-017",
+      "requirement": "Genuine internal HtlcsReady with a 100,000-sat sender source and two signed grants totaling 90,000 sats; both original clients absent. Clean physical PostgreSQL/WAL, server identity and wallet-journal backup restores into disjoint service roots on continuing Core/CLN. Native maturity/identity/journal/recipient-zero assertions, automatic rightful 99,000-sat fallback plus 1,000-sat charge and fresh seed-only BIP84 confirmed drain. Independent 23-transaction selected cut: 605,000 = 197,349 customer recovery + 381,626 other retained outputs + 26,025 actual miner fees; parent/child 12 confirmations and drain six.",
+      "layer_network": "native server/Core/PostgreSQL/CLN regtest",
+      "automated_test_name": "ark-testing::server qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+      "latest_result": "PASS",
+      "tested_revision": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+      "evidence_path": "batch46-lightning-physical-backup-v11c-receipt.json; batch46-v11c-client-postflight.json; batch46-p07-retained-core-reconciliation-backend.json; batch46-p07-retained-core-input-stability-backend.json; batch46-v11c-coverage-append.json",
+      "limitation": "One orderly HtlcsReady backup boundary with configured dedicated operator sweep and bounded funding; no crash/PITR, all backup boundaries, default replenishment or universal/full P07 qualification. Continuing CLN 12 BTC reserve is outside the selected four-output cut. Identity, private backup/journals, recipient-zero, seed binding and wallet custody remain native assertions; independent Core audit verifies public canonical transactions/prevouts/conservation, not private wallet control or full cryptographic policy. No global custody, full ML, release or production promotion.",
+      "owner": "testing-track",
+      "entry_kind": "executed_named_test",
+      "classification": "native_bounded_HTLCsReady_physical_backup_seed_recovery",
+      "inspected_revision": "29508f4a0e30e1b329de4311207cd333fbcced0ca78e9f9a8ce981b50e55b85e",
+      "success_oracle": "Genuine internal HtlcsReady with a 100,000-sat sender source and two signed grants totaling 90,000 sats; both original clients absent. Clean physical PostgreSQL/WAL, server identity and wallet-journal backup restores into disjoint service roots on continuing Core/CLN. Native maturity/identity/journal/recipient-zero assertions, automatic rightful 99,000-sat fallback plus 1,000-sat charge and fresh seed-only BIP84 confirmed drain. Independent 23-transaction selected cut: 605,000 = 197,349 customer recovery + 381,626 other retained outputs + 26,025 actual miner fees; parent/child 12 confirmations and drain six. Actual PASS 139.775 seconds; run 6376a368-f78f-4eee-9376-8a0996196c81."
+    },
+    "bytes": 2531,
+    "sha256": "05c3a088c01d5e4245dd9063e0a1c2627f97f8d4075f6491b8bb3a38d06a5ec4",
+    "prior459_row_byte_prefix_identical": true,
+    "prior_parsed_rows_identical": true,
+    "FINDINGS_prior_byte_prefix_identical": true,
+    "all_LF": true,
+    "new_unique_pairs": 1,
+    "prior_literal_FAIL_rows_unchanged": 14,
+    "prior_aggregate_failed_executions_preserved": 15,
+    "mixed_rows_not_one_to_one_with_historical_executions": true
+  },
+  "evidence_sha256": {
+    "batch46-lightning-physical-backup-v11c-receipt.json": "9648e4f726b4029b85354b268d0c12ac732c66bf455afbdab5a20f3b6813562b",
+    "batch46-v11c-client-postflight.json": "18c5aace0d7a82ddb3275b2d8ee54d8ef6408b47a5c85249c9a6a3c6a4c42174",
+    "batch46-p07-retained-core-reconciliation-backend.json": "63ddb9488440257b0041ab47f46a4d124382893515d1d5ecadddfa21bbefd3a9",
+    "batch46-p07-retained-core-input-stability-backend.json": "6f49bff3b4da32ef7368c506fd4629facdf270bb99be6e04263efe70d56b4af6"
+  },
+  "conditional_plan_sha256": "0d1dfa125205b5e8889613d8975aeb2252623e5d5fb349169868654dd165546d",
+  "native_result": {
+    "PASS": 1,
+    "FAIL": 0,
+    "binary": "ark-testing::server",
+    "literal": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+    "run_id": "6376a368-f78f-4eee-9376-8a0996196c81",
+    "native_seconds": 139.775,
+    "wall_seconds": 140.724,
+    "parent_session": 15868,
+    "parent_terminal_exit_code": 0,
+    "timeout_seconds": 180,
+    "retries": 0,
+    "serial": 1
+  },
+  "candidate": {
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+    "native_server_sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+    "source_file_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c"
+  },
+  "captured_HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+  "body_sha256": "29508f4a0e30e1b329de4311207cd333fbcced0ca78e9f9a8ce981b50e55b85e",
+  "postflight": {
+    "pins": 17,
+    "frozen_paths": 16,
+    "known_PGID_SID": 154295,
+    "remaining_known_group_SID_members": 0,
+    "remaining_scoped_actors": 0,
+    "other_lanes_excluded": true
+  },
+  "independent_selected_Core": {
+    "tip": 198,
+    "transactions": 23,
+    "external_sat": 605000,
+    "customer_recovery_sat": 197349,
+    "other_retained_sat": 381626,
+    "miner_fees_sat": 26025,
+    "unknown_inputs": [],
+    "parent_child_confirmations": 12,
+    "drain_confirmations": 6,
+    "stable_before_after_final": true
+  },
+  "preservation": {
+    "initial_native_and_formal_pending_fields_unchanged": true,
+    "all_four_evidence_hashes_unchanged": true,
+    "fixed_report19_manifest_sha256": "94d4cb3e8d4ae36c3d163a1814fe77bff3ecf2e9f37a28f892730419684f3505",
+    "all80_payload_files_unchanged": true,
+    "all15_historical_FAILED_executions_unchanged": true,
+    "ML_maps_untouched": true
+  },
+  "limits": "One orderly HtlcsReady backup boundary with configured dedicated operator sweep and bounded funding; no crash/PITR, all backup boundaries, default replenishment or universal/full P07 qualification. Continuing CLN 12 BTC reserve is outside the selected four-output cut. Identity, private backup/journals, recipient-zero, seed binding and wallet custody remain native assertions; independent Core audit verifies public canonical transactions/prevouts/conservation, not private wallet control or full cryptographic policy. No global custody, full ML, release or production promotion.",
+  "native_vs_independent_scope": "Backup/identity/journal/recipient-zero/seed binding and control remain native assertions. Independent Core reconstruction checks public canonical signed bytes, prevouts, graph and fees; no private wallet/DB/config reads or independent global custody/signature-policy audit."
+}

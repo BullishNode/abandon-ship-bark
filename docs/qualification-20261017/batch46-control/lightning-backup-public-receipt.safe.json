@@ -1,0 +1,53 @@
+{
+  "kind": "EXPLICIT37_PUBLIC_FIELD_PROJECTION",
+  "source_receipt_sha256": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+  "public_fields": {
+    "actual_board_miner_fee_sat": 763,
+    "actual_joint_child_miner_fee_sat": 3383,
+    "actual_pool_miner_fee_sat": 1081,
+    "actual_recovery_miner_fee_sat": 888,
+    "all_connected_miner_fees_sat": 26025,
+    "attempt": 1,
+    "canonical_graph_transactions": 23,
+    "cluster_file_count": 1620,
+    "customer_initial_sat": 200000,
+    "customer_root": "670fe4e205b51752faaad2e3e5cbdbce96fc1f7945fa57cd1f1cf14e8c9c5c54:0",
+    "external_cut_sat": 605000,
+    "fallback_fee_sat": 1000,
+    "grant_amount_sat": 90000,
+    "grant_maturity_height": 186,
+    "grants": [
+      "5bab11a0d2dd39247dd9610312884f2d3cf30fcf76e1789400c8abd7935c2ab3:0",
+      "bffc2b3e90060748b961aff0c475a2fc28e2bb4cbdda88f834fe0cef4a37b0d3:0"
+    ],
+    "joint_operator_remainder_sat": 91000,
+    "joint_parent_block": {
+      "hash": "23bcdb75ca2baa39dbdca9e908881f1313876dc1f93cc37da61e930f2a044d5d",
+      "height": 187
+    },
+    "operator_initial_sat": 205000,
+    "operator_retained_sat": 381626,
+    "payout": "323b2a071f0cbd28ee5c305dc5fcb6b788a38557e1f733a8a6ea04e4746ef603:0",
+    "payout_sat": 99000,
+    "pool_root": "165ca69aaeb804065ab5e54d7967334f3bd3c9d99aa82585c766845a4cb306c6:0",
+    "postbackup_blocks_mined": 72,
+    "prebackup_blockhash": "7156336bdad38d09c90a94c1ed62b71e34341ad44c319856b7e33705da679f11",
+    "prebackup_height": 126,
+    "private_manifest_sha256": "0fdbb17e965b84a2bebaa23663aaa2e6ec3e434792ee24e01c359db3fa56c516",
+    "recovery_input_sat": 198237,
+    "recovery_output_sat": 197349,
+    "recovery_txid": "503b091d4e733f2f8453413ba5125cf08bf4fc051a5178f91c8718318bb699db",
+    "scope": "orderly same-candidate PG/server/watch physical backup at internal HtlcsReady; continuing Core and CLN; both original clients absent",
+    "sender_principal_sat": 100000,
+    "source": "5543ef8205d45caccf90b7a25544f795da6db3163e289c681f97597e63683db5:0",
+    "source_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+    "sponsors": {
+      "aa7374637e10b57596acc49bf60eca07ce22087ed2a64fb2a6a3627a707030c7:1": 100000,
+      "df97b6b4d36e93bdd2270ddb50b9a665262c2004f05bba542fb2ffe3d8a78be7:0": 100000
+    },
+    "sponsors_initial_sat": 200000,
+    "subscription": 1,
+    "wallet_changesets_preserved": 231
+  },
+  "scope_note": "Only public points/hashes/numeric/native scope; private_manifest_sha256 is hash-only, target not opened/exported. Before-cleanup emission does not override terminal exit; actual parent0/formal18c are separate. CLN12BTC outside605k; no independent custody/recipient identity inference."
+}

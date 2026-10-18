@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-18T06:26:59.092554+00:00",
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch46-lightning-physical-backup-v11c",
+  "expected_selection": [
+    [
+      "ark-testing::server",
+      "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender"
+    ]
+  ],
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "sha256": {
+    "selection-proof.json": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+    "root-allocation.json": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+    "source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+    "mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+    "batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "server-cohort.py": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+    "preflight-static.py": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+    "fresh-listings.py": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+    "preflight.sh": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+    "run.sh": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+    "case01/nextest.toml": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2",
+    "fresh-listing-admission.json": "9555bc4ad6066051c4988f04d250dd1a56f537ebfd7667d0f10f4a63468b5f70",
+    "resource-admission.json": "99387e03da04299d05d75bfee374e8822ac636d2e790d6e3188484264d38e040"
+  },
+  "root_allocation_sha256": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+  "final_control_peer_sha256": "c218aa3b37e119c8e9293ac97813e053a0d598a233fcc452d7924bc75707b1d2",
+  "required_47_formal_postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+  "preflight_parent_session": 86132,
+  "preflight_parent_terminal_exit_code": 0,
+  "actual_runtime_pins": 17,
+  "actual_product_versions_checked": 4,
+  "actual_native_CLN_version": "v26.06.6",
+  "both_native_plugins_actual_pin_hashes_verified": true,
+  "PG_controldata_extra_hash_verified": true,
+  "scoped_actor_admission_sha256": "8bb86737debf517e4652acf887112932d451c35b10054ae755907a7e73521334",
+  "actor_probe_sha256": "49be3fb3c043bc4131e61668a33c237c5676d566306809f3fa4b276adf987011",
+  "resource_observation_sha256": "6e7530990cc052013f364da52a2d746887b2b84fa27017f9046abeeaa0f32367",
+  "scope": "One605kfinitecutphysicalpendinggrantbackup test; continuingCLN12BTCexcluded,180/retry0/serial1/global2, nofullML/currentpublishedHEADrelabelling."
+}

@@ -141,99 +141,207 @@ async fn pay_hold_succeeds() {
 }
 
 #[tokio::test]
-async fn pay_hold_with_near_expiry_inputs_succeeds() {
-	let ctx = TestContext::new("bark_sdk/pay_hold_with_near_expiry_inputs_succeeds").await;
-
-	let lightning = ctx.new_lightning_setup("lightningd").await;
-	// Short vtxo lifetime keeps the block-advance cheap; absurdly long
-	// round interval keeps any background refresh out of the picture.
-	let srv = ctx.captaind("server").lightningd(&lightning.internal).cfg(|cfg| {
-		cfg.vtxo_lifetime = BlockDelta::new(100);
-		cfg.round_interval = Duration::from_secs(86400);
-	}).funded(btc(10)).create().await;
-
-	let board_amount = btc(2);
-	let wallet = ctx.bark_sdk("bark", &srv)
-		.boarded(board_amount)
-		.create().await;
-
-	// Push the boarded VTXO past its expiry. An expired VTXO can still fund
-	// a lightning payment; it and its change count as needs_refresh. The
-	// lightning send used to spuriously fail this scenario because it
-	// conflated input-VTXO expiry with HTLC expiry; the fresh HTLC's own
-	// CLTV (htlc_send_expiry_delta blocks ahead) is still comfortably far
-	// out, so the payment should still settle normally.
-	ctx.generate_blocks(98).await;
-
-	lightning.sync().await;
-
-	let preimage = Preimage::random();
-	let payment_hash = preimage.compute_payment_hash();
-	let invoice_amount = btc(0.5);
-
-	let mut hold_client = lightning.external.hold_client().await;
-	let invoice = hold_client.invoice(hold::InvoiceRequest {
-		payment_hash: payment_hash.as_ref().to_vec(),
-		amount_msat: invoice_amount.to_sat() * 1_000,
-		description: Some(hold::invoice_request::Description::Memo(
-			"pay_hold_with_expired_inputs_succeeds".into(),
-		)),
-		min_final_cltv_expiry: Some(18),
-		expiry: Some(3600),
-		routing_hints: vec![],
-	}).await.expect("create hold invoice").into_inner().bolt11;
-
-	wallet.pay_lightning_invoice(invoice, None, false).await
-		.expect("pay_lightning_invoice failed");
-
-	wait_for_hold_invoice_accepted(&mut hold_client, payment_hash).await;
-
-	// The payment is pending because the receiver hasn't claimed it yet
-	// We report this correctly
-	let status = wallet.check_lightning_payment(payment_hash, false).await .expect("no-wait check errored");
-	match status {
-		LightningSendState::InProgress(pending) => {
-			let pending_balance = pending.payment_amount + pending.fee;
-			let balance = assert_balance_consistent(&wallet, false).await;
-			assert_eq!(balance.needs_refresh, board_amount - pending_balance);
-			assert_eq!(balance.pending_lightning_send, pending_balance);
+async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(async {
+		async fn assert_not_dispatched(
+			db: &Db, node: &ark_testing::daemon::lightningd::Lightningd,
+			hold_client: &mut hold::hold_client::HoldClient<tonic::transport::Channel>, hash: PaymentHash,
+		) {
+			let rows = db.read(async |tx| Ok(tx.query_one("SELECT \
+				(SELECT COUNT(*) FROM lightning_payment_attempt WHERE payment_hash=$1) AS attempts, \
+				(SELECT COUNT(*) FROM expiry_lightning_dispatch d JOIN lightning_payment_attempt p ON p.id=d.id \
+				 WHERE p.payment_hash=$1) AS dispatches", &[&hash.to_string()]).await?)).await.unwrap();
+			assert_eq!(rows.get::<_, i64>("attempts"), 0);
+			assert_eq!(rows.get::<_, i64>("dispatches"), 0);
+			let pays = node.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
+				bolt11: None, payment_hash: Some(hash.to_vec()), status: None,
+				index: None, limit: None, start: None,
+			}).await.unwrap().into_inner().pays;
+			assert!(pays.is_empty(), "a refused grant must not reach the real payer");
+			let invoices = hold_client.list(hold::ListRequest {
+				constraint: Some(hold::list_request::Constraint::PaymentHash(hash.to_vec())),
+			}).await.unwrap().into_inner().invoices;
+			assert_eq!(invoices.len(), 1);
+			assert_eq!(invoices[0].state(), hold::InvoiceState::Unpaid);
+			assert!(invoices[0].htlcs.is_empty());
 		}
-		other => panic!("Payment should be pending was {:?}", other),
-	};
 
-	// Wait for the payment to get completed
-	let waiter = {
-		let wallet = wallet.clone();
-		tokio::spawn(async move {
-			wallet.check_lightning_payment(payment_hash, true).await
-		})
-	};
+		let ctx = TestContext::new("bark_sdk/pay_hold_expired_refusal_then_refresh").await;
+		let lightning = Box::pin(ctx.new_lightning_setup("lightningd")).await;
+		// Isolate new-grant admission before a real fallback decision. These
+		// explicit scheduling settings do not qualify default-daemon behavior.
+		let srv = Box::pin(ctx.captaind("server").lightningd(&lightning.internal).cfg(|cfg| {
+			cfg.vtxo_lifetime = BlockDelta::new(100);
+			cfg.round_interval = Duration::from_secs(86400);
+		}).watchmand_cfg(|cfg| {
+			cfg.watchman.reaction_interval = Duration::from_secs(900);
+			cfg.watchman.sweep_interval = Duration::from_secs(900);
+		}).funded(btc(10)).create()).await;
+		let board_amount = btc(2);
+		let wallet = Box::pin(ctx.bark_sdk("bark", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
+			.boarded(board_amount).create()).await;
+		let db = Db::connect(&srv.config().postgres).await.unwrap();
+		let original = wallet.vtxos().await.unwrap();
+		assert_eq!(original.len(), 1);
+		let source = wallet.get_full_vtxo(original[0].id()).await.unwrap();
+		assert_eq!(source.amount(), board_amount);
+		let source_body = ark::ProtocolEncoding::serialize(&source);
+		let source_anchor = ctx.bitcoind().await_transaction(source.chain_anchor().txid).await;
+		source.validate(&source_anchor).unwrap();
+		let tip = ctx.bitcoind().get_block_count().await as u32;
+		assert!(tip < source.expiry_height().to_u32());
+		let expired = ctx.generate_blocks(source.expiry_height().to_u32() - tip).await;
+		srv.wait_for_sync_height(expired).await;
+		srv.watchmand().wait_for_sync_height(expired).await;
+		wallet.chain().invalidate_caches().await;
+		assert_eq!(wallet.chain().tip().await.unwrap(), source.expiry_height());
+		let native = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
+		assert_eq!(native.spend_state, server::database::SpendState::Spendable);
+		assert!(!native.decided_for_fallback, "the fixture must reach expiry before any native payout decision");
+		assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1",
+			&[&source.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0);
+		lightning.sync().await;
 
-	// We should wait if the invoice isn't settled
-	tokio::time::sleep(Duration::from_millis(500)).await;
-	assert!(!waiter.is_finished(), "waiting check resolved before settlement");
+		let invoice_amount = btc(0.5);
+		let refused_hash = Preimage::random().compute_payment_hash();
+		let mut hold_client = lightning.external.hold_client().await;
+		let refused_invoice = hold_client.invoice(hold::InvoiceRequest {
+			payment_hash: refused_hash.to_vec(), amount_msat: invoice_amount.to_sat() * 1_000,
+			description: Some(hold::invoice_request::Description::Memo("expired-new-grant-refusal".into())),
+			min_final_cltv_expiry: Some(18), expiry: Some(3600), routing_hints: vec![],
+		}).await.unwrap().into_inner().bolt11.parse::<ark::lightning::Invoice>().unwrap();
+		refused_invoice.check_signature().unwrap();
+		assert_eq!(refused_invoice.network(), bitcoin::Network::Regtest);
+		assert_eq!(refused_invoice.payment_hash(), refused_hash);
+		assert_eq!(refused_invoice.amount_msat(), Some(invoice_amount.to_sat() * 1_000));
+		let previous_history = wallet.history().await.unwrap();
+		let error = wallet.pay_lightning_invoice(refused_invoice, None, false).await.unwrap_err();
+		let refusal = bark::FallbackRefusal::from_error(&error).expect("typed expired-new-grant refusal");
+		assert_eq!(refusal, bark::FallbackRefusal::ExpiredNewLightning);
+		assert_eq!(refusal.code(), "expired_new_lightning");
+		assert_eq!(ark::ProtocolEncoding::serialize(&wallet.get_full_vtxo(source.id()).await.unwrap()), source_body);
+		let retained = wallet.vtxos().await.unwrap();
+		assert_eq!(retained.len(), 1);
+		assert_eq!(retained[0].id(), source.id());
+		assert_eq!(retained[0].state, bark::vtxo::VtxoState::Spendable);
+		let balance = assert_balance_consistent(&wallet, false).await;
+		assert_eq!(balance.total(), board_amount);
+		assert_eq!(balance.needs_refresh, board_amount);
+		assert_eq!(balance.pending(), bitcoin::Amount::ZERO);
+		assert!(wallet.pending_lightning_sends().await.unwrap().is_empty());
+		let history = wallet.history().await.unwrap();
+		let failed = history.iter().filter(|movement|
+			!previous_history.iter().any(|old| old.id == movement.id)).collect::<Vec<_>>();
+		assert_eq!(failed.len(), 1);
+		assert_eq!(failed[0].status, MovementStatus::Failed);
+		assert_eq!(failed[0].effective_balance.to_sat(), 0);
+		assert_eq!(failed[0].input_vtxos, vec![source.id()]);
+		let native = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
+		assert_eq!(native.spend_state, server::database::SpendState::Spendable);
+		assert!(!native.decided_for_fallback);
+		assert_not_dispatched(&db, &lightning.internal, &mut hold_client, refused_hash).await;
 
-	// Settle the invoice
-	hold_client.settle(hold::SettleRequest {
-		payment_preimage: preimage.as_ref().to_vec(),
-	}).await.expect("settle hold invoice");
+		// A genuine round replaces the expired source; no expiry is extended
+		// and no financial state is injected by the fixture.
+		let (refresh, _) = tokio::join!(wallet.refresh_vtxos([source.id()]), async {
+			tokio::time::sleep(Duration::from_secs(2)).await;
+			srv.trigger_round().await;
+		});
+		refresh.unwrap().expect("the expired source must participate in a real refresh");
+		ctx.generate_blocks(ark_testing::constants::ROUND_CONFIRMATIONS).await;
+		wallet.chain().invalidate_caches().await;
+		tokio::time::timeout(Duration::from_secs(15), async {
+			loop {
+				wallet.sync().await;
+				if wallet.balance().await.unwrap().pending_in_round == bitcoin::Amount::ZERO { break; }
+				tokio::time::sleep(poll_interval()).await;
+			}
+		}).await.expect("the real refreshed round must confirm");
+		let replacement = wallet.vtxos().await.unwrap();
+		assert_eq!(replacement.len(), 1);
+		assert_ne!(replacement[0].id(), source.id());
+		assert_eq!(replacement[0].amount(), board_amount, "the declared refresh fee is zero");
+		let replacement = wallet.get_full_vtxo(replacement[0].id()).await.unwrap();
+		assert_ne!(replacement.chain_anchor(), source.chain_anchor());
+		assert!(replacement.expiry_height() > wallet.chain().tip().await.unwrap());
+		let anchor_info = bitcoin_ext::rpc::BitcoinRpcExt::custom_get_raw_transaction_info(
+			&ctx.bitcoind().sync_client(), replacement.chain_anchor().txid, None,
+		).unwrap().unwrap();
+		assert!(anchor_info.confirmations.unwrap_or(0) >= 6);
+		let anchor = ctx.bitcoind().await_transaction(replacement.chain_anchor().txid).await;
+		replacement.validate(&anchor).unwrap();
+		let native = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
+		assert_eq!(native.spend_state, server::database::SpendState::Spent);
+		assert!(native.spent_in_round.is_some());
+		assert!(!native.decided_for_fallback);
+		assert!(wallet.fallback_payouts().await.unwrap().is_empty());
+		let balance = assert_balance_consistent(&wallet, false).await;
+		assert_eq!(balance.spendable, board_amount);
+		assert_eq!(balance.needs_refresh, bitcoin::Amount::ZERO);
+		lightning.sync().await;
 
-	// ready()'s 2s bound is too tight under BARK_DOUBLE_DRIVE_ACTIONS: steps run twice and the send re-polls every 2s.
-	let status = waiter.wait_millis(10_000).await.expect("join waiter");
-	match &status {
-		Ok(LightningSendState::Paid(invoice)) => {
-			assert_eq!(invoice.payment_hash, payment_hash);
-			assert_eq!(invoice.preimage, preimage);
-		},
-		err => panic!("Payment did not succeed: {:?}", err),
-	}
-
-	// A subsequent check should return the same cached result
-	let new_status =  wallet.check_lightning_payment(payment_hash, false).await.expect("Failed to query lightning send");
-	assert_eq!(new_status, status.unwrap());
-
-	let balance = assert_balance_consistent(&wallet, false).await;
-	assert_eq!(balance.needs_refresh, board_amount - invoice_amount);
+		let preimage = Preimage::random();
+		let payment_hash = preimage.compute_payment_hash();
+		assert_ne!(payment_hash, refused_hash);
+		let invoice = hold_client.invoice(hold::InvoiceRequest {
+			payment_hash: payment_hash.to_vec(), amount_msat: invoice_amount.to_sat() * 1_000,
+			description: Some(hold::invoice_request::Description::Memo("refreshed-native-hold-payment".into())),
+			min_final_cltv_expiry: Some(18), expiry: Some(3600), routing_hints: vec![],
+		}).await.unwrap().into_inner().bolt11.parse::<ark::lightning::Invoice>().unwrap();
+		invoice.check_signature().unwrap();
+		assert_eq!(invoice.network(), bitcoin::Network::Regtest);
+		assert_eq!(invoice.payment_hash(), payment_hash);
+		assert_eq!(invoice.amount_msat(), Some(invoice_amount.to_sat() * 1_000));
+		wallet.pay_lightning_invoice(invoice, None, false).await.expect("a genuinely refreshed input must pay");
+		wait_for_hold_invoice_accepted(&mut hold_client, payment_hash).await;
+		let pending = wallet.pending_lightning_sends().await.unwrap();
+		assert_eq!(pending.len(), 1);
+		assert_eq!(pending[0].input_vtxo_ids, vec![replacement.id()]);
+		assert_eq!(pending[0].invoice.payment_hash(), payment_hash);
+		assert_eq!(pending[0].fee, bitcoin::Amount::ZERO, "this fixture declares zero user Lightning fee");
+		let status = wallet.check_lightning_payment(payment_hash, false).await.unwrap();
+		match status {
+			LightningSendState::InProgress(pending) => {
+				let pending_balance = pending.payment_amount + pending.fee;
+				assert_eq!(pending.payment_amount, invoice_amount);
+				let balance = assert_balance_consistent(&wallet, false).await;
+				assert_eq!(balance.spendable, board_amount - pending_balance);
+				assert_eq!(balance.needs_refresh, bitcoin::Amount::ZERO);
+				assert_eq!(balance.pending_lightning_send, pending_balance);
+			},
+			other => panic!("real hold invoice should remain pending: {other:?}"),
+		}
+		let waiter = {
+			let wallet = wallet.clone();
+			tokio::spawn(async move { wallet.check_lightning_payment(payment_hash, true).await })
+		};
+		tokio::time::sleep(Duration::from_millis(500)).await;
+		assert!(!waiter.is_finished(), "waiting check resolved before real settlement");
+		hold_client.settle(hold::SettleRequest { payment_preimage: preimage.to_vec() }).await.unwrap();
+		let status = waiter.wait_millis(10_000).await.unwrap().unwrap();
+		let LightningSendState::Paid(paid) = &status else { panic!("real payment did not settle: {status:?}"); };
+		assert_eq!(paid.payment_hash, payment_hash);
+		assert_eq!(paid.preimage, preimage);
+		assert_eq!(wallet.check_lightning_payment(payment_hash, false).await.unwrap(), status);
+		let invoices = hold_client.list(hold::ListRequest {
+			constraint: Some(hold::list_request::Constraint::PaymentHash(payment_hash.to_vec())),
+		}).await.unwrap().into_inner().invoices;
+		assert_eq!(invoices.len(), 1);
+		assert_eq!(invoices[0].state(), hold::InvoiceState::Paid);
+		let pays = lightning.internal.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
+			bolt11: None, payment_hash: Some(payment_hash.to_vec()), status: None,
+			index: None, limit: None, start: None,
+		}).await.unwrap().into_inner().pays;
+		assert_eq!(pays.len(), 1);
+		assert_eq!(pays[0].status(), cln_rpc::listpays_pays::ListpaysPaysStatus::Complete);
+		assert_eq!(pays[0].payment_hash, payment_hash.to_vec());
+		assert_eq!(pays[0].preimage.as_deref(), Some(preimage.as_ref()));
+		let balance = assert_balance_consistent(&wallet, false).await;
+		assert_eq!(balance.spendable, board_amount - invoice_amount);
+		assert_eq!(balance.needs_refresh, bitcoin::Amount::ZERO);
+		assert_eq!(balance.pending(), bitcoin::Amount::ZERO);
+		assert_not_dispatched(&db, &lightning.internal, &mut hold_client, refused_hash).await;
+	})).await.expect("expired grant refusal, authentic refresh and hold settlement must finish within180s");
 }
 
 #[tokio::test]

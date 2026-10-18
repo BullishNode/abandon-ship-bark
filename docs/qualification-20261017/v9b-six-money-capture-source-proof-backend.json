@@ -1,0 +1,446 @@
+{
+  "state": "INDEPENDENT_CAPTURE_SOURCE_GATE_PASS_PENDING_PARENT_RESOURCE_LISTING_LAUNCH",
+  "at": "2026-10-18T03:50:14.716186+00:00",
+  "allocation": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/v9b-six-money-fixtures-root-allocation.json",
+    "sha256": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+    "state": "AUTHORIZED_EXTERNAL_V9B_SIX_REVIEWED_MONEY_CASES_AFTER_OWN_PREFLIGHT",
+    "actual_order": [
+      "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "exit::watchman_sweeps_funding_tx_during_exit",
+      "exit::watchman_sweeps_vtxo_chain_during_exit"
+    ]
+  },
+  "candidate": {
+    "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+    "archive_sha256": "f72ca371c3c575cb55da61f145bcea05065c5b87cb8ef0d49e688e0d75645bde",
+    "bundle_manifest_sha256": "fcba315b96f3a7f7690c9e8e33ec16bcdbda0949c36fddbc304c89e533cdbf95",
+    "runtime_metadata_sha256": "fbc7525ff3180f5dcc73f6d165ec2e63d4c6a8647339e8b0b80d14ddd96e68db",
+    "immutable_metadata_sha256": "5ffa6495550fb11f898016bf5ddd658d00eaa816691ddca62115df4a56d1d305",
+    "captured_HEAD": "4fa8997ba21158f20326c19f68efba5f42af1f3c",
+    "dirty_diff_sha256": "7c6128d6f0a5a3ad6ad930f2589fa1f7162495d7663bd915866d98fba72994e3",
+    "dirty": true
+  },
+  "archive": {
+    "entries": 1730,
+    "exact_manifest_membership": true,
+    "all_actual_resolved_content_hashes_match": true,
+    "symlinks": [
+      {
+        "path": "AGENTS.md",
+        "target": "CLAUDE.md",
+        "resolved_content_sha256": "5f3a81a5f9592ecc2a71e275682a3a6a4a97e554632d4a08f1dccd6ebea439ee",
+        "manifest_content_verified": true
+      }
+    ],
+    "extracted_to_filesystem": false
+  },
+  "actual_pins": {
+    "pinfile": "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/runtime-pins.sha256",
+    "sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+    "count": 17,
+    "all_before_after_unchanged": true,
+    "files": [
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/captaind",
+        "sha256": "c6b4c1c4681f6172bd7c42cd258ce677501af432269d1365a0b572dac9c6c441",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/watchmand",
+        "sha256": "6cd056b99a601203667a48369347cde60c3cd8faf86d0a0e2e592c78680451c5",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/bark",
+        "sha256": "32643bf093c29e87c82f6ac90467ff8e4f5e57a420c42cf6fc966825b64b344d",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/barkd",
+        "sha256": "44165cea7af5a1ed27e7cdeeea6c8ba69ec5926bdc3880b2180e0fd9500bd859",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-bark",
+        "sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-bark-sdk",
+        "sha256": "11b2b5ac382094b4e5213f80ea4528d8e41554af2c0890fad19f3171b843d0cc",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-barkd",
+        "sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-server",
+        "sha256": "4e3b817da2eccae40f372c20e8bcf9bb793a05275b1c722d4aa32ebbc80d3769",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/nextest-binaries-runtime.json",
+        "sha256": "fbc7525ff3180f5dcc73f6d165ec2e63d4c6a8647339e8b0b80d14ddd96e68db",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/source-manifest.json",
+        "sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/manifest.json",
+        "sha256": "fcba315b96f3a7f7690c9e8e33ec16bcdbda0949c36fddbc304c89e533cdbf95",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/deps/libark.rlib",
+        "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/deps/libark.so",
+        "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/lock-holder",
+        "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "verification_method": "host_read_only"
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "verification_method": "container_read_only_sha256sum"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "verification_method": "container_read_only_sha256sum"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "verification_method": "container_read_only_sha256sum"
+      }
+    ]
+  },
+  "actual_ELFs": [
+    {
+      "id": "captaind",
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/captaind",
+      "sha256": "c6b4c1c4681f6172bd7c42cd258ce677501af432269d1365a0b572dac9c6c441",
+      "actual_version": "captaind 0.7.1-dev+4fa8997ba21158f20326c19f68efba5f42af1f3c",
+      "actual_ELF_magic_verified": true
+    },
+    {
+      "id": "watchmand",
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/watchmand",
+      "sha256": "6cd056b99a601203667a48369347cde60c3cd8faf86d0a0e2e592c78680451c5",
+      "actual_version": "watchmand 0.7.1-dev+4fa8997ba21158f20326c19f68efba5f42af1f3c",
+      "actual_ELF_magic_verified": true
+    },
+    {
+      "id": "bark",
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/bark",
+      "sha256": "32643bf093c29e87c82f6ac90467ff8e4f5e57a420c42cf6fc966825b64b344d",
+      "actual_version": "bark 0.7.1-dev (4fa8997ba21158f20326c19f68efba5f42af1f3c)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979",
+      "actual_ELF_magic_verified": true
+    },
+    {
+      "id": "barkd",
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/barkd",
+      "sha256": "44165cea7af5a1ed27e7cdeeea6c8ba69ec5926bdc3880b2180e0fd9500bd859",
+      "actual_version": "barkd 0.7.1-dev (4fa8997ba21158f20326c19f68efba5f42af1f3c)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979",
+      "actual_ELF_magic_verified": true
+    },
+    {
+      "id": "ark-testing::bark",
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-bark",
+      "sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+      "actual_ELF_magic_verified": true
+    },
+    {
+      "id": "ark-testing::bark-sdk",
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-bark-sdk",
+      "sha256": "11b2b5ac382094b4e5213f80ea4528d8e41554af2c0890fad19f3171b843d0cc",
+      "actual_ELF_magic_verified": true
+    },
+    {
+      "id": "ark-testing::barkd",
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-barkd",
+      "sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+      "actual_ELF_magic_verified": true
+    },
+    {
+      "id": "ark-testing::server",
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-server",
+      "sha256": "4e3b817da2eccae40f372c20e8bcf9bb793a05275b1c722d4aa32ebbc80d3769",
+      "actual_ELF_magic_verified": true
+    }
+  ],
+  "actual_support": {
+    "debug/deps/libark.rlib": {
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/deps/libark.rlib",
+      "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+    },
+    "debug/deps/libark.so": {
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/deps/libark.so",
+      "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+    },
+    "debug/lock-holder": {
+      "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/lock-holder",
+      "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+    }
+  },
+  "metadata_overlay": {
+    "only_change_count": 3,
+    "changes": [
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/0/path",
+        "before": "debug/deps/libark.rlib",
+        "after": "../runtime-recovery-v9b-20261017/support/debug/deps/libark.rlib"
+      },
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/1/path",
+        "before": "debug/deps/libark.so",
+        "after": "../runtime-recovery-v9b-20261017/support/debug/deps/libark.so"
+      },
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0/0/path",
+        "before": "debug/lock-holder",
+        "after": "../runtime-recovery-v9b-20261017/support/debug/lock-holder"
+      }
+    ],
+    "all_four_binary_and_package_IDs_paths_unchanged": true,
+    "fresh_listing_performed": false
+  },
+  "six_source_bindings": [
+    {
+      "literal_name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "expected_binary": "ark-testing::server",
+      "source_file": "testing/tests/server/qualification_conflict_reorg.rs",
+      "actual_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "actual_function_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "historical_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "historical_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "module_declared": true,
+      "wholefile_or_helper_binding": "Exact reviewed/current corrected file and body verified."
+    },
+    {
+      "literal_name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "source_file": "testing/tests/server/qualification_failed_swap.rs",
+      "actual_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+      "actual_function_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "historical_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "historical_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "module_declared": true,
+      "wholefile_or_helper_binding": "Exact post835a file hash verified. Failed-swap wrapper unchanged but helper/file changed; no silent55bb helper provenance transfer."
+    },
+    {
+      "literal_name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "source_file": "testing/tests/server/qualification_offboard_restart.rs",
+      "actual_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "actual_function_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "historical_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "historical_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "module_declared": true,
+      "wholefile_or_helper_binding": "Exact reviewed/current corrected file and body verified."
+    },
+    {
+      "literal_name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_file": "testing/tests/bark_sdk/lightning.rs",
+      "actual_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "actual_function_body_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+      "historical_file_sha256": "3fef86397a648c4b11ef92f2f0c252b870e9ec766cc1ac14ff96075347964c88",
+      "historical_body_sha256": "eb82a1226e01d9a3ffee536fa5fae7b663dec32d18fc420e1984099448e8a414",
+      "module_declared": true,
+      "wholefile_or_helper_binding": "Exact reviewed/current corrected file and body verified."
+    },
+    {
+      "literal_name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "actual_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "actual_function_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "historical_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "historical_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "module_declared": true,
+      "wholefile_or_helper_binding": "Exact reviewed/current corrected file and body verified."
+    },
+    {
+      "literal_name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "actual_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "actual_function_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "historical_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "historical_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "module_declared": true,
+      "wholefile_or_helper_binding": "Exact reviewed/current corrected file and body verified."
+    }
+  ],
+  "mechanical_supersession": {
+    "patch_sha256": "835a5fb4b864433398cc43568a9547cec53c20b8cf030944b7ba2c9796285b97",
+    "prior_source_ACK_sha256": "fb236a52453681c182c58359190e8605b66e73bda242f9396d225da6185a2f31",
+    "failed_swap_helper_actual_sha256": "ebae0d73bfe45b63e1e42b2ea77d2bb3e75e091df20ddb07639b50a1a259cd07",
+    "replan_after_file_sha256": "5ed82c822d2efe12718315935c996e5f7b826058e2d666446f4c9f7f4b3678ef",
+    "same_API_definition_hashes_as_mechanical_review": true,
+    "allocation_metadata_note": "failed_swap change_from_frozen_intake None is true only of public wrapper; full file/helper changed by two awaits. Actual file hash237d and helperebae are verified here; do not claim helper unchanged."
+  },
+  "excluded_0cf_mixed_round": {
+    "archive_recovery_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+    "matches_original_c52a_not_corrected23f4": true
+  },
+  "build_provenance": {
+    "phase_records": {
+      "checks": {
+        "state": "PASS",
+        "command": [
+          "just",
+          "checks"
+        ],
+        "started_at": "2026-10-18T03:31:47.335404+00:00",
+        "exit_code": 0,
+        "seconds": 59.277,
+        "ended_at": "2026-10-18T03:32:46.612695+00:00"
+      },
+      "units": {
+        "state": "PASS",
+        "command": [
+          "just",
+          "--set",
+          "JUSTFILE_DIR",
+          "/fresh-cache/runtime-recovery-v9b-20261017",
+          "unit",
+          "--test-threads 4"
+        ],
+        "started_at": "2026-10-18T03:32:46.936518+00:00",
+        "exit_code": 0,
+        "seconds": 177.128,
+        "ended_at": "2026-10-18T03:35:44.064538+00:00"
+      },
+      "products": {
+        "state": "PASS",
+        "command": [
+          "cargo",
+          "build",
+          "--package",
+          "bark-server",
+          "--bin",
+          "captaind",
+          "--bin",
+          "watchmand",
+          "--package",
+          "bark-cli",
+          "--bin",
+          "bark",
+          "--bin",
+          "barkd",
+          "--features",
+          "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui"
+        ],
+        "started_at": "2026-10-18T03:35:44.387028+00:00",
+        "exit_code": 0,
+        "seconds": 141.11,
+        "ended_at": "2026-10-18T03:38:05.497436+00:00"
+      },
+      "metadata": {
+        "state": "PASS",
+        "command": [
+          "cargo",
+          "nextest",
+          "list",
+          "--package",
+          "ark-testing",
+          "--test",
+          "bark-sdk",
+          "--test",
+          "bark",
+          "--test",
+          "barkd",
+          "--test",
+          "server",
+          "--features",
+          "ark-testing/fallback-test-bip84",
+          "--list-type",
+          "binaries-only",
+          "--message-format",
+          "json"
+        ],
+        "started_at": "2026-10-18T03:38:06.521803+00:00",
+        "exit_code": 0,
+        "seconds": 323.282,
+        "ended_at": "2026-10-18T03:43:29.803794+00:00"
+      }
+    },
+    "phase_verification_records": [
+      {
+        "file": "source-verification-after-checks.json",
+        "sha256": "1094fbcb0125f545910f65521c83b92f46a0cc755b3ac9fe71e3ac6d062bb003",
+        "recorded_state": "PASS"
+      },
+      {
+        "file": "source-verification-after-metadata.json",
+        "sha256": "b29ee004dcefcd91928ccacc481ccd62176b49b8e891bec8240c12ee28fe39af",
+        "recorded_state": "PASS"
+      },
+      {
+        "file": "source-verification-after-products.json",
+        "sha256": "a713636c233125f1c11de25fce624966c3e27544fa4066dc29934a0b2be866ec",
+        "recorded_state": "PASS"
+      },
+      {
+        "file": "source-verification-after-units.json",
+        "sha256": "c68bbc41da2212d93b583d26d1480bb566a01aa04b3b59b4a12fc62bb5c1654e",
+        "recorded_state": "PASS"
+      },
+      {
+        "file": "source-verification-before-checks.json",
+        "sha256": "80dc4c31d25bf21bc803e3637eabbaa4770298318bc718766e851ef35a5d1606",
+        "recorded_state": "PASS"
+      },
+      {
+        "file": "source-verification-before-metadata.json",
+        "sha256": "163dfe6e1b2c9a5ca020709b6d2b03e33f1bd8f882847561611f7845ae4590eb",
+        "recorded_state": "PASS"
+      },
+      {
+        "file": "source-verification-before-products.json",
+        "sha256": "7473b0a12d11b4cf4e11eda7eb1394e600ae19ca7ebc7819c921c749268e5312",
+        "recorded_state": "PASS"
+      },
+      {
+        "file": "source-verification-before-units.json",
+        "sha256": "17a8fcfce808ecd38b8e3055dca0ff6ddae40c5d426146aedb3a3c5f3761a94b",
+        "recorded_state": "PASS"
+      },
+      {
+        "file": "source-verification-final-capture.json",
+        "sha256": "9ab5232f432325ed75849748d16dd9bc5fc0162bebba384dc442c10c7f516364",
+        "recorded_state": "PASS"
+      }
+    ],
+    "interpretation": "Recorded build phases PASS and artifact/source bindings independently hashed. Earlier temporal verification observations are builder records, not reproduced by this reviewer. No new compile or native execution."
+  },
+  "concrete_blockers": [],
+  "remaining_gates": [
+    "Client-owned batch44 controls and final hash freeze; no control edits by reviewer.",
+    "Parent fresh resources/ownedactor absence and exact singleton expectedbinary unignored listings; allocated serial1/default180/retries0/firstFAIL.",
+    "Actual native outcomes, independent money oracles and bounded failure reconciliation; source gate is not PASS/ML/production credit."
+  ],
+  "scope": "Read-only archive/artifact/source verification. Container invocation only sha256sum for host-unavailable pinnedCLN executable; no actor/version/native runtime/Cargo/list/RPC/DB opened."
+}

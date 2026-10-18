@@ -1,0 +1,23 @@
+{
+  "kind": "SAFE_NATIVE_SUMMARY_FROM_FROZEN_POSTFLIGHT",
+  "binary": "ark-testing::server",
+  "name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+  "run_id": "b12b96fd-87f1-445d-ba71-9d2f3295113c",
+  "result": "PASS",
+  "native_seconds": 52.846,
+  "wall_seconds": 54.09,
+  "exit_code": 0,
+  "resource_error": null,
+  "actual_selected": 1,
+  "fresh_unignored_selected": 1,
+  "filtered_tests": 653,
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "source_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+  "target_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+  "native_nextest_log_sha256_only": "b959fd7bc34022bf6d61fff75050fc1bb49e8de2f339d4c9258029707558e05c",
+  "raw_log_included": false,
+  "source_postflight_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+  "scope": "Bounded metadata projection from prior independent postflight; no raw nextest/wallet log read or copied during this export. Native assertions/financial audit limits remain separate."
+}

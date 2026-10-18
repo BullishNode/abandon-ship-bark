@@ -1,0 +1,193 @@
+{
+  "kind": "CHECKPOINT17_REPORT_DOCUMENTS_ONLY_PREPARATION_MANIFEST",
+  "at": "2026-10-18T04:19:14.931926+00:00",
+  "state": "REPORT_DOCUMENTS_READY_PARENT_FINAL_PUBLICATION_PENDING",
+  "file_count_excluding_self": 30,
+  "file_count_including_self": 31,
+  "cutoff": {
+    "executions": 242,
+    "PASS": 227,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 227,
+    "nextest_invocations": 215,
+    "native": 230,
+    "component": 12,
+    "coverage_rows": 453
+  },
+  "files": {
+    "SEVENTEENTH-CHECKPOINT.md": {
+      "sha256": "84f661a1c6369a66018e8596fe5b11d364cbde1fa510fd97da138e8a769ab118",
+      "bytes": 5519,
+      "mode": "byte_exact_external_report"
+    },
+    "batch44-six-money-v9b-receipt.json": {
+      "sha256": "528a52d36f55036009b9eb567c3346685b403b97d77ff21fc099921316e9fbdd",
+      "bytes": 14179,
+      "mode": "byte_exact_external_report"
+    },
+    "batch44-client-postflight.json": {
+      "sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+      "bytes": 19432,
+      "mode": "byte_exact_external_report"
+    },
+    "batch44-coverage-append.json": {
+      "sha256": "3676642d88a65c3a20e35be311ad045f4874a9082dd75ce768373469535b7c78",
+      "bytes": 22828,
+      "mode": "byte_exact_external_report"
+    },
+    "batch44-conditional-curation-plan.json": {
+      "sha256": "faca93cf789fc2db9a4eef318879a900285b2958b4e8d9407c968f5bb98657db",
+      "bytes": 17600,
+      "mode": "byte_exact_external_report"
+    },
+    "batch44-control-guard-source-review.md": {
+      "sha256": "dbd240d4968db9e138d6f5786a49d004ee9246ff3bc1e7a46cf04f29963694a1",
+      "bytes": 4139,
+      "mode": "byte_exact_external_report"
+    },
+    "v9b-six-money-capture-source-proof-backend.json": {
+      "sha256": "87921b392df8818315beca93ed93b80fda735c774b0595ced5381e862483b457",
+      "bytes": 20805,
+      "mode": "byte_exact_external_report"
+    },
+    "v9b-six-money-capture-source-proof-backend.md": {
+      "sha256": "3d59e44a02ff9be05f912d6fba6a8b06fa5a5cfc28bcc132ce4a4137bc5f1703",
+      "bytes": 1290,
+      "mode": "byte_exact_external_report"
+    },
+    "v9-test-api-compile-corrections-source-review.json": {
+      "sha256": "fb236a52453681c182c58359190e8605b66e73bda242f9396d225da6185a2f31",
+      "bytes": 9253,
+      "mode": "byte_exact_external_report"
+    },
+    "v9-test-api-compile-corrections-source-review.md": {
+      "sha256": "cb75643a47b9d4037d064073207af99060120d752a63269e2ae8c60a307e6b17",
+      "bytes": 1320,
+      "mode": "byte_exact_external_report"
+    },
+    "v9b-next-six-selection-plan.json": {
+      "sha256": "c4d0adee1619c80b356c9cc2ad9b8fe617a7b9fee2446e8654f7a8182df5c4cb",
+      "bytes": 19300,
+      "mode": "byte_exact_external_report"
+    },
+    "v9b-next-six-selection-plan.md": {
+      "sha256": "1437f13ee8e1b527d45010a309eaab5f55ee609def45f916b86867f162bca0f5",
+      "bytes": 1802,
+      "mode": "byte_exact_external_report"
+    },
+    "v9-money-fixtures-source-intake-backend-verification.json": {
+      "sha256": "c5196abe964ffe5fc1b16dfe5246221618db69d72d001f6604c3e05414acc81a",
+      "bytes": 5830,
+      "mode": "byte_exact_external_report"
+    },
+    "v9-money-fixtures-source-intake-backend-verification.md": {
+      "sha256": "84410ff4139c13e01a233abdcc7af723c4d58aba751a5a5f57029ed3174a84f1",
+      "bytes": 882,
+      "mode": "byte_exact_external_report"
+    },
+    "barkd-recovery-round-retirement-v2-manifest.json": {
+      "sha256": "7ecb78075275a4600bec876e5c097e3660907062af683c1d3fb26f48af177395",
+      "bytes": 4114,
+      "mode": "byte_exact_external_report"
+    },
+    "barkd-recovery-round-retirement-v2-notes.md": {
+      "sha256": "05c4611690d40c97fd1a5e0786778291bd869d46613b142ff1460e5f737dcb75",
+      "bytes": 2229,
+      "mode": "byte_exact_external_report"
+    },
+    "barkd-recovery-round-retirement-v2-backend-source-review.json": {
+      "sha256": "18ca06cdfe70fbb90484adf5db9b9d822db1e9b9e0aeb33c6432cb9fbbb3602d",
+      "bytes": 3800,
+      "mode": "byte_exact_external_report"
+    },
+    "barkd-recovery-round-retirement-v2-backend-source-review.md": {
+      "sha256": "64f5d9a71aa3439a1d426466d142563c0cdad3a6408b5571e6a994cd84c238c6",
+      "bytes": 1075,
+      "mode": "byte_exact_external_report"
+    },
+    "barkd-recovery-round-retirement-v2-peer-review-legacy.md": {
+      "sha256": "f9f47bd8cbf54cfed60aac8de4fe22714f96b2b654ce57407e050ce616d7e428",
+      "bytes": 3390,
+      "mode": "byte_exact_external_report"
+    },
+    "barkd-recovery-round-retirement-balance-ownership-audit.json": {
+      "sha256": "b6579375a52f5257ecf4f4be22e8cb7172a07b630b3da7d21b53c1a66e03bfe7",
+      "bytes": 8018,
+      "mode": "byte_exact_external_report"
+    },
+    "barkd-recovery-round-retirement-balance-ownership-audit.md": {
+      "sha256": "89dbf120e76b3ccf1f5427386496aac650844bb762a5439040b5479423cc893a",
+      "bytes": 1628,
+      "mode": "byte_exact_external_report"
+    },
+    "batch44-case01-conflict-retained-core-reconciliation.json": {
+      "sha256": "cedd6a2ba14a9eab6d9df80a6ef3d59acdfd23a67671bba1f70eda1eb391a422",
+      "bytes": 17058,
+      "mode": "byte_exact_external_report"
+    },
+    "batch44-case01-conflict-retained-core-reconciliation.md": {
+      "sha256": "130d2c3c02bbbc3e9c5d63049c98f6ba690b0178eff30a1617697d376e61df65",
+      "bytes": 1319,
+      "mode": "byte_exact_external_report"
+    },
+    "root-j01-replan-retained-core-reconciliation-backend.json": {
+      "sha256": "bb30ba4304b680622ff06f248ff16f89bdafaacae3c1ecfdb17df955128da07e",
+      "bytes": 29635,
+      "mode": "byte_exact_external_report"
+    },
+    "root-j01-replan-retained-core-reconciliation-backend.md": {
+      "sha256": "5bc6eb80acf8c31eeb98dacbf5f5bccc113951f4b0568c0de26c963af534ab83",
+      "bytes": 1702,
+      "mode": "byte_exact_external_report"
+    },
+    "batch44-case01-j01-retained-core-final-stability.json": {
+      "sha256": "8cf261298b7f62b166f6bffae1f1d24408811141eda21cac50e4663ee6e6aac3",
+      "bytes": 5824,
+      "mode": "byte_exact_external_report"
+    },
+    "v9b-financial-handoff-to-root.json": {
+      "sha256": "3c4090e46a53cabec7a6adc8fc1b28ebb539d19597bb3d14e549209afc7cae19",
+      "bytes": 3126,
+      "mode": "byte_exact_external_report"
+    },
+    "PUBLICATION-PR20.json": {
+      "sha256": "c3cb7fab4cb69b49b443555329e368948a658b1329bed6bf8724ea8dc078878b",
+      "bytes": 942,
+      "mode": "byte_exact_external_report"
+    },
+    "checkpoint16-publication-independent-audit.md": {
+      "sha256": "c4a9d1aa220874c4c3cbc70305572d27db75275fa9c3e1619d26cb49a0025959",
+      "bytes": 3058,
+      "mode": "byte_exact_external_report"
+    },
+    "checkpoint17-report-documents-notes.md": {
+      "sha256": "54eb1397146a17f115b3f6122329623e0459ecdcf40f39f84daf0723fffd67e9",
+      "bytes": 3243,
+      "mode": "new_preparation_note"
+    }
+  },
+  "validation": {
+    "JSON_source_report_parse_count": 16,
+    "all29_byte_exact_hashes_match": true,
+    "six_actual_PASS_287_135_seconds_agree": true,
+    "receipt_cross_references_match": true,
+    "secret_pattern_or_valid_private_Base58Check_hits": 0,
+    "harmless_prose_match_dispositions": [
+      "Audit authorization is ordinary source-authoring prose",
+      "Predecessor scan description names Bearer credentials"
+    ],
+    "full_BIP39_checksum_scan": "NOT_REPEATED_PARENT_FINAL_SANITIZATION",
+    "rawlogs_privateDB_backup_seed_source_patch_files_copied": 0
+  },
+  "client_subtree_reference_only": {
+    "path": "batch44-control/EXPORT.json",
+    "sha256": "f2f7612c7da1a42d818d317dba140203cbda0668f7abf74b2707c5df32fc35c6",
+    "ownership": "client; not modified by this preparer"
+  },
+  "parent_reserved": [
+    "rolling STATUS/COVERAGE/FINDINGS snapshots",
+    "final whole-packet publication manifest",
+    "branch/Git/publication"
+  ],
+  "mutations": "Only31 new top-level checkpoint17 report files; no old snapshots/global/source/control/runtime/Cargo/Git changes."
+}

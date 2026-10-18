@@ -1,0 +1,58 @@
+{
+  "state": "SOURCE_ONLY_NARROW_ASSERTION_ADDENDUM_ACK_NO_CONCRETE_BLOCKER",
+  "at": "2026-10-18T04:11:02.619512+00:00",
+  "reviewed_manifest_sha256": "7ecb78075275a4600bec876e5c097e3660907062af683c1d3fb26f48af177395",
+  "delta_patch_sha256": "e674bcafc14011cac555606d19d33b80a9c030d408dbbb98b587ae663f284142",
+  "aggregate_patch_sha256": "546269c665c58c75a297b49b524c187a1842f2e534b13fa2881af9ba7ff4622c",
+  "exact_source": {
+    "c52": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+    "v1": "23f4a74b916c5dcc429b442ec099808ad2757df74d4162fbed7ec4d575b736c5",
+    "v2": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4"
+  },
+  "independent_in_memory_reconstruction": {
+    "delta_hunks": 4,
+    "all_v1_statements_retained": true,
+    "delta_deleted_statement_lines": 0,
+    "outside_two_target_bodies_identical_v2_v1_c52": true,
+    "no_source_application": true
+  },
+  "targets": [
+    {
+      "name": "recovered_wallet_finds_round_vtxo",
+      "c52": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+      "v1": "1f75a3484f1dd75826013a5142d86ac30a66c712c6d6568754fd982093fb197e",
+      "v2": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5"
+    },
+    {
+      "name": "recovered_wallet_finds_mixed_origin_vtxos",
+      "c52": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+      "v1": "59e8637124b230915660b8745151c2f7992d2c381bc6b1d92a3fef3484df1b67",
+      "v2": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30"
+    }
+  ],
+  "unchanged_controls": {
+    "shared_strict_partition_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+    "invalid_body_quarantine_and_authentic_same_anchor_Arkoor_control_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+    "frozen_v1_packet_hashes_verified": true,
+    "timer_expressions_unchanged": true
+  },
+  "e00_API_evidence": {
+    "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+    "files_sha256": {
+      "testing/src/daemon/barkd.rs": "40c0539e04a79f0cd7bf1438217a9712e8934cf4f1d946cc9c42aff78cfa12b3",
+      "bark-json/src/cli/mod.rs": "2f91167f0484fa3186ed6d3c8045f3599d867267be74c13ff2b2a69f05f0f116",
+      "bark-rest/src/api/v1/exits.rs": "e925334b853094bdefe159a7c9788ab464b8eeb3003f22a0dc18f8e1e91e8168",
+      "bark/src/exit/mod.rs": "b66a647f12b566322ff756ca56bc64d7d454c00b4eb6dd18ce4bc7567142eaad"
+    },
+    "balance": "barkd.rs433 public bark_balance() returns Balance without forcing sync; all10 fields are actual bitcoin Amount. Each target adds exact actual spend_amount plus9zero before payment and10zero after complete native transfer.",
+    "exit_status": "barkd.rs625 public get_all_exit_status(Option<bool>,Option<bool>) returns Vec; REST routes list_all and exit/mod.rs519\u2013526 obtains every persisted exit entry. None flags suppress detailhistory/transactions, not live/finished entries."
+  },
+  "oracle_scope": "Additive current monetarybalance and persistedexit-status checks only. Keeps knownexactLocked ancestor/body/anchor, exactlivecut, authenticrecipient transfer, currentinputsSpent, strict shared helper and genuineordinaryproof control. No perVTXOawaiting_settlement=false requirement.",
+  "limits": [
+    "ADAPTED_NOT_RUN/UNCOMPILED: no Rust parse/typecheck or native credit. rustfmt absent127 is not a successful check.",
+    "No future act-by/automaticprotection execution or ownershippolicy safety inferred from two point-in-time status checks.",
+    "Originalcase10FAIL and heldroundNOTRUN plus v1sourcepacket preserved; no retry/result/ML promotion.",
+    "No canonical/ownedRust/sourcepacket mutation, Cargo/list/native/DB/RPC actions by this reviewer."
+  ],
+  "concrete_blockers": []
+}

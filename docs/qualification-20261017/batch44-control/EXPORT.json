@@ -1,0 +1,388 @@
+{
+  "state": "SAFE_BATCH44_CONTROL_EXPORT_FROZEN_NOT_PUBLISHED",
+  "created_at": "2026-10-18T04:17:51.958376+00:00",
+  "directory": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint17-proposed-safe/batch44-control",
+  "exports": [
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/selection-proof.json",
+      "source_sha256": "28dcf32c059a9db5d3aaf612c8507335d893b7a356dcbd0d0bcc029284a6fac6",
+      "destination": "selection-proof.json",
+      "destination_sha256": "28dcf32c059a9db5d3aaf612c8507335d893b7a356dcbd0d0bcc029284a6fac6",
+      "bytes": 10243,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/root-allocation.json",
+      "source_sha256": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+      "destination": "root-allocation.json",
+      "destination_sha256": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+      "bytes": 4929,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/runtime-pins.sha256",
+      "source_sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+      "destination": "runtime-pins.sha256",
+      "destination_sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+      "bytes": 2136,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/server-cohort.py",
+      "source_sha256": "dfe26aafa742d76c236eddbde7df39c8679902b34efe06ef4d04042c391adeea",
+      "destination": "server-cohort.py",
+      "destination_sha256": "dfe26aafa742d76c236eddbde7df39c8679902b34efe06ef4d04042c391adeea",
+      "bytes": 10888,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/preflight-static.py",
+      "source_sha256": "6e8de1ac64e7a85f104aea4e75ac250c0931c8dd6f6a3599873a51bd13e57b1c",
+      "destination": "preflight-static.py",
+      "destination_sha256": "6e8de1ac64e7a85f104aea4e75ac250c0931c8dd6f6a3599873a51bd13e57b1c",
+      "bytes": 4150,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/fresh-listings.py",
+      "source_sha256": "8b33543e8841102429474c700ac6be44771963703f0ffd3c44643d5260adc49a",
+      "destination": "fresh-listings.py",
+      "destination_sha256": "8b33543e8841102429474c700ac6be44771963703f0ffd3c44643d5260adc49a",
+      "bytes": 3656,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/preflight.sh",
+      "source_sha256": "c838fb79a64f3ded80575d7d81481f3ff2cdf0d21bf003f4a0e7f101fe54ce68",
+      "destination": "preflight.sh",
+      "destination_sha256": "c838fb79a64f3ded80575d7d81481f3ff2cdf0d21bf003f4a0e7f101fe54ce68",
+      "bytes": 1657,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/run.sh",
+      "source_sha256": "6a06e513074a2c197c454f3d11cf47217e4f04125ec642053cdce29b93d85237",
+      "destination": "run.sh",
+      "destination_sha256": "6a06e513074a2c197c454f3d11cf47217e4f04125ec642053cdce29b93d85237",
+      "bytes": 1556,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/nextest.toml",
+      "source_sha256": "0de07aa6380edb2d1d701ce0022d5c2bc7d5e4e0f0f539c616e93088694235bd",
+      "destination": "case01/nextest.toml",
+      "destination_sha256": "0de07aa6380edb2d1d701ce0022d5c2bc7d5e4e0f0f539c616e93088694235bd",
+      "bytes": 173,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case02/nextest.toml",
+      "source_sha256": "6fd57cd7cc4a120f2caa987a8dad395dea29db767aae82f17c8339f2185d8d56",
+      "destination": "case02/nextest.toml",
+      "destination_sha256": "6fd57cd7cc4a120f2caa987a8dad395dea29db767aae82f17c8339f2185d8d56",
+      "bytes": 173,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case03/nextest.toml",
+      "source_sha256": "f60cbd4d4060de6e46afc2db30d0c1d4b1f7d84b31abffc2cd39e4fac0eb1755",
+      "destination": "case03/nextest.toml",
+      "destination_sha256": "f60cbd4d4060de6e46afc2db30d0c1d4b1f7d84b31abffc2cd39e4fac0eb1755",
+      "bytes": 173,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case04/nextest.toml",
+      "source_sha256": "bbc12e0c8053dc79318c6693d8032d27f944cd6751fc0bd59519562bb23f3ad2",
+      "destination": "case04/nextest.toml",
+      "destination_sha256": "bbc12e0c8053dc79318c6693d8032d27f944cd6751fc0bd59519562bb23f3ad2",
+      "bytes": 173,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case05/nextest.toml",
+      "source_sha256": "6c04a6815fec9f5cc9fc6a3177cf107e9b2c77e3d619a6918dcfe17e275568dd",
+      "destination": "case05/nextest.toml",
+      "destination_sha256": "6c04a6815fec9f5cc9fc6a3177cf107e9b2c77e3d619a6918dcfe17e275568dd",
+      "bytes": 173,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case06/nextest.toml",
+      "source_sha256": "a9d7cc54bfa1987777ed6664b4a561ea33fd06c48d37e644de21937cb8046567",
+      "destination": "case06/nextest.toml",
+      "destination_sha256": "a9d7cc54bfa1987777ed6664b4a561ea33fd06c48d37e644de21937cb8046567",
+      "bytes": 173,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/fresh-listing-admission.json",
+      "source_sha256": "a9404660a9cb951b0e938f1cf8c046724ae1d364d6f16cb7b29e799e7d83fb52",
+      "destination": "fresh-listing-admission.json",
+      "destination_sha256": "a9404660a9cb951b0e938f1cf8c046724ae1d364d6f16cb7b29e799e7d83fb52",
+      "bytes": 708,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/resource-admission.json",
+      "source_sha256": "8c5c558307473c1fb5f9d562af027273ed4be15f3a8e74d32fbd268db4d3e91e",
+      "destination": "resource-admission.json",
+      "destination_sha256": "8c5c558307473c1fb5f9d562af027273ed4be15f3a8e74d32fbd268db4d3e91e",
+      "bytes": 111,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/parent-launch-admission.json",
+      "source_sha256": "164dccd808a7a7ce42e21c0160a7e8b134a696bfd0e4f2b7de3642648ba60585",
+      "destination": "parent-launch-admission.json",
+      "destination_sha256": "164dccd808a7a7ce42e21c0160a7e8b134a696bfd0e4f2b7de3642648ba60585",
+      "bytes": 3568,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/launch-authorization-pending.preserved.json",
+      "source_sha256": "9a7c2e163c31498f094e61c0c29df8e72d4f2dbb08bfb9f544fa38b0402044d2",
+      "destination": "launch-authorization-pending.preserved.json",
+      "destination_sha256": "9a7c2e163c31498f094e61c0c29df8e72d4f2dbb08bfb9f544fa38b0402044d2",
+      "bytes": 272,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/PREPARATION.json",
+      "source_sha256": "cfd71627c903ce1123d66fa4ce7794d2328c391540d205a65d4da15e5a466fce",
+      "destination": "PREPARATION.json",
+      "destination_sha256": "cfd71627c903ce1123d66fa4ce7794d2328c391540d205a65d4da15e5a466fce",
+      "bytes": 3967,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/runtime-pins.sha256",
+      "source_sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+      "destination": "core-pins-14.sha256",
+      "destination_sha256": "e8f54aca326b80d6b59a7ba94fe55ac70d7a10f2cd5c8fd30d3bcc4cc9d72949",
+      "bytes": 1762,
+      "byte_equal": false,
+      "transform": "DERIVED_FIRST14_CORE_ROWS_ONLY; authoritative runtime-pins retains all17 inclCLN3"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/cohort-progress.json",
+      "source_sha256": "88b96811454580383769be3081e807dcaab76d57218c4eacdf1cd76e984765ea",
+      "destination": "cohort-progress.json",
+      "destination_sha256": "93ce8e79eba2f76bdaeea91810589985e606bb68d93b2e0b1223e394f367a107",
+      "bytes": 3133,
+      "byte_equal": false,
+      "transform": "EXPLICIT_RESULT_FIELD_ALLOWLIST; command/argv omitted"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/cohort-summary.json",
+      "source_sha256": "4a421ffbdc0a2f88ac8859ff85370e6778550228bd7a0c890b307551d38fe821",
+      "destination": "cohort-summary.json",
+      "destination_sha256": "c6bef4edee7003cf5d96c8d6e48fe73c8d8ec6515f610fc20abca70f377271d5",
+      "bytes": 3770,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SUMMARY_ALLOWLIST; cases use explicit result projection; command/argv omitted"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/result.json",
+      "source_sha256": "7472562319837acb4d260c89a215d1b2e107383745f3369c876126654fe4e523",
+      "destination": "case01/result.json",
+      "destination_sha256": "96d25865d0e88b993c0bcaa15189b8617974323094106df7036fe82a1e1c5467",
+      "bytes": 510,
+      "byte_equal": false,
+      "transform": "EXPLICIT_RESULT_FIELD_ALLOWLIST; command/argv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-client-postflight.json",
+      "source_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+      "destination": "case01/safe-native-summary.json",
+      "destination_sha256": "f514ece440a0a74c12fa82f2313d46ef6a39283899912d139a38b43e09fe60d8",
+      "bytes": 1133,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SAFE_POSTFLIGHT_CASE_METADATA_PROJECTION; rawlog SHA only, no raw log input read"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case02/result.json",
+      "source_sha256": "594755ecd42b519189bcb7c7e3356bd78ec064873c87e0ea3cf7a8f8eeed9871",
+      "destination": "case02/result.json",
+      "destination_sha256": "40c4459ac3c79f414f530c9e6fe9f7f34bd2b538a906e0973eb7f61aa5bfc677",
+      "bytes": 501,
+      "byte_equal": false,
+      "transform": "EXPLICIT_RESULT_FIELD_ALLOWLIST; command/argv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-client-postflight.json",
+      "source_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+      "destination": "case02/safe-native-summary.json",
+      "destination_sha256": "88cd10a520478a9b4e91e950703e5dc43c723f09f89893e51d9a29689c114028",
+      "bytes": 1124,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SAFE_POSTFLIGHT_CASE_METADATA_PROJECTION; rawlog SHA only, no raw log input read"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case03/result.json",
+      "source_sha256": "4e786a56454849b0ba3879b036800fe1b8a2b7d4546a2d1b59d1c0fe9ba4cd85",
+      "destination": "case03/result.json",
+      "destination_sha256": "59faa45edc8b3faf07f7e8d83e99a5d109c57a0142832cc441a88e383444c801",
+      "bytes": 523,
+      "byte_equal": false,
+      "transform": "EXPLICIT_RESULT_FIELD_ALLOWLIST; command/argv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-client-postflight.json",
+      "source_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+      "destination": "case03/safe-native-summary.json",
+      "destination_sha256": "d84fa6669cb4c8519b5edd5b3fe5df164bad26de020d2ac260e3d209c9360995",
+      "bytes": 1146,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SAFE_POSTFLIGHT_CASE_METADATA_PROJECTION; rawlog SHA only, no raw log input read"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case04/result.json",
+      "source_sha256": "cfddc0496fa170f177469bfa553ab9a4ad71192c3713180520d6f4e97ca82232",
+      "destination": "case04/result.json",
+      "destination_sha256": "06c50c4cdb4b2782fefd0c55565e04e3dc2ef218a79169a62d7bff7b9b0c33bd",
+      "bytes": 482,
+      "byte_equal": false,
+      "transform": "EXPLICIT_RESULT_FIELD_ALLOWLIST; command/argv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-client-postflight.json",
+      "source_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+      "destination": "case04/safe-native-summary.json",
+      "destination_sha256": "0a9f4602301c0b54407dbc3fd46ba04210959e2401986ea06848b57cdd7f98c6",
+      "bytes": 1107,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SAFE_POSTFLIGHT_CASE_METADATA_PROJECTION; rawlog SHA only, no raw log input read"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case05/result.json",
+      "source_sha256": "fc65857b7972a6507490a8625a3cf57e1af689ab61a1ca172e6ccd0b57b8542f",
+      "destination": "case05/result.json",
+      "destination_sha256": "2aa2f41982baa4864e4050191736f75066d242e57f2c45dd6c9f1ffa0174abc3",
+      "bytes": 458,
+      "byte_equal": false,
+      "transform": "EXPLICIT_RESULT_FIELD_ALLOWLIST; command/argv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-client-postflight.json",
+      "source_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+      "destination": "case05/safe-native-summary.json",
+      "destination_sha256": "5503412ff132fc24017b863469389c3b37d33ff9cd84469459bf79e8df1c77b7",
+      "bytes": 1083,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SAFE_POSTFLIGHT_CASE_METADATA_PROJECTION; rawlog SHA only, no raw log input read"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case06/result.json",
+      "source_sha256": "766b5c0611046e6338977f16055cb4dc1d5200033a63159f8f8e9e4268bc4ec3",
+      "destination": "case06/result.json",
+      "destination_sha256": "caea650c5b043624b5220d4c2a9e410532a8b7d0e159ce397edc7ce4e9efa669",
+      "bytes": 458,
+      "byte_equal": false,
+      "transform": "EXPLICIT_RESULT_FIELD_ALLOWLIST; command/argv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-client-postflight.json",
+      "source_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+      "destination": "case06/safe-native-summary.json",
+      "destination_sha256": "1670de013e64ecdb08bc1f48b6d01724ef2b6e06527f44d796bed29d61b2e8e3",
+      "bytes": 1083,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SAFE_POSTFLIGHT_CASE_METADATA_PROJECTION; rawlog SHA only, no raw log input read"
+    }
+  ],
+  "export_count_excluding_this_receipt": 34,
+  "inventory_path_hash_digest": "7c5a04bfc7044f54db8819dc46895ebb9d3887dbf4a36ef697e6b03fe480d1f6",
+  "source_inputs_before_after_unchanged": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/selection-proof.json": "28dcf32c059a9db5d3aaf612c8507335d893b7a356dcbd0d0bcc029284a6fac6",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/root-allocation.json": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/runtime-pins.sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/server-cohort.py": "dfe26aafa742d76c236eddbde7df39c8679902b34efe06ef4d04042c391adeea",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/preflight-static.py": "6e8de1ac64e7a85f104aea4e75ac250c0931c8dd6f6a3599873a51bd13e57b1c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/fresh-listings.py": "8b33543e8841102429474c700ac6be44771963703f0ffd3c44643d5260adc49a",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/preflight.sh": "c838fb79a64f3ded80575d7d81481f3ff2cdf0d21bf003f4a0e7f101fe54ce68",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/run.sh": "6a06e513074a2c197c454f3d11cf47217e4f04125ec642053cdce29b93d85237",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/nextest.toml": "0de07aa6380edb2d1d701ce0022d5c2bc7d5e4e0f0f539c616e93088694235bd",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case02/nextest.toml": "6fd57cd7cc4a120f2caa987a8dad395dea29db767aae82f17c8339f2185d8d56",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case03/nextest.toml": "f60cbd4d4060de6e46afc2db30d0c1d4b1f7d84b31abffc2cd39e4fac0eb1755",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case04/nextest.toml": "bbc12e0c8053dc79318c6693d8032d27f944cd6751fc0bd59519562bb23f3ad2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case05/nextest.toml": "6c04a6815fec9f5cc9fc6a3177cf107e9b2c77e3d619a6918dcfe17e275568dd",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case06/nextest.toml": "a9d7cc54bfa1987777ed6664b4a561ea33fd06c48d37e644de21937cb8046567",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/fresh-listing-admission.json": "a9404660a9cb951b0e938f1cf8c046724ae1d364d6f16cb7b29e799e7d83fb52",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/resource-admission.json": "8c5c558307473c1fb5f9d562af027273ed4be15f3a8e74d32fbd268db4d3e91e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/parent-launch-admission.json": "164dccd808a7a7ce42e21c0160a7e8b134a696bfd0e4f2b7de3642648ba60585",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/launch-authorization-pending.preserved.json": "9a7c2e163c31498f094e61c0c29df8e72d4f2dbb08bfb9f544fa38b0402044d2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/PREPARATION.json": "cfd71627c903ce1123d66fa4ce7794d2328c391540d205a65d4da15e5a466fce",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/cohort-progress.json": "88b96811454580383769be3081e807dcaab76d57218c4eacdf1cd76e984765ea",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/cohort-summary.json": "4a421ffbdc0a2f88ac8859ff85370e6778550228bd7a0c890b307551d38fe821",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/result.json": "7472562319837acb4d260c89a215d1b2e107383745f3369c876126654fe4e523",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-client-postflight.json": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case02/result.json": "594755ecd42b519189bcb7c7e3356bd78ec064873c87e0ea3cf7a8f8eeed9871",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case03/result.json": "4e786a56454849b0ba3879b036800fe1b8a2b7d4546a2d1b59d1c0fe9ba4cd85",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case04/result.json": "cfddc0496fa170f177469bfa553ab9a4ad71192c3713180520d6f4e97ca82232",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case05/result.json": "fc65857b7972a6507490a8625a3cf57e1af689ab61a1ca172e6ccd0b57b8542f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case06/result.json": "766b5c0611046e6338977f16055cb4dc1d5200033a63159f8f8e9e4268bc4ec3"
+  },
+  "admission": {
+    "source_sha256": "164dccd808a7a7ce42e21c0160a7e8b134a696bfd0e4f2b7de3642648ba60585",
+    "all16referenced_controls_profiles_gates_byte_exact_and_unchanged": true,
+    "runtime_pins_rows": 17,
+    "core_only_projection_rows": 14,
+    "CLN_rows": 3
+  },
+  "outcomes": {
+    "started": 6,
+    "PASS": 6,
+    "FAIL": 0,
+    "native_seconds_total": 287.135,
+    "original_outcomes_unchanged": true
+  },
+  "projection_policy": [
+    "Control/proof/rootallocation/admission/resource/listing/pins/6profiles/tinycode are an explicit byte-exact allowlist. Static control instructions are copied as evidence; no control executed.",
+    "Progress/summary/6results keep only named public state/runID/duration/policy fields; actual command argv removed. No unknown JSON fields silently copied.",
+    "Six safe-native-summary JSON files derive only from immutable sanitized postflight96e, with prior rawlog hash metadata. No nextest/wallet log was read/copied during this export.",
+    "core-pins-14 is explicitly incomplete for CLN fixtures; authoritative runtime-pins.sha256 includes all17.",
+    "EXPORT.json itself excluded from inventory digest to avoid self-reference. Parent final publication manifest must hash it separately."
+  ],
+  "syntax_validation": {
+    "Python_AST": 3,
+    "bash_n": 2,
+    "TOML": 6,
+    "JSON": 21,
+    "control_body_evaluation": 0
+  },
+  "secret_scan": {
+    "private_key_PEM_or_xprv_findings": 0,
+    "valid_English_BIP39_checksum_phrase_findings": 0,
+    "BIP39_wordlist_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693",
+    "raw_secret_values_printed": false
+  },
+  "excluded": [
+    "raw nextest/wallet logs",
+    "actualcommandargv journals",
+    "DBs/config/env/seed/key/privateidentity",
+    "full source/archive/ELFs/decoder code",
+    "source patches",
+    "rolling STATUS/COVERAGE/FINDINGS and frozencheckpoint16"
+  ],
+  "scope": "Publication preparation only; no new runtime results, financial reconciliation, compile or FULL ML/production credit. No Git/publishing/deployment/source/runtime/Cargo/actor operations. Only owned batch44-control subtree and this receipt written."
+}

@@ -1,0 +1,55 @@
+{
+  "at": "2026-10-18T04:09:51.717344+00:00",
+  "state": "FORMAL_6_NATIVE_PASS_POSTFLIGHT_AND_TWO_SCOPE_CORE_AUDITS_COMPLETE",
+  "artifacts": [
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-six-money-v9b-receipt.json",
+      "sha256": "528a52d36f55036009b9eb567c3346685b403b97d77ff21fc099921316e9fbdd"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-client-postflight.json",
+      "sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-case01-conflict-retained-core-reconciliation.json",
+      "sha256": "cedd6a2ba14a9eab6d9df80a6ef3d59acdfd23a67671bba1f70eda1eb391a422"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/root-j01-replan-retained-core-reconciliation-backend.json",
+      "sha256": "bb30ba4304b680622ff06f248ff16f89bdafaacae3c1ecfdb17df955128da07e"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-case01-j01-retained-core-final-stability.json",
+      "sha256": "8cf261298b7f62b166f6bffae1f1d24408811141eda21cac50e4663ee6e6aac3"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/PUBLICATION-PR20.json",
+      "sha256": "c3cb7fab4cb69b49b443555329e368948a658b1329bed6bf8724ea8dc078878b"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/publication-checkpoint16-files.json",
+      "sha256": "2abca14ea77cc2f808d0e1c6cca0420b64368ad50ebbc1b8c18dfa3c92fda777"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint16-publication-independent-audit.md",
+      "sha256": "c4a9d1aa220874c4c3cbc70305572d27db75275fa9c3e1619d26cb49a0025959"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/cohort-progress.json",
+      "sha256": "88b96811454580383769be3081e807dcaab76d57218c4eacdf1cd76e984765ea"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/cohort-summary.json",
+      "sha256": "4a421ffbdc0a2f88ac8859ff85370e6778550228bd7a0c890b307551d38fe821"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/parent-launch-admission.json",
+      "sha256": "164dccd808a7a7ce42e21c0160a7e8b134a696bfd0e4f2b7de3642648ba60585"
+    }
+  ],
+  "PR20_fixed_head": "b8513872c8e6a5efee43ee2cb9dbaebe1acf10ed",
+  "PR20_fixed_cutoff": "236/447, no batch44countpromotionuntilnewcuration",
+  "six_native_test_total_seconds": 287.135,
+  "root_J01_historical_PGID_SID": "UNKNOWN explicitly; actualscopedargv/cwd/FDquiescence+stableinputhashes proved, no inventedgroup",
+  "limits": "Ownconflict700k/Core7; rootfinalpackage680k/Core6 is scopedpackage notglobalwalletcut. Nativepayee/originalgrantidentitybindings attributed, no independentcustodyorwholeMLpromotion."
+}

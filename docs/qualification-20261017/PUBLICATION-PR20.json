@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-18T03:53:07.212117+00:00",
+  "pr": {
+    "baseRefName": "fresh/xpub-sweep",
+    "headRefOid": "b8513872c8e6a5efee43ee2cb9dbaebe1acf10ed",
+    "isDraft": true,
+    "number": 20,
+    "state": "OPEN",
+    "url": "https://github.com/BullishNode/abandon-ship-bark/pull/20"
+  },
+  "remote_head_verified": "b8513872c8e6a5efee43ee2cb9dbaebe1acf10ed",
+  "actual_PR_paths_verified_with_paginated_REST": 102,
+  "scope": "Report-only236executions/221PASS15FAIL/221unique209nextest224native12component447coverage; oldfailures and source-onlyfix limits preserved.",
+  "manifest_sha256": "2abca14ea77cc2f808d0e1c6cca0420b64368ad50ebbc1b8c18dfa3c92fda777",
+  "payload_files": 101,
+  "logical_snapshots": [
+    15,
+    16
+  ],
+  "independent_publication_review_sha256": "c4a9d1aa220874c4c3cbc70305572d27db75275fa9c3e1619d26cb49a0025959",
+  "owned_Rust_files_preserved_unstaged": 15,
+  "merge_promotion_deployment_by_testing_track": false
+}

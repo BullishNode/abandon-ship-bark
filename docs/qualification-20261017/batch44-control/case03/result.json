@@ -1,0 +1,16 @@
+{
+  "index": 3,
+  "name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+  "state": "PASS",
+  "started_at": "2026-10-18T03:55:26.857884+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "owned_nextest_group": 135338,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "b12b96fd-87f1-445d-ba71-9d2f3295113c",
+  "test_seconds": 52.846,
+  "wall_seconds": 54.09,
+  "ended_at": "2026-10-18T03:56:20.948249+00:00"
+}

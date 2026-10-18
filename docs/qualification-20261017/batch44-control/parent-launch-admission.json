@@ -1,0 +1,61 @@
+{
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch44-six-money-v9b",
+  "at": "2026-10-18T03:53:40.409644+00:00",
+  "expected_selection": [
+    [
+      "ark-testing::server",
+      "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment"
+    ],
+    [
+      "ark-testing::server",
+      "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once"
+    ],
+    [
+      "ark-testing::server",
+      "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "exit::watchman_sweeps_funding_tx_during_exit"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "exit::watchman_sweeps_vtxo_chain_during_exit"
+    ]
+  ],
+  "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+  "bundle_manifest_sha256": "fcba315b96f3a7f7690c9e8e33ec16bcdbda0949c36fddbc304c89e533cdbf95",
+  "runtime_metadata_sha256": "fbc7525ff3180f5dcc73f6d165ec2e63d4c6a8647339e8b0b80d14ddd96e68db",
+  "sha256": {
+    "selection-proof.json": "28dcf32c059a9db5d3aaf612c8507335d893b7a356dcbd0d0bcc029284a6fac6",
+    "root-allocation.json": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+    "runtime-pins.sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+    "server-cohort.py": "dfe26aafa742d76c236eddbde7df39c8679902b34efe06ef4d04042c391adeea",
+    "preflight-static.py": "6e8de1ac64e7a85f104aea4e75ac250c0931c8dd6f6a3599873a51bd13e57b1c",
+    "fresh-listings.py": "8b33543e8841102429474c700ac6be44771963703f0ffd3c44643d5260adc49a",
+    "preflight.sh": "c838fb79a64f3ded80575d7d81481f3ff2cdf0d21bf003f4a0e7f101fe54ce68",
+    "run.sh": "6a06e513074a2c197c454f3d11cf47217e4f04125ec642053cdce29b93d85237",
+    "case01/nextest.toml": "0de07aa6380edb2d1d701ce0022d5c2bc7d5e4e0f0f539c616e93088694235bd",
+    "case02/nextest.toml": "6fd57cd7cc4a120f2caa987a8dad395dea29db767aae82f17c8339f2185d8d56",
+    "case03/nextest.toml": "f60cbd4d4060de6e46afc2db30d0c1d4b1f7d84b31abffc2cd39e4fac0eb1755",
+    "case04/nextest.toml": "bbc12e0c8053dc79318c6693d8032d27f944cd6751fc0bd59519562bb23f3ad2",
+    "case05/nextest.toml": "6c04a6815fec9f5cc9fc6a3177cf107e9b2c77e3d619a6918dcfe17e275568dd",
+    "case06/nextest.toml": "a9d7cc54bfa1987777ed6664b4a561ea33fd06c48d37e644de21937cb8046567",
+    "fresh-listing-admission.json": "a9404660a9cb951b0e938f1cf8c046724ae1d364d6f16cb7b29e799e7d83fb52",
+    "resource-admission.json": "8c5c558307473c1fb5f9d562af027273ed4be15f3a8e74d32fbd268db4d3e91e"
+  },
+  "parent_preflight_exec_session": 88494,
+  "parent_preflight_exit_code": 0,
+  "parent_preflight_log_sha256": "df751afce3128d55f212618b16ef0ce2d8d5704932188b5d9fa1fac7be71dccd",
+  "parent_actor_absence_sha256": "b9047f2f27edfefc712717b4d2402770cc9defe24459ff6244bf7b95bd98acdd",
+  "parent_archive_entries_all_hashes_verified": 1730,
+  "parent_actual_all6_source_file_and_body_hashes_match_root_packet": true,
+  "independent_capture_source_proof_sha256": "87921b392df8818315beca93ed93b80fda735c774b0595ced5381e862483b457",
+  "independent_control_peer_sha256": "dbd240d4968db9e138d6f5786a49d004ee9246ff3bc1e7a46cf04f29963694a1",
+  "limits": "Only exact6allocation in suppliedconflict-first order/default180/retry0/serial1/firstFAIL. No mixed/heldround/sourcefix/nativeextras. All17pins includingnativeCLN3 passedactualcontainerfreshgate."
+}

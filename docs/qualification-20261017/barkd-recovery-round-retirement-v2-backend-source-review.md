@@ -1,0 +1,5 @@
+Source-only ACK exact97118c62 /deltae674bcaf /aggregate546269c6: no concrete blocker. Four additive hunks retain every v1 statement. Independent reverse reconstruction yields exact23f4v1 and c52original; all bytes outside the two target bodies, strict partition helper and quarantine/authentic same-anchor Arkoor control remain identical.
+
+The actual e00 APIs support all10Amount balancefields and get_all_exit_status(None,None). The latter lists all persisted exit entries; None only removes history/transaction detail. Each target now asserts currentactualcut+9zero before its genuine payment,10zero afterward, and no persisted exit statuses at both points. All prior recipient/currentcut/Spent/body/anchor oracles and timer expressions remain.
+
+This does not require a perVTXOawaiting_settlement flag to be false and does not establish future act-by or automatic protection behavior. OriginalFAIL/heldNOTRUN remain; source-only UNCOMPILED/NOTRUN. No Cargo/native/source edits; absent rustfmt127 grants no parse/typecheck credit. Full exacthashes/API evidence are in JSON.

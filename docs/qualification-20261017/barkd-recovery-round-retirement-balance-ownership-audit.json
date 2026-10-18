@@ -1,0 +1,115 @@
+{
+  "kind": "SOURCE_AND_IMMUTABLE_LEDGER_ROUND_ANCESTOR_BALANCE_OWNERSHIP_AUDIT",
+  "at": "2026-10-18T04:04:42.210591+00:00",
+  "state": "ORACLE_GAP_IDENTIFIED_NO_OBSERVED_DOUBLE_BALANCE_OR_EXIT",
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "source_file_sha256": {
+    "bark/src/fallback/adoption.rs": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+    "bark/src/balance.rs": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+    "bark/src/fallback/act_by.rs": "35e52cd9b5e9f0294c27e3031cb68e85cd8400a3dd88698b641721889cc118be",
+    "bark/src/fallback/reconcile.rs": "4c420e19bb1c9ef79d5147254ceb43bc43cfe14ff8dd6358e98595512522b660",
+    "testing/tests/barkd/helpers.rs": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+    "testing/src/daemon/barkd.rs": "40c0539e04a79f0cd7bf1438217a9712e8934cf4f1d946cc9c42aff78cfa12b3",
+    "bark-rest/src/api/v1/wallet.rs": "9f466880a9d42558676b1b9d521452e153d99fe8969371584c50643b63b8bd5e"
+  },
+  "current_own_adapted_recovery_sha256": "23f4a74b916c5dcc429b442ec099808ad2757df74d4162fbed7ec4d575b736c5",
+  "current_patch_sha256": "0cf1761862c27795afc679c9092ffb4b9c6cade326f7287c69a022dc2ed06fc0",
+  "prior_case10_public_ledger_receipt_sha256": "d14fcf0fb07c10dd1e8a32cb73bf4aced66b8832a8c4ddd3db5524deac833405",
+  "batch44_postflight_already_frozen_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+  "observed_public_SQLite": {
+    "bark": {
+      "db_sha256_before_after": "a79fa489f56208711e8a40cee56a7484c4b08e69884d7e1494354a163b782586",
+      "snapshot_blob_sha256": "ba2fae6652c19fdbcb4d2c62406617ae9e29f071299119095308afd0957bfbe4",
+      "public_ownership_markers": {
+        "unproven_spent_vtxos": [],
+        "awaiting_settlement": [],
+        "quarantined_vtxos": [],
+        "verified_ordinary_spends": [],
+        "adopted_payout_vtxos": []
+      },
+      "entitlements_count": 0,
+      "wallet_action_checkpoint_count": 0,
+      "exit_state_count": 0,
+      "exit_child_transaction_count": 0
+    },
+    "bark_recovered": {
+      "db_sha256_before_after": "cf4ac0315a24907eb69784f76f00f94cb147c9e76b80ac514064293430124164",
+      "snapshot_blob_sha256": "1a5b102de6de72b410f703d5e612ad6f46a2e5490bca13c6b43c29a4af046a32",
+      "public_ownership_markers": {
+        "unproven_spent_vtxos": [
+          "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0"
+        ],
+        "awaiting_settlement": [
+          "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0"
+        ],
+        "quarantined_vtxos": [
+          "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0"
+        ],
+        "verified_ordinary_spends": [],
+        "adopted_payout_vtxos": []
+      },
+      "entitlements_count": 0,
+      "wallet_action_checkpoint_count": 0,
+      "exit_state_count": 0,
+      "exit_child_transaction_count": 0
+    }
+  },
+  "observed_public_API_balance_receipt": null,
+  "bounded_balance_log_scan": [
+    {
+      "path": "bark_recovered/debug.log",
+      "sha256_before_after": "dd50bb4cf81a59c3c8dd5b188048b39b7581679de35c652b6fea380716ae8981",
+      "whitelisted_numeric_balance_tokens": 0
+    },
+    {
+      "path": "bark_recovered/stderr.log",
+      "sha256_before_after": "23c4382cc41d629ae11e466804383636895469678f3823a190ca4fc71a1ed7c0",
+      "whitelisted_numeric_balance_tokens": 0
+    }
+  ],
+  "source_derived_expectations": [
+    {
+      "refs": "adoption.rs46,70-95",
+      "finding": "Fresh server-reported historical Spent body is retained Locked; absent prior positive ownership it is marked unproven and quarantined. Awaiting-settlement ID membership alone does not establish a monetary claim."
+    },
+    {
+      "refs": "balance.rs184-209;243-258;273-359",
+      "finding": "Owned map filters unproven and verified-ordinary IDs before every positive bucket. Only an actual active undischarge CustomerPayout/BelowDust entitlement can add principal back. Observed unproven old546a with entitlements0 therefore supplies zero owned principal to all buckets; retained same current economic cut remains649392, not949392."
+    },
+    {
+      "refs": "fallback/act_by.rs95-106;122-130;235-257;280-296",
+      "finding": "Observed unproven old546a with no authenticated customer receipt fails automatic ownership. Report can retain its deadline schedule alongside unproven_historical; protector explicitly blocks it before starting an exit and rechecks under the publication lock. Scheduling material is not authorization or a positive claim."
+    },
+    {
+      "refs": "fallback/reconcile.rs20-23;REST wallet.rs568-571,605-606",
+      "finding": "Public WalletVtxoInfo.awaiting_settlement is raw awaiting ID union pending IDs. Source predicts true for retained old546a even though its monetary await bucket is zero. Do not require that flag false as an ownership oracle."
+    }
+  ],
+  "existing_0cf_oracle_gap": {
+    "all_positive_balance_buckets_asserted": false,
+    "automatic_exit_ownership_or_intent_asserted": false,
+    "what_is_asserted": "Exact known historical LockedNone body retained and current cut IDs/amount/anchors, genuine final payment/recipient conservation, current inputs Spent, zero .spendable and exact singleton known historical default-list.",
+    "wait_for_spendable_ref": "helpers.rs205-213 calls sync then checks ONLY balance.spendable. A hidden positive awaiting/pending bucket could coexist with this assertion.",
+    "native_status": "Current0cf is source-only/NOTRUN. Original44 six-PASS batch excludes it; original42 mixedFAIL occurred before final send/wait/balance/recipient actions. No measured API allbucket/automatic-protection result exists from that failed case."
+  },
+  "minimal_grounded_future_strengthening": {
+    "before_real_send": "Use existing recovered.bark_balance().await: spendable equals actual recovered current-cut sum; explicitly all9 other positive fields zero. Independently assert the ten-field total equals currentcut, excluding historical board amount.",
+    "after_real_send": "After existing wait_for_spendable(0), fetch full bark_balance and assert all10 fields Amount::ZERO, while exact retained body/default-list and actual current-input Spent assertions stay intact.",
+    "current_intent": "Existing get_all_exit_status(None,None).await returns all live+finished exits; assert empty before and after payment in both specific fixtures. This is current-intent evidence, not a future deadline stress test.",
+    "ownership_marker_or_future_protection": "The barkd REST/helper API lacks an exit_protection_report endpoint. SDK Wallet::exit_protection_report is public, but reopening another seed wallet or adding an SDK/framework boundary would broaden this fixture. Existing actual cached markers + source guard show fail-closed expectation; any dynamic act-by ownership test needs separately approved native setup/admission, not a manufactured regression.",
+    "keep_unchanged": [
+      "shared partition_recovered helper",
+      "quarantine invalid-body test and genuine same-anchor Arkoor Spent control",
+      "only exact known round-retired ancestor exception",
+      "all actual current-cut/native recipient/payment conservation checks"
+    ],
+    "authorization": "No source edit performed; root decides if it wants the bounded additional assertions before another capture."
+  },
+  "limits": [
+    "SQLite immutable mode=ro only; public snapshot ownership markers/counts queried, no registration/account_xpub/key/privateproperties/config/seed/token queries.",
+    "Two DB hashes and bounded log hashes unchanged; no sidecars; original failure retained.",
+    "Source projection is not an observed complete balance response or executed future protective-exit outcome.",
+    "No fair-cohort/rootJ01/other-owner data read; backend owns those audits.",
+    "No actors/RPC/Core/services/DB reopening, SQL mutation, signals, native run/retry/list/preflight/Cargo, source or global-report edits."
+  ]
+}

@@ -65,9 +65,24 @@ async fn recovered_wallet_finds_boarded_vtxo() {
 		assert!(after.iter().any(|v| v.vtxo.id == vtxo.vtxo.id), "recovered wallet should rediscover the VTXO with id {:?}", vtxo.vtxo.id);
 	}
 
-	// Spend recovered VTXOs in a payment (board minus fees)
+	let recovered_vtxo = after.iter().find(|vtxo| vtxo.vtxo.id == before[0].vtxo.id).unwrap();
+	assert_eq!(recovered_vtxo.state, VtxoStateInfo::Spendable);
+	assert_eq!(recovered_vtxo.vtxo.amount, before[0].vtxo.amount);
+	assert_eq!(recovered_vtxo.vtxo.chain_anchor, before[0].vtxo.chain_anchor);
+	let spend_amount = recovered_vtxo.vtxo.amount;
+	assert!(spend_amount > Amount::ZERO);
+
+	// Spend the actual recovered coin, whose net value includes its native funding fee.
 	let recipient = ctx.barkd("recipient", &srv).create().await;
-	recovered.send(&recipient.ark_address().await, Amount::from_sat(99_443)).await;
+	recovered.send(&recipient.ark_address().await, spend_amount).await;
+	wait_for_spendable(&recipient, spend_amount).await;
+	let received = wait_for_spendable_vtxos(&recipient, 1).await;
+	assert_eq!(received[0].vtxo.amount, spend_amount);
+	assert_eq!(received[0].vtxo.chain_anchor, recovered_vtxo.vtxo.chain_anchor);
+	assert_ne!(received[0].vtxo.id, recovered_vtxo.vtxo.id);
+	wait_for_spendable(&recovered, Amount::ZERO).await;
+	assert!(recovered.vtxos(None).await.is_empty());
+	assert_eq!(recovered.get_vtxo(&recovered_vtxo.vtxo.id.to_string()).await.state, VtxoStateInfo::Spent);
 }
 
 /// A round output that was claimed and then spent is recovered as spent: its
@@ -259,9 +274,26 @@ async fn recovered_wallet_finds_round_vtxo() {
 	assert_eq!(spent.len(), 1, "the round input should be recorded as spent");
 	assert_eq!(spent[0].vtxo.id, board_id, "the spent record should be the board VTXO");
 
-	// Spend recovered VTXOs in a payment
+	// The fixture's native refresh fee is zero: preserve the actual boarded value.
+	assert_eq!(after_refresh[0].vtxo.amount, board[0].vtxo.amount);
+	assert_eq!(after[0].state, VtxoStateInfo::Spendable);
+	assert_eq!(after[0].vtxo.amount, after_refresh[0].vtxo.amount);
+	assert_eq!(after[0].vtxo.chain_anchor, after_refresh[0].vtxo.chain_anchor);
+	let spend_amount = after[0].vtxo.amount;
+	assert!(spend_amount > Amount::ZERO);
+
+	// Spend the real recovered round output, independent of the board funding fee.
 	let recipient = ctx.barkd("recipient", &srv).create().await;
-	recovered.send(&recipient.ark_address().await, Amount::from_sat(99_443)).await;
+	recovered.send(&recipient.ark_address().await, spend_amount).await;
+	wait_for_spendable(&recipient, spend_amount).await;
+	let received = wait_for_spendable_vtxos(&recipient, 1).await;
+	assert_eq!(received[0].vtxo.amount, spend_amount);
+	assert_eq!(received[0].vtxo.chain_anchor, after[0].vtxo.chain_anchor);
+	assert_ne!(received[0].vtxo.id, round_id);
+	wait_for_spendable(&recovered, Amount::ZERO).await;
+	assert!(recovered.vtxos(None).await.is_empty());
+	assert_eq!(recovered.get_vtxo(&round_id.to_string()).await.state, VtxoStateInfo::Spent);
+	assert_eq!(recovered.get_vtxo(&board_id.to_string()).await.state, VtxoStateInfo::Spent);
 }
 
 /// Wallet recovery from seed across an arkoor change tree.
@@ -713,9 +745,40 @@ async fn recovered_wallet_finds_mixed_origin_vtxos() {
 			"recovered wallet should rediscover VTXO {:?}", vtxo.vtxo.id);
 	}
 
-	// Spend recovered VTXOs in a payment
+	let recovered_ids = after.iter().map(|vtxo| vtxo.vtxo.id).collect::<std::collections::BTreeSet<_>>();
+	assert_eq!(recovered_ids.len(), after.len(), "recovered inputs must be distinct");
+	assert_eq!(recovered_ids, before.iter().map(|vtxo| vtxo.vtxo.id).collect());
+	let mut expected_by_anchor = std::collections::BTreeMap::<_, Amount>::new();
+	let mut spend_amount = Amount::ZERO;
+	for original in &before {
+		let restored = after.iter().find(|vtxo| vtxo.vtxo.id == original.vtxo.id).unwrap();
+		assert_eq!(restored.vtxo.amount, original.vtxo.amount);
+		assert_eq!(restored.vtxo.chain_anchor, original.vtxo.chain_anchor);
+		spend_amount += restored.vtxo.amount;
+		*expected_by_anchor.entry(restored.vtxo.chain_anchor).or_default() += restored.vtxo.amount;
+	}
+	assert!(spend_amount > Amount::ZERO);
+	assert_eq!(spend_amount, before.iter().map(|vtxo| vtxo.vtxo.amount).sum::<Amount>());
+
+	// Spend this one matching recovered cut, excluding its already-spent ancestors.
 	let recipient = ctx.barkd("recipient", &srv).create().await;
-	recovered.send(&recipient.ark_address().await, Amount::from_sat(649_443)).await;
+	recovered.send(&recipient.ark_address().await, spend_amount).await;
+	wait_for_spendable(&recipient, spend_amount).await;
+	let received = recipient.vtxos(None).await;
+	assert!(!received.is_empty());
+	let mut received_by_anchor = std::collections::BTreeMap::<_, Amount>::new();
+	for vtxo in &received {
+		assert_eq!(vtxo.state, VtxoStateInfo::Spendable);
+		assert!(!recovered_ids.contains(&vtxo.vtxo.id));
+		*received_by_anchor.entry(vtxo.vtxo.chain_anchor).or_default() += vtxo.vtxo.amount;
+	}
+	assert_eq!(received.iter().map(|vtxo| vtxo.vtxo.amount).sum::<Amount>(), spend_amount);
+	assert_eq!(received_by_anchor, expected_by_anchor);
+	wait_for_spendable(&recovered, Amount::ZERO).await;
+	assert!(recovered.vtxos(None).await.is_empty());
+	for source in &after {
+		assert_eq!(recovered.get_vtxo(&source.vtxo.id.to_string()).await.state, VtxoStateInfo::Spent);
+	}
 }
 
 /// Recovery tolerates a valid VTXO it cannot own.
@@ -839,62 +902,151 @@ async fn recovered_wallet_locks_vtxos_without_a_status() {
 	}
 }
 
-/// Recovery stores a VTXO the server reports spent without validating it.
-///
-/// The server's word on the spend state is final: a spent VTXO is stored
-/// spent as it comes, and only a VTXO the server calls spendable is
-/// validated. A proxy corrupts every body it serves, so the spent board is
-/// stored spent regardless, while the corrupt change fails validation and is
-/// not stored.
+/// Invalid signed bodies cannot establish a historical spend or wallet balance.
+/// A fresh restore with the genuine bodies recognizes the actual native spend.
 #[tokio::test]
-async fn recovered_wallet_stores_spent_vtxos_on_the_servers_word() {
-	let ctx = TestContext::new("barkd/recovered_wallet_stores_spent_vtxos_on_the_servers_word").await;
-	// The xpub lookup carries each VTXO's body and status itself, so it is
-	// turned off to send recovery through the mailbox path under test.
+async fn recovered_wallet_quarantines_invalid_spent_vtxos() {
+	require_bark_version!(> "0.7.1");
+
+	let ctx = TestContext::new("barkd/recovered_wallet_quarantines_invalid_spent_vtxos").await;
+	// Exercise the recovery mailbox and body lookup rather than the xpub scan.
 	let srv = ctx.captaind("server").funded(btc(10))
 		.cfg(|c| c.recovery_xpub_nb_keys = 0)
 		.create().await;
-
 	let sender = ctx.barkd("sender", &srv).boarded(sat(100_000)).expose_mnemonic().create().await;
 	let boards = sender.vtxos(None).await;
-	assert_eq!(boards.len(), 1, "sender should hold its board VTXO, got {:?}", boards);
+	assert_eq!(boards.len(), 1);
 	let board_id = boards[0].vtxo.id;
+	let board_body = Vtxo::<Full>::deserialize_hex(
+		&sender.get_vtxo_encoded(&board_id.to_string()).await.encoded.0,
+	).unwrap();
+	assert_eq!(board_body.id(), board_id);
+	assert_eq!(board_body.amount(), boards[0].vtxo.amount);
+	let funding_tx = ctx.bitcoind().await_transaction(board_body.chain_anchor().txid).await;
+	board_body.validate(&funding_tx).expect("the original board must have valid signatures");
+
 	let recipient = ctx.barkd("recipient", &srv).create().await;
-	sender.send(&recipient.ark_address().await, sat(10_000)).await;
+	let payment = sat(10_000);
+	assert!(board_body.amount() > payment);
+	sender.send(&recipient.ark_address().await, payment).await;
+	wait_for_spendable(&recipient, payment).await;
+	wait_for_spendable(&sender, board_body.amount() - payment).await;
+	let change = sender.vtxos(None).await;
+	let received = recipient.vtxos(None).await;
+	assert!(!change.is_empty());
+	assert!(!received.is_empty());
+	let change_amount = change.iter().map(|v| v.vtxo.amount).sum::<Amount>();
+	assert_eq!(received.iter().map(|v| v.vtxo.amount).sum::<Amount>(), payment);
+	assert_eq!(change_amount + payment, board_body.amount());
+	assert_eq!(sender.get_vtxo(&board_id.to_string()).await.state, VtxoStateInfo::Spent);
 
-	// Every body served has an invalid final signature.
+	// Authenticate the payment and change independently of the reported spend state.
+	for (wallet, coins) in [(&sender, &change), (&recipient, &received)] {
+		for coin in coins {
+			assert_eq!(coin.state, VtxoStateInfo::Spendable);
+			assert_ne!(coin.vtxo.id, board_id);
+			let body = Vtxo::<Full>::deserialize_hex(
+				&wallet.get_vtxo_encoded(&coin.vtxo.id.to_string()).await.encoded.0,
+			).unwrap();
+			assert_eq!(body.id(), coin.vtxo.id);
+			assert_eq!(body.amount(), coin.vtxo.amount);
+			assert_eq!(body.chain_anchor(), board_body.chain_anchor());
+			body.validate(&funding_tx).expect("the native successor must have valid signatures");
+			assert!(body.transactions().any(|tx|
+				tx.tx.input.iter().any(|input| input.previous_output == board_body.point())
+			), "the signed successor must discharge the original board");
+		}
+	}
+	let mnemonic = sender.mnemonic().await;
+
 	#[derive(Clone)]
-	struct ForgeVtxo;
-
+	struct ForgeVtxo {
+		corrupted_ids: std::sync::Arc<std::sync::Mutex<Vec<VtxoId>>>,
+	}
 	#[async_trait::async_trait]
 	impl captaind::proxy::ArkRpcProxy for ForgeVtxo {
 		async fn get_vtxos_by_ids(
 			&self, upstream: &mut ArkClient, req: protos::GetVtxosByIdsRequest,
 		) -> Result<protos::GetVtxosByIdsResponse, tonic::Status> {
 			let mut resp = upstream.get_vtxos_by_ids(req).await?.into_inner();
-			for raw in resp.vtxos.iter_mut() {
+			for raw in &mut resp.vtxos {
 				let mut vtxo = Vtxo::<Full>::deserialize(raw).unwrap();
+				self.corrupted_ids.lock().unwrap().push(vtxo.id());
 				vtxo.invalidate_final_sig();
 				*raw = vtxo.serialize();
 			}
 			Ok(resp)
 		}
 	}
-
-	let proxy = srv.start_proxy_with_mailbox(ForgeVtxo, ()).await;
-	let recovered = ctx.barkd("sender_recovered", &srv)
-		.mnemonic(sender.mnemonic().await)
+	let corrupted_ids = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+	let proxy = srv.start_proxy_with_mailbox(ForgeVtxo {
+		corrupted_ids: corrupted_ids.clone(),
+	}, ()).await;
+	let recovered = ctx.barkd("sender_quarantined", &srv)
+		.mnemonic(mnemonic.clone())
 		.cfg({
 			let addr = proxy.address.clone();
 			move |c| c.server_address = addr
 		})
 		.create().await;
+	recovered.onchain_sync().await;
+	recovered.sync().await;
+	assert!(corrupted_ids.lock().unwrap().contains(&board_id));
+	for coin in &change {
+		assert!(corrupted_ids.lock().unwrap().contains(&coin.vtxo.id),
+			"recovery must exercise the corrupt-body lookup for every change coin");
+	}
+	let quarantined = recovered.vtxos(Some(true)).await;
+	assert_eq!(quarantined.len(), 1, "invalid spendable bodies must not be imported");
+	let stored = &quarantined[0];
+	assert_eq!(stored.vtxo, boards[0].vtxo);
+	assert_eq!(stored.state, VtxoStateInfo::Locked { movement_id: None, action_id: None });
+	let invalid_board = Vtxo::<Full>::deserialize_hex(
+		&recovered.get_vtxo_encoded(&board_id.to_string()).await.encoded.0,
+	).unwrap();
+	assert_eq!(invalid_board.id(), board_id);
+	assert!(invalid_board.validate(&funding_tx).is_err(), "the proxy must invalidate the stored body");
+	let balance = recovered.bark_balance().await;
+	assert_eq!([
+		balance.spendable, balance.needs_refresh, balance.awaiting_settlement,
+		balance.pending_board, balance.pending_in_round, balance.pending_arkoor_send,
+		balance.pending_offboard, balance.pending_lightning_send,
+		balance.claimable_lightning_receive, balance.pending_exit,
+	], [Amount::ZERO; 10], "an unvalidated body must not invent any balance");
 
-	let (spendable, spent) = partition_recovered(recovered.vtxos(Some(true)).await);
-	assert!(spendable.is_empty(),
-		"a corrupt body the server calls spendable must fail validation, got {:?}", spendable);
-	assert!(spent.iter().any(|v| v.vtxo.id == board_id),
-		"the spent board is stored on the server's word, got {:?}", spent);
+	// A distinct fresh restore uses the real signed bodies, without the proxy.
+	// The original daemon remains alive throughout both restores.
+	let control = ctx.barkd("sender_valid_control", &srv)
+		.mnemonic(mnemonic)
+		.create().await;
+	control.onchain_sync().await;
+	control.sync().await;
+	let (restored_change, spent) = partition_recovered(control.vtxos(Some(true)).await);
+	assert_eq!(spent.len(), 1);
+	assert_eq!(spent[0].vtxo, boards[0].vtxo);
+	assert_eq!(restored_change.len(), change.len());
+	assert_eq!(restored_change.iter().map(|v| v.vtxo.amount).sum::<Amount>(), change_amount);
+	for expected in &change {
+		let restored = restored_change.iter().find(|v| v.vtxo.id == expected.vtxo.id)
+			.expect("the valid restore must recover each actual native change coin");
+		assert_eq!(restored.vtxo, expected.vtxo);
+		let original = sender.get_vtxo_encoded(&expected.vtxo.id.to_string()).await.encoded.0;
+		let restored = control.get_vtxo_encoded(&expected.vtxo.id.to_string()).await.encoded.0;
+		assert!(restored == original, "the restored successor must retain its valid signed body");
+	}
+	let restored_board = Vtxo::<Full>::deserialize_hex(
+		&control.get_vtxo_encoded(&board_id.to_string()).await.encoded.0,
+	).unwrap();
+	assert!(restored_board.serialize() == board_body.serialize());
+	restored_board.validate(&funding_tx).expect("Spent requires the genuine signed board body");
+	let balance = control.bark_balance().await;
+	assert_eq!(balance.spendable, change_amount);
+	assert_eq!([
+		balance.needs_refresh, balance.awaiting_settlement, balance.pending_board,
+		balance.pending_in_round, balance.pending_arkoor_send, balance.pending_offboard,
+		balance.pending_lightning_send, balance.claimable_lightning_receive, balance.pending_exit,
+	], [Amount::ZERO; 9]);
+	assert_eq!(recipient.bark_balance().await.spendable + balance.spendable, board_body.amount());
 }
 
 /// Recovery skips a VTXO that fails validation.

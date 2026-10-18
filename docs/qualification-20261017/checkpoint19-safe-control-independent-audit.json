@@ -1,0 +1,72 @@
+{
+  "scope": "READ_ONLY_INDEPENDENT_FROZEN_BATCH47_SAFE_CONTROL_SUBTREE_AUDIT",
+  "at": "2026-10-18T06:19:24.381977+00:00",
+  "result": "ACK_NO_CONCRETE_BLOCKER",
+  "subtree": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint19-proposed-safe/batch47-control",
+  "EXPORT_sha256": "28c86017c86d2e41d30c6fe2087dd3519f5e7ac0e6b76cab1f4e0d59e85870a6",
+  "inventory": {
+    "files_including_EXPORT": 42,
+    "declared_exports": 41,
+    "exact_file_set_and_no_symlinks": true,
+    "all_source_destination_hashes_bytes_equality_flags_verified": true,
+    "aggregate_path_NUL_sha_newline_sorted_digest_recomputed": "d6bc2af77da5bd5ffae4c184bd45bdfb192afb1c6715c8f3131ec904c9299e3f",
+    "byte_equal_exports": 31,
+    "non_byte_equal_transforms": 10
+  },
+  "frozen_bindings": {
+    "parent_admission_sha256": "96e09f0ae64d6361400bdd5be7a133e76de7b15c161abee42c6a6afc0b8fe1ed",
+    "exact_fifteen_controls_match_admission_and_formal_postflight": true,
+    "preserved_closed_pending_files": 12,
+    "preserved_pending_flags_false_and_marker_retained": true,
+    "preserved_private_receipt_hash_matches_PREP": true,
+    "source_controls_and_all_manifest_source_inputs_unchanged_after_audit": true
+  },
+  "projections": {
+    "all_results_progress_summary_original_values_exact": true,
+    "PREP_only_selected_fields_parent_commands_omitted": true,
+    "actor_projection_empty_and_no_rawargv_cwd_FD_values": true,
+    "three_native_summaries_exact_postflight_fields_PASS_summary_and_log_hash_only": true,
+    "runtime_command_argv_fields_in_projected_results_PREP_summaries": 0,
+    "raw_nextest_wallet_DB_seed_config_sourcepatch_export_files": 0
+  },
+  "native_evidence": {
+    "formal_postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "initial_receipt_sha256": "586ea5bfbe46a484f49459f4c8343e73dbe8d6ef35f008288c540b87f636365c",
+    "initial_pending_at_creation_label_unchanged": true,
+    "initial_cases_and_formal_cases_exact_names_binary_runIDs_times_groups_match": true,
+    "PASS": 3,
+    "FAIL": 0,
+    "native_seconds": 92.658,
+    "case_seconds": [
+      31.134,
+      31.595,
+      29.929
+    ],
+    "only_one_selected_barkd_test_each_across_fullmetadata": true,
+    "656_skipped_per_case_not_executions": true,
+    "scope": "Exited classification / discovery-window / xpub address-nonreuse only; original actors alive. No final recovered payment/Core6/fullbalance/backup/custody/newer fix/FULLML/production claim."
+  },
+  "pins": {
+    "provided_authoritative": 17,
+    "matches_formal_actual_pin_receipt": true,
+    "derived_core14_byte_exact_first14": true,
+    "unused_CLN3_explicit": true,
+    "no_fresh_runtime_artifact_execution_or_admission": true
+  },
+  "syntax_only": {
+    "JSON_export_files": 22,
+    "JSON_including_EXPORT": 23,
+    "Python_AST": 6,
+    "bash_n": 4,
+    "TOML": 6,
+    "controller_preflight_listing_bodies_executed": 0
+  },
+  "credential_checks": {
+    "all42_text_files_bounded_literal_PEM_extended_private_key_credential_assignment_authorization_patterns": true,
+    "findings": 0,
+    "full_BIP39_WIF_and_complete_payload_scan": "NOT PERFORMED HERE; parent publication gate remains required",
+    "not_a_universal_secret_absence_proof": true
+  },
+  "publication_scope": "Only this frozen control subtree audited; parent complete checkpoint19 payload/global manifest not finalized or approved by this report. No rolling count/coverage/ML promotion.",
+  "actions": "Read-only manifest/source/projection hashing, JSON/AST/TOML parse and bash -n only. No privatewallet/rawlogs/service/actor/resources/list/runtime/Cargo/source/Git operations; no frozen subtree/global COVERAGE/FINDINGS/STATUS edits. Only new external audit JSON/Markdown."
+}

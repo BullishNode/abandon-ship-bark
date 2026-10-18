@@ -1,0 +1,253 @@
+{
+  "scope": "READ_ONLY_V10_IMMUTABLE_STATIC_SOURCE_AND_METADATA_BINDING_NOT_ALLOCATION",
+  "at": "2026-10-18T05:50:13.742876+00:00",
+  "status": "STATIC_BINDING_PASS",
+  "proposal": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v15-proposed-ordinary-barkd-regressions.json",
+    "sha256": "9ae492d696dba9d010ca4873f1cc3b8720197d2dd6429f42801dd138d0087c0d",
+    "proposal_not_actual_root_allocation": true
+  },
+  "v10_capture": {
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "source_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "bundle_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "immutable_metadata_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+    "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+    "captured_HEAD": "783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "actual_dirty_diff_sha256": "07668101a86082c0a1969735aa65051e5003222c9f0b1bc7928e4b7881d9108b",
+    "archive_entries_all_resolved_hashes_and_exact_member_set_rechecked": 1833,
+    "archive_symlink": "AGENTS.md -> CLAUDE.md; resolved content matches manifest; no filesystem extraction"
+  },
+  "seven_relevant_files": [
+    {
+      "path": "testing/tests/barkd/recovery.rs",
+      "archive_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "current_canonical_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "matches_current_canonical": true
+    },
+    {
+      "path": "testing/tests/barkd/helpers.rs",
+      "archive_sha256": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+      "current_canonical_sha256": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+      "matches_current_canonical": true
+    },
+    {
+      "path": "testing/src/context/builders.rs",
+      "archive_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "current_canonical_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "matches_current_canonical": true
+    },
+    {
+      "path": "testing/src/context/mod.rs",
+      "archive_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "current_canonical_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "matches_current_canonical": true
+    },
+    {
+      "path": "bark/src/recovery.rs",
+      "archive_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "current_canonical_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "matches_current_canonical": true
+    },
+    {
+      "path": "bark/src/fallback/spend_proof.rs",
+      "archive_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+      "current_canonical_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+      "matches_current_canonical": true
+    },
+    {
+      "path": "server/src/database/ordinary_spend.rs",
+      "archive_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+      "current_canonical_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+      "matches_current_canonical": true
+    }
+  ],
+  "actual_current_canonical_HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+  "current_canonical_mismatches": [],
+  "three_cases": [
+    {
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_skips_exited_vtxo",
+      "source": {
+        "function": "recovered_wallet_skips_exited_vtxo",
+        "path": "testing/tests/barkd/recovery.rs",
+        "function_sha256": "f7f7ece461c7faf3e1b9348c8a5f8fbe8c04c9dab0b03ba688990a11001aeecd",
+        "body_sha256": "9d85cfa3b507ac5d0771b228fc2125d0fcbe64ae9b4cad9407e06344dbb2373b",
+        "archive_lines": [
+          689,
+          721
+        ]
+      },
+      "saved_listing_entry": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "execution_credit": "NONE; old filtered listing is not a new selection/run"
+    },
+    {
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+      "source": {
+        "function": "recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+        "path": "testing/tests/barkd/recovery.rs",
+        "function_sha256": "9900105e71d85b6f14fd4cc33c6dea2dd0355e18a7c75777a5656e720681ec81",
+        "body_sha256": "da4c9d33959ffb3d922b2f5b202766f4f66d521ffae81821283f15c236aba705",
+        "archive_lines": [
+          1288,
+          1328
+        ]
+      },
+      "saved_listing_entry": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "execution_credit": "NONE; old filtered listing is not a new selection/run"
+    },
+    {
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+      "source": {
+        "function": "recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+        "path": "testing/tests/barkd/recovery.rs",
+        "function_sha256": "9b5ea48fc57fd4e62121498f3a0b0802fe13c1d1e8922640b54467a9f47d13f5",
+        "body_sha256": "3d0cbe7a1f5af1c312bb94fddfa099e6fe763ca29262ae9e516d092b32626b3c",
+        "archive_lines": [
+          1333,
+          1368
+        ]
+      },
+      "saved_listing_entry": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "execution_credit": "NONE; old filtered listing is not a new selection/run"
+    }
+  ],
+  "shared_helpers": [
+    {
+      "function": "wait_for_exits_claimable",
+      "path": "testing/tests/barkd/helpers.rs",
+      "function_sha256": "511a6ff867a6a517fea002991dcac43e6e069177c4ab695f886d825d00d5ef8e",
+      "body_sha256": "57f969e41feda872db67e12fa3deb588ba0962649292207b6a57128b4199d83f",
+      "archive_lines": [
+        145,
+        198
+      ]
+    },
+    {
+      "function": "partition_recovered",
+      "path": "testing/tests/barkd/recovery.rs",
+      "function_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+      "body_sha256": "2577d4d4bb1a28e06448c68ff1c404392dca72912d845059abd50b49678394af",
+      "archive_lines": [
+        22,
+        32
+      ]
+    }
+  ],
+  "module_Cargo_binding": {
+    "testing/Cargo.toml": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+    "testing/tests/barkd/mod.rs": "376fba80a3352deba0ffb34fa935c99c1a233aa07fe9ef7332dc624d06449fc1",
+    "package_id": "path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0",
+    "explicit_test_path": "tests/barkd/mod.rs",
+    "recovery_and_helpers_modules_declared": true
+  },
+  "saved_listing": {
+    "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/case01/selection-list-fresh.json",
+    "sha256": "5d5172fc5cccbe79e76adc4c819e749da1755a6fa893050f0b369c0d436d557b",
+    "suite_binary_and_package_path_match_authoritative_metadata": true,
+    "each_proposed_case_saved_unignored": true,
+    "filter_mismatch_is_old_case01_exact_string_filter_not_absence": true,
+    "no_new_listing": true
+  },
+  "metadata": {
+    "barkd": {
+      "binary-id": "ark-testing::barkd",
+      "binary-name": "barkd",
+      "package-id": "path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0",
+      "kind": "test",
+      "binary-path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-barkd",
+      "build-platform": "target"
+    },
+    "all_test_binary_records_package_ids_and_other_metadata_unchanged": true,
+    "only_changes": [
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/0/path",
+        "immutable": "debug/deps/libark.rlib",
+        "runtime": "../runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.rlib"
+      },
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/1/path",
+        "immutable": "debug/deps/libark.so",
+        "runtime": "../runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.so"
+      },
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0/0/path",
+        "immutable": "debug/lock-holder",
+        "runtime": "../runtime-sponsor-terminal-v10-20261018/support/debug/lock-holder"
+      }
+    ],
+    "support_capture_sha256": "817c8ab9518047845dc5e0e0dfaf1244d93a2e92de78b77702db0775ae41181b",
+    "three_actual_support_bindings": [
+      {
+        "metadata_relative_path": "../runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.rlib",
+        "resolved_container_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.rlib",
+        "captured_file_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "metadata_relative_path": "../runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.so",
+        "resolved_container_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.so",
+        "captured_file_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "metadata_relative_path": "../runtime-sponsor-terminal-v10-20261018/support/debug/lock-holder",
+        "resolved_container_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/lock-holder",
+        "captured_file_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      }
+    ],
+    "static_native_barkd_file_sha256": "40ee2c9257d2fb50f85663895b23c814b9cc321e9304e043bd38d254ab7633fe",
+    "native_file_hash_only_no_execution_or_version_probe": true
+  },
+  "prior_proofs": {
+    "source_c7af": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed",
+    "metadata_e5a": "e5a0e100b4aa274d3fc53112a3b7819bdce5bdd3035160d2d2ab15e58eee4846",
+    "batch45_selection_proof": "e131eb2815ed2c55e9f7a68746063e516e147992733648e0f2e5751763d2264d"
+  },
+  "input_hashes_before_after_unchanged": true,
+  "input_hashes": {
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v15-proposed-ordinary-barkd-regressions.json": "9ae492d696dba9d010ca4873f1cc3b8720197d2dd6429f42801dd138d0087c0d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/selection-proof.json": "e131eb2815ed2c55e9f7a68746063e516e147992733648e0f2e5751763d2264d",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v10-recovery-capture-source-proof-backend.json": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v10-recovery-runtime-metadata-parent-verification.json": "e5a0e100b4aa274d3fc53112a3b7819bdce5bdd3035160d2d2ab15e58eee4846",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/case01/selection-list-fresh.json": "5d5172fc5cccbe79e76adc4c819e749da1755a6fa893050f0b369c0d436d557b",
+    "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/source-manifest.json": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/source.tar.gz": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/manifest.json": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/nextest-binaries-immutable.json": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+    "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/nextest-binaries-runtime.json": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+    "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/support-capture.json": "817c8ab9518047845dc5e0e0dfaf1244d93a2e92de78b77702db0775ae41181b"
+  },
+  "future_admission": {
+    "root_allocation": null,
+    "fresh_version_features_resource_actor_singleton_gates": null,
+    "parent_launch_admission": null
+  },
+  "limitations": [
+    "Old immutable v10 archive is authoritative. No later current source/product fix is credited to its source bodies or ELF.",
+    "Source function hash excludes trailing newline; body hash includes both braces. Saved unignored entries still require future fresh exact singleton selection.",
+    "No runtime/controller/script/preflight/list/resources/Cargo/DB/secret/actor operations. Only immutable artifact hashing/archive/JSON/source reads and these new external reports.",
+    "No execution/PASS/FULL ML/production credit; default180/serial1/retries0/firstFAIL/global2 and final actual ELF/version/environment/resources/listing/parent admission remain future allocation gates."
+  ]
+}

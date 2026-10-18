@@ -1,0 +1,188 @@
+{
+  "schema": 1,
+  "batch": "batch47-ordinary-recovery-three-v10",
+  "state": "ROOT_ALLOCATED_ONCE_PENDING_PARENT_LAUNCH",
+  "candidate_ready": true,
+  "controls_finalized": true,
+  "execution_authorized": true,
+  "artifact_readiness_verified": "STATIC_CAPTURE_BINDINGS_ONLY_PARENT_FRESH_GATES_PENDING",
+  "expected_names_in_execution_order": [
+    "recovery::recovered_wallet_skips_exited_vtxo",
+    "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+    "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::barkd",
+    "ark-testing::barkd",
+    "ark-testing::barkd"
+  ],
+  "expected_selection_count_each": 1,
+  "expected_ignored": false,
+  "run_ignored": null,
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "threads": 1,
+  "maximum_case_executions": 3,
+  "maximum_global_native": 2,
+  "first_fail_stops": true,
+  "fresh_context_required": true,
+  "CLN_required": false,
+  "native_CLN_required_version": null,
+  "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "source_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+  "bundle_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+  "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+  "immutable_metadata_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+  "metadata_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/nextest-binaries-runtime.json",
+  "runtime_pin_count": 17,
+  "runtime_pinlist_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+  "execution_environment": {
+    "CAPTAIND_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+    "WATCHMAND_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+    "BARK_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/bark",
+    "BARKD_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/barkd",
+    "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+    "BARK_VERSION": "bark 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+    "BARKD_VERSION": "barkd 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+    "CAPTAIND_VERSION": "captaind 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "WATCHMAND_VERSION": "watchmand 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+  },
+  "root_authorization": {
+    "packet_path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/batch47-root-allocation-20261018.json",
+    "sha256": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+    "state": "ALLOCATED_FINALIZE_PEER_PREFLIGHT_THEN_ONE_PARENT_LAUNCH",
+    "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+    "cases_field": "cases",
+    "cohort_field": "cohort"
+  },
+  "parent_launch_admission": null,
+  "source_proposal": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v15-proposed-ordinary-barkd-regressions.json",
+    "sha256": "9ae492d696dba9d010ca4873f1cc3b8720197d2dd6429f42801dd138d0087c0d"
+  },
+  "proposed_source_bodies_and_helpers": [
+    {
+      "literal": "recovery::recovered_wallet_skips_exited_vtxo",
+      "file": "testing/tests/barkd/recovery.rs",
+      "full_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "function": {
+        "function_sha256": "f7f7ece461c7faf3e1b9348c8a5f8fbe8c04c9dab0b03ba688990a11001aeecd",
+        "body_sha256": "9d85cfa3b507ac5d0771b228fc2125d0fcbe64ae9b4cad9407e06344dbb2373b",
+        "first_line": 689,
+        "last_line": 721
+      },
+      "CLN_required": false,
+      "helper_binding": {
+        "file": "testing/tests/barkd/helpers.rs",
+        "file_sha256": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+        "wait_for_exits_claimable": {
+          "function_sha256": "511a6ff867a6a517fea002991dcac43e6e069177c4ab695f886d825d00d5ef8e",
+          "body_sha256": "57f969e41feda872db67e12fa3deb588ba0962649292207b6a57128b4199d83f",
+          "first_line": 145,
+          "last_line": 198
+        }
+      }
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+      "file": "testing/tests/barkd/recovery.rs",
+      "full_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "function": {
+        "function_sha256": "9900105e71d85b6f14fd4cc33c6dea2dd0355e18a7c75777a5656e720681ec81",
+        "body_sha256": "da4c9d33959ffb3d922b2f5b202766f4f66d521ffae81821283f15c236aba705",
+        "first_line": 1288,
+        "last_line": 1328
+      },
+      "CLN_required": false
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+      "file": "testing/tests/barkd/recovery.rs",
+      "full_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "function": {
+        "function_sha256": "9b5ea48fc57fd4e62121498f3a0b0802fe13c1d1e8922640b54467a9f47d13f5",
+        "body_sha256": "3d0cbe7a1f5af1c312bb94fddfa099e6fe763ca29262ae9e516d092b32626b3c",
+        "first_line": 1333,
+        "last_line": 1368
+      },
+      "CLN_required": false
+    }
+  ],
+  "proposed_v10_evidence_only": {
+    "meaning": "Historical completed immutablev10 capture proposed for idle capacity; these are actual prior paths/hashes, NOT new allocation/readiness/admission. No old45 testdata/results copied. If root chooses nextV11 keep closed.",
+    "historical_evidence_files": [
+      {
+        "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/selection-proof.json",
+        "sha256": "e131eb2815ed2c55e9f7a68746063e516e147992733648e0f2e5751763d2264d"
+      },
+      {
+        "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/root-allocation.json",
+        "sha256": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838"
+      },
+      {
+        "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/parent-launch-admission.json",
+        "sha256": "439f73b462d886017a0fd8a91b1c5379362543d8338b79dc138d238fb070748c"
+      }
+    ],
+    "bundle_path": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018",
+    "captured_HEAD": "783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "dirty": true,
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "source_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "bundle_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "runtime_metadata_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/nextest-binaries-runtime.json",
+    "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+    "immutable_metadata_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+    "historical_pinlist_path": "/home/francis/.cache/abandon-fresh/root-sponsor-partial-v10-20261018/runtime-pins.sha256",
+    "historical_pinlist_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+    "copied_pinlist": "proposed-v10-pins.sha256",
+    "historical_pin_count": 17,
+    "ordinary_core_subset": "first14 actual listed rows; historical last3 nativeCLN/plugin pins are not runtime requirements for these cases",
+    "actual_native_barkd_sha256": "40ee2c9257d2fb50f85663895b23c814b9cc321e9304e043bd38d254ab7633fe",
+    "actual_product_versions": {
+      "bark": "bark 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "barkd": "barkd 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "captaind": "captaind 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+      "watchmand": "watchmand 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e"
+    },
+    "actual_historical_environment": {
+      "CAPTAIND_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+      "WATCHMAND_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+      "BARK_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/bark",
+      "BARKD_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/barkd",
+      "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+      "BARK_VERSION": "bark 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "BARKD_VERSION": "barkd 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "CAPTAIND_VERSION": "captaind 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+      "WATCHMAND_VERSION": "watchmand 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+      "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+    },
+    "canonical_and_archive_full_file_bindings": {
+      "sha256": {
+        "testing/tests/barkd/recovery.rs": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "testing/tests/barkd/helpers.rs": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+        "testing/src/context/builders.rs": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+        "testing/src/context/mod.rs": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+        "bark/src/recovery.rs": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+        "bark/src/fallback/spend_proof.rs": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+        "server/src/database/ordinary_spend.rs": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55"
+      },
+      "archive_equals_canonical_at_frozen_proposal": true
+    }
+  },
+  "pending_guard": "Actual root/candidate/source/pin/environment guards permit only authorized preflight/listing; native runner additionally requires distinct parent-launch-admission.json and removed pending marker.",
+  "environment_requirements": [
+    "Source cached Nix before guard Python; fully unset BARK_DOUBLE_DRIVE_ACTIONS afterward; reject any presence includingfalse/0/empty in Python listing and runner.",
+    "Unset LIGHTNINGD_DOCKER_IMAGE TEST_POSTGRES_HOST USE_FILESTORE OLD_BARK_EXEC OLD_CAPTAIND_EXEC; actual future product/SQLite/PG environment only after exact root allocation.",
+    "No CLN fixture dependency; do not launch any native CLN case or add cases beyond exact3."
+  ],
+  "scope": "Exact sourceproposal discovery-window cases plus independently confirmed Exited recovery; no generic historicalSpent assumption, no default180 feasibility guarantee, no money-loss/FULLML acceptance.",
+  "source_peer_sha256": "cdb42e928acdaab063f6191747b7420dc235b88219a6f7c7b3d7c8f2b0f9545e",
+  "immutable_source_binding_sha256": "0df3cd07d8756f5586d84bc92e66134779640356acb20417ea1c577865a65703",
+  "source_archive_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/source.tar.gz",
+  "proposed_only_notice": "Root has allocated this exact existingv10 candidate. Actual parent fresh gates and separate launch admission remain mandatory; historical45 outcomes confer no result on47.",
+  "immutable_metadata_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/nextest-binaries-immutable.json",
+  "native_barkd_sha256": "40ee2c9257d2fb50f85663895b23c814b9cc321e9304e043bd38d254ab7633fe"
+}

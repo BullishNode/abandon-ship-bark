@@ -1,0 +1,16 @@
+{
+  "index": 1,
+  "name": "recovery::recovered_wallet_skips_exited_vtxo",
+  "state": "PASS",
+  "started_at": "2026-10-18T06:05:44.074658+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "owned_nextest_group": 145878,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "fb976354-1087-43c5-bbc9-a84910b828a6",
+  "test_seconds": 31.134,
+  "wall_seconds": 32.052,
+  "ended_at": "2026-10-18T06:06:16.126951+00:00"
+}

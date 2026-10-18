@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "state": "CLOSED_PENDING_SCAFFOLD_SOURCE_ONLY_NOT_ALLOCATED",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10",
+  "private_receipt": {
+    "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/PREPARATION.pending.json",
+    "sha256": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903"
+  },
+  "all_private_files": [
+    {
+      "file": "PREPARATION.pending.json",
+      "bytes": 4106,
+      "sha256": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903"
+    },
+    {
+      "file": "case01/nextest.toml",
+      "bytes": 187,
+      "sha256": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6"
+    },
+    {
+      "file": "case02/nextest.toml",
+      "bytes": 187,
+      "sha256": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2"
+    },
+    {
+      "file": "case03/nextest.toml",
+      "bytes": 187,
+      "sha256": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2"
+    },
+    {
+      "file": "fresh-listings.py",
+      "bytes": 2846,
+      "sha256": "15ecf12ddf0953b31336f34eed7aaa39ef33059ab1d91ed7ec18f067c0ad23d8"
+    },
+    {
+      "file": "launch-authorization-pending.json",
+      "bytes": 726,
+      "sha256": "1ce79e2db63494215c8e70d4fd746a4424b3ae4071a8e6ac57ff720e88367f2e"
+    },
+    {
+      "file": "preflight-static.py",
+      "bytes": 2728,
+      "sha256": "2bd4c7852d7cdf017f0b38657130d9694ec01fa01073c235a6bf2763c8e32fb3"
+    },
+    {
+      "file": "preflight.sh",
+      "bytes": 566,
+      "sha256": "585b69042e8b4969ed4a36424191b160604e00d65988884a2dd9b588edc5880b"
+    },
+    {
+      "file": "proposed-v10-pins.sha256",
+      "bytes": 2248,
+      "sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c"
+    },
+    {
+      "file": "run.sh",
+      "bytes": 563,
+      "sha256": "3299f6cad70cfa4dcb420dce6f198256530862a79add124249cc7d2bd40ecb7a"
+    },
+    {
+      "file": "selection-proof.json",
+      "bytes": 8201,
+      "sha256": "38ec6f61e3f500754c24546edb5fb93855fbd64cf881b9d23cfb771ddbd35948"
+    },
+    {
+      "file": "server-cohort.py",
+      "bytes": 8045,
+      "sha256": "bba4dc3d944f28b59d0a58cce6dd56d6dcba8c71e7d138977698563b36ddabd6"
+    }
+  ],
+  "total_private_bytes": 30590,
+  "actual_new_root_allocation": null,
+  "launch_authorized": false,
+  "protected_files_hash_verified": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/PREPARATION.pending.json": "bcc0eff57a8b58d4bb4b6453e913f3672a0f2c1a3b0de5cf0e29188c52c5bda1",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/fresh-listings.py": "3bc140daa54d52174c6f1f181560a4346a6001eb46336589a1cbb5d4617dcb6b",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/run.sh": "52c6590fdc1750a766644bae53e97ca4199c1494a24faafa48567a6f6881f89f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/launch-authorization-pending.json": "8eb829dbf7feb17c232811c27e4ff3b8acc2faeac4dfac3740016120cfb992d6",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/preflight.sh": "5dd11dffe1120b0580d74932271d827ac2b915bc81fb59e01d960a9f62e3cc83",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/preflight-static.py": "b67492aa2555729fdbf1cc2dd8dd8ceaae675bf71ee8973d285eaf97e9d11899",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/selection-proof.json": "8e7232d7c42b782650a769b4a444c6c3403fc7aba982b866c03a325f544c4ef9",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/server-cohort.py": "a449286b5aa138a4b0aac0954f7799bd84696661eeeaa9b403da5270d350478b",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15/case01/nextest.toml": "1fdd0f62b280405f4be707a8406fba248fe8544151af5277afa8d3902c6916cf",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/server-cohort.py": "6e4c23114447393abff649edd4e337db0ba8d8e6689fc10e0af06940c0091e97",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/preflight-static.py": "41e54ee9fc0b4cddddfe6eebe161f8ac8e53654c70693fcbdb6b6fc31d21bed5",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/fresh-listings.py": "fd2f31637ae88b4fdd9ad29f0277707b3f14abb56fcffead14f20af51b3a0c03",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/run.sh": "c1feadae46bd5480f74722f568e67f2056c0056ea1733ea057d6ad9d84212a7e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/preflight.sh": "897156adb749a4605d464bd84de45b51ff994f736f823df3f15f0290473e94c7",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/case01/nextest.toml": "118ae204b35b28f852b40f74f8b1326e28052209bdb7364ee165738787172e71",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/selection-proof.json": "e131eb2815ed2c55e9f7a68746063e516e147992733648e0f2e5751763d2264d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/root-allocation.json": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/parent-launch-admission.json": "439f73b462d886017a0fd8a91b1c5379362543d8338b79dc138d238fb070748c",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_lightning_backup.rs": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695"
+  },
+  "validation": {
+    "actual_cached_Nix_before_control_edits": "PASS IN_NIX_SHELL=impure/Rust1.90.0 read-only echo/version only",
+    "Python_AST": 3,
+    "TOML": 3,
+    "shell_order_source_check": 2,
+    "control_or_shell_bodies_executed": 0,
+    "new_listing": 0,
+    "preflight": 0,
+    "Cargo": 0,
+    "resources_or_actors_probed": 0,
+    "native_tests": 0,
+    "closure": "All3 entrypoints unconditional CLOSEDline19 before probes/list/write/Popen, regardless flags. No actual allocation/admission file created."
+  },
+  "limitation": "Pending scaffold only; source/control peer review and exact actual new root allocation plus parent fresh final gates remain required. Proposed actualv10 paths/hashes are historical evidence, not readiness/authorization. No execution credit."
+}

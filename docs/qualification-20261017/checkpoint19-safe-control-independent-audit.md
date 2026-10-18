@@ -1,0 +1,9 @@
+ACK: no concrete blocker in the frozen42-file batch47 safe-control subtree. EXPORT SHA28c86017c86d2e41d30c6fe2087dd3519f5e7ac0e6b76cab1f4e0d59e85870a6; all41 source/output hashes, lengths, equality flags and exact inventory match. Its sorted path+NUL+hash+newline digestd6bc2af77da5bd5ffae4c184bd45bdfb192afb1c6715c8f3131ec904c9299e3f was independently recomputed. No symlinks/extra files.
+
+All15 admission-frozen controls and12 closed-pending files match their original bytes; pending flags/marker remain historical closed evidence. All result/progress/summary/PREP/actor/native projections retain exact selected source values while omitting runtime command argv; no raw nextest/wallet/DB/config/seed/sourcepatch files are exported. Controller source naturally contains command construction, not captured runtime argv.
+
+The three native summaries exactly match formal postflight2f6bf03e and initial receipt586ea5bf names, binaries, runIDs, groups and31.134/31.595/29.929s =92.658s. Initial formal-PENDING-atcreation wording remains unchanged and is resolved additively, not rewritten. One selected barkd test across full metadata is correctly distinct from656 filtered skips. Exited/discovery/nonreuse scope and original-alive/no payment/fullML/newer-fix limits are preserved. All17 pin records match formal actual evidence; derived14 is exactly first14, with unusedCLN3 explicit.
+
+Syntax-only checks passed:22 exported JSON plus EXPORT,6 Python AST,4 bash -n,6 TOML. Bounded literal credential/private-key pattern checks over all42 text files found zero matches. Parent's full BIP39/WIF/complete-payload scan remains a publication requirement; this is not a universal secret detector or approval of the later global checkpoint payload.
+
+No controller/preflight/list/native/Cargo/resource/actor/service/privatewallet/raw-log/source/Git operations or frozen/global/rolling edits occurred. Only this new external audit and companion JSON were written.

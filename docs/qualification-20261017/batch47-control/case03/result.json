@@ -1,0 +1,16 @@
+{
+  "index": 3,
+  "name": "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+  "state": "PASS",
+  "started_at": "2026-10-18T06:06:48.703978+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "owned_nextest_group": 148754,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "51739b82-e2c1-4104-b904-869c30fd56ef",
+  "test_seconds": 29.929,
+  "wall_seconds": 31.048,
+  "ended_at": "2026-10-18T06:07:19.752013+00:00"
+}

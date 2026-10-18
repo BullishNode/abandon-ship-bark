@@ -1,0 +1,60 @@
+{
+  "result": "PASS",
+  "passed": 3,
+  "failed": 0,
+  "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+  "runtime_scope": "Three ordinary barkd recovery cases only after exact new root allocation; discovery-window or independently chain-confirmed Exited semantics only; no FULLML qualification",
+  "resource_cleanup": "NONE; all raw evidence retained",
+  "retries": 0,
+  "cases": [
+    {
+      "index": 1,
+      "name": "recovery::recovered_wallet_skips_exited_vtxo",
+      "state": "PASS",
+      "started_at": "2026-10-18T06:05:44.074658+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 145878,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "fb976354-1087-43c5-bbc9-a84910b828a6",
+      "test_seconds": 31.134,
+      "wall_seconds": 32.052,
+      "ended_at": "2026-10-18T06:06:16.126951+00:00"
+    },
+    {
+      "index": 2,
+      "name": "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+      "state": "PASS",
+      "started_at": "2026-10-18T06:06:16.139215+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 146890,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "c1529e13-32bb-48a5-9a66-e050ad1a05dc",
+      "test_seconds": 31.595,
+      "wall_seconds": 32.552,
+      "ended_at": "2026-10-18T06:06:48.691890+00:00"
+    },
+    {
+      "index": 3,
+      "name": "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+      "state": "PASS",
+      "started_at": "2026-10-18T06:06:48.703978+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 148754,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "51739b82-e2c1-4104-b904-869c30fd56ef",
+      "test_seconds": 29.929,
+      "wall_seconds": 31.048,
+      "ended_at": "2026-10-18T06:07:19.752013+00:00"
+    }
+  ]
+}

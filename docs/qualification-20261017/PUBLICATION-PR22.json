@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-18T05:31:52.994788+00:00",
+  "state": "DRAFT_OPEN_REMOTE_HEAD_BODY_AND_ALL71_ACTUAL_PATHS_VERIFIED",
+  "pr": {
+    "baseRefName": "fresh/xpub-sweep",
+    "headRefOid": "5dde8947196fb840ec616871d662e658f1c038d9",
+    "isDraft": true,
+    "number": 22,
+    "state": "OPEN",
+    "title": "testing: record recovery qualification and reviewed Lightning backup packet",
+    "url": "https://github.com/BullishNode/abandon-ship-bark/pull/22"
+  },
+  "branch": "work/fresh-test-report-checkpoint17-20261017",
+  "head": "5dde8947196fb840ec616871d662e658f1c038d9",
+  "verified_remote_head": "5dde8947196fb840ec616871d662e658f1c038d9",
+  "body_verified_exact_file_content": true,
+  "actual_paginated_PR_paths": 71,
+  "payload_files_plus_manifest": 71,
+  "all_actual_PR_paths_exact_report_allowlist": true,
+  "manifest_sha256": "80e2c498bb7e5cc3c6f9cb8f60bcc2555a729f432f5e7c885dee7efe6d5913ed",
+  "independent_publication_audit_sha256": "b20f11f7cfc29328eaf01ee9bd5d84a82b0a194c0f67f3070f857384e1d7eac4",
+  "scope": "Report-onlycheckpoint18fixed245/230PASS15preservedFAIL/228unique/218nextest/233native12component/456mixedrows. Separate rootFAIR1Mfinitecut and P07v2source-only, no ML/productionpromotion.",
+  "all16_owned_Rust_hashes_preserved_unstaged": true,
+  "safe_payload18_frozen": true,
+  "create_response_network_reset": "ghcreate response connectionreset afterservercreated PR22; queriedexacthead and adoptedactualexistingdraft. No duplicatecreate retry."
+}

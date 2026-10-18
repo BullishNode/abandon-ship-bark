@@ -1,0 +1,80 @@
+{
+  "kind": "INDEPENDENT_SOURCE_ONLY_PEER_REVIEW_ORDINARY_THREE_BARKD_PROPOSAL",
+  "at": "2026-10-18T05:52:13.246888+00:00",
+  "state": "ACCEPT_SOURCE_SCOPE_NO_CONCRETE_BLOCKER_NOT_ALLOCATION",
+  "proposal": {
+    "json": "v15-proposed-ordinary-barkd-regressions.json",
+    "json_sha256": "9ae492d696dba9d010ca4873f1cc3b8720197d2dd6429f42801dd138d0087c0d",
+    "md": "v15-proposed-ordinary-barkd-regressions.md",
+    "md_sha256": "c428edef840625fd63a8bcf99c5d9703ccd37bc479af27eb301a7d6ffbe50f82"
+  },
+  "cases": [
+    {
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_skips_exited_vtxo",
+      "file": "testing/tests/barkd/recovery.rs",
+      "whole_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "function_sha256": "f7f7ece461c7faf3e1b9348c8a5f8fbe8c04c9dab0b03ba688990a11001aeecd",
+      "brace_inclusive_body_sha256": "9d85cfa3b507ac5d0771b228fc2125d0fcbe64ae9b4cad9407e06344dbb2373b",
+      "disposition": "SOURCE_ACCEPT_NO_RUNTIME_ALLOCATION_OR_CREDIT",
+      "scope": "Real unilateral exit progresses via native daemon; new same-seed wallet stores exact ID as Exited, not off-chain money. No final claim/drain/Core6/conservation result.",
+      "case_id_reserved": null
+    },
+    {
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+      "file": "testing/tests/barkd/recovery.rs",
+      "whole_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "function_sha256": "9900105e71d85b6f14fd4cc33c6dea2dd0355e18a7c75777a5656e720681ec81",
+      "brace_inclusive_body_sha256": "da4c9d33959ffb3d922b2f5b202766f4f66d521ffae81821283f15c236aba705",
+      "disposition": "SOURCE_ACCEPT_NO_RUNTIME_ALLOCATION_OR_CREDIT",
+      "scope": "Discovery window/exact received ID only. No recovered Spendable state, successful payment, all-bucket/value/Core6/custody result; xpub variant next!=old excludes reissuing that address only, not exact index advancement.",
+      "case_id_reserved": null
+    },
+    {
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+      "file": "testing/tests/barkd/recovery.rs",
+      "whole_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "function_sha256": "9b5ea48fc57fd4e62121498f3a0b0802fe13c1d1e8922640b54467a9f47d13f5",
+      "brace_inclusive_body_sha256": "3d0cbe7a1f5af1c312bb94fddfa099e6fe763ca29262ae9e516d092b32626b3c",
+      "disposition": "SOURCE_ACCEPT_NO_RUNTIME_ALLOCATION_OR_CREDIT",
+      "scope": "Discovery window/exact received ID only. No recovered Spendable state, successful payment, all-bucket/value/Core6/custody result; xpub variant next!=old excludes reissuing that address only, not exact index advancement.",
+      "case_id_reserved": null
+    }
+  ],
+  "verified": {
+    "selected_exact_literals": 3,
+    "all_expected_binary": "ark-testing::barkd",
+    "all_unignored_in_existing_saved_listing": true,
+    "saved_listing_sha256": "5d5172fc5cccbe79e76adc4c819e749da1755a6fa893050f0b369c0d436d557b",
+    "saved_barkd_name_count": 78,
+    "original_filter_mismatch_is_not_execution": true,
+    "coverage_rows_read": 456,
+    "coverage_sha256": "c297a23c2c9c643659c7549747cd30f18f469cb93bb00fa9eb6e870c44807083",
+    "selected_PASS_FAIL_coverage_hits": 0,
+    "curated_native_receipt_files_hash_verified": 49,
+    "exact_literal_receipt_hits": 0,
+    "archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "all7_proposal_archive_canonical_file_hashes_match": true,
+    "all3_function_and_brace_inclusive_body_hashes_match": true,
+    "exited_helper_file_sha256": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+    "exited_helper_function_sha256": "511a6ff867a6a517fea002991dcac43e6e069177c4ab695f886d825d00d5ef8e",
+    "exited_helper_brace_inclusive_body_sha256": "57f969e41feda872db67e12fa3deb588ba0962649292207b6a57128b4199d83f"
+  },
+  "concrete_blockers": [],
+  "scope_and_gates": [
+    "Exit case uses independently chain-confirmed actual VTXO-point Exited semantics; gap pair avoids the strict historical Spent partition. Unsafe server-word and known old fixed-net/conditional-history cases remain excluded.",
+    "Gap comments still say index59; reserved identity child0 can make actual address convention60. Actual narrow50/wide100/ID oracles do not depend on magic59.",
+    "All original actors remain alive; fresh same-seed databases are not absent-original/offline/physical backups. No FULL ML, production or release credit.",
+    "Default180/serial1/retries0/firstFAIL and actual candidate/body/version/resource/exact unignored singleton listing/root packet/parent admission remain future gates. No CLN needed; native xpub100000 scan and exit120s helper have unmeasured total180 feasibility.",
+    "Archive/listing proof binds frozen v10 only; proposal name V15 is not a new immutable candidate. A fresh explicit packet may allocate the same reviewed bodies on v10; this peer receipt itself grants no launch.",
+    "Absence claims are limited to the inspected456-row CSV and49 named curated safe receipts, not all possible external/root campaigns. No IDs or counts reserved."
+  ],
+  "actions": {
+    "only_two_new_external_peer_report_files_written": true,
+    "existing_proposal_reports_COVERAGE_STATUS_source_metadata_listing_runtime_Cargo_Git_mutations": 0,
+    "new_execution_or_count_credit": 0
+  },
+  "companion_markdown_sha256": "a747137460dfed61ceb54bdc8d300131070fc8dc2eafabdb8714ac22622ab501"
+}

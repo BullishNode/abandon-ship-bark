@@ -1,0 +1,16 @@
+{
+  "state": "CLOSED_NO_NEW_ROOT_ALLOCATION_NO_PARENT_ADMISSION",
+  "batch": "batch47-ordinary-recovery-three-v10",
+  "artifact_readiness": false,
+  "execution_authorized": false,
+  "listing_authorized": false,
+  "preflight_authorized": false,
+  "native_authorized": false,
+  "proposed_cases": [
+    "recovery::recovered_wallet_skips_exited_vtxo",
+    "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+    "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub"
+  ],
+  "root_actual_allocation": null,
+  "pending_until": "Explicit actual root allocation plus source/control peer ACK and parent fresh candidate/listing/resource/hash/launch admission. Optionalv10 evidence is not authorization."
+}

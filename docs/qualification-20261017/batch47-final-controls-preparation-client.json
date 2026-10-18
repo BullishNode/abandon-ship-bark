@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "state": "FINAL_CONTROLS_FROZEN_PARENT_PREFLIGHT_AND_LAUNCH_ADMISSION_PENDING",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10",
+  "PREPARATION_sha256": "5c5e0cbd9967e4f552a5544877d84a14e7adf6521c19cb669f780b1566abd81b",
+  "allocation_sha256": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+  "static_freeze": {
+    "selection-proof.json": "fa2f13e8561734e9fcdaf95bed20498436c667e774a400f70c32b0fd8ecdf31c",
+    "root-allocation.json": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+    "runtime-pins.sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+    "source-peer.json": "cdb42e928acdaab063f6191747b7420dc235b88219a6f7c7b3d7c8f2b0f9545e",
+    "immutable-source-proof.json": "0df3cd07d8756f5586d84bc92e66134779640356acb20417ea1c577865a65703",
+    "server-cohort.py": "74500c9b2ee1c2c328aa1c743222aae9533288c1c90b3c8c6a68dd5a8eaeb83d",
+    "preflight-static.py": "d38c2d1a501b437f89a1b0167aa3ecb6e28710a7391b11ab485a1568db6e8c3b",
+    "fresh-listings.py": "d899735ed1b335b0d142199988a0b918fa5cc96ce815c4b1f69b90f97955b796",
+    "preflight.sh": "b2e933abfb243a23030730ba745a30975707e5f77cb0bb93143ea580548e942f",
+    "run.sh": "498a7835342f5994a29b1e2a9ff95b33f1110b3f2b1c47507c30bff5ece6a58e",
+    "case01/nextest.toml": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+    "case02/nextest.toml": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+    "case03/nextest.toml": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2"
+  },
+  "required_parent_freeze_count": 15,
+  "preserved_pending": {
+    "subdirectory": "preserved-closed-pending",
+    "file_count": 12,
+    "private_receipt_sha256": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903",
+    "all12bytes_verified": true
+  },
+  "parent_commands": {
+    "preflight": [
+      "docker",
+      "exec",
+      "-u",
+      "1000:1000",
+      "abandon-fresh-runtime-20261017",
+      "bash",
+      "/fresh-cache/testing-track-20261017/batch47-ordinary-recovery-three-v10/preflight.sh"
+    ],
+    "after_fresh_gates_and_separate_admission": [
+      "docker",
+      "exec",
+      "-u",
+      "1000:1000",
+      "abandon-fresh-runtime-20261017",
+      "bash",
+      "/fresh-cache/testing-track-20261017/batch47-ordinary-recovery-three-v10/run.sh"
+    ]
+  },
+  "validation": {
+    "actual_cached_Nix_before_edits": "impure/Rust1.90.0 read-only confirmation",
+    "AST": 3,
+    "bash_n": 2,
+    "TOML": 3,
+    "control_bodies_executed": 0,
+    "preflight": 0,
+    "listing": 0,
+    "resource_actor_probe": 0,
+    "native": 0,
+    "Cargo": 0,
+    "immutable_metadata_and_pin_identity_guards": "Actual immutable+runtime metadata plus source/archive/bundle/nativebarkd identities are guarded; only static source validation performed by author"
+  },
+  "parent_admission": "ABSENT; marker PRESENT; native launch blocked",
+  "limitation": "No preflight/list/resource/native execution or result credit by author. Final controls require independent peer and parent fresh gates."
+}

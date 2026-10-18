@@ -1,0 +1,14 @@
+{
+  "headRefOid": "5dde8947196fb840ec616871d662e658f1c038d9",
+  "mergeCommit": {
+    "oid": "0496e057fe8cedde99c9b85edab67035633a8f25"
+  },
+  "mergedAt": "2026-10-18T05:39:59Z",
+  "number": 22,
+  "state": "MERGED",
+  "url": "https://github.com/BullishNode/abandon-ship-bark/pull/22",
+  "verified_at": "2026-10-18T05:41:12.708434+00:00",
+  "root_review_path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/pr22-root-structural-review.json",
+  "root_review_sha256": "0cf00d83264e2f63e45a10218c0b57fae630b9abf985993c9a76f657c29f57ae",
+  "scope": "Read-only GitHub merge verification; historical publication receipt/fixed head/payload unchanged. No merge or candidate promotion by testing track."
+}

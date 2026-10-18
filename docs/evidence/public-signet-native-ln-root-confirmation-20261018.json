@@ -1,0 +1,167 @@
+{
+  "at": "2026-10-18T03:46:26.585119+00:00",
+  "cases": {
+    "failed_send": {
+      "child": {
+        "blockhash": "00000011e4efb066deb852f2fa89d4f72debd2faef88d3cdc865e7b557e73d77",
+        "confirmations": 19,
+        "fee_sat": 363,
+        "height": 326824,
+        "inputs": [
+          {
+            "point": "556ea567cc4a142457c03585af27e8d07a38753aa97c795dc2dc37bf73eb2e2f:2",
+            "sat": 0
+          },
+          {
+            "point": "8e60b79edef0d909c8008c3a1f1eb68384b47058a21edfae1be2254880fd7103:2",
+            "sat": 20000
+          }
+        ],
+        "outputs": [
+          {
+            "sat": 19637,
+            "script": "512006f7de3d966873193731b622ba34fe89dad9f1abf3ce7deb0fd2a21c9ccd6fac",
+            "vout": 0
+          }
+        ],
+        "txid": "02f1a1939c3b50392f662953c8a3cc9e0aa526d3418ccd65d8d429daf0af1d11"
+      },
+      "parent": {
+        "blockhash": "00000011e4efb066deb852f2fa89d4f72debd2faef88d3cdc865e7b557e73d77",
+        "confirmations": 19,
+        "fee_sat": 0,
+        "height": 326824,
+        "inputs": [
+          {
+            "point": "033bb9d8ed94869f86db30207d95019f359d030ca73c0ae85f21f925290299ff:0",
+            "sat": 30000
+          }
+        ],
+        "outputs": [
+          {
+            "sat": 28670,
+            "script": "0014d1aec760c6412136dd1c5864b60ab2eba31275cc",
+            "vout": 0
+          },
+          {
+            "sat": 1330,
+            "script": "5120a674bf9f30e1eab58c3edb0cce91e0b0455ab4302787276f061ccca5b1930ade",
+            "vout": 1
+          },
+          {
+            "sat": 0,
+            "script": "51024e73",
+            "vout": 2
+          }
+        ],
+        "txid": "556ea567cc4a142457c03585af27e8d07a38753aa97c795dc2dc37bf73eb2e2f"
+      },
+      "recovery": {
+        "blockhash": "00000013944e884ec611e0be5e56c3d1e1a4b8c96a8dd0b0ded7c7e2ae61534b",
+        "confirmations": 10,
+        "fee_sat": 178,
+        "height": 326833,
+        "inputs": [
+          {
+            "point": "556ea567cc4a142457c03585af27e8d07a38753aa97c795dc2dc37bf73eb2e2f:0",
+            "sat": 28670
+          },
+          {
+            "point": "033bb9d8ed94869f86db30207d95019f359d030ca73c0ae85f21f925290299ff:1",
+            "sat": 29542
+          }
+        ],
+        "outputs": [
+          {
+            "sat": 58034,
+            "script": "0014e401edc4d85cbf4c41231d0414890ff8201282ba",
+            "vout": 0
+          }
+        ],
+        "txid": "0e4f2b223e99f27fef775a84811269e307fb053f7a6d8f67d1e58930f88f6fa7"
+      },
+      "recovery_destination_output_unspent": true
+    },
+    "receive": {
+      "child": {
+        "blockhash": "0000000dce2962dc0ef1e985cb0ac81bc9d9b297cc6b93d18f8181e3196c54d9",
+        "confirmations": 26,
+        "fee_sat": 363,
+        "height": 326817,
+        "inputs": [
+          {
+            "point": "68b1e9569dbd34fcfac02a40df82d15ff679cbb54a90201b76746869a4a1cbcf:5",
+            "sat": 20000
+          },
+          {
+            "point": "20f119e07cbe1f9949f75813ef705671dee4c8ae81fd665317c26ac920a7247a:2",
+            "sat": 0
+          }
+        ],
+        "outputs": [
+          {
+            "sat": 19637,
+            "script": "5120dd1d074abb5a752b628ac4d3832ac490adda3a5c14f8dd0b8862d2298a492591",
+            "vout": 0
+          }
+        ],
+        "txid": "a3f00c0ef1f037d0d71c105237107fa576b74fc3629d56feb6b02aac7181b94a"
+      },
+      "parent": {
+        "blockhash": "0000000dce2962dc0ef1e985cb0ac81bc9d9b297cc6b93d18f8181e3196c54d9",
+        "confirmations": 26,
+        "fee_sat": 0,
+        "height": 326817,
+        "inputs": [
+          {
+            "point": "52aa108da2b8341e03b7b6b050aaabb7ee0f2513b22810d730de1d6dd26ea000:0",
+            "sat": 20000
+          }
+        ],
+        "outputs": [
+          {
+            "sat": 3890,
+            "script": "0014f6cb317634543f8564334d7262a98dd402f066a5",
+            "vout": 0
+          },
+          {
+            "sat": 16110,
+            "script": "51209e94aa8ab38ed577aa50a5e7a2c92edb582acab4d4d5654aa1e40e484641c7e3",
+            "vout": 1
+          },
+          {
+            "sat": 0,
+            "script": "51024e73",
+            "vout": 2
+          }
+        ],
+        "txid": "20f119e07cbe1f9949f75813ef705671dee4c8ae81fd665317c26ac920a7247a"
+      },
+      "recovery": {
+        "blockhash": "00000000fd123db0ee57e491157cfbba5792325ee86adda80a34dcd3215740c4",
+        "confirmations": 20,
+        "fee_sat": 110,
+        "height": 326823,
+        "inputs": [
+          {
+            "point": "20f119e07cbe1f9949f75813ef705671dee4c8ae81fd665317c26ac920a7247a:0",
+            "sat": 3890
+          }
+        ],
+        "outputs": [
+          {
+            "sat": 3780,
+            "script": "0014e401edc4d85cbf4c41231d0414890ff8201282ba",
+            "vout": 0
+          }
+        ],
+        "txid": "43fb70c6396532ce7161cb275986901569045f676947d9a63a508b95e16d64a0"
+      },
+      "recovery_destination_output_unspent": true
+    }
+  },
+  "height": 326842,
+  "limits": "Actual canonical tx/prevout/fee/registered-script and recoverydestination comparison. Registration authentication, seed-only origination and once-only dispatch inherit frozen original native journals; no new wallet/actor/actions or totaloperatorcustody/Noah/finalv9candidate claim.",
+  "state": "ROOT_INDEPENDENT_CURRENT_CORE_BOTH_LN_PAYOUTS_AND_SEED_DRAINS_CONFIRMED",
+  "reader_erratum": "Initialread-only verifier mishandled CoreCLI empty/null gettxout reply as emptystring; priorprogramretained, no financialassertion changed and no moneyaction/retry."
+}

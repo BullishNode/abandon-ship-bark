@@ -100,8 +100,14 @@ async fn own_claim_and_path_reorg_cold_reopen_offline_rebuilds_from_retained_fun
 
 #[tokio::test]
 async fn own_claim_tail_reorg_cold_reopen_offline_rebuilds_from_confirmed_signed_prefix() {
-	tokio::time::timeout(Duration::from_secs(180), Box::pin(run_with_prefix_fork(true, true, true))).await
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(run_with_prefix_fork(true, true, true, false))).await
 		.expect("lost signed tail must recover from its surviving prefix and spent funding root within 180s");
+}
+
+#[tokio::test]
+async fn own_claim_tail_reorg_cold_reopen_offline_spends_exact_recovered_principal() {
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(run_with_prefix_fork(true, true, true, true))).await
+		.expect("recovered signed-prefix principal must actually settle to the caller's destination within 180s");
 }
 
 async fn run(later_claim_fork: bool) {
@@ -109,13 +115,16 @@ async fn run(later_claim_fork: bool) {
 }
 
 async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
-	run_with_prefix_fork(later_claim_fork, remove_claim_path, false).await;
+	run_with_prefix_fork(later_claim_fork, remove_claim_path, false, false).await;
 }
 
-async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, keep_signed_prefix: bool) {
+async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, keep_signed_prefix: bool, settle_recovered: bool) {
 	assert!(!remove_claim_path || later_claim_fork);
 	assert!(!keep_signed_prefix || remove_claim_path);
-	let ctx = TestContext::new(if keep_signed_prefix {
+	assert!(!settle_recovered || keep_signed_prefix);
+	let ctx = TestContext::new(if settle_recovered {
+		"bark_sdk/qualification_own_claim_prefix_settlement"
+	} else if keep_signed_prefix {
 		"bark_sdk/qualification_own_claim_prefix_reorg"
 	} else if remove_claim_path {
 		"bark_sdk/qualification_own_claim_path_reorg"
@@ -293,6 +302,8 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	gate.refuse.store(true, Ordering::SeqCst);
 	let alternate_miner = ctx.bitcoind().get_new_address();
 	let destination = ctx.bitcoind().get_new_address();
+	// Allocate the later caller-selected destination before cold Core unloads its wallet.
+	let settlement_destination = settle_recovered.then(|| ctx.bitcoind().get_new_address());
 	// Core's control wallet is not automatically loaded after a cold restart.
 	let claim_fork_miner = later_claim_fork.then(|| ctx.bitcoind().get_new_address());
 	core.invalidate_block(&paid_block).unwrap();
@@ -702,7 +713,9 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 		}
 		tokio::time::sleep(Duration::from_millis(100)).await;
 	}
-	reopened.stop_daemon_wait().await.unwrap();
+	// The settlement-only variant keeps this same default daemon running for
+	// observation of a fresh explicit app claim, after recovery has already passed.
+	if !settle_recovered { reopened.stop_daemon_wait().await.unwrap(); }
 	let still_stopped = tokio::time::timeout(Duration::from_secs(2),
 		tokio::net::TcpStream::connect(stopped_listener)).await.unwrap().expect_err("Ark must remain stopped after the own-claim fork");
 	assert_eq!(still_stopped.kind(), std::io::ErrorKind::ConnectionRefused);
@@ -750,5 +763,134 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 		"path_txids": signed_path.iter().map(|item| item.tx.compute_txid()).collect::<Vec<_>>(),
 		"current_native_onchain_sat": second_canonical_local.to_sat(),
 		"scope": "same original seed/store; default daemon only after cold reopen; no controller claim broadcast, new drain, BDK-owned claim, Ark, or ordinary-spend resurrection"
+	})).unwrap()).unwrap();
+	if !settle_recovered { return; }
+
+	// Recovery above is autonomous. Only now does the app request a NEW claim
+	// through the same public signing/broadcast path as `bark exit claim`.
+	assert_eq!(recovered_by, "actionable_exact_original", "this variant requires an actually recovered unspent entitlement before the app spends it");
+	let settlement_destination = settlement_destination.unwrap();
+	assert_ne!(settlement_destination.script_pubkey(), destination.script_pubkey());
+	assert!(!OnchainWalletTrait::is_mine(&*onchain.read().await, &settlement_destination.script_pubkey()).await.unwrap());
+	let recovered_claimable = reopened.exit_mgr().list_claimable().await;
+	assert_eq!(recovered_claimable.len(), 1);
+	assert_eq!(recovered_claimable[0].id(), owned.id());
+	principal(reopened.balance().await.unwrap(), sat(100_000));
+	let recovered_leaf = core.get_tx_out(&owned.point().txid, owned.point().vout, Some(true)).unwrap().unwrap();
+	assert!(recovered_leaf.confirmations >= owned.exit_delta().to_u32());
+	assert_eq!(recovered_leaf.value, sat(100_000));
+	assert_eq!(recovered_leaf.script_pub_key.script().unwrap(), previous.output[owned.point().vout as usize].script_pubkey);
+	let settled_claim = reopened.exit_mgr().drain_exits(&recovered_claimable, &reopened, settlement_destination.clone(),
+		Some(bitcoin::FeeRate::from_sat_per_vb(2).unwrap())).await.unwrap().extract_tx().unwrap();
+	assert_ne!(settled_claim.compute_txid(), claim.compute_txid(), "a new app claim must not replay the orphaned transaction");
+	assert_eq!(settled_claim.input.len(), 1);
+	assert_eq!(settled_claim.input[0].previous_output, owned.point());
+	assert_eq!(settled_claim.output.len(), 1);
+	assert_eq!(settled_claim.output[0].script_pubkey, settlement_destination.script_pubkey());
+	let settled_fee = recovered_leaf.value.checked_sub(settled_claim.output[0].value).unwrap();
+	assert!(settled_fee > sat(0) && settled_claim.output[0].value > sat(0));
+	reopened.chain().broadcast_tx(&settled_claim).await.unwrap();
+	core.generate_to_address(6, &second_miner).unwrap();
+	assert_eq!(ctx.bitcoind().await_transaction(settled_claim.compute_txid()).await, settled_claim);
+	let settled_info = core.custom_get_raw_transaction_info(settled_claim.compute_txid(), None).unwrap().unwrap();
+	assert!(settled_info.confirmations.unwrap_or(0) >= 6);
+	let settled_block = settled_info.blockhash.unwrap();
+	let settled_height = core.get_block_header_info(&settled_block).unwrap().height as u64;
+	assert_eq!(core.get_block_hash(settled_height).unwrap(), settled_block);
+	let settled_outpoint = OutPoint::new(settled_claim.compute_txid(), 0);
+	let delivered = core.get_tx_out(&settled_outpoint.txid, settled_outpoint.vout, Some(true)).unwrap().unwrap();
+	assert!(delivered.confirmations >= 6);
+	assert_eq!(delivered.value, settled_claim.output[0].value);
+	assert_eq!(delivered.script_pub_key.script().unwrap(), settlement_destination.script_pubkey());
+	assert_eq!(delivered.value + settled_fee, recovered_leaf.value);
+	assert!(core.get_tx_out(&owned.point().txid, owned.point().vout, Some(true)).unwrap().is_none());
+	tokio::time::timeout(Duration::from_secs(15), async {
+		loop {
+			ordinary_stays_spent(&reopened, &db, historic.id(), &historic_bytes).await;
+			let ancestor = self_send_source.unwrap();
+			assert_eq!(db.get_wallet_vtxo(ancestor).await.unwrap().unwrap().state, VtxoState::Spent);
+			assert!(reopened.exit_mgr().get_exit_vtxo(ancestor).await.is_none());
+			let exit = db.get_exit_vtxo_entry(&owned.id()).await.unwrap().unwrap();
+			if matches!(exit.state, ExitState::Claimed(done) if done.txid == settled_claim.compute_txid()
+				&& done.block.hash == settled_block && u64::from(done.block.height.to_u32()) == settled_height)
+				&& exit.movement_id == Some(movement)
+				&& db.get_movement_by_id(movement).await.unwrap().status == MovementStatus::Successful
+				&& reopened.balance().await.unwrap().total() == sat(0) { break; }
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}).await.expect("default daemon must reconcile actual settlement of the recovered principal on its original movement");
+	reopened.stop_daemon_wait().await.unwrap();
+	principal(reopened.balance().await.unwrap(), sat(0));
+	assert_eq!(db.get_wallet_vtxo(owned.id()).await.unwrap().unwrap().state, VtxoState::Exited);
+	assert!(reopened.exit_mgr().list_claimable().await.is_empty());
+	assert_eq!(reopened.get_full_vtxo(owned.id()).await.unwrap().serialize(), owned_bytes);
+	let settled_snapshot = db.get_fallback_snapshot().await.unwrap();
+	assert!(settled_snapshot.awaiting_sync && settled_snapshot.verified_payouts.is_empty());
+	assert!(settled_snapshot.verified_terminals.values().any(|proof| proof.transaction == settled_claim
+		&& proof.confirmation.hash == settled_block));
+	assert!(!settled_snapshot.verified_terminals.values().any(|proof| proof.transaction == claim));
+	let settled_history = reopened.history().await.unwrap();
+	let settled_debits = settled_history.iter().filter(|entry| entry.input_vtxos.contains(&owned.id())
+		&& matches!(entry.subsystem.name.as_str(), "bark.exit" | "abandon.fallback_payout")
+		&& entry.effective_balance.to_sat() == -100_000).collect::<Vec<_>>();
+	assert_eq!(settled_debits.len(), 1);
+	assert_eq!(settled_debits[0].id, movement);
+	assert_eq!(settled_debits[0].status, MovementStatus::Successful);
+	assert_eq!(settled_history.iter().filter(|entry| matches!(entry.subsystem.name.as_str(), "bark.exit" | "abandon.fallback_payout"))
+		.map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), -100_000);
+	assert_eq!(settled_history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0);
+	assert!(settled_history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout")
+		.all(|entry| entry.status != MovementStatus::Successful || (
+			entry.metadata["fallback"]["disposition"] == "exited"
+			&& entry.metadata["fallback"]["txid"] == serde_json::json!(settled_claim.compute_txid())
+			&& entry.effective_balance.to_sat() == 0 && entry.offchain_fee == sat(0))),
+		"only the new canonical claim may provide a successful fallback receipt");
+	let mut settlement_outputs = Vec::new();
+	let mut source_spenders = Vec::new();
+	for height in claim_fork_height + 1..=core.get_block_count().unwrap() {
+		let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
+		for transaction in block.txdata {
+			if transaction.input.iter().any(|input| input.previous_output == owned.point()) {
+				source_spenders.push(transaction.compute_txid());
+			}
+			for (vout, output) in transaction.output.iter().enumerate() {
+				assert!(!parent.output.iter().chain(&child.output).any(|old| old.value > sat(0) && old.script_pubkey == output.script_pubkey),
+					"no orphaned fallback recipient, operator or fee-child output may be paid alongside settlement");
+				assert_ne!(output.script_pubkey, destination.script_pubkey(), "the old claim destination must remain unpaid");
+				if output.script_pubkey == settlement_destination.script_pubkey() {
+					settlement_outputs.push((OutPoint::new(transaction.compute_txid(), vout as u32), output.value));
+				}
+			}
+		}
+	}
+	assert_eq!(settlement_outputs, vec![(settled_outpoint, delivered.value)]);
+	assert_eq!(source_spenders, vec![settled_claim.compute_txid()]);
+	assert!(core.get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().is_none());
+	assert!(onchain.read().await.list_transactions().iter().all(|tx| tx.compute_txid() != settled_claim.compute_txid()));
+	let mut settled_onchain = sat(0);
+	for coin in onchain.read().await.list_unspent() {
+		let actual = core.get_tx_out(&coin.outpoint.txid, coin.outpoint.vout, Some(true)).unwrap().unwrap();
+		assert_eq!(actual.value, coin.txout.value);
+		assert_eq!(actual.script_pub_key.script().unwrap(), coin.txout.script_pubkey);
+		settled_onchain += actual.value;
+	}
+	assert_eq!(onchain.read().await.balance().total(), settled_onchain);
+	assert_eq!(settled_onchain, second_canonical_local, "claim miner fee must come from recovered principal, not consume BDK fee change");
+	let still_stopped = tokio::time::timeout(Duration::from_secs(2),
+		tokio::net::TcpStream::connect(stopped_listener)).await.unwrap().expect_err("Ark must stay offline through actual recovered-principal settlement");
+	assert_eq!(still_stopped.kind(), std::io::ErrorKind::ConnectionRefused);
+	std::fs::write(ctx.datadir.join("recovered-principal-settled-proof.json"), serde_json::to_vec_pretty(&serde_json::json!({
+		"source": owned.id().to_string(), "funding_root": owned.chain_anchor().to_string(),
+		"retained_prefix_frontier": retained_frontier.map(|point| point.to_string()),
+		"original_body_sha256": sha256::Hash::hash(&owned_bytes).to_string(), "movement": movement,
+		"recovered_by_before_drain": recovered_by, "claim": bitcoin::consensus::encode::serialize_hex(&settled_claim),
+		"outpoint": settled_outpoint, "script": settlement_destination.script_pubkey().to_hex_string(),
+		"gross_sat": recovered_leaf.value.to_sat(), "delivered_sat": delivered.value.to_sat(), "actual_miner_fee_sat": settled_fee.to_sat(),
+		"block": settled_block, "height": settled_height, "confirmations": delivered.confirmations,
+		"replacement_tip": core.get_block_count().unwrap(), "balance_total_sat": 0, "movement_status": "successful",
+		"principal_debit_count": settled_debits.len(), "ordinary_spent": historic.id().to_string(),
+		"self_send_source": self_send_source.map(|id| id.to_string()), "old_claim_txid": claim.compute_txid(),
+		"current_native_onchain_sat": settled_onchain.to_sat(), "settlement_outputs": settlement_outputs, "source_spenders": source_spenders,
+		"scope": "same seed AND store; autonomous default-daemon prefix recovery precedes explicit fresh app claim via native API; actual Core6 delivery, no old claim replay or duplicate known-script payment"
 	})).unwrap()).unwrap();
 }

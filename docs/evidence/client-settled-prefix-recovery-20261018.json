@@ -1,0 +1,110 @@
+{
+  "recorded_at": "2026-10-18T22:28:03.472040+00:00",
+  "scope": "One genuine surviving-prefix recovery followed by an explicit fresh supported native app withdrawal; regtest",
+  "selector": "qualification_paid_reorg::own_claim_tail_reorg_cold_reopen_offline_spends_exact_recovered_principal",
+  "outcome": "PASS",
+  "run_id": "1951b9ce-e34a-4813-bd8a-5076474dadd5",
+  "native_seconds": 43.538,
+  "wrapper_seconds": 44.295,
+  "retries": 0,
+  "source": {
+    "source_head": "9b84666076d1d3e4a0adf76401f3475d72f67cd9",
+    "source_manifest_sha256": "e1fe0ee0f4a42cf6d7b6d725f63157d20a3363b5a5129c2cc7cfc7e34443c00c",
+    "source_archive_sha256": "fe58c1507f9b2ed8d7ed0e0d541e2d0cc7671891cdea30459b326d6653a98b6c",
+    "bundle_manifest_sha256": "7594a9f477b351127bcd13844357c4181076119230d317c88dfa1ff7a42e62d6",
+    "runtime_metadata_sha256": "bd647d48d9930cc09892b4ccc612fe66b536cf72bc27232794e014f1ebd8a8e8",
+    "fixture_sha256": "ba26e57bf1f0dabbdae099facbd4fb938465768f48a66b74d3953c6d36bf248f",
+    "actual_product_label": "33fa2a3ef7ba98b8748a39ba86c657d32b97b2de",
+    "inheritance": "Fresh mandatory checks+SDK metadata; four actual33fa product ELFs,890unitsPASS1skip, unused server/barkd entries explicitly inherited. No product or unit rebuild/re-execution by this terminal."
+  },
+  "public_paid_receipt_sha256": "19bf79c11b2ab1c36faccb6d25e725cb5140545f7855ae25f2f5dd14c1c6ca57",
+  "predrain_unpaid_receipt_sha256": "1cc9bdd9a55c5ac30484165a0a423a8fb9d97ea38e4017c392eb5ad5b973f0b8",
+  "payment": {
+    "gross_entitlement_sat": 100000,
+    "delivered": {
+      "outpoint": "b655dbadcd4246cf6936417d4df558302cd69111a99f94fcbc3f3c5bd5892dea:0",
+      "sat": 99766,
+      "script": "0014f97f14753cf4704a1d0715b6d594c4c39761dd69",
+      "confirmation": {
+        "height": 173,
+        "block": "5c92360df9976092d68739ad33f22962dc00488d09baf1c696dd07c9950369e6",
+        "confirmations": 6
+      },
+      "unspent": true
+    },
+    "actual_claim_miner_fee_sat": 234,
+    "claim_txid": "b655dbadcd4246cf6936417d4df558302cd69111a99f94fcbc3f3c5bd5892dea",
+    "claim_raw_sha256": "8c8a2ca71964f002562b589dae3c64cbb469dd6211fed6bcb8b0d8e913d2ced7",
+    "source_outpoint": "b64cb9d099b3229ba3afbf4a75f57b3930827b3f0886d770e56c55ef2436552b:0",
+    "source_sat": 100000,
+    "source_current_spender": "b655dbadcd4246cf6936417d4df558302cd69111a99f94fcbc3f3c5bd5892dea",
+    "old_claim": {
+      "txid": "0e365076ef9d917600a6595fa525b1a4c771474882fcb24bbb9e304835b84365",
+      "output_sat": 99766,
+      "fee_sat": 234,
+      "current_canonical": false,
+      "occurrences": [
+        {
+          "height": 162,
+          "block": "47ea0989b72ef7a526bcd38b8f3efea8fbd6ae34f52a22634d620cefc77d37c2",
+          "canonical": false,
+          "raw_sha256": "ae122878edfe1c739e468fcff379438f79ec90d2545abe8a353b591847fe6988"
+        }
+      ]
+    },
+    "new_claim_distinct_from_old": true,
+    "native_balance_principal_sat": 0,
+    "movement": {
+      "id": 7,
+      "status": "Successful",
+      "original_principal_debit_count": 1,
+      "effective_debit_sat": -100000,
+      "total_history_net_sat": 0,
+      "evidence": "Passing source/native oracles807-847 and final public marker; no independent financial DB read."
+    },
+    "native_BDK_fee_wallet_sat": 394355,
+    "fee_policy_distinction": "Fresh explicit native drain subtracts its measured minerfee from recovered principal. BDK-funded prior exitCPFP costs and orphaned watchman fallbackchild are separately accounted; no invented universal fee policy."
+  },
+  "postflight": {
+    "sha256": "306a3c38cd638acf4be443431f20e7bdf26a63a314794c92a49d23ab5b15c8fa",
+    "state": "ACTUAL_ONE_PASS_POSTFLIGHT_PASS",
+    "all16pins_unchanged": true,
+    "all12_controls_unchanged": true,
+    "flags_absent_after_cached_Nix": [
+      "BARK_DOUBLE_DRIVE_ACTIONS",
+      "LIGHTNINGD_DOCKER_IMAGE"
+    ],
+    "own_actor_pids": [],
+    "unreadable_pids": [],
+    "compiler_pids": [],
+    "process_actions": [],
+    "slot2_released": true,
+    "current_runtime_authority": false
+  },
+  "independent_accounting": {
+    "report_sha256": "edd4c3d13386dad60fd691221633fe0513e68beec25a377ea1cd46fba3ea0b7a",
+    "canonical_blocks": 179,
+    "orphan_blocks": 17,
+    "canonical_noncoinbase_count": 13,
+    "canonical_input_count": 16,
+    "root_sat": 15000000000,
+    "terminal_sat": 14999993485,
+    "miner_fee_sat": 6515,
+    "root_intake": "All35referenced artifact hashes/sizes rechecked and boundary/terminal sums independently recomputed. Raw-chain decode/branch/spender proof is independent terminal lead+peer provenance, not a third root raw-chain audit."
+  },
+  "preserved_compile_failure": {
+    "capture": "V30",
+    "error": "Awaited synchronous concrete BDK Balance in new assertion; no native execution",
+    "checks_log_sha256": "7b30655b262911e31ed29641e14b1623172dedcf30b58fe0f6f9f0054d4cf41f",
+    "correction": "Compare .balance().total() with the same expected Amount; assertion unchanged."
+  },
+  "limits": [
+    "One explicit app withdrawal AFTER autonomous actionable recovery; not automatic eventual payment when user never returns.",
+    "Same original seed AND retained store; no seed-only empty-store restoration, newdevice/externalBIP84/backup crash proof.",
+    "One boardprefix/two Arkoor suffix steps, not arbitrary checkpoint frontier/multiround/Lightning/provider case.",
+    "Native6confirmation unspent caller output is actual current payment; no later reorg/permanent finality or subsequent destination spend demonstrated.",
+    "Native signed validity/keys/rights/history/client balances/daemononly/BDK exclusion are source+runtime provenance; independent raw audit verifies public outpoints/values/scripts/branch/fees, not privatecustody or fullconsensus/witness/difficulty transition.",
+    "ListedBDKcoin truth is not complete wallet discovery. Ordinary100k backing remains another recipient's backing, not final recipient onchain settlement credit.",
+    "No new product build/unit executions; unused server/barkd inherited metadata not qualified. No Signet/load/production or fullML acceptance."
+  ]
+}

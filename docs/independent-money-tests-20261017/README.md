@@ -1,20 +1,36 @@
-# Independent money-safety source intake
+# Independent money-safety fixtures
 
-These two fixtures add independent assertions for gaps outside the ordinary regression queue. Both received source review and crossreview. They are **not compiled or executed**. The coordinator owns integration, candidate capture and resource allocation. Production readiness remains unestablished.
+Both exact test bodies passed once after coordinator integration into the dirty V11c capture. These are bounded component results. Production readiness and full ML acceptance remain unestablished.
 
-| Scenario | Proposed test | Bounded assertion |
+| Scenario | Test | Result and bounded assertion |
 | --- | --- | --- |
-| ML049 | `qualification_forwarded_ack::forwarded_receive_ack_loss_replays_identical_outputs_and_credits_recipient_once` | A real mailbox accepts a forwarded receive, its reply is lost, then an explicit retry sends identical signed outputs. Recipient ingestion before and after retry must preserve one credit and the exact output IDs. The original Lightning payment completes once. |
-| ML186/ML187, partial alternate recovery | `fallback_external::fallback_external_bip84_seed_restore_spends_actual_payout_while_history_unavailable` | A real honest fallback confirms while the original recipient is absent. Two original independent seeds and fresh stores must discover/spend the actual BIP84 output while only history RPC transport is unavailable. Actual canonical blocks and the complete observed script interval guard receipt and duplication. |
+| ML049 delivery component | `qualification_forwarded_ack::forwarded_receive_ack_loss_replays_identical_outputs_and_credits_recipient_once` | PASS, 22.588 seconds. Two real accepted mailbox posts and one lost reply preserve the same 10,000-sat output, one credit and one movement. One original payer record is COMPLETE. |
+| ML186/ML187 alternate recovery | `fallback_external::fallback_external_bip84_seed_restore_spends_actual_payout_while_history_unavailable` | PASS, 25.923 seconds. Fresh stores and the two original independent seeds recover the actual 99,000-sat BIP84 payout while history RPC remains unavailable. A real recovery transaction delivers 98,781 sat and pays 219 sat to miners. |
 
-Base is `4fa8997ba21158f20326c19f68efba5f42af1f3c`. Only the two test files and this intake document are authored in this branch. The prior two external-wallet test bodies remain byte-identical. The new server file is intentionally not registered in this branch. The coordinator must add `mod qualification_forwarded_ack;` to `testing/tests/server/mod.rs` in the accepted candidate, then capture and compile that exact source. A green build that omits the module cannot qualify this test.
+The fixtures use genuine native payments and signed outputs. The faults alter transport responses only. They do not fabricate money, signatures, recipient ownership or confirmations.
 
-Before execution, record a concrete coordinator allocation, source/archive/file/body/executable/tool hashes, exact expected binary, and a fresh singleton listing with one unignored test. Use the existing `just int-binaries` artifact protocol, serial one, retries zero, default 180-second timeout, first failure stops. ML049 requires the approved native CLN/grpc/hold pairing and `BARK_DOUBLE_DRIVE_ACTIONS` completely absent from the environment. It must not use the reentrant recipe. No tests were run to prepare this branch. CI is skipped for this draft source packet so the coordinator retains build admission.
+## Source and execution
 
-ML049 does not qualify fallback, seed recovery or Noah compatibility. The recovery test does not reproduce a 2-MiB history or actual revision churn, and does not independently prove custody of fee-child output keys. Neither is a full ML acceptance claim. Every original failed execution remains unchanged.
+The source branch starts at `4fa8997ba21158f20326c19f68efba5f42af1f3c`. Only two test files and this intake document differ from that base. The previous two external-wallet test bodies remain byte-identical. This branch leaves the new server module unregistered. The coordinator integrated the accepted patch and added its binding in `testing/tests/server/mod.rs`. Do not merge this old source base over newer product work.
 
-External append-only handoff, source packets, crossreviews and the independent retained v7 finite-DAG audit are under `/home/francis/bark-integration-2026-10-01/independent-money-tests-20261017/`. The separate historical audit reconciles 1,850,000 input sats = 1,803,531 terminal sats + 46,469 miner-fee sats over 41 canonical descendant transactions. It retains native recipient/LN-state provenance and adds no new execution count. Raw/private artifacts are excluded from this branch.
+Actual tests used the coordinator's exact dirty capture at HEAD 0496e057fe8cedde99c9b85edab67035633a8f25:
 
-## Runner correction
+- Source manifest: `cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635`.
+- Source archive: `acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58`.
+- ML049 file: `456f7b8c999fc4c6692e13671392d0be8800f0c00789af4798983aaee858ddee`.
+- Recovery file: `90339cdd2e46df18f53d591f907bee4f7a0a1d97b7242564eb25972baa3539e9`.
+- Native run IDs: `59b44ec7-50ad-4e2e-a6d6-2bd7a469b055` and `1584f140-2495-4079-b4c2-de5e7b9f99b2`.
 
-The ML049 fixture requires `unset BARK_DOUBLE_DRIVE_ACTIONS` **after** the cached Nix environment is sourced. `action_drive_factor` checks variable presence, so `false`, `0` and an empty string all enable double driving. Every earlier unset/false allowance in the external immutable packets is superseded by `double-drive-environment-correction-001.json`. Preserve those packets as historical review evidence. No source test, native run or result changed.
+The coordinator allocated one serial two-case parent. Both exact unignored singleton selections passed. Execution used the existing `just int-binaries` protocol, default 180 seconds per case, retries 0 and first failure stop. Both tests passed on their first attempt. All 17 runtime pins and 20 admission control/receipt hashes remained unchanged afterward. No owned actors remained. No cleanup or signals occurred. The initial postflight reader used the wrong plugin-line prefix; its failure remains retained. A separate reader recognized the actual required `important-plugin=` lines. No native test was retried or changed.
+
+For ML049, `BARK_DOUBLE_DRIVE_ACTIONS` and `LIGHTNINGD_DOCKER_IMAGE` were completely absent after the approved cached Nix environment was sourced. False, zero and empty strings do not meet the absence requirement. The actual native CLN 26.06.6 executable and both approved plugins were pinned. The reentrant recipe was not used.
+
+## Independent financial evidence and limits
+
+The retained recovery graph independently conserves 200,000 sat of actual backing and sponsor inputs = 197,500 terminal sat + 2,500 miner-fee sat. Parent and child have 12 confirmations. Recovery has 6 confirmations. The complete canonical interval contains one output to the payout script, including spent history, and no reused non-coinbase input.
+
+The mailbox audit independently reconciles public phase, quote and original payment records. Signed-request equality, materialization, actual mailbox effects and underlying Lightning state remain native assertions. The chain audit does not independently establish recipient identity, seed provenance, private-key custody or consensus/signature validity.
+
+ML049 does not qualify fallback, seed recovery or Noah. The recovery fixture does not create actual oversized history, revision churn, Lightning, backup or reorg. Neither result closes a full ML scenario. No release admission follows.
+
+The immutable final receipt is `native-two-fixtures-results-001.json`, SHA256 `71b9583d24fded71fc1e41b73545f34a3107e627212dc6e7cd7871724504abbc`. Append-only local reports and exact artifact references are under `/home/francis/bark-integration-2026-10-01/independent-money-tests-20261017/`. Raw private runtime data, credentials, seeds and preimages are excluded from this branch. Coordinator intake and curation remain separate.

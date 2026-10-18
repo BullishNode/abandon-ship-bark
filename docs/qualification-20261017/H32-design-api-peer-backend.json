@@ -1,0 +1,128 @@
+{
+  "kind": "H32_DESIGN_CURRENT_CANONICAL_API_PEER_BACKEND",
+  "state": "SOURCE_ONLY_DESIGN_FEASIBLE_IMPLEMENTATION_NOT_YET_REVIEWED",
+  "created_utc": "2026-10-18T08:51:59.042769+00:00",
+  "proposal_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H32-genuine-dust-later-receipt-source-proposal.json",
+  "proposal_sha256": "1b5da53b25130b4a291fdf2b30b0773c1cab8aec0423fad21b5fbb9ec3fdc4d1",
+  "canonical_HEAD_at_read": "d2fae7db778096ff940e3861ca575d0b7bcddb56",
+  "actual_source_file_sha256": {
+    "server/src/watchman/settlement.rs": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+    "server/src/database/expiry_details.rs": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+    "server/src/database/expiry_decision.rs": "50d535e7630fd0c787d1cc21f3cb59b6cb7144239badb04f2b6822dce7101ebd",
+    "bark/src/fallback/protection.rs": "b0f3040f9d707c28fac3f42869a2429dc583e0b0692b964f67c16763bb2fb26e",
+    "bark/src/fallback/payouts.rs": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+    "bark/src/fallback/sync.rs": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+    "bark/src/mailbox.rs": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+    "bark/src/lib.rs": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+    "lib/src/arkoor/mod.rs": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+    "testing/src/bark.rs": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+    "testing/src/context/mod.rs": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+    "testing/tests/server/qualification_oversize.rs": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+    "server/captaind.default.toml": "e3d0433e6fcd4849823b3259b097a5e98d45cfd1dc7a075dc6d0c00de926a52e",
+    "bark/src/exit/mod.rs": "b66a647f12b566322ff756ca56bc64d7d454c00b4eb6dd18ce4bc7567142eaad",
+    "testing/src/daemon/bitcoind/mod.rs": "7b077e16d63b9b91426dbf48e90c14828447f2a0cda646f11778b1240dc7b604",
+    "server/src/rpcserver/admin.rs": "ef5a0c9617bedfe95f4c19b6523cab86e300761b442d7de11bbdac36076a1ebb",
+    "server/src/wallet/mod.rs": "5a0e8bf56e868dec55a60b746f4155c054ddcefb5a1d04413672f641727ea6cb",
+    "testing/src/daemon/captaind/mod.rs": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+    "testing/tests/server/qualification_cold_backup.rs": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42"
+  },
+  "proposal_source_matches_current": {
+    "server/src/watchman/settlement.rs": true,
+    "server/src/database/expiry_details.rs": false,
+    "server/src/database/expiry_decision.rs": false,
+    "bark/src/fallback/protection.rs": true,
+    "bark/src/fallback/payouts.rs": true,
+    "bark/src/fallback/sync.rs": true,
+    "bark/src/mailbox.rs": true,
+    "bark/src/lib.rs": true,
+    "lib/src/arkoor/mod.rs": true,
+    "testing/src/bark.rs": true,
+    "testing/src/context/mod.rs": true,
+    "testing/tests/server/qualification_oversize.rs": true,
+    "server/captaind.default.toml": true
+  },
+  "current_source_drift_reviewed": [
+    {
+      "path": "server/src/database/expiry_details.rs",
+      "proposal_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "actual_sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+      "delta": "Only customer classifier switches individual payout>0 to joined output_index.is_some. Genuine dust has no joined output; H32 design still applies. No execution credit."
+    },
+    {
+      "path": "server/src/database/expiry_decision.rs",
+      "proposal_sha256": "ab2903e83264f314f17cfea91e67e4ca95a7df1086ea4c6f450f90d2c9cf5255",
+      "actual_sha256": "50d535e7630fd0c787d1cc21f3cb59b6cb7144239badb04f2b6822dce7101ebd",
+      "delta": "Only joint-source obligation/reservation locking and subscription IDs versus capturedC; ordinary no-CLN H32 path has no new API/schema change identified. Broader fix review belongs to root."
+    }
+  ],
+  "concrete_design_findings": [
+    {
+      "id": "H32-API-EXIT",
+      "evidence": [
+        "bark/src/lib.rs992 public exit_mgr()",
+        "bark/src/exit/mod.rs519 list_all(include_history,include_transactions), both booleans details only",
+        "No bark::Wallet get_all_exit_status(None,None) method"
+      ],
+      "requirement": "Use wallet.exit_mgr().list_all(false,false).await and assert empty; true,true also includes same entries with details.",
+      "author_response": "Confirmed actual SDK API already planned; incomplete source not inspected."
+    },
+    {
+      "id": "H32-CUT-OVERLAP",
+      "evidence": [
+        "testing/src/context/mod.rs719 fund_bark delegates one Core wallet funding",
+        "testing/src/daemon/bitcoind/mod.rs275 sendtoaddress chooses funds automatically",
+        "Same file295 get_new_address belongs to that same Core wallet",
+        "testing/src/context/mod.rs552/570 default watch operator sweep belongs to captaind rounds wallet"
+      ],
+      "requirement": "Fresh donor SDK alone is insufficient physical independence if operator sweep is overridden to Core funding wallet, which can recycle first-cut return into later funding. Keep default cap sweep/no_vtxo_pool or restrict/reject overlapping later funding ancestry.",
+      "author_response": "Confirmed default actual cap rounds-wallet sweep/no Core override plus explicit second donor funding ancestry exclusion against first-cut points planned."
+    }
+  ],
+  "verified_API_and_money_contracts": [
+    {
+      "topic": "Native geometry",
+      "refs": "arkoor/package.rs193 andarkoor/mod.rs1164",
+      "contract": "Real1200/98800 exceed330P2TRdust, with2checkpoints/3virtualtx; later entire100k transfer1checkpoint/2tx. Native cosign/register/all-mailbox hydration and public recover_vtxos source retirement required; no fabricated financial rows."
+    },
+    {
+      "topic": "Genuine dust acceptance",
+      "refs": "settlement.rs90\u2013118;fallback/payouts.rs153\u2013176;protection.rs54\u201378,199\u2013244",
+      "contract": "1200\u22121000=200 below actualscriptdust gives zero fee/payout, full1200forfeit, no payout row. SDK must retain full original locallySpendablebody and verify whole same-allocation/script dustgroup plus actual canonical server-expiry witness before one Successful\u22121200debit/no sent_to; server disposition alone insufficient."
+    },
+    {
+      "topic": "SQL/types/macro scope",
+      "refs": "database/expiry_details.rs183\u2013237;fork_migrations/V5__expiry_allocations.sql;Db::read397;testing/tests/server/mod.rs",
+      "contract": "Dust LEFT JOIN payout nullable outputindexOption<i32>/amountOption<i64>, not innerjoin. a.status/c.disposition areTEXT; vtxo.spend_state enum requires::TEXT if String. Db::read wraps query await? inOk. New child imports or qualifies both require macros explicitly."
+    },
+    {
+      "topic": "Actual watch change ownership",
+      "refs": "testing/daemon/captaind/mod.rs61;qualification_cold_backup.rs113\u2013117;rpcserver/admin.rs45;wallet/mod.rs180\u2013194",
+      "contract": "Use WalletAdminClient at actual watchmand.config().admin_address, captured beforeawait; wallet_status(Empty{}).watchman mustSome (capendpointreturnsNone). Parse confirmed_utxos strings asOutPoint and independently Core-confirm values/scripts. Actual child change can differ from configured operator sweep script."
+    },
+    {
+      "topic": "Full finite cut/nonrevival",
+      "refs": "Proposal phases2\u20134 and selected_cut_sat600000",
+      "contract": "Exactly two disjoint real100k backing roots+four confirmed100k sponsors; follow actual child change/unused sponsors, reject outside inputs/duplicate spends, count policy retention separately from miners. Classify remaining outputs as rightful97800/99000 customer, actualconfigured cap sweep, or BDKwatch confirmedUTXO. Ordinary boardchange/upfrontminers outside selected600k. Same originalrecipientDB/script: old1200staysdischarged and\u22121200debit unchanged; new100k pays99000+1000 only, totalfallbackdebit\u2212101200 without doubledebit or100200revival. Full10 balances and sync/reopen idempotence required."
+    }
+  ],
+  "remaining_final_source_checks": [
+    "Read only author-frozen exact new19 source/patch/manifest after ready; not an ACK of unfinished code.",
+    "Verify actual ownership/canonical6/parent-child/zero-parentfee/fullprevout graph coverage is nonvacuous and funding-cut overlap excluded.",
+    "Verify below_dust history handles absent output_index, empty sent_to and preserved movement; later output/history cannot combine old forfeited principal.",
+    "Ensure public pre-history checkpoint preserves sanitized financial evidence on original native failure.",
+    "Actual future integration/build/captured candidate/allocation/native evidence required;180s/<=128blocks remain proposed hard bounds, not observed feasibility."
+  ],
+  "incomplete_fixture_read": false,
+  "source_edits": false,
+  "compiler_runtime_Cargo_RPC_private_context_global_actions": 0,
+  "compile_result": null,
+  "native_result": null,
+  "source_hashes_stable_during_packet_creation": true,
+  "limits": [
+    "Source-only design/API review; no H32 PASS/FAIL or ML/result/count update.",
+    "No native forged-group negative, all-script matrix/defaultdaemon/reorg/backup/globalcustody/FULLML/production credit.",
+    "Current dirty source pins differ from historical proposal/capturedC; do not transfer old build/PASS or root-fix qualification.",
+    "No source/module edits, incomplete source read, Cargo/list/native/service/RPC/SQL/private-wallet/data actions, Git mutation, extra agents or global rolling report writes."
+  ]
+}

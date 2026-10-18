@@ -1,0 +1,105 @@
+{
+  "state": "SCOPED_QUIESCENCE_PASS",
+  "at": "2026-10-18T09:32:21.538366+00:00",
+  "namespace": "pid:[4026538663]",
+  "uid": 1000,
+  "IN_NIX_SHELL": "impure",
+  "BARK_DOUBLE_DRIVE_ACTIONS_present_in_audit_environment": false,
+  "known_groups_SIDs": [
+    185773,
+    186158
+  ],
+  "remaining_group_or_SID_members": [],
+  "remaining_scoped_argv_cwd_FD_actors": [],
+  "unreadable_owned_proc_entries": [],
+  "owned_uid_processes_examined": 8,
+  "scope": "All known50 PGID/SID and actual sameUID batch50 scoped argv/cwd/FD, including owned CLN/grpc/hold processes; no output of argument/path/FD values. Other root lanes excluded.",
+  "global_CLN_or_other_service_absence_claim": false,
+  "signals_cleanup_RPC_DB_native_calls": 0,
+  "all14_actual_pins_unchanged": [
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/captaind",
+      "expected_sha256": "bb6c4d6c54bca6e833c6bcf07b6da9053e976c6aba720621b35761dd8fddfe46",
+      "actual_sha256": "bb6c4d6c54bca6e833c6bcf07b6da9053e976c6aba720621b35761dd8fddfe46",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/watchmand",
+      "expected_sha256": "bbee136d1f5062d07b37199caefabb39d95922a1e52dd103bf255ad61db44ede",
+      "actual_sha256": "bbee136d1f5062d07b37199caefabb39d95922a1e52dd103bf255ad61db44ede",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/bark",
+      "expected_sha256": "bfbe65a2a61d15b31e33623a36fddb603acb69cf8a44abd9a7a2e4cf681d1d4a",
+      "actual_sha256": "bfbe65a2a61d15b31e33623a36fddb603acb69cf8a44abd9a7a2e4cf681d1d4a",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/barkd",
+      "expected_sha256": "e9ff58d1c5b50867187cd99bdbe07bbe5ec3ea49e2111fa9815b6ccd0af4a1fe",
+      "actual_sha256": "e9ff58d1c5b50867187cd99bdbe07bbe5ec3ea49e2111fa9815b6ccd0af4a1fe",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/native-server",
+      "expected_sha256": "780dde6b31eb639ccd5680800d5ab7e40585702e9ec8a0381e8c7468d3135ba6",
+      "actual_sha256": "780dde6b31eb639ccd5680800d5ab7e40585702e9ec8a0381e8c7468d3135ba6",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/nextest-binaries-runtime.json",
+      "expected_sha256": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab",
+      "actual_sha256": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/source-manifest.json",
+      "expected_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+      "actual_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/manifest.json",
+      "expected_sha256": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76",
+      "actual_sha256": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.rlib",
+      "expected_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+      "actual_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.so",
+      "expected_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+      "actual_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/lock-holder",
+      "expected_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+      "actual_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+      "unchanged": true
+    },
+    {
+      "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+      "expected_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+      "actual_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+      "expected_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+      "actual_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+      "unchanged": true
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+      "expected_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "actual_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "unchanged": true
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "actual_graph_miner_fee_sat": 2498,
+  "board_miner_fee_sat_outside_cut": 763,
+  "canonical_tip_hash": "70b5f43f0b27cf7ba2519805305e318e7d692a56e0a7690e5616f4ccb4866d62",
+  "canonical_tip_height": 146,
+  "customer_gross_sat": 100000,
+  "customer_payout_sat": 98000,
+  "customer_policy_fee_sat": 2000,
+  "graph_txids": [
+    "8a3819b40c3431975bd99c8c78335c734a78caaa96fe11d54093f5f9928bb42d",
+    "465aeaa5f7a6615903f668ee94a5b3f142a909b0bbdde3f2c56aeb4edd35bf63"
+  ],
+  "leaves": [
+    {
+      "allocation_id": 1,
+      "canonical_hash": "4499cbef00b1275fe44cb2746d5f793e767782951699dc827efedfb99b02cba1",
+      "fee_sat": 1000,
+      "forfeited_sat": 0,
+      "gross_sat": 98500,
+      "group_output_sat": 97500,
+      "outpoint": "465aeaa5f7a6615903f668ee94a5b3f142a909b0bbdde3f2c56aeb4edd35bf63:0",
+      "owner_mailbox": "03cc9e1c5446eb20c5f34ea1427bde593a69a63469968da3029b1c0cbe1f0728be",
+      "payout_sat": 97500,
+      "script": "001467ea56305a2f919ba6dcbcffba2c1cdaa8f8f59a",
+      "user_pubkey": "03094af67248036e1ff207cfb7112b9523a48b3ec58112853fdb0b1f67508b7b03",
+      "vtxo_id": "4f49a3f0537ce882f51e89354f84c439410d85e34103b8f0ea1d76eff8d46746:0"
+    },
+    {
+      "allocation_id": 1,
+      "canonical_hash": "4499cbef00b1275fe44cb2746d5f793e767782951699dc827efedfb99b02cba1",
+      "fee_sat": 500,
+      "forfeited_sat": 0,
+      "gross_sat": 500,
+      "group_output_sat": 500,
+      "outpoint": "465aeaa5f7a6615903f668ee94a5b3f142a909b0bbdde3f2c56aeb4edd35bf63:1",
+      "owner_mailbox": "0300b732614c97f5c0e34a933d6ce0bdcfd57c74e22c2dcd06ee9b0f4ef3d7a79a",
+      "payout_sat": 0,
+      "script": "00148e5dac1c3d1f4cd43f25bfec2f3f6ce1fb04bac5",
+      "user_pubkey": "02ae432194f2907a96125d21ca68b5aa163b105e0c28431e4da801a431b69199fc",
+      "vtxo_id": "fab5bd1b80da68d5985089d5f6cb38371e9c277408f25c99c69781f3316c9508:0"
+    },
+    {
+      "allocation_id": 1,
+      "canonical_hash": "4499cbef00b1275fe44cb2746d5f793e767782951699dc827efedfb99b02cba1",
+      "fee_sat": 500,
+      "forfeited_sat": 0,
+      "gross_sat": 500,
+      "group_output_sat": 500,
+      "outpoint": "465aeaa5f7a6615903f668ee94a5b3f142a909b0bbdde3f2c56aeb4edd35bf63:1",
+      "owner_mailbox": "0300b732614c97f5c0e34a933d6ce0bdcfd57c74e22c2dcd06ee9b0f4ef3d7a79a",
+      "payout_sat": 0,
+      "script": "00148e5dac1c3d1f4cd43f25bfec2f3f6ce1fb04bac5",
+      "user_pubkey": "03b73664c8b6ee1245a3131f9fd4793e45a19622011fe87127dc40d278dfe9438e",
+      "vtxo_id": "db3066a5e9496588eaf157f31f3c4fc340b1af0324cbefb3dbdc00d793a4362f:0"
+    },
+    {
+      "allocation_id": 1,
+      "canonical_hash": "4499cbef00b1275fe44cb2746d5f793e767782951699dc827efedfb99b02cba1",
+      "fee_sat": 0,
+      "forfeited_sat": 0,
+      "gross_sat": 500,
+      "group_output_sat": 500,
+      "outpoint": "465aeaa5f7a6615903f668ee94a5b3f142a909b0bbdde3f2c56aeb4edd35bf63:1",
+      "owner_mailbox": "0300b732614c97f5c0e34a933d6ce0bdcfd57c74e22c2dcd06ee9b0f4ef3d7a79a",
+      "payout_sat": 500,
+      "script": "00148e5dac1c3d1f4cd43f25bfec2f3f6ce1fb04bac5",
+      "user_pubkey": "03cc89ee95bdded014a726da8bb014e3c9466bc9cccc909c695a58a7d28241ff8a",
+      "vtxo_id": "263c16cf5e24530a8f6ebeb3612eddd79a0a0e0176e2ee998e48f6ef145ae16b:0"
+    }
+  ],
+  "limits": "ordinary same-owner payable group only; no native whole-group dust or forged-group negative; no global wallet custody claim",
+  "ordinary_customer_change_sat_outside_cut": 99237,
+  "overall_pass": true,
+  "packages": [
+    {
+      "actual_child_miner_fee_sat": 2498,
+      "canonical_hash": "4499cbef00b1275fe44cb2746d5f793e767782951699dc827efedfb99b02cba1",
+      "child_txid": "8a3819b40c3431975bd99c8c78335c734a78caaa96fe11d54093f5f9928bb42d",
+      "parent_fee_sat": 0,
+      "parent_txid": "465aeaa5f7a6615903f668ee94a5b3f142a909b0bbdde3f2c56aeb4edd35bf63"
+    }
+  ],
+  "phase": "COMPLETE",
+  "recipient_gross_sat": 1500,
+  "recipient_group_payout_sat": 500,
+  "recipient_group_policy_fee_sat": 1000,
+  "recipient_history_movement_id": 4,
+  "remaining_output_sat": 297502,
+  "root": "0285f2e14cf674b1ccb48cce6efe657793597726b69f04c54799fd9f1edbb4fe:0",
+  "selected_finite_input_sat": 300000,
+  "sender_change_gross_sat": 98500,
+  "sender_group_policy_fee_sat": 1000,
+  "sender_payout_sat": 97500,
+  "source_pin": "d2fae7db778096ff940e3861ca575d0b7bcddb56",
+  "source_vtxo_id": "b7a06f5f52d085a5c1f89d19eddb876be6d8c35d8f2198a710a6e635ac7cf160:0",
+  "sponsors": [
+    "3e52a1794d133ad671ab7e74d0e03eae378bac9ddbde9dfb639547100b611362:1",
+    "1f0bca47b36aae34b8077f1bb607e691645df3e2c4ee630a22e18d251904ac88:1"
+  ]
+}

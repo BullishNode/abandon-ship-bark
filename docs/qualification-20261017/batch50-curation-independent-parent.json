@@ -1,0 +1,36 @@
+{
+  "state": "PARENT_INDEPENDENT_BATCH50_APPEND_ONLY_CURATION_PASS_AFTER_EXPLICIT_STATUS_CORRECTION",
+  "at": "2026-10-18T09:49:33.979999+00:00",
+  "base_fixed_PR26": "bae867b649a043fa9d8111678201245ca3c2ab1a",
+  "prior464_bytes": 345725,
+  "prior464_sha256": "5aa2daa686d6cd36cd144190aef31a18ba8f8d2336440435da6540efc2f8914a",
+  "prior_CSV_and_FINDINGS_prefix_byte_exact": true,
+  "literal_FAIL_rows_unchanged": 14,
+  "failed_executions_unchanged": 15,
+  "new_rows": [
+    "FT-SERVER-018",
+    "FT-SERVER-019"
+  ],
+  "new_unique_pairs": 2,
+  "aggregate": {
+    "executions": 255,
+    "PASS": 240,
+    "FAIL": 15,
+    "unique_pairs": 235,
+    "nextest": 228,
+    "native": 243,
+    "component": 12,
+    "coverage_rows": 466
+  },
+  "STATUS_counter_correction": "batch50-STATUS-outcome-correction-parent.json",
+  "STATUS_counter_correction_sha256": "f881306fe50818161acf80d92a36c68ae93e2f8ee7dc87039e563f8d612e31ac",
+  "initial_curated_STATUS_preserved_sha256": "1c3ce6e7c039aa3f36f1a98802dc64b47ddf2658eb2d930473d71b14ec522d8f",
+  "output_sha256": {
+    "COVERAGE.csv": "2f555fa380782909329df1da68469628aa3dac79992e518c91c05c0b32049371",
+    "FINDINGS.md": "ea575eba79a3f0d04ffad5ca24ace43d5f1469616fffd576bd1fd330663a1c23",
+    "STATUS.json": "9c08e608c6eedeee5ffb054df48ec9281be0d6c35abcadd12278e0fe890a31a8",
+    "TWENTY-THIRD-CHECKPOINT.md": "cc3f3d229cb95dc3043039cc0511af29db77900c85b72824479991d28f258e8e",
+    "batch50-coverage-append.json": "886e3bcbf9c8ec43c97511ec16cff3a63cad7220c1f8255e0b0f8691e85886d3"
+  },
+  "native_controls_source_changes": 0
+}

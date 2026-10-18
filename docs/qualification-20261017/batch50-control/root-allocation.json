@@ -1,0 +1,79 @@
+{
+  "state": "CONCRETE_TWO_UNRUN_FIXTURES_NATIVE_ALLOCATION",
+  "at": "2026-10-18T09:11:28.991181+00:00",
+  "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+  "root_original_batch": "94859 TERMINAL1 firstpartialTIMEOUT180.019; these2NOTRUN, no unmodified failed selector retry",
+  "source_manifest_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+  "source_archive_sha256": "80f8e78953d3ca7ac14200bfe312c22987ca3071fbebaaed3f89bfa31c3bcdf0",
+  "bundle_manifest_sha256": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76",
+  "actual_product_label": "d2fae7db778096ff940e3861ca575d0b7bcddb56",
+  "published_source_commits": [
+    "cdc196c00",
+    "d5432698b",
+    "57f59bf3b"
+  ],
+  "immutable_metadata_sha256": "8393bd7182e1119554b31f40e840937adf61e51181f3280ee22d5c2256d008a2",
+  "runtime_metadata_sha256": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab",
+  "runtime_pins_path": "/home/francis/.cache/abandon-fresh/root-reserved-partial-v17-20261018/runtime-pins.sha256",
+  "runtime_pin_count": 14,
+  "runtime_pins_sha256": "1e593d4b826fb91e3f27376d9d37bc8de0c6a54eaa353e8052e047a3198f92a9",
+  "products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/captaind",
+      "sha256": "bb6c4d6c54bca6e833c6bcf07b6da9053e976c6aba720621b35761dd8fddfe46",
+      "actual_version": "captaind 0.7.1-dev+d2fae7db778096ff940e3861ca575d0b7bcddb56"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/watchmand",
+      "sha256": "bbee136d1f5062d07b37199caefabb39d95922a1e52dd103bf255ad61db44ede",
+      "actual_version": "watchmand 0.7.1-dev+d2fae7db778096ff940e3861ca575d0b7bcddb56"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/bark",
+      "sha256": "bfbe65a2a61d15b31e33623a36fddb603acb69cf8a44abd9a7a2e4cf681d1d4a",
+      "actual_version": "bark 0.7.1-dev (d2fae7db778096ff940e3861ca575d0b7bcddb56)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/barkd",
+      "sha256": "e9ff58d1c5b50867187cd99bdbe07bbe5ec3ea49e2111fa9815b6ccd0af4a1fe",
+      "actual_version": "barkd 0.7.1-dev (d2fae7db778096ff940e3861ca575d0b7bcddb56)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/native-server",
+      "sha256": "780dde6b31eb639ccd5680800d5ab7e40585702e9ec8a0381e8c7468d3135ba6"
+    }
+  },
+  "cases": [
+    {
+      "label": "H30-grouped-zero-share-history",
+      "selector": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+      "source": "testing/tests/server/qualification_tiny_payout_grouping.rs",
+      "source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c"
+    },
+    {
+      "label": "ML125-restored-offboard",
+      "selector": "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge",
+      "source": "testing/tests/server/qualification_offboard_reply_restore.rs",
+      "source_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85"
+    }
+  ],
+  "required_controls": "New separate allocated directory/control manifest; fresh independent peer and actual14pin/product4version+exactunignoredsingleton/resource/scopedprocess checks; fully UNSET BARK_DOUBLE_DRIVE_ACTIONS AFTER cachedNix source (false/0/empty invalid). Immutable copied source/binaries only; no ownCargo/build/sharedtarget/canonical changes. Existing17pin controls mustNOTbe falsely applied to14pin V17.",
+  "execution": {
+    "serial": 1,
+    "max_global_native": 2,
+    "timeout_seconds_per_case": 180,
+    "retries": 0,
+    "first_fail_stop": true,
+    "native_case_limit": 2,
+    "profile": "default",
+    "test_binary": "ark-testing::server",
+    "root_other_lane": "original94859 terminal; bounded copiedPG diagnostic sourceowner may run, no rootnative concurrent now"
+  },
+  "CLN": "Neither source requests nativeCLN; do not start unauthorizedLNpair. Exact existingtool/plugin hashes remain14pinprovenance; noBOLT11claim.",
+  "publication": "Actual2native/results/formal counts only afteractualcompletion, source candidate5d50 not global qualified/currentdeployedSignet. PriorpartialTIMEOUT remains OPEN independently.",
+  "go": "Once final controls+independentpeer+fresh actual gates pass, launch exactlyonce without another routine coordinator go. Any unknown dispatch/pin/resource/funding mismatch HOLD; no retry, reset, fixture weakener or timeout extension."
+}

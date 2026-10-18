@@ -1,0 +1,22 @@
+{
+  "state": "ADDITIVE_ROLLING_STATUS_PASS_COUNTER_CORRECTED",
+  "at": "2026-10-18T09:48:55.268663+00:00",
+  "old_STATUS_sha256": "1c3ce6e7c039aa3f36f1a98802dc64b47ddf2658eb2d930473d71b14ec522d8f",
+  "old_STATUS_preserved": "batch50-STATUS-curation-before-outcome-correction.json",
+  "old_counter": {
+    "PASS": 238,
+    "FAIL": 15
+  },
+  "correct_counter": {
+    "PASS": 240,
+    "FAIL": 15
+  },
+  "case_executions": 255,
+  "basis": "Baseline253=238PASS+15FAIL plusactual2PASSH30/ML125fromparent89868/formalaf8/financiale1; mixedCSV466rows isnotexecutioncounter.",
+  "preserved_curation_receipt": "batch50-coverage-append.json",
+  "preserved_curation_receipt_sha256": "886e3bcbf9c8ec43c97511ec16cff3a63cad7220c1f8255e0b0f8691e85886d3",
+  "new_STATUS_sha256": "9c08e608c6eedeee5ffb054df48ec9281be0d6c35abcadd12278e0fe890a31a8",
+  "failed_executions_unchanged": 15,
+  "CSV_FINDINGS_source_native_controls_mutations": 0,
+  "explanation": "Finalparentindependentcheck foundSTATUS.execution_outcomes.PASSstale238 despitecorrecttopline255 andCSV2newrows. RollingcounteronlycorrectedafterwriterleaseRELEASED; original1c3STATUS/886curationreceipt remainavailablebyteexact. No compiler/nativeFAIL orrerun."
+}

@@ -1,0 +1,17 @@
+{
+  "index": 1,
+  "name": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+  "state": "PASS",
+  "started_at": "2026-10-18T09:28:49.547770+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "expected_binary": "ark-testing::server",
+  "owned_nextest_group": 185773,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "6d405cb5-133f-436c-a550-cd162214e8f3",
+  "test_seconds": 23.972,
+  "wall_seconds": 25.039,
+  "ended_at": "2026-10-18T09:29:14.586761+00:00"
+}

@@ -1,0 +1,6 @@
+{
+  "state": "PARENT_FRESH_GATES_AND_LAUNCH_ADMISSION_PENDING",
+  "native_launch_authorized": false,
+  "root_allocation_sha256": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
+  "parent_only": "fresh preflight+exact listing+actor classification/admission/freeze, then remove marker; author never executes controls"
+}

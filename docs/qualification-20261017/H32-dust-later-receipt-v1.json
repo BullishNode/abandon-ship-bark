@@ -1,0 +1,25 @@
+{
+  "state": "HISTORICAL_SOURCE_V1_REVIEW_FOUND_THREE_BOUNDED_ISSUES_NOT_ADMITTED_UNCOMPILED_NOT_RUN",
+  "created_utc": "2026-10-18T09:04:15.413475+00:00",
+  "source_sha256": "0333355ee220fe8e9227be4b69fb8b7ffdf787b07a0da6ac3e1ce6b08b7fdb95",
+  "source_lines": 648,
+  "source_bytes": 37129,
+  "private_source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H32-dust-later-private/qualification_dust_later_receipt.v1.rs",
+  "patch_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H32-dust-later-receipt-v1.patch",
+  "patch_sha256": "a259360f109a702eedc93bbdb199ba03877de26327aa643a282e943fc9079cda",
+  "design_sha256": "e724766d71e41ea7fd40bacd141f89f5cf4c93616842389e8ec24af635f4ca40",
+  "proposal_sha256": "1b5da53b25130b4a291fdf2b30b0773c1cab8aec0423fad21b5fbb9ec3fdc4d1",
+  "parent_review_sha256": "1b7f89d6907992ff20482bca92d84f429c85acbb6ac6a5251b6f3e171527d8ea",
+  "issues": [
+    "Wrong WalletAdminClient import namespace.",
+    "Canonical expected-payee output scan confined to selectedgraph; requires independent allcanonical scan.",
+    "Public receipt lacks complete publicbinding capsule for independent offlinefinancial audit."
+  ],
+  "no_observed_compile_or_native_failure": true,
+  "prior151_snapshot_sha256": "2ad8ea02969268c2d2c5d6760a2ab126e2db81ff3f596dc7fbb93f2f5554cffc",
+  "module_registered": false,
+  "product_edits": false,
+  "financial_SQL_writes": false,
+  "native_runtime": null,
+  "compile": null
+}

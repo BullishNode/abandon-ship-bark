@@ -1,0 +1,32 @@
+{
+  "state": "FULL_PROVISIONAL_SOURCE_READ_NEEDS_BOUNDED_CORRECTION_NOT_COMPILED_NOT_RUN",
+  "at": "2026-10-18T09:03:17.236309+00:00",
+  "reviewed_source_sha256": "0333355ee220fe8e9227be4b69fb8b7ffdf787b07a0da6ac3e1ce6b08b7fdb95",
+  "reviewed_lines": 648,
+  "path": "testing/tests/server/qualification_dust_later_receipt.rs",
+  "definite_source_blocker": "server_rpc::WalletAdminClient is not exported at crate root; author/backend verified existing ark_testing::daemon::captaind::WalletAdminClient alias. Import-only correction required.",
+  "oracle_gap": {
+    "location": "financial_cut canonical block loop early cut.contains_key filter before output inspection; later expected_payees traverses graph.values only",
+    "effect": "An additional confirmed payment from an outside input/root to the same fresh payee script would not enter the selected cut and could escape the exact0/1 output oracle. Existing mempool check is global.",
+    "required_correction": "Collect every matching expected-payee output from every canonical postsetup transaction before selected-cut filtering. Assert exact0/1, amount and positive outpoint identity with the selected graph at both epochs, preserving existing cut/fee/SDK oracles and bounds."
+  },
+  "public_evidence_gap": "Backend peer identified first pre-SDK capsule missing explicit recipient binding and labelled roots/sponsors/payees/physical packages. Add actual public fields so independent audit requires no private database or guessed ownership.",
+  "supported_design": [
+    "First genuine1200 originalDB hydrated before absence; gross1200>1000 but net200 below actual script dust; actual fee0/nooutput/forfeit1200.",
+    "Require canonical expiry-clause transaction and actual sameblock feechild/Core6, then successful strict SDKBelowDust acceptance/idempotence before any later donor creation.",
+    "Fresh independently funded donor100k to same originalrecipientDB/account/script with fresh key; 99000+1000 and oldreceipt/movement stable.",
+    "First500k and final600k cuts traverse all actual descendants, reject undeclared inputs and distinguish operator configured script vs real watch-wallet-owned confirmed outputs. Ordinary boardchange/upfrontminers explicitly outside.",
+    "Default operator sweep remains cap roundswallet; later backing/funding input ancestry checked against first graph to avoid overlapping selected roots.",
+    "AlltenArkbalances and allknownexitstatus emptiness checked. list_all(false,false) is sound for emptiness: flags only include status details; list_all still reads all exit entries.",
+    "FallbackEntitlement first_seen/last_updated stable comparisons supported by actual sync implementation preserving them when economic attempt/chain validity unchanged."
+  ],
+  "bounds": {
+    "timeout_seconds": 180,
+    "max_progress_blocks": 128,
+    "retries": 0,
+    "feasibility": "SOURCE_ONLY_UNMEASURED"
+  },
+  "actions": "Read only full held source and actual SDK source; findings communicated to sole author and backend peer. No source/product/module/index/Git/runtime/global report changes.",
+  "native_or_compile_failure_credit": 0,
+  "final_ACK": false
+}

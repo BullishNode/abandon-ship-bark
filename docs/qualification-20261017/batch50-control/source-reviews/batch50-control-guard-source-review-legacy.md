@@ -1,0 +1,11 @@
+# Batch50: final allocated control review
+
+**ACK: no concrete blocker found.** Preparation `eaf9604d` binds actual allocation `42300584`: only H30, then ML125, in the server binary. All 13 static hashes and 16 required parent-freeze paths match. AST 4, bash syntax 2 and TOML 2 pass; profiles retain 180 seconds, serial 1, retries 0, first-failure stop and maximum two cases.
+
+The archive independently matches 31 complete source files, 17 entry/local-helper regions and 16 API regions. Case files are exact db2e/38977; both modules are present in the captured test root, and the actual joined-output classifier is c11c. Immutable/runtime metadata agree on exactly one server binary. The 14 authoritative pins contain 11 non-CLN core/support paths plus 3 CLN provenance tools/plugins; neither case requests CLN. No 17-pin capturedC substitution is used.
+
+Parent probe v2 f552 fixes the concrete omitted batch45 group set, adding only 143297/143753/144233 to the preserved 591f source. All 11 known prior groups now match 45/47/P07/49/48. RootV16/V17 unknown SID remains explicit; scoped financial/controller processes, including PostgreSQL, are not automatically exempt. Parent must inspect reported nonfinancial exceptions and explicitly affirm review. Resource requirements are 256 MiB SHM, 20 GiB disk and at most one other native before launch.
+
+Cached Nix precedes Python and full presence-flag unsets. Actual four-product versions/source/metadata are bound. Pending marker is present, parent admission absent and no result/context/progress exists. The guard requires actual 16 frozen controls/gates, fresh exact unignored selections and actor/resource PASS before Popen. Private stores/contexts, repository just int-binaries and exact literals are retained. Expected filtered counts derive from actual fresh listing; no hardcoded 660 is carried across to this one-binary V17 metadata.
+
+No control, probe, preflight, listing, native, RPC or Cargo ran. Current actors/resources, actual runtime 14 rehashes and versions remain parent fresh gates. The unrelated root partial TIMEOUT 180.019 stays preserved; both selected cases remain NOT RUN at review. No source 19/H11 source 20/global/ML mutation or execution credit. Full exact hashes and limits are in the companion JSON.

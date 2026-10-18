@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-10-18T08:43:31.643226+00:00",
+  "updated_at": "2026-10-18T09:51:08.259899+00:00",
   "session": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
-  "state": "BATCH48_TERMINAL_3PASS_FORMAL_AND_APPEND_CURATION_COMPLETE_NONE_ACTIVE",
-  "branch": "work/fresh-test-tiny-grouping-20261018",
+  "state": "BATCH50_FORMAL_FINANCIAL_AND_CURATION_COMPLETE_SOURCE19_PUSHED_REPORT23_PREPARING",
+  "branch": "work/fresh-test-dust-later-receipt-20261018",
   "base_commit": "e44ddf95741478508908c17adc61752832d75c6a",
   "worktree": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree",
   "worktree_created": true,
@@ -17,7 +17,7 @@
   "execution": {
     "disk_hold_released": true,
     "shared_target_write_allocated": false,
-    "runtime_capacity_allocated": "NONE_ACTIVE; own48 consumed. Root retains independent lanes and sole Cargo/shared-target ownership.",
+    "runtime_capacity_allocated": "NONE_ACTIVE; own batch50 exact-two allocation consumed. Root retains independent lanes and sole Cargo/shared-target ownership.",
     "new_signet_campaign_allocated": false,
     "next_shared_target_write_allocated": false
   },
@@ -42,11 +42,11 @@
     "worktree_creation": "deferred during disk hold"
   },
   "production_readiness": "NOT established: bounded regression evidence only; known scale/Lightning/splitting/operations gaps remain",
-  "next_action": "Parent may assemble coherent report22 from terminal48/formal/safe export plus separate H30 source-only13file packet. H30 source18 committed57f5/db2e unregistered/uncompiled/unrun; client owns root-authorized H32 source19 authoring only. No further own runtime allocation.",
+  "next_action": "Publish completed50source5d50money evidence +source19H32v267aa peerreviewed/unregistered/uncompiled/NOTRUN onNEWfixedbranch; preservePR26bae. Source20H11solebackendauthoring underrootgrant now50complete; no newnativeallocation, ownruntimeNONE, rootsolebuildowner. No production/fullML/currentV18qualification.",
   "remote_base_verified": "git ls-remote origin refs/heads/fresh/xpub-sweep = e44ddf95741478508908c17adc61752832d75c6a",
   "remote_test_branch_exists": true,
   "worktree_allocation": "Coordinator-corrected nested worktree created from explicit e44ddf957 base",
-  "runtime_allocation": "NONE_ACTIVE: allocated48 completed once/formal/curation; all own allocations consumed. Root other lanes excluded; no new native/Cargo/Signet authorization.",
+  "runtime_allocation": "NONE_ACTIVE; batch50 allocation consumed after exactly two native PASS and complete formal/financial audits. Root 94859 partial timeout and V18 are separate; no further own runtime authorized.",
   "inventory_rows_by_file": {
     "legacy-inventory.csv": 103,
     "backend-inventory.csv": 72,
@@ -69,66 +69,79 @@
   "upstream_registration": "PASS2/2,46.373s",
   "archived_batch_result": "PASS15/15 case executions (13 native money-path/regression and2 mailbox component),6 nextest invocations; corrected dirty archived source only",
   "new_test_source_review": "Published earlier fixtures compiled and ran on recorded pairings. New failed-send v3 is source-only and excluded from this checkpoint.",
-  "coverage_rows": 464,
-  "coverage_warning": "464 mixed rows; prior461-byte prefix and all14 literal FAIL rows preserved. Aggregate15 historical failed executions remain unchanged; these3 capturedC repeats add zero unique pairs.",
+  "coverage_rows": 466,
+  "coverage_warning": "466 mixed rows; prior 464-row byte prefix and all 14 literal FAIL rows preserved. Aggregate 15 historical failed executions remain unchanged; two genuine new binary/test pairs add bounded evidence only.",
   "current_batch": {
-    "name": "batch48-sdk-watch-bridge-v11c-allocated",
-    "state": "TERMINAL_3PASS_FORMAL_AND_APPEND_CURATED_NONE_ACTIVE",
-    "parent_exec_session": 79687,
-    "session_is_not_PID": true,
-    "preflight_session": 62742,
-    "preflight_terminal_exit": 0,
-    "parent_native_launches": 1,
-    "allocation": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
-    "parent_admission_sha256": "a84a2d42f040db4e6ca58581cf65f301bfad564c88b99ad88805b226694fb1b3",
+    "name": "batch50-H30-ML125-v17",
+    "state": "COMPLETE_TWO_PASS_FORMAL_FINANCIAL_CURATED",
+    "allocation": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/H30-ML125-v17-two-native-allocation-20261018.json",
+    "allocation_sha256": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
     "cases": [
-      [
-        "ark-testing::bark-sdk",
-        "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds"
-      ],
-      [
-        "ark-testing::bark-sdk",
-        "exit::watchman_sweeps_funding_tx_during_exit"
-      ],
-      [
-        "ark-testing::bark-sdk",
-        "exit::watchman_sweeps_vtxo_chain_during_exit"
-      ]
+      {
+        "label": "H30-grouped-zero-share-history",
+        "selector": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+        "source": "testing/tests/server/qualification_tiny_payout_grouping.rs",
+        "source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c"
+      },
+      {
+        "label": "ML125-restored-offboard",
+        "selector": "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge",
+        "source": "testing/tests/server/qualification_offboard_reply_restore.rs",
+        "source_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85"
+      }
     ],
+    "binary": "ark-testing::server",
+    "metadata_binary_count": 1,
+    "source_manifest_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+    "runtime_metadata_sha256": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab",
+    "runtime_pins_sha256": "1e593d4b826fb91e3f27376d9d37bc8de0c6a54eaa353e8052e047a3198f92a9",
+    "runtime_pin_count": 14,
     "timeout_seconds_each": 180,
     "retries": 0,
     "serial": 1,
     "max_global_native": 2,
-    "frozen_files": 19,
-    "pins": 17,
-    "curated_credit": 3,
-    "new_unique_credit": 0,
-    "prior_own_actors": 0,
-    "other_native_before_launch": 0,
-    "SHM_available_before_launch": 806584320,
-    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "first_fail_stop": true,
+    "native_launches": 1,
+    "curated_execution_credit": 2,
+    "root_failed_other_selector": "94859 reserved partial TIMEOUT 180.019 is preserved separately; the two allocated batch50 cases passed and are now curated.",
+    "CLN_required": false,
+    "controls_owner": "client_test_gaps",
+    "source_artifact_proof_owner": "backend_test_gaps",
+    "control_peer": "legacy_inventory",
+    "parent_sole_executor": true,
+    "parent_exec_session": 89868,
+    "session_is_not_PID": true,
+    "parent_preflight_session": 6924,
+    "parent_preflight_terminal_exit_code": 0,
+    "parent_launch_admission_sha256": "94810850cc82d25a477b6870bb02cb491ee13859243de652f2468bc42fab9f73",
+    "independent_final_control_peer_sha256": "dcf3e7c27b8f501d50cf4c101f59ad0c0c4e6f6f460e8e1ecc01ac0fbaff1d7b",
+    "frozen_parent_paths": 16,
+    "own_actors_before": 0,
+    "other_native_before": 0,
+    "SHM_available_before": 801198080,
+    "root_nonfinancial_exemptions": [],
     "parent_terminal_exit_code": 0,
     "parent_native_active": false,
-    "actual_groups_and_SIDs": [
-      173577,
-      174944,
-      175188
+    "owned_groups_and_SIDs": [
+      185773,
+      186158
     ],
-    "native_seconds": 134.521,
-    "wall_seconds": 137.725,
-    "receipt": "batch48-sdk-watch-bridge-v11c-allocated-receipt.json",
-    "receipt_sha256": "effab7ec704f337944952215f95ec4a55a2e6301bacf442081dd7fc305d6df21",
-    "formal_postflight": "batch48-backend-postflight.json",
-    "formal_postflight_sha256": "906f834450bc1609544397d8e7d4f09c4a95407fd4c72db980c68eced57d5569",
-    "allocation_consumed": true,
+    "native_seconds": 68.416,
+    "wall_seconds": 70.621,
+    "receipt": "batch50-H30-ML125-v17-receipt.json",
+    "receipt_sha256": "ea3b4a2dbc64c58dbd689a35b1f04cee28fa550f14d868c31e358b706e08443f",
+    "curation": "batch50-coverage-append.json",
+    "formal_postflight": "batch50-backend-postflight.json",
+    "formal_postflight_sha256": "af8a87d777ceb94de74e1a900a2f88fbd97b6799b28dbe085efb2e700cae62ee",
+    "independent_financial_audit": "batch50-public-Core-reconciliation-client.json",
+    "independent_financial_audit_sha256": "e1c93447f3a1ade414f82a6682d2c75d54a4914b9487f37b655645974c53e51e",
+    "formal_complete": true,
+    "independent_financial_audit_complete": true,
     "scoped_actors_after": 0,
-    "curation": "batch48-coverage-append.json",
-    "coverage_rows_added": [
-      "FT-SDK-059",
-      "FT-SDK-060",
-      "FT-SDK-061"
-    ],
-    "filter_skipped_per_case": 660
+    "unreadable_owned_proc_entries": 0,
+    "actual_filtered_skips_each": 300,
+    "new_unique_binary_test_pairs": 2,
+    "allocation_consumed": true
   },
   "build_environment": {
     "CARGO_HOME": "/fresh-cache/cargo",
@@ -163,10 +176,10 @@
     "wall_seconds_approx": 159.375
   },
   "new_readiness_result": "PASS1/1,26.184s exact canonical payout + unresolvedroot + canonical sponsor oracles",
-  "case_executions": 253,
-  "unique_executed_test_names": 233,
-  "nextest_invocations": 226,
-  "native_case_executions": 241,
+  "case_executions": 255,
+  "unique_executed_test_names": 235,
+  "nextest_invocations": 228,
+  "native_case_executions": 243,
   "component_case_executions": 12,
   "new_test_results": {
     "readiness": "PASS26.184s",
@@ -176,15 +189,15 @@
   "test_code_commit": "bc3d02835e0aa539d5a5dd8f7c1385ed85227ce5",
   "source_commit_equivalence": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/source-commit-equivalence.json",
   "publication": {
-    "draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/6",
-    "branch": "work/fresh-test-qualification-20261017",
-    "verified_remote_head": "5635b5a95b636894b1e1aae9117eac3d057329a9",
+    "draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/26",
+    "branch": "work/fresh-test-tiny-grouping-20261018",
+    "verified_remote_head": "bae867b649a043fa9d8111678201245ca3c2ab1a",
     "test_code_commit": "bc3d02835e0aa539d5a5dd8f7c1385ed85227ce5",
     "working_tree_was_clean_at_push": true,
-    "state": "PR25_DRAFT_OPEN_FIXED39CA_REMOTE_BODY78PATHS_AND_INDEPENDENT_AUDIT_VERIFIED",
+    "state": "PR26_OPEN_READY_FIXED_BAE_COMPLETE_INDEPENDENT_PUBLICATION_ACK_AT_20261018T0950Z",
     "merged_by_coordinator": "0f932806513a8dcefb5a3f3e841b98b73d02d3a1",
     "verified_merged_at": "2026-10-17T15:33:13Z",
-    "next_checkpoint": "Prepare logical22 at253/464: terminal48 three repeats/formal/safe export, plus separate H30 source18 db2e test-only commit57f5. No newunique/fullML/currentroot qualification. PR25fixed39ca retains250/461.",
+    "next_checkpoint": "Checkpoint23 externally curated at 255/466 with batch50 formal and financial audits complete. Fixed PR26 bae867/report22 remains 253/464; no new publication is claimed.",
     "next_draft_pr": "https://github.com/BullishNode/abandon-ship-bark/pull/7",
     "next_verified_remote_head": "e509f35169b8ee409310c1361305c1e1942565f2",
     "new_source_result": "Peer reviewed; canonical compile and runtime NOT RUN",
@@ -294,7 +307,17 @@
       "FAIL": 15,
       "coverage_rows": 461,
       "report": "TWENTY-FIRST-CHECKPOINT.md"
-    }
+    },
+    "current_source_commit": "57f5d32943cc0b1a30b86164e520aa68aa8577c3",
+    "current_report_commit": "bae867b649a043fa9d8111678201245ca3c2ab1a",
+    "current_payload": "checkpoint22-final-safe",
+    "current_payload_files": 68,
+    "current_report_commit_docs": 65,
+    "current_actual_PR_paths": 66,
+    "current_receipt": "PUBLICATION-PR26.json",
+    "current_receipt_sha256": "ea3f3f0c521888d70d9941ad57b57d125ce5145374e0438cce561a7e8b5a0eb0",
+    "independent_final_audit": "checkpoint22-publication-independent-audit-legacy.json",
+    "independent_final_audit_sha256": "63ac7388ee1efcc70b83150b2cbd78a606cc60198df76e21677a7d791a9a481e"
   },
   "next_batch": {
     "automatic_oversize": "Actualcorrectedfixturepassedonfrozen814+ownerpatch/source7041; original16.359sFAIL preserved. Notproductioncapacity.",
@@ -307,8 +330,9 @@
     "live_funded_registration_cohorts": "Two ignored 100/1000 authenticated-registration cohorts PASS on d05/04b v7, 47.490/80.781 seconds. Each has two funded accounts and three roots. Independent client postflight COMPLETE; retained-Core audit COMPLETE for both cohorts at tip177/Core6+: each exact 1M physical cut, no custody inference for other leaves. No funded-user throughput/fairness/full-ML promotion or further allocation.",
     "P07_lightning_physical_backup": "Actual corrected source6051/capturecdedd singleton PASS139.775; formal and independent selected605k Core/stability audits COMPLETE. One clean HtlcsReady backup boundary/dedicated sweep; no further native allocation/fullP07 promotion.",
     "SDK_watch_bridge": "Three repeated capturedC SDK cases PASS134.521; formal17pins/19controls/scopedabsence COMPLETE, allocation consumed. Manual/live shallow watch scope; no full childfee/defaultdaemon/current-root/FULLML credit.",
-    "H30": "Source18 db2e committed57f5 on new tiny-grouping branch; peer reviewed/unregistered/uncompiled/NOTRUN. Productclassifier proposal remains separate.",
-    "H32": "Client owns root-authorized source19 authoring only; original1200forfeit then later100kreceipt lifecycle proposal. Uncompiled/unrun; excluded from48 and source22packet until frozen and reviewed."
+    "H30": "Captured V17 exact db2e positive three-leaf grouped payout/history case PASS 23.972; formal 14-pin/16-control and independent selected 300k Core reconciliation complete. No whole-group dust/forged negative or full legacy/ML credit; fixed PR26 source-only publication remains historical.",
+    "H32": "Client source19 v2 67aa / peer242ed held stable, uncompiled and NOT RUN, excluded from V17. Genuine 1200 dust-forfeit/later 100k lifecycle requires a distinct future allocation; no current execution credit.",
+    "ML125_reply_restore": "Captured V17 exact 38977 clean-client Finish-reply restore PASS 44.444; formal and bounded public Core audit complete. Private backup/source/fallback-negative/history remain native assertions; no universal/full ML125 qualification."
   },
   "next_compile_policy": "Author/review in own isolated worktree; submit reviewed patch/PR increment for coordinator integration; compile from canonical stable package path only after explicit writerlease. No new own-worktree metadata.",
   "source_review_fixes": [
@@ -318,7 +342,7 @@
     "Wholecase backup deadline and exactrecoveryfee/change conservation",
     "Distinguish327payees+source record and157cosign/registerpairs fromRPCcallcount"
   ],
-  "passed_case_executions": 238,
+  "passed_case_executions": 240,
   "failed_case_executions": 15,
   "first_checkpoint": {
     "executions": 17,
@@ -526,10 +550,10 @@
     "coverage_sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
     "full_pass_limitation": "Only ML165/166 bounded327-owner shape. No expansion to restart/reorg/heterogeneous-history cases."
   },
-  "counts_warning": "253 executions =238 PASS+15 preserved failed executions;233 unique binary/test pairs;226 nextest invocations;241 native+12 components.464 mixed coverage rows include14 literal FAIL rows and are not464 full financial scenarios. No ML or production promotion.",
-  "execution_counts_through": "Batch48 three capturedC SDK repeats PASS134.521; formal17pins/19controls/source/scopedabsence complete. Exact singleton plus660 filtered skips each; zero new unique. Historical15 failed executions and14 literal CSV FAIL rows preserved.",
+  "counts_warning": "255 executions = 240 PASS + 15 preserved failed executions; 235 unique binary/test pairs; 228 nextest invocations; 243 native + 12 components. 466 mixed coverage rows are not 466 full financial scenarios. No full ML or production promotion.",
+  "execution_counts_through": "Batch50 captured V17 H30 and ML125: two PASS, 68.416 native seconds. Formal 14 pins/16 controls/scoped absence and independent bounded public Core financial audit complete. Each singleton ran once with 300 filtered skips. Two new unique pairs; all 15 failed executions / 14 literal CSV FAIL rows preserved.",
   "execution_outcomes": {
-    "PASS": 238,
+    "PASS": 240,
     "FAIL": 15
   },
   "last_completed_batch": {
@@ -840,9 +864,9 @@
   },
   "next_allocated_batch": {
     "name": "NONE",
-    "state": "OWN48_ALLOCATION_CONSUMED_NO_ACTIVE_NATIVE",
-    "completed_batch": "batch48-sdk-watch-bridge-v11c-allocated",
-    "root_allocation_sha256": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+    "state": "BATCH50_ALLOCATION_CONSUMED_NO_ACTIVE_OWN_NATIVE",
+    "completed_batch": "batch50-H30-ML125-v17",
+    "root_allocation_sha256": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
     "further_native_authorization": false
   },
   "prior_completed_batch44": {
@@ -1180,7 +1204,7 @@
     "scope": "Explicit SDK fixture: 40-block lifetime, exit delta3 and refresh4/exit2 margins. Native source-bound initiation/adoption/signed-path broadcast only; test still triggers the round/mines blocks. No completed claim, final Core6 recovery, customer payout/ownership/fees/full conservation, seed drain, default barkd lifecycle, production or fullML proof. Independent public projection verifies stable retained block structure/merkle/PoW/inventory only, not active tip or exact native path identity; unbound persisted mempool dumps cannot prove/refute final live mempool. 660 filtered skips are not executed or zero-test evidence."
   },
   "H30_source_only": {
-    "state": "V2_SOURCE_ONLY_COMMITTED_UNREGISTERED_UNCOMPILED_NOT_RUN",
+    "state": "SOURCE_V2_PEER_REVIEWED_COMMITTED_PUBLISHED_PR26_UNREGISTERED_UNCOMPILED_UNRUN",
     "owner": "backend_test_gaps",
     "source_risk_peer": "H30-grouped-zero-share-disposition-source-peer-legacy.json",
     "source_risk_peer_sha256": "4552714e70e68bbaae0731dcfd243e3e19a72a7bf4d92c35777e78d7f32ed7ab",
@@ -1191,7 +1215,9 @@
     "branch": "work/fresh-test-tiny-grouping-20261018",
     "fixed_PR25_head": "39ca7a731d26cf2bb46d84f62a944ac500c89c37",
     "publication_source_audit": "checkpoint22-H30-source-publication-independent-audit-legacy.json",
-    "publication_source_audit_sha256": "09f6d7232c69c701e1d6b3dfe070a92e4b95e8bf30ab71ad0a8d26790352b460"
+    "publication_source_audit_sha256": "09f6d7232c69c701e1d6b3dfe070a92e4b95e8bf30ab71ad0a8d26790352b460",
+    "source_commit": "57f5d32943cc0b1a30b86164e520aa68aa8577c3",
+    "publication": "PR26"
   },
   "prior_completed_batch49": {
     "name": "batch49-default-daemon-singleton-v11c",
@@ -1239,14 +1265,138 @@
     "scoped_actors_after": 0
   },
   "H32_source_only": {
-    "state": "ROOT_AUTHORIZED_AUTHORING_ONLY_UNCOMPILED_NOT_RUN",
-    "owner": "client_test_gaps",
-    "source_number": 19,
-    "proposal": "H32-genuine-dust-later-receipt-source-proposal.json",
-    "proposal_sha256": "1b5da53b25130b4a291fdf2b30b0773c1cab8aec0423fad21b5fbb9ec3fdc4d1",
-    "source_freeze": null,
-    "module_registered": false,
-    "native_credit": 0,
-    "publication_scope": "New source excluded until stable author/peer packet; no stage/export/compile/native implied."
+    "state": "SOURCE_V2_PEER_REVIEWED_COMMITTED_AND_PUSHED_UNREGISTERED_UNCOMPILED_NOT_RUN",
+    "owner": "/root/client_test_gaps",
+    "path": "testing/tests/server/qualification_dust_later_receipt.rs",
+    "provisional_sha256": "0333355ee220fe8e9227be4b69fb8b7ffdf787b07a0da6ac3e1ce6b08b7fdb95",
+    "initial_lines": 648,
+    "root_source_only_grant": "H32-source-ownership-parent.json",
+    "API_peer": "H32-design-api-peer-backend.json",
+    "full_peer_owner": "/root/backend_test_gaps",
+    "excluded_fixed_PR26": true,
+    "compiled": false,
+    "native_result": "NOT RUN",
+    "execution_credit": 0,
+    "source_sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+    "current_lines": 709,
+    "current_peer": "H32-dust-later-receipt-v2-peer-review-backend.json",
+    "current_peer_sha256": "242ed4d2ce3829beb9b4720dcfa4a767cfb08ed1f8c2fd4a929ef2308f8f0dd6",
+    "source_commit": "f36f377be24aefa78e36ad84d120356fd395379b",
+    "parent_intake": "H32-ROOT-INTAKE-v2-parent.json",
+    "parent_intake_sha256": "22e837c0411cb8c1c7d1f763017ef0ab9ae87593a445dc52f4ec8608094583b7"
+  },
+  "PR25_merge_observed": {
+    "state": "MERGED",
+    "fixed_head": "39ca7a731d26cf2bb46d84f62a944ac500c89c37",
+    "merge_commit": "d2fae7db778096ff940e3861ca575d0b7bcddb56",
+    "merged_at": "2026-10-18T08:43:21Z",
+    "source": "ActualGitHubmetadata and independent complete78mergeblobIDs/77reportpayload/source17 verification",
+    "independent_receipt": "PR25-merge-independent-verification-legacy.json",
+    "independent_receipt_sha256": "186fa2d18e1c6e60f848f8771666d11005adaf64394aac37481b3b46adcad9c0"
+  },
+  "prior_completed_batch48": {
+    "name": "batch48-sdk-watch-bridge-v11c-allocated",
+    "state": "TERMINAL_3PASS_FORMAL_AND_APPEND_CURATED_NONE_ACTIVE",
+    "parent_exec_session": 79687,
+    "session_is_not_PID": true,
+    "preflight_session": 62742,
+    "preflight_terminal_exit": 0,
+    "parent_native_launches": 1,
+    "allocation": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+    "parent_admission_sha256": "a84a2d42f040db4e6ca58581cf65f301bfad564c88b99ad88805b226694fb1b3",
+    "cases": [
+      [
+        "ark-testing::bark-sdk",
+        "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds"
+      ],
+      [
+        "ark-testing::bark-sdk",
+        "exit::watchman_sweeps_funding_tx_during_exit"
+      ],
+      [
+        "ark-testing::bark-sdk",
+        "exit::watchman_sweeps_vtxo_chain_during_exit"
+      ]
+    ],
+    "timeout_seconds_each": 180,
+    "retries": 0,
+    "serial": 1,
+    "max_global_native": 2,
+    "frozen_files": 19,
+    "pins": 17,
+    "curated_credit": 3,
+    "new_unique_credit": 0,
+    "prior_own_actors": 0,
+    "other_native_before_launch": 0,
+    "SHM_available_before_launch": 806584320,
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "parent_terminal_exit_code": 0,
+    "parent_native_active": false,
+    "actual_groups_and_SIDs": [
+      173577,
+      174944,
+      175188
+    ],
+    "native_seconds": 134.521,
+    "wall_seconds": 137.725,
+    "receipt": "batch48-sdk-watch-bridge-v11c-allocated-receipt.json",
+    "receipt_sha256": "effab7ec704f337944952215f95ec4a55a2e6301bacf442081dd7fc305d6df21",
+    "formal_postflight": "batch48-backend-postflight.json",
+    "formal_postflight_sha256": "906f834450bc1609544397d8e7d4f09c4a95407fd4c72db980c68eced57d5569",
+    "allocation_consumed": true,
+    "scoped_actors_after": 0,
+    "curation": "batch48-coverage-append.json",
+    "coverage_rows_added": [
+      "FT-SDK-059",
+      "FT-SDK-060",
+      "FT-SDK-061"
+    ],
+    "filter_skipped_per_case": 660
+  },
+  "current_checkpoint_preparation": {
+    "logical_checkpoint": 23,
+    "state": "EXTERNAL_CURATED_PUBLICATION_PENDING",
+    "report": "TWENTY-THIRD-CHECKPOINT.md",
+    "counts": {
+      "executions": 255,
+      "PASS": 240,
+      "FAIL": 15,
+      "unique_binary_test_pairs": 235,
+      "nextest_invocations": 228,
+      "native": 243,
+      "component": 12,
+      "coverage_rows": 466
+    },
+    "fixed_previous_PR": 26,
+    "fixed_previous_head": "bae867b649a043fa9d8111678201245ca3c2ab1a"
+  },
+  "next_publication": {
+    "state": "SOURCE19_PUSHED_REPORT23_PREPARING_NO_NEW_PR_CREATED_YET",
+    "branch": "work/fresh-test-dust-later-receipt-20261018",
+    "source_commit": "f36f377be24aefa78e36ad84d120356fd395379b",
+    "source_sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+    "prior_fixed_PR26_head": "bae867b649a043fa9d8111678201245ca3c2ab1a",
+    "source_status": "UNREGISTERED_UNCOMPILED_NOT_RUN",
+    "source_packet": "checkpoint23-source-proposed-safe",
+    "source_packet_manifest_sha256": "508cf0ccb1751b39f4fcd0af436f119253a59a9012b1f26b6b6749f3b1e0d5f7"
+  },
+  "H11_source_only": {
+    "state": "SOLE_NEW20_SOURCE_AUTHORING_NO_COMPILE_OR_NATIVE",
+    "owner": "/root/backend_test_gaps",
+    "path": "testing/tests/server/qualification_three_owner_forwarding.rs",
+    "selector": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+    "proposal_sha256": "5e8c30ca5e98679f8e2bf63a1b17efce5874e3dbea62b44a30b507efe028d488",
+    "root_grant": "Source-onlyprovisionallydeconflicted; authoronlyafter19stable andpriority50completed, bothconditionsmet. No module/product/canonical/build/native grant.",
+    "NOT_IN_REPORT23_SOURCE_PAYLOAD": true,
+    "result": "NOT RUN",
+    "count_credit": 0
+  },
+  "batch50_STATUS_counter_correction": {
+    "receipt": "batch50-STATUS-outcome-correction-parent.json",
+    "sha256": "f881306fe50818161acf80d92a36c68ae93e2f8ee7dc87039e563f8d612e31ac",
+    "preserved_original_STATUS": "batch50-STATUS-curation-before-outcome-correction.json",
+    "original_sha256": "1c3ce6e7c039aa3f36f1a98802dc64b47ddf2658eb2d930473d71b14ec522d8f",
+    "current_PASS": 240,
+    "current_FAIL": 15
   }
 }

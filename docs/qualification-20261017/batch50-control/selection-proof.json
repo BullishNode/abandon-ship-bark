@@ -1,0 +1,62 @@
+{
+  "state": "ROOT_ALLOCATED_ONCE_PENDING_PARENT_FRESH_GATES_AND_LAUNCH",
+  "candidate_ready": true,
+  "controls_finalized": true,
+  "execution_authorized": true,
+  "native_launch_admission": null,
+  "root_authorization": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/H30-ML125-v17-two-native-allocation-20261018.json",
+    "sha256": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185"
+  },
+  "expected_names_in_execution_order": [
+    "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+    "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::server",
+    "ark-testing::server"
+  ],
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "maximum_case_executions": 2,
+  "maximum_global_native": 2,
+  "first_fail_stops": true,
+  "CLN_required": false,
+  "CLN_pin_scope": "three pinned CLN files provenance only; neither case requests CLN",
+  "expected_ignored": false,
+  "run_ignored": null,
+  "runtime_pin_count": 14,
+  "runtime_pinlist_sha256": "1e593d4b826fb91e3f27376d9d37bc8de0c6a54eaa353e8052e047a3198f92a9",
+  "source_manifest_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+  "source_archive_sha256": "80f8e78953d3ca7ac14200bfe312c22987ca3071fbebaaed3f89bfa31c3bcdf0",
+  "bundle_manifest_sha256": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76",
+  "runtime_metadata_sha256": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab",
+  "immutable_metadata_sha256": "8393bd7182e1119554b31f40e840937adf61e51181f3280ee22d5c2256d008a2",
+  "metadata_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/nextest-binaries-runtime.json",
+  "immutable_metadata_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/nextest-binaries-immutable.json",
+  "source_archive_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/source.tar.gz",
+  "native_server_sha256": "780dde6b31eb639ccd5680800d5ab7e40585702e9ec8a0381e8c7468d3135ba6",
+  "metadata_binary_count": 1,
+  "execution_environment": {
+    "BARK_EXEC": "/fresh-cache/runtime-reserved-partial-v17-20261018/bark",
+    "BARKD_EXEC": "/fresh-cache/runtime-reserved-partial-v17-20261018/barkd",
+    "CAPTAIND_EXEC": "/fresh-cache/runtime-reserved-partial-v17-20261018/captaind",
+    "WATCHMAND_EXEC": "/fresh-cache/runtime-reserved-partial-v17-20261018/watchmand",
+    "BARK_VERSION": "bark 0.7.1-dev (d2fae7db778096ff940e3861ca575d0b7bcddb56)",
+    "BARKD_VERSION": "barkd 0.7.1-dev (d2fae7db778096ff940e3861ca575d0b7bcddb56)",
+    "CAPTAIND_VERSION": "captaind 0.7.1-dev+d2fae7db778096ff940e3861ca575d0b7bcddb56",
+    "WATCHMAND_VERSION": "watchmand 0.7.1-dev+d2fae7db778096ff940e3861ca575d0b7bcddb56",
+    "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+    "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+  },
+  "proof_sha256": {
+    "source-bindings.json": "f88bed2f1bd45f9aec8f2a42732573003d85678d8c0ee01a3e78e8adafee3db8",
+    "source-artifact-proof.json": "3dc6b03b62e605a1af809399e2d33f7476bebdcb568cf670a867811cc39a0d62",
+    "parent-actor-probe.py": "f552a7ad4a871d589bb21e644136dc79e9ccc23c71fa266e5a14983da94e4d34"
+  },
+  "root_original_partial_outcome": "UNRELATED TIMEOUT180.019 preserved; selected2 absent NOTRUN; previous root PGID/SID UNKNOWN_NOT_RECORDED",
+  "author_actions": "static construction/AST/bash-n/TOML/hash only; no generated body/preflight/list/resources/native/Cargo",
+  "limits": "No native PASS or financial qualification from capture/build/source proof. First FAIL prevents second case. Actual selected/filtered counts from new singleton listing."
+}

@@ -73,7 +73,67 @@ fn retained_terminal_omission_shape(source: &ServerVtxo, claim: &Transaction, re
 	terminal_omission_shape(source, claim) && serialize(claim) == retained
 }
 
+/// One closed epoch covers only database row IDs already allocated when it
+/// starts. Later arrivals cannot keep its tail growing; an older row becoming
+/// eligible behind the cursor is revisited in the next epoch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BackfillWindow {
+	after: i64,
+	through: i64,
+}
+
+impl BackfillWindow {
+	fn begin(self, current_max: i64) -> Self {
+		if self.after>=self.through { Self {after:0,through:current_max} } else { self }
+	}
+
+	fn advanced(self, last: Option<i64>) -> anyhow::Result<Self> {
+		let after=last.unwrap_or(self.through);
+		ensure!(after>=self.after && after<=self.through
+			&& (last.is_none() || after>self.after),"invalid user claim backfill position");
+		Ok(Self {after,..self})
+	}
+}
+
+pub(crate) struct UserClaimBackfill {
+	pub source_id: String,
+	pub body: Vec<u8>,
+	pub claim_txid: String,
+	pub observed_height: i32,
+}
+
 impl Tx<'_> {
+	/// Service metadata is committed before external reads. Unsupported or
+	/// temporarily unavailable canonical bodies must not monopolize each pass.
+	pub(crate) async fn take_user_claim_backfill(
+		&self, view: ExpiryViewToken,
+	) -> anyhow::Result<Vec<UserClaimBackfill>> {
+		self.query_one("SELECT generation FROM expiry_chain_view WHERE id=1 FOR SHARE", &[]).await?;
+		if self.expiry_rebuild_token().await? != Some(view) { return Ok(Vec::new()); }
+		let row=self.query_one("SELECT after_id,through_id FROM expiry_user_claim_backfill_service WHERE id=1 FOR UPDATE", &[]).await?;
+		let position=BackfillWindow {after:row.get("after_id"),through:row.get("through_id")};
+		let high=if position.after>=position.through {
+			self.query_one("SELECT COALESCE(MAX(id),0) FROM vtxo", &[]).await?.get(0)
+		} else { position.through };
+		let window=position.begin(high);
+		let rows=self.query("SELECT v.id,v.vtxo_id,v.vtxo,v.onchain_spent_txid,v.onchain_spent_height \
+			FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.id>$1 AND v.id<=$2 \
+			AND h.direction='incoming' AND h.chain_resolution='revoked' \
+			AND h.chain_resolution_height=v.onchain_spent_height AND v.onchain_spent_height<=$3 \
+			AND NOT EXISTS(SELECT 1 FROM expiry_user_claim_source s WHERE s.source_vtxo_id=v.vtxo_id \
+			AND s.claim_txid=v.onchain_spent_txid) ORDER BY v.id LIMIT 16",
+			&[&window.after,&window.through,&i32::try_from(view.captaind.height.min(view.watchmand.height).to_u32())?]).await?;
+		let next=window.advanced(rows.last().map(|row|row.get("id")))?;
+		self.execute("UPDATE expiry_user_claim_backfill_service SET after_id=$1,through_id=$2 WHERE id=1",
+			&[&next.after,&next.through]).await?;
+		// Decode each source only after this service position has committed. A
+		// malformed legacy body is isolated just like an unavailable Core body.
+		Ok(rows.into_iter().map(|row|UserClaimBackfill {
+			source_id:row.get("vtxo_id"),body:row.get("vtxo"),claim_txid:row.get("onchain_spent_txid"),
+			observed_height:row.get("onchain_spent_height"),
+		}).collect())
+	}
+
 	/// Called in the same transaction as the canonical source-spend observation,
 	/// or after independently fetching that canonical body during backfill.
 	/// Never replace the first body with a different witness variant of its txid.
@@ -211,6 +271,33 @@ mod tests {
 	use bitcoin::hashes::Hash;
 	use ark::test_util::VTXO_VECTORS;
 	use bitcoin::{absolute,transaction,Sequence,TxIn,Witness};
+
+	#[test]
+	fn backfill_unsupported_prefix_does_not_restart_the_same_batch() {
+		let start=BackfillWindow {after:0,through:0}.begin(48);
+		let first=start.advanced(Some(16)).unwrap();
+		// Even if all first sixteen bodies remain unsupported/unlinked, the
+		// next database range starts strictly after their actual row IDs.
+		assert_eq!(first,BackfillWindow {after:16,through:48});
+		let second=first.advanced(Some(32)).unwrap();
+		assert_eq!(second.after,32);
+		assert_eq!(second.begin(1000).through,48,"new funded arrivals cannot extend this epoch");
+		let exhausted=second.advanced(None).unwrap();
+		assert_eq!(exhausted.after,48);
+		assert_eq!(exhausted.begin(1000),BackfillWindow {after:0,through:1000});
+	}
+
+	#[test]
+	fn backfill_late_old_row_and_restart_keep_finite_epoch_position() {
+		let persisted=BackfillWindow {after:32,through:48};
+		assert_eq!(persisted.begin(1000),persisted,"a process restart does not reset the closed epoch");
+		let wrapped=persisted.advanced(None).unwrap().begin(1000);
+		assert_eq!(wrapped.after,0,"a newly eligible old row below32 is reconsidered after wrap");
+		assert!(wrapped.advanced(Some(10)).is_ok());
+		assert!(persisted.advanced(Some(20)).is_err());
+		assert!(persisted.advanced(Some(32)).is_err());
+		assert!(persisted.advanced(Some(49)).is_err());
+	}
 
 	#[test]
 	fn ordinary_or_ancestor_spend_is_not_a_retained_timeout_authorization() {

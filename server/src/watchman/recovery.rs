@@ -39,33 +39,17 @@ impl Watchman {
 	pub(crate) async fn rebuild_expiry_state(&self) -> anyhow::Result<Option<ExpiryViewToken>> {
 		let Some(view) = self.db.read(async |t| t.expiry_rebuild_token().await).await? else { return Ok(None); };
 		self.verify_expiry_view(view).await?;
-		let missing_claims=self.db.read(async |t| Ok(t.query_one("SELECT EXISTS(SELECT 1 FROM vtxo v \
-			JOIN htlc_vtxo h ON h.id=v.id WHERE h.direction='incoming' AND h.chain_resolution='revoked' \
-			AND v.onchain_spent_height<=$1 AND NOT EXISTS(SELECT 1 FROM expiry_user_claim_source s \
-			WHERE s.source_vtxo_id=v.vtxo_id AND s.claim_txid=v.onchain_spent_txid)) AS missing",
-			&[&i32::try_from(view.captaind.height.min(view.watchmand.height).to_u32())?]).await?.get::<_,bool>("missing"))).await?;
-		if !missing_claims && self.db.read(async |t| t.expiry_view_is_rebuilt(view).await).await? {
+		self.backfill_user_timeout_claims(view).await?;
+		if self.db.read(async |t| t.expiry_view_is_rebuilt(view).await).await? {
 			return Ok(Some(view));
 		}
-		let (ids,txids,claims,backfill) = self.db.read(async |t| {
+		let (ids,txids,claims) = self.db.read(async |t| {
 			let allocations = t.query("SELECT id,sweep_txid FROM expiry_allocation ORDER BY id", &[]).await?;
 			let ids = allocations.iter().map(|r| r.get::<_, i64>("id")).collect::<Vec<_>>();
 			let mut txids = allocations.iter().filter_map(|r| r.get::<_, Option<&str>>("sweep_txid"))
 				.map(Txid::from_str).collect::<Result<BTreeSet<_>, _>>()?;
 			for row in t.query("SELECT txid FROM expiry_fee_child", &[]).await? { txids.insert(row.get::<_, &str>("txid").parse()?); }
 			for row in t.query("SELECT txid FROM expiry_user_claim_tx", &[]).await? { txids.insert(row.get::<_,&str>("txid").parse()?); }
-			// Upgrade existing canonical timeout observations in bounded batches.
-			// No entitlement must already exist to preserve this authorization.
-			let mut backfill=Vec::new();
-			for row in t.query("SELECT v.vtxo,v.onchain_spent_txid FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id \
-				WHERE h.direction='incoming' AND h.chain_resolution='revoked' AND v.onchain_spent_height<=$1 \
-				AND NOT EXISTS(SELECT 1 FROM expiry_user_claim_source s WHERE s.source_vtxo_id=v.vtxo_id \
-				AND s.claim_txid=v.onchain_spent_txid) ORDER BY v.vtxo_id LIMIT 16",
-				&[&i32::try_from(view.captaind.height.min(view.watchmand.height).to_u32())?]).await? {
-				let txid:Txid=row.get::<_,&str>("onchain_spent_txid").parse()?;
-				txids.insert(txid);
-				backfill.push((ServerVtxo::deserialize(row.get("vtxo"))?,txid));
-			}
 			let mut claims = Vec::new();
 			for row in t.query("SELECT e.id,v.vtxo,v.onchain_spent_txid FROM expiry_entitlement e JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE v.onchain_spent_height IS NOT NULL AND v.onchain_spent_height<=$1", &[&i32::try_from(view.captaind.height.min(view.watchmand.height).to_u32())?]).await? {
 				let txid: Txid = row.get::<_, &str>("onchain_spent_txid").parse()?;
@@ -75,7 +59,7 @@ impl Watchman {
 				txids.insert(txid);
 				claims.push((row.get::<_, i64>("id"),ServerVtxo::deserialize(row.get("vtxo"))?,txid));
 			}
-			Ok((ids,txids,claims,backfill))
+			Ok((ids,txids,claims))
 		}).await?;
 		let mut confirmed = BTreeMap::<Txid,BlockRef>::new();
 		for txid in txids {
@@ -84,13 +68,6 @@ impl Watchman {
 					confirmed.insert(txid,point);
 				}
 			}
-		}
-		let mut retained_claims=Vec::new();
-		for (source,txid) in backfill {
-			let Some(point)=confirmed.get(&txid).copied() else { continue; };
-			let claim=self.bitcoind.get_raw_transaction_verbosity_zero(&txid).await?.0;
-			ensure!(claim.compute_txid()==txid,"canonical user claim body identity differs");
-			retained_claims.push((source,claim,point));
 		}
 		// The ordinary package's child may confirm before any sweep observes
 		// it in the mempool. Recover its actual body from the parent's canonical
@@ -148,11 +125,6 @@ impl Watchman {
 			let current = t.query("SELECT id FROM expiry_allocation ORDER BY id FOR UPDATE", &[]).await?
 				.into_iter().map(|r| r.get::<_, i64>("id")).collect::<Vec<_>>();
 			ensure!(current == ids, "expiry allocations changed during chain reconstruction");
-			for (source,claim,point) in &retained_claims {
-				let current=t.query_opt("SELECT vtxo_id FROM vtxo WHERE vtxo_id=$1 AND onchain_spent_txid=$2 AND onchain_spent_height=$3",
-					&[&source.id().to_string(),&claim.compute_txid().to_string(),&i32::try_from(point.height.to_u32())?]).await?;
-				if current.is_some() { t.retain_user_timeout_claim(source,claim,*point).await?; }
-			}
 			for (id,parent,observed) in &observations {
 				t.store_observed_expiry_fee_child(view,*id,parent,observed).await?;
 			}

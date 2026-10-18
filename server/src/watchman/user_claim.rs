@@ -5,8 +5,9 @@ use anyhow::Context;
 use ark::{ProtocolEncoding, ServerVtxo};
 use bitcoin::{Amount, Transaction, Txid};
 use bitcoin::consensus::deserialize;
-use bitcoin_ext::TxStatus;
+use bitcoin_ext::{BlockHeight, TxStatus};
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
+use bitcoind_async_client::traits::Reader;
 use tracing::{info, warn};
 
 use crate::bitcoind as bcd;
@@ -17,6 +18,45 @@ use super::Watchman;
 const REPLAY_BATCH: i64 = 16;
 
 impl Watchman {
+	/// Upgrade legacy chain observations independently of the financial rebuild.
+	/// A rejected witness variant or one unavailable raw body never aborts the
+	/// remaining sources, invalidates payments, or forces another full rebuild.
+	pub(crate) async fn backfill_user_timeout_claims(&self, view: ExpiryViewToken) -> anyhow::Result<()> {
+		let pending=self.db.write(async |t|t.take_user_claim_backfill(view).await).await?;
+		for item in pending {
+			let result=async {
+				let source:ServerVtxo=ServerVtxo::deserialize(&item.body)?;
+				let claim_txid:Txid=item.claim_txid.parse()?;
+				ensure!(source.id().to_string()==item.source_id,"legacy source body identity differs");
+				let TxStatus::Confirmed(point)=bcd::tx_status(&self.bitcoind,claim_txid).await? else { return Ok(()); };
+				if point.height!=BlockHeight::try_from(item.observed_height)? || point.height>view.captaind.height.min(view.watchmand.height) { return Ok(()); }
+				let claim=self.bitcoind.get_raw_transaction_verbosity_zero(&claim_txid).await?.0;
+				ensure!(claim.compute_txid()==claim_txid,"canonical user claim body identity differs");
+				self.verify_expiry_view(view).await?;
+				self.db.write(async |t| {
+					t.query_one("SELECT generation FROM expiry_chain_view WHERE id=1 FOR SHARE", &[]).await?;
+					if t.expiry_rebuild_token().await?!=Some(view) { return Ok(()); }
+					let row=t.query_opt("SELECT v.vtxo_id FROM vtxo v JOIN watchmand_block b ON b.height=v.onchain_spent_height \
+						WHERE v.vtxo_id=$1 AND v.onchain_spent_txid=$2 AND v.onchain_spent_height=$3 \
+						AND b.hash=$4 AND v.vtxo=$5 FOR UPDATE OF v",&[&item.source_id,&item.claim_txid,
+						&i32::try_from(point.height.to_u32())?,&point.hash.to_string(),&item.body]).await?;
+					if row.is_some() {
+						t.retain_user_timeout_claim(&source,&claim,point).await?;
+						ensure!(t.query_opt("SELECT source_vtxo_id FROM expiry_user_claim_source WHERE source_vtxo_id=$1 AND claim_txid=$2",
+							&[&item.source_id,&item.claim_txid]).await?.is_some(),
+							"canonical timeout witness is incompatible with the retained body; source remains pending");
+					}
+					Ok(())
+				}).await
+			}.await;
+			if let Err(error)=result {
+				warn!(source=%item.source_id,txid=%item.claim_txid,error=%format_args!("{error:#}"),
+					"Legacy user timeout body remains pending; continue the closed service epoch");
+			}
+		}
+		Ok(())
+	}
+
 	pub(crate) async fn replay_user_timeout_claims(&self, view: ExpiryViewToken) -> anyhow::Result<()> {
 		// Service bookkeeping is deliberately outside the financial revision
 		// trigger. One permanently blocked batch cannot monopolize every pass.

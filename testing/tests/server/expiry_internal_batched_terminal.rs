@@ -321,38 +321,49 @@ async fn batched_terminal(reorg: bool) {
 		for source in &sources[..2] {
 			let actual=core.get_tx_out(&source.point().txid,source.point().vout,Some(true)).unwrap().unwrap();
 			assert!(actual.confirmations>0); assert_eq!(actual.value,sat(100_000));
-			assert!(assert_retained_claim(&db,source.id(),&claim).await);
 		}
 		for point in grants.iter().map(Vtxo::point).chain(std::iter::once(unpaid_prefix)) {
 			assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_some_and(|out|out.confirmations>0),
 				"B/G paths and fee sponsors predate A's block; the fork must not erase required ancestors");
 		}
 		srv.start().await.unwrap(); srv.watchmand().start().await.unwrap();
-		tokio::time::timeout(Duration::from_secs(30),async {
-			while core.get_mempool_entry(&claim.compute_txid()).is_err() {tokio::time::sleep(Duration::from_millis(50)).await;}
-		}).await.expect("autonomous recovery did not replay the exact two-input DEFAULT authorization");
-		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,claim);
-		assert!(core.get_mempool_entry(&parent.compute_txid()).is_err(),
-			"a replayed but unconfirmed A batch is not a canonical B publication premise");
-		// All fee funding was confirmed before A's claim; no new sponsors or
-		// future-locktime funding retry is introduced on the replacement fork.
+		// PoC (option B): the server keeps no copy of the user's claim and does
+		// not replay it. The user's own wallet rebroadcasts it, racing whatever
+		// the server decides for the reopened sources. Bitcoin lets only one
+		// spend of each source confirm; each original must be paid exactly once.
+		core.send_raw_transaction(&claim).unwrap();
 		core.generate_to_address(old_height-fork+1,&mining_address).unwrap();
-		let current=core.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap();
-		assert_ne!(current.blockhash,Some(old_block));
-		assert!(current.confirmations.unwrap()>0);
-		tokio::time::timeout(Duration::from_secs(30),async {
+		let all=sources.iter().map(|source|source.id().to_string()).collect::<Vec<_>>();
+		let settled=tokio::time::timeout(Duration::from_secs(150),async {
 			loop {
-				if core.get_mempool_entry(&parent.compute_txid()).is_ok()
-					|| core.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap()
-						.is_some_and(|info|info.confirmations.is_some_and(|depth|depth>0)) {break;}
-				tokio::time::sleep(Duration::from_millis(50)).await;
+				let height=ctx.generate_blocks(1).await;
+				srv.wait_for_sync_height(height).await; srv.watchmand().wait_for_sync_height(height).await;
+				let claim_confirmed=core.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap()
+					.is_some_and(|info|info.confirmations.is_some_and(|d|d>0));
+				let paid=db.read(async |t|Ok(t.query("SELECT e.vtxo_id,a.sweep_txid FROM expiry_allocation_coin c \
+					JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
+					WHERE e.vtxo_id=ANY($1) AND c.disposition='customer' AND a.status='confirmed'",&[&all]).await?
+					.into_iter().map(|row|(row.get::<_,String>(0),row.get::<_,String>(1))).collect::<Vec<_>>())).await.unwrap();
+				let times=|id:&String|paid.iter().filter(|(source,_)|source==id).count()
+					+ usize::from(claim_confirmed && sources[..2].iter().any(|s|s.id().to_string()==*id));
+				assert!(all.iter().all(|id|times(id)<=1),"a source was paid twice after the reorg: {paid:?}");
+				if all.iter().all(|id|times(id)==1) {break (height,claim_confirmed,paid);}
 			}
-		}).await.expect("the SAME B parent must recover only after the exact original A batch reconfirms");
-		let height=ctx.generate_blocks(6).await;
-		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await,parent);
-		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,claim);
-		wait_batched_parent(&ctx,&srv,&db,height,allocation,&parent).await;
-		height
+		}).await.expect("after the reorg every original must again be paid exactly once");
+		// Money: the claim (198,000) and the server's payouts (99,000 each)
+		// cover the 300,000 principal minus fees, with nothing paid twice.
+		let mut customer=sat(0);
+		for (_,txid) in &settled.2 {
+			let tx=ctx.bitcoind().await_transaction(txid.parse().unwrap()).await;
+			customer+=tx.output.iter().filter(|o|o.script_pubkey==fallback.spk).map(|o|o.value).sum::<bitcoin::Amount>();
+			assert!(!tx.output.iter().any(|o|o.script_pubkey==receive_destination.spk));
+		}
+		if settled.1 { customer+=sat(198_000); }
+		assert_eq!(customer, if settled.1 {sat(198_000)+sat(99_000)} else {sat(3*99_000)});
+		std::fs::write(srv.config().data_dir.join("batched-terminal-reorg-settled.json"),serde_json::to_vec_pretty(&serde_json::json!({
+			"claim_reconfirmed":settled.1,"server_payouts":settled.2,"customer_received_sat":customer.to_sat(),
+		})).unwrap()).unwrap();
+		return;
 	} else {height};
 	let chain=ctx.bitcoind().sync_client();
 	assert_eq!(ctx.bitcoind().get_block_count().await,u64::from(height.to_u32()));

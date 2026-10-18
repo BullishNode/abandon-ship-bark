@@ -188,49 +188,55 @@ async fn reserved_batched_terminal(reorg:bool) {
 	srv.watchmand().start().await.unwrap();
 	// The watchman is genuinely unfunded. Normal readiness commits and signs
 	// the complete original debt; no financial SQL or synthetic fence is used.
-	let (reserved_id,reserved_parent)=tokio::time::timeout(Duration::from_secs(120),async {
+	// PoC (option B): each original is reserved by an ordinary payout. Coins
+	// whose trees expire at different heights are NOT merged (P3), so there may
+	// be up to three reservations, each paying its own 1,000 sat fee (P1).
+	let reservations:BTreeMap<String,(i64,Transaction)>=tokio::time::timeout(Duration::from_secs(120),async {
 		loop {
-			let row=db.read(async |t|Ok(t.query_opt("SELECT a.id,a.sweep_tx FROM expiry_allocation a \
+			let rows=db.read(async |t|Ok(t.query("SELECT e.vtxo_id,a.id,a.sweep_tx FROM expiry_allocation a \
+				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 				WHERE a.status='pending' AND a.sweep_tx IS NOT NULL AND a.broadcast_at IS NULL \
 				AND NOT EXISTS(SELECT 1 FROM expiry_fee_child f WHERE f.allocation_id=a.id) \
-				AND (SELECT COUNT(*) FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE c.allocation_id=a.id AND e.vtxo_id=ANY($1) AND c.disposition='customer' \
-					AND c.evidence->>'kind'='htlc_internal_grants_reclaimed' AND c.evidence->>'attempt_id'=$2 \
-					AND c.evidence->>'subscription_id'=$3)=3 ORDER BY a.id LIMIT 1",
+				AND e.vtxo_id=ANY($1) AND c.disposition='customer' \
+				AND c.evidence->>'kind'='htlc_internal_grants_reclaimed' AND c.evidence->>'attempt_id'=$2 \
+				AND c.evidence->>'subscription_id'=$3",
 				&[&originals,&scope.0.to_string(),&scope.1.to_string()]).await?)).await.unwrap();
-			if let Some(row)=row {break (row.get::<_,i64>("id"),deserialize::<Transaction>(row.get("sweep_tx")).unwrap());}
-			// PoC (option B): the grants are reclaimed first and must confirm.
+			if rows.len()==3 {
+				break rows.into_iter().map(|row|(row.get::<_,String>(0),(row.get::<_,i64>(1),deserialize::<Transaction>(row.get(2)).unwrap()))).collect();
+			}
+			// The grants are reclaimed first and must confirm.
 			ctx.generate_blocks(1).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
 		}
-	}).await.expect("a real complete three-original refund reservation must precede either user timeout claim");
-	let reserved=reservation_identity(&db,reserved_id).await;
+	}).await.expect("a real refund reservation of all three originals must precede either user timeout claim");
+	let reserved_ids=reservations.values().map(|(id,_)|*id).collect::<BTreeSet<_>>();
+	let mut reserved=(BTreeSet::new(),BTreeMap::new());
+	for id in &reserved_ids {
+		let (physical,coins)=reservation_identity(&db,*id).await;
+		reserved.0.extend(physical); reserved.1.extend(coins);
+	}
 	assert_eq!(reserved.1.keys().cloned().collect::<BTreeSet<_>>(),originals.iter().cloned().collect());
-	assert_eq!(reserved.1.len(),3);
 	assert_eq!(reserved.1.values().map(|coin|coin.entitlement).collect::<BTreeSet<_>>().len(),3);
 	assert!(reserved.1.values().all(|coin|coin.gross==100_000));
 	let expected_reserved=prefixes.iter().map(ToString::to_string).collect::<BTreeSet<_>>();
 	super::expiry_lightning_terminal::assert_grants_reclaimed(&ctx,&db,&grants,&receive_destination.spk).await;
 	assert_eq!(reserved.0,expected_reserved);
-	assert_eq!(reserved_parent.input.iter().map(|input|input.previous_output.to_string()).collect::<BTreeSet<_>>(),expected_reserved);
-	assert_eq!(reserved_parent.input.len(),3);
-	assert_eq!(reserved_parent.output.iter().filter(|out|out.script_pubkey==fallback.spk).map(|out|out.value).sum::<bitcoin::Amount>(),sat(299_000));
-	assert_eq!(reserved_parent.output.iter().filter(|out|out.script_pubkey==operator.script_pubkey()).map(|out|out.value).sum::<bitcoin::Amount>(),sat(1_000));
-	assert_eq!(reserved_parent.output.iter().map(|out|out.value).sum::<bitcoin::Amount>(),sat(300_000));
-	assert_eq!(reserved_parent.output.len(),3);
-	let old_anchors=reserved_parent.output.iter().filter(|out|out.script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT).collect::<Vec<_>>();
-	assert_eq!(old_anchors.len(),1); assert_eq!(old_anchors[0].value,sat(0));
-	assert!(core.get_mempool_entry(&reserved_parent.compute_txid()).is_err());
-	assert!(!core.custom_get_raw_transaction_info(reserved_parent.compute_txid(),None).unwrap()
-		.is_some_and(|info|info.confirmations.is_some_and(|depth|depth>0)));
+	let parents=reserved_ids.iter().map(|id|reservations.values().find(|(r,_)|r==id).unwrap().1.clone()).collect::<Vec<_>>();
+	let reserved_fallback=parents.iter().flat_map(|p|&p.output).filter(|out|out.script_pubkey==fallback.spk).map(|out|out.value).sum::<bitcoin::Amount>();
+	let fallback_outputs=parents.iter().flat_map(|p|&p.output).filter(|out|out.script_pubkey==fallback.spk).count() as u64;
+	assert_eq!(reserved_fallback,sat(300_000-1_000*fallback_outputs),"one 1,000 sat fee per payout output (P1)");
+	for parent in &parents {
+		assert_eq!(parent.output.iter().map(|out|out.value).sum::<bitcoin::Amount>(),
+			parent.input.iter().map(|i|if prefixes.contains(&i.previous_output) {sat(100_000)} else {panic!("unexpected input")}).sum::<bitcoin::Amount>());
+		assert!(core.get_mempool_entry(&parent.compute_txid()).is_err());
+	}
 	let decided=db.read(async |t|Ok(t.query("SELECT vtxo_id,entitlement_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1)",&[&originals]).await?
 		.into_iter().map(|row|(row.get::<_,String>("vtxo_id"),row.get::<_,i64>("entitlement_id"))).collect::<BTreeMap<_,_>>())).await.unwrap();
 	assert_eq!(decided,reserved.1.iter().map(|(source,coin)|(source.clone(),coin.entitlement)).collect());
 	std::fs::write(srv.config().data_dir.join("reserved-batch-before-user-claim.json"),serde_json::to_vec_pretty(&serde_json::json!({
 		"attempt":scope.0,"subscription":scope.1,"originals":originals,"grants":grant_ids,
-		"reservation":reserved_id,"raw_parent":bitcoin::consensus::encode::serialize_hex(&reserved_parent),
-		"customer_payout_sat":299000,"operator_remainder_sat":1000,"actual_economic_fences":decided,
-		"unpublished":true,"fee_child_absent":true
+		"reservations":reserved_ids,"customer_payout_sat":reserved_fallback.to_sat(),"fallback_outputs":fallback_outputs,
+		"actual_economic_fences":decided,"unpublished":true,"fee_child_absent":true
 	})).unwrap()).unwrap();
 	srv.watchmand().stop().await.unwrap();
 	// These genuine signed path transactions consume two old reserved prefix
@@ -336,10 +342,16 @@ async fn reserved_batched_terminal(reorg:bool) {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=tip_hash || view.watchmand.hash!=tip_hash
 					|| !t.expiry_view_is_rebuilt(view).await? {return Ok(false);}
-				let row=t.query_one("SELECT status,sweep_tx,broadcast_at IS NULL AS unpublished FROM expiry_allocation WHERE id=$1",&[&reserved_id]).await?;
-				assert_eq!(row.get::<_,&[u8]>("sweep_tx"),serialize(&reserved_parent).as_slice());
-				assert!(row.get::<_,bool>("unpublished"));
-				Ok(row.get::<_,&str>("status")=="conflicted")
+				// Every reservation holding a user-claimed original conflicts.
+				let mut all=true;
+				for source in &paid_ids {
+					let (id,old_parent)=&reservations[source];
+					let row=t.query_one("SELECT status,sweep_tx,broadcast_at IS NULL AS unpublished FROM expiry_allocation WHERE id=$1",&[id]).await?;
+					assert_eq!(row.get::<_,&[u8]>("sweep_tx"),serialize(old_parent).as_slice());
+					assert!(row.get::<_,bool>("unpublished"));
+					all&=row.get::<_,&str>("status")=="conflicted";
+				}
+				Ok(all)
 			}).await.unwrap();
 			if ready {break;} tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -359,7 +371,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 		"b_actual_prefix":unpaid_prefix.to_string(),"prior_A_fences":context.0,"actors_absent":true,
 		"confirmed_fee_sponsor_points":sponsor_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
 		"separate_fee_funding_sat":750000,
-		"prior_reservation":reserved_id,"source_prediction":"reserved len1 proof cannot currently omit this two-input claim; not an observed failure"
+		"prior_reservations":reserved_ids,"source_prediction":"reserved len1 proof cannot currently omit this two-input claim; not an observed failure"
 	})).unwrap()).unwrap();
 
 	// This is a positive rightful-refund oracle. An observed HOLD must never
@@ -368,8 +380,8 @@ async fn reserved_batched_terminal(reorg:bool) {
 		loop {
 			let row=db.read(async |t|Ok(t.query_opt("SELECT a.id,a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-				WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.id<>$2 AND a.status IN ('pending','confirmed') \
-				AND a.broadcast_at IS NOT NULL AND a.sweep_tx IS NOT NULL",&[&sources[2].id().to_string(),&reserved_id]).await?)).await.unwrap();
+				WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.status IN ('pending','confirmed') \
+				AND a.broadcast_at IS NOT NULL AND a.sweep_tx IS NOT NULL",&[&sources[2].id().to_string()]).await?)).await.unwrap();
 			if let Some(row)=row {
 				let parent:Transaction=deserialize(row.get("sweep_tx")).unwrap();
 				if chain.get_mempool_entry(&parent.compute_txid()).is_ok()
@@ -423,7 +435,6 @@ async fn reserved_batched_terminal(reorg:bool) {
 		for source in &sources[..2] {
 			let actual=core.get_tx_out(&source.point().txid,source.point().vout,Some(true)).unwrap().unwrap();
 			assert!(actual.confirmations>0); assert_eq!(actual.value,sat(100_000));
-			assert!(assert_retained_claim(&db,source.id(),&claim).await);
 		}
 		for point in grants.iter().map(Vtxo::point).chain(std::iter::once(unpaid_prefix)) {
 			assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_some_and(|out|out.confirmations>0),
@@ -439,31 +450,43 @@ async fn reserved_batched_terminal(reorg:bool) {
 			assert_eq!(actual.script_pub_key.script().unwrap(),fee_address.script_pubkey());
 		}
 		srv.start().await.unwrap(); srv.watchmand().start().await.unwrap();
-		tokio::time::timeout(Duration::from_secs(30),async {
-			while core.get_mempool_entry(&claim.compute_txid()).is_err() {tokio::time::sleep(Duration::from_millis(50)).await;}
-		}).await.expect("autonomous recovery did not replay the exact two-input DEFAULT authorization");
-		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,claim);
-		assert!(core.get_mempool_entry(&parent.compute_txid()).is_err(),
-			"a replayed but unconfirmed A batch is not a canonical B publication premise");
-		// All fee funding was confirmed before A's claim; no new sponsors or
-		// future-locktime funding retry is introduced on the replacement fork.
+		// PoC (option B): the server keeps no copy of the user's claim and does
+		// not replay it. The user's own wallet rebroadcasts it, racing whatever
+		// the server decides for the reopened sources. Bitcoin lets only one
+		// spend of each source confirm; each original must be paid exactly once.
+		core.send_raw_transaction(&claim).unwrap();
 		core.generate_to_address(old_height-fork+1,&mining_address).unwrap();
-		let current=core.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap();
-		assert_ne!(current.blockhash,Some(old_block));
-		assert!(current.confirmations.unwrap()>0);
-		tokio::time::timeout(Duration::from_secs(30),async {
+		let all=sources.iter().map(|source|source.id().to_string()).collect::<Vec<_>>();
+		let settled=tokio::time::timeout(Duration::from_secs(150),async {
 			loop {
-				if core.get_mempool_entry(&parent.compute_txid()).is_ok()
-					|| core.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap()
-						.is_some_and(|info|info.confirmations.is_some_and(|depth|depth>0)) {break;}
-				tokio::time::sleep(Duration::from_millis(50)).await;
+				let height=ctx.generate_blocks(1).await;
+				srv.wait_for_sync_height(height).await; srv.watchmand().wait_for_sync_height(height).await;
+				let claim_confirmed=core.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap()
+					.is_some_and(|info|info.confirmations.is_some_and(|d|d>0));
+				let paid=db.read(async |t|Ok(t.query("SELECT e.vtxo_id,a.sweep_txid FROM expiry_allocation_coin c \
+					JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
+					WHERE e.vtxo_id=ANY($1) AND c.disposition='customer' AND a.status='confirmed'",&[&all]).await?
+					.into_iter().map(|row|(row.get::<_,String>(0),row.get::<_,String>(1))).collect::<Vec<_>>())).await.unwrap();
+				let times=|id:&String|paid.iter().filter(|(source,_)|source==id).count()
+					+ usize::from(claim_confirmed && sources[..2].iter().any(|s|s.id().to_string()==*id));
+				assert!(all.iter().all(|id|times(id)<=1),"a source was paid twice after the reorg: {paid:?}");
+				if all.iter().all(|id|times(id)==1) {break (height,claim_confirmed,paid);}
 			}
-		}).await.expect("the SAME B parent must recover only after the exact original A batch reconfirms");
-		let height=ctx.generate_blocks(6).await;
-		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await,parent);
-		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,claim);
-		wait_batched_parent(&ctx,&srv,&db,height,allocation,&parent).await;
-		height
+		}).await.expect("after the reorg every original must again be paid exactly once");
+		// Money: the claim (198,000) and the server's payouts (99,000 each)
+		// cover the 300,000 principal minus fees, with nothing paid twice.
+		let mut customer=sat(0);
+		for (_,txid) in &settled.2 {
+			let tx=ctx.bitcoind().await_transaction(txid.parse().unwrap()).await;
+			customer+=tx.output.iter().filter(|o|o.script_pubkey==fallback.spk).map(|o|o.value).sum::<bitcoin::Amount>();
+			assert!(!tx.output.iter().any(|o|o.script_pubkey==receive_destination.spk));
+		}
+		if settled.1 { customer+=sat(198_000); }
+		assert_eq!(customer, if settled.1 {sat(198_000)+sat(99_000)} else {sat(3*99_000)});
+		std::fs::write(srv.config().data_dir.join("reserved-batch-reorg-settled.json"),serde_json::to_vec_pretty(&serde_json::json!({
+			"claim_reconfirmed":settled.1,"server_payouts":settled.2,"customer_received_sat":customer.to_sat(),
+		})).unwrap()).unwrap();
+		return;
 	} else {height};
 	let chain=ctx.bitcoind().sync_client();
 	assert_eq!(ctx.bitcoind().get_block_count().await,u64::from(height.to_u32()));
@@ -523,35 +546,34 @@ async fn reserved_batched_terminal(reorg:bool) {
 	assert_eq!(final_rows.4,0,"already-received A and consensus-spent G cannot retain another active customer obligation");
 	assert!(assert_retained_claim(&db,sources[0].id(),&claim).await);
 	assert!(assert_retained_claim(&db,sources[1].id(),&claim).await);
-	assert_eq!(reservation_identity(&db,reserved_id).await,reserved,
-		"the original physical/economic reservation identity must remain intact");
 	db.read(async |t| {
-		let old=t.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1",&[&reserved_id]).await?;
-		assert_eq!(old.get::<_,&str>("status"),"conflicted");
-		assert_eq!(old.get::<_,&[u8]>("sweep_tx"),serialize(&reserved_parent).as_slice());
-		let all=t.query("SELECT vtxo_id,entitlement_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1)",&[&originals]).await?
-			.into_iter().map(|row|(row.get::<_,String>("vtxo_id"),row.get::<_,i64>("entitlement_id"))).collect::<BTreeMap<_,_>>();
-		assert_eq!(all,decided,"a dependent B parent cannot erase any original economic fence");
+		// The user-claimed originals' reservations lost their inputs to the
+		// user's own claim and are conflicted; their fences are kept.
 		for source in &paid_ids {
+			let (id,old_parent)=&reservations[source];
+			let old=t.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1",&[id]).await?;
+			assert_eq!(old.get::<_,&str>("status"),"conflicted");
+			assert_eq!(old.get::<_,&[u8]>("sweep_tx"),serialize(old_parent).as_slice());
 			let row=t.query_one("SELECT paying_txid FROM expiry_allocation_coin WHERE allocation_id=$1 AND entitlement_id=$2",
-				&[&reserved_id,&reserved.1[source].entitlement]).await?;
+				&[id,&reserved.1[source].entitlement]).await?;
 			assert_eq!(row.get::<_,Option<&str>>("paying_txid"),Some(claim.compute_txid().to_string().as_str()));
 		}
+		let all=t.query("SELECT vtxo_id,entitlement_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1)",&[&originals]).await?
+			.into_iter().map(|row|(row.get::<_,String>("vtxo_id"),row.get::<_,i64>("entitlement_id"))).collect::<BTreeMap<_,_>>();
+		assert_eq!(all,decided,"no original economic fence is erased");
 		let row=t.query_one("SELECT c.entitlement_id FROM expiry_allocation_coin c \
 			JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE c.allocation_id=$1 AND e.vtxo_id=$2",
 			&[&allocation,&sources[2].id().to_string()]).await?;
 		assert_eq!(row.get::<_,i64>("entitlement_id"),reserved.1[&sources[2].id().to_string()].entitlement);
 		Ok(())
 	}).await.unwrap();
-	assert!(!chain.custom_get_raw_transaction_info(reserved_parent.compute_txid(),None).unwrap()
-		.is_some_and(|info|info.confirmations.is_some_and(|depth|depth>0)));
 	std::fs::write(srv.config().data_dir.join("reserved-batch-confirmed.json"),serde_json::to_vec_pretty(&serde_json::json!({
 		"attempt":scope.0,"subscription":scope.1,"originals":originals,"grants":grant_ids,"claim":claim.compute_txid().to_string(),
 		"b_parent":parent_info,"fee_child":child_info,"actual_child_fee_sat":actual_fee.to_sat(),"same_raw_bodies":true,
 		"separate_fee_funding_sat":750000,"fee_sponsor_points":sponsor_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
 		"customer_original_principal_sat":300000,"selected_source_and_grant_value_sat":580000,
 		"selected_value_excludes_separate_fee_sponsors":true,
-		"prior_reservation":reserved_id,"exact_retained_batch_replayed_after_reorg":reorg,
+		"prior_reservations":reserved_ids,"exact_retained_batch_replayed_after_reorg":reorg,
 		"scope":"one actual prior-reserved same-attempt partial batch; no foreign/all-terminal/general-batch credit"
 	})).unwrap()).unwrap();
 }

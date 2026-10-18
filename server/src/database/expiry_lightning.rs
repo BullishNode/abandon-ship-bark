@@ -7,7 +7,7 @@
 use anyhow::Context;
 use ark::VtxoId;
 use ark::lightning::{PaymentHash, Preimage};
-use bitcoin_ext::{BlockDelta, BlockHeight};
+use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef};
 
 use super::Tx;
 use super::ln::LightningPaymentAttempt;

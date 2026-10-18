@@ -258,7 +258,7 @@ impl Tx<'_> {
 			for coin in &output.coins {
 				let proposal = &coin.ownership;
 				let evidence = proposal.evidence.as_ref().context("ready ownership lacks evidence")?;
-				let mut observed = evidence_json(evidence, proposal.has_stored_preimage);
+				let observed = evidence_json(evidence, proposal.has_stored_preimage);
 				let conditional = matches!(evidence, OwnershipEvidence::HtlcChain { .. } | OwnershipEvidence::HtlcInternalGrantsReclaimed { .. });
 				let mut stable = if conditional {
 					serde_json::json!({"stored_preimage": proposal.has_stored_preimage})
@@ -297,7 +297,7 @@ impl Tx<'_> {
 				self.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW() WHERE vtxo_id=$1", &[&proposal.id.to_string()]).await?;
 			}
 		}
-		let inputs = accepted.iter().map(|o| o.root.id()).chain(dependencies.iter().map(|g| g.id())).collect();
+		let inputs = accepted.iter().map(|o| o.root.id()).collect();
 		Ok(Some(CommittedExpiryGroup { id, inputs, dropped }))
 	}
 

@@ -1,0 +1,38 @@
+{
+  "recorded_at": "2026-10-18T19:21:55.471781+00:00",
+  "state": "TWO_SELECTED_PUBLIC_SIGNET_LIFECYCLES_COMPLETE",
+  "production_ready": false,
+  "deployment": "V18, experimental short-lifetime profile; not V25/V26/final release candidate",
+  "receive": {
+    "payout_sat": 3890,
+    "recovery_confirmations_at_prior_acceptance": 6,
+    "prior_owned_core_receipt_sha256": "31fc6eac8cfa604ca0a12eb42fb6a7fc433ba728117d9a2b6b6862be2a6f045d",
+    "provenance": "Coin materialized V11c, automatic fallback/seed recovery observed on V18; no new receive executed by this report."
+  },
+  "failed_send": {
+    "owned_core_height": 326930,
+    "observed_at": "2026-10-18T19:15:30.871812+00:00",
+    "payout_txid": "bb621176ece2d5cfa4d1c35a30fe14d36ea2b6eb5780afafeafe891dd68fc2a4",
+    "fee_child_txid": "b3db23461fed79c4bbc89bd775b011f4205e9bb8628abbe6b91320d245e62e33",
+    "parent_child_confirmations": 12,
+    "customer_payout_sat": 18670,
+    "customer_output_fee_sat": 1000,
+    "parent_miner_fee_sat": 0,
+    "separately_sponsored_child_fee_sat": 363,
+    "recovery_txid": "22f7354ccb0952d6b51df78954da05f54f7d644f19581f6b2ce6ce5fc5640015",
+    "recovery_confirmations": 6,
+    "recovery_equation_sat": "18670customerpayout+9542existingBDKchange=28034treasuryrecovery+178miner",
+    "original_observer_final_receipt_sha256": "bc9a2df3c4c7d27ee4135c88706ad5789cba79c1389e30c46e33693d5635e66c",
+    "independent_owned_core_watch_sha256": "415f79732bf1c31511c2413e99ba46ec3fb25210fe0f6ad1b81252b0fedd3409",
+    "both_final_confirmations_gates_pass": true,
+    "original_observer_complete": true,
+    "original_services_unchanged_no_restarts": true,
+    "financial_actions_by_watch": 0
+  },
+  "limits": [
+    "Exact selected successful receive and attempted external failed-send fallback cases only; no Noah/LNURL evaluation credit.",
+    "Public Signet block production was observed, not controlled. Earlier premature inner PASS and interrupted observer records remain retained.",
+    "Nested generic incomplete labels concern other frozen coins/global case coverage; selected exact payouts and actual recovery transactions are independently established at the required depth.",
+    "No final-candidate, production-profile, sustained load, whole deployment solvency or mainnet authorization inferred."
+  ]
+}

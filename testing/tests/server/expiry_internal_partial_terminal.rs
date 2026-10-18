@@ -273,13 +273,7 @@ async fn partial_terminal(case: TerminalCase) {
 		panic!("the genuinely unpaid original source still requires an absent user");
 	}).await.expect("partial terminal closure must not strand the other original source");
 	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
-	for grant in &grants {
-		let input = parent.input.iter().find(|input| input.previous_output == grant.point())
-			.expect("source observations alone cannot replace an actual receive-grant dependency");
-		let script = grant.policy().as_server_htlc_recv().unwrap()
-			.server_claim_after_expiry_clause(grant.server_pubkey(), grant.exit_delta()).tapscript();
-		assert_eq!(input.witness.taproot_leaf_script().unwrap().script, script.as_script());
-	}
+	super::expiry_lightning_terminal::assert_grants_reclaimed(&ctx, &db, &grants, &receive_destination.spk).await;
 	let mut unpaid_path = sources[1].transactions().map(|step|
 		bitcoin::OutPoint::new(step.tx.compute_txid(), step.output_idx as u32)).collect::<BTreeSet<_>>();
 	unpaid_path.insert(sources[1].chain_anchor());
@@ -364,19 +358,13 @@ async fn partial_terminal(case: TerminalCase) {
 		"reconfirmation must reuse one immutable body and one exact source link");
 }
 
+/// The server's completed chain view records `claim` as the spend of `source`.
+/// (Under the joint refund this also checked a retained copy of the claim;
+/// the PoC removes that journal, so only the chain fact remains.)
 pub(super) async fn assert_retained_claim(db:&Db,source:VtxoId,claim:&Transaction) -> bool {
 	db.read(async |t| {
-		let Some(row)=t.query_opt("SELECT raw_tx FROM expiry_user_claim_tx WHERE txid=$1",
-			&[&claim.compute_txid().to_string()]).await? else { return Ok(false); };
-		assert_eq!(row.get::<_,&[u8]>("raw_tx"),bitcoin::consensus::serialize(claim).as_slice());
-		let row=t.query_one("SELECT \
-			(SELECT COUNT(*) FROM expiry_user_claim_tx WHERE txid=$1) AS bodies, \
-			(SELECT COUNT(*) FROM expiry_user_claim_source WHERE source_vtxo_id=$2 AND claim_txid=$1) AS links",
-			&[&claim.compute_txid().to_string(),&source.to_string()]).await?;
-		assert_eq!(row.get::<_,i64>("bodies"),1);
-		if row.get::<_,i64>("links")==0 { return Ok(false); }
-		assert_eq!(row.get::<_,i64>("links"),1);
-		Ok(true)
+		let row=t.query_one("SELECT onchain_spent_txid FROM vtxo WHERE vtxo_id=$1",&[&source.to_string()]).await?;
+		Ok(row.get::<_,Option<&str>>(0)==Some(claim.compute_txid().to_string().as_str()))
 	}).await.unwrap()
 }
 
@@ -407,18 +395,6 @@ pub(super) async fn wait_partial_confirmation(
 				assert_eq!(source.get::<_,Option<&str>>("chain_resolution"),Some("revoked"));
 				assert!(source.get::<_,Option<&str>>("offchain_resolution").is_none(),
 					"an actual user claim cannot be manufactured into permanent off-chain cancellation");
-				let row = t.query_one("SELECT c.evidence::TEXT FROM expiry_allocation_coin c \
-					JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
-					WHERE e.vtxo_id=$1 AND c.active AND a.status='confirmed' AND a.sweep_tx=$2",
-					&[&unpaid.to_string(),&bitcoin::consensus::serialize(parent)]).await?;
-				let evidence:serde_json::Value = serde_json::from_str(row.get("evidence"))?;
-				let terminals = evidence["terminal_sources"].as_array().unwrap();
-				assert_eq!(terminals.len(),1);
-				assert_eq!(terminals[0]["source"].as_str(),Some(paid_source.as_str()));
-				assert_eq!(terminals[0]["claim_txid"].as_str(),Some(claim.to_string().as_str()));
-				let originals = evidence["original_sources"].as_array().unwrap().iter()
-					.map(|value|value.as_str().unwrap().to_owned()).collect::<BTreeSet<_>>();
-				assert_eq!(originals,[paid_source.clone(),unpaid.to_string()].into_iter().collect());
 				let duplicate = t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
 					JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
 					WHERE e.vtxo_id=$1 AND c.disposition='customer' AND a.status='confirmed'", &[&paid_source]).await?

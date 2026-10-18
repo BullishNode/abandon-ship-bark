@@ -235,10 +235,7 @@ async fn batched_terminal(reorg: bool) {
 		let paid=t.query("SELECT v.vtxo_id,v.onchain_spent_txid,v.onchain_spent_height,h.chain_resolution::TEXT, \
 			h.offchain_resolution::TEXT,h.chain_resolution_height FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=ANY($1) ORDER BY v.vtxo_id",
 			&[&paid_ids]).await?;
-		let journal=t.query_one("SELECT confirmed_height,confirmed_hash, \
-			(SELECT COUNT(*) FROM expiry_user_claim_source WHERE claim_txid=$1) AS links FROM expiry_user_claim_tx WHERE txid=$1",
-			&[&claim.compute_txid().to_string()]).await?;
-		Ok((fences,paid,journal))
+		Ok((fences,paid))
 	}).await.unwrap();
 	assert_eq!(context.0,0,"this first case has no prior joint reservation or unrelated source fence");
 	assert_eq!(context.1.len(),2);
@@ -249,11 +246,6 @@ async fn batched_terminal(reorg: bool) {
 		assert_eq!(row.get::<_,Option<&str>>("chain_resolution"),Some("revoked"));
 		assert!(row.get::<_,Option<&str>>("offchain_resolution").is_none());
 	}
-	assert_eq!(context.2.get::<_,i64>("links"),2);
-	assert_eq!(context.2.get::<_,Option<i64>>("confirmed_height"),Some(i64::from(actual_claim_height)));
-	assert_eq!(context.2.get::<_,Option<&str>>("confirmed_hash"),claim_info["blockhash"].as_str());
-	for grant in &grants {assert!(chain.get_tx_out(&grant.point().txid,grant.point().vout,Some(false)).unwrap().is_some(),
-		"the actual batch raw and both links precede canonical consumption of every G");}
 	std::fs::write(srv.config().data_dir.join("batched-terminal-before-publication.json"),serde_json::to_vec_pretty(&serde_json::json!({
 		"actual_attempt":scope.0,"subscription":scope.1,"originals":originals,"grants":grant_ids,
 		"actual_claim":claim.compute_txid().to_string(),"claim_raw_sha256":sha256::Hash::hash(&serialize(&claim)).to_string(),
@@ -276,30 +268,29 @@ async fn batched_terminal(reorg: bool) {
 				let parent:Transaction=deserialize(row.get("sweep_tx")).unwrap();
 				if chain.get_mempool_entry(&parent.compute_txid()).is_ok() {break (row.get("id"),parent);}
 			}
-			tokio::time::sleep(Duration::from_millis(50)).await;
+			// PoC (option B): grant reclaims must confirm before the refund.
+			ctx.generate_blocks(1).await;
+			tokio::time::sleep(Duration::from_secs(1)).await;
 		}
 	}).await.expect("a real two-source user receipt must not strand the same attempt's third rightful original");
-	let expected_inputs=grants.iter().map(Vtxo::point).chain(std::iter::once(unpaid_prefix)).collect::<BTreeSet<_>>();
-	assert_eq!(parent.input.len(),expected_inputs.len());
-	assert_eq!(parent.input.iter().map(|input|input.previous_output).collect::<BTreeSet<_>>(),expected_inputs);
-	for grant in &grants {
-		let input=parent.input.iter().find(|input|input.previous_output==grant.point()).unwrap();
-		let script=grant.policy().as_server_htlc_recv().unwrap().server_claim_after_expiry_clause(grant.server_pubkey(),grant.exit_delta()).tapscript();
-		assert_eq!(input.witness.taproot_leaf_script().unwrap().script,script.as_script());
-	}
+	// PoC (option B): the refund spends only the unpaid original's own backing;
+	// the grants were reclaimed earlier by the server's timeout clause.
+	assert_eq!(parent.input.iter().map(|input|input.previous_output).collect::<BTreeSet<_>>(),BTreeSet::from([unpaid_prefix]));
+	super::expiry_lightning_terminal::assert_grants_reclaimed(&ctx,&db,&grants,&receive_destination.spk).await;
 	assert!(!parent.output.iter().any(|output|output.script_pubkey==receive_destination.spk));
 	let customer=parent.output.iter().enumerate().filter(|(_,output)|output.script_pubkey==fallback.spk).collect::<Vec<_>>();
 	assert_eq!(customer.len(),1); assert_eq!(customer[0].1.value,sat(99_000));
 	let payout=OutPoint::new(parent.compute_txid(),u32::try_from(customer[0].0).unwrap());
-	assert_eq!(parent.output.iter().filter(|output|output.script_pubkey==operator.script_pubkey()).map(|output|output.value).sum::<bitcoin::Amount>(),sat(281_000));
+	assert_eq!(parent.output.iter().filter(|output|output.script_pubkey==operator.script_pubkey()).map(|output|output.value).sum::<bitcoin::Amount>(),sat(1_000));
 	let anchors=parent.output.iter().enumerate().filter(|(_,output)|output.script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT).collect::<Vec<_>>();
 	assert_eq!(anchors.len(),1); assert_eq!(anchors[0].1.value,sat(0));
 	let anchor=OutPoint::new(parent.compute_txid(),u32::try_from(anchors[0].0).unwrap());
 	let mut input_total=sat(0);
 	for input in &parent.input {input_total+=ctx.bitcoind().await_transaction(input.previous_output.txid).await.output[input.previous_output.vout as usize].value;}
-	assert_eq!(input_total,sat(380_000));
+	assert_eq!(input_total,sat(100_000));
 	assert_eq!(parent.output.iter().map(|output|output.value).sum::<bitcoin::Amount>(),input_total);
-	assert_eq!(sat(300_000)+sat(280_000),sat(198_000)+sat(99_000)+sat(281_000)+sat(2_000));
+	// The 280,000 of grants went back to the operator in their own reclaims.
+	assert_eq!(sat(300_000)+sat(280_000),sat(198_000)+sat(99_000)+sat(1_000)+sat(280_000)+sat(2_000));
 	let height=ctx.generate_blocks(6).await;
 	wait_batched_parent(&ctx,&srv,&db,height,allocation,&parent).await;
 	let height=if reorg {
@@ -405,17 +396,13 @@ async fn batched_terminal(reorg: bool) {
 	assert_eq!(row.get::<_,&str>("vtxo_id"),sources[2].id().to_string());
 	assert_eq!((row.get::<_,i64>("gross_sat"),row.get::<_,i64>("payout_sat"),row.get::<_,i64>("fee_sat")),(100_000,99_000,1_000));
 	let evidence:serde_json::Value=serde_json::from_str(row.get("evidence")).unwrap();
+	assert_eq!(evidence["kind"].as_str(),Some("htlc_internal_grants_reclaimed"));
 	assert_eq!(evidence["attempt_id"].as_i64(),Some(scope.0));
 	assert_eq!(evidence["subscription_id"].as_i64(),Some(scope.1));
-	let terminals=evidence["terminal_sources"].as_array().unwrap();
-	assert_eq!(terminals.len(),2);
-	assert_eq!(terminals.iter().map(|item|item["source"].as_str().unwrap().to_owned()).collect::<BTreeSet<_>>(),paid_ids.iter().cloned().collect());
-	assert!(terminals.iter().all(|item|item["claim_txid"].as_str()==Some(claim.compute_txid().to_string().as_str())
-		&& item["original_batch"].as_bool()==Some(true) && item.get("prior_joint").is_none()));
 	assert_eq!(final_rows.1,0,"the198k prior user receipt cannot also earn a customer fallback");
 	assert_eq!(final_rows.2.len(),grants.len());
 	for row in &final_rows.2 {
-		assert_eq!(row.get::<_,Option<&str>>("onchain_spent_txid"),Some(parent.compute_txid().to_string().as_str()));
+		assert!(row.get::<_,Option<&str>>("onchain_spent_txid").is_some_and(|txid|txid!=parent.compute_txid().to_string()));
 		assert_eq!(row.get::<_,Option<&str>>("chain_resolution"),Some("revoked"));
 		assert!(row.get::<_,Option<&str>>("offchain_resolution").is_none(),"actual grant timeout cannot be manufactured as off-chain cancellation");
 	}

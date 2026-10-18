@@ -41,6 +41,25 @@ async fn assert_stored_grant_ancestry(db: &Db, grants: &[Vtxo<Full>]) {
 /// A real external HTLC is accepted and then cancelled by its receiver.
 /// No test row supplies a failure proof, entitlement, spend fence or payout.
 /// The abandoned sender never requests a cooperative HTLC revocation.
+/// Every receive grant was taken back on chain through the server's timeout
+/// clause, in a transaction that pays nothing to the absent receiver.
+pub(super) async fn assert_grants_reclaimed(ctx: &TestContext, db: &Db, grants: &[Vtxo<Full>], receiver: &bitcoin::Script) {
+	for grant in grants {
+		let row = db.read(async |t| Ok(t.query_one("SELECT v.onchain_spent_txid,h.chain_resolution::TEXT FROM vtxo v \
+			JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=$1", &[&grant.id().to_string()]).await?)).await.unwrap();
+		assert_eq!(row.get::<_, Option<&str>>(1), Some("revoked"), "grant {} was not reclaimed by timeout", grant.id());
+		let txid: bitcoin::Txid = row.get::<_, Option<&str>>(0).unwrap().parse().unwrap();
+		let reclaim = ctx.bitcoind().await_transaction(txid).await;
+		let input = reclaim.input.iter().find(|i| i.previous_output == grant.point()).unwrap();
+		let policy = grant.policy().as_server_htlc_recv().unwrap();
+		let script = policy.server_claim_after_expiry_clause(grant.server_pubkey(), grant.exit_delta()).tapscript();
+		assert_eq!(input.witness.taproot_leaf_script().unwrap().script, script.as_script());
+		assert!(reclaim.output.iter().all(|o| o.script_pubkey.as_script() != receiver));
+		let info = ctx.bitcoind().sync_client().get_tx_out(&txid, 0, Some(true)).unwrap();
+		assert!(info.map_or(true, |out| out.confirmations > 0), "a grant reclaim must be confirmed");
+	}
+}
+
 async fn failed_external_payout(no_channel: bool) {
 	let name = if no_channel { "server/expiry_no_part_external_offline_owner" } else { "server/expiry_failed_external_offline_owner" };
 	let ctx = TestContext::new(name).await;
@@ -415,16 +434,10 @@ fn internal_safe_pool_grants(large_cover: bool) -> std::pin::Pin<Box<dyn std::fu
 				WHERE e.vtxo_id=$1 AND a.broadcast_at IS NOT NULL", &[&source.to_string()]).await?)).await.unwrap();
 			if let Some(row) = row { return deserialize(row.get("sweep_tx")).unwrap(); }
 		}
-		panic!("signed receive grants did not close in a joint normal timeout parent");
+		panic!("the absent sender was not refunded after its receive grants were reclaimed");
 	}).await.expect("both-absent internal timeout required a returning wallet");
 	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
-	for grant in &grants {
-		let input = parent.input.iter().find(|i| i.previous_output == grant.point())
-			.expect("dropping even one signed receive grant severs the Bitcoin dependency");
-		let policy = grant.policy().as_server_htlc_recv().unwrap();
-		let script = policy.server_claim_after_expiry_clause(grant.server_pubkey(), grant.exit_delta()).tapscript();
-		assert_eq!(input.witness.taproot_leaf_script().unwrap().script, script.as_script());
-	}
+	assert_grants_reclaimed(&ctx, &db, &grants, &receiver_destination.spk).await;
 	let (index,paid) = parent.output.iter().enumerate().find(|(_, o)| o.script_pubkey == destination.spk).unwrap();
 	assert_eq!(paid.value, sat(99_000));
 	assert!(parent.output.iter().all(|o| o.script_pubkey != receiver_destination.spk));
@@ -606,7 +619,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 					Ok(view.captaind.height>=target && view.watchmand.height>=target && t.expiry_view_is_rebuilt(view).await?)
 				}).await.unwrap();
 				if !mature_view { continue; }
-			} else { continue; }
+			}
 			let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
 				WHERE a.broadcast_at IS NOT NULL AND (SELECT COUNT(DISTINCT e.vtxo_id) FROM expiry_allocation_coin c \
 				JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE c.allocation_id=a.id AND e.vtxo_id=ANY($1))=2",
@@ -624,14 +637,8 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 		assert_eq!(matched.len(), 1, "every original source needs one actual backing input on its signed path");
 		incoming_points.insert(matched[0].previous_output);
 	}
-	assert_eq!(parent.input.len(), incoming_points.len() + grants.len(), "no dependency or unrelated input may be hidden");
-	for grant in &grants {
-		let inputs = parent.input.iter().filter(|input| input.previous_output == grant.point()).collect::<Vec<_>>();
-		assert_eq!(inputs.len(), 1, "every grant of BOTH attempts must be spent exactly once by this parent");
-		let policy = grant.policy().as_server_htlc_recv().unwrap();
-		let timeout = policy.server_claim_after_expiry_clause(grant.server_pubkey(), grant.exit_delta()).tapscript();
-		assert_eq!(inputs[0].witness.taproot_leaf_script().unwrap().script, timeout.as_script());
-	}
+	assert_eq!(parent.input.len(), incoming_points.len(), "no grant or unrelated input in the refund");
+	assert_grants_reclaimed(&ctx, &db, &grants, &recipient_destination.spk).await;
 	let payouts = parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == destination.spk).collect::<Vec<_>>();
 	assert_eq!(payouts.len(), 1);
 	assert_eq!(payouts[0].1.value, sat(199_000), "same-root same-user payout charges one output fee");

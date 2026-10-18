@@ -32,3 +32,4 @@ mod qualification_protection_isolation;
 
 mod qualification_ordinary_exit_atomic;
 mod qualification_daemon_unpaid;
+mod qualification_paid_reorg;

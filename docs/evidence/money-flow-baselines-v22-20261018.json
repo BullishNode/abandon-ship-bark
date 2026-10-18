@@ -1,0 +1,79 @@
+{
+  "at": "2026-10-18T15:01:46.781324+00:00",
+  "state": "TWO_BASELINES_PRESERVED_NO_NEW_PRODUCT_FIX_CLAIM",
+  "source_head": "8ab1f9cdf67b6adffdea1797de778afcaf49ed8f",
+  "source_manifest_sha256": "28cf5252894b543468775f1c2bcc1b2ad34b6f8ebfb8a5f4aff316edad5970b1",
+  "manifest_sha256": "80de081de52831b99df14f9dcf15776e5d77f4572429d6ff48dc23a549657ed1",
+  "runtime_metadata_sha256": "e788a19b00002390758cf04da68cff90ca27846327aea23c7416bc24e5b2cc2d",
+  "runtime_pins_sha256": "d8332e8f3d6d318c70c3500fd1bc62441e1af91d735aaa1554245b858fd30d50",
+  "checks_seconds": 104.098,
+  "metadata_seconds": 179.498,
+  "products": "Exact unchanged V21 four products, source equivalence checked;879unitPASS1skip inherited rather than rerun",
+  "baselines": [
+    {
+      "source": "root-v22-backend-qualification-20261018",
+      "result": {
+        "source_manifest_sha256": "28cf5252894b543468775f1c2bcc1b2ad34b6f8ebfb8a5f4aff316edad5970b1",
+        "started_at": "2026-10-18T14:54:03.196666+00:00",
+        "state": "FAIL",
+        "retries": 0,
+        "container": "abandon-fresh-runtime-20261017",
+        "cases": [
+          {
+            "test": "expiry_internal_reserved_batched_terminal::expiry_internal_reserved_batch_pays_remaining_source",
+            "started_at": "2026-10-18T14:54:04.046573+00:00",
+            "state": "FAIL",
+            "selected": [
+              "expiry_internal_reserved_batched_terminal::expiry_internal_reserved_batch_pays_remaining_source"
+            ],
+            "exit_code": 100,
+            "seconds": 176.58,
+            "ended_at": "2026-10-18T14:57:00.627501+00:00",
+            "log_sha256": "15192bb73ed32ab7627c2a3785e4f82d9fa2b68d95740db30e46c7518bb9bf1b"
+          }
+        ],
+        "not_run": [],
+        "ended_at": "2026-10-18T14:57:00.632336+00:00"
+      },
+      "interpretation": "Actual prior complete reservation and rightful two-input timeout reached; remaining positive payout publication did not finish. Reserved single-input proof path is the identified fix target; preserved timeout is not proof of permanent loss."
+    },
+    {
+      "source": "root-client-paid-reorg-v22-20261018",
+      "result": {
+        "source_manifest_sha256": "28cf5252894b543468775f1c2bcc1b2ad34b6f8ebfb8a5f4aff316edad5970b1",
+        "started_at": "2026-10-18T14:54:33.695815+00:00",
+        "state": "FAIL",
+        "retries": 0,
+        "container": "abandon-fresh-runtime-20261017",
+        "cases": [
+          {
+            "test": "qualification_paid_reorg::paid_fallback_reorg_cold_reopen_offline_protects_and_claims_exact_original",
+            "started_at": "2026-10-18T14:54:34.699926+00:00",
+            "state": "FAIL",
+            "selected": [
+              "qualification_paid_reorg::paid_fallback_reorg_cold_reopen_offline_protects_and_claims_exact_original"
+            ],
+            "exit_code": 100,
+            "seconds": 32.46,
+            "ended_at": "2026-10-18T14:55:07.160676+00:00",
+            "log_sha256": "159e0b7d053cffa37b66e820d335aad40ed53714aeef3f249ce8764146b2a287"
+          }
+        ],
+        "ended_at": "2026-10-18T14:55:07.166094+00:00"
+      },
+      "interpretation": "Default daemon reached Claimable after genuinely adopted confirmed payout was orphaned and server stopped. Failed proxy RPC counter is invalid when offline connection fails before handler; final drain/accounting NOT REACHED. Narrow test-only outage oracle correction required."
+    }
+  ],
+  "scope_limits": [
+    "No permanent customer loss proved by timeout",
+    "No general batch/foreign reservation/production qualification",
+    "Earlier V20 product failure and V21 funding failure preserved; scoped V21b five backend and two recovery passes remain at original pins"
+  ],
+  "production_ready": false,
+  "independent_completed_batch_accounting": {
+    "each_case": "2150000=2135128 terminal+14872 canonical miner",
+    "customer": "300000=297000 receipts+2000 direct claim miner+1000 payout charge",
+    "root_receipt_sha256": "e4fe4e8d5def419fca59d1942285f8365477ca771fcdc6668b61c3916bf361b3",
+    "limits": "Declared finite cut only; root recomputed report equations and rehashed artifacts, not a second raw-block decode; no full custody/200case claim"
+  }
+}

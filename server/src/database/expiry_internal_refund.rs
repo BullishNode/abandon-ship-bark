@@ -556,14 +556,32 @@ fn dependent_terminal_txid(evidence:&serde_json::Value,source:VtxoId) -> anyhow:
 fn check_dependent_parent_inputs(
 	omitted:VtxoId,parent:&Transaction,grants:&BTreeSet<VtxoId>,paths:&BTreeMap<VtxoId,BTreeSet<OutPoint>>,
 ) -> anyhow::Result<()> {
+	check_dependent_input_points(omitted,&parent.input.iter().map(|input|input.previous_output).collect::<Vec<_>>(),grants,paths)
+}
+
+fn check_dependent_input_points(
+	omitted:VtxoId,points:&[OutPoint],grants:&BTreeSet<VtxoId>,paths:&BTreeMap<VtxoId,BTreeSet<OutPoint>>,
+) -> anyhow::Result<()> {
 	ensure!(!paths.is_empty() && !paths.contains_key(&omitted) && !grants.is_empty(),"dependent parent has no distinct live source/grant scope");
-	let inputs=parent.input.iter().map(|input|input.previous_output).collect::<BTreeSet<_>>();
-	ensure!(inputs.len()==parent.input.len() && !inputs.contains(&omitted.to_point())
+	let inputs=points.iter().copied().collect::<BTreeSet<_>>();
+	ensure!(inputs.len()==points.len() && !inputs.contains(&omitted.to_point())
 		&& grants.iter().all(|id|inputs.contains(&id.to_point())),"dependent parent drops a grant or allocates its omitted original");
 	let physical=inputs.iter().filter(|point|!grants.contains(&VtxoId::from(**point))).collect::<Vec<_>>();
 	ensure!(!physical.is_empty() && physical.iter().all(|point|paths.values().any(|path|path.contains(*point)))
 		&& paths.values().all(|path|physical.iter().any(|point|path.contains(*point))),
 		"dependent parent is not backed by each actual live original's signed path");
+	Ok(())
+}
+
+/// An unpublished financial intent supplies membership/fences only. It is not
+/// a Bitcoin parent, current payment evidence or permission to omit A's proof.
+/// Historical never-signed conflicted intents retain those same reservations.
+fn check_unsigned_dependent_intent(
+	status:&str,txid:Option<&str>,broadcast:bool,confirmed:bool,fee_child:bool,paid_coin:bool,
+) -> anyhow::Result<()> {
+	ensure!(matches!(status,"pending"|"conflicted") && txid.is_none() && !broadcast
+		&& !confirmed && !fee_child && !paid_coin,
+		"unsigned dependent intent has a published, paid or incompatible financial identity");
 	Ok(())
 }
 
@@ -711,7 +729,7 @@ impl Tx<'_> {
 		let mut covered=BTreeSet::new();
 		let mut original_conflict=false;
 		for allocation in &allocations {
-			let row=self.query_one("SELECT status,sweep_tx,confirmed_height FROM expiry_allocation WHERE id=$1",&[allocation]).await?;
+			let row=self.query_one("SELECT status,sweep_tx,sweep_txid,broadcast_at IS NOT NULL AS broadcast,confirmed_height,confirmed_hash FROM expiry_allocation WHERE id=$1",&[allocation]).await?;
 			let status=row.get::<_,&str>("status");
 			scope_eligible!(allow_dependent || (status=="conflicted" && row.get::<_,Option<i64>>("confirmed_height").is_none()),
 				"terminal joint parent has a live canonical payment");
@@ -752,7 +770,16 @@ impl Tx<'_> {
 			if dependent {
 				scope_eligible!(coins.iter().all(|coin|coin.get::<_,&str>("vtxo_id")!=source.to_string()),
 					"dependent parent also allocates the omitted original");
-				let parent:Transaction=bitcoin::consensus::deserialize(raw.context("dependent parent is not durably signed")?)?;
+				// A committed intent precedes parent signing in the normal payout
+				// pipeline. Rebuild must validate that exact unpublished intent,
+				// rather than require a parent that itself needs a rebuilt view.
+				if raw.is_none() {
+					let fee_child=self.query_opt("SELECT id FROM expiry_fee_child WHERE allocation_id=$1 LIMIT 1",&[allocation]).await?.is_some();
+					check_unsigned_dependent_intent(status,row.get("sweep_txid"),row.get("broadcast"),
+						row.get::<_,Option<i64>>("confirmed_height").is_some() || row.get::<_,Option<&str>>("confirmed_hash").is_some(),
+						fee_child,coins.iter().any(|coin|coin.get::<_,Option<&str>>("paying_txid").is_some()))
+						.map_err(|_|InternalUserClaimScopeIneligible("dependent unsigned intent is already published or paid"))?;
+				}
 				let mut paths=BTreeMap::new();
 				let mut required=BTreeSet::new();
 				for coin in &coins {
@@ -765,7 +792,12 @@ impl Tx<'_> {
 						.filter(|point|*point!=state.vtxo.vtxo.point()).collect::<BTreeSet<_>>();
 					paths.insert(id,path);
 				}
-				check_dependent_parent_inputs(source,&parent,&required,&paths)?;
+				if let Some(raw)=raw {
+					let parent:Transaction=bitcoin::consensus::deserialize(raw)?;
+					check_dependent_parent_inputs(source,&parent,&required,&paths)?;
+				} else {
+					check_dependent_input_points(source,&allocation_inputs.iter().map(|id|id.to_point()).collect::<Vec<_>>(),&required,&paths)?;
+				}
 			}
 			for coin in coins {
 				let id:VtxoId=coin.get::<_,&str>("vtxo_id").parse()?;
@@ -931,6 +963,36 @@ mod tests {
 			]),existing:BTreeMap::new(),terminal_reservations:BTreeMap::new(),grants:vec![InternalRefundGrant {
 				vtxo:ServerVtxo::from(grant.vtxo.vtxo).to_bare(),confirmed:BlockHeight::new(1),updated_at:Local::now(),
 			}] }
+	}
+
+	#[test]
+	fn unsigned_partial_intent_accepts_only_never_published_pending_or_conflicted_identity() {
+		assert!(check_unsigned_dependent_intent("pending",None,false,false,false,false).is_ok());
+		assert!(check_unsigned_dependent_intent("conflicted",None,false,false,false,false).is_ok());
+		assert!(check_unsigned_dependent_intent("confirmed",None,false,false,false,false).is_err());
+		assert!(check_unsigned_dependent_intent("pending",Some("foreign"),false,false,false,false).is_err());
+		assert!(check_unsigned_dependent_intent("pending",None,true,false,false,false).is_err());
+		assert!(check_unsigned_dependent_intent("pending",None,false,true,false,false).is_err());
+		assert!(check_unsigned_dependent_intent("pending",None,false,false,true,false).is_err());
+		assert!(check_unsigned_dependent_intent("pending",None,false,false,false,true).is_err());
+	}
+
+	#[test]
+	fn unsigned_intent_cannot_omit_a_grant_or_replace_its_actual_live_source_path() {
+		let a=VtxoId::from(OutPoint::new(Txid::from_byte_array([51;32]),0));
+		let b=VtxoId::from(OutPoint::new(Txid::from_byte_array([52;32]),0));
+		let prefix=OutPoint::new(Txid::from_byte_array([53;32]),0);
+		let g=VtxoId::from(OutPoint::new(Txid::from_byte_array([54;32]),0));
+		let grants=BTreeSet::from([g]);let paths=BTreeMap::from([(b,BTreeSet::from([prefix]))]);
+		assert!(check_dependent_input_points(a,&[prefix,g.to_point()],&grants,&paths).is_ok());
+		assert!(check_dependent_input_points(a,&[prefix],&grants,&paths).is_err());
+		assert!(check_dependent_input_points(a,&[a.to_point(),g.to_point()],&grants,&paths).is_err());
+		let foreign=OutPoint::new(Txid::from_byte_array([55;32]),0);
+		assert!(check_dependent_input_points(a,&[foreign,g.to_point()],&grants,&paths).is_err());
+		let signed=parent(&[prefix,g.to_point()]);
+		assert!(check_dependent_parent_inputs(a,&signed,&grants,&paths).is_ok());
+		assert!(check_terminal_return_parent(&[VtxoId::from(prefix),g],&parent(&[prefix])).is_err(),
+			"present signed bodies still require the complete immutable input set");
 	}
 
 	#[test]

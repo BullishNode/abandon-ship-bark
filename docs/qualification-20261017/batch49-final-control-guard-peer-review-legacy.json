@@ -1,0 +1,162 @@
+{
+  "kind": "BATCH49_FINAL_CONTROL_GUARD_INDEPENDENT_SOURCE_PEER",
+  "at": "2026-10-18T07:16:06.510798+00:00",
+  "state": "ACK_NO_CONCRETE_BLOCKER_PARENT_FRESH_GATES_PENDING",
+  "preparation_sha256": "c4011abb96aabd234af0acbd52553e57d5f034b4011ba17af6fdf6a493019c60",
+  "static_hashes_verified": {
+    "selection-proof.json": "1c81bdb5546ff459b66393f61d4384e01dec7ae95790c102eddbdc25f8db0678",
+    "root-allocation.json": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "source-proposal.json": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+    "source-peer.json": "01d22056373d2cb481b5ad9eb743f26bcd41551af4dbcb8aeee935afa1633a09",
+    "parent-actor-probe.py": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+    "server-cohort.py": "199d3f30755f0b8c409f970e3f02cb0fbd86d61ba5500cd14be9dc308a7d4512",
+    "preflight-static.py": "d854494967294d7eee9a702c8a46f2d0ee9ad3703d896820c2459b926189a3fb",
+    "fresh-listings.py": "35f688a58f0d8e75ded85a0c19d2e32e298b7bbc31b8cb8f1f7a1bed9b815564",
+    "preflight.sh": "369aa4079c538f8271c20eca5d7a0109bb7c1754e2da817d11f34299793da309",
+    "run.sh": "6fca8c839fd4b1b02d88d93ccc6913140060b4af7dd6e2524800211965327c23",
+    "case01/nextest.toml": "ca296923f097bd06cfd9bdae385e57bef7c8fdd8b034638c3b8b4b99388ae337"
+  },
+  "static_paths": 12,
+  "parent_required_paths": 15,
+  "root_allocation_sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+  "exact_selection": [
+    [
+      "ark-testing::bark-sdk",
+      "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable"
+    ]
+  ],
+  "bounds": {
+    "seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "cases": 1,
+    "first_fail_stop": true,
+    "global_native_maximum": 2,
+    "CLN_required": false,
+    "actual_all_pins_still_required": 17
+  },
+  "closed_at_review": {
+    "pending_marker_present": true,
+    "pending_marker_sha256": "24412e2c5d34bf0eda9789555a18d3c899bfe1862e2f80ca2dd0701bb17045bd",
+    "parent_admission_absent": true,
+    "no_prior_results_or_context": true
+  },
+  "source_binding": {
+    "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "native_sdk_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+    "full_source_files_independently_hashed": 10,
+    "function_body_pairs_independently_hashed": 13,
+    "pairs": [
+      {
+        "file": "testing/tests/bark_sdk/fallback_act_by.rs",
+        "function": "fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+        "function_sha256": "f70ded222b148d44d06eadd1e4b541865820046a9a28c37e1af610b3ba0f88cb",
+        "brace_body_sha256": "1e38f5ae82e6333b35b982a53439228f0f33fd36e3a8d824c66649cec7b6062d"
+      },
+      {
+        "file": "testing/tests/bark_sdk/fallback_act_by.rs",
+        "function": "protection_config",
+        "function_sha256": "46b800097cb322dde544a1c959fe4f482c4276ebcb92131aeb4d67b696927460",
+        "brace_body_sha256": "72e1c3943bd1d4624d75c4109dbc4d6204b8609353f25d53a0ec92863fc78339"
+      },
+      {
+        "file": "testing/tests/bark_sdk/fallback_act_by.rs",
+        "function": "advance_to",
+        "function_sha256": "6433b106c7a5368ca558b2b18e63f9623c5874b203304fc52020534cf0c2c582",
+        "brace_body_sha256": "7fc2c0af4b20877a78e349e6fbc2e88e55ac2497bad16e1fb85f08b7aa7d2070"
+      },
+      {
+        "file": "testing/src/context/builders.rs",
+        "function": "try_create",
+        "function_sha256": "6e6f1f40daad366be8ecfbf8b9b6ee6abf772f45d754c615ba8149bd9332e5c3",
+        "brace_body_sha256": "ede538d7f8ba3d4e293950c8ca59c63999a8dddb0e4fa3d9a42ff435f1248700"
+      },
+      {
+        "file": "testing/src/context/builders.rs",
+        "function": "create_unregistered",
+        "function_sha256": "c014c4316c306eecba2586766c9e7fcd26546cde56a6fa7d3a0cdbd9dcde7556",
+        "brace_body_sha256": "8b3541c776bf988b046ac80ba02de90984d302eec6aa02e33bb777b4c08f16e7"
+      },
+      {
+        "file": "testing/src/context/mod.rs",
+        "function": "generate_blocks",
+        "function_sha256": "620c93b60d97e7cb9fecec21762658c9eaef983a9880e5f30736b99727acac2a",
+        "brace_body_sha256": "8aeae07b8133b9a254b9dd7096829d5bc462c0a62536caca0c3d30bff71d4cc0"
+      },
+      {
+        "file": "testing/src/context/mod.rs",
+        "function": "await_block_count_sync",
+        "function_sha256": "7f6f7c1b5109abe85599afc325da2c63c18dbb56fbbf7f6006405fba12d7fe9f",
+        "brace_body_sha256": "b9615e6d924d33ab03fd9b268656e7c6bf46b443bae8a0bbaca7667eeb35909c"
+      },
+      {
+        "file": "bark/src/fallback/act_by.rs",
+        "function": "deadlines",
+        "function_sha256": "e9df9ccf8cb18fd39aadde228c2f4f4ad7ef08feea05520b0eccfc463112f1df",
+        "brace_body_sha256": "f30d0c704d37b97d25abdbbd384daa3753fc05cd2e5ef3d801b02c60e2a9aaaa"
+      },
+      {
+        "file": "bark/src/fallback/act_by.rs",
+        "function": "coin_exit_schedule",
+        "function_sha256": "8e74f2523194635e0563bea382adc906d771f4b820ed6ac3581c6d11c79043d3",
+        "brace_body_sha256": "9f41833230776d447bf28568831d22ba270bae3d3ef5b6601caa96bca5ea13f4"
+      },
+      {
+        "file": "bark/src/fallback/act_by.rs",
+        "function": "exit_protection_schedule",
+        "function_sha256": "8a2c53c79cd40ba4b7c914bd725fe5a2a571239ff67b0fb58f0653bbdbed7d9a",
+        "brace_body_sha256": "d03f3258d45ce1e3b269771cc0670585663b7145b066444d803fe7bd046c7a9d"
+      },
+      {
+        "file": "bark/src/fallback/act_by.rs",
+        "function": "exit_protection_report",
+        "function_sha256": "078ce0ad847e03bb0509a852e5b49ba828976dc6a8caed8b0c8feb625e572249",
+        "brace_body_sha256": "a0bfded45af3c129a913b589715ce9dfe7c959d36f0c354a6bce1afab1345465"
+      },
+      {
+        "file": "bark/src/fallback/act_by.rs",
+        "function": "protect_expiring_vtxos",
+        "function_sha256": "d04712c64b6130e4f1e174168198e6da2b13f62da97e1cec23295ddb454e7fb4",
+        "brace_body_sha256": "2cd1243c4c12e56cd82a31542002d70494df24156d24ff8d6030172584640c61"
+      },
+      {
+        "file": "bark/src/daemon/mod.rs",
+        "function": "run_exit_protection_process",
+        "function_sha256": "f814455faa1e6822da5cc0601d0ffbe90b969748b5b3e98702073d6218175855",
+        "brace_body_sha256": "4e9fed48baaad63fe8ed417956e6d80e89e0cc4a4dcb05f85354dab3562bc724"
+      }
+    ],
+    "pin_manifest_rows": 17,
+    "actual17product_rehash_by_this_peer": false,
+    "parent_fresh_actual_artifact_hashes_still_required": true
+  },
+  "guards": {
+    "actual_root_teststring_binary_owner_bounds_and_pin_schema": true,
+    "one_exact_unignored_binary_bound_selection_and_PASS": true,
+    "pending_marker_parent15hash_gate_before_case_writes_Popen": true,
+    "once_only_no_old_results_fresh_private_context": true,
+    "default180_retry0_serial1_firstFAIL_global2": true,
+    "cached_Nix_then_presence_flags_unset_SQLite_and_versions": true,
+    "sameUID_groupSID_argv_cwd_FD_and_unreadable_refusal": true,
+    "capacity_at_most_one_other_native_before_launch": true,
+    "CLN_not_required_but_all17_pins_required": true,
+    "all_inputs_unchanged": true
+  },
+  "syntax": {
+    "JSON": 4,
+    "Python_AST": 4,
+    "bash_n": 2,
+    "TOML": 1
+  },
+  "scope": [
+    "SDKdaemon actual refresh/adoption and Ark-offline signed protective path broadcast only; no completedclaim/payment/Core6/cost/seeddrain/FULLML/production qualification.",
+    "No financial public receipt expected; retained public/Core audit requires explicit public bindings. Do not infer customer identity, policy or fees from arbitrary retained outputs.",
+    "Parent must run fresh actual artifacts/versions/environment/exact listing/resources/actor/hash gates and then owns the once-only launch. This source peer grants no runtime PASS.",
+    "Read-only metadata/source/archive and AST/bash-n/TOML only. No control/script/list/probe/resource/native/Cargo/source/Git/global actions; only new external review pair."
+  ],
+  "reviewer_static_assertion_note": "One over-literal reviewer source-text check stopped before any report write; corrected to recognize the combined boolean allocation assertion. No control/preflight/list/native call or file mutation occurred.",
+  "blockers": []
+}

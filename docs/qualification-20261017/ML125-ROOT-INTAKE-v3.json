@@ -1,0 +1,56 @@
+{
+  "at": "2026-10-18T07:44:19.139578+00:00",
+  "state": "V3_REVIEWED_SOURCE_ONLY_READY_FOR_NEXT_ROOT_CAPTURE",
+  "binary": "ark-testing::server",
+  "test": "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge",
+  "source_path": "testing/tests/server/qualification_offboard_reply_restore.rs",
+  "source_lines": 545,
+  "source_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+  "verified_remote_branch": "work/fresh-test-offboard-reply-restore-20261018",
+  "verified_remote_head": "3d21a0592c6a4d8265b06ed57ab219b4859d6321",
+  "source_commits": [
+    "0d1f260c5ddbc832df5b8741d2cdedadd5fb90d7",
+    "3d21a0592c6a4d8265b06ed57ab219b4859d6321"
+  ],
+  "preferred_add_file_patch": "ML125-offboard-reply-restore-v3.patch",
+  "preferred_add_file_patch_sha256": "6ae63a927d20e0528ba500b925741881818f8ba445e4b29e3660a397d04e40b1",
+  "client_source_peer_sha256": "456ed9cf6a4156df7de6faa297fe766f45debcb10e1d511731e9f13cd6ad36d3",
+  "parent_source_peer_sha256": "5d098b9b9d55b7640d9fe0f9aa0098b75e7b0afb3ca279f6fd7cc95bbeaa3e29",
+  "actual_native_setup": {
+    "server_sat": 500000,
+    "main_wallet_sat": 200000,
+    "main_board_sat": 100000,
+    "positive_control_wallet_sat": 40000,
+    "positive_control_board_sat": 20000,
+    "positive_control_net_sat": 19000,
+    "positive_control_fee_sat": 1000,
+    "confirmed_watchman_fee_outputs_sat": [
+      100000,
+      100000
+    ],
+    "timeout_seconds": 180,
+    "retries": 0,
+    "block_budget": 96,
+    "CLN_required": false,
+    "double_drive_presence_flag": "FULLY_UNSET"
+  },
+  "native_oracles": [
+    "Genuine committed FinishOffboard response lost; real durable unsigned prepared checkpoint survives clean whole-client cold copy to disjoint directory.",
+    "Load existing SQLite/BDK, create_if_not_exists=false/run_daemon=false; authentic expired-server-session retry adopts exact prior signed transaction without observer response injection.",
+    "One prepare/two exact-txid finish calls/one economic offboard; exact original movement and10Arkbalancefields; ordinary onchain change separate.",
+    "Actual payout/Core6, agreed offboard fee distinct from actual minerfee; funded control19k payout+1k fee with same-block child, completed expiry views.",
+    "Original source remainsSpent/offboardedIn originaltx; all generations/wholepost-observationchain+mempool prohibit duplicate original fallback/offboard payout; repeatedsync preserves history."
+  ],
+  "important_limits": [
+    "One orderly local client checkpoint/continuing native server+Core; not crash/PITR/serverbackup/seedonly/allboundaries/globalcustody/fullML/production.",
+    "No compile/native result exists. Source review fixed closure lifetime, single-confirmed-sponsor starvation and10k-below20k board setup before compiler/native.",
+    "Prior f339 sourcecommit/reviews and initial21ffe payload are historical, not current intake. Native49 daemon22.071 result is separate and unchanged.",
+    "Not present in frozen V11c/V15/V16; old ELF results cannot qualify this new body."
+  ],
+  "root_next": [
+    "Intake latest aggregate patch or both source commits; register testing/tests/server/mod.rs only in coordinator lane.",
+    "Perform coherent nextsource capture/checks/nativecompile and supply metadata/source/ELF/tool pins.",
+    "Allocate exact new singleton on immutable candidate with fresh standard180/0admission; no runtime authorization inferred."
+  ],
+  "all_native_credit": 0
+}

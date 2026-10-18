@@ -1,0 +1,386 @@
+{
+  "kind": "LEGACY80_ADDITIVE_NEXT_THREE_FULL_NATIVE_CASE_PRIORITIES",
+  "at": "2026-10-18T07:07:01.305639+00:00",
+  "state": "SOURCE_ONLY_SELECTION_NO_AUTHORING_COMPILE_LIST_ALLOCATION_OR_EXECUTION",
+  "scope": "Original80 IDs reconciled with latest own460-row coverage and inspected canonical source. Full native fixture gaps, not product absence/defect findings. Source-only existing economic logic and partial executions are preserved.",
+  "baseline": {
+    "executions": 249,
+    "PASS": 234,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 232,
+    "nextest_invocations": 222,
+    "native": 237,
+    "component": 12,
+    "mixed_coverage_rows": 460
+  },
+  "input_evidence": {
+    "catalogue": {
+      "path": "/home/francis/bark-simulator-signet-rework/docs/80-case-coverage.md",
+      "sha256": "1e0e6b4d320a587475b51f0418ea5ae08eadfbb031413c25e8fedbf529ce4c74",
+      "lines": {
+        "H11": 64,
+        "H30": 83,
+        "H31": 84,
+        "H32": 85
+      }
+    },
+    "original_scenarios": {
+      "path": "/home/francis/bark-simulator-signet-rework/simulator/scenarios.json",
+      "sha256": "fd01b08c72abb9cf61c5f93aa2c43362fa7e8b58788a7fbc54d0e1ab85de86b4"
+    },
+    "legacy_inventory": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/legacy-inventory.csv",
+      "sha256": "e17520cd411d61201302de23351ad9ecac31f40f4b6f888369cc1355333a7f6d",
+      "original_case_count": 80,
+      "additional_gap_IDs_excluded_from_original_count": 23
+    },
+    "coverage_snapshot": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/COVERAGE.csv",
+      "sha256": "3e40c57525b3e69c08f29e28d2e0022a8cf0e9cd3ab5a0be6dbb558ad83ca71b",
+      "rows": 460
+    },
+    "approved_policy": {
+      "path": "/home/francis/bark-integration-2026-10-01/abandon-ship-final-plan-2026-10-16.md",
+      "sha256": "d32c2e67e8ae7b54da6b7edf8cfe34e5ce1d7f935ecbd1f396dc87968db0caa9",
+      "lines": [
+        49,
+        318,
+        518,
+        580,
+        589
+      ]
+    },
+    "source_review": {
+      "canonical_HEAD_observed": "50ee7e99afd1a19111bd631a1063ef8a5637fbad",
+      "qualification_credit_from_HEAD": 0,
+      "file_sha256": {
+        "server/src/watchman/settlement.rs": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+        "server/src/database/expiry_decision.rs": "ab2903e83264f314f17cfea91e67e4ca95a7df1086ea4c6f450f90d2c9cf5255",
+        "server/src/database/expiry_ownership.rs": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+        "server/src/expiry_readiness.rs": "ca3f0b99e05cc98f38f3bee159dcea3585c2bfa7a7ec193c23273c57aa86e2fe",
+        "server/src/arkoor.rs": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+        "lib/src/arkoor/package.rs": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+        "testing/tests/server/qualification_oversize.rs": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+        "testing/tests/server/expiry_replacement_transfer.rs": "8e8f5b19033dc14ae11cf17479a2b93b96282cd1b8d23678012a08e59b1a7d8c",
+        "testing/tests/server/expiry_transfer_refresh.rs": "a6b52ab184288358963fc9e5183c232cbc0c602f3782aec458af4eec9adb5712"
+      },
+      "artifact_or_future_candidate_binding": null
+    }
+  },
+  "priorities": [
+    {
+      "rank": 1,
+      "case_id": "H30",
+      "title": "Tiny live leaves must fund one real payable grouped output",
+      "priority": "P1",
+      "status": "SOURCE_ONLY_FULL_NATIVE_FIXTURE_NOT_IDENTIFIED",
+      "legacy_original_behavior": "Several individually tiny leaves form payable group; include lowest-ID leaf<1000.",
+      "full_case_requirement": "Several individually tiny genuine leaves sharing a payout script form a payable group; the lowest-ID leaf is below1000. Charge1000 per actual customer output without per-leaf underflow, lost remainder or invented forfeit.",
+      "why_high_risk": "A correct group total can hide invalid per-leaf fee attribution and silently erase a customer leaf. The unit loop and the DB-to-real-parent path need one authentic composed test.",
+      "source_evidence": [
+        {
+          "file": "server/src/watchman/settlement.rs",
+          "lines": [
+            81,
+            118,
+            143,
+            151,
+            176,
+            182
+          ],
+          "detail": "Groups by exact script, sorts IDs and distributes remaining fee by min(leaf.amount,remaining_fee); existing small-leaf/permutation cases are pure allocator units."
+        },
+        {
+          "file": "server/src/database/expiry_decision.rs",
+          "lines": [
+            321,
+            331,
+            379,
+            394
+          ],
+          "detail": "Native group allocation persists per-coin gross/fee/payout/forfeit and marks the inputs spent; pure allocation alone does not validate this commit and signed payout."
+        },
+        {
+          "file": "testing/tests/server/qualification_oversize.rs",
+          "lines": [
+            65,
+            118,
+            437,
+            440
+          ],
+          "detail": "Reusable native cosign+actual signed registration path exists. Executed327-owner fixture uses10000-sat leaves/1000fee each, not one owner with sub1000 leaves."
+        }
+      ],
+      "nearby_evidence_limits": [
+        "B-T052/B-T057 are source unit inventory; global unit-suite successes do not prove native customer money.",
+        "FT-SPLIT-AUTO01/batch16 PASS covers327 separate10000-sat owners and real graph conservation; it does not exercise several sub1000 leaves charged across one shared output.",
+        "Original S03 failure and later corrected two-root cases stay separate; neither is the requested tiny-leaf ID/fee boundary."
+      ],
+      "minimum_fixture": {
+        "proposed_selector": "qualification_tiny_group::three_sub_fee_leaves_pay_one_registered_owner_once",
+        "selector_exists": false,
+        "actors": 2,
+        "real_source_sat": 100000,
+        "signed_terminal_outputs": [
+          {
+            "owner": "recipient",
+            "amount_sat": 500,
+            "count": 3,
+            "keys": "Three actual distinct keys of one authenticated account; same immutable payout script."
+          },
+          {
+            "owner": "sender",
+            "amount_sat": 98500,
+            "count": 1
+          }
+        ],
+        "operations": [
+          "Use normal TestContext/SDK authenticated registration and a genuinely confirmed100k board. Use existing library builder/public cosign and signed-chain registration to create all four outputs; no financial SQL writes.",
+          "Read actual registered standard payout script; assert500 is non-dust for that script and record actual product admission. All three recipient IDs have gross500, so the smallest is provably below1000 without manipulating hashes.",
+          "Close original clients before expiry; wait for the actual complete rebuilt view and ordinary readiness. Fund owned watchman with explicitly declared confirmed sponsor UTXOs; keep original production fee/size limits.",
+          "Observe automatic canonical payout parent and actual fee child; mine toCore>=6, then inspect all source-lineage customer outputs and actual terminal UTXOs."
+        ],
+        "mandatory_oracles": [
+          "Exactly one recipient output500, backed by all three original500-sat entitlement IDs; gross1500 = payout500 + one1000charge.",
+          "Per-leaf gross=fee+payout+forfeited; fee<=gross; all three forfeit0; fee attribution follows actual ID order and totalfee1000. A zero-payout fee-only leaf is not forfeited.",
+          "Sender change98500 has its own rightful disposition; if paid as one customer output its net97500 plus its actual1000charge reconciles. No original100k predecessor customer payout.",
+          "Whole declared backing+sponsor cut conserves actual canonical graph outputs and actual miner fees, including unused sponsors/child change; whole-lineage uniqueness repeated after a later rebuilt tip."
+        ]
+      },
+      "prerequisites": [
+        "Author only one isolated small native fixture, reusing library APIs and existing local money assertions; no new harness/framework.",
+        "Recheck source500-sat admission and exact four-output result before counting any fixture setup; if normal API refuses, report that concrete blocker without lowering policy.",
+        "Root must assign candidate/compile/capture/exact listing/default180/serial1/retry0/runtime budget. No allocation exists."
+      ],
+      "budget": "Default180 proposed; no measured runtime estimate or timeout extension. One ordinary expiry; no CLN/reorg/restore.",
+      "full_case_remaining_after_smaller_smoke": "A pure allocator result, an RPC acknowledgement or one on-chain500 output without all three signed source IDs, per-leaf conservation and whole-lineage proof remains PARTIAL."
+    },
+    {
+      "rank": 2,
+      "case_id": "H32",
+      "title": "A later real receipt must not revive an already forfeited small entitlement",
+      "priority": "P1",
+      "status": "SOURCE_ONLY_FULL_NATIVE_FIXTURE_NOT_IDENTIFIED",
+      "legacy_original_behavior": "Add genuine later receipt after prior small entitlement was forfeited; then expire.",
+      "full_case_requirement": "After a real sub-dust entitlement has been irrevocably disposed, a genuine later receipt in a later expiry epoch pays under its own fee rule; the old forfeit must never become retained/spendable/payable principal.",
+      "why_high_risk": "A new receipt to the same account/script can accidentally reintroduce old forfeited principal or misleading paid/balance history. This is two chronological decisions, unlike a static dust threshold calculation.",
+      "source_evidence": [
+        {
+          "file": "server/src/watchman/settlement.rs",
+          "lines": [
+            96,
+            118,
+            165,
+            171,
+            204,
+            212
+          ],
+          "detail": "Net below script dust produces payout0/fee0/full forfeited amount; combining2400 in one group differs from two terminal1200 forfeits."
+        },
+        {
+          "file": "server/src/database/expiry_decision.rs",
+          "lines": [
+            370,
+            394
+          ],
+          "detail": "Durable entitlement/decided-coin and allocation fields record each original decision independently."
+        },
+        {
+          "file": "server/src/database/expiry_ownership.rs",
+          "lines": [
+            111,
+            125
+          ],
+          "detail": "Already-decided Spent inputs recover irreversible owner facts; merely observing Spent is not a final financial oracle."
+        }
+      ],
+      "nearby_evidence_limits": [
+        "Catalogue H32 explicitly has no fresh later-receipt-after-forfeit trace; current legacy row remains NOTRUN.",
+        "H31 script dust equality units and ordinary offboard dust refusal do not create an on-chain old forfeit then a new expiry receipt.",
+        "P07 and current active terminal/refund work concern HTLC liabilities and are deliberately excluded."
+      ],
+      "minimum_fixture": {
+        "proposed_selector": "qualification_dust_epoch::later_receipt_never_revives_prior_forfeiture",
+        "selector_exists": false,
+        "actors": 2,
+        "epochs": 2,
+        "operations": [
+          "Cache genuine recipient addresses/immutable fallback registration, then stop the recipient. Send one genuine1200-sat signed registered leaf to its standard P2WPKH payout account on ordinary backing; assert actual minimal_non_dust294 so1200-1000=200 is below dust.",
+          "Let the native expiry decision and actual operator disposition complete; require exact old ledger gross1200/forfeited1200/fee0/payout0, no customer output and a confirmed consumed backing path. Capture immutable entitlement identity and canonical signed parents.",
+          "Only after that terminal old disposition, create/fund a new ordinary board and deliver a genuine100k signed registered receipt to the same absent account without reopening it. Do not edit expiry/financial rows or pretend an old unexpired receipt is new.",
+          "At the actual second expiry, require rightful99k customer output plus1000fee atCore6 and observe another completed view."
+        ],
+        "mandatory_oracles": [
+          "Original1200 forfeited amount stays exactly forfeited, fee0/payout0; it is never added to the later100k principal or reported as retained spendable balance.",
+          "New100k alone yields99k+1000 and has a distinct real entitlement/source/root; no output100200 from resurrecting the old1200.",
+          "Every actual old/new source and operator remainder/sponsor output reconciles in the declared two-epoch cut; no negative assertion based only on invoice/height or an empty RPC list.",
+          "Returning-wallet/public history reports old forfeiture separately from later actual payment; no stale Ark principal, repeat debit or duplicate economic output."
+        ]
+      },
+      "prerequisites": [
+        "Confirm first forfeit has actually reached its terminal chain disposition before funding the later receipt; same-pass aggregation must not be substituted.",
+        "Use original real registration and supplied script; no external-BIP84 restore, authentication adversary, LN terminal or reorg branch.",
+        "Root future authoring/build/capture/runtime allocation required; retain default180 unless root separately reviews an explicit budget."
+      ],
+      "budget": "Default180 proposed for two bounded ordinary epochs; feasibility/timing unmeasured. Do not silently extend or replace two actual epochs with fabricated financial state.",
+      "full_case_remaining_after_smaller_smoke": "One unit forfeit or a later payout without proof that the first decision had become terminal beforehand remains PARTIAL."
+    },
+    {
+      "rank": 3,
+      "case_id": "H11",
+      "title": "Three actual registered owners must forward one principal to exactly one final owner payout",
+      "priority": "P1",
+      "status": "SOURCE_ONLY_FULL_NATIVE_FIXTURE_NOT_IDENTIFIED",
+      "legacy_original_behavior": "Forward received value across three owners.",
+      "full_case_requirement": "A\u2192B\u2192C genuine registered ordinary Arkoor transfers finish before expiry; only C retains the final live entitlement and neither predecessor can get that principal again.",
+      "why_high_risk": "Multi-hop predecessor ownership can be accidentally retained after each locally valid transfer. A two-owner transfer or many transient keys in one source account does not prove three registered owner transitions.",
+      "source_evidence": [
+        {
+          "file": "server/src/arkoor.rs",
+          "lines": [
+            131,
+            139,
+            174,
+            225
+          ],
+          "detail": "Unsigned outputs are not spendable until real signed-chain registration; each hop must complete that actual boundary."
+        },
+        {
+          "file": "testing/tests/server/expiry_replacement_transfer.rs",
+          "lines": [
+            27,
+            34,
+            65,
+            77,
+            108,
+            122
+          ],
+          "detail": "Existing source gives native SDK send/sync/close and finalCore6 predecessor exclusion for two owners after refresh; no third registered owner."
+        },
+        {
+          "file": "testing/tests/server/qualification_oversize.rs",
+          "lines": [
+            281,
+            287,
+            316,
+            321,
+            502,
+            505
+          ],
+          "detail": "Deep split intermediates use source-wallet derived keys;327 final payees do not establish a B-account receipt followed by B\u2192C forwarding."
+        }
+      ],
+      "nearby_evidence_limits": [
+        "B-T030/batch08 proves frozen recipient plus sender-change refresh/two-root return history, not three independent registered owners forwarding the same whole principal.",
+        "Executed327-owner split has signed depth and no extra intermediates but its intermediate ownership stays with source-derived keys; it is useful helper evidence, not automatic fullH11 credit.",
+        "No wholeH11 composed exact trace identified in reviewed canonical native source plus current own curated rows. This is not a claim about all other root campaigns."
+      ],
+      "minimum_fixture": {
+        "proposed_selector": "qualification_forwarding::three_registered_owners_pay_only_final_absent_owner",
+        "selector_exists": false,
+        "actors": 3,
+        "source_sat": 100000,
+        "operations": [
+          "Create three distinct genuinely registered wallets and capture all three destination scripts. Board one actual100k source forA.",
+          "Use normal public SDK send/mailbox sync/signed registration for full-principalA\u2192B andB\u2192C; independently validate both received full signed bodies against actual original backing. Confirm three distinct accounts/keys and exact current source IDs rather than constructing transient source-wallet keys.",
+          "Stop/drop all original clients after C registration, before expiry. Let normal captaind/watchman automatically settle the actual final cut with confirmed owned fee funds.",
+          "Require actual final C payment and fee child atCore6, then a later completed tip; optionally return A/B only after that to inspect native stale-state adoption."
+        ],
+        "mandatory_oracles": [
+          "Exactly oneC customer output99k and one actual1000customer charge for a zero-Arkoor-fee100k fixture; if actual configured protocol fees differ, preserve declared actual fee conservation rather than overriding policy.",
+          "No customer allocations or canonical/mempool payments to A or B for the forwarded original/intermediate principal; all predecessor/current IDs and scripts are included in the assertion, not only C leaf.",
+          "Native source rows/registration evidence must prove both ownership transitions. Complete real backing+sponsor graph/actual fees/terminal outputs conserve funds with no duplicate canonical outpoint spending.",
+          "A/B return cannot refresh or credit the already discharged principal; any legitimate unrelated on-chain change is tracked separately."
+        ]
+      },
+      "prerequisites": [
+        "Use manual scheduling only to establish controlled absence; no default-daemon qualification or external-BIP84 seed-recovery claim.",
+        "If registration or normal API refuses a hop, preserve failure; no fabricated financial SQL, unlock/preimage hook or predecessor payout override.",
+        "Root future exact source/artifact capture/build/list/runtime allocation; source selection alone has zero credit."
+      ],
+      "budget": "Three actors, two normal transfers, one ordinary expiry; default180 proposed, no measured timing guarantee. No CLN/backup/reorg.",
+      "full_case_remaining_after_smaller_smoke": "Two delivered RPCs or C balance/one output without A/B exclusion over the whole lineage and actual economic cut remains PARTIAL."
+    }
+  ],
+  "recommended_next_selection": "Author only H30 three500-sat leaves first, after root author assignment; H32 second, H11 third. Proposed selectors do not exist and reserve no IDs/counts.",
+  "related_curated_rows": [
+    {
+      "case_id": "B-T030",
+      "automated_test_name": "expiry_frozen_recipient_is_paid_after_sender_change_refresh",
+      "latest_result": "PASS",
+      "tested_revision": "testsource:e44ddf95741478508908c17adc61752832d75c6a+manifest:3f52d4f99a55097698c698b012d035f0037328d8baf392f4d13e18047fbad0ae;external_servers:dirtyfb85/source0ff7819",
+      "evidence_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch08-two-root-return-history-receipt.json",
+      "limitation": "Test-only source based on e44 with separately pinned corrected dirty servers/older CLI; no clean all-product candidate claim. Actual one-or-two output history; no strict one-output grouping/seed restore/reorg claim."
+    },
+    {
+      "case_id": "B-T052",
+      "automated_test_name": "direct_fee_many_small_leaves_pay_one_non_dust_output",
+      "latest_result": "NOT RUN",
+      "tested_revision": "",
+      "evidence_path": "server/src/watchman/settlement.rs@e44ddf95741478508908c17adc61752832d75c6a",
+      "limitation": "Pure allocator tests; no transaction broadcast or actual coin ownership"
+    },
+    {
+      "case_id": "B-T053",
+      "automated_test_name": "direct_fee_script_dust_equality_is_paid",
+      "latest_result": "NOT RUN",
+      "tested_revision": "",
+      "evidence_path": "server/src/watchman/settlement.rs@e44ddf95741478508908c17adc61752832d75c6a",
+      "limitation": "Pure allocator tests; no transaction broadcast or actual coin ownership"
+    },
+    {
+      "case_id": "B-T057",
+      "automated_test_name": "direct_fee_separate_outputs_forfeit_what_a_merged_output_pays",
+      "latest_result": "NOT RUN",
+      "tested_revision": "",
+      "evidence_path": "server/src/watchman/settlement.rs@e44ddf95741478508908c17adc61752832d75c6a",
+      "limitation": "Pure allocator tests; no transaction broadcast or actual coin ownership"
+    },
+    {
+      "case_id": "FT-SPLIT-AUTO01",
+      "automated_test_name": "qualification_oversize::expiry_automatic_real_limit_multilevel_split_pays_every_owner",
+      "latest_result": "PASS",
+      "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06 frozen814dirtyownerpatch;pairedall4products/servercd9c13c0;fixture1d708",
+      "evidence_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch16-corrected-multilevel-split-receipt.json",
+      "limitation": "Controlledregtest bounded case with explicit1s harness timers and concurrent coordinator-approved37.688s extra metadata compile. Not productioncapacity/highload/reorg/restart/Noah/Signet/migrations/backup proof. Same existingnamedcase as originalbatch12FAIL; separatecandidate/run, no newunique-namecredit. No assertions/deadline/numericlimits weakened. Rawfailedandnewmoneydata preserved."
+    },
+    {
+      "case_id": "FT-SDK-056",
+      "automated_test_name": "ark-testing::bark-sdk exit::watchman_sweeps_funding_tx_during_exit",
+      "latest_result": "PASS",
+      "tested_revision": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+      "evidence_path": "batch44-six-money-v9b-receipt.json; batch44-client-postflight.json",
+      "limitation": "Manual client and watch interval 900; bounded exit iterations. Native assertions only; no independent full fee-child/subsidy custody or global operator cut, default daemon or full ML credit."
+    },
+    {
+      "case_id": "FT-SDK-057",
+      "automated_test_name": "ark-testing::bark-sdk exit::watchman_sweeps_vtxo_chain_during_exit",
+      "latest_result": "PASS",
+      "tested_revision": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+      "evidence_path": "batch44-six-money-v9b-receipt.json; batch44-client-postflight.json",
+      "limitation": "Explicit change factor 1; default factor 2 and grouped-change behavior remain unqualified. Native assertions only; no independent all-DAG fee-child custody, subsidy/global operator cut, backup/default daemon or full ML credit."
+    },
+    {
+      "case_id": "FT-SERVER-017",
+      "automated_test_name": "ark-testing::server qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+      "latest_result": "PASS",
+      "tested_revision": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+      "evidence_path": "batch46-lightning-physical-backup-v11c-receipt.json; batch46-v11c-client-postflight.json; batch46-p07-retained-core-reconciliation-backend.json; batch46-p07-retained-core-input-stability-backend.json; batch46-v11c-coverage-append.json",
+      "limitation": "One orderly HtlcsReady backup boundary with configured dedicated operator sweep and bounded funding; no crash/PITR, all backup boundaries, default replenishment or universal/full P07 qualification. Continuing CLN 12 BTC reserve is outside the selected four-output cut. Identity, private backup/journals, recipient-zero, seed binding and wallet custody remain native assertions; independent Core audit verifies public canonical transactions/prevouts/conservation, not private wallet control or full cryptographic policy. No global custody, full ML, release or production promotion."
+    }
+  ],
+  "exclusions": [
+    "Root active paired new-money/native terminal/reorg/other-terminal fixtures.",
+    "Other-terminal ACK-loss and external BIP84 work.",
+    "Client default-daemon protection/source-predicted red and P07 physical backup already separately owned/qualified.",
+    "No repeat of the stopped preregistration incorrect-payout workflow.",
+    "H31 all-script dust matrix remains a related separate gap; no fourth priority or additional dataset row is created here."
+  ],
+  "limits": [
+    "Current original80 legacy rows still carry historical NOTRUN/sourceinventory labels; they are not an automatically updated qualification map. No legacy/ML/global statuses changed.",
+    "Related source inventory unit rows may say NOTRUN even when a pinned broad unit suite passed; no native economic proof inferred from those labels.",
+    "The three full cases were not identified in the bounded source/own-receipt review; no universal absence claim across external/root-owned campaigns.",
+    "CanonicalHEAD/sourcefile hashes identify inspection only; no artifact binding or latest-source execution credit. All proposed counts/amounts are fixture design inputs, not observed outcomes.",
+    "No new framework, source code, Git/index, global reports, source lists, runtime, services, funding, Cargo or additional agents. Only this new external JSON/Markdown pair."
+  ]
+}

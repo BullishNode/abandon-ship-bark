@@ -1,0 +1,200 @@
+{
+  "kind": "BATCH49_INDEPENDENT_RETAINED_PUBLIC_CORE_PROJECTION",
+  "at": "2026-10-18T07:23:45.027163+00:00",
+  "state": "BOUNDED_PUBLIC_PROJECTION_COMPLETE_NO_NATIVE_ORACLE_REPLICATION",
+  "native_result_reference": {
+    "receipt": "batch49-default-daemon-singleton-v11c-receipt.json",
+    "sha256": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+    "parent_terminal_session": 99263,
+    "exit_code": 0,
+    "run_id": "bd52a8d0-818b-492b-8617-394ead9a3620",
+    "native_seconds": 22.071,
+    "wall_seconds": 23.037,
+    "initial_pending_fields_unchanged": true
+  },
+  "source_bound_native_oracles": {
+    "source_file": "testing/tests/bark_sdk/fallback_act_by.rs",
+    "full_file_sha256": "d3e79a29af1cd1c03767ac24e89960e91745a96d8e4480fbfd3f5b09fe31da70",
+    "function_sha256": "f70ded222b148d44d06eadd1e4b541865820046a9a28c37e1af610b3ba0f88cb",
+    "body_sha256": "1e38f5ae82e6333b35b982a53439228f0f33fd36e3a8d824c66649cec7b6062d",
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "assertions": [
+      "Lines35-47 SDK daemon_manual_sync=false/1s interval independently initiates early refresh; product config lifetime40/exitdelta3 with4+2 margins.",
+      "Lines48-66 test triggers round and mines confirmation blocks, daemon adopts an actual replacement; this is not fully autonomous round production.",
+      "Lines67-82 healthy confirmed replacement is not prematurely exited; after Ark stop and actual act_by, native signed.transactions has a txid in Core live mempool and replacement ID enters exit manager."
+    ],
+    "independently_recovered_exact_native_coin_or_path_ID": false,
+    "no_public_financial_receipt_emitted": true
+  },
+  "public_nodes": {
+    "bitcoind": {
+      "retained_unique_chain_tip": "1c7360248bb26b98022ba6685d33a6b56a6c5302d812fba290b36504359e47fe",
+      "retained_unique_chain_height": 170,
+      "unique_blocks": 171,
+      "block_entries": 171,
+      "all_blocks_in_one_retained_chain": true,
+      "all_header_ancestry_merkle_roots_and_header_PoW_verified": true,
+      "noncoinbase_transactions_count": 4,
+      "noncoinbase_transactions": [
+        {
+          "txid": "c92a360ddd1fd910001d8f205a8f443f6997b9a097ea171efc35d65d8d446e10",
+          "retained_chain_height": 105,
+          "block_hash": "5a918f38321f7e15b5eff6d86c7bff0ddf090d9159c0cabd6a61554501f81889",
+          "inputs_count": 1,
+          "outputs_count": 2,
+          "signed_size_bytes": 246
+        },
+        {
+          "txid": "d8171d4a31b20929d022d86dc3898932fa35e88e4d4463ee71e0f155d12b635a",
+          "retained_chain_height": 106,
+          "block_hash": "34f7500fa04b4af7ec8f5614c9c2ee664a379df5baa9f6adf09a27f4611188b7",
+          "inputs_count": 1,
+          "outputs_count": 2,
+          "signed_size_bytes": 222
+        },
+        {
+          "txid": "049854ed52fa07fd100e10a05356beb479ad4f22a4608c0951a0470e34d0f587",
+          "retained_chain_height": 107,
+          "block_hash": "7cc21e4dbbf583cd040ce9a5b92c15cc05565cd1685d1c0773ab244bd636dd85",
+          "inputs_count": 1,
+          "outputs_count": 2,
+          "signed_size_bytes": 234
+        },
+        {
+          "txid": "aeeb518ab962a6f797f32552fa0549dbeaf25b118a3e0417d8298dea026d171a",
+          "retained_chain_height": 139,
+          "block_hash": "45860b4f14d71dc5ff99ee0a4c18d828d315c995f12fe0a21e6fdb1249b17704",
+          "inputs_count": 1,
+          "outputs_count": 2,
+          "signed_size_bytes": 205
+        }
+      ],
+      "duplicate_retained_spends": 0,
+      "mempool_dump": {
+        "bytes": 27,
+        "sha256": "ae739cbd008cecebeca4ac627262193c502965b27e77e78dd98a8872a55c778a",
+        "mtime_UTC": "2026-10-18T07:18:30.302367+00:00",
+        "interpretation": "Unbound persisted dump only. No run-bound transaction identity or final live mempool proof; content not interpreted as a final pool snapshot."
+      },
+      "active_chain_confirmation_binding": "Not established: no RPC, active-chain index/chainstate or node logs were read. Heights refer to the unique retained file chain, not an independently observed live active tip."
+    },
+    "server_bitcoind": {
+      "retained_unique_chain_tip": "1c7360248bb26b98022ba6685d33a6b56a6c5302d812fba290b36504359e47fe",
+      "retained_unique_chain_height": 170,
+      "unique_blocks": 171,
+      "block_entries": 171,
+      "all_blocks_in_one_retained_chain": true,
+      "all_header_ancestry_merkle_roots_and_header_PoW_verified": true,
+      "noncoinbase_transactions_count": 4,
+      "noncoinbase_transactions": [
+        {
+          "txid": "c92a360ddd1fd910001d8f205a8f443f6997b9a097ea171efc35d65d8d446e10",
+          "retained_chain_height": 105,
+          "block_hash": "5a918f38321f7e15b5eff6d86c7bff0ddf090d9159c0cabd6a61554501f81889",
+          "inputs_count": 1,
+          "outputs_count": 2,
+          "signed_size_bytes": 246
+        },
+        {
+          "txid": "d8171d4a31b20929d022d86dc3898932fa35e88e4d4463ee71e0f155d12b635a",
+          "retained_chain_height": 106,
+          "block_hash": "34f7500fa04b4af7ec8f5614c9c2ee664a379df5baa9f6adf09a27f4611188b7",
+          "inputs_count": 1,
+          "outputs_count": 2,
+          "signed_size_bytes": 222
+        },
+        {
+          "txid": "049854ed52fa07fd100e10a05356beb479ad4f22a4608c0951a0470e34d0f587",
+          "retained_chain_height": 107,
+          "block_hash": "7cc21e4dbbf583cd040ce9a5b92c15cc05565cd1685d1c0773ab244bd636dd85",
+          "inputs_count": 1,
+          "outputs_count": 2,
+          "signed_size_bytes": 234
+        },
+        {
+          "txid": "aeeb518ab962a6f797f32552fa0549dbeaf25b118a3e0417d8298dea026d171a",
+          "retained_chain_height": 139,
+          "block_hash": "45860b4f14d71dc5ff99ee0a4c18d828d315c995f12fe0a21e6fdb1249b17704",
+          "inputs_count": 1,
+          "outputs_count": 2,
+          "signed_size_bytes": 205
+        }
+      ],
+      "duplicate_retained_spends": 0,
+      "mempool_dump": {
+        "bytes": 27,
+        "sha256": "ae739cbd008cecebeca4ac627262193c502965b27e77e78dd98a8872a55c778a",
+        "mtime_UTC": "2026-10-18T07:18:30.302367+00:00",
+        "interpretation": "Unbound persisted dump only. No run-bound transaction identity or final live mempool proof; content not interpreted as a final pool snapshot."
+      },
+      "active_chain_confirmation_binding": "Not established: no RPC, active-chain index/chainstate or node logs were read. Heights refer to the unique retained file chain, not an independently observed live active tip."
+    }
+  },
+  "node_chain_tip_agreement": true,
+  "input_stability": {
+    "before": {
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-default-daemon-singleton-v11c-receipt.json": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-retained-public-actor-absence-legacy.json": "41ce782381711593acaee53d5c6d543ecd302e891a02529303a45786299a05ac",
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/blocks/xor.dat": "c47c1f47ab1ccf520772c7ccb1327a2ae88e7aace8da18d1514f5d38cf77fd78",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/blocks/blk00000.dat": "d5fd54e015931a2f1d734ec39b5a6a330df01f9cf54eaa85618196f76bc94f0d",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/mempool.dat": "ae739cbd008cecebeca4ac627262193c502965b27e77e78dd98a8872a55c778a",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/blocks/xor.dat": "c47c1f47ab1ccf520772c7ccb1327a2ae88e7aace8da18d1514f5d38cf77fd78",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/blocks/blk00000.dat": "d5fd54e015931a2f1d734ec39b5a6a330df01f9cf54eaa85618196f76bc94f0d",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/mempool.dat": "ae739cbd008cecebeca4ac627262193c502965b27e77e78dd98a8872a55c778a"
+    },
+    "after": {
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-default-daemon-singleton-v11c-receipt.json": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-retained-public-actor-absence-legacy.json": "41ce782381711593acaee53d5c6d543ecd302e891a02529303a45786299a05ac",
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/blocks/xor.dat": "c47c1f47ab1ccf520772c7ccb1327a2ae88e7aace8da18d1514f5d38cf77fd78",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/blocks/blk00000.dat": "d5fd54e015931a2f1d734ec39b5a6a330df01f9cf54eaa85618196f76bc94f0d",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/mempool.dat": "ae739cbd008cecebeca4ac627262193c502965b27e77e78dd98a8872a55c778a",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/blocks/xor.dat": "c47c1f47ab1ccf520772c7ccb1327a2ae88e7aace8da18d1514f5d38cf77fd78",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/blocks/blk00000.dat": "d5fd54e015931a2f1d734ec39b5a6a330df01f9cf54eaa85618196f76bc94f0d",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/mempool.dat": "ae739cbd008cecebeca4ac627262193c502965b27e77e78dd98a8872a55c778a"
+    },
+    "final": {
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-default-daemon-singleton-v11c-receipt.json": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-retained-public-actor-absence-legacy.json": "41ce782381711593acaee53d5c6d543ecd302e891a02529303a45786299a05ac",
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/blocks/xor.dat": "c47c1f47ab1ccf520772c7ccb1327a2ae88e7aace8da18d1514f5d38cf77fd78",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/blocks/blk00000.dat": "d5fd54e015931a2f1d734ec39b5a6a330df01f9cf54eaa85618196f76bc94f0d",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/bitcoind/regtest/mempool.dat": "ae739cbd008cecebeca4ac627262193c502965b27e77e78dd98a8872a55c778a",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/blocks/xor.dat": "c47c1f47ab1ccf520772c7ccb1327a2ae88e7aace8da18d1514f5d38cf77fd78",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/blocks/blk00000.dat": "d5fd54e015931a2f1d734ec39b5a6a330df01f9cf54eaa85618196f76bc94f0d",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon/server_bitcoind/regtest/mempool.dat": "ae739cbd008cecebeca4ac627262193c502965b27e77e78dd98a8872a55c778a"
+    },
+    "all_unchanged": true
+  },
+  "scoped_actor_absence": {
+    "before_receipt": "batch49-retained-public-actor-absence-legacy.json",
+    "before_sha256": "41ce782381711593acaee53d5c6d543ecd302e891a02529303a45786299a05ac",
+    "after_receipt": "batch49-retained-public-actor-absence-final-legacy.json",
+    "after_sha256": "4db70788f11476346c9e8bd63b1b288a62075b0d79603e4facf04d45fa922161",
+    "known_group_SID": 165688,
+    "before_after_scoped_actors": 0,
+    "before_after_unreadable": 0,
+    "other_root_lane_excluded": true
+  },
+  "decoder_reuse": {
+    "path": "batch23-upstream-bark-unstarted46-reconcile-core-blocks.py",
+    "sha256": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+    "only_AST_function_defs_loaded": [
+      "digest",
+      "vi",
+      "tx"
+    ],
+    "original_main_top_level_not_executed": true,
+    "no_log_read": true
+  },
+  "limits": [
+    "This independently verifies retained public block structure/ancestry/merkle/PoW and transaction inventories only. No active-tip/canonical confirmations or final live mempool snapshot binding.",
+    "Without public native coin/path/transaction bindings, listed retained transactions cannot be labelled customer board/refresh/protective path/payment, nor assigned ownership/fees/full conservation.",
+    "No completed claim/Core6 recovery/drain/fee/seed/defaultbarkd/production/FULLML proof. Native exact signed-path linkage remains a source-bound assertion reached by the terminal PASS.",
+    "Small persisted mempool dumps are unbound and cannot reproduce or refute the native observed live mempool assertion.",
+    "Only explicit public blocks/xor/mempool paths, safe receipts and decoder code were read. No RPC/services/node start/cleanup, private wallet/DB/config/journal/seed or node/native log read, source/global/control/Git/Cargo changes.",
+    "Independent read-only own scoped probes were new scripts/receipts, never the frozen parent prelaunch probe; root other lane excluded."
+  ],
+  "blockers": []
+}

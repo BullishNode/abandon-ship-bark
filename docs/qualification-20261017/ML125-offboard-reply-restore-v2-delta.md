@@ -1,0 +1,5 @@
+# ML125 source v2: two real fee inputs, unchanged total budget
+
+SOURCE ONLY; uncompiled/NOT RUN, module/allocation absent. V1 sourcefb832 and its private copy/patch/manifest/design remain unchanged. Client source review identified a concrete fixture liveness race: the original operator backing and unrelated positive-control customer can have different expiry groups, while confirmed-only fee selection cannot spend the first child's unconfirmed change. Waiting for control before mining could stall with one fee UTXO.
+
+Root-directed minimal v2 changes only the upfront200k funding geometry: two genuine100k watchman funding transactions, exact distinct outpoints, total200k unchanged, each actually unspent/Core6 before the original offboard. Receipt records the actual map instead of the old singleton point. All customer oracles, original signed intent, cold-copy/open, actual upstream retry, completed views, timeouts, block bounds and no-duplicate checks remain unchanged. This is no product/funding policy change or topup after failure. Client/parent re-review of actual two-group sufficiency remains pending; no compile/native result follows.

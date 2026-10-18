@@ -1,0 +1,5 @@
+{
+  "state": "PARENT_FRESH_GATES_AND_ADMISSION_PENDING",
+  "root_allocation_sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+  "remove_marker": "PARENT ONLY after independent peer+fresh gates and15hash admission"
+}

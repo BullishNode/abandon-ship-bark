@@ -1,0 +1,86 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_NEW_FIXTURE_UNCOMPILED_NOT_RUN_REVIEW_PENDING",
+  "at": "2026-10-18T07:18:08.585092+00:00",
+  "name": "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge",
+  "binary": "ark-testing::server",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_reply_restore.rs",
+  "source_sha256": "fb83266d5c14c12d0b2264701f6702c7a21f1384eff63082297cbad5cf360250",
+  "source_lines": 534,
+  "private_frozen_source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/qualification_offboard_reply_restore.v1.rs",
+  "private_source_sha256": "fb83266d5c14c12d0b2264701f6702c7a21f1384eff63082297cbad5cf360250",
+  "private_source_mode": "0o600",
+  "add_file_patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v1.patch",
+  "add_file_patch_sha256": "241f242d4f0a76dee7ddb1b8ae16e9e7f405358480db9425648bcd934a0de394",
+  "design": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v1-design.md",
+  "design_sha256": "dfad2df90237f5f10f80bdee71d5e3fb780e368ae797b96be8b3f92b068cd473",
+  "canonical_API_inspection_HEAD": "50ee7e99afd1a19111bd631a1063ef8a5637fbad",
+  "API_file_hashes": {
+    "bark/src/lib.rs": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+    "bark/src/actions/offboard.rs": "0440c63b5e01ac5b61e0405c549ab3677cf1befc4dcfe8d1075dc76165e8749b",
+    "bark/src/persist/sqlite/mod.rs": "b41f613618f7cf0c5ba7d0ac81008f5e45dc9aaca0f48f7c72d1b632881a6507",
+    "bark/src/onchain/bdk.rs": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85",
+    "bark/src/balance.rs": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+    "server/src/offboards.rs": "c137c09af1f3c1e711463cd1abafc5ab6204009d6c11f8c41550c6feaf3eaa9b",
+    "server/schema.sql": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+    "testing/src/context/builders.rs": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+    "testing/src/bark.rs": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+    "testing/tests/server/qualification_offboard_restart.rs": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+    "testing/tests/bark_sdk/offboard.rs": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e"
+  },
+  "captured_C_reference": {
+    "source": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "archive": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "meaning": "source inspection reference only; new fixture is absent and not compiled there"
+  },
+  "native_setup": {
+    "server_sat": 500000,
+    "main_customer_sat": 200000,
+    "exact_main_board_sat": 100000,
+    "control_customer_sat": 20000,
+    "exact_control_board_sat": 10000,
+    "watchman_sat": 200000,
+    "CLN": false,
+    "timeout_seconds": 180,
+    "retry_count": 0,
+    "block_budget": 96,
+    "session_timeout_seconds": 5,
+    "harness_sweep_seconds": 1,
+    "double_drive_flag": "REQUIRED_FULLY_UNSET"
+  },
+  "static_preservation": {
+    "all_prior_owned_test_Rust_files_unchanged": 121,
+    "all_other_test_Rust_paths_unchanged": true,
+    "only_new_path": "testing/tests/server/qualification_offboard_reply_restore.rs",
+    "server_module_not_edited": true,
+    "no_canonical_source_edits": true,
+    "before_snapshot": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/all-owned-testing-rust-before.json",
+    "before_snapshot_sha256": "1a09b56c8e886c0ca14114ed1c26f3291fbfe0810195a18a69edbf1b2d81444a"
+  },
+  "pre_peer_version": {
+    "source_sha256": "e8722a394d10ed33526547eb038e97cd5c62087751a11e3411b0496cd1d24684",
+    "private_preservation": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/qualification_offboard_reply_restore.e872-pre-peer.rs",
+    "only_fix": "server cfg closure move for required static bound; no oracle change"
+  },
+  "future": {
+    "module_registration": null,
+    "review_ACK": null,
+    "build_candidate": null,
+    "actual_build_result": null,
+    "allocation": null,
+    "native_result": null
+  },
+  "actions": {
+    "new_source_file_only": true,
+    "Cargo_build_runtime_native": 0,
+    "financial_SQL_mutation": 0,
+    "module_changes": 0,
+    "global_report_edits": 0,
+    "Git_actions": 0
+  },
+  "limits": [
+    "Exact one cold client snapshot at committed offboard/lost-reply boundary; original server/Core continue. No global operator solvency/custody, fullML or production credit.",
+    "Ark ten-bucket zeros are separate from actual preserved ordinary onchain change; agreed offboard fee separate from actual miner fee.",
+    "No shared helper/frozen Rust packet/source mutation. Existing failures remain unchanged."
+  ]
+}

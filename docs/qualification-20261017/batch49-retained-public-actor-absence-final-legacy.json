@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-18T07:23:44.969181+00:00",
+  "state": "SCOPED_ABSENCE_PASS",
+  "container": "abandon-fresh-runtime-20261017",
+  "known_group_SID": 165688,
+  "scopes": [
+    "/fresh-cache/testing-track-20261017/batch49-default-daemon-singleton-v11c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c"
+  ],
+  "actors": [],
+  "unreadable": [],
+  "other_root_lane_excluded": true,
+  "no_process_actions_or_private_reads": true
+}

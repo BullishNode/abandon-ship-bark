@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_V2_PEER_ACK_NO_REMAINING_CONCRETE_BLOCKER_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T07:29:53.931557+00:00",
+  "test": "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge",
+  "binary": "ark-testing::server",
+  "source": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_reply_restore.rs",
+  "source_sha256": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+  "source_lines": 545,
+  "canonical_API_inspection_HEAD": "4e3d37c8941cbba216350264b6d6242bbe71137f",
+  "API_file_hashes": {
+    "bark/src/lib.rs": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+    "bark/src/actions/offboard.rs": "0440c63b5e01ac5b61e0405c549ab3677cf1befc4dcfe8d1075dc76165e8749b",
+    "bark/src/persist/sqlite/mod.rs": "b41f613618f7cf0c5ba7d0ac81008f5e45dc9aaca0f48f7c72d1b632881a6507",
+    "bark/src/onchain/bdk.rs": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85",
+    "bark/src/balance.rs": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+    "server/src/offboards.rs": "c137c09af1f3c1e711463cd1abafc5ab6204009d6c11f8c41550c6feaf3eaa9b",
+    "server/schema.sql": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+    "testing/src/context/builders.rs": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+    "testing/src/bark.rs": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+    "testing/tests/server/qualification_offboard_restart.rs": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+    "testing/tests/bark_sdk/offboard.rs": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+    "bark/src/daemon/mod.rs": "fb549edfc8745af9c6f03b0d21c890a4cff54f4fb26c55db47519c76d8e543cd",
+    "bark/src/offboard.rs": "79ad470ebf974d71f3d40634c9cbe29d77ca9253769b02c9e77777e6edb17ea0",
+    "bark/src/actions/mod.rs": "85b7bca7898905b0763ce50fb4c2910b5b5fc341ce6c1e297e25e1517c135248",
+    "server/src/database/mod.rs": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416",
+    "server/src/database/expiry_ownership.rs": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+    "server/src/database/expiry_decision.rs": "ab2903e83264f314f17cfea91e67e4ca95a7df1086ea4c6f450f90d2c9cf5255",
+    "server/src/database/expiry_payout.rs": "32f0917bdcce19626331790301e1ecff6bf4bf2a25cff64e14a3c1c16ff92bf8",
+    "server/src/watchman/payout.rs": "19769210f706753f65749fa741179a5090bfd6a92c1e444c92d97605963eb32a",
+    "bitcoin-ext/src/bdk.rs": "a8c4c84cc55bd5c08222582e1858eccf3cce5e757f6bd97402af7616057ab8cb",
+    "lib/src/offboard.rs": "7423fdce9b37b24bfae481e69a89e77274e0b381644b0b0741fd510723461cbf"
+  },
+  "input_hashes": {
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_reply_restore.rs": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/qualification_offboard_reply_restore.v2.rs": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/qualification_offboard_reply_restore.v1.rs": "fb83266d5c14c12d0b2264701f6702c7a21f1384eff63082297cbad5cf360250",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/qualification_offboard_reply_restore.e872-pre-peer.rs": "e8722a394d10ed33526547eb038e97cd5c62087751a11e3411b0496cd1d24684",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v1.json": "610c6d1c2a295785c4a71ef95618f76de75269a7d2aba814f968f2679071d460",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v2.json": "d94ec2a644f42fa4a1fa91d555c78d977384ec54e0924af116d1299e1815bc90",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v2-delta.patch": "a31c0825def600ecaa9c8cd7d0683ebe647a6566c31bbb81d4c0991cab8a4967",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v2.patch": "ee94f3e0807623a3149268342149c73c1df63bf851c4f0fd45208fd8b439ab52",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v1.patch": "241f242d4f0a76dee7ddb1b8ae16e9e7f405358480db9425648bcd934a0de394",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v1-design.md": "dfad2df90237f5f10f80bdee71d5e3fb780e368ae797b96be8b3f92b068cd473",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/all-owned-testing-rust-before.json": "1a09b56c8e886c0ca14114ed1c26f3291fbfe0810195a18a69edbf1b2d81444a"
+  },
+  "whole_source_read": "All534v1lines comprehensively read; exact11-line-net v2 sponsorship/receipt delta read/reconstructed, allremaining source identical.",
+  "addressed_findings": [
+    {
+      "id": "CLIENT-ML125-01",
+      "severity": "compile blocker",
+      "historical_source": "e8722a394d10ed33526547eb038e97cd5c62087751a11e3411b0496cd1d24684",
+      "location": "restored_finish server cfg closure, source171\u2013175",
+      "finding": "Local session_timeout was captured by reference by closure required static.",
+      "fix": "Exactly cfg(move |config| ...) in fb832; reversing this one token reproduces exact preserved e872. No runtime/compilation performed."
+    },
+    {
+      "id": "CLIENT-ML125-02",
+      "severity": "fixture funding/liveness blocker risk",
+      "historical_source": "fb83266d5c14c12d0b2264701f6702c7a21f1384eff63082297cbad5cf360250",
+      "location": "prefunding and positive control wait",
+      "finding": "Earlier original operator expiry group could consume sole confirmed200k sponsor; control has different expiry and cannot merge; unconfirmed child change is excluded while test waits without mining.",
+      "source_refs": [
+        "expiry_ownership.rs103\u2013108 offboard=>operator",
+        "expiry_decision.rs226\u2013227 forbids mixedexpiry groups",
+        "expiry_payout.rs98 earliestexpiry first",
+        "watchman/payout.rs183\u2013204 confirmed usable fees",
+        "bitcoin-ext/bdk.rs428 excludes unconfirmed"
+      ],
+      "fix": "V2 genuinely funds two distinct100k outputs before cold boundary and asserts each actual value/Core6, total stays200k; all timers/oracles unchanged. Removes identified single-UTXO bottleneck for selected original/control groups; actual selection/progress/runtime still requires native test. Connector sweep has additional144blocks (lib/offboard.rs39\u201340), outside96block case budget."
+    }
+  ],
+  "remaining_concrete_blockers": [],
+  "verified_API_and_lifecycle": [
+    "Public offboard_vtxos drives synchronously until park; executor UntilParkOrDone persists checkpoint and returns error, no detached offboard task survives awaited error. Native CLI wrapper owns no persistent child; original SDK client run_daemon:false by try_client. Both are dropped; stop_daemon_wait is joined before full-directory cold copy.",
+    "SqliteClient stores a path only and opens local per-operation Connections; no persistent connection field. Copy includes db.sqlite and all actual sidecars, seed/config in private owned testroot, symlinks rejected,32MiB/128file bound; source hash manifest stable before/after.",
+    "BDK persists through same BarkPersister DB; restored disk has existing properties/checkpoint before any drive; load_or_create must yield exact old ordinary output map, not an empty recreated wallet. Wallet::open uses create_if_not_exists:false/run_daemon:false and exactsame seed/binding/mailbox, new disjoint datadir.",
+    "Current public Offboard fields/Clone/Eq, Progress variants, wallet/checkpoint/balance APIs, MemoryLockManager, Db async closures, PostgreSQL TEXT/BYTEA/Option integer SQL types align with current canonical APIs. nursery enum cast kind::TEXT retained."
+  ],
+  "verified_oracles": [
+    "Proxy first calls real FinishOffboard, records genuine signed upstream reply only as independent oracle, then returns loss error. Wallet checkpoint remains exactunsignedprepared intent. No replayed create/prepare, signed-response feeding, inventedstate or financialSQL writes.",
+    "Native server offboards row has exactsignedtx/wallet_commit/user_fee_sat and original source Spent/offboarded_in. After coldrestore and realsessionexpiry, second authentic Finish returns unknowntxid; prepare1/finish2 exactsame txid. Chain adoption retains action/movement/destination/fee/net and exactoriginalsigned bytes.",
+    "All10Ark monetary buckets assert pending100k beforefinish/restore, then zero aftercanonical six-confirmation discharge; empty exitstatus and sourceSpent; existing ordinary BDK change separate. Movement originalID/Successful/effective\u2212100k/fee exactcommit/net exactrecipient; postexpiry repeated sync/history exact/idempotent.",
+    "Offboard Core canonical hash/height/bytes>=6, exactunique destination output and final gettxoutvalue/script>=6. Actual all-prevout minus all-output physicalminerfee separately computed positive; customer200k=ordinarychange+net+committedfee+boardminer. No fallback1000 substitution.",
+    "Genuine absent unrelated10k control gets exactly9k plus1k customercharge, registeredmailbox/key/SPK, oneconfirmedallocation and actualcanonicalparent/Core6/UTXO; actualsameblockP2Achild with allprevouts fee>0/confirmations.",
+    "Both native completedexpiry views match current Coretip; acrossall generations no customerallocation for constrained original anchor/sourcepath/offboardoutput roots, repeatedcadence/finalrebuilt negative. All postoffboard observation blocks+mempool exclude any original fallbackSPK output and require singleton originaloffboard/control payees. Original private clientdir remains byte-hash untouched."
+  ],
+  "scope_limits": [
+    "No compiler/native/module registration/resource allocation; futurecandidate must capture source+test ELF, actual versions/feature/chain and fresh singleton gates. Dev version macro must be shown bodyexecuted in future receipt.",
+    "This is a clean cold client checkpoint restore with continuing server/Core, not PG/server physicalbackup, crash/PITR, seed-only recovery, originalserverloss or allML125 fault boundaries.",
+    "Per-main-customer200k ledger separates committeduserfee from actualoffboardminerfee. Server500k/control20k/watch200k and child/operator change are not a closed global920k custody/solvency cut; actualcontrolchild fee alone does not prove sponsor/changeownership.",
+    "Two100k funding removes identified selected-group bottleneck but is SOURCE evidence, not guaranteed runtime/180s feasibility or generalfee-fairness qualification.",
+    "Negative ledger query is constrained to declared source/ancestor/offboardoutput roots; whole observed chain+mempool originalSPK exclusion independently checks actual extra payment. It does not assert all unrelated roots/operators are quiescent.",
+    "No actual PASS/FAIL/FULLML credit; historical prepeer source issues are not native failures. Old source packets remain immutable."
+  ],
+  "preservation": {
+    "all121prior_owned_test_Rust_hashes_match_before_snapshot": true,
+    "exact_v2_delta_matches_unified_diff": true,
+    "exact_addfile_patch_reconstructs545line_source": true,
+    "e872_and_fb832_private_snapshots_preserved": true,
+    "no_source_or_global_edits_by_peer": true
+  },
+  "actions": "Read-only source/API/schema/privateSOURCEsnapshot hash checks and in-memory diff reconstruction; wrote only these new peerJSON/MD. No wallet/private runtime data, SQL queries, actors/services, Cargo/build/metadata/list/native/probes/source/Git mutation."
+}

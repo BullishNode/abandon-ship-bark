@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_V3_ADMISSION_CORRECTION_PEER_ACK_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T07:40:28.978852+00:00",
+  "binary": "ark-testing::server",
+  "name": "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge",
+  "source_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+  "input_hashes": {
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_reply_restore.rs": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/qualification_offboard_reply_restore.v2.rs": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v2.json": "d94ec2a644f42fa4a1fa91d555c78d977384ec54e0924af116d1299e1815bc90",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v3.json": "856df4e827dd5dd84c9c70fe7509d736f19cca769937391ec00bee643f2ba8aa",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v3-delta.patch": "4cf0dc976505624d6fd3ffb88c0093b33cb99d96f18a4332c57a9ab101a443b0",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v3.patch": "6ae63a927d20e0528ba500b925741881818f8ba445e4b29e3660a397d04e40b1",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v2-peer-review-client.json": "8a0b1d092e2a6c42f6ff435cdd9096105ccda489081e562ef5c1240e556df0fd",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v3-delta.md": "e12f3b9dd715e625b60bda60ed40e83cc2cb0780b6eca6edd95aa8fd6983ebf6"
+  },
+  "API_config_hashes": {
+    "bark/src/lib.rs": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+    "bark/src/actions/offboard.rs": "0440c63b5e01ac5b61e0405c549ab3677cf1befc4dcfe8d1075dc76165e8749b",
+    "bark/src/persist/sqlite/mod.rs": "b41f613618f7cf0c5ba7d0ac81008f5e45dc9aaca0f48f7c72d1b632881a6507",
+    "bark/src/onchain/bdk.rs": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85",
+    "bark/src/balance.rs": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+    "server/src/offboards.rs": "c137c09af1f3c1e711463cd1abafc5ab6204009d6c11f8c41550c6feaf3eaa9b",
+    "server/schema.sql": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+    "testing/src/context/builders.rs": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+    "testing/src/bark.rs": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+    "testing/tests/server/qualification_offboard_restart.rs": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+    "testing/tests/bark_sdk/offboard.rs": "69fbf20f6ea458b0afd1e863a20d529ea75632226dea2330e7dc22e88540810e",
+    "testing/src/context/mod.rs": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+    "bark/src/board.rs": "ec9139eb5aa8c5d59d47f16d24b483e50a4ee3904ccc683c4d4ee183b5090143",
+    "server/src/config.rs": "5f38edd5dc89e838df8b95438b5e43be916f21c5850e83422105ce8102715257",
+    "bitcoin-ext/src/bdk.rs": "a8c4c84cc55bd5c08222582e1858eccf3cce5e757f6bd97402af7616057ab8cb",
+    "lib/src/offboard.rs": "7423fdce9b37b24bfae481e69a89e77274e0b381644b0b0741fd510723461cbf"
+  },
+  "addressed_new_finding": {
+    "historical_source_sha256": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+    "finding": "Control10k board below unchanged native20kminimum; Wallet::board rejects it. Earlier sourceACK missed thisminimum.",
+    "source_refs": [
+      "testing/src/context/mod.rs509",
+      "bark/src/board.rs249\u2013251"
+    ],
+    "fix": "V3control40kfunding/20kboard/19kcustomerpayout+1kfee; all exactcontrolrows/outputmaps/publicreceipt updated. No policy/minimum override.",
+    "earlier_ACK": "8a0b1d preservedhistorical but superseded for currentadmission; no actualnativeFAIL existed."
+  },
+  "delta_checks": {
+    "exact_v2_to_v3_unified_diff_matches": true,
+    "exact_addfile_patch545lines_matches": true,
+    "no_old10k9k_control_numeric_literals": true,
+    "all121prior_owned_test_Rust_hashes_match": true
+  },
+  "admission_checks": [
+    "Native advertised minboard20k and actualboard-output >=min guard verified. board_amount20k requests exactnetboard output; nativeboardmin/base/ppm fees zero,40kinputfunding covers20k+miningfee/change.",
+    "Main100k and control20k meetminimum;19kpayout standard/nondust. Positivecontrol is now20k\u219219k+1k with exactmailbox/key/script/canonicalCore6/uniqueoutput/sameblockchild fees retained.",
+    "Server500k/no pool/lifetime32, offboardsession5s/checkinterval1s, manualclients and6confirmations unaffected. No CLN calls.",
+    "Original coldwholeclient/closedhandles/preparedintent/existingBDK/createfalse/runfalse/noobserverfeeding/authenticFinish2Prepare1/exactoriginalsignedtx/committedfee/Core6/all10balance/idempotence unchanged.",
+    "Two confirmed100ksponsors unchanged; native CPFP confirmed-only/defaultcoinselection/WithGuaranteedChange/drain_to does not drain_wallet, so selected original/control expiry groups can use separatefunding atnormalfees. Connector additional144blocks lies beyond96blockbudget.",
+    "Main200k selectedcustomer equation/allgenerationoriginal-root no-customer rows and wholeobservedchain+mempool originalfallbackSPK exclusion unchanged.180s/96blocks remain exact."
+  ],
+  "remaining_concrete_blockers": [],
+  "scope_limits": [
+    "No compilation/registration/native/allocation result; 180s feasibility remainsunverified.",
+    "Clean coldCLIENTcheckpoint restore with continuingserver/Core, not PG/serverbackup/PITR/seed-only/allML125 boundaries.",
+    "No full940ksetupcustodycut; maincustomer200k and separate20kcontrol assertions, actualphysicalminerfee distinct fromcommittedcustomerfee.",
+    "Frozen originalcheckpoint21ffe refers historicalf339/v2ACK and needs additiveknownblocker/correction/newfinalpayload; oldreceipts and native250/461counts unchanged."
+  ],
+  "actions": "Only readstablev3/delta/API/config and reconstructedpatches in memory; wrote these newpeerreports. No source/control/global/Gitindex/Cargo/runtime changes."
+}

@@ -1,0 +1,6 @@
+Run ID: bd52a8d0-818b-492b-8617-394ead9a3620
+Starting 1 test across4 listed binaries;660 filter-skipped (formal metadata projection).
+PASS [22.071s] ark-testing::bark-sdk fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable
+Summary [22.073s] 1 test run: 1 passed, 660 skipped
+Parent99263 terminal exit0; native22.071s/controller23.037s; scoped group/SID165688 absent at formal postflight.
+Scope: SDK automatic refresh and Ark-offline signed exit-path broadcast; no final claim/Core6/full money/seed-drain/custody/FULLML credit.

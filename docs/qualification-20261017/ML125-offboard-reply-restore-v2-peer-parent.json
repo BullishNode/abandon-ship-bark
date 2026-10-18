@@ -1,0 +1,23 @@
+{
+  "at": "2026-10-18T07:31:53.380522+00:00",
+  "state": "PARENT_SOURCE_ACK_READY_FOR_ROOT_INTEGRATION_UNCOMPILED_NOT_RUN",
+  "source_sha256": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+  "main_helper_declaration_sha256": "1f25715aa88b261f446b665be89d7616adaa9bc60546be2bcc848f5c32b189ca",
+  "main_helper_brace_body_sha256": "ca3b4d64fe20a74fd41d10560abb27f9f580ef5f7ecb24858d7950c7e5a9d19a",
+  "entry_declaration_sha256": "54f982f9f6b3de58339e531e72af9e4a387e711600bcf10f71951358ec20c7fa",
+  "add_file_patch": "ML125-offboard-reply-restore-v2.patch",
+  "add_file_patch_sha256": "ee94f3e0807623a3149268342149c73c1df63bf851c4f0fd45208fd8b439ab52",
+  "independent_peer_sha256": "8a0b1d092e2a6c42f6ff435cdd9096105ccda489081e562ef5c1240e556df0fd",
+  "review": "Full main helper and lifecycle/observer-vs-restoredwallet separation, real source checkpoint + signed bytes, Arktenbuckets vsordinarychange, authenticexpiredsession retry/economicrow1, Core6/net+committeduserfee distinctactualminerfee, funded9kpositivecontrol+sameblockchild, completedexpiryviews/allgenerations/wholechain+mempoolsingleton. Two confirmed100k sponsoroutputs preserve200ktotal; nativeWalletExt coinselection excludesunconfirmed butdoesnotdrainall; source+144connector beyond96blockcap.",
+  "findings_fixed_before_compile": [
+    "servercfgclosuremove requiredstatic",
+    "singleconfirmedfeesponsor couldstrandlaterdistinctexpirygroup; two100k preservefundingtotal"
+  ],
+  "scope": "Onlyonecleanclientcheckpointrestore/continuingserverCore. No seedonly/serverbackup/globalcustody/actualnative/fullML claim.",
+  "future_required": [
+    "Root registers new server module",
+    "Root coherent source capture/checks/nativecompile+ELFmetadata pins",
+    "Exact resourceallocation+fresh singleton/17pins/env/resources/actor admission",
+    "One native180/0retry execution and independentretained chain audit"
+  ]
+}

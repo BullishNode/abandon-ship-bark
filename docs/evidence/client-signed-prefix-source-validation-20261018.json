@@ -1,0 +1,32 @@
+{
+  "recorded_at": "2026-10-18T20:32:45.062222+00:00",
+  "state": "SIGNED_PREFIX_EXTENSION_CHECKS_AND_THREE_UNITS_PASS_NATIVE_UNQUALIFIED",
+  "production_ready": false,
+  "base_commit": "83119da8a226db6896f1740976e0bd1dceec876c",
+  "initial_reviewed_patch_sha256": "c884eb44d9306bb8ecaf366ace84495aca13b363166f20845e5385aad3ecf511",
+  "test_only_funding_correction_sha256": "d01611fb59cf10a0331f52dbced90e4311410cf01a1601b61537146eb2189837",
+  "behavior": "An ordinary owned completed exit can resume from the exact canonical signed ancestor output. Positive known-unspent amount/script evidence and an uncached stable-tip check are required. The original movement and debit remain unchanged. Unknown or competing outputs do not authorize recovery.",
+  "files": {
+    "bark/src/chain.rs": "bf2a0d861b07befcb0f94e4ea3f35dfc2388bb3d2f9430c8c8da3b2688e8e4c1",
+    "bark/src/exit/mod.rs": "b1443b11f77411c235e524571315c43b0848e99281558d25afccbe08da065ce5"
+  },
+  "checks": "PASS",
+  "units": {
+    "passed": 3,
+    "run_id": "43edd7db-abed-481c-86f8-9c2e9a677170",
+    "seconds": 0.029,
+    "source_contract": "Prefix search all/none/partial/error; exact signed body and selected output; missing/incomplete/confirmed-spend backend status."
+  },
+  "original_unit_failure": {
+    "passed": 2,
+    "failed": 1,
+    "cause": "The test used the board funding vector for a round-derived arkoor VTXO. The correction uses its real round funding and adds explicit anchor identity. No product assertion was removed."
+  },
+  "limits": [
+    "No native surviving-prefix recovery result yet; the genuine multi-step fixture is under development.",
+    "Existing V27 nine native passes precede this extension and are not relabeled as qualification of the extension.",
+    "Full transaction witness equality may conservatively hold a valid alternative-witness body.",
+    "No unavailable-root-history, general recovery, global custody, Signet load or production readiness claim.",
+    "Unrelated existing backend test overlay was present during checks and stays outside this commit."
+  ]
+}

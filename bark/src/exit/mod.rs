@@ -137,13 +137,13 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use bitcoin::{
-	Address, Amount, FeeRate, Psbt, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness, sighash
+	Address, Amount, FeeRate, OutPoint, Psbt, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness, sighash
 };
 use bitcoin::consensus::Params;
 use log::{error, info, trace, warn};
 
 use ark::{Vtxo, VtxoId, VtxoPolicy};
-use ark::vtxo::{Bare, Full, TapScriptClause};
+use ark::vtxo::{Bare, Full, TapScriptClause, VtxoTxIterItem};
 use ark::vtxo::policy::signing::VtxoSigner;
 use bitcoin_ext::{BlockDelta, BlockHeight, P2TR_DUST, TxStatus};
 
@@ -205,6 +205,30 @@ pub(crate) struct ExitInner {
 	exit_vtxos: Vec<ExitVtxo>,
 	/// Nonfinancial fair retry position; signed bodies/checkpoints stay durable.
 	claimed_reorg_cursor: Option<VtxoId>,
+}
+
+// Signed single-parent exit paths have a confirmed prefix. Probe it in
+// logarithmic network work; errors remain errors, never absence evidence.
+async fn confirmed_path_prefix_len<F, Fut>(len: usize, mut confirmed: F) -> anyhow::Result<usize>
+where
+	F: FnMut(usize) -> Fut,
+	Fut: std::future::Future<Output = anyhow::Result<bool>>,
+{
+	let (mut first, mut end) = (0, len);
+	while first < end {
+		let middle = first + (end - first) / 2;
+		if confirmed(middle).await? { first = middle + 1; } else { end = middle; }
+	}
+	Ok(first)
+}
+
+fn signed_frontier_output(
+	step: &VtxoTxIterItem, next_input: OutPoint, actual: &Transaction,
+) -> anyhow::Result<TxOut> {
+	let point = OutPoint::new(step.tx.compute_txid(), u32::try_from(step.output_idx)?);
+	ensure!(point == next_input, "recovery frontier is not the selected signed path output");
+	ensure!(actual == &step.tx, "current recovery frontier differs from its retained signed transaction");
+	actual.output.get(step.output_idx).cloned().context("signed recovery frontier output is missing")
 }
 
 impl ExitInner {
@@ -373,28 +397,54 @@ impl ExitInner {
 			let leaf = self.chain_source.get_tx(&full.point().txid).await?.context("confirmed exit leaf is unavailable")?;
 			ensure!(leaf.output.get(full.point().vout as usize) == Some(&full.txout()),
 				"current confirmed leaf differs from the retained signed exit");
-			if self.chain_source.outpoint_spent_confirmed(full.point()).await? { return Ok(()); }
+			if !self.chain_source.confirmed_output_is_unspent(full.point(), &full.txout()).await? { return Ok(()); }
 			ExitState::new_awaiting_delta(tip.height, leaf_block, delay)
 		} else {
 			// No leaf means no immediate claim right. Resume the SAME signed native
-			// path only from its actually canonical, unspent funding root.
+			// path only from an actually canonical, unspent output on that path.
 			let anchor = full.chain_anchor();
 			let TxStatus::Confirmed(block) = self.chain_source.tx_status(anchor.txid).await? else { return Ok(()); };
 			if tip.height < block.height || self.chain_source.block_ref(block.height).await? != block { return Ok(()); }
 			let funding = self.chain_source.get_tx(&anchor.txid).await?.context("canonical exit funding body is unavailable")?;
 			ensure!(funding.compute_txid() == anchor.txid, "exit funding transaction identity changed");
 			full.validate(&funding).context("signed exit does not match its actual canonical funding output")?;
-			if self.chain_source.outpoint_spent_confirmed(anchor).await? { return Ok(()); }
-			let txids = full.transactions().map(|step| step.tx.compute_txid()).collect::<Vec<_>>();
-			ensure!(!txids.is_empty(), "missing exit path cannot be reconstructed from its retained body");
-			ExitState::new_processing(tip.height, txids)
+			let steps = full.transactions().collect::<Vec<_>>();
+			ensure!(!steps.is_empty(), "missing exit path cannot be reconstructed from its retained body");
+			let root_output = funding.output.get(anchor.vout as usize).context("exit funding output is missing")?;
+			if !self.chain_source.confirmed_output_is_unspent(anchor, root_output).await? {
+				// Each signed step spends the preceding selected output, so current
+				// confirmations form a prefix. Only its exact, positively unspent
+				// final output can authorize recovery; unrelated root spends cannot.
+				let prefix = confirmed_path_prefix_len(steps.len(), |index| {
+					let txid = steps[index].tx.compute_txid();
+					let chain = &self.chain_source;
+					async move {
+						let TxStatus::Confirmed(block) = chain.tx_status(txid).await? else { return Ok(false); };
+						Ok(tip.height >= block.height && chain.block_ref(block.height).await? == block)
+					}
+				}).await?;
+				let Some(index) = prefix.checked_sub(1) else { return Ok(()); };
+				let step = &steps[index];
+				let point = OutPoint::new(step.tx.compute_txid(), u32::try_from(step.output_idx)?);
+				let next = match steps.get(index + 1) {
+					Some(next) => {
+						ensure!(next.tx.input.len() == 1, "recovery path is not a single-parent signed transition");
+						next.tx.input[0].previous_output
+					},
+					None => full.point(),
+				};
+				let actual = self.chain_source.get_tx(&point.txid).await?.context("canonical recovery frontier body is unavailable")?;
+				let output = signed_frontier_output(step, next, &actual)?;
+				if !self.chain_source.confirmed_output_is_unspent(point, &output).await? { return Ok(()); }
+			}
+			ExitState::new_processing(tip.height, steps.iter().map(|step| step.tx.compute_txid()))
 		};
 		ensure!(self.chain_source.tip_ref_uncached().await? == tip, "chain changed during completed-claim reconciliation");
 		// Pending commits first. A crash or failed exit write leaves Claimed+Pending
 		// eligible for this same scan; it never creates a second principal debit.
 		self.movement_manager.rearm_chain_recovery(movement_id).await?;
 		fresh.history.push(fresh.state.clone());
-		// Preserve Exited and the old Claimed history. A root-backed Processing
+		// Preserve Exited and the old Claimed history. A frontier-backed Processing
 		// retry is authenticated again before any package replay or holder check.
 		fresh.state = next;
 		self.persister.store_exit_vtxo_entry(&fresh).await?;
@@ -1678,6 +1728,56 @@ mod ordinary_proof_tests {
 	use crate::movement::{Movement, MovementSubsystem};
 	use crate::persist::models::StoredExit;
 	use bitcoin::hashes::Hash;
+
+	#[tokio::test]
+	async fn surviving_signed_prefix_search_is_bounded_and_preserves_lookup_errors() {
+		for len in [0, 1, 2, 17, 65, 1024] {
+			for prefix in 0..=len {
+				let mut probes = 0;
+				let found = confirmed_path_prefix_len(len, |index| {
+					probes += 1;
+					std::future::ready(Ok(index < prefix))
+				}).await.unwrap();
+				assert_eq!(found, prefix);
+				assert!(probes <= usize::BITS - len.leading_zeros());
+			}
+		}
+		let error = confirmed_path_prefix_len(17, |_| std::future::ready(
+			Err(anyhow::anyhow!("backend unavailable")),
+		)).await.unwrap_err();
+		assert_eq!(error.to_string(), "backend unavailable", "failed lookup cannot become absence evidence");
+	}
+
+	#[test]
+	fn recovery_frontier_binds_actual_signed_body_and_selected_path_output() {
+		let vectors = &*ark::test_util::VTXO_VECTORS;
+		let full = &vectors.arkoor3_vtxo;
+		let funding = &vectors.round_tx;
+		assert_eq!(full.chain_anchor().txid, funding.compute_txid());
+		full.validate(funding).unwrap();
+		let steps = full.transactions().collect::<Vec<_>>();
+		assert!(steps.len() > 1);
+		for (index, step) in steps.iter().enumerate() {
+			let next = steps.get(index + 1).map(|next| {
+				assert_eq!(next.tx.input.len(), 1);
+				next.tx.input[0].previous_output
+			}).unwrap_or(full.point());
+			assert_eq!(signed_frontier_output(step, next, &step.tx).unwrap(), step.tx.output[step.output_idx]);
+			let sibling = OutPoint::new(next.txid, next.vout ^ 1);
+			assert!(signed_frontier_output(step, sibling, &step.tx).is_err(), "sibling output does not carry this signed path");
+			let mut substituted = step.tx.clone();
+			substituted.input[0].witness.push([1]);
+			assert_eq!(substituted.compute_txid(), step.tx.compute_txid());
+			assert!(signed_frontier_output(step, next, &substituted).is_err(), "same txid does not waive actual signed-body identity");
+			let mut changed_output = step.tx.clone();
+			changed_output.output[step.output_idx].value += Amount::from_sat(1);
+			assert!(signed_frontier_output(step, next, &changed_output).is_err(), "actual amount or body substitution stays blocked");
+			let mut invalid = step.clone();
+			invalid.output_idx = invalid.tx.output.len();
+			let missing = OutPoint::new(next.txid, u32::try_from(invalid.output_idx).unwrap());
+			assert!(signed_frontier_output(&invalid, missing, &invalid.tx).is_err());
+		}
+	}
 
 	#[test]
 	fn stale_cpfp_is_blocked_without_starving_a_live_shared_ancestor_owner() {

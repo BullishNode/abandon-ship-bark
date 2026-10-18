@@ -1,0 +1,7 @@
+ACK: P07 v2 source `abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695` fixes the sole concrete v1 blocker by casting `wallet_changeset.kind::TEXT AS kind` in both journal queries. Reversing exactly those two replacements yields byte-exact frozen v1 `a3ae1fe2d62a82d147c0f4a7c885d2ab4880d737ad77ee7e561091c20aef175a`; no financial assertion, lifecycle checkpoint, API call or timer changes. No remaining concrete blocker was found by the full v1 inspection plus exact v2 delta review.
+
+All original v1 packet/API evidence hashes remain unchanged. Every v2 manifest entry hash/length matches its actual file. Delta SHA `9bc85e5b2c728c97dc629ccfdd96d378813a74d2df543ceb475d80348beab4c3`; aggregate SHA `3f8ffa11f01003c154f90303da4ca2c743c72e8e7fcf5750d85e4f27bb885931`.
+
+V2 notes/intake correctly limit605k conservation to the selected four customer/pool/watch funding outputs and their actual descendants. The separately funded continuing CLN12BTC setup reserve is excluded; unchanged-reserve/channel/HSM custody is not audited or claimed. This clarification adds no source money flow or oracle.
+
+SOURCE ONLY, UNCOMPILED, NOT RUN. Parent integration/build/admission and exact runtime allocation remain required; no old PASS transfers or full P07/P11/ML/production credit. No source, old packet/report, module, runtime/Cargo or rolling-file mutation. Details/hashes are in `P07-v2-backend-source-review.json`.

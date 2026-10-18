@@ -1,0 +1,132 @@
+{
+  "kind": "PROPOSED_NEXT_THREE_RECOVERY_SELECTION_SOURCE_ONLY",
+  "at": "2026-10-18T04:20:45.975388+00:00",
+  "state": "SOURCE_REVIEWED_NO_RUNTIME_ALLOCATION_NO_COUNT_CREDIT",
+  "proposed_order_overridden_by_future_exact_root_packet": true,
+  "selection": [
+    {
+      "proposed_order": 1,
+      "literal_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "expected_binary": "ark-testing::barkd",
+      "reviewed_source_file": "testing/tests/barkd/recovery.rs",
+      "reviewed_v2_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "queued_doc_after_file_sha256": "8fb7578db3fa0a0ab1a6de193015c3551be07a963ff4ec4f8e3200b7a0abe7b0",
+      "exact_body_sha256": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5",
+      "body_same_after_doc_delta": true,
+      "current_candidate_execution_status": "NOT RUN; candidate binding and allocation pending",
+      "execution_credit": 0,
+      "prior_body_sha256": "1f75a3484f1dd75826013a5142d86ac30a66c712c6d6568754fd982093fb197e",
+      "status": "V2 adapted full-current-cut/payment + all10balance buckets + no-current-exit intent; original outcomes preserved"
+    },
+    {
+      "proposed_order": 2,
+      "literal_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "expected_binary": "ark-testing::barkd",
+      "reviewed_source_file": "testing/tests/barkd/recovery.rs",
+      "reviewed_v2_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "queued_doc_after_file_sha256": "8fb7578db3fa0a0ab1a6de193015c3551be07a963ff4ec4f8e3200b7a0abe7b0",
+      "exact_body_sha256": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30",
+      "body_same_after_doc_delta": true,
+      "current_candidate_execution_status": "NOT RUN; candidate binding and allocation pending",
+      "execution_credit": 0,
+      "prior_body_sha256": "59e8637124b230915660b8745151c2f7992d2c381bc6b1d92a3fef3484df1b67",
+      "status": "V2 adapted full-current-cut/payment + all10balance buckets + no-current-exit intent; original outcomes preserved"
+    },
+    {
+      "proposed_order": 3,
+      "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "expected_binary": "ark-testing::barkd",
+      "reviewed_source_file": "testing/tests/barkd/recovery.rs",
+      "reviewed_v2_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "queued_doc_after_file_sha256": "8fb7578db3fa0a0ab1a6de193015c3551be07a963ff4ec4f8e3200b7a0abe7b0",
+      "exact_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+      "body_same_after_doc_delta": true,
+      "current_candidate_execution_status": "NOT RUN; candidate binding and allocation pending",
+      "execution_credit": 0,
+      "status": "Unchanged quarantine + genuine signed same-anchor Arkoor Spent positive control; newcandidate execution still required"
+    }
+  ],
+  "shared_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+  "v2_manifest_sha256": "7ecb78075275a4600bec876e5c097e3660907062af683c1d3fb26f48af177395",
+  "v2_aggregate_patch_sha256": "546269c665c58c75a297b49b524c187a1842f2e534b13fa2881af9ba7ff4622c",
+  "v2_peer_review": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/barkd-recovery-round-retirement-v2-peer-review-legacy.md",
+    "sha256": "f9f47bd8cbf54cfed60aac8de4fe22714f96b2b654ce57407e050ce616d7e428"
+  },
+  "queued_doc_delta_review": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/barkd-recovery-round-retirement-v2-doc-source-review.json",
+    "sha256": "2c0180668d2bf4f3336e2c49bdf4d15511d1a664f4f3c874a7868b72ba29dd6b",
+    "patch_sha256": "a7f3d4e73593860da7be50ed76dc79dc2262cb810c379fa5c95e564929934d2e",
+    "not_in_captured_ELF_claim": true
+  },
+  "historical_evidence_preserved": {
+    "mixed_original_fee_oracle_FAIL": {
+      "run_id": "551dd1bb-ab3b-4629-a333-40a5f4ad9a97",
+      "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/barkd-recovery-mixed-retained-reconciliation.json",
+      "receipt_sha256": "53e3853e2756f5e96ff605b98a4d4fd514d55298415ffa887a364e9bd9292f91"
+    },
+    "mixed_adapted_cross_anchor_helper_actual_FAIL": {
+      "run_id": "15eac100-bf66-4630-b810-edcc7f433046",
+      "native_seconds": 35.103,
+      "source_location": "testing/tests/barkd/recovery.rs:26:9",
+      "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch42-ordinary-twelve-v8e-receipt.json",
+      "receipt_sha256": "4391490deb65b0190a91d6946b551a75a89fcc9881def7e3021096cad7a97c48"
+    },
+    "round_original": "HELD NOT RUN; no observed FAIL or prior execution claimed",
+    "quarantine_prior_actual_PASS": {
+      "run_id": "ea55a215-31a1-4101-97e7-8502a4361ed0",
+      "native_seconds": 25.427,
+      "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch43-quarantine-v8e-receipt.json",
+      "receipt_sha256": "49aea2ace1e8184a0940504e52432b301ea9970becea6ae9a16db11367540385",
+      "scope": "Historical immutablev8e source outcome only; does not qualify newcandidate."
+    }
+  },
+  "unique_name_accounting": {
+    "existing_executed_names": [
+      "ark-testing::barkd recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "ark-testing::barkd recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ],
+    "only_potential_new_unique_name_if_started": "ark-testing::barkd recovery::recovered_wallet_finds_round_vtxo",
+    "this_plan_execution_or_unique_credit": 0,
+    "rule": "Do not count3newunique. Actual newcandidate reruns are separate outcomes; old mixed FAIL retained. No counters changed."
+  },
+  "future_candidate": {
+    "root_reported_label": "v10 compiling; actual artifact handoff pending",
+    "unverified_parent_source_hint": "3e0437f1\u2026",
+    "unverified_parent_archive_hint": "03686b6d\u2026",
+    "exact_source_manifest_sha256": null,
+    "exact_archive_sha256": null,
+    "bundle_manifest_sha256": null,
+    "immutable_metadata_sha256": null,
+    "runtime_metadata_sha256": null,
+    "native_barkd_ELF_sha256": null,
+    "allocation": null,
+    "execution_authorized": false
+  },
+  "required_admission": {
+    "profile": "default",
+    "per_test_timeout_seconds": 180,
+    "serial": 1,
+    "retries": 0,
+    "first_fail_stops": true,
+    "maximum_global_native": 2,
+    "exact_case_count": 3,
+    "ignored": false,
+    "CLN_required": false,
+    "pending": [
+      "Explicitrootallocation exactbinary/name order; parent sole launch authority.",
+      "Actual complete source/archive/diff/helper/body/ELF+runtime/immutablemetadata binding from handoff; source label/hash prefix is insufficient.",
+      "Verify actual archive file97118 or explicitly reviewed queued-doc8fb and all3literal bodies/stricthelper; no assumption capturedpostdoc.",
+      "Fresh exact singleton unignored listing per barkd literal and actual versions/features/native-BIP84 binding; no new compilation by testing agents.",
+      "Actual allocated tool/product/support/source/runtime pins, fresh private per-casecontexts, availableSHM>=12MiB/global2/scopedPG/resource gate and immutableparentadmission.",
+      "Safe firstFAIL preserve/postterminalreconcile before any follow-up; no hidden retries/deadline extension."
+    ]
+  },
+  "limits": [
+    "No controlcode, mutable/finalallocation, runtimepins, metadata/list/preflight/native/Cargo/target/source edits created.",
+    "V2 allbucket/no-current-exit-intent outcomes still unexecuted; no full APIbalance response or future act-by protection claim.",
+    "Quarantine unchanged same-anchor Spent control and strict sharedhelper remain exact; no generic Locked exception or per-VTXOawaitflagfalse.",
+    "No freshseed-only/originalabsent/offline/fullML/production/fullsuite credit.",
+    "Frozen checkpoint17 payload and all earlier reports/results/rolling STATUS/COVERAGE untouched."
+  ]
+}

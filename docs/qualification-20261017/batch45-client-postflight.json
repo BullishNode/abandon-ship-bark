@@ -1,0 +1,257 @@
+{
+  "kind": "INDEPENDENT_BATCH45_CLIENT_POSTFLIGHT_BY_BACKEND_REVIEWER",
+  "at": "2026-10-18T04:38:05.156585+00:00",
+  "state": "TERMINAL_3PASS_POSTFLIGHT_SOURCE_ARTIFACT_CONTROL_INTEGRITY_PASS",
+  "parent_terminal_confirmed": {
+    "session": 17820,
+    "exit_code": 0,
+    "source": "Parentexplicit message before postflight; toolsession is not PID"
+  },
+  "counts": {
+    "started": 3,
+    "PASS": 3,
+    "FAIL": 0,
+    "NOT_STARTED": 0,
+    "reviewer_executions": 0
+  },
+  "native_seconds_sum": 94.387,
+  "cases": [
+    {
+      "case": 1,
+      "binary": "ark-testing::barkd",
+      "name": "recovery::recovered_wallet_finds_round_vtxo",
+      "result": "PASS",
+      "run_id": "fad96514-47ba-4b94-9348-1c597054a1a5",
+      "native_seconds": 34.026,
+      "wall_seconds": 35.564,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 143297,
+      "fresh_selected": [
+        [
+          "ark-testing::barkd",
+          "recovery::recovered_wallet_finds_round_vtxo"
+        ]
+      ],
+      "unignored": true,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "target_body_sha256": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/case01/test-data/barkd/recovered_wallet_finds_round_vtxo",
+      "nonempty_Core_blockfiles": [
+        {
+          "filename": "blk00000.dat",
+          "bytes": 16777216
+        }
+      ],
+      "no_early_version_return": "Genuine nonempty nativeCore context and source operations reached; no placeholder/smoke selection.",
+      "native_assertion_scope": "Firsttwo: exactknownroundancestorLocked body/currentcut/fullrecipientpayment/currentinputsSpent; all10monetarybuckets beforeactualcut+9zero/after10zero and emptycurrentpersistedexitstatuses. Third: invalidsignedbodyquarantine/allbalancezero plus genuine signed same-anchorSpentsource/actualrecipient+change conservation control.",
+      "limits": "Nativeassertions only, no independentCore/SQLite money reconstruction by this postflight. Originaldaemon alive; no absent-original/backup/defaultdaemon/futureprotection/FULLML claim."
+    },
+    {
+      "case": 2,
+      "binary": "ark-testing::barkd",
+      "name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "result": "PASS",
+      "run_id": "02a13f8b-6088-48db-9248-9d06cd1a91e8",
+      "native_seconds": 37.976,
+      "wall_seconds": 39.581,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 143753,
+      "fresh_selected": [
+        [
+          "ark-testing::barkd",
+          "recovery::recovered_wallet_finds_mixed_origin_vtxos"
+        ]
+      ],
+      "unignored": true,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "target_body_sha256": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/case02/test-data/barkd/recovered_wallet_finds_mixed_origin_vtxos",
+      "nonempty_Core_blockfiles": [
+        {
+          "filename": "blk00000.dat",
+          "bytes": 16777216
+        }
+      ],
+      "no_early_version_return": "Genuine nonempty nativeCore context and source operations reached; no placeholder/smoke selection.",
+      "native_assertion_scope": "Firsttwo: exactknownroundancestorLocked body/currentcut/fullrecipientpayment/currentinputsSpent; all10monetarybuckets beforeactualcut+9zero/after10zero and emptycurrentpersistedexitstatuses. Third: invalidsignedbodyquarantine/allbalancezero plus genuine signed same-anchorSpentsource/actualrecipient+change conservation control.",
+      "limits": "Nativeassertions only, no independentCore/SQLite money reconstruction by this postflight. Originaldaemon alive; no absent-original/backup/defaultdaemon/futureprotection/FULLML claim."
+    },
+    {
+      "case": 3,
+      "binary": "ark-testing::barkd",
+      "name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "result": "PASS",
+      "run_id": "a35c677b-696f-4674-843d-87bdd2c4839f",
+      "native_seconds": 22.385,
+      "wall_seconds": 23.554,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 144233,
+      "fresh_selected": [
+        [
+          "ark-testing::barkd",
+          "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+        ]
+      ],
+      "unignored": true,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/case03/test-data/barkd/recovered_wallet_quarantines_invalid_spent_vtxos",
+      "nonempty_Core_blockfiles": [
+        {
+          "filename": "blk00000.dat",
+          "bytes": 16777216
+        }
+      ],
+      "no_early_version_return": "Genuine nonempty nativeCore context and source operations reached; no placeholder/smoke selection.",
+      "native_assertion_scope": "Firsttwo: exactknownroundancestorLocked body/currentcut/fullrecipientpayment/currentinputsSpent; all10monetarybuckets beforeactualcut+9zero/after10zero and emptycurrentpersistedexitstatuses. Third: invalidsignedbodyquarantine/allbalancezero plus genuine signed same-anchorSpentsource/actualrecipient+change conservation control.",
+      "limits": "Nativeassertions only, no independentCore/SQLite money reconstruction by this postflight. Originaldaemon alive; no absent-original/backup/defaultdaemon/futureprotection/FULLML claim."
+    }
+  ],
+  "immutable": {
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "bundle_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+    "immutable_metadata_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+    "actual17pins_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+        "sha256": "f7c8fd77d91533a389ef8bb509dce5b2b92295036f93ef5d9a2be5900e9e0156"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+        "sha256": "920c6a742daae000274f44075e3e674262a4421fe0db0806bd59d0ab301836de"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/bark",
+        "sha256": "fb17b031e47761f49031663574cc53a53fe935e998a50e728d38bc33104ad222"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/barkd",
+        "sha256": "3e6be0afa0418f4d135d64fc1251d9913ac68c0c4619c1cbce8d587874156281"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-bark",
+        "sha256": "11c858e84b4f3329eec72bc46b0487581a1b7d8433e827b188d56472ae664838"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-bark-sdk",
+        "sha256": "95f82e3620e86a153187e9645979f6c5873a46d7975c90f3ef98554470cdde6c"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-barkd",
+        "sha256": "40ee2c9257d2fb50f85663895b23c814b9cc321e9304e043bd38d254ab7633fe"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-server",
+        "sha256": "67184883b95bc9b247822b34d4576389e0847fcb373bf0bd1df798c16ac596dc"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/nextest-binaries-runtime.json",
+        "sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/source-manifest.json",
+        "sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/manifest.json",
+        "sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.rlib",
+        "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.so",
+        "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/lock-holder",
+        "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9"
+      }
+    ],
+    "all13parent_frozen_paths_unchanged": {
+      "selection-proof.json": "e131eb2815ed2c55e9f7a68746063e516e147992733648e0f2e5751763d2264d",
+      "root-allocation.json": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838",
+      "runtime-pins.sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+      "server-cohort.py": "6e4c23114447393abff649edd4e337db0ba8d8e6689fc10e0af06940c0091e97",
+      "preflight-static.py": "41e54ee9fc0b4cddddfe6eebe161f8ac8e53654c70693fcbdb6b6fc31d21bed5",
+      "fresh-listings.py": "fd2f31637ae88b4fdd9ad29f0277707b3f14abb56fcffead14f20af51b3a0c03",
+      "preflight.sh": "897156adb749a4605d464bd84de45b51ff994f736f823df3f15f0290473e94c7",
+      "run.sh": "c1feadae46bd5480f74722f568e67f2056c0056ea1733ea057d6ad9d84212a7e",
+      "case01/nextest.toml": "118ae204b35b28f852b40f74f8b1326e28052209bdb7364ee165738787172e71",
+      "case02/nextest.toml": "94066dc292988abcc328ec562589f39aa3ba9bf7ac8b8d075bbdc04f1d474d3e",
+      "case03/nextest.toml": "9fffa2d065ca483a08ae846cf4fa333f9bf8d12c4da10be807eafeafc077e2c0",
+      "fresh-listing-admission.json": "771340d18a41f79c9e8d24c39c88d01d69718c772778cbee585669522e86f035",
+      "resource-admission.json": "9279e2514df20fc4de4ffcd68ad6f94a2e209e36af6aa186736430b4a1f47021"
+    },
+    "source_file97118_threebodies_helper_unchanged": true,
+    "shared_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+    "queued_doc8fb_NOT_applied": true,
+    "preparation_sha256": "ac6d2caf3e70d99fb8dd6269227997003c3d82302b23a63d8444f648500b0b20",
+    "parent_admission_sha256": "439f73b462d886017a0fd8a91b1c5379362543d8338b79dc138d238fb070748c"
+  },
+  "cleanup_resources": {
+    "at": "2026-10-18T04:38:01.989664+00:00",
+    "namespace": "abandon-fresh-runtime-20261017",
+    "IN_NIX_SHELL": "impure",
+    "known_groups_SIDs": [
+      143297,
+      143753,
+      144233
+    ],
+    "remaining_members": [],
+    "remaining_scoped_actors_argv_cwd_FD": [],
+    "prefixes_checked": [
+      "/fresh-cache/testing-track-20261017/batch45-recovery-three-v10",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10"
+    ],
+    "shm_available_bytes": 822743040,
+    "other_root_lanes_excluded": true,
+    "global_CLN_absence_required": false,
+    "no_signals_or_actor_calls": true
+  },
+  "safe_raw_artifact_hashes": {
+    "case01/result.json": "5976db9d9a66536bd88fee6314a30a26cc605eeb98b2049bced32f2d1659d440",
+    "case01/selection-list-fresh.json": "5d5172fc5cccbe79e76adc4c819e749da1755a6fa893050f0b369c0d436d557b",
+    "case01/nextest.log": "a4d5c9e3666758c31079854d4f010d39aa493982e32fe701e73663a8ec031d02",
+    "case02/result.json": "3a6c17f7b5e168c728d6e0759abe78349de93f7c858e6bfb2d68fd9cfac30548",
+    "case02/selection-list-fresh.json": "ccf7efaf706eeb8e492012a59a5d11814d36e370ea7525fe9dd90dd8e8cdcb57",
+    "case02/nextest.log": "2cc2d08d17b6dbbab1b292bf5d2f80529f20aa25ca847bd929884f458e3b963c",
+    "case03/result.json": "5a6e45dbeea0c8b7ce9bf466562e53fe91a940be67b9e87a76acc45ec8759fe0",
+    "case03/selection-list-fresh.json": "db35831dbd9eddca21b7ec19690e2bc292aca056aaf8ede28b4937707cce752e",
+    "case03/nextest.log": "0cfffbbc817105182589535dd70df646a5c2cd37353626a0b878165a6e513858"
+  },
+  "bare_bash_preflight_and_optional_probe": "Parent preserved initial environment/probe127 before listing/native; corrected undercachedNix before actual admission. Not a native FAIL or retry; not executed by this reviewer.",
+  "limits": [
+    "All3 actual outcomes on immutablev10 only; prior mixedFAIL/priorquarantinePASS and heldround original remain preserved. Same source/testname does not erase old outcomes or make all3newunique.",
+    "No global CLN absence requirement or interference with root funded/sponsor/partial diagnostic lanes. Absence is scoped point-in-time, not continuous.",
+    "No rawargv/fullnativelogbody/privatewallet/seed/config/DB reads/exports; no Core/RPC/services/signals/mining/Cargo/list/preflight/controller rerun.",
+    "No independent financial reconstruction/globalcustody/FULLML/production upgrade from postflight. Only newpostflightJSON; no controls/source/rolling updates."
+  ]
+}

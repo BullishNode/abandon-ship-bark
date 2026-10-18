@@ -1,0 +1,236 @@
+{
+  "state": "FINAL_PINNED_PREPARATION_PENDING_PARENT_PREFLIGHT_LISTING_RESOURCE_ADMISSION",
+  "at": "2026-10-18T04:31:31.839600+00:00",
+  "batch": "batch45-recovery-three-v10",
+  "owner": "/root/backend_test_gaps",
+  "selection": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_round_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_mixed_origin_vtxos"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ]
+  ],
+  "root_packet": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/v10-three-client-recovery-root-allocation.json",
+    "sha256": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838",
+    "byte_exact_copy": true,
+    "actual_cases_schema": "stringarray+topbinary",
+    "actual_manifest_key": "manifest_sha256",
+    "global_max_native": 2,
+    "other_lane": "root serial sponsor2+partialterminal diagnostic; funded1000 only after root batch terminal"
+  },
+  "candidate": {
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "source_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "bundle_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+    "immutable_metadata_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5"
+  },
+  "sourceproof": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v10-recovery-capture-source-proof-backend.json",
+    "sha256": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed",
+    "initial_preadmission_state_retained_not_rewritten": true
+  },
+  "artifacts": {
+    "actual17pins_before_after_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+        "sha256": "f7c8fd77d91533a389ef8bb509dce5b2b92295036f93ef5d9a2be5900e9e0156"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+        "sha256": "920c6a742daae000274f44075e3e674262a4421fe0db0806bd59d0ab301836de"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/bark",
+        "sha256": "fb17b031e47761f49031663574cc53a53fe935e998a50e728d38bc33104ad222"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/barkd",
+        "sha256": "3e6be0afa0418f4d135d64fc1251d9913ac68c0c4619c1cbce8d587874156281"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-bark",
+        "sha256": "11c858e84b4f3329eec72bc46b0487581a1b7d8433e827b188d56472ae664838"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-bark-sdk",
+        "sha256": "95f82e3620e86a153187e9645979f6c5873a46d7975c90f3ef98554470cdde6c"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-barkd",
+        "sha256": "40ee2c9257d2fb50f85663895b23c814b9cc321e9304e043bd38d254ab7633fe"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/native-server",
+        "sha256": "67184883b95bc9b247822b34d4576389e0847fcb373bf0bd1df798c16ac596dc"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/nextest-binaries-runtime.json",
+        "sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/source-manifest.json",
+        "sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/manifest.json",
+        "sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.rlib",
+        "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.so",
+        "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/support/debug/lock-holder",
+        "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9"
+      }
+    ],
+    "all8ELF_magic_and_hashes_match_manifest": true,
+    "metadata_only3supportpath_changes": [
+      [
+        "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/0/path",
+        "debug/deps/libark.rlib",
+        "../runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.rlib"
+      ],
+      [
+        "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/1/path",
+        "debug/deps/libark.so",
+        "../runtime-sponsor-terminal-v10-20261018/support/debug/deps/libark.so"
+      ],
+      [
+        "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0/0/path",
+        "debug/lock-holder",
+        "../runtime-sponsor-terminal-v10-20261018/support/debug/lock-holder"
+      ]
+    ],
+    "all4binary_IDs_package_IDs_paths_unchanged": true,
+    "source_archive_file97118_and3bodies_match": [
+      {
+        "test_name": "recovery::recovered_wallet_finds_round_vtxo",
+        "path": "testing/tests/barkd/recovery.rs",
+        "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "target_body_sha256": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5"
+      },
+      {
+        "test_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+        "path": "testing/tests/barkd/recovery.rs",
+        "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "target_body_sha256": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30"
+      },
+      {
+        "test_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+        "path": "testing/tests/barkd/recovery.rs",
+        "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+      }
+    ],
+    "shared_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+    "module_declared": true,
+    "queued_doc8fb_NOT_applied": true
+  },
+  "source_APIs": {
+    "file_sha256": {
+      "testing/src/daemon/barkd.rs": "40c0539e04a79f0cd7bf1438217a9712e8934cf4f1d946cc9c42aff78cfa12b3",
+      "bark-json/src/cli/mod.rs": "2f91167f0484fa3186ed6d3c8045f3599d867267be74c13ff2b2a69f05f0f116",
+      "bark-rest/src/api/v1/exits.rs": "e925334b853094bdefe159a7c9788ab464b8eeb3003f22a0dc18f8e1e91e8168",
+      "bark/src/exit/mod.rs": "b66a647f12b566322ff756ca56bc64d7d454c00b4eb6dd18ce4bc7567142eaad",
+      "testing/tests/barkd/mod.rs": "376fba80a3352deba0ffb34fa935c99c1a233aa07fe9ef7332dc624d06449fc1"
+    },
+    "basis": "bark_balance and public10Amount fields/get_all_exit_status actualcaptured APIs match reviewed source. Methodflags mean detailverbosity, not statusfilter."
+  },
+  "features_versions_environment": {
+    "manifest_versions": {
+      "bark": "bark 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "barkd": "barkd 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "captaind": "captaind 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+      "watchmand": "watchmand 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e"
+    },
+    "product_BIP84_feature": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+    "native_metadata_BIP84_feature": true,
+    "actual_readonly_Nix_observation": "IN_NIX_SHELL=impure; POSTGRES_BINS and command-v pg_ctl/bitcoind observed without version/native calls",
+    "execution_environment": {
+      "CAPTAIND_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+      "WATCHMAND_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+      "BARK_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/bark",
+      "BARKD_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/barkd",
+      "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+      "BARK_VERSION": "bark 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "BARKD_VERSION": "barkd 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "CAPTAIND_VERSION": "captaind 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+      "WATCHMAND_VERSION": "watchmand 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+      "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+    },
+    "sqlite_path_source": "Root v10 run.sh explicit export",
+    "PG_path_source": "Exact cachedNix variable and command-v pg_ctl",
+    "CLN_required_by_cases": false,
+    "CLN3_retained_only_as_rootprovided17pins": true
+  },
+  "static_checks": {
+    "AST_files": 3,
+    "bash_n_files": 2,
+    "result": "PASS",
+    "no_control_body_execution": true
+  },
+  "frozen_preparation_hashes": {
+    "selection-proof.json": "e131eb2815ed2c55e9f7a68746063e516e147992733648e0f2e5751763d2264d",
+    "root-allocation.json": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838",
+    "runtime-pins.sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+    "server-cohort.py": "6e4c23114447393abff649edd4e337db0ba8d8e6689fc10e0af06940c0091e97",
+    "preflight-static.py": "41e54ee9fc0b4cddddfe6eebe161f8ac8e53654c70693fcbdb6b6fc31d21bed5",
+    "fresh-listings.py": "fd2f31637ae88b4fdd9ad29f0277707b3f14abb56fcffead14f20af51b3a0c03",
+    "preflight.sh": "897156adb749a4605d464bd84de45b51ff994f736f823df3f15f0290473e94c7",
+    "run.sh": "c1feadae46bd5480f74722f568e67f2056c0056ea1733ea057d6ad9d84212a7e",
+    "case01/nextest.toml": "118ae204b35b28f852b40f74f8b1326e28052209bdb7364ee165738787172e71",
+    "case02/nextest.toml": "94066dc292988abcc328ec562589f39aa3ba9bf7ac8b8d075bbdc04f1d474d3e",
+    "case03/nextest.toml": "9fffa2d065ca483a08ae846cf4fa333f9bf8d12c4da10be807eafeafc077e2c0"
+  },
+  "required_parent_freeze_paths": [
+    "selection-proof.json",
+    "root-allocation.json",
+    "runtime-pins.sha256",
+    "server-cohort.py",
+    "preflight-static.py",
+    "fresh-listings.py",
+    "preflight.sh",
+    "run.sh",
+    "case01/nextest.toml",
+    "case02/nextest.toml",
+    "case03/nextest.toml",
+    "fresh-listing-admission.json",
+    "resource-admission.json"
+  ],
+  "required_parent_freeze_count": 13,
+  "pending_originals_byte_unchanged": {
+    "PREPARATION.pending.json": "bc80f0d9d2dc74bdb8714f3247308763db305384a5fdc3bd60d2e068fb56a807",
+    "launch-authorization-pending.json": "8e79396f8858c54779ae89351da5122e322702ea417ed6947392301a93d925a0"
+  },
+  "pending_marker_PRESENT": true,
+  "parent_admission_ABSENT": true,
+  "fresh_context_no_results_or_data": true,
+  "mandatory_parent_next": "Independent source peer then fresh actualNix/version/pins/resource/singleton-unignored listings, freeze13actualpaths, parentonly marker removal/launch. No case or metadata listing/preflight/native/Cargo by preparer.",
+  "no_execution_or_count_credit": true
+}

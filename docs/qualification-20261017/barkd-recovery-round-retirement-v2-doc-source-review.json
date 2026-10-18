@@ -1,0 +1,24 @@
+{
+  "kind": "READ_ONLY_POSTCAPTURE_DOC_DELTA_REVIEW",
+  "at": "2026-10-18T04:20:45.971729+00:00",
+  "state": "SOURCE_ONLY_DOC_DELTA_ACK_NO_CONCRETE_BLOCKER",
+  "patch_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/barkd-recovery-round-retirement-v2-doc-clarification.patch",
+  "patch_sha256": "a7f3d4e73593860da7be50ed76dc79dc2262cb810c379fa5c95e564929934d2e",
+  "base_source_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+  "in_memory_after_sha256": "8fb7578db3fa0a0ab1a6de193015c3551be07a963ff4ec4f8e3200b7a0abe7b0",
+  "queued_not_applied": true,
+  "hunks": 1,
+  "removed_lines": 2,
+  "added_lines": 3,
+  "changed_lines_all_doc_comments": true,
+  "all_non_doccomment_bytes_identical": true,
+  "all3_selected_function_bodies_unchanged": {
+    "recovered_wallet_finds_round_vtxo": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5",
+    "recovered_wallet_finds_mixed_origin_vtxos": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30",
+    "recovered_wallet_quarantines_invalid_spent_vtxos": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+  },
+  "shared_strict_helper_unchanged_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+  "meaning": "Corrects obsolete surrounding round-test prose claiming the historical board is skipped. Describes current exact locked-body retention without counting current principal; matches v2 assertions and grounded ownership audit.",
+  "capture_scope": "Root says doc-only patch queued after v10 capture; it does not describe a rebuilt ELF. Current source is97118. Exact artifact handoff still required; no native/compile credit.",
+  "activity": "Read-only strict in-memory one-hunk application/reversal; no source/worktree/canonical changes or git application, Cargo/metadata/list/preflight/native/actor calls."
+}

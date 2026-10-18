@@ -1,0 +1,158 @@
+{
+  "kind": "BATCH45_CONDITIONAL_CURATION_PLAN_ONLY",
+  "at": "2026-10-18T04:28:36.414917+00:00",
+  "state": "PLAN_ONLY_NOT_ALLOCATED_NO_CONTROL_OR_RUNTIME_OR_CREDIT",
+  "batch_label": "provisional batch45; final root packet governs actual identity/order/selection",
+  "baseline": {
+    "aggregate": {
+      "executions": 242,
+      "PASS": 227,
+      "FAIL": 15,
+      "unique_binary_test_pairs": 227,
+      "nextest_invocations": 215,
+      "native": 230,
+      "component": 12,
+      "coverage_rows": 453
+    },
+    "coverage_sha256": "a07b84c98f72644877594d69cb413b0bc644c16c338ac8b71504c87d7bb454fb",
+    "coverage_prefix_bytes": 327887,
+    "all_LF": true,
+    "authority": "Frozen batch44 append aggregate and current parsed 453-row CSV; mixed inventory rows are not an alternate aggregate execution counter."
+  },
+  "proposed_selection": [
+    {
+      "proposed_order": 1,
+      "expected_binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "case_id": null,
+      "count_reserved": 0,
+      "current_candidate_result": "NOT RUN",
+      "prior_actual_execution_rows": [],
+      "potential_unique_increment_if_actually_started": 1,
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "captured_v2_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "captured_target_body_sha256": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5",
+      "queued_document_only_file_sha256": "8fb7578db3fa0a0ab1a6de193015c3551be07a963ff4ec4f8e3200b7a0abe7b0",
+      "queued_doc_not_substituted_for_actual_capture": true,
+      "terminal_native_oracle": "Known exact cross-anchor round ancestor remains Locked(None,None) with unchanged full public info/body; real current recovered cut matches original IDs/amount/anchor, all ten monetary buckets equal current cut plus nine zeros before actual payment and all ten zero afterward; persisted exit list empty at both observations; actual recipient gets exact value/anchor partition and discharged current inputs become Spent. Exact historical singleton remains; no generic Locked exception.",
+      "limitation": "Original daemon remains alive and live Ark endpoint is used. Point-in-time all-bucket/current-exit observations do not prove future act-by/default protection, original-absent/offline or physical backup, independent Core6/global custody/full ML."
+    },
+    {
+      "proposed_order": 2,
+      "expected_binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "case_id": null,
+      "count_reserved": 0,
+      "current_candidate_result": "NOT RUN",
+      "prior_actual_execution_rows": [
+        {
+          "case_id": "FT-BARKD-022",
+          "latest_result": "FAIL",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06",
+          "evidence_path": "batch28-barkd-unstarted17-receipt.json",
+          "inspected_revision": "bfbe6b7c3088a09dd4e81c4ac24cdc763a627a8c"
+        },
+        {
+          "case_id": "FT-BARKD-039",
+          "latest_result": "FAIL",
+          "tested_revision": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+          "evidence_path": "batch42-ordinary-twelve-v8e-receipt.json",
+          "inspected_revision": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a"
+        }
+      ],
+      "potential_unique_increment_if_actually_started": 0,
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "captured_v2_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "captured_target_body_sha256": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30",
+      "queued_document_only_file_sha256": "8fb7578db3fa0a0ab1a6de193015c3551be07a963ff4ec4f8e3200b7a0abe7b0",
+      "queued_doc_not_substituted_for_actual_capture": true,
+      "terminal_native_oracle": "Known exact cross-anchor round ancestor remains Locked(None,None) with unchanged full public info/body; real current recovered cut matches original IDs/amount/anchor, all ten monetary buckets equal current cut plus nine zeros before actual payment and all ten zero afterward; persisted exit list empty at both observations; actual recipient gets exact value/anchor partition and discharged current inputs become Spent. Exact historical singleton remains; no generic Locked exception.",
+      "limitation": "Original daemon remains alive and live Ark endpoint is used. Point-in-time all-bucket/current-exit observations do not prove future act-by/default protection, original-absent/offline or physical backup, independent Core6/global custody/full ML."
+    },
+    {
+      "proposed_order": 3,
+      "expected_binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "case_id": null,
+      "count_reserved": 0,
+      "current_candidate_result": "NOT RUN",
+      "prior_actual_execution_rows": [
+        {
+          "case_id": "FT-BARKD-040",
+          "latest_result": "PASS",
+          "tested_revision": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+          "evidence_path": "batch43-quarantine-v8e-receipt.json",
+          "inspected_revision": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+        }
+      ],
+      "potential_unique_increment_if_actually_started": 0,
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "captured_v2_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "captured_target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+      "queued_document_only_file_sha256": "8fb7578db3fa0a0ab1a6de193015c3551be07a963ff4ec4f8e3200b7a0abe7b0",
+      "queued_doc_not_substituted_for_actual_capture": true,
+      "terminal_native_oracle": "Strict invalid-body negative recovery keeps all ten monetary buckets zero and invalid live successor absent; exact historical body quarantined. Separate valid same-seed control validates real signed ordinary successor against actual Core anchor, recovers exact live change as Spendable and requires old board Spent, conserving real boarded value as actual recipient plus change.",
+      "limitation": "Original daemon remains alive and live Ark endpoint is used. Point-in-time all-bucket/current-exit observations do not prove future act-by/default protection, original-absent/offline or physical backup, independent Core6/global custody/full ML."
+    }
+  ],
+  "source_archive_proof": {
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "captured_HEAD": "783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "captured_dirty": true,
+    "actual_recovery_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+    "shared_strict_partition_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+    "module_declared": true,
+    "source_proof_status": "Archive/source bytes verified only at c7af creation; original phase states/pending final bundle remain historical, not new build/admission credit.",
+    "complete_candidate_bundle": null,
+    "runtime_metadata": null,
+    "immutable_metadata": null,
+    "native_barkd_ELF": null
+  },
+  "required_pending_gates": [
+    "Exact completed root candidate handoff: source/archive/diff, actual full recovery file/all three target bodies/shared helper, native barkd ELF, runtime and immutable metadata, product/tool/support pins. Source proof alone admits no runtime.",
+    "Explicit actual root allocation with exact binary/name/order, default180/serial1/retries0/firstFAIL/global resource limit, no CLN required for these ordinary cases. Proposed order does not authorize a changed selection.",
+    "Fresh private contexts and exact unignored singleton listings using repo just int-binaries; no compile, controller/list/native launch by this preparer.",
+    "Fresh resource/actor-absence gate and immutable parent launch admission binding actual allocated controls/profiles/listings/pins, only parent launch authority.",
+    "After terminal: freeze initial safe native receipt/status durations/run IDs/source/binary identity and first-failure cutoff; preserve every skipped/NOTSTARTED item without execution or ID credit.",
+    "Formal postflight: exact selections/contexts, source and pins unchanged, prior groups/SIDs/scoped actors absent. Pending-at-initial-receipt fields remain immutable; later evidence is an additive supplement.",
+    "Failure or financial anomaly: stop after actual firstFAIL, preserve artifacts, request bounded source/public-ledger and financial reconciliation before follow-up. Native assertions alone must not be labeled an independent Core/signature/full-cut audit.",
+    "Explicit writer lease before append-only COVERAGE/FINDINGS/STATUS work; no global mutation or count reservation under this plan."
+  ],
+  "terminal_only_accounting": {
+    "allocated_count": null,
+    "reserved_case_ids": [],
+    "reserved_executions": 0,
+    "execution_credit_applied": 0,
+    "row_credit_applied": 0,
+    "unique_credit_applied": 0,
+    "rule": "Let S be only actual started tests with verified terminal PASS/FAIL. Append one fresh row per S, even when its name/body has prior outcomes; preserve entire original 453-row byte prefix and all original failures. NOTSTARTED/filtered/ignored/version-gated-without-fixture entries receive no native execution credit.",
+    "counter_increments": "executions += len(S); PASS += observedPASS; FAIL += observedFAIL; nextest/native += actual corresponding verified invocations/cases; component unchanged. Only actual started round name can add a unique pair (recheck global receipts and CSV at curation).",
+    "potential_max_unique_increment_if_this_exact_selection_runs": 1,
+    "first_failure_cutoff": "Only actually started prefix from final actual root order counts. Do not infer later PASS or credit from the plan or all-case metadata.",
+    "duration": "Use actual native and summary/controller wall durations with separate labels; never infer native timing from preparation or extrapolate."
+  },
+  "preservation": {
+    "mixed_original_and_adapted_FAILs": "FT-BARKD-022 and FT-BARKD-039 remain distinct actual FAILs; future v2 outcome never overwrites either.",
+    "round_held_original": "Original held NOT RUN has no observed prior FAIL; any actual admitted first execution receives its own new row only then.",
+    "quarantine_prior_PASS": "FT-BARKD-040 remains separate immutable v8e PASS; same body on new candidate is a new attempt, not a new unique name.",
+    "unsafe_server_word_literal": "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word stays held/unexecuted; never substituted or selected.",
+    "strict_shared_helper_and_valid_control": "Exact helper b81d and quarantine/ordinary valid-signed control body 0f174 remain unchanged.",
+    "ML_counts_and_gates": "No ML or production/release gate promotion from source plans or a later bounded ordinary recovery result.",
+    "published_checkpoint17": "Fixed 242/453 report payload and all historical native/source receipts untouched."
+  },
+  "references_sha256": {
+    "v10-recovery-three-selection-plan.json": "30aec6acaa5802afcdc22578ece889588a877d98bdafb01b57802f5f417f1e1a",
+    "v10-recovery-capture-source-proof-backend.json": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed",
+    "batch44-coverage-append.json": "3676642d88a65c3a20e35be311ad045f4874a9082dd75ce768373469535b7c78",
+    "barkd-recovery-round-retirement-v2-manifest.json": "7ecb78075275a4600bec876e5c097e3660907062af683c1d3fb26f48af177395",
+    "barkd-recovery-round-retirement-v2-peer-review-legacy.md": "f9f47bd8cbf54cfed60aac8de4fe22714f96b2b654ce57407e050ce616d7e428",
+    "barkd-recovery-round-retirement-v2-backend-source-review.json": "18ca06cdfe70fbb90484adf5db9b9d822db1e9b9e0aeb33c6432cb9fbbb3602d",
+    "batch42-ordinary-twelve-v8e-receipt.json": "4391490deb65b0190a91d6946b551a75a89fcc9881def7e3021096cad7a97c48",
+    "batch43-quarantine-v8e-receipt.json": "49aea2ace1e8184a0940504e52432b301ea9970becea6ae9a16db11367540385"
+  },
+  "mutations": {
+    "only_this_new_external_JSON": true,
+    "COVERAGE_STATUS_FINDINGS_ML_public_payload_source_control_Git_Cargo_metadata_listing_native_RPC_DB": 0
+  }
+}

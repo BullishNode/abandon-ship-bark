@@ -1,0 +1,7 @@
+Pre-admission SOURCE/ARCHIVE ACK only: no concrete byte/provenance blocker. Products were RUNNING at taskhandoff; actual proofcreation phase states are recorded in JSON (products advanced toPASS, metadataRUNNING). Finalbundlemanifest was absent; no completedbuild/native/metadata admission or PASS inferred.
+
+Verified fullsource3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33 and fullarchive03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d. The source manifest has no archivepath field: rootdriver actual bundle-manifest construction explicitly binds source.tar.gz under the capturedroot; its artifact matches coordinatorSTATUS fullarchive digest. All1,833 entries exactly match manifest membership/resolved content hashes, including AGENTS→CLAUDE symlink. Dirtypublished783c0c5c5 plus diff07668101 is recorded explicitly.
+
+Captured recovery fullfile97118 matches exact reviewedv2. Round0ece3fbc, mixed3ee4d770, quarantine0f174 and strictsharedhelperb81d allmatch, with recovery module declared. Wholefile equality binds documentation too; pendingstatus wording grants no bodychange or executioncredit. Reviewed all10balance/currentexit-status additions do not imply per-VTXOawaitingfalse or futureautomaticprotection outcomes.
+
+All source/archive/diff/driver inputs hashunchanged before/after. No ELF/listing/metadata opening, Cargo/build, native/runtime/RPC/DB, source/rolling/payload mutations. Fullcompletedcandidate proof and exactrootallocation remain mandatory. OriginalFAIL/heldNOTRUN/priorPASS evidence is preserved.

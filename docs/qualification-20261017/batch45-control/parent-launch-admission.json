@@ -1,0 +1,51 @@
+{
+  "at": "2026-10-18T04:34:18.159065+00:00",
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch45-recovery-three-v10",
+  "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "expected_selection": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_round_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_mixed_origin_vtxos"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ]
+  ],
+  "sha256": {
+    "selection-proof.json": "e131eb2815ed2c55e9f7a68746063e516e147992733648e0f2e5751763d2264d",
+    "root-allocation.json": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838",
+    "runtime-pins.sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+    "server-cohort.py": "6e4c23114447393abff649edd4e337db0ba8d8e6689fc10e0af06940c0091e97",
+    "preflight-static.py": "41e54ee9fc0b4cddddfe6eebe161f8ac8e53654c70693fcbdb6b6fc31d21bed5",
+    "fresh-listings.py": "fd2f31637ae88b4fdd9ad29f0277707b3f14abb56fcffead14f20af51b3a0c03",
+    "preflight.sh": "897156adb749a4605d464bd84de45b51ff994f736f823df3f15f0290473e94c7",
+    "run.sh": "c1feadae46bd5480f74722f568e67f2056c0056ea1733ea057d6ad9d84212a7e",
+    "case01/nextest.toml": "118ae204b35b28f852b40f74f8b1326e28052209bdb7364ee165738787172e71",
+    "case02/nextest.toml": "94066dc292988abcc328ec562589f39aa3ba9bf7ac8b8d075bbdc04f1d474d3e",
+    "case03/nextest.toml": "9fffa2d065ca483a08ae846cf4fa333f9bf8d12c4da10be807eafeafc077e2c0",
+    "fresh-listing-admission.json": "771340d18a41f79c9e8d24c39c88d01d69718c772778cbee585669522e86f035",
+    "resource-admission.json": "9279e2514df20fc4de4ffcd68ad6f94a2e209e36af6aa186736430b4a1f47021"
+  },
+  "preflight_parent_session": 45234,
+  "preflight_parent_exit_code": 0,
+  "initial_parent_wrapper_environment_error_exit127_preserved": true,
+  "preparation_sha256": "ac6d2caf3e70d99fb8dd6269227997003c3d82302b23a63d8444f648500b0b20",
+  "control_peer_sha256": "c18d1d2a43fadcc00ee90449aad19b2a77b52208946158747058b61d81b8141b",
+  "parent_actor_admission_sha256": "e01dd406aa5dcceb6254070bf90ee0d488a3eec596561e180e88f47e5cb52a1f",
+  "source_proof_sha256": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed",
+  "metadata_parent_proof_sha256": "e5a0e100b4aa274d3fc53112a3b7819bdce5bdd3035160d2d2ab15e58eee4846",
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "serial": 1,
+  "first_fail_stops": true,
+  "global_max_native": 2,
+  "other_lane": "Coordinator funded1000 session3849 only; original sponsor/partial batch terminal. Root alone schedules its lane.",
+  "no_test_or_Cargo_run_by_this_gate": true
+}

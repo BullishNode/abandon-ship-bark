@@ -1,0 +1,90 @@
+{
+  "state": "PRE_ADMISSION_SOURCE_ARCHIVE_PROOF_ONLY_NO_COMPLETED_BUILD_OR_NATIVE_CREDIT",
+  "at": "2026-10-18T04:22:56.165216+00:00",
+  "candidate_admission": "NOT_ADMITTED; exact runtime allocation, completedbuild/ELF/metadata/tool/resource/listing/control gates remain required",
+  "build_state_observed_at_creation": {
+    "observed_at": "2026-10-18T04:22:55.503327+00:00",
+    "task_handoff_products_state": "RUNNING",
+    "actual_recorded_phase_states": {
+      "checks": "PASS",
+      "units": "PASS",
+      "products": "PASS",
+      "metadata": "RUNNING"
+    },
+    "final_bundle_manifest_absent": true,
+    "checks_and_units_reported_only": "Safe phase records contain PASS; not independently run and no completed candidate build/admission credit inferred."
+  },
+  "capture": {
+    "directory": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018",
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "source_archive_path": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/source.tar.gz",
+    "source_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "archive_locator_provenance": {
+      "source_manifest_has_no_archive_path": true,
+      "actual_root_driver_manifest_construction": "sha(root / 'source.tar.gz')",
+      "driver_path": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/build-driver.py",
+      "driver_sha256": "56e8170ad74d284a9715d0bfdc02bad977f1addd315488e2d18aeed919e9e9a6",
+      "full_digest_bound_to_coordinator_active_build": true
+    },
+    "captured_HEAD": "783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "actual_dirty_diff_sha256": "07668101a86082c0a1969735aa65051e5003222c9f0b1bc7928e4b7881d9108b",
+    "dirty_diff_nonempty": true,
+    "source_scope": "Published783c0c5c5 including independently reviewed PR20 reports plus exact paired ordinary observed P2A sponsor V14 packet15e261f0, reviewed one-attempt two-source partial-terminal diagnostic8b6c8685, funded-owner current-cut fixture2ead170d and public all10-balance/exit-intent client fixture546269c6. Earlier fair/mixed native FAILs retained; no product coinselection/deadline/oracle weakening. Partial-terminal expected unresolved on current product; no native credit before actual run.",
+    "capture_timestamp": "2026-10-18T04:13:30.729247+00:00"
+  },
+  "archive": {
+    "entries": 1833,
+    "manifest_file_count": 1833,
+    "exact_member_set": true,
+    "all_actual_resolved_content_hashes_match": true,
+    "symlinks": [
+      {
+        "path": "AGENTS.md",
+        "target": "CLAUDE.md",
+        "resolved_content_sha256": "5f3a81a5f9592ecc2a71e275682a3a6a4a97e554632d4a08f1dccd6ebea439ee",
+        "manifest_resolved_content_matches": true
+      }
+    ],
+    "extracted_to_filesystem": false
+  },
+  "recovery": {
+    "path": "testing/tests/barkd/recovery.rs",
+    "whole_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+    "three_bodies_sha256": {
+      "recovered_wallet_finds_round_vtxo": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5",
+      "recovered_wallet_finds_mixed_origin_vtxos": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30",
+      "recovered_wallet_quarantines_invalid_spent_vtxos": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+    },
+    "shared_strict_partition_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+    "module_declared": true,
+    "exact_reviewed_v2_file_and_owned_frozen_source_equal": true,
+    "v2_manifest_sha256": "7ecb78075275a4600bec876e5c097e3660907062af683c1d3fb26f48af177395",
+    "v2_source_peer_SHA256": "18ca06cdfe70fbb90484adf5db9b9d822db1e9b9e0aeb33c6432cb9fbbb3602d",
+    "pending_documentation_and_body_scope": "Captured wholefile exactly97118, so pending documentation/status does not change any of the three body hashes or helper. Previously reviewed v2 additions remain prospective, not runtime/compile PASS. No canonical/currentdocument movement substitutes source snapshot.",
+    "negative_awaiting_flag_and_future_exit_claim": "No per-VTXOawaiting=false requirement; snapshot monetary10bucket and current exit-status assertions only. No futureprotection/act-by proof."
+  },
+  "input_hashes_before_after": {
+    "hashes": {
+      "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/source-manifest.json": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+      "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/source.tar.gz": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+      "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/actual-git-diff.patch": "07668101a86082c0a1969735aa65051e5003222c9f0b1bc7928e4b7881d9108b",
+      "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/build-driver.py": "56e8170ad74d284a9715d0bfdc02bad977f1addd315488e2d18aeed919e9e9a6"
+    },
+    "unchanged": true
+  },
+  "runtime_or_new_execution_actions": {
+    "Cargo_or_build": false,
+    "ELF_or_binary_listing": false,
+    "binaries_metadata_opened_or_used": false,
+    "native_or_actor_actions": false,
+    "RPC_SQL_DB_wallet_reads": false,
+    "source_rolling_payload_mutations": false
+  },
+  "historical_evidence": "Original mixedFAIL, heldroundNOTRUN and priorquarantinePASS remain intact. Same literal/body does not supply a new attempt or unique-pair credit. Actual new native outcome requires explicit allocation and terminalreceipt.",
+  "limits": [
+    "This verifies archivedsource bytes, path/digest provenance and exact reviewed recovery bodies only. No wholecandidate product/othernewfinancialfixture review performed.",
+    "Fullhashes above are actual verified64hex; abbreviated3e0437f1/03686b6d are not treated as complete pins.",
+    "Products were RUNNING at taskhandoff; actual phase state at proofcreation is explicitly recorded as progress changed. No finalbundlemanifest was present. Phase transitions are not source errors or native results. No metadata/binary/runtime admission."
+  ],
+  "concrete_blockers": []
+}

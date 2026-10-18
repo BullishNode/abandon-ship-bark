@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_FROZEN_PENDING_PEER_AND_PARENT_CAPTURE",
+  "files": [
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_lightning_backup.rs",
+      "bytes": 49157,
+      "sha256": "a3ae1fe2d62a82d147c0f4a7c885d2ab4880d737ad77ee7e561091c20aef175a"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/P07-lightning-physical-backup-v1.patch",
+      "bytes": 50061,
+      "sha256": "3bb693e4b31e0d2fb87c857a5cc52fc1c3066f5eac014115925ae6deac7e1108"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/P07-lightning-physical-backup-v1-source-intake.json",
+      "bytes": 5954,
+      "sha256": "388a67d9b8768fc269c175d5da79c14d1b1f69245c9f8f67a2daa73310330daf"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/P07-lightning-physical-backup-v1-notes.md",
+      "bytes": 3167,
+      "sha256": "ecde1ba644a6142a1a4892c8c133b6501f5992391547e66b6566162a6c20dd07"
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/P07-lightning-physical-backup-design.md",
+      "bytes": 3510,
+      "sha256": "f66cbc40bef174d6820b50c3412c5b4e43b484035b3f1ac2f7c8ba1197f66e47"
+    }
+  ],
+  "test_literal": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+  "expected_binary": "ark-testing::server",
+  "source_target_only": "new testing/tests/server/qualification_lightning_backup.rs; no module registration or existing source changes by author",
+  "source_functions": [
+    {
+      "name": "file_hash",
+      "line": 54
+    },
+    {
+      "name": "copy_tree",
+      "line": 68
+    },
+    {
+      "name": "postgres_tool",
+      "line": 102
+    },
+    {
+      "name": "assert_clean_cluster",
+      "line": 107
+    },
+    {
+      "name": "watchman_coins",
+      "line": 118
+    },
+    {
+      "name": "wait_watchman_coins",
+      "line": 125
+    },
+    {
+      "name": "mine_continuing_core",
+      "line": 138
+    },
+    {
+      "name": "actual_fee",
+      "line": 144
+    },
+    {
+      "name": "canonical",
+      "line": 153
+    },
+    {
+      "name": "rebuilt",
+      "line": 164
+    },
+    {
+      "name": "pending_checkpoint",
+      "line": 178
+    },
+    {
+      "name": "signed_grant_ancestry",
+      "line": 211
+    },
+    {
+      "name": "canonical_descendants",
+      "line": 231
+    },
+    {
+      "name": "qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+      "line": 253
+    },
+    {
+      "name": "lightning_backup",
+      "line": 260
+    }
+  ],
+  "checks": {
+    "cached_Nix_actual": "PASS: impure/Rust1.90.0 via read-only container command before final source edits",
+    "add_file_git_apply_check": "PASS exit0 against canonical source with absent new target; no patch applied",
+    "compiler_or_rust_parser": "NOT RUN; no Rust type or AST validation claimed",
+    "runtime": "NOT RUN; no services, nextest listing or native tests",
+    "seed_hygiene": "No literal runtime-funded seed; seed obtained from actual original test wallet and held in memory; copied identities/backup only in private test tree"
+  },
+  "limitations": [
+    "One clean orderly internal HtlcsReady backup stage; continuing Core and native CLN",
+    "Native default180/<=96block bounded design remains unverified by execution",
+    "Dedicated configured Core operator sweep prevents replenishment scope; not default replenishment qualification",
+    "Full money oracle prospective only; no FULL ML credit",
+    "Independent peer ACK and parent exact candidate capture/build/admission/allocation remain required"
+  ],
+  "prior_draft_correction": {
+    "initial_unfrozen_source_sha256": "5fa2bd95400253e0356a38b1e3a1b88df4f5e07df85d09ba84aaa4e28b82dec5",
+    "initial_external_cut_sat": 700000,
+    "final_external_cut_sat": 605000,
+    "reason": "Operator sweep default rounds-wallet return could finance legitimate refill; final original config uses dedicated exact preserved Core sweep script and205k rounds funding; unused Pool returns considered."
+  }
+}

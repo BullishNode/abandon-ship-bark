@@ -1,0 +1,116 @@
+{
+  "state": "ROOT_ALLOCATED_ONCE_PENDING_PARENT_LAUNCH",
+  "batch": "batch45-recovery-three-v10",
+  "candidate_ready": true,
+  "execution_authorized": true,
+  "controls_finalized": true,
+  "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "source_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+  "bundle_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+  "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+  "immutable_metadata_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+  "metadata_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/nextest-binaries-runtime.json",
+  "runtime_pin_count": 17,
+  "execution_environment": {
+    "CAPTAIND_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+    "WATCHMAND_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+    "BARK_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/bark",
+    "BARKD_EXEC": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/barkd",
+    "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+    "BARK_VERSION": "bark 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+    "BARKD_VERSION": "barkd 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+    "CAPTAIND_VERSION": "captaind 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "WATCHMAND_VERSION": "watchmand 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+  },
+  "root_authorization": {
+    "state": "AUTHORIZED_EXTERNAL_THREE_CLIENT_CASES_AFTER_OWN_PREFLIGHT",
+    "cases_field": "cases",
+    "cases_schema": "list_of_literal_strings_with_top_level_binary",
+    "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+    "sha256": "0b6453bc2c95b31bcd166bd3f414da4a7eb8ac081fdd5fa32d65d12915fde838",
+    "packet_path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/v10-three-client-recovery-root-allocation.json"
+  },
+  "expected_names_in_execution_order": [
+    "recovery::recovered_wallet_finds_round_vtxo",
+    "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::barkd",
+    "ark-testing::barkd",
+    "ark-testing::barkd"
+  ],
+  "expected_selection": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_round_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_mixed_origin_vtxos"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ]
+  ],
+  "expected_ignored": false,
+  "run_ignored": null,
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "maximum_case_executions": 3,
+  "maximum_global_native": 2,
+  "CLN_required": false,
+  "source_functions": [
+    {
+      "test_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "target_body_sha256": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5"
+    },
+    {
+      "test_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "target_body_sha256": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30"
+    },
+    {
+      "test_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+    }
+  ],
+  "shared_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+  "source_plan": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v10-recovery-three-selection-plan.json",
+    "sha256": "30aec6acaa5802afcdc22578ece889588a877d98bdafb01b57802f5f417f1e1a",
+    "proposed_order_only_actual_root_packet_wins": true
+  },
+  "source_proof": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v10-recovery-capture-source-proof-backend.json",
+    "sha256": "c7af5fb855e68823558ec340988522d30c6d1e1ec861d01d57945952e3b81fed",
+    "scope": "SOURCE/ARCHIVE ONLY, not completecandidate/build/runtime admission"
+  },
+  "queued_doc_delta": "Captured file97118 only. Queued documentation-only8fb is not presumed captured; finalhandoff/sourceproof must resolve any difference.",
+  "scope": "Only3rootallocated ordinarybarkd recovery cases; first2sourceV2 correctedmoneyoracles, unchangedquarantine/strictsame-anchorcontrol. Originalfailures/held originals preserved. No new outcome until parent launch/terminal. Global2 with separate rootlane94006; serial1 owncase only.",
+  "candidate_hint": {
+    "captured_HEAD": "783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "dirty": true,
+    "actual_git_diff_sha256": "07668101a86082c0a1969735aa65051e5003222c9f0b1bc7928e4b7881d9108b",
+    "bundle_path": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018",
+    "build_phase_records_all_PASS": true,
+    "actual_manifest_versions": {
+      "bark": "bark 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "barkd": "barkd 0.7.1-dev (783c0c5c51105b1ec1a5fa1068820ce94e18017e)",
+      "captaind": "captaind 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+      "watchmand": "watchmand 0.7.1-dev+783c0c5c51105b1ec1a5fa1068820ce94e18017e"
+    },
+    "native_barkd_sha256": "40ee2c9257d2fb50f85663895b23c814b9cc321e9304e043bd38d254ab7633fe",
+    "no_actual_version_execution_by_preparer": true
+  },
+  "ordering": "Exactactualrootpacketorder, no funded1000 or root-lane sponsor/partial diagnostic selected"
+}

@@ -1,0 +1,27 @@
+{
+  "binary": "ark-testing::barkd",
+  "name": "recovery::recovered_wallet_finds_round_vtxo",
+  "run_id": "fad96514-47ba-4b94-9348-1c597054a1a5",
+  "result": "PASS",
+  "native_seconds": 34.026,
+  "wall_seconds": 35.564,
+  "exit_code": 0,
+  "resource_error": null,
+  "fresh_selected": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_round_vtxo"
+    ]
+  ],
+  "unignored": true,
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+  "target_body_sha256": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5",
+  "kind": "SAFE_NATIVE_SUMMARY_FROM_FROZEN_POSTFLIGHT",
+  "native_nextest_log_sha256_only": "a4d5c9e3666758c31079854d4f010d39aa493982e32fe701e73663a8ec031d02",
+  "raw_log_included": false,
+  "source_postflight_sha256": "97f378ee2371aa37bfa33bf239c20d9a7d59aec74eb1c7d9f1d54a8a80d84c8e",
+  "scope": "Bounded sanitized postflight metadata only; no rawnextest/wallet log read orcopied in export. Actual assertion/independentfinancial limits unchanged."
+}

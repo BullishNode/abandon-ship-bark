@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-18T04:34:02.554982+00:00",
+  "scope": "All own testing-track actual argv/cwd/FD path targets in runtime namespace, self and ancestor launchers excluded; no FD contents or raw argv exported",
+  "remaining_scoped_actors": [],
+  "state": "OWN_ACTOR_ABSENCE_PASS",
+  "signals": 0,
+  "RPC_DB_calls": 0,
+  "initial_empty_probe_missing_guessed_interpreter_exit": 127,
+  "initial_empty_probe_script_executed": false,
+  "correction": "Use actual sourced cached Nix environment; no guessed interpreter path in actual scan"
+}

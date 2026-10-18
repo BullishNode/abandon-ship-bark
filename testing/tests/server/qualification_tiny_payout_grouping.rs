@@ -1,0 +1,472 @@
+//! H30: genuine sub-fee leaves share one economic payout and one history debit.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
+
+use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
+use ark::{ProtocolEncoding, ServerVtxoPolicy, VtxoId, VtxoPolicy};
+use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+use bark::{FallbackDisposition, FallbackPayoutStage};
+use bark::movement::{Movement, MovementStatus, PaymentMethod};
+use bark::vtxo::VtxoState;
+use bitcoin::{Address, Amount, Network, OutPoint, Transaction, Txid};
+use bitcoin::consensus::deserialize;
+use bitcoin::hex::DisplayHex;
+use bitcoin_ext::{BlockDelta, BlockRef, TxOutExt};
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
+use serde_json::json;
+use server::database::Db;
+use server_rpc::protos;
+
+fn balance_fields(balance: &bark::Balance) -> [Amount; 10] {
+	[balance.spendable, balance.needs_refresh, balance.pending_lightning_send,
+		balance.claimable_lightning_receive, balance.pending_in_round, balance.pending_exit,
+		balance.pending_board, balance.pending_arkoor_send, balance.pending_offboard,
+		balance.awaiting_settlement]
+}
+
+async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
+	let height = ctx.bitcoind().get_block_count().await;
+	let height = bitcoin_ext::BlockHeight::new(u32::try_from(height).unwrap());
+	srv.wait_for_sync_height(height).await;
+	srv.watchmand().wait_for_sync_height(height).await;
+	let point = BlockRef { height, hash: ctx.bitcoind().sync_client().get_best_block_hash().unwrap() };
+	tokio::time::timeout(Duration::from_secs(20), async {
+		loop {
+			let ready = db.read(async |tx| {
+				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+			}).await.unwrap();
+			if ready { break; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("both native expiry views must finish the actual Core height");
+}
+
+async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
+	let mut inputs = Amount::ZERO;
+	let mut seen = BTreeSet::new();
+	for input in &transaction.input {
+		assert!(seen.insert(input.previous_output));
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		inputs += previous.output[input.previous_output.vout as usize].value;
+	}
+	inputs.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
+}
+
+fn fallback_history(history: Vec<Movement>, baseline: &[Movement], ids: &BTreeSet<VtxoId>,
+	script: &bitcoin::Script, gross: u64, payout: u64,
+) -> Movement {
+	let other_debits = |history: &[Movement]| history.iter().filter(|movement|
+		movement.subsystem.name != "abandon.fallback_payout" && movement.effective_balance.to_sat() < 0
+		&& movement.input_vtxos.iter().any(|id| ids.contains(id)))
+		.map(|movement| (movement.id, movement.effective_balance.to_sat())).collect::<BTreeMap<_, _>>();
+	let old_debits = other_debits(baseline);
+	assert_eq!(other_debits(&history), old_debits, "another subsystem cannot add a payout-input debit");
+	let total_debit = history.iter().filter(|movement| movement.effective_balance.to_sat() < 0
+		&& movement.input_vtxos.iter().any(|id| ids.contains(id)))
+		.map(|movement| movement.effective_balance.to_sat()).sum::<i64>();
+	assert_eq!(total_debit, old_debits.values().sum::<i64>() - i64::try_from(gross).unwrap());
+	let mut payouts = history.into_iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout");
+	let movement = payouts.next().expect("one actual output must have one history movement");
+	assert!(payouts.next().is_none());
+	assert_eq!(movement.status, MovementStatus::Successful);
+	assert_eq!(movement.input_vtxos.len(), ids.len());
+	assert_eq!(movement.input_vtxos.iter().copied().collect::<BTreeSet<_>>(), *ids);
+	assert_eq!(movement.intended_balance.to_sat(), -(gross as i64));
+	assert_eq!(movement.effective_balance.to_sat(), -(gross as i64));
+	assert_eq!(movement.offchain_fee, sat(1_000));
+	assert_eq!(movement.sent_to.len(), 1);
+	assert_eq!(movement.sent_to[0].amount, sat(payout));
+	assert_eq!(movement.sent_to[0].destination,
+		PaymentMethod::Bitcoin(Address::from_script(script, Network::Regtest).unwrap().into_unchecked()));
+	assert_eq!(movement.metadata["fallback"]["stage"], "confirmed");
+	assert_eq!(movement.metadata["fallback"]["chain_verified"], true);
+	assert_eq!(movement.metadata["fallback"]["disposition"], "customer_payout");
+	assert_eq!(movement.metadata["fallback"]["forfeited_sat"], 0);
+	movement
+}
+
+#[tokio::test]
+async fn three_sub_fee_leaves_pay_one_registered_owner_once() {
+	require_bark_version!(> "0.7.1");
+	require_bitcoind_chain_source!();
+	assert!(std::env::var_os("BARK_DOUBLE_DRIVE_ACTIONS").is_none());
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(tiny_group())).await
+		.expect("the original H30 single-case 180-second deadline must not be extended");
+}
+
+async fn tiny_group() {
+	let ctx = TestContext::new("server/qualification_tiny_payout_grouping").await;
+	let first_height = ctx.bitcoind().get_block_count().await;
+	let srv = Box::pin(ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
+		.cfg(|config| config.vtxo_lifetime = BlockDelta::new(32)).watchmand().create()).await;
+	let sender_cli = Box::pin(ctx.bark("sender", &srv).cfg(|config| config.daemon_manual_sync = true)
+		.funded(sat(200_000)).create()).await;
+	let recipient_cli = Box::pin(ctx.bark("recipient", &srv).cfg(|config| config.daemon_manual_sync = true)
+		.create()).await;
+	let ids = Box::pin(sender_cli.board_and_confirm_and_register(&ctx, sat(100_000))).await;
+	assert_eq!(ids.len(), 1);
+	let sender = Box::pin(sender_cli.client()).await;
+	let recipient = Box::pin(recipient_cli.client()).await;
+	sender.stop_daemon_wait().await.unwrap();
+	recipient.stop_daemon_wait().await.unwrap();
+	let source = sender.get_full_vtxo(ids[0]).await.unwrap();
+	assert_eq!(source.amount(), sat(100_000));
+	let root = source.chain_anchor();
+	let board = ctx.bitcoind().await_transaction(root.txid).await;
+	source.validate(&board).unwrap();
+	let ordinary = sender_cli.onchain_utxos().await.into_iter()
+		.map(|coin| (coin.outpoint, coin.amount)).collect::<BTreeMap<_, _>>();
+	assert!(!ordinary.is_empty());
+	assert!(ordinary.keys().all(|point| point.txid == root.txid && *point != root));
+	let board_fee = actual_fee(&ctx, &board).await;
+	assert_eq!(sat(100_000) + ordinary.values().copied().sum::<Amount>() + board_fee, sat(200_000));
+	let sender_binding = sender.fallback_destination().await.unwrap();
+	let recipient_binding = recipient.fallback_destination().await.unwrap();
+	let sender_mailbox = sender.mailbox_identifier();
+	let recipient_mailbox = recipient.mailbox_identifier();
+	sender_binding.verify(Network::Regtest, sender_mailbox.as_pubkey()).unwrap();
+	recipient_binding.verify(Network::Regtest, recipient_mailbox.as_pubkey()).unwrap();
+	assert_ne!(sender_binding.spk, recipient_binding.spk);
+	assert!(recipient_binding.spk.minimal_non_dust() <= sat(500));
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	for (mailbox, binding) in [(sender_mailbox, &sender_binding), (recipient_mailbox, &recipient_binding)] {
+		let registered = db.read(async |tx| tx.get_fallback(mailbox.as_pubkey()).await).await.unwrap().unwrap();
+		assert!(registered.same_binding(binding));
+	}
+
+	let mut keys = Vec::new();
+	for _ in 0..3 { keys.push(recipient.derive_store_next_keypair().await.unwrap().0); }
+	keys.push(sender.derive_store_next_keypair().await.unwrap().0);
+	assert_eq!(keys.iter().map(|key| key.public_key()).collect::<BTreeSet<_>>().len(), 4);
+	let destinations = keys.iter().enumerate().map(|(index, key)| ArkoorDestination {
+		total_amount: sat(if index < 3 { 500 } else { 98_500 }),
+		policy: VtxoPolicy::new_pubkey(key.public_key()),
+	}).collect::<Vec<_>>();
+	let key = sender.get_vtxo_key(&source).await.unwrap();
+	sender.register_vtxo_transactions_with_server([&source]).await.unwrap();
+	let builder = ArkoorPackageBuilder::new_with_checkpoints([source.clone()], destinations).unwrap()
+		.generate_user_nonces(&[key]).unwrap();
+	let mut rpc = srv.get_public_rpc().await;
+	let response = rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+		.await.unwrap().into_inner();
+	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
+	assert_eq!(signed.build_signed_internal_vtxos().iter()
+		.filter(|(coin, _)| matches!(coin.policy(), ServerVtxoPolicy::Checkpoint(_))).count(), 4);
+	assert_eq!(signed.signed_virtual_transactions().len(), 5);
+	let leaves = signed.build_signed_vtxos();
+	assert_eq!(leaves.len(), 4);
+	for (index, leaf) in leaves.iter().enumerate() {
+		assert_eq!(leaf.amount(), sat(if index < 3 { 500 } else { 98_500 }));
+		assert_eq!(leaf.policy(), &VtxoPolicy::new_pubkey(keys[index].public_key()));
+		assert_eq!(leaf.chain_anchor(), root);
+		assert_eq!(leaf.expiry_height(), source.expiry_height());
+		leaf.validate(&board).unwrap();
+	}
+	sender.register_vtxo_transactions_with_server(&leaves).await.unwrap();
+	let mut mailbox = srv.get_mailbox_public_rpc().await;
+	let mailbox_key = srv.ark_info().await.mailbox_pubkey;
+	for (index, leaf) in leaves.iter().enumerate() {
+		let owner = if index < 3 { recipient_mailbox } else { sender_mailbox };
+		let blinded = owner.to_blinded(mailbox_key, &keys[index]).unwrap();
+		mailbox.post_arkoor_message(protos::mailbox_server::PostArkoorMessageRequest {
+			blinded_id: blinded.as_ref().to_vec(), vtxos: vec![leaf.serialize()],
+		}).await.unwrap();
+	}
+	recipient.sync_mailbox().await.unwrap();
+	sender.sync_mailbox().await.unwrap();
+	// Manual native cosigning is not an SDK send action. Authenticate the
+	// real ordinary spend proof to retire its source instead of editing state.
+	sender.recover_vtxos([source.id()], None).await.unwrap();
+	assert_eq!(sender.get_vtxo_by_id(source.id()).await.unwrap().state, VtxoState::Spent);
+	let recipient_ids = leaves[..3].iter().map(|leaf| leaf.id()).collect::<BTreeSet<_>>();
+	let sender_ids = BTreeSet::from([leaves[3].id()]);
+	for (wallet, expected) in [(&recipient, &recipient_ids), (&sender, &sender_ids)] {
+		let coins = wallet.spendable_vtxos().await.unwrap();
+		assert_eq!(coins.iter().map(|coin| coin.id()).collect::<BTreeSet<_>>(), *expected);
+		for id in expected {
+			let body = wallet.get_full_vtxo(*id).await.unwrap();
+			assert_eq!(body.serialize(), leaves.iter().find(|leaf| leaf.id() == *id).unwrap().serialize());
+			assert_eq!(wallet.get_vtxo_by_id(*id).await.unwrap().state, VtxoState::Spendable);
+		}
+	}
+	let recipient_before = recipient.history().await.unwrap();
+	let sender_before = sender.history().await.unwrap();
+	assert_eq!(recipient.balance().await.unwrap().spendable, sat(1_500));
+	assert_eq!(sender.balance().await.unwrap().spendable, sat(98_500));
+	drop(recipient);
+	drop(sender);
+	drop(rpc);
+	drop(mailbox);
+
+	let mut sponsors = BTreeMap::new();
+	for _ in 0..2 {
+		let address = srv.watchmand().wait_wallet_address().await;
+		let txid = ctx.bitcoind().fund_addr(address.clone(), sat(100_000)).await;
+		let transaction = ctx.bitcoind().await_transaction(txid).await;
+		let outputs = transaction.output.iter().enumerate().filter(|(_, output)|
+			output.script_pubkey == address.script_pubkey() && output.value == sat(100_000)).collect::<Vec<_>>();
+		assert_eq!(outputs.len(), 1);
+		assert!(sponsors.insert(OutPoint::new(txid, outputs[0].0 as u32), outputs[0].1.clone()).is_none());
+	}
+	ctx.generate_blocks(6).await;
+	let core = ctx.bitcoind().sync_client();
+	for (point, expected) in &sponsors {
+		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+		assert!(actual.confirmations >= 6);
+		assert_eq!(actual.value, expected.value);
+	}
+	let scan_height = core.get_block_count().unwrap();
+	let current = u32::try_from(scan_height).unwrap();
+	assert!(current < source.expiry_height().to_u32());
+	ctx.generate_blocks(source.expiry_height().to_u32() + 1 - current).await;
+	rebuilt(&ctx, &srv, &db).await;
+	let leaf_ids = leaves.iter().map(|leaf| leaf.id().to_string()).collect::<Vec<_>>();
+	let rows = tokio::time::timeout(Duration::from_secs(45), async {
+		for _ in 0..24 {
+			let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.gross_sat,c.fee_sat,c.payout_sat, \
+				c.forfeited_sat,c.spk,c.owner_mailbox,c.user_pubkey,a.id,a.sweep_tx,a.sweep_txid \
+				FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+				JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=ANY($1) \
+				AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL", &[&leaf_ids],
+			).await?)).await.unwrap();
+			assert!(rows.len() <= 4);
+			if rows.len() == 4 && rows.iter().all(|row|
+				core.custom_get_raw_transaction_info(row.get::<_, &str>("sweep_txid").parse().unwrap(), None).unwrap().is_some()) {
+				return rows;
+			}
+			// Real intermediate packages may need a block before another
+			// signed level or confirmed sponsor change can be used.
+			tokio::time::sleep(Duration::from_millis(750)).await;
+			ctx.generate_blocks(1).await;
+			rebuilt(&ctx, &srv, &db).await;
+			assert!(ctx.bitcoind().get_block_count().await - first_height <= 90);
+		}
+		panic!("four genuine leaf allocations must become physically published within24 progress blocks");
+	}).await.expect("bounded native discovery/publication deadline");
+	ctx.generate_blocks(6).await;
+	rebuilt(&ctx, &srv, &db).await;
+	let mut expected = BTreeMap::new();
+	for (index, id) in recipient_ids.iter().enumerate() {
+		expected.insert(*id, (500_i64, if index < 2 { 500_i64 } else { 0 }, if index < 2 { 0_i64 } else { 500 }));
+	}
+	expected.insert(leaves[3].id(), (98_500, 1_000, 97_500));
+	let mut parents = BTreeMap::new();
+	let mut tiny_group = None;
+	let mut public_leaves = Vec::new();
+	for row in &rows {
+		let id = row.get::<_, &str>("vtxo_id").parse::<VtxoId>().unwrap();
+		let index = leaves.iter().position(|leaf| leaf.id() == id).unwrap();
+		let binding = if index < 3 { &recipient_binding } else { &sender_binding };
+		let owner = if index < 3 { recipient_mailbox } else { sender_mailbox };
+		let (gross, fee, payout) = expected[&id];
+		assert_eq!(row.get::<_, i64>("gross_sat"), gross);
+		assert_eq!(row.get::<_, i64>("fee_sat"), fee);
+		assert_eq!(row.get::<_, i64>("payout_sat"), payout);
+		assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
+		assert_eq!(row.get::<_, String>("spk"), binding.spk.as_bytes().to_lower_hex_string());
+		assert_eq!(row.get::<_, String>("owner_mailbox"), owner.as_pubkey().to_string());
+		assert_eq!(row.get::<_, String>("user_pubkey"), keys[index].public_key().to_string());
+		let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+		let txid = parent.compute_txid();
+		assert_eq!(row.get::<_, String>("sweep_txid"), txid.to_string());
+		let info = core.custom_get_raw_transaction_info(txid, None).unwrap().unwrap();
+		assert!(info.confirmations.unwrap_or(0) >= 6);
+		let hash = info.blockhash.unwrap();
+		let ledger = db.read(async |tx| Ok(tx.query_one("SELECT c.active,c.paying_txid,c.paying_hash, \
+			a.status,a.confirmed_hash,p.output_index,p.amount_sat FROM expiry_allocation_coin c \
+			JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
+			JOIN expiry_allocation_payout p ON p.allocation_id=c.allocation_id AND p.spk=c.spk \
+			WHERE e.vtxo_id=$1 AND c.allocation_id=$2", &[&id.to_string(), &row.get::<_, i64>("id")],
+		).await?)).await.unwrap();
+		assert!(ledger.get::<_, bool>("active"));
+		assert_eq!(ledger.get::<_, String>("status"), "confirmed");
+		assert_eq!(ledger.get::<_, String>("paying_txid"), txid.to_string());
+		assert_eq!(ledger.get::<_, String>("paying_hash"), hash.to_string());
+		assert_eq!(ledger.get::<_, String>("confirmed_hash"), hash.to_string());
+		let output_index = u32::try_from(ledger.get::<_, i32>("output_index")).unwrap();
+		let output_amount = if index < 3 { 500 } else { 97_500 };
+		assert_eq!(ledger.get::<_, i64>("amount_sat"), output_amount);
+		assert_eq!(parent.output[output_index as usize].value, sat(output_amount as u64));
+		assert_eq!(parent.output[output_index as usize].script_pubkey, binding.spk);
+		if index < 3 {
+			let group = (row.get::<_, i64>("id"), OutPoint::new(txid, output_index));
+			if let Some(previous) = tiny_group { assert_eq!(previous, group); }
+			tiny_group = Some(group);
+		}
+		public_leaves.push(json!({"vtxo_id": id, "user_pubkey": keys[index].public_key().to_string(),
+			"owner_mailbox": owner.as_pubkey().to_string(), "script": binding.spk.as_bytes().to_lower_hex_string(),
+			"gross_sat": gross, "fee_sat": fee, "payout_sat": payout, "forfeited_sat": 0,
+			"allocation_id": row.get::<_, i64>("id"), "outpoint": OutPoint::new(txid, output_index),
+			"group_output_sat": output_amount, "canonical_hash": hash}));
+		parents.insert(txid, parent);
+	}
+	let tiny_point = tiny_group.unwrap().1;
+	let mut packages = Vec::new();
+	for (txid, parent) in &parents {
+		assert_eq!(parent.version.0, 3);
+		assert_eq!(actual_fee(&ctx, parent).await, Amount::ZERO);
+		let hash = core.custom_get_raw_transaction_info(*txid, None).unwrap().unwrap().blockhash.unwrap();
+		let block = core.get_block(&hash).unwrap();
+		assert!(block.txdata.iter().any(|transaction| transaction == parent));
+		let anchors = parent.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor())
+			.map(|(vout, _)| OutPoint::new(*txid, vout as u32)).collect::<Vec<_>>();
+		assert_eq!(anchors.len(), 1);
+		let children = block.txdata.iter().filter(|transaction| transaction.input.iter()
+			.any(|input| input.previous_output == anchors[0])).collect::<Vec<_>>();
+		assert_eq!(children.len(), 1, "select the actual canonical sponsor, not a stale fee attempt");
+		let child = children[0];
+		assert_eq!(child.version.0, 3);
+		let child_info = core.custom_get_raw_transaction_info(child.compute_txid(), None).unwrap().unwrap();
+		assert_eq!(child_info.blockhash, Some(hash));
+		assert!(child_info.confirmations.unwrap_or(0) >= 6);
+		let fee = actual_fee(&ctx, child).await;
+		assert!(fee > Amount::ZERO);
+		let stored = db.read(async |tx| Ok(tx.query_one("SELECT raw_tx,fee_sat,confirmed_hash \
+			FROM expiry_fee_child WHERE txid=$1", &[&child.compute_txid().to_string()],
+		).await?)).await.unwrap();
+		assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(), *child);
+		assert_eq!(stored.get::<_, i64>("fee_sat"), fee.to_sat() as i64);
+		assert_eq!(stored.get::<_, String>("confirmed_hash"), hash.to_string());
+		packages.push(json!({"parent_txid": txid, "parent_fee_sat": 0, "canonical_hash": hash,
+			"child_txid": child.compute_txid(), "actual_child_miner_fee_sat": fee.to_sat()}));
+	}
+
+	// Reconstruct the complete finite cut in canonical block order. Retain
+	// unused declared sponsors and follow actual child change, not an assumed
+	// fee-wallet output shape. An undeclared additional input is a failure.
+	let mut cut = sponsors.clone();
+	assert!(cut.insert(root, board.output[root.vout as usize].clone()).is_none());
+	let mut graph = BTreeMap::<Txid, Transaction>::new();
+	let mut spent = BTreeSet::new();
+	let mut fees = Amount::ZERO;
+	let tip = core.get_block_count().unwrap();
+	for height in scan_height + 1..=tip {
+		let hash = core.get_block_hash(height).unwrap();
+		for transaction in core.get_block(&hash).unwrap().txdata {
+			if !transaction.input.iter().any(|input| cut.contains_key(&input.previous_output)) { continue; }
+			let mut input_sum = Amount::ZERO;
+			for input in &transaction.input {
+				assert!(spent.insert(input.previous_output), "no finite-cut input can be spent twice");
+				input_sum += cut.remove(&input.previous_output)
+					.expect("the actual native graph cannot consume undeclared outside funds").value;
+			}
+			let txid = transaction.compute_txid();
+			let output_sum = transaction.output.iter().map(|output| output.value).sum::<Amount>();
+			fees += input_sum.checked_sub(output_sum).unwrap();
+			for (vout, output) in transaction.output.iter().enumerate() {
+				assert!(cut.insert(OutPoint::new(txid, vout as u32), output.clone()).is_none());
+			}
+			assert!(graph.insert(txid, transaction).is_none());
+		}
+	}
+	assert!(spent.contains(&root));
+	for (txid, parent) in &parents { assert_eq!(graph.get(txid), Some(parent)); }
+	for (script, amount) in [(&recipient_binding.spk, 500), (&sender_binding.spk, 97_500)] {
+		let matches = graph.values().flat_map(|transaction| transaction.output.iter().enumerate().filter_map(move |(vout, output)|
+			(&output.script_pubkey == script).then_some((OutPoint::new(transaction.compute_txid(), vout as u32), output))
+		)).collect::<Vec<_>>();
+		assert_eq!(matches.len(), 1, "one economic output per registered owner, including every child output");
+		assert_eq!(matches[0].1.value, sat(amount));
+		assert!(!spent.contains(&matches[0].0));
+	}
+	let mut remaining = Amount::ZERO;
+	for (point, expected) in &cut {
+		if expected.value == Amount::ZERO { continue; }
+		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+		assert!(actual.confirmations >= 6);
+		assert_eq!(actual.value, expected.value);
+		assert_eq!(actual.script_pub_key.script().unwrap(), expected.script_pubkey);
+		remaining += actual.value;
+	}
+	assert_eq!(remaining + fees, sat(300_000));
+	for point in core.get_raw_mempool().unwrap() {
+		let pending = core.get_raw_transaction(&point, None).unwrap();
+		assert!(pending.output.iter().all(|output| output.script_pubkey != recipient_binding.spk
+			&& output.script_pubkey != sender_binding.spk), "no second economic payout may wait in the mempool");
+	}
+	let all_customer_rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,a.sweep_txid \
+		FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+		JOIN expiry_allocation a ON a.id=c.allocation_id JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
+		WHERE v.anchor_point=$1 AND c.disposition='customer' AND a.status='confirmed'",
+		&[&root.to_string()],
+	).await?)).await.unwrap();
+	assert_eq!(all_customer_rows.len(), 4, "no historical source or intermediate obtains another customer entitlement");
+	assert_eq!(all_customer_rows.iter().map(|row| row.get::<_, &str>("vtxo_id").to_owned())
+		.collect::<BTreeSet<_>>(), leaf_ids.iter().cloned().collect());
+	assert!(all_customer_rows.iter().all(|row| parents.contains_key(&row.get::<_, &str>("sweep_txid").parse::<Txid>().unwrap())));
+	assert!(ctx.bitcoind().get_block_count().await - first_height <= 96);
+	let mut receipt = json!({"phase": "CHAIN_CONFIRMED_HISTORY_NOT_YET_VERIFIED", "overall_pass": false,
+		"source_pin": option_env!("GIT_HASH"), "root": root, "source_vtxo_id": source.id(),
+		"board_miner_fee_sat_outside_cut": board_fee.to_sat(),
+		"ordinary_customer_change_sat_outside_cut": ordinary.values().copied().sum::<Amount>().to_sat(),
+		"sponsors": sponsors.keys().map(ToString::to_string).collect::<Vec<_>>(),
+		"recipient_gross_sat": 1_500, "recipient_group_payout_sat": 500, "recipient_group_policy_fee_sat": 1_000,
+		"sender_change_gross_sat": 98_500, "sender_payout_sat": 97_500, "sender_group_policy_fee_sat": 1_000,
+		"customer_gross_sat": 100_000, "customer_payout_sat": 98_000, "customer_policy_fee_sat": 2_000,
+		"selected_finite_input_sat": 300_000, "remaining_output_sat": remaining.to_sat(),
+		"actual_graph_miner_fee_sat": fees.to_sat(), "graph_txids": graph.keys().map(ToString::to_string).collect::<Vec<_>>(),
+		"canonical_tip_height": tip, "canonical_tip_hash": core.get_best_block_hash().unwrap(),
+		"leaves": public_leaves, "packages": packages,
+		"limits": "ordinary same-owner payable group only; no native whole-group dust or forged-group negative; no global wallet custody claim"});
+	let receipt_path = ctx.datadir.join("tiny-group-public-receipt.json");
+	tokio::fs::write(&receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).await.unwrap();
+
+	// The original recipient database already held all three signed coins
+	// before absence. Do not substitute fresh recovery or ignore receipt errors:
+	// the two fee-only contributors must remain payable-group members.
+	let returned = Box::pin(recipient_cli.client()).await;
+	returned.sync_fallback_payouts().await.unwrap();
+	let receipts = returned.fallback_payouts().await.unwrap();
+	assert_eq!(receipts.len(), 3);
+	for entitlement in &receipts {
+		assert!(recipient_ids.contains(&entitlement.vtxo_id));
+		assert_eq!(entitlement.gross, sat(500));
+		assert!(entitlement.chain_view_valid);
+		assert!(entitlement.terminal_claim.is_none());
+		assert_eq!(entitlement.attempts.len(), 1);
+		let attempt = &entitlement.attempts[0];
+		let (_, fee, payout) = expected[&entitlement.vtxo_id];
+		assert!(attempt.active);
+		assert_eq!(attempt.disposition, FallbackDisposition::CustomerPayout);
+		assert_eq!(attempt.stage, FallbackPayoutStage::Confirmed);
+		assert_eq!(attempt.fee, sat(fee as u64));
+		assert_eq!(attempt.payout, sat(payout as u64));
+		assert_eq!(attempt.forfeited, Amount::ZERO);
+		assert_eq!(attempt.output_amount, Some(sat(500)));
+		assert_eq!(attempt.output_index, Some(tiny_point.vout));
+		assert_eq!(attempt.allocation_id, tiny_group.unwrap().0);
+		assert_eq!(attempt.script.as_ref(), Some(&recipient_binding.spk));
+		assert_eq!(attempt.parent.as_ref(), parents.get(&tiny_point.txid));
+		assert_eq!(attempt.confirmation.as_ref().unwrap().hash,
+			core.custom_get_raw_transaction_info(tiny_point.txid, None).unwrap().unwrap().blockhash.unwrap());
+		assert_eq!(returned.get_vtxo_by_id(entitlement.vtxo_id).await.unwrap().state, VtxoState::Spent);
+	}
+	let history = fallback_history(returned.history().await.unwrap(), &recipient_before, &recipient_ids,
+		&recipient_binding.spk, 1_500, 500);
+	assert_eq!(balance_fields(&returned.balance().await.unwrap()), [Amount::ZERO; 10]);
+	for _ in 0..2 {
+		returned.sync_fallback_payouts().await.unwrap();
+		assert_eq!(fallback_history(returned.history().await.unwrap(), &recipient_before, &recipient_ids,
+			&recipient_binding.spk, 1_500, 500), history);
+	}
+	returned.stop_daemon_wait().await.unwrap();
+	drop(returned);
+	let reopened = Box::pin(recipient_cli.client()).await;
+	reopened.sync_fallback_payouts().await.unwrap();
+	assert_eq!(fallback_history(reopened.history().await.unwrap(), &recipient_before, &recipient_ids,
+		&recipient_binding.spk, 1_500, 500), history);
+	assert_eq!(balance_fields(&reopened.balance().await.unwrap()), [Amount::ZERO; 10]);
+	let sender_returned = Box::pin(sender_cli.client()).await;
+	sender_returned.sync_fallback_payouts().await.unwrap();
+	let _sender_history = fallback_history(sender_returned.history().await.unwrap(), &sender_before, &sender_ids,
+		&sender_binding.spk, 98_500, 97_500);
+	assert_eq!(balance_fields(&sender_returned.balance().await.unwrap()), [Amount::ZERO; 10]);
+	receipt["phase"] = json!("COMPLETE");
+	receipt["overall_pass"] = json!(true);
+	receipt["recipient_history_movement_id"] = json!(history.id);
+	tokio::fs::write(receipt_path, serde_json::to_vec_pretty(&receipt).unwrap()).await.unwrap();
+	sender_returned.stop_daemon_wait().await.unwrap();
+	reopened.stop_daemon_wait().await.unwrap();
+}

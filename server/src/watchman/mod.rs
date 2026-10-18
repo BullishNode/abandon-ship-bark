@@ -9,6 +9,7 @@
 mod config;
 mod daemon;
 mod frontier;
+pub(crate) mod fee_sponsor;
 mod policy;
 mod payout;
 mod recovery;

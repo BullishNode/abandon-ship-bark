@@ -109,29 +109,41 @@ impl Watchman {
 		let target = self.fee_estimator.regular();
 		let (anchor, _) = parent.fee_anchor().context("expiry parent has no fee anchor")?;
 		let active_child = bcd::get_mempool_spending_tx(&self.bitcoind, anchor).await?;
-		let active_fee = match active_child {
+		let active_record = match active_child {
 			Some(txid) => {
-				// Anyone can spend P2A. A live spender is a replacement premise
-				// only when our own durable history binds its exact economics to
-				// this allocation and parent, including an older fee-child version.
-				let recorded_fee = self.db.read(async |t| {
-					let row = t.query_opt("SELECT raw_tx,fee_sat FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2",
-						&[&group.id, &txid.to_string()]).await?
-						.context("expiry anchor has an unrecognized mempool spender")?;
-					let known: Transaction = bitcoin::consensus::deserialize(row.get("raw_tx"))?;
-					ensure!(known.compute_txid() == txid && known.version.0 == 3
-						&& known.input.iter().filter(|input| input.previous_output == anchor).count() == 1,
-						"active expiry fee child differs from its retained parent history");
-					Ok(Amount::from_sat(u64::try_from(row.get::<_, i64>("fee_sat"))?))
-				}).await?;
-				let fee = mempool_child_fee(&self.bitcoind, txid).await?
+				let saved = self.db.read(async |t| Ok(t.query_opt("SELECT raw_tx,fee_sat FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2",
+					&[&group.id,&txid.to_string()]).await?)).await?;
+				let fee = mempool_child_fee(&self.bitcoind,txid).await?
 					.context("active expiry fee child changed during observation")?;
-				ensure!(fee == recorded_fee, "active expiry fee differs from retained economics");
-				Some(fee)
+				let child = if let Some(row) = saved {
+					let child: Transaction = bitcoin::consensus::deserialize(row.get("raw_tx"))?;
+					ensure!(child.compute_txid()==txid && child.version.0==3
+						&& child.input.iter().filter(|input|input.previous_output==anchor).count()==1,
+						"active expiry fee child differs from retained parent history");
+					ensure!(fee.to_sat()==u64::try_from(row.get::<_,i64>("fee_sat"))?,
+						"active expiry fee differs from retained economics");
+					child
+				} else {
+					let child = self.bitcoind.get_raw_transaction_verbosity_zero(&txid).await?.0;
+					ensure!(child.compute_txid()==txid,"observed fee child body has wrong id");
+					let prevouts = self.observed_fee_prevouts(view,&parent,&child).await?;
+					let observed = super::fee_sponsor::recognize_fee_only(&parent,group.payouts.len(),&child,&prevouts,
+						|script| script==self.drain_spk.as_script() || wallet.is_mine(script.to_owned()))?;
+					ensure!(observed.fee==fee && mempool_child_fee(&self.bitcoind,txid).await?==Some(fee)
+						&& bcd::get_mempool_spending_tx(&self.bitcoind,anchor).await?==Some(txid),
+						"observed fee child presence or fee changed");
+					self.db.write(async |t| t.store_observed_expiry_fee_child(view,group.id,&parent,&observed).await).await?;
+					child
+				};
+				Some((child,fee))
 			},
 			None => None,
 		};
-		let fees = if let Some((child, fee)) = &group.fee_child {
+		let active_fee = active_record.as_ref().map(|(_,fee)|*fee);
+		// A recognized older child or independent fee-only sponsor can already
+		// provide the package's fee. Preserve its genuine signed body unchanged.
+		let reusable = active_record.or(group.fee_child);
+		let fees = if let Some((child, fee)) = &reusable {
 			// A side-chain getrawtransaction result is not mempool membership.
 			// Only a real canonical confirmation or gettxspendingprevout entry
 			// establishes that the child's own spends explain missing funding.
@@ -207,10 +219,14 @@ impl Watchman {
 			self.db.write(async |t| t.store_expiry_fee_child(view, group.id, &parent, &child, fee).await).await?;
 			child
 		} else {
-			group.fee_child.context("missing recorded expiry fee child")?.0
+			reusable.context("missing recorded expiry fee child")?.0
 		};
-		wallet.commit_tx(&child);
-		wallet.persist().await?;
+		let own = self.db.read(async |t| Ok(t.query_one("SELECT funding_kind FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2",
+			&[&group.id,&child.compute_txid().to_string()]).await?.get::<_,String>(0)=="watchman")).await?;
+		if own {
+			wallet.commit_tx(&child);
+			wallet.persist().await?;
+		}
 		drop(wallet);
 		// Re-check the actual completed canonical hashes immediately before
 		// publication. Hold the durable barrier shared through the RPC.
@@ -227,6 +243,33 @@ impl Watchman {
 			Ok(())
 		}).await?;
 		Ok(())
+	}
+
+	/// Use creating transactions and their real active-chain confirmations:
+	/// a confirmed child has already consumed its prevouts, so gettxout=false
+	/// alone cannot reconstruct this evidence. The parent is supplied exactly.
+	pub(super) async fn observed_fee_prevouts(
+		&self, view: ExpiryViewToken, parent: &Transaction, child: &Transaction,
+	) -> anyhow::Result<Vec<TxOut>> {
+		let mut prevouts = Vec::with_capacity(child.input.len());
+		for input in &child.input {
+			let point = input.previous_output;
+			let previous = if point.txid==parent.compute_txid() {
+				parent.output.get(point.vout as usize).cloned().context("invalid observed parent prevout")?
+			} else {
+				let TxStatus::Confirmed(at) = bcd::tx_status(&self.bitcoind,point.txid).await? else {
+					bail!("observed fee child funding has no canonical confirmation");
+				};
+				ensure!(at.height<=view.captaind.height.min(view.watchmand.height)
+					&& self.bitcoind.get_block_hash(at.height.into()).await?==at.hash,
+					"observed fee funding is outside completed canonical view");
+				let previous = self.bitcoind.get_raw_transaction_verbosity_zero(&point.txid).await?.0;
+				ensure!(previous.compute_txid()==point.txid,"observed funding transaction has wrong id");
+				previous.output.get(point.vout as usize).cloned().context("invalid observed funding prevout")?
+			};
+			prevouts.push(previous);
+		}
+		Ok(prevouts)
 	}
 
 	pub(crate) async fn verify_expiry_view(&self, view: ExpiryViewToken) -> anyhow::Result<()> {

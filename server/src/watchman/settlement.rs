@@ -39,6 +39,8 @@ pub(crate) struct SettlementPlan {
 pub(crate) struct PayoutFeeAccounting {
 	pub operator_remainder: Amount,
 	pub miner_fee: Amount,
+	pub operator_contribution: SignedAmount,
+	pub outside_scope_contribution: SignedAmount,
 	pub subsidy: Amount,
 	pub net_operator_result: SignedAmount,
 }
@@ -49,14 +51,28 @@ pub(crate) struct PayoutFeeAccounting {
 pub(crate) fn payout_fee_accounting(
 	parent: &Transaction, customer_outputs: usize, miner_fee: Amount,
 ) -> anyhow::Result<PayoutFeeAccounting> {
+	payout_fee_accounting_with_contribution(parent,customer_outputs,miner_fee,miner_fee.to_signed()?)
+}
+
+/// Miner fee is a network expense. Only the proven known-operator net
+/// contribution is charged to this operator scope; the two need not match.
+pub(crate) fn payout_fee_accounting_with_contribution(
+	parent: &Transaction, customer_outputs: usize, miner_fee: Amount,
+	operator_contribution: SignedAmount,
+) -> anyhow::Result<PayoutFeeAccounting> {
 	ensure!(customer_outputs <= parent.output.len(), "payout accounting omits customer outputs");
 	let operator_remainder = parent.output[customer_outputs..].iter().try_fold(Amount::ZERO, |sum, output|
 		sum.checked_add(output.value).context("operator payout remainder overflow"),
 	)?;
-	let net_operator_result = operator_remainder.to_signed()?.checked_sub(miner_fee.to_signed()?)
+	let net_operator_result = operator_remainder.to_signed()?.checked_sub(operator_contribution)
 		.context("net operator payout result overflow")?;
-	let subsidy = miner_fee.checked_sub(operator_remainder).unwrap_or(Amount::ZERO);
-	Ok(PayoutFeeAccounting { operator_remainder, miner_fee, subsidy, net_operator_result })
+	let outside_scope_contribution = miner_fee.to_signed()?.checked_sub(operator_contribution)
+		.context("outside-scope fee contribution overflow")?;
+	let subsidy = if net_operator_result.is_negative() {
+		SignedAmount::ZERO.checked_sub(net_operator_result).context("operator subsidy overflow")?.to_unsigned()?
+	} else { Amount::ZERO };
+	Ok(PayoutFeeAccounting { operator_remainder, miner_fee, operator_contribution,
+		outside_scope_contribution, subsidy, net_operator_result })
 }
 
 /// Group by actual output, with stable per-leaf amounts for persisted attribution.
@@ -224,6 +240,21 @@ mod tests {
 		let replacement = payout_fee_accounting(&parent,1,Amount::from_sat(450)).unwrap();
 		assert_eq!(replacement.miner_fee.to_sat(),450);
 		assert_eq!(replacement.subsidy.to_sat(),250);
+	}
+
+	#[test]
+	fn foreign_fee_is_not_charged_as_operator_cash_expense() {
+		let parent = Transaction {
+			version: bitcoin::transaction::Version::non_standard(3),
+			lock_time: bitcoin::absolute::LockTime::ZERO, input: vec![],
+			output: vec![bitcoin_ext::fee::fee_anchor_with_amount(Amount::from_sat(200))],
+		};
+		for fee in [100,800] {
+			let result = payout_fee_accounting_with_contribution(&parent,0,Amount::from_sat(fee),SignedAmount::from_sat(200)).unwrap();
+			assert_eq!(result.net_operator_result,SignedAmount::ZERO);
+			assert_eq!(result.subsidy,Amount::ZERO);
+			assert_eq!(result.outside_scope_contribution.to_sat(),fee as i64-200);
+		}
 	}
 
 }

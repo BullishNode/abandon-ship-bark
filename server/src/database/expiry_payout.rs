@@ -168,8 +168,45 @@ impl Tx<'_> {
 		ensure!(child.version.0 == 3, "expiry fee child is not version 3");
 		let customer_outputs = usize::try_from(self.query_one("SELECT COUNT(*) FROM expiry_allocation_payout WHERE allocation_id=$1", &[&id]).await?.get::<_, i64>(0))?;
 		let accounting = crate::watchman::settlement::payout_fee_accounting(parent,customer_outputs,fee)?;
-		self.execute("INSERT INTO expiry_fee_child(allocation_id,txid,raw_tx,fee_sat,operator_remainder_sat) VALUES($1,$2,$3,$4,$5) ON CONFLICT(txid) DO NOTHING",
-			&[&id,&child.compute_txid().to_string(),&serialize(child),&i64::try_from(fee.to_sat())?,&i64::try_from(accounting.operator_remainder.to_sat())?]).await?;
+		self.insert_expiry_fee_child(id,child,fee,accounting.operator_remainder,"watchman",fee,None).await
+	}
+
+	/// An observation cannot authorize customer payment. It may be stored during
+	/// reconstruction before the matching completed view is marked rebuilt.
+	pub(crate) async fn store_observed_expiry_fee_child(
+		&self, view: ExpiryViewToken, id: i64, parent: &Transaction,
+		observed: &crate::watchman::fee_sponsor::ObservedFeeChild,
+	) -> anyhow::Result<()> {
+		self.query_one("SELECT generation FROM expiry_chain_view WHERE id=1 FOR SHARE", &[]).await?;
+		ensure!(self.expiry_rebuild_token().await? == Some(view), "observed fee child chain view changed");
+		let row = self.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1 FOR UPDATE", &[&id]).await?;
+		ensure!(row.get::<_, Option<&[u8]>>("sweep_tx") == Some(serialize(parent).as_slice()),
+			"observed fee child allocation changed");
+		let count = usize::try_from(self.query_one("SELECT COUNT(*) FROM expiry_allocation_payout WHERE allocation_id=$1", &[&id]).await?.get::<_, i64>(0))?;
+		let accounting = crate::watchman::settlement::payout_fee_accounting_with_contribution(
+			parent,count,observed.fee,observed.operator_contribution.to_signed()?,
+		)?;
+		self.insert_expiry_fee_child(id,&observed.child,observed.fee,accounting.operator_remainder,
+			"observed_fee_only",observed.operator_contribution,Some(serialize(&observed.prevouts))).await
+	}
+
+	async fn insert_expiry_fee_child(
+		&self, id: i64, child: &Transaction, fee: Amount, remainder: Amount,
+		kind: &str, contribution: Amount, prevouts: Option<Vec<u8>>,
+	) -> anyhow::Result<()> {
+		let raw = serialize(child);
+		let txid = child.compute_txid().to_string();
+		let fee = i64::try_from(fee.to_sat())?;
+		let remainder = i64::try_from(remainder.to_sat())?;
+		let contribution = i64::try_from(contribution.to_sat())?;
+		self.execute("INSERT INTO expiry_fee_child(allocation_id,txid,raw_tx,fee_sat,operator_remainder_sat,funding_kind,operator_net_contribution_sat,observed_prevouts) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(txid) DO NOTHING",
+			&[&id,&txid,&raw,&fee,&remainder,&kind,&contribution,&prevouts]).await?;
+		let stored = self.query_one("SELECT allocation_id,raw_tx,fee_sat,operator_remainder_sat,funding_kind,operator_net_contribution_sat,observed_prevouts FROM expiry_fee_child WHERE txid=$1", &[&txid]).await?;
+		ensure!(stored.get::<_, i64>("allocation_id")==id && stored.get::<_, &[u8]>("raw_tx")==raw.as_slice()
+			&& stored.get::<_, i64>("fee_sat")==fee && stored.get::<_, i64>("operator_remainder_sat")==remainder
+			&& stored.get::<_, &str>("funding_kind")==kind && stored.get::<_, i64>("operator_net_contribution_sat")==contribution
+			&& stored.get::<_, Option<&[u8]>>("observed_prevouts")==prevouts.as_deref(),
+			"existing fee-child history differs from immutable observation");
 		Ok(())
 	}
 }

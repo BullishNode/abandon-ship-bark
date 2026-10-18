@@ -355,3 +355,108 @@ async fn expiry_payout_replaces_orphan_funding_child_without_changing_parent() {
 	assert_eq!(confirmed[0].get::<_, String>("txid"), child.compute_txid().to_string());
 	assert_eq!(confirmed[0].get::<_, i64>("fee_sat"), i64::try_from(measured_fee.to_sat()).unwrap());
 }
+
+/// A separate owned controller sponsors the ordinary immutable package. The
+/// watchman has no funding input: network fee must not become its cash expense.
+async fn independently_sponsored_payout(confirm_before_restart: bool) {
+	let name = if confirm_before_restart { "server/expiry_observed_sponsor_restart" }
+		else { "server/expiry_observed_sponsor_mempool" };
+	let ctx = TestContext::new(name).await;
+	let srv = Box::pin(ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
+		.cfg(|cfg|cfg.vtxo_lifetime=BlockDelta::new(24)).watchmand().create()).await;
+	let wallet = Box::pin(ctx.bark("absent_owner",&srv).funded(sat(200_000)).create()).await;
+	let ids = wallet.board_and_confirm_and_register(&ctx,sat(100_000)).await;
+	let client = wallet.client().await;
+	let coin = client.get_full_vtxo(ids[0]).await.unwrap();
+	let destination = client.fallback_destination().await.unwrap();
+	drop(client);
+	let height = ctx.bitcoind().get_block_count().await as u32;
+	ctx.generate_blocks(coin.expiry_height().to_u32()+1-height).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let (allocation,parent) = tokio::time::timeout(Duration::from_secs(30),async {
+		loop {
+			let row = db.read(async |t|Ok(t.query_opt("SELECT a.id,a.sweep_tx,a.broadcast_at IS NULL AS unpublished \
+				FROM expiry_allocation a JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+				JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				WHERE e.vtxo_id=$1 AND a.sweep_tx IS NOT NULL",&[&ids[0].to_string()]).await?)).await.unwrap();
+			if let Some(row)=row {
+				assert!(row.get::<_,bool>("unpublished"));
+				break (row.get::<_,i64>("id"),deserialize::<Transaction>(row.get("sweep_tx")).unwrap());
+			}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("unfunded ordinary parent was not durably prepared");
+	let payouts=parent.output.iter().filter(|out|out.script_pubkey==destination.spk).collect::<Vec<_>>();
+	assert_eq!(payouts.len(),1);
+	assert_eq!(payouts[0].value,coin.amount()-sat(1_000));
+	srv.watchmand().stop().await.unwrap();
+	// The existing independent-controller helper pays exactly 2,000 sat. Make
+	// this an explicitly adequate ordinary package, not a low-fee RBF test.
+	let target=bitcoin::FeeRate::from_sat_per_vb(1).unwrap();
+	{
+		let mut config=srv.watchmand().config_mut();
+		config.fee_estimator.fallback_fee_rate_fast=target;
+		config.fee_estimator.fallback_fee_rate_regular=target;
+		config.fee_estimator.fallback_fee_rate_slow=target;
+	}
+	let child_id=ctx.broadcast_cpfp(&parent).await;
+	let rpc=ctx.bitcoind().sync_client();
+	let child=ctx.bitcoind().await_transaction(child_id).await;
+	assert!(rpc.get_mempool_entry(&child_id).is_ok());
+	let fee=child.input.iter().map(|input|rpc.get_raw_transaction(&input.previous_output.txid,None).unwrap()
+		.output[input.previous_output.vout as usize].value.to_sat()).sum::<u64>()
+		-child.output.iter().map(|out|out.value.to_sat()).sum::<u64>();
+	assert_eq!(fee,2_000);
+	assert!(sat(fee)>=target*(parent.weight()+child.weight()),"independent child must cover the declared package target");
+	let mining_address=ctx.bitcoind().get_new_address();
+	if confirm_before_restart { rpc.generate_to_address(6,&mining_address).unwrap(); }
+	srv.watchmand().start().await.unwrap();
+	if !confirm_before_restart {
+		tokio::time::timeout(Duration::from_secs(30),async {
+			loop {
+				let found=db.read(async |t|Ok(t.query_opt("SELECT f.funding_kind FROM expiry_fee_child f \
+					JOIN expiry_allocation a ON a.id=f.allocation_id \
+					WHERE f.allocation_id=$1 AND f.txid=$2 AND a.broadcast_at IS NOT NULL",
+					&[&allocation,&child_id.to_string()]).await?.is_some())).await.unwrap();
+				if found { break; }
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+		}).await.expect("actual mempool fee-only sponsor was not recognized without watchman funding");
+		rpc.generate_to_address(6,&mining_address).unwrap();
+	}
+	let parent_info:serde_json::Value=rpc.call("getrawtransaction",&[serde_json::json!(parent.compute_txid()),true.into()]).unwrap();
+	let child_info:serde_json::Value=rpc.call("getrawtransaction",&[serde_json::json!(child_id),true.into()]).unwrap();
+	assert!(parent_info["confirmations"].as_u64().unwrap()>=6);
+	assert!(child_info["confirmations"].as_u64().unwrap()>=6);
+	assert_eq!(parent_info["blockhash"],child_info["blockhash"]);
+	let hash:BlockHash=parent_info["blockhash"].as_str().unwrap().parse().unwrap();
+	let tip=server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
+	wait_for_confirmation(&db,allocation,tip,hash).await;
+	let rows=db.read(async |t|Ok(t.query("SELECT raw_tx,funding_kind,fee_sat,operator_remainder_sat, \
+		operator_net_contribution_sat,observed_prevouts,confirmed_hash \
+		FROM expiry_fee_child WHERE allocation_id=$1",&[&allocation]).await?)).await.unwrap();
+	assert_eq!(rows.len(),1,"independent sponsorship must not invent another operator expense");
+	let row=&rows[0];
+	assert_eq!(deserialize::<Transaction>(row.get("raw_tx")).unwrap(),child);
+	assert_eq!(row.get::<_,&str>("funding_kind"),"observed_fee_only");
+	assert_eq!(row.get::<_,i64>("fee_sat"),i64::try_from(fee).unwrap());
+	assert_eq!(row.get::<_,i64>("operator_remainder_sat"),1_000);
+	assert_eq!(row.get::<_,i64>("operator_net_contribution_sat"),0);
+	assert_eq!(row.get::<_,Option<&str>>("confirmed_hash"),Some(hash.to_string().as_str()));
+	let prevouts:Vec<bitcoin::TxOut>=deserialize(row.get::<_,&[u8]>("observed_prevouts")).unwrap();
+	assert_eq!(prevouts.len(),child.input.len());
+	for (input,previous) in child.input.iter().zip(prevouts) {
+		assert_eq!(previous,rpc.get_raw_transaction(&input.previous_output.txid,None).unwrap().output[input.previous_output.vout as usize]);
+	}
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await,parent);
+}
+
+#[tokio::test]
+async fn expiry_payout_recognizes_independent_fee_only_sponsor() {
+	independently_sponsored_payout(false).await;
+}
+
+#[tokio::test]
+async fn expiry_payout_recovers_confirmed_fee_only_sponsor_after_restart() {
+	independently_sponsored_payout(true).await;
+}

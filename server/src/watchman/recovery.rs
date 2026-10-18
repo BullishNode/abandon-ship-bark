@@ -5,6 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
 use bitcoin::{Transaction, Txid};
+use anyhow::Context;
+use bitcoin_ext::TransactionExt;
+use tracing::warn;
 use bitcoin::taproot::LeafVersion;
 use bitcoin_ext::{BlockRef, TxStatus};
 use bitcoind_async_client::traits::Reader;
@@ -64,6 +67,49 @@ impl Watchman {
 				}
 			}
 		}
+		// The ordinary package's child may confirm before any sweep observes
+		// it in the mempool. Recover its actual body from the parent's canonical
+		// block, including after restart; no anchor-discovery hint marks it paid.
+		let parents = self.db.read(async |t| Ok(t.query("SELECT a.id,a.sweep_tx, \
+			(SELECT COUNT(*) FROM expiry_allocation_payout p WHERE p.allocation_id=a.id) AS customer_outputs, \
+			ARRAY(SELECT f.txid FROM expiry_fee_child f WHERE f.allocation_id=a.id) AS known_children \
+			FROM expiry_allocation a WHERE a.sweep_tx IS NOT NULL ORDER BY a.id", &[]).await?)).await?;
+		let mut observations = Vec::new();
+		let mut current_block = None;
+		for row in parents {
+			let id: i64 = row.get("id");
+			let parent: Transaction = bitcoin::consensus::deserialize(row.get("sweep_tx"))?;
+			let Some(point) = confirmed.get(&parent.compute_txid()).copied() else { continue; };
+			let known = row.get::<_,Vec<String>>("known_children").into_iter()
+				.map(|id|id.parse::<Txid>()).collect::<Result<Vec<_>,_>>()?;
+			if known.iter().any(|id|confirmed.contains_key(id)) { continue; }
+			let (anchor,_) = parent.fee_anchor().context("confirmed expiry parent has no anchor")?;
+			if current_block.as_ref().is_none_or(|block:&bitcoin::Block|block.block_hash()!=point.hash) {
+				current_block=Some(self.bitcoind.get_block(&point.hash).await?);
+			}
+			let block=current_block.as_ref().context("missing canonical parent block")?;
+			ensure!(block.block_hash()==point.hash && block.txdata.iter().any(|tx|tx==&parent),
+				"confirmed expiry parent body differs from actual canonical block");
+			for child in block.txdata.iter().filter(|tx|tx.input.iter().any(|input|input.previous_output==anchor)) {
+				if self.db.read(async |t| Ok(t.query_opt("SELECT id FROM expiry_fee_child WHERE txid=$1",
+					&[&child.compute_txid().to_string()]).await?.is_some())).await? { continue; }
+				let observed = async {
+					let prevouts = self.observed_fee_prevouts(view,&parent,child).await?;
+					let wallet = self.watchman_wallet.lock().await;
+					super::fee_sponsor::recognize_fee_only(&parent,usize::try_from(row.get::<_,i64>("customer_outputs"))?,child,&prevouts,
+						|script|script==self.drain_spk.as_script() || wallet.is_mine(script.to_owned()))
+				}.await;
+				match observed {
+					Ok(observed) => {
+						confirmed.insert(child.compute_txid(),point);
+						observations.push((id,parent.clone(),observed));
+					},
+					Err(error) => warn!(allocation_id=id,child=%child.compute_txid(),error=%format_args!("{error:#}"),
+						"Canonical payout sponsor accounting remains unclassified"),
+				}
+			}
+		}
+
 		let mut paid_claims = Vec::new();
 		for (id,vtxo,txid) in claims {
 			let Some(point) = confirmed.get(&txid) else { continue; };
@@ -77,6 +123,9 @@ impl Watchman {
 			let current = t.query("SELECT id FROM expiry_allocation ORDER BY id FOR UPDATE", &[]).await?
 				.into_iter().map(|r| r.get::<_, i64>("id")).collect::<Vec<_>>();
 			ensure!(current == ids, "expiry allocations changed during chain reconstruction");
+			for (id,parent,observed) in &observations {
+				t.store_observed_expiry_fee_child(view,*id,parent,observed).await?;
+			}
 			t.execute("UPDATE expiry_allocation SET confirmed_height=NULL,confirmed_hash=NULL,status='pending'", &[]).await?;
 			t.execute("UPDATE expiry_fee_child SET confirmed_height=NULL,confirmed_hash=NULL", &[]).await?;
 			t.execute("UPDATE expiry_allocation_coin SET paying_txid=NULL,paying_height=NULL,paying_hash=NULL", &[]).await?;

@@ -1,6 +1,7 @@
 //! Bounded funded attribution with the real scanner and readiness tasks alive.
 //! This is a qualification fixture, not production throughput or a static lookup benchmark.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -282,6 +283,102 @@ async fn funded_background(count: u32) {
 	assert_eq!(restored.fallback_destination().await.unwrap(),destination);
 	restored.sync_onchain().await.unwrap();
 	let app=restored.onchain().unwrap();
+	// A normal late board may spend the first payout as well as app change.
+	// Follow the exact four-transaction owner graph instead of requiring an
+	// already spent historical payout to remain a fresh drain input.
+	let old_board=ctx.bitcoind().await_transaction(old.chain_anchor().txid).await;
+	let late_board=ctx.bitcoind().await_transaction(late.chain_anchor().txid).await;
+	let first_parent=ctx.bitcoind().await_transaction(first.txid).await;
+	let second_parent=ctx.bitcoind().await_transaction(second.txid).await;
+	let graph=[old_board.clone(),first_parent.clone(),late_board.clone(),second_parent.clone()]
+		.into_iter().map(|tx|(tx.compute_txid(),tx)).collect::<BTreeMap<_,_>>();
+	assert_eq!(graph.len(),4,"both genuine boards and immutable payouts must remain distinct");
+	let mut spent=BTreeSet::new();
+	let mut original_inputs=BTreeSet::new();
+	let mut graph_fees=sat(0);
+	let mut board_fees=sat(0);
+	for tx in graph.values() {
+		let mut input_value=sat(0);
+		for input in &tx.input {
+			let point=input.previous_output;
+			assert!(spent.insert(point),"the bounded owner graph cannot spend a principal twice");
+			let previous=ctx.bitcoind().await_transaction(point.txid).await;
+			input_value+=previous.output[point.vout as usize].value;
+			if !graph.contains_key(&point.txid) { original_inputs.insert(point); }
+		}
+		let output_value=tx.output.iter().map(|out|out.value).sum::<bitcoin::Amount>();
+		let fee=input_value.checked_sub(output_value).expect("actual owner transaction must conserve value");
+		if tx.compute_txid()==first.txid || tx.compute_txid()==second.txid {
+			assert_eq!(fee,sat(0),"an immutable fallback parent must retain zero fee");
+		} else { board_fees+=fee; }
+		graph_fees+=fee;
+	}
+	assert_eq!(original_inputs,old_board.input.iter().map(|input|input.previous_output).collect(),
+		"the late board may only reuse the original funding cut or its actual first payout");
+	let mut original_value=sat(0);
+	for point in &original_inputs {
+		let previous=ctx.bitcoind().await_transaction(point.txid).await;
+		original_value+=previous.output[point.vout as usize].value;
+	}
+	assert_eq!(original_value,sat(500_000),"no additional owner funding is introduced");
+	assert_eq!(graph_fees,board_fees);
+	let mut operator_points=BTreeSet::new();
+	for (point,parent) in [(first,&first_parent),(second,&second_parent)] {
+		assert_eq!(parent.output[point.vout as usize].script_pubkey,destination.spk);
+		assert_eq!(parent.output[point.vout as usize].value,sat(99_000));
+		let mut suffix=sat(0);
+		for (vout,output) in parent.output.iter().enumerate() {
+			let output_point=OutPoint::new(parent.compute_txid(),vout as u32);
+			if output_point==point { continue; }
+			if output.script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT {
+				assert_eq!(output.value,sat(0));
+			} else {
+				assert!(!app.read().await.is_mine(&output.script_pubkey).await.unwrap());
+				suffix+=output.value;
+				operator_points.insert(output_point);
+			}
+		}
+		assert_eq!(suffix,sat(1_000),"one exact operator fee per actual payout output");
+	}
+	let core=ctx.bitcoind().sync_client();
+	let mut customer_cut=BTreeMap::new();
+	for tx in graph.values() {
+		for (vout,output) in tx.output.iter().enumerate() {
+			let point=OutPoint::new(tx.compute_txid(),vout as u32);
+			if spent.contains(&point) || operator_points.contains(&point) { continue; }
+			if output.script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT {
+				assert_eq!(output.value,sat(0));
+				continue;
+			}
+			assert!(app.read().await.is_mine(&output.script_pubkey).await.unwrap(),
+				"every remaining customer output must belong to the freshly restored app seed");
+			let actual=core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap()
+				.expect("a current customer terminal cannot disappear outside the declared owner graph");
+			assert!(actual.confirmations>=6);
+			assert_eq!(actual.value,output.value);
+			assert_eq!(actual.script_pub_key.script().unwrap(),output.script_pubkey);
+			assert!(customer_cut.insert(point,output.clone()).is_none());
+		}
+	}
+	let reboarded_first=late_board.input.iter().any(|input|input.previous_output==first);
+	assert_eq!(spent.contains(&first),reboarded_first,
+		"only the actual late board may consume the first payout before seed recovery");
+	assert_eq!(customer_cut.contains_key(&first),!reboarded_first);
+	assert!(customer_cut.contains_key(&second));
+	let current_customer=customer_cut.values().map(|out|out.value).sum::<bitcoin::Amount>();
+	assert_eq!(original_value,current_customer+sat(2_000)+board_fees,
+		"all 500k owner principal must remain in current customer outputs, two fees, or actual board miner fees");
+	assert_eq!(app.read().await.balance().await,current_customer,
+		"seed-only BDK balance must equal the complete current owner cut");
+	let cut_receipt=customer_cut.iter().map(|(point,output)|json!({
+		"outpoint":point,"value_sat":output.value.to_sat(),"script":output.script_pubkey,
+	})).collect::<Vec<_>>();
+	std::fs::write(ctx.datadir.join("live-funded-owner-recovery-cut.json"),serde_json::to_vec_pretty(&json!({
+		"original_funding_sat":original_value.to_sat(),"customer_cut":cut_receipt,
+		"current_customer_sat":current_customer.to_sat(),"operator_fees_sat":2_000,
+		"actual_board_miner_fees_sat":board_fees.to_sat(),"first_payout_reboarded":reboarded_first,
+		"old_board":old_board,"late_board":late_board,"first_parent":first_parent,"second_parent":second_parent,
+	})).unwrap()).unwrap();
 	let recipient=ctx.bitcoind().get_new_address();
 	let recovery={
 		let mut app=app.write().await;
@@ -289,15 +386,16 @@ async fn funded_background(count: u32) {
 		let signed=app.sign_psbt(proposal).await.unwrap();
 		app.finish_psbt(signed).await.unwrap().extract_tx().unwrap()
 	};
-	for point in [first,second] {
-		assert_eq!(recovery.input.iter().filter(|input|input.previous_output==point).count(),1,
-			"fresh seed-only app must sign each actual fallback input");
-	}
+	let recovered_points=recovery.input.iter().map(|input|input.previous_output).collect::<BTreeSet<_>>();
+	assert_eq!(recovered_points.len(),recovery.input.len(),"seed drain cannot repeat an input");
+	assert_eq!(recovered_points,customer_cut.keys().copied().collect(),
+		"fresh seed-only app must sign precisely every actual current customer input");
 	let mut recovery_inputs=sat(0);
 	for input in &recovery.input {
 		let previous=ctx.bitcoind().await_transaction(input.previous_output.txid).await;
 		recovery_inputs+=previous.output[input.previous_output.vout as usize].value;
 	}
+	assert_eq!(recovery_inputs,current_customer);
 	assert_eq!(recovery.output.len(),1);
 	assert_eq!(recovery.output[0].script_pubkey,recipient.script_pubkey());
 	let recovery_fee=recovery_inputs-recovery.output[0].value;
@@ -308,13 +406,18 @@ async fn funded_background(count: u32) {
 	assert!(output.confirmations>=6);
 	assert_eq!(output.value,recovery_inputs-recovery_fee);
 	assert_eq!(output.script_pub_key.script().unwrap(),recipient.script_pubkey());
-	for point in [first,second] { assert!(ctx.bitcoind().sync_client().get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_none()); }
+	for point in customer_cut.keys() {
+		assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_none());
+	}
 	std::fs::write(ctx.datadir.join("live-funded-attribution-proof.json"),serde_json::to_vec_pretty(&json!({
 		"status":"PASS","initial_authenticated_registrations":count,"extra_records_max":16,
 		"funded_accounts":2,"actual_board_roots":3,"independent_control_payout":control_point,"lookup_budget_seconds_per_leg":120,
 		"chunk_size":32,"workers":2,"registration_pressure_max_requests_per_leg":2048,"no_manual_scanner_or_queue_calls":true,
 		"both_daemons_live_throughout":true,"mailbox_outage":"recovery post only",
 		"phases":phases,"seed_only_recovery_txid":recovery.compute_txid(),
+		"first_payout_reboarded":reboarded_first,"recovered_customer_cut":cut_receipt,
+		"original_funding_sat":original_value.to_sat(),"recovered_principal_sat":current_customer.to_sat(),
+		"actual_board_miner_fees_sat":board_fees.to_sat(),"operator_fees_sat":2_000,
 		"recovery_fee_sat":recovery_fee.to_sat(),"recovery_6conf":true,
 		"limits":["bounded two-leg cohort, not sustained open-ended arrivals or fairness proof",
 			"unfunded records are authenticated registrations, not funded-user throughput",

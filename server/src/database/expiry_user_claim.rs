@@ -11,7 +11,7 @@ use bitcoin_ext::BlockRef;
 
 use super::Tx;
 use super::expiry_chain::ExpiryViewToken;
-use super::expiry_internal_refund::InternalOriginalClaimScope;
+use super::expiry_internal_refund::{ConflictedInternalUserClaimScope, InternalOriginalClaimScope};
 
 /// Replay is deliberately bounded to standard-sized existing transactions.
 /// Unsupported bodies are still retained; they do not authorize dropping a
@@ -286,6 +286,60 @@ impl Tx<'_> {
 		Ok(Some(proof))
 	}
 
+	/// Retained authorization only, not current payment evidence. Every input
+	/// must be a distinct original of this exact funded attempt, with its own
+	/// linked DEFAULT timeout witness and identical immutable journal bytes.
+	pub(crate) async fn retained_internal_original_batch(
+		&self, claim:&Transaction, scope:&InternalOriginalClaimScope,
+	) -> anyhow::Result<bool> {
+		if !complete_original_batch_inputs(scope.originals(),claim) {return Ok(false);}
+		let raw=serialize(claim);
+		let txid=claim.compute_txid().to_string();
+		let rows=self.query("SELECT v.vtxo_id,t.raw_tx FROM expiry_user_claim_source s \
+			JOIN expiry_user_claim_tx t ON t.txid=s.claim_txid JOIN vtxo v ON v.vtxo_id=s.source_vtxo_id \
+			WHERE s.claim_txid=$1 ORDER BY v.vtxo_id",&[&txid]).await?;
+		let expected=claim.input.iter().map(|input|VtxoId::from(input.previous_output)).collect::<std::collections::BTreeSet<_>>();
+		let linked=rows.iter().map(|row|row.get::<_,&str>("vtxo_id").parse()).collect::<Result<std::collections::BTreeSet<VtxoId>,_>>()?;
+		if rows.len()!=expected.len() || linked!=expected || rows.iter().any(|row|row.get::<_,&[u8]>("raw_tx")!=raw) {return Ok(false);}
+		for id in expected {
+			let source=super::htlc_vtxo::get_htlc_vtxo(self,id).await?.context("retained batch source disappeared")?;
+			scope.check_source(&source)?;
+			if source.htlc.offchain_resolution.is_some() || source.vtxo.oor_spent_txid.is_some()
+				|| source.vtxo.spent_in_round.is_some() || source.vtxo.offboarded_in.is_some()
+				|| !user_timeout_input(&ServerVtxo::from(source.vtxo.vtxo).to_bare(),claim) {return Ok(false);}
+		}
+		Ok(true)
+	}
+
+	/// This exception belongs only to the already-reserved partial internal
+	/// component. Generic omission and strict all-terminal return stay len1.
+	/// All input scopes must name the same complete immutable reservation union.
+	async fn retained_internal_partial_batch_scope(
+		&self, source:VtxoId, claim:&Transaction, original:&InternalOriginalClaimScope,
+	) -> anyhow::Result<Option<ConflictedInternalUserClaimScope>> {
+		if !claim.input.iter().any(|input|input.previous_output==source.to_point())
+			|| !self.retained_internal_original_batch(claim,original).await? {return Ok(None);}
+		let Some(scope)=self.partial_internal_user_claim_scope(source).await? else {return Ok(None);};
+		if !original.originals().iter().all(|id|scope.incoming.contains(id)) {return Ok(None);}
+		for input in &claim.input {
+			let Some(other)=self.partial_internal_user_claim_scope(VtxoId::from(input.previous_output)).await? else {return Ok(None);};
+			if !scope.same_component(&other) {return Ok(None);}
+		}
+		Ok(Some(scope))
+	}
+
+	pub(crate) async fn replayable_internal_reserved_batch_claim(
+		&self,source:VtxoId,view:ExpiryViewToken,original:&InternalOriginalClaimScope,rebuilding:bool,
+	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		let Some((_,proof,raw))=self.canonical_retained_terminal_claim(source,view,!rebuilding).await? else {return Ok(None);};
+		if self.retained_internal_partial_batch_scope(source,&proof.claim,original).await?.is_none() {return Ok(None);}
+		for input in &proof.claim.input {
+			let Some((_,current,current_raw))=self.canonical_retained_terminal_claim(VtxoId::from(input.previous_output),view,!rebuilding).await? else {return Ok(None);};
+			if current_raw!=raw || serialize(&current.claim)!=raw || current.confirmed!=proof.confirmed {return Ok(None);}
+		}
+		Ok(Some(proof))
+	}
+
 	async fn user_claim_has_obligation_fences(&self, ids: &[VtxoId]) -> anyhow::Result<bool> {
 		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
 		Ok(self.query_one("SELECT EXISTS(SELECT 1 FROM expiry_decided_coin WHERE vtxo_id=ANY($1)) \
@@ -308,13 +362,27 @@ impl Tx<'_> {
 			let linked = self.query("SELECT v.vtxo FROM expiry_user_claim_source s \
 				JOIN vtxo v ON v.vtxo_id=s.source_vtxo_id WHERE s.claim_txid=$1",
 				&[&claim.compute_txid().to_string()]).await?;
-			ensure!(linked.len() == 1, "reserved user claim replay requires one exact original source");
-			let source = ServerVtxo::deserialize(linked[0].get("vtxo"))?;
-			ensure!(retained_terminal_omission_shape(&source, claim, raw),
-				"reserved user claim replay requires the retained single-input DEFAULT authorization");
-			let scope = self.partial_internal_user_claim_scope(source.id()).await?
-				.context("retained user claim crosses an unrelated or live financial reservation")?;
-			self.lock_conflicted_internal_user_claim_scope(&scope).await?;
+			if claim.input.len()==1 {
+				ensure!(linked.len() == 1, "reserved user claim replay requires one exact original source");
+				let source = ServerVtxo::deserialize(linked[0].get("vtxo"))?;
+				ensure!(retained_terminal_omission_shape(&source, claim, raw),
+					"reserved user claim replay requires the retained single-input DEFAULT authorization");
+				let scope = self.partial_internal_user_claim_scope(source.id()).await?
+					.context("retained user claim crosses an unrelated or live financial reservation")?;
+				self.lock_conflicted_internal_user_claim_scope(&scope).await?;
+			} else {
+				let source=ids[0];
+				let original=self.internal_original_claim_scope_for_source(source).await?
+					.context("reserved batch has no unique original funding attempt")?;
+				let scope=self.retained_internal_partial_batch_scope(source,claim,&original).await?
+					.context("reserved batch crosses an unrelated or live financial reservation")?;
+				self.lock_conflicted_internal_user_claim_scope(&scope).await?;
+				// The whole component union is now held, before WAL/subscription
+				// barriers. Recheck every exact input scope, not A-only authority.
+				let actual=self.retained_internal_partial_batch_scope(source,claim,&original).await?
+					.context("reserved batch authorization changed under its locks")?;
+				ensure!(actual==scope,"reserved batch component changed under its locks");
+			}
 		} else {
 			// If a fence is inserted after the initial read, the ordinary guard
 			// rejects this pass. Retry may then take the complete scoped union.

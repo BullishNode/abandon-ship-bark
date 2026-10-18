@@ -484,6 +484,35 @@ impl Tx<'_> {
 		Ok(Some(InternalOriginalClaimScope { attempt: attempt_id, subscription: subscription_id, hash, originals: incoming }))
 	}
 
+	pub(crate) async fn internal_original_claim_scope_for_source(
+		&self, source:VtxoId,
+	) -> anyhow::Result<Option<InternalOriginalClaimScope>> {
+		let rows=self.query("SELECT f.id FROM expiry_lightning_internal_funding f \
+			JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=f.id \
+			WHERE l.vtxo_id=$1 ORDER BY f.id",&[&source.to_string()]).await?;
+		if rows.len()!=1 {return Ok(None);}
+		self.internal_original_claim_scope(rows[0].get("id")).await
+	}
+
+	pub(crate) async fn rebuilding_internal_reserved_batch_claim(
+		&self,source:VtxoId,customer:VtxoId,view:ExpiryViewToken,evidence:&serde_json::Value,
+	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		let attempt=evidence.get("attempt_id").and_then(serde_json::Value::as_i64)
+			.context("reserved batch premise lacks its original attempt")?;
+		let Some(scope)=self.internal_original_claim_scope(attempt).await? else {return Ok(None);};
+		let grants=self.query("SELECT vtxo_id FROM vtxo WHERE lightning_htlc_subscription_id=$1 ORDER BY vtxo_id LIMIT $2",
+			&[&scope.subscription,&(MAX_JOINT_GRANTS+1)]).await?.into_iter()
+			.map(|row|row.get::<_,&str>("vtxo_id").parse()).collect::<Result<Vec<VtxoId>,_>>()?;
+		ensure!(grants.len() as i64<=MAX_JOINT_GRANTS,"reserved batch premise exceeds grant budget");
+		scope.check_evidence(evidence,&grants)?;
+		let Some(proof)=self.replayable_internal_reserved_batch_claim(source,view,&scope,true).await? else {return Ok(None);};
+		ensure!(scope.originals.contains(&customer)
+			&& proof.claim.input.iter().all(|input|VtxoId::from(input.previous_output)!=customer),
+			"reserved batch premise changes its distinct unpaid customer");
+		check_reserved_batch_premises(evidence,&proof.claim)?;
+		Ok(Some(proof))
+	}
+
 	pub(crate) async fn rebuilding_internal_original_batch_claim(
 		&self, source: VtxoId, customer: VtxoId, view: ExpiryViewToken, evidence: &serde_json::Value,
 	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
@@ -535,7 +564,10 @@ impl Tx<'_> {
 			check_incoming_identity(&source, hash)?;
 			let physical_fence=self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=$1 LIMIT 1",&[&id.to_string()]).await?.is_some();
 			let reserved=source.vtxo.decided_for_fallback || physical_fence;
-			let terminal=if reserved {self.replayable_internal_partial_terminal_claim(*id,view).await?}
+			let terminal=if reserved {
+				if let Some(single)=self.replayable_internal_partial_terminal_claim(*id,view).await? {Some(single)}
+				else {self.replayable_internal_reserved_batch_claim(*id,view,&original_scope,false).await?}
+			}
 				else if let Some(single)=self.replayable_terminal_claim(*id,view).await? {Some(single)}
 				else {self.replayable_internal_original_batch_claim(*id,view,&original_scope,false).await?};
 			if let Some(claim) = terminal {
@@ -666,7 +698,33 @@ fn check_terminal_return_parent(inputs:&[VtxoId],parent:&Transaction) -> anyhow:
 	Ok(())
 }
 
+/// Rebuild must retain one exact premise for EVERY raw batch input, all
+/// explicitly inside this same reserved mode. Metadata cannot silently drop
+/// an original or upgrade a fresh/unrelated source into replay authority.
+fn check_reserved_batch_premises(evidence:&serde_json::Value,claim:&Transaction) -> anyhow::Result<()> {
+	let premises=evidence.get("terminal_sources").and_then(serde_json::Value::as_array)
+		.context("reserved batch lacks complete terminal premises")?;
+	let txid=claim.compute_txid().to_string();
+	let mut linked=BTreeSet::new();
+	for premise in premises.iter().filter(|value|value.get("claim_txid").and_then(serde_json::Value::as_str)==Some(txid.as_str())) {
+		ensure!(premise.get("original_batch").and_then(serde_json::Value::as_bool)==Some(true)
+			&& premise.get("prior_joint").and_then(serde_json::Value::as_bool)==Some(true),
+			"reserved batch mixes incompatible terminal modes");
+		let id=premise.get("source").and_then(serde_json::Value::as_str).context("reserved batch omits an original")?.parse::<VtxoId>()?;
+		ensure!(linked.insert(id),"reserved batch repeats an original premise");
+	}
+	ensure!(claim.input.len()>1 && linked==claim.input.iter().map(|input|VtxoId::from(input.previous_output)).collect(),
+		"reserved batch premises differ from its complete raw input set");
+	Ok(())
+}
+
 impl ConflictedInternalUserClaimScope {
+	pub(crate) fn same_component(&self,other:&Self) -> bool {
+		self.incoming==other.incoming && self.grants==other.grants && self.physical==other.physical
+			&& self.allow_dependent==other.allow_dependent && self.allocations==other.allocations
+			&& self.subscriptions==other.subscriptions && self.identity==other.identity
+	}
+
 	fn lock_ids(&self) -> Vec<String> {
 		self.incoming.iter().chain(&self.grants).chain(&self.physical)
 			.map(ToString::to_string).collect::<BTreeSet<_>>().into_iter().collect()
@@ -832,9 +890,15 @@ impl Tx<'_> {
 						let claim:Transaction=bitcoin::consensus::deserialize(journal.get("raw_tx"))?;
 						let original=htlc_vtxo::get_htlc_vtxo(self,source).await?.context("dependent original disappeared")?;
 						let original=ServerVtxo::from(original.vtxo.vtxo).to_bare();
-						scope_eligible!(claim.compute_txid()==txid && claim.input.len()==1
-							&& super::expiry_user_claim::user_timeout_input(&original,&claim),
+						let authorization=if claim.input.len()==1 {
+							super::expiry_user_claim::user_timeout_input(&original,&claim)
+						} else {
+							let Some(original_scope)=self.internal_original_claim_scope_for_source(source).await? else {return Ok(None);};
+							self.retained_internal_original_batch(&claim,&original_scope).await?
+						};
+						scope_eligible!(claim.compute_txid()==txid && authorization,
 							"dependent parent lacks the exact original DEFAULT timeout authorization");
+						if claim.input.len()>1 {check_reserved_batch_premises(&evidence,&claim)?;}
 						dependent=true;
 					}
 				}
@@ -1060,6 +1124,43 @@ mod tests {
 		assert!(scope.check_evidence(&repeated,&grants).is_err());
 		let mut grant=evidence.clone(); grant["required_grants"]=serde_json::json!([]);
 		assert!(scope.check_evidence(&grant,&grants).is_err());
+	}
+
+	#[test]
+	fn reserved_batch_premises_require_every_raw_input_and_both_private_mode_flags() {
+		let a=VtxoId::from(OutPoint::new(Txid::from_byte_array([81;32]),0));
+		let b=VtxoId::from(OutPoint::new(Txid::from_byte_array([82;32]),0));
+		let foreign=VtxoId::from(OutPoint::new(Txid::from_byte_array([83;32]),0));
+		let claim=parent(&[a.to_point(),b.to_point()]);
+		let entries=[a,b].iter().map(|id|serde_json::json!({"source":id.to_string(),
+			"claim_txid":claim.compute_txid().to_string(),"prior_joint":true,"original_batch":true})).collect::<Vec<_>>();
+		let evidence=serde_json::json!({"terminal_sources":entries});
+		assert!(check_reserved_batch_premises(&evidence,&claim).is_ok());
+		let mut missing=evidence.clone();missing["terminal_sources"].as_array_mut().unwrap().pop();
+		assert!(check_reserved_batch_premises(&missing,&claim).is_err());
+		let mut duplicate=evidence.clone();duplicate["terminal_sources"][1]=duplicate["terminal_sources"][0].clone();
+		assert!(check_reserved_batch_premises(&duplicate,&claim).is_err());
+		let mut unrelated=evidence.clone();unrelated["terminal_sources"][1]["source"]=foreign.to_string().into();
+		assert!(check_reserved_batch_premises(&unrelated,&claim).is_err());
+		for flag in ["prior_joint","original_batch"] {
+			let mut changed=evidence.clone();changed["terminal_sources"][1][flag]=false.into();
+			assert!(check_reserved_batch_premises(&changed,&claim).is_err());
+		}
+	}
+
+	#[test]
+	fn reserved_batch_scopes_share_only_the_same_complete_reservation_component() {
+		let a=VtxoId::from(OutPoint::new(Txid::from_byte_array([84;32]),0));
+		let b=VtxoId::from(OutPoint::new(Txid::from_byte_array([85;32]),0));
+		let g=VtxoId::from(OutPoint::new(Txid::from_byte_array([86;32]),0));
+		let scope=ConflictedInternalUserClaimScope {source:a,incoming:vec![a,b],grants:vec![g],physical:vec![a,b,g],
+			allow_dependent:true,allocations:vec![1],subscriptions:vec![2],identity:vec![serde_json::json!({"attempt":3})]};
+		let mut other=scope.clone();other.source=b;
+		assert!(scope.same_component(&other),"the selected batch input is not a new component identity");
+		other.grants.clear();assert!(!scope.same_component(&other));
+		other=scope.clone();other.physical.pop();assert!(!scope.same_component(&other));
+		other=scope.clone();other.allocations.push(4);assert!(!scope.same_component(&other));
+		other=scope.clone();other.identity[0]["attempt"]=5.into();assert!(!scope.same_component(&other));
 	}
 
 	#[test]

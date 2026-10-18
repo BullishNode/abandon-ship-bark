@@ -162,8 +162,9 @@ impl Watchman {
 					let txid:bitcoin::Txid=premise["claim_txid"].as_str().context("missing terminal premise txid")?.parse()?;
 					let prior_joint=premise.get("prior_joint").and_then(serde_json::Value::as_bool)==Some(true);
 					let batch=premise.get("original_batch").and_then(serde_json::Value::as_bool)==Some(true);
-					let current=if batch {
-						ensure!(!prior_joint,"a fresh batch premise cannot widen prior-reserved replay");
+					let current=if batch && prior_joint {
+						t.rebuilding_internal_reserved_batch_claim(source,row.get::<_,&str>("customer_source").parse()?,view,&evidence).await?
+					} else if batch {
 						t.rebuilding_internal_original_batch_claim(source,row.get::<_,&str>("customer_source").parse()?,view,&evidence).await?
 					} else {t.rebuilding_internal_partial_terminal_claim(source,view,prior_joint).await?};
 					if current.is_none_or(|proof|proof.claim.compute_txid()!=txid) {unsupported.insert(allocation);}

@@ -76,9 +76,11 @@ async fn reservation_identity(db: &Db, allocation: i64) -> (BTreeSet<String>, BT
 	}).await.unwrap()
 }
 
-async fn reserved_batched_terminal() {
+async fn reserved_batched_terminal(reorg:bool) {
 	let cap=product("CAPTAIND_EXEC"); product("WATCHMAND_EXEC"); product("BARK_EXEC");
-	let ctx=TestContext::new("server/expiry_internal_reserved_batch_pays_remaining_source").await;
+	let ctx=TestContext::new(if reorg {
+		"server/expiry_internal_reserved_batch_replays_after_reorg"
+	} else {"server/expiry_internal_reserved_batch_pays_remaining_source"}).await;
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	let operator = ctx.bitcoind().get_new_address();
 	let drain = operator.clone();
@@ -404,6 +406,74 @@ async fn reserved_batched_terminal() {
 	assert_eq!(sat(300_000)+sat(280_000),sat(198_000)+sat(99_000)+sat(281_000)+sat(2_000));
 	let height=ctx.generate_blocks(6).await;
 	wait_batched_parent(&ctx,&srv,&db,height,allocation,&parent).await;
+	let height=if reorg {
+		let claim_info=chain.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap();
+		let old_block=claim_info.blockhash.unwrap();
+		let old_height=chain.get_block_count().unwrap();
+		let mining_address=ctx.bitcoind().get_new_address();
+		srv.watchmand().stop().await.unwrap(); srv.stop().await.unwrap();
+		chain.invalidate_block(&old_block).unwrap();
+		let fork=chain.get_block_count().unwrap();
+		assert!(fork<old_height);
+		ctx.bitcoind().stop().await.unwrap();
+		// Preserve this owned ephemeral cache before a genuine cold restart.
+		// Chain, wallet, signed authorizations and outcome history are retained.
+		let cache=ctx.bitcoind().datadir().join("regtest/mempool.dat");
+		let bytes=std::fs::read(&cache).unwrap();
+		let preserved=ctx.bitcoind().datadir().join("reserved-batched-terminal-before-replay.mempool.dat");
+		std::fs::rename(&cache,&preserved).unwrap();
+		let cache_hash=sha256::Hash::hash(&bytes);
+		assert_eq!(sha256::Hash::hash(&std::fs::read(&preserved).unwrap()),cache_hash);
+		std::fs::write(ctx.bitcoind().datadir().join("reserved-batched-terminal-before-replay.sha256"),cache_hash.to_string()).unwrap();
+		ctx.bitcoind().start().await.unwrap();
+		let core=ctx.bitcoind().sync_client();
+		assert!(core.get_mempool_entry(&claim.compute_txid()).is_err());
+		assert!(core.get_mempool_entry(&parent.compute_txid()).is_err());
+		for source in &sources[..2] {
+			let actual=core.get_tx_out(&source.point().txid,source.point().vout,Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations>0); assert_eq!(actual.value,sat(100_000));
+			assert!(assert_retained_claim(&db,source.id(),&claim).await);
+		}
+		for point in grants.iter().map(Vtxo::point).chain(std::iter::once(unpaid_prefix)) {
+			assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_some_and(|out|out.confirmations>0),
+				"B/G paths and fee sponsors predate A's block; the fork must not erase required ancestors");
+		}
+		for point in &prefixes[..2] {
+			assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_none(),
+				"pre-fork signed prefix conflicts must keep the old reservation genuinely conflicted");
+		}
+		for point in &sponsor_points {
+			let actual=core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations>=2); assert_eq!(actual.value,sat(150_000));
+			assert_eq!(actual.script_pub_key.script().unwrap(),fee_address.script_pubkey());
+		}
+		srv.start().await.unwrap(); srv.watchmand().start().await.unwrap();
+		tokio::time::timeout(Duration::from_secs(30),async {
+			while core.get_mempool_entry(&claim.compute_txid()).is_err() {tokio::time::sleep(Duration::from_millis(50)).await;}
+		}).await.expect("autonomous recovery did not replay the exact two-input DEFAULT authorization");
+		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,claim);
+		assert!(core.get_mempool_entry(&parent.compute_txid()).is_err(),
+			"a replayed but unconfirmed A batch is not a canonical B publication premise");
+		// All fee funding was confirmed before A's claim; no new sponsors or
+		// future-locktime funding retry is introduced on the replacement fork.
+		core.generate_to_address(old_height-fork+1,&mining_address).unwrap();
+		let current=core.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap();
+		assert_ne!(current.blockhash,Some(old_block));
+		assert!(current.confirmations.unwrap()>0);
+		tokio::time::timeout(Duration::from_secs(30),async {
+			loop {
+				if core.get_mempool_entry(&parent.compute_txid()).is_ok()
+					|| core.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap()
+						.is_some_and(|info|info.confirmations.is_some_and(|depth|depth>0)) {break;}
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+		}).await.expect("the SAME B parent must recover only after the exact original A batch reconfirms");
+		let height=ctx.generate_blocks(6).await;
+		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await,parent);
+		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,claim);
+		wait_batched_parent(&ctx,&srv,&db,height,allocation,&parent).await;
+		height
+	} else {height};
 	let chain=ctx.bitcoind().sync_client();
 	assert_eq!(ctx.bitcoind().get_block_count().await,u64::from(height.to_u32()));
 	let paid=chain.get_tx_out(&payout.txid,payout.vout,Some(true)).unwrap().unwrap();
@@ -494,13 +564,19 @@ async fn reserved_batched_terminal() {
 		"separate_fee_funding_sat":750000,"fee_sponsor_points":sponsor_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
 		"customer_original_principal_sat":300000,"selected_source_and_grant_value_sat":580000,
 		"selected_value_excludes_separate_fee_sponsors":true,
-		"prior_reservation":reserved_id,
-		"scope":"one actual prior-reserved same-attempt partial batch; no reorg/foreign/all-terminal/general-batch credit"
+		"prior_reservation":reserved_id,"exact_retained_batch_replayed_after_reorg":reorg,
+		"scope":"one actual prior-reserved same-attempt partial batch; no foreign/all-terminal/general-batch credit"
 	})).unwrap()).unwrap();
 }
 
 #[tokio::test]
 async fn expiry_internal_reserved_batch_pays_remaining_source() {
-	tokio::time::timeout(Duration::from_secs(180),Box::pin(reserved_batched_terminal())).await
+	tokio::time::timeout(Duration::from_secs(180),Box::pin(reserved_batched_terminal(false))).await
 		.expect("one actual prior-reserved batch must not strand the remaining B principal");
+}
+
+#[tokio::test]
+async fn expiry_internal_reserved_batch_replays_after_reorg() {
+	tokio::time::timeout(Duration::from_secs(180),Box::pin(reserved_batched_terminal(true))).await
+		.expect("the exact reserved user batch and unchanged B refund must recover after a real fork");
 }

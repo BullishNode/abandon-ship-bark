@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "state": "CLOSED_PENDING_SCAFFOLD_SOURCE_ONLY_NOT_ADMITTED",
+  "at": "2026-10-18T05:31:14.324310+00:00",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v15",
+  "candidate_ready": false,
+  "controls_finalized": false,
+  "execution_authorized": false,
+  "proposed_binary": "ark-testing::server",
+  "proposed_case": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+  "proposed_source_sha256": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+  "proposed_aggregate_patch_sha256": "3f8ffa11f01003c154f90303da4ca2c743c72e8e7fcf5750d85e4f27bb885931",
+  "full_candidate_archive_bundle_metadata_ELF_pins_versions_allocation": "UNKNOWN_NULL_NO_BORROWED_PINS",
+  "parent_launch_admission": "ABSENT",
+  "launch_pending_marker": "PRESENT",
+  "baseline": {
+    "private_batch45_controls_unchanged": {
+      "server-cohort.py": "6e4c23114447393abff649edd4e337db0ba8d8e6689fc10e0af06940c0091e97",
+      "preflight-static.py": "41e54ee9fc0b4cddddfe6eebe161f8ac8e53654c70693fcbdb6b6fc31d21bed5",
+      "fresh-listings.py": "fd2f31637ae88b4fdd9ad29f0277707b3f14abb56fcffead14f20af51b3a0c03",
+      "run.sh": "c1feadae46bd5480f74722f568e67f2056c0056ea1733ea057d6ad9d84212a7e",
+      "preflight.sh": "897156adb749a4605d464bd84de45b51ff994f736f823df3f15f0290473e94c7",
+      "case01/nextest.toml": "118ae204b35b28f852b40f74f8b1326e28052209bdb7364ee165738787172e71"
+    },
+    "reused": "Existing serial/no-retry/first-fail resource/process-group/singleton binary-bound PASS runner, exact fresh listing tail, resource-guard tail, default180 profile; guarded by unconditional closed prefix. No old raw testdata/results/admission copied."
+  },
+  "static_file_hashes": {
+    "fresh-listings.py": "3bc140daa54d52174c6f1f181560a4346a6001eb46336589a1cbb5d4617dcb6b",
+    "run.sh": "52c6590fdc1750a766644bae53e97ca4199c1494a24faafa48567a6f6881f89f",
+    "launch-authorization-pending.json": "8eb829dbf7feb17c232811c27e4ff3b8acc2faeac4dfac3740016120cfb992d6",
+    "preflight.sh": "5dd11dffe1120b0580d74932271d827ac2b915bc81fb59e01d960a9f62e3cc83",
+    "preflight-static.py": "b67492aa2555729fdbf1cc2dd8dd8ceaae675bf71ee8973d285eaf97e9d11899",
+    "selection-proof.json": "8e7232d7c42b782650a769b4a444c6c3403fc7aba982b866c03a325f544c4ef9",
+    "server-cohort.py": "a449286b5aa138a4b0aac0954f7799bd84696661eeeaa9b403da5270d350478b",
+    "case01/nextest.toml": "1fdd0f62b280405f4be707a8406fba248fe8544151af5277afa8d3902c6916cf"
+  },
+  "validation": {
+    "python_AST": 3,
+    "TOML": 1,
+    "bash_n": 2,
+    "scripts_executed": 0,
+    "resources_inspected": 0,
+    "listings": 0,
+    "native_tests": 0,
+    "Cargo": 0,
+    "cached_Nix_before_writes": "Actual container IN_NIX_SHELL=impure read-only echo",
+    "closed_guard_AST": "Unconditional CLOSED SCAFFOLD raise precedes every resource/list/process/output operation in all3 Python entrypoints; only parsed, never executed."
+  },
+  "mandatory_handoff_gaps": [
+    "Actual full source/archive/bundle/meta captures and complete all-entry/source-body/module verification.",
+    "Actual provided pinlist count/hash and exact products/test/support ELFs, native CLN v26.06.6+grpc/hold paths/hashes and pg_controldata prerequisite.",
+    "Actual version labels, BIP84 features and exact environment incl LD_LIBRARY_PATH/SQLite/POSTGRES_BINS; no guesses.",
+    "Actual root allocation packet byte-copy, schema/state/owner/exact1/bounds/source identities; no fabricated root-allocation.json.",
+    "Replace deliberately unconditional closed scaffold stop with fully reviewed exact schema/hash guards; marker stays until parent fresh admission.",
+    "Parent-owned fresh exact singleton listing, actual resource/actor/hash gates, finalized freeze and launch admission; none performed by preparer.",
+    "Explicit full-unset BARK_DOUBLE_DRIVE_ACTIONS after cached Nix, and guard absence in listing and runner environments."
+  ],
+  "bounds": {
+    "timeout_seconds": 180,
+    "serial": 1,
+    "retries": 0,
+    "maximum_case_executions": 1,
+    "global_native_maximum": 2,
+    "first_fail_stops": true,
+    "fresh_context": true
+  },
+  "no_source_target_largecopy_rolling_or_prior_payload_mutation": true
+}

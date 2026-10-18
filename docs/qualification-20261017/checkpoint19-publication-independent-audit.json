@@ -1,0 +1,83 @@
+{
+  "kind": "CHECKPOINT19_PUBLICATION_INDEPENDENT_READONLY_AUDIT",
+  "at": "2026-10-18T06:32:09.559190+00:00",
+  "state": "PASS_NO_BLOCKER",
+  "publication": {
+    "PR": 23,
+    "url": "https://github.com/BullishNode/abandon-ship-bark/pull/23",
+    "head": "e8d0beafb5b42d6d6a54a8d74686660d1dfe8d9e",
+    "immediate_parent_and_explicit_base": "5dde8947196fb840ec616871d662e658f1c038d9",
+    "remote_state_observed": "OPEN",
+    "isDraft": true,
+    "remote_branch_matches": true,
+    "exact_PR_body_matches_local_frozen_body": true,
+    "body_sha256": "96353857236fd9b8591ae14a7b934302ae52c940d5996c59af491df9d1167d90",
+    "publication_receipt_sha256": "6cdd503237cccf76f608de7e70d6cdd21c64c4be92da89b06d57e11edd0a9481"
+  },
+  "manifest": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint19-proposed-safe/publication-checkpoint19-files.json",
+    "sha256": "94d4cb3e8d4ae36c3d163a1814fe77bff3ecf2e9f37a28f892730419684f3505",
+    "payload_files": 80,
+    "including_manifest": 81,
+    "all_sha256_and_git_blob_and_frozen_copy_and_owned_docs_bytes_match": true,
+    "actual_commit_and_GH_PR_paths_exact_allowlist": true,
+    "git_diff_check": true,
+    "only_docs_paths": true
+  },
+  "syntax": {
+    "CSV": 1,
+    "JSON": 46,
+    "TOML": 6,
+    "Python_AST": 6,
+    "bash_n": 4
+  },
+  "safety": {
+    "independent_strong_secret_patterns_zero": true,
+    "independent_full2048_English_BIP39_checksum_zero": true,
+    "independent_WIF_checksum_zero": true,
+    "no_raw_wallet_DB_seed_config_log_reads": true,
+    "parent_validation_sha256": "2eecd27f8af10532fbf5b98b7e8f37d317cf30f57934ec0c7fa9b8b9be11f6cd"
+  },
+  "cutoff": {
+    "case_executions": 248,
+    "passed_case_executions": 233,
+    "failed_case_executions": 15,
+    "unique_executed_test_names": 231,
+    "nextest_invocations": 221,
+    "native_case_executions": 236,
+    "component_case_executions": 12,
+    "coverage_rows": 459
+  },
+  "coverage": {
+    "rows": 459,
+    "prior_rows": 456,
+    "prior_prefix_bytes": 333206,
+    "prior_prefix_sha256": "c297a23c2c9c643659c7549747cd30f18f469cb93bb00fa9eb6e870c44807083",
+    "prior_prefix_exact": true,
+    "all_LF": true,
+    "prior_literal_FAIL_rows": 14,
+    "prior_aggregate_failed_executions": 15,
+    "prior_FAIL_rows_unchanged": true,
+    "new_ids": [
+      "FT-BARKD-044",
+      "FT-BARKD-045",
+      "FT-BARKD-046"
+    ],
+    "new_unique_pairs": 3,
+    "note": "Mixed historical coverage rows are not one-to-one with aggregate executions."
+  },
+  "source_preservation": {
+    "owned_source_files": 16,
+    "all_baseline_bytes_unchanged": true,
+    "all_unstaged": true,
+    "protected15_baseline_sha256": "f7a6e8805f657c0fc005185175bb81ace42007eb97b3f42394a20bc84a0dd01c",
+    "P07_frozen_addendum_sha256": "7209c97a0163d024af54a2c3cf6c5bc50ca534a2399a617a8619d12d0ad31469"
+  },
+  "scope": [
+    "Batch47 exact three old-v10 native PASS establish Exited classification, gap-window discovery and xpub discovery/address nonreuse only; not recovered payment/all-bucket/custody/Core6/fullML/production or latest fix proof.",
+    "P07 mechanical source correction and artifact evidence are included as pre-runtime evidence. Later P07 native PASS reported separately is excluded from fixed checkpoint19 and adds no credit here.",
+    "Initial native pending-at-creation label, earlier compile failures and source-only conditional plans remain historical immutable snapshots.",
+    "No Git/index/branch/source/control/rolling-report/native/Cargo mutations; only the two new external audit files written."
+  ],
+  "blockers": []
+}

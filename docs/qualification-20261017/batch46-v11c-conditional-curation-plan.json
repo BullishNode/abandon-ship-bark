@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-18T06:38:48.556249+00:00",
+  "state": "PRECURATION_PLAN_NO_CREDIT",
+  "baseline": {
+    "executions": 248,
+    "PASS": 233,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 231,
+    "nextest_invocations": 221,
+    "native": 236,
+    "component": 12,
+    "coverage_rows": 459,
+    "coverage_sha256": "1e55694d41b337e8008ed68701a2f11ee1f1e7f07f51a1f3464dd5f404102d24",
+    "coverage_prefix_bytes": 336702
+  },
+  "case": {
+    "binary": "ark-testing::server",
+    "literal": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "source_file_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+    "body_sha256": "29508f4a0e30e1b329de4311207cd333fbcced0ca78e9f9a8ce981b50e55b85e",
+    "case_id": null,
+    "native_PASS_seconds": 139.775,
+    "run_id": "6376a368-f78f-4eee-9376-8a0996196c81"
+  },
+  "references_sha256": {
+    "batch46-lightning-physical-backup-v11c-receipt.json": "9648e4f726b4029b85354b268d0c12ac732c66bf455afbdab5a20f3b6813562b",
+    "batch46-v11c-client-postflight.json": "18c5aace0d7a82ddb3275b2d8ee54d8ef6408b47a5c85249c9a6a3c6a4c42174",
+    "batch46-p07-retained-core-reconciliation-backend.json": "63ddb9488440257b0041ab47f46a4d124382893515d1d5ecadddfa21bbefd3a9",
+    "batch46-p07-retained-core-input-stability-backend.json": "6f49bff3b4da32ef7368c506fd4629facdf270bb99be6e04263efe70d56b4af6"
+  },
+  "terminal_curation": "Onlyone actualverifiednativePASS afterformal17pins/16controls/knownPGID/SID/scopedabsence andstableindependent605kCoreaudit. Recheck dedup/IDavailability; preserve459CSVbyteprefix/all15historicalFAILs andFINDINGSbyteprefix. Then249=234PASS15FAIL/232unique/222nextest/237native12component/460mixedrows.",
+  "scope": "OnecleanPG/WAL+walletjournalrestore atgenuineHtlcsReady/twosignedgrants/originalclientsabsent. Nativeidentity/recipientzero/seed/backup/journalbindings plusindependent605000=197349customer+381626otherretained+26025miners/23tx/parentchild12conf/drain6conf. ContinuingCLN12BTCexcluded; no globalcustody/signatureaudit/crashPITR/allboundaries/defaultreplenishment/fullP07/fullML/productioncredit.",
+  "preservation": "Initial9648formal/auditpending andformal18cfinancependingatcreation remainbyteidentical; newcurationresolvescompanions. FrozenPR23e8d0/manifest94d4 stays248/459. Oldv15/abd0 androotA/BcompileFAILs unchanged.",
+  "preparation_note": "Initialplan-onlymetadata lookup used an incorrect stability filename and stopped before anywrite; resolved actual input-stability filename, no test/native/control/global action."
+}

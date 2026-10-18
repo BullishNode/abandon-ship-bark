@@ -1,0 +1,18 @@
+[
+  {
+    "index": 1,
+    "name": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+    "state": "PASS",
+    "started_at": "2026-10-18T06:27:07.217357+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 154295,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "6376a368-f78f-4eee-9376-8a0996196c81",
+    "test_seconds": 139.775,
+    "wall_seconds": 140.724,
+    "ended_at": "2026-10-18T06:29:27.941645+00:00"
+  }
+]

@@ -1,0 +1,296 @@
+{
+  "schema": 1,
+  "state": "READ_ONLY_COMPLETE_V11C_ARTIFACT_SOURCE_BINDING_PASS_NO_P07_NATIVE_ALLOCATION",
+  "bundle": "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018",
+  "capture_HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+  "dirty": true,
+  "input_hashes": {
+    "manifest.json": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "nextest-binaries-immutable.json": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+    "nextest-binaries-runtime.json": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "source-manifest.json": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "source.tar.gz": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58"
+  },
+  "pinlist": {
+    "path": "/home/francis/.cache/abandon-fresh/root-terminal-replay-v11c-20261018/runtime-pins.sha256",
+    "sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "actual_count": 17,
+    "actual_container_hashes": [
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind",
+        "sha256": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand",
+        "sha256": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark",
+        "sha256": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd",
+        "sha256": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark",
+        "sha256": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk",
+        "sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-barkd",
+        "sha256": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-server",
+        "sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json",
+        "sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/source-manifest.json",
+        "sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/manifest.json",
+        "sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.rlib",
+        "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.so",
+        "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/lock-holder",
+        "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9"
+      }
+    ],
+    "actual_cached_Nix": "impure",
+    "no_binary_version_execution_by_reviewer": true
+  },
+  "four_recorded_build_phases": {
+    "checks": {
+      "state": "PASS",
+      "seconds": 44.92,
+      "exit_code": 0
+    },
+    "units": {
+      "state": "PASS",
+      "seconds": 134.647,
+      "exit_code": 0
+    },
+    "products": {
+      "state": "PASS",
+      "seconds": 105.775,
+      "exit_code": 0
+    },
+    "metadata": {
+      "state": "PASS",
+      "seconds": 222.203,
+      "exit_code": 0
+    }
+  },
+  "build_vs_native": "Four executable products and four metadata test ELF builds are distinct captured artifacts, not4or8native case executions; checks/unit/build receipt PASS is root evidence, not reexecuted here.",
+  "products_and_test_ELFs": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind",
+      "sha256": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e",
+      "actual_version": "captaind 0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand",
+      "sha256": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802",
+      "actual_version": "watchmand 0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark",
+      "sha256": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c",
+      "actual_version": "bark 0.7.1-dev (0496e057fe8cedde99c9b85edab67035633a8f25)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd",
+      "sha256": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537",
+      "actual_version": "barkd 0.7.1-dev (0496e057fe8cedde99c9b85edab67035633a8f25)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "ark-testing::bark": {
+      "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark",
+      "sha256": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk",
+      "sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c"
+    },
+    "ark-testing::barkd": {
+      "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-barkd",
+      "sha256": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-server",
+      "sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256"
+    }
+  },
+  "metadata": {
+    "immutable_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+    "runtime_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "only_differences": [
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/0/path",
+        "immutable": "debug/deps/libark.rlib",
+        "runtime": "../runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.rlib",
+        "resolved_runtime_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.rlib",
+        "actual_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1/1/path",
+        "immutable": "debug/deps/libark.so",
+        "runtime": "../runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.so",
+        "resolved_runtime_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.so",
+        "actual_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "json_path": "/rust-build-meta/non-test-binaries/path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0/0/path",
+        "immutable": "debug/lock-holder",
+        "runtime": "../runtime-terminal-replay-v11c-20261018/support/debug/lock-holder",
+        "resolved_runtime_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/lock-holder",
+        "actual_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      }
+    ],
+    "all4_test_records_and_binary_IDs_package_IDs_paths_unchanged": true,
+    "support_capture_sha256": "975987e3f52e539143068053b99f2b1e94ead76cebbc25156c2fed7d5d971502",
+    "actual_support_hashes_matched": 3,
+    "features_binding": "Recorded product command+manifest bark/barkd fallback-test-bip84,web-ui; metadata command ark-testing/fallback-test-bip84; no ELF feature introspection/version execution by reviewer."
+  },
+  "P07": {
+    "literal": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+    "binary": "ark-testing::server",
+    "source_file": "testing/tests/server/qualification_lightning_backup.rs",
+    "source_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+    "entry": {
+      "function_sha256": "aa91855bf97abe363fc77a10dbef2001c0fc79b4e0aca114f7d302c58a1a422b",
+      "body_sha256": "8dcea71b84d731d6de9e1215a89a6f22195e3057a68c0cd002208d91c5d85b3c"
+    },
+    "async_body": {
+      "function_sha256": "b475c2b79cac32137dbb41840fa98af2213dc74be4fe1e8a7bd4388d084ed60a",
+      "body_sha256": "29508f4a0e30e1b329de4311207cd333fbcced0ca78e9f9a8ce981b50e55b85e"
+    },
+    "all13_helpers": {
+      "file_hash": {
+        "function_sha256": "b7ad4e47fda384bc788034b3e6e97acb31be992e158017839b27e7ec6a1345db",
+        "body_sha256": "256c37bb952812692cfe955f41d4e95338aff8868c8060472c2c338b184deb33"
+      },
+      "copy_tree": {
+        "function_sha256": "22b620cf4bf751b7ed7c958c8e9864d1f8300222c02334dfe90dc8349932b15c",
+        "body_sha256": "ffe82652678fe0c696d9f7d33c8cb2299f9f3ab62fc2e78cb9c617cbe272fc95"
+      },
+      "postgres_tool": {
+        "function_sha256": "d00182d1511f3f43213c38dd8be0400755c1c90b67242afc8e4acb27f6f13b11",
+        "body_sha256": "424ecbd18d8aaa96023389c5adcc7e68c56029253a3ef0f89496e0c061ff8ca2"
+      },
+      "assert_clean_cluster": {
+        "function_sha256": "465120c46ea6d367fc8078097ed5b034efd72ce2e705535c9efd29467d017eae",
+        "body_sha256": "4a047a35ffddcdc12f5b63ec5d4b2f43e9a321ad0553eec4b0d28f7535241554"
+      },
+      "watchman_coins": {
+        "function_sha256": "ad54b678330508d0952b711890b192393167e1546a3f84102d781376f885aca9",
+        "body_sha256": "89b45b06c805600248135e642ecd41d288da1b1b020351a059c898d786b4ba8a"
+      },
+      "wait_watchman_coins": {
+        "function_sha256": "1d85aaf9bd79b4d0b86138deb2582ec1fbb60779be6ddc0288b35ea373512a38",
+        "body_sha256": "29b2ddfb6072e55e34fbd8b95962d52a09ae6c63103a555ec1dfcf4c2ef00d68"
+      },
+      "mine_continuing_core": {
+        "function_sha256": "781de25833846102cbccfbcc190f723ac92d343f9386653217406a11ffb06f10",
+        "body_sha256": "2fbe6f507ed290520509ed81920ae59a03c037340aab70a1f72830521ec03aa5"
+      },
+      "actual_fee": {
+        "function_sha256": "4a26752d687c7bcdf30866f8a6ea9f6d0cbdfdf3a899a3196fa89bcf516a55cf",
+        "body_sha256": "44afaa5c95715dccfc3bb80fb62a6ee01f1cd2ab4101fdd358b0219e04ab96f3"
+      },
+      "canonical": {
+        "function_sha256": "dce96a758b4e176578f95a70b6111455120d38ff19d178255a157e01218d73a4",
+        "body_sha256": "0cb2a7f61b0eed00ff28212b500f7681cefc4c53a97ed42d67ed6791bf071fde"
+      },
+      "rebuilt": {
+        "function_sha256": "f13842f6ad21ee01d020232a14ffc2e8f35930094e357fa0eb360f59ec8b07ae",
+        "body_sha256": "186b274ab4c68ca1eb31d4fca88d8edbc3b68abf1f6d65524c1da7d05e404029"
+      },
+      "pending_checkpoint": {
+        "function_sha256": "337f67250a35464eb49d345ab760060486d27923b9354ad62051ebf4e6cb579c",
+        "body_sha256": "1fd1f972421504f183117c93c659053bc359a7017e80869b801faaf696983370"
+      },
+      "signed_grant_ancestry": {
+        "function_sha256": "94a70688caa93ff750d61566a4829d95669d15ceb2fcd777373875fe92219f71",
+        "body_sha256": "c31cb737fd0bdaecfe4176d87b68634560304f1c8c27be4b84cf3ab747e8f851"
+      },
+      "canonical_descendants": {
+        "function_sha256": "df508973e4fb606300cf8575d6e74176aad7d799765adede0acef451a8acb08c",
+        "body_sha256": "985bafe157fcc67f8407bb9a4b2aa5a6070e71acc3b9e7df0d33f1835592de0d"
+      }
+    },
+    "ExistingCluster_impl": {
+      "function_sha256": "94731d107fe97b8728d1c8f35a6548b620cedc9cdf61a7f1c8a8f6f8906d92e0",
+      "body_sha256": "bd25b683961b326705aac78f40b9a16665313e8db5bb06dd95f1e76505dfbb8d"
+    },
+    "module_source_sha256": "02143d923de98c3915d3d3bd6bfbc505774eacdf0b67a6f8dc096b931f27075f",
+    "testing_Cargo_sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+    "module_Cargo_test_feature_binding": true,
+    "exact_mechanical_delta": "Only two maturity block-hash binding lines rename hash\u2192block_hash; reversing them produces byte-exact abd0. This preserves intended later PaymentHash typed SQL/RPC, all monetary/lifecycle/timer assertions unchanged.",
+    "native_status": "NOT RUN; no listing performed; no P07 allocation inferred.",
+    "scope": "Selected605k four-output cut, continuing Core/native CLN; separate internal CLN12BTC reserve outside cut, no unchanged-reserve/channel/HSM/all-boundaries/FULLML claim."
+  },
+  "source_archive": {
+    "exact_member_and_resolved_content_matches": 1968,
+    "source_scope": "Published0496 including reviewedPR22 plus core0ddb, pairedexisting-protocoljournal/replayc65v2+mechanicalunusedimportremoval, nativejournalassertions10e35, reviewedP07physicalpending-grantsbackup3f8f/abd0 and independentML049/partialML186-187patch7c2e; exactservermodulebindings. No wire/script/signature/fee policy change. Original180.028partialTIMEOUT and allpreviousFAIL retained; allnewnativebodies unrun. Single-inputDEFAULT no-prior-fence terminal omission only; broad batched/prior-fence/cold/consumed/oversize/fee liveness remains releaseOPEN. V11checks E0283 preserved; v11b adds ONLY explicit Vec<ServerVtxo> decoded type annotation in watchman/user_claim.rs; no financial/lifecycle/test change. V11bchecksE0283/E0308 preserved; v11c adds ONLY explicitServerVtxo type for nativeprefix and renames P07blockhash binding to preserve PaymentHash in later typedRPC/SQL; no monetary/lifecycle/timeout change.",
+    "source_proof_reference": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v11c-source-archive-proof-backend.json",
+      "sha256": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207"
+    },
+    "prior_temporal_observation_preserved": "01245 was source-only while products running. This new artifact proof separately records completed4phase capture; prior v11/v11b errors and source receipts are unchanged.",
+    "no_extraction_or_current_source_read_or_mutation": true
+  },
+  "future_admission": {
+    "actual_P07_root_allocation": null,
+    "fresh_exact_singleton_listing": null,
+    "native_P07_run": null,
+    "parent_launch_admission": null,
+    "batch46": "Remain CLOSED/PENDING; no controls changed.",
+    "requirements": "Root exact source/artifact allocation, reviewed final controls/current source6051 bindings, actual version/no-early-gate, environment/PG/SQLite/nativeCLN plugins/resources/global coordination and parent fresh admission remain required."
+  },
+  "actions": {
+    "actual17_file_hash_reads": true,
+    "archive_and_metadata_static_reads": true,
+    "control_or_source_changes": 0,
+    "Cargo_or_builds": 0,
+    "new_listing": 0,
+    "resource_or_actor_probes": 0,
+    "RPC_DB_wallet_secret_reads": 0,
+    "native_case_or_product_version_execution": 0,
+    "global_or_payload_writes": 0
+  },
+  "inputs_small_hashes_before_after_unchanged": true,
+  "credit": "Artifact/source proof only; no native/PASS/FULLML/production credit."
+}

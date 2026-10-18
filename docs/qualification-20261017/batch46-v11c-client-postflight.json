@@ -1,0 +1,271 @@
+{
+  "kind": "INDEPENDENT_BATCH46_V11C_CLIENT_FORMAL_POSTFLIGHT",
+  "state": "TERMINAL_SINGLETON_PASS_INTEGRITY_AND_SCOPED_ACTOR_ABSENCE_PASS",
+  "parent_terminal_confirmed": {
+    "tool_session": 15868,
+    "exit_code": 0,
+    "source": "Explicit parent terminal notice; toolsession is not processPID"
+  },
+  "case": {
+    "index": 1,
+    "name": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+    "state": "PASS",
+    "started_at": "2026-10-18T06:27:07.217357+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "owned_nextest_group": 154295,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "6376a368-f78f-4eee-9376-8a0996196c81",
+    "test_seconds": 139.775,
+    "wall_seconds": 140.724,
+    "ended_at": "2026-10-18T06:29:27.941645+00:00"
+  },
+  "binary": "ark-testing::server",
+  "actual_selected_unignored": [
+    [
+      "ark-testing::server",
+      "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender"
+    ]
+  ],
+  "native_safe_PASS_line": "        PASS [ 139.775s] (1/1) ark-testing::server qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+  "native_safe_summary": "Summary [139.780s] 1 test run: 1 passed (suffix omitted)",
+  "native_starting_count": 1,
+  "public_receipt": {
+    "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/lightning-backup-public-receipt.json",
+    "sha256": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+    "safe_public_fields": {
+      "actual_board_miner_fee_sat": 763,
+      "actual_joint_child_miner_fee_sat": 3383,
+      "actual_pool_miner_fee_sat": 1081,
+      "actual_recovery_miner_fee_sat": 888,
+      "all_connected_miner_fees_sat": 26025,
+      "attempt": 1,
+      "canonical_graph_transactions": 23,
+      "cluster_file_count": 1620,
+      "customer_initial_sat": 200000,
+      "customer_root": "670fe4e205b51752faaad2e3e5cbdbce96fc1f7945fa57cd1f1cf14e8c9c5c54:0",
+      "external_cut_sat": 605000,
+      "fallback_fee_sat": 1000,
+      "grant_amount_sat": 90000,
+      "grant_maturity_height": 186,
+      "grants": [
+        "5bab11a0d2dd39247dd9610312884f2d3cf30fcf76e1789400c8abd7935c2ab3:0",
+        "bffc2b3e90060748b961aff0c475a2fc28e2bb4cbdda88f834fe0cef4a37b0d3:0"
+      ],
+      "joint_operator_remainder_sat": 91000,
+      "joint_parent_block": {
+        "hash": "23bcdb75ca2baa39dbdca9e908881f1313876dc1f93cc37da61e930f2a044d5d",
+        "height": 187
+      },
+      "operator_initial_sat": 205000,
+      "operator_retained_sat": 381626,
+      "payout": "323b2a071f0cbd28ee5c305dc5fcb6b788a38557e1f733a8a6ea04e4746ef603:0",
+      "payout_sat": 99000,
+      "pool_root": "165ca69aaeb804065ab5e54d7967334f3bd3c9d99aa82585c766845a4cb306c6:0",
+      "postbackup_blocks_mined": 72,
+      "prebackup_blockhash": "7156336bdad38d09c90a94c1ed62b71e34341ad44c319856b7e33705da679f11",
+      "prebackup_height": 126,
+      "private_manifest_sha256": "0fdbb17e965b84a2bebaa23663aaa2e6ec3e434792ee24e01c359db3fa56c516",
+      "recovery_input_sat": 198237,
+      "recovery_output_sat": 197349,
+      "recovery_txid": "503b091d4e733f2f8453413ba5125cf08bf4fc051a5178f91c8718318bb699db",
+      "scope": "orderly same-candidate PG/server/watch physical backup at internal HtlcsReady; continuing Core and CLN; both original clients absent",
+      "sender_principal_sat": 100000,
+      "source": "5543ef8205d45caccf90b7a25544f795da6db3163e289c681f97597e63683db5:0",
+      "source_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+      "sponsors": {
+        "aa7374637e10b57596acc49bf60eca07ce22087ed2a64fb2a6a3627a707030c7:1": 100000,
+        "df97b6b4d36e93bdd2270ddb50b9a665262c2004f05bba542fb2ffe3d8a78be7:0": 100000
+      },
+      "sponsors_initial_sat": 200000,
+      "subscription": 1,
+      "wallet_changesets_preserved": 231
+    }
+  },
+  "genuine_native_scope": {
+    "actual_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup",
+    "public_final_receipt_reached": true,
+    "source_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+    "version_early_return_only": false,
+    "native_CLN_getinfo": "Source-bound exact getinfo.version==v26.06.6 assertion precedes genuine grant/backup path and finalreceipt. NativePASS+finalreceipt bind it; no reviewerRPC/version call.",
+    "assertions_reached": "Actual internalHtlcsReady with signed90kgrants/100ksource, absentoriginalclients, cleanphysicalPG+identities/watchjournalcopy/disjointrestore, realgrantmaturity, unique99krightfulfallback+1kcharge/no recipientfallback, freshseedBIP84 exactchange+payout/drain, Core6parent+sameblockchild+drain, fullselected605kgraph/actualfees nativeassertions.",
+    "limits": "Reached source-bound native assertions only. Independent retained-Core/SQL/wallet reconstruction not performed; backend605kofflineaudit pending. Dedicatedsweep/continuingCore+CLN/excluded12BTCreserve scope unchanged."
+  },
+  "immutable": {
+    "all16parent_frozen_paths_unchanged": {
+      "selection-proof.json": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+      "root-allocation.json": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+      "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+      "source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+      "mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+      "mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+      "batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+      "server-cohort.py": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+      "preflight-static.py": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+      "fresh-listings.py": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+      "preflight.sh": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+      "run.sh": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+      "case01/nextest.toml": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2",
+      "fresh-listing-admission.json": "9555bc4ad6066051c4988f04d250dd1a56f537ebfd7667d0f10f4a63468b5f70",
+      "resource-admission.json": "99387e03da04299d05d75bfee374e8822ac636d2e790d6e3188484264d38e040"
+    },
+    "PREPARATION_sha256": "31e45be457b4a84f34d6547db1d96b2710c79b18078bb62bac42bec01dc9c2c4",
+    "root_allocation_sha256": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "parent_admission_sha256": "2195b47b8038b12078f94c8d199becf80bf21706c107c0b807a152cb5883270c",
+    "final_control_peer_sha256": "c218aa3b37e119c8e9293ac97813e053a0d598a233fcc452d7924bc75707b1d2",
+    "required_47_postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "native_server_sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+    "capture_HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+    "not_relabelled_as_newer_HEAD": true
+  },
+  "cleanup_resources": {
+    "at": "2026-10-18T06:35:45.264446+00:00",
+    "namespace": "abandon-fresh-runtime-20261017",
+    "IN_NIX_SHELL": "impure",
+    "BARK_DOUBLE_DRIVE_ACTIONS_present_in_audit_environment": false,
+    "known_PGID_SID": 154295,
+    "remaining_group_or_SID_members": [],
+    "remaining_scoped_argv_cwd_FD_actors": [],
+    "unreadable_owned_proc_entries": [],
+    "owned_uid_processes_examined": 9,
+    "CLN_global_path_candidates_examined": 0,
+    "scope": "Only public path matching; no argv/FDcontents exported. Unrelatedroot8506 excluded; globalCLNabsence not required.",
+    "shm_available_bytes": 816279552,
+    "all17_actual_pins_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind",
+        "sha256": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand",
+        "sha256": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark",
+        "sha256": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd",
+        "sha256": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark",
+        "sha256": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk",
+        "sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-barkd",
+        "sha256": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-server",
+        "sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json",
+        "sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/source-manifest.json",
+        "sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/manifest.json",
+        "sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.rlib",
+        "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.so",
+        "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/lock-holder",
+        "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9"
+      }
+    ],
+    "signals_cleanup_RPC_DB_native_calls": 0
+  },
+  "additive_probe": {
+    "path": "/tmp/batch46-v11c-client-postflight-probe-6376a368.py",
+    "sha256": "f3fb4edc1cce64131aff9e13be1a2cee95e238d5b07fce4f857bb3ac2e19cf8f",
+    "receipt": "/tmp/batch46-v11c-client-postflight-actors-6376a368.json",
+    "receipt_sha256": "877fdc7c6556876e21175339d0e741d8f743db68d07f0264d0f77e11a24bc80b",
+    "parent_prelaunch_probe_executed": false,
+    "unchanged_parent_probe_and_admission_and_resource_receipt": {
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-actor-probe.py": "49be3fb3c043bc4131e61668a33c237c5676d566306809f3fa4b276adf987011",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-actor-admission.json": "8bb86737debf517e4652acf887112932d451c35b10054ae755907a7e73521334",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-resource-observation.json": "6e7530990cc052013f364da52a2d746887b2b84fa27017f9046abeeaa0f32367"
+    }
+  },
+  "preservation": {
+    "old46_v15_all9_unchanged": true,
+    "owned_frozen_abd0_source_unchanged": true,
+    "checkpoint19_manifest_sha256": "94d4cb3e8d4ae36c3d163a1814fe77bff3ecf2e9f37a28f892730419684f3505",
+    "checkpoint19_all80_payload_and_manifest_unchanged": true,
+    "initial_native_receipt": "Preserved; additive postflight only",
+    "no_counts_CSV_FINDINGS_STATUS_writes": true
+  },
+  "input_hashes_before_after_unchanged": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preflight-static.py": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/resource-admission.json": "99387e03da04299d05d75bfee374e8822ac636d2e790d6e3188484264d38e040",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/server-cohort.py": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/result.json": "f000a62698f67fb79ecb52587241d59f9dc77ce9a57fe9e5f97ce61693435081",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/selection-proof.json": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/selection-list-fresh.json": "8071f556c8a4ba05878f19f673faf901fd57f2742cf194c53dc9fc3f4c297486",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/nextest.toml": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/run.sh": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/fresh-listings.py": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preflight.sh": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/fresh-listing-admission.json": "9555bc4ad6066051c4988f04d250dd1a56f537ebfd7667d0f10f4a63468b5f70",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/PREPARATION.json": "31e45be457b4a84f34d6547db1d96b2710c79b18078bb62bac42bec01dc9c2c4",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-launch-admission.json": "2195b47b8038b12078f94c8d199becf80bf21706c107c0b807a152cb5883270c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/root-allocation.json": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-actor-probe.py": "49be3fb3c043bc4131e61668a33c237c5676d566306809f3fa4b276adf987011",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-actor-admission.json": "8bb86737debf517e4652acf887112932d451c35b10054ae755907a7e73521334",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-resource-observation.json": "6e7530990cc052013f364da52a2d746887b2b84fa27017f9046abeeaa0f32367",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/lightning-backup-public-receipt.json": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch46-final-control-guard-peer-review-backend.json": "c218aa3b37e119c8e9293ac97813e053a0d598a233fcc452d7924bc75707b1d2",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint19-proposed-safe/publication-checkpoint19-files.json": "94d4cb3e8d4ae36c3d163a1814fe77bff3ecf2e9f37a28f892730419684f3505",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_lightning_backup.rs": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695"
+  },
+  "raw_native_log_sha256_only": "02a06c0550f95f2a0e97a1ba4156aa5a90f1245dc3cf2db8e9caef2edf39f253",
+  "actions": {
+    "native_projection": "Strict knownname PASS/runID/starting/summary streamed only; no native/walletbody/argv exported",
+    "signals_cleanup_service_RPC_SQL_wallet_PG_config_seed_privatebackup_reads": 0,
+    "Cargo_listing_preflight_native_rerun": 0,
+    "source_Git_index_HEAD_mutations": 0
+  },
+  "credit_limits": [
+    "One same-candidate cleanHtlcsReady physicalserver/watch/PG backup nativecase; not allboundaries/crashPITR/CLNchannelHSM/12BTCreserve/globalcustody/FULLML/productionqualification",
+    "Actorabsence is current scopednamespace snapshot, not continuousglobalquiescence; unrelatedroot8506 excluded",
+    "Currentaudit interpreterenvabsence is distinct from exited originalenv; frozenoriginalguards and source bind expectedenv"
+  ]
+}

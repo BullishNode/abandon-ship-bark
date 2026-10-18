@@ -1,0 +1,13 @@
+{
+  "state": "PENDING_NO_CANDIDATE_NO_ALLOCATION_NO_PARENT_ADMISSION",
+  "batch": "batch46-lightning-physical-backup-v15",
+  "execution_authorized": false,
+  "listing_authorized": false,
+  "preflight_authorized": false,
+  "native_authorized": false,
+  "proposed_cases": [
+    "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender"
+  ],
+  "candidate_fields": "NULL until exact completed candidate and actual root packet",
+  "requires_parent_finalization_and_fresh_admission": true
+}

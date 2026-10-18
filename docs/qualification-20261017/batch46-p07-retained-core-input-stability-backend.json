@@ -1,0 +1,51 @@
+{
+  "state": "ALL_ALLOWED_INPUT_HASHES_UNCHANGED",
+  "before": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/lightning-backup-public-receipt.json": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+    "/tmp/batch46-p07-retained-core-reconciliation-backend.py": "01f4649e5cadeb35f15f0b9a36781afea86360e72178489fadaa811d0d567f40",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/blocks/xor.dat": "b896dd53929aa32ab1e84eef1b03f7e8a2a5517a3b91ef2e78671553c23af423",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/debug.log": "e1723091d4a0440e0c5568dd504d94f9beacbd58029c8c1a13cd958b55769785",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/blocks/blk00000.dat": "55a5b0dc3bde62b23507aa5c3db0bb89413fc99428cc41d3d22a542ab263955f"
+  },
+  "after": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/lightning-backup-public-receipt.json": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+    "/tmp/batch46-p07-retained-core-reconciliation-backend.py": "01f4649e5cadeb35f15f0b9a36781afea86360e72178489fadaa811d0d567f40",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/blocks/xor.dat": "b896dd53929aa32ab1e84eef1b03f7e8a2a5517a3b91ef2e78671553c23af423",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/debug.log": "e1723091d4a0440e0c5568dd504d94f9beacbd58029c8c1a13cd958b55769785",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/blocks/blk00000.dat": "55a5b0dc3bde62b23507aa5c3db0bb89413fc99428cc41d3d22a542ab263955f"
+  },
+  "decoder": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py",
+  "source6051": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+  "final_check": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/lightning-backup-public-receipt.json": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+    "/tmp/batch46-p07-retained-core-reconciliation-backend.py": "01f4649e5cadeb35f15f0b9a36781afea86360e72178489fadaa811d0d567f40",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/blocks/xor.dat": "b896dd53929aa32ab1e84eef1b03f7e8a2a5517a3b91ef2e78671553c23af423",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/debug.log": "e1723091d4a0440e0c5568dd504d94f9beacbd58029c8c1a13cd958b55769785",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/bitcoind/regtest/blocks/blk00000.dat": "55a5b0dc3bde62b23507aa5c3db0bb89413fc99428cc41d3d22a542ab263955f"
+  },
+  "actor_absence": {
+    "before": {
+      "at": "2026-10-18T06:31:04.338978+00:00",
+      "IN_NIX_SHELL": "impure",
+      "actual_container": "abandon-fresh-runtime-20261017",
+      "known_group_SID": 154295,
+      "group_or_session_members": [],
+      "scoped_argv_cwd_fd_matches": [],
+      "unreadable": []
+    },
+    "after": {
+      "at": "2026-10-18T06:32:38.625617+00:00",
+      "IN_NIX_SHELL": "impure",
+      "actual_container": "abandon-fresh-runtime-20261017",
+      "known_group_SID": 154295,
+      "group_or_session_members": [],
+      "scoped_argv_cwd_fd_matches": [],
+      "unreadable": []
+    },
+    "scanner_sha256": "0ba940001300241b6a5cda4aa787735bd3d9e5d5a3143935167cbdafe16d5e2d",
+    "scope": "Exact knownPGID/SID154295 plus both mount-equivalent case01 argv/cwd/FD scopes; no global absence claim."
+  }
+}

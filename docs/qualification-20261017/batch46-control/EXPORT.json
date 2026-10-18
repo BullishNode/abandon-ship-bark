@@ -1,0 +1,412 @@
+{
+  "kind": "SAFE_BATCH46_CONTROL_EXPORT_FROZEN_NOT_PUBLISHED",
+  "at": "2026-10-18T06:43:44.291265+00:00",
+  "exports": [
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/selection-proof.json",
+      "source_sha256": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+      "destination": "selection-proof.json",
+      "destination_sha256": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+      "bytes": 9273,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/root-allocation.json",
+      "source_sha256": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+      "destination": "root-allocation.json",
+      "destination_sha256": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+      "bytes": 2500,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/runtime-pins.sha256",
+      "source_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "destination": "runtime-pins.sha256",
+      "destination_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "bytes": 2248,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/artifact-proof.json",
+      "source_sha256": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+      "destination": "artifact-proof.json",
+      "destination_sha256": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+      "bytes": 16435,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/source-proof.json",
+      "source_sha256": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+      "destination": "source-proof.json",
+      "destination_sha256": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+      "bytes": 17052,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/mechanical-parent.json",
+      "source_sha256": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+      "destination": "mechanical-parent.json",
+      "destination_sha256": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+      "bytes": 3626,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/mechanical-peer.json",
+      "source_sha256": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+      "destination": "mechanical-peer.json",
+      "destination_sha256": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+      "bytes": 3496,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/batch47-postflight.json",
+      "source_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+      "destination": "batch47-postflight.json",
+      "destination_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+      "bytes": 30281,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/server-cohort.py",
+      "source_sha256": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+      "destination": "server-cohort.py",
+      "destination_sha256": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+      "bytes": 15420,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preflight-static.py",
+      "source_sha256": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+      "destination": "preflight-static.py",
+      "destination_sha256": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+      "bytes": 8362,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/fresh-listings.py",
+      "source_sha256": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+      "destination": "fresh-listings.py",
+      "destination_sha256": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+      "bytes": 8621,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preflight.sh",
+      "source_sha256": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+      "destination": "preflight.sh",
+      "destination_sha256": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+      "bytes": 2324,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/run.sh",
+      "source_sha256": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+      "destination": "run.sh",
+      "destination_sha256": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+      "bytes": 2354,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/nextest.toml",
+      "source_sha256": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2",
+      "destination": "case01/nextest.toml",
+      "destination_sha256": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2",
+      "bytes": 190,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/fresh-listing-admission.json",
+      "source_sha256": "9555bc4ad6066051c4988f04d250dd1a56f537ebfd7667d0f10f4a63468b5f70",
+      "destination": "fresh-listing-admission.json",
+      "destination_sha256": "9555bc4ad6066051c4988f04d250dd1a56f537ebfd7667d0f10f4a63468b5f70",
+      "bytes": 211,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/resource-admission.json",
+      "source_sha256": "99387e03da04299d05d75bfee374e8822ac636d2e790d6e3188484264d38e040",
+      "destination": "resource-admission.json",
+      "destination_sha256": "99387e03da04299d05d75bfee374e8822ac636d2e790d6e3188484264d38e040",
+      "bytes": 111,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/PREPARATION.json",
+      "source_sha256": "31e45be457b4a84f34d6547db1d96b2710c79b18078bb62bac42bec01dc9c2c4",
+      "destination": "PREPARATION.json",
+      "destination_sha256": "8b9925b3b8f1016145e891a923b488c583c0143f4d81ef67000e5029e1ffbf6b",
+      "bytes": 5277,
+      "byte_equal": false,
+      "transform": "PREPARATION_EXPLICIT_FIELDS_EXCEPT_PARENT_COMMAND_ARRAYS; SOURCE_HASH_IN_INVENTORY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/PREPARATION.pending.json",
+      "source_sha256": "bcc0eff57a8b58d4bb4b6453e913f3672a0f2c1a3b0de5cf0e29188c52c5bda1",
+      "destination": "preserved-v15-closed/PREPARATION.pending.json",
+      "destination_sha256": "bcc0eff57a8b58d4bb4b6453e913f3672a0f2c1a3b0de5cf0e29188c52c5bda1",
+      "bytes": 4273,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/fresh-listings.py",
+      "source_sha256": "3bc140daa54d52174c6f1f181560a4346a6001eb46336589a1cbb5d4617dcb6b",
+      "destination": "preserved-v15-closed/fresh-listings.py",
+      "destination_sha256": "3bc140daa54d52174c6f1f181560a4346a6001eb46336589a1cbb5d4617dcb6b",
+      "bytes": 2730,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/run.sh",
+      "source_sha256": "52c6590fdc1750a766644bae53e97ca4199c1494a24faafa48567a6f6881f89f",
+      "destination": "preserved-v15-closed/run.sh",
+      "destination_sha256": "52c6590fdc1750a766644bae53e97ca4199c1494a24faafa48567a6f6881f89f",
+      "bytes": 565,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/launch-authorization-pending.json",
+      "source_sha256": "8eb829dbf7feb17c232811c27e4ff3b8acc2faeac4dfac3740016120cfb992d6",
+      "destination": "preserved-v15-closed/launch-authorization-pending.json",
+      "destination_sha256": "8eb829dbf7feb17c232811c27e4ff3b8acc2faeac4dfac3740016120cfb992d6",
+      "bytes": 534,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/preflight.sh",
+      "source_sha256": "5dd11dffe1120b0580d74932271d827ac2b915bc81fb59e01d960a9f62e3cc83",
+      "destination": "preserved-v15-closed/preflight.sh",
+      "destination_sha256": "5dd11dffe1120b0580d74932271d827ac2b915bc81fb59e01d960a9f62e3cc83",
+      "bytes": 568,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/preflight-static.py",
+      "source_sha256": "b67492aa2555729fdbf1cc2dd8dd8ceaae675bf71ee8973d285eaf97e9d11899",
+      "destination": "preserved-v15-closed/preflight-static.py",
+      "destination_sha256": "b67492aa2555729fdbf1cc2dd8dd8ceaae675bf71ee8973d285eaf97e9d11899",
+      "bytes": 2612,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/selection-proof.json",
+      "source_sha256": "8e7232d7c42b782650a769b4a444c6c3403fc7aba982b866c03a325f544c4ef9",
+      "destination": "preserved-v15-closed/selection-proof.json",
+      "destination_sha256": "8e7232d7c42b782650a769b4a444c6c3403fc7aba982b866c03a325f544c4ef9",
+      "bytes": 2517,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/server-cohort.py",
+      "source_sha256": "a449286b5aa138a4b0aac0954f7799bd84696661eeeaa9b403da5270d350478b",
+      "destination": "preserved-v15-closed/server-cohort.py",
+      "destination_sha256": "a449286b5aa138a4b0aac0954f7799bd84696661eeeaa9b403da5270d350478b",
+      "bytes": 7905,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/preserved-v15-closed/case01/nextest.toml",
+      "source_sha256": "1fdd0f62b280405f4be707a8406fba248fe8544151af5277afa8d3902c6916cf",
+      "destination": "preserved-v15-closed/case01/nextest.toml",
+      "destination_sha256": "1fdd0f62b280405f4be707a8406fba248fe8544151af5277afa8d3902c6916cf",
+      "bytes": 189,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-launch-admission.json",
+      "source_sha256": "2195b47b8038b12078f94c8d199becf80bf21706c107c0b807a152cb5883270c",
+      "destination": "parent-launch-admission.json",
+      "destination_sha256": "2195b47b8038b12078f94c8d199becf80bf21706c107c0b807a152cb5883270c",
+      "bytes": 3011,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/launch-authorization-pending.preserved.json",
+      "source_sha256": "ab2bcc986bb398eb7fca70a79d8625c9076b53c75dcf5f9a329d7f1e11f29f73",
+      "destination": "launch-authorization-pending.preserved.json",
+      "destination_sha256": "ab2bcc986bb398eb7fca70a79d8625c9076b53c75dcf5f9a329d7f1e11f29f73",
+      "bytes": 431,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/parent-actor-admission.json",
+      "source_sha256": "8bb86737debf517e4652acf887112932d451c35b10054ae755907a7e73521334",
+      "destination": "parent-actor-admission.json",
+      "destination_sha256": "8bb86737debf517e4652acf887112932d451c35b10054ae755907a7e73521334",
+      "bytes": 506,
+      "byte_equal": true,
+      "transform": "ACTOR_METADATA_ALLOWLIST_REQUIRES_EMPTY_MATCHES_NO_ARGV_CWD_FD_CONTENT"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/runtime-pins.sha256",
+      "source_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "destination": "runtime-core14-derived.sha256",
+      "destination_sha256": "6a55b1404550cfa82bbe8148efa2b5b463749a28d75b513792d04aea7f591f46",
+      "bytes": 1874,
+      "byte_equal": false,
+      "transform": "DERIVED_14_CORE_ARTIFACT_LINES_EXCLUDES_EXACT_CLN3_ONLY_PRIMARY17_REMAINS_AUTHORITATIVE"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/cohort-progress.json",
+      "source_sha256": "7739a42eece8c0bef4ba369b024499e9a9cc9c4b9b275ff9eb866f28960469d2",
+      "destination": "cohort-progress.safe.json",
+      "destination_sha256": "f2241cf18bb06212e91e9d9b079b229971e7a68a3874168300508a9fba00211c",
+      "bytes": 556,
+      "byte_equal": false,
+      "transform": "EXPLICIT_CASE_FIELDS_COMMAND_ARRAY_OMITTED"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/cohort-summary.json",
+      "source_sha256": "5d54712ae846a42e31521acd76bbd850a43bebc0ff4676d2befcec675a041731",
+      "destination": "cohort-summary.safe.json",
+      "destination_sha256": "a569f5401f03fa49517a169deb7b0b65c832e1eeee57980fd84d06205d0de5bb",
+      "bytes": 1090,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SUMMARY_AND_CASE_FIELD_ALLOWLIST_COMMAND_ARRAY_OMITTED"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/result.json",
+      "source_sha256": "f000a62698f67fb79ecb52587241d59f9dc77ce9a57fe9e5f97ce61693435081",
+      "destination": "case01/result.safe.json",
+      "destination_sha256": "2f5ec098d62958fdc717efb8c499d7a9033f728f69887cff4a3bf4586bf228b6",
+      "bytes": 520,
+      "byte_equal": false,
+      "transform": "EXPLICIT_CASE_FIELDS_COMMAND_ARRAY_OMITTED"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch46-v11c-client-postflight.json",
+      "source_sha256": "18c5aace0d7a82ddb3275b2d8ee54d8ef6408b47a5c85249c9a6a3c6a4c42174",
+      "destination": "case01/safe-native-summary.txt",
+      "destination_sha256": "ac25503d878d61b35c6eaa6895bb607cdf20d1529a6d3e3f38ea540f83d0b4c9",
+      "bytes": 641,
+      "byte_equal": false,
+      "transform": "ONLY_FORMAL_SANITIZED_PASS_SUMMARY_RUNID_METADATA_NO_RAW_LOG_OR_ARGUMENTS"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch46-lightning-physical-backup-v11c-receipt.json",
+      "source_sha256": "9648e4f726b4029b85354b268d0c12ac732c66bf455afbdab5a20f3b6813562b",
+      "destination": "native-receipt.safe.json",
+      "destination_sha256": "0f27d8c531cc1ebdbc192f84544adb6a512a31081e455c550c9c0e5d758b4d66",
+      "bytes": 1960,
+      "byte_equal": false,
+      "transform": "EXPLICIT_INITIAL_RECEIPT_PUBLIC_METADATA_PROJECTION_NO_COMMAND_ARRAY_NO_LOGS"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/test-data/server/qualification_internal_htlcs_ready_physical_backup/lightning-backup-public-receipt.json",
+      "source_sha256": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+      "destination": "lightning-backup-public-receipt.safe.json",
+      "destination_sha256": "209845d5fa07b7560190aa75736549a346148b56426f719e8362b4c2315968d0",
+      "bytes": 2716,
+      "byte_equal": false,
+      "transform": "EXPLICIT37_TYPED_FIELD_ALLOWLIST_HASH_POINT_NUMERIC_SCOPE_ONLY_NO_PRIVATE_TARGET_READ"
+    }
+  ],
+  "exported_files_excluding_manifest": 36,
+  "exported_files_including_manifest": 37,
+  "aggregate_sha256": "bc376d35fb5e142a33e25970f1dceb9e270664841dafac35c29fde03f1027f99",
+  "aggregate_algorithm": "SHA256 concatenated destination+NUL+destination_sha256+LF sorted by destination; excludes EXPORT.json",
+  "source_frozen16_unchanged": {
+    "selection-proof.json": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+    "root-allocation.json": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+    "source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+    "mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+    "batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "server-cohort.py": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+    "preflight-static.py": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+    "fresh-listings.py": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+    "preflight.sh": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+    "run.sh": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+    "case01/nextest.toml": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2",
+    "fresh-listing-admission.json": "9555bc4ad6066051c4988f04d250dd1a56f537ebfd7667d0f10f4a63468b5f70",
+    "resource-admission.json": "99387e03da04299d05d75bfee374e8822ac636d2e790d6e3188484264d38e040"
+  },
+  "primary17_pins_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "derived14_core_note": "Exact primary17 minus lightningd/cln-grpc/hold; primary17 remains authoritative for P07.",
+  "initial_native_receipt_sha256": "9648e4f726b4029b85354b268d0c12ac732c66bf455afbdab5a20f3b6813562b",
+  "formal_postflight_sha256": "18c5aace0d7a82ddb3275b2d8ee54d8ef6408b47a5c85249c9a6a3c6a4c42174",
+  "public_receipt_sha256": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+  "public_field_allowlist37": [
+    "actual_board_miner_fee_sat",
+    "actual_joint_child_miner_fee_sat",
+    "actual_pool_miner_fee_sat",
+    "actual_recovery_miner_fee_sat",
+    "all_connected_miner_fees_sat",
+    "attempt",
+    "canonical_graph_transactions",
+    "cluster_file_count",
+    "customer_initial_sat",
+    "customer_root",
+    "external_cut_sat",
+    "fallback_fee_sat",
+    "grant_amount_sat",
+    "grant_maturity_height",
+    "grants",
+    "joint_operator_remainder_sat",
+    "joint_parent_block",
+    "operator_initial_sat",
+    "operator_retained_sat",
+    "payout",
+    "payout_sat",
+    "pool_root",
+    "postbackup_blocks_mined",
+    "prebackup_blockhash",
+    "prebackup_height",
+    "private_manifest_sha256",
+    "recovery_input_sat",
+    "recovery_output_sat",
+    "recovery_txid",
+    "scope",
+    "sender_principal_sat",
+    "source",
+    "source_sha256",
+    "sponsors",
+    "sponsors_initial_sat",
+    "subscription",
+    "wallet_changesets_preserved"
+  ],
+  "validation": {
+    "JSON": 21,
+    "AST": 6,
+    "bash_n": 4,
+    "TOML": 2,
+    "basic_credential_matches": 0
+  },
+  "no_runtime_or_control_bodies_executed": true,
+  "scope_limits": [
+    "Static Python AST/bash-n/TOML/JSON only; no controller/list/preflight/native/Cargo/process probe/resources executed.",
+    "Oldv15/abd0 nine-file copies are closed historical proposal only; active runtime C6051 captured0496 is distinct.",
+    "No private PG/wallet/database/config/seed/journal/backup manifests or raw native/node logs copied. Public private-manifest hash does not authorize/open target.",
+    "Initial native receipt pending-at-creation preserved; actual terminal0/formal18c additive. Public receipt beforecleanup cannot override native outcome.",
+    "Selected605k excludes continuing CLN12BTC; independent financial audit63/stability6f49 outside this subtree unchanged.",
+    "Basic credential checks only; parent independent full BIP39/WIF/payload gate still required. No rolling/public docs/Git/ML count writes."
+  ]
+}

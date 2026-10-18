@@ -1,0 +1,69 @@
+{
+  "kind": "CHECKPOINT20_SAFE_P07_CONTROL_EXPORT_INDEPENDENT_AUDIT",
+  "at": "2026-10-18T06:45:43.429438+00:00",
+  "state": "PASS_NO_BLOCKER",
+  "export_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint20-proposed-safe/batch46-control/EXPORT.json",
+  "export_sha256": "4d6d159333d9f001916964ff38a4da5ecfcd7b83e3e0eafbc85e89fee55070d7",
+  "inventory": {
+    "payload_files": 36,
+    "total_files": 37,
+    "all_source_output_hashes_lengths_equality_flags_match": true,
+    "exact_file_inventory": true,
+    "aggregate_algorithm": "SHA256 concatenated destination+NUL+destination_sha256+LF sorted by destination; excludes EXPORT.json",
+    "aggregate_sha256": "bc376d35fb5e142a33e25970f1dceb9e270664841dafac35c29fde03f1027f99",
+    "all_source_inputs_before_after_unchanged": true
+  },
+  "transforms": {
+    "BYTE_EXACT_EXPLICIT_CONTROL_ALLOWLIST": 18,
+    "PREPARATION_EXPLICIT_FIELDS_EXCEPT_PARENT_COMMAND_ARRAYS; SOURCE_HASH_IN_INVENTORY": 1,
+    "BYTE_EXACT_HISTORICAL_CLOSED_V15_NOT_ACTIVE_C6051": 9,
+    "ACTOR_METADATA_ALLOWLIST_REQUIRES_EMPTY_MATCHES_NO_ARGV_CWD_FD_CONTENT": 1,
+    "DERIVED_14_CORE_ARTIFACT_LINES_EXCLUDES_EXACT_CLN3_ONLY_PRIMARY17_REMAINS_AUTHORITATIVE": 1,
+    "EXPLICIT_CASE_FIELDS_COMMAND_ARRAY_OMITTED": 2,
+    "EXPLICIT_SUMMARY_AND_CASE_FIELD_ALLOWLIST_COMMAND_ARRAY_OMITTED": 1,
+    "ONLY_FORMAL_SANITIZED_PASS_SUMMARY_RUNID_METADATA_NO_RAW_LOG_OR_ARGUMENTS": 1,
+    "EXPLICIT_INITIAL_RECEIPT_PUBLIC_METADATA_PROJECTION_NO_COMMAND_ARRAY_NO_LOGS": 1,
+    "EXPLICIT37_TYPED_FIELD_ALLOWLIST_HASH_POINT_NUMERIC_SCOPE_ONLY_NO_PRIVATE_TARGET_READ": 1
+  },
+  "control_provenance": {
+    "frozen_active_paths": 16,
+    "actual_source_file_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+    "historical_closed_v15_originals_and_copies": 9,
+    "historical_v15_not_active": true,
+    "primary_pins": 17,
+    "derived_core14_exact_exclusion": true,
+    "command_arrays_in_selected_projections": 0,
+    "actor_metadata_empty": true,
+    "initial_native_receipt_sha256": "9648e4f726b4029b85354b268d0c12ac732c66bf455afbdab5a20f3b6813562b",
+    "formal_postflight_sha256": "18c5aace0d7a82ddb3275b2d8ee54d8ef6408b47a5c85249c9a6a3c6a4c42174",
+    "initial_pending_fields_preserved": true,
+    "native_summary_from_sanitized_formal_only": true
+  },
+  "public_receipt": {
+    "source_sha256": "91ff3cd150f313a370ca4e9b323b7efbdddb0f80993c19e2296ed73e5be3f0a9",
+    "exact_unique_public_fields": 37,
+    "invented_38th_field": false,
+    "all_values_and_types_match_original_and_formal": true,
+    "hash_points_numeric_scope_types_checked": true,
+    "private_manifest_target_opened": false
+  },
+  "syntax": {
+    "JSON": 22,
+    "Python_AST": 6,
+    "bash_n": 4,
+    "TOML": 2
+  },
+  "safety": {
+    "strong_credential_pattern_findings": 0,
+    "full2048_English_BIP39_checksum_findings": 0,
+    "WIF_checksum_findings": 0,
+    "no_raw_native_Core_PG_wallet_journal_backup_config_seed_reads": true
+  },
+  "independent_Core_and_stability_receipts_unchanged": true,
+  "blockers": [],
+  "limits": [
+    "Static safe export audit only; no scripts except bash -n, listings, probes, runtime, services, RPC, Cargo, source, Git, global-report or ML-map actions.",
+    "One clean configured HtlcsReady backup boundary; continuing CLN12BTC outside selected605k. No crash/PITR/all-boundary/default-replenishment/global-custody/fullP07/fullML/production credit.",
+    "Full parent publication gate remains responsible for additional top-level payload; this audit covers only frozen37-file subtree."
+  ]
+}

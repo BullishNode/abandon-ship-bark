@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "at": "2026-10-18T09:51:11.539097+00:00",
+  "state": "BOUNDED_RESULTS_WITH_OPEN_FAILURES_NOT_PRODUCTION_READY",
+  "completed": {
+    "V16b": {
+      "source_manifest_sha256": "e06fa3e827ae29a4ee4b9063320057d5377d448387bff7b8ad31babd071b4da2",
+      "bundle_sha256": "5e828604aa834e426474231c896bc65fac5ac5ee070d0e3b63142f9bd7dee596",
+      "native_cases": [
+        {
+          "name": "expiry_internal_partial_terminal::expiry_internal_all_sources_exited_returns_all_grants",
+          "seconds": 62.875
+        },
+        {
+          "name": "expiry_internal_terminal_return::expiry_internal_reserved_all_terminal_replays_after_reorg",
+          "seconds": 79.651
+        }
+      ],
+      "postflight_sha256": "eaa0c06f2e7501bc3e3d42edc990486c847395d82419538847984eb0a9c54bbf",
+      "scope": "Test-only receipt destinations corrected from Core funding wallet to existing sender fallback script. Same captured four V16 products, no relabel or repeated unit/product build. Original V16 failure64.523 retained; original PGservice3.620PASS not rerun."
+    },
+    "V15_independent_chain_audit": {
+      "normal_report_sha256": "2b6c6941e783f217223a2dc93cb1918f62e87c9e9ffbdc3a9d41b715b2c58118",
+      "reorg_report_sha256": "81f440291a17725674e438ed9abc35195902671a1b555b66ef7648396a4eda19",
+      "root_recomputed_review_sha256": "1eb5ab5e589ab4b766f1033b1b2ed009d464384cfa3a5b8278ff78d4b6b94a6c",
+      "each_finite_cut_sat": {
+        "external": 1850000,
+        "terminal": 1836864,
+        "miners": 13136
+      },
+      "customer_claims_sat": 196000,
+      "operator_grant_sat": {
+        "principal": 180000,
+        "net_return": 177336,
+        "miner_fee": 2664
+      },
+      "limits": "Root recomputed disjoint retained inventory frontiers and fees, rehashed17 originals. Parser/consensus/signature verification not rerun. Customer destinations are signer-authorized Core fixture scripts, no sender seed/spend proof. Native source/DB fences/replay causation inherited; no global custody, omitted ancestry fee or unknown-alt-lineage claim. Orphanfees excluded."
+    }
+  },
+  "open_V17_failure": {
+    "source_manifest_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+    "source_archive_sha256": "80f8e78953d3ca7ac14200bfe312c22987ca3071fbebaaed3f89bfa31c3bcdf0",
+    "bundle_sha256": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76",
+    "build": "Mandatory checksPASS99.259;875unitsPASS1skip13.744 native;fourproductsPASS113.176;servernativecompilePASS206.277",
+    "case": "expiry_internal_terminal_return::expiry_internal_reserved_partial_pays_remaining_source",
+    "outcome": "TIMEOUT180.019/native,180.820wrapper; no retry or deadline extension",
+    "log_sha256": "918bd7f6b910d3db48dba019677444e6b0ee36d9b002252eb050331fe1712e5d",
+    "failure_integrity_postflight_sha256": "a237240b328f9b07b606291e8199a41413097af4f25fb6fd24aacb0a856ab2e0",
+    "other_original_four_cases": "NOTRUN in original first-fail-stopped batch",
+    "cause": "Retained never-signed dependent allocation had no raw transaction/txid/broadcast. Rebuild demanded a signed body, while parent signing required completed rebuild; copied-PG diagnosis confirmed. Historical conflicted unsigned intents retain the same fences.",
+    "diagnostic_postflight_sha256": "8f8fae0e5a52ab3816453d5b122ab5e28b2a39b21194942581baef752f823218",
+    "correction_patch_sha256": "0b9461d320523195b5af303b5d671540038ae2194cbbd60f822ee444a6769f39",
+    "correction_scope": "Validate exact never-published financial intent separately; no unsigned payment authority. Keep immutable complete source/grant/path/economic/fence and canonical omitted-claim joins. Present signed bodies retain all strict checks. NOTYET native-qualified."
+  },
+  "public_signet": {
+    "deployed_source": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "new_receive": "One5000sat invoice settled to fully signed4890sat pubkeycoin, originalrecipientabsent; E326894; expected3890fallback; lifecycle stillpending expiry/Core6/seedrecovery.",
+    "distinct_refresh_setup_failure": "One refresh used old144-blockexit inputs for new32-blockround; signer correctly requires tip+2*12+144. Original28670sat retained, no completed380satcustomerfee and no failedsendinvoice/payment. Ordinary Finished cancellation has no safe public irrevocable authority under stale-backup ambiguity; remainsOPEN.",
+    "readiness_diagnosis": "One existing TriggerSweep09:00:51 completed acknowledgedview gen8/326865 andledger13/rev17 with no newmempooltx, confirming2h schedulinggap. Serial1s rebuild-only source113fa reviewed, notdeployed."
+  },
+  "limits": [
+    "No entire200-scenario or production qualification. Historical and current-source evidence stay separate.",
+    "Native/component execution counts do not replace money-scenario oracle coverage.",
+    "No Mainnet authorization; no Noah mobile/Android or new cancellation protocol introduced."
+  ],
+  "V18_correction_qualification": {
+    "state": "FOUR_NATIVE_AND_FORMAL_PASS",
+    "source_manifest_sha256": "e0b904e012ad3f07867432762939ba61a3aae8210e168a671407c6b41ce2c8f7",
+    "archive_sha256": "fa642a6fa649ba996e2afb993d7bbff3b3cec25411c275ea3da4d4a89df6a8f0",
+    "bundle_sha256": "eb57dbca7c37a635ff4ff25e43147e15325ff29b45d601a49a86f0c7cad42137",
+    "runtime_metadata_sha256": "e4739a9b64b6c3e5872721ba1add0f9d553b85ea489d29bdae9c927f455e6f48",
+    "formal_postflight_sha256": "d80d07566d452a86e0751e7f84da9f2787511f0740213f74a1f850f9fe6a69dc",
+    "build": "MandatorychecksPASS98.433;877unitsPASS1skip13.732native;fourproductsPASS109.951;servernativecompilePASS210.136",
+    "native_cases": [
+      {
+        "test": "expiry_view_service::expiry_view_rebuild_services_delayed_cap_ack_and_next_block_without_financial_sweep",
+        "native_seconds": 12.734,
+        "wrapper_seconds": 13.621,
+        "log_sha256": "13788ff36a34314094bd2e930a1961feb7ac543ba281c1991197bb22c9d48d5b",
+        "exact_singleton_summary": true
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_partial_pays_remaining_source",
+        "native_seconds": 68.273,
+        "wrapper_seconds": 69.166,
+        "log_sha256": "0ddfc545e5986cd133ae187e08041806d8f486e0d40eed70e1a2540b754d7144",
+        "exact_singleton_summary": true
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_partial_replays_paid_source_after_reorg",
+        "native_seconds": 77.177,
+        "wrapper_seconds": 78.01,
+        "log_sha256": "ea5563ed499f5617479c96127530217ae37c6c500de20973080d9df5b945e00c",
+        "exact_singleton_summary": true
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_all_terminal_replays_after_reorg",
+        "native_seconds": 76.967,
+        "wrapper_seconds": 77.631,
+        "log_sha256": "1208ca89a5874f4931f7729b5fc14a360c8c78f95d84adeec1ccc8c4c8fc2928",
+        "exact_singleton_summary": true
+      }
+    ],
+    "runtime_policy": "Default180each/retries0/serial1/globalMAX2, flagfullyabsent aftercachedNix; artifactsunchanged, scopedactors0/unreadable0.",
+    "limits": "Fix qualifies bounded normal/reorg cases; originalV17TIMEOUT retained, independent retainedfinancialcut pending. Readiness caseemptyhistory, not fundedscale latency. ClientFinishedcancellationgap staysOPEN."
+  }
+}

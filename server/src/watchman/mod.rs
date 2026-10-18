@@ -569,7 +569,17 @@ impl Watchman {
 		let txid = tx.compute_txid();
 		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
 		self.db.write(async |t| {
-			t.lock_unallocated_watchman_inputs(&ids).await?;
+			let fenced=t.query_one("SELECT EXISTS(SELECT 1 FROM expiry_allocation_input WHERE vtxo_id=ANY($1)) AS fenced",
+				&[&ids.iter().map(ToString::to_string).collect::<Vec<_>>()]).await?.get::<_,bool>("fenced");
+			if fenced {
+				let view=t.expiry_rebuild_token().await?.context("reserved operator return needs a completed view")?;
+				t.lock_terminal_internal_grant_returns(view,&ids).await?;
+				self.verify_expiry_view(view).await?;
+			} else {
+				// A new reservation racing this read still fails the ordinary
+				// guard. Normal unreserved claims retain their existing path.
+				t.lock_unallocated_watchman_inputs(&ids).await?;
+			}
 			bcd::broadcast_tx(&self.bitcoind, &tx).await?;
 			Ok(())
 		}).await?;

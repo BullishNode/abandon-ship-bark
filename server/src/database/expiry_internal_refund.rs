@@ -486,6 +486,251 @@ impl Tx<'_> {
 
 }
 
+/// Private permission for existing user authorizations and operator timeout
+/// returns after an entire retained joint allocation became conflicted. This
+/// describes immutable obligations, not present-day chain payment evidence.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ConflictedInternalUserClaimScope {
+	pub(crate) source: VtxoId,
+	pub(crate) incoming: Vec<VtxoId>,
+	pub(crate) grants: Vec<VtxoId>,
+	physical: Vec<VtxoId>,
+	allocations: Vec<i64>,
+	subscriptions: Vec<i64>,
+	identity: Vec<serde_json::Value>,
+}
+
+fn check_terminal_return_parent(inputs:&[VtxoId],parent:&Transaction) -> anyhow::Result<()> {
+	let actual=parent.input.iter().map(|input|VtxoId::from(input.previous_output)).collect::<BTreeSet<_>>();
+	ensure!(parent.version.0==3 && actual.len()==parent.input.len() && actual.len()==inputs.len()
+		&& actual==inputs.iter().copied().collect(),"retained joint parent differs from its physical inputs");
+	Ok(())
+}
+
+impl ConflictedInternalUserClaimScope {
+	fn lock_ids(&self) -> Vec<String> {
+		self.incoming.iter().chain(&self.grants).chain(&self.physical)
+			.map(ToString::to_string).collect::<BTreeSet<_>>().into_iter().collect()
+	}
+}
+
+impl Tx<'_> {
+	/// Do not require current canonical claims here: replay needs this exact
+	/// immutable scope after those observations disappeared. The final return
+	/// guard separately requires all original claims in the completed view.
+	pub(crate) async fn conflicted_internal_user_claim_scope(
+		&self, source: VtxoId,
+	) -> anyhow::Result<Option<ConflictedInternalUserClaimScope>> {
+		let first = self.query("SELECT f.id FROM expiry_lightning_internal_funding f \
+			JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=f.id \
+			WHERE l.vtxo_id=$1 ORDER BY f.id", &[&source.to_string()]).await?;
+		if first.len()!=1 { return Ok(None); }
+		let mut pending = BTreeSet::from([first[0].get::<_,i64>("id")]);
+		let mut members = BTreeMap::<i64,(i64,PaymentHash,Vec<VtxoId>,Vec<VtxoId>)>::new();
+		let mut allocations = BTreeSet::new();
+		let mut identity = Vec::new();
+		while let Some(attempt)=pending.pop_first() {
+			if members.contains_key(&attempt) { continue; }
+			ensure!(members.len()<MAX_JOINT_GRANTS as usize,"terminal joint scope exceeds component budget");
+			let Some(row)=self.query_opt("SELECT f.subscription_id,a.payment_hash FROM expiry_lightning_internal_funding f \
+				JOIN lightning_payment_attempt a ON a.id=f.id AND a.lightning_htlc_subscription_id=f.subscription_id \
+				JOIN lightning_htlc_subscription s ON s.id=f.subscription_id AND s.payment_hash=a.payment_hash \
+				WHERE f.id=$1 AND s.status IN ('htlcs-ready','canceled') \
+				AND NOT EXISTS(SELECT 1 FROM expiry_lightning_receive_claim WHERE subscription_id=s.id) \
+				AND NOT EXISTS(SELECT 1 FROM expiry_lightning_receive_replay WHERE subscription_id=s.id) \
+				AND NOT EXISTS(SELECT 1 FROM htlc_settlement WHERE payment_hash=a.payment_hash) \
+				AND NOT EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo original \
+					JOIN lightning_payment_attempt_htlc_vtxo other ON other.vtxo_id=original.vtxo_id \
+					WHERE original.lightning_payment_attempt_id=a.id AND ( \
+						EXISTS(SELECT 1 FROM expiry_lightning_dispatch d WHERE d.id=other.lightning_payment_attempt_id) \
+						OR EXISTS(SELECT 1 FROM expiry_lightning_external_success paid WHERE paid.id=other.lightning_payment_attempt_id) \
+						OR EXISTS(SELECT 1 FROM expiry_lightning_queued_attempt q WHERE q.id=other.lightning_payment_attempt_id AND q.id<>a.id)))",
+				&[&attempt]).await? else { return Ok(None); };
+			let subscription: i64=row.get("subscription_id");
+			let hash: PaymentHash=row.get::<_,&str>("payment_hash").parse()?;
+			let originals=self.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+				WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id",&[&attempt]).await?
+				.into_iter().map(|row|row.get::<_,&str>("vtxo_id").parse()).collect::<Result<Vec<VtxoId>,_>>()?;
+			let grants=self.query("SELECT vtxo_id FROM vtxo WHERE lightning_htlc_subscription_id=$1 ORDER BY vtxo_id",&[&subscription]).await?
+				.into_iter().map(|row|row.get::<_,&str>("vtxo_id").parse()).collect::<Result<Vec<VtxoId>,_>>()?;
+			ensure!(!originals.is_empty() && !grants.is_empty()
+				&& originals.len()<=MAX_JOINT_GRANTS as usize && grants.len()<=MAX_JOINT_GRANTS as usize,
+				"terminal joint scope lost its complete original or grant membership");
+			for id in &originals {
+				let original=htlc_vtxo::get_htlc_vtxo(self,*id).await?.context("terminal joint source disappeared")?;
+				check_incoming_identity(&original,hash)?;
+				ensure!(original.htlc.offchain_resolution.is_none() && original.vtxo.oor_spent_txid.is_none()
+					&& original.vtxo.spent_in_round.is_none() && original.vtxo.offboarded_in.is_none(),
+					"terminal joint source has an incompatible off-chain commitment");
+				identity.push(serde_json::json!({"source":id.to_string(),"body":original.vtxo.vtxo.serialize()}));
+			}
+			for id in &grants {
+				let grant=htlc_vtxo::get_htlc_vtxo(self,*id).await?.context("terminal joint grant disappeared")?;
+				let policy=grant.vtxo.vtxo.policy().as_server_htlc_recv().context("terminal return is not a receive grant")?;
+				ensure!(grant.direction()==HtlcDirection::Outgoing && grant.htlc.payment_hash==hash
+					&& policy.payment_hash==hash && policy.htlc_expiry==grant.htlc_expiry()
+					&& grant.htlc.offchain_resolution.is_none() && grant.vtxo.oor_spent_txid.is_none()
+					&& grant.vtxo.spent_in_round.is_none() && grant.vtxo.offboarded_in.is_none(),
+					"terminal return grant has a different obligation");
+				identity.push(serde_json::json!({"grant":id.to_string(),"body":grant.vtxo.vtxo.serialize()}));
+			}
+			let ids=originals.iter().chain(&grants).map(ToString::to_string).collect::<Vec<_>>();
+			let rows=self.query("SELECT DISTINCT a.id,a.status FROM expiry_allocation a WHERE \
+				EXISTS(SELECT 1 FROM expiry_allocation_input i WHERE i.allocation_id=a.id AND i.vtxo_id=ANY($1)) \
+				OR EXISTS(SELECT 1 FROM expiry_allocation_coin c JOIN expiry_decided_coin d ON d.entitlement_id=c.entitlement_id \
+					WHERE c.allocation_id=a.id AND d.vtxo_id=ANY($1)) ORDER BY a.id",&[&ids]).await?;
+			ensure!(!rows.is_empty(),"terminal joint scope has no retained reservation");
+			for row in rows {
+				ensure!(row.get::<_,&str>("status")=="conflicted","terminal joint reservation is still pending or paid");
+				let allocation:i64=row.get("id");
+				if !allocations.insert(allocation) {continue;}
+				for coin in self.query("SELECT evidence::TEXT FROM expiry_allocation_coin WHERE allocation_id=$1 ORDER BY entitlement_id",&[&allocation]).await? {
+					let evidence:serde_json::Value=serde_json::from_str(coin.get("evidence"))?;
+					ensure!(evidence["kind"]=="htlc_internal_joint_timeout","terminal return crosses an unrelated allocation");
+					pending.insert(evidence["attempt_id"].as_i64().context("joint reservation has no attempt identity")?);
+				}
+			}
+			members.insert(attempt,(subscription,hash,originals,grants));
+		}
+		let incoming=members.values().flat_map(|(_,_,ids,_)|ids.iter().copied()).collect::<BTreeSet<_>>();
+		let grants=members.values().flat_map(|(_,_,_,ids)|ids.iter().copied()).collect::<BTreeSet<_>>();
+		ensure!(incoming.len()==members.values().map(|(_,_,ids,_)|ids.len()).sum::<usize>()
+			&& grants.len()==members.values().map(|(_,_,_,ids)|ids.len()).sum::<usize>()
+			&& incoming.contains(&source) && incoming.is_disjoint(&grants)
+			&& incoming.len()<=MAX_JOINT_GRANTS as usize && grants.len()<=MAX_JOINT_GRANTS as usize,
+			"terminal joint component overlaps or exceeds its original input budget");
+		let mut physical=BTreeSet::new();
+		let allocations=allocations.into_iter().collect::<Vec<_>>();
+		let mut covered=BTreeSet::new();
+		for allocation in &allocations {
+			let row=self.query_one("SELECT status,sweep_tx,confirmed_height FROM expiry_allocation WHERE id=$1",&[allocation]).await?;
+			ensure!(row.get::<_,&str>("status")=="conflicted" && row.get::<_,Option<i64>>("confirmed_height").is_none(),
+				"terminal joint parent has a live canonical payment");
+			let inputs=self.query("SELECT vtxo_id FROM expiry_allocation_input WHERE allocation_id=$1 ORDER BY vtxo_id",&[allocation]).await?
+				.into_iter().map(|row|row.get::<_,&str>("vtxo_id").parse()).collect::<Result<Vec<VtxoId>,_>>()?;
+			ensure!(!inputs.is_empty(),"terminal joint parent lost its physical reservation");
+			let raw=row.get::<_,Option<&[u8]>>("sweep_tx");
+			if let Some(raw)=raw { check_terminal_return_parent(&inputs,&bitcoin::consensus::deserialize(raw)?)?; }
+			identity.push(serde_json::json!({"allocation":allocation,"parent":raw,"inputs":inputs.iter().map(ToString::to_string).collect::<Vec<_>>()}));
+			let allocation_inputs=inputs.iter().copied().collect::<BTreeSet<_>>();
+			physical.extend(inputs);
+			let coins=self.query("SELECT d.vtxo_id,e.id,e.gross_sat,c.gross_sat AS allocated_gross,c.disposition, \
+				c.user_pubkey,c.owner_mailbox,c.spk,c.evidence::TEXT,c.paying_txid \
+				FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				JOIN expiry_decided_coin d ON d.entitlement_id=e.id WHERE c.allocation_id=$1 ORDER BY d.vtxo_id",&[allocation]).await?;
+			let coin_count=self.query_one("SELECT COUNT(*) FROM expiry_allocation_coin WHERE allocation_id=$1",&[allocation]).await?.get::<_,i64>(0);
+			ensure!(usize::try_from(coin_count)?==coins.len() && !coins.is_empty(),"terminal joint allocation has an unbound entitlement");
+			for coin in coins {
+				let id:VtxoId=coin.get::<_,&str>("vtxo_id").parse()?;
+				let (attempt,(subscription,hash,originals,required))=members.iter().find(|(_,(_,_,ids,_))|ids.contains(&id))
+					.context("terminal joint reservation contains an unrelated source")?;
+				let evidence:serde_json::Value=serde_json::from_str(coin.get("evidence"))?;
+				check_existing_joint_evidence(&evidence,*attempt,*subscription,*hash,Some(required))?;
+				let original=htlc_vtxo::get_htlc_vtxo(self,id).await?.context("terminal joint claimant disappeared")?;
+				let claimant=original.vtxo.vtxo.policy().as_server_htlc_send().context("terminal joint claimant policy changed")?.user_pubkey;
+				ensure!(coin.get::<_,&str>("disposition")=="customer"
+					&& u64::try_from(coin.get::<_,i64>("gross_sat"))?==original.amount().to_sat()
+					&& coin.get::<_,i64>("allocated_gross")==coin.get::<_,i64>("gross_sat")
+					&& coin.get::<_,&str>("user_pubkey").parse::<PublicKey>()?==claimant,
+					"terminal joint reservation changes its original principal or claimant");
+				if let Some(paid)=coin.get::<_,Option<&str>>("paying_txid") {
+					ensure!(self.query_opt("SELECT s.source_vtxo_id FROM expiry_user_claim_source s \
+						WHERE s.source_vtxo_id=$1 AND s.claim_txid=$2",&[&id.to_string(),&paid]).await?.is_some(),
+						"terminal joint entitlement has another paying transaction");
+				}
+				ensure!(required.iter().all(|id|allocation_inputs.contains(id)),
+					"terminal joint parent omitted its own complete grant set");
+				if let Some(original_ids)=evidence.get("original_sources") {
+					let ids=original_ids.as_array().context("invalid original joint source set")?.iter()
+						.map(|value|value.as_str().context("invalid original joint source")?.parse::<VtxoId>().map_err(Into::into))
+						.collect::<anyhow::Result<BTreeSet<_>>>()?;
+					ensure!(ids==originals.iter().copied().collect(),"terminal joint source membership changed");
+				}
+				covered.insert(id);
+				identity.push(serde_json::json!({"allocation":allocation,"source":id.to_string(),"entitlement":coin.get::<_,i64>("id"),
+					"gross":coin.get::<_,i64>("gross_sat"),"user_pubkey":coin.get::<_,&str>("user_pubkey"),
+					"mailbox":coin.get::<_,&str>("owner_mailbox"),"script":coin.get::<_,&str>("spk"),"evidence":evidence}));
+			}
+		}
+		ensure!(covered==incoming,"terminal joint scope does not retain every original economic claim");
+		let all=incoming.iter().chain(&grants).chain(&physical).map(ToString::to_string).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+		ensure!(self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1) AND allocation_id<>ALL($2) LIMIT 1",&[&all,&allocations]).await?.is_none(),
+			"terminal joint scope crosses another physical reservation");
+		ensure!(self.query_opt("SELECT d.vtxo_id FROM expiry_decided_coin d WHERE d.vtxo_id=ANY($1) \
+			AND NOT EXISTS(SELECT 1 FROM expiry_allocation_coin c WHERE c.entitlement_id=d.entitlement_id AND c.allocation_id=ANY($2)) LIMIT 1",
+			&[&all,&allocations]).await?.is_none(),"terminal joint scope crosses another economic fence");
+		let mut subscriptions=members.values().map(|(id,_,_,_)|*id).collect::<Vec<_>>();
+		subscriptions.sort_unstable(); subscriptions.dedup();
+		Ok(Some(ConflictedInternalUserClaimScope {source,incoming:incoming.into_iter().collect(),grants:grants.into_iter().collect(),
+			physical:physical.into_iter().collect(),allocations,subscriptions,identity}))
+	}
+
+	/// Caller holds the completed view. No source-only lock may precede this
+	/// complete sorted union. Every writer still observes the retained fences.
+	pub(crate) async fn lock_conflicted_internal_user_claim_scope(
+		&self, proposed:&ConflictedInternalUserClaimScope,
+	) -> anyhow::Result<()> {
+		let ids=proposed.lock_ids();
+		let rows=self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE",&[&ids]).await?;
+		ensure!(rows.len()==ids.len(),"terminal joint scope lost a retained physical/source row");
+		self.query("SELECT id FROM expiry_allocation WHERE id=ANY($1) ORDER BY id FOR UPDATE",&[&proposed.allocations]).await?;
+		self.lock_htlc_settlements().await?;
+		self.query("SELECT id FROM lightning_htlc_subscription WHERE id=ANY($1) ORDER BY id FOR UPDATE",&[&proposed.subscriptions]).await?;
+		let actual=self.conflicted_internal_user_claim_scope(proposed.source).await?.context("terminal joint scope became ineligible")?;
+		ensure!(&actual==proposed,"terminal joint membership or retained reservations changed");
+		Ok(())
+	}
+
+	/// CLAIM-only alternative to the normal guard. It never authorizes progress,
+	/// customer payout or an unrelated mutation of an already reserved output.
+	pub(crate) async fn lock_terminal_internal_grant_returns(
+		&self, view:ExpiryViewToken, ids:&[VtxoId],
+	) -> anyhow::Result<()> {
+		self.lock_valid_expiry_view(view).await?;
+		let names=ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+		let fenced=self.query("SELECT DISTINCT i.vtxo_id,f.id FROM expiry_allocation_input i \
+			JOIN vtxo g ON g.vtxo_id=i.vtxo_id JOIN expiry_lightning_internal_funding f ON f.subscription_id=g.lightning_htlc_subscription_id \
+			WHERE i.vtxo_id=ANY($1) ORDER BY i.vtxo_id,f.id",&[&names]).await?;
+		if fenced.is_empty() {return self.lock_unallocated_watchman_inputs(ids).await;}
+		let mut scopes=BTreeMap::new();
+		for row in fenced {
+			let attempt:i64=row.get("id");
+			let original=self.query_one("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+				WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id LIMIT 1",&[&attempt]).await?.get::<_,String>(0).parse()?;
+			let scope=self.conflicted_internal_user_claim_scope(original).await?.context("reserved grant lacks a complete conflicted internal scope")?;
+			scopes.insert(scope.source,scope);
+		}
+		let all=scopes.values().flat_map(ConflictedInternalUserClaimScope::lock_ids).chain(names.iter().cloned())
+			.collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+		self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE",&[&all]).await?;
+		// All helpers now reacquire only rows already held, before the common
+		// WAL/subscription barrier. No chunk fallback can waive partial proof.
+		let allocations=scopes.values().flat_map(|scope|scope.allocations.iter().copied()).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+		self.query("SELECT id FROM expiry_allocation WHERE id=ANY($1) ORDER BY id FOR UPDATE",&[&allocations]).await?;
+		self.lock_htlc_settlements().await?;
+		let subscriptions=scopes.values().flat_map(|scope|scope.subscriptions.iter().copied()).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+		self.query("SELECT id FROM lightning_htlc_subscription WHERE id=ANY($1) ORDER BY id FOR UPDATE",&[&subscriptions]).await?;
+		let mut allowed=BTreeSet::new();
+		for proposed in scopes.values() {
+			let actual=self.conflicted_internal_user_claim_scope(proposed.source).await?.context("operator return scope changed")?;
+			ensure!(&actual==proposed,"operator return membership changed under its locks");
+			for source in &actual.incoming {
+				ensure!(self.replayable_internal_return_terminal_claim(*source,view).await?.is_some(),
+					"operator return requires every original user's current canonical retained claim");
+			}
+			for grant in ids.iter().filter(|id|actual.grants.contains(id)) {
+				let state=htlc_vtxo::get_htlc_vtxo(self,*grant).await?.context("operator timeout input disappeared")?;
+				check_grant_scope(&state,state.htlc.payment_hash,view,true)?;
+				ensure!(self.query_one("SELECT onchain_spent_height IS NULL AND onchain_spent_txid IS NULL AS unspent FROM vtxo WHERE vtxo_id=$1",&[&grant.to_string()]).await?.get::<_,bool>("unspent"),
+					"operator return grant is already consumed");
+				allowed.insert(*grant);
+			}
+		}
+		let ordinary=ids.iter().copied().filter(|id|!allowed.contains(id)).collect::<Vec<_>>();
+		self.lock_unallocated_watchman_inputs(&ordinary).await
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use bitcoin::{absolute, transaction, TxIn, Txid};
@@ -536,6 +781,30 @@ mod tests {
 			]),existing:BTreeMap::new(),grants:vec![InternalRefundGrant {
 				vtxo:ServerVtxo::from(grant.vtxo.vtxo).to_bare(),confirmed:BlockHeight::new(1),updated_at:Local::now(),
 			}] }
+	}
+
+	#[test]
+	fn terminal_return_cannot_cross_a_different_or_partial_parent_input_set() {
+		let a=VtxoId::from(OutPoint::new(Txid::from_byte_array([11;32]),0));
+		let g=VtxoId::from(OutPoint::new(Txid::from_byte_array([12;32]),0));
+		let admitted=parent(&[a.to_point(),g.to_point()]);
+		assert!(check_terminal_return_parent(&[a,g],&admitted).is_ok());
+		assert!(check_terminal_return_parent(&[a],&admitted).is_err());
+		assert!(check_terminal_return_parent(&[a,g],&parent(&[a.to_point()])).is_err());
+		assert!(check_terminal_return_parent(&[a,g],&parent(&[a.to_point(),a.to_point()])).is_err());
+		let mut different_version=admitted;
+		different_version.version=transaction::Version::TWO;
+		assert!(check_terminal_return_parent(&[a,g],&different_version).is_err());
+	}
+
+	#[test]
+	fn terminal_return_locks_the_complete_sorted_original_grant_and_old_physical_union() {
+		let a=VtxoId::from(OutPoint::new(Txid::from_byte_array([13;32]),0));
+		let g=VtxoId::from(OutPoint::new(Txid::from_byte_array([14;32]),0));
+		let p=VtxoId::from(OutPoint::new(Txid::from_byte_array([15;32]),0));
+		let scope=ConflictedInternalUserClaimScope {source:a,incoming:vec![a],grants:vec![g],physical:vec![p,g],
+			allocations:vec![7],subscriptions:vec![8],identity:vec![]};
+		assert_eq!(scope.lock_ids(),[a,g,p].into_iter().map(|id|id.to_string()).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>());
 	}
 
 	#[test]

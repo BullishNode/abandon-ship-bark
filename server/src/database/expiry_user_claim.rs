@@ -1,6 +1,7 @@
 //! Retain a canonical user's existing timeout authorization independently of
 //! its current confirmation. These rows never create an entitlement or payment.
 
+use anyhow::Context;
 use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
 use ark::vtxo::TapScriptClause;
 use bitcoin::{Transaction, Txid};
@@ -65,6 +66,13 @@ fn terminal_omission_shape(source: &ServerVtxo, claim: &Transaction) -> bool {
 	claim.input.len()==1 && replay_shape(claim) && user_timeout_input(source,claim)
 }
 
+/// A prior financial reservation is not authority to create or alter a user
+/// spend. Only the exact retained DEFAULT authorization may use its private
+/// joint-refund scope; the ordinary financial admission fence stays in place.
+fn retained_terminal_omission_shape(source: &ServerVtxo, claim: &Transaction, retained: &[u8]) -> bool {
+	terminal_omission_shape(source, claim) && serialize(claim) == retained
+}
+
 impl Tx<'_> {
 	/// Called in the same transaction as the canonical source-spend observation,
 	/// or after independently fetching that canonical body during backfill.
@@ -98,6 +106,22 @@ impl Tx<'_> {
 	pub(crate) async fn replayable_terminal_claim(
 		&self, source: VtxoId, view: ExpiryViewToken,
 	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		self.replayable_terminal_claim_with_reservations(source, view, false).await
+	}
+
+	/// Only the complete all-terminal internal grant-return guard may opt into
+	/// an exact prior conflicted reservation. Partial-refund discovery keeps its
+	/// existing unfenced premise and lock union; this does not authorize a new
+	/// customer allocation or weaken its separate rebuild validator.
+	pub(crate) async fn replayable_internal_return_terminal_claim(
+		&self, source: VtxoId, view: ExpiryViewToken,
+	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		self.replayable_terminal_claim_with_reservations(source, view, true).await
+	}
+
+	async fn replayable_terminal_claim_with_reservations(
+		&self, source: VtxoId, view: ExpiryViewToken, allow_reserved_return: bool,
+	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
 		if self.expiry_rebuild_token().await? != Some(view)
 			|| self.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_,bool>("invalid") { return Ok(None); }
 		let row=self.query_opt("SELECT v.vtxo,t.raw_tx,t.txid,t.confirmed_height,b.hash \
@@ -108,9 +132,7 @@ impl Tx<'_> {
 			WHERE v.vtxo_id=$1 AND v.onchain_spent_height=t.confirmed_height \
 			AND t.confirmed_height<=$2 AND h.direction='incoming' AND h.chain_resolution='revoked' \
 			AND h.chain_resolution_height=v.onchain_spent_height AND h.offchain_resolution IS NULL \
-			AND v.oor_spent_txid IS NULL AND v.spent_in_round IS NULL AND v.offboarded_in IS NULL \
-			AND NOT EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=v.vtxo_id) \
-			AND NOT EXISTS(SELECT 1 FROM expiry_allocation_input i WHERE i.vtxo_id=v.vtxo_id)",
+			AND v.oor_spent_txid IS NULL AND v.spent_in_round IS NULL AND v.offboarded_in IS NULL",
 			&[&source.to_string(),&i64::from(view.captaind.height.min(view.watchmand.height))]).await?;
 		let Some(row)=row else { return Ok(None); };
 		let body=ServerVtxo::deserialize(row.get("vtxo"))?;
@@ -120,18 +142,48 @@ impl Tx<'_> {
 		// Only a single-input claim supplies terminal omission today: that
 		// exact source is in the final component lock union. A batched claim
 		// would need every additional known input in that same final union.
-		if !terminal_omission_shape(&body,&claim) { return Ok(None); }
+		if !retained_terminal_omission_shape(&body,&claim,row.get("raw_tx")) { return Ok(None); }
+		if self.user_claim_has_obligation_fences(&[source]).await?
+			&& (!allow_reserved_return || self.conflicted_internal_user_claim_scope(source).await?.is_none()) { return Ok(None); }
 		Ok(Some(ReplayableTerminalClaim { source,claim,confirmed:BlockRef {
 			height:row.get::<_,i64>("confirmed_height").try_into()?,hash:row.get::<_,&str>("hash").parse()?,
 		}}))
 	}
 
-	/// Recheck under the same sorted source locks used by all competing writes.
+	async fn user_claim_has_obligation_fences(&self, ids: &[VtxoId]) -> anyhow::Result<bool> {
+		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+		Ok(self.query_one("SELECT EXISTS(SELECT 1 FROM expiry_decided_coin WHERE vtxo_id=ANY($1)) \
+			OR EXISTS(SELECT 1 FROM expiry_allocation_input WHERE vtxo_id=ANY($1)) AS fenced", &[&ids])
+			.await?.get("fenced"))
+	}
+
+	/// The caller holds the completed view. Choose the exact scoped reservation
+	/// BEFORE taking any single-source lock: its full original/grant/physical
+	/// union must be locked in one order, followed by allocations and WAL/subs.
 	/// A new off-chain obligation must never be undone by replaying stale raw.
 	pub(crate) async fn guard_user_claim_replay(&self, claim: &Transaction) -> anyhow::Result<()> {
 		ensure!(replay_shape(claim),"retained user claim exceeds replay capacity");
+		let retained = self.query_opt("SELECT raw_tx FROM expiry_user_claim_tx WHERE txid=$1",
+			&[&claim.compute_txid().to_string()]).await?.context("user claim replay has no retained authorization")?;
+		let raw: &[u8] = retained.get("raw_tx");
+		ensure!(serialize(claim) == raw, "user claim replay changes the retained authorization");
 		let ids=claim.input.iter().map(|input|VtxoId::from(input.previous_output)).collect::<Vec<_>>();
-		super::expiry_guard::guard_obligation_changes(self,&ids).await?;
+		if self.user_claim_has_obligation_fences(&ids).await? {
+			let linked = self.query("SELECT v.vtxo FROM expiry_user_claim_source s \
+				JOIN vtxo v ON v.vtxo_id=s.source_vtxo_id WHERE s.claim_txid=$1",
+				&[&claim.compute_txid().to_string()]).await?;
+			ensure!(linked.len() == 1, "reserved user claim replay requires one exact original source");
+			let source = ServerVtxo::deserialize(linked[0].get("vtxo"))?;
+			ensure!(retained_terminal_omission_shape(&source, claim, raw),
+				"reserved user claim replay requires the retained single-input DEFAULT authorization");
+			let scope = self.conflicted_internal_user_claim_scope(source.id()).await?
+				.context("retained user claim crosses an unrelated or live financial reservation")?;
+			self.lock_conflicted_internal_user_claim_scope(&scope).await?;
+		} else {
+			// If a fence is inserted after the initial read, the ordinary guard
+			// rejects this pass. Retry may then take the complete scoped union.
+			super::expiry_guard::guard_obligation_changes(self,&ids).await?;
+		}
 		let ids=ids.iter().map(ToString::to_string).collect::<Vec<_>>();
 		let rows=self.query("SELECT v.vtxo_id,v.oor_spent_txid,v.spent_in_round,v.offboarded_in,h.offchain_resolution::TEXT AS offchain_resolution \
 			FROM vtxo v LEFT JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=ANY($1)", &[&ids]).await?;
@@ -186,6 +238,21 @@ mod tests {
 		assert!(replay_shape(&batched));
 		assert!(!terminal_omission_shape(&source,&batched),"extra inputs are not in the terminal original source lock union");
 		let bytes=serialize(&claim);
+		assert!(retained_terminal_omission_shape(&source, &claim, &bytes));
+		assert!(!retained_terminal_omission_shape(&source, &batched, &serialize(&batched)),
+			"a financial reservation does not authorize a batched scope shortcut");
+		let mut altered = claim.clone();
+		altered.output.push(bitcoin::TxOut {value:bitcoin::Amount::from_sat(1),script_pubkey:Default::default()});
+		assert!(!retained_terminal_omission_shape(&source, &altered, &bytes),
+			"same source/script is insufficient when the retained user outputs change");
+		let mut altered_witness = claim.clone();
+		let mut witness = claim.input[0].witness.iter().map(|item| item.to_vec()).collect::<Vec<_>>();
+		witness[0][0] = 1;
+		altered_witness.input[0].witness = Witness::from_slice(&witness);
+		assert_eq!(altered_witness.compute_txid(), claim.compute_txid());
+		assert!(user_timeout_input(&source, &altered_witness));
+		assert!(!retained_terminal_omission_shape(&source, &altered_witness, &bytes),
+			"same txid does not permit replacing the exact retained witness");
 		let retained:Transaction=deserialize(&bytes).unwrap();
 		assert_eq!(serialize(&retained),bytes);
 		claim.input[0].previous_output=source.chain_anchor();

@@ -1,0 +1,44 @@
+{
+  "state": "FROZEN_PUBLIC_INPUT_HASH_PROVENANCE_NO_NEW_RAW_RECONCILIATION",
+  "independent_audit_sha256": "ca8f1bd9f4ac19856a8e12e705492434d14669df948998f39c792b9e9d82cae9",
+  "independent_audit_parser_sha256": "25b3fe18bc4a7d43b7a2e4abaabaf8ad26e67508ffed1d6b7d9aa19f143b47f6",
+  "parent_recompute_sha256": "503892b4a4d567d291bd27a47027f916deb9ee7bed6f999012c5f3c0b1c4b209",
+  "parent_script_sha256": "6796afabf81df3d2983a33bb4c35a8f70b30aedf3984591e28da3ab32b6deb26",
+  "parent_scope": "Arithmetic recheck of decoded DAG/frontier records and9 original publicinput rehashes, NOT second rawdecode; exporter reran neither parser nor recomputation",
+  "typed_public_capsules_byte_exact": [
+    {
+      "source_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/test-data/server/qualification_dust_later_receipt/dust-later-public-receipt.json",
+      "destination": "dust-later-public-receipt.json",
+      "sha256": "35f5d95865460e1ed2a9fac63fe2b70d1d9301049d3060e1ea48be6fb309be16"
+    },
+    {
+      "source_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/test-data/server/qualification_three_owner_forwarding/three-owner-forwarding-public-receipt.json",
+      "destination": "three-owner-forwarding-public-receipt.json",
+      "sha256": "aeb519daf61602a08b60de9320b3cfb1dba8859eae0c997a396aafbc5ae49900"
+    }
+  ],
+  "original_input_sha256_before_and_after_recorded_by_auditor": {
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-postflight-backend-actors.json": "ae6ec940769d61310b74e76b865c4295fc23ebf1e98279af96093dc63ee1c300",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-postflight-backend.json": "161a59128023f247289fff751bab620b3aaf87d20c6adce21f49a6aa16857ee3",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint23-final-safe/financial/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": "f88a7d9a116b3f59c924f4076dcb91d5b62c4590a0da4453c326ad253cadc146",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/test-data/server/qualification_dust_later_receipt/dust-later-public-receipt.json": "35f5d95865460e1ed2a9fac63fe2b70d1d9301049d3060e1ea48be6fb309be16",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/test-data/server/qualification_dust_later_receipt/bitcoind/regtest/blocks/xor.dat": "45f719f57254fe57b447819408f4bacd4921de270469f79ed1e7cad794bf4290",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/test-data/server/qualification_dust_later_receipt/bitcoind/regtest/blocks/blk00000.dat": "b30eb05161dc3dc7413d04a988d8d16ad28826f27e070ee4d4fccfc44648ccb8",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/test-data/server/qualification_three_owner_forwarding/three-owner-forwarding-public-receipt.json": "aeb519daf61602a08b60de9320b3cfb1dba8859eae0c997a396aafbc5ae49900",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/test-data/server/qualification_three_owner_forwarding/bitcoind/regtest/blocks/xor.dat": "45f719f57254fe57b447819408f4bacd4921de270469f79ed1e7cad794bf4290",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/test-data/server/qualification_three_owner_forwarding/bitcoind/regtest/blocks/blk00000.dat": "e7d6233ce7ef4b3f4aef3da0a27b2ed2ea2b5d49fc2f3458c8b309da6d41b0df"
+  },
+  "all_auditor_read_inputs_unchanged": true,
+  "pure_decoder": {
+    "public_helper_sha256": "f88a7d9a116b3f59c924f4076dcb91d5b62c4590a0da4453c326ad253cadc146",
+    "function_AST_sha256": {
+      "digest": "5b02eb3b8922615b044092ee9473f06c19b78a2dd7a4d5373380aaf88c1fff51",
+      "vi": "e1faa24972682e9478e07cb8ddf34fad47211472d7fd5702e023020441a746df",
+      "tx": "8c410766edb2e56d150d3fb44e412ccc416cb0e7777084d5a9c6f312c2be8350"
+    },
+    "only_digest_vi_tx_function_ASTs_executed": true,
+    "old_hardcoded_entrypoints_excluded": true
+  },
+  "excluded_not_copied": "No blk/xor/testdata/rawnative/debuglogs/argv/privatewallet/PG/DB/config/seeds/keys/backups/protection snapshots. Largepublicblocks referenced only by frozen hashes.",
+  "financial_limits": "Successive H32frontiers cannotbeadded; one firstunused100ksponsor isspent inepoch2. Operatorlabel/nativewatchmembership\u2260independentprivatecustody. Native signed/account/history rights separatefrompublicchain amounts. No independentmempooldecode/activeCorestateDB/globalcustody/FULLML/production."
+}

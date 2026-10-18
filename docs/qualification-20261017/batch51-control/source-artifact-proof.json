@@ -1,0 +1,929 @@
+{
+  "kind": "V19_H32_H11_PURE_HOST_SOURCE_ARTIFACT_INTAKE",
+  "state": "PASS_HOST_BINDINGS_NO_ROOT_NATIVE_ALLOCATION_NOT_RUN",
+  "at": "2026-10-18T10:52:30.125612+00:00",
+  "directory": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018",
+  "source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+  "source_archive_sha256": "c4bd8779088622c9b7b8af4a8c438a0ab872f9a368b7a79c5f87feead725f1df",
+  "bundle_manifest_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+  "source_identity": {
+    "captured_HEAD": "4e3f916f833567d874a11453170fa1c5f7563736",
+    "dirty": true,
+    "diff_sha256": "c4fca03573694ac9b2268ba1b6dce6d325306c856239e696c7eb7bc4518c0607",
+    "archive_entries": 2341,
+    "all_names_resolved_content_hashes_match": true,
+    "symlinks": [
+      {
+        "path": "AGENTS.md",
+        "target": "CLAUDE.md",
+        "resolved_content_sha256": "5f3a81a5f9592ecc2a71e275682a3a6a4a97e554632d4a08f1dccd6ebea439ee"
+      }
+    ],
+    "not_extracted": true
+  },
+  "our_source_bindings": [
+    {
+      "id": "H32",
+      "binary": "ark-testing::server",
+      "selector": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+      "full_file_sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+      "reviewed_manifest_sha256": "2df1356f5f7e8c9aaee35d5fbb32d6f59c7578799e3d5f107d3ab5c7aba2b8ff",
+      "matches_reviewed_owned_bytes": true,
+      "explicit_module": "mod qualification_dust_later_receipt;",
+      "entry_function": {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+        "start_line": 474,
+        "end_line": 480,
+        "function_sha256": "8db3c696dd8243123254843593be3ee641bfc2c39800a869d5b2e8b390d93b67",
+        "brace_body_sha256": "202366e0fe96054749e7a1590ade228428bbf3542046b615073f3b53bac91ea7"
+      },
+      "local_helpers_and_implementation_regions": [
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "fields",
+          "start_line": 25,
+          "end_line": 30,
+          "function_sha256": "657327469e8c3763a82faaadecf93f4b04b8ab198ac1c08c0bb7bdb79a2697bc",
+          "brace_body_sha256": "961aeb6ce6398f3c9765d376f48a11dbcc62a8f64fa9b9ab5af78a94bfeb08a2"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "balances",
+          "start_line": 32,
+          "end_line": 38,
+          "function_sha256": "c1125cc6d54efea685535e8339a60a289d5f22cb20750fc018b33edc19c4eb48",
+          "brace_body_sha256": "131cf3dfa6c4eedf41aa4c5e4789c6db829cc0b5b037bb7fccedbd503c994374"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "rebuilt",
+          "start_line": 40,
+          "end_line": 54,
+          "function_sha256": "48bbe1c8e500d55d3150a9ab4c10e0b6d4a850c123bc2276086529f644bba687",
+          "brace_body_sha256": "cbec568e8dce6006acd4c0fe9cb42302c59fd0d971048ac0327334d5e9c9189c"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "actual_fee",
+          "start_line": 56,
+          "end_line": 65,
+          "function_sha256": "7c033f3b8a531f773867c0d9cd7d6961d9f7d318998c3f41c86c8328526eeb2b",
+          "brace_body_sha256": "4753b2997a6365f5652fa169df32661647dd0f8b4a077e3b742527731d761293"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "watch_coins",
+          "start_line": 67,
+          "end_line": 72,
+          "function_sha256": "37638aaf3e80989cb72f5c6d75aecd7c0411075719087813cb1ef85d75c30c61",
+          "brace_body_sha256": "0ba2328dcd40fa4c4b0d3de1a38180140ed587394a1353358ef7bda30486ecfc"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "transfer",
+          "start_line": 95,
+          "end_line": 158,
+          "function_sha256": "5152669295b0a2360ea5adb3ecc498d3be5561ec161aed93e3536c2537d50833",
+          "brace_body_sha256": "df761ca0d914421f43804c396f4f3b9fd66c7eea72594e47401685afa8ecd022"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "confirm_epoch",
+          "start_line": 160,
+          "end_line": 282,
+          "function_sha256": "b338554fe48fd4a42651163386574c2f0ca93e109e6859aee57fd90bff9c5ee1",
+          "brace_body_sha256": "d16e3dea5c48c2c38640ad92bf80343bf17d3cbb582ce3a82c997e6589af5a26"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "receipt",
+          "start_line": 284,
+          "end_line": 309,
+          "function_sha256": "d16b3e60d7e6b831cc9e7fc93afa6bc1ac6fb398554e544680c08619d2aea1e1",
+          "brace_body_sha256": "d648986719a888815c1077c099fe3de1a1d01df43e162a8f06f3d388fbf46682"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "history",
+          "start_line": 311,
+          "end_line": 355,
+          "function_sha256": "54fac4cc734aaf7fbdb9ace459aa313880b7e6cc9bea2e93f64a5210584ae10c",
+          "brace_body_sha256": "51437af2d7aafa933c96719dbc4e71bdecee486248bce0412e5fbdfc97778754"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "financial_cut",
+          "start_line": 359,
+          "end_line": 471,
+          "function_sha256": "4c797c14760b4124781e42b3546ee712d10ef926340afe03b7d7ec2e2cdd0371",
+          "brace_body_sha256": "85a510b52799d0d4f09b5d549e9ba9b95f8e689a05ae74b099a8572af8c8a924"
+        },
+        {
+          "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+          "function": "two_receipts",
+          "start_line": 482,
+          "end_line": 709,
+          "function_sha256": "4f77338b51838ccfe6df4d021a310d5f387c00038ee114513f7c4112e3b77876",
+          "brace_body_sha256": "9b16180896c27847f2c742fa5104029a49627de37e0ac5d1ca3fe5c4ccfa6807"
+        }
+      ],
+      "native_result": "NOT RUN"
+    },
+    {
+      "id": "H11",
+      "binary": "ark-testing::server",
+      "selector": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+      "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+      "full_file_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+      "reviewed_manifest_sha256": "6d0a3018305442eab0139ca0ba7ea961604115c6e3b2e0ca11ce0ed5a7c17943",
+      "matches_reviewed_owned_bytes": true,
+      "explicit_module": "mod qualification_three_owner_forwarding;",
+      "entry_function": {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "only_final_owner_receives_after_two_full_value_forwards",
+        "start_line": 509,
+        "end_line": 515,
+        "function_sha256": "5e5e7fa49b2576c0567724b05ecd0db8ad49282d00966b03da02d25cfb61710d",
+        "brace_body_sha256": "ac3bb3bc38b5b13722bc8da83f994176c02af37eae185b2fe421014b4dad3fe7"
+      },
+      "local_helpers_and_implementation_regions": [
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "fields",
+          "start_line": 25,
+          "end_line": 30,
+          "function_sha256": "657327469e8c3763a82faaadecf93f4b04b8ab198ac1c08c0bb7bdb79a2697bc",
+          "brace_body_sha256": "961aeb6ce6398f3c9765d376f48a11dbcc62a8f64fa9b9ab5af78a94bfeb08a2"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "balances",
+          "start_line": 32,
+          "end_line": 38,
+          "function_sha256": "c1125cc6d54efea685535e8339a60a289d5f22cb20750fc018b33edc19c4eb48",
+          "brace_body_sha256": "131cf3dfa6c4eedf41aa4c5e4789c6db829cc0b5b037bb7fccedbd503c994374"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "rebuilt",
+          "start_line": 40,
+          "end_line": 54,
+          "function_sha256": "48bbe1c8e500d55d3150a9ab4c10e0b6d4a850c123bc2276086529f644bba687",
+          "brace_body_sha256": "cbec568e8dce6006acd4c0fe9cb42302c59fd0d971048ac0327334d5e9c9189c"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "actual_fee",
+          "start_line": 56,
+          "end_line": 65,
+          "function_sha256": "7c033f3b8a531f773867c0d9cd7d6961d9f7d318998c3f41c86c8328526eeb2b",
+          "brace_body_sha256": "4753b2997a6365f5652fa169df32661647dd0f8b4a077e3b742527731d761293"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "watch_coins",
+          "start_line": 67,
+          "end_line": 72,
+          "function_sha256": "37638aaf3e80989cb72f5c6d75aecd7c0411075719087813cb1ef85d75c30c61",
+          "brace_body_sha256": "0ba2328dcd40fa4c4b0d3de1a38180140ed587394a1353358ef7bda30486ecfc"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "confirm_epoch",
+          "start_line": 94,
+          "end_line": 216,
+          "function_sha256": "67f0c2f7bc8947f5c4b542c28bb5abda310a83cece57840d65df20167245fed0",
+          "brace_body_sha256": "c44279f4980f8645dc43482c7ffd0c321ae9210ef644693d7cf78b5350e36fb6"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "receipt",
+          "start_line": 218,
+          "end_line": 243,
+          "function_sha256": "d16b3e60d7e6b831cc9e7fc93afa6bc1ac6fb398554e544680c08619d2aea1e1",
+          "brace_body_sha256": "d648986719a888815c1077c099fe3de1a1d01df43e162a8f06f3d388fbf46682"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "history",
+          "start_line": 245,
+          "end_line": 289,
+          "function_sha256": "54fac4cc734aaf7fbdb9ace459aa313880b7e6cc9bea2e93f64a5210584ae10c",
+          "brace_body_sha256": "51437af2d7aafa933c96719dbc4e71bdecee486248bce0412e5fbdfc97778754"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "financial_cut",
+          "start_line": 293,
+          "end_line": 405,
+          "function_sha256": "fbb815a79584c5dcde1ffcb0005797ed76d62db6127d96000c22aa8ec37915c3",
+          "brace_body_sha256": "e426c626e05a1d0f0e6106069bb877934b96b893622b22ef94d799154d553728"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "send_full",
+          "start_line": 410,
+          "end_line": 490,
+          "function_sha256": "859d402b9f8b541cf6c26d2bf72a8baefd33c11b28ef2f201aa857e2b6d90d12",
+          "brace_body_sha256": "0dbda686955144dd5dac83285032f370addf7e67bd334211b1ce7a99e8a1a79b"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "predecessor",
+          "start_line": 492,
+          "end_line": 506,
+          "function_sha256": "f2b60dbbdb3a04fe5a10622c999cd0bfa6dc04c15f0c1a53801669d1d2704d63",
+          "brace_body_sha256": "d75428f3ccc274de2bd19d368d7dd2646750134e92e23d6c46c4a440370997a4"
+        },
+        {
+          "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+          "function": "three_owners",
+          "start_line": 517,
+          "end_line": 699,
+          "function_sha256": "f82166cbdf2163cf55d7180b29e90df06cef068c77d512a3843909e1b867040c",
+          "brace_body_sha256": "2d1d6b059366f711337af6235370d044b9833c560d62385d7afaa9c7247cade1"
+        }
+      ],
+      "native_result": "NOT RUN"
+    }
+  ],
+  "whole_file_API_schema_helper_bindings": {
+    "bark/src/lib.rs": {
+      "captured_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+        "owned_sha256": "2486a4f20a5e014febc859c83cdac42dd3658e336a31d1947f047b1f234823aa",
+        "same_bytes": false
+      }
+    },
+    "bark/src/mailbox.rs": {
+      "captured_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+        "owned_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+        "same_bytes": true
+      }
+    },
+    "bark/src/recovery.rs": {
+      "captured_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+        "owned_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+        "identical": true
+      }
+    },
+    "bark/src/fallback/adoption.rs": {
+      "captured_sha256": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+        "owned_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+        "same_bytes": false
+      }
+    },
+    "bark/src/fallback/sync.rs": {
+      "captured_sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+        "owned_sha256": "dc24a84878eaf20b4158836c2503881797a792fae699a442f47f3731ee6bfe26",
+        "same_bytes": false
+      }
+    },
+    "bark/src/fallback/payouts.rs": {
+      "captured_sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+        "owned_sha256": "eeb8e7c2706fa163c7525c9ededd4492689da667bfdb231c78084cc564afd349",
+        "same_bytes": false
+      }
+    },
+    "bark/src/fallback/protection.rs": {
+      "captured_sha256": "b0f3040f9d707c28fac3f42869a2429dc583e0b0692b964f67c16763bb2fb26e",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "b0f3040f9d707c28fac3f42869a2429dc583e0b0692b964f67c16763bb2fb26e",
+        "owned_sha256": "4cb7198e8bb98871b378a9a7ae9e32a9ed0849bb774e9b8a0818982ef2212253",
+        "identical": false
+      }
+    },
+    "bark/src/fallback/spend_proof.rs": {
+      "captured_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+        "owned_sha256": null,
+        "same_bytes": false
+      }
+    },
+    "bark/src/exit/mod.rs": {
+      "captured_sha256": "b66a647f12b566322ff756ca56bc64d7d454c00b4eb6dd18ce4bc7567142eaad",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "b66a647f12b566322ff756ca56bc64d7d454c00b4eb6dd18ce4bc7567142eaad",
+        "owned_sha256": "ed351105d2fc368b18d7a9f6f737bfe6214417c246c313d20403ca9b3c89917e",
+        "identical": false
+      }
+    },
+    "bark/src/onchain/bdk.rs": {
+      "captured_sha256": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85",
+        "owned_sha256": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85",
+        "identical": true
+      }
+    },
+    "lib/src/fallback.rs": {
+      "captured_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+        "owned_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+        "same_bytes": true
+      }
+    },
+    "lib/src/mailbox.rs": {
+      "captured_sha256": "4f51e97a1eabe54b3e495e2537d5edaf4623b1392f234648cba6898c69095abc",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "4f51e97a1eabe54b3e495e2537d5edaf4623b1392f234648cba6898c69095abc",
+        "owned_sha256": "4f51e97a1eabe54b3e495e2537d5edaf4623b1392f234648cba6898c69095abc",
+        "identical": true
+      }
+    },
+    "lib/src/arkoor/package.rs": {
+      "captured_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+        "owned_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+        "identical": true
+      }
+    },
+    "lib/src/arkoor/mod.rs": {
+      "captured_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+        "owned_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+        "identical": true
+      }
+    },
+    "server/src/arkoor.rs": {
+      "captured_sha256": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+        "owned_sha256": "5daa060b0c5307a12e11545f037977bd21334dd9cf11c24e2ff5124f36399833",
+        "identical": false
+      }
+    },
+    "server/src/watchman/settlement.rs": {
+      "captured_sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+        "owned_sha256": "d09a4c2a303ed9d3f853fdd351b9e6e81ca89929642e573df6fddeb57d2f3d36",
+        "identical": false
+      }
+    },
+    "server/src/watchman/payout.rs": {
+      "captured_sha256": "19769210f706753f65749fa741179a5090bfd6a92c1e444c92d97605963eb32a",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "19769210f706753f65749fa741179a5090bfd6a92c1e444c92d97605963eb32a",
+        "owned_sha256": "6c62a55dcdd76aba427de36a14f37b546beb57dc8667cbd71958426d5e92883e",
+        "identical": false
+      }
+    },
+    "server/src/watchman/recovery.rs": {
+      "captured_sha256": "93d16b541dca8be0a4524d153d32ca4f48cb9b735794a2f5920ce820876eab1f",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "93d16b541dca8be0a4524d153d32ca4f48cb9b735794a2f5920ce820876eab1f",
+        "owned_sha256": "ee4534800f0b6845a90dc6f557682c9fc9049c23a4b7693fdf10d12b8301b4c0",
+        "identical": false
+      }
+    },
+    "server/src/database/expiry_details.rs": {
+      "captured_sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+        "owned_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+        "same_bytes": false
+      }
+    },
+    "server/src/database/expiry_decision.rs": {
+      "captured_sha256": "50d535e7630fd0c787d1cc21f3cb59b6cb7144239badb04f2b6822dce7101ebd",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "50d535e7630fd0c787d1cc21f3cb59b6cb7144239badb04f2b6822dce7101ebd",
+        "owned_sha256": "b649088e18efd0a812e3fa6f4476cbf92915bf595808cdde591c308046f2fa28",
+        "identical": false
+      }
+    },
+    "server/src/database/ordinary_spend.rs": {
+      "captured_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+        "owned_sha256": null,
+        "same_bytes": false
+      }
+    },
+    "server/src/database/fallback.rs": {
+      "captured_sha256": "71b8dfae45ddad92f9c69a32f9b0d474f4c928f202c9b1aed647b83993b23fe9",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "71b8dfae45ddad92f9c69a32f9b0d474f4c928f202c9b1aed647b83993b23fe9",
+        "owned_sha256": "45388819f9f1f610464f767cd8367432a6e4fd6322778ad5180f2205ec8b5925",
+        "identical": false
+      }
+    },
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": {
+      "captured_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+        "owned_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+        "same_bytes": true
+      }
+    },
+    "testing/src/context/mod.rs": {
+      "captured_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+        "owned_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+        "same_bytes": true
+      }
+    },
+    "testing/src/context/builders.rs": {
+      "captured_sha256": "540a818dc3c22aa9d78cba692851df68a50fb268ceca0e05b81eb14f209c6d72",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+        "owned_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+        "same_bytes": true
+      }
+    },
+    "testing/src/bark.rs": {
+      "captured_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+        "owned_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+        "same_bytes": true
+      }
+    },
+    "testing/src/daemon/watchmand.rs": {
+      "captured_sha256": "e66722cd79876985808e5ed6d84a631f67c13d603153d139beb35756e2abdca5",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+        "owned_sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+        "identical": true
+      }
+    },
+    "testing/src/daemon/captaind/mod.rs": {
+      "captured_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+        "owned_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+        "same_bytes": true
+      }
+    },
+    "server-rpc/src/lib.rs": {
+      "captured_sha256": "33164cf2bedfab6f944c0d08e33c1d2dfac3edc4c59c1e95ba491f3afe72c2a7",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "33164cf2bedfab6f944c0d08e33c1d2dfac3edc4c59c1e95ba491f3afe72c2a7",
+        "owned_sha256": "9e6da29a2e5e282c9fcdc79f6bbaf9d07edb1e3727c7209a7691efef4ee44703",
+        "identical": false
+      }
+    },
+    "server-rpc/protos/bark_server.proto": {
+      "captured_sha256": "6ccf1b22452ef232c6ff31eb390fb366fc65750168fe279caa769f4f099e464c",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "6ccf1b22452ef232c6ff31eb390fb366fc65750168fe279caa769f4f099e464c",
+        "owned_sha256": "4853b54b00fc2ee7059af3c3159313a19da156d12806092f40429700e4044619",
+        "same_bytes": false
+      }
+    },
+    "bark/src/arkoor.rs": {
+      "captured_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+        "owned_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+        "same_bytes": true
+      }
+    },
+    "bark/src/actions/arkoor_send.rs": {
+      "captured_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+        "owned_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+        "same_bytes": true
+      }
+    },
+    "bark/src/fallback.rs": {
+      "captured_sha256": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+        "owned_sha256": "57cabf9b3eea09024e59c901067f1f5bb6bc2cc93f4fe376fa295ba9c81d546d",
+        "same_bytes": false
+      }
+    },
+    "bark/src/balance.rs": {
+      "captured_sha256": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+        "owned_sha256": "905684f07daaddfd6b78f4c0398359c170161e95ebbdd7674ea06e6ed9a124d3",
+        "same_bytes": false
+      }
+    },
+    "bark/src/movement/mod.rs": {
+      "captured_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+        "owned_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+        "same_bytes": true
+      }
+    },
+    "bark/src/movement/payment_method.rs": {
+      "captured_sha256": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+        "owned_sha256": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+        "same_bytes": true
+      }
+    },
+    "lib/src/vtxo/mod.rs": {
+      "captured_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+        "owned_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+        "same_bytes": true
+      }
+    },
+    "lib/src/attestations.rs": {
+      "captured_sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+        "owned_sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+        "same_bytes": true
+      }
+    },
+    "lib/src/address.rs": {
+      "captured_sha256": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+        "owned_sha256": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+        "same_bytes": true
+      }
+    },
+    "server/src/database/mod.rs": {
+      "captured_sha256": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416",
+        "owned_sha256": "29f8b4122404b98b41b59867b33adb142e6f03534c8b039ca41535dea0bd5bb2",
+        "same_bytes": false
+      }
+    },
+    "server/src/database/expiry_ownership.rs": {
+      "captured_sha256": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+        "owned_sha256": "a2fdfa9cefc5f02629adb992e1441c339451e3377702694f1ea3a07de2c612bf",
+        "same_bytes": false
+      }
+    },
+    "server/schema.sql": {
+      "captured_sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+        "owned_sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+        "same_bytes": true
+      }
+    },
+    "testing/tests/server/mod.rs": {
+      "captured_sha256": "dc42cca1e46722b6544fce96072f0bfb88d9d24819422fd0b43cde134b350909",
+      "historical_reviewed_pair_or_pin": {
+        "canonical_sha256": "be30fa90fa9fa0c179dc3452cdb8ae051ac8624936e2ebac41f5d17b0ba49f8e",
+        "owned_sha256": "5d7d37ba46825e988876b0a6158ac363416feefe742decad975b77609565b6ee",
+        "same_bytes": false
+      }
+    }
+  },
+  "actual_API_function_regions": [
+    {
+      "file": "bark/src/arkoor.rs",
+      "function": "send_arkoor_payment",
+      "start_line": 290,
+      "end_line": 303,
+      "function_sha256": "5005a8a98ecd821db5ebe450f46dce13cf5e7a7a7f58035a9153af0f4eedde3c",
+      "brace_body_sha256": "c0ceeb25d78265516b42d79b47d37049f43b61b2aac39bbce94a5302069b98cd"
+    },
+    {
+      "file": "bark/src/arkoor.rs",
+      "function": "pending_arkoor_sends",
+      "start_line": 306,
+      "end_line": 311,
+      "function_sha256": "8df4e2524fbf99bda379c44ebf671c47a13861d08e033273899a81d9b51f5757",
+      "brace_body_sha256": "eeb4081d4a7a8503be6108810519f3a87f1503c2b7a274101bc55f46921e4f49"
+    },
+    {
+      "file": "bark/src/mailbox.rs",
+      "function": "sync_mailbox",
+      "start_line": 297,
+      "end_line": 332,
+      "function_sha256": "dada71f4b20f18051d9a1758c2bb5d44ba83ccae3e379a0beec3b8a780e6b676",
+      "brace_body_sha256": "fd6ecda9c5f946ccaa1fc610067404568eaed019ed638c9575fd678f140940c0"
+    },
+    {
+      "file": "bark/src/mailbox.rs",
+      "function": "process_received_arkoor_package",
+      "start_line": 475,
+      "end_line": 556,
+      "function_sha256": "6f03adbc2edbdd2a4bab8d5f1a6250a203dca87ebcd30121514689925be3a957",
+      "brace_body_sha256": "85534df91cdcee9d297b8954312910d8bb05e92a7d075e7de345fed0ad019a11"
+    },
+    {
+      "file": "bark/src/lib.rs",
+      "function": "get_vtxo_key",
+      "start_line": 1140,
+      "end_line": 1151,
+      "function_sha256": "2340af1a968a8aaa0d00dc19f973a0f75d2442e89a3cb32c7554345f813068a1",
+      "brace_body_sha256": "c33d9da20d5137a5ff157b1a4abe14738a5ecbc1648820c0b12704fe93ed3154"
+    },
+    {
+      "file": "bark/src/lib.rs",
+      "function": "get_full_vtxo",
+      "start_line": 1710,
+      "end_line": 1714,
+      "function_sha256": "9dfef81f9c1d37281c52b8e22c8f9403fb029fc5e6ee9e014b1573b1c16414a1",
+      "brace_body_sha256": "5f512c1557a08a93526c0495d8dc316158e93dbcec9123aab907502adc84b96d"
+    },
+    {
+      "file": "bark/src/lib.rs",
+      "function": "history",
+      "start_line": 1735,
+      "end_line": 1739,
+      "function_sha256": "112a09ef8ea2a86efef01b7eaebe16936c2ae66bfd2ed3a0e09378cf5ef5d811",
+      "brace_body_sha256": "40d9fcdd42fa63fe3c8042c99b280bcb71793a10a44ac9e53c4362b39f46afa7"
+    },
+    {
+      "file": "bark/src/lib.rs",
+      "function": "stop_daemon_wait",
+      "start_line": 2524,
+      "end_line": 2530,
+      "function_sha256": "81fd2da84a497df3f7e19ccd31924afd8b2c8ef232c7e495ff01b2227db00267",
+      "brace_body_sha256": "0ed0769dc88917989ec3d1f3fbfa7746160c5c2583d660f6d0893e747d659ff6"
+    },
+    {
+      "file": "bark/src/fallback/sync.rs",
+      "function": "sync_fallback_payouts",
+      "start_line": 148,
+      "end_line": 242,
+      "function_sha256": "8460918204cbb8ad1a6c5cf2a2c98e70003b81aa8a48994d34ab64e704d7153f",
+      "brace_body_sha256": "8c9d9da2dc817c7c85fd08af656b424dcc2dda0651348375f2af690ee1c2f885"
+    },
+    {
+      "file": "bark/src/fallback/sync.rs",
+      "function": "fallback_payouts",
+      "start_line": 244,
+      "end_line": 246,
+      "function_sha256": "60534e43e9d39789be2f4585f537731beb0dea9c35078ee05cde52a5d3d905f8",
+      "brace_body_sha256": "064d03b24129142e71e1088a4da7ef105a84dd39106f0833aa23e180225098a7"
+    },
+    {
+      "file": "bark/src/fallback/spend_proof.rs",
+      "function": "verify_reported_ordinary_spend",
+      "start_line": 74,
+      "end_line": 89,
+      "function_sha256": "1d1fa3b81f92c67ea2fa591869c2d908acff17b1712841506f51277a79fb9e9a",
+      "brace_body_sha256": "674ae4027d359254a9314e3725ca3aa44c0e4ce33a9f4591deb8312acdf09982"
+    },
+    {
+      "file": "server/src/database/mod.rs",
+      "function": "read",
+      "start_line": 398,
+      "end_line": 403,
+      "function_sha256": "5c9fc9f44f337bd89a7944984a6a06466577ca316384952dfd692dffef2b3c17",
+      "brace_body_sha256": "a9bd7c509de730db2451ac2fff872d60e5586178225d3267b858ee46a8e3da1a"
+    },
+    {
+      "file": "server/src/database/mod.rs",
+      "function": "get_user_vtxo_by_id",
+      "start_line": 499,
+      "end_line": 505,
+      "function_sha256": "c2b59649dc8dedb5ecbbaac50eb198ff5b686c198c86800c18f19613530b1569",
+      "brace_body_sha256": "47d3f59a860b201eaf6215b237e8452df60329eb1c7b1c66fd6d95fe9b76ced9"
+    },
+    {
+      "file": "server/src/database/ordinary_spend.rs",
+      "function": "ordinary_spend_proof",
+      "start_line": 15,
+      "end_line": 55,
+      "function_sha256": "9560f45780ed77f378832e244256db413a57a3225b9eabce61c53beba808a525",
+      "brace_body_sha256": "6a591c81de2fb199134870fc59fe0ffd8fcba63a0caa2746a4b2f4965aac2f1f"
+    },
+    {
+      "file": "testing/src/bark.rs",
+      "function": "client",
+      "start_line": 364,
+      "end_line": 366,
+      "function_sha256": "28c0f1da1bd15d9830993b24adbff426b3045d0ec08edc92de07ed682770469f",
+      "brace_body_sha256": "4e75469dd26027b3e7a34a6173103a673f843350d295e702d15593687a949fa7"
+    },
+    {
+      "file": "testing/src/bark.rs",
+      "function": "board_and_confirm_and_register",
+      "start_line": 914,
+      "end_line": 919,
+      "function_sha256": "ec20204372f98bff34510a64a5809c573c47239a7b9c53d9a8bf73f0d94e0a8c",
+      "brace_body_sha256": "fce8f19342984b6783e0a84a5b75c690f0dd8cbc9321263b29c315f2876369b9"
+    },
+    {
+      "file": "lib/src/vtxo/mod.rs",
+      "function": "ancestor_ids",
+      "start_line": 842,
+      "end_line": 850,
+      "function_sha256": "f3c9363fc944c73ecdf682a6d5832c0539c46014f6de9501ebefb6179bb219de",
+      "brace_body_sha256": "95e147a51af3599d025326e856ac8fd87a31dff811fa4025c1dd4272e6bc7193"
+    },
+    {
+      "file": "lib/src/vtxo/mod.rs",
+      "function": "ancestor_ids",
+      "start_line": 1647,
+      "end_line": 1704,
+      "function_sha256": "f52e3e76735bae17f296e30fdd080dcee2e0ed63804278c1fe2619c88d866ccd",
+      "brace_body_sha256": "52bcac1d40b0665e0f5b63dad9d200b70e4a051a8c79d06f1b6c668a29bbd6f1"
+    }
+  ],
+  "metadata": {
+    "raw_sha256": "93c9662810bd65cd973e3bd76cce9955288705bc420bfd1395e01f5b4b897b01",
+    "immutable_sha256": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+    "binary_count": 1,
+    "binary": "ark-testing::server",
+    "package_id": "path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0",
+    "binary_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/native-server",
+    "raw_to_immutable_delta": [
+      {
+        "path": [
+          "rust-binaries",
+          "ark-testing::server",
+          "binary-path"
+        ],
+        "before": "/fresh-cache/target/debug/deps/server-df1a12179a8e599b",
+        "after": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/native-server"
+      }
+    ],
+    "runtime_overlay_present_at_read": true,
+    "immutable_support_paths_still_target_relative": true,
+    "fresh_singleton_listing": false
+  },
+  "host_products": {
+    "captaind": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+      "sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+      "ELF_magic_verified_without_execution": true,
+      "actual_version_as_recorded": "captaind 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+      "reused_V18": true
+    },
+    "watchmand": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+      "sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+      "ELF_magic_verified_without_execution": true,
+      "actual_version_as_recorded": "watchmand 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+      "reused_V18": true
+    },
+    "bark": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/bark",
+      "sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+      "ELF_magic_verified_without_execution": true,
+      "actual_version_as_recorded": "bark 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+      "reused_V18": true
+    },
+    "barkd": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+      "sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+      "ELF_magic_verified_without_execution": true,
+      "actual_version_as_recorded": "barkd 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+      "reused_V18": true
+    },
+    "ark-testing::server": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/native-server",
+      "sha256": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f",
+      "ELF_magic_verified_without_execution": true,
+      "actual_version_as_recorded": null,
+      "reused_V18": false
+    }
+  },
+  "supports_host_verified": {
+    "debug/deps/libark.rlib": {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.rlib",
+      "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+    },
+    "debug/deps/libark.so": {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.so",
+      "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+    },
+    "debug/lock-holder": {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/lock-holder",
+      "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+    }
+  },
+  "reuse_provenance": {
+    "equivalence_sha256": "d6c65fccbf45f2871d8dd1da1a5f817a1f908b033985005a089cc9d5fe255ec1",
+    "V18_source_manifest_sha256": "e0b904e012ad3f07867432762939ba61a3aae8210e168a671407c6b41ce2c8f7",
+    "V18_archive_sha256": "fa642a6fa649ba996e2afb993d7bbff3b3cec25411c275ea3da4d4a89df6a8f0",
+    "V18_archive_entries_independently_verified": 2187,
+    "changed_paths_exactly_equal_root_receipt": true,
+    "unchanged_files": 2181,
+    "changed_testing_paths": [
+      "testing/src/context/builders.rs",
+      "testing/src/daemon/watchmand.rs",
+      "testing/tests/server/expiry_user_claim_legacy_upgrade.rs",
+      "testing/tests/server/mod.rs",
+      "testing/tests/server/qualification_dust_later_receipt.rs",
+      "testing/tests/server/qualification_three_owner_forwarding.rs"
+    ],
+    "all_source_outside_docs_testing_byte_identical": true,
+    "all_four_product_hashes_equal_V18_manifest": true,
+    "inherited_actual_label": "57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+    "label_is_not_V19captured_HEAD": true,
+    "unit_result": "V18_ROOT_RECORDED_877PASS_1SKIP_INHERITED_NOT_RERUN"
+  },
+  "root_terminal_build_receipts_observed": {
+    "checks": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "checks"
+      ],
+      "started_at": "2026-10-18T10:45:17.726139+00:00",
+      "exit_code": 0,
+      "seconds": 68.137,
+      "ended_at": "2026-10-18T10:46:25.862691+00:00"
+    },
+    "metadata": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "nextest",
+        "list",
+        "--package",
+        "ark-testing",
+        "--test",
+        "server",
+        "--features",
+        "ark-testing/fallback-test-bip84",
+        "--list-type",
+        "binaries-only",
+        "--message-format",
+        "json"
+      ],
+      "started_at": "2026-10-18T10:46:26.580230+00:00",
+      "exit_code": 0,
+      "seconds": 113.994,
+      "ended_at": "2026-10-18T10:48:20.574025+00:00"
+    }
+  },
+  "root_source_verification_receipt_hashes": {
+    "source-verification-before-checks.json": "49355037591c8cf124a4740acd60172ff6b5d79be40619c8e79bb3423fa873ad",
+    "source-verification-after-checks.json": "8ca58b64887e922bc04e5040d19a7e333fe1e27d9b1717212762e5bb274347ed",
+    "source-verification-after-metadata.json": "d72ba442bcbef4901e037efc974fa9bf090533cefccb7151ae11c901bf13449e",
+    "source-verification-final-capture.json": "0609b3f589a96753a62b7e45bac27c738bb29c691ff15994c3a5b8e25d7c4b38",
+    "source-verification-before-metadata.json": "019b3179de229aebb1b1ac31de57556d765f0035a27ee7aa510af6339b114041"
+  },
+  "native": {
+    "H32": "NOT RUN",
+    "H11": "NOT RUN",
+    "allocation": null,
+    "reviewer_native_or_container_executions": 0,
+    "new_execution_credit": 0
+  },
+  "all_host_input_hashes_before_after_unchanged": true,
+  "input_sha256": {
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/nextest-binaries.json": "93c9662810bd65cd973e3bd76cce9955288705bc420bfd1395e01f5b4b897b01",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/barkd": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/bark": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/product-source-equivalence.json": "d6c65fccbf45f2871d8dd1da1a5f817a1f908b033985005a089cc9d5fe255ec1",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/native-server": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/lock-holder": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-verification-final-capture.json": "0609b3f589a96753a62b7e45bac27c738bb29c691ff15994c3a5b8e25d7c4b38",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/manifest.json": "eb57dbca7c37a635ff4ff25e43147e15325ff29b45d601a49a86f0c7cad42137",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.so": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H32-dust-later-receipt-v2.json": "2df1356f5f7e8c9aaee35d5fbb32d6f59c7578799e3d5f107d3ab5c7aba2b8ff",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/metadata.log": "353d17b1ada76ff56bfafa0718309263aa647ff864ea6eb5f5347924b2ffd4bf",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/source-manifest.json": "e0b904e012ad3f07867432762939ba61a3aae8210e168a671407c6b41ce2c8f7",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support-capture.json": "af298790eb57efae34e05ed29977da9114b6a6171d9ccf3582e80b2cdeb66829",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-verification-after-metadata.json": "d72ba442bcbef4901e037efc974fa9bf090533cefccb7151ae11c901bf13449e",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_dust_later_receipt.rs": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source.patch": "c4fca03573694ac9b2268ba1b6dce6d325306c856239e696c7eb7bc4518c0607",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-verification-after-checks.json": "8ca58b64887e922bc04e5040d19a7e333fe1e27d9b1717212762e5bb274347ed",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/manifest.json": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-immutable.json": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1-manifest.json": "6d0a3018305442eab0139ca0ba7ea961604115c6e3b2e0ca11ce0ed5a7c17943",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-manifest.json": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/checks.log": "52103489262fa746c3b18c5ad18284984d38067009084492ea3de26787772fb0",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_three_owner_forwarding.rs": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-verification-before-checks.json": "49355037591c8cf124a4740acd60172ff6b5d79be40619c8e79bb3423fa873ad",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/build-phases.json": "a39f0f7e442a0c63881493bcfb671cdbb1b30b4aed691f33a485867fc6876bc6",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/captaind": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/watchmand": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/source.tar.gz": "fa642a6fa649ba996e2afb993d7bbff3b3cec25411c275ea3da4d4a89df6a8f0",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/web-dist-manifest.json": "51c1f05e4c64bfe62f4edb31bee514da53f7e2f5fb7ec94546266500ebb865e5",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.rlib": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-verification-before-metadata.json": "019b3179de229aebb1b1ac31de57556d765f0035a27ee7aa510af6339b114041",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source.tar.gz": "c4bd8779088622c9b7b8af4a8c438a0ab872f9a368b7a79c5f87feead725f1df"
+  },
+  "limits": [
+    "Pure host archive/JSON/publicsource/hash/ELFmagic inspection only; no container, executable invocation, Nix/version/list/preflight/actor/resources/RPC/DB/wallet/privateconfig/seed/Git/Cargo/build/native action.",
+    "Root terminal checks68.137/metadata113.994 PASS are read receipts, not independent reviewer executions. V18 units/product label remain inherited, not a V19 full rebuild.",
+    "No runtime allocation, actual-container pins, support-path overlay, environment/version/fresh-singleton/resource/actor gate is supplied by this proof. Parent must establish all before native.",
+    "Full reviewed H32/H11 files and every helper/function bind money/history assertions, not successful execution,128/96block or180second feasibility. No ML/FULLML/production/globalcustody promotion.",
+    "Legacy17 belongs another/root owner; only its explicit test-only change is acknowledged, no semantic audit/result/ownership expansion. Only new proofJSON/MD written."
+  ]
+}

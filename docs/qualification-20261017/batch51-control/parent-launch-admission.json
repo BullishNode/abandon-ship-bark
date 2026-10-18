@@ -1,0 +1,40 @@
+{
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch51-H32-H11-v19-v2",
+  "at": "2026-10-18T11:24:16.085513+00:00",
+  "source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+  "expected_selection": [
+    [
+      "ark-testing::server",
+      "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again"
+    ],
+    [
+      "ark-testing::server",
+      "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards"
+    ]
+  ],
+  "root_allocation_sha256": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+  "sha256": {
+    "selection-proof.json": "ee0db064489e466537376829ce06d02bf378d9c09783682caa83192a1a6181d5",
+    "root-preparation.json": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+    "root-allocation.json": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+    "runtime-pins.sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+    "source-artifact-proof.json": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+    "runtime-overlay-proof.json": "52db2fc0cf144f9aba0cff7cd91d690678eed1e76b5c752a1c416ef3df40745f",
+    "parent-actor-probe.py": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f",
+    "server-cohort.py": "73f11e9cbc74c34f969819fc3bf545189789af07727b587bc5b2b0121e94aee5",
+    "preflight-static.py": "b03ce1fc10e50f53ad6b778da25e2d2ece06f8716223e936590a4edaa56d5583",
+    "fresh-listings.py": "d1d347511658b829cbc1dcb280d5a0bc6f7f10c2ac3bf2bbe9f6db9435d2aa82",
+    "preflight.sh": "7453d23641530a704c3676630f7d9c2bfc9e5dca6bcf098f1cc4d830c9fe3e73",
+    "run.sh": "530434ff1a1969bc08e02a28900b600cdcce3103d47ff54adca8719228aae502",
+    "case01/nextest.toml": "744c72025c4563e12e227366a1e53e7e214a3747bf83d71adf7bec26ef16ba48",
+    "case02/nextest.toml": "df0b46c3c9b32c6253c435c377cc7a4818288d879c27cecc63d45dbdaf3419c5",
+    "fresh-listing-admission.json": "d35d6cc4316d360901a4b85497cff32d8d1452708d1a2e9cc4104924288be630",
+    "resource-admission.json": "6d6fc9b36350215377d4161fe328a6fba607d01d9b9600ad918e23e2092e476f",
+    "parent-actor-admission.json": "b44a83ec90e7eeeaed1441b2b0ff2d59af0cbdf8924daec17ec4d8a567d680e2"
+  },
+  "root_readonly_exemptions_reviewed": true,
+  "actor_probe_sha256": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f",
+  "peer_review_sha256": "4df82e5ad9d58f6e30fc6ecc2cede8fde9afd18f4d8d79c13082d88038be6433",
+  "PREPARATION_sha256": "45406e7b5c6d98f623e2c274dccb4d887c82035118224fafaaa967ca67b2e6c9"
+}

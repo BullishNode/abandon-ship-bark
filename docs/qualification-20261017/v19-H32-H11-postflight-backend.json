@@ -1,0 +1,794 @@
+{
+  "audit_marker_assumption_correction": {
+    "initial_checker_sha256": "202646ebdbcb586f2fb33180bf95e8d6de1f2a580fbeae60063880386059298b",
+    "observation": "Initial checker assumed older-batch preserved marker copy existed. Actual V2 has no preserved marker file; admitted17-path contract and actual pending-marker absence are verified unchanged. No nativefailure/retry/control mutation."
+  },
+  "kind": "INDEPENDENT_V19_H32_H11_FORMAL_POSTFLIGHT_BACKEND",
+  "state": "TERMINAL_2PASS_POSTFLIGHT_INTEGRITY_ACTUAL_PINS_AND_SCOPED_ABSENCE_PASS",
+  "at": "2026-10-18T11:30:32.730940+00:00",
+  "parent_terminal": {
+    "session": 61525,
+    "exit_code": 0,
+    "session_is_not_PID": true,
+    "source": "Explicitparentterminal message, matched publicresult/nativeanchoredmetadata"
+  },
+  "counts": {
+    "started": 2,
+    "PASS": 2,
+    "FAIL": 0,
+    "NOT_STARTED": 0,
+    "reviewer_native_runs": 0
+  },
+  "native_seconds_sum": 71.432,
+  "controller_wall_seconds_sum": 73.623,
+  "cases": [
+    {
+      "index": 1,
+      "binary": "ark-testing::server",
+      "name": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "state": "PASS",
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "40d6ba07-f88f-4291-bf6d-12f8eb1c521d",
+      "native_seconds": 43.613,
+      "wall_seconds": 44.575,
+      "known_PGID_SID": 200178,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "fresh_selected_unignored": [
+        [
+          "ark-testing::server",
+          "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again"
+        ]
+      ],
+      "listed_metadata_binary_count": 1,
+      "listed_total_test_cases": 305,
+      "dynamic_filter_skipped": 304,
+      "safe_native_UUID_line": "Nextest run ID 40d6ba07-f88f-4291-bf6d-12f8eb1c521d with nextest profile: default",
+      "safe_native_starting": "Starting 1 test across 1 binary (304 tests skipped)",
+      "safe_native_PASS_line": "PASS [  43.613s] (1/1) ark-testing::server qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "safe_native_summary": "Summary [  43.616s] 1 test run: 1 passed, 304 skipped",
+      "source_full_file_sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+      "function_sha256": "8db3c696dd8243123254843593be3ee641bfc2c39800a869d5b2e8b390d93b67",
+      "body_sha256": "202366e0fe96054749e7a1590ade228428bbf3542046b615073f3b53bac91ea7",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/test-data/server/qualification_dust_later_receipt",
+      "native_context_metadata": {
+        "context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/test-data/server/qualification_dust_later_receipt",
+        "directory_categories_present": [
+          "bitcoind",
+          "bitcoind_snapshot",
+          "first_donor",
+          "later_donor",
+          "postgres",
+          "recipient",
+          "server",
+          "server-watchmand"
+        ],
+        "nonempty_Core_blockfiles": [
+          {
+            "relative_path": "bitcoind/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          },
+          {
+            "relative_path": "bitcoind_snapshot/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          }
+        ]
+      },
+      "public_receipt_presence_only": {
+        "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/test-data/server/qualification_dust_later_receipt/dust-later-public-receipt.json",
+        "sha256": "35f5d95865460e1ed2a9fac63fe2b70d1d9301049d3060e1ea48be6fb309be16",
+        "bytes": 14366,
+        "financial_content_not_interpreted_here": true,
+        "actual_native_exit_authoritative": true
+      },
+      "native_assertion_scope": "Actual original recipient accepts genuine1200 whole-group BelowDust/forfeit1200/fee0/nooutput before later independent100k receipt creation; later sameDB/script pays99000+1000 with no1200 revival. Native first500k/final600k canonical finitecuts/globalallpayee/mempool/actualfeechildren/Core6/watchownership/all10/history+receipts/rebuild/reopen/idempotence. Selectedcuts exclude ordinary donor boardchange/miner; no globalcustody/defaultdaemon/reorg/backup/FULLML."
+    },
+    {
+      "index": 2,
+      "binary": "ark-testing::server",
+      "name": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+      "state": "PASS",
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "d6956d96-b733-465d-be2c-57c56c081fb6",
+      "native_seconds": 27.819,
+      "wall_seconds": 29.048,
+      "known_PGID_SID": 200669,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "fresh_selected_unignored": [
+        [
+          "ark-testing::server",
+          "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards"
+        ]
+      ],
+      "listed_metadata_binary_count": 1,
+      "listed_total_test_cases": 305,
+      "dynamic_filter_skipped": 304,
+      "safe_native_UUID_line": "Nextest run ID d6956d96-b733-465d-be2c-57c56c081fb6 with nextest profile: default",
+      "safe_native_starting": "Starting 1 test across 1 binary (304 tests skipped)",
+      "safe_native_PASS_line": "PASS [  27.819s] (1/1) ark-testing::server qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+      "safe_native_summary": "Summary [  27.820s] 1 test run: 1 passed, 304 skipped",
+      "source_full_file_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+      "function_sha256": "5e5e7fa49b2576c0567724b05ecd0db8ad49282d00966b03da02d25cfb61710d",
+      "body_sha256": "ac3bb3bc38b5b13722bc8da83f994176c02af37eae185b2fe421014b4dad3fe7",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/test-data/server/qualification_three_owner_forwarding",
+      "native_context_metadata": {
+        "context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/test-data/server/qualification_three_owner_forwarding",
+        "directory_categories_present": [
+          "bitcoind",
+          "bitcoind_snapshot",
+          "original_a",
+          "original_b",
+          "original_c",
+          "postgres",
+          "server",
+          "server-watchmand"
+        ],
+        "nonempty_Core_blockfiles": [
+          {
+            "relative_path": "bitcoind/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          },
+          {
+            "relative_path": "bitcoind_snapshot/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          }
+        ]
+      },
+      "public_receipt_presence_only": {
+        "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/test-data/server/qualification_three_owner_forwarding/three-owner-forwarding-public-receipt.json",
+        "sha256": "aeb519daf61602a08b60de9320b3cfb1dba8859eae0c997a396aafbc5ae49900",
+        "bytes": 6574,
+        "financial_content_not_interpreted_here": true,
+        "actual_native_exit_authoritative": true
+      },
+      "native_assertion_scope": "Actual two normalSDK fullvalue100k sends A\u2192B\u2192C/3registeredoriginalaccounts, complete signed ordinaryproofs/bodyhydration/sameanchor; all clientsabsent beforeexpiry, soleC99000+1000/zeroA/Boutputs and all-generationancestorallocations, canonicalactualsameblockchild/Core6/full300kroot+sponsors/actualfees/terminalownership. Original A/B normalhistory unchanged, C exactly\u2212100k once/all10zero/repeat/laterrebuild/reopen. No HTLC/refresh/reorg/backup/defaultdaemon/globalcustody/FULLML."
+    }
+  ],
+  "immutable": {
+    "source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+    "source_archive_sha256": "c4bd8779088622c9b7b8af4a8c438a0ab872f9a368b7a79c5f87feead725f1df",
+    "bundle_manifest_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+    "immutable_metadata_sha256": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+    "runtime_metadata_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+    "root_release_sha256": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+    "PREPARATION_sha256": "45406e7b5c6d98f623e2c274dccb4d887c82035118224fafaaa967ca67b2e6c9",
+    "parent_admission_sha256": "995f13be24ace971a497ddd4ddb11efefa77cd2680be735dc81b202d213b9a28",
+    "independent_control_peer_sha256": "4df82e5ad9d58f6e30fc6ecc2cede8fde9afd18f4d8d79c13082d88038be6433",
+    "all17_parent_frozen_paths_unchanged": {
+      "selection-proof.json": "ee0db064489e466537376829ce06d02bf378d9c09783682caa83192a1a6181d5",
+      "root-preparation.json": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+      "root-allocation.json": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+      "runtime-pins.sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+      "source-artifact-proof.json": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+      "runtime-overlay-proof.json": "52db2fc0cf144f9aba0cff7cd91d690678eed1e76b5c752a1c416ef3df40745f",
+      "parent-actor-probe.py": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f",
+      "server-cohort.py": "73f11e9cbc74c34f969819fc3bf545189789af07727b587bc5b2b0121e94aee5",
+      "preflight-static.py": "b03ce1fc10e50f53ad6b778da25e2d2ece06f8716223e936590a4edaa56d5583",
+      "fresh-listings.py": "d1d347511658b829cbc1dcb280d5a0bc6f7f10c2ac3bf2bbe9f6db9435d2aa82",
+      "preflight.sh": "7453d23641530a704c3676630f7d9c2bfc9e5dca6bcf098f1cc4d830c9fe3e73",
+      "run.sh": "530434ff1a1969bc08e02a28900b600cdcce3103d47ff54adca8719228aae502",
+      "case01/nextest.toml": "744c72025c4563e12e227366a1e53e7e214a3747bf83d71adf7bec26ef16ba48",
+      "case02/nextest.toml": "df0b46c3c9b32c6253c435c377cc7a4818288d879c27cecc63d45dbdaf3419c5",
+      "fresh-listing-admission.json": "d35d6cc4316d360901a4b85497cff32d8d1452708d1a2e9cc4104924288be630",
+      "resource-admission.json": "6d6fc9b36350215377d4161fe328a6fba607d01d9b9600ad918e23e2092e476f",
+      "parent-actor-admission.json": "b44a83ec90e7eeeaed1441b2b0ff2d59af0cbdf8924daec17ec4d8a567d680e2"
+    },
+    "all14_static_controls_unchanged": {
+      "selection-proof.json": "ee0db064489e466537376829ce06d02bf378d9c09783682caa83192a1a6181d5",
+      "root-preparation.json": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+      "root-allocation.json": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+      "runtime-pins.sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+      "source-artifact-proof.json": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+      "runtime-overlay-proof.json": "52db2fc0cf144f9aba0cff7cd91d690678eed1e76b5c752a1c416ef3df40745f",
+      "parent-actor-probe.py": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f",
+      "server-cohort.py": "73f11e9cbc74c34f969819fc3bf545189789af07727b587bc5b2b0121e94aee5",
+      "preflight-static.py": "b03ce1fc10e50f53ad6b778da25e2d2ece06f8716223e936590a4edaa56d5583",
+      "fresh-listings.py": "d1d347511658b829cbc1dcb280d5a0bc6f7f10c2ac3bf2bbe9f6db9435d2aa82",
+      "preflight.sh": "7453d23641530a704c3676630f7d9c2bfc9e5dca6bcf098f1cc4d830c9fe3e73",
+      "run.sh": "530434ff1a1969bc08e02a28900b600cdcce3103d47ff54adca8719228aae502",
+      "case01/nextest.toml": "744c72025c4563e12e227366a1e53e7e214a3747bf83d71adf7bec26ef16ba48",
+      "case02/nextest.toml": "df0b46c3c9b32c6253c435c377cc7a4818288d879c27cecc63d45dbdaf3419c5"
+    },
+    "all16_actual_container_pins_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+        "expected_sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+        "actual_sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25"
+      },
+      {
+        "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+        "expected_sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+        "actual_sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366"
+      },
+      {
+        "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/bark",
+        "expected_sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+        "actual_sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779"
+      },
+      {
+        "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+        "expected_sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+        "actual_sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82"
+      },
+      {
+        "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/native-server",
+        "expected_sha256": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f",
+        "actual_sha256": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f"
+      },
+      {
+        "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+        "expected_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+        "actual_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f"
+      },
+      {
+        "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/source-manifest.json",
+        "expected_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+        "actual_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e"
+      },
+      {
+        "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/manifest.json",
+        "expected_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+        "actual_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4"
+      },
+      {
+        "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.rlib",
+        "expected_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "actual_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.so",
+        "expected_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "actual_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/lock-holder",
+        "expected_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "actual_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "expected_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "actual_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "expected_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "actual_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "expected_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "actual_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+        "expected_sha256": "f7c8fd77d91533a389ef8bb509dce5b2b92295036f93ef5d9a2be5900e9e0156",
+        "actual_sha256": "f7c8fd77d91533a389ef8bb509dce5b2b92295036f93ef5d9a2be5900e9e0156"
+      },
+      {
+        "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+        "expected_sha256": "920c6a742daae000274f44075e3e674262a4421fe0db0806bd59d0ab301836de",
+        "actual_sha256": "920c6a742daae000274f44075e3e674262a4421fe0db0806bd59d0ab301836de"
+      }
+    ],
+    "actual4_V18_product_paths_hashes_versions": {
+      "bark": {
+        "environment_key": "BARK_EXEC",
+        "exact_environment_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/bark",
+        "actual_version": "bark 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+        "actual_sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+        "inherited_V18_product": true
+      },
+      "barkd": {
+        "environment_key": "BARKD_EXEC",
+        "exact_environment_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+        "actual_version": "barkd 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+        "actual_sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+        "inherited_V18_product": true
+      },
+      "captaind": {
+        "environment_key": "CAPTAIND_EXEC",
+        "exact_environment_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+        "actual_version": "captaind 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+        "actual_sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+        "inherited_V18_product": true
+      },
+      "watchmand": {
+        "environment_key": "WATCHMAND_EXEC",
+        "exact_environment_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+        "actual_version": "watchmand 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+        "actual_sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+        "inherited_V18_product": true
+      }
+    },
+    "current_justfile_sha256": "8bcf85e341c95b28ed28c3d74d735effe082d282a97bbf3f7d7dc45c2dbbc3f6",
+    "current_just_version": "just 1.51.0",
+    "full_source_files_verified": {
+      "bark/src/lib.rs": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "bark/src/mailbox.rs": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "bark/src/recovery.rs": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "bark/src/fallback/adoption.rs": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+      "bark/src/fallback/sync.rs": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "bark/src/fallback/payouts.rs": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "bark/src/fallback/protection.rs": "b0f3040f9d707c28fac3f42869a2429dc583e0b0692b964f67c16763bb2fb26e",
+      "bark/src/fallback/spend_proof.rs": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+      "bark/src/exit/mod.rs": "b66a647f12b566322ff756ca56bc64d7d454c00b4eb6dd18ce4bc7567142eaad",
+      "bark/src/onchain/bdk.rs": "88851d0144cd394371088918dc0b4669648605ace1e438f633dcc4f10bd8ee85",
+      "lib/src/fallback.rs": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "lib/src/mailbox.rs": "4f51e97a1eabe54b3e495e2537d5edaf4623b1392f234648cba6898c69095abc",
+      "lib/src/arkoor/package.rs": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+      "lib/src/arkoor/mod.rs": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "server/src/arkoor.rs": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+      "server/src/watchman/settlement.rs": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "server/src/watchman/payout.rs": "19769210f706753f65749fa741179a5090bfd6a92c1e444c92d97605963eb32a",
+      "server/src/watchman/recovery.rs": "93d16b541dca8be0a4524d153d32ca4f48cb9b735794a2f5920ce820876eab1f",
+      "server/src/database/expiry_details.rs": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+      "server/src/database/expiry_decision.rs": "50d535e7630fd0c787d1cc21f3cb59b6cb7144239badb04f2b6822dce7101ebd",
+      "server/src/database/ordinary_spend.rs": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+      "server/src/database/fallback.rs": "71b8dfae45ddad92f9c69a32f9b0d474f4c928f202c9b1aed647b83993b23fe9",
+      "server/src/database/fork_migrations/V5__expiry_allocations.sql": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "testing/src/context/mod.rs": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "testing/src/context/builders.rs": "540a818dc3c22aa9d78cba692851df68a50fb268ceca0e05b81eb14f209c6d72",
+      "testing/src/bark.rs": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "testing/src/daemon/watchmand.rs": "e66722cd79876985808e5ed6d84a631f67c13d603153d139beb35756e2abdca5",
+      "testing/src/daemon/captaind/mod.rs": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+      "server-rpc/src/lib.rs": "33164cf2bedfab6f944c0d08e33c1d2dfac3edc4c59c1e95ba491f3afe72c2a7",
+      "server-rpc/protos/bark_server.proto": "6ccf1b22452ef232c6ff31eb390fb366fc65750168fe279caa769f4f099e464c",
+      "bark/src/arkoor.rs": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "bark/src/actions/arkoor_send.rs": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+      "bark/src/fallback.rs": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+      "bark/src/balance.rs": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+      "bark/src/movement/mod.rs": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "bark/src/movement/payment_method.rs": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+      "lib/src/vtxo/mod.rs": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+      "lib/src/attestations.rs": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+      "lib/src/address.rs": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+      "server/src/database/mod.rs": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416",
+      "server/src/database/expiry_ownership.rs": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+      "server/schema.sql": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "testing/tests/server/mod.rs": "dc42cca1e46722b6544fce96072f0bfb88d9d24819422fd0b43cde134b350909",
+      "testing/tests/server/qualification_dust_later_receipt.rs": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+      "testing/tests/server/qualification_three_owner_forwarding.rs": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd"
+    },
+    "case_local_helper_and_API_regions_verified": [
+      {
+        "file": "bark/src/arkoor.rs",
+        "function": "send_arkoor_payment",
+        "start_line": 290,
+        "end_line": 303,
+        "function_sha256": "5005a8a98ecd821db5ebe450f46dce13cf5e7a7a7f58035a9153af0f4eedde3c",
+        "brace_body_sha256": "c0ceeb25d78265516b42d79b47d37049f43b61b2aac39bbce94a5302069b98cd"
+      },
+      {
+        "file": "bark/src/arkoor.rs",
+        "function": "pending_arkoor_sends",
+        "start_line": 306,
+        "end_line": 311,
+        "function_sha256": "8df4e2524fbf99bda379c44ebf671c47a13861d08e033273899a81d9b51f5757",
+        "brace_body_sha256": "eeb4081d4a7a8503be6108810519f3a87f1503c2b7a274101bc55f46921e4f49"
+      },
+      {
+        "file": "bark/src/mailbox.rs",
+        "function": "sync_mailbox",
+        "start_line": 297,
+        "end_line": 332,
+        "function_sha256": "dada71f4b20f18051d9a1758c2bb5d44ba83ccae3e379a0beec3b8a780e6b676",
+        "brace_body_sha256": "fd6ecda9c5f946ccaa1fc610067404568eaed019ed638c9575fd678f140940c0"
+      },
+      {
+        "file": "bark/src/mailbox.rs",
+        "function": "process_received_arkoor_package",
+        "start_line": 475,
+        "end_line": 556,
+        "function_sha256": "6f03adbc2edbdd2a4bab8d5f1a6250a203dca87ebcd30121514689925be3a957",
+        "brace_body_sha256": "85534df91cdcee9d297b8954312910d8bb05e92a7d075e7de345fed0ad019a11"
+      },
+      {
+        "file": "bark/src/lib.rs",
+        "function": "get_vtxo_key",
+        "start_line": 1140,
+        "end_line": 1151,
+        "function_sha256": "2340af1a968a8aaa0d00dc19f973a0f75d2442e89a3cb32c7554345f813068a1",
+        "brace_body_sha256": "c33d9da20d5137a5ff157b1a4abe14738a5ecbc1648820c0b12704fe93ed3154"
+      },
+      {
+        "file": "bark/src/lib.rs",
+        "function": "get_full_vtxo",
+        "start_line": 1710,
+        "end_line": 1714,
+        "function_sha256": "9dfef81f9c1d37281c52b8e22c8f9403fb029fc5e6ee9e014b1573b1c16414a1",
+        "brace_body_sha256": "5f512c1557a08a93526c0495d8dc316158e93dbcec9123aab907502adc84b96d"
+      },
+      {
+        "file": "bark/src/lib.rs",
+        "function": "history",
+        "start_line": 1735,
+        "end_line": 1739,
+        "function_sha256": "112a09ef8ea2a86efef01b7eaebe16936c2ae66bfd2ed3a0e09378cf5ef5d811",
+        "brace_body_sha256": "40d9fcdd42fa63fe3c8042c99b280bcb71793a10a44ac9e53c4362b39f46afa7"
+      },
+      {
+        "file": "bark/src/lib.rs",
+        "function": "stop_daemon_wait",
+        "start_line": 2524,
+        "end_line": 2530,
+        "function_sha256": "81fd2da84a497df3f7e19ccd31924afd8b2c8ef232c7e495ff01b2227db00267",
+        "brace_body_sha256": "0ed0769dc88917989ec3d1f3fbfa7746160c5c2583d660f6d0893e747d659ff6"
+      },
+      {
+        "file": "bark/src/fallback/sync.rs",
+        "function": "sync_fallback_payouts",
+        "start_line": 148,
+        "end_line": 242,
+        "function_sha256": "8460918204cbb8ad1a6c5cf2a2c98e70003b81aa8a48994d34ab64e704d7153f",
+        "brace_body_sha256": "8c9d9da2dc817c7c85fd08af656b424dcc2dda0651348375f2af690ee1c2f885"
+      },
+      {
+        "file": "bark/src/fallback/sync.rs",
+        "function": "fallback_payouts",
+        "start_line": 244,
+        "end_line": 246,
+        "function_sha256": "60534e43e9d39789be2f4585f537731beb0dea9c35078ee05cde52a5d3d905f8",
+        "brace_body_sha256": "064d03b24129142e71e1088a4da7ef105a84dd39106f0833aa23e180225098a7"
+      },
+      {
+        "file": "bark/src/fallback/spend_proof.rs",
+        "function": "verify_reported_ordinary_spend",
+        "start_line": 74,
+        "end_line": 89,
+        "function_sha256": "1d1fa3b81f92c67ea2fa591869c2d908acff17b1712841506f51277a79fb9e9a",
+        "brace_body_sha256": "674ae4027d359254a9314e3725ca3aa44c0e4ce33a9f4591deb8312acdf09982"
+      },
+      {
+        "file": "server/src/database/mod.rs",
+        "function": "read",
+        "start_line": 398,
+        "end_line": 403,
+        "function_sha256": "5c9fc9f44f337bd89a7944984a6a06466577ca316384952dfd692dffef2b3c17",
+        "brace_body_sha256": "a9bd7c509de730db2451ac2fff872d60e5586178225d3267b858ee46a8e3da1a"
+      },
+      {
+        "file": "server/src/database/mod.rs",
+        "function": "get_user_vtxo_by_id",
+        "start_line": 499,
+        "end_line": 505,
+        "function_sha256": "c2b59649dc8dedb5ecbbaac50eb198ff5b686c198c86800c18f19613530b1569",
+        "brace_body_sha256": "47d3f59a860b201eaf6215b237e8452df60329eb1c7b1c66fd6d95fe9b76ced9"
+      },
+      {
+        "file": "server/src/database/ordinary_spend.rs",
+        "function": "ordinary_spend_proof",
+        "start_line": 15,
+        "end_line": 55,
+        "function_sha256": "9560f45780ed77f378832e244256db413a57a3225b9eabce61c53beba808a525",
+        "brace_body_sha256": "6a591c81de2fb199134870fc59fe0ffd8fcba63a0caa2746a4b2f4965aac2f1f"
+      },
+      {
+        "file": "testing/src/bark.rs",
+        "function": "client",
+        "start_line": 364,
+        "end_line": 366,
+        "function_sha256": "28c0f1da1bd15d9830993b24adbff426b3045d0ec08edc92de07ed682770469f",
+        "brace_body_sha256": "4e75469dd26027b3e7a34a6173103a673f843350d295e702d15593687a949fa7"
+      },
+      {
+        "file": "testing/src/bark.rs",
+        "function": "board_and_confirm_and_register",
+        "start_line": 914,
+        "end_line": 919,
+        "function_sha256": "ec20204372f98bff34510a64a5809c573c47239a7b9c53d9a8bf73f0d94e0a8c",
+        "brace_body_sha256": "fce8f19342984b6783e0a84a5b75c690f0dd8cbc9321263b29c315f2876369b9"
+      },
+      {
+        "file": "lib/src/vtxo/mod.rs",
+        "function": "ancestor_ids",
+        "start_line": 842,
+        "end_line": 850,
+        "function_sha256": "f3c9363fc944c73ecdf682a6d5832c0539c46014f6de9501ebefb6179bb219de",
+        "brace_body_sha256": "95e147a51af3599d025326e856ac8fd87a31dff811fa4025c1dd4272e6bc7193"
+      },
+      {
+        "file": "lib/src/vtxo/mod.rs",
+        "function": "ancestor_ids",
+        "start_line": 1647,
+        "end_line": 1704,
+        "function_sha256": "f52e3e76735bae17f296e30fdd080dcee2e0ed63804278c1fe2619c88d866ccd",
+        "brace_body_sha256": "52bcac1d40b0665e0f5b63dad9d200b70e4a051a8c79d06f1b6c668a29bbd6f1"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+        "start_line": 474,
+        "end_line": 480,
+        "function_sha256": "8db3c696dd8243123254843593be3ee641bfc2c39800a869d5b2e8b390d93b67",
+        "brace_body_sha256": "202366e0fe96054749e7a1590ade228428bbf3542046b615073f3b53bac91ea7"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "fields",
+        "start_line": 25,
+        "end_line": 30,
+        "function_sha256": "657327469e8c3763a82faaadecf93f4b04b8ab198ac1c08c0bb7bdb79a2697bc",
+        "brace_body_sha256": "961aeb6ce6398f3c9765d376f48a11dbcc62a8f64fa9b9ab5af78a94bfeb08a2"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "balances",
+        "start_line": 32,
+        "end_line": 38,
+        "function_sha256": "c1125cc6d54efea685535e8339a60a289d5f22cb20750fc018b33edc19c4eb48",
+        "brace_body_sha256": "131cf3dfa6c4eedf41aa4c5e4789c6db829cc0b5b037bb7fccedbd503c994374"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "rebuilt",
+        "start_line": 40,
+        "end_line": 54,
+        "function_sha256": "48bbe1c8e500d55d3150a9ab4c10e0b6d4a850c123bc2276086529f644bba687",
+        "brace_body_sha256": "cbec568e8dce6006acd4c0fe9cb42302c59fd0d971048ac0327334d5e9c9189c"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "actual_fee",
+        "start_line": 56,
+        "end_line": 65,
+        "function_sha256": "7c033f3b8a531f773867c0d9cd7d6961d9f7d318998c3f41c86c8328526eeb2b",
+        "brace_body_sha256": "4753b2997a6365f5652fa169df32661647dd0f8b4a077e3b742527731d761293"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "watch_coins",
+        "start_line": 67,
+        "end_line": 72,
+        "function_sha256": "37638aaf3e80989cb72f5c6d75aecd7c0411075719087813cb1ef85d75c30c61",
+        "brace_body_sha256": "0ba2328dcd40fa4c4b0d3de1a38180140ed587394a1353358ef7bda30486ecfc"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "transfer",
+        "start_line": 95,
+        "end_line": 158,
+        "function_sha256": "5152669295b0a2360ea5adb3ecc498d3be5561ec161aed93e3536c2537d50833",
+        "brace_body_sha256": "df761ca0d914421f43804c396f4f3b9fd66c7eea72594e47401685afa8ecd022"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "confirm_epoch",
+        "start_line": 160,
+        "end_line": 282,
+        "function_sha256": "b338554fe48fd4a42651163386574c2f0ca93e109e6859aee57fd90bff9c5ee1",
+        "brace_body_sha256": "d16e3dea5c48c2c38640ad92bf80343bf17d3cbb582ce3a82c997e6589af5a26"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "receipt",
+        "start_line": 284,
+        "end_line": 309,
+        "function_sha256": "d16b3e60d7e6b831cc9e7fc93afa6bc1ac6fb398554e544680c08619d2aea1e1",
+        "brace_body_sha256": "d648986719a888815c1077c099fe3de1a1d01df43e162a8f06f3d388fbf46682"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "history",
+        "start_line": 311,
+        "end_line": 355,
+        "function_sha256": "54fac4cc734aaf7fbdb9ace459aa313880b7e6cc9bea2e93f64a5210584ae10c",
+        "brace_body_sha256": "51437af2d7aafa933c96719dbc4e71bdecee486248bce0412e5fbdfc97778754"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "financial_cut",
+        "start_line": 359,
+        "end_line": 471,
+        "function_sha256": "4c797c14760b4124781e42b3546ee712d10ef926340afe03b7d7ec2e2cdd0371",
+        "brace_body_sha256": "85a510b52799d0d4f09b5d549e9ba9b95f8e689a05ae74b099a8572af8c8a924"
+      },
+      {
+        "file": "testing/tests/server/qualification_dust_later_receipt.rs",
+        "function": "two_receipts",
+        "start_line": 482,
+        "end_line": 709,
+        "function_sha256": "4f77338b51838ccfe6df4d021a310d5f387c00038ee114513f7c4112e3b77876",
+        "brace_body_sha256": "9b16180896c27847f2c742fa5104029a49627de37e0ac5d1ca3fe5c4ccfa6807"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "only_final_owner_receives_after_two_full_value_forwards",
+        "start_line": 509,
+        "end_line": 515,
+        "function_sha256": "5e5e7fa49b2576c0567724b05ecd0db8ad49282d00966b03da02d25cfb61710d",
+        "brace_body_sha256": "ac3bb3bc38b5b13722bc8da83f994176c02af37eae185b2fe421014b4dad3fe7"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "fields",
+        "start_line": 25,
+        "end_line": 30,
+        "function_sha256": "657327469e8c3763a82faaadecf93f4b04b8ab198ac1c08c0bb7bdb79a2697bc",
+        "brace_body_sha256": "961aeb6ce6398f3c9765d376f48a11dbcc62a8f64fa9b9ab5af78a94bfeb08a2"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "balances",
+        "start_line": 32,
+        "end_line": 38,
+        "function_sha256": "c1125cc6d54efea685535e8339a60a289d5f22cb20750fc018b33edc19c4eb48",
+        "brace_body_sha256": "131cf3dfa6c4eedf41aa4c5e4789c6db829cc0b5b037bb7fccedbd503c994374"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "rebuilt",
+        "start_line": 40,
+        "end_line": 54,
+        "function_sha256": "48bbe1c8e500d55d3150a9ab4c10e0b6d4a850c123bc2276086529f644bba687",
+        "brace_body_sha256": "cbec568e8dce6006acd4c0fe9cb42302c59fd0d971048ac0327334d5e9c9189c"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "actual_fee",
+        "start_line": 56,
+        "end_line": 65,
+        "function_sha256": "7c033f3b8a531f773867c0d9cd7d6961d9f7d318998c3f41c86c8328526eeb2b",
+        "brace_body_sha256": "4753b2997a6365f5652fa169df32661647dd0f8b4a077e3b742527731d761293"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "watch_coins",
+        "start_line": 67,
+        "end_line": 72,
+        "function_sha256": "37638aaf3e80989cb72f5c6d75aecd7c0411075719087813cb1ef85d75c30c61",
+        "brace_body_sha256": "0ba2328dcd40fa4c4b0d3de1a38180140ed587394a1353358ef7bda30486ecfc"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "confirm_epoch",
+        "start_line": 94,
+        "end_line": 216,
+        "function_sha256": "67f0c2f7bc8947f5c4b542c28bb5abda310a83cece57840d65df20167245fed0",
+        "brace_body_sha256": "c44279f4980f8645dc43482c7ffd0c321ae9210ef644693d7cf78b5350e36fb6"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "receipt",
+        "start_line": 218,
+        "end_line": 243,
+        "function_sha256": "d16b3e60d7e6b831cc9e7fc93afa6bc1ac6fb398554e544680c08619d2aea1e1",
+        "brace_body_sha256": "d648986719a888815c1077c099fe3de1a1d01df43e162a8f06f3d388fbf46682"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "history",
+        "start_line": 245,
+        "end_line": 289,
+        "function_sha256": "54fac4cc734aaf7fbdb9ace459aa313880b7e6cc9bea2e93f64a5210584ae10c",
+        "brace_body_sha256": "51437af2d7aafa933c96719dbc4e71bdecee486248bce0412e5fbdfc97778754"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "financial_cut",
+        "start_line": 293,
+        "end_line": 405,
+        "function_sha256": "fbb815a79584c5dcde1ffcb0005797ed76d62db6127d96000c22aa8ec37915c3",
+        "brace_body_sha256": "e426c626e05a1d0f0e6106069bb877934b96b893622b22ef94d799154d553728"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "send_full",
+        "start_line": 410,
+        "end_line": 490,
+        "function_sha256": "859d402b9f8b541cf6c26d2bf72a8baefd33c11b28ef2f201aa857e2b6d90d12",
+        "brace_body_sha256": "0dbda686955144dd5dac83285032f370addf7e67bd334211b1ce7a99e8a1a79b"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "predecessor",
+        "start_line": 492,
+        "end_line": 506,
+        "function_sha256": "f2b60dbbdb3a04fe5a10622c999cd0bfa6dc04c15f0c1a53801669d1d2704d63",
+        "brace_body_sha256": "d75428f3ccc274de2bd19d368d7dd2646750134e92e23d6c46c4a440370997a4"
+      },
+      {
+        "file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+        "function": "three_owners",
+        "start_line": 517,
+        "end_line": 699,
+        "function_sha256": "f82166cbdf2163cf55d7180b29e90df06cef068c77d512a3843909e1b867040c",
+        "brace_body_sha256": "2d1d6b059366f711337af6235370d044b9833c560d62385d7afaa9c7247cade1"
+      }
+    ],
+    "native_metadata_binary_count": 1,
+    "H32_source_sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+    "H11_source_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+    "scope": "CapturedV19testELF/source7d7c with reusedV18productsactual57f59, notcapturedHEAD4e3/currentcleanGit equivalence. Oldprep/nativecontrolfailure preserved."
+  },
+  "actor_receipt": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-postflight-backend-actors.json",
+    "sha256": "ae6ec940769d61310b74e76b865c4295fc23ebf1e98279af96093dc63ee1c300",
+    "known_current_groups": [
+      200178,
+      200669
+    ],
+    "current_and_full_prior_scoped_actors": 0,
+    "unreadable_owned_entries": 0,
+    "protected_compilers": 0,
+    "global_native_at_probe": 0,
+    "root_readonly_exemptions": [],
+    "original_probe_copy_only_output_path_changed": {
+      "original_sha256": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f",
+      "copy_sha256": "0e5e5f19aaf400f1629ee48c0a8e6603e1696b8eea08bcbbebc6f906423bf684",
+      "sole_text_delta": "Output path parent-actor-admission.json changed to additive /tmp/v19-H32-H11-postflight-original-scope-actor-audit.json; all actor/resource logic unchanged. Current groups checked independently in the second probe.",
+      "admitted_parent_actor_receipt_unchanged": true
+    },
+    "admitted_parent_actor_file_never_overwritten": true,
+    "scope": "Point-in-time actualcontainer group/SID and sameUID argv/cwd/FD; root prior scopes as admitted. No ongoingabsence or globalCLN/serviceclaim."
+  },
+  "runtime_receipt": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-postflight-backend-runtime.json",
+    "sha256": "72df3cecc3ca8e49d0057400bc81ceacc59646c90004ffdd8017cf7dde1ff455",
+    "cachedNix_impure": true,
+    "BARK_DOUBLE_DRIVE_ACTIONS_absent": true,
+    "Postgres_SQLite_env_and_LD_path_checked": true,
+    "only_four_version_commands_and_just_version_no_service_or_test_start": true
+  },
+  "initial_native_receipt": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch51-H32-H11-v19-receipt.json",
+    "sha256": "6b5b4726d2f849af896bd07f9eb50f4492089b9999e640dd70956089a7f4ff1d",
+    "formal_and_financial_PENDING_at_creation_unchanged": true,
+    "resolved_formal_additively_only": true
+  },
+  "all_read_source_control_result_log_publicreceipt_inputs_before_after_unchanged": true,
+  "input_sha256": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/resource-admission.json": "6d6fc9b36350215377d4161fe328a6fba607d01d9b9600ad918e23e2092e476f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/test-data/server/qualification_three_owner_forwarding/three-owner-forwarding-public-receipt.json": "aeb519daf61602a08b60de9320b3cfb1dba8859eae0c997a396aafbc5ae49900",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-manifest.json": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/root-allocation.json": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/selection-list-fresh.json": "10736aa020d46a01dacf5426cdb7dbbdfa608f2ee3a10962c0f137269a9bfc4e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/selection-list-fresh.json": "04ea644c26d2c6e86acc63b4921d2831cb2b8a33f062d15b7096174fbda19dd2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/preflight-static.py": "b03ce1fc10e50f53ad6b778da25e2d2ece06f8716223e936590a4edaa56d5583",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/test-data/server/qualification_dust_later_receipt/dust-later-public-receipt.json": "35f5d95865460e1ed2a9fac63fe2b70d1d9301049d3060e1ea48be6fb309be16",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/preflight.sh": "7453d23641530a704c3676630f7d9c2bfc9e5dca6bcf098f1cc4d830c9fe3e73",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/nextest.log": "fa03dae0dbbc473ab36d304732221465642f5b476d700a12df842d29e06f9acd",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/nextest.log": "914f3a02b1008fe199bb5ffc22dcf655b866303442d97e5ae90bf5bcc8bded40",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch51-H32-H11-v19-receipt.json": "6b5b4726d2f849af896bd07f9eb50f4492089b9999e640dd70956089a7f4ff1d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/nextest.toml": "df0b46c3c9b32c6253c435c377cc7a4818288d879c27cecc63d45dbdaf3419c5",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/fresh-listing-admission.json": "d35d6cc4316d360901a4b85497cff32d8d1452708d1a2e9cc4104924288be630",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/parent-actor-probe.py": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/nextest.toml": "744c72025c4563e12e227366a1e53e7e214a3747bf83d71adf7bec26ef16ba48",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/fresh-listings.py": "d1d347511658b829cbc1dcb280d5a0bc6f7f10c2ac3bf2bbe9f6db9435d2aa82",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/PREPARATION.json": "45406e7b5c6d98f623e2c274dccb4d887c82035118224fafaaa967ca67b2e6c9",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/selection-proof.json": "ee0db064489e466537376829ce06d02bf378d9c09783682caa83192a1a6181d5",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case01/result.json": "f01a559ebe22e983ddb91a35f71af86dc682d6eb6b18cbf7a0a1ae1e549369c1",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/manifest.json": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/server-cohort.py": "73f11e9cbc74c34f969819fc3bf545189789af07727b587bc5b2b0121e94aee5",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/runtime-pins.sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/root-preparation.json": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-postflight-backend-actors.json": "ae6ec940769d61310b74e76b865c4295fc23ebf1e98279af96093dc63ee1c300",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/parent-actor-admission.json": "b44a83ec90e7eeeaed1441b2b0ff2d59af0cbdf8924daec17ec4d8a567d680e2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/source-artifact-proof.json": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/cohort-progress.json": "b0c7ca78df709f8d2aebec9a2b745e3ebd403d4c6668fe015f7653780bd47a99",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/cohort-summary.json": "7095d14da751931637b7adc24e8e1993f320e6baa8989de90b1297edc12468a9",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch51-v2-control-guard-source-review-legacy.json": "4df82e5ad9d58f6e30fc6ecc2cede8fde9afd18f4d8d79c13082d88038be6433",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source.tar.gz": "c4bd8779088622c9b7b8af4a8c438a0ab872f9a368b7a79c5f87feead725f1df",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-immutable.json": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-postflight-backend-runtime.json": "72df3cecc3ca8e49d0057400bc81ceacc59646c90004ffdd8017cf7dde1ff455",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/runtime-overlay-proof.json": "52db2fc0cf144f9aba0cff7cd91d690678eed1e76b5c752a1c416ef3df40745f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/parent-launch-admission.json": "995f13be24ace971a497ddd4ddb11efefa77cd2680be735dc81b202d213b9a28",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/case02/result.json": "d9add45340b28f2ca428f166dc8087b2ce1594afa7e8fd8f369ee59e56a345ad",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2/run.sh": "530434ff1a1969bc08e02a28900b600cdcce3103d47ff54adca8719228aae502"
+  },
+  "independent_financial_audit": {
+    "owner": "legacy_inventory_as_parent_assigned",
+    "actual_actorzero_receipt_sent_before_own_financial_data_reads": true,
+    "here": "PUBLIC_RECEIPT_PRESENCE_HASH_ONLY_NO_OFFLINE_CORE_OR_PRIVATE_FINANCIAL_RECONSTRUCTION"
+  },
+  "limits": [
+    "Exact native fixture assertions reached with parentexit0. No independent Corefinancialproof is created by formalpostflight; assigned auditor owns retainedfinancial reconstruction and binding limits.",
+    "No automatic CSV/count/ML/FULLML/production/globalcustody promotion. NativeH32oneordinarytwoepochdust/later andH11twoSDKforward/oneexpiry only; no general/defaultdaemon/reorg/restore/HTLC qualification.",
+    "No privatewallet/DB/config/seed/Coretransaction/fullrawlog/argv output, no RPC/service/mining/signals/tests/list/preflight/Cargo/Git/source/control/globalwrites. Readonlyfourproduct--version and just--version commands explicitlyauthorized and terminalsafe.",
+    "All17admittedpaths incl parent-actor-admission.json preserved. New equivalent actorprobe changed outputpathonly; exactcurrentgroups verified separately. Root historicallegacyfirstFAIL/controlbug and olderpending/closedpackets remain unchanged."
+  ]
+}

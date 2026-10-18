@@ -1,0 +1,26 @@
+{
+  "index": 2,
+  "name": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+  "state": "PASS",
+  "started_at": "2026-10-18T11:25:08.267367+00:00",
+  "ended_at": "2026-10-18T11:25:37.315856+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "expected_binary": "ark-testing::server",
+  "owned_nextest_group": 200669,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "d6956d96-b733-465d-be2c-57c56c081fb6",
+  "test_seconds": 27.819,
+  "wall_seconds": 29.048,
+  "fixed_public_nextest_command": [
+    "just",
+    "--set",
+    "JUSTFILE_DIR",
+    "/fresh-cache/testing-track-20261017/batch51-H32-H11-v19-v2",
+    "int-binaries",
+    "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+    "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch51-H32-H11-v19-v2/case02/nextest.toml -- qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards --exact"
+  ]
+}

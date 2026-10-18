@@ -1,0 +1,56 @@
+{
+  "kind": "BATCH51_V1_CONTROL_GUARD_SOURCE_FINDING_LEGACY",
+  "state": "PRE_NATIVE_CONTROL_BLOCKER_PRESERVE_V1_NO_EXECUTION",
+  "at": "2026-10-18T11:12:00.433589+00:00",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19",
+  "PREPARATION_sha256": "85e42cc423e3edb19c45711ab29e0ea18d558b92cc8d43b811db8b16b607b459",
+  "controller_sha256": "2d2e5ee7d1376f0d7a22b1edcf0a78aed4bbd61f0bfb3a3232644c6e127c05c2",
+  "static_control_sha256": {
+    "selection-proof.json": "d1ff1e330a6c96dd2900bd8f05350bb2fbef88d452ff93453b28fbe9bb4ea16e",
+    "root-preparation.json": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+    "root-allocation.json": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+    "runtime-pins.sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+    "source-artifact-proof.json": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+    "runtime-overlay-proof.json": "52db2fc0cf144f9aba0cff7cd91d690678eed1e76b5c752a1c416ef3df40745f",
+    "parent-actor-probe.py": "b3d7dee9fa189905138bc054b465ab0cdfffebf719834ab34628d9f8273cbbb1",
+    "server-cohort.py": "2d2e5ee7d1376f0d7a22b1edcf0a78aed4bbd61f0bfb3a3232644c6e127c05c2",
+    "preflight-static.py": "f8573f9367feb7686a7f877bf265eefa2b2df8c06b7b17a4895c96459e46bca7",
+    "fresh-listings.py": "4a6d55ac0443d7c926eb40a9339a13cf6af8b26cf88d799da2594afa50a0829b",
+    "preflight.sh": "a03317fb6d1a192c539cc42b3290f7b1cb48cd21b9e8a609b083cd373e706460",
+    "run.sh": "e1b3a9ef605a8cd0be9547cd11d3baee70905a0860a11ed831d410d17ab4e3d7",
+    "case01/nextest.toml": "f0bac5324fdde1aa95f0fe8c731877ba843a17cd3692e706750202cc3944e8d8",
+    "case02/nextest.toml": "cb569c9f95af2d4efb09936d18f2c4a76454d789ddd1aa0e2c814176dd8b91cf"
+  },
+  "all14_static_hashes_unchanged": true,
+  "syntax": {
+    "AST": 4,
+    "bash_n": 2,
+    "TOML": 2
+  },
+  "finding": {
+    "severity": "BLOCKS_TRUTHFUL_NATIVE_RESULT_CLASSIFICATION",
+    "reported_by": "Parent independent source review, independently confirmed here",
+    "location": "server-cohort.py:181\u2013182",
+    "summary_regex": "Summary.*?1 test run: 1 passed, (\\d+) skipped",
+    "effect": "Default60s slow annotation in a legitimate exit0/exact test PASS summary is rejected, causing controller FAIL without a failed native oracle.",
+    "synthetic_format_only_check": {
+      "ordinary_summary_matches": true,
+      "valid_one_slow_summary_matches": false,
+      "generated_control_or_native_execution": false
+    },
+    "required_bounded_correction": "Preserve V1 unchanged. In a new private V2 directory accept optional (1 slow) annotation while retaining exit0, exact binary/name PASS, exact singleton and dynamic filtered count. No timeout, retry, financial or selection change."
+  },
+  "launch_state": {
+    "marker_present": true,
+    "parent_admission_absent": true,
+    "no_progress_results_or_contexts": true,
+    "native_count": 0,
+    "observed_native_FAIL": false
+  },
+  "partial_review_notes": [
+    "Actual root execution release1df12 schema cases[] strings/budget and corrected legacy formal ae1e binding are coherent.",
+    "Four *_EXEC paths are inherited actualV18 manifest paths and hashes checked before version probes; runtime tests/source metadata remain V19.",
+    "No final ACK issued for V1; this finding supersedes any assumption of V1 admission."
+  ],
+  "actions": "Static read/hash/AST/TOML/bash -n and synthetic regex format inspection only; no control/preflight/list/probe/CLI/native/Cargo executed. No existing file modified."
+}

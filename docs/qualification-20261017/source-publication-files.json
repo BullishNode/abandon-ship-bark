@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_PROPOSED_SAFE_NOT_STAGED_NOT_PUBLISHED",
+  "created_utc": "2026-10-18T12:05:57.364634+00:00",
+  "payload": {
+    "H31-ROOT-INTAKE-parent.json": {
+      "sha256": "0c3c5daacd3255180b381eb2285ac1dea2b5abad3dfb4b589a0e7e3981404789",
+      "bytes": 2651
+    },
+    "H31-SOURCE-ONLY.md": {
+      "sha256": "65f58a937665012664277152fc8aedc129e0c996987880cd9cf815c7ad951a6f",
+      "bytes": 2641
+    },
+    "H31-SOURCE21-COMMIT-parent.json": {
+      "sha256": "4bbc8188ce7c889d8ebf1d3e52e42b8081de23093c81c78c14ea3a28be253c71",
+      "bytes": 1141
+    },
+    "H31-script-dust-boundaries-v1-design.md": {
+      "sha256": "8a8d9cd39a5384a659bc6c492e21bccaa496169d29d480203aed810fa34d5c46",
+      "bytes": 3351
+    },
+    "H31-script-dust-boundaries-v1-manifest.public.json": {
+      "sha256": "6875f286c952c2ad1416b8db438116dbcb6fa219236bf7e446f5acb30c23af7e",
+      "bytes": 13511
+    },
+    "H31-script-dust-boundaries-v1.patch": {
+      "sha256": "1aeec8d98891bb0470ed7df951e8dc0532f00fb975500754f83eee9aac5ade1f",
+      "bytes": 46984
+    },
+    "H31-script-dust-source-peer-client.json": {
+      "sha256": "106926e41b44b2005ffcd7b1eaea010d9e4fb5f01aa833176ee13f6acf3ebfab",
+      "bytes": 24349
+    },
+    "H31-script-dust-source-peer-client.md": {
+      "sha256": "4e9a6eac69b3a911a19fe4e3eb422b9738e5b31b0e9e665a72d9adb5bf5bdb3b",
+      "bytes": 2083
+    },
+    "H31-script-dust-source-risk-peer-legacy.json": {
+      "sha256": "bc762dd6952351eb4fe4c23ca1dcf38cec68c9bc06525a4962b21743cce2b9a2",
+      "bytes": 17959
+    },
+    "H31-script-dust-source-risk-peer-legacy.md": {
+      "sha256": "ace89a7389bd19b67eafbbed50aaf3710f2ea4ab30713b9c709c73a91946fc1b",
+      "bytes": 3311
+    },
+    "H31-script-dust-v1-parent-source-review.json": {
+      "sha256": "5eb7b5c7d5165f76e0ecec4ef00857ac4c917775b2376984dca13bc9411a63f7",
+      "bytes": 1545
+    },
+    "H31-source-api-feasibility-backend.json": {
+      "sha256": "ce72aba8d930e7fe3625a472a32a36713f008d8e94f13e91cb0a624d17967b75",
+      "bytes": 13863
+    },
+    "H31-source-api-feasibility-backend.md": {
+      "sha256": "959a19ac4809654c0f16947e1b97140b51634a769a6a4df7a855e6a5eb4a09b5",
+      "bytes": 2619
+    },
+    "checkpoint25-PR29-independent-publication-review-legacy.json": {
+      "sha256": "e98d522758d3972cf10b27d2b02e886d36fa7e6522a647224e23fb5b3dead16b",
+      "bytes": 11706
+    },
+    "checkpoint25-PR29-independent-publication-review-legacy.md": {
+      "sha256": "473b1518c279989cb7143e9f439ea149dd6d0f3465ae68576b6636c4b5cad822",
+      "bytes": 1082
+    }
+  },
+  "source": {
+    "path": "testing/tests/server/qualification_script_dust_boundaries.rs",
+    "sha256": "ad89e56eaf8cfda9d13941eca04ae966da9f4025ecbef752e343d8ec48e2b381",
+    "commit": "951b2a16f10e818492c95520b648c2ecf1ef8eb8",
+    "base_fixed_PR29": "7fe9f2a181a58628dc8258b5ef97cde9aaed396d",
+    "standalone_Rust_included": false,
+    "module_registered": false,
+    "compiled": false,
+    "native_result": "NOT RUN",
+    "deadline_seconds": 180,
+    "deadline_feasibility": "UNMEASURED",
+    "future_candidate": null,
+    "allocation": null,
+    "new_execution_credit": 0
+  },
+  "copy_policy": {
+    "byteexact_reports_and_patch": [
+      "H31-source-api-feasibility-backend.json",
+      "H31-source-api-feasibility-backend.md",
+      "H31-script-dust-boundaries-v1-design.md",
+      "H31-script-dust-boundaries-v1.patch",
+      "H31-script-dust-source-peer-client.json",
+      "H31-script-dust-source-peer-client.md",
+      "H31-script-dust-source-risk-peer-legacy.json",
+      "H31-script-dust-source-risk-peer-legacy.md",
+      "H31-ROOT-INTAKE-parent.json",
+      "H31-SOURCE21-COMMIT-parent.json",
+      "H31-script-dust-v1-parent-source-review.json",
+      "checkpoint25-PR29-independent-publication-review-legacy.json",
+      "checkpoint25-PR29-independent-publication-review-legacy.md"
+    ],
+    "public_projection": "H31-script-dust-boundaries-v1-manifest.public.json",
+    "new_editorial_notes": "H31-SOURCE-ONLY.md",
+    "private_snapshot_or_private_source_copied": false,
+    "globals_copied": false,
+    "original_manifest_sha256": "179b3cbc28049d105f0e6f73c7cff69076bc5e1f31f5e8a0804e2d3ced2eb5b0",
+    "protected_prior153_unchanged": true
+  },
+  "secret_screen": {
+    "source_and_payload_inputs": 16,
+    "valid_English_BIP39_checksum": 0,
+    "valid_WIF_checksum": 0,
+    "strong_secret_patterns": 0,
+    "falsepositive_exceptions": [],
+    "wordlist_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693",
+    "method": "Full English BIP39 sliding dictionary-run checksum for12/15/18/21/24 words; Base58Check WIF; strong private-key/token/literal-credential patterns. Static bounded screen, not universal secret absence."
+  },
+  "counts_unchanged": {
+    "executions": 257,
+    "PASS": 242,
+    "FAIL": 15,
+    "unique_pairs": 237,
+    "mixed_rows": 468
+  },
+  "limitations": [
+    "No new compile/list/native/probe/build/resource/CLN or ML credit.",
+    "Public packet includes only source reports/patch/projection/context; no wallet, configuration, seed, logs, private backup, raw protection data or runtime artifact.",
+    "Earlier copied pending-review wording is a dated immutable snapshot, resolved only by later included receipts.",
+    "Parent owns integration/publication; no Git/index/source/globals changed by exporter."
+  ]
+}

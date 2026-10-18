@@ -1,0 +1,21 @@
+{
+  "state": "SOURCE21_COMMITTED_TWO_INDEPENDENT_SOURCE_ACKS_UNREGISTERED_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T12:03:29.538014+00:00",
+  "branch": "work/fresh-test-script-dust-boundaries-20261018",
+  "commit": "951b2a16f10e818492c95520b648c2ecf1ef8eb8",
+  "base_fixed_PR29": "7fe9f2a181a58628dc8258b5ef97cde9aaed396d",
+  "file": "testing/tests/server/qualification_script_dust_boundaries.rs",
+  "source_sha256": "ad89e56eaf8cfda9d13941eca04ae966da9f4025ecbef752e343d8ec48e2b381",
+  "source_lines": 819,
+  "client_peer_sha256": "106926e41b44b2005ffcd7b1eaea010d9e4fb5f01aa833176ee13f6acf3ebfab",
+  "risk_peer_sha256": "bc762dd6952351eb4fe4c23ca1dcf38cec68c9bc06525a4962b21743cce2b9a2",
+  "protected_prior153_Rust_unchanged": true,
+  "only_new_source_file_in_commit": true,
+  "module_registered": false,
+  "compiled": false,
+  "native": "NOT RUN",
+  "future_candidate": null,
+  "future_runtime_allocation": null,
+  "new_execution_credit": 0,
+  "checks": "git diff --cached --check PASS. Cargo/just checks not run: root explicitly retains all build/Cargo resources; reviewed source-only handoff awaits coherent root integration/capture."
+}

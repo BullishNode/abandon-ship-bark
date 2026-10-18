@@ -1,0 +1,309 @@
+{
+  "state": "SOURCE_ONLY_FEASIBLE_NOT_AUTHORED_NOTRUN",
+  "created_utc": "2026-10-18T11:39:49.592847+00:00",
+  "case_id": "H31",
+  "catalogue": {
+    "path": "/home/francis/bark-simulator-signet-rework/docs/80-case-coverage.json",
+    "sha256": "27199dd7921af86e73eeadceca922b66d7ffdbe80a4ba01971ad24c8f1d23562",
+    "full_remaining_requirement": "For all five accepted standard script families, actual genuine registered SDK receipts and full settlement at gross=1000+scriptdust-1/equal/+1, exact boundary paid, subdust terminal recorded with zero fee and no separate minimum."
+  },
+  "root_source_only_five_family_ack_received": true,
+  "runtime_allocation": null,
+  "compiled_H31_candidate": null,
+  "actual_H31_results": null,
+  "next_authoring_filename": "testing/tests/server/qualification_script_dust_boundaries.rs",
+  "current_source_comparison_candidate": {
+    "source_manifest": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-manifest.json",
+    "sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+    "role": "product/API byte comparison only, not an H31 compiled artifact"
+  },
+  "source_files": [
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/lib/src/fallback.rs",
+      "sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "references": "31 standard families;49 signedrecord;67 verify;80 binding",
+      "v19_manifest_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/bark/src/fallback.rs",
+      "sha256": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+      "references": "37 binding;86 register;108/118 public getters",
+      "v19_manifest_sha256": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/bark/src/lib.rs",
+      "sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "references": "777 OpenWalletArgs fallback_spk;1394/1405 onchain/open_fallback",
+      "v19_manifest_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/bark/src/arkoor.rs",
+      "sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "references": "47 split_change_amount;290 genuine send;306 pending checkpoints",
+      "v19_manifest_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/bark/src/fallback/sync.rs",
+      "sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "references": "180 local debit requires original Spendable body",
+      "v19_manifest_sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/testing/src/context/builders.rs",
+      "sha256": "540a818dc3c22aa9d78cba692851df68a50fb268ceca0e05b81eb14f209c6d72",
+      "references": "540 SDK builder;641 always native BDK fallback script",
+      "v19_manifest_sha256": "540a818dc3c22aa9d78cba692851df68a50fb268ceca0e05b81eb14f209c6d72",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/fallback_external.rs",
+      "sha256": "90339cdd2e46df18f53d591f907bee4f7a0a1d97b7242564eb25972baa3539e9",
+      "references": "67 direct public Wallet::open existing integration",
+      "v19_manifest_sha256": "90339cdd2e46df18f53d591f907bee4f7a0a1d97b7242564eb25972baa3539e9",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_tiny_payout_grouping.rs",
+      "sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+      "references": "existing genuine receipt/history helper pattern; distinct H30 grouped scenario",
+      "v19_manifest_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_dust_later_receipt.rs",
+      "sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+      "references": "existing real receipt/history and canonical finite graph helper pattern",
+      "v19_manifest_sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/server/src/watchman/settlement.rs",
+      "sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "references": "81 allocation;92 sort;98 net>=actualscriptdust;155 units",
+      "v19_manifest_sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/server/schema.sql",
+      "sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "references": "actual base schema",
+      "v19_manifest_sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/abandon-ship-fresh-integration/server/src/database/fork_migrations/V5__expiry_allocations.sql",
+      "sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "references": "actual fork allocation fields",
+      "v19_manifest_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "matches_v19": true
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitcoin-0.32.9/src/blockdata/script/borrowed.rs",
+      "sha256": "5f29b5bf91dd703be37bba1ca89bb8cbc3b6d757fa1de85ba829e801958edf16",
+      "references": "borrowed152/380 standard redeem/witness scripts;430-472 dust formula;owned86-130 actual script constructors"
+    },
+    {
+      "path": "/home/francis/.cache/abandon-fresh/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/bitcoin-0.32.9/src/blockdata/script/owned.rs",
+      "sha256": "09bbc83c7731d27c0ec1cce2dd3a2a272f531d0cbcd2508878d978ef95f104c6",
+      "references": "borrowed152/380 standard redeem/witness scripts;430-472 dust formula;owned86-130 actual script constructors"
+    }
+  ],
+  "proposed_shape": {
+    "family_cases": 5,
+    "distinct_boundary_original_accounts_and_distinct_spks_per_case": 3,
+    "one_native_root_sat": 100000,
+    "separately_confirmed_sponsors_sat": [
+      100000,
+      100000
+    ],
+    "finite_cut_sat": 300000,
+    "normal_SDK_sends": 3,
+    "change_factor": "unchanged production default2; discover all actual change pieces",
+    "outer_seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "feasibility": "UNMEASURED; no build/runtime/deadline extension",
+    "alternative": "One15-boundary case is larger16accounts/15sends; not preferred, 180s unmeasured."
+  },
+  "boundaries": [
+    {
+      "family": "P2PKH",
+      "dust_sat_source_derived_not_executed": 546,
+      "boundary_gross_sat": [
+        1545,
+        1546,
+        1547
+      ],
+      "payout_sat": [
+        0,
+        546,
+        547
+      ],
+      "fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeit_sat": [
+        1545,
+        0,
+        0
+      ],
+      "sender_current_gross_sat": 95362,
+      "sender_group_payout_sat": 94362,
+      "customer_paid_sat": 95455,
+      "total_policy_fee_sat": 3000,
+      "total_forfeiture_sat": 1545
+    },
+    {
+      "family": "P2SH",
+      "dust_sat_source_derived_not_executed": 540,
+      "boundary_gross_sat": [
+        1539,
+        1540,
+        1541
+      ],
+      "payout_sat": [
+        0,
+        540,
+        541
+      ],
+      "fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeit_sat": [
+        1539,
+        0,
+        0
+      ],
+      "sender_current_gross_sat": 95380,
+      "sender_group_payout_sat": 94380,
+      "customer_paid_sat": 95461,
+      "total_policy_fee_sat": 3000,
+      "total_forfeiture_sat": 1539
+    },
+    {
+      "family": "P2WPKH",
+      "dust_sat_source_derived_not_executed": 294,
+      "boundary_gross_sat": [
+        1293,
+        1294,
+        1295
+      ],
+      "payout_sat": [
+        0,
+        294,
+        295
+      ],
+      "fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeit_sat": [
+        1293,
+        0,
+        0
+      ],
+      "sender_current_gross_sat": 96118,
+      "sender_group_payout_sat": 95118,
+      "customer_paid_sat": 95707,
+      "total_policy_fee_sat": 3000,
+      "total_forfeiture_sat": 1293
+    },
+    {
+      "family": "P2WSH",
+      "dust_sat_source_derived_not_executed": 330,
+      "boundary_gross_sat": [
+        1329,
+        1330,
+        1331
+      ],
+      "payout_sat": [
+        0,
+        330,
+        331
+      ],
+      "fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeit_sat": [
+        1329,
+        0,
+        0
+      ],
+      "sender_current_gross_sat": 96010,
+      "sender_group_payout_sat": 95010,
+      "customer_paid_sat": 95671,
+      "total_policy_fee_sat": 3000,
+      "total_forfeiture_sat": 1329
+    },
+    {
+      "family": "P2TR",
+      "dust_sat_source_derived_not_executed": 330,
+      "boundary_gross_sat": [
+        1329,
+        1330,
+        1331
+      ],
+      "payout_sat": [
+        0,
+        330,
+        331
+      ],
+      "fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeit_sat": [
+        1329,
+        0,
+        0
+      ],
+      "sender_current_gross_sat": 96010,
+      "sender_group_payout_sat": 95010,
+      "customer_paid_sat": 95671,
+      "total_policy_fee_sat": 3000,
+      "total_forfeiture_sat": 1329
+    }
+  ],
+  "real_public_API": {
+    "custom_script": "Wallet::open with actual SqliteClient persister, real network/WalletSeed/config, OpenWalletArgs { fallback_spk:Some(actual app standard SPK), onchain:None, run_daemon:false,..Default::default() }. Existing signed registration verifies exact script+xpub+mailbox. No builder or CLI fallback-script setter exists.",
+    "addresses": "Actual random app keys and Bitcoin ScriptBuf::new_p2pkh/new_p2wpkh/new_p2tr; actual redeem.to_p2sh and witness.to_p2wsh; Address::from_script; future fixture asserts each actual minimal_non_dust() (no policy override).",
+    "receipt": "Three actual send_arkoor_payment calls to real recipient Ark addresses, completed checkpoints, real mailbox and server signed-body equality/full path validation; exact locally Spendable coins before absence. All gross>=1293>Ark330 dust.",
+    "reopen": "Original real recipient SQLite, original seed and same authenticated binding; create_if_not_exists:false, run_daemon:false; do not replace original DB with seed-only wallet (would omit local debit)."
+  },
+  "required_native_oracles": [
+    "Three DISTINCT scripts as well as independent owners per family; key distinctness alone does not prevent script fee grouping.",
+    "For each single-leaf group exact gross/fee/payout/forfeit/disposition, fee0/nooutput/LEFTJOIN nullable index for subdust; fee1000/dust or dust+1/forfeit0 equality/plus1. Exact authentic source expiry witnesses.",
+    "One sender script group despite multiple default change pieces, charged1000; allcustomerpaid=96001-dust, policyfees3000, forfeit999+dust, sum100000. Actual physical miner fees separate.",
+    "Actual zero-fee parent and unique canonical same-block signed anchorchild>=6, prevouts/bytes/fee and actual stored canonical ledger. Follow actual DAG change plus unused sponsors; reject outside inputs; operator configured sweep/native watch confirmed ownership separate from Core script evidence.",
+    "Whole postsetup canonical chain collects all expected payee outputs BEFORE graph filter; exact0/1 output and values/scripts/outpoints, globalmempool negatives, all generations/current cut coverage.",
+    "Original recipient history exact debit gross once, Successful BelowDust fee0/empty sent_to or CustomerPayout fee1000/net dust/dust+1, actual chainverified, no second subsystem debit, all10 monetary balances0/empty exit intents. Repeat sync/reopen/later view unchanged.",
+    "Typed labelled public capsule BEFORE returning SDK/history assertions, phase not COMPLETE; roots/sponsors/owners/scripts/IDs/allocation/parents+canonicalchildren/fees/heights. COMPLETE only after history accepts; partial artifacts remain partial/unknown."
+  ],
+  "concrete_traps": [
+    "No invented SDK builder or CLI override; direct public Wallet::open required.",
+    "Never .boarded(100000) blindly: board-all helper deducts real funding miner fee; exact100k principal via actual board_amount after sufficient funding.",
+    "Same-script boundary grouping invalidates the -1 test; all three payout scripts and accounts must differ.",
+    "Do not claim whole-parent1000 fee; positive2groups+sendergroup total3000, whole-subdust contributes fee0.",
+    "Do not force change factor1 or assume one sender leaf.",
+    "Actual app-script registration does not prove spending/custody of destination; no spend test proposed."
+  ],
+  "limits": [
+    "No H31 execution, build, runtime, metadata, source edit, reportstate/count promotion.",
+    "H30/H32 actual adjacent native cases do not close all5families/3boundaries.",
+    "Ordinary customer board change and upfront board fee outside selected300k cut explicitly captured separately.",
+    "No ML190/defaultdaemon ownership overlap, app spend/custody, reorg, LN, backup, throughput, production or FULLML credit."
+  ]
+}

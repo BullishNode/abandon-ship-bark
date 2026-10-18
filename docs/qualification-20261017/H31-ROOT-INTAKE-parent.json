@@ -1,0 +1,41 @@
+{
+  "state": "SOURCE_ONLY_ROOT_INTAKE_READY_NO_BUILD_OR_NATIVE_ALLOCATION",
+  "at": "2026-10-18T12:04:07.545290+00:00",
+  "source_commit": "951b2a16f10e818492c95520b648c2ecf1ef8eb8",
+  "branch": "work/fresh-test-script-dust-boundaries-20261018",
+  "file": "testing/tests/server/qualification_script_dust_boundaries.rs",
+  "file_sha256": "ad89e56eaf8cfda9d13941eca04ae966da9f4025ecbef752e343d8ec48e2b381",
+  "case_selectors": [
+    "qualification_script_dust_boundaries::p2pkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2sh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2wpkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2wsh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2tr_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited"
+  ],
+  "root_integration_needed": "Add only mod qualification_script_dust_boundaries to testing/tests/server/mod.rs during coordinator integration; own module intentionally untouched.",
+  "source_only_commit_changes": "One new test file, no production hook or shared setter/helper edits.",
+  "review_receipts": {
+    "H31-script-dust-source-peer-client.json": "106926e41b44b2005ffcd7b1eaea010d9e4fb5f01aa833176ee13f6acf3ebfab",
+    "H31-script-dust-source-risk-peer-legacy.json": "bc762dd6952351eb4fe4c23ca1dcf38cec68c9bc06525a4962b21743cce2b9a2",
+    "H31-script-dust-v1-parent-source-review.json": "5eb7b5c7d5165f76e0ecec4ef00857ac4c917775b2376984dca13bc9411a63f7"
+  },
+  "requirements": "Each family has 3 distinct original authenticated app SQLite accounts/custom scripts, 3 normal signed SDK receipts, default split2/four sender leaves/one sender fee, whole-subdust forfeiture with fee0 versus equality/+1 paid, Core6 actual parent/child and closed300k root+sponsor cut, all10/history/repeat/reopen and public partial/COMPLETE capsules.",
+  "module_registered": false,
+  "compiled": false,
+  "native": "NOT RUN",
+  "deadline_seconds_per_family": 180,
+  "deadline_feasibility": "UNMEASURED",
+  "future_candidate": null,
+  "future_ELF": null,
+  "future_metadata": null,
+  "allocation": null,
+  "resource_scope": "No build/list/native/CLN/Signet access requested or inferred by this source intake.",
+  "limits": "No external destination spending/seed restore/custody, CLN/reorg/default daemon/throughput/global or fullML/production claim.",
+  "counts_unchanged": {
+    "executions": 257,
+    "PASS": 242,
+    "FAIL": 15,
+    "unique_pairs": 237,
+    "mixed_rows": 468
+  }
+}

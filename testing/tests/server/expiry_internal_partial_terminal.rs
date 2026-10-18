@@ -189,7 +189,7 @@ async fn partial_terminal(case: TerminalCase) {
 	let mut claim = Transaction {
 		version: bitcoin::transaction::Version::TWO, lock_time: clause.locktime(),
 		input: vec![TxIn { previous_output: point, script_sig: Default::default(), sequence: clause.sequence(), witness: Witness::new() }],
-		output: vec![TxOut { value: sat(98_000), script_pubkey: claim_address.script_pubkey() }],
+		output: vec![TxOut { value: sat(98_000), script_pubkey: if all_terminal { fallback.spk.clone() } else { claim_address.script_pubkey() } }],
 	};
 	let prevouts = [sources[0].txout()];
 	let witness = sender.sign_input_with_clause(&sources[0], &clause.clone().into(), 0,
@@ -215,7 +215,7 @@ async fn partial_terminal(case: TerminalCase) {
 		if mature>current { ctx.generate_blocks(mature-current).await; }
 		let mut tx = Transaction { version:bitcoin::transaction::Version::TWO,lock_time:clause.locktime(),
 			input:vec![TxIn {previous_output:source.point(),script_sig:Default::default(),sequence:clause.sequence(),witness:Witness::new()}],
-			output:vec![TxOut {value:sat(98_000),script_pubkey:ctx.bitcoind().get_new_address().script_pubkey()}] };
+			output:vec![TxOut {value:sat(98_000),script_pubkey:fallback.spk.clone()}] };
 		let witness = sender.sign_input_with_clause(source,&clause.into(),0,
 			&mut SighashCache::new(&tx),&Prevouts::All(&[source.txout()])).await.unwrap();
 		tx.input[0].witness=witness;

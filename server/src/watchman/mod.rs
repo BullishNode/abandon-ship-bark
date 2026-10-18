@@ -13,6 +13,7 @@ pub(crate) mod fee_sponsor;
 mod policy;
 mod payout;
 mod recovery;
+mod user_claim;
 mod signer;
 pub(crate) mod settlement;
 
@@ -392,6 +393,7 @@ impl Watchman {
 		// Expired customer backing never reaches upstream's drain-only claim
 		// builder. Only committed financial groups can authorize these spends.
 		let Some(view) = self.rebuild_expiry_state().await? else { return Ok(()); };
+		self.replay_user_timeout_claims(view).await?;
 		self.process_expiry_payouts(view).await?;
 		let splits = self.db.read(async |t| t.pending_expiry_splits().await).await?;
 		for (txid, root) in splits {

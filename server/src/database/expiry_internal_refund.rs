@@ -15,10 +15,12 @@ use chrono::{DateTime, Local};
 use super::{SpendState, Tx};
 use super::expiry_chain::ExpiryViewToken;
 use super::expiry_decision::ReadyOutput;
+use super::expiry_user_claim::ReplayableTerminalClaim;
 use super::htlc_vtxo::{self, HtlcDirection, HtlcVtxo};
 
 pub(crate) const MAX_JOINT_GRANTS: i64 = 64;
 
+#[derive(Clone)]
 pub(crate) struct InternalRefundGrant {
 	pub vtxo: ServerVtxo,
 	confirmed: BlockHeight,
@@ -37,13 +39,24 @@ pub(crate) struct ExistingInternalRefund {
 	pub allocations: BTreeMap<i64, Vec<VtxoId>>,
 }
 
+/// Classification belongs to one rebuilt canonical view. A terminal claim
+/// remains a retained user-authorized transaction, never an irreversible
+/// off-chain settlement or permission to repay its source.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum InternalRefundSource {
+	Live,
+	Terminal(ReplayableTerminalClaim),
+}
+
+#[derive(Clone)]
 pub(crate) struct InternalRefundCandidate {
 	pub attempt_id: i64,
 	pub subscription_id: i64,
 	pub payment_hash: PaymentHash,
 	pub view: ExpiryViewToken,
-	/// Entire immutable original funding set; no chain-only omission at replan.
-	pub incoming: Vec<VtxoId>,
+	/// Exact immutable original funding membership, including observed paid
+	/// sources. Only Live sources enter this refund's physical input set.
+	pub incoming: BTreeMap<VtxoId, InternalRefundSource>,
 	pub existing: BTreeMap<VtxoId, ExistingInternalRefund>,
 	pub grants: Vec<InternalRefundGrant>,
 }
@@ -104,9 +117,16 @@ impl InternalRefundComponent {
 		for member in &members {
 			ensure!(member.view == view && attempts.insert(member.attempt_id)
 				&& subscriptions.insert(member.subscription_id), "internal refund repeats or rebinds an attempt/subscription");
-			ensure!(!member.incoming.is_empty() && !member.grants.is_empty(), "internal refund member omits an obligation");
-			for id in &member.incoming {
+			ensure!(!member.incoming.is_empty() && !member.grants.is_empty()
+				&& !member.live_incoming_ids().is_empty(), "internal refund member omits a live obligation");
+			ensure!(member.existing.keys().all(|id| matches!(member.incoming.get(id), Some(InternalRefundSource::Live))),
+				"joint refund reassigns a terminal source's old reservation");
+			for (id, state) in &member.incoming {
 				ensure!(incoming.insert(*id), "internal attempts share an original logical source");
+				if let InternalRefundSource::Terminal(claim) = state {
+					ensure!(claim.source == *id && claim.confirmed.height <= view.captaind.height.min(view.watchmand.height),
+						"joint terminal proof belongs to another source or completed prefix");
+				}
 			}
 			for id in member.grant_ids() {
 				ensure!(grants.insert(id), "internal attempts repeat a receive grant");
@@ -118,9 +138,18 @@ impl InternalRefundComponent {
 	}
 
 	pub(crate) fn incoming_ids(&self) -> Vec<VtxoId> {
-		self.members.iter().flat_map(|member| member.incoming.iter().copied()).collect()
+		self.members.iter().flat_map(|member| member.incoming.keys().copied()).collect()
 	}
 
+
+	pub(crate) fn live_incoming_ids(&self) -> Vec<VtxoId> {
+		self.members.iter().flat_map(InternalRefundCandidate::live_incoming_ids).collect()
+	}
+
+	pub(crate) fn terminal_ids(&self) -> BTreeSet<VtxoId> {
+		self.members.iter().flat_map(|member| member.incoming.iter().filter_map(|(id, state)|
+			matches!(state, InternalRefundSource::Terminal(_)).then_some(*id))).collect()
+	}
 
 	pub(crate) fn existing_source(&self, id: VtxoId) -> Option<&ExistingInternalRefund> {
 		self.members.iter().find_map(|member| member.existing.get(&id))
@@ -138,21 +167,23 @@ impl InternalRefundComponent {
 	pub(crate) fn grant_ids(&self) -> Vec<VtxoId> { self.grants().map(|grant| grant.vtxo.id()).collect() }
 
 	pub(crate) fn for_source(&self, id: VtxoId) -> Option<&InternalRefundCandidate> {
-		self.members.iter().find(|member| member.incoming.contains(&id))
+		self.members.iter().find(|member| matches!(member.incoming.get(&id), Some(InternalRefundSource::Live)))
 	}
 
 	pub(crate) fn check_parent(
 		&self, current: ExpiryViewToken, incoming: &[ReadyOutput], parent: &Transaction,
 	) -> anyhow::Result<()> {
-		let ids = self.incoming_ids();
+		let ids = self.live_incoming_ids();
+		ensure!(self.terminal_ids().iter().all(|id| incoming.iter().all(|output| !output.contains_coin(*id))),
+			"a canonically exited original cannot enter the new customer allocation");
 		for id in &ids {
 			ensure!(incoming.iter().filter(|output| output.contains_coin(*id)).count() == 1,
-				"internal component does not cover one physical path per original source");
+				"internal component does not cover one physical path per live original source");
 		}
 		ensure!(incoming.iter().all(|output| ids.iter().any(|id| output.contains_coin(*id))),
 			"internal component adds unrelated backing");
 		let member_roots = self.members.iter().map(|member| incoming.iter()
-			.filter(|output| member.incoming.iter().any(|id| output.contains_coin(*id)))
+			.filter(|output| member.live_incoming_ids().iter().any(|id| output.contains_coin(*id)))
 			.map(|output| output.root().point()).collect()).collect::<Vec<BTreeSet<_>>>();
 		check_connected_roots(&member_roots)?;
 		for member in &self.members {
@@ -239,6 +270,18 @@ fn check_parent_inputs(
 impl InternalRefundCandidate {
 	pub fn grant_ids(&self) -> Vec<VtxoId> { self.grants.iter().map(|g| g.vtxo.id()).collect() }
 
+	pub(crate) fn live_incoming_ids(&self) -> Vec<VtxoId> {
+		self.incoming.iter().filter_map(|(id, state)|
+			matches!(state, InternalRefundSource::Live).then_some(*id)).collect()
+	}
+
+	pub(crate) fn terminal_evidence(&self) -> Vec<serde_json::Value> {
+		self.incoming.values().filter_map(|state| match state {
+			InternalRefundSource::Terminal(claim) => Some(claim.evidence_json()),
+			InternalRefundSource::Live => None,
+		}).collect()
+	}
+
 	fn same_observation(&self, other: &Self) -> bool {
 		self.attempt_id == other.attempt_id && self.subscription_id == other.subscription_id
 			&& self.payment_hash == other.payment_hash && self.incoming == other.incoming
@@ -250,15 +293,6 @@ impl InternalRefundCandidate {
 }
 
 impl Tx<'_> {
-	async fn internal_refund_terminal_claim(&self, source: VtxoId, view: ExpiryViewToken) -> anyhow::Result<bool> {
-		Ok(self.query_opt("SELECT p.entitlement_id FROM expiry_terminal_claim p \
-			JOIN expiry_entitlement e ON e.id=p.entitlement_id JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
-			JOIN htlc_vtxo h ON h.id=v.id JOIN watchmand_block b ON b.height=p.height AND b.hash=p.hash \
-			WHERE e.vtxo_id=$1 AND p.height<=$2 AND h.direction='incoming' \
-			AND h.chain_resolution='revoked' AND h.chain_resolution_height=p.height \
-			AND v.onchain_spent_height=p.height AND v.onchain_spent_txid=p.txid",
-			&[&source.to_string(), &i64::from(view.captaind.height.min(view.watchmand.height))]).await?.is_some())
-	}
 
 	async fn existing_internal_refund(
 		&self, source: VtxoId, attempt: i64, subscription: i64, hash: PaymentHash,
@@ -308,11 +342,17 @@ impl Tx<'_> {
 	/// This is PRIVATE authority for the exact joint commit, never an exception
 	/// exposed to refresh/offboard/materialization or normal watchman writers.
 	async fn guard_internal_refund_replan(&self, component: &InternalRefundComponent, ids: &[VtxoId]) -> anyhow::Result<()> {
+		let all = ids.iter().map(ToString::to_string).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+		let sources = self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&all]).await?;
+		ensure!(sources.len() == all.len(), "joint refund lost an original source or partition row");
+		let terminal = component.terminal_ids();
+		// These exact original rows are observed, not changed or allocated.
+		// Fresh classification below still runs under their locks, WAL2 and
+		// the subscription locks. No other writer learns this exclusion.
+		let mutable = ids.iter().copied().filter(|id| !terminal.contains(id)).collect::<Vec<_>>();
 		let allowed = component.superseded_allocations();
-		if allowed.is_empty() { return super::expiry_guard::guard_obligation_changes(self, ids).await; }
-		let ids = ids.iter().map(ToString::to_string).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
-		let sources = self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&ids]).await?;
-		ensure!(sources.len() == ids.len(), "joint replan lost an original source or partition row");
+		if allowed.is_empty() { return super::expiry_guard::guard_obligation_changes(self, &mutable).await; }
+		let ids = mutable.iter().map(ToString::to_string).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
 		let allocations = self.query("SELECT id,status FROM expiry_allocation WHERE id=ANY($1) ORDER BY id FOR UPDATE", &[&allowed]).await?;
 		ensure!(allocations.len() == allowed.len() && allocations.iter().all(|row| row.get::<_, &str>("status") == "conflicted"),
 			"joint replan previous reservation is still active or paid");
@@ -353,7 +393,9 @@ impl Tx<'_> {
 		InternalRefundComponent::new(current, actual)
 	}
 
-	/// Only a NEW, unmaterialized and still-unspent receive is eligible here.
+	/// An unmaterialized receive retains its entire original source membership.
+	/// Live originals are refunded; exact replayable canonical user claims are
+	/// observation-only. Every receive grant must still be an actual input.
 	/// Historical returns to a cold drain cannot authorize a cross-root refund
 	/// without a real spendable bridge; observed depth alone is insufficient.
 	pub(crate) async fn unclaimed_internal_refund(
@@ -387,14 +429,21 @@ impl Tx<'_> {
 		ensure!(!incoming.is_empty() && incoming.len() as i64 <= MAX_JOINT_GRANTS,
 			"joint refund original funding set exceeds its preparation budget");
 		let mut existing = BTreeMap::new();
+		let mut classified = BTreeMap::new();
 		for id in &incoming {
 			let source = htlc_vtxo::get_htlc_vtxo(self, *id).await?.context("joint incoming source lost its signed body")?;
 			check_incoming_identity(&source, hash)?;
+			if let Some(claim) = self.replayable_terminal_claim(*id, view).await? {
+				// This is the actual original user's signed leaf spend in the
+				// current canonical view. Retain its source membership while
+				// keeping it out of the new payout and physical input set.
+				ensure!(source.htlc.offchain_resolution.is_none()
+					&& source.vtxo.oor_spent_txid.is_none() && source.vtxo.spent_in_round.is_none()
+					&& source.vtxo.offboarded_in.is_none(), "terminal original has another off-chain commitment");
+				classified.insert(*id, InternalRefundSource::Terminal(claim));
+				continue;
+			}
 			if source.vtxo.decided_for_fallback {
-				// Never consume an attempt's grant dependency after omitting one
-				// of its original sources based only on a chain observation. A
-				// user claim can reorg independently of the new timeout parent.
-				if self.internal_refund_terminal_claim(*id, view).await? { return Ok(None); }
 				let Some(scope) = self.existing_internal_refund(*id, attempt_id, subscription_id, hash).await? else { return Ok(None); };
 				ensure!(scope.gross == source.vtxo.vtxo.amount()
 					&& scope.claimant == source.vtxo.vtxo.policy().as_server_htlc_send()
@@ -406,7 +455,9 @@ impl Tx<'_> {
 			ensure!(self.query_one(
 				"SELECT onchain_spent_height IS NULL AND onchain_spent_txid IS NULL AS unspent FROM vtxo WHERE vtxo_id=$1",
 				&[&id.to_string()]).await?.get::<_, bool>("unspent"), "joint incoming source has a terminal chain spend");
+			classified.insert(*id, InternalRefundSource::Live);
 		}
+		if !classified.values().any(|state| matches!(state, InternalRefundSource::Live)) { return Ok(None); }
 		let rows = self.query("SELECT vtxo_id,onchain_spent_height,onchain_spent_txid FROM vtxo \
 			WHERE lightning_htlc_subscription_id=$1 ORDER BY vtxo_id LIMIT $2", &[&subscription_id,&(MAX_JOINT_GRANTS+1)]).await?;
 		ensure!(!rows.is_empty() && rows.len() as i64 <= MAX_JOINT_GRANTS,
@@ -430,7 +481,7 @@ impl Tx<'_> {
 			self.check_internal_refund_membership(*source, attempt_id, subscription_id, hash, &grant_ids).await?;
 		}
 		Ok(Some(InternalRefundCandidate { attempt_id, subscription_id, payment_hash: hash, view,
-			incoming, existing, grants }))
+			incoming: classified, existing, grants }))
 	}
 
 }
@@ -469,6 +520,78 @@ mod tests {
 			spend_state: SpendState::HtlcRecvUnclaimed, decided_for_fallback: false,
 			confirmed_height: Some(confirmed), created_at: Local::now(), updated_at: Local::now() };
 		(HtlcVtxo { htlc, vtxo: state },current)
+	}
+
+	// These tests exercise partition/membership only. Cryptographic and actual
+	// canonical user-claim admission is tested by expiry_user_claim's helper.
+	fn terminal_candidate() -> InternalRefundCandidate {
+		let (grant, current) = receive_grant();
+		let a = VtxoId::from(OutPoint::new(Txid::from_byte_array([121;32]),0));
+		let b = VtxoId::from(OutPoint::new(Txid::from_byte_array([122;32]),0));
+		InternalRefundCandidate { attempt_id: 1, subscription_id: 2, payment_hash: grant.htlc.payment_hash,
+			view: current, incoming: BTreeMap::from([
+				(a,InternalRefundSource::Terminal(ReplayableTerminalClaim { source:a,
+					claim:parent(&[a.to_point()]),confirmed:current.watchmand })),
+				(b,InternalRefundSource::Live),
+			]),existing:BTreeMap::new(),grants:vec![InternalRefundGrant {
+				vtxo:ServerVtxo::from(grant.vtxo.vtxo).to_bare(),confirmed:BlockHeight::new(1),updated_at:Local::now(),
+			}] }
+	}
+
+	#[test]
+	fn joint_terminal_partition_locks_every_original_but_allocates_only_live_sources() {
+		let candidate = terminal_candidate();
+		let all = candidate.incoming.keys().copied().collect::<Vec<_>>();
+		let live = candidate.live_incoming_ids();
+		let terminal = *candidate.incoming.keys().find(|id| !live.contains(id)).unwrap();
+		let component = InternalRefundComponent::new(candidate.view,vec![candidate]).unwrap();
+		assert_eq!(component.incoming_ids(),all,"terminal originals remain in the final sorted lock union");
+		assert_eq!(component.live_incoming_ids(),live);
+		assert_eq!(component.terminal_ids(),[terminal].into_iter().collect());
+		assert!(component.for_source(terminal).is_none(),"an actual exited source gets no new customer allocation");
+		assert!(component.for_source(live[0]).is_some());
+		let required = component.grant_ids();
+		let points = live.iter().map(|id| id.to_point()).chain(required.iter().map(|id|id.to_point())).collect::<Vec<_>>();
+		assert!(check_parent_inputs(component.view,component.view,&[live[0].to_point()],&required,&parent(&points)).is_ok());
+		assert!(check_parent_inputs(component.view,component.view,&[live[0].to_point()],&required,&parent(&[live[0].to_point()])).is_err());
+		let mut extra = points;
+		extra.push(terminal.to_point());
+		assert!(check_parent_inputs(component.view,component.view,&[live[0].to_point()],&required,&parent(&extra)).is_err());
+	}
+
+	#[test]
+	fn joint_terminal_partition_revalidates_exact_claim_body_and_block() {
+		let candidate = terminal_candidate();
+		let mut changed = candidate.clone();
+		assert!(candidate.same_observation(&changed));
+		let claim = changed.incoming.values_mut().find_map(|state| match state {
+			InternalRefundSource::Terminal(claim) => Some(claim), _ => None,
+		}).unwrap();
+		claim.claim.lock_time = absolute::LockTime::from_height(1).unwrap();
+		assert!(!candidate.same_observation(&changed),"the final commit cannot substitute another signed body");
+		let mut changed = candidate.clone();
+		let claim = changed.incoming.values_mut().find_map(|state| match state {
+			InternalRefundSource::Terminal(claim) => Some(claim), _ => None,
+		}).unwrap();
+		claim.confirmed.hash = bitcoin::BlockHash::from_byte_array([123;32]);
+		assert!(!candidate.same_observation(&changed),"a reorg requires fresh classification before commit");
+	}
+
+	#[test]
+	fn joint_terminal_partition_rejects_a_rebound_or_future_terminal_observation() {
+		let candidate = terminal_candidate();
+		let mut changed = candidate.clone();
+		let claim = changed.incoming.values_mut().find_map(|state| match state {
+			InternalRefundSource::Terminal(claim) => Some(claim), _ => None,
+		}).unwrap();
+		claim.source = VtxoId::from(OutPoint::new(Txid::from_byte_array([124;32]),0));
+		assert!(InternalRefundComponent::new(changed.view,vec![changed]).is_err());
+		let mut changed = candidate.clone();
+		let claim = changed.incoming.values_mut().find_map(|state| match state {
+			InternalRefundSource::Terminal(claim) => Some(claim), _ => None,
+		}).unwrap();
+		claim.confirmed.height = changed.view.watchmand.height + bitcoin_ext::BlockDelta::new(1);
+		assert!(InternalRefundComponent::new(changed.view,vec![changed]).is_err());
 	}
 
 	#[test]

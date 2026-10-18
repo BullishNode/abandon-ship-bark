@@ -41,14 +41,15 @@ impl Server {
 		// marks its members so the same component is not retried eight times.
 		let rows = self.db.read(async |t| Ok(t.query("SELECT f.id FROM expiry_lightning_internal_funding f \
 			WHERE f.id>$1 AND EXISTS(SELECT 1 FROM vtxo g WHERE g.lightning_htlc_subscription_id=f.subscription_id) \
-			AND (NOT EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l \
-				JOIN expiry_decided_coin d ON d.vtxo_id=l.vtxo_id WHERE l.lightning_payment_attempt_id=f.id) \
-				OR EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l \
-				JOIN expiry_decided_coin d ON d.vtxo_id=l.vtxo_id \
-				JOIN expiry_allocation_coin c ON c.entitlement_id=d.entitlement_id \
-				JOIN expiry_allocation a ON a.id=c.allocation_id WHERE l.lightning_payment_attempt_id=f.id \
-				AND a.status='conflicted' AND c.evidence->>'kind'='htlc_internal_joint_timeout' \
-				AND c.evidence->>'attempt_id'=f.id::TEXT)) \
+			AND EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l \
+				JOIN vtxo source ON source.vtxo_id=l.vtxo_id WHERE l.lightning_payment_attempt_id=f.id \
+				AND source.onchain_spent_height IS NULL AND source.onchain_spent_txid IS NULL \
+				AND (NOT EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=l.vtxo_id) \
+					OR EXISTS(SELECT 1 FROM expiry_decided_coin d \
+						JOIN expiry_allocation_coin c ON c.entitlement_id=d.entitlement_id \
+						JOIN expiry_allocation a ON a.id=c.allocation_id WHERE d.vtxo_id=l.vtxo_id \
+						AND a.status='conflicted' AND c.evidence->>'kind'='htlc_internal_joint_timeout' \
+						AND c.evidence->>'attempt_id'=f.id::TEXT))) \
 			ORDER BY f.id LIMIT $2", &[&cursor,&ATTEMPTS_PER_PASS]).await?)).await?;
 		let Some(last) = rows.last() else { return Ok(0); };
 		let next = last.get::<_, i64>("id");
@@ -81,9 +82,9 @@ impl Server {
 		let mut roots = 0usize;
 		while let Some(attempt) = pending.pop_first() {
 			ensure!(!self.rtmgr.shutdown_requested(), "shutdown cancels incomplete internal component preparation");
-			let incoming = members.get(&attempt).expect("queued member exists").incoming.clone();
+			let incoming = members.get(&attempt).expect("queued member exists").live_incoming_ids();
 			let sources = self.db.read(async |t| t.get_server_vtxos_by_id(&incoming).await).await?;
-			ensure!(sources.len() == incoming.len(), "internal component lacks its complete original sources");
+			ensure!(sources.len() == incoming.len(), "internal component lacks its complete live original sources");
 			for source in sources {
 				let anchor = source.vtxo.chain_anchor();
 				if !anchors.contains_key(&anchor) {

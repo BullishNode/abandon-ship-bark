@@ -344,6 +344,15 @@ impl Tx<'_> {
 				let proposal = &coin.ownership;
 				let evidence = proposal.evidence.as_ref().context("ready ownership lacks evidence")?;
 				let mut observed = evidence_json(evidence, proposal.has_stored_preimage);
+				if let Some(member) = locked_joint.as_ref().and_then(|joint| joint.for_source(proposal.id)) {
+					let terminals = member.terminal_evidence();
+					if !terminals.is_empty() {
+						// Keep the exact omitted originals as canonical premises,
+						// never as permanent off-chain ownership or new payouts.
+						observed["terminal_sources"] = serde_json::json!(terminals);
+						observed["original_sources"] = serde_json::json!(member.incoming.keys().map(ToString::to_string).collect::<Vec<_>>());
+					}
+				}
 				if let Some(scope) = locked_joint.as_ref().and_then(|joint| joint.existing_source(proposal.id)) {
 					observed["supersedes_allocations"] = serde_json::json!(scope.allocations.keys().copied().collect::<Vec<_>>());
 				}

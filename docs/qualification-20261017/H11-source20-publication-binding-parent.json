@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-18T10:06:32.204320+00:00",
+  "state": "SOURCE20_ONLY_COMMITTED_PUSHED_REMOTE_VERIFIED_UNCOMPILED_NOT_RUN",
+  "branch": "work/fresh-test-three-owner-forwarding-20261018",
+  "base_fixed_PR27": "b0143874c45f413d5e886b160457005b49a6af65",
+  "source_commit": "1b2206666d27d85f27456d7b6598a9edf1d12997",
+  "source_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+  "parent_intake_sha256": "a60183a3b3d934acf5381e0a6bf56a88b6135f2490f025832496697c15c2687c",
+  "prior152Rust_protection_snapshot_sha256": "ddec5432dafead860626a4917b56c88a66b42c8faa7ec4c9a8bc711ee48a0d83",
+  "native_execution_credit": 0,
+  "compiled": false,
+  "module_registered": false,
+  "runtime_allocation": null,
+  "actual_git_commit_paths": [
+    "testing/tests/server/qualification_three_owner_forwarding.rs"
+  ]
+}

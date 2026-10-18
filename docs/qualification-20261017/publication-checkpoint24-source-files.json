@@ -1,0 +1,70 @@
+{
+  "state": "PROPOSED_SAFE_SOURCE_ONLY_EXPORT_PARENT_INTAKE_PENDING_NOT_STAGED",
+  "at": "2026-10-18T10:02:13.887192+00:00",
+  "payload_count": 8,
+  "payload": {
+    "H11-SOURCE-PUBLICATION-NOTES.md": {
+      "sha256": "ab909f8390cfb01969799ae28d45e53b03d07e411e25558bf37c4a8ced744827",
+      "bytes": 2613
+    },
+    "H11-three-owner-forwarding-source-proposal.json": {
+      "sha256": "5e8c30ca5e98679f8e2bf63a1b17efce5874e3dbea62b44a30b507efe028d488",
+      "bytes": 16978
+    },
+    "H11-three-owner-forwarding-source-proposal.md": {
+      "sha256": "6327c0c16a2bea9424f6bbc54f42280774594243533f56f4be5f99785507adec",
+      "bytes": 4474
+    },
+    "H11-three-owner-forwarding-v1-design.md": {
+      "sha256": "c1c5b0711b1a13df6e25a27e598b6519cfa2e921e6de33d42481aa60f3200619",
+      "bytes": 5125
+    },
+    "H11-three-owner-forwarding-v1-manifest.json": {
+      "sha256": "6d0a3018305442eab0139ca0ba7ea961604115c6e3b2e0ca11ce0ed5a7c17943",
+      "bytes": 14192
+    },
+    "H11-three-owner-forwarding-v1-peer-review-client.json": {
+      "sha256": "c87f65ea91eb2781beb69288d5dd2ed6efd9eb21a992caf8fe0dd857554c18a3",
+      "bytes": 10675
+    },
+    "H11-three-owner-forwarding-v1-peer-review-client.md": {
+      "sha256": "1df794021715e044b2bd95d214d75a06956f4e4b673ee07c31ddfdca80e5b4df",
+      "bytes": 1503
+    },
+    "H11-three-owner-forwarding-v1.patch": {
+      "sha256": "b32d89cc8c7a07934a738e5881a61e24936da9f99983ed3881d267579e4ba445",
+      "bytes": 41957
+    }
+  },
+  "byte_exact_public_copies": 7,
+  "new_context_note": 1,
+  "separate_source": {
+    "path": "testing/tests/server/qualification_three_owner_forwarding.rs",
+    "sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+    "lines": 699,
+    "bytes": 41001,
+    "standalone_Rust_copy": false,
+    "selector": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+    "binary": "ark-testing::server"
+  },
+  "review_scope": "Full frozen source inspection ACK c87f65ea; no concrete blocker, not compiler/native or launch admission",
+  "runtime": {
+    "parent_intake": null,
+    "module_registration": null,
+    "source_capture": null,
+    "ELF": null,
+    "metadata": null,
+    "allocation": null,
+    "compile": null,
+    "native": "NOT RUN",
+    "credit_added": false
+  },
+  "secret_screen": {
+    "source_and_all_9_export_files": 10,
+    "English_BIP39_checksum": 0,
+    "WIF_checksum": 0,
+    "strong_private_credential_patterns": 0,
+    "limit": "Full publictext bounded checksum/pattern checks, not universal secret absence"
+  },
+  "exclusions": "No standalone Rust/private source or protection snapshot/runtime/largeblocks/testdata/backup/wallet/PG/DB/config/log/argv/seed/key/global/Git/index artifacts. No source19 packet/global mutation."
+}

@@ -1,0 +1,288 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_REREVIEW_NO_CONCRETE_BLOCKER_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T10:02:55.800758+00:00",
+  "reviewer_role": "Author performed requested additional source/API/catalogue reread; separate independent client peer c87f remains authoritative for reviewer independence.",
+  "source": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_three_owner_forwarding.rs",
+  "source_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+  "manifest_sha256": "6d0a3018305442eab0139ca0ba7ea961604115c6e3b2e0ca11ce0ed5a7c17943",
+  "proposal_sha256": "5e8c30ca5e98679f8e2bf63a1b17efce5874e3dbea62b44a30b507efe028d488",
+  "catalogue": "/home/francis/bark-simulator-signet-rework/docs/80-case-coverage.json",
+  "catalogue_sha256": "27199dd7921af86e73eeadceca922b66d7ffdbe80a4ba01971ad24c8f1d23562",
+  "full_H11_catalogue_entry": {
+    "id": "H11",
+    "behavior": "Forward received value across three owners.",
+    "expected": "Final live entitlement is counted once; predecessors cannot receive it again.",
+    "driver": "SDK",
+    "evidence_category": "source_only",
+    "coverage_scope": "unproven",
+    "whole_id_pass": false,
+    "evidence_refs": [
+      "SOURCE"
+    ],
+    "demonstrated": "Ownership/lineage source exists.",
+    "remaining_or_adaptation": "No captured three-owner forwarding chain and final expiry settlement.",
+    "design_expectation": "Final live entitlement is counted once; predecessors cannot receive it again.",
+    "required_proof": "Execute the original behavior through actual current native SDK/RPC paths; preserve exact pins, all failures and unknowns. No captured three-owner forwarding chain and final expiry settlement.",
+    "expectation_changed": false,
+    "adaptation_status": "see_evidence_scope",
+    "evidence_scope_warning": "The original whole_id_pass flag applies only to the named original behavior and pinned execution; this design overlay does not extend it to unexecuted variants."
+  },
+  "requirement_tags_from_original_proposal": [
+    "W4",
+    "W5",
+    "W10"
+  ],
+  "client_independent_peer": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1-peer-review-client.json",
+    "sha256": "c87f65ea91eb2781beb69288d5dd2ed6efd9eb21a992caf8fe0dd857554c18a3"
+  },
+  "concrete_blockers": [],
+  "invariant_review": [
+    {
+      "invariant": "Original catalogue behavior uses three actual SDK owners, rather than direct test cosign or same-seed aliases.",
+      "evidence": [
+        {
+          "source_line": 418,
+          "literal": "sender.send_arkoor_payment("
+        },
+        {
+          "source_line": 563,
+          "literal": "let (middle, a_send)"
+        },
+        {
+          "source_line": 564,
+          "literal": "let (last, b_send)"
+        },
+        {
+          "source_line": 551,
+          "literal": "record.account_xpub"
+        }
+      ],
+      "review": "Three original accounts have distinct mailbox/script/xpub and actual leaf-key checks. Only A funded/boarded; both normal UntilDone sends finalize at full100k and no change."
+    },
+    {
+      "invariant": "Money/source ancestry is authenticated before expiry, not inferred from Spent flags.",
+      "evidence": [
+        {
+          "source_line": 450,
+          "literal": "leaf.validate(board)"
+        },
+        {
+          "source_line": 464,
+          "literal": "rpc.get_vtxo_spend_proof("
+        },
+        {
+          "source_line": 468,
+          "literal": "assert_eq!(proof.vtxos"
+        },
+        {
+          "source_line": 472,
+          "literal": "assert_eq!(&path[..prefix.len()]"
+        },
+        {
+          "source_line": 486,
+          "literal": "tx.get_user_vtxo_by_id("
+        },
+        {
+          "source_line": 569,
+          "literal": "ancestors.contains(&source.id())"
+        }
+      ],
+      "review": "Each actual source-owner attested server proof equals the exact signed successor; signatures validate against genuine Core funding, one complete100k branch and two-step prefix geometry. C retains A/B ancestors and same backing/expiry."
+    },
+    {
+      "invariant": "All-generation predecessors/ancestors are excluded without filtering to active or confirmed generations.",
+      "evidence": [
+        {
+          "source_line": 386,
+          "literal": "WHERE v.anchor_point=ANY($1)"
+        },
+        {
+          "source_line": 388,
+          "literal": "the final owner must have a non-vacuous"
+        },
+        {
+          "source_line": 628,
+          "literal": "WHERE e.vtxo_id=ANY($1) AND c.disposition='customer'"
+        },
+        {
+          "source_line": 630,
+          "literal": "no generation may allocate predecessor"
+        }
+      ],
+      "review": "Nonempty root-wide customer allocation IDs must equal only C. Separate forbidden signed-ancestor query excludes A/B and checkpoints in every generation; active canonical C also binds exact mailbox/key/script/amount/payer."
+    },
+    {
+      "invariant": "Actual expiry payment is observed on canonical Core, not merely publication/row-count/height.",
+      "evidence": [
+        {
+          "source_line": 142,
+          "literal": "ctx.bitcoind().await_transaction(txid).await, parent"
+        },
+        {
+          "source_line": 144,
+          "literal": "info.confirmations.unwrap_or(0) >= 6"
+        },
+        {
+          "source_line": 152,
+          "literal": "input.witness.taproot_leaf_script()"
+        },
+        {
+          "source_line": 194,
+          "literal": "let children = block.txdata"
+        },
+        {
+          "source_line": 204,
+          "literal": "SELECT raw_tx,fee_sat,confirmed_hash"
+        },
+        {
+          "source_line": 617,
+          "literal": "sum::<Amount>(), sat(100_000)"
+        }
+      ],
+      "review": "Stored parent equals actual bytes and canonicalhash/height; native expiry witness spends a known signed path. Actual same-block anchor child selected from canonical block,6+depth/realprevouts/fee/storedraw/hash checked. C99k+operator/anchor1k and parentzero minerfee required."
+    },
+    {
+      "invariant": "Whole canonical chain and mempool reject predecessor or duplicate payments; finite money is conserved.",
+      "evidence": [
+        {
+          "source_line": 313,
+          "literal": "for (vout, output) in tx.output.iter().enumerate() {"
+        },
+        {
+          "source_line": 318,
+          "literal": "if !tx.input.iter().any"
+        },
+        {
+          "source_line": 322,
+          "literal": "selected graph consumed undeclared outside funds"
+        },
+        {
+          "source_line": 348,
+          "literal": "whole-chain payee outputs must equal"
+        },
+        {
+          "source_line": 366,
+          "literal": "actual child change and unused sponsors"
+        },
+        {
+          "source_line": 376,
+          "literal": "assert_eq!(retained + fees, initial)"
+        },
+        {
+          "source_line": 377,
+          "literal": "for txid in core.get_raw_mempool()"
+        }
+      ],
+      "review": "All canonical payee outputs collected before selected-cut filter. A/B zero and C exact1x99k in both global observations and graph; all positive terminalpoints Core6+/actualvalues/scripts, no outside inputs/duplicates. Actual watch confirmedutxo membership or configured operator script classifies remaining value.300k cut includes root100k+two confirmed100k sponsors, actual unused/change retained."
+    },
+    {
+      "invariant": "Original SDK histories count legitimate forwards separately and one C fallback once.",
+      "evidence": [
+        {
+          "source_line": 501,
+          "literal": "current, baseline, \"a predecessor retains"
+        },
+        {
+          "source_line": 250,
+          "literal": "movement.subsystem.name != \"abandon.fallback_payout\""
+        },
+        {
+          "source_line": 259,
+          "literal": "assert_eq!(debit, previous.values()"
+        },
+        {
+          "source_line": 267,
+          "literal": "assert_eq!(movement.effective_balance, movement.intended_balance)"
+        },
+        {
+          "source_line": 663,
+          "literal": "assert_eq!(unchanged_c_history, baselines[2])"
+        },
+        {
+          "source_line": 680,
+          "literal": "assert_eq!(repeat_cut, public["
+        }
+      ],
+      "review": "A/B full successfulsend IDs/body/state/history remain unchanged, no extra fallback debit or revival; all10Arkfields zero. Original C held100k before absence, accepts one chainverified CustomerPayout/history\u2212100k/fee1k/net99k, other-subsystem debit baseline and all10 zero. Receipts/movement IDs repeated twice and originals reopened after later completed-view height."
+    }
+  ],
+  "current_API_pair_file_count": 28,
+  "current_pair_hashes_still_equal_frozen_manifest": true,
+  "current_C_absent_and_unregistered": true,
+  "all152_prior_testing_Rust_unchanged": true,
+  "all_review_inputs_before_after_unchanged": true,
+  "input_sha256": {
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/fallback/adoption.rs": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+    "/home/francis/abandon-ship-fresh-integration/lib/src/vtxo/mod.rs": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/lib/src/address.rs": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/lib/src/fallback.rs": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/server/src/database/expiry_details.rs": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1-manifest.json": "6d0a3018305442eab0139ca0ba7ea961604115c6e3b2e0ca11ce0ed5a7c17943",
+    "/home/francis/abandon-ship-fresh-integration/server/src/database/ordinary_spend.rs": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1.patch": "b32d89cc8c7a07934a738e5881a61e24936da9f99983ed3881d267579e4ba445",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/fallback/adoption.rs": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/lib/src/attestations.rs": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/fallback/payouts.rs": "eeb8e7c2706fa163c7525c9ededd4492689da667bfdb231c78084cc564afd349",
+    "/home/francis/abandon-ship-fresh-integration/testing/src/bark.rs": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+    "/home/francis/abandon-ship-fresh-integration/server/src/database/expiry_ownership.rs": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/fallback/spend_proof.rs": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/mailbox.rs": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/actions/arkoor_send.rs": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/src/bark.rs": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/server/src/database/mod.rs": "29f8b4122404b98b41b59867b33adb142e6f03534c8b039ca41535dea0bd5bb2",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/fallback.rs": "57cabf9b3eea09024e59c901067f1f5bb6bc2cc93f4fe376fa295ba9c81d546d",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/arkoor.rs": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/fallback.rs": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/balance.rs": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+    "/home/francis/abandon-ship-fresh-integration/server/schema.sql": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1-private/qualification_three_owner_forwarding.rs": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/src/context/mod.rs": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+    "/home/francis/abandon-ship-fresh-integration/server/src/database/fork_migrations/V5__expiry_allocations.sql": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/arkoor.rs": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/mailbox.rs": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/src/context/builders.rs": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/fallback/payouts.rs": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/server/schema.sql": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+    "/home/francis/abandon-ship-fresh-integration/lib/src/address.rs": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/server-rpc/protos/bark_server.proto": "4853b54b00fc2ee7059af3c3159313a19da156d12806092f40429700e4044619",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/server/src/database/expiry_ownership.rs": "a2fdfa9cefc5f02629adb992e1441c339451e3377702694f1ea3a07de2c612bf",
+    "/home/francis/abandon-ship-fresh-integration/lib/src/fallback.rs": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/movement/payment_method.rs": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/movement/mod.rs": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+    "/home/francis/abandon-ship-fresh-integration/testing/src/context/mod.rs": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+    "/home/francis/abandon-ship-fresh-integration/server-rpc/protos/bark_server.proto": "6ccf1b22452ef232c6ff31eb390fb366fc65750168fe279caa769f4f099e464c",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/fallback/sync.rs": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/mod.rs": "5d7d37ba46825e988876b0a6158ac363416feefe742decad975b77609565b6ee",
+    "/home/francis/abandon-ship-fresh-integration/server/src/database/mod.rs": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1-design.md": "c1c5b0711b1a13df6e25a27e598b6519cfa2e921e6de33d42481aa60f3200619",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/src/daemon/captaind/mod.rs": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/server/src/database/fork_migrations/V5__expiry_allocations.sql": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+    "/home/francis/abandon-ship-fresh-integration/bark/src/lib.rs": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/actions/arkoor_send.rs": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/movement/mod.rs": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/balance.rs": "905684f07daaddfd6b78f4c0398359c170161e95ebbdd7674ea06e6ed9a124d3",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/lib/src/vtxo/mod.rs": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+    "/home/francis/abandon-ship-fresh-integration/lib/src/attestations.rs": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+    "/home/francis/abandon-ship-fresh-integration/testing/tests/server/mod.rs": "be30fa90fa9fa0c179dc3452cdb8ae051ac8624936e2ebac41f5d17b0ba49f8e",
+    "/home/francis/bark-simulator-signet-rework/docs/80-case-coverage.json": "27199dd7921af86e73eeadceca922b66d7ffdbe80a4ba01971ad24c8f1d23562",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/lib.rs": "2486a4f20a5e014febc859c83cdac42dd3658e336a31d1947f047b1f234823aa",
+    "/home/francis/abandon-ship-fresh-integration/testing/src/context/builders.rs": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+    "/home/francis/abandon-ship-fresh-integration/testing/src/daemon/captaind/mod.rs": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+    "/home/francis/abandon-ship-fresh-integration/server/src/database/expiry_details.rs": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_three_owner_forwarding.rs": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1-peer-review-client.json": "c87f65ea91eb2781beb69288d5dd2ed6efd9eb21a992caf8fe0dd857554c18a3",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/movement/payment_method.rs": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-source-proposal.json": "5e8c30ca5e98679f8e2bf63a1b17efce5874e3dbea62b44a30b507efe028d488",
+    "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/bark/src/fallback/sync.rs": "dc24a84878eaf20b4158836c2503881797a792fae699a442f47f3731ee6bfe26"
+  },
+  "limits": [
+    "SOURCE ONLY; no compile/typecheck/native/result/artifact allocation or catalogue/ML/production promotion.180seconds/96blocks/cadence and fee-input sufficiency remain unmeasured native prerequisites.",
+    "All28currentC/Wpairs remain as frozen: older W fork files differ from currentC; no clean/latest-candidate equivalence is inferred. C integration/module registration remains pending.",
+    "Finite300k root+sponsors conserved. Actual A initial200k ordinarychange/boardminer observed separately, excluded from selected cut. No global operator custody or fullwallet solvency claim.",
+    "H11 fullcatalogue entry still source_only/unproven/whole_id_pass=false; this read-only report does not update it. Actual future native SDK\u2192SDK\u2192SDK/finalexpiry receipt is required.",
+    "Source assertions cover ordinary full-value two-hop manual accounts only; no refresh/split/HTLC/reorg/restore/defaultdaemon/universal owner-graph credit.",
+    "No Rust/source/packet/global/Git/index/build/Cargo/native/service/RPC/database/actor/resource mutation or execution. Only additive JSON/MD review files were written."
+  ]
+}

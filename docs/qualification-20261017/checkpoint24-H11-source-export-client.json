@@ -1,0 +1,18 @@
+{
+  "state": "PROPOSED_H11_SOURCE_EXPORT_FROZEN_PARENT_INTAKE_PENDING",
+  "directory": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint24-source-proposed-safe",
+  "manifest_sha256": "12be511310263ada5d0fcd1c3377943247570c0b18380e0afa5c609dadcc0fee",
+  "payload_count": 8,
+  "total_files": 9,
+  "total_bytes": 100311,
+  "source_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+  "source_runtime_status": "UNREGISTERED_UNCOMPILED_NOT_RUN",
+  "current_testing_Rust_count": 153,
+  "all153_testing_Rust_bytes_unchanged": true,
+  "current_testing_Rust_hashmap_sha256": "874a0a23400bc588e6a705808a5fd171a30b7d8edcbd0706987f721dd3b38efc",
+  "public_copies_byte_exact": 7,
+  "secret_screen_inputs": 10,
+  "secret_findings": 0,
+  "Git_index_source_globals_runtime_actions": 0,
+  "limits": "Parent intake pending; no compiler/native/qualification/currentcount/production credit. No standalone source or private protection snapshot exported."
+}

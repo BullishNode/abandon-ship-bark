@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_FEASIBILITY_PROPOSAL_UNASSIGNED_NOT_AUTHORED_NOT_COMPILED_NOT_RUN",
+  "at": "2026-10-18T09:07:47.817467+00:00",
+  "case_id": "H11",
+  "original_requirement": {
+    "behavior": "Forward received value across three owners.",
+    "expected": "Final live entitlement is counted once; predecessors cannot receive it again.",
+    "driver": "SDK",
+    "requirement": "W4|W5|W10",
+    "status": "NOT RUN",
+    "source_catalogue": "/home/francis/bark-simulator-signet-rework/docs/80-case-coverage.json#H11",
+    "catalogue_sha256": "27199dd7921af86e73eeadceca922b66d7ffdbe80a4ba01971ad24c8f1d23562",
+    "coverage_md_line": 64
+  },
+  "ownership": {
+    "owner": null,
+    "selector": null,
+    "source_file": null,
+    "source20_authoring_authorized": false,
+    "allocation": null,
+    "module": null,
+    "capture_or_runtime": null,
+    "rule": "Parent/root must independently confirm distinction and assign ownership before any Rust/module/test selector is created or reserved."
+  },
+  "inspected_source": {
+    "canonical_HEAD": "57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+    "inspection_only_not_artifact_pairing": true,
+    "files": {
+      "bark/src/arkoor.rs": {
+        "sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+        "evidence": "290-318"
+      },
+      "bark/src/actions/arkoor_send.rs": {
+        "sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+        "evidence": "103-157,229-282,345-380"
+      },
+      "bark/src/mailbox.rs": {
+        "sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+        "evidence": "297-328"
+      },
+      "bark/src/lib.rs": {
+        "sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+        "evidence": "1015,1190-1200,1735,2524-2532"
+      },
+      "bark/src/fallback.rs": {
+        "sha256": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+        "evidence": "112-136"
+      },
+      "bark/src/fallback/sync.rs": {
+        "sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+        "evidence": "148-245"
+      },
+      "bark/src/fallback/protection.rs": {
+        "sha256": "b0f3040f9d707c28fac3f42869a2429dc583e0b0692b964f67c16763bb2fb26e",
+        "evidence": "136-168"
+      },
+      "bark/src/fallback/payouts.rs": {
+        "sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+        "evidence": "193-217,275-333"
+      },
+      "bark/src/balance.rs": {
+        "sha256": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+        "evidence": "225 onward"
+      },
+      "testing/src/bark.rs": {
+        "sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+        "evidence": "335-365,914-920"
+      },
+      "testing/src/context/mod.rs": {
+        "sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+        "evidence": "438-444,509-539,548-570"
+      },
+      "testing/tests/server/expiry_replacement_transfer.rs": {
+        "sha256": "8e8f5b19033dc14ae11cf17479a2b93b96282cd1b8d23678012a08e59b1a7d8c",
+        "evidence": "27-77,108-132"
+      },
+      "testing/tests/bark_sdk/recovery.rs": {
+        "sha256": "135f10ef789afc65854dc173362c9a064682655f573492ee8688e2b295fe7d25",
+        "evidence": "90-128"
+      },
+      "testing/tests/bark_sdk/fallback_adoption.rs": {
+        "sha256": "8f21f3d3b396fa4d84b9dcfd1f816cf3879c59482e04d0543504e82245737864",
+        "evidence": "260-318"
+      },
+      "server/src/arkoor.rs": {
+        "sha256": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+        "evidence": "131-174,190-225"
+      },
+      "server/src/database/expiry_inventory.rs": {
+        "sha256": "c4944ee82addf3369875be81d8a55e286472e961f2d6c941342f28f28a54bb94",
+        "evidence": "85-110,124-224"
+      },
+      "server/src/database/expiry_ownership.rs": {
+        "sha256": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+        "evidence": "85-125,313-319,357-360"
+      },
+      "server/src/database/expiry_chain.rs": {
+        "sha256": "a20f49ca1edcec080db441fe5152a273e509b0141c34bf3de91cd02b0ed76e0c",
+        "evidence": "74-114"
+      },
+      "server/src/database/expiry_details.rs": {
+        "sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+        "evidence": "183-237"
+      },
+      "server/src/watchman/settlement.rs": {
+        "sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+        "evidence": "81-118"
+      },
+      "testing/tests/server/qualification_oversize.rs": {
+        "sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+        "evidence": "65-118,281-321"
+      }
+    }
+  },
+  "recipe": {
+    "actors": 3,
+    "accounts": "A/B/C must have distinct real seeds, mailbox IDs, fallback records/scripts and normal leaf keys. A\u2192B\u2192A or a third same-seed device does not satisfy H11.",
+    "source_principal_sat": 100000,
+    "minimum_board_sat": 20000,
+    "setup": "Reuse ctx.bark persistent setup wrappers and their client() real Wallet APIs, as existing H30 does, so originals can be closed/reopened without a new restore harness. Only A is ordinarily funded200k and boards100k; B and C start empty but genuinely register normal fallback accounts. SDK send actions drive both transfers; CLI is setup only.",
+    "schedule": "Manual scheduling explicitly configured. Capture authenticated records and pairwise-distinct scripts; assert unchanged fixture boardfee0 and real boardnet100k, no transfer fee-policy override. Validate source signed body against actual Core funding. Native board helper mines3, not6; independently obtain required actual confirmations.",
+    "first_hop": "A.send_arkoor_payment(&B.new_address(),100k); require successful original A action/movement, no pending_arkoor_sends, A sourceSpent/nochange/zero Ark balance. B.sync_mailbox(); exactly one Spendable100k with exact full signed body, own stored key and same actual backing/expiry. Read actual registered source facts; RPC Ok alone is insufficient.",
+    "second_hop": "Only after B really holds/validates first receipt, B.send_arkoor_payment(&C.new_address(),100k), then C.sync_mailbox(). Require complete successful action, B intermediateSpent/nochange/zero Ark balance; exact distinct C100k full body and stored key. C ancestor_ids includes actual A and B sources; same physical backing/expiry and bounded depth. No rounds, refresh, split-factor override, HTLC, replay gate or forced financial state.",
+    "absence": "Capture complete histories and exact source/action/ID snapshots for all3; C has100k Spendable and nine other Ark buckets zero, A/B all ten zero. Stop_daemon_wait and drop all live wallet handles before actual expiry; retain only setup wrappers for reopening original DBs. Assert no pending send.",
+    "expiry": "No_vtxo_pool server; confirmed declared watch funds ready before deadline. Drive only real bounded blocks and exact captaind/watchmand/rebuilt ledger view to the actual signed expiry. Wait automatic canonical economic settlement; height/Spent/row count alone never counts as terminal.",
+    "return": "Only after actual canonical payout/child confirmations reopen original A/B/C DBs via existing wrappers. All original account/script/body bindings must persist; verify public receipts, balances and history without manual balances/unlocks/SQL writes."
+  },
+  "mandatory_oracles": [
+    "Current complete100k economic terminal is C only. All original A, B and C IDs, signed checkpoints/ancestors and source paths are included; old A/B ownership is not treated as another live principal. Read-only ledger owner_mailbox/user_pubkey/script/entitlement/payer links match actual final key and immutable registration.",
+    "Exactly one actual99k output to C and one1000 policy customer charge, forfeited0. No customer payout allocation for A/B predecessor IDs and no canonical or mempool economic outputs to A/B scripts from this root, across all stored allocation generations. No parent/predecessor duplicate100k or alternate canonical economic payment.",
+    "Recorded signed parent bytes equal actual canonical Core transaction, exact output index/script/value, >=6 confirmations and canonical blockhash. Locate actual same-block P2A fee child and its ledger record, recompute physical parent/child fees from all actual prevouts; stale fee attempts do not count as canonical.",
+    "Traverse all canonical descendants of original100k root and declared watch sponsors; reject unknown external inputs, duplicate outpoints and uncovered current outputs. Selected cut equals actual unspent customer/operator/watch/unused sponsor leaves plus actual miner fees.1000 output charge is retained value, not another miner fee.",
+    "Returning C accepts one confirmed CustomerPayout receipt/history group, gross100k/payout99k/fee1000, immutable final ID/script/outpoint, chain_verified true, statusSuccessful and exactly one fallback debit-100k. Compare all-subsystem negative debits of C input against preabsence baseline to reject repeated principal debits.",
+    "Returning A/B retain successful ordinary send movement identities and already-spent original/intermediate bodies; zero current Ark principal and no new fallback debit/fee/customer output for either transferred source. Preserve their captured ordinary send/receive history, rather than deleting historical facts.",
+    "Each ownership transfer legitimately debits its sender. Do NOT sum A/B/C debits as if three native transfers were duplicate economic payouts: A send-100k and B send-100k are distinct ordinary history, while C fallback-100k is its single terminal debit. Ordinary onchain change is separate from Ark principal.",
+    "Repeat receipt sync, mine a bounded later tip with full ledger rebuild, and reopen originals again. Require stable economic history/movement IDs, zero ten-bucket Ark balances, no pending sends, same one canonical C payment and no A/B resurrection."
+  ],
+  "funding_and_bounds": {
+    "ordinary_A_funding_sat": 200000,
+    "actual_board_backing_sat": 100000,
+    "confirmed_watch_outputs": 2,
+    "watch_output_sat_each": 100000,
+    "selected_cut_sat": 300000,
+    "scope": "Selected100k backing plus two100k sponsor outputs; A ordinary funding change and upfront board miner are separately observed, not counted as principal twice or claimed as global operator custody. No pool/round/LN setup reserve.",
+    "readiness": "Record actual sponsor outpoints/amounts/scripts and >=6 confirmations before expiry. Follow real confirmed child change and unused sponsors; do not assume one fresh100k input per child or top up silently. Source-readiness bounds do not guarantee actual coin selection/timing.",
+    "lifetime_blocks": 40,
+    "exit_delta_blocks": 2,
+    "watch_cadence_seconds": 1,
+    "conditions": "Explicit existing bounded expiry/harness timing. Leave native fee/fanout/depth/registration/expiry policy intact. Full-principal sends have zero change, so default factor2 need not be altered.",
+    "timeout_seconds": 180,
+    "retries": 0,
+    "serial_threads": 1,
+    "maximum_post_board_progress_blocks": 96,
+    "measured_seconds": null,
+    "budget_status": "One ordinary expiry/two sends is source-feasible, not measured. All asynchronous waits and actual publication/confirmation progress must fit the unchanged180 outer bound; exhaustion is failure, never success."
+  },
+  "known_overlap_and_exclusions": {
+    "H30": "Different: three sub-fee leaves in ONE recipient account/group; H11 forwards full value through three actual accounts. Do not edit committed source18 or product proposal.",
+    "H32": "Different: genuine forfeiture then new independent later receipt/two epochs. H11 one100k root/one epoch/no dust; client owns source19.",
+    "replacement_transfer": "Existing test refreshes A then transfers to B, two owners/new root. H11 uses no refresh and genuine B\u2192C forwarding.",
+    "ordinary_recovery_ML181": "Existing two economic owners and same-seed second device/partial change/proof availability; no three-account final expiry payment.",
+    "oversize327": "Existing5000-sat leaves and source-derived intermediate keys do not prove actual B account receives then forwards to C. No automatic H11 credit.",
+    "reserved_root_work": "No partial terminal/partial-chain split, reorg/conflict, claimbackfill, other-terminal, reply/ACK loss, ML125, external-BIP84 restore, P07 or default-daemon boundary. Root must confirm no unlisted reserved H11 owner before assignment.",
+    "credit": "Scoped own-coverage/source review did not identify a whole H11 receipt. This is not a universal absence claim about all root/external campaigns."
+  },
+  "related_curated_rows": [
+    {
+      "case_id": "B-T030",
+      "test": "expiry_frozen_recipient_is_paid_after_sender_change_refresh",
+      "result": "PASS",
+      "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch08-two-root-return-history-receipt.json",
+      "H11_limit": "Frozen recipient plus sender refresh: two owners, not A\u2192B\u2192C."
+    },
+    {
+      "case_id": "FT-SPLIT-AUTO01",
+      "test": "qualification_oversize::expiry_automatic_real_limit_multilevel_split_pays_every_owner",
+      "result": "PASS",
+      "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch16-corrected-multilevel-split-receipt.json",
+      "H11_limit": "327 payees with source-owned intermediate keys, not B-account forwarding."
+    },
+    {
+      "case_id": "FT-LN-FORWARD01",
+      "test": "qualification_noah::qualification_native_forwarding_delivery_survives_provider_reopen",
+      "result": "PASS",
+      "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch11-native-forwarding-reopen-receipt.json",
+      "H11_limit": "Provider reopening and one receive delivery, not three ordinary owners/final expiry."
+    },
+    {
+      "case_id": "FT-LN-RECEIVE-FALLBACK01",
+      "test": "qualification_receive_fallback::qualification_registered_forwarded_receive_pays_absent_recipient_after_provider_stops",
+      "result": "PASS",
+      "receipt": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch14-v2-registered-receive-fallback-receipt.json",
+      "H11_limit": "One registered receive fallback, not a two-hop ordinary full principal."
+    },
+    {
+      "case_id": "FT-SDK-060",
+      "test": "ark-testing::bark-sdk exit::watchman_sweeps_funding_tx_during_exit",
+      "result": "PASS",
+      "receipt": "batch48-sdk-watch-bridge-v11c-allocated-receipt.json; batch48-backend-postflight.json; batch48-coverage-append.json",
+      "H11_limit": "Two-owner/manual watch sweep only."
+    },
+    {
+      "case_id": "FT-SDK-061",
+      "test": "ark-testing::bark-sdk exit::watchman_sweeps_vtxo_chain_during_exit",
+      "result": "PASS",
+      "receipt": "batch48-sdk-watch-bridge-v11c-allocated-receipt.json; batch48-backend-postflight.json; batch48-coverage-append.json",
+      "H11_limit": "Two-owner partial chain/factor1; no three-owner forwarding."
+    }
+  ],
+  "evidence_inputs": {
+    "legacy_inventory_sha256": "e17520cd411d61201302de23351ad9ecac31f40f4b6f888369cc1355333a7f6d",
+    "current_coverage_rows": 464,
+    "current_coverage_sha256": "5aa2daa686d6cd36cd144190aef31a18ba8f8d2336440435da6540efc2f8914a",
+    "original_priority_sha256": "6286fd7ecbfc48a5cccb759be30ea5c2b248e6dee57a6e4aa74547ec63451597"
+  },
+  "remaining_unknowns": [
+    "Actual future source/body/helper/ELF/metadata must be bound after separate root-owned coherent build/capture; inspected canonical HEAD is not an executed candidate.",
+    "Source ownership/unassigned selector and root deconfliction are pending; no new source20 is authorized by this proposal.",
+    "Default180 runtime and two confirmed sponsor sufficiency under actual current publication schedule are unmeasured. Preserve any failure rather than extending deadline, injecting balances or bypassing registration.",
+    "Fallback account snapshots may legitimately retain historical/noncustomer facts. Assert no extra payable/economic/debit principal for A/B rather than deleting history or assuming every API list is globally empty.",
+    "Current canonical product changes can alter ordinary-proof/state APIs; author must recheck exact signed source and successor proof compatibility before compiling. No Spendable/Spent acceptance based only on a server status string."
+  ],
+  "result": "Source-supported authentic minimal design; no product hook identified. No originalH11/fullML/unique-case/execution qualification from this proposal.",
+  "actions": "Read-only scoped original inventory/current canonical APIs/own coverage; only this new JSON+Markdown written. No Rust/selector/owner reservation, globals/ML/Git/index/build/list/runtime/RPC/funding/services or additional agents."
+}

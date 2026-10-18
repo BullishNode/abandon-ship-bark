@@ -1,0 +1,119 @@
+{
+  "state": "SOURCE_ONLY_REVIEWED_PUBLICATION_PROPOSAL_PARENT_FINAL_GATE_PENDING",
+  "at": "2026-10-18T10:08:59.351819+00:00",
+  "payload_count": 20,
+  "payload": {
+    "H11-ROOT-INTAKE-v1-parent.json": {
+      "sha256": "a60183a3b3d934acf5381e0a6bf56a88b6135f2490f025832496697c15c2687c",
+      "bytes": 2583
+    },
+    "H11-SOURCE-PUBLICATION-NOTES.md": {
+      "sha256": "ab909f8390cfb01969799ae28d45e53b03d07e411e25558bf37c4a8ced744827",
+      "bytes": 2613
+    },
+    "H11-source20-publication-binding-parent.json": {
+      "sha256": "bd64e875242bffb03702164a97d6f690f9467f2f33e360b97ed57c4d442f8bfc",
+      "bytes": 828
+    },
+    "H11-three-owner-forwarding-source-proposal.json": {
+      "sha256": "5e8c30ca5e98679f8e2bf63a1b17efce5874e3dbea62b44a30b507efe028d488",
+      "bytes": 16978
+    },
+    "H11-three-owner-forwarding-source-proposal.md": {
+      "sha256": "6327c0c16a2bea9424f6bbc54f42280774594243533f56f4be5f99785507adec",
+      "bytes": 4474
+    },
+    "H11-three-owner-forwarding-v1-additive-backend-rereview.json": {
+      "sha256": "e6932ec3b064bd8d316a65ae74557f649a38f229e5e1635754eae842353159c3",
+      "bytes": 20326
+    },
+    "H11-three-owner-forwarding-v1-additive-backend-rereview.md": {
+      "sha256": "517d7c57dfe5a4c088d7c9bfe1202ca1a7357e7ffa6b46d22d23f8d09d5230be",
+      "bytes": 2256
+    },
+    "H11-three-owner-forwarding-v1-design.md": {
+      "sha256": "c1c5b0711b1a13df6e25a27e598b6519cfa2e921e6de33d42481aa60f3200619",
+      "bytes": 5125
+    },
+    "H11-three-owner-forwarding-v1-manifest.json": {
+      "sha256": "6d0a3018305442eab0139ca0ba7ea961604115c6e3b2e0ca11ce0ed5a7c17943",
+      "bytes": 14192
+    },
+    "H11-three-owner-forwarding-v1-peer-review-client.json": {
+      "sha256": "c87f65ea91eb2781beb69288d5dd2ed6efd9eb21a992caf8fe0dd857554c18a3",
+      "bytes": 10675
+    },
+    "H11-three-owner-forwarding-v1-peer-review-client.md": {
+      "sha256": "1df794021715e044b2bd95d214d75a06956f4e4b673ee07c31ddfdca80e5b4df",
+      "bytes": 1503
+    },
+    "H11-three-owner-forwarding-v1.patch": {
+      "sha256": "b32d89cc8c7a07934a738e5881a61e24936da9f99983ed3881d267579e4ba445",
+      "bytes": 41957
+    },
+    "PUBLICATION-PR27.json": {
+      "sha256": "5d145f89341454875d6a9e0fd75d9d472f860ee26a86e3e2f5cac989acc1ba23",
+      "bytes": 9631
+    },
+    "STATUS-before-PR27-publication-H11-intake-parent.json": {
+      "sha256": "a3bb9583577f827c8220c45f06b8cd254327ba38447d507fb603885bd399ac0c",
+      "bytes": 84327
+    },
+    "STATUS.json": {
+      "sha256": "c7e3e19595c32c3778b19e3ec32a59a30a20b30d36129161a9216fceee09af7d",
+      "bytes": 79868
+    },
+    "TWENTY-FOURTH-CHECKPOINT.md": {
+      "sha256": "0e548aaa154f327cf505090934e7cd614f214590453a5234597cbb46285fce4d",
+      "bytes": 3322
+    },
+    "checkpoint23-publication-independent-audit-legacy.json": {
+      "sha256": "83b361ce3cccd5b1c0f0709f7dec5c5d435b08a92e7c351e74033834b008c49d",
+      "bytes": 12950
+    },
+    "checkpoint23-publication-independent-audit-legacy.md": {
+      "sha256": "a7e22e27915193dcf8cdfacfad285ff19d49c9fe77e083ad205651ec922ce04a",
+      "bytes": 1433
+    },
+    "checkpoint24-H11-source-export-client.json": {
+      "sha256": "5771096fb0b4ceaec61263f9b73aad2b56d6f043146c11250530154c2d69e98d",
+      "bytes": 995
+    },
+    "publication-checkpoint24-source-files.json": {
+      "sha256": "12be511310263ada5d0fcd1c3377943247570c0b18380e0afa5c609dadcc0fee",
+      "bytes": 2794
+    }
+  },
+  "prior_frozen9_byte_exact": true,
+  "prior_proposed_manifest_sha256": "12be511310263ada5d0fcd1c3377943247570c0b18380e0afa5c609dadcc0fee",
+  "source": {
+    "separate_Rust_path": "testing/tests/server/qualification_three_owner_forwarding.rs",
+    "sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+    "source_commit": "1b2206666d27d85f27456d7b6598a9edf1d12997",
+    "new_branch": "work/fresh-test-three-owner-forwarding-20261018",
+    "base_fixed_PR27": "b0143874c45f413d5e886b160457005b49a6af65",
+    "module_registered": false,
+    "compiled": false,
+    "native": "NOT RUN",
+    "runtime_allocation": null,
+    "new_native_credit": 0
+  },
+  "unchanged_completed_counts": {
+    "executions": 255,
+    "PASS": 240,
+    "preserved_FAIL": 15,
+    "unique_binary_test_pairs": 235,
+    "mixed_rows": 466
+  },
+  "STATUS_policy": "Exact parent-owned currentc7e3 and beforea3bb copies; exporter made no global mutation. Historical pending states in frozen originalpacket remain dated snapshots.",
+  "PR27_independent_audit": "83b361ce completed after original5d145 publication receipt; both preserved",
+  "source_only_limits": "180second/96block feasibility unmeasured; no compile/native/fullML/production/globalcustody claim. Coherent integration/capture/build/allocation remain root-owned.",
+  "export_policy": "19 exact existing publicfiles +one new checkpointMD; no standaloneRust/private/runtime/largefiles or other global snapshots. No source/index/Git/build/native actions by exporter.",
+  "secret_screen": {
+    "source_plus21publicfiles": 22,
+    "valid_English_BIP39_checksum": 0,
+    "valid_WIF_checksum": 0,
+    "strong_credentials": 0,
+    "limit": "Full publictext bounded checksum/pattern checks, not universal secret absence"
+  }
+}

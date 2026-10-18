@@ -1,0 +1,316 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_AUTHORED_UNREGISTERED_UNCOMPILED_NOT_RUN_PENDING_PARENT_CLIENT_REVIEW",
+  "at": "2026-10-18T09:55:24.587531+00:00",
+  "case_id": "H11",
+  "requirements": [
+    "W4",
+    "W5",
+    "W10"
+  ],
+  "source": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_three_owner_forwarding.rs",
+  "source_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+  "source_lines": 699,
+  "source_bytes": 41001,
+  "private_source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1-private/qualification_three_owner_forwarding.rs",
+  "private_source_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+  "private_mode": "0o600",
+  "binary": "ark-testing::server",
+  "selector": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+  "module_registration": "NOT_ADDED",
+  "source_capture": null,
+  "artifact": null,
+  "runtime_allocation": null,
+  "native_result": "NOT RUN",
+  "proposal_sha256": "5e8c30ca5e98679f8e2bf63a1b17efce5874e3dbea62b44a30b507efe028d488",
+  "protected_before_sha256": "e0ed40456b70d5a0e2b7c6445696e9fd85b2426d36667ea373546df03ca863d4",
+  "protected_prior_testing_Rust_count": 152,
+  "protected_prior_testing_Rust_unchanged": true,
+  "new_testing_Rust_count": 153,
+  "sole_new_file": "testing/tests/server/qualification_three_owner_forwarding.rs",
+  "cached_actual_Nix_before_code": "impure",
+  "owned_HEAD_at_reservation": "f36f377be24aefa78e36ad84d120356fd395379b",
+  "canonical_HEAD_at_reservation_inspection_only": "57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+  "canonical_and_owned_source_file_pairs": {
+    "bark/src/arkoor.rs": {
+      "canonical_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "owned_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "same_bytes": true
+    },
+    "bark/src/actions/arkoor_send.rs": {
+      "canonical_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+      "owned_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+      "same_bytes": true
+    },
+    "bark/src/mailbox.rs": {
+      "canonical_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "owned_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "same_bytes": true
+    },
+    "bark/src/fallback/spend_proof.rs": {
+      "canonical_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+      "owned_sha256": null,
+      "same_bytes": false
+    },
+    "bark/src/fallback/adoption.rs": {
+      "canonical_sha256": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+      "owned_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+      "same_bytes": false
+    },
+    "bark/src/fallback/payouts.rs": {
+      "canonical_sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "owned_sha256": "eeb8e7c2706fa163c7525c9ededd4492689da667bfdb231c78084cc564afd349",
+      "same_bytes": false
+    },
+    "bark/src/fallback/sync.rs": {
+      "canonical_sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "owned_sha256": "dc24a84878eaf20b4158836c2503881797a792fae699a442f47f3731ee6bfe26",
+      "same_bytes": false
+    },
+    "bark/src/fallback.rs": {
+      "canonical_sha256": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+      "owned_sha256": "57cabf9b3eea09024e59c901067f1f5bb6bc2cc93f4fe376fa295ba9c81d546d",
+      "same_bytes": false
+    },
+    "bark/src/balance.rs": {
+      "canonical_sha256": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+      "owned_sha256": "905684f07daaddfd6b78f4c0398359c170161e95ebbdd7674ea06e6ed9a124d3",
+      "same_bytes": false
+    },
+    "bark/src/lib.rs": {
+      "canonical_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "owned_sha256": "2486a4f20a5e014febc859c83cdac42dd3658e336a31d1947f047b1f234823aa",
+      "same_bytes": false
+    },
+    "bark/src/movement/mod.rs": {
+      "canonical_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "owned_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "same_bytes": true
+    },
+    "bark/src/movement/payment_method.rs": {
+      "canonical_sha256": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+      "owned_sha256": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+      "same_bytes": true
+    },
+    "lib/src/vtxo/mod.rs": {
+      "canonical_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+      "owned_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+      "same_bytes": true
+    },
+    "lib/src/attestations.rs": {
+      "canonical_sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+      "owned_sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+      "same_bytes": true
+    },
+    "lib/src/fallback.rs": {
+      "canonical_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "owned_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "same_bytes": true
+    },
+    "lib/src/address.rs": {
+      "canonical_sha256": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+      "owned_sha256": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+      "same_bytes": true
+    },
+    "testing/src/bark.rs": {
+      "canonical_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "owned_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "same_bytes": true
+    },
+    "testing/src/context/builders.rs": {
+      "canonical_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "owned_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "same_bytes": true
+    },
+    "testing/src/context/mod.rs": {
+      "canonical_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "owned_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "same_bytes": true
+    },
+    "testing/src/daemon/captaind/mod.rs": {
+      "canonical_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+      "owned_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+      "same_bytes": true
+    },
+    "server/src/database/mod.rs": {
+      "canonical_sha256": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416",
+      "owned_sha256": "29f8b4122404b98b41b59867b33adb142e6f03534c8b039ca41535dea0bd5bb2",
+      "same_bytes": false
+    },
+    "server/src/database/ordinary_spend.rs": {
+      "canonical_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+      "owned_sha256": null,
+      "same_bytes": false
+    },
+    "server/src/database/expiry_details.rs": {
+      "canonical_sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+      "owned_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "same_bytes": false
+    },
+    "server/src/database/expiry_ownership.rs": {
+      "canonical_sha256": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+      "owned_sha256": "a2fdfa9cefc5f02629adb992e1441c339451e3377702694f1ea3a07de2c612bf",
+      "same_bytes": false
+    },
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": {
+      "canonical_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "owned_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "same_bytes": true
+    },
+    "server/schema.sql": {
+      "canonical_sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "owned_sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "same_bytes": true
+    },
+    "server-rpc/protos/bark_server.proto": {
+      "canonical_sha256": "6ccf1b22452ef232c6ff31eb390fb366fc65750168fe279caa769f4f099e464c",
+      "owned_sha256": "4853b54b00fc2ee7059af3c3159313a19da156d12806092f40429700e4044619",
+      "same_bytes": false
+    },
+    "testing/tests/server/mod.rs": {
+      "canonical_sha256": "be30fa90fa9fa0c179dc3452cdb8ae051ac8624936e2ebac41f5d17b0ba49f8e",
+      "owned_sha256": "5d7d37ba46825e988876b0a6158ac363416feefe742decad975b77609565b6ee",
+      "same_bytes": false
+    }
+  },
+  "exact_API_references": [
+    {
+      "file": "bark/src/arkoor.rs",
+      "line": 290,
+      "literal": "pub async fn send_arkoor_payment(",
+      "file_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f"
+    },
+    {
+      "file": "bark/src/arkoor.rs",
+      "line": 306,
+      "literal": "pub async fn pending_arkoor_sends(",
+      "file_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f"
+    },
+    {
+      "file": "bark/src/actions/arkoor_send.rs",
+      "line": 105,
+      "literal": "Progress::Registration {",
+      "file_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed"
+    },
+    {
+      "file": "bark/src/actions/arkoor_send.rs",
+      "line": 346,
+      "literal": "async fn finalize_arkoor_send(",
+      "file_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed"
+    },
+    {
+      "file": "bark/src/mailbox.rs",
+      "line": 475,
+      "literal": "async fn process_received_arkoor_package(",
+      "file_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec"
+    },
+    {
+      "file": "bark/src/fallback/spend_proof.rs",
+      "line": 74,
+      "literal": "pub(crate) async fn verify_reported_ordinary_spend(",
+      "file_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9"
+    },
+    {
+      "file": "bark/src/movement/mod.rs",
+      "line": 31,
+      "literal": "pub struct Movement {",
+      "file_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1"
+    },
+    {
+      "file": "lib/src/vtxo/mod.rs",
+      "line": 357,
+      "literal": "pub struct VtxoTxIterItem {",
+      "file_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1"
+    },
+    {
+      "file": "lib/src/vtxo/mod.rs",
+      "line": 842,
+      "literal": "pub fn ancestor_ids(",
+      "file_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1"
+    },
+    {
+      "file": "lib/src/attestations.rs",
+      "line": 259,
+      "literal": "pub fn new(vtxo_id: VtxoId, vtxo_keypair: &Keypair)",
+      "file_sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e"
+    },
+    {
+      "file": "server/src/database/mod.rs",
+      "line": 499,
+      "literal": "pub async fn get_user_vtxo_by_id(",
+      "file_sha256": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416"
+    },
+    {
+      "file": "server/src/database/mod.rs",
+      "line": 398,
+      "literal": "pub async fn read<",
+      "file_sha256": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416"
+    },
+    {
+      "file": "server/src/database/ordinary_spend.rs",
+      "line": 15,
+      "literal": "pub(crate) async fn ordinary_spend_proof(",
+      "file_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55"
+    },
+    {
+      "file": "server-rpc/protos/bark_server.proto",
+      "line": 22,
+      "literal": "rpc GetVtxoSpendProof(",
+      "file_sha256": "6ccf1b22452ef232c6ff31eb390fb366fc65750168fe279caa769f4f099e464c"
+    },
+    {
+      "file": "testing/src/bark.rs",
+      "line": 335,
+      "literal": "pub async fn try_client(",
+      "file_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e"
+    },
+    {
+      "file": "testing/src/bark.rs",
+      "line": 364,
+      "literal": "pub async fn client(",
+      "file_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e"
+    },
+    {
+      "file": "testing/src/daemon/captaind/mod.rs",
+      "line": 62,
+      "literal": "WalletAdminClient",
+      "file_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336"
+    }
+  ],
+  "patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1.patch",
+  "patch_sha256": "b32d89cc8c7a07934a738e5881a61e24936da9f99983ed3881d267579e4ba445",
+  "design": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H11-three-owner-forwarding-v1-design.md",
+  "design_sha256": "c1c5b0711b1a13df6e25a27e598b6519cfa2e921e6de33d42481aa60f3200619",
+  "static_checks": {
+    "one_tokio_test": true,
+    "two_normal_SDK_send_calls_via_one_local_helper": true,
+    "no_manual_cosign_builder": true,
+    "SELECT_only_SQL_literals": 1,
+    "lexical_delimiters_balanced_NOT_Rust_parser": true,
+    "add_file_patch_payload_reconstructed_exact": true,
+    "all152_prior_Rust_sha256_unchanged": true,
+    "macro_imports_explicit": true,
+    "compile_format_typecheck_or_native_performed": false
+  },
+  "bounds": {
+    "outer_seconds": 180,
+    "retries": 0,
+    "maximum_blocks": 96,
+    "local_publication_seconds": 40,
+    "local_publication_blocks": 20,
+    "watch_sponsor_outputs": 2,
+    "watch_sponsor_sat_each": 100000,
+    "selected_cut_sat": 300000,
+    "native_measured_seconds": null
+  },
+  "review_status": {
+    "parent": null,
+    "client": null
+  },
+  "limits": [
+    "Source-only; type/API/liveness/native money assertions require actual future integration/build and exact root allocation.",
+    "Original accounts use manual scheduling and original databases, not seed restore or client/server backup.",
+    "Selected300kcut excludes separately observed customer ordinary funding change/board miner. No global operator custody/FULLML claim.",
+    "No source/product/module/canonical/Git/index/Cargo/build/runtime/global-report mutation; only new owned test and additive external/private source packet."
+  ]
+}

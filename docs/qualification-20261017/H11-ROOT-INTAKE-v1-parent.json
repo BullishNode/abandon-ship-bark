@@ -1,0 +1,37 @@
+{
+  "at": "2026-10-18T10:03:45.354793+00:00",
+  "state": "SOURCE_INTAKE_ACK_UNREGISTERED_UNCOMPILED_NOT_RUN",
+  "case": "H11",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_three_owner_forwarding.rs",
+  "source_sha256": "acaaabcdcea9e158326c41a3e7acf507d663787e0c60e80ca26ba19d150cdbbd",
+  "source_lines": 699,
+  "binary": "ark-testing::server",
+  "selector": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+  "manifest_sha256": "6d0a3018305442eab0139ca0ba7ea961604115c6e3b2e0ca11ce0ed5a7c17943",
+  "patch_sha256": "b32d89cc8c7a07934a738e5881a61e24936da9f99983ed3881d267579e4ba445",
+  "independent_client_peer_sha256": "c87f65ea91eb2781beb69288d5dd2ed6efd9eb21a992caf8fe0dd857554c18a3",
+  "backend_author_rereview_sha256": "e6932ec3b064bd8d316a65ae74557f649a38f229e5e1635754eae842353159c3",
+  "parent_review": "Full699-line review of authentic ordinary A-to-B-to-C SDK send, exact signed proof path, actual expiry parent/unique sameblock fee child/Core6, finite300k root+sponsors conservation, canonical all-payee observation before cut-filtering, global mempool exclusions, all-generation predecessor/ancestor exclusion, A/B original send history and C single terminal100k debit, all10 balances, completed-view/idempotence/reopen. No concrete source blocker identified.",
+  "API_pin_pairs_verified": 28,
+  "exact_canonical_API_references_verified": 17,
+  "prior152_Rust_unchanged": true,
+  "new_source20_remains_untracked_and_excluded_PR27": true,
+  "proposed_export_manifest_sha256": "12be511310263ada5d0fcd1c3377943247570c0b18380e0afa5c609dadcc0fee",
+  "findings": [],
+  "qualification": {
+    "compiled": false,
+    "module_registered": false,
+    "runtime_allocated": false,
+    "native_result": "NOT RUN",
+    "measured_seconds": null,
+    "default_deadline_seconds": 180,
+    "maximum_blocks": 96,
+    "retries": 0
+  },
+  "limits": [
+    "Source review does not establish type checking or deadline feasibility. Root alone integrates/captures/builds and supplies exact native allocation.",
+    "Current canonical APIs are separately pinned from older owned product files; coherent future source and artifact capture required.",
+    "Three original manual accounts and sequential full-value sends; no split/HTLC/refresh/reorg/lost-reply/default-daemon/backup/seed/throughput evidence.",
+    "Selected300k cut excludes customer ordinary change and upfront board miner fee; no whole-operator custody, full-legacy-case or production-readiness claim."
+  ]
+}

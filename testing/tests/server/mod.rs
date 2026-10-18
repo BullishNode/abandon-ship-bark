@@ -2717,3 +2717,5 @@ mod qualification_failed_swap;
 mod qualification_offboard_restart;
 
 mod expiry_internal_terminal_return;
+
+mod expiry_user_claim_backfill;

@@ -68,11 +68,21 @@ pub(super) async fn confirm_recoverable_prefix(
 /// The A claim is an ordinary rightful timeout receipt, made while its owner
 /// is present. Both actors then disappear; B must not be stranded. There is no
 /// incorrect payout request, SQL money mutation, or fabricated resolution.
-async fn partial_terminal(reorg_a: bool) {
-	let name = if reorg_a { "server/expiry_internal_partial_terminal_replays_actual_claim_after_reorg" }
-		else { "server/expiry_internal_one_attempt_partial_terminal" };
+#[derive(Clone, Copy)]
+enum TerminalCase { Partial, Reorg, All }
+
+async fn partial_terminal(case: TerminalCase) {
+	let reorg_a = matches!(case,TerminalCase::Reorg);
+	let all_terminal = matches!(case,TerminalCase::All);
+	let name = match case {
+		TerminalCase::Partial => "server/expiry_internal_one_attempt_partial_terminal",
+		TerminalCase::Reorg => "server/expiry_internal_partial_terminal_replays_actual_claim_after_reorg",
+		TerminalCase::All => "server/expiry_internal_all_sources_exited_returns_all_grants",
+	};
 	let ctx = TestContext::new(name).await;
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
+	let operator = ctx.bitcoind().get_new_address();
+	let operator_config = operator.clone();
 	let srv = Box::pin(ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
 		.funded(btc(10)).cfg(|cfg| {
 			cfg.vtxo_lifetime = BlockDelta::new(24);
@@ -80,7 +90,9 @@ async fn partial_terminal(reorg_a: bool) {
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
 			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 8 }];
 			cfg.invoice_check_interval = Duration::from_secs(1);
-		}).watchmand().create()).await;
+		}).watchmand().watchmand_cfg(move |cfg| {
+			if all_terminal { cfg.sweep_address = Some(operator_config.into_unchecked()); }
+		}).create()).await;
 	srv.wait_for_vtxopool(&ctx).await;
 	let recipient = Box::pin(ctx.bark_sdk("recipient", &srv)
 		.cfg(|cfg| cfg.daemon_manual_sync = true).create()).await;
@@ -193,6 +205,25 @@ async fn partial_terminal(reorg_a: bool) {
 	for grant in &grants {
 		assert!(chain.get_tx_out(&grant.point().txid, grant.point().vout, Some(true)).unwrap().is_some());
 	}
+	let second_claim = if all_terminal {
+		confirm_actual_path(&ctx,&sources[1],&mut seen).await;
+		let source = &sources[1];
+		let current = ctx.bitcoind().get_block_count().await as u32;
+		let prior = chain.get_tx_out(&source.point().txid,source.point().vout,Some(true)).unwrap().unwrap();
+		let clause = source.policy().as_server_htlc_send().unwrap().user_claim_after_expiry_clause(source.exit_delta());
+		let mature = clause.timelock_height.to_u32().max(current+1-u32::try_from(prior.confirmations).unwrap()+clause.block_delta.to_u32())+1;
+		if mature>current { ctx.generate_blocks(mature-current).await; }
+		let mut tx = Transaction { version:bitcoin::transaction::Version::TWO,lock_time:clause.locktime(),
+			input:vec![TxIn {previous_output:source.point(),script_sig:Default::default(),sequence:clause.sequence(),witness:Witness::new()}],
+			output:vec![TxOut {value:sat(98_000),script_pubkey:ctx.bitcoind().get_new_address().script_pubkey()}] };
+		let witness = sender.sign_input_with_clause(source,&clause.into(),0,
+			&mut SighashCache::new(&tx),&Prevouts::All(&[source.txout()])).await.unwrap();
+		tx.input[0].witness=witness;
+		chain.send_raw_transaction(&tx).unwrap();
+		ctx.generate_blocks(6).await;
+		assert!(chain.get_tx_out(&tx.compute_txid(),0,Some(true)).unwrap().unwrap().confirmations>=6);
+		Some(tx)
+	} else { None };
 	drop(sender);
 	drop(recipient);
 	drop(rpc);
@@ -218,6 +249,15 @@ async fn partial_terminal(reorg_a: bool) {
 		SELECT vtxo_id FROM expiry_decided_coin UNION ALL SELECT vtxo_id FROM expiry_allocation_input \
 		) prior WHERE vtxo_id=$1",&[&sources[0].id().to_string()]).await?.get::<_,i64>(0))).await.unwrap();
 	assert_eq!(prior_fences,0,"this case qualifies an observed user claim without a prior decided/allocation fence");
+	if let Some(second_claim)=&second_claim {
+		tokio::time::timeout(Duration::from_secs(30),async {
+			while !assert_retained_claim(&db,sources[1].id(),second_claim).await {
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+		}).await.expect("retain both actual original user authorizations before operator recovery");
+		all_terminal_returns(&ctx,&srv,&db,&sources,&[claim,second_claim.clone()],&grants,&operator).await;
+		return;
+	}
 	let unpaid = sources[1].id();
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {
 		for _ in 0..100 {
@@ -394,10 +434,100 @@ async fn wait_partial_confirmation(
 
 #[tokio::test]
 async fn expiry_internal_one_attempt_partial_terminal_keeps_other_source_owed() {
-	Box::pin(partial_terminal(false)).await;
+	Box::pin(partial_terminal(TerminalCase::Partial)).await;
 }
 
 #[tokio::test]
 async fn expiry_internal_partial_terminal_replays_actual_claim_after_reorg() {
-	Box::pin(partial_terminal(true)).await;
+	Box::pin(partial_terminal(TerminalCase::Reorg)).await;
+}
+
+#[tokio::test]
+async fn expiry_internal_all_sources_exited_returns_all_grants() {
+	Box::pin(partial_terminal(TerminalCase::All)).await;
+}
+
+/// Both customers already have their genuine on-chain receipts. Remaining G
+/// principal belongs to the operator, and must not stay held as a nonexistent
+/// customer refund. Observe normal watchman timeout transactions, not flags.
+async fn all_terminal_returns(
+	ctx:&TestContext,srv:&Captaind,db:&Db,sources:&[Vtxo<Full>],claims:&[Transaction],grants:&[Vtxo<Full>],operator:&bitcoin::Address,
+) {
+	let ids=grants.iter().map(|grant|grant.id().to_string()).collect::<Vec<_>>();
+	let original=sources.iter().map(|source|source.id().to_string()).collect::<Vec<_>>();
+	let old_reservations=db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM ( \
+		SELECT vtxo_id FROM expiry_decided_coin UNION ALL SELECT vtxo_id FROM expiry_allocation_input \
+		) prior WHERE vtxo_id=ANY($1)",&[&original]).await?.get::<_,i64>(0))).await.unwrap();
+	assert_eq!(old_reservations,0,"this normal control does not waive a previously committed joint reservation");
+	let spenders=tokio::time::timeout(Duration::from_secs(150),async {
+		for _ in 0..100 {
+			let height=ctx.generate_blocks(1).await;
+			srv.wait_for_sync_height(height).await;
+			srv.watchmand().wait_for_sync_height(height).await;
+			let rows=db.read(async |t| Ok(t.query("SELECT v.vtxo_id,v.onchain_spent_txid,h.chain_resolution::TEXT \
+				FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=ANY($1)",&[&ids]).await?)).await.unwrap();
+			if rows.len()==grants.len() && rows.iter().all(|row|row.get::<_,Option<&str>>("onchain_spent_txid").is_some()
+				&& row.get::<_,Option<&str>>("chain_resolution")==Some("revoked")) {
+				return rows.iter().map(|row|row.get::<_,&str>("onchain_spent_txid").parse::<bitcoin::Txid>().unwrap()).collect::<BTreeSet<_>>();
+			}
+			tokio::time::sleep(Duration::from_secs(1)).await;
+		}
+		panic!("already-exited originals must not strand the actual receive grants");
+	}).await.expect("normal all-original-terminal operator recovery exceeded its bound");
+	let chain=ctx.bitcoind().sync_client();
+	let mut covered=BTreeSet::new();
+	let mut input_total=sat(0);
+	let mut returned=sat(0);
+	let mut fees=sat(0);
+	for txid in &spenders {
+		let tx=ctx.bitcoind().await_transaction(*txid).await;
+		assert_eq!(tx.version,bitcoin::transaction::Version::TWO);
+		assert_eq!(tx.output.len(),1);
+		assert_eq!(tx.output[0].script_pubkey,operator.script_pubkey());
+		let mut actual_inputs=sat(0);
+		for input in &tx.input {
+			let previous=ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+			actual_inputs+=previous.output[input.previous_output.vout as usize].value;
+			if let Some(grant)=grants.iter().find(|grant|grant.point()==input.previous_output) {
+				assert!(covered.insert(grant.id()));
+				let script=grant.policy().as_server_htlc_recv().unwrap()
+					.server_claim_after_expiry_clause(grant.server_pubkey(),grant.exit_delta()).tapscript();
+				assert_eq!(input.witness.taproot_leaf_script().unwrap().script,script.as_script());
+			}
+		}
+		assert!(actual_inputs>tx.output[0].value);
+		fees+=actual_inputs-tx.output[0].value;
+		input_total+=actual_inputs;
+		returned+=tx.output[0].value;
+	}
+	assert_eq!(covered,grants.iter().map(Vtxo::id).collect());
+	assert!(input_total>=sat(180_000));
+	assert_eq!(input_total,returned+fees,"measure the entire actual operator-return input group, including any extra operator input");
+	let height=ctx.generate_blocks(6).await;
+	srv.wait_for_sync_height(height).await;
+	srv.watchmand().wait_for_sync_height(height).await;
+	for txid in &spenders {
+		assert!(chain.get_tx_out(txid,0,Some(true)).unwrap().unwrap().confirmations>=6);
+	}
+	for (source,claim) in sources.iter().zip(claims) {
+		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,*claim);
+		assert!(chain.get_tx_out(&claim.compute_txid(),0,Some(true)).unwrap().unwrap().confirmations>=6);
+		assert!(assert_retained_claim(db,source.id(),claim).await);
+	}
+	let expected_hash=chain.get_block_hash(height.to_u32() as u64).unwrap();
+	tokio::time::timeout(Duration::from_secs(30),async {
+		loop {
+			let rebuilt=db.read(async |t| {
+				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
+				Ok(view.captaind.height==height && view.watchmand.height==height
+					&& view.captaind.hash==expected_hash && view.watchmand.hash==expected_hash && t.expiry_view_is_rebuilt(view).await?)
+			}).await.unwrap();
+			if rebuilt {break;}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("no-duplicate check requires completed actual operator-return reconstruction");
+	let duplicated=db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
+		JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE e.vtxo_id=ANY($1) AND c.disposition='customer'",
+		&[&original]).await?.get::<_,i64>(0))).await.unwrap();
+	assert_eq!(duplicated,0,"actual prior receipts must not also create customer fallback allocations");
 }

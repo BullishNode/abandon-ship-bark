@@ -149,9 +149,25 @@ async fn batched_terminal(reorg: bool) {
 	let unpaid_prefix = confirm_recoverable_prefix(&ctx,&db,&sources[2],&mut seen).await;
 	// Sponsor before user receipt: neither the198k receipt nor the later99k
 	// payout is controlled by the Core funding wallet or recycled into fees.
-	for _ in 0..4 {ctx.bitcoind().fund_addr(fee_address.clone(),sat(150_000)).await;}
+	// Four independent operator parents can publish before the joint parent.
+	// Each needs its own confirmed fee coin while no new block is mined.
+	let mut sponsor_txids=Vec::new();
+	for _ in 0..5 {sponsor_txids.push(ctx.bitcoind().fund_addr(fee_address.clone(),sat(150_000)).await);}
 	ctx.generate_blocks(2).await;
 	let chain = ctx.bitcoind().sync_client();
+	let mut sponsor_points=BTreeSet::new();
+	for txid in &sponsor_txids {
+		let funding=ctx.bitcoind().await_transaction(*txid).await;
+		assert_eq!(funding.compute_txid(),*txid);
+		let outputs=funding.output.iter().enumerate().filter(|(_,out)|out.script_pubkey==fee_address.script_pubkey()).collect::<Vec<_>>();
+		assert_eq!(outputs.len(),1);
+		let point=OutPoint::new(*txid,u32::try_from(outputs[0].0).unwrap());
+		let actual=chain.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().unwrap();
+		assert!(actual.confirmations>=2); assert_eq!(actual.value,sat(150_000));
+		assert_eq!(actual.script_pub_key.script().unwrap(),fee_address.script_pubkey());
+		assert!(sponsor_points.insert(point));
+	}
+	assert_eq!(sponsor_points.len(),5,"five distinct genuinely usable confirmed fee coins must predate A's claim");
 	let current = ctx.bitcoind().get_block_count().await as u32;
 	let clauses = sources[..2].iter().map(|source|source.policy().as_server_htlc_send().unwrap()
 		.user_claim_after_expiry_clause(source.exit_delta())).collect::<Vec<_>>();
@@ -243,11 +259,13 @@ async fn batched_terminal(reorg: bool) {
 		"actual_claim":claim.compute_txid().to_string(),"claim_raw_sha256":sha256::Hash::hash(&serialize(&claim)).to_string(),
 		"claim_input_count":2,"claim_receipt_sat":198000,"claim_fee_sat":2000,"actual_claim_depth":receipt.confirmations,
 		"b_actual_prefix":unpaid_prefix.to_string(),"prior_A_fences":context.0,"actors_absent":true,
+		"confirmed_fee_sponsor_points":sponsor_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
+		"separate_fee_funding_sat":750000,
 		"scope":"fresh complete-original-attempt batch; generic/reserved single-input guards remain unchanged"
 	})).unwrap()).unwrap();
 
-	// This is a positive rightful-refund oracle. It is expected to fail on
-	// An observed HOLD must never be relabeled as a test PASS.
+	// This is a positive rightful-refund oracle. An observed HOLD must never
+	// be relabeled as a test PASS.
 	let (allocation,parent): (i64,Transaction)=tokio::time::timeout(Duration::from_secs(90),async {
 		loop {
 			let row=db.read(async |t|Ok(t.query_opt("SELECT a.id,a.sweep_tx FROM expiry_allocation a \
@@ -408,6 +426,9 @@ async fn batched_terminal(reorg: bool) {
 	std::fs::write(srv.config().data_dir.join("batched-terminal-confirmed.json"),serde_json::to_vec_pretty(&serde_json::json!({
 		"attempt":scope.0,"subscription":scope.1,"originals":originals,"grants":grant_ids,"claim":claim.compute_txid().to_string(),
 		"b_parent":parent_info,"fee_child":child_info,"actual_child_fee_sat":actual_fee.to_sat(),"same_raw_bodies":true,
+		"separate_fee_funding_sat":750000,"fee_sponsor_points":sponsor_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
+		"customer_original_principal_sat":300000,"selected_source_and_grant_value_sat":580000,
+		"selected_value_excludes_separate_fee_sponsors":true,
 		"reorg_exact_raw_replayed":reorg,
 		"scope":"fresh unfenced same-attempt complete batch only; no prior-fence/foreign-input/general-batch credit"
 	})).unwrap()).unwrap();

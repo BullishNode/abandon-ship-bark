@@ -1,0 +1,141 @@
+{
+  "at": "2026-10-18T14:13:50.516940+00:00",
+  "state": "FIVE_BACKEND_AND_TWO_EXISTING_RECOVERY_COMPONENT_CASES_PASS",
+  "production_ready": false,
+  "mainnet_authorized": false,
+  "candidate": {
+    "source_manifest_sha256": "ad5cb5212fe0b7d672c7a4a71722acad892e9aa26baebbc34d7e57f668373f74",
+    "bundle_manifest_sha256": "6c01d7a1e73354602be745e2445d3f93e208fd68c7b9e98d9b002b5d5ba4f505",
+    "runtime_metadata_sha256": "5b7b750e1dc79df426f317d96f728043ffcedf72e397a6bdbd168118d4a1bd79",
+    "actual_product_label": "427e369e6473596d0eb44927f0f38373b17e9005",
+    "product_source_equality_sha256": "b961610805ae358958c503a64e04f034e1e67ce97823adb26b749cc22b0bce14",
+    "test_only_delta": "Fifth150k confirmed fee sponsor and exact native UTXO checks plus H31 test module registration. Product code unchanged from V21; original actual ELFs and879unitPASS1skip inherited, not rebuilt/rerun."
+  },
+  "checks_seconds": 117.357,
+  "metadata_seconds": 217.663,
+  "backend": {
+    "formal_postflight_sha256": "1c0adb46ee68ada542de7bfd2f0a816d6b1b162fa344edc23f8504239e486179",
+    "cases": [
+      {
+        "test": "expiry_internal_batched_terminal::expiry_internal_two_originals_timeout_together_keeps_third_source_owed",
+        "state": "PASS",
+        "native_seconds": 103.034,
+        "wrapper_seconds": 104.267,
+        "run_id": "9e18e298-4eeb-4258-8486-a68e4c883989",
+        "log_sha256": "aced2e11d6acfb9db3b57c527fdf76ebf546daf78f91d0bca0744af73d3aafbc",
+        "exact_singleton_terminal": true
+      },
+      {
+        "test": "expiry_internal_batched_terminal::expiry_internal_batched_terminal_replays_exact_authorization_after_reorg",
+        "state": "PASS",
+        "native_seconds": 95.513,
+        "wrapper_seconds": 96.542,
+        "run_id": "07ed6ac5-863f-41ef-8697-8e5492e750ab",
+        "log_sha256": "014936f2099d5e8e3111328f2a3d8c84283ddfad341835eefb6e98a4f87c55c5",
+        "exact_singleton_terminal": true
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_partial_pays_remaining_source",
+        "state": "PASS",
+        "native_seconds": 81.04,
+        "wrapper_seconds": 81.903,
+        "run_id": "25ed0552-76b0-4114-92c3-039d4f6590db",
+        "log_sha256": "c37b9a001e204f884ab603d50d0cd39b5a603ce1d47622b41d2196095b0646dd",
+        "exact_singleton_terminal": true
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_partial_replays_paid_source_after_reorg",
+        "state": "PASS",
+        "native_seconds": 98.565,
+        "wrapper_seconds": 99.896,
+        "run_id": "e712a773-cf44-4777-bfa0-93af8f3cf1e6",
+        "log_sha256": "3d2f1f556ba51fb4b130b7aac659503fc90340b64fd0106b6f868560db61e1cf",
+        "exact_singleton_terminal": true
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_all_terminal_replays_after_reorg",
+        "state": "PASS",
+        "native_seconds": 93.355,
+        "wrapper_seconds": 94.558,
+        "run_id": "2311aab8-3b3a-4ed6-9e03-e10950b8b2a0",
+        "log_sha256": "2a45b99dc1d56df59179870eab803ebbe4d5dc8e3b494684a1c9c19ea2607ad6",
+        "exact_singleton_terminal": true
+      }
+    ],
+    "retries": 0,
+    "not_run": [],
+    "actual_money": "Two original sources pay198000 via DEFAULT timeout claim plus2000miner; third source gets99000 via Bprefix+all280000G, operator281000, parent0miner and actual5756childminer/Core6. Reorg case removes original claim/payout, then replays identical bodies and reconfirms correct payout/fee child.",
+    "limits": "Fresh same-attempt complete-original batch plus three existing single-input/reserved regressions. General prior-reserved multi-input batch remains source-supported unqualified risk, not covered by these passes. Independent full finite-graph accounting assigned separately."
+  },
+  "existing_two_fixture_requalification": {
+    "packet_sha256": "bb9e4e9e58406063cbe2e8bbe3ef5f0119b24d50a23ebdc7c4b1dd78c0ac481a",
+    "formal_postflight_sha256": "b88f4bf188f0b54cce0c8eb88fa114ab5b9004077ff81faf7e405db69150e6de",
+    "native_cases": [
+      {
+        "test": "qualification_forwarded_ack::forwarded_receive_ack_loss_replays_identical_outputs_and_credits_recipient_once",
+        "state": "PASS",
+        "test_seconds": 42.939,
+        "seconds": 44.196,
+        "run_id": "22b8198e-1333-4423-bd10-6c8e3db4d67a",
+        "log_sha256": "9d3762a346ef16b43410c74d1e9ef2a123f500ee62a05082181f5cf8e463d1bd"
+      },
+      {
+        "test": "fallback_external::fallback_external_bip84_seed_restore_spends_actual_payout_while_history_unavailable",
+        "state": "PASS",
+        "test_seconds": 40.521,
+        "seconds": 41.741,
+        "run_id": "3a86f9ea-a4c2-48bf-8055-18337363fe50",
+        "log_sha256": "67b2e8df82e2f9a476f05722f5d0d1173271a6be66bd93404f26fbf7238469e4"
+      }
+    ],
+    "money": {
+      "ML049": {
+        "gross_net_sat": 10000,
+        "quoted_fee_sat": 0,
+        "accepted_posts": 2,
+        "lost_replies": 1,
+        "recipient_credits": 1,
+        "provider_spendable_sat": 0,
+        "same_recipient_virtual_outpoint_and_movement": true,
+        "original_payer_COMPLETE_count": 1,
+        "original_payer_msat": 10000000,
+        "coverage": "Native delivery/idempotence component; independent retained receipt reconciliation, not offline fallback/Noah/global liability qualification"
+      },
+      "ML186_ML187_partial": {
+        "principal_sat": 100000,
+        "payout_sat": 99000,
+        "output_fee_sat": 1000,
+        "actual_recovered_sat": 98781,
+        "recovery_miner_fee_sat": 219,
+        "recovery_confirmations": 6,
+        "payout_child_confirmations": 12,
+        "sponsor_miner_fee_sat": 2281,
+        "cut_inputs_sat": 200000,
+        "cut_terminal_sat": 197500,
+        "cut_miner_fee_sat": 2500,
+        "external_utxos": 2,
+        "descendant_transactions": 3,
+        "terminal_utxos": 3,
+        "whole_canonical_known_script_outputs": 1,
+        "history_refused_requests_reported": 7,
+        "coverage": "Independent rawchain actual payout/spend/frontier; native seed/store/identity/history provenance; ordinary honest payout only, not actual oversized-history/churn"
+      }
+    },
+    "new_unique_cases": 0,
+    "full_ML_promotions": 0,
+    "root_artifact_refs_rehashed": 28,
+    "root_review_limits": "Root rehashed listed immutable artifacts and checked reported equations; independent raw-chain decoder belongs to separate accounting review, not rerun by root."
+  },
+  "postflight": "All16 actual runtime pins/control/environment absence/scoped actors0 verified in both native lanes; no cleanup actions or retries.",
+  "earlier_failures_preserved": [
+    "V20 product terminal-proof rejection163.804s",
+    "V21 four-sponsor funding-input exhaustion163.522s; B parent signed but unbroadcast. Native five-sponsor setup now passes; no counterfactual ablation claim."
+  ],
+  "money_work_next": [
+    "Prior-reserved two-input original claim leaves a remaining customer owed: positive regression before fix",
+    "Confirmed payout orphaned while server unavailable: original-store daemon recovery and exact balances/history",
+    "External-paid receive before final materialization: source ordering/recovery assessment",
+    "Existing two public Signet flows still await automatic payout/confirmed seed recovery"
+  ],
+  "deferred": "Historical audit repeats and broad new test expansion; H31 cases compiled but UNRUN/unallocated."
+}

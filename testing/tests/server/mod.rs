@@ -28,6 +28,7 @@ mod qualification_offboard_reply_restore;
 mod qualification_tiny_payout_grouping;
 mod qualification_dust_later_receipt;
 mod qualification_three_owner_forwarding;
+mod qualification_script_dust_boundaries;
 mod ban;
 mod blocklist;
 mod block_index;

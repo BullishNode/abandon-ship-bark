@@ -98,13 +98,26 @@ async fn own_claim_and_path_reorg_cold_reopen_offline_rebuilds_from_retained_fun
 		.expect("lost own-claim and signed path must recover from its canonical funding root within 180s");
 }
 
+#[tokio::test]
+async fn own_claim_tail_reorg_cold_reopen_offline_rebuilds_from_confirmed_signed_prefix() {
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(run_with_prefix_fork(true, true, true))).await
+		.expect("lost signed tail must recover from its surviving prefix and spent funding root within 180s");
+}
+
 async fn run(later_claim_fork: bool) {
 	run_with_path_fork(later_claim_fork, false).await;
 }
 
 async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
+	run_with_prefix_fork(later_claim_fork, remove_claim_path, false).await;
+}
+
+async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, keep_signed_prefix: bool) {
 	assert!(!remove_claim_path || later_claim_fork);
-	let ctx = TestContext::new(if remove_claim_path {
+	assert!(!keep_signed_prefix || remove_claim_path);
+	let ctx = TestContext::new(if keep_signed_prefix {
+		"bark_sdk/qualification_own_claim_prefix_reorg"
+	} else if remove_claim_path {
 		"bark_sdk/qualification_own_claim_path_reorg"
 	} else if later_claim_fork {
 		"bark_sdk/qualification_own_claim_reorg"
@@ -128,7 +141,26 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 	let remaining = owner.spendable_vtxos().await.unwrap();
 	assert_eq!(remaining.len(), 1);
 	let owned = owner.get_full_vtxo(remaining[0].id()).await.unwrap();
+	// Freeze the unrelated spent control before a self-payment changes the owned ID.
 	let historic = owner.get_full_vtxo(original.iter().find(|coin| coin.id() != owned.id()).unwrap().id()).await.unwrap();
+	let self_send_source = keep_signed_prefix.then_some(owned.id());
+	let owned = if keep_signed_prefix {
+		let address = owner.new_address().await.unwrap();
+		owner.send_arkoor_payment(&address, sat(100_000)).await.unwrap();
+		assert!(owner.pending_arkoor_sends().await.unwrap().is_empty());
+		owner.sync_mailbox().await.unwrap();
+		let received = owner.spendable_vtxos().await.unwrap();
+		assert_eq!(received.len(), 1, "the real self-payment must deliver one full-value recipient coin");
+		let descendant = owner.get_full_vtxo(received[0].id()).await.unwrap();
+		assert_ne!(descendant.id(), owned.id());
+		assert_eq!(descendant.amount(), sat(100_000));
+		assert_eq!(descendant.policy(), address.policy());
+		assert_eq!(descendant.chain_anchor(), owned.chain_anchor());
+		assert!(descendant.has_all_witnesses());
+		assert!(descendant.transactions().len() >= 2, "native self-payment must supply a genuinely signed multistep path");
+		assert_eq!(owner.get_vtxo_by_id(owned.id()).await.unwrap().state, VtxoState::Spent);
+		descendant
+	} else { owned };
 	assert_ne!(historic.chain_anchor(), owned.chain_anchor());
 	assert_eq!(owned.amount(), sat(100_000));
 	let owned_bytes = owned.serialize();
@@ -434,6 +466,21 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 	// funding transaction and the unrelated ordinary-spend root stay canonical.
 	// Never substitute an invented DB state or an unfunded virtual source.
 	let signed_path = owned.transactions().collect::<Vec<_>>();
+	let retained_path_steps = if keep_signed_prefix { 1 } else { 0 };
+	let retained_frontier = if keep_signed_prefix {
+		assert!(signed_path.len() >= 2);
+		let mut previous_point = owned.chain_anchor();
+		for item in &signed_path {
+			assert!(item.tx.input.iter().any(|input| input.previous_output == previous_point),
+				"every signed step must spend the actual preceding relevant outpoint");
+			previous_point = OutPoint::new(item.tx.compute_txid(), item.output_idx as u32);
+		}
+		assert_eq!(previous_point, owned.point());
+		let first = &signed_path[0];
+		assert_eq!(first.tx.output[first.output_idx].value, sat(100_000));
+		Some(OutPoint::new(first.tx.compute_txid(), first.output_idx as u32))
+	} else { None };
+	let mut retained_path_blocks = Vec::new();
 	let mut removed_path_blocks = Vec::new();
 	let second_fork_block = if remove_claim_path {
 		assert_ne!(owned.point(), owned.chain_anchor());
@@ -450,7 +497,7 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 		let ordinary_root_height = core.get_block_header_info(&ordinary_root_block).unwrap().height as u64;
 		assert_eq!(core.get_block_hash(ordinary_root_height).unwrap(), ordinary_root_block);
 		let indexed = onchain.read().await.list_transactions();
-		for item in &signed_path {
+		for (index, item) in signed_path.iter().enumerate() {
 			assert!(!indexed.iter().any(|tx| tx.compute_txid() == item.tx.compute_txid()),
 				"BDK must not independently replay the missing signed path");
 			let actual = ctx.bitcoind().await_transaction(item.tx.compute_txid()).await;
@@ -461,7 +508,14 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 			let height = core.get_block_header_info(&block).unwrap().height as u64;
 			assert_eq!(core.get_block_hash(height).unwrap(), block);
 			assert!(height > root_height && height > ordinary_root_height);
-			removed_path_blocks.push((height, block));
+			if index < retained_path_steps { retained_path_blocks.push((height, block)); }
+			else { removed_path_blocks.push((height, block)); }
+		}
+		if keep_signed_prefix {
+			let first_removed = removed_path_blocks.iter().map(|(height, _)| *height).min().unwrap();
+			assert!(retained_path_blocks.iter().all(|(height, _)| *height < first_removed),
+				"the actual signed prefix must remain below the tail fork");
+			assert!(core.get_tx_out(&owned.chain_anchor().txid, owned.chain_anchor().vout, Some(true)).unwrap().is_none());
 		}
 		removed_path_blocks.iter().min_by_key(|(height, _)| *height).unwrap().1
 	} else { final_block };
@@ -487,14 +541,28 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 	}
 	assert!(core.get_tx_out(&claim.compute_txid(), 0, Some(true)).unwrap().is_none());
 	if remove_claim_path {
-		for item in &signed_path {
+		for item in signed_path.iter().skip(retained_path_steps) {
 			assert!(core.get_mempool_entry(&item.tx.compute_txid()).is_err());
 			assert!(core.get_tx_out(&item.tx.compute_txid(), item.output_idx as u32, Some(true)).unwrap().is_none());
 		}
-		let root = core.get_tx_out(&owned.chain_anchor().txid, owned.chain_anchor().vout, Some(true)).unwrap().unwrap();
-		assert!(root.confirmations >= 6);
-		assert_eq!(root.value, actual_anchor.value);
-		assert_eq!(root.script_pub_key.script().unwrap(), actual_anchor.script_pubkey);
+		if let Some(frontier) = retained_frontier {
+			assert!(core.get_tx_out(&owned.chain_anchor().txid, owned.chain_anchor().vout, Some(true)).unwrap().is_none(),
+				"the genuine surviving prefix, rather than an untouched root, must back this recovery");
+			for (item, (height, block)) in signed_path.iter().take(retained_path_steps).zip(&retained_path_blocks) {
+				assert_eq!(core.get_block_hash(*height).unwrap(), *block);
+				assert_eq!(core.get_raw_transaction(&item.tx.compute_txid(), None).unwrap(), item.tx);
+				assert!(item.tx.input.iter().any(|input| input.previous_output == owned.chain_anchor()));
+			}
+			let actual = core.get_tx_out(&frontier.txid, frontier.vout, Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations > 0);
+			assert_eq!(actual.value, sat(100_000));
+			assert_eq!(actual.script_pub_key.script().unwrap(), signed_path[0].tx.output[frontier.vout as usize].script_pubkey);
+		} else {
+			let root = core.get_tx_out(&owned.chain_anchor().txid, owned.chain_anchor().vout, Some(true)).unwrap().unwrap();
+			assert!(root.confirmations >= 6);
+			assert_eq!(root.value, actual_anchor.value);
+			assert_eq!(root.script_pub_key.script().unwrap(), actual_anchor.script_pubkey);
+		}
 		owned.validate(&original_funding).unwrap();
 	} else {
 		let reopened_leaf = core.get_tx_out(&owned.point().txid, owned.point().vout, Some(true)).unwrap().unwrap();
@@ -512,8 +580,15 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 	assert!(core.get_mempool_entry(&claim.compute_txid()).is_err());
 	if remove_claim_path {
 		assert!(core.get_tx_out(&owned.point().txid, owned.point().vout, Some(true)).unwrap().is_none());
-		for item in &signed_path { assert!(core.get_mempool_entry(&item.tx.compute_txid()).is_err()); }
-		assert!(core.get_tx_out(&owned.chain_anchor().txid, owned.chain_anchor().vout, Some(true)).unwrap().is_some());
+		for item in signed_path.iter().skip(retained_path_steps) { assert!(core.get_mempool_entry(&item.tx.compute_txid()).is_err()); }
+		if let Some(frontier) = retained_frontier {
+			assert!(core.get_tx_out(&owned.chain_anchor().txid, owned.chain_anchor().vout, Some(true)).unwrap().is_none());
+			for (height, block) in &retained_path_blocks { assert_eq!(core.get_block_hash(*height).unwrap(), *block); }
+			let actual = core.get_tx_out(&frontier.txid, frontier.vout, Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations >= 6);
+			assert_eq!(actual.value, sat(100_000));
+			assert_eq!(actual.script_pub_key.script().unwrap(), signed_path[0].tx.output[frontier.vout as usize].script_pubkey);
+		} else { assert!(core.get_tx_out(&owned.chain_anchor().txid, owned.chain_anchor().vout, Some(true)).unwrap().is_some()); }
 	} else { assert!(core.get_tx_out(&owned.point().txid, owned.point().vout, Some(true)).unwrap().is_some()); }
 	assert!(matches!(db.get_exit_vtxo_entry(&owned.id()).await.unwrap().unwrap().state,
 		ExitState::Claimed(done) if done.txid == claim.compute_txid() && done.block.hash == final_block));
@@ -525,8 +600,14 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 		"reopened_source_sat": if remove_claim_path { 0 } else { 100_000 }, "claim_absent_mempool": true,
 		"path_removed": remove_claim_path, "funding_root": owned.chain_anchor().to_string(),
 		"funding_root_sat": actual_anchor.value.to_sat(), "funding_root_script": actual_anchor.script_pubkey.to_hex_string(),
-		"removed_path_txids": if remove_claim_path { signed_path.iter().map(|item| item.tx.compute_txid()).collect::<Vec<_>>() } else { Vec::new() },
+		"removed_path_txids": if remove_claim_path { signed_path.iter().skip(retained_path_steps).map(|item| item.tx.compute_txid()).collect::<Vec<_>>() } else { Vec::new() },
 		"removed_path_blocks": removed_path_blocks,
+		"retained_prefix_txids": signed_path.iter().take(retained_path_steps).map(|item| item.tx.compute_txid()).collect::<Vec<_>>(),
+		"retained_prefix_blocks": retained_path_blocks,
+		"retained_prefix_frontier": retained_frontier.map(|point| point.to_string()),
+		"retained_prefix_frontier_sat": retained_frontier.map(|_| 100_000),
+		"retained_prefix_frontier_script": retained_frontier.map(|point| signed_path[0].tx.output[point.vout as usize].script_pubkey.to_hex_string()),
+		"funding_root_spent_by_prefix": keep_signed_prefix, "self_send_source": self_send_source.map(|id| id.to_string()),
 		"bdk_never_indexed_claim": true, "ark_stopped": true, "same_seed_store": true,
 		"cached_native_claimed_and_successful": true
 	})).unwrap()).unwrap();
@@ -536,6 +617,15 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 	let recovered_by;
 	loop {
 		ordinary_stays_spent(&reopened, &db, historic.id(), &historic_bytes).await;
+		if let Some(id) = self_send_source {
+			assert_eq!(db.get_wallet_vtxo(id).await.unwrap().unwrap().state, VtxoState::Spent);
+			assert!(reopened.exit_mgr().get_exit_vtxo(id).await.is_none(), "a consumed self-send ancestor must not acquire a second principal exit");
+			let indexed = onchain.read().await.list_transactions();
+			for item in signed_path.iter().skip(retained_path_steps) {
+				assert!(!indexed.iter().any(|tx| tx.compute_txid() == item.tx.compute_txid()),
+					"BDK must not independently supply the missing signed tail");
+			}
+		}
 		assert_eq!(reopened.get_full_vtxo(owned.id()).await.unwrap().serialize(), owned_bytes);
 		assert!(onchain.read().await.list_transactions().iter().all(|tx| tx.compute_txid() != claim.compute_txid()));
 		assert!(!onchain.read().await.list_unspent().iter().any(|coin| coin.outpoint == payout
@@ -655,6 +745,8 @@ async fn run_with_path_fork(later_claim_fork: bool, remove_claim_path: bool) {
 		"replacement_tip": core.get_block_count().unwrap(), "retained_mempool_sha256": claim_cache_sha.to_string(),
 		"balance_total_sat": reopened.balance().await.unwrap().total().to_sat(), "original_body_sha256": sha256::Hash::hash(&owned_bytes).to_string(),
 		"path_removed": remove_claim_path, "funding_root": owned.chain_anchor().to_string(),
+		"funding_root_spent_by_prefix": keep_signed_prefix,
+		"retained_prefix_frontier": retained_frontier.map(|point| point.to_string()),
 		"path_txids": signed_path.iter().map(|item| item.tx.compute_txid()).collect::<Vec<_>>(),
 		"current_native_onchain_sat": second_canonical_local.to_sat(),
 		"scope": "same original seed/store; default daemon only after cold reopen; no controller claim broadcast, new drain, BDK-owned claim, Ark, or ordinary-spend resurrection"

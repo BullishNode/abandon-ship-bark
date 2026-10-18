@@ -1,0 +1,124 @@
+{
+  "status": "ACTUAL_V28_FOUR_CLIENT_REGRESSIONS_PASS",
+  "recorded_at": "2026-10-18T21:15:46.778103+00:00",
+  "scope": "One genuine surviving-signed-prefix recovery plus three existing client controls; finite local qualification only.",
+  "capture": {
+    "source_head": "33fa2a3ef7ba98b8748a39ba86c657d32b97b2de",
+    "source_manifest_sha256": "bc1664165ac10f42a7009dc494b37f1ffa33482f497a95211549a372fe8e63ee",
+    "source_archive_sha256": "315f35eaa896889899ac74e04b3b9d1937f6c37ebcab08bfd54c9ab14aa5707e",
+    "bundle_manifest_sha256": "9d797ac6444adddc41444c1c16f9d7eb621bed8a67637d3636686d6968607d41",
+    "metadata_runtime_sha256": "4814e18c5249700d932025e56f284db07de86227eae707e32a5018c42225b7ea",
+    "runtime_pins_sha256": "fcb0f30a76e5343fb7f6ab2a0be6c214c6e69cb8934243f3fd4c2edcd7292b62",
+    "runtime_pin_count": 16,
+    "all_four_products": "Actual newly captured V28 products; no inherited native result.",
+    "capture_receipt_sha256": "7a5f48e24df800fd4795df78bcf76e1e799576ecdf364a1c1fc8ba60a46a1861"
+  },
+  "fixture": {
+    "path": "testing/tests/bark_sdk/qualification_paid_reorg.rs",
+    "captured_and_current_canonical_sha256": "294a6e4dd8a8172a9091f1f25aa3acc10f8ecc12874f8a56738c3d40d549320a",
+    "verification": "Exact captured source manifest and current canonical dirty file matched during curation; canonical was not modified."
+  },
+  "execution": {
+    "allocation_sha256": "f2b6d810cc1c7bad76777f02ca171a60b089bf0772186e76e1073300ee2efaf7",
+    "final_controls_sha256": "e40b661122e557f676cb18ad894a58cdfa89e737488ea2b15a286710715edda0",
+    "private_context": "/home/francis/.cache/abandon-fresh/root-client-signed-prefix-v28-20261018",
+    "exec_session": 78060,
+    "exit_code": 0,
+    "serial": 1,
+    "timeout_seconds_per_case": 180,
+    "retries": 0,
+    "stop_first_nonpass": true,
+    "cases": [
+      {
+        "label": "signed-prefix-reorg",
+        "selector": "qualification_paid_reorg::own_claim_tail_reorg_cold_reopen_offline_rebuilds_from_confirmed_signed_prefix",
+        "state": "PASS",
+        "run_id": "b14e823c-cf34-4e97-91b1-2329d8f3da9c",
+        "native_seconds": 42.877,
+        "wall_seconds": 43.528,
+        "log_sha256": "3a118b4ae4e1675e80999063c5aea776f75410c843c6b933c5e71d5fa7cc1141"
+      },
+      {
+        "label": "own-claim-path-reorg",
+        "selector": "qualification_paid_reorg::own_claim_and_path_reorg_cold_reopen_offline_rebuilds_from_retained_funding_root",
+        "state": "PASS",
+        "run_id": "f80e3bf7-0c68-43dc-abbf-47cf4ef8d44d",
+        "native_seconds": 37.183,
+        "wall_seconds": 37.845,
+        "log_sha256": "acec8de45a82060aa5cf30ee3866492f8134c347cf4ec15892a1f928a3d80558"
+      },
+      {
+        "label": "own-claim-second-reorg",
+        "selector": "qualification_paid_reorg::own_claim_reorg_cold_reopen_offline_restores_actionable_exit_or_replays_exact_claim",
+        "state": "PASS",
+        "run_id": "f8890248-c058-44ec-86cd-c623447a7166",
+        "native_seconds": 33.426,
+        "wall_seconds": 34.278,
+        "log_sha256": "393c60c8b64b54ffd577573f0036a698d5e6a3e027f7b44b239e902ea8cd2fce"
+      },
+      {
+        "label": "ordinary-spent",
+        "selector": "recovery::recovered_wallet_keeps_spent_vtxo_spent",
+        "state": "PASS",
+        "run_id": "d2728cd2-d41e-4895-a039-0d69b6505d93",
+        "native_seconds": 16.123,
+        "wall_seconds": 16.772,
+        "log_sha256": "d20cf7e96d4846c65f28dc67fe983896e17f7f308fba27ab9db8933a261c00aa"
+      }
+    ]
+  },
+  "signed_prefix_result": {
+    "recovered_by": "actionable_exact_original",
+    "current_owned_principal_sat": 100000,
+    "payment_status": "UNPAID_ACTIONABLE_EXIT",
+    "funding_root_spent_by_prefix": true,
+    "canonical_retained_prefix_steps_at_fork": 1,
+    "removed_signed_tail_steps": 2,
+    "retained_frontier_sat": 100000,
+    "assertions_reached": [
+      "Genuine full-value self-payment created the signed descendant; consumed ancestor remained Spent without a second exit/debit.",
+      "Actual canonical prefix consumed the funding root; cold fork removed the signed tail and old claim, with saved mempool cache and no BDK tail replay.",
+      "Same seed/store reopened with Ark unavailable; default daemon alone restored the exact mature leaf to Claimable and truthful 100000-sat principal.",
+      "Same signed body/movement, ordinary-spent exclusion and duplicate-principal/history checks passed."
+    ],
+    "proof_sha256": "1c14de371c0ab327fce773ab0dcac94f42d971c7a656b58c29469ad4e210fd49",
+    "boundary_proof_sha256": "18c000aac6df276b9b5aa6d0cd0cfd67af4e32889d80bacf207302dc3da59145"
+  },
+  "postflight": {
+    "path": "/home/francis/.cache/abandon-fresh/root-client-signed-prefix-v28-20261018/postflight.json",
+    "sha256": "dfabf52b46e9cabc1bd7c7c0220e7e64a94ac9c40f445356683a5b5284b33334",
+    "state": "ACTUAL_FOUR_PASS_POSTFLIGHT_PASS",
+    "all16_pins_unchanged": true,
+    "controls_unchanged": true,
+    "flags_absent": [
+      "BARK_DOUBLE_DRIVE_ACTIONS",
+      "LIGHTNINGD_DOCKER_IMAGE"
+    ],
+    "own_actors": [],
+    "unreadable_pids": [],
+    "compiler_pids": [],
+    "other_native_pids": [],
+    "slot_released": 1
+  },
+  "limits": [
+    "Actionable 100000 sats is UNPAID; no second settled payout or automatic new-drain policy is claimed.",
+    "One retained board prefix with two removed signed suffix steps; not arbitrary graph, HTLC, foreign/ambiguous frontier or lost-funding-root recovery.",
+    "Requires original seed AND store and one active Wallet/Exit engine; not empty-store seed-only recovery.",
+    "Native/assertion proof and immutable postflight were curated here; an independent retained raw-chain audit is separate and is not asserted by this record.",
+    "No Lightning transport/hold, browser, full money-loss catalogue, scale, global-custody or production-readiness promotion.",
+    "Original compiler-unit funding-fixture failure and earlier V24/V26 failures remain preserved; no failed case was silently retried."
+  ],
+  "independent_signed_prefix_accounting": {
+    "report": "/home/francis/bark-integration-2026-10-01/independent-money-tests-20261017/V28-signed-prefix-retained-accounting-final-001.json",
+    "sha256": "89d8ba0a4fa1fa329efce50a941b6aee1d14d59a0a6100819e81a5bb3e469274",
+    "scope": "ONLY completed V28 signed-prefix-reorg retained case. No financial audit/acceptance of other three cases, aggregate outcome or final postflight.",
+    "equation_sat": "15000000000=14999993719 terminal+6281 current canonical miner fees",
+    "customer_equation_sat": "600000=100000 ordinary backing+100000 actionable unpaid+394355 BDK change+5645 miner fees",
+    "root_intake": {
+      "references_rehashed_unchanged": 30,
+      "declared_cut_arithmetic_and_unique_boundaries_recomputed": true,
+      "native_postflight_rehashed_and_read": true
+    },
+    "limits": "Peer/lead raw-chain reconciliation per linked report; root intake rehashes references and recomputes declared-cut arithmetic, without repeating raw consensus, seed custody, private DB or full liability audit. No second payment or fullML claim."
+  }
+}

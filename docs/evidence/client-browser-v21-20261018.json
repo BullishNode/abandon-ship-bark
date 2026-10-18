@@ -1,0 +1,305 @@
+{
+  "at": "2026-10-18T12:42:55.798794+00:00",
+  "state": "ACTUAL_PAIRED_BROWSER_AND_NATIVE_PASS",
+  "run_uuid": "3d464000-9d7a-4396-9a08-9a15f8ffefeb",
+  "native_seconds": 32.632,
+  "wall_seconds": 33.397,
+  "native_exit_code": 0,
+  "allocation_sha256": "f227f6ab50743aea7f7f6528fdda0b02b248edf7620bbc969188081738b57a6c",
+  "controller_sha256": "12371ac7d754adc4b3e99932404caf412c5e6ce86e21e1c5a0f91a8522f337ae",
+  "browser_version": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/156.0.8078.4",
+    "revision": "@f842f52ef39fd97b449eb27cff414bf05a98ddce",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "jsVersion": "15.6.75"
+  },
+  "metadata_sha256": "0ab8146f3dda6f46a7e8943d5d432d90bc1f8304da73ca7e5b9847a19dc86379",
+  "source_manifest_sha256": "925b102f961654204df10fc0bcd66141da5775164e835ea101525f853c83ab52",
+  "web_commit": "4c1c979ccbd60b7761c528d0428f9965f439721b",
+  "exact_native_test": "ark-testing::barkd::fallback_browser::fallback_barkd_web_actual_payout_and_seed_restore",
+  "serial": 1,
+  "retries": 0,
+  "configured_native_watchdog_seconds": 180,
+  "native_phase_seconds": 60,
+  "controller_phase_seconds": 50,
+  "phases": [
+    {
+      "phase": "registered",
+      "base_url": "http://127.0.0.1:15324",
+      "phase_sha256": "7dbeda7bc5121a7124cb89478b99c78e43c37197eecaf31576e829594d21d358",
+      "completed_at": "2026-10-18T12:38:44.314Z",
+      "cdp_event_counts": {
+        "console": 0,
+        "exceptions": 0
+      }
+    },
+    {
+      "phase": "payout",
+      "base_url": "http://127.0.0.1:20194",
+      "phase_sha256": "0260cfae5039e5cdcd4741e6eb80a80ff46eaf8ddf317572ccb89aa3d4123a1c",
+      "completed_at": "2026-10-18T12:38:57.512Z",
+      "cdp_event_counts": {
+        "console": 0,
+        "exceptions": 0
+      }
+    },
+    {
+      "phase": "restored",
+      "base_url": "http://127.0.0.1:23060",
+      "phase_sha256": "ec4060118065f82b5b07345ca6de1b7eda046edc76ee872c60cbdc8a353bef5f",
+      "completed_at": "2026-10-18T12:39:03.334Z",
+      "cdp_event_counts": {
+        "console": 0,
+        "exceptions": 0
+      }
+    }
+  ],
+  "registered_coin": {
+    "id": "3cd6dd06967f1fabe80c469398d8cef1b28baf8025e378e8bfbe26b56b9d74aa:0",
+    "amount_sat": 100000,
+    "expiry_height": 129,
+    "state": {
+      "type": "spendable"
+    }
+  },
+  "actual_native_projections": {
+    "payout": {
+      "registration": {
+        "registered": true,
+        "payout_address": "bcrt1qe6xvy6ua2qqeag0myxxwxwqs8pfen3ckqr53qt",
+        "history_awaiting_sync": false
+      },
+      "balance": {
+        "awaiting_settlement_sat": 0,
+        "spendable_sat": 0,
+        "needs_refresh_sat": 0,
+        "pending_lightning_send_sat": 0,
+        "claimable_lightning_receive_sat": 0,
+        "pending_in_round_sat": 0,
+        "pending_board_sat": 0,
+        "pending_arkoor_send_sat": 0,
+        "pending_offboard_sat": 0,
+        "pending_exit_sat": 0
+      },
+      "movement_id": 2,
+      "movement_status": "successful",
+      "effective_balance_sat": -100000,
+      "offchain_fee_sat": 1000,
+      "sent_to": [
+        {
+          "destination": {
+            "type": "bitcoin",
+            "value": "bcrt1qe6xvy6ua2qqeag0myxxwxwqs8pfen3ckqr53qt"
+          },
+          "amount_sat": 99000
+        }
+      ],
+      "fallback": {
+        "stage": "confirmed",
+        "chain_verified": true,
+        "chain_view_valid": true,
+        "disposition": "customer_payout",
+        "allocation_id": 1,
+        "txid": "937bf964f5ec5a2ef90b13e6bf84ec0e3edd8858cbb35505dab9670f4c232edf",
+        "output_index": 0,
+        "payout_sat": 99000,
+        "forfeited_sat": 0
+      },
+      "native_owned_utxos": [
+        {
+          "outpoint": "937bf964f5ec5a2ef90b13e6bf84ec0e3edd8858cbb35505dab9670f4c232edf:0",
+          "amount_sat": 99000,
+          "confirmation_height": 131
+        },
+        {
+          "outpoint": "73a16a0ded1f25cdee16a44216f7fdb08573e7c4970cfb66cc6b791ed3fd0716:1",
+          "amount_sat": 99237,
+          "confirmation_height": 106
+        }
+      ]
+    },
+    "restored": {
+      "registration": {
+        "registered": true,
+        "payout_address": "bcrt1qe6xvy6ua2qqeag0myxxwxwqs8pfen3ckqr53qt",
+        "history_awaiting_sync": false
+      },
+      "balance": {
+        "awaiting_settlement_sat": 0,
+        "spendable_sat": 0,
+        "needs_refresh_sat": 0,
+        "pending_lightning_send_sat": 0,
+        "claimable_lightning_receive_sat": 0,
+        "pending_in_round_sat": 0,
+        "pending_board_sat": 0,
+        "pending_arkoor_send_sat": 0,
+        "pending_offboard_sat": 0,
+        "pending_exit_sat": 0
+      },
+      "movement_id": 1,
+      "movement_status": "successful",
+      "effective_balance_sat": 0,
+      "offchain_fee_sat": 1000,
+      "sent_to": [
+        {
+          "destination": {
+            "type": "bitcoin",
+            "value": "bcrt1qe6xvy6ua2qqeag0myxxwxwqs8pfen3ckqr53qt"
+          },
+          "amount_sat": 99000
+        }
+      ],
+      "fallback": {
+        "stage": "confirmed",
+        "chain_verified": true,
+        "chain_view_valid": true,
+        "disposition": "customer_payout",
+        "allocation_id": 1,
+        "txid": "937bf964f5ec5a2ef90b13e6bf84ec0e3edd8858cbb35505dab9670f4c232edf",
+        "output_index": 0,
+        "payout_sat": 99000,
+        "forfeited_sat": 0
+      },
+      "native_owned_utxos": [
+        {
+          "outpoint": "937bf964f5ec5a2ef90b13e6bf84ec0e3edd8858cbb35505dab9670f4c232edf:0",
+          "amount_sat": 99000,
+          "confirmation_height": 131
+        },
+        {
+          "outpoint": "73a16a0ded1f25cdee16a44216f7fdb08573e7c4970cfb66cc6b791ed3fd0716:1",
+          "amount_sat": 99237,
+          "confirmation_height": 106
+        }
+      ]
+    }
+  },
+  "ui_assertions": [
+    "Actual permanent registered BIP84 address in Settings in every phase; exact4c1c embedded index/App hashes verified by controller.",
+    "Real100000sat Spendable VTXO and expiry warning; correct actual ID/expiry metadata corroboration.",
+    "Exactly one visible99000sat Confirmed fallback row; actual row mouse click; dialog has exact payout txid/address/99000amount/1000separatefee/confirmation/miner-fee wording.",
+    "Fresh native original-seed restore has same permanent registration/exact99000 confirmed payout UTXO, current receipt effective0 rather than original-100000.",
+    "All10 Ark balance buckets0 in payout and restored phases; ordinary99237 onchain board change remains separate from99000payout."
+  ],
+  "native_assertions": [
+    "Real HTTP409 decided_for_fallback before returning original wallet status adoption.",
+    "Wallet absent while actual background watchman expiry payout broadcasts; native generates6Coreblocks and asserts exact destination/netUTXO, actual history and fresh seed recovery.",
+    "No browser send/sync/restore/drain shortcut; those lifecycle operations belong to the existing native fixture."
+  ],
+  "visual_inspection_by_client_reviewer": [
+    "registered-settings.png: permanent address/status clear; seed/auth not visible.",
+    "payout-detail.png: actual confirmation,99000 payout,1000 fee,txid/address clear.",
+    "restored-history.png: single confirmed fallback row plus separate real onchain history."
+  ],
+  "postflight": {
+    "all16pins_reverified": true,
+    "runtime_pins_sha256": "5363b4a003f5bd01beeca36204763168d1b122acc997e407fda992197976aebc",
+    "controls_match_preflight": true,
+    "double_drive_absent_after_Nix": true,
+    "own_native_actors": [],
+    "own_browser_actors": [],
+    "unreadable_native": [],
+    "unreadable_host": []
+  },
+  "preserved_first_failure": {
+    "run_uuid": "6427ca37-90a5-4812-8736-b27d8edebce9",
+    "native_seconds": 73.932,
+    "postflight_sha256": "a2660c29102782f682f50afb68702f18114548e0ed195f1f3cc52fddced17634",
+    "cause": "ASCII comma-only controller missed visible100U+202F000sat coin; no ACK/expiry payout/restore credit."
+  },
+  "limits": [
+    "Existing three-phase UI journey only, not wholeP08/catalogue/production readiness.",
+    "Native restores original seed with Ark server online; no unavailable-server/external-wallet/drain credit.",
+    "No fee-child sameblock/global custody/P&L/reorg proof or independent offlineCoreblock parse by this browser controller.",
+    "ExactV21 all4 product/current4c1c pairing proved; separate backend native gates qualify the included batch fix.",
+    "Private browserprofile/auth and raw native logs remain private; publish sanitized proof/screenshots only."
+  ],
+  "artifacts": {
+    "allocation.json": "f227f6ab50743aea7f7f6528fdda0b02b248edf7620bbc969188081738b57a6c",
+    "preflight.json": "6b8b2e4e4510baaf051e67a1235f0b0ee70a8f83681958ee6885a166346e5850",
+    "native-postflight.json": "7b6dd9d04d95dace27aed74396d83ffb4feb656073171705823d94c042b04ccc",
+    "host-postflight.json": "2f177055053f5ee14e20b8cd9e5000a7513bd1ff9ec40a6a15fcc8134e01fee0",
+    "native-result.json": "9085bb40ab3bb527775be176d522b0b102f0b7105de84562e81a3f79217e009d",
+    "native/run.log": "bbeeefa427e20ce6a35f63a0cc5f3dbb52bff5167435e6d7b289c7f1c3c95a34",
+    "runtime-pins.sha256": "5363b4a003f5bd01beeca36204763168d1b122acc997e407fda992197976aebc",
+    "chrome-identity.json": "d27cbdfd0aa47376286614167e0425de0af5f16d42895145c0bd61a0f3e8bb29"
+  },
+  "browser_artifacts": {
+    "ready.json": "e93cc4190e8bb3ae1494dd2a448cdf4b6f4a0aeed5ce52eddd3fa83be7af3d4e",
+    "payout-proof.json": "7c9c064f4722797ecec67e8f9adb56cb65e80c9b8a2cbd974581464d056a6097",
+    "payout-settings.png": "11557cddf6acdc37551f868a0e1d3f4531c9e7005c6ea75e8626a6cbe4df34ce",
+    "browser-version.json": "81541427e05cd5b6bcbca90307b55f5eb386db7f7222e1e92bcadc4aecf435b0",
+    "payout-projection.json": "7e8c73c5a3218e0a057acbc1a0d0650da2fd2dd864ed46360676edb2990fda51",
+    "restored-settings.dom.json": "490ebb1819fa09d4bbd1a7d1cb178e4dee162610a36ebc9fcc6f169806966f18",
+    "payout-detail.dom.json": "8f078fe639ecc2ad267195e6f30dbe9ea876c22116898f8c2b0f9da666cb894d",
+    "registered-proof.json": "513ba0f7d515fde8e382e635684b3822784f872388c2afecd436accf3071631b",
+    "restored-proof.json": "5eb5c5c5101a56bb6e50370d813917cccab346c510da62fedd634877c44f64be",
+    "registered-coin.json": "a6cfd2599f5ef13d5230dcbc6e21d98904dcd39f181bd43b055d71a0fe4db631",
+    "payout-history.png": "12979fb6e3d7a0a4152dfd82cb1e9fbad34ed3d40a66af005e5e404405603375",
+    "payout-history.dom.json": "2214554132c905ed246bcec9cbe959d3bb68b725de478840c6102d9febbc984d",
+    "registered-settings.png": "3dc806ede4f0d0c409b541098694dca54fb32d478443e88b12bc4523dd139b20",
+    "registered-coins.png": "36e184aa839dff49af50dcd1a45628ed9b6418b0c3798677ca3bd15798f6ff23",
+    "payout-settings.dom.json": "490ebb1819fa09d4bbd1a7d1cb178e4dee162610a36ebc9fcc6f169806966f18",
+    "restored-settings.png": "11557cddf6acdc37551f868a0e1d3f4531c9e7005c6ea75e8626a6cbe4df34ce",
+    "restored-projection.json": "8a02ad245a3fe17aab997d9ab7b6eddb6163d892a021a738e4ac9534c31c543b",
+    "registered-coins.dom.json": "ede814a63cd8fecb4d3ffcfae13598b13c9838f615d1502ff79810108bf86bdc",
+    "restored-history.dom.json": "d7203cb73ead8f914b368e3960e06cbef34300a244ff226edc4d6e768c0b80e6",
+    "result.json": "4c62852c3e964a252cee234733a544ad275603e26f1b8c66f6cab9abdbf4cab3",
+    "payout-detail.png": "748d9ba7dc8289a5ff540268101488ac836ecc2d2bea77c358f6f9be321f3553",
+    "restored-detail.png": "8d69d7e03ba7a0945a62df3d39499d601f2fc6c304f102ab3578c916397af53b",
+    "restored-history.png": "83352d32015ed298f4b7feac25410034c95fcc0d7a9cc77e352e5834e8f33742",
+    "registered-settings.dom.json": "6f5edfc6ab18f9539a736d96e4fdac5a6a04d3820c7672d20e2febe35b394761",
+    "restored-detail.dom.json": "2d179651bb11de1145ac78d29ab86128c02ebc486bcad1f54ffb8a09baedf4e2"
+  },
+  "actual_product_source": "427e369e6473596d0eb44927f0f38373b17e9005+capturedV21dirtysource",
+  "actual_versions": {
+    "captaind": "captaind 0.7.1-dev+427e369e6473596d0eb44927f0f38373b17e9005",
+    "watchmand": "watchmand 0.7.1-dev+427e369e6473596d0eb44927f0f38373b17e9005",
+    "bark": "bark 0.7.1-dev (427e369e6473596d0eb44927f0f38373b17e9005)",
+    "barkd": "barkd 0.7.1-dev (427e369e6473596d0eb44927f0f38373b17e9005)"
+  },
+  "actual_products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-complete-original-batch-v21-20261018/captaind",
+      "sha256": "3a7710ee06f4af0eb4e7356a513bf7994ae5a079200a9b2955ea26d135f32352",
+      "actual_version": "captaind 0.7.1-dev+427e369e6473596d0eb44927f0f38373b17e9005"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-complete-original-batch-v21-20261018/watchmand",
+      "sha256": "aeab56c7ad764ef30da547a25183935237dcb1b12ddf292b9ff59dfdde4ad22f",
+      "actual_version": "watchmand 0.7.1-dev+427e369e6473596d0eb44927f0f38373b17e9005"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-complete-original-batch-v21-20261018/bark",
+      "sha256": "6ef72b37f99daf3ecd0ab975caa672864c9152435bfc29d38bb3b312f3baa334",
+      "actual_version": "bark 0.7.1-dev (427e369e6473596d0eb44927f0f38373b17e9005)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-complete-original-batch-v21-20261018/barkd",
+      "sha256": "2f81daad6ca02cdc74b472049cc245db1d282d56e3cc501b51e59929be728402",
+      "actual_version": "barkd 0.7.1-dev (427e369e6473596d0eb44927f0f38373b17e9005)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "ark-testing::bark-sdk": {
+      "path": "/fresh-cache/runtime-complete-original-batch-v21-20261018/native-bark-sdk",
+      "sha256": "9a711d22a932a52c043058e85f47ae07f8d5c484a635ce9ad91e53228eca2474"
+    },
+    "ark-testing::barkd": {
+      "path": "/fresh-cache/runtime-complete-original-batch-v21-20261018/native-barkd",
+      "sha256": "deb1505c18c9b8d84054d9eeedecef51c3d620499050225fe601dbe3686e59b8"
+    },
+    "ark-testing::server": {
+      "path": "/fresh-cache/runtime-complete-original-batch-v21-20261018/native-server",
+      "sha256": "88202ce3aef9d36131aabb1717ae9c584ddee7712e47a3f40c523effb8f3f1ec"
+    }
+  },
+  "bundle_sha256": "e961e92cd628c2d4423ee83c95ed4c0100e54be000c05301cab1681a13c9a890",
+  "prior_V20b_pairing_preserved": {
+    "run_uuid": "98479db5-4df6-424b-a882-b444d390ef30",
+    "postflight_sha256": "c3c53c90cadbd023a5a67e6a18c55406c0bc0aa9dfdad33886ec72890ef829d3"
+  }
+}

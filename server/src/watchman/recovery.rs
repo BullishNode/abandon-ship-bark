@@ -148,8 +148,9 @@ impl Watchman {
 			// A terminal observation is a premise, not a permanent payment fact.
 			// The exact retained user body may reconfirm in another block; match
 			// current canonical source+txid, not its old observation height/hash.
-			let premises=t.query("SELECT a.id,c.evidence::TEXT FROM expiry_allocation a \
+			let premises=t.query("SELECT a.id,e.vtxo_id AS customer_source,c.evidence::TEXT FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+				JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 				WHERE a.status='pending' AND c.evidence ? 'terminal_sources' ORDER BY a.id,c.entitlement_id",&[]).await?;
 			let mut unsupported=std::collections::BTreeSet::new();
 			for row in premises {
@@ -160,7 +161,11 @@ impl Watchman {
 					let source= premise["source"].as_str().context("missing terminal premise source")?.parse()?;
 					let txid:bitcoin::Txid=premise["claim_txid"].as_str().context("missing terminal premise txid")?.parse()?;
 					let prior_joint=premise.get("prior_joint").and_then(serde_json::Value::as_bool)==Some(true);
-					let current=t.rebuilding_internal_partial_terminal_claim(source,view,prior_joint).await?;
+					let batch=premise.get("original_batch").and_then(serde_json::Value::as_bool)==Some(true);
+					let current=if batch {
+						ensure!(!prior_joint,"a fresh batch premise cannot widen prior-reserved replay");
+						t.rebuilding_internal_original_batch_claim(source,row.get::<_,&str>("customer_source").parse()?,view,&evidence).await?
+					} else {t.rebuilding_internal_partial_terminal_claim(source,view,prior_joint).await?};
 					if current.is_none_or(|proof|proof.claim.compute_txid()!=txid) {unsupported.insert(allocation);}
 				}
 			}

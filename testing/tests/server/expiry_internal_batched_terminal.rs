@@ -1,7 +1,7 @@
 //! Three genuine originals fund one internal receive. A1 and A2 take one
 //! ordinary DEFAULT timeout receipt; absent B remains entitled to fallback.
-//! V18's single-input terminal-omission guard predicts a HOLD, not a pass.
-//! This file is source-only until explicitly registered and qualified.
+//! The failed V20/V18 baseline is retained separately; corrected products are
+//! selected and independently hashed by the immutable runtime preflight.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -13,6 +13,7 @@ use ark::vtxo::{Full, TapScriptClause};
 use ark::vtxo::policy::signing::VtxoSigner;
 use ark::{ProtocolEncoding, Vtxo, VtxoPolicy};
 use ark_testing::{btc, sat, TestContext};
+use ark_testing::daemon::captaind::Captaind;
 use bitcoin::{OutPoint, Transaction, TxIn, TxOut, Witness};
 use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::hashes::{sha256, Hash};
@@ -24,18 +25,41 @@ use server_rpc::protos;
 
 use super::expiry_internal_partial_terminal::{assert_retained_claim, confirm_actual_path, confirm_recoverable_prefix};
 
-fn product(variable: &str, expected: &str) -> PathBuf {
-	let path = PathBuf::from(std::env::var_os(variable).expect("the existing runtime product environment is required"));
-	assert_eq!(sha256::Hash::hash(&std::fs::read(&path).expect("qualified V18 product must exist")).to_string(), expected,
-		"this first diagnostic must use the unchanged qualified V18 products");
+fn product(variable: &str) -> PathBuf {
+	let path = PathBuf::from(std::env::var_os(variable).expect("the immutable runtime product environment is required"));
+	assert!(path.is_file(),"the admitted per-instance product must exist");
 	path
 }
 
-async fn batched_terminal() {
-	let cap = product("CAPTAIND_EXEC","4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25");
-	product("WATCHMAND_EXEC","1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366");
-	product("BARK_EXEC","b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779");
-	let ctx = TestContext::new("server/expiry_internal_two_originals_timeout_together_keeps_third_source_owed").await;
+async fn wait_batched_parent(
+	ctx: &TestContext, srv: &Captaind, db: &Db, height: BlockHeight, allocation: i64, parent: &Transaction,
+) {
+	srv.wait_for_sync_height(height).await; srv.watchmand().wait_for_sync_height(height).await;
+	let hash=ctx.bitcoind().sync_client().get_block_hash(height.to_u32() as u64).unwrap();
+	tokio::time::timeout(Duration::from_secs(30),async {
+		loop {
+			let finished=db.read(async |t| {
+				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
+				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=hash || view.watchmand.hash!=hash
+					|| !t.expiry_view_is_rebuilt(view).await? {return Ok(false);}
+				let row=t.query_one("SELECT status,sweep_txid,sweep_tx,confirmed_hash FROM expiry_allocation WHERE id=$1",&[&allocation]).await?;
+				assert_eq!(row.get::<_,Option<&str>>("sweep_txid"),Some(parent.compute_txid().to_string().as_str()));
+				assert_eq!(row.get::<_,Option<&[u8]>>("sweep_tx"),Some(serialize(parent).as_slice()));
+				Ok(row.get::<_,&str>("status")=="confirmed" && row.get::<_,Option<&str>>("confirmed_hash").is_some())
+			}).await.unwrap();
+			if finished {break;}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("money/no-duplicate checks require a completed actual canonical B allocation");
+}
+
+async fn batched_terminal(reorg: bool) {
+	let cap = product("CAPTAIND_EXEC");
+	product("WATCHMAND_EXEC");
+	product("BARK_EXEC");
+	let ctx = TestContext::new(if reorg {
+		"server/expiry_internal_batched_terminal_replays_exact_authorization_after_reorg"
+	} else {"server/expiry_internal_two_originals_timeout_together_keeps_third_source_owed"}).await;
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	let operator = ctx.bitcoind().get_new_address();
 	let drain = operator.clone();
@@ -219,11 +243,11 @@ async fn batched_terminal() {
 		"actual_claim":claim.compute_txid().to_string(),"claim_raw_sha256":sha256::Hash::hash(&serialize(&claim)).to_string(),
 		"claim_input_count":2,"claim_receipt_sat":198000,"claim_fee_sat":2000,"actual_claim_depth":receipt.confirmations,
 		"b_actual_prefix":unpaid_prefix.to_string(),"prior_A_fences":context.0,"actors_absent":true,
-		"source_expectation":"V18 rejects batch terminal omission at claim.input.len()==1; not an observed runtime result"
+		"scope":"fresh complete-original-attempt batch; generic/reserved single-input guards remain unchanged"
 	})).unwrap()).unwrap();
 
 	// This is a positive rightful-refund oracle. It is expected to fail on
-	// unchanged V18; an observed HOLD must never be relabeled as a test PASS.
+	// An observed HOLD must never be relabeled as a test PASS.
 	let (allocation,parent): (i64,Transaction)=tokio::time::timeout(Duration::from_secs(90),async {
 		loop {
 			let row=db.read(async |t|Ok(t.query_opt("SELECT a.id,a.sweep_tx FROM expiry_allocation a \
@@ -259,21 +283,68 @@ async fn batched_terminal() {
 	assert_eq!(parent.output.iter().map(|output|output.value).sum::<bitcoin::Amount>(),input_total);
 	assert_eq!(sat(300_000)+sat(280_000),sat(198_000)+sat(99_000)+sat(281_000)+sat(2_000));
 	let height=ctx.generate_blocks(6).await;
-	srv.wait_for_sync_height(height).await; srv.watchmand().wait_for_sync_height(height).await;
-	let hash=chain.get_block_hash(height.to_u32() as u64).unwrap();
-	tokio::time::timeout(Duration::from_secs(30),async {
-		loop {
-			let finished=db.read(async |t| {
-				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
-				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=hash || view.watchmand.hash!=hash
-					|| !t.expiry_view_is_rebuilt(view).await? {return Ok(false);}
-				let row=t.query_one("SELECT status,confirmed_hash FROM expiry_allocation WHERE id=$1",&[&allocation]).await?;
-				Ok(row.get::<_,&str>("status")=="confirmed" && row.get::<_,Option<&str>>("confirmed_hash").is_some())
-			}).await.unwrap();
-			if finished {break;}
-			tokio::time::sleep(Duration::from_millis(50)).await;
+	wait_batched_parent(&ctx,&srv,&db,height,allocation,&parent).await;
+	let height=if reorg {
+		let claim_info=chain.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap();
+		let old_block=claim_info.blockhash.unwrap();
+		let old_height=chain.get_block_count().unwrap();
+		let mining_address=ctx.bitcoind().get_new_address();
+		srv.watchmand().stop().await.unwrap(); srv.stop().await.unwrap();
+		chain.invalidate_block(&old_block).unwrap();
+		let fork=chain.get_block_count().unwrap();
+		assert!(fork<old_height);
+		ctx.bitcoind().stop().await.unwrap();
+		// Preserve this owned ephemeral cache before a genuine cold restart.
+		// Chain, wallet, signed authorizations and outcome history are retained.
+		let cache=ctx.bitcoind().datadir().join("regtest/mempool.dat");
+		let bytes=std::fs::read(&cache).unwrap();
+		let preserved=ctx.bitcoind().datadir().join("batched-terminal-before-replay.mempool.dat");
+		std::fs::rename(&cache,&preserved).unwrap();
+		let cache_hash=sha256::Hash::hash(&bytes);
+		assert_eq!(sha256::Hash::hash(&std::fs::read(&preserved).unwrap()),cache_hash);
+		std::fs::write(ctx.bitcoind().datadir().join("batched-terminal-before-replay.sha256"),cache_hash.to_string()).unwrap();
+		ctx.bitcoind().start().await.unwrap();
+		let core=ctx.bitcoind().sync_client();
+		assert!(core.get_mempool_entry(&claim.compute_txid()).is_err());
+		assert!(core.get_mempool_entry(&parent.compute_txid()).is_err());
+		for source in &sources[..2] {
+			let actual=core.get_tx_out(&source.point().txid,source.point().vout,Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations>0); assert_eq!(actual.value,sat(100_000));
+			assert!(assert_retained_claim(&db,source.id(),&claim).await);
 		}
-	}).await.expect("money/no-duplicate checks require a completed actual canonical B allocation");
+		for point in grants.iter().map(Vtxo::point).chain(std::iter::once(unpaid_prefix)) {
+			assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_some_and(|out|out.confirmations>0),
+				"B/G paths and fee sponsors predate A's block; the fork must not erase required ancestors");
+		}
+		srv.start().await.unwrap(); srv.watchmand().start().await.unwrap();
+		tokio::time::timeout(Duration::from_secs(30),async {
+			while core.get_mempool_entry(&claim.compute_txid()).is_err() {tokio::time::sleep(Duration::from_millis(50)).await;}
+		}).await.expect("autonomous recovery did not replay the exact two-input DEFAULT authorization");
+		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,claim);
+		assert!(core.get_mempool_entry(&parent.compute_txid()).is_err(),
+			"a replayed but unconfirmed A batch is not a canonical B publication premise");
+		// All fee funding was confirmed before A's claim; no new sponsors or
+		// future-locktime funding retry is introduced on the replacement fork.
+		core.generate_to_address(old_height-fork+1,&mining_address).unwrap();
+		let current=core.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap();
+		assert_ne!(current.blockhash,Some(old_block));
+		assert!(current.confirmations.unwrap()>0);
+		tokio::time::timeout(Duration::from_secs(30),async {
+			loop {
+				if core.get_mempool_entry(&parent.compute_txid()).is_ok()
+					|| core.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap()
+						.is_some_and(|info|info.confirmations.is_some_and(|depth|depth>0)) {break;}
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+		}).await.expect("the SAME B parent must recover only after the exact original A batch reconfirms");
+		let height=ctx.generate_blocks(6).await;
+		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await,parent);
+		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,claim);
+		wait_batched_parent(&ctx,&srv,&db,height,allocation,&parent).await;
+		height
+	} else {height};
+	let chain=ctx.bitcoind().sync_client();
+	assert_eq!(ctx.bitcoind().get_block_count().await,u64::from(height.to_u32()));
 	let paid=chain.get_tx_out(&payout.txid,payout.vout,Some(true)).unwrap().unwrap();
 	assert_eq!(paid.value,sat(99_000)); assert!(paid.confirmations>=6);
 	assert!(chain.get_tx_out(&claim.compute_txid(),0,Some(true)).unwrap().unwrap().confirmations>=6);
@@ -321,7 +392,8 @@ async fn batched_terminal() {
 	let terminals=evidence["terminal_sources"].as_array().unwrap();
 	assert_eq!(terminals.len(),2);
 	assert_eq!(terminals.iter().map(|item|item["source"].as_str().unwrap().to_owned()).collect::<BTreeSet<_>>(),paid_ids.iter().cloned().collect());
-	assert!(terminals.iter().all(|item|item["claim_txid"].as_str()==Some(claim.compute_txid().to_string().as_str())));
+	assert!(terminals.iter().all(|item|item["claim_txid"].as_str()==Some(claim.compute_txid().to_string().as_str())
+		&& item["original_batch"].as_bool()==Some(true) && item.get("prior_joint").is_none()));
 	assert_eq!(final_rows.1,0,"the198k prior user receipt cannot also earn a customer fallback");
 	assert_eq!(final_rows.2.len(),grants.len());
 	for row in &final_rows.2 {
@@ -336,12 +408,19 @@ async fn batched_terminal() {
 	std::fs::write(srv.config().data_dir.join("batched-terminal-confirmed.json"),serde_json::to_vec_pretty(&serde_json::json!({
 		"attempt":scope.0,"subscription":scope.1,"originals":originals,"grants":grant_ids,"claim":claim.compute_txid().to_string(),
 		"b_parent":parent_info,"fee_child":child_info,"actual_child_fee_sat":actual_fee.to_sat(),"same_raw_bodies":true,
-		"scope":"fresh unfenced same-attempt complete batch only; no prior-fence/foreign-input/reorg/general-batch credit"
+		"reorg_exact_raw_replayed":reorg,
+		"scope":"fresh unfenced same-attempt complete batch only; no prior-fence/foreign-input/general-batch credit"
 	})).unwrap()).unwrap();
 }
 
 #[tokio::test]
 async fn expiry_internal_two_originals_timeout_together_keeps_third_source_owed() {
-	tokio::time::timeout(Duration::from_secs(180),Box::pin(batched_terminal())).await
+	tokio::time::timeout(Duration::from_secs(180),Box::pin(batched_terminal(false))).await
 		.expect("actual batched-terminal third-source refund exceeded proposed180second total");
+}
+
+#[tokio::test]
+async fn expiry_internal_batched_terminal_replays_exact_authorization_after_reorg() {
+	tokio::time::timeout(Duration::from_secs(180),Box::pin(batched_terminal(true))).await
+		.expect("actual batched-terminal replay and unchanged B refund exceeded proposed180second total");
 }

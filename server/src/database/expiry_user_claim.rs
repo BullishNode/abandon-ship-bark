@@ -11,6 +11,7 @@ use bitcoin_ext::BlockRef;
 
 use super::Tx;
 use super::expiry_chain::ExpiryViewToken;
+use super::expiry_internal_refund::InternalOriginalClaimScope;
 
 /// Replay is deliberately bounded to standard-sized existing transactions.
 /// Unsupported bodies are still retained; they do not authorize dropping a
@@ -64,6 +65,13 @@ fn replay_shape(claim: &Transaction) -> bool {
 
 fn terminal_omission_shape(source: &ServerVtxo, claim: &Transaction) -> bool {
 	claim.input.len()==1 && replay_shape(claim) && user_timeout_input(source,claim)
+}
+
+/// The entire raw input set must be inside one actual original-attempt
+/// membership. Distinct/size checks precede any per-source canonical lookup.
+fn complete_original_batch_inputs(originals: &[VtxoId], claim: &Transaction) -> bool {
+	claim.input.len()>1 && replay_shape(claim)
+		&& claim.input.iter().all(|input|originals.contains(&VtxoId::from(input.previous_output)))
 }
 
 /// A prior financial reservation is not authority to create or alter a user
@@ -212,8 +220,27 @@ impl Tx<'_> {
 	async fn replayable_terminal_claim_with_reservations(
 		&self, source: VtxoId, view: ExpiryViewToken, scope: TerminalProofScope,
 	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		let Some((body,proof,raw))=self.canonical_retained_terminal_claim(source,view,scope.requires_completed_rebuild()).await? else {return Ok(None);};
+		let claim=&proof.claim;
+		// Generic and reserved omission remain single-input. Only the private
+		// complete-original-attempt helper below may classify a fresh batch.
+		if !retained_terminal_omission_shape(&body,claim,&raw) { return Ok(None); }
+		if self.user_claim_has_obligation_fences(&[source]).await? {
+			let allowed=match scope {
+				TerminalProofScope::Unfenced|TerminalProofScope::RebuildingUnfenced=>false,
+				TerminalProofScope::InternalReturn=>self.conflicted_internal_user_claim_scope(source).await?.is_some(),
+				TerminalProofScope::InternalPartial|TerminalProofScope::RebuildingPartial=>self.partial_internal_user_claim_scope(source).await?.is_some(),
+			};
+			if !allowed {return Ok(None);}
+		}
+		Ok(Some(proof))
+	}
+
+	async fn canonical_retained_terminal_claim(
+		&self, source: VtxoId, view: ExpiryViewToken, requires_completed_rebuild: bool,
+	) -> anyhow::Result<Option<(ServerVtxo,ReplayableTerminalClaim,Vec<u8>)>> {
 		if self.expiry_rebuild_token().await? != Some(view)
-			|| (scope.requires_completed_rebuild()
+			|| (requires_completed_rebuild
 				&& self.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_,bool>("invalid")) { return Ok(None); }
 		let row=self.query_opt("SELECT v.vtxo,t.raw_tx,t.txid,t.confirmed_height,b.hash \
 			FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id \
@@ -227,24 +254,36 @@ impl Tx<'_> {
 			&[&source.to_string(),&i64::from(view.captaind.height.min(view.watchmand.height))]).await?;
 		let Some(row)=row else { return Ok(None); };
 		let body=ServerVtxo::deserialize(row.get("vtxo"))?;
-		let claim:Transaction=deserialize(row.get("raw_tx"))?;
+		let raw:Vec<u8>=row.get("raw_tx");
+		let claim:Transaction=deserialize(&raw)?;
 		let txid:Txid=row.get::<_,&str>("txid").parse()?;
 		ensure!(claim.compute_txid()==txid && body.id()==source,"retained user claim identity differs");
-		// Only a single-input claim supplies terminal omission today: that
-		// exact source is in the final component lock union. A batched claim
-		// would need every additional known input in that same final union.
-		if !retained_terminal_omission_shape(&body,&claim,row.get("raw_tx")) { return Ok(None); }
-		if self.user_claim_has_obligation_fences(&[source]).await? {
-			let allowed=match scope {
-				TerminalProofScope::Unfenced|TerminalProofScope::RebuildingUnfenced=>false,
-				TerminalProofScope::InternalReturn=>self.conflicted_internal_user_claim_scope(source).await?.is_some(),
-				TerminalProofScope::InternalPartial|TerminalProofScope::RebuildingPartial=>self.partial_internal_user_claim_scope(source).await?.is_some(),
-			};
-			if !allowed {return Ok(None);}
-		}
-		Ok(Some(ReplayableTerminalClaim { source,claim,confirmed:BlockRef {
+		let proof=ReplayableTerminalClaim { source,claim,confirmed:BlockRef {
 			height:row.get::<_,i64>("confirmed_height").try_into()?,hash:row.get::<_,&str>("hash").parse()?,
-		}}))
+		}};
+		Ok(Some((body,proof,raw)))
+	}
+
+	/// Private fresh same-attempt proof, never a generic or reserved replay
+	/// exception. Final component commit rechecks this under its complete sorted
+	/// original/grant/physical union, WAL2 and subscription locks. Rebuild owns
+	/// the exclusive view and reconstructs this same actual membership.
+	pub(crate) async fn replayable_internal_original_batch_claim(
+		&self, source: VtxoId, view: ExpiryViewToken, scope: &InternalOriginalClaimScope, rebuilding: bool,
+	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		let Some((_,proof,raw))=self.canonical_retained_terminal_claim(source,view,!rebuilding).await? else {return Ok(None);};
+		if !scope.originals().contains(&source) || !complete_original_batch_inputs(scope.originals(),&proof.claim) {return Ok(None);}
+		let ids=proof.claim.input.iter().map(|input|VtxoId::from(input.previous_output)).collect::<Vec<_>>();
+		if self.user_claim_has_obligation_fences(&ids).await?
+			|| (!rebuilding && self.user_claim_has_obligation_fences(scope.originals()).await?) {return Ok(None);}
+		for id in ids {
+			let Some((body,current,current_raw))=self.canonical_retained_terminal_claim(id,view,!rebuilding).await? else {return Ok(None);};
+			if current_raw!=raw || serialize(&current.claim)!=raw || current.confirmed!=proof.confirmed
+				|| !user_timeout_input(&body,&current.claim) {return Ok(None);}
+			let source=super::htlc_vtxo::get_htlc_vtxo(self,id).await?.context("batch original lost its signed HTLC source")?;
+			scope.check_source(&source)?;
+		}
+		Ok(Some(proof))
 	}
 
 	async fn user_claim_has_obligation_fences(&self, ids: &[VtxoId]) -> anyhow::Result<bool> {
@@ -394,6 +433,24 @@ mod tests {
 		claim.input[0].witness=Witness::from_slice(&[vec![0;65],script.into_bytes(),control]);
 		assert!(user_timeout_clause(&source,&claim));
 		assert!(!user_timeout_input(&source,&claim));
+	}
+
+	#[test]
+	fn complete_original_batch_never_accepts_a_foreign_duplicate_or_single_input() {
+		let a=bitcoin::OutPoint::new(Txid::from_byte_array([1;32]),0);
+		let b=bitcoin::OutPoint::new(Txid::from_byte_array([2;32]),0);
+		let live=bitcoin::OutPoint::new(Txid::from_byte_array([3;32]),0);
+		let originals=[VtxoId::from(a),VtxoId::from(b),VtxoId::from(live)];
+		let mut claim=Transaction {version:transaction::Version::TWO,lock_time:absolute::LockTime::ZERO,
+			input:vec![TxIn {previous_output:a,..TxIn::default()},TxIn {previous_output:b,..TxIn::default()}],output:vec![]};
+		assert!(complete_original_batch_inputs(&originals,&claim));
+		claim.input.reverse();
+		assert!(complete_original_batch_inputs(&originals,&claim));
+		assert!(!complete_original_batch_inputs(&originals[..1],&claim));
+		claim.input[1].previous_output=claim.input[0].previous_output;
+		assert!(!complete_original_batch_inputs(&originals,&claim));
+		claim.input.pop();
+		assert!(!complete_original_batch_inputs(&originals,&claim));
 	}
 
 	#[test]

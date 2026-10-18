@@ -64,6 +64,36 @@ pub(crate) struct InternalRefundCandidate {
 	pub grants: Vec<InternalRefundGrant>,
 }
 
+/// Only actual original-attempt membership may widen a fresh terminal proof.
+/// Construction stays in this database module; arbitrary caller ID lists are
+/// not an authorization. Final financial commit reconstructs it under locks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InternalOriginalClaimScope {
+	attempt: i64,
+	subscription: i64,
+	hash: PaymentHash,
+	originals: Vec<VtxoId>,
+}
+
+impl InternalOriginalClaimScope {
+	pub(crate) fn originals(&self) -> &[VtxoId] { &self.originals }
+
+	pub(crate) fn check_source(&self, source: &HtlcVtxo) -> anyhow::Result<()> {
+		ensure!(self.originals.contains(&source.vtxo.vtxo.id()), "batch timeout source is not an original of this internal attempt");
+		check_incoming_identity(source, self.hash)
+	}
+
+	fn check_evidence(&self, evidence: &serde_json::Value, grants: &[VtxoId]) -> anyhow::Result<()> {
+		let values=evidence.get("original_sources").and_then(serde_json::Value::as_array)
+			.context("batch premise lacks its complete original membership")?;
+		let originals=values.iter().map(|value|value.as_str().context("invalid batch original")?
+			.parse::<VtxoId>().map_err(Into::into)).collect::<anyhow::Result<BTreeSet<_>>>()?;
+		ensure!(originals.len()==values.len() && originals==self.originals.iter().copied().collect(),
+			"batch premise changes its actual original attempt membership");
+		check_existing_joint_evidence(evidence,self.attempt,self.subscription,self.hash,Some(grants))
+	}
+}
+
 /// Original attempts keep their separate funding identities. Only their
 /// inseparable Bitcoin input dependency is grouped; this creates no new owner.
 pub(crate) struct InternalRefundComponent {
@@ -302,6 +332,7 @@ impl InternalRefundCandidate {
 			InternalRefundSource::Terminal(claim) => {
 				let mut evidence=claim.evidence_json();
 				if self.terminal_reservations.contains_key(&claim.source) {evidence["prior_joint"]=true.into();}
+				if claim.claim.input.len()>1 {evidence["original_batch"]=true.into();}
 				Some(evidence)
 			},
 			InternalRefundSource::Live => None,
@@ -419,14 +450,10 @@ impl Tx<'_> {
 		InternalRefundComponent::new(current, actual)
 	}
 
-	/// An unmaterialized receive retains its entire original source membership.
-	/// Live originals are refunded; exact replayable canonical user claims are
-	/// observation-only. Every receive grant must still be an actual input.
-	/// Historical returns to a cold drain cannot authorize a cross-root refund
-	/// without a real spendable bridge; observed depth alone is insufficient.
-	pub(crate) async fn unclaimed_internal_refund(
-		&self, attempt_id: i64, view: ExpiryViewToken,
-	) -> anyhow::Result<Option<InternalRefundCandidate>> {
+	/// Immutable identity plus the existing uncollected source-specific exclusions.
+	/// This does not require grants to remain unspent: rebuild must validate an
+	/// already-committed parent's premises after it consumes B and its grants.
+	async fn internal_original_claim_scope(&self, attempt_id: i64) -> anyhow::Result<Option<InternalOriginalClaimScope>> {
 		let Some(row) = self.query_opt("SELECT f.subscription_id,a.payment_hash FROM expiry_lightning_internal_funding f \
 			JOIN lightning_payment_attempt a ON a.id=f.id AND a.lightning_htlc_subscription_id=f.subscription_id \
 			JOIN lightning_htlc_subscription s ON s.id=f.subscription_id AND s.payment_hash=a.payment_hash \
@@ -454,6 +481,52 @@ impl Tx<'_> {
 			.into_iter().map(|row| row.get::<_, &str>("vtxo_id").parse()).collect::<Result<Vec<VtxoId>,_>>()?;
 		ensure!(!incoming.is_empty() && incoming.len() as i64 <= MAX_JOINT_GRANTS,
 			"joint refund original funding set exceeds its preparation budget");
+		Ok(Some(InternalOriginalClaimScope { attempt: attempt_id, subscription: subscription_id, hash, originals: incoming }))
+	}
+
+	pub(crate) async fn rebuilding_internal_original_batch_claim(
+		&self, source: VtxoId, customer: VtxoId, view: ExpiryViewToken, evidence: &serde_json::Value,
+	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		let attempt=evidence.get("attempt_id").and_then(serde_json::Value::as_i64)
+			.context("batch premise has no actual attempt identity")?;
+		let Some(scope)=self.internal_original_claim_scope(attempt).await? else { return Ok(None); };
+		let grants=self.query("SELECT vtxo_id FROM vtxo WHERE lightning_htlc_subscription_id=$1 ORDER BY vtxo_id LIMIT $2",
+			&[&scope.subscription,&(MAX_JOINT_GRANTS+1)]).await?.into_iter()
+			.map(|row|row.get::<_,&str>("vtxo_id").parse()).collect::<Result<Vec<VtxoId>,_>>()?;
+		ensure!(grants.len() as i64<=MAX_JOINT_GRANTS,"batch premise exceeds the complete grant budget");
+		scope.check_evidence(evidence,&grants)?;
+		let Some(proof)=self.replayable_internal_original_batch_claim(source,view,&scope,true).await? else {return Ok(None);};
+		ensure!(scope.originals.contains(&customer)
+			&& proof.claim.input.iter().all(|input|VtxoId::from(input.previous_output)!=customer),
+			"batch premise does not belong to its distinct actual original customer");
+		let premises=evidence.get("terminal_sources").and_then(serde_json::Value::as_array)
+			.context("batch premise lacks its original terminal observations")?;
+		let txid=proof.claim.compute_txid().to_string();
+		let mut linked=BTreeSet::new();
+		for premise in premises.iter().filter(|value|value.get("claim_txid").and_then(serde_json::Value::as_str)==Some(txid.as_str())) {
+			ensure!(premise.get("original_batch").and_then(serde_json::Value::as_bool)==Some(true)
+				&& premise.get("prior_joint").and_then(serde_json::Value::as_bool)!=Some(true),
+				"batch premise cannot widen a reserved single-original scope");
+			let id=premise.get("source").and_then(serde_json::Value::as_str).context("batch premise source is missing")?.parse::<VtxoId>()?;
+			ensure!(linked.insert(id),"batch premise repeats an original");
+		}
+		ensure!(linked==proof.claim.input.iter().map(|input|VtxoId::from(input.previous_output)).collect(),
+			"batch premise omits or adds a raw transaction input");
+		Ok(Some(proof))
+	}
+
+	/// An unmaterialized receive retains its entire original source membership.
+	/// Live originals are refunded; exact replayable canonical user claims are
+	/// observation-only. Every receive grant must still be an actual input.
+	/// Historical returns to a cold drain cannot authorize a cross-root refund
+	/// without a real spendable bridge; observed depth alone is insufficient.
+	pub(crate) async fn unclaimed_internal_refund(
+		&self, attempt_id: i64, view: ExpiryViewToken,
+	) -> anyhow::Result<Option<InternalRefundCandidate>> {
+		let Some(original_scope) = self.internal_original_claim_scope(attempt_id).await? else { return Ok(None); };
+		let subscription_id = original_scope.subscription;
+		let hash = original_scope.hash;
+		let incoming = original_scope.originals.clone();
 		let mut existing = BTreeMap::new();
 		let mut terminal_reservations = BTreeMap::new();
 		let mut classified = BTreeMap::new();
@@ -463,7 +536,8 @@ impl Tx<'_> {
 			let physical_fence=self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=$1 LIMIT 1",&[&id.to_string()]).await?.is_some();
 			let reserved=source.vtxo.decided_for_fallback || physical_fence;
 			let terminal=if reserved {self.replayable_internal_partial_terminal_claim(*id,view).await?}
-				else {self.replayable_terminal_claim(*id,view).await?};
+				else if let Some(single)=self.replayable_terminal_claim(*id,view).await? {Some(single)}
+				else {self.replayable_internal_original_batch_claim(*id,view,&original_scope,false).await?};
 			if let Some(claim) = terminal {
 				if reserved {
 					terminal_reservations.insert(*id,self.partial_internal_user_claim_scope(*id).await?
@@ -963,6 +1037,29 @@ mod tests {
 			]),existing:BTreeMap::new(),terminal_reservations:BTreeMap::new(),grants:vec![InternalRefundGrant {
 				vtxo:ServerVtxo::from(grant.vtxo.vtxo).to_bare(),confirmed:BlockHeight::new(1),updated_at:Local::now(),
 			}] }
+	}
+
+	#[test]
+	fn original_batch_rebuild_rejects_rebound_missing_or_repeated_membership() {
+		let member=terminal_candidate();
+		let scope=InternalOriginalClaimScope {attempt:member.attempt_id,subscription:member.subscription_id,
+			hash:member.payment_hash,originals:member.incoming.keys().copied().collect()};
+		let grants=member.grant_ids();
+		let evidence=serde_json::json!({"kind":"htlc_internal_joint_timeout","attempt_id":scope.attempt,
+			"subscription_id":scope.subscription,"payment_hash":scope.hash.to_string(),
+			"original_sources":scope.originals.iter().map(ToString::to_string).collect::<Vec<_>>(),
+			"required_grants":grants.iter().map(ToString::to_string).collect::<Vec<_>>()});
+		assert!(scope.check_evidence(&evidence,&grants).is_ok());
+		for field in ["attempt_id","subscription_id"] {
+			let mut other=evidence.clone(); other[field]=999.into();
+			assert!(scope.check_evidence(&other,&grants).is_err());
+		}
+		let mut missing=evidence.clone(); missing["original_sources"].as_array_mut().unwrap().pop();
+		assert!(scope.check_evidence(&missing,&grants).is_err());
+		let mut repeated=evidence.clone(); repeated["original_sources"][1]=repeated["original_sources"][0].clone();
+		assert!(scope.check_evidence(&repeated,&grants).is_err());
+		let mut grant=evidence.clone(); grant["required_grants"]=serde_json::json!([]);
+		assert!(scope.check_evidence(&grant,&grants).is_err());
 	}
 
 	#[test]

@@ -1,0 +1,107 @@
+{
+  "at": "2026-10-18T12:46:14.351278+00:00",
+  "state": "REVIEWED_SOURCE_BUILD_PASS_END_TO_END_REFUND_STILL_FAILS",
+  "production_ready": false,
+  "mainnet_authorized": false,
+  "source": {
+    "head": "427e369e6473596d0eb44927f0f38373b17e9005",
+    "dirty": true,
+    "source_manifest_sha256": "925b102f961654204df10fc0bcd66141da5775164e835ea101525f853c83ab52",
+    "source_archive_sha256": "3382e643259939a7940261a7ba726806a48a49b0a6d2691cc5e7e897d16015cd",
+    "actual_git_diff_sha256": "df3b2d0ad83ec8f7e7ef276a829835b59bf0a4fd71ea2a2788cfca48d745df8b"
+  },
+  "bundle_manifest_sha256": "e961e92cd628c2d4423ee83c95ed4c0100e54be000c05301cab1681a13c9a890",
+  "scope": "Private complete-original batched-claim proof bound to actual original input set, internal attempt, subscription and payment hash; generic single-input and existing reserved guards retained; canonical replay uses matching scoped proof. This checkpoint does not establish complete payout closure.",
+  "checks": {
+    "state": "PASS",
+    "command": [
+      "just",
+      "checks"
+    ],
+    "started_at": "2026-10-18T12:18:21.778485+00:00",
+    "exit_code": 0,
+    "seconds": 101.676,
+    "ended_at": "2026-10-18T12:20:03.454733+00:00"
+  },
+  "unit_summary": {
+    "passed": 879,
+    "skipped": 1
+  },
+  "actual_product_hashes": {
+    "captaind": "3a7710ee06f4af0eb4e7356a513bf7994ae5a079200a9b2955ea26d135f32352",
+    "watchmand": "aeab56c7ad764ef30da547a25183935237dcb1b12ddf292b9ff59dfdde4ad22f",
+    "bark": "6ef72b37f99daf3ecd0ab975caa672864c9152435bfc29d38bb3b312f3baa334",
+    "barkd": "2f81daad6ca02cdc74b472049cc245db1d282d56e3cc501b51e59929be728402",
+    "ark-testing::bark-sdk": "9a711d22a932a52c043058e85f47ae07f8d5c484a635ce9ad91e53228eca2474",
+    "ark-testing::barkd": "deb1505c18c9b8d84054d9eeedecef51c3d620499050225fe601dbe3686e59b8",
+    "ark-testing::server": "88202ce3aef9d36131aabb1717ae9c584ddee7712e47a3f40c523effb8f3f1ec"
+  },
+  "backend_native": {
+    "source_manifest_sha256": "925b102f961654204df10fc0bcd66141da5775164e835ea101525f853c83ab52",
+    "started_at": "2026-10-18T12:39:01.409391+00:00",
+    "state": "FAIL",
+    "retries": 0,
+    "container": "abandon-fresh-runtime-20261017",
+    "cases": [
+      {
+        "test": "expiry_internal_batched_terminal::expiry_internal_two_originals_timeout_together_keeps_third_source_owed",
+        "started_at": "2026-10-18T12:39:02.019867+00:00",
+        "state": "FAIL",
+        "selected": [
+          "expiry_internal_batched_terminal::expiry_internal_two_originals_timeout_together_keeps_third_source_owed"
+        ],
+        "exit_code": 100,
+        "seconds": 164.423,
+        "ended_at": "2026-10-18T12:41:46.443151+00:00",
+        "log_sha256": "7c37657c86e1fe2a8aae8bb72528946e0c86a12a0128ce08062f90d97cac5cad"
+      }
+    ],
+    "not_run": [
+      {
+        "test": "expiry_internal_batched_terminal::expiry_internal_batched_terminal_replays_exact_authorization_after_reorg",
+        "state": "NOT_RUN_AFTER_FIRST_FAILURE"
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_partial_pays_remaining_source",
+        "state": "NOT_RUN_AFTER_FIRST_FAILURE"
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_partial_replays_paid_source_after_reorg",
+        "state": "NOT_RUN_AFTER_FIRST_FAILURE"
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_all_terminal_replays_after_reorg",
+        "state": "NOT_RUN_AFTER_FIRST_FAILURE"
+      }
+    ],
+    "ended_at": "2026-10-18T12:41:46.447981+00:00"
+  },
+  "native_seconds": 163.522,
+  "first_failure": "Remaining B payout parent was absent for positive90second publication wait at line263. Earlier single-input proof rejection passed; current warnings include need for usable confirmed watchman funding. Exact retained-state diagnosis pending; fixture-vs-product classification not yet made.",
+  "prior_failure": {
+    "source_capture": "V20",
+    "native_seconds": 163.804,
+    "log_sha256": "5d4925b46f6b2d35ccc349154dd25af7ae64f7d4ca772b434c550e5f77688009",
+    "classification": "Observed missing B refund; copied PG confirmed single-input terminal-proof rejection; original failure preserved"
+  },
+  "client": {
+    "SDK": {
+      "native_seconds": 29.529,
+      "formal_sha256": "81731d9c8d0a3acde852466a6902ea74bbd8645b9b1bb83726fbc63a75f12af3",
+      "scope": "True background unpaid100k protection to Claimable, cold reopen, explicit app claim99766 plus234miner/Core6, historical ordinary-spent negative, all10 balance buckets; no automatic final-drain policy"
+    },
+    "browser": {
+      "native_seconds": 32.632,
+      "formal_sha256": "12157a5d017f428b3b18a03813843a3fd668321da178635789ef3ef911b57a10",
+      "proof": "client-browser-v21-20261018.json"
+    }
+  },
+  "environment": "BARK_DOUBLE_DRIVE_ACTIONS wholly absent AFTER cached Nix source, never false/0/empty; exact V21 ELFs and immutable metadata pinned",
+  "deployment": "V21 local qualification only; public Signet remains V18",
+  "remaining": [
+    "Actual successful remaining-refund publication and canonical money accounting",
+    "New batch reorg and three affected pre-existing regressions NOTRUN after first failure",
+    "Broader batch shapes, final-candidate Signet/backup/load/operator acceptance",
+    "No new full money-loss catalogue credit or production admission"
+  ]
+}

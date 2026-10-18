@@ -2715,3 +2715,5 @@ mod qualification_conflict_reorg;
 mod qualification_failed_swap;
 
 mod qualification_offboard_restart;
+
+mod expiry_internal_terminal_return;

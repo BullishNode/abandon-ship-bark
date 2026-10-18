@@ -20,7 +20,7 @@ use ark_testing::daemon::captaind::Captaind;
 use server::database::Db;
 use server_rpc::protos;
 
-async fn confirm_actual_path(ctx: &TestContext, leaf: &Vtxo<Full>, seen: &mut BTreeSet<bitcoin::Txid>) {
+pub(super) async fn confirm_actual_path(ctx: &TestContext, leaf: &Vtxo<Full>, seen: &mut BTreeSet<bitcoin::Txid>) {
 	for step in leaf.transactions() {
 		let txid = step.tx.compute_txid();
 		if !seen.insert(txid) { continue; }
@@ -34,7 +34,7 @@ async fn confirm_actual_path(ctx: &TestContext, leaf: &Vtxo<Full>, seen: &mut BT
 		.unwrap().is_some_and(|output| output.confirmations > 0));
 }
 
-async fn confirm_recoverable_prefix(
+pub(super) async fn confirm_recoverable_prefix(
 	ctx:&TestContext,db:&Db,leaf:&Vtxo<Full>,seen:&mut BTreeSet<bitcoin::Txid>,
 ) -> bitcoin::OutPoint {
 	let steps = leaf.transactions().collect::<Vec<_>>();
@@ -324,7 +324,7 @@ async fn partial_terminal(reorg_a: bool) {
 		"reconfirmation must reuse one immutable body and one exact source link");
 }
 
-async fn assert_retained_claim(db:&Db,source:VtxoId,claim:&Transaction) -> bool {
+pub(super) async fn assert_retained_claim(db:&Db,source:VtxoId,claim:&Transaction) -> bool {
 	db.read(async |t| {
 		let Some(row)=t.query_opt("SELECT raw_tx FROM expiry_user_claim_tx WHERE txid=$1",
 			&[&claim.compute_txid().to_string()]).await? else { return Ok(false); };

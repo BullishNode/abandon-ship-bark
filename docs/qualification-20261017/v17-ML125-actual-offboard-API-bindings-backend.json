@@ -1,0 +1,131 @@
+{
+  "state": "PURE_HOST_ADDITIVE_ACTUAL_ML125_PUBLIC_DRIVE_AND_ADOPTION_API_BINDINGS",
+  "created_utc": "2026-10-18T09:21:35.226365+00:00",
+  "source_manifest_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+  "archive_sha256": "80f8e78953d3ca7ac14200bfe312c22987ca3071fbebaaed3f89bfa31c3bcdf0",
+  "parent_hostproof_sha256": "3dc6b03b62e605a1af809399e2d33f7476bebdcb568cf670a867811cc39a0d62",
+  "parent_sourcebindings_sha256": "f88bed2f1bd45f9aec8f2a42732573003d85678d8c0ee01a3e78e8adafee3db8",
+  "clarification": "Initial optional requested name progress is absent because it is not the fixture API. Actual fixture uses Wallet::sync_pending_offboards. This additive record binds that existing public drive and actual action adoption/confirmation/registration implementations; absence of heuristic progress name is not a product/test blocker. Original proof/bindings remain unchanged.",
+  "full_files": [
+    {
+      "path": "bark/src/offboard.rs",
+      "captured_sha256": "79ad470ebf974d71f3d40634c9cbe29d77ca9253769b02c9e77777e6edb17ea0"
+    },
+    {
+      "path": "bark/src/actions/offboard.rs",
+      "captured_sha256": "0440c63b5e01ac5b61e0405c549ab3677cf1befc4dcfe8d1075dc76165e8749b"
+    },
+    {
+      "path": "bark/src/lib.rs",
+      "captured_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad"
+    },
+    {
+      "path": "server/src/offboards.rs",
+      "captured_sha256": "c137c09af1f3c1e711463cd1abafc5ab6204009d6c11f8c41550c6feaf3eaa9b"
+    },
+    {
+      "path": "server/src/database/mod.rs",
+      "captured_sha256": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416"
+    }
+  ],
+  "functions": [
+    {
+      "file": "bark/src/offboard.rs",
+      "function": "pending_offboards",
+      "start_line": 14,
+      "end_line": 22,
+      "function_sha256": "331d3a5b096d2c25d91ab56feca2a2b9159d0eed07cdfd1ba8bb6277fd98d57e",
+      "brace_body_sha256": "0911b7e14cbb9479f47d3efc43bc04e8545407ecafb9c0c715225398844aedfe"
+    },
+    {
+      "file": "bark/src/offboard.rs",
+      "function": "sync_pending_offboards",
+      "start_line": 27,
+      "end_line": 40,
+      "function_sha256": "9376bc03888330cfeffdd0c85c1efecd5ab6cee7b3f20e282a09bb5f53eec5f7",
+      "brace_body_sha256": "9bccce594943ba8a372e50ffcf100bafccc9d1f635542ff7b828cb31edefefd0"
+    },
+    {
+      "file": "bark/src/offboard.rs",
+      "function": "offboard_vtxos",
+      "start_line": 76,
+      "end_line": 94,
+      "function_sha256": "8ede1b22d451d67627ecb44c9dcf901d410e551137b632b9fe4208823d5aecb6",
+      "brace_body_sha256": "6a98aebf00e29c55f904ba0208ececb8ef4f8776e0886635ad16e90edad94b9f"
+    },
+    {
+      "file": "bark/src/actions/offboard.rs",
+      "function": "advance",
+      "start_line": 230,
+      "end_line": 313,
+      "function_sha256": "c001630542958001b30faa639ca6db491d554a2211a54edb58fbfa7630d3fef4",
+      "brace_body_sha256": "33fbefed188a7271f71fb44d9f956f9ca475b84004e00ef21824ae0ef137d7af"
+    },
+    {
+      "file": "bark/src/actions/offboard.rs",
+      "function": "finish_offboard",
+      "start_line": 763,
+      "end_line": 835,
+      "function_sha256": "f68a77965dde51d7f62e5373b8f545006629ca37c1830d25036aad62c55fa566",
+      "brace_body_sha256": "7a9d4d5725ddf4e3d3435b50191b159cdd225bca2ec18fffb4885c70a1771fd5"
+    },
+    {
+      "file": "bark/src/actions/offboard.rs",
+      "function": "adopt_broadcast_offboard",
+      "start_line": 878,
+      "end_line": 902,
+      "function_sha256": "fcaba5654325e5bb4bde83723a24105035ea171514bf968a4fcf7d8d4f2a8a18",
+      "brace_body_sha256": "dc42878c601646c449ad8fb3621b7cef66e83394f5b050e4b98a2286c997beb5"
+    },
+    {
+      "file": "bark/src/actions/offboard.rs",
+      "function": "settle_offboard",
+      "start_line": 929,
+      "end_line": 952,
+      "function_sha256": "e504632bff1024b61c71346cc5639318c6a9a5f74cd443532685dd6005f143ae",
+      "brace_body_sha256": "de3ce2bcab521f140fe59dfe8b05e7b41e6c4578591bb87bc6a023ccd0d3cc3a"
+    },
+    {
+      "file": "bark/src/actions/offboard.rs",
+      "function": "check_offboard_confirmation",
+      "start_line": 956,
+      "end_line": 1008,
+      "function_sha256": "f930d393208e0a43b72ad8641ffc20f46adc68843168a623fdb191fd6895fd56",
+      "brace_body_sha256": "08fada3a641a171343aa067a5c9e93640069217448db4bfbd7269191c2e66728"
+    },
+    {
+      "file": "bark/src/actions/offboard.rs",
+      "function": "get_or_create_movement",
+      "start_line": 1011,
+      "end_line": 1055,
+      "function_sha256": "824a98b1cd2b6b4551f74f59a0c35b8486a048b27e6af6b139976a1ddf6665a6",
+      "brace_body_sha256": "155e27e3bba95a6f296e0b481c3b743321f0e928c2cf810f4aa60b764210ea7a"
+    },
+    {
+      "file": "bark/src/lib.rs",
+      "function": "open",
+      "start_line": 1301,
+      "end_line": 1442,
+      "function_sha256": "e57196f081cd70a82e766a31493810f2f5e05a1bd8cbb0e006a1c2525721fc08",
+      "brace_body_sha256": "dd66996721beec20e90439dbb7336948b99e034a222688ff5a9fdaa2a06575db"
+    },
+    {
+      "file": "server/src/offboards.rs",
+      "function": "finish_offboard",
+      "start_line": 423,
+      "end_line": 553,
+      "function_sha256": "158e93869bc6e936d25cd9c9e74485d2067f7693d4846bac9bfdf2d1332bee96",
+      "brace_body_sha256": "04c65be2479df026719c742e31dc80f9c737e3e051d08085d0d88167f39ff08f"
+    },
+    {
+      "file": "server/src/database/mod.rs",
+      "function": "register_offboard",
+      "start_line": 990,
+      "end_line": 1036,
+      "function_sha256": "f450e0ce4f441180f622dc5d5a877689b485f2158b0e7f7d39d4a0953624dd49",
+      "brace_body_sha256": "30dabdc652e74ff8164cd442d6cad8ce48fdec0194885408a033c6503178ea86"
+    }
+  ],
+  "native_status": "NOT RUN by reviewer; no product/Nix/helper/list/preflight/actor/Cargo execution",
+  "no_runtime_or_policy_credit": true
+}

@@ -1,0 +1,9 @@
+# H32 v1 — preserved source with three review findings
+
+The original 648-line source is frozen as 0333355e in the private source snapshot and exact add-file patch. It is unregistered, uncompiled and NOT RUN. It is not ready for admission.
+
+It implements a genuine first100k split into1200 recipient/98800 change, actual whole-group forfeiture1200/fee0/nooutput, original-database SDK BelowDust acceptance, then a newly created independent donor's100k receipt and99000 payout to the same account/script. It requires Core6 parents/actual same-block feechildren, real all-prevout fees, first500k/final600k closed cuts, no extra input, retained watch ownership, all ten balance fields, public SDK exit-list emptiness, full-history no-double-debit and old-receipt/movement stability. Declared bounds are180 seconds and128 blocks, unmeasured. Ordinary donor funding change and board miner fees are separately outside the selectedcut.
+
+Three bounded source review fixes are required. WalletAdminClient is imported from an absent server_rpc root export; the actual existing alias belongs to ark_testing::daemon::captaind. The financial cut must also count expected payee outputs in every canonical transaction before its selected-input early continue, so outside-funded duplicate customer outputs cannot escape. Public checkpoints must include explicit captured owner/script, root/sponsor/value and canonical package/fee bindings for independent offline audit. These are source findings, not observed compile/native failures. Parent full-source review is1b7f89d6; v1 has no no-blocker ACK.
+
+A later additive v2 will preserve this version and retain all native assertions, deadlines, policy and financial SQL restrictions while correcting only those issues. No existing source, modules, products or runtime artifacts were changed by this v1 packet.

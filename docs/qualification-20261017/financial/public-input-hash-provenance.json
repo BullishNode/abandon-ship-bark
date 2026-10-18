@@ -1,0 +1,53 @@
+{
+  "state": "PUBLIC_INPUT_HASH_PROVENANCE_NO_NEW_RECONCILIATION",
+  "audit_sha256": "e1c93447f3a1ade414f82a6682d2c75d54a4914b9487f37b655645974c53e51e",
+  "native_public_receipts": {
+    "tiny-group-public-receipt.json": {
+      "source_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case01/test-data/server/qualification_tiny_payout_grouping/tiny-group-public-receipt.json",
+      "sha256": "9dc79beec10efbc03e3793c9f62436b767421df36b2e41c716c553e6d436e8a7",
+      "byte_exact_export": true
+    },
+    "offboard-reply-restore-public-receipt.json": {
+      "source_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case02/test-data/server/qualification_offboard_reply_restore/offboard-reply-restore-public-receipt.json",
+      "sha256": "c95ecfb02608b3e14f606e5537711be57a267cf955e00e689f505e6741cae441",
+      "byte_exact_export": true
+    }
+  },
+  "retained_inputs_NOT_COPIED": [
+    {
+      "case": "H30",
+      "sha256_before_and_after": {
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case01/test-data/server/qualification_tiny_payout_grouping/tiny-group-public-receipt.json": "9dc79beec10efbc03e3793c9f62436b767421df36b2e41c716c553e6d436e8a7",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case01/test-data/server/qualification_tiny_payout_grouping/bitcoind/regtest/blocks/xor.dat": "6a530ec694b34a1b9a15d9f0cd7dea1fcdd6aae63f8c0b31b30274a09d679148",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case01/test-data/server/qualification_tiny_payout_grouping/bitcoind/regtest/blocks/blk00000.dat": "b7ee54fd13e4a3da3afd9070b37893a12f65a00a991b369ad6e0d2e0d2d350ec"
+      },
+      "unchanged_at_original_audit": true
+    },
+    {
+      "case": "ML125",
+      "sha256_before_and_after": {
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case02/test-data/server/qualification_offboard_reply_restore/offboard-reply-restore-public-receipt.json": "c95ecfb02608b3e14f606e5537711be57a267cf955e00e689f505e6741cae441",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case02/test-data/server/qualification_offboard_reply_restore/bitcoind/regtest/blocks/xor.dat": "6a530ec694b34a1b9a15d9f0cd7dea1fcdd6aae63f8c0b31b30274a09d679148",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case02/test-data/server/qualification_offboard_reply_restore/bitcoind/regtest/blocks/blk00000.dat": "e78f91bd41fd820720c35f76be4b785d4e5bbefc8d49597f37a6b3ed6452d6a5"
+      },
+      "unchanged_at_original_audit": true
+    }
+  ],
+  "export_reverified": "Only the two typed public native receipts and already-frozen public reports/scripts were rehashed for export. No block/Core/mempool/DB/wallet reread or reconciliation rerun. Original public block input hashes are preserved as recorded audit evidence.",
+  "pure_decoder": {
+    "original_full_helper_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py",
+    "original_full_helper_sha256": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+    "export_projection_name": "batch23-upstream-bark-unstarted46-reconcile-core-blocks.py",
+    "export_projection_sha256": "f88a7d9a116b3f59c924f4076dcb91d5b62c4590a0da4453c326ad253cadc146",
+    "functions": [
+      "digest",
+      "vi",
+      "tx"
+    ],
+    "function_AST_equal_to_original": true,
+    "old_hardcoded_entrypoint_removed": true,
+    "audit_parser_copy_sha256": "4f1f47975373f7c09651f9cbdcb0b8d8c736759019c0289e0862f0c28a5b667e",
+    "replay_note": "Original parser imports only the three functions using AST. Projection preserves those exact functions, removes old batch entrypoint and I/O. If replayed on a scratch copy, its helper-provenance digest changes to the projection hash; original immutable financial receipt is not rewritten or relabelled."
+  },
+  "private_content": "No native/debug logs, argv, config, seeds, wallet/SQLite/PG/backup/journal/private protection, raw blocks or testdata copied."
+}

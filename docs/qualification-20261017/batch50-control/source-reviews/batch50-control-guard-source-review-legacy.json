@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "state": "FINAL_BATCH50_STATIC_SOURCE_GUARD_ACK_NO_CONCRETE_BLOCKER_PARENT_FRESH_GATES_REQUIRED",
+  "at": "2026-10-18T09:27:37.544323+00:00",
+  "preparation_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/PREPARATION.json",
+  "preparation_sha256": "eaf9604dc98058178b75bac891b8b5cc2b9ad534da1d824cd70fa7b655d45240",
+  "actual_allocation_sha256": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
+  "static_control_sha256": {
+    "selection-proof.json": "3119a42b9127be8e94ace60af0200cb195b4635967fe0b2f03acafc91ad017f2",
+    "root-allocation.json": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
+    "runtime-pins.sha256": "1e593d4b826fb91e3f27376d9d37bc8de0c6a54eaa353e8052e047a3198f92a9",
+    "source-bindings.json": "f88bed2f1bd45f9aec8f2a42732573003d85678d8c0ee01a3e78e8adafee3db8",
+    "source-artifact-proof.json": "3dc6b03b62e605a1af809399e2d33f7476bebdcb568cf670a867811cc39a0d62",
+    "parent-actor-probe.py": "f552a7ad4a871d589bb21e644136dc79e9ccc23c71fa266e5a14983da94e4d34",
+    "server-cohort.py": "50901c236c7df879410b0c382e6370771b2ae29bdfbdfc6a161c0f7e45320766",
+    "preflight-static.py": "b6ab4abf26fefffc0f2161348382ddae5974773fef7d2352a11a2d25a18174af",
+    "fresh-listings.py": "6cf4770b65868bdcdafd704cdc9765615719b78368e2ad19db1749d050f6ac7d",
+    "preflight.sh": "9f59829e2f2a03351390a9483c1dcceda778d58f111cab0a279859fc407c12e4",
+    "run.sh": "5e45ab4b74923bfb14a288b100a8b1e276cf02a4c45e82d219977a810fe6a4c0",
+    "case01/nextest.toml": "9984898ddfefff01e79cd8f1859f751746133c29b441c824de47be688736581d",
+    "case02/nextest.toml": "b9c17fcacae4c4df639e3a80df1e1328686d2eb466f342189ac5446d93b4c3c1"
+  },
+  "parent_freeze_required_paths": [
+    "selection-proof.json",
+    "root-allocation.json",
+    "runtime-pins.sha256",
+    "source-bindings.json",
+    "source-artifact-proof.json",
+    "parent-actor-probe.py",
+    "server-cohort.py",
+    "preflight-static.py",
+    "fresh-listings.py",
+    "preflight.sh",
+    "run.sh",
+    "case01/nextest.toml",
+    "case02/nextest.toml",
+    "fresh-listing-admission.json",
+    "resource-admission.json",
+    "parent-actor-admission.json"
+  ],
+  "selection": [
+    [
+      "ark-testing::server",
+      "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once"
+    ],
+    [
+      "ark-testing::server",
+      "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge"
+    ]
+  ],
+  "capture": {
+    "source_manifest_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+    "source_archive_sha256": "80f8e78953d3ca7ac14200bfe312c22987ca3071fbebaaed3f89bfa31c3bcdf0",
+    "bundle_manifest_sha256": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76",
+    "runtime_metadata_sha256": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab",
+    "immutable_metadata_sha256": "8393bd7182e1119554b31f40e840937adf61e51181f3280ee22d5c2256d008a2",
+    "native_server_sha256": "780dde6b31eb639ccd5680800d5ab7e40585702e9ec8a0381e8c7468d3135ba6",
+    "runtime_pinlist_sha256": "1e593d4b826fb91e3f27376d9d37bc8de0c6a54eaa353e8052e047a3198f92a9"
+  },
+  "checks": {
+    "actual_cases_object_array_and_execution_nested_schema_keys_valid": true,
+    "ordered_unique_names": 2,
+    "static_hashes_matched": 13,
+    "parent_freeze_exact_required_paths": 16,
+    "Python_AST": 4,
+    "bash_n": 2,
+    "TOML": 2,
+    "default_seconds_each": 180,
+    "retries": 0,
+    "serial_threads": 1,
+    "first_failure_stops": true,
+    "maximum_allocated_cases": 2,
+    "max_global_native": 2,
+    "authoritative_pin_entries": 14,
+    "pin_scope": "11 non-CLN core/support metadata paths plus3 CLN tool/plugin provenance paths. All14 mandatory; neither case requests CLN. Old17pin C controls are not used.",
+    "metadata_contains_exactly_one_server_binary": true,
+    "immutable_and_runtime_rust_binaries_equal": true,
+    "archive_full_files_rehashed": 31,
+    "entry_and_local_helper_regions_function_and_body_hashes_recomputed": 17,
+    "additional_API_regions_function_and_body_hashes_recomputed": 16,
+    "exact_H30_source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+    "exact_ML125_source_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+    "captured_module_declarations_present": true,
+    "captured_joined_output_classifier_sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+    "pending_marker_present": true,
+    "parent_launch_admission_absent": true,
+    "prior_result_context_progress_absent": true
+  },
+  "actor_probe_review": {
+    "old_sha256": "591fe64304b66160f3f0375a0a91e790f2df6e515945c3be1e48678bb03a0f79",
+    "final_sha256": "f552a7ad4a871d589bb21e644136dc79e9ccc23c71fa266e5a14983da94e4d34",
+    "finding": "Original50 probe omitted actual batch45 knowngroups while retaining45 path scopes. Parent corrected only the known_groups line, adding143297/143753/144233; old probe preserved and not retroactively described as complete.",
+    "actual_known_groups": [
+      143297,
+      143753,
+      144233,
+      145878,
+      146890,
+      148754,
+      154295,
+      165688,
+      173577,
+      174944,
+      175188
+    ],
+    "own_and_prior_scope": "50 plus45/47/P07/49/48 path scopes, known groups/SIDs and sameUID argv/cwd/FD checks. RootV16/V17 SID unknown is labeled, so broad actual scoped financial/controller checks apply.",
+    "minimum_SHM_bytes": 268435456,
+    "minimum_disk_bytes": 21474836480,
+    "other_native_before_launch_max": 1,
+    "financial_PG_auto_exemption": false,
+    "parent_explicit_root_readonly_exemptions_review_required": true,
+    "no_secret_argv_content_output": true,
+    "probe_executed_by_reviewer": false
+  },
+  "guard_semantics": [
+    "Wrappers source cached Nix before Python, fully unset all presence-sensitive overrides afterward; Python rejects false/0/empty presence as well as true. Actual four-product versions and SQLite LD path are bound to the V17 allocation.",
+    "Native path calls parent admission guard before Popen; pending marker must be absent, all16 hashes exact, root/source/ordered selectors and actor-probe hash match, and fresh unignored listing/resource/actor receipts PASS. Parent independently reviews any root-scoped nonfinancial exemptions. Financial PostgreSQL is not automatically excused.",
+    "Fresh listing selects only the exact two allocated names in order, separately, under one server binary; no ignored run or extra selector. Results require one started test across one binary, expected exact server name/PASS, exit0, no resource errors, and skipped count derived from that actual fresh listing rather than hardcoded660.",
+    "Native invocations use repository just int-binaries, exact literals after --, serial1/retry0/default180 and distinct private stores/TEST_DIRECTORY. Existing result/context/progress prevents resume; firstFAIL stops the second case. Per-case SHM/disk/Postgres checks do not perform cleanup.",
+    "The source proof explicitly reports missing narrow offboard progress region name, while the complete offboard action file is among31 hash-bound sources. No missing API function is represented as separately found."
+  ],
+  "blockers": [],
+  "parent_remaining": [
+    "Actual final preflight must rehash all14 tool/product/support pins, full archive and metadata and compare four actual product versions; source-binding archive reads are rechecked by controls.",
+    "Generate actual fresh two singleton/unignored listings, resource gate and final actor/capacity gate in the real namespace. Any root-scoped copied PostgreSQL process blocks unless parent/root resolve the specific diagnostic scope through reviewed controls; no automatic exemption or cleanup by this reviewer.",
+    "Freeze the actual16 paths with independent review hashes and explicit root_readonly_exemptions_reviewed=true in parent admission, then remove marker and execute exactly once under existing allocation."
+  ],
+  "limits": [
+    "Static source/hash/syntax review only; no generated controller/preflight/list/probe body, native test, version executable, RPC, resource/actor probe, Cargo or Git action executed. Actual runtime pin rehash and current capacity claims remain parent fresh gates.",
+    "Both selected tests are NOT RUN at this review. Source18 and17 publication/compile provenance does not supply native success, fees/custody/fullML or production qualification. Root unrelated partial TIMEOUT180.019 remains separate and unmodified.",
+    "No old control/source/global/coverage/ML or H32source19 changes. Only this new review JSON/Markdown pair is written. H11source20 authoring has not begun."
+  ]
+}

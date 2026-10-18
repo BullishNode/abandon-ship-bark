@@ -1,0 +1,43 @@
+{
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch50-H30-ML125-v17",
+  "at": "2026-10-18T09:28:24.584275+00:00",
+  "source_manifest_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+  "expected_selection": [
+    [
+      "ark-testing::server",
+      "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once"
+    ],
+    [
+      "ark-testing::server",
+      "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge"
+    ]
+  ],
+  "root_allocation_sha256": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
+  "actor_probe_sha256": "f552a7ad4a871d589bb21e644136dc79e9ccc23c71fa266e5a14983da94e4d34",
+  "root_readonly_exemptions_reviewed": true,
+  "root_readonly_exemptions_observed": [],
+  "sha256": {
+    "selection-proof.json": "3119a42b9127be8e94ace60af0200cb195b4635967fe0b2f03acafc91ad017f2",
+    "root-allocation.json": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
+    "runtime-pins.sha256": "1e593d4b826fb91e3f27376d9d37bc8de0c6a54eaa353e8052e047a3198f92a9",
+    "source-bindings.json": "f88bed2f1bd45f9aec8f2a42732573003d85678d8c0ee01a3e78e8adafee3db8",
+    "source-artifact-proof.json": "3dc6b03b62e605a1af809399e2d33f7476bebdcb568cf670a867811cc39a0d62",
+    "parent-actor-probe.py": "f552a7ad4a871d589bb21e644136dc79e9ccc23c71fa266e5a14983da94e4d34",
+    "server-cohort.py": "50901c236c7df879410b0c382e6370771b2ae29bdfbdfc6a161c0f7e45320766",
+    "preflight-static.py": "b6ab4abf26fefffc0f2161348382ddae5974773fef7d2352a11a2d25a18174af",
+    "fresh-listings.py": "6cf4770b65868bdcdafd704cdc9765615719b78368e2ad19db1749d050f6ac7d",
+    "preflight.sh": "9f59829e2f2a03351390a9483c1dcceda778d58f111cab0a279859fc407c12e4",
+    "run.sh": "5e45ab4b74923bfb14a288b100a8b1e276cf02a4c45e82d219977a810fe6a4c0",
+    "case01/nextest.toml": "9984898ddfefff01e79cd8f1859f751746133c29b441c824de47be688736581d",
+    "case02/nextest.toml": "b9c17fcacae4c4df639e3a80df1e1328686d2eb466f342189ac5446d93b4c3c1",
+    "fresh-listing-admission.json": "06369c0fe70a62bd6a3f0a750c2a49c47297b0ce832a7790fb6d18e3aa3c6bca",
+    "resource-admission.json": "84b42e6a28a0c9be6d241003326630387e00090a639860cee5fe3881415a0f72",
+    "parent-actor-admission.json": "f6a35871d78228b425d47436d157df72ac47addf678d39cd9e62d13ead859ffa"
+  },
+  "preparation_sha256": "eaf9604dc98058178b75bac891b8b5cc2b9ad534da1d824cd70fa7b655d45240",
+  "independent_peer_sha256": "dcf3e7c27b8f501d50cf4c101f59ad0c0c4e6f6f460e8e1ecc01ac0fbaff1d7b",
+  "parent_preflight_exec_session": 6924,
+  "parent_preflight_terminal_exit_code": 0,
+  "prior_native_launches": 0
+}

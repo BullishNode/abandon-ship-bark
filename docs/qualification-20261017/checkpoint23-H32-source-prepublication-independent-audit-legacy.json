@@ -1,0 +1,67 @@
+{
+  "kind": "H32_SOURCE19_PREPUBLICATION_INDEPENDENT_AUDIT_LEGACY",
+  "state": "SCOPED_PREPUBLICATION_ACK_NO_CONCRETE_BLOCKER_SOURCE_ONLY_NOT_RUN",
+  "at": "2026-10-18T09:47:21.348439+00:00",
+  "source_branch": "work/fresh-test-dust-later-receipt-20261018",
+  "commit": "f36f377be24aefa78e36ad84d120356fd395379b",
+  "parent_fixed_PR26_head": "bae867b649a043fa9d8111678201245ca3c2ab1a",
+  "source": {
+    "only_commit_path": "testing/tests/server/qualification_dust_later_receipt.rs",
+    "sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+    "bytes": 41827,
+    "lines": 709,
+    "commit_owned_v2_aggregate_and_v1_plus_delta_bytes_equal": true,
+    "all_v1_assertion_lines_preserved_as_multiset": true,
+    "v1_sha256": "0333355ee220fe8e9227be4b69fb8b7ffdf787b07a0da6ac3e1ce6b08b7fdb95",
+    "remote_branch_full_head_independently_verified": true,
+    "index_empty": true,
+    "module_registered": false,
+    "compile": null,
+    "native": null,
+    "status": "NOT RUN",
+    "execution_credit": 0
+  },
+  "frozen_packet": {
+    "path": "checkpoint23-source-proposed-safe/publication-checkpoint23-source-files.json",
+    "sha256": "508cf0ccb1751b39f4fcd0af436f119253a59a9012b1f26b6b6749f3b1e0d5f7",
+    "payload": 16,
+    "files_including_manifest": 17,
+    "all_hashes_match": true,
+    "JSON_parsed": 8,
+    "standalone_Rust_or_mutable_global_or_batch50_runtime_files": false
+  },
+  "reviews": {
+    "v2_peer_sha256": "242ed4d2ce3829beb9b4720dcfa4a767cfb08ed1f8c2fd4a929ef2308f8f0dd6",
+    "parent_intake_outside_frozen_packet": {
+      "path": "H32-ROOT-INTAKE-v2-parent.json",
+      "sha256": "22e837c0411cb8c1c7d1f763017ef0ab9ae87593a445dc52f4ec8608094583b7"
+    },
+    "historical_v1_known_source_findings_not_compile_nativeFAIL": true,
+    "creation_time_pending_peer_resolved_additively_not_rewritten": true
+  },
+  "protected_Rust": {
+    "snapshot_sha256": "e9ef0a44d2a7ec8825576f4669ab8680950607f40816d7639dd726e545e30b1c",
+    "prior_files": 151,
+    "all_unchanged_including_17_18_and_modules": true,
+    "source19_matches_snapshot": true,
+    "new_source20_authorized_untracked_excluded": true
+  },
+  "secret_screen": {
+    "files": 18,
+    "wordlist_words": 2048,
+    "wordlist_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693",
+    "contiguous_whitespace_delimited_valid_BIP39_checksum": 0,
+    "valid_WIF_checksum": 0,
+    "strong_credentials_private_keys": 0,
+    "scanner_note": "An initial overbroad token-joining scan crossed eleven JSON punctuation gaps and produced one noncontiguous checksum coincidence in peer metadata. Actual phrase scan requires whitespace-only gaps; no source or report was changed.",
+    "limit": "Bounded static screen, not universal absence proof."
+  },
+  "limitations": [
+    "Source-only publication and history audit, not a new full product/cryptographic review.",
+    "H32 prospective1200-forfeit/later100k lifecycle has no captured candidate, ELF, metadata, allocation, compiler or native result.",
+    "Two-epoch default180/128-block feasibility remains unmeasured.",
+    "Canonical API reference hashes are inspection snapshots, not runtime bindings.",
+    "No full H32/legacy/ML, custody, release or production credit.",
+    "No frozen packet/source/global/index/Git/runtime changes; only new audit files written."
+  ]
+}

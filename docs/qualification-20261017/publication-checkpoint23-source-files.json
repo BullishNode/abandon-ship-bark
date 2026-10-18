@@ -1,0 +1,55 @@
+{
+  "state": "PROPOSED_SAFE_SOURCE_ONLY_PUBLIC_REPORT_PACKET_NOT_STAGED_NOT_PUBLISHED",
+  "created_utc": "2026-10-18T09:39:39.603877+00:00",
+  "payload_count": 16,
+  "payload_sha256": {
+    "H32-SOURCE-PUBLICATION-NOTES.md": "207d0063c68e32aa47e7edb57e4e9d5b9761d7a08e106a24a2aeaaf56d510f69",
+    "H32-design-api-peer-backend.json": "3fc15ca018cfeb8d1ea7cc017319ca33b466fb870d20058f939f16448104bdf9",
+    "H32-design-api-peer-backend.md": "233347437c3e5fd8e4fe3af01623750d4e3acd85aa95d05591be0bcbda312be6",
+    "H32-dust-later-receipt-v1-design.md": "e724766d71e41ea7fd40bacd141f89f5cf4c93616842389e8ec24af635f4ca40",
+    "H32-dust-later-receipt-v1.json": "52b392b9992cf7f0f9f654318dc1793871837e3a72bef175a41e0dfdc0539e2a",
+    "H32-dust-later-receipt-v1.patch": "a259360f109a702eedc93bbdb199ba03877de26327aa643a282e943fc9079cda",
+    "H32-dust-later-receipt-v2-delta.patch": "8816af6c4238b925c6e4a5915d53a2e38dafb1f67d116f3a6637998dc31569ee",
+    "H32-dust-later-receipt-v2-design.md": "f251396412a483a151a14a7fbc7ba46c88d12189ae68cfa795bad0856c335b18",
+    "H32-dust-later-receipt-v2-peer-review-backend.json": "242ed4d2ce3829beb9b4720dcfa4a767cfb08ed1f8c2fd4a929ef2308f8f0dd6",
+    "H32-dust-later-receipt-v2-peer-review-backend.md": "326be55d544a47046158c5cb93b716d4ee83408d96fdb41439f239c63e345ae1",
+    "H32-dust-later-receipt-v2.json": "2df1356f5f7e8c9aaee35d5fbb32d6f59c7578799e3d5f107d3ab5c7aba2b8ff",
+    "H32-dust-later-receipt-v2.patch": "842fa69d143952fd52bda6bcb3d58d3accadfef4cb220e0ed53980355d0710ab",
+    "H32-genuine-dust-later-receipt-source-proposal.json": "1b5da53b25130b4a291fdf2b30b0773c1cab8aec0423fad21b5fbb9ec3fdc4d1",
+    "H32-genuine-dust-later-receipt-source-proposal.md": "5f42148cfac259ba514bdecff5c471520bc0f2022fac582f3a4ce5da176fa9b8",
+    "H32-source-ownership-parent.json": "6f318d786f5a7471395ba2526f771a79983b0176a71d4c9df75c6072422d4e6b",
+    "H32-v1-parent-source-review.json": "1b7f89d6907992ff20482bca92d84f429c85acbb6ac6a5251b6f3e171527d8ea"
+  },
+  "source": {
+    "separate_future_Rust_path": "testing/tests/server/qualification_dust_later_receipt.rs",
+    "owned_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_dust_later_receipt.rs",
+    "sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+    "source_included_as_standalone_Rust": false,
+    "current_v2_aggregate_patch_sha256": "842fa69d143952fd52bda6bcb3d58d3accadfef4cb220e0ed53980355d0710ab",
+    "current_v2_delta_sha256": "8816af6c4238b925c6e4a5915d53a2e38dafb1f67d116f3a6637998dc31569ee",
+    "current_v2_manifest_sha256": "2df1356f5f7e8c9aaee35d5fbb32d6f59c7578799e3d5f107d3ab5c7aba2b8ff",
+    "current_v2_peer_sha256": "242ed4d2ce3829beb9b4720dcfa4a767cfb08ed1f8c2fd4a929ef2308f8f0dd6",
+    "historical_v1": "0333355e known three source findings, not admitted; no observed compile/nativeFAIL"
+  },
+  "scope": "H32 source history/current review only; no mutableglobal or batch50 native content",
+  "execution": {
+    "module_registered": false,
+    "compile": null,
+    "native": null,
+    "candidate": null,
+    "ELF": null,
+    "metadata": null,
+    "allocation": null,
+    "status": "NOT RUN",
+    "native_credit": false
+  },
+  "secret_screen": {
+    "inputs": 17,
+    "valid_English_BIP39_checksum": 0,
+    "valid_WIF_checksum": 0,
+    "strong_private_or_credential_patterns": 0,
+    "public_wordlist_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693",
+    "limit": "Bounded static checksum/pattern screen, not universal secret absence"
+  },
+  "export_policy": "15 exact public report/patch copies +1 new contextual notes; no privateprotection snapshots/rawsourcefile/runtime/private material; no Git/index/source edits"
+}

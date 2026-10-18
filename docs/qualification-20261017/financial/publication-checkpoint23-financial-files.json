@@ -1,0 +1,80 @@
+{
+  "state": "FROZEN_PUBLIC_ONLY_FINANCIAL_EXPORT_NO_NEW_NATIVE_OR_RECONCILIATION",
+  "created_utc": "2026-10-18T09:46:07.514504+00:00",
+  "payload_count": 9,
+  "payload": {
+    "README.md": {
+      "sha256": "7d0bf4c679c22db2780c768b87f36754f027e88381bad048334d8ccf6ff423a1",
+      "bytes": 3436
+    },
+    "batch23-upstream-bark-unstarted46-reconcile-core-blocks.py": {
+      "sha256": "f88a7d9a116b3f59c924f4076dcb91d5b62c4590a0da4453c326ad253cadc146",
+      "bytes": 1513
+    },
+    "batch50-backend-actor-quiescence.json": {
+      "sha256": "99f0ea7047f59fd577738598016e958b51db26d99854bad873c929180c1b8689",
+      "bytes": 5032
+    },
+    "batch50-public-Core-reconciliation-client.json": {
+      "sha256": "e1c93447f3a1ade414f82a6682d2c75d54a4914b9487f37b655645974c53e51e",
+      "bytes": 18681
+    },
+    "batch50-public-Core-reconciliation-client.md": {
+      "sha256": "297d23dac48fd0fb09416e60665f3cc034ccb40a0cbc168f9eb3021765cfb1b5",
+      "bytes": 2379
+    },
+    "batch50-public-Core-reconciliation-client.py": {
+      "sha256": "4f1f47975373f7c09651f9cbdcb0b8d8c736759019c0289e0862f0c28a5b667e",
+      "bytes": 12474
+    },
+    "offboard-reply-restore-public-receipt.json": {
+      "sha256": "c95ecfb02608b3e14f606e5537711be57a267cf955e00e689f505e6741cae441",
+      "bytes": 2058
+    },
+    "public-input-hash-provenance.json": {
+      "sha256": "7c1ff24c67bd6463b52a834a3e8a542853f95eee0e34742db1a91092a29218c7",
+      "bytes": 4224
+    },
+    "tiny-group-public-receipt.json": {
+      "sha256": "9dc79beec10efbc03e3793c9f62436b767421df36b2e41c716c553e6d436e8a7",
+      "bytes": 4547
+    }
+  },
+  "byte_exact_inputs": {
+    "tiny-group-public-receipt.json": {
+      "source_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case01/test-data/server/qualification_tiny_payout_grouping/tiny-group-public-receipt.json",
+      "sha256": "9dc79beec10efbc03e3793c9f62436b767421df36b2e41c716c553e6d436e8a7"
+    },
+    "offboard-reply-restore-public-receipt.json": {
+      "source_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch50-H30-ML125-v17/case02/test-data/server/qualification_offboard_reply_restore/offboard-reply-restore-public-receipt.json",
+      "sha256": "c95ecfb02608b3e14f606e5537711be57a267cf955e00e689f505e6741cae441"
+    },
+    "batch50-public-Core-reconciliation-client.json": {
+      "source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch50-public-Core-reconciliation-client.json",
+      "sha256": "e1c93447f3a1ade414f82a6682d2c75d54a4914b9487f37b655645974c53e51e"
+    },
+    "batch50-public-Core-reconciliation-client.md": {
+      "source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch50-public-Core-reconciliation-client.md",
+      "sha256": "297d23dac48fd0fb09416e60665f3cc034ccb40a0cbc168f9eb3021765cfb1b5"
+    },
+    "batch50-public-Core-reconciliation-client.py": {
+      "source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch50-public-Core-reconciliation-client.py",
+      "sha256": "4f1f47975373f7c09651f9cbdcb0b8d8c736759019c0289e0862f0c28a5b667e"
+    },
+    "batch50-backend-actor-quiescence.json": {
+      "source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch50-backend-actor-quiescence.json",
+      "sha256": "99f0ea7047f59fd577738598016e958b51db26d99854bad873c929180c1b8689"
+    }
+  },
+  "scope": "Actual batch50 bounded public financial audit only; source19 and rolling current global reports excluded",
+  "exclusions": "No largeblocks/testdata/privatewallet/PG/config/backup/journal/logs/seed/privateprotection; no new source/module/Git/global/native change",
+  "static_scan": {
+    "files": 9,
+    "valid_BIP39": 0,
+    "valid_WIF": 0,
+    "strong_credentials": 0,
+    "limit": "Full exported public texts, bounded static checksum/pattern checks, not universal secret absence"
+  },
+  "script_validation": "Audit parser AST + pure helper AST/no top-level entrypoint actions; three function ASTs equal original decoder; neither script executed for export",
+  "global_counts_or_runtime_credit_added": false
+}

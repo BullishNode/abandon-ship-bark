@@ -1,0 +1,169 @@
+--- a/testing/tests/server/qualification_dust_later_receipt.rs
++++ b/testing/tests/server/qualification_dust_later_receipt.rs
+@@ -9,6 +9,7 @@
+ use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
+ use ark::vtxo::Full;
+ use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
++use ark_testing::daemon::captaind::WalletAdminClient;
+ use bark::{FallbackDisposition, FallbackEntitlement, FallbackPayoutStage, Wallet};
+ use bark::movement::{Movement, MovementStatus, PaymentMethod};
+ use bark::vtxo::VtxoState;
+@@ -19,7 +20,7 @@
+ use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
+ use serde_json::json;
+ use server::database::Db;
+-use server_rpc::{protos, WalletAdminClient};
++use server_rpc::protos;
+ 
+ fn fields(balance: &bark::Balance) -> [Amount; 10] {
+ 	[balance.spendable, balance.needs_refresh, balance.pending_lightning_send,
+@@ -87,6 +88,7 @@
+ 	outputs: BTreeMap<VtxoId, Option<OutPoint>>,
+ 	hashes: BTreeMap<Txid, BlockHash>,
+ 	heights: BTreeMap<Txid, bitcoin_ext::BlockHeight>,
++	packages: Vec<serde_json::Value>,
+ }
+ 
+ /// Use the production cosign, signed-chain registration and mailbox paths.
+@@ -189,7 +191,7 @@
+ 	ctx.generate_blocks(6).await;
+ 	rebuilt(ctx, srv, db).await;
+ 	let mut result = Epoch { parents: BTreeMap::new(), children: BTreeMap::new(),
+-		allocations: BTreeMap::new(), outputs: BTreeMap::new(), hashes: BTreeMap::new(), heights: BTreeMap::new() };
++		allocations: BTreeMap::new(), outputs: BTreeMap::new(), hashes: BTreeMap::new(), heights: BTreeMap::new(), packages: Vec::new() };
+ 	for row in rows {
+ 		let id = row.get::<_, &str>("vtxo_id").parse::<VtxoId>().unwrap();
+ 		let leaf = leaves.iter().find(|leaf| leaf.coin.id() == id).unwrap();
+@@ -270,6 +272,9 @@
+ 		assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(), *child);
+ 		assert_eq!(stored.get::<_, i64>("fee_sat"), fee.to_sat() as i64);
+ 		assert_eq!(stored.get::<_, String>("confirmed_hash"), hash.to_string());
++		result.packages.push(json!({"parent_txid": txid, "child_txid": child.compute_txid(),
++			"canonical_hash": hash, "canonical_height": result.heights[txid].to_u32(),
++			"parent_miner_fee_sat": 0, "actual_child_miner_fee_sat": fee.to_sat()}));
+ 		result.children.insert(child.compute_txid(), child.clone());
+ 	}
+ 	assert!(ctx.bitcoind().get_block_count().await - start <= 128);
+@@ -364,8 +369,18 @@
+ 	let mut spent = BTreeSet::new();
+ 	let mut all_points = cut.keys().copied().collect::<BTreeSet<_>>();
+ 	let mut fees = Amount::ZERO;
++	let mut canonical_payees = expected_payees.iter().map(|(script, _)|
++		(script.clone(), Vec::<(OutPoint, TxOut)>::new())).collect::<BTreeMap<_, _>>();
++	assert_eq!(canonical_payees.len(), expected_payees.len());
+ 	for height in scan_height + 1..=core.get_block_count().unwrap() {
+ 		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
++			// The selected cut alone cannot exclude an extra payment funded
++			// from elsewhere. Observe every canonical transaction first.
++			for (vout, output) in tx.output.iter().enumerate() {
++				if let Some(found) = canonical_payees.get_mut(&output.script_pubkey) {
++					found.push((OutPoint::new(tx.compute_txid(), vout as u32), output.clone()));
++				}
++			}
+ 			if !tx.input.iter().any(|input| cut.contains_key(&input.previous_output)) { continue; }
+ 			let mut amount = Amount::ZERO;
+ 			for input in &tx.input {
+@@ -395,6 +410,12 @@
+ 			assert_eq!(outputs[0].1.value, sat(*value));
+ 			assert!(cut.contains_key(&outputs[0].0));
+ 		} else { assert!(outputs.is_empty(), "a forfeited or transferred source cannot obtain a payout"); }
++		let global = &canonical_payees[script];
++		assert_eq!(global.len(), outputs.len(), "whole-chain payee outputs must equal the selected economic cut");
++		if !global.is_empty() {
++			assert_eq!(global[0].0, outputs[0].0);
++			assert_eq!(&global[0].1, outputs[0].1);
++		}
+ 	}
+ 	let operator = {
+ 		let config = srv.watchmand().config();
+@@ -433,6 +454,17 @@
+ 	assert_eq!(rows.len(), expected_ids.len());
+ 	assert_eq!(rows.iter().map(|row| row.get::<_, &str>("vtxo_id").parse::<VtxoId>().unwrap()).collect::<BTreeSet<_>>(), *expected_ids);
+ 	json!({"selected_input_sat": initial.to_sat(), "remaining_sat": retained.to_sat(), "actual_graph_miner_fee_sat": fees.to_sat(),
++		"roots": roots.iter().map(|(point, output)| json!({"outpoint": point, "amount_sat": output.value.to_sat(),
++			"script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
++		"sponsors": sponsors.iter().map(|(point, output)| json!({"outpoint": point, "amount_sat": output.value.to_sat(),
++			"script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
++		"expected_payees": expected_payees.iter().map(|(script, amount)| json!({"script": script.as_bytes().to_lower_hex_string(),
++			"expected_amount_sat": amount})).collect::<Vec<_>>(),
++		"canonical_packages": epochs.iter().flat_map(|epoch| epoch.packages.iter()).collect::<Vec<_>>(),
++		"canonical_payee_outputs": canonical_payees.iter().flat_map(|(script, outputs)| outputs.iter().map(move |(point, output)|
++			json!({"outpoint": point, "amount_sat": output.value.to_sat(), "script": script.as_bytes().to_lower_hex_string()}))).collect::<Vec<_>>(),
++		"terminal_utxos": cut.iter().filter(|(_, output)| output.value > Amount::ZERO).map(|(point, output)|
++			json!({"outpoint": point, "amount_sat": output.value.to_sat(), "script": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>(),
+ 		"graph_txids": graph.keys().map(ToString::to_string).collect::<Vec<_>>(),
+ 		"all_graph_outpoints": all_points.iter().map(ToString::to_string).collect::<Vec<_>>(),
+ 		"operator_configured_script": operator.as_bytes().to_lower_hex_string(), "confirmed_watch_owned_terminal_points": needed_watch})
+@@ -473,6 +505,11 @@
+ 	assert!(sat(1_200) > sat(1_000) && sat(200) > Amount::ZERO && sat(200) < binding.spk.minimal_non_dust());
+ 	let first_board = ctx.bitcoind().await_transaction(source.chain_anchor().txid).await;
+ 	source.validate(&first_board).unwrap();
++	for input in &first_board.input {
++		let funding = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
++		assert!(funding.output.iter().all(|output| output.script_pubkey != binding.spk && output.script_pubkey != donor_binding.spk),
++			"ordinary funding addresses must differ from the fresh registered fallback scripts");
++	}
+ 	let first_ordinary = donor_cli.onchain_utxos().await.into_iter().map(|coin| (coin.outpoint, coin.amount)).collect::<BTreeMap<_, _>>();
+ 	assert!(!first_ordinary.is_empty());
+ 	assert!(first_ordinary.keys().all(|point| point.txid == source.chain_anchor().txid && *point != source.chain_anchor()));
+@@ -482,6 +519,7 @@
+ 	assert_eq!(leaves.len(), 2);
+ 	let old = ExpectedLeaf { coin: leaves[0].clone(), mailbox: recipient.mailbox_identifier(),
+ 		script: binding.spk.clone(), fee: 0, payout: 0, forfeited: 1_200 };
++	let first_donor_mailbox = donor.mailbox_identifier();
+ 	let change = ExpectedLeaf { coin: leaves[1].clone(), mailbox: donor.mailbox_identifier(),
+ 		script: donor_binding.spk.clone(), fee: 1_000, payout: 97_800, forfeited: 0 };
+ 	balances(&recipient, sat(1_200)).await;
+@@ -523,7 +561,14 @@
+ 	assert_eq!(first_cut["selected_input_sat"], 500_000);
+ 	let mut public = json!({"phase": "FIRST_DUST_CORE_CONFIRMED_SDK_PENDING", "overall_pass": false,
+ 		"first_cut": first_cut, "old_vtxo_id": old.coin.id(), "old_gross_sat": 1_200,
+-		"old_fee_sat": 0, "old_payout_sat": 0, "old_forfeited_sat": 1_200});
++		"old_fee_sat": 0, "old_payout_sat": 0, "old_forfeited_sat": 1_200,
++		"recipient_mailbox": old.mailbox.as_pubkey().to_string(), "registered_recipient_script": binding.spk.as_bytes().to_lower_hex_string(),
++		"old_user_pubkey": old.coin.user_pubkey().to_string(), "old_chain_anchor": old.coin.chain_anchor(),
++		"old_expiry_height": old.coin.expiry_height().to_u32(), "old_allocation_id": first.allocations[&old.coin.id()],
++		"server_pubkey": old.coin.server_pubkey().to_string(), "first_donor_mailbox": first_donor_mailbox.as_pubkey().to_string(),
++		"first_donor_registered_script": donor_binding.spk.as_bytes().to_lower_hex_string(),
++		"first_donor_change_vtxo_id": change_id, "first_donor_change_user_pubkey": leaves[1].user_pubkey().to_string(),
++		"first_core_tip_height": core.get_block_count().unwrap(), "first_core_tip_hash": core.get_best_block_hash().unwrap()});
+ 	let path = ctx.datadir.join("dust-later-public-receipt.json");
+ 	tokio::fs::write(&path, serde_json::to_vec_pretty(&public).unwrap()).await.unwrap();
+ 	let returned = recipient_cli.client().await;
+@@ -558,6 +603,7 @@
+ 	assert_eq!(later_source.amount(), sat(100_000));
+ 	assert_ne!(later_source.chain_anchor(), source.chain_anchor());
+ 	assert!(later_source.expiry_height() > source.expiry_height());
++	let later_mailbox = later.mailbox_identifier();
+ 	let later_binding = later.fallback_destination().await.unwrap();
+ 	later_binding.verify(Network::Regtest, later.mailbox_identifier().as_pubkey()).unwrap();
+ 	let actual_later = db.read(async |tx| tx.get_fallback(later.mailbox_identifier().as_pubkey()).await).await.unwrap().unwrap();
+@@ -570,6 +616,9 @@
+ 	for input in &second_board.input {
+ 		assert!(!forbidden.contains(&input.previous_output));
+ 		let funding = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
++		assert!(funding.output.iter().all(|output| output.script_pubkey != binding.spk
++			&& output.script_pubkey != donor_binding.spk && output.script_pubkey != later_binding.spk),
++			"later ordinary funding must not create an apparent fallback payment");
+ 		assert!(funding.input.iter().all(|input| !forbidden.contains(&input.previous_output)),
+ 			"later source funding must not recycle first-cut operator/customer/watch returns");
+ 	}
+@@ -603,6 +652,18 @@
+ 	public["phase"] = json!("BOTH_EPOCHS_CORE_CONFIRMED_FINAL_HISTORY_PENDING");
+ 	public["final_cut"] = final_cut;
+ 	public["new_vtxo_id"] = json!(new.coin.id());
++	public["new_user_pubkey"] = json!(new.coin.user_pubkey().to_string());
++	public["new_owner_mailbox"] = json!(new.mailbox.as_pubkey().to_string());
++	public["new_registered_script"] = json!(new.script.as_bytes().to_lower_hex_string());
++	public["new_chain_anchor"] = json!(new.coin.chain_anchor());
++	public["new_expiry_height"] = json!(new.coin.expiry_height().to_u32());
++	public["new_allocation_id"] = json!(second.allocations[&new.coin.id()]);
++	public["new_gross_sat"] = json!(new.coin.amount().to_sat());
++	public["new_fee_sat"] = json!(new.fee);
++	public["new_forfeited_sat"] = json!(new.forfeited);
++	public["later_donor_mailbox"] = json!(later_mailbox.as_pubkey().to_string());
++	public["later_core_tip_height"] = json!(core.get_block_count().unwrap());
++	public["later_core_tip_hash"] = json!(core.get_best_block_hash().unwrap());
+ 	public["later_payout_sat"] = json!(99_000);
+ 	public["outside_cut_board_miner_fees_sat"] = json!([first_board_fee.to_sat(), later_board_fee.to_sat()]);
+ 	public["outside_cut_ordinary_change_sat"] = json!([first_ordinary.values().copied().sum::<Amount>().to_sat(), later_ordinary.values().copied().sum::<Amount>().to_sat()]);

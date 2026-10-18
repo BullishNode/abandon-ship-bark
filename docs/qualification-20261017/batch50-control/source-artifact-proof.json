@@ -1,0 +1,381 @@
+{
+  "kind": "V17_H30_ML125_PURE_HOST_SOURCE_ARTIFACT_PROOF_BACKEND",
+  "state": "PASS_PURE_HOST_BINDINGS_CONTAINER_FRESH_GATES_AND_NATIVE_UNPERFORMED",
+  "created_utc": "2026-10-18T09:19:57.023031+00:00",
+  "allocation_path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/H30-ML125-v17-two-native-allocation-20261018.json",
+  "allocation_sha256": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
+  "source_manifest_sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+  "source_archive_sha256": "80f8e78953d3ca7ac14200bfe312c22987ca3071fbebaaed3f89bfa31c3bcdf0",
+  "bundle_manifest_sha256": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76",
+  "immutable_metadata_sha256": "8393bd7182e1119554b31f40e840937adf61e51181f3280ee22d5c2256d008a2",
+  "runtime_metadata_sha256": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab",
+  "source_entry_verification": {
+    "archive_entries": 2186,
+    "all_manifest_names_equal_archive": true,
+    "regular_entries": 2185,
+    "symlink_entries": [
+      {
+        "path": "AGENTS.md",
+        "link_target": "CLAUDE.md",
+        "resolved_archived_content_sha256": "5f3a81a5f9592ecc2a71e275682a3a6a4a97e554632d4a08f1dccd6ebea439ee",
+        "target_text_sha256": "6ebdb617a8104a7756d0cf36578ab01103dc9f07e4dc6feb751296b9c402faf7",
+        "manifest_hash_semantics": "captured source verifier hashes resolved file bytes, not link target text"
+      }
+    ],
+    "all_manifest_resolved_content_hashes_match": true,
+    "archive_not_extracted_to_filesystem": true
+  },
+  "source_identity": {
+    "captured_HEAD": "d2fae7db778096ff940e3861ca575d0b7bcddb56",
+    "dirty": true,
+    "actual_diff_sha256": "fc07b8f8b32cafed4741cb744c76c6b559d3a0cd1bf4054fc3fca9ba26a3efa5",
+    "published_source_commits_as_recorded": [
+      "cdc196c00",
+      "d5432698b",
+      "57f59bf3b"
+    ],
+    "actual_product_label_as_recorded": "d2fae7db778096ff940e3861ca575d0b7bcddb56",
+    "warning": "GIT labeld2fa is not clean source equivalence to published57f59. Full dirtysource5d50/archive80f8/difffc07 and bytes are authoritative."
+  },
+  "reviewed_case_sources": [
+    {
+      "selector": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+      "path": "testing/tests/server/qualification_tiny_payout_grouping.rs",
+      "source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+      "matches_own_reviewed_source": true
+    },
+    {
+      "selector": "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge",
+      "path": "testing/tests/server/qualification_offboard_reply_restore.rs",
+      "source_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+      "matches_own_reviewed_source": true
+    }
+  ],
+  "explicit_root_module_bindings": [
+    "mod qualification_tiny_payout_grouping;",
+    "mod qualification_offboard_reply_restore;"
+  ],
+  "classifier": {
+    "path": "server/src/database/expiry_details.rs",
+    "sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+    "actual_joined_output_rule_verified": true,
+    "old_individual_payout_classifier_absent": true
+  },
+  "host_products_verified_without_execution": {
+    "captaind": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/captaind",
+      "sha256": "bb6c4d6c54bca6e833c6bcf07b6da9053e976c6aba720621b35761dd8fddfe46",
+      "ELF_magic_verified_without_execution": true,
+      "declared_actual_version": "captaind 0.7.1-dev+d2fae7db778096ff940e3861ca575d0b7bcddb56",
+      "version_command_executed_by_reviewer": false
+    },
+    "watchmand": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/watchmand",
+      "sha256": "bbee136d1f5062d07b37199caefabb39d95922a1e52dd103bf255ad61db44ede",
+      "ELF_magic_verified_without_execution": true,
+      "declared_actual_version": "watchmand 0.7.1-dev+d2fae7db778096ff940e3861ca575d0b7bcddb56",
+      "version_command_executed_by_reviewer": false
+    },
+    "bark": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/bark",
+      "sha256": "bfbe65a2a61d15b31e33623a36fddb603acb69cf8a44abd9a7a2e4cf681d1d4a",
+      "ELF_magic_verified_without_execution": true,
+      "declared_actual_version": "bark 0.7.1-dev (d2fae7db778096ff940e3861ca575d0b7bcddb56)",
+      "version_command_executed_by_reviewer": false
+    },
+    "barkd": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/barkd",
+      "sha256": "e9ff58d1c5b50867187cd99bdbe07bbe5ec3ea49e2111fa9815b6ccd0af4a1fe",
+      "ELF_magic_verified_without_execution": true,
+      "declared_actual_version": "barkd 0.7.1-dev (d2fae7db778096ff940e3861ca575d0b7bcddb56)",
+      "version_command_executed_by_reviewer": false
+    },
+    "ark-testing::server": {
+      "host_path": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/native-server",
+      "sha256": "780dde6b31eb639ccd5680800d5ab7e40585702e9ec8a0381e8c7468d3135ba6",
+      "ELF_magic_verified_without_execution": true,
+      "declared_actual_version": null,
+      "version_command_executed_by_reviewer": false
+    }
+  },
+  "metadata": {
+    "only_binary": "ark-testing::server",
+    "binary_count": 1,
+    "package_id": "path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0",
+    "binary_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/native-server",
+    "same_binary_mapping_in_immutable_and_runtime": true,
+    "runtime_changes_only_3_support_paths": [
+      {
+        "path": [
+          "rust-build-meta",
+          "non-test-binaries",
+          "path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1",
+          0,
+          "path"
+        ],
+        "immutable": "debug/deps/libark.rlib",
+        "runtime": "../runtime-reserved-partial-v17-20261018/support/debug/deps/libark.rlib"
+      },
+      {
+        "path": [
+          "rust-build-meta",
+          "non-test-binaries",
+          "path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1",
+          1,
+          "path"
+        ],
+        "immutable": "debug/deps/libark.so",
+        "runtime": "../runtime-reserved-partial-v17-20261018/support/debug/deps/libark.so"
+      },
+      {
+        "path": [
+          "rust-build-meta",
+          "non-test-binaries",
+          "path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0",
+          0,
+          "path"
+        ],
+        "immutable": "debug/lock-holder",
+        "runtime": "../runtime-reserved-partial-v17-20261018/support/debug/lock-holder"
+      }
+    ],
+    "target_buildplatform_unchanged": true,
+    "fresh_singleton_listing_executed": false
+  },
+  "support_capture_sha256": "b8784fa7586447be2eec30990053380d53edcff638abdc87385db17d30c0c039",
+  "support_host_bytes_verified": {
+    "debug/deps/libark.rlib": {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.rlib",
+      "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+    },
+    "debug/deps/libark.so": {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.so",
+      "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+    },
+    "debug/lock-holder": {
+      "path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/lock-holder",
+      "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+    }
+  },
+  "primary_pinlist": {
+    "path": "/home/francis/.cache/abandon-fresh/root-reserved-partial-v17-20261018/runtime-pins.sha256",
+    "sha256": "1e593d4b826fb91e3f27376d9d37bc8de0c6a54eaa353e8052e047a3198f92a9",
+    "declared_count": 14,
+    "host_bundle_counterparts_verified_count": 11,
+    "host_bundle_counterparts": [
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/captaind",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/captaind",
+        "sha256": "bb6c4d6c54bca6e833c6bcf07b6da9053e976c6aba720621b35761dd8fddfe46"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/watchmand",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/watchmand",
+        "sha256": "bbee136d1f5062d07b37199caefabb39d95922a1e52dd103bf255ad61db44ede"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/bark",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/bark",
+        "sha256": "bfbe65a2a61d15b31e33623a36fddb603acb69cf8a44abd9a7a2e4cf681d1d4a"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/barkd",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/barkd",
+        "sha256": "e9ff58d1c5b50867187cd99bdbe07bbe5ec3ea49e2111fa9815b6ccd0af4a1fe"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/native-server",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/native-server",
+        "sha256": "780dde6b31eb639ccd5680800d5ab7e40585702e9ec8a0381e8c7468d3135ba6"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/nextest-binaries-runtime.json",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/nextest-binaries-runtime.json",
+        "sha256": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/source-manifest.json",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/source-manifest.json",
+        "sha256": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/manifest.json",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/manifest.json",
+        "sha256": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.rlib",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.rlib",
+        "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.so",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.so",
+        "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-reserved-partial-v17-20261018/support/debug/lock-holder",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/support/debug/lock-holder",
+        "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      }
+    ],
+    "actual_container_3_CLN_bytes_not_verified": [
+      {
+        "runtime_path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "declared_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "actual_container_bytes_verified": false
+      },
+      {
+        "runtime_path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "declared_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "actual_container_bytes_verified": false
+      },
+      {
+        "runtime_path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "declared_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "actual_container_bytes_verified": false
+      }
+    ],
+    "warning": "Neither fixture instantiatesCLN.14pin declaration is not14 actualcontainer rehashes; parent freshgate must verify all actual paths. No Nix/container/product execution by reviewer."
+  },
+  "root_build_receipts_as_recorded": {
+    "checks": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "checks"
+      ],
+      "started_at": "2026-10-18T08:49:14.585438+00:00",
+      "exit_code": 0,
+      "seconds": 99.259,
+      "ended_at": "2026-10-18T08:50:53.844749+00:00"
+    },
+    "units": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/runtime-reserved-partial-v17-20261018",
+        "unit",
+        "--test-threads 4"
+      ],
+      "started_at": "2026-10-18T08:50:54.106016+00:00",
+      "exit_code": 0,
+      "seconds": 141.622,
+      "ended_at": "2026-10-18T08:53:15.727756+00:00"
+    },
+    "products": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "bark-server",
+        "--bin",
+        "captaind",
+        "--bin",
+        "watchmand",
+        "--package",
+        "bark-cli",
+        "--bin",
+        "bark",
+        "--bin",
+        "barkd",
+        "--features",
+        "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui"
+      ],
+      "started_at": "2026-10-18T08:53:15.998076+00:00",
+      "exit_code": 0,
+      "seconds": 113.176,
+      "ended_at": "2026-10-18T08:55:09.174453+00:00"
+    },
+    "metadata": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "nextest",
+        "list",
+        "--package",
+        "ark-testing",
+        "--test",
+        "server",
+        "--features",
+        "ark-testing/fallback-test-bip84",
+        "--list-type",
+        "binaries-only",
+        "--message-format",
+        "json"
+      ],
+      "started_at": "2026-10-18T08:55:10.137221+00:00",
+      "exit_code": 0,
+      "seconds": 206.277,
+      "ended_at": "2026-10-18T08:58:36.414203+00:00"
+    }
+  },
+  "source_phase_receipt_hashes": {
+    "source-verification-before-checks.json": "d70766e589721d053de8c357a2c15c9a9d4437b2865e0a1fd124d0973c3e42a6",
+    "source-verification-after-checks.json": "bfd655963cf8b6f7e756bc536656775dcdf4c959bb04f926fee03cdd9f56a063",
+    "source-verification-after-metadata.json": "6bcf384ce162c6e7d5ff8bd7d216bcad7b51491db261a290d51106d256569766",
+    "source-verification-after-products.json": "7f022d72a4dc75ef93cd137a3339433f072e3d1d7c6bd6d1bd4f9e28b7702307",
+    "source-verification-after-units.json": "b737117695247a820827afa727ed2f8b9b82405adf32da04a46ad2d6ea36ab73",
+    "source-verification-before-products.json": "52c80c8846fa98fba173be89ef0bc24e8e3fc12f359d51c813abe550d3a5d855",
+    "source-verification-final-capture.json": "60cbed58c1c3ab997536820f135c117d5b9e6fce8690db52220d508a4832233b",
+    "source-verification-before-units.json": "f27d663b24c0ddcedb8cdfe32e07731880aba1bc14900226ca150a919e34a28c",
+    "source-verification-before-metadata.json": "633edeadce3b2cdcfe1d08d2a585743c8e11eb814fae7a7e861ee87ee50c1cdc"
+  },
+  "source_bindings_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v17-H30-ML125-source-bindings-backend.json",
+  "source_bindings_sha256": "f88bed2f1bd45f9aec8f2a42732573003d85678d8c0ee01a3e78e8adafee3db8",
+  "full_source_files_bound": 31,
+  "exact_case_function_regions": 2,
+  "local_helper_and_implementation_regions": 15,
+  "API_function_regions": 16,
+  "API_region_missing_names": [
+    {
+      "file": "bark/src/actions/offboard.rs",
+      "function": "progress"
+    }
+  ],
+  "native_allocation_limits": {
+    "serial": 1,
+    "max_global_native": 2,
+    "timeout_seconds_per_case": 180,
+    "retries": 0,
+    "first_fail_stop": true,
+    "native_case_limit": 2,
+    "profile": "default",
+    "test_binary": "ark-testing::server",
+    "root_other_lane": "original94859 terminal; bounded copiedPG diagnostic sourceowner may run, no rootnative concurrent now"
+  },
+  "original_root_partial_failure_preserved": "94859 TERMINAL1 firstpartialTIMEOUT180.019; these2NOTRUN, no unmodified failed selector retry",
+  "native_status_for_allocated_two": "NOT RUN by reviewer; no result credit or prior source-only ACK transfers native PASS. Parentsole freshgates and launch.",
+  "independent_proof_limits": [
+    "Pure host bytes/archive/JSON/source inspection only; no Nix/product/version/helper/controller/list/preflight/process/resource/native/Cargo/Git action.",
+    "BuildPASS statuses and actual version strings are pinned root receipts, not rerun independently. Product/ELF hashes and metadata bindings independently verified.",
+    "No artifact/native result from the older C4metadata is applied: this V17metadata has exactly one server binary.",
+    "No raw rootpartial logs/actors/data or financial DB/wallet/config/seed contents read. Rootpartial TIMEOUT180.019 remains unchanged.",
+    "No H32/module registration, product/source/control edits or globalreport/count/ML/production credit."
+  ],
+  "all_host_inputs_after_proof_sha256": {
+    "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/H30-ML125-v17-two-native-allocation-20261018.json": "423005848035ba599187a35a83fd342b523cddde52b2b1a088c0173824f96185",
+    "/home/francis/.cache/abandon-fresh/root-reserved-partial-v17-20261018/runtime-pins.sha256": "1e593d4b826fb91e3f27376d9d37bc8de0c6a54eaa353e8052e047a3198f92a9",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/source-manifest.json": "5d50a0f4dfd7a2fd61257363e5b29b013b6cdf48fdbb048f527e9f93f3fd178b",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/source.tar.gz": "80f8e78953d3ca7ac14200bfe312c22987ca3071fbebaaed3f89bfa31c3bcdf0",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/manifest.json": "6f67b30beaad60a4acc82eff01859a58abbe4e4d95f8caec53c5514842b8ae76",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/nextest-binaries-immutable.json": "8393bd7182e1119554b31f40e840937adf61e51181f3280ee22d5c2256d008a2",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/nextest-binaries-runtime.json": "7823dcb1df1974331f5e332930aec782f54fada1d0f21ae73130c374d3c6c6ab",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/source.patch": "fc07b8f8b32cafed4741cb744c76c6b559d3a0cd1bf4054fc3fca9ba26a3efa5",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/support-capture.json": "b8784fa7586447be2eec30990053380d53edcff638abdc87385db17d30c0c039",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/products-capture.json": "05f9dbb7ffce4b376c206f30ff79e05a95cc82e6461a58e9fadc53e64c82849c",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/build-phases.json": "6c727632016db4b8020a570ea598def7b3b385a5c62fde02a216612d39af16d1",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/web-dist-manifest.json": "51c1f05e4c64bfe62f4edb31bee514da53f7e2f5fb7ec94546266500ebb865e5",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/captaind": "bb6c4d6c54bca6e833c6bcf07b6da9053e976c6aba720621b35761dd8fddfe46",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/watchmand": "bbee136d1f5062d07b37199caefabb39d95922a1e52dd103bf255ad61db44ede",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/bark": "bfbe65a2a61d15b31e33623a36fddb603acb69cf8a44abd9a7a2e4cf681d1d4a",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/barkd": "e9ff58d1c5b50867187cd99bdbe07bbe5ec3ea49e2111fa9815b6ccd0af4a1fe",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/native-server": "780dde6b31eb639ccd5680800d5ab7e40585702e9ec8a0381e8c7468d3135ba6",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.rlib": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/support/debug/deps/libark.so": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+    "/home/francis/.cache/abandon-fresh/runtime-reserved-partial-v17-20261018/support/debug/lock-holder": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+  }
+}

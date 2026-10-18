@@ -1,0 +1,30 @@
+{
+  "state": "SOURCE_ONLY_SAFE_EXPORT_FROZEN_NOT_STAGED",
+  "directory": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint23-source-proposed-safe",
+  "manifest_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint23-source-proposed-safe/publication-checkpoint23-source-files.json",
+  "manifest_sha256": "508cf0ccb1751b39f4fcd0af436f119253a59a9012b1f26b6b6749f3b1e0d5f7",
+  "payload_count": 16,
+  "total_files_with_manifest": 17,
+  "payload_byte_exact_copies": 15,
+  "new_context_notes": 1,
+  "current_source_sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+  "source_runtime_status": "UNREGISTERED_UNCOMPILED_NOT_RUN",
+  "protected_testing_Rust_count": 152,
+  "protected_testing_Rust_hashmap_sha256": "4d01a957d34b48c93c30b314b524b7e8de7912f8078d9070f56c44bfb1ab72e5",
+  "all_152_bytes_unchanged": true,
+  "worktree_HEAD_before_after": "bae867b649a043fa9d8111678201245ca3c2ab1a",
+  "worktree_index_sha256_before_after": "b3bd8a2d3352f33987986ebfe6948d672898e0476c356c376c3bb5238e98a176",
+  "staged_paths": 0,
+  "worktree_status_unchanged": true,
+  "secret_screen": {
+    "inputs": 18,
+    "valid_English_BIP39_checksum": 0,
+    "valid_WIF_checksum": 0,
+    "strong_private_or_credential_patterns": 0,
+    "public_wordlist_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693",
+    "limit": "Bounded static checksum/pattern screen, not universal secret absence",
+    "includes_final_manifest": true
+  },
+  "excluded": "No Rust filecopy/privateprotection snapshots/runtime/backup/log/seed/keys/PG/wallet/globalstatus/coverage/findings; no batch50 native or current counts",
+  "publication": "Parent newbranch+finalpeer+quiescence only; not authorized/executed by this export"
+}

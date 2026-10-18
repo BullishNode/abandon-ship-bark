@@ -1,0 +1,28 @@
+{
+  "state": "SOURCE_V2_PARENT_ACK_UNREGISTERED_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T09:39:46.343080+00:00",
+  "case": "H32",
+  "source_path": "testing/tests/server/qualification_dust_later_receipt.rs",
+  "source_sha256": "67aa2a84cb7f3aa5192fea5b12c8c4738796097f869f40ed16489e586a45f524",
+  "source_lines": 709,
+  "expected_selector": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+  "source_only_ownership": "H32-source-ownership-parent.json",
+  "packet_sha256": {
+    "H32-dust-later-receipt-v2.patch": "842fa69d143952fd52bda6bcb3d58d3accadfef4cb220e0ed53980355d0710ab",
+    "H32-dust-later-receipt-v2-delta.patch": "8816af6c4238b925c6e4a5915d53a2e38dafb1f67d116f3a6637998dc31569ee",
+    "H32-dust-later-receipt-v2.json": "2df1356f5f7e8c9aaee35d5fbb32d6f59c7578799e3d5f107d3ab5c7aba2b8ff",
+    "H32-dust-later-receipt-v2-peer-review-backend.json": "242ed4d2ce3829beb9b4720dcfa4a767cfb08ed1f8c2fd4a929ef2308f8f0dd6"
+  },
+  "review_basis": "Parent read all648heldv1lines plus exact61-line netv2delta/context. Backendindependentfull/focusedsourceACK242ed. Wholecanonicalmatches collectedbeforecutfilter with exactpoint/value, actualWalletAdminClientalias, labelledpublicroot/sponsor/payee/package/owner/phasebindings.",
+  "preserved_requirements": [
+    "Genuine1200originalDBhydration,200netbelowactualscriptdust;fee0/nooutput/forfeit1200.",
+    "ActualCore6+sameblockchild and successfuloriginalDBSDKBelowDust history beforecreationofnewdonor.",
+    "Newindependentlyfunded100k sameoriginalrecipient/account/script, freshkey/newroot, actual99000+1000;old1200cannotrevive.",
+    "First500k/final600k2root+4sponsoractualDAGcut, no undeclaredinput,defaultcapoperator andlaterfundingancestrydisjointness; ordinarychange/boardminersoutside.",
+    "All10Arkbalances/allknownexitentryemptiness/allsubsystemdebitbaselines/stableoldreceiptandhistory/twosync+reopen idempotence.",
+    "180seconds/retry0/128blocks bounds retained, twoepochsfeasibilityUNMEASURED."
+  ],
+  "v1_status": "033335source/knownwrongimport+underboundpubliccapsule+selected-onlycanonicaloracle preservedhistorically, source-onlyfinding no native/compilerFAIL.",
+  "limitations": "H30positiveonlysource17/18 nowactualV17PASS separate. H32 notincapturedV17/V18 orPR26, no build/list/metadata/native/unique/fullMLcredit. No forged-group/H31matrix/seedbackup/defaultdaemon/globalcustody proof.",
+  "actions": "Source/patch/reportread+thisNEWparentACK only; no source/module/product/runtime/global/Git mutation."
+}

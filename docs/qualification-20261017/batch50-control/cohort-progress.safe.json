@@ -1,0 +1,36 @@
+[
+  {
+    "index": 1,
+    "name": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+    "state": "PASS",
+    "started_at": "2026-10-18T09:28:49.547770+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "expected_binary": "ark-testing::server",
+    "owned_nextest_group": 185773,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "6d405cb5-133f-436c-a550-cd162214e8f3",
+    "test_seconds": 23.972,
+    "wall_seconds": 25.039,
+    "ended_at": "2026-10-18T09:29:14.586761+00:00"
+  },
+  {
+    "index": 2,
+    "name": "qualification_offboard_reply_restore::expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge",
+    "state": "PASS",
+    "started_at": "2026-10-18T09:29:14.591012+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "expected_binary": "ark-testing::server",
+    "owned_nextest_group": 186158,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "e50465f7-c866-4cc5-8182-b6ba8e0bf0db",
+    "test_seconds": 44.444,
+    "wall_seconds": 45.582,
+    "ended_at": "2026-10-18T09:30:00.173477+00:00"
+  }
+]

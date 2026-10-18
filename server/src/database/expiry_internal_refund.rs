@@ -2,12 +2,13 @@
 //! This is not an ownership authorization: the financial commit must consume
 //! every receive grant in the SAME parent as its original incoming backing.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
 use ark::{ProtocolEncoding, ServerVtxo, VtxoId};
 use ark::lightning::PaymentHash;
 use bitcoin::{OutPoint, Transaction};
+use bitcoin::secp256k1::PublicKey;
 use bitcoin_ext::BlockHeight;
 use chrono::{DateTime, Local};
 
@@ -24,12 +25,26 @@ pub(crate) struct InternalRefundGrant {
 	updated_at: DateTime<Local>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ExistingInternalRefund {
+	pub entitlement_id: i64,
+	pub claimant: PublicKey,
+	pub mailbox: PublicKey,
+	pub script: bitcoin::ScriptBuf,
+	pub gross: bitcoin::Amount,
+	/// Every historical physical reservation remains retained. Only this
+	/// exact conditional source's conflicted alternatives may be superseded.
+	pub allocations: BTreeMap<i64, Vec<VtxoId>>,
+}
+
 pub(crate) struct InternalRefundCandidate {
 	pub attempt_id: i64,
 	pub subscription_id: i64,
 	pub payment_hash: PaymentHash,
 	pub view: ExpiryViewToken,
+	/// Entire immutable original funding set; no chain-only omission at replan.
 	pub incoming: Vec<VtxoId>,
+	pub existing: BTreeMap<VtxoId, ExistingInternalRefund>,
 	pub grants: Vec<InternalRefundGrant>,
 }
 
@@ -38,6 +53,28 @@ pub(crate) struct InternalRefundCandidate {
 pub(crate) struct InternalRefundComponent {
 	pub view: ExpiryViewToken,
 	pub members: Vec<InternalRefundCandidate>,
+}
+
+fn check_existing_joint_evidence(
+	evidence: &serde_json::Value, attempt: i64, subscription: i64, hash: PaymentHash, grants: Option<&[VtxoId]>,
+) -> anyhow::Result<()> {
+	ensure!(evidence.get("kind").and_then(serde_json::Value::as_str) == Some("htlc_internal_joint_timeout")
+		&& evidence.get("attempt_id").and_then(serde_json::Value::as_i64) == Some(attempt)
+		&& evidence.get("subscription_id").and_then(serde_json::Value::as_i64) == Some(subscription)
+		&& evidence.get("payment_hash").and_then(serde_json::Value::as_str) == Some(hash.to_string().as_str()),
+		"replan evidence belongs to a different original internal obligation");
+	let required = evidence.get("required_grants").and_then(serde_json::Value::as_array)
+		.context("joint replan lacks its original complete grant membership")?;
+	let ids = required.iter().map(|value| Ok(value.as_str().context("invalid stored joint grant")?.parse::<VtxoId>()?))
+		.collect::<anyhow::Result<Vec<VtxoId>>>()?;
+	let set = ids.iter().copied().collect::<BTreeSet<_>>();
+	ensure!(!ids.is_empty() && set.len() == ids.len(), "joint replan grant membership is empty or repeated");
+	if let Some(actual) = grants {
+		ensure!(actual.len() == set.len() && actual.iter().copied().collect::<BTreeSet<_>>().len() == actual.len()
+			&& actual.iter().all(|id| set.contains(id)),
+			"joint replan changes or drops its original receive dependency");
+	}
+	Ok(())
 }
 
 fn check_connected_roots(members: &[BTreeSet<OutPoint>]) -> anyhow::Result<()> {
@@ -84,6 +121,16 @@ impl InternalRefundComponent {
 		self.members.iter().flat_map(|member| member.incoming.iter().copied()).collect()
 	}
 
+
+	pub(crate) fn existing_source(&self, id: VtxoId) -> Option<&ExistingInternalRefund> {
+		self.members.iter().find_map(|member| member.existing.get(&id))
+	}
+
+	pub(crate) fn superseded_allocations(&self) -> Vec<i64> {
+		self.members.iter().flat_map(|member| member.existing.values())
+			.flat_map(|source| source.allocations.keys().copied()).collect::<BTreeSet<_>>().into_iter().collect()
+	}
+
 	pub(crate) fn grants(&self) -> impl Iterator<Item = &InternalRefundGrant> {
 		self.members.iter().flat_map(|member| &member.grants)
 	}
@@ -108,30 +155,57 @@ impl InternalRefundComponent {
 			.filter(|output| member.incoming.iter().any(|id| output.contains_coin(*id)))
 			.map(|output| output.root().point()).collect()).collect::<Vec<BTreeSet<_>>>();
 		check_connected_roots(&member_roots)?;
+		for member in &self.members {
+			for (source, scope) in &member.existing {
+				let output = incoming.iter().find(|output| output.contains_coin(*source))
+					.context("replan lost an owed source's current path")?;
+				for points in scope.allocations.values() {
+					ensure!(output.excludes_old_refund(*source, points)?,
+						"replan lacks an exclusive original-path input against an old refund");
+				}
+			}
+		}
 		check_parent_inputs(self.view, current,
 			&incoming.iter().map(|output| output.root().point()).collect::<Vec<_>>(), &self.grant_ids(), parent)
 	}
 }
 
+#[cfg(test)]
 fn check_incoming(source: &HtlcVtxo, hash: PaymentHash) -> anyhow::Result<()> {
+	check_incoming_scope(source, hash, false)
+}
+
+fn check_incoming_identity(source: &HtlcVtxo, hash: PaymentHash) -> anyhow::Result<()> {
 	ensure!(source.direction() == HtlcDirection::Incoming && source.htlc.payment_hash == hash,
 		"joint refund original funding has different source metadata");
 	let policy = source.vtxo.vtxo.policy().as_server_htlc_send().context("joint funding is not an actual send contract")?;
 	ensure!(policy.payment_hash == hash && policy.htlc_expiry == source.htlc_expiry(),
 		"joint incoming metadata differs from its signed source policy");
+	Ok(())
+}
+
+fn check_incoming_scope(source: &HtlcVtxo, hash: PaymentHash, own_reservation: bool) -> anyhow::Result<()> {
+	check_incoming_identity(source, hash)?;
 	ensure!(source.htlc.offchain_resolution.is_none() && source.htlc.chain_resolution.is_none()
-		&& source.vtxo.spend_state == SpendState::Spendable && !source.vtxo.decided_for_fallback
+		&& ((source.vtxo.spend_state == SpendState::Spendable && !source.vtxo.decided_for_fallback)
+			|| (own_reservation && source.vtxo.spend_state == SpendState::Spent && source.vtxo.decided_for_fallback))
 		&& source.vtxo.oor_spent_txid.is_none() && source.vtxo.spent_in_round.is_none()
 		&& source.vtxo.offboarded_in.is_none(), "joint incoming source already has another commitment");
 	Ok(())
 }
 
+#[cfg(test)]
 fn check_grant(grant: &HtlcVtxo, hash: PaymentHash, view: ExpiryViewToken) -> anyhow::Result<()> {
+	check_grant_scope(grant, hash, view, false)
+}
+
+fn check_grant_scope(grant: &HtlcVtxo, hash: PaymentHash, view: ExpiryViewToken, own_reservation: bool) -> anyhow::Result<()> {
 	ensure!(grant.direction() == HtlcDirection::Outgoing && grant.htlc.payment_hash == hash,
 		"joint refund contains a different receive grant");
 	ensure!(grant.htlc.offchain_resolution.is_none() && grant.htlc.chain_resolution.is_none(),
 		"joint refund grant is already claimed or returned; an actual dependency bridge is required");
-	ensure!(grant.vtxo.spend_state == SpendState::HtlcRecvUnclaimed && !grant.vtxo.decided_for_fallback
+	ensure!((grant.vtxo.spend_state == SpendState::HtlcRecvUnclaimed
+		|| (own_reservation && grant.vtxo.spend_state == SpendState::Spent)) && !grant.vtxo.decided_for_fallback
 		&& grant.vtxo.oor_spent_txid.is_none() && grant.vtxo.spent_in_round.is_none()
 		&& grant.vtxo.offboarded_in.is_none(), "joint refund grant already has another commitment");
 	let confirmed = grant.vtxo.confirmed_height.context("joint refund grant is not an actual confirmed input")?;
@@ -168,6 +242,7 @@ impl InternalRefundCandidate {
 	fn same_observation(&self, other: &Self) -> bool {
 		self.attempt_id == other.attempt_id && self.subscription_id == other.subscription_id
 			&& self.payment_hash == other.payment_hash && self.incoming == other.incoming
+			&& self.existing == other.existing
 			&& self.grant_ids() == other.grant_ids() && self.grants.iter().zip(&other.grants).all(|(a,b)|
 				a.confirmed == b.confirmed && a.updated_at == b.updated_at && a.vtxo.serialize() == b.vtxo.serialize())
 	}
@@ -175,6 +250,82 @@ impl InternalRefundCandidate {
 }
 
 impl Tx<'_> {
+	async fn internal_refund_terminal_claim(&self, source: VtxoId, view: ExpiryViewToken) -> anyhow::Result<bool> {
+		Ok(self.query_opt("SELECT p.entitlement_id FROM expiry_terminal_claim p \
+			JOIN expiry_entitlement e ON e.id=p.entitlement_id JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
+			JOIN htlc_vtxo h ON h.id=v.id JOIN watchmand_block b ON b.height=p.height AND b.hash=p.hash \
+			WHERE e.vtxo_id=$1 AND p.height<=$2 AND h.direction='incoming' \
+			AND h.chain_resolution='revoked' AND h.chain_resolution_height=p.height \
+			AND v.onchain_spent_height=p.height AND v.onchain_spent_txid=p.txid",
+			&[&source.to_string(), &i64::from(view.captaind.height.min(view.watchmand.height))]).await?.is_some())
+	}
+
+	async fn existing_internal_refund(
+		&self, source: VtxoId, attempt: i64, subscription: i64, hash: PaymentHash,
+	) -> anyhow::Result<Option<ExistingInternalRefund>> {
+		let rows = self.query("SELECT e.id,e.gross_sat,c.gross_sat AS allocated_gross,c.user_pubkey,c.owner_mailbox,c.spk,c.evidence::TEXT,a.id AS allocation_id \
+			FROM expiry_decided_coin d JOIN expiry_entitlement e ON e.id=d.entitlement_id \
+			JOIN expiry_allocation_coin c ON c.entitlement_id=e.id JOIN expiry_allocation a ON a.id=c.allocation_id \
+			WHERE d.vtxo_id=$1 AND a.status='conflicted' AND c.disposition='customer' \
+			AND c.evidence->>'kind'='htlc_internal_joint_timeout' \
+			AND NOT EXISTS(SELECT 1 FROM expiry_terminal_claim p WHERE p.entitlement_id=e.id) \
+			AND NOT EXISTS(SELECT 1 FROM expiry_allocation_coin other JOIN expiry_allocation payment ON payment.id=other.allocation_id \
+				WHERE other.entitlement_id=e.id AND (other.paying_txid IS NOT NULL OR payment.status='confirmed' \
+				OR (other.active AND payment.status<>'conflicted'))) ORDER BY a.id", &[&source.to_string()]).await?;
+		let Some(first) = rows.first() else { return Ok(None); };
+		let mut scope = ExistingInternalRefund { entitlement_id: first.get("id"),
+			claimant: first.get::<_, &str>("user_pubkey").parse()?, mailbox: first.get::<_, &str>("owner_mailbox").parse()?,
+			script: bitcoin::ScriptBuf::from_hex(first.get("spk"))?,
+			gross: bitcoin::Amount::from_sat(u64::try_from(first.get::<_, i64>("gross_sat"))?), allocations: BTreeMap::new() };
+		for row in rows {
+			let evidence: serde_json::Value = serde_json::from_str(row.get("evidence"))?;
+			check_existing_joint_evidence(&evidence, attempt, subscription, hash, None)?;
+			ensure!(row.get::<_, i64>("id") == scope.entitlement_id
+				&& u64::try_from(row.get::<_, i64>("allocated_gross"))? == scope.gross.to_sat()
+				&& row.get::<_, &str>("user_pubkey").parse::<PublicKey>()? == scope.claimant
+				&& row.get::<_, &str>("owner_mailbox").parse::<PublicKey>()? == scope.mailbox
+				&& bitcoin::ScriptBuf::from_hex(row.get("spk"))? == scope.script,
+				"joint replan history changes its admitted claimant or destination");
+			let id: i64 = row.get("allocation_id");
+			let points = self.query("SELECT vtxo_id FROM expiry_allocation_input WHERE allocation_id=$1 ORDER BY vtxo_id", &[&id]).await?
+				.into_iter().map(|row| row.get::<_, &str>("vtxo_id").parse()).collect::<Result<Vec<_>,_>>()?;
+			scope.allocations.insert(id, points);
+		}
+		Ok(Some(scope))
+	}
+
+	async fn check_internal_refund_membership(
+		&self, source: VtxoId, attempt: i64, subscription: i64, hash: PaymentHash, grants: &[VtxoId],
+	) -> anyhow::Result<()> {
+		for row in self.query("SELECT c.evidence::TEXT FROM expiry_decided_coin d \
+			JOIN expiry_allocation_coin c ON c.entitlement_id=d.entitlement_id \
+			WHERE d.vtxo_id=$1 AND c.evidence->>'kind'='htlc_internal_joint_timeout'", &[&source.to_string()]).await? {
+			check_existing_joint_evidence(&serde_json::from_str(row.get("evidence"))?, attempt, subscription, hash, Some(grants))?;
+		}
+		Ok(())
+	}
+
+	/// This is PRIVATE authority for the exact joint commit, never an exception
+	/// exposed to refresh/offboard/materialization or normal watchman writers.
+	async fn guard_internal_refund_replan(&self, component: &InternalRefundComponent, ids: &[VtxoId]) -> anyhow::Result<()> {
+		let allowed = component.superseded_allocations();
+		if allowed.is_empty() { return super::expiry_guard::guard_obligation_changes(self, ids).await; }
+		let ids = ids.iter().map(ToString::to_string).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+		let sources = self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&ids]).await?;
+		ensure!(sources.len() == ids.len(), "joint replan lost an original source or partition row");
+		let allocations = self.query("SELECT id,status FROM expiry_allocation WHERE id=ANY($1) ORDER BY id FOR UPDATE", &[&allowed]).await?;
+		ensure!(allocations.len() == allowed.len() && allocations.iter().all(|row| row.get::<_, &str>("status") == "conflicted"),
+			"joint replan previous reservation is still active or paid");
+		ensure!(self.query_opt("SELECT d.vtxo_id FROM expiry_decided_coin d WHERE d.vtxo_id=ANY($1) \
+			AND NOT EXISTS(SELECT 1 FROM expiry_allocation_coin c WHERE c.entitlement_id=d.entitlement_id \
+				AND c.allocation_id=ANY($2)) LIMIT 1", &[&ids,&allowed]).await?.is_none(),
+			"joint replan would cross another economic fence");
+		ensure!(self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1) \
+			AND allocation_id<>ALL($2) LIMIT 1", &[&ids,&allowed]).await?.is_none(),
+			"joint replan would cross another physical reservation");
+		Ok(())
+	}
+
 	/// Acquire the complete physical/source union before the existing WAL2
 	/// barrier and every subscription, never one member at a time. Discovery
 	/// and geometric preparation remain outside this short transaction.
@@ -185,7 +336,7 @@ impl Tx<'_> {
 		self.lock_valid_expiry_view(current).await?;
 		let ids = proposed.incoming_ids().into_iter().chain(proposed.grant_ids())
 			.chain(incoming.iter().flat_map(ReadyOutput::source_ids)).collect::<Vec<_>>();
-		super::expiry_guard::guard_obligation_changes(self, &ids).await?;
+		self.guard_internal_refund_replan(proposed, &ids).await?;
 		self.lock_htlc_settlements().await?;
 		let mut subscriptions = proposed.members.iter().map(|member| member.subscription_id).collect::<Vec<_>>();
 		subscriptions.sort_unstable();
@@ -230,21 +381,31 @@ impl Tx<'_> {
 				WHERE original.lightning_payment_attempt_id=a.id)", &[&attempt_id]).await? else { return Ok(None); };
 		let subscription_id = row.get::<_, i64>("subscription_id");
 		let hash: PaymentHash = row.get::<_, &str>("payment_hash").parse()?;
-		let incoming = self.query("SELECT l.vtxo_id FROM lightning_payment_attempt_htlc_vtxo l \
-			JOIN vtxo v ON v.vtxo_id=l.vtxo_id JOIN htlc_vtxo h ON h.id=v.id \
-			WHERE l.lightning_payment_attempt_id=$1 AND h.direction='incoming' AND h.payment_hash=$2 \
-			AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL \
-			AND v.onchain_spent_height IS NULL AND v.onchain_spent_txid IS NULL \
-			AND v.spend_state='spendable' AND NOT EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=v.vtxo_id) \
-			ORDER BY l.vtxo_id", &[&attempt_id,&hash.to_string()]).await?
-			.into_iter().map(|r| r.get::<_, &str>("vtxo_id").parse()).collect::<Result<Vec<VtxoId>,_>>()?;
-		let total = self.query_one("SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo WHERE lightning_payment_attempt_id=$1",
-			&[&attempt_id]).await?.get::<_, i64>(0);
-		ensure!(!incoming.is_empty() && incoming.len() as i64 == total && total <= MAX_JOINT_GRANTS,
-			"joint refund lacks its complete still-uncommitted original funding set");
+		let incoming = self.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+			WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id", &[&attempt_id]).await?
+			.into_iter().map(|row| row.get::<_, &str>("vtxo_id").parse()).collect::<Result<Vec<VtxoId>,_>>()?;
+		ensure!(!incoming.is_empty() && incoming.len() as i64 <= MAX_JOINT_GRANTS,
+			"joint refund original funding set exceeds its preparation budget");
+		let mut existing = BTreeMap::new();
 		for id in &incoming {
 			let source = htlc_vtxo::get_htlc_vtxo(self, *id).await?.context("joint incoming source lost its signed body")?;
-			check_incoming(&source, hash)?;
+			check_incoming_identity(&source, hash)?;
+			if source.vtxo.decided_for_fallback {
+				// Never consume an attempt's grant dependency after omitting one
+				// of its original sources based only on a chain observation. A
+				// user claim can reorg independently of the new timeout parent.
+				if self.internal_refund_terminal_claim(*id, view).await? { return Ok(None); }
+				let Some(scope) = self.existing_internal_refund(*id, attempt_id, subscription_id, hash).await? else { return Ok(None); };
+				ensure!(scope.gross == source.vtxo.vtxo.amount()
+					&& scope.claimant == source.vtxo.vtxo.policy().as_server_htlc_send()
+						.context("stored joint source policy changed")?.user_pubkey,
+					"joint replan changes its original amount or claimant");
+				existing.insert(*id, scope);
+			}
+			check_incoming_scope(&source, hash, existing.contains_key(id))?;
+			ensure!(self.query_one(
+				"SELECT onchain_spent_height IS NULL AND onchain_spent_txid IS NULL AS unspent FROM vtxo WHERE vtxo_id=$1",
+				&[&id.to_string()]).await?.get::<_, bool>("unspent"), "joint incoming source has a terminal chain spend");
 		}
 		let rows = self.query("SELECT vtxo_id,onchain_spent_height,onchain_spent_txid FROM vtxo \
 			WHERE lightning_htlc_subscription_id=$1 ORDER BY vtxo_id LIMIT $2", &[&subscription_id,&(MAX_JOINT_GRANTS+1)]).await?;
@@ -257,11 +418,19 @@ impl Tx<'_> {
 				"joint refund grant is already spent; cannot replace its dependency with an observation");
 			let id: VtxoId = row.get::<_, &str>("vtxo_id").parse()?;
 			let grant = htlc_vtxo::get_htlc_vtxo(self, id).await?.context("joint receive grant has no actual HTLC")?;
-			check_grant(&grant, hash, view)?;
+			let own_reservation = !existing.is_empty() && self.query_opt(
+				"SELECT i.vtxo_id FROM expiry_allocation_input i WHERE i.vtxo_id=$1 AND i.allocation_id=ANY($2) LIMIT 1",
+				&[&id.to_string(), &existing.values().flat_map(|scope| scope.allocations.keys().copied()).collect::<Vec<_>>()]).await?.is_some();
+			check_grant_scope(&grant, hash, view, own_reservation)?;
 			grants.push(InternalRefundGrant { confirmed: grant.vtxo.confirmed_height.expect("checked above"),
 				updated_at: grant.vtxo.updated_at, vtxo: ServerVtxo::from(grant.vtxo.vtxo).to_bare() });
 		}
-		Ok(Some(InternalRefundCandidate { attempt_id, subscription_id, payment_hash: hash, view, incoming, grants }))
+		let grant_ids = grants.iter().map(|grant| grant.vtxo.id()).collect::<Vec<_>>();
+		for source in existing.keys() {
+			self.check_internal_refund_membership(*source, attempt_id, subscription_id, hash, &grant_ids).await?;
+		}
+		Ok(Some(InternalRefundCandidate { attempt_id, subscription_id, payment_hash: hash, view,
+			incoming, existing, grants }))
 	}
 
 }
@@ -394,4 +563,34 @@ mod tests {
 		assert!(check_parent_inputs(view(),view(),&[source],&grants,
 			&parent(&[source,first[0],first[1]])).is_err(), "one attempt cannot silently shed the other grant set");
 	}
+	#[test]
+	fn joint_replan_preserves_the_exact_original_obligation_and_entire_grant_set() {
+		let hash = PaymentHash::from([9;32]);
+		let a = VtxoId::from(OutPoint::new(Txid::from_byte_array([2;32]),0));
+		let b = VtxoId::from(OutPoint::new(Txid::from_byte_array([3;32]),0));
+		let evidence = serde_json::json!({"kind":"htlc_internal_joint_timeout", "attempt_id":7,
+			"subscription_id":8,"payment_hash":hash.to_string(), "required_grants":[a.to_string(),b.to_string()]});
+		assert!(check_existing_joint_evidence(&evidence,7,8,hash,Some(&[b,a])).is_ok());
+		assert!(check_existing_joint_evidence(&evidence,6,8,hash,Some(&[a,b])).is_err());
+		assert!(check_existing_joint_evidence(&evidence,7,6,hash,Some(&[a,b])).is_err());
+		assert!(check_existing_joint_evidence(&evidence,7,8,PaymentHash::from([8;32]),Some(&[a,b])).is_err());
+		assert!(check_existing_joint_evidence(&evidence,7,8,hash,Some(&[a])).is_err());
+		assert!(check_existing_joint_evidence(&evidence,7,8,hash,Some(&[a,a])).is_err());
+		let mut repeated = evidence;
+		repeated["required_grants"] = serde_json::json!([a.to_string(),a.to_string()]);
+		assert!(check_existing_joint_evidence(&repeated,7,8,hash,None).is_err());
+	}
+
+	#[test]
+	fn joint_replan_spent_grant_requires_its_own_reservation_and_no_resolution() {
+		let (mut grant,current) = receive_grant();
+		let hash = grant.htlc.payment_hash;
+		grant.vtxo.spend_state = SpendState::Spent;
+		assert!(check_grant_scope(&grant,hash,current,false).is_err());
+		assert!(check_grant_scope(&grant,hash,current,true).is_ok());
+		grant.htlc.chain_resolution = Some(HtlcResolution::Revoked);
+		assert!(check_grant_scope(&grant,hash,current,true).is_err(),
+			"a historical reservation cannot replace a consumed dependency with an observation");
+	}
+
 }

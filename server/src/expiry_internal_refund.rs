@@ -41,8 +41,14 @@ impl Server {
 		// marks its members so the same component is not retried eight times.
 		let rows = self.db.read(async |t| Ok(t.query("SELECT f.id FROM expiry_lightning_internal_funding f \
 			WHERE f.id>$1 AND EXISTS(SELECT 1 FROM vtxo g WHERE g.lightning_htlc_subscription_id=f.subscription_id) \
-			AND NOT EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l \
+			AND (NOT EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l \
 				JOIN expiry_decided_coin d ON d.vtxo_id=l.vtxo_id WHERE l.lightning_payment_attempt_id=f.id) \
+				OR EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l \
+				JOIN expiry_decided_coin d ON d.vtxo_id=l.vtxo_id \
+				JOIN expiry_allocation_coin c ON c.entitlement_id=d.entitlement_id \
+				JOIN expiry_allocation a ON a.id=c.allocation_id WHERE l.lightning_payment_attempt_id=f.id \
+				AND a.status='conflicted' AND c.evidence->>'kind'='htlc_internal_joint_timeout' \
+				AND c.evidence->>'attempt_id'=f.id::TEXT)) \
 			ORDER BY f.id LIMIT $2", &[&cursor,&ATTEMPTS_PER_PASS]).await?)).await?;
 		let Some(last) = rows.last() else { return Ok(0); };
 		let next = last.get::<_, i64>("id");
@@ -121,7 +127,10 @@ impl Server {
 					AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL \
 					AND EXISTS(SELECT 1 FROM vtxo g WHERE g.lightning_htlc_subscription_id=f.subscription_id) \
 					AND NOT EXISTS(SELECT 1 FROM htlc_settlement wal WHERE wal.payment_hash=h.payment_hash) \
-					AND NOT EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=v.vtxo_id) \
+					AND (NOT EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=v.vtxo_id) \
+						OR EXISTS(SELECT 1 FROM expiry_decided_coin d JOIN expiry_allocation_coin c ON c.entitlement_id=d.entitlement_id \
+						JOIN expiry_allocation a ON a.id=c.allocation_id WHERE d.vtxo_id=v.vtxo_id AND a.status='conflicted' \
+						AND c.evidence->>'kind'='htlc_internal_joint_timeout' AND c.evidence->>'attempt_id'=f.id::TEXT)) \
 					ORDER BY f.id LIMIT $2", &[&terminals,&(MAX_JOINT_GRANTS+1)]).await?)).await?;
 				ensure!(linked.len() as i64 <= MAX_JOINT_GRANTS, "internal component exceeds its attempt budget");
 				for row in linked {

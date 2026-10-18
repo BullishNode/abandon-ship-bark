@@ -8,6 +8,7 @@ mod expiry_state;
 mod expiry_ownership;
 mod expiry_dispatch;
 mod expiry_lightning_terminal;
+mod expiry_internal_replan;
 mod expiry_hash_provenance;
 mod expiry_payout_flow;
 mod expiry_split;
@@ -2705,3 +2706,9 @@ async fn board_exit_tx_prevents_registration() {
 	assert_eq!(balance, Amount::ZERO, "spendable balance should be zero since board was not registered");
 }
 
+
+mod qualification_conflict_reorg;
+
+mod qualification_failed_swap;
+
+mod qualification_offboard_restart;

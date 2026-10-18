@@ -325,15 +325,25 @@ impl Tx<'_> {
 		let mut proposal = self.propose_expiry_ownership(fact, funding,
 			view.captaind.height, Some(view.watchmand.height)).await?;
 		let Some(joint) = component.for_source(fact.state.vtxo_id) else { return Ok(proposal); };
-		ensure!(joint.view == view && matches!(proposal.disposition,
-			OwnershipDisposition::Unresolved("Lightning settlement pending"))
-			&& !proposal.has_stored_preimage && proposal.cancellations.is_empty(),
+		let previous = component.existing_source(fact.state.vtxo_id);
+		// Only the caller's exact conflicted conditional entitlement can reuse
+		// its own spent fence. Ordinary ownership never learns this exception.
+		let premise = if let Some(scope) = previous {
+			fact.state.decided_for_fallback && fact.state.spend_state == SpendState::Spent
+				&& fact.state.vtxo.amount() == scope.gross
+				&& matches!(proposal.disposition, OwnershipDisposition::Unresolved(_))
+		} else { matches!(proposal.disposition, OwnershipDisposition::Unresolved("Lightning settlement pending")) };
+		ensure!(joint.view == view && premise && !proposal.has_stored_preimage && proposal.cancellations.is_empty(),
 			"joint refund source has another settlement premise");
 		let full = fact.full_vtxo.as_ref().context("joint refund lacks its full signed source")?;
 		full.validate(funding).context("joint refund source signature is invalid")?;
 		let user = full.clone().try_into_user_vtxo().map_err(|_| anyhow::anyhow!("joint funding is not a user contract"))?;
 		let policy = user.policy().as_server_htlc_send().context("joint source is not a send contract")?;
 		ensure!(policy.payment_hash == joint.payment_hash, "joint source has another payment hash");
+		if let Some(scope) = previous {
+			ensure!(user.user_pubkey() == scope.claimant, "joint replan changed its original claimant");
+		}
+
 		proposal.disposition = self.expiry_customer(proposal.id, user.user_pubkey()).await?;
 		proposal.evidence = Some(OwnershipEvidence::HtlcInternalJointTimeout {
 			payment_hash: joint.payment_hash, attempt_id: joint.attempt_id,

@@ -76,6 +76,20 @@ impl ReadyOutput {
 	pub(crate) fn contains_coin(&self, id: VtxoId) -> bool { self.coins.iter().any(|coin| coin.ownership.id == id) }
 	pub(crate) fn source_ids(&self) -> impl Iterator<Item = VtxoId> + '_ { self.versions.iter().map(|v| v.0) }
 
+	/// An old refund must compete with this replacement on the SAME signed
+	/// source path. A confirmed drain on a different path is not a dependency.
+	pub(crate) fn excludes_old_refund(&self, id: VtxoId, old_inputs: &[VtxoId]) -> anyhow::Result<bool> {
+		ensure!(self.contains_coin(id), "replacement does not contain its original entitlement");
+		let source = self.snapshot.regular.iter().find(|fact| fact.state.vtxo_id == id)
+			.and_then(|fact| fact.full_vtxo.as_ref()).context("replacement lost its original signed path")?;
+		let funding = self.funding.iter().find(|tx| tx.compute_txid() == source.chain_anchor().txid)
+			.context("replacement lost its actual funding")?;
+		source.validate(funding).context("invalid replacement source signatures")?;
+		let path = std::iter::once(source.chain_anchor()).chain(source.transactions().map(|step|
+			bitcoin::OutPoint::new(step.tx.compute_txid(), step.output_idx as u32))).collect::<Vec<_>>();
+		path_excludes_old_parent(&path, self.root.point(), old_inputs)
+	}
+
 	/// No geometric cut supplied by an external caller can bypass the actual
 	/// partition proof. Signature and settlement evidence remain W5's job.
 	pub fn prove(
@@ -115,6 +129,12 @@ impl ReadyOutput {
 		versions.dedup_by_key(|v| v.0);
 		Ok(Self { root, coins, versions, snapshot, funding: funding.to_vec() })
 	}
+}
+
+fn path_excludes_old_parent(path: &[bitcoin::OutPoint], current: bitcoin::OutPoint, old_inputs: &[VtxoId]) -> anyhow::Result<bool> {
+	let current = path.iter().position(|point| *point == current)
+		.context("replacement backing is outside its original signed path")?;
+	Ok(path[..=current].iter().any(|point| old_inputs.iter().any(|id| id.to_point() == *point)))
 }
 
 pub struct CommittedExpiryGroup {
@@ -270,9 +290,18 @@ impl Tx<'_> {
 					&& current.has_stored_preimage == coin.ownership.has_stored_preimage
 					&& current.cancellations == coin.ownership.cancellations;
 				valid &= self.revalidate_expiry_payee(coin, network).await?;
+				if let Some(scope) = locked_joint.as_ref().and_then(|joint| joint.existing_source(coin.ownership.id)) {
+					valid &= matches!(&coin.ownership.disposition, OwnershipDisposition::Customer { user_pubkey, .. }
+						if *user_pubkey == scope.claimant) && coin.ownership.gross == scope.gross
+						&& coin.payee.as_ref().is_some_and(|payee| payee.mailbox == scope.mailbox && payee.script == scope.script);
+				}
+
 				if let Some(row) = self.query_opt("SELECT e.id,e.gross_sat, EXISTS(SELECT 1 FROM expiry_allocation_coin c JOIN expiry_allocation a ON a.id=c.allocation_id WHERE c.entitlement_id=e.id AND ((c.active AND a.status<>'conflicted') OR c.paying_txid IS NOT NULL)) AS reserved, EXISTS(SELECT 1 FROM expiry_terminal_claim p WHERE p.entitlement_id=e.id) AS claimed FROM expiry_decided_coin d JOIN expiry_entitlement e ON e.id=d.entitlement_id WHERE d.vtxo_id=$1", &[&coin.ownership.id.to_string()]).await? {
 					valid &= !row.get::<_, bool>("reserved") && !row.get::<_, bool>("claimed")
 						&& u64::try_from(row.get::<_, i64>("gross_sat"))? == coin.ownership.gross.to_sat();
+					if let Some(scope) = locked_joint.as_ref().and_then(|joint| joint.existing_source(coin.ownership.id)) {
+						valid &= row.get::<_, i64>("id") == scope.entitlement_id;
+					}
 					existing_entitlements.insert(coin.ownership.id,row.get::<_, i64>("id"));
 				}
 			}
@@ -314,7 +343,10 @@ impl Tx<'_> {
 			for coin in &output.coins {
 				let proposal = &coin.ownership;
 				let evidence = proposal.evidence.as_ref().context("ready ownership lacks evidence")?;
-				let observed = evidence_json(evidence, proposal.has_stored_preimage);
+				let mut observed = evidence_json(evidence, proposal.has_stored_preimage);
+				if let Some(scope) = locked_joint.as_ref().and_then(|joint| joint.existing_source(proposal.id)) {
+					observed["supersedes_allocations"] = serde_json::json!(scope.allocations.keys().copied().collect::<Vec<_>>());
+				}
 				let conditional = matches!(evidence, OwnershipEvidence::HtlcChain { .. } | OwnershipEvidence::HtlcInternalJointTimeout { .. });
 				let mut stable = if conditional {
 					serde_json::json!({"stored_preimage": proposal.has_stored_preimage})
@@ -365,5 +397,26 @@ impl Tx<'_> {
 				mailbox_pk == payee.mailbox && child_index == payee.child_index && spk == payee.script,
 			_ => false,
 		})
+	}
+}
+
+#[cfg(test)]
+mod replan_tests {
+	use super::*;
+	use ark::test_util::VTXO_VECTORS;
+
+	#[test]
+	fn joint_replan_requires_an_old_parent_input_on_the_validated_source_prefix() {
+		let source = &VTXO_VECTORS.arkoor2_vtxo;
+		let path = std::iter::once(source.chain_anchor()).chain(source.transactions().map(|step|
+			bitcoin::OutPoint::new(step.tx.compute_txid(), step.output_idx as u32))).collect::<Vec<_>>();
+		assert!(path.len()>2, "fixture must contain a real multi-step source path");
+		assert!(path_excludes_old_parent(&path,path[1],&[VtxoId::from(path[0])]).unwrap());
+		assert!(path_excludes_old_parent(&path,path[1],&[VtxoId::from(path[1])]).unwrap());
+		assert!(!path_excludes_old_parent(&path,path[1],&[VtxoId::from(*path.last().unwrap())]).unwrap(),
+			"a later old input cannot prove that an unrelated earlier branch is the same reservation");
+		let unrelated = bitcoin::OutPoint::new(bitcoin::Txid::from_byte_array([127;32]),1);
+		assert!(!path_excludes_old_parent(&path,path[1],&[unrelated.into()]).unwrap());
+		assert!(path_excludes_old_parent(&path,unrelated,&[VtxoId::from(path[0])]).is_err());
 	}
 }

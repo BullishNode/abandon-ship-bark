@@ -149,10 +149,12 @@ async fn reclaim_reorg(when: When) {
 	}).collect::<Vec<_>>();
 	let fork_height = *reclaim_heights.iter().min().unwrap();
 	let old_tip = chain.get_block_count().unwrap() as usize;
-	let mut replay = Vec::new();
+	// Replay block by block so every transaction keeps a final locktime.
+	let mut replay = Vec::<Vec<Transaction>>::new();
 	let mut excluded = reclaims.clone();
 	for height in fork_height..=old_tip {
 		let block = chain.get_block(&chain.get_block_hash(height as u64).unwrap()).unwrap();
+		let mut kept = Vec::new();
 		for tx in block.txdata.into_iter().skip(1) {
 			if excluded.contains(&tx.compute_txid())
 				|| tx.input.iter().any(|i| excluded.contains(&i.previous_output.txid))
@@ -160,11 +162,12 @@ async fn reclaim_reorg(when: When) {
 				excluded.insert(tx.compute_txid());
 				continue;
 			}
-			replay.push(tx);
+			kept.push(tx);
 		}
+		replay.push(kept);
 	}
 	let refund_replayed = customer_allocations(&db, &source, "confirmed").await.iter()
-		.any(|(_, tx)| replay.iter().any(|r| r.compute_txid() == tx.compute_txid()));
+		.any(|(_, tx)| replay.iter().flatten().any(|r| r.compute_txid() == tx.compute_txid()));
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
 	chain.invalidate_block(&chain.get_block_hash(fork_height as u64).unwrap()).unwrap();
@@ -173,7 +176,7 @@ async fn reclaim_reorg(when: When) {
 		chain.call("generateblock", &[serde_json::json!(miner.to_string()),
 			serde_json::json!(txs.iter().map(serialize_hex).collect::<Vec<_>>())]).unwrap()
 	};
-	generate(&replay);
+	for txs in &replay { generate(txs); }
 
 	// The receiver comes back and claims every grant with the preimage.
 	let mut claim = Transaction {

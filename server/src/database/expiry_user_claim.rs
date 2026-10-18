@@ -73,6 +73,15 @@ fn retained_terminal_omission_shape(source: &ServerVtxo, claim: &Transaction, re
 	terminal_omission_shape(source, claim) && serialize(claim) == retained
 }
 
+#[derive(Clone, Copy)]
+enum TerminalProofScope { Unfenced, InternalReturn, InternalPartial, RebuildingUnfenced, RebuildingPartial }
+
+impl TerminalProofScope {
+	fn requires_completed_rebuild(self)->bool {
+		!matches!(self,Self::RebuildingUnfenced|Self::RebuildingPartial)
+	}
+}
+
 /// One closed epoch covers only database row IDs already allocated when it
 /// starts. Later arrivals cannot keep its tail growing; an older row becoming
 /// eligible behind the cursor is revisited in the next epoch.
@@ -134,6 +143,7 @@ impl Tx<'_> {
 		}).collect())
 	}
 
+
 	/// Called in the same transaction as the canonical source-spend observation,
 	/// or after independently fetching that canonical body during backfill.
 	/// Never replace the first body with a different witness variant of its txid.
@@ -166,24 +176,45 @@ impl Tx<'_> {
 	pub(crate) async fn replayable_terminal_claim(
 		&self, source: VtxoId, view: ExpiryViewToken,
 	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
-		self.replayable_terminal_claim_with_reservations(source, view, false).await
+		self.replayable_terminal_claim_with_reservations(source, view, TerminalProofScope::Unfenced).await
 	}
 
 	/// Only the complete all-terminal internal grant-return guard may opt into
-	/// an exact prior conflicted reservation. Partial-refund discovery keeps its
-	/// existing unfenced premise and lock union; this does not authorize a new
-	/// customer allocation or weaken its separate rebuild validator.
+	/// an exact prior conflicted reservation. Its strict mode does not recognize
+	/// dependent partial parents; those use the separate typed scope below.
 	pub(crate) async fn replayable_internal_return_terminal_claim(
 		&self, source: VtxoId, view: ExpiryViewToken,
 	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
-		self.replayable_terminal_claim_with_reservations(source, view, true).await
+		self.replayable_terminal_claim_with_reservations(source, view, TerminalProofScope::InternalReturn).await
+	}
+
+	/// Only scoped joint preparation uses this opt-in. It preserves an existing
+	/// exact original customer debt; it cannot admit an unrelated allocation.
+	pub(crate) async fn replayable_internal_partial_terminal_claim(
+		&self,source:VtxoId,view:ExpiryViewToken,
+	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		self.replayable_terminal_claim_with_reservations(source,view,TerminalProofScope::InternalPartial).await
+	}
+
+	/// The rebuild owns the exclusive generation lock and has independently
+	/// verified Core's completed hashes. It cannot demand invalid=false before
+	/// finishing its own reconstruction. All canonical source/body joins remain.
+	pub(crate) async fn rebuilding_internal_partial_terminal_claim(
+		&self,source:VtxoId,view:ExpiryViewToken,prior_joint:bool,
+	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
+		if prior_joint {
+			self.replayable_terminal_claim_with_reservations(source,view,TerminalProofScope::RebuildingPartial).await
+		} else {
+			self.replayable_terminal_claim_with_reservations(source,view,TerminalProofScope::RebuildingUnfenced).await
+		}
 	}
 
 	async fn replayable_terminal_claim_with_reservations(
-		&self, source: VtxoId, view: ExpiryViewToken, allow_reserved_return: bool,
+		&self, source: VtxoId, view: ExpiryViewToken, scope: TerminalProofScope,
 	) -> anyhow::Result<Option<ReplayableTerminalClaim>> {
 		if self.expiry_rebuild_token().await? != Some(view)
-			|| self.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_,bool>("invalid") { return Ok(None); }
+			|| (scope.requires_completed_rebuild()
+				&& self.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_,bool>("invalid")) { return Ok(None); }
 		let row=self.query_opt("SELECT v.vtxo,t.raw_tx,t.txid,t.confirmed_height,b.hash \
 			FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id \
 			JOIN expiry_user_claim_source s ON s.source_vtxo_id=v.vtxo_id AND s.claim_txid=v.onchain_spent_txid \
@@ -203,8 +234,14 @@ impl Tx<'_> {
 		// exact source is in the final component lock union. A batched claim
 		// would need every additional known input in that same final union.
 		if !retained_terminal_omission_shape(&body,&claim,row.get("raw_tx")) { return Ok(None); }
-		if self.user_claim_has_obligation_fences(&[source]).await?
-			&& (!allow_reserved_return || self.conflicted_internal_user_claim_scope(source).await?.is_none()) { return Ok(None); }
+		if self.user_claim_has_obligation_fences(&[source]).await? {
+			let allowed=match scope {
+				TerminalProofScope::Unfenced|TerminalProofScope::RebuildingUnfenced=>false,
+				TerminalProofScope::InternalReturn=>self.conflicted_internal_user_claim_scope(source).await?.is_some(),
+				TerminalProofScope::InternalPartial|TerminalProofScope::RebuildingPartial=>self.partial_internal_user_claim_scope(source).await?.is_some(),
+			};
+			if !allowed {return Ok(None);}
+		}
 		Ok(Some(ReplayableTerminalClaim { source,claim,confirmed:BlockRef {
 			height:row.get::<_,i64>("confirmed_height").try_into()?,hash:row.get::<_,&str>("hash").parse()?,
 		}}))
@@ -236,7 +273,7 @@ impl Tx<'_> {
 			let source = ServerVtxo::deserialize(linked[0].get("vtxo"))?;
 			ensure!(retained_terminal_omission_shape(&source, claim, raw),
 				"reserved user claim replay requires the retained single-input DEFAULT authorization");
-			let scope = self.conflicted_internal_user_claim_scope(source.id()).await?
+			let scope = self.partial_internal_user_claim_scope(source.id()).await?
 				.context("retained user claim crosses an unrelated or live financial reservation")?;
 			self.lock_conflicted_internal_user_claim_scope(&scope).await?;
 		} else {
@@ -271,6 +308,15 @@ mod tests {
 	use bitcoin::hashes::Hash;
 	use ark::test_util::VTXO_VECTORS;
 	use bitcoin::{absolute,transaction,Sequence,TxIn,Witness};
+
+	#[test]
+	fn only_reconstruction_modes_may_validate_premises_before_rebuild_finishes() {
+		for scope in [TerminalProofScope::Unfenced,TerminalProofScope::InternalReturn,TerminalProofScope::InternalPartial] {
+			assert!(scope.requires_completed_rebuild());
+		}
+		assert!(!TerminalProofScope::RebuildingUnfenced.requires_completed_rebuild());
+		assert!(!TerminalProofScope::RebuildingPartial.requires_completed_rebuild());
+	}
 
 	#[test]
 	fn backfill_unsupported_prefix_does_not_restart_the_same_batch() {

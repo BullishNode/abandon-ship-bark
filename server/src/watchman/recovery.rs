@@ -148,20 +148,25 @@ impl Watchman {
 			// A terminal observation is a premise, not a permanent payment fact.
 			// The exact retained user body may reconfirm in another block; match
 			// current canonical source+txid, not its old observation height/hash.
-			t.execute("UPDATE expiry_allocation a SET status='conflicted' WHERE a.status='pending' AND EXISTS( \
-				SELECT 1 FROM expiry_allocation_coin c CROSS JOIN LATERAL jsonb_array_elements( \
-				COALESCE(c.evidence->'terminal_sources','[]'::jsonb)) premise WHERE c.allocation_id=a.id \
-				AND NOT EXISTS(SELECT 1 FROM expiry_user_claim_source s JOIN expiry_user_claim_tx u ON u.txid=s.claim_txid \
-				JOIN vtxo v ON v.vtxo_id=s.source_vtxo_id JOIN htlc_vtxo h ON h.id=v.id \
-				JOIN watchmand_block b ON b.height=u.confirmed_height AND b.hash=u.confirmed_hash \
-				WHERE s.source_vtxo_id=premise->>'source' AND s.claim_txid=premise->>'claim_txid' \
-				AND v.onchain_spent_txid=u.txid AND v.onchain_spent_height=u.confirmed_height \
-				AND u.confirmed_height<=$1 AND h.direction='incoming' AND h.chain_resolution='revoked' \
-				AND h.chain_resolution_height=v.onchain_spent_height AND h.offchain_resolution IS NULL \
-				AND v.oor_spent_txid IS NULL AND v.spent_in_round IS NULL AND v.offboarded_in IS NULL \
-				AND NOT EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=v.vtxo_id) \
-				AND NOT EXISTS(SELECT 1 FROM expiry_allocation_input i WHERE i.vtxo_id=v.vtxo_id)))",
-				&[&i64::from(view.captaind.height.min(view.watchmand.height))]).await?;
+			let premises=t.query("SELECT a.id,c.evidence::TEXT FROM expiry_allocation a \
+				JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+				WHERE a.status='pending' AND c.evidence ? 'terminal_sources' ORDER BY a.id,c.entitlement_id",&[]).await?;
+			let mut unsupported=std::collections::BTreeSet::new();
+			for row in premises {
+				let allocation:i64=row.get("id");
+				let evidence:serde_json::Value=serde_json::from_str(row.get("evidence"))?;
+				let sources=evidence["terminal_sources"].as_array().context("invalid stored terminal premise list")?;
+				for premise in sources {
+					let source= premise["source"].as_str().context("missing terminal premise source")?.parse()?;
+					let txid:bitcoin::Txid=premise["claim_txid"].as_str().context("missing terminal premise txid")?.parse()?;
+					let prior_joint=premise.get("prior_joint").and_then(serde_json::Value::as_bool)==Some(true);
+					let current=t.rebuilding_internal_partial_terminal_claim(source,view,prior_joint).await?;
+					if current.is_none_or(|proof|proof.claim.compute_txid()!=txid) {unsupported.insert(allocation);}
+				}
+			}
+			for allocation in unsupported {
+				t.execute("UPDATE expiry_allocation SET status='conflicted' WHERE id=$1 AND status='pending'",&[&allocation]).await?;
+			}
 			t.execute("UPDATE expiry_allocation_coin c SET paying_txid=a.sweep_txid,paying_height=a.confirmed_height,paying_hash=a.confirmed_hash FROM expiry_allocation a WHERE a.id=c.allocation_id AND a.status='confirmed'", &[]).await?;
 			for (id,txid,point) in &paid_claims {
 				t.execute("INSERT INTO expiry_terminal_claim(entitlement_id,txid,height,hash) VALUES($1,$2,$3,$4)", &[id,&txid.to_string(),&i64::from(point.height),&point.hash.to_string()]).await?;

@@ -247,13 +247,19 @@ impl Tx<'_> {
 				.into_iter().map(|r| r.get::<_, String>("vtxo_id")));
 		}
 		if let Some(joint) = joint {
-			ids.extend(joint.incoming_ids().into_iter().chain(joint.grant_ids()).map(|id| id.to_string()));
+			ids.extend(joint.obligation_lock_ids());
 		}
 		ids.sort(); ids.dedup();
 		let rows = self.query("SELECT vtxo_id,updated_at,spend_state::TEXT,onchain_spent_height IS NOT NULL OR onchain_spent_txid IS NOT NULL AS chain_spent FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&ids]).await?;
+		if let Some(joint)=joint {
+			// Replay takes this same complete source union, then allocations,
+			// WAL2 and subscriptions. Revalidation below reacquires only held rows.
+			let allocations=joint.superseded_allocations();
+			let locked=self.query("SELECT id FROM expiry_allocation WHERE id=ANY($1) ORDER BY id FOR UPDATE",&[&allocations]).await?;
+			ensure!(locked.len()==allocations.len(),"joint refund lost a retained financial reservation");
+		}
 		self.lock_htlc_settlements().await?;
-		let mut subscriptions = joint.map(|component| component.members.iter().map(|member| member.subscription_id)
-			.collect::<Vec<_>>()).unwrap_or_default();
+		let mut subscriptions = joint.map(|component| component.subscription_ids()).unwrap_or_default();
 		if !internal_attempts.is_empty() {
 			subscriptions.extend(self.query("SELECT subscription_id FROM expiry_lightning_internal_funding WHERE id=ANY($1)",
 				&[&internal_attempts]).await?.into_iter().map(|row| row.get::<_, i64>("subscription_id")));

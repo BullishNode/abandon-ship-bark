@@ -1,0 +1,42 @@
+{
+  "kind": "v8e_ordinary_twelve_captured_source_readonly_verification",
+  "at": "2026-10-17T22:57:29.563508+00:00",
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "source_archive_sha256": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+  "source_capture_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+  "source_dirty_diff_sha256": "e400afe675e86a268fc5c01f12e7df71c1fbe61304f34f946be055175389e777",
+  "plan_sha256": "bef0af66394f3839eabad46f422ee39f2ad94c9cd03ddfd5857bc058bcfc83c8",
+  "files": [
+    {
+      "file": "testing/tests/bark/onchain.rs",
+      "archive_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "exact_reviewed_plan_file_match": true
+    },
+    {
+      "file": "testing/tests/bark/movement.rs",
+      "archive_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "exact_reviewed_plan_file_match": true
+    },
+    {
+      "file": "testing/tests/bark/offboard.rs",
+      "archive_file_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "exact_reviewed_plan_file_match": true
+    },
+    {
+      "file": "testing/tests/barkd/boards.rs",
+      "archive_file_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "exact_reviewed_plan_file_match": true
+    },
+    {
+      "file": "testing/tests/barkd/recovery.rs",
+      "archive_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "exact_reviewed_plan_file_match": true
+    }
+  ],
+  "result": "All five complete captured file bytes equal frozen reviewed plan, thereby binding all twelve target bodies without any canonical edits.",
+  "limits": [
+    "Source/archive review only; products/ELFs/runtime metadata and exact listing still pending.",
+    "No native execution allocation or launch; no new execution/coverage credit.",
+    "Failed prior captures remain historical, no relabeling."
+  ]
+}

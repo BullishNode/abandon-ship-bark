@@ -1,0 +1,9 @@
+{
+  "state": "BLOCKED_PENDING_CANDIDATE_AND_ROOT_ALLOCATION_AND_FINAL_PARENT_HASH_GATE",
+  "batch": "batch42-ordinary-twelve-v8",
+  "required_actual_records": [
+    "root-allocation.json",
+    "parent-launch-admission.json"
+  ],
+  "preflight_and_native_not_authorized": true
+}

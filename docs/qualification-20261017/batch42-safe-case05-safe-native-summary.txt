@@ -1,0 +1,4 @@
+Nextest run ID bfb4f367-bac2-4f03-aa4a-2f2156edce78 with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+PASS [  11.656s] (1/1) ark-testing::bark movement::movement_send_onchain
+Summary [  11.658s] 1 test run: 1 passed, 650 skipped

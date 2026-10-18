@@ -1,0 +1,342 @@
+{
+  "kind": "BATCH42_STOPPED_PREFIX_CURATION_PLAN",
+  "at": "2026-10-17T23:10:34.834123+00:00",
+  "state": "TERMINAL_PREFIX_VERIFIED_PENDING_SAFE_RECEIPT_AND_GLOBAL_WRITE_LEASE",
+  "parent_session": 23981,
+  "parent_terminal_exit": 100,
+  "initial_conditional_plan": {
+    "file": "batch42-conditional-curation-plan.json",
+    "sha256": "c4e89867e71d10d99e19a510a7fe7d7c9054913fe668db60928de07eb2b04b71",
+    "unchanged": true
+  },
+  "baseline": {
+    "coverage_rows": 436,
+    "coverage_sha256": "1d883d67354df23c5ccc339bc5127db4c5dd2db344e41944ea9b7902ba43cf91",
+    "executions": 225,
+    "PASS": 211,
+    "FAIL": 14,
+    "unique_pairs": 219,
+    "invocations": 198,
+    "native": 213,
+    "component": 12
+  },
+  "candidate": {
+    "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+    "source_archive_sha256": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+    "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+    "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+    "head_label": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+    "do_not_relabel_old_779_or_d05_evidence": true
+  },
+  "started_cases": 10,
+  "passed": 9,
+  "failed": 1,
+  "unstarted_cases": 2,
+  "started_prefix": [
+    {
+      "index": 1,
+      "binary": "ark-testing::bark",
+      "literal_name": "onchain::list_utxos",
+      "result": "PASS",
+      "run_id": "d0d570b2-7a54-450b-954a-5aa868243468",
+      "native_seconds": 18.8,
+      "nextest_summary_seconds": 18.801,
+      "wall_seconds": 19.527,
+      "controller_record_test_seconds": 18.8,
+      "proposed_case_id_if_curated": "FT-CLI-079",
+      "unique_pair_increment": 1,
+      "historical_execution_refs": [],
+      "result_sha256": "be128b28c0b52125327fcbaa8386399040abe1e333d7fd08c57e387506dea41a",
+      "raw_native_log_sha256": "060930117f6c59e5cffb32ad4b68595f26236ecbf25505a6d2a368d5a8053b7b",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 2,
+      "binary": "ark-testing::bark",
+      "literal_name": "onchain::onchain_drain",
+      "result": "PASS",
+      "run_id": "5eedaad4-5c87-4e34-a5e7-740492948d68",
+      "native_seconds": 9.366,
+      "nextest_summary_seconds": 9.367,
+      "wall_seconds": 10.015,
+      "controller_record_test_seconds": 9.366,
+      "proposed_case_id_if_curated": "FT-CLI-080",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-063",
+          "result": "FAIL",
+          "receipt": "batch33-bark-unstarted16-receipt.json"
+        }
+      ],
+      "result_sha256": "8faa8c08b75fe554f525ae8c731241b581a6056416978558c84666cfd42cc3d5",
+      "raw_native_log_sha256": "69e9fa380794bef261b5546b95ee856793455a5ffbda98c03170fe3ff8329501",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 3,
+      "binary": "ark-testing::bark",
+      "literal_name": "movement::board_board",
+      "result": "PASS",
+      "run_id": "11868218-7733-4e01-abc4-4349893bb99d",
+      "native_seconds": 9.27,
+      "nextest_summary_seconds": 9.271,
+      "wall_seconds": 10.015,
+      "controller_record_test_seconds": 9.27,
+      "proposed_case_id_if_curated": "FT-CLI-081",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-053",
+          "result": "FAIL",
+          "receipt": "batch24-upstream-bark-unstarted29-receipt.json"
+        }
+      ],
+      "result_sha256": "0b6f0d515c3c601ba45fe4282a65c363cff13cfacb1734de6961e585c4d9ce7a",
+      "raw_native_log_sha256": "6a73fad5a58a378a20517e3f42d775fe23e674523b118e3c3f33a2e73c496e60",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 4,
+      "binary": "ark-testing::bark",
+      "literal_name": "movement::movement_offboard",
+      "result": "PASS",
+      "run_id": "1eb1c3dc-660d-48fa-9e13-4601d6b851f3",
+      "native_seconds": 12.726,
+      "nextest_summary_seconds": 12.727,
+      "wall_seconds": 13.524,
+      "controller_record_test_seconds": 12.726,
+      "proposed_case_id_if_curated": "FT-CLI-082",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-055",
+          "result": "FAIL",
+          "receipt": "batch26-upstream-bark-unstarted23-receipt.json"
+        }
+      ],
+      "result_sha256": "896c4fdd8d02155665aab57f32fbf987bdb5f2b5695ef86fa0ec29af124e12c8",
+      "raw_native_log_sha256": "8e2870f6982eda20e880b9ecd6a8c9eac87e07a55ef32ac6d4ba45c860ab050c",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 5,
+      "binary": "ark-testing::bark",
+      "literal_name": "movement::movement_send_onchain",
+      "result": "PASS",
+      "run_id": "bfb4f367-bac2-4f03-aa4a-2f2156edce78",
+      "native_seconds": 11.656,
+      "nextest_summary_seconds": 11.658,
+      "wall_seconds": 12.52,
+      "controller_record_test_seconds": 11.656,
+      "proposed_case_id_if_curated": "FT-CLI-083",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-056",
+          "result": "FAIL",
+          "receipt": "batch30-bark-unstarted21-receipt.json"
+        }
+      ],
+      "result_sha256": "ddba4d2e6e3532653cbce997a2b1b2ca50e0c938c9ee390e033a7bd9ba68b331",
+      "raw_native_log_sha256": "79e7171af26d22cffbf4a0e4e16396686091d4915163b2ec0ac12a85e3837242",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 6,
+      "binary": "ark-testing::bark",
+      "literal_name": "offboard::bark_send_onchain",
+      "result": "PASS",
+      "run_id": "0becc6c5-27f9-424f-911a-fd723536fd7f",
+      "native_seconds": 16.312,
+      "nextest_summary_seconds": 16.313,
+      "wall_seconds": 17.024,
+      "controller_record_test_seconds": 16.312,
+      "proposed_case_id_if_curated": "FT-CLI-084",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-059",
+          "result": "FAIL",
+          "receipt": "batch32-bark-unstarted18-receipt.json"
+        }
+      ],
+      "result_sha256": "e1a6bfd8457c36a0fdd145b497be97b99ee350797fdae942c1072176aab6ad05",
+      "raw_native_log_sha256": "8c3b343d1b0e2d7df0fed36895930eecfa10948d1f98e88e1ea44261e1c9b357",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 7,
+      "binary": "ark-testing::bark",
+      "literal_name": "offboard::bark_rejects_offboarding_dust_amount",
+      "result": "PASS",
+      "run_id": "e00ecfc9-fc1d-4371-ad5c-8fe9cc699ab0",
+      "native_seconds": 11.477,
+      "nextest_summary_seconds": 11.478,
+      "wall_seconds": 12.018,
+      "controller_record_test_seconds": 11.477,
+      "proposed_case_id_if_curated": "FT-CLI-085",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-058",
+          "result": "FAIL",
+          "receipt": "batch31-bark-unstarted20-receipt.json"
+        }
+      ],
+      "result_sha256": "4ac0f7a8443b060091529a51e83f9c93192a5a45dd8053f4533dedd9ee2335e7",
+      "raw_native_log_sha256": "663a6de59710eb60393eb79e79859610ff17d17928dd367f6d7019cd76defba1",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 8,
+      "binary": "ark-testing::barkd",
+      "literal_name": "boards::board_all_barkd",
+      "result": "PASS",
+      "run_id": "35ec7171-35f8-4dfe-8768-aca3380cd720",
+      "native_seconds": 9.128,
+      "nextest_summary_seconds": 9.129,
+      "wall_seconds": 10.018,
+      "controller_record_test_seconds": 9.128,
+      "proposed_case_id_if_curated": "FT-BARKD-037",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-BARKD-002",
+          "result": "FAIL",
+          "receipt": "batch25-barkd-ordinary38-receipt.json"
+        }
+      ],
+      "result_sha256": "d4c50e7bd151b40b4db434e6fc7006183950ef0bc34d72717ecb5d451ba47189",
+      "raw_native_log_sha256": "8eeb38dcd670b679add26fdf597e756b3caf4fc8585e9dd74d05cf89a89dc1ec",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 9,
+      "binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_finds_boarded_vtxo",
+      "result": "PASS",
+      "run_id": "1f713f59-acdb-405f-824e-b03e97b9771e",
+      "native_seconds": 20.677,
+      "nextest_summary_seconds": 20.679,
+      "wall_seconds": 21.533,
+      "controller_record_test_seconds": 20.677,
+      "proposed_case_id_if_curated": "FT-BARKD-038",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-BARKD-021",
+          "result": "FAIL",
+          "receipt": "batch27-barkd-unstarted36-receipt.json"
+        }
+      ],
+      "result_sha256": "2997c3c1a232d830250fa0c9df24391efb3d3682bc3fa1b46329915f5451c8b9",
+      "raw_native_log_sha256": "e2a9901f639aa6f8fbccf8d73415ba557cfd556baf593884d2728ffd4929861e",
+      "full_native_log_not_copied": true
+    },
+    {
+      "index": 10,
+      "binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "result": "FAIL",
+      "run_id": "15eac100-bf66-4630-b810-edcc7f433046",
+      "native_seconds": 35.103,
+      "nextest_summary_seconds": 35.114,
+      "wall_seconds": 36.058,
+      "controller_record_test_seconds": null,
+      "proposed_case_id_if_curated": "FT-BARKD-039",
+      "unique_pair_increment": 0,
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-BARKD-022",
+          "result": "FAIL",
+          "receipt": "batch28-barkd-unstarted17-receipt.json"
+        }
+      ],
+      "result_sha256": "73d16b998c1cfe38bfa7659340737d8a65b6146c9f1e7c06c4cf820c3593f41b",
+      "raw_native_log_sha256": "3c9c6ecbcd1527a826dbb0c32deed9ecaa40741bfaddc32484fefd07a9de85c6",
+      "full_native_log_not_copied": true
+    }
+  ],
+  "unstarted": [
+    {
+      "order": 11,
+      "binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "historical_original": {
+        "status": "HELD_NOT_RUN",
+        "run_id": null,
+        "retained_evidence": "barkd-recovery-round-actual-amount-v1-manifest.json"
+      },
+      "result": "NOT STARTED",
+      "execution_credit": 0,
+      "coverage_execution_row": null
+    },
+    {
+      "order": 12,
+      "binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "historical_original": {
+        "literal_name": "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+        "status": "HELD_NOT_RUN_UNSAFE_LEGACY_ORACLE",
+        "run_id": null,
+        "retained_evidence": "barkd-recovery-quarantine-v2-manifest.json"
+      },
+      "result": "NOT STARTED",
+      "execution_credit": 0,
+      "coverage_execution_row": null
+    }
+  ],
+  "failure_scope": {
+    "test": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "run_id": "15eac100-bf66-4630-b810-edcc7f433046",
+    "native_seconds": 35.103,
+    "nextest_summary_seconds": 35.114,
+    "wall_seconds": 36.058,
+    "source_location": "testing/tests/barkd/recovery.rs:26:9",
+    "helper": "partition_recovered",
+    "assertion": "Every non-Spendable restored record must be Spent.",
+    "main_function_callsite": "testing/tests/barkd/recovery.rs:739",
+    "last_oracle_boundary": "Helper panics during recovered-record partition; later exact-set/amount/anchor comparison and final recipient send/receipt/sender-zero assertions are not reached.",
+    "financial_cause_and_product_fixture_disposition": "PENDING assigned source/log/money diagnosis; no cause inferred by curator.",
+    "controller_duration_note": "Original result test_seconds is null because controller recognizes PASS durations only; safe native FAIL and summary lines independently provide35.103/35.114. Preserve original result unchanged.",
+    "resource_error": null,
+    "retry": false,
+    "historical_original_mixed_FAIL_preserved": true
+  },
+  "native_duration_sum_seconds": 154.515,
+  "increment_if_lease_granted": {
+    "executions": 10,
+    "PASS": 9,
+    "FAIL": 1,
+    "unique_pairs": 1,
+    "invocations": 10,
+    "native": 10,
+    "component": 0,
+    "coverage_rows": 10
+  },
+  "expected_after_curating_only_started_prefix": {
+    "executions": 235,
+    "PASS": 220,
+    "FAIL": 15,
+    "unique_pairs": 220,
+    "invocations": 208,
+    "native": 223,
+    "component": 12,
+    "coverage_rows": 446,
+    "not_yet_written": true
+  },
+  "writer_lease": "NOT GRANTED; no shared/global report mutations authorized by this plan",
+  "preserve": [
+    "All14 priorFAILs, including originalmixedFAIL, remainunchanged. NewadaptedmixedFAIL is separate v8e evidence.",
+    "Roundadaptation and newquarantine literal areNOTSTARTED, no executionrows; unsafeoldserverword predecessor staysheld.",
+    "Onlyactuallystarted10 receive appendrows, once authorized; write LF endings and preserve436rowbytes.",
+    "Safe initialreceipt must honestlyseparate9boundedPASS scopes and failedunreachedmoneyoracles; laterclientpostflight/Core/sourcefindings resolvepending statesadditively.",
+    "Roototherlane/results are notautomaticallycounted in thistrack; no fullML promotion."
+  ],
+  "mutations": {
+    "STATUS_COVERAGE_FINDINGS_publicdocs": 0,
+    "control_source_Cargo_metadata_native_services_Git": 0,
+    "new_execution_credit_applied": 0
+  }
+}

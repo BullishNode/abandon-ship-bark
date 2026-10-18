@@ -1,0 +1,419 @@
+{
+  "kind": "BATCH42_CONDITIONAL_APPEND_ONLY_CURATION_PLAN",
+  "at": "2026-10-17T23:08:06.065288+00:00",
+  "state": "PREPARED_DURING_PARENT_RUNTIME_NO_GLOBAL_WRITES",
+  "parent_exec_session": 23981,
+  "baseline": {
+    "coverage_rows": 436,
+    "coverage_sha256": "1d883d67354df23c5ccc339bc5127db4c5dd2db344e41944ea9b7902ba43cf91",
+    "executions": 225,
+    "PASS": 211,
+    "FAIL": 14,
+    "unique_pairs": 219,
+    "invocations": 198,
+    "native": 213,
+    "component": 12
+  },
+  "candidate": {
+    "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+    "source_archive_sha256": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+    "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+    "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+    "head_label": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+    "do_not_relabel_old_779_or_d05_evidence": true
+  },
+  "authority": "Parent owns running allocation. Curator has NO global write lease until explicit terminal/full-safe-receipt instruction. This artifact is not a run or count update.",
+  "cases": [
+    {
+      "order": 1,
+      "binary": "ark-testing::bark",
+      "literal_name": "onchain::list_utxos",
+      "proposed_case_id_if_started": "FT-CLI-079",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "source_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "target_body_sha256": "2ea3d73dbdf39828a110df07e025db31b206bfa1b0ad349fe515c3fb4495b53e",
+      "source_lines": [
+        30,
+        96
+      ],
+      "test_ELF_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+      "native_context_name": "bark/list_utxos",
+      "historical_original": {
+        "status": "HELD_NOT_RUN",
+        "run_id": null,
+        "retained_evidence": "onchain-list-utxos-actual-values-v1-manifest.json"
+      },
+      "historical_execution_refs": [],
+      "unique_name_increment_if_first_run": 1,
+      "source_success_oracle": "Actual1M board input/200k anchor and signed funding prevout fee; public script-size offboard quote; exact two-wallet-UTXO outpoint/value map equals ordinary change plus actual payout output.",
+      "limitation": "Two generated post-offboard blocks; no explicitCore6 or full fee-child/operator graph/seed recovery/absence oracle.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 2,
+      "binary": "ark-testing::bark",
+      "literal_name": "onchain::onchain_drain",
+      "proposed_case_id_if_started": "FT-CLI-080",
+      "source_file": "testing/tests/bark/onchain.rs",
+      "source_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "target_body_sha256": "9985bf9862fcdfdfb385bf74628fa86a8e94d469d7954a81c35571c5ef66e7d1",
+      "source_lines": [
+        161,
+        230
+      ],
+      "test_ELF_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+      "native_context_name": "bark/onchain_drain",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "9601bb92-202a-4151-92fb-8d19fef22d2d",
+        "retained_evidence": "onchain-drain-retained-reconciliation.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-063",
+          "result": "FAIL",
+          "receipt": "batch33-bark-unstarted16-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Actual complete1M one-input drain to one recipient output, canonical currentCore block and unspent output >=1confirmation; actual fee bounded by public regular quote, signed weight and descriptor maximum satisfaction; senderzero and exact recipient+fee conservation.",
+      "limitation": "One-confirmation bounded ordinary drain; no Core6/fallback/backup/whole operator or alternate script population qualification.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 3,
+      "binary": "ark-testing::bark",
+      "literal_name": "movement::board_board",
+      "proposed_case_id_if_started": "FT-CLI-081",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "c35fb82d976c5d637e682458b9717005bedfad803da62688409f2d77bcf80c25",
+      "source_lines": [
+        88,
+        135
+      ],
+      "test_ELF_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+      "native_context_name": "movement/board_board",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+        "retained_evidence": "board-movement-actual-fee-adaptation-v1-manifest.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-053",
+          "result": "FAIL",
+          "receipt": "batch24-upstream-bark-unstarted29-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Real100k registered board; exact movement state/subsystem/input-output IDs/completion and anchor; movement onchain_fee equals independently fetched actual signed funding prevouts minus all outputs.",
+      "limitation": "Native board helper confirmation boundary; no explicitCore6/full initial1M residual/fee-child/backup claim.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 4,
+      "binary": "ark-testing::bark",
+      "literal_name": "movement::movement_offboard",
+      "proposed_case_id_if_started": "FT-CLI-082",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "ae0362fab02066be397fa84755d044f8c5bf570b48585a0667a1169c56856693",
+      "source_lines": [
+        391,
+        449
+      ],
+      "test_ELF_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+      "native_context_name": "movement/movement_offboard",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "67572fd5-4452-4303-b66e-57b2902c1bf4",
+        "retained_evidence": "movement-offboard-retained-reconciliation.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-055",
+          "result": "FAIL",
+          "receipt": "batch26-upstream-bark-unstarted23-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Real three100k boards, one selected offboard; exact public quoted rate times100+actualdestination script bytes equals customer charge; successful zero-required-confirmation movement, exact selected input/destination/net/metadata signed txid.",
+      "limitation": "Movement is deliberately successful at0 required confirmations. No actual miner fee, final canonical payout depth/full300k+ordinary change graph conservation.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 5,
+      "binary": "ark-testing::bark",
+      "literal_name": "movement::movement_send_onchain",
+      "proposed_case_id_if_started": "FT-CLI-083",
+      "source_file": "testing/tests/bark/movement.rs",
+      "source_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "31d2694ea05d8164cd9721dc2f3b9ed3cc7a0a9b943e0406429fc32895c5f96c",
+      "source_lines": [
+        493,
+        558
+      ],
+      "test_ELF_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+      "native_context_name": "movement/movement_send_onchain",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "5642a425-2b0a-41dc-a294-90e32132411b",
+        "retained_evidence": "movement-send-onchain-retained-reconciliation.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-056",
+          "result": "FAIL",
+          "receipt": "batch30-bark-unstarted21-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Real100k registered source and50k requested onchain amount; exact movement effective debit amount+public script-size customer fee, input/newchange IDs, destination amount and metadata txid/body; two fixture blocks then maintain.",
+      "limitation": "Customer fee/movement/selected source only; no actual payout miner-fee audit, Core6, whole initial1M/operator cut or backup.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 6,
+      "binary": "ark-testing::bark",
+      "literal_name": "offboard::bark_send_onchain",
+      "proposed_case_id_if_started": "FT-CLI-084",
+      "source_file": "testing/tests/bark/offboard.rs",
+      "source_file_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "target_body_sha256": "a2a607e12a0671337e5d1e20ca6d8220c4507bb3cc10a9d39c317fc48f8019c8",
+      "source_lines": [
+        122,
+        168
+      ],
+      "test_ELF_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+      "native_context_name": "bark/bark_send_onchain",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "7a6f0ea0-1685-4abd-bfbe-664ed76582ad",
+        "retained_evidence": "offboard-send-onchain-retained-reconciliation.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-059",
+          "result": "FAIL",
+          "receipt": "batch32-bark-unstarted18-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Real800k source pays300k destination with exact public script-size charged fee; expected native change count and total, source-linked movement and recipient onchain balance after fixture mining.",
+      "limitation": "Recipient CLI balance and3 generated blocks are not independentCore6/canonical all-prevout proof; initial1M/boardfee/ordinary change/server residual outside scoped800k cut.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 7,
+      "binary": "ark-testing::bark",
+      "literal_name": "offboard::bark_rejects_offboarding_dust_amount",
+      "proposed_case_id_if_started": "FT-CLI-085",
+      "source_file": "testing/tests/bark/offboard.rs",
+      "source_file_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "target_body_sha256": "efccc9ea84a6871cd1fc1cad47db56cad9da6b1fd542690ac9ba2f1b13a433be",
+      "source_lines": [
+        201,
+        233
+      ],
+      "test_ELF_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+      "native_context_name": "bark/bark_rejects_offboarding_dust_amount",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "3d1aa01c-86f3-480c-b980-b9973e7fffa1",
+        "retained_evidence": "offboard-dust-retained-reconciliation.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-CLI-058",
+          "result": "FAIL",
+          "receipt": "batch31-bark-unstarted20-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Real800k board; actual destination minimal_non_dust minus1 refused with native error; no-sync VTXO state, spendable balance and complete history unchanged.",
+      "limitation": "Valid refusal is tested; no successful dust payment, canonical payout/settlement, near-threshold accepted counterpart or globalmoney audit.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 8,
+      "binary": "ark-testing::barkd",
+      "literal_name": "boards::board_all_barkd",
+      "proposed_case_id_if_started": "FT-BARKD-037",
+      "source_file": "testing/tests/barkd/boards.rs",
+      "source_file_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "target_body_sha256": "d35b67840c0aa16a7280ab3cb1ebf3d5346daa45ab05db90fd59121e3497c829",
+      "source_lines": [
+        10,
+        75
+      ],
+      "test_ELF_sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+      "native_context_name": "barkd/board_all_barkd",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
+        "retained_evidence": "barkd-board-all-actual-fee-adaptation-v1-manifest.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-BARKD-002",
+          "result": "FAIL",
+          "receipt": "batch25-barkd-ordinary38-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Real100k onchain board_all funding; signedCore transaction matches response shape, exact native VTXO amount/anchor; actual prevout miner fee +100base+ceil1%actualgross+net=100k; pending\u2192confirmedspendable and onchainzero.",
+      "limitation": "Explicit fixtureboard fee schedule; no requiredCore6/raw full wallet graph, arbitrary fee schedules or independent operator custody.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 9,
+      "binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_finds_boarded_vtxo",
+      "proposed_case_id_if_started": "FT-BARKD-038",
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "source_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "c05792829e71cbb8b86eca8ee4342e60edcf336f91f40a2dfedaa4c9da20a687",
+      "source_lines": [
+        40,
+        86
+      ],
+      "test_ELF_sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+      "native_context_name": "barkd/recovered_wallet_finds_boarded_vtxo",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "a17a9bb2-7a91-4d52-8105-712c68404cfb",
+        "retained_evidence": "barkd-recovery-boarded-actual-amount-v1-manifest.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-BARKD-021",
+          "result": "FAIL",
+          "receipt": "batch27-barkd-unstarted36-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Fresh distinctDB same-seed native recovery matches actual boardedID/Spendable/amount/anchor; sends wholeactualpositive coin; recipientexactbalance/oneSpendable/newID/sameanchor, recoveredzero/empty/sourceSpent.",
+      "limitation": "Original daemon remains alive and Ark endpoint live. No original-absent/physicalDBbackup/seed-onlyoffline/Core6/initial100kfee graph claim.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 10,
+      "binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "proposed_case_id_if_started": "FT-BARKD-039",
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "source_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+      "source_lines": [
+        692,
+        782
+      ],
+      "test_ELF_sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+      "native_context_name": "barkd/recovered_wallet_finds_mixed_origin_vtxos",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "551dd1bb-ab3b-4629-a333-40a5f4ad9a97",
+        "retained_evidence": "barkd-recovery-mixed-actual-amount-v1-manifest.json"
+      },
+      "historical_execution_refs": [
+        {
+          "case_id": "FT-BARKD-022",
+          "result": "FAIL",
+          "receipt": "batch28-barkd-unstarted17-receipt.json",
+          "tested_revision": "704179331e4f672ac09f5dad6dc564d42fa36707dc32bad5b6889c831848cf06"
+        }
+      ],
+      "unique_name_increment_if_first_run": 0,
+      "source_success_oracle": "Recover exact board+round+Arkoor liveID set, amounts and per-anchor totals with spent ancestors recorded; send wholematchingcut; recipientSpendable/newIDs/exactsum+peranchormap, recoveredzero/allselectedsourcesSpent.",
+      "limitation": "Original remains alive/distinctDB/liveArk; no output-count/per-input-fee assumption, Core6, whole initialfunding/operator graph, absent actor or universal seedbackup claim.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 11,
+      "binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "proposed_case_id_if_started": "FT-BARKD-040",
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "source_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+      "source_lines": [
+        236,
+        297
+      ],
+      "test_ELF_sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+      "native_context_name": "barkd/recovered_wallet_finds_round_vtxo",
+      "historical_original": {
+        "status": "HELD_NOT_RUN",
+        "run_id": null,
+        "retained_evidence": "barkd-recovery-round-actual-amount-v1-manifest.json"
+      },
+      "historical_execution_refs": [],
+      "unique_name_increment_if_first_run": 1,
+      "source_success_oracle": "Realboard\u2192interactiveconfirmedround changesID, zero fixture refreshfee preservesactualamount; recoveredroundID Spendable/amount/anchor and oldboardSpent; wholeactualsend yields exactrecipient/newID/sameanchor and bothsourceIDsSpent.",
+      "limitation": "Original remains alive/distinctDB/liveArk and native round wait; no lost-original/Ark-offline/physicalbackup/Core6/globalfunding conservation.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    },
+    {
+      "order": 12,
+      "binary": "ark-testing::barkd",
+      "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "proposed_case_id_if_started": "FT-BARKD-041",
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "source_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+      "source_lines": [
+        908,
+        1050
+      ],
+      "test_ELF_sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+      "native_context_name": "barkd/recovered_wallet_quarantines_invalid_spent_vtxos",
+      "historical_original": {
+        "literal_name": "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+        "status": "HELD_NOT_RUN_UNSAFE_LEGACY_ORACLE",
+        "run_id": null,
+        "retained_evidence": "barkd-recovery-quarantine-v2-manifest.json"
+      },
+      "historical_execution_refs": [],
+      "unique_name_increment_if_first_run": 1,
+      "source_success_oracle": "Real10k native transfer authenticates valid signed successors against actualCore anchor; negative proxy-corruptbody recovery quarantines oldboard LockedNone, rejects invalidlivechange and all10balancefieldszero; distinct valid restore recovers exactsignedchange/oldboardSpent and recipient+change=actualboardbodyamount.",
+      "limitation": "Controlled local invalid-body defense, not unsafe server-word acceptance. Original stays alive; no physicalbackup/absentactor/Core6/wholeinitialfunding or malicious third-party workflow qualification.",
+      "current_result_credit": "NONE_PENDING_PARENT_TERMINAL_AND_CURATION_LEASE"
+    }
+  ],
+  "curation_rules": [
+    "Require explicit parentterminal and writerlease, inspect actualcohort progress/results and safe summary thenverifyexactorderedstartedprefix; do not inferremainingnamesPASS.",
+    "For every actualstartedresult bind expectedbinary/exactliteral/runID/sourcebody/ELF/config/actualversiongate and actualnativecontext. Record native and summary durations separately; preflight/list/resourceeventswithno testare notFAILexecutions.",
+    "Append onlyactuallyexecutedprefix with proposedIDsstillfree, neverinsertunstartedheldnamesasexecutions. RetainnineoriginalFAILrecords, twoheldoriginals and oldunsafe serverwordhold unchanged. AdaptedPASSdoesnoterasepriorFAIL.",
+    "Recheckglobal exact(binary,name)dedup atterminal; presentlythree potentialnewpairs. ActualfirstFAILstops and unstartedremainingnames earnnoexecution. No retry.",
+    "WriteCSVrowswith LF endings only; preserve current436rowbytes andstorebefore/aftersha plusappendreceipt. Preserveinitialnativereceipt andresolve laterindependentreviewpending states viaadditivesupplements.",
+    "Publishonlywhitelistedsafe result/proof/control/hashmetadata, strictsummary lines and source-boundoracles. No fullnative logs/privatewallet/seed/key/config/DB artifacts.",
+    "Keep scopes percase; noCore6fromtwothreefixtureblocks orCLIbalance.total; no seed-onlyoffline/originalabsent/fullbackupfromliveoriginalrecovery; no customercharge=actualminerfee inference.",
+    "No fullML/readiness/productionpromotion or unrelatedrootlane credit. Parent explicitlyauthorizesfuturepubliccheckpoint separately."
+  ],
+  "conditional_all12_PASS_only": {
+    "executions": 237,
+    "PASS": 223,
+    "FAIL": 14,
+    "unique_pairs": 222,
+    "invocations": 210,
+    "native": 225,
+    "component": 12,
+    "coverage_rows": 448,
+    "new_unique_pairs": 3,
+    "not_current_evidence": true
+  },
+  "mutations": {
+    "global_STATUS_COVERAGE_FINDINGS_publicdocs": 0,
+    "source_privatecontrols_build_metadata_runtime_services_Git": 0,
+    "new_execution_or_ML_credit": 0
+  }
+}

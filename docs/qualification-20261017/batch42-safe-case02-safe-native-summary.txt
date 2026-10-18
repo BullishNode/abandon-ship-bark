@@ -1,0 +1,4 @@
+Nextest run ID 5eedaad4-5c87-4e34-a5e7-740492948d68 with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+PASS [   9.366s] (1/1) ark-testing::bark onchain::onchain_drain
+Summary [   9.367s] 1 test run: 1 passed, 650 skipped

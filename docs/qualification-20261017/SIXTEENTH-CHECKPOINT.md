@@ -1,0 +1,25 @@
+# Sixteenth qualification checkpoint — 2026-10-17 testing track
+
+**236 executions: 221 PASS, 15 FAIL; 221 unique binary/test pairs; 209 nextest invocations; 224 native plus 12 component executions; 447 mixed coverage rows.** Rows are not financial-scenario counts. This current report supersedes the unpublished fifteenth 235/446 snapshot; its file and all initial receipts remain unchanged. Parent owns publication on the current report branch based on fixed PR18 head `b969dd862ad3d08d7c30ffa289e708f04578d331`.
+
+| New row | Exact barkd test | Result | Native seconds |
+| --- | --- | --- | ---: |
+| FT-BARKD-040 | `recovery::recovered_wallet_quarantines_invalid_spent_vtxos` | PASS | 25.427 |
+
+Batch43 was a separate explicit allocation of the previously unstarted quarantine case, not a mixed-origin retry or batch42 resume. Run `ea55a215-31a1-4101-97e7-8502a4361ed0`, parent session 10651 exit 0, wall 27.065 seconds, default 180, serial 1/retries 0. Exact unignored selection, genuine fixture after version gating, all 14 pins and 11 parent-frozen paths unchanged, no resource error, and absent owned group/SID 130317 and scoped actors are confirmed by independent postflight. Available shared memory was 837,824,512 bytes.
+
+The native fixture makes a real 10,000-sat Arkoor payment. Invalid-body recovery retains the known historical board Locked(None,None), excludes invalid live successors and keeps all ten balance fields zero. A separate valid same-seed control validates genuine signed bodies against the Core anchor, requires oldboardSpent and exact live change, and conserves actual board value as recipient 10,000 plus change. Original daemon remains alive. This is bounded native signature/recipient evidence, not independent cryptographic/full-Core-graph audit, absent-original/offline restore, physical backup or Core 6.
+
+Initial native receipt `batch43-quarantine-v8e-receipt.json` SHA256 `49aea2ace1e8184a0940504e52432b301ea9970becea6ae9a16db11367540385` stays immutable, including its pending-postflight-at-creation field. Formal `batch43-client-postflight.json` SHA256 `07e38b7e9a57e76f35d2f07c52048d08926870c65897200d7302994e14f80a95` resolves it additively through the new append receipt. Tested candidate remains dirty v8e source e00/archive bbc215/bundle 0dc/runtime fdc, archived recovery file c52 and quarantine body 0f174; exact pins are in those receipts and postflight. New 23f4 source is not substituted for that compiled candidate.
+
+Batch42 remains **9 PASS/1 FAIL/2 NOT STARTED**. Its original and adapted mixed-origin failures remain FAIL; held round and unsafe server-word predecessor remain unexecuted. Later diagnosis identifies exact `546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0` as the 300,000-sat second board consumed by an original successful zero-fee round refresh into another anchor. Original/recovered current Spendable IDs and public bodies match at 649,392 sats; originalSpent/restoredLocked concerns only that historical ancestor.
+
+The ordinary proof API rejects `spent_in_round` inputs and cannot authenticate that cross-anchor retirement using its supported same-anchor ordinary proof. Diagnostic `d14fcf0fb07c10dd1e8a32cb73bf4aced66b8832a8c4ddd3db5524deac833405` and policy review `4728bf03a585e3b138f23a626d59cb832a006ac2361ea7724b98e4239071a593` support a narrow fixture historical-state expectation mismatch. They do not cryptographically prove round discharge or the final recovered spend, which the failing helper prevented.
+
+Proposed patch `0cf1761862c27795afc679c9092ffb4b9c6cade326f7287c69a022dc2ed06fc0`, c52→23f4, changes only mixed and held-round targets: exact known LockedNone/full-info/encoded ancestor before/after payment, strict current-cut/recipient/zero/current-input-Spent assertions retained. Shared helper and quarantine/valid ordinary-Arkoor control are unchanged. Legacy peer `dab7e40077e4157d6d65f4864fb456f0d4a59506f325f999dca154349190533c` and parent ACK are **source-only; uncompiled and NOT RUN**. The patch is absent from the root-reported v9b capture.
+
+Root reports v9b contains six separate reviewed money fixtures plus a mechanical fixture compile correction. Intake verification `c5196abe964ffe5fc1b16dfe5246221618db69d72d001f6604c3e05414acc81a` predates that delta and is source evidence only. No v9 native result is credited here.
+
+Host wall clock changed 23:18→03:30 during preparation; original timestamps are retained. Parent used fresh namespace/resource/hash gates and root reconfirmation after the change. The actual 25.427-second native duration is not inferred across that clock change.
+
+P1 Core supplements for cases 01/02/08 retain relevant depths **2/1/3**, not Core 6; no full physical financial-cut or custody claim follows. The 200-case ML map remains 198 NOT RUN/two bounded PASS; evidence 145 PARTIAL/53 NONE/two FULL. No ML/readiness/production promotion. Only one LF row is appended, preserving all 446 prior rows and 15 FAIL outcomes. STATUS, ML maps, public docs, source, controls, Cargo, metadata, runtime and Git were not changed by this curation.

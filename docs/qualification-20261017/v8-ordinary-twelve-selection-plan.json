@@ -1,0 +1,331 @@
+{
+  "kind": "V8_ORDINARY_TWELVE_SELECTION_PLAN_ONLY",
+  "at": "2026-10-17T22:33:14.618644+00:00",
+  "state": "PLAN_ONLY_AWAIT_EXACT_V8_CAPTURE_AND_ROOT_ALLOCATION",
+  "execution_authorized": false,
+  "captures_known": false,
+  "v8_source_manifest_sha256": null,
+  "v8_bundle_manifest_sha256": null,
+  "v8_runtime_metadata_sha256": null,
+  "reviewed_patch": {
+    "file": "ordinary-adaptations-twelve-source-only.patch",
+    "sha256": "3aeb8840d040a67cee0bc423a3ab80953df3b795229d864e8be2fd6bee1ea165",
+    "published_base_commit": "828863b21a21a10d3d26ae5f29479be3ee87a233"
+  },
+  "reviewed_manifest": {
+    "file": "ordinary-adaptations-twelve-source-only-manifest.json",
+    "sha256": "c589354c1fdd931f5e313a531fd3c434531105156d5ffb991166c2554049bcbb"
+  },
+  "peer_ack": {
+    "file": "ordinary-adaptations-twelve-peer-review.json",
+    "sha256": "842169d08989eec03f2134c1967af79ff05417c8f4292694cf6351c18a37a326"
+  },
+  "current_canonical_scope": "Onlythefiveintegratedtargetfilesread; exactbytesboundbyfilehashes, no claimaboutunrelatedbackendWIP/productHEAD.",
+  "files": {
+    "testing/tests/bark/onchain.rs": {
+      "canonical_current_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "exact_frozen_reviewed_result_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "canonical_bytes_equal_frozen_peer_result": true,
+      "published_patch_base_file_sha256": "bf323688aab8746678bbf73f886ba4cbfaf13f9c3083c5dfd0e60d61b1d9c015"
+    },
+    "testing/tests/bark/movement.rs": {
+      "canonical_current_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "exact_frozen_reviewed_result_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "canonical_bytes_equal_frozen_peer_result": true,
+      "published_patch_base_file_sha256": "ca6fecd5578373f4baa46abc70013ec910a1ba24640891ccda3039f200585827"
+    },
+    "testing/tests/bark/offboard.rs": {
+      "canonical_current_file_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "exact_frozen_reviewed_result_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "canonical_bytes_equal_frozen_peer_result": true,
+      "published_patch_base_file_sha256": "3b332ccfa1db013e11abce7ea87043742786dae1f686868939df38974a17ee35"
+    },
+    "testing/tests/barkd/boards.rs": {
+      "canonical_current_file_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "exact_frozen_reviewed_result_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "canonical_bytes_equal_frozen_peer_result": true,
+      "published_patch_base_file_sha256": "9daaf65eed620a073f5ef16bff5315968c5334156a910f92730f3bc934482d58"
+    },
+    "testing/tests/barkd/recovery.rs": {
+      "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "exact_frozen_reviewed_result_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "canonical_bytes_equal_frozen_peer_result": true,
+      "published_patch_base_file_sha256": "0e3ea6530a31d3e80a37fcbe575ce4c73e161348bbbbc9587c3bb83a9fee1464"
+    }
+  },
+  "selection": [
+    {
+      "order": 1,
+      "literal_name": "onchain::list_utxos",
+      "expected_binary": "ark-testing::bark",
+      "expected_ignored": false,
+      "source_file": "testing/tests/bark/onchain.rs",
+      "canonical_current_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "target_body_sha256": "2ea3d73dbdf39828a110df07e025db31b206bfa1b0ad349fe515c3fb4495b53e",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [
+        "require_bark_version!(> \"0.5.0\");"
+      ],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "HELD_NOT_RUN",
+        "run_id": null,
+        "retained_evidence": "onchain-list-utxos-actual-values-v1-manifest.json"
+      }
+    },
+    {
+      "order": 2,
+      "literal_name": "onchain::onchain_drain",
+      "expected_binary": "ark-testing::bark",
+      "expected_ignored": false,
+      "source_file": "testing/tests/bark/onchain.rs",
+      "canonical_current_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "target_body_sha256": "9985bf9862fcdfdfb385bf74628fa86a8e94d469d7954a81c35571c5ef66e7d1",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "9601bb92-202a-4151-92fb-8d19fef22d2d",
+        "retained_evidence": "onchain-drain-retained-reconciliation.json"
+      }
+    },
+    {
+      "order": 3,
+      "literal_name": "movement::board_board",
+      "expected_binary": "ark-testing::bark",
+      "expected_ignored": false,
+      "source_file": "testing/tests/bark/movement.rs",
+      "canonical_current_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "c35fb82d976c5d637e682458b9717005bedfad803da62688409f2d77bcf80c25",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+        "retained_evidence": "board-movement-actual-fee-adaptation-v1-manifest.json"
+      }
+    },
+    {
+      "order": 4,
+      "literal_name": "movement::movement_offboard",
+      "expected_binary": "ark-testing::bark",
+      "expected_ignored": false,
+      "source_file": "testing/tests/bark/movement.rs",
+      "canonical_current_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "ae0362fab02066be397fa84755d044f8c5bf570b48585a0667a1169c56856693",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "67572fd5-4452-4303-b66e-57b2902c1bf4",
+        "retained_evidence": "movement-offboard-retained-reconciliation.json"
+      }
+    },
+    {
+      "order": 5,
+      "literal_name": "movement::movement_send_onchain",
+      "expected_binary": "ark-testing::bark",
+      "expected_ignored": false,
+      "source_file": "testing/tests/bark/movement.rs",
+      "canonical_current_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "31d2694ea05d8164cd9721dc2f3b9ed3cc7a0a9b943e0406429fc32895c5f96c",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [
+        "require_bark_version!(> \"0.5.0\");"
+      ],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "5642a425-2b0a-41dc-a294-90e32132411b",
+        "retained_evidence": "movement-send-onchain-retained-reconciliation.json"
+      }
+    },
+    {
+      "order": 6,
+      "literal_name": "offboard::bark_send_onchain",
+      "expected_binary": "ark-testing::bark",
+      "expected_ignored": false,
+      "source_file": "testing/tests/bark/offboard.rs",
+      "canonical_current_file_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "target_body_sha256": "a2a607e12a0671337e5d1e20ca6d8220c4507bb3cc10a9d39c317fc48f8019c8",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "7a6f0ea0-1685-4abd-bfbe-664ed76582ad",
+        "retained_evidence": "offboard-send-onchain-retained-reconciliation.json"
+      }
+    },
+    {
+      "order": 7,
+      "literal_name": "offboard::bark_rejects_offboarding_dust_amount",
+      "expected_binary": "ark-testing::bark",
+      "expected_ignored": false,
+      "source_file": "testing/tests/bark/offboard.rs",
+      "canonical_current_file_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "target_body_sha256": "efccc9ea84a6871cd1fc1cad47db56cad9da6b1fd542690ac9ba2f1b13a433be",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "3d1aa01c-86f3-480c-b980-b9973e7fffa1",
+        "retained_evidence": "offboard-dust-retained-reconciliation.json"
+      }
+    },
+    {
+      "order": 8,
+      "literal_name": "boards::board_all_barkd",
+      "expected_binary": "ark-testing::barkd",
+      "expected_ignored": false,
+      "source_file": "testing/tests/barkd/boards.rs",
+      "canonical_current_file_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "target_body_sha256": "d35b67840c0aa16a7280ab3cb1ebf3d5346daa45ab05db90fd59121e3497c829",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
+        "retained_evidence": "barkd-board-all-actual-fee-adaptation-v1-manifest.json"
+      }
+    },
+    {
+      "order": 9,
+      "literal_name": "recovery::recovered_wallet_finds_boarded_vtxo",
+      "expected_binary": "ark-testing::barkd",
+      "expected_ignored": false,
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "c05792829e71cbb8b86eca8ee4342e60edcf336f91f40a2dfedaa4c9da20a687",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "a17a9bb2-7a91-4d52-8105-712c68404cfb",
+        "retained_evidence": "barkd-recovery-boarded-actual-amount-v1-manifest.json"
+      }
+    },
+    {
+      "order": 10,
+      "literal_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "expected_binary": "ark-testing::barkd",
+      "expected_ignored": false,
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [
+        "require_bark_version!(> \"0.5.0\");"
+      ],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "FAIL",
+        "run_id": "551dd1bb-ab3b-4629-a333-40a5f4ad9a97",
+        "retained_evidence": "barkd-recovery-mixed-actual-amount-v1-manifest.json"
+      }
+    },
+    {
+      "order": 11,
+      "literal_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "expected_binary": "ark-testing::barkd",
+      "expected_ignored": false,
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [
+        "require_bark_version!(> \"0.5.0\");"
+      ],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "status": "HELD_NOT_RUN",
+        "run_id": null,
+        "retained_evidence": "barkd-recovery-round-actual-amount-v1-manifest.json"
+      }
+    },
+    {
+      "order": 12,
+      "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "expected_binary": "ark-testing::barkd",
+      "expected_ignored": false,
+      "source_file": "testing/tests/barkd/recovery.rs",
+      "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+      "target_bytes_equal_frozen_aggregate_result": true,
+      "native_version_gates_in_target": [
+        "require_bark_version!(> \"0.7.1\");"
+      ],
+      "adapted_execution_status": "NOT RUN",
+      "historical_original": {
+        "literal_name": "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+        "status": "HELD_NOT_RUN_UNSAFE_LEGACY_ORACLE",
+        "run_id": null,
+        "retained_evidence": "barkd-recovery-quarantine-v2-manifest.json"
+      },
+      "explicit_selection_rule": "SelectonlyNEWquarantines_invalid_spent_vtxos; NEVERtheheldoldserverwordliteral. GenuineinvalidbodyLocked/noinventedbalance plusseparatevalidsignedcontrol retained."
+    }
+  ],
+  "counts": {
+    "targets": 12,
+    "CLI": 7,
+    "barkd": 5,
+    "files": 5,
+    "new_execution_credit": 0,
+    "FULL_ML_credit": 0
+  },
+  "future_allocation_defaults": {
+    "outer_timeout_seconds_per_test": 180,
+    "profile": "default",
+    "retries": 0,
+    "test_threads": 1,
+    "serial_cases": 1,
+    "first_failure_stops": true,
+    "exact_filter": true,
+    "run_ignored": "Noexceptionrequested; all12expectedunignored.",
+    "fresh_private_context": true,
+    "no_failed_case_retry": true
+  },
+  "future_prerequisites": [
+    "Parentexplicitlyallocatesexactv8candidate/names/countbeforeanyruntime.",
+    "Exactnewsource/archive includesall5listedfullfilehashes and12bodyhashes; retainpeerpacket/sourceprovenance andrecordanylaterdelta separately.",
+    "Captureactualark-testing::bark andark-testing::barkd integrationELFs+matchingbinariesmetadata; barkdproductaloneisinsufficient. v6metadatahasnobarkdtestbinaryandcannotstandinforv8.",
+    "Independentpostbuild ELF/source/archive/metadata/support/toolpinverificationandactualcandidateversions; no assumptionfromcompilednames.",
+    "Freshnextestsingletonlist foreachliteral mustselecttheexpectedbinary,exact1unignored,nonamesunexpected,matchingfrozenbody/archive; no newmetadata/listperformedbythisplan.",
+    "Parentresource/ownedprocess/privatecontextgateandread-onlyfreshpreflightbeforeparent-onlylaunch; ROOTsoleCargo/targetwriter.",
+    "AftereachactualrunrecordrunID/duration/exit/exactselection/realbodyassertions andstopfirstfailure; inspectretainedmoneyonlyafterterminal+actorabsence.",
+    "PreservealloriginalFAIL/heldrecordsandconditionchanges; thesourceadaptationsneverrewritehistoricaloutcomes."
+  ],
+  "separate_and_excluded": {
+    "alreadyintegrated_3_actual_batch40_PASS": [
+      "create::bark_address_works_offline",
+      "onchain::bark_address_changes",
+      "fees::send_onchain_fee_deducted"
+    ],
+    "heldunsafe_original": "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+    "SDKpolicy_packets": [
+      "expired-Lightningrefusal/refresh",
+      "watchmanpairfactor1"
+    ],
+    "othernative_backend_tests": "Notselectedorcreditedbythisplan."
+  },
+  "limits": [
+    "Thisartifactisaselection/source-matchplan,notabuild,Cargo,list/run,controlscriptorfinancialreconciliation.",
+    "No runtimeELF/metadata/sourcepinclaimedbeforev8capture. No deployment/productionpromotion.",
+    "ActualnativefinancialoraclesremainNOTRUNforthese12; nofullsuite/fullcustody/fullMLcredit.",
+    "Originalwalletalive/distinctDBrecoveryscopeandnativeconfirmed-depthlimitsremainasreviewed; no freshseed-only/originalabsentclaimfortheordinaryrecoveryadapters."
+  ],
+  "mutations": {
+    "canonical_source": 0,
+    "frozen_packets": 0,
+    "build_metadata_listing_runtime": 0,
+    "COVERAGE_STATUS": 0
+  },
+  "target_body_hash_scope": "async fn declaration through top-level closingbrace; excludes tokioattribute/precedingdocs",
+  "actual_body_credit_requirement": "For eachallocatedcase verifyfresh exact1unignored expectedbinary, matchingactual1testresult/runID, versiongatepassed andgenuinenativefixture/assertionsreached. Compiledname/listingsuccessaloneearnsnoruntimecredit."
+}

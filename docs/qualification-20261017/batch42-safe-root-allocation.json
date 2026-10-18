@@ -1,0 +1,78 @@
+{
+  "state": "AUTHORIZED_EXTERNAL_ORDINARY12_SERIAL_LANE2_AFTER_OWN_PREFLIGHT",
+  "at": "2026-10-17T23:01:57.242627+00:00",
+  "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "source_archive_sha256": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "binaries_metadata": "/fresh-cache/runtime-reorg-admission-v8e-20261017/nextest-binaries-runtime.json",
+  "binaries_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "selection_plan_sha256": "bef0af66394f3839eabad46f422ee39f2ad94c9cd03ddfd5857bc058bcfc83c8",
+  "exact_cases": [
+    {
+      "name": "onchain::list_utxos",
+      "binary": "ark-testing::bark"
+    },
+    {
+      "name": "onchain::onchain_drain",
+      "binary": "ark-testing::bark"
+    },
+    {
+      "name": "movement::board_board",
+      "binary": "ark-testing::bark"
+    },
+    {
+      "name": "movement::movement_offboard",
+      "binary": "ark-testing::bark"
+    },
+    {
+      "name": "movement::movement_send_onchain",
+      "binary": "ark-testing::bark"
+    },
+    {
+      "name": "offboard::bark_send_onchain",
+      "binary": "ark-testing::bark"
+    },
+    {
+      "name": "offboard::bark_rejects_offboarding_dust_amount",
+      "binary": "ark-testing::bark"
+    },
+    {
+      "name": "boards::board_all_barkd",
+      "binary": "ark-testing::barkd"
+    },
+    {
+      "name": "recovery::recovered_wallet_finds_boarded_vtxo",
+      "binary": "ark-testing::barkd"
+    },
+    {
+      "name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "binary": "ark-testing::barkd"
+    },
+    {
+      "name": "recovery::recovered_wallet_finds_round_vtxo",
+      "binary": "ark-testing::barkd"
+    },
+    {
+      "name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "binary": "ark-testing::barkd"
+    }
+  ],
+  "serial": 1,
+  "global_max_concurrent_native": 2,
+  "other_lane": "rootserial10sourceandfinancialqualification",
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "first_fail_stops": true,
+  "preconditions": [
+    "own independent hash/source/body/binary selection/resource/control preflight",
+    "exactly1unignored expectedbinary percase",
+    "no Cargo/sharedtargetwriters",
+    "no Signet or extra case allocation"
+  ],
+  "root_old_orphans_cleanup": "/home/francis/.cache/abandon-fresh/root-reorg-admission-v8e-20261017/old-root-orphan-cleanup.json",
+  "root_resource_proof": "/home/francis/.cache/abandon-fresh/root-reorg-admission-v8e-20261017/resource-observation.json",
+  "runtime_pins_reference": "/home/francis/.cache/abandon-fresh/root-reorg-admission-v8e-20261017/runtime-pins.sha256",
+  "ordinary_can_exclude_cln3": true
+}

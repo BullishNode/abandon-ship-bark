@@ -1,0 +1,4 @@
+Nextest run ID d0d570b2-7a54-450b-954a-5aa868243468 with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+PASS [  18.800s] (1/1) ark-testing::bark onchain::list_utxos
+Summary [  18.801s] 1 test run: 1 passed, 650 skipped

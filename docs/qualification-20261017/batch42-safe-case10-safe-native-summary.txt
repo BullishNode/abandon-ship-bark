@@ -1,0 +1,9 @@
+Nextest run ID 15eac100-bf66-4630-b810-edcc7f433046 with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+FAIL [  35.103s] (1/1) ark-testing::barkd recovery::recovered_wallet_finds_mixed_origin_vtxos
+Summary [  35.114s] 1 test run: 0 passed, 1 failed, 650 skipped
+Panic location: testing/tests/barkd/recovery.rs:26:9
+Expected state: Spent
+Observed state: Locked { movement_id: None, action_id: None }
+Public VTXO ID: 546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0
+Original FAIL retained; later assertions were not reached.

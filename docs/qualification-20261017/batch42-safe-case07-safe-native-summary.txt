@@ -1,0 +1,4 @@
+Nextest run ID e00ecfc9-fc1d-4371-ad5c-8fe9cc699ab0 with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+PASS [  11.477s] (1/1) ark-testing::bark offboard::bark_rejects_offboarding_dust_amount
+Summary [  11.478s] 1 test run: 1 passed, 650 skipped

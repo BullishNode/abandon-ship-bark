@@ -1,0 +1,155 @@
+{
+  "kind": "INDEPENDENT_BATCH43_CLIENT_POSTFLIGHT",
+  "at": "2026-10-18T03:37:55.027233+00:00",
+  "state": "TERMINAL_PASS_POSTFLIGHT_INTEGRITY_PASS",
+  "parent_terminal": "Parent10651 terminal0 confirmed before cleanup check.",
+  "selection": {
+    "binary": "ark-testing::barkd",
+    "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+    "exactly_one_unignored_freshlisting": true,
+    "actual_nextest_selected": 1,
+    "actual_binaries_available": 4,
+    "filtered_tests": 650,
+    "no_ignored_override": true
+  },
+  "result": {
+    "run_id": "ea55a215-31a1-4101-97e7-8502a4361ed0",
+    "state": "PASS",
+    "test_seconds": 25.427,
+    "wall_seconds": 27.065,
+    "exit_code": 0,
+    "resource_error": null,
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "owned_nextest_group": 130317,
+    "started_at": "2026-10-18T03:35:16.942197+00:00",
+    "ended_at": "2026-10-18T03:35:44.007063+00:00"
+  },
+  "counts": {
+    "started": 1,
+    "PASS": 1,
+    "FAIL": 0,
+    "additional_reviewer_executions": 0
+  },
+  "source_and_run_binding": {
+    "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+    "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+    "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+    "archived_source_file": {
+      "test_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+    },
+    "all14pins_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/captaind",
+        "sha256": "79dc4e8ac031c3c83e98e3818354c25f90217db2ed75d6250f227247c21f4d88"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/watchmand",
+        "sha256": "12833888b556987c7c975fec155189589cb471fc31ca2e4e90c4c54d01fc9dea"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/bark",
+        "sha256": "0ac32573d1684401a90acf630ddfee355ed3633c3f594d95d4b1f8644f63d980"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/barkd",
+        "sha256": "32efdb7b014e1ed3afe985e40aec59f28f9abeaeaf5a87dea42c27c35bd3d4be"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-bark",
+        "sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-bark-sdk",
+        "sha256": "521639a01a7300b4c3304a46b70b4c5f9e8ef8f3ddd8d4edddc4b10827741219"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-barkd",
+        "sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-server",
+        "sha256": "579c6b2dbd1b06edcef6e50b63c8e36b1e7d49fd68f0b66e853bb473259c8fe4"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/nextest-binaries-runtime.json",
+        "sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/source-manifest.json",
+        "sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/manifest.json",
+        "sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/deps/libark.rlib",
+        "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/deps/libark.so",
+        "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/lock-holder",
+        "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      }
+    ],
+    "all11parent_control_profile_listing_resource_hashes_unchanged": {
+      "selection-proof.json": "e67080a105fa88dee2f013b2c8a2d48c78d5c431975bf2759263c502eb6337af",
+      "root-allocation.json": "2322f04380ff60582baf03d0bfa1ae1918dbf524c1880c499e9f1916ff5286a2",
+      "runtime-pins.sha256": "27a230e131ed5c0a01da27fced22243bf8d49e9bc0b2fbef2fc71c35d28342e4",
+      "server-cohort.py": "31545c01d2097553e62baaa1d09a046122ce1dcd0d5d9a2b5eb3faf8cc8f6d5e",
+      "preflight-static.py": "ac1cca7a1b6133c25e347b5e4fbdf5444d1668666f38a6693827afbd44c32a4f",
+      "fresh-listings.py": "468f31082797f1b1e0b5ffc715f52e5ed005bf927021165b5d1464f0d9539bfa",
+      "preflight.sh": "51246e503189e7457b4c76f2242092b9f4a3170bc89124da0bbfd160c9d5d0b6",
+      "run.sh": "54de404cd7bda8034582be17748782ff71493c8dc16fc828c634c169f5c94fa6",
+      "case01/nextest.toml": "2e36fa8eba62c1b8266cea3e97b5a2c5d3a955ed39b44604ea880c7b7f6ebb2d",
+      "fresh-listing-admission.json": "9bfebe63e1abac43d6c09c4bf9bda2701e42e685a2067cca00ea861f365677bb",
+      "resource-admission.json": "3119a47d8615867eed02c669d829f60da657b1e1d18adc39ffbcc793c0932db6"
+    },
+    "parent_admission_sha256": "dd1acb8c9bd28a86f0b975d023bebfad7d2077d59bafa2a8b00a7dccfb4ad96f",
+    "actual_profile": "default",
+    "native_version_gates": [
+      "require_bark_version!(> \"0.7.1\");"
+    ],
+    "genuine_fixture_after_gates": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/case01/test-data/barkd/recovered_wallet_quarantines_invalid_spent_vtxos",
+    "quarantined_valid_control_recipient_context_directories_present": true,
+    "nonempty_native_Core_blockfile_present": true
+  },
+  "native_assertion_scope": [
+    "Native fixture requests 100k boarding and performs a 10k Arkoor payment; conservation uses the actual signed board amount, not requested funding. Invalid-body proxy exercised for the known spent board and each change coin.",
+    "Invalid historical board retains Locked None/None; invalid successors absent; no Spendable/Spent fabrication and all10balance fields zero.",
+    "Distinct fresh same-seed control receives original valid signed bodies, checks old board Spent and actual change Spendable/IDs/amounts/anchors/encoded bodies and validate against actual Core anchor.",
+    "Native recipient10k plus genuine control change conserves actualboard value; original daemon alive throughout.",
+    "Native PASS reaches all source assertions; this postflight independently verifies selection/artifact binding, not secp256k1 signatures or whole Core financial graph."
+  ],
+  "cleanup_resources": {
+    "at": "2026-10-18T03:37:53.511369+00:00",
+    "namespace": "abandon-fresh-runtime-20261017",
+    "owned_group": 130317,
+    "remaining_owned_group_or_session_members": [],
+    "remaining_batch_scoped_processes": [],
+    "shm_available_bytes": 837824512,
+    "shm_guard_bytes": 12582912,
+    "no_signals_or_actor_calls": true
+  },
+  "safe_artifact_hashes": {
+    "case01/result.json": "123f0f594be1bcf17e3be8b7b96797bd673adc703e0cd6cee45459cdf8ccd197",
+    "case01/selection-list-fresh.json": "8c973c6923b0d8a2c19c25aab7fa6891440a9a1cb8d8726607d17adc7dbabc4b",
+    "case01/nextest.log": "bf4a37a63b8863c338a7d719dc7983a8711e07b0643e85a88935e3fb5f42602b",
+    "cohort-progress.json": "c06a732bb521b1f5421c6fdb7dd675fe0cbdc6e7347fc744a1ebdddb744cec49",
+    "PREPARATION.json": "ee6e87869d04cb6ec9fdb886b07d4ad3073781a7a8a84da9068a188f057332be"
+  },
+  "limits": [
+    "This is one distinct previouslyNOTRUN case; no case10 retry or held-round execution.",
+    "Batch42 historical9PASS/1FAIL/2unstarted receipt and original unsafe held literal unchanged.",
+    "No generic corrupt-server acceptance, originalabsence/offline recovery, fullsuite, production or FULL ML claim.",
+    "No full native log/argv/mnemonic/privatekey/config/walletDB reads or exports; only bounded safe native summary regex plus source/artifact hashes and directory/blockfile stats.",
+    "No actors/services/RPC/Core/PG reopening, signals, mutation, rerun, listing, preflight, Cargo or native launch."
+  ]
+}

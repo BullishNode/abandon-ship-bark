@@ -1,0 +1,15 @@
+IN_NIX_SHELL=impure
+/fresh-cache/runtime-reorg-admission-v8e-20261017/captaind: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/watchmand: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/bark: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/barkd: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/native-bark: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/native-bark-sdk: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/native-barkd: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/native-server: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/nextest-binaries-runtime.json: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/source-manifest.json: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/manifest.json: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/deps/libark.rlib: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/deps/libark.so: OK
+/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/lock-holder: OK

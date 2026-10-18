@@ -1,0 +1,4 @@
+{
+  "state": "PENDING_FRESH_PARENT_PREFLIGHT_LISTING_RESOURCE_HASH_ADMISSION",
+  "scope": "Preparation only. Parent sole launch owner; marker must remain present until parent completes all gates. Clock jump requires fresh resources; no old admission reused."
+}

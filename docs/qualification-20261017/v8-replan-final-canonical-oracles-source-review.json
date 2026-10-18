@@ -1,0 +1,52 @@
+{
+  "kind": "v8_replan_final_canonical_oracles_independent_source_review",
+  "at": "2026-10-17T22:53:35.618701+00:00",
+  "verdict": "SOURCE ACK; no concrete remaining blocker in the exacttest-onlydelta byinspection; no compilation/native/productioncredit",
+  "patch_path": "/tmp/fresh-v8-replan-final-canonical-oracles-20261017.patch",
+  "patch_sha256": "126678af78e3f875336a1dac5f467d6892ca0dcd54a07b8336034f0b1801bf37",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_internal_replan.rs",
+  "current_source_sha256": "1148bd51024416aa96ffcd5d230a7dfc3a07c74ec9b0ab73f2d259e82d56fdb0",
+  "current_canonical_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+  "exact_applied_hunk_new_contexts_match_current_source": true,
+  "derived_preimage_sha256": "29827e262621dc703690f72adcea07daa83639018439454a01208e73a7414293",
+  "changed_files_in_patch": [
+    "testing/tests/server/expiry_internal_replan.rs"
+  ],
+  "supersedes_only_covered_source_findings": [
+    {
+      "report": "v8-replan-postfork-oracle-parent-addendum.json",
+      "sha256": "f634435451ba649b9cb08e6b19bb19db583b041913805b75fde39d37d9e36533",
+      "status": "conditionalempty-active-set gapclosed by thissource delta"
+    },
+    {
+      "report": "v8-feechild-reorg-source-review.json",
+      "sha256": "9adbb6f8534f0146c4f11bdc73b51401f3d3972ea11222340e434b4160e4b91c",
+      "status": "postforkparentmoney/dependency gapclosed for thisboundedtest; frozenoldreviewremainsunchanged"
+    }
+  ],
+  "checks": [
+    {
+      "lines": "354-369",
+      "assertion": "Activeconfirmed query emits sourceID+parent; rowcount==ids.len, unique by_source insert, and every expectedsourceID covered. Bothsources require actualunspentCore6 output. Inactivehistoricalconfirmedcounts alone cannotproduce readySome orvacuousCoreloop success."
+    },
+    {
+      "lines": "375-391",
+      "assertion": "Eachsource canonicalparent spends at leastone of thatoriginalsource signedpath outpoints; everyoriginalsignedgrant is a parentinput with exactserver-after-expiryTIMEOUTtapscript. Newparentset selectedfromactualactiveconfirmedsourcecoverage."
+    },
+    {
+      "lines": "393-409",
+      "assertion": "Deduplicatephysicalparentsbytxid; exactCoretransaction equalsstoredcanonicalparent; no recipientfallbackSPK output; exactlyone rightfulcustomeroutput peruniqueparent; allactualprevouts resolved andsumoutputs==suminputs (zero parentfee); aggregatecanonicalnet=200000\u22121000\u00d7uniqueparentcount."
+    },
+    {
+      "lines": "329-374/410-414",
+      "assertion": "Same60s/30-step postfork bound andunchangedoriginalfault/financialsetup/immutableoldparentchecks; validmerged/separateregrouping allowed bysourcecoverage+uniquephysicalparentdedup ratherthanforcedoldallocation. Patchcontainsno originalreceipt/historicalFAIL rewrite."
+    }
+  ],
+  "limits": [
+    "SourceACKonly, actualv8d compilerchecks/frozenartifactpins and separatelyallocatednativeproof stillrequired. No test launched byreviewer.",
+    "The delta closes the identifiedsource-specificpostforkparentamount/dependency/vacuity gaps; it doesnotadd fullcanonicalfeechild/operatorchange/globalinitialfunding/seedrecovery/otherunknownrecipient proof orclosefullML/productiongate.",
+    "Rawcurrentcanonicalparent andCore6 are authoritative nativeassertions; no new financialSQLstate ormockchain mutation. Sourcecontexts verified readonly/inmemory only.",
+    "Old9adbb/f634 reports and all originalnativeFAIL receipts remainimmutable; no deadlineextension/retry/resultreclassification."
+  ],
+  "mutations": "Only thisnewexternalcompactJSON. No source/patch/oldreport/Cargo/build/native/runtime/actors/DB/RPC changes."
+}

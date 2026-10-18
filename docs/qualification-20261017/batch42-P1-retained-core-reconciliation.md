@@ -1,0 +1,11 @@
+Assignedcase01/02/08 reconciled offline only after independentactualcontainer group/session+scopedactorabsence (113986/114386/117925), cachedNiximpure. RetainedmainCore blk/xor/headerancestry/transactionMerkleroots/finalUpdateTip andsaferesults/source read; no otheractivecase, Core/RPC/SQL/wallet/DB/seed/config/fullnativelog opening. Allretainedinputhashes unchanged before/after.
+
+| Case | ActualretainedCore finding | Limit |
+| --- | --- | --- |
+|01 list_utxos PASS18.8s | tip118;1mboardinput=200kboard+799237ordinarychange+763miner. Actualoffboardoutput199146 at117=2conf, customercharge854; operatorinput999795813=alloutputs999794515+1298actualminer. Exactnative2UTXOpoints corroborated. | Actualoffboard has third330satconnector; alloutputs counted. Nativequote/list/recipient semantics remain source+PASS provenance; customerliability equation is notfulloperatorDAG/custody. Old200kboardUTXO notadditivecustomerprincipal afterrefresh/offboard. |
+|02 drain PASS9.366s | actual1m input→999452recipient+548miner;191signedbytes,437wu/110vB; exact1input/1output, inputspent/outputunspent; height107/tip107=1conf | Recipientidentity/quote/descriptormaxbound nativeassertions; noCore6/optimalfee/seedrestore claim. |
+|08 board_all PASS9.128s |100kinput→99392P2TRboard+608miner; actualdeclaredArk100base+ceil1%=1094; nativeVTXOnet98298. Height106/tip108=3conf | Offchainnet/ID/registration/confirming→spendable/unsignedPSBTshape are nativeassertions; CoredoesnotproveArkfee custody orwholewalletbalance. |
+
+Transactions are selected by uniqueexactsource-constrained topology/inputamount/outputscriptshape/window, notlargestvalue. These originalfixtures do notemit independentlycapturedpublictxid/destinationscriptcapsules; this limitation staysexplicit ratherthanopeningprivatewallets/logs. No mempooldata read, so no comprehensivependingtransactionabsence claim.
+
+An initialofflineparser assumption of2offboardoutputs was rejected; actualcase01 has a330satconnector pluscustomer/operatorchange. Finaldecoder follows alloutputs. This was an auditassumption, notnativeFAIL orretry. Originalhistoricalfailures unchanged. JSON contains sourcee00/bundle0dc/metadatafdc pins, exacttxIDs/prevouts/signedhashes/depths and before-afterhashes;3case-specific supplementalreceipts reference it. No ML/count/gate/publicdocs/source/control mutations.

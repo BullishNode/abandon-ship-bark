@@ -1,0 +1,61 @@
+{
+  "state": "ROOT_ALLOCATED_ONCE_PENDING_PARENT_LAUNCH",
+  "batch": "batch43-quarantine-v8e",
+  "candidate_ready": true,
+  "execution_authorized": true,
+  "candidate_hint": {
+    "runtime_directory": "/fresh-cache/runtime-reorg-admission-v8e-20261017",
+    "capture_label": "v8e",
+    "head": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+    "pins_verified": 14,
+    "quarantine_archived_file_and_body_verified": true
+  },
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "metadata_path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/nextest-binaries-runtime.json",
+  "actual_bark_version": "bark 0.7.1-dev (f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0)",
+  "expected_names_in_execution_order": [
+    "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::barkd"
+  ],
+  "expected_selection": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ]
+  ],
+  "expected_ignored": false,
+  "run_ignored": null,
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "maximum_case_executions": 1,
+  "root_authorization": {
+    "packet": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/v8e-quarantine-case12-root-allocation.json",
+    "sha256": "2322f04380ff60582baf03d0bfa1ae1918dbf524c1880c499e9f1916ff5286a2",
+    "state": "AUTHORIZED_SEPARATE_ONE_PREVIOUSLY_NOTRUN_QUARANTINE_CASE",
+    "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+    "global_max_concurrent_native": 2,
+    "serial": 1,
+    "native_launch_owner": "parent only after fresh resources/listing/final hash admission"
+  },
+  "immutable_plan": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v8-ordinary-twelve-selection-plan.json",
+    "sha256": "bef0af66394f3839eabad46f422ee39f2ad94c9cd03ddfd5857bc058bcfc83c8"
+  },
+  "source_functions": [
+    {
+      "test_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+    }
+  ],
+  "scope": "One separate previously NOT RUN invalid-body quarantine plus authentic same-anchor signed-control case. No case10 retry, heldround case11 or unsafe old server-word literal. No execution credit from preparation.",
+  "source_archive_sha256": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+  "immutable_metadata_sha256": "ca163caf8629bad6f7b28e399d796762f0ca8ccf7a296558c522fd62d32a1d9c"
+}

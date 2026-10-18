@@ -1,0 +1,84 @@
+{
+  "kind": "BATCH43_ADDITIVE_APPEND_ONLY_CURATION_RECEIPT",
+  "state": "COMPLETE_ONE_PASS_WITH_FORMAL_POSTFLIGHT",
+  "at": "2026-10-18T03:41:05.827649+00:00",
+  "before_rows": 446,
+  "after_rows": 447,
+  "appended_rows": 1,
+  "before_sha256": "f615f672cfb59ffaa924834ebd48f792b4f6536b9b873b3b29b86bdf4dd31ff0",
+  "after_sha256": "0b7387360a4fbe3cd1887a92f1a2114aa27065b242ccd92f74ded8e9c1ab1d0e",
+  "prefix_byte_identical": true,
+  "new_row_LF_only": true,
+  "append_bytes_sha256": "91515c7c0371e51f024748def3e2f8a935af964048a081b5c7fbb9fb373a67c5",
+  "case_id": "FT-BARKD-040",
+  "test_binary": "ark-testing::barkd",
+  "test_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+  "result": "PASS",
+  "run_id": "ea55a215-31a1-4101-97e7-8502a4361ed0",
+  "native_seconds": 25.427,
+  "nextest_summary_seconds": 25.431,
+  "wall_seconds": 27.065,
+  "no_retries": true,
+  "new_unique_pairs": 1,
+  "aggregate": {
+    "executions": 236,
+    "PASS": 221,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 221,
+    "nextest_invocations": 209,
+    "native": 224,
+    "component": 12,
+    "coverage_rows": 447
+  },
+  "all_15_prior_FAIL_outcomes_preserved": true,
+  "batch42_9PASS_1FAIL_2NOTSTARTED_immutable": true,
+  "held_round_and_unsafe_predecessor_unchanged": true,
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "source_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+  "source_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+  "test_ELF_sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+  "source_native_oracle": "Real native board and10k Arkoor transfer; invalid-body restore retains exact historical board LockedNone/None with invalid signature, rejects invalid live change and keeps all10balance fields zero. Distinct valid same-seed control validates signed original/successor bodies against actualCore anchor, requires oldboardSpent/currentchangeSpendable/exactIDs+encodings and10krecipient+change=actualboardamount.",
+  "limitation": "Originaldaemon alive/liveArk; valid control is native source/assertion evidence, not independent cryptographic or wholeCorefinancialaudit. No Core6, originalabsence/offline recovery, physicalbackup, globalcustody, genericmaliciousserver or fullML qualification. Separate batch43 allocation; batch42 remains9PASS1FAIL/2NOTSTARTED and oldunsafe literalheld.",
+  "independent_postflight": "COMPLETE_PASS exact1/noSkip/14pins+11freeze unchanged/actorsabsent",
+  "initial_native_pending_label_preserved": true,
+  "postflight_pending_resolution": "Completed formal postflight linked additively here; original initial receipt unchanged.",
+  "clock_note": {
+    "parent_reported_observation": "23:18\u219203:30 wall-clock change",
+    "original_timestamps_preserved": true,
+    "fresh_namespace_resource_hash_gates_and_root_reconfirmation_used": true,
+    "native_seconds_source": "Actual native status log; not cross-period wall arithmetic."
+  },
+  "later_batch42_diagnostic_scope": "Exact300k round-consumed546a ancestor; current649392 cut identical, no independent round-discharge signature or successful final mixed-spend inference. Narrow supported-policy/fixture historical-state mismatch; old and new FAILs remain FAIL.",
+  "two_target_correction_status": "SOURCE_ONLY_UNCOMPILED_NOT_RUN; no currentcapture qualification",
+  "v9b_state_attribution": "Root reports separate6money-fixture intake plus mechanicalcompilefix; c519 source verification predatesdelta; mixedtwo-targetpatch absentfromcapture; no nativecredit here.",
+  "references_sha256": {
+    "batch43-quarantine-v8e-receipt.json": "49aea2ace1e8184a0940504e52432b301ea9970becea6ae9a16db11367540385",
+    "batch43-client-postflight.json": "07e38b7e9a57e76f35d2f07c52048d08926870c65897200d7302994e14f80a95",
+    "batch42-ordinary-twelve-v8e-receipt.json": "4391490deb65b0190a91d6946b551a75a89fcc9881def7e3021096cad7a97c48",
+    "batch42-coverage-append.json": "2b7e0bd13257b0a3b9dfcb8d00c0de73a1f0b9232150978a0eb9356112b7a259",
+    "batch42-case10-public-ledger-diagnostic.json": "d14fcf0fb07c10dd1e8a32cb73bf4aced66b8832a8c4ddd3db5524deac833405",
+    "batch42-case10-mixed-recovery-policy-source-review.json": "4728bf03a585e3b138f23a626d59cb832a006ac2361ea7724b98e4239071a593",
+    "barkd-recovery-round-retirement-v1-manifest.json": "611a514a557465be93a0cd055053022f6844d6ddb85b6f8e2d5b8dbaa004d3eb",
+    "barkd-recovery-round-retirement-v1-peer-review-legacy.md": "dab7e40077e4157d6d65f4864fb456f0d4a59506f325f999dca154349190533c",
+    "v9-money-fixtures-source-intake-backend-verification.json": "c5196abe964ffe5fc1b16dfe5246221618db69d72d001f6604c3e05414acc81a"
+  },
+  "updated_reports": {
+    "FINDINGS.md": {
+      "before_sha256": "c6601d310ae0ae66c48264a644cb722590fad5b39ce7f9951ee2aa9e3f9bf8b4",
+      "after_sha256": "5048922a2ac3d8a738c5ec04ca7894dc780af4424fbeeca88a841a53ab8c2a66",
+      "prefix_byte_identical": true
+    },
+    "SIXTEENTH-CHECKPOINT.md": {
+      "sha256": "b2bbe0743b5f56419ccb528cf152c9e9cdbcd74283e72e0b57d50b79d7a149b3",
+      "new_logical_checkpoint_supersedes_unpublished15": true
+    }
+  },
+  "preserved_FIFTEENTH_sha256": "b83fe26ce020979d87429d53a607b9f48e45d6ecf1a897c5dfbbc449b1b615be",
+  "mutations": {
+    "only_authorized_COVERAGE_FINDINGS_newcheckpoint_and_appendreceipt": true,
+    "STATUS_ML_publicdocs_source_control_Cargo_metadata_native_Git": 0,
+    "ML_promotions": 0
+  }
+}

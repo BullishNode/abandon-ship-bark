@@ -50,12 +50,12 @@
     "cause": "Retained never-signed dependent allocation had no raw transaction/txid/broadcast. Rebuild demanded a signed body, while parent signing required completed rebuild; copied-PG diagnosis confirmed. Historical conflicted unsigned intents retain the same fences.",
     "diagnostic_postflight_sha256": "8f8fae0e5a52ab3816453d5b122ab5e28b2a39b21194942581baef752f823218",
     "correction_patch_sha256": "0b9461d320523195b5af303b5d671540038ae2194cbbd60f822ee444a6769f39",
-    "correction_scope": "Validate exact never-published financial intent separately; no unsigned payment authority. Keep immutable complete source/grant/path/economic/fence and canonical omitted-claim joins. Present signed bodies retain all strict checks. NOTYET native-qualified."
+    "correction_scope": "The frozen V17 failed capture remains unchanged. The separate unsigned-intent correction is now bounded-native-qualified on V18 as recorded below; unsigned membership is not payment authority and present signed bodies retain strict checks."
   },
   "public_signet": {
     "deployed_source": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
     "new_receive": "One5000sat invoice settled to fully signed4890sat pubkeycoin, originalrecipientabsent; E326894; expected3890fallback; lifecycle stillpending expiry/Core6/seedrecovery.",
-    "distinct_refresh_setup_failure": "One refresh used old144-blockexit inputs for new32-blockround; signer correctly requires tip+2*12+144. Original28670sat retained, no completed380satcustomerfee and no failedsendinvoice/payment. Ordinary Finished cancellation has no safe public irrevocable authority under stale-backup ambiguity; remainsOPEN.",
+    "distinct_refresh_setup_failure": "One refresh used old144-blockexit inputs for new32-blockround; signer correctly requires tip+2*12+144. Original28670sat retained, no completed380satcustomerfee and no failedsendinvoice/payment. Ordinary Finished cancellation has no safe public irrevocable authority under stale-backup ambiguity; remainsOPEN. Exact Finished-cancel refusal and exit-window guard are byte-identical to pinned upstream. This is inherited behavior triggered by incompatible test parameters, not a demonstrated fork-introduced loss. Production parameter compatibility and actual recovery remain explicit qualification work.",
     "readiness_diagnosis": "One existing TriggerSweep09:00:51 completed acknowledgedview gen8/326865 andledger13/rev17 with no newmempooltx, confirming2h schedulinggap. Serial1s rebuild-only source113fa reviewed, notdeployed."
   },
   "limits": [

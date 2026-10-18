@@ -276,8 +276,12 @@ impl Tx<'_> {
 				}
 				// An uncollected internal payment: once every receive grant is
 				// back with the server on chain, the sender's source is theirs.
+				// Its own send expiry can lie beyond the tree's expiry and does
+				// not matter: no one can collect the payment any more.
+				let unspent = fact.onchain_spent_height.is_none() && fact.onchain_spent_txid.is_none()
+					&& htlc.htlc.chain_resolution.is_none();
 				if let LightningSourceState::InternalCommitted { attempt_id, subscription_id } = source {
-					if let Some(watchman_tip) = watchman_tip.filter(|_| expired_contract && htlc.htlc.chain_resolution.is_none()) {
+					if let Some(watchman_tip) = watchman_tip.filter(|_| unspent) {
 						if let Some(block) = self.internal_grants_reclaimed(subscription_id, hash, tip, watchman_tip, internal_refund_depth()).await? {
 							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
 							proposal.evidence = Some(OwnershipEvidence::HtlcInternalGrantsReclaimed {

@@ -1,0 +1,186 @@
+{
+  "state": "SCOPED_SOURCE_PEER_ACK_NO_CONCRETE_BLOCKER_UNCOMPILED_NOT_RUN",
+  "created_utc": "2026-10-18T08:07:54.273091+00:00",
+  "author_packet": {
+    "source": {
+      "path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_tiny_payout_grouping.rs",
+      "sha256": "106bd16b2024c94f1fc188fd4424fc9005381d52b40d27e0a03544fb8d102b40",
+      "bytes": 27060,
+      "lines": 472
+    },
+    "manifest": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H30-tiny-payout-grouping-v1.json",
+      "sha256": "3199b3f86c5ffbadd13a3d222058420d1ba4a2d8587126fa5d28c39e38d290ed"
+    },
+    "patch": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H30-tiny-payout-grouping-v1.patch",
+      "sha256": "0c05c3bafed46fa1c2ee9db45a7aaa1b55e1383beadab0643acc22bb2493fab6"
+    },
+    "design": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H30-tiny-payout-grouping-v1-design.md",
+      "sha256": "d2c1fe42e2fa4f65dff2d988510674126d044931a3624c93f9c8f8202f4e74cd"
+    }
+  },
+  "canonical_head_at_inspection": "4e3d37c8941cbba216350264b6d6242bbe71137f",
+  "api_pins_independently_verified": {
+    "bark/src/lib.rs": {
+      "canonical_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "owned_sha256": "2486a4f20a5e014febc859c83cdac42dd3658e336a31d1947f047b1f234823aa",
+      "identical": false
+    },
+    "bark/src/mailbox.rs": {
+      "canonical_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "owned_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "identical": true
+    },
+    "bark/src/recovery.rs": {
+      "canonical_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "owned_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "identical": true
+    },
+    "bark/src/fallback/adoption.rs": {
+      "canonical_sha256": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+      "owned_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+      "identical": false
+    },
+    "bark/src/fallback/sync.rs": {
+      "canonical_sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "owned_sha256": "dc24a84878eaf20b4158836c2503881797a792fae699a442f47f3731ee6bfe26",
+      "identical": false
+    },
+    "bark/src/fallback/payouts.rs": {
+      "canonical_sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "owned_sha256": "eeb8e7c2706fa163c7525c9ededd4492689da667bfdb231c78084cc564afd349",
+      "identical": false
+    },
+    "bark/src/movement/mod.rs": {
+      "canonical_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "owned_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "identical": true
+    },
+    "lib/src/arkoor/package.rs": {
+      "canonical_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+      "owned_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+      "identical": true
+    },
+    "lib/src/arkoor/mod.rs": {
+      "canonical_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "owned_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "identical": true
+    },
+    "lib/src/mailbox.rs": {
+      "canonical_sha256": "4f51e97a1eabe54b3e495e2537d5edaf4623b1392f234648cba6898c69095abc",
+      "owned_sha256": "4f51e97a1eabe54b3e495e2537d5edaf4623b1392f234648cba6898c69095abc",
+      "identical": true
+    },
+    "server/src/arkoor.rs": {
+      "canonical_sha256": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+      "owned_sha256": "5daa060b0c5307a12e11545f037977bd21334dd9cf11c24e2ff5124f36399833",
+      "identical": false
+    },
+    "server/src/database/expiry_details.rs": {
+      "canonical_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "owned_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "identical": true
+    },
+    "server/src/watchman/settlement.rs": {
+      "canonical_sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "owned_sha256": "d09a4c2a303ed9d3f853fdd351b9e6e81ca89929642e573df6fddeb57d2f3d36",
+      "identical": false
+    },
+    "server/src/watchman/recovery.rs": {
+      "canonical_sha256": "f4fd6bce5c5cbc9f08abadb01dee190cacd4331bc093ba879290137011946491",
+      "owned_sha256": "ee4534800f0b6845a90dc6f557682c9fc9049c23a4b7693fdf10d12b8301b4c0",
+      "identical": false
+    },
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": {
+      "canonical_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "owned_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "identical": true
+    },
+    "testing/src/context/builders.rs": {
+      "canonical_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "owned_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "identical": true
+    },
+    "testing/tests/server/qualification_oversize.rs": {
+      "canonical_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+      "owned_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+      "identical": true
+    },
+    "testing/tests/server/qualification_offboard_restart.rs": {
+      "canonical_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "owned_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "identical": true
+    }
+  },
+  "source_functions": {
+    "balance_fields": {
+      "line": 21,
+      "source_region_sha256": "790eb0ee82ec276cb587b0f2c0537702e1dc16e324f29cc82cddcf9526ba4f0c"
+    },
+    "rebuilt": {
+      "line": 28,
+      "source_region_sha256": "68c180c98d0f7beb91f2dbc4eb403f4c116447e19a842f00f891f9db0194a9e4"
+    },
+    "actual_fee": {
+      "line": 46,
+      "source_region_sha256": "2ff3acb33deff6292eb52cbcb4eeeaba62db587f822ff9ac3f609e9eb6d2c4ce"
+    },
+    "fallback_history": {
+      "line": 57,
+      "source_region_sha256": "fbb7f148e9bedaf832667a4d0b1982472f5b26664612a8fb8ea91902930e15c1"
+    },
+    "three_sub_fee_leaves_pay_one_registered_owner_once": {
+      "line": 91,
+      "source_region_sha256": "d459fbd8acdaf862f552ac40941be7e57d1202ccb277f685a3eeb018c1ac3802"
+    },
+    "tiny_group": {
+      "line": 99,
+      "source_region_sha256": "bdacf4c0e90365696f774840701edfa94a9e86e0cea250a9366837425da057ea"
+    }
+  },
+  "protected_existing_testing_rust": {
+    "snapshot_sha256": "731081d664d2c7e0a7790dcd6fe97ae24e01878a19405af2de6c71f15718c93d",
+    "count": 122,
+    "unchanged": true,
+    "only_new_file": [
+      "testing/tests/server/qualification_tiny_payout_grouping.rs"
+    ],
+    "ML125_v3_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85"
+  },
+  "checks": {
+    "patch_exactly_reconstructs_472_line_add_file": true,
+    "private_source_byte_exact": true,
+    "all_18_current_canonical_and_owned_api_bindings_verified": true,
+    "distinct_older_owned_api_bindings_not_misrepresented": true,
+    "full_472_lines_reviewed": true
+  },
+  "source_findings": [],
+  "reviewed_oracles": [
+    "Actual100kboard from200kfunding meets20kminimum;3x500Arkoutputs exceed330dust; actualrecipientfallback500non-dust; four-wayfanoutpolicy unchanged.",
+    "Real4-waypackage5signedtransactions/4checkpoints, exactnormaldistinctkeys, realchainregistration/per-keymailboxpost and exactoriginalwalletfullbodySpendablehydration.",
+    "Publicrecover_vtxos requests actualsigned4branch ordinary proof and retiressender100k source; rawregistration/mailbox alone is not treated as localspend.",
+    "ActualsortedRustVtxoIds determine500/500/0policyfees and0/0/500net; all3customerreceipts shareactual500output and forfeit0, senderseparate98500gross/97500net/1000fee.",
+    "Actualcanonicalstoredparents havezero minerfee; uniqueactualsameblockanchorchildren havepositiveindependentlyresolvedprevoutfees andCore6+.",
+    "Closedselected300kroot+sponsorDAG rejects unknowninputs, reconcilesallactualremainingCoreUTXOvalues/scripts andminers, includesunusedsponsors/childchange; graph-widecustomeroutputs exactly500+97500 andmempoolduplicatepayeeexcluded.",
+    "Nativepubliccheckpointoverall_passfalse precedesreturningSDK; noexpected-errorbypass whenoldclassifierrejectsfee-onlyrows.",
+    "OriginalrecipientDBheld3Spendable500beforeabsence; returninghistoryrequiresoneSuccessful\u22121500movement/all3IDs/1000fee/net500, noadditionalcross-subsystemnegativeinputdebit, all10Arkzero, two-sync+sameDBreopenidempotence.",
+    "Actualsenderreturnandall10zero/sourceSpent proof preventcountinghistorical100kplus98500currentcut.",
+    "180-secondoutertimeout/24boundednativepublicationsteps/96blockcap; genuineCore+watchmanactualprogress andtwoindependentlyconfirmed100ksponsors; nativefeasibilityunmeasured."
+  ],
+  "product_dependency": {
+    "separate_classifier_proposal_sha256": "f556330ac43ee5bccc0658ef439407ed003858418500457209acf61dcba8fca8",
+    "current_inspected_classifier_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+    "classification": "Oldclassifier fee-only rows are source-predicted to fail strictreturningSDK validation; not an observednativeFAIL. Test retains strictoracle; productpatch notappliedbyreviewer."
+  },
+  "limits": [
+    "No compiler/Rustparse/typecheck/nativeexecution/module-registration/allocation credit.",
+    "Source-onlyread cannot establish180-secondruntimefeasibility.",
+    "Selected300kcut excludescustomerordinaryboardchange/upfrontboardminer, which areseparatelychecked; noglobaloperatorcustody/controlclaim.",
+    "Onlyonepayabletinygroupcase; truewholegroupdust andforgednegativecases remainNOTRUN.",
+    "Manualnativecosign is not ordinarySDKsend-action/historyqualification.",
+    "No seed-only/backup/defaultdaemon/reorg/throughput/fairness/FULLML credit."
+  ],
+  "actions": "Read-only source/schema/hash inspection; writes only these two new external peer reports. No source/module/global/control/runtime/Cargo/index changes."
+}

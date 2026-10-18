@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-18T08:25:05.740999+00:00",
+  "state": "PARENT_SCOPED_AND_CAPACITY_PASS",
+  "scopes": [
+    "/fresh-cache/testing-track-20261017/batch45-recovery-three-v10",
+    "/fresh-cache/testing-track-20261017/batch47-ordinary-recovery-three-v10",
+    "/fresh-cache/testing-track-20261017/batch46-lightning-physical-backup-v11c",
+    "/fresh-cache/testing-track-20261017/batch49-default-daemon-singleton-v11c",
+    "/fresh-cache/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated",
+    "/fresh-cache/independent-two-v11c-20261018",
+    "/home/francis/.cache/abandon-fresh/independent-two-v11c-20261018"
+  ],
+  "root_previous_financial_scopes": [
+    "/fresh-cache/root-claim-backfill-v16-20261018",
+    "/home/francis/.cache/abandon-fresh/root-claim-backfill-v16-20261018"
+  ],
+  "root_previous_group_or_SID": "UNKNOWN_NOT_RECORDED_BY_ROOT_RUNNER; scoped_process_checks_used",
+  "root_nonfinancial_scoped_processes_exempted": [],
+  "known_previous_groups_and_SIDs": [
+    145878,
+    146890,
+    148754,
+    154295,
+    165688
+  ],
+  "actors": [],
+  "actor_count": 0,
+  "unreadable": [],
+  "unreadable_count": 0,
+  "global_native_candidates": [],
+  "global_native_count_before_launch": 0,
+  "global_max_after_one_launch": 2,
+  "SHM_available_bytes": 806584320,
+  "disk_available_bytes": 1004995653632,
+  "probe_ancestry_excluded": [
+    173479
+  ],
+  "scope_limit": "Same-UID own/prior process argv/cwd/FD plus known groups; previous rootV16 native/financial services/controllers must be gone. Root-authorized nonfinancial read-only audit parsers may coexist. No private file read/process action; root retains separate lane."
+}

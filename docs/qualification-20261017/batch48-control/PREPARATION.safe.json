@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "state": "ROOT_ALLOCATED_STATIC_CONTROLS_FROZEN_PENDING_INDEPENDENT_PEER_AND_PARENT_FRESH_GATES",
+  "at": "2026-10-18T08:20:00.833521+00:00",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated",
+  "root_allocation_sha256": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+  "root_state": "ALLOCATED_THREE_REPEAT_SDK_BRIDGE_CASES_AFTER_FRESH_GATES",
+  "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+  "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+  "runtime_pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "runtime_pin_count": 17,
+  "expected_selection": [
+    [
+      "ark-testing::bark-sdk",
+      "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "exit::watchman_sweeps_funding_tx_during_exit"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "exit::watchman_sweeps_vtxo_chain_during_exit"
+    ]
+  ],
+  "bounds": {
+    "seconds_each": 180,
+    "retries": 0,
+    "serial": 1,
+    "max_cases": 3,
+    "first_fail_stop": true,
+    "max_global_native": 2
+  },
+  "CLN_required": true,
+  "native_CLN_version": "v26.06.6",
+  "native_CLN_plugins": "Exact pinned grpc+hold pair; firstcase requireschannel/hold, watch2noCLNinstantiation.",
+  "prior49_postflight_sha256": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+  "proof_bindings": {
+    "source-proposal.json": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+    "source-peer.json": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+    "source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+    "prior49-postflight.json": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+    "parent-actor-probe.py": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665"
+  },
+  "static_file_hashes": {
+    "selection-proof.json": "1030aa10b1d18fba7636624b76ecf97e9562a930531a0422f3285a8195313114",
+    "root-allocation.json": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "source-proposal.json": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+    "source-peer.json": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+    "source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+    "prior49-postflight.json": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+    "parent-actor-probe.py": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665",
+    "server-cohort.py": "f70b0aca93c2da2d7b1364f6766625e106dfa158550f797e9290458bff96d5fb",
+    "preflight-static.py": "12d3901fa0f47ae4d401a70573c2a639c16295f108256c1d7d06b1cea1170ef2",
+    "fresh-listings.py": "74409ba644385cb3b10b0cb8dec30d36425afd787abd545923848d5a0cd34d9a",
+    "preflight.sh": "480a97ab83f19f574ea1b70f64fb34cd418cb6511ce52cb4af406e6ca26e1194",
+    "run.sh": "aab2adc5ce6e712fa27e395956c31c1395980ebac468c786d5677d82bb83805e",
+    "case01/nextest.toml": "6e180a4dcc152d0196b8385b8389ff9ca1407b65b703435a7a45134750257687",
+    "case02/nextest.toml": "9257e99254f6d6376150ab4291fe1524f5f600546b8cd521e7bb7f2960db93b5",
+    "case03/nextest.toml": "3b7382e283b38022d87c1a9af3875c819b1d601d0aee82b7b7da206c3056e198"
+  },
+  "parent_freeze_required": [
+    "selection-proof.json",
+    "root-allocation.json",
+    "runtime-pins.sha256",
+    "source-proposal.json",
+    "source-peer.json",
+    "source-bindings.json",
+    "prior49-postflight.json",
+    "parent-actor-probe.py",
+    "server-cohort.py",
+    "preflight-static.py",
+    "fresh-listings.py",
+    "preflight.sh",
+    "run.sh",
+    "case01/nextest.toml",
+    "case02/nextest.toml",
+    "case03/nextest.toml",
+    "fresh-listing-admission.json",
+    "resource-admission.json",
+    "parent-actor-admission.json"
+  ],
+  "parent_freeze_count": 19,
+  "pending_marker_present": true,
+  "parent_launch_admission_present": false,
+  "old13_CLOSED_preserved_unchanged": {
+    "case01/nextest.toml": "46a0591ef30f6f8afa3f4c76f746864c60552861ef50d01a3bea6dc743a56301",
+    "case02/nextest.toml": "4bd65d9757518f3f908f1bca02168a9d6999227162c76511a842ae376428583d",
+    "case03/nextest.toml": "a05a8721a3211875a379496b68cdc576f0b86d408e5151b045b00bbab36d5791",
+    "fresh-listings.py": "e95f68a7ce5df90a2fb6257b3851398da4cbad4bbdffc5b5aaa095f5141ca87e",
+    "launch-authorization-pending.json": "0f653321d8c6be60bc53b141def3158aa067c2a6a4977ac0dbf2a3162f195a13",
+    "preflight-static.py": "752c115c3b2672c64f244084d72250d00167caa31e52e1b0d1634cc5b231406d",
+    "preflight.sh": "9b4512936e497312bf33365d196581e42f19e156d1b1a71b59e44c88df969f6d",
+    "proposed-C-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "run.sh": "7db553376742ab0fe9783c7e20fb2b810e81c3f11e5338b47b5155716c100a61",
+    "selection-proof.json": "f3ccd20024b009c18fea0131f48207bcc92419b465b095e74fbf1ec60b2f95eb",
+    "server-cohort.py": "af73905fece7c2913412d7a05c27f4f18000ac3299f6987080c9b374cc11257d",
+    "source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+    "PREPARATION.pending.json": "9b96e90b74df84ec0b5058032b79eddafd52c0f9e236c5b0054a8e55427a1077"
+  },
+  "static_checks": {
+    "AST_controls": 3,
+    "AST_parent_probe": 1,
+    "bash_n": 2,
+    "TOML": 3,
+    "root_packet_schema_literal_keys_valid": true,
+    "source_full_files_hashed": 12,
+    "source_function_and_helper_regions_hashed": 13,
+    "generated_script_bodies_executed": 0,
+    "preflight_executions": 0,
+    "listings": 0,
+    "actor_or_resource_probes": 0,
+    "native_tests": 0,
+    "Cargo": 0
+  },
+  "environment": "Both wrappers source cached Nix BEFORE Python; all3 Pythonentrypoints requireIN_NIX_SHELL and rejectpresence ofBARK_DOUBLE_DRIVE_ACTIONS/oldexe/Docker/externalPG/filestore overrides; wrappers fullyunset afterNix. Nativegetinfo/version assertions stay actualfixture/parentgate.",
+  "limits": [
+    "New allocation authorizes only3 repeated names on capturedC; zero newunique/nativePASS/fullML/currentV16 credit atpreparation.",
+    "ShallowwatchProcessing/awaitmembership/nohistory isnot allpositivebucket/completechildfeeledger qualification.",
+    "Old49formal provespreviousabsenceatitscutoff; parentfresh probe must independently establish currentown49/48/rootV16financialactorabsence andcapacity.",
+    "Parent issole preflight/listing/probe/nativeexecutor; no authorruntime or selfadmission."
+  ],
+  "preservation": "Only NEW allocated48directory and NEW externalreceipt written. All13old48CLOSED files+copies byteexact;49/46/47/source/P07/globalreports untouched."
+}

@@ -1,0 +1,190 @@
+{
+  "schema": 1,
+  "status": "SOURCE_PROPOSAL_ONLY_NOT_AUTHORED_NOT_COMPILED_NOT_RUN",
+  "case_ids": [
+    "H32"
+  ],
+  "secondary_scope": "Authentic whole-group BelowDust negative beside the separately owned H30 positive fixture; forged-group rejection remains separate.",
+  "proposal_selector": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+  "selector_reserved": false,
+  "implementation_allocation": null,
+  "candidate": null,
+  "native_result": null,
+  "source_head_read_only": "4e3d37c8941cbba216350264b6d6242bbe71137f",
+  "source_files": {
+    "server/src/watchman/settlement.rs": {
+      "sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "lines": "81-118"
+    },
+    "server/src/database/expiry_details.rs": {
+      "sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "lines": "183-237"
+    },
+    "server/src/database/expiry_decision.rs": {
+      "sha256": "ab2903e83264f314f17cfea91e67e4ca95a7df1086ea4c6f450f90d2c9cf5255",
+      "lines": "321-394"
+    },
+    "bark/src/fallback/protection.rs": {
+      "sha256": "b0f3040f9d707c28fac3f42869a2429dc583e0b0692b964f67c16763bb2fb26e",
+      "lines": "54-78,199-273"
+    },
+    "bark/src/fallback/payouts.rs": {
+      "sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "lines": "153-217,275-333,486-520"
+    },
+    "bark/src/fallback/sync.rs": {
+      "sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "lines": "148-245"
+    },
+    "bark/src/mailbox.rs": {
+      "sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "lines": "297-328"
+    },
+    "bark/src/lib.rs": {
+      "sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "lines": "1015,1735,2638"
+    },
+    "lib/src/arkoor/mod.rs": {
+      "sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "lines": "1164-1178"
+    },
+    "testing/src/bark.rs": {
+      "sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "lines": "335-365,914-920"
+    },
+    "testing/src/context/mod.rs": {
+      "sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "lines": "509,662-663,719-727"
+    },
+    "testing/tests/server/qualification_oversize.rs": {
+      "sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+      "lines": "65-118"
+    },
+    "server/captaind.default.toml": {
+      "sha256": "e3d0433e6fcd4849823b3259b097a5e98d45cfd1dc7a075dc6d0c00de926a52e",
+      "lines": "20-41"
+    }
+  },
+  "related_artifact_sha256": {
+    "H30-tiny-native-feasibility-backend.json": "727cf73db3895b1765dc84043e643794a89bed9fbf6e80e21abef8569f61dce5",
+    "H30-grouped-zero-share-disposition-source-peer-legacy.json": "4552714e70e68bbaae0731dcfd243e3e19a72a7bf4d92c35777e78d7f32ed7ab",
+    "legacy80-next-three-full-case-priorities-20261018.json": "6286fd7ecbfc48a5cccb759be30ea5c2b248e6dee57a6e4aa74547ec63451597",
+    "legacy-inventory.csv": "e17520cd411d61201302de23351ad9ecac31f40f4b6f888369cc1355333a7f6d",
+    "COVERAGE.csv": "661fb68712076548e5a8665b2e78047bf7d7d69f58743d7a94326e449af70b9d"
+  },
+  "h30_positive_owner": {
+    "owner": "backend_test_gaps",
+    "path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_tiny_payout_grouping.rs",
+    "sha256": "106bd16b2024c94f1fc188fd4424fc9005381d52b40d27e0a03544fb8d102b40",
+    "lines": "103-197,203-253,420-472",
+    "relationship": "Read-only helper/API reference. Do not edit, duplicate its three-by-500 positive group, or infer its execution status."
+  },
+  "coverage_at_inspection": {
+    "rows": 461,
+    "H32_status": "NOT RUN",
+    "no_global_mutations": true,
+    "no_new_execution_or_ML_credit": true,
+    "limits": "Existing settlement units and offboard dust-refusal PASS do not prove actual expiry forfeiture followed by a later receipt. H31 script/boundary matrix remains separate."
+  },
+  "primary_amounts_sat": {
+    "first_actual_board": 100000,
+    "native_minimum_board": 20000,
+    "first_recipient": 1200,
+    "first_sender_change": 98800,
+    "nominal_output_fee": 1000,
+    "first_recipient_hypothetical_net": 200,
+    "first_recipient_fee": 0,
+    "first_recipient_payout": 0,
+    "first_recipient_forfeited": 1200,
+    "first_sender_payout_if_single_group": 97800,
+    "later_actual_board_and_receipt": 100000,
+    "later_recipient_fee": 1000,
+    "later_recipient_payout": 99000,
+    "forbidden_resurrected_recipient_payout": 100200
+  },
+  "script_preconditions": [
+    "Capture and verify actual normal fallback record against its account mailbox and Regtest; sender and recipient scripts must differ. Retain the identical recipient mailbox/account/registered script across both epochs; use distinct fresh stored normal leaf keys.",
+    "Assert 1200 > 1000 and 0 < 200 < actual recipient script.minimal_non_dust(). Standard P2WPKH294 and P2TR330 both satisfy this; the fixture uses the actual generated script, not a hardcoded assumed threshold.",
+    "Both initial Arkoor amounts1200/98800 exceed P2TR330, so new_isolate_dust takes the non-isolated path. A500 variant is legal but only a below-fee control and is not the primary H32 proposal."
+  ],
+  "phases": [
+    {
+      "phase": 1,
+      "name": "Authenticate and hydrate genuine old principal",
+      "required": [
+        "Two real normal accounts. Explicit daemon_manual_sync=true; stop_daemon_wait and drop every live Wallet before each absence. No default-daemon claim.",
+        "No VTXO pool; real100k board from ordinarily funded sender, zero board/transfer fee asserted from unchanged native fixture configuration. Board minimum20k retained.",
+        "Use actual source key, fresh stored recipient and sender-change keys; ArkoorPackageBuilder::new_with_checkpoints produces1200/98800, two checkpoints and three signed transactions. Public cosign and register all signed output paths before correctly blinded mailbox posts.",
+        "sync_mailbox must be followed by exact current IDs, amounts, full encoded bodies and keys. Use public recover_vtxos([source.id()],None), as source18 does, to prove old sender board is Spent; do not infer retirement from mailbox sync alone.",
+        "Original recipient DB must really hold Spendable1200 and its full path before absence. Capture all ten balances and full history baseline; no preemptive receipt/financial SQL."
+      ]
+    },
+    {
+      "phase": 2,
+      "name": "Actual dust forfeiture and accepted returning history",
+      "required": [
+        "Advance to actual first signed expiry with bounded completed-view progress; no height-only success. Authenticate allocation entitlement and owner/mailbox/key/script; gross1200, fee0, payout0, forfeited1200; no joined expiry_allocation_payout output for recipient script.",
+        "Actual parent must spend the original signed expiry path using the server expiry clause, match immutable recorded bytes, and be canonically confirmed at least6 blocks. Select actual same-block anchor child, all prevouts and actual fee, not a stale attempt.",
+        "First root is conserved: sender98800 pays its own actual grouped fee, expected one97800 output if one group; operator receives the forfeited1200 plus actual1000 sender charge before any real child fee. Recipient receives no economic output anywhere in canonical whole lineage or mempool.",
+        "Only then reopen original recipient DB and sync_fallback_payouts successfully. Require BelowDust active attempt, valid chain binding, Successful below_dust history, empty sent_to, fee0, forfeit1200 and one debit-1200. Exact ten Ark balances zero; full body retained; no pending exit or other action claims old principal.",
+        "Repeat sync and stop/drop/reopen; preserve old entitlement, stable movement identity and economic projection. Any failure is a real unqualified composed behavior, not bypassed by fake terminal state."
+      ]
+    },
+    {
+      "phase": 3,
+      "name": "Independent later genuine receipt",
+      "required": [
+        "Only after phase2 terminal and client acceptance, create a fresh independently funded second donor account and real100k backing root. The original recipient account/DB/script stays unchanged. Never coin-select first donor fallback proceeds into the new board: a fresh donor avoids overlapping the two-root economic cut. No reuse of first root, expired change, operator return or precreated coincident-expiry coin.",
+        "Public cosign/register and correctly blinded deliver one100k leaf to a fresh stored key of the SAME recipient account and registered payout script; one-checkpoint/two-signed-transaction shape must be asserted from actual builder output.",
+        "Recipient explicitly syncs exact signed100k into the SAME original DB. Require old1200 still discharged and current balance exactly100k with other nine buckets zero. Old and new entitlement/coin/backing/allocation epochs are distinct.",
+        "Capture later receipt/history baseline, then stop/drop both clients again; no refresh or manual payout."
+      ]
+    },
+    {
+      "phase": 4,
+      "name": "Later payout without old principal revival",
+      "required": [
+        "At the new actual expiry, automatic new allocation pays recipient99000 plus1000 output fee and forfeits0. Parent and actual anchor child canonically confirmed at least6; actual recipient output unspent and correct script, immutable bytes, blockhash and ledger paying links.",
+        "Full two-root/all-generation lineage and whole postsetup chain plus successful mempool listing contain exactly one recipient economic output,99000. There must be no100200 resurrected-principal output, extra1200, old output, predecessor payout or duplicate attempt that becomes another payment.",
+        "Return original recipient again. Authenticated account history contains old Successful below_dust receipt unchanged and new Successful confirmed payout receipt; old debit-1200 and new debit-100000 each occur once across ALL subsystems, relative to captured nonfallback debit baselines. Combined fallback debit is-101200; ordinary receive credits are separate and are not subtracted twice.",
+        "Repeat successful sync, mine another bounded rebuilt tip and stop/drop/reopen. Recheck canonical outcomes, zero ten-bucket Ark balance, empty public exit statuses, stable economic history, permanent old disposition and no newly revived current principal."
+      ]
+    }
+  ],
+  "funding_and_bounds": {
+    "actors": 3,
+    "core_nodes": 1,
+    "lightning_required": false,
+    "vtxo_pool": false,
+    "vtxo_lifetime_blocks": 40,
+    "exit_delta_blocks": 2,
+    "configuration_scope": "Explicit bounded fixture timing/scheduling conditions using existing expiry_transfer_refresh pattern; not production lifetime, cadence or default-daemon qualification. No fee/dust-policy override.",
+    "initial_sponsor_outputs": 4,
+    "each_sponsor_sat": 100000,
+    "sponsor_total_sat": 400000,
+    "selected_cut_sat": 600000,
+    "cut_definition": "Exactly the two actual100k board backing outputs plus four declared100k watch-wallet sponsor outputs. Ordinary source-funding change and upfront board miner fee are separately observed, outside this selected cut; no exhaustive global setup/rounds-wallet custody claim. The second donor is distinct so its board cannot spend the first donor payout and double-count overlapping roots.",
+    "sponsor_precondition": "Before first expiry, capture all four real sponsor outpoints/scripts/amounts and confirm each at least6. Inspect actual watch-wallet readiness. Do not assume every child uses a fresh100k sponsor: traverse actual confirmed child change and preserve unused outputs, as production does.",
+    "conservation": "Selected600k inputs equal every actual unspent terminal descendant plus recomputed physical miner fees. Reject unknown external inputs into this cut; classify customer/operator/watch change by actual configured scripts and wallet evidence. Policy1000 output charges are retained value, never also counted as miner fee.",
+    "deadline_seconds": 180,
+    "retries": 0,
+    "serial_threads": 1,
+    "maximum_post_first_board_mined_blocks": 128,
+    "deadline_status": "Proposed hard bounds only, unmeasured and not yet proven feasible by compilation/native execution. Each phase has bounded asynchronous waits; exhausting deadline or block cap is failure, never proof of terminality.",
+    "progress": "Derive expiry from each actual signed VTXO. Wait captaind/watchmand exact tip hash and expiry_rebuild_token plus expiry_view_is_rebuilt after progress; mine only bounded real blocks needed for ancestry/confirmed fee-change readiness. No fixed sleep or elapsed-height terminal oracle.",
+    "actor_roles": [
+      "Original donor; stopped after first signed split and absent thereafter.",
+      "Same original recipient DB/account/script in both epochs, returned only for explicit receipt/history checks.",
+      "Fresh independently funded later donor, created only after old dust proof and acceptance; stopped before second expiry."
+    ]
+  },
+  "implementation_dependencies": [
+    "Parent must assign sole source owner and new file before authoring; no19source or module is created here.",
+    "Bind exact captured source, H30 classifier candidate state, SDK/helper bodies, actual test ELF and immutable metadata only in a later admitted build/allocation. Current H30 one-line classifier change is neither required nor qualified by this source proposal.",
+    "A small local dust-history oracle must handle absent output_index/txid for the dust movement; do not reuse positive-only helper that unwraps output_index. Reuse public sync/receipt/full-body and canonical-DAG patterns, not fabricated snapshots.",
+    "Use SQL read-only and cast PostgreSQL enums to TEXT before String decoding; no entitlement, fee, terminal, ownership, wallet or Spent-state SQL writes.",
+    "Keep genuine dust acceptance distinct from a forged paid-group-as-dust rejection test. H30 positive owner remains backend; root active terminal/reorg/ACK-loss, source17 offboard reply, P07 and default-daemon work are outside scope."
+  ],
+  "feasibility": "Source-supported authentic shape; no product hook identified. Whole-group dust uses no output under both the original per-leaf-payout classifier and proposed joined-output classifier. Two-epoch180-second runtime and actual fallback/client reconciliation are still NOT RUN; failure must remain visible.",
+  "actions": "Read-only source/coverage/API inspection plus these new proposal files only. No Rust/module/build/runtime/list/financial action/global report/ML mutation."
+}

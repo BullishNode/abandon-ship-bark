@@ -1,0 +1,1 @@
+{"state": "LISTING_GATE_PASS", "selected_unignored": [["ark-testing::bark-sdk", "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds"], ["ark-testing::bark-sdk", "exit::watchman_sweeps_funding_tx_during_exit"], ["ark-testing::bark-sdk", "exit::watchman_sweeps_vtxo_chain_during_exit"]], "native_tests_run": 0}

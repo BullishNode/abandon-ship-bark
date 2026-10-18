@@ -1,0 +1,179 @@
+{
+  "kind": "APPEND_ONLY_BATCH48_THREE_CAPTURED_C_REPEAT_NATIVE_CASES",
+  "at": "2026-10-18T08:43:31.643226+00:00",
+  "state": "CURATED_3PASS_FORMAL_COMPLETE_NO_ACTIVE_OWN_RUNTIME",
+  "baseline": {
+    "executions": 250,
+    "PASS": 235,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 233,
+    "nextest_invocations": 223,
+    "native": 238,
+    "component": 12,
+    "coverage_rows": 461
+  },
+  "baseline_sha256": {
+    "STATUS.json": "33a1708b3f1538073d0e2275f933ff4f9906c0cee22f5f28cbeb29a435f4a9f2",
+    "COVERAGE.csv": "661fb68712076548e5a8665b2e78047bf7d7d69f58743d7a94326e449af70b9d",
+    "FINDINGS.md": "6f56f1137366a6b034aad0c34df9d1efef7540a3d7f8e1829f4947a9501e0b87"
+  },
+  "after": {
+    "aggregate": {
+      "executions": 253,
+      "PASS": 238,
+      "FAIL": 15,
+      "unique_binary_test_pairs": 233,
+      "nextest_invocations": 226,
+      "native": 241,
+      "component": 12,
+      "coverage_rows": 464
+    },
+    "coverage_sha256": "5aa2daa686d6cd36cd144190aef31a18ba8f8d2336440435da6540efc2f8914a",
+    "coverage_bytes": 345725,
+    "FINDINGS_sha256": "faeacdb8cb0d7da863c025ee34baf95a82ff7ce79ee5f138eeab11b516d0c344",
+    "STATUS_sha256": "6311aa8f98d9dccb1a7fa1ac5ea4c4988a4e9280dad23278651afec93d318afb",
+    "checkpoint_sha256": "f26ca592c3ff8500a40d2fb3466be6f78313e4a5544aaa15c7a7139feae9e3d1"
+  },
+  "append": {
+    "ids": [
+      "FT-SDK-059",
+      "FT-SDK-060",
+      "FT-SDK-061"
+    ],
+    "rows": 3,
+    "LF_only": true,
+    "bytes": 4362,
+    "sha256": "2deaee8b98308717c3f9599064daf97a84f94255290a695874571e3dbbd366d1",
+    "prior461_prefix_bytes": 341363,
+    "prior461_prefix_sha256": "661fb68712076548e5a8665b2e78047bf7d7d69f58743d7a94326e449af70b9d",
+    "prefix_byte_identical": true,
+    "all_old_rows_field_identical": true,
+    "literal_FAIL_rows_before": 14,
+    "literal_FAIL_rows_after": 14,
+    "aggregate_failed_executions_before_after": 15,
+    "new_unique_pairs": 0,
+    "prior_matching_ids_in_order": [
+      [
+        "FT-SDK-055"
+      ],
+      [
+        "FT-SDK-056"
+      ],
+      [
+        "FT-SDK-057"
+      ]
+    ]
+  },
+  "actual_terminal": {
+    "parent_session": 79687,
+    "exit": 0,
+    "counts": {
+      "started": 3,
+      "PASS": 3,
+      "FAIL": 0,
+      "NOT_STARTED": 0,
+      "reviewer_native_executions": 0
+    },
+    "native_seconds": 134.521,
+    "wall_seconds": 137.725,
+    "cases": [
+      {
+        "index": 1,
+        "binary": "ark-testing::bark-sdk",
+        "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+        "state": "PASS",
+        "run_id": "0e681d68-54a6-4654-b846-2efd707b24f2",
+        "native_seconds": 35.152,
+        "wall_seconds": 36.058,
+        "known_PGID_SID": 173577,
+        "body_sha256": "139c429a0f035978ce03968c7d8cfa31ebd80c738e7c3126073cc90871fea378"
+      },
+      {
+        "index": 2,
+        "binary": "ark-testing::bark-sdk",
+        "name": "exit::watchman_sweeps_funding_tx_during_exit",
+        "state": "PASS",
+        "run_id": "e21e9868-f630-4efc-b8b8-175127cfec10",
+        "native_seconds": 44.183,
+        "wall_seconds": 45.071,
+        "known_PGID_SID": 174944,
+        "body_sha256": "50fa0dc5db6532f939a590cdcc2ef8aa8b4d669e454219e1e4243a62e42c12c1"
+      },
+      {
+        "index": 3,
+        "binary": "ark-testing::bark-sdk",
+        "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+        "state": "PASS",
+        "run_id": "109c9a65-c98b-4dd9-b7db-08540b4460ff",
+        "native_seconds": 55.186,
+        "wall_seconds": 56.596,
+        "known_PGID_SID": 175188,
+        "body_sha256": "b638a3aa3fa6099a0d7f08b37ba505c6b4080e60d1719b83ff9be8b4dc5edb56"
+      }
+    ]
+  },
+  "evidence_sha256": {
+    "batch48-sdk-watch-bridge-v11c-allocated-receipt.json": "effab7ec704f337944952215f95ec4a55a2e6301bacf442081dd7fc305d6df21",
+    "batch48-backend-postflight.json": "906f834450bc1609544397d8e7d4f09c4a95407fd4c72db980c68eced57d5569",
+    "batch48-backend-postflight.md": "0905b43b6bfadc6c95bfcbddbae62b22df90f012b2520530acd33aa3e0db10f9",
+    "batch48-allocated-control-guard-source-review-legacy.json": "a32e639d7862ea8c0a2225f58274f5c052f67221842aee34c230706e6adef21a",
+    "batch48-conditional-curation-export-plan-legacy.json": "8178ccdb0d578ec98038566c1609590c44bc63de2302be106040c509641b6321",
+    "checkpoint22-safe-control-independent-audit.json": "e0fd387023a15262f4384c7003492dddb77eed95047cb774da630cc73fcb4cdd",
+    "checkpoint22-H30-source-publication-independent-audit-legacy.json": "09f6d7232c69c701e1d6b3dfe070a92e4b95e8bf30ab71ad0a8d26790352b460"
+  },
+  "frozen_export": {
+    "path": "checkpoint22-terminal-safe/batch48-control/EXPORT.json",
+    "sha256": "13c151f7e1739903ca02f491d069df72a3a9a239a20afb4511015d997a28d68a",
+    "state": "Historical formal-pending at creation, unchanged; postflight and independent export audit resolve additively."
+  },
+  "source_binding": {
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "native_sdk_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+    "preparation_sha256": "e955360c351eb6e84900f2697cb65ad3180bc9d1911bde5670687f5489a9e6f0",
+    "root_allocation_sha256": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+    "parent_admission_sha256": "a84a2d42f040db4e6ca58581cf65f301bfad564c88b99ad88805b226694fb1b3"
+  },
+  "formal": {
+    "pins": 17,
+    "parent_frozen_controls": 19,
+    "static_controls": 16,
+    "scoped_groups_SIDs": [
+      173577,
+      174944,
+      175188
+    ],
+    "scoped_actors": 0,
+    "unreadable_owned_proc_entries": 0,
+    "global_root_lane_absence_claim": false,
+    "checks_from_formal_report_no_new_probe": true
+  },
+  "historical_plan_erratum": "Frozen8178 conditional plan said15 previous FAIL rows. Correct mixed inventory has14 literal FAIL rows and15 aggregate failed executions; all are preserved. No original plan, receipt or outcome rewritten.",
+  "source_only": {
+    "H30": "db2e source18 committed57f5/new tiny-grouping branch; unregistered/uncompiled/NOTRUN; separate classifier proposal; protected150 unchanged.",
+    "H32": "Client root-authorized source19 authoring only; uncompiled/unrun; no current source artifact or execution credit."
+  },
+  "scope_limits": [
+    "Shallow phase directly asserts Processing, awaiting_settlement membership and no successful payout history; it does not independently assert every monetary balance bucket there. Do not broaden this into a standalone all-balance oracle.",
+    "Clients remain manual/live; explicitwatchmantriggers,15mincadences, zero Arkrefresh/LNuserfees, factor1chainfixture. No absent-client/defaultdaemon/reorg/claim-journal replay boundary proof.",
+    "Payout parents have exactactualprevout zero-miner-fee assertions; economic1000customercharge is distinct from unmeasured CPFPfees. No full child/sponsor-DAG/custody cut or global solvency claim.",
+    "Saved8071 records these names unignored but filter-mismatched under P07; no new singleton/freshlisting/run inferred.",
+    "Old44PASS remains oldd0fb only. Exactunchangedsource binds candidateC; no PASS/unique/FULLML/newfix credit transfer.",
+    "All3 repeated native cases: zero newunique credit. Old44 PASS and historical FAIL records stay unchanged. No whole financial child/sponsor DAG, independent Core money reconstruction, global custody or FULLML/production qualification.",
+    "Only batch48 known groups/SIDs and scoped argv/cwd/FD are verified absent at this cutoff; other root lanes are excluded and no global CLN/service/continuous absence claim is made.",
+    "No private wallet/DB/config/seed contents, native full raw log dump, RPC/node restart, service action, signal/cleanup, test/list/preflight/controller/Cargo/Git execution or global report edits. Only bounded nextest metadata patterns, public controls, captured source and directory/Core-file metadata were read.",
+    "Actual runtime launch full-unset condition is bound to frozen wrappers/guards and parent admission; postflight Nix environment is independently observed without treating it as original exited-process environment.",
+    "The firstcase requires genuine CLN26.06.6/grpc+hold and hold/channel native assertions; exact3 CLN artifacts are among17 rehashed pins. Watch2 instantiate no CLN. No repeat version command or global CLN absence probe was used."
+  ],
+  "preservation": {
+    "FINDINGS_prefix_bytes": 59805,
+    "FINDINGS_prefix_sha256": "6f56f1137366a6b034aad0c34df9d1efef7540a3d7f8e1829f4947a9501e0b87",
+    "byte_prefix_unchanged": true,
+    "old14_literal_FAIL_rows": true,
+    "old15_failed_executions": true,
+    "initial_pending_receipt_and_frozen_export_unchanged": true,
+    "no_ML_source_control_native_Git_writes": true
+  }
+}

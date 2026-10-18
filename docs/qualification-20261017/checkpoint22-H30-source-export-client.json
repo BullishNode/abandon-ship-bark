@@ -1,0 +1,39 @@
+{
+  "state": "PROPOSED_SOURCE_ONLY_H30_PAYLOAD_EXPORTED_NOT_STAGED",
+  "at": "2026-10-18T08:34:05.514289+00:00",
+  "directory": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint22-proposed-safe",
+  "manifest": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint22-proposed-safe/publication-checkpoint22-source-files.json",
+    "sha256": "03bd40060d16cff1c7969441b34a87bfa4928b405155ccfbf5fd8ce9ee37ce2d"
+  },
+  "payload_count": 12,
+  "total_count": 13,
+  "manifest_payload_hashes_verified": true,
+  "copy_bytes_equal_frozen_inputs": true,
+  "current_source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+  "source_not_copied": true,
+  "prior_122_Rust_unchanged": true,
+  "publication_checklist_sha256": "757c098571d33a7e1e4afd64907760599459a0dd0f7566b161fbf2d61a73fc5e",
+  "all13_hashes": {
+    "H30-ROOT-INTAKE-v2-parent.json": "1a50e6e864d911799e65944d2a09da17388dae5f7eaed73918c69ef0bae111f6",
+    "H30-tiny-payout-grouping-v1-design.md": "d2c1fe42e2fa4f65dff2d988510674126d044931a3624c93f9c8f8202f4e74cd",
+    "H30-tiny-payout-grouping-v1-peer-review-client.json": "49dcc779d8a899a793ad1b189f49d1610d04805b5fbc4b8f57d0c75800dfcac9",
+    "H30-tiny-payout-grouping-v1-peer-review-client.md": "2cd9a7dea70e396ba7194a7b81f6ed647bb045043494fcbf68be5fb83f5cb2f7",
+    "H30-tiny-payout-grouping-v1.json": "3199b3f86c5ffbadd13a3d222058420d1ba4a2d8587126fa5d28c39e38d290ed",
+    "H30-tiny-payout-grouping-v1.patch": "0c05c3bafed46fa1c2ee9db45a7aaa1b55e1383beadab0643acc22bb2493fab6",
+    "H30-tiny-payout-grouping-v2-delta.md": "0ef71118bb579a523c5729f4f249c5c476e3af25369fb3bed87447c2a5837f62",
+    "H30-tiny-payout-grouping-v2-delta.patch": "3d9d15a7eab0f15e608447a2f0015ef238c262a36cb57c5300dece28d352e041",
+    "H30-tiny-payout-grouping-v2-peer-review-client.json": "fd8994db6703bf64e90a6978b0b8eafc9aa950331bab82700b806d55d4c4705a",
+    "H30-tiny-payout-grouping-v2-peer-review-client.md": "f42784e1d398da9a977a19e1ce1c2c957f851844082f511472f6656bd1b48173",
+    "H30-tiny-payout-grouping-v2.json": "703cd0a868e0ff60657449781e9c66ab03059768f043705dcf0bbc0f07ed5168",
+    "H30-tiny-payout-grouping-v2.patch": "f4a1bfa1d6039851fe964e9da01a571d0686febbef19f37061ad9187a43ac92d",
+    "publication-checkpoint22-source-files.json": "03bd40060d16cff1c7969441b34a87bfa4928b405155ccfbf5fd8ce9ee37ce2d"
+  },
+  "safe_screen": {
+    "files": 13,
+    "full_English_BIP39_WIF_strong_credential_findings": 0,
+    "wordlist_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693",
+    "limit": "Boundedstaticpattern/checksum screen; no universal secret-absence claim; no private runtime contents read."
+  },
+  "actions": "Created only NEW proposed-safe12copies+manifest and NEWexternalexportreceipt/Markdown. No staging/Git/index/HEAD/Rust/module/global/control/runtime/Cargo actions. FixedPR25 immutable; batch48curation separate."
+}

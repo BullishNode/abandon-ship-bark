@@ -1,0 +1,793 @@
+{
+  "kind": "INDEPENDENT_BATCH48_BACKEND_POSTFLIGHT",
+  "state": "TERMINAL_3PASS_POSTFLIGHT_INTEGRITY_AND_SCOPED_ABSENCE_PASS",
+  "at": "2026-10-18T08:36:52.084421+00:00",
+  "parent_terminal_confirmed": {
+    "tool_session": 79687,
+    "exit_code": 0,
+    "source": "Explicit parent terminal signal; actual result and bounded native lines independently matched; tool session is not process PID"
+  },
+  "counts": {
+    "started": 3,
+    "PASS": 3,
+    "FAIL": 0,
+    "NOT_STARTED": 0,
+    "reviewer_native_executions": 0
+  },
+  "native_seconds_sum": 134.521,
+  "controller_wall_seconds_sum": 137.725,
+  "cases": [
+    {
+      "index": 1,
+      "binary": "ark-testing::bark-sdk",
+      "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "state": "PASS",
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "0e681d68-54a6-4654-b846-2efd707b24f2",
+      "native_seconds": 35.152,
+      "wall_seconds": 36.058,
+      "known_PGID_SID": 173577,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "fresh_selected_unignored": [
+        [
+          "ark-testing::bark-sdk",
+          "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds"
+        ]
+      ],
+      "starting_count": 1,
+      "metadata_binary_count": 4,
+      "filter_skipped": 660,
+      "safe_native_PASS_line": "PASS [  35.152s] (1/1) ark-testing::bark-sdk lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "safe_native_summary": "Summary [  35.155s] 1 test run: 1 passed, 660 skipped",
+      "safe_native_starting": "Starting 1 test across 4 binaries (660 tests skipped)",
+      "actual_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case01/test-data/bark_sdk/pay_hold_expired_refusal_then_refresh",
+      "context_metadata": {
+        "directory_categories_present": [
+          "bark",
+          "bitcoind",
+          "bitcoind_snapshot",
+          "lightningd_external",
+          "lightningd_internal",
+          "postgres",
+          "server",
+          "server-watchmand",
+          "server_bitcoind"
+        ],
+        "nonempty_Core_blockfiles": [
+          {
+            "relative_path": "bitcoind/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          },
+          {
+            "relative_path": "bitcoind_snapshot/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          },
+          {
+            "relative_path": "server_bitcoind/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          }
+        ]
+      },
+      "source_full_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "function_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+      "body_sha256": "139c429a0f035978ce03968c7d8cfa31ebd80c738e7c3126073cc90871fea378",
+      "native_assertion_scope": "Expired-new-LN: typed refusal and retained signed2BTC source, zero nativeattempts/dispatch/CLNsend and unaccepted invoice; actual refresh/newvalidatedCore6anchor, distinct0.5BTChold Accepted\u2192Paid/CLNComplete and1.5BTCremaining. This is not unilateral fallback/refund."
+    },
+    {
+      "index": 2,
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "state": "PASS",
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "e21e9868-f630-4efc-b8b8-175127cfec10",
+      "native_seconds": 44.183,
+      "wall_seconds": 45.071,
+      "known_PGID_SID": 174944,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "fresh_selected_unignored": [
+        [
+          "ark-testing::bark-sdk",
+          "exit::watchman_sweeps_funding_tx_during_exit"
+        ]
+      ],
+      "starting_count": 1,
+      "metadata_binary_count": 4,
+      "filter_skipped": 660,
+      "safe_native_PASS_line": "PASS [  44.183s] (1/1) ark-testing::bark-sdk exit::watchman_sweeps_funding_tx_during_exit",
+      "safe_native_summary": "Summary [  44.185s] 1 test run: 1 passed, 660 skipped",
+      "safe_native_starting": "Starting 1 test across 4 binaries (660 tests skipped)",
+      "actual_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case02/test-data/bark_sdk/watchman_sweeps_funding_tx_during_exit",
+      "context_metadata": {
+        "directory_categories_present": [
+          "bark",
+          "bitcoind",
+          "bitcoind_snapshot",
+          "postgres",
+          "server",
+          "server-watchmand",
+          "server_bitcoind"
+        ],
+        "nonempty_Core_blockfiles": [
+          {
+            "relative_path": "bitcoind/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          },
+          {
+            "relative_path": "bitcoind_snapshot/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          },
+          {
+            "relative_path": "server_bitcoind/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          }
+        ]
+      },
+      "source_full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "function_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "body_sha256": "50fa0dc5db6532f939a590cdcc2ef8aa8b4d669e454219e1e4243a62e42c12c1",
+      "native_assertion_scope": "Watch funding: one400000principal\u2192399000customer+1000charge; actualsignedcanonicalparent/Core6/unspent output, allgeneration owner/mailbox/key/script ledger binding and exact1postsetup chain+mempool payment."
+    },
+    {
+      "index": 3,
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "state": "PASS",
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "109c9a65-c98b-4dd9-b7db-08540b4460ff",
+      "native_seconds": 55.186,
+      "wall_seconds": 56.596,
+      "known_PGID_SID": 175188,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "fresh_selected_unignored": [
+        [
+          "ark-testing::bark-sdk",
+          "exit::watchman_sweeps_vtxo_chain_during_exit"
+        ]
+      ],
+      "starting_count": 1,
+      "metadata_binary_count": 4,
+      "filter_skipped": 660,
+      "safe_native_PASS_line": "PASS [  55.186s] (1/1) ark-testing::bark-sdk exit::watchman_sweeps_vtxo_chain_during_exit",
+      "safe_native_summary": "Summary [  55.192s] 1 test run: 1 passed, 660 skipped",
+      "safe_native_starting": "Starting 1 test across 4 binaries (660 tests skipped)",
+      "actual_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case03/test-data/bark_sdk/watchman_sweeps_vtxo_chain_during_exit",
+      "context_metadata": {
+        "directory_categories_present": [
+          "bark1",
+          "bark2",
+          "bitcoind",
+          "bitcoind_snapshot",
+          "postgres",
+          "server",
+          "server-watchmand",
+          "server_bitcoind"
+        ],
+        "nonempty_Core_blockfiles": [
+          {
+            "relative_path": "bitcoind/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          },
+          {
+            "relative_path": "bitcoind_snapshot/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          },
+          {
+            "relative_path": "server_bitcoind/regtest/blocks/blk00000.dat",
+            "bytes": 16777216
+          }
+        ]
+      },
+      "source_full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "function_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "body_sha256": "b638a3aa3fa6099a0d7f08b37ba505c6b4080e60d1719b83ff9be8b4dc5edb56",
+      "native_assertion_scope": "Watch chain: authentic partially confirmed exit with300000senderchange+100000receiver,299000/99000actualcustomeroutputs/two1000charges; sameowner/Core6/idempotence/reconciliation rules; Claimable/Claimed never observed in drivenloop; VtxoSwept terminal."
+    }
+  ],
+  "immutable": {
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+    "native_sdk_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+    "preparation_sha256": "e955360c351eb6e84900f2697cb65ad3180bc9d1911bde5670687f5489a9e6f0",
+    "root_allocation_sha256": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+    "parent_admission_sha256": "a84a2d42f040db4e6ca58581cf65f301bfad564c88b99ad88805b226694fb1b3",
+    "independent_control_peer_sha256": "a32e639d7862ea8c0a2225f58274f5c052f67221842aee34c230706e6adef21a",
+    "all19_parent_frozen_paths_unchanged": {
+      "selection-proof.json": "1030aa10b1d18fba7636624b76ecf97e9562a930531a0422f3285a8195313114",
+      "root-allocation.json": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+      "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "source-proposal.json": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+      "source-peer.json": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+      "source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+      "prior49-postflight.json": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+      "parent-actor-probe.py": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665",
+      "server-cohort.py": "f70b0aca93c2da2d7b1364f6766625e106dfa158550f797e9290458bff96d5fb",
+      "preflight-static.py": "12d3901fa0f47ae4d401a70573c2a639c16295f108256c1d7d06b1cea1170ef2",
+      "fresh-listings.py": "74409ba644385cb3b10b0cb8dec30d36425afd787abd545923848d5a0cd34d9a",
+      "preflight.sh": "480a97ab83f19f574ea1b70f64fb34cd418cb6511ce52cb4af406e6ca26e1194",
+      "run.sh": "aab2adc5ce6e712fa27e395956c31c1395980ebac468c786d5677d82bb83805e",
+      "case01/nextest.toml": "6e180a4dcc152d0196b8385b8389ff9ca1407b65b703435a7a45134750257687",
+      "case02/nextest.toml": "9257e99254f6d6376150ab4291fe1524f5f600546b8cd521e7bb7f2960db93b5",
+      "case03/nextest.toml": "3b7382e283b38022d87c1a9af3875c819b1d601d0aee82b7b7da206c3056e198",
+      "fresh-listing-admission.json": "b3bda395fe0d90ccd8418565a63b632219105f88dd6f499401b517a104815605",
+      "resource-admission.json": "935aa8eca0192c1d8d647e7f17a3b55c4051c4eff4db7136d77502f91c24c969",
+      "parent-actor-admission.json": "144480868534b07b6d6cc8b2c82203f66c4c127609aea87e594b7b51565deb68"
+    },
+    "all16_static_controls_unchanged": {
+      "selection-proof.json": "1030aa10b1d18fba7636624b76ecf97e9562a930531a0422f3285a8195313114",
+      "root-allocation.json": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+      "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "source-proposal.json": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+      "source-peer.json": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+      "source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+      "prior49-postflight.json": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+      "parent-actor-probe.py": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665",
+      "server-cohort.py": "f70b0aca93c2da2d7b1364f6766625e106dfa158550f797e9290458bff96d5fb",
+      "preflight-static.py": "12d3901fa0f47ae4d401a70573c2a639c16295f108256c1d7d06b1cea1170ef2",
+      "fresh-listings.py": "74409ba644385cb3b10b0cb8dec30d36425afd787abd545923848d5a0cd34d9a",
+      "preflight.sh": "480a97ab83f19f574ea1b70f64fb34cd418cb6511ce52cb4af406e6ca26e1194",
+      "run.sh": "aab2adc5ce6e712fa27e395956c31c1395980ebac468c786d5677d82bb83805e",
+      "case01/nextest.toml": "6e180a4dcc152d0196b8385b8389ff9ca1407b65b703435a7a45134750257687",
+      "case02/nextest.toml": "9257e99254f6d6376150ab4291fe1524f5f600546b8cd521e7bb7f2960db93b5",
+      "case03/nextest.toml": "3b7382e283b38022d87c1a9af3875c819b1d601d0aee82b7b7da206c3056e198"
+    },
+    "actual17_pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "all17_actual_pins_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind",
+        "expected_sha256": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e",
+        "actual_sha256": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand",
+        "expected_sha256": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802",
+        "actual_sha256": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark",
+        "expected_sha256": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c",
+        "actual_sha256": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd",
+        "expected_sha256": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537",
+        "actual_sha256": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark",
+        "expected_sha256": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69",
+        "actual_sha256": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk",
+        "expected_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+        "actual_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-barkd",
+        "expected_sha256": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b",
+        "actual_sha256": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-server",
+        "expected_sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+        "actual_sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json",
+        "expected_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+        "actual_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/source-manifest.json",
+        "expected_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+        "actual_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/manifest.json",
+        "expected_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+        "actual_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.rlib",
+        "expected_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "actual_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.so",
+        "expected_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "actual_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/lock-holder",
+        "expected_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "actual_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "unchanged": true
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "expected_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "actual_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "expected_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "actual_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "expected_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "actual_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "unchanged": true
+      }
+    ],
+    "old13_CLOSED_original_and_copy_hashes_unchanged": {
+      "case01/nextest.toml": "46a0591ef30f6f8afa3f4c76f746864c60552861ef50d01a3bea6dc743a56301",
+      "case02/nextest.toml": "4bd65d9757518f3f908f1bca02168a9d6999227162c76511a842ae376428583d",
+      "case03/nextest.toml": "a05a8721a3211875a379496b68cdc576f0b86d408e5151b045b00bbab36d5791",
+      "fresh-listings.py": "e95f68a7ce5df90a2fb6257b3851398da4cbad4bbdffc5b5aaa095f5141ca87e",
+      "launch-authorization-pending.json": "0f653321d8c6be60bc53b141def3158aa067c2a6a4977ac0dbf2a3162f195a13",
+      "preflight-static.py": "752c115c3b2672c64f244084d72250d00167caa31e52e1b0d1634cc5b231406d",
+      "preflight.sh": "9b4512936e497312bf33365d196581e42f19e156d1b1a71b59e44c88df969f6d",
+      "proposed-C-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "run.sh": "7db553376742ab0fe9783c7e20fb2b810e81c3f11e5338b47b5155716c100a61",
+      "selection-proof.json": "f3ccd20024b009c18fea0131f48207bcc92419b465b095e74fbf1ec60b2f95eb",
+      "server-cohort.py": "af73905fece7c2913412d7a05c27f4f18000ac3299f6987080c9b374cc11257d",
+      "source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+      "PREPARATION.pending.json": "9b96e90b74df84ec0b5058032b79eddafd52c0f9e236c5b0054a8e55427a1077"
+    },
+    "captured_full_files_verified": [
+      {
+        "path": "testing/tests/bark_sdk/lightning.rs",
+        "old44_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+        "C_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/tests/bark_sdk/exit.rs",
+        "old44_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+        "C_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/tests/bark_sdk/mod.rs",
+        "old44_sha256": "43168858bd9fd73d14387f418d9889f12a29cb7977e19eaea470691717b56c89",
+        "C_sha256": "43168858bd9fd73d14387f418d9889f12a29cb7977e19eaea470691717b56c89",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/Cargo.toml",
+        "old44_sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+        "C_sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/src/context/mod.rs",
+        "old44_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+        "C_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/src/context/builders.rs",
+        "old44_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+        "C_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/src/balance.rs",
+        "old44_sha256": "a853197fd74375191dfb5725e7edfdbc1b262e8885035ba8073996416e35ef15",
+        "C_sha256": "a853197fd74375191dfb5725e7edfdbc1b262e8885035ba8073996416e35ef15",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/src/util.rs",
+        "old44_sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+        "C_sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/src/constants.rs",
+        "old44_sha256": "58c0495f38c6cad5124b64e9a5a803c32ff2c536cef0258ea62e9cffca748f37",
+        "C_sha256": "58c0495f38c6cad5124b64e9a5a803c32ff2c536cef0258ea62e9cffca748f37",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/src/lib.rs",
+        "old44_sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+        "C_sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/src/daemon/lightningd.rs",
+        "old44_sha256": "d5e920e9e9003e9e694d68af77dccbae890ba75280ded8160a1f2157682291b6",
+        "C_sha256": "d5e920e9e9003e9e694d68af77dccbae890ba75280ded8160a1f2157682291b6",
+        "byte_identical": true
+      },
+      {
+        "path": "testing/src/daemon/watchmand.rs",
+        "old44_sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+        "C_sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+        "byte_identical": true
+      }
+    ],
+    "captured_functions_verified": [
+      {
+        "order": 1,
+        "binary": "ark-testing::bark-sdk",
+        "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+        "source_file": "testing/tests/bark_sdk/lightning.rs",
+        "full_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+        "function_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+        "brace_body_sha256": "139c429a0f035978ce03968c7d8cfa31ebd80c738e7c3126073cc90871fea378",
+        "start_line": 144,
+        "end_line": 345
+      },
+      {
+        "order": 2,
+        "binary": "ark-testing::bark-sdk",
+        "name": "exit::watchman_sweeps_funding_tx_during_exit",
+        "source_file": "testing/tests/bark_sdk/exit.rs",
+        "full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+        "function_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+        "brace_body_sha256": "50fa0dc5db6532f939a590cdcc2ef8aa8b4d669e454219e1e4243a62e42c12c1",
+        "start_line": 67,
+        "end_line": 350
+      },
+      {
+        "order": 3,
+        "binary": "ark-testing::bark-sdk",
+        "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+        "source_file": "testing/tests/bark_sdk/exit.rs",
+        "full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+        "function_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+        "brace_body_sha256": "b638a3aa3fa6099a0d7f08b37ba505c6b4080e60d1719b83ff9be8b4dc5edb56",
+        "start_line": 355,
+        "end_line": 684
+      }
+    ],
+    "captured_helpers_verified": [
+      {
+        "file": "testing/tests/bark_sdk/lightning.rs",
+        "function": "wait_for_hold_invoice_accepted",
+        "function_sha256": "dbe665c63e7ef9d7a4dd2a9727ff515f2528d361d737701d82eecfc0dc8bcac3",
+        "brace_body_sha256": "56a5e07859449b174c502e4a80a6f727dea2870258ca1c8926d49fa08527124c",
+        "start_line": 35,
+        "end_line": 53,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/tests/bark_sdk/lightning.rs",
+        "function": "assert_not_dispatched",
+        "function_sha256": "2f29eede989d5036db69a0f527df77d2501041bdfb63458adb331911d9c25959",
+        "brace_body_sha256": "3d640afe25c6d6bf04448bacc80d7776de2eba408430c64ff5075c86f3a415e3",
+        "start_line": 146,
+        "end_line": 167,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/tests/bark_sdk/exit.rs",
+        "function": "chain_tip",
+        "function_sha256": "4456737bd0ab9229820e29bbc12154b55dddc6b6a197494c8c1721931826686f",
+        "brace_body_sha256": "33819ca233fda418635f65c0eb17a416d8acda0a275b62abc33fe09b8df40978",
+        "start_line": 14,
+        "end_line": 17,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/tests/bark_sdk/exit.rs",
+        "function": "blocks_until",
+        "function_sha256": "7445c5759387c29eee168d5cf4e50d63ed7e4725c26015c6bebf43ceba5f0167",
+        "brace_body_sha256": "2481ef429fd2995c890a329c22ba61cd6b350ce16b72b6f2420df541ddcc94ad",
+        "start_line": 20,
+        "end_line": 22,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/src/balance.rs",
+        "function": "assert_balance_consistent",
+        "function_sha256": "e0472a0f3bd2be9ce6d3a017f8e283f390c0f0c7f3f995347b3f19c5c4df4856",
+        "brace_body_sha256": "41a3d972ce55b503019d6a81f963d7f7a2eeef796250cca3ba323040aa26a768",
+        "start_line": 15,
+        "end_line": 121,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/src/util.rs",
+        "function": "poll_interval",
+        "function_sha256": "527e68a11792afec909b2135d3322679b49c2db6ba58c0cddd3fd406e0127cf3",
+        "brace_body_sha256": "914a5cde27c007feb397720b9dbcb41e84cbceb351c90e8d2a967406ee8043c7",
+        "start_line": 192,
+        "end_line": 199,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/src/util.rs",
+        "function": "wait_millis",
+        "function_sha256": "8d180f39ff3046dabe019eb59122ecaef7d94505a3d6f18960b9d9f36a3e0dd3",
+        "brace_body_sha256": "da999b714154b435926ebfc0b2b4ca63214ab3befadd6934204cde65f69e589e",
+        "start_line": 267,
+        "end_line": 269,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/src/context/mod.rs",
+        "function": "new_lightning_setup",
+        "function_sha256": "d04d691a1722d95d96dce734c4318e33081ab7fe0856720811b11c5538852920",
+        "brace_body_sha256": "ed37d3516d4d0f73743f86e7688aedf74d92a69cf9bf0e84c62b69f86574130b",
+        "start_line": 698,
+        "end_line": 702,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/src/context/mod.rs",
+        "function": "new_lightning_setup_no_channel",
+        "function_sha256": "10aff716b05a6d89236fd0d6d2455ee5187cd3108e18b485a5bfc449b660e875",
+        "brace_body_sha256": "c1e45e450b8ae649583f352e339db19a456c6c19625cecb369de7b48ae71ff5b",
+        "start_line": 683,
+        "end_line": 694,
+        "old44_to_C": "BYTE_IDENTICAL"
+      },
+      {
+        "file": "testing/src/daemon/watchmand.rs",
+        "function": "trigger_sweep",
+        "function_sha256": "c90aa9b5e715303b0b98af680ec8f1f72f7cf7373623f8cd07c2df069b9d5bbf",
+        "brace_body_sha256": "319c90c8caa6d36b48da8f7bcdf6425cc3f8da13e9a6ecea760f4ac0baa2c4b1",
+        "start_line": 113,
+        "end_line": 115,
+        "old44_to_C": "BYTE_IDENTICAL"
+      }
+    ],
+    "capture_scope": "Dirty capturedC cdedd/archiveacc3 at HEAD0496; no current rootV16 or latest HEAD/fix credit"
+  },
+  "cleanup_resources": {
+    "state": "SCOPED_QUIESCENCE_PASS",
+    "at": "2026-10-18T08:33:28.932419+00:00",
+    "namespace": "pid:[4026538663]",
+    "uid": 1000,
+    "IN_NIX_SHELL": "impure",
+    "BARK_DOUBLE_DRIVE_ACTIONS_present_in_audit_environment": false,
+    "known_groups_SIDs": [
+      173577,
+      174944,
+      175188
+    ],
+    "remaining_group_or_SID_members": [],
+    "remaining_scoped_argv_cwd_FD_actors": [],
+    "unreadable_owned_proc_entries": [],
+    "owned_uid_processes_examined": 8,
+    "scope": "All known48 PGID/SID and actual sameUID batch48 scoped argv/cwd/FD, including owned CLN/grpc/hold processes; no output of argument/path/FD values. Other root lanes excluded.",
+    "global_CLN_or_other_service_absence_claim": false,
+    "signals_cleanup_RPC_DB_native_calls": 0,
+    "all17_actual_pins_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind",
+        "expected_sha256": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e",
+        "actual_sha256": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand",
+        "expected_sha256": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802",
+        "actual_sha256": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark",
+        "expected_sha256": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c",
+        "actual_sha256": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd",
+        "expected_sha256": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537",
+        "actual_sha256": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark",
+        "expected_sha256": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69",
+        "actual_sha256": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk",
+        "expected_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+        "actual_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-barkd",
+        "expected_sha256": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b",
+        "actual_sha256": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-server",
+        "expected_sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+        "actual_sha256": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json",
+        "expected_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+        "actual_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/source-manifest.json",
+        "expected_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+        "actual_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/manifest.json",
+        "expected_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+        "actual_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.rlib",
+        "expected_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "actual_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.so",
+        "expected_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "actual_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/lock-holder",
+        "expected_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "actual_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "unchanged": true
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "expected_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "actual_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "expected_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "actual_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "unchanged": true
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "expected_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "actual_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "unchanged": true
+      }
+    ]
+  },
+  "actor_check_receipt": {
+    "path": "/tmp/batch48-independent-scoped-postflight-backend.json",
+    "sha256": "f2b83b5876910362d9c6c77dc71fa5f8c2d93ae6c9d0d7592aef1c3d75f0320c",
+    "new_readonly_probe_sha256": "0d77b25ba1e07d4261eaebccf461c4b8d16695cb409a9dd9465d374967a68638",
+    "frozen_parent_actor_probe_never_rerun": true
+  },
+  "initial_native_receipt": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated-receipt.json",
+    "sha256": "effab7ec704f337944952215f95ec4a55a2e6301bacf442081dd7fc305d6df21",
+    "formal_pending_at_creation_preserved": true,
+    "resolution": "This separate formal report resolves status additively; original not rewritten"
+  },
+  "all_read_public_source_control_result_log_hashes_before_after_unchanged": true,
+  "input_hashes": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/selection-proof.json": "1030aa10b1d18fba7636624b76ecf97e9562a930531a0422f3285a8195313114",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/root-allocation.json": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/source-proposal.json": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/source-peer.json": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/prior49-postflight.json": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/parent-actor-probe.py": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/server-cohort.py": "f70b0aca93c2da2d7b1364f6766625e106dfa158550f797e9290458bff96d5fb",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preflight-static.py": "12d3901fa0f47ae4d401a70573c2a639c16295f108256c1d7d06b1cea1170ef2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/fresh-listings.py": "74409ba644385cb3b10b0cb8dec30d36425afd787abd545923848d5a0cd34d9a",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preflight.sh": "480a97ab83f19f574ea1b70f64fb34cd418cb6511ce52cb4af406e6ca26e1194",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/run.sh": "aab2adc5ce6e712fa27e395956c31c1395980ebac468c786d5677d82bb83805e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case01/nextest.toml": "6e180a4dcc152d0196b8385b8389ff9ca1407b65b703435a7a45134750257687",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case02/nextest.toml": "9257e99254f6d6376150ab4291fe1524f5f600546b8cd521e7bb7f2960db93b5",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case03/nextest.toml": "3b7382e283b38022d87c1a9af3875c819b1d601d0aee82b7b7da206c3056e198",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/fresh-listing-admission.json": "b3bda395fe0d90ccd8418565a63b632219105f88dd6f499401b517a104815605",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/resource-admission.json": "935aa8eca0192c1d8d647e7f17a3b55c4051c4eff4db7136d77502f91c24c969",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/parent-actor-admission.json": "144480868534b07b6d6cc8b2c82203f66c4c127609aea87e594b7b51565deb68",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/PREPARATION.json": "e955360c351eb6e84900f2697cb65ad3180bc9d1911bde5670687f5489a9e6f0",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/parent-launch-admission.json": "a84a2d42f040db4e6ca58581cf65f301bfad564c88b99ad88805b226694fb1b3",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/launch-authorization-pending.preserved.json": "675fad40a9c0df388060d6232e2039cfb619de02cd3951218592d3e6024975d7",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/cohort-progress.json": "c216f29006b95d7f09dbdc0912fa77214f5f2512cb100d400451b3607500371e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/cohort-summary.json": "e3df096303df71f629c77f892ccab628d8fd70491a3f2a866f03136078c00293",
+    "/tmp/batch48-independent-scoped-postflight-backend.json": "f2b83b5876910362d9c6c77dc71fa5f8c2d93ae6c9d0d7592aef1c3d75f0320c",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch48-allocated-control-guard-source-review-legacy.json": "a32e639d7862ea8c0a2225f58274f5c052f67221842aee34c230706e6adef21a",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch48-postflight-audit-plan-backend.json": "c5ffd1efce5032f5de96d9fa56c90ad98004479646fdee0a1275da36fdfcb45d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/case01/nextest.toml": "46a0591ef30f6f8afa3f4c76f746864c60552861ef50d01a3bea6dc743a56301",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/case02/nextest.toml": "4bd65d9757518f3f908f1bca02168a9d6999227162c76511a842ae376428583d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/case03/nextest.toml": "a05a8721a3211875a379496b68cdc576f0b86d408e5151b045b00bbab36d5791",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/fresh-listings.py": "e95f68a7ce5df90a2fb6257b3851398da4cbad4bbdffc5b5aaa095f5141ca87e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/launch-authorization-pending.json": "0f653321d8c6be60bc53b141def3158aa067c2a6a4977ac0dbf2a3162f195a13",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/preflight-static.py": "752c115c3b2672c64f244084d72250d00167caa31e52e1b0d1634cc5b231406d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/preflight.sh": "9b4512936e497312bf33365d196581e42f19e156d1b1a71b59e44c88df969f6d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/proposed-C-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/run.sh": "7db553376742ab0fe9783c7e20fb2b810e81c3f11e5338b47b5155716c100a61",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/selection-proof.json": "f3ccd20024b009c18fea0131f48207bcc92419b465b095e74fbf1ec60b2f95eb",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/server-cohort.py": "af73905fece7c2913412d7a05c27f4f18000ac3299f6987080c9b374cc11257d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c/PREPARATION.pending.json": "9b96e90b74df84ec0b5058032b79eddafd52c0f9e236c5b0054a8e55427a1077",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/case01/nextest.toml": "46a0591ef30f6f8afa3f4c76f746864c60552861ef50d01a3bea6dc743a56301",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/case02/nextest.toml": "4bd65d9757518f3f908f1bca02168a9d6999227162c76511a842ae376428583d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/case03/nextest.toml": "a05a8721a3211875a379496b68cdc576f0b86d408e5151b045b00bbab36d5791",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/fresh-listings.py": "e95f68a7ce5df90a2fb6257b3851398da4cbad4bbdffc5b5aaa095f5141ca87e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/launch-authorization-pending.json": "0f653321d8c6be60bc53b141def3158aa067c2a6a4977ac0dbf2a3162f195a13",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/preflight-static.py": "752c115c3b2672c64f244084d72250d00167caa31e52e1b0d1634cc5b231406d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/preflight.sh": "9b4512936e497312bf33365d196581e42f19e156d1b1a71b59e44c88df969f6d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/proposed-C-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/run.sh": "7db553376742ab0fe9783c7e20fb2b810e81c3f11e5338b47b5155716c100a61",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/selection-proof.json": "f3ccd20024b009c18fea0131f48207bcc92419b465b095e74fbf1ec60b2f95eb",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/server-cohort.py": "af73905fece7c2913412d7a05c27f4f18000ac3299f6987080c9b374cc11257d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/preserved-closed-pending/PREPARATION.pending.json": "9b96e90b74df84ec0b5058032b79eddafd52c0f9e236c5b0054a8e55427a1077",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/source-manifest.json": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/manifest.json": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/source.tar.gz": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/nextest-binaries-immutable.json": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated-receipt.json": "effab7ec704f337944952215f95ec4a55a2e6301bacf442081dd7fc305d6df21",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case01/result.json": "03eb57262c07daf6d1e08e8aa16d9182c7e9cb7cc4c14d224e921ab20a22f95f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case01/selection-list-fresh.json": "a14f3263d8b578f4b4d0314bbd22fe15437d48ecaaad4df6fcbd87ee9bc2e458",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case01/nextest.log": "4867195912069790d764b55cf449af4a4eff0465291db3cdfb79a0c04cba1e3a",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case02/result.json": "0de5e0bba7e51441dc27ac703ee3a3460dd87fa7b982ba0ca31f53915473d66f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case02/selection-list-fresh.json": "f3649018e5f99f9730d6b50d0159a6d80da265ee91643825d91f69d64d34a5da",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case02/nextest.log": "8e89c3c9a372ba681f445bcc5321eaa1f8a98e4ba516d46f09a1453135d012d8",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case03/result.json": "55b546e3f37ea2a8c399118a20a0022740a99065d6a469eb8d4ce0baad9d3ac9",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case03/selection-list-fresh.json": "7bb9e035780b293d2db88c28f70e41f10a8a2e29c2c36d4cf484c8961ee9e8ad",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/case03/nextest.log": "1c51d07b1ddb7a6662294222c1a112e3daabb9c4ad3b2a0f0e942d4eea0ba2e8"
+  },
+  "audit_parser_assumption_corrections": {
+    "initial_uuid_header_only_assumption": "Corrected to anchored UUID with wordboundary; suffix is not exported",
+    "initial_no_counter_PASS_assumption": "Actual native lines have public(1/1) counter; exact optional1/1 accepted, binary/name/duration still anchored",
+    "preserved_initial_checker_sha256": "7031c5a35919059f7cd6a3967f579ab62d6603393cf6cf702ddfd5ef84ed92fa",
+    "preserved_second_checker_sha256": "c622d8d3a877a8122c511193d1492edd4502ab5a8f8351f37d2697f65e8a4fbc",
+    "final_checker_sha256": "56db5dcc6a0593ba34be6a3d330f75ec90c98c0437460b6cb42775a54f72171d",
+    "native_outcomes_unchanged": true,
+    "no_native_reexecution": true
+  },
+  "scope_limits": [
+    "Shallow phase directly asserts Processing, awaiting_settlement membership and no successful payout history; it does not independently assert every monetary balance bucket there. Do not broaden this into a standalone all-balance oracle.",
+    "Clients remain manual/live; explicitwatchmantriggers,15mincadences, zero Arkrefresh/LNuserfees, factor1chainfixture. No absent-client/defaultdaemon/reorg/claim-journal replay boundary proof.",
+    "Payout parents have exactactualprevout zero-miner-fee assertions; economic1000customercharge is distinct from unmeasured CPFPfees. No full child/sponsor-DAG/custody cut or global solvency claim.",
+    "Saved8071 records these names unignored but filter-mismatched under P07; no new singleton/freshlisting/run inferred.",
+    "Old44PASS remains oldd0fb only. Exactunchangedsource binds candidateC; no PASS/unique/FULLML/newfix credit transfer.",
+    "All3 repeated native cases: zero newunique credit. Old44 PASS and historical FAIL records stay unchanged. No whole financial child/sponsor DAG, independent Core money reconstruction, global custody or FULLML/production qualification.",
+    "Only batch48 known groups/SIDs and scoped argv/cwd/FD are verified absent at this cutoff; other root lanes are excluded and no global CLN/service/continuous absence claim is made.",
+    "No private wallet/DB/config/seed contents, native full raw log dump, RPC/node restart, service action, signal/cleanup, test/list/preflight/controller/Cargo/Git execution or global report edits. Only bounded nextest metadata patterns, public controls, captured source and directory/Core-file metadata were read.",
+    "Actual runtime launch full-unset condition is bound to frozen wrappers/guards and parent admission; postflight Nix environment is independently observed without treating it as original exited-process environment.",
+    "The firstcase requires genuine CLN26.06.6/grpc+hold and hold/channel native assertions; exact3 CLN artifacts are among17 rehashed pins. Watch2 instantiate no CLN. No repeat version command or global CLN absence probe was used."
+  ]
+}

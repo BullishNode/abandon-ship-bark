@@ -1,0 +1,44 @@
+{
+  "state": "SCOPED_V2_DELTA_SOURCE_ACK_NO_REMAINING_CONCRETE_BLOCKER_UNCOMPILED_NOT_RUN",
+  "created_utc": "2026-10-18T08:12:57.675659+00:00",
+  "source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+  "source_bytes": 27113,
+  "source_lines": 472,
+  "manifest_sha256": "703cd0a868e0ff60657449781e9c66ab03059768f043705dcf0bbc0f07ed5168",
+  "delta_sha256": "3d9d15a7eab0f15e608447a2f0015ef238c262a36cb57c5300dece28d352e041",
+  "aggregate_patch_sha256": "f4a1bfa1d6039851fe964e9da01a571d0686febbef19f37061ad9187a43ac92d",
+  "delta_notes_sha256": "0ef71118bb579a523c5729f4f249c5c476e3af25369fb3bed87447c2a5837f62",
+  "exact_only_change": "Adds both ark_testing macro imports on one existing use line; reverse exactly reconstructs106bd v1. All function/helper bodies and financial/history/budget oracles byte-identical.",
+  "macro_scope": {
+    "actual_server_test_root": "tests/server/mod.rs",
+    "server_root_sha256": "e89b7fa35784576b3a446d8bb10502da27157b57ca653592817d6e1e7d1f4e2c",
+    "cargo_sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+    "exporting_library_sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+    "explicit_child_imports_both_present": true,
+    "root_global_macro_use_absent": true,
+    "child_use_super_absent": true,
+    "finding": "V1 lacked explicit/path-qualified macros in child; ordinary parent use-import is not inherited. V2 fixes the actual source namespace."
+  },
+  "historical_v1_ack": {
+    "json_sha256": "49dcc779d8a899a793ad1b189f49d1610d04805b5fbc4b8f57d0c75800dfcac9",
+    "status": "HISTORICAL_SUPERSEDED_FOR_ADMISSION",
+    "reviewer_acknowledgement": "The initial review missed this macro-scope omission. This additive correction preserves that report and explicitly supersedes its no-blocker admission conclusion."
+  },
+  "frozen_v1_packet_hashes_verified": {
+    "H30-tiny-payout-grouping-v1.patch": "0c05c3bafed46fa1c2ee9db45a7aaa1b55e1383beadab0643acc22bb2493fab6",
+    "H30-tiny-payout-grouping-v1.json": "3199b3f86c5ffbadd13a3d222058420d1ba4a2d8587126fa5d28c39e38d290ed",
+    "H30-tiny-payout-grouping-v1-design.md": "d2c1fe42e2fa4f65dff2d988510674126d044931a3624c93f9c8f8202f4e74cd",
+    "H30-tiny-payout-grouping-v1-peer-review-client.json": "49dcc779d8a899a793ad1b189f49d1610d04805b5fbc4b8f57d0c75800dfcac9",
+    "H30-tiny-payout-grouping-v1-peer-review-client.md": "2cd9a7dea70e396ba7194a7b81f6ed647bb045043494fcbf68be5fb83f5cb2f7"
+  },
+  "prior_existing_122_testing_rust_unchanged": true,
+  "new_source_module_registration": false,
+  "financial_assertions_unchanged": true,
+  "runtime_or_compile_failure_observed": false,
+  "limits": [
+    "Read-only delta/module/API source checks, no compiler/typecheck/nativeexecution.",
+    "Full v1 financial/API review retained subject to this corrected import; actual candidate build and180-second feasibility still required.",
+    "Old product classifier remains separately source-predicted to fail strict returning history; no product patch applied or native result inferred."
+  ],
+  "actions": "Only two new external additive review files written; no fixture/source/module/global/control/index/runtime changes."
+}

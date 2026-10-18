@@ -1,0 +1,11 @@
+--- a/testing/tests/server/qualification_tiny_payout_grouping.rs
++++ b/testing/tests/server/qualification_tiny_payout_grouping.rs
+@@ -5,7 +5,7 @@
+ 
+ use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
+ use ark::{ProtocolEncoding, ServerVtxoPolicy, VtxoId, VtxoPolicy};
+-use ark_testing::{sat, Captaind, TestContext};
++use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+ use bark::{FallbackDisposition, FallbackPayoutStage};
+ use bark::movement::{Movement, MovementStatus, PaymentMethod};
+ use bark::vtxo::VtxoState;

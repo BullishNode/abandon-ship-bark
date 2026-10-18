@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "state": "INDEPENDENT_H30_SOURCE_PUBLICATION_ACK_NO_BLOCKER_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T08:38:11.677969+00:00",
+  "scope": "Frozen H30 source-only report packet plus new source18 commit. No batch48 outcome or H32 draft exported or promoted.",
+  "manifest": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint22-proposed-safe/publication-checkpoint22-source-files.json",
+    "sha256": "03bd40060d16cff1c7969441b34a87bfa4928b405155ccfbf5fd8ce9ee37ce2d",
+    "payload": 12,
+    "total_files": 13,
+    "all_hashes_sizes_and_exact_frozen_input_copies_verified": true
+  },
+  "git_read_only_checks": {
+    "branch": "work/fresh-test-tiny-grouping-20261018",
+    "HEAD": "57f5d32943cc0b1a30b86164e520aa68aa8577c3",
+    "parent": "39ca7a731d26cf2bb46d84f62a944ac500c89c37",
+    "fixed_PR25_branch_head": "39ca7a731d26cf2bb46d84f62a944ac500c89c37",
+    "commit_paths": [
+      "testing/tests/server/qualification_tiny_payout_grouping.rs"
+    ],
+    "source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+    "working_equals_committed_bytes": true,
+    "source_equals_reconstructed_v2_add_file_patch": true,
+    "reversing_only_macro_import_line_equals_v1_sha256": "106bd16b2024c94f1fc188fd4424fc9005381d52b40d27e0a03544fb8d102b40",
+    "module_unchanged_and_new_test_unregistered": true,
+    "index_empty_at_audit": true,
+    "cached_diff_check_clean": true,
+    "product_or_prior_source_in_new_commit": false
+  },
+  "protected_Rust": {
+    "snapshot_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/checkpoint22-owned-Rust-before-publication.json",
+    "snapshot_sha256": "584ff65667df9d9956cd89b6c05ea444e90e32c9fe1c24d56f409bbf8b83ec6d",
+    "prior_files": 150,
+    "all_current_hashes_equal_before_after": true,
+    "includes_existing_source17": true,
+    "H32_new_untracked_draft": "Allowed outside protected150 if subsequently authored; not staged or included by this audit."
+  },
+  "source_packet_bindings": {
+    "H30-tiny-payout-grouping-v2.patch": "f4a1bfa1d6039851fe964e9da01a571d0686febbef19f37061ad9187a43ac92d",
+    "H30-tiny-payout-grouping-v2.json": "703cd0a868e0ff60657449781e9c66ab03059768f043705dcf0bbc0f07ed5168",
+    "H30-tiny-payout-grouping-v2-peer-review-client.json": "fd8994db6703bf64e90a6978b0b8eafc9aa950331bab82700b806d55d4c4705a",
+    "H30-ROOT-INTAKE-v2-parent.json": "1a50e6e864d911799e65944d2a09da17388dae5f7eaed73918c69ef0bae111f6"
+  },
+  "validation": {
+    "JSON_parsed": 6,
+    "credential_BIP39_WIF_files_scanned": 14,
+    "strong_credential_patterns": 0,
+    "full_English_2048_word_BIP39_checksum_matches": 0,
+    "valid_WIF_Base58Check_matches": 0,
+    "source_472_lines_verified": true
+  },
+  "scope_disposition": [
+    "Source18 is an authentic positive500+500+500 grouped payout proposal with selected300k backing/sponsor cut and mandatory returning SDK history, not an observed PASS or native failure.",
+    "Historical v1 packet and its missed macro import finding remain preserved; v2 adds only the two required macro imports on one existing use line. Financial/helper/test bodies and budgets are unchanged.",
+    "The separate H30 product classifier patch is not applied or committed here. No whole-group dust/forged-group/reorg/fullML/globalcustody or new execution count credit.",
+    "Manifest creation-time future-branch/pending fields are preserved historical snapshots; this additive audit records actual new source-only commit and current uncompiled/unregistered status.",
+    "All12 reports including explicitly allowlisted source patches are frozen exact copies. No private context, wallet, DB, seed, config, raw log or journal content was read."
+  ],
+  "blockers": [],
+  "actions": "Read-only Git/hash/JSON/source-patch reconstruction and bounded secret scans. Only this new audit receipt written. No index/HEAD/branch/source/control/global/runtime/list/Cargo mutation."
+}

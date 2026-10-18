@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "state": "SOURCE_GUARD_REVIEW_ACK_NO_CONCRETE_BLOCKER_PARENT_FRESH_GATES_REQUIRED",
+  "at": "2026-10-18T08:23:59.954173+00:00",
+  "reviewer": "legacy_inventory",
+  "preparation_path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch48-sdk-watch-bridge-v11c-allocated/PREPARATION.json",
+  "preparation_sha256": "e955360c351eb6e84900f2697cb65ad3180bc9d1911bde5670687f5489a9e6f0",
+  "root_allocation_sha256": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+  "reviewed_static_file_sha256": {
+    "selection-proof.json": "1030aa10b1d18fba7636624b76ecf97e9562a930531a0422f3285a8195313114",
+    "root-allocation.json": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "source-proposal.json": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+    "source-peer.json": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+    "source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+    "prior49-postflight.json": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+    "parent-actor-probe.py": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665",
+    "server-cohort.py": "f70b0aca93c2da2d7b1364f6766625e106dfa158550f797e9290458bff96d5fb",
+    "preflight-static.py": "12d3901fa0f47ae4d401a70573c2a639c16295f108256c1d7d06b1cea1170ef2",
+    "fresh-listings.py": "74409ba644385cb3b10b0cb8dec30d36425afd787abd545923848d5a0cd34d9a",
+    "preflight.sh": "480a97ab83f19f574ea1b70f64fb34cd418cb6511ce52cb4af406e6ca26e1194",
+    "run.sh": "aab2adc5ce6e712fa27e395956c31c1395980ebac468c786d5677d82bb83805e",
+    "case01/nextest.toml": "6e180a4dcc152d0196b8385b8389ff9ca1407b65b703435a7a45134750257687",
+    "case02/nextest.toml": "9257e99254f6d6376150ab4291fe1524f5f600546b8cd521e7bb7f2960db93b5",
+    "case03/nextest.toml": "3b7382e283b38022d87c1a9af3875c819b1d601d0aee82b7b7da206c3056e198"
+  },
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "archive_sha256_declared": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+  "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+  "pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "expected_selection": [
+    [
+      "ark-testing::bark-sdk",
+      "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "exit::watchman_sweeps_funding_tx_during_exit"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "exit::watchman_sweeps_vtxo_chain_during_exit"
+    ]
+  ],
+  "checks": {
+    "actual_root_literal_schema_no_missing_allocation_keys": true,
+    "exact_order_three_unique_SDK_selectors": true,
+    "static_hashes_matched": 16,
+    "parent_freeze_required_exact_paths": 19,
+    "old_CLOSED_originals_and_preserved_copies_each_matched": 13,
+    "Python_AST_parsed": 4,
+    "bash_n": 2,
+    "TOML_parsed": 3,
+    "default_timeout_seconds": 180,
+    "retries": 0,
+    "serial_threads": 1,
+    "maximum_cases": 3,
+    "global_native_limit": 2,
+    "first_fail_stops": true,
+    "archive_complete_files_independently_rehashed": 12,
+    "archive_function_helper_regions_independently_rehashed": 13,
+    "source_and_body_regions_both_verified": true,
+    "prior49_formal_exact_hash_and_scoped_absence_fields_verified": true,
+    "historical_saved_listing_names_present_unignored": 3,
+    "pin_entries_unique": 17,
+    "pending_marker_present": true,
+    "parent_launch_admission_absent": true,
+    "no_prior_case_results_test_context_or_progress": true
+  },
+  "guard_findings": [
+    "Both shell wrappers source cached Nix before Python, then fully unset presence-sensitive BARK_DOUBLE_DRIVE_ACTIONS, Docker, old-executable, external-Postgres and filestore overrides. All three Python controls independently reject presence; false, zero and empty are not accepted.",
+    "Actual root27007 tests STRING array, SDK binary, owner/state, source/archive/bundle/metadata/pin fields and180/0/1/global2 match the finalized controls; no invented batch/exact_cases schema is required.",
+    "Controller checks pending marker absent, exact19 frozen hashes, fresh singleton unignored order, resource/actor PASS, zero scoped actors and unreadable entries, at most one other native, SHM threshold and explicit parent root-readonly exemption review before Popen. Parent only supplies admission and removes marker.",
+    "Parent actor source6ff includes prior49 group165688 and rootV16 scoped native/financial names including cln-grpc. Root nonfinancial exemptions require parent inspection and explicit true admission flag; this review makes no current actor/capacity assertion.",
+    "Exactly one just int-binaries invocation per literal selector, exact filter after --, private TEST_DIRECTORY and nextest store; no direct runtime cargo fallback, resume, extra case, silent retry or timeout extension. Actual PASS must be bound to expected SDK binary and literal name, starting selection count1 and zero process exit.",
+    "CLN is required for cohort: actual pinned26.06.6 plus grpc/hold, Docker absent, SQLite LD path leading. All17 pins are checked by the parent controls, and run wrapper verifies actual product and CLN versions."
+  ],
+  "blockers": [],
+  "parent_remaining": [
+    "Run finalized preflight and fresh listing in actual container; rehash all17 actual runtime pins and verify real versions/plugins/environment.",
+    "Run fresh parent actor probe and independently classify any listed nonfinancial root exemptions; require scoped absence, capacity and SHM gates.",
+    "Freeze actual19 controls/gates into parent admission, affirm root_readonly_exemptions_reviewed=true, remove marker only after these pass and execute the allocated cohort once."
+  ],
+  "limits": "Static source/hash/syntax review only. No generated control body, preflight, listing, actor/resource probe, RPC, native test, Cargo or Git mutation executed. Runtime product/Nix pins were not independently rehashed here; their future rehash guards were inspected. No execution, unique-case, current-root-candidate, financial or FULL-ML credit. Previous PASS/FAIL records remain immutable."
+}

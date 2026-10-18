@@ -214,12 +214,12 @@ async fn restored_finish() {
 
 	// An unrelated absent owner must actually get paid after expiry. A live,
 	// funded watchman and completed views alone are not a positive progress oracle.
-	let control = Box::pin(ctx.bark_sdk("control", &srv).funded(sat(20_000)).boarded(sat(10_000))
+	let control = Box::pin(ctx.bark_sdk("control", &srv).funded(sat(40_000)).boarded(sat(20_000))
 		.cfg(|config| config.daemon_manual_sync = true).create()).await;
 	control.stop_daemon_wait().await.unwrap();
 	let controls = control.spendable_vtxos().await.unwrap();
 	assert_eq!(controls.len(), 1);
-	assert_eq!(controls[0].amount(), sat(10_000));
+	assert_eq!(controls[0].amount(), sat(20_000));
 	let control_id = controls[0].id();
 	let control_root = controls[0].chain_anchor();
 	let control_expiry = controls[0].expiry_height();
@@ -402,9 +402,9 @@ async fn restored_finish() {
 				assert_eq!(row.get::<_, Option<String>>("owner_mailbox"), Some(control_mailbox.to_string()));
 				assert_eq!(row.get::<_, Option<String>>("user_pubkey"), Some(control_key.to_string()));
 				assert_eq!(row.get::<_, Option<String>>("spk"), Some(control_binding.spk.to_hex_string()));
-				assert_eq!(row.get::<_, i64>("gross_sat"), 10_000);
+				assert_eq!(row.get::<_, i64>("gross_sat"), 20_000);
 				assert_eq!(row.get::<_, i64>("fee_sat"), 1_000);
-				assert_eq!(row.get::<_, i64>("payout_sat"), 9_000);
+				assert_eq!(row.get::<_, i64>("payout_sat"), 19_000);
 				return parent;
 			}
 			tokio::time::sleep(Duration::from_millis(100)).await;
@@ -430,15 +430,15 @@ async fn restored_finish() {
 	assert_eq!(row.get::<_, Option<String>>("owner_mailbox"), Some(control_mailbox.to_string()));
 	assert_eq!(row.get::<_, Option<String>>("user_pubkey"), Some(control_key.to_string()));
 	assert_eq!(row.get::<_, Option<String>>("spk"), Some(control_binding.spk.to_hex_string()));
-	assert_eq!(row.get::<_, i64>("gross_sat"), 10_000);
+	assert_eq!(row.get::<_, i64>("gross_sat"), 20_000);
 	assert_eq!(row.get::<_, i64>("fee_sat"), 1_000);
-	assert_eq!(row.get::<_, i64>("payout_sat"), 9_000);
+	assert_eq!(row.get::<_, i64>("payout_sat"), 19_000);
 	assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
 	assert_eq!(row.get::<_, Option<String>>("paying_txid"), Some(control_txid.to_string()));
 	assert_eq!(row.get::<_, Option<String>>("paying_hash"), Some(control_hash.to_string()));
 	let control_outputs = control_parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == control_binding.spk).collect::<Vec<_>>();
 	assert_eq!(control_outputs.len(), 1);
-	assert_eq!(control_outputs[0].1.value, sat(9_000));
+	assert_eq!(control_outputs[0].1.value, sat(19_000));
 	let control_payout = OutPoint::new(control_txid, control_outputs[0].0 as u32);
 	assert_eq!(actual_fee(&ctx, &control_parent).await, Amount::ZERO);
 	let anchors = control_parent.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor()).collect::<Vec<_>>();
@@ -501,14 +501,14 @@ async fn restored_finish() {
 		}
 	}
 	assert_eq!(paid, BTreeMap::from([(payout, prepared.onchain_output_amount)]));
-	assert_eq!(control_paid, BTreeMap::from([(control_payout, sat(9_000))]));
+	assert_eq!(control_paid, BTreeMap::from([(control_payout, sat(19_000))]));
 	for (point, amount) in &ordinary {
 		let output = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
 		assert_eq!(output.value, *amount);
 		assert_eq!(output.script_pub_key.script().unwrap(), board.output[point.vout as usize].script_pubkey);
 	}
 	for (point, amount, script) in [(payout, prepared.onchain_output_amount, destination.script_pubkey()),
-		(control_payout, sat(9_000), control_binding.spk.clone())] {
+		(control_payout, sat(19_000), control_binding.spk.clone())] {
 		let output = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
 		assert!(output.confirmations >= 6);
 		assert_eq!(output.value, amount);
@@ -534,7 +534,7 @@ async fn restored_finish() {
 		"customer_initial_sat":200_000,"ordinary_change_sat":ordinary.values().copied().sum::<Amount>().to_sat(),
 		"actual_board_miner_fee_sat":board_fee.to_sat(),"canonical_offboard_height":confirmed_height,"canonical_offboard_hash":confirmed_hash,
 		"prepare_calls":1,"finish_calls":2,"authentic_expired_finish_errors":1,"economic_offboards":1,
-		"positive_control_payout":control_payout,"positive_control_root":control_root,"positive_control_parent_hash":control_hash,
+		"positive_control_gross_sat":20_000,"positive_control_net_sat":19_000,"positive_control_payout":control_payout,"positive_control_root":control_root,"positive_control_parent_hash":control_hash,
 		"positive_control_child":control_child.compute_txid(),"positive_control_child_fee_sat":control_child_fee.to_sat(),
 		"watchman_prefunding":sponsors,"watchman_prefunding_sat":200_000,"snapshot_files":cold.len(),
 		"snapshot_manifest_sha256":sha256::Hash::hash(&serde_json::to_vec(&cold).unwrap()).to_string(),

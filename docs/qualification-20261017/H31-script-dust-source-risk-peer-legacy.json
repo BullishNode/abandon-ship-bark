@@ -1,0 +1,432 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_FULL_FROZEN_CODE_RISK_ACK_NO_CONCRETE_BLOCKER",
+  "at": "2026-10-18T12:02:49.685511+00:00",
+  "case_id": "H31",
+  "reviewer": "legacy_inventory",
+  "source": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_script_dust_boundaries.rs",
+  "source_sha256": "ad89e56eaf8cfda9d13941eca04ae966da9f4025ecbef752e343d8ec48e2b381",
+  "source_lines": 819,
+  "source_bytes": 45908,
+  "read_entire_source": true,
+  "manifest": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H31-script-dust-boundaries-v1-manifest.json",
+  "manifest_sha256": "179b3cbc28049d105f0e6f73c7cff69076bc5e1f31f5e8a0804e2d3ced2eb5b0",
+  "patch_sha256": "1aeec8d98891bb0470ed7df951e8dc0532f00fb975500754f83eee9aac5ade1f",
+  "design_sha256": "8a8d9cd39a5384a659bc6c492e21bccaa496169d29d480203aed810fa34d5c46",
+  "selectors": [
+    "qualification_script_dust_boundaries::p2pkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2sh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2wpkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2wsh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2tr_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited"
+  ],
+  "source_regions": [
+    {
+      "name": "imports_and_helpers",
+      "first_line": 1,
+      "last_line": 101,
+      "sha256": "937801a3f83c0e73ba2354000293d1becc53965770244d5006f444dc6a976291"
+    },
+    {
+      "name": "canonical_allocations_and_packages",
+      "first_line": 102,
+      "last_line": 225,
+      "sha256": "4df281b7fcc75eec8b6963cf3fd07e099a855b1fed04a3c0ac62d05ca02c8270"
+    },
+    {
+      "name": "sdk_receipts",
+      "first_line": 226,
+      "last_line": 252,
+      "sha256": "530208355b8889e924e1dcb0e04f51d0dcd2d781a0f8862352033df11a8d4d5c"
+    },
+    {
+      "name": "selected_graph_and_global_payee_oracles",
+      "first_line": 253,
+      "last_line": 368,
+      "sha256": "8a7d54bd0633240039543e675db50fa99ccb170b5d7eafb568b6291fab5715e6"
+    },
+    {
+      "name": "external_app_binding_and_history",
+      "first_line": 369,
+      "last_line": 477,
+      "sha256": "827187dd744dfdc77ee2fa5387d443f847d8265a474e828d216b75e8b274c8ae"
+    },
+    {
+      "name": "genuine_normal_transfers_and_signed_proof",
+      "first_line": 478,
+      "last_line": 558,
+      "sha256": "1525149931723cbf8d90d71258c53ea46128aaaeeb8f648607993a55e8a4f557"
+    },
+    {
+      "name": "return_helper",
+      "first_line": 559,
+      "last_line": 569,
+      "sha256": "8e7e72f4b335d9537ecea018269958ab33ac19e0d1707f9e48202be2e46d646b"
+    },
+    {
+      "name": "complete_scenario_and_public_evidence",
+      "first_line": 570,
+      "last_line": 779,
+      "sha256": "2da7e27bc9feb3b8f35e4035c551e69ee36d64fd9dc59e2cf43a5a203b29d066"
+    },
+    {
+      "name": "bounds_and_five_selectors",
+      "first_line": 780,
+      "last_line": 819,
+      "sha256": "62becccbc20bb62a0ff875be1bafcdacb6e48028f7881b7ee3e5286c5aa838cf"
+    }
+  ],
+  "canonical_api_file_pins": {
+    "bark/src/actions/arkoor_send.rs": {
+      "sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+      "matches_frozen_packet": true
+    },
+    "bark/src/arkoor.rs": {
+      "sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "matches_frozen_packet": true
+    },
+    "bark/src/balance.rs": {
+      "sha256": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+      "matches_frozen_packet": true
+    },
+    "bark/src/config.rs": {
+      "sha256": "0b90cd033708b897f42067ef911c9f7ac8756b8661e2636e78b168579734ca8f",
+      "matches_frozen_packet": true
+    },
+    "bark/src/fallback.rs": {
+      "sha256": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+      "matches_frozen_packet": true
+    },
+    "bark/src/fallback/adoption.rs": {
+      "sha256": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+      "matches_frozen_packet": true
+    },
+    "bark/src/fallback/payouts.rs": {
+      "sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "matches_frozen_packet": true
+    },
+    "bark/src/fallback/spend_proof.rs": {
+      "sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+      "matches_frozen_packet": true
+    },
+    "bark/src/fallback/sync.rs": {
+      "sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "matches_frozen_packet": true
+    },
+    "bark/src/lib.rs": {
+      "sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "matches_frozen_packet": true
+    },
+    "bark/src/lock_manager/memory.rs": {
+      "sha256": "58a94a9e412e101d74166221af10ea36388a3faeaf10f9ee78982e075c9ee6dc",
+      "matches_frozen_packet": true
+    },
+    "bark/src/mailbox.rs": {
+      "sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "matches_frozen_packet": true
+    },
+    "bark/src/movement/mod.rs": {
+      "sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "matches_frozen_packet": true
+    },
+    "bark/src/movement/payment_method.rs": {
+      "sha256": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+      "matches_frozen_packet": true
+    },
+    "bark/src/persist/sqlite/mod.rs": {
+      "sha256": "b41f613618f7cf0c5ba7d0ac81008f5e45dc9aaca0f48f7c72d1b632881a6507",
+      "matches_frozen_packet": true
+    },
+    "lib/src/address.rs": {
+      "sha256": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+      "matches_frozen_packet": true
+    },
+    "lib/src/attestations.rs": {
+      "sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+      "matches_frozen_packet": true
+    },
+    "lib/src/fallback.rs": {
+      "sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "matches_frozen_packet": true
+    },
+    "lib/src/vtxo/mod.rs": {
+      "sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+      "matches_frozen_packet": true
+    },
+    "server-rpc/protos/bark_server.proto": {
+      "sha256": "6ccf1b22452ef232c6ff31eb390fb366fc65750168fe279caa769f4f099e464c",
+      "matches_frozen_packet": true
+    },
+    "server/schema.sql": {
+      "sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "matches_frozen_packet": true
+    },
+    "server/src/database/expiry_details.rs": {
+      "sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+      "matches_frozen_packet": true
+    },
+    "server/src/database/expiry_ownership.rs": {
+      "sha256": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+      "matches_frozen_packet": true
+    },
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": {
+      "sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "matches_frozen_packet": true
+    },
+    "server/src/database/mod.rs": {
+      "sha256": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416",
+      "matches_frozen_packet": true
+    },
+    "server/src/database/ordinary_spend.rs": {
+      "sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+      "matches_frozen_packet": true
+    },
+    "server/src/watchman/payout.rs": {
+      "sha256": "19769210f706753f65749fa741179a5090bfd6a92c1e444c92d97605963eb32a",
+      "matches_frozen_packet": true
+    },
+    "server/src/watchman/settlement.rs": {
+      "sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "matches_frozen_packet": true
+    },
+    "testing/src/bark.rs": {
+      "sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "matches_frozen_packet": true
+    },
+    "testing/src/context/builders.rs": {
+      "sha256": "540a818dc3c22aa9d78cba692851df68a50fb268ceca0e05b81eb14f209c6d72",
+      "matches_frozen_packet": true
+    },
+    "testing/src/context/mod.rs": {
+      "sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "matches_frozen_packet": true
+    },
+    "testing/src/daemon/captaind/mod.rs": {
+      "sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+      "matches_frozen_packet": true
+    },
+    "testing/tests/server/mod.rs": {
+      "sha256": "30799b8978b7da4faace26d4f154627ca20fe79483bbc03edf3cd5989efff0da",
+      "matches_frozen_packet": true
+    }
+  },
+  "financial_arithmetic_by_family": [
+    {
+      "family": "p2pkh",
+      "dust_sat": 546,
+      "gross_boundaries_sat": [
+        1545,
+        1546,
+        1547
+      ],
+      "recipient_payouts_sat": [
+        0,
+        546,
+        547
+      ],
+      "recipient_fees_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeiture_sat": 1545,
+      "four_sender_leaves_gross_sat": 95362,
+      "one_grouped_sender_payout_sat": 94362,
+      "total_policy_fee_sat": 3000,
+      "total_customer_paid_sat": 95455,
+      "gross_conservation_sat": 100000
+    },
+    {
+      "family": "p2sh",
+      "dust_sat": 540,
+      "gross_boundaries_sat": [
+        1539,
+        1540,
+        1541
+      ],
+      "recipient_payouts_sat": [
+        0,
+        540,
+        541
+      ],
+      "recipient_fees_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeiture_sat": 1539,
+      "four_sender_leaves_gross_sat": 95380,
+      "one_grouped_sender_payout_sat": 94380,
+      "total_policy_fee_sat": 3000,
+      "total_customer_paid_sat": 95461,
+      "gross_conservation_sat": 100000
+    },
+    {
+      "family": "p2wpkh",
+      "dust_sat": 294,
+      "gross_boundaries_sat": [
+        1293,
+        1294,
+        1295
+      ],
+      "recipient_payouts_sat": [
+        0,
+        294,
+        295
+      ],
+      "recipient_fees_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeiture_sat": 1293,
+      "four_sender_leaves_gross_sat": 96118,
+      "one_grouped_sender_payout_sat": 95118,
+      "total_policy_fee_sat": 3000,
+      "total_customer_paid_sat": 95707,
+      "gross_conservation_sat": 100000
+    },
+    {
+      "family": "p2wsh",
+      "dust_sat": 330,
+      "gross_boundaries_sat": [
+        1329,
+        1330,
+        1331
+      ],
+      "recipient_payouts_sat": [
+        0,
+        330,
+        331
+      ],
+      "recipient_fees_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeiture_sat": 1329,
+      "four_sender_leaves_gross_sat": 96010,
+      "one_grouped_sender_payout_sat": 95010,
+      "total_policy_fee_sat": 3000,
+      "total_customer_paid_sat": 95671,
+      "gross_conservation_sat": 100000
+    },
+    {
+      "family": "p2tr",
+      "dust_sat": 330,
+      "gross_boundaries_sat": [
+        1329,
+        1330,
+        1331
+      ],
+      "recipient_payouts_sat": [
+        0,
+        330,
+        331
+      ],
+      "recipient_fees_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "forfeiture_sat": 1329,
+      "four_sender_leaves_gross_sat": 96010,
+      "one_grouped_sender_payout_sat": 95010,
+      "total_policy_fee_sat": 3000,
+      "total_customer_paid_sat": 95671,
+      "gross_conservation_sat": 100000
+    }
+  ],
+  "checks": [
+    {
+      "subject": "Authentic standard external application binding",
+      "source_lines": [
+        369,
+        428,
+        598,
+        623
+      ],
+      "conclusion": "Three random in-memory wallet seeds and application keys produce distinct real standard SPKs, accounts and mailboxes. Public Wallet::open uses real SQLite, fallback_spk, onchain=None and no daemon. Regtest signatures and actual server-stored immutable binding are checked; reopening requires the original database."
+    },
+    {
+      "subject": "Authentic normal current financial cut",
+      "source_lines": [
+        478,
+        557,
+        624,
+        667
+      ],
+      "conclusion": "Three completed normal sends hydrate real signed recipient bodies and keys. Actual consumed source plus three fully signed successor branches are compared to an attested ordinary-spend proof and server-stored bodies. Source and successor path geometry, signature validation, value, anchor and expiry are checked. Default split factor2 remains; final four sender leaves plus three recipient leaves sum to the real100k board."
+    },
+    {
+      "subject": "Independent script boundary and one fee per output",
+      "source_lines": [
+        383,
+        399,
+        624,
+        653
+      ],
+      "conclusion": "Expected dust values are asserted against each actual Script::minimal_non_dust. Distinct SPKs prevent regrouping the three boundary accounts. Whole sub-dust gross is forfeited with fee0 and no payout mapping; exact/+1 pay dust/dust+1 with1000 each. Sender leaves sort by ID as settlement::allocate does and split only one1000 fee. Current leaf amounts and whole100k policy conservation are explicit."
+    },
+    {
+      "subject": "Native canonical financial attribution",
+      "source_lines": [
+        102,
+        224
+      ],
+      "conclusion": "Actual active customer rows bind gross/fee/payout/forfeit/script/mailbox/user key to stored signed parent bytes and canonical >=6-confirmed block/hash. LEFT JOIN retains the no-output dust leaf; paying fields and null payout association are checked. Parent must spend a real signed lineage point via its exact expiry clause, have zero actual miner fee, and have one actual same-block P2A child with positive recomputed prevout fee, >=6 confirmations and exact stored bytes/fee/hash."
+    },
+    {
+      "subject": "Whole public-chain cut and duplicates",
+      "source_lines": [
+        255,
+        368,
+        700,
+        719
+      ],
+      "conclusion": "Every canonical transaction after the pre-expiry scan boundary is inspected for registered payees before selected-cut filtering. Exactly one unspent output per paying account and none for the forfeited account are required, including global mempool negatives. Block-order graph closure rejects outside input subsidies and repeated selected inputs; exact root+two confirmed100k sponsors conserve selected300k into actual positive terminal Core UTXOs and actual graph fees. Parent/child membership, current watch-wallet terminal ownership and all-generation current-ID/old-ancestor allocation exclusions are checked."
+    },
+    {
+      "subject": "Returning original balances and history",
+      "source_lines": [
+        32,
+        45,
+        226,
+        252,
+        429,
+        475,
+        559,
+        568,
+        738,
+        777
+      ],
+      "conclusion": "Original SDK databases return only after canonical chain assertions. Each receipt binds exact per-leaf value and shared output, confirmed parent/block, disposition and local Spent/full-body state. All ten balance buckets are zero, no unilateral exits or pending sends remain, ordinary movement bodies are unchanged, one grouped fallback movement consumes exactly the known current IDs and gross once, and destination/fee/forfeit metadata is exact. Repeated sync and a later rebuilt-tip close/reopen preserve complete results and financial cut."
+    },
+    {
+      "subject": "Public evidence chronology and private-material exclusion",
+      "source_lines": [
+        700,
+        737,
+        773,
+        777
+      ],
+      "conclusion": "Typed capsule is written only after chain/financial oracles with overall_pass=false; COMPLETE/true is written only after repeated returning-SDK and reopen oracles. Fields are public scripts, pubkeys/xpubs, mailbox identifiers, signed VTXOs, public transaction bytes/outpoints, amounts and movement IDs. Application seeds/private keys, SQLite, config, wallet material and raw logs are not serialized. Signed VTXO encoding is public recovery data, not a private signing key."
+    }
+  ],
+  "concrete_blockers": [],
+  "relationship_to_preliminary_design_review": "Supersedes the earlier design-only review for this exact frozen code risk scope; does not relabel the preliminary review or qualify any execution. Client full API/code peer is separate.",
+  "static_actions": [
+    "Read all819 source lines and frozen packet; hash-bound sections and current canonical API files.",
+    "Read current relevant APIs/schema guidance; evaluated only independent integer fee/dust arithmetic.",
+    "Read-only source review. No code parser/compiler, Cargo, build, test metadata, listings, controls, probes, resources, RPC, native tests, financial reruns, Git/index or global report mutations."
+  ],
+  "limits": [
+    "Source remains unregistered, uncompiled and NOT RUN. No source capture, artifact or allocation is implied.",
+    "Default180-second per-family timeout,20 publication progress blocks and96 total-block cap are unmeasured; future timeout or native failure remains a failure, not permission for retries or deadline extension.",
+    "Version and chain-source macros require future exact candidate/version/backend preflight to exclude early-return inventory credit.",
+    "Selected300k is the100k backing plus two100k watch sponsors. The original ordinary board change/miner fee is accounted separately, not included as selected principal; no full-wallet or global setup cut.",
+    "Configured operator script attribution plus actual public unspent outputs does not prove external application spendability/custody. Watch-wallet ownership checks cover only selected nonpayee/nonoperator positive terminal points.",
+    "This is one family/three distinct accounts per native case with explicit manual scheduling; no external SPK spend, seed recovery, default daemon, backup, reorg, Lightning, throughput, production, full legacy-case or FULLML claim.",
+    "No runtime/coverage/unique count or ML status changes. All prior/frozen evidence remains unchanged."
+  ]
+}

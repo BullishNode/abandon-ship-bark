@@ -1,0 +1,556 @@
+{
+  "schema": 1,
+  "created_utc": "2026-10-18T11:59:55.139760+00:00",
+  "reviewer": "client_test_gaps",
+  "state": "SCOPED_SOURCE_ACK_NO_CONCRETE_BLOCKER_FOUND",
+  "source": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_script_dust_boundaries.rs",
+  "source_sha256": "ad89e56eaf8cfda9d13941eca04ae966da9f4025ecbef752e343d8ec48e2b381",
+  "source_lines": 819,
+  "source_bytes": 45908,
+  "packet": {
+    "H31-script-dust-boundaries-v1-manifest.json": {
+      "sha256": "179b3cbc28049d105f0e6f73c7cff69076bc5e1f31f5e8a0804e2d3ced2eb5b0",
+      "bytes": 13463
+    },
+    "H31-script-dust-boundaries-v1.patch": {
+      "sha256": "1aeec8d98891bb0470ed7df951e8dc0532f00fb975500754f83eee9aac5ade1f",
+      "bytes": 46984
+    },
+    "H31-script-dust-boundaries-v1-design.md": {
+      "sha256": "8a8d9cd39a5384a659bc6c492e21bccaa496169d29d480203aed810fa34d5c46",
+      "bytes": 3351
+    }
+  },
+  "design_inputs": {
+    "H31-source-api-feasibility-backend.json": "ce72aba8d930e7fe3625a472a32a36713f008d8e94f13e91cb0a624d17967b75",
+    "H31-design-risk-peer-legacy.json": "4eed4dc6e2287192dc66dfa3ec561524bbc1cc2a7a408396db7ef2085f9b7a1e"
+  },
+  "binary": "ark-testing::server",
+  "selectors": [
+    "qualification_script_dust_boundaries::p2pkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2sh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2wpkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2wsh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+    "qualification_script_dust_boundaries::p2tr_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited"
+  ],
+  "function_region_convention": "UTF8 declared function through matching same-indentation closing brace, leading indentation removed, LF joins/no trailingLF; body starts at first opening brace",
+  "function_regions": [
+    {
+      "name": "fields",
+      "start_line": 32,
+      "end_line": 37,
+      "region_sha256": "657327469e8c3763a82faaadecf93f4b04b8ab198ac1c08c0bb7bdb79a2697bc",
+      "body_sha256": "961aeb6ce6398f3c9765d376f48a11dbcc62a8f64fa9b9ab5af78a94bfeb08a2"
+    },
+    {
+      "name": "balances",
+      "start_line": 39,
+      "end_line": 45,
+      "region_sha256": "4585c5516fe4d3a51baef8ba025f99958cb90ccb72714c2f59ab275290096da0",
+      "body_sha256": "ba783760bfd26f79ab838b93d96f835975ed61c34997be71588deabfa58706d8"
+    },
+    {
+      "name": "rebuilt",
+      "start_line": 47,
+      "end_line": 61,
+      "region_sha256": "48bbe1c8e500d55d3150a9ab4c10e0b6d4a850c123bc2276086529f644bba687",
+      "body_sha256": "cbec568e8dce6006acd4c0fe9cb42302c59fd0d971048ac0327334d5e9c9189c"
+    },
+    {
+      "name": "actual_fee",
+      "start_line": 63,
+      "end_line": 72,
+      "region_sha256": "7c033f3b8a531f773867c0d9cd7d6961d9f7d318998c3f41c86c8328526eeb2b",
+      "body_sha256": "4753b2997a6365f5652fa169df32661647dd0f8b4a077e3b742527731d761293"
+    },
+    {
+      "name": "watch_coins",
+      "start_line": 74,
+      "end_line": 79,
+      "region_sha256": "37638aaf3e80989cb72f5c6d75aecd7c0411075719087813cb1ef85d75c30c61",
+      "body_sha256": "0ba2328dcd40fa4c4b0d3de1a38180140ed587394a1353358ef7bda30486ecfc"
+    },
+    {
+      "name": "confirm_epoch",
+      "start_line": 102,
+      "end_line": 224,
+      "region_sha256": "5fda5080c54d85dbbd3ceac904591f3894226e4566491ea1c5cd4014fd83203c",
+      "body_sha256": "01a959879ceb36e6587b129667034b207dff762ddcb186abc63f86f00e894c11"
+    },
+    {
+      "name": "receipt",
+      "start_line": 226,
+      "end_line": 251,
+      "region_sha256": "361203d3fd87c0d9e02df63cc90e63ccd00dddb4d93ccabb148b8013e5f4dda0",
+      "body_sha256": "31ea95c165f72cedb9cda68a2bcb0596fe16c7db68e03581d39e74568ad68b69"
+    },
+    {
+      "name": "financial_cut",
+      "start_line": 255,
+      "end_line": 367,
+      "region_sha256": "fbb815a79584c5dcde1ffcb0005797ed76d62db6127d96000c22aa8ec37915c3",
+      "body_sha256": "e426c626e05a1d0f0e6106069bb877934b96b893622b22ef94d799154d553728"
+    },
+    {
+      "name": "label",
+      "start_line": 373,
+      "end_line": 375,
+      "region_sha256": "246f37eb7911dd76b99e89beee49a64d1f001bdaf7885468aaa8b6e0bd6398e4",
+      "body_sha256": "9e788346a6fd2989fdb096b943509afcd9460a228c80a488f476ea3f78b23223"
+    },
+    {
+      "name": "dust",
+      "start_line": 377,
+      "end_line": 379,
+      "region_sha256": "c0322e243c63a03ede060c963078e8da00b9004065d9a3d21e2b45644726d3ed",
+      "body_sha256": "480522e8eb1918df585e1eb325d203116ea3d37fcb2230993886cb062d44488b"
+    },
+    {
+      "name": "script",
+      "start_line": 381,
+      "end_line": 390,
+      "region_sha256": "d52658c05dba4472545106ee1fdfa07efac008cda65b920e9f93f36a78697ee3",
+      "body_sha256": "c048173114e36d1fc3ee89ff7ddf011cc696b9d0139c4bde4e8a09bcbae42f0a"
+    },
+    {
+      "name": "new",
+      "start_line": 403,
+      "end_line": 411,
+      "region_sha256": "28aae50af7935f7f31a1df8c9fdc00013a6f24af39928c8ca67cdd97f187802d",
+      "body_sha256": "c836e9636897088e986bd625e76c64f1a717773d50411c7af2ec053d573a9927"
+    },
+    {
+      "name": "open",
+      "start_line": 413,
+      "end_line": 426,
+      "region_sha256": "f08e1a69864e823d45cfaf62985bbef818f3a700c1a3f83f5cf8f0d88a37b1d2",
+      "body_sha256": "3f4edd1a6a8afe8550ff00948e7ac33f87c05ac87f1d5aa8f653ddd68b12d2fc"
+    },
+    {
+      "name": "group_history",
+      "start_line": 429,
+      "end_line": 474,
+      "region_sha256": "dc2734a4e8a60c786b4c39c321e57dbc2badb10720a423118e0da893c4f9a682",
+      "body_sha256": "960289319890426f53101329908bec72595b5029f15e9fc51fa7b1900ce40159"
+    },
+    {
+      "name": "receive_boundary",
+      "start_line": 478,
+      "end_line": 557,
+      "region_sha256": "a1caf9683a89577d0764371a08af7fa72d811006d38229165e96c0c383eb08f3",
+      "body_sha256": "8f5c898c67d2e7e82e67f0d2c78a7bc299f5253a0d9e43f339fcf711a103dc8a"
+    },
+    {
+      "name": "verify_return",
+      "start_line": 559,
+      "end_line": 568,
+      "region_sha256": "a3ebefd0371d37458b3fe39304f1b1e03da23388639db44c8de0896c8ce0a267",
+      "body_sha256": "cf68dfe500f65f3243e9847a58408c38144e29d453ac47a8eebf4baee0f6b400"
+    },
+    {
+      "name": "boundaries",
+      "start_line": 570,
+      "end_line": 778,
+      "region_sha256": "005d28b5a6c6c0d71686c2f10f0553e81252ca604877a4b4afec9de5c10c21ae",
+      "body_sha256": "6ad8b389c00336136d56f1ef316c6a0d399bc32257813350bdaf26566f98d998"
+    },
+    {
+      "name": "bounded",
+      "start_line": 780,
+      "end_line": 784,
+      "region_sha256": "8e61503b3db2b2da59fa146bdf2dfbabbf95120ba086b397c7dcd77d580ff7da",
+      "body_sha256": "280d3bbb8017323af1039a0a14def79e0511ac6c6f99a900433d5ce95da442e0"
+    },
+    {
+      "name": "p2pkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+      "start_line": 787,
+      "end_line": 791,
+      "region_sha256": "6aaea2b5bf5101165a0c4de3e1cc0d42f12ce4b0c1c4703596bc804836a73faa",
+      "body_sha256": "f4d4e5db7ccd92b7e18b14c2989c3baa9ba99374fc301ac401acb03fcff1d9cc"
+    },
+    {
+      "name": "p2sh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+      "start_line": 794,
+      "end_line": 798,
+      "region_sha256": "3df23c0ca181b8020eafbd9e71f3fb96b1db5e0c26996433f3bedef78afa133f",
+      "body_sha256": "690af83e672aeae70a5ed05bd968c3e5c916bf7839c7e5fa6fbc76bc28933fb3"
+    },
+    {
+      "name": "p2wpkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+      "start_line": 801,
+      "end_line": 805,
+      "region_sha256": "fb9b7c31dcbca26c6e63fb191c0e852bbe0016ce8f204123cb963254be83400a",
+      "body_sha256": "d90c7935d1d392db5146f68da24a4c35d21869110c8f810d4a1a2c63240499b3"
+    },
+    {
+      "name": "p2wsh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+      "start_line": 808,
+      "end_line": 812,
+      "region_sha256": "a4f922e7985c0efbe7ba6e164778aa438b881ec8a7a6c0196ec7aec04c62dcf1",
+      "body_sha256": "e39586397d3dd81832d4f0fa8af565350768336401920a80140e15ae812c5f81"
+    },
+    {
+      "name": "p2tr_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited",
+      "start_line": 815,
+      "end_line": 819,
+      "region_sha256": "7f347128ebc6a6d123e7549ba8e198fb1b025596e1db075d89315b9feb1c9602",
+      "body_sha256": "a3ce7ce70c4baa477816b7e203e0ec8424fb004ddac99034ee5ba9d5a89234d4"
+    }
+  ],
+  "canonical_owned_API_pins_verified": {
+    "bark/src/actions/arkoor_send.rs": {
+      "canonical_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+      "owned_sha256": "716c4d400bd974a7f1463246b41191d3e31106e5a819de817dfbaac3221285ed",
+      "equal": true
+    },
+    "bark/src/arkoor.rs": {
+      "canonical_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "owned_sha256": "5b262be195855d8694c95bc23523b967758a7532f596c043971f149741a8a02f",
+      "equal": true
+    },
+    "bark/src/balance.rs": {
+      "canonical_sha256": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+      "owned_sha256": "905684f07daaddfd6b78f4c0398359c170161e95ebbdd7674ea06e6ed9a124d3",
+      "equal": false
+    },
+    "bark/src/config.rs": {
+      "canonical_sha256": "0b90cd033708b897f42067ef911c9f7ac8756b8661e2636e78b168579734ca8f",
+      "owned_sha256": "0b90cd033708b897f42067ef911c9f7ac8756b8661e2636e78b168579734ca8f",
+      "equal": true
+    },
+    "bark/src/fallback.rs": {
+      "canonical_sha256": "502dcfdf542ead1ee7d43d934c2026089a645ae9d6ff2acf6db242cbc1dce125",
+      "owned_sha256": "57cabf9b3eea09024e59c901067f1f5bb6bc2cc93f4fe376fa295ba9c81d546d",
+      "equal": false
+    },
+    "bark/src/fallback/adoption.rs": {
+      "canonical_sha256": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+      "owned_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+      "equal": false
+    },
+    "bark/src/fallback/payouts.rs": {
+      "canonical_sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "owned_sha256": "eeb8e7c2706fa163c7525c9ededd4492689da667bfdb231c78084cc564afd349",
+      "equal": false
+    },
+    "bark/src/fallback/spend_proof.rs": {
+      "canonical_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+      "owned_sha256": null,
+      "equal": false
+    },
+    "bark/src/fallback/sync.rs": {
+      "canonical_sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "owned_sha256": "dc24a84878eaf20b4158836c2503881797a792fae699a442f47f3731ee6bfe26",
+      "equal": false
+    },
+    "bark/src/lib.rs": {
+      "canonical_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "owned_sha256": "2486a4f20a5e014febc859c83cdac42dd3658e336a31d1947f047b1f234823aa",
+      "equal": false
+    },
+    "bark/src/lock_manager/memory.rs": {
+      "canonical_sha256": "58a94a9e412e101d74166221af10ea36388a3faeaf10f9ee78982e075c9ee6dc",
+      "owned_sha256": "58a94a9e412e101d74166221af10ea36388a3faeaf10f9ee78982e075c9ee6dc",
+      "equal": true
+    },
+    "bark/src/mailbox.rs": {
+      "canonical_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "owned_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "equal": true
+    },
+    "bark/src/movement/mod.rs": {
+      "canonical_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "owned_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "equal": true
+    },
+    "bark/src/movement/payment_method.rs": {
+      "canonical_sha256": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+      "owned_sha256": "6b358fa26f5aad346e5965fd1e5fdee4305b50aa82d4ecad7b59dfeebc51f951",
+      "equal": true
+    },
+    "bark/src/persist/sqlite/mod.rs": {
+      "canonical_sha256": "b41f613618f7cf0c5ba7d0ac81008f5e45dc9aaca0f48f7c72d1b632881a6507",
+      "owned_sha256": "3722da573986817b98956ce7ff4c8a34ea20c2415e33d3235d774232e3cf64a9",
+      "equal": false
+    },
+    "lib/src/address.rs": {
+      "canonical_sha256": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+      "owned_sha256": "b36d068a7f0b13f8a29a79590d358d959246eb4483af39600bf3577a6ddfcb15",
+      "equal": true
+    },
+    "lib/src/attestations.rs": {
+      "canonical_sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+      "owned_sha256": "799ad0fef9cb7732030173a45e2477b3894daf08117250e9e1dae3da82d9770e",
+      "equal": true
+    },
+    "lib/src/fallback.rs": {
+      "canonical_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "owned_sha256": "1935bc0eab2b40adc0b5fc4779c7e49e90975ef32601751cb610938c430257a1",
+      "equal": true
+    },
+    "lib/src/vtxo/mod.rs": {
+      "canonical_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+      "owned_sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+      "equal": true
+    },
+    "server-rpc/protos/bark_server.proto": {
+      "canonical_sha256": "6ccf1b22452ef232c6ff31eb390fb366fc65750168fe279caa769f4f099e464c",
+      "owned_sha256": "4853b54b00fc2ee7059af3c3159313a19da156d12806092f40429700e4044619",
+      "equal": false
+    },
+    "server/schema.sql": {
+      "canonical_sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "owned_sha256": "62a007ebd2b03e99d8da9969f53a0b6e0a5e53b9124526a9148abbf30ffd7614",
+      "equal": true
+    },
+    "server/src/database/expiry_details.rs": {
+      "canonical_sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+      "owned_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "equal": false
+    },
+    "server/src/database/expiry_ownership.rs": {
+      "canonical_sha256": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+      "owned_sha256": "a2fdfa9cefc5f02629adb992e1441c339451e3377702694f1ea3a07de2c612bf",
+      "equal": false
+    },
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": {
+      "canonical_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "owned_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "equal": true
+    },
+    "server/src/database/mod.rs": {
+      "canonical_sha256": "eee09e046d8acbf3ee25e0be7a16cf8cc7512c19c395fb65d094bf3596846416",
+      "owned_sha256": "29f8b4122404b98b41b59867b33adb142e6f03534c8b039ca41535dea0bd5bb2",
+      "equal": false
+    },
+    "server/src/database/ordinary_spend.rs": {
+      "canonical_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+      "owned_sha256": null,
+      "equal": false
+    },
+    "server/src/watchman/payout.rs": {
+      "canonical_sha256": "19769210f706753f65749fa741179a5090bfd6a92c1e444c92d97605963eb32a",
+      "owned_sha256": "6c62a55dcdd76aba427de36a14f37b546beb57dc8667cbd71958426d5e92883e",
+      "equal": false
+    },
+    "server/src/watchman/settlement.rs": {
+      "canonical_sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "owned_sha256": "d09a4c2a303ed9d3f853fdd351b9e6e81ca89929642e573df6fddeb57d2f3d36",
+      "equal": false
+    },
+    "testing/src/bark.rs": {
+      "canonical_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "owned_sha256": "8519d0d80e2a73b85b78401ae79321e480bddb7ccaed98d8059b90019817759e",
+      "equal": true
+    },
+    "testing/src/context/builders.rs": {
+      "canonical_sha256": "540a818dc3c22aa9d78cba692851df68a50fb268ceca0e05b81eb14f209c6d72",
+      "owned_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "equal": false
+    },
+    "testing/src/context/mod.rs": {
+      "canonical_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "owned_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "equal": true
+    },
+    "testing/src/daemon/captaind/mod.rs": {
+      "canonical_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+      "owned_sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336",
+      "equal": true
+    },
+    "testing/tests/server/mod.rs": {
+      "canonical_sha256": "30799b8978b7da4faace26d4f154627ca20fe79483bbc03edf3cd5989efff0da",
+      "owned_sha256": "5d7d37ba46825e988876b0a6158ac363416feefe742decad975b77609565b6ee",
+      "equal": false
+    }
+  },
+  "checks": {
+    "full_source_read": true,
+    "private_source_equal": true,
+    "addfile_patch_reconstructs_source": true,
+    "protected_prior_Rust_count": 153,
+    "prior_files_unchanged": true,
+    "actual_testing_Rust_count": 154,
+    "sole_new_file": "testing/tests/server/qualification_script_dust_boundaries.rs",
+    "module_unchanged": true,
+    "protected_snapshot_sha256": "619324e06ebb0693fe167e7d49ccb6625ffe777927e36e0a79cf7948a2936df9",
+    "all33_API_pin_pairs_unchanged": true,
+    "all5_explicit_version_and_bitcoind_gates": true,
+    "no_financial_SQL_writes": true,
+    "no_constant_funded_seed": true,
+    "Rust_compiler_parser": "NOT RUN",
+    "Cargo_build_listing": "NOT RUN",
+    "native_execution": "NOT RUN"
+  },
+  "findings": [],
+  "reviewed_oracles": [
+    "Four distinct authenticated mailbox/account/script bindings: original native sender plus three real Sqlite-backed SDK recipients with application fallback_spk and no onchain wallet. Full signatures validated against actual board transaction before absence.",
+    "Three normal SDK sends hydrate original recipient bodies/Spendable balances/history and authenticate complete direct signed source proofs; default factor2 yields four remaining sender pieces with one grouped1000 fee sorted by actual VtxoId.",
+    "Runtime script.minimal_non_dust matches546/540/294/330/330; whole below group forfeits gross with zero fee/no output association; exact and plus1 each pay actual script dust / dust+1 with1000 fee.",
+    "Actual published expiry parent uses a signed-path expiry witness, actual Core canonical block and >=6confirmations; same-block real anchor child/raw signed bytes/all-prevout minerfee bound to stored fee row.",
+    "Selected300k root+sponsors reconstructed block-order with unknown-external-input rejection, actual terminal Core UTXOs>=6, confirmed watch ownership for childchange/unusedfunds, and all-generation customer IDs exactly current cut. Whole canonical payee scan precedes selected cut filtering; mempool no pending terminal spends or duplicate customer outputs.",
+    "Returning original Sqlite/account/script bindings validate all receipts and full group history debit across every subsystem, actual fallback fees/net/forfeit, all10 zero balance buckets, empty persisted exit list, repeated sync and sameDB reopen idempotence.",
+    "CHAIN_CONFIRMED_HISTORY_NOT_YET_VERIFIED public capsule is durably emitted before returning SDK/history checks; COMPLETE only after return/repeat/reopen/later completed-view proof."
+  ],
+  "static_boundary_arithmetic": [
+    {
+      "family": "p2pkh",
+      "actual_script_dust_assertion_sat": 546,
+      "gross_sat": [
+        1545,
+        1546,
+        1547
+      ],
+      "recipient_payout_sat": [
+        0,
+        546,
+        547
+      ],
+      "recipient_fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "sender_group_gross_sat": 95362,
+      "sender_group_payout_sat": 94362,
+      "sender_group_fee_sat": 1000,
+      "all_customer_payout_sat": 95455,
+      "forfeited_sat": 1545,
+      "fees_sat": 3000,
+      "principal_sat": 100000,
+      "minimum_possible_final_sender_piece_sat": 11146,
+      "arithmetic_scope": "static exhaustive single-input piece-choice arithmetic; no SDK execution"
+    },
+    {
+      "family": "p2sh",
+      "actual_script_dust_assertion_sat": 540,
+      "gross_sat": [
+        1539,
+        1540,
+        1541
+      ],
+      "recipient_payout_sat": [
+        0,
+        540,
+        541
+      ],
+      "recipient_fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "sender_group_gross_sat": 95380,
+      "sender_group_payout_sat": 94380,
+      "sender_group_fee_sat": 1000,
+      "all_customer_payout_sat": 95461,
+      "forfeited_sat": 1539,
+      "fees_sat": 3000,
+      "principal_sat": 100000,
+      "minimum_possible_final_sender_piece_sat": 11152,
+      "arithmetic_scope": "static exhaustive single-input piece-choice arithmetic; no SDK execution"
+    },
+    {
+      "family": "p2wpkh",
+      "actual_script_dust_assertion_sat": 294,
+      "gross_sat": [
+        1293,
+        1294,
+        1295
+      ],
+      "recipient_payout_sat": [
+        0,
+        294,
+        295
+      ],
+      "recipient_fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "sender_group_gross_sat": 96118,
+      "sender_group_payout_sat": 95118,
+      "sender_group_fee_sat": 1000,
+      "all_customer_payout_sat": 95707,
+      "forfeited_sat": 1293,
+      "fees_sat": 3000,
+      "principal_sat": 100000,
+      "minimum_possible_final_sender_piece_sat": 11367,
+      "arithmetic_scope": "static exhaustive single-input piece-choice arithmetic; no SDK execution"
+    },
+    {
+      "family": "p2wsh",
+      "actual_script_dust_assertion_sat": 330,
+      "gross_sat": [
+        1329,
+        1330,
+        1331
+      ],
+      "recipient_payout_sat": [
+        0,
+        330,
+        331
+      ],
+      "recipient_fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "sender_group_gross_sat": 96010,
+      "sender_group_payout_sat": 95010,
+      "sender_group_fee_sat": 1000,
+      "all_customer_payout_sat": 95671,
+      "forfeited_sat": 1329,
+      "fees_sat": 3000,
+      "principal_sat": 100000,
+      "minimum_possible_final_sender_piece_sat": 11335,
+      "arithmetic_scope": "static exhaustive single-input piece-choice arithmetic; no SDK execution"
+    },
+    {
+      "family": "p2tr",
+      "actual_script_dust_assertion_sat": 330,
+      "gross_sat": [
+        1329,
+        1330,
+        1331
+      ],
+      "recipient_payout_sat": [
+        0,
+        330,
+        331
+      ],
+      "recipient_fee_sat": [
+        0,
+        1000,
+        1000
+      ],
+      "sender_group_gross_sat": 96010,
+      "sender_group_payout_sat": 95010,
+      "sender_group_fee_sat": 1000,
+      "all_customer_payout_sat": 95671,
+      "forfeited_sat": 1329,
+      "fees_sat": 3000,
+      "principal_sat": 100000,
+      "minimum_possible_final_sender_piece_sat": 11335,
+      "arithmetic_scope": "static exhaustive single-input piece-choice arithmetic; no SDK execution"
+    }
+  ],
+  "source_locations": {
+    "custom_Sqlite_open": "Application::open lines413-426",
+    "normal_send_and_signed_proof": "receive_boundary lines478-557",
+    "completed_views_and_actual_package": "rebuilt lines47-61 / confirm_epoch lines102-224",
+    "whole_canonical_and_cut": "financial_cut lines255-367",
+    "full_history": "group_history lines429-474",
+    "preabsence_and_partial_receipt": "boundaries lines570-744",
+    "repeat_reopen_and_COMPLETE": "boundaries lines745-778",
+    "outer_timeout_and_wrappers": "bounded/wrappers lines780-819"
+  },
+  "scope_limits": [
+    "Source-only API/schema/oracle review, not compiler validation or native PASS. Source remains unregistered/uncompiled/NOT RUN.",
+    "Each family180s/96block feasibility is UNMEASURED. Five wrappers require future coherent source/module capture, product versions, exact listing, root allocation and actor/resource gates.",
+    "Manual SDK scheduling and continuing native Core/captaind/watchman; no CLN, backup, reorg, default daemon, throughput or all-boundaries proof.",
+    "Selected300k consists100k actual board root+two actual100k sponsors. Original200k funding ordinary change+board miner accounted separately, outside selected cut.",
+    "Public operator script label is configured attribution, not independent private-key/custody proof; application external outputs are not spent by this fixture.",
+    "No ML map promotion, current/future compile/runtime credit or previous outcome changes."
+  ],
+  "actions": "Read-only source/API/packet hashing and static Python arithmetic; wrote only these new external review JSON/MD files; no Rust/module/product/sharedhelper/global/Git/index/build/list/native actions."
+}

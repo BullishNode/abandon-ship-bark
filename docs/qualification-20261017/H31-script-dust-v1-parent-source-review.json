@@ -1,0 +1,28 @@
+{
+  "state": "PARENT_FULL_SOURCE_READ_NO_CONCRETE_BLOCKER_INDEPENDENT_CLIENT_PEER_PENDING",
+  "at": "2026-10-18T11:59:15.020188+00:00",
+  "path": "testing/tests/server/qualification_script_dust_boundaries.rs",
+  "source_sha256": "ad89e56eaf8cfda9d13941eca04ae966da9f4025ecbef752e343d8ec48e2b381",
+  "source_lines": 819,
+  "scope": "Full819-line source read; compared financial helpers with already qualified H11/H32 patterns and reviewed explicit original SDK SQLite/custom fallback opening, genuine sends and signed proof, split sender change, whole-group fee attribution, all three script-specific dust boundaries, canonical scans before graph filtering, actual fee children, selected 300k graph, receipts/history/balances and repeat/reopen. Source inspection only; no compiler or native command.",
+  "families": [
+    "p2pkh",
+    "p2sh",
+    "p2wpkh",
+    "p2wsh",
+    "p2tr"
+  ],
+  "actual_source_boundary_count": 15,
+  "grouped_sender_fee_sat": 1000,
+  "total_policy_fee_sat": 3000,
+  "forfeited_principal": "999 + actual script dust",
+  "customer_paid": "96001 - actual script dust",
+  "independent_code_peer": "client_test_gaps pending formal receipt",
+  "module_registered": false,
+  "compiled": false,
+  "native_result": "NOT RUN",
+  "runtime_deadline_seconds": 180,
+  "deadline_feasibility": "UNMEASURED",
+  "new_native_credit": 0,
+  "limits": "No external-app output spending, seed restoration, custody, CLN, reorg, daemon, throughput, global or fullML/production acceptance; no product/sharedhelper/module or prior153Rust edits."
+}

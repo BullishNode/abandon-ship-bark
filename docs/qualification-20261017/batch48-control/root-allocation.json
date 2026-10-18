@@ -1,0 +1,36 @@
+{
+  "at": "2026-10-18T08:08:51.660149+00:00",
+  "state": "ALLOCATED_THREE_REPEAT_SDK_BRIDGE_CASES_AFTER_FRESH_GATES",
+  "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+  "binary": "ark-testing::bark-sdk",
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+  "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+  "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+  "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+  "runtime_pins_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "artifact_directory": "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018",
+  "runtime_container": "abandon-fresh-runtime-20261017",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "serial": 1,
+  "max_global_native": 2,
+  "requires_exact_CLN_and_both_plugins": true,
+  "conditions": [
+    "Own49 terminal/formal complete with scopedactors absent; actual global native maximum2 and no third concurrent process",
+    "Finalize old closed48 into new exactC V11c controls, independent peer/hash review; source/body/helper/module and actual17pins/version/features/singleton selections/env/scopedactors/resource gates required",
+    "BARK_DOUBLE_DRIVE_ACTIONS must be absent AFTER cached Nix environment source; false/0/empty all invalid. Exact CLN26.06.6+grpc/hold required, firstcase needs actual channel/hold setup",
+    "Three exactSDKcases SERIAL, standard180each/retries0/firstFAIL/one parent launch; no timeout extension/reset/unmodified rerun or extra selector",
+    "Root current V16 failedparent64522 terminal1; native preflight must confirm scoped actors gone. Root test-onlycapture/newnative may use otherlane; immutableC runtime allowed concurrently with known new-capture compiler",
+    "No own Cargo/sharedtarget/canonical/index/HEAD/Signet changes; exact immutableC artifacts must remain untouched",
+    "Repeated prior names only; no newunique/full200ML/currentV16 or same-final-candidate credit. Preserve failures and formalpostflight before curation"
+  ],
+  "authorization": "One serial three-case parent after final concrete gates may launch without another root/user confirmation; preserve actual handles/results/postflight. No broader runtime allocation or production claim.",
+  "source_proposal_sha256": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+  "peer_sha256": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+  "tests": [
+    "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+    "exit::watchman_sweeps_funding_tx_during_exit",
+    "exit::watchman_sweeps_vtxo_chain_during_exit"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-18T08:19:35.926996+00:00",
+  "state": "PARENT_H30_V2_SOURCE_ACK_READY_FOR_FUTURE_ROOT_CAPTURE_UNCOMPILED_NOT_RUN",
+  "binary": "ark-testing::server",
+  "test": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+  "source_path": "testing/tests/server/qualification_tiny_payout_grouping.rs",
+  "source_lines": 472,
+  "source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+  "aggregate_add_file_patch": "H30-tiny-payout-grouping-v2.patch",
+  "aggregate_add_file_patch_sha256": "f4a1bfa1d6039851fe964e9da01a571d0686febbef19f37061ad9187a43ac92d",
+  "client_source_peer_sha256": "fd8994db6703bf64e90a6978b0b8eafc9aa950331bab82700b806d55d4c4705a",
+  "parent_review": "Full472line source andexact2macroimportdelta inspected. Genuine100kboard/fourwaycosign+registration/perkeymailboxhydration; publicproof-backed originalsourceSpent; recipientoriginalDB3full500Spendablebeforeabsence; canonical6actual500recipient+97500sender outputs/1000fee eachgroup; sorted500/500/0recipientfee allocation, actualsameblockchildren andfinite300kcut/unknowninputfailure; typedphasecheckpointBEFOREmandatorySDKhistory; one\u22121500fee1000net500movement/all3IDs/all10Arkfields/other-subsystemdebit/idempotentresync+reopen. No concrete remaining sourceblockerfound, actualcompiler/runtime required.",
+  "public_receipt_phase_before_history": "CHAIN_CONFIRMED_HISTORY_NOT_YET_VERIFIED/overall_pass=false; COMPLETE/overall_pass=true onlyafterallrequiredSDKhistoryoracles",
+  "product_source_proposal_separate": {
+    "patch_sha256": "f556330ac43ee5bccc0658ef439407ed003858418500457209acf61dcba8fca8",
+    "source_peer_sha256": "4552714e70e68bbaae0731dcfd243e3e19a72a7bf4d92c35777e78d7f32ed7ab",
+    "meaning": "Rootisolatedclassifierproposal only; no producteditbytestingtrack orobservednativeFAIL. Oldclassifierpredictedrejectsfee-onlygroupmembers; nativeoracle retained."
+  },
+  "limits": [
+    "Ordinarypayablegroup H30 only; genuinewholegroupdust andforgedgroup native negatives stillNOTRUN.",
+    "Selected300k =100kboardprincipal+2confirmed100kfeesponsors; originalordinaryonchainchange/boardminerfee outsidecut; no globalcustody/seedrecovery/reorg/fairness/throughput/fullML.",
+    "V1source106bd/clientACK49dcc supersededforadmission byexplicit2macroimports only. Priorall122Rust andnew17v338977 remainunchanged.",
+    "NotinV11c/V15/V16, unregistered/uncompiled; no nativecredit."
+  ],
+  "future_required": [
+    "Rootregisternewmodule in testing/tests/server/mod.rs, coherentcapture/checks/nativecompile/source+ELFpinnedmetadata.",
+    "Exact180/0serialallocation andfreshsource/selection/env/plugin/resources/scopedactor/hashadmission; preservealloutcomes.",
+    "IfoldclassifieractualSDKFAILoccurs, usepre-returnpublicreceipt+retainedCore toreconcilebeforeanynewcandidate rerun."
+  ],
+  "Git_publication": "Deferreduntilallocated48cohortterminal; fixedPR25head39ca unchanged. No index/HEAD/sharedtarget/canonical writes during48allocation."
+}

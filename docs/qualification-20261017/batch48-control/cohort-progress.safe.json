@@ -1,0 +1,50 @@
+[
+  {
+    "index": 1,
+    "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+    "state": "PASS",
+    "started_at": "2026-10-18T08:29:54.953398+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 173577,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "0e681d68-54a6-4654-b846-2efd707b24f2",
+    "test_seconds": 35.152,
+    "wall_seconds": 36.058,
+    "ended_at": "2026-10-18T08:30:31.011508+00:00"
+  },
+  {
+    "index": 2,
+    "name": "exit::watchman_sweeps_funding_tx_during_exit",
+    "state": "PASS",
+    "started_at": "2026-10-18T08:30:31.016855+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 174944,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "e21e9868-f630-4efc-b8b8-175127cfec10",
+    "test_seconds": 44.183,
+    "wall_seconds": 45.071,
+    "ended_at": "2026-10-18T08:31:16.088459+00:00"
+  },
+  {
+    "index": 3,
+    "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+    "state": "PASS",
+    "started_at": "2026-10-18T08:31:16.093249+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 175188,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "109c9a65-c98b-4dd9-b7db-08540b4460ff",
+    "test_seconds": 55.186,
+    "wall_seconds": 56.596,
+    "ended_at": "2026-10-18T08:32:12.689648+00:00"
+  }
+]

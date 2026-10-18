@@ -1,0 +1,35 @@
+{
+  "state": "PARENT_INDEPENDENT_APPEND_ONLY_CURATION_PASS",
+  "at": "2026-10-18T08:45:40.426530+00:00",
+  "base": "39ca7a731d26cf2bb46d84f62a944ac500c89c37",
+  "old_coverage_bytes": 341363,
+  "old_coverage_sha256": "661fb68712076548e5a8665b2e78047bf7d7d69f58743d7a94326e449af70b9d",
+  "prior461_rows_byte_exact": true,
+  "old_FINDINGS_prefix_byte_exact": true,
+  "literal_FAIL_rows_preserved": 14,
+  "failed_execution_count_preserved": 15,
+  "new_rows": [
+    "FT-SDK-059",
+    "FT-SDK-060",
+    "FT-SDK-061"
+  ],
+  "new_unique_pairs": 0,
+  "counts": {
+    "executions": 253,
+    "PASS": 238,
+    "FAIL": 15,
+    "unique_pairs": 233,
+    "nextest": 226,
+    "native": 241,
+    "component": 12,
+    "coverage_rows": 464
+  },
+  "output_sha256": {
+    "COVERAGE.csv": "5aa2daa686d6cd36cd144190aef31a18ba8f8d2336440435da6540efc2f8914a",
+    "STATUS.json": "6311aa8f98d9dccb1a7fa1ac5ea4c4988a4e9280dad23278651afec93d318afb",
+    "FINDINGS.md": "faeacdb8cb0d7da863c025ee34baf95a82ff7ce79ee5f138eeab11b516d0c344",
+    "TWENTY-SECOND-CHECKPOINT.md": "f26ca592c3ff8500a40d2fb3466be6f78313e4a5544aaa15c7a7139feae9e3d1",
+    "batch48-coverage-append.json": "e801f2a01119f3e0e4ba60bd52f9bcd24f7dd6b006b4458298db0d9f9b625f87"
+  },
+  "source_and_native_changes": 0
+}

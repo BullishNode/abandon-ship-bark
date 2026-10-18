@@ -1,0 +1,41 @@
+{
+  "state": "SOURCE_ONLY_UNCOMPILED_NOT_RUN_PENDING_V2_INDEPENDENT_REVIEW_AND_FUTURE_CAPTURE",
+  "created_utc": "2026-10-18T08:10:56.647950+00:00",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_tiny_payout_grouping.rs",
+  "source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+  "source_lines": 472,
+  "source_bytes": 27113,
+  "selector": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+  "expected_binary": "ark-testing::server",
+  "private_source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H30-tiny-group-private/qualification_tiny_payout_grouping.v2.rs",
+  "delta_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H30-tiny-payout-grouping-v2-delta.patch",
+  "delta_sha256": "3d9d15a7eab0f15e608447a2f0015ef238c262a36cb57c5300dece28d352e041",
+  "aggregate_add_file_patch_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H30-tiny-payout-grouping-v2.patch",
+  "aggregate_add_file_patch_sha256": "f4a1bfa1d6039851fe964e9da01a571d0686febbef19f37061ad9187a43ac92d",
+  "v1_frozen_source_sha256": "106bd16b2024c94f1fc188fd4424fc9005381d52b40d27e0a03544fb8d102b40",
+  "v1_frozen_packets": {
+    "H30-tiny-payout-grouping-v1.patch": "0c05c3bafed46fa1c2ee9db45a7aaa1b55e1383beadab0643acc22bb2493fab6",
+    "H30-tiny-payout-grouping-v1.json": "3199b3f86c5ffbadd13a3d222058420d1ba4a2d8587126fa5d28c39e38d290ed",
+    "H30-tiny-payout-grouping-v1-design.md": "d2c1fe42e2fa4f65dff2d988510674126d044931a3624c93f9c8f8202f4e74cd",
+    "H30-tiny-payout-grouping-v1-peer-review-client.json": "49dcc779d8a899a793ad1b189f49d1610d04805b5fbc4b8f57d0c75800dfcac9",
+    "H30-tiny-payout-grouping-v1-peer-review-client.md": "2cd9a7dea70e396ba7194a7b81f6ed647bb045043494fcbf68be5fb83f5cb2f7"
+  },
+  "v1_peer_admission_status": "HISTORICAL_SUPERSEDED_BY_CONCRETE_MISSING_MACRO_IMPORT_FINDING",
+  "change": "Only import require_bark_version and require_bitcoind_chain_source from ark_testing in existing use line. Exact reverse produces v1 source.",
+  "reason": "testing/Cargo.toml server target is tests/server/mod.rs. Parent module use-imports macro names, not a global macro_use; child has neither use super::* nor explicit previous macro imports. Exported macros require child name resolution.",
+  "financial_oracle_changes": false,
+  "deadline_or_retry_changes": false,
+  "prior_122_test_files_unchanged": true,
+  "module_registered": false,
+  "product_edits": false,
+  "compile": null,
+  "native_runtime": null,
+  "observed_native_failure": false,
+  "runtime_limits": {
+    "outer_seconds": 180,
+    "retries": 0,
+    "block_budget": 96
+  },
+  "v1_design_scope_retained": true,
+  "no_full_ml_or_current_candidate_credit": true
+}

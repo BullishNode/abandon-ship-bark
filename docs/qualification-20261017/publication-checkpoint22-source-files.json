@@ -1,0 +1,101 @@
+{
+  "kind": "CHECKPOINT22_PROPOSED_H30_SOURCE_ONLY_REPORT_PAYLOAD",
+  "created_utc": "2026-10-18T08:34:05.489249+00:00",
+  "payload_file_count": 12,
+  "total_files_including_this_manifest": 13,
+  "files": {
+    "H30-ROOT-INTAKE-v2-parent.json": {
+      "sha256": "1a50e6e864d911799e65944d2a09da17388dae5f7eaed73918c69ef0bae111f6",
+      "bytes": 3014
+    },
+    "H30-tiny-payout-grouping-v1.json": {
+      "sha256": "3199b3f86c5ffbadd13a3d222058420d1ba4a2d8587126fa5d28c39e38d290ed",
+      "bytes": 9352
+    },
+    "H30-tiny-payout-grouping-v1.patch": {
+      "sha256": "0c05c3bafed46fa1c2ee9db45a7aaa1b55e1383beadab0643acc22bb2493fab6",
+      "bytes": 27629
+    },
+    "H30-tiny-payout-grouping-v1-design.md": {
+      "sha256": "d2c1fe42e2fa4f65dff2d988510674126d044931a3624c93f9c8f8202f4e74cd",
+      "bytes": 3219
+    },
+    "H30-tiny-payout-grouping-v1-peer-review-client.json": {
+      "sha256": "49dcc779d8a899a793ad1b189f49d1610d04805b5fbc4b8f57d0c75800dfcac9",
+      "bytes": 10380
+    },
+    "H30-tiny-payout-grouping-v1-peer-review-client.md": {
+      "sha256": "2cd9a7dea70e396ba7194a7b81f6ed647bb045043494fcbf68be5fb83f5cb2f7",
+      "bytes": 1788
+    },
+    "H30-tiny-payout-grouping-v2.json": {
+      "sha256": "703cd0a868e0ff60657449781e9c66ab03059768f043705dcf0bbc0f07ed5168",
+      "bytes": 2850
+    },
+    "H30-tiny-payout-grouping-v2.patch": {
+      "sha256": "f4a1bfa1d6039851fe964e9da01a571d0686febbef19f37061ad9187a43ac92d",
+      "bytes": 27682
+    },
+    "H30-tiny-payout-grouping-v2-delta.patch": {
+      "sha256": "3d9d15a7eab0f15e608447a2f0015ef238c262a36cb57c5300dece28d352e041",
+      "bytes": 613
+    },
+    "H30-tiny-payout-grouping-v2-delta.md": {
+      "sha256": "0ef71118bb579a523c5729f4f249c5c476e3af25369fb3bed87447c2a5837f62",
+      "bytes": 935
+    },
+    "H30-tiny-payout-grouping-v2-peer-review-client.json": {
+      "sha256": "fd8994db6703bf64e90a6978b0b8eafc9aa950331bab82700b806d55d4c4705a",
+      "bytes": 3201
+    },
+    "H30-tiny-payout-grouping-v2-peer-review-client.md": {
+      "sha256": "f42784e1d398da9a977a19e1ce1c2c957f851844082f511472f6656bd1b48173",
+      "bytes": 1100
+    }
+  },
+  "source_not_in_payload": {
+    "future_new_branch": null,
+    "repo_relative_path": "testing/tests/server/qualification_tiny_payout_grouping.rs",
+    "sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+    "bytes": 27113,
+    "lines": 472,
+    "expected_binary": "ark-testing::server",
+    "test": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+    "module_registered": false,
+    "compiled": false,
+    "execution_status": "NOT RUN"
+  },
+  "current_source_packet": {
+    "aggregate_patch_sha256": "f4a1bfa1d6039851fe964e9da01a571d0686febbef19f37061ad9187a43ac92d",
+    "manifest_sha256": "703cd0a868e0ff60657449781e9c66ab03059768f043705dcf0bbc0f07ed5168",
+    "source_peer_sha256": "fd8994db6703bf64e90a6978b0b8eafc9aa950331bab82700b806d55d4c4705a",
+    "parent_intake_sha256": "1a50e6e864d911799e65944d2a09da17388dae5f7eaed73918c69ef0bae111f6"
+  },
+  "historical_v1": {
+    "source_sha256": "106bd16b2024c94f1fc188fd4424fc9005381d52b40d27e0a03544fb8d102b40",
+    "peer_sha256": "49dcc779d8a899a793ad1b189f49d1610d04805b5fbc4b8f57d0c75800dfcac9",
+    "admission_status": "HISTORICAL_SUPERSEDED_BY_V2_MACRO_IMPORT_CORRECTION",
+    "correction": "Exactly one existing import line adds require_bark_version and require_bitcoind_chain_source. All test/helper bodies and financial/history/budget assertions remain byte-identical. Source finding only; no observed compile/nativeFAIL."
+  },
+  "protection": {
+    "fixed_PR25_head": "39ca7a731d26cf2bb46d84f62a944ac500c89c37",
+    "prior_122_Rust_hashes_unchanged": true,
+    "ML125_v3_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+    "Rust_payload_files": 0,
+    "Git_index_HEAD_actions": 0,
+    "mutable_global_files_included": false,
+    "batch48_results_included": false
+  },
+  "scope": [
+    "H30onepayabletinygroup SOURCE ONLY; no module/build/runtime/allocation/nativePASS ornewcount credit.",
+    "Rootclassifierproposal f556 remainsseparate; no productedits inthispacket. Oldclassifier strictSDKhistoryreject is source-predicted, not observednativeFAIL.",
+    "Selected300kroot+sponsorcut; ordinarycustomerboardchange/upfrontminer separatelyoutside; no globalcustody/FULLML/wholegroupdust/forgednegative qualification.",
+    "Batch48results/formalpostflight/curation/export areindependent; thisproposalcontainsnobatch48nativeevidence.",
+    "FutureNEWsourcebranch/publication requiresparentaction; fixedPR25 remainsimmutable. Thisisaproposedun-stageddirectory, notpublication."
+  ],
+  "exclusions": [
+    "No native logs/argv/seeds/keys/wallet/config/PG/privatebackup/testdata/controlfiles.",
+    "No Rustcopy/private-sourcecopy/protectivesnapshot contents.",
+    "No STATUS/COVERAGE/FINDINGS/globalcounts orfrozencheckpoint mutations."
+  ]
+}

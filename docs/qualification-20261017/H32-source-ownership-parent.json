@@ -1,0 +1,19 @@
+{
+  "state": "SOLE_SOURCE_ONLY_AUTHOR_ALLOCATED_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T08:36:33.884198+00:00",
+  "coordinator_thread": "01a14133-d4bf-7d72-bd69-d0f9762d007f",
+  "author": "/root/client_test_gaps",
+  "proposal": "H32-genuine-dust-later-receipt-source-proposal.json",
+  "proposal_sha256": "1b5da53b25130b4a291fdf2b30b0773c1cab8aec0423fad21b5fbb9ec3fdc4d1",
+  "root_approval_text": "H32 new19 scope provisionally deconflicted; attribution peer reviewing proposal now. Source-only ownership granted if distinct genuine whole-group dust then independent later receipt, no module/canonical mutation/build/native grant. No scope or funding assumptions may weaken H30/ML125.",
+  "new_path": "testing/tests/server/qualification_dust_later_receipt.rs",
+  "selector": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+  "constraints": [
+    "Actual1200 receipt alreadyhydrated into originalDB beforeabsence; genuine gross>fee butnet200belowactualscriptdust => fee0/nooutput/forfeit1200; originalDBacceptsactualBelowDust before anynewreceipt.",
+    "Onlythen independentfreshdonor fundsnew100k tosameoriginalrecipientaccount/DB/script; new99000+1000, no old1200 revival or100200.",
+    "Authenticnativecosign/register/mailbox/recover_vtxos, readonlyfinancialSQL, actualCore6parent+sameblockfeechild, allhistory/tendeclarations/idempotence; finite600kcut2roots+4confirmed100ksponsors.",
+    "180-seconddeadline/no retries/128progressblocks proposedunmeasured; no unearnednativeFAIL/PASS/unique/fullML credit.",
+    "No module/product/canonical/Git/index/HEAD/build/runtime/globalreport actions byauthor. Protect prior150Rust and currentH30db2e/ML12538977."
+  ],
+  "status": "Root attributionpeer feedback pending; source work proceeds within explicit conditionalgrant."
+}

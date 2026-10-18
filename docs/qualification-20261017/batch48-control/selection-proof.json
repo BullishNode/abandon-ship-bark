@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "batch": "batch48-sdk-watch-bridge-v11c-allocated",
+  "state": "ROOT_ALLOCATED_THREE_REPEAT_SDK_CASES_PENDING_PARENT_FRESH_GATES_AND_LAUNCH",
+  "candidate_ready": true,
+  "controls_finalized": true,
+  "execution_authorized": true,
+  "expected_names_in_execution_order": [
+    "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+    "exit::watchman_sweeps_funding_tx_during_exit",
+    "exit::watchman_sweeps_vtxo_chain_during_exit"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::bark-sdk",
+    "ark-testing::bark-sdk",
+    "ark-testing::bark-sdk"
+  ],
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "maximum_case_executions": 3,
+  "maximum_global_native": 2,
+  "first_fail_stops": true,
+  "fresh_context_required": true,
+  "expected_ignored": false,
+  "run_ignored": null,
+  "CLN_required": true,
+  "runtime_pin_count": 17,
+  "metadata_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json",
+  "immutable_metadata_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-immutable.json",
+  "source_archive_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/source.tar.gz",
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+  "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+  "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+  "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+  "runtime_pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "native_sdk_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+  "root_authorization": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/sdk-three-bridge-v11c-native-allocation-20261018.json",
+    "sha256": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+    "state": "ALLOCATED_THREE_REPEAT_SDK_BRIDGE_CASES_AFTER_FRESH_GATES",
+    "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a"
+  },
+  "proof_sha256": {
+    "source-proposal.json": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+    "source-peer.json": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+    "source-bindings.json": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+    "prior49-postflight.json": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+    "parent-actor-probe.py": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665"
+  },
+  "execution_environment": {
+    "BARK_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark",
+    "BARKD_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd",
+    "CAPTAIND_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind",
+    "WATCHMAND_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand",
+    "BARK_VERSION": "bark 0.7.1-dev (0496e057fe8cedde99c9b85edab67035633a8f25)",
+    "BARKD_VERSION": "barkd 0.7.1-dev (0496e057fe8cedde99c9b85edab67035633a8f25)",
+    "CAPTAIND_VERSION": "captaind 0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25",
+    "WATCHMAND_VERSION": "watchmand 0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25",
+    "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+    "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib",
+    "LIGHTNINGD_EXEC": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+    "LIGHTNINGD_PLUGIN_DIR": "/fresh-cache/cln-adapter-evidence/plugins"
+  },
+  "scope": "First case actual nativeCLN/channel/hold; watch pair manual/live/factor1, shallowProcessing+await membership+nohistory only, not all-bucketbalance or fullchildDAG; repeated names zero newunique. CandidateC not currentrootV16.",
+  "native_CLN_required_version": "v26.06.6",
+  "fresh_listing_readiness": null,
+  "artifact_readiness": "EXACT_CAPTURED_C_BINDINGS_PENDING_PARENT_FRESH_ACTUAL_REHASH",
+  "native_scope": "Repeated SDK expired-send refusal/refresh/payment and two manual watchman-payout cases; no new unique/currentV16/FULLML credit.",
+  "saved_listing": {
+    "path": "/fresh-cache/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/selection-list-fresh.json",
+    "sha256": "8071f556c8a4ba05878f19f673faf901fd57f2742cf194c53dc9fc3f4c297486",
+    "meaning": "Prior compiled/unignored names only; parent must freshly select each exact singleton."
+  },
+  "prior49_postflight": {
+    "sha256": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+    "required_state": "TERMINAL_1PASS_POSTFLIGHT_INTEGRITY_AND_SCOPED_ABSENCE_PASS",
+    "meaning": "Historical formal condition only; current scoped absence requires parent fresh probe."
+  },
+  "parent_actor_probe_source": {
+    "host_path": "/tmp/batch48-parent-actor-probe.py",
+    "sha256": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665",
+    "parent_only": "Fresh old49+own48+previousrootV16 financial/service/globalcapacity/SHM check after independentpeer; authorneverexecutes",
+    "parent_readonly_exemptions_reviewed_required": true
+  }
+}

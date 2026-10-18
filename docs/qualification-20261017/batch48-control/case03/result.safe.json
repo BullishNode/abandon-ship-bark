@@ -1,0 +1,16 @@
+{
+  "index": 3,
+  "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+  "state": "PASS",
+  "started_at": "2026-10-18T08:31:16.093249+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "owned_nextest_group": 175188,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "109c9a65-c98b-4dd9-b7db-08540b4460ff",
+  "test_seconds": 55.186,
+  "wall_seconds": 56.596,
+  "ended_at": "2026-10-18T08:32:12.689648+00:00"
+}

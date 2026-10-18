@@ -1,0 +1,236 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_PEER_ACK_NO_CONCRETE_BLOCKER_NOT_ALLOCATED_NOT_RUN",
+  "at": "2026-10-18T06:49:17.809623+00:00",
+  "proposal_sha256": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+  "proposal_md_sha256": "6a44f00973704e276f914148c9d252cf3549e596aca0b63ff39f6a16b0b1a8b4",
+  "blockers": [],
+  "input_hashes": {
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/source-manifest.json": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/source.tar.gz": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/manifest.json": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/nextest-binaries-immutable.json": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/native-bark-sdk": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+    "/home/francis/.cache/abandon-fresh/runtime-recovery-v9b-20261017/source.tar.gz": "f72ca371c3c575cb55da61f145bcea05065c5b87cb8ef0d49e688e0d75645bde",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch44-six-money-v9b-receipt.json": "528a52d36f55036009b9eb567c3346685b403b97d77ff21fc099921316e9fbdd",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/selection-list-fresh.json": "8071f556c8a4ba05878f19f673faf901fd57f2742cf194c53dc9fc3f4c297486",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/P07-v11c-artifact-runtime-proof-client.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b"
+  },
+  "full_file_old44_C_bindings12": [
+    {
+      "path": "testing/tests/bark_sdk/lightning.rs",
+      "sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/tests/bark_sdk/exit.rs",
+      "sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/tests/bark_sdk/mod.rs",
+      "sha256": "43168858bd9fd73d14387f418d9889f12a29cb7977e19eaea470691717b56c89",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/Cargo.toml",
+      "sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/src/context/mod.rs",
+      "sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/src/context/builders.rs",
+      "sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/src/balance.rs",
+      "sha256": "a853197fd74375191dfb5725e7edfdbc1b262e8885035ba8073996416e35ef15",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/src/util.rs",
+      "sha256": "de65a390128dbdd8ab4f05b5ee89c2a9e979ee419ead5dd3c8d705ad1536d56b",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/src/constants.rs",
+      "sha256": "58c0495f38c6cad5124b64e9a5a803c32ff2c536cef0258ea62e9cffca748f37",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/src/lib.rs",
+      "sha256": "c7159ac93bee368ceb09bef3f1c8c704f98b670366ab6b8ccd649a0ae2b42e40",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/src/daemon/lightningd.rs",
+      "sha256": "d5e920e9e9003e9e694d68af77dccbae890ba75280ded8160a1f2157682291b6",
+      "old44_C_byte_identical": true
+    },
+    {
+      "path": "testing/src/daemon/watchmand.rs",
+      "sha256": "87b4cbefa3a16565d7d2217ffc05c11c2bdadea754a9448cfd9e4656a74397a6",
+      "old44_C_byte_identical": true
+    }
+  ],
+  "functions3": [
+    {
+      "binary": "ark-testing::bark-sdk",
+      "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "source_file": "testing/tests/bark_sdk/lightning.rs",
+      "full_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "function_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+      "brace_body_sha256": "139c429a0f035978ce03968c7d8cfa31ebd80c738e7c3126073cc90871fea378"
+    },
+    {
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "function_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "brace_body_sha256": "50fa0dc5db6532f939a590cdcc2ef8aa8b4d669e454219e1e4243a62e42c12c1"
+    },
+    {
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "function_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "brace_body_sha256": "b638a3aa3fa6099a0d7f08b37ba505c6b4080e60d1719b83ff9be8b4dc5edb56"
+    }
+  ],
+  "helpers10_verified": [
+    {
+      "file": "testing/tests/bark_sdk/lightning.rs",
+      "function": "wait_for_hold_invoice_accepted",
+      "function_sha256": "dbe665c63e7ef9d7a4dd2a9727ff515f2528d361d737701d82eecfc0dc8bcac3",
+      "brace_body_sha256": "56a5e07859449b174c502e4a80a6f727dea2870258ca1c8926d49fa08527124c",
+      "start_line": 35,
+      "end_line": 53,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/tests/bark_sdk/lightning.rs",
+      "function": "assert_not_dispatched",
+      "function_sha256": "2f29eede989d5036db69a0f527df77d2501041bdfb63458adb331911d9c25959",
+      "brace_body_sha256": "3d640afe25c6d6bf04448bacc80d7776de2eba408430c64ff5075c86f3a415e3",
+      "start_line": 146,
+      "end_line": 167,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/tests/bark_sdk/exit.rs",
+      "function": "chain_tip",
+      "function_sha256": "4456737bd0ab9229820e29bbc12154b55dddc6b6a197494c8c1721931826686f",
+      "brace_body_sha256": "33819ca233fda418635f65c0eb17a416d8acda0a275b62abc33fe09b8df40978",
+      "start_line": 14,
+      "end_line": 17,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/tests/bark_sdk/exit.rs",
+      "function": "blocks_until",
+      "function_sha256": "7445c5759387c29eee168d5cf4e50d63ed7e4725c26015c6bebf43ceba5f0167",
+      "brace_body_sha256": "2481ef429fd2995c890a329c22ba61cd6b350ce16b72b6f2420df541ddcc94ad",
+      "start_line": 20,
+      "end_line": 22,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/balance.rs",
+      "function": "assert_balance_consistent",
+      "function_sha256": "e0472a0f3bd2be9ce6d3a017f8e283f390c0f0c7f3f995347b3f19c5c4df4856",
+      "brace_body_sha256": "41a3d972ce55b503019d6a81f963d7f7a2eeef796250cca3ba323040aa26a768",
+      "start_line": 15,
+      "end_line": 121,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/util.rs",
+      "function": "poll_interval",
+      "function_sha256": "527e68a11792afec909b2135d3322679b49c2db6ba58c0cddd3fd406e0127cf3",
+      "brace_body_sha256": "914a5cde27c007feb397720b9dbcb41e84cbceb351c90e8d2a967406ee8043c7",
+      "start_line": 192,
+      "end_line": 199,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/util.rs",
+      "function": "wait_millis",
+      "function_sha256": "8d180f39ff3046dabe019eb59122ecaef7d94505a3d6f18960b9d9f36a3e0dd3",
+      "brace_body_sha256": "da999b714154b435926ebfc0b2b4ca63214ab3befadd6934204cde65f69e589e",
+      "start_line": 267,
+      "end_line": 269,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/context/mod.rs",
+      "function": "new_lightning_setup",
+      "function_sha256": "d04d691a1722d95d96dce734c4318e33081ab7fe0856720811b11c5538852920",
+      "brace_body_sha256": "ed37d3516d4d0f73743f86e7688aedf74d92a69cf9bf0e84c62b69f86574130b",
+      "start_line": 698,
+      "end_line": 702,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/context/mod.rs",
+      "function": "new_lightning_setup_no_channel",
+      "function_sha256": "10aff716b05a6d89236fd0d6d2455ee5187cd3108e18b485a5bfc449b660e875",
+      "brace_body_sha256": "c1e45e450b8ae649583f352e339db19a456c6c19625cecb369de7b48ae71ff5b",
+      "start_line": 683,
+      "end_line": 694,
+      "old44_to_C": "BYTE_IDENTICAL"
+    },
+    {
+      "file": "testing/src/daemon/watchmand.rs",
+      "function": "trigger_sweep",
+      "function_sha256": "c90aa9b5e715303b0b98af680ec8f1f72f7cf7373623f8cd07c2df069b9d5bbf",
+      "brace_body_sha256": "319c90c8caa6d36b48da8f7bcdf6425cc3f8da13e9a6ecea760f4ac0baa2c4b1",
+      "start_line": 113,
+      "end_line": 115,
+      "old44_to_C": "BYTE_IDENTICAL"
+    }
+  ],
+  "old44_three_actual_receipt_matches": true,
+  "saved_P07_listing_unignored_filter_mismatch_only": true,
+  "SDK_metadata_binary_relation_verified": {
+    "binary-id": "ark-testing::bark-sdk",
+    "binary-name": "bark-sdk",
+    "package-id": "path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0",
+    "kind": "test",
+    "binary-path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk",
+    "build-platform": "target"
+  },
+  "native_oracle_scope": [
+    "Expired-new-LN: typed refusal and retained signed2BTC source, zero nativeattempts/dispatch/CLNsend and unaccepted invoice; actual refresh/newvalidatedCore6anchor, distinct0.5BTChold Accepted\u2192Paid/CLNComplete and1.5BTCremaining. This is not unilateral fallback/refund.",
+    "Watch funding: one400000principal\u2192399000customer+1000charge; actualsignedcanonicalparent/Core6/unspent output, allgeneration owner/mailbox/key/script ledger binding and exact1postsetup chain+mempool payment.",
+    "Watch chain: authentic partially confirmed exit with300000senderchange+100000receiver,299000/99000actualcustomeroutputs/two1000charges; sameowner/Core6/idempotence/reconciliation rules; Claimable/Claimed never observed in drivenloop; VtxoSwept terminal."
+  ],
+  "scope_refinements": [
+    "Shallow phase directly asserts Processing, awaiting_settlement membership and no successful payout history; it does not independently assert every monetary balance bucket there. Do not broaden this into a standalone all-balance oracle.",
+    "Clients remain manual/live; explicitwatchmantriggers,15mincadences, zero Arkrefresh/LNuserfees, factor1chainfixture. No absent-client/defaultdaemon/reorg/claim-journal replay boundary proof.",
+    "Payout parents have exactactualprevout zero-miner-fee assertions; economic1000customercharge is distinct from unmeasured CPFPfees. No full child/sponsor-DAG/custody cut or global solvency claim.",
+    "Saved8071 records these names unignored but filter-mismatched under P07; no new singleton/freshlisting/run inferred.",
+    "Old44PASS remains oldd0fb only. Exactunchangedsource binds candidateC; no PASS/unique/FULLML/newfix credit transfer."
+  ],
+  "future_admission": {
+    "actual_root_allocation": null,
+    "artifact_readiness": null,
+    "fresh_listing_readiness": null,
+    "parent_launch_admission": null,
+    "new_candidate": null,
+    "per_case_timeout_seconds": 180,
+    "retries": 0,
+    "serial_cases": 1,
+    "stop_on_first_failure": true,
+    "global_max_native_cohorts": 2,
+    "needed": "Explicit root exact-three allocation and parent fresh gates: immutable C source/body/ELF/metadata+17 pins, all three exact single unignored selections, supported public-chain profile, native CLN26.06.6 plus matching grpc/hold plugins for first case, SQLite/PG/native cached-Nix environment, no incompatible presence env, fresh private contexts/resources/actor cleanup, parent sole once-only launch."
+  },
+  "actions": "Read-only sourcearchive/metadata/receipt/savedlisting/hash inspection, wrote only new peerJSON/MD; no source/controls/global/Git/build/Cargo/resource/list/native/actor/DB actions."
+}

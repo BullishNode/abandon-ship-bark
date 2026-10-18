@@ -1,0 +1,203 @@
+{
+  "state": "SOURCE_ONLY_UNCOMPILED_NOT_RUN_PENDING_PEER_AND_FUTURE_EXACT_CANDIDATE_ALLOCATION",
+  "created_utc": "2026-10-18T08:06:16.800018+00:00",
+  "selector": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+  "expected_binary": "ark-testing::server",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_tiny_payout_grouping.rs",
+  "source_sha256": "106bd16b2024c94f1fc188fd4424fc9005381d52b40d27e0a03544fb8d102b40",
+  "source_bytes": 27060,
+  "source_lines": 472,
+  "private_source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H30-tiny-group-private/qualification_tiny_payout_grouping.v1.rs",
+  "patch_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/H30-tiny-payout-grouping-v1.patch",
+  "patch_sha256": "0c05c3bafed46fa1c2ee9db45a7aaa1b55e1383beadab0643acc22bb2493fab6",
+  "canonical_head_at_review": "4e3d37c8941cbba216350264b6d6242bbe71137f",
+  "source_api_pins": {
+    "bark/src/lib.rs": {
+      "canonical_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "owned_sha256": "2486a4f20a5e014febc859c83cdac42dd3658e336a31d1947f047b1f234823aa",
+      "identical": false
+    },
+    "bark/src/mailbox.rs": {
+      "canonical_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "owned_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "identical": true
+    },
+    "bark/src/recovery.rs": {
+      "canonical_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "owned_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "identical": true
+    },
+    "bark/src/fallback/adoption.rs": {
+      "canonical_sha256": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+      "owned_sha256": "aac920f00ae039828d6495006567c48f77265fa653f8ad1c15c7865498306a04",
+      "identical": false
+    },
+    "bark/src/fallback/sync.rs": {
+      "canonical_sha256": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7",
+      "owned_sha256": "dc24a84878eaf20b4158836c2503881797a792fae699a442f47f3731ee6bfe26",
+      "identical": false
+    },
+    "bark/src/fallback/payouts.rs": {
+      "canonical_sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "owned_sha256": "eeb8e7c2706fa163c7525c9ededd4492689da667bfdb231c78084cc564afd349",
+      "identical": false
+    },
+    "bark/src/movement/mod.rs": {
+      "canonical_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "owned_sha256": "d8954479df9f0929a63b905ad52fd5b906ff20ef51e95bdc02832781e3a694d1",
+      "identical": true
+    },
+    "lib/src/arkoor/package.rs": {
+      "canonical_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+      "owned_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+      "identical": true
+    },
+    "lib/src/arkoor/mod.rs": {
+      "canonical_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "owned_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "identical": true
+    },
+    "lib/src/mailbox.rs": {
+      "canonical_sha256": "4f51e97a1eabe54b3e495e2537d5edaf4623b1392f234648cba6898c69095abc",
+      "owned_sha256": "4f51e97a1eabe54b3e495e2537d5edaf4623b1392f234648cba6898c69095abc",
+      "identical": true
+    },
+    "server/src/arkoor.rs": {
+      "canonical_sha256": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+      "owned_sha256": "5daa060b0c5307a12e11545f037977bd21334dd9cf11c24e2ff5124f36399833",
+      "identical": false
+    },
+    "server/src/database/expiry_details.rs": {
+      "canonical_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "owned_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "identical": true
+    },
+    "server/src/watchman/settlement.rs": {
+      "canonical_sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "owned_sha256": "d09a4c2a303ed9d3f853fdd351b9e6e81ca89929642e573df6fddeb57d2f3d36",
+      "identical": false
+    },
+    "server/src/watchman/recovery.rs": {
+      "canonical_sha256": "f4fd6bce5c5cbc9f08abadb01dee190cacd4331bc093ba879290137011946491",
+      "owned_sha256": "ee4534800f0b6845a90dc6f557682c9fc9049c23a4b7693fdf10d12b8301b4c0",
+      "identical": false
+    },
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": {
+      "canonical_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "owned_sha256": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+      "identical": true
+    },
+    "testing/src/context/builders.rs": {
+      "canonical_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "owned_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+      "identical": true
+    },
+    "testing/tests/server/qualification_oversize.rs": {
+      "canonical_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+      "owned_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+      "identical": true
+    },
+    "testing/tests/server/qualification_offboard_restart.rs": {
+      "canonical_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "owned_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "identical": true
+    }
+  },
+  "compatibility_scope": "Public APIs/schema inspected in CURRENT canonical; owned worktree product files are an older distinct baseline, individually recorded, not asserted identical. Future canonical integration/build required.",
+  "prior_122_testing_rust_unchanged": true,
+  "prior_snapshot_sha256": "731081d664d2c7e0a7790dcd6fe97ae24e01878a19405af2de6c71f15718c93d",
+  "new_rust_files": [
+    "testing/tests/server/qualification_tiny_payout_grouping.rs"
+  ],
+  "module_registered": false,
+  "product_edits": false,
+  "runtime": {
+    "status": "NOT_RUN",
+    "candidate": null,
+    "allocation": null,
+    "compile": null,
+    "outer_timeout_seconds": 180,
+    "retries": 0,
+    "block_budget": 96,
+    "presence_flag": "BARK_DOUBLE_DRIVE_ACTIONS must be fully unset"
+  },
+  "native_setup": {
+    "sender_funding_sat": 200000,
+    "real_board_principal_sat": 100000,
+    "cosign_register_pairs": 1,
+    "native_checkpoint_fanout": 4,
+    "native_virtual_transactions": 5,
+    "recipient_distinct_normal_account_keys": 3,
+    "recipient_leaf_gross_sat": [
+      500,
+      500,
+      500
+    ],
+    "sender_change_sat": 98500,
+    "mailbox_posts": 4,
+    "confirmed_watchman_sponsors_sat": [
+      100000,
+      100000
+    ],
+    "unchanged_minimum_board_sat": 20000
+  },
+  "oracles": {
+    "recipient_group": {
+      "gross_sat": 1500,
+      "payout_sat": 500,
+      "policy_fee_sat": 1000,
+      "forfeit_sat": 0,
+      "rust_id_order_gross_fee_payout": [
+        [
+          500,
+          500,
+          0
+        ],
+        [
+          500,
+          500,
+          0
+        ],
+        [
+          500,
+          0,
+          500
+        ]
+      ]
+    },
+    "sender_group": {
+      "gross_sat": 98500,
+      "payout_sat": 97500,
+      "policy_fee_sat": 1000
+    },
+    "total_customer_gross_sat": 100000,
+    "total_customer_output_sat": 98000,
+    "total_customer_policy_fee_sat": 2000,
+    "canonical_parent_fee_sat": 0,
+    "actual_same_block_child_and_output_confirmations_min": 6,
+    "whole_actual_finite_cut_sat": 300000,
+    "undeclared_additional_inputs": "FAIL",
+    "unused_declared_sponsors": "included as retained leaves",
+    "source_retirement": "public recover_vtxos authentic signed ordinary-spend proof",
+    "original_recipient_local_full_bodies_and_spendable_ids_before_absence": 3,
+    "returning_sdk_required": true,
+    "recipient_single_history_input_ids": 3,
+    "recipient_history_debit_sat": -1500,
+    "recipient_history_fee_sat": 1000,
+    "recipient_history_sent_sat": 500,
+    "all_10_ark_balance_fields_after_payout_sat": 0,
+    "other_subsystem_negative_debits": "must equal preabsence baseline",
+    "idempotence": "two syncs and original DB reopen preserve exact whole movement",
+    "pre_return_public_checkpoint_phase": "CHAIN_CONFIRMED_HISTORY_NOT_YET_VERIFIED",
+    "pre_return_public_checkpoint_overall_pass": false
+  },
+  "known_source_inference": "Old customer classifier selects CustomerPayout only for individual payout>0; two genuine fee-only contributors are mislabelled BelowDust and violate receipt validation. Source inference only, not observed native FAIL. No error bypass or expected-error oracle; root owns product correction.",
+  "limitations": [
+    "No native whole-group dust or forged-group negative scenario",
+    "No global operator-wallet custody or entire initial wallet conservation credit",
+    "Ordinary customer board change and upfront miner fee explicitly outside selected300k cut",
+    "No ordinary SDK sender-send movement claim for low-level genuine package",
+    "No seed-only recovery/backup/defaultdaemon/reorg/fairness/throughput/FULLML credit",
+    "No compilation/native PASS transfer from source inspection"
+  ]
+}

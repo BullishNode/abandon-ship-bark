@@ -1,0 +1,305 @@
+{
+  "kind": "CHECKPOINT22_FINAL_FROZEN_PUBLICATION_PAYLOAD",
+  "at": "2026-10-18T08:47:16.115555+00:00",
+  "payload_files": 67,
+  "total_including_manifest": 68,
+  "files": {
+    "CHECKPOINT22-PUBLIC-EVIDENCE.md": {
+      "sha256": "e7fbdc59830afd5969607bb3f7d2b08e51a9694cd041effdded49126d7ab7f68",
+      "bytes": 4266
+    },
+    "COVERAGE.csv": {
+      "sha256": "5aa2daa686d6cd36cd144190aef31a18ba8f8d2336440435da6540efc2f8914a",
+      "bytes": 345725
+    },
+    "FINDINGS.md": {
+      "sha256": "faeacdb8cb0d7da863c025ee34baf95a82ff7ce79ee5f138eeab11b516d0c344",
+      "bytes": 62725
+    },
+    "H30-ROOT-INTAKE-v2-parent.json": {
+      "sha256": "1a50e6e864d911799e65944d2a09da17388dae5f7eaed73918c69ef0bae111f6",
+      "bytes": 3014
+    },
+    "H30-grouped-zero-share-disposition-source-peer-legacy.json": {
+      "sha256": "4552714e70e68bbaae0731dcfd243e3e19a72a7bf4d92c35777e78d7f32ed7ab",
+      "bytes": 7472
+    },
+    "H30-grouped-zero-share-disposition-source-peer-legacy.md": {
+      "sha256": "10fec4552960f335198164e0f5577886ffbac5da56821aa01f796606d221bd3b",
+      "bytes": 2576
+    },
+    "H30-projection-composition-risk-parent.json": {
+      "sha256": "9ba0e3eafa7716544d4f80cb994130c5d4cac004693c83af196f087b78104b92",
+      "bytes": 1471
+    },
+    "H30-tiny-native-feasibility-backend.json": {
+      "sha256": "727cf73db3895b1765dc84043e643794a89bed9fbf6e80e21abef8569f61dce5",
+      "bytes": 9742
+    },
+    "H30-tiny-native-feasibility-backend.md": {
+      "sha256": "df5d16cf8cd8bb4fe1c47f724d8a4484b4cc7b17e7fbf1da56ddfeec6142699d",
+      "bytes": 2458
+    },
+    "H30-tiny-payout-grouping-v1-design.md": {
+      "sha256": "d2c1fe42e2fa4f65dff2d988510674126d044931a3624c93f9c8f8202f4e74cd",
+      "bytes": 3219
+    },
+    "H30-tiny-payout-grouping-v1-peer-review-client.json": {
+      "sha256": "49dcc779d8a899a793ad1b189f49d1610d04805b5fbc4b8f57d0c75800dfcac9",
+      "bytes": 10380
+    },
+    "H30-tiny-payout-grouping-v1-peer-review-client.md": {
+      "sha256": "2cd9a7dea70e396ba7194a7b81f6ed647bb045043494fcbf68be5fb83f5cb2f7",
+      "bytes": 1788
+    },
+    "H30-tiny-payout-grouping-v1.json": {
+      "sha256": "3199b3f86c5ffbadd13a3d222058420d1ba4a2d8587126fa5d28c39e38d290ed",
+      "bytes": 9352
+    },
+    "H30-tiny-payout-grouping-v1.patch": {
+      "sha256": "0c05c3bafed46fa1c2ee9db45a7aaa1b55e1383beadab0643acc22bb2493fab6",
+      "bytes": 27629
+    },
+    "H30-tiny-payout-grouping-v2-delta.md": {
+      "sha256": "0ef71118bb579a523c5729f4f249c5c476e3af25369fb3bed87447c2a5837f62",
+      "bytes": 935
+    },
+    "H30-tiny-payout-grouping-v2-delta.patch": {
+      "sha256": "3d9d15a7eab0f15e608447a2f0015ef238c262a36cb57c5300dece28d352e041",
+      "bytes": 613
+    },
+    "H30-tiny-payout-grouping-v2-peer-review-client.json": {
+      "sha256": "fd8994db6703bf64e90a6978b0b8eafc9aa950331bab82700b806d55d4c4705a",
+      "bytes": 3201
+    },
+    "H30-tiny-payout-grouping-v2-peer-review-client.md": {
+      "sha256": "f42784e1d398da9a977a19e1ce1c2c957f851844082f511472f6656bd1b48173",
+      "bytes": 1100
+    },
+    "H30-tiny-payout-grouping-v2.json": {
+      "sha256": "703cd0a868e0ff60657449781e9c66ab03059768f043705dcf0bbc0f07ed5168",
+      "bytes": 2850
+    },
+    "H30-tiny-payout-grouping-v2.patch": {
+      "sha256": "f4a1bfa1d6039851fe964e9da01a571d0686febbef19f37061ad9187a43ac92d",
+      "bytes": 27682
+    },
+    "H32-genuine-dust-later-receipt-source-proposal.json": {
+      "sha256": "1b5da53b25130b4a291fdf2b30b0773c1cab8aec0423fad21b5fbb9ec3fdc4d1",
+      "bytes": 14779
+    },
+    "H32-genuine-dust-later-receipt-source-proposal.md": {
+      "sha256": "5f42148cfac259ba514bdecff5c471520bc0f2022fac582f3a4ce5da176fa9b8",
+      "bytes": 5056
+    },
+    "H32-source-ownership-parent.json": {
+      "sha256": "6f318d786f5a7471395ba2526f771a79983b0176a71d4c9df75c6072422d4e6b",
+      "bytes": 1838
+    },
+    "STATUS.json": {
+      "sha256": "6311aa8f98d9dccb1a7fa1ac5ea4c4988a4e9280dad23278651afec93d318afb",
+      "bytes": 76096
+    },
+    "TWENTY-SECOND-CHECKPOINT.md": {
+      "sha256": "f26ca592c3ff8500a40d2fb3466be6f78313e4a5544aaa15c7a7139feae9e3d1",
+      "bytes": 2996
+    },
+    "batch48-backend-postflight.json": {
+      "sha256": "906f834450bc1609544397d8e7d4f09c4a95407fd4c72db980c68eced57d5569",
+      "bytes": 51480
+    },
+    "batch48-backend-postflight.md": {
+      "sha256": "0905b43b6bfadc6c95bfcbddbae62b22df90f012b2520530acd33aa3e0db10f9",
+      "bytes": 2010
+    },
+    "batch48-control/EXPORT.json": {
+      "sha256": "13c151f7e1739903ca02f491d069df72a3a9a239a20afb4511015d997a28d68a",
+      "bytes": 22414
+    },
+    "batch48-control/PREPARATION.safe.json": {
+      "sha256": "d280fe8b902b06b418156fd966cb3e853796af57995442a945a9c4dd3255ffb0",
+      "bytes": 7070
+    },
+    "batch48-control/case01/nextest.toml": {
+      "sha256": "6e180a4dcc152d0196b8385b8389ff9ca1407b65b703435a7a45134750257687",
+      "bytes": 191
+    },
+    "batch48-control/case01/result.safe.json": {
+      "sha256": "0f2bcbd5843ceda24ce182f431ec047a4a1045ee3ba97229474640fed75429de",
+      "bytes": 482
+    },
+    "batch48-control/case02/nextest.toml": {
+      "sha256": "9257e99254f6d6376150ab4291fe1524f5f600546b8cd521e7bb7f2960db93b5",
+      "bytes": 191
+    },
+    "batch48-control/case02/result.safe.json": {
+      "sha256": "1ed26b1fdcc56474c4f4ec47eac9494d223926281eb7612730238f6b590376d5",
+      "bytes": 458
+    },
+    "batch48-control/case03/nextest.toml": {
+      "sha256": "3b7382e283b38022d87c1a9af3875c819b1d601d0aee82b7b7da206c3056e198",
+      "bytes": 191
+    },
+    "batch48-control/case03/result.safe.json": {
+      "sha256": "afcfd1020ddc7710dc13d04e1d11d9257cd62e007141c9a48a19c96a6578d626",
+      "bytes": 458
+    },
+    "batch48-control/cohort-progress.safe.json": {
+      "sha256": "603261a6ad8100302f53afabeee5a60354a3e98c4cd9825250be25a96dd68354",
+      "bytes": 1500
+    },
+    "batch48-control/cohort-summary.safe.json": {
+      "sha256": "56f3ebe28932898f449755c7325ba6eb7a4f13c7f2983bc84d69d5a3537fd1cc",
+      "bytes": 2076
+    },
+    "batch48-control/fresh-listing-admission.json": {
+      "sha256": "b3bda395fe0d90ccd8418565a63b632219105f88dd6f499401b517a104815605",
+      "bytes": 327
+    },
+    "batch48-control/fresh-listings.py": {
+      "sha256": "74409ba644385cb3b10b0cb8dec30d36425afd787abd545923848d5a0cd34d9a",
+      "bytes": 7812
+    },
+    "batch48-control/launch-authorization-pending.preserved.json": {
+      "sha256": "675fad40a9c0df388060d6232e2039cfb619de02cd3951218592d3e6024975d7",
+      "bytes": 237
+    },
+    "batch48-control/native-initial-receipt.safe.json": {
+      "sha256": "58b45a6c23a2593c2bdd7fd07848fa1c10897c5078d3fb8b3110800bfdba348c",
+      "bytes": 3204
+    },
+    "batch48-control/parent-actor-admission.json": {
+      "sha256": "144480868534b07b6d6cc8b2c82203f66c4c127609aea87e594b7b51565deb68",
+      "bytes": 2152
+    },
+    "batch48-control/parent-actor-probe.py": {
+      "sha256": "6ff4741c7042851673befa7bbe54de428836242b554fe01b4f9b7ab4b905e665",
+      "bytes": 5992
+    },
+    "batch48-control/parent-launch-admission.json": {
+      "sha256": "a84a2d42f040db4e6ca58581cf65f301bfad564c88b99ad88805b226694fb1b3",
+      "bytes": 2987
+    },
+    "batch48-control/preflight-static.py": {
+      "sha256": "12d3901fa0f47ae4d401a70573c2a639c16295f108256c1d7d06b1cea1170ef2",
+      "bytes": 7556
+    },
+    "batch48-control/preflight.sh": {
+      "sha256": "480a97ab83f19f574ea1b70f64fb34cd418cb6511ce52cb4af406e6ca26e1194",
+      "bytes": 2326
+    },
+    "batch48-control/prior49-postflight.json": {
+      "sha256": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+      "bytes": 16584
+    },
+    "batch48-control/resource-admission.json": {
+      "sha256": "935aa8eca0192c1d8d647e7f17a3b55c4051c4eff4db7136d77502f91c24c969",
+      "bytes": 111
+    },
+    "batch48-control/root-allocation.json": {
+      "sha256": "27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379",
+      "bytes": 2874
+    },
+    "batch48-control/run.sh": {
+      "sha256": "aab2adc5ce6e712fa27e395956c31c1395980ebac468c786d5677d82bb83805e",
+      "bytes": 2356
+    },
+    "batch48-control/runtime-core14-derived.sha256": {
+      "sha256": "6a55b1404550cfa82bbe8148efa2b5b463749a28d75b513792d04aea7f591f46",
+      "bytes": 1874
+    },
+    "batch48-control/runtime-pins.sha256": {
+      "sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "bytes": 2248
+    },
+    "batch48-control/selection-proof.json": {
+      "sha256": "1030aa10b1d18fba7636624b76ecf97e9562a930531a0422f3285a8195313114",
+      "bytes": 5414
+    },
+    "batch48-control/server-cohort.py": {
+      "sha256": "f70b0aca93c2da2d7b1364f6766625e106dfa158550f797e9290458bff96d5fb",
+      "bytes": 15505
+    },
+    "batch48-control/source-bindings.json": {
+      "sha256": "4f8c4c05e60d6ab5355b1555e6a2e584e34e91324dab986be3f1ae8c484b4833",
+      "bytes": 8895
+    },
+    "batch48-control/source-peer.json": {
+      "sha256": "7e4721cdb86028bedd88a6db369470fba960544f9a94b55e252efd57ffeb8b79",
+      "bytes": 12575
+    },
+    "batch48-control/source-proposal.json": {
+      "sha256": "b20b693e35a803d030eed508a185766e3f12740ffe30aab17e32ccadab28d017",
+      "bytes": 18982
+    },
+    "batch48-control/source-reviews/batch48-allocated-control-guard-source-review-legacy.json": {
+      "sha256": "a32e639d7862ea8c0a2225f58274f5c052f67221842aee34c230706e6adef21a",
+      "bytes": 6365
+    },
+    "batch48-control/source-reviews/batch48-allocated-control-guard-source-review-legacy.md": {
+      "sha256": "b0956707f9fb7589f92d581cbc2b97d3e83d5d77c58c444a80c3fe343a72a379",
+      "bytes": 2233
+    },
+    "batch48-coverage-append.json": {
+      "sha256": "e801f2a01119f3e0e4ba60bd52f9bcd24f7dd6b006b4458298db0d9f9b625f87",
+      "bytes": 9009
+    },
+    "batch48-curation-independent-parent.json": {
+      "sha256": "f49b1fbae9679589c5127cfeb15e07a6babc6ac96e52e43b915ed1a9907c4456",
+      "bytes": 1254
+    },
+    "checkpoint22-H30-source-export-client.json": {
+      "sha256": "3d9634d0efda5b9fc6641602a95ce942c2a17e56eca50c9618c49936bb17f861",
+      "bytes": 2946
+    },
+    "checkpoint22-H30-source-export-client.md": {
+      "sha256": "4c7bd22be1c94cf81d0a8d4592fd26662f47b9ff0771ad69ff91751421b35893",
+      "bytes": 1111
+    },
+    "checkpoint22-H30-source-publication-independent-audit-legacy.json": {
+      "sha256": "09f6d7232c69c701e1d6b3dfe070a92e4b95e8bf30ab71ad0a8d26790352b460",
+      "bytes": 3945
+    },
+    "checkpoint22-safe-control-independent-audit.json": {
+      "sha256": "e0fd387023a15262f4384c7003492dddb77eed95047cb774da630cc73fcb4cdd",
+      "bytes": 33343
+    },
+    "checkpoint22-safe-control-independent-audit.md": {
+      "sha256": "3b989398916c67b9ad118d6064960d41e7cc421ecf72cf2cab1edac86ba3060f",
+      "bytes": 1367
+    },
+    "publication-checkpoint22-source-files.json": {
+      "sha256": "03bd40060d16cff1c7969441b34a87bfa4928b405155ccfbf5fd8ce9ee37ce2d",
+      "bytes": 4934
+    }
+  },
+  "source_branch": "work/fresh-test-tiny-grouping-20261018",
+  "source_commit": "57f5d32943cc0b1a30b86164e520aa68aa8577c3",
+  "base_fixed_PR25": "39ca7a731d26cf2bb46d84f62a944ac500c89c37",
+  "source_file": "testing/tests/server/qualification_tiny_payout_grouping.rs",
+  "source_sha256": "db2e2356b563bb56140f9de3c133df7bdf738f97f8dc70001256057f7194662c",
+  "source_status": "PEER_REVIEWED_UNREGISTERED_UNCOMPILED_NOT_RUN",
+  "counts": {
+    "executions": 253,
+    "PASS": 238,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 233,
+    "nextest_invocations": 226,
+    "native": 241,
+    "component": 12,
+    "coverage_rows": 464
+  },
+  "native_batch": "batch48-sdk-watch-bridge-v11c-allocated",
+  "native_source_manifest": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "native_PASS": 3,
+  "native_unique_increment": 0,
+  "formal_sha256": "906f834450bc1609544397d8e7d4f09c4a95407fd4c72db980c68eced57d5569",
+  "prior461CSVprefix_preserved": true,
+  "pending_receipts": "Native initial receipt/export and source proposal manifests are frozen historical states; separate formal906f/exportaudite0fd/curatione801/parentf49 resolve them additively.",
+  "exclusions": [
+    "No raw native logs/testdata/privatewallet/PG/config/seed/key material.",
+    "H32 source19 is still being authored and is excluded; only frozen proposal and sourceownership packet included.",
+    "No product patch/module/oldRust changes. Product classifier proposal remains isolated and unqualified.",
+    "No later root candidate, fulllegacy/fullML/globalcustody/production readiness credit."
+  ]
+}

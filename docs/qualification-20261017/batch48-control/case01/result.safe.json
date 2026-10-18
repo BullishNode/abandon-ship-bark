@@ -1,0 +1,16 @@
+{
+  "index": 1,
+  "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+  "state": "PASS",
+  "started_at": "2026-10-18T08:29:54.953398+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "owned_nextest_group": 173577,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "0e681d68-54a6-4654-b846-2efd707b24f2",
+  "test_seconds": 35.152,
+  "wall_seconds": 36.058,
+  "ended_at": "2026-10-18T08:30:31.011508+00:00"
+}

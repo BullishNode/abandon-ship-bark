@@ -1,0 +1,11 @@
+# Batch48 allocated controls: independent source review
+
+**ACK, no concrete blocker found.** This is a static review; the parent must still perform actual fresh admission gates before launch.
+
+Preparation `e955360c351eb6e84900f2697cb65ad3180bc9d1911bde5670687f5489a9e6f0` binds actual root allocation `27007c4235840bc86630eff49041b000434bbdbc84dc60cbd832e694c201f379`. All 16 static files match, the parent freeze requires exactly 19 paths, and all 13 original closed controls plus their preserved copies remain byte-identical. Four Python ASTs, two shell syntax checks and three TOML profiles pass. The 12 complete archived source files and 13 function/helper regions independently match their recorded hashes.
+
+The exact ordered SDK singleton selectors are expired-input refusal/refresh, funding-transaction watch sweep, then partial-chain watch sweep. The actual allocation uses `tests` strings and an SDK binary; required literal schema keys exist. Profiles retain 180 seconds, zero retries and serial one, with maximum three cases and first-failure stop. Runtime calls use repository `just int-binaries`, exact literals and private stores/contexts. Starting count and successful output must match the expected binary/name.
+
+Cached Nix precedes Python; presence-sensitive overrides are fully unset and independently rejected. Required CLN is pinned 26.06.6 with both grpc and hold plugins; all 17 pin guards remain mandatory. The launch marker is present, parent admission absent, and no progress, result or test context exists at inspection. Before Popen, admission requires actual fresh exact unignored selections, resource/actor gates, all 19 hashes and explicit `root_readonly_exemptions_reviewed=true`. Parent probe source includes prior49 and root scoped financial processes, including cln-grpc. Exemptions still require parent inspection.
+
+No control body, listing, actor/resource probe, native test, RPC or Cargo ran. Actual runtime product/Nix pin rehashes, versions, current capacity and fresh selections remain parent work. This provides no execution, financial, new-unique, current-V16 or FULL-ML credit; old failures and closed controls remain preserved. Full exact hashes and limitations are in the companion JSON.

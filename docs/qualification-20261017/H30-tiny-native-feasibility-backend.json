@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_NATIVE_SHAPE_FEASIBLE_RETURN_HISTORY_COMPOSITION_MISMATCH_PREDICTED_NOT_OBSERVED",
+  "at": "2026-10-18T07:45:26.378709+00:00",
+  "priority_packet_sha256": "6286fd7ecbfc48a5cccb759be30ea5c2b248e6dee57a6e4aa74547ec63451597",
+  "source_capture_C": {
+    "source_manifest": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "archive": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "captured_HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+    "credit": "source inspection only; not nativeH30"
+  },
+  "file_bindings": {
+    "server/src/watchman/settlement.rs": {
+      "inspected_sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "captured_C_sha256": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+      "byte_identical_to_C": true
+    },
+    "server/src/database/expiry_details.rs": {
+      "inspected_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "captured_C_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+      "byte_identical_to_C": true
+    },
+    "bark/src/fallback/payouts.rs": {
+      "inspected_sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "captured_C_sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "byte_identical_to_C": true
+    },
+    "server/src/arkoor.rs": {
+      "inspected_sha256": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+      "captured_C_sha256": "2273b90fea9ee2909e8c93cedadd595d5d711f4b9ebf1244e49ea7fd823c3894",
+      "byte_identical_to_C": true
+    },
+    "lib/src/arkoor/package.rs": {
+      "inspected_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+      "captured_C_sha256": "8f8314254c5db48aa7d6e7c58ff5cc2acb3d1bc61721d20e96e792c4167af0f3",
+      "byte_identical_to_C": true
+    },
+    "lib/src/arkoor/mod.rs": {
+      "inspected_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "captured_C_sha256": "ca3f38108aaf108e68b21393b9acc972efa711a5eb54cdddc923e9b8d662d463",
+      "byte_identical_to_C": true
+    },
+    "testing/tests/server/qualification_oversize.rs": {
+      "inspected_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+      "captured_C_sha256": "1d708bd6e4fa9bc80ff5b95d1acb52fc0269278dbb2c5b186107c6e023785366",
+      "byte_identical_to_C": true
+    },
+    "testing/src/context/mod.rs": {
+      "inspected_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "captured_C_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+      "byte_identical_to_C": true
+    },
+    "server/captaind.default.toml": {
+      "inspected_sha256": "e3d0433e6fcd4849823b3259b097a5e98d45cfd1dc7a075dc6d0c00de926a52e",
+      "captured_C_sha256": "e3d0433e6fcd4849823b3259b097a5e98d45cfd1dc7a075dc6d0c00de926a52e",
+      "byte_identical_to_C": true
+    },
+    "bark/src/lib.rs": {
+      "inspected_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "captured_C_sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "byte_identical_to_C": true
+    },
+    "bark/src/mailbox.rs": {
+      "inspected_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "captured_C_sha256": "eb172befca9ba52869b467d613a8cace4e51541b5865f87f7169fb7f0d1c31ec",
+      "byte_identical_to_C": true
+    }
+  },
+  "legal_shape": {
+    "source_board_sat": 100000,
+    "native_min_board_sat": 20000,
+    "P2TR_dust_sat": 330,
+    "recipient_leaf_sat": [
+      500,
+      500,
+      500
+    ],
+    "sender_change_sat": 98500,
+    "separate_recipient_normal_keys": 3,
+    "same_recipient_account_and_registered_script": true,
+    "native_fanout": 4,
+    "expected_signed_arkoor_transactions": 5,
+    "expected_internal_checkpoints": 4,
+    "expected_final_leaves": 4,
+    "native_rpc_pairs": 1,
+    "mailbox_posts": 4,
+    "actual_node_assertions": "One checkpoint fanout with4 independently signed exit transactions; do not repeat old single-checkpoint assertion.",
+    "fees": "No Ark transfer/board fee override; assert native defaultzero boardfee/100kregistered root. Output grouped charge1000 unchanged; physical miners separate."
+  },
+  "exact_API_recipe": [
+    "TestContext::bark creates two authenticated normal SDK accounts/fallback records; main explicitly funded200k then board_and_confirm_and_register100k; recipient need not board. Capture root/fullsource/source_key=Wallet::get_vtxo_key and actual immutable fallback bindings.",
+    "Wallet::derive_store_next_keypair at bark/src/lib.rs1015 supplies3distinct normal recipientkeys and1fresh senderchange key; each immutable account binding verified.",
+    "ArkoorPackageBuilder::new_with_checkpoints([source], Vec<ArkoorDestination{total_amount,policy:VtxoPolicy::new_pubkey(key)}>) at lib/src/arkoor/package.rs193, generate_user_nonces/sourcekey; request_arkoor_cosign realRPC; user_cosign; build_signed_vtxos and internalpath/5tx assertions per qualification_oversize.rs65\u2013118.",
+    "Wallet::register_vtxo_transactions_with_server at lib.rs2638 genuinely publishes signed chains; no direct financialSQL.",
+    "MailboxIdentifier::to_blinded(server_mailbox_pubkey,&actual_leaf_key), PostArkoorMessageRequest via get_mailbox_public_rpc, then Wallet::sync_mailbox at mailbox.rs297. Assert recipient current3x500 and sender exact98500/currentinputSpent with authenticated signed bodies before both clients stop/drop.",
+    "Leave productionfee/fanout/size/depth limits intact; default harness maxdepth50 and production100 both comfortably exceed this shallow path.500\u2265330 avoids dust-isolation; no minArkoor amount check above500 found in actual cosign path.",
+    "Real confirmed fee outputs with bounded native block progress; completed views at source expiry, actual500recipient/97500sender customer outputs and canonical selected feechildren >=6. No manually inserted entitlements/fees/owner rows or test-only payout request."
+  ],
+  "mandatory_oracles": [
+    "All3 originaltiny IDs retained; RustVtxoId order gives[(gross500,fee500,payout0,forfeit0),(500,500,0,0),(500,0,500,0)]. Sameallocation/output_index/script and gross1500=500singleoutput+1000charge. Zero payout fee-only leaves are customer-associated, not forged forfeits.",
+    "Senderchange98500 separately pays97500+1000, rightful sender script; no100k predecessorcustomer payout. Exact allgen ledger ownership/mailbox/userkey/confirmation fields and canonical signedparent bytes.",
+    "Complete finite100k backing +declared200k watchsponsor cut=all actual canonical terminal leaves+actualparent/child miners, includingunusedsponsor andconfirmedchildchange. Board ordinaryonchainchange/upfrontboard miner is separate, not counted as another100kprincipal.",
+    "Postsetup canonicalchain+mempoolexactone500output torecipient andone97500tosender, repeatedcompletedtip/no duplicatedeconomicpayment.",
+    "Only AFTERCore6 reopenrecipient andsender SDKclients; sync_fallback_payouts must succeed with all3 tiny entitlements customer-associated/sameoutput, grouped historygross1500/fee1000/net500, no fee-only below-dust label; full10Arkbalances correctlyzero afterdischarge. Do not omit or expectfail to bypass this composed publicAPI oracle."
+  ],
+  "composition_mismatch": {
+    "source_fact_1": "settlement.rs90\u2013116 sorts IDs, groups exactscript, min(leaf.amount,remainingfee); three500 producefees500/500/0, payouts0/0/500, forfeits0, realoutput500.",
+    "source_fact_2": "expiry_details.rs185\u2013194 joins payoutrow byallocation+spk for each leaf. Lines220\u2013225 choose CustomerPayout onlyif perleaf payout>0; zero rows become BelowDust despiteactual joinedoutput500.",
+    "source_fact_3": "bark fallback/payouts.rs168\u2013172 rejects BelowDust if fee!=0,forfeit!=gross,oroutput_index/output_amount exists. Firsttwo normalfee-only rows violate all these conditions.",
+    "inference": "If authentic H30 settlement reaches this storedshape under capturedC, returning authenticated client history is predicted toreject. Not an observed nativeFAIL or fundloss; source-only standaloneallocator units do not expose this composition.",
+    "ownership": "Parent/root/backend own potential classifier repair; reviewer touched no product. Reported legacy455271 sourcepeer is distinct futureproposal, absent from frozenC and givesno nativecredit."
+  },
+  "implementation_estimate": {
+    "file": "testing/tests/server/qualification_tiny_payout_grouping.rs",
+    "selector": "qualification_tiny_payout_grouping::three_sub_fee_leaves_pay_one_registered_owner_once",
+    "actors": 2,
+    "estimate": "One focused ~350\u2013500line test/helper file using existing native_node and finitegraph patterns, not a framework.1board,1cosign+register pair,4mailbox posts,1expiry,2economiccustomeroutputs.",
+    "timeout_seconds": 180,
+    "retries": 0,
+    "runtime_seconds_measured": null,
+    "candidate": null,
+    "allocation": null,
+    "module_registration": null
+  },
+  "adjacent_limit": "Actual captured qualification_oversize1d708 declares LEAF_SAT5000 (>1000); legacypriority prose says10000. Either differs from all three subfee500leaves and does not closeH30. No historicalreceipt/status is rewritten.",
+  "overlap": "No root reorg/fair/terminal/ACK-loss, new17lostoffboardreply, P07, defaultdaemon or other-terminal originalbinding work duplicated. Only H30tinygroup/publicreceiptcomposition.",
+  "actions": "Read-only source/archive/coverage/priority inspection and newfeasibility reports only; new18authoring begins only under later explicitparentassignment."
+}

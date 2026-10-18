@@ -218,8 +218,22 @@ impl Watchman {
 
 		let mut reaction_timer = tokio::time::interval(self.config.reaction_interval);
 		let mut sweep_timer = tokio::time::interval(self.config.sweep_interval);
+		// A sweep's first tick can precede the second daemon's sync ack.
+		// Readiness also needs a fresh rebuilt token after later blocks or
+		// ledger commits, independently of the configured financial sweep.
+		let mut rebuild_timer = tokio::time::interval(std::time::Duration::from_secs(1));
 		loop {
 			tokio::select! {
+				_ = rebuild_timer.tick() => {
+					// Reuse the completed-token/ledger fast path. This performs
+					// reconstruction only: no claim, replay or payout publication.
+					if let Err(error) = self.rebuild_expiry_state().await {
+						warn!("Error rebuilding expiry readiness: {error:#}");
+					}
+					// The same loop serializes this with sweeps; reset coalesces
+					// slow work instead of accumulating missed timer bursts.
+					rebuild_timer.reset();
+				},
 				_ = reaction_timer.tick() => {
 					self.process_reactions_logged().await;
 					reaction_timer.reset();

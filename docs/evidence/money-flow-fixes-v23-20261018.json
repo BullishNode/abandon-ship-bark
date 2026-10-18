@@ -1,0 +1,309 @@
+{
+  "at": "2026-10-18T16:45:49.069616+00:00",
+  "state": "TEN_TARGETED_MONEY_REGRESSIONS_PASS",
+  "candidate": "V23",
+  "published_fix_commits": [
+    "3364e7a4f",
+    "e0db502d306199d069ba3e4ebf3f99516a7eb4ef"
+  ],
+  "actual_build_source": {
+    "head": "c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed",
+    "dirty": true,
+    "source_manifest_sha256": "9a1f9994c1ffc143b49639686f2fc55ddad9a874749d3cedf7d1f7a2b5480403",
+    "source_archive_sha256": "a5fe4aea347342f3859892e2ecb40898e7b43e64ab291d60ea2c8b4377f220d5",
+    "diff_sha256": "465166f67500a68faa7367f61de05139499b0a9f9777252630c856b09e710d62",
+    "manifest_sha256": "4d56fbc11aeff9b2baccc2be8de2a1a876420bbced9aaa6ed3d7b01878bdaf48",
+    "runtime_metadata_sha256": "7749bc196afe4569e2ba35d2f74848d4042ea93e26d1b1f12c990a11166b112d"
+  },
+  "build_phases": {
+    "checks": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "CARGO_TARGET",
+        "/fresh-cache/target",
+        "--set",
+        "HOST_TARGET",
+        "x86_64-unknown-linux-gnu",
+        "checks"
+      ],
+      "started_at": "2026-10-18T16:23:13.538669+00:00",
+      "exit_code": 0,
+      "seconds": 97.646,
+      "ended_at": "2026-10-18T16:24:51.184400+00:00"
+    },
+    "units": {
+      "state": "PASS",
+      "command": [
+        "just",
+        "--set",
+        "CARGO_TARGET",
+        "/fresh-cache/target",
+        "--set",
+        "HOST_TARGET",
+        "x86_64-unknown-linux-gnu",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018",
+        "unit",
+        "--test-threads 4"
+      ],
+      "started_at": "2026-10-18T16:24:51.388541+00:00",
+      "exit_code": 0,
+      "seconds": 104.266,
+      "ended_at": "2026-10-18T16:26:35.654861+00:00"
+    },
+    "products": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "bark-server",
+        "--bin",
+        "captaind",
+        "--bin",
+        "watchmand",
+        "--package",
+        "bark-cli",
+        "--bin",
+        "bark",
+        "--bin",
+        "barkd",
+        "--features",
+        "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui"
+      ],
+      "started_at": "2026-10-18T16:26:35.855534+00:00",
+      "exit_code": 0,
+      "seconds": 75.788,
+      "ended_at": "2026-10-18T16:27:51.643592+00:00"
+    },
+    "metadata": {
+      "state": "PASS",
+      "command": [
+        "cargo",
+        "nextest",
+        "list",
+        "--package",
+        "ark-testing",
+        "--test",
+        "server",
+        "--test",
+        "bark-sdk",
+        "--test",
+        "barkd",
+        "--features",
+        "ark-testing/fallback-test-bip84",
+        "--list-type",
+        "binaries-only",
+        "--message-format",
+        "json"
+      ],
+      "started_at": "2026-10-18T16:27:52.288557+00:00",
+      "exit_code": 0,
+      "seconds": 155.019,
+      "ended_at": "2026-10-18T16:30:27.307272+00:00"
+    }
+  },
+  "unit_result": {
+    "passed": 881,
+    "skipped": 1
+  },
+  "actual_new_products": {
+    "captaind": {
+      "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/captaind",
+      "sha256": "378cb862dbcbb93533150097a480fbb88096c733dde0dd63d14269cd868130e7",
+      "actual_version": "captaind 0.7.1-dev+c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/watchmand",
+      "sha256": "16d50ba72c3e2c027e6664e4694647a3454fcad672fb2685cadbcafa0787e12b",
+      "actual_version": "watchmand 0.7.1-dev+c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed"
+    },
+    "bark": {
+      "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/bark",
+      "sha256": "f227b9be28501cad17c2e7821ac3fea60587c53d33d4ac541c5f538553b69171",
+      "actual_version": "bark 0.7.1-dev (c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/barkd",
+      "sha256": "3031a349137e449e3d6288d092af10f9b8f9727288f93a3445a74d48b2cf5d73",
+      "actual_version": "barkd 0.7.1-dev (c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    }
+  },
+  "native_lanes": {
+    "backend": {
+      "result": {
+        "source_manifest_sha256": "9a1f9994c1ffc143b49639686f2fc55ddad9a874749d3cedf7d1f7a2b5480403",
+        "started_at": "2026-10-18T16:34:09.652270+00:00",
+        "state": "PASS",
+        "retries": 0,
+        "container": "abandon-fresh-runtime-20261017",
+        "cases": [
+          {
+            "test": "expiry_internal_reserved_batched_terminal::expiry_internal_reserved_batch_pays_remaining_source",
+            "started_at": "2026-10-18T16:34:10.125828+00:00",
+            "state": "PASS",
+            "selected": [
+              "expiry_internal_reserved_batched_terminal::expiry_internal_reserved_batch_pays_remaining_source"
+            ],
+            "exit_code": 0,
+            "seconds": 80.496,
+            "ended_at": "2026-10-18T16:35:30.622209+00:00",
+            "log_sha256": "bb53bc8d9aa153a484f8e2e32cc1b8d83fd69e935c629c34719ef0d80d896b4c"
+          },
+          {
+            "test": "expiry_internal_reserved_batched_terminal::expiry_internal_reserved_batch_replays_after_reorg",
+            "started_at": "2026-10-18T16:35:30.965077+00:00",
+            "state": "PASS",
+            "selected": [
+              "expiry_internal_reserved_batched_terminal::expiry_internal_reserved_batch_replays_after_reorg"
+            ],
+            "exit_code": 0,
+            "seconds": 84.493,
+            "ended_at": "2026-10-18T16:36:55.458340+00:00",
+            "log_sha256": "875860ce6b7e69cfb661778be8b0d2f96cae872ba69a1b3e00820a0b3cb0831d"
+          },
+          {
+            "test": "expiry_internal_terminal_return::expiry_internal_reserved_partial_pays_remaining_source",
+            "started_at": "2026-10-18T16:36:55.885210+00:00",
+            "state": "PASS",
+            "selected": [
+              "expiry_internal_terminal_return::expiry_internal_reserved_partial_pays_remaining_source"
+            ],
+            "exit_code": 0,
+            "seconds": 67.125,
+            "ended_at": "2026-10-18T16:38:03.010561+00:00",
+            "log_sha256": "8e07ffc50f5e7b7506bf47fa61d2b70015599bc8ff4d684cad8b11177395825a"
+          },
+          {
+            "test": "expiry_internal_terminal_return::expiry_internal_reserved_partial_replays_paid_source_after_reorg",
+            "started_at": "2026-10-18T16:38:03.464455+00:00",
+            "state": "PASS",
+            "selected": [
+              "expiry_internal_terminal_return::expiry_internal_reserved_partial_replays_paid_source_after_reorg"
+            ],
+            "exit_code": 0,
+            "seconds": 73.939,
+            "ended_at": "2026-10-18T16:39:17.403247+00:00",
+            "log_sha256": "a20bc3f35b7d06f121ef94e0bda3dad4d003dc667ec93c3c34fe7f420a7d3e5f"
+          },
+          {
+            "test": "expiry_internal_batched_terminal::expiry_internal_two_originals_timeout_together_keeps_third_source_owed",
+            "started_at": "2026-10-18T16:39:17.823480+00:00",
+            "state": "PASS",
+            "selected": [
+              "expiry_internal_batched_terminal::expiry_internal_two_originals_timeout_together_keeps_third_source_owed"
+            ],
+            "exit_code": 0,
+            "seconds": 77.936,
+            "ended_at": "2026-10-18T16:40:35.760022+00:00",
+            "log_sha256": "94871499805a4c5252708cebc0e679d84d294a41823ffc756395dbd84ad6fe16"
+          },
+          {
+            "test": "expiry_internal_batched_terminal::expiry_internal_batched_terminal_replays_exact_authorization_after_reorg",
+            "started_at": "2026-10-18T16:40:36.099973+00:00",
+            "state": "PASS",
+            "selected": [
+              "expiry_internal_batched_terminal::expiry_internal_batched_terminal_replays_exact_authorization_after_reorg"
+            ],
+            "exit_code": 0,
+            "seconds": 80.128,
+            "ended_at": "2026-10-18T16:41:56.228684+00:00",
+            "log_sha256": "f41559604243b014ebd02a8f78f132912933b1fb5bf7e92108e86d7c89a08f4d"
+          },
+          {
+            "test": "expiry_internal_terminal_return::expiry_internal_reserved_all_terminal_replays_after_reorg",
+            "started_at": "2026-10-18T16:41:56.644512+00:00",
+            "state": "PASS",
+            "selected": [
+              "expiry_internal_terminal_return::expiry_internal_reserved_all_terminal_replays_after_reorg"
+            ],
+            "exit_code": 0,
+            "seconds": 73.626,
+            "ended_at": "2026-10-18T16:43:10.271538+00:00",
+            "log_sha256": "d370a6808b87f4dc51c16b8f8171f472f6b85c6b69600ce975b2ad9bd54f8420"
+          }
+        ],
+        "not_run": [],
+        "ended_at": "2026-10-18T16:43:10.272209+00:00"
+      },
+      "result_sha256": "ffd2123d8a3608bc8ddec38f0a0c9464252d886cfa3efee904f4ea18e3359a56",
+      "postflight_sha256": "56a323597bd2fdee749146b14167a2c8829d7beb14caee27e913827c663071ef",
+      "scope": "Exactall16pins/controlsunchanged, bothenvironmentflagsabsent, scopedactors0/unreadable0, no retries"
+    },
+    "client": {
+      "result": {
+        "source_manifest_sha256": "9a1f9994c1ffc143b49639686f2fc55ddad9a874749d3cedf7d1f7a2b5480403",
+        "started_at": "2026-10-18T16:37:20.088425+00:00",
+        "state": "PASS",
+        "retries": 0,
+        "container": "abandon-fresh-runtime-20261017",
+        "cases": [
+          {
+            "test": "qualification_paid_reorg::paid_fallback_reorg_cold_reopen_offline_protects_and_claims_exact_original",
+            "started_at": "2026-10-18T16:37:22.792854+00:00",
+            "state": "PASS",
+            "selected": [
+              "qualification_paid_reorg::paid_fallback_reorg_cold_reopen_offline_protects_and_claims_exact_original"
+            ],
+            "exit_code": 0,
+            "seconds": 28.903,
+            "ended_at": "2026-10-18T16:37:51.696441+00:00",
+            "log_sha256": "3f419ff433028278864842a58746dc60b4386a44a87517dbf077fbc84c4ba111"
+          },
+          {
+            "test": "qualification_daemon_unpaid::default_daemon_protects_owned_unpaid_principal_without_exiting_an_ordinary_spent_import",
+            "started_at": "2026-10-18T16:37:54.637219+00:00",
+            "state": "PASS",
+            "selected": [
+              "qualification_daemon_unpaid::default_daemon_protects_owned_unpaid_principal_without_exiting_an_ordinary_spent_import"
+            ],
+            "exit_code": 0,
+            "seconds": 27.852,
+            "ended_at": "2026-10-18T16:38:22.489840+00:00",
+            "log_sha256": "483908fb267860aa92487fd91d2574d9c04449bf2e3b0649c84aa24c2aad5929"
+          },
+          {
+            "test": "recovery::recovered_wallet_keeps_spent_vtxo_spent",
+            "started_at": "2026-10-18T16:38:25.485016+00:00",
+            "state": "PASS",
+            "selected": [
+              "recovery::recovered_wallet_keeps_spent_vtxo_spent"
+            ],
+            "exit_code": 0,
+            "seconds": 14.306,
+            "ended_at": "2026-10-18T16:38:39.791825+00:00",
+            "log_sha256": "82c3bb729588b4f9fa6a23edd45df45ef9f9d18d65e76b209e83714b28e2c02a"
+          }
+        ],
+        "not_run": [],
+        "ended_at": "2026-10-18T16:38:39.793098+00:00"
+      },
+      "result_sha256": "5f7f2ef6bc381058d6a427cd2991f2d92c48f4777c45e04935bfa3056946d830",
+      "postflight_sha256": "358b6611db28b0a03f49be6cbf1c929f848deb83aedfacc937e9b28b0f2049dd",
+      "scope": "Exactall16pins/controlsunchanged, bothenvironmentflagsabsent, scopedactors0/unreadable0, no retries"
+    }
+  },
+  "money_proofs": {
+    "reserved_batch": "Real original299k jointreservation retained; two-input userclaim198k+2000miner confirmed; remaining99k customer and281koperator consume exactB+all280k grants, actualfeechild5756miner/Core6, retainedfences and no duplicate A/G obligation. Coldfork replays exactA then sameB only afterAcanonical.",
+    "client": "Actual100k ownclaim99766+234miner/Core6 after paidpayoutorphan/coldreopen/serveroffline; all10Arkbalanceszero, correctcurrentBDKcut andone100kdebit/historysum0, ordinaryspent coin never exits."
+  },
+  "preserved_actual_failures": {
+    "backend_v22_log_sha256": "15192bb73ed32ab7627c2a3785e4f82d9fa2b68d95740db30e46c7518bb9bf1b",
+    "client_v22c_log_sha256": "715c7a2d1b8459e09a229c10787c835d3a0c678df06c773ed7e9b706f7416701"
+  },
+  "limits": [
+    "Ten targeted native regressions only; not all200cataloguecases or allmoneyfamilies",
+    "Exactsame-attempt DEFAULT internalbatch and declaredreorgscope; no genericforeign/allterminalbatch qualification",
+    "Clientownclaimlaterorphanedagain remains source-supported inheritedrisk requiring separatepositive test",
+    "ExternalPaid beforeclaimmaterialization/providerpermanentlyabsent newML036fixture source-only/uncompiled/unrun",
+    "No sustainedscale/productionreadiness/mainnetauthorization. PublicSignetdeployment remainsV18, notV23.",
+    "Native source/oracles establish declaredowner/fence proofs; independent current retained-graph accounting remains separate."
+  ]
+}

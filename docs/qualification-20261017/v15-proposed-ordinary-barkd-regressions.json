@@ -1,0 +1,506 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_PROPOSAL_TO_ROOT_NOT_ALLOCATION",
+  "case_count": 3,
+  "proposed_cases": [
+    {
+      "proposed_order": 1,
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_skips_exited_vtxo",
+      "file": "testing/tests/barkd/recovery.rs",
+      "function": {
+        "function_sha256": "f7f7ece461c7faf3e1b9348c8a5f8fbe8c04c9dab0b03ba688990a11001aeecd",
+        "body_sha256": "9d85cfa3b507ac5d0771b228fc2125d0fcbe64ae9b4cad9407e06344dbb2373b",
+        "first_line": 689,
+        "last_line": 721
+      },
+      "full_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "saved_listing_entry": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "execution_status": "NOT RUN",
+      "actual_terminal_receipt_hits": 0,
+      "PASS_FAIL_coverage_matches": 0,
+      "CLN_required": false,
+      "default_budget_seconds": 180,
+      "native_layer": "real barkd daemon/REST + Ark server + owned Core instances; not pure component",
+      "fee_policy_change_needed": false,
+      "future_candidate_and_allocation": null,
+      "purpose": "Fresh-wallet recovery must classify a genuinely chain-confirmed unilateral exit as Exited, not resurrect it as off-chain money",
+      "full_existing_success_oracle": [
+        "Exactly one original500k-gross board VTXO is captured",
+        "Original daemon starts a real unilateral exit; genuine100k on-chain fee funding is supplied; background auto-progress reaches Claimable or Claimed through actual mined chain steps",
+        "Original default unspent list is empty after exit progression",
+        "New same-seed wallet in a distinct daemon/data directory performs on-chain and Ark sync",
+        "Recovered complete-list contains exactly one record with the exact original VTXO ID and state exactly Exited"
+      ],
+      "genuine_fault_scope": "No corruption or service outage. Real unilateral exit plus loss of wallet-local state simulated by a separate seed recovery; original daemon remains alive and performs progression. No original-absence/cold-backup claim.",
+      "state_semantics": "No partition_recovered helper and no bare server Spent trust. Current recovery.rs388\u2013405 validates actual vtxo.point transaction confirmation before storing Exited; this independent chain path is distinct from unsupported cross-anchor historical round discharge.",
+      "fee_assumptions": "No old BIP86/P2TR exact-fee/net literal. Gross500k board and separate100k CPFP funding; source assertions do not fix their resulting fee amounts.",
+      "boundedness_evidence": "Existing wait_for_exits_claimable uses120s timeout/250ms poll, genuine daemon auto-progress and batches actual CSV-height mining. No ignored/benchmark profile or extended timeout. Total180 feasibility remains unexecuted, not guaranteed.",
+      "helper_binding": {
+        "file": "testing/tests/barkd/helpers.rs",
+        "file_sha256": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+        "wait_for_exits_claimable": {
+          "function_sha256": "511a6ff867a6a517fea002991dcac43e6e069177c4ab695f886d825d00d5ef8e",
+          "body_sha256": "57f969e41feda872db67e12fa3deb588ba0962649292207b6a57128b4199d83f",
+          "first_line": 145,
+          "last_line": 198
+        }
+      },
+      "risks_and_limits": [
+        "Native active daemon background auto-progress is required",
+        "Actual node/server/bootstrap+120s helper must fit default180; no runtime timing yet",
+        "Stops at Claimable/Claimed progression and recovered Exited classification; no explicit final claim payment, drain, Core6 or full financial-fee conservation assertion",
+        "No all-bucket/exit-ownership proof for historical Locked round ancestors; this is independently chain-confirmed Exited semantics"
+      ]
+    },
+    {
+      "proposed_order": 2,
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+      "file": "testing/tests/barkd/recovery.rs",
+      "function": {
+        "function_sha256": "9900105e71d85b6f14fd4cc33c6dea2dd0355e18a7c75777a5656e720681ec81",
+        "body_sha256": "da4c9d33959ffb3d922b2f5b202766f4f66d521ffae81821283f15c236aba705",
+        "first_line": 1288,
+        "last_line": 1328
+      },
+      "full_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "saved_listing_entry": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "execution_status": "NOT RUN",
+      "actual_terminal_receipt_hits": 0,
+      "PASS_FAIL_coverage_matches": 0,
+      "CLN_required": false,
+      "default_budget_seconds": 180,
+      "native_layer": "real barkd daemon/REST + Ark server + owned Core instances; not pure component",
+      "fee_policy_change_needed": false,
+      "future_candidate_and_allocation": null,
+      "purpose": "Prove mailbox key-gap boundary with same genuine received coin: narrow misses, wide discovers",
+      "full_existing_success_oracle": [
+        "Server xpub recovery is explicitly disabled (recovery_xpub_nb_keys=0)",
+        "Original recipient issues60 real Ark addresses and receives an actual50k Arkoor at the last one; original default list contains exactly one record",
+        "A new same-seed narrow wallet with gap50 syncs and its complete-list remains empty",
+        "A separate same-seed wide wallet with gap100 syncs and its complete-list contains exactly one record with the original received VTXO ID"
+      ],
+      "genuine_fault_scope": "Deliberately insufficient recovery gap window; no malformed body, fabricated SQL, offline sender or crashed service. Original sender/recipient stay alive; fresh same-seed daemon databases are separate.",
+      "state_semantics": "One current received Pubkey-policy VTXO; no round refresh or historical Spent partition assumption. Existing source checks discovery identity/count, not the recovered state or a successful spend.",
+      "fee_assumptions": "Sender boards1m-gross using native board_all helper;50k transfer is far below remaining principal. No fixed legacy net-fee literal, quoted fee assumption or total-balance expectation.",
+      "boundedness_evidence": "60 normal address calls plus two ordinary daemon recoveries, gap limits50/100; no large pressure loop or benchmark profile. Default180 required; total runtime remains unverified.",
+      "risks_and_limits": [
+        "Saved comment calls last address index59; accepted reserved identity index0 means actual fresh-index convention may instead place it at60; runtime asserts only window50/100/actual ID, not magic index59",
+        "Complete-list ID/count could not by itself distinguish Spendable from Locked. Credit discovery-window behavior only; no all-bucket, native recovered spend, recipient-value, Core6 or custody proof",
+        "Recovery xpub is intentionally disabled for this half, so not default xpub-flow qualification"
+      ]
+    },
+    {
+      "proposed_order": 3,
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+      "file": "testing/tests/barkd/recovery.rs",
+      "function": {
+        "function_sha256": "9b5ea48fc57fd4e62121498f3a0b0802fe13c1d1e8922640b54467a9f47d13f5",
+        "body_sha256": "3d0cbe7a1f5af1c312bb94fddfa099e6fe763ca29262ae9e516d092b32626b3c",
+        "first_line": 1333,
+        "last_line": 1368
+      },
+      "full_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "saved_listing_entry": {
+        "kind": "test",
+        "ignored": false,
+        "filter-match": {
+          "status": "mismatch",
+          "reason": "string"
+        }
+      },
+      "execution_status": "NOT RUN",
+      "actual_terminal_receipt_hits": 0,
+      "PASS_FAIL_coverage_matches": 0,
+      "CLN_required": false,
+      "default_budget_seconds": 180,
+      "native_layer": "real barkd daemon/REST + Ark server + owned Core instances; not pure component",
+      "fee_policy_change_needed": false,
+      "future_candidate_and_allocation": null,
+      "purpose": "Prove normal server xpub discovery can cross client gap50 and advances the recovered address counter",
+      "full_existing_success_oracle": [
+        "Original recipient issues60 real Ark addresses and receives an actual50k Arkoor at the last one; original default list contains exactly one record",
+        "Server retains standard native test xpub scanning (100000 keys)",
+        "A new same-seed narrow wallet with gap50 performs on-chain and Ark sync",
+        "Recovered complete-list contains exactly one record with the exact original received VTXO ID",
+        "Next fresh Ark address differs from the original received address, preventing that exact recovered key from being handed out again"
+      ],
+      "genuine_fault_scope": "Current legitimate VTXO outside the local wallet gap window, recovered by server xpub scan. Separate new data directory, original actors remain alive; no service outage/corruption/physical backup.",
+      "state_semantics": "Current received Pubkey-policy coin; no historical round Spent helper. Checks discovery and exact recovered-key nonreuse only, not full counter equality or state/spendability.",
+      "fee_assumptions": "Native1m-gross board_all funds a genuine50k send; no exact old board/offboard fee or net-principal literal.",
+      "boundedness_evidence": "60 address calls and one recovery with native test default100000-key server scan; ordinary existing test, not load-pressure benchmark. This scan can add CPU cost;180 remains a required future gate, not a timing claim.",
+      "version_gate": ">0.7.1 via require_bark_version; future admission must prove actual Dev version satisfies and no early return",
+      "risks_and_limits": [
+        "Like the paired gap test, complete-list identity/count alone does not establish Spendable or recovered-payment success",
+        "Address assertion is next!=old, not exact next index; no stronger address-counter determinism credit",
+        "Default test xpub scan100000 could consume noticeable CPU; actual resource/default180 checks required",
+        "No all-bucket/fee conservation/Core6/fallback/backup proof"
+      ]
+    }
+  ],
+  "input_evidence": {
+    "saved_listing": {
+      "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10/case01/selection-list-fresh.json",
+      "sha256": "5d5172fc5cccbe79e76adc4c819e749da1755a6fa893050f0b369c0d436d557b",
+      "source": "Existing immutable batch45 case01 saved listing; no new listing executed",
+      "total_barkd_names": 78,
+      "listed_but_filter_mismatch": "All3 are existing unignored entries mismatched only because original case01 selected another exact string; no execution inferred"
+    },
+    "coverage": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/COVERAGE.csv",
+      "sha256": "c297a23c2c9c643659c7549747cd30f18f469cb93bb00fa9eb6e870c44807083",
+      "rows": 456,
+      "check": "No selected literal appears in any PASS/FAIL row; source-only inventory is not execution proof"
+    },
+    "status": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/STATUS.json",
+      "sha256": "1528291390a729e0c127e7d714f1067f28007a9053252802297c1650fb3da992",
+      "parent_counts_at_intake": {
+        "executions": 245,
+        "PASS": 230,
+        "FAIL": 15
+      },
+      "limit": "Counts are owner-maintained terminal aggregate, not recomputed from entry_kind executed_named_test alone; older receipt categories differ."
+    },
+    "receipt_exact_literal_absence": {
+      "checked": [
+        {
+          "file": "batch01-current-cut-receipt.json",
+          "sha256": "a70ab1ccde0ca4fe7443b7a0503b9207ccee918d82de9a3d148e629309d6ecf1"
+        },
+        {
+          "file": "batch02-offboard-decision-receipt.json",
+          "sha256": "3839938c8b216b6155b6e20434be6f7757690431d62c709d55e84aaf2984913e"
+        },
+        {
+          "file": "batch03-offboard-registration-receipt.json",
+          "sha256": "84f778317a7b2ed668077cc05fc1b7502a905ef24c281a589b66129d377e3f62"
+        },
+        {
+          "file": "batch04-upstream-registration-receipt.json",
+          "sha256": "917ea8a3a4cce0a7272ba47192bc93eafbdd883ea54bc9d5ab77f8b65fe91aea"
+        },
+        {
+          "file": "batch05-upstream-offboard-mailbox-receipt.json",
+          "sha256": "94ed37d928c01b700f2400309bc7420b87968582277023c8e73d60fcac601b83"
+        },
+        {
+          "file": "batch06-corrected-reorg-fee-conflict-split-receipt.json",
+          "sha256": "956a1e37b8ad4ab9859df522ef0492651d534264defbe6292f4c06e9b20af539"
+        },
+        {
+          "file": "batch07-readiness-isolation-receipt.json",
+          "sha256": "2434a029eed2f1b54a4a0b7b8742e90ecb26110be767f2e9a3ab0d5cfafc7682"
+        },
+        {
+          "file": "batch08-two-root-return-history-receipt.json",
+          "sha256": "9910ea72a6e2ac43a664353953296cac42af6fec1d10110234b3969531972e5f"
+        },
+        {
+          "file": "batch09-native-lightning-terminal-sources-receipt.json",
+          "sha256": "dc130a0b2fcf735254d18d010336ac2b88195d66bbff4317138c2b2a8afded5b"
+        },
+        {
+          "file": "batch10-lightning-restart-receipt.json",
+          "sha256": "7697f4101b69a9af61e09b301c63065803e6ee0ae9c40d25c544e4c9a9f852c0"
+        },
+        {
+          "file": "batch11-native-forwarding-reopen-receipt.json",
+          "sha256": "2044d63b582becff2379fe1f95a123785b3e5101a4164a10c225cc1d472dd7aa"
+        },
+        {
+          "file": "batch12-automatic-multilevel-split-receipt.json",
+          "sha256": "25c776bc68b9ab3f7f0c81151ff8deefa61f5c2d105b0541ff208c555e88bff5"
+        },
+        {
+          "file": "batch13-registered-receive-fallback-receipt.json",
+          "sha256": "224d3b3f642a28a0eaf2a96558929cd0385a1219f65c0721c150884ea4d87ba2"
+        },
+        {
+          "file": "batch14-v2-registered-receive-fallback-receipt.json",
+          "sha256": "c3f96faa1bdb03266fbe9e087694137abe915f83f3101125c4c522503a0abb05"
+        },
+        {
+          "file": "batch15-v2-failed-send-refund-receipt.json",
+          "sha256": "d7c63cd66eee4da6faba7ce58b4478d1c1811be68657665c579c496c90bc3dfc"
+        },
+        {
+          "file": "batch16-corrected-multilevel-split-receipt.json",
+          "sha256": "312219c8484aa6275708acd3929f1f619da1c042a5da18a5ee7c66489ed71460"
+        },
+        {
+          "file": "batch17-upstream-core-default-receipt.json",
+          "sha256": "547c67bd37561f23bb4a7bb2ea9424cbc6ae4539632d5f047e84512911657716"
+        },
+        {
+          "file": "batch18-sdk-upstream-normal-01-receipt.json",
+          "sha256": "83966063ecfcd732bcb6705c5da66a3ab8a42d3234f007ec3cc8d1325a46477c"
+        },
+        {
+          "file": "batch19-sdk-upstream-normal-final-receipt.json",
+          "sha256": "380585c9cf2769db2bf2b8e3417452eefce0c22188b3d10626cb324ca8355820"
+        },
+        {
+          "file": "batch19-sdk-upstream-normal-prefix28-receipt.json",
+          "sha256": "7c40fea356aee3d768b12753a2b55a394f7d507701b42a97449fb98f7e3a0e7a"
+        },
+        {
+          "file": "batch20-upstream-bark-first-two-receipt.json",
+          "sha256": "1908c66929a3834f8b661e1ff2f93f3f2d2040bca6707fba93da3876f80614a3"
+        },
+        {
+          "file": "batch21-upstream-bark-remaining75-receipt.json",
+          "sha256": "d14c01590ef20f57701faa69d5a18fb0e6aed547ccbfab0968cc9c86f9058121"
+        },
+        {
+          "file": "batch22-upstream-bark-unstarted47-receipt.json",
+          "sha256": "d7bf02e6f9c1a7f019722e3288ac94fa3bf31f81e69ea5bcef161a92b8b5c0ba"
+        },
+        {
+          "file": "batch23-upstream-bark-unstarted46-receipt.json",
+          "sha256": "0f13197e5bca91459ae8ba8aeba433841df68f405734e0c5f31e5100db5890ff"
+        },
+        {
+          "file": "batch24-upstream-bark-unstarted29-receipt.json",
+          "sha256": "0b8277272aaeb80e43e5f8e3726bc0754ae24ae368a39ef692f185cec7f70b5b"
+        },
+        {
+          "file": "batch25-barkd-ordinary38-receipt.json",
+          "sha256": "a9f8172e88cc9835c72333c960a37df7e58533353f1b8be71fa31ee51fb74744"
+        },
+        {
+          "file": "batch26-upstream-bark-unstarted23-receipt.json",
+          "sha256": "6b013dc727b2724c994489c3521fff9575c390b82a37b26542d0a5064cb3cf0d"
+        },
+        {
+          "file": "batch27-barkd-unstarted36-receipt.json",
+          "sha256": "8a11ea9b14a244b45eecb9829e38f0cede64d8e8579459d0a4f39a3beb3eabbe"
+        },
+        {
+          "file": "batch28-barkd-unstarted17-receipt.json",
+          "sha256": "8aeb0803503ffdfb0e6d650ebd1571377f590b5995e4e233315f5c21c5006bcd"
+        },
+        {
+          "file": "batch29-barkd-unstarted14-receipt.json",
+          "sha256": "592f981c2e2298c50943c6eb92ac7f4e52a80dd0b2dd1076d2e5987669123ea4"
+        },
+        {
+          "file": "batch30-bark-unstarted21-receipt.json",
+          "sha256": "7dfcc443853ee75efe7b45edcd7ad84248b1755e22b46a4de716d7b444b7a74a"
+        },
+        {
+          "file": "batch31-bark-unstarted20-receipt.json",
+          "sha256": "79a644a77d9e03aac0556490e64102a6ef53f07f213fcd597e02193cbe287729"
+        },
+        {
+          "file": "batch32-bark-unstarted18-receipt.json",
+          "sha256": "928a72617305e8c4b8632b185797bd377d1b32ecd4422db00396d9d57af81f71"
+        },
+        {
+          "file": "batch33-bark-unstarted16-receipt.json",
+          "sha256": "9af799a9f2b0902a2c88aa5d724141fa5ede103fed389d0423b599c0849ad814"
+        },
+        {
+          "file": "batch34-bark-unstarted12-receipt.json",
+          "sha256": "f665d06ad4d2ee9e8aebe3e8e9643d69f78f0fb8c140b1e738c452a37ee1b9b6"
+        },
+        {
+          "file": "batch35-server-ordinary8-receipt.json",
+          "sha256": "69b4657ea432c9b1887d75fa168fa45b8d6e4319400384e1f507d96cb964cba7"
+        },
+        {
+          "file": "batch36-sdk-cln6-receipt.json",
+          "sha256": "3b99787e0fc02616423c08e388cc55afcbea8accbc83670908db49e43e9ff291"
+        },
+        {
+          "file": "batch37-server-reorg-retry1-receipt.json",
+          "sha256": "d6ac1037a077ab90cd7eaaace3c9d8c851f920c4d9e52496f0b6a32db8b5a18e"
+        },
+        {
+          "file": "batch38-cold-backup-public-receipt.json",
+          "sha256": "b86e1db16b8d045e7257417f47691a98859b30750c3a8e4f74a36be8ad7328df"
+        },
+        {
+          "file": "batch38-cold-backup-v5-environment-receipt.json",
+          "sha256": "0dcbaa652f36f52bc370f6603ea1a72907d6ce0f6ee48e96491880c7c781d77c"
+        },
+        {
+          "file": "batch38-cold-backup-v5-receipt.json",
+          "sha256": "d0a0a16f8105e41e38a3ca7c11420a63ec538c00dd093ec4a217c3e893a9ea2e"
+        },
+        {
+          "file": "batch38-controls-environment-receipt.json",
+          "sha256": "0dcbaa652f36f52bc370f6603ea1a72907d6ce0f6ee48e96491880c7c781d77c"
+        },
+        {
+          "file": "batch39-owner-replan-v6-receipt.json",
+          "sha256": "779d3771ce61016748db980e10eb3a3734e933cdeb7106b01d470bc1ee4d859c"
+        },
+        {
+          "file": "batch40-three-existing-v6-receipt.json",
+          "sha256": "27bb2368cfaadb0cd739929e037306a3f6c2d0f95519551c96037901181e8174"
+        },
+        {
+          "file": "batch41-live-funded-v7-receipt.json",
+          "sha256": "0909c1cc68919394d7af238da42900946b2519093868332dc1d17fe8db3c8428"
+        },
+        {
+          "file": "batch42-ordinary-twelve-v8e-receipt.json",
+          "sha256": "4391490deb65b0190a91d6946b551a75a89fcc9881def7e3021096cad7a97c48"
+        },
+        {
+          "file": "batch43-quarantine-v8e-receipt.json",
+          "sha256": "49aea2ace1e8184a0940504e52432b301ea9970becea6ae9a16db11367540385"
+        },
+        {
+          "file": "batch44-six-money-v9b-receipt.json",
+          "sha256": "528a52d36f55036009b9eb567c3346685b403b97d77ff21fc099921316e9fbdd"
+        },
+        {
+          "file": "batch45-recovery-three-v10-receipt.json",
+          "sha256": "5d0bdfdef75d97130de60e06c82b8933cc32fe8eac05a46f29e5027131692253"
+        }
+      ],
+      "selected_literal_hits": 0,
+      "limit": "No exact candidate literal in curated batch01..45 receipt string values; no runtime/private raw logs or wallet files read"
+    }
+  },
+  "captured_source": {
+    "bundle": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018",
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "source_archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "capture_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "archive_head": "783c0c5c51105b1ec1a5fa1068820ce94e18017e",
+    "source_dirty": true,
+    "old_native_barkd_sha256": "40ee2c9257d2fb50f85663895b23c814b9cc321e9304e043bd38d254ab7633fe",
+    "meaning": "Frozen v10 source/listing provenance only, not candidate or runtime allocation for future V15",
+    "canonical_comparison": [
+      {
+        "file": "testing/tests/barkd/recovery.rs",
+        "archive_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "canonical_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+        "byte_equal": true
+      },
+      {
+        "file": "testing/tests/barkd/helpers.rs",
+        "archive_sha256": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+        "canonical_sha256": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+        "byte_equal": true
+      },
+      {
+        "file": "testing/src/context/builders.rs",
+        "archive_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+        "canonical_sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae",
+        "byte_equal": true
+      },
+      {
+        "file": "testing/src/context/mod.rs",
+        "archive_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+        "canonical_sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab",
+        "byte_equal": true
+      },
+      {
+        "file": "bark/src/recovery.rs",
+        "archive_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+        "canonical_sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+        "byte_equal": true
+      },
+      {
+        "file": "bark/src/fallback/spend_proof.rs",
+        "archive_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+        "canonical_sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+        "byte_equal": true
+      },
+      {
+        "file": "server/src/database/ordinary_spend.rs",
+        "archive_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+        "canonical_sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+        "byte_equal": true
+      }
+    ]
+  },
+  "spent_locked_semantics": {
+    "shared_partition_helper": {
+      "function_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+      "body_sha256": "2577d4d4bb1a28e06448c68ff1c404392dca72912d845059abd50b49678394af",
+      "first_line": 22,
+      "last_line": 32
+    },
+    "policy": "Do not globally classify historical server-reported Spent as discharged. Current source ordinary_spend_proof only supports complete signed same-domain Pubkey OOR paths, excludes spent_in_round/offboard/conditional sources; fresh unsupported round ancestor remains Locked while the actual current cut remains independently spendable. Selected exit case instead uses real confirmed-point Exited classification; gap pair avoids historic-spend partition entirely.",
+    "references": [
+      "server/src/database/ordinary_spend.rs:16",
+      "bark/src/fallback/spend_proof.rs:19",
+      "bark/src/recovery.rs:388",
+      "bark/src/recovery.rs:554"
+    ],
+    "no_new_policy": true
+  },
+  "explicit_exclusions": [
+    {
+      "literal": "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+      "reason": "Explicit held unsafe original; NOT proposed, NOT retried; replacement quarantine name already executed."
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_arkoor_receive_and_change_vtxos",
+      "reason": "Unexecuted but fixed final991443 assumes old board net; current native gross-board fee shape changed, so requires separately reviewed actual-cut adapter before proposal."
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_lightning_send_change",
+      "reason": "Unexecuted but fixed699443 plus exact two-change assumption; historical conditional HTLC Spent partition needs independent current-policy proof."
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_lightning_send_revocation",
+      "reason": "Unexecuted but fixed999443 plus three-coin/conditional historical Spent assumptions; not proposed without oracle/fee audit."
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_lightning_receive",
+      "reason": "No old board net literal, but strict partition_recovered expects spent conditional HTLC history; ordinary discharge proofs explicitly restrict to Pubkey sources. Needs grounded separate policy/oracle review, not generic Spent or Locked acceptance."
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_delegated_refresh_output_expired_output",
+      "reason": "New round-output plus historical board/default-list/current-exit interactions need separate Locked/current-cut audit; not selected as unchanged ordinary intake."
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_round_vtxo",
+      "reason": "Already executed PASS in batch45; no rerun proposed."
+    },
+    {
+      "literal": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "reason": "Already executed historical FAILs and batch45 PASS; no retry proposed."
+    }
+  ],
+  "future_admission": {
+    "candidate": null,
+    "V15_source_archive": null,
+    "runtime_metadata": null,
+    "runtime_ELF_pins": null,
+    "root_allocation": null,
+    "parent_launch_admission": null,
+    "default_timeout_seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "first_failure_stop": true,
+    "max_global_native": 2,
+    "new_exact_selection_body_version_resource_gates_required": true,
+    "no_ignored_or_benchmark": true,
+    "CLN_required": false
+  },
+  "actions": "Read-only immutable listing/source/archive/coverage/curated receipts; wrote only this external JSON and companion Markdown. No new listing, metadata, Cargo, controller, service, runtime, source, resource, global report or frozen payload writes.",
+  "credit": "NOT RUN; zero execution/PASS/FULL ML credit."
+}

@@ -1,0 +1,330 @@
+{
+  "scope": "READ_ONLY_V11A_V11B_FROZEN_SOURCE_ARCHIVE_AND_REGISTRATION_PROOF_NO_BUILD_OR_NATIVE_ADMISSION",
+  "at": "2026-10-18T05:53:23.091815+00:00",
+  "status": "SOURCE_ARCHIVE_BINDING_PASS_WITH_RETAINED_BUILD_FAILURES",
+  "captures": [
+    {
+      "label": "A",
+      "directory": "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11-20261018",
+      "source_manifest_sha256": "7dda6b8d581c7a1603f0c3627f35aafb1843f67f6f6ef545219b691dd60a3979",
+      "source_archive_sha256": "470acbd83dab68b07d9063338de13cf4588c06cff286b8442fa8f6b1a5dac9a7",
+      "HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+      "dirty_diff_sha256": "9d91a8461333d4f6ba4743e7afd8ed959ccfda3860f758079b412de54c3ed264",
+      "source_scope": "Published0496 including reviewedPR22 plus core0ddb, pairedexisting-protocoljournal/replayc65v2+mechanicalunusedimportremoval, nativejournalassertions10e35, reviewedP07physicalpending-grantsbackup3f8f/abd0 and independentML049/partialML186-187patch7c2e; exactservermodulebindings. No wire/script/signature/fee policy change. Original180.028partialTIMEOUT and allpreviousFAIL retained; allnewnativebodies unrun. Single-inputDEFAULT no-prior-fence terminal omission only; broad batched/prior-fence/cold/consumed/oversize/fee liveness remains releaseOPEN.",
+      "archive_entries": 1968,
+      "all_exact_member_sets_resolved_content_hashes_match": true,
+      "symlinks": [
+        {
+          "path": "AGENTS.md",
+          "target": "CLAUDE.md"
+        }
+      ],
+      "source_verification_before_checks": {
+        "state": "PASS",
+        "head": "0496e057fe8cedde99c9b85edab67035633a8f25",
+        "files": 1968,
+        "at": "2026-10-18T05:48:17.722399+00:00"
+      },
+      "build_phases_observed_at_review": {
+        "checks": {
+          "state": "FAIL",
+          "seconds": 50.533,
+          "exit_code": 101,
+          "started_at": "2026-10-18T05:48:17.722824+00:00",
+          "ended_at": "2026-10-18T05:49:08.255928+00:00"
+        }
+      },
+      "build_phase_receipt_sha256_at_observation": "0b91bbd68d44faef877dca632a5386cfa259ef191235496d516391511c660f21",
+      "phase_observation_is_temporal_not_source_stasis_requirement": true
+    },
+    {
+      "label": "B",
+      "directory": "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11b-20261018",
+      "source_manifest_sha256": "52e74ff47d32c3b5e38cc98ee35c6daf087034900e5c3e91c641874a69dbee87",
+      "source_archive_sha256": "24eab618a167435aeff65df86f3f6c23ed5abf4aac8735aa465cbfb03895ef7d",
+      "HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+      "dirty_diff_sha256": "019a99172a3dca8e447ab45e693b76719c8651ea1391c70ceb316a91b45f46b0",
+      "source_scope": "Published0496 including reviewedPR22 plus core0ddb, pairedexisting-protocoljournal/replayc65v2+mechanicalunusedimportremoval, nativejournalassertions10e35, reviewedP07physicalpending-grantsbackup3f8f/abd0 and independentML049/partialML186-187patch7c2e; exactservermodulebindings. No wire/script/signature/fee policy change. Original180.028partialTIMEOUT and allpreviousFAIL retained; allnewnativebodies unrun. Single-inputDEFAULT no-prior-fence terminal omission only; broad batched/prior-fence/cold/consumed/oversize/fee liveness remains releaseOPEN. V11checks E0283 preserved; v11b adds ONLY explicit Vec<ServerVtxo> decoded type annotation in watchman/user_claim.rs; no financial/lifecycle/test change.",
+      "archive_entries": 1968,
+      "all_exact_member_sets_resolved_content_hashes_match": true,
+      "symlinks": [
+        {
+          "path": "AGENTS.md",
+          "target": "CLAUDE.md"
+        }
+      ],
+      "source_verification_before_checks": {
+        "state": "PASS",
+        "head": "0496e057fe8cedde99c9b85edab67035633a8f25",
+        "files": 1968,
+        "at": "2026-10-18T05:50:00.815837+00:00"
+      },
+      "build_phases_observed_at_review": {
+        "checks": {
+          "state": "FAIL",
+          "seconds": 86.778,
+          "exit_code": 101,
+          "started_at": "2026-10-18T05:50:00.816413+00:00",
+          "ended_at": "2026-10-18T05:51:27.594485+00:00"
+        }
+      },
+      "build_phase_receipt_sha256_at_observation": "9ce69860d7ab442b0bca9af0bda92215e8c72837285619c4e9fdbfae24dc46b2",
+      "phase_observation_is_temporal_not_source_stasis_requirement": true
+    }
+  ],
+  "exact_A_to_B_delta": {
+    "source_member_set_unchanged": true,
+    "changed_source_files": [
+      "server/src/watchman/user_claim.rs"
+    ],
+    "A_file_sha256": "b16103e416c80c801b6346cee6dab73e3fa2ae297211d1ce7f80d121ffa9d191",
+    "B_file_sha256": "98398c3503bb2aad24859d7910e86efc3522d8a38cb3d9973dd4d8c80f1f7fdb",
+    "only_explicit_type_annotation": true,
+    "replacement": "let linked=t.query( -> let linked: Vec<ServerVtxo>=t.query(",
+    "unified_diff": "--- A/server/src/watchman/user_claim.rs\n+++ B/server/src/watchman/user_claim.rs\n@@ -57,7 +57,7 @@\n \t\tself.db.write(async |t| {\n \t\t\tt.lock_valid_expiry_view(view).await?;\n \t\t\tt.guard_user_claim_replay(claim).await?;\n-\t\t\tlet linked=t.query(\"SELECT v.vtxo FROM expiry_user_claim_source s \\\n+\t\t\tlet linked: Vec<ServerVtxo>=t.query(\"SELECT v.vtxo FROM expiry_user_claim_source s \\\n \t\t\t\tJOIN vtxo v ON v.vtxo_id=s.source_vtxo_id WHERE s.claim_txid=$1\",\n \t\t\t\t&[&claim.compute_txid().to_string()]).await?.into_iter()\n \t\t\t\t.map(|row|ServerVtxo::deserialize(row.get(\"vtxo\"))).collect::<Result<Vec<_>,_>>()?;\n",
+    "no_test_money_lifecycle_timer_or_assertion_changes": true
+  },
+  "P07": {
+    "file": "testing/tests/server/qualification_lightning_backup.rs",
+    "whole_file_sha256": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+    "exact_reviewed_v2_source_in_both_archives": true,
+    "source_review_sha256": "8cbb1fdecbca60a3b921ebb1e723caf2867b4f84fe686b51f73bca7449f420e2",
+    "all13_helper_function_and_body_hashes": [
+      {
+        "name": "file_hash",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 54,
+        "last_line": 64,
+        "function_sha256": "b7ad4e47fda384bc788034b3e6e97acb31be992e158017839b27e7ec6a1345db",
+        "body_sha256": "256c37bb952812692cfe955f41d4e95338aff8868c8060472c2c338b184deb33"
+      },
+      {
+        "name": "copy_tree",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 68,
+        "last_line": 100,
+        "function_sha256": "22b620cf4bf751b7ed7c958c8e9864d1f8300222c02334dfe90dc8349932b15c",
+        "body_sha256": "ffe82652678fe0c696d9f7d33c8cb2299f9f3ab62fc2e78cb9c617cbe272fc95"
+      },
+      {
+        "name": "postgres_tool",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 102,
+        "last_line": 105,
+        "function_sha256": "d00182d1511f3f43213c38dd8be0400755c1c90b67242afc8e4acb27f6f13b11",
+        "body_sha256": "424ecbd18d8aaa96023389c5adcc7e68c56029253a3ef0f89496e0c061ff8ca2"
+      },
+      {
+        "name": "assert_clean_cluster",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 107,
+        "last_line": 116,
+        "function_sha256": "465120c46ea6d367fc8078097ed5b034efd72ce2e705535c9efd29467d017eae",
+        "body_sha256": "4a047a35ffddcdc12f5b63ec5d4b2f43e9a321ad0553eec4b0d28f7535241554"
+      },
+      {
+        "name": "watchman_coins",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 118,
+        "last_line": 123,
+        "function_sha256": "ad54b678330508d0952b711890b192393167e1546a3f84102d781376f885aca9",
+        "body_sha256": "89b45b06c805600248135e642ecd41d288da1b1b020351a059c898d786b4ba8a"
+      },
+      {
+        "name": "wait_watchman_coins",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 125,
+        "last_line": 133,
+        "function_sha256": "1d85aaf9bd79b4d0b86138deb2582ec1fbb60779be6ddc0288b35ea373512a38",
+        "body_sha256": "29b2ddfb6072e55e34fbd8b95962d52a09ae6c63103a555ec1dfcf4c2ef00d68"
+      },
+      {
+        "name": "mine_continuing_core",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 138,
+        "last_line": 142,
+        "function_sha256": "781de25833846102cbccfbcc190f723ac92d343f9386653217406a11ffb06f10",
+        "body_sha256": "2fbe6f507ed290520509ed81920ae59a03c037340aab70a1f72830521ec03aa5"
+      },
+      {
+        "name": "actual_fee",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 144,
+        "last_line": 151,
+        "function_sha256": "4a26752d687c7bcdf30866f8a6ea9f6d0cbdfdf3a899a3196fa89bcf516a55cf",
+        "body_sha256": "44afaa5c95715dccfc3bb80fb62a6ee01f1cd2ab4101fdd358b0219e04ab96f3"
+      },
+      {
+        "name": "canonical",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 153,
+        "last_line": 162,
+        "function_sha256": "dce96a758b4e176578f95a70b6111455120d38ff19d178255a157e01218d73a4",
+        "body_sha256": "0cb2a7f61b0eed00ff28212b500f7681cefc4c53a97ed42d67ed6791bf071fde"
+      },
+      {
+        "name": "rebuilt",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 164,
+        "last_line": 174,
+        "function_sha256": "f13842f6ad21ee01d020232a14ffc2e8f35930094e357fa0eb360f59ec8b07ae",
+        "body_sha256": "186b274ab4c68ca1eb31d4fca88d8edbc3b68abf1f6d65524c1da7d05e404029"
+      },
+      {
+        "name": "pending_checkpoint",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 178,
+        "last_line": 209,
+        "function_sha256": "337f67250a35464eb49d345ab760060486d27923b9354ad62051ebf4e6cb579c",
+        "body_sha256": "1fd1f972421504f183117c93c659053bc359a7017e80869b801faaf696983370"
+      },
+      {
+        "name": "signed_grant_ancestry",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 211,
+        "last_line": 226,
+        "function_sha256": "94a70688caa93ff750d61566a4829d95669d15ceb2fcd777373875fe92219f71",
+        "body_sha256": "c31cb737fd0bdaecfe4176d87b68634560304f1c8c27be4b84cf3ab747e8f851"
+      },
+      {
+        "name": "canonical_descendants",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 231,
+        "last_line": 250,
+        "function_sha256": "df508973e4fb606300cf8575d6e74176aad7d799765adede0acef451a8acb08c",
+        "body_sha256": "985bafe157fcc67f8407bb9a4b2aa5a6070e71acc3b9e7df0d33f1835592de0d"
+      }
+    ],
+    "ExistingCluster_declaration_plus_impl_sha256": "1ea228a55b14d074e468b708f2573e8d41b1f073d4829c89dc5c455695920c65",
+    "ExistingCluster_six_delegation_prepare_methods": [
+      "name",
+      "datadir",
+      "make_reservations",
+      "get_command",
+      "wait_for_init",
+      "prepare"
+    ],
+    "entry_and_main_body": [
+      {
+        "name": "qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 253,
+        "last_line": 258,
+        "function_sha256": "aa91855bf97abe363fc77a10dbef2001c0fc79b4e0aca114f7d302c58a1a422b",
+        "body_sha256": "8dcea71b84d731d6de9e1215a89a6f22195e3057a68c0cd002208d91c5d85b3c"
+      },
+      {
+        "name": "lightning_backup",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 260,
+        "last_line": 811,
+        "function_sha256": "a34017723804500926945056d1feabd00802093313b7cd1591ad6dae847b40dc",
+        "body_sha256": "d49cf5fbd37271d20ede2af449c5027d7a98e6dad68befc245219c8000c540a6"
+      }
+    ],
+    "module": "testing/tests/server/mod.rs",
+    "module_file_sha256": "02143d923de98c3915d3d3bd6bfbc505774eacdf0b67a6f8dc096b931f27075f",
+    "registered_in_both": true,
+    "runtime_credit": false
+  },
+  "three_other_registered_native_tests": [
+    {
+      "literal": "expiry_reorg::expiry_payout_recognizes_independent_fee_only_sponsor",
+      "expected_binary": "ark-testing::server",
+      "tokio_test_and_module_registered": true,
+      "source_file_sha256": "f9a637ea14c2477ee065bf246deae4e2d95e9ee910daec32e424c2bb193548a8",
+      "function": {
+        "name": "expiry_payout_recognizes_independent_fee_only_sponsor",
+        "path": "testing/tests/server/expiry_reorg.rs",
+        "first_line": 455,
+        "last_line": 457,
+        "function_sha256": "bf86ae8871f9eb722ee9c7bfe55e343ff1e3f41c18981a5ee1396b9bee12c4e8",
+        "body_sha256": "c4a97ad1e46bbc36cf780ad701bd252057ce6ac9723bbc11fca83671157444c5"
+      },
+      "unchanged_A_to_B": true,
+      "native_credit": false
+    },
+    {
+      "literal": "expiry_reorg::expiry_payout_recovers_confirmed_fee_only_sponsor_after_restart",
+      "expected_binary": "ark-testing::server",
+      "tokio_test_and_module_registered": true,
+      "source_file_sha256": "f9a637ea14c2477ee065bf246deae4e2d95e9ee910daec32e424c2bb193548a8",
+      "function": {
+        "name": "expiry_payout_recovers_confirmed_fee_only_sponsor_after_restart",
+        "path": "testing/tests/server/expiry_reorg.rs",
+        "first_line": 460,
+        "last_line": 462,
+        "function_sha256": "612f235f8a5aa9bbcab43f855b96a7309d568d9d5037ba2abb6228d1547826af",
+        "body_sha256": "1e1f17260be1ec3738ea8ce1b49b33c363fd32c4e6d9aa66d141651c6a535ca5"
+      },
+      "unchanged_A_to_B": true,
+      "native_credit": false
+    },
+    {
+      "literal": "expiry_internal_partial_terminal::expiry_internal_partial_terminal_replays_actual_claim_after_reorg",
+      "expected_binary": "ark-testing::server",
+      "tokio_test_and_module_registered": true,
+      "source_file_sha256": "06e77fe34029e91f885c93c57c9a74d954c39d58e5fb6e3b66e2acc46cd9ea56",
+      "function": {
+        "name": "expiry_internal_partial_terminal_replays_actual_claim_after_reorg",
+        "path": "testing/tests/server/expiry_internal_partial_terminal.rs",
+        "first_line": 394,
+        "last_line": 396,
+        "function_sha256": "4e91d221c2c5b8941eaa266496b84a7a85420c14e4480f3ebd2ac5e2c86d746d",
+        "body_sha256": "d2f01b3a8e2e4221ee6348edc5efcc3461a7d2de5d5a93c3b4f8fbd0b7ea075b"
+      },
+      "unchanged_A_to_B": true,
+      "native_credit": false
+    }
+  ],
+  "compile_evidence": {
+    "A": {
+      "state": "FAIL",
+      "checks_seconds": 50.533,
+      "exit_code": 101,
+      "error": "E0283 at server/src/watchman/user_claim.rs63:15; ambiguous Bare/Full ServerVtxo ProtocolEncoding",
+      "retained_log_sha256": "70c96749e72dab4a90021ca6aeb9e2e61667c36ebf34db8c409f3ce2b38932d6",
+      "no_original_failure_rewritten": true
+    },
+    "B": {
+      "handoff_state": "CHECKS_RUNNING",
+      "observed_phases_at_review": {
+        "checks": {
+          "state": "FAIL",
+          "seconds": 86.778,
+          "exit_code": 101,
+          "started_at": "2026-10-18T05:50:00.816413+00:00",
+          "ended_at": "2026-10-18T05:51:27.594485+00:00"
+        }
+      },
+      "no_final_build_or_candidate_credit": true,
+      "state_progress_is_not_source_error": true
+    }
+  },
+  "immutable_source_inputs_before_after_unchanged": true,
+  "immutable_source_inputs": {
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11-20261018/source-manifest.json": "7dda6b8d581c7a1603f0c3627f35aafb1843f67f6f6ef545219b691dd60a3979",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11-20261018/source.tar.gz": "470acbd83dab68b07d9063338de13cf4588c06cff286b8442fa8f6b1a5dac9a7",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11-20261018/actual-git-diff.patch": "9d91a8461333d4f6ba4743e7afd8ed959ccfda3860f758079b412de54c3ed264",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11-20261018/build-driver.py": "6873bbfb08e2231e9f8513d1dbc6b61bba7d2cfe00bd72bbe03fedf590b7180e",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11-20261018/source-verification-before-checks.json": "f8186c1fbafb07d8d6b83f740c7e9977b465af1fe076061c50a27d0bfcbb20a9",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11b-20261018/source-manifest.json": "52e74ff47d32c3b5e38cc98ee35c6daf087034900e5c3e91c641874a69dbee87",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11b-20261018/source.tar.gz": "24eab618a167435aeff65df86f3f6c23ed5abf4aac8735aa465cbfb03895ef7d",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11b-20261018/actual-git-diff.patch": "019a99172a3dca8e447ab45e693b76719c8651ea1391c70ceb316a91b45f46b0",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11b-20261018/build-driver.py": "0d56c0697a6f744a526943c5bb7c85a8a1757f6f3a9182cc9e6f040bcd6b4130",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11b-20261018/source-verification-before-checks.json": "79f3e3411fda1479f1c48c62dc3ec078499c6e86a8728e125d44ef7ea3ead6cd"
+  },
+  "future_candidate": {
+    "completed_product_manifest": null,
+    "runtime_metadata_and_ELF_pins": null,
+    "exact_allocation": null,
+    "native_results": null
+  },
+  "limits": [
+    "Both archives fully verified as1968-entry captures; no extraction or source/index/HEAD/target mutation. All fullhashes are actual64hex.",
+    "This is source byte/registration binding, not Rust parse/typecheck or renewed API/product/money review. The annotation matches retained E0283 genesis-type ambiguity; no claim it fixes every build error.",
+    "A original checksFAIL remains retained. B phase state is explicitly temporal and may progress from the RUNNING handoff; observed FAIL is compiler evidence only, never a native case outcome.",
+    "P07 remains exact reviewed abd0 source, prospective default180/96block selected605k oracle, continuing Core/CLN with external12BTC reserve excluded; no P07/P11/FULLML/production qualification.",
+    "No compiler/Cargo, ELF execution/listing, resource/actor operations, SQL/DB/wallet/secret or runtime/native actions. Only archive/source/JSON/hash reads and these new external reports."
+  ]
+}

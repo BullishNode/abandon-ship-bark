@@ -1,0 +1,51 @@
+{
+  "kind": "P07_V11C_EXACT_TWO_LINE_SOURCE_DELTA_INDEPENDENT_PEER",
+  "at": "2026-10-18T05:55:07.744563+00:00",
+  "state": "SOURCE_ACK_NO_ADDITIONAL_CONCRETE_BLOCKER_NO_BUILD_OR_NATIVE_CREDIT",
+  "source_path": "testing/tests/server/qualification_lightning_backup.rs",
+  "protected_owned_before_sha256": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+  "canonical_corrected_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+  "parent_receipt": {
+    "file": "P07-v11c-mechanical-compile-fix-source-ack-parent.json",
+    "sha256": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68"
+  },
+  "verified": {
+    "exact_changed_lines": 2,
+    "whole_file_unique_replacement_only": true,
+    "binding_declaration_line": 534,
+    "BlockRef_hash_field_line": 535,
+    "original_PaymentHash_declaration_line": 299,
+    "original_PaymentHash_settlement_line": 628,
+    "original_PaymentHash_SQL_line": 637,
+    "all13helpers_entry_and_ExistingCluster_hashes_unchanged": {
+      "file_hash": "b7ad4e47fda384bc788034b3e6e97acb31be992e158017839b27e7ec6a1345db",
+      "copy_tree": "22b620cf4bf751b7ed7c958c8e9864d1f8300222c02334dfe90dc8349932b15c",
+      "postgres_tool": "d00182d1511f3f43213c38dd8be0400755c1c90b67242afc8e4acb27f6f13b11",
+      "assert_clean_cluster": "465120c46ea6d367fc8078097ed5b034efd72ce2e705535c9efd29467d017eae",
+      "watchman_coins": "ad54b678330508d0952b711890b192393167e1546a3f84102d781376f885aca9",
+      "wait_watchman_coins": "1d85aaf9bd79b4d0b86138deb2582ec1fbb60779be6ddc0288b35ea373512a38",
+      "mine_continuing_core": "781de25833846102cbccfbcc190f723ac92d343f9386653217406a11ffb06f10",
+      "actual_fee": "4a26752d687c7bcdf30866f8a6ea9f6d0cbdfdf3a899a3196fa89bcf516a55cf",
+      "canonical": "dce96a758b4e176578f95a70b6111455120d38ff19d178255a157e01218d73a4",
+      "rebuilt": "f13842f6ad21ee01d020232a14ffc2e8f35930094e357fa0eb360f59ec8b07ae",
+      "pending_checkpoint": "337f67250a35464eb49d345ab760060486d27923b9354ad62051ebf4e6cb579c",
+      "signed_grant_ancestry": "94a70688caa93ff750d61566a4829d95669d15ceb2fcd777373875fe92219f71",
+      "canonical_descendants": "df508973e4fb606300cf8575d6e74176aad7d799765adede0acef451a8acb08c",
+      "entry": "aa91855bf97abe363fc77a10dbef2001c0fc79b4e0aca114f7d302c58a1a422b",
+      "ExistingCluster_DaemonHelper_impl": "94731d107fe97b8728d1c8f35a6548b620cedc9cdf61a7f1c8a8f6f8906d92e0"
+    },
+    "main_function_sha256": "b475c2b79cac32137dbb41840fa98af2213dc74be4fe1e8a7bd4388d084ed60a",
+    "brace_inclusive_body_sha256": "29508f4a0e30e1b329de4311207cd333fbcced0ca78e9f9a8ce981b50e55b85e",
+    "money_lifecycle_timer_oracle_assertions_unchanged": true,
+    "protected_own_source_unchanged": true
+  },
+  "concrete_blockers": [],
+  "limits": [
+    "Original root E0308/checksFAIL86.778 is preserved as compile-only evidence, not native FAIL/fund-loss or own execution.",
+    "Prior source review did not establish compiler success; this correction resolves its previously missed lexical shadowing.",
+    "No Rust parser/compiler/build/native or actual v11c capture/admission verification performed.",
+    "Root exact artifact/source/helper/metadata/pin/resource and explicit runtime allocation remain separate gates.",
+    "Only this JSON and companion Markdown are new; no source/control/global/index/HEAD/Cargo/runtime mutations or count/ML promotion."
+  ],
+  "companion_markdown_sha256": "42c1294a087b9c91979c69c749bfb5e2fca6951a2979b6f300d761500eb2dc2e"
+}

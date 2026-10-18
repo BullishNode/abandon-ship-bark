@@ -1,0 +1,152 @@
+{
+  "kind": "BATCH47_ADDITIVE_TERMINAL_CURATION",
+  "at": "2026-10-18T06:20:30.962017+00:00",
+  "state": "THREE_NATIVE_PASS_FORMAL_POSTFLIGHT_VERIFIED_APPEND_ONLY_COMPLETE",
+  "baseline": {
+    "aggregate": {
+      "executions": 245,
+      "PASS": 230,
+      "FAIL": 15,
+      "unique_binary_test_pairs": 228,
+      "nextest_invocations": 218,
+      "native": 233,
+      "component": 12,
+      "coverage_rows": 456
+    },
+    "coverage_sha256": "c297a23c2c9c643659c7549747cd30f18f469cb93bb00fa9eb6e870c44807083",
+    "coverage_bytes": 333206,
+    "coverage_rows": 456,
+    "FINDINGS_sha256": "ab500616306333820124a71feb1d9c02010ed2aa7226688368c762ea9c4576f8",
+    "STATUS_sha256": "935c0e4171416dddfaecc300bfe7832a182eb49ea37ab58c77bcae89841b3e07"
+  },
+  "after": {
+    "aggregate": {
+      "executions": 248,
+      "PASS": 233,
+      "FAIL": 15,
+      "unique_binary_test_pairs": 231,
+      "nextest_invocations": 221,
+      "native": 236,
+      "component": 12,
+      "coverage_rows": 459
+    },
+    "coverage_sha256": "1e55694d41b337e8008ed68701a2f11ee1f1e7f07f51a1f3464dd5f404102d24",
+    "coverage_bytes": 336702,
+    "coverage_rows": 459,
+    "FINDINGS_sha256": "500c49c085449416724631f38c63205f30571bae18ad441533c709bdca910238",
+    "STATUS_sha256": "d0871b259a9ba002e58c4edea56b53ce5c046bcbd8da94942ae3c6134b5a9981",
+    "checkpoint_sha256": "a9e62ff1fc77018f77ddda5bfe4a420bd7cbe971bc841386cdec11bf902c5a3f"
+  },
+  "append": {
+    "case_ids": [
+      "FT-BARKD-044",
+      "FT-BARKD-045",
+      "FT-BARKD-046"
+    ],
+    "rows": [
+      {
+        "case_id": "FT-BARKD-044",
+        "requirement": "Actual daemon unilateral-exit progression to Claimable/Claimed; complete fresh recovery returns exact original ID Exited. No final claimed-payment/drain/Core6/full conservation assertion.",
+        "layer_network": "native barkd REST/Core/PostgreSQL regtest",
+        "automated_test_name": "ark-testing::barkd recovery::recovered_wallet_skips_exited_vtxo",
+        "latest_result": "PASS",
+        "tested_revision": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+        "evidence_path": "batch47-ordinary-recovery-three-v10-receipt.json; batch47-backend-postflight.json; batch47-coverage-append.json",
+        "limitation": "Original actors remain alive in fixture; separate same-seed recovery DBs. No absent-original/cold-backup/defaultdaemon/payment/fullML/newerfix credit. No independent final payment, Core 6 or full financial conservation; current V11/P07 qualification excluded.",
+        "owner": "testing-track",
+        "entry_kind": "executed_named_test",
+        "classification": "ordinary_native_exited_classification",
+        "inspected_revision": "9d85cfa3b507ac5d0771b228fc2125d0fcbe64ae9b4cad9407e06344dbb2373b",
+        "success_oracle": "Actual daemon unilateral-exit progression to Claimable/Claimed; complete fresh recovery returns exact original ID Exited. No final claimed-payment/drain/Core6/full conservation assertion. Actual PASS 31.134 seconds; run fb976354-1087-43c5-bbc9-a84910b828a6."
+      },
+      {
+        "case_id": "FT-BARKD-045",
+        "requirement": "With server xpub recovery deliberately disabled, gap50 complete list empty and gap100 complete list contains exact actual received coin ID. No Spendable-state/recovered-payment proof.",
+        "layer_network": "native barkd REST/Core/PostgreSQL regtest",
+        "automated_test_name": "ark-testing::barkd recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+        "latest_result": "PASS",
+        "tested_revision": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+        "evidence_path": "batch47-ordinary-recovery-three-v10-receipt.json; batch47-backend-postflight.json; batch47-coverage-append.json",
+        "limitation": "Original actors remain alive in fixture; separate same-seed recovery DBs. No absent-original/cold-backup/defaultdaemon/payment/fullML/newerfix credit. No independent final payment, Core 6 or full financial conservation; current V11/P07 qualification excluded.",
+        "owner": "testing-track",
+        "entry_kind": "executed_named_test",
+        "classification": "ordinary_native_recovery_discovery",
+        "inspected_revision": "da4c9d33959ffb3d922b2f5b202766f4f66d521ffae81821283f15c236aba705",
+        "success_oracle": "With server xpub recovery deliberately disabled, gap50 complete list empty and gap100 complete list contains exact actual received coin ID. No Spendable-state/recovered-payment proof. Actual PASS 31.595 seconds; run c1529e13-32bb-48a5-9a66-e050ad1a05dc."
+      },
+      {
+        "case_id": "FT-BARKD-046",
+        "requirement": "Standard test server xpub scan discovers exact actual received coin beyond local gap50; next address differs from recovered old address. No exact counter index/recovered-payment/Spendable-state proof.",
+        "layer_network": "native barkd REST/Core/PostgreSQL regtest",
+        "automated_test_name": "ark-testing::barkd recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+        "latest_result": "PASS",
+        "tested_revision": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+        "evidence_path": "batch47-ordinary-recovery-three-v10-receipt.json; batch47-backend-postflight.json; batch47-coverage-append.json",
+        "limitation": "Original actors remain alive in fixture; separate same-seed recovery DBs. No absent-original/cold-backup/defaultdaemon/payment/fullML/newerfix credit. No independent final payment, Core 6 or full financial conservation; current V11/P07 qualification excluded.",
+        "owner": "testing-track",
+        "entry_kind": "executed_named_test",
+        "classification": "ordinary_native_recovery_discovery",
+        "inspected_revision": "3d0cbe7a1f5af1c312bb94fddfa099e6fe763ca29262ae9e516d092b32626b3c",
+        "success_oracle": "Standard test server xpub scan discovers exact actual received coin beyond local gap50; next address differs from recovered old address. No exact counter index/recovered-payment/Spendable-state proof. Actual PASS 29.929 seconds; run 51739b82-e2c1-4104-b904-869c30fd56ef."
+      }
+    ],
+    "bytes": 3496,
+    "sha256": "25c654ffeeb06f6dde2dbde214d53563bd1998ebfb3216cd37136652a526c518",
+    "prior_456_row_byte_prefix_identical": true,
+    "prior_parsed_rows_identical": true,
+    "all_LF": true,
+    "prior_literal_FAIL_rows_preserved": 14,
+    "prior_aggregate_failed_executions_preserved": 15,
+    "failure_count_note": "Aggregate historical executions are not one-to-one with mixed CSV rows; the exact baseline prefix preserves all prior outcomes.",
+    "FINDINGS_prior_byte_prefix_identical": true,
+    "new_unique_pairs": 3,
+    "global_prior_curated_PASS_FAIL_unique_pairs": 228,
+    "global_after_curated_PASS_FAIL_unique_pairs": 231
+  },
+  "evidence": {
+    "initial_native_receipt": {
+      "path": "batch47-ordinary-recovery-three-v10-receipt.json",
+      "sha256": "586ea5bfbe46a484f49459f4c8343e73dbe8d6ef35f008288c540b87f636365c",
+      "pending_at_creation_bytes_unchanged": true
+    },
+    "formal_postflight": {
+      "path": "batch47-backend-postflight.json",
+      "sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3"
+    },
+    "conditional_plan_sha256": "8f7d076ffa3d43974a7fff140d99cc4229ea7103af1fcefd08296a5cb98fa968",
+    "source_proposal_sha256": "9ae492d696dba9d010ca4873f1cc3b8720197d2dd6429f42801dd138d0087c0d",
+    "source_peer_sha256": "cdb42e928acdaab063f6191747b7420dc235b88219a6f7c7b3d7c8f2b0f9545e",
+    "final_control_peer_sha256": "2b542dd236fba12cb24e19abb09dce26bac67b80f9869f2823b86ce852af4440",
+    "frozen_export_sha256": "28c86017c86d2e41d30c6fe2087dd3519f5e7ac0e6b76cab1f4e0d59e85870a6"
+  },
+  "source_artifacts_and_admission": {
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "bundle_manifest_sha256": "db58ea456c1c5e545496514274e62e9d45436ec0503ae3a5016c454ba3b8352c",
+    "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+    "immutable_metadata_sha256": "8c74608d70ce54ccb0d0737ddadd0014246231bfa7c03149f19fa818df1731f5",
+    "root_allocation_sha256": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+    "parent_admission_sha256": "96e09f0ae64d6361400bdd5be7a133e76de7b15c161abee42c6a6afc0b8fe1ed",
+    "final_control_peer_sha256": "2b542dd236fba12cb24e19abb09dce26bac67b80f9869f2823b86ce852af4440",
+    "preparation_sha256": "5c5e0cbd9967e4f552a5544877d84a14e7adf6521c19cb669f780b1566abd81b",
+    "exit_wait_helper_sha256": "3b78424c4d250b1271552fbf18979f31128951f05ffa16bc03562f68ccd6d18f",
+    "exit_wait_function_sha256": "511a6ff867a6a517fea002991dcac43e6e069177c4ab695f886d825d00d5ef8e",
+    "strict_partition_helper_sha256": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691"
+  },
+  "actual_native_seconds": 92.658,
+  "parent_terminal_session": 28414,
+  "parent_terminal_exit_code": 0,
+  "postflight": {
+    "pins": 17,
+    "frozen_paths": 15,
+    "known_group_SID_members": 0,
+    "scoped_actors": 0,
+    "other_root_lanes_excluded": true
+  },
+  "limits": [
+    "Exited classification and discovery/window/address-nonreuse only. Original actors alive; no recovered payment, full balances, Core6, full financial reconstruction, backup, fullML or production credit.",
+    "Immutable old v10 source only; no latest V11 fix or P07 execution/result credit.",
+    "No existing receipts, plans, reports or source changed; rolling CSV/FINDINGS/STATUS only updated under explicit lease.",
+    "Frozen 42-file control export and eighteenth checkpoint unchanged."
+  ]
+}

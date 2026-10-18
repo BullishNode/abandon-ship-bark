@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "state": "CLOSED_PENDING_SCAFFOLD_SOURCE_ONLY_NOT_ALLOCATED",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10",
+  "candidate_ready": false,
+  "artifact_readiness_verified": false,
+  "execution_authorized": false,
+  "actual_new_root_allocation": null,
+  "parent_launch_admission": "ABSENT",
+  "pending_marker": "PRESENT",
+  "source_proposal_sha256": "9ae492d696dba9d010ca4873f1cc3b8720197d2dd6429f42801dd138d0087c0d",
+  "exact_pairs": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_skips_exited_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub"
+    ]
+  ],
+  "proposed_v10_source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "proposed_v10_runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+  "proposed_v10_native_barkd_sha256": "40ee2c9257d2fb50f85663895b23c814b9cc321e9304e043bd38d254ab7633fe",
+  "copied_proposed_historical_pinlist_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+  "historical_pin_count": 17,
+  "static_file_hashes": {
+    "case01/nextest.toml": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+    "case02/nextest.toml": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+    "case03/nextest.toml": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2",
+    "fresh-listings.py": "15ecf12ddf0953b31336f34eed7aaa39ef33059ab1d91ed7ec18f067c0ad23d8",
+    "launch-authorization-pending.json": "1ce79e2db63494215c8e70d4fd746a4424b3ae4071a8e6ac57ff720e88367f2e",
+    "preflight-static.py": "2bd4c7852d7cdf017f0b38657130d9694ec01fa01073c235a6bf2763c8e32fb3",
+    "preflight.sh": "585b69042e8b4969ed4a36424191b160604e00d65988884a2dd9b588edc5880b",
+    "proposed-v10-pins.sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+    "run.sh": "3299f6cad70cfa4dcb420dce6f198256530862a79add124249cc7d2bd40ecb7a",
+    "selection-proof.json": "38ec6f61e3f500754c24546edb5fb93855fbd64cf881b9d23cfb771ddbd35948",
+    "server-cohort.py": "bba4dc3d944f28b59d0a58cce6dd56d6dcba8c71e7d138977698563b36ddabd6"
+  },
+  "byte_count_before_receipt": 26484,
+  "validation": {
+    "actual_cached_Nix_before_control_edits": "PASS IN_NIX_SHELL=impure/Rust1.90.0 read-only echo/version only",
+    "Python_AST": 3,
+    "TOML": 3,
+    "shell_order_source_check": 2,
+    "control_or_shell_bodies_executed": 0,
+    "new_listing": 0,
+    "preflight": 0,
+    "Cargo": 0,
+    "resources_or_actors_probed": 0,
+    "native_tests": 0,
+    "closure": "All3 entrypoints unconditional CLOSEDline19 before probes/list/write/Popen, regardless flags. No actual allocation/admission file created."
+  },
+  "mandatory_before_finalization": [
+    "Independent exact3 source/oracle peer ACK and actual current immutablev10 body/helper hashes/pin revalidation, or choose newcandidate and keep closed.",
+    "Actual root newallocation packet and its real cases/schema/state/owner/bounds/source; historical45 allocation never copied into root-allocation.json.",
+    "Actual authoritative candidate14core/otherprovidedpinset/environment/versions metadata, full sourcearchive and exact3body/helper/module proof.17row historicalpinfile includes3unusedCLN entries as provenance only; these cases do not requireCLN.",
+    "Replace unconditional CLOSEDstop only with peer-reviewed actual schema/hash/parent guard; pendingmarker stays until parent newlisting/resources/versions/hashfreeze/admission.",
+    "Default180/retry0/serial1/firstFAIL/global2; no retries or alreadyexecuted names. Originalactors remain alive in selectedsources; sourceoracle limits remain as proposal."
+  ],
+  "untouched": "All writes confined to NEW47 controls and external receipt; protected46+historical45+P07 hashes independently checked against frozen prior references. No framework redesign."
+}

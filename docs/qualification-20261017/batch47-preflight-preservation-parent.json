@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-18T05:57:14.664310+00:00",
+  "state": "READ_ONLY_PRESERVATION_PASS_NOT_NATIVE_ADMISSION",
+  "own16_source_hashes": {
+    "testing/tests/bark_sdk/qualification_protection_isolation.rs": "a6309348bd5661fd636949c6c321e116d3e447aed8e20132e442596346f11e1e",
+    "testing/tests/server/qualification_cold_backup.rs": "ced8c436e9106e68bcd916a640aee6ef1007fb7584d2c09f0114b71902009374",
+    "testing/tests/server/qualification_conflict_reorg.rs": "ef70f33b248620c50fd01b68126db5aca720c4184ccb1f31c85b8d884f7e113a",
+    "testing/tests/server/qualification_failed_swap.rs": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+    "testing/tests/server/qualification_offboard_restart.rs": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+    "testing/tests/server/qualification_restore.rs": "050535e844320b0f99f6d436fb05bb0e41872fc5f9969932d483b0d1a38dfc21",
+    "testing/tests/bark/create.rs": "34f9761979b3cded559f7d9be927f283aaab9ce8e6e91177d778148698852fe0",
+    "testing/tests/bark/fees.rs": "c88d3058c782e3c9d5a54099896a8604a246ae1a03b1295b41c8531c19e7983d",
+    "testing/tests/bark/movement.rs": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+    "testing/tests/bark/offboard.rs": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+    "testing/tests/bark/onchain.rs": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+    "testing/tests/bark_sdk/exit.rs": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+    "testing/tests/bark_sdk/lightning.rs": "3fef86397a648c4b11ef92f2f0c252b870e9ec766cc1ac14ff96075347964c88",
+    "testing/tests/barkd/boards.rs": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+    "testing/tests/barkd/recovery.rs": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+    "testing/tests/server/qualification_lightning_backup.rs": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695"
+  },
+  "coverage_sha256": "c297a23c2c9c643659c7549747cd30f18f469cb93bb00fa9eb6e870c44807083",
+  "frozen_report18_manifest_sha256": "80e2c498bb7e5cc3c6f9cb8f60bcc2555a729f432f5e7c885dee7efe6d5913ed",
+  "root_allocation_sha256": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+  "scope": "New JSON only; no source/index/HEAD/global counts/controls/probes/listing/native/Cargo changes. Current rootP07mechanical6051 is distinct from protectedownabd0; no substitution."
+}

@@ -1,0 +1,9 @@
+Both frozen1968-entry source archives pass full source-manifest/member-set/resolved-content validation, including AGENTS.md→CLAUDE.md. A source7dda6b8d/archive470acbd8 and B source52e74ff4/archive24eab618 both bind HEAD0496e057; full hashes and unchanged source-input receipts are in the companion JSON.
+
+The complete A→B source difference is exactly one annotation in `server/src/watchman/user_claim.rs`: `let linked=t.query(` becomes `let linked: Vec<ServerVtxo>=t.query(`. No other source member, test body, money/lifecycle/assertion/timer or module bytes changed. This matches the retained compiler's Bare/Full ServerVtxo ProtocolEncoding ambiguity; it does not establish a successful rebuild.
+
+P07 source is exact reviewed v2abd0 in both archives. All13 helper function/body hashes, six ExistingCluster methods/whole implementation, entry/main body and actual server-module registration are bound. Both independent-sponsor test wrappers and the actual-claim reorg/replay test are genuine tokio::test functions under registered expiry_reorg/expiry_internal_partial_terminal modules, unchanged between A/B. This proves source registration, without fresh listing or runtime credit.
+
+A's actual checksFAIL50.533s/exit101/E0283 at user_claim.rs63 remains preserved. B was RUNNING at handoff but its phase receipt now records checksFAIL86.778s/exit101 at inspection. These temporal build observations are separate from stable source identity; no completed candidate/product/native PASS or admission is claimed. Original failures are untouched.
+
+Only these new external JSON/Markdown reports were written. No source/index/HEAD/target/Cargo/build/listing/ELF/resource/actor/SQL/DB/wallet/secret/native operations occurred. Parent requires actual complete build/candidate/pins/allocation before any runtime; P07 remains uncompiled/unrun, with its bounded selected605k/continuing-CLN limits unchanged.

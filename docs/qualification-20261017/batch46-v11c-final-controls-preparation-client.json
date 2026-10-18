@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "state": "FINAL_SOURCE_CONTROLS_PARENT_FRESH_GATES_AND_LAUNCH_ADMISSION_PENDING",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c",
+  "PREPARATION_sha256": "31e45be457b4a84f34d6547db1d96b2710c79b18078bb62bac42bec01dc9c2c4",
+  "root_allocation_sha256": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+  "47postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+  "static_freeze": {
+    "selection-proof.json": "e22e1dc09c6a452ef8de8b3c8744803830b2fd2eb70ca73fd0157014f4c75ad4",
+    "root-allocation.json": "9fff36edc955bc6159dea69d36ea27b1ccdd6bee830778c766c5c42fe363a5c2",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "artifact-proof.json": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b",
+    "source-proof.json": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207",
+    "mechanical-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "mechanical-peer.json": "1966faf6750198105f4bde6b8eef28b8fd0182049cccf3ffff10617b3abf81af",
+    "batch47-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "server-cohort.py": "d1abad83e376558d1f9eaee1e5974cf079fe48352d744cd361dc7ac178d6e095",
+    "preflight-static.py": "1d88d3028b697ccdfb4257fe67dc659a564a03dd2b51c238f4db71af72b62dd4",
+    "fresh-listings.py": "29cc52af68df6ee535a9ec888c41e58610805ff0f9d07fcfcc4ff64f75ac1717",
+    "preflight.sh": "f7e59161ed9624111c3a80d938d8ef1aaa8cede48c6075817fc19910d444fafd",
+    "run.sh": "4aa657c294e1498c927534938eac793e2fecc6ecad4dd0c35036a26696ca126f",
+    "case01/nextest.toml": "8ccc36a4092f3a70bb1a0790640f620ed11cc38e07144a44e9d98b8c29be3cf2"
+  },
+  "required_parent_freeze_count": 16,
+  "parent_commands": {
+    "preflight": [
+      "docker",
+      "exec",
+      "-u",
+      "1000:1000",
+      "abandon-fresh-runtime-20261017",
+      "bash",
+      "/fresh-cache/testing-track-20261017/batch46-lightning-physical-backup-v11c/preflight.sh"
+    ],
+    "launch_only_after_finalpeer_freshgates_16hash_admission_and_marker_removal": [
+      "docker",
+      "exec",
+      "-u",
+      "1000:1000",
+      "abandon-fresh-runtime-20261017",
+      "bash",
+      "/fresh-cache/testing-track-20261017/batch46-lightning-physical-backup-v11c/run.sh"
+    ]
+  },
+  "validation": {
+    "cached_Nix_before_edits": "impure/Rust1.90.0",
+    "AST": 3,
+    "bash_n": 2,
+    "TOML": 1,
+    "17pin+P07source_binding": "from exact ac69proof and actual root9fff, fresh actual guard checks parent-owned",
+    "PGcontroldata_readonly_hash": "6b8304e7827e26ff3e5f00661ad00da51ee5329c032c19b2660ccc9fcb8a2d63",
+    "control_or_shell_bodies_executed": 0,
+    "preflight": 0,
+    "listing": 0,
+    "resource_actor_probe": 0,
+    "native": 0,
+    "Cargo": 0
+  },
+  "old46_v15_all9_unchanged": true,
+  "native_guard": "47formalPASS/hash/schema verified and additionally requires parent separate16hash admission+removedmarker; markerPRESENT/admissionABSENT at preparation",
+  "no_execution_credit": true
+}

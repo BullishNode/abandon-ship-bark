@@ -1,0 +1,32 @@
+{
+  "binary": "ark-testing::barkd",
+  "name": "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+  "run_id": "51739b82-e2c1-4104-b904-869c30fd56ef",
+  "result": "PASS",
+  "native_seconds": 29.929,
+  "wall_seconds": 31.048,
+  "exit_code": 0,
+  "resource_error": null,
+  "fresh_selected": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub"
+    ]
+  ],
+  "unignored": true,
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+  "target_body_sha256": "3d0cbe7a1f5af1c312bb94fddfa099e6fe763ca29262ae9e516d092b32626b3c",
+  "target_function_sha256": "9b5ea48fc57fd4e62121498f3a0b0802fe13c1d1e8922640b54467a9f47d13f5",
+  "native_safe_PASS_line": "PASS [  29.929s] (1/1) ark-testing::barkd recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+  "native_safe_summary": "Summary [  29.932s] 1 test run: 1 passed, 656 skipped",
+  "native_assertion_scope": "Standard test server xpub scan discovers exact actual received coin beyond local gap50; next address differs from recovered old address. No exact counter index/recovered-payment/Spendable-state proof.",
+  "limits": "Original actors remain alive in fixture; separate same-seed recovery DBs. No absent-original/cold-backup/defaultdaemon/payment/fullML/newerfix credit.",
+  "kind": "SAFE_NATIVE_SUMMARY_FROM_FROZEN_SANITIZED_POSTFLIGHT",
+  "native_nextest_log_sha256_only": "ffbf9b2443dbdca096c3bc8d4bfcccbce20d9cc020538a4dd5d531d12d3d742b",
+  "raw_log_included": false,
+  "source_postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+  "scope": "Explicit safe postflight projection only; no raw native/wallet log opened/copied by exporter. One exact selected barkd test, other metadata binaries filtered;656 skipped are not native executions."
+}

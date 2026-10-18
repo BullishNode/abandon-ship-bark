@@ -1,0 +1,104 @@
+{
+  "scope": "SOURCE_ONLY_SINGLE_P07_OFFLINE_POSTFLIGHT_RECONCILIATION_PLAN_NOT_EXECUTED",
+  "at": "2026-10-18T05:45:39.838169+00:00",
+  "source": {
+    "sha256": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+    "aggregate_patch_sha256": "3f8ffa11f01003c154f90303da4ca2c743c72e8e7fcf5750d85e4f27bb885931",
+    "inspected_canonical_HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+    "module_registered": true,
+    "literal": "qualification_lightning_backup::qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+    "binary": "ark-testing::server",
+    "compiler_and_runtime_credit": false
+  },
+  "future_runtime": {
+    "allocation": null,
+    "candidate_source_archive_bundle_metadata": null,
+    "ELF_and_support_pins": null,
+    "versions_environment": null,
+    "case_directory": null,
+    "run_id": null,
+    "native_outcome": null,
+    "process_group_SID": null
+  },
+  "gates": [
+    "Await exact reviewed candidate/allocation, parent terminal outcome and root authorization of the specific retained dataset. This plan does not authorize execution or current data reads.",
+    "Before retained Core reads, verify actual-container exact recorded group/SID and scoped argv/cwd/FD absence for both mount paths. A tool session is not a PID; unknown historical groups require explicit coordinator scoped-absence-only disposition and remain UNKNOWN. Never signal/restart actors.",
+    "Hash allowed Core xor.dat/blk*.dat/debug.log, safe public receipt, safe terminal/provenance receipts and decoder before/after; do not open client/server/watch/PG databases, backup identities, mnemonic/config/private manifests or full native logs."
+  ],
+  "public_artifacts": [
+    {
+      "relative_path": "lightning-backup-public-receipt.json",
+      "source_lines": "787-805",
+      "emission": "Only after money/chain/ledger/recovery assertions, before final stop/cleanup. It may be absent/truncated on failure, and presence alone is not terminal PASS.",
+      "fields": "source_sha256; source/grants VtxoIds; attempt/subscription; prebackup_height/hash; customer_root/pool_root/sponsors; payout; joint_parent_block; recovery_txid; actual fee/value/count summaries; private_manifest_sha256 hash only."
+    },
+    {
+      "relative_path": "bitcoind/regtest/blocks/{xor.dat,blk*.dat}",
+      "purpose": "Pure offline canonical signed transaction/prevout/header/Merkle reconstruction; preserve all retained orphan branches separately."
+    },
+    {
+      "relative_path": "bitcoind/regtest/debug.log",
+      "purpose": "Hash whole retained file; read only bounded final UpdateTip matching lines to identify actual final tip, not the full log body."
+    },
+    {
+      "relative_path": "parent-provided terminal/provenance/postflight projections",
+      "purpose": "Exact runID, selected binary/name, actual outcome/times/source pins and owned groups. No raw nextest/CLI log ingestion."
+    }
+  ],
+  "reconciliation_steps": [
+    {
+      "step": 1,
+      "scope": "Identity and canonical chain",
+      "action": "Require actual terminal receipt plus exact future candidate/source pin. Parse valid public receipt only if present; verify source_sha256 matches captured abd0 body. Decode retained blocks with proven pure decoder; validate all transaction Merkle roots, final-tip header ancestry, canonical uniqueness and complete prevouts. Actual confirmations are tip-height+1, never presumed6."
+    },
+    {
+      "step": 2,
+      "scope": "Explicit selected four-output boundary",
+      "action": "From public customer_root derive actual board and its exact200000 input; from public pool_root derive actual pool funding and its exact205000 input. Add the two explicit sponsor100000 outpoints. Require four distinct canonical funding points totaling605000. Receipt amounts are claims until corroborated by actual prevouts. Exclude all controller funding change/fees before these boundary points."
+    },
+    {
+      "step": 3,
+      "scope": "Joint refund and original grant points",
+      "action": "Use public payout.txid as parent locator, verify exact99000 output at payout.vout. Vtxo::id equals Vtxo::point encoded as OutPoint (lib/src/vtxo/mod.rs475-487,193-214): public two grant IDs therefore locate the exact two consumed grant points, totaling90000. Follow their actual canonical ancestry to public pool_root and the remaining100000 parent input to customer_root. Source VtxoId can remain offchain: do not require it itself canonical when a valid earlier backing is paid."
+    },
+    {
+      "step": 4,
+      "scope": "Signed bytes and actual canonical fee child",
+      "action": "Recover full signed transactions from blocks and record signed-byte/witness hashes without raw witness stacks. Verify V3 parent actual fee0, actual inputs190000, one99000 output and other parent value91000. Select the unique actual canonical transaction spending its P2A, require same canonical block and measure actual prevout fee. Check actual parent inclusion against public joint_parent_block; do not pick latest attempted child, assume fresh sponsor input, or ignore confirmed child-change reuse."
+    },
+    {
+      "step": 5,
+      "scope": "Full seed-drain cut",
+      "action": "Use public recovery_txid; require all actual inputs exactly the original board ordinary-change points plus the public99000 payout, with duplicate exclusion. Resolve actual values/scripts; inspect two-element witness structure/P2WPKH prevouts. Require one actual output, measured positive miner fee, six canonical confirmations only when actual depth supports it, and all consumed points spent by that drain. Corroborate customer200000 = final drain output + measured board fee +1000 customer charge + measured drain fee."
+    },
+    {
+      "step": 6,
+      "scope": "Complete finite selected descendant graph",
+      "action": "Starting only at the four declared boundary points, follow every connected canonical transaction/output in chain order, including board/pool/progression/grant/refund children, confirmed change reuse, drain and unused sponsors. Reject unknown extra inputs instead of silently expanding the budget. Check no omitted canonical descendant, duplicate canonical spend or double-counted internal value; reconcile605000 = actual positive terminal leaves + all actual graph miner fees. Separate final drain from noncustomer retained leaves; custody is not inferred from their scripts. Compare public fee/count summaries to measurements; no hardcoded fee totals beyond source amounts."
+    }
+  ],
+  "native_assertion_only_bindings": [
+    "The public receipt contains no independently signed fallback registration/mailbox/key/SPK capsule. Actual payout point/script is recoverable, but rightful sender identity, distinct recipient destination and no recipient payment remain native assertions; Core alone cannot identify an unpublished recipient script.",
+    "Public grant point IDs bind txid/vout, not witness bytes. Canonical signed bytes can be recovered/hash-checked, but no independent expected signed-grant DB ancestry/raw-child receipt is exported; exact DB journal/ancestry/parent persistence equality remains native.",
+    "Core can expose actual CLTV/CSV witness-script structure and inclusion heights. Matching the intended exact policy/server key and full grant maturation state remains native/source-bound without a public signed VTXO capsule.",
+    "Orderly clean stop, physical whole-PG/WAL copy equality, both original clients absent, restored journal/registrations/checkpoint, seed/genesis identity and wallet-control assertions remain native evidence. Only numeric summaries/hash references are public; do not read private_manifest_sha256 target.",
+    "Configured sweep and native wallet-admin ownership classify operator leaves in the fixture. Offline Core reports noncustomer retained outputs, not independent BDK/operator private-key custody or solvency."
+  ],
+  "failure_safe_disposition": {
+    "missing_or_invalid_public_receipt": "Preserve native original outcome and all raw artifacts. Report artifact ABSENT/INVALID and money identity bindings UNKNOWN. No receipt is expected before line787; do not infer lost funds or success from absence.",
+    "valid_receipt_but_terminal_failure": "Treat receipt as the reached assertion checkpoint only; cleanup or later failure still keeps native FAIL. Final public emission precedes stop calls at808-810.",
+    "incomplete_graph_or_missing_tip_or_unknown_root_binding": "Report PARTIAL/UNKNOWN with exact missing input/depth/binding. Do not select a customer transaction by amount alone, invent a full605k equation or grant-point identity, fabricate SQL state or launch a retry. Parent may supply an explicitly sanitized public locator projection; otherwise retain the gap.",
+    "mempool": "Pure blk/xor audit proves only retained canonical chain. The fixture live mempool-no-continuation assertion is native-only; no exhaustive unconfirmed absence claim from block files.",
+    "before_any_retry": "Deliver observed terminal/absence/hash/partial accounting evidence for coordinator disposition. This plan does not authorize a retry or mutate any original failure."
+  },
+  "existing_decoder_reuse": {
+    "pure_base": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py",
+    "pure_base_sha256": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+    "method": "Reuse only digest/compact-int/transaction parsing and reviewed header/Merkle logic in a new exact-scope small script after allocation. Never execute another-batch hardcoded entrypoint unchanged. No new framework."
+  },
+  "excluded_scope": [
+    "Continuing internal CLN12BTC setup reserve is outside selected605k; no reserve-unchanged/channel/HSM/custody audit.",
+    "No full P07/P11/ML/production, unclean/PITR/cross-version/disaster/default-flow qualification.",
+    "No runtime/list/Cargo/services/DB/secret reads or fixture/export changes in preparing this plan."
+  ]
+}

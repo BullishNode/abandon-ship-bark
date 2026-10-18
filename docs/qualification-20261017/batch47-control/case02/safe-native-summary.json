@@ -1,0 +1,32 @@
+{
+  "binary": "ark-testing::barkd",
+  "name": "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+  "run_id": "c1529e13-32bb-48a5-9a66-e050ad1a05dc",
+  "result": "PASS",
+  "native_seconds": 31.595,
+  "wall_seconds": 32.552,
+  "exit_code": 0,
+  "resource_error": null,
+  "fresh_selected": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit"
+    ]
+  ],
+  "unignored": true,
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+  "target_body_sha256": "da4c9d33959ffb3d922b2f5b202766f4f66d521ffae81821283f15c236aba705",
+  "target_function_sha256": "9900105e71d85b6f14fd4cc33c6dea2dd0355e18a7c75777a5656e720681ec81",
+  "native_safe_PASS_line": "PASS [  31.595s] (1/1) ark-testing::barkd recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+  "native_safe_summary": "Summary [  31.597s] 1 test run: 1 passed, 656 skipped",
+  "native_assertion_scope": "With server xpub recovery deliberately disabled, gap50 complete list empty and gap100 complete list contains exact actual received coin ID. No Spendable-state/recovered-payment proof.",
+  "limits": "Original actors remain alive in fixture; separate same-seed recovery DBs. No absent-original/cold-backup/defaultdaemon/payment/fullML/newerfix credit.",
+  "kind": "SAFE_NATIVE_SUMMARY_FROM_FROZEN_SANITIZED_POSTFLIGHT",
+  "native_nextest_log_sha256_only": "91b4a1eb64ff15235b7c75f13d40f7d52ef5bab6086c54d01813e0823c96ef2a",
+  "raw_log_included": false,
+  "source_postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+  "scope": "Explicit safe postflight projection only; no raw native/wallet log opened/copied by exporter. One exact selected barkd test, other metadata binaries filtered;656 skipped are not native executions."
+}

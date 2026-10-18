@@ -1,0 +1,459 @@
+{
+  "kind": "SAFE_BATCH47_CONTROL_EXPORT_FROZEN_NOT_PUBLISHED",
+  "at": "2026-10-18T06:14:33.318642+00:00",
+  "exports": [
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/selection-proof.json",
+      "source_sha256": "fa2f13e8561734e9fcdaf95bed20498436c667e774a400f70c32b0fd8ecdf31c",
+      "destination": "selection-proof.json",
+      "destination_sha256": "fa2f13e8561734e9fcdaf95bed20498436c667e774a400f70c32b0fd8ecdf31c",
+      "bytes": 11565,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/root-allocation.json",
+      "source_sha256": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+      "destination": "root-allocation.json",
+      "destination_sha256": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+      "bytes": 2199,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/runtime-pins.sha256",
+      "source_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+      "destination": "runtime-pins.sha256",
+      "destination_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+      "bytes": 2248,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/source-peer.json",
+      "source_sha256": "cdb42e928acdaab063f6191747b7420dc235b88219a6f7c7b3d7c8f2b0f9545e",
+      "destination": "source-peer.json",
+      "destination_sha256": "cdb42e928acdaab063f6191747b7420dc235b88219a6f7c7b3d7c8f2b0f9545e",
+      "bytes": 5618,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/immutable-source-proof.json",
+      "source_sha256": "0df3cd07d8756f5586d84bc92e66134779640356acb20417ea1c577865a65703",
+      "destination": "immutable-source-proof.json",
+      "destination_sha256": "0df3cd07d8756f5586d84bc92e66134779640356acb20417ea1c577865a65703",
+      "bytes": 13480,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/server-cohort.py",
+      "source_sha256": "74500c9b2ee1c2c328aa1c743222aae9533288c1c90b3c8c6a68dd5a8eaeb83d",
+      "destination": "server-cohort.py",
+      "destination_sha256": "74500c9b2ee1c2c328aa1c743222aae9533288c1c90b3c8c6a68dd5a8eaeb83d",
+      "bytes": 13911,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preflight-static.py",
+      "source_sha256": "d38c2d1a501b437f89a1b0167aa3ecb6e28710a7391b11ab485a1568db6e8c3b",
+      "destination": "preflight-static.py",
+      "destination_sha256": "d38c2d1a501b437f89a1b0167aa3ecb6e28710a7391b11ab485a1568db6e8c3b",
+      "bytes": 6813,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/fresh-listings.py",
+      "source_sha256": "d899735ed1b335b0d142199988a0b918fa5cc96ce815c4b1f69b90f97955b796",
+      "destination": "fresh-listings.py",
+      "destination_sha256": "d899735ed1b335b0d142199988a0b918fa5cc96ce815c4b1f69b90f97955b796",
+      "bytes": 7111,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preflight.sh",
+      "source_sha256": "b2e933abfb243a23030730ba745a30975707e5f77cb0bb93143ea580548e942f",
+      "destination": "preflight.sh",
+      "destination_sha256": "b2e933abfb243a23030730ba745a30975707e5f77cb0bb93143ea580548e942f",
+      "bytes": 2096,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/run.sh",
+      "source_sha256": "498a7835342f5994a29b1e2a9ff95b33f1110b3f2b1c47507c30bff5ece6a58e",
+      "destination": "run.sh",
+      "destination_sha256": "498a7835342f5994a29b1e2a9ff95b33f1110b3f2b1c47507c30bff5ece6a58e",
+      "bytes": 2126,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case01/nextest.toml",
+      "source_sha256": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+      "destination": "case01/nextest.toml",
+      "destination_sha256": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+      "bytes": 187,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case02/nextest.toml",
+      "source_sha256": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+      "destination": "case02/nextest.toml",
+      "destination_sha256": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+      "bytes": 187,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case03/nextest.toml",
+      "source_sha256": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2",
+      "destination": "case03/nextest.toml",
+      "destination_sha256": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2",
+      "bytes": 187,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/fresh-listing-admission.json",
+      "source_sha256": "914e97f74a2035246f9fe2ec6e34ef7381d9ea5e1bc65273db8b80d38a695a76",
+      "destination": "fresh-listing-admission.json",
+      "destination_sha256": "914e97f74a2035246f9fe2ec6e34ef7381d9ea5e1bc65273db8b80d38a695a76",
+      "bytes": 336,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/resource-admission.json",
+      "source_sha256": "06da851ef8244740883a66e647aafae866c2450b2d1ecbe850868aea1ac1295f",
+      "destination": "resource-admission.json",
+      "destination_sha256": "06da851ef8244740883a66e647aafae866c2450b2d1ecbe850868aea1ac1295f",
+      "bytes": 111,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/parent-launch-admission.json",
+      "source_sha256": "96e09f0ae64d6361400bdd5be7a133e76de7b15c161abee42c6a6afc0b8fe1ed",
+      "destination": "parent-launch-admission.json",
+      "destination_sha256": "96e09f0ae64d6361400bdd5be7a133e76de7b15c161abee42c6a6afc0b8fe1ed",
+      "bytes": 2852,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/launch-authorization-pending.preserved.json",
+      "source_sha256": "1ce79e2db63494215c8e70d4fd746a4424b3ae4071a8e6ac57ff720e88367f2e",
+      "destination": "launch-authorization-pending.preserved.json",
+      "destination_sha256": "1ce79e2db63494215c8e70d4fd746a4424b3ae4071a8e6ac57ff720e88367f2e",
+      "bytes": 726,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/PREPARATION.pending.json",
+      "source_sha256": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903",
+      "destination": "PREPARATION.pending.json",
+      "destination_sha256": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903",
+      "bytes": 4106,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/PREPARATION.json",
+      "source_sha256": "5c5e0cbd9967e4f552a5544877d84a14e7adf6521c19cb669f780b1566abd81b",
+      "destination": "PREPARATION.json",
+      "destination_sha256": "8a28c1e73e1089dd6d579806eee2adc00f50a55422a409145e1cde042dd790a2",
+      "bytes": 4612,
+      "byte_equal": false,
+      "transform": "EXPLICIT_PREPARATION_FIELD_PROJECTION; parent_commands array omitted; authoritative sourcePREPARATION hash retained"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/parent-actor-admission.json",
+      "source_sha256": "2c92b315262344d503cb686d797907ff1693522f2fa645aca896107bc0b97ac6",
+      "destination": "parent-actor-admission.json",
+      "destination_sha256": "2c92b315262344d503cb686d797907ff1693522f2fa645aca896107bc0b97ac6",
+      "bytes": 500,
+      "byte_equal": true,
+      "transform": "EXPLICIT_ACTOR_METADATA_FIELD_ALLOWLIST; requiresemptyactorlist; no rawargv/cwd/FD values"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/PREPARATION.pending.json",
+      "source_sha256": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903",
+      "destination": "preserved-closed-pending/PREPARATION.pending.json",
+      "destination_sha256": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903",
+      "bytes": 4106,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/case01/nextest.toml",
+      "source_sha256": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+      "destination": "preserved-closed-pending/case01/nextest.toml",
+      "destination_sha256": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+      "bytes": 187,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/case02/nextest.toml",
+      "source_sha256": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+      "destination": "preserved-closed-pending/case02/nextest.toml",
+      "destination_sha256": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+      "bytes": 187,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/case03/nextest.toml",
+      "source_sha256": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2",
+      "destination": "preserved-closed-pending/case03/nextest.toml",
+      "destination_sha256": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2",
+      "bytes": 187,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/fresh-listings.py",
+      "source_sha256": "15ecf12ddf0953b31336f34eed7aaa39ef33059ab1d91ed7ec18f067c0ad23d8",
+      "destination": "preserved-closed-pending/fresh-listings.py",
+      "destination_sha256": "15ecf12ddf0953b31336f34eed7aaa39ef33059ab1d91ed7ec18f067c0ad23d8",
+      "bytes": 2846,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/launch-authorization-pending.json",
+      "source_sha256": "1ce79e2db63494215c8e70d4fd746a4424b3ae4071a8e6ac57ff720e88367f2e",
+      "destination": "preserved-closed-pending/launch-authorization-pending.json",
+      "destination_sha256": "1ce79e2db63494215c8e70d4fd746a4424b3ae4071a8e6ac57ff720e88367f2e",
+      "bytes": 726,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/preflight-static.py",
+      "source_sha256": "2bd4c7852d7cdf017f0b38657130d9694ec01fa01073c235a6bf2763c8e32fb3",
+      "destination": "preserved-closed-pending/preflight-static.py",
+      "destination_sha256": "2bd4c7852d7cdf017f0b38657130d9694ec01fa01073c235a6bf2763c8e32fb3",
+      "bytes": 2728,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/preflight.sh",
+      "source_sha256": "585b69042e8b4969ed4a36424191b160604e00d65988884a2dd9b588edc5880b",
+      "destination": "preserved-closed-pending/preflight.sh",
+      "destination_sha256": "585b69042e8b4969ed4a36424191b160604e00d65988884a2dd9b588edc5880b",
+      "bytes": 566,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/proposed-v10-pins.sha256",
+      "source_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+      "destination": "preserved-closed-pending/proposed-v10-pins.sha256",
+      "destination_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+      "bytes": 2248,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/run.sh",
+      "source_sha256": "3299f6cad70cfa4dcb420dce6f198256530862a79add124249cc7d2bd40ecb7a",
+      "destination": "preserved-closed-pending/run.sh",
+      "destination_sha256": "3299f6cad70cfa4dcb420dce6f198256530862a79add124249cc7d2bd40ecb7a",
+      "bytes": 563,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/selection-proof.json",
+      "source_sha256": "38ec6f61e3f500754c24546edb5fb93855fbd64cf881b9d23cfb771ddbd35948",
+      "destination": "preserved-closed-pending/selection-proof.json",
+      "destination_sha256": "38ec6f61e3f500754c24546edb5fb93855fbd64cf881b9d23cfb771ddbd35948",
+      "bytes": 8201,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/server-cohort.py",
+      "source_sha256": "bba4dc3d944f28b59d0a58cce6dd56d6dcba8c71e7d138977698563b36ddabd6",
+      "destination": "preserved-closed-pending/server-cohort.py",
+      "destination_sha256": "bba4dc3d944f28b59d0a58cce6dd56d6dcba8c71e7d138977698563b36ddabd6",
+      "bytes": 8045,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_METADATA_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/runtime-pins.sha256",
+      "source_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+      "destination": "core-pins-14.sha256",
+      "destination_sha256": "0281f427261fd2c54cc87cd110d73b94fe40f54ca46dac41700d0ad237998429",
+      "bytes": 1874,
+      "byte_equal": false,
+      "transform": "EXPLICIT_FIRST14_CORE_PROJECTION; fullroot17pinlist remains authoritative; CLN3 unusedbytheseordinarycases"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/cohort-progress.json",
+      "source_sha256": "e089c864318d2303e1c5627fda102b40791cc1bd4dc73f734e990fd304450493",
+      "destination": "cohort-progress.json",
+      "destination_sha256": "88df2ff0483394135480a8b690e532dab62c6ad72a6c7995eb2365f0f6b1880c",
+      "bytes": 1518,
+      "byte_equal": false,
+      "transform": "EXPLICIT_TERMINAL_RESULT_FIELD_ALLOWLIST; actualcommandargv omitted"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/cohort-summary.json",
+      "source_sha256": "999da9136475230d1afb680d2d450ee15c3fbce38fa641f6201568e44589f84d",
+      "destination": "cohort-summary.json",
+      "destination_sha256": "2ffaabb4e0c4517466cebdc28cd052f323932ff0ec75521cd007cbca9e8c4d15",
+      "bytes": 2132,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SUMMARY_FIELD_ALLOWLIST; actualcasecommandargv omitted"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case01/result.json",
+      "source_sha256": "899d9eda195b43536a5ff915af8e503725e7e42d20d8779473b2bdf71326409e",
+      "destination": "case01/result.json",
+      "destination_sha256": "3d6e9e17649ee806548a053ec23bd48cd26d09dc1c51fd1cd975bd44b032b510",
+      "bytes": 458,
+      "byte_equal": false,
+      "transform": "EXPLICIT_TERMINAL_RESULT_FIELD_ALLOWLIST; actualcommandargv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch47-backend-postflight.json",
+      "source_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+      "destination": "case01/safe-native-summary.json",
+      "destination_sha256": "6b986503e616fcb7b694c1cb6c99b424f241fab0ff567b1ae3576d9de09b47d7",
+      "bytes": 1844,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SANITIZED_POSTFLIGHT_FIELD_PROJECTION; boundedPASS+summary andnativeSHAonly; no rawlog reads"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case02/result.json",
+      "source_sha256": "b1893c681f6ec204e665d35b967136ae3e14887186c37e3d292c4f6550c15d14",
+      "destination": "case02/result.json",
+      "destination_sha256": "fc5bb7e47498f2494242ef8dcda4c98a95f8b145c2c8cc3c42d16b0884fdbae4",
+      "bytes": 477,
+      "byte_equal": false,
+      "transform": "EXPLICIT_TERMINAL_RESULT_FIELD_ALLOWLIST; actualcommandargv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch47-backend-postflight.json",
+      "source_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+      "destination": "case02/safe-native-summary.json",
+      "destination_sha256": "5a633bdc3e01eafbf1645723915edae712442b4c79ae2395022fbdac06d01e94",
+      "bytes": 1897,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SANITIZED_POSTFLIGHT_FIELD_PROJECTION; boundedPASS+summary andnativeSHAonly; no rawlog reads"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case03/result.json",
+      "source_sha256": "785df911dad542cd1950532b6a3ed87ca543f0a3f14fccf9919f75551988243a",
+      "destination": "case03/result.json",
+      "destination_sha256": "966597da8bc2e7ee51dbd391849b2bf44de979a4f716c7a87728d7991733fa79",
+      "bytes": 481,
+      "byte_equal": false,
+      "transform": "EXPLICIT_TERMINAL_RESULT_FIELD_ALLOWLIST; actualcommandargv omitted"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch47-backend-postflight.json",
+      "source_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+      "destination": "case03/safe-native-summary.json",
+      "destination_sha256": "7a64245cad18e101b83a62ef7acf4e35cc625af7baf0dd82548c83aeb86ee6d6",
+      "bytes": 1926,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SANITIZED_POSTFLIGHT_FIELD_PROJECTION; boundedPASS+summary andnativeSHAonly; no rawlog reads"
+    }
+  ],
+  "export_count_excluding_this_receipt": 41,
+  "files_including_EXPORT": 42,
+  "source_inputs_before_after_unchanged": {
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/selection-proof.json": "fa2f13e8561734e9fcdaf95bed20498436c667e774a400f70c32b0fd8ecdf31c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/root-allocation.json": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/runtime-pins.sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/source-peer.json": "cdb42e928acdaab063f6191747b7420dc235b88219a6f7c7b3d7c8f2b0f9545e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/immutable-source-proof.json": "0df3cd07d8756f5586d84bc92e66134779640356acb20417ea1c577865a65703",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/server-cohort.py": "74500c9b2ee1c2c328aa1c743222aae9533288c1c90b3c8c6a68dd5a8eaeb83d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preflight-static.py": "d38c2d1a501b437f89a1b0167aa3ecb6e28710a7391b11ab485a1568db6e8c3b",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/fresh-listings.py": "d899735ed1b335b0d142199988a0b918fa5cc96ce815c4b1f69b90f97955b796",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preflight.sh": "b2e933abfb243a23030730ba745a30975707e5f77cb0bb93143ea580548e942f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/run.sh": "498a7835342f5994a29b1e2a9ff95b33f1110b3f2b1c47507c30bff5ece6a58e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case01/nextest.toml": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case02/nextest.toml": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case03/nextest.toml": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/fresh-listing-admission.json": "914e97f74a2035246f9fe2ec6e34ef7381d9ea5e1bc65273db8b80d38a695a76",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/resource-admission.json": "06da851ef8244740883a66e647aafae866c2450b2d1ecbe850868aea1ac1295f",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/parent-launch-admission.json": "96e09f0ae64d6361400bdd5be7a133e76de7b15c161abee42c6a6afc0b8fe1ed",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/launch-authorization-pending.preserved.json": "1ce79e2db63494215c8e70d4fd746a4424b3ae4071a8e6ac57ff720e88367f2e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/PREPARATION.pending.json": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/PREPARATION.json": "5c5e0cbd9967e4f552a5544877d84a14e7adf6521c19cb669f780b1566abd81b",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/parent-actor-admission.json": "2c92b315262344d503cb686d797907ff1693522f2fa645aca896107bc0b97ac6",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/PREPARATION.pending.json": "55fa0f5bd6b8297c298e3b91c94d72ae96518bc5a56ef45e5c5bed5c0b3cc903",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/case01/nextest.toml": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/case02/nextest.toml": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/case03/nextest.toml": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/fresh-listings.py": "15ecf12ddf0953b31336f34eed7aaa39ef33059ab1d91ed7ec18f067c0ad23d8",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/launch-authorization-pending.json": "1ce79e2db63494215c8e70d4fd746a4424b3ae4071a8e6ac57ff720e88367f2e",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/preflight-static.py": "2bd4c7852d7cdf017f0b38657130d9694ec01fa01073c235a6bf2763c8e32fb3",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/preflight.sh": "585b69042e8b4969ed4a36424191b160604e00d65988884a2dd9b588edc5880b",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/proposed-v10-pins.sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/run.sh": "3299f6cad70cfa4dcb420dce6f198256530862a79add124249cc7d2bd40ecb7a",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/selection-proof.json": "38ec6f61e3f500754c24546edb5fb93855fbd64cf881b9d23cfb771ddbd35948",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/preserved-closed-pending/server-cohort.py": "bba4dc3d944f28b59d0a58cce6dd56d6dcba8c71e7d138977698563b36ddabd6",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/cohort-progress.json": "e089c864318d2303e1c5627fda102b40791cc1bd4dc73f734e990fd304450493",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/cohort-summary.json": "999da9136475230d1afb680d2d450ee15c3fbce38fa641f6201568e44589f84d",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case01/result.json": "899d9eda195b43536a5ff915af8e503725e7e42d20d8779473b2bdf71326409e",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch47-backend-postflight.json": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case02/result.json": "b1893c681f6ec204e665d35b967136ae3e14887186c37e3d292c4f6550c15d14",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10/case03/result.json": "785df911dad542cd1950532b6a3ed87ca543f0a3f14fccf9919f75551988243a"
+  },
+  "inventory_path_hash_digest": "d6bc2af77da5bd5ffae4c184bd45bdfb192afb1c6715c8f3131ec904c9299e3f",
+  "admission_sha256": "96e09f0ae64d6361400bdd5be7a133e76de7b15c161abee42c6a6afc0b8fe1ed",
+  "formal_postflight_sha256": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+  "initial_native_receipt_sha256_preserved": "586ea5bfbe46a484f49459f4c8343e73dbe8d6ef35f008288c540b87f636365c",
+  "frozen_control_paths": 15,
+  "provided_root_pins": 17,
+  "derived_core_rows": 14,
+  "preserved_closed_pending_files": 12,
+  "CLN_required_by_these_cases": false,
+  "outcomes": {
+    "started": 3,
+    "PASS": 3,
+    "FAIL": 0,
+    "native_seconds": 92.658,
+    "case_native_seconds": [
+      31.134,
+      31.595,
+      29.929
+    ],
+    "global_curation_credit_by_exporter": 0
+  },
+  "projection_policy": [
+    "Explicit15admissionfrozen paths copiedbyteexact. ExtraPREP/history/parent/emptyactor/12pending files are namedallowlist; finalPREP parent_commands omitted withoriginalsourcehash preserved.",
+    "Actualprogress/summary/results omitcommandargv using fixedfieldallowlists. Safe3native summaries deriveonlyformalpostflight2f6bf03e withboundedalready-sanitizedPASS+summary plushashes, neverrawnextest/walletlog.",
+    "17rootpins remainauthoritative;14core-onlyrows explicitlyderived. Extra3CLN/pluginpins unusedbyordinarycases.",
+    "Initial586 receipt andpending-atcreation label retained unchanged; postflight/export are additive. No CSV/STATUS/FINDINGS/ML edits orcountreservation.",
+    "EXPORT excludesitself frominventorydigest; parentfinalpublicationmanifest musthashit separately. StrongfullpayloadBIP39/WIF/credential scanning remainsparentgate; no fabricatedfullscanclaim here."
+  ],
+  "syntax_validation": {
+    "JSON": 22,
+    "Python_AST": 6,
+    "bash_n": 4,
+    "TOML": 6
+  },
+  "simple_output_credential_patterns_zero_findings": true,
+  "actual_commandargv_in_result_native_and_PREP_projections": 0,
+  "raw_nextest_wallet_DB_seed_config_sourcepatch_files_exported": 0,
+  "limits": [
+    "Three ordinary Exited/discovery/address-nonreuse assertions only; originalactorsalive. No recoveredpayment/fullbalance/Core6/backup/custody/fullML/production/newerfix qualification.",
+    "One native selectedtest acrossfullmetadata is notone metadata binary.656filtered skips are notexecutions. Verifierheadercorrection changesno nativeoutcome/retry.",
+    "Onlythisnewcontrolsubtree written; no rootrollups/CSV/FINDINGS/STATUS/source/control/Git/Cargo/runtime changes by exporter."
+  ]
+}

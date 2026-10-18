@@ -1,0 +1,144 @@
+{
+  "kind": "BATCH47_CONDITIONAL_CURATION_PLAN_ONLY",
+  "at": "2026-10-18T05:48:25.304750+00:00",
+  "state": "NOT_ALLOCATED_NO_RUNTIME_OR_CREDIT",
+  "baseline": {
+    "aggregate": {
+      "executions": 245,
+      "PASS": 230,
+      "FAIL": 15,
+      "unique_binary_test_pairs": 228,
+      "nextest_invocations": 218,
+      "native": 233,
+      "component": 12,
+      "coverage_rows": 456
+    },
+    "coverage_sha256": "c297a23c2c9c643659c7549747cd30f18f469cb93bb00fa9eb6e870c44807083",
+    "coverage_prefix_bytes": 333206,
+    "all_LF": true,
+    "source_append_receipt_sha256": "ba945056bbc05d5b165b3becf3fafaeb4b7d9bd8a0277337c0eb11f0ff96f02e"
+  },
+  "proposed_cases": [
+    {
+      "proposed_order": 1,
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_skips_exited_vtxo",
+      "case_id": null,
+      "result": "NOT RUN",
+      "reserved_credit": 0,
+      "potential_unique_increment_if_actual_started": 1,
+      "source_function": {
+        "function_sha256": "f7f7ece461c7faf3e1b9348c8a5f8fbe8c04c9dab0b03ba688990a11001aeecd",
+        "body_sha256": "9d85cfa3b507ac5d0771b228fc2125d0fcbe64ae9b4cad9407e06344dbb2373b",
+        "first_line": 689,
+        "last_line": 721
+      },
+      "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "oracle": [
+        "Exactly one original500k-gross board VTXO is captured",
+        "Original daemon starts a real unilateral exit; genuine100k on-chain fee funding is supplied; background auto-progress reaches Claimable or Claimed through actual mined chain steps",
+        "Original default unspent list is empty after exit progression",
+        "New same-seed wallet in a distinct daemon/data directory performs on-chain and Ark sync",
+        "Recovered complete-list contains exactly one record with the exact original VTXO ID and state exactly Exited"
+      ],
+      "limitations": [
+        "Native active daemon background auto-progress is required",
+        "Actual node/server/bootstrap+120s helper must fit default180; no runtime timing yet",
+        "Stops at Claimable/Claimed progression and recovered Exited classification; no explicit final claim payment, drain, Core6 or full financial-fee conservation assertion",
+        "No all-bucket/exit-ownership proof for historical Locked round ancestors; this is independently chain-confirmed Exited semantics"
+      ]
+    },
+    {
+      "proposed_order": 2,
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+      "case_id": null,
+      "result": "NOT RUN",
+      "reserved_credit": 0,
+      "potential_unique_increment_if_actual_started": 1,
+      "source_function": {
+        "function_sha256": "9900105e71d85b6f14fd4cc33c6dea2dd0355e18a7c75777a5656e720681ec81",
+        "body_sha256": "da4c9d33959ffb3d922b2f5b202766f4f66d521ffae81821283f15c236aba705",
+        "first_line": 1288,
+        "last_line": 1328
+      },
+      "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "oracle": [
+        "Server xpub recovery is explicitly disabled (recovery_xpub_nb_keys=0)",
+        "Original recipient issues60 real Ark addresses and receives an actual50k Arkoor at the last one; original default list contains exactly one record",
+        "A new same-seed narrow wallet with gap50 syncs and its complete-list remains empty",
+        "A separate same-seed wide wallet with gap100 syncs and its complete-list contains exactly one record with the original received VTXO ID"
+      ],
+      "limitations": [
+        "Saved comment calls last address index59; accepted reserved identity index0 means actual fresh-index convention may instead place it at60; runtime asserts only window50/100/actual ID, not magic index59",
+        "Complete-list ID/count could not by itself distinguish Spendable from Locked. Credit discovery-window behavior only; no all-bucket, native recovered spend, recipient-value, Core6 or custody proof",
+        "Recovery xpub is intentionally disabled for this half, so not default xpub-flow qualification"
+      ]
+    },
+    {
+      "proposed_order": 3,
+      "binary": "ark-testing::barkd",
+      "literal": "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub",
+      "case_id": null,
+      "result": "NOT RUN",
+      "reserved_credit": 0,
+      "potential_unique_increment_if_actual_started": 1,
+      "source_function": {
+        "function_sha256": "9b5ea48fc57fd4e62121498f3a0b0802fe13c1d1e8922640b54467a9f47d13f5",
+        "body_sha256": "3d0cbe7a1f5af1c312bb94fddfa099e6fe763ca29262ae9e516d092b32626b3c",
+        "first_line": 1333,
+        "last_line": 1368
+      },
+      "source_file_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+      "oracle": [
+        "Original recipient issues60 real Ark addresses and receives an actual50k Arkoor at the last one; original default list contains exactly one record",
+        "Server retains standard native test xpub scanning (100000 keys)",
+        "A new same-seed narrow wallet with gap50 performs on-chain and Ark sync",
+        "Recovered complete-list contains exactly one record with the exact original received VTXO ID",
+        "Next fresh Ark address differs from the original received address, preventing that exact recovered key from being handed out again"
+      ],
+      "limitations": [
+        "Like the paired gap test, complete-list identity/count alone does not establish Spendable or recovered-payment success",
+        "Address assertion is next!=old, not exact next index; no stronger address-counter determinism credit",
+        "Default test xpub scan100000 could consume noticeable CPU; actual resource/default180 checks required",
+        "No all-bucket/fee conservation/Core6/fallback/backup proof"
+      ]
+    }
+  ],
+  "candidate_proposal": {
+    "label": "Existing immutable v10 only; not future V11/product-fix evidence",
+    "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+    "archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+    "runtime_metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+    "root_allocation": null,
+    "parent_admission": null
+  },
+  "terminal_only_accounting": {
+    "credit_now": 0,
+    "reserved_ids": [],
+    "rule": "Count only genuinely selected, unignored, non-gated actual fixture executions with verified native terminal PASS/FAIL; firstFAIL stops, remaining NOTSTARTED have zero credit. Recheck global dedup at curation. Preserve all456 row byte prefix and all15 priorFAILs.",
+    "increments": "executions/native/nextest += actual verified started terminal cases; PASS/FAIL += actual outcomes; unique += actually new binary/name pairs only; component unchanged. No mixed-inventory counting.",
+    "potential_max_unique_increment": 3,
+    "duration": "Actual measured native and outer wall times with separate labels; no preparation or budget inference."
+  },
+  "mandatory_gates": [
+    "Actual exact root allocation/order/metadata/source/pins; no carryover of consumed45allocation.",
+    "Independent source/control review and actual cached Nix/versions/pins/support overlay; full BARK_DOUBLE_DRIVE_ACTIONS unset.",
+    "Parent-only fresh exact unignored singleton listings, resources/actors/global2, immutable controls and parent launch admission; ordinary180/retry0/serial1/firstFAIL.",
+    "Private distinct case contexts; genuine fixture reaches required stages; gate-only return or empty context cannot be counted nativePASS.",
+    "Terminal result and formal postflight with pins/source/control freeze and owned groups/SIDs/scoped actors absent before curation.",
+    "Any FAIL/timeout/anomaly preserved and scoped public financial/source reconciliation before follow-up; no silent retry or weakened oracle.",
+    "Acquire global writer lease and recheck current byte prefix/counts/dedup before append; this plan has no writer lease or ID reservation."
+  ],
+  "preservation": [
+    "P07 controls46/source untouched; optional47 independent.",
+    "All historical failures/native/source packets/frozenPR22head5dde and payload remain unchanged.",
+    "Gap cases discovery ID/window/nonreuse only; no Spendable/all-bucket/payment/Core6/custody inference. Exited classification has no explicit final-drain/fullfee oracle.",
+    "No fullML/release/production or currentV11fix credit."
+  ],
+  "source_proposal_sha256": "9ae492d696dba9d010ca4873f1cc3b8720197d2dd6429f42801dd138d0087c0d",
+  "mutations": {
+    "only_this_new_external_JSON": true,
+    "COVERAGE_STATUS_FINDINGS_ML_source_controls_listing_native_Cargo_Git": 0
+  }
+}

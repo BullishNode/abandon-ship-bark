@@ -1,0 +1,30 @@
+{
+  "at": "2026-10-18T05:55:29.340681+00:00",
+  "state": "ALLOCATED_FINALIZE_PEER_PREFLIGHT_THEN_ONE_PARENT_LAUNCH",
+  "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a",
+  "cohort": "batch47-ordinary-recovery-three-v10",
+  "container": "abandon-fresh-runtime-20261017",
+  "binary": "ark-testing::barkd",
+  "cases": [
+    "recovery::recovered_wallet_skips_exited_vtxo",
+    "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit",
+    "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub"
+  ],
+  "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "archive_sha256": "03686b6d3e567ee42ebaa6bfc1f8278cafb3e185e9f92c839e52d7af493aba3d",
+  "metadata_sha256": "5014cd46046da81a36e19a4f82e4900fc3ae1c90c0c688a72a62fcf495dd918a",
+  "pins_sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+  "source_peer_sha256": "cdb42e928acdaab063f6191747b7420dc235b88219a6f7c7b3d7c8f2b0f9545e",
+  "immutable_source_binding_sha256": "0df3cd07d8756f5586d84bc92e66134779640356acb20417ea1c577865a65703",
+  "timeout_seconds_each": 180,
+  "retries": 0,
+  "serial": 1,
+  "max_global_native": 2,
+  "stop_on_first_failure": true,
+  "CLN_required": false,
+  "no_Cargo_shared_target_write": true,
+  "permission": "Finalize separate47 controls, independently review exact final controls and record hashes, perform fresh actual same-artifact pin/version/feature/environment/singleton/resource/actor checks, then one parent launch if all pass. No additional root/user go needed after these stated gates pass. Preserve preallocation closedscaffold and anyfailure; no retry or timeout extension.",
+  "environment": "Source cached Nix before Python, then fully unset BARK_DOUBLE_DRIVE_ACTIONS and verify absence. Actual immutable executables only; do not use shared target products from ongoing rootbuild.",
+  "source_freeze": "No canonical source/index/HEAD or frozen source packet changes; rootV11c actualbuild concurrent.",
+  "scope_limit": "Bounded existingv10 Exited/discovery/address-nonreuse assertions only; no currentpairedfix/finalsamecandidate/fullML/production promotion. No P07 or independentterminal allocation implied."
+}

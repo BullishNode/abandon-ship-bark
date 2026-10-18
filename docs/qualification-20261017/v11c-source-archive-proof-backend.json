@@ -1,0 +1,288 @@
+{
+  "scope": "READ_ONLY_V11C_SOURCE_ARCHIVE_AND_B_TO_C_MECHANICAL_DELTA_PROOF",
+  "at": "2026-10-18T05:56:12.550120+00:00",
+  "status": "SOURCE_BINDING_PASS_NO_COMPLETED_CANDIDATE_OR_NATIVE_ADMISSION",
+  "capture": {
+    "directory": "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018",
+    "HEAD": "0496e057fe8cedde99c9b85edab67035633a8f25",
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "actual_dirty_diff_sha256": "3bffe40d68135d9f92e9cdce55fcb8fd90541567ac73daeb12fe5c74d77b0565",
+    "source_scope": "Published0496 including reviewedPR22 plus core0ddb, pairedexisting-protocoljournal/replayc65v2+mechanicalunusedimportremoval, nativejournalassertions10e35, reviewedP07physicalpending-grantsbackup3f8f/abd0 and independentML049/partialML186-187patch7c2e; exactservermodulebindings. No wire/script/signature/fee policy change. Original180.028partialTIMEOUT and allpreviousFAIL retained; allnewnativebodies unrun. Single-inputDEFAULT no-prior-fence terminal omission only; broad batched/prior-fence/cold/consumed/oversize/fee liveness remains releaseOPEN. V11checks E0283 preserved; v11b adds ONLY explicit Vec<ServerVtxo> decoded type annotation in watchman/user_claim.rs; no financial/lifecycle/test change. V11bchecksE0283/E0308 preserved; v11c adds ONLY explicitServerVtxo type for nativeprefix and renames P07blockhash binding to preserve PaymentHash in later typedRPC/SQL; no monetary/lifecycle/timeout change.",
+    "all1968_entries_exact_member_sets_and_resolved_content_hashes_match": true,
+    "symlinks": [
+      {
+        "path": "AGENTS.md",
+        "target": "CLAUDE.md",
+        "resolved_sha256": "5f3a81a5f9592ecc2a71e275682a3a6a4a97e554632d4a08f1dccd6ebea439ee"
+      }
+    ],
+    "extracted_to_filesystem": false
+  },
+  "B_to_C": {
+    "same1968_member_set": true,
+    "only_two_changed_source_members": [
+      {
+        "path": "testing/tests/server/expiry_internal_partial_terminal.rs",
+        "B_sha256": "06e77fe34029e91f885c93c57c9a74d954c39d58e5fb6e3b66e2acc46cd9ea56",
+        "C_sha256": "1cc3420178e8b4eb8f6cfc153036c52400ac73bbcdfc7465eb88088f9689e692",
+        "unified_diff": "--- B/testing/tests/server/expiry_internal_partial_terminal.rs\n+++ C/testing/tests/server/expiry_internal_partial_terminal.rs\n@@ -50,7 +50,7 @@\n \t\tctx.broadcast_cpfp(&step.tx).await;\n \t\tctx.generate_blocks(1).await;\n \t}\n-\tlet prefix = db.read(async |t| {\n+\tlet prefix: ServerVtxo = db.read(async |t| {\n \t\tlet row = t.query_one(\"SELECT vtxo FROM vtxo WHERE vtxo_id=$1\",&[&point.to_string()]).await?;\n \t\tOk(ServerVtxo::deserialize(row.get(\"vtxo\"))?)\n \t}).await.unwrap();\n"
+      },
+      {
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "B_sha256": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+        "C_sha256": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+        "unified_diff": "--- B/testing/tests/server/qualification_lightning_backup.rs\n+++ C/testing/tests/server/qualification_lightning_backup.rs\n@@ -531,8 +531,8 @@\n \tassert_eq!(height.to_u32(), maturity);\n \trestored.wait_for_sync_height(height).await;\n \trestored.watchmand().wait_for_sync_height(height).await;\n-\tlet hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();\n-\trebuilt(&db, BlockRef { height, hash }).await;\n+\tlet block_hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();\n+\trebuilt(&db, BlockRef { height, hash: block_hash }).await;\n \tlet (allocation, parent) = tokio::time::timeout(Duration::from_secs(20), async {\n \t\tloop {\n \t\t\tlet rows = db.read(async |tx| Ok(tx.query(\"SELECT a.id,a.sweep_tx FROM expiry_allocation a \\\n"
+      }
+    ],
+    "exact_expected_replacements_verified": true,
+    "remaining1966_source_members_byte_identical": true,
+    "financial_lifecycle_state_amount_fee_timer_oracle_weakening": false,
+    "meaning": "Partial-terminal prefix gets explicit ServerVtxo decode type. P07 maturity BlockHash binding is renamed locally so later settlement/SQL checks retain intended PaymentHash. No other source delta."
+  },
+  "P07": {
+    "path": "testing/tests/server/qualification_lightning_backup.rs",
+    "source_before_abd0": "abd0e399a1676ad425d7780fdddf61bd7f25fa9982cb6e3ba294cebc6f622695",
+    "source_after6051": "6051ab33231cbe9cb88dad49fd8fa2baa852aade2bc519476c37ae24b17a870c",
+    "parent_source_ACK_sha256": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "all13_helpers_identical_and_match_parent_ACK": [
+      {
+        "name": "file_hash",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 54,
+        "last_line": 64,
+        "function_sha256": "b7ad4e47fda384bc788034b3e6e97acb31be992e158017839b27e7ec6a1345db",
+        "body_sha256": "256c37bb952812692cfe955f41d4e95338aff8868c8060472c2c338b184deb33"
+      },
+      {
+        "name": "copy_tree",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 68,
+        "last_line": 100,
+        "function_sha256": "22b620cf4bf751b7ed7c958c8e9864d1f8300222c02334dfe90dc8349932b15c",
+        "body_sha256": "ffe82652678fe0c696d9f7d33c8cb2299f9f3ab62fc2e78cb9c617cbe272fc95"
+      },
+      {
+        "name": "postgres_tool",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 102,
+        "last_line": 105,
+        "function_sha256": "d00182d1511f3f43213c38dd8be0400755c1c90b67242afc8e4acb27f6f13b11",
+        "body_sha256": "424ecbd18d8aaa96023389c5adcc7e68c56029253a3ef0f89496e0c061ff8ca2"
+      },
+      {
+        "name": "assert_clean_cluster",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 107,
+        "last_line": 116,
+        "function_sha256": "465120c46ea6d367fc8078097ed5b034efd72ce2e705535c9efd29467d017eae",
+        "body_sha256": "4a047a35ffddcdc12f5b63ec5d4b2f43e9a321ad0553eec4b0d28f7535241554"
+      },
+      {
+        "name": "watchman_coins",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 118,
+        "last_line": 123,
+        "function_sha256": "ad54b678330508d0952b711890b192393167e1546a3f84102d781376f885aca9",
+        "body_sha256": "89b45b06c805600248135e642ecd41d288da1b1b020351a059c898d786b4ba8a"
+      },
+      {
+        "name": "wait_watchman_coins",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 125,
+        "last_line": 133,
+        "function_sha256": "1d85aaf9bd79b4d0b86138deb2582ec1fbb60779be6ddc0288b35ea373512a38",
+        "body_sha256": "29b2ddfb6072e55e34fbd8b95962d52a09ae6c63103a555ec1dfcf4c2ef00d68"
+      },
+      {
+        "name": "mine_continuing_core",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 138,
+        "last_line": 142,
+        "function_sha256": "781de25833846102cbccfbcc190f723ac92d343f9386653217406a11ffb06f10",
+        "body_sha256": "2fbe6f507ed290520509ed81920ae59a03c037340aab70a1f72830521ec03aa5"
+      },
+      {
+        "name": "actual_fee",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 144,
+        "last_line": 151,
+        "function_sha256": "4a26752d687c7bcdf30866f8a6ea9f6d0cbdfdf3a899a3196fa89bcf516a55cf",
+        "body_sha256": "44afaa5c95715dccfc3bb80fb62a6ee01f1cd2ab4101fdd358b0219e04ab96f3"
+      },
+      {
+        "name": "canonical",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 153,
+        "last_line": 162,
+        "function_sha256": "dce96a758b4e176578f95a70b6111455120d38ff19d178255a157e01218d73a4",
+        "body_sha256": "0cb2a7f61b0eed00ff28212b500f7681cefc4c53a97ed42d67ed6791bf071fde"
+      },
+      {
+        "name": "rebuilt",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 164,
+        "last_line": 174,
+        "function_sha256": "f13842f6ad21ee01d020232a14ffc2e8f35930094e357fa0eb360f59ec8b07ae",
+        "body_sha256": "186b274ab4c68ca1eb31d4fca88d8edbc3b68abf1f6d65524c1da7d05e404029"
+      },
+      {
+        "name": "pending_checkpoint",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 178,
+        "last_line": 209,
+        "function_sha256": "337f67250a35464eb49d345ab760060486d27923b9354ad62051ebf4e6cb579c",
+        "body_sha256": "1fd1f972421504f183117c93c659053bc359a7017e80869b801faaf696983370"
+      },
+      {
+        "name": "signed_grant_ancestry",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 211,
+        "last_line": 226,
+        "function_sha256": "94a70688caa93ff750d61566a4829d95669d15ceb2fcd777373875fe92219f71",
+        "body_sha256": "c31cb737fd0bdaecfe4176d87b68634560304f1c8c27be4b84cf3ab747e8f851"
+      },
+      {
+        "name": "canonical_descendants",
+        "path": "testing/tests/server/qualification_lightning_backup.rs",
+        "first_line": 231,
+        "last_line": 250,
+        "function_sha256": "df508973e4fb606300cf8575d6e74176aad7d799765adede0acef451a8acb08c",
+        "body_sha256": "985bafe157fcc67f8407bb9a4b2aa5a6070e71acc3b9e7df0d33f1835592de0d"
+      }
+    ],
+    "entry_identical_and_parent_ACK_match": {
+      "name": "qualification_internal_htlcs_ready_physical_backup_refunds_absent_sender",
+      "path": "testing/tests/server/qualification_lightning_backup.rs",
+      "first_line": 253,
+      "last_line": 258,
+      "function_sha256": "aa91855bf97abe363fc77a10dbef2001c0fc79b4e0aca114f7d302c58a1a422b",
+      "body_sha256": "8dcea71b84d731d6de9e1215a89a6f22195e3057a68c0cd002208d91c5d85b3c"
+    },
+    "ExistingCluster_declaration": "struct ExistingCluster(Arc<PostgresHelper>);",
+    "ExistingCluster_impl_sha256": "94731d107fe97b8728d1c8f35a6548b620cedc9cdf61a7f1c8a8f6f8906d92e0",
+    "ExistingCluster_six_methods_identical": [
+      "name",
+      "datadir",
+      "make_reservations",
+      "get_command",
+      "wait_for_init",
+      "prepare"
+    ],
+    "main_async_function_and_body_match_parent_ACK": {
+      "name": "lightning_backup",
+      "path": "testing/tests/server/qualification_lightning_backup.rs",
+      "first_line": 260,
+      "last_line": 811,
+      "function_sha256": "b475c2b79cac32137dbb41840fa98af2213dc74be4fe1e8a7bd4388d084ed60a",
+      "body_sha256": "29508f4a0e30e1b329de4311207cd333fbcced0ca78e9f9a8ce981b50e55b85e"
+    },
+    "module_registered": true,
+    "module_source_sha256": "02143d923de98c3915d3d3bd6bfbc505774eacdf0b67a6f8dc096b931f27075f"
+  },
+  "independent_two_and_claim_replay_registrations": [
+    {
+      "literal": "expiry_reorg::expiry_payout_recognizes_independent_fee_only_sponsor",
+      "function_unchanged_from_B": true,
+      "function_and_body": {
+        "name": "expiry_payout_recognizes_independent_fee_only_sponsor",
+        "path": "testing/tests/server/expiry_reorg.rs",
+        "first_line": 455,
+        "last_line": 457,
+        "function_sha256": "bf86ae8871f9eb722ee9c7bfe55e343ff1e3f41c18981a5ee1396b9bee12c4e8",
+        "body_sha256": "c4a97ad1e46bbc36cf780ad701bd252057ce6ac9723bbc11fca83671157444c5"
+      },
+      "source_file_sha256": "f9a637ea14c2477ee065bf246deae4e2d95e9ee910daec32e424c2bb193548a8",
+      "tokio_and_module_registered": true,
+      "execution_credit": false
+    },
+    {
+      "literal": "expiry_reorg::expiry_payout_recovers_confirmed_fee_only_sponsor_after_restart",
+      "function_unchanged_from_B": true,
+      "function_and_body": {
+        "name": "expiry_payout_recovers_confirmed_fee_only_sponsor_after_restart",
+        "path": "testing/tests/server/expiry_reorg.rs",
+        "first_line": 460,
+        "last_line": 462,
+        "function_sha256": "612f235f8a5aa9bbcab43f855b96a7309d568d9d5037ba2abb6228d1547826af",
+        "body_sha256": "1e1f17260be1ec3738ea8ce1b49b33c363fd32c4e6d9aa66d141651c6a535ca5"
+      },
+      "source_file_sha256": "f9a637ea14c2477ee065bf246deae4e2d95e9ee910daec32e424c2bb193548a8",
+      "tokio_and_module_registered": true,
+      "execution_credit": false
+    },
+    {
+      "literal": "expiry_internal_partial_terminal::expiry_internal_partial_terminal_replays_actual_claim_after_reorg",
+      "function_unchanged_from_B": true,
+      "function_and_body": {
+        "name": "expiry_internal_partial_terminal_replays_actual_claim_after_reorg",
+        "path": "testing/tests/server/expiry_internal_partial_terminal.rs",
+        "first_line": 394,
+        "last_line": 396,
+        "function_sha256": "4e91d221c2c5b8941eaa266496b84a7a85420c14e4480f3ebd2ac5e2c86d746d",
+        "body_sha256": "d2f01b3a8e2e4221ee6348edc5efcc3461a7d2de5d5a93c3b4f8fbd0b7ea075b"
+      },
+      "source_file_sha256": "1cc3420178e8b4eb8f6cfc153036c52400ac73bbcdfc7465eb88088f9689e692",
+      "tokio_and_module_registered": true,
+      "execution_credit": false
+    }
+  ],
+  "temporal_build_observation": {
+    "handoff_state": "CAPTURED_NOT_STARTED",
+    "actual_phase_receipt_at_review": {
+      "checks": {
+        "state": "PASS",
+        "seconds": 44.92,
+        "exit_code": 0,
+        "started_at": "2026-10-18T05:53:06.659295+00:00",
+        "ended_at": "2026-10-18T05:53:51.579199+00:00"
+      },
+      "units": {
+        "state": "PASS",
+        "seconds": 134.647,
+        "exit_code": 0,
+        "started_at": "2026-10-18T05:53:51.831030+00:00",
+        "ended_at": "2026-10-18T05:56:06.478206+00:00"
+      },
+      "products": {
+        "state": "RUNNING",
+        "started_at": "2026-10-18T05:56:06.703803+00:00"
+      }
+    },
+    "phase_receipt_sha256_at_observation": "7c4125eb624537899c6df97ee8a376a21737596c6050d4e02760dc2c17fd2d56",
+    "recorded_root_phases_not_reexecuted_by_reviewer": true,
+    "progress_does_not_change_frozen_source_proof": true,
+    "no_future_product_ELF_metadata_buildPASS_or_native_assumption": true
+  },
+  "prior_A_B_receipt": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v11a-v11b-source-archive-proof-backend.json",
+    "sha256": "acd1829324bca22668a6668ad9dc40658b578e4304e2df9fdce48d04a5f2b3d2",
+    "original_A_and_B_failures_and_packets_unchanged": true
+  },
+  "source_inputs_before_after_unchanged": true,
+  "source_input_hashes": {
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/source-manifest.json": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/source.tar.gz": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/actual-git-diff.patch": "3bffe40d68135d9f92e9cdce55fcb8fd90541567ac73daeb12fe5c74d77b0565",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/build-driver.py": "937b0367efde330c6a07be7e3fc361992448e1354ad27226c2daf5d02bfd4906",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018/source-verification-before-checks.json": "f88a2cd2c66f8ac51f00d0d5d4102bff6d94e663081d15ed56f583965dd62ce6",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11b-20261018/source-manifest.json": "52e74ff47d32c3b5e38cc98ee35c6daf087034900e5c3e91c641874a69dbee87",
+    "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11b-20261018/source.tar.gz": "24eab618a167435aeff65df86f3f6c23ed5abf4aac8735aa465cbfb03895ef7d",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/P07-v11c-mechanical-compile-fix-source-ack-parent.json": "3ea2c27004563d955d2dc31330432ab9ccd75bd356e9fce935366de02d8b8d68",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v11a-v11b-source-archive-proof-backend.json": "acd1829324bca22668a6668ad9dc40658b578e4304e2df9fdce48d04a5f2b3d2"
+  },
+  "future_admission": {
+    "complete_product_manifest": null,
+    "immutable_runtime_metadata": null,
+    "ELF_support_tool_pins": null,
+    "actual_allocation": null,
+    "native_result": null
+  },
+  "limits": [
+    "Source-byte/registration proof only; no compiler/typechecker/Cargo, ELF or fresh listing, resource/actor/SQL/DB/wallet/secret/runtime actions.",
+    "Checks phase state is temporal root receipt evidence, not source error or completed full candidate/native qualification. A/B failures remain separate and are not overwritten.",
+    "6051 is a new mechanical source intake distinct from frozen abd0. No earlier compilation/native PASS transfers to it; final actual candidate/pins/allocation/fresh admission remain required.",
+    "P07 keeps its bounded180s/96block selected605k oracle, continuing Core/CLN and excluded12BTC reserve; no full P07/P11/FULLML/production closure.",
+    "Only these new external JSON and Markdown reports written; no source/index/HEAD/target/old reports/payload/controls mutation."
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-18T06:05:24.142374+00:00",
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch47-ordinary-recovery-three-v10",
+  "expected_selection": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_skips_exited_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub"
+    ]
+  ],
+  "source_manifest_sha256": "3e0437f1d1c89e554a38d7756f2d89238732cc368882f7b3f382b799487c0f33",
+  "sha256": {
+    "selection-proof.json": "fa2f13e8561734e9fcdaf95bed20498436c667e774a400f70c32b0fd8ecdf31c",
+    "root-allocation.json": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+    "runtime-pins.sha256": "3b0f9507560b10563a32793458e773cdcaae9d042f34f660797dae329830494c",
+    "source-peer.json": "cdb42e928acdaab063f6191747b7420dc235b88219a6f7c7b3d7c8f2b0f9545e",
+    "immutable-source-proof.json": "0df3cd07d8756f5586d84bc92e66134779640356acb20417ea1c577865a65703",
+    "server-cohort.py": "74500c9b2ee1c2c328aa1c743222aae9533288c1c90b3c8c6a68dd5a8eaeb83d",
+    "preflight-static.py": "d38c2d1a501b437f89a1b0167aa3ecb6e28710a7391b11ab485a1568db6e8c3b",
+    "fresh-listings.py": "d899735ed1b335b0d142199988a0b918fa5cc96ce815c4b1f69b90f97955b796",
+    "preflight.sh": "b2e933abfb243a23030730ba745a30975707e5f77cb0bb93143ea580548e942f",
+    "run.sh": "498a7835342f5994a29b1e2a9ff95b33f1110b3f2b1c47507c30bff5ece6a58e",
+    "case01/nextest.toml": "f56e696b1f0117275b2dc0c05c66eebb6841e6444f1201fe6fe087b98ddf12e6",
+    "case02/nextest.toml": "fcefccac9629e747fa2c6c6336451b035e7b06711e6055f92ab9654708a159b2",
+    "case03/nextest.toml": "18fe14fb8f01d455161aafdd6a6354fda6d309e53382b0dc6ed14e33bc986cc2",
+    "fresh-listing-admission.json": "914e97f74a2035246f9fe2ec6e34ef7381d9ea5e1bc65273db8b80d38a695a76",
+    "resource-admission.json": "06da851ef8244740883a66e647aafae866c2450b2d1ecbe850868aea1ac1295f"
+  },
+  "root_allocation_sha256": "96a9f25bd6e64925b4a028f8e5f0cdbf32a893edb891a9aee39ff434917782fb",
+  "final_control_peer_sha256": "2b542dd236fba12cb24e19abb09dce26bac67b80f9869f2823b86ce852af4440",
+  "preflight_parent_session": 92020,
+  "preflight_parent_terminal_exit_code": 0,
+  "actual_versions": "All4 immutable product --version exact shell comparisonsPASS; cachedNix/profile/bitcoind/SQLite/PG/unsetpresence guards passed.",
+  "runtime_pins_verified": 17,
+  "scoped_actor_admission_sha256": "2c92b315262344d503cb686d797907ff1693522f2fa645aca896107bc0b97ac6",
+  "actor_probe_sha256": "1285f8c3f15ee4201ceb7163e86d0eba5b7b9c34a14b8e6b93c411ab8f43909c",
+  "resource_shm_available_bytes": 822743040,
+  "limits": "Only exact3 immutablev10 nativecases default180/retry0/serial1/firstFAIL/global2, no CLN/currentfix/fullML credit."
+}

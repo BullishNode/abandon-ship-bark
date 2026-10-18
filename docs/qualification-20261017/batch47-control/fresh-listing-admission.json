@@ -1,0 +1,1 @@
+{"state": "LISTING_GATE_PASS", "selected_unignored": [["ark-testing::barkd", "recovery::recovered_wallet_skips_exited_vtxo"], ["ark-testing::barkd", "recovery::recovered_wallet_finds_vtxo_only_within_the_gap_limit"], ["ark-testing::barkd", "recovery::recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub"]], "native_tests_run": 0}

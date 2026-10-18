@@ -81,7 +81,7 @@ watchman fence in `expiry_payout.rs`.
 
 ## 3. Assumptions
 
-1. **Reorgs deeper than 3 blocks do not happen** (owner, 2026-10-18; to be recorded as a ruling). This is stricter
+1. **Reorgs deeper than 3 blocks do not happen** (owner ruling 2026-10-18, recorded in `poc/OWNER-RULING-reorg-depth.md`). This is stricter
    than plan C10, which explicitly does not treat 100 blocks as final.
 2. **N ≥ 4**; recommended **N = 6**.
 3. The server host and its database writer are trusted (plan ruling §1.6), as today.

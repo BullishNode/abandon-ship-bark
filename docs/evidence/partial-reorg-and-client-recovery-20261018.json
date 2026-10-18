@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "published_at": "2026-10-18T07:29:17.256129+00:00",
+  "purpose": "Bounded new native recovery evidence; no production readiness claim",
+  "partial_terminal_reorg": {
+    "state": "PASS_NATIVE_AND_INDEPENDENT_RETAINED_CHAIN_AUDIT",
+    "native_seconds": 75.27,
+    "wrapper_seconds": 76.03,
+    "source_manifest_sha256": "1d476aae2ed863107753f71e12772812147a94cbc3ac557782f8679d569a9480",
+    "product_candidate": "Unchanged V11c, actual build0496 plus captured dirty sourcecdedd",
+    "source_fix_commit": "50ee7e99afd1a19111bd631a1063ef8a5637fbad",
+    "independent_handoff_sha256": "cbbbd4291bb8f86171136bd892cac87e02254aaa2f064ea83006c4e23e9de799",
+    "key_money": {
+      "A_sat": 98000,
+      "A_depth": 24,
+      "B_sat": 99000,
+      "B_depth": 6,
+      "G_sat": 180000,
+      "operator_parent_gross_sat": 181000,
+      "current_child_fee_sat": 4654,
+      "cut_input_sat": 530000,
+      "cut_output_sat": 523346,
+      "cut_fee_sat": 6654
+    },
+    "branch_note": "Same exact A user claim and B customer parent on replacement branch; orphan child fee excluded from current canonical cut; earlier V11c/V12/V13 fixture failures retained.",
+    "limits": "Single-input DEFAULT supported authorizations and controlled retained ancestors/sponsors; not arbitrary batched/cold/consumed/prior-reserved partial closure or global custody."
+  },
+  "prior_reserved_all_terminal": {
+    "state": "BOTH_NATIVE_PASS_FORMAL_POSTFLIGHT_PASS_INDEPENDENT_MONEY_AUDIT_PENDING",
+    "source_manifest_sha256": "0e37aa1de1e8ff239b68371eb1e475f1dbea433fd9f442ada410ebd89e027666",
+    "source_archive_sha256": "eca58e596533dce34eae789f0fd833f9f7da265da4decc9c735df379eb6f1d25",
+    "bundle_sha256": "74feeed0dc9aa74017c5f60b9e5e4c9b4574d78a4f311e6e557003899288d8af",
+    "runtime_metadata_sha256": "bae9d09008e262a760d998a1145148c218500e7a6fee6523dd072dc8885d2830",
+    "actual_build_head": "50ee7e99afd1a19111bd631a1063ef8a5637fbad",
+    "dirty_captured_source": true,
+    "published_product_commit": "abe5e6441",
+    "published_test_commit": "2032df8c8",
+    "checks_seconds": 103.862,
+    "unit_tests_passed": 869,
+    "unit_tests_skipped": 1,
+    "products_build_seconds": 114.977,
+    "four_test_binaries_build_seconds": 221.289,
+    "actual_native_cases": [
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_all_terminal_returns_grants",
+        "native_seconds": 70.835,
+        "wrapper_seconds": 71.612,
+        "log_sha256": "0bf50bfebcd2636d791f0df1834ae188b4a3bb5978e95bf46f4e82ed0160b72b",
+        "exact_singleton_summary": true
+      },
+      {
+        "test": "expiry_internal_terminal_return::expiry_internal_reserved_all_terminal_replays_after_reorg",
+        "native_seconds": 77.687,
+        "wrapper_seconds": 78.58,
+        "log_sha256": "593bd2f7e2e5b01fd32b7b2f861c2136947a8449543f95f2a4bf339ec8e665fb",
+        "exact_singleton_summary": true
+      }
+    ],
+    "formal_postflight_sha256": "4fecce5b64c06ef1d947e4c16401727253783c0783fca21fede8a6342351d5cb",
+    "native_oracles": "Genuine unfunded prior grouped199k parent reserves originals+all180kgrants. Both original users exercise actual98k claims, disappear; all grants return via actual server timeout/Core6 while immutable old physical/economic reservations remain. Fork case requires exact retained claim replay and repeats reservation/money assertions.",
+    "limits": "Independent chain audit pending. No prior-reserved partial/live B closure, arbitrary batched/cold ancestors/large components or final same-candidate qualification."
+  },
+  "independent_client_components": {
+    "candidate": "V11c capturedcdedd/bundle42c, not V15",
+    "formal_postflight_sha256": "24a6433512bc4f90b3628f9cd2700723b60688bdac8c7a5afaea872e6322c79b",
+    "cases": [
+      {
+        "test": "qualification_forwarded_ack::forwarded_receive_ack_loss_replays_identical_outputs_and_credits_recipient_once",
+        "state": "PASS",
+        "test_seconds": 22.588,
+        "seconds": 23.406,
+        "run_id": "59b44ec7-50ad-4e2e-a6d6-2bd7a469b055",
+        "log_sha256": "d4cdef8afe819bd8dd46be195d35b73cf13361250958f55f04fba27c383bbf8a"
+      },
+      {
+        "test": "fallback_external::fallback_external_bip84_seed_restore_spends_actual_payout_while_history_unavailable",
+        "state": "PASS",
+        "test_seconds": 25.923,
+        "seconds": 26.796,
+        "run_id": "1584f140-2495-4079-b4c2-de5e7b9f99b2",
+        "log_sha256": "ffaceb87dd286c1427383b3712de4ae54af4ae9f3341d9d4a58439e12f030605"
+      }
+    ],
+    "delivery_observation": "Repeated forwarded mailbox delivery credits real recipient10000sat once; component only.",
+    "recovery_observation": "99k real fallback discovered and spent from external BIP84 seed while history unavailable; destination98781sat+219miner at Core6.",
+    "independent_recovery_audit_sha256": "054364a54de61370d8131923a5a1f0224019ffb5513dddf068b031e2794a9407",
+    "recovery_finite_cut": "200000=197500terminal+2500miners",
+    "limits": "Partial ML049 delivery and ML186/187 alternate recovery, not full incident rows/Noah/oversized/churn/global custody."
+  },
+  "remaining_release_blockers": [
+    "Prior-reserved partial/live-source Lightning closure",
+    "General batched, missing/cold ancestor, consumed/shared and large-component paths",
+    "Same final candidate client/backup/reorg/fee/load qualification",
+    "Declared sustained capacity and complete operations/recovery assessment"
+  ],
+  "production_readiness": "NO",
+  "mainnet_authorized": false
+}

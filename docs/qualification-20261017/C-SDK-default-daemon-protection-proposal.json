@@ -1,0 +1,378 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_PROPOSAL_NOT_ALLOCATED_NOT_RUN",
+  "at": "2026-10-18T07:03:00.937729+00:00",
+  "binary": "ark-testing::bark-sdk",
+  "name": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+  "purpose": "Native SDK daemon wiring control, complementary to manual batch48 watch cases; no completed claim or C paired-journal qualification inferred.",
+  "test_source": {
+    "full_file_sha256": "d3e79a29af1cd1c03767ac24e89960e91745a96d8e4480fbfd3f5b09fe31da70",
+    "file": "testing/tests/bark_sdk/fallback_act_by.rs",
+    "function": "fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+    "function_sha256": "f70ded222b148d44d06eadd1e4b541865820046a9a28c37e1af610b3ba0f88cb",
+    "brace_body_sha256": "1e38f5ae82e6333b35b982a53439228f0f33fd36e3a8d824c66649cec7b6062d",
+    "start_line": 29,
+    "end_line": 83,
+    "hash_mode": "fn declaration to closing brace excluding attributes; body hash includes braces"
+  },
+  "captured_C": {
+    "directory": "/home/francis/.cache/abandon-fresh/runtime-terminal-replay-v11c-20261018",
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "bundle_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+    "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+    "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "SDK_ELF_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+    "product_version": "0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25; dirty captured source authoritative",
+    "existing_artifact_proof": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/P07-v11c-artifact-runtime-proof-client.json",
+      "sha256": "ac69ffbf60f1cb15a854f1a48eb295f1f513394c4e0600fcef9466ca9cbb074b"
+    },
+    "proposed_pinlist": "/home/francis/.cache/abandon-fresh/root-terminal-replay-v11c-20261018/runtime-pins.sha256",
+    "proposed_pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "old44_archive_sha256": "f72ca371c3c575cb55da61f145bcea05065c5b87cb8ef0d49e688e0d75645bde",
+    "current_source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+    "native_result_for_this_case": "NOT RUN",
+    "existing_archive_proof": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v11c-source-archive-proof-backend.json",
+      "sha256": "01245bd30a0cf3c52a6683728bbdaefda92bc4e0b031b9de8e74c9e2c6b46207"
+    }
+  },
+  "full_file_helper_pins": [
+    {
+      "archive_member": "testing/tests/bark_sdk/fallback_act_by.rs",
+      "sha256": "d3e79a29af1cd1c03767ac24e89960e91745a96d8e4480fbfd3f5b09fe31da70"
+    },
+    {
+      "archive_member": "testing/src/context/builders.rs",
+      "sha256": "25bb654b25c5cc3995bacb10fa892c4544c9739606ee14a3aba279351ccbd3ae"
+    },
+    {
+      "archive_member": "testing/src/context/mod.rs",
+      "sha256": "7c1bc8616dc2f2af5ee91106bb8c647dcc8efd831985aaecae8db706c6279cab"
+    },
+    {
+      "archive_member": "bark/src/fallback/act_by.rs",
+      "sha256": "35e52cd9b5e9f0294c27e3031cb68e85cd8400a3dd88698b641721889cc118be"
+    },
+    {
+      "archive_member": "bark/src/daemon/mod.rs",
+      "sha256": "fb549edfc8745af9c6f03b0d21c890a4cff54f4fb26c55db47519c76d8e543cd"
+    },
+    {
+      "archive_member": "testing/tests/bark_sdk/mod.rs",
+      "sha256": "43168858bd9fd73d14387f418d9889f12a29cb7977e19eaea470691717b56c89"
+    },
+    {
+      "archive_member": "testing/Cargo.toml",
+      "sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277"
+    },
+    {
+      "archive_member": "testing/src/constants.rs",
+      "sha256": "58c0495f38c6cad5124b64e9a5a803c32ff2c536cef0258ea62e9cffca748f37"
+    },
+    {
+      "archive_member": "bark/src/lib.rs",
+      "sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad"
+    },
+    {
+      "archive_member": "testing/src/daemon/captaind/mod.rs",
+      "sha256": "86cb060d38ad34eee116d5cd53449d5826c7cb34e23342faead3222b743fc336"
+    }
+  ],
+  "named_helper_pins": [
+    {
+      "file": "testing/tests/bark_sdk/fallback_act_by.rs",
+      "function": "protection_config",
+      "function_sha256": "46b800097cb322dde544a1c959fe4f482c4276ebcb92131aeb4d67b696927460",
+      "brace_body_sha256": "72e1c3943bd1d4624d75c4109dbc4d6204b8609353f25d53a0ec92863fc78339",
+      "start_line": 21,
+      "end_line": 26
+    },
+    {
+      "file": "testing/tests/bark_sdk/fallback_act_by.rs",
+      "function": "advance_to",
+      "function_sha256": "6433b106c7a5368ca558b2b18e63f9623c5874b203304fc52020534cf0c2c582",
+      "brace_body_sha256": "7fc2c0af4b20877a78e349e6fbc2e88e55ac2497bad16e1fb85f08b7aa7d2070",
+      "start_line": 85,
+      "end_line": 88
+    },
+    {
+      "file": "testing/src/context/builders.rs",
+      "function": "try_create",
+      "function_sha256": "6e6f1f40daad366be8ecfbf8b9b6ee6abf772f45d754c615ba8149bd9332e5c3",
+      "brace_body_sha256": "ede538d7f8ba3d4e293950c8ca59c63999a8dddb0e4fa3d9a42ff435f1248700",
+      "start_line": 590,
+      "end_line": 690
+    },
+    {
+      "file": "testing/src/context/builders.rs",
+      "function": "create_unregistered",
+      "function_sha256": "c014c4316c306eecba2586766c9e7fcd26546cde56a6fa7d3a0cdbd9dcde7556",
+      "brace_body_sha256": "8b3541c776bf988b046ac80ba02de90984d302eec6aa02e33bb777b4c08f16e7",
+      "start_line": 118,
+      "end_line": 154
+    },
+    {
+      "file": "testing/src/context/mod.rs",
+      "function": "generate_blocks",
+      "function_sha256": "620c93b60d97e7cb9fecec21762658c9eaef983a9880e5f30736b99727acac2a",
+      "brace_body_sha256": "8aeae07b8133b9a254b9dd7096829d5bc462c0a62536caca0c3d30bff71d4cc0",
+      "start_line": 845,
+      "end_line": 857
+    },
+    {
+      "file": "testing/src/context/mod.rs",
+      "function": "await_block_count_sync",
+      "function_sha256": "7f6f7c1b5109abe85599afc325da2c63c18dbb56fbbf7f6006405fba12d7fe9f",
+      "brace_body_sha256": "b9615e6d924d33ab03fd9b268656e7c6bf46b443bae8a0bbaca7667eeb35909c",
+      "start_line": 754,
+      "end_line": 793
+    },
+    {
+      "file": "bark/src/fallback/act_by.rs",
+      "function": "deadlines",
+      "function_sha256": "e9df9ccf8cb18fd39aadde228c2f4f4ad7ef08feea05520b0eccfc463112f1df",
+      "brace_body_sha256": "f30d0c704d37b97d25abdbbd384daa3753fc05cd2e5ef3d801b02c60e2a9aaaa",
+      "start_line": 109,
+      "end_line": 116
+    },
+    {
+      "file": "bark/src/fallback/act_by.rs",
+      "function": "coin_exit_schedule",
+      "function_sha256": "8e74f2523194635e0563bea382adc906d771f4b820ed6ac3581c6d11c79043d3",
+      "brace_body_sha256": "9f41833230776d447bf28568831d22ba270bae3d3ef5b6601caa96bca5ea13f4",
+      "start_line": 301,
+      "end_line": 328
+    },
+    {
+      "file": "bark/src/fallback/act_by.rs",
+      "function": "exit_protection_schedule",
+      "function_sha256": "8a2c53c79cd40ba4b7c914bd725fe5a2a571239ff67b0fb58f0653bbdbed7d9a",
+      "brace_body_sha256": "d03f3258d45ce1e3b269771cc0670585663b7145b066444d803fe7bd046c7a9d",
+      "start_line": 271,
+      "end_line": 275
+    },
+    {
+      "file": "bark/src/fallback/act_by.rs",
+      "function": "exit_protection_report",
+      "function_sha256": "078ce0ad847e03bb0509a852e5b49ba828976dc6a8caed8b0c8feb625e572249",
+      "brace_body_sha256": "a0bfded45af3c129a913b589715ce9dfe7c959d36f0c354a6bce1afab1345465",
+      "start_line": 280,
+      "end_line": 299
+    },
+    {
+      "file": "bark/src/fallback/act_by.rs",
+      "function": "protect_expiring_vtxos",
+      "function_sha256": "d04712c64b6130e4f1e174168198e6da2b13f62da97e1cec23295ddb454e7fb4",
+      "brace_body_sha256": "2cd1243c4c12e56cd82a31542002d70494df24156d24ff8d6030172584640c61",
+      "start_line": 138,
+      "end_line": 253
+    },
+    {
+      "file": "bark/src/daemon/mod.rs",
+      "function": "run_exit_protection_process",
+      "function_sha256": "f814455faa1e6822da5cc0601d0ffbe90b969748b5b3e98702073d6218175855",
+      "brace_body_sha256": "4e9fed48baaad63fe8ed417956e6d80e89e0cc4a4dcb05f85354dab3562bc724",
+      "start_line": 353,
+      "end_line": 374
+    }
+  ],
+  "saved_listing": {
+    "path": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c/case01/selection-list-fresh.json",
+    "sha256": "8071f556c8a4ba05878f19f673faf901fd57f2742cf194c53dc9fc3f4c297486",
+    "binary_id": "ark-testing::bark-sdk",
+    "binary_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk",
+    "test": {
+      "kind": "test",
+      "ignored": false,
+      "filter-match": {
+        "status": "mismatch",
+        "reason": "string"
+      }
+    },
+    "meaning": "Present/unignored but P07 string-filter mismatch, not selected/executed. No new listing."
+  },
+  "settings": {
+    "network": "regtest",
+    "server_funding_sat": 100000000,
+    "pool": "disabled via no_vtxo_pool",
+    "watchman": "not enabled; builder opt-in unused",
+    "vtxo_lifetime_blocks": 40,
+    "exit_delta_blocks": 3,
+    "wallet_funding_sat": 500000,
+    "board_sat": 100000,
+    "daemon_run": "SDK Builder uses OpenWalletArgs Default run_daemon=true (bark/src/lib.rs805-808), not barkd process",
+    "daemon_manual_sync": false,
+    "daemon_sync_interval_seconds": 1,
+    "refresh_threshold_blocks": 4,
+    "exit_margin_blocks": 2,
+    "ROUND_CONFIRMATIONS": 6,
+    "CLN_required": false
+  },
+  "actual_source_oracles": [
+    {
+      "phase": "Early daemon refresh",
+      "oracle": "Native signed-path schedule drives real Core to refresh_by; <=20s wait for daemon-created pending round, no direct protect call. Explicitly trigger server round, <=20s wait for actual pending replacement funding txid in Core mempool."
+    },
+    {
+      "phase": "Replacement and old deadline",
+      "oracle": "Mine ROUND_CONFIRMATIONS=6; <=20s wait for spendable different-ID replacement. Advance to original act_by, assert exit-manager ID list empty. No separate raw Core confirmation-count/output-value assertion for replacement."
+    },
+    {
+      "phase": "Ark-offline protective broadcast",
+      "oracle": "Capture replacement full native signed path; sync onchain; stop owned Ark server; advance Core to replacement act_by; <=20s wait for at least one captured path txid in Core mempool, require replacement ID in exit manager. No direct protect_expiring_vtxos/progress_exits call."
+    }
+  ],
+  "deadline_and_profile": {
+    "derived_budget": "coin_exit_schedule: actual unconfirmed signed-path sequence waits plus remaining own claim CSV; deadlines adds final claim block and exit margin, then refresh_by=act_by-margin. No expiry extension/blanket LN margin.",
+    "advance_to": "Mines only positive difference through continuing Core/helper sync. Existing helper skips unreachable stopped nodes; no stale stopped-server-hang rationale.",
+    "event_waits_seconds": [
+      20,
+      20,
+      20,
+      20
+    ],
+    "expected_180_suitability": "Reasonable bounded candidate for standard180: four20s event waits, finite40-block lifetime, no CLN/channel. Source-only estimate; C duration/completion unmeasured. Setup/mining/stop awaits are not all individually bounded and consume remaining budget.",
+    "outer_timeout_in_test_body": null,
+    "future_nextest_timeout_seconds": 180,
+    "no_extension": true
+  },
+  "missing_oracles": [
+    "Final proof is >=1 signed path transaction in mempool and exit-manager ID membership, not completed claim state/transaction.",
+    "No final claim canonical Core6, exact payee/value, actual input/fee conservation or independent fee-child ledger. Six mined refresh blocks are not final claim confirmation.",
+    "No fresh seed-only wallet, recovered UTXO map, signed confirmed drain, original-client-absent recovery or physical backup.",
+    "No outage all-bucket/history/double-debit proof, reorg/journal replay, missing-B fault isolation, slow-history fairness or conditional HTLC recovery.",
+    "SDK wallet stays live; accelerated1s/4+2/40 settings and manually triggered round/mining are not production/default-barkd lifecycle qualification."
+  ],
+  "coverage_mapping": {
+    "coverage": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/COVERAGE.csv",
+      "sha256": "3e40c57525b3e69c08f29e28d2e0022a8cf0e9cd3ab5a0be6dbb558ad83ca71b",
+      "rows": [
+        {
+          "case_id": "CQUAL-007",
+          "requirement": "K3a default daemon automatic protection",
+          "layer_network": "native/regtest",
+          "automated_test_name": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+          "latest_result": "NOT RUN",
+          "tested_revision": "",
+          "evidence_path": "testing/tests/bark_sdk/fallback_act_by.rs:28",
+          "limitation": "Does not directly call protect_expiring_vtxos; observes signed exit broadcast, not completed exit claim/recovery; explicit 4/2 configuration and 40block lifetime",
+          "owner": "testing/client",
+          "entry_kind": "source_test_inventory",
+          "classification": "unchanged",
+          "inspected_revision": "e44ddf95741478508908c17adc61752832d75c6a",
+          "success_oracle": "daemon_manual_sync=false initiates early round; real funding mempool and confirmed replacement; old act-by no spurious exit; stop Ark; daemon broadcasts replacement signed path into Core"
+        }
+      ]
+    },
+    "default_inventory": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/default-integration-inventory.csv",
+      "sha256": "9dd77db32ecd9adc433a1b740fcb81f83bd3f7a02567c03fd07956058b1d7845",
+      "rows": [
+        {
+          "binary": "bark-sdk",
+          "test_name": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+          "is_ignored": "false",
+          "default_selection": "SELECTED",
+          "classification": "INVENTORY_ONLY"
+        }
+      ]
+    },
+    "ML_map": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML-COVERAGE.csv",
+      "sha256": "305746845f6ee9526d4e862def7154b9e70803c38af37ab01f2b68f00b854310",
+      "rows": [
+        {
+          "case_id": "ML056",
+          "title": "Pubkey-only act-by protection omits stuck conditional receive/send coins",
+          "priority": "P1",
+          "execution_status": "NOT RUN",
+          "evidence_scope": "PARTIAL",
+          "missing_oracle": "Track each actual HTLC D and backingE under server outage; at least one valid recovery path remains funded/signable until principal discharged. Apply the full-lineage and eventual-progress baseline above.",
+          "limitation": "Full A-K scenario NOT executed/qualified here. Default-daemon protection test covers ordinary Pubkey coin; batch14 turns receive into Pubkey before absence."
+        },
+        {
+          "case_id": "ML189",
+          "title": "Manual-sync application never calls the SDK act-by protection loop",
+          "priority": "P1",
+          "execution_status": "NOT RUN",
+          "evidence_scope": "PARTIAL",
+          "missing_oracle": "Historical default loop initiates refresh/exit path, not a manual-sync supported application's scheduler or final claim.",
+          "limitation": "Historical7055 pairing and default-loop initiation only; no final spend/manual-app qualification."
+        },
+        {
+          "case_id": "ML190",
+          "title": "One missing signed coin body aborts protection scheduling for every healthy coin",
+          "priority": "P0",
+          "execution_status": "NOT RUN",
+          "evidence_scope": "PARTIAL",
+          "missing_oracle": "Healthy small complete-body loop works; no repeatedly failing legacy B hydration alongside a healthy due A.",
+          "limitation": "Healthy daemon control cannot establish error isolation across coins."
+        },
+        {
+          "case_id": "ML191",
+          "title": "Large cached history chain checks monopolize the protection deadline budget",
+          "priority": "P1",
+          "execution_status": "NOT RUN",
+          "evidence_scope": "PARTIAL",
+          "missing_oracle": "Small-history healthy loop has no bounded slow chain-evidence backlog before live act-by work.",
+          "limitation": "No sustained protection-queue throughput or final receipt is established."
+        }
+      ],
+      "limit": "Existing PARTIAL/source/historical references frozen; full ML056/189/190/191 stay NOT RUN. Healthy Pubkey control cannot qualify their missing scenarios."
+    }
+  },
+  "overlap_check": {
+    "public_receipt_allocation_roots": [
+      "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017",
+      "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016"
+    ],
+    "globs": [
+      "*receipt*.json",
+      "*allocation*.json"
+    ],
+    "exact_literal": "fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+    "matching_files": [],
+    "rg_exit": 1,
+    "ownership_snapshots": [
+      {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/current-source-ownership-handoff.json",
+        "sha256": "16b15db0dc2a20b18dd82854ecfdbac876e5b372e8731a6f39197c8788f1bdba",
+        "exact_name_referenced": false
+      },
+      {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/source-queue-post-batch39.json",
+        "sha256": "2187df586053bb7ed29fb61e35017447c04ad6432b8a5fea7e8a14b45fab34a9",
+        "exact_name_referenced": false
+      },
+      {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v8-testing-track-ownership-status.json",
+        "sha256": "76f3ecc49c33b9ca22601800015cfe7eacefac58f9fe438c452a1096dd26c0f1",
+        "exact_name_referenced": false
+      }
+    ],
+    "finding": "No exact-name execution receipt/allocation/ownership entry found in scoped public inputs; one source inventory row. Historical first-batch planning names default protection generically, not execution or current resource ownership. Unknown coordinator/private/root-led runs outside scope remain possible; root must reconcile before allocation."
+  },
+  "future_admission": {
+    "root_allocation": null,
+    "readiness": null,
+    "parent_launch_admission": null,
+    "candidate_binding_final": null,
+    "per_case_seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "first_fail_stop": true,
+    "global_max_native": 2,
+    "max_cases": 1,
+    "needed": "Explicit singleton root allocation/overlap check; parent fresh source/SDK/pins/native env/version/single unignored listing/resources; fresh private context, sole once-only launch. No controls authored."
+  },
+  "credit": {
+    "current_native_executions": 0,
+    "current_PASS": false,
+    "new_unique_credit": 0,
+    "FULL_ML": false
+  },
+  "actions": "Only existing archive/source/public listing/receipts/coverage read; wrote two new proposal reports. No source/guard/global/frozen/Cargo/build/list/preflight/resources/actors/native changes."
+}

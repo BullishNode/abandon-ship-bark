@@ -1,0 +1,17 @@
+{
+  "state": "ACTUAL_ALLOCATION_VERIFIED_FINAL_CONTROLS_AND_FRESH_ADMISSION_PENDING",
+  "allocation_path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/sdk-default-daemon-v11c-native-allocation-20261018.json",
+  "allocation_sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+  "private_batch": "batch49-default-daemon-singleton-v11c",
+  "allocation_schema": "binary/test strings, source/artifact pins,conditions; no assumedbatch/cohort/cases schema",
+  "candidate_source": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "test": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "serial": 1,
+  "global_max_native": 2,
+  "parent_native_launches": 0,
+  "native_credit": 0,
+  "otherterminal_scope_to_verify": "/fresh-cache/independent-two-v11c-20261018",
+  "own48": "Remainsclosed/unallocated; no source/pendingcontrol changes."
+}

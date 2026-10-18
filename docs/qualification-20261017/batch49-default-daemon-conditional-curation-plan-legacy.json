@@ -1,0 +1,71 @@
+{
+  "kind": "BATCH49_CONDITIONAL_APPEND_ONLY_CURATION_PLAN",
+  "at": "2026-10-18T07:24:26.342532+00:00",
+  "state": "NO_WRITER_LEASE_NO_CURATION_OR_CREDIT_FORMAL_POSTFLIGHT_PENDING",
+  "baseline": {
+    "executions": 249,
+    "PASS": 234,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 232,
+    "nextest_invocations": 222,
+    "native": 237,
+    "component": 12,
+    "coverage_rows": 460,
+    "coverage_bytes": 339233,
+    "coverage_sha256": "3e40c57525b3e69c08f29e28d2e0022a8cf0e9cd3ab5a0be6dbb558ad83ca71b"
+  },
+  "actual_terminal_reference": {
+    "binary": "ark-testing::bark-sdk",
+    "literal": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+    "run_id": "bd52a8d0-818b-492b-8617-394ead9a3620",
+    "parent_session": 99263,
+    "exit_code": 0,
+    "native_seconds": 22.071,
+    "wall_seconds": 23.037,
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "source_file_sha256": "d3e79a29af1cd1c03767ac24e89960e91745a96d8e4480fbfd3f5b09fe31da70",
+    "body_sha256": "1e38f5ae82e6333b35b982a53439228f0f33fd36e3a8d824c66649cec7b6062d"
+  },
+  "evidence_sha256": {
+    "batch49-default-daemon-singleton-v11c-receipt.json": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+    "batch49-final-control-guard-peer-review-legacy.json": "ff8279a2f20cf3c3c0f7e8b45d274736257634683a8b4ec365fcfa4403f9c57d",
+    "batch49-retained-public-core-projection-legacy.json": "0879fb537c76b05eba5a0eaf0dbde6546d037d8aadec3cd7567a20fc88b4f9d1",
+    "batch49-retained-public-actor-absence-legacy.json": "41ce782381711593acaee53d5c6d543ecd302e891a02529303a45786299a05ac",
+    "batch49-retained-public-actor-absence-final-legacy.json": "4db70788f11476346c9e8bd63b1b288a62075b0d79603e4facf04d45fa922161"
+  },
+  "formal_postflight": null,
+  "dedup": {
+    "new_actual_unique_pair_if_formal_and_writer_gates_complete": 1,
+    "existing_source_inventory_row": "CQUAL-007",
+    "source_inventory_result_at_review": "NOT RUN",
+    "source_inventory_row_does_not_count_execution": true,
+    "historical_pretrack_default_daemon_evidence_not_inherited_as_own_attempt": true,
+    "reserved_case_ID": null,
+    "candidate_ID_only_if_still_free": "FT-SDK-058",
+    "candidate_ID_free_at_review": true
+  },
+  "conditional_after": {
+    "executions": 250,
+    "PASS": 235,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 233,
+    "nextest_invocations": 223,
+    "native": 238,
+    "component": 12,
+    "coverage_rows": 461
+  },
+  "mandatory_gates": [
+    "Receive exact final client postflight binding native run/group165688, actual17pins/15controls/source functions, real selected singleton and no skip/version-only return; verify own scoped actor absence.",
+    "Use immutable initial511 receipt and independent public projection0879 additively; do not rewrite temporal pending-at-creation fields.",
+    "Acquire root writer lease and recheck current baseline/dedup/IDavailability; append exactly one LF native execution row with entire460-row byte prefix and all15historicalfailed executions preserved.",
+    "Update counts only after actual formal gates; preserve frozen PR24/report20 cutoff249/460 and prior reports.",
+    "No lost-source/financial/Core6/fullclaim/ownership/fee/seeddrain evidence inference from the independent structural public projection."
+  ],
+  "success_oracle": "Native SDK daemon initiates early refresh, test triggers the round/mines confirmation blocks, daemon adopts an actual confirmed replacement; healthy replacement is not prematurely exited; after Ark stop at act_by at least one original signed-path tx reaches actual Core live mempool and the replacement exit ID is recorded.",
+  "limitations": [
+    "Explicit1s SDKdaemon/40-block lifetime/exitdelta3/refresh4+exit2 fixture; no default barkd or production timing qualification.",
+    "No final claim/Core6/customer payout/fee conservation/seed drain/fullML qualification. No public financialreceipt or target path coin/txID emission.",
+    "Independent public audit establishes only stable unique retained chains/merkle/PoW/transaction inventory, not final active-chain tip or exact final protective path.",
+    "No execution, listing, compiler, source/global/ML/Git mutation; only this plan is written. IDs and counts remain unreserved."
+  ]
+}

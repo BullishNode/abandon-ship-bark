@@ -1,0 +1,158 @@
+{
+  "kind": "H30_GROUPED_ZERO_SHARE_DISPOSITION_NARROW_SOURCE_PEER",
+  "at": "2026-10-18T07:42:58.609594+00:00",
+  "state": "SOURCE_ACK_NO_CONCRETE_BLOCKER_NOT_COMPILED_NOT_RUN",
+  "patch": {
+    "path": "/tmp/fresh-grouped-zero-share-disposition-20261018-v1.patch",
+    "sha256": "f556330ac43ee5bccc0658ef439407ed003858418500457209acf61dcba8fca8",
+    "manifest_path": "/tmp/fresh-grouped-zero-share-disposition-20261018-v1.json",
+    "manifest_sha256": "be7b04cf74321e6d58819c3f16376a025a8dc0238efd88ae982d815b570a3f4a",
+    "target": "server/src/database/expiry_details.rs",
+    "before_sha256": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+    "after_in_memory_sha256": "c11c205f88d36362a9c00e5049229531407f5687457898ff7395a19ae44683c6",
+    "one_removed_one_added_line": true,
+    "canonical_target_bytes_unchanged": true
+  },
+  "parent_risk_receipt": {
+    "path": "H30-projection-composition-risk-parent.json",
+    "sha256": "9ba0e3eafa7716544d4f80cb994130c5d4cac004693c83af196f087b78104b92"
+  },
+  "reviewed_source_sha256": {
+    "server/src/database/expiry_details.rs": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+    "server/src/database/expiry_decision.rs": "ab2903e83264f314f17cfea91e67e4ca95a7df1086ea4c6f450f90d2c9cf5255",
+    "server/src/watchman/settlement.rs": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+    "server/src/database/fork_migrations/V5__expiry_allocations.sql": "3712331243e47c147d3387b5887f02eeccb0d7a59e2b273ba9d4d55574ecea42",
+    "bark/src/fallback/payouts.rs": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+    "bark/src/fallback/protection.rs": "b0f3040f9d707c28fac3f42869a2429dc583e0b0692b964f67c16763bb2fb26e",
+    "bark/src/fallback/sync.rs": "d826d65a587e5cb5b8edbb7a4550086483edd65abc3bb61128689a4731f789a7"
+  },
+  "source_findings": [
+    {
+      "file": "server/src/database/expiry_details.rs",
+      "lines": [
+        183,
+        193
+      ],
+      "finding": "LEFT JOIN payout by identical allocation ID and exact coin script; presence is allocation payout association, not per-leaf net and not proof of on-chain payment."
+    },
+    {
+      "file": "server/src/database/fork_migrations/V5__expiry_allocations.sql",
+      "lines": [
+        48,
+        55
+      ],
+      "finding": "Payout output index is nonnegative INTEGER NOT NULL; positive output amount and unique allocation/script prevent ambiguous group join. Checked schema.sql first; fork table DDL is in the explicit fork migration."
+    },
+    {
+      "file": "server/src/database/expiry_decision.rs",
+      "lines": [
+        321,
+        331,
+        379,
+        394
+      ],
+      "finding": "Allocate exact leaf group, persist payout rows only for recipients, retain per-leaf fee/payout/forfeit and exact owner/script independently."
+    },
+    {
+      "file": "server/src/watchman/settlement.rs",
+      "lines": [
+        81,
+        118
+      ],
+      "finding": "Same-script leaves sorted by ID; fee consumes min(gross,remaining_fee), zero payout share is allowed in a payable output group; whole-group dust creates forfeits and no recipient output."
+    },
+    {
+      "file": "server/src/database/expiry_details.rs",
+      "lines": [
+        227,
+        242
+      ],
+      "finding": "Existing fallible output-index conversion, parent txid and exact parent output script/value validation unchanged."
+    },
+    {
+      "file": "bark/src/fallback/payouts.rs",
+      "lines": [
+        153,
+        187,
+        281,
+        333
+      ],
+      "finding": "Per-leaf principal conservation, registered payee, index/value/parent/stage checks and grouped movement/debit accounting unchanged; customer payout need not have positive per-leaf share."
+    },
+    {
+      "file": "bark/src/fallback/protection.rs",
+      "lines": [
+        22,
+        69,
+        136,
+        168
+      ],
+      "finding": "Group conservation requires nonforfeited leaves, fee<=1000, positive aggregate payout<=actual output, expected script, canonical Core>=6 and actual signed ancestry. BelowDust still demands no output, zero fee, full forfeit and genuinely subdust aggregate."
+    },
+    {
+      "file": "bark/src/fallback/protection.rs",
+      "lines": [
+        292,
+        344
+      ],
+      "finding": "Existing wrong-script/value/excess-fee/output-reuse/dust-boundary negative test source remains unchanged; no tests run by reviewer."
+    }
+  ],
+  "static_case_reasoning": [
+    {
+      "condition": "Three500-sat leaves share one standard non-dust500-sat group output after1000fee",
+      "ordered_leaf_shares": [
+        {
+          "gross": 500,
+          "fee": 500,
+          "payout": 0,
+          "forfeited": 0
+        },
+        {
+          "gross": 500,
+          "fee": 500,
+          "payout": 0,
+          "forfeited": 0
+        },
+        {
+          "gross": 500,
+          "fee": 0,
+          "payout": 500,
+          "forfeited": 0
+        }
+      ],
+      "before": "Two lawful fee-only leaves are labelled BelowDust despite nonzero fee/present group output; SDKBelowDust contract rejects that projection.",
+      "proposed": "All three joined output_index values are Some, so all classifyCustomerPayout; per-leaf arithmetic and grouped output conservation remain valid."
+    },
+    {
+      "condition": "True whole-group net below actual script dust",
+      "before_and_proposed": "Allocator creates no recipient/payout row; LEFT JOIN output_index isNone, soCustomer becomesBelowDust, with fullforfeit/fee0/payout0.",
+      "scope": "Proposed patch does not change allocator/dust or client validation."
+    },
+    {
+      "condition": "Committed output mapping exists but signed parent/broadcast/confirmation has not yet happened",
+      "proposed": "CustomerPayout denotes a committed payout attempt association, not paid/discharged; existing stage and independent evidence fences remain required."
+    }
+  ],
+  "unchanged_guards": {
+    "query_join_scope": true,
+    "payee_account_authentication_and_script": true,
+    "parent_txid_and_output_index_script_value": true,
+    "per_leaf_conservation": true,
+    "group_fee_output_and_no_double_payment_checks": true,
+    "client_canonical_Core6_and_signed_path": true,
+    "whole_group_dust_and_no_output_contract": true
+  },
+  "required_future_validation": [
+    "Authentic nativeH30 cosign/registration/automatic grouped payout and returningSDK/history acceptance of all three exact receipt IDs, including fee-only leaves.",
+    "True whole-group no-output dust still projectsBelowDust and is accepted only under unchanged full-forfeit/zero-fee rules.",
+    "Preserve/run existing bad-script/value/excess-fee/reused-output/dust-negative checks on the future captured candidate; this source review does not claim their runtime outcomes."
+  ],
+  "limits": [
+    "One-line server projection correction only; not a change to financial allocator/fee/dust/address/protocol policy or client validation.",
+    "No native reproduction or severity/globalfund-loss/fullML claim. Parent risk is source-supported; exact future source/artifact/build/runtime admission is required.",
+    "RootV16 frozen capture excludes this isolated patch and newH30test; do not relabel any old or running candidate.",
+    "In-memory substitution/fullhash and read-only source/schema review only; no source/product/control/global/ML/Git/build/Cargo/native mutation. Only this new external review JSON/MD pair."
+  ],
+  "blockers": []
+}

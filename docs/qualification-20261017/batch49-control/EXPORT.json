@@ -1,0 +1,289 @@
+{
+  "kind": "SAFE_BATCH49_CONTROL_EXPORT_FROZEN_NOT_PUBLISHED",
+  "at": "2026-10-18T07:27:51.636271+00:00",
+  "exports": [
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/selection-proof.json",
+      "source_sha256": "1c81bdb5546ff459b66393f61d4384e01dec7ae95790c102eddbdc25f8db0678",
+      "destination": "selection-proof.json",
+      "destination_sha256": "1c81bdb5546ff459b66393f61d4384e01dec7ae95790c102eddbdc25f8db0678",
+      "bytes": 4090,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/root-allocation.json",
+      "source_sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+      "destination": "root-allocation.json",
+      "destination_sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+      "bytes": 2856,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/runtime-pins.sha256",
+      "source_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "destination": "runtime-pins.sha256",
+      "destination_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "bytes": 2248,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/source-proposal.json",
+      "source_sha256": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+      "destination": "source-proposal.json",
+      "destination_sha256": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+      "bytes": 19293,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/source-peer.json",
+      "source_sha256": "01d22056373d2cb481b5ad9eb743f26bcd41551af4dbcb8aeee935afa1633a09",
+      "destination": "source-peer.json",
+      "destination_sha256": "01d22056373d2cb481b5ad9eb743f26bcd41551af4dbcb8aeee935afa1633a09",
+      "bytes": 1300,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/parent-actor-probe.py",
+      "source_sha256": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+      "destination": "parent-actor-probe.py",
+      "destination_sha256": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+      "bytes": 4153,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/server-cohort.py",
+      "source_sha256": "199d3f30755f0b8c409f970e3f02cb0fbd86d61ba5500cd14be9dc308a7d4512",
+      "destination": "server-cohort.py",
+      "destination_sha256": "199d3f30755f0b8c409f970e3f02cb0fbd86d61ba5500cd14be9dc308a7d4512",
+      "bytes": 14646,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/preflight-static.py",
+      "source_sha256": "d854494967294d7eee9a702c8a46f2d0ee9ad3703d896820c2459b926189a3fb",
+      "destination": "preflight-static.py",
+      "destination_sha256": "d854494967294d7eee9a702c8a46f2d0ee9ad3703d896820c2459b926189a3fb",
+      "bytes": 6938,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/fresh-listings.py",
+      "source_sha256": "35f688a58f0d8e75ded85a0c19d2e32e298b7bbc31b8cb8f1f7a1bed9b815564",
+      "destination": "fresh-listings.py",
+      "destination_sha256": "35f688a58f0d8e75ded85a0c19d2e32e298b7bbc31b8cb8f1f7a1bed9b815564",
+      "bytes": 7194,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/preflight.sh",
+      "source_sha256": "369aa4079c538f8271c20eca5d7a0109bb7c1754e2da817d11f34299793da309",
+      "destination": "preflight.sh",
+      "destination_sha256": "369aa4079c538f8271c20eca5d7a0109bb7c1754e2da817d11f34299793da309",
+      "bytes": 2100,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/run.sh",
+      "source_sha256": "6fca8c839fd4b1b02d88d93ccc6913140060b4af7dd6e2524800211965327c23",
+      "destination": "run.sh",
+      "destination_sha256": "6fca8c839fd4b1b02d88d93ccc6913140060b4af7dd6e2524800211965327c23",
+      "bytes": 2130,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/nextest.toml",
+      "source_sha256": "ca296923f097bd06cfd9bdae385e57bef7c8fdd8b034638c3b8b4b99388ae337",
+      "destination": "case01/nextest.toml",
+      "destination_sha256": "ca296923f097bd06cfd9bdae385e57bef7c8fdd8b034638c3b8b4b99388ae337",
+      "bytes": 189,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/fresh-listing-admission.json",
+      "source_sha256": "4ca6524b0126f058793a8e7708c1e82c24f4a589fe5221979ce659bacb2296f4",
+      "destination": "fresh-listing-admission.json",
+      "destination_sha256": "4ca6524b0126f058793a8e7708c1e82c24f4a589fe5221979ce659bacb2296f4",
+      "bytes": 205,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/resource-admission.json",
+      "source_sha256": "f7c9a0d5f3b2dc4ce00c712fe4cc86f170bb4beff31b777f6cd9327a10b80593",
+      "destination": "resource-admission.json",
+      "destination_sha256": "f7c9a0d5f3b2dc4ce00c712fe4cc86f170bb4beff31b777f6cd9327a10b80593",
+      "bytes": 111,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/parent-actor-admission.json",
+      "source_sha256": "1d058d2a0b5ef821a9c5c0e4c327d13c0fb31c9811a0202e2029d0cd9a7c66fb",
+      "destination": "parent-actor-admission.json",
+      "destination_sha256": "1d058d2a0b5ef821a9c5c0e4c327d13c0fb31c9811a0202e2029d0cd9a7c66fb",
+      "bytes": 1492,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/PREPARATION.json",
+      "source_sha256": "c4011abb96aabd234af0acbd52553e57d5f034b4011ba17af6fdf6a493019c60",
+      "destination": "PREPARATION.json",
+      "destination_sha256": "44b713cf43d6b8c3a18a2e47ca4e2845d224b0be4dc4d56b6a68db4d7180e51d",
+      "bytes": 4108,
+      "byte_equal": false,
+      "transform": "PREPARATION_FIELD_PROJECTION_PARENT_COMMAND_ARRAYS_OMITTED"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/parent-launch-admission.json",
+      "source_sha256": "cbe20bc817c83ff0e2b24eb2f1df057c19c4b25bec2ea4b3493748e88a001d96",
+      "destination": "parent-launch-admission.json",
+      "destination_sha256": "cbe20bc817c83ff0e2b24eb2f1df057c19c4b25bec2ea4b3493748e88a001d96",
+      "bytes": 2486,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/launch-authorization-pending.preserved.json",
+      "source_sha256": "24412e2c5d34bf0eda9789555a18d3c899bfe1862e2f80ca2dd0701bb17045bd",
+      "destination": "launch-authorization-pending.preserved.json",
+      "destination_sha256": "24412e2c5d34bf0eda9789555a18d3c899bfe1862e2f80ca2dd0701bb17045bd",
+      "bytes": 243,
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/runtime-pins.sha256",
+      "source_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "destination": "runtime-core14-derived.sha256",
+      "destination_sha256": "6a55b1404550cfa82bbe8148efa2b5b463749a28d75b513792d04aea7f591f46",
+      "bytes": 1874,
+      "byte_equal": false,
+      "transform": "EXACT_PRIMARY17_MINUS_CLN3_DERIVED_CORE14_PRIMARY17_AUTHORITATIVE_CLN_UNUSED"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/cohort-progress.json",
+      "source_sha256": "d0c440d59fae5fdf0bd83e371dcd39cb3d77a79afc070ab84bfd90f4d46774a4",
+      "destination": "cohort-progress.safe.json",
+      "destination_sha256": "4df3e825794ea949aa6cff528b93891e13b2634b152098ee4592a4cf369c5e37",
+      "bytes": 546,
+      "byte_equal": false,
+      "transform": "EXPLICIT_CASE_FIELDS_NO_COMMAND_ARGV_OR_RAW_LOG"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/cohort-summary.json",
+      "source_sha256": "51ec2b6616b51666d977633cbd6d857af6ba2c2c76d36cde96087519db03f8e1",
+      "destination": "cohort-summary.safe.json",
+      "destination_sha256": "7b451e69a82cd029f9605b8f7975f8ebe6119827e6fafd8c0c971c45f5e4af92",
+      "bytes": 1051,
+      "byte_equal": false,
+      "transform": "EXPLICIT_SUMMARY_CASE_FIELDS_COMMAND_ARRAY_OMITTED"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/result.json",
+      "source_sha256": "c6b37566d6dbc63ecfd155ac3f246ff250f0058e06a67817c37bd12efb9b0b01",
+      "destination": "case01/result.safe.json",
+      "destination_sha256": "062949fdad08587a37a2bd340cc76ba7db8d0fe9a9ccc343c15f7b4728821912",
+      "bytes": 510,
+      "byte_equal": false,
+      "transform": "EXPLICIT_CASE_FIELDS_COMMAND_ARRAY_OMITTED"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-v11c-client-postflight.json",
+      "source_sha256": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+      "destination": "case01/safe-native-summary.txt",
+      "destination_sha256": "07a2feecb0777bfedd79123b7f6ff977946a5a06a775a4b032d037190068c6ce",
+      "bytes": 572,
+      "byte_equal": false,
+      "transform": "ANCHORED_FORMAL_SAFE_UUID_PASS_SUMMARY_AND_DERIVED_STARTING_METADATA_NO_RAW_LOG"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-v11c-client-postflight.json",
+      "source_sha256": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+      "destination": "formal-postflight.safe.json",
+      "destination_sha256": "e2aa5a2dd82003e8ea6ccb45ded433c3302e261366bc3062e38217a19210b07d",
+      "bytes": 11447,
+      "byte_equal": false,
+      "transform": "EXPLICIT_FORMAL_METADATA_PROJECTION_NO_PRIVATE_PATH_CONTENTS_COMMANDS_OR_RAW_LOG"
+    },
+    {
+      "source": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch49-default-daemon-singleton-v11c-receipt.json",
+      "source_sha256": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+      "destination": "native-initial-receipt.safe.json",
+      "destination_sha256": "9243084187a1bd805e933bec3c16f1d7dd77554cd00e7158470e0136f68a6c4d",
+      "bytes": 1941,
+      "byte_equal": false,
+      "transform": "EXPLICIT_INITIAL_METADATA_AND_CASE_PROJECTION_NO_COMMAND_PRIVATE_CONTEXT_RAW_LOG"
+    }
+  ],
+  "exported_files_excluding_manifest": 25,
+  "exported_files_including_manifest": 26,
+  "aggregate_sha256": "65c025665ed31479c111e778c51cfb3dd893641e34b49b343cd65200ee21261d",
+  "aggregate_algorithm": "SHA256 concatenated destination+NUL+destination_sha256+LF sorted by destination; excludes EXPORT.json",
+  "source_static12_unchanged": {
+    "selection-proof.json": "1c81bdb5546ff459b66393f61d4384e01dec7ae95790c102eddbdc25f8db0678",
+    "root-allocation.json": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "source-proposal.json": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+    "source-peer.json": "01d22056373d2cb481b5ad9eb743f26bcd41551af4dbcb8aeee935afa1633a09",
+    "parent-actor-probe.py": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+    "server-cohort.py": "199d3f30755f0b8c409f970e3f02cb0fbd86d61ba5500cd14be9dc308a7d4512",
+    "preflight-static.py": "d854494967294d7eee9a702c8a46f2d0ee9ad3703d896820c2459b926189a3fb",
+    "fresh-listings.py": "35f688a58f0d8e75ded85a0c19d2e32e298b7bbc31b8cb8f1f7a1bed9b815564",
+    "preflight.sh": "369aa4079c538f8271c20eca5d7a0109bb7c1754e2da817d11f34299793da309",
+    "run.sh": "6fca8c839fd4b1b02d88d93ccc6913140060b4af7dd6e2524800211965327c23",
+    "case01/nextest.toml": "ca296923f097bd06cfd9bdae385e57bef7c8fdd8b034638c3b8b4b99388ae337"
+  },
+  "source_parent15_unchanged": {
+    "selection-proof.json": "1c81bdb5546ff459b66393f61d4384e01dec7ae95790c102eddbdc25f8db0678",
+    "root-allocation.json": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "source-proposal.json": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+    "source-peer.json": "01d22056373d2cb481b5ad9eb743f26bcd41551af4dbcb8aeee935afa1633a09",
+    "parent-actor-probe.py": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+    "server-cohort.py": "199d3f30755f0b8c409f970e3f02cb0fbd86d61ba5500cd14be9dc308a7d4512",
+    "preflight-static.py": "d854494967294d7eee9a702c8a46f2d0ee9ad3703d896820c2459b926189a3fb",
+    "fresh-listings.py": "35f688a58f0d8e75ded85a0c19d2e32e298b7bbc31b8cb8f1f7a1bed9b815564",
+    "preflight.sh": "369aa4079c538f8271c20eca5d7a0109bb7c1754e2da817d11f34299793da309",
+    "run.sh": "6fca8c839fd4b1b02d88d93ccc6913140060b4af7dd6e2524800211965327c23",
+    "case01/nextest.toml": "ca296923f097bd06cfd9bdae385e57bef7c8fdd8b034638c3b8b4b99388ae337",
+    "fresh-listing-admission.json": "4ca6524b0126f058793a8e7708c1e82c24f4a589fe5221979ce659bacb2296f4",
+    "resource-admission.json": "f7c9a0d5f3b2dc4ce00c712fe4cc86f170bb4beff31b777f6cd9327a10b80593",
+    "parent-actor-admission.json": "1d058d2a0b5ef821a9c5c0e4c327d13c0fb31c9811a0202e2029d0cd9a7c66fb"
+  },
+  "primary17_pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "initial_native_receipt_sha256": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+  "formal_postflight_sha256": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+  "separate_independent_public_projection_sha256": "0879fb537c76b05eba5a0eaf0dbde6546d037d8aadec3cd7567a20fc88b4f9d1",
+  "validation": {
+    "JSON": 15,
+    "AST": 4,
+    "bash_n": 2,
+    "TOML": 1,
+    "basic_credential_matches": 0,
+    "valid_BIP39_checksum_matches": 0,
+    "valid_WIF_Base58Check_matches": 0,
+    "BIP39_wordlist_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693"
+  },
+  "limits": [
+    "Source/probe/control AST and bash-n only; no controller/probe/list/preflight/resources/native/Cargo executed.",
+    "Only tiny static controls and explicit command-free sanitized metadata exported; no nativewallet/Core/config/rawlogs/private source/PG/seed contents or fabricated financial receipt.",
+    "One selected unignored SDK test across4 listed binaries;660 filtered tests were not executed.",
+    "Actual native22.071s PASS and formal postflight do not prove final claim/Core6/seeddrain/full money/custody/FULLML; separate independent0879 projection unchanged and outside subtree.",
+    "Primary17 still authoritative; exactcore14 subset excludes3 unused CLN artifact lines without implying CLN use.",
+    "No frozen19/20/48 or ML125f339 source mutation, no rolling/COVERAGE/FINDINGS/STATUS/Git actions.",
+    "Parent independent complete publication payload audit still required; this English-BIP39/Base58Check WIF/strong credential scan is only this exported subtree."
+  ]
+}

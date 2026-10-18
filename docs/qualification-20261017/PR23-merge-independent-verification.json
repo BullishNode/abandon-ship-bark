@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-18T07:21:23.035280+00:00",
+  "state": "MERGED_FIXED_HEAD_AND_ALL_PAYLOAD_GIT_BLOBS_VERIFIED",
+  "PR": 23,
+  "fixed_head": "e8d0beafb5b42d6d6a54a8d74686660d1dfe8d9e",
+  "merge_commit": "f6461d35cc643e96e5f4bd3a3c61e6a6616f91ec",
+  "merged_at": "2026-10-18T07:16:16Z",
+  "frozen_payload_plus_manifest_files_verified": 81,
+  "verification": "GitHubactualPRstate/MERGED/fixedhead/merge metadata and recursiveGit tree GitblobIDs equal ownfixedcommit for every frozenpayload+manifest. Original publicationOPENatcreation receipt unchanged.",
+  "original_receipt_sha256": "6cdd503237cccf76f608de7e70d6cdd21c64c4be92da89b06d57e11edd0a9481",
+  "no_merge_by_testing_track": true
+}

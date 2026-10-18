@@ -1,0 +1,28 @@
+{
+  "result": "PASS",
+  "passed": 1,
+  "failed": 0,
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+  "runtime_scope": "One SDK default-daemon refresh/Ark-offline signed-path broadcast; no completedclaim/Core6/cost/seeddrain/FULLML qualification",
+  "resource_cleanup": "NONE; all raw evidence retained",
+  "retries": 0,
+  "cases": [
+    {
+      "index": 1,
+      "name": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+      "state": "PASS",
+      "started_at": "2026-10-18T07:18:27.952205+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "owned_nextest_group": 165688,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "bd52a8d0-818b-492b-8617-394ead9a3620",
+      "test_seconds": 22.071,
+      "wall_seconds": 23.037,
+      "ended_at": "2026-10-18T07:18:50.989853+00:00"
+    }
+  ]
+}

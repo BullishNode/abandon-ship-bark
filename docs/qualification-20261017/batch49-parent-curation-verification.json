@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-18T07:29:32.005877+00:00",
+  "state": "PARENT_INDEPENDENT_CURATION_VERIFICATION_PASS",
+  "executions": 250,
+  "PASS": 235,
+  "FAIL": 15,
+  "rows": 461,
+  "exact_prior_prefix_bytes": 339233,
+  "prior_prefix_sha256": "3e40c57525b3e69c08f29e28d2e0022a8cf0e9cd3ab5a0be6dbb558ad83ca71b",
+  "new_case": "FT-SDK-058",
+  "COVERAGE_sha256": "661fb68712076548e5a8665b2e78047bf7d7d69f58743d7a94326e449af70b9d",
+  "lease": "RELEASED",
+  "initial_native_receipt_immutable": true,
+  "scope": "Native automaticdaemonrefresh/adoption+signedpathbroadcast only; retainedpublicCorechainprojection noactive-tip/path/financialbinding. No FULLML."
+}

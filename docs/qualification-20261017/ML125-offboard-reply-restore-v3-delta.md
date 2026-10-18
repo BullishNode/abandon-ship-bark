@@ -1,0 +1,7 @@
+# ML125 source v3: obey the real minimum board admission
+
+SOURCE ONLY — uncompiled/NOT RUN; parent authorizes this correction only. V2f339/private source/add-file/delta/manifest and its source peer ACK8a0b remain immutable. Subsequent source inspection found a concrete setup blocker missed by that ACK: TestContext config min_board_amount20,000 (testing/src/context/mod.rs509), same as current server/captaind.default.toml26. Direct control.boarded10,000 would be rejected. No actual native failure occurred; earlier source review is superseded for this admission issue.
+
+Minimal v3 funds the control with40,000 and boards20,000 through the real unchanged admission policy. The genuine positive control now pays19,000 plus its1,000 fallback charge. Only control amount assertions and explicit public control gross/net are changed. Main customer200,000/native100,000 offboard, exact original intent/net/agreed committed fee/actual miner fee, cold DB/BDK, all-ten balances, authentic expired Finish retry, two confirmed100,000 fee sponsors,180-second/96-block bounds, no duplicate original payments and positive-control Core6/child proof remain unchanged. No min-board override, time extension, financial SQL injection or product edit.
+
+This increases separately declared control funding by20,000; total declared native setup is940,000, not the earlier920,000. Neither amount is claimed as a complete global operator custody/solvency equation. V3 needs client/parent source re-review and actual root integration/build/capture/allocation; it has zero native execution credit.

@@ -1,0 +1,127 @@
+{
+  "kind": "BATCH49_ADDITIVE_TERMINAL_CURATION",
+  "at": "2026-10-18T07:27:32.380500+00:00",
+  "state": "ONE_NATIVE_PASS_FORMAL_AND_BOUNDED_PUBLIC_PROJECTION_COMPLETE_APPEND_ONLY",
+  "baseline": {
+    "executions": 249,
+    "PASS": 234,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 232,
+    "nextest_invocations": 222,
+    "native": 237,
+    "component": 12,
+    "coverage_rows": 460
+  },
+  "baseline_sha256": {
+    "COVERAGE.csv": "3e40c57525b3e69c08f29e28d2e0022a8cf0e9cd3ab5a0be6dbb558ad83ca71b",
+    "FINDINGS.md": "e96d9b8571f9963c54fb7869fb73272a5b8c5925ba9b048d9fefa996d29418ac",
+    "STATUS.json": "344792339d891a8a5d223a8057ef3e7610c3f49434181fd7530a9e9d51af04b3"
+  },
+  "after": {
+    "aggregate": {
+      "executions": 250,
+      "PASS": 235,
+      "FAIL": 15,
+      "unique_binary_test_pairs": 233,
+      "nextest_invocations": 223,
+      "native": 238,
+      "component": 12,
+      "coverage_rows": 461
+    },
+    "coverage_sha256": "661fb68712076548e5a8665b2e78047bf7d7d69f58743d7a94326e449af70b9d",
+    "coverage_bytes": 341363,
+    "FINDINGS_sha256": "6f56f1137366a6b034aad0c34df9d1efef7540a3d7f8e1829f4947a9501e0b87",
+    "STATUS_sha256": "b5e5729fbfbae874065151af5892fe314bc3d5572dd2e727005b86efdf3281ed",
+    "checkpoint_sha256": "c3b360548993d74045016be248868dd835c30384f8bb17c312086022e167fd59"
+  },
+  "append": {
+    "case_id": "FT-SDK-058",
+    "row": {
+      "case_id": "FT-SDK-058",
+      "requirement": "SDK default daemon (manual_sync=false, one-second interval) independently initiates early refresh; the test triggers the actual round and mines confirmations, then the daemon adopts its confirmed replacement without exiting it at the old deadline. With Ark stopped and replacement act_by reached, at least one actual signed protective-path transaction is observed in Core live mempool and the replacement ID is in the exit manager.",
+      "layer_network": "native SDK/Core/PostgreSQL regtest",
+      "automated_test_name": "ark-testing::bark-sdk fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+      "latest_result": "PASS",
+      "tested_revision": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+      "evidence_path": "batch49-default-daemon-singleton-v11c-receipt.json; batch49-v11c-client-postflight.json; batch49-retained-public-core-projection-legacy.json; batch49-coverage-append.json",
+      "limitation": "Explicit SDK fixture: 40-block lifetime, exit delta3 and refresh4/exit2 margins. Native source-bound initiation/adoption/signed-path broadcast only; test still triggers the round/mines blocks. No completed claim, final Core6 recovery, customer payout/ownership/fees/full conservation, seed drain, default barkd lifecycle, production or fullML proof. Independent public projection verifies stable retained block structure/merkle/PoW/inventory only, not active tip or exact native path identity; unbound persisted mempool dumps cannot prove/refute final live mempool. 660 filtered skips are not executed or zero-test evidence.",
+      "owner": "testing-track",
+      "entry_kind": "executed_named_test",
+      "classification": "native_SDK_default_daemon_refresh_and_signed_path_broadcast",
+      "inspected_revision": "1e38f5ae82e6333b35b982a53439228f0f33fd36e3a8d824c66649cec7b6062d",
+      "success_oracle": "SDK default daemon (manual_sync=false, one-second interval) independently initiates early refresh; the test triggers the actual round and mines confirmations, then the daemon adopts its confirmed replacement without exiting it at the old deadline. With Ark stopped and replacement act_by reached, at least one actual signed protective-path transaction is observed in Core live mempool and the replacement ID is in the exit manager. Actual PASS 22.071 seconds; run bd52a8d0-818b-492b-8617-394ead9a3620."
+    },
+    "bytes": 2130,
+    "sha256": "cc37227129a0e4d53926aa4f5e4c5f233f733f07f7e62ac357e88ee3bc82a87d",
+    "prior460_row_prefix_bytes": 339233,
+    "prior_prefix_byte_identical": true,
+    "prior_parsed_rows_identical": true,
+    "all_LF": true,
+    "FINDINGS_prior_prefix_byte_identical": true,
+    "all_prior_literal_FAIL_rows_unchanged": 14,
+    "prior_aggregate_FAILED_executions_unchanged": 15,
+    "source_inventory_CQUAL007_unchanged": true,
+    "new_unique_binary_test_pairs": 1,
+    "mixed_rows_not_one_to_one_with_aggregate": true
+  },
+  "actual_terminal": {
+    "binary": "ark-testing::bark-sdk",
+    "literal": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+    "PASS": 1,
+    "FAIL": 0,
+    "run_id": "bd52a8d0-818b-492b-8617-394ead9a3620",
+    "native_seconds": 22.071,
+    "wall_seconds": 23.037,
+    "parent_session": 99263,
+    "exit_code": 0,
+    "timeout_seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "filtered_skipped_other_tests": 660,
+    "skips_execution_credit": 0
+  },
+  "evidence_sha256": {
+    "batch49-default-daemon-singleton-v11c-receipt.json": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+    "batch49-v11c-client-postflight.json": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+    "batch49-retained-public-core-projection-legacy.json": "0879fb537c76b05eba5a0eaf0dbde6546d037d8aadec3cd7567a20fc88b4f9d1",
+    "batch49-default-daemon-conditional-curation-plan-legacy.json": "f79c221d6031b553d734b3055bbeb353dd657663cba6e234c40f49cacfd506b8"
+  },
+  "source_binding": {
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+    "full_source_file_sha256": "d3e79a29af1cd1c03767ac24e89960e91745a96d8e4480fbfd3f5b09fe31da70",
+    "body_sha256": "1e38f5ae82e6333b35b982a53439228f0f33fd36e3a8d824c66649cec7b6062d",
+    "native_sdk_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+    "root_allocation_sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+    "parent_admission_sha256": "cbe20bc817c83ff0e2b24eb2f1df057c19c4b25bec2ea4b3493748e88a001d96"
+  },
+  "formal": {
+    "actual_pins": 17,
+    "frozen_paths": 15,
+    "scoped_actors": 0,
+    "known_PGID_SID": 165688,
+    "no_private_contents_read": true
+  },
+  "public_projection": {
+    "mode": "stable_retained_structure_only",
+    "nodes": 2,
+    "blocks_each": 171,
+    "retained_height_each": 170,
+    "noncoinbase_txs_each": 4,
+    "active_tip_binding": false,
+    "native_coin_path_ID_binding": false,
+    "ownership_or_fee_inference": false
+  },
+  "frozen_publication_snapshots_unchanged": {
+    "19": {
+      "manifest_sha256": "94d4cb3e8d4ae36c3d163a1814fe77bff3ecf2e9f37a28f892730419684f3505",
+      "all_payload_entries_unchanged": 80
+    },
+    "20": {
+      "manifest_sha256": "3c9a0e5de012810bbb35c1b85ded79fd4fa80149ad479428e315856fb6c7afcd",
+      "all_payload_entries_unchanged": 62
+    }
+  },
+  "scope_limits": "Explicit SDK fixture: 40-block lifetime, exit delta3 and refresh4/exit2 margins. Native source-bound initiation/adoption/signed-path broadcast only; test still triggers the round/mines blocks. No completed claim, final Core6 recovery, customer payout/ownership/fees/full conservation, seed drain, default barkd lifecycle, production or fullML proof. Independent public projection verifies stable retained block structure/merkle/PoW/inventory only, not active tip or exact native path identity; unbound persisted mempool dumps cannot prove/refute final live mempool. 660 filtered skips are not executed or zero-test evidence.",
+  "preservation": "Initial511/formaldd/public0879/conditionalplan remain immutable; no ML maps/source/Git/control/native or other reports changed. Only authorized rolling globals plus this new receipt/checkpoint and lease release."
+}

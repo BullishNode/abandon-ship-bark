@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_V3_MINIMUM_BOARD_ADMISSION_CORRECTION_REVIEW_PENDING_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T07:36:36.673364+00:00",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_reply_restore.rs",
+  "source_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+  "source_lines": 545,
+  "private_snapshot_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+  "v2_source_sha256": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+  "v2_manifest_sha256": "d94ec2a644f42fa4a1fa91d555c78d977384ec54e0924af116d1299e1815bc90",
+  "v2_ACK_preserved_but_admission_superseded": "8a0b1d092e2a6c42f6ff435cdd9096105ccda489081e562ef5c1240e556df0fd",
+  "delta_patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v3-delta.patch",
+  "delta_sha256": "4cf0dc976505624d6fd3ffb88c0093b33cb99d96f18a4332c57a9ab101a443b0",
+  "add_file_patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v3.patch",
+  "add_file_patch_sha256": "6ae63a927d20e0528ba500b925741881818f8ba445e4b29e3660a397d04e40b1",
+  "notes_sha256": "e12f3b9dd715e625b60bda60ed40e83cc2cb0780b6eca6edd95aa8fd6983ebf6",
+  "new_control": {
+    "funding_sat": 40000,
+    "board_gross_sat": 20000,
+    "fallback_net_sat": 19000,
+    "fallback_fee_sat": 1000
+  },
+  "unchanged": {
+    "main_customer_sat": 200000,
+    "main_offboard_gross_sat": 100000,
+    "watchman_sponsors_sat": [
+      100000,
+      100000
+    ],
+    "whole_case_seconds": 180,
+    "block_budget": 96,
+    "prior_owned_test_Rust_files": 121,
+    "product_policy": true,
+    "module": true
+  },
+  "future": {
+    "source_review_ACK": null,
+    "build_result": null,
+    "allocation": null,
+    "native_result": null
+  },
+  "no_Cargo_native_global_Git_actions": true
+}

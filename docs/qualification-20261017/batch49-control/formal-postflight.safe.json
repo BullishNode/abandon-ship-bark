@@ -1,0 +1,200 @@
+{
+  "kind": "batch49-independent-client-postflight",
+  "state": "TERMINAL_1PASS_POSTFLIGHT_INTEGRITY_AND_SCOPED_ABSENCE_PASS",
+  "at": "2026-10-18T07:24:58.937706+00:00",
+  "parent_terminal_confirmed": {
+    "tool_session": 99263,
+    "exit_code": 0,
+    "source": "Parent explicit terminal confirmation; child exit0/result independently matched"
+  },
+  "counts": {
+    "started": 1,
+    "PASS": 1,
+    "FAIL": 0,
+    "NOT_STARTED": 0
+  },
+  "binary": "ark-testing::bark-sdk",
+  "actual_selected_unignored": [
+    [
+      "ark-testing::bark-sdk",
+      "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable"
+    ]
+  ],
+  "native_safe_PASS_line": "PASS [22.071s] ark-testing::bark-sdk fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+  "native_safe_summary": "Summary [22.073s] 1 test run: 1 passed, 660 skipped",
+  "native_starting_count": 1,
+  "native_listed_binary_count": 4,
+  "filter_skip_meaning": "660 other tests filter-skipped; exact selected unignored case executed. Not zero-test/version-gate-only PASS.",
+  "genuine_native_scope": {
+    "context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c/case01/test-data/bark_sdk/fallback_protection_default_daemon",
+    "directory_categories_present": [
+      "owner",
+      "server",
+      "postgres",
+      "bitcoind"
+    ],
+    "owner_db_and_Core_block_files_exist": true,
+    "private_artifact_contents_read": false,
+    "source_fn_sha256": "f70ded222b148d44d06eadd1e4b541865820046a9a28c37e1af610b3ba0f88cb",
+    "version_gate": "No version macro or outer early-return in exact target; its two returns complete local async polling waits. Parent product version gates preceded run.",
+    "native_assertions": "ActualSDKdaemon initiated refresh, replacement funding inCore, replacement adopted after6blocks/noexitatolddeadline; Arkstop then >=1signedpathtx Coremempool and exitID.",
+    "not_proved": "No completedclaim/finalclaimCore6/exactcost/seeddrain/defaultproduction/barkd lifecycle; no financialpublicreceipt required."
+  },
+  "immutable": {
+    "all15parent_frozen_paths_unchanged": {
+      "selection-proof.json": "1c81bdb5546ff459b66393f61d4384e01dec7ae95790c102eddbdc25f8db0678",
+      "root-allocation.json": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+      "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+      "source-proposal.json": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+      "source-peer.json": "01d22056373d2cb481b5ad9eb743f26bcd41551af4dbcb8aeee935afa1633a09",
+      "parent-actor-probe.py": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+      "server-cohort.py": "199d3f30755f0b8c409f970e3f02cb0fbd86d61ba5500cd14be9dc308a7d4512",
+      "preflight-static.py": "d854494967294d7eee9a702c8a46f2d0ee9ad3703d896820c2459b926189a3fb",
+      "fresh-listings.py": "35f688a58f0d8e75ded85a0c19d2e32e298b7bbc31b8cb8f1f7a1bed9b815564",
+      "preflight.sh": "369aa4079c538f8271c20eca5d7a0109bb7c1754e2da817d11f34299793da309",
+      "run.sh": "6fca8c839fd4b1b02d88d93ccc6913140060b4af7dd6e2524800211965327c23",
+      "case01/nextest.toml": "ca296923f097bd06cfd9bdae385e57bef7c8fdd8b034638c3b8b4b99388ae337",
+      "fresh-listing-admission.json": "4ca6524b0126f058793a8e7708c1e82c24f4a589fe5221979ce659bacb2296f4",
+      "resource-admission.json": "f7c9a0d5f3b2dc4ce00c712fe4cc86f170bb4beff31b777f6cd9327a10b80593",
+      "parent-actor-admission.json": "1d058d2a0b5ef821a9c5c0e4c327d13c0fb31c9811a0202e2029d0cd9a7c66fb"
+    },
+    "PREPARATION_sha256": "c4011abb96aabd234af0acbd52553e57d5f034b4011ba17af6fdf6a493019c60",
+    "root_allocation_sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+    "parent_admission_sha256": "cbe20bc817c83ff0e2b24eb2f1df057c19c4b25bec2ea4b3493748e88a001d96",
+    "final_control_peer_sha256": "ff8279a2f20cf3c3c0f7e8b45d274736257634683a8b4ec365fcfa4403f9c57d",
+    "initial_pending_receipt_sha256": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+    "pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+    "native_SDK_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+    "capture_version": "0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25; dirty cdedd archive",
+    "not_relabelled_as_newer_HEAD": true
+  },
+  "cleanup_resources": {
+    "at": "2026-10-18T07:22:08.428938+00:00",
+    "namespace": "pid:[4026538663]",
+    "uid": 1000,
+    "IN_NIX_SHELL": "impure",
+    "BARK_DOUBLE_DRIVE_ACTIONS_present_in_audit_environment": false,
+    "known_PGID_SID": 165688,
+    "remaining_group_or_SID_members": [],
+    "remaining_scoped_argv_cwd_FD_actors": [],
+    "unreadable_owned_proc_entries": [],
+    "owned_uid_processes_examined": 8,
+    "CLN_required": false,
+    "other_global_CLN_or_plugin_names_examined": 0,
+    "scope": "Actual container sameUID known49group/SID and49argv/cwd/FD only; no global service absence claim. No FD contents/private files read.",
+    "shm_available_bytes": 808738816,
+    "all17_actual_pins_unchanged": {
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind": {
+        "expected": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e",
+        "actual": "a06b54abcbba6183220eb4654ef84b523abbcfa432af5105a8911f57bc47010e",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand": {
+        "expected": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802",
+        "actual": "dee9cccd344b44534de33f0ebdd39e922cb53d89195f6b0782cde562686c5802",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark": {
+        "expected": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c",
+        "actual": "43af4775cf42a3e0e628733d71ced959bf4bf20f1a944603ff7ee2f75244401c",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd": {
+        "expected": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537",
+        "actual": "3922f56e1a8c59f43789fc0e5ec75759fbed8bce5b54ed519b588c2343f6d537",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark": {
+        "expected": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69",
+        "actual": "ecb71ed614d510c1ed8dc0afcfdef0d89eea9b8a917c6c2d84ceba2ab89e1e69",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-bark-sdk": {
+        "expected": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+        "actual": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-barkd": {
+        "expected": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b",
+        "actual": "1aa5f19fb7f1af71c67e202d2b173fb0bf9ffef8acec90ab180afee90b98340b",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/native-server": {
+        "expected": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+        "actual": "c7e7fcc3b23e0e9a111d9c886e738078e752a91d37f31795f0db0ef5881ce256",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json": {
+        "expected": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+        "actual": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/source-manifest.json": {
+        "expected": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+        "actual": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/manifest.json": {
+        "expected": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+        "actual": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.rlib": {
+        "expected": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "actual": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/deps/libark.so": {
+        "expected": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "actual": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "unchanged": true
+      },
+      "/fresh-cache/runtime-terminal-replay-v11c-20261018/support/debug/lock-holder": {
+        "expected": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "actual": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "unchanged": true
+      },
+      "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd": {
+        "expected": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "actual": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "unchanged": true
+      },
+      "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc": {
+        "expected": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "actual": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "unchanged": true
+      },
+      "/fresh-cache/cln-adapter-evidence/plugins/hold": {
+        "expected": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "actual": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "unchanged": true
+      }
+    },
+    "signals_cleanup_RPC_DB_native_calls": 0
+  },
+  "credit_limits": "One actualSDKnativePASS only capturedC. Independent retainedchain/public audit separate ifallocated. No FULLML/production/finalrecovery credit.",
+  "raw_native_log_sha256_only": "2454defff43d51ad05216a49ebff6d768f1861912145f166f3d5eba50157a804",
+  "case": {
+    "index": 1,
+    "name": "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable",
+    "state": "PASS",
+    "started_at": "2026-10-18T07:18:27.952205+00:00",
+    "per_test_timeout_seconds": 180,
+    "retries": 0,
+    "no_new_compilation": true,
+    "owned_nextest_group": 165688,
+    "exit_code": 0,
+    "resource_error": null,
+    "run_id": "bd52a8d0-818b-492b-8617-394ead9a3620",
+    "test_seconds": 22.071,
+    "wall_seconds": 23.037,
+    "ended_at": "2026-10-18T07:18:50.989853+00:00"
+  },
+  "source_formal_sha256": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+  "independent_public_projection_reference": {
+    "sha256": "0879fb537c76b05eba5a0eaf0dbde6546d037d8aadec3cd7567a20fc88b4f9d1",
+    "name": "batch49-retained-public-core-projection-legacy.json",
+    "scope": "Separate retained public/Core projection; not generated/modified/exported by this control task."
+  }
+}

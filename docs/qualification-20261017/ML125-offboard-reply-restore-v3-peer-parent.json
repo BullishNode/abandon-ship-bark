@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-18T07:41:14.439350+00:00",
+  "state": "PARENT_V3_SOURCE_ACK_READY_FOR_ROOT_INTEGRATION_UNCOMPILED_NOT_RUN",
+  "source_sha256": "38977dd86bb3f76ca232c7517ef2ef138400a4e511e026441788560d0e9f2a85",
+  "add_file_patch_sha256": "6ae63a927d20e0528ba500b925741881818f8ba445e4b29e3660a397d04e40b1",
+  "independent_client_peer_sha256": "456ed9cf6a4156df7de6faa297fe766f45debcb10e1d511731e9f13cd6ad36d3",
+  "prior_v2_ACKs": "Historicalsourceinspection; supersededforadmission afterminboard20kvscontrol10k foundbeforecompile. Sourcef339/owncommit0d1 preserved.",
+  "correction": "Controlfunding40k/actualboard20k/currentnative20kminimum\u219219kpayout+1000fee; main100k/200k/2confirmed100ksponsors/180s/96blocks andcoreoracles unchanged.",
+  "source_review_scope": "Reviewedactualminimum/context+Walletguard, exactv3delta, priorfullbodylifecycle/fee/tenbucket/Core6/positivecontrol andnegativeexpiry allgen/chain/mempool. No remainingconcrete sourceblockerfound; actualcompiler/runtime required.",
+  "future": "Rootmodule/integration/coherentcompile+immutablepins/exactallocation/one180/0native andindependentaudit remainpending.",
+  "no_fullML_or_native_credit": true
+}

@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "state": "SOURCE_ONLY_V2_FUNDING_GEOMETRY_FIX_REVIEW_PENDING_UNCOMPILED_NOT_RUN",
+  "at": "2026-10-18T07:22:08.070302+00:00",
+  "source": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_reply_restore.rs",
+  "source_sha256": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+  "source_lines": 545,
+  "private_snapshot": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-reply-restore-private/qualification_offboard_reply_restore.v2.rs",
+  "private_snapshot_sha256": "f3396c6b4e42c741a605eb3455131203a2d96c52f78292ed444f4232a4e94420",
+  "v1_source_sha256": "fb83266d5c14c12d0b2264701f6702c7a21f1384eff63082297cbad5cf360250",
+  "delta_patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v2-delta.patch",
+  "delta_sha256": "a31c0825def600ecaa9c8cd7d0683ebe647a6566c31bbb81d4c0991cab8a4967",
+  "add_file_patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML125-offboard-reply-restore-v2.patch",
+  "add_file_patch_sha256": "ee94f3e0807623a3149268342149c73c1df63bf851c4f0fd45208fd8b439ab52",
+  "notes_sha256": "047e519bf1e615310ffe355b49d63e0a1f15c178116e08643222bff7959a33a3",
+  "declared_delta": [
+    "One200k preconfirmed fee output becomes two distinct real100k outputs, total unchanged.",
+    "Each exact actual output has100k andCore6 before main offboard; no fallback-oracle/timebound change.",
+    "Public receipt watchman_prefunding changes from singlepoint to actual two-point map."
+  ],
+  "prior_owned_test_Rust_unchanged": 121,
+  "v1_manifest_unchanged": "610c6d1c2a295785c4a71ef95618f76de75269a7d2aba814f968f2679071d460",
+  "runtime_and_build": null,
+  "module_registration": null,
+  "root_allocation": null,
+  "review_ACK": null
+}

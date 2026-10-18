@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-18T07:39:40.277106+00:00",
+  "state": "SOURCE_COMPOSITION_MISMATCH_INDEPENDENTLY_SUPPORTED_NATIVE_REPRO_PENDING",
+  "case": "H30",
+  "source_sha256": {
+    "server/src/database/expiry_details.rs": "292206c5c2745aff5e4fc7abacada2b7cb435c305674f2886958c91de86e9c5c",
+    "server/src/watchman/settlement.rs": "2c9b572518207281397fb3ce3ea503d083400d6070100ff59c029c5c861c2ba0",
+    "bark/src/fallback/payouts.rs": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74"
+  },
+  "source_supported_risk": "Allocator group ofthree500sat leaves canpayone500satoutputwith1000fee. Two fee-only leaf allocations havepayout0andfee500 yet customer groupoutput exists. Serverselects BelowDust fromperleafpayout0; SDKBelowDustvalidation rejectsnonzerofee/outputindex/outputamount. A lawfulgroupedonchainpayment cantherefore yieldrejectedhistoryprojection.",
+  "expected_native_reproducer": "Authentic100kboard/fourwaysignedsplit500+500+500+98500; sameowner3distinctkeys/standardregisteredscript; actualsingle500payout+1000charge/Core6; returningSDKmustacceptandreconcileallthree receipts/groupedmovement. No SQLfinancialfabrication/nooracleweakening.",
+  "actual_native_result": null,
+  "product_changes_by_testing_track": false,
+  "root_scope_ownership": "Acceptedtest-only/nootherowner percoordinator; exactfuturecapture/allocationpending",
+  "limits": "Sourceinference only; notconfirmednativeFAIL, finalseverity/globalcustody/fullML/productionclaim."
+}

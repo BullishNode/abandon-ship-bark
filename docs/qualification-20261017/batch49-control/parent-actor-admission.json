@@ -1,0 +1,35 @@
+{
+  "at": "2026-10-18T07:16:50.179476+00:00",
+  "state": "PARENT_SCOPED_AND_CAPACITY_PASS",
+  "scopes": [
+    "/fresh-cache/testing-track-20261017/batch45-recovery-three-v10",
+    "/fresh-cache/testing-track-20261017/batch47-ordinary-recovery-three-v10",
+    "/fresh-cache/testing-track-20261017/batch46-lightning-physical-backup-v11c",
+    "/fresh-cache/testing-track-20261017/batch49-default-daemon-singleton-v11c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch45-recovery-three-v10",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch47-ordinary-recovery-three-v10",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch46-lightning-physical-backup-v11c",
+    "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch49-default-daemon-singleton-v11c",
+    "/fresh-cache/independent-two-v11c-20261018",
+    "/home/francis/.cache/abandon-fresh/independent-two-v11c-20261018"
+  ],
+  "known_previous_groups_and_SIDs": [
+    145878,
+    146890,
+    148754,
+    154295
+  ],
+  "actors": [],
+  "actor_count": 0,
+  "unreadable": [],
+  "unreadable_count": 0,
+  "global_native_candidates": [],
+  "global_native_count_before_launch": 0,
+  "global_max_after_one_launch": 2,
+  "SHM_available_bytes": 811970560,
+  "disk_available_bytes": 1004290715648,
+  "probe_ancestry_excluded": [
+    164153
+  ],
+  "scope_limit": "Same-UID proc argv/cwd/FD and known old groups; no private file read or process action. Root retains one separate lane."
+}

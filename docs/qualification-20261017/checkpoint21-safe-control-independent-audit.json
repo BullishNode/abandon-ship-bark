@@ -1,0 +1,59 @@
+{
+  "kind": "CHECKPOINT21_SAFE_BATCH49_EXPORT_INDEPENDENT_AUDIT",
+  "at": "2026-10-18T07:30:12.595112+00:00",
+  "state": "PASS_NO_BLOCKER",
+  "export_sha256": "c3a626fd2a52d50cc84eba67eb61f745ba1706ae8abbcd53031f5fec9a25daa8",
+  "aggregate_sha256": "65c025665ed31479c111e778c51cfb3dd893641e34b49b343cd65200ee21261d",
+  "inventory": {
+    "payload_files": 25,
+    "including_EXPORT": 26,
+    "all_source_output_hashes_lengths_equality_flags_exact": true,
+    "exact_actual_pathset": true,
+    "all_inputs_and_export_unchanged": true
+  },
+  "transforms": {
+    "BYTE_EXACT_EXPLICIT_STATIC_PUBLIC_CONTROL_ALLOWLIST": 17,
+    "PREPARATION_FIELD_PROJECTION_PARENT_COMMAND_ARRAYS_OMITTED": 1,
+    "EXACT_PRIMARY17_MINUS_CLN3_DERIVED_CORE14_PRIMARY17_AUTHORITATIVE_CLN_UNUSED": 1,
+    "EXPLICIT_CASE_FIELDS_NO_COMMAND_ARGV_OR_RAW_LOG": 1,
+    "EXPLICIT_SUMMARY_CASE_FIELDS_COMMAND_ARRAY_OMITTED": 1,
+    "EXPLICIT_CASE_FIELDS_COMMAND_ARRAY_OMITTED": 1,
+    "ANCHORED_FORMAL_SAFE_UUID_PASS_SUMMARY_AND_DERIVED_STARTING_METADATA_NO_RAW_LOG": 1,
+    "EXPLICIT_FORMAL_METADATA_PROJECTION_NO_PRIVATE_PATH_CONTENTS_COMMANDS_OR_RAW_LOG": 1,
+    "EXPLICIT_INITIAL_METADATA_AND_CASE_PROJECTION_NO_COMMAND_PRIVATE_CONTEXT_RAW_LOG": 1
+  },
+  "provenance": {
+    "static12_and_parent15_exact": true,
+    "authoritative_pin_rows": 17,
+    "derived_core14_excludes_exact_unusedCLN3": true,
+    "initial_native_receipt_sha256": "511cf693f18b3699faf3b489c6725a82d83d5d0789b83780c4e229a9f2403d35",
+    "formal_postflight_sha256": "dd684e3f4ebffe4403abada74833c2fc67f96721df4c2e3f5f9df3f4b289cb7b",
+    "public_projection_hash_reference_only": "0879fb537c76b05eba5a0eaf0dbde6546d037d8aadec3cd7567a20fc88b4f9d1",
+    "initial_temporal_pending_values_preserved": true,
+    "exact_one_nativePASS_and660filteredskips": true,
+    "UUID_PASS_summary_anchored_to_formal_and_no_raw_log_read": true,
+    "command_arrays_in_safe_projections": 0,
+    "scoped_actor_absence_metadata": true,
+    "financial_receipt_fabricated": false
+  },
+  "syntax_including_EXPORT": {
+    "JSON": 16,
+    "Python_AST": 4,
+    "bash_n": 2,
+    "TOML": 1
+  },
+  "security_scan": {
+    "strong_credential_matches": 0,
+    "full2048_English_BIP39_checksum_matches": 0,
+    "Base58Check_WIF_matches": 0,
+    "wordlist_source_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693",
+    "scope": "All26files in this subtree includingEXPORT; final fullpublication payload remains parent gate."
+  },
+  "limits": [
+    "One nativeSDK refresh/adoption/signed protective-path broadcast case, not completedclaim/Core6/cost/payout/seeddrain/fullML/production proof.",
+    "Public0879 remains separate retained-chain structure only; no active-tip/path/ownership/fees inferred.",
+    "No raw native/node logs, wallet/config/DB/seed/journal files or Core inputs opened for this static export audit.",
+    "Only new external auditJSON/MD written. Frozen exports/source/controls/globalreports/Git/native/Cargo unchanged."
+  ],
+  "blockers": []
+}

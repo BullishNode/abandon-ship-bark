@@ -1,0 +1,37 @@
+{
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch49-default-daemon-singleton-v11c",
+  "expected_selection": [
+    [
+      "ark-testing::bark-sdk",
+      "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable"
+    ]
+  ],
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "root_allocation_sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+  "actor_probe_sha256": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+  "sha256": {
+    "selection-proof.json": "1c81bdb5546ff459b66393f61d4384e01dec7ae95790c102eddbdc25f8db0678",
+    "root-allocation.json": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+    "runtime-pins.sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+    "source-proposal.json": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+    "source-peer.json": "01d22056373d2cb481b5ad9eb743f26bcd41551af4dbcb8aeee935afa1633a09",
+    "parent-actor-probe.py": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+    "server-cohort.py": "199d3f30755f0b8c409f970e3f02cb0fbd86d61ba5500cd14be9dc308a7d4512",
+    "preflight-static.py": "d854494967294d7eee9a702c8a46f2d0ee9ad3703d896820c2459b926189a3fb",
+    "fresh-listings.py": "35f688a58f0d8e75ded85a0c19d2e32e298b7bbc31b8cb8f1f7a1bed9b815564",
+    "preflight.sh": "369aa4079c538f8271c20eca5d7a0109bb7c1754e2da817d11f34299793da309",
+    "run.sh": "6fca8c839fd4b1b02d88d93ccc6913140060b4af7dd6e2524800211965327c23",
+    "case01/nextest.toml": "ca296923f097bd06cfd9bdae385e57bef7c8fdd8b034638c3b8b4b99388ae337",
+    "fresh-listing-admission.json": "4ca6524b0126f058793a8e7708c1e82c24f4a589fe5221979ce659bacb2296f4",
+    "resource-admission.json": "f7c9a0d5f3b2dc4ce00c712fe4cc86f170bb4beff31b777f6cd9327a10b80593",
+    "parent-actor-admission.json": "1d058d2a0b5ef821a9c5c0e4c327d13c0fb31c9811a0202e2029d0cd9a7c66fb"
+  },
+  "at": "2026-10-18T07:18:05.347809+00:00",
+  "PREPARATION_sha256": "c4011abb96aabd234af0acbd52553e57d5f034b4011ba17af6fdf6a493019c60",
+  "independent_final_peer_sha256": "ff8279a2f20cf3c3c0f7e8b45d274736257634683a8b4ec365fcfa4403f9c57d",
+  "parent_preflight_session": 80830,
+  "parent_preflight_terminal_exit_code": 0,
+  "parent_native_launches_before_this": 0,
+  "scope": "OneexactV11cSDKdefaultdaemoncase180/0retry/serial1/global2; no fullclaim/Core6financial/seeddrain qualification"
+}

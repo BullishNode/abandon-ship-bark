@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "batch": "batch49-default-daemon-singleton-v11c",
+  "state": "ROOT_ALLOCATED_SINGLETON_PENDING_PARENT_FRESH_GATES_AND_LAUNCH",
+  "candidate_ready": true,
+  "controls_finalized": true,
+  "execution_authorized": true,
+  "expected_names_in_execution_order": [
+    "fallback_act_by::fallback_protection_default_daemon_refreshes_then_exits_when_ark_is_unavailable"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::bark-sdk"
+  ],
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "maximum_case_executions": 1,
+  "maximum_global_native": 2,
+  "first_fail_stops": true,
+  "fresh_context_required": true,
+  "expected_ignored": false,
+  "run_ignored": null,
+  "CLN_required": false,
+  "runtime_pin_count": 17,
+  "metadata_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-runtime.json",
+  "immutable_metadata_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/nextest-binaries-immutable.json",
+  "source_archive_path": "/fresh-cache/runtime-terminal-replay-v11c-20261018/source.tar.gz",
+  "source_manifest_sha256": "cdedd62efcf1e4f131f8378017cae5facd729d36995419a4ff2e36d0456bf635",
+  "source_archive_sha256": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+  "bundle_manifest_sha256": "42c0642e6fedbeb04ae7273a05df482ed6e6bef3c52d7a76eee0f964d4f15abc",
+  "immutable_metadata_sha256": "38299893363d7d8c7607202b74a6fff4fe84790d53cc20b23545d5419f09bb92",
+  "runtime_metadata_sha256": "fca28b4dceef4d667ff0bae1351a76c152fb3edcdd3ca275d69551220991276a",
+  "runtime_pinlist_sha256": "c9948060f0738abc1247b4ba7106a5bcbad7e09e6115ec670fd871b8631a21e1",
+  "native_sdk_sha256": "c3bbf7992f0ee6fe7e93caa513a5be4664a6749edab8757e1534f7bb316d8a4c",
+  "source_file": "testing/tests/bark_sdk/fallback_act_by.rs",
+  "source_file_sha256": "d3e79a29af1cd1c03767ac24e89960e91745a96d8e4480fbfd3f5b09fe31da70",
+  "root_authorization": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/sdk-default-daemon-v11c-native-allocation-20261018.json",
+    "sha256": "0d4ccfaef628edf4495bb707c915282d1b79f8056622eae3f9771a4eac1ff900",
+    "state": "ALLOCATED_ONE_DAEMON_SINGLETON_AFTER_FINAL_GATES",
+    "owner_thread": "01a14a4a-0a4d-7a62-8c6f-0041fdb9f53a"
+  },
+  "proof_sha256": {
+    "source-proposal.json": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+    "source-peer.json": "01d22056373d2cb481b5ad9eb743f26bcd41551af4dbcb8aeee935afa1633a09",
+    "parent-actor-probe.py": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22"
+  },
+  "execution_environment": {
+    "BARK_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/bark",
+    "BARKD_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/barkd",
+    "CAPTAIND_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/captaind",
+    "WATCHMAND_EXEC": "/fresh-cache/runtime-terminal-replay-v11c-20261018/watchmand",
+    "BARK_VERSION": "bark 0.7.1-dev (0496e057fe8cedde99c9b85edab67035633a8f25)",
+    "BARKD_VERSION": "barkd 0.7.1-dev (0496e057fe8cedde99c9b85edab67035633a8f25)",
+    "CAPTAIND_VERSION": "captaind 0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25",
+    "WATCHMAND_VERSION": "watchmand 0.7.1-dev+0496e057fe8cedde99c9b85edab67035633a8f25",
+    "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+    "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+  },
+  "parent_actor_probe_source": {
+    "host_path": "/tmp/batch49-parent-actor-probe.py",
+    "sha256": "1a142d74f9c9bc74c057b8193d9a715731da18547352da49a23e90ae0bc56a22",
+    "execute": "PARENT ONLY after independent final peer; never author executed"
+  },
+  "prior_postflights": {
+    "own47": "2f6bf03e87c1cd91736ad0bab590168a469302772c9e2da3ed9906f9e4f08cc3",
+    "P07": "18c5aace0d7a82ddb3275b2d8ee54d8ef6408b47a5c85249c9a6a3c6a4c42174"
+  },
+  "scope": "ActualSDK automatic refresh/adoption and Ark-offline signed path broadcast only; no completedclaim/claimCore6/fee/seeddrain/defaultproduction/FULLML credit."
+}

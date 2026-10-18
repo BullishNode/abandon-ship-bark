@@ -1,0 +1,16 @@
+{
+  "at": "2026-10-18T07:04:44.439553+00:00",
+  "state": "SOURCE_ONLY_PEER_ACK_NOT_RUN_NOT_ALLOCATED",
+  "author_proposal_sha256": "f081d54bdacb172195a7ae2a7e0935989ea991f5c47e697df77c26d198b8bcf2",
+  "source_archive_sha256_verified": "acc3dfec248801a5476085cc3f917142bb7e22df1b090df913ba92c8c8baaf58",
+  "full_source_files_independently_hashed": 10,
+  "function_and_body_pairs_independently_hashed": 13,
+  "function_hash_mode": "Trim leading declaration indentation and trailing LF; include pub/async declaration and internal bytes. Bodies include braces.",
+  "saved_listing_sha256_verified": "8071f556c8a4ba05878f19f673faf901fd57f2742cf194c53dc9fc3f4c297486",
+  "saved_listing_result": "One unignored exact-name record, mismatch underP07filter; no newlisting/execution",
+  "actual_oracle": "SDKdaemon startsrealrefresh/adoptsreplacement; Arkoffline signedpath>=1mempooltx andexitID. No finalclaim/claimCore6/exactmoney/seeddrain. Config1s/40blocks/4+2 margins; no CLN/watchman.",
+  "180_second_suitability": "Sourceestimateonly; four20s waits plus setup/mining/stop; no measuredpromise orbudgetextension.",
+  "future_admission_allocation_fields_null": true,
+  "current_native_credit": 0,
+  "scope": "No source/runtime/control/global/frozenpayload changes. Additive independentproposalpeer only."
+}

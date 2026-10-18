@@ -13,6 +13,7 @@ mod expiry_internal_partial_terminal;
 mod expiry_internal_batched_terminal;
 mod expiry_internal_reserved_batched_terminal;
 mod expiry_internal_cross_attempt_claim;
+mod expiry_internal_reclaim_reorg;
 mod expiry_hash_provenance;
 mod expiry_payout_flow;
 mod expiry_split;

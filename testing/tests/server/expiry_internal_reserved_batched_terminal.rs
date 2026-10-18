@@ -437,7 +437,8 @@ async fn reserved_batched_terminal(reorg:bool) {
 			let actual=core.get_tx_out(&source.point().txid,source.point().vout,Some(true)).unwrap().unwrap();
 			assert!(actual.confirmations>0); assert_eq!(actual.value,sat(100_000));
 		}
-		for point in grants.iter().map(Vtxo::point).chain(std::iter::once(unpaid_prefix)) {
+		// Under option B the grants may already be reclaimed; only B's prefix must survive.
+		for point in std::iter::once(unpaid_prefix) {
 			assert!(core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().is_some_and(|out|out.confirmations>0),
 				"B/G paths and fee sponsors predate A's block; the fork must not erase required ancestors");
 		}

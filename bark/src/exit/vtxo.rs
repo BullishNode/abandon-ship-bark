@@ -81,6 +81,13 @@ impl ExitVtxo {
 		}
 	}
 
+	pub(super) fn adopt_persisted_state(&mut self, entry: StoredExit) {
+		assert_eq!(entry.vtxo_id, self.vtxo_id);
+		assert_eq!(entry.movement_id, self.movement_id);
+		self.state = entry.state;
+		self.history = entry.history;
+	}
+
 	/// Returns the ID of the tracked [Vtxo].
 	pub fn id(&self) -> VtxoId {
 		self.vtxo_id
@@ -117,6 +124,12 @@ impl ExitVtxo {
 	/// True if the exit is currently [ExitState::Claimable] and can be claimed/spent.
 	pub fn is_claimable(&self) -> bool {
 		matches!(self.state, ExitState::Claimable(..))
+	}
+
+	/// A replay of a previously completed claim retains its existing debit even
+	/// while its missing path is back in Processing's ordinary abortable states.
+	pub(crate) fn is_cancelable(&self) -> bool {
+		self.state.is_cancelable() && !self.history.iter().any(|state| matches!(state, ExitState::Claimed(_)))
 	}
 
 	/// True if [ExitVtxo::initialize] has been called and the exit is ready to progress.
@@ -166,15 +179,24 @@ impl ExitVtxo {
 		// The caller holds Exit.inner throughout this progression. New complete
 		// ordinary facts need that same guard before publication. A resumed
 		// intent must never reacquire/broadcast over an already durable fact.
-		let ordinary_spent = wallet.inner.db.get_fallback_snapshot().await
-			.map_err(|error| ExitError::InternalError { error: error.to_string() })?
-			.verified_ordinary_spends.contains(&self.id());
+		let snapshot = wallet.inner.db.get_fallback_snapshot().await
+			.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
+		if !matches!(self.state, ExitState::Claimed(_)) && !super::exit_rebroadcast_allowed(self, wallet).await
+			.map_err(|error| ExitError::InvalidWalletState { error: error.to_string() })? {
+			return Err(ExitError::InvalidWalletState {
+				error: format!("completed exit {} no longer owns this exact resumed intent", self.id()),
+			});
+		}
+		let resumed_claim = matches!(self.state, ExitState::Processing(_))
+			&& super::completed_claim_recovery_lineage(&StoredExit::new(self))
+			&& vtxo.state == crate::vtxo::VtxoState::Exited;
+		let ordinary_spent = snapshot.verified_ordinary_spends.contains(&self.id());
 		if ordinary_spent && vtxo.state.kind() != crate::vtxo::VtxoStateKind::Spent {
 			return Err(ExitError::InvalidWalletState {
 				error: format!("verified ordinary spend of {} awaits exact holder retirement; exit is paused", self.id()),
 			});
 		}
-		if !self.state.warrants_exited_vtxo() && vtxo.state.kind() != crate::vtxo::VtxoStateKind::Spent {
+		if !resumed_claim && !self.state.warrants_exited_vtxo() && vtxo.state.kind() != crate::vtxo::VtxoStateKind::Spent {
 			if let Some(movement_id) = self.movement_id {
 				let movement = wallet.inner.db.get_movement_by_id(movement_id).await
 					.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
@@ -237,6 +259,10 @@ impl ExitVtxo {
 		tip: BlockHeight,
 		persister: &dyn BarkPersister,
 	) -> anyhow::Result<(), ExitError> {
+		if matches!(self.state, ExitState::Canceled(_)) { return Ok(()); }
+		if !self.is_cancelable() {
+			return Err(ExitError::CannotCancelExit { vtxo: self.id(), state: self.state.kind() });
+		}
 		self.update_state_if_newer(ExitState::new_canceled(tip), persister).await
 	}
 
@@ -269,18 +295,86 @@ impl ExitVtxo {
 	) -> anyhow::Result<(), ExitError> {
 		// We don't want to push a new history item unless the state has changed logically
 		if new != self.state {
-			self.history.push(self.state.clone());
-			self.state = new;
-			self.persist(persister).await
+			let mut entry = StoredExit::new(self);
+			entry.history.push(self.state.clone());
+			entry.state = new;
+			// Publish memory only after the durable checkpoint. Otherwise a
+			// failed write makes exact persisted-intent revalidation reject
+			// this engine forever, even though cold reload could still retry.
+			persister.store_exit_vtxo_entry(&entry).await
+				.map_err(|e| ExitError::DatabaseVtxoStoreFailure { vtxo_id: self.id(), error: e.to_string() })?;
+			self.history = entry.history;
+			self.state = entry.state;
+			Ok(())
 		} else {
 			Ok(())
 		}
 	}
 
-	async fn persist(&self, persister: &dyn BarkPersister) -> anyhow::Result<(), ExitError> {
-		persister.store_exit_vtxo_entry(&StoredExit::new(self)).await
-			.map_err(|e| ExitError::DatabaseVtxoStoreFailure {
-				vtxo_id: self.id(), error: e.to_string(),
-			})
+}
+
+#[cfg(test)]
+mod completed_recovery_tests {
+	use super::*;
+	use bitcoin::hashes::Hash;
+
+	#[test]
+	fn previously_claimed_processing_cannot_cancel_the_existing_principal_debit() {
+		let tip = BlockHeight::new(20);
+		let mut exit = ExitVtxo {
+			vtxo_id: VtxoId::from_slice(&[13; 36]).unwrap(), amount: Amount::from_sat(100_000),
+			state: ExitState::new_processing(tip, [Txid::all_zeros()]), history: vec![],
+			txids: None, movement_id: Some(MovementId(13)),
+		};
+		assert!(exit.is_cancelable(), "normal unbroadcast exits retain their abortable window");
+		exit.history.push(ExitState::new_awaiting_delta(tip,
+			bitcoin_ext::BlockRef { height: BlockHeight::new(10), hash: bitcoin::BlockHash::all_zeros() }, bitcoin_ext::BlockDelta::new(3)));
+		assert!(exit.is_cancelable(), "an ordinary uncompleted reorg is not a completed-claim retry");
+		exit.history.push(ExitState::new_claimed(tip, Txid::all_zeros(),
+			bitcoin_ext::BlockRef { height: BlockHeight::new(10), hash: bitcoin::BlockHash::all_zeros() }));
+		assert!(exit.state().is_cancelable(), "Processing by itself does not record the prior commitment");
+		assert!(!exit.is_cancelable(), "the exact persisted Claimed lineage prevents manual debt erasure");
+	}
+}
+
+#[cfg(all(test, feature = "sqlite", not(target_arch = "wasm32")))]
+mod checkpoint_failure_tests {
+	use super::*;
+	use crate::persist::sqlite::SqliteClient;
+	use bitcoin::hashes::Hash;
+
+	#[tokio::test]
+	async fn failed_recovery_checkpoint_preserves_durable_and_memory_intent_then_retries() {
+		let temp = tempfile::tempdir().unwrap();
+		let path = temp.path().join("checkpoint.sqlite");
+		let db = SqliteClient::open(&path).unwrap();
+		let tip = BlockHeight::new(30);
+		let movement = db.create_new_movement(crate::movement::MovementStatus::Pending,
+			&crate::movement::MovementSubsystem { name: crate::subsystem::Subsystem::EXIT.as_name().into(), kind: "exit".into() },
+			chrono::Local::now(), None).await.unwrap();
+		let mut exit = ExitVtxo {
+			vtxo_id: VtxoId::from_slice(&[14; 36]).unwrap(), amount: Amount::from_sat(100_000),
+			state: ExitState::new_processing(tip, [Txid::all_zeros()]),
+			history: vec![ExitState::new_claimed(tip, Txid::all_zeros(),
+				bitcoin_ext::BlockRef { height: BlockHeight::new(10), hash: bitcoin::BlockHash::all_zeros() })],
+			txids: None, movement_id: Some(movement),
+		};
+		db.store_exit_vtxo_entry(&StoredExit::new(&exit)).await.unwrap();
+		let before = StoredExit::new(&exit);
+		let conn = rusqlite::Connection::open(&path).unwrap();
+		conn.execute_batch("CREATE TRIGGER reject_exit_checkpoint BEFORE UPDATE ON bark_exit_states BEGIN SELECT RAISE(FAIL, 'injected checkpoint failure'); END;").unwrap();
+		let next = ExitState::new_awaiting_delta(tip,
+			bitcoin_ext::BlockRef { height: BlockHeight::new(25), hash: bitcoin::BlockHash::all_zeros() }, bitcoin_ext::BlockDelta::new(3));
+		assert!(matches!(exit.update_state_if_newer(next.clone(), &db).await, Err(ExitError::DatabaseVtxoStoreFailure { .. })));
+		assert_eq!(StoredExit::new(&exit), before);
+		assert_eq!(db.get_exit_vtxo_entry(&exit.id()).await.unwrap(), Some(before));
+		conn.execute_batch("DROP TRIGGER reject_exit_checkpoint;").unwrap();
+		exit.update_state_if_newer(next.clone(), &db).await.unwrap();
+		let reopened = db.get_exit_vtxo_entry(&exit.id()).await.unwrap().unwrap();
+		assert_eq!(StoredExit::new(&exit), reopened);
+		assert_eq!(reopened.state, next);
+		assert_eq!(reopened.movement_id, Some(movement));
+		assert_eq!(reopened.history.len(), 2, "one committed transition after the same-process retry");
+		assert!(!exit.is_cancelable());
 	}
 }

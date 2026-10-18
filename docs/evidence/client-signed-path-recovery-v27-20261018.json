@@ -1,0 +1,267 @@
+{
+  "recorded_at": "2026-10-18T20:16:23.125330+00:00",
+  "state": "NINE_SELECTED_NATIVE_REGRESSIONS_PASS",
+  "production_ready": false,
+  "source": {
+    "captured_head": "98383d96e8137ed7d6a68a43b04fa55abce83a0e",
+    "dirty_capture": "Reviewed defensive client recovery patch plus existing test overlays. Later publication does not change actual binary versions.",
+    "source_manifest_sha256": "21eae3bdef66d2458128c399bb05109c9a61997f1cfb447abc62df078f0e0124",
+    "bundle_manifest_sha256": "c701c618834b4c4ba0b0b19b02c30aa9773a5d88ea6d3a38f9514871aef0458e",
+    "patch_sha256": "3a2f0c47a6ff6d0ad481765b10e0361d1306c18477f806d137f92a0f5f9601fb"
+  },
+  "build": {
+    "checks": "PASS",
+    "unit_pass": 887,
+    "unit_skip": 1,
+    "new_products": {
+      "captaind": {
+        "path": "/fresh-cache/runtime-own-claim-path-recovery-v27-20261018/captaind",
+        "sha256": "8c5a671117058413a50d113dee69c5e6ec924405fad8587a42dadf2c881b603d",
+        "actual_version": "captaind 0.7.1-dev+98383d96e8137ed7d6a68a43b04fa55abce83a0e"
+      },
+      "watchmand": {
+        "path": "/fresh-cache/runtime-own-claim-path-recovery-v27-20261018/watchmand",
+        "sha256": "19db5902db94022dbaad1690a04567394007e62e00f68f5b30c22f349281ab63",
+        "actual_version": "watchmand 0.7.1-dev+98383d96e8137ed7d6a68a43b04fa55abce83a0e"
+      },
+      "bark": {
+        "path": "/fresh-cache/runtime-own-claim-path-recovery-v27-20261018/bark",
+        "sha256": "3051519e33f47e75bf0369218e2355f6f57ecf59ce29a92d449a6069e72fd19d",
+        "actual_version": "bark 0.7.1-dev (98383d96e8137ed7d6a68a43b04fa55abce83a0e)",
+        "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+        "web_dist": "/fresh-cache/web-dist-4c1c979"
+      },
+      "barkd": {
+        "path": "/fresh-cache/runtime-own-claim-path-recovery-v27-20261018/barkd",
+        "sha256": "c17678e84419bef05e00cfe5634d4637c9bf9e390f1860429e440474a2e91efc",
+        "actual_version": "barkd 0.7.1-dev (98383d96e8137ed7d6a68a43b04fa55abce83a0e)",
+        "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+        "web_dist": "/fresh-cache/web-dist-4c1c979"
+      },
+      "ark-testing::bark-sdk": {
+        "path": "/fresh-cache/runtime-own-claim-path-recovery-v27-20261018/native-bark-sdk",
+        "sha256": "a37128dca1d176e26babcb3d0a05de3b2b7f527e194ab20f99bee90132d1095a"
+      },
+      "ark-testing::barkd": {
+        "path": "/fresh-cache/runtime-own-claim-path-recovery-v27-20261018/native-barkd",
+        "sha256": "397df64e1860104145b189b2a11244a7e0a2bf51f491c97ec13f0b32a542bc10"
+      },
+      "ark-testing::server": {
+        "path": "/fresh-cache/runtime-own-claim-path-recovery-v27-20261018/native-server",
+        "sha256": "b15fae1a860121dac0bb1d46fceb0dd5236c788420eef6cbaed0216ef138cd20"
+      }
+    }
+  },
+  "client": {
+    "state": "FIVE_PASS_ZERO_RETRY",
+    "cases": [
+      {
+        "case": "own-claim-path-reorg",
+        "test": "qualification_paid_reorg::own_claim_and_path_reorg_cold_reopen_offline_rebuilds_from_retained_funding_root",
+        "state": "PASS",
+        "run_id": "a54ed0f0-0282-422f-a05e-e3482fff1da1",
+        "native_seconds": 35.889,
+        "wall_seconds": 36.597,
+        "log_sha256": "d0dddf7c299fffbe86d66325e69850cf2579da727c2dbbd23b5abe000520c4fb",
+        "fresh_guard_sha256": "da6c242484eab59452de5f16f53071dec2f2651aaba9d788a0e59b0e16bfe1cf",
+        "fresh_guard": {
+          "at": "2026-10-18T19:56:33.601709+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1037115392,
+          "disk_available": 994077777920
+        },
+        "exact_unignored_singleton": true
+      },
+      {
+        "case": "own-claim-second-reorg",
+        "test": "qualification_paid_reorg::own_claim_reorg_cold_reopen_offline_restores_actionable_exit_or_replays_exact_claim",
+        "state": "PASS",
+        "run_id": "f93e04a6-8c0a-4306-8be3-559b86f5b15e",
+        "native_seconds": 31.624,
+        "wall_seconds": 32.283,
+        "log_sha256": "0feddce69633d67cdb845df0f439ed84baa66d481e4e5ac2b4cad089df9466ce",
+        "fresh_guard_sha256": "cb0c4b4e6c02b8144e6270f7cd28d8019199ed6ad0b17c2f833b8696c97da639",
+        "fresh_guard": {
+          "at": "2026-10-18T19:57:14.526140+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1036038144,
+          "disk_available": 993964658688
+        },
+        "exact_unignored_singleton": true
+      },
+      {
+        "case": "paid-reorg",
+        "test": "qualification_paid_reorg::paid_fallback_reorg_cold_reopen_offline_protects_and_claims_exact_original",
+        "state": "PASS",
+        "run_id": "4437ef23-7ad5-4d3e-be7a-f05d25a2d486",
+        "native_seconds": 31.26,
+        "wall_seconds": 31.926,
+        "log_sha256": "3e6de329490df181942ab6a2dd3fe985e04a6ec6979ddedb7bd5daa7ab797b5e",
+        "fresh_guard_sha256": "1d4ad33965d5ae795293b9177f443ee9a02fcfbc32c48495badd0a0a156eb3fb",
+        "fresh_guard": {
+          "at": "2026-10-18T19:57:50.729450+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1034960896,
+          "disk_available": 993851797504
+        },
+        "exact_unignored_singleton": true
+      },
+      {
+        "case": "unpaid-daemon",
+        "test": "qualification_daemon_unpaid::default_daemon_protects_owned_unpaid_principal_without_exiting_an_ordinary_spent_import",
+        "state": "PASS",
+        "run_id": "09caa6ea-e413-4a72-a75f-a86b20214861",
+        "native_seconds": 29.865,
+        "wall_seconds": 30.52,
+        "log_sha256": "0c072004c24897471b04e09e97535f143bec84dc11be3668e4c8a5597a26a58b",
+        "fresh_guard_sha256": "5452f16bdb884091667b3aae1bf929044511e0bfd8db670d11229b262f907668",
+        "fresh_guard": {
+          "at": "2026-10-18T19:58:27.012825+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1033883648,
+          "disk_available": 993739399168
+        },
+        "exact_unignored_singleton": true
+      },
+      {
+        "case": "ordinary-spent",
+        "test": "recovery::recovered_wallet_keeps_spent_vtxo_spent",
+        "state": "PASS",
+        "run_id": "efdec859-d995-498f-bc12-75bd76889899",
+        "native_seconds": 17.569,
+        "wall_seconds": 18.184,
+        "log_sha256": "754766a6cf3911e46585673e6b715c239c6afb7186f35e4333ca74669a657363",
+        "fresh_guard_sha256": "b1f656c07b23c22c4063410c79120785c249ef1de7975536ebcd1bf35ee4b2c1",
+        "fresh_guard": {
+          "at": "2026-10-18T19:59:01.763657+00:00",
+          "own_actors": [],
+          "other_native_pids": [],
+          "compiler_pids": [],
+          "unreadable_pids": [],
+          "shm_available": 1032806400,
+          "disk_available": 993626140672
+        },
+        "exact_unignored_singleton": true
+      }
+    ],
+    "formal_postflight_sha256": "2ee7c43bd2bea2e616c681ba29cf0df5b94714de97d263f4b562a25a76c1b9a2",
+    "lostpath_accounting_sha256": "0cf453bd6c6f558cb8c0f2f050208ed134a6eb42437463561e51559185b39ad6",
+    "money": "100000 sats are mature and actionable, but unpaid. The old 99766-sat claim is orphaned. The retained physical cut is 15000000000 = 14999996465 terminal + 3535 canonical miner fees."
+  },
+  "server": {
+    "state": "FOUR_NATIVE_PASS_ZERO_NATIVE_FAILURE_ZERO_RETRY",
+    "cases": [
+      {
+        "label": "receive-unmaterialized",
+        "binary": "ark-testing::server",
+        "test": "qualification_receive_unmaterialized::collected_external_receive_materializes_without_provider_then_pays_recipient_once",
+        "state": "PASS",
+        "run_id": "f441e067-7bab-4dc6-a3ad-2a5b6c9b0e30",
+        "native_seconds": 38.605,
+        "seconds": 39.737,
+        "log_sha256": "dad27d538fb98d1f64d936ed80d900908b662a1024a5d96dbce837cc34832b3b",
+        "receipt": {
+          "label": "receive-unmaterialized",
+          "receipt_path": "/fresh-cache/root-v27-four-money-regressions-20261018/receive-unmaterialized/test-data/server/qualification_receive_unmaterialized/receive-unmaterialized-public-receipt.json",
+          "receipt_sha256": "57a18e919be2e7b7123d62faa1dc75d8c6d2efafa228dd0191218a92157d2bf3",
+          "verification": "Case-specific public terminal evidence; not independent Core/DB/signature verification",
+          "customer_sat": 99000,
+          "output_fee_sat": 1000,
+          "declared_boundary_sat": 400000,
+          "state": "CASE_PUBLIC_TERMINAL_EVIDENCE_PASS"
+        }
+      },
+      {
+        "label": "failed-swap-restart",
+        "binary": "ark-testing::server",
+        "test": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+        "state": "PASS",
+        "run_id": "32428825-6eb1-427e-8729-39b3cde929b3",
+        "native_seconds": 59.345,
+        "seconds": 60.186,
+        "log_sha256": "a6631da97c2b3881891908119b6bd37b74d161d4cb88d4ff322a3256ce94ac76",
+        "receipt": {
+          "label": "failed-swap-restart",
+          "receipt_path": "/fresh-cache/root-v27-three-money-continuation-20261018/failed-swap-restart/test-data/server/qualification_failed_swap_restart/failed-swap-conservation.json",
+          "receipt_sha256": "b145a2abbf06104d81d267efeaa8c4d0915e2d07855d36a353fc63c414c93891",
+          "verification": "Case-specific public terminal evidence; not independent Core/DB/signature verification",
+          "customer_sat": 99000,
+          "operator_remainder_sat": 1000,
+          "declared_boundary_sat": 200000,
+          "state": "CASE_PUBLIC_TERMINAL_EVIDENCE_PASS"
+        }
+      },
+      {
+        "label": "reserved-batch-reorg",
+        "binary": "ark-testing::server",
+        "test": "expiry_internal_reserved_batched_terminal::expiry_internal_reserved_batch_replays_after_reorg",
+        "state": "PASS",
+        "run_id": "eb304d94-f88e-49c0-8722-3862cb16ed6c",
+        "native_seconds": 104.34,
+        "seconds": 105.175,
+        "log_sha256": "b3a1d88851d4031a2ba4841b4e0b0e0d8961059198cfe6b879c6602ca7699e67",
+        "receipt": {
+          "label": "reserved-batch-reorg",
+          "receipt_path": "/fresh-cache/root-v27-three-money-continuation-20261018/reserved-batch-reorg/test-data/server/expiry_internal_reserved_batch_replays_after_reorg/server/reserved-batch-confirmed.json",
+          "receipt_sha256": "b5ef1903176fcff3b2dcbdc25c7ac82559325536cb0b4d4246c51773232d4438",
+          "verification": "Case-specific public terminal evidence; not independent Core/DB/signature verification",
+          "customer_original_principal_sat": 300000,
+          "source_and_grant_value_sat": 580000,
+          "separate_fee_funding_sat": 750000,
+          "source_receipt_has_no_COMPLETE_or_outcome_field": true,
+          "state": "CASE_PUBLIC_TERMINAL_EVIDENCE_PASS"
+        }
+      },
+      {
+        "label": "offboard-restart",
+        "binary": "ark-testing::server",
+        "test": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+        "state": "PASS",
+        "run_id": "7665a1ee-4440-4ef0-b003-6f202779a5bb",
+        "native_seconds": 54.948,
+        "seconds": 55.764,
+        "log_sha256": "b9d8349af6529e76ad4b540e3a0f646d5273cd4cae74d03cffe173b615df9391",
+        "receipt": {
+          "label": "offboard-restart",
+          "receipt_path": "/fresh-cache/root-v27-three-money-continuation-20261018/offboard-restart/test-data/server/qualification_offboard_restart/offboard-restart-conservation.json",
+          "receipt_sha256": "5237c4a082e20ed0403932adb8e6ad5198a4ff3187a8d53f1cbdf52410bf8065",
+          "verification": "Case-specific public terminal evidence; not independent Core/DB/signature verification",
+          "customer_sat": 99146,
+          "user_fee_sat": 854,
+          "actual_miner_fee_sat": 1298,
+          "state": "CASE_PUBLIC_TERMINAL_EVIDENCE_PASS"
+        }
+      }
+    ],
+    "original_first_case_and_controller_stop_report_sha256": "9319331692395f2532dc25e860679e43b41a3307123e041fd03cc3861b4f56df",
+    "first_formal_postflight_sha256": "671675a38779f08e04681d4215aefe27d837fce8b63ff1edeae5953f4a341526",
+    "three_continuation_postflight_sha256": "a1330f6e451cb9b62f04f4f6eb4829ffec6d1d6b8e8772583fc26b5536a7ad94",
+    "controller_history": "The first queue stopped before the second native case. Its bare AssertionError does not establish the exact cause. A later read-only postflight observed a process tail; final quiescence passed with no signals. A new allocation ran only the three cases that never started. The bounded grace had no samples in the continuation, so no causal claim is made."
+  },
+  "original_failure": {
+    "run_id": "ee32c28e-e5a7-48a7-a756-c03002b7665c",
+    "native_seconds": 76.02,
+    "postflight_sha256": "3ffff45e0c6531904821c5c9593dc9b31007af0e1593502e6893b68b9d7f5e4c",
+    "preserved": true
+  },
+  "limits": [
+    "Only an original canonical unspent funding root is qualified by the new lost-path native case. Recovery from a surviving signed prefix with a spent root remains unqualified.",
+    "The oldraw-unavailable case and a separate native terminal-convergence race remain open.",
+    "The native fixture preserves the original seed and store. This is not seed-only restore or a new final drain.",
+    "No general autonomous external Lightning ambiguity closure, final-candidate public Signet, load envelope, whole-custody or production readiness is established.",
+    "The stopped backend cross-attempt workflow is excluded from this publication and execution queue."
+  ],
+  "publication_scope": "Four reviewed client product files, one existing SDK regression file and this evidence report. The unrelated backend cross-attempt source overlay in the full capture is excluded from this commit and this execution queue."
+}

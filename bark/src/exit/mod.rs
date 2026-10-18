@@ -305,6 +305,16 @@ impl ExitInner {
 		let mut errors = Vec::new();
 		for entry in entries.into_iter().take(16) {
 			self.claimed_reorg_cursor = Some(entry.vtxo_id);
+			match self.reconcile_reconfirmed_claim(wallet, entry.vtxo_id).await {
+				Ok(true) => continue,
+				Ok(false) => {},
+				Err(error) => {
+					warn!("Completed exit {} could not finish its confirmed claim: {:#}", entry.vtxo_id, error);
+					errors.push(ExitProgressStatus { vtxo_id: entry.vtxo_id, state: entry.state,
+						error: Some(ExitError::InvalidWalletState { error: format!("claim completion reconciliation: {:#}", error) }) });
+					continue;
+				},
+			}
 			if let Err(error) = self.rearm_orphaned_claim(wallet, entry.vtxo_id).await {
 				warn!("Completed exit {} could not reconcile its claim: {:#}", entry.vtxo_id, error);
 				errors.push(ExitProgressStatus { vtxo_id: entry.vtxo_id, state: entry.state,
@@ -358,21 +368,35 @@ impl ExitInner {
 			"completed exit needs a block-based claim delay");
 		let delay = BlockDelta::new((sequence.0 & 0xffff) as u16);
 		ensure!(delay != BlockDelta::ZERO, "zero-delay completed exit needs separate reconciliation");
-		let TxStatus::Confirmed(leaf_block) = self.chain_source.tx_status(full.point().txid).await? else { return Ok(()); };
-		if tip.height < leaf_block.height || self.chain_source.block_ref(leaf_block.height).await? != leaf_block { return Ok(()); }
-		let leaf = self.chain_source.get_tx(&full.point().txid).await?.context("confirmed exit leaf is unavailable")?;
-		ensure!(leaf.output.get(full.point().vout as usize) == Some(&full.txout()),
-			"current confirmed leaf differs from the retained signed exit");
-		if self.chain_source.outpoint_spent_confirmed(full.point()).await? { return Ok(()); }
+		let next = if let TxStatus::Confirmed(leaf_block) = self.chain_source.tx_status(full.point().txid).await? {
+			if tip.height < leaf_block.height || self.chain_source.block_ref(leaf_block.height).await? != leaf_block { return Ok(()); }
+			let leaf = self.chain_source.get_tx(&full.point().txid).await?.context("confirmed exit leaf is unavailable")?;
+			ensure!(leaf.output.get(full.point().vout as usize) == Some(&full.txout()),
+				"current confirmed leaf differs from the retained signed exit");
+			if self.chain_source.outpoint_spent_confirmed(full.point()).await? { return Ok(()); }
+			ExitState::new_awaiting_delta(tip.height, leaf_block, delay)
+		} else {
+			// No leaf means no immediate claim right. Resume the SAME signed native
+			// path only from its actually canonical, unspent funding root.
+			let anchor = full.chain_anchor();
+			let TxStatus::Confirmed(block) = self.chain_source.tx_status(anchor.txid).await? else { return Ok(()); };
+			if tip.height < block.height || self.chain_source.block_ref(block.height).await? != block { return Ok(()); }
+			let funding = self.chain_source.get_tx(&anchor.txid).await?.context("canonical exit funding body is unavailable")?;
+			ensure!(funding.compute_txid() == anchor.txid, "exit funding transaction identity changed");
+			full.validate(&funding).context("signed exit does not match its actual canonical funding output")?;
+			if self.chain_source.outpoint_spent_confirmed(anchor).await? { return Ok(()); }
+			let txids = full.transactions().map(|step| step.tx.compute_txid()).collect::<Vec<_>>();
+			ensure!(!txids.is_empty(), "missing exit path cannot be reconstructed from its retained body");
+			ExitState::new_processing(tip.height, txids)
+		};
 		ensure!(self.chain_source.tip_ref_uncached().await? == tip, "chain changed during completed-claim reconciliation");
 		// Pending commits first. A crash or failed exit write leaves Claimed+Pending
 		// eligible for this same scan; it never creates a second principal debit.
 		self.movement_manager.rearm_chain_recovery(movement_id).await?;
 		fresh.history.push(fresh.state.clone());
-		// This actual confirmed unspent leaf already proves its ancestry. Retain
-		// Exited and use the native wait/spender checks, without reacquiring a lock
-		// or declaring it Claimable from an old cached Claimed checkpoint.
-		fresh.state = ExitState::new_awaiting_delta(tip.height, leaf_block, delay);
+		// Preserve Exited and the old Claimed history. A root-backed Processing
+		// retry is authenticated again before any package replay or holder check.
+		fresh.state = next;
 		self.persister.store_exit_vtxo_entry(&fresh).await?;
 		let old_txids = self.exit_vtxos.iter().position(|exit| exit.id() == id)
 			.and_then(|index| self.exit_vtxos.remove(index).txids().cloned());
@@ -384,10 +408,74 @@ impl ExitInner {
 		Ok(())
 	}
 
+	/// Reconcile an independently paid own claim without authorizing any replay.
+	/// The current proof map is only a lookup hint; canonical/raw/user-clause and
+	/// stable-tip checks are repeated while holding Exit.inner -> history.
+	async fn reconcile_reconfirmed_claim(&mut self, wallet: &Wallet, id: VtxoId) -> anyhow::Result<bool> {
+		let _history = wallet.inner.lock_manager.lock(
+			&format!("{}.fallback-history", wallet.fingerprint()), std::time::Duration::from_secs(30),
+		).await?;
+		let Some(mut entry) = self.persister.get_exit_vtxo_entry(&id).await? else { return Ok(false); };
+		let Some(coin) = self.persister.get_wallet_vtxo(id).await? else { return Ok(false); };
+		let Some(movement_id) = entry.movement_id else { return Ok(false); };
+		let movement = self.persister.get_movement_by_id(movement_id).await?;
+		let snapshot = self.persister.get_fallback_snapshot().await?;
+		let Some(candidate) = reconfirmed_claim_candidate(&entry, &movement, &coin.state, coin.amount(), &snapshot) else { return Ok(false); };
+		let tip = self.chain_source.tip_ref_uncached().await?;
+		let txid = candidate.transaction.compute_txid();
+		let TxStatus::Confirmed(block) = self.chain_source.tx_status(txid).await? else { return Ok(false); };
+		if tip.height.checked_blocks_since(block.height).is_none_or(|depth| depth.saturating_add(1) < 6)
+			|| self.chain_source.block_ref(block.height).await? != block
+			|| candidate.confirmation.height != block.height || candidate.confirmation.hash != block.hash { return Ok(false); }
+		let actual = self.chain_source.get_tx(&txid).await?.context("confirmed own claim body is unavailable")?;
+		ensure!(actual == candidate.transaction, "current own claim body differs from its retained proof");
+		let full = wallet.get_full_vtxo(id).await?;
+		ensure!(matches!(full.policy(), VtxoPolicy::Pubkey(_)), "confirmed recovery is not an own-key leaf");
+		wallet.validate_vtxo(&full).await.context("confirmed claim lost its valid signed source")?;
+		let clause = wallet.find_signable_clause(&full).await.context("confirmed claim has no own signable clause")?;
+		let expected = clause.tapscript();
+		ensure!(actual.input.iter().any(|input| input.previous_output == full.point()
+			&& input.witness.taproot_leaf_script().is_some_and(|leaf|
+				leaf.version == bitcoin::taproot::LeafVersion::TapScript && leaf.script == expected.as_script())),
+			"confirmed receipt does not spend this exact own user-clause leaf");
+		ensure!(self.chain_source.tip_ref_uncached().await? == tip, "chain changed during own claim completion");
+		let index = self.exit_vtxos.iter().position(|exit| exit.id() == id);
+		if let Some(index) = index {
+			ensure!(StoredExit::new(&self.exit_vtxos[index]) == entry, "live exit differs from its durable completion intent");
+		}
+		if !matches!(entry.state, ExitState::Claimed(claim) if claim.txid == txid && claim.block == block) {
+			entry.history.push(entry.state.clone());
+			entry.state = ExitState::new_claimed(tip.height, txid, block);
+			self.persister.store_exit_vtxo_entry(&entry).await?;
+			// Install immediately after commit, before the movement write awaits.
+			// Claimed+Pending is retried by the bounded finished-row scan above.
+			if let Some(index) = index { self.exit_vtxos[index].adopt_persisted_state(entry); }
+		}
+		self.movement_manager.finish_movement(movement_id, MovementStatus::Successful).await?;
+		Ok(true)
+	}
+
 	/// Initializes pending exits and refreshes the chain view of their transaction packages.
-	async fn refresh_tx_state(&mut self) -> anyhow::Result<()> {
+	async fn refresh_tx_state(&mut self, wallet: &Wallet) -> anyhow::Result<()> {
+		let recovering = self.exit_vtxos.iter().filter(|exit|
+			completed_claim_recovery_lineage(&StoredExit::new(exit))).map(ExitVtxo::id).collect::<Vec<_>>();
+		for id in recovering {
+			if let Err(error) = self.reconcile_reconfirmed_claim(wallet, id).await {
+				warn!("Exit {} could not reconcile its actual completed claim: {:#}", id, error);
+			}
+		}
+		let snapshot = self.persister.get_fallback_snapshot().await?;
+		let mut blocked = HashSet::new();
 		let mut exit_vtxos = std::mem::take(&mut self.exit_vtxos);
 		for exit in &mut exit_vtxos {
+			match exit_rebroadcast_allowed(exit, wallet).await {
+				Ok(true) => {},
+				result => {
+					warn!("Exit {} is not authorized to resume its completed intent: {:?}", exit.id(), result);
+					blocked.insert(exit.id());
+					continue;
+				},
+			}
 			if !exit.is_initialized() {
 				match exit.initialize(&mut self.tx_manager, &*self.persister).await {
 					Ok(()) => continue,
@@ -398,12 +486,11 @@ impl ExitInner {
 			}
 		}
 		self.exit_vtxos = exit_vtxos;
-		let snapshot = self.persister.get_fallback_snapshot().await?;
 		let mut candidates = HashSet::<Txid>::new();
 		let mut live = HashSet::<Txid>::new();
 		for exit in &self.exit_vtxos {
 			if let Some(txids) = exit.txids() {
-				if snapshot.verified_ordinary_spends.contains(&exit.id()) { candidates.extend(txids.iter().copied()); }
+				if snapshot.verified_ordinary_spends.contains(&exit.id()) || blocked.contains(&exit.id()) { candidates.extend(txids.iter().copied()); }
 				else { live.extend(txids.iter().copied()); }
 			}
 		}
@@ -852,7 +939,7 @@ impl Exit {
 			},
 		};
 
-		if !inner.exit_vtxos[idx].state().is_cancelable() {
+		if !inner.exit_vtxos[idx].is_cancelable() {
 			return Err(ExitError::CannotCancelExit {
 				vtxo: vtxo_id,
 				state: inner.exit_vtxos[idx].state().kind(),
@@ -933,7 +1020,7 @@ impl Exit {
 	) -> anyhow::Result<Option<Vec<ExitProgressStatus>>> {
 		let mut guard = self.inner.write().await;
 		let mut exit_statuses = guard.rearm_orphaned_claims(wallet).await?;
-		guard.refresh_tx_state().await?;
+		guard.refresh_tx_state(wallet).await?;
 		let mut exit_vtxos = std::mem::take(&mut guard.exit_vtxos);
 
 		for ev in exit_vtxos.iter_mut() {
@@ -1066,7 +1153,7 @@ impl Exit {
 		wallet: &Wallet,
 	) -> anyhow::Result<()> {
 		let mut guard = self.inner.write().await;
-		guard.refresh_tx_state().await?;
+		guard.refresh_tx_state(wallet).await?;
 		let mut exit_vtxos = std::mem::take(&mut guard.exit_vtxos);
 		for exit in &mut exit_vtxos {
 			if !exit.is_initialized() {
@@ -1162,11 +1249,22 @@ impl Exit {
 		// A child may have been prepared before a complete ordinary proof was
 		// checkpointed. Check BEFORE the broadcast, not only in later progress.
 		// A genuinely live sibling may still need this exact shared ancestor.
-		let owners = inner.exit_vtxos.iter().filter(|exit|
-			exit.txids().is_some_and(|txids| txids.contains(&exit_txid))).map(|exit| exit.id());
-		if ordinary_proof_blocks_cpfp(owners, &snapshot.verified_ordinary_spends) {
+		let mut owners = Vec::new();
+		let mut blocked = snapshot.verified_ordinary_spends.clone();
+		for exit in inner.exit_vtxos.iter().filter(|exit|
+			exit.txids().is_some_and(|txids| txids.contains(&exit_txid))) {
+			owners.push(exit.id());
+			match exit_rebroadcast_allowed(exit, wallet).await {
+				Ok(true) => {},
+				result => {
+					warn!("CPFP owner {} cannot authorize resumed replay: {:?}", exit.id(), result);
+					blocked.insert(exit.id());
+				},
+			}
+		}
+		if ordinary_proof_blocks_cpfp(owners, &blocked) {
 			return Err(ExitError::InvalidWalletState {
-				error: format!("exit package {exit_txid} has only verified ordinary-spent owners; stale CPFP is not broadcast"),
+				error: format!("exit package {exit_txid} has only discharged or unauthorized owners; stale CPFP is not broadcast"),
 			});
 		}
 
@@ -1475,13 +1573,28 @@ pub(crate) fn ordinary_proof_retires_protective_exit(
 
 /// A cached Claimed label alone never authorizes a balance or another holder.
 /// The caller additionally proves the old block noncanonical and the exact
-/// signed own-key leaf currently canonical and unspent under the history lock.
+/// signed own-key leaf or funding root currently canonical and unspent under the history lock.
 fn orphaned_claim_owns_principal(
 	entry: &StoredExit, movement: &crate::movement::Movement, state: &VtxoState,
 	amount: Amount, snapshot: &crate::fallback::payouts::FallbackSnapshot,
 ) -> bool {
-	matches!(entry.state, ExitState::Claimed(_)) && *state == VtxoState::Exited
-		&& entry.movement_id == Some(movement.id)
+	matches!(entry.state, ExitState::Claimed(_))
+		&& own_exit_principal(entry, movement, state, amount, snapshot)
+}
+
+fn own_exit_principal(
+	entry: &StoredExit, movement: &crate::movement::Movement, state: &VtxoState,
+	amount: Amount, snapshot: &crate::fallback::payouts::FallbackSnapshot,
+) -> bool {
+	owned_exit_identity(entry, movement, state, amount, snapshot)
+		&& !snapshot.entitlements.iter().any(|(id, receipt)| receipt.vtxo_id == entry.vtxo_id && snapshot.is_discharged(*id))
+}
+
+fn owned_exit_identity(
+	entry: &StoredExit, movement: &crate::movement::Movement, state: &VtxoState,
+	amount: Amount, snapshot: &crate::fallback::payouts::FallbackSnapshot,
+) -> bool {
+	*state == VtxoState::Exited && entry.movement_id == Some(movement.id)
 		&& movement.subsystem.name == Subsystem::EXIT.as_name()
 		&& movement.input_vtxos == [entry.vtxo_id]
 		&& amount.to_signed().is_ok_and(|gross| gross > bitcoin::SignedAmount::ZERO && movement.effective_balance == -gross)
@@ -1490,7 +1603,62 @@ fn orphaned_claim_owns_principal(
 		&& !movement.metadata.contains_key("protective_round_movement")
 		&& !snapshot.verified_ordinary_spends.contains(&entry.vtxo_id)
 		&& !snapshot.unproven_spent_vtxos.contains(&entry.vtxo_id)
-		&& !snapshot.entitlements.iter().any(|(id, receipt)| receipt.vtxo_id == entry.vtxo_id && snapshot.is_discharged(*id))
+}
+
+/// A durable Claimed -> Processing checkpoint is a continuation, not a new
+/// reservation. Terminal/canceled history after that claim cannot authorize it.
+fn resumed_claim_owns_principal(
+	entry: &StoredExit, movement: &crate::movement::Movement, state: &VtxoState,
+	amount: Amount, snapshot: &crate::fallback::payouts::FallbackSnapshot,
+) -> bool {
+	resumed_claim_shape(entry) && movement.status == MovementStatus::Pending
+		&& own_exit_principal(entry, movement, state, amount, snapshot)
+}
+
+fn resumed_claim_shape(entry: &StoredExit) -> bool {
+	let Some(last_claim) = entry.history.iter().rposition(|state| matches!(state, ExitState::Claimed(_))) else { return false; };
+	matches!(entry.state, ExitState::Processing(_) | ExitState::AwaitingDelta(_) | ExitState::Claimable(_) | ExitState::ClaimInProgress(_))
+		&& entry.history[last_claim + 1..].iter().all(|state| matches!(state,
+			ExitState::Processing(_) | ExitState::AwaitingDelta(_) | ExitState::Claimable(_) | ExitState::ClaimInProgress(_)))
+}
+
+/// Candidate selection for read-only completion only. A caller must independently
+/// revalidate the actual canonical transaction, exact owned user leaf and tip.
+fn reconfirmed_claim_candidate(
+	entry: &StoredExit, movement: &crate::movement::Movement, state: &VtxoState,
+	amount: Amount, snapshot: &crate::fallback::payouts::FallbackSnapshot,
+) -> Option<crate::fallback::payouts::FallbackVerifiedTerminal> {
+	if movement.status != MovementStatus::Pending || !owned_exit_identity(entry, movement, state, amount, snapshot) { return None; }
+	if !matches!(entry.state, ExitState::Claimed(_)) && !resumed_claim_shape(entry) { return None; }
+	// A later legitimate user claim can confirm while native state is still
+	// Claimable. Its exact source/user authorization must be proved by the
+	// caller, rather than restricting completion to a previously cached txid.
+	snapshot.entitlements.iter().filter(|(_, receipt)| receipt.vtxo_id == entry.vtxo_id)
+		.filter_map(|(id, _)| snapshot.verified_terminals.get(id)).find(|proof|
+			matches!(proof.disposition, crate::fallback::payouts::FallbackTerminalDisposition::Exited)).cloned()
+}
+
+fn completed_claim_recovery_lineage(entry: &StoredExit) -> bool {
+	ExitStateKind::LIVE_STATES.contains(&entry.state.kind())
+		&& entry.history.iter().any(|state| matches!(state, ExitState::Claimed(_)))
+}
+
+async fn exit_rebroadcast_allowed(exit: &ExitVtxo, wallet: &Wallet) -> anyhow::Result<bool> {
+	if matches!(exit.state(), ExitState::Claimed(_)) && exit.history().iter().any(|state| matches!(state, ExitState::Claimed(_))) {
+		return Ok(false);
+	}
+	if !completed_claim_recovery_lineage(&StoredExit::new(exit)) { return Ok(true); }
+	// Exit.inner is already held. Match the admission lock order before
+	// rechecking this persisted continuation, including after a cold load.
+	let _history = wallet.lock_automatic_exit_ownership(exit.id()).await?;
+	let persister = &*wallet.inner.db;
+	let snapshot = persister.get_fallback_snapshot().await?;
+	let coin = persister.get_wallet_vtxo(exit.id()).await?.context("exit replay source is missing")?;
+	let Some(stored) = persister.get_exit_vtxo_entry(&exit.id()).await? else { return Ok(false); };
+	if stored != StoredExit::new(exit) { return Ok(false); }
+	let Some(id) = stored.movement_id else { return Ok(false); };
+	let movement = persister.get_movement_by_id(id).await?;
+	Ok(resumed_claim_owns_principal(&stored, &movement, &coin.state, coin.amount(), &snapshot))
 }
 
 fn ordinary_proof_blocks_cpfp(
@@ -1595,4 +1763,132 @@ mod ordinary_proof_tests {
 		assert!(ExitStateKind::LIVE_STATES.contains(&waiting.kind()));
 		assert!(!waiting.is_cancelable());
 	}
+
+	#[test]
+	fn completed_claim_processing_checkpoint_keeps_one_owned_debit_across_cold_retry() {
+		let id = VtxoId::from_slice(&[11; 36]).unwrap();
+		let tip = BlockHeight::new(25);
+		let block = bitcoin_ext::BlockRef { height: BlockHeight::new(10), hash: bitcoin::BlockHash::all_zeros() };
+		let claimed = ExitState::new_claimed(tip, bitcoin::Txid::all_zeros(), block);
+		let mut entry = StoredExit { vtxo_id: id, state: claimed.clone(), history: vec![], movement_id: Some(MovementId(11)) };
+		let mut movement = Movement::new(MovementId(11), MovementStatus::Pending,
+			&MovementSubsystem { name: Subsystem::EXIT.as_name().into(), kind: "exit".into() }, chrono::Local::now());
+		movement.input_vtxos.push(id);
+		movement.effective_balance = bitcoin::SignedAmount::from_sat(-100_000);
+		movement.metadata.insert("protective_exit".into(), serde_json::json!(true));
+		let mut snapshot = crate::fallback::payouts::FallbackSnapshot::default();
+		// Failure/crash between the two durable writes leaves the SAME Claimed
+		// row and Pending movement eligible; no replacement movement is needed.
+		let interrupted: StoredExit = serde_json::from_str(&serde_json::to_string(&entry).unwrap()).unwrap();
+		assert!(orphaned_claim_owns_principal(&interrupted, &movement, &VtxoState::Exited, Amount::from_sat(100_000), &snapshot));
+		entry.history.push(claimed);
+		entry.state = ExitState::new_processing(tip, [bitcoin::Txid::all_zeros()]);
+		let mut reopened: StoredExit = serde_json::from_str(&serde_json::to_string(&entry).unwrap()).unwrap();
+		let eligible = |entry: &StoredExit, movement: &Movement, state: &VtxoState, snapshot: &crate::fallback::payouts::FallbackSnapshot|
+			resumed_claim_owns_principal(entry, movement, state, Amount::from_sat(100_000), snapshot);
+		assert!(completed_claim_recovery_lineage(&reopened));
+		assert!(eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+		for state in [ExitState::new_awaiting_delta(tip, block, BlockDelta::new(3)),
+			ExitState::new_claimable(tip, block, None),
+			ExitState::new_claim_in_progress(tip, block, bitcoin::Txid::all_zeros())] {
+			reopened.state = state;
+			assert!(completed_claim_recovery_lineage(&reopened));
+			assert!(eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+			movement.status = MovementStatus::Canceled;
+			assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+			movement.status = MovementStatus::Pending;
+		}
+		reopened.state = ExitState::new_start(tip);
+		assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+		reopened.state = ExitState::new_processing(tip, [bitcoin::Txid::all_zeros()]);
+		assert_eq!(reopened.movement_id, Some(movement.id));
+		assert_eq!(movement.effective_balance, bitcoin::SignedAmount::from_sat(-100_000));
+		for state in [VtxoState::Spendable, VtxoState::Spent, VtxoState::Locked { holder: None },
+			VtxoState::Locked { holder: Some(MovementId(12).into()) }] {
+			assert!(!eligible(&reopened, &movement, &state, &snapshot));
+		}
+		for status in [MovementStatus::Successful, MovementStatus::Canceled, MovementStatus::Failed] {
+			movement.status = status;
+			assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+		}
+		movement.status = MovementStatus::Pending;
+		movement.metadata.insert("protective_round_movement".into(), serde_json::json!(12));
+		assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+		movement.metadata.remove("protective_round_movement");
+		movement.id = MovementId(12);
+		assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+		movement.id = MovementId(11);
+		snapshot.verified_ordinary_spends.insert(id);
+		assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+		snapshot.verified_ordinary_spends.clear();
+		snapshot.unproven_spent_vtxos.insert(id);
+		assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+		snapshot.unproven_spent_vtxos.clear();
+		reopened.history.push(ExitState::new_canceled(tip));
+		assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+		// Ordinary uncompleted AwaitingDelta -> Processing after a fork has no
+		// prior Claimed checkpoint. It must not acquire this special gate.
+		reopened.history = vec![ExitState::new_awaiting_delta(tip, block, BlockDelta::new(3))];
+		assert!(!completed_claim_recovery_lineage(&reopened));
+		assert!(!eligible(&reopened, &movement, &VtxoState::Exited, &snapshot));
+	}
+
+
+	#[test]
+	fn paid_own_terminal_can_reconcile_without_authorizing_discharge_replay() {
+		let id = VtxoId::from_slice(&[15; 36]).unwrap();
+		let tip = BlockHeight::new(30);
+		let block = bitcoin_ext::BlockRef { height: BlockHeight::new(20), hash: bitcoin::BlockHash::all_zeros() };
+		let transaction = Transaction { version: bitcoin::transaction::Version::TWO,
+			lock_time: bitcoin::absolute::LockTime::ZERO, input: vec![], output: vec![] };
+		let mut entry = StoredExit { vtxo_id: id, state: ExitState::new_claimable(tip, block, None),
+			history: vec![ExitState::new_claimed(tip, bitcoin::Txid::from_byte_array([1; 32]), block)],
+			movement_id: Some(MovementId(15)) };
+		let mut movement = Movement::new(MovementId(15), MovementStatus::Pending,
+			&MovementSubsystem { name: Subsystem::EXIT.as_name().into(), kind: "exit".into() }, chrono::Local::now());
+		movement.input_vtxos.push(id);
+		movement.effective_balance = bitcoin::SignedAmount::from_sat(-100_000);
+		let mut snapshot = crate::fallback::payouts::FallbackSnapshot::default();
+		snapshot.entitlements.insert(1, crate::FallbackEntitlement {
+			entitlement_id: 1, vtxo_id: id, gross: Amount::from_sat(100_000), chain_view_valid: true,
+			attempts: vec![], terminal_claim: None, first_seen: chrono::Local::now(), last_updated: chrono::Local::now(),
+		});
+		snapshot.verified_terminals.insert(1, crate::fallback::payouts::FallbackVerifiedTerminal {
+			disposition: crate::fallback::payouts::FallbackTerminalDisposition::Exited,
+			transaction: transaction.clone(), confirmation: crate::FallbackBlock { height: block.height, hash: block.hash },
+		});
+		let candidate = |entry: &StoredExit, movement: &Movement, state: &VtxoState, snapshot: &crate::fallback::payouts::FallbackSnapshot|
+			reconfirmed_claim_candidate(entry, movement, state, Amount::from_sat(100_000), snapshot);
+		assert!(snapshot.is_discharged(1));
+		assert!(!resumed_claim_owns_principal(&entry, &movement, &VtxoState::Exited, Amount::from_sat(100_000), &snapshot));
+		assert_eq!(candidate(&entry, &movement, &VtxoState::Exited, &snapshot).unwrap().transaction, transaction,
+			"even a later own claim is only a lookup candidate; current raw/user-clause/canonical proof remains mandatory");
+		entry.history.push(entry.state.clone());
+		entry.state = ExitState::new_claimed(tip, transaction.compute_txid(), block);
+		assert!(candidate(&entry, &movement, &VtxoState::Exited, &snapshot).is_some(),
+			"Claimed checkpoint committed but movement write failed: bounded finished scan can retry");
+		for status in [MovementStatus::Successful, MovementStatus::Canceled, MovementStatus::Failed] {
+			movement.status = status;
+			assert!(candidate(&entry, &movement, &VtxoState::Exited, &snapshot).is_none());
+		}
+		movement.status = MovementStatus::Pending;
+		for state in [VtxoState::Spent, VtxoState::Spendable, VtxoState::Locked { holder: Some(MovementId(16).into()) }] {
+			assert!(candidate(&entry, &movement, &state, &snapshot).is_none());
+		}
+		movement.metadata.insert("protective_round_state".into(), serde_json::json!(1));
+		assert!(candidate(&entry, &movement, &VtxoState::Exited, &snapshot).is_none());
+		movement.metadata.remove("protective_round_state");
+		snapshot.verified_ordinary_spends.insert(id);
+		assert!(candidate(&entry, &movement, &VtxoState::Exited, &snapshot).is_none());
+		snapshot.verified_ordinary_spends.clear();
+		snapshot.unproven_spent_vtxos.insert(id);
+		assert!(candidate(&entry, &movement, &VtxoState::Exited, &snapshot).is_none());
+		snapshot.unproven_spent_vtxos.clear();
+		snapshot.entitlements.get_mut(&1).unwrap().vtxo_id = VtxoId::from_slice(&[16; 36]).unwrap();
+		assert!(candidate(&entry, &movement, &VtxoState::Exited, &snapshot).is_none());
+		snapshot.entitlements.get_mut(&1).unwrap().vtxo_id = id;
+		snapshot.verified_terminals.clear();
+		assert!(candidate(&entry, &movement, &VtxoState::Exited, &snapshot).is_none(), "reorg-cleared current proof cannot finish native bookkeeping");
+	}
+
 }

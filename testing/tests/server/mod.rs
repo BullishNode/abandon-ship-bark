@@ -23,6 +23,8 @@ mod qualification_oversize;
 mod qualification_receive_fallback;
 mod qualification_cold_backup;
 mod qualification_lightning_backup;
+mod qualification_offboard_reply_restore;
+mod qualification_tiny_payout_grouping;
 mod ban;
 mod blocklist;
 mod block_index;

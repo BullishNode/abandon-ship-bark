@@ -21,7 +21,7 @@ use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::Db;
 use server_rpc::protos;
 
-use super::expiry_internal_partial_terminal::{assert_retained_claim, confirm_actual_path, confirm_recoverable_prefix};
+use super::expiry_internal_partial_terminal::{assert_retained_claim, confirm_actual_path, confirm_recoverable_prefix, wait_partial_confirmation};
 
 #[derive(Clone)]
 struct OriginalReservation {
@@ -31,9 +31,13 @@ struct OriginalReservation {
 	entitlements:BTreeSet<i64>,
 }
 
-async fn reserved_terminal(reorg:bool) {
-	let name=if reorg {"server/expiry_internal_reserved_all_terminal_replays_after_reorg"}
-		else {"server/expiry_internal_reserved_all_terminal_returns_grants"};
+async fn reserved_terminal(reorg:bool,partial:bool) {
+	let name=match (reorg,partial) {
+		(false,false)=>"server/expiry_internal_reserved_all_terminal_returns_grants",
+		(true,false)=>"server/expiry_internal_reserved_all_terminal_replays_after_reorg",
+		(false,true)=>"server/expiry_internal_reserved_partial_pays_remaining_source",
+		(true,true)=>"server/expiry_internal_reserved_partial_replays_paid_source_after_reorg",
+	};
 	let ctx=TestContext::new(name).await;
 	let lightning=ctx.new_lightning_setup_no_channel("lightningd").await;
 	let operator=ctx.bitcoind().get_new_address();
@@ -146,19 +150,19 @@ async fn reserved_terminal(reorg:bool) {
 	// All physical conflicts and fee UTXOs precede the user-claim fork. Thus
 	// old reservations remain genuinely conflicted even when those claims are
 	// unconfirmed; neither test nor product assigns that status by hand.
-	for source in &sources {confirm_actual_path(&ctx,source,&mut seen).await;}
+	for source in sources.iter().take(if partial {1}else{sources.len()}) {confirm_actual_path(&ctx,source,&mut seen).await;}
 	for _ in 0..4 {ctx.bitcoind().fund_addr(fee_address.clone(),sat(150_000)).await;}
 	ctx.generate_blocks(2).await;
 	let current=ctx.bitcoind().get_block_count().await as u32;
 	let mut mature=current;
-	for source in &sources {
+	for source in sources.iter().take(if partial {1}else{sources.len()}) {
 		let prior=chain.get_tx_out(&source.point().txid,source.point().vout,Some(true)).unwrap().unwrap();
 		let clause=source.policy().as_server_htlc_send().unwrap().user_claim_after_expiry_clause(source.exit_delta());
 		mature=mature.max(clause.timelock_height.to_u32()).max(current+1-u32::try_from(prior.confirmations).unwrap()+clause.block_delta.to_u32());
 	}
 	if mature>=current {ctx.generate_blocks(mature-current+1).await;}
 	let mut claims=Vec::new();
-	for source in &sources {
+	for source in sources.iter().take(if partial {1}else{sources.len()}) {
 		let clause=source.policy().as_server_htlc_send().unwrap().user_claim_after_expiry_clause(source.exit_delta());
 		let mut claim=Transaction {version:bitcoin::transaction::Version::TWO,lock_time:clause.locktime(),
 			input:vec![TxIn {previous_output:source.point(),script_sig:Default::default(),sequence:clause.sequence(),witness:Witness::new()}],
@@ -179,8 +183,13 @@ async fn reserved_terminal(reorg:bool) {
 			if all {break;}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("both actual user raw authorizations must precede canonical grant consumption");
+	}).await.expect("every actual user raw authorization must precede canonical grant consumption");
 	for grant in &grants {assert!(chain.get_tx_out(&grant.point().txid,grant.point().vout,Some(false)).unwrap().is_some());}
+	if partial {
+		let parent=confirm_reserved_partial(&ctx,&srv,&db,&sources,&claims[0],&grants,&fallback.spk,&operator,&reserved,None).await;
+		if reorg {replay_reserved_partial(&ctx,&srv,&db,&sources,&claims[0],&grants,&fallback.spk,&operator,&reserved,&parent).await;}
+		return;
+	}
 	let first_returns=confirm_operator_returns(&ctx,&srv,&db,&sources,&claims,&grants,&operator,&reserved).await;
 	if !reorg {return;}
 	let claim_block=chain.custom_get_raw_transaction_info(claims[0].compute_txid(),None).unwrap().unwrap().blockhash.unwrap();
@@ -320,10 +329,146 @@ async fn confirm_operator_returns(
 
 #[tokio::test]
 async fn expiry_internal_reserved_all_terminal_returns_grants() {
-	Box::pin(reserved_terminal(false)).await;
+	Box::pin(reserved_terminal(false,false)).await;
 }
 
 #[tokio::test]
 async fn expiry_internal_reserved_all_terminal_replays_after_reorg() {
-	Box::pin(reserved_terminal(true)).await;
+	Box::pin(reserved_terminal(true,false)).await;
+}
+
+/// Preserve every original fence while replacing only B's conflicted physical
+/// reservation. The controller's pre-claim sponsors remain canonical on a fork.
+async fn confirm_reserved_partial(
+	ctx:&TestContext,srv:&Captaind,db:&Db,sources:&[Vtxo<Full>],claim:&Transaction,grants:&[Vtxo<Full>],
+	fallback:&bitcoin::ScriptBuf,operator:&bitcoin::Address,reserved:&OriginalReservation,expected:Option<&Transaction>,
+) -> Transaction {
+	let chain=ctx.bitcoind().sync_client();
+	let unpaid=sources[1].id();
+	let parent:Transaction=tokio::time::timeout(Duration::from_secs(150),async {
+		for _ in 0..100 {
+			let height=ctx.generate_blocks(1).await;
+			srv.wait_for_sync_height(height).await; srv.watchmand().wait_for_sync_height(height).await;
+			let row=db.read(async |t|Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
+				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				WHERE e.vtxo_id=$1 AND c.active AND a.id<>$2 AND a.status IN ('pending','confirmed') AND a.broadcast_at IS NOT NULL ORDER BY a.id DESC LIMIT 1",
+				&[&unpaid.to_string(),&reserved.id]).await?)).await.unwrap();
+			if let Some(row)=row {
+				let parent:Transaction=deserialize(row.get("sweep_tx")).unwrap();
+				// A retained broadcast timestamp can outlive the old branch.
+				// Require actual current presence before counting confirmation blocks.
+				let canonical=chain.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap()
+					.is_some_and(|info|info.confirmations.is_some_and(|n|n>0));
+				if canonical || chain.get_mempool_entry(&parent.compute_txid()).is_ok() {return parent;}
+			}
+			tokio::time::sleep(Duration::from_secs(1)).await;
+		}
+		panic!("the actual prior reservation stranded B after A's genuine user receipt");
+	}).await.expect("prior-reserved partial closure exceeded the unchanged payout bound");
+	if let Some(expected)=expected {assert_eq!(&parent,expected,"a fork must reuse B's exact signed parent");}
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await,parent);
+	let mut path=sources[1].transactions().map(|step|
+		bitcoin::OutPoint::new(step.tx.compute_txid(),step.output_idx as u32)).collect::<BTreeSet<_>>();
+	path.insert(sources[1].chain_anchor()); path.remove(&sources[1].point());
+	assert!(parent.input.iter().any(|input|path.contains(&input.previous_output)));
+	assert!(!parent.input.iter().any(|input|input.previous_output==sources[0].point()));
+	for grant in grants {
+		let input=parent.input.iter().find(|input|input.previous_output==grant.point()).unwrap();
+		let script=grant.policy().as_server_htlc_recv().unwrap()
+			.server_claim_after_expiry_clause(grant.server_pubkey(),grant.exit_delta()).tapscript();
+		assert_eq!(input.witness.taproot_leaf_script().unwrap().script,script.as_script());
+	}
+	assert_eq!(parent.input.len(),grants.len()+1);
+	let mut actual=sat(0);
+	for input in &parent.input {
+		let previous=ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		actual+=previous.output[input.previous_output.vout as usize].value;
+	}
+	assert_eq!(actual,sat(280_000));
+	assert_eq!(parent.output.iter().map(|output|output.value).sum::<bitcoin::Amount>(),actual);
+	assert_eq!(parent.output.iter().filter(|output|&output.script_pubkey==fallback).map(|output|output.value).sum::<bitcoin::Amount>(),sat(99_000));
+	assert_eq!(parent.output.iter().filter(|output|output.script_pubkey==operator.script_pubkey()).map(|output|output.value).sum::<bitcoin::Amount>(),sat(181_000));
+	assert_eq!(parent.output.len(),3);
+	let index=parent.output.iter().position(|output|&output.script_pubkey==fallback).unwrap();
+	let height=ctx.generate_blocks(6).await;
+	assert!(chain.get_tx_out(&parent.compute_txid(),index as u32,Some(true)).unwrap().unwrap().confirmations>=6);
+	assert!(chain.get_tx_out(&claim.compute_txid(),0,Some(true)).unwrap().unwrap().confirmations>=6);
+	wait_partial_confirmation(ctx,srv,db,height,sources[0].id(),claim.compute_txid(),unpaid,&parent).await;
+	assert!(assert_retained_claim(db,sources[0].id(),claim).await);
+	db.read(async |t| {
+		let row=t.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1",&[&reserved.id]).await?;
+		assert_eq!(row.get::<_,&str>("status"),"conflicted");
+		assert_eq!(row.get::<_,&[u8]>("sweep_tx"),serialize(&reserved.parent).as_slice());
+		let physical=t.query("SELECT vtxo_id FROM expiry_allocation_input WHERE allocation_id=$1 ORDER BY vtxo_id",&[&reserved.id]).await?
+			.into_iter().map(|row|row.get::<_,String>(0)).collect::<BTreeSet<_>>();
+		assert_eq!(physical,reserved.inputs);
+		let entitlements=t.query("SELECT entitlement_id FROM expiry_allocation_coin WHERE allocation_id=$1 ORDER BY entitlement_id",&[&reserved.id]).await?
+			.into_iter().map(|row|row.get::<_,i64>(0)).collect::<BTreeSet<_>>();
+		assert_eq!(entitlements,reserved.entitlements);
+		let paid=t.query_one("SELECT c.paying_txid FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+			WHERE c.allocation_id=$1 AND e.vtxo_id=$2",&[&reserved.id,&sources[0].id().to_string()]).await?;
+		assert_eq!(paid.get::<_,Option<&str>>("paying_txid"),Some(claim.compute_txid().to_string().as_str()));
+		let row=t.query_one("SELECT c.entitlement_id,c.evidence::TEXT FROM expiry_allocation_coin c \
+			JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
+			WHERE e.vtxo_id=$1 AND c.active AND a.status='confirmed' AND a.sweep_tx=$2",
+			&[&unpaid.to_string(),&serialize(&parent)]).await?;
+		assert!(reserved.entitlements.contains(&row.get::<_,i64>("entitlement_id")));
+		let evidence:serde_json::Value=serde_json::from_str(row.get("evidence"))?;
+		assert_eq!(evidence["terminal_sources"][0]["prior_joint"],true);
+		assert_eq!(evidence["required_grants"].as_array().unwrap().iter().map(|id|id.as_str().unwrap().to_owned()).collect::<BTreeSet<_>>(),
+			grants.iter().map(|grant|grant.id().to_string()).collect());
+		let count=t.query_one("SELECT COUNT(*) FROM expiry_decided_coin WHERE entitlement_id=ANY($1)",
+			&[&reserved.entitlements.iter().copied().collect::<Vec<_>>()]).await?.get::<_,i64>(0);
+		assert_eq!(count,2,"the original economic fences must survive the dependent payout");
+		Ok(())
+	}).await.unwrap();
+	parent
+}
+
+async fn replay_reserved_partial(
+	ctx:&TestContext,srv:&Captaind,db:&Db,sources:&[Vtxo<Full>],claim:&Transaction,grants:&[Vtxo<Full>],
+	fallback:&bitcoin::ScriptBuf,operator:&bitcoin::Address,reserved:&OriginalReservation,parent:&Transaction,
+) {
+	let chain=ctx.bitcoind().sync_client();
+	let claim_block=chain.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap().blockhash.unwrap();
+	let old_height=chain.get_block_count().unwrap();
+	let mining_address=ctx.bitcoind().get_new_address();
+	srv.watchmand().stop().await.unwrap(); srv.stop().await.unwrap();
+	chain.invalidate_block(&claim_block).unwrap();
+	let fork_height=chain.get_block_count().unwrap(); assert!(fork_height<old_height);
+	ctx.bitcoind().stop().await.unwrap();
+	let cache=ctx.bitcoind().datadir().join("regtest/mempool.dat");
+	let bytes=std::fs::read(&cache).unwrap();
+	let preserved=ctx.bitcoind().datadir().join("reserved-partial-before-replay.mempool.dat");
+	std::fs::rename(cache,&preserved).unwrap();
+	let hash=sha256::Hash::hash(&bytes);
+	assert_eq!(sha256::Hash::hash(&std::fs::read(&preserved).unwrap()),hash);
+	std::fs::write(ctx.bitcoind().datadir().join("reserved-partial-before-replay.sha256"),hash.to_string()).unwrap();
+	ctx.bitcoind().start().await.unwrap();
+	let chain=ctx.bitcoind().sync_client();
+	assert!(chain.get_mempool_entry(&claim.compute_txid()).is_err());
+	assert!(chain.get_tx_out(&sources[0].point().txid,sources[0].point().vout,Some(true)).unwrap().is_some());
+	assert!(assert_retained_claim(db,sources[0].id(),claim).await);
+	assert!(!chain.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap()
+		.is_some_and(|info|info.confirmations.is_some_and(|n|n>0)));
+	srv.start().await.unwrap(); srv.watchmand().start().await.unwrap();
+	tokio::time::timeout(Duration::from_secs(30),async {
+		while chain.get_mempool_entry(&claim.compute_txid()).is_err() {tokio::time::sleep(Duration::from_millis(50)).await;}
+	}).await.expect("a dependent B reservation must not block exact original A user replay");
+	assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await,*claim);
+	chain.generate_to_address(old_height-fork_height+1,&mining_address).unwrap();
+	confirm_reserved_partial(ctx,srv,db,sources,claim,grants,fallback,operator,reserved,Some(parent)).await;
+	let current=chain.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap();
+	assert!(current.confirmations.unwrap()>=6); assert_ne!(current.blockhash,Some(claim_block));
+	assert!(assert_retained_claim(db,sources[0].id(),claim).await);
+}
+
+#[tokio::test]
+async fn expiry_internal_reserved_partial_pays_remaining_source() {
+	Box::pin(reserved_terminal(false,true)).await;
+}
+
+#[tokio::test]
+async fn expiry_internal_reserved_partial_replays_paid_source_after_reorg() {
+	Box::pin(reserved_terminal(true,true)).await;
 }

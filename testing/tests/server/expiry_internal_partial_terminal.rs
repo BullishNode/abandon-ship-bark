@@ -380,7 +380,7 @@ pub(super) async fn assert_retained_claim(db:&Db,source:VtxoId,claim:&Transactio
 	}).await.unwrap()
 }
 
-async fn wait_partial_confirmation(
+pub(super) async fn wait_partial_confirmation(
 	ctx:&TestContext,srv:&Captaind,db:&Db,height:BlockHeight,paid:VtxoId,claim:bitcoin::Txid,unpaid:VtxoId,parent:&Transaction,
 ) {
 	srv.wait_for_sync_height(height).await;

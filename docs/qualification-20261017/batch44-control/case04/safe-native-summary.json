@@ -1,0 +1,23 @@
+{
+  "kind": "SAFE_NATIVE_SUMMARY_FROM_FROZEN_POSTFLIGHT",
+  "binary": "ark-testing::bark-sdk",
+  "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+  "run_id": "a5bc02b0-5357-4440-98bb-59f4cb4dd5b2",
+  "result": "PASS",
+  "native_seconds": 39.847,
+  "wall_seconds": 41.076,
+  "exit_code": 0,
+  "resource_error": null,
+  "actual_selected": 1,
+  "fresh_unignored_selected": 1,
+  "filtered_tests": 653,
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "source_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+  "target_body_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+  "native_nextest_log_sha256_only": "e824bef9fce0a21031454b14ad0780714e09ac1dd718bcc8b6b2c18a6169fc5b",
+  "raw_log_included": false,
+  "source_postflight_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+  "scope": "Bounded metadata projection from prior independent postflight; no raw nextest/wallet log read or copied during this export. Native assertions/financial audit limits remain separate."
+}

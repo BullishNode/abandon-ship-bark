@@ -1,0 +1,82 @@
+{
+  "state": "PREPARED_ROOT_ALLOCATED_PENDING_PARENT_FRESH_GATES",
+  "at": "2026-10-18T03:49:32.855939+00:00",
+  "batch": "batch44-six-money-v9b",
+  "template": "batch42 mixedbinary controller; substitutions only, actualpacket cases schema/order",
+  "root_allocation_sha256": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+  "source_plan_sha256": "c4d0adee1619c80b356c9cc2ad9b8fe617a7b9fee2446e8654f7a8182df5c4cb",
+  "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+  "archive_sha256": "f72ca371c3c575cb55da61f145bcea05065c5b87cb8ef0d49e688e0d75645bde",
+  "runtime_metadata_sha256": "fbc7525ff3180f5dcc73f6d165ec2e63d4c6a8647339e8b0b80d14ddd96e68db",
+  "runtime_pins_file_sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+  "actual_expected_selection": [
+    [
+      "ark-testing::server",
+      "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment"
+    ],
+    [
+      "ark-testing::server",
+      "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once"
+    ],
+    [
+      "ark-testing::server",
+      "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "exit::watchman_sweeps_funding_tx_during_exit"
+    ],
+    [
+      "ark-testing::bark-sdk",
+      "exit::watchman_sweeps_vtxo_chain_during_exit"
+    ]
+  ],
+  "static_verification": {
+    "Python_AST": 3,
+    "bash_syntax_only": 2,
+    "control_body_preflight_listing_native_execution": 0
+  },
+  "future_parent_freeze_file_count": 16,
+  "future_parent_freeze": [
+    "selection-proof.json",
+    "root-allocation.json",
+    "runtime-pins.sha256",
+    "server-cohort.py",
+    "preflight-static.py",
+    "fresh-listings.py",
+    "preflight.sh",
+    "run.sh",
+    "case01/nextest.toml",
+    "case02/nextest.toml",
+    "case03/nextest.toml",
+    "case04/nextest.toml",
+    "case05/nextest.toml",
+    "case06/nextest.toml",
+    "fresh-listing-admission.json",
+    "resource-admission.json"
+  ],
+  "prepared_sha256": {
+    "selection-proof.json": "28dcf32c059a9db5d3aaf612c8507335d893b7a356dcbd0d0bcc029284a6fac6",
+    "root-allocation.json": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+    "runtime-pins.sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+    "server-cohort.py": "dfe26aafa742d76c236eddbde7df39c8679902b34efe06ef4d04042c391adeea",
+    "preflight-static.py": "6e8de1ac64e7a85f104aea4e75ac250c0931c8dd6f6a3599873a51bd13e57b1c",
+    "fresh-listings.py": "8b33543e8841102429474c700ac6be44771963703f0ffd3c44643d5260adc49a",
+    "preflight.sh": "c838fb79a64f3ded80575d7d81481f3ff2cdf0d21bf003f4a0e7f101fe54ce68",
+    "run.sh": "6a06e513074a2c197c454f3d11cf47217e4f04125ec642053cdce29b93d85237",
+    "case01/nextest.toml": "0de07aa6380edb2d1d701ce0022d5c2bc7d5e4e0f0f539c616e93088694235bd",
+    "case02/nextest.toml": "6fd57cd7cc4a120f2caa987a8dad395dea29db767aae82f17c8339f2185d8d56",
+    "case03/nextest.toml": "f60cbd4d4060de6e46afc2db30d0c1d4b1f7d84b31abffc2cd39e4fac0eb1755",
+    "case04/nextest.toml": "bbc12e0c8053dc79318c6693d8032d27f944cd6751fc0bd59519562bb23f3ad2",
+    "case05/nextest.toml": "6c04a6815fec9f5cc9fc6a3177cf107e9b2c77e3d619a6918dcfe17e275568dd",
+    "case06/nextest.toml": "a9d7cc54bfa1987777ed6664b4a561ea33fd06c48d37e644de21937cb8046567"
+  },
+  "pending_marker_present": true,
+  "parent_admission_absent": true,
+  "no_prior_progress_results_testdata": true,
+  "limits": "Parent alone must run actual fresh17pin/version/list/resource preflight, freeze16, remove pending marker/create exact parentadmission and launch ONCE. Agent did not run any control body/preflight/list/native/Cargo/actor. No source/global reports modified."
+}

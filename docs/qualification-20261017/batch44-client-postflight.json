@@ -1,0 +1,323 @@
+{
+  "kind": "INDEPENDENT_BATCH44_CLIENT_POSTFLIGHT",
+  "at": "2026-10-18T04:01:01.016677+00:00",
+  "state": "TERMINAL_NATIVE_OUTCOMES_RETAINED_POSTFLIGHT_INTEGRITY_PASS",
+  "parent_terminal_confirmed_before_cleanup": true,
+  "counts": {
+    "started": 6,
+    "PASS": 6,
+    "FAIL": 0,
+    "NOT_STARTED": 0,
+    "reviewer_executions": 0
+  },
+  "cases": [
+    {
+      "case": 1,
+      "binary": "ark-testing::server",
+      "name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "result": "PASS",
+      "run_id": "51978c4f-4b4c-4f3d-bdbc-3f6e55d49db3",
+      "native_seconds": 34.69,
+      "wall_seconds": 36.062,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 133274,
+      "fresh_unignored_selected": 1,
+      "actual_selected": 1,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests": 653,
+      "source_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "target_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/test-data/server/qualification_partial_conflict_reorg",
+      "nonempty_Core_blockfile_present": true,
+      "source_version_gates": [
+        "require_bark_version!(> \"0.7.1\");"
+      ],
+      "no_early_version_return": "Fresh native context/blocks after the selected entrypoint/helper prove body ran; actual singleton binary-bound native outcome verified.",
+      "native_money_assertion_scope": "Actualordinarytwo100kroots/holderexit+terminalclaim/partialconflict/regroup/wholebranchreorg, C9validmerged199k OR2x99k, retainedfences and full700k canonicalboard/parent/child/leafcut repeatedafterreconsider.",
+      "limits": "Oneowner/tworoot/24blocklife/3exitdelta/180s; noseedrecovery/backup/scale/globalcustody/fullML121orP06. Stoppeddaemonhangclaim withdrawn; directCoremining is scheduling."
+    },
+    {
+      "case": 2,
+      "binary": "ark-testing::server",
+      "name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "result": "PASS",
+      "run_id": "5838a49e-d1f0-451f-9f82-c27334bffe6f",
+      "native_seconds": 53.453,
+      "wall_seconds": 55.088,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 133908,
+      "fresh_unignored_selected": 1,
+      "actual_selected": 1,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests": 653,
+      "source_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+      "target_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case02/test-data/server/qualification_failed_swap_restart",
+      "nonempty_Core_blockfile_present": true,
+      "source_version_gates": [],
+      "no_early_version_return": "Fresh native context/blocks after the selected entrypoint/helper prove body ran; actual singleton binary-bound native outcome verified.",
+      "native_money_assertion_scope": "RealexternalholdAccepted, nativeproductdowntime, actualCancel at originalremotegroup, senderabsent, originalterminalFailed proof+exact99kcanonicalparent/child6 and fullDAGphysicalconservation; immutableparent/ownerledger/originalgroup/no redispatch.",
+      "limits": "180s/<=96blocks; parentremainder binds configuredsweep, childchange walletcustody not independentlychecked; no multipart/crossroot/reorg/seedrestore/globaloperatorsolvency/FULLML."
+    },
+    {
+      "case": 3,
+      "binary": "ark-testing::server",
+      "name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "result": "PASS",
+      "run_id": "b12b96fd-87f1-445d-ba71-9d2f3295113c",
+      "native_seconds": 52.846,
+      "wall_seconds": 54.09,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 135338,
+      "fresh_unignored_selected": 1,
+      "actual_selected": 1,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests": 653,
+      "source_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "target_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case03/test-data/server/qualification_offboard_restart",
+      "nonempty_Core_blockfile_present": true,
+      "source_version_gates": [],
+      "no_early_version_return": "Fresh native context/blocks after the selected entrypoint/helper prove body ran; actual singleton binary-bound native outcome verified.",
+      "native_money_assertion_scope": "GenuineSDKauthorizeddurableoffboard, actualnurseryINSERT schedulinglock, serverstop/reap+clientabort/proxygone, startupalone exactsignedbroadcast, canonical6net+actualfee, sourceSpent and boundedwholechain/mempoolzeroextrafallback.",
+      "limits": "180s/<=96blocks,32blocklife; afterwalletpersist/beforenursery, not beforeallwalletwrites. Actualcoinamount fromSDKhelper, not assumed100kfunding. No completeoperator/customerinitialfunding/residualchange/fullML126 orbackup/defaultdaemon proof."
+    },
+    {
+      "case": 4,
+      "binary": "ark-testing::bark-sdk",
+      "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "result": "PASS",
+      "run_id": "a5bc02b0-5357-4440-98bb-59f4cb4dd5b2",
+      "native_seconds": 39.847,
+      "wall_seconds": 41.076,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 135842,
+      "fresh_unignored_selected": 1,
+      "actual_selected": 1,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests": 653,
+      "source_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "target_body_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case04/test-data/bark_sdk/pay_hold_expired_refusal_then_refresh",
+      "nonempty_Core_blockfile_present": true,
+      "source_version_gates": [],
+      "no_early_version_return": "Fresh native context/blocks after the selected entrypoint/helper prove body ran; actual singleton binary-bound native outcome verified.",
+      "native_money_assertion_scope": "PublictypedExpiredNewLightning refusalbeforeattempt/dispatch/nativeCLNpay with fullsignedprincipalretained; actualinteractiveconfirmedrefresh to newtree then freshdistinctholdinvoicePaid with nativeCLNComplete and exactbalance/history.",
+      "limits": "180s;100blocklife/clientmanualsync/watch900scadence isolatesadmission. No first-attemptpendingrace/defaultdaemon/fallback/backup/FULLML. Large2BTC/0.5BTC are nativeREGTEST only."
+    },
+    {
+      "case": 5,
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "result": "PASS",
+      "run_id": "f41b4b18-b14b-422d-ba54-513ec19240dc",
+      "native_seconds": 49.248,
+      "wall_seconds": 50.585,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 137270,
+      "fresh_unignored_selected": 1,
+      "actual_selected": 1,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests": 653,
+      "source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "target_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case05/test-data/bark_sdk/watchman_sweeps_funding_tx_during_exit",
+      "nonempty_Core_blockfile_present": true,
+      "source_version_gates": [],
+      "no_early_version_return": "Fresh native context/blocks after the selected entrypoint/helper prove body ran; actual singleton binary-bound native outcome verified.",
+      "native_money_assertion_scope": "Nativeexpiredsingle400kregisteredowner, one-deepProcessing/no prematurehistory then actual399kcanonical6fallback, exactownerledger/sourcepath andchain+mempooloneoutput, sourceSpent/no refresh resurrection.",
+      "limits": "180s;manualclient/watch900s,15exititerations; no actualallfeechild/subsidy/operatorcustodycut ordefaultdaemon/FULLML."
+    },
+    {
+      "case": 6,
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "result": "PASS",
+      "run_id": "57fbc695-a764-4c4f-9684-432e5dac01c2",
+      "native_seconds": 57.051,
+      "wall_seconds": 58.101,
+      "exit_code": 0,
+      "resource_error": null,
+      "owned_nextest_group": 137532,
+      "fresh_unignored_selected": 1,
+      "actual_selected": 1,
+      "profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests": 653,
+      "source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "target_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "actual_native_context": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case06/test-data/bark_sdk/watchman_sweeps_vtxo_chain_during_exit",
+      "nonempty_Core_blockfile_present": true,
+      "source_version_gates": [],
+      "no_early_version_return": "Fresh native context/blocks after the selected entrypoint/helper prove body ran; actual singleton binary-bound native outcome verified.",
+      "native_money_assertion_scope": "Real100kArkoorrecipient+300ksenderchange under sameanchor/partialexit; nativecanonical299k+99ktoindependentregisteredowners, exactledger/generation/chainoneoutputeach andlocalspent/history/no refresh resurrection.",
+      "limits": "180s;explicit change_vtxo_split_factor1/manualsync/watch900s; not defaultfactor2/groupedoutputs/fullfeechild/subsidy/custody/globalML."
+    }
+  ],
+  "unstarted": [],
+  "immutable": {
+    "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+    "archive_sha256": "f72ca371c3c575cb55da61f145bcea05065c5b87cb8ef0d49e688e0d75645bde",
+    "bundle_manifest_sha256": "fcba315b96f3a7f7690c9e8e33ec16bcdbda0949c36fddbc304c89e533cdbf95",
+    "runtime_metadata_sha256": "fbc7525ff3180f5dcc73f6d165ec2e63d4c6a8647339e8b0b80d14ddd96e68db",
+    "immutable_metadata_sha256": "5ffa6495550fb11f898016bf5ddd658d00eaa816691ddca62115df4a56d1d305",
+    "root_allocation_sha256": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+    "parent_admission_sha256": "164dccd808a7a7ce42e21c0160a7e8b134a696bfd0e4f2b7de3642648ba60585",
+    "all16parent_control_profile_listing_resource_hashes_unchanged": {
+      "selection-proof.json": "28dcf32c059a9db5d3aaf612c8507335d893b7a356dcbd0d0bcc029284a6fac6",
+      "root-allocation.json": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+      "runtime-pins.sha256": "6f478a0bac0d0768332e6c305093d7a6ad7ca28c1f52bcd513c34dfe64ea08a5",
+      "server-cohort.py": "dfe26aafa742d76c236eddbde7df39c8679902b34efe06ef4d04042c391adeea",
+      "preflight-static.py": "6e8de1ac64e7a85f104aea4e75ac250c0931c8dd6f6a3599873a51bd13e57b1c",
+      "fresh-listings.py": "8b33543e8841102429474c700ac6be44771963703f0ffd3c44643d5260adc49a",
+      "preflight.sh": "c838fb79a64f3ded80575d7d81481f3ff2cdf0d21bf003f4a0e7f101fe54ce68",
+      "run.sh": "6a06e513074a2c197c454f3d11cf47217e4f04125ec642053cdce29b93d85237",
+      "case01/nextest.toml": "0de07aa6380edb2d1d701ce0022d5c2bc7d5e4e0f0f539c616e93088694235bd",
+      "case02/nextest.toml": "6fd57cd7cc4a120f2caa987a8dad395dea29db767aae82f17c8339f2185d8d56",
+      "case03/nextest.toml": "f60cbd4d4060de6e46afc2db30d0c1d4b1f7d84b31abffc2cd39e4fac0eb1755",
+      "case04/nextest.toml": "bbc12e0c8053dc79318c6693d8032d27f944cd6751fc0bd59519562bb23f3ad2",
+      "case05/nextest.toml": "6c04a6815fec9f5cc9fc6a3177cf107e9b2c77e3d619a6918dcfe17e275568dd",
+      "case06/nextest.toml": "a9d7cc54bfa1987777ed6664b4a561ea33fd06c48d37e644de21937cb8046567",
+      "fresh-listing-admission.json": "a9404660a9cb951b0e938f1cf8c046724ae1d364d6f16cb7b29e799e7d83fb52",
+      "resource-admission.json": "8c5c558307473c1fb5f9d562af027273ed4be15f3a8e74d32fbd268db4d3e91e"
+    },
+    "all17containerpins_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/captaind",
+        "sha256": "c6b4c1c4681f6172bd7c42cd258ce677501af432269d1365a0b572dac9c6c441"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/watchmand",
+        "sha256": "6cd056b99a601203667a48369347cde60c3cd8faf86d0a0e2e592c78680451c5"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/bark",
+        "sha256": "32643bf093c29e87c82f6ac90467ff8e4f5e57a420c42cf6fc966825b64b344d"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/barkd",
+        "sha256": "44165cea7af5a1ed27e7cdeeea6c8ba69ec5926bdc3880b2180e0fd9500bd859"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-bark",
+        "sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-bark-sdk",
+        "sha256": "11b2b5ac382094b4e5213f80ea4528d8e41554af2c0890fad19f3171b843d0cc"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-barkd",
+        "sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/native-server",
+        "sha256": "4e3b817da2eccae40f372c20e8bcf9bb793a05275b1c722d4aa32ebbc80d3769"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/nextest-binaries-runtime.json",
+        "sha256": "fbc7525ff3180f5dcc73f6d165ec2e63d4c6a8647339e8b0b80d14ddd96e68db"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/source-manifest.json",
+        "sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/manifest.json",
+        "sha256": "fcba315b96f3a7f7690c9e8e33ec16bcdbda0949c36fddbc304c89e533cdbf95"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/deps/libark.rlib",
+        "sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/deps/libark.so",
+        "sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+      },
+      {
+        "path": "/fresh-cache/runtime-recovery-v9b-20261017/support/debug/lock-holder",
+        "sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+      },
+      {
+        "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1"
+      },
+      {
+        "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9"
+      }
+    ],
+    "all5archivedsourcefiles_6bodies_relevanthelperhashes_unchanged": true,
+    "failedswap_wrapper_old0fe44_does_not_replace_changed_helper_file237d": true,
+    "SDK_expired_target_d97_not_historical_eb82": true,
+    "preparation_receipt_sha256": "cfd71627c903ce1123d66fa4ce7794d2328c391540d205a65d4da15e5a466fce"
+  },
+  "cleanup_resources": {
+    "at": "2026-10-18T04:01:00.201579+00:00",
+    "namespace": "abandon-fresh-runtime-20261017",
+    "owned_groups": [
+      133274,
+      133908,
+      135338,
+      135842,
+      137270,
+      137532
+    ],
+    "remaining_owned_group_or_session_members": [],
+    "remaining_batch_scoped_processes": [],
+    "CLN_lightningd_hold_grpc_candidates": [],
+    "CLN_scan_scope": "All process comm/argv plus cwd and FD public path targets only; no FD contents or rawargv exported. Global plugin argv detects escaped children beyond batch text/group.",
+    "all17pins_unchanged": true,
+    "shm_available_bytes": 829206528,
+    "shm_guard_bytes": 12582912,
+    "no_signals_or_actor_calls": true
+  },
+  "safe_artifact_hashes": {
+    "case01/result.json": "7472562319837acb4d260c89a215d1b2e107383745f3369c876126654fe4e523",
+    "case01/selection-list-fresh.json": "8c326f0a969d80c3b299306acbdff8815380ab0c51a48276a55b2f146edb5b62",
+    "case01/nextest.log": "66fdbcc593ed7355d84b6ff5f9d56b61de2ea2db87850a3f3683305a821086b9",
+    "case02/result.json": "594755ecd42b519189bcb7c7e3356bd78ec064873c87e0ea3cf7a8f8eeed9871",
+    "case02/selection-list-fresh.json": "92a4c868eae3713f903d2b1a811f2037fcfe2dc086df1632c5e132052a401383",
+    "case02/nextest.log": "c9c7a22944e5f3f95e4f5e103989589a2eabb140916dac6a9a8a4b2d7a93a00f",
+    "case03/result.json": "4e786a56454849b0ba3879b036800fe1b8a2b7d4546a2d1b59d1c0fe9ba4cd85",
+    "case03/selection-list-fresh.json": "68ffd67d7a4b30db019fd567e67af79475cb6a297d1116601dc56f84df87c7ea",
+    "case03/nextest.log": "b959fd7bc34022bf6d61fff75050fc1bb49e8de2f339d4c9258029707558e05c",
+    "case04/result.json": "cfddc0496fa170f177469bfa553ab9a4ad71192c3713180520d6f4e97ca82232",
+    "case04/selection-list-fresh.json": "f973686da9dafbab6020faf61b2a220435aacc8dc5f68cb2bff53be0899f0788",
+    "case04/nextest.log": "e824bef9fce0a21031454b14ad0780714e09ac1dd718bcc8b6b2c18a6169fc5b",
+    "case05/result.json": "fc65857b7972a6507490a8625a3cf57e1af689ab61a1ca172e6ccd0b57b8542f",
+    "case05/selection-list-fresh.json": "1a0676dcbe3b7ac11c8830fead5769521f80d47882cc1f624f4e6ea9e5f13d5b",
+    "case05/nextest.log": "143ebc2ce76c40d89d1f16647adbe487eb7e9795aa26ef857756851823897832",
+    "case06/result.json": "766b5c0611046e6338977f16055cb4dc1d5200033a63159f8f8e9e4268bc4ec3",
+    "case06/selection-list-fresh.json": "bc88f845e8f9cbf1a893a249693441b50648f7157180d3240ef7d5c02cea82c9",
+    "case06/nextest.log": "45c5a0e4ac073cdca4cda24c9ff5c9190bfbb9faaebc55498b00083946cb15aa"
+  },
+  "limits": [
+    "Only actual started native outcomes count; same names/compiled source/proposed plan confer no execution credit.",
+    "Selected order is root actual conflict/failed/offboard/expired/watchfund/watchchain, overriding prior proposed offboard-first order.",
+    "Real body/source assertions are native evidence; this postflight does not independently reconstruct money/signatures/Coregraph or qualify FULL ML/globalcustody/fullsuite/production.",
+    "Existing historical failures and batch42/43 receipts unchanged; later own0cf mixed/roundfix excluded from captured v9b.",
+    "No full raw log/argv/privatewallet/seed/key/config/DB reads or exports. Only safe bounded log metadata/source/archive hashes and fixture/blockfile stats.",
+    "No actor/RPC/Core/PG calls, signals, controller/preflight/list rerun, Cargo/target/build or global report mutations."
+  ]
+}

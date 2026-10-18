@@ -1,0 +1,16 @@
+{
+  "index": 2,
+  "name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+  "state": "PASS",
+  "started_at": "2026-10-18T03:54:31.762043+00:00",
+  "per_test_timeout_seconds": 180,
+  "retries": 0,
+  "no_new_compilation": true,
+  "owned_nextest_group": 133908,
+  "exit_code": 0,
+  "resource_error": null,
+  "run_id": "5838a49e-d1f0-451f-9f82-c27334bffe6f",
+  "test_seconds": 53.453,
+  "wall_seconds": 55.088,
+  "ended_at": "2026-10-18T03:55:26.851488+00:00"
+}

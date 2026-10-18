@@ -1,0 +1,66 @@
+{
+  "state": "FINAL_BINDING_AND_INPUT_STABILITY_VERIFIED",
+  "at": "2026-10-18T04:05:55.677066+00:00",
+  "reports": {
+    "batch44-case01-conflict-retained-core-reconciliation.json": "cedd6a2ba14a9eab6d9df80a6ef3d59acdfd23a67671bba1f70eda1eb391a422",
+    "root-j01-replan-retained-core-reconciliation-backend.json": "bb30ba4304b680622ff06f248ff16f89bdafaacae3c1ecfdb17df955128da07e"
+  },
+  "all_retained_Core_and_safe_result_inputs": {
+    "count": 8,
+    "hashes_before": {
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/test-data/server/qualification_partial_conflict_reorg/bitcoind/regtest/blocks/xor.dat": "0935117f1ed1e03f4787d7dd8ac2a7430eb8c59bbf2acbd30390e5ba67786c40",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/test-data/server/qualification_partial_conflict_reorg/bitcoind/regtest/debug.log": "6e46fa0c08edd78772de64a333fe1cfcf4b17f31776dc205518ce84d06679e48",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/test-data/server/qualification_partial_conflict_reorg/bitcoind/regtest/blocks/blk00000.dat": "2adc31991700eb92cf1e771fc8853df6c2db760dad7d89d53b0b0eeee5451177",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/result.json": "7472562319837acb4d260c89a215d1b2e107383745f3369c876126654fe4e523",
+      "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/corrected-reserve-joint-replan/test-data/server/expiry_internal_shared_root_frontier_replan/bitcoind/regtest/blocks/xor.dat": "eb49904d87fcf20bd133d05e674d6086ad05edf8622a719911431b18ad5f453b",
+      "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/corrected-reserve-joint-replan/test-data/server/expiry_internal_shared_root_frontier_replan/bitcoind/regtest/debug.log": "6af030e98d512ab26bb72b906f80a9266a501a78ea9321840d74106ae269ca1f",
+      "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/corrected-reserve-joint-replan/test-data/server/expiry_internal_shared_root_frontier_replan/bitcoind/regtest/blocks/blk00000.dat": "166f9b249df27c8ba90b4aee91b4ca7a4581e47ef2a1421b769acfd78440046e",
+      "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/results.json": "a566d1ae03ce9d6da95e90a4b2a8ce161287d44b4c68f4e80589a29180ba16e4"
+    },
+    "hashes_after": {
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/test-data/server/qualification_partial_conflict_reorg/bitcoind/regtest/blocks/xor.dat": "0935117f1ed1e03f4787d7dd8ac2a7430eb8c59bbf2acbd30390e5ba67786c40",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/test-data/server/qualification_partial_conflict_reorg/bitcoind/regtest/debug.log": "6e46fa0c08edd78772de64a333fe1cfcf4b17f31776dc205518ce84d06679e48",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/test-data/server/qualification_partial_conflict_reorg/bitcoind/regtest/blocks/blk00000.dat": "2adc31991700eb92cf1e771fc8853df6c2db760dad7d89d53b0b0eeee5451177",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01/result.json": "7472562319837acb4d260c89a215d1b2e107383745f3369c876126654fe4e523",
+      "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/corrected-reserve-joint-replan/test-data/server/expiry_internal_shared_root_frontier_replan/bitcoind/regtest/blocks/xor.dat": "eb49904d87fcf20bd133d05e674d6086ad05edf8622a719911431b18ad5f453b",
+      "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/corrected-reserve-joint-replan/test-data/server/expiry_internal_shared_root_frontier_replan/bitcoind/regtest/debug.log": "6af030e98d512ab26bb72b906f80a9266a501a78ea9321840d74106ae269ca1f",
+      "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/corrected-reserve-joint-replan/test-data/server/expiry_internal_shared_root_frontier_replan/bitcoind/regtest/blocks/blk00000.dat": "166f9b249df27c8ba90b4aee91b4ca7a4581e47ef2a1421b769acfd78440046e",
+      "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/results.json": "a566d1ae03ce9d6da95e90a4b2a8ce161287d44b4c68f4e80589a29180ba16e4"
+    },
+    "unchanged": true,
+    "measurement": "Final binding verification after the full offline parse. Each report additionally records original Core before/after parse hashes; final hashes equal those original hashes."
+  },
+  "post_read_actor_absence": {
+    "path": "/tmp/batch44-case01-j01-replan-offline-absence-after.json",
+    "sha256": "2c88af3d9d9d946271891798be47e702aac4ac7ba9fbf57ff9af8b486aa2e356",
+    "scopes": [
+      {
+        "label": "batch44-case01-conflict",
+        "prefixes_checked": [
+          "/fresh-cache/testing-track-20261017/batch44-six-money-v9b/case01",
+          "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch44-six-money-v9b/case01"
+        ],
+        "historical_group_SID": 133274,
+        "historical_group_verified": true,
+        "group_SID_members": [],
+        "argv_cwd_FD_scoped_actors": [],
+        "quiescent": true
+      },
+      {
+        "label": "root-j01-replan",
+        "prefixes_checked": [
+          "/fresh-cache/root-recovery-v9b-20261018/corrected-reserve-joint-replan",
+          "/home/francis/.cache/abandon-fresh/root-recovery-v9b-20261018/corrected-reserve-joint-replan"
+        ],
+        "historical_group_SID": null,
+        "historical_group_verified": false,
+        "group_SID_members": [],
+        "argv_cwd_FD_scoped_actors": [],
+        "quiescent": true
+      }
+    ]
+  },
+  "historical_root_J01_group": "UNKNOWN; scoped-absence-only parent disposition, no guessed processID or continuousabsence claim",
+  "no_input_mutations": true,
+  "no_actor_or_private_financial_database_actions": true
+}

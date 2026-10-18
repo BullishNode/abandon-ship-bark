@@ -1,0 +1,343 @@
+{
+  "kind": "BATCH44_ADDITIVE_APPEND_ONLY_CURATION_RECEIPT",
+  "state": "COMPLETE_SIX_PASS_FORMAL_POSTFLIGHT_AND_OWN_CONFLICT_FINANCIAL_AUDIT",
+  "at": "2026-10-18T04:11:24.170579+00:00",
+  "before_rows": 447,
+  "after_rows": 453,
+  "appended_rows": 6,
+  "before_sha256": "0b7387360a4fbe3cd1887a92f1a2114aa27065b242ccd92f74ded8e9c1ab1d0e",
+  "after_sha256": "a07b84c98f72644877594d69cb413b0bc644c16c338ac8b71504c87d7bb454fb",
+  "prefix_byte_identical": true,
+  "all_prior_parsed_rows_and_FAIL_rows_unchanged": true,
+  "new_rows_LF_only": true,
+  "append_bytes_sha256": "750ae19671552436c43e7689ba0357ec822448d2684953a2891c65cccc451e0c",
+  "new_unique_pairs": 6,
+  "deduplication": "All six exact binary/name strings absent from the prior 447-row CSV; immutable pre-runtime plan additionally checks safe prior execution receipts. Increment only these six actual started tests. Baseline aggregate and original failures inherited from batch43 append receipt, not inferred from mixed inventory rows.",
+  "baseline_aggregate": {
+    "executions": 236,
+    "PASS": 221,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 221,
+    "nextest_invocations": 209,
+    "native": 224,
+    "component": 12,
+    "coverage_rows": 447
+  },
+  "aggregate": {
+    "executions": 242,
+    "PASS": 227,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 227,
+    "nextest_invocations": 215,
+    "native": 230,
+    "component": 12,
+    "coverage_rows": 453
+  },
+  "native_seconds": 287.135,
+  "parent_session": 49687,
+  "parent_terminal_exit": 0,
+  "case_records": [
+    {
+      "case_id": "FT-SERVER-014",
+      "binary": "ark-testing::server",
+      "name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "result": "PASS",
+      "run_id": "51978c4f-4b4c-4f3d-bdbc-3f6e55d49db3",
+      "native_seconds": 34.69,
+      "native_log_sha256": "66fdbcc593ed7355d84b6ff5f9d56b61de2ea2db87850a3f3683305a821086b9",
+      "source_file": "testing/tests/server/qualification_conflict_reorg.rs",
+      "source_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "source_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "helper_provenance": [
+        {
+          "path": "testing/tests/server/qualification_conflict_reorg.rs",
+          "v9b_full_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+          "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+          "relevant_helper_body_sha256": {
+            "canonical_point": "70876493593ab9fcff9f6bd80e98e48d6841eca17d7ad5eff0c7d4e6b7ba9578",
+            "actual_fee": "a03748f679acfa94968c5139cc9ce10bad79ec069ec26e476602feab10eaacb0",
+            "assert_physical_cut": "4887a5a6ee9082282d1bb29c08db496e754997c544af9a811f51165f4d309c26",
+            "decided_obligations": "49e8b2321b3e62441cd6223a5af0431bf33d1d1c6fdcd1e7c8fa1131a29fdf6e",
+            "rebuilt_generation": "1d58c0005833dc3e273f8dc408ffd4ea1b3ce051d98e51fd30fc0262c140e41d",
+            "assert_final_outcome": "978dd60e8f11a0fb13a28554afb6575beae5795534cad9c81daf8b0dded8395d",
+            "partial_conflict_reorg": "bcb23dd524db0e72cdc670c32b4db5a17511c0ef6d31987fcbcd829d378c0d30"
+          }
+        }
+      ],
+      "new_unique_pair": 1,
+      "native_success_oracle": "Authentic completed owner claim and partial conflict; actual Core branch rollback, mempool-wiping restart, rebuilt generations and reconsider. Preserve irreversible obligations and recorded signed parents; one canonical economic payment per coin under either valid C9 paying disposition, actual same-block fee child and Core 6. Independent retained-Core audit additionally reconciles the finite 700,000-sat graph at Core 7.",
+      "limitation": "Bounded two-root ordinary reorg. Independent block audit establishes finite value/depth and retained canonicality; dynamic owner identity and signature validity remain native/source assertions. No exhaustive unconfirmed exclusion, secret-derived custody, global solvency, backup, production or full ML qualification."
+    },
+    {
+      "case_id": "FT-SERVER-015",
+      "binary": "ark-testing::server",
+      "name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "result": "PASS",
+      "run_id": "5838a49e-d1f0-451f-9f82-c27334bffe6f",
+      "native_seconds": 53.453,
+      "native_log_sha256": "c9c7a22944e5f3f95e4f5e103989589a2eabb140916dac6a9a8a4b2d7a93a00f",
+      "source_file": "testing/tests/server/qualification_failed_swap.rs",
+      "source_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+      "source_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "helper_provenance": [
+        {
+          "path": "testing/tests/server/qualification_failed_swap.rs",
+          "v9b_full_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+          "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+          "relevant_helper_body_sha256": {
+            "remote_pays": "d0533b447f2971179060b0c7565eb25fd277750ffc4026de4d0bbf5654448772",
+            "remote_groups": "b2fcf5ac4b92662143cb2aa1f82c4ada52264aad52125573f20c397941aed96a",
+            "actual_fee": "86613e86656c9aa014a7978a81d7420a27ab52cbd59fbef952f051cde7d5ea07",
+            "canonical_package": "94c7b2f07260e6b30618ed09c476da95756372a18855eb52a9edb87cd1d137f7",
+            "assert_original_attempt": "2c63d060c88839c4c8ba77dc0b894f64ff17c68289081e118a55ad9191199957",
+            "wait_rebuilt": "8becf6b380edd52f6ac7ec4315d5a82bbc440eafa0987b56a2e89f2495f02f67",
+            "failed_swap_during_restart": "ebae0d73bfe45b63e1e42b2ea77d2bb3e75e091df20ddb07639b50a1a259cd07"
+          }
+        }
+      ],
+      "new_unique_pair": 1,
+      "native_success_oracle": "Actual Accepted external hold, receiver cancellation during owned server/watch outage, source-labelled all-Failed terminal group without preimage, and restart with absent sender. Preserve original attempt without duplicate dispatch, require funded pre-deadline no-fallback/unspent-root, then rightful 99,000-sat canonical payout plus actual fee child at Core 6 and finite root/sponsor conservation.",
+      "limitation": "External cancellation during downtime only. Actual changed helper/full file 237d is authoritative; unchanged wrapper alone is insufficient. No separate offline financial audit, multipart/reorg/seed recovery, child-change signing custody, global solvency or full ML credit."
+    },
+    {
+      "case_id": "FT-SERVER-016",
+      "binary": "ark-testing::server",
+      "name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "result": "PASS",
+      "run_id": "b12b96fd-87f1-445d-ba71-9d2f3295113c",
+      "native_seconds": 52.846,
+      "native_log_sha256": "b959fd7bc34022bf6d61fff75050fc1bb49e8de2f339d4c9258029707558e05c",
+      "source_file": "testing/tests/server/qualification_offboard_restart.rs",
+      "source_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "source_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "helper_provenance": [
+        {
+          "path": "testing/tests/server/qualification_offboard_restart.rs",
+          "v9b_full_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+          "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+          "relevant_helper_body_sha256": {
+            "wait_rebuilt": "04d013d17ae4e46aa9956c749240997ca9222904048c7c1101afb307c7a27cee",
+            "actual_fee": "68c41c2c2320e03d04357da20066fc81f3f2e154850922b6232657293e95975d",
+            "interrupted_offboard": "785093b668a14c2bd1a7b3140758b25903534150bca2c23655198974d9d9bf1a"
+          }
+        }
+      ],
+      "new_unique_pair": 1,
+      "native_success_oracle": "Authentic SDK-signed durable offboard before nursery handoff, scheduler-only PG lock, server stop/reap and original caller abort/drop. Native startup alone publishes exact authorized bytes at Core 6; actual net plus user fee conserves input, source is Spent, nursery reference matches, and repeated canonical/mempool observations exclude duplicate customer output.",
+      "limitation": "After-wallet-persist/before-nursery boundary only. Native assertions, not an additional independent financial audit; no complete initial-funding/global operator cut, all crash boundaries, physical backup, default daemon or full ML credit."
+    },
+    {
+      "case_id": "FT-SDK-055",
+      "binary": "ark-testing::bark-sdk",
+      "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "result": "PASS",
+      "run_id": "a5bc02b0-5357-4440-98bb-59f4cb4dd5b2",
+      "native_seconds": 39.847,
+      "native_log_sha256": "e824bef9fce0a21031454b14ad0780714e09ac1dd718bcc8b6b2c18a6169fc5b",
+      "source_file": "testing/tests/bark_sdk/lightning.rs",
+      "source_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "source_body_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+      "helper_provenance": [
+        {
+          "path": "testing/tests/bark_sdk/lightning.rs",
+          "v9b_full_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+          "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+          "relevant_helper_body_sha256": {
+            "wait_for_hold_invoice_accepted": "dbe665c63e7ef9d7a4dd2a9727ff515f2528d361d737701d82eecfc0dc8bcac3"
+          }
+        }
+      ],
+      "new_unique_pair": 1,
+      "native_success_oracle": "Actual expired signed source is refused by the public typed Lightning API before attempt/dispatch, with principal retained and no effects. Genuine interactive confirmed refresh produces fresh inputs; a distinct hold invoice is Accepted then Paid with real CLN Complete/preimage and precise native balance/history while the refused invoice remains unpaid.",
+      "limitation": "Manual synchronization and watch interval 900 fixture; actual SDK body d97 includes the mechanical API correction. Native assertions only; no separate offline CLN/Core audit, default daemon, first-attempt race, fallback/backup or full ML credit."
+    },
+    {
+      "case_id": "FT-SDK-056",
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "result": "PASS",
+      "run_id": "f41b4b18-b14b-422d-ba54-513ec19240dc",
+      "native_seconds": 49.248,
+      "native_log_sha256": "143ebc2ce76c40d89d1f16647adbe487eb7e9795aa26ef857756851823897832",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "source_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "helper_provenance": [
+        {
+          "path": "testing/tests/bark_sdk/exit.rs",
+          "v9b_full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+          "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+          "relevant_helper_body_sha256": {
+            "chain_tip": "4456737bd0ab9229820e29bbc12154b55dddc6b6a197494c8c1721931826686f",
+            "blocks_until": "7445c5759387c29eee168d5cf4e50d63ed7e4725c26015c6bebf43ceba5f0167"
+          }
+        }
+      ],
+      "new_unique_pair": 1,
+      "native_success_oracle": "Registered 400,000-sat owner source, genuine client exit with one-depth Processing rather than premature terminal status, then rightful 399,000-sat customer payout plus 1,000-sat charge at Core 6. Native registered ledger/path, no duplicate economic output, and no local principal/history resurrection across refresh.",
+      "limitation": "Manual client and watch interval 900; bounded exit iterations. Native assertions only; no independent full fee-child/subsidy custody or global operator cut, default daemon or full ML credit."
+    },
+    {
+      "case_id": "FT-SDK-057",
+      "binary": "ark-testing::bark-sdk",
+      "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "result": "PASS",
+      "run_id": "57fbc695-a764-4c4f-9684-432e5dac01c2",
+      "native_seconds": 57.051,
+      "native_log_sha256": "45c5a0e4ac073cdca4cda24c9ff5c9190bfbb9faaebc55498b00083946cb15aa",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "source_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "helper_provenance": [
+        {
+          "path": "testing/tests/bark_sdk/exit.rs",
+          "v9b_full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+          "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+          "relevant_helper_body_sha256": {
+            "chain_tip": "4456737bd0ab9229820e29bbc12154b55dddc6b6a197494c8c1721931826686f",
+            "blocks_until": "7445c5759387c29eee168d5cf4e50d63ed7e4725c26015c6bebf43ceba5f0167"
+          }
+        }
+      ],
+      "new_unique_pair": 1,
+      "native_success_oracle": "Actual 400,000-sat shared anchor, 100,000-sat recipient and 300,000-sat sender change with explicit change factor 1, and genuine partial-exit race. Rightful 299,000 plus 99,000 payouts and two 1,000-sat charges at Core 6; registered ownership, generations and canonical/mempool uniqueness, with discharged local principal/history retained.",
+      "limitation": "Explicit change factor 1; default factor 2 and grouped-change behavior remain unqualified. Native assertions only; no independent all-DAG fee-child custody, subsidy/global operator cut, backup/default daemon or full ML credit."
+    }
+  ],
+  "source": {
+    "captured_HEAD": "4fa8997ba21158f20326c19f68efba5f42af1f3c",
+    "dirty": true,
+    "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+    "archive_sha256": "f72ca371c3c575cb55da61f145bcea05065c5b87cb8ef0d49e688e0d75645bde",
+    "bundle_manifest_sha256": "fcba315b96f3a7f7690c9e8e33ec16bcdbda0949c36fddbc304c89e533cdbf95",
+    "runtime_metadata_sha256": "fbc7525ff3180f5dcc73f6d165ec2e63d4c6a8647339e8b0b80d14ddd96e68db",
+    "immutable_metadata_sha256": "5ffa6495550fb11f898016bf5ddd658d00eaa816691ddca62115df4a56d1d305",
+    "actual_product_version_label": "0.7.1-dev 4fa8997b; explicitlabel plusdeclaredactualdirtyarchive authoritative, no relabelto laterpublishedcommits",
+    "actual_source_bindings": [
+      {
+        "name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+        "binary": "ark-testing::server",
+        "source_file": "testing/tests/server/qualification_conflict_reorg.rs",
+        "actual_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+        "actual_function_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+        "historical_reviewed_function_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+        "change_from_frozen_intake": "None"
+      },
+      {
+        "name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+        "binary": "ark-testing::server",
+        "source_file": "testing/tests/server/qualification_failed_swap.rs",
+        "actual_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+        "actual_function_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+        "historical_reviewed_function_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+        "change_from_frozen_intake": "None"
+      },
+      {
+        "name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+        "binary": "ark-testing::server",
+        "source_file": "testing/tests/server/qualification_offboard_restart.rs",
+        "actual_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+        "actual_function_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+        "historical_reviewed_function_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+        "change_from_frozen_intake": "None"
+      },
+      {
+        "name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+        "binary": "ark-testing::bark-sdk",
+        "source_file": "testing/tests/bark_sdk/lightning.rs",
+        "actual_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+        "actual_function_body_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+        "historical_reviewed_function_sha256": "eb82a1226e01d9a3ffee536fa5fae7b663dec32d18fc420e1984099448e8a414",
+        "change_from_frozen_intake": "OnlypeerACK835a mechanicalAPIpublicexport/BlockHeightorawaitcorrection; preserveoriginalpacket"
+      },
+      {
+        "name": "exit::watchman_sweeps_funding_tx_during_exit",
+        "binary": "ark-testing::bark-sdk",
+        "source_file": "testing/tests/bark_sdk/exit.rs",
+        "actual_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+        "actual_function_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+        "historical_reviewed_function_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+        "change_from_frozen_intake": "None"
+      },
+      {
+        "name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+        "binary": "ark-testing::bark-sdk",
+        "source_file": "testing/tests/bark_sdk/exit.rs",
+        "actual_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+        "actual_function_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+        "historical_reviewed_function_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+        "change_from_frozen_intake": "None"
+      }
+    ],
+    "API_correction_note": "835a source-only correction before v9b compile: SDK expiredbody nowd97 vs reviewedeb82; failedswapwrapper unchanged0fe44 butawait/loghelper/fullfile237d differs old55bb; bothprovenances retained.",
+    "mixed_round_fix": "0cf source-only correction excluded fromv9b; no mixed/heldround execution."
+  },
+  "authorization": {
+    "root_packet_sha256": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+    "parent_admission_sha256": "164dccd808a7a7ce42e21c0160a7e8b134a696bfd0e4f2b7de3642648ba60585",
+    "parent_frozen_paths": 16,
+    "preflight_parent_session": 88494,
+    "preflight_parent_exit_code": 0,
+    "exact_fresh_singleton_unignored_listings": 6,
+    "actual17pins_CLN_plugins_verified": true,
+    "actual_archive_entries_verified": 1730,
+    "profile": "default",
+    "timeout_seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "first_failure_stops": true,
+    "no_new_compilation_by_testing_track": true
+  },
+  "independent_postflight": "COMPLETE; exact six real unignored contexts, 17 pins/16 controls/source bindings unchanged, all six groups/SIDs/scoped actors and CLN/plugin candidates absent.",
+  "independent_financial": {
+    "own_case01": "COMPLETE bounded retained-Core finite 700000 cut; actual merged199000 payout/fee child at Core7; payee identity/signature validity native/source-bound; no global custody/unconfirmed exclusion.",
+    "other_five": "Native source assertions only; no additional independent offline financial audit claimed.",
+    "root_J01": "Separate root lane, zero own execution credit."
+  },
+  "references_sha256": {
+    "batch44-six-money-v9b-receipt.json": "528a52d36f55036009b9eb567c3346685b403b97d77ff21fc099921316e9fbdd",
+    "batch44-client-postflight.json": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+    "batch44-conditional-curation-plan.json": "faca93cf789fc2db9a4eef318879a900285b2958b4e8d9407c968f5bb98657db",
+    "batch44-case01-conflict-retained-core-reconciliation.json": "cedd6a2ba14a9eab6d9df80a6ef3d59acdfd23a67671bba1f70eda1eb391a422",
+    "FIFTEENTH-CHECKPOINT.md": "b83fe26ce020979d87429d53a607b9f48e45d6ecf1a897c5dfbbc449b1b615be",
+    "SIXTEENTH-CHECKPOINT.md": "b2bbe0743b5f56419ccb528cf152c9e9cdbcd74283e72e0b57d50b79d7a149b3",
+    "batch44-case01-j01-retained-core-final-stability.json": "8cf261298b7f62b166f6bffae1f1d24408811141eda21cac50e4663ee6e6aac3",
+    "barkd-recovery-round-retirement-balance-ownership-audit.json": "b6579375a52f5257ecf4f4be22e8cb7172a07b630b3da7d21b53c1a66e03bfe7",
+    "barkd-recovery-round-retirement-v1-peer-review-legacy.md": "dab7e40077e4157d6d65f4864fb456f0d4a59506f325f999dca154349190533c"
+  },
+  "updated_reports": {
+    "FINDINGS.md": {
+      "before_sha256": "5048922a2ac3d8a738c5ec04ca7894dc780af4424fbeeca88a841a53ab8c2a66",
+      "after_sha256": "7d499ce0a290ec60a5ab00b8b69fd245eccec14d386bf45c1979b3ea11c914bf",
+      "prefix_byte_identical": true
+    },
+    "SEVENTEENTH-CHECKPOINT.md": {
+      "sha256": "84f661a1c6369a66018e8596fe5b11d364cbde1fa510fd97da138e8a769ab118",
+      "logical_checkpoint": 17,
+      "supersedes_cutoff236_rows447_without_rewriting_history": true
+    }
+  },
+  "preserved_prior_snapshots": {
+    "FIFTEENTH-CHECKPOINT.md": "b83fe26ce020979d87429d53a607b9f48e45d6ecf1a897c5dfbbc449b1b615be",
+    "SIXTEENTH-CHECKPOINT.md": "b2bbe0743b5f56419ccb528cf152c9e9cdbcd74283e72e0b57d50b79d7a149b3"
+  },
+  "historical_failures": {
+    "aggregate_count": 15,
+    "all_baseline_rows_and_receipts_preserved": true,
+    "batch42": "9PASS/1FAIL/2NOTSTARTED remains immutable; mixed and original failure retained",
+    "batch43": "Separate quarantine PASS unchanged",
+    "unsafe_server_word_literal": "HELD_UNEXECUTED"
+  },
+  "recovery_correction_status": "0cf absent from v9b; later b657 balance/ownership review and recovery v2 source-only/uncompiled/NOT_RUN. No actual all-bucket or future-protection credit.",
+  "watchman_fixture_limit": "Explicit factor1; default2/all-DAG fee-child/subsidy custody unqualified",
+  "mutations": {
+    "authorized_COVERAGE_FINDINGS_newcheckpoint_newappendreceipt_only": true,
+    "STATUS_ML_publicdocs_source_control_Cargo_metadata_native_Git": 0,
+    "ML_promotions": 0
+  },
+  "limits": [
+    "No full ML/production/release qualification.",
+    "Root fairness failure other-owner scope is not counted or classified as fund loss here.",
+    "Native initial receipt, conditional plan, prior append receipts and all original evidence remain immutable."
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "kind": "SAFE_NATIVE_SUMMARY_FROM_FROZEN_POSTFLIGHT",
+  "binary": "ark-testing::bark-sdk",
+  "name": "exit::watchman_sweeps_funding_tx_during_exit",
+  "run_id": "f41b4b18-b14b-422d-ba54-513ec19240dc",
+  "result": "PASS",
+  "native_seconds": 49.248,
+  "wall_seconds": 50.585,
+  "exit_code": 0,
+  "resource_error": null,
+  "actual_selected": 1,
+  "fresh_unignored_selected": 1,
+  "filtered_tests": 653,
+  "profile": "default",
+  "timeout_seconds": 180,
+  "retries": 0,
+  "source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+  "target_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+  "native_nextest_log_sha256_only": "143ebc2ce76c40d89d1f16647adbe487eb7e9795aa26ef857756851823897832",
+  "raw_log_included": false,
+  "source_postflight_sha256": "96e04e64149bbf863c06250df204b4ae454bddde0aba45a183be3f3ead827fc7",
+  "scope": "Bounded metadata projection from prior independent postflight; no raw nextest/wallet log read or copied during this export. Native assertions/financial audit limits remain separate."
+}

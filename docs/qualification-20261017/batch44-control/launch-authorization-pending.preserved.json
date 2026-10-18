@@ -1,0 +1,7 @@
+{
+  "state": "PARENT_FRESH_PREFLIGHT_LISTING_RESOURCE_HASH_GATE_PENDING",
+  "batch": "batch44-six-money-v9b",
+  "root_allocation_sha256": "54125d627beb47e978a9ff14fa3cb630b31d837aef5d691d6ca6b1191dcbc417",
+  "native_launch_owner": "parent only",
+  "native_tests_run": 0
+}

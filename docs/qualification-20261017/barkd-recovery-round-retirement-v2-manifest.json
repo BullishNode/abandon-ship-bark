@@ -1,0 +1,68 @@
+{
+  "kind": "SOURCE_ONLY_V2_BALANCE_AND_CURRENT_EXIT_INTENT_ADDENDUM",
+  "at": "2026-10-18T04:08:21.758294+00:00",
+  "state": "ADAPTED_NOT_RUN_UNCOMPILED",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/barkd/recovery.rs",
+  "base_c52_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+  "v1_base_sha256": "23f4a74b916c5dcc429b442ec099808ad2757df74d4162fbed7ec4d575b736c5",
+  "v2_result_sha256": "97118c62993592f80fc167a1346168389c0386dae88a762cc99205ee417567b4",
+  "delta_patch": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/barkd-recovery-round-retirement-v2-delta.patch",
+    "sha256": "e674bcafc14011cac555606d19d33b80a9c030d408dbbb98b587ae663f284142",
+    "base": "23f4a74b916c5dcc429b442ec099808ad2757df74d4162fbed7ec4d575b736c5",
+    "apply_check_private_exact_base_exit": 0
+  },
+  "aggregate_patch": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/barkd-recovery-round-retirement-v2-aggregate.patch",
+    "sha256": "546269c665c58c75a297b49b524c187a1842f2e534b13fa2881af9ba7ff4622c",
+    "base": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+    "apply_check_private_exact_base_exit": 0
+  },
+  "two_target_body_hashes": [
+    {
+      "name": "recovered_wallet_finds_round_vtxo",
+      "c52": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+      "v1": "1f75a3484f1dd75826013a5142d86ac30a66c712c6d6568754fd982093fb197e",
+      "v2": "0ece3fbc1ac39e420d85d542dc62c23b327facb055fac63697424fb27b32ceb5"
+    },
+    {
+      "name": "recovered_wallet_finds_mixed_origin_vtxos",
+      "c52": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+      "v1": "59e8637124b230915660b8745151c2f7992d2c381bc6b1d92a3fef3484df1b67",
+      "v2": "3ee4d770d917287289485f16ca1cf6bbd1c46e9fd1077840182042788b7d9f30"
+    }
+  ],
+  "all_v1_statements_reconstruct_exactly_when_added_blocks_removed": true,
+  "all_bytes_outside_two_bodies_identical_against_both_baselines": true,
+  "shared_partition_helper_sha256_unchanged": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+  "quarantine_and_valid_same_anchor_control_body_sha256_unchanged": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+  "frozen_v1_artifacts_unchanged": {
+    "barkd-recovery-round-retirement-v1.patch": "0cf1761862c27795afc679c9092ffb4b9c6cade326f7287c69a022dc2ed06fc0",
+    "barkd-recovery-round-retirement-v1-manifest.json": "611a514a557465be93a0cd055053022f6844d6ddb85b6f8e2d5b8dbaa004d3eb",
+    "barkd-recovery-round-retirement-v1-notes.md": "94d204a79526af0fed03f5e5c301a4ef75225f6df43b77bc40bea47b0078b3b9"
+  },
+  "grounding_audit_sha256": "b6579375a52f5257ecf4f4be22e8cb7172a07b630b3da7d21b53c1a66e03bfe7",
+  "notes_sha256": "05c4611690d40c97fd1a5e0786778291bd869d46613b142ff1460e5f737dcb75",
+  "public_API_references": [
+    "testing/src/daemon/barkd.rs:433 bark_balance -> bark_json::cli::Balance",
+    "testing/src/daemon/barkd.rs:625 get_all_exit_status(Option<bool>,Option<bool>) -> Vec<ExitTransactionStatus>",
+    "bark-json/src/cli/mod.rs:251 ten amount fields; Amount::ZERO valid existing fixture pattern"
+  ],
+  "checks": {
+    "actual_cached_Nix": "IN_NIX_SHELL=impure; rustc1.90.0",
+    "delta_apply_check": 0,
+    "aggregate_apply_check": 0,
+    "source_target_only_and_added_blocks_reversal": true,
+    "Python_generator_AST": true,
+    "Rust_AST_attempt": "rustfmt absent, exit127; no AST/type-check claim",
+    "Cargo_or_compiler": 0,
+    "native_or_preflight_listing": 0,
+    "canonical_source_mutations": 0
+  },
+  "limits": [
+    "The future native case must actually execute to establish full-balance/no-current-intent outcomes. No actual measurement/PASS/FULL ML credit here.",
+    "No public per-VTXO awaiting_settlement=false requirement; historic flag and positive monetary bucket are distinct.",
+    "No future act-by ownership test or native protection-execution claim.",
+    "All original actual FAIL/held originals/v1 source packets and strict controls unchanged."
+  ]
+}

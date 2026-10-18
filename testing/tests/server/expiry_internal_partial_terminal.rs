@@ -36,7 +36,7 @@ async fn confirm_actual_path(ctx: &TestContext, leaf: &Vtxo<Full>, seen: &mut BT
 
 async fn confirm_recoverable_prefix(
 	ctx:&TestContext,db:&Db,leaf:&Vtxo<Full>,seen:&mut BTreeSet<bitcoin::Txid>,
-) {
+) -> bitcoin::OutPoint {
 	let steps = leaf.transactions().collect::<Vec<_>>();
 	assert!(steps.len()>=2);
 	let last = steps.last().unwrap();
@@ -62,6 +62,7 @@ async fn confirm_recoverable_prefix(
 	assert!(actual.confirmations>0);
 	assert_eq!(actual.value,leaf.amount());
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&leaf.point().txid,leaf.point().vout,Some(true)).unwrap().is_none());
+	point
 }
 
 /// The A claim is an ordinary rightful timeout receipt, made while its owner
@@ -152,10 +153,11 @@ async fn partial_terminal(reorg_a: bool) {
 	let mut seen = BTreeSet::new();
 	for grant in &grants { confirm_actual_path(&ctx, grant, &mut seen).await; }
 	confirm_actual_path(&ctx, &sources[0], &mut seen).await;
+	let mut unpaid_backing = sources[1].chain_anchor();
 	if reorg_a {
 		// Keep B's actual server-recoverable prefix on both branches. The
 		// original mode still exercises ordinary background B progression.
-		confirm_recoverable_prefix(&ctx,&db,&sources[1],&mut seen).await;
+		unpaid_backing = confirm_recoverable_prefix(&ctx,&db,&sources[1],&mut seen).await;
 		// These actual independent fee inputs precede A's claim block and
 		// survive its fork. The reorg must test claim recovery, not depend on
 		// a future-locktime orphaned controller sponsor or fresh funding.
@@ -185,7 +187,9 @@ async fn partial_terminal(reorg_a: bool) {
 	ctx.generate_blocks(6).await;
 	assert!(chain.get_tx_out(&claim.compute_txid(), 0, Some(true)).unwrap().unwrap().confirmations >= 6);
 	assert_eq!(claim.output[0].value, sources[0].amount() - sat(2_000));
-	assert!(chain.get_tx_out(&sources[1].chain_anchor().txid, sources[1].chain_anchor().vout, Some(true)).unwrap().is_some());
+	let unspent = chain.get_tx_out(&unpaid_backing.txid,unpaid_backing.vout,Some(true)).unwrap().unwrap();
+	assert!(unspent.confirmations > 0);
+	assert_eq!(unspent.value,sources[1].amount());
 	for grant in &grants {
 		assert!(chain.get_tx_out(&grant.point().txid, grant.point().vout, Some(true)).unwrap().is_some());
 	}
@@ -259,6 +263,7 @@ async fn partial_terminal(reorg_a: bool) {
 
 	let claim_block = chain.custom_get_raw_transaction_info(claim.compute_txid(),None).unwrap().unwrap().blockhash.unwrap();
 	let old_height = chain.get_block_count().unwrap();
+	let mining_address = ctx.bitcoind().get_new_address();
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
 	chain.invalidate_block(&claim_block).unwrap();
@@ -296,7 +301,9 @@ async fn partial_terminal(reorg_a: bool) {
 	// Restore the old parent locktime/maturity on a genuinely different
 	// branch, with no new sponsors or retry of a financial request.
 	let replace = u32::try_from(old_height-fork_height+1).unwrap();
-	ctx.generate_blocks(replace).await;
+	// A cold Core can recreate the deliberately invalidated block when its
+	// coinbase address is reused. A fresh address makes this a different fork.
+	chain.generate_to_address(u64::from(replace),&mining_address).unwrap();
 	tokio::time::timeout(Duration::from_secs(30),async {
 		loop {
 			let info = chain.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap();

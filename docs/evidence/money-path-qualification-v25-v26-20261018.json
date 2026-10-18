@@ -1,0 +1,81 @@
+{
+  "recorded_at": "2026-10-18T19:09:24.738646+00:00",
+  "production_ready": false,
+  "current_product_baseline": "V25; publication5e5c61fab249d72bf4bb6ddd5082d5ff89bb3da3; captured788515+reviewed source overlay. No artifact relabel.",
+  "V25": {
+    "source_manifest_sha256": "ed017da439f5eaa648685dd2a38ff866b70fd6a574cb0c601608e281b4919b6f",
+    "source_archive_sha256": "ddd8cac269a46a25d3a6a5f7c4324125806cc8f6e15ababe21d5763af1da7c5f",
+    "runtime_metadata_sha256": "7dc11f5b08fcaf11412336a98f3a69cd78e72f1dd0f29a1b69f999e582024e28",
+    "build": "Checks PASS;882unit PASS/1skip;four newly built products and three native test binaries.",
+    "client_cases": {
+      "passed": 4,
+      "retries": 0,
+      "postflight_sha256": "9945557f7e0c10b82ecc163186b266e8cc98af75b2786642c1b565505e2a1b31",
+      "scope": "Confirmed-leaf reorg recovery, earlier paid-reorg, default daemon unpaid protection, ordinary spent exclusion."
+    },
+    "server_cases": {
+      "passed": 4,
+      "retries": 0,
+      "native_seconds": [
+        47.006,
+        58.995,
+        98.477,
+        59.164
+      ],
+      "scope": "Receive provider absent before materialization; failed-swap restart; reserved-batch reorg; offboard restart.",
+      "report_sha256": "df825bc1cf96de64e999c10989bbe51aa8d3a63430371d9ddf3be69fd4a5748b",
+      "postflight_sha256": "6d96227858c111e0fa9f8f8dfdfcffac79797915118f5650312b5d3b9ac95574",
+      "root_rehashed_references": 31,
+      "limits": "Native financial assertions and public receipts; this intake does not independently rederive all chain, identity or DB facts. Actual offboard99146customer+854userfee=100000;miner1298 separate."
+    },
+    "retained_own_claim_audit": {
+      "report_sha256": "ce8b4730ec0df324087dab989641cf317f967317ecf830c5cc2c7a13f3d2dd7c",
+      "root_rehashed_references": 26,
+      "canonical_cut_sat": "1050000=1047101terminal+2899miner",
+      "customer_state": "100000sat UNPAID actionable entitlement. Old99766sat claim+234sat fee are orphan-only, not current payment or miner cost.",
+      "limits": "Exact a71be8fe retained case; no post-rearm spend or missing-path qualification."
+    }
+  },
+  "V26": {
+    "source_manifest_sha256": "7a986261e26486392bda38f9a650c4e46e8d87801b24744a33d6171b42c12e07",
+    "source_archive_sha256": "ab8ae649e76e1b83c3a4a18808297dadb683dc78c2f074ed0a6fde1869780c47",
+    "runtime_metadata_sha256": "337924e668f7a5c38f490b26f533587629a1d9f02468ef275439341b5d07c643",
+    "provenance": "Test-only change; V25 products inherited byte-exact. Checks and two changed native test binaries compiled successfully. No corrected product or release acceptance.",
+    "missing_path_client_case": {
+      "state": "FAIL",
+      "run_id": "ee32c28e-e5a7-48a7-a756-c03002b7665c",
+      "native_seconds": 76.02,
+      "wall_seconds": 76.927,
+      "retries": 0,
+      "log_sha256": "bccc74973ab4225cf9156aeb042368a311e774938409412d42a21be558d0406c",
+      "postflight_sha256": "3ffff45e0c6531904821c5c9593dc9b31007af0e1593502e6893b68b9d7f5e4c",
+      "finding": "After the claim and its native path are removed by reorg, the same100000sat funding root remains canonical/unspent, but cold reopened wallet retains stale completed history and no actionable exit after35s.",
+      "classification": "Observed recovery/actionability/history defect. No duplicate payment, theft or irreversible principal loss established.",
+      "next": "Defensive same-owned-intent recovery and canonical cache validation under independent review; no new drain policy."
+    },
+    "backend_boundary_case": {
+      "state": "TIMEOUT_INCONCLUSIVE",
+      "native_seconds": 180.022,
+      "wall_seconds": 181.034,
+      "retries": 0,
+      "postflight_sha256": "763ef0a39b282c22bcae9be50a02160194805165a8c403bcf185691650131cc3",
+      "finding": "Retained public premise reached; no final rightful-remaining-payout receipt. Timeout is not proof of permanent stranding.",
+      "workflow": "Automated safety review stopped backend agent. Original result and read-only cleanup retained; no retry or circumvention."
+    },
+    "resource_state": "Both original allocations terminal and consumed; formal artifact/control/actor postflights PASS, scoped actors0. No new runtime grant."
+  },
+  "public_signet": {
+    "deployed_product": "V18, not V25/V26",
+    "latest_owned_core_height": 326928,
+    "latest_observed_at": "2026-10-18T19:05:25+00:00",
+    "failed_send_recovery_confirmations": 4,
+    "final_core6_receipt_present": false,
+    "finding": "One original automatic payout and one recovery broadcast; inner PASS at first confirmation was premature. Completion requires ownedCore>=6 AND original final receipt>=6. No replay or reset."
+  },
+  "remaining_release_work": [
+    "Fix and qualify missing-path client recovery.",
+    "Resolve unqualified Lightning/capacity boundaries and supported limits without weakening financial oracles.",
+    "Qualify one final candidate with production-compatible Signet geometry, funded load, authentic recovery and operations.",
+    "Independent release assessment; mainnet requires separate explicit authorization."
+  ]
+}

@@ -368,11 +368,13 @@ async fn reserved_batched_terminal(reorg:bool) {
 		loop {
 			let row=db.read(async |t|Ok(t.query_opt("SELECT a.id,a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-				WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.id<>$2 AND a.status='pending' \
+				WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.id<>$2 AND a.status IN ('pending','confirmed') \
 				AND a.broadcast_at IS NOT NULL AND a.sweep_tx IS NOT NULL",&[&sources[2].id().to_string(),&reserved_id]).await?)).await.unwrap();
 			if let Some(row)=row {
 				let parent:Transaction=deserialize(row.get("sweep_tx")).unwrap();
-				if chain.get_mempool_entry(&parent.compute_txid()).is_ok() {break (row.get("id"),parent);}
+				if chain.get_mempool_entry(&parent.compute_txid()).is_ok()
+					|| chain.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap().is_some_and(|info|info.confirmations.is_some_and(|d|d>0))
+				{break (row.get("id"),parent);}
 			}
 			ctx.generate_blocks(1).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;

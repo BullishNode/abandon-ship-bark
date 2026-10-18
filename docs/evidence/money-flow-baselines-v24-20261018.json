@@ -1,0 +1,102 @@
+{
+  "recorded_at": "2026-10-18T17:23:30.609174+00:00",
+  "production_ready": false,
+  "kind": "V24 test-only capture; one positive baseline and one reproduced release-blocking failure",
+  "capture": {
+    "state": "ALL_BUILD_PHASES_PASS_IMMUTABLE_RUNTIME_CAPTURED_NOT_RUN",
+    "at": "2026-10-18T17:07:29.886017+00:00",
+    "source_manifest_sha256": "b9b26a669d84c3226942641135415bc00b5c353cfbcc20fdb54ef26589189950",
+    "bundle_manifest_sha256": "92888a27d171eccb93177fea3a202729916c62720809fc0a39ecd7d17a616988",
+    "metadata_immutable_sha256": "5708353c82ab174972860a0acfbfc9ef2c1ba083510e9d48f35cbecb56729735",
+    "metadata_runtime_sha256": "d50221927913df5af8edf4d10e67075570acecbb9924c1576c13773549e1417a",
+    "pin_count": 16,
+    "runtime_pins_sha256": "dae5cfa78800337950951a9ccde846136380b0a8b62d5cfee79a6a7d5288fcba",
+    "native_binaries": [
+      "ark-testing::bark-sdk",
+      "ark-testing::server",
+      "ark-testing::barkd"
+    ],
+    "products": {
+      "captaind": {
+        "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/captaind",
+        "sha256": "378cb862dbcbb93533150097a480fbb88096c733dde0dd63d14269cd868130e7",
+        "actual_version": "captaind 0.7.1-dev+c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed"
+      },
+      "watchmand": {
+        "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/watchmand",
+        "sha256": "16d50ba72c3e2c027e6664e4694647a3454fcad672fb2685cadbcafa0787e12b",
+        "actual_version": "watchmand 0.7.1-dev+c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed"
+      },
+      "bark": {
+        "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/bark",
+        "sha256": "f227b9be28501cad17c2e7821ac3fea60587c53d33d4ac541c5f538553b69171",
+        "actual_version": "bark 0.7.1-dev (c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed)",
+        "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+        "web_dist": "/fresh-cache/web-dist-4c1c979"
+      },
+      "barkd": {
+        "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/barkd",
+        "sha256": "3031a349137e449e3d6288d092af10f9b8f9727288f93a3445a74d48b2cf5d73",
+        "actual_version": "barkd 0.7.1-dev (c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed)",
+        "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+        "web_dist": "/fresh-cache/web-dist-4c1c979"
+      },
+      "ark-testing::bark-sdk": {
+        "path": "/fresh-cache/runtime-two-money-gaps-v24-20261018/native-bark-sdk",
+        "sha256": "4e9a42492fa0c3dfd070ce7cbbb7b5456f82737c0f33485d5f82a2532e32cb2b"
+      },
+      "ark-testing::server": {
+        "path": "/fresh-cache/runtime-two-money-gaps-v24-20261018/native-server",
+        "sha256": "911b25618f59c744daaba9b9492e2d4cfdfd9e6f0ab565a7b54139473dd60e35"
+      },
+      "ark-testing::barkd": {
+        "path": "/fresh-cache/runtime-reserved-batch-paid-reorg-fixes-v23-20261018/native-barkd",
+        "sha256": "ba3c85c6bb564c4fc213897292692bcbefed6dc50dae0e404fd1ec1b8c836352"
+      }
+    },
+    "support_capture_sha256": "47ec0b4df811f70119ff256c33b97ba630b902c02f4880767863b4b446658051"
+  },
+  "source_archive_sha256": "f42c56da37603ce12686f62b3322c427cf4c40566edeb670c0553ae2a22a4359",
+  "checks": "PASS 40.785 seconds",
+  "integration_metadata": "server and bark-sdk rebuilt; 77.988 seconds; unused barkd inherited explicitly",
+  "product_provenance": "Four V23 products unchanged, checks and 881 unit passes/1 skip qualified in V23. V24 changes only tests/docs; all other source bytes checked equal. Actual product version c0e41fe59a8fd276bdd9bd3e30ca6f375009f4ed plus captured source overlay, not current publication HEAD.",
+  "results": [
+    {
+      "receipt": "/home/francis/.cache/abandon-fresh/root-v24-receive-unmaterialized-20261018/postflight.json",
+      "sha256": "926320c4e0d1746e2d3789cc5771be7448db89283b08300a5ca7e66f42e2966a",
+      "cases": [
+        {
+          "test": "qualification_receive_unmaterialized::collected_external_receive_materializes_without_provider_then_pays_recipient_once",
+          "state": "PASS",
+          "native_seconds": 43.755,
+          "wrapper_seconds": 44.156,
+          "run_id": "0e330645-0ac7-4195-bac3-ab95d477c398",
+          "log_sha256": "a4b6a8f42bad066f0f8b7ac35f9623197c2990267e287128e2e061eebe992f02",
+          "exact_singleton_terminal": true
+        }
+      ],
+      "scope": "PASS: original externally paid receive materialized and paid rightful recipient after provider disappearance. Quiet-pool controlled case only."
+    },
+    {
+      "receipt": "/home/francis/.cache/abandon-fresh/root-client-own-claim-reorg-v24-20261018/postflight.json",
+      "sha256": "6d360de09854dc0f7e40408e20d7e0318ead93dc0e0256eb8cb628ed14ace849",
+      "cases": [
+        {
+          "state": "FAIL",
+          "test": "qualification_paid_reorg::own_claim_reorg_cold_reopen_offline_restores_actionable_exit_or_replays_exact_claim",
+          "run_id": "ce23fbfc-9efa-4c02-9de2-12c738ac46c0",
+          "native_seconds": 72.849,
+          "wall_seconds": 73.391,
+          "run_log_sha256": "14caa3a8081dbe9c74d126c2c5c21378654c96d1749dc4b34a9f21bd2eabea5a"
+        }
+      ],
+      "scope": "FAIL: after a second reorg removes an own claim, principal remains awaiting settlement but the native exit is stale Claimed and history Successful; actionable recovery is missing. Not evidence of irreversible loss."
+    }
+  ],
+  "execution_limits": {
+    "seconds_per_case": 180,
+    "retries": 0,
+    "global_concurrency": 2
+  },
+  "remaining_blocker": "Narrow same-native-exit rearm fix and positive repeated-reorg qualification pending. Broader supported money boundaries, final-candidate deployment/scale/operations gates remain open."
+}

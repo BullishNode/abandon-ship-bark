@@ -23,6 +23,7 @@ mod qualification_forwarded_ack;
 mod qualification_noah;
 mod qualification_oversize;
 mod qualification_receive_fallback;
+mod qualification_receive_unmaterialized;
 mod qualification_cold_backup;
 mod qualification_lightning_backup;
 mod qualification_offboard_reply_restore;

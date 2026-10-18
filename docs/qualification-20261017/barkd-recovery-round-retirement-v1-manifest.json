@@ -1,0 +1,47 @@
+{
+  "kind": "SOURCE_ONLY_TWO_TARGET_ROUND_RETIREMENT_FIXTURE_ADAPTATION",
+  "at": "2026-10-18T03:31:02.556706+00:00",
+  "state": "ADAPTED_NOT_RUN_UNCOMPILED",
+  "base_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+  "result_sha256": "23f4a74b916c5dcc429b442ec099808ad2757df74d4162fbed7ec4d575b736c5",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/barkd/recovery.rs",
+  "patch": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/barkd-recovery-round-retirement-v1.patch",
+  "patch_sha256": "0cf1761862c27795afc679c9092ffb4b9c6cade326f7287c69a022dc2ed06fc0",
+  "notes_sha256": "94d204a79526af0fed03f5e5c301a4ef75225f6df43b77bc40bea47b0078b3b9",
+  "ledger_receipt_sha256": "d14fcf0fb07c10dd1e8a32cb73bf4aced66b8832a8c4ddd3db5524deac833405",
+  "changed_functions": [
+    {
+      "name": "recovered_wallet_finds_round_vtxo",
+      "before_body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+      "after_body_sha256": "1f75a3484f1dd75826013a5142d86ac30a66c712c6d6568754fd982093fb197e"
+    },
+    {
+      "name": "recovered_wallet_finds_mixed_origin_vtxos",
+      "before_body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+      "after_body_sha256": "59e8637124b230915660b8745151c2f7992d2c381bc6b1d92a3fef3484df1b67"
+    }
+  ],
+  "all_other_bytes_identical": true,
+  "shared_partition_helper_sha256_unchanged": "b81d71ef98247ef15291cf182cdc685b9cebfb10de4d099377d0e50051ded691",
+  "quarantine_and_valid_Arkoor_control_body_sha256_unchanged": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+  "private_applycheck": {
+    "command": "git apply --check <external patch>",
+    "cwd": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/barkd-recovery-round-retirement-adaptation-private/applycheck",
+    "exit_code": 0,
+    "baseline_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+    "no_source_application": true
+  },
+  "actual_environment_confirmation": "Read-only docker cached Nix: IN_NIX_SHELL=impure; rustc1.90.0",
+  "original_evidence_preserved": {
+    "batch42_mixed_actual_FAIL_run_id": "15eac100-bf66-4630-b810-edcc7f433046",
+    "held_round": "ORIGINAL_NOT_RUN; not an observed failure",
+    "original_public_policy_control": "Shared helper and valid same-anchor Arkoor Spent control unchanged"
+  },
+  "scope": [
+    "Known exact round-retired ancestor only; Locked None/None and original full body retained.",
+    "Current cut exact IDs/amounts/anchors; genuine full recipient receipt; zero sender spendable/current-inputs Spent.",
+    "Final unspent list exactly known retained ancestor, excludes unexpected states.",
+    "No product/canonical changes, Cargo/build/check/native/list/preflight/controller/RPC/retry.",
+    "No new execution/PASS/FULL ML credit."
+  ]
+}

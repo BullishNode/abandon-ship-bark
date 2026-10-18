@@ -1,0 +1,32 @@
+{
+  "kind": "two_target_round_retirement_parent_independent_source_review",
+  "at": "2026-10-18T03:41:54.293590+00:00",
+  "patch_sha256": "0cf1761862c27795afc679c9092ffb4b9c6cade326f7287c69a022dc2ed06fc0",
+  "base_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+  "after_file_sha256": "23f4a74b916c5dcc429b442ec099808ad2757df74d4162fbed7ec4d575b736c5",
+  "targets": [
+    {
+      "name": "recovered_wallet_finds_round_vtxo",
+      "before_body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+      "after_body_sha256": "1f75a3484f1dd75826013a5142d86ac30a66c712c6d6568754fd982093fb197e"
+    },
+    {
+      "name": "recovered_wallet_finds_mixed_origin_vtxos",
+      "before_body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+      "after_body_sha256": "59e8637124b230915660b8745151c2f7992d2c381bc6b1d92a3fef3484df1b67"
+    }
+  ],
+  "outside_two_function_bodies_byte_identical_to_exact_v8e_archive": true,
+  "verdict": "SOURCE ACK: exact known cross-anchor round ancestor is retained Locked(None,None) with original public body; current-cut and final-payment/Spent-discharge assertions retained.",
+  "basis": [
+    "Nativecase10 actual15eac100 FAILatstricthelper26 preserved.",
+    "Immutableledgerd14fcf confirms exact300kround ancestor/differentanchor/current649392 identical.",
+    "Sourcepolicy4728 confirms ordinary proof unavailable for spent_in_round; no fabricatedSpent.",
+    "Sharedpartitionhelper/quarantinevalidordinarySpent/allotherbytes untouched."
+  ],
+  "limits": [
+    "Sourceonly: notcompiled/NOTRUN; no revisedPASS or signaturevalidation claim.",
+    "Heldroundcase11 has no nativeFAIL/PASS; oldunsafe literal remains held.",
+    "Rootowns nextcoherent integration/capture; no canonicaledits/build/native byreviewer."
+  ]
+}

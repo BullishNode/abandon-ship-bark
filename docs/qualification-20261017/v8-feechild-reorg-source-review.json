@@ -1,0 +1,145 @@
+{
+  "kind": "v8_feechild_reorg_source_review",
+  "at": "2026-10-17T22:49:16.244610+00:00",
+  "scope": "READ ONLY actualcanonicaldirtydiff and immediatepackage/DB/oracledependencies. No source/patch/receipt/canonical changes, Cargo/build/native/actors/DB/RPC. Root/backend ownfix.",
+  "HEAD_at_review": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+  "scoped_git_diff_sha256": "b9c1d43a401cdc56eb8f8d98f5d316c7429decb5ca02be9aa100cf660d6434dc",
+  "scoped_diff_paths": [
+    "server/src/watchman/payout.rs",
+    "bitcoin-ext/src/bdk.rs",
+    "server/src/bitcoind.rs",
+    "testing/tests/server/expiry_internal_replan.rs",
+    "testing/tests/server/expiry_reorg.rs",
+    "testing/tests/server/expiry_lightning_terminal.rs"
+  ],
+  "full_working_git_diff_sha256_at_review": "1c05becf33b9b74d4316baaa08d9219ca8c41a2aa29b8caedb6eba399586d91d",
+  "untracked_file_caveat": "expiry_internal_replan.rs is untracked at HEAD and therefore excluded from normal gitdiff; exact workingfileSHA below independently pins it. A futurev8capture must include thisfile and module deliberately.",
+  "file_fingerprints": [
+    {
+      "path": "server/src/watchman/payout.rs",
+      "working_sha256": "574097b25f98eea04165c78322f8e45b34d1edb96a00ef6a28dd72bd5656d193",
+      "tracked_HEAD_sha256": "6c62a55dcdd76aba427de36a14f37b546beb57dc8667cbd71958426d5e92883e",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": false
+    },
+    {
+      "path": "bitcoin-ext/src/bdk.rs",
+      "working_sha256": "a8c4c84cc55bd5c08222582e1858eccf3cce5e757f6bd97402af7616057ab8cb",
+      "tracked_HEAD_sha256": "12bce48a0b62e24c0fc27892d872544fb28f8e8ce75ec4db7841d224278a5f93",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": false
+    },
+    {
+      "path": "server/src/bitcoind.rs",
+      "working_sha256": "220375aaa920dd20f71689051c287edfaf26f22af26fe3f493d7307456f5f89b",
+      "tracked_HEAD_sha256": "189ae26c24b2f37f165bc2908ee93cb559683c9e87e536dbed21acd8f0cb7623",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": false
+    },
+    {
+      "path": "bitcoin-ext/src/cpfp.rs",
+      "working_sha256": "425470ee43a9fe1d5724249490e4eb6b8b5ae34cb3e93a520f3b3ebd84cc509e",
+      "tracked_HEAD_sha256": "425470ee43a9fe1d5724249490e4eb6b8b5ae34cb3e93a520f3b3ebd84cc509e",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": true
+    },
+    {
+      "path": "bitcoin-ext/src/rpc/mod.rs",
+      "working_sha256": "db839a9b8c5f436e9bfa8d96a3f9ece76abec108c2155dc32a29c84be0fc995a",
+      "tracked_HEAD_sha256": "db839a9b8c5f436e9bfa8d96a3f9ece76abec108c2155dc32a29c84be0fc995a",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": true
+    },
+    {
+      "path": "server/src/database/expiry_payout.rs",
+      "working_sha256": "49fcf848c9a98287a5555930b8a5a842bc9da028882a7721117782921794c98a",
+      "tracked_HEAD_sha256": "49fcf848c9a98287a5555930b8a5a842bc9da028882a7721117782921794c98a",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": true
+    },
+    {
+      "path": "server/src/watchman/mod.rs",
+      "working_sha256": "ebfd93238b0bd27248b2eaccacccaed7b1d621b4da59d54480417904377c2c6a",
+      "tracked_HEAD_sha256": "ebfd93238b0bd27248b2eaccacccaed7b1d621b4da59d54480417904377c2c6a",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": true
+    },
+    {
+      "path": "testing/tests/server/expiry_internal_replan.rs",
+      "working_sha256": "29827e262621dc703690f72adcea07daa83639018439454a01208e73a7414293",
+      "tracked_HEAD_sha256": null,
+      "tracked_at_HEAD": false,
+      "working_matches_HEAD": false
+    },
+    {
+      "path": "testing/tests/server/expiry_reorg.rs",
+      "working_sha256": "a96cdc801166197e906b0a2528799ac2becb2003e8150e3349bb638921a0ef0d",
+      "tracked_HEAD_sha256": "40785c812b8c78d5a0480cd3dbe80438b0d6915eb0d07e2ed5963c56e3f02dc7",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": false
+    },
+    {
+      "path": "testing/tests/server/expiry_lightning_terminal.rs",
+      "working_sha256": "4ec446a15734aaab3498f6a6efa0fc94fe882e0b84144c5ef8e51473273c39f2",
+      "tracked_HEAD_sha256": "7430769a98cb255db2788749d681ed95a4fe38ab5830e438d2b53482c926b5af",
+      "tracked_at_HEAD": true,
+      "working_matches_HEAD": false
+    }
+  ],
+  "verdict": "No new concrete payout-product invariant blocker established by this bounded inspection. One concrete post-reorg test-oracle gap; native firstqualification remainsrequired.",
+  "findings": [
+    {
+      "id": "V8-ORACLE-01",
+      "classification": "CONCRETE TEST ORACLE LIMIT; not evidence productmoneyfailure",
+      "file": "testing/tests/server/expiry_internal_replan.rs",
+      "locations": [
+        "pre-fork273-291 fullgrant/checkpointinputs, recipientexcluded,actualparentprevoutsum/zero-fee,net200k-minus-per-outputfee",
+        "post-fork343-366 entitlementIDs/confirmedcount<=1/Core6destinationpresence",
+        "post-fork373-376 storedpre-forkreplacementbytesunchanged"
+      ],
+      "issue": "Afterfork canonicalactiveparents are re-read but only destinationpresence and unspentCore6 are checked. They can be different allocations from pre-fork parents; final checks do not independentlyrepeat actualamount/per-outputfee/zero-parentfee/grant-input/recipient0 equations for that finalcanonical set. Thus PASScannotbequoted as fullpost-reorg moneyconservation or all-dependency proof.",
+      "minimal_reviewer_proposal": "Afterpostforksettledview, select actualcanonicalparents and independentlyrepeat pre-fork rightfulscript/value/net+per-actualoutputfee, exactsource/grantfrontier and Coreprevoutsum or declaredfullgraphcut. KeepC9validwinner policy, immutableoldparents, deadlines/actualfault and originalFAIL unchanged. Root decides followup; no codeedited.",
+      "blocking_scope": "Blocks fullpostforkmoneyoracle claim, not necessarily boundedfirstnativeadmission orprovenneedproductpatch."
+    }
+  ],
+  "positive_source_checks": [
+    {
+      "subject": "Canonical versus orphan feechange",
+      "locations": "payout.rs109-176;bitcoind.rs105-124/155-164",
+      "evidence": "gettxspendingprevout establishes actualmempoolanchor spender. tx_status Confirmed requires blockheader.confirmations>0; an orphan rawtx being mappedMempool doesnotmake it active. Nonactivecachedchild reused only if everyexternalprevout exists in currentCoregettxout(include_mempool=true) with confirmations>0. Newbuilderexclusions filter BDKunspents by currentCore; selectedexternalinputs rechecked beforefeeaccounting."
+    },
+    {
+      "subject": "Adequate-fee child reuse and RBFbasis",
+      "locations": "payout.rs26-39/113-171;cpfp.rs55-76",
+      "evidence": "Activeanchor spender must match retainedallocation childtxid/V3/exactanchoruse and actualmempoolbasefee equalsstoredfee. Existingadequatechild reused only if active or fundedbyconfirmedusableprevouts with nootheractivechild. Replacementusescurrentactivebasefee, not lateststalerecordedfee orentirechunk. Effectivefallback usedwhennoactivechild. ConservativeRBFfee retainszero-parentpackageformula."
+    },
+    {
+      "subject": "Full package result gate",
+      "locations": "bitcoind.rs212-237/276-322;bitcoin-ext/rpc/mod.rs229-242;payout.rs220-227",
+      "evidence": "Requires package_msg success, completeexactsubmittedcount, no duplicatetxid, matching submittedwtxidkey/resulttxid and no pertxerror. Missing/substituted/foreign/error rows rejected in sourceunittests. TransportOk alone cannotrecordnewbroadcast_at. Alreadyknownresult mayomitfee details; confirmation remainsseparatecanonicalreceipt."
+    },
+    {
+      "subject": "Immutablecustomerparent versus childreplacement",
+      "locations": "database/expiry_payout.rs124-150/154-173;payout.rs104-107/219-227",
+      "evidence": "DurableparentCAS compares signedbytes/allocatedinputs/payees/zero-feeV3shape. Childstore checksparentidentity. Beforepublication validchaingeneration barrier and allocation FORUPDATE recheckstatuspending/exactparentbytes. BDKbuilderexcludesorphanfunding while retainingparentreference; exclusionunitchecksserializedparentunchanged."
+    },
+    {
+      "subject": "Authentic orphan funding regression",
+      "locations": "expiry_reorg.rs252-358",
+      "evidence": "Actualfundednativeboard, oldparent+childconfirm, realfunding-blockinvalidate, ownedCorewalletbumpfee replacesorphanedsponsor, freshconfirmedfunding, nativewatchmanrestart. Requireschangedchild/oldfundingnotused, confirmednonparentinputs, sameimmutableparent, netcustomerCore6, sameblockactualcanonicalchild6/headerhash, actualchildprevoutfee equalsuniquelyconfirmedrow. Oldchildrow retainedunconfirmed. NoSQLfinancialsetup/fakeheight/manualchildbroadcast."
+    }
+  ],
+  "remaining_native_proof_and_scope_limits": [
+    "No compile/test/native receipt inspected for thisv8dirtyrepair. Require actualcapturedsource/archive/ELF/metadata and explicitallocation, exact singletonjustrecipe/default180/retries0/firstFAIL. Historicalv6/v7FAILreceipts remainimmutable; improvedfixture/source is a newcondition, not reclassification.",
+    "Orphan regression source requires realCore31package/BDKreorg/walletsync behavior; unitcraftedreceipts and make_signedhelper signatures do notproveRPCpolicy/nativeeventualprogress. Neither alloperatorcustody/subsidy/fullinitialfundingcut nor globalML/production follows.",
+    "The childfunding filter can reject confirmedBDKstale outputs and waits for genuineconfirmed liquidity. Live RBF mayneednewusableconfirmedinputs; do notassume mempoolchildchange isconfirmed or an orphanfundingconfirmation survivesfork. No loweredfundingpolicy or fakeack permitted.",
+    "Zero-feeparent is not independently relayable at normalstandalone minrelay policy. make_signed_p2a_cpfp only constructs child; standaloneparent send/testmempoolaccept is not successful1p1c packageadmission. Actualparent+child submitpackage pertxreceipt and canonicaloutcome remainrequired. This repair is not a genericstandalonezero-fee relay guarantee.",
+    "Otherprogressionpublisher at server/src/watchman/mod.rs808-813 still calls submit_package without newrequire_package_acceptance. This is a concrete scopeboundary: payoutfix doesnotgloballyhardenallpackagepublishers. No duplicatefix/broadWIPreview proposed.",
+    "Unknownthird-partyP2A spender is conservativelyleftpending instead of trusted asretainedreplacementeconomics. No generalizedgriefresistance/foreverprogressclaim from this boundedguard.",
+    "newexpiry_reorg test checksselectedcanonicalchild actualfee/parentimmutability but notfullcustomer+operatorinitialfunding/terminalleafcustody orgraph-wideextrapayees. Internalreplanfinalmoneygapabove mustremainexplicit.",
+    "Observedexpiry_lightning_terminal changes refactor originalzero-grant/signedgrant controls, addnativeunsafe-fragmented/largecover setups andindependentconfirmedfunding/exactmaturity scheduling. No originalreceipt edit observed; wholecase/fullpost-reorgfeechildmoney qualification not inferred. PRE-obligation productpolicy/sourceoutside immediatepackage scope not audited."
+  ],
+  "historical_hang_correction": "Currentnative stopped-daemonsyncskip remainsvalid; directCoremining/scheduling choices not evidenceofoldhang.",
+  "mutations": "Only newexternalreview JSON/MD. No existing source/reports/FAILs oracceptancecounts modified.",
+  "reviewed_source_fingerprints_stable_at_finish": true
+}

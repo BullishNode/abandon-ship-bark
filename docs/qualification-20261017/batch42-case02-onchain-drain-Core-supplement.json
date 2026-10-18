@@ -1,0 +1,82 @@
+{
+  "kind": "BOUNDED_OFFLINE_RETAINED_CORE_SUPPLEMENT",
+  "parent_report": "batch42-P1-retained-core-reconciliation.json",
+  "parent_report_sha256": "e360d98f7e96ee6d782bdae0f6cdb587e13fa2d3d1cb1b4a392642d0a24942e2",
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "actor_absence_receipts": [
+    {
+      "path": "/tmp/batch42-case01-02-actor-absence.json",
+      "sha256": "946696fc2fdf807e5bad43295d9a6a2f4346671e03a281e6fa01935a36bf5c75"
+    },
+    {
+      "path": "/tmp/batch42-case08-actor-absence.json",
+      "sha256": "007f6fadc031bc76aa8d280973cb0d6d4ddac14ddc409be942e3fd818a7b3c32"
+    }
+  ],
+  "case": {
+    "case": 2,
+    "name": "onchain::onchain_drain",
+    "run_id": "5eedaad4-5c87-4e34-a5e7-740492948d68",
+    "native_result": "PASS",
+    "native_seconds": 9.366,
+    "retained_tip": {
+      "height": 107,
+      "hash": "568826f2c4b7bbf6bf56c99f90f80f13e266bd31a5c4042d127ac0babcb7890c"
+    },
+    "canonical_noncoinbase_transactions": 3,
+    "canonical_duplicate_spends": 0,
+    "selection_mode": "Unique exactsource-topology/amount/input-output/count/window constraints, not highestamount. NativePASS binds dynamicdestination/returnedtxid/UTXOmap; blockonlyreader cannot independentlyrecoverclientkeys.",
+    "details": {
+      "drain": {
+        "txid": "007b1bb85376b39fc3aece6f70b7842b672174a95336dfbf226d9c09af59939c",
+        "canonical": {
+          "height": 107,
+          "blockhash": "568826f2c4b7bbf6bf56c99f90f80f13e266bd31a5c4042d127ac0babcb7890c",
+          "confirmations": 1
+        },
+        "signed_raw_sha256": "f3c50de2ca8cd6680c5f672931d31d39682a786381d310e41b3e0c90f937e908",
+        "signed_bytes": 191,
+        "weight_wu": 437,
+        "vsize": 110,
+        "has_segwit_witness": true,
+        "inputs": [
+          {
+            "point": "1c6b8b34b1cadf56b304a17254c47ce4bea2721684ac79c8389d53e68bff41bd:0",
+            "value_sat": 1000000,
+            "script_hex": "0014e50525fe9e2998c94d61db9aec4e033e0c282d65"
+          }
+        ],
+        "outputs": [
+          {
+            "point": "007b1bb85376b39fc3aece6f70b7842b672174a95336dfbf226d9c09af59939c:0",
+            "value_sat": 999452,
+            "script_hex": "00145c7a8cbe0cd05d982396e63062526db611c296b0",
+            "unspent_at_retained_tip": true
+          }
+        ],
+        "actual_miner_fee_sat": 548
+      },
+      "complete_single_input_spent": true,
+      "recipient_output_unspent": true,
+      "customer_equation": "1000000 = 999452 recipient + 548 actualminerfee",
+      "scope": "Unique exact1m/oneinput/oneoutput finaltiptransaction corroborates nativePASS senderzero/exactrecipient/fullinputmap/quoteddescriptorfeebound. Recipientidentity/publicquote/maxsatisfaction not independentlyavailable from blocks; those remain nativeassertionprovenance. Actualdepth is retained1, notCore6."
+    },
+    "retained_hashes_before_after_equal": true,
+    "retained_input_hashes": {
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/result.json": "8faa8c08b75fe554f525ae8c731241b581a6056416978558c84666cfd42cc3d5",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/test-data/bark/onchain_drain/bitcoind/regtest/blocks/xor.dat": "f7071d85985116e039246fe686f6977bfc8d302346e3e0cb120cbd429d5f3188",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/test-data/bark/onchain_drain/bitcoind/regtest/debug.log": "5a048e5c622e96fb8e740fcefa4aa0346d4448a1a7e11da79c37393d4ab8adcb",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/test-data/bark/onchain_drain/bitcoind/regtest/blocks/blk00000.dat": "18ff60e602da7c732334806cc66f53e56ba0d99a5fa62b8eac61663c4908a46b"
+    }
+  },
+  "scope_limits": [
+    "No independentlycapturedpublicdestination/returnedtxid capsule exists intheseoriginalfixtures. Uniquechain-topology corroboration is explicitlyboundtoactualnativePASS assertions; recipientidentity/quote/clientUTXOlisting/BDKcustody not inferredfromscripts.",
+    "No mempool read, so dropped/pending/noncanonical outputs outsidecanonicalchain are not exhaustivelyexcluded. Depthreportedexactly, neverCore6 from1/2/3blocks.",
+    "Customercharges/Arkfees distinctfromactualphysicalminerfees. No fulloperatorwalletcut/globalcustody/FULLML/production/count updates. OriginalFAILreceipts andchangedcandidateconditions retained.",
+    "Only three newcasefinancialsupplements and thisowned/tmp pureparser; no source/oldreport/controlfile/globalcounter changes.",
+    "Case01 customer_cut is a native liability/charged-fee equation, not a fullphysicalfundingDAG: offboard spendsoperatorwalletfunding. The old200kboardoutput stillbeingCoreunspent is not additionalcustomerprincipal afterrefresh/offboard; nativeforfeit/round/offboard proof governs economicdischarge. No globaloperatorconservation inferred."
+  ],
+  "originalFAILs_and_other_candidates": "Unchanged; actualv8e adaptedPASS independentofhistoricalFAIL. No fullML/globalcustody/Core6promotion."
+}

@@ -1,0 +1,175 @@
+{
+  "kind": "READ_ONLY_V8_FREEZE_SOURCE_VERIFICATION",
+  "at": "2026-10-17T22:47:11.628810+00:00",
+  "verdict": "ALL12_TARGET_BODIES_AND5_FILES_MATCH",
+  "current_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+  "HEAD_unchanged_during_read": true,
+  "immutable_plan": {
+    "file": "v8-ordinary-twelve-selection-plan.json",
+    "sha256": "bef0af66394f3839eabad46f422ee39f2ad94c9cd03ddfd5857bc058bcfc83c8"
+  },
+  "frozen_manifest_sha256": "c589354c1fdd931f5e313a531fd3c434531105156d5ffb991166c2554049bcbb",
+  "frozen_peer_sha256": "842169d08989eec03f2134c1967af79ff05417c8f4292694cf6351c18a37a326",
+  "files": [
+    {
+      "path": "testing/tests/bark/onchain.rs",
+      "current_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "matches_frozen_manifest_and_plan": true
+    },
+    {
+      "path": "testing/tests/bark/movement.rs",
+      "current_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "matches_frozen_manifest_and_plan": true
+    },
+    {
+      "path": "testing/tests/bark/offboard.rs",
+      "current_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "matches_frozen_manifest_and_plan": true
+    },
+    {
+      "path": "testing/tests/barkd/boards.rs",
+      "current_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "matches_frozen_manifest_and_plan": true
+    },
+    {
+      "path": "testing/tests/barkd/recovery.rs",
+      "current_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "matches_frozen_manifest_and_plan": true
+    }
+  ],
+  "targets": [
+    {
+      "literal_name": "onchain::list_utxos",
+      "expected_binary": "ark-testing::bark",
+      "target_body_sha256": "2ea3d73dbdf39828a110df07e025db31b206bfa1b0ad349fe515c3fb4495b53e",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "onchain::onchain_drain",
+      "expected_binary": "ark-testing::bark",
+      "target_body_sha256": "9985bf9862fcdfdfb385bf74628fa86a8e94d469d7954a81c35571c5ef66e7d1",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "movement::board_board",
+      "expected_binary": "ark-testing::bark",
+      "target_body_sha256": "c35fb82d976c5d637e682458b9717005bedfad803da62688409f2d77bcf80c25",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "movement::movement_offboard",
+      "expected_binary": "ark-testing::bark",
+      "target_body_sha256": "ae0362fab02066be397fa84755d044f8c5bf570b48585a0667a1169c56856693",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "movement::movement_send_onchain",
+      "expected_binary": "ark-testing::bark",
+      "target_body_sha256": "31d2694ea05d8164cd9721dc2f3b9ed3cc7a0a9b943e0406429fc32895c5f96c",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "offboard::bark_send_onchain",
+      "expected_binary": "ark-testing::bark",
+      "target_body_sha256": "a2a607e12a0671337e5d1e20ca6d8220c4507bb3cc10a9d39c317fc48f8019c8",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "offboard::bark_rejects_offboarding_dust_amount",
+      "expected_binary": "ark-testing::bark",
+      "target_body_sha256": "efccc9ea84a6871cd1fc1cad47db56cad9da6b1fd542690ac9ba2f1b13a433be",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "boards::board_all_barkd",
+      "expected_binary": "ark-testing::barkd",
+      "target_body_sha256": "d35b67840c0aa16a7280ab3cb1ebf3d5346daa45ab05db90fd59121e3497c829",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "recovery::recovered_wallet_finds_boarded_vtxo",
+      "expected_binary": "ark-testing::barkd",
+      "target_body_sha256": "c05792829e71cbb8b86eca8ee4342e60edcf336f91f40a2dfedaa4c9da20a687",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "expected_binary": "ark-testing::barkd",
+      "target_body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "expected_binary": "ark-testing::barkd",
+      "target_body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    },
+    {
+      "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "expected_binary": "ark-testing::barkd",
+      "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+      "matches_immutable_plan": true,
+      "ordinary_tokio_test_attribute_present": true
+    }
+  ],
+  "module_binary_references": {
+    "testing_Cargo_toml_sha256": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277",
+    "targets": {
+      "ark-testing::bark": {
+        "cargo_target_path": "tests/bark/mod.rs",
+        "cargo_target_present": true,
+        "module_file": "testing/tests/bark/mod.rs",
+        "module_file_sha256": "24312b9dbf8103e8c7146e9d8b091ba1bfb5fe6bfb31da2bfa51a1acc1aebff3",
+        "required_modules": [
+          "onchain",
+          "movement",
+          "offboard"
+        ],
+        "all_modules_registered": true
+      },
+      "ark-testing::barkd": {
+        "cargo_target_path": "tests/barkd/mod.rs",
+        "cargo_target_present": true,
+        "module_file": "testing/tests/barkd/mod.rs",
+        "module_file_sha256": "376fba80a3352deba0ffb34fa935c99c1a233aa07fe9ef7332dc624d06449fc1",
+        "required_modules": [
+          "boards",
+          "recovery"
+        ],
+        "all_modules_registered": true
+      }
+    }
+  },
+  "counts": {
+    "targets": 12,
+    "CLI": 7,
+    "barkd": 5,
+    "files": 5,
+    "module_source_files": 2
+  },
+  "changes_detected": [],
+  "build_status": "ParentsoleCargo ongoing; no buildartifact/sourcearchive/metadata/ELF pin claimed here.",
+  "v8_source_manifest_sha256": null,
+  "v8_bundle_manifest_sha256": null,
+  "v8_metadata_sha256": null,
+  "future_requirement": "Captureactualark-testing::barkd integrationELF+matchingmetadata/source, aswellasbarktestELF. Compilednamesorlistingalonecannotcreditactualbody/financialoracles. Awaitexplicitexactv8runtimeallocation.",
+  "evidence_preservation": "Immutableplan/historicalFAIL/heldunsafeoriginal remainunchanged. Newquarantineonly; oldunsafe serverwordliteralnotselected.",
+  "activity": {
+    "Cargo_metadata_list_build_native": 0,
+    "source_or_control_edits": 0,
+    "COVERAGE_STATUS_mutations": 0,
+    "FULL_ML_credit": 0
+  },
+  "team_scope": "No additionalagentteam launch inferred orclaimed."
+}

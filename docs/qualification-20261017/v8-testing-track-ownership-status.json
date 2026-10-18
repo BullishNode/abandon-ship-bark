@@ -1,0 +1,841 @@
+{
+  "kind": "CURRENT_V8_TESTING_TRACK_OWNERSHIP_STATUS",
+  "at": "2026-10-17T22:48:26.678127+00:00",
+  "status": "READ_ONLY_HANDOFF; ROOT_V8_BUILD_REPORTED_IN_PROGRESS; NO_V8_NATIVE_ALLOCATION",
+  "supersedes_status_narrative_of": [
+    "current-source-ownership-handoff.json",
+    "source-queue-post-batch39.json"
+  ],
+  "historical_packets_preserved": true,
+  "completed_cutoff": {
+    "executions": 225,
+    "PASS": 211,
+    "FAIL": 14,
+    "unique_binary_test_pairs": 219,
+    "nextest_invocations": 198,
+    "native": 213,
+    "component": 12,
+    "coverage_rows": 436
+  },
+  "current_own_native_runtime": "NONE_ACTIVE",
+  "latest_nine_PASS": [
+    {
+      "binary": "ark-testing::server",
+      "literal_name": "expiry_lightning_terminal::expiry_internal_zero_grant_timeout_pays_absent_sender",
+      "result": "PASS",
+      "native_seconds": 42.519,
+      "run_id": "2dfc746e-61f8-40b1-87bc-08d0b703dc14",
+      "receipt": "batch39-owner-replan-v6-receipt.json",
+      "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a"
+    },
+    {
+      "binary": "ark-testing::bark-sdk",
+      "literal_name": "lightning_receive_binding::receive_binding_normal_internal_claim_and_reconciliation_are_idempotent",
+      "result": "PASS",
+      "native_seconds": 26.331,
+      "run_id": "b610c1d3-dec8-4495-9745-2612c54252b2",
+      "receipt": "batch39-owner-replan-v6-receipt.json",
+      "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a"
+    },
+    {
+      "binary": "ark-testing::bark-sdk",
+      "literal_name": "lightning_receive_binding::receive_binding_normal_external_claim_keeps_the_actual_recipient",
+      "result": "PASS",
+      "native_seconds": 27.849,
+      "run_id": "b5ae3cf9-4ee4-4869-848d-1773dd64844e",
+      "receipt": "batch39-owner-replan-v6-receipt.json",
+      "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a"
+    },
+    {
+      "binary": "ark-testing::bark-sdk",
+      "literal_name": "lightning_receive_binding::receive_binding_internal_original_request_resumes_without_either_wallet",
+      "result": "PASS",
+      "native_seconds": 60.151,
+      "run_id": "d4edfcfe-ca7f-46b1-aade-963126f8b31b",
+      "receipt": "batch39-owner-replan-v6-receipt.json",
+      "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a"
+    },
+    {
+      "binary": "ark-testing::bark",
+      "literal_name": "create::bark_address_works_offline",
+      "result": "PASS",
+      "native_seconds": 9.169,
+      "run_id": "447ee5ed-b589-47bd-a13f-bd30682cb5a4",
+      "receipt": "batch40-three-existing-v6-receipt.json",
+      "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a"
+    },
+    {
+      "binary": "ark-testing::bark",
+      "literal_name": "onchain::bark_address_changes",
+      "result": "PASS",
+      "native_seconds": 6.738,
+      "run_id": "0edcfebe-9c42-4366-b5d1-9e9ad35fc579",
+      "receipt": "batch40-three-existing-v6-receipt.json",
+      "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a"
+    },
+    {
+      "binary": "ark-testing::bark",
+      "literal_name": "fees::send_onchain_fee_deducted",
+      "result": "PASS",
+      "native_seconds": 18.798,
+      "run_id": "16bc85a2-be21-4d2e-a1c3-d8b9ffcf8eb8",
+      "receipt": "batch40-three-existing-v6-receipt.json",
+      "source_manifest_sha256": "779189df58ccf6e1225e5e89ea7f74ba62134974b8c232c78be596049ddea79a"
+    },
+    {
+      "binary": "ark-testing::server",
+      "literal_name": "expiry_owner_load::expiry_owner_live_funded_100_registrations",
+      "result": "PASS",
+      "native_seconds": 47.49,
+      "run_id": "928e5203-5a36-4489-967e-dcdbef965b4c",
+      "receipt": "batch41-live-funded-v7-receipt.json",
+      "source_manifest_sha256": "d05d3d5c7a24584fc9893f6601d9c0b243784f9bb16602feca699b4e532c3db0"
+    },
+    {
+      "binary": "ark-testing::server",
+      "literal_name": "expiry_owner_load::expiry_owner_live_funded_1000_registrations",
+      "result": "PASS",
+      "native_seconds": 80.781,
+      "run_id": "ec8b5641-6b09-4abd-a319-04a11b538ac1",
+      "receipt": "batch41-live-funded-v7-receipt.json",
+      "source_manifest_sha256": "d05d3d5c7a24584fc9893f6601d9c0b243784f9bb16602feca699b4e532c3db0"
+    }
+  ],
+  "publication": {
+    "pr": 18,
+    "url": "https://github.com/BullishNode/abandon-ship-bark/pull/18",
+    "state": "DRAFT OPEN",
+    "branch": "work/fresh-test-report-checkpoint14-20261017",
+    "verified_remote_head": "b969dd862ad3d08d7c30ffa289e708f04578d331",
+    "fixed_cutoff": {
+      "executions": 225,
+      "PASS": 211,
+      "FAIL": 14,
+      "unique_binary_test_pairs": 219,
+      "nextest_invocations": 198,
+      "native": 213,
+      "component": 12,
+      "coverage_rows": 436
+    },
+    "payload_paths": 47,
+    "receipt": "PUBLICATION-PR18.json",
+    "receipt_sha256": "c57dc15e16bf838a13aa4db19a4f23a3634a8d423c6c77ab29cfda6a98fa5050",
+    "PR17_fixed_head_preserved": "e36fff479b8c9b29452677316becfbe014172f3d",
+    "full_independent_audit_scope": "Batch41 client postflight and finite retained-Core financial audit complete for both cohorts. Each1M=495983drain+99000control+395394otherleaves+9623fees; no custody inference/fullML/production qualification."
+  },
+  "v8_capture": {
+    "build_owner": "root/coordinator sole Cargo/shared-target writer",
+    "reported_build_state": "Freeze/build started; completion not supplied to this handoff",
+    "source_manifest_sha256": null,
+    "bundle_manifest_sha256": null,
+    "source_archive_sha256": null,
+    "runtime_metadata_sha256": null,
+    "test_ELF_sha256": null,
+    "runtime_allocation": null,
+    "expected_integration_binary_names": [
+      "ark-testing::bark",
+      "ark-testing::barkd",
+      "ark-testing::bark-sdk",
+      "ark-testing::server"
+    ],
+    "expected_is_not_captured_verified": true,
+    "canonical_source_reference": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0 is historical intake/root-reported source reference, not a v8 immutable candidate pin. Do not relabel old d05/v7 or779/v6 executions."
+  },
+  "ordinary_twelve": {
+    "logical_targets": 12,
+    "CLI": 7,
+    "barkd": 5,
+    "canonical_files_verified_by_read_only_hash": {
+      "testing/tests/bark/onchain.rs": {
+        "current_read_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+        "frozen_reviewed_result_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d"
+      },
+      "testing/tests/bark/movement.rs": {
+        "current_read_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+        "frozen_reviewed_result_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06"
+      },
+      "testing/tests/bark/offboard.rs": {
+        "current_read_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+        "frozen_reviewed_result_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22"
+      },
+      "testing/tests/barkd/boards.rs": {
+        "current_read_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+        "frozen_reviewed_result_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e"
+      },
+      "testing/tests/barkd/recovery.rs": {
+        "current_read_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+        "frozen_reviewed_result_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296"
+      }
+    },
+    "aggregate_manifest": {
+      "file": "ordinary-adaptations-twelve-source-only-manifest.json",
+      "sha256": "c589354c1fdd931f5e313a531fd3c434531105156d5ffb991166c2554049bcbb"
+    },
+    "aggregate_private_patch_reference": {
+      "file": "ordinary-adaptations-twelve-source-only.patch",
+      "sha256": "3aeb8840d040a67cee0bc423a3ab80953df3b795229d864e8be2fd6bee1ea165",
+      "published_base_commit": "828863b21a21a10d3d26ae5f29479be3ee87a233"
+    },
+    "peer_ACK": {
+      "file": "ordinary-adaptations-twelve-peer-review.json",
+      "sha256": "842169d08989eec03f2134c1967af79ff05417c8f4292694cf6351c18a37a326"
+    },
+    "selection_plan": {
+      "file": "v8-ordinary-twelve-selection-plan.json",
+      "sha256": "bef0af66394f3839eabad46f422ee39f2ad94c9cd03ddfd5857bc058bcfc83c8"
+    },
+    "execution_status": "ALL_ADAPTED_TARGETS_NOT_RUN; root build in progress is not compile qualification",
+    "historical_dispositions": {
+      "HELD_NOT_RUN": 2,
+      "FAIL": 9,
+      "HELD_NOT_RUN_UNSAFE_LEGACY_ORACLE": 1
+    },
+    "targets": [
+      {
+        "order": 1,
+        "literal_name": "onchain::list_utxos",
+        "expected_binary": "ark-testing::bark",
+        "expected_ignored": false,
+        "source_file": "testing/tests/bark/onchain.rs",
+        "canonical_current_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+        "target_body_sha256": "2ea3d73dbdf39828a110df07e025db31b206bfa1b0ad349fe515c3fb4495b53e",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [
+          "require_bark_version!(> \"0.5.0\");"
+        ],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "HELD_NOT_RUN",
+          "run_id": null,
+          "retained_evidence": "onchain-list-utxos-actual-values-v1-manifest.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 2,
+        "literal_name": "onchain::onchain_drain",
+        "expected_binary": "ark-testing::bark",
+        "expected_ignored": false,
+        "source_file": "testing/tests/bark/onchain.rs",
+        "canonical_current_file_sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+        "target_body_sha256": "9985bf9862fcdfdfb385bf74628fa86a8e94d469d7954a81c35571c5ef66e7d1",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "9601bb92-202a-4151-92fb-8d19fef22d2d",
+          "retained_evidence": "onchain-drain-retained-reconciliation.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 3,
+        "literal_name": "movement::board_board",
+        "expected_binary": "ark-testing::bark",
+        "expected_ignored": false,
+        "source_file": "testing/tests/bark/movement.rs",
+        "canonical_current_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+        "target_body_sha256": "c35fb82d976c5d637e682458b9717005bedfad803da62688409f2d77bcf80c25",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "85c49b07-b0e1-4eaf-9709-3eb55920515a",
+          "retained_evidence": "board-movement-actual-fee-adaptation-v1-manifest.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 4,
+        "literal_name": "movement::movement_offboard",
+        "expected_binary": "ark-testing::bark",
+        "expected_ignored": false,
+        "source_file": "testing/tests/bark/movement.rs",
+        "canonical_current_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+        "target_body_sha256": "ae0362fab02066be397fa84755d044f8c5bf570b48585a0667a1169c56856693",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "67572fd5-4452-4303-b66e-57b2902c1bf4",
+          "retained_evidence": "movement-offboard-retained-reconciliation.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 5,
+        "literal_name": "movement::movement_send_onchain",
+        "expected_binary": "ark-testing::bark",
+        "expected_ignored": false,
+        "source_file": "testing/tests/bark/movement.rs",
+        "canonical_current_file_sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+        "target_body_sha256": "31d2694ea05d8164cd9721dc2f3b9ed3cc7a0a9b943e0406429fc32895c5f96c",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [
+          "require_bark_version!(> \"0.5.0\");"
+        ],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "5642a425-2b0a-41dc-a294-90e32132411b",
+          "retained_evidence": "movement-send-onchain-retained-reconciliation.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 6,
+        "literal_name": "offboard::bark_send_onchain",
+        "expected_binary": "ark-testing::bark",
+        "expected_ignored": false,
+        "source_file": "testing/tests/bark/offboard.rs",
+        "canonical_current_file_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+        "target_body_sha256": "a2a607e12a0671337e5d1e20ca6d8220c4507bb3cc10a9d39c317fc48f8019c8",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "7a6f0ea0-1685-4abd-bfbe-664ed76582ad",
+          "retained_evidence": "offboard-send-onchain-retained-reconciliation.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 7,
+        "literal_name": "offboard::bark_rejects_offboarding_dust_amount",
+        "expected_binary": "ark-testing::bark",
+        "expected_ignored": false,
+        "source_file": "testing/tests/bark/offboard.rs",
+        "canonical_current_file_sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+        "target_body_sha256": "efccc9ea84a6871cd1fc1cad47db56cad9da6b1fd542690ac9ba2f1b13a433be",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "3d1aa01c-86f3-480c-b980-b9973e7fffa1",
+          "retained_evidence": "offboard-dust-retained-reconciliation.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 8,
+        "literal_name": "boards::board_all_barkd",
+        "expected_binary": "ark-testing::barkd",
+        "expected_ignored": false,
+        "source_file": "testing/tests/barkd/boards.rs",
+        "canonical_current_file_sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+        "target_body_sha256": "d35b67840c0aa16a7280ab3cb1ebf3d5346daa45ab05db90fd59121e3497c829",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "a807d8a4-4b13-4fcc-928a-c11ac7ea7643",
+          "retained_evidence": "barkd-board-all-actual-fee-adaptation-v1-manifest.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 9,
+        "literal_name": "recovery::recovered_wallet_finds_boarded_vtxo",
+        "expected_binary": "ark-testing::barkd",
+        "expected_ignored": false,
+        "source_file": "testing/tests/barkd/recovery.rs",
+        "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+        "target_body_sha256": "c05792829e71cbb8b86eca8ee4342e60edcf336f91f40a2dfedaa4c9da20a687",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "a17a9bb2-7a91-4d52-8105-712c68404cfb",
+          "retained_evidence": "barkd-recovery-boarded-actual-amount-v1-manifest.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 10,
+        "literal_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+        "expected_binary": "ark-testing::barkd",
+        "expected_ignored": false,
+        "source_file": "testing/tests/barkd/recovery.rs",
+        "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+        "target_body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [
+          "require_bark_version!(> \"0.5.0\");"
+        ],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "FAIL",
+          "run_id": "551dd1bb-ab3b-4629-a333-40a5f4ad9a97",
+          "retained_evidence": "barkd-recovery-mixed-actual-amount-v1-manifest.json"
+        },
+        "source_author_owner": "client_test_gaps",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 11,
+        "literal_name": "recovery::recovered_wallet_finds_round_vtxo",
+        "expected_binary": "ark-testing::barkd",
+        "expected_ignored": false,
+        "source_file": "testing/tests/barkd/recovery.rs",
+        "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+        "target_body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [
+          "require_bark_version!(> \"0.5.0\");"
+        ],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "status": "HELD_NOT_RUN",
+          "run_id": null,
+          "retained_evidence": "barkd-recovery-round-actual-amount-v1-manifest.json"
+        },
+        "source_author_owner": "legacy_inventory; client_test_gaps peer",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      },
+      {
+        "order": 12,
+        "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+        "expected_binary": "ark-testing::barkd",
+        "expected_ignored": false,
+        "source_file": "testing/tests/barkd/recovery.rs",
+        "canonical_current_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+        "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+        "target_bytes_equal_frozen_aggregate_result": true,
+        "native_version_gates_in_target": [
+          "require_bark_version!(> \"0.7.1\");"
+        ],
+        "adapted_execution_status": "NOT RUN",
+        "historical_original": {
+          "literal_name": "recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+          "status": "HELD_NOT_RUN_UNSAFE_LEGACY_ORACLE",
+          "run_id": null,
+          "retained_evidence": "barkd-recovery-quarantine-v2-manifest.json"
+        },
+        "explicit_selection_rule": "SelectonlyNEWquarantines_invalid_spent_vtxos; NEVERtheheldoldserverwordliteral. GenuineinvalidbodyLocked/noinventedbalance plusseparatevalidsignedcontrol retained.",
+        "source_author_owner": "backend_test_gaps; legacy/client peers",
+        "canonical_integration_owner": "root/coordinator",
+        "source_status": "CANONICAL_SOURCE_INTEGRATED_BYTES_MATCH_REVIEWED_AGGREGATE",
+        "compile_qualification": "NOT_ESTABLISHED_PENDING_V8_IMMUTABLE_CAPTURE",
+        "runtime_status": "NOT RUN",
+        "allocation_status": "NO_V8_NATIVE_ALLOCATION",
+        "execution_credit_increment": 0
+      }
+    ],
+    "conditions": {
+      "outer_timeout_seconds_per_test": 180,
+      "profile": "default",
+      "retries": 0,
+      "test_threads": 1,
+      "serial_cases": 1,
+      "first_failure_stops": true,
+      "exact_filter": true,
+      "run_ignored": "Noexceptionrequested; all12expectedunignored.",
+      "fresh_private_context": true,
+      "no_failed_case_retry": true
+    },
+    "required_actual_barkd_test_ELF": true,
+    "body_and_version_gate_credit_requirement": "For eachallocatedcase verifyfresh exact1unignored expectedbinary, matchingactual1testresult/runID, versiongatepassed andgenuinenativefixture/assertionsreached. Compiledname/listingsuccessaloneearnsnoruntimecredit."
+  },
+  "other_six_source_money_fixtures": [
+    {
+      "id": "conflict_reorg_v2",
+      "literal_name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "expected_binary": "ark-testing::server",
+      "source_owner": "backend_test_gaps",
+      "frozen_source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/conflict-reorg-v2-private/qualification_conflict_reorg.rs",
+      "frozen_source_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "exact_function_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/conflict-reorg-v2-peer-acceptance.json",
+        "sha256": "bfc3d65b20c535d2db73ed0cb81e537cd96bca0450527a270f553e58b6022871"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/conflict-reorg-v2-add-file.patch",
+        "sha256": "9195800e523242e7501ec9e0e25121d00679f587b2722fe2251af797fc2d16ed"
+      },
+      "current_canonical_relative_path": "testing/tests/server/qualification_conflict_reorg.rs",
+      "current_canonical_HEAD_file_present": false,
+      "current_canonical_HEAD_literal_present": false,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": false,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": false,
+      "bounded_money_oracle": "Actualordinarytwo100kroots/holderexit+terminalclaim/partialconflict/regroup/wholebranchreorg, C9validmerged199k OR2x99k, retainedfences and full700k canonicalboard/parent/child/leafcut repeatedafterreconsider.",
+      "money_ML_limits": "Oneowner/tworoot/24blocklife/3exitdelta/180s; noseedrecovery/backup/scale/globalcustody/fullML121orP06. Stoppeddaemonhangclaim withdrawn; directCoremining is scheduling.",
+      "integration": "Add full frozenfile and new moduledeclaration. For failedsend delta-v3 alone requires51bfbaseline+v2chain; prefer exactreviewedfull55bbbody. Never apply v3delta directly to31ca. Conflict use fulladdfile, not relative-old diff.",
+      "packet_manifest": {
+        "file": "conflict-reorg-v2-manifest.json",
+        "sha256": "46bdcc91ed470790ad6928d1b7296c617e93a01278e62637e74d3df32c7ed8be"
+      },
+      "canonical_status_basis": {
+        "intake": "v8-reviewed-money-fixtures-intake.json",
+        "sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+        "observed_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+        "historical_source_observation_not_v8_capture": true
+      },
+      "readiness": "AUTHORED_AND_SOURCE_REVIEWED; exact adapted body absent or mismatched at intake; deliberate root integration/API review/capture needed",
+      "compile_qualification": "NOT_ESTABLISHED_NO_MATCHING_IMMUTABLE_CAPTURE",
+      "runtime_status": "NOT RUN",
+      "integration_build_allocation_owner": "root/coordinator",
+      "execution_credit_increment": 0
+    },
+    {
+      "id": "failed_send_restart_v3",
+      "literal_name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "source_owner": "legacy_inventory originalfixture; backend_test_gaps v2/v3 hardening and frozen55bb; client_test_gaps/parent source peers",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_failed_swap.rs",
+      "frozen_source_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "exact_function_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/failed-swap-hardening-v3-parent-review.md",
+        "sha256": "f14043849069501762eed12d3dd4aba87c76fe3561f5614259e3f105f0c76b4a"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/failed-swap-hardening-v3.patch",
+        "sha256": "b2f15e160dd52d25744e2724fe1636c8638c7de36108b8bbbc5530c9d0f747af"
+      },
+      "current_canonical_relative_path": "testing/tests/server/qualification_failed_swap.rs",
+      "current_canonical_HEAD_file_present": false,
+      "current_canonical_HEAD_literal_present": false,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": false,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": true,
+      "bounded_money_oracle": "RealexternalholdAccepted, nativeproductdowntime, actualCancel at originalremotegroup, senderabsent, originalterminalFailed proof+exact99kcanonicalparent/child6 and fullDAGphysicalconservation; immutableparent/ownerledger/originalgroup/no redispatch.",
+      "money_ML_limits": "180s/<=96blocks; parentremainder binds configuredsweep, childchange walletcustody not independentlychecked; no multipart/crossroot/reorg/seedrestore/globaloperatorsolvency/FULLML.",
+      "integration": "Add full frozenfile and new moduledeclaration. For failedsend delta-v3 alone requires51bfbaseline+v2chain; prefer exactreviewedfull55bbbody. Never apply v3delta directly to31ca. Conflict use fulladdfile, not relative-old diff.",
+      "packet_manifest": {
+        "file": "failed-swap-hardening-v3-manifest.json",
+        "sha256": "4a49d95453119b377db5c88175445099cf7f5fb081455087113aecd360b50789"
+      },
+      "canonical_status_basis": {
+        "intake": "v8-reviewed-money-fixtures-intake.json",
+        "sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+        "observed_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+        "historical_source_observation_not_v8_capture": true
+      },
+      "readiness": "AUTHORED_AND_SOURCE_REVIEWED; exact adapted body absent or mismatched at intake; deliberate root integration/API review/capture needed",
+      "compile_qualification": "NOT_ESTABLISHED_NO_MATCHING_IMMUTABLE_CAPTURE",
+      "runtime_status": "NOT RUN",
+      "integration_build_allocation_owner": "root/coordinator",
+      "execution_credit_increment": 0
+    },
+    {
+      "id": "registered_offboard_restart",
+      "literal_name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "source_owner": "backend_test_gaps; legacy peer",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_restart.rs",
+      "frozen_source_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "exact_function_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML126-offboard-restart-source-review.md",
+        "sha256": "b4bf20b9b587717bcdd10089df3750168e21247cbed6b24ec9b296a4c3f5f645"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML126-native-source.patch",
+        "sha256": "8e612992c741381f4991f70a6af6ff39c47bf77b8691b018f1cf734b84a31fb4"
+      },
+      "current_canonical_relative_path": "testing/tests/server/qualification_offboard_restart.rs",
+      "current_canonical_HEAD_file_present": false,
+      "current_canonical_HEAD_literal_present": false,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": false,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": false,
+      "bounded_money_oracle": "GenuineSDKauthorizeddurableoffboard, actualnurseryINSERT schedulinglock, serverstop/reap+clientabort/proxygone, startupalone exactsignedbroadcast, canonical6net+actualfee, sourceSpent and boundedwholechain/mempoolzeroextrafallback.",
+      "money_ML_limits": "180s/<=96blocks,32blocklife; afterwalletpersist/beforenursery, not beforeallwalletwrites. Actualcoinamount fromSDKhelper, not assumed100kfunding. No completeoperator/customerinitialfunding/residualchange/fullML126 orbackup/defaultdaemon proof.",
+      "integration": "Add full frozenfile and new moduledeclaration. For failedsend delta-v3 alone requires51bfbaseline+v2chain; prefer exactreviewedfull55bbbody. Never apply v3delta directly to31ca. Conflict use fulladdfile, not relative-old diff.",
+      "packet_manifest": {
+        "file": "ML126-native-manifest.json",
+        "sha256": "ec3d843053eba5a372056e09abbeea1b0e8188270b4027285ed7bd2de17ab5f5"
+      },
+      "canonical_status_basis": {
+        "intake": "v8-reviewed-money-fixtures-intake.json",
+        "sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+        "observed_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+        "historical_source_observation_not_v8_capture": true
+      },
+      "readiness": "AUTHORED_AND_SOURCE_REVIEWED; exact adapted body absent or mismatched at intake; deliberate root integration/API review/capture needed",
+      "compile_qualification": "NOT_ESTABLISHED_NO_MATCHING_IMMUTABLE_CAPTURE",
+      "runtime_status": "NOT RUN",
+      "integration_build_allocation_owner": "root/coordinator",
+      "execution_credit_increment": 0
+    },
+    {
+      "id": "SDK_expired_new_LN_refusal_refresh",
+      "literal_name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_owner": "client_test_gaps",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark_sdk/lightning.rs",
+      "frozen_source_file_sha256": "3fef86397a648c4b11ef92f2f0c252b870e9ec766cc1ac14ff96075347964c88",
+      "exact_function_body_sha256": "eb82a1226e01d9a3ffee536fa5fae7b663dec32d18fc420e1984099448e8a414",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-expired-lightning-refusal-refresh-v1-source-review-parent.md",
+        "sha256": "b3b153de5a5ac9b7c9728baad1e7d6b2d87b5fcca93102b562216e8d2cb62ca7"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-expired-lightning-refusal-refresh-v1.patch",
+        "sha256": "4ae8f31745b3f84a383493a957c3f7045c4fe4d12e59d6501ad5517e59bfc72a"
+      },
+      "current_canonical_relative_path": "testing/tests/bark_sdk/lightning.rs",
+      "current_canonical_HEAD_file_present": true,
+      "current_canonical_HEAD_literal_present": false,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": true,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": true,
+      "bounded_money_oracle": "PublictypedExpiredNewLightning refusalbeforeattempt/dispatch/nativeCLNpay with fullsignedprincipalretained; actualinteractiveconfirmedrefresh to newtree then freshdistinctholdinvoicePaid with nativeCLNComplete and exactbalance/history.",
+      "money_ML_limits": "180s;100blocklife/clientmanualsync/watch900scadence isolatesadmission. No first-attemptpendingrace/defaultdaemon/fallback/backup/FULLML. Large2BTC/0.5BTC are nativeREGTEST only.",
+      "integration": "Target-only reviewedpatch; existingmodule registered but adaptedbody not present. Preserve currentunrelatedfunctions/imports; wholefileoverwrite unsafe, especially lightning.rs newerreceive fixtures. Samewatchmanliteralnames do NOT prove adaptedbodycompiled.",
+      "packet_manifest": {
+        "file": "sdk-expired-lightning-refusal-refresh-v1-manifest.json",
+        "sha256": "d8f3e921b045477a53a1401408265d67365653be66ee44cdaa28a6da59edf234"
+      },
+      "canonical_status_basis": {
+        "intake": "v8-reviewed-money-fixtures-intake.json",
+        "sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+        "observed_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+        "historical_source_observation_not_v8_capture": true
+      },
+      "readiness": "AUTHORED_AND_SOURCE_REVIEWED; exact adapted body absent or mismatched at intake; deliberate root integration/API review/capture needed",
+      "compile_qualification": "NOT_ESTABLISHED_NO_MATCHING_IMMUTABLE_CAPTURE",
+      "runtime_status": "NOT RUN",
+      "integration_build_allocation_owner": "root/coordinator",
+      "execution_credit_increment": 0
+    },
+    {
+      "id": "SDK_watchman_funding_parent",
+      "literal_name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_owner": "legacy_inventory author; client_test_gaps peer",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark_sdk/exit.rs",
+      "frozen_source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "exact_function_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-watchman-registered-payout-v2-client-review.md",
+        "sha256": "1bd97c7b2355fcf9efdeae9065646ef7eeeabd6f1bfca28ae15388767184ac49"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-watchman-registered-payout-v2.patch",
+        "sha256": "e179ccedab159b107269280b0ead794007b6b459b6b4d301c1a0ba58c45d0ea1"
+      },
+      "current_canonical_relative_path": "testing/tests/bark_sdk/exit.rs",
+      "current_canonical_HEAD_file_present": true,
+      "current_canonical_HEAD_literal_present": true,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": true,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": false,
+      "bounded_money_oracle": "Nativeexpiredsingle400kregisteredowner, one-deepProcessing/no prematurehistory then actual399kcanonical6fallback, exactownerledger/sourcepath andchain+mempooloneoutput, sourceSpent/no refresh resurrection.",
+      "money_ML_limits": "180s;manualclient/watch900s,15exititerations; no actualallfeechild/subsidy/operatorcustodycut ordefaultdaemon/FULLML.",
+      "integration": "Target-only reviewedpatch; existingmodule registered but adaptedbody not present. Preserve currentunrelatedfunctions/imports; wholefileoverwrite unsafe, especially lightning.rs newerreceive fixtures. Samewatchmanliteralnames do NOT prove adaptedbodycompiled.",
+      "packet_manifest": {
+        "file": "sdk-watchman-registered-payout-v2-manifest.json",
+        "sha256": "338a9601bf985c363ee6b613a73c5d5c8e591b33f7761320a833bd40d7eaedee"
+      },
+      "canonical_status_basis": {
+        "intake": "v8-reviewed-money-fixtures-intake.json",
+        "sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+        "observed_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+        "historical_source_observation_not_v8_capture": true
+      },
+      "readiness": "AUTHORED_AND_SOURCE_REVIEWED; exact adapted body absent or mismatched at intake; deliberate root integration/API review/capture needed",
+      "compile_qualification": "NOT_ESTABLISHED_NO_MATCHING_IMMUTABLE_CAPTURE",
+      "runtime_status": "NOT RUN",
+      "integration_build_allocation_owner": "root/coordinator",
+      "execution_credit_increment": 0
+    },
+    {
+      "id": "SDK_watchman_partial_chain",
+      "literal_name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_owner": "legacy_inventory author; client_test_gaps peer",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark_sdk/exit.rs",
+      "frozen_source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "exact_function_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-watchman-registered-payout-v2-client-review.md",
+        "sha256": "1bd97c7b2355fcf9efdeae9065646ef7eeeabd6f1bfca28ae15388767184ac49"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-watchman-registered-payout-v2.patch",
+        "sha256": "e179ccedab159b107269280b0ead794007b6b459b6b4d301c1a0ba58c45d0ea1"
+      },
+      "current_canonical_relative_path": "testing/tests/bark_sdk/exit.rs",
+      "current_canonical_HEAD_file_present": true,
+      "current_canonical_HEAD_literal_present": true,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": true,
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": false,
+      "bounded_money_oracle": "Real100kArkoorrecipient+300ksenderchange under sameanchor/partialexit; nativecanonical299k+99ktoindependentregisteredowners, exactledger/generation/chainoneoutputeach andlocalspent/history/no refresh resurrection.",
+      "money_ML_limits": "180s;explicit change_vtxo_split_factor1/manualsync/watch900s; not defaultfactor2/groupedoutputs/fullfeechild/subsidy/custody/globalML.",
+      "integration": "Target-only reviewedpatch; existingmodule registered but adaptedbody not present. Preserve currentunrelatedfunctions/imports; wholefileoverwrite unsafe, especially lightning.rs newerreceive fixtures. Samewatchmanliteralnames do NOT prove adaptedbodycompiled.",
+      "packet_manifest": {
+        "file": "sdk-watchman-registered-payout-v2-manifest.json",
+        "sha256": "338a9601bf985c363ee6b613a73c5d5c8e591b33f7761320a833bd40d7eaedee"
+      },
+      "canonical_status_basis": {
+        "intake": "v8-reviewed-money-fixtures-intake.json",
+        "sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+        "observed_HEAD": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+        "historical_source_observation_not_v8_capture": true
+      },
+      "readiness": "AUTHORED_AND_SOURCE_REVIEWED; exact adapted body absent or mismatched at intake; deliberate root integration/API review/capture needed",
+      "compile_qualification": "NOT_ESTABLISHED_NO_MATCHING_IMMUTABLE_CAPTURE",
+      "runtime_status": "NOT RUN",
+      "integration_build_allocation_owner": "root/coordinator",
+      "execution_credit_increment": 0
+    }
+  ],
+  "root_owned_excluded_work": [
+    "internal refund/shared-source replan",
+    "pre-obligation acceptance/admission and associated product fixtures",
+    "default-client product fixes",
+    "fairness and production owner scheduling"
+  ],
+  "frozen_exclusions": [
+    {
+      "source": "Older qualification_restore draft050535",
+      "status": "FROZEN_EXCLUDED; no new compile/runtime credit"
+    },
+    {
+      "source": "Older owned qualification_conflict_reorg ef70",
+      "status": "FROZEN_EXCLUDED; external15ec is separate reviewed successor"
+    },
+    {
+      "source": "ML190 protection-isolation a6309348bd5661fd636949c6c321e116d3e447aed8e20132e442596346f11e1e",
+      "status": "SOURCE_ONLY_EXPECTED_RED_FROZEN_EXCLUDED; no revival without explicit allocation"
+    },
+    {
+      "source": "Unsafe recovery::recovered_wallet_stores_spent_vtxos_on_the_servers_word",
+      "status": "HELD_ORIGINAL_NOT_RUN; only new authenticated-quarantine target is proposed"
+    }
+  ],
+  "existing_track_roles": {
+    "root_parent": "Canonical integration, sole Cargo/capture writer, explicit allocation, sequential parent launch and publication",
+    "backend_test_gaps": "Existing backend test/control/source-intake role; source owners listed per packet",
+    "client_test_gaps": "Existing client test/control/source-intake role; source owners listed per packet",
+    "legacy_inventory": "Read-only evidence/ownership handoff and previously authored packets; no active source-edit/runtime allocation",
+    "additional_team_status": "No additional four-agent team announced or assumed; no new delegation created by this handoff"
+  },
+  "required_before_runtime": [
+    "Root provides exact immutable v8 source/archive/product/testELF/metadata/support/tool pins and candidate versions; expected four binaries do not substitute for captured metadata.",
+    "Root explicitly allocates exact case names/counts. No caller may infer allocation from this handoff or a successful build.",
+    "Verify exact reviewed body/hash in captured source plus matching actual test ELF; names alone do not qualify adapted watchman or ordinary targets.",
+    "Only repository just int-binaries, fresh private contexts, exact singleton selection, actual version gates passed, serial1/retries0/default180 unless an explicit new allocation says otherwise; first failure stops, preserve original failures.",
+    "CLN-dependent sources additionally require exact approved native CLN/adapter/hold pins and Docker image unset; future admission must reverify actual tools."
+  ],
+  "money_loss_map_unchanged": {
+    "execution_status": {
+      "NOT RUN": 198,
+      "PASS": 2
+    },
+    "evidence_scope": {
+      "PARTIAL": 145,
+      "NONE": 53,
+      "FULL": 2
+    }
+  },
+  "references_sha256": {
+    "PUBLICATION-PR18.json": "c57dc15e16bf838a13aa4db19a4f23a3634a8d423c6c77ab29cfda6a98fa5050",
+    "publication-checkpoint14-files.json": "822678af0c8d16f1fccdc0aa9bade08fe46d9ecee8c5435e7271fcb5d2f30ce5",
+    "batch39-owner-replan-v6-receipt.json": "779d3771ce61016748db980e10eb3a3734e933cdeb7106b01d470bc1ee4d859c",
+    "batch40-three-existing-v6-receipt.json": "27bb2368cfaadb0cd739929e037306a3f6c2d0f95519551c96037901181e8174",
+    "batch41-live-funded-v7-receipt.json": "0909c1cc68919394d7af238da42900946b2519093868332dc1d17fe8db3c8428",
+    "batch41-client-postflight.json": "ab64656e0889f0303aa61aab01ee17705a550190c830b124eb360c80e333880a",
+    "batch41-retained-core-reconciliation.json": "502c1cd68860481dc7f2c78cb702455be6b4ccb4d6d638f4cc04c5d2e3935b66",
+    "batch41-financial-supplement.json": "4d33d3ee69a7c44eee0f7b604e5115287f4548f8032679158613a6ae588f43d3",
+    "batch41-coverage-line-ending-correction.json": "b5d03e08d43ba3484c447ab4a3902b2122f62aea1ad89875ae0ec1562a2fdb8d",
+    "v8-ordinary-twelve-selection-plan.json": "bef0af66394f3839eabad46f422ee39f2ad94c9cd03ddfd5857bc058bcfc83c8",
+    "v8-reviewed-money-fixtures-intake.json": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+    "ordinary-adaptations-twelve-source-only-manifest.json": "c589354c1fdd931f5e313a531fd3c434531105156d5ffb991166c2554049bcbb",
+    "ordinary-adaptations-twelve-peer-review.json": "842169d08989eec03f2134c1967af79ff05417c8f4292694cf6351c18a37a326"
+  },
+  "mutations": {
+    "only_new_external_handoff_JSON_and_MD": true,
+    "STATUS_COVERAGE_FINDINGS_publicdocs": 0,
+    "source_Cargo_build_metadata_native_services_Git": 0,
+    "new_execution_or_ML_credit": 0,
+    "frozen_packets": 0
+  }
+}

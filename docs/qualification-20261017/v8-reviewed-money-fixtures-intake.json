@@ -1,0 +1,261 @@
+{
+  "kind": "v8_reviewed_money_fixtures_intake_plan",
+  "at": "2026-10-17T22:34:01.057459+00:00",
+  "scope": "External source-only prospectiveintake, not allocation/compilation/listing/runtime approval. No source/Cargo/native/actors/status/publicdocs/ML edits.",
+  "current_canonical_HEAD_at_read": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+  "future_v8_candidate": "NOT CAPTURED; exactHEAD+dirtysource/archive/manifest/ELF/runtime metadata/features/versions and explicitrootallocation required before runtime",
+  "fixtures": [
+    {
+      "id": "conflict_reorg_v2",
+      "literal_name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "expected_binary": "ark-testing::server",
+      "frozen_source_path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/conflict-reorg-v2-private/qualification_conflict_reorg.rs",
+      "frozen_source_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "exact_function_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "body_hash_definition": "async fn declaration through its columnzero closingbrace, without trailingnewline/attributes; helperfunctions bound by wholefilehash",
+      "source_owner": "backend_test_gaps",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/conflict-reorg-v2-peer-acceptance.json",
+        "sha256": "bfc3d65b20c535d2db73ed0cb81e537cd96bca0450527a270f553e58b6022871"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/conflict-reorg-v2-add-file.patch",
+        "sha256": "9195800e523242e7501ec9e0e25121d00679f587b2722fe2251af797fc2d16ed"
+      },
+      "current_canonical_relative_path": "testing/tests/server/qualification_conflict_reorg.rs",
+      "current_canonical_HEAD_file_present": false,
+      "current_canonical_HEAD_file_sha256": null,
+      "current_canonical_HEAD_literal_present": false,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": false,
+      "working_file_exists": false,
+      "working_file_sha256": null,
+      "execution_status": "SOURCE ONLY REVIEWED; NOT RUN; no matchingcompiledcapture established",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": false,
+      "bounded_money_oracle": "Actualordinarytwo100kroots/holderexit+terminalclaim/partialconflict/regroup/wholebranchreorg, C9validmerged199k OR2x99k, retainedfences and full700k canonicalboard/parent/child/leafcut repeatedafterreconsider.",
+      "money_ML_limits": "Oneowner/tworoot/24blocklife/3exitdelta/180s; noseedrecovery/backup/scale/globalcustody/fullML121orP06. Stoppeddaemonhangclaim withdrawn; directCoremining is scheduling.",
+      "overlap_disposition": "Distinct ordinaryterminalclaim+reorg; do not duplicate rootinternalgrant refund/replan/coldbridge fixtures.",
+      "integration": "Add full frozenfile and new moduledeclaration. For failedsend delta-v3 alone requires51bfbaseline+v2chain; prefer exactreviewedfull55bbbody. Never apply v3delta directly to31ca. Conflict use fulladdfile, not relative-old diff."
+    },
+    {
+      "id": "failed_send_restart_v3",
+      "literal_name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_failed_swap.rs",
+      "frozen_source_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "exact_function_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "body_hash_definition": "async fn declaration through its columnzero closingbrace, without trailingnewline/attributes; helperfunctions bound by wholefilehash",
+      "source_owner": "legacy_inventory originalfixture; backend_test_gaps v2/v3 hardening and frozen55bb; client_test_gaps/parent source peers",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/failed-swap-hardening-v3-parent-review.md",
+        "sha256": "f14043849069501762eed12d3dd4aba87c76fe3561f5614259e3f105f0c76b4a"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/failed-swap-hardening-v3.patch",
+        "sha256": "b2f15e160dd52d25744e2724fe1636c8638c7de36108b8bbbc5530c9d0f747af"
+      },
+      "current_canonical_relative_path": "testing/tests/server/qualification_failed_swap.rs",
+      "current_canonical_HEAD_file_present": false,
+      "current_canonical_HEAD_file_sha256": null,
+      "current_canonical_HEAD_literal_present": false,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": false,
+      "working_file_exists": false,
+      "working_file_sha256": null,
+      "execution_status": "SOURCE ONLY REVIEWED; NOT RUN; no matchingcompiledcapture established",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": true,
+      "bounded_money_oracle": "RealexternalholdAccepted, nativeproductdowntime, actualCancel at originalremotegroup, senderabsent, originalterminalFailed proof+exact99kcanonicalparent/child6 and fullDAGphysicalconservation; immutableparent/ownerledger/originalgroup/no redispatch.",
+      "money_ML_limits": "180s/<=96blocks; parentremainder binds configuredsweep, childchange walletcustody not independentlychecked; no multipart/crossroot/reorg/seedrestore/globaloperatorsolvency/FULLML.",
+      "overlap_disposition": "Distinct externalAccepted\u2192Cancel downtime, not rootsignedinternalrefund/sharedsource/preobligation fixture. Preserve v2/31ca oldpackets and all earliernativefailedsendreceipts.",
+      "integration": "Add full frozenfile and new moduledeclaration. For failedsend delta-v3 alone requires51bfbaseline+v2chain; prefer exactreviewedfull55bbbody. Never apply v3delta directly to31ca. Conflict use fulladdfile, not relative-old diff."
+    },
+    {
+      "id": "registered_offboard_restart",
+      "literal_name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/server/qualification_offboard_restart.rs",
+      "frozen_source_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "exact_function_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "body_hash_definition": "async fn declaration through its columnzero closingbrace, without trailingnewline/attributes; helperfunctions bound by wholefilehash",
+      "source_owner": "backend_test_gaps; legacy peer",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML126-offboard-restart-source-review.md",
+        "sha256": "b4bf20b9b587717bcdd10089df3750168e21247cbed6b24ec9b296a4c3f5f645"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/ML126-native-source.patch",
+        "sha256": "8e612992c741381f4991f70a6af6ff39c47bf77b8691b018f1cf734b84a31fb4"
+      },
+      "current_canonical_relative_path": "testing/tests/server/qualification_offboard_restart.rs",
+      "current_canonical_HEAD_file_present": false,
+      "current_canonical_HEAD_file_sha256": null,
+      "current_canonical_HEAD_literal_present": false,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": false,
+      "working_file_exists": false,
+      "working_file_sha256": null,
+      "execution_status": "SOURCE ONLY REVIEWED; NOT RUN; no matchingcompiledcapture established",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": false,
+      "bounded_money_oracle": "GenuineSDKauthorizeddurableoffboard, actualnurseryINSERT schedulinglock, serverstop/reap+clientabort/proxygone, startupalone exactsignedbroadcast, canonical6net+actualfee, sourceSpent and boundedwholechain/mempoolzeroextrafallback.",
+      "money_ML_limits": "180s/<=96blocks,32blocklife; afterwalletpersist/beforenursery, not beforeallwalletwrites. Actualcoinamount fromSDKhelper, not assumed100kfunding. No completeoperator/customerinitialfunding/residualchange/fullML126 orbackup/defaultdaemon proof.",
+      "overlap_disposition": "Durablepostregistration handoff, complementary to rootpre-obligation acceptance work; no financialSQLfabrication.",
+      "integration": "Add full frozenfile and new moduledeclaration. For failedsend delta-v3 alone requires51bfbaseline+v2chain; prefer exactreviewedfull55bbbody. Never apply v3delta directly to31ca. Conflict use fulladdfile, not relative-old diff."
+    },
+    {
+      "id": "SDK_expired_new_LN_refusal_refresh",
+      "literal_name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "expected_binary": "ark-testing::bark-sdk",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark_sdk/lightning.rs",
+      "frozen_source_file_sha256": "3fef86397a648c4b11ef92f2f0c252b870e9ec766cc1ac14ff96075347964c88",
+      "exact_function_body_sha256": "eb82a1226e01d9a3ffee536fa5fae7b663dec32d18fc420e1984099448e8a414",
+      "body_hash_definition": "async fn declaration through its columnzero closingbrace, without trailingnewline/attributes; helperfunctions bound by wholefilehash",
+      "source_owner": "client_test_gaps",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-expired-lightning-refusal-refresh-v1-source-review-parent.md",
+        "sha256": "b3b153de5a5ac9b7c9728baad1e7d6b2d87b5fcca93102b562216e8d2cb62ca7"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-expired-lightning-refusal-refresh-v1.patch",
+        "sha256": "4ae8f31745b3f84a383493a957c3f7045c4fe4d12e59d6501ad5517e59bfc72a"
+      },
+      "current_canonical_relative_path": "testing/tests/bark_sdk/lightning.rs",
+      "current_canonical_HEAD_file_present": true,
+      "current_canonical_HEAD_file_sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+      "current_canonical_HEAD_literal_present": false,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": true,
+      "working_file_exists": true,
+      "working_file_sha256": "ed1ef1a1ce76e9875b465539131b42f3cd9606840f8b20776881771ddfa9f081",
+      "execution_status": "SOURCE ONLY REVIEWED; NOT RUN; no matchingcompiledcapture established",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": true,
+      "bounded_money_oracle": "PublictypedExpiredNewLightning refusalbeforeattempt/dispatch/nativeCLNpay with fullsignedprincipalretained; actualinteractiveconfirmedrefresh to newtree then freshdistinctholdinvoicePaid with nativeCLNComplete and exactbalance/history.",
+      "money_ML_limits": "180s;100blocklife/clientmanualsync/watch900scadence isolatesadmission. No first-attemptpendingrace/defaultdaemon/fallback/backup/FULLML. Large2BTC/0.5BTC are nativeREGTEST only.",
+      "overlap_disposition": "Coordinate rootpre-obligation/defaultclientfix owner beforeselecting. TestpublicC3typedrefusal+refresh only; do not duplicate rootnewadmissionfixture/deniedincorrectpayee work.",
+      "integration": "Target-only reviewedpatch; existingmodule registered but adaptedbody not present. Preserve currentunrelatedfunctions/imports; wholefileoverwrite unsafe, especially lightning.rs newerreceive fixtures. Samewatchmanliteralnames do NOT prove adaptedbodycompiled."
+    },
+    {
+      "id": "SDK_watchman_funding_parent",
+      "literal_name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark_sdk/exit.rs",
+      "frozen_source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "exact_function_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "body_hash_definition": "async fn declaration through its columnzero closingbrace, without trailingnewline/attributes; helperfunctions bound by wholefilehash",
+      "source_owner": "legacy_inventory author; client_test_gaps peer",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-watchman-registered-payout-v2-client-review.md",
+        "sha256": "1bd97c7b2355fcf9efdeae9065646ef7eeeabd6f1bfca28ae15388767184ac49"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-watchman-registered-payout-v2.patch",
+        "sha256": "e179ccedab159b107269280b0ead794007b6b459b6b4d301c1a0ba58c45d0ea1"
+      },
+      "current_canonical_relative_path": "testing/tests/bark_sdk/exit.rs",
+      "current_canonical_HEAD_file_present": true,
+      "current_canonical_HEAD_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239",
+      "current_canonical_HEAD_literal_present": true,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": true,
+      "working_file_exists": true,
+      "working_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239",
+      "execution_status": "SOURCE ONLY REVIEWED; NOT RUN; no matchingcompiledcapture established",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": false,
+      "bounded_money_oracle": "Nativeexpiredsingle400kregisteredowner, one-deepProcessing/no prematurehistory then actual399kcanonical6fallback, exactownerledger/sourcepath andchain+mempooloneoutput, sourceSpent/no refresh resurrection.",
+      "money_ML_limits": "180s;manualclient/watch900s,15exititerations; no actualallfeechild/subsidy/operatorcustodycut ordefaultdaemon/FULLML.",
+      "overlap_disposition": "Adaptednamedfixture is not originaloperatorclaim-then-refresh expectedred. Coordinate rootdefaultclientprotection owner; do not rerun legacyunsafecontract.",
+      "integration": "Target-only reviewedpatch; existingmodule registered but adaptedbody not present. Preserve currentunrelatedfunctions/imports; wholefileoverwrite unsafe, especially lightning.rs newerreceive fixtures. Samewatchmanliteralnames do NOT prove adaptedbodycompiled."
+    },
+    {
+      "id": "SDK_watchman_partial_chain",
+      "literal_name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "frozen_source_path": "/home/francis/abandon-ship-fresh-integration/testing-track-worktree/testing/tests/bark_sdk/exit.rs",
+      "frozen_source_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "exact_function_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "body_hash_definition": "async fn declaration through its columnzero closingbrace, without trailingnewline/attributes; helperfunctions bound by wholefilehash",
+      "source_owner": "legacy_inventory author; client_test_gaps peer",
+      "source_review": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-watchman-registered-payout-v2-client-review.md",
+        "sha256": "1bd97c7b2355fcf9efdeae9065646ef7eeeabd6f1bfca28ae15388767184ac49"
+      },
+      "integration_patch": {
+        "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/sdk-watchman-registered-payout-v2.patch",
+        "sha256": "e179ccedab159b107269280b0ead794007b6b459b6b4d301c1a0ba58c45d0ea1"
+      },
+      "current_canonical_relative_path": "testing/tests/bark_sdk/exit.rs",
+      "current_canonical_HEAD_file_present": true,
+      "current_canonical_HEAD_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239",
+      "current_canonical_HEAD_literal_present": true,
+      "current_canonical_HEAD_exact_body_matches_frozen": false,
+      "module_declared_at_HEAD": true,
+      "working_file_exists": true,
+      "working_file_sha256": "4bb8c8614559f1ccd8c3136780e83f4edc7d57bd4b0a7b847b5b9dbee0b22239",
+      "execution_status": "SOURCE ONLY REVIEWED; NOT RUN; no matchingcompiledcapture established",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "requires_CLN": false,
+      "bounded_money_oracle": "Real100kArkoorrecipient+300ksenderchange under sameanchor/partialexit; nativecanonical299k+99ktoindependentregisteredowners, exactledger/generation/chainoneoutputeach andlocalspent/history/no refresh resurrection.",
+      "money_ML_limits": "180s;explicit change_vtxo_split_factor1/manualsync/watch900s; not defaultfactor2/groupedoutputs/fullfeechild/subsidy/custody/globalML.",
+      "overlap_disposition": "Distinct reviewedtargetunderexplicitfactor1; rootdefaultclientfixes mayalter APIs/policy, require source/APIre-review. Do not duplicate protectiveexpectedred/nativehelper injections.",
+      "integration": "Target-only reviewedpatch; existingmodule registered but adaptedbody not present. Preserve currentunrelatedfunctions/imports; wholefileoverwrite unsafe, especially lightning.rs newerreceive fixtures. Samewatchmanliteralnames do NOT prove adaptedbodycompiled."
+    }
+  ],
+  "proposed_serial_order": [
+    "registered_offboard_restart",
+    "failed_send_restart_v3",
+    "conflict_reorg_v2",
+    "SDK_expired_new_LN_refusal_refresh",
+    "SDK_watchman_funding_parent",
+    "SDK_watchman_partial_chain"
+  ],
+  "order_is_not_launch_authorization": true,
+  "common_preconditions": [
+    "Rootsoleintegration/buildowner; captureexactnewv8 aftercompatibletest-onlyintegration. Re-reviewAPI/schema and changedproductsemantics againstactualv8; older828sourceACK notcurrentcompiledqualification.",
+    "ActualBark/cap/watch productversions/sourceELFs/dirtyarchive/runtimebinarymetadata/helperoverlay matchcanonicalinvocation and features, includingnativefallback-test-bip84. NativeREGTEST/CHAIN_SOURCE=bitcoind; freshprivatecontext/stores, confirmedwatchfunding fromauthenticfixture.",
+    "Onlyrepository just int-binaries fromcanonicalcwd, exactliteralexpectedbinary, freshlistingunignoredsingleton1, defaultprofile180s/serial1/retries0. Do not extend deadlines or silentlyretry; firstFAIL stopsallocatedcohort and preserveoriginalreceipt+boundedreadonlyfinancialrecon before anynewaction.",
+    "Resourcegate >=12MiBfreeSHM/nootherownedPG, scopedprocessownership and postflight; useexistingcachedNix/toolchain withoutsharedtargetwritebytestingagent.",
+    "No knownv7/source-d05/nativec007 binary credit for thesenewbodies. Aftercompile, sourcebody+metadata+ELF provenance mustprove exactreviewedtarget; identicaltestname is insufficient."
+  ],
+  "CLN_preconditions": {
+    "applies_to": [
+      "failed_send_restart_v3",
+      "SDK_expired_new_LN_refusal_refresh"
+    ],
+    "native_version": "v26.06.6",
+    "native_path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+    "native_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+    "cln_grpc_plugin_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+    "hold_plugin_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+    "private_plugin_dir": "/fresh-cache/cln-adapter-evidence/plugins",
+    "environment": "Pin LIGHTNINGD_EXEC/LIGHTNINGD_PLUGIN_DIR; unset LIGHTNINGD_DOCKER_IMAGE. Fresh actualhash/version gate underrootruntimeallocation; sourceplanalone does not reverify futuretools."
+  },
+  "exclusions": [
+    "Root-owned internalrefund/sharedreplan/pre-obligation/defaultclientproduct fixes and their existingfixtures: do not duplicate code or launch withoutownercoordination.",
+    "Frozen oldqualification_conflict_reorg ef70 (supersededbyexternal15ec) and qualification_restore050535 oldlogicalbackup/clientDBcopydraft remainpreserved/excluded; ordinarycoldbackupsameCore alreadyqualifiedseparately.",
+    "Legacy/protectionexpected-redunsafecontract fixtures excluded. Only an explicitlyidentifiedmissingassertion can justify newowner-approvedwork; do not revive obsolete operatorpayment/fullprincipalrefresh expectation.",
+    "EarlieractualPASS+FAIL and source-onlypackets remainimmutable; no automaticfullML/productionadmission orfirstattemptnewpolicy/maliciouspayee workflow."
+  ],
+  "review_refs": {
+    "backend_current_intake": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/source-only-build-intake-backend.json",
+      "sha256": "a3a84aa2421f0a1ee14cc384c511d75263a608d0967625d927e70a6ad6c38eb2",
+      "historical_pin": "828863; currentstatus independentlyrecheckedhere"
+    },
+    "client_current_intake": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/source-only-build-intake-client.json",
+      "sha256": "c90480941224883eb260566565240343131b736c2751c3cd8cffe98d5a72d21c",
+      "historical_pin": "828863; not currentcompileproof"
+    }
+  },
+  "count_credit": 0
+}

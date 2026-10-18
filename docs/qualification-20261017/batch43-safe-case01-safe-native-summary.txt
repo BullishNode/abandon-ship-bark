@@ -1,0 +1,4 @@
+Nextest run ID ea55a215-31a1-4101-97e7-8502a4361ed0 with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+PASS [  25.427s] (1/1) ark-testing::barkd recovery::recovered_wallet_quarantines_invalid_spent_vtxos
+Summary [  25.431s] 1 test run: 1 passed, 650 skipped

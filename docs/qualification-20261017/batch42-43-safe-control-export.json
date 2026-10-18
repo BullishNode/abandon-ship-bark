@@ -1,0 +1,497 @@
+{
+  "state": "SAFE_CONTROL_EXPORTS_FROZEN_ONLY_NO_PUBLICATION",
+  "created_at": "2026-10-18T03:42:13.417685+00:00",
+  "directory": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint16-proposed-safe",
+  "exports": [
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/server-cohort.py",
+      "source_sha256": "504a68f859e4ea3b5a2c4f00cbd3984701fbd5da31cbe085d8b8afb6a9f77970",
+      "destination": "batch42-safe-server-cohort.py",
+      "destination_sha256": "504a68f859e4ea3b5a2c4f00cbd3984701fbd5da31cbe085d8b8afb6a9f77970",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/run.sh",
+      "source_sha256": "e40a0b894de7666b1be34335b134fe582c3b992852d93bf19a7ef616cb64b0b8",
+      "destination": "batch42-safe-run.sh",
+      "destination_sha256": "e40a0b894de7666b1be34335b134fe582c3b992852d93bf19a7ef616cb64b0b8",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/preflight.sh",
+      "source_sha256": "347cb1c36052be5c088b9fbdc28bf16961d31c8e33d4acb3f215cd16ee348bd0",
+      "destination": "batch42-safe-preflight.sh",
+      "destination_sha256": "347cb1c36052be5c088b9fbdc28bf16961d31c8e33d4acb3f215cd16ee348bd0",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/preflight-static.py",
+      "source_sha256": "19758c8ebecb9191c9126e4ab00c655bcbb4375961015e802954fb8b30a62593",
+      "destination": "batch42-safe-preflight-static.py",
+      "destination_sha256": "19758c8ebecb9191c9126e4ab00c655bcbb4375961015e802954fb8b30a62593",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/fresh-listings.py",
+      "source_sha256": "30defe2e6c90425c54d5d0b2fae9a3e7cad3a4a87f5349d72d22ea3df5b6e711",
+      "destination": "batch42-safe-fresh-listings.py",
+      "destination_sha256": "30defe2e6c90425c54d5d0b2fae9a3e7cad3a4a87f5349d72d22ea3df5b6e711",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/runtime-pins.sha256",
+      "source_sha256": "27a230e131ed5c0a01da27fced22243bf8d49e9bc0b2fbef2fc71c35d28342e4",
+      "destination": "batch42-safe-runtime-pins.sha256",
+      "destination_sha256": "27a230e131ed5c0a01da27fced22243bf8d49e9bc0b2fbef2fc71c35d28342e4",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/selection-proof.json",
+      "source_sha256": "6b704a51de04911e671df06e129e5871a8efbf0f88d1bdb6aa65cd26c914872a",
+      "destination": "batch42-safe-selection-proof.json",
+      "destination_sha256": "6b704a51de04911e671df06e129e5871a8efbf0f88d1bdb6aa65cd26c914872a",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/root-allocation.json",
+      "source_sha256": "97b24090420b2f0b0ccf0c530c5aef9080df87fc73235cf0bf970289db0fdf2a",
+      "destination": "batch42-safe-root-allocation.json",
+      "destination_sha256": "97b24090420b2f0b0ccf0c530c5aef9080df87fc73235cf0bf970289db0fdf2a",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/parent-launch-admission.json",
+      "source_sha256": "1e02608ddd6bb89095e4ca2d7c466549d4d034469d5887b813587767768c4a63",
+      "destination": "batch42-safe-parent-launch-admission.json",
+      "destination_sha256": "1e02608ddd6bb89095e4ca2d7c466549d4d034469d5887b813587767768c4a63",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/fresh-listing-admission.json",
+      "source_sha256": "08583760de6b72f0ac161d20adb06814efb533cbac39d920f3e478cb05deb2ca",
+      "destination": "batch42-safe-fresh-listing-admission.json",
+      "destination_sha256": "08583760de6b72f0ac161d20adb06814efb533cbac39d920f3e478cb05deb2ca",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/resource-admission.json",
+      "source_sha256": "6e38f4e0847fa7a6b15f864f3234ab4b732e3bab1de752a069bbae5877f17b09",
+      "destination": "batch42-safe-resource-admission.json",
+      "destination_sha256": "6e38f4e0847fa7a6b15f864f3234ab4b732e3bab1de752a069bbae5877f17b09",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/launch-authorization-pending.preserved.json",
+      "source_sha256": "493ff7e60fd086cbf24dfd9c390702365cde472bd48df7d390bc7ef97bacaf39",
+      "destination": "batch42-safe-launch-authorization-pending.preserved.json",
+      "destination_sha256": "493ff7e60fd086cbf24dfd9c390702365cde472bd48df7d390bc7ef97bacaf39",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/preflight-parent-final.log",
+      "source_sha256": "1eb4b13f8152d8067358e895182566dbd8f312b27d13dea98ec4444a87becfe2",
+      "destination": "batch42-safe-preflight-parent-final.log",
+      "destination_sha256": "1eb4b13f8152d8067358e895182566dbd8f312b27d13dea98ec4444a87becfe2",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case01/nextest.toml",
+      "source_sha256": "3b6c02bc4340d4477323c338619269cd0a996586d3906b9237924cb13d2777ed",
+      "destination": "batch42-safe-case01-nextest.toml",
+      "destination_sha256": "3b6c02bc4340d4477323c338619269cd0a996586d3906b9237924cb13d2777ed",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/nextest.toml",
+      "source_sha256": "a754073022c99a4876d2053fcb8c0b378ff855c58c3bbe54c32b87d22c82ab4a",
+      "destination": "batch42-safe-case02-nextest.toml",
+      "destination_sha256": "a754073022c99a4876d2053fcb8c0b378ff855c58c3bbe54c32b87d22c82ab4a",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case03/nextest.toml",
+      "source_sha256": "4af14bf0212c3ce688cc4f2112a5511a85b8a5ac8a42fddc8e4dfc2a44aa37f1",
+      "destination": "batch42-safe-case03-nextest.toml",
+      "destination_sha256": "4af14bf0212c3ce688cc4f2112a5511a85b8a5ac8a42fddc8e4dfc2a44aa37f1",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case04/nextest.toml",
+      "source_sha256": "6b87caa1aee3361ca554358724089537cd305754166c0f68b2c444c749250d3b",
+      "destination": "batch42-safe-case04-nextest.toml",
+      "destination_sha256": "6b87caa1aee3361ca554358724089537cd305754166c0f68b2c444c749250d3b",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case05/nextest.toml",
+      "source_sha256": "04eabfb8db1d8009cdb01b546e33ce741d8d43285a25360feb431a306a8bf185",
+      "destination": "batch42-safe-case05-nextest.toml",
+      "destination_sha256": "04eabfb8db1d8009cdb01b546e33ce741d8d43285a25360feb431a306a8bf185",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case06/nextest.toml",
+      "source_sha256": "90a2664c5bc11271b9f2e063adc1d62688b2facc14497cc2789dd4dfb08aacc5",
+      "destination": "batch42-safe-case06-nextest.toml",
+      "destination_sha256": "90a2664c5bc11271b9f2e063adc1d62688b2facc14497cc2789dd4dfb08aacc5",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case07/nextest.toml",
+      "source_sha256": "65653b55a7a4c07ae619b6154bfbac3e0f094f132404490c130e47b017c77592",
+      "destination": "batch42-safe-case07-nextest.toml",
+      "destination_sha256": "65653b55a7a4c07ae619b6154bfbac3e0f094f132404490c130e47b017c77592",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/nextest.toml",
+      "source_sha256": "9373e05af01382abb7da6148a87df1d67815834d7a67f38c9f93179a330ec6e5",
+      "destination": "batch42-safe-case08-nextest.toml",
+      "destination_sha256": "9373e05af01382abb7da6148a87df1d67815834d7a67f38c9f93179a330ec6e5",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case09/nextest.toml",
+      "source_sha256": "b33120e51c552fbc867d701a4428ced10ccee94912810507a47cbf75c8d055d9",
+      "destination": "batch42-safe-case09-nextest.toml",
+      "destination_sha256": "b33120e51c552fbc867d701a4428ced10ccee94912810507a47cbf75c8d055d9",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case10/nextest.toml",
+      "source_sha256": "ef1d70282a26de2699c11f8c7280ce299f67b90d62b816c40e0f18830add41a2",
+      "destination": "batch42-safe-case10-nextest.toml",
+      "destination_sha256": "ef1d70282a26de2699c11f8c7280ce299f67b90d62b816c40e0f18830add41a2",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case11/nextest.toml",
+      "source_sha256": "84f3d0e33dff1b7e41b998ca95e1fe887c30d766eaffe7ca3732214e3482c716",
+      "destination": "batch42-safe-case11-nextest.toml",
+      "destination_sha256": "84f3d0e33dff1b7e41b998ca95e1fe887c30d766eaffe7ca3732214e3482c716",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case12/nextest.toml",
+      "source_sha256": "ae64241ea6f758095f4cff8ab0393250b369c3a58b90676870012cf6285fff67",
+      "destination": "batch42-safe-case12-nextest.toml",
+      "destination_sha256": "ae64241ea6f758095f4cff8ab0393250b369c3a58b90676870012cf6285fff67",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/cohort-progress.json",
+      "source_sha256": "13d5a6ebdc1b0280121a0fea6c9a47ef54a6c3508c491885bcfcadfeaf868695",
+      "destination": "batch42-safe-cohort-progress.json",
+      "destination_sha256": "da8a6699fde9afc8187d7b10ad434a96efb8df7568a22d7534768c1173d86908",
+      "byte_equal": false,
+      "transform": "SAFE_JSON_PROJECTION_REMOVE_COMMAND_ARGV_ONLY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case01/nextest.log",
+      "source_sha256": "060930117f6c59e5cffb32ad4b68595f26236ecbf25505a6d2a368d5a8053b7b",
+      "destination": "batch42-safe-case01-safe-native-summary.txt",
+      "destination_sha256": "b88b26328a7de6d8d17a24035692bb7a173090f2e616924f48f10da4e438293b",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/nextest.log",
+      "source_sha256": "69e9fa380794bef261b5546b95ee856793455a5ffbda98c03170fe3ff8329501",
+      "destination": "batch42-safe-case02-safe-native-summary.txt",
+      "destination_sha256": "8655d9bd0016db7bc6b619e7825a6ee8fed302cdb330e795e994c4c3d485b225",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case03/nextest.log",
+      "source_sha256": "6a73fad5a58a378a20517e3f42d775fe23e674523b118e3c3f33a2e73c496e60",
+      "destination": "batch42-safe-case03-safe-native-summary.txt",
+      "destination_sha256": "5bb87860e16028664d7d481aee68e1beabdb750bb9ffd0595322ad020c47435b",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case04/nextest.log",
+      "source_sha256": "8e2870f6982eda20e880b9ecd6a8c9eac87e07a55ef32ac6d4ba45c860ab050c",
+      "destination": "batch42-safe-case04-safe-native-summary.txt",
+      "destination_sha256": "6eae346a956d05c6d9132bbc37ae070b339051618986794d60bf0105cc9930fd",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case05/nextest.log",
+      "source_sha256": "79e7171af26d22cffbf4a0e4e16396686091d4915163b2ec0ac12a85e3837242",
+      "destination": "batch42-safe-case05-safe-native-summary.txt",
+      "destination_sha256": "335a32ab619724da8763ed52dee2131101cd3ac3c87474eea0cce97ab9eff062",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case06/nextest.log",
+      "source_sha256": "8c3b343d1b0e2d7df0fed36895930eecfa10948d1f98e88e1ea44261e1c9b357",
+      "destination": "batch42-safe-case06-safe-native-summary.txt",
+      "destination_sha256": "c97a33b7529bded496ba143720f683373cf635875749d320d234256464a3b1ca",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case07/nextest.log",
+      "source_sha256": "663a6de59710eb60393eb79e79859610ff17d17928dd367f6d7019cd76defba1",
+      "destination": "batch42-safe-case07-safe-native-summary.txt",
+      "destination_sha256": "84fba855626fa94f4b299b529f35b59994acb892301d434bc88b049cc1122056",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/nextest.log",
+      "source_sha256": "8eeb38dcd670b679add26fdf597e756b3caf4fc8585e9dd74d05cf89a89dc1ec",
+      "destination": "batch42-safe-case08-safe-native-summary.txt",
+      "destination_sha256": "dc465e52d33a2802da183340e24b94f9dc57bb8fb105daa53f59679dc6e57111",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case09/nextest.log",
+      "source_sha256": "e2a9901f639aa6f8fbccf8d73415ba557cfd556baf593884d2728ffd4929861e",
+      "destination": "batch42-safe-case09-safe-native-summary.txt",
+      "destination_sha256": "e5307bf37ab8921d8d91581a020408676a0f76fb07b0b5a327a0b087a5f9c7e0",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case10/nextest.log",
+      "source_sha256": "3c9c6ecbcd1527a826dbb0c32deed9ecaa40741bfaddc32484fefd07a9de85c6",
+      "destination": "batch42-safe-case10-safe-native-summary.txt",
+      "destination_sha256": "ac08bed561c8a67a45d5bb70788036542d4c3c25af41f9aa4ae750b72d9cb1e3",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/server-cohort.py",
+      "source_sha256": "31545c01d2097553e62baaa1d09a046122ce1dcd0d5d9a2b5eb3faf8cc8f6d5e",
+      "destination": "batch43-safe-server-cohort.py",
+      "destination_sha256": "31545c01d2097553e62baaa1d09a046122ce1dcd0d5d9a2b5eb3faf8cc8f6d5e",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/run.sh",
+      "source_sha256": "54de404cd7bda8034582be17748782ff71493c8dc16fc828c634c169f5c94fa6",
+      "destination": "batch43-safe-run.sh",
+      "destination_sha256": "54de404cd7bda8034582be17748782ff71493c8dc16fc828c634c169f5c94fa6",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/preflight.sh",
+      "source_sha256": "51246e503189e7457b4c76f2242092b9f4a3170bc89124da0bbfd160c9d5d0b6",
+      "destination": "batch43-safe-preflight.sh",
+      "destination_sha256": "51246e503189e7457b4c76f2242092b9f4a3170bc89124da0bbfd160c9d5d0b6",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/preflight-static.py",
+      "source_sha256": "ac1cca7a1b6133c25e347b5e4fbdf5444d1668666f38a6693827afbd44c32a4f",
+      "destination": "batch43-safe-preflight-static.py",
+      "destination_sha256": "ac1cca7a1b6133c25e347b5e4fbdf5444d1668666f38a6693827afbd44c32a4f",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/fresh-listings.py",
+      "source_sha256": "468f31082797f1b1e0b5ffc715f52e5ed005bf927021165b5d1464f0d9539bfa",
+      "destination": "batch43-safe-fresh-listings.py",
+      "destination_sha256": "468f31082797f1b1e0b5ffc715f52e5ed005bf927021165b5d1464f0d9539bfa",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/runtime-pins.sha256",
+      "source_sha256": "27a230e131ed5c0a01da27fced22243bf8d49e9bc0b2fbef2fc71c35d28342e4",
+      "destination": "batch43-safe-runtime-pins.sha256",
+      "destination_sha256": "27a230e131ed5c0a01da27fced22243bf8d49e9bc0b2fbef2fc71c35d28342e4",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/selection-proof.json",
+      "source_sha256": "e67080a105fa88dee2f013b2c8a2d48c78d5c431975bf2759263c502eb6337af",
+      "destination": "batch43-safe-selection-proof.json",
+      "destination_sha256": "e67080a105fa88dee2f013b2c8a2d48c78d5c431975bf2759263c502eb6337af",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/root-allocation.json",
+      "source_sha256": "2322f04380ff60582baf03d0bfa1ae1918dbf524c1880c499e9f1916ff5286a2",
+      "destination": "batch43-safe-root-allocation.json",
+      "destination_sha256": "2322f04380ff60582baf03d0bfa1ae1918dbf524c1880c499e9f1916ff5286a2",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/parent-launch-admission.json",
+      "source_sha256": "dd1acb8c9bd28a86f0b975d023bebfad7d2077d59bafa2a8b00a7dccfb4ad96f",
+      "destination": "batch43-safe-parent-launch-admission.json",
+      "destination_sha256": "dd1acb8c9bd28a86f0b975d023bebfad7d2077d59bafa2a8b00a7dccfb4ad96f",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/fresh-listing-admission.json",
+      "source_sha256": "9bfebe63e1abac43d6c09c4bf9bda2701e42e685a2067cca00ea861f365677bb",
+      "destination": "batch43-safe-fresh-listing-admission.json",
+      "destination_sha256": "9bfebe63e1abac43d6c09c4bf9bda2701e42e685a2067cca00ea861f365677bb",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/resource-admission.json",
+      "source_sha256": "3119a47d8615867eed02c669d829f60da657b1e1d18adc39ffbcc793c0932db6",
+      "destination": "batch43-safe-resource-admission.json",
+      "destination_sha256": "3119a47d8615867eed02c669d829f60da657b1e1d18adc39ffbcc793c0932db6",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/launch-authorization-pending.preserved.json",
+      "source_sha256": "e22af4a3088eb228386ddc3384d5f3e7433ce0282c1f858af01e84e57b6dbf84",
+      "destination": "batch43-safe-launch-authorization-pending.preserved.json",
+      "destination_sha256": "e22af4a3088eb228386ddc3384d5f3e7433ce0282c1f858af01e84e57b6dbf84",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/preflight-parent-final.log",
+      "source_sha256": "1eb4b13f8152d8067358e895182566dbd8f312b27d13dea98ec4444a87becfe2",
+      "destination": "batch43-safe-preflight-parent-final.log",
+      "destination_sha256": "1eb4b13f8152d8067358e895182566dbd8f312b27d13dea98ec4444a87becfe2",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/case01/nextest.toml",
+      "source_sha256": "2e36fa8eba62c1b8266cea3e97b5a2c5d3a955ed39b44604ea880c7b7f6ebb2d",
+      "destination": "batch43-safe-case01-nextest.toml",
+      "destination_sha256": "2e36fa8eba62c1b8266cea3e97b5a2c5d3a955ed39b44604ea880c7b7f6ebb2d",
+      "byte_equal": true,
+      "transform": "BYTE_EXACT_ALLOWLIST_COPY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/cohort-progress.json",
+      "source_sha256": "c06a732bb521b1f5421c6fdb7dd675fe0cbdc6e7347fc744a1ebdddb744cec49",
+      "destination": "batch43-safe-cohort-progress.json",
+      "destination_sha256": "561cd2f1dabbc32320fe32134049b4e522fcf1636f15914198d28dd1c6b7e903",
+      "byte_equal": false,
+      "transform": "SAFE_JSON_PROJECTION_REMOVE_COMMAND_ARGV_ONLY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/cohort-summary.json",
+      "source_sha256": "6d0878586835575d7b3b5883ff0ac39863a750f2322954ec522947171b4e9e1a",
+      "destination": "batch43-safe-cohort-summary.json",
+      "destination_sha256": "f07d4d7652d077d2fa16d9889e2793dd1faaaacbb2e885aa11fc90a2bde49780",
+      "byte_equal": false,
+      "transform": "SAFE_JSON_PROJECTION_REMOVE_COMMAND_ARGV_ONLY"
+    },
+    {
+      "source": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch43-quarantine-v8e/case01/nextest.log",
+      "source_sha256": "bf4a37a63b8863c338a7d719dc7983a8711e07b0643e85a88935e3fb5f42602b",
+      "destination": "batch43-safe-case01-safe-native-summary.txt",
+      "destination_sha256": "f7a6f70cece1251185a5e217cf4808c5f2500751e264cb5e8a48ed1ae163089c",
+      "byte_equal": false,
+      "transform": "BOUNDED_SAFE_LINE_PROJECTION_AND_KNOWN_PUBLIC_CASE10_ASSERTION"
+    }
+  ],
+  "export_count": 53,
+  "allowlist": {
+    "tiny_controls_per_batch": [
+      "server-cohort.py",
+      "run.sh",
+      "preflight.sh",
+      "preflight-static.py",
+      "fresh-listings.py",
+      "runtime-pins.sha256",
+      "selection-proof.json",
+      "root-allocation.json",
+      "parent-launch-admission.json",
+      "fresh-listing-admission.json",
+      "resource-admission.json",
+      "launch-authorization-pending.preserved.json",
+      "preflight-parent-final.log"
+    ],
+    "profiles": "All12 batch42 profiles and one batch43, flat names only",
+    "cohort_json": "Safe progress both; summary43 only. Command argv fields removed. No summary42 invented.",
+    "native_summaries": "Exact runID, selectionheader, expectedbinary-bound status, elapsedsummary; known publiccase10 location/enums/ID only."
+  },
+  "preservation_checks": [
+    {
+      "batch": "batch42-ordinary-twelve-v8",
+      "frozen_control_count": 22,
+      "frozen_hashes_before_after_unchanged": true,
+      "actual_runtime_pin_count": 14,
+      "actual_runtime_pins_before_after_unchanged": true,
+      "safe_native_summary_count": 10
+    },
+    {
+      "batch": "batch43-quarantine-v8e",
+      "frozen_control_count": 11,
+      "frozen_hashes_before_after_unchanged": true,
+      "actual_runtime_pin_count": 14,
+      "actual_runtime_pins_before_after_unchanged": true,
+      "safe_native_summary_count": 1
+    }
+  ],
+  "syntax_validation": {
+    "python_AST": 6,
+    "bash_n": 4,
+    "TOML": 13,
+    "JSON": 15
+  },
+  "secret_scan": {
+    "state": "PASS",
+    "private_key_PEM_and_high_entropy_secret_assignment_findings": 0,
+    "valid_English_BIP39_phrase_findings": 0,
+    "BIP39_checksum_validation": true,
+    "wordlist_sha256": "3f4d2e39891d12d8193741c68663d29f568606cec65c864eff7e3231f0d29693",
+    "raw_secret_values_printed": false
+  },
+  "excluded": [
+    "raw nextest/wallet logs",
+    "private configs/env",
+    "wallet/financial DBs",
+    "keys/seeds",
+    "source patches",
+    "raw argv command journals",
+    "decoder/helper source"
+  ],
+  "prior_publication_payloads": "Not opened or modified",
+  "source_mutations": false,
+  "native_or_Cargo_actions": false,
+  "parent_next_step": "Parent may add separately reviewed reports/global snapshot; no public Git action by this export task."
+}

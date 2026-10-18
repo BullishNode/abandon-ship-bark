@@ -1,0 +1,332 @@
+{
+  "kind": "BATCH42_CASE10_IMMUTABLE_PUBLIC_LEDGER_DIAGNOSTIC",
+  "at": "2026-10-17T23:18:21.848251+00:00",
+  "result": "ACTUAL_NATIVE_FAIL_PRESERVED_CURRENT_SPENDABLE_CUT_MATCHES",
+  "run_id": "15eac100-bf66-4630-b810-edcc7f433046",
+  "native_seconds": 35.103,
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "archived_source_hashes": {
+    "testing/tests/barkd/recovery.rs": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+    "lib/src/vtxo/mod.rs": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+    "lib/src/encode.rs": "a0312513dd851e22e2b638582e048eb2a3e353fe2cfd4ec64faa4b9d7506cd1f"
+  },
+  "postflight_receipt_sha256": "3cc5c2a7d826772cd2daa4ce881f14572b32b9bc60d3550266dfc3ab305dab95",
+  "actors": {
+    "bark": {
+      "db_sha256_before_after": "a79fa489f56208711e8a40cee56a7484c4b08e69884d7e1494354a163b782586",
+      "no_WAL_or_SHM_sidecars": true,
+      "vtxos": [
+        {
+          "id": "21f4748f6735db52bf6940aa8f12d77425e8aa279315f3e0a2de93ffd3fec785:0",
+          "amount_sat": 50000,
+          "expiry_height": 557,
+          "chain_anchor": "47195ff07c64747cc8255d9a7550004ad4f7273e3d6dd6c8722cf2af04e936fd:0",
+          "state_history": [
+            "Spendable"
+          ],
+          "latest_state": "Spendable",
+          "raw_bare_sha256": "eb217ebee393a3c4921aab117855b5117d4969991539e0da7e1d441af4355dfb",
+          "raw_genesis_sha256": "d347991023dd83447f19e2ebaa154339ec54c33bab35db5115c89de50b17bf8a",
+          "raw_genesis_bytes": 511,
+          "genesis_transition_count": 3
+        },
+        {
+          "id": "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0",
+          "amount_sat": 300000,
+          "expiry_height": 542,
+          "chain_anchor": "cfd157ccb5a784033a18f00e667b301a9d529fcf0c5568226489144a8159d48f:0",
+          "state_history": [
+            "Locked",
+            "Spendable",
+            "Locked",
+            "Spent"
+          ],
+          "latest_state": "Spent",
+          "raw_bare_sha256": "1ba70bb43b45800b8ba8958b01ccdf2da062ff94b8991d05c98d73ffd4a7d3bc",
+          "raw_genesis_sha256": "e9991bbda5838087d27c9a23d2c5b8b9431a6acaee674c3185cbb42259e0829c",
+          "raw_genesis_bytes": 143,
+          "genesis_transition_count": 1
+        },
+        {
+          "id": "638264abe5804ddf431aac71868878d3f3f0abe734d72f7c36491bfd5ea8143c:0",
+          "amount_sat": 300000,
+          "expiry_height": 549,
+          "chain_anchor": "ec18eedf4efb97f41a85751abd1582777e75f35e77941643019dd8997f53107d:0",
+          "state_history": [
+            "Spendable"
+          ],
+          "latest_state": "Spendable",
+          "raw_bare_sha256": "02039dc61abe988b26a9fa6f780d7c36230b90db23b64cbc80e7b8d59b7bc088",
+          "raw_genesis_sha256": "e307361aa005b6da508bd25f14c2f8cf6f79297edae81cf8177058a896e99fd1",
+          "raw_genesis_bytes": 327,
+          "genesis_transition_count": 2
+        },
+        {
+          "id": "9f41947f95abaa81548e1cd08f7523bc183e1792c0bfb7a47c5d1db45896c4b0:0",
+          "amount_sat": 299392,
+          "expiry_height": 538,
+          "chain_anchor": "06b46b96bae59c8b1f3a1fd3e26acbdc8556ff948d0068678e03f640055c0eba:0",
+          "state_history": [
+            "Locked",
+            "Spendable"
+          ],
+          "latest_state": "Spendable",
+          "raw_bare_sha256": "10972d089c23fb1a9861d43536722bbf531ce4187e7140bd14f76d7ed310ab2e",
+          "raw_genesis_sha256": "c8619e2a1de1c86c98c5499b852c8960c3d699e6683e66e9638588788f81fc14",
+          "raw_genesis_bytes": 143,
+          "genesis_transition_count": 1
+        }
+      ],
+      "public_movements": [
+        {
+          "id": 1,
+          "status": "successful",
+          "subsystem": "bark.board",
+          "kind": "board",
+          "intended_balance": 299392,
+          "effective_balance": 299392,
+          "offchain_fee": 0
+        },
+        {
+          "id": 2,
+          "status": "successful",
+          "subsystem": "bark.board",
+          "kind": "board",
+          "intended_balance": 300000,
+          "effective_balance": 300000,
+          "offchain_fee": 0
+        },
+        {
+          "id": 3,
+          "status": "successful",
+          "subsystem": "bark.round",
+          "kind": "refresh",
+          "intended_balance": 0,
+          "effective_balance": 0,
+          "offchain_fee": 0
+        },
+        {
+          "id": 4,
+          "status": "successful",
+          "subsystem": "bark.arkoor",
+          "kind": "receive",
+          "intended_balance": 50000,
+          "effective_balance": 50000,
+          "offchain_fee": 0
+        }
+      ],
+      "movement_inputs": [
+        [
+          3,
+          "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0"
+        ]
+      ],
+      "movement_outputs": [
+        [
+          1,
+          "9f41947f95abaa81548e1cd08f7523bc183e1792c0bfb7a47c5d1db45896c4b0:0"
+        ],
+        [
+          2,
+          "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0"
+        ],
+        [
+          3,
+          "638264abe5804ddf431aac71868878d3f3f0abe734d72f7c36491bfd5ea8143c:0"
+        ],
+        [
+          4,
+          "21f4748f6735db52bf6940aa8f12d77425e8aa279315f3e0a2de93ffd3fec785:0"
+        ]
+      ]
+    },
+    "bark_recovered": {
+      "db_sha256_before_after": "cf4ac0315a24907eb69784f76f00f94cb147c9e76b80ac514064293430124164",
+      "no_WAL_or_SHM_sidecars": true,
+      "vtxos": [
+        {
+          "id": "21f4748f6735db52bf6940aa8f12d77425e8aa279315f3e0a2de93ffd3fec785:0",
+          "amount_sat": 50000,
+          "expiry_height": 557,
+          "chain_anchor": "47195ff07c64747cc8255d9a7550004ad4f7273e3d6dd6c8722cf2af04e936fd:0",
+          "state_history": [
+            "Spendable"
+          ],
+          "latest_state": "Spendable",
+          "raw_bare_sha256": "eb217ebee393a3c4921aab117855b5117d4969991539e0da7e1d441af4355dfb",
+          "raw_genesis_sha256": "d347991023dd83447f19e2ebaa154339ec54c33bab35db5115c89de50b17bf8a",
+          "raw_genesis_bytes": 511,
+          "genesis_transition_count": 3
+        },
+        {
+          "id": "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0",
+          "amount_sat": 300000,
+          "expiry_height": 542,
+          "chain_anchor": "cfd157ccb5a784033a18f00e667b301a9d529fcf0c5568226489144a8159d48f:0",
+          "state_history": [
+            "Locked"
+          ],
+          "latest_state": "Locked",
+          "raw_bare_sha256": "1ba70bb43b45800b8ba8958b01ccdf2da062ff94b8991d05c98d73ffd4a7d3bc",
+          "raw_genesis_sha256": "e9991bbda5838087d27c9a23d2c5b8b9431a6acaee674c3185cbb42259e0829c",
+          "raw_genesis_bytes": 143,
+          "genesis_transition_count": 1
+        },
+        {
+          "id": "638264abe5804ddf431aac71868878d3f3f0abe734d72f7c36491bfd5ea8143c:0",
+          "amount_sat": 300000,
+          "expiry_height": 549,
+          "chain_anchor": "ec18eedf4efb97f41a85751abd1582777e75f35e77941643019dd8997f53107d:0",
+          "state_history": [
+            "Spendable"
+          ],
+          "latest_state": "Spendable",
+          "raw_bare_sha256": "02039dc61abe988b26a9fa6f780d7c36230b90db23b64cbc80e7b8d59b7bc088",
+          "raw_genesis_sha256": "e307361aa005b6da508bd25f14c2f8cf6f79297edae81cf8177058a896e99fd1",
+          "raw_genesis_bytes": 327,
+          "genesis_transition_count": 2
+        },
+        {
+          "id": "9f41947f95abaa81548e1cd08f7523bc183e1792c0bfb7a47c5d1db45896c4b0:0",
+          "amount_sat": 299392,
+          "expiry_height": 538,
+          "chain_anchor": "06b46b96bae59c8b1f3a1fd3e26acbdc8556ff948d0068678e03f640055c0eba:0",
+          "state_history": [
+            "Spendable"
+          ],
+          "latest_state": "Spendable",
+          "raw_bare_sha256": "10972d089c23fb1a9861d43536722bbf531ce4187e7140bd14f76d7ed310ab2e",
+          "raw_genesis_sha256": "c8619e2a1de1c86c98c5499b852c8960c3d699e6683e66e9638588788f81fc14",
+          "raw_genesis_bytes": 143,
+          "genesis_transition_count": 1
+        }
+      ],
+      "public_movements": [],
+      "movement_inputs": [],
+      "movement_outputs": []
+    },
+    "sender": {
+      "db_sha256_before_after": "65d9b8cc93f0f2e308a26de119bbd30147142e45e0fb983e3ba00744a7637e09",
+      "no_WAL_or_SHM_sidecars": true,
+      "vtxos": [
+        {
+          "id": "59797379ed9ad054c177392bcbc85c77a897b1f856cf54785833b67e16290d1a:0",
+          "amount_sat": 499392,
+          "expiry_height": 557,
+          "chain_anchor": "47195ff07c64747cc8255d9a7550004ad4f7273e3d6dd6c8722cf2af04e936fd:0",
+          "state_history": [
+            "Locked",
+            "Spendable",
+            "Locked",
+            "Spent"
+          ],
+          "latest_state": "Spent",
+          "raw_bare_sha256": "de3b579a2553ebbadf84a8e3199fb44bfccb9a2642c336b5be66898da507e8fd",
+          "raw_genesis_sha256": "ef2aa76c21243e386991491ec81156185ddc98ab29568b7d59f1f821b3b1b3d2",
+          "raw_genesis_bytes": 143,
+          "genesis_transition_count": 1
+        },
+        {
+          "id": "dc0a13259b1de7d7ba35aa5a36be7d9ad8a4b4e2779ea384466c2de1a1f2c400:0",
+          "amount_sat": 224696,
+          "expiry_height": 557,
+          "chain_anchor": "47195ff07c64747cc8255d9a7550004ad4f7273e3d6dd6c8722cf2af04e936fd:0",
+          "state_history": [
+            "Spendable"
+          ],
+          "latest_state": "Spendable",
+          "raw_bare_sha256": "450832a12cd6511ccc52a370da1f099ea2d86836c90af831252c9e5430b91a15",
+          "raw_genesis_sha256": "e31a89eda624cda098ce0ad28a3bfa4a12ba6c328955ee783ee6cc4362d56d1a",
+          "raw_genesis_bytes": 511,
+          "genesis_transition_count": 3
+        },
+        {
+          "id": "e9a3d566663fc0e0290e4d3d453f564e36be626bfa4a06df580a603ce00d3728:0",
+          "amount_sat": 224696,
+          "expiry_height": 557,
+          "chain_anchor": "47195ff07c64747cc8255d9a7550004ad4f7273e3d6dd6c8722cf2af04e936fd:0",
+          "state_history": [
+            "Spendable"
+          ],
+          "latest_state": "Spendable",
+          "raw_bare_sha256": "a07bb72b12510ef1f39fb040e6d5fbff5029e07c2501d3525e4573f6354d871b",
+          "raw_genesis_sha256": "89f1af364f35e2ef36df3be790469eee63d8d5ac7b2cbfad6cd67bf4f735205f",
+          "raw_genesis_bytes": 511,
+          "genesis_transition_count": 3
+        }
+      ],
+      "public_movements": [
+        {
+          "id": 1,
+          "status": "successful",
+          "subsystem": "bark.board",
+          "kind": "board",
+          "intended_balance": 499392,
+          "effective_balance": 499392,
+          "offchain_fee": 0
+        },
+        {
+          "id": 2,
+          "status": "successful",
+          "subsystem": "bark.arkoor",
+          "kind": "send",
+          "intended_balance": -50000,
+          "effective_balance": -50000,
+          "offchain_fee": 0
+        }
+      ],
+      "movement_inputs": [
+        [
+          2,
+          "59797379ed9ad054c177392bcbc85c77a897b1f856cf54785833b67e16290d1a:0"
+        ]
+      ],
+      "movement_outputs": [
+        [
+          1,
+          "59797379ed9ad054c177392bcbc85c77a897b1f856cf54785833b67e16290d1a:0"
+        ],
+        [
+          2,
+          "dc0a13259b1de7d7ba35aa5a36be7d9ad8a4b4e2779ea384466c2de1a1f2c400:0"
+        ],
+        [
+          2,
+          "e9a3d566663fc0e0290e4d3d453f564e36be626bfa4a06df580a603ce00d3728:0"
+        ]
+      ]
+    }
+  },
+  "observed": {
+    "failed_id": "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0",
+    "exact_second_board_from_movement2": true,
+    "successful_zero_fee_round_refresh_movement3_consumes_old_and_creates": "638264abe5804ddf431aac71868878d3f3f0abe734d72f7c36491bfd5ea8143c:0",
+    "old_latest_original": "Spent",
+    "old_latest_recovered": "Locked",
+    "old_anchor": "cfd157ccb5a784033a18f00e667b301a9d529fcf0c5568226489144a8159d48f:0",
+    "round_anchor": "ec18eedf4efb97f41a85751abd1582777e75f35e77941643019dd8997f53107d:0",
+    "anchors_differ": true,
+    "no_other_restored_body_shares_old_anchor": true,
+    "all4_original_restored_public_body_pairs_byte_identical": true,
+    "current_spendable_ids_identical": [
+      "21f4748f6735db52bf6940aa8f12d77425e8aa279315f3e0a2de93ffd3fec785:0",
+      "638264abe5804ddf431aac71868878d3f3f0abe734d72f7c36491bfd5ea8143c:0",
+      "9f41947f95abaa81548e1cd08f7523bc183e1792c0bfb7a47c5d1db45896c4b0:0"
+    ],
+    "current_spendable_sum_each_sat": 649392,
+    "recovered_movement_count": 0,
+    "recipient_creation_source_unreached_and_directory_absent": true
+  },
+  "inference": {
+    "narrow_fixture_policy_conflict": "The helper globally requires Spent for every nonspendable ancestor. Observed failed ancestor is a cross-anchor round retirement; current source ordinary-spend proof supports same-anchor two-step Arkoor successors. These retained bodies contain no same-anchor successor candidate for this ancestor. This supports specific ancestor classification, not globally accepting Locked.",
+    "money_scope": "Same current economic cut observed twice, not additive; no recovered send occurred before panic. No loss observed in this retained offchain cut; no final spend/recipient/Coreconfirmation lifecycle credit."
+  },
+  "decoder_scope": "Only archived version2 bare header/point/anchor and first compact-size genesis count decoded; no secp256k1 validation, transaction reconstruction, or independent discharge-signature validity claim. Public body hashes retained, no raw body exported.",
+  "limits": [
+    "Original native FAIL stays FAIL; held round case is source-predicted only and NOT RUN.",
+    "Shared helper and genuine same-anchor Arkoor Spent control must remain strict.",
+    "No server DB, RPC, Core, service, private seed/key/config/token/property reads. SQLite immutable read-only only public VTXO/state/movement fields.",
+    "All3 SQLite hashes unchanged; no sidecars; actors absent from prior postflight.",
+    "No fixture edits, retry, compiler, Cargo, listing, controller, signal or runtime actions."
+  ]
+}

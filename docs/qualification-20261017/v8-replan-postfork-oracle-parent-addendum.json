@@ -1,0 +1,24 @@
+{
+  "created_at": "2026-10-17T22:50:33.653944+00:00",
+  "kind": "READ_ONLY_POSTFORK_ORACLE_SCOPE_ADDENDUM",
+  "source_path": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/expiry_internal_replan.rs",
+  "source_sha256": "29827e262621dc703690f72adcea07daa83639018439454a01208e73a7414293",
+  "scope": "Test-oracle coverage only; no observed product failure, no reproduction or runtime action.",
+  "backend_source_review": "v8-feechild-reorg-source-review.json",
+  "backend_source_review_sha256": "9adbb6f8534f0146c4f11bdc73b51401f3d3972ea11222340e434b4160e4b91c",
+  "finding": {
+    "lines": [
+      343,
+      366
+    ],
+    "count_query": "Counts confirmed allocations across all allocation_coin rows for each original source, without requiring c.active.",
+    "confirmation_query": "Checks Core6 for DISTINCT active confirmed parents, but does not require that result covers both original sources or is nonempty.",
+    "conditional_false_positive": "If ledger inconsistency leaves exactly one inactive confirmed historical allocation per source and no active confirmed allocation, the first query can set ready=true while the Core6 loop runs zero times. This review does not establish that the product can create that state.",
+    "additional_missing_money_oracles": "Final canonical set is not independently rechecked for exact net payout/per-actual-output fee, zero parent fee, every original source grant dependency or absence of the recipient fallback output, unlike the pre-fork set.",
+    "recommended_evidence": "Require complete exact active canonical coverage of both original source IDs, then check actual current canonical parent inputs/outputs and source-specific grant bindings. Permit the declared valid C9 grouping rather than forcing an old physical allocation. Independent retained-chain reconciliation can close factual money evidence for an observed run, without converting the source test into full general coverage.",
+    "does_not_authorize": "No test weakening, deadline extension, SQL financial state injection, native rerun, source mutation or historical failure reclassification."
+  },
+  "mutations": "Only this external source-review addendum; frozen source/publication/counters unchanged.",
+  "native_executions": 0,
+  "new_full_ML_credit": 0
+}

@@ -1,0 +1,101 @@
+{
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch42-ordinary-twelve-v8",
+  "at": "2026-10-17T23:06:19.298886+00:00",
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "expected_selection": [
+    [
+      "ark-testing::bark",
+      "onchain::list_utxos"
+    ],
+    [
+      "ark-testing::bark",
+      "onchain::onchain_drain"
+    ],
+    [
+      "ark-testing::bark",
+      "movement::board_board"
+    ],
+    [
+      "ark-testing::bark",
+      "movement::movement_offboard"
+    ],
+    [
+      "ark-testing::bark",
+      "movement::movement_send_onchain"
+    ],
+    [
+      "ark-testing::bark",
+      "offboard::bark_send_onchain"
+    ],
+    [
+      "ark-testing::bark",
+      "offboard::bark_rejects_offboarding_dust_amount"
+    ],
+    [
+      "ark-testing::barkd",
+      "boards::board_all_barkd"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_boarded_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_mixed_origin_vtxos"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_round_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ]
+  ],
+  "sha256": {
+    "selection-proof.json": "6b704a51de04911e671df06e129e5871a8efbf0f88d1bdb6aa65cd26c914872a",
+    "root-allocation.json": "97b24090420b2f0b0ccf0c530c5aef9080df87fc73235cf0bf970289db0fdf2a",
+    "runtime-pins.sha256": "27a230e131ed5c0a01da27fced22243bf8d49e9bc0b2fbef2fc71c35d28342e4",
+    "server-cohort.py": "504a68f859e4ea3b5a2c4f00cbd3984701fbd5da31cbe085d8b8afb6a9f77970",
+    "preflight-static.py": "19758c8ebecb9191c9126e4ab00c655bcbb4375961015e802954fb8b30a62593",
+    "fresh-listings.py": "30defe2e6c90425c54d5d0b2fae9a3e7cad3a4a87f5349d72d22ea3df5b6e711",
+    "preflight.sh": "347cb1c36052be5c088b9fbdc28bf16961d31c8e33d4acb3f215cd16ee348bd0",
+    "run.sh": "e40a0b894de7666b1be34335b134fe582c3b992852d93bf19a7ef616cb64b0b8",
+    "case01/nextest.toml": "3b6c02bc4340d4477323c338619269cd0a996586d3906b9237924cb13d2777ed",
+    "case02/nextest.toml": "a754073022c99a4876d2053fcb8c0b378ff855c58c3bbe54c32b87d22c82ab4a",
+    "case03/nextest.toml": "4af14bf0212c3ce688cc4f2112a5511a85b8a5ac8a42fddc8e4dfc2a44aa37f1",
+    "case04/nextest.toml": "6b87caa1aee3361ca554358724089537cd305754166c0f68b2c444c749250d3b",
+    "case05/nextest.toml": "04eabfb8db1d8009cdb01b546e33ce741d8d43285a25360feb431a306a8bf185",
+    "case06/nextest.toml": "90a2664c5bc11271b9f2e063adc1d62688b2facc14497cc2789dd4dfb08aacc5",
+    "case07/nextest.toml": "65653b55a7a4c07ae619b6154bfbac3e0f094f132404490c130e47b017c77592",
+    "case08/nextest.toml": "9373e05af01382abb7da6148a87df1d67815834d7a67f38c9f93179a330ec6e5",
+    "case09/nextest.toml": "b33120e51c552fbc867d701a4428ced10ccee94912810507a47cbf75c8d055d9",
+    "case10/nextest.toml": "ef1d70282a26de2699c11f8c7280ce299f67b90d62b816c40e0f18830add41a2",
+    "case11/nextest.toml": "84f3d0e33dff1b7e41b998ca95e1fe887c30d766eaffe7ca3732214e3482c716",
+    "case12/nextest.toml": "ae64241ea6f758095f4cff8ab0393250b369c3a58b90676870012cf6285fff67",
+    "fresh-listing-admission.json": "08583760de6b72f0ac161d20adb06814efb533cbac39d920f3e478cb05deb2ca",
+    "resource-admission.json": "6e38f4e0847fa7a6b15f864f3234ab4b732e3bab1de752a069bbae5877f17b09"
+  },
+  "parent_independent_checks": {
+    "captured_archive_entries": 1616,
+    "archive_regular_entries": 1615,
+    "AGENTS_symlink_to_CLAUDE_content_verified": true,
+    "all_captured_manifest_content_hashes_match": true,
+    "all5_reviewed_files_exact": true,
+    "all8_actual_ELF_hashes_match": true,
+    "runtime_overlay_only3_immutable_support_path_changes": true,
+    "support_hashes_match": true,
+    "actual_cached_Nix": "impure/rustc1.90.0/Core31.0.0/just1.51.0",
+    "preflight_parent_exec_session": 90066,
+    "preflight_parent_terminal_exit": 0,
+    "preflight_log_sha256": "1eb4b13f8152d8067358e895182566dbd8f312b27d13dea98ec4444a87becfe2",
+    "fresh_exact_unignored_singleton_listings": 12,
+    "all12_default_profiles": "60s x3 =180s; retries0",
+    "pending_source_control_issue_fixed_before_any_preflight": "5697b28177b5552691b5428a037aa482fb354c82b75f94494a136d56b44d940d",
+    "independent_peer_review": "53aeeb9ec2f07f49105873d8aac85b5d9cf6c1a06b76bc858bd0fc726aaeba33"
+  },
+  "limits": "Exactly allocated12 sequential default180/retries0 firstFAIL. No Cargo/target writes, extra cases or readiness promotion."
+}

@@ -1,0 +1,192 @@
+{
+  "state": "ROOT_ALLOCATED_ONCE_PENDING_PARENT_LAUNCH",
+  "batch": "batch42-ordinary-twelve-v8",
+  "candidate_ready": true,
+  "execution_authorized": true,
+  "candidate_hint": {
+    "runtime_directory": "/fresh-cache/runtime-reorg-admission-v8e-20261017",
+    "capture_label": "v8e",
+    "head": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+    "pins_verified": 14,
+    "source_archive_matches_5_reviewed_files": true
+  },
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "metadata_path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/nextest-binaries-runtime.json",
+  "actual_bark_version": "bark 0.7.1-dev (f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0)",
+  "expected_names_in_execution_order": [
+    "onchain::list_utxos",
+    "onchain::onchain_drain",
+    "movement::board_board",
+    "movement::movement_offboard",
+    "movement::movement_send_onchain",
+    "offboard::bark_send_onchain",
+    "offboard::bark_rejects_offboarding_dust_amount",
+    "boards::board_all_barkd",
+    "recovery::recovered_wallet_finds_boarded_vtxo",
+    "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "recovery::recovered_wallet_finds_round_vtxo",
+    "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::bark",
+    "ark-testing::bark",
+    "ark-testing::bark",
+    "ark-testing::bark",
+    "ark-testing::bark",
+    "ark-testing::bark",
+    "ark-testing::bark",
+    "ark-testing::barkd",
+    "ark-testing::barkd",
+    "ark-testing::barkd",
+    "ark-testing::barkd",
+    "ark-testing::barkd"
+  ],
+  "expected_selection": [
+    [
+      "ark-testing::bark",
+      "onchain::list_utxos"
+    ],
+    [
+      "ark-testing::bark",
+      "onchain::onchain_drain"
+    ],
+    [
+      "ark-testing::bark",
+      "movement::board_board"
+    ],
+    [
+      "ark-testing::bark",
+      "movement::movement_offboard"
+    ],
+    [
+      "ark-testing::bark",
+      "movement::movement_send_onchain"
+    ],
+    [
+      "ark-testing::bark",
+      "offboard::bark_send_onchain"
+    ],
+    [
+      "ark-testing::bark",
+      "offboard::bark_rejects_offboarding_dust_amount"
+    ],
+    [
+      "ark-testing::barkd",
+      "boards::board_all_barkd"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_boarded_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_mixed_origin_vtxos"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_finds_round_vtxo"
+    ],
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ]
+  ],
+  "expected_ignored": false,
+  "run_ignored": null,
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "maximum_case_executions": 12,
+  "root_authorization": {
+    "packet": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/v8e-ordinary-twelve-root-allocation.json",
+    "sha256": "97b24090420b2f0b0ccf0c530c5aef9080df87fc73235cf0bf970289db0fdf2a",
+    "state": "AUTHORIZED_EXTERNAL_ORDINARY12_SERIAL_LANE2_AFTER_OWN_PREFLIGHT",
+    "global_max_concurrent_native": 2,
+    "serial": 1,
+    "native_launch_owner": "parentonlyafterownpreflight+freshlisting+finalhashadmission"
+  },
+  "immutable_plan": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v8-ordinary-twelve-selection-plan.json",
+    "sha256": "bef0af66394f3839eabad46f422ee39f2ad94c9cd03ddfd5857bc058bcfc83c8"
+  },
+  "source_functions": [
+    {
+      "test_name": "onchain::list_utxos",
+      "path": "testing/tests/bark/onchain.rs",
+      "sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "target_body_sha256": "2ea3d73dbdf39828a110df07e025db31b206bfa1b0ad349fe515c3fb4495b53e"
+    },
+    {
+      "test_name": "onchain::onchain_drain",
+      "path": "testing/tests/bark/onchain.rs",
+      "sha256": "6f15458c909e645642321862d5e7c85e8efcd2959ffa42793adfb69b3b64805d",
+      "target_body_sha256": "9985bf9862fcdfdfb385bf74628fa86a8e94d469d7954a81c35571c5ef66e7d1"
+    },
+    {
+      "test_name": "movement::board_board",
+      "path": "testing/tests/bark/movement.rs",
+      "sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "c35fb82d976c5d637e682458b9717005bedfad803da62688409f2d77bcf80c25"
+    },
+    {
+      "test_name": "movement::movement_offboard",
+      "path": "testing/tests/bark/movement.rs",
+      "sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "ae0362fab02066be397fa84755d044f8c5bf570b48585a0667a1169c56856693"
+    },
+    {
+      "test_name": "movement::movement_send_onchain",
+      "path": "testing/tests/bark/movement.rs",
+      "sha256": "6261d2c78e530f4b872202619738ee6cddb8b25fc3ed0281f64825f965a49e06",
+      "target_body_sha256": "31d2694ea05d8164cd9721dc2f3b9ed3cc7a0a9b943e0406429fc32895c5f96c"
+    },
+    {
+      "test_name": "offboard::bark_send_onchain",
+      "path": "testing/tests/bark/offboard.rs",
+      "sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "target_body_sha256": "a2a607e12a0671337e5d1e20ca6d8220c4507bb3cc10a9d39c317fc48f8019c8"
+    },
+    {
+      "test_name": "offboard::bark_rejects_offboarding_dust_amount",
+      "path": "testing/tests/bark/offboard.rs",
+      "sha256": "0e948d63052354f22162764302a46022d024ab79f62cf63688c0f37ff7ab8a22",
+      "target_body_sha256": "efccc9ea84a6871cd1fc1cad47db56cad9da6b1fd542690ac9ba2f1b13a433be"
+    },
+    {
+      "test_name": "boards::board_all_barkd",
+      "path": "testing/tests/barkd/boards.rs",
+      "sha256": "1c621ce68bf466fe2d64c444abeb23d352f10cd0be7004aba18a5c0fce209e8e",
+      "target_body_sha256": "d35b67840c0aa16a7280ab3cb1ebf3d5346daa45ab05db90fd59121e3497c829"
+    },
+    {
+      "test_name": "recovery::recovered_wallet_finds_boarded_vtxo",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "c05792829e71cbb8b86eca8ee4342e60edcf336f91f40a2dfedaa4c9da20a687"
+    },
+    {
+      "test_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a"
+    },
+    {
+      "test_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714"
+    },
+    {
+      "test_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "path": "testing/tests/barkd/recovery.rs",
+      "sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+    }
+  ],
+  "scope": "PENDING12ordinaryadapters:7CLI+5barkd; noextraSDK/backendcase/unsafeoldserverwordliteral. Preserve9originalFAIL+2held+newquarantinehistoricalscope; no compile/runtime/fullMLcreditfromthisscaffold.",
+  "source_archive_sha256": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+  "immutable_metadata_sha256": "ca163caf8629bad6f7b28e399d796762f0ca8ccf7a296558c522fd62d32a1d9c"
+}

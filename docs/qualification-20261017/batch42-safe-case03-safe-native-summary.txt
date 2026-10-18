@@ -1,0 +1,4 @@
+Nextest run ID 11868218-7733-4e01-abc4-4349893bb99d with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+PASS [   9.270s] (1/1) ark-testing::bark movement::board_board
+Summary [   9.271s] 1 test run: 1 passed, 650 skipped

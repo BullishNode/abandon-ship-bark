@@ -1,0 +1,38 @@
+{
+  "verified_at": "2026-10-17T22:40:04.165337+00:00",
+  "pr": 18,
+  "url": "https://github.com/BullishNode/abandon-ship-bark/pull/18",
+  "state": "DRAFT OPEN",
+  "branch": "work/fresh-test-report-checkpoint14-20261017",
+  "verified_remote_head": "b969dd862ad3d08d7c30ffa289e708f04578d331",
+  "dependency": {
+    "pr": 17,
+    "fixed_head": "e36fff479b8c9b29452677316becfbe014172f3d",
+    "head_preserved_and_GH_verified": true,
+    "state": "DRAFT OPEN"
+  },
+  "new_commit_report_paths": 47,
+  "PR_report_only_paths_at_verification": 100,
+  "payload_manifest": "publication-checkpoint14-files.json",
+  "payload_manifest_sha256": "822678af0c8d16f1fccdc0aa9bade08fe46d9ecee8c5435e7271fcb5d2f30ce5",
+  "cutoff": {
+    "executions": 225,
+    "PASS": 211,
+    "FAIL": 14,
+    "unique_binary_test_pairs": 219,
+    "nextest_invocations": 198,
+    "native": 213,
+    "component": 12,
+    "coverage_rows": 436
+  },
+  "validation": "Parent46payloadhashes+manifest/26JSON/2TOML/3PythonAST/2bashsyntax/1JSONL/CSVcounts/secretpatterns/2x1Mmath/retainedhashproofs/exact47report-only stagedpaths/ownedRustunchanged/remotehead/GHdraftandPRfiles; PR17head separatelypreserved.",
+  "coverage_formatting": "Only two new CRLF row endings normalized toLF; old privatebytes and historicalappendreceipt retained; additiveb5d03e08 records old/newhashes+prior434prefix unchanged.",
+  "independent_evidence": {
+    "initial_receipt_sha256": "0909c1cc68919394d7af238da42900946b2519093868332dc1d17fe8db3c8428",
+    "client_postflight_sha256": "ab64656e0889f0303aa61aab01ee17705a550190c830b124eb360c80e333880a",
+    "retained_Core_financial_audit_sha256": "502c1cd68860481dc7f2c78cb702455be6b4ccb4d6d638f4cc04c5d2e3935b66",
+    "financial_supplement_sha256": "4d33d3ee69a7c44eee0f7b604e5115287f4548f8032679158613a6ae588f43d3"
+  },
+  "excluded": "No completeML/gate/production promotion. No newtestbeyond2allocatedv7cases;v8sourceplansareNOTexecution.",
+  "authority": "Originaluserauthorizedsmallreportcheckpoints; newbranchpreservesfixedpriorPR. No merge/deployment bytestingtrack."
+}

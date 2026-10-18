@@ -1,0 +1,33 @@
+{
+  "state": "PARENT_HASH_GATE_PASSED",
+  "batch": "batch43-quarantine-v8e",
+  "at": "2026-10-18T03:34:51.401685+00:00",
+  "expected_selection": [
+    [
+      "ark-testing::barkd",
+      "recovery::recovered_wallet_quarantines_invalid_spent_vtxos"
+    ]
+  ],
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "sha256": {
+    "selection-proof.json": "e67080a105fa88dee2f013b2c8a2d48c78d5c431975bf2759263c502eb6337af",
+    "root-allocation.json": "2322f04380ff60582baf03d0bfa1ae1918dbf524c1880c499e9f1916ff5286a2",
+    "runtime-pins.sha256": "27a230e131ed5c0a01da27fced22243bf8d49e9bc0b2fbef2fc71c35d28342e4",
+    "server-cohort.py": "31545c01d2097553e62baaa1d09a046122ce1dcd0d5d9a2b5eb3faf8cc8f6d5e",
+    "preflight-static.py": "ac1cca7a1b6133c25e347b5e4fbdf5444d1668666f38a6693827afbd44c32a4f",
+    "fresh-listings.py": "468f31082797f1b1e0b5ffc715f52e5ed005bf927021165b5d1464f0d9539bfa",
+    "preflight.sh": "51246e503189e7457b4c76f2242092b9f4a3170bc89124da0bbfd160c9d5d0b6",
+    "run.sh": "54de404cd7bda8034582be17748782ff71493c8dc16fc828c634c169f5c94fa6",
+    "case01/nextest.toml": "2e36fa8eba62c1b8266cea3e97b5a2c5d3a955ed39b44604ea880c7b7f6ebb2d",
+    "fresh-listing-admission.json": "9bfebe63e1abac43d6c09c4bf9bda2701e42e685a2067cca00ea861f365677bb",
+    "resource-admission.json": "3119a47d8615867eed02c669d829f60da657b1e1d18adc39ffbcc793c0932db6"
+  },
+  "parent_preflight_exec_session": 15481,
+  "parent_preflight_exit_code": 0,
+  "parent_preflight_log_sha256": "1eb4b13f8152d8067358e895182566dbd8f312b27d13dea98ec4444a87becfe2",
+  "parent_actor_absence_sha256": "31d0d80564169dc228d1f3e92f03f8c01d57fffc771e5c0158be356ed18a0ed6",
+  "policy": "One distinct previouslyNOTRUN quarantinecase, default180/retry0/serial1/firstFAIL; no case10retry orcase11; all42outcomes unchanged.",
+  "clock_jump_note": "HostUTC jumped23:18->03:30 between calls; allocation reconfirmed by root, actual fresh pins/resource/namespace checks used, no elapsed-state assumptions."
+}

@@ -1,0 +1,138 @@
+{
+  "state": "SOURCE_ONLY_MECHANICAL_API_CORRECTION_ACK_NO_CONCRETE_BLOCKER",
+  "patch": "/tmp/fresh-v9-test-api-compile-corrections-20261018.patch",
+  "patch_sha256": "835a5fb4b864433398cc43568a9547cec53c20b8cf030944b7ba2c9796285b97",
+  "canonical_HEAD_at_read": "4fa8997ba21158f20326c19f68efba5f42af1f3c",
+  "exact_patch_scope": [
+    {
+      "file": "testing/tests/bark_sdk/lightning.rs",
+      "before_file_sha256": "3c3ed9228423f067887ff69d55dde42b7d24a513e72c14f7bc3f3c94413c5148",
+      "after_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "patch_hunks": 3,
+      "all_timer_expression_lines_identical": true
+    },
+    {
+      "file": "testing/tests/server/expiry_internal_replan.rs",
+      "before_file_sha256": "c31a0b9110fef5cf87fcf8a003a002574a5d41559e218878b890a2117539c2f6",
+      "after_file_sha256": "5ed82c822d2efe12718315935c996e5f7b826058e2d666446f4c9f7f4b3678ef",
+      "patch_hunks": 3,
+      "all_timer_expression_lines_identical": true
+    },
+    {
+      "file": "testing/tests/server/qualification_failed_swap.rs",
+      "before_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "after_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+      "patch_hunks": 1,
+      "all_timer_expression_lines_identical": true
+    }
+  ],
+  "original_six_intake_sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+  "six_fixture_before_after": [
+    {
+      "literal_name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "expected_binary": "ark-testing::server",
+      "file": "testing/tests/server/qualification_conflict_reorg.rs",
+      "reviewed_before_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "current_after_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "reviewed_before_target_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "current_after_target_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "literal_target_body_unchanged": true,
+      "note": "Entire file and target unchanged by this patch."
+    },
+    {
+      "literal_name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "file": "testing/tests/server/qualification_failed_swap.rs",
+      "reviewed_before_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "current_after_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+      "reviewed_before_target_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "current_after_target_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "literal_target_body_unchanged": true,
+      "note": "Failed-swap wrapper target unchanged but its helper/file has two awaited calls changed; bind new whole-file hash."
+    },
+    {
+      "literal_name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "file": "testing/tests/server/qualification_offboard_restart.rs",
+      "reviewed_before_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "current_after_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "reviewed_before_target_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "current_after_target_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "literal_target_body_unchanged": true,
+      "note": "Entire file and target unchanged by this patch."
+    },
+    {
+      "literal_name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "expected_binary": "ark-testing::bark-sdk",
+      "file": "testing/tests/bark_sdk/lightning.rs",
+      "reviewed_before_file_sha256": "3c3ed9228423f067887ff69d55dde42b7d24a513e72c14f7bc3f3c94413c5148",
+      "current_after_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "reviewed_before_target_body_sha256": "eb82a1226e01d9a3ffee536fa5fae7b663dec32d18fc420e1984099448e8a414",
+      "current_after_target_body_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+      "literal_target_body_unchanged": false,
+      "note": "Expired-LN target changed mechanically; old body hash does not describe corrected body."
+    },
+    {
+      "literal_name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "file": "testing/tests/bark_sdk/exit.rs",
+      "reviewed_before_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "current_after_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "reviewed_before_target_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "current_after_target_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "literal_target_body_unchanged": true,
+      "note": "Entire file and target unchanged by this patch."
+    },
+    {
+      "literal_name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "file": "testing/tests/bark_sdk/exit.rs",
+      "reviewed_before_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "current_after_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "reviewed_before_target_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "current_after_target_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "literal_target_body_unchanged": true,
+      "note": "Entire file and target unchanged by this patch."
+    }
+  ],
+  "changed_failed_swap_helper": {
+    "name": "failed_swap_during_restart",
+    "before_sha256": "d6aeb05e85f8f39ec13cc911c070997339e959bc9e5b4fbad610200ba26fbe02",
+    "after_sha256": "ebae0d73bfe45b63e1e42b2ea77d2bb3e75e091df20ddb07639b50a1a259cd07"
+  },
+  "API_evidence": [
+    {
+      "path": "bark/src/chain.rs:407\u2013408",
+      "finding": "tip returns Result<BlockHeight>; direct equality/order preserves intended height conditions."
+    },
+    {
+      "path": "bark/src/lib.rs:400\u2013402",
+      "finding": "fallback module private; FallbackRefusal publicly re-exported at bark root; variant/code/typed extraction unchanged."
+    },
+    {
+      "path": "server/src/database/expiry_inventory.rs:285\u2013287;expiry_ownership.rs:91\u201397",
+      "finding": "Both Tx methods async returning anyhow::Result; adding inner await executes same bounded read/proposal within Db transaction closure."
+    },
+    {
+      "path": "testing/Cargo.toml:76;expiry_internal_replan.rs:21,194\u2013195,364\u2013365",
+      "finding": "log is declared; replacing absent tracing import and structured syntax with log format preserves logged public values, reserve lock/unlock logic and all assertions."
+    }
+  ],
+  "API_file_sha256": {
+    "bark/src/chain.rs": "1cee4a70c350e0154695202cb67652ed4306c3de7ea82217b5011472c493da70",
+    "bark/src/lib.rs": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+    "server/src/database/expiry_inventory.rs": "c4944ee82addf3369875be81d8a55e286472e961f2d6c941342f28f28a54bb94",
+    "server/src/database/expiry_ownership.rs": "739ba9af2542bf373ccb951e2408f15a41f2438e7428009a888c70f9c3647287",
+    "testing/Cargo.toml": "6d0c1a985e2905973c01f5a3c60201e11e7ad1214b376817b19023979d3b4277"
+  },
+  "invariants": "No amount, script, owner, canonicality, parent/child, grant, original remote-group, paid/refund, expiry/timeout/step bound or assertion predicate removed/relaxed. Height predicates remain same BlockHeight comparisons; two missing async evaluations are restored. Logging representation changes only.",
+  "original_check_failure": {
+    "reported_by_parent": "v9 original checks FAIL59.917s, retained unchanged",
+    "independently_reopened": false
+  },
+  "future_candidate": "v9b building per parent; exact new archive/source-manifest/diff/ELF/metadata and successful checks require separate proof. This report binds current working bytes, not a frozen candidate or compile success.",
+  "historical_provenance": "Original frozen six-fixture packets/reviews remain valid historical inputs. Corrected failed-swap helper/file and expired-LN body require their NEW hashes; previous55bb/eb82 cannot silently transfer as unchanged current source. Other four literal bodies remain exact reviewed hashes.",
+  "mixed_round_packet": "0cf mixed/round adaptation excluded and untouched; no case10 retry/heldround execution authorized by this review.",
+  "concrete_blockers": [],
+  "activity": "Read-only source/patch verification plus new external reports only. No source changes, Cargo, listings, native, RPC, DB or result updates."
+}

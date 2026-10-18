@@ -1,0 +1,4 @@
+Nextest run ID 1f713f59-acdb-405f-824e-b03e97b9771e with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+PASS [  20.677s] (1/1) ark-testing::barkd recovery::recovered_wallet_finds_boarded_vtxo
+Summary [  20.679s] 1 test run: 1 passed, 650 skipped

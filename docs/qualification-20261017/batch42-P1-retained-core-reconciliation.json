@@ -1,0 +1,255 @@
+{
+  "kind": "batch42_P1_independent_retained_Core_reconciliation",
+  "parser_assumption_correction": "Rejected an initial offline assumption that offboard has only2outputs. Actualcase01 has330satconnector pluscustomer andoperatorchange. Sourceasserts only1customeroutput; finaldecoder includes everyactualoutput and its unique native-shaped customeroutput. Auditassertion was not a nativeFAIL orretry.",
+  "at": "2026-10-17T23:11:03.298049+00:00",
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "decoder_helper_sha256": "23324f09675b512bec4057d2d647d857024026826e4ac47ee03412fc40cf9062",
+  "owned_parser_path": "/tmp/batch42-p1-retained-core-backend.py",
+  "owned_parser_sha256": "8360bb29c0663f512d31f73ab0ed24e21def2faeebc105c669ce9ade0f88a6ea",
+  "actor_absence_receipts": [
+    {
+      "path": "/tmp/batch42-case01-02-actor-absence.json",
+      "sha256": "946696fc2fdf807e5bad43295d9a6a2f4346671e03a281e6fa01935a36bf5c75"
+    },
+    {
+      "path": "/tmp/batch42-case08-actor-absence.json",
+      "sha256": "007f6fadc031bc76aa8d280973cb0d6d4ddac14ddc409be942e3fd818a7b3c32"
+    }
+  ],
+  "scope": "Assignedcase01/02/08only afterexactactualcontainer group/actorabsence. Offline retainedmainCore blk/xor/headerancestry+txMerkleroots/finalUpdateTip and saferesults/source only; no otheractivecase read, actors/Core/RPC/SQL/wallet/DB/seed/privatefullnativelog/config/service opening.",
+  "cohorts": [
+    {
+      "case": 1,
+      "name": "onchain::list_utxos",
+      "run_id": "d0d570b2-7a54-450b-954a-5aa868243468",
+      "native_result": "PASS",
+      "native_seconds": 18.8,
+      "retained_tip": {
+        "height": 118,
+        "hash": "774ad5626c13c0077f361a5bd16496aca20390ec7545aaa08d2a44695fa798f2"
+      },
+      "canonical_noncoinbase_transactions": 5,
+      "canonical_duplicate_spends": 0,
+      "selection_mode": "Unique exactsource-topology/amount/input-output/count/window constraints, not highestamount. NativePASS binds dynamicdestination/returnedtxid/UTXOmap; blockonlyreader cannot independentlyrecoverclientkeys.",
+      "details": {
+        "board": {
+          "txid": "11c5d5ffeef1cbd41ff83fd435ee8e5d8d37a065cdd0dbf0a5e56436ba38629d",
+          "canonical": {
+            "height": 107,
+            "blockhash": "3fc18d486c46981d6e897a1e4d25ac07fd5a4e3b8d8b522bec2a02c7fb210d12",
+            "confirmations": 12
+          },
+          "signed_raw_sha256": "2004eeb386aeb0744a9fffe490f487640a9d958d8abf0388ef77cafce436549a",
+          "signed_bytes": 234,
+          "weight_wu": 609,
+          "vsize": 153,
+          "has_segwit_witness": true,
+          "inputs": [
+            {
+              "point": "4f8ba7b0531a4d8763325f51781b48c38ea5edb4e0b519e6ea1a6842661b5e6c:1",
+              "value_sat": 1000000,
+              "script_hex": "0014f5b154c2172b12106924ffe58102510fc5173299"
+            }
+          ],
+          "outputs": [
+            {
+              "point": "11c5d5ffeef1cbd41ff83fd435ee8e5d8d37a065cdd0dbf0a5e56436ba38629d:0",
+              "value_sat": 200000,
+              "script_hex": "5120cfc448f097fe9758506f1b71bffabdbed36fad2fe67582e51f1c2cf1cffb2a44",
+              "unspent_at_retained_tip": true
+            },
+            {
+              "point": "11c5d5ffeef1cbd41ff83fd435ee8e5d8d37a065cdd0dbf0a5e56436ba38629d:1",
+              "value_sat": 799237,
+              "script_hex": "00142122de14d1557e43b59a75dc572b6e0643699e05",
+              "unspent_at_retained_tip": true
+            }
+          ],
+          "actual_miner_fee_sat": 763
+        },
+        "offboard": {
+          "txid": "1a8604bed57961af8994cf9698deca5156f65ed2d81e3359c709f8735f639e28",
+          "canonical": {
+            "height": 117,
+            "blockhash": "574d2d92fd65b198cfaa92604e11449219f34d8403009d40c77854924928537e",
+            "confirmations": 2
+          },
+          "signed_raw_sha256": "b07f16e3e9650606bc15a9a2cfb5da39605615d9b1f8998c23955f6e527856a1",
+          "signed_bytes": 236,
+          "weight_wu": 740,
+          "vsize": 185,
+          "has_segwit_witness": true,
+          "inputs": [
+            {
+              "point": "0d097afed3225de0e15a8b564b86d8fbcbde34e9a3b5c1aef6529ac311976bca:1",
+              "value_sat": 999795813,
+              "script_hex": "5120488d6ba003518bb59cfcff10625ab0152274432f1ea187c1b1cbe1334e2d36a5"
+            }
+          ],
+          "outputs": [
+            {
+              "point": "1a8604bed57961af8994cf9698deca5156f65ed2d81e3359c709f8735f639e28:0",
+              "value_sat": 199146,
+              "script_hex": "0014c2a1c08db974f4e1d9fa89446fdcee6a020e6ac4",
+              "unspent_at_retained_tip": true
+            },
+            {
+              "point": "1a8604bed57961af8994cf9698deca5156f65ed2d81e3359c709f8735f639e28:1",
+              "value_sat": 330,
+              "script_hex": "5120122acac330a93d7469f0aabd18ba9a69ed7670a73e9221b6986ef686197fdb6b",
+              "unspent_at_retained_tip": true
+            },
+            {
+              "point": "1a8604bed57961af8994cf9698deca5156f65ed2d81e3359c709f8735f639e28:2",
+              "value_sat": 999595039,
+              "script_hex": "5120c6c49d71ca2d9c399370c61d11290c70fa5b70756bf41a8b456c483ac26b9a0c",
+              "unspent_at_retained_tip": true
+            }
+          ],
+          "actual_miner_fee_sat": 1298
+        },
+        "expected_native_two_UTXO_map_from_source_assertions": {
+          "11c5d5ffeef1cbd41ff83fd435ee8e5d8d37a065cdd0dbf0a5e56436ba38629d:1": 799237,
+          "1a8604bed57961af8994cf9698deca5156f65ed2d81e3359c709f8735f639e28:0": 199146
+        },
+        "customer_payout_charge_implied_by_200k_source_sat": 854,
+        "scope": "Exact unique source-constrained canonical topology corroborates native PASS exactUTXOmap/script/feequote assertions; no publictxid/script capsule retained, so actualuserkey/CLIlist correspondence remains native-source/result evidence. No allwalletUTXO/privateDB read.",
+        "board_equation": "1000000 = 200000 board + 799237 ordinarychange + 763 actualboardminerfee",
+        "customer_cut": "1000000 = 799237 ordinarychange + 199146 offboardpayout + 763 boardminerfee + 854 customercharge",
+        "operator_tx_cut": "999795813 operatorinputs = 999794515 alloutputs + 1298 actualminerfee"
+      },
+      "retained_hashes_before_after_equal": true,
+      "retained_input_hashes": {
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case01/result.json": "be128b28c0b52125327fcbaa8386399040abe1e333d7fd08c57e387506dea41a",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case01/test-data/bark/list_utxos/bitcoind/regtest/blocks/xor.dat": "f7071d85985116e039246fe686f6977bfc8d302346e3e0cb120cbd429d5f3188",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case01/test-data/bark/list_utxos/bitcoind/regtest/debug.log": "6068170584a7abf577dae70baa30ef03c8fe1ec4346c2981c8fb4c0c9a49ce9b",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case01/test-data/bark/list_utxos/bitcoind/regtest/blocks/blk00000.dat": "93333b2b3f6242f6e78a42ba47cd54c353f5d1417492bf436d32b8f5d60202f8"
+      }
+    },
+    {
+      "case": 2,
+      "name": "onchain::onchain_drain",
+      "run_id": "5eedaad4-5c87-4e34-a5e7-740492948d68",
+      "native_result": "PASS",
+      "native_seconds": 9.366,
+      "retained_tip": {
+        "height": 107,
+        "hash": "568826f2c4b7bbf6bf56c99f90f80f13e266bd31a5c4042d127ac0babcb7890c"
+      },
+      "canonical_noncoinbase_transactions": 3,
+      "canonical_duplicate_spends": 0,
+      "selection_mode": "Unique exactsource-topology/amount/input-output/count/window constraints, not highestamount. NativePASS binds dynamicdestination/returnedtxid/UTXOmap; blockonlyreader cannot independentlyrecoverclientkeys.",
+      "details": {
+        "drain": {
+          "txid": "007b1bb85376b39fc3aece6f70b7842b672174a95336dfbf226d9c09af59939c",
+          "canonical": {
+            "height": 107,
+            "blockhash": "568826f2c4b7bbf6bf56c99f90f80f13e266bd31a5c4042d127ac0babcb7890c",
+            "confirmations": 1
+          },
+          "signed_raw_sha256": "f3c50de2ca8cd6680c5f672931d31d39682a786381d310e41b3e0c90f937e908",
+          "signed_bytes": 191,
+          "weight_wu": 437,
+          "vsize": 110,
+          "has_segwit_witness": true,
+          "inputs": [
+            {
+              "point": "1c6b8b34b1cadf56b304a17254c47ce4bea2721684ac79c8389d53e68bff41bd:0",
+              "value_sat": 1000000,
+              "script_hex": "0014e50525fe9e2998c94d61db9aec4e033e0c282d65"
+            }
+          ],
+          "outputs": [
+            {
+              "point": "007b1bb85376b39fc3aece6f70b7842b672174a95336dfbf226d9c09af59939c:0",
+              "value_sat": 999452,
+              "script_hex": "00145c7a8cbe0cd05d982396e63062526db611c296b0",
+              "unspent_at_retained_tip": true
+            }
+          ],
+          "actual_miner_fee_sat": 548
+        },
+        "complete_single_input_spent": true,
+        "recipient_output_unspent": true,
+        "customer_equation": "1000000 = 999452 recipient + 548 actualminerfee",
+        "scope": "Unique exact1m/oneinput/oneoutput finaltiptransaction corroborates nativePASS senderzero/exactrecipient/fullinputmap/quoteddescriptorfeebound. Recipientidentity/publicquote/maxsatisfaction not independentlyavailable from blocks; those remain nativeassertionprovenance. Actualdepth is retained1, notCore6."
+      },
+      "retained_hashes_before_after_equal": true,
+      "retained_input_hashes": {
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/result.json": "8faa8c08b75fe554f525ae8c731241b581a6056416978558c84666cfd42cc3d5",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/test-data/bark/onchain_drain/bitcoind/regtest/blocks/xor.dat": "f7071d85985116e039246fe686f6977bfc8d302346e3e0cb120cbd429d5f3188",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/test-data/bark/onchain_drain/bitcoind/regtest/debug.log": "5a048e5c622e96fb8e740fcefa4aa0346d4448a1a7e11da79c37393d4ab8adcb",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/test-data/bark/onchain_drain/bitcoind/regtest/blocks/blk00000.dat": "18ff60e602da7c732334806cc66f53e56ba0d99a5fa62b8eac61663c4908a46b"
+      }
+    },
+    {
+      "case": 8,
+      "name": "boards::board_all_barkd",
+      "run_id": "35ec7171-35f8-4dfe-8768-aca3380cd720",
+      "native_result": "PASS",
+      "native_seconds": 9.128,
+      "retained_tip": {
+        "height": 108,
+        "hash": "686343cef3f52dc8e63d518ecdb4a040c8478c582571fb5389bab2b6299ccb89"
+      },
+      "canonical_noncoinbase_transactions": 2,
+      "canonical_duplicate_spends": 0,
+      "selection_mode": "Unique exactsource-topology/amount/input-output/count/window constraints, not highestamount. NativePASS binds dynamicdestination/returnedtxid/UTXOmap; blockonlyreader cannot independentlyrecoverclientkeys.",
+      "details": {
+        "board": {
+          "txid": "0a36f1194343d1c7f0d9a29c14b0dc0f41c324d11a7b2d0e04a3f7357af95672",
+          "canonical": {
+            "height": 106,
+            "blockhash": "4b9524eaadeba45f5bf30f3db35df60041b3ceb552788e11d4e8e2bd5854a673",
+            "confirmations": 3
+          },
+          "signed_raw_sha256": "45344c719110ca7322f70e606611bafb801a113af46f0ae7896e19c13dc839c1",
+          "signed_bytes": 203,
+          "weight_wu": 485,
+          "vsize": 122,
+          "has_segwit_witness": true,
+          "inputs": [
+            {
+              "point": "879ed53b03ca16487ad73ef9e2657fa179b598b05bad0a8308d8c866a91b4d07:1",
+              "value_sat": 100000,
+              "script_hex": "0014e1cf98169c12fc88e9eadeb10e3b00d21f93832c"
+            }
+          ],
+          "outputs": [
+            {
+              "point": "0a36f1194343d1c7f0d9a29c14b0dc0f41c324d11a7b2d0e04a3f7357af95672:0",
+              "value_sat": 99392,
+              "script_hex": "5120bef198a5da499571211e0a09edfe1dcc6689ae257e462dc7a12730143445e5c3",
+              "unspent_at_retained_tip": true
+            }
+          ],
+          "actual_miner_fee_sat": 608
+        },
+        "native_declared_Ark_fee_parameters": {
+          "base_sat": 100,
+          "ppm": 10000
+        },
+        "Ark_fee_derived_from_actual_board_gross_sat": 1094,
+        "native_pending_confirmed_VTXO_net_sat": 98298,
+        "customer_equation": "100000 = 608 actualminerfee + 1094 declaredArkfee + 98298 nativeVTXOnet",
+        "scope": "Coreindependentlyconfirms exact100k\u2192singleactualsignedboardgross/minerfee/unspentanchor. ReturnedunsignedPSBTshape, VTXOnet/ID/registered/confirming\u2192spendable andsenderonchainzero remain boundnativePASS/sourceassertions; no walletDB/persistedfeeconfig read. Corecannotprove offchainArkfeeownership."
+      },
+      "retained_hashes_before_after_equal": true,
+      "retained_input_hashes": {
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/result.json": "d4c50e7bd151b40b4db434e6fc7006183950ef0bc34d72717ecb5d451ba47189",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/test-data/barkd/board_all_barkd/bitcoind/regtest/blocks/xor.dat": "f7071d85985116e039246fe686f6977bfc8d302346e3e0cb120cbd429d5f3188",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/test-data/barkd/board_all_barkd/bitcoind/regtest/debug.log": "cc8ea4194729c4c82af13ea0d2248f29c45e9f6b9d3d39f8c3e95c3829a369a0",
+        "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/test-data/barkd/board_all_barkd/bitcoind/regtest/blocks/blk00000.dat": "9ca84240831ddfcb1dd35740bb0f77c5f9cf02831396349ae5160d784183989d"
+      }
+    }
+  ],
+  "limits": [
+    "No independentlycapturedpublicdestination/returnedtxid capsule exists intheseoriginalfixtures. Uniquechain-topology corroboration is explicitlyboundtoactualnativePASS assertions; recipientidentity/quote/clientUTXOlisting/BDKcustody not inferredfromscripts.",
+    "No mempool read, so dropped/pending/noncanonical outputs outsidecanonicalchain are not exhaustivelyexcluded. Depthreportedexactly, neverCore6 from1/2/3blocks.",
+    "Customercharges/Arkfees distinctfromactualphysicalminerfees. No fulloperatorwalletcut/globalcustody/FULLML/production/count updates. OriginalFAILreceipts andchangedcandidateconditions retained.",
+    "Only three newcasefinancialsupplements and thisowned/tmp pureparser; no source/oldreport/controlfile/globalcounter changes.",
+    "Case01 customer_cut is a native liability/charged-fee equation, not a fullphysicalfundingDAG: offboard spendsoperatorwalletfunding. The old200kboardoutput stillbeingCoreunspent is not additionalcustomerprincipal afterrefresh/offboard; nativeforfeit/round/offboard proof governs economicdischarge. No globaloperatorconservation inferred."
+  ]
+}

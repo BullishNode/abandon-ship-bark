@@ -1,0 +1,256 @@
+{
+  "kind": "NEXT_SIX_V9B_SOURCE_ONLY_SELECTION_PLAN",
+  "at": "2026-10-18T03:43:04.145868+00:00",
+  "state": "SOURCE_VERIFIED_NOT_RUN_NO_RUNTIME_ALLOCATION",
+  "proposed_order_only": true,
+  "allocation": null,
+  "native_launch_authorized": false,
+  "source": {
+    "capture": "/home/francis/.cache/abandon-fresh/runtime-recovery-v9b-20261017",
+    "head_label": "4fa8997ba21158f20326c19f68efba5f42af1f3c",
+    "source_manifest_sha256": "d0fb8640a67d96cc1ffba795fdeae328538513eb3ef86476aab04b30a1d358b3",
+    "archive_sha256": "f72ca371c3c575cb55da61f145bcea05065c5b87cb8ef0d49e688e0d75645bde",
+    "actual_git_diff_sha256": "7c6128d6f0a5a3ad6ad930f2589fa1f7162495d7663bd915866d98fba72994e3",
+    "all_selected_files_verified_against_archive_and_source_manifest": true,
+    "source_body_hash_definition": "fn/async fn declaration through its column-zero closing brace without final newline; full-file hash binds every helper/import",
+    "original_six_intake_sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+    "API_correction_patch_sha256": "835a5fb4b864433398cc43568a9547cec53c20b8cf030944b7ba2c9796285b97",
+    "API_correction_peer_json_sha256": "fb236a52453681c182c58359190e8605b66e73bda242f9396d225da6185a2f31",
+    "reported_build_state": "Parent reports v9b checks/unit/products PASS; metadata running at assignment. This source-only plan does not verify compiled test artifacts or grant test execution.",
+    "later_mixed_round_patch0cf_EXCLUDED": true,
+    "archived_recovery_file_sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296"
+  },
+  "selection": [
+    {
+      "order": 1,
+      "id": "registered_offboard_restart",
+      "literal_name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "source_file": "testing/tests/server/qualification_offboard_restart.rs",
+      "current_v9b_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "current_v9b_target_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "original_intake_target_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "target_unchanged_from_original_intake": true,
+      "current_api_delta": "Entire file and target unchanged by this patch.",
+      "requires_native_CLN": false,
+      "module_registration_file": "testing/tests/server/mod.rs",
+      "module_registered_in_v9b_archive": true,
+      "execution_status": "NOT RUN",
+      "execution_credit": 0,
+      "bounded_money_oracle": "GenuineSDKauthorizeddurableoffboard, actualnurseryINSERT schedulinglock, serverstop/reap+clientabort/proxygone, startupalone exactsignedbroadcast, canonical6net+actualfee, sourceSpent and boundedwholechain/mempoolzeroextrafallback.",
+      "limits": "180s/<=96blocks,32blocklife; afterwalletpersist/beforenursery, not beforeallwalletwrites. Actualcoinamount fromSDKhelper, not assumed100kfunding. No completeoperator/customerinitialfunding/residualchange/fullML126 orbackup/defaultdaemon proof.",
+      "original_intake_full_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "API_correction_review_before_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "current_full_file_equals_original_intake": true
+    },
+    {
+      "order": 2,
+      "id": "failed_send_restart_v3",
+      "literal_name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "source_file": "testing/tests/server/qualification_failed_swap.rs",
+      "current_v9b_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+      "current_v9b_target_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "original_intake_target_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "target_unchanged_from_original_intake": true,
+      "current_api_delta": "Failed-swap wrapper target unchanged but its helper/file has two awaited calls changed; bind new whole-file hash.",
+      "requires_native_CLN": true,
+      "module_registration_file": "testing/tests/server/mod.rs",
+      "module_registered_in_v9b_archive": true,
+      "execution_status": "NOT RUN",
+      "execution_credit": 0,
+      "bounded_money_oracle": "RealexternalholdAccepted, nativeproductdowntime, actualCancel at originalremotegroup, senderabsent, originalterminalFailed proof+exact99kcanonicalparent/child6 and fullDAGphysicalconservation; immutableparent/ownerledger/originalgroup/no redispatch.",
+      "limits": "180s/<=96blocks; parentremainder binds configuredsweep, childchange walletcustody not independentlychecked; no multipart/crossroot/reorg/seedrestore/globaloperatorsolvency/FULLML.",
+      "original_intake_full_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "API_correction_review_before_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "current_full_file_equals_original_intake": false
+    },
+    {
+      "order": 3,
+      "id": "conflict_reorg_v2",
+      "literal_name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "expected_binary": "ark-testing::server",
+      "source_file": "testing/tests/server/qualification_conflict_reorg.rs",
+      "current_v9b_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "current_v9b_target_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "original_intake_target_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "target_unchanged_from_original_intake": true,
+      "current_api_delta": "Entire file and target unchanged by this patch.",
+      "requires_native_CLN": false,
+      "module_registration_file": "testing/tests/server/mod.rs",
+      "module_registered_in_v9b_archive": true,
+      "execution_status": "NOT RUN",
+      "execution_credit": 0,
+      "bounded_money_oracle": "Actualordinarytwo100kroots/holderexit+terminalclaim/partialconflict/regroup/wholebranchreorg, C9validmerged199k OR2x99k, retainedfences and full700k canonicalboard/parent/child/leafcut repeatedafterreconsider.",
+      "limits": "Oneowner/tworoot/24blocklife/3exitdelta/180s; noseedrecovery/backup/scale/globalcustody/fullML121orP06. Stoppeddaemonhangclaim withdrawn; directCoremining is scheduling.",
+      "original_intake_full_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "API_correction_review_before_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "current_full_file_equals_original_intake": true
+    },
+    {
+      "order": 4,
+      "id": "SDK_expired_new_LN_refusal_refresh",
+      "literal_name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_file": "testing/tests/bark_sdk/lightning.rs",
+      "current_v9b_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "current_v9b_target_body_sha256": "d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+      "original_intake_target_body_sha256": "eb82a1226e01d9a3ffee536fa5fae7b663dec32d18fc420e1984099448e8a414",
+      "target_unchanged_from_original_intake": false,
+      "current_api_delta": "Expired-LN target changed mechanically; old body hash does not describe corrected body.",
+      "requires_native_CLN": true,
+      "module_registration_file": "testing/tests/bark_sdk/mod.rs",
+      "module_registered_in_v9b_archive": true,
+      "execution_status": "NOT RUN",
+      "execution_credit": 0,
+      "bounded_money_oracle": "PublictypedExpiredNewLightning refusalbeforeattempt/dispatch/nativeCLNpay with fullsignedprincipalretained; actualinteractiveconfirmedrefresh to newtree then freshdistinctholdinvoicePaid with nativeCLNComplete and exactbalance/history.",
+      "limits": "180s;100blocklife/clientmanualsync/watch900scadence isolatesadmission. No first-attemptpendingrace/defaultdaemon/fallback/backup/FULLML. Large2BTC/0.5BTC are nativeREGTEST only.",
+      "original_intake_full_file_sha256": "3fef86397a648c4b11ef92f2f0c252b870e9ec766cc1ac14ff96075347964c88",
+      "API_correction_review_before_file_sha256": "3c3ed9228423f067887ff69d55dde42b7d24a513e72c14f7bc3f3c94413c5148",
+      "current_full_file_equals_original_intake": false
+    },
+    {
+      "order": 5,
+      "id": "SDK_watchman_funding_parent",
+      "literal_name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "current_v9b_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "current_v9b_target_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "original_intake_target_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "target_unchanged_from_original_intake": true,
+      "current_api_delta": "Entire file and target unchanged by this patch.",
+      "requires_native_CLN": false,
+      "module_registration_file": "testing/tests/bark_sdk/mod.rs",
+      "module_registered_in_v9b_archive": true,
+      "execution_status": "NOT RUN",
+      "execution_credit": 0,
+      "bounded_money_oracle": "Nativeexpiredsingle400kregisteredowner, one-deepProcessing/no prematurehistory then actual399kcanonical6fallback, exactownerledger/sourcepath andchain+mempooloneoutput, sourceSpent/no refresh resurrection.",
+      "limits": "180s;manualclient/watch900s,15exititerations; no actualallfeechild/subsidy/operatorcustodycut ordefaultdaemon/FULLML.",
+      "original_intake_full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "API_correction_review_before_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "current_full_file_equals_original_intake": true
+    },
+    {
+      "order": 6,
+      "id": "SDK_watchman_partial_chain",
+      "literal_name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "source_file": "testing/tests/bark_sdk/exit.rs",
+      "current_v9b_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "current_v9b_target_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "original_intake_target_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "target_unchanged_from_original_intake": true,
+      "current_api_delta": "Entire file and target unchanged by this patch.",
+      "requires_native_CLN": false,
+      "module_registration_file": "testing/tests/bark_sdk/mod.rs",
+      "module_registered_in_v9b_archive": true,
+      "execution_status": "NOT RUN",
+      "execution_credit": 0,
+      "bounded_money_oracle": "Real100kArkoorrecipient+300ksenderchange under sameanchor/partialexit; nativecanonical299k+99ktoindependentregisteredowners, exactledger/generation/chainoneoutputeach andlocalspent/history/no refresh resurrection.",
+      "limits": "180s;explicit change_vtxo_split_factor1/manualsync/watch900s; not defaultfactor2/groupedoutputs/fullfeechild/subsidy/custody/globalML.",
+      "original_intake_full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "API_correction_review_before_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "current_full_file_equals_original_intake": true
+    }
+  ],
+  "full_file_and_helper_bindings": [
+    {
+      "path": "testing/tests/server/qualification_offboard_restart.rs",
+      "v9b_full_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+      "relevant_helper_body_sha256": {
+        "wait_rebuilt": "04d013d17ae4e46aa9956c749240997ca9222904048c7c1101afb307c7a27cee",
+        "actual_fee": "68c41c2c2320e03d04357da20066fc81f3f2e154850922b6232657293e95975d",
+        "interrupted_offboard": "785093b668a14c2bd1a7b3140758b25903534150bca2c23655198974d9d9bf1a"
+      }
+    },
+    {
+      "path": "testing/tests/server/qualification_failed_swap.rs",
+      "v9b_full_file_sha256": "237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+      "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+      "relevant_helper_body_sha256": {
+        "remote_pays": "d0533b447f2971179060b0c7565eb25fd277750ffc4026de4d0bbf5654448772",
+        "remote_groups": "b2fcf5ac4b92662143cb2aa1f82c4ada52264aad52125573f20c397941aed96a",
+        "actual_fee": "86613e86656c9aa014a7978a81d7420a27ab52cbd59fbef952f051cde7d5ea07",
+        "canonical_package": "94c7b2f07260e6b30618ed09c476da95756372a18855eb52a9edb87cd1d137f7",
+        "assert_original_attempt": "2c63d060c88839c4c8ba77dc0b894f64ff17c68289081e118a55ad9191199957",
+        "wait_rebuilt": "8becf6b380edd52f6ac7ec4315d5a82bbc440eafa0987b56a2e89f2495f02f67",
+        "failed_swap_during_restart": "ebae0d73bfe45b63e1e42b2ea77d2bb3e75e091df20ddb07639b50a1a259cd07"
+      }
+    },
+    {
+      "path": "testing/tests/server/qualification_conflict_reorg.rs",
+      "v9b_full_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+      "relevant_helper_body_sha256": {
+        "canonical_point": "70876493593ab9fcff9f6bd80e98e48d6841eca17d7ad5eff0c7d4e6b7ba9578",
+        "actual_fee": "a03748f679acfa94968c5139cc9ce10bad79ec069ec26e476602feab10eaacb0",
+        "assert_physical_cut": "4887a5a6ee9082282d1bb29c08db496e754997c544af9a811f51165f4d309c26",
+        "decided_obligations": "49e8b2321b3e62441cd6223a5af0431bf33d1d1c6fdcd1e7c8fa1131a29fdf6e",
+        "rebuilt_generation": "1d58c0005833dc3e273f8dc408ffd4ea1b3ce051d98e51fd30fc0262c140e41d",
+        "assert_final_outcome": "978dd60e8f11a0fb13a28554afb6575beae5795534cad9c81daf8b0dded8395d",
+        "partial_conflict_reorg": "bcb23dd524db0e72cdc670c32b4db5a17511c0ef6d31987fcbcd829d378c0d30"
+      }
+    },
+    {
+      "path": "testing/tests/bark_sdk/lightning.rs",
+      "v9b_full_file_sha256": "50051ad21af829a1b1ada9c53c23ae4e6f34d2db6f9a7db4eabcf7bb1a9907f5",
+      "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+      "relevant_helper_body_sha256": {
+        "wait_for_hold_invoice_accepted": "dbe665c63e7ef9d7a4dd2a9727ff515f2528d361d737701d82eecfc0dc8bcac3"
+      }
+    },
+    {
+      "path": "testing/tests/bark_sdk/exit.rs",
+      "v9b_full_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "full_file_binds_all_imports_helpers_and_nonselected_functions": true,
+      "relevant_helper_body_sha256": {
+        "chain_tip": "4456737bd0ab9229820e29bbc12154b55dddc6b6a197494c8c1721931826686f",
+        "blocks_until": "7445c5759387c29eee168d5cf4e50d63ed7e4725c26015c6bebf43ceba5f0167"
+      }
+    }
+  ],
+  "mechanical_delta_summary": {
+    "SDK_expired_LN_body": "eb82a1226e01d9a3ffee536fa5fae7b663dec32d18fc420e1984099448e8a414 -> d97faa40b0c5cbd35001fd89bb2183b10360a463aae8efe1de25e785b5fc5bfb",
+    "failed_swap_file": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e -> 237dbe45d37227f8887f9680f560b58554e7a19feda36d9b52d08700a77009ff",
+    "failed_swap_wrapper_body_unchanged": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+    "failed_swap_underlying_helper": {
+      "name": "failed_swap_during_restart",
+      "before_sha256": "d6aeb05e85f8f39ec13cc911c070997339e959bc9e5b4fbad610200ba26fbe02",
+      "after_sha256": "ebae0d73bfe45b63e1e42b2ea77d2bb3e75e091df20ddb07639b50a1a259cd07"
+    },
+    "other_four_target_bodies_and_full_files_unchanged_from_reviewed_intake": true,
+    "reviewed_change_scope": "Public FallbackRefusal path + BlockHeight tip API and two missing async awaits; assertions/economics/timeouts unchanged per frozen peer; old hashes preserved historically."
+  },
+  "future_admission_prerequisites": [
+    "Explicit root allocation of these exact six ordered binary/name pairs and parent sole launch ownership; first FAIL stops rest, no retries.",
+    "Final v9b archive/source/diff/product/test ELF/bundle/runtime-metadata/immutable-metadata provenance including actual native server and bark-sdk ELFs; exact reviewed body binding not merely same literal names.",
+    "Fresh exact singleton UNIGNORED listing for each selected binary/name; canonical cwd just int-binaries only; CHAIN_SOURCE=bitcoind and native-fallback-test-bip84 feature proof.",
+    "Default profile 180seconds, threads1, retries0; no ignored override, no deadline extension or alternate profile.",
+    "Actual cached Nix/tools/product versions and 17 immutable runtime pins: 4products+4testELFs+3support+source-manifest+bundle-manifest+runtime-metadata=14core, plus native lightningd/grpc-plugin/hold-plugin=3CLN. Future product pins unknown and intentionally not constructed here.",
+    "CLN cases need actual native CLN26.06.6 under pinned LIGHTNINGD_EXEC/LIGHTNINGD_PLUGIN_DIR and unset LIGHTNINGD_DOCKER_IMAGE, fresh actual hash/version gate.",
+    "Fresh private per-case contexts/no prior result reuse, >=12MiB free SHM, scoped owned-PG/process/resource guard, parent admission/hash freeze, no shared target writes by testing agents.",
+    "Safe post-terminal exact selection/version-body/immutable pins/actorabsence proof; first FAIL retained and financially reconciled before any follow-up."
+  ],
+  "CLN_expected_historical_tool_pins": {
+    "applies_to": [
+      "failed_send_restart_v3",
+      "SDK_expired_new_LN_refusal_refresh"
+    ],
+    "native_version": "v26.06.6",
+    "native_path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+    "native_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+    "cln_grpc_plugin_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+    "hold_plugin_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+    "private_plugin_dir": "/fresh-cache/cln-adapter-evidence/plugins",
+    "environment": "Pin LIGHTNINGD_EXEC/LIGHTNINGD_PLUGIN_DIR; unset LIGHTNINGD_DOCKER_IMAGE. Fresh actualhash/version gate underrootruntimeallocation; sourceplanalone does not reverify futuretools."
+  },
+  "limits": [
+    "All six exact current target bodies are source-bound but NOT RUN; zero PASS/FAIL/FULL ML credit from this plan or compiled names.",
+    "No controls/pins files or runtime cohort created; no Cargo/build/metadata/list/preflight/native/actor/RPC/DB actions.",
+    "No edits to frozen original/API correction/intake reports or source. No global STATUS/COVERAGE/FINDINGS/public docs changes.",
+    "Original native failures and held unsafe spent-body/old near-expiry/operator-claim fixtures remain preserved and excluded.",
+    "Own later mixed/round0cf fix is not captured in v9b and is not selected."
+  ]
+}

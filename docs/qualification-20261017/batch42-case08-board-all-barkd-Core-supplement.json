@@ -1,0 +1,86 @@
+{
+  "kind": "BOUNDED_OFFLINE_RETAINED_CORE_SUPPLEMENT",
+  "parent_report": "batch42-P1-retained-core-reconciliation.json",
+  "parent_report_sha256": "e360d98f7e96ee6d782bdae0f6cdb587e13fa2d3d1cb1b4a392642d0a24942e2",
+  "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+  "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+  "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+  "actor_absence_receipts": [
+    {
+      "path": "/tmp/batch42-case01-02-actor-absence.json",
+      "sha256": "946696fc2fdf807e5bad43295d9a6a2f4346671e03a281e6fa01935a36bf5c75"
+    },
+    {
+      "path": "/tmp/batch42-case08-actor-absence.json",
+      "sha256": "007f6fadc031bc76aa8d280973cb0d6d4ddac14ddc409be942e3fd818a7b3c32"
+    }
+  ],
+  "case": {
+    "case": 8,
+    "name": "boards::board_all_barkd",
+    "run_id": "35ec7171-35f8-4dfe-8768-aca3380cd720",
+    "native_result": "PASS",
+    "native_seconds": 9.128,
+    "retained_tip": {
+      "height": 108,
+      "hash": "686343cef3f52dc8e63d518ecdb4a040c8478c582571fb5389bab2b6299ccb89"
+    },
+    "canonical_noncoinbase_transactions": 2,
+    "canonical_duplicate_spends": 0,
+    "selection_mode": "Unique exactsource-topology/amount/input-output/count/window constraints, not highestamount. NativePASS binds dynamicdestination/returnedtxid/UTXOmap; blockonlyreader cannot independentlyrecoverclientkeys.",
+    "details": {
+      "board": {
+        "txid": "0a36f1194343d1c7f0d9a29c14b0dc0f41c324d11a7b2d0e04a3f7357af95672",
+        "canonical": {
+          "height": 106,
+          "blockhash": "4b9524eaadeba45f5bf30f3db35df60041b3ceb552788e11d4e8e2bd5854a673",
+          "confirmations": 3
+        },
+        "signed_raw_sha256": "45344c719110ca7322f70e606611bafb801a113af46f0ae7896e19c13dc839c1",
+        "signed_bytes": 203,
+        "weight_wu": 485,
+        "vsize": 122,
+        "has_segwit_witness": true,
+        "inputs": [
+          {
+            "point": "879ed53b03ca16487ad73ef9e2657fa179b598b05bad0a8308d8c866a91b4d07:1",
+            "value_sat": 100000,
+            "script_hex": "0014e1cf98169c12fc88e9eadeb10e3b00d21f93832c"
+          }
+        ],
+        "outputs": [
+          {
+            "point": "0a36f1194343d1c7f0d9a29c14b0dc0f41c324d11a7b2d0e04a3f7357af95672:0",
+            "value_sat": 99392,
+            "script_hex": "5120bef198a5da499571211e0a09edfe1dcc6689ae257e462dc7a12730143445e5c3",
+            "unspent_at_retained_tip": true
+          }
+        ],
+        "actual_miner_fee_sat": 608
+      },
+      "native_declared_Ark_fee_parameters": {
+        "base_sat": 100,
+        "ppm": 10000
+      },
+      "Ark_fee_derived_from_actual_board_gross_sat": 1094,
+      "native_pending_confirmed_VTXO_net_sat": 98298,
+      "customer_equation": "100000 = 608 actualminerfee + 1094 declaredArkfee + 98298 nativeVTXOnet",
+      "scope": "Coreindependentlyconfirms exact100k\u2192singleactualsignedboardgross/minerfee/unspentanchor. ReturnedunsignedPSBTshape, VTXOnet/ID/registered/confirming\u2192spendable andsenderonchainzero remain boundnativePASS/sourceassertions; no walletDB/persistedfeeconfig read. Corecannotprove offchainArkfeeownership."
+    },
+    "retained_hashes_before_after_equal": true,
+    "retained_input_hashes": {
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/result.json": "d4c50e7bd151b40b4db434e6fc7006183950ef0bc34d72717ecb5d451ba47189",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/test-data/barkd/board_all_barkd/bitcoind/regtest/blocks/xor.dat": "f7071d85985116e039246fe686f6977bfc8d302346e3e0cb120cbd429d5f3188",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/test-data/barkd/board_all_barkd/bitcoind/regtest/debug.log": "cc8ea4194729c4c82af13ea0d2248f29c45e9f6b9d3d39f8c3e95c3829a369a0",
+      "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/test-data/barkd/board_all_barkd/bitcoind/regtest/blocks/blk00000.dat": "9ca84240831ddfcb1dd35740bb0f77c5f9cf02831396349ae5160d784183989d"
+    }
+  },
+  "scope_limits": [
+    "No independentlycapturedpublicdestination/returnedtxid capsule exists intheseoriginalfixtures. Uniquechain-topology corroboration is explicitlyboundtoactualnativePASS assertions; recipientidentity/quote/clientUTXOlisting/BDKcustody not inferredfromscripts.",
+    "No mempool read, so dropped/pending/noncanonical outputs outsidecanonicalchain are not exhaustivelyexcluded. Depthreportedexactly, neverCore6 from1/2/3blocks.",
+    "Customercharges/Arkfees distinctfromactualphysicalminerfees. No fulloperatorwalletcut/globalcustody/FULLML/production/count updates. OriginalFAILreceipts andchangedcandidateconditions retained.",
+    "Only three newcasefinancialsupplements and thisowned/tmp pureparser; no source/oldreport/controlfile/globalcounter changes.",
+    "Case01 customer_cut is a native liability/charged-fee equation, not a fullphysicalfundingDAG: offboard spendsoperatorwalletfunding. The old200kboardoutput stillbeingCoreunspent is not additionalcustomerprincipal afterrefresh/offboard; nativeforfeit/round/offboard proof governs economicdischarge. No globaloperatorconservation inferred."
+  ],
+  "originalFAILs_and_other_candidates": "Unchanged; actualv8e adaptedPASS independentofhistoricalFAIL. No fullML/globalcustody/Core6promotion."
+}

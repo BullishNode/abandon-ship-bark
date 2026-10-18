@@ -1,0 +1,96 @@
+{
+  "state": "SOURCE_ONLY_INDEPENDENT_INTAKE_HASH_ACK_NOT_COMPILED_NOT_RUN",
+  "canonical_HEAD_at_read": "4fa8997ba21158f20326c19f68efba5f42af1f3c",
+  "root_intake_path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/v9-money-fixtures-source-intake.json",
+  "root_intake_sha256": "2692fe65c3ad4bfa73264219b52a7d1b8c29149d91ba29406f0c04f574674aa0",
+  "prior_reviewed_plan_sha256": "cd43538fb754deded5abc5dc73ebde341b3f527d5a60016d0ff333693b811ec0",
+  "fixtures": [
+    {
+      "literal_name": "qualification_conflict_reorg::expiry_actual_partial_conflict_reorg_restores_one_canonical_payment",
+      "expected_binary": "ark-testing::server",
+      "canonical_path": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_conflict_reorg.rs",
+      "canonical_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "frozen_file_sha256": "15ec3495faf2baba22675d1a3960d85655d03066c48de5bed21e883271c6daf1",
+      "exact_target_body_sha256": "d3e0e4b1f678574980e4f15e7660df42faa4bf1b6676f1b1f27bd3dfa5fb17f6",
+      "target_body_equals_reviewed_frozen": true,
+      "whole_file_equals_frozen": true,
+      "module_declared": true,
+      "requires_CLN": false,
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "qualification_failed_swap::expiry_failed_swap_during_restart_pays_its_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "canonical_path": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_failed_swap.rs",
+      "canonical_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "frozen_file_sha256": "55bb4efbab450247052dec3aac00578a774c7fbe7ad02181625e9f5153521b1e",
+      "exact_target_body_sha256": "0fe44adff5714dd946d04155d8dc02a3c7f04a0ee46243939af0eddde514e17b",
+      "target_body_equals_reviewed_frozen": true,
+      "whole_file_equals_frozen": true,
+      "module_declared": true,
+      "requires_CLN": true,
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "qualification_offboard_restart::registered_offboard_restarts_before_nursery_handoff_and_pays_absent_owner_once",
+      "expected_binary": "ark-testing::server",
+      "canonical_path": "/home/francis/abandon-ship-fresh-integration/testing/tests/server/qualification_offboard_restart.rs",
+      "canonical_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "frozen_file_sha256": "6512e1ed42f4591afcc2f7b930da9eba7c24f6daaf5cc28cadb5d4fc1d4c5bf9",
+      "exact_target_body_sha256": "fa907f99edf3bfeb4964296e70f955685f4d1bd477f8331dc4429925103e40c7",
+      "target_body_equals_reviewed_frozen": true,
+      "whole_file_equals_frozen": true,
+      "module_declared": true,
+      "requires_CLN": false,
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "lightning::pay_hold_expired_inputs_are_refused_then_refresh_succeeds",
+      "expected_binary": "ark-testing::bark-sdk",
+      "canonical_path": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/lightning.rs",
+      "canonical_file_sha256": "3c3ed9228423f067887ff69d55dde42b7d24a513e72c14f7bc3f3c94413c5148",
+      "frozen_file_sha256": "3fef86397a648c4b11ef92f2f0c252b870e9ec766cc1ac14ff96075347964c88",
+      "exact_target_body_sha256": "eb82a1226e01d9a3ffee536fa5fae7b663dec32d18fc420e1984099448e8a414",
+      "target_body_equals_reviewed_frozen": true,
+      "whole_file_equals_frozen": false,
+      "module_declared": true,
+      "requires_CLN": true,
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "exit::watchman_sweeps_funding_tx_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "canonical_path": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/exit.rs",
+      "canonical_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "frozen_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "exact_target_body_sha256": "aa77742686167022fe1ea479184810357f44f15a098c3fb8e48fa22b2d0bea80",
+      "target_body_equals_reviewed_frozen": true,
+      "whole_file_equals_frozen": true,
+      "module_declared": true,
+      "requires_CLN": false,
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "exit::watchman_sweeps_vtxo_chain_during_exit",
+      "expected_binary": "ark-testing::bark-sdk",
+      "canonical_path": "/home/francis/abandon-ship-fresh-integration/testing/tests/bark_sdk/exit.rs",
+      "canonical_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "frozen_file_sha256": "bda6c497af71c94ea799fda1dc99d720bd6a034776428fa2d4fed5488386b9b1",
+      "exact_target_body_sha256": "6ca76e17a543d976bbe9a31bdd776e6658ea44cf57c01619021c130c68e17ecb",
+      "target_body_equals_reviewed_frozen": true,
+      "whole_file_equals_frozen": true,
+      "module_declared": true,
+      "requires_CLN": false,
+      "execution_credit": 0
+    }
+  ],
+  "reserve_after_sha256_verified": "c31a0b9110fef5cf87fcf8a003a002574a5d41559e218878b890a2117539c2f6",
+  "concrete_blockers": [],
+  "limits": [
+    "Working test bytes checked, not a captured v9 archive or ELF. No Cargo/listing/native actions.",
+    "SDK lightning wholefile differs intentionally: only target body equals frozen3fef; no unsafe wholefile replacement was assumed.",
+    "All bounded money/ML limitations of priorcd435 plan retained. Actual newsource capture, compiled metadata/ELFs, pertestfreshlisting, versions/features/toolpins and explicit runtime allocation still required.",
+    "Default180s, serial1, retries0 and firstFAILstop; LN requires actual nativeCLN26.06.6/adapter6a752/holdcef524 pins and Dockerunset.",
+    "No historical failure or result mutation; root owns productintegration/build."
+  ]
+}

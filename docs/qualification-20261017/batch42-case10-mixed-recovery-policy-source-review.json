@@ -1,0 +1,143 @@
+{
+  "scope": "Independent archived product-source policy diagnosis; no native execution or result change",
+  "candidate": {
+    "captured_head": "f1a609d9b44d0a7b7513d7d162e6b5e71f5a61f0",
+    "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+    "captured_dirty_diff_sha256": "e400afe675e86a268fc5c01f12e7df71c1fbe61304f34f946be055175389e777",
+    "canonical_head_at_initial_comparison": "4fa8997ba21158f20326c19f68efba5f42af1f3c",
+    "archive": "/home/francis/.cache/abandon-fresh/runtime-reorg-admission-v8e-20261017/source.tar.gz"
+  },
+  "verified_files": {
+    "testing/tests/barkd/recovery.rs": {
+      "sha256": "c52a0b7869a0a3b94dc8523ec799efaa269360eae59b0c31f4d31afb16a41296",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "bark/src/recovery.rs": {
+      "sha256": "64cbe72eb37638127188013667abb2eb0bfe3b5bbf4c8c0bc2c8cd0a68a09b14",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "bark/src/fallback/adoption.rs": {
+      "sha256": "b8638876ada4a16f0b95f94802365bdeb344e0feedbea2a3b3712f64cb420143",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "bark/src/fallback/spend_proof.rs": {
+      "sha256": "fa037b6f75e6f9caec96b1feb85688ec01a79173ad4bc03c4498dfd31d797fe9",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "bark/src/lib.rs": {
+      "sha256": "21dc182c3b4807eef1f974c2d22736de64fb630b0a8b3f34597dd1012f463fad",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "server/src/database/ordinary_spend.rs": {
+      "sha256": "49e992a1d2784ee6806b012c1c7c67c852139033b1f31d9437c422ce71dfce55",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "server/src/rpcserver/ark.rs": {
+      "sha256": "9ec7829a9ef6423a815a33ec51ce76b310c412bd4978f2585b59d6d14cc9890d",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "bark/src/balance.rs": {
+      "sha256": "bb656cd442f39693599905d5933fecff612e4e335a22002cf3e43207016796b0",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "bark/src/fallback/act_by.rs": {
+      "sha256": "35e52cd9b5e9f0294c27e3031cb68e85cd8400a3dd88698b641721889cc118be",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "bark/src/fallback/payouts.rs": {
+      "sha256": "96b37a838e40625956ba404dd99c647b95ae424a0385947a1da9ee18299e8e74",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "bark/src/vtxo/mod.rs": {
+      "sha256": "69b69d710f80f6c1a1b000affc1726c03fca3d6d500cbe37c14559323c8fb6ba",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    },
+    "lib/src/vtxo/mod.rs": {
+      "sha256": "193b7e4e4e7184f8f724d34dfcc65334c147384012dce4d956f4faa8da09b7e1",
+      "archive_manifest_verified": true,
+      "current_canonical_bytes_equal": true
+    }
+  },
+  "observed_native_failure_supplied_by_parent": {
+    "test": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "vtxo_id": "546a4fa9bbbf5bf78f5c303091f5abacb727f131b55f3d983145b33b48e42eca:0",
+    "actual_state": "Locked { movement_id: None, action_id: None }",
+    "expected_state": "Spent",
+    "assertion": "testing/tests/barkd/recovery.rs:26, called at739",
+    "disposition": "Original FAIL retained; assertions at740 onward, including eventual spend, not reached"
+  },
+  "independently_supplied_public_ledger_facts": {
+    "reviewer": "/root/client_test_gaps; sanitized messages, final client artifact to follow separately",
+    "exact_failed_source_role": "300000-sat second board, original successful bark.round refresh input; original Spent, restored Locked",
+    "current_spendable_cut_original_and_recovered_sat": [
+      299392,
+      300000,
+      50000
+    ],
+    "current_cut_total_sat": 649392,
+    "current_ids_equal": true,
+    "original_recovered_body_bytes_equal_per_id": true,
+    "recovered_movements": 0,
+    "old_source_anchor": "cfd157ccb5a784033a18f00e667b301a9d529fcf0c5568226489144a8159d48f:0",
+    "round_successor_anchor": "ec18eedf4efb97f41a85751abd1582777e75f35e77941643019dd8997f53107d:0",
+    "no_other_restored_body_under_old_source_anchor": true,
+    "independent_signature_validation": false
+  },
+  "source_trace": [
+    {
+      "location": "bark/src/recovery.rs:462\u2013475,494\u2013519",
+      "fact": "Owned server statuses map Spent to adopt_reported_spent, rather than directly persisting Spent."
+    },
+    {
+      "location": "bark/src/fallback/adoption.rs:40\u201351,70\u201397,99\u2013107",
+      "fact": "Preserve body as holderless Locked; validate against actual funding; fresh historical presence is unproven ownership; require complete post-status authenticated history."
+    },
+    {
+      "location": "server/src/database/ordinary_spend.rs:15\u201318",
+      "fact": "Ordinary proof rejects sources with spent_in_round or offboarded_in; round-input Spent marker is deliberately insufficient."
+    },
+    {
+      "location": "bark/src/fallback/spend_proof.rs:18\u201360,74\u201388",
+      "fact": "Ordinary discharge requires valid source and all final signed leaves against same funding; same anchor/policy domain; exact two-step direct source descendants; one common checkpoint; every unique branch/value and total original principal covered."
+    },
+    {
+      "location": "bark/src/fallback/adoption.rs:111\u2013130,147\u2013163",
+      "fact": "Absent verified ordinary proof or discharged entitlement leaves historical body quarantined; bounded ordinary proof retries cannot make unsupported round geometry valid."
+    },
+    {
+      "location": "bark/src/balance.rs:188\u2013198; bark/src/fallback/act_by.rs:95\u2013106",
+      "fact": "Unproven historical body alone is excluded from positive owned balance and does not authorize automatic exit."
+    }
+  ],
+  "assessment": {
+    "classification": "Supported-policy / fixture historical-state expectation mismatch for this exact round ancestor, based on source plus client public-ledger identity/anchor confirmation; not a native PASS or complete product-correctness verdict",
+    "why": "The specific historical input was replaced via cross-anchor round refresh. The supported ordinary discharge verifier cannot authorize that replacement from an ordinary same-anchor proof. Preserving its signed material as nonspendable/non-owned historical quarantine is distinct from losing the current round output. The observed current three-coin cut is intact.",
+    "not_implied": [
+      "Locked does not itself prove invalid signatures; several nondecision paths share this state.",
+      "A round spent marker or matching face value alone is not cryptographic discharge proof.",
+      "No final spend, seed-only absent-original recovery, canonical Core6 or global conservation claim follows from this failed case.",
+      "Case11 remains unstarted, not FAIL."
+    ]
+  },
+  "minimal_fixture_boundary": {
+    "permitted_proposal_only": "Keep partition_recovered strict. Handle only the exact captured refreshed-board ID within mixed and held-round target: assert holderless Locked, preserved body/anchor, exclusion from spendable cut and no fabricated balance; retain all current IDs/amounts/anchors, real final send and successor conservation.",
+    "must_preserve": "Genuine complete same-anchor Arkoor restore control at recovery.rs1017\u20131049 must still require old source Spent via shared helper1024. Invalid-body quarantine and authenticated ordinary discharge remain distinct.",
+    "product_extension_if_desired": "Retiring a cross-anchor round ancestor would require a separately authenticated owner-authorized round/forfeit linkage and actual validated successor coverage/discharge, not merely serverSpent or a valid unrelated new anchor. No such extension is proposed or implemented here."
+  },
+  "limitations": [
+    "No product/fixture/source packet changes, Cargo, runtime, RPC, DB, wallet or raw native log reads by this reviewer.",
+    "Client supplied ledger/blob/encoding facts are attributed, not duplicated or independently cryptographically validated here.",
+    "Current source equivalence was checked by exact bytes; Git HEAD alone is not the dirty candidate pin."
+  ]
+}

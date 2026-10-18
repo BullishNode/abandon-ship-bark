@@ -1,0 +1,4 @@
+Nextest run ID 35ec7171-35f8-4dfe-8768-aca3380cd720 with nextest profile: default
+Starting 1 test across 4 binaries (650 tests skipped)
+PASS [   9.128s] (1/1) ark-testing::barkd boards::board_all_barkd
+Summary [   9.129s] 1 test run: 1 passed, 650 skipped

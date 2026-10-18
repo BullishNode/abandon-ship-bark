@@ -1,0 +1,558 @@
+{
+  "kind": "INDEPENDENT_BATCH42_CLIENT_POSTFLIGHT",
+  "at": "2026-10-17T23:15:52.211880+00:00",
+  "state": "TERMINAL_FIRST_FAIL_PRESERVED_POSTFLIGHT_INTEGRITY_PASS",
+  "parent_terminal": "Parent23981confirmedexit100 beforepostflight.",
+  "counts": {
+    "started": 10,
+    "PASS": 9,
+    "FAIL": 1,
+    "NOT_STARTED": 2,
+    "additional_execution_by_reviewer": 0
+  },
+  "cases": [
+    {
+      "case": 1,
+      "name": "onchain::list_utxos",
+      "binary": "ark-testing::bark",
+      "result": "PASS",
+      "run_id": "d0d570b2-7a54-450b-954a-5aa868243468",
+      "native_seconds": 18.8,
+      "wall_seconds": 19.527,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case01/test-data/bark/list_utxos",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [
+        "require_bark_version!(> \"0.5.0\");"
+      ],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 2,
+      "name": "onchain::onchain_drain",
+      "binary": "ark-testing::bark",
+      "result": "PASS",
+      "run_id": "5eedaad4-5c87-4e34-a5e7-740492948d68",
+      "native_seconds": 9.366,
+      "wall_seconds": 10.015,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case02/test-data/bark/onchain_drain",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 3,
+      "name": "movement::board_board",
+      "binary": "ark-testing::bark",
+      "result": "PASS",
+      "run_id": "11868218-7733-4e01-abc4-4349893bb99d",
+      "native_seconds": 9.27,
+      "wall_seconds": 10.015,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case03/test-data/movement/board_board",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 4,
+      "name": "movement::movement_offboard",
+      "binary": "ark-testing::bark",
+      "result": "PASS",
+      "run_id": "1eb1c3dc-660d-48fa-9e13-4601d6b851f3",
+      "native_seconds": 12.726,
+      "wall_seconds": 13.524,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case04/test-data/movement/movement_offboard",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 5,
+      "name": "movement::movement_send_onchain",
+      "binary": "ark-testing::bark",
+      "result": "PASS",
+      "run_id": "bfb4f367-bac2-4f03-aa4a-2f2156edce78",
+      "native_seconds": 11.656,
+      "wall_seconds": 12.52,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case05/test-data/movement/movement_send_onchain",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [
+        "require_bark_version!(> \"0.5.0\");"
+      ],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 6,
+      "name": "offboard::bark_send_onchain",
+      "binary": "ark-testing::bark",
+      "result": "PASS",
+      "run_id": "0becc6c5-27f9-424f-911a-fd723536fd7f",
+      "native_seconds": 16.312,
+      "wall_seconds": 17.024,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case06/test-data/bark/bark_send_onchain",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 7,
+      "name": "offboard::bark_rejects_offboarding_dust_amount",
+      "binary": "ark-testing::bark",
+      "result": "PASS",
+      "run_id": "e00ecfc9-fc1d-4371-ad5c-8fe9cc699ab0",
+      "native_seconds": 11.477,
+      "wall_seconds": 12.018,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case07/test-data/bark/bark_rejects_offboarding_dust_amount",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 8,
+      "name": "boards::board_all_barkd",
+      "binary": "ark-testing::barkd",
+      "result": "PASS",
+      "run_id": "35ec7171-35f8-4dfe-8768-aca3380cd720",
+      "native_seconds": 9.128,
+      "wall_seconds": 10.018,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case08/test-data/barkd/board_all_barkd",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 9,
+      "name": "recovery::recovered_wallet_finds_boarded_vtxo",
+      "binary": "ark-testing::barkd",
+      "result": "PASS",
+      "run_id": "1f713f59-acdb-405f-824e-b03e97b9771e",
+      "native_seconds": 20.677,
+      "wall_seconds": 21.533,
+      "exit_code": 0,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case09/test-data/barkd/recovered_wallet_finds_boarded_vtxo",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "PASS sourceassertions reached; independentmoneyauditseparate."
+    },
+    {
+      "case": 10,
+      "name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "binary": "ark-testing::barkd",
+      "result": "FAIL",
+      "run_id": "15eac100-bf66-4630-b810-edcc7f433046",
+      "native_seconds": 35.103,
+      "wall_seconds": 36.058,
+      "exit_code": 100,
+      "resource_error": null,
+      "exact1unignored_freshlisting_and_actualrun": true,
+      "actual_profile": "default",
+      "timeout_seconds": 180,
+      "retries": 0,
+      "filtered_tests_skipped": 650,
+      "genuine_fixture_directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch42-ordinary-twelve-v8/case10/test-data/barkd/recovered_wallet_finds_mixed_origin_vtxos",
+      "nonempty_native_Core_blockfile_present": true,
+      "native_version_gates": [
+        "require_bark_version!(> \"0.5.0\");"
+      ],
+      "no_early_version_return_evidence": "Freshcontextpreflightandnewnativefixture/blockfilesexist afterpre-contextversiongates; actualbinary-boundnativePASS/FAIL reached.",
+      "financial_assertion_scope": "FAILbeforefinalmixedspendassertions; no completedlifecyclecredit."
+    }
+  ],
+  "failure": {
+    "case": 10,
+    "name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+    "run_id": "15eac100-bf66-4630-b810-edcc7f433046",
+    "native_seconds": 35.103,
+    "wall_seconds": 36.058,
+    "exit_code": 100,
+    "resource_error": null,
+    "safe_source_location": "testing/tests/barkd/recovery.rs:26:9",
+    "diagnosis": "Separateadditivepublicledger/pathdiagnosis pending; nofinanciallossorfixturepolicyconclusionhere."
+  },
+  "unstarted": [
+    {
+      "case": 11,
+      "name": "recovery::recovered_wallet_finds_round_vtxo",
+      "status": "NOT STARTED"
+    },
+    {
+      "case": 12,
+      "name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "status": "NOT STARTED"
+    }
+  ],
+  "immutable": {
+    "source_manifest_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+    "bundle_manifest_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+    "runtime_metadata_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+    "source_archive_sha256": "bbc2159090dc159aca79f10f362cc54d42e40de93d83254723da3774d73d812e",
+    "all5archivedsourcefiles_and12bodies_match_plan": true,
+    "target_body_hashes": [
+      {
+        "name": "onchain::list_utxos",
+        "body_sha256": "2ea3d73dbdf39828a110df07e025db31b206bfa1b0ad349fe515c3fb4495b53e"
+      },
+      {
+        "name": "onchain::onchain_drain",
+        "body_sha256": "9985bf9862fcdfdfb385bf74628fa86a8e94d469d7954a81c35571c5ef66e7d1"
+      },
+      {
+        "name": "movement::board_board",
+        "body_sha256": "c35fb82d976c5d637e682458b9717005bedfad803da62688409f2d77bcf80c25"
+      },
+      {
+        "name": "movement::movement_offboard",
+        "body_sha256": "ae0362fab02066be397fa84755d044f8c5bf570b48585a0667a1169c56856693"
+      },
+      {
+        "name": "movement::movement_send_onchain",
+        "body_sha256": "31d2694ea05d8164cd9721dc2f3b9ed3cc7a0a9b943e0406429fc32895c5f96c"
+      },
+      {
+        "name": "offboard::bark_send_onchain",
+        "body_sha256": "a2a607e12a0671337e5d1e20ca6d8220c4507bb3cc10a9d39c317fc48f8019c8"
+      },
+      {
+        "name": "offboard::bark_rejects_offboarding_dust_amount",
+        "body_sha256": "efccc9ea84a6871cd1fc1cad47db56cad9da6b1fd542690ac9ba2f1b13a433be"
+      },
+      {
+        "name": "boards::board_all_barkd",
+        "body_sha256": "d35b67840c0aa16a7280ab3cb1ebf3d5346daa45ab05db90fd59121e3497c829"
+      },
+      {
+        "name": "recovery::recovered_wallet_finds_boarded_vtxo",
+        "body_sha256": "c05792829e71cbb8b86eca8ee4342e60edcf336f91f40a2dfedaa4c9da20a687"
+      },
+      {
+        "name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+        "body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a"
+      },
+      {
+        "name": "recovery::recovered_wallet_finds_round_vtxo",
+        "body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714"
+      },
+      {
+        "name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+        "body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace"
+      }
+    ],
+    "parent_admission_sha256": "1e02608ddd6bb89095e4ca2d7c466549d4d034469d5887b813587767768c4a63",
+    "all22parent_control_profile_admission_freeze_hashes_unchanged": [
+      {
+        "file": "selection-proof.json",
+        "sha256": "6b704a51de04911e671df06e129e5871a8efbf0f88d1bdb6aa65cd26c914872a"
+      },
+      {
+        "file": "root-allocation.json",
+        "sha256": "97b24090420b2f0b0ccf0c530c5aef9080df87fc73235cf0bf970289db0fdf2a"
+      },
+      {
+        "file": "runtime-pins.sha256",
+        "sha256": "27a230e131ed5c0a01da27fced22243bf8d49e9bc0b2fbef2fc71c35d28342e4"
+      },
+      {
+        "file": "server-cohort.py",
+        "sha256": "504a68f859e4ea3b5a2c4f00cbd3984701fbd5da31cbe085d8b8afb6a9f77970"
+      },
+      {
+        "file": "preflight-static.py",
+        "sha256": "19758c8ebecb9191c9126e4ab00c655bcbb4375961015e802954fb8b30a62593"
+      },
+      {
+        "file": "fresh-listings.py",
+        "sha256": "30defe2e6c90425c54d5d0b2fae9a3e7cad3a4a87f5349d72d22ea3df5b6e711"
+      },
+      {
+        "file": "preflight.sh",
+        "sha256": "347cb1c36052be5c088b9fbdc28bf16961d31c8e33d4acb3f215cd16ee348bd0"
+      },
+      {
+        "file": "run.sh",
+        "sha256": "e40a0b894de7666b1be34335b134fe582c3b992852d93bf19a7ef616cb64b0b8"
+      },
+      {
+        "file": "case01/nextest.toml",
+        "sha256": "3b6c02bc4340d4477323c338619269cd0a996586d3906b9237924cb13d2777ed"
+      },
+      {
+        "file": "case02/nextest.toml",
+        "sha256": "a754073022c99a4876d2053fcb8c0b378ff855c58c3bbe54c32b87d22c82ab4a"
+      },
+      {
+        "file": "case03/nextest.toml",
+        "sha256": "4af14bf0212c3ce688cc4f2112a5511a85b8a5ac8a42fddc8e4dfc2a44aa37f1"
+      },
+      {
+        "file": "case04/nextest.toml",
+        "sha256": "6b87caa1aee3361ca554358724089537cd305754166c0f68b2c444c749250d3b"
+      },
+      {
+        "file": "case05/nextest.toml",
+        "sha256": "04eabfb8db1d8009cdb01b546e33ce741d8d43285a25360feb431a306a8bf185"
+      },
+      {
+        "file": "case06/nextest.toml",
+        "sha256": "90a2664c5bc11271b9f2e063adc1d62688b2facc14497cc2789dd4dfb08aacc5"
+      },
+      {
+        "file": "case07/nextest.toml",
+        "sha256": "65653b55a7a4c07ae619b6154bfbac3e0f094f132404490c130e47b017c77592"
+      },
+      {
+        "file": "case08/nextest.toml",
+        "sha256": "9373e05af01382abb7da6148a87df1d67815834d7a67f38c9f93179a330ec6e5"
+      },
+      {
+        "file": "case09/nextest.toml",
+        "sha256": "b33120e51c552fbc867d701a4428ced10ccee94912810507a47cbf75c8d055d9"
+      },
+      {
+        "file": "case10/nextest.toml",
+        "sha256": "ef1d70282a26de2699c11f8c7280ce299f67b90d62b816c40e0f18830add41a2"
+      },
+      {
+        "file": "case11/nextest.toml",
+        "sha256": "84f3d0e33dff1b7e41b998ca95e1fe887c30d766eaffe7ca3732214e3482c716"
+      },
+      {
+        "file": "case12/nextest.toml",
+        "sha256": "ae64241ea6f758095f4cff8ab0393250b369c3a58b90676870012cf6285fff67"
+      },
+      {
+        "file": "fresh-listing-admission.json",
+        "sha256": "08583760de6b72f0ac161d20adb06814efb533cbac39d920f3e478cb05deb2ca"
+      },
+      {
+        "file": "resource-admission.json",
+        "sha256": "6e38f4e0847fa7a6b15f864f3234ab4b732e3bab1de752a069bbae5877f17b09"
+      }
+    ],
+    "all14runtimepins_rehashed_unchanged": [
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/captaind",
+        "expected_sha256": "79dc4e8ac031c3c83e98e3818354c25f90217db2ed75d6250f227247c21f4d88",
+        "actual_sha256": "79dc4e8ac031c3c83e98e3818354c25f90217db2ed75d6250f227247c21f4d88",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/watchmand",
+        "expected_sha256": "12833888b556987c7c975fec155189589cb471fc31ca2e4e90c4c54d01fc9dea",
+        "actual_sha256": "12833888b556987c7c975fec155189589cb471fc31ca2e4e90c4c54d01fc9dea",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/bark",
+        "expected_sha256": "0ac32573d1684401a90acf630ddfee355ed3633c3f594d95d4b1f8644f63d980",
+        "actual_sha256": "0ac32573d1684401a90acf630ddfee355ed3633c3f594d95d4b1f8644f63d980",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/barkd",
+        "expected_sha256": "32efdb7b014e1ed3afe985e40aec59f28f9abeaeaf5a87dea42c27c35bd3d4be",
+        "actual_sha256": "32efdb7b014e1ed3afe985e40aec59f28f9abeaeaf5a87dea42c27c35bd3d4be",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-bark",
+        "expected_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+        "actual_sha256": "8021a00d12de23b22ef7f30b14b0f8830218d373be05533c0f4223064bceb423",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-bark-sdk",
+        "expected_sha256": "521639a01a7300b4c3304a46b70b4c5f9e8ef8f3ddd8d4edddc4b10827741219",
+        "actual_sha256": "521639a01a7300b4c3304a46b70b4c5f9e8ef8f3ddd8d4edddc4b10827741219",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-barkd",
+        "expected_sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+        "actual_sha256": "285f8b45bb8dec65d840072572966803c2b6a70c4ed7bcb21b46ea02cc155ae7",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/native-server",
+        "expected_sha256": "579c6b2dbd1b06edcef6e50b63c8e36b1e7d49fd68f0b66e853bb473259c8fe4",
+        "actual_sha256": "579c6b2dbd1b06edcef6e50b63c8e36b1e7d49fd68f0b66e853bb473259c8fe4",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/nextest-binaries-runtime.json",
+        "expected_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+        "actual_sha256": "fdc855f18d7ae09911078088c1209befc0c84929e47f3c6aecb0a4a8a1f852d1",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/source-manifest.json",
+        "expected_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+        "actual_sha256": "e00df6ae055872fc7b47d04dc39079146e86b41a52135ae354e6f1c466093ff1",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/manifest.json",
+        "expected_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+        "actual_sha256": "0dc54e827b8d73235b2149f228df5b07768a0b13394326ae2655e8edb8df28d6",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/deps/libark.rlib",
+        "expected_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "actual_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/deps/libark.so",
+        "expected_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "actual_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "matches": true
+      },
+      {
+        "path": "/fresh-cache/runtime-reorg-admission-v8e-20261017/support/debug/lock-holder",
+        "expected_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "actual_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "matches": true
+      }
+    ],
+    "preparation_pending_receipt_preserved_sha256": "06049b16e5e8f720b3a4a77a7c0b529a78903f5497de382ebb0bbf3928ff007f",
+    "candidate_receipt_preserved_sha256": "21fe4bac8746211c24aa2cd9c041804773d5a7ca8328cd367d08ca789c466b22",
+    "sourceonly_assertion_correction_receipt_sha256": "5697b28177b5552691b5428a037aa482fb354c82b75f94494a136d56b44d940d"
+  },
+  "cleanup_resources": {
+    "owned_groups": [
+      113986,
+      114386,
+      114724,
+      115078,
+      115483,
+      116096,
+      117245,
+      117925,
+      118817,
+      120224
+    ],
+    "remaining_owned_group_or_session_members": [],
+    "remaining_batch_scoped_processes": [],
+    "shm_available_bytes": 842133504,
+    "guard_bytes": 12582912,
+    "resource_guard_pass": true,
+    "all14pins_unchanged": true,
+    "cleanup_or_signals_performed": false
+  },
+  "safe_artifact_hashes": {
+    "case01/result.json": "be128b28c0b52125327fcbaa8386399040abe1e333d7fd08c57e387506dea41a",
+    "case01/selection-list-fresh.json": "147932d42025b7b2dcd17663455f8dad6ed0ec94483302f9ee3d5b65331c8b41",
+    "case01/nextest.log": "060930117f6c59e5cffb32ad4b68595f26236ecbf25505a6d2a368d5a8053b7b",
+    "case02/result.json": "8faa8c08b75fe554f525ae8c731241b581a6056416978558c84666cfd42cc3d5",
+    "case02/selection-list-fresh.json": "34d56da65143ee3ced6b54a06debe8c0f1b87f8ca6320c3ea87cb84c72e6eb45",
+    "case02/nextest.log": "69e9fa380794bef261b5546b95ee856793455a5ffbda98c03170fe3ff8329501",
+    "case03/result.json": "0b6f0d515c3c601ba45fe4282a65c363cff13cfacb1734de6961e585c4d9ce7a",
+    "case03/selection-list-fresh.json": "600b2d2cb80e61437223023b8599ee5d71953cd11a80b14d29b683e28da4a19e",
+    "case03/nextest.log": "6a73fad5a58a378a20517e3f42d775fe23e674523b118e3c3f33a2e73c496e60",
+    "case04/result.json": "896c4fdd8d02155665aab57f32fbf987bdb5f2b5695ef86fa0ec29af124e12c8",
+    "case04/selection-list-fresh.json": "0d480f259d0d16ca713e351507974b05e2b888614da957cdee80599307bd9c27",
+    "case04/nextest.log": "8e2870f6982eda20e880b9ecd6a8c9eac87e07a55ef32ac6d4ba45c860ab050c",
+    "case05/result.json": "ddba4d2e6e3532653cbce997a2b1b2ca50e0c938c9ee390e033a7bd9ba68b331",
+    "case05/selection-list-fresh.json": "c561536668fef45752140b5a313eaf366acf2290eccfe7257408d0c4d8f00809",
+    "case05/nextest.log": "79e7171af26d22cffbf4a0e4e16396686091d4915163b2ec0ac12a85e3837242",
+    "case06/result.json": "e1a6bfd8457c36a0fdd145b497be97b99ee350797fdae942c1072176aab6ad05",
+    "case06/selection-list-fresh.json": "4a69c6e25f3f19605a6f3f8e430d3b57c2f6fc4bcf4215028efe58ac29a85255",
+    "case06/nextest.log": "8c3b343d1b0e2d7df0fed36895930eecfa10948d1f98e88e1ea44261e1c9b357",
+    "case07/result.json": "4ac0f7a8443b060091529a51e83f9c93192a5a45dd8053f4533dedd9ee2335e7",
+    "case07/selection-list-fresh.json": "be59dcbf496dfce0f60c098f0bc28a91ebaa0630e1dd474080d4f7b2fe4d3d67",
+    "case07/nextest.log": "663a6de59710eb60393eb79e79859610ff17d17928dd367f6d7019cd76defba1",
+    "case08/result.json": "d4c50e7bd151b40b4db434e6fc7006183950ef0bc34d72717ecb5d451ba47189",
+    "case08/selection-list-fresh.json": "b6d1e7799388ec370cb192c6cd6e0ff5948c34c544de8c8c7ac817d0ae0d79fe",
+    "case08/nextest.log": "8eeb38dcd670b679add26fdf597e756b3caf4fc8585e9dd74d05cf89a89dc1ec",
+    "case09/result.json": "2997c3c1a232d830250fa0c9df24391efb3d3682bc3fa1b46329915f5451c8b9",
+    "case09/selection-list-fresh.json": "c071b975ab4c3b5ce3232bfa82d06513c93626aa5186a5ed8b3d4ef3694d0bb6",
+    "case09/nextest.log": "e2a9901f639aa6f8fbccf8d73415ba557cfd556baf593884d2728ffd4929861e",
+    "case10/result.json": "73d16b998c1cfe38bfa7659340737d8a65b6146c9f1e7c06c4cf820c3593f41b",
+    "case10/selection-list-fresh.json": "31fc85d3e52194712741e4bb8621c75abf80cda52b4f72d8b7e1a5d1e1c6e727",
+    "case10/nextest.log": "3c9c6ecbcd1527a826dbb0c32deed9ecaa40741bfaddc32484fefd07a9de85c6"
+  },
+  "limits": [
+    "9adaptedPASS/1actualFAIL/2unstartedonly; no12PASSorfullsuiteclaim.",
+    "OriginalFAIL/heldunsafeoriginal evidencepreserved. Case11sourcepredictionisnotactualFAIL; newquarantinecase12NOTSTARTED.",
+    "No service/DB/RPC/privatewallet/seed/keyreads orprocesssignals; nativepayloadreadonlyinternallythroughstrictmetadataregex, neverprinted/copied.",
+    "GenuinefixturepresenceandactualPASSruleoutpre-contextversiongateskip; thismetadatareceiptisnotindependentfinancialreconciliation.",
+    "CoreP1supplemente360 isseparate; exactcase10Lockedancestor/pathdiagnosisseparateadditiveevidence.",
+    "No FULLML/custody/production/deploymentcredit."
+  ],
+  "mutations": {
+    "controls_source_admission": 0,
+    "rerun_preflight_listing_Cargo": 0,
+    "cleanup_or_signals": 0,
+    "global_STATUS_COVERAGE_FINDINGS": 0
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "kind": "ordinary12_postnative_retainedCore_reconciliation_priorities",
+  "at": "2026-10-17T22:57:52.424825+00:00",
+  "status": "SOURCE ONLY FUTURE PLAN; v8dexactpins/allocation pending; no native outcome or executioncredit",
+  "target_inventory": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/source-only-build-intake-client.json",
+    "sha256": "c90480941224883eb260566565240343131b736c2751c3cd8cffe98d5a72d21c",
+    "historicalpin": "828863 sourceintake; futureactualv8dtargetmatch+compilerprovenance required",
+    "excluded_already_separate_batch40_adaptations": [
+      "bark_address_changes",
+      "bark_address_works_offline",
+      "send_onchain_fee_deducted"
+    ]
+  },
+  "cases": [
+    {
+      "literal_name": "boards::board_all_barkd",
+      "expected_binary": "ark-testing::barkd",
+      "frozen_target_body_sha256": "d35b67840c0aa16a7280ab3cb1ebf3d5346daa45ab05db90fd59121e3497c829",
+      "priority": 1,
+      "post_native_reconciliation_scope": "Required: actual signedboard vs returnedunsignedshape (clearwitnessonly), exactinput/outputgross/minerfee+declaredArkfee/net; actualboardanchor/confirmdepth afternativeblocks. Boardresponse or pendingVTXO alone is notcanonicalconfirmation.",
+      "reuse": "Existing barkd-board-all-retained-reconciliation.json as scope model; puredecoder, no walletDBopen underthisplan.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "onchain::list_utxos",
+      "expected_binary": "ark-testing::bark",
+      "frozen_target_body_sha256": "2ea3d73dbdf39828a110df07e025db31b206bfa1b0ad349fe515c3fb4495b53e",
+      "priority": 1,
+      "post_native_reconciliation_scope": "Required: exact boardanchor/changeoutpoint and rawprevouts/boardminerfee; exactoffboardtxid/destinationscript/net/customerfee; complete2UTXOmap equality+canonical inclusion/currentunspentness. Unconfirmed/missingcanonical outcomes reported, not promoted.",
+      "reuse": "Purebatch23decoder; nativepublicUTXOmap+publicfeequote capsule needed.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "onchain::onchain_drain",
+      "expected_binary": "ark-testing::bark",
+      "frozen_target_body_sha256": "9985bf9862fcdfdfb385bf74628fa86a8e94d469d7954a81c35571c5ef66e7d1",
+      "priority": 1,
+      "post_native_reconciliation_scope": "Required after money outcome: exact originalfundingmap\u2192unique drain/allactualinputs\u2192exactdestinationoutput+actualminerfee and quoted descriptorbound; canonicalhash/depth and senderinputsspent. Keep actual1block/sourcebudget, neverclaimCore6.",
+      "reuse": "Existing samekind onchain-drain-retained-reconciliation.json plus purebatch23decoder; no oldtxid/fee constants.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "movement::board_board",
+      "expected_binary": "ark-testing::bark",
+      "frozen_target_body_sha256": "c35fb82d976c5d637e682458b9717005bedfad803da62688409f2d77bcf80c25",
+      "priority": 2,
+      "post_native_reconciliation_scope": "Actual boardprevouts/alloutputs/minerfee matches movementmetadata; exactboardoutput/ordinarychange and canonicaldepth. Do not replace expected772 with fixed763.",
+      "reuse": "Existingbatch24 boardCoreparser forsingletransaction only; parameterize newfrozencontext/txid.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "movement::movement_offboard",
+      "expected_binary": "ark-testing::bark",
+      "frozen_target_body_sha256": "ae0362fab02066be397fa84755d044f8c5bf570b48585a0667a1169c56856693",
+      "priority": 2,
+      "post_native_reconciliation_scope": "Actual offboardprevouts/outputscript/net/minerfee and inclusion/absence; separate customerchargedfee/effectivebalance from physicalminerfee. Remainingoffchaincoins are nativeclient evidence, not Corealone.",
+      "reuse": "Existing movement-offboard-retained-reconciliation.json +puredecoder.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "movement::movement_send_onchain",
+      "expected_binary": "ark-testing::bark",
+      "frozen_target_body_sha256": "31d2694ea05d8164cd9721dc2f3b9ed3cc7a0a9b943e0406429fc32895c5f96c",
+      "priority": 2,
+      "post_native_reconciliation_scope": "Exact externalrecipientoutput and actualminerfee/confirmdepth; preserve customerinput=offchainchange+onchainrequested+quotedcustomerfee, historicalintermediate notadditive. Coredoesnotproveoffchainchangeownership withoutnativeproof.",
+      "reuse": "Existing movement-send-onchain-retained-reconciliation.json +puredecoder.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "offboard::bark_send_onchain",
+      "expected_binary": "ark-testing::bark",
+      "frozen_target_body_sha256": "a2a607e12a0671337e5d1e20ca6d8220c4507bb3cc10a9d39c317fc48f8019c8",
+      "priority": 2,
+      "post_native_reconciliation_scope": "Samefee/output distinction: actualrecipient300k/exactscript/canonicaldepth plusactualoperatorfundingprevouts/physicalfee; nativesignedreplacementchange+customerfee separate. No3generatedblocks\u21d2Core6 shortcut.",
+      "reuse": "Existing offboard-send-onchain-retained-reconciliation.json +puredecoder.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "offboard::bark_rejects_offboarding_dust_amount",
+      "expected_binary": "ark-testing::bark",
+      "frozen_target_body_sha256": "efccc9ea84a6871cd1fc1cad47db56cad9da6b1fd542690ac9ba2f1b13a433be",
+      "priority": 3,
+      "post_native_reconciliation_scope": "Conditional Coreaudit ifany fundedacceptedoffboard occurs; otherwise native typedrefusal/no unwantedspend is primary, not a fundedloss/recovery case. Absence only atretainedcanonicaltip; no mempoolabsence unless separatelydecoded/authorized.",
+      "reuse": "Nativepublicrefusal/sourcecoins capsule first; puredecoder onlyifidentifiedfinancialtx/inputscope.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "recovery::recovered_wallet_finds_boarded_vtxo",
+      "expected_binary": "ark-testing::barkd",
+      "frozen_target_body_sha256": "c05792829e71cbb8b86eca8ee4342e60edcf336f91f40a2dfedaa4c9da20a687",
+      "priority": 3,
+      "post_native_reconciliation_scope": "Coreauthenticates actualfunding/boardanchor once and confirmdepth; nativeexactoriginal/recoveredcoinidentity/bodyamount+recipientpayment proveoffchainrecovery, not independentCorealone. Neveraddbothwalletcopies as principal.",
+      "reuse": "Existing barkd-recovery-boarded-retained-reconciliation.json as sourcecounterparts, puredecoderanchors only.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "recovery::recovered_wallet_finds_mixed_origin_vtxos",
+      "expected_binary": "ark-testing::barkd",
+      "frozen_target_body_sha256": "3e7214db40d4d198650eb060df2603ea10b90a9730c4e335b93c4be8f23be58a",
+      "priority": 3,
+      "post_native_reconciliation_scope": "Coreauthenticates board/roundanchors+actualfees whereidentified; source/recipient/currenteconomiccut remainsnative signedcoin/history evidence. Spentoldboard/historicalintermediates excluded, not additive; originalalive setup not seedonly/absentoriginal.",
+      "reuse": "Existing barkd-recovery-mixed-retained-reconciliation.json +puredecoderidentifiedanchors.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "recovery::recovered_wallet_finds_round_vtxo",
+      "expected_binary": "ark-testing::barkd",
+      "frozen_target_body_sha256": "e15d21dceb3bf99724a5e9e6a07294ab39198e52af072b913af201dd8eb2d714",
+      "priority": 3,
+      "post_native_reconciliation_scope": "Coreauthenticates actualroundfundinganchor and networkconfirmation, while genuinefinalpay+nativecoinliability proves restoredoffchainright. No whole-roundoperatorbalance claim fromanchor alone.",
+      "reuse": "Puredecoder; exactsignedcoin/anchor and nativepublicpayment evidence supplied byclientowner.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    },
+    {
+      "literal_name": "recovery::recovered_wallet_quarantines_invalid_spent_vtxos",
+      "expected_binary": "ark-testing::barkd",
+      "frozen_target_body_sha256": "0f1742b81d049783a9da3a02e49769997fabe409afe1b56f6232f7732ff4cace",
+      "priority": 3,
+      "post_native_reconciliation_scope": "Corecancheck genuineboard/validsuccessoranchors only. Actualinvalid-bodyLocked/zeroallbalancebuckets and honestfreshcontrolSpent/exactchange are nativeproof; blockdata cannotestablishquarantine/offchainownership. No executeunsafeoriginalserverwordoracle.",
+      "reuse": "Frozenquarantinev2source/reviews+clientpublicnativeassertions; no need genericwholechainmoneyrecon beyondidentifiedanchors.",
+      "future_owner": "backend_test_gaps retainedCoreonly afterrootallocation/actorsabsent; client_test_gaps suppliesnativepubliccoin/fee/receiptsemantics",
+      "execution_credit": 0
+    }
+  ],
+  "default_policy": "Every actualmoneyFAIL/unknown stopscohort forreadonlyrecon before any retry/continuation. P1threecases get independentretainedCoreproof evenonPASS; P2fourphysicalfee/outputcases shouldgeta boundedCoretransactionaudit onPASS; P3native/offchainornegativecases onlyidentifiedchainanchors unlessrootasksbroader. OriginalFAIL/status untouched.",
+  "safe_handoff_required": [
+    "Parentterminal+scopedactors/sessionabsence beforeblockreads; exactfuturev8dsource/archive/ELF/metadata/bodypins and actualcase/result/runID/remainingassertions state.",
+    "Sanitizedpublicfundingpoints/transactionIDs/destinationSPKs+amounts, feequote/configpublicparameters and nativeUTXOmap/historysummary asapplicable. Do notguess targetfromhighestamount orreadfullnativelogs/seed/config toderiveidentities.",
+    "Onlyblk*.dat/xor.dat/finaldebugUpdateTip+safeproof/results read; hashallinputs before/after, reconstructcanonicalheaderancestry/actualprevouts/uniqueconsumption, reportactualretaineddepth/missingtx. NoCore/RPC/SQL/DB/wallet/privatebackupopening underthisplan.",
+    "Corecannot prove BDKcustody, offchainVTXOspendability/quarantine, seedonlyrestoration orwholeglobalfundingcut fromscripts. Those staynativeassertionprovenance; no fullML/production/fairness/throughputcredit."
+  ],
+  "reused_decoder_paths": [
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch23-upstream-bark-unstarted46-reconcile-core-blocks.py",
+      "reuse": "Onlydigest/vi/tx purefunctions; originaltop-levelcontext/txid/scripthardcoded, neverexecuteunchanged."
+    },
+    {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch24-upstream-bark-unstarted29-financial-core-supplement-reconcile-core-blocks.py",
+      "reuse": "Singleboard ancestry/prevoutfee model; newcasepins/targets required, not oldsourcefeeconstants."
+    },
+    {
+      "path": "/tmp/batch41-retained-core-reconcile-backend.py",
+      "reuse": "Only boundedDAG/retainedcanonicalancestry/Merkle/unique-spend idea ifneeded; hardcodedbatch41/1M/sponsorassumptions mustnotbeexecutedunchanged."
+    },
+    {
+      "path": "/tmp/reconcile-cold-backup-core-client.py",
+      "reuse": "Fullgraphcut referenceonly; hardcodedbatch38, do notexecuteunchanged."
+    }
+  ],
+  "actions_performed": "Readsourceintake/notes and preparedthisnewexternalplan only. No controlprivatepath/source/reportrewrites/framework/Cargo/list/native/Core/DB/actors/counters."
+}

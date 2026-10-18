@@ -49,8 +49,8 @@ ordinary readiness, ordinary per-output allocation (P1 fee, P3 same-height merge
 
 **Who reclaims the grants.** Second's own watchman, unchanged. Its policy already claims an expired
 `ServerHtlcRecv` leaf through the server timeout clause (`upstream/server/src/watchman/policy.rs:209-228`),
-and the frontier records the spend as `chain_resolution = revoked` (`server/src/watchman/frontier.rs:105-117`,
-classifier `:183-221`). The fork used to **block** this reclaim while the sender was unresolved; B removes that
+and the frontier records the spend as `chain_resolution = revoked` (`server/src/watchman/frontier.rs:105-115`,
+classifier `:188-231`). The fork used to **block** this reclaim while the sender was unresolved; B removes that
 block.
 
 **Code** (all at `e279e7bcf`):

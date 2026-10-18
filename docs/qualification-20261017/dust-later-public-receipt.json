@@ -1,0 +1,319 @@
+{
+  "combined_fallback_debit_sat": -101200,
+  "customer_forfeited_sat": 1200,
+  "customer_paid_sat": 196800,
+  "customer_policy_fee_sat": 2000,
+  "customer_principal_sat": 200000,
+  "final_cut": {
+    "actual_graph_miner_fee_sat": 4562,
+    "all_graph_outpoints": [
+      "61d9fe8306615e976b3996c6a73816c9b3e9c0fc309e4d80f793d27f3b2c6405:0",
+      "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d:0",
+      "35ac62299e5ccf8aa62dc235058c0487ac7b615af5463ef1e2485154d0780031:0",
+      "71b1b10a6d63885eda4d7c3c449b6337f6c7b7e47e66f6aa2935f050223a7b3f:1",
+      "49e721870b2357c85a2ef2347f02ecfe98b5a9d2d07d67d685e58f5400e78476:0",
+      "49e721870b2357c85a2ef2347f02ecfe98b5a9d2d07d67d685e58f5400e78476:1",
+      "49e721870b2357c85a2ef2347f02ecfe98b5a9d2d07d67d685e58f5400e78476:2",
+      "d4ae5d0dfc51334c6b6f17f7b56fb67dc051fcbd3614a999efd25b86f2118dad:0",
+      "76ac5c9b1242c0fd52b870ab7e80d734a022dd5af666ec315df4f993d95c63ce:0",
+      "95f991d0b84ddc2bd4ea860109f10457bdb2f898c0aaded0217dd5a89b4205d4:1",
+      "6214e6956f9544783e72cd5a76344482ed96b02e7da8ac6d8af4955ab4ceb8ee:0",
+      "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:0",
+      "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:1",
+      "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:2"
+    ],
+    "canonical_packages": [
+      {
+        "actual_child_miner_fee_sat": 2281,
+        "canonical_hash": "10f11a8a00909414a0ed6373b3343dfa8a0a62e5c2254591252d592d32729c66",
+        "canonical_height": 149,
+        "child_txid": "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d",
+        "parent_miner_fee_sat": 0,
+        "parent_txid": "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc"
+      },
+      {
+        "actual_child_miner_fee_sat": 2281,
+        "canonical_hash": "6b177fff069c2809fba3078af85138e096ba5d03639e18a9a8b72e52b7f9e55d",
+        "canonical_height": 200,
+        "child_txid": "d4ae5d0dfc51334c6b6f17f7b56fb67dc051fcbd3614a999efd25b86f2118dad",
+        "parent_miner_fee_sat": 0,
+        "parent_txid": "49e721870b2357c85a2ef2347f02ecfe98b5a9d2d07d67d685e58f5400e78476"
+      }
+    ],
+    "canonical_payee_outputs": [
+      {
+        "amount_sat": 97800,
+        "outpoint": "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:0",
+        "script": "00143e45b832b5f7317ea174d20ef7f7954daacf6e5e"
+      },
+      {
+        "amount_sat": 99000,
+        "outpoint": "49e721870b2357c85a2ef2347f02ecfe98b5a9d2d07d67d685e58f5400e78476:0",
+        "script": "001458df4fd880c10df954e5643e164c870cb9858e4d"
+      }
+    ],
+    "confirmed_watch_owned_terminal_points": [
+      "61d9fe8306615e976b3996c6a73816c9b3e9c0fc309e4d80f793d27f3b2c6405:0",
+      "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d:0",
+      "d4ae5d0dfc51334c6b6f17f7b56fb67dc051fcbd3614a999efd25b86f2118dad:0",
+      "6214e6956f9544783e72cd5a76344482ed96b02e7da8ac6d8af4955ab4ceb8ee:0"
+    ],
+    "expected_payees": [
+      {
+        "expected_amount_sat": 99000,
+        "script": "001458df4fd880c10df954e5643e164c870cb9858e4d"
+      },
+      {
+        "expected_amount_sat": 97800,
+        "script": "00143e45b832b5f7317ea174d20ef7f7954daacf6e5e"
+      },
+      {
+        "expected_amount_sat": null,
+        "script": "00147b4841e4c5de6b8d0121f163b8b7df7aa61524e8"
+      }
+    ],
+    "graph_txids": [
+      "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d",
+      "49e721870b2357c85a2ef2347f02ecfe98b5a9d2d07d67d685e58f5400e78476",
+      "d4ae5d0dfc51334c6b6f17f7b56fb67dc051fcbd3614a999efd25b86f2118dad",
+      "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc"
+    ],
+    "operator_configured_script": "512032da90634a2b8dcddbbb5bd541d7a78a80add85935344d3c7dbab423f51e6542",
+    "remaining_sat": 595438,
+    "roots": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "35ac62299e5ccf8aa62dc235058c0487ac7b615af5463ef1e2485154d0780031:0",
+        "script": "51204f73930a40a446348c9a321887b063eaa059a5a8582ba849f60864908e3f8736"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "76ac5c9b1242c0fd52b870ab7e80d734a022dd5af666ec315df4f993d95c63ce:0",
+        "script": "51205fda7358d3ce11f5b4994c4252895833eb8d6024ebc7188384ced73494149ff9"
+      }
+    ],
+    "selected_input_sat": 600000,
+    "sponsors": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "61d9fe8306615e976b3996c6a73816c9b3e9c0fc309e4d80f793d27f3b2c6405:0",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "71b1b10a6d63885eda4d7c3c449b6337f6c7b7e47e66f6aa2935f050223a7b3f:1",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "95f991d0b84ddc2bd4ea860109f10457bdb2f898c0aaded0217dd5a89b4205d4:1",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "6214e6956f9544783e72cd5a76344482ed96b02e7da8ac6d8af4955ab4ceb8ee:0",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      }
+    ],
+    "terminal_utxos": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "61d9fe8306615e976b3996c6a73816c9b3e9c0fc309e4d80f793d27f3b2c6405:0",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 97719,
+        "outpoint": "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d:0",
+        "script": "5120d08ca06b0496eaeaf3248f9f8f918c221efaf0cb7cff2df01f951422402aa937"
+      },
+      {
+        "amount_sat": 99000,
+        "outpoint": "49e721870b2357c85a2ef2347f02ecfe98b5a9d2d07d67d685e58f5400e78476:0",
+        "script": "001458df4fd880c10df954e5643e164c870cb9858e4d"
+      },
+      {
+        "amount_sat": 1000,
+        "outpoint": "49e721870b2357c85a2ef2347f02ecfe98b5a9d2d07d67d685e58f5400e78476:1",
+        "script": "512032da90634a2b8dcddbbb5bd541d7a78a80add85935344d3c7dbab423f51e6542"
+      },
+      {
+        "amount_sat": 97719,
+        "outpoint": "d4ae5d0dfc51334c6b6f17f7b56fb67dc051fcbd3614a999efd25b86f2118dad:0",
+        "script": "51208b12813d81780a0bd024b67be6dcf691777aad5574854f9684283edd1a4174b8"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "6214e6956f9544783e72cd5a76344482ed96b02e7da8ac6d8af4955ab4ceb8ee:0",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 97800,
+        "outpoint": "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:0",
+        "script": "00143e45b832b5f7317ea174d20ef7f7954daacf6e5e"
+      },
+      {
+        "amount_sat": 2200,
+        "outpoint": "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:1",
+        "script": "512032da90634a2b8dcddbbb5bd541d7a78a80add85935344d3c7dbab423f51e6542"
+      }
+    ]
+  },
+  "first_core_tip_hash": "5efaed18ab59b0bfbb876bad8e04fff965d2da0275658b56e695cd9430f97411",
+  "first_core_tip_height": 155,
+  "first_cut": {
+    "actual_graph_miner_fee_sat": 2281,
+    "all_graph_outpoints": [
+      "61d9fe8306615e976b3996c6a73816c9b3e9c0fc309e4d80f793d27f3b2c6405:0",
+      "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d:0",
+      "71b1b10a6d63885eda4d7c3c449b6337f6c7b7e47e66f6aa2935f050223a7b3f:1",
+      "76ac5c9b1242c0fd52b870ab7e80d734a022dd5af666ec315df4f993d95c63ce:0",
+      "95f991d0b84ddc2bd4ea860109f10457bdb2f898c0aaded0217dd5a89b4205d4:1",
+      "6214e6956f9544783e72cd5a76344482ed96b02e7da8ac6d8af4955ab4ceb8ee:0",
+      "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:0",
+      "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:1",
+      "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:2"
+    ],
+    "canonical_packages": [
+      {
+        "actual_child_miner_fee_sat": 2281,
+        "canonical_hash": "10f11a8a00909414a0ed6373b3343dfa8a0a62e5c2254591252d592d32729c66",
+        "canonical_height": 149,
+        "child_txid": "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d",
+        "parent_miner_fee_sat": 0,
+        "parent_txid": "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc"
+      }
+    ],
+    "canonical_payee_outputs": [
+      {
+        "amount_sat": 97800,
+        "outpoint": "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:0",
+        "script": "00143e45b832b5f7317ea174d20ef7f7954daacf6e5e"
+      }
+    ],
+    "confirmed_watch_owned_terminal_points": [
+      "61d9fe8306615e976b3996c6a73816c9b3e9c0fc309e4d80f793d27f3b2c6405:0",
+      "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d:0",
+      "95f991d0b84ddc2bd4ea860109f10457bdb2f898c0aaded0217dd5a89b4205d4:1",
+      "6214e6956f9544783e72cd5a76344482ed96b02e7da8ac6d8af4955ab4ceb8ee:0"
+    ],
+    "expected_payees": [
+      {
+        "expected_amount_sat": null,
+        "script": "001458df4fd880c10df954e5643e164c870cb9858e4d"
+      },
+      {
+        "expected_amount_sat": 97800,
+        "script": "00143e45b832b5f7317ea174d20ef7f7954daacf6e5e"
+      }
+    ],
+    "graph_txids": [
+      "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d",
+      "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc"
+    ],
+    "operator_configured_script": "512032da90634a2b8dcddbbb5bd541d7a78a80add85935344d3c7dbab423f51e6542",
+    "remaining_sat": 497719,
+    "roots": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "76ac5c9b1242c0fd52b870ab7e80d734a022dd5af666ec315df4f993d95c63ce:0",
+        "script": "51205fda7358d3ce11f5b4994c4252895833eb8d6024ebc7188384ced73494149ff9"
+      }
+    ],
+    "selected_input_sat": 500000,
+    "sponsors": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "61d9fe8306615e976b3996c6a73816c9b3e9c0fc309e4d80f793d27f3b2c6405:0",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "71b1b10a6d63885eda4d7c3c449b6337f6c7b7e47e66f6aa2935f050223a7b3f:1",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "95f991d0b84ddc2bd4ea860109f10457bdb2f898c0aaded0217dd5a89b4205d4:1",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "6214e6956f9544783e72cd5a76344482ed96b02e7da8ac6d8af4955ab4ceb8ee:0",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      }
+    ],
+    "terminal_utxos": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "61d9fe8306615e976b3996c6a73816c9b3e9c0fc309e4d80f793d27f3b2c6405:0",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 97719,
+        "outpoint": "a836630b3b535fb7de0d7653a238d8543d3516c7ff57eacd81bce30e1837362d:0",
+        "script": "5120d08ca06b0496eaeaf3248f9f8f918c221efaf0cb7cff2df01f951422402aa937"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "95f991d0b84ddc2bd4ea860109f10457bdb2f898c0aaded0217dd5a89b4205d4:1",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "6214e6956f9544783e72cd5a76344482ed96b02e7da8ac6d8af4955ab4ceb8ee:0",
+        "script": "512005bdab0abada755099cc45d8c4dafd4ffaba0ef341e209dc4018b460f50dc2d9"
+      },
+      {
+        "amount_sat": 97800,
+        "outpoint": "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:0",
+        "script": "00143e45b832b5f7317ea174d20ef7f7954daacf6e5e"
+      },
+      {
+        "amount_sat": 2200,
+        "outpoint": "7a11e16008b902b1810433c8e54f5bf036d350a66fd51397f795bcd3bd4f72fc:1",
+        "script": "512032da90634a2b8dcddbbb5bd541d7a78a80add85935344d3c7dbab423f51e6542"
+      }
+    ]
+  },
+  "first_donor_change_user_pubkey": "034d8d5a4cf1a5a05cf0376de42619dba63f584ffab3dd85c22f077b103ed7556a",
+  "first_donor_change_vtxo_id": "36467df3bb39e04fc54a69cb6a6566cd77f7a39c6a6af5e34b6c82aee1cc3688:0",
+  "first_donor_mailbox": "03611484159d26d7c69c752736127326c043aa98f86ec3f1074d984cf0948a83da",
+  "first_donor_registered_script": "00143e45b832b5f7317ea174d20ef7f7954daacf6e5e",
+  "later_core_tip_hash": "618a902238c3dd5583a825bde209b8558344476da216fff9df5ebf0bd0dd3e99",
+  "later_core_tip_height": 206,
+  "later_donor_mailbox": "033ce2674dc44ef05fdb18bcb29f6abfcfd6c95ef81bb5e928fe083257ac4c09f9",
+  "later_payout_sat": 99000,
+  "limits": "Two manual-client expiry epochs; selected600kcut excludes ordinaryfundingchange/boardminer. No CLN/backup/seedrestore/defaultdaemon/globalcustody/FULLML credit.",
+  "new_allocation_id": 2,
+  "new_chain_anchor": "35ac62299e5ccf8aa62dc235058c0487ac7b615af5463ef1e2485154d0780031:0",
+  "new_expiry_height": 196,
+  "new_fee_sat": 1000,
+  "new_forfeited_sat": 0,
+  "new_gross_sat": 100000,
+  "new_owner_mailbox": "0234205be120f0709f71cd76787eb25da78be3ab352092c5387f25844e0adbf7ac",
+  "new_registered_script": "001458df4fd880c10df954e5643e164c870cb9858e4d",
+  "new_user_pubkey": "03bab7a9aee7c127727b2db0df57db0f2b9871eae868d19de1da78dff3cdd30176",
+  "new_vtxo_id": "8a2b1e14f9c0c689d458a89b4da8cf71e2367613470c5a1d0dbf0bf65a9cec1c:0",
+  "old_allocation_id": 1,
+  "old_chain_anchor": "76ac5c9b1242c0fd52b870ab7e80d734a022dd5af666ec315df4f993d95c63ce:0",
+  "old_expiry_height": 145,
+  "old_fee_sat": 0,
+  "old_forfeited_sat": 1200,
+  "old_gross_sat": 1200,
+  "old_payout_sat": 0,
+  "old_user_pubkey": "02537ea131bd8d5a62c6c97924300baac629785c3091fa210c397477abccc78364",
+  "old_vtxo_id": "1ad3c4afad2714d2ba3a3342e31f374d848a40d42daeddecc58d0772ccf524e2:0",
+  "outside_cut_board_miner_fees_sat": [
+    763,
+    763
+  ],
+  "outside_cut_ordinary_change_sat": [
+    99237,
+    99237
+  ],
+  "overall_pass": true,
+  "phase": "COMPLETE",
+  "recipient_mailbox": "0234205be120f0709f71cd76787eb25da78be3ab352092c5387f25844e0adbf7ac",
+  "registered_recipient_script": "001458df4fd880c10df954e5643e164c870cb9858e4d",
+  "server_pubkey": "03f7e867a5f4a18d2760b54c07d3d7eaf81344d17ce84a379061d1266aecb4c850"
+}

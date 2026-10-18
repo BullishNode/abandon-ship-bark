@@ -1,0 +1,148 @@
+{
+  "C_fallback_movement_id": 2,
+  "canonical_tip_hash": "6d69e17e865768ec848b0be8ee1debfd351bf97e7d893c8bd8758ddf7c12b970",
+  "canonical_tip_height": 155,
+  "expiry_height": 145,
+  "final_forfeited_sat": 0,
+  "final_gross_sat": 100000,
+  "final_payout_sat": 99000,
+  "final_policy_fee_sat": 1000,
+  "limits": "Three original manual SDK accounts/two ordinary full-value sends/one expiry. Selected300kcut excludes ordinaryfundingchange/boardminer. No HTLC/reorg/refresh/backup/defaultdaemon/globalcustody/FULLML credit.",
+  "outside_cut_board_miner_fee_sat": 763,
+  "outside_cut_customer_ordinary_change_sat": 99237,
+  "overall_pass": true,
+  "owners": [
+    {
+      "label": "A",
+      "mailbox": "03b6aad41a5e80e8cf7b69ac8ad8963f9fd27e801d333a08cabb6d8124b4705fc8",
+      "ordinary_send_movement_id": 2,
+      "registered_script": "00144a9754ba6bd4606d9f63639e5693a48e78a3c8ea",
+      "user_pubkey": "0239f1656c4fe2b585023a7b3b4277a49d3a4e6e845b2cf80181977fdd50a0ac26",
+      "vtxo_id": "4b8e4f2f07051f3d1dcf240196857f7adfb72581c84189fa5255cb6a43cfa21f:0"
+    },
+    {
+      "label": "B",
+      "mailbox": "027904d86f29ddadd00828030fff9a0963e60601741e41e6ccc5e13fb0a6e13988",
+      "ordinary_send_movement_id": 2,
+      "registered_script": "0014cc2e1f2fd85c30152caf0dcb409d0b0e9d375aea",
+      "user_pubkey": "03997408773b35c6941610dde7597c76cd15c08cf430a811451794cb180c1bf153",
+      "vtxo_id": "3c8f20d2c2c08ac79c8391ef0ee2181a8cc68ea2f705896390233d6fc818b89f:0"
+    },
+    {
+      "allocation_id": 1,
+      "label": "C",
+      "mailbox": "029c995722751f2fd263c148e1135b4a127fc3c6d2608ce0859d8d8ab60b385992",
+      "payout_outpoint": "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da:0",
+      "registered_script": "0014e5b46c48cbc0b0bcc0ebed344b5e03445056d548",
+      "user_pubkey": "022afe4156ca262f6d78608e07865524611a21001f352fc5af7de6fde67f4715f0",
+      "vtxo_id": "9f79a9f473711c66057d074869b119e49c98b7e329978880ef03043c390be2ac:0"
+    }
+  ],
+  "phase": "COMPLETE",
+  "post_return_tip_hash": "612a2b4daf20f2240bfb47a5346814b9703dd58198b4633bfbecda34cc4dd2d2",
+  "post_return_tip_height": 156,
+  "selected_finite_cut": {
+    "actual_graph_miner_fee_sat": 2281,
+    "all_graph_outpoints": [
+      "ed944d5cfc4a9bd0d4aae55c0973c07c88a54bfbb256550b39caecee75300d33:0",
+      "78b424ae23d104a0404cc35e87a2da608e27c4f01899f399498d7e172b31de74:0",
+      "2d25ce552526c07b46b0386dc6e78ef6bd285b9588f9a4166550a26c185d8bc4:0",
+      "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da:0",
+      "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da:1",
+      "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da:2",
+      "bb892dee3637028f32617171e02236e5755b16e0e1e172a20dfeec87d1762bf3:0"
+    ],
+    "canonical_packages": [
+      {
+        "actual_child_miner_fee_sat": 2281,
+        "canonical_hash": "0339eeb7e695f1267d5084d493d55459bba8c9dd05ce08a48ebc19af4619dfb9",
+        "canonical_height": 149,
+        "child_txid": "2d25ce552526c07b46b0386dc6e78ef6bd285b9588f9a4166550a26c185d8bc4",
+        "parent_miner_fee_sat": 0,
+        "parent_txid": "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da"
+      }
+    ],
+    "canonical_payee_outputs": [
+      {
+        "amount_sat": 99000,
+        "outpoint": "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da:0",
+        "script": "0014e5b46c48cbc0b0bcc0ebed344b5e03445056d548"
+      }
+    ],
+    "confirmed_watch_owned_terminal_points": [
+      "78b424ae23d104a0404cc35e87a2da608e27c4f01899f399498d7e172b31de74:0",
+      "2d25ce552526c07b46b0386dc6e78ef6bd285b9588f9a4166550a26c185d8bc4:0"
+    ],
+    "expected_payees": [
+      {
+        "expected_amount_sat": null,
+        "script": "00144a9754ba6bd4606d9f63639e5693a48e78a3c8ea"
+      },
+      {
+        "expected_amount_sat": null,
+        "script": "0014cc2e1f2fd85c30152caf0dcb409d0b0e9d375aea"
+      },
+      {
+        "expected_amount_sat": 99000,
+        "script": "0014e5b46c48cbc0b0bcc0ebed344b5e03445056d548"
+      }
+    ],
+    "graph_txids": [
+      "2d25ce552526c07b46b0386dc6e78ef6bd285b9588f9a4166550a26c185d8bc4",
+      "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da"
+    ],
+    "operator_configured_script": "51203c5d9f2aa942177c47a94214bbe627c967da624725aac677881ce77d39212cf7",
+    "remaining_sat": 297719,
+    "roots": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "bb892dee3637028f32617171e02236e5755b16e0e1e172a20dfeec87d1762bf3:0",
+        "script": "512086a08b489db0952a76343e2de270cfaaab8e2645963d5d9d6c8159beb1f9ffff"
+      }
+    ],
+    "selected_input_sat": 300000,
+    "sponsors": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "ed944d5cfc4a9bd0d4aae55c0973c07c88a54bfbb256550b39caecee75300d33:0",
+        "script": "51204d6794495153880e8a1b1e9cf6c9f99e021f0a2c38f1827663c780cc3b45e5ab"
+      },
+      {
+        "amount_sat": 100000,
+        "outpoint": "78b424ae23d104a0404cc35e87a2da608e27c4f01899f399498d7e172b31de74:0",
+        "script": "51204d6794495153880e8a1b1e9cf6c9f99e021f0a2c38f1827663c780cc3b45e5ab"
+      }
+    ],
+    "terminal_utxos": [
+      {
+        "amount_sat": 100000,
+        "outpoint": "78b424ae23d104a0404cc35e87a2da608e27c4f01899f399498d7e172b31de74:0",
+        "script": "51204d6794495153880e8a1b1e9cf6c9f99e021f0a2c38f1827663c780cc3b45e5ab"
+      },
+      {
+        "amount_sat": 97719,
+        "outpoint": "2d25ce552526c07b46b0386dc6e78ef6bd285b9588f9a4166550a26c185d8bc4:0",
+        "script": "51202508db299824de9b44bc6bf36f430d302cc094e89c545356cf70481993d4df90"
+      },
+      {
+        "amount_sat": 99000,
+        "outpoint": "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da:0",
+        "script": "0014e5b46c48cbc0b0bcc0ebed344b5e03445056d548"
+      },
+      {
+        "amount_sat": 1000,
+        "outpoint": "d8ae7159e0f4178583303ef323883aa802711b9a13c72d817fa42f92a085c2da:1",
+        "script": "51203c5d9f2aa942177c47a94214bbe627c967da624725aac677881ce77d39212cf7"
+      }
+    ]
+  },
+  "server_pubkey": "02d0236124c8a04ab53cf2e985271f1867afe833cca789a587132c6d57f14e1f1c",
+  "signed_ancestor_ids": [
+    "4b8e4f2f07051f3d1dcf240196857f7adfb72581c84189fa5255cb6a43cfa21f:0",
+    "c34add689a20914600d4f2b40fa00025aa3f745643da5a222d31d70b94304437:0",
+    "a0502ff24c2baae7a831a5a1314651a1d007540281eb9a6860d8b4270834148f:0",
+    "3c8f20d2c2c08ac79c8391ef0ee2181a8cc68ea2f705896390233d6fc818b89f:0"
+  ],
+  "source_chain_anchor": "bb892dee3637028f32617171e02236e5755b16e0e1e172a20dfeec87d1762bf3:0",
+  "source_pin": "57f59bf3bc1aaa97a765828726f56e54f69bc59b"
+}

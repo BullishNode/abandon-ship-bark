@@ -1,0 +1,55 @@
+{
+  "state": "AUTHORIZED_APPEND_ONLY_ACTUAL_BATCH51_ROWS",
+  "parent_authorization_sha256": "810ac5ad24a97c46f26e5fdeb019b859d101d99825a70b85c45fb443c7e24abe",
+  "prefix_sha256": "2f555fa380782909329df1da68469628aa3dac79992e518c91c05c0b32049371",
+  "prefix_bytes": 350471,
+  "prefix_rows": 466,
+  "all_prior466_bytes_and_FAILs_preserved": true,
+  "append_rows": 2,
+  "row_ids": [
+    "FT-SERVER-020",
+    "FT-SERVER-021"
+  ],
+  "coverage_sha256_after": "a95c6dca27d17a8a058c9dd99f559392fcf73386362ef5b7c0f77fa9299b822f",
+  "audits": {
+    "native": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch51-H32-H11-v19-receipt.json",
+      "sha256": "6b5b4726d2f849af896bd07f9eb50f4492089b9999e640dd70956089a7f4ff1d"
+    },
+    "formal": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-postflight-backend.json",
+      "sha256": "161a59128023f247289fff751bab620b3aaf87d20c6adce21f49a6aa16857ee3"
+    },
+    "financial": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch51-financial-audit-legacy.json",
+      "sha256": "ca8f1bd9f4ac19856a8e12e705492434d14669df948998f39c792b9e9d82cae9"
+    }
+  },
+  "actual_results": [
+    {
+      "binary": "ark-testing::server",
+      "name": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "result": "PASS",
+      "run_id": "40d6ba07-f88f-4291-bf6d-12f8eb1c521d",
+      "native_seconds": 43.613
+    },
+    {
+      "binary": "ark-testing::server",
+      "name": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+      "result": "PASS",
+      "run_id": "d6956d96-b733-465d-be2c-57c56c081fb6",
+      "native_seconds": 27.819
+    }
+  ],
+  "aggregate": {
+    "case_executions": 257,
+    "passed_case_executions": 242,
+    "failed_case_executions": 15,
+    "unique_executed_test_names": 237,
+    "nextest_invocations": 230,
+    "native_case_executions": 245,
+    "component_case_executions": 12,
+    "coverage_rows": 468
+  },
+  "scope": "Actual2new exact binary/name pairs only if started; no unstarted row or wholeML promotion. STATUS/FINDINGS not mutated by this script."
+}

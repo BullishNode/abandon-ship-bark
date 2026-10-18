@@ -1,0 +1,24 @@
+{
+  "state": "EDITORIAL_ONLY_PUBLICATION_REVISION_ORIGINAL_FROZEN_PACKET_PRESERVED",
+  "at": "2026-10-18T11:48:41.616614+00:00",
+  "original_manifest_sha256": "caa1a889d28d8e1927ae46771a8b8c950be33d6dbc80ec2c7903c86d40f35d46",
+  "original_export_receipt_sha256": "c5f734be7472642a746ffe5258ba6233ed4c801f6fb9ea56d1078088ab496d70",
+  "original_frozen_directory_unchanged": true,
+  "changed_entry_documents": {
+    "TWENTY-FIFTH-CHECKPOINT.md": {
+      "original_publication_path": "TWENTY-FIFTH-CHECKPOINT.before-editorial-review.md",
+      "original_sha256": "079b1fcad6fe5caa15f327606533c751c2dd02edf06b7c7c815f3c5b157c1a51",
+      "revised_sha256": "ab4453df2143421fa3488ae73bbecc5270a0b1088d5257ae6a4882d4a62a9483",
+      "change": "Editorial readability only; amounts/results/provenance/claim boundaries preserved."
+    },
+    "CHECKPOINT25-PUBLIC-EVIDENCE.md": {
+      "original_publication_path": "CHECKPOINT25-PUBLIC-EVIDENCE.before-editorial-review.md",
+      "original_sha256": "f05a060542d33ec3192f0de6975c32b1ffd2af70176ca216a6b2dbef01ed9d2f",
+      "revised_sha256": "2dc6de8b495424c29cbf494de191c230fc62bcbb6c3d356bf117290aa4c5d1a2",
+      "change": "Editorial readability only; amounts/results/provenance/claim boundaries preserved."
+    }
+  },
+  "original39_control_files_byte_exact": true,
+  "source_or_runtime_or_count_changes": 0,
+  "original_manifest_publication_path": "publication-checkpoint25-before-editorial-review-files.json"
+}

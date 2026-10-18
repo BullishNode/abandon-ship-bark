@@ -1,0 +1,7 @@
+{
+  "state": "ROOT_EXPLICIT_RELEASE_RECEIVED_PARENT_FRESH_GATES_AND_LAUNCH_ADMISSION_PENDING",
+  "parent_admission": null,
+  "root_preparation_sha256": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+  "root_execution_release_sha256": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+  "native_tests_started": 0
+}

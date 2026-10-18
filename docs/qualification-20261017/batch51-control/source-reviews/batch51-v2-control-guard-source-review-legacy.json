@@ -1,0 +1,114 @@
+{
+  "kind": "BATCH51_V2_CONTROL_GUARD_SOURCE_REVIEW_LEGACY",
+  "state": "STATIC_SOURCE_ACK_NO_CONCRETE_REMAINING_BLOCKER_PARENT_FRESH_GATES_REQUIRED",
+  "at": "2026-10-18T11:21:05.696533+00:00",
+  "directory": "/home/francis/.cache/abandon-fresh/testing-track-20261017/batch51-H32-H11-v19-v2",
+  "PREPARATION_sha256": "45406e7b5c6d98f623e2c274dccb4d887c82035118224fafaaa967ca67b2e6c9",
+  "controller_sha256": "73f11e9cbc74c34f969819fc3bf545189789af07727b587bc5b2b0121e94aee5",
+  "static_control_sha256": {
+    "selection-proof.json": "ee0db064489e466537376829ce06d02bf378d9c09783682caa83192a1a6181d5",
+    "root-preparation.json": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+    "root-allocation.json": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+    "runtime-pins.sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+    "source-artifact-proof.json": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+    "runtime-overlay-proof.json": "52db2fc0cf144f9aba0cff7cd91d690678eed1e76b5c752a1c416ef3df40745f",
+    "parent-actor-probe.py": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f",
+    "server-cohort.py": "73f11e9cbc74c34f969819fc3bf545189789af07727b587bc5b2b0121e94aee5",
+    "preflight-static.py": "b03ce1fc10e50f53ad6b778da25e2d2ece06f8716223e936590a4edaa56d5583",
+    "fresh-listings.py": "d1d347511658b829cbc1dcb280d5a0bc6f7f10c2ac3bf2bbe9f6db9435d2aa82",
+    "preflight.sh": "7453d23641530a704c3676630f7d9c2bfc9e5dca6bcf098f1cc4d830c9fe3e73",
+    "run.sh": "530434ff1a1969bc08e02a28900b600cdcce3103d47ff54adca8719228aae502",
+    "case01/nextest.toml": "744c72025c4563e12e227366a1e53e7e214a3747bf83d71adf7bec26ef16ba48",
+    "case02/nextest.toml": "df0b46c3c9b32c6253c435c377cc7a4818288d879c27cecc63d45dbdaf3419c5"
+  },
+  "syntax": {
+    "AST": 4,
+    "bash_n": 2,
+    "TOML": 2
+  },
+  "root_authority": {
+    "actual_execution_release_sha256": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca",
+    "state": "EXECUTION_ALLOCATED_NOW",
+    "real_cases_strings_schema_and_budget_match": true,
+    "prior_preparation09dc_preserved": true,
+    "corrected_legacy_formal_path": "/home/francis/.cache/abandon-fresh/root-extra-money-fixtures-v19b-20261018/postflight.json",
+    "formal_sha256": "ae1e69fcf854c28be28748baecf99c730609aecaf61a48c8ae572f762e5ff713",
+    "corrected_legacy_PASS_scoped_actor0_unreadable0": true,
+    "original_root_failed_control_attempt_separate_no_retry_credit": true
+  },
+  "selection_and_result": {
+    "binary": "ark-testing::server",
+    "ordered_selectors": [
+      "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards"
+    ],
+    "only_two_unignored_serial_once": true,
+    "profile": "default",
+    "timeout_seconds": 180,
+    "retries": 0,
+    "first_FAIL_stops": true,
+    "fresh_listing_exact_literal_after_double_dash_no_extra_E": true,
+    "binary_bound_PASS_and_exit0_singleton_required": true,
+    "filtered_count_dynamic_from_fresh_listing": true,
+    "normal_and_optional_one_slow_PASS_summary_formats_accept": true,
+    "FAIL_summary_rejects": true,
+    "synthetic_parser_only_not_native_execution": true,
+    "absolute_private_contexts_and_stores": true,
+    "once_only_progress_results_testdata_absence_fence": true,
+    "runtime_uses_just_int_binaries_no_build": true
+  },
+  "artifact_and_product_identity": {
+    "V19_source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+    "archive_sha256": "c4bd8779088622c9b7b8af4a8c438a0ab872f9a368b7a79c5f87feead725f1df",
+    "runtime_metadata_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+    "immutable_metadata_sha256": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+    "16pins_bound": true,
+    "host_counterparts_fresh_hashed": 13,
+    "container_only_3_pins_for_parent_actual_rehash": [
+      "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+      "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+      "/fresh-cache/cln-adapter-evidence/plugins/hold"
+    ],
+    "four_EXEC_paths_equal_actual_V18_manifest_and_pin_hashes_before_versions": true,
+    "four_versions_not_substitute_for_path_hash": true,
+    "archive_whole_files_verified": 45,
+    "entry_local_and_API_regions_verified": 43,
+    "both_reviewed_source_files_and_modules_bound": true,
+    "exact_three_support_path_relocations_only": true,
+    "current_justfile_and_captured_archive_hash_match": "8bcf85e341c95b28ed28c3d74d735effe082d282a97bbf3f7d7dc45c2dbbc3f6",
+    "two_extra_legacyV10_and_three_CLN_pins_provenance_not_our_executables": true
+  },
+  "launch_gates": {
+    "14_static_plus3_actual_fresh_parent_paths": 17,
+    "all17_hashes_required_in_parent_admission": true,
+    "pending_marker_present": true,
+    "parent_admission_absent": true,
+    "no_progress_results_contexts": true,
+    "parent_V4_sha256": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f",
+    "V4_only_V3_output_root_change": true,
+    "known_prior_groups": 13,
+    "actual50_groups185773_186158_bound": true,
+    "V19_prefix_covers_corrected_v19b_and_own51_prefix_covers_v2": true,
+    "root_financial_controller_and_service_scope_no_automatic_PG_exemption": true,
+    "unknown_root_groups_explicit": true,
+    "scoped_actor0_unreadable0_protectedcompiler0": true,
+    "max_global_after_launch": 2,
+    "minimum_SHM_MiB": 256,
+    "minimum_disk_GiB": 20,
+    "parent_explicit_readonly_exemptions_review_required": true,
+    "cached_Nix_before_Python_and_presence_flag_full_unset": true
+  },
+  "V1_preservation": {
+    "PREPARATION_sha256": "85e42cc423e3edb19c45711ab29e0ea18d558b92cc8d43b811db8b16b607b459",
+    "all14_static_unchanged": true,
+    "pending_no_execution": true,
+    "finding_receipt_sha256": "6f1dac05d45f6d6c88b56722336e1e07883a11c93e4d9e5f8b6ed92c926c2625",
+    "V2_delta_only_paths_probe_output_optional_slow_and_Just_hash_guard": true
+  },
+  "limitations": [
+    "Static source/host artifact review only. Parent must run actual container16pin/version/exact listing/resource/actor fresh gates and create matching17path admission before once-only launch.",
+    "No control/preflight/list/probe/resource/CLI/native/Cargo script executed by reviewer; only AST/bash -n/TOML and synthetic summary-format inspection.",
+    "Root release is exact existing authorization; no new user or root approval requirement added.",
+    "No PASS, runtime/ML/count/production credit from this source ACK. All reviewed inputs and V1 unchanged; only new JSON/MD files written."
+  ]
+}

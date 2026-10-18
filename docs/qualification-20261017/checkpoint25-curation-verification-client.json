@@ -1,0 +1,39 @@
+{
+  "state": "PARENT_AUTHORIZED_APPEND_ONLY_BATCH51_CURATION_VERIFIED",
+  "authorization_sha256": "810ac5ad24a97c46f26e5fdeb019b859d101d99825a70b85c45fb443c7e24abe",
+  "before_global_sha256": {
+    "STATUS.json": "d3d0aa8b108a44457682983cc1a503145b30271e403b64f598716a3a1cd40943",
+    "COVERAGE.csv": "2f555fa380782909329df1da68469628aa3dac79992e518c91c05c0b32049371",
+    "FINDINGS.md": "ea575eba79a3f0d04ffad5ca24ace43d5f1469616fffd576bd1fd330663a1c23"
+  },
+  "after_global_sha256": {
+    "STATUS.json": "dd2f8e34be91bbb72c3792da4b21679f6ad5ed94e6624894a143440b7cee55c5",
+    "COVERAGE.csv": "a95c6dca27d17a8a058c9dd99f559392fcf73386362ef5b7c0f77fa9299b822f",
+    "FINDINGS.md": "a02f549732547ad17d1d6768d131c94797f0ac9c1f2204c697cae748750ec576"
+  },
+  "snapshots_directory_not_copied": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint25-curation-before-client",
+  "prior466_CSV_bytes": 350471,
+  "prior466_bytes_preserved": true,
+  "prior_literal_CSV_FAIL_rows": 14,
+  "all15_failed_executions_preserved": true,
+  "new_coverage_ids": [
+    "FT-SERVER-020",
+    "FT-SERVER-021"
+  ],
+  "current_counts": {
+    "executions": 257,
+    "PASS": 242,
+    "FAIL": 15,
+    "unique_binary_test_pairs": 237,
+    "nextest_invocations": 230,
+    "native": 245,
+    "component": 12,
+    "mixed_rows": 468
+  },
+  "FINDINGS_prior_bytes_preserved": true,
+  "MLmap_changed": false,
+  "H31_source21_excluded": true,
+  "curation_script_sha256": "69ed5d71a7bd605e618a0a3f4658f967862de94c56c564810a46b8857a152804",
+  "append_receipt_sha256": "398b3c30f2962ee9db399454c70714df5b46258e1aba055a38092906e3a2dea2",
+  "own_native_or_build_actions_by_curator": 0
+}

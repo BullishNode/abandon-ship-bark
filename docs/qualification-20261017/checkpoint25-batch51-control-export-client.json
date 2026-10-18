@@ -1,0 +1,18 @@
+{
+  "state": "BATCH51_CONSUMED_CONTROLS_SAFE_EXPORT_FROZEN_NO_CURATION",
+  "directory": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/checkpoint25-terminal-safe/batch51-control",
+  "EXPORT_sha256": "a70834898d5dbb72fe191b47cffce9e65362c5bf2efe7daf4d36349bb4efff1d",
+  "payload_files": 38,
+  "total_files": 39,
+  "total_bytes": 261577,
+  "sealed": 17,
+  "static_controls": 14,
+  "formal_sha256": "161a59128023f247289fff751bab620b3aaf87d20c6adce21f49a6aa16857ee3",
+  "native_initial_sha256": "6b5b4726d2f849af896bd07f9eb50f4492089b9999e640dd70956089a7f4ff1d",
+  "secret_screen_file_count": 39,
+  "secret_findings": 0,
+  "financial": "PENDING",
+  "global_mutations": 0,
+  "replay_authorization": false,
+  "source_or_runtime_actions": 0
+}

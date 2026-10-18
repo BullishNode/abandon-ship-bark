@@ -1,0 +1,64 @@
+{
+  "result": "PASS",
+  "passed": 2,
+  "failed": 0,
+  "source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+  "metadata_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+  "runtime_scope": "Two explicitly allocated H32/H11 native fixtures on capturedV19 tests/inheritedV18 products; case-specific assertions only, no fullML/globalproduction qualification",
+  "resource_cleanup": "NONE; all raw evidence retained",
+  "retries": 0,
+  "cases": [
+    {
+      "index": 1,
+      "name": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "state": "PASS",
+      "started_at": "2026-10-18T11:24:23.688636+00:00",
+      "ended_at": "2026-10-18T11:25:08.263322+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "expected_binary": "ark-testing::server",
+      "owned_nextest_group": 200178,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "40d6ba07-f88f-4291-bf6d-12f8eb1c521d",
+      "test_seconds": 43.613,
+      "wall_seconds": 44.575,
+      "fixed_public_nextest_command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch51-H32-H11-v19-v2",
+        "int-binaries",
+        "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch51-H32-H11-v19-v2/case01/nextest.toml -- qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again --exact"
+      ]
+    },
+    {
+      "index": 2,
+      "name": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+      "state": "PASS",
+      "started_at": "2026-10-18T11:25:08.267367+00:00",
+      "ended_at": "2026-10-18T11:25:37.315856+00:00",
+      "per_test_timeout_seconds": 180,
+      "retries": 0,
+      "no_new_compilation": true,
+      "expected_binary": "ark-testing::server",
+      "owned_nextest_group": 200669,
+      "exit_code": 0,
+      "resource_error": null,
+      "run_id": "d6956d96-b733-465d-be2c-57c56c081fb6",
+      "test_seconds": 27.819,
+      "wall_seconds": 29.048,
+      "fixed_public_nextest_command": [
+        "just",
+        "--set",
+        "JUSTFILE_DIR",
+        "/fresh-cache/testing-track-20261017/batch51-H32-H11-v19-v2",
+        "int-binaries",
+        "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+        "--test-threads 1 --retries 0 --config-file /fresh-cache/testing-track-20261017/batch51-H32-H11-v19-v2/case02/nextest.toml -- qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards --exact"
+      ]
+    }
+  ]
+}

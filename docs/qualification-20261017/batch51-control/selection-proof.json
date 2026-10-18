@@ -1,0 +1,91 @@
+{
+  "state": "ROOT_EXPLICITLY_RELEASED_ONCE_PENDING_PARENT_FRESH_GATES_AND_LAUNCH",
+  "candidate_ready": true,
+  "controls_finalized": true,
+  "execution_authorized": true,
+  "parent_launch_admission": null,
+  "root_preparation_sha256": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+  "root_authorization": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/H32-H11-v19-two-native-execution-allocation-20261018.json",
+    "sha256": "1df12af294e2871b863ea6a9f322ddfe9e1c63465e1c9d628d51722167ba7dca"
+  },
+  "expected_names_in_execution_order": [
+    "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+    "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards"
+  ],
+  "test_binaries_in_execution_order": [
+    "ark-testing::server",
+    "ark-testing::server"
+  ],
+  "profile": "default",
+  "per_test_timeout_seconds": 180,
+  "threads": 1,
+  "retries": 0,
+  "maximum_case_executions": 2,
+  "maximum_global_native": 2,
+  "first_fail_stops": true,
+  "CLN_required": false,
+  "expected_ignored": false,
+  "run_ignored": null,
+  "runtime_pin_count": 16,
+  "runtime_pinlist_sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+  "source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+  "source_archive_sha256": "c4bd8779088622c9b7b8af4a8c438a0ab872f9a368b7a79c5f87feead725f1df",
+  "bundle_manifest_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+  "runtime_metadata_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+  "immutable_metadata_sha256": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+  "metadata_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+  "immutable_metadata_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-immutable.json",
+  "source_archive_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/source.tar.gz",
+  "native_server_sha256": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f",
+  "metadata_binary_count": 1,
+  "products": {
+    "bark": {
+      "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/bark",
+      "sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+      "actual_version": "bark 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "barkd": {
+      "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+      "sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+      "actual_version": "barkd 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+      "features": "bark-cli/fallback-test-bip84,bark-cli/barkd-web-ui",
+      "web_dist": "/fresh-cache/web-dist-4c1c979"
+    },
+    "captaind": {
+      "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+      "sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+      "actual_version": "captaind 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b"
+    },
+    "watchmand": {
+      "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+      "sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+      "actual_version": "watchmand 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b"
+    }
+  },
+  "execution_environment": {
+    "BARK_EXEC": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/bark",
+    "BARKD_EXEC": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+    "CAPTAIND_EXEC": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+    "WATCHMAND_EXEC": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+    "BARK_VERSION": "bark 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+    "BARKD_VERSION": "barkd 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+    "CAPTAIND_VERSION": "captaind 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+    "WATCHMAND_VERSION": "watchmand 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+    "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+    "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib"
+  },
+  "proof_sha256": {
+    "source-artifact-proof.json": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+    "runtime-overlay-proof.json": "52db2fc0cf144f9aba0cff7cd91d690678eed1e76b5c752a1c416ef3df40745f",
+    "parent-actor-probe.py": "d35aae48012ed758a7f3b2b4937aea996b29c77b0c2251ba8659d5ebb8ed201f"
+  },
+  "root_legacy_postflight_path": "/fresh-cache/root-extra-money-fixtures-v19b-20261018/postflight.json",
+  "root_legacy_postflight_sha256": "ae1e69fcf854c28be28748baecf99c730609aecaf61a48c8ae572f762e5ff713",
+  "product_identity": "All4productionexecutables inheritedV18 actual57f59paths; onlynative-server/support/metadata capturedV19 source7d7. Source-equivalence d6c65fcc; no captureHEAD-as-productlabel claim.",
+  "limits": "NativeNOTRUN atpreparation; no credit.16pins includes3CLNprovenance-only+2legacyV10products notused asour4EXEC. Root initiallegacycontrolfailure preserved; correctedlegacyPASS onlyprerequisite.",
+  "author_actions": "AST/bash-n/TOML/hash/sourcearchive only; no generated scripts/list/preflight/probe/executables/build/native",
+  "current_justfile_sha256": "8bcf85e341c95b28ed28c3d74d735effe082d282a97bbf3f7d7dc45c2dbbc3f6"
+}

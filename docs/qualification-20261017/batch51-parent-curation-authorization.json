@@ -1,0 +1,81 @@
+{
+  "state": "PARENT_EXCLUSIVE_BATCH51_CURATION_AUTHORIZED_AFTER_TERMINAL_AND_AUDITS",
+  "at": "2026-10-18T11:38:46.978023+00:00",
+  "writer": "client_test_gaps",
+  "other_shared_writers_absent": true,
+  "parent_terminal_confirmed": true,
+  "formal_scoped_actors_absent": true,
+  "source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+  "audits": {
+    "native": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch51-H32-H11-v19-receipt.json",
+      "sha256": "6b5b4726d2f849af896bd07f9eb50f4492089b9999e640dd70956089a7f4ff1d"
+    },
+    "formal": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-postflight-backend.json",
+      "sha256": "161a59128023f247289fff751bab620b3aaf87d20c6adce21f49a6aa16857ee3"
+    },
+    "financial": {
+      "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/batch51-financial-audit-legacy.json",
+      "sha256": "ca8f1bd9f4ac19856a8e12e705492434d14669df948998f39c792b9e9d82cae9"
+    }
+  },
+  "financial_limits_reviewed": true,
+  "ML_full_acceptance_changes": 0,
+  "actual_results": [
+    {
+      "binary": "ark-testing::server",
+      "name": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "result": "PASS",
+      "run_id": "40d6ba07-f88f-4291-bf6d-12f8eb1c521d",
+      "native_seconds": 43.613
+    },
+    {
+      "binary": "ark-testing::server",
+      "name": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+      "result": "PASS",
+      "run_id": "d6956d96-b733-465d-be2c-57c56c081fb6",
+      "native_seconds": 27.819
+    }
+  ],
+  "coverage_rows": [
+    {
+      "case_id": "FT-SERVER-020",
+      "requirement": "Original registered recipient accepts an actual 1,200-sat BelowDust forfeiture before a later independent 100,000-sat receipt is created for the same account/destination. Old receipt/history stays unchanged with no revival; later output pays 99,000 with 1,000 policy fee. Original all-ten-bucket/history/reopen/idempotence assertions pass. Independent first cut: 500,000=497,719 terminal+2,281 miner; final cut: 600,000=595,438 terminal+4,562 miner. Whole-chain script scan finds no first recipient output and exactly one final 99,000 output.",
+      "layer_network": "native server/SDK/Core/PostgreSQL regtest",
+      "automated_test_name": "ark-testing::server qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "latest_result": "PASS",
+      "tested_revision": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+      "evidence_path": "batch51-H32-H11-v19-receipt.json; v19-H32-H11-postflight-backend.json; batch51-financial-audit-legacy.json; batch51-financial-parent-recompute.json; batch51-coverage-append.json",
+      "limitation": "Two manual SDK expiry epochs and one P2WPKH script, not the all-script H31 boundary matrix. Native signed/account/disposition/history/balance/reopen assertions remain distinct from independently decoded public chain facts. First package has seven confirmations at its checkpoint and 59 finally; second has eight. One first-frontier unused 100,000 sponsor is spent in epoch two, so phase frontiers are not added. Ordinary donor funding/change/board miner lies outside selected cut; policy charges differ from actual sponsor miner fees. Captured V19 tests use source-equivalent inherited V18 products with actual57f59 label. No seed restore, spend/custody, default daemon, reorg, full legacy/ML or production qualification.",
+      "owner": "testing-track",
+      "entry_kind": "executed_named_test",
+      "classification": "native_later_receipt_after_completed_dust_forfeiture",
+      "inspected_revision": "202366e0fe96054749e7a1590ade228428bbf3542046b615073f3b53bac91ea7",
+      "success_oracle": "Original registered recipient accepts an actual 1,200-sat BelowDust forfeiture before a later independent 100,000-sat receipt is created for the same account/destination. Old receipt/history stays unchanged with no revival; later output pays 99,000 with 1,000 policy fee. Original all-ten-bucket/history/reopen/idempotence assertions pass. Independent first cut: 500,000=497,719 terminal+2,281 miner; final cut: 600,000=595,438 terminal+4,562 miner. Whole-chain script scan finds no first recipient output and exactly one final 99,000 output. Actual PASS 43.613 seconds; run 40d6ba07-f88f-4291-bf6d-12f8eb1c521d."
+    },
+    {
+      "case_id": "FT-SERVER-021",
+      "requirement": "Two actual normal SDK full-value 100,000-sat transfers A to B to C across three original independently registered accounts precede all clients stopping. Only final C receives 99,000 with 1,000 policy fee; A/B have no predecessor payout or extra fallback history debit. C debits 100,000 once, all ten buckets reach zero, and repeat/reopen remains stable. Independent full selected cut: 300,000=297,719 terminal+2,281 miner; exactly one C output and no A/B registered-script outputs; actual same-block parent/child have eight retained confirmations.",
+      "layer_network": "native server/SDK/Core/PostgreSQL regtest",
+      "automated_test_name": "ark-testing::server qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+      "latest_result": "PASS",
+      "tested_revision": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+      "evidence_path": "batch51-H32-H11-v19-receipt.json; v19-H32-H11-postflight-backend.json; batch51-financial-audit-legacy.json; batch51-financial-parent-recompute.json; batch51-coverage-append.json",
+      "limitation": "Two full-value ownership changes only; no split, HTLC, refresh, reorg, backup, seed restore or default daemon. Source ownership, signed proof, allocation exclusions and SDK histories inherit actual native provenance; public script labels do not independently prove private-key custody. Selected 300,000 root+sponsor cut excludes ordinary funding/change/board miner. Customer 1,000 policy charge differs from the 2,281 actual child miner fee. Captured V19 tests use source-equivalent inherited V18 products with actual57f59 label. No global alternate-lineage/custody, full legacy/ML or production qualification.",
+      "owner": "testing-track",
+      "entry_kind": "executed_named_test",
+      "classification": "native_three_original_owner_full_value_forwarding",
+      "inspected_revision": "ac3bb3bc38b5b13722bc8da83f994176c02af37eae185b2fe421014b4dad3fe7",
+      "success_oracle": "Two actual normal SDK full-value 100,000-sat transfers A to B to C across three original independently registered accounts precede all clients stopping. Only final C receives 99,000 with 1,000 policy fee; A/B have no predecessor payout or extra fallback history debit. C debits 100,000 once, all ten buckets reach zero, and repeat/reopen remains stable. Independent full selected cut: 300,000=297,719 terminal+2,281 miner; exactly one C output and no A/B registered-script outputs; actual same-block parent/child have eight retained confirmations. Actual PASS 27.819 seconds; run d6956d96-b733-465d-be2c-57c56c081fb6."
+    }
+  ],
+  "parent_recompute_sha256": "503892b4a4d567d291bd27a47027f916deb9ee7bed6f999012c5f3c0b1c4b209",
+  "precuration_sha256": {
+    "COVERAGE.csv": "2f555fa380782909329df1da68469628aa3dac79992e518c91c05c0b32049371",
+    "FINDINGS.md": "ea575eba79a3f0d04ffad5ca24ace43d5f1469616fffd576bd1fd330663a1c23",
+    "STATUS.json": "d3d0aa8b108a44457682983cc1a503145b30271e403b64f598716a3a1cd40943"
+  },
+  "branch": "work/fresh-test-h32-h11-results-20261018",
+  "limits": "Exclusive shared-document writer for completed batch51 curation only; no source/module/Git/native/build/ML map mutation. Source21H31 draft is excluded from checkpoint25/publication."
+}

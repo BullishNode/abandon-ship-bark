@@ -1,0 +1,243 @@
+{
+  "kind": "V19_H32_H11_ADDITIVE_RUNTIME_OVERLAY_AND_PIN_HOST_PROOF",
+  "state": "PASS_HOST_OVERLAY_13_OF_16_PINS_PREPARATION_ONLY_NATIVE_BLOCKED",
+  "at": "2026-10-18T10:57:48.939224+00:00",
+  "historical_source_proof": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-source-artifact-proof-backend.json",
+    "sha256": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+    "unchanged": true,
+    "old_runtime_overlay_absent_at_that_read_preserved": true
+  },
+  "preparation_packet": {
+    "path": "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/H32-H11-v19-two-native-preparation-20261018.json",
+    "sha256": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d",
+    "state": "PREPARATION_ALLOCATED_EXECUTION_AWAIT_ROOT_RELEASE",
+    "budget": {
+      "per_case_seconds": 180,
+      "retries": 0,
+      "serial": 1,
+      "max_global_native": 2,
+      "cases": 2
+    },
+    "exact_case_order": [
+      "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards"
+    ],
+    "execution_authorized": false,
+    "root_explicit_release_still_required_after_corrected_legacy_terminal_and_scoped_absence": true
+  },
+  "metadata": {
+    "immutable_sha256": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+    "runtime_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+    "binary_mapping_identical_only_server": true,
+    "exactly_three_support_relocations": [
+      {
+        "path": [
+          "rust-build-meta",
+          "non-test-binaries",
+          "path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1",
+          0,
+          "path"
+        ],
+        "immutable": "debug/deps/libark.rlib",
+        "runtime": "../runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.rlib"
+      },
+      {
+        "path": [
+          "rust-build-meta",
+          "non-test-binaries",
+          "path+file:///home/francis/abandon-ship-fresh-integration/lib#ark-lib@0.7.1",
+          1,
+          "path"
+        ],
+        "immutable": "debug/deps/libark.so",
+        "runtime": "../runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.so"
+      },
+      {
+        "path": [
+          "rust-build-meta",
+          "non-test-binaries",
+          "path+file:///home/francis/abandon-ship-fresh-integration/testing#ark-testing@0.0.0",
+          0,
+          "path"
+        ],
+        "immutable": "debug/lock-holder",
+        "runtime": "../runtime-extra-money-fixtures-v19-20261018/support/debug/lock-holder"
+      }
+    ],
+    "each_target_relative_resolution_equals_immutable_support_capture_and_hash": true,
+    "target_directory_unchanged": "/fresh-cache/target"
+  },
+  "authoritative16pins": {
+    "path": "/home/francis/.cache/abandon-fresh/root-extra-money-fixtures-v19-20261018/runtime-pins.sha256",
+    "sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+    "declared_count": 16,
+    "host_counterparts_verified": [
+      {
+        "runtime_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+        "declared_sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+        "declared_sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/bark",
+        "declared_sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/bark",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+        "declared_sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/native-server",
+        "declared_sha256": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/native-server",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+        "declared_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/source-manifest.json",
+        "declared_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-manifest.json",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/manifest.json",
+        "declared_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/manifest.json",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.rlib",
+        "declared_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.rlib",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.so",
+        "declared_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.so",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/lock-holder",
+        "declared_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/lock-holder",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+        "declared_sha256": "f7c8fd77d91533a389ef8bb509dce5b2b92295036f93ef5d9a2be5900e9e0156",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/captaind",
+        "host_counterpart_present": true
+      },
+      {
+        "runtime_path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+        "declared_sha256": "920c6a742daae000274f44075e3e674262a4421fe0db0806bd59d0ab301836de",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/watchmand",
+        "host_counterpart_present": true
+      }
+    ],
+    "host_counterparts_verified_count": 13,
+    "container_only_unverified": [
+      {
+        "runtime_path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "declared_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+        "host_counterpart": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+        "host_counterpart_present": false
+      },
+      {
+        "runtime_path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+        "declared_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/cln-adapter-evidence/plugins/cln-grpc",
+        "host_counterpart_present": false
+      },
+      {
+        "runtime_path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+        "declared_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+        "host_counterpart": "/home/francis/.cache/abandon-fresh/cln-adapter-evidence/plugins/hold",
+        "host_counterpart_present": false
+      }
+    ],
+    "container_only_count": 3,
+    "legacyV10_two_extra_pins_scope": "Declared root pinlist additionally retains oldcaptaind/watchmand for other/root legacy fixture. Host hashes verified, neither own H32/H11 fixture instantiates legacy servers; no legacy semantic/result audit.",
+    "all16_actual_container_paths_must_still_be_fresh_rehashed_by_parent": true
+  },
+  "required_product_environment_exact_path_guards": {
+    "BARK_EXEC": {
+      "required_exact_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/bark",
+      "sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+      "expected_version_as_recorded": "bark 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+      "guard": "Final controller environment value must equal this exact manifest path, resolve to this actual ELF and be covered by the authoritative16pinlist. Do not derive from V19bundle directory."
+    },
+    "BARKD_EXEC": {
+      "required_exact_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+      "sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+      "expected_version_as_recorded": "barkd 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+      "guard": "Final controller environment value must equal this exact manifest path, resolve to this actual ELF and be covered by the authoritative16pinlist. Do not derive from V19bundle directory."
+    },
+    "CAPTAIND_EXEC": {
+      "required_exact_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+      "sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+      "expected_version_as_recorded": "captaind 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+      "guard": "Final controller environment value must equal this exact manifest path, resolve to this actual ELF and be covered by the authoritative16pinlist. Do not derive from V19bundle directory."
+    },
+    "WATCHMAND_EXEC": {
+      "required_exact_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+      "sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+      "expected_version_as_recorded": "watchmand 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+      "guard": "Final controller environment value must equal this exact manifest path, resolve to this actual ELF and be covered by the authoritative16pinlist. Do not derive from V19bundle directory."
+    }
+  },
+  "final_batch51_controls_reviewed": false,
+  "native_status": {
+    "H32": "NOT RUN",
+    "H11": "NOT RUN",
+    "reviewer_native_container_product_invocations": 0,
+    "new_execution_credit": 0
+  },
+  "all_read_available_host_inputs_before_after_unchanged": true,
+  "input_sha256": {
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-source-artifact-proof-backend.md": "fb3573817ef082d3ba57e4e7582729de21ce3c507026c60d12f9f8790a3a675b",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/bark": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/watchmand": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+    "/home/francis/.cache/abandon-fresh/root-extra-money-fixtures-v19-20261018/runtime-pins.sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/captaind": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/lock-holder": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+    "/home/francis/bark-integration-2026-10-01/fresh-testing-track-20261017/v19-H32-H11-source-artifact-proof-backend.json": "f5893e6c6032f4c954d814f42612a108a2c91393f1d9565d2721ffc93066a535",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.rlib": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/source-manifest.json": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support-capture.json": "af298790eb57efae34e05ed29977da9114b6a6171d9ccf3582e80b2cdeb66829",
+    "/home/francis/.cache/abandon-fresh/root-extra-money-fixtures-v19-20261018/capture-receipt.json": "48d05bc0e779164a389bebf1fe44335ba0a51a2dab0507fbfd6fa4642aa89091",
+    "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/captaind": "f7c8fd77d91533a389ef8bb509dce5b2b92295036f93ef5d9a2be5900e9e0156",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.so": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-immutable.json": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/manifest.json": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+    "/home/francis/.cache/abandon-fresh/runtime-readiness-and-partial-intent-v18-20261018/barkd": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+    "/home/francis/.cache/abandon-fresh/runtime-sponsor-terminal-v10-20261018/watchmand": "920c6a742daae000274f44075e3e674262a4421fe0db0806bd59d0ab301836de",
+    "/home/francis/.cache/abandon-fresh/runtime-extra-money-fixtures-v19-20261018/native-server": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f",
+    "/home/francis/bark-integration-2026-10-01/fresh-execution-20261016/H32-H11-v19-two-native-preparation-20261018.json": "09dc9e68db34dee4e5e606c1a58a76a9775209a6cc108d714eaa779463c97b8d"
+  },
+  "limits": [
+    "Pure host read-only actual JSON/sourceproof/control receipts/pinlist and file hashing only; no container/Nix/version/product/helper/controller/list/preflight/native/actor/resource/RPC/DB/wallet/Cargo/build/Git/source/global action.",
+    "Nixlightningd and both exact plugin paths have no literal host counterparts. This is13hosthashes, not16actualcontainerverification. Neither own fixture requiresCLN but all16rootpins remain authoritative.",
+    "Actual root preparation is not execution admission. Hard block remains until explicitrootrelease after corrected legacy terminal/actorzero, then fresh case/control/pin/environment/resource/list gates and soleparentlaunch.",
+    "Root reported firstlegacyFAIL wrongBARK_EXEC V19/bark is not retested/reclassified here. Required fourproducts come from V18 actualmanifest paths; only new server ELF/metadata/supports belongV19. No failure history rewritten.",
+    "Frozenf589 earlier absent-overlay temporal observation remains historical unchanged; this addendum verifies the nowpresent293c overlay. No source/runtime PASS transfer or production/FULLML/custody credit."
+  ]
+}

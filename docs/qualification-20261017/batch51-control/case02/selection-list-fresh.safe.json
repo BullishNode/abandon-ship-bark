@@ -1,0 +1,14 @@
+{
+  "selected": [
+    {
+      "binary": "ark-testing::server",
+      "name": "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards",
+      "ignored": false,
+      "filter_match": "matches"
+    }
+  ],
+  "binary_count": 1,
+  "total_testcases": 305,
+  "filtered_testcases": 304,
+  "new_listing_execution_by_exporter": false
+}

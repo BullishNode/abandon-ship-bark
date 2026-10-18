@@ -1,0 +1,124 @@
+{
+  "state": "ACTUAL_CONTAINER_16_PINS_4_EXACT_V18_PRODUCT_ENV_VERSIONS_AND_JUST_PASS",
+  "at": "2026-10-18T11:28:06.034258+00:00",
+  "IN_NIX_SHELL": "impure",
+  "BARK_DOUBLE_DRIVE_ACTIONS_absent_after_cached_Nix": true,
+  "actual16pins": [
+    {
+      "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+      "expected_sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+      "actual_sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25"
+    },
+    {
+      "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+      "expected_sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+      "actual_sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366"
+    },
+    {
+      "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/bark",
+      "expected_sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+      "actual_sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779"
+    },
+    {
+      "path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+      "expected_sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+      "actual_sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82"
+    },
+    {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/native-server",
+      "expected_sha256": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f",
+      "actual_sha256": "36a09461f8228445ff28367e1341d0650ccfd0a6801fc4b3893dbe67c386c27f"
+    },
+    {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+      "expected_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+      "actual_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f"
+    },
+    {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/source-manifest.json",
+      "expected_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+      "actual_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e"
+    },
+    {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/manifest.json",
+      "expected_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+      "actual_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4"
+    },
+    {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.rlib",
+      "expected_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d",
+      "actual_sha256": "f84d0490ca1df992588e13a48dae66d1ed4c0aad4b25d5287f6e9a475d8cf89d"
+    },
+    {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/deps/libark.so",
+      "expected_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a",
+      "actual_sha256": "e358c4507e2791b398e49d8a59564520dbf612f05d25e0c5e480e76b14b5c59a"
+    },
+    {
+      "path": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/support/debug/lock-holder",
+      "expected_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0",
+      "actual_sha256": "67634e7cc3b65953c7280fff5ae9b6ab4d706c721d09409e8921fca7eebd18c0"
+    },
+    {
+      "path": "/nix/store/b7hmiq12w2g2x6dxn7w2gjgp9dc75s5q-clightning-26.06.6/bin/lightningd",
+      "expected_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc",
+      "actual_sha256": "0979efd4a552759c51a6f05d774f85919556d942f926ae3682d1910374a4d2fc"
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/cln-grpc",
+      "expected_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1",
+      "actual_sha256": "6a752d8fb498b5757e8e6efc68e64f04fe3732f61010fe2d55f2c9df9d9637d1"
+    },
+    {
+      "path": "/fresh-cache/cln-adapter-evidence/plugins/hold",
+      "expected_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9",
+      "actual_sha256": "cef52444d4ae4c7f819a315dc6deb4cfbb2b38d1156e17bf2bac271009e6c7e9"
+    },
+    {
+      "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/captaind",
+      "expected_sha256": "f7c8fd77d91533a389ef8bb509dce5b2b92295036f93ef5d9a2be5900e9e0156",
+      "actual_sha256": "f7c8fd77d91533a389ef8bb509dce5b2b92295036f93ef5d9a2be5900e9e0156"
+    },
+    {
+      "path": "/fresh-cache/runtime-sponsor-terminal-v10-20261018/watchmand",
+      "expected_sha256": "920c6a742daae000274f44075e3e674262a4421fe0db0806bd59d0ab301836de",
+      "actual_sha256": "920c6a742daae000274f44075e3e674262a4421fe0db0806bd59d0ab301836de"
+    }
+  ],
+  "actual4product_environment_and_versions": {
+    "bark": {
+      "environment_key": "BARK_EXEC",
+      "exact_environment_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/bark",
+      "actual_version": "bark 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+      "actual_sha256": "b0fdf36592f29d805ebeaf8dd6d2c92dc309d1be3c0499255590b9f36de45779",
+      "inherited_V18_product": true
+    },
+    "barkd": {
+      "environment_key": "BARKD_EXEC",
+      "exact_environment_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/barkd",
+      "actual_version": "barkd 0.7.1-dev (57f59bf3bc1aaa97a765828726f56e54f69bc59b)",
+      "actual_sha256": "eb88ab3083e4b4b6197f99874ac1a47eab5fb288251e3b4c35d9d0343b7c1c82",
+      "inherited_V18_product": true
+    },
+    "captaind": {
+      "environment_key": "CAPTAIND_EXEC",
+      "exact_environment_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/captaind",
+      "actual_version": "captaind 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+      "actual_sha256": "4bc16a305a40d455135bfd2df985d9dcb21a4987523148ec83cfdbae32ce4f25",
+      "inherited_V18_product": true
+    },
+    "watchmand": {
+      "environment_key": "WATCHMAND_EXEC",
+      "exact_environment_path": "/fresh-cache/runtime-readiness-and-partial-intent-v18-20261018/watchmand",
+      "actual_version": "watchmand 0.7.1-dev+57f59bf3bc1aaa97a765828726f56e54f69bc59b",
+      "actual_sha256": "1660f365f1fb14909d4aad7975c171db49b0aa4c351b2a07d71513e7ff750366",
+      "inherited_V18_product": true
+    }
+  },
+  "POSTGRES_BINS": "/nix/store/f5bx5vyjvfc52a93q6p7gy7aidwg3jpx-postgresql-17.11/bin",
+  "SQLITE_LIBRARY_PATH": "/nix/store/p774nkfb6frncliffdsyppg93n3cpb4b-sqlite-3.51.2/lib",
+  "LD_LIBRARY_PATH_first_entry_matches_SQLite": true,
+  "justfile_sha256": "8bcf85e341c95b28ed28c3d74d735effe082d282a97bbf3f7d7dc45c2dbbc3f6",
+  "just_version": "just 1.51.0",
+  "only_version_commands_no_test_or_service_start": true
+}

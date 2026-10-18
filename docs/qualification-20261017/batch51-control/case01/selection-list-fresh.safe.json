@@ -1,0 +1,14 @@
+{
+  "selected": [
+    {
+      "binary": "ark-testing::server",
+      "name": "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+      "ignored": false,
+      "filter_match": "matches"
+    }
+  ],
+  "binary_count": 1,
+  "total_testcases": 305,
+  "filtered_testcases": 304,
+  "new_listing_execution_by_exporter": false
+}

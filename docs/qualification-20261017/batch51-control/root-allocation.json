@@ -1,0 +1,42 @@
+{
+  "at": "2026-10-18T11:02:46.012674+00:00",
+  "scope": "H32-H11 V19 TWO exact serial native tests, root legacy first case terminal with scoped0actor0unreadable formal proof",
+  "state": "EXECUTION_ALLOCATED_NOW",
+  "source_manifest_sha256": "7d7c5b456d168d33223c9fe8b1daef8f2dbfbce33819a09af881e05d55ad795e",
+  "bundle_manifest_sha256": "4abcb4232d8a5c25986da29c2ceafca3d91a11d187286af7b7929bdfb45987a4",
+  "metadata_runtime_sha256": "293c92d3e49b224703afc48a1acf82ad5b3c98e00cd7ec8dbf552a833e476f1f",
+  "metadata_immutable_sha256": "c633cbac018deb07361c0eec6568a9145db7f52d3e600bd6fb635986d743f9ad",
+  "runtime_pins": "/home/francis/.cache/abandon-fresh/root-extra-money-fixtures-v19-20261018/runtime-pins.sha256",
+  "runtime_pins_sha256": "1342193337a432f736fc32b26dbdb1eacefe6eb934144d9c631124171df574b0",
+  "metadata": "/fresh-cache/runtime-extra-money-fixtures-v19-20261018/nextest-binaries-runtime.json",
+  "products": "Exact four V18 products inherited via d6c65fcc all non-test non-doc source equality; actual57f59 label, new server testscompiledV19",
+  "container": "abandon-fresh-runtime-20261017",
+  "cwd": "/home/francis/abandon-ship-fresh-integration",
+  "cases": [
+    "qualification_dust_later_receipt::forfeited_small_receipt_does_not_revive_when_same_customer_receives_again",
+    "qualification_three_owner_forwarding::only_final_owner_receives_after_two_full_value_forwards"
+  ],
+  "budget": {
+    "per_case_seconds": 180,
+    "retries": 0,
+    "serial": 1,
+    "max_global_native": 2,
+    "cases": 2
+  },
+  "scope_exclusions": [
+    "No product/source/module change",
+    "No build/cargo metadata reuse mutation",
+    "No general tests, Node/Signet/VM/funding",
+    "No timeout extension or repeat after failure"
+  ],
+  "environment": "Source cached Nix then UNSET BARK_DOUBLE_DRIVE_ACTIONS and verify ABSENT; false/0/empty invalid. Same qualified nativeCLN pair if needed, exact existing ELF pins.",
+  "preflight": "Verify all4 *_EXEC environment paths equal actual manifest inheritedV18 paths AND hashes after sourced Nix; BARK_DOUBLE_DRIVE_ACTIONS wholly absent; exact singleton/nonignored/default180/retries0/serial1/global2/disk/shm checks, immutable own controls and16pins. Then run TWO exact allocated cases; no source/build changes.",
+  "root_legacy_result": {
+    "state": "PASS",
+    "native_seconds": 111.368,
+    "wrapper_seconds": 112.12,
+    "formal_postflight_sha256": "ae1e69fcf854c28be28748baecf99c730609aecaf61a48c8ae572f762e5ff713",
+    "own_scoped_actors": 0,
+    "unreadable_proc_entries": 0
+  }
+}

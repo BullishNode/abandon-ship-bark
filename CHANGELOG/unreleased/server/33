@@ -1,0 +1,5 @@
+- Simplify fresh fork initialization and payout confirmation records
+  Initialize fork tables atomically and retain state on same-schema reopen.
+  Keep the inherited migration chains and authoritative payment checks.
+  Fresh stores are required; earlier experimental fork formats are not converted.
+  [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)

@@ -10,10 +10,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin::{Amount, Network, OutPoint, Transaction};
+use bitcoin::{Address, Amount, Network, OutPoint, Transaction};
+use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::consensus::deserialize;
 use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::hex::DisplayHex;
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use tokio::process::Command;
@@ -208,7 +210,15 @@ async fn cold_backup() {
 	let registration = client.fallback_destination().await.unwrap();
 	let mailbox = client.mailbox_identifier().as_pubkey();
 	registration.verify(Network::Regtest, mailbox).unwrap();
-	assert!(registration.spk.is_p2wpkh(), "this native recovery is specifically BIP84");
+	let secp = Secp256k1::new();
+	let master = Xpriv::new_master(Network::Regtest, &seed.to_seed("")).unwrap();
+	let path = DerivationPath::from_str("m/86'/1'/0'/0/0").unwrap();
+	let fallback_key = master.derive_priv(&secp, &path).unwrap().to_keypair(&secp);
+	let expected_fallback_script = Address::p2tr(
+		&secp, fallback_key.x_only_public_key().0, None, Network::Regtest,
+	).script_pubkey();
+	assert_eq!(registration.spk, expected_fallback_script, "the native fallback must use the seed-derived BIP86 destination");
+	assert!(registration.spk.is_p2tr());
 	let owner_key = client.get_vtxo_key(&coin).await.unwrap().public_key();
 	drop(client);
 	drop(wallet); // No original owner handle or wallet command is used again.
@@ -444,10 +454,17 @@ async fn cold_backup() {
 	let drain = drains.pop().unwrap();
 	let mut drain_inputs = BTreeMap::new();
 	for input in &drain.input {
-		assert_eq!(input.witness.len(), 2, "each actual recovery signature must be a BIP84 witness");
+		assert_eq!(input.witness.len(), 1, "each native BIP86 recovery input must use a key-path witness");
+		bitcoin::taproot::Signature::from_slice(input.witness.iter().next().unwrap()).unwrap();
 		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
 		let output = &previous.output[input.previous_output.vout as usize];
-		assert!(output.script_pubkey.is_p2wpkh());
+		assert!(output.script_pubkey.is_p2tr());
+		if input.previous_output == payout {
+			assert_eq!(output.script_pubkey, expected_fallback_script);
+		} else {
+			assert!(change.contains_key(&input.previous_output));
+			assert_eq!(output.script_pubkey, board.output[input.previous_output.vout as usize].script_pubkey);
+		}
 		assert!(drain_inputs.insert(input.previous_output, output.value).is_none());
 	}
 	assert_eq!(drain_inputs, recovered_inputs);

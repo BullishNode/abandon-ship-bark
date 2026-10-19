@@ -213,9 +213,21 @@
 					];
 				};
 
+				rustBuildToolchain = fenix.packages.${system}.combine [
+					rustToolchain.rustc
+					rustToolchain.cargo
+					rustToolchain.rust-src
+					rustToolchain.llvm-tools
+					rustToolchain.rust-std
+				];
+
+				cln-grpc = import ./nix/package-cln-grpc.nix {
+					inherit pkgs rustBuildToolchain;
+				};
+
 				serverPackages = import ./nix/package-server.nix {
 					pkgs = releasePkgs;
-					inherit lib craneLib;
+					inherit lib craneLib cln-grpc;
 					gitHash = self.rev or self.dirtyRev or "unknown";
 					targets = [
 						"x86_64-unknown-linux-gnu"
@@ -227,6 +239,8 @@
 			in
 			{
 				packages = {
+					inherit cln-grpc;
+
 					# Release artifacts keyed by target triple.
 					bark-x86_64-unknown-linux-gnu  = barkPackages.x86_64-unknown-linux-gnu;
 					bark-x86_64-unknown-linux-musl = barkPackages.x86_64-unknown-linux-musl;
@@ -281,7 +295,7 @@
 					};
 
 					devShell = import ./nix/dev-shell.nix {
-						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm;
+						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm cln-grpc rustBuildToolchain;
 					};
 
 					ciShell = import ./nix/ci-shell.nix {

@@ -1,4 +1,4 @@
-{ system, pkgs, lib, fenix, slog-tools, buildShell, rustTargetWasm,
+{ system, pkgs, lib, fenix, slog-tools, buildShell, rustTargetWasm, cln-grpc, rustBuildToolchain,
 }:
 let
 	bitcoinVersion = "31.0";
@@ -10,14 +10,6 @@ let
 	isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
 
 	rustToolchain = buildShell.rustToolchain;
-	# this toolchain is used to build the internal tools
-	rustBuildToolchain = fenix.packages.${system}.combine [
-		rustToolchain.rustc
-		rustToolchain.cargo
-		rustToolchain.rust-src
-		rustToolchain.llvm-tools
-		rustToolchain.rust-std
-	];
 	rustPlatform = pkgs.makeRustPlatform {
 		cargo = rustBuildToolchain;
 		rustc = rustBuildToolchain;
@@ -109,26 +101,6 @@ let
 		'';
 	}));
 
-	cln-grpc = rustPlatform.buildRustPackage rec {
-		pname = "cln-grpc";
-		version = "99.99.99";
-		src = pkgs.fetchFromGitHub {
-			owner = "ElementsProject";
-			repo = "lightning";
-			rev = "v${lightningVersion}";
-			hash = "sha256-bra45wREkyt4byY7/oemRQsmqSiVX/8vVuwYcYjcQHQ=";
-		};
-		buildAndTestSubdir = "plugins/grpc-plugin";
-		nativeBuildInputs = [ rustBuildToolchain pkgs.protobuf ];
-		buildInputs = (if isDarwin then [ pkgs.darwin.apple_sdk.frameworks.Security ] else []);
-		doCheck = false;
-		cargoLock.lockFile = "${src}/Cargo.lock";
-		cargoHash = "sha256-UOhoqVs7nxZ98v2lJrAOc/qT8bcSPHekloUObI7wuJc=";
-		postUnpack = ''
-			rm ${src.name}/configure
-		'';
-	};
-
 	hold-invoice = rustPlatform.buildRustPackage rec {
 		pname = "hold-invoice";
 		version = holdPluginVersion;
@@ -149,7 +121,7 @@ let
 		cargoLock.lockFile = "${src}/Cargo.lock";
 	};
 
-	cln-plugins = pkgs.linkFarm "plugins" {
+	cln-plugins = assert cln-grpc.version == lightningVersion; pkgs.linkFarm "plugins" {
 		"cln-grpc" = "${cln-grpc}/bin/cln-grpc";
 		"hold" = "${hold-invoice}/bin/hold";
 	};

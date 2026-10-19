@@ -724,7 +724,7 @@ async fn lightning_backup() {
 	assert_eq!(stored_child.get::<_, Option<i64>>("confirmed_height"), Some(i64::from(parent_block.height.to_u32())));
 	assert_eq!(stored_child.get::<_, Option<String>>("confirmed_hash"), Some(parent_block.hash.to_string()));
 	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk,c.gross_sat,c.fee_sat, \
-		c.payout_sat,c.forfeited_sat,c.active,c.paying_txid,a.id,a.status,a.sweep_tx FROM expiry_allocation_coin c \
+		c.payout_sat,c.forfeited_sat,c.active,a.sweep_txid,a.id,a.status,a.sweep_tx FROM expiry_allocation_coin c \
 		JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
 		WHERE c.disposition='customer'", &[]).await?)).await.unwrap();
 	assert_eq!(rows.len(), 1, "only one original sender principal can receive customer money");
@@ -738,7 +738,7 @@ async fn lightning_backup() {
 	assert_eq!(row.get::<_, i64>("payout_sat"), 99_000);
 	assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
 	assert!(row.get::<_, bool>("active"));
-	assert_eq!(row.get::<_, Option<String>>("paying_txid"), Some(payout.txid.to_string()));
+	assert_eq!(row.get::<_, Option<String>>("sweep_txid"), Some(payout.txid.to_string()));
 	assert_eq!(row.get::<_, i64>("id"), allocation);
 	assert_eq!(row.get::<_, String>("status"), "confirmed");
 	assert_eq!(deserialize::<Transaction>(row.get("sweep_tx")).unwrap(), parent);

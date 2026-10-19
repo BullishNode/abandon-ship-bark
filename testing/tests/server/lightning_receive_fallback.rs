@@ -217,7 +217,8 @@ async fn registered_receive_fallback() {
 			}
 		}).await.expect("both real daemon views and their financial ledger must finish rebuilding this Core tip");
 		let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk, \
-			c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.active,c.paying_txid FROM expiry_allocation_coin c \
+			c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.active,a.sweep_txid,a.status FROM expiry_allocation_coin c \
+			JOIN expiry_allocation a ON a.id=c.allocation_id \
 			JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
 			WHERE v.anchor_point=ANY($1) AND c.disposition='customer'", &[&root_ids],
 		).await?)).await.unwrap();
@@ -232,7 +233,8 @@ async fn registered_receive_fallback() {
 		assert_eq!(row.get::<_, i64>("payout_sat"), expected.to_sat() as i64);
 		assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
 		assert!(row.get::<_, bool>("active"));
-		assert_eq!(row.get::<_, Option<String>>("paying_txid"), Some(payout.txid.to_string()));
+		assert_eq!(row.get::<_, String>("status"), "confirmed");
+		assert_eq!(row.get::<_, Option<String>>("sweep_txid"), Some(payout.txid.to_string()));
 		let allocations = db.read(async |tx| Ok(tx.query("SELECT DISTINCT a.sweep_tx FROM expiry_allocation a \
 			JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 			JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE v.anchor_point=ANY($1) AND a.sweep_tx IS NOT NULL",

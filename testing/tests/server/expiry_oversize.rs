@@ -418,7 +418,7 @@ async fn automatic_multilevel_split() {
 		let row = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) AS n,COUNT(DISTINCT e.vtxo_id) AS coins \
 			FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
 			JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=ANY($1) \
-			AND c.active AND a.status='confirmed' AND c.paying_txid=a.sweep_txid AND a.confirmed_hash IS NOT NULL",
+			AND c.active AND a.status='confirmed' AND a.sweep_txid IS NOT NULL AND a.confirmed_hash IS NOT NULL",
 			&[&terminal_ids],
 		).await?)).await.unwrap();
 		assert!(row.get::<_, i64>("n") <= PAYEES as i64);

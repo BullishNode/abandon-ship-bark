@@ -201,10 +201,6 @@ impl Watchman {
 				SET confirmed_height = NULL, confirmed_hash = NULL
 			", &[]).await?;
 			t.execute("
-				UPDATE expiry_allocation_coin
-				SET paying_txid = NULL
-			", &[]).await?;
-			t.execute("
 				DELETE
 				FROM expiry_terminal_claim
 			", &[]).await?;
@@ -257,13 +253,6 @@ impl Watchman {
 						WHERE b.height = (c.evidence->>'height')::BIGINT
 						AND b.hash = c.evidence->>'hash'))
 			", &[]).await?;
-			t.execute("
-				UPDATE expiry_allocation_coin c
-				SET paying_txid = a.sweep_txid
-				FROM expiry_allocation a
-				WHERE a.id = c.allocation_id
-				AND a.status = 'confirmed'
-			", &[]).await?;
 			for (id, txid, point) in &paid_claims {
 				t.execute("
 					INSERT INTO expiry_terminal_claim(entitlement_id, txid, height, hash)
@@ -273,14 +262,6 @@ impl Watchman {
 					&txid.to_string(),
 					&i64::from(point.height),
 					&point.hash.to_string()
-				]).await?;
-				t.execute("
-					UPDATE expiry_allocation_coin
-					SET paying_txid = $2
-					WHERE entitlement_id = $1
-				", &[
-					id,
-					&txid.to_string(),
 				]).await?;
 			}
 			let duplicated = t.query_one("

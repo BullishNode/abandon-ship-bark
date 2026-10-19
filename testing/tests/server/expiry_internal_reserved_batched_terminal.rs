@@ -517,9 +517,11 @@ async fn reserved_batched_terminal(reorg:bool) {
 			let old=t.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1",&[id]).await?;
 			assert_eq!(old.get::<_,&str>("status"),"conflicted");
 			assert_eq!(old.get::<_,&[u8]>("sweep_tx"),serialize(old_parent).as_slice());
-			let row=t.query_one("SELECT paying_txid FROM expiry_allocation_coin WHERE allocation_id=$1 AND entitlement_id=$2",
+			let row=t.query_one("SELECT p.txid FROM expiry_allocation_coin c \
+				JOIN expiry_terminal_claim p ON p.entitlement_id=c.entitlement_id \
+				WHERE c.allocation_id=$1 AND c.entitlement_id=$2",
 				&[id,&reserved.1[source].entitlement]).await?;
-			assert_eq!(row.get::<_,Option<&str>>("paying_txid"),Some(claim.compute_txid().to_string().as_str()));
+			assert_eq!(row.get::<_,Option<&str>>("txid"),Some(claim.compute_txid().to_string().as_str()));
 		}
 		let all=t.query("SELECT vtxo_id,entitlement_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1)",&[&originals]).await?
 			.into_iter().map(|row|(row.get::<_,String>("vtxo_id"),row.get::<_,i64>("entitlement_id"))).collect::<BTreeMap<_,_>>();

@@ -15,7 +15,7 @@ use ark_testing::{sat, Captaind, TestContext};
 use ark_testing::constants::BOARD_CONFIRMATIONS;
 use ark_testing::context::builders::{BarkSdkBuilder, CaptaindBuilder};
 use ark_testing::daemon::captaind::{self, ArkClient, MailboxClient};
-use bitcoin::bip32::{ChildNumber, Xpriv};
+use bitcoin::bip32::Xpriv;
 use bitcoin::consensus::deserialize;
 use bitcoin::secp256k1::{Keypair, PublicKey};
 use bitcoin::{Network, OutPoint, ScriptBuf, Transaction};

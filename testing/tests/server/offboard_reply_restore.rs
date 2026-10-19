@@ -416,9 +416,9 @@ async fn restored_finish() {
 	let control_height = core.get_block_header_info(&control_hash).unwrap().height;
 	assert_eq!(core.get_block_hash(control_height as u64).unwrap(), control_hash);
 	assert_eq!(ctx.bitcoind().await_transaction(control_txid).await, control_parent);
-	let confirmed_controls = db.read(async |tx| Ok(tx.query("SELECT a.sweep_tx,c.owner_mailbox,c.user_pubkey,c.spk,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.paying_txid,c.paying_hash \
+	let confirmed_controls = db.read(async |tx| Ok(tx.query("SELECT a.sweep_tx,c.owner_mailbox,c.user_pubkey,c.spk,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.paying_txid,a.confirmed_hash \
 		FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-		JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=$1 AND c.disposition='customer' AND c.paying_hash IS NOT NULL",
+		JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=$1 AND c.disposition='customer' AND c.paying_txid IS NOT NULL",
 		&[&control_id.to_string()]).await?)).await.unwrap();
 	assert_eq!(confirmed_controls.len(), 1, "the positive control must have one confirmed economic allocation");
 	let row = &confirmed_controls[0];
@@ -431,7 +431,7 @@ async fn restored_finish() {
 	assert_eq!(row.get::<_, i64>("payout_sat"), 19_000);
 	assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
 	assert_eq!(row.get::<_, Option<String>>("paying_txid"), Some(control_txid.to_string()));
-	assert_eq!(row.get::<_, Option<String>>("paying_hash"), Some(control_hash.to_string()));
+	assert_eq!(row.get::<_, Option<String>>("confirmed_hash"), Some(control_hash.to_string()));
 	let control_outputs = control_parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == control_binding.spk).collect::<Vec<_>>();
 	assert_eq!(control_outputs.len(), 1);
 	assert_eq!(control_outputs[0].1.value, sat(19_000));

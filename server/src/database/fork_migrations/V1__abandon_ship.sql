@@ -122,14 +122,10 @@ CREATE TABLE expiry_allocation_coin (
 	active BOOLEAN NOT NULL DEFAULT TRUE,
 	evidence JSONB NOT NULL,
 	paying_txid TEXT,
-	paying_height BIGINT,
-	paying_hash TEXT,
 	PRIMARY KEY (allocation_id, entitlement_id),
 	CHECK ((disposition = 'customer' AND owner_mailbox IS NOT NULL AND user_pubkey IS NOT NULL
 		AND spk IS NOT NULL AND gross_sat = fee_sat + payout_sat + forfeited_sat)
-		OR (disposition = 'operator' AND fee_sat = 0 AND payout_sat = 0 AND forfeited_sat = 0)),
-	CHECK ((paying_txid IS NULL) = (paying_height IS NULL)),
-	CHECK ((paying_height IS NULL) = (paying_hash IS NULL))
+		OR (disposition = 'operator' AND fee_sat = 0 AND payout_sat = 0 AND forfeited_sat = 0))
 );
 CREATE UNIQUE INDEX expiry_one_active_allocation_per_coin ON expiry_allocation_coin(entitlement_id) WHERE active;
 

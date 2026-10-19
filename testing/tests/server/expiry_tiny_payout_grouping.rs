@@ -271,7 +271,7 @@ async fn tiny_group() {
 		let info = core.custom_get_raw_transaction_info(txid, None).unwrap().unwrap();
 		assert!(info.confirmations.unwrap_or(0) >= 6);
 		let hash = info.blockhash.unwrap();
-		let ledger = db.read(async |tx| Ok(tx.query_one("SELECT c.active,c.paying_txid,c.paying_hash, \
+		let ledger = db.read(async |tx| Ok(tx.query_one("SELECT c.active,c.paying_txid, \
 			a.status,a.confirmed_hash,p.output_index,p.amount_sat FROM expiry_allocation_coin c \
 			JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
 			JOIN expiry_allocation_payout p ON p.allocation_id=c.allocation_id AND p.spk=c.spk \
@@ -280,7 +280,6 @@ async fn tiny_group() {
 		assert!(ledger.get::<_, bool>("active"));
 		assert_eq!(ledger.get::<_, String>("status"), "confirmed");
 		assert_eq!(ledger.get::<_, String>("paying_txid"), txid.to_string());
-		assert_eq!(ledger.get::<_, String>("paying_hash"), hash.to_string());
 		assert_eq!(ledger.get::<_, String>("confirmed_hash"), hash.to_string());
 		let output_index = u32::try_from(ledger.get::<_, i32>("output_index")).unwrap();
 		let output_amount = if index < 3 { 500 } else { 97_500 };

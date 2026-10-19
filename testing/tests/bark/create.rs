@@ -10,13 +10,12 @@ use bark::BarkNetwork;
 use bitcoin::Network;
 use bitcoin_ext::BlockDelta;
 
-use ark_testing::{Bark, TestContext, require_bark_version};
+use ark_testing::{Bark, TestContext};
 use ark_testing::constants::env::BARK_EXEC;
 use ark_testing::util::{resolve_path, ToAltString};
 
 #[tokio::test]
 async fn cli_create_releases_lock_after_failure() {
-	require_bark_version!(> "0.7.1");
 	let bark_exec = resolve_path(std::env::var(BARK_EXEC).expect("BARK_EXEC env not set"))
 		.expect("failed to resolve BARK_EXEC");
 	let ctx = TestContext::new_minimal("bark/cli_create_releases_lock_after_failure").await;
@@ -41,7 +40,6 @@ async fn cli_create_releases_lock_after_failure() {
 
 #[tokio::test]
 async fn cli_create_refuses_another_cli_create() {
-	require_bark_version!(> "0.7.1");
 	let bark_exec = resolve_path(std::env::var(BARK_EXEC).expect("BARK_EXEC env not set"))
 		.expect("failed to resolve BARK_EXEC");
 	let ctx = TestContext::new_minimal("bark/cli_create_refuses_another_cli_create").await;

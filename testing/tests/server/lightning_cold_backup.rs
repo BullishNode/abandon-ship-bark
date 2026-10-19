@@ -23,7 +23,7 @@ use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use tokio::process::Command;
 
-use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use ark_testing::daemon::{Daemon, DaemonHelper};
 use ark_testing::daemon::captaind::WalletAdminClient;
 use ark_testing::daemon::postgres::PostgresHelper;
@@ -251,7 +251,6 @@ fn canonical_descendants(ctx: &TestContext, first_height: u32, external: &BTreeM
 
 #[tokio::test]
 async fn internal_htlcs_ready_physical_backup_refunds_absent_sender() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	tokio::time::timeout(Duration::from_secs(180), Box::pin(lightning_backup())).await
 		.expect("one internal signed-grant physical backup and seed recovery must finish within 180 seconds");

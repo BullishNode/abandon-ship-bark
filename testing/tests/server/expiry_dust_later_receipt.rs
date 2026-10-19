@@ -8,7 +8,7 @@ use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPacka
 use ark::mailbox::MailboxIdentifier;
 use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
 use ark::vtxo::Full;
-use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use ark_testing::daemon::captaind::WalletAdminClient;
 use bark::{FallbackDisposition, FallbackEntitlement, FallbackPayoutStage, Wallet};
 use bark::movement::{Movement, MovementStatus, PaymentMethod};
@@ -472,7 +472,6 @@ async fn financial_cut(
 
 #[tokio::test]
 async fn forfeited_small_receipt_does_not_revive_when_same_customer_receives_again() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	assert!(std::env::var_os("BARK_DOUBLE_DRIVE_ACTIONS").is_none());
 	tokio::time::timeout(Duration::from_secs(180), Box::pin(two_receipts())).await

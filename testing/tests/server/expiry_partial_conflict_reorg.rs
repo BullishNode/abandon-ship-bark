@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::time::Duration;
 
-use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use ark_testing::daemon::captaind::WalletAdminClient;
 use ark_testing::constants::BOARD_CONFIRMATIONS;
 use ark_testing::exit::{complete_exit, progress_exit_until_awaiting_delta};
@@ -328,7 +328,6 @@ async fn assert_final_outcome(
 /// signed holder exit/claim, automatic regroup, real Core forks and owned restarts.
 #[tokio::test]
 async fn expiry_actual_partial_conflict_reorg_restores_one_canonical_payment() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	tokio::time::timeout(Duration::from_secs(180), Box::pin(partial_conflict_reorg())).await
 		.expect("the bounded native partial-conflict reorg case must finish");

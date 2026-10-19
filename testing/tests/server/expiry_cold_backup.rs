@@ -18,7 +18,7 @@ use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use tokio::process::Command;
 
-use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use ark_testing::daemon::{Daemon, DaemonHelper};
 use ark_testing::daemon::captaind::WalletAdminClient;
 use ark_testing::daemon::postgres::PostgresHelper;
@@ -170,7 +170,6 @@ async fn rebuilt(db: &Db, point: BlockRef) {
 
 #[tokio::test]
 async fn orderly_physical_backup_seed_only_recovery() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	tokio::time::timeout(Duration::from_secs(180), Box::pin(cold_backup())).await
 		.expect("one ordinary physical backup and actual seed recovery must finish within 180 seconds");

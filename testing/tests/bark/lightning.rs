@@ -796,7 +796,6 @@ async fn bark_claims_lightning_receive_after_blocks_mined(
 	srv: &Captaind,
 	pay: impl AsyncFn(String),
 ) {
-	require_bark_version!(> "0.7.1");
 
 	srv.wait_for_vtxopool(&ctx).await;
 
@@ -2134,7 +2133,6 @@ lightning_test!(bark_can_claim_all_claimable_receives);
 
 #[tokio::test]
 async fn bark_can_cancel_lightning_receive() {
-	require_bark_version!(== "DIRTY");
 
 	let ctx = TestContext::new("lightningd/bark_can_cancel_lightning_receive").await;
 
@@ -2169,7 +2167,6 @@ async fn bark_can_cancel_lightning_receive() {
 
 #[tokio::test]
 async fn bark_cannot_cancel_lightning_receive_after_preimage_revealed() {
-	require_bark_version!(== "DIRTY");
 
 	let ctx = TestContext::new("lightningd/bark_cannot_cancel_after_preimage_revealed").await;
 
@@ -2307,7 +2304,6 @@ async fn bark_can_receive_lightning_long_route() {
 /// explicit exit attempt decides what happens next.
 #[tokio::test]
 async fn bark_keeps_lightning_receive_pending_after_retry_budget_exhausted() {
-	require_bark_version!(== "DIRTY");
 
 	let ctx = TestContext::new("lightningd/keeps_pending_after_retry_budget_exhausted").await;
 
@@ -2384,7 +2380,6 @@ async fn bark_keeps_lightning_receive_pending_after_retry_budget_exhausted() {
 /// receive should ultimately settle off-chain.
 #[tokio::test]
 async fn bark_completes_lightning_receive_after_transient_claim_failures() {
-	require_bark_version!(== "DIRTY");
 
 	let ctx = TestContext::new("lightningd/completes_after_transient_claim_failures").await;
 

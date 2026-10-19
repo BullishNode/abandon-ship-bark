@@ -8,7 +8,7 @@ use ark::attestations::VtxoStatusAttestation;
 use ark::mailbox::MailboxIdentifier;
 use ark::{ProtocolEncoding, Vtxo, VtxoId};
 use ark::vtxo::Full;
-use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use ark_testing::daemon::captaind::WalletAdminClient;
 use bark::{FallbackDisposition, FallbackEntitlement, FallbackPayoutStage, Wallet};
 use bark::movement::{Movement, MovementStatus, PaymentMethod};
@@ -507,7 +507,6 @@ async fn predecessor(
 
 #[tokio::test]
 async fn only_final_owner_receives_after_two_full_value_forwards() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	assert!(std::env::var_os("BARK_DOUBLE_DRIVE_ACTIONS").is_none());
 	tokio::time::timeout(Duration::from_secs(180), Box::pin(three_owners())).await

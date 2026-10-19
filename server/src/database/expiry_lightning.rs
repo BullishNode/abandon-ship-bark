@@ -5,11 +5,16 @@
 //! the upstream WAL and bind financial conclusions to actual attempt links.
 
 use anyhow::Context;
-use ark::VtxoId;
+use bitcoin::Transaction;
+use bitcoin::taproot::LeafVersion;
+
+use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
+use ark::vtxo::TapScriptClause;
+use ark::vtxo::policy::clause::{HashDelaySignClause, HashDelaySignClause_v0};
 use ark::lightning::{PaymentHash, Preimage};
 use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef};
 
-use super::Tx;
+use super::{BlockTable, Tx};
 use super::ln::LightningPaymentAttempt;
 
 /// Source-specific internal routing survives completion of the initiating
@@ -140,6 +145,75 @@ impl Tx<'_> {
 		Ok(())
 	}
 
+	/// Off-chain fulfillment or an actual confirmed user preimage spend must
+	/// cover the entire issued set. Shared preimage knowledge alone says nothing
+	/// about which subscription paid its recipient.
+	async fn internal_receive_grants_claimed(&self, subscription_id: i64, hash: PaymentHash) -> anyhow::Result<bool> {
+		let Some(preimage) = self.get_htlc_settlement_by_payment_hash(hash).await? else { return Ok(false); };
+		let initial_view = self.expiry_rebuild_token().await?;
+		let rows = self.query("
+			SELECT v.vtxo,v.vtxo_id,v.onchain_spent_txid,v.onchain_spent_height,
+				h.payment_hash,h.offchain_resolution::TEXT,h.chain_resolution::TEXT,h.chain_resolution_height,
+				c.raw_tx,c.confirmed_height
+			FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
+			LEFT JOIN user_exit_claim c ON c.id=v.onchain_spent_txid
+			WHERE v.lightning_htlc_subscription_id=$1 AND h.direction='outgoing'
+			ORDER BY v.vtxo_id
+		", &[&subscription_id]).await?;
+		if rows.is_empty() { return Ok(false); }
+		let mut chain_view = None;
+		for row in rows {
+			if row.get::<_, &str>("payment_hash") != hash.to_string() { return Ok(false); }
+			if row.get::<_, Option<&str>>("offchain_resolution") == Some("fulfilled") { continue; }
+			if row.get::<_, Option<&str>>("chain_resolution") != Some("fulfilled") { return Ok(false); }
+			let Some(height) = row.get::<_, Option<i32>>("chain_resolution_height") else { return Ok(false); };
+			if row.get::<_, Option<i32>>("onchain_spent_height") != Some(height)
+				|| row.get::<_, Option<i32>>("confirmed_height") != Some(height) { return Ok(false); }
+			let Some(txid) = row.get::<_, Option<&str>>("onchain_spent_txid") else { return Ok(false); };
+			let Some(raw) = row.get::<_, Option<&[u8]>>("raw_tx") else { return Ok(false); };
+			let claim: Transaction = bitcoin::consensus::deserialize(raw)?;
+			if claim.compute_txid().to_string() != txid { return Ok(false); }
+			let grant: ServerVtxo = ServerVtxo::deserialize(row.get("vtxo"))?;
+			if grant.id().to_string() != row.get::<_, &str>("vtxo_id") { return Ok(false); }
+			let mut inputs = claim.input.iter().filter(|i| i.previous_output == grant.point());
+			let Some(input) = inputs.next() else { return Ok(false); };
+			if inputs.next().is_some() { return Ok(false); }
+			let (policy_hash, script, revealed) = match grant.policy() {
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv(policy)) => (
+					policy.payment_hash, policy.user_reveals_preimage_clause(grant.exit_delta()).tapscript(),
+					HashDelaySignClause::extract_preimage_from_witness(&input.witness, hash),
+				),
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv_v0(policy)) => (
+					policy.payment_hash, policy.user_reveals_preimage_clause(grant.exit_delta()).tapscript(),
+					HashDelaySignClause_v0::extract_preimage_from_witness(&input.witness, hash),
+				),
+				_ => return Ok(false),
+			};
+			let Some(leaf) = input.witness.taproot_leaf_script() else { return Ok(false); };
+			if policy_hash != hash || revealed != Some(preimage)
+				|| leaf.version != LeafVersion::TapScript || leaf.script != script.as_script() { return Ok(false); }
+			// Only the confirmed-block frontier writes this raw claim and spend
+			// linkage. Reorg processing clears all three confirmation heights.
+			// Require both current completed views, not a stale fulfillment flag.
+			let view = match chain_view {
+				Some(view) => view,
+				None => {
+					let Some(view) = initial_view else { return Ok(false); };
+					chain_view = Some(view);
+					view
+				},
+			};
+			let height = BlockHeight::try_from(height)?;
+			if height > view.captaind.height || height > view.watchmand.height { return Ok(false); }
+			let block = self.get_block_by_height(BlockTable::Watchmand, height).await?;
+			if block.is_none() || self.get_block_by_height(BlockTable::Captaind, height).await? != block { return Ok(false); }
+		}
+		// ReadCommitted callers must not combine rows from opposite sides of a
+		// reorg. Completed views are inputs to expiry reconstruction, so do not
+		// require the financial reconstruction itself to have finished here.
+		Ok(chain_view.is_none() || self.expiry_rebuild_token().await? == chain_view)
+	}
+
 	/// The WAL consumer may already have observed an unrelated shared preimage.
 	/// Maintenance must also finish open attempts after their own real claim
 	/// commits, even without a new WAL item or the original caller.
@@ -151,12 +225,26 @@ impl Tx<'_> {
 			amount_msat,final_amount_msat,status,error,block_height,user_fee_sat,retry_for_secs,user_agent,
 			lightning_htlc_subscription_id,created_at,updated_at,claim_complete
 			FROM funding
-			WHERE claim_complete AND status NOT IN ('failed','succeeded') ORDER BY id LIMIT $1
+			WHERE (claim_complete OR EXISTS(SELECT 1 FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
+					WHERE v.lightning_htlc_subscription_id=funding.funded_subscription_id AND h.direction='outgoing'
+					AND h.chain_resolution='fulfilled')
+					AND NOT EXISTS(SELECT 1 FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
+						WHERE v.lightning_htlc_subscription_id=funding.funded_subscription_id AND h.direction='outgoing'
+						AND (h.payment_hash<>funding.payment_hash OR (h.offchain_resolution::TEXT IS DISTINCT FROM 'fulfilled'
+							AND h.chain_resolution::TEXT IS DISTINCT FROM 'fulfilled'))))
+				AND status NOT IN ('failed','succeeded')
+				ORDER BY id LIMIT $1
 		");
-		self.query(&query, &[&limit]).await?.into_iter().map(|row| {
-			let claim_complete = row.get("claim_complete");
-			Ok(InternalReceiveFunding { attempt: row.try_into()?, claim_complete })
-		}).collect()
+		let mut completed = Vec::new();
+		for row in self.query(&query, &[&limit]).await? {
+			let cooperative = row.get::<_, bool>("claim_complete");
+			let attempt: LightningPaymentAttempt = row.try_into()?;
+			let subscription = attempt.lightning_htlc_subscription_id.context("internal funding lacks subscription")?;
+			if cooperative || self.internal_receive_grants_claimed(subscription, attempt.payment_hash).await? {
+				completed.push(InternalReceiveFunding { attempt, claim_complete: true });
+			}
+		}
+		Ok(completed)
 	}
 	pub(crate) async fn funded_internal_receive(
 		&self, subscription_id: i64, hash: PaymentHash,
@@ -169,10 +257,10 @@ impl Tx<'_> {
 			FROM funding
 			WHERE funded_subscription_id=$1 AND payment_hash=$2
 		");
-		self.query_opt(&query, &[&subscription_id, &hash.to_string()]).await?.map(|row| {
-			let claim_complete = row.get("claim_complete");
-			Ok(InternalReceiveFunding { attempt: row.try_into()?, claim_complete })
-		}).transpose()
+		let Some(row) = self.query_opt(&query, &[&subscription_id, &hash.to_string()]).await? else { return Ok(None); };
+		let claim_complete = row.get::<_, bool>("claim_complete")
+			|| self.internal_receive_grants_claimed(subscription_id, hash).await?;
+		Ok(Some(InternalReceiveFunding { attempt: row.try_into()?, claim_complete }))
 	}
 
 	/// Replay completed internal commitments after a missed status write. The
@@ -182,18 +270,27 @@ impl Tx<'_> {
 	pub async fn reconcile_completed_internal_receives(&self, limit: i64) -> anyhow::Result<Vec<PaymentHash>> {
 		ensure!((1..=128).contains(&limit), "invalid internal receive reconciliation limit");
 		let query = format!("
-			WITH funding AS ({INTERNAL_RECEIVE_FUNDING}), ready AS (
-				SELECT s.id FROM lightning_htlc_subscription s
-				JOIN funding f ON f.funded_subscription_id=s.id
-				WHERE s.status<>'settled' AND f.claim_complete
-				ORDER BY s.id LIMIT $1 FOR UPDATE OF s SKIP LOCKED
-			)
-			UPDATE lightning_htlc_subscription s SET status='settled',updated_at=NOW()
-			FROM ready
-			WHERE s.id=ready.id AND s.status<>'settled' RETURNING s.payment_hash
+			WITH funding AS ({INTERNAL_RECEIVE_FUNDING})
+			SELECT s.id,s.payment_hash,f.claim_complete FROM lightning_htlc_subscription s
+			JOIN funding f ON f.funded_subscription_id=s.id
+			WHERE s.status<>'settled' AND (f.claim_complete OR EXISTS(
+				SELECT 1 FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
+				WHERE v.lightning_htlc_subscription_id=s.id AND h.direction='outgoing' AND h.chain_resolution='fulfilled')
+				AND NOT EXISTS(SELECT 1 FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
+					WHERE v.lightning_htlc_subscription_id=s.id AND h.direction='outgoing'
+					AND (h.payment_hash<>s.payment_hash OR (h.offchain_resolution::TEXT IS DISTINCT FROM 'fulfilled'
+						AND h.chain_resolution::TEXT IS DISTINCT FROM 'fulfilled'))))
+			ORDER BY s.id LIMIT $1 FOR UPDATE OF s SKIP LOCKED
 		");
-		self.query(&query, &[&limit]).await?.into_iter()
-			.map(|row| Ok(row.get::<_, &str>("payment_hash").parse()?)).collect()
+		let mut completed = Vec::new();
+		for row in self.query(&query, &[&limit]).await? {
+			let subscription: i64 = row.get("id");
+			let hash: PaymentHash = row.get::<_, &str>("payment_hash").parse()?;
+			if !row.get::<_, bool>("claim_complete") && !self.internal_receive_grants_claimed(subscription, hash).await? { continue; }
+			if self.execute("UPDATE lightning_htlc_subscription SET status='settled',updated_at=NOW() WHERE id=$1 AND status<>'settled'",
+				&[&subscription]).await? != 0 { completed.push(hash); }
+		}
+		Ok(completed)
 	}
 
 	pub(crate) async fn lightning_source_state(
@@ -204,11 +301,7 @@ impl Tx<'_> {
 			q.id IS NOT NULL AS queued, d.id IS NOT NULL AS dispatched,
 			f.id IS NOT NULL AS terminal_failure, s.id IS NOT NULL AS external_success,
 			i.id IS NOT NULL AS internal_funding,
-			(EXISTS(SELECT 1 FROM vtxo rv JOIN htlc_vtxo rh ON rh.id=rv.id
-				WHERE rv.lightning_htlc_subscription_id=i.subscription_id AND rh.direction='outgoing')
-			AND NOT EXISTS(SELECT 1 FROM vtxo rv JOIN htlc_vtxo rh ON rh.id=rv.id
-				WHERE rv.lightning_htlc_subscription_id=i.subscription_id AND rh.direction='outgoing'
-				AND rh.offchain_resolution::TEXT IS DISTINCT FROM 'fulfilled')) AS internal_claimed
+			i.subscription_id AS internal_subscription
 			FROM lightning_payment_attempt_htlc_vtxo l
 			JOIN lightning_payment_attempt a ON a.id=l.lightning_payment_attempt_id
 			LEFT JOIN expiry_lightning_queued_attempt q ON q.id=a.id
@@ -226,10 +319,13 @@ impl Tx<'_> {
 		let mut internal = Vec::new();
 		let mut cancelled_internal = None;
 		for attempt in attempts {
-			if preimage_known && (attempt.get::<_, bool>("external_success")
-				|| (attempt.get::<_, bool>("internal_funding")
-					&& attempt.get::<_, bool>("internal_claimed"))) {
-				return Ok(LightningSourceState::Discharged);
+			if preimage_known {
+				if attempt.get::<_, bool>("external_success") { return Ok(LightningSourceState::Discharged); }
+				if let Some(subscription) = attempt.get::<_, Option<i64>>("internal_subscription") {
+					if self.funded_internal_receive(subscription, hash).await?.is_some_and(|funding|
+						funding.attempt.id == attempt.get::<_, i64>("id") && funding.claim_complete)
+					{ return Ok(LightningSourceState::Discharged); }
+				}
 			}
 			if attempt.get::<_, bool>("internal_funding") {
 				let attempt_id = attempt.get::<_, i64>("id");

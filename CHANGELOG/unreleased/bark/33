@@ -1,0 +1,5 @@
+- Make Bitcoin payment-method history agree with complete wallet history
+  Preserve exact address and output-script matching and movement-ID query order.
+  Queries read the complete history, so work and memory can grow with its size.
+  Keep the public `Wallet::exit_protection_schedule` method available.
+  [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)

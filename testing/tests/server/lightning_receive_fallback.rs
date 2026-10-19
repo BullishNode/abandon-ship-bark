@@ -14,9 +14,11 @@ use ark_testing::daemon::captaind::{proxy::MailboxRpcProxy, MailboxClient};
 use bark::FallbackDisposition;
 use bark::actions::lightning::receive::Progress;
 use bark::movement::MovementStatus;
-use bitcoin::{Amount, OutPoint, Transaction};
+use bitcoin::{Address, Amount, Network, OutPoint, Transaction};
+use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin_ext::BlockDelta;
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::{Db, SpendState};
@@ -83,9 +85,17 @@ async fn registered_receive_fallback() {
 	let recipient_mailbox = recipient.mailbox_keypair().public_key().to_string();
 	assert_ne!(destination.account_xpub, provider_destination.account_xpub);
 	assert_ne!(destination.spk, provider_destination.spk);
-	assert!(destination.spk.is_p2wpkh(), "the real recipient supplies a standard BIP84 fallback");
 	let seed = bip39::Mnemonic::from_str(tokio::fs::read_to_string(ctx.datadir.join("recipient/mnemonic"))
 		.await.unwrap().trim()).unwrap();
+	let secp = Secp256k1::new();
+	let master = Xpriv::new_master(Network::Regtest, &seed.to_seed("")).unwrap();
+	let path = DerivationPath::from_str("m/86'/1'/0'/0/0").unwrap();
+	let fallback_key = master.derive_priv(&secp, &path).unwrap().to_keypair(&secp);
+	let expected_fallback_script = Address::p2tr(
+		&secp, fallback_key.x_only_public_key().0, None, Network::Regtest,
+	).script_pubkey();
+	assert_eq!(destination.spk, expected_fallback_script, "the native fallback must use the seed-derived BIP86 destination");
+	assert!(destination.spk.is_p2tr());
 	assert_eq!(recipient.balance().await.unwrap().spendable, sat(0));
 	drop(recipient);
 	// The original recipient is never reopened, synced, delivered to or
@@ -290,7 +300,13 @@ async fn registered_receive_fallback() {
 	let recovery = &recoveries[0];
 	assert_eq!(recovery.input.iter().map(|input| input.previous_output).collect::<BTreeSet<_>>(), BTreeSet::from([payout]));
 	assert_eq!(recovery.input.len(), 1);
-	assert_eq!(recovery.input[0].witness.len(), 2, "the actual BIP84 recipient key signs the fallback spend");
+	assert_eq!(recovery.input[0].witness.len(), 1, "the native BIP86 recipient must use a key-path witness");
+	bitcoin::taproot::Signature::from_slice(recovery.input[0].witness.iter().next().unwrap()).unwrap();
+	let previous = ctx.bitcoind().await_transaction(recovery.input[0].previous_output.txid).await;
+	let previous_output = &previous.output[recovery.input[0].previous_output.vout as usize];
+	assert!(previous_output.script_pubkey.is_p2tr());
+	assert_eq!(previous_output.script_pubkey, expected_fallback_script);
+	assert_eq!(previous_output.value, expected);
 	assert_eq!(recovery.output.len(), 1);
 	assert_eq!(recovery.output[0].script_pubkey, recovery_address.script_pubkey());
 	let recovery_fee = expected.checked_sub(recovery.output[0].value).unwrap();

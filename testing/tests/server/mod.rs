@@ -873,7 +873,7 @@ async fn change_split_avoids_exit_depth_limit() {
 	let checks = [(&bark1, 900_000, 727_500, 172_500), (&bark2, 100_000, 60_000, 40_000)];
 	for (bark, total, spendable, needs_refresh) in checks {
 		let balance = bark.offchain_balance().await;
-		if is_bark_version!(> "0.7.1") {
+		if is_bark_version!(> "0.7.1") || bark.supports_awaiting_settlement().await {
 			assert_eq!(spendable, balance.spendable.to_sat(), "{balance:?}");
 			assert_eq!(needs_refresh, balance.needs_refresh.to_sat(), "{balance:?}");
 		} else {

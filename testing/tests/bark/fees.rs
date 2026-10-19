@@ -553,7 +553,7 @@ async fn refresh_should_refresh_vtxos_no_dust() {
 
 	// The expired VTXO needs a refresh before it can be sent again.
 	let balance = bark2.offchain_balance().await;
-	if is_bark_version!(> "0.7.1") {
+	if is_bark_version!(> "0.7.1") || bark2.supports_awaiting_settlement().await {
 		assert_eq!(balance.spendable, sat(200_000) - expected_fee, "{balance:?}");
 		assert_eq!(balance.needs_refresh, sat(331), "{balance:?}");
 	} else {

@@ -10,7 +10,7 @@ use ark::attestations::VtxoStatusAttestation;
 use ark::mailbox::MailboxIdentifier;
 use ark::{ProtocolEncoding, Vtxo, VtxoId, SECP};
 use ark::vtxo::Full;
-use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use ark_testing::daemon::captaind::WalletAdminClient;
 use bark::{FallbackDisposition, FallbackEntitlement, FallbackPayoutStage, OpenWalletArgs, Wallet, WalletSeed};
 use bark::lock_manager::memory::MemoryLockManager;
@@ -752,35 +752,30 @@ async fn bounded(family: Family) {
 
 #[tokio::test]
 async fn p2pkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	bounded(Family::P2pkh).await;
 }
 
 #[tokio::test]
 async fn p2sh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	bounded(Family::P2sh).await;
 }
 
 #[tokio::test]
 async fn p2wpkh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	bounded(Family::P2wpkh).await;
 }
 
 #[tokio::test]
 async fn p2wsh_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	bounded(Family::P2wsh).await;
 }
 
 #[tokio::test]
 async fn p2tr_exact_dust_boundary_is_paid_and_one_sat_below_is_forfeited() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	bounded(Family::P2tr).await;
 }

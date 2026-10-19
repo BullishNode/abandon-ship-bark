@@ -66,9 +66,10 @@ closures six confirmations deep, a server and watchman restart across the
 fifth-to-sixth confirmation, and the sender's refund on a fresh private Signet.
 Seed-restored wallets spent the resulting outputs. These observations do not
 qualify changed binaries; the lifecycle, history, balances and recovery must be
-verified again on the final
-artifacts. Live verification of the embedded web client's payout settings,
-balances and history also remains pending.
+verified again on the final artifacts. An intermediate native daemon passed
+HTTP checks for the embedded web assets, authentication, payout registration,
+zero balances and empty history. Rendered payout history and final-product web
+verification remain pending.
 
 The following findings still require verification or completion:
 
@@ -77,9 +78,23 @@ The following findings still require verification or completion:
   scenarios still need to pass on the final binaries.
 - The Lightning revocation test setup is being corrected for receiver-grant
   closure and the six-confirmation refund depth. Its rerun remains pending.
-- Outgoing Lightning history can retain a pending send entry after its fallback
-  refund is confirmed. The correction and its regression verification remain
-  pending.
+- Outgoing Lightning history retained a pending send entry after its fallback
+  refund was confirmed. A correction now verifies the complete set of confirmed
+  payout proofs before ending that send. Its integration regression and private
+  Signet verification on the final artifacts remain pending.
+- Seed recovery retains historical conditional, round and offboard inputs when
+  the server cannot provide a supported discharge proof. These inputs must not
+  inflate balances or prevent spending recovered change. Updated recovery tests
+  still need to pass their full balance and spending checks.
+- Two automatic-refresh fixtures reached the protective-exit boundary instead
+  of completing a refresh. Their setup must exercise the refresh window with
+  protection enabled, and the refresh and rejected-input assertions must pass.
+- A background ownership-scan test observed a different scheduling checkpoint
+  than expected. The scan ordering and late-arriving-key guarantees remain under
+  review; the final regression has not passed.
+- Native seed-recovery backup tests must use the released BIP86 wallet, while
+  application-wallet tests retain BIP84 coverage. The corrected native backup
+  tests have not yet passed on the final artifacts.
 
 Final qualification must also retain coverage of an attached BIP84 application
 wallet and the released CLI and daemon configuration, exposed-grant closure,

@@ -54,7 +54,7 @@ wallet balance, fee demand and pending payouts.
 
 ### Qualification status
 
-The most recently checked candidate passed static checks and 852 unit tests,
+At this source freeze, the functional candidate passed static checks and 852 unit tests,
 with one test skipped. Earlier Nix builds succeeded. The latest corrections
 still require completion and qualification of the final captaind, watchmand,
 bark and barkd Nix artifacts. The complete server, wallet SDK, CLI, daemon and
@@ -68,8 +68,8 @@ Seed-restored wallets spent the resulting outputs. These observations do not
 qualify changed binaries; the lifecycle, history, balances and recovery must be
 verified again on the final artifacts. An intermediate native daemon passed
 HTTP checks for the embedded web assets, authentication, payout registration,
-zero balances and empty history. Rendered payout history and final-product web
-verification remain pending.
+zero balances and empty history. Its rendered dashboard and settings also
+passed. Rendered payout history and final-product web verification remain pending.
 
 The following findings still require verification or completion:
 
@@ -87,11 +87,19 @@ The following findings still require verification or completion:
   inflate balances or prevent spending recovered change. Updated recovery tests
   still need to pass their full balance and spending checks.
 - Two automatic-refresh fixtures reached the protective-exit boundary instead
-  of completing a refresh. Their setup must exercise the refresh window with
-  protection enabled, and the refresh and rejected-input assertions must pass.
-- A background ownership-scan test observed a different scheduling checkpoint
-  than expected. The scan ordering and late-arriving-key guarantees remain under
-  review; the final regression has not passed.
+  of completing a refresh. Their setup now uses the refresh window with
+  protection enabled. The refresh and rejected-input assertions must pass on
+  the final artifacts.
+- A background ownership-scan test expected the wrong scheduling checkpoint.
+  Its setup now follows persisted service tickets while retaining late-arriving
+  key and stale-work checks. The final regression has not passed.
+- An earlier receiver sync reported an error after the receive had been
+  canceled; a subsequent snapshot showed zero balances. Error reporting and the
+  complete receive-side return path still need final verification.
+- A partial-refund test could not find a previously confirmed customer claim
+  output in the unspent set. Later fixture funding had spent that receipt.
+  The test now uses a separate customer destination and retains its original
+  payment and remaining-refund assertions. Its final rerun remains pending.
 - Native seed-recovery backup tests must use the released BIP86 wallet, while
   application-wallet tests retain BIP84 coverage. The corrected native backup
   tests have not yet passed on the final artifacts.

@@ -35,10 +35,10 @@ acceptance of this bound and monitoring for violations.
 ### Ambiguous external Lightning payments
 
 A crash or connection failure can leave a payment without proof of its outcome.
-The sender's VTXO remains pending in this case. An empty node payment history does
-not authorize a refund. Automatic recovery and an operator resolution command
-are not implemented. This requires a defined resolution policy, implementation
-and tests before production approval.
+The sender's VTXO remains pending indefinitely in this case. An empty node payment
+history does not authorize a refund. Automatic recovery and an operator
+resolution command are not implemented. This requires a defined resolution
+policy, implementation and tests before production approval.
 
 ### Owners without a registration
 
@@ -52,24 +52,37 @@ Payouts require confirmed, usable watchman UTXOs. Payouts wait when those UTXOs 
 unavailable. The operator subsidy has no hard cap. An operator must monitor the
 wallet balance, fee demand and pending payouts.
 
-### Qualification still required
+### Qualification status
 
-The final source revision and its release binaries are not yet qualified. The
-remaining work includes:
+The most recently checked candidate passed static checks and 852 unit tests,
+with one test skipped. Earlier Nix builds succeeded. The latest corrections
+still require completion and qualification of the final captaind, watchmand,
+bark and barkd Nix artifacts. The complete server, wallet SDK, CLI, daemon and
+core integration suites remain pending for those artifacts, using the required
+patched Core Lightning plugin.
 
-- Resolve or disclose every outstanding independent diff review finding.
-- Complete checks and unit tests on the final revision.
-- Complete the server, wallet SDK, CLI, daemon and core integration suites using
-  the release binaries and the declared patched Core Lightning plugin.
-- Confirm funded exposed-grant closure, internal refunds, restart recovery and
-  claim rebroadcast after reorgs within the supported bound.
-- Confirm both an attached BIP84 application wallet and the released CLI and
-  daemon wallet configuration.
-- Build and identify all four Nix release binaries. Verify the embedded web
-  client has the required payout settings, balances and history.
-- Complete the fresh private Signet lifecycle: ordinary expiry and payout,
-  uncollected internal Lightning receive with both clients absent, grant closure,
-  sender refund, history, balances and recovery.
+An earlier build completed ordinary expiry payouts, funded receiver-grant
+closures six confirmations deep, a server and watchman restart across the
+fifth-to-sixth confirmation, and the sender's refund on a fresh private Signet.
+Seed-restored wallets spent the resulting outputs. These observations do not
+qualify changed binaries; the lifecycle, history, balances and recovery must be
+verified again on the final
+artifacts. Live verification of the embedded web client's payout settings,
+balances and history also remains pending.
 
-Earlier test results do not qualify binaries built from changed source. This
-section must be updated with the final candidate's results before delivery.
+The following findings still require verification or completion:
+
+- Earlier exit scenarios timed out. Fee funding selection has been corrected to
+  exclude unconfirmed wallet outputs, but package relay and the affected exit
+  scenarios still need to pass on the final binaries.
+- The Lightning revocation test setup is being corrected for receiver-grant
+  closure and the six-confirmation refund depth. Its rerun remains pending.
+- Outgoing Lightning history can retain a pending send entry after its fallback
+  refund is confirmed. The correction and its regression verification remain
+  pending.
+
+Final qualification must also retain coverage of an attached BIP84 application
+wallet and the released CLI and daemon configuration, exposed-grant closure,
+internal refunds, restart recovery and user-claim rebroadcast after reorgs within
+the supported bound. Outstanding independent review findings must be resolved or
+disclosed before the final assessment.

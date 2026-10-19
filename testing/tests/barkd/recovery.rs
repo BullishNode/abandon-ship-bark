@@ -9,6 +9,7 @@ use ark_testing::util::FutureExt;
 use bark_json::primitives::{VtxoStateInfo, WalletVtxoInfo};
 use bitcoin::Amount;
 use bitcoin_ext::BlockDelta;
+use bitcoin_ext::rpc::RpcApi;
 use server_rpc::protos;
 
 use crate::helpers::wait_for_boards_synced;
@@ -127,6 +128,11 @@ async fn recovered_wallet_keeps_spent_round_vtxo_spent() {
 	let srv = ctx.captaind("server").funded(btc(10)).create().await;
 
 	let barkd = ctx.barkd("bark", &srv).boarded(sat(100_000)).expose_mnemonic().create().await;
+	let board = barkd.vtxos(None).await;
+	assert_eq!(board.len(), 1);
+	assert_eq!(board[0].vtxo.amount, sat(99_443));
+	let board_id = board[0].vtxo.id;
+	let board_body = barkd.get_vtxo_encoded(&board_id.to_string()).await.encoded.0;
 	tokio::join!(barkd.refresh_all(), srv.trigger_round());
 	wait_for_rounds_complete(&ctx, &barkd).await;
 
@@ -147,12 +153,36 @@ async fn recovered_wallet_keeps_spent_round_vtxo_spent() {
 	recovered.onchain_sync().await;
 	recovered.sync().await;
 
-	let (after, spent) = partition_recovered(recovered.vtxos(Some(true)).await, false);
+	let mut restored = recovered.vtxos(Some(true)).await;
+	let board_index = restored.iter().position(|v| v.vtxo.id == board_id).expect("the original signed board must be retained");
+	let historical_board = restored.remove(board_index);
+	assert_eq!(historical_board.vtxo, board[0].vtxo);
+	assert_eq!(historical_board.state, VtxoStateInfo::Locked { movement_id: None, action_id: None });
+	assert!(recovered.get_vtxo_encoded(&board_id.to_string()).await.encoded.0 == board_body,
+		"the exact original board body must survive recovery");
+	let (after, spent) = partition_recovered(restored, false);
 	assert_eq!(after.len(), 1, "only the change should be spendable, got {:?}", after);
 	assert_eq!(after[0].vtxo.id, change[0].vtxo.id, "the spendable VTXO should be the change");
 	assert!(spent.iter().any(|v| v.vtxo.id == round_id),
 		"the spent round output should be recorded as spent",
 	);
+	assert_eq!(spent.iter().find(|v| v.vtxo.id == round_id).unwrap().state, VtxoStateInfo::Spent);
+	let spend_amount = sat(49_443);
+	assert_eq!(after.iter().map(|v| v.vtxo.amount).sum::<Amount>(), spend_amount);
+	assert_recovered_balance_before_spend(&recovered, spend_amount).await;
+	wait_for_spendable(&recipient, sat(50_000)).await;
+	let original_received = recipient.vtxos(None).await;
+	assert!(original_received.iter().all(|v| v.state == VtxoStateInfo::Spendable));
+	assert_eq!(original_received.iter().map(|v| v.vtxo.amount).sum::<Amount>(), sat(50_000));
+	let change_recipient = ctx.barkd("change_recipient", &srv).create().await;
+	assert_recovered_balance_before_spend(&change_recipient, Amount::ZERO).await;
+	recovered.send(&change_recipient.ark_address().await, spend_amount).await;
+	wait_for_spendable(&change_recipient, spend_amount).await;
+	assert_eq!(change_recipient.vtxos(None).await.iter().map(|v| v.vtxo.amount).sum::<Amount>(), spend_amount);
+	assert_recovered_balance_before_spend(&change_recipient, spend_amount).await;
+	recovered.sync().await;
+	assert_recovered_balance_after_spend(&recovered).await;
+	assert_eq!(recipient.bark_balance().await.spendable + change_recipient.bark_balance().await.spendable, board[0].vtxo.amount);
 }
 
 /// Wallet recovery of a scheduled delegated refresh completed while the
@@ -472,6 +502,13 @@ async fn recovered_wallet_finds_lightning_receive() {
 	let before = barkd.vtxos(None).await;
 	assert_eq!(before.len(), 1, "should hold one lightning-receive VTXO after claim");
 	let recv_id = before[0].vtxo.id;
+	let original = barkd.vtxos(Some(true)).await;
+	let htlcs = original.iter().filter(|v| v.vtxo.policy_type == ark::vtxo::policy::VtxoPolicyKind::ServerHtlcRecv).collect::<Vec<_>>();
+	assert_eq!(htlcs.len(), 1);
+	let htlc = htlcs[0];
+	assert_eq!(htlc.vtxo.amount, amount);
+	assert_eq!(htlc.state, VtxoStateInfo::Spent);
+	let htlc_body = barkd.get_vtxo_encoded(&htlc.vtxo.id.to_string()).await.encoded.0;
 
 	// Recover from the same seed into a fresh wallet.
 	let mnemonic = barkd.mnemonic().await;
@@ -481,14 +518,31 @@ async fn recovered_wallet_finds_lightning_receive() {
 	recovered.onchain_sync().await;
 	recovered.sync().await;
 
-	let (after, spent) = partition_recovered(recovered.vtxos(Some(true)).await, false);
+	let mut restored = recovered.vtxos(Some(true)).await;
+	let htlc_index = restored.iter().position(|v| v.vtxo.id == htlc.vtxo.id).expect("the exact claimed HTLC body must be retained");
+	let historical_htlc = restored.remove(htlc_index);
+	assert_eq!(historical_htlc.vtxo, htlc.vtxo);
+	assert_eq!(historical_htlc.state, VtxoStateInfo::Locked { movement_id: None, action_id: None });
+	assert!(recovered.get_vtxo_encoded(&htlc.vtxo.id.to_string()).await.encoded.0 == htlc_body);
+	let (after, spent) = partition_recovered(restored, false);
 	assert_eq!(after.len(), 1, "recovered wallet should hold the lightning-receive VTXO");
 	assert_eq!(after[0].vtxo.id, recv_id, "recovered VTXO should be the claimed receive output");
-	assert!(!spent.is_empty(), "the claimed HTLC VTXO should be recorded as spent");
+	assert!(spent.is_empty(), "only the exact claimed HTLC may remain quarantined");
+	assert_eq!(after[0].vtxo.amount, amount);
+	assert_recovered_balance_before_spend(&recovered, amount).await;
 
 	// Spend recovered VTXOs in a payment
 	let recipient = ctx.barkd("recipient", &srv).create().await;
+	assert_recovered_balance_before_spend(&recipient, Amount::ZERO).await;
 	recovered.send(&recipient.ark_address().await, Amount::from_sat(500_000)).await;
+	wait_for_spendable(&recipient, amount).await;
+	let received = recipient.vtxos(None).await;
+	assert!(received.iter().all(|v| v.state == VtxoStateInfo::Spendable));
+	assert_eq!(received.iter().map(|v| v.vtxo.amount).sum::<Amount>(), amount);
+	assert_recovered_balance_before_spend(&recipient, amount).await;
+	recovered.sync().await;
+	assert_recovered_balance_after_spend(&recovered).await;
+	assert_eq!(recovered.bark_balance().await.spendable + recipient.bark_balance().await.spendable, amount);
 }
 
 /// Wallet recovery of Lightning-send change outputs.
@@ -716,6 +770,11 @@ async fn recovered_wallet_is_empty_when_fully_spent() {
 	let barkd = ctx.barkd("bark", &srv).boarded(sat(500_000)).expose_mnemonic().create().await;
 	let recipient = ctx.barkd("recipient", &srv).create().await;
 	let addr = recipient.onchain_address().await;
+	let board = barkd.vtxos(None).await;
+	assert_eq!(board.len(), 1);
+	assert_eq!(board[0].vtxo.amount, sat(499_443));
+	let board_id = board[0].vtxo.id;
+	let board_body = barkd.get_vtxo_encoded(&board_id.to_string()).await.encoded.0;
 
 	// Offboard everything on-chain — no change VTXO remains.
 	barkd.offboard_all(&addr.to_string()).await;
@@ -723,6 +782,31 @@ async fn recovered_wallet_is_empty_when_fully_spent() {
 	barkd.sync().await;
 	assert!(barkd.vtxos(None).await.is_empty(),
 		"wallet should hold no VTXOs after offboarding everything");
+	recipient.onchain_sync().await;
+	let received = recipient.onchain_utxos().await;
+	assert_eq!(received.len(), 1);
+	assert_eq!(received[0].amount, sat(498_505));
+	let core = ctx.bitcoind().sync_client();
+	let point = received[0].outpoint;
+	let output = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+	assert!(output.confirmations >= 2);
+	assert_eq!(output.value, sat(498_505));
+	assert_eq!(output.script_pub_key.hex, addr.script_pubkey().as_bytes());
+	let offboard = ctx.bitcoind().await_transaction(point.txid).await;
+	let mut input_value = Amount::ZERO;
+	for input in &offboard.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		input_value += previous.output[input.previous_output.vout as usize].value;
+	}
+	let miner_fee = input_value - offboard.output.iter().map(|o| o.value).sum::<Amount>();
+	assert_eq!(miner_fee, sat(1_382));
+	let history = barkd.history(None, None).await;
+	let offboards = history.iter().filter(|m| m.subsystem.name == "bark.offboard").collect::<Vec<_>>();
+	assert_eq!(offboards.len(), 1);
+	assert_eq!(offboards[0].status, bark_json::movements::MovementStatus::Successful);
+	assert_eq!(offboards[0].offchain_fee, sat(938));
+	assert_eq!(board[0].vtxo.amount, output.value + offboards[0].offchain_fee,
+		"the customer charge is distinct from the complete transaction's miner fee");
 
 	// Recover from the same seed: there is nothing to recover.
 	let mnemonic = barkd.mnemonic().await;
@@ -732,11 +816,17 @@ async fn recovered_wallet_is_empty_when_fully_spent() {
 	recovered.onchain_sync().await;
 	recovered.sync().await;
 
-	// Nothing is spendable, but the offboarded VTXO is recorded as spent, so the
-	// verdict outlives the scan and a replayed delivery can't restore it.
-	let (after, spent) = partition_recovered(recovered.vtxos(Some(true)).await, false);
+	// The exact old source is recovery material, not another customer balance.
+	let mut restored = recovered.vtxos(Some(true)).await;
+	assert_eq!(restored.len(), 1, "only the exact offboarded source may remain");
+	let historical = restored.remove(0);
+	assert_eq!(historical.vtxo, board[0].vtxo);
+	assert_eq!(historical.state, VtxoStateInfo::Locked { movement_id: None, action_id: None });
+	assert!(recovered.get_vtxo_encoded(&board_id.to_string()).await.encoded.0 == board_body);
+	let (after, spent) = partition_recovered(restored, false);
 	assert!(after.is_empty(), "recovered wallet should hold no spendable VTXOs, got {:?}", after);
-	assert_eq!(spent.len(), 1, "the offboarded VTXO should be recorded as spent");
+	assert!(spent.is_empty(), "no unrelated historical source may appear");
+	assert_recovered_balance_after_spend(&recovered).await;
 }
 
 /// Recovery does not resurrect a unilaterally-exited VTXO.

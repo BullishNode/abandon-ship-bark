@@ -166,9 +166,7 @@ impl Wallet {
 			// Keep this fence after the original pending ancestor is resolved.
 			// Proof derivation above is local and outside the short history lock;
 			// never replace a concurrently refreshed account snapshot.
-			let _guard = self.inner.lock_manager.lock(
-				&format!("{}.fallback-history", self.fingerprint()), Duration::from_secs(30),
-			).await?;
+			let _guard = self.lock_fallback_history(Duration::from_secs(30)).await?;
 			let mut latest = self.inner.db.get_fallback_snapshot().await?;
 			for id in inferred {
 				if latest.verified_ordinary_spends.contains(&id) { continue; }

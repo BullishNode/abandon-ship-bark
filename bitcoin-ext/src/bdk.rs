@@ -425,8 +425,8 @@ pub trait WalletExt: BorrowMut<Wallet> {
 			let mut b = wallet.build_tx()
 				.coin_selection(WithGuaranteedChange(DefaultCoinSelectionAlgorithm::default()));
 			b.only_witness_utxo();
-			b.exclude_unconfirmed();
 			b.unspendable(excluded.to_vec());
+			b.exclude_unconfirmed();
 			b.version(3); // for 1p1c package relay, all inputs must be confirmed
 			b.add_fee_anchor_spend(fee_anchor_point, fee_anchor_txout);
 			b.drain_to(change_addr.address.script_pubkey());
@@ -500,7 +500,8 @@ mod test {
 
 	#[test]
 	fn cpfp_excludes_unavailable_funding_without_changing_parent() {
-		let (mut wallet, excluded) = two_utxo_wallet();
+		let (mut wallet, confirmed, unconfirmed) = mixed_confirmation_wallet();
+		let excluded = confirmed[0];
 		let parent = Transaction {
 			version: bitcoin::transaction::Version::non_standard(3),
 			lock_time: bitcoin::absolute::LockTime::ZERO,
@@ -514,9 +515,36 @@ mod test {
 		assert!(!child.input.iter().any(|input| input.previous_output == excluded));
 		assert!(child.input.iter().any(|input| input.previous_output.txid == parent.compute_txid()));
 		assert!(child.input.iter().any(|input| input.previous_output.txid != parent.compute_txid()));
+		assert_eq!(child.input.len(), 2);
+		assert!(child.input.iter().any(|input| input.previous_output == confirmed[1]));
+		assert!(child.input.iter().any(|input| input.previous_output == OutPoint::new(parent.compute_txid(), 0)));
+		assert!(!child.input.iter().any(|input| input.previous_output == unconfirmed));
+
+		// The unconfirmed coin remains available in the wallet, but cannot
+		// replace the confirmed funding excluded by the caller.
+		assert!(matches!(wallet.make_signed_p2a_cpfp_excluding(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &confirmed),
+			Err(CpfpInternalError::InsufficientConfirmedFunds(_))));
 		let all = wallet.list_unspent().map(|utxo| utxo.outpoint).collect::<Vec<_>>();
 		assert!(wallet.make_signed_p2a_cpfp_excluding(&parent,
 			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &all).is_err());
+
+		let child = wallet.make_signed_p2a_cpfp(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap())).unwrap();
+		assert!(child.input.iter().all(|input| confirmed.contains(&input.previous_output)
+			|| input.previous_output == OutPoint::new(parent.compute_txid(), 0)));
+		assert_eq!(serialize(&parent), original);
+
+		// The default empty exclusion list must preserve the same confirmed-only rule.
+		let mut only_unconfirmed = Wallet::create_single(get_test_wpkh())
+			.network(Network::Regtest).create_wallet_no_persist().unwrap();
+		let pending = receive_output(&mut only_unconfirmed, Amount::from_sat(50_000), ReceiveTo::Mempool(1));
+		assert!(only_unconfirmed.list_unspent().any(|utxo| utxo.outpoint == pending));
+		assert!(only_unconfirmed.list_unspent().all(|utxo| !utxo.chain_position.is_confirmed()));
+		assert!(matches!(only_unconfirmed.make_signed_p2a_cpfp(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap())),
+			Err(CpfpInternalError::InsufficientConfirmedFunds(_))));
+		assert_eq!(serialize(&parent), original);
 	}
 
 	/// Build the drain-only tx shape of a CPFP child: one mandatory input, an absolute fee it

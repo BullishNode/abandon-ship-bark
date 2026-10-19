@@ -1,3 +1,79 @@
+# Post-RC maintenance cleanup (PR33)
+
+This maintenance series reduces duplicated fork storage and makes Bitcoin
+payment-method history use the complete wallet-history projection. Exact-source
+builds, artifacts and qualification results are recorded in
+[PR33](https://github.com/BullishNode/abandon-ship-bark/pull/33).
+
+## Installation and reopen scope
+
+Use fresh server and client stores for this fork schema. The inherited migration
+chains remain unchanged. Fork tables initialize atomically, and normal reopen of
+a complete store created by the same schema retains identity, registrations,
+pending acknowledgments, snapshots and obligations. Earlier experimental fork
+formats are not converted or repaired by this cleanup. Initialization success
+does not establish completed payment or recovery.
+
+## History and public API
+
+`Wallet::history_by_payment_method` filters the complete history projection for
+Bitcoin addresses and output scripts. Matching preserves the exact payment-method
+variant. Query results keep ascending movement-ID order; complete history keeps
+newest-first time/ID order. Non-Bitcoin methods retain their indexed path.
+`Wallet::exit_protection_schedule` remains public.
+
+Bitcoin payment-method queries read and project the complete stored history and
+fallback snapshot before filtering. Their work and memory use can grow with
+history size, and an unrelated movement decode or projection error can fail a
+query. Small fixture timings do not establish production-scale performance.
+
+## Confirmation and qualification boundaries
+
+Payout confirmation uses the authoritative allocation record rather than copied
+confirmation fields. Native user-claim evidence remains separate from fallback
+payment evidence. Ownership, authorization, principal, grant closure, source
+fences and actual canonical-payment checks retain their existing roles.
+
+Entitlement presence is a durable decision fence. It does not prove customer
+payment, grant collection or discharge of principal.
+
+Results belong to their exact source and artifacts. A retained actionable claim
+is an unpaid entitlement; an actual confirmed spend establishes a different
+recovery outcome. Native seed-derived fallback recovery, an application-owned
+external payout wallet, and a caller-authorized claim destination have separate
+key and spend requirements.
+
+For predecessor `3d6c4ca1a6cfea869542b2e4cea6203966af4ede`, retained per-case runner
+records reconcile 706 eligible cases as 496 passes, four failures, one process
+abort and 205 unknown outcomes. These are historical observations, not results
+for changed programs. The original narrative below records earlier snapshots
+and remains preserved. Current exact-source evidence is maintained in PR33.
+
+On `a8c8076157cdc860e99181c60c46f80ce0443dcb`, the targeted 24-case batch
+recorded 23 passes and one failure. The internal-Lightning physical-backup case
+stopped at its original 40-second grant-closure wait, before refund and seed-spend
+assertions. These are observations of that exact A8 revision, not qualification
+of the later FR6 changes. PR33 records qualification for each subsequent source.
+
+## Current limits retained by this cleanup
+
+An ambiguous external Lightning payment remains held without automatic outcome
+resolution or an operator resolution command. An empty node payment history does
+not authorize a refund.
+
+Owners without registrations remain held. Their unresolved ownership can also
+delay other payouts that share a tree output.
+
+Payouts require confirmed, usable watchman fee-wallet outputs. They wait when
+those outputs are unavailable; the operator subsidy has no hard cap.
+
+The internal-Lightning refund design retains its assumption that reorgs remove
+no more than three blocks. Six confirmations do not eliminate the deeper-fork
+double-payment risk. Tests of other recovery forks do not remove this assumption.
+Production capacity remains unqualified.
+
+# Historical release-candidate narrative
+
 # Abandon-ship release candidate
 
 This candidate adds emergency payouts to registered on-chain addresses. It is

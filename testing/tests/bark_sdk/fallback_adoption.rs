@@ -112,13 +112,12 @@ fn assert_one_principal_debit(history: &[Movement], coin: VtxoId, expected_id: M
 		&& matches!(row.subsystem.name.as_str(), "bark.exit" | "abandon.fallback_payout")).collect::<Vec<_>>();
 	assert_eq!(rows.iter().map(|row| row.effective_balance.to_sat()).sum::<i64>(), -100_000);
 	let debits = rows.iter().filter(|row| row.effective_balance.to_sat() != 0).collect::<Vec<_>>();
-	assert_eq!(debits.len(), 1, "a net sum cannot conceal duplicate principal and a compensating credit");
+	assert_eq!(debits.len(), 1, "expected exactly one nonzero history entry");
 	assert_eq!(debits[0].id, expected_id);
 	assert_eq!(debits[0].effective_balance.to_sat(), -100_000);
 }
 
-// Scan the complete new canonical block range, not a mempool or server label.
-// This is a known-script and declared-branch assertion, not a global custody audit.
+// Find all outputs to this script in the new confirmed blocks.
 fn canonical_script_outputs(ctx: &TestContext, after_height: u64, script: &Script) -> Vec<(OutPoint, TxOut)> {
 	let core = ctx.bitcoind().sync_client();
 	let mut outputs = Vec::new();
@@ -170,7 +169,7 @@ async fn history_projection_agrees_after_protective_exit_payout_and_reorg() {
 	assert_ne!(exit_method, payout_method, "the fixture must distinguish native exit and fallback destinations");
 	let methods = [exit_method.clone(), payout_method.clone()];
 	assert!(owner.history_by_payment_method(&exit_method).await.unwrap().iter().any(|row| row.id == exit_id),
-		"the genuine native exit must match the indexed-query premise");
+		"the address query must include the exit");
 	let pending = assert_history_views(&owner, &methods).await;
 	assert_one_principal_debit(&pending, coin.id(), exit_id);
 	let owed = owner.balance().await.unwrap();
@@ -191,7 +190,7 @@ async fn history_projection_agrees_after_protective_exit_payout_and_reorg() {
 	srv.watchmand().start().await.unwrap();
 	assert_eq!(srv.watchmand().config().data_dir, watchman_dir);
 	srv.watchmand().wait_for_sync_height(fee_tip).await;
-	// No more mining occurs until the actual parent is observed unconfirmed.
+	// Wait for the payout transaction in the mempool before mining.
 	let parent = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			for txid in ctx.bitcoind().sync_client().get_raw_mempool().unwrap() {

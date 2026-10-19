@@ -202,7 +202,7 @@ impl Watchman {
 			", &[]).await?;
 			t.execute("
 				UPDATE expiry_allocation_coin
-				SET paying_txid = NULL, paying_height = NULL, paying_hash = NULL
+				SET paying_txid = NULL
 			", &[]).await?;
 			t.execute("
 				DELETE
@@ -259,7 +259,7 @@ impl Watchman {
 			", &[]).await?;
 			t.execute("
 				UPDATE expiry_allocation_coin c
-				SET paying_txid = a.sweep_txid, paying_height = a.confirmed_height, paying_hash = a.confirmed_hash
+				SET paying_txid = a.sweep_txid
 				FROM expiry_allocation a
 				WHERE a.id = c.allocation_id
 				AND a.status = 'confirmed'
@@ -276,13 +276,11 @@ impl Watchman {
 				]).await?;
 				t.execute("
 					UPDATE expiry_allocation_coin
-					SET paying_txid = $2, paying_height = $3, paying_hash = $4
+					SET paying_txid = $2
 					WHERE entitlement_id = $1
 				", &[
 					id,
 					&txid.to_string(),
-					&i64::from(point.height),
-					&point.hash.to_string()
 				]).await?;
 			}
 			let duplicated = t.query_one("

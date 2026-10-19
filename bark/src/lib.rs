@@ -1772,20 +1772,17 @@ impl Wallet {
 		&self,
 		payment_method: &PaymentMethod,
 	) -> anyhow::Result<Vec<Movement>> {
-		let mut ret = self.inner.db.get_movements_by_payment_method(payment_method).await?;
-		ret.retain(|movement| movement.subsystem.name != fallback::payouts::FALLBACK_SUBSYSTEM);
-		// Preserve the indexed path for ordinary invoice/Ark lookups. Only
-		// onchain destinations can have projected fallback receipts.
-		if payment_method.is_bitcoin() {
-			let snapshot = self.inner.db.get_fallback_snapshot().await?;
-			let mut stored = Vec::new();
-			for key in snapshot.groups()?.keys() {
-				let id = *snapshot.movement_ids.get(key).context("fallback history ID is absent")?;
-				stored.push(self.inner.db.get_movement_by_id(id).await?);
-			}
-			ret.extend(snapshot.project(stored, self.network().await?)?.into_iter()
-				.filter(|movement| movement.sent_to(payment_method) || movement.received_on(payment_method)));
-		}
+		let mut ret = if payment_method.is_bitcoin() {
+			// Projection also changes ordinary exits and needs their complete
+			// context to avoid a second debit for the same principal.
+			self.history().await?.into_iter()
+				.filter(|movement| movement.sent_to(payment_method) || movement.received_on(payment_method))
+				.collect::<Vec<_>>()
+		} else {
+			let mut indexed = self.inner.db.get_movements_by_payment_method(payment_method).await?;
+			indexed.retain(|movement| movement.subsystem.name != fallback::payouts::FALLBACK_SUBSYSTEM);
+			indexed
+		};
 		ret.sort_by_key(|m| m.id);
 		Ok(ret)
 	}

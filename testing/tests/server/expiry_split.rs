@@ -100,7 +100,9 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 	let backing = first.input.iter().map(|i| ark::VtxoId::from(i.previous_output)).collect::<Vec<_>>();
 	let reserved = db.write(async |t| t.lock_unallocated_watchman_inputs(&backing).await).await
 		.expect_err("normal watchman progression must respect the actual payout's physical backing reservation");
-	assert!(format!("{reserved:#}").contains("reserved for expiry payouts"), "{reserved:#}");
+	let refusal = format!("{reserved:#}");
+	assert!(backing.iter().any(|id| refusal.contains(&format!("vtxo {id} is reserved for expiry recovery"))),
+		"{refusal}");
 	assert_eq!(first.output.iter().find(|o| o.script_pubkey == destination.spk).unwrap().value, sat(49_000));
 	let waiting = db.read(async |t| Ok(t.query_one("
 		SELECT COUNT(*)

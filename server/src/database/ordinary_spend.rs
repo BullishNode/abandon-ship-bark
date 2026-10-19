@@ -4,7 +4,6 @@ use anyhow::Context;
 use bitcoin::OutPoint;
 
 use ark::{ProtocolEncoding, ServerVtxoPolicy, VtxoId, VtxoPolicy};
-use ark::vtxo::Policy;
 
 use super::{Tx, VtxoState};
 

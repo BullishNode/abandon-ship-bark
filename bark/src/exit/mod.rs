@@ -143,7 +143,7 @@ use bitcoin::consensus::Params;
 use log::{error, info, trace, warn};
 
 use ark::{Vtxo, VtxoId, VtxoPolicy};
-use ark::vtxo::{Bare, Full, TapScriptClause, VtxoTxIterItem};
+use ark::vtxo::{Bare, Full, VtxoTxIterItem};
 use ark::vtxo::policy::signing::VtxoSigner;
 use bitcoin_ext::{BlockDelta, BlockHeight, P2TR_DUST, TxStatus};
 

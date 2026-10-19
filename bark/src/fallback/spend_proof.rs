@@ -7,7 +7,7 @@ use bitcoin::{Amount, Transaction};
 
 use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoPolicy};
 use ark::attestations::VtxoStatusAttestation;
-use ark::vtxo::{Full, Policy};
+use ark::vtxo::Full;
 use server_rpc::{protos, MAX_ORDINARY_SPEND_PROOF_BYTES, MAX_ORDINARY_SPEND_PROOF_VTXOS};
 
 use crate::Wallet;

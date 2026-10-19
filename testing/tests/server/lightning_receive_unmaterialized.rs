@@ -16,7 +16,7 @@ use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
 use bitcoin_ext::{AmountExt, BlockDelta, TxOutExt};
-use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
+use bitcoin_ext::rpc::RpcApi;
 use cln_rpc::plugins::hold;
 use cln_rpc::listpays_pays::ListpaysPaysStatus;
 use server::database::{Db, SpendState};

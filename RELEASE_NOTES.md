@@ -18,6 +18,9 @@ not approved for bitcoin mainnet. Qualification is incomplete.
 - A failed internal Lightning payment waits for the expired, unsettled receiver
   grants to close before the sender receives an ordinary fallback payout. The
   operator's funded sweep closes these grants, including exposed grants.
+- A recipient who claims internal Lightning grants on chain can complete the
+  payment only after every issued grant has verified fulfillment. A shared
+  preimage or a partially claimed set does not establish collection.
 - The refund depth defaults to six blocks. Values of three or fewer are refused.
 - The server retains the bytes of user exit claims it observes confirmed. After
   a reorg, it can rebroadcast those claims when they are valid and their inputs
@@ -71,6 +74,9 @@ HTTP checks for the embedded web assets, authentication, payout registration,
 zero balances and empty history. Its rendered dashboard and settings also
 passed. Rendered payout history and final-product web verification remain pending.
 
+Default-ignored tests are not part of this run. Scale tests remain available
+on demand and have not qualified production capacity.
+
 The following findings still require verification or completion:
 
 - Earlier exit scenarios timed out. Fee funding selection has been corrected to
@@ -100,6 +106,18 @@ The following findings still require verification or completion:
   output in the unspent set. Later fixture funding had spent that receipt.
   The test now uses a separate customer destination and retains its original
   payment and remaining-refund assertions. Its final rerun remains pending.
+- Internal Lightning sender completion could remain pending after a recipient
+  claimed on chain. The correction verifies every grant against cooperative or
+  canonical on-chain fulfillment. Its unchanged integration regression must
+  pass on the final artifacts.
+- Requests reusing the hash of an in-flight external payment can wait behind
+  that payment. Several race tests timed out before their refund and duplicate
+  payment checks. Admission and cancellation progress still need verification
+  without weakening the payment guards.
+- Several watchman tests waited for an older claim-broadcast event while the
+  server was making expiry payout decisions. They stopped before their amount
+  and conservation assertions. Those tests need to observe the payout path and
+  verify the amounts and fees under the agreed policy.
 - Native seed-recovery backup tests must use the released BIP86 wallet, while
   application-wallet tests retain BIP84 coverage. The corrected native backup
   tests have not yet passed on the final artifacts.

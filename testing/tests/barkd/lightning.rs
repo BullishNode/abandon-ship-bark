@@ -100,7 +100,6 @@ async fn lightning_send_status_unknown_for_unseen_hash() {
 #[tokio::test]
 async fn pay_with_retry_for() {
 	// Older barkd binaries don't know the field and silently drop it.
-	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("barkd/pay_with_retry_for").await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;

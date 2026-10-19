@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
 use ark::{ProtocolEncoding, ServerVtxoPolicy, VtxoId, VtxoPolicy};
-use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, Captaind, TestContext};
+use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use bark::{FallbackDisposition, FallbackPayoutStage};
 use bark::movement::{Movement, MovementStatus, PaymentMethod};
 use bark::vtxo::VtxoState;
@@ -88,7 +88,6 @@ fn fallback_history(history: Vec<Movement>, baseline: &[Movement], ids: &BTreeSe
 
 #[tokio::test]
 async fn three_sub_fee_leaves_pay_one_registered_owner_once() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	assert!(std::env::var_os("BARK_DOUBLE_DRIVE_ACTIONS").is_none());
 	tokio::time::timeout(Duration::from_secs(180), Box::pin(tiny_group())).await

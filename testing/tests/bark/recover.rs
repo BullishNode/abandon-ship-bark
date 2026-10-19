@@ -480,7 +480,6 @@ impl captaind::proxy::MailboxRpcProxy for NoMailbox {
 /// offer, so the recovery can only have come from the xpub rpc.
 #[tokio::test]
 async fn recovered_wallet_finds_vtxos_via_xpub_without_mailbox() {
-	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("bark/recovered_wallet_finds_vtxos_via_xpub_without_mailbox").await;
 	let srv = ctx.captaind("server").funded(btc(10)).create().await;
@@ -529,7 +528,6 @@ async fn recovered_wallet_finds_vtxos_via_xpub_without_mailbox() {
 /// recovers through the recovery mailbox.
 #[tokio::test]
 async fn recovered_wallet_falls_back_to_mailbox_when_xpub_disabled() {
-	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("bark/recovered_wallet_falls_back_to_mailbox_when_xpub_disabled").await;
 	let srv = ctx.captaind("server").funded(btc(10))
@@ -557,7 +555,6 @@ async fn recovered_wallet_falls_back_to_mailbox_when_xpub_disabled() {
 /// server reports that nothing more may follow.
 #[tokio::test]
 async fn recovered_wallet_continues_xpub_lookup_past_server_range() {
-	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("bark/recovered_wallet_continues_xpub_lookup_past_server_range").await;
 	let srv = ctx.captaind("server").funded(btc(10))
@@ -679,7 +676,6 @@ async fn recovered_wallet_follows_xpub_lookup_cursor() {
 /// balance without asking the server anything else about it.
 #[tokio::test]
 async fn recovered_wallet_xpub_lookup_returns_spent_vtxos() {
-	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("bark/recovered_wallet_xpub_lookup_returns_spent_vtxos").await;
 	let srv = ctx.captaind("server").funded(btc(10)).create().await;

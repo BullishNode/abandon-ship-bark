@@ -549,6 +549,13 @@ impl Bark {
 		self.offchain_balance().await.pending_in_round
 	}
 
+	/// Whether this binary reports the current awaiting-settlement balance field.
+	pub async fn supports_awaiting_settlement(&self) -> bool {
+		let balance: serde_json::Value = self.run_json(["balance", "--no-sync"]).await;
+		let _: json::cli::Balance = serde_json::from_value(balance.clone()).expect("balance JSON schema");
+		balance.get("awaiting_settlement_sat").is_some()
+	}
+
 	/// Return the balance, syncing first when `sync` is set, and assert that
 	/// it agrees with the wallet's VTXOs. Legacy bark 0.7.1 and older could
 	/// count a VTXO twice; the awaiting-settlement field identifies builds
@@ -1115,6 +1122,11 @@ impl Bark {
 
 	pub async fn start_exit_all(&self) {
 		self.run(["exit", "start", "--all"]).await;
+	}
+
+	/// Whether this binary exposes the fee margin of the exit estimator.
+	pub async fn supports_exit_fee_margin(&self) -> bool {
+		self.run(["exit", "estimate-fee", "--help"]).await.contains("--fee-margin")
 	}
 
 	pub async fn estimate_exit_fee_all(&self) -> json::web::EmergencyExitFeeEstimateResponse {

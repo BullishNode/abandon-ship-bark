@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use ark_testing::{require_bark_version, require_bitcoind_chain_source, sat, TestContext};
+use ark_testing::{require_bitcoind_chain_source, sat, TestContext};
 use ark_testing::daemon::captaind::{self, ArkClient};
 use bark::{OpenWalletArgs, Wallet, WalletSeed};
 use bark::actions::offboard::{Offboard, Progress};
@@ -155,7 +155,6 @@ async fn wait_rebuilt(db: &Db, point: BlockRef) {
 
 #[tokio::test]
 async fn expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge() {
-	require_bark_version!(> "0.7.1");
 	require_bitcoind_chain_source!();
 	assert!(std::env::var_os("BARK_DOUBLE_DRIVE_ACTIONS").is_none(),
 		"this ordinary once-only checkpoint case requires the presence flag fully unset");

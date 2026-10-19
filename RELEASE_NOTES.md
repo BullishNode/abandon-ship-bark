@@ -57,73 +57,59 @@ wallet balance, fee demand and pending payouts.
 
 ### Qualification status
 
-At this source freeze, the functional candidate passed static checks and 852 unit tests,
-with one test skipped. Earlier Nix builds succeeded. The latest corrections
-still require completion and qualification of the final captaind, watchmand,
-bark and barkd Nix artifacts. The complete server, wallet SDK, CLI, daemon and
-core integration suites remain pending for those artifacts, using the required
-patched Core Lightning plugin.
+The preceding candidate passed static checks and 852 unit tests, with one
+skipped. Its four Nix release programs built and were exercised on a fresh
+private Signet. Ordinary payouts, closure of an unsettled internal Lightning
+receive including a small grant, a restart between the fifth and sixth grant
+confirmations, the sender's refund, and seed-restored spending were observed.
+The released native wallet and embedded UI also showed the confirmed payout,
+fee, permanent address and correct balance. These are observations of that
+preceding revision, not qualification of changed programs.
 
-An earlier build completed ordinary expiry payouts, funded receiver-grant
-closures six confirmations deep, a server and watchman restart across the
-fifth-to-sixth confirmation, and the sender's refund on a fresh private Signet.
-Seed-restored wallets spent the resulting outputs. These observations do not
-qualify changed binaries; the lifecycle, history, balances and recovery must be
-verified again on the final artifacts. An intermediate native daemon passed
-HTTP checks for the embedded web assets, authentication, payout registration,
-zero balances and empty history. Its rendered dashboard and settings also
-passed. Rendered payout history and final-product web verification remain pending.
+Across its 706 selected integration cases and separate qualification after a
+shared-memory setup failure, 690 distinct cases passed. Eleven watchman cases
+failed at old claim-broadcast waits, three same-hash payment cases timed out,
+one internal-Lightning backup case timed out, and one wallet test process
+aborted during setup. Original failures and the separate qualification results
+are retained. This is not a clean full-suite pass.
 
-Default-ignored tests are not part of this run. Scale tests remain available
-on demand and have not qualified production capacity.
+This revision separates external dispatch locking from short payment decisions
+so a pending remote payment does not block a same-hash receive. Dispatch remains
+excluded until its result is reconciled; durable source and refund checks are
+unchanged. The three original integration scenarios and their payment assertions
+are unchanged. The correction still requires compilation and runtime checks.
 
-The following findings still require verification or completion:
+The backup test now recognizes a verified, funded closure of a signed ancestor,
+instead of requiring every virtual leaf to appear on chain. Its refund,
+receiver, seed-spend and value-conservation assertions remain unchanged. The
+wallet setup fixture now allocates its large asynchronous future on the heap.
+Both test corrections still need to compile and complete on the release
+programs. They do not establish a passing result by source inspection.
 
-- Earlier exit scenarios timed out. Fee funding selection has been corrected to
-  exclude unconfirmed wallet outputs, but package relay and the affected exit
-  scenarios still need to pass on the final binaries.
-- The Lightning revocation test setup is being corrected for receiver-grant
-  closure and the six-confirmation refund depth. Its rerun remains pending.
-- Outgoing Lightning history retained a pending send entry after its fallback
-  refund was confirmed. A correction now verifies the complete set of confirmed
-  payout proofs before ending that send. Its integration regression and private
-  Signet verification on the final artifacts remain pending.
-- Seed recovery retains historical conditional, round and offboard inputs when
-  the server cannot provide a supported discharge proof. These inputs must not
-  inflate balances or prevent spending recovered change. Updated recovery tests
-  still need to pass their full balance and spending checks.
-- Two automatic-refresh fixtures reached the protective-exit boundary instead
-  of completing a refresh. Their setup now uses the refresh window with
-  protection enabled. The refresh and rejected-input assertions must pass on
-  the final artifacts.
-- A background ownership-scan test expected the wrong scheduling checkpoint.
-  Its setup now follows persisted service tickets while retaining late-arriving
-  key and stale-work checks. The final regression has not passed.
-- An earlier receiver sync reported an error after the receive had been
-  canceled; a subsequent snapshot showed zero balances. Error reporting and the
-  complete receive-side return path still need final verification.
-- A partial-refund test could not find a previously confirmed customer claim
-  output in the unspent set. Later fixture funding had spent that receipt.
-  The test now uses a separate customer destination and retains its original
-  payment and remaining-refund assertions. Its final rerun remains pending.
-- Internal Lightning sender completion could remain pending after a recipient
-  claimed on chain. The correction verifies every grant against cooperative or
-  canonical on-chain fulfillment. Its unchanged integration regression must
-  pass on the final artifacts.
-- Requests reusing the hash of an in-flight external payment can wait behind
-  that payment. Several race tests timed out before their refund and duplicate
-  payment checks. Admission and cancellation progress still need verification
-  without weakening the payment guards.
-- Several watchman tests waited for an older claim-broadcast event while the
-  server was making expiry payout decisions. They stopped before their amount
-  and conservation assertions. Those tests need to observe the payout path and
-  verify the amounts and fees under the agreed policy.
-- Native seed-recovery backup tests must use the released BIP86 wallet, while
-  application-wallet tests retain BIP84 coverage. The corrected native backup
-  tests have not yet passed on the final artifacts.
+The following work remains before production approval:
 
-Final qualification must also retain coverage of an attached BIP84 application
-wallet and the released CLI and daemon configuration, exposed-grant closure,
-internal refunds, restart recovery and user-claim rebroadcast after reorgs within
-the supported bound. Outstanding independent review findings must be resolved or
-disclosed before the final assessment.
+- Build and qualify all four programs from this exact revision. Run static,
+  unit and integration checks, the affected payment and recovery scenarios,
+  and the private-Signet lifecycle. Earlier artifacts cannot qualify them.
+- Complete the eleven watchman scenarios with the applicable payout receipts
+  and original amount, fee and recovery assertions. Their former event waits
+  stopped before those checks; the observations do not establish lost funds
+  or correct final operator credit.
+- Verify same-hash receive progress without weakening dispatch authorization,
+  and complete the interrupted backup refund and seed-spend checks.
+- Complete receive-side return reporting. A preceding application-wallet driver
+  reported an error after a closed-window receive was canceled, while a separate
+  snapshot showed zero balances. A narrowly checked driver correction has been
+  built, but its fresh lifecycle has not completed. A new board attempt stopped
+  before a proposal because the private node had no fee estimate; no estimate
+  was fabricated or fee guard bypassed.
+- Finish the capacity assessment. Default-ignored scale tests remain available
+  on demand and are outside the full-suite counts. Production capacity has not
+  been qualified.
+- Check intermediate commits independently if the review series needs to be
+  bisected. The preceding final revision was built; every earlier commit was
+  not separately built.
+
+The private-Signet profile is deliberately short. It does not establish public
+network fee behaviour or production capacity. Final release qualification and
+remaining work are also recorded with the downloadable release artifacts.

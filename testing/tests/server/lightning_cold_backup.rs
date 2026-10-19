@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
 use ark::lightning::PaymentHash;
-use ark::vtxo::Full;
+use ark::vtxo::{Full, TapScriptClause};
 use ark::{ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy};
 use async_trait::async_trait;
 use bitcoin::{Address, Amount, Network, OutPoint, Transaction};
@@ -161,6 +161,75 @@ fn canonical(ctx: &TestContext, tx: &Transaction) -> BlockRef {
 	assert_eq!(core.get_block_hash(header.height as u64).unwrap(), hash);
 	assert!(core.get_block(&hash).unwrap().txdata.iter().any(|actual| actual == tx));
 	BlockRef { height: BlockHeight::new(u32::try_from(header.height).unwrap()), hash }
+}
+
+/// A ledger allocation only locates a candidate. Core must prove that it
+/// consumes this grant's exact signed path through the server's timeout clause.
+async fn assert_grant_closure(
+	ctx: &TestContext, grant: &Vtxo<Full>, pool_funding: &Transaction,
+	closure: &Transaction, operator: &bitcoin::Script, ancestor_required: bool,
+) -> OutPoint {
+	let block = canonical(ctx, closure);
+	let steps = grant.transactions().collect::<Vec<_>>();
+	assert!(steps.len() <= 16, "the two-grant fixture has a bounded signed path");
+	let mut path = BTreeSet::from([grant.chain_anchor()]);
+	let mut point = grant.chain_anchor();
+	for step in &steps {
+		assert_eq!(step.tx.input.len(), 1);
+		assert_eq!(step.tx.input[0].previous_output, point);
+		point = OutPoint::new(step.tx.compute_txid(), u32::try_from(step.output_idx).unwrap());
+		assert!(path.insert(point));
+	}
+	assert_eq!(point, grant.point());
+	let inputs = closure.input.iter().filter(|input| path.contains(&input.previous_output)).collect::<Vec<_>>();
+	assert_eq!(inputs.len(), 1, "the closure must spend this exact grant path, not a sibling");
+	let input = inputs[0];
+	let closed = input.previous_output;
+	let mut previous = pool_funding.clone();
+	point = grant.chain_anchor();
+	for step in &steps {
+		if point == closed { break; }
+		assert_eq!(ctx.bitcoind().await_transaction(step.tx.compute_txid()).await, step.tx);
+		canonical(ctx, &step.tx);
+		previous = step.tx.clone();
+		point = OutPoint::new(step.tx.compute_txid(), u32::try_from(step.output_idx).unwrap());
+	}
+	assert_eq!(point, closed);
+	assert_eq!(previous.compute_txid(), closed.txid);
+	assert_eq!(ctx.bitcoind().await_transaction(closed.txid).await, previous);
+	let confirmed = canonical(ctx, &previous);
+	assert!(previous.output[closed.vout as usize].value >= grant.amount());
+	let script = if closed == grant.point() {
+		assert!(!ancestor_required, "an unexposed grant needs its independently proven ancestor closure");
+		assert_eq!(previous.output[closed.vout as usize], grant.txout());
+		let policy = grant.policy().as_server_htlc_recv().unwrap();
+		assert!(block.height >= policy.htlc_expiry.max(confirmed.height + grant.exit_delta()));
+		policy.server_claim_after_expiry_clause(grant.server_pubkey(), grant.exit_delta()).tapscript()
+	} else {
+		assert!(block.height >= grant.expiry_height());
+		ark::tree::signed::expiry_clause(grant.server_pubkey(), grant.expiry_height())
+	};
+	assert_eq!(input.witness.taproot_leaf_script().unwrap().script, script.as_script());
+	assert!(closure.output.iter().all(|output| output.script_pubkey.as_script() == operator
+		|| output.is_p2a_fee_anchor() && output.value == Amount::ZERO));
+	assert_eq!(actual_fee(ctx, closure).await, Amount::ZERO);
+	let anchors = closure.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor())
+		.map(|(index, _)| OutPoint::new(closure.compute_txid(), u32::try_from(index).unwrap())).collect::<Vec<_>>();
+	assert_eq!(anchors.len(), 1);
+	let children = ctx.bitcoind().sync_client().get_block(&block.hash).unwrap().txdata.into_iter()
+		.filter(|tx| tx.input.iter().any(|input| input.previous_output == anchors[0])).collect::<Vec<_>>();
+	assert_eq!(children.len(), 1, "the operator closure needs its actual funded same-block fee child");
+	let child = &children[0];
+	assert_eq!(canonical(ctx, child), block);
+	assert!(actual_fee(ctx, child).await > Amount::ZERO);
+	let funding = child.input.iter().filter(|input| input.previous_output != anchors[0]).collect::<Vec<_>>();
+	assert!(!funding.is_empty());
+	for input in funding {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		assert!(previous.output[input.previous_output.vout as usize].value > Amount::ZERO);
+		assert!(canonical(ctx, &previous).height < block.height, "fee funding must already be confirmed");
+	}
+	closed
 }
 
 async fn rebuilt(db: &Db, point: BlockRef) {
@@ -481,30 +550,45 @@ async fn lightning_backup() {
 	wait_watchman_coins(restored.watchmand(), &sponsors.keys().copied().collect()).await;
 	assert_eq!(db.read(async |tx| tx.get_fallback(mailbox).await).await.unwrap(), Some(registration.clone()));
 
-	// Drive authentic ancestry, then use actual confirmed-height+CSV and signed
-	// CLTV maturity. A source-face-value refund cannot bypass either grant.
+	// Checkpoints can close a grant at tree expiry without publishing its leaf.
+	// Observe the applicable barrier before crossing it; never invent a missing
+	// leaf's confirmation height. The closure below must prove the chosen route.
 	let mut mined = 1_u32;
 	let mut maturity = None;
+	let mut ancestor_required = BTreeSet::new();
 	for _ in 0..80 {
+		let height = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
+		let mut latest = 0;
+		let mut missing = BTreeSet::new();
+		let mut first_expiry = u32::MAX;
+		for grant in &grants {
+			let info = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(grant.point().txid, None).unwrap();
+			if let Some(info) = info.filter(|info| info.confirmations.unwrap_or(0) > 0) {
+				let blockhash = info.blockhash.unwrap();
+				let header = ctx.bitcoind().sync_client().get_block_header_info(&blockhash).unwrap();
+				assert_eq!(ctx.bitcoind().sync_client().get_block_hash(header.height as u64).unwrap(), blockhash);
+				latest = latest.max(outgoing_deadline.to_u32()).max(u32::try_from(header.height).unwrap() + grant.exit_delta().to_u32());
+			} else {
+				missing.insert(grant.id());
+				first_expiry = first_expiry.min(grant.expiry_height().to_u32());
+				latest = latest.max(grant.expiry_height().to_u32());
+			}
+		}
+		if missing.is_empty() || height + 1 >= first_expiry {
+			assert!(missing.is_empty() || height < first_expiry,
+				"sample before the earliest unexposed grant expiry, not just the latest grant bound");
+			maturity = Some(latest);
+			ancestor_required = missing;
+			break;
+		}
 		let height = mine_continuing_core(&ctx, 1).await;
 		mined += 1;
 		restored.wait_for_sync_height(height).await;
 		restored.watchmand().wait_for_sync_height(height).await;
 		let hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();
 		rebuilt(&db, BlockRef { height, hash }).await;
-		let mut all_confirmed = true;
-		let mut latest = outgoing_deadline.to_u32();
-		for grant in &grants {
-			let info = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(grant.point().txid, None).unwrap();
-			let Some(info) = info.filter(|info| info.confirmations.unwrap_or(0) > 0) else { all_confirmed = false; break; };
-			let blockhash = info.blockhash.unwrap();
-			let header = ctx.bitcoind().sync_client().get_block_header_info(&blockhash).unwrap();
-			assert_eq!(ctx.bitcoind().sync_client().get_block_hash(header.height as u64).unwrap(), blockhash);
-			latest = latest.max(u32::try_from(header.height).unwrap() + u32::from(grant.exit_delta().to_u16()));
-		}
-		if all_confirmed { maturity = Some(latest); break; }
 	}
-	let maturity = maturity.expect("both real receive grants must become canonical without a returning client");
+	let maturity = maturity.expect("a genuine leaf or ancestor expiry barrier must be observed before maturity");
 	let height = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
 	assert!(height < maturity, "the fixture must observe its genuine pre-maturity barrier");
 	let no_early_payout = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_allocation a \
@@ -534,9 +618,13 @@ async fn lightning_backup() {
 	rebuilt(&db, BlockRef { height, hash: block_hash }).await;
 	// Receive grants close in their own funded operator payouts. Their
 	// canonical six-confirmation proof must precede the sender refund.
-	let grant_closures = tokio::time::timeout(Duration::from_secs(40), async {
+	let grant_path_inputs = grants.iter().flat_map(|grant| std::iter::once(grant.chain_anchor())
+		.chain(grant.transactions().map(|step| OutPoint::new(step.tx.compute_txid(), u32::try_from(step.output_idx).unwrap()))))
+		.collect::<BTreeSet<_>>();
+	let (grant_closures, closed_points) = tokio::time::timeout(Duration::from_secs(40), async {
 		loop {
 			let mut closures = BTreeMap::new();
+			let mut closed_points = BTreeMap::new();
 			for grant in &grants {
 				let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
 					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
@@ -546,13 +634,17 @@ async fn lightning_backup() {
 				let tx: Transaction = deserialize(row.get("sweep_tx")).unwrap();
 				let info = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(tx.compute_txid(), None).unwrap();
 				if info.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6) {
+					assert!(tx.input.iter().all(|input| grant_path_inputs.contains(&input.previous_output)),
+						"an operator closure cannot absorb unrelated customer, pool-change or sponsor capital");
 					assert!(tx.output.iter().all(|output| output.script_pubkey != registration.spk
 						&& output.script_pubkey != receiver_registration.spk));
-					assert_eq!(actual_fee(&ctx, &tx).await, Amount::ZERO);
+					let point = assert_grant_closure(&ctx, grant, &pool_funding, &tx, &operator_script,
+						ancestor_required.contains(&grant.id())).await;
+					closed_points.insert(grant.id(), point);
 					closures.insert(grant.id(), tx);
 				}
 			}
-			if closures.len() == grants.len() { break closures; }
+			if closures.len() == grants.len() { break (closures, closed_points); }
 			let height = mine_continuing_core(&ctx, 1).await;
 			mined += 1;
 			restored.wait_for_sync_height(height).await;
@@ -758,7 +850,45 @@ async fn lightning_backup() {
 	let graph = canonical_descendants(&ctx, first_height, &external);
 	for tx in [&board, &pool_funding, &parent, &drain] { assert_eq!(graph.get(&tx.compute_txid()), Some(tx)); }
 	assert_eq!(graph.get(&child.compute_txid()), Some(&child));
-	for (txid, raw) in &ancestry { assert_eq!(graph.get(&bitcoin::Txid::from_str(txid).unwrap()), Some(&deserialize::<Transaction>(raw).unwrap())); }
+	for grant in &grants {
+		let closed = closed_points[&grant.id()];
+		let mut blocked = false;
+		for step in grant.transactions() {
+			blocked |= step.tx.input[0].previous_output == closed;
+			if blocked {
+				assert!(!graph.contains_key(&step.tx.compute_txid()), "a swept ancestor cannot also publish its signed descendant");
+			} else {
+				assert_eq!(graph.get(&step.tx.compute_txid()), Some(&step.tx));
+			}
+		}
+		assert_eq!(graph.get(&grant_closures[&grant.id()].compute_txid()), Some(&grant_closures[&grant.id()]));
+	}
+	// Independently trace every actual fee child's non-anchor inputs back to
+	// the original watchman sponsors. Customer and pool principal cannot pay it.
+	let is_anchor = |point: OutPoint| graph.get(&point.txid).is_some_and(|tx| {
+		let output = &tx.output[point.vout as usize];
+		if !output.is_p2a_fee_anchor() { return false; }
+		assert_eq!(output.value, Amount::ZERO, "an anchor cannot import principal into the fee provenance");
+		true
+	});
+	let mut fee_children = graph.values().filter(|tx| tx.input.iter().any(|input| is_anchor(input.previous_output)))
+		.collect::<Vec<_>>();
+	let mut fee_funds = sponsors.keys().copied().collect::<BTreeSet<_>>();
+	for _ in 0..fee_children.len() {
+		fee_children.retain(|tx| {
+			if !tx.input.iter().all(|input| is_anchor(input.previous_output) || fee_funds.contains(&input.previous_output)) {
+				return true;
+			}
+			assert!(tx.input.iter().any(|input| fee_funds.contains(&input.previous_output)));
+			for (vout, output) in tx.output.iter().enumerate() {
+				if !output.is_p2a_fee_anchor() {
+					fee_funds.insert(OutPoint::new(tx.compute_txid(), u32::try_from(vout).unwrap()));
+				}
+			}
+			false
+		});
+	}
+	assert!(fee_children.is_empty(), "every actual fee child must descend only from watchman sponsor capital");
 	let mut spent = BTreeSet::new();
 	let mut all_fees = Amount::ZERO;
 	let mut monetary_outputs = BTreeMap::new();

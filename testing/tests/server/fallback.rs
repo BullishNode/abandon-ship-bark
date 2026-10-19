@@ -19,42 +19,47 @@ async fn wait_for_migration_lock(client: &tokio_postgres::Client, granted: bool,
 	}).await.unwrap_or_else(|_| panic!("migration lock boundary timed out: granted={granted}, count={count}"));
 }
 
-#[tokio::test]
-async fn fallback_concurrent_migrations_preserve_both_histories() {
-	let mut ctx = TestContext::new_minimal("postgresd/fallback_concurrent_migrations_preserve_both_histories").await;
-	ctx.init_central_postgres().await;
-	let config = ctx.new_postgres(&ctx.test_name).await;
-	server::database::Db::create(&config).await.unwrap();
-	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
-	let before = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
-		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
-	let fork_count = client.query_one("SELECT COUNT(*) FROM expiry_refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0);
-	assert_eq!(fork_count, 1);
-	// Simulate the real upstream-to-fork deployment, not an already migrated
-	// fixture. There are no coins or financial decisions in this database.
+async fn remove_fork_schema(client: &tokio_postgres::Client) {
 	let tables = client.query("SELECT tablename FROM pg_tables WHERE schemaname='public' \
 		AND (LEFT(tablename, 7)='expiry_' OR tablename IN ('fallback_record', 'user_exit_claim'))", &[]).await.unwrap();
 	for table in tables {
 		let name: &str = table.get(0);
 		client.batch_execute(&format!("DROP TABLE IF EXISTS \"{}\" CASCADE", name.replace('"', "\"\""))).await.unwrap();
 	}
-	client.batch_execute("DROP FUNCTION expiry_record_ledger_commit(); DROP INDEX expiry_vtxo_anchor_point_ix; SELECT pg_advisory_lock(4::BIGINT);").await.unwrap();
+	client.batch_execute("DROP FUNCTION expiry_record_ledger_commit(); DROP INDEX expiry_vtxo_anchor_point_ix;").await.unwrap();
+}
+
+#[tokio::test]
+async fn fallback_concurrent_initialization_preserves_upstream_history() {
+	let mut ctx = TestContext::new_minimal("postgresd/fallback_concurrent_initialization_preserves_upstream_history").await;
+	ctx.init_central_postgres().await;
+	let config = ctx.new_postgres(&ctx.test_name).await;
+	server::database::Db::create(&config).await.unwrap();
+	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
+	let before = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
+		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
+	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
+	// Simulate the real upstream-to-fork deployment, not an already migrated
+	// fixture. There are no coins or financial decisions in this database.
+	remove_fork_schema(&client).await;
+	client.batch_execute("SELECT pg_advisory_lock(4::BIGINT);").await.unwrap();
 	let first_config = config.clone();
 	let first = tokio::spawn(async move { server::database::Db::connect(&first_config).await });
 	let second = tokio::spawn(async move { server::database::Db::connect(&config).await });
-	// Both real startup connections must wait before reading either history.
+	// Both real startup connections must wait before schema initialization.
 	wait_for_migration_lock(&client, false, 2).await;
 	assert!(!first.is_finished() && !second.is_finished());
 	client.query_one("SELECT pg_advisory_unlock(4::BIGINT)", &[]).await.unwrap();
 	let (first, second) = tokio::time::timeout(std::time::Duration::from_secs(30), async {
 		tokio::join!(first, second)
-	}).await.expect("concurrent migrations did not finish");
-	drop(first.unwrap().expect("first startup must migrate successfully"));
-	drop(second.unwrap().expect("second startup must reuse the completed migrations"));
+	}).await.expect("concurrent initialization did not finish");
+	drop(first.unwrap().expect("first startup must initialize successfully"));
+	drop(second.unwrap().expect("second startup must reuse the initialized schema"));
 	let after = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
 		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
 	assert_eq!(before, after, "fork startup must not rewrite upstream checksums");
-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0), fork_count);
+	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
+	assert!(client.query_one("SELECT to_regclass('expiry_refinery_schema_history') IS NULL", &[]).await.unwrap().get::<_, bool>(0));
 	wait_for_migration_lock(&client, true, 0).await;
 }
 
@@ -82,41 +87,31 @@ async fn fallback_cancelled_migration_releases_its_session_lock() {
 }
 
 #[tokio::test]
-async fn fallback_rejects_old_fork_schema_before_upstream_migrations() {
-	let mut ctx = TestContext::new_minimal("postgresd/fallback_rejects_old_fork_schema_before_upstream_migrations").await;
+async fn fallback_failed_initialization_rolls_back_schema() {
+	let mut ctx = TestContext::new_minimal("postgresd/fallback_failed_initialization_rolls_back_schema").await;
 	ctx.init_central_postgres().await;
 	let config = ctx.new_postgres(&ctx.test_name).await;
 	drop(server::database::Db::create(&config).await.unwrap());
 	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
-	let original = client.query_one("SELECT version,name,checksum FROM expiry_refinery_schema_history", &[]).await.unwrap();
-	assert_eq!(original.get::<_, i32>("version"), 1);
-	let name = original.get::<_, String>("name");
-	let checksum = original.get::<_, String>("checksum");
-	assert_eq!(name, "abandon_ship");
-	// A pending upstream migration would try to recreate its existing index.
-	// The fork guard must reject first, before either runner can do work.
-	client.execute("DELETE FROM refinery_schema_history WHERE version=(SELECT MAX(version) FROM refinery_schema_history)", &[]).await.unwrap();
-	let before = client.query("SELECT version,name,checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
-		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1), r.get::<_, String>(2))).collect::<Vec<_>>();
-	for (old_name, old_checksum) in [
-		("fallback_registration", checksum.as_str()),
-		(name.as_str(), "not-the-embedded-checksum"),
-	] {
-		client.execute("UPDATE expiry_refinery_schema_history SET name=$1,checksum=$2 WHERE version=1", &[&old_name, &old_checksum]).await.unwrap();
-		let error = match server::database::Db::connect(&config).await {
-			Ok(_) => panic!("an incompatible fork schema was accepted"),
-			Err(error) => error,
-		};
-		assert!(error.to_string().contains("unsupported fork schema history"), "unexpected startup failure: {error:#}");
-		let after = client.query("SELECT version,name,checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
-			.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1), r.get::<_, String>(2))).collect::<Vec<_>>();
-		assert_eq!(before, after, "rejected fork startup must not change upstream history");
-		let rejected = client.query_one("SELECT version,name,checksum FROM expiry_refinery_schema_history", &[]).await.unwrap();
-		assert_eq!(rejected.get::<_, i32>("version"), 1);
-		assert_eq!(rejected.get::<_, &str>("name"), old_name);
-		assert_eq!(rejected.get::<_, &str>("checksum"), old_checksum);
-		wait_for_migration_lock(&client, true, 0).await;
-	}
+	remove_fork_schema(&client).await;
+	// An empty conflicting relation fails near the end of the schema batch.
+	// No ownership, entitlement or payment rows are manufactured.
+	client.batch_execute("CREATE TABLE user_exit_claim (id INTEGER);").await.unwrap();
+	let Err(error) = server::database::Db::connect(&config).await else {
+		panic!("conflicting schema object must refuse initialization");
+	};
+	let pg = error.downcast_ref::<tokio_postgres::Error>().expect("expected schema statement failure");
+	let db_error = pg.as_db_error().expect("expected PostgreSQL schema error");
+	assert_eq!(db_error.code(), &tokio_postgres::error::SqlState::DUPLICATE_TABLE);
+	assert!(db_error.message().contains("user_exit_claim"));
+	assert!(client.query_one("SELECT to_regclass('expiry_chain_view') IS NULL \
+		AND to_regclass('fallback_record') IS NULL", &[]).await.unwrap().get::<_, bool>(0),
+		"failed initialization must roll back its earlier tables and marker");
+	assert_eq!(client.query_one("SELECT COUNT(*) FROM user_exit_claim", &[]).await.unwrap().get::<_, i64>(0), 0);
+	wait_for_migration_lock(&client, true, 0).await;
+	client.batch_execute("DROP TABLE user_exit_claim;").await.unwrap();
+	drop(server::database::Db::connect(&config).await.unwrap());
+	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
 }
 
 #[tokio::test]
@@ -174,25 +169,18 @@ async fn fallback_registration_is_authenticated_immutable_and_idempotent() {
 }
 
 #[tokio::test]
-async fn fallback_migrations_do_not_share_upstream_history() {
-	let mut ctx = TestContext::new_minimal("postgresd/fallback_migrations_do_not_share_upstream_history").await;
+async fn fallback_schema_initialization_preserves_upstream_history() {
+	let mut ctx = TestContext::new_minimal("postgresd/fallback_schema_initialization_preserves_upstream_history").await;
 	ctx.init_central_postgres().await;
 	let config = ctx.new_postgres(&ctx.test_name).await;
 	server::database::Db::create(&config).await.unwrap();
 	let client = ctx.postgres_manager().database_client(Some(&config.name)).await;
 	let count = client.query_one("SELECT COUNT(*) FROM refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0);
 	assert!(count > 0);
-	let fork_count = client.query_one("SELECT COUNT(*) FROM expiry_refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0);
-	assert_eq!(fork_count, 1);
+	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
 	// Return the database to exactly the plain-upstream schema/history. The
 	// fork build must add its own schema without changing an upstream checksum.
-	let tables = client.query("SELECT tablename FROM pg_tables WHERE schemaname='public'
-		AND (LEFT(tablename, 7)='expiry_' OR tablename IN ('fallback_record', 'user_exit_claim'))", &[]).await.unwrap();
-	for table in tables {
-		let name: &str = table.get(0);
-		client.batch_execute(&format!("DROP TABLE IF EXISTS \"{}\" CASCADE", name.replace('"', "\"\""))).await.unwrap();
-	}
-	client.batch_execute("DROP FUNCTION expiry_record_ledger_commit(); DROP INDEX expiry_vtxo_anchor_point_ix;").await.unwrap();
+	remove_fork_schema(&client).await;
 	let before = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
 		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
 	let db = server::database::Db::connect(&config).await.unwrap();
@@ -200,6 +188,10 @@ async fn fallback_migrations_do_not_share_upstream_history() {
 	let after = client.query("SELECT version, checksum FROM refinery_schema_history ORDER BY version", &[]).await.unwrap()
 		.into_iter().map(|r| (r.get::<_, i32>(0), r.get::<_, String>(1))).collect::<Vec<_>>();
 	assert_eq!(before, after);
-	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_refinery_schema_history", &[]).await.unwrap().get::<_, i64>(0), fork_count);
+	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
+	assert!(client.query_one("SELECT to_regclass('expiry_refinery_schema_history') IS NULL", &[]).await.unwrap().get::<_, bool>(0));
+	client.execute("UPDATE expiry_chain_view SET generation=generation+1 WHERE id=1", &[]).await.unwrap();
+	let generation = client.query_one("SELECT generation FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0);
 	server::database::Db::connect(&config).await.unwrap();
+	assert_eq!(client.query_one("SELECT generation FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), generation);
 }

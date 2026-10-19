@@ -319,10 +319,29 @@ async fn history_native_and_other_device_claim_share_one_principal_debit() {
 	let native_method = native.sent_to[0].destination.clone();
 	assert_one_principal_debit(&assert_history_views(&claimant, &[native_method.clone()]).await, coin.id(), movement);
 
+	// Recovery restored the Ark coin into a fresh BDK store. Discover the
+	// same seed's existing confirmed fee change before requesting CPFP.
+	claimant.sync_onchain().await.unwrap();
+	let fee_coins = {
+		let onchain = claimant.onchain().unwrap();
+		let guard = onchain.read().await;
+		let wallet = (&*guard as &dyn std::any::Any).downcast_ref::<OnchainWallet>().unwrap();
+		assert!(wallet.balance().confirmed > sat(0), "the restored claimant must discover existing confirmed fee funds");
+		wallet.list_unspent().into_iter().filter(|coin| coin.chain_position.is_confirmed()).collect::<Vec<_>>()
+	};
+	for coin in fee_coins {
+		let actual = ctx.bitcoind().sync_client().get_tx_out(&coin.outpoint.txid, coin.outpoint.vout, Some(true)).unwrap().unwrap();
+		assert!(actual.confirmations > 0);
+		assert_eq!(actual.value, coin.txout.value);
+		assert_eq!(actual.script_pub_key.script().unwrap(), coin.txout.script_pubkey);
+	}
+
 	// The server never receives fee liquidity. Only this device publishes the
 	// genuine signed user path and its explicitly authorized final claim.
 	tokio::time::timeout(Duration::from_secs(40), async {
 		loop {
+			claimant.chain().invalidate_caches().await;
+			claimant.sync_onchain().await.unwrap();
 			claimant.exit_mgr().progress_exits_with_cpfp(&claimant, None).await.unwrap();
 			if claimant.exit_mgr().list_claimable().await.iter().any(|exit| exit.id() == coin.id()) { break; }
 			ctx.generate_blocks(1).await;

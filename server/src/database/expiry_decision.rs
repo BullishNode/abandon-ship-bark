@@ -14,6 +14,7 @@ use ark::{ServerVtxo, VtxoId};
 use super::expiry_chain::ExpiryViewToken;
 use super::expiry_inventory::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits};
 use super::expiry_ownership::{OwnershipDisposition, OwnershipEvidence, OwnershipProposal};
+use super::expiry_payout::MAX_PAYOUT_VSIZE;
 use super::{SpendState, Tx};
 use crate::watchman::settlement::{allocate, CustomerLeaf};
 
@@ -62,7 +63,7 @@ impl ReadyOutput {
 				.iter().map(|clause| clause.witness_size(root)).max().unwrap_or(66).max(66);
 			weight = weight.checked_add(u64::try_from(witness)?).context("expiry group witness overflow")?;
 		}
-		Ok(weight.div_ceil(4) <= 10_000)
+		Ok(weight.div_ceil(4) <= u64::try_from(MAX_PAYOUT_VSIZE)?)
 	}
 
 	pub fn root(&self) -> &ServerVtxo { &self.root }

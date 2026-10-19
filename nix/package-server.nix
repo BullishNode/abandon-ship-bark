@@ -23,9 +23,9 @@ let
 			(craneLib.fileset.commonCargoSources ./..)
 			./../server-rpc/protos
 			./../cln-rpc/protos
-			# embed_migrations! reads these SQL files at compile time.
+			# The server embeds these SQL files at compile time.
 			./../server/src/database/migrations
-			./../server/src/database/fork_migrations
+			./../server/src/database/fork_schema.sql
 		];
 	};
 

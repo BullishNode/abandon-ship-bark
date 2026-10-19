@@ -1,0 +1,4 @@
+- Expose the registered fallback destination and pending settlement
+  Keep the released wallet configuration independent of the application's
+  attached-wallet tests.
+  [#32](https://github.com/BullishNode/abandon-ship-bark/pull/32)

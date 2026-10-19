@@ -108,7 +108,8 @@ impl ClnXpayClient {
 		retry_for: Duration,
 	) {
 		let payment_hash = invoice.payment_hash();
-		let _payment = self.payment_guards.lock(payment_hash).await;
+		let _dispatch = self.payment_guards.lock_dispatch(payment_hash).await;
+		let payment = self.payment_guards.lock(payment_hash).await;
 		// A task can wait after admission while reconciliation or a returning
 		// client closes its attempt. Never dispatch such an obsolete task.
 		let admitted = self.db.write(async |tx| tx.admit_lightning_dispatch(&attempt).await).await;
@@ -123,18 +124,21 @@ impl ClnXpayClient {
 				return;
 			},
 		}
-		// The transaction above is short. Only the payment-local guard spans
-		// the network call; unrelated payments and database writers continue.
 		let label = match self.db.read(async |t| Ok(t.query_one(
 			"SELECT label FROM expiry_lightning_dispatch WHERE id=$1", &[&attempt.id],
 		).await?.get::<_, String>("label"))).await {
 			Ok(label) => label,
 			Err(error) => { error!(attempt_id=attempt.id, %error, "Reading actual dispatch label failed"); return; },
 		};
+		// The durable dispatch keeps its source pending. Only xpay and its
+		// monitors wait for the remote result; a same-hash receive can proceed.
+		drop(payment);
 		let mut rpc = self.rpc.clone();
-		let pay_error = match call_xpay(
+		let result = call_xpay(
 			&mut rpc, &label, &invoice, payment_amount, max_routing_fee, max_cltv_expiry_delta, retry_for,
-		).await {
+		).await;
+		let _payment = self.payment_guards.lock(payment_hash).await;
+		let pay_error = match result {
 			Ok(preimage) => {
 				// The attempt may already be coarse-final after a lost status
 				// race. Never discard the actual xpay result in that case.
@@ -238,8 +242,9 @@ impl ClnXpayClient {
 	/// `None`; it is reconciling attempts it did not make.
 	/// Source-specific receipts alone decide source release and mailbox completion.
 	pub async fn sync_payment_attempt_status(&self, attempt: LightningPaymentAttempt, pay_error: Option<&str>) -> anyhow::Result<()> {
-		// The xpay task reconciles its own result before releasing this lock.
-		// Skip it here rather than blocking every other node payment behind it.
+		// A pending xpay reconciles its own result, even across a reconnect.
+		// Always take dispatch before decision; skip rather than wait here.
+		let Some(_dispatch) = self.payment_guards.try_lock_dispatch(attempt.payment_hash) else { return Ok(()); };
 		let Some(_payment) = self.payment_guards.try_lock(attempt.payment_hash) else { return Ok(()); };
 		self.sync_payment_attempt_status_locked(attempt, pay_error).await
 	}

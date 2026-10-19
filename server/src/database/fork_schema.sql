@@ -22,14 +22,7 @@ CREATE TABLE expiry_entitlement (
 	vtxo_id TEXT NOT NULL UNIQUE REFERENCES vtxo(vtxo_id),
 	gross_sat BIGINT NOT NULL CHECK (gross_sat > 0),
 	irreversible_facts JSONB NOT NULL DEFAULT '{}'::jsonb,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	UNIQUE (vtxo_id, id)
-);
-
-CREATE TABLE expiry_decided_coin (
-	vtxo_id TEXT PRIMARY KEY REFERENCES vtxo(vtxo_id),
-	entitlement_id BIGINT NOT NULL UNIQUE,
-	FOREIGN KEY (vtxo_id, entitlement_id) REFERENCES expiry_entitlement(vtxo_id, id)
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE expiry_cancelled_participation (
@@ -198,8 +191,6 @@ END;
 $$;
 
 CREATE TRIGGER expiry_entitlement_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_entitlement
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_decided_coin_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_decided_coin
 	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
 CREATE TRIGGER expiry_allocation_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_allocation
 	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();

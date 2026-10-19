@@ -814,7 +814,7 @@ async fn do_undo_round_updates(
 		UPDATE vtxo
 		SET spend_state = 'spendable', spent_in_round = NULL, oor_spent_txid = NULL, updated_at = NOW()
 		WHERE spent_in_round = ANY($1::int8[])
-			AND NOT EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=vtxo.vtxo_id)
+			AND NOT EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id)
 	", &[&round_ids]).await.context("failed to undo round spend on VTXOs")?;
 	Ok(())
 }

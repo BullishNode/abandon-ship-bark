@@ -114,7 +114,7 @@ pub async fn get_vtxo_by_id(
 	let stmt = tx.prepare_typed("
 		SELECT id, vtxo_id, vtxo, expiry, oor_spent_txid, spent_in_round, offboarded_in,
 			banned_until_height, confirmed_height, spend_state::TEXT AS spend_state, created_at, updated_at,
-			EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback
+			EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback
 		FROM vtxo
 		WHERE vtxo_id = $1;
 	", &[Type::TEXT]).await?;
@@ -137,7 +137,7 @@ pub async fn get_existing_vtxos_by_id(
 	let statement = tx.prepare_typed("
 		SELECT id, vtxo_id, vtxo, expiry, oor_spent_txid, spent_in_round, offboarded_in,
 			banned_until_height, confirmed_height, spend_state::TEXT AS spend_state, created_at, updated_at,
-			EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback
+			EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback
 		FROM vtxo
 		WHERE vtxo_id = ANY($1);
 	", &[Type::TEXT_ARRAY]).await?;
@@ -183,7 +183,7 @@ pub async fn get_vtxos_by_policy(
 	let statement = tx.prepare_typed("
 		SELECT id, vtxo_id, vtxo, expiry, oor_spent_txid, spent_in_round, offboarded_in,
 			banned_until_height, confirmed_height, spend_state::TEXT AS spend_state, created_at, updated_at,
-			EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback
+			EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback
 		FROM vtxo
 		WHERE policy = ANY($1);
 	", &[Type::BYTEA_ARRAY]).await?;
@@ -210,7 +210,7 @@ pub async fn try_get_bare_vtxo_by_id(
 			server_pubkey, amount, anchor_point,
 			oor_spent_txid, spent_in_round, offboarded_in,
 			banned_until_height, confirmed_height, spend_state::TEXT AS spend_state, created_at, updated_at,
-			EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback
+			EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback
 		FROM vtxo
 		WHERE vtxo_id = $1;
 	", &[Type::TEXT]).await?;

@@ -119,8 +119,8 @@ impl Tx<'_> {
 		if state.spend_state == SpendState::Spent {
 			if let Some(row) = self.query_opt("
 				SELECT e.id,e.irreversible_facts::TEXT AS irreversible_facts
-				FROM expiry_decided_coin d JOIN expiry_entitlement e ON e.id=d.entitlement_id
-				WHERE d.vtxo_id=$1
+				FROM expiry_entitlement e
+				WHERE e.vtxo_id=$1
 			", &[&state.vtxo_id.to_string()]).await? {
 				let facts: serde_json::Value = serde_json::from_str(row.get("irreversible_facts"))?;
 				let kind = facts.get("kind").and_then(serde_json::Value::as_str);

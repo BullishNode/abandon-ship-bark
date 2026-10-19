@@ -61,15 +61,11 @@ async fn expiry_coin_fence_serializes_actual_tree_writes() {
 				}
 				Ok::<_, anyhow::Error>(())
 			}).await.expect("competing writer must reach actual coin lock")?;
-			let entitlement = t.query_one("
+			t.query_one("
 				INSERT INTO expiry_entitlement(vtxo_id, gross_sat)
 				VALUES($1, $2)
 				RETURNING id
-			", &[&coin.id().to_string(), &i64::try_from(coin.amount().to_sat())?]).await?.get::<_, i64>(0);
-			t.execute("
-				INSERT INTO expiry_decided_coin(vtxo_id, entitlement_id)
-				VALUES($1, $2)
-			", &[&coin.id().to_string(), &entitlement]).await?;
+			", &[&coin.id().to_string(), &i64::try_from(coin.amount().to_sat())?]).await?;
 			t.execute("
 				UPDATE vtxo
 				SET spend_state = 'spent', updated_at = NOW()
@@ -86,10 +82,6 @@ async fn expiry_coin_fence_serializes_actual_tree_writes() {
 		assert_eq!(state[0].spent_in_round, None);
 		// Reset this isolated fixture for the next distinct real writer path.
 		db.write(async |t| {
-			t.execute("
-				DELETE
-				FROM expiry_decided_coin
-			", &[]).await?;
 			t.execute("
 				DELETE
 				FROM expiry_entitlement

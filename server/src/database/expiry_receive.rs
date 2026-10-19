@@ -167,7 +167,7 @@ impl Tx<'_> {
 				SELECT r.subscription_id FROM expiry_lightning_receive_replay r
 				WHERE r.uncollected_at IS NULL AND (r.last_attempt_at IS NULL OR r.last_attempt_at < NOW()-INTERVAL '5 seconds')
 				AND EXISTS(SELECT 1 FROM expiry_lightning_receive_claim c WHERE c.subscription_id=r.subscription_id AND NOT c.materialized)
-				AND NOT EXISTS(SELECT 1 FROM expiry_lightning_receive_claim c JOIN expiry_decided_coin d ON d.vtxo_id=c.source_vtxo_id
+				AND NOT EXISTS(SELECT 1 FROM expiry_lightning_receive_claim c JOIN expiry_entitlement d ON d.vtxo_id=c.source_vtxo_id
 					WHERE c.subscription_id=r.subscription_id)
 				ORDER BY r.last_attempt_at NULLS FIRST,r.subscription_id LIMIT $1 FOR UPDATE OF r SKIP LOCKED
 			)

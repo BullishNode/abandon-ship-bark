@@ -244,7 +244,7 @@ async fn assert_physical_cut(
 async fn decided_obligations(db: &Db, coins: &[String]) -> BTreeMap<String, (i64, i64, String)> {
 	let rows = db.read(async |tx| Ok(tx.query("SELECT e.id,e.vtxo_id,e.gross_sat, \
 		e.irreversible_facts::TEXT AS facts,v.spend_state::TEXT AS spend_state, \
-		(SELECT COUNT(*) FROM expiry_decided_coin d WHERE d.entitlement_id=e.id) AS fences \
+		(SELECT COUNT(*) FROM expiry_entitlement d WHERE d.id=e.id) AS fences \
 		FROM expiry_entitlement e JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE e.vtxo_id=ANY($1)",
 		&[&coins],
 	).await?)).await.unwrap();

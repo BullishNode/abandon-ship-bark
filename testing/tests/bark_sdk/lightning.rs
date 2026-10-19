@@ -191,6 +191,16 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		source.validate(&source_anchor).unwrap();
 		let tip = ctx.bitcoind().get_block_count().await as u32;
 		assert!(tip < source.expiry_height().to_u32());
+		wallet.fallback_destination().await.unwrap();
+		let earliest = db.read(async |tx| Ok(tx.query_one(
+			"SELECT MIN(expiry) FROM vtxo WHERE frontier_at IS NOT NULL AND onchain_spent_height IS NULL", &[],
+		).await?.get::<_, Option<i32>>(0))).await.unwrap().expect("fixture must have a real backing frontier");
+		assert!(i64::from(earliest) > i64::from(tip), "the registry barrier must precede every backing maturity");
+		// The real registry writer lock holds decisions before they take coin
+		// locks. Ordinary refresh/forfeit registration remains available.
+		let mut registry_conn = db.raw_conn().await.unwrap();
+		let registry_gate = registry_conn.transaction().await.unwrap();
+		registry_gate.execute("SELECT pg_advisory_xact_lock($1)", &[&3_i64]).await.unwrap();
 		let expired = ctx.generate_blocks(source.expiry_height().to_u32() - tip).await;
 		srv.wait_for_sync_height(expired).await;
 		srv.watchmand().wait_for_sync_height(expired).await;
@@ -248,7 +258,14 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 			tokio::time::sleep(Duration::from_secs(2)).await;
 			srv.trigger_round().await;
 		});
-		refresh.unwrap().expect("the expired source must participate in a real refresh");
+		let refresh = refresh.unwrap().expect("the expired source must participate in a real refresh");
+		assert!(matches!(refresh, bark::round::RoundStatus::Unconfirmed { .. }));
+		let committed = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
+		assert_eq!(committed.spend_state, server::database::SpendState::Spent);
+		assert!(committed.spent_in_round.is_some(), "release the barrier only after real refresh binding commits");
+		assert!(!committed.decided_for_fallback);
+		registry_gate.commit().await.unwrap();
+		drop(registry_conn);
 		ctx.generate_blocks(ark_testing::constants::ROUND_CONFIRMATIONS).await;
 		wallet.chain().invalidate_caches().await;
 		tokio::time::timeout(Duration::from_secs(15), async {
@@ -350,7 +367,8 @@ async fn pay_hold_refused() {
 	let ctx = TestContext::new("bark_sdk/pay_hold_refused").await;
 
 	let lightning = ctx.new_lightning_setup("lightningd").await;
-	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10)).create().await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10))
+		.bitcoind(ctx.bitcoind_arc()).watchmand().create().await;
 
 	let board_amount = btc(2);
 	let wallet = ctx.bark_sdk("bark", &srv)
@@ -433,6 +451,162 @@ async fn pay_hold_refused() {
 	let balance = assert_balance_consistent(&wallet, false).await;
 	assert_eq!(balance.spendable, board_amount);
 	assert_eq!(balance.pending_lightning_send, btc(0));
+	wallet.stop_daemon_wait().await.unwrap();
+	drop(wallet);
+
+	// A second genuine payment fails while its sender is absent. This time
+	// the watchman, rather than a cooperative revocation, returns its HTLC.
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let board = ark_testing::sat(300_000);
+	let absent = ctx.bark_sdk("absent_refund", &srv).mnemonic(mnemonic.clone())
+		.cfg(|cfg| cfg.daemon_manual_sync = true).boarded(board).create().await;
+	absent.stop_daemon_wait().await.unwrap();
+	let preimage = Preimage::random();
+	let hash = preimage.compute_payment_hash();
+	let invoice = hold_client.invoice(hold::InvoiceRequest {
+		payment_hash: hash.to_vec(), amount_msat: 100_000_000,
+		description: Some(hold::invoice_request::Description::Memo("absent_sender_refund".into())),
+		min_final_cltv_expiry: Some(18), expiry: Some(3600), routing_hints: vec![],
+	}).await.unwrap().into_inner().bolt11;
+	absent.pay_lightning_invoice(invoice, None, false).await.unwrap();
+	wait_for_hold_invoice_accepted(&mut hold_client, hash).await;
+	let send = absent.lightning_send_checkpoint(hash).await.unwrap().unwrap();
+	let (ids, movement_id) = match &send.progress {
+		bark::actions::lightning::pay::Progress::PaymentInitiated(htlcs) => (htlcs.vtxo_ids.clone(), htlcs.movement_id),
+		other => panic!("hold payment must be initiated, got {other:?}"),
+	};
+	assert_eq!(ids.len(), 1, "this bounded fixture needs one real HTLC source");
+	let source = absent.get_full_vtxo(ids[0]).await.unwrap();
+	assert_eq!(source.amount(), send.total_amount());
+	let registration = absent.fallback_destination().await.unwrap();
+	let config = absent.config().clone();
+	drop(absent);
+	hold_client.cancel(hold::CancelRequest { payment_hash: hash.to_vec() }).await.unwrap();
+	for _ in 0..4 {
+		ctx.bitcoind().fund_addr(srv.watchmand().wait_wallet_address().await, ark_testing::sat(100_000)).await;
+	}
+	ctx.generate_blocks(2).await;
+	let height = ctx.bitcoind().get_block_count().await as u32;
+	assert!(height < source.expiry_height().to_u32());
+	let expired = ctx.generate_blocks(source.expiry_height().to_u32() + 1 - height).await;
+	srv.wait_for_sync_height(expired).await;
+	srv.watchmand().wait_for_sync_height(expired).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let (parent, child, recorded_fee) = tokio::time::timeout(Duration::from_secs(60), async {
+		loop {
+			let row = db.read(async |tx| Ok(tx.query_opt(
+				"SELECT a.sweep_tx,f.raw_tx,f.fee_sat FROM expiry_allocation a \
+				JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+				JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				JOIN expiry_fee_child f ON f.allocation_id=a.id \
+				WHERE e.vtxo_id=$1 AND c.active AND a.broadcast_at IS NOT NULL \
+				ORDER BY f.id DESC LIMIT 1", &[&source.id().to_string()],
+			).await?)).await.unwrap();
+			if let Some(row) = row {
+				break (deserialize::<Transaction>(row.get("sweep_tx")).unwrap(),
+					deserialize::<Transaction>(row.get("raw_tx")).unwrap(), row.get::<_, i64>("fee_sat"));
+			}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("absent sender must reach an actual background HTLC refund");
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+	assert_eq!(ctx.bitcoind().await_transaction(child.compute_txid()).await, child);
+	let source_path = std::iter::once(source.chain_anchor()).chain(source.transactions().map(|step|
+		OutPoint::new(step.tx.compute_txid(), step.output_idx as u32))).collect::<std::collections::BTreeSet<_>>();
+	assert!(parent.input.iter().any(|input| source_path.contains(&input.previous_output)),
+		"the actual refund parent must spend this signed HTLC's backing path");
+	let anchor = parent.output.iter().enumerate().find(|(_, output)| output.is_p2a_fee_anchor()).unwrap();
+	assert!(child.input.iter().any(|input| input.previous_output == OutPoint::new(parent.compute_txid(), anchor.0 as u32)));
+	let mut parent_inputs = bitcoin::Amount::ZERO;
+	for input in &parent.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		parent_inputs += previous.output[input.previous_output.vout as usize].value;
+	}
+	assert_eq!(parent_inputs, parent.output.iter().map(|output| output.value).sum::<bitcoin::Amount>());
+	let mut child_inputs = bitcoin::Amount::ZERO;
+	for input in &child.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		child_inputs += previous.output[input.previous_output.vout as usize].value;
+	}
+	let child_fee = child_inputs - child.output.iter().map(|output| output.value).sum::<bitcoin::Amount>();
+	assert!(child_fee > bitcoin::Amount::ZERO);
+	assert_eq!(child_fee.to_sat(), u64::try_from(recorded_fee).unwrap());
+
+	let reopened = Wallet::open(Network::Regtest, WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic),
+		config.clone(), OpenWalletArgs { datadir: Some(ctx.datadir.join("absent_refund")),
+			run_daemon: false, ..Default::default() }).await.unwrap();
+	reopened.sync().await;
+	let before = reopened.history().await.unwrap().into_iter().find(|entry|
+		entry.subsystem.is_subsystem(Subsystem::LIGHTNING_SEND)).unwrap();
+	assert_eq!(before.status, MovementStatus::Pending, "mempool receipt must not complete the send");
+	assert_eq!(before.effective_balance, -send.total_amount().to_signed().unwrap());
+	assert!(reopened.lightning_send_checkpoint(hash).await.unwrap().is_some());
+	drop(reopened);
+	let confirmed = ctx.generate_blocks(6).await;
+	srv.wait_for_sync_height(confirmed).await;
+	srv.watchmand().wait_for_sync_height(confirmed).await;
+	let core = ctx.bitcoind().sync_client();
+	for txid in [parent.compute_txid(), child.compute_txid()] {
+		let chain: serde_json::Value = core.call("getrawtransaction", &[
+			serde_json::json!(txid.to_string()), serde_json::json!(true),
+		]).unwrap();
+		assert!(chain["confirmations"].as_u64().unwrap() >= 6);
+	}
+	for _ in 0..2 {
+		let reopened = Wallet::open(Network::Regtest, WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic),
+			config.clone(), OpenWalletArgs { datadir: Some(ctx.datadir.join("absent_refund")),
+				run_daemon: false, ..Default::default() }).await.unwrap();
+		for _ in 0..2 { reopened.sync().await; }
+		assert!(reopened.lightning_send_checkpoint(hash).await.unwrap().is_none());
+		assert!(!reopened.is_invoice_paid(hash).await.unwrap());
+		let history = reopened.history().await.unwrap();
+		let sends = history.iter().filter(|entry| entry.subsystem.is_subsystem(Subsystem::LIGHTNING_SEND)).collect::<Vec<_>>();
+		assert_eq!(sends.len(), 1);
+		assert_eq!(sends[0].id, movement_id);
+		assert_eq!(sends[0].status, MovementStatus::Failed);
+		assert_eq!(sends[0].effective_balance, bitcoin::SignedAmount::ZERO);
+		assert_eq!(sends[0].offchain_fee, bitcoin::Amount::ZERO);
+		assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0,
+			"board principal must be debited once through fallback, never also through the failed invoice");
+		for id in &ids {
+			assert_eq!(reopened.get_vtxo_by_id(*id).await.unwrap().state, bark::vtxo::VtxoState::Spent);
+		}
+		let balance = assert_balance_consistent(&reopened, false).await;
+		assert_eq!(balance.total(), bitcoin::Amount::ZERO);
+		let receipts = reopened.fallback_payouts().await.unwrap();
+		let refund = receipts.iter().find(|entry| entry.vtxo_id == source.id()).unwrap();
+		assert_eq!(refund.gross, send.total_amount());
+		let mut points = std::collections::BTreeMap::new();
+		let mut gross = bitcoin::Amount::ZERO;
+		let mut fees = bitcoin::Amount::ZERO;
+		for entry in &receipts {
+			let attempt = entry.attempts.iter().find(|attempt| attempt.active
+				&& attempt.disposition == bark::FallbackDisposition::CustomerPayout).unwrap();
+			let tx = attempt.parent.as_ref().unwrap();
+			let index = attempt.output_index.unwrap();
+			let output = &tx.output[index as usize];
+			assert_eq!(output.script_pubkey, registration.spk);
+			points.insert(OutPoint::new(tx.compute_txid(), index), output.value);
+			gross += entry.gross;
+			fees += attempt.fee;
+		}
+		assert_eq!(gross, board);
+		assert_eq!(fees, ark_testing::sat(1_000 * points.len() as u64));
+		assert_eq!(points.values().copied().sum::<bitcoin::Amount>(), board - fees);
+		for (point, value) in &points {
+			let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations >= 6);
+			assert_eq!(actual.value, *value);
+			assert_eq!(actual.script_pub_key.hex, registration.spk.as_bytes());
+		}
+		let mut actual = bitcoin::Amount::ZERO;
+		for height in 0..=u64::from(confirmed.to_u32()) {
+			let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
+			actual += block.txdata.iter().flat_map(|tx| &tx.output)
+				.filter(|output| output.script_pubkey == registration.spk).map(|output| output.value).sum::<bitcoin::Amount>();
+		}
+		assert_eq!(actual, board - fees, "no additional payment may reuse this sender's payout script");
+	}
 }
 
 /// Any integrator should be able to claim a lightning receive off the raw mailbox stream

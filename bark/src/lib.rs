@@ -397,6 +397,13 @@ mod balance;
 mod board;
 mod config;
 mod daemon;
+mod fallback;
+pub use fallback::{FallbackRefusal, ExitProtectionOutcome, ExitProtectionSchedule,
+	ExitProtectionReport, ExitProtectionIssue, ExitProtectionIncomplete};
+pub use fallback::payouts::{
+	FallbackAttempt, FallbackBlock, FallbackDisposition, FallbackEntitlement,
+	FallbackPayoutStage, FallbackSnapshot, FallbackTerminalClaim,
+};
 mod fees;
 mod import;
 mod lightning;
@@ -764,6 +771,11 @@ pub struct OpenWalletArgs {
 	/// Default: none
 	pub onchain: Option<Arc<tokio::sync::RwLock<dyn OnchainWalletTrait>>>,
 
+	/// Immutable standard payout script selected by the app. The SDK binds
+	/// it to this seed's coin account, without imposing an onchain wallet,
+	/// seed or derivation path. A cached record may reopen without this field.
+	pub fallback_spk: Option<bitcoin::ScriptBuf>,
+
 	/// Whether to create a new wallet if no wallet exists
 	///
 	///  Default: true
@@ -795,6 +807,7 @@ impl Default for OpenWalletArgs {
 	    Self {
 			run_daemon: true,
 			onchain: None,
+			fallback_spk: None,
 			datadir: None,
 			persister: None,
 			lock_manager: None,
@@ -990,7 +1003,8 @@ impl Wallet {
 	pub async fn peek_next_keypair(&self) -> anyhow::Result<(Keypair, u32)> {
 		let last_revealed = self.inner.db.get_last_vtxo_key_index().await?;
 
-		let index = last_revealed.map(|i| i + 1).unwrap_or(u32::MIN);
+		self.fallback_destination().await?;
+		let index = fallback::next_key_index(last_revealed)?;
 		let keypair = self.inner.seed.derive_vtxo_keypair(index);
 
 		Ok((keypair, index))
@@ -1066,8 +1080,8 @@ impl Wallet {
 		}
 
 		// We should derive unrevealed keys, so we add one to the last key index.
-		let start_idx = self.inner.db.get_last_vtxo_key_index().await?.map(|i| i + 1).unwrap_or(0);
-		let mut frontier = start_idx.saturating_add(gap_limit);
+		let start_idx = fallback::next_key_index(self.inner.db.get_last_vtxo_key_index().await?)?;
+		let mut frontier = start_idx.saturating_add(gap_limit).min((1 << 31) - 1);
 		let mut idx = start_idx;
 		let mut gap = Vec::<(u32, PublicKey)>::new();
 		while idx <= frontier && !unrevealed.is_empty() {
@@ -1083,7 +1097,7 @@ impl Wallet {
 
 				// `frontier` is the last index the scan tests. This index matched,
 				// so the next run of unused indices starts at idx + 1.
-				frontier = idx.saturating_add(1).saturating_add(gap_limit);
+				frontier = idx.saturating_add(1).saturating_add(gap_limit).min((1 << 31) - 1);
 			} else {
 				gap.push((idx, pubkey));
 			}
@@ -1145,6 +1159,7 @@ impl Wallet {
 	///
 	/// May return an error if the address at the given index has not been derived yet.
 	pub async fn peek_address(&self, index: u32) -> anyhow::Result<ark::Address> {
+		self.fallback_destination().await?;
 		let properties = self.properties().await?;
 		let network = properties.network;
 		let keypair = self.peek_keypair(index).await?;
@@ -1384,6 +1399,10 @@ impl Wallet {
 			last_force_exit_scan_tip: tokio::sync::Mutex::new(None),
 			round_secret_nonces: RoundSecretNonces::new(),
 		})};
+
+		// Offline creation retains a pending local identity. Coin issuance only
+		// becomes available after an authenticated registration acknowledgement.
+		ret.open_fallback(args.fallback_spk, args.create_without_server).await?;
 
 		ret.inner.exit.load().await
 			.context("error loading exit system after opening wallet")?;
@@ -1714,7 +1733,9 @@ impl Wallet {
 
 	/// Fetches all wallet fund movements ordered from newest to oldest.
 	pub async fn history(&self) -> anyhow::Result<Vec<Movement>> {
-		Ok(self.inner.db.get_all_movements().await?)
+		let snapshot = self.inner.db.get_fallback_snapshot().await?;
+		let stored = self.inner.db.get_all_movements().await?;
+		snapshot.project(stored, self.network().await?)
 	}
 
 	/// Applies an [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) JSON Merge Patch to the
@@ -1751,6 +1772,19 @@ impl Wallet {
 		payment_method: &PaymentMethod,
 	) -> anyhow::Result<Vec<Movement>> {
 		let mut ret = self.inner.db.get_movements_by_payment_method(payment_method).await?;
+		ret.retain(|movement| movement.subsystem.name != fallback::payouts::FALLBACK_SUBSYSTEM);
+		// Preserve the indexed path for ordinary invoice/Ark lookups. Only
+		// onchain destinations can have projected fallback receipts.
+		if payment_method.is_bitcoin() {
+			let snapshot = self.inner.db.get_fallback_snapshot().await?;
+			let mut stored = Vec::new();
+			for key in snapshot.groups()?.keys() {
+				let id = *snapshot.movement_ids.get(key).context("fallback history ID is absent")?;
+				stored.push(self.inner.db.get_movement_by_id(id).await?);
+			}
+			ret.extend(snapshot.project(stored, self.network().await?)?.into_iter()
+				.filter(|movement| movement.sent_to(payment_method) || movement.received_on(payment_method)));
+		}
 		ret.sort_by_key(|m| m.id);
 		Ok(ret)
 	}
@@ -1774,7 +1808,13 @@ impl Wallet {
 
 	/// Returns all spendable vtxos
 	pub async fn spendable_vtxos(&self) -> anyhow::Result<Vec<WalletVtxo>> {
-		Ok(self.vtxos_with(&VtxoStateKind::Spendable).await?)
+		let mut vtxos = self.vtxos_with(&VtxoStateKind::Spendable).await?;
+		let snapshot = self.inner.db.get_fallback_snapshot().await?;
+		let pending = self.fallback_pending_principal(&snapshot).await?;
+		let decided = snapshot.entitlements.values().map(|entitlement| entitlement.vtxo_id).collect::<HashSet<_>>();
+		vtxos.retain(|vtxo| !decided.contains(&vtxo.id()) && !snapshot.awaiting_settlement.contains(&vtxo.id())
+			&& !pending.contains_key(&vtxo.id()));
+		Ok(vtxos)
 	}
 
 	/// Returns all spendable vtxos matching the provided predicate
@@ -1836,9 +1876,13 @@ impl Wallet {
 		}
 
 		if rounds.is_err() || refresh.is_err() {
-			bail!("Maintenance encountered errors.\nprogress_rounds: {:#?}\nrefresh: {:#?}",
-				rounds, refresh,
-			);
+			let diagnostic = format!("Maintenance encountered errors.\nprogress_rounds: {:#?}\nrefresh: {:#?}", rounds, refresh);
+			let refusal = rounds.as_ref().err().and_then(FallbackRefusal::from_error)
+				.or_else(|| refresh.as_ref().err().and_then(FallbackRefusal::from_error));
+			return Err(match refusal {
+				Some(refusal) => anyhow::Error::new(refusal).context(diagnostic),
+				None => anyhow!(diagnostic),
+			});
 		}
 
 		Ok(())
@@ -1863,10 +1907,14 @@ impl Wallet {
 		}
 
 		if rounds.is_err() || refresh.is_err() {
-			bail!("Delegated maintenance encountered errors.\n\
-				progress_rounds: {:#?}\nrefresh: {:#?}",
-				rounds, refresh,
-			);
+			let diagnostic = format!("Delegated maintenance encountered errors.\n\
+				progress_rounds: {:#?}\nrefresh: {:#?}", rounds, refresh);
+			let refusal = rounds.as_ref().err().and_then(FallbackRefusal::from_error)
+				.or_else(|| refresh.as_ref().err().and_then(FallbackRefusal::from_error));
+			return Err(match refusal {
+				Some(refusal) => anyhow::Error::new(refusal).context(diagnostic),
+				None => anyhow!(diagnostic),
+			});
 		}
 
 		Ok(())
@@ -1931,6 +1979,7 @@ impl Wallet {
 		Fut: Future<Output = anyhow::Result<Option<RoundStateId>>>,
 	{
 		let mut excluded = HashSet::new();
+		let mut last_refusal = None;
 		for _ in 0..10 {
 			let vtxos = self.get_vtxos_to_refresh_with_excluded(excluded.iter().copied()).await?;
 			match (vtxos.is_empty(), excluded.is_empty()) {
@@ -1939,6 +1988,7 @@ impl Wallet {
 				// silently reporting success.
 				(true, false) => {
 					warn!("no VTXOs to refresh after exclusions: {:?}", excluded);
+					if let Some(error) = last_refusal.take() { return Err(error); }
 					bail!("no VTXOs to refresh after excluding: {:?}", excluded);
 				},
 				// Nothing was due for refresh in the first place.
@@ -1963,6 +2013,9 @@ impl Wallet {
 					warn!("Maintenance refresh rejected {} unusable input(s) ({:?}); \
 						retrying without them", rejected.len(), rejected);
 					excluded.extend(rejected);
+					// Preserve the actual typed reason if the decision raced the
+					// preflight and leaves no other inputs to submit.
+					last_refusal = Some(e);
 				},
 			}
 		}
@@ -2011,7 +2064,19 @@ impl Wallet {
 	/// Notes:
 	/// - Exits are only synced if we detect onchain activity which has force-exited our VTXO.
 	pub async fn sync(&self) {
+		if let Err(error) = self.retry_pending_fallback_registration().await {
+			warn!("Fallback registration remains pending: {:#}", error);
+		}
 		self.inner.chain.invalidate_caches().await;
+		if let Err(error) = self.sync_fallback_payouts().await {
+			warn!("Fallback payout history awaits sync: {:#}", error);
+		}
+		if let Err(error) = self.reconcile_all_expired_vtxos().await {
+			warn!("Expired coins await settlement: {:#}", error);
+		}
+		if let Err(error) = self.sync_recovery_quarantine().await {
+			warn!("Recovered coins await their post-status history: {:#}", error);
+		}
 
 		futures::join!(
 			async {
@@ -2223,8 +2288,9 @@ impl Wallet {
 		vtxos: impl IntoIterator<Item = V>,
 		height: Option<BlockHeight>,
 	) -> anyhow::Result<Option<RoundParticipation>> {
+		let selected = self.filter_expired_refresh_inputs(vtxos.into_iter().collect()).await?;
 		let (vtxos, total_amount) = {
-			let iter = vtxos.into_iter();
+			let iter = selected.into_iter();
 			let size_hint = iter.size_hint();
 			let mut vtxos = Vec::<Vtxo<Full>>::with_capacity(size_hint.1.unwrap_or(size_hint.0));
 			let mut amount = Amount::ZERO;
@@ -2345,12 +2411,12 @@ impl Wallet {
 	/// This will find all VTXOs that meets must-refresh criteria. Then, if there are some VTXOs to
 	/// refresh, it will also add those that meet should-refresh criteria.
 	pub async fn get_vtxos_to_refresh(&self) -> anyhow::Result<Vec<WalletVtxo>> {
-		let vtxos = self.spendable_vtxos_with(&RefreshStrategy::should_refresh_if_must(
-			self,
-			self.inner.chain.tip().await?,
-			self.inner.chain.fee_rates().await.fast,
-		)).await?;
-		Ok(vtxos)
+		// Include previously awaiting coins so a later positive status can
+		// release them; ordinary spend selection intentionally excludes them.
+		let mut vtxos = self.vtxos_with(&VtxoStateKind::Spendable).await?;
+		RefreshStrategy::should_refresh_if_must(self, self.inner.chain.tip().await?,
+			self.inner.chain.fee_rates().await.fast).filter_vtxos(&mut vtxos).await?;
+		self.filter_expired_refresh_inputs(vtxos).await
 	}
 
 	/// Similar to [Wallet::get_vtxos_to_refresh] but it allows VTXOs to be excluded from the

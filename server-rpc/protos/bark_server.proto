@@ -11,10 +11,15 @@ import "core.proto";
 service ArkService {
 	rpc Handshake(HandshakeRequest) returns (HandshakeResponse) {}
 	rpc GetArkInfo(core.Empty) returns (ArkInfo) {}
+	// Register an authenticated immutable mailbox/account/payout binding.
+	rpc SetFallback(SetFallbackRequest) returns (SetFallbackResponse) {}
+	rpc GetFallbackPayouts(GetFallbackPayoutsRequest) returns (GetFallbackPayoutsResponse) {}
 	rpc GetOffboardFeeRate(core.Empty) returns (OffboardFeeRateResponse) {}
 
 	rpc GetVtxo(GetVtxoRequest) returns (GetVtxoResponse) {}
 	rpc GetVtxoStatus(GetVtxoStatusRequest) returns (GetVtxoStatusResponse) {}
+	// Fully signed ordinary OOR descendants only; incomplete proofs are refused.
+	rpc GetVtxoSpendProof(GetVtxoStatusRequest) returns (GetVtxoSpendProofResponse) {}
 	rpc GetVtxosByIds(GetVtxosByIdsRequest) returns (GetVtxosByIdsResponse) {}
 	rpc GetVtxosStatusByIds(GetVtxosStatusByIdsRequest) returns (GetVtxosStatusByIdsResponse) {}
 	// Seed recovery without the mailbox: lists the VTXOs, in any spend state,
@@ -227,6 +232,13 @@ message GetVtxoStatusRequest {
 
 message GetVtxoStatusResponse {
 	VtxoSpendState spend_state = 1;
+}
+
+message GetVtxoSpendProofResponse {
+	// Complete immediate ordinary branches after the original checkpoint.
+	// Each full VTXO contains the owner-authorized signed path, including change.
+	// The client independently validates every signature and branch.
+	repeated bytes vtxos = 1;
 }
 
 message VtxoStatusQuery {
@@ -773,4 +785,84 @@ message WalletStatusResponse {
 
 message LightningNodeUri {
 	string uri = 1;
+}
+
+// The record uses ark-lib's versioned, bounded FallbackRecord encoding.
+message SetFallbackRequest {
+	bytes mailbox_pk = 1;
+	bytes record = 2;
+}
+message SetFallbackResponse {
+	bytes record = 1;
+}
+
+// Account authorization lists all entitlements belonging to the immutable
+// registration. Its upstream signature authorizes the account, not one page.
+message FallbackPayoutAccountQuery {
+	bytes xpub = 1;
+	bytes authorization = 2;
+	int64 after_entitlement_id = 3;
+	// 1..1000. A cursor is a scan position, not a change feed: rescan known
+	// entitlements to observe conflict, regrouping and reorg changes.
+	uint32 page_size = 4;
+	// Echo the first page token. A changed ledger/chain view rejects the page.
+	bytes view_token = 5;
+}
+message GetFallbackPayoutsRequest {
+	oneof query {
+		FallbackPayoutAccountQuery account = 1;
+		GetVtxosStatusByIdsRequest vtxos = 2;
+	}
+}
+message FallbackPayoutBlock {
+	uint32 height = 1;
+	bytes hash = 2;
+}
+enum FallbackPayoutStage {
+	FALLBACK_PAYOUT_STAGE_UNSPECIFIED = 0;
+	FALLBACK_PAYOUT_STAGE_COMMITTED = 1;
+	FALLBACK_PAYOUT_STAGE_BROADCAST = 2;
+	FALLBACK_PAYOUT_STAGE_CONFIRMED = 3;
+	FALLBACK_PAYOUT_STAGE_CONFLICTED = 4;
+}
+enum FallbackPayoutDisposition {
+	FALLBACK_PAYOUT_DISPOSITION_UNSPECIFIED = 0;
+	FALLBACK_PAYOUT_DISPOSITION_CUSTOMER_PAYOUT = 1;
+	FALLBACK_PAYOUT_DISPOSITION_BELOW_DUST = 2;
+	FALLBACK_PAYOUT_DISPOSITION_OPERATOR = 3;
+}
+message FallbackPayoutAttempt {
+	int64 allocation_id = 1;
+	bool active = 2;
+	FallbackPayoutStage stage = 3;
+	FallbackPayoutDisposition disposition = 4;
+	optional uint32 output_index = 5;
+	bytes script_pubkey = 6;
+	uint64 gross_sat = 7;
+	uint64 fee_sat = 8;
+	uint64 payout_sat = 9;
+	uint64 forfeited_sat = 10;
+	optional uint64 output_amount_sat = 11;
+	// Actual signed parent, if constructed. Storage alone is only Committed.
+	bytes parent_tx = 12;
+	FallbackPayoutBlock confirmation = 13;
+}
+message FallbackTerminalClaim {
+	bytes txid = 1;
+	FallbackPayoutBlock confirmation = 2;
+}
+message FallbackEntitlementDetails {
+	int64 entitlement_id = 1;
+	bytes vtxo_id = 2;
+	uint64 gross_sat = 3;
+	bool chain_view_valid = 4;
+	// Historical attempts are associations, never additional balance debits.
+	repeated FallbackPayoutAttempt attempts = 5;
+	// A terminal unilateral exit is separate from fallback payout history.
+	FallbackTerminalClaim terminal_claim = 6;
+}
+message GetFallbackPayoutsResponse {
+	repeated FallbackEntitlementDetails entitlements = 1;
+	optional int64 next_after_entitlement_id = 2;
+	bytes view_token = 3;
 }

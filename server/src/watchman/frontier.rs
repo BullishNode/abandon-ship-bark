@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Context;
-use bitcoin::{OutPoint, Txid, Witness};
+use bitcoin::{OutPoint, Transaction, Txid, Witness};
 use bitcoin::taproot::LeafVersion;
 use tokio::sync::RwLock;
 use tracing::{error, trace};
@@ -85,9 +85,10 @@ impl VtxoExitFrontier {
 		&mut self,
 		vtxo_id: VtxoId,
 		spent_height: BlockHeight,
-		spent_txid: Txid,
+		transaction: &Transaction,
 		witness: &Witness,
 	) -> anyhow::Result<bool> {
+		let spent_txid = transaction.compute_txid();
 		if let Some((_height, vtxo)) = self.frontier.remove(&vtxo_id) {
 			// Try to extract a preimage from the spending witness if this is an HTLC vtxo.
 			// This must succeed before we proceed — if persisting the preimage fails,
@@ -101,8 +102,12 @@ impl VtxoExitFrontier {
 			}
 
 			let chain_resolution = classify_htlc_spend(&vtxo, witness);
+			let user_claim = super::user_claim::is_user_exit_claim(&vtxo, witness);
 			self.db.write(async |t| {
 				t.register_vtxo_spend(vtxo_id, spent_height, spent_txid).await?;
+				if user_claim {
+					t.record_user_exit_claim(transaction, spent_height).await?;
+				}
 				if let Some(resolution) = chain_resolution {
 					htlc_vtxo::set_htlc_vtxo_chain_resolution(
 						&t, vtxo_id, resolution, spent_height,
@@ -290,6 +295,9 @@ impl ChainEventListener for Arc<RwLock<VtxoExitFrontier>> {
 		// detection below works correctly for all frontier entries.
 		frontier.sync_new_vtxos_from_db().await?;
 
+		let txids = block.block.txdata.iter().map(Transaction::compute_txid).collect::<Vec<_>>();
+		frontier.db.write(async |t| t.confirm_user_exit_claims(&txids, height).await).await?;
+
 		for tx in &block.block.txdata {
 			let txid = tx.compute_txid();
 
@@ -300,7 +308,7 @@ impl ChainEventListener for Arc<RwLock<VtxoExitFrontier>> {
 			let mut removed_any = false;
 			for input in &tx.input {
 				if frontier.spend(
-					input.previous_output.into(), height, txid, &input.witness,
+					input.previous_output.into(), height, tx, &input.witness,
 				).await? {
 					removed_any = true;
 				}
@@ -335,6 +343,7 @@ impl ChainEventListener for Arc<RwLock<VtxoExitFrontier>> {
 		// Rollback all transactions that ocurred above this block
 		frontier.db.write(async |t| {
 			t.reorg_frontier(block_ref.height).await?;
+			t.reorg_user_exit_claims(block_ref.height).await?;
 			htlc_vtxo::clear_htlc_vtxo_chain_resolutions_above(&t, block_ref.height).await?;
 			Ok(())
 		}).await?;

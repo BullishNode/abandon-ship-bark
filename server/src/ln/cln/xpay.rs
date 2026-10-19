@@ -41,6 +41,7 @@ use cln_rpc::listpays_pays::ListpaysPaysStatus;
 use crate::database;
 use crate::database::ln::{LightningNodeId, LightningPaymentAttempt, LightningPaymentStatus};
 use crate::ln::settler::HtlcSettler;
+use crate::ln::guard::PaymentGuards;
 use crate::system::RuntimeManager;
 use crate::telemetry;
 
@@ -64,6 +65,7 @@ pub(crate) struct ClnXpayClient {
 	/// [`LightningManager::wait_payment_status`]: crate::ln::node_manager::LightningManager::wait_payment_status
 	payment_update_tx: broadcast::Sender<PaymentHash>,
 	mailbox_manager: Arc<crate::mailbox_manager::MailboxManager>,
+	payment_guards: PaymentGuards,
 }
 
 impl ClnXpayClient {
@@ -77,8 +79,9 @@ impl ClnXpayClient {
 		rpc: ClnGrpcClient,
 		settler: Arc<HtlcSettler>,
 		mailbox_manager: Arc<crate::mailbox_manager::MailboxManager>,
+		payment_guards: PaymentGuards,
 	) -> Arc<Self> {
-		Arc::new(Self { db, payment_update_tx, rpc, settler, mailbox_manager })
+		Arc::new(Self { db, payment_update_tx, rpc, settler, mailbox_manager, payment_guards })
 	}
 
 	/// Calls xpay and then reconciles the attempt status against CLN.
@@ -97,23 +100,51 @@ impl ClnXpayClient {
 	))]
 	pub async fn pay(
 		&self,
+		attempt: LightningPaymentAttempt,
 		invoice: Box<Invoice>,
 		payment_amount: Amount,
 		max_routing_fee: Amount,
 		max_cltv_expiry_delta: BlockDelta,
 		retry_for: Duration,
 	) {
-		let mut rpc = self.rpc.clone();
 		let payment_hash = invoice.payment_hash();
-		// Only place CLN says whether the route was pruned on cost or on delay.
-		// A route it never found leaves no `listpays` record either, so
-		// dropping this loses the reason entirely.
+		let _payment = self.payment_guards.lock(payment_hash).await;
+		// A task can wait after admission while reconciliation or a returning
+		// client closes its attempt. Never dispatch such an obsolete task.
+		let admitted = self.db.write(async |tx| tx.admit_lightning_dispatch(&attempt).await).await;
+		match admitted {
+			Ok(true) => {},
+			Ok(false) => { debug!(attempt_id=attempt.id, "Skipping claimed or obsolete queued xpay attempt"); return; },
+			Err(error) => {
+				warn!(attempt_id=attempt.id, %error, "Refusing queued xpay dispatch");
+				if let Err(error) = self.payment_handler().fail_payment_attempt(&attempt, Some(&error.to_string())).await {
+					error!(attempt_id=attempt.id, %error, "Recording refused xpay dispatch failed");
+				}
+				return;
+			},
+		}
+		// The transaction above is short. Only the payment-local guard spans
+		// the network call; unrelated payments and database writers continue.
+		let label = match self.db.read(async |t| Ok(t.query_one(
+			"SELECT label FROM expiry_lightning_dispatch WHERE id=$1", &[&attempt.id],
+		).await?.get::<_, String>("label"))).await {
+			Ok(label) => label,
+			Err(error) => { error!(attempt_id=attempt.id, %error, "Reading actual dispatch label failed"); return; },
+		};
+		let mut rpc = self.rpc.clone();
 		let pay_error = match call_xpay(
-			&mut rpc, &invoice, payment_amount, max_routing_fee, max_cltv_expiry_delta, retry_for,
+			&mut rpc, &label, &invoice, payment_amount, max_routing_fee, max_cltv_expiry_delta, retry_for,
 		).await {
-			Ok(_preimage) => {
-				// NB we don't do db stuff when it's succesful, because
-				// it will happen in the sendpay stream of the monitor process
+			Ok(preimage) => {
+				// The attempt may already be coarse-final after a lost status
+				// race. Never discard the actual xpay result in that case.
+				if preimage.compute_payment_hash() != payment_hash {
+					error!(%payment_hash, "xpay returned a preimage for another payment hash");
+					return;
+				}
+				if let Err(error) = self.settler.settle(preimage).await {
+					error!(%payment_hash, %error, "Recording xpay settlement failed");
+				}
 				trace!("Payment successful for payment hash {}", payment_hash.as_hex());
 				None
 			},
@@ -127,6 +158,15 @@ impl ClnXpayClient {
 			},
 			Err(pay_err) => {
 				debug!("Error calling pay-command: {}", pay_err);
+				if let Some(code) = pay_err.downcast_ref::<tonic::Status>().and_then(no_attempt_rejection) {
+					if let Err(error) = self.db.write(async |t| {
+						t.execute("
+							INSERT INTO expiry_lightning_rpc_rejection(id,code) VALUES($1,$2)
+							ON CONFLICT(id) DO NOTHING
+						", &[&attempt.id,&code]).await?;
+						Ok(())
+					}).await { error!(attempt_id=attempt.id, %error, "Recording actual JSON-RPC rejection failed"); }
+				}
 				Some(pay_err.to_string())
 			},
 		};
@@ -143,9 +183,7 @@ impl ClnXpayClient {
 
 		match attempt_res {
 			Ok(Some(attempt)) => {
-				if let Err(e) = self.sync_payment_attempt_status(
-					attempt, pay_error.as_deref(),
-				).await {
+				if let Err(e) = self.sync_payment_attempt_status_locked(attempt, pay_error.as_deref()).await {
 					error!("Error syncing payment attempt status: {e:#}");
 				}
 			},
@@ -198,11 +236,15 @@ impl ClnXpayClient {
 	/// xpay only returns once it has stopped trying, so the attempt is failed
 	/// even when `listpays` still reports it pending. The monitor loop passes
 	/// `None`; it is reconciling attempts it did not make.
-	pub async fn sync_payment_attempt_status(
-		&self,
-		attempt: LightningPaymentAttempt,
-		pay_error: Option<&str>,
-	) -> anyhow::Result<()> {
+	/// Source-specific receipts alone decide source release and mailbox completion.
+	pub async fn sync_payment_attempt_status(&self, attempt: LightningPaymentAttempt, pay_error: Option<&str>) -> anyhow::Result<()> {
+		// The xpay task reconciles its own result before releasing this lock.
+		// Skip it here rather than blocking every other node payment behind it.
+		let Some(_payment) = self.payment_guards.try_lock(attempt.payment_hash) else { return Ok(()); };
+		self.sync_payment_attempt_status_locked(attempt, pay_error).await
+	}
+
+	async fn sync_payment_attempt_status_locked(&self, attempt: LightningPaymentAttempt, pay_error: Option<&str>) -> anyhow::Result<()> {
 		let payment_hash = attempt.payment_hash;
 		let error = pay_error.or(attempt.error.as_deref());
 		debug!("Lightning payment attempt ({}): with payment hash {} is being verified.",
@@ -222,6 +264,53 @@ impl ClnXpayClient {
 		let listpays_response = self.rpc.clone().list_pays(req).await
 			.context("Could not fetch cln payments")?
 			.into_inner();
+		let dispatch = self.db.read(async |t| Ok(t.query_opt(
+			"
+				SELECT d.label,r.code FROM expiry_lightning_dispatch d
+			LEFT JOIN expiry_lightning_rpc_rejection r ON r.id=d.id WHERE d.id=$1
+			", &[&attempt.id],
+		).await?.map(|row| (row.get::<_, String>("label"),row.get::<_, Option<i32>>("code"))))).await?;
+		if let Some((label,rejection)) = dispatch {
+			// CLN can return an old successful invoice to a new caller. Only
+			// a completed group carrying THIS dispatch's unique label discharges
+			// its source coins. Store the actual preimage and receipt together.
+			for pay in &listpays_response.pays {
+				if pay.label.as_deref() != Some(label.as_str()) || pay.payment_hash != payment_hash.to_vec()
+					|| pay.status() != ListpaysPaysStatus::Complete { continue; }
+				let bytes = pay.preimage.as_ref().context("completed source dispatch has no preimage")?;
+				let preimage = Preimage::from_slice(bytes).context("invalid source dispatch preimage")?;
+				ensure!(preimage.compute_payment_hash() == payment_hash, "source dispatch preimage has another hash");
+				let created = i64::try_from(pay.created_index.context("completed source dispatch has no index")?)?;
+				let updated = pay.updated_index.map(i64::try_from).transpose()?;
+				self.db.write(async |t| {
+					t.store_htlc_settlement(preimage).await?;
+					t.execute("
+						INSERT INTO expiry_lightning_external_success(id,created_index,updated_index)
+						VALUES($1,$2,$3) ON CONFLICT(id) DO NOTHING
+					", &[&attempt.id,&created,&updated]).await?;
+					Ok(())
+				}).await?;
+			}
+			let observed = terminal_failure(&listpays_response.pays, &label, payment_hash);
+			let no_attempt = rejection.filter(|code| matches!(code,205|207))
+				.filter(|_| listpays_response.pays.iter().all(|pay|
+					pay.payment_hash == payment_hash.to_vec() && pay.status() == ListpaysPaysStatus::Failed && pay.preimage.is_none()
+				));
+			if observed.is_some() || no_attempt.is_some() {
+				let version = self.rpc.clone().getinfo(cln_rpc::GetinfoRequest {}).await?.into_inner().version;
+				ensure!(version == "v26.06.6", "CLN {version} terminal failure semantics have not been qualified");
+				let created = observed.map(|(created,_)| i64::try_from(created)).transpose()?;
+				let updated = observed.and_then(|(_,updated)| updated).map(i64::try_from).transpose()?;
+				let error_code = if observed.is_some() { None } else { no_attempt };
+				self.db.write(async |t| {
+					t.execute("
+						INSERT INTO expiry_lightning_terminal_failure(id,created_index,updated_index,jsonrpc_error_code)
+						VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING
+					", &[&attempt.id,&created,&updated,&error_code]).await?;
+					Ok(())
+				}).await?;
+			}
+		}
 		if listpays_response.pays.is_empty() {
 			match attempt.status {
 				LightningPaymentStatus::Succeeded => {
@@ -243,6 +332,19 @@ impl ClnXpayClient {
 				},
 			}
 		} else {
+			// A coarse final attempt status can be stale after a lost response
+			// or optimistic-write race. Every authentic preimage is settlement
+			// evidence, including one attached to an older CLN payment group.
+			// Preserve it before deciding whether a status transition applies.
+			for pay in &listpays_response.pays {
+				if let Some(bytes) = &pay.preimage {
+					let preimage = Preimage::from_slice(bytes)
+						.context("CLN returned a preimage that is not 32 bytes")?;
+					ensure!(preimage.compute_payment_hash() == payment_hash, "CLN returned a preimage for another payment hash");
+					self.settler.settle(preimage).await?;
+				}
+			}
+
 			let latest = listpays_response.pays.into_iter().max_by_key(|p| {
 				p.created_index.expect("should have index")
 			}).expect("we have at least one");
@@ -342,6 +444,7 @@ impl ClnXpay {
 		config: ClnXpayConfig,
 		settler: Arc<HtlcSettler>,
 		mailbox_manager: Arc<crate::mailbox_manager::MailboxManager>,
+		payment_guards: PaymentGuards,
 	) -> anyhow::Result<ClnXpay> {
 		let payment_idxs = db.read(async |t| t.get_lightning_payment_indexes(node_id).await).await
 			.with_context(|| format!("failed to fetch payment indices for {}", node_id))?
@@ -353,7 +456,7 @@ impl ClnXpay {
 			updated_index: payment_idxs.updated_index,
 		);
 
-		let client = ClnXpayClient::new(db.clone(), payment_update_tx, rpc, settler, mailbox_manager).await;
+		let client = ClnXpayClient::new(db.clone(), payment_update_tx, rpc, settler, mailbox_manager, payment_guards).await;
 
 		let proc = ClnXpayProcess {
 			config, db, node_id,
@@ -495,6 +598,15 @@ impl ClnXpayProcess {
 
 		}
 
+		// A coarse Failed row can precede CLN's terminal result. Keep checking
+		// expired actual dispatches until their own remote group is proved.
+		let failed = self.db.write(async |t| t.unproven_expiry_lightning_dispatches(self.node_id, 16).await).await?;
+		for attempt in failed {
+			if let Err(error) = self.client.sync_payment_attempt_status(attempt).await {
+				warn!(%error, "Checking terminal expiry Lightning dispatch failed");
+			}
+		}
+
 		self.attempt_next_check_at.retain(|_, &mut (_, datetime)| datetime > Local::now());
 
 		telemetry::set_pending_payment_syncs(
@@ -532,11 +644,34 @@ fn is_cln_error(err: &anyhow::Error) -> bool {
 		.is_some_and(|s| s.message().contains("RpcError { code: Some("))
 }
 
+/// Only typed receipts from the qualified gRPC adapter are accepted. In
+/// CLN26.06.6, 205 is returned before any new_attempt (later routing failures
+/// map to 209), and 207 precedes routing. Generic and transport errors do not
+/// establish quiescence, even if their explanatory text looks identical.
+fn no_attempt_rejection(status: &tonic::Status) -> Option<i32> {
+	if status.code() != tonic::Code::Unknown { return None; }
+	let code = status.metadata().get("abandon-cln-jsonrpc-error-code")?.to_str().ok()?.parse().ok()?;
+	matches!(code,205|207).then_some(code)
+}
+
+/// CLN26.06.6's listpays stays Pending while any same-hash xpay object
+/// exists. A matching random dispatch label proves this request reached an
+/// actual sendpay group; an older failed group or an empty response cannot.
+fn terminal_failure(pays: &[cln_rpc::ListpaysPays], label: &str, hash: PaymentHash) -> Option<(u64, Option<u64>)> {
+	if pays.is_empty() || pays.iter().any(|pay|
+		pay.payment_hash != hash.to_vec() || pay.status() != ListpaysPaysStatus::Failed || pay.preimage.is_some()
+	) { return None; }
+	let own = pays.iter().filter(|pay| pay.label.as_deref() == Some(label))
+		.max_by_key(|pay| pay.created_index)?;
+	Some((own.created_index.filter(|index| *index > 0)?, own.updated_index))
+}
+
 /// Calls the xpay-command over gRPC.
 /// If the payment completes successfully it will return the pre-image
 /// Otherwise, an error will be returned
 async fn call_xpay(
 	rpc: &mut ClnGrpcClient,
+	label: &str,
 	invoice: &Invoice,
 	payment_amount: Amount,
 	max_routing_fee: Amount,
@@ -565,7 +700,7 @@ async fn call_xpay(
 		partial_msat: None,
 		layers: vec![],
 		payer_note: None,
-		label: None,
+		label: Some(label.to_owned()),
 		localinvreqid: None,
 		dev_use_shadow: None,
 	}).await;
@@ -608,5 +743,46 @@ mod test {
 			code: None, message: \"no response from lightningd\", data: None }");
 		assert!(!is_cln_error(&socket.into()));
 		assert!(!is_cln_error(&anyhow!("missing preimage")));
+	}
+}
+
+#[cfg(test)]
+mod expiry_tests {
+	use super::*;
+
+	fn failed(label: &str, hash: PaymentHash) -> cln_rpc::ListpaysPays {
+		cln_rpc::ListpaysPays {
+			payment_hash: hash.to_vec(), status: ListpaysPaysStatus::Failed as i32,
+			label: Some(label.to_owned()), created_index: Some(7), updated_index: Some(9),
+			..Default::default()
+		}
+	}
+
+	#[test]
+	fn no_attempt_rejection_requires_typed_source_reviewed_code() {
+		let mut status = tonic::Status::unknown("even convincing error text is not a receipt");
+		assert_eq!(no_attempt_rejection(&status), None);
+		for (code,expected) in [("205",Some(205)),("207",Some(207)),("200",None),("209",None),("garbled",None)] {
+			status.metadata_mut().insert("abandon-cln-jsonrpc-error-code",code.parse().unwrap());
+			assert_eq!(no_attempt_rejection(&status), expected);
+		}
+	}
+
+	#[test]
+	fn terminal_failure_requires_own_observed_dispatch_and_every_group_failed() {
+		let hash = PaymentHash::from([17;32]);
+		assert_eq!(terminal_failure(&[], "own", hash), None);
+		assert_eq!(terminal_failure(&[failed("old", hash)], "own", hash), None);
+		assert_eq!(terminal_failure(&[failed("own", hash)], "own", hash), Some((7,Some(9))));
+		let mut pending = failed("old", hash);
+		pending.status = ListpaysPaysStatus::Pending as i32;
+		assert_eq!(terminal_failure(&[failed("own", hash),pending], "own", hash), None);
+		let mut paid = failed("old", hash);
+		paid.status = ListpaysPaysStatus::Complete as i32;
+		assert_eq!(terminal_failure(&[failed("own", hash),paid], "own", hash), None);
+		let mut known = failed("own", hash);
+		known.preimage = Some(vec![1;32]);
+		assert_eq!(terminal_failure(&[known], "own", hash), None);
+		assert_eq!(terminal_failure(&[failed("own", PaymentHash::from([18;32]))], "own", hash), None);
 	}
 }

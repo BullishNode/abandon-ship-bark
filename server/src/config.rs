@@ -266,6 +266,19 @@ pub struct Config {
 	/// Whether server allows spending expired VTXOs in arkoor
 	#[serde(default)]
 	pub allow_expired_arkoor: bool,
+	/// Bound the duration of new Lightning obligations; settlement can take longer.
+	#[serde(default = "default_max_htlc_expiry_delta")]
+	pub max_htlc_expiry_delta: BlockDelta,
+	/// Confirmations each receive grant's timeout spend needs before refunding its sender.
+	/// Must exceed the supported three-block reorg depth.
+	#[serde(default = "default_expiry_internal_refund_depth")]
+	pub expiry_internal_refund_depth: u32,
+	/// Children derived in one resumable owner-search chunk.
+	#[serde(default = "default_expiry_owner_scan_chunk_size")]
+	pub expiry_owner_scan_chunk_size: u32,
+	/// Maximum simultaneous owner-search derivation workers.
+	#[serde(default = "default_expiry_owner_scan_workers")]
+	pub expiry_owner_scan_workers: usize,
 
 	#[serde(with = "utils::serde::duration")]
 	pub round_interval: Duration,
@@ -469,6 +482,11 @@ pub struct Config {
 	pub round_legacy_hashlock_clauses: bool,
 }
 
+fn default_max_htlc_expiry_delta() -> BlockDelta { BlockDelta::new(288) }
+fn default_expiry_internal_refund_depth() -> u32 { 6 }
+fn default_expiry_owner_scan_chunk_size() -> u32 { 10_000 }
+fn default_expiry_owner_scan_workers() -> usize { 2 }
+
 impl Config {
 	fn load_with_custom_env(
 		config_file: impl AsRef<Path>,
@@ -546,6 +564,16 @@ impl Config {
 	pub fn validate(&self) -> anyhow::Result<()> {
 		self.bitcoind.validate()?;
 		self.fees.validate()?;
+
+		if self.expiry_internal_refund_depth <= 3 {
+			bail!("expiry_internal_refund_depth must be greater than 3");
+		}
+		if self.expiry_owner_scan_chunk_size == 0 || self.expiry_owner_scan_workers == 0 {
+			bail!("expiry owner scan chunk size and worker count must be positive");
+		}
+		if self.max_htlc_expiry_delta < self.htlc_send_expiry_delta {
+			bail!("max_htlc_expiry_delta must cover htlc_send_expiry_delta");
+		}
 
 		if self.offboard_check_interval > self.offboard_session_timeout {
 			bail!("Invalid configuration: offboard_check_interval ({:?}) may not \
@@ -741,6 +769,43 @@ mod test {
 		cfg.bitcoind.cookie = Some(".cookie".into());
 
 		cfg.validate().expect("error validating default config");
+	}
+
+	#[test]
+	fn internal_refund_depth_defaults_to_six_and_exceeds_the_reorg_bound() {
+		let mut cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
+		cfg.bitcoind.cookie = Some(".cookie".into());
+		let mut fields = serde_json::to_value(&cfg).unwrap();
+		fields.as_object_mut().unwrap().remove("expiry_internal_refund_depth");
+		let mut cfg: Config = serde_json::from_value(fields).unwrap();
+		assert_eq!(cfg.expiry_internal_refund_depth, 6);
+		cfg.validate().unwrap();
+		for depth in 0..=3 {
+			cfg.expiry_internal_refund_depth = depth;
+			assert!(cfg.validate().unwrap_err().to_string().contains("expiry_internal_refund_depth"));
+		}
+		for depth in [4, 6, 12] {
+			cfg.expiry_internal_refund_depth = depth;
+			cfg.validate().unwrap();
+		}
+	}
+
+	#[test]
+	fn expiry_owner_scan_defaults_are_bounded_and_zero_is_rejected() {
+		let mut cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
+		cfg.bitcoind.cookie = Some(".cookie".into());
+		let mut fields = serde_json::to_value(&cfg).unwrap();
+		fields.as_object_mut().unwrap().remove("expiry_owner_scan_chunk_size");
+		fields.as_object_mut().unwrap().remove("expiry_owner_scan_workers");
+		let mut cfg: Config = serde_json::from_value(fields).unwrap();
+		assert_eq!(cfg.expiry_owner_scan_chunk_size, 10_000);
+		assert_eq!(cfg.expiry_owner_scan_workers, 2);
+		cfg.validate().unwrap();
+		cfg.expiry_owner_scan_chunk_size = 0;
+		assert!(cfg.validate().unwrap_err().to_string().contains("expiry owner scan"));
+		cfg.expiry_owner_scan_chunk_size = 10_000;
+		cfg.expiry_owner_scan_workers = 0;
+		assert!(cfg.validate().unwrap_err().to_string().contains("expiry owner scan"));
 	}
 
 	#[test]

@@ -9,8 +9,13 @@
 mod config;
 mod daemon;
 mod frontier;
+pub(crate) mod fee_sponsor;
 mod policy;
+mod payout;
+mod recovery;
 mod signer;
+mod user_claim;
+pub(crate) mod settlement;
 
 pub use self::config::Config;
 pub use self::daemon::Daemon;
@@ -48,6 +53,7 @@ use tracing::{info, trace, warn};
 
 use ark::{ServerVtxo, ServerVtxoPolicy, VtxoId};
 use ark::vtxo::policy::signing::VtxoSigner;
+use ark::vtxo::policy::clause::VtxoClause;
 use bitcoin_ext::{fee, BlockHeight, BlockRef, TxStatus, P2TR_DUST};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
 use bitcoin_ext::cpfp::MakeCpfpFees;
@@ -212,8 +218,22 @@ impl Watchman {
 
 		let mut reaction_timer = tokio::time::interval(self.config.reaction_interval);
 		let mut sweep_timer = tokio::time::interval(self.config.sweep_interval);
+		// A sweep's first tick can precede the second daemon's sync ack.
+		// Readiness also needs a fresh rebuilt token after later blocks or
+		// ledger commits, independently of the configured financial sweep.
+		let mut rebuild_timer = tokio::time::interval(std::time::Duration::from_secs(1));
 		loop {
 			tokio::select! {
+				_ = rebuild_timer.tick() => {
+					// Reuse the completed-token/ledger fast path. This performs
+					// reconstruction only: no claim, replay or payout publication.
+					if let Err(error) = self.rebuild_expiry_state().await {
+						warn!("Error rebuilding expiry readiness: {error:#}");
+					}
+					// The same loop serializes this with sweeps; reset coalesces
+					// slow work instead of accumulating missed timer bursts.
+					rebuild_timer.reset();
+				},
 				_ = reaction_timer.tick() => {
 					self.process_reactions_logged().await;
 					reaction_timer.reset();
@@ -362,6 +382,7 @@ impl Watchman {
 	/// This is the time-critical half of the watchman's work and runs on the
 	/// short [Config::reaction_interval].
 	pub async fn process_reactions(&self) -> anyhow::Result<()> {
+		self.rebroadcast_user_exit_claims().await?;
 		let work = self.scan_frontier().await;
 
 		let vtxos = work.claims.iter().chain(work.progress.iter().map(|(_, v)| v));
@@ -384,16 +405,48 @@ impl Watchman {
 	/// Sweeps have no deadline, so this runs on the much longer
 	/// [Config::sweep_interval].
 	pub async fn process_sweeps(&self) -> anyhow::Result<()> {
-		let work = self.scan_frontier().await;
-
-		for vtxo in &work.sweeps {
-			self.update_mempool_spend(vtxo.id()).await;
+		// Expired customer backing never reaches upstream's drain-only claim
+		// builder. Only committed financial groups can authorize these spends.
+		let Some(view) = self.rebuild_expiry_state().await? else { return Ok(()); };
+		self.process_expiry_payouts(view).await?;
+		let splits = self.db.read(async |t| t.pending_expiry_splits().await).await?;
+		for (txid, root) in splits {
+			self.verify_expiry_view(view).await?;
+			let ids = [root.id()];
+			// Match the fee-payout path's wallet -> view -> coin lock order.
+			// A reorg invalidation waiting on the view cannot invert it.
+			let mut wallet = self.watchman_wallet.lock().await;
+			if !wallet.has_trusted_balance(self.config.min_cpfp_amount) {
+				warn!(vtxo_id = %root.id(), "Expiry splitting needs confirmed usable watchman funds");
+				continue;
+			}
+			let mut fee_rate = self.fee_estimator.regular();
+			self.update_mempool_spend(root.id()).await;
+			if let Some(spend) = self.get_mempool_spend(root.id()) {
+				if spend.fee_rate >= fee_rate { continue; }
+				fee_rate = fee_rate.max(saturating_add_feerates(
+					spend.fee_rate, self.config.incremental_relay_fee
+				));
+			}
+			if let Err(error) = self.db.write(async |t| {
+				// A request may outlive a later refresh, offboard or key drop.
+				// Reprove preservation and retain its sorted path locks through
+				// publication, rather than trusting the old request's txid alone.
+				if !t.request_expiry_split(view, &root).await? { return Ok(()); }
+				let current = t.query_one("
+					SELECT progress_txid FROM expiry_split_request
+					WHERE vtxo_id=$1
+				", &[&root.id().to_string()]).await?;
+				ensure!(
+					current.get::<_, &str>("progress_txid") == txid.to_string(),
+					"expiry split instruction changed"
+				);
+				t.lock_unallocated_watchman_inputs(&ids).await?;
+				self.process_progress_tx(&mut wallet, txid, &root, fee_rate).await
+			}).await {
+				warn!(vtxo_id = %ids[0], %error, "Expiry split remains pending");
+			}
 		}
-
-		if !work.sweeps.is_empty() {
-			self.process_claims(work.sweeps).await?;
-		}
-
 		Ok(())
 	}
 
@@ -536,7 +589,12 @@ impl Watchman {
 	) -> anyhow::Result<()> {
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
 		let txid = tx.compute_txid();
-		bcd::broadcast_tx(&self.bitcoind, &tx).await?;
+		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
+		self.db.write(async |t| {
+			t.lock_unallocated_watchman_inputs(&ids).await?;
+			bcd::broadcast_tx(&self.bitcoind, &tx).await?;
+			Ok(())
+		}).await?;
 
 		let total_output_value = tx.output.iter().map(|o| o.value).sum::<Amount>();
 		let total_input_value = vtxos.iter().map(|v| v.amount()).sum::<Amount>();
@@ -558,11 +616,9 @@ impl Watchman {
 		Ok(())
 	}
 
-	async fn build_claim_tx(
-		&self,
-		vtxos: &[ServerVtxo],
-		fee_rate: FeeRate,
-	) -> anyhow::Result<Transaction> {
+	async fn claim_inputs(
+		&self, vtxos: &[ServerVtxo],
+	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount, usize)> {
 		let mut inputs = Vec::with_capacity(vtxos.len());
 		let mut clauses = Vec::with_capacity(vtxos.len());
 		let mut total_input_weight = 0;
@@ -580,7 +636,7 @@ impl Watchman {
 
 				// TxIn base weight (non-witness) + witness weight
 				total_input_weight += 4 * input.base_size() + (1 + 1 + 64); // nb items + sig
-				total_input_amount += vtxo.amount();
+				total_input_amount = total_input_amount.checked_add(vtxo.amount()).context("claim input amount overflow")?;
 
 				inputs.push(input);
 				clauses.push(None);
@@ -598,7 +654,7 @@ impl Watchman {
 
 				// TxIn base weight (non-witness) + witness weight
 				total_input_weight += 4 * input.base_size() + clause.witness_size(vtxo);
-				total_input_amount += vtxo.amount();
+				total_input_amount = total_input_amount.checked_add(vtxo.amount()).context("claim input amount overflow")?;
 
 				inputs.push(input);
 				clauses.push(Some(clause));
@@ -608,6 +664,16 @@ impl Watchman {
 				value: vtxo.amount(),
 			);
 		}
+
+		Ok((inputs, clauses, total_input_amount, total_input_weight))
+	}
+
+	async fn build_claim_tx(
+		&self,
+		vtxos: &[ServerVtxo],
+		fee_rate: FeeRate,
+	) -> anyhow::Result<Transaction> {
+		let (inputs, clauses, total_input_amount, total_input_weight) = self.claim_inputs(vtxos).await?;
 
 		let lock_time = self.sync_height().height.to_locktime()
 			.expect("valid block height");
@@ -639,19 +705,24 @@ impl Watchman {
 			value: output_amount,
 		};
 
-		let mut tx = Transaction {
+		let tx = Transaction {
 			version: bitcoin::transaction::Version::TWO,
 			lock_time,
 			input: inputs,
 			output: vec![output],
 		};
 
+		self.sign_claim_inputs(vtxos, &clauses, tx).await
+	}
+	async fn sign_claim_inputs(
+		&self, vtxos: &[ServerVtxo], clauses: &[Option<VtxoClause>], mut tx: Transaction,
+	) -> anyhow::Result<Transaction> {
 		// Sign all inputs
 		let prevouts = vtxos.iter().map(|vtxo| vtxo.txout()).collect::<Vec<_>>();
 		let prevouts = sighash::Prevouts::All(&prevouts);
 
 		let mut sighash_cache = sighash::SighashCache::new(&mut tx);
-		for (input_idx, (vtxo, clause)) in vtxos.iter().zip(&clauses).enumerate() {
+		for (input_idx, (vtxo, clause)) in vtxos.iter().zip(clauses).enumerate() {
 			if let Some(clause) = clause {
 				let witness = self.signer.sign_input_with_clause(
 					vtxo, clause, input_idx, &mut sighash_cache, &prevouts,
@@ -722,9 +793,12 @@ impl Watchman {
 				break;
 			}
 
-			if let Err(e) = self.process_progress_tx(
-				&mut wallet, progress_txid, &vtxo, fee_rate,
-			).await {
+			if let Err(e) = self.db.write(async |t| {
+				// Normal exit progression competes with payouts for the same
+				// physical backing too. Hold its coin locks through publication.
+				t.lock_unallocated_watchman_inputs(&[vtxo.id()]).await?;
+				self.process_progress_tx(&mut wallet, progress_txid, &vtxo, fee_rate).await
+			}).await {
 				slog!(ProgressCpfpFailure, vtxo_id: vtxo.id(), txid: progress_txid,
 					error: e.to_string(),
 				);

@@ -5,8 +5,8 @@
 //!
 //! The wallet owns a VTXO when it can derive the VTXO's user pubkey from its
 //! seed. That keypair also authorizes the query that asks the server whether
-//! the VTXO is spent. A spent VTXO is stored as spent rather than refused,
-//! since it is part of the wallet's history.
+//! the VTXO is spent. A Spent answer is followed by authenticated fallback
+//! history; pending payouts retain their signed material in quarantine.
 
 use anyhow::Context;
 use bitcoin::secp256k1::Keypair;
@@ -131,11 +131,17 @@ impl Wallet {
 			return Ok(ids);
 		}
 
-		let rows = to_store.iter().map(|(v, s)| (*v, s)).collect::<Vec<_>>();
+		let quarantine = VtxoState::Locked { holder: None };
+		let rows = to_store.iter().map(|(v, s)| (*v, if *s == VtxoState::Spent { &quarantine } else { s })).collect::<Vec<_>>();
 		self.inner.db.store_vtxos(&rows).await
 			.context("failed to store imported VTXOs")?;
 
-		for (vtxo, state) in &to_store {
+		let spent = to_store.iter().filter(|(_, state)| *state == VtxoState::Spent)
+			.map(|(coin, _)| *coin).collect::<Vec<_>>();
+		self.adopt_reported_spent(&spent).await?;
+
+		for (vtxo, _) in &to_store {
+			let state = self.inner.db.get_wallet_vtxo(vtxo.id()).await?.context("imported coin disappeared")?.state;
 			info!("Successfully imported VTXO {} as {}", vtxo.id(), state.kind());
 			ids.push(vtxo.id());
 		}

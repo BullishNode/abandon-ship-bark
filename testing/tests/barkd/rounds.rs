@@ -1,14 +1,18 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use ark::VtxoId;
+use ark::{ProtocolEncoding, Vtxo, VtxoId};
+use ark::vtxo::Full;
+use bitcoin::Amount;
+use bitcoin_ext::rpc::BitcoinRpcExt;
 use bark_json::movements::MovementStatus;
+use bark_json::primitives::VtxoStateInfo;
 use server_log::RoundFinished;
 use server_rpc::protos;
 use bitcoin_ext::BlockDelta;
 
 use ark_testing::{btc, require_bark_version, sat, Captaind, TestContext};
-use ark_testing::constants::BOARD_CONFIRMATIONS;
+use ark_testing::constants::{BOARD_CONFIRMATIONS, ROUND_CONFIRMATIONS};
 use ark_testing::daemon::captaind::{self, ArkClient};
 use ark_testing::util::FutureExt;
 
@@ -55,6 +59,7 @@ impl captaind::proxy::ArkRpcProxy for RejectVtxoProxy {
 async fn setup_barkd_with_rejected_vtxo(
 	ctx: &TestContext,
 	srv: &Captaind,
+	refresh_threshold: Option<BlockDelta>,
 ) -> (
 	ark_testing::daemon::barkd::Barkd,
 	captaind::proxy::ArkRpcProxyServer,
@@ -67,7 +72,10 @@ async fn setup_barkd_with_rejected_vtxo(
 
 	let barkd = ctx.barkd("barkd", srv)
 		.funded(sat(1_000_000))
-		.cfg(move |c| c.server_address = proxy_url)
+		.cfg(move |c| {
+			c.server_address = proxy_url;
+			if let Some(threshold) = refresh_threshold { c.vtxo_refresh_expiry_threshold = threshold; }
+		})
 		.create().await;
 
 	wait_for_onchain_balance(&barkd, sat(1_000_000)).await;
@@ -90,6 +98,78 @@ async fn setup_barkd_with_rejected_vtxo(
 	(barkd, proxy, bad_id, good_id)
 }
 
+/// Derive the common early-refresh window from the actual signed boards and
+/// current chain. Keep normal protection enabled and leave room to confirm
+/// the cooperative replacement before any original coin's exit deadline.
+async fn age_boards_for_maintenance(
+	ctx: &TestContext,
+	barkd: &ark_testing::daemon::barkd::Barkd,
+	ids: &[VtxoId],
+) -> u32 {
+	let config: bark::Config = toml::from_str(&tokio::fs::read_to_string(
+		barkd.datadir().join("config.toml"),
+	).await.unwrap()).unwrap();
+	let tip = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
+	let chain = ctx.bitcoind().sync_client();
+	let mut ordinary_due = tip;
+	let mut protection_refresh_by = u32::MAX;
+	let mut act_by = u32::MAX;
+	for id in ids {
+		let coin = Vtxo::<Full>::deserialize_hex(
+			&barkd.get_vtxo_encoded(&id.to_string()).await.encoded.0,
+		).unwrap();
+		assert_eq!(coin.id(), *id);
+		assert!(coin.policy().as_pubkey().is_some());
+		let funding = ctx.bitcoind().await_transaction(coin.chain_anchor().txid).await;
+		coin.validate(&funding).unwrap();
+		let mut path_blocks = 0u32;
+		for step in coin.transactions() {
+			let info = chain.custom_get_raw_transaction_info(step.tx.compute_txid(), None).unwrap();
+			if info.is_some_and(|i| i.confirmations.unwrap_or(0) > 0) { continue; }
+			let wait = step.tx.input.iter().filter(|i| i.sequence.is_relative_lock_time())
+				.map(|i| { assert_eq!(i.sequence.0 & (1 << 22), 0); i.sequence.0 & 0xffff })
+				.max().unwrap_or(1).max(1);
+			path_blocks += wait;
+		}
+		let leaf = chain.custom_get_raw_transaction_info(coin.point().txid, None).unwrap();
+		assert!(!leaf.is_some_and(|i| i.confirmations.unwrap_or(0) > 0), "the boarded leaf must not already be exited");
+		let csv = coin.exit_delta().to_u32();
+		let margin = config.vtxo_exit_margin.to_u32();
+		let deadline = coin.expiry_height().to_u32().checked_sub(path_blocks + csv + 1 + margin).unwrap();
+		ordinary_due = ordinary_due.max(coin.expiry_height().to_u32()
+			.saturating_sub(config.vtxo_refresh_expiry_threshold.to_u32()) + 1);
+		protection_refresh_by = protection_refresh_by.min(deadline.checked_sub(margin).unwrap());
+		act_by = act_by.min(deadline);
+	}
+	assert!(ordinary_due + ROUND_CONFIRMATIONS < protection_refresh_by,
+		"ordinary maintenance must confirm before early protection schedules an explicit refresh");
+	assert!(protection_refresh_by < act_by);
+	ctx.generate_blocks(ordinary_due - tip).await;
+	wait_for_tip(barkd, u64::from(ordinary_due)).await;
+	assert!(u32::try_from(ctx.bitcoind().get_block_count().await).unwrap() < protection_refresh_by);
+	protection_refresh_by
+}
+
+/// The server has finished the round; confirm it without mining repeatedly
+/// while the daemon catches up and consuming the originals' protection window.
+async fn confirm_maintenance_round(
+	ctx: &TestContext,
+	barkd: &ark_testing::daemon::barkd::Barkd,
+	protection_refresh_by: u32,
+	funding_txid: bitcoin::Txid,
+) {
+	ctx.await_transaction(funding_txid).await;
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	let tip = ctx.bitcoind().get_block_count().await;
+	assert!(tip < u64::from(protection_refresh_by));
+	wait_for_tip(barkd, tip).await;
+	async {
+		while !barkd.pending_rounds().await.is_empty() {
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}.wait(Duration::from_secs(60)).await;
+}
+
 /// Verify that the daemon's round-event loop automatically schedules a
 /// maintenance refresh for VTXOs approaching expiry. Triggers a round on
 /// the server and expects barkd to join it on its own (no REST refresh
@@ -103,9 +183,11 @@ async fn maintenance_refresh_auto_barkd() {
 	// Short vtxo lifetime so the test doesn't have to mine 432 blocks
 	// to age vtxos into the maintenance refresh window.
 	let srv = ctx.captaind("server").funded(btc(1))
-		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(32))
+		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(96))
 		.create().await;
-	let barkd = ctx.barkd("barkd1", &srv).funded(sat(100_000)).create().await;
+	let barkd = ctx.barkd("barkd1", &srv).funded(sat(100_000))
+		.cfg(|c| c.vtxo_refresh_expiry_threshold = BlockDelta::new(64))
+		.create().await;
 
 	wait_for_onchain_balance(&barkd, sat(100_000)).await;
 	barkd.board_all().await;
@@ -116,13 +198,8 @@ async fn maintenance_refresh_auto_barkd() {
 	assert_eq!(vtxos_before.len(), 1, "should have one vtxo after boarding");
 	let vtxo_id_before = vtxos_before[0].vtxo.id;
 
-	// Push the vtxo within the refresh expiry threshold so the daemon
-	// considers it due for maintenance.
-	ctx.generate_blocks(srv.config().vtxo_lifetime.to_u32()).await;
-
-	// `generate_blocks` only waits for bitcoind. The daemon joins off its own
-	// cached tip, so let it catch up or it sits the round out.
-	wait_for_tip(&barkd, ctx.bitcoind().get_block_count().await).await;
+	let principal = vtxos_before[0].vtxo.amount;
+	let protection_refresh_by = age_boards_for_maintenance(&ctx, &barkd, &[vtxo_id_before]).await;
 
 	// Subscribe before triggering so we can't miss the log.
 	let mut log_round_finished = srv.subscribe_log::<RoundFinished>();
@@ -137,10 +214,18 @@ async fn maintenance_refresh_auto_barkd() {
 		"round should include at least one input vtxo from the auto refresh",
 	);
 
-	wait_for_rounds_complete(&ctx, &barkd).await;
+	confirm_maintenance_round(&ctx, &barkd, protection_refresh_by, finished.txid).await;
 
 	let vtxos_after = barkd.vtxos(None).await;
 	assert_eq!(vtxos_after.len(), 1, "should still have one vtxo after refresh");
+	assert_eq!(vtxos_after[0].state, VtxoStateInfo::Spendable);
+	assert_eq!(vtxos_after[0].vtxo.amount, principal, "refresh must preserve boarded principal");
+	let refreshes = barkd.history(None, None).await;
+	let refreshed = refreshes.iter().find(|m| m.status == MovementStatus::Successful
+		&& m.subsystem.name == "bark.round" && m.subsystem.kind == "refresh"
+		&& m.input_vtxos == vec![vtxo_id_before]).expect("the original board must complete a refresh");
+	assert_eq!(refreshed.output_vtxos, vec![vtxos_after[0].vtxo.id]);
+	assert_eq!(refreshed.offchain_fee, Amount::ZERO);
 	assert_ne!(
 		vtxos_after[0].vtxo.id, vtxo_id_before,
 		"vtxo id should change after maintenance refresh",
@@ -157,7 +242,7 @@ async fn manual_refresh_does_not_drop_rejected_vtxo_barkd() {
 	let ctx = TestContext::new("barkd/manual_refresh_does_not_drop_rejected_vtxo_barkd").await;
 	let srv = ctx.captaind("server").funded(btc(1)).create().await;
 
-	let (barkd, _proxy, bad_id, good_id) = setup_barkd_with_rejected_vtxo(&ctx, &srv).await;
+	let (barkd, _proxy, bad_id, good_id) = setup_barkd_with_rejected_vtxo(&ctx, &srv, None).await;
 	barkd.refresh_vtxos(vec![bad_id.to_string(), good_id.to_string()]).await;
 	srv.trigger_round().await;
 	wait_for_rounds_complete(&ctx, &barkd).await;
@@ -181,14 +266,13 @@ async fn maintenance_refresh_skips_rejected_vtxo_barkd() {
 	// Short vtxo lifetime so the test doesn't have to mine 432 blocks
 	// to age vtxos into the maintenance refresh window.
 	let srv = ctx.captaind("server").funded(btc(1))
-		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(32))
+		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(96))
 		.create().await;
 
-	let (barkd, _proxy, bad_id, good_id) = setup_barkd_with_rejected_vtxo(&ctx, &srv).await;
+	let (barkd, _proxy, bad_id, good_id) = setup_barkd_with_rejected_vtxo(&ctx, &srv, Some(BlockDelta::new(64))).await;
 
-	// Age both so the daemon's auto-maintenance considers them due for refresh.
-	ctx.generate_blocks(srv.config().vtxo_lifetime.to_u32()).await;
-	wait_for_tip(&barkd, ctx.bitcoind().get_block_count().await).await;
+	let principal = barkd.vtxos(None).await.iter().map(|v| v.vtxo.amount).sum::<Amount>();
+	let protection_refresh_by = age_boards_for_maintenance(&ctx, &barkd, &[bad_id, good_id]).await;
 
 	// A SINGLE round must refresh the healthy vtxo: the daemon submits
 	// [bad, good], the server rejects `bad`, and the daemon re-submits just
@@ -196,23 +280,16 @@ async fn maintenance_refresh_skips_rejected_vtxo_barkd() {
 	// and the in-flight attempt is replayed to the new participation). We trigger
 	// exactly one round, then only mine blocks to confirm its funding tx — we
 	// never trigger a second round, so a pass proves same-round recovery.
+	let mut log_round_finished = srv.subscribe_log::<RoundFinished>();
 	srv.trigger_round().await;
-	let mut refreshed = false;
-	for _ in 0..30 {
-		ctx.generate_blocks(1).await;
-		tokio::time::sleep(Duration::from_secs(1)).await;
-		let ids = barkd.vtxos(None).await.into_iter().map(|v| v.vtxo.id).collect::<Vec<_>>();
-		if !ids.contains(&good_id) {
-			refreshed = true;
-			break;
-		}
-	}
-	// Inputs are marked spent before the outputs and movement are persisted.
-	wait_for_rounds_complete(&ctx, &barkd).await;
+	let finished = log_round_finished.recv().wait(Duration::from_secs(30)).await.unwrap();
+	assert_eq!(finished.nb_input_vtxos, 1, "only the healthy input may complete this round");
+	confirm_maintenance_round(&ctx, &barkd, protection_refresh_by, finished.txid).await;
 
-	let final_ids = barkd.vtxos(None).await.into_iter().map(|v| v.vtxo.id).collect::<Vec<_>>();
-	assert!(refreshed,
-		"healthy vtxo should have been refreshed within a single round; final vtxos: {final_ids:?}");
+	let final_vtxos = barkd.vtxos(None).await;
+	assert!(final_vtxos.iter().all(|v| v.state == VtxoStateInfo::Spendable));
+	assert_eq!(final_vtxos.iter().map(|v| v.vtxo.amount).sum::<Amount>(), principal, "refresh must preserve both boards' principal");
+	let final_ids = final_vtxos.iter().map(|v| v.vtxo.id).collect::<Vec<_>>();
 	assert!(
 		final_ids.contains(&bad_id),
 		"the rejected vtxo should be left untouched (still spendable locally); got {final_ids:?}",
@@ -245,6 +322,10 @@ async fn maintenance_refresh_skips_rejected_vtxo_barkd() {
 		succeeded.input_vtxos,
 	);
 
+	assert_eq!(succeeded.output_vtxos.len(), 1);
+	assert!(final_ids.contains(&succeeded.output_vtxos[0]));
+	assert!(![bad_id, good_id].contains(&succeeded.output_vtxos[0]));
+	assert_eq!(succeeded.offchain_fee, Amount::ZERO);
 	assert_ne!(failed.id, succeeded.id, "the two refreshes should be distinct movements");
 	assert_ne!(
 		failed.input_vtxos, succeeded.input_vtxos,

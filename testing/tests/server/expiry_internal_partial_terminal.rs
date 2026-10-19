@@ -184,7 +184,8 @@ async fn partial_terminal(case: TerminalCase) {
 	let csv = current + 1 - u32::try_from(confirmed.confirmations).unwrap() + clause.block_delta.to_u32();
 	let mature = incoming_deadline.to_u32().max(csv) + 1;
 	if mature > current { ctx.generate_blocks(mature - current).await; }
-	let claim_address = ctx.bitcoind().get_new_address();
+	// The central funding wallet must not reuse this customer receipt for later fee sponsors.
+	let claim_address = actor.get_onchain_address().await;
 	let mut claim = Transaction {
 		version: bitcoin::transaction::Version::TWO, lock_time: clause.locktime(),
 		input: vec![TxIn { previous_output: point, script_sig: Default::default(), sequence: clause.sequence(), witness: Witness::new() }],

@@ -24,7 +24,7 @@ async fn assert_payouts_once(
 	first_height: u64,
 ) {
 	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk,c.disposition, \
-		c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.paying_txid,a.confirmed_height,a.confirmed_hash,a.sweep_tx \
+		c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,a.sweep_txid,a.confirmed_height,a.confirmed_hash,a.sweep_tx \
 		FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 		JOIN vtxo v ON v.vtxo_id=e.vtxo_id JOIN expiry_allocation a ON a.id=c.allocation_id \
 		WHERE v.anchor_point=$1", &[&anchor.to_string()],
@@ -50,7 +50,7 @@ async fn assert_payouts_once(
 		assert_eq!(row.get::<_, i64>("fee_sat"), 1_000);
 		assert_eq!(row.get::<_, i64>("payout_sat"), gross.to_sat() as i64 - 1_000);
 		assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
-		assert_eq!(row.get::<_, Option<String>>("paying_txid"), Some(txid.to_string()));
+		assert_eq!(row.get::<_, Option<String>>("sweep_txid"), Some(txid.to_string()));
 		let block = info.blockhash.unwrap();
 		assert_eq!(row.get::<_, Option<String>>("confirmed_hash"), Some(block.to_string()));
 		assert_eq!(row.get::<_, Option<i64>>("confirmed_height"),
@@ -273,7 +273,7 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 				JOIN expiry_allocation a ON a.id=c.allocation_id \
 				WHERE v.anchor_point=$1 AND a.status='confirmed' \
 				AND a.confirmed_height IS NOT NULL AND a.confirmed_hash IS NOT NULL \
-				AND a.sweep_txid=c.paying_txid", &[&anchor.to_string()],
+				AND a.sweep_txid IS NOT NULL", &[&anchor.to_string()],
 			).await?)).await.unwrap();
 			if paid.len() == expected.len() { break; }
 			wm.trigger_sweep().await;
@@ -547,7 +547,7 @@ async fn watchman_sweeps_vtxo_chain_during_exit() {
 				JOIN expiry_allocation a ON a.id=c.allocation_id \
 				WHERE v.anchor_point=$1 AND a.status='confirmed' \
 				AND a.confirmed_height IS NOT NULL AND a.confirmed_hash IS NOT NULL \
-				AND a.sweep_txid=c.paying_txid", &[&anchor.to_string()],
+				AND a.sweep_txid IS NOT NULL", &[&anchor.to_string()],
 			).await?)).await.unwrap();
 			if paid.len() == expected.len() { break; }
 			wm.trigger_sweep().await;

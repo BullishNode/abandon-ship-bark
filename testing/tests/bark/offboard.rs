@@ -1,6 +1,5 @@
 
 use bitcoin::Amount;
-use bitcoin_ext::P2TR_DUST_SAT;
 
 use bark_json::movements::{MovementDestination, PaymentMethod};
 

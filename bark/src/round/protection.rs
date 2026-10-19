@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use anyhow::Context;
 use ark::{VtxoId, Vtxo, forfeit};
 use ark::vtxo::Full;
-use ark::vtxo::policy::clause::{HashDelaySignClause, TapScriptClause};
+use ark::vtxo::policy::clause::HashDelaySignClause;
 use ark::tree::signed::{UnlockHash, UnlockPreimage};
 use ark::lightning::PaymentHash;
 use bitcoin::{OutPoint, SignedAmount};

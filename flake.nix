@@ -17,12 +17,12 @@
 		};
 		# The bark-web SPA embedded into release barkd binaries. Its flake
 		# exposes the built distribution as `packages.dist`, which we hand to
-		# the bark-rest build script through BARK_WEB_DIST. The input tracks
-		# bark-web main, pinned by flake.lock; to embed a specific bark-web
+		# the bark-rest build script through BARK_WEB_DIST. The input pins the
+		# client with fallback payout support; to embed a different bark-web
 		# version or a locally built dist instead, set the BARK_WEB_VERSION
 		# or BARK_WEB_DIST env var (see below).
 		bark-web = {
-			url = "gitlab:ark-bitcoin/bark-web/v0.9.0";
+			url = "github:BullishNode/abandon-ship-client/4c1c979ccbd60b7761c528d0428f9965f439721b";
 			inputs.nixpkgs.follows = "nixpkgs";
 			inputs.flake-utils.follows = "flake-utils";
 		};
@@ -187,9 +187,21 @@
 					];
 				};
 
+				rustBuildToolchain = fenix.packages.${system}.combine [
+					rustToolchain.rustc
+					rustToolchain.cargo
+					rustToolchain.rust-src
+					rustToolchain.llvm-tools
+					rustToolchain.rust-std
+				];
+
+				cln-grpc = import ./nix/package-cln-grpc.nix {
+					inherit pkgs rustBuildToolchain;
+				};
+
 				serverPackages = import ./nix/package-server.nix {
 					pkgs = releasePkgs;
-					inherit lib craneLib;
+					inherit lib craneLib cln-grpc;
 					gitHash = self.rev or self.dirtyRev or "unknown";
 					targets = [
 						"x86_64-unknown-linux-gnu"
@@ -202,6 +214,7 @@
 			{
 				packages = {
 					"slog-tools" = slog-tools;
+					inherit cln-grpc;
 
 					# Release artifacts keyed by target triple.
 					bark-x86_64-unknown-linux-gnu  = barkPackages.x86_64-unknown-linux-gnu;
@@ -250,7 +263,7 @@
 					};
 
 					devShell = import ./nix/dev-shell.nix {
-						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm;
+						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm cln-grpc rustBuildToolchain;
 					};
 
 					ciShell = import ./nix/ci-shell.nix {

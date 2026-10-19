@@ -10,18 +10,18 @@
         ]
       },
       "locked": {
-        "lastModified": 1789727824,
-        "narHash": "sha256-GjwXhd0taPmPYcC3UQm89PrdMXRyaDmnI+jsuug9M9Q=",
-        "owner": "ark-bitcoin",
-        "repo": "bark-web",
-        "rev": "dad02198df52fe1f6c8d0d4cfde74d42927dbfe2",
-        "type": "gitlab"
+        "lastModified": 1792264731,
+        "narHash": "sha256-reR89t5xYfswJMsiD+ACU7dm3FWtq9rxt4gs2iC8kP4=",
+        "owner": "BullishNode",
+        "repo": "abandon-ship-client",
+        "rev": "4c1c979ccbd60b7761c528d0428f9965f439721b",
+        "type": "github"
       },
       "original": {
-        "owner": "ark-bitcoin",
-        "ref": "v0.9.0",
-        "repo": "bark-web",
-        "type": "gitlab"
+        "owner": "BullishNode",
+        "repo": "abandon-ship-client",
+        "rev": "4c1c979ccbd60b7761c528d0428f9965f439721b",
+        "type": "github"
       }
     },
     "crane": {

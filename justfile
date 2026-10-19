@@ -162,6 +162,13 @@ test-integration TEST="": ensure-build-bins docker-pull
 		-E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' {{TEST}}
 alias int := test-integration
 
+# Run prebuilt integration executables without rebuilding.
+test-integration-binaries BINARIES_METADATA TEST="": docker-pull
+	cargo nextest run --no-fail-fast --profile {{NEXTEST_PROFILE}} \
+		--binaries-metadata "{{BINARIES_METADATA}}" \
+		-E 'not binary(tor) and not binary(server-migrations) and not binary(upgrade)' {{TEST}}
+alias int-binaries := test-integration-binaries
+
 # Run the server upgrade/migration tests. Requires OLD_CAPTAIND_EXEC to
 # point at a previous captaind release binary, e.g.:
 #   OLD_CAPTAIND_EXEC=/opt/second/captaind-0.7.0 just int-server-migrations

@@ -13,7 +13,7 @@ use log::{error, info};
 use ark::arkoor::ArkoorDestination;
 use ark::vtxo::{Full, VtxoId, Vtxo};
 
-use crate::Wallet;
+use crate::{FallbackRefusal, Wallet};
 use crate::actions::{
 	Advance, AdvanceError, IntoAdvanceResult, RetryUnlessRejected, WalletAction, WalletActionId,
 };
@@ -243,12 +243,28 @@ pub(crate) async fn start_arkoor_send(
 	wallet.inner.db.store_vtxo_key(change_key_index, change_keypair.public_key()).await
 		.context("failed to store arkoor change keypair")?;
 
-	// The server refuses expired vtxos as arkoor inputs; they have to wait
-	// for a refresh.
+	// Refresh expired inputs before an arkoor payment. If expiry alone
+	// prevents selection, a real payout receipt can explain why the old
+	// balance is unavailable instead of reporting generic missing funds.
 	let tip = wallet.inner.chain.tip().await?;
-	let inputs = wallet.spend_input_selection().await?
-		.expires_after(tip)
-		.select(wallet.spendable_vtxos().await?, amount)?;
+	let selection = wallet.spend_input_selection().await?;
+	let candidates = wallet.spendable_vtxos().await?;
+	let inputs = match selection.clone().expires_after(tip).select(candidates.clone(), amount) {
+		Ok(inputs) => inputs,
+		Err(error) => {
+			if let Ok(otherwise_selected) = selection.select(candidates, amount) {
+				let expired = otherwise_selected.iter().filter(|coin| coin.expiry_height() <= tip)
+					.map(|coin| coin.id()).collect::<std::collections::HashSet<_>>();
+				if !expired.is_empty() && wallet.sync_fallback_payouts().await.is_ok() {
+					let snapshot = wallet.inner.db.get_fallback_snapshot().await?;
+					if snapshot.entitlements.values().any(|entitlement| expired.contains(&entitlement.vtxo_id)) {
+						return Err(error.context(FallbackRefusal::DecidedForFallback));
+					}
+				}
+			}
+			return Err(error);
+		},
+	};
 	let input_vtxo_ids = inputs.iter().map(|v| v.id()).collect::<Vec<_>>();
 
 	let total_input = inputs.iter().map(|v| v.amount()).sum::<Amount>();

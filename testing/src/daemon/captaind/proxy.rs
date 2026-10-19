@@ -28,6 +28,14 @@ pub trait ArkRpcProxy: Send + Sync + Clone + 'static {
 		Ok(upstream.get_ark_info(req).await?.into_inner())
 	}
 
+	async fn set_fallback(&self, upstream: &mut ArkClient, req: protos::SetFallbackRequest) -> Result<protos::SetFallbackResponse, tonic::Status> {
+		Ok(upstream.set_fallback(req).await?.into_inner())
+	}
+
+	async fn get_fallback_payouts(&self, upstream: &mut ArkClient, req: protos::GetFallbackPayoutsRequest) -> Result<protos::GetFallbackPayoutsResponse, tonic::Status> {
+		Ok(upstream.get_fallback_payouts(req).await?.into_inner())
+	}
+
 	async fn get_offboard_fee_rate(&self, upstream: &mut ArkClient, req: protos::Empty) -> Result<protos::OffboardFeeRateResponse, tonic::Status> {
 		Ok(upstream.get_offboard_fee_rate(req).await?.into_inner())
 	}
@@ -38,6 +46,10 @@ pub trait ArkRpcProxy: Send + Sync + Clone + 'static {
 
 	async fn get_vtxo_status(&self, upstream: &mut ArkClient, req: protos::GetVtxoStatusRequest) -> Result<protos::GetVtxoStatusResponse, tonic::Status> {
 		Ok(upstream.get_vtxo_status(req).await?.into_inner())
+	}
+
+	async fn get_vtxo_spend_proof(&self, upstream: &mut ArkClient, req: protos::GetVtxoStatusRequest) -> Result<protos::GetVtxoSpendProofResponse, tonic::Status> {
+		Ok(upstream.get_vtxo_spend_proof(req).await?.into_inner())
 	}
 
 	async fn get_vtxos_by_ids(&self, upstream: &mut ArkClient, req: protos::GetVtxosByIdsRequest) -> Result<protos::GetVtxosByIdsResponse, tonic::Status> {
@@ -303,6 +315,20 @@ impl<T: ArkRpcProxy> rpc::server::ArkService for ArkRpcProxyWrapper<T> {
 		Ok(tonic::Response::new(ArkRpcProxy::get_ark_info(&self.proxy, &mut self.upstream_client(), req.into_inner()).await?))
 	}
 
+	async fn set_fallback(
+		&self, req: tonic::Request<protos::SetFallbackRequest>,
+	) -> Result<tonic::Response<protos::SetFallbackResponse>, tonic::Status> {
+		self.proxy.on_request(req.metadata()).await?;
+		Ok(tonic::Response::new(ArkRpcProxy::set_fallback(&self.proxy, &mut self.upstream_client(), req.into_inner()).await?))
+	}
+
+	async fn get_fallback_payouts(
+		&self, req: tonic::Request<protos::GetFallbackPayoutsRequest>,
+	) -> Result<tonic::Response<protos::GetFallbackPayoutsResponse>, tonic::Status> {
+		self.proxy.on_request(req.metadata()).await?;
+		Ok(tonic::Response::new(ArkRpcProxy::get_fallback_payouts(&self.proxy, &mut self.upstream_client(), req.into_inner()).await?))
+	}
+
 	async fn get_offboard_fee_rate(
 		&self, req: tonic::Request<protos::Empty>,
 	) -> Result<tonic::Response<protos::OffboardFeeRateResponse>, tonic::Status> {
@@ -329,6 +355,13 @@ impl<T: ArkRpcProxy> rpc::server::ArkService for ArkRpcProxyWrapper<T> {
 	) -> Result<tonic::Response<protos::GetVtxoStatusResponse>, tonic::Status> {
 		self.proxy.on_request(req.metadata()).await?;
 		Ok(tonic::Response::new(ArkRpcProxy::get_vtxo_status(&self.proxy, &mut self.upstream_client(), req.into_inner()).await?))
+	}
+
+	async fn get_vtxo_spend_proof(
+		&self, req: tonic::Request<protos::GetVtxoStatusRequest>,
+	) -> Result<tonic::Response<protos::GetVtxoSpendProofResponse>, tonic::Status> {
+		self.proxy.on_request(req.metadata()).await?;
+		Ok(tonic::Response::new(ArkRpcProxy::get_vtxo_spend_proof(&self.proxy, &mut self.upstream_client(), req.into_inner()).await?))
 	}
 
 	async fn get_vtxos_by_ids(

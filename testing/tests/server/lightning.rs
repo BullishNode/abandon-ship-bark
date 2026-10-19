@@ -601,7 +601,8 @@ impl ParkedReceive {
 	async fn setup(ctx: &TestContext) -> ParkedReceive {
 		let lightning = ctx.new_lightning_setup("lightningd").await;
 
-		// The watchman tells the server the HTLC-recv vtxos expired unexited.
+		// An unexposed grant remains a commitment until its funded timeout
+		// closure, even after both daemons observe its HTLC expiry.
 		let srv = ctx.captaind("server").lightningd(&lightning.internal).watchmand().cfg(|cfg| {
 			cfg.invoice_check_interval = Duration::from_secs(1);
 		}).create().await;
@@ -658,25 +659,28 @@ impl ParkedReceive {
 		try_request_htlc_revocation(&self.srv, &self.payer, self.payment_hash).await
 	}
 
-	/// Try a revoke at every height until one is cosigned, which must happen
-	/// the block after the HTLC-recv vtxos expired.
-	async fn revoke_every_block_until_cosigned(&self, ctx: &TestContext) {
+	/// Expiry does not prove that the server recovered an issued grant.
+	/// Refuse at every height through expiry+1 while the grants remain open.
+	async fn assert_revoke_refused_past_expiry(&self, ctx: &TestContext) {
 		let mut tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 		loop {
 			self.srv.wait_for_sync_height(tip).await;
 			self.srv.watchmand().wait_for_sync_height(tip).await;
-			match self.revoke().await {
-				Ok(()) => {
-					assert_eq!(tip, self.htlc_recv_expiry + BlockDelta::new(1),
-						"the first revoke should be cosigned right after the HTLC-recv vtxos expired");
-					return;
-				},
-				Err(status) => {
-					assert!(tip <= self.htlc_recv_expiry,
-						"revoke refused after the HTLC-recv vtxos expired: {status:?}");
-					assert!(status.message().contains("already committed"),
-						"unexpected refusal: {status:?}");
-				},
+			let status = self.revoke().await.expect_err("expiry alone must not authorize a signed refund");
+			assert!(status.message().contains("already committed"), "unexpected refusal: {status:?}");
+			if tip > self.htlc_recv_expiry {
+				let db = Db::connect(&self.srv.config().postgres.clone()).await.unwrap();
+				let open = db.read(async |t| { Ok(t.query_one("SELECT COUNT(*) AS grants, \
+					BOOL_AND(h.offchain_resolution IS NULL AND h.chain_resolution IS NULL \
+					AND NOT EXISTS(SELECT 1 FROM expiry_allocation a \
+					JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+					JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+					WHERE e.vtxo_id=v.vtxo_id AND c.disposition='operator' AND a.status='confirmed')) AS open \
+					FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id \
+					WHERE h.payment_hash=$1 AND h.direction='outgoing'", &[&self.payment_hash.to_string()]).await?) }).await.unwrap();
+				assert!(open.get::<_, i64>("grants") > 0);
+				assert!(open.get::<_, bool>("open"), "this regression must retain actual unreclaimed grants");
+				return;
 			}
 			ctx.generate_blocks_unsynced(1).await;
 			tip = tip + BlockDelta::new(1);
@@ -684,35 +688,34 @@ impl ParkedReceive {
 	}
 
 	/// Release the parked claim, which must be refused, leaving the payee
-	/// unpaid.
+	/// unpaid. The grants expired, but have not authorized any signed refund.
 	async fn assert_claim_refused(self) {
 		self.release.notify_one();
 		self.payee_task.wait_millis(120_000).await
 			.expect("payee claim task panicked")
-			.expect_err("claim should be refused after the revoke");
+			.expect_err("claim should be refused after grant expiry");
 		assert_eq!(self.payee.spendable_balance().await, Amount::ZERO);
 	}
 }
 
 /// The payer of an intra-ark payment tries to revoke at every block height
 /// while the payee holds granted HTLC-recv vtxos and withholds the preimage.
-/// Every revoke must be refused while the payee can still claim them, and the
-/// first one the server cosigns must come right after they expired. The
-/// parked claim is then refused.
+/// Every revoke must be refused, including after HTLC expiry while the issued
+/// grants have not actually been recovered. The parked claim is then refused.
 #[tokio::test]
 async fn intra_ark_revoke_refused_until_htlc_recvs_expire() {
 	require_bark_version!(> "0.5.0");
 
 	let ctx = TestContext::new("server/intra_ark_revoke_refused_until_htlc_recvs_expire").await;
 	let parked = ParkedReceive::setup(&ctx).await;
-	parked.revoke_every_block_until_cosigned(&ctx).await;
+	parked.assert_revoke_refused_past_expiry(&ctx).await;
 	parked.assert_claim_refused().await;
 }
 
 /// Like [intra_ark_revoke_refused_until_htlc_recvs_expire], but with the
 /// receive already canceled. Canceling only refuses the cooperative claim:
 /// the payee can still claim live HTLC-recv vtxos on-chain, so the canceled
-/// receive must stay committed until they expired.
+/// receive must stay committed until the issued grants are actually recovered.
 #[tokio::test]
 async fn intra_ark_revoke_refused_on_canceled_receive_until_htlc_recvs_expire() {
 	require_bark_version!(> "0.5.0");
@@ -729,14 +732,15 @@ async fn intra_ark_revoke_refused_on_canceled_receive_until_htlc_recvs_expire() 
 		Ok(())
 	}).await.unwrap();
 
-	parked.revoke_every_block_until_cosigned(&ctx).await;
+	parked.assert_revoke_refused_past_expiry(&ctx).await;
 	parked.assert_claim_refused().await;
 }
 
 /// Exits, resolutions and on-chain preimages are only recorded by the
 /// watchman. While it is behind, the server cannot tell whether the payee
 /// exited an HTLC-recv vtxo, so the revoke must be refused past their expiry
-/// until the watchman caught up.
+/// until the watchman caught up. Catching up to expiry alone is still
+/// insufficient: the issued grants must be recovered at the configured depth.
 #[tokio::test]
 async fn intra_ark_revoke_refused_while_watchman_is_behind() {
 	require_bark_version!(> "0.5.0");
@@ -755,7 +759,7 @@ async fn intra_ark_revoke_refused_while_watchman_is_behind() {
 
 	parked.srv.watchmand().start().await.unwrap();
 	parked.srv.watchmand().wait_for_sync_height(tip).await;
-	parked.revoke().await.expect("revoke should be cosigned once the watchman caught up");
+	parked.assert_revoke_refused_past_expiry(&ctx).await;
 	parked.assert_claim_refused().await;
 }
 

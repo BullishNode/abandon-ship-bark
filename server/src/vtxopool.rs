@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::Context;
 use bdk_wallet::coin_selection::SingleRandomDraw;
 use bitcoin::secp256k1::{rand, Keypair};
-use bitcoin::{Amount, OutPoint, Transaction};
+use bitcoin::{Amount, OutPoint};
 use futures::{stream, StreamExt, TryStreamExt};
 use tracing::{debug, error, info, warn};
 
@@ -199,6 +199,7 @@ impl Data {
 	pub fn take_inputs(
 		&mut self,
 		required_amount: Amount,
+		minimum_expiry: BlockHeight,
 	) -> Vec<(VtxoId, BlockHeight, Amount)> {
 		// The strategy here is to always prioritize expiry.
 		// For each expiry "bucket", pick the highest amount if the
@@ -214,7 +215,7 @@ impl Data {
 		let mut remaining = required_amount;
 		let mut ret = Vec::<(VtxoId, BlockHeight, Amount)>::new();
 		'main:
-		for (height, for_height) in self.pool.iter_mut() {
+		for (height, for_height) in self.pool.range_mut(minimum_expiry..) {
 			let mut amount_iter = for_height.iter_mut().rev().peekable();
 			while let Some((amount, for_amount)) = amount_iter.next() {
 				let next_amount = amount_iter.peek().map(|p| *p.0).unwrap_or(Amount::ZERO);
@@ -303,6 +304,8 @@ impl VtxoPool {
 		// This ensures we spend the smallest vtxos first and
 		// we don't have any vtxo that serves as change
 		input_vtxos.sort_by(|v1, v2| v1.amount().cmp(&v2.amount()));
+		ensure!(input_vtxos.iter().all(|v| v.expiry_height() > srv.chain_tip().height),
+			"pool coin expired before the new Lightning grant");
 
 		// Validate that the inputs are still usable and unlocked
 		let _vtxo_guard = srv.vtxos_in_flux.try_lock(&input_ids).map_err(|e| {
@@ -386,6 +389,7 @@ impl VtxoPool {
 			.collect::<Vec<_>>();
 
 		srv.db.write(async |t| {
+			crate::database::expiry_guard::guard_new_lightning_inputs(t, &input_ids).await?;
 			t.execute_vtxo_tree_update(update).await?;
 			htlc_vtxo::create_htlc_vtxos(&t, &htlc_recvs, HtlcDirection::Outgoing).await?;
 			t.mark_vtxopool_vtxos_spent(inputs.iter().map(|v| v.0)).await
@@ -446,7 +450,9 @@ impl VtxoPool {
 	where
 		F: AsyncFnOnce(&database::Tx<'_>, &[Vtxo<Full>]) -> anyhow::Result<()>,
 	{
-		let inputs = self.data.lock().take_inputs(dest.total_amount);
+		let minimum_expiry = srv.chain_tip().height.checked_add(BlockDelta::new(1))
+			.context("receive pool expiry requirement overflows")?;
+		let inputs = self.data.lock().take_inputs(dest.total_amount, minimum_expiry);
 		if inputs.is_empty() {
 			bail!("vtxo pool is empty");
 		}
@@ -622,6 +628,21 @@ impl Process {
 		// finish and broadcast the tx
 		let tx = wallet.finish_tx(funding_psbt).context("error finishing tree funding tx")?;
 
+		// The cached tree still holds unsigned hArk leaf transactions. The
+		// finalized VTXOs above carry their actual signatures AND preimage;
+		// persist that full path before handing any pool coin to a receive.
+		// Deduplicate shared ancestors so one INSERT cannot update one txid twice.
+		let mut signed_txs = BTreeMap::new();
+		for vtxo in &vtxos {
+			vtxo.validate(&tx).context("finalized pool VTXO has an invalid signed path")?;
+			for step in vtxo.transactions() {
+				let txid = step.tx.compute_txid();
+				if let Some(old) = signed_txs.insert(txid, step.tx.clone()) {
+					ensure!(old == step.tx, "finalized pool paths disagree on a shared transaction");
+				}
+			}
+		}
+
 		// Create the vtxos and virtual transactions in the database
 		// before committing the funding tx to the wallet. The funding tx
 		// is handed to the nursery in the same db tx, so that once the
@@ -630,11 +651,10 @@ impl Process {
 		let confirm_target = self.srv.nursery_confirm_target();
 		let update = VtxoTreeUpdate::new()
 			.upsert_funding_tx(&tx)
-			.upsert_signed_tx(tree.internal_node_txs().iter().cloned())
-			.upsert_unsigned_tx(tree.unsigned_leaf_txs().iter().map(Transaction::compute_txid))
+			.upsert_signed_tx(signed_txs.into_values())
 			.insert_oor_spent_vtxos(tree.internal_vtxos())
 			.insert_unspent_vtxos(
-				tree.output_vtxos().map(ServerVtxo::from),
+				vtxos.iter().cloned().map(ServerVtxo::from),
 				database::SpendState::Pool,
 			);
 		self.srv.db.write(async |t| {
@@ -812,25 +832,25 @@ mod test {
 		}
 		assert_eq!(data.len(), len);
 
-		let sel = data.take_inputs(sat(500));
+		let sel = data.take_inputs(sat(500), BlockHeight::ZERO);
 		assert_sel(&sel, &[(h(100), sat(1000))]);
 
-		let sel = data.take_inputs(sat(2500));
+		let sel = data.take_inputs(sat(2500), BlockHeight::ZERO);
 		assert_sel(&sel, &[(h(100), sat(3000))]);
 
-		let sel = data.take_inputs(sat(1000));
+		let sel = data.take_inputs(sat(1000), BlockHeight::ZERO);
 		assert_sel(&sel, &[(h(100), sat(1000))]);
 
 		// the 2x 1000 at height 100 are already used
-		let sel = data.take_inputs(sat(900));
+		let sel = data.take_inputs(sat(900), BlockHeight::ZERO);
 		assert_sel(&sel, &[(h(100), sat(2000))]);
 
 		// left at 100: 3000, 2000
-		let sel = data.take_inputs(sat(5500));
+		let sel = data.take_inputs(sat(5500), BlockHeight::ZERO);
 		assert_sel(&sel, &[(h(100), sat(2000)), (h(100), sat(3000)), (h(110), sat(1000))]);
 
 		let len = data.len();
-		let sel = data.take_inputs(Amount::MAX_MONEY);
+		let sel = data.take_inputs(Amount::MAX_MONEY, BlockHeight::ZERO);
 		assert!(sel.is_empty());
 		assert_eq!(data.len(), len);
 	}

@@ -396,7 +396,8 @@ impl Wallet {
 				}
 			},
 			ServerStatusAdoption::Spent => {
-				self.mark_vtxos_as_spent(&[vtxo_id]).await?;
+				let full = self.get_full_vtxo(vtxo_id).await?;
+				if !self.adopt_reported_spent(&[&full]).await?.contains(&vtxo_id) { return Ok(None); }
 			},
 			ServerStatusAdoption::InFlight(_) => {},
 		}

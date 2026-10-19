@@ -1755,7 +1755,7 @@ async fn mark_htlc_send_vtxos_ln_spent_for_settled_attempt() {
 		&attempt, LightningPaymentStatus::Succeeded, None, None,
 	).await).await.unwrap().expect("attempt should have transitioned to Succeeded");
 
-	db.write(async |t| t.mark_htlc_send_vtxos_ln_spent(attempt.payment_hash).await).await.unwrap();
+	db.write(async |t| t.mark_htlc_send_vtxos_ln_spent(attempt.id).await).await.unwrap();
 
 	// The funding vtxo must be flagged ln-spent.
 	let db_client = ctx.postgres_manager().database_client(Some(&ctx.test_name)).await;

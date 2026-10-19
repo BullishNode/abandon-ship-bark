@@ -62,6 +62,21 @@ impl PaymentGuards {
 		}
 	}
 
+	/// Take a payment lock without delaying another payment's monitor pass.
+	pub fn try_lock(&self, payment_hash: PaymentHash) -> Option<PaymentGuard> {
+		let mut waiting = Waiting {
+			locks: &self.locks, payment_hash,
+			semaphore: self.locks.semaphore(payment_hash), acquired: false,
+		};
+		let permit = waiting.semaphore.try_acquire().ok()?;
+		permit.forget();
+		waiting.acquired = true;
+		Some(PaymentGuard {
+			locks: self.locks.clone(), payment_hash,
+			semaphore: waiting.semaphore.clone(),
+		})
+	}
+
 	/// The number of payment hashes that are locked or waited for.
 	///
 	/// For tests and diagnostics.
@@ -188,6 +203,19 @@ mod tests {
 		-> Option<PaymentGuard>
 	{
 		tokio::time::timeout(Duration::ZERO, waiting).await.ok()
+	}
+
+	#[tokio::test]
+	async fn a_busy_payment_does_not_block_monitoring_another_payment() {
+		let guards = PaymentGuards::new();
+		let held = guards.lock(hash(1)).await;
+		assert!(guards.try_lock(hash(1)).is_none());
+		let other = guards.try_lock(hash(2)).expect("another payment remains available");
+		drop(other);
+		drop(held);
+		let first = guards.try_lock(hash(1)).expect("released payment is available");
+		drop(first);
+		assert_eq!(guards.tracked(), 0);
 	}
 
 	#[tokio::test]

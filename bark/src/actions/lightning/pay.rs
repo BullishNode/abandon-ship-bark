@@ -493,7 +493,7 @@ async fn request_lightning_send_htlcs(
 	let cosign_request = protos::LightningPayHtlcCosignRequest {
 		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
 	};
-	let response = srv.client.request_lightning_pay_htlc_cosign(cosign_request).await
+	let response = srv.client.request_lightning_pay_htlc_cosign(cosign_request).await.map_err(crate::FallbackRefusal::map_status)
 		.retry_unless_rejected()?.into_inner();
 
 	// The server has cosigned the HTLCs by now, so from here on only retry:
@@ -577,7 +577,7 @@ async fn initiate_lightning_send_payment(
 		retry_for_secs: send.retry_for.map(|d| d.as_secs().try_into().unwrap_or(u32::MAX)),
 	};
 	// A rejection aborts: `abort` then revokes the HTLCs.
-	srv.client.initiate_lightning_payment(req).await.retry_unless_rejected()?;
+	srv.client.initiate_lightning_payment(req).await.map_err(crate::FallbackRefusal::map_status).retry_unless_rejected()?;
 
 	Ok(())
 }

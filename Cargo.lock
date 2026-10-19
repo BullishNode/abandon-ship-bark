@@ -623,6 +623,7 @@ dependencies = [
  "parking_lot",
  "pin-project",
  "postgres-types",
+ "prost 0.14.3",
  "refinery",
  "rmp-serde",
  "serde",

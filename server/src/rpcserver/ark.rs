@@ -37,6 +37,7 @@ use ark::vtxo::policy::check_block_height;
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use server_rpc::{self as rpc, protos, RequestExt, TryFromBytes};
 use crate::database::SpendState;
+use crate::database::expiry_details::{FallbackDisposition, FallbackPayoutStage};
 
 use crate::database::rounds::StoredRoundOutput;
 use crate::recovery::NB_NORMAL_CHILDREN;
@@ -58,6 +59,44 @@ use crate::secret::Secret;
 use crate::rpcserver::macros;
 use crate::telemetry;
 
+
+fn fallback_payout_block(point: bitcoin_ext::BlockRef) -> protos::FallbackPayoutBlock {
+	protos::FallbackPayoutBlock { height: point.height.to_u32(), hash: point.hash.to_byte_array().to_vec() }
+}
+
+fn fallback_payout_page(page: crate::database::expiry_details::FallbackEntitlementPage) -> protos::GetFallbackPayoutsResponse {
+	protos::GetFallbackPayoutsResponse {
+		view_token: page.view_token,
+		next_after_entitlement_id: page.next_after_entitlement_id,
+		entitlements: page.entitlements.into_iter().map(|entry| protos::FallbackEntitlementDetails {
+			entitlement_id: entry.entitlement_id, vtxo_id: entry.vtxo_id.to_bytes().to_vec(),
+			gross_sat: entry.gross.to_sat(), chain_view_valid: entry.chain_view_valid,
+			terminal_claim: entry.terminal_claim.map(|claim| protos::FallbackTerminalClaim {
+				txid: claim.txid.to_byte_array().to_vec(), confirmation: Some(fallback_payout_block(claim.confirmation)),
+			}),
+			attempts: entry.attempts.into_iter().map(|attempt| protos::FallbackPayoutAttempt {
+				allocation_id: attempt.allocation_id, active: attempt.active,
+				stage: match attempt.stage {
+					FallbackPayoutStage::Committed => protos::FallbackPayoutStage::Committed,
+					FallbackPayoutStage::Broadcast => protos::FallbackPayoutStage::Broadcast,
+					FallbackPayoutStage::Confirmed => protos::FallbackPayoutStage::Confirmed,
+					FallbackPayoutStage::Conflicted => protos::FallbackPayoutStage::Conflicted,
+				} as i32,
+				disposition: match attempt.disposition {
+					FallbackDisposition::CustomerPayout => protos::FallbackPayoutDisposition::CustomerPayout,
+					FallbackDisposition::BelowDust => protos::FallbackPayoutDisposition::BelowDust,
+					FallbackDisposition::Operator => protos::FallbackPayoutDisposition::Operator,
+				} as i32,
+				output_index: attempt.output_index,
+				script_pubkey: attempt.script.map(|script| script.into_bytes()).unwrap_or_default(),
+				gross_sat: attempt.gross.to_sat(), fee_sat: attempt.fee.to_sat(), payout_sat: attempt.payout.to_sat(),
+				forfeited_sat: attempt.forfeited.to_sat(), output_amount_sat: attempt.output_amount.map(|amount| amount.to_sat()),
+				parent_tx: attempt.parent.as_ref().map(serialize).unwrap_or_default(),
+				confirmation: attempt.confirmation.map(fallback_payout_block),
+			}).collect(),
+		}).collect(),
+	}
+}
 
 /// Map an internal [`SpendState`] to the client-facing [`protos::VtxoSpendState`].
 ///
@@ -192,6 +231,21 @@ impl rpc::server::ArkService for Server {
 	}
 
 	#[tracing::instrument(skip(self, req))]
+	async fn get_vtxo_spend_proof(
+		&self, req: tonic::Request<protos::GetVtxoStatusRequest>,
+	) -> Result<tonic::Response<protos::GetVtxoSpendProofResponse>, tonic::Status> {
+		let req = req.into_inner();
+		let id = VtxoId::from_bytes(req.vtxo_id)?;
+		let attestation = VtxoStatusAttestation::from_bytes(&req.attestation)?;
+		let vtxos = self.db.read(async |tx| {
+			let source = tx.get_user_vtxo_by_id(id).await?;
+			attestation.verify(&source.vtxo).badarg("invalid VTXO status attestation")?;
+			tx.ordinary_spend_proof(&source).await
+		}).await.to_status()?;
+		Ok(tonic::Response::new(protos::GetVtxoSpendProofResponse { vtxos }))
+	}
+
+	#[tracing::instrument(skip(self, req))]
 	async fn get_vtxos_by_ids(
 		&self,
 		req: tonic::Request<protos::GetVtxosByIdsRequest>,
@@ -283,6 +337,55 @@ impl rpc::server::ArkService for Server {
 	}
 
 	#[tracing::instrument(skip(self, req))]
+	async fn get_fallback_payouts(
+		&self,
+		req: tonic::Request<protos::GetFallbackPayoutsRequest>,
+	) -> Result<tonic::Response<protos::GetFallbackPayoutsResponse>, tonic::Status> {
+		let page = match req.into_inner().query.badarg("missing fallback payout query")? {
+			protos::get_fallback_payouts_request::Query::Account(query) => {
+				let xpub = bip32::Xpub::from_bytes(&query.xpub)?;
+				if xpub.network != NetworkKind::from(self.config.network) {
+					macros::badarg!("fallback account is for a different network");
+				}
+				if query.after_entitlement_id < 0 || query.page_size == 0 || query.page_size > 1_000 {
+					macros::badarg!("invalid fallback account page");
+				}
+				let auth = XpubRecoveryAuthorization::deserialize(&query.authorization)
+					.badarg("invalid fallback account authorization")?;
+				if !auth.is_valid_now() || !auth.verify(&xpub, self.server_pubkey()) {
+					macros::badarg!("invalid or expired fallback account authorization");
+				}
+				let expected = (!query.view_token.is_empty()).then_some(query.view_token.as_slice());
+				self.db.read_snapshot(async |t| t.fallback_payout_details_by_account(
+					xpub, self.config.network, query.after_entitlement_id, query.page_size, expected,
+				).await).await.to_status()?
+			},
+			protos::get_fallback_payouts_request::Query::Vtxos(query) => {
+				if query.vtxos.len() > rpc::MAX_NB_VTXO_IDS {
+					macros::badarg!("too many fallback payout coin identifiers");
+				}
+				let queries = query.vtxos.into_iter().map(|q| Ok((
+					VtxoId::from_bytes(&q.vtxo_id)?, VtxoStatusAttestation::from_bytes(&q.attestation)?,
+				))).collect::<Result<Vec<_>, tonic::Status>>()?;
+				let ids = queries.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+				self.db.read_snapshot(async |t| {
+					let states = t.get_existing_server_vtxos_by_id(&ids).await?;
+					let mut visible = Vec::new();
+					for (id, attestation) in &queries {
+						let Some(state) = states.get(id) else { continue; };
+						if client_spend_state(state.spend_state).is_none() { continue; }
+						let Ok(vtxo) = state.vtxo.clone().try_into_user_vtxo() else { continue; };
+						attestation.verify(&vtxo).map_err(|_| crate::error::BadArgument::new("invalid fallback VTXO attestation"))?;
+						visible.push(*id);
+					}
+					t.fallback_payout_details(&visible).await
+				}).await.to_status()?
+			},
+		};
+		Ok(tonic::Response::new(fallback_payout_page(page)))
+	}
+
+	#[tracing::instrument(skip(self, req))]
 	async fn recover_vtxos_by_xpub(
 		&self,
 		req: tonic::Request<protos::RecoverVtxosByXpubRequest>,
@@ -344,6 +447,20 @@ impl rpc::server::ArkService for Server {
 			have_more: res.have_more,
 			cursor_vtxo_id: res.cursor_vtxo_id.map(|id| id.to_bytes().to_vec()),
 		}))
+	}
+
+	#[tracing::instrument(skip(self, req))]
+	async fn set_fallback(
+		&self, req: tonic::Request<protos::SetFallbackRequest>,
+	) -> Result<tonic::Response<protos::SetFallbackResponse>, tonic::Status> {
+		let req = req.into_inner();
+		let mailbox = PublicKey::from_bytes(&req.mailbox_pk)?;
+		let record = ark::fallback::FallbackRecord::deserialize(&req.record)
+			.badarg("invalid fallback record")?;
+		record.verify(self.config.network, mailbox).badarg("invalid fallback record")?;
+		let stored = self.db.write(async |tx| tx.set_fallback(mailbox, &record, self.config.network).await)
+			.await.to_status()?;
+		Ok(tonic::Response::new(protos::SetFallbackResponse { record: stored.serialize() }))
 	}
 
 	// boarding
@@ -883,8 +1000,12 @@ impl rpc::server::ArkService for Server {
 		let req = req.into_inner();
 
 		let unlock_hash = UnlockHash::from_bytes(&req.unlock_hash)?;
-		let part = self.db.read(async |t| t.get_round_participation_by_unlock_hash(unlock_hash).await).await.to_status()?
-			.not_found([unlock_hash], "round participation not found")?;
+		let part = self.db.read(async |t| {
+			if t.query_opt("SELECT participation_id FROM expiry_cancelled_participation WHERE unlock_hash=$1", &[&unlock_hash.to_string()]).await?.is_some() {
+				return Err(crate::error::RoundCancelledBeforeForfeit(unlock_hash).into());
+			}
+			t.get_round_participation_by_unlock_hash(unlock_hash).await
+		}).await.to_status()?.not_found([unlock_hash], "round participation not found")?;
 		let input_vtxo_ids = part.inputs.iter().map(|i| i.vtxo_id.to_bytes().to_vec()).collect();
 
 		let res = if let Some(round_id) = part.round_id {
@@ -908,7 +1029,11 @@ impl rpc::server::ArkService for Server {
 				output_vtxos.push(tree.build_vtxo(idx).serialize());
 			}
 
-			if part.inputs.iter().all(|i| i.is_forfeited()) {
+			// The marker is committed atomically with every accepted forfeit.
+			// Multiple READ COMMITTED reads may see removed child rows after
+			// reading a superseded parent; an empty set is never acceptance.
+			if part.forfeited_at.is_some() && !part.inputs.is_empty()
+				&& part.inputs.iter().all(|i| i.is_forfeited()) {
 				protos::RoundParticipationStatusResponse {
 					status: protos::RoundParticipationStatus::RoundPartReleased.into(),
 					unlock_preimage: Some(part.unlock_preimage.leak_ref().to_vec()),

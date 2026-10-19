@@ -16,12 +16,11 @@
 //! replayed too, since the recovery post is best-effort and a VTXO can be
 //! missing there.
 //!
-//! Note that recovery is a trusted process. The server can withhold VTXOs
-//! or may falsely represent spendable VTXOs as spent. Its word on the spend
-//! state is final: a VTXO it reports spent is stored spent without being
-//! validated, and only a VTXO it reports spendable is validated and checked
-//! against the chain. Prefer to maintain back-ups and use recovery from the
-//! mnemonic as a last resort.
+//! Recovery trusts the server's off-chain history, which can omit coins.
+//! A Spent response is reconciled against fresh authenticated fallback
+//! history before adoption. Pending payouts retain validated signed exit
+//! material until independently confirmed. Prefer maintaining backups;
+//! mnemonic recovery cannot recover records the server withholds.
 
 use std::collections::{HashMap, HashSet};
 
@@ -460,8 +459,8 @@ impl Wallet {
 			}
 		}
 
-		// The server is the authority on whether a vtxo was spent elsewhere,
-		// and recovery has nothing else to go on.
+		// Off-chain status is followed by account history for every Spent
+		// answer: an admission fence alone is not a completed payout.
 		let queries = owned.iter().map(|(vtxo, keypair)| (vtxo.id(), keypair)).collect::<Vec<_>>();
 		let states = self.fetch_vtxo_spend_states(&queries).await?;
 
@@ -478,10 +477,9 @@ impl Wallet {
 
 	/// Store owned VTXOs in the state the server reported for them.
 	///
-	/// The server's word on the spend state is final, so it is taken before any
-	/// chain lookup: a VTXO it reports spent is stored spent as is, and only a
-	/// VTXO it reports spendable is validated and checked for an exit. Rows are
-	/// written once per state, not once per VTXO.
+	/// A Spent response is followed by complete authenticated account history.
+	/// Undischarged decisions or unavailable history retain validated signed
+	/// material in quarantine; ordinary historical spends remain spent.
 	async fn store_recovered_vtxos(
 		&self,
 		report: &mut RecoveryReport,
@@ -515,15 +513,13 @@ impl Wallet {
 			}
 		}
 
-		// The spent row is what stops a later mailbox replay from storing the
-		// vtxo as spendable again. A row from an earlier, failed attempt is
-		// forced along.
+		// Statuses were fetched before this fresh account-history barrier.
+		// Pending decisions retain their validated signed exit material.
 		if !spent.is_empty() {
-			self.store_vtxos(spent.iter(), &VtxoState::Spent).await?;
-			self.mark_vtxos_as_spent(spent.iter().map(|v| v.id())).await?;
+			let final_ids = self.adopt_reported_spent(&spent.iter().collect::<Vec<_>>()).await?;
 			for vtxo in &spent {
-				debug!("Recovery vtxo {} already spent, skipping", vtxo.id());
-				report.push_skipped(vtxo);
+				if final_ids.contains(&vtxo.id()) { report.push_skipped(vtxo); }
+				else { report.push_failed(vtxo.id(), Some(vtxo.amount())); }
 			}
 		}
 

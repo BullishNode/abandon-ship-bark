@@ -319,6 +319,19 @@ impl MovementManager {
 		Ok(())
 	}
 
+	/// Rearm an existing emergency recovery movement when its own-chain claim
+	/// loses finality. The debit and identity are unchanged; no second exit is created.
+	pub(crate) async fn rearm_chain_recovery(&self, id: MovementId) -> anyhow::Result<(), MovementError> {
+		let mut guard = self.get_cached_movement(id).await?;
+		guard.status = MovementStatus::Pending;
+		guard.time.completed_at = None;
+		guard.time.updated_at = chrono::Local::now();
+		self.db.update_movement(&guard).await
+			.map_err(|e| MovementError::PersisterError { id, e })?;
+		self.notifications.dispatch_movement_updated(guard.clone());
+		Ok(())
+	}
+
 	/// Finalizes a movement, setting it to the given [MovementStatus].
 	///
 	/// See also: [MovementManager::new_movement] and [MovementManager::update_movement]

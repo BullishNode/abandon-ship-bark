@@ -256,7 +256,7 @@ impl Wallet {
 			builder.cosign_request(),
 		);
 
-		let response = srv.client.request_arkoor_cosign(cosign_request).await
+		let response = srv.client.request_arkoor_cosign(cosign_request).await.map_err(crate::FallbackRefusal::map_status)
 			.context("error requesting arkoor cosign")?
 			.into_inner();
 

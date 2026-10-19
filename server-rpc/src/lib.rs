@@ -147,6 +147,10 @@ pub const MAX_NB_VTXO_IDS: usize = 1000;
 /// The maximum number of vtxos that the server accepts per register request.
 pub const MAX_NB_REGISTER_VTXOS: usize = 1000;
 
+/// Bounds for complete ordinary-spend evidence. Unsupported trees remain pending.
+pub const MAX_ORDINARY_SPEND_PROOF_VTXOS: usize = 256;
+pub const MAX_ORDINARY_SPEND_PROOF_BYTES: usize = 1_048_576;
+
 /// The maximum number of vtxos that the server accepts per arkoor mailbox
 /// post. Generous for a single payment's outputs to one recipient; clients
 /// sending more should split into multiple posts.

@@ -15,6 +15,7 @@ pub mod util;
 pub mod bark;
 pub mod postgres;
 pub mod exit;
+pub mod onchain;
 pub mod control_server;
 
 pub use context::TestContext;

@@ -12,11 +12,23 @@ mod arkoor;
 mod balance;
 mod board;
 mod exit;
+mod fallback;
+mod fallback_protection;
+mod fallback_act_by;
+mod fallback_adoption;
+mod fallback_external;
 mod import;
 mod lightning;
+mod lightning_receive_binding;
 mod mailbox;
 mod offboard;
 mod payment_request;
 mod recovery;
 mod round;
 mod vtxo_lock;
+
+mod protection_isolation;
+
+mod ordinary_exit_atomic;
+mod offline_exit_recovery;
+mod payout_reorg_recovery;

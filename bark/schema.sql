@@ -221,11 +221,6 @@ CREATE VIEW vtxo_view AS
 			JOIN most_recent_vtxo_state as vs
 				ON v.id = vs.vtxo_id
 /* vtxo_view(id,expiry_height,amount_sat,raw_bare,exit_depth,exit_tx_weight,registered,created_at,state,state_kind,last_updated_at) */;
-CREATE TABLE bark_expiry_migration (
-				id INTEGER PRIMARY KEY CHECK (id = 1),
-				version INTEGER NOT NULL,
-				name TEXT NOT NULL
-			);
 CREATE TABLE bark_fallback_record (
 				id INTEGER PRIMARY KEY CHECK (id = 1),
 				record BLOB NOT NULL,

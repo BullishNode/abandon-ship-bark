@@ -9,7 +9,6 @@
 //! lifecycle data, Lightning receives, exit tracking, and sync metadata.
 
 mod convert;
-mod fork_migrations;
 mod migrations;
 mod query;
 
@@ -65,7 +64,18 @@ impl SqliteClient {
 
 		let migrations = migrations::MigrationContext::new();
 		migrations.do_all_migrations(&mut conn)?;
-		fork_migrations::run(&mut conn)?;
+		let tx = conn.transaction()?;
+		tx.execute_batch("CREATE TABLE IF NOT EXISTS bark_fallback_record (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			record BLOB NOT NULL,
+			spk BLOB NOT NULL,
+			account_xpub BLOB NOT NULL,
+			registered INTEGER NOT NULL DEFAULT 1
+		);
+		CREATE TABLE IF NOT EXISTS bark_fallback_snapshot (
+			id INTEGER PRIMARY KEY CHECK (id = 1), snapshot BLOB NOT NULL
+		);")?;
+		tx.commit()?;
 
 		Ok( Self { connection_string: path })
 	}
@@ -560,6 +570,57 @@ mod test {
 	use crate::persist::test_suite::bark_persister_tests;
 
 	use super::*;
+
+	#[test]
+	fn fallback_tables_reopen_without_changing_wallet_records_or_upstream_history() {
+		let (path, conn) = in_memory_db();
+		let db = SqliteClient::open(&path).unwrap();
+		let history = conn.prepare("SELECT id,value,created_at FROM migrations ORDER BY id").unwrap()
+			.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)))
+			.unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+		assert!(!history.is_empty());
+		// These are persistence sentinels, not authenticated financial proofs.
+		conn.execute_batch("INSERT INTO bark_fallback_record (id,record,spk,account_xpub) VALUES (1,X'01',X'02',X'03');
+			INSERT INTO bark_fallback_snapshot (id,snapshot) VALUES (1,X'04');
+			INSERT INTO bark_properties (id,network,fingerprint) VALUES ('control','regtest','deadbeef');").unwrap();
+		assert_eq!(conn.query_row("SELECT registered FROM bark_fallback_record", [], |row| row.get::<_, i64>(0)).unwrap(), 1);
+		conn.execute("UPDATE bark_fallback_record SET registered=0 WHERE id=1", []).unwrap();
+		drop(db);
+		let _reopened = SqliteClient::open(&path).unwrap();
+		let after = conn.prepare("SELECT id,value,created_at FROM migrations ORDER BY id").unwrap()
+			.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?)))
+			.unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+		assert_eq!(after, history);
+		assert_eq!(conn.query_row("SELECT record,spk,account_xpub,registered FROM bark_fallback_record", [],
+			|row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?, row.get::<_, Vec<u8>>(2)?, row.get::<_, i64>(3)?)))
+			.unwrap(), (vec![1], vec![2], vec![3], 0));
+		assert_eq!(conn.query_row("SELECT snapshot FROM bark_fallback_snapshot", [], |row| row.get::<_, Vec<u8>>(0)).unwrap(), vec![4]);
+		assert_eq!(conn.query_row("SELECT network,fingerprint FROM bark_properties WHERE id='control'", [],
+			|row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))).unwrap(), ("regtest".to_owned(), "deadbeef".to_owned()));
+	}
+
+	#[test]
+	fn fallback_table_creation_rolls_back_if_the_second_statement_fails() {
+		let (path, mut conn) = in_memory_db();
+		migrations::MigrationContext::new().do_all_migrations(&mut conn).unwrap();
+		// An index-name collision fails CREATE TABLE even with IF NOT EXISTS.
+		// This schema-only fault tests rollback, not an older wallet format.
+		conn.execute_batch("CREATE INDEX bark_fallback_snapshot ON bark_properties(network);
+			INSERT INTO bark_properties (id,network,fingerprint) VALUES ('control','regtest','deadbeef');").unwrap();
+		let before = conn.prepare("SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name").unwrap()
+			.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+			.unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+		let error = SqliteClient::open(&path).unwrap_err();
+		assert!(error.to_string().contains("bark_fallback_snapshot"), "the second table statement must reach the controlled collision");
+		let after = conn.prepare("SELECT name,sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name").unwrap()
+			.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+			.unwrap().collect::<rusqlite::Result<Vec<_>>>().unwrap();
+		assert_eq!(after, before);
+		assert_eq!(conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table'
+			AND name IN ('bark_fallback_record','bark_fallback_snapshot')", [], |row| row.get::<_, i64>(0)).unwrap(), 0);
+		assert_eq!(conn.query_row("SELECT network,fingerprint FROM bark_properties WHERE id='control'", [],
+			|row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))).unwrap(), ("regtest".to_owned(), "deadbeef".to_owned()));
+	}
 
 	#[tokio::test]
 	async fn test_add_and_retrieve_vtxos() {

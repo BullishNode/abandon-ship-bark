@@ -15,14 +15,12 @@ use tracing::warn;
 use crate::bitcoind as bcd;
 use crate::bitcoind::BitcoindErrorExt;
 use crate::database::expiry_chain::ExpiryViewToken;
-use crate::database::expiry_payout::PendingExpiryPayout;
+use crate::database::expiry_payout::{MAX_PAYOUT_VSIZE, PendingExpiryPayout};
 use crate::wallet::BdkWalletExt;
 
 use ark::ServerVtxo;
 
 use super::Watchman;
-
-const MAX_PAYOUT_VSIZE: usize = 10_000;
 
 /// The fee of the actual transaction being replaced, not a stale historical
 /// child or its entire mempool chunk.

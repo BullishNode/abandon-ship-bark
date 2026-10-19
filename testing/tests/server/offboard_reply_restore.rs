@@ -154,7 +154,7 @@ async fn wait_rebuilt(db: &Db, point: BlockRef) {
 }
 
 #[tokio::test]
-async fn expiry_ml125_restored_offboard_intent_adopts_exact_original_discharge() {
+async fn restored_offboard_intent_adopts_original_discharge() {
 	require_bitcoind_chain_source!();
 	assert!(std::env::var_os("BARK_DOUBLE_DRIVE_ACTIONS").is_none(),
 		"this ordinary once-only checkpoint case requires the presence flag fully unset");

@@ -331,7 +331,7 @@ async fn failed_swap_during_restart() {
 	let mut graph = BTreeMap::from([(parent.compute_txid(), parent.clone()), (child_txid, child)]);
 	let rows = db.read(async |tx| Ok(tx.query("SELECT a.id,a.status,a.sweep_tx,a.sweep_txid,a.confirmed_height,a.confirmed_hash, \
 		c.disposition,c.owner_mailbox,c.user_pubkey,c.spk,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.active, \
-		c.paying_txid,e.vtxo_id,e.gross_sat AS entitlement_gross_sat, \
+		e.vtxo_id,e.gross_sat AS entitlement_gross_sat, \
 		e.irreversible_facts::TEXT AS irreversible_facts \
 		FROM expiry_allocation a JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
 		JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
@@ -353,9 +353,7 @@ async fn failed_swap_during_restart() {
 			assert_eq!(row.get::<_, i64>("fee_sat"), 1_000);
 			assert_eq!(row.get::<_, i64>("payout_sat"), 99_000);
 			assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
-			for field in ["sweep_txid", "paying_txid"] {
-				assert_eq!(row.get::<_, Option<String>>(field), Some(parent.compute_txid().to_string()));
-			}
+			assert_eq!(row.get::<_, Option<String>>("sweep_txid"), Some(parent.compute_txid().to_string()));
 			assert_eq!(row.get::<_, Option<i64>>("confirmed_height"), Some(i64::from(parent_block.height.to_u32())));
 			assert_eq!(row.get::<_, Option<String>>("confirmed_hash"), Some(parent_block.hash.to_string()));
 			let facts: serde_json::Value = serde_json::from_str(row.get("irreversible_facts")).unwrap();

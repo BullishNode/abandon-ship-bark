@@ -246,7 +246,7 @@ impl Tx<'_> {
 						EXISTS(SELECT 1 FROM expiry_allocation_coin c
 							JOIN expiry_allocation a ON a.id=c.allocation_id
 							WHERE c.entitlement_id=e.id
-							AND ((c.active AND a.status<>'conflicted') OR c.paying_txid IS NOT NULL)) AS reserved,
+							AND ((c.active AND a.status<>'conflicted') OR a.status='confirmed')) AS reserved,
 						EXISTS(SELECT 1 FROM expiry_terminal_claim p WHERE p.entitlement_id=e.id) AS claimed
 					FROM expiry_decided_coin d JOIN expiry_entitlement e ON e.id=d.entitlement_id
 					WHERE d.vtxo_id=$1

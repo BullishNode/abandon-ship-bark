@@ -273,9 +273,11 @@ async fn confirm_operator_returns(
 			let row=t.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1",&[id]).await?;
 			assert_eq!(row.get::<_,&[u8]>("sweep_tx"),serialize(parent).as_slice());
 			let claim=claims[sources.iter().position(|s|s.id().to_string()==*source).unwrap()].compute_txid();
-			let row=t.query_one("SELECT c.paying_txid FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+			let row=t.query_one("SELECT p.txid FROM expiry_allocation_coin c \
+			JOIN expiry_terminal_claim p ON p.entitlement_id=c.entitlement_id \
+			JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 				WHERE c.allocation_id=$1 AND e.vtxo_id=$2",&[id,source]).await?;
-			assert_eq!(row.get::<_,Option<&str>>("paying_txid"),Some(claim.to_string().as_str()));
+			assert_eq!(row.get::<_,Option<&str>>("txid"),Some(claim.to_string().as_str()));
 		}
 		let decided=t.query("SELECT entitlement_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1)",&[&originals]).await?
 			.into_iter().map(|row|row.get::<_,i64>(0)).collect::<BTreeSet<_>>();
@@ -362,9 +364,11 @@ async fn confirm_reserved_partial(
 		let (a_id,a_parent)=&reserved.by_source[&sources[0].id().to_string()];
 		let row=t.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1",&[a_id]).await?;
 		assert_eq!(row.get::<_,&[u8]>("sweep_tx"),serialize(a_parent).as_slice());
-		let paid=t.query_one("SELECT c.paying_txid FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+		let paid=t.query_one("SELECT p.txid FROM expiry_allocation_coin c \
+			JOIN expiry_terminal_claim p ON p.entitlement_id=c.entitlement_id \
+			JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 			WHERE c.allocation_id=$1 AND e.vtxo_id=$2",&[a_id,&sources[0].id().to_string()]).await?;
-		assert_eq!(paid.get::<_,Option<&str>>("paying_txid"),Some(claim.compute_txid().to_string().as_str()));
+		assert_eq!(paid.get::<_,Option<&str>>("txid"),Some(claim.compute_txid().to_string().as_str()));
 		let row=t.query_one("SELECT c.entitlement_id,c.evidence::TEXT FROM expiry_allocation_coin c \
 			JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
 			WHERE e.vtxo_id=$1 AND c.active AND a.status='confirmed' AND a.sweep_tx=$2",

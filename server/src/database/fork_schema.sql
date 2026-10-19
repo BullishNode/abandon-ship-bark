@@ -121,7 +121,6 @@ CREATE TABLE expiry_allocation_coin (
 	forfeited_sat BIGINT NOT NULL CHECK (forfeited_sat >= 0),
 	active BOOLEAN NOT NULL DEFAULT TRUE,
 	evidence JSONB NOT NULL,
-	paying_txid TEXT,
 	PRIMARY KEY (allocation_id, entitlement_id),
 	CHECK ((disposition = 'customer' AND owner_mailbox IS NOT NULL AND user_pubkey IS NOT NULL
 		AND spk IS NOT NULL AND gross_sat = fee_sat + payout_sat + forfeited_sat)

@@ -154,7 +154,7 @@ async fn confirm_epoch(
 		let allocation = row.get::<_, i64>("id");
 		// A real dust allocation has NO payout association. Never replace
 		// this LEFT JOIN by an inner join which silently drops the dust leaf.
-		let ledger = db.read(async |tx| Ok(tx.query_one("SELECT a.status,a.confirmed_hash,a.confirmed_height,c.paying_txid, \
+		let ledger = db.read(async |tx| Ok(tx.query_one("SELECT a.status,a.confirmed_hash,a.confirmed_height,a.sweep_txid, \
 			p.output_index,p.amount_sat FROM expiry_allocation_coin c \
 			JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
 			LEFT JOIN expiry_allocation_payout p ON p.allocation_id=c.allocation_id AND p.spk=c.spk \
@@ -163,7 +163,7 @@ async fn confirm_epoch(
 		assert_eq!(ledger.get::<_, String>("status"), "confirmed");
 		assert_eq!(ledger.get::<_, String>("confirmed_hash"), hash.to_string());
 		assert_eq!(ledger.get::<_, i64>("confirmed_height"), i64::from(height.to_u32()));
-		assert_eq!(ledger.get::<_, String>("paying_txid"), txid.to_string());
+		assert_eq!(ledger.get::<_, String>("sweep_txid"), txid.to_string());
 		let index = ledger.get::<_, Option<i32>>("output_index").map(|index| u32::try_from(index).unwrap());
 		if leaf.payout == 0 {
 			assert!(index.is_none());

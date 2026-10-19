@@ -232,7 +232,7 @@ impl<'t> Tx<'t> {
 			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_external_success s WHERE s.id=a.id)
 			AND EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l JOIN vtxo v ON v.vtxo_id=l.vtxo_id
 				WHERE l.lightning_payment_attempt_id=a.id AND v.expiry<=COALESCE((SELECT MAX(height) FROM captaind_block),0)
-				AND NOT EXISTS(SELECT 1 FROM expiry_decided_coin e WHERE e.vtxo_id=v.vtxo_id))
+				AND NOT EXISTS(SELECT 1 FROM expiry_entitlement e WHERE e.vtxo_id=v.vtxo_id))
 			ORDER BY d.checked_at NULLS FIRST,d.id LIMIT $2
 		", &[&node,&limit]).await?;
 		let attempts = rows.into_iter().map(TryInto::try_into).collect::<anyhow::Result<Vec<LightningPaymentAttempt>>>()?;

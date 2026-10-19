@@ -83,8 +83,7 @@ async fn payout_reorg(depth: u32) {
 	let payout_index = parent.output.iter().position(|out| out.script_pubkey == destination.spk).unwrap() as u32;
 	assert_eq!(parent.output[payout_index as usize].value, expected);
 	let permanent = db.read(async |t| Ok(t.query_one(
-		"SELECT e.id,e.irreversible_facts::TEXT AS facts FROM expiry_entitlement e \
-		JOIN expiry_decided_coin d ON d.entitlement_id=e.id WHERE d.vtxo_id=$1", &[&ids[0].to_string()],
+		"SELECT e.id,e.irreversible_facts::TEXT AS facts FROM expiry_entitlement e WHERE e.vtxo_id=$1", &[&ids[0].to_string()],
 	).await?)).await.unwrap();
 	let entitlement: i64 = permanent.get("id");
 	let irreversible: String = permanent.get("facts");
@@ -140,7 +139,7 @@ async fn payout_reorg(depth: u32) {
 	assert_eq!(rpc.get_tx_out(&txid, payout_index, Some(true)).unwrap().unwrap().value, expected);
 	let row = db.read(async |t| Ok(t.query_one(
 		"SELECT e.irreversible_facts::TEXT AS facts, \
-			(SELECT COUNT(*) FROM expiry_decided_coin d WHERE d.entitlement_id=e.id) AS fences, \
+			(SELECT COUNT(*) FROM expiry_entitlement d WHERE d.id=e.id) AS fences, \
 			(SELECT COUNT(*) FROM expiry_allocation_coin c WHERE c.entitlement_id=e.id AND c.active) AS active, \
 			(SELECT COUNT(DISTINCT a.sweep_txid) FROM expiry_allocation_coin c \
 			 JOIN expiry_allocation a ON a.id=c.allocation_id WHERE c.entitlement_id=e.id AND a.status='confirmed') AS payments, \
@@ -654,7 +653,7 @@ async fn expiry_payout_recovers_same_parent_when_positive_untrusted_funds_mature
 	let tip = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
 	wait_for_confirmation(&db, allocation, tip, block).await;
 	let final_state = db.read(async |t| Ok(t.query_one("SELECT e.irreversible_facts::TEXT AS facts, \
-		(SELECT COUNT(*) FROM expiry_decided_coin d WHERE d.entitlement_id=e.id) AS fences, \
+		(SELECT COUNT(*) FROM expiry_entitlement d WHERE d.id=e.id) AS fences, \
 		(SELECT COUNT(*) FROM expiry_allocation_coin c WHERE c.entitlement_id=e.id AND c.active) AS active, \
 		(SELECT COUNT(*) FROM expiry_allocation_coin c WHERE c.entitlement_id=e.id) AS associations, \
 		(SELECT COUNT(DISTINCT a.sweep_txid) FROM expiry_allocation_coin c JOIN expiry_allocation a ON a.id=c.allocation_id \

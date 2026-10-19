@@ -247,7 +247,7 @@ WITH inventory AS (
 	SELECT vtxo_id, anchor_point, id, vtxo, expiry,
 		oor_spent_txid, spent_in_round, offboarded_in, banned_until_height,
 		confirmed_height, spend_state::text AS spend_state, created_at, updated_at,
-		EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback,
+		EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id) AS decided_for_fallback,
 		frontier_at, onchain_spent_height, onchain_spent_txid,
 		lightning_htlc_subscription_id, vtxo_txid, exit_delta, policy_type, policy, server_pubkey, amount
 	FROM vtxo WHERE anchor_point = ANY($1)

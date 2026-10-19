@@ -252,7 +252,7 @@ async fn partial_terminal(case: TerminalCase) {
 			"the exact raw A authorization must be durable before canonical grant consumption");
 	}
 	let prior_fences = db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM ( \
-		SELECT vtxo_id FROM expiry_decided_coin UNION ALL SELECT vtxo_id FROM expiry_allocation_input \
+		SELECT vtxo_id FROM expiry_entitlement UNION ALL SELECT vtxo_id FROM expiry_allocation_input \
 		) prior WHERE vtxo_id=$1",&[&sources[0].id().to_string()]).await?.get::<_,i64>(0))).await.unwrap();
 	assert_eq!(prior_fences,0,"this case qualifies an observed user claim without a prior decided/allocation fence");
 	if let Some(second_claim)=&second_claim {
@@ -421,7 +421,7 @@ async fn all_terminal_returns(
 	let ids=grants.iter().map(|grant|grant.id().to_string()).collect::<Vec<_>>();
 	let original=sources.iter().map(|source|source.id().to_string()).collect::<Vec<_>>();
 	let old_reservations=db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM ( \
-		SELECT vtxo_id FROM expiry_decided_coin UNION ALL SELECT vtxo_id FROM expiry_allocation_input \
+		SELECT vtxo_id FROM expiry_entitlement UNION ALL SELECT vtxo_id FROM expiry_allocation_input \
 		) prior WHERE vtxo_id=ANY($1)",&[&original]).await?.get::<_,i64>(0))).await.unwrap();
 	assert_eq!(old_reservations,0,"this normal control does not waive a previously committed joint reservation");
 	let spenders=tokio::time::timeout(Duration::from_secs(150),async {

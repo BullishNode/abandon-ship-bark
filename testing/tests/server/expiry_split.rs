@@ -106,7 +106,7 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 	assert_eq!(first.output.iter().find(|o| o.script_pubkey == destination.spk).unwrap().value, sat(49_000));
 	let waiting = db.read(async |t| Ok(t.query_one("
 		SELECT COUNT(*)
-		FROM expiry_decided_coin
+		FROM expiry_entitlement
 		WHERE vtxo_id=$1
 	", &[&htlc.to_string()]).await?.get::<_, i64>(0))).await.unwrap();
 	assert_eq!(waiting, 0, "ordinary payout must not invent a terminal HTLC resolution");

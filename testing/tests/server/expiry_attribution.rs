@@ -252,24 +252,37 @@ async fn expiry_attribution_prepared_work_never_advances_a_new_pending_key() {
 	let result = batch.derive().unwrap();
 	db.commit_expiry_owner_scan(Network::Regtest, &result).await.unwrap();
 	assert_eq!(owner(&db, late).await, Attribution::Unresolved);
+	assert_eq!(coverage(&db, old).await.get(&mailbox.as_pubkey()), Some(&32));
+	assert_eq!(coverage(&db, late).await.get(&mailbox.as_pubkey()), Some(&0));
+	let old_tickets = cursor_tickets(&db, old).await;
+	let late_tickets = cursor_tickets(&db, late).await;
+	assert!(late_tickets[&mailbox.as_pubkey()].1 < old_tickets[&mailbox.as_pubkey()].1,
+		"committing the old prefix renews its ticket behind the unserved late key");
 	// Drop a newly prepared batch to model interruption before a completed
-	// derivation/commit. Restart must derive its whole untested prefix again.
+	// derivation/commit. Preparation changes neither coverage nor waiting age.
 	drop(db.prepare_expiry_owner_scan(32, 1).await.unwrap());
+	assert_eq!(cursor_tickets(&db, old).await, old_tickets);
+	assert_eq!(cursor_tickets(&db, late).await, late_tickets);
 	drop(db);
 	let db = Db::connect(&config).await.unwrap();
-	// Oldest waiting coverage gets the first turn after restart; the late
-	// zero-prefix key gets the next. Neither inherits the other's work.
+	assert_eq!(cursor_tickets(&db, old).await, old_tickets);
+	assert_eq!(cursor_tickets(&db, late).await, late_tickets);
+	// The late zero-prefix key kept its older ticket while the old key's
+	// successful commit renewed its ticket. Neither inherits the other's work.
+	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
+	assert_eq!(coverage(&db, old).await.get(&mailbox.as_pubkey()), Some(&32));
+	assert!(matches!(owner(&db, late).await, Attribution::Owned { mailbox_pk, child_index: 8, .. }
+		if mailbox_pk == mailbox.as_pubkey()));
 	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
 	assert_eq!(coverage(&db, old).await.get(&mailbox.as_pubkey()), Some(&64));
-	assert_eq!(owner(&db, late).await, Attribution::Unresolved);
 	let before_stale = cursor_tickets(&db, old).await;
 	assert_eq!(db.commit_expiry_owner_scan(Network::Regtest, &stale.derive().unwrap()).await.unwrap(), 0);
 	assert_eq!(cursor_tickets(&db, old).await, before_stale,
 		"stale work changes neither contiguous coverage nor its waiting ticket");
-	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
 	assert!(matches!(owner(&db, late).await, Attribution::Owned { child_index: 8, .. }));
 	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
-	assert!(matches!(owner(&db, old).await, Attribution::Owned { child_index: 80, .. }));
+	assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
+		if mailbox_pk == mailbox.as_pubkey()));
 }
 
 #[tokio::test]

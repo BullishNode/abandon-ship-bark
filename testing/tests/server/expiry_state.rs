@@ -25,15 +25,11 @@ async fn expiry_generation_rejects_stale_rebuild_and_survives_restart() {
 		let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 		t.upsert_vtxos([&vtxo]).await?;
 		let id = vtxo.id().to_string();
-		let entitlement = t.query_one("
+		t.query_one("
 			INSERT INTO expiry_entitlement(vtxo_id, gross_sat)
 			VALUES($1, $2)
 			RETURNING id
-		", &[&id, &(vtxo.amount().to_sat() as i64)]).await?.get::<_, i64>("id");
-		t.execute("
-			INSERT INTO expiry_decided_coin(vtxo_id, entitlement_id)
-			VALUES($1, $2)
-		", &[&id, &entitlement]).await?;
+		", &[&id, &(vtxo.amount().to_sat() as i64)]).await?;
 		Ok(())
 	}).await.unwrap();
 	let server = ExpiryChainListener::start(db.clone(), BlockTable::Captaind).await.unwrap();
@@ -51,7 +47,7 @@ async fn expiry_generation_rejects_stale_rebuild_and_survives_restart() {
 	server.on_reorg(point).await.unwrap();
 	let n = db.read(async |t| Ok(t.query_one("
 		SELECT COUNT(*)
-		FROM expiry_decided_coin
+		FROM expiry_entitlement
 	", &[]).await?.get::<_, i64>(0))).await.unwrap();
 	assert_eq!(n, 1);
 	server.on_sync_complete(point).await.unwrap();

@@ -279,7 +279,7 @@ async fn confirm_operator_returns(
 				WHERE c.allocation_id=$1 AND e.vtxo_id=$2",&[id,source]).await?;
 			assert_eq!(row.get::<_,Option<&str>>("txid"),Some(claim.to_string().as_str()));
 		}
-		let decided=t.query("SELECT entitlement_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1)",&[&originals]).await?
+		let decided=t.query("SELECT id AS entitlement_id FROM expiry_entitlement WHERE vtxo_id=ANY($1)",&[&originals]).await?
 			.into_iter().map(|row|row.get::<_,i64>(0)).collect::<BTreeSet<_>>();
 		assert_eq!(decided,reserved.entitlements,"economic fences survive");
 		let duplicate=t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
@@ -376,7 +376,7 @@ async fn confirm_reserved_partial(
 		assert!(reserved.entitlements.contains(&row.get::<_,i64>("entitlement_id")));
 		let evidence:serde_json::Value=serde_json::from_str(row.get("evidence"))?;
 		assert_eq!(evidence["kind"],"htlc_internal_grants_reclaimed");
-		let count=t.query_one("SELECT COUNT(*) FROM expiry_decided_coin WHERE entitlement_id=ANY($1)",
+		let count=t.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE id=ANY($1)",
 			&[&reserved.entitlements.iter().copied().collect::<Vec<_>>()]).await?.get::<_,i64>(0);
 		assert_eq!(count,2,"the original economic fences survive");
 		Ok(())

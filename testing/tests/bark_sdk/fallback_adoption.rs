@@ -80,7 +80,7 @@ async fn await_decision(ctx: &TestContext, srv: &captaind::Captaind, coin: &bark
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let exists = database.read(async |tx| Ok(tx.query_opt(
-				"SELECT entitlement_id FROM expiry_decided_coin WHERE vtxo_id=$1", &[&coin.id().to_string()],
+				"SELECT id AS entitlement_id FROM expiry_entitlement WHERE vtxo_id=$1", &[&coin.id().to_string()],
 			).await?)).await.unwrap().is_some();
 			if exists { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;

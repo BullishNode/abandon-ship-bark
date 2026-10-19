@@ -34,7 +34,7 @@ async fn fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payme
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let row = db.read(async |tx| Ok(tx.query_opt(
-				"SELECT e.id FROM expiry_entitlement e JOIN expiry_decided_coin d ON d.entitlement_id=e.id WHERE e.vtxo_id=$1",
+				"SELECT e.id FROM expiry_entitlement e WHERE e.vtxo_id=$1",
 				&[&coin.id().to_string()],
 			).await?)).await.unwrap();
 			if row.is_some() { break; }

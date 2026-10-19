@@ -322,7 +322,7 @@ impl Watchman {
 				SET spend_state = 'spent', updated_at = NOW()
 				WHERE spend_state <> 'spent'
 				AND EXISTS(SELECT 1
-					FROM expiry_decided_coin d
+					FROM expiry_entitlement d
 					WHERE d.vtxo_id = vtxo.vtxo_id)
 			", &[]).await?;
 			t.finish_expiry_rebuild(view).await

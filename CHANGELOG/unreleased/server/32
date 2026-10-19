@@ -1,0 +1,6 @@
+- Add registered-address emergency payouts for expired VTXOs
+  Verify ownership from immutable registrations before a funded payout. Close
+  expired receiver grants before an internal Lightning refund, at depth six.
+  Retain confirmed user exit claims for rebroadcast after supported reorgs.
+  [#32](https://github.com/BullishNode/abandon-ship-bark/pull/32)
+  - **BREAKING:** The fork defines a fresh schema. Earlier fork databases are refused.

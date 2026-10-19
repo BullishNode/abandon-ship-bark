@@ -1,0 +1,4 @@
+- Add authenticated fallback registration, payout history and spend proofs
+  Wallets can verify a registered destination and distinguish a completed
+  payment from a server spending refusal.
+  [#32](https://github.com/BullishNode/abandon-ship-bark/pull/32)

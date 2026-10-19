@@ -1,0 +1,4 @@
+- Add signed fallback registrations
+  Bind the mailbox key, network, xpub and application-selected payout script
+  without adding attribution data to payments.
+  [#32](https://github.com/BullishNode/abandon-ship-bark/pull/32)

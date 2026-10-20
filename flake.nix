@@ -55,6 +55,7 @@
 				};
 
 				isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+				clightning = if isDarwin then null else import ./nix/package-clightning.nix { inherit pkgs; };
 
 				# We serve the static musl binaries for Linux user so it runs everywhere.
 				hostRustTarget =
@@ -269,6 +270,9 @@
 				}
 				// lib.optionalAttrs (builtins.hasAttr hostRustTarget serverPackages) {
 					bark-server = serverPackages.${hostRustTarget};
+				}
+				// lib.optionalAttrs (!isDarwin) {
+					inherit clightning;
 				};
 
 				# for `nix run` support
@@ -295,7 +299,7 @@
 					};
 
 					devShell = import ./nix/dev-shell.nix {
-						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm cln-grpc rustBuildToolchain;
+						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm cln-grpc clightning rustBuildToolchain;
 					};
 
 					ciShell = import ./nix/ci-shell.nix {

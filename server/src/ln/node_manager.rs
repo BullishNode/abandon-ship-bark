@@ -52,7 +52,6 @@ use ark::lightning::{Bolt12Invoice, Bolt12InvoiceExt, Invoice, Offer, PaymentHas
 use ark::mailbox::MailboxIdentifier;
 
 use crate::Server;
-use crate::error::ContextExt;
 use crate::ln::cln::{ClnNodeInfo, ClnNodeOnlineState, NodeHandle};
 use crate::ln::cln::hold::ClnHoldConfig;
 use crate::ln::cln::xpay::ClnXpayConfig;
@@ -63,6 +62,7 @@ use crate::sync::SyncManager;
 use crate::system::RuntimeManager;
 use crate::config::Config;
 use crate::database;
+use crate::database::expiry_lightning::LightningSourceState;
 use crate::database::ln::{
 	LightningNodeId, LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningPaymentStatus,
 	LightningPaymentAttempt,
@@ -492,57 +492,33 @@ impl LightningManager {
 		Ok(())
 	}
 
-	/// Gets the current payment status for a given payment hash.
+	/// Gets the outcome of a complete, recorded payment input set.
 	pub async fn get_payment_status(
 		&self,
 		payment_hash: PaymentHash,
-	) -> anyhow::Result<PaymentStatus> {
-		trace!("Getting payment status for payment hash: {}", payment_hash);
-
-		let attempt = self.db.read(async |t|
-			t.get_latest_payment_attempt_by_payment_hash(payment_hash).await
-		).await?.not_found([payment_hash], "payment attempt not found")?;
-
-		trace!("Payment attempt status for payment {}: {}",
-			payment_hash, attempt.status,
-		);
-		if let Some(subscription_id) = attempt.lightning_htlc_subscription_id {
-			let funding = self.db.read(async |t| t.funded_internal_receive(subscription_id, payment_hash).await).await?;
-			let own_claim = funding.is_some_and(|f| f.attempt.id == attempt.id && f.claim_complete);
-			if !own_claim {
-				// A preimage learned from another source cannot complete this
-				// internal payment before its own recipient commitment.
-				return Ok(if attempt.status == LightningPaymentStatus::Failed {
-					PaymentStatus::Failed
-				} else { PaymentStatus::Pending });
-			}
-		}
-
-		// The settlement WAL wins over a stale coarse attempt status. A
-		// completed payment must never be reported as refundable because its
-		// final status write lost an optimistic-lock race.
-		if let Some(preimage) = self.settler.is_settled(payment_hash).await? {
-			debug!(payment_hash = %payment_hash, "CheckLightningPayment responding with success");
-			return Ok(PaymentStatus::Success(preimage));
-		}
-		ensure!(attempt.status != LightningPaymentStatus::Succeeded, "missing preimage on payment success");
-
-		if attempt.status == LightningPaymentStatus::Failed {
-			debug!(payment_hash = %payment_hash, "CheckLightningPayment responding with failed");
-			return Ok(PaymentStatus::Failed);
-		}
-
-		trace!(payment_hash = %payment_hash, "payment still pending");
-		Ok(PaymentStatus::Pending)
+		source_ids: &[VtxoId],
+	) -> anyhow::Result<(PaymentStatus, Vec<VtxoId>)> {
+		let Some((scope, outcome)) = self.db.read_snapshot(async |t|
+			t.lightning_payment_outcome(payment_hash, source_ids, None).await
+		).await? else { return Ok((PaymentStatus::Pending, Vec::new())); };
+		let status = match outcome {
+			LightningSourceState::Discharged => {
+				let preimage = self.settler.is_settled(payment_hash).await?
+					.context("source-specific payment success has no preimage")?;
+				PaymentStatus::Success(preimage)
+			},
+			LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. } => PaymentStatus::Failed,
+			_ => PaymentStatus::Pending,
+		};
+		Ok((status, scope))
 	}
 
-	/// Waits until the payment for the given payment hash reaches a final state.
-	///
-	/// Never returns [`PaymentStatus::Pending`].
+	/// Waits for a recorded scope; ambiguous or invalid scopes remain Pending.
 	pub async fn wait_payment_status(
 		&self,
 		payment_hash: PaymentHash,
-	) -> anyhow::Result<PaymentStatus> {
+		source_ids: &[VtxoId],
+	) -> anyhow::Result<(PaymentStatus, Vec<VtxoId>)> {
 		trace!("Waiting for payment status for payment hash: {}", payment_hash);
 
 		// Subscribe before the first check, otherwise we can miss an update
@@ -551,9 +527,10 @@ impl LightningManager {
 		let mut poll_interval = tokio::time::interval(self.invoice_poll_interval);
 
 		loop {
-			match self.get_payment_status(payment_hash).await? {
-				PaymentStatus::Success(preimage) => return Ok(PaymentStatus::Success(preimage)),
-				PaymentStatus::Failed => return Ok(PaymentStatus::Failed),
+			let (status, scope) = self.get_payment_status(payment_hash, source_ids).await?;
+			match status {
+				PaymentStatus::Success(_) | PaymentStatus::Failed => return Ok((status, scope)),
+				PaymentStatus::Pending if scope.is_empty() => return Ok((status, scope)),
 				PaymentStatus::Pending => {},
 			}
 
@@ -694,12 +671,18 @@ impl LightningManager {
 		// Update the subscription status to settled and notify waiters.
 		// This covers both intra-ark (no CLN hook fires) and regular
 		// hold-invoice paths.
-		let newly_settled = self.db.write(async |t| t.store_lightning_htlc_subscription_status(
-			subscription_id,
-			LightningHtlcSubscriptionStatus::Settled,
-			None,
-			None,
-		).await).await?;
+		let newly_settled = self.db.write(async |t| {
+			if let Some(funding) = t.funded_internal_receive(subscription_id, payment_hash).await? {
+				t.lock_lightning_attempt_sources(funding.attempt.id).await?;
+				t.mark_htlc_send_vtxos_ln_spent(funding.attempt.id).await?;
+			}
+			t.store_lightning_htlc_subscription_status(
+				subscription_id,
+				LightningHtlcSubscriptionStatus::Settled,
+				None,
+				None,
+			).await
+		}).await?;
 		let _ = self.payment_update_tx.send(payment_hash);
 
 		// Only meter on the caller that actually flipped the row; retries
@@ -1025,7 +1008,14 @@ impl LightningManagerProcess {
 			let subscription_id = candidate.attempt.lightning_htlc_subscription_id.context("internal candidate lacks subscription")?;
 			let current = self.db.read(async |t| t.funded_internal_receive(subscription_id, hash).await).await?
 				.context("completed internal candidate lost its source")?;
-			if current.attempt.id != candidate.attempt.id || !current.claim_complete || current.attempt.status.is_final() { continue; }
+			if current.attempt.id != candidate.attempt.id || !current.claim_complete { continue; }
+			if current.attempt.status.is_final() {
+				self.db.write(async |t| t.mark_htlc_send_vtxos_ln_spent(current.attempt.id).await).await?;
+				let _ = self.payment_update_tx.send(hash);
+				PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx)
+					.post_lightning_send_finished(&current.attempt).await;
+				continue;
+			}
 			let preimage = self.settler.is_settled(hash).await?.context("completed internal claim lacks its WAL")?;
 			PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx)
 				.process_payment_attempt(&self.settler, &current.attempt, LightningPaymentStatus::Succeeded,

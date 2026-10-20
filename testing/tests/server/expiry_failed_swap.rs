@@ -151,7 +151,7 @@ async fn failed_swap_during_restart() {
 	let ctx = TestContext::new("server/expiry_failed_swap_restart").await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	assert_eq!(lightning.internal.grpc_client().await.getinfo(cln_rpc::GetinfoRequest {})
-		.await.unwrap().into_inner().version, "v26.06.6", "terminal group semantics require the qualified CLN version");
+		.await.unwrap().into_inner().version, "v26.06.6-abandon6", "terminal group semantics require the qualified CLN version");
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal)
 		.no_vtxo_pool().funded(btc(10)).cfg(|config| {
 			config.vtxo_lifetime = BlockDelta::new(24);

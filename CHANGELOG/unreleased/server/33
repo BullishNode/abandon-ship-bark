@@ -3,3 +3,8 @@
   Keep the inherited migration chains and authoritative payment checks.
   Fresh stores are required; earlier experimental fork formats are not converted.
   [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)
+- Bind Lightning outcomes to the complete payment source
+  Keep unrelated payments with the same hash from settling another sender.
+  Require the qualified six-confirmation Core Lightning runtime and preserve
+  source-specific incident evidence for supervised recovery.
+  [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)

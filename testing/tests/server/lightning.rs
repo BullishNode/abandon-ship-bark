@@ -525,7 +525,14 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 	// preimage.
 	let _ = bark_payee.try_lightning_receive_no_wait(&invoice_info.invoice).await;
 
-	let htlc_recv_expiry = srv.htlc_vtxos(payment_hash).await.iter()
+	let htlcs = srv.htlc_vtxos(payment_hash).await;
+	let mut payer_htlc_vtxo_ids = htlcs.iter()
+		.filter(|htlc| htlc.direction() == HtlcDirection::Incoming)
+		.map(|htlc| htlc.vtxo.vtxo_id.to_bytes().to_vec()).collect::<Vec<_>>();
+	assert!(!payer_htlc_vtxo_ids.is_empty());
+	payer_htlc_vtxo_ids.sort_unstable();
+	assert!(payer_htlc_vtxo_ids.windows(2).all(|pair| pair[0] != pair[1]));
+	let htlc_recv_expiry = htlcs.iter()
 		.filter(|h| h.direction() == HtlcDirection::Outgoing)
 		.map(|h| h.htlc_expiry())
 		.max()
@@ -552,7 +559,11 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 	let status = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
 		hash: payment_hash.to_vec(),
 		wait: true,
+		htlc_vtxo_ids: payer_htlc_vtxo_ids.clone(),
 	}).wait_millis(30_000).await.expect("check_lightning_payment failed").into_inner();
+	let mut echoed_ids = status.htlc_vtxo_ids.clone();
+	echoed_ids.sort_unstable();
+	assert_eq!(echoed_ids, payer_htlc_vtxo_ids, "terminal failure must identify the original payer's complete HTLC set");
 	assert!(
 		matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Failed(_))),
 		"canceling should fail the payer's attempt, got {:?}", status.payment_status,
@@ -1009,9 +1020,10 @@ async fn refuse_generic_spends_of_htlc_send_vtxo_with_no_payment_in_flight() {
 		async fn check_lightning_payment(
 			&self,
 			_upstream: &mut ArkClient,
-			_req: protos::CheckLightningPaymentRequest,
+			req: protos::CheckLightningPaymentRequest,
 		) -> Result<protos::LightningPaymentStatus, tonic::Status> {
 			Ok(protos::LightningPaymentStatus {
+				htlc_vtxo_ids: req.htlc_vtxo_ids,
 				payment_status: Some(
 					protos::lightning_payment_status::PaymentStatus::Pending(protos::Empty {}),
 				),
@@ -1094,9 +1106,10 @@ async fn refuse_revocation_of_banned_htlc_send_vtxo() {
 		async fn check_lightning_payment(
 			&self,
 			_upstream: &mut ArkClient,
-			_req: protos::CheckLightningPaymentRequest,
+			req: protos::CheckLightningPaymentRequest,
 		) -> Result<protos::LightningPaymentStatus, tonic::Status> {
 			Ok(protos::LightningPaymentStatus {
+				htlc_vtxo_ids: req.htlc_vtxo_ids,
 				payment_status: Some(
 					protos::lightning_payment_status::PaymentStatus::Pending(protos::Empty {}),
 				),

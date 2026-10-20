@@ -1,0 +1,12 @@
+diff --git a/lightningd/onchain_control.c b/lightningd/onchain_control.c
+--- a/lightningd/onchain_control.c
++++ b/lightningd/onchain_control.c
+@@ -1885,7 +1885,7 @@
+ 				  tx->wtx->locktime,
+ 				  blockheight,
+ 				  /* FIXME: config for 'reasonable depth' */
+-				  3,
++				  6,
+ 				  channel->last_htlc_sigs,
+ 				  channel->min_possible_feerate,
+ 				  channel->max_possible_feerate,

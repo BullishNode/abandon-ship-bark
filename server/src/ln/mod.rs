@@ -1415,7 +1415,10 @@ impl Server {
 		}
 
 		let (builder, _) = if is_self_payment {
-			self.cosign_internal_receive(builder, sub.id, payment_preimage).await?
+			let signed = self.cosign_internal_receive(builder, sub.id, payment_preimage).await?;
+			self.lightning_manager.settle_invoice(sub.id, payment_preimage).await
+				.context("could not finalize internal Lightning receive")?;
+			signed
 		} else {
 			self.cosign_oor_with_builder(builder).await?
 		};

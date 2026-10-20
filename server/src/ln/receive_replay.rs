@@ -57,6 +57,21 @@ impl Server {
 		if !still_collectible || subscription.status == LightningHtlcSubscriptionStatus::Canceled {
 			if internal {
 				collected = self.db.read(async |t| t.internal_receive_collected(subscription_id, original.payment_hash).await).await?;
+				if !collected && !still_collectible
+					&& self.lightning_manager.original_receive_invoice_state(&subscription).await? == Some(InvoiceState::Cancelled) {
+					// Internal promotion cancels the native invoice before a claim
+					// necessarily collects its original sources. Terminal backend
+					// evidence plus expired collection permits only ordinary grant
+					// recovery, never an immediate sender refund.
+					let view = self.db.read(async |t| t.expiry_rebuild_token().await).await?
+						.context("uncollected internal receive needs completed chain views")?;
+					self.verify_readiness_view(view).await?;
+					let stopped = self.db.write(async |t|
+						t.stop_uncollected_receive_request(subscription_id, Some((view, margin))).await
+					).await?;
+					ensure!(stopped, "cancelled internal receive no longer meets uncollected source predicates");
+					return Ok(());
+				}
 			} else {
 				match self.lightning_manager.original_receive_invoice_state(&subscription).await? {
 					Some(InvoiceState::Paid) => {
@@ -67,7 +82,7 @@ impl Server {
 						collected = true;
 					},
 					Some(InvoiceState::Cancelled) => {
-						let stopped = self.db.write(async |t| t.stop_uncollected_receive_request(subscription_id).await).await?;
+						let stopped = self.db.write(async |t| t.stop_uncollected_receive_request(subscription_id, None).await).await?;
 						ensure!(stopped, "cancelled invoice no longer meets uncollected source predicates; recheck actual claim state");
 						return Ok(());
 					},

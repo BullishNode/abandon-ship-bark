@@ -432,52 +432,7 @@ impl Tx<'_> {
 			LEFT JOIN expiry_lightning_internal_funding i ON i.id=a.id
 			WHERE l.vtxo_id=$1 AND a.payment_hash=$2
 		", &[&source.to_string(), &hash.to_string()]).await?;
-		if attempts.is_empty() {
-			return Ok(LightningSourceState::Unattempted);
-		}
-		let preimage_known = self.get_htlc_settlement_by_payment_hash(hash).await?.is_some();
-		let mut pending = false;
-		let mut internal = Vec::new();
-		let mut cancelled_internal = None;
-		for attempt in attempts {
-			if preimage_known {
-				if attempt.get::<_, bool>("external_success") { return Ok(LightningSourceState::Discharged); }
-				if let Some(subscription) = attempt.get::<_, Option<i64>>("internal_subscription") {
-					if self.funded_internal_receive(subscription, hash).await?.is_some_and(|funding|
-						funding.attempt.id == attempt.get::<_, i64>("id") && funding.claim_complete)
-					{ return Ok(LightningSourceState::Discharged); }
-				}
-			}
-			if attempt.get::<_, bool>("internal_funding") {
-				let attempt_id = attempt.get::<_, i64>("id");
-				if let Some(subscription_id) = self.internal_zero_grant_cancellation(attempt_id, hash).await? {
-					cancelled_internal = Some((attempt_id, subscription_id));
-					continue;
-				}
-				internal.push(attempt_id);
-				continue;
-			}
-			let never_dispatched = attempt.get::<_, bool>("queued")
-				&& attempt.get::<_, bool>("failed") && !attempt.get::<_, bool>("dispatched");
-			if !attempt.get::<_, bool>("terminal_failure") && !never_dispatched {
-				pending = true;
-			}
-		}
-		Ok(if pending {
-			LightningSourceState::Pending
-		} else if let [attempt_id] = internal[..] {
-			let subscription_id = self.query_one(
-				"SELECT subscription_id FROM expiry_lightning_internal_funding WHERE id=$1",
-				&[&attempt_id]).await?.get("subscription_id");
-			LightningSourceState::InternalCommitted { attempt_id, subscription_id }
-		} else if !internal.is_empty() {
-			// Several internal attempts on one source never resolve automatically.
-			LightningSourceState::Pending
-		} else if let Some((attempt_id, subscription_id)) = cancelled_internal {
-			LightningSourceState::InternalZeroGrantCancelled { attempt_id, subscription_id }
-		} else {
-			LightningSourceState::Failed
-		})
+		self.lightning_attempts_outcome(hash, attempts).await
 	}
 
 	/// Resolve only a complete signed source-set identity, never the newest
@@ -661,9 +616,6 @@ impl Tx<'_> {
 		watchman_tip: BlockHeight,
 		depth: u32,
 	) -> anyhow::Result<Option<BlockRef>> {
-		if self.get_htlc_settlement_by_payment_hash(hash).await?.is_some() {
-			return Ok(None);
-		}
 		let grants = self.query("
 			SELECT h.payment_hash,h.direction::TEXT,h.offchain_resolution::TEXT,
 				h.chain_resolution::TEXT,h.chain_resolution_height,

@@ -1,5 +1,6 @@
 //! Fallback registration, payout and seed restoration with an application-owned BIP84 wallet.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -16,7 +17,7 @@ use tokio::sync::RwLock;
 
 use ark_testing::{sat, TestContext};
 use ark_testing::onchain::AppBip84Wallet;
-use ark_testing::daemon::captaind::{self, ArkClient};
+use ark_testing::daemon::captaind::{self, ArkClient, WalletAdminClient};
 
 #[tokio::test]
 async fn fallback_external_bip84_wallet_registers_and_restores_without_ark_seed_assumptions() {
@@ -98,9 +99,15 @@ async fn fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend(
 		run_daemon: false, ..Default::default()
 	}).await.unwrap();
 	let registration = wallet.fallback_destination().await.unwrap();
+	let scan_from = ctx.bitcoind().get_block_count().await;
 	let funding_address = app.write().await.address().await.unwrap();
 	assert_ne!(funding_address.script_pubkey(), script);
-	ctx.bitcoind().fund_addr(funding_address, sat(200_000)).await;
+	let funding_txid = ctx.bitcoind().fund_addr(funding_address.clone(), sat(200_000)).await;
+	let funding = ctx.bitcoind().await_transaction(funding_txid).await;
+	let funding_outputs = funding.output.iter().enumerate().filter(|(_, output)|
+		output.script_pubkey == funding_address.script_pubkey() && output.value == sat(200_000)).collect::<Vec<_>>();
+	assert_eq!(funding_outputs.len(), 1);
+	let funding_point = OutPoint::new(funding_txid, funding_outputs[0].0 as u32);
 	ctx.generate_blocks(1).await;
 	app.write().await.sync(wallet.chain()).await.unwrap();
 	let board = wallet.board_amount(sat(100_000)).await.unwrap();
@@ -110,13 +117,34 @@ async fn fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend(
 	assert_eq!(board.vtxos.len(), 1);
 	let source = wallet.get_full_vtxo(board.vtxos[0]).await.unwrap();
 	assert_eq!(wallet.spendable_vtxos().await.unwrap().len(), 1);
+	assert_eq!(source.amount(), sat(100_000));
+	assert_eq!(source.chain_anchor().txid, board.funding_tx.compute_txid());
+	source.validate(&board.funding_tx).unwrap();
+	assert_eq!(board.funding_tx.input.iter().map(|input| input.previous_output).collect::<Vec<_>>(), vec![funding_point]);
+	let board_fee = sat(200_000).checked_sub(board.funding_tx.output.iter().map(|output| output.value).sum::<Amount>()).unwrap();
+	assert!(board_fee > Amount::ZERO);
+	app.write().await.sync(wallet.chain()).await.unwrap();
+	let mut board_change = BTreeMap::new();
+	for (vout, output) in board.funding_tx.output.iter().enumerate() {
+		if app.read().await.is_mine(&output.script_pubkey).await.unwrap() {
+			assert!(output.script_pubkey.is_p2wpkh());
+			board_change.insert(OutPoint::new(board.funding_tx.compute_txid(), vout as u32), output.clone());
+		}
+	}
+	assert!(!board_change.is_empty());
+	assert_eq!(board_change.values().map(|output| output.value).sum::<Amount>() + source.amount() + board_fee, sat(200_000));
 	let expected = source.amount() - sat(1_000);
 
 	// Keep the wallet closed until the fallback has confirmed.
 	drop(wallet);
 	drop(app);
 	let fee_address = srv.watchmand().wait_wallet_address().await;
-	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
+	let fee_funding_txid = ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;
+	let fee_funding = ctx.bitcoind().await_transaction(fee_funding_txid).await;
+	let sponsor_outputs = fee_funding.output.iter().enumerate().filter(|(_, output)|
+		output.script_pubkey == fee_address.script_pubkey() && output.value == sat(100_000)).collect::<Vec<_>>();
+	assert_eq!(sponsor_outputs.len(), 1);
+	let sponsor = OutPoint::new(fee_funding_txid, sponsor_outputs[0].0 as u32);
 	ctx.generate_blocks(2).await;
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	assert!(height < source.expiry_height().to_u32());
@@ -147,6 +175,53 @@ async fn fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend(
 		.unwrap().unwrap();
 	assert!(confirmed_payout.confirmations >= 6, "the external app needs an actually confirmed payout");
 	assert_eq!(confirmed_payout.value, expected);
+	let core = ctx.bitcoind().sync_client();
+	let payout_info = core.custom_get_raw_transaction_info(point.txid, None).unwrap().unwrap();
+	let payout_hash = payout_info.blockhash.unwrap();
+	let payout_height = core.get_block_header_info(&payout_hash).unwrap().height;
+	assert_eq!(core.get_block_hash(payout_height as u64).unwrap(), payout_hash);
+	let payout_block = core.get_block(&payout_hash).unwrap();
+	assert!(payout_block.txdata.iter().any(|tx| tx == &parent));
+	let parent_points = parent.input.iter().map(|input| input.previous_output).collect::<BTreeSet<_>>();
+	assert_eq!(parent_points.len(), parent.input.len());
+	assert_eq!(parent_points, BTreeSet::from([source.chain_anchor()]));
+	let mut parent_value = Amount::ZERO;
+	for input in &parent.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		let output = &previous.output[input.previous_output.vout as usize];
+		parent_value += output.value;
+	}
+	assert_eq!(parent_value, sat(100_000));
+	let parent_fee = parent_value.checked_sub(parent.output.iter().map(|output| output.value).sum::<Amount>()).unwrap();
+	assert_eq!(parent_fee, Amount::ZERO);
+	let anchors = parent.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor()).collect::<Vec<_>>();
+	assert_eq!(anchors.len(), 1);
+	assert_eq!(anchors[0].1.value, Amount::ZERO);
+	let anchor = OutPoint::new(parent.compute_txid(), anchors[0].0 as u32);
+	let children = payout_block.txdata.iter().filter(|tx| tx.input.iter().any(|input| input.previous_output == anchor)).collect::<Vec<_>>();
+	assert_eq!(children.len(), 1);
+	let child = children[0];
+	let child_points = child.input.iter().map(|input| input.previous_output).collect::<BTreeSet<_>>();
+	assert_eq!(child_points.len(), child.input.len());
+	assert_eq!(child_points, BTreeSet::from([anchor, sponsor]));
+	let child_info = core.custom_get_raw_transaction_info(child.compute_txid(), None).unwrap().unwrap();
+	assert_eq!(child_info.blockhash, Some(payout_hash));
+	assert!(child_info.confirmations.unwrap_or(0) >= 6);
+	let operator_change = child.output.iter().map(|output| output.value).sum::<Amount>();
+	let mut child_value = Amount::ZERO;
+	for input in &child.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		child_value += previous.output[input.previous_output.vout as usize].value;
+	}
+	let child_fee = child_value.checked_sub(operator_change).unwrap();
+	assert!(child_fee > Amount::ZERO);
+	let operator_script = srv.watchmand().config().sweep_address.clone().unwrap().require_network(network).unwrap().script_pubkey();
+	let mut operator_retained = Amount::ZERO;
+	for (vout, output) in parent.output.iter().enumerate() {
+		if vout as u32 == point.vout || output.is_p2a_fee_anchor() { continue; }
+		assert_eq!(output.script_pubkey, operator_script);
+		operator_retained += output.value;
+	}
 
 	let restored_app_db: Arc<dyn BarkPersister> = Arc::new(SqliteClient::open(ctx.datadir.join("restored-app.sqlite")).unwrap());
 	let restored_bdk = AppBip84Wallet::load_or_create(network, app_seed, restored_app_db, ctx.bitcoind().sync_client()).await.unwrap();
@@ -155,13 +230,18 @@ async fn fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend(
 	let restored_app: Arc<RwLock<dyn OnchainWalletTrait>> = restored_impl.clone();
 	let restored_ark_db: Arc<dyn BarkPersister> = Arc::new(SqliteClient::open(ctx.datadir.join("restored-ark.sqlite")).unwrap());
 	let restored = Wallet::open(network, WalletSeed::new_from_seed(network, &ark_seed), config, OpenWalletArgs {
-		persister: Some(restored_ark_db), onchain: Some(restored_app.clone()), fallback_spk: Some(script),
+		persister: Some(restored_ark_db), onchain: Some(restored_app.clone()), fallback_spk: Some(script.clone()),
 		run_daemon: false, ..Default::default()
 	}).await.unwrap();
 	assert_eq!(restored.fallback_destination().await.unwrap(), registration);
 	restored_app.write().await.sync(restored.chain()).await.unwrap();
 	assert!(restored_impl.read().await.utxos().iter().any(|utxo| matches!(utxo,
 		bark::onchain::Utxo::Local(local) if local.outpoint == point && local.amount == expected && local.confirmation_height.is_some())));
+	let mut expected_inputs = board_change.clone();
+	assert!(expected_inputs.insert(point, parent.output[point.vout as usize].clone()).is_none());
+	let discovered = restored_impl.read().await.list_unspent().into_iter().map(|output|
+		(output.outpoint, output.txout)).collect::<BTreeMap<_, _>>();
+	assert_eq!(discovered, expected_inputs, "fresh seed discovery must find exactly the actual payout and legitimate board change");
 
 	// Fetch payout history using the restored account identity.
 	// The restored wallet receives no source ID or transaction hint.
@@ -184,10 +264,70 @@ async fn fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend(
 	let recovery = final_psbt.extract_tx().unwrap();
 	let input = recovery.input.iter().find(|input| input.previous_output == point).expect("external callback did not spend its actual fallback outpoint");
 	assert_eq!(input.witness.len(), 2, "the fallback is actually spent through the app's BIP84 key");
+	let mut recovery_inputs = BTreeMap::new();
+	for input in &recovery.input {
+		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
+		let output = previous.output[input.previous_output.vout as usize].clone();
+		assert!(output.script_pubkey.is_p2wpkh());
+		assert_eq!(input.witness.len(), 2);
+		assert!(recovery_inputs.insert(input.previous_output, output).is_none());
+	}
+	assert_eq!(recovery_inputs, expected_inputs);
+	assert_eq!(recovery.output.len(), 1);
+	assert_eq!(recovery.output[0].script_pubkey, destination.script_pubkey());
+	let recovered_value = recovery.output[0].value;
+	let recovery_fee = recovery_inputs.values().map(|output| output.value).sum::<Amount>().checked_sub(recovered_value).unwrap();
+	assert!(recovery_fee > Amount::ZERO);
+	assert_eq!(sat(200_000), recovered_value + recovery_fee + board_fee + sat(1_000));
+	assert_eq!(sat(300_000),
+		recovered_value + operator_retained + operator_change + board_fee + parent_fee + child_fee + recovery_fee,
+		"original app funding and operator sponsor must conserve through board, payout, child and recovery");
 	restored.chain().broadcast_tx(&recovery).await.unwrap();
 	assert_eq!(ctx.bitcoind().await_transaction(recovery.compute_txid()).await, recovery);
-	ctx.generate_blocks(1).await;
-	assert!(ctx.bitcoind().get_received_by_address(&destination) > sat(0));
+	ctx.generate_blocks(6).await;
+	let recovery_info = core.custom_get_raw_transaction_info(recovery.compute_txid(), None).unwrap().unwrap();
+	assert!(recovery_info.confirmations.unwrap_or(0) >= 6);
+	let recovery_hash = recovery_info.blockhash.unwrap();
+	let recovery_height = core.get_block_header_info(&recovery_hash).unwrap().height;
+	assert_eq!(core.get_block_hash(recovery_height as u64).unwrap(), recovery_hash);
+	assert!(core.get_block(&recovery_hash).unwrap().txdata.iter().any(|tx| tx == &recovery));
+	let delivered = core.get_tx_out(&recovery.compute_txid(), 0, Some(true)).unwrap().unwrap();
+	assert!(delivered.confirmations >= 6);
+	assert_eq!(delivered.value, recovered_value);
+	assert_eq!(delivered.script_pub_key.script().unwrap(), destination.script_pubkey());
+	assert_eq!(ctx.bitcoind().get_received_by_address(&destination), recovered_value);
+	for input in recovery_inputs.keys() { assert!(core.get_tx_out(&input.txid, input.vout, Some(true)).unwrap().is_none()); }
+	for (txid, outputs) in [(parent.compute_txid(), &parent.output), (child.compute_txid(), &child.output)] {
+		for (vout, output) in outputs.iter().enumerate() {
+			if output.is_p2a_fee_anchor() || (txid == point.txid && vout as u32 == point.vout) { continue; }
+			let actual = core.get_tx_out(&txid, vout as u32, Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations >= 6);
+			assert_eq!(actual.value, output.value);
+			assert_eq!(actual.script_pub_key.script().unwrap(), output.script_pubkey);
+		}
+	}
+	let child_outputs = (0..child.output.len()).map(|vout|
+		OutPoint::new(child.compute_txid(), vout as u32)).collect::<BTreeSet<_>>();
+	let admin_address = srv.watchmand().config().admin_address.unwrap();
+	let mut admin = WalletAdminClient::connect(format!("http://{admin_address}")).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(10), async {
+		loop {
+			let owned = admin.wallet_status(protos::Empty {}).await.unwrap().into_inner().watchman.unwrap()
+				.confirmed_utxos.into_iter().map(|point| point.parse::<OutPoint>().unwrap()).collect::<BTreeSet<_>>();
+			if child_outputs.is_subset(&owned) { break; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("every actual fee-child change output must belong to the watchman wallet");
+	let mut actual_payouts = Vec::new();
+	for height in scan_from..=ctx.bitcoind().get_block_count().await {
+		let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
+		for tx in block.txdata {
+			for (vout, output) in tx.output.iter().enumerate() {
+				if output.script_pubkey == script { actual_payouts.push((OutPoint::new(tx.compute_txid(), vout as u32), output.value)); }
+			}
+		}
+	}
+	assert_eq!(actual_payouts, vec![(point, expected)], "a spent payout must not conceal another canonical payment to the fallback script");
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_none());
 }
 

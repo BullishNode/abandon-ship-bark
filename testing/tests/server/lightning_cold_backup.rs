@@ -1,5 +1,5 @@
-//! One orderly physical backup at genuine internal HtlcsReady, followed by
-//! automatic sender refund and fresh-seed BIP86 recovery. Core and CLN continue.
+//! Orderly and unclean-PostgreSQL physical backups at genuine internal HtlcsReady,
+//! followed by automatic sender refund and fresh-seed BIP86 recovery. Core and CLN continue.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File};
@@ -35,14 +35,18 @@ use server_rpc::protos;
 
 /// The standard helper's prepare deletes the cluster and runs initdb. This
 /// wrapper delegates only reservations, the real postgres command and readiness.
-struct ExistingCluster(Arc<PostgresHelper>);
+struct ExistingCluster(Arc<PostgresHelper>, bool);
 
 #[async_trait]
 impl DaemonHelper for ExistingCluster {
 	fn name(&self) -> &str { &self.0.name }
 	fn datadir(&self) -> PathBuf { self.0.datadir.clone() }
 	async fn make_reservations(&self) -> anyhow::Result<()> { self.0.make_reservations().await }
-	async fn get_command(&self) -> anyhow::Result<Command> { self.0.get_command().await }
+	async fn get_command(&self) -> anyhow::Result<Command> {
+		let mut command = self.0.get_command().await?;
+		if self.1 { command.args(["-c", "lc_messages=C"]); }
+		Ok(command)
+	}
 	async fn wait_for_init(&self) -> anyhow::Result<()> { self.0.wait_for_init().await }
 	async fn prepare(&self) -> anyhow::Result<()> {
 		assert!(self.0.pgdata().join("PG_VERSION").is_file());
@@ -106,15 +110,50 @@ fn postgres_tool(name: &str) -> Command {
 		.map(|directory| directory.join(name)).unwrap_or_else(|| PathBuf::from(name)))
 }
 
-async fn assert_clean_cluster(path: &Path) {
+async fn assert_stopped_cluster(path: &Path, unclean: bool) {
 	assert!(!path.join("postmaster.pid").exists());
 	let result = tokio::time::timeout(Duration::from_secs(10), postgres_tool("pg_controldata")
 		.arg("-D").arg(path).env("LC_ALL", "C").kill_on_drop(true).output()).await.unwrap().unwrap();
 	assert!(result.status.success(), "pg_controldata must inspect the stopped cluster");
 	let output = String::from_utf8(result.stdout).unwrap();
+	let expected = if unclean { "in production" } else { "shut down" };
 	assert!(output.lines().any(|line| line.split_once(':').is_some_and(|(key, value)|
-		key.trim() == "Database cluster state" && value.trim() == "shut down")),
-		"a reaped postmaster alone does not establish a clean cold backup");
+		key.trim() == "Database cluster state" && value.trim() == expected)),
+		"the stopped cluster must have the expected {expected} control state");
+}
+
+// Record only process identities, never command lines or database contents.
+fn process_start_ticks(pid: u32) -> Option<u64> {
+	let stat = match fs::read_to_string(format!("/proc/{pid}/stat")) {
+		Ok(stat) => stat,
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+		Err(error) => panic!("cannot inspect owned PostgreSQL process {pid}: {error}"),
+	};
+	let (_, fields) = stat.rsplit_once(") ").expect("Linux process stat must contain its command boundary");
+	Some(fields.split_whitespace().nth(19).expect("Linux process stat must contain start ticks").parse().unwrap())
+}
+
+fn postgres_process_tree(path: &Path) -> BTreeMap<u32, u64> {
+	let pid = fs::read_to_string(path.join("postmaster.pid")).unwrap()
+		.lines().next().unwrap().parse::<u32>().unwrap();
+	assert_eq!(fs::read_to_string(format!("/proc/{pid}/comm")).unwrap().trim(), "postgres");
+	let mut pending = vec![pid];
+	let mut processes = BTreeMap::new();
+	while let Some(pid) = pending.pop() {
+		if processes.contains_key(&pid) { continue; }
+		let Some(start) = process_start_ticks(pid) else { continue; };
+		assert!(processes.len() < 64, "owned PostgreSQL descendant budget exceeded");
+		processes.insert(pid, start);
+		// Inspect every task's children, including workers descended from workers.
+		let tasks = fs::read_dir(format!("/proc/{pid}/task")).unwrap().collect::<Result<Vec<_>, _>>().unwrap();
+		assert!(tasks.len() <= 64, "owned PostgreSQL task budget exceeded");
+		for task in tasks {
+			let children = fs::read_to_string(task.path().join("children")).unwrap();
+			for child in children.split_whitespace() { pending.push(child.parse().unwrap()); }
+		}
+	}
+	assert!(processes.contains_key(&pid), "the original owned postmaster must be alive before crash");
+	processes
 }
 
 async fn watchman_coins(watchman: &Watchmand) -> BTreeSet<OutPoint> {
@@ -323,17 +362,26 @@ fn canonical_descendants(ctx: &TestContext, first_height: u32, external: &BTreeM
 #[tokio::test]
 async fn internal_htlcs_ready_physical_backup_refunds_absent_sender() {
 	require_bitcoind_chain_source!();
-	tokio::time::timeout(Duration::from_secs(180), Box::pin(lightning_backup())).await
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(lightning_backup(false))).await
 		.expect("one internal signed-grant physical backup and seed recovery must finish within 180 seconds");
 }
 
-async fn lightning_backup() {
+#[tokio::test]
+async fn internal_htlcs_ready_unclean_postgres_backup_refunds_absent_sender() {
+	require_bitcoind_chain_source!();
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(lightning_backup(true))).await
+		.expect("one internal signed-grant PostgreSQL crash recovery and seed recovery must finish within 180 seconds");
+}
+
+async fn lightning_backup(unclean: bool) {
 	assert!(!ark_testing::postgres::externally_hosted(), "the physical cluster must belong to this test");
-	let ctx = TestContext::new("server/internal_htlcs_ready_physical_backup").await;
+	let context = if unclean { "server/internal_htlcs_ready_unclean_postgres_backup" }
+		else { "server/internal_htlcs_ready_physical_backup" };
+	let ctx = TestContext::new(context).await;
 	let first_height = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	assert_eq!(lightning.internal.grpc_client().await.getinfo(cln_rpc::GetinfoRequest {}).await
-		.unwrap().into_inner().version, "v26.06.6");
+		.unwrap().into_inner().version, "v26.06.6-abandon6");
 	// Keep real operator returns outside the rounds wallet: the fixture must
 	// not start unrelated replenishment while measuring this finite backup cut.
 	let operator_address = ctx.bitcoind().get_new_address();
@@ -500,9 +548,19 @@ async fn lightning_backup() {
 	assert!(grants.iter().all(|grant| before + BlockDelta::new(2) < grant.expiry_height()));
 	let before_hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(before.to_u32())).unwrap();
 	drop(db); // No old connection/pool is used after the owned cluster stops.
-	ctx.postgres_manager().stop().await.unwrap();
 	let source_pg = ctx.datadir.join("postgres/pg_data");
-	assert_clean_cluster(&source_pg).await;
+	if unclean {
+		// Product daemons are already stopped: this is database crash recovery,
+		// not an application-mid-transaction crash, power loss or CLN crash.
+		let processes = postgres_process_tree(&source_pg);
+		ctx.postgres_manager().crash_stop().await.unwrap();
+		for (pid, start) in processes {
+			assert_ne!(process_start_ticks(pid), Some(start), "an original PostgreSQL process survived immediate shutdown");
+		}
+	} else {
+		ctx.postgres_manager().stop().await.unwrap();
+	}
+	assert_stopped_cluster(&source_pg, unclean).await;
 	let during_backup = mine_continuing_core(&ctx, 1).await;
 	assert_eq!(during_backup.to_u32(), before.to_u32() + 1);
 	assert_eq!(ctx.bitcoind().sync_client().get_block_hash(u64::from(before.to_u32())).unwrap(), before_hash);
@@ -519,10 +577,19 @@ async fn lightning_backup() {
 		let manifest = copy_tree(source, &backup.join(name));
 		assert_eq!(copy_tree(&backup.join(name), &restored_root.join(name)), manifest);
 	}
-	assert_clean_cluster(&restored_root.join("postgres/pg_data")).await;
+	assert_stopped_cluster(&restored_root.join("postgres/pg_data"), unclean).await;
 	let helper = Arc::new(PostgresHelper::new("lightning-restored-postgres", restored_root.join("postgres")));
-	let postgres = Daemon::wrap(ExistingCluster(helper.clone()));
+	let recovery_log = restored_root.join("postgres/stderr.log");
+	let recovery_offset = if unclean { Some(fs::metadata(&recovery_log).unwrap().len()) } else { None };
+	let postgres = Daemon::wrap(ExistingCluster(helper.clone(), unclean));
 	Box::pin(postgres.start()).await.unwrap();
+	if let Some(offset) = recovery_offset {
+		let log = fs::read(&recovery_log).unwrap();
+		let recovered = std::str::from_utf8(&log[usize::try_from(offset).unwrap()..]).unwrap();
+		for message in ["database system was interrupted", "automatic recovery in progress", "redo starts at", "redo done at"] {
+			assert!(recovered.contains(message), "this restored start must independently prove {message}");
+		}
+	}
 	let config = helper.into_config(&server_config.postgres.name);
 	assert_eq!(config.name, server_config.postgres.name);
 	assert_ne!(config.port, server_config.postgres.port);
@@ -591,11 +658,9 @@ async fn lightning_backup() {
 	let maturity = maturity.expect("a genuine leaf or ancestor expiry barrier must be observed before maturity");
 	let height = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
 	assert!(height < maturity, "the fixture must observe its genuine pre-maturity barrier");
-	let no_early_payout = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_allocation a \
-		JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-		WHERE e.vtxo_id=$1 AND c.disposition='customer' AND a.broadcast_at IS NOT NULL", &[&source.to_string()]).await?
+	let no_early_decision = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1", &[&source.to_string()]).await?
 		.get::<_, i64>(0))).await.unwrap();
-	assert_eq!(no_early_payout, 0);
+	assert_eq!(no_early_decision, 0);
 	if maturity > height + 1 {
 		let count = maturity - 1 - height;
 		let height = mine_continuing_core(&ctx, count).await;
@@ -604,9 +669,7 @@ async fn lightning_backup() {
 		restored.watchmand().wait_for_sync_height(height).await;
 		let hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();
 		rebuilt(&db, BlockRef { height, hash }).await;
-		assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_allocation a \
-			JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-			WHERE e.vtxo_id=$1 AND c.disposition='customer' AND a.broadcast_at IS NOT NULL", &[&source.to_string()]).await?
+		assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1", &[&source.to_string()]).await?
 			.get::<_, i64>(0))).await.unwrap(), 0);
 	}
 	let height = mine_continuing_core(&ctx, 1).await;
@@ -622,6 +685,44 @@ async fn lightning_backup() {
 		.chain(grant.transactions().map(|step| OutPoint::new(step.tx.compute_txid(), u32::try_from(step.output_idx).unwrap()))))
 		.collect::<BTreeSet<_>>();
 	let (grant_closures, closed_points) = tokio::time::timeout(Duration::from_secs(40), async {
+		// An unexposed tree may expire before the signed receive contract.
+		// Ownership still waits for that contract on both daemon tips. Advance
+		// the real chain in a batch, with every wait inside this same deadline.
+		let contract_maturity = grants.iter().map(|grant|
+			grant.policy().as_server_htlc_recv().unwrap().htlc_expiry.to_u32()
+		).max().unwrap();
+		assert_eq!(contract_maturity, outgoing_deadline.to_u32());
+		let height = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
+		if height < contract_maturity {
+			let before_contract = contract_maturity - 1;
+			if height < before_contract {
+				let count = before_contract - height;
+				let height = mine_continuing_core(&ctx, count).await;
+				mined += count;
+				restored.wait_for_sync_height(height).await;
+				restored.watchmand().wait_for_sync_height(height).await;
+				let hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();
+				rebuilt(&db, BlockRef { height, hash }).await;
+			}
+			assert_eq!(u32::try_from(ctx.bitcoind().get_block_count().await).unwrap(), before_contract);
+			assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1", &[&source.to_string()]).await?
+				.get::<_, i64>(0))).await.unwrap(), 0);
+			let mut external = pool_initial.clone();
+			for (point, value) in customer_initial.iter().chain(sponsors.iter()) {
+				assert!(external.insert(*point, *value).is_none());
+			}
+			let graph = canonical_descendants(&ctx, first_height, &external);
+			assert!(graph.values().flat_map(|tx| &tx.output).all(|output|
+				output.script_pubkey != registration.spk && output.script_pubkey != receiver_registration.spk
+			), "neither fallback destination may receive a canonical payout before the signed receive deadline");
+			let height = mine_continuing_core(&ctx, 1).await;
+			mined += 1;
+			assert_eq!(height.to_u32(), contract_maturity);
+			restored.wait_for_sync_height(height).await;
+			restored.watchmand().wait_for_sync_height(height).await;
+			let hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();
+			rebuilt(&db, BlockRef { height, hash }).await;
+		}
 		loop {
 			let mut closures = BTreeMap::new();
 			let mut closed_points = BTreeMap::new();
@@ -645,6 +746,10 @@ async fn lightning_backup() {
 				}
 			}
 			if closures.len() == grants.len() { break (closures, closed_points); }
+			assert_eq!(db.read(async |tx| Ok(tx.query_one(
+				"SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1", &[&source.to_string()],
+			).await?.get::<_, i64>(0))).await.unwrap(), 0,
+				"the sender entitlement must not commit before every actual grant closure is six blocks deep");
 			let height = mine_continuing_core(&ctx, 1).await;
 			mined += 1;
 			restored.wait_for_sync_height(height).await;

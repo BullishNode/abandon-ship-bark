@@ -270,7 +270,7 @@ pub struct Config {
 	#[serde(default = "default_max_htlc_expiry_delta")]
 	pub max_htlc_expiry_delta: BlockDelta,
 	/// Confirmations each receive grant's timeout spend needs before refunding its sender.
-	/// Must exceed the supported three-block reorg depth.
+	/// Must exceed the supported five-block reorg depth.
 	#[serde(default = "default_expiry_internal_refund_depth")]
 	pub expiry_internal_refund_depth: u32,
 	/// Children derived in one resumable owner-search chunk.
@@ -565,8 +565,8 @@ impl Config {
 		self.bitcoind.validate()?;
 		self.fees.validate()?;
 
-		if self.expiry_internal_refund_depth <= 3 {
-			bail!("expiry_internal_refund_depth must be greater than 3");
+		if self.expiry_internal_refund_depth < 6 {
+			bail!("expiry_internal_refund_depth must be at least 6");
 		}
 		if self.expiry_owner_scan_chunk_size == 0 || self.expiry_owner_scan_workers == 0 {
 			bail!("expiry owner scan chunk size and worker count must be positive");
@@ -780,11 +780,11 @@ mod test {
 		let mut cfg: Config = serde_json::from_value(fields).unwrap();
 		assert_eq!(cfg.expiry_internal_refund_depth, 6);
 		cfg.validate().unwrap();
-		for depth in 0..=3 {
+		for depth in 0..6 {
 			cfg.expiry_internal_refund_depth = depth;
 			assert!(cfg.validate().unwrap_err().to_string().contains("expiry_internal_refund_depth"));
 		}
-		for depth in [4, 6, 12] {
+		for depth in [6, 7, 12] {
 			cfg.expiry_internal_refund_depth = depth;
 			cfg.validate().unwrap();
 		}

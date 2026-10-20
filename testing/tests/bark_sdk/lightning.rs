@@ -291,7 +291,49 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		let native = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
 		assert_eq!(native.spend_state, server::database::SpendState::Spent);
 		assert!(native.spent_in_round.is_some());
-		assert!(!native.decided_for_fallback);
+		let forfeits = db.read(async |tx| Ok(tx.query(
+			"SELECT p.id,r.funding_txid,i.signed_forfeit_tx IS NOT NULL AS signed,p.forfeited_at IS NOT NULL AS accepted \
+			FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id \
+			JOIN round r ON r.funding_txid=p.round_id WHERE i.vtxo_id=$1 AND r.id=$2",
+			&[&source.id().to_string(), &native.spent_in_round.unwrap()],
+		).await?)).await.unwrap();
+		assert_eq!(forfeits.len(), 1, "the old source must fund its actual accepted refresh");
+		let forfeit = &forfeits[0];
+		assert!(forfeit.get::<_, bool>("signed") && forfeit.get::<_, bool>("accepted"));
+		assert_eq!(forfeit.get::<_, String>("funding_txid"), replacement.chain_anchor().txid.to_string());
+		// Once the barrier is released, expiry may decide the surrendered old
+		// backing for the operator. It must never pay that principal again.
+		let allocations = db.read(async |tx| Ok(tx.query(
+			"SELECT e.gross_sat,e.irreversible_facts::TEXT AS facts,c.gross_sat AS allocated_gross_sat,c.disposition,c.owner_mailbox,c.user_pubkey,c.spk, \
+			c.fee_sat,c.payout_sat,c.forfeited_sat FROM expiry_entitlement e \
+			LEFT JOIN expiry_allocation_coin c ON c.entitlement_id=e.id WHERE e.vtxo_id=$1",
+			&[&source.id().to_string()],
+		).await?)).await.unwrap();
+		if native.decided_for_fallback { assert!(!allocations.is_empty()); }
+		for allocation in allocations {
+			assert_eq!(allocation.get::<_, i64>("gross_sat"), i64::try_from(board_amount.to_sat()).unwrap());
+			let facts: serde_json::Value = serde_json::from_str(allocation.get("facts")).unwrap();
+			assert_eq!(facts["kind"], "exchange");
+			assert_eq!(facts["operator"], true);
+			assert_eq!(facts["forfeited"], true);
+			assert_eq!(facts["participation_id"].as_i64(), Some(forfeit.get::<_, i64>("id")));
+			assert!(facts.get("customer_key").is_none());
+			if let Some(disposition) = allocation.get::<_, Option<String>>("disposition") {
+				assert_eq!(disposition, "operator");
+				assert_eq!(allocation.get::<_, i64>("allocated_gross_sat"), i64::try_from(board_amount.to_sat()).unwrap());
+				for field in ["owner_mailbox", "user_pubkey", "spk"] {
+					assert!(allocation.get::<_, Option<String>>(field).is_none());
+				}
+				for field in ["fee_sat", "payout_sat", "forfeited_sat"] {
+					assert_eq!(allocation.get::<_, i64>(field), 0);
+				}
+			}
+		}
+		let native_replacement = db.read(async |tx| tx.get_user_vtxo_by_id(replacement.id()).await).await.unwrap();
+		assert_eq!(native_replacement.spend_state, server::database::SpendState::Spendable);
+		assert!(!native_replacement.decided_for_fallback);
+		assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1",
+			&[&replacement.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0);
 		assert!(wallet.fallback_payouts().await.unwrap().is_empty());
 		let balance = assert_balance_consistent(&wallet, false).await;
 		assert_eq!(balance.spendable, board_amount);
@@ -372,9 +414,9 @@ async fn pay_hold_refused() {
 			.bitcoind(ctx.bitcoind_arc()).watchmand().create().await;
 
 		let board_amount = btc(2);
-		let wallet = ctx.bark_sdk("bark", &srv)
+		let wallet = Box::pin(ctx.bark_sdk("bark", &srv)
 			.boarded(board_amount)
-			.create().await;
+			.create()).await;
 
 		lightning.sync().await;
 
@@ -459,8 +501,8 @@ async fn pay_hold_refused() {
 		// the watchman, rather than a cooperative revocation, returns its HTLC.
 		let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 		let board = ark_testing::sat(300_000);
-		let absent = ctx.bark_sdk("absent_refund", &srv).mnemonic(mnemonic.clone())
-			.cfg(|cfg| cfg.daemon_manual_sync = true).boarded(board).create().await;
+		let absent = Box::pin(ctx.bark_sdk("absent_refund", &srv).mnemonic(mnemonic.clone())
+			.cfg(|cfg| cfg.daemon_manual_sync = true).boarded(board).create()).await;
 		absent.stop_daemon_wait().await.unwrap();
 		let preimage = Preimage::random();
 		let hash = preimage.compute_payment_hash();

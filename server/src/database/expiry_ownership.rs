@@ -279,7 +279,8 @@ impl Tx<'_> {
 			let Some(resolution) = htlc.htlc.resolution() else {
 				// Use the funded operator sweep even when the receiver exposed
 				// the grant: a small grant cannot pay for its own timeout claim.
-				if htlc.direction() == HtlcDirection::Outgoing && !proposal.has_stored_preimage && expired_contract {
+				if htlc.direction() == HtlcDirection::Outgoing
+					&& (!proposal.has_stored_preimage || cancelled_receive_claim) && expired_contract {
 					proposal.disposition = OwnershipDisposition::Operator;
 					proposal.evidence = Some(OwnershipEvidence::HtlcRecvExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry });
 					return Ok(proposal);

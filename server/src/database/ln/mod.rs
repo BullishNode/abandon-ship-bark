@@ -233,7 +233,7 @@ impl<'t> Tx<'t> {
 		let rows = self.query("
 			SELECT a.id,a.lightning_node_id,a.payment_hash,a.amount_msat,a.final_amount_msat,
 			a.status,a.error,a.block_height,a.user_fee_sat,a.retry_for_secs,a.user_agent,
-			a.lightning_htlc_subscription_id,a.created_at,a.updated_at
+			a.lightning_htlc_subscription_id,a.max_routing_fee_msat,a.created_at,a.updated_at
 			FROM lightning_payment_attempt a JOIN expiry_lightning_dispatch d ON d.id=a.id
 			WHERE a.lightning_node_id=$1 AND a.status IN ('failed','succeeded') AND a.lightning_htlc_subscription_id IS NULL
 			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_terminal_failure f WHERE f.id=a.id)

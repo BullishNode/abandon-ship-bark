@@ -413,89 +413,92 @@ async fn pay_hold_refused() {
 		let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10))
 			.bitcoind(ctx.bitcoind_arc()).watchmand().create().await;
 
-		let board_amount = btc(2);
-		let wallet = Box::pin(ctx.bark_sdk("bark", &srv)
-			.boarded(board_amount)
-			.create()).await;
+		let mut hold_client = Box::pin(async {
+			let board_amount = btc(2);
+			let wallet = Box::pin(ctx.bark_sdk("bark", &srv)
+				.boarded(board_amount)
+				.create()).await;
 
-		lightning.sync().await;
+			lightning.sync().await;
 
-		// Build a hold invoice on the external CLN node. We never settle it
-		// — instead we cancel, which makes the held HTLC fail back through
-		// the route.
-		let preimage = Preimage::random();
-		let payment_hash = preimage.compute_payment_hash();
-		let invoice_amount = btc(0.5);
+			// Build a hold invoice on the external CLN node. We never settle it
+			// — instead we cancel, which makes the held HTLC fail back through
+			// the route.
+			let preimage = Preimage::random();
+			let payment_hash = preimage.compute_payment_hash();
+			let invoice_amount = btc(0.5);
 
-		let mut hold_client = lightning.external.hold_client().await;
-		let invoice = hold_client.invoice(hold::InvoiceRequest {
-			payment_hash: payment_hash.as_ref().to_vec(),
-			amount_msat: invoice_amount.to_sat() * 1_000,
-			description: Some(hold::invoice_request::Description::Memo(
-				"sdk_pay_lightning_hold_invoice_fail".into(),
-			)),
-			min_final_cltv_expiry: Some(18),
-			expiry: Some(3600),
-			routing_hints: vec![],
-		}).await.expect("create hold invoice").into_inner().bolt11;
+			let mut hold_client = lightning.external.hold_client().await;
+			let invoice = hold_client.invoice(hold::InvoiceRequest {
+				payment_hash: payment_hash.as_ref().to_vec(),
+				amount_msat: invoice_amount.to_sat() * 1_000,
+				description: Some(hold::invoice_request::Description::Memo(
+					"sdk_pay_lightning_hold_invoice_fail".into(),
+				)),
+				min_final_cltv_expiry: Some(18),
+				expiry: Some(3600),
+				routing_hints: vec![],
+			}).await.expect("create hold invoice").into_inner().bolt11;
 
-		wallet.pay_lightning_invoice(invoice, None, false).await
-			.expect("pay_lightning_invoice failed");
+			wallet.pay_lightning_invoice(invoice, None, false).await
+				.expect("pay_lightning_invoice failed");
 
-		// The payment is pending because the receiver hasn't claimed or
-		// cancelled it yet; while the HTLC is in flight the locked amount
-		// should be tracked as pending lightning send and excluded from
-		// spendable.
-		let status = wallet.check_lightning_payment(payment_hash, false).await.expect("no-wait check errored");
-		match status {
-			LightningSendState::InProgress(pending) => {
-				let pending_balance = pending.payment_amount + pending.fee;
-				let balance = assert_balance_consistent(&wallet, false).await;
-				assert_eq!(balance.spendable, board_amount - pending_balance);
-				assert_eq!(balance.pending_lightning_send, pending_balance);
-			}
-			other => panic!("Payment should be pending was {:?}", other),
-		};
+			// The payment is pending because the receiver hasn't claimed or
+			// cancelled it yet; while the HTLC is in flight the locked amount
+			// should be tracked as pending lightning send and excluded from
+			// spendable.
+			let status = wallet.check_lightning_payment(payment_hash, false).await.expect("no-wait check errored");
+			match status {
+				LightningSendState::InProgress(pending) => {
+					let pending_balance = pending.payment_amount + pending.fee;
+					let balance = assert_balance_consistent(&wallet, false).await;
+					assert_eq!(balance.spendable, board_amount - pending_balance);
+					assert_eq!(balance.pending_lightning_send, pending_balance);
+				}
+				other => panic!("Payment should be pending was {:?}", other),
+			};
 
-		// Wait for the payment to resolve
-		let waiter = {
-			let wallet = wallet.clone();
-			tokio::spawn(async move {
-				wallet.check_lightning_payment(payment_hash, true).await
-			})
-		};
+			// Wait for the payment to resolve
+			let waiter = {
+				let wallet = wallet.clone();
+				tokio::spawn(async move {
+					wallet.check_lightning_payment(payment_hash, true).await
+				})
+			};
 
-		// We should wait if the invoice isn't cancelled
-		tokio::time::sleep(Duration::from_millis(500)).await;
-		assert!(!waiter.is_finished(), "waiting check resolved before cancel");
+			// We should wait if the invoice isn't cancelled
+			tokio::time::sleep(Duration::from_millis(500)).await;
+			assert!(!waiter.is_finished(), "waiting check resolved before cancel");
 
-		// Cancel the hold invoice — the HTLC fails back to the server and
-		// bark revokes the HTLC vtxos, restoring the funds.
-		hold_client.cancel(hold::CancelRequest {
-			payment_hash: payment_hash.as_ref().to_vec(),
-		}).await.expect("cancel hold invoice");
+			// Cancel the hold invoice — the HTLC fails back to the server and
+			// bark revokes the HTLC vtxos, restoring the funds.
+			hold_client.cancel(hold::CancelRequest {
+				payment_hash: payment_hash.as_ref().to_vec(),
+			}).await.expect("cancel hold invoice");
 
-		// On failure the LightningSend record is removed once revocation completes, so the state
-		// is Unknown. With CLN 26.06, xpay reports the destination failure before CLN's own sendpay
-		// row transitions to failed, so captaind's immediate listpays reconciliation still sees
-		// Pending and marks the attempt Submitted. It only flips to Failed on the next
-		// process_payment_attempts tick past cln_xpay_timeout + XPAY_TIMEOUT_BUFFER (5s + 15s)
-		// after the attempt was created. Wait long enough to clear that gate under
-		// BARK_DOUBLE_DRIVE_ACTIONS + a couple of bark re-poll intervals.
-		let status = waiter.wait_millis(40_000).await.expect("join waiter")
-			.expect("waiting check errored");
-		assert_eq!(status, LightningSendState::Unknown);
+			// On failure the LightningSend record is removed once revocation completes, so the state
+			// is Unknown. With CLN 26.06, xpay reports the destination failure before CLN's own sendpay
+			// row transitions to failed, so captaind's immediate listpays reconciliation still sees
+			// Pending and marks the attempt Submitted. It only flips to Failed on the next
+			// process_payment_attempts tick past cln_xpay_timeout + XPAY_TIMEOUT_BUFFER (5s + 15s)
+			// after the attempt was created. Wait long enough to clear that gate under
+			// BARK_DOUBLE_DRIVE_ACTIONS + a couple of bark re-poll intervals.
+			let status = waiter.wait_millis(40_000).await.expect("join waiter")
+				.expect("waiting check errored");
+			assert_eq!(status, LightningSendState::Unknown);
 
-		// A subsequent check should also report Unknown
-		let new_status = wallet.check_lightning_payment(payment_hash, false).await.expect("Failed to query lightning send");
-		assert_eq!(new_status, LightningSendState::Unknown);
+			// A subsequent check should also report Unknown
+			let new_status = wallet.check_lightning_payment(payment_hash, false).await.expect("Failed to query lightning send");
+			assert_eq!(new_status, LightningSendState::Unknown);
 
-		// After revocation the HTLC vtxos come back as spendable
-		let balance = assert_balance_consistent(&wallet, false).await;
-		assert_eq!(balance.spendable, board_amount);
-		assert_eq!(balance.pending_lightning_send, btc(0));
-		wallet.stop_daemon_wait().await.unwrap();
-		drop(wallet);
+			// After revocation the HTLC vtxos come back as spendable
+			let balance = assert_balance_consistent(&wallet, false).await;
+			assert_eq!(balance.spendable, board_amount);
+			assert_eq!(balance.pending_lightning_send, btc(0));
+			wallet.stop_daemon_wait().await.unwrap();
+			drop(wallet);
+			hold_client
+		}).await;
 
 		Box::pin(async {
 			// A second genuine payment fails while its sender is absent. This time

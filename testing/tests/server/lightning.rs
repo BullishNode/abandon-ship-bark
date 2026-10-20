@@ -3141,7 +3141,7 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	let payer = Arc::new(lightning.external);
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal)
 		.funded(btc(10)).cfg(|cfg| {
-			cfg.vtxopool.vtxo_targets = vec![VtxoTarget { count: 1, amount: sat(100_000) }];
+			cfg.vtxopool.vtxo_targets = vec![VtxoTarget { count: 2, amount: sat(100_000) }];
 		}).watchmand().create().await;
 	srv.wait_for_vtxopool(&ctx).await;
 	let operator_script = {

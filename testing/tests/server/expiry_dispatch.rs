@@ -490,6 +490,9 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 			plugin.uri = hold.uri.parse().unwrap();
 		}
 		let cfg = srv.config().clone();
+		// The CLI reads its endpoints from disk while the server is stopped.
+		let config_path = cfg.data_dir.join(ark_testing::daemon::captaind::CAPTAIND_CONFIG_FILE);
+		cfg.write_into(&mut std::fs::File::create(config_path).unwrap()).unwrap();
 		let original_status=db.read(async |tx|tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap().status;
 		let manifest = retained_supervised_manifest(&ctx, &cfg, &db, attempt.id,
 			if queued_original {"queued-original-incident"} else if foreign_complete {"foreign-complete-incident"}

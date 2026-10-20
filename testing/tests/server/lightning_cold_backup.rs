@@ -44,7 +44,7 @@ impl DaemonHelper for ExistingCluster {
 	async fn make_reservations(&self) -> anyhow::Result<()> { self.0.make_reservations().await }
 	async fn get_command(&self) -> anyhow::Result<Command> {
 		let mut command = self.0.get_command().await?;
-		if self.1 { command.args(["-c", "lc_messages=C"]); }
+		if self.1 { command.args(["-c", "lc_messages=C", "-c", "logging_collector=off"]); }
 		Ok(command)
 	}
 	async fn wait_for_init(&self) -> anyhow::Result<()> { self.0.wait_for_init().await }

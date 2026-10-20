@@ -3153,7 +3153,7 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	let hash = preimage.compute_payment_hash();
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
-		payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 144,
+		payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: srv.config().max_user_invoice_cltv_delta.into(),
 		mailbox_id: None, description: None,
 	}).await.unwrap().into_inner().bolt11;
 	let pay_task = {

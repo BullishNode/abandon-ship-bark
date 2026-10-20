@@ -4,9 +4,13 @@
 //! each of those grants funded a payment. Keep that cryptographic knowledge in
 //! the upstream WAL and bind financial conclusions to actual attempt links.
 
+use std::collections::BTreeMap;
+
 use anyhow::Context;
 use bitcoin::Transaction;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::taproot::LeafVersion;
+use tokio_postgres::Row;
 
 use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
 use ark::vtxo::TapScriptClause;
@@ -58,6 +62,121 @@ pub(crate) enum LightningSourceState {
 }
 
 impl Tx<'_> {
+	/// Read before the current source guard: identical accepted incidents stay
+	/// idempotent after payout. A different receipt must never overwrite one.
+	pub(crate) async fn supervised_lightning_failure_recorded(
+		&self, attempt: i64, digest: &[u8; 32],
+	) -> anyhow::Result<bool> {
+		let Some(row) = self.query_opt(
+			"SELECT supervised_manifest_sha256 FROM expiry_lightning_terminal_failure WHERE id=$1",
+			&[&attempt],
+		).await? else { return Ok(false); };
+		ensure!(row.get::<_, Option<Vec<u8>>>(0).as_deref() == Some(digest.as_slice()),
+			"attempt already has a different terminal receipt");
+		Ok(true)
+	}
+
+	/// Accept exactly the original externally dispatched source set under the
+	/// same coin and WAL ordering as ordinary expiry decisions. This records a
+	/// trusted supervised fact; no coarse Failed flag, preimage, dispatch reset
+	/// or money movement is manufactured here.
+	pub(crate) async fn record_supervised_lightning_failure(
+		&self,
+		binding: &crate::ln::SupervisedLightningBinding,
+		digest: &[u8; 32],
+		receipt: &serde_json::Value,
+		absence: &crate::ln::SupervisedOriginalAbsence,
+	) -> anyhow::Result<bool> {
+		let id = binding.attempt_id;
+		if self.supervised_lightning_failure_recorded(id, digest).await? { return Ok(false); }
+		let original = self.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+			WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id", &[&id]).await?
+			.into_iter().map(|row| row.get::<_, String>(0)).collect::<Vec<_>>();
+		ensure!(original.len() as u64 == binding.source_count
+			&& sha256::Hash::hash(&serde_json::to_vec(&original)?) == binding.source_set_sha256,
+			"incident does not bind the complete original source set");
+		let sources = original.iter().map(|source| source.parse::<VtxoId>())
+			.collect::<Result<Vec<_>, _>>()?;
+		// Lock first, then repeat the idempotence check before testing decided
+		// fences. A simultaneous import/payout cannot turn SAME receipt into a
+		// spurious refusal or create a second entitlement.
+		self.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE",
+			&[&original]).await?;
+		if self.supervised_lightning_failure_recorded(id, digest).await? { return Ok(false); }
+		super::expiry_guard::guard_obligation_changes(self, &sources).await?;
+		let attempt = self.query_opt("
+			SELECT a.payment_hash,a.lightning_node_id,a.amount_msat,a.final_amount_msat,
+				a.status::TEXT,a.lightning_htlc_subscription_id,n.pubkey,d.label,d.created_at AS dispatch_created_at,
+				EXISTS(SELECT 1 FROM expiry_lightning_queued_attempt q WHERE q.id=a.id) AS queued,
+				EXISTS(SELECT 1 FROM expiry_lightning_external_success s WHERE s.id=a.id) AS success,
+				EXISTS(SELECT 1 FROM expiry_lightning_internal_funding f WHERE f.id=a.id) AS internal
+			FROM lightning_payment_attempt a JOIN expiry_lightning_dispatch d ON d.id=a.id
+			JOIN lightning_node n ON n.id=a.lightning_node_id WHERE a.id=$1 FOR UPDATE OF a,d
+		", &[&id]).await?.context("original external dispatch is missing")?;
+		self.lock_htlc_settlements().await?;
+		ensure!(attempt.get::<_, &str>("payment_hash") == binding.payment_hash.to_string()
+			&& attempt.get::<_, i64>("lightning_node_id") == binding.node_id
+			&& attempt.get::<_, Vec<u8>>("pubkey") == binding.node_pubkey.serialize().to_vec()
+			&& attempt.get::<_, i64>("amount_msat") == i64::try_from(binding.amount_msat)?
+			&& attempt.get::<_, &str>("label") == binding.dispatch_label,
+			"incident does not match the original dispatch");
+		let qualified_original = match absence {
+			crate::ln::SupervisedOriginalAbsence::WholeHashEmpty => false,
+			crate::ln::SupervisedOriginalAbsence::QualifiedOwnLabel { dispatch_created_at } => {
+				ensure!(attempt.get::<_, chrono::DateTime<chrono::Utc>>("dispatch_created_at") == *dispatch_created_at,
+					"producer provenance describes a different original dispatch epoch");
+				true
+			},
+		};
+		// The ordinary monitor can infer Succeeded/final_amount from a foreign
+		// same-hash group. Only qualified ORIGINAL own-label absence supersedes
+		// those coarse fields. Actual own commitments/resolutions remain fenced.
+		let coarse_uncommitted = attempt.get::<_, Option<i64>>("final_amount_msat").is_none()
+			&& attempt.get::<_, &str>("status") != "succeeded";
+		ensure!(attempt.get::<_, bool>("queued") && !attempt.get::<_, bool>("success")
+			&& !attempt.get::<_, bool>("internal")
+			&& attempt.get::<_, Option<i64>>("lightning_htlc_subscription_id").is_none()
+			&& (qualified_original || coarse_uncommitted),
+			"original attempt has a contradictory economic commitment");
+		let rows = self.query("
+			SELECT l.vtxo_id,h.direction::TEXT,h.payment_hash,h.offchain_resolution::TEXT,
+				h.chain_resolution::TEXT,v.spend_state::TEXT,v.oor_spent_txid,v.spent_in_round,
+				v.offboarded_in,v.onchain_spent_txid
+			FROM lightning_payment_attempt_htlc_vtxo l
+			LEFT JOIN vtxo v ON v.vtxo_id=l.vtxo_id LEFT JOIN htlc_vtxo h ON h.id=v.id
+			WHERE l.lightning_payment_attempt_id=$1 ORDER BY l.vtxo_id
+		", &[&id]).await?;
+		let actual = rows.iter().map(|row| row.get::<_, String>("vtxo_id")).collect::<Vec<_>>();
+		ensure!(actual == original, "original complete source set changed");
+		for row in rows {
+			ensure!(row.get::<_, Option<&str>>("direction") == Some("incoming")
+				&& row.get::<_, Option<&str>>("payment_hash") == Some(binding.payment_hash.to_string().as_str())
+				&& row.get::<_, Option<&str>>("spend_state").is_some_and(|state| matches!(state,"spendable"|"ln-spent"))
+				&& row.get::<_, Option<&str>>("offchain_resolution").is_none()
+				&& row.get::<_, Option<&str>>("chain_resolution").is_none()
+				&& row.get::<_, Option<String>>("oor_spent_txid").is_none()
+				&& row.get::<_, Option<i64>>("spent_in_round").is_none()
+				&& row.get::<_, Option<String>>("offboarded_in").is_none()
+				&& row.get::<_, Option<String>>("onchain_spent_txid").is_none(),
+				"source has a contradictory claim, refund, or spend");
+		}
+		// A preimage shared by an unrelated hash sibling is not proof this
+		// particular source paid. Check actual funding/success on its links.
+		ensure!(self.query_opt("
+			SELECT l.vtxo_id FROM lightning_payment_attempt_htlc_vtxo l
+			WHERE l.vtxo_id=ANY($1) AND (
+				EXISTS(SELECT 1 FROM expiry_lightning_external_success s WHERE s.id=l.lightning_payment_attempt_id)
+				OR EXISTS(SELECT 1 FROM expiry_lightning_internal_funding f WHERE f.id=l.lightning_payment_attempt_id))
+			LIMIT 1
+		", &[&original]).await?.is_none(), "source funded a different economic commitment");
+		let receipt = serde_json::to_string(&receipt)?;
+		self.execute("
+			INSERT INTO expiry_lightning_terminal_failure(id,supervised_manifest_sha256,supervised_manifest)
+			VALUES($1,$2,$3::TEXT::JSONB)
+		", &[&id, &&digest[..], &receipt]).await?;
+		Ok(true)
+	}
+
 	/// An internal promotion never dispatches xpay. Once its exact receive is
 	/// cancelled without EVER granting a receive coin, no recipient commitment
 	/// exists. Do not infer this from the payer's coarse Failed state, a shared
@@ -215,7 +334,7 @@ impl Tx<'_> {
 	}
 
 	/// The WAL consumer may already have observed an unrelated shared preimage.
-	/// Maintenance must also finish open attempts after their own real claim
+	/// Maintenance must also finish attempts after their own real claim
 	/// commits, even without a new WAL item or the original caller.
 	pub(crate) async fn completed_internal_attempts(&self, limit: i64) -> anyhow::Result<Vec<InternalReceiveFunding>> {
 		ensure!((1..=128).contains(&limit), "invalid completed internal attempt limit");
@@ -232,7 +351,9 @@ impl Tx<'_> {
 						WHERE v.lightning_htlc_subscription_id=funding.funded_subscription_id AND h.direction='outgoing'
 						AND (h.payment_hash<>funding.payment_hash OR (h.offchain_resolution::TEXT IS DISTINCT FROM 'fulfilled'
 							AND h.chain_resolution::TEXT IS DISTINCT FROM 'fulfilled'))))
-				AND status NOT IN ('failed','succeeded')
+				AND (status NOT IN ('failed','succeeded') OR EXISTS(
+					SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l JOIN vtxo source ON source.vtxo_id=l.vtxo_id
+					WHERE l.lightning_payment_attempt_id=funding.id AND source.spend_state='spendable'))
 				ORDER BY id LIMIT $1
 		");
 		let mut completed = Vec::new();
@@ -311,6 +432,129 @@ impl Tx<'_> {
 			LEFT JOIN expiry_lightning_internal_funding i ON i.id=a.id
 			WHERE l.vtxo_id=$1 AND a.payment_hash=$2
 		", &[&source.to_string(), &hash.to_string()]).await?;
+		self.lightning_attempts_outcome(hash, attempts).await
+	}
+
+	/// Resolve only a complete signed source-set identity, never the newest
+	/// same-hash attempt. Mailbox callers constrain the actual attempt ID;
+	/// hash-only callers get no proof when several source sets are possible.
+	/// Invalid/partial/duplicate/unlinked scopes return None, not a failure or
+	/// a success inferred from someone else's preimage.
+	pub(crate) async fn lightning_payment_outcome(
+		&self, hash: PaymentHash, source_ids: &[VtxoId], actual_attempt_id: Option<i64>,
+	) -> anyhow::Result<Option<(Vec<VtxoId>, LightningSourceState)>> {
+		let mut requested = source_ids.to_vec();
+		requested.sort_unstable();
+		requested.dedup();
+		if requested.len() != source_ids.len() { return Ok(None); }
+		let rows = self.query("
+			SELECT a.id,l.vtxo_id,h.direction::TEXT,h.payment_hash AS source_hash
+			FROM lightning_payment_attempt a
+			LEFT JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=a.id
+			LEFT JOIN vtxo v ON v.vtxo_id=l.vtxo_id LEFT JOIN htlc_vtxo h ON h.id=v.id
+			WHERE a.payment_hash=$1 AND ($2::BIGINT IS NULL OR a.id=$2)
+			ORDER BY a.id,l.vtxo_id
+		", &[&hash.to_string(), &actual_attempt_id]).await?;
+		let mut groups = BTreeMap::<i64, Option<Vec<VtxoId>>>::new();
+		for row in rows {
+			let sources = groups.entry(row.get("id")).or_insert_with(|| Some(Vec::new()));
+			let Some(current) = sources.as_mut() else { continue; };
+			if row.get::<_, Option<&str>>("direction") != Some("incoming")
+				|| row.get::<_, Option<&str>>("source_hash") != Some(hash.to_string().as_str()) {
+				*sources = None;
+				continue;
+			}
+			let Some(source) = row.get::<_, Option<&str>>("vtxo_id") else {
+				*sources = None;
+				continue;
+			};
+			current.push(source.parse()?);
+		}
+		let mut canonical = if requested.is_empty() { None } else { Some(requested) };
+		let mut attempts = Vec::new();
+		for (id, sources) in groups {
+			let Some(mut sources) = sources else {
+				if source_ids.is_empty() || actual_attempt_id.is_some() { return Ok(None); }
+				continue;
+			};
+			sources.sort_unstable();
+			let count = sources.len();
+			sources.dedup();
+			if sources.is_empty() || count != sources.len() { return Ok(None); }
+			if let Some(expected) = &canonical {
+				if *expected != sources {
+					if source_ids.is_empty() { return Ok(None); }
+					continue;
+				}
+			} else {
+				canonical = Some(sources);
+			}
+			attempts.push(id);
+		}
+		let Some(canonical) = canonical else { return Ok(None); };
+		if attempts.is_empty() { return Ok(None); }
+		let states = self.query("
+			SELECT a.id,a.status='failed' AS failed,
+			q.id IS NOT NULL AS queued, d.id IS NOT NULL AS dispatched,
+			f.id IS NOT NULL AS terminal_failure, s.id IS NOT NULL AS external_success,
+			i.id IS NOT NULL AS internal_funding, i.subscription_id AS internal_subscription
+			FROM lightning_payment_attempt a
+			LEFT JOIN expiry_lightning_queued_attempt q ON q.id=a.id
+			LEFT JOIN expiry_lightning_dispatch d ON d.id=a.id
+			LEFT JOIN expiry_lightning_terminal_failure f ON f.id=a.id
+			LEFT JOIN expiry_lightning_external_success s ON s.id=a.id
+			LEFT JOIN expiry_lightning_internal_funding i ON i.id=a.id
+			WHERE a.id=ANY($1) AND a.payment_hash=$2 ORDER BY a.id
+		", &[&attempts, &hash.to_string()]).await?;
+		if states.len() != attempts.len() { return Ok(None); }
+		let mut outcome = self.lightning_attempts_outcome(hash, states).await?;
+		if outcome != LightningSourceState::Discharged {
+			// A native cooperative refund can finish an internal payment even
+			// though its attempt still says Succeeded/Committed. Only a real
+			// committed, signed refund spend of EVERY source proves that return;
+			// neither cancellation/N6 recovery nor a payout decision suffices.
+			let ids = canonical.iter().map(ToString::to_string).collect::<Vec<_>>();
+			let refunds = self.query("
+				SELECT v.vtxo_id,v.vtxo,v.spend_state::TEXT,v.oor_spent_txid,
+					h.direction::TEXT,h.payment_hash,h.offchain_resolution::TEXT,t.signed_tx
+				FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
+				LEFT JOIN virtual_transaction t ON t.txid=v.oor_spent_txid
+				WHERE v.vtxo_id=ANY($1) ORDER BY v.vtxo_id
+			", &[&ids]).await?;
+			let mut complete_refund = refunds.len() == canonical.len();
+			for row in refunds {
+				if row.get::<_, &str>("direction") != "incoming"
+					|| row.get::<_, &str>("payment_hash") != hash.to_string()
+					|| row.get::<_, Option<&str>>("offchain_resolution") != Some("revoked")
+					|| row.get::<_, &str>("spend_state") != "spent" {
+					complete_refund = false;
+					break;
+				}
+				let (Some(spend), Some(raw)) = (
+					row.get::<_, Option<&str>>("oor_spent_txid"), row.get::<_, Option<&[u8]>>("signed_tx"),
+				) else { complete_refund = false; break; };
+				let source: ServerVtxo = ServerVtxo::deserialize(row.get("vtxo"))?;
+				let refund: Transaction = bitcoin::consensus::deserialize(raw)?;
+				let mut inputs = refund.input.iter().filter(|input| input.previous_output == source.point());
+				let Some(input) = inputs.next() else { complete_refund = false; break; };
+				if source.id().to_string() != row.get::<_, &str>("vtxo_id")
+					|| !matches!(source.policy(), ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(policy)) if policy.payment_hash==hash)
+					|| refund.compute_txid().to_string() != spend || inputs.next().is_some() || input.witness.is_empty() {
+					complete_refund = false;
+					break;
+				}
+			}
+			if complete_refund { outcome = LightningSourceState::Failed; }
+		}
+		Ok(Some((canonical, outcome)))
+	}
+
+	/// Shared source-specific public proof for scoped status and the actual
+	/// attempt's mailbox. The existing expiry spending guard is unchanged;
+	/// coarse final fields never discharge this public outcome either.
+	async fn lightning_attempts_outcome(
+		&self, hash: PaymentHash, attempts: Vec<Row>,
+	) -> anyhow::Result<LightningSourceState> {
 		if attempts.is_empty() {
 			return Ok(LightningSourceState::Unattempted);
 		}
@@ -372,9 +616,6 @@ impl Tx<'_> {
 		watchman_tip: BlockHeight,
 		depth: u32,
 	) -> anyhow::Result<Option<BlockRef>> {
-		if self.get_htlc_settlement_by_payment_hash(hash).await?.is_some() {
-			return Ok(None);
-		}
 		let grants = self.query("
 			SELECT h.payment_hash,h.direction::TEXT,h.offchain_resolution::TEXT,
 				h.chain_resolution::TEXT,h.chain_resolution_height,

@@ -260,7 +260,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 			assert!(core.get_tx_out(&input.previous_output.txid,input.previous_output.vout,Some(false)).unwrap().is_some());
 		}
 	}
-	let decided=db.read(async |t|Ok(t.query("SELECT vtxo_id,entitlement_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1)",&[&originals]).await?
+	let decided=db.read(async |t|Ok(t.query("SELECT vtxo_id,id AS entitlement_id FROM expiry_entitlement WHERE vtxo_id=ANY($1)",&[&originals]).await?
 		.into_iter().map(|row|(row.get::<_,String>("vtxo_id"),row.get::<_,i64>("entitlement_id"))).collect::<BTreeMap<_,_>>())).await.unwrap();
 	assert_eq!(decided,reserved.1.iter().map(|(source,coin)|(source.clone(),coin.entitlement)).collect());
 	srv.watchmand().stop().await.unwrap();
@@ -377,7 +377,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 		}
 	}).await.expect("both real user sources must retain their actual canonical batch authorization");
 	let context=db.read(async |t| {
-		let fences=t.query_one("SELECT COUNT(*) FROM (SELECT vtxo_id FROM expiry_decided_coin \
+		let fences=t.query_one("SELECT COUNT(*) FROM (SELECT vtxo_id FROM expiry_entitlement \
 			UNION ALL SELECT vtxo_id FROM expiry_allocation_input) prior WHERE vtxo_id=ANY($1)",&[&paid_ids]).await?.get::<_,i64>(0);
 		let paid=t.query("SELECT v.vtxo_id,v.onchain_spent_txid,v.onchain_spent_height,h.chain_resolution::TEXT, \
 			h.offchain_resolution::TEXT,h.chain_resolution_height FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=ANY($1) ORDER BY v.vtxo_id",
@@ -517,11 +517,13 @@ async fn reserved_batched_terminal(reorg:bool) {
 			let old=t.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1",&[id]).await?;
 			assert_eq!(old.get::<_,&str>("status"),"conflicted");
 			assert_eq!(old.get::<_,&[u8]>("sweep_tx"),serialize(old_parent).as_slice());
-			let row=t.query_one("SELECT paying_txid FROM expiry_allocation_coin WHERE allocation_id=$1 AND entitlement_id=$2",
+			let row=t.query_one("SELECT p.txid FROM expiry_allocation_coin c \
+				JOIN expiry_terminal_claim p ON p.entitlement_id=c.entitlement_id \
+				WHERE c.allocation_id=$1 AND c.entitlement_id=$2",
 				&[id,&reserved.1[source].entitlement]).await?;
-			assert_eq!(row.get::<_,Option<&str>>("paying_txid"),Some(claim.compute_txid().to_string().as_str()));
+			assert_eq!(row.get::<_,Option<&str>>("txid"),Some(claim.compute_txid().to_string().as_str()));
 		}
-		let all=t.query("SELECT vtxo_id,entitlement_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1)",&[&originals]).await?
+		let all=t.query("SELECT vtxo_id,id AS entitlement_id FROM expiry_entitlement WHERE vtxo_id=ANY($1)",&[&originals]).await?
 			.into_iter().map(|row|(row.get::<_,String>("vtxo_id"),row.get::<_,i64>("entitlement_id"))).collect::<BTreeMap<_,_>>();
 		assert_eq!(all,decided,"no original economic fence is erased");
 		let row=t.query_one("SELECT c.entitlement_id FROM expiry_allocation_coin c \

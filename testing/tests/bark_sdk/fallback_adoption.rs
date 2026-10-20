@@ -10,16 +10,20 @@ use std::time::Duration;
 
 use bark::{ExitProtectionIncomplete, ImportVtxoArgs};
 use bark::{OpenWalletArgs, Wallet, WalletSeed};
+use bark::exit::ExitState;
+use bark::movement::{Movement, MovementDestination, MovementId, MovementStatus, PaymentMethod};
+use bark::movement::update::MovementUpdate;
 use bark::onchain::OnchainWallet;
 use bark::persist::{BarkPersister, sqlite::SqliteClient};
+use bark::subsystem::Subsystem;
 use bark::vtxo::VtxoState;
 use bitcoin_ext::BlockDelta;
-use bitcoin::Network;
-use bitcoin_ext::rpc::RpcApi;
+use bitcoin::{Address, Network, OutPoint, Script, TxOut};
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::Db;
 use server_rpc::protos;
 
-use ark::ProtocolEncoding;
+use ark::{ProtocolEncoding, VtxoId};
 use ark_testing::{sat, TestContext};
 use ark_testing::context::builders::BarkSdkBuilder;
 use ark_testing::daemon::captaind::{self, ArkClient};
@@ -76,12 +80,405 @@ async fn await_decision(ctx: &TestContext, srv: &captaind::Captaind, coin: &bark
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let exists = database.read(async |tx| Ok(tx.query_opt(
-				"SELECT entitlement_id FROM expiry_decided_coin WHERE vtxo_id=$1", &[&coin.id().to_string()],
+				"SELECT id AS entitlement_id FROM expiry_entitlement WHERE vtxo_id=$1", &[&coin.id().to_string()],
 			).await?)).await.unwrap().is_some();
 			if exists { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("actual unfunded background allocation did not decide the coin");
+}
+
+// Read at a stable manual-sync boundary. Equality includes every public row
+// field; address queries keep their own ascending-ID order.
+async fn assert_history_views(wallet: &Wallet, methods: &[PaymentMethod]) -> Vec<Movement> {
+	let full = wallet.history().await.unwrap();
+	assert_eq!(full.iter().map(|row| row.id).collect::<BTreeSet<_>>().len(), full.len());
+	let mut ordered = full.clone();
+	ordered.sort_by(|a, b| b.time.created_at.cmp(&a.time.created_at).then_with(|| b.id.cmp(&a.id)));
+	assert_eq!(full, ordered, "full history order changed");
+	for method in methods {
+		let mut expected = full.iter().filter(|row| row.sent_to(method) || row.received_on(method))
+			.cloned().collect::<Vec<_>>();
+		expected.sort_by_key(|row| row.id);
+		let actual = wallet.history_by_payment_method(method).await.unwrap();
+		assert_eq!(actual, expected, "payment-method history differs for {method:?}");
+		assert!(actual.windows(2).all(|pair| pair[0].id < pair[1].id), "query repeated or reordered a movement");
+	}
+	full
+}
+
+fn assert_one_principal_debit(history: &[Movement], coin: VtxoId, expected_id: MovementId) {
+	let rows = history.iter().filter(|row| row.input_vtxos.contains(&coin)
+		&& matches!(row.subsystem.name.as_str(), "bark.exit" | "abandon.fallback_payout")).collect::<Vec<_>>();
+	assert_eq!(rows.iter().map(|row| row.effective_balance.to_sat()).sum::<i64>(), -100_000);
+	let debits = rows.iter().filter(|row| row.effective_balance.to_sat() != 0).collect::<Vec<_>>();
+	assert_eq!(debits.len(), 1, "expected exactly one nonzero history entry");
+	assert_eq!(debits[0].id, expected_id);
+	assert_eq!(debits[0].effective_balance.to_sat(), -100_000);
+}
+
+// Find all outputs to this script in the new confirmed blocks.
+fn canonical_script_outputs(ctx: &TestContext, after_height: u64, script: &Script) -> Vec<(OutPoint, TxOut)> {
+	let core = ctx.bitcoind().sync_client();
+	let mut outputs = Vec::new();
+	let mut inputs = BTreeSet::new();
+	for height in after_height + 1..=core.get_block_count().unwrap() {
+		let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
+		for tx in block.txdata {
+			if tx.is_coinbase() { continue; }
+			for input in &tx.input {
+				assert!(inputs.insert(input.previous_output), "a canonical input is reused");
+			}
+			for (index, output) in tx.output.iter().enumerate() {
+				if output.script_pubkey.as_script() == script {
+					outputs.push((OutPoint::new(tx.compute_txid(), u32::try_from(index).unwrap()), output.clone()));
+				}
+			}
+		}
+	}
+	outputs
+}
+
+#[tokio::test]
+async fn history_projection_agrees_after_protective_exit_payout_and_reorg() {
+	let ctx = TestContext::new("bark_sdk/history_protective_payout_reorg").await;
+	let srv = ctx.captaind("server").no_vtxo_pool().cfg(|cfg| {
+		cfg.vtxo_lifetime = BlockDelta::new(24);
+		cfg.vtxo_exit_delta = BlockDelta::new(3);
+	}).watchmand().create().await;
+	let owner = create_proof_wallet(ctx.bark_sdk("owner", &srv).cfg(config)
+		.funded(sat(500_000)).boarded(sat(100_000))).await;
+	owner.stop_daemon_wait().await.unwrap();
+	let coin = owner.spendable_vtxos().await.unwrap().remove(0);
+	let signed = owner.get_full_vtxo(coin.id()).await.unwrap();
+	let script = owner.fallback_destination().await.unwrap().spk;
+	let payout_method = PaymentMethod::Bitcoin(Address::from_script(&script, Network::Regtest).unwrap().into_unchecked());
+	let scan_start = ctx.bitcoind().get_block_count().await;
+	await_decision(&ctx, &srv, &coin).await;
+	owner.sync_fallback_payouts().await.unwrap();
+	assert_eq!(owner.balance().await.unwrap().total(), sat(100_000));
+	assert_eq!(owner.protect_expiring_vtxos().await.unwrap().exits_started, vec![coin.id()]);
+	let exit_id = owner.exit_mgr().get_exit_vtxo(coin.id()).await.unwrap().movement_id().unwrap();
+	let db = SqliteClient::open(ctx.datadir.join("owner/db.sqlite")).unwrap();
+	let stored = db.get_movement_by_id(exit_id).await.unwrap();
+	assert_eq!(stored.status, MovementStatus::Pending);
+	assert_eq!(stored.metadata["protective_exit"], true);
+	assert_eq!(stored.input_vtxos, vec![coin.id()]);
+	assert_eq!(stored.sent_to.len(), 1);
+	let exit_method = stored.sent_to[0].destination.clone();
+	assert_ne!(exit_method, payout_method, "the fixture must distinguish native exit and fallback destinations");
+	let methods = [exit_method.clone(), payout_method.clone()];
+	assert!(owner.history_by_payment_method(&exit_method).await.unwrap().iter().any(|row| row.id == exit_id),
+		"the address query must include the exit");
+	let pending = assert_history_views(&owner, &methods).await;
+	assert_one_principal_debit(&pending, coin.id(), exit_id);
+	let owed = owner.balance().await.unwrap();
+	assert_eq!(owed.spendable, sat(0));
+	assert_eq!(owed.awaiting_settlement + owed.pending_exit, sat(100_000));
+	assert_eq!(owed.total(), sat(100_000));
+	assert!(pending.iter().filter(|row| row.subsystem.name == "abandon.fallback_payout")
+		.all(|row| row.status == MovementStatus::Pending));
+
+	// Stop only this fixture's watchman while the fee coins confirm. Otherwise
+	// it can publish a parent that the second funding block already mines.
+	let fee_address = srv.watchmand().wait_wallet_address().await;
+	let watchman_dir = srv.watchmand().config().data_dir.clone();
+	srv.watchmand().stop().await.unwrap();
+	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
+	let fee_tip = ctx.generate_blocks(2).await;
+	assert!(canonical_script_outputs(&ctx, scan_start, &script).is_empty());
+	srv.watchmand().start().await.unwrap();
+	assert_eq!(srv.watchmand().config().data_dir, watchman_dir);
+	srv.watchmand().wait_for_sync_height(fee_tip).await;
+	// Wait for the payout transaction in the mempool before mining.
+	let parent = tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			for txid in ctx.bitcoind().sync_client().get_raw_mempool().unwrap() {
+				let tx = ctx.bitcoind().await_transaction(txid).await;
+				if tx.output.iter().any(|output| output.script_pubkey == script && output.value == sat(99_000)) {
+					return tx;
+				}
+			}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("actual fallback parent did not broadcast");
+	assert!(parent.input.iter().any(|input| input.previous_output == signed.chain_anchor()));
+	assert!(ctx.bitcoind().sync_client().get_mempool_entry(&parent.compute_txid()).is_ok());
+	owner.sync_fallback_payouts().await.unwrap();
+	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.is_empty());
+	assert_one_principal_debit(&assert_history_views(&owner, &methods).await, coin.id(), exit_id);
+	let first_confirmation = ctx.generate_blocks(1).await;
+	let core = ctx.bitcoind().sync_client();
+	let confirmation_hash = core.get_block_hash(first_confirmation.into()).unwrap();
+	ctx.generate_blocks(5).await;
+	// Raw JSON avoids older typed RPC decoders rejecting the parent's P2A output.
+	let info: serde_json::Value = core.call("getrawtransaction",
+		&[serde_json::json!(parent.compute_txid()), serde_json::json!(true)]).unwrap();
+	assert!(info["confirmations"].as_u64().unwrap() >= 6);
+	assert_eq!(info["blockhash"], serde_json::json!(confirmation_hash));
+	let outputs = canonical_script_outputs(&ctx, scan_start, &script);
+	assert_eq!(outputs.len(), 1, "the declared canonical range must have exactly one customer output");
+	assert_eq!(outputs[0].0.txid, parent.compute_txid());
+	assert_eq!(outputs[0].1.value, sat(99_000));
+	let actual = core.get_tx_out(&outputs[0].0.txid, outputs[0].0.vout, Some(true)).unwrap().unwrap();
+	assert!(actual.confirmations >= 6);
+	assert_eq!(actual.value, sat(99_000));
+	assert_eq!(actual.script_pub_key.script().unwrap(), script);
+	owner.chain().invalidate_caches().await;
+	owner.sync_fallback_payouts().await.unwrap();
+	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.values()
+		.any(|proof| proof.outpoint == outputs[0].0));
+	// Sync must not manufacture the premise by rewriting the ordinary intent.
+	assert_eq!(db.get_movement_by_id(exit_id).await.unwrap().status, MovementStatus::Pending);
+	let paid = assert_history_views(&owner, &methods).await;
+	let exit = paid.iter().find(|row| row.id == exit_id).unwrap();
+	assert_eq!(exit.status, MovementStatus::Canceled);
+	assert_eq!(exit.effective_balance.to_sat(), 0);
+	assert_eq!(exit.intended_balance, stored.intended_balance);
+	let receipts = paid.iter().filter(|row| row.subsystem.name == "abandon.fallback_payout"
+		&& row.input_vtxos.contains(&coin.id())).collect::<Vec<_>>();
+	assert_eq!(receipts.len(), 1);
+	let receipt_id = receipts[0].id;
+	assert_eq!(receipts[0].input_vtxos, vec![coin.id()]);
+	assert_eq!(receipts[0].status, MovementStatus::Successful);
+	assert_eq!(receipts[0].offchain_fee, sat(1_000));
+	assert_eq!(receipts[0].sent_to, vec![MovementDestination::new(payout_method, sat(99_000))]);
+	assert_one_principal_debit(&paid, coin.id(), receipt_id);
+	assert_eq!(owner.balance().await.unwrap().total(), sat(0));
+	let sample_movements = db.get_all_movements().await.unwrap().len();
+	let sample_entitlements = db.get_fallback_snapshot().await.unwrap().entitlements.len();
+	let sample_started = std::time::Instant::now();
+	let sampled_query = owner.history_by_payment_method(&exit_method).await.unwrap();
+	let query_sample_us = sample_started.elapsed().as_micros();
+	assert_eq!(sampled_query, vec![exit.clone()]);
+	drop(owner);
+	let owner = Box::pin(reopen(&ctx, "owner", &srv)).await;
+	assert_eq!(assert_history_views(&owner, &methods).await, paid, "reopen must preserve public rows");
+
+	srv.watchmand().stop().await.unwrap();
+	srv.stop().await.unwrap();
+	// Disconnect the first payout block after six confirmations. This is a
+	// deep client-history reversal, not the <=3-block protocol gate.
+	core.invalidate_block(&confirmation_hash).unwrap();
+	owner.chain().invalidate_caches().await;
+	assert!(owner.sync_fallback_payouts().await.is_err(), "the stopped server cannot supply new history");
+	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.is_empty());
+	assert!(canonical_script_outputs(&ctx, scan_start, &script).is_empty());
+	let reorged = assert_history_views(&owner, &methods).await;
+	assert_one_principal_debit(&reorged, coin.id(), exit_id);
+	assert_eq!(reorged.iter().find(|row| row.id == exit_id).unwrap().status, MovementStatus::Pending);
+	assert_eq!(reorged.iter().find(|row| row.id == receipt_id).unwrap().status, MovementStatus::Pending);
+	let owed_again = owner.balance().await.unwrap();
+	assert_eq!(owed_again.spendable, sat(0));
+	assert_eq!(owed_again.awaiting_settlement + owed_again.pending_exit, sat(100_000));
+	assert_eq!(owed_again.total(), sat(100_000));
+	assert_eq!(owner.get_full_vtxo(coin.id()).await.unwrap().serialize(), signed.serialize());
+	drop(owner);
+	let owner = Box::pin(reopen(&ctx, "owner", &srv)).await;
+	assert_eq!(assert_history_views(&owner, &methods).await, reorged, "offline reopen must retain reversal");
+	assert_one_principal_debit(&owner.history().await.unwrap(), coin.id(), exit_id);
+	log::info!("History deep client reversal: coin={}, parent={}, payout={}, payout_sat=99000, output_fee_sat=1000, removed_block={}, exit_id={}, fallback_id={}, scan_after_height={}",
+		coin.id(), parent.compute_txid(), outputs[0].0, confirmation_hash, exit_id, receipt_id, scan_start);
+	log::info!("History query sample: elapsed_us={}, stored_movements={}, entitlements={}, matched_rows={}",
+		query_sample_us, sample_movements, sample_entitlements, sampled_query.len());
+}
+
+#[tokio::test]
+async fn history_native_and_other_device_claim_share_one_principal_debit() {
+	let ctx = TestContext::new("bark_sdk/history_two_device_claim").await;
+	let srv = ctx.captaind("server").no_vtxo_pool().cfg(|cfg| {
+		cfg.vtxo_lifetime = BlockDelta::new(24);
+		cfg.vtxo_exit_delta = BlockDelta::new(3);
+	}).watchmand().create().await;
+	let observer = create_proof_wallet(ctx.bark_sdk("observer", &srv).cfg(config)
+		.funded(sat(500_000)).boarded(sat(100_000))).await;
+	observer.stop_daemon_wait().await.unwrap();
+	let coin = observer.spendable_vtxos().await.unwrap().remove(0);
+	let signed = observer.get_full_vtxo(coin.id()).await.unwrap();
+	let claimant = create_proof_wallet(ctx.bark_sdk("claimant", &srv).cfg(config)
+		.mnemonic(mnemonic(&ctx, "observer").await)).await;
+	claimant.stop_daemon_wait().await.unwrap();
+	assert_eq!(observer.balance().await.unwrap().total(), sat(100_000));
+	assert_eq!(claimant.balance().await.unwrap().total(), sat(100_000));
+	assert_eq!(claimant.get_full_vtxo(coin.id()).await.unwrap().serialize(), signed.serialize());
+	assert!(observer.exit_mgr().get_exit_vtxo(coin.id()).await.is_none());
+	let scan_start = ctx.bitcoind().get_block_count().await;
+	let script = observer.fallback_destination().await.unwrap().spk;
+	await_decision(&ctx, &srv, &coin).await;
+	observer.sync_fallback_payouts().await.unwrap();
+	claimant.sync_fallback_payouts().await.unwrap();
+	assert_eq!(claimant.protect_expiring_vtxos().await.unwrap().exits_started, vec![coin.id()]);
+	let movement = claimant.exit_mgr().get_exit_vtxo(coin.id()).await.unwrap().movement_id().unwrap();
+	let claimant_db = SqliteClient::open(ctx.datadir.join("claimant/db.sqlite")).unwrap();
+	let observer_db = SqliteClient::open(ctx.datadir.join("observer/db.sqlite")).unwrap();
+	let native = claimant_db.get_movement_by_id(movement).await.unwrap();
+	assert_eq!(native.status, MovementStatus::Pending);
+	assert_eq!(native.input_vtxos, vec![coin.id()]);
+	assert_eq!(native.sent_to.len(), 1);
+	let native_method = native.sent_to[0].destination.clone();
+	assert_one_principal_debit(&assert_history_views(&claimant, &[native_method.clone()]).await, coin.id(), movement);
+
+	// Recovery restored the Ark coin into a fresh BDK store. Discover the
+	// same seed's existing confirmed fee change before requesting CPFP.
+	claimant.sync_onchain().await.unwrap();
+	let fee_coins = {
+		let onchain = claimant.onchain().unwrap();
+		let guard = onchain.read().await;
+		let wallet = (&*guard as &dyn std::any::Any).downcast_ref::<OnchainWallet>().unwrap();
+		assert!(wallet.balance().confirmed > sat(0), "the restored claimant must discover existing confirmed fee funds");
+		wallet.list_unspent().into_iter().filter(|coin| coin.chain_position.is_confirmed()).collect::<Vec<_>>()
+	};
+	for coin in fee_coins {
+		let actual = ctx.bitcoind().sync_client().get_tx_out(&coin.outpoint.txid, coin.outpoint.vout, Some(true)).unwrap().unwrap();
+		assert!(actual.confirmations > 0);
+		assert_eq!(actual.value, coin.txout.value);
+		assert_eq!(actual.script_pub_key.script().unwrap(), coin.txout.script_pubkey);
+	}
+
+	// The server never receives fee liquidity. Only this device publishes the
+	// genuine signed user path and its explicitly authorized final claim.
+	tokio::time::timeout(Duration::from_secs(40), async {
+		loop {
+			claimant.chain().invalidate_caches().await;
+			claimant.sync_onchain().await.unwrap();
+			claimant.exit_mgr().progress_exits_with_cpfp(&claimant, None).await.unwrap();
+			if claimant.exit_mgr().list_claimable().await.iter().any(|exit| exit.id() == coin.id()) { break; }
+			ctx.generate_blocks(1).await;
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}).await.expect("the real retained source did not become claimable");
+	let claimable = claimant.exit_mgr().list_claimable().await;
+	assert_eq!(claimable.len(), 1);
+	assert_eq!(claimable[0].id(), coin.id());
+	let destination = ctx.bitcoind().get_new_address();
+	let claim = claimant.exit_mgr().drain_exits(&claimable, &claimant, destination.clone(),
+		Some(bitcoin::FeeRate::from_sat_per_vb(2).unwrap())).await.unwrap().extract_tx().unwrap();
+	assert_eq!(claim.input.len(), 1);
+	assert_eq!(claim.input[0].previous_output, signed.point());
+	assert_eq!(claim.output.len(), 1);
+	assert_eq!(claim.output[0].script_pubkey, destination.script_pubkey());
+	let previous = ctx.bitcoind().await_transaction(signed.point().txid).await;
+	assert_eq!(previous.output[signed.point().vout as usize].value, sat(100_000));
+	let miner_fee = sat(100_000).checked_sub(claim.output[0].value).unwrap();
+	assert!(miner_fee > sat(0) && claim.output[0].value > sat(0));
+	assert_eq!(claim.output[0].value + miner_fee, sat(100_000));
+	let core = ctx.bitcoind().sync_client();
+	core.send_raw_transaction(&claim).unwrap();
+	let confirmed = ctx.generate_blocks(6).await;
+	let info = core.custom_get_raw_transaction_info(claim.compute_txid(), None).unwrap().unwrap();
+	assert!(info.confirmations.unwrap_or(0) >= 6);
+	let block = info.blockhash.unwrap();
+	let height = core.get_block_header_info(&block).unwrap().height as u64;
+	assert_eq!(core.get_block_hash(height).unwrap(), block);
+	let output = core.get_tx_out(&claim.compute_txid(), 0, Some(true)).unwrap().unwrap();
+	assert!(output.confirmations >= 6);
+	assert_eq!(output.value, claim.output[0].value);
+	assert_eq!(output.script_pub_key.script().unwrap(), destination.script_pubkey());
+	srv.wait_for_sync_height(confirmed).await;
+	srv.watchmand().wait_for_sync_height(confirmed).await;
+	claimant.chain().invalidate_caches().await;
+	observer.chain().invalidate_caches().await;
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			claimant.exit_mgr().progress_exits(&claimant).await.unwrap();
+			claimant.sync_fallback_payouts().await.unwrap();
+			observer.sync_fallback_payouts().await.unwrap();
+			let local = claimant_db.get_exit_vtxo_entry(&coin.id()).await.unwrap().unwrap();
+			let snapshot = observer_db.get_fallback_snapshot().await.unwrap();
+			if matches!(local.state, ExitState::Claimed(done) if done.txid == claim.compute_txid())
+				&& snapshot.entitlements.values().any(|entry| entry.vtxo_id == coin.id()
+					&& entry.terminal_claim.as_ref().is_some_and(|terminal| terminal.txid == claim.compute_txid()))
+				&& snapshot.verified_terminals.values().any(|proof| proof.transaction == claim) { break; }
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}).await.expect("both genuine stores must independently reconcile the actual terminal claim");
+	assert!(canonical_script_outputs(&ctx, scan_start, &script).is_empty(),
+		"an unfunded fallback must not become another physical customer payment");
+	let native_history = assert_history_views(&claimant, &[native_method.clone()]).await;
+	assert_one_principal_debit(&native_history, coin.id(), movement);
+	assert_eq!(native_history.iter().find(|row| row.id == movement).unwrap().status, MovementStatus::Successful);
+	assert!(native_history.iter().all(|row| row.subsystem.name != "abandon.fallback_payout"
+		|| !row.input_vtxos.contains(&coin.id())), "the local native exit already represents this principal");
+	let methods = [native_method, PaymentMethod::Bitcoin(destination.into_unchecked()),
+		PaymentMethod::Bitcoin(Address::from_script(&script, Network::Regtest).unwrap().into_unchecked())];
+	let remote_history = assert_history_views(&observer, &methods).await;
+	let exits = remote_history.iter().filter(|row| row.input_vtxos.contains(&coin.id())
+		&& row.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
+	assert_eq!(exits.len(), 1);
+	assert_eq!(exits[0].input_vtxos, vec![coin.id()]);
+	assert_one_principal_debit(&remote_history, coin.id(), exits[0].id);
+	assert_eq!(exits[0].status, MovementStatus::Successful);
+	assert_eq!(exits[0].subsystem.kind, "exit");
+	assert_eq!(exits[0].offchain_fee, sat(0));
+	assert!(exits[0].sent_to.is_empty(), "another device's claim must not invent a payout destination");
+	assert_eq!(exits[0].metadata["fallback"]["disposition"], "exited");
+	assert_eq!(exits[0].metadata["fallback"]["payout_sat"], 0);
+	assert_eq!(exits[0].metadata["fallback"]["txid"], serde_json::json!(claim.compute_txid()));
+	assert!(observer.exit_mgr().get_exit_vtxo(coin.id()).await.is_none());
+	assert_eq!(observer.balance().await.unwrap().total(), sat(0));
+	assert_eq!(claimant.balance().await.unwrap().total(), sat(0));
+	drop(observer);
+	drop(claimant);
+	let observer = Box::pin(reopen(&ctx, "observer", &srv)).await;
+	let claimant = Box::pin(reopen(&ctx, "claimant", &srv)).await;
+	assert_eq!(assert_history_views(&observer, &methods).await, remote_history);
+	assert_eq!(assert_history_views(&claimant, &methods).await, native_history);
+	log::info!("History two-device claim: coin={}, txid={}, block={}, height={}, gross_sat=100000, paid_sat={}, miner_fee_sat={}, native_id={}, other_device_id={}, scan_after_height={}",
+		coin.id(), claim.compute_txid(), block, height, claim.output[0].value.to_sat(), miner_fee.to_sat(),
+		movement, exits[0].id, scan_start);
+}
+
+#[tokio::test]
+async fn history_payment_method_queries_preserve_order_and_variant_identity() {
+	let ctx = TestContext::new("bark_sdk/history_query_contract").await;
+	let srv = ctx.captaind("server").create().await;
+	let wallet = create_proof_wallet(ctx.bark_sdk("owner", &srv).cfg(config)).await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let address = ctx.bitcoind().get_new_address();
+	let methods = [PaymentMethod::Bitcoin(address.clone().into_unchecked()),
+		PaymentMethod::OutputScript(address.script_pubkey()), PaymentMethod::Custom("history-query-control".into())];
+	let subsystem = Subsystem::new("test.history_query");
+	wallet.movements_mgr().register_subsystem(subsystem).await.unwrap();
+	let mut ids = Vec::new();
+	// These pending zero-value annotations exercise query matching only. They
+	// are not ownership, financial operations, receipts or settlement evidence.
+	for method in &methods {
+		let mut matching = Vec::new();
+		for direction in 0..3 {
+			let destination = MovementDestination::new(method.clone(), sat(0));
+			let mut update = MovementUpdate::new().metadata([("query_only".into(), serde_json::json!(true))]);
+			if direction != 1 { update = update.sent_to([destination.clone()]); }
+			if direction != 0 { update = update.received_on([destination]); }
+			matching.push(wallet.movements_mgr().new_movement_with_update(subsystem, "annotation", update).await.unwrap());
+		}
+		ids.push(matching);
+	}
+	let full = assert_history_views(&wallet, &methods).await;
+	assert_eq!(full.len(), 9);
+	for row in &full {
+		assert_eq!(row.subsystem.name, "test.history_query");
+		assert_eq!(row.status, MovementStatus::Pending);
+		assert_eq!(row.intended_balance.to_sat(), 0);
+		assert_eq!(row.effective_balance.to_sat(), 0);
+		assert_eq!(row.offchain_fee, sat(0));
+		assert!(row.input_vtxos.is_empty() && row.output_vtxos.is_empty() && row.exited_vtxos.is_empty());
+	}
+	for (method, expected) in methods.iter().zip(&ids) {
+		let started = std::time::Instant::now();
+		let queried = wallet.history_by_payment_method(method).await.unwrap();
+		let query_sample_us = started.elapsed().as_micros();
+		log::info!("History query-only sample: method={:?}, elapsed_us={}, stored_movements={}, matched_rows={}",
+			method, query_sample_us, full.len(), queried.len());
+		assert_eq!(queried.iter().map(|row| row.id).collect::<Vec<_>>(), *expected);
+	}
+	assert_ne!(ids[0], ids[1], "equal scripts do not erase the payment-method variant");
+	wallet.update_history_metadata(ids[0][0], &serde_json::json!({"note": "retained query annotation"})).await.unwrap();
+	let patched = assert_history_views(&wallet, &methods).await;
+	assert_eq!(patched.iter().find(|row| row.id == ids[0][0]).unwrap().metadata["note"], "retained query annotation");
+	drop(wallet);
+	let wallet = Box::pin(reopen(&ctx, "owner", &srv)).await;
+	assert_eq!(assert_history_views(&wallet, &methods).await, patched);
+	assert!(wallet.history_by_payment_method(&PaymentMethod::Custom("unrelated".into())).await.unwrap().is_empty());
 }
 
 #[tokio::test]

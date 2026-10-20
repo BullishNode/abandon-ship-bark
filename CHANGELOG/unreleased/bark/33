@@ -1,0 +1,7 @@
+- Make Bitcoin payment-method history agree with complete wallet history
+  Preserve exact address and output-script matching and movement-ID query order.
+  Queries read the complete history, so work and memory can grow with its size.
+  [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)
+- Verify the source of Lightning status and mailbox updates
+  Validate the complete HTLC set before changing payment history or refund state.
+  [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)

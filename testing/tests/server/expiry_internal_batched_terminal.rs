@@ -223,7 +223,7 @@ async fn batched_terminal(reorg: bool) {
 		}
 	}).await.expect("both real user sources must link to one actual canonical batch body before G consumption");
 	let context=db.read(async |t| {
-		let fences=t.query_one("SELECT COUNT(*) FROM (SELECT vtxo_id FROM expiry_decided_coin \
+		let fences=t.query_one("SELECT COUNT(*) FROM (SELECT vtxo_id FROM expiry_entitlement \
 			UNION ALL SELECT vtxo_id FROM expiry_allocation_input) prior WHERE vtxo_id=ANY($1)",&[&paid_ids]).await?.get::<_,i64>(0);
 		let paid=t.query("SELECT v.vtxo_id,v.onchain_spent_txid,v.onchain_spent_height,h.chain_resolution::TEXT, \
 			h.offchain_resolution::TEXT,h.chain_resolution_height FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=ANY($1) ORDER BY v.vtxo_id",

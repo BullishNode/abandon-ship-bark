@@ -10,17 +10,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1792264731,
-        "narHash": "sha256-reR89t5xYfswJMsiD+ACU7dm3FWtq9rxt4gs2iC8kP4=",
+        "lastModified": 1792469043,
+        "narHash": "sha256-CLLr+rUeYwG781EFiNVMoAjc8MAw6h9S0JO88suIV0Q=",
         "owner": "BullishNode",
         "repo": "abandon-ship-client",
-        "rev": "4c1c979ccbd60b7761c528d0428f9965f439721b",
+        "rev": "215ad25abe616f642433a1c5d1fd0110cf95a824",
         "type": "github"
       },
       "original": {
         "owner": "BullishNode",
         "repo": "abandon-ship-client",
-        "rev": "4c1c979ccbd60b7761c528d0428f9965f439721b",
+        "rev": "215ad25abe616f642433a1c5d1fd0110cf95a824",
         "type": "github"
       }
     },

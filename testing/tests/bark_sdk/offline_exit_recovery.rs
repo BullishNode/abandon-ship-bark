@@ -132,7 +132,7 @@ async fn run() {
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let decided = server_db.read(async |tx| Ok(tx.query_opt(
-				"SELECT entitlement_id FROM expiry_decided_coin WHERE vtxo_id=$1", &[&owned.id().to_string()],
+				"SELECT id AS entitlement_id FROM expiry_entitlement WHERE vtxo_id=$1", &[&owned.id().to_string()],
 			).await?)).await.unwrap().is_some();
 			if decided { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;

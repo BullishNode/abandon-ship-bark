@@ -167,7 +167,7 @@ impl Tx<'_> {
 				SELECT r.subscription_id FROM expiry_lightning_receive_replay r
 				WHERE r.uncollected_at IS NULL AND (r.last_attempt_at IS NULL OR r.last_attempt_at < NOW()-INTERVAL '5 seconds')
 				AND EXISTS(SELECT 1 FROM expiry_lightning_receive_claim c WHERE c.subscription_id=r.subscription_id AND NOT c.materialized)
-				AND NOT EXISTS(SELECT 1 FROM expiry_lightning_receive_claim c JOIN expiry_decided_coin d ON d.vtxo_id=c.source_vtxo_id
+				AND NOT EXISTS(SELECT 1 FROM expiry_lightning_receive_claim c JOIN expiry_entitlement d ON d.vtxo_id=c.source_vtxo_id
 					WHERE c.subscription_id=r.subscription_id)
 				ORDER BY r.last_attempt_at NULLS FIRST,r.subscription_id LIMIT $1 FOR UPDATE OF r SKIP LOCKED
 			)
@@ -207,21 +207,46 @@ impl Tx<'_> {
 
 	/// Called only after the original authenticated hold backend reports this
 	/// exact invoice Cancelled. Coarse cancellation alone never drops work.
-	pub(crate) async fn stop_uncollected_receive_request(&self, subscription_id: i64) -> anyhow::Result<bool> {
+	pub(crate) async fn stop_uncollected_receive_request(
+		&self, subscription_id: i64,
+		internal_deadline: Option<(super::expiry_chain::ExpiryViewToken, BlockDelta)>,
+	) -> anyhow::Result<bool> {
+		if let Some((view, _)) = internal_deadline { self.lock_valid_expiry_view(view).await?; }
 		let ids = self.query("
 			SELECT source_vtxo_id FROM expiry_lightning_receive_claim
 			WHERE subscription_id=$1 ORDER BY source_vtxo_id
 		", &[&subscription_id]).await?
 			.into_iter().map(|r| r.get::<_, &str>("source_vtxo_id").parse()).collect::<Result<Vec<VtxoId>, _>>()?;
 		super::expiry_guard::guard_obligation_changes(self, &ids).await?;
+		if internal_deadline.is_some() { self.lock_htlc_settlements().await?; }
+		let subscription = self.get_htlc_subscription_by_id(subscription_id).await?
+			.context("uncollected receive subscription disappeared")?;
+		let funding = self.funded_internal_receive(subscription_id, subscription.payment_hash).await?;
+		ensure!(funding.is_some() == internal_deadline.is_some(), "receive funding changed before terminal recovery");
+		if let Some((view, margin)) = internal_deadline {
+			let funding = funding.context("internal receive funding disappeared")?;
+			let attempt_id = funding.attempt.id;
+			let incoming = self.query_one("SELECT COUNT(*) AS count,MIN(h.htlc_expiry) AS expiry, \
+				BOOL_AND(COALESCE(h.direction::TEXT='incoming' AND h.payment_hash=$2,FALSE)) AS valid \
+				FROM lightning_payment_attempt_htlc_vtxo l LEFT JOIN vtxo v ON v.vtxo_id=l.vtxo_id \
+				LEFT JOIN htlc_vtxo h ON h.id=v.id WHERE l.lightning_payment_attempt_id=$1",
+				&[&attempt_id, &subscription.payment_hash.to_string()]).await?;
+			ensure!(incoming.get::<_, i64>("count") > 0 && incoming.get::<_, Option<bool>>("valid") == Some(true),
+				"internal receive lacks its complete original incoming sources");
+			let expiry = BlockHeight::try_from(incoming.get::<_, i32>("expiry"))?;
+			let last = view.captaind.height.checked_add(margin).context("internal receive collection margin overflows")?;
+			if last <= expiry || funding.claim_complete
+				|| self.internal_receive_collected(subscription_id, subscription.payment_hash).await? {
+				return Ok(false);
+			}
+		}
 		// Keep actual terminal cancellation independent of a missed coarse-state
-		// update. The existing entitlement resolver still requires no actual own
-		// fulfillment/materialization and no internal funding before recovery.
+		// update. Cancellation must not override an already materialized or
+		// fulfilled destination; entitlement recovery proves collection separately.
 		let changed = self.execute("
 			UPDATE expiry_lightning_receive_replay r SET uncollected_at=NOW()
 			FROM lightning_htlc_subscription s WHERE r.subscription_id=$1 AND s.id=r.subscription_id
 			AND r.payment_hash=s.payment_hash AND r.uncollected_at IS NULL
-			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_internal_funding f WHERE f.subscription_id=s.id)
 			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_receive_claim c JOIN vtxo v ON v.vtxo_id=c.source_vtxo_id
 			JOIN htlc_vtxo h ON h.id=v.id WHERE c.subscription_id=s.id AND (c.materialized OR h.offchain_resolution='fulfilled'))
 		",
@@ -328,10 +353,14 @@ impl Tx<'_> {
 				"receive output has no committed claim materialization");
 		}
 		let recipient = match output.policy() { VtxoPolicy::Pubkey(p) => Some(p.user_pubkey), _ => None };
+		let subscription_id = row.get("subscription_id");
+		let payment_hash = row.get::<_, &str>("payment_hash").parse()?;
+		let internally_collected = row.get::<_, bool>("internally_funded")
+			&& self.internal_receive_collected(subscription_id, payment_hash).await?;
 		Ok(Some(ReceiveClaimEntitlement {
-			source, subscription_id: row.get("subscription_id"), payment_hash: row.get::<_, &str>("payment_hash").parse()?,
+			source, subscription_id, payment_hash,
 			output_id, recipient, settlement: receive_claim_settlement(
-				row.get("settled"), row.get("canceled"), row.get("materialized"), row.get("internally_funded"),
+				row.get("settled"), row.get("canceled"), row.get("materialized"), internally_collected,
 				row.get::<_, Option<&str>>("resolution") == Some("fulfilled"),
 			),
 		}))
@@ -339,10 +368,11 @@ impl Tx<'_> {
 }
 
 // Canceling the native hold invoice is part of a successful intra-Ark payment,
-// so it cannot erase that payment's actual source-specific funding obligation.
-fn receive_claim_settlement(settled: bool, canceled: bool, materialized: bool, internally_funded: bool, fulfilled: bool) -> ReceiveClaimSettlement {
+// so it cannot erase actual source-specific collection. Funding alone is not
+// collection: the original claim can expire after its destination was recorded.
+fn receive_claim_settlement(settled: bool, canceled: bool, materialized: bool, internally_collected: bool, fulfilled: bool) -> ReceiveClaimSettlement {
 	if settled { ReceiveClaimSettlement::Settled }
-	else if canceled && !materialized && !internally_funded && !fulfilled { ReceiveClaimSettlement::CancelledUncollected }
+	else if canceled && !materialized && !internally_collected && !fulfilled { ReceiveClaimSettlement::CancelledUncollected }
 	else { ReceiveClaimSettlement::Pending }
 }
 
@@ -456,10 +486,15 @@ mod tests {
 
 	#[test]
 	fn receive_claim_cancelled_uncollected_intent_preserves_original_grant_recovery() {
+		// A funded but uncollected internal request has the same recovery
+		// classification as an uncollected external request.
 		assert_eq!(receive_claim_settlement(false, true, false, false, false), ReceiveClaimSettlement::CancelledUncollected);
 		assert_eq!(receive_claim_settlement(false, false, false, false, false), ReceiveClaimSettlement::Pending);
 		assert_eq!(receive_claim_settlement(false, true, true, false, true), ReceiveClaimSettlement::Pending);
 		assert_eq!(receive_claim_settlement(false, true, false, true, false), ReceiveClaimSettlement::Pending);
+		assert_eq!(receive_claim_settlement(false, true, true, false, false), ReceiveClaimSettlement::Pending);
+		assert_eq!(receive_claim_settlement(false, true, false, false, true), ReceiveClaimSettlement::Pending);
+		assert_eq!(receive_claim_settlement(true, true, false, false, false), ReceiveClaimSettlement::Settled);
 		assert_eq!(receive_claim_settlement(true, false, true, false, true), ReceiveClaimSettlement::Settled);
 	}
 

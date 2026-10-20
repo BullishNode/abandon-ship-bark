@@ -8,12 +8,6 @@ mod embedded {
 	}
 }
 
-mod fork_embedded {
-	pub mod migrations {
-		include!(concat!(env!("OUT_DIR"), "/fork_migrations.rs"));
-	}
-}
-
 pub mod fallback;
 pub(crate) mod ordinary_spend;
 pub mod expiry_attribution;
@@ -202,8 +196,8 @@ pub struct Db {
 
 impl Db {
 	async fn run_migrations(config: &PostgresConfig) -> anyhow::Result<()> {
-		// The server and watchman can start together. Refinery reads history
-		// before applying migrations, so both histories must share one lock.
+		// The server and watchman can start together. Serialize upstream
+		// migrations and fork schema initialization on the same connection.
 		// Use a dedicated session. Cancel its query before closing on a dropped
 		// startup future; a blocked backend may not notice a closed socket yet.
 		let pg_config = Self::config(&config.name, config);
@@ -214,27 +208,16 @@ impl Db {
 			cancel: conn.cancel_token(), driver: Some(tokio::spawn(connection)),
 		};
 		conn.query_one("SELECT pg_advisory_lock($1)", &[&(AdvisoryLock::Migrations as i64)]).await?;
-		let mut fork_runner = fork_embedded::migrations::runner();
-		let expected = fork_runner.get_migrations();
-		ensure!(expected.len() == 1 && expected[0].version() == 1,
-			"fork schema must contain exactly one initial migration");
-		let expected_checksum = expected[0].checksum().to_string();
-		// Refuse earlier fork builds before either runner can write history or
-		// schema. Version 1 alone also names an incompatible earlier schema.
-		if conn.query_one("SELECT to_regclass('expiry_refinery_schema_history') IS NOT NULL", &[])
+		embedded::migrations::runner().run_async::<Client>(&mut conn).await?;
+		let tx = conn.transaction().await?;
+		// The marker and all fork objects commit together on a fresh database.
+		// Reopening the same schema must not reset its chain view or obligations.
+		if tx.query_one("SELECT to_regclass('expiry_chain_view') IS NULL", &[])
 			.await?.get::<_, bool>(0)
 		{
-			let history = conn.query("SELECT version,name,checksum FROM expiry_refinery_schema_history ORDER BY version", &[]).await?;
-			let compatible = history.is_empty() || (history.len() == 1
-				&& history[0].get::<_, Option<i32>>("version") == Some(1)
-				&& history[0].get::<_, Option<&str>>("name") == Some(expected[0].name())
-				&& history[0].get::<_, Option<&str>>("checksum") == Some(expected_checksum.as_str()));
-			ensure!(compatible, "unsupported fork schema history: this build requires a fresh database or the exact abandon_ship schema");
+			tx.batch_execute(include_str!("fork_schema.sql")).await?;
 		}
-		embedded::migrations::runner().run_async::<Client>(&mut conn).await?;
-		fork_runner
-			.set_migration_table_name("expiry_refinery_schema_history")
-			.run_async::<Client>(&mut conn).await?;
+		tx.commit().await?;
 		connection.finish();
 		info!("All migrations got successfully run");
 		Ok(())

@@ -44,8 +44,7 @@ fn main() {
 		println!("cargo:rustc-env=SERVER_VERSION={}", version);
 	}
 
-	generate_migrations("migrations");
-	generate_migrations("fork_migrations");
+	generate_migrations();
 }
 
 /// Generates the embedded database migrations module.
@@ -53,11 +52,10 @@ fn main() {
 /// refinery's embed_migrations! macro embeds the migration files in filesystem
 /// readdir order, which differs between machines and makes the build
 /// unreproducible. Generate the equivalent module from a sorted file list.
-fn generate_migrations(directory: &str) {
-	let source = format!("src/database/{directory}");
-	println!("cargo:rerun-if-changed={source}");
+fn generate_migrations() {
+	println!("cargo:rerun-if-changed=src/database/migrations");
 
-	let mut files = fs::read_dir(&source)
+	let mut files = fs::read_dir("src/database/migrations")
 		.expect("failed to read migrations directory")
 		.map(|entry| entry.expect("failed to read migrations directory").path())
 		.filter(|path| path.extension().is_some_and(|ext| ext == "sql"))
@@ -77,6 +75,6 @@ fn generate_migrations(directory: &str) {
 	}
 	code.push_str("\t];\n\t::refinery::Runner::new(&migrations)\n}\n");
 
-	let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join(format!("{directory}.rs"));
+	let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("migrations.rs");
 	fs::write(out, code).expect("failed to write migrations.rs");
 }

@@ -22,7 +22,7 @@
 		# version or a locally built dist instead, set the BARK_WEB_VERSION
 		# or BARK_WEB_DIST env var (see below).
 		bark-web = {
-			url = "github:BullishNode/abandon-ship-client/4c1c979ccbd60b7761c528d0428f9965f439721b";
+			url = "github:BullishNode/abandon-ship-client/215ad25abe616f642433a1c5d1fd0110cf95a824";
 			inputs.nixpkgs.follows = "nixpkgs";
 			inputs.flake-utils.follows = "flake-utils";
 		};
@@ -52,6 +52,7 @@
 				};
 
 				isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+				clightning = if isDarwin then null else import ./nix/package-clightning.nix { inherit pkgs; };
 
 				# We serve the static musl binaries for Linux user so it runs everywhere.
 				hostRustTarget =
@@ -237,6 +238,9 @@
 				}
 				// lib.optionalAttrs (builtins.hasAttr hostRustTarget serverPackages) {
 					bark-server = serverPackages.${hostRustTarget};
+				}
+				// lib.optionalAttrs (!isDarwin) {
+					inherit clightning;
 				};
 
 				# for `nix run` support
@@ -263,7 +267,7 @@
 					};
 
 					devShell = import ./nix/dev-shell.nix {
-						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm cln-grpc rustBuildToolchain;
+						inherit system pkgs lib fenix buildShell slog-tools rustTargetWasm cln-grpc clightning rustBuildToolchain;
 					};
 
 					ciShell = import ./nix/ci-shell.nix {

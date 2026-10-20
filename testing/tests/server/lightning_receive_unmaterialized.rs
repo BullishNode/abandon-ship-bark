@@ -9,14 +9,14 @@ use std::time::Duration;
 
 use ark::{ProtocolEncoding, ServerVtxo, Vtxo};
 use ark::lightning::PaymentHash;
-use ark::vtxo::Full;
+use ark::vtxo::{Full, VtxoClause};
 use ark_testing::{sat, Captaind, TestContext};
 use ark_testing::daemon::captaind::{self, ArkClient, MailboxClient, WalletAdminClient};
 use bitcoin::{Amount, OutPoint, ScriptBuf, Transaction, TxOut};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
 use bitcoin_ext::{AmountExt, BlockDelta, TxOutExt};
-use bitcoin_ext::rpc::RpcApi;
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use cln_rpc::plugins::hold;
 use cln_rpc::listpays_pays::ListpaysPaysStatus;
 use server::database::{Db, SpendState};
@@ -143,8 +143,8 @@ async fn rebuilt(ctx: &TestContext, db: &Db) {
 
 /// Scan the entire bounded canonical chain before selecting descendants. The
 /// physical cut includes unused sponsor/pool capital, not just the payee parent.
-async fn canonical_cut(ctx: &TestContext, srv: &Captaind, boundary: &BTreeMap<OutPoint, TxOut>,
-	recipient: &ScriptBuf, provider: &ScriptBuf, payout: OutPoint,
+async fn canonical_cut(ctx: &TestContext, srv: &Captaind, db: &Db, boundary: &BTreeMap<OutPoint, TxOut>,
+	recipient: &ScriptBuf, provider: &ScriptBuf, payout: OutPoint, source: &Vtxo<Full>, pool: &Vtxo<Full>,
 ) {
 	let core = ctx.bitcoind().sync_client();
 	let height = core.get_block_count().unwrap();
@@ -171,9 +171,32 @@ async fn canonical_cut(ctx: &TestContext, srv: &Captaind, boundary: &BTreeMap<Ou
 		}
 	}
 	assert_eq!(customer_outputs, BTreeMap::from([(payout, 99_000)]));
+	let operator = {
+		let config = srv.watchmand().config();
+		config.sweep_address.clone().unwrap().require_network(config.network).unwrap().script_pubkey()
+	};
+	let mut source_path = BTreeMap::from([(source.chain_anchor(), boundary[&source.chain_anchor()].clone())]);
+	for step in source.transactions() {
+		source_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32), step.tx.output[step.output_idx].clone());
+	}
+	let mut pool_path = BTreeMap::new();
+	let mut prefixes = BTreeMap::new();
+	for coin in [source, pool] {
+		for step in coin.transactions() {
+			if coin.id() == pool.id() {
+				pool_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32), step.tx.output[step.output_idx].clone());
+			}
+			if let Some(previous) = prefixes.insert(step.tx.compute_txid(), step.tx.clone()) { assert_eq!(previous, step.tx); }
+		}
+	}
+	let allocations = db.read(async |tx| Ok(tx.query("SELECT sweep_tx FROM expiry_allocation WHERE sweep_tx IS NOT NULL", &[])
+		.await?.into_iter().map(|row| deserialize::<Transaction>(row.get("sweep_tx")).unwrap())
+		.map(|tx| (tx.compute_txid(), tx)).collect::<BTreeMap<_, _>>())).await.unwrap();
 	let mut frontier = boundary.clone();
+	let mut fee_points = boundary.keys().filter(|point| **point != source.chain_anchor()).copied().collect::<BTreeSet<_>>();
+	let mut parent_anchors = BTreeMap::new();
+	let mut children = BTreeMap::new();
 	let mut fees = 0_u64;
-	let mut selected = 0;
 	let mut child = None;
 	let parent = inventory.iter().find(|(_, tx)| tx.compute_txid() == payout.txid).unwrap();
 	let anchors = parent.1.output.iter().enumerate().filter(|(_, out)| out.is_p2a_fee_anchor())
@@ -181,25 +204,108 @@ async fn canonical_cut(ctx: &TestContext, srv: &Captaind, boundary: &BTreeMap<Ou
 	assert_eq!(anchors.len(), 1);
 	for (mined, transaction) in &inventory {
 		if !transaction.input.iter().any(|input| frontier.contains_key(&input.previous_output)) { continue; }
+		let points = transaction.input.iter().map(|input| input.previous_output).collect::<Vec<_>>();
+		let anchor_inputs = points.iter().filter(|point| parent_anchors.contains_key(*point)).copied().collect::<Vec<_>>();
+		let fee_inputs_only = points.iter().all(|point| parent_anchors.contains_key(point) || fee_points.contains(point));
 		let mut input_value = 0_u64;
 		for input in &transaction.input {
 			let output = frontier.remove(&input.previous_output).expect("cut transaction has an undeclared external input");
 			input_value = input_value.checked_add(output.value.to_sat()).unwrap();
+			fee_points.remove(&input.previous_output);
 		}
 		let output_value = transaction.output.iter().map(|output| output.value.to_sat()).sum::<u64>();
 		let miner = input_value.checked_sub(output_value).unwrap();
 		fees += miner;
 		let txid = transaction.compute_txid();
-		if transaction.input.iter().any(|input| input.previous_output == anchors[0]) {
-			assert!(child.replace(*mined).is_none(), "one fee child");
+		let fee_child = if let Some(expected) = prefixes.get(&txid) {
+			assert_eq!(transaction, expected, "every published prefix must be the original fully signed transaction");
+			assert_eq!(miner, 0);
+			false
+		} else if !anchor_inputs.is_empty() {
+			assert_eq!(anchor_inputs.len(), 1);
+			assert!(fee_inputs_only, "fee children may use only original sponsors or their fee change");
+			assert_eq!(transaction.version.0, 3);
 			assert!(miner > 0);
-			assert!(transaction.input.iter().any(|input| boundary.contains_key(&input.previous_output)),
-				"the child uses a separately declared confirmed fee sponsor");
+			assert!(transaction.output.iter().all(|out| out.value > Amount::ZERO));
+			assert!(children.insert(anchor_inputs[0], *mined).is_none(), "one canonical child per actual anchor");
+			if anchor_inputs[0] == anchors[0] { assert!(child.replace(*mined).is_none(), "one payout fee child"); }
+			true
+		} else {
+			assert_eq!(allocations.get(&txid), Some(transaction), "only an actual retained expiry allocation may spend non-prefix backing");
+			assert_eq!(miner, 0);
+			let mut collected_inputs = 0;
+			let mut pool_input_value = Amount::ZERO;
+			for input in &transaction.input {
+				let point = input.previous_output;
+				if let Some(expected) = source_path.get(&point) {
+					assert_eq!(txid, payout.txid, "operator allocation cannot spend recipient backing");
+					let previous = core.get_raw_transaction(&point.txid, None).unwrap();
+					assert_eq!(previous.output[point.vout as usize], *expected);
+					assert!(expected.value >= source.amount());
+					collected_inputs += 1;
+				} else {
+					let expected = pool_path.get(&point).expect("operator input needs the exact retained signed Pool path");
+					pool_input_value += expected.value;
+					let previous = core.get_raw_transaction(&point.txid, None).unwrap();
+					assert_eq!(previous.output[point.vout as usize], *expected);
+					assert!(*mined >= u64::from(pool.expiry_height().to_u32()));
+					let row = db.read(async |tx| Ok(tx.query_one("SELECT vtxo FROM vtxo WHERE vtxo_id=$1",
+						&[&point.to_string()]).await?)).await.unwrap();
+					let actual: ServerVtxo = ServerVtxo::deserialize(row.get("vtxo")).unwrap();
+					assert_eq!(actual.point(), point);
+					assert_eq!(actual.txout(), *expected);
+					assert_eq!(actual.server_pubkey(), pool.server_pubkey());
+					assert_eq!(actual.chain_anchor(), pool.chain_anchor());
+					let clauses = actual.policy().clauses(actual.exit_delta(), actual.expiry_height(), actual.server_pubkey());
+					let script = input.witness.taproot_leaf_script().unwrap().script;
+					let clause = clauses.iter().find(|clause| clause.tapscript().as_script() == script)
+						.expect("operator witness must match this exact signed Pool point's policy");
+					let owned_key = clause.pubkey() == pool.server_pubkey() || db.read(async |tx| Ok(tx.query_opt(
+						"SELECT pubkey FROM ephemeral_tweak WHERE pubkey=$1", &[&clause.pubkey().to_string()],
+					).await?.is_some())).await.unwrap();
+					assert!(owned_key, "operator clause needs the actual server or owned ephemeral public key");
+					match clause {
+						VtxoClause::DelayedSign(clause) => {
+							assert_eq!(input.sequence, clause.sequence());
+							let info = core.custom_get_raw_transaction_info(point.txid, None).unwrap().unwrap();
+							let hash = info.blockhash.unwrap();
+							let height = core.get_block_header_info(&hash).unwrap().height as u64;
+							assert_eq!(core.get_block_hash(height).unwrap(), hash);
+							assert!(*mined >= height + u64::from(clause.block_delta.to_u32()));
+						},
+						VtxoClause::TimelockSign(clause) => {
+							assert_eq!(input.sequence, bitcoin::Sequence::ZERO);
+							assert!(matches!(transaction.lock_time, bitcoin::absolute::LockTime::Blocks(_)));
+							assert!(transaction.lock_time.to_consensus_u32() >= clause.timelock_height.to_u32());
+							assert!(*mined > u64::from(clause.timelock_height.to_u32()));
+						},
+						_ => panic!("retained Pool allocation needs its actual signature and CSV or expiry clause"),
+					}
+				}
+			}
+			assert_eq!(collected_inputs, usize::from(txid == payout.txid), "one collected source input belongs to the unique customer payout");
+			assert!(pool_input_value <= pool.amount(), "grouped Pool inputs cannot exceed the original unused Pool principal");
+			assert!(input_value <= boundary[&source.chain_anchor()].value.to_sat(), "allocation inputs cannot exceed the original shared backing");
+			for (vout, output) in transaction.output.iter().enumerate() {
+				if output.is_p2a_fee_anchor() { assert_eq!(output.value, Amount::ZERO); }
+				else if output.script_pubkey == *recipient {
+					assert_eq!(OutPoint::new(txid, vout as u32), payout);
+					assert_eq!(output.value, sat(99_000));
+				} else { assert_eq!(output.script_pubkey, operator); }
+			}
+			false
+		};
+		if !fee_child {
+			let actual_anchors = transaction.output.iter().enumerate().filter(|(_, out)| out.is_p2a_fee_anchor())
+				.map(|(vout, out)| { assert_eq!(out.value, Amount::ZERO); OutPoint::new(txid, vout as u32) }).collect::<Vec<_>>();
+			assert_eq!(actual_anchors.len(), 1);
+			assert!(parent_anchors.insert(actual_anchors[0], *mined).is_none());
 		}
 		for (vout, output) in transaction.output.iter().enumerate() {
-			assert!(frontier.insert(OutPoint::new(txid, vout as u32), output.clone()).is_none());
+			let point = OutPoint::new(txid, vout as u32);
+			assert!(frontier.insert(point, output.clone()).is_none());
+			if fee_child { assert!(fee_points.insert(point)); }
 		}
-		selected += 1;
 	}
 	let parent_height = inventory.iter().find(|(_, tx)| tx.compute_txid() == payout.txid).unwrap().0;
 	let child_height = child.expect("Core must contain the funded fee child");
@@ -209,16 +315,23 @@ async fn canonical_cut(ctx: &TestContext, srv: &Captaind, boundary: &BTreeMap<Ou
 	let terminal = frontier.values().map(|output| output.value.to_sat()).sum::<u64>();
 	assert_eq!(root_total, terminal + fees);
 	assert_eq!(frontier.get(&payout).unwrap().value, sat(99_000));
-	assert_eq!(selected, 2, "one complete physical-root parent and its funded fee child");
-	let operator = {
-		let config = srv.watchmand().config();
-		config.sweep_address.clone().unwrap().require_network(config.network).unwrap().script_pubkey()
-	};
-	let operator_terminal = frontier.values().filter(|out| out.script_pubkey == operator)
-		.map(|out| out.value.to_sat()).sum::<u64>();
+	for (anchor, parent_height) in &parent_anchors {
+		assert_eq!(children.get(anchor), Some(parent_height), "every canonical prefix or allocation needs its genuine same-block fee child");
+	}
+	let operator_terminal = frontier.iter().filter(|(point, out)| out.script_pubkey == operator
+		|| (!source_path.contains_key(*point) && pool_path.get(*point) == Some(*out)))
+		.map(|(_, out)| out.value.to_sat()).sum::<u64>();
 	assert_eq!(operator_terminal, 101_000, "unused pool principal100k and output charge1k remain operator capital");
-	let watch_owned = frontier.iter().filter(|(point, out)| **point != payout && out.value > Amount::ZERO
-		&& out.script_pubkey != operator).map(|(point, _)| *point).collect::<BTreeSet<_>>();
+	for (point, output) in &frontier {
+		if output.value == Amount::ZERO { assert!(output.is_p2a_fee_anchor()); continue; }
+		if *point == payout { assert_eq!(output.value, sat(99_000)); }
+		else if !fee_points.contains(point) && output.script_pubkey != operator {
+			assert!(!source_path.contains_key(point));
+			assert_eq!(pool_path.get(point), Some(output), "other terminal capital needs its exact signed operator Pool path");
+		}
+	}
+	let watch_owned = fee_points.iter().filter(|point| frontier.get(*point).is_some_and(|out| out.value > Amount::ZERO))
+		.copied().collect::<BTreeSet<_>>();
 	tokio::time::timeout(Duration::from_secs(10), async {
 		loop {
 			let address = srv.watchmand().config().admin_address.unwrap();
@@ -394,6 +507,18 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 	let mut boundary = sponsors;
 	assert!(boundary.insert(anchor, anchor_output).is_none());
 	assert_eq!(boundary.values().map(|output| output.value).sum::<Amount>(), sat(400_000));
+	let pool_rows = db.read(async |tx| Ok(tx.query("SELECT vtxo FROM vtxo_pool WHERE spent_at IS NULL", &[]).await?)).await.unwrap();
+	assert_eq!(pool_rows.len(), 1);
+	let operator_pool = Vtxo::<Full>::deserialize(pool_rows[0].get("vtxo")).unwrap();
+	assert_eq!(operator_pool.amount(), sat(100_000));
+	assert_eq!(operator_pool.chain_anchor(), anchor);
+	assert_eq!(operator_pool.server_pubkey(), original.source.server_pubkey());
+	assert_eq!(operator_pool.expiry_height(), original.source.expiry_height());
+	assert!(operator_pool.has_all_witnesses());
+	operator_pool.validate(&anchor_transaction).unwrap();
+	let owned_pool_key = db.read(async |tx| Ok(tx.query_opt("SELECT pubkey FROM ephemeral_tweak WHERE pubkey=$1",
+		&[&operator_pool.user_pubkey().to_string()]).await?.is_some())).await.unwrap();
+	assert!(owned_pool_key, "unused Pool capital needs the actual server-owned public key");
 	// The original signed grants, unused pool principal and callerless request
 	// remain intact. Disable only future issuance through the ordinary config:
 	// after expiry a two-target replenishment could recycle operator capital
@@ -417,17 +542,115 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 	let expired = ctx.generate_blocks(target - height).await;
 	srv.wait_for_sync_height(expired).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
+	let mut source_path = BTreeMap::from([(anchor, anchor_transaction.output[anchor.vout as usize].clone())]);
+	let signed_steps = original.source.transactions().map(|step| {
+		source_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32), step.tx.output[step.output_idx].clone());
+		step.tx
+	}).collect::<Vec<_>>();
+	let pool_path = operator_pool.transactions().map(|step| (
+		OutPoint::new(step.tx.compute_txid(), step.output_idx as u32), step.tx.output[step.output_idx].clone(),
+	)).collect::<BTreeMap<_, _>>();
+	// Same-expiry allocations may group the customer's root with the unused
+	// Pool root. Only one input carries this collected customer obligation.
+	let payout_input_value = |parent: &Transaction| {
+		let mut points = BTreeSet::new();
+		let mut collected_inputs = 0;
+		let mut pool_value = Amount::ZERO;
+		let mut total = Amount::ZERO;
+		for input in &parent.input {
+			let point = input.previous_output;
+			assert!(points.insert(point), "payout inputs must be distinct");
+			let expected = if let Some(expected) = source_path.get(&point) {
+				assert!(expected.value >= gross, "a prefix cannot reduce the collected recipient principal");
+				collected_inputs += 1;
+				expected
+			} else {
+				let expected = pool_path.get(&point).expect("additional payout input needs the exact exclusive signed Pool path");
+				pool_value += expected.value;
+				expected
+			};
+			total += expected.value;
+		}
+		assert_eq!(collected_inputs, 1, "payout needs exactly one collected customer source input");
+		assert!(pool_value <= operator_pool.amount());
+		assert!(total <= anchor_transaction.output[anchor.vout as usize].value);
+		total
+	};
+	let depth = original.source.exit_depth();
+	assert!(depth <= 8, "the original signed receive geometry bounds automatic prefix confirmation");
+	let operator_script = {
+		let config = srv.watchmand().config();
+		config.sweep_address.clone().unwrap().require_network(config.network).unwrap().script_pubkey()
+	};
 	let parent = tokio::time::timeout(Duration::from_secs(30), async {
-		loop {
+		let mut confirmed_prefixes = 0;
+		'publication: loop {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 				WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL",
 				&[&original.promised.id().to_string()]).await?)).await.unwrap();
 			assert!(rows.len() <= 1);
-			if let Some(row) = rows.first() { break deserialize::<Transaction>(row.get("sweep_tx")).unwrap(); }
-			tokio::time::sleep(Duration::from_millis(50)).await;
+			let mut candidates = Vec::new();
+			if let Some(row) = rows.first() {
+				let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+				let input_value = payout_input_value(&parent);
+				assert_eq!(parent.output.iter().filter(|out| out.script_pubkey == destination.spk).count(), 1);
+				for output in &parent.output {
+					if output.script_pubkey == destination.spk { assert_eq!(output.value, sat(99_000)); }
+					else { assert!(output.script_pubkey == operator_script || output.is_p2a_fee_anchor()); }
+				}
+				assert_eq!(input_value, parent.output.iter().map(|out| out.value).sum::<Amount>());
+				candidates.push((true, parent));
+			}
+			let core = ctx.bitcoind().sync_client();
+			if let Some(step) = signed_steps.iter().find(|step| !core.custom_get_raw_transaction_info(step.compute_txid(), None).unwrap()
+				.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6)) { candidates.push((false, step.clone())); }
+			let mut prefix_ready = false;
+			for (is_payout, required) in candidates {
+				let txid = required.compute_txid();
+				let Some(info) = core.custom_get_raw_transaction_info(txid, None).unwrap() else { continue; };
+				assert_eq!(core.get_raw_transaction(&txid, None).unwrap(), required);
+				if !is_payout { assert_eq!(required.input.len(), 1); }
+				for input in &required.input {
+					let point = input.previous_output;
+					let expected = source_path.get(&point).or_else(|| {
+						assert!(is_payout, "a signed prefix must use its own source path");
+						pool_path.get(&point)
+					}).expect("accepted payout input needs its exact signed source or exclusive Pool path");
+					let previous = core.get_raw_transaction(&point.txid, None).unwrap();
+					assert_eq!(previous.output[point.vout as usize], *expected);
+				}
+				let anchors = required.output.iter().enumerate().filter(|(_, out)| out.is_p2a_fee_anchor())
+					.map(|(vout, out)| { assert_eq!(out.value, Amount::ZERO); OutPoint::new(txid, vout as u32) }).collect::<Vec<_>>();
+				assert_eq!(anchors.len(), 1);
+				let transactions = if info.confirmations.unwrap_or(0) > 0 {
+					core.get_block(&info.blockhash.unwrap()).unwrap().txdata
+				} else {
+					let mempool = core.get_raw_mempool().unwrap();
+					if !mempool.contains(&txid) { continue; }
+					mempool.iter().map(|id| core.get_raw_transaction(id, None).unwrap()).collect()
+				};
+				let children = transactions.iter().filter(|tx| tx.input.iter().any(|input| input.previous_output == anchors[0])).collect::<Vec<_>>();
+				assert!(children.len() <= 1);
+				let Some(child) = children.first() else { continue; };
+				let input_value = child.input.iter().map(|input| {
+					let previous = core.get_raw_transaction(&input.previous_output.txid, None).unwrap();
+					previous.output[input.previous_output.vout as usize].value
+				}).sum::<Amount>();
+				assert!(input_value > child.output.iter().map(|out| out.value).sum::<Amount>());
+				if is_payout { break 'publication required; }
+				prefix_ready = true;
+				break;
+			}
+			if prefix_ready {
+				assert!(confirmed_prefixes < usize::from(depth));
+				let tip = ctx.generate_blocks(6).await;
+				srv.wait_for_sync_height(tip).await;
+				srv.watchmand().wait_for_sync_height(tip).await;
+				confirmed_prefixes += 1;
+			} else { tokio::time::sleep(Duration::from_millis(50)).await; }
 		}
-	}).await.expect("expiry path must pay the absent recipient from its backing");
+	}).await.expect("expiry path must publish the actual funded payout through its bounded signed prefix");
 	let outputs = parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == destination.spk).collect::<Vec<_>>();
 	assert_eq!(outputs.len(), 1);
 	assert_eq!(outputs[0].1.value, sat(99_000));
@@ -439,8 +662,7 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 		parent_inputs += previous.output[input.previous_output.vout as usize].value;
 	}
 	assert_eq!(parent_inputs, parent.output.iter().map(|out| out.value).sum::<Amount>());
-	assert_eq!(parent.input.iter().map(|input| input.previous_output).collect::<BTreeSet<_>>(), BTreeSet::from([anchor]));
-	assert_eq!(parent.input.len(), 1);
+	assert_eq!(parent_inputs, payout_input_value(&parent));
 	let confirmed = ctx.generate_blocks(6).await;
 	srv.wait_for_sync_height(confirmed).await;
 	srv.watchmand().wait_for_sync_height(confirmed).await;
@@ -454,7 +676,8 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 		}
 		rebuilt(&ctx, &db).await;
 		let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk,c.gross_sat,c.fee_sat, \
-			c.payout_sat,c.forfeited_sat,c.active,c.paying_txid FROM expiry_allocation_coin c \
+			c.payout_sat,c.forfeited_sat,c.active,a.sweep_txid,a.status FROM expiry_allocation_coin c \
+			JOIN expiry_allocation a ON a.id=c.allocation_id \
 			JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
 			WHERE v.anchor_point=$1 AND c.disposition='customer'", &[&anchor.to_string()]).await?)).await.unwrap();
 		assert_eq!(rows.len(), 1, "old grant, provider checkpoint and recipient leaf cannot each get paid");
@@ -468,8 +691,9 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 		assert_eq!(row.get::<_, i64>("payout_sat"), 99_000);
 		assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
 		assert!(row.get::<_, bool>("active"));
-		assert_eq!(row.get::<_, Option<String>>("paying_txid"), Some(payout.txid.to_string()));
-		canonical_cut(&ctx, &srv, &boundary, &destination.spk, &provider_destination.spk, payout).await;
+		assert_eq!(row.get::<_, String>("status"), "confirmed");
+		assert_eq!(row.get::<_, Option<String>>("sweep_txid"), Some(payout.txid.to_string()));
+		canonical_cut(&ctx, &srv, &db, &boundary, &destination.spk, &provider_destination.spk, payout, &original.source, &operator_pool).await;
 	}
 	assert_eq!(gate.claims.load(Ordering::SeqCst), 1);
 	assert_eq!(gate.registrations.load(Ordering::SeqCst), 0);

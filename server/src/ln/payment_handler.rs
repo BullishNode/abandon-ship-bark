@@ -6,6 +6,7 @@ use tracing::{trace, warn};
 use ark::lightning::{PaymentHash, Preimage};
 
 use crate::database;
+use crate::database::expiry_lightning::LightningSourceState;
 use crate::database::ln::{LightningPaymentAttempt, LightningPaymentStatus};
 use crate::ln::settler::HtlcSettler;
 use crate::telemetry;
@@ -48,7 +49,7 @@ impl<'a> PaymentAttemptHandler<'a> {
 			self.payment_update_tx.send(attempt.payment_hash)
 				.context("payment update channel broken")?;
 
-			self.post_lightning_send_finished(attempt.payment_hash, None).await;
+			self.post_lightning_send_finished(attempt).await;
 
 			// Attempted amount (not final_amount_msat) so failed/succeeded
 			// volumes stay comparable.
@@ -97,23 +98,18 @@ impl<'a> PaymentAttemptHandler<'a> {
 		}
 
 		let updated = self.db.write(async |t| {
+			t.lock_lightning_attempt_sources(attempt.id).await?;
 			let updated = t.verify_and_update_payment_attempt(
 				attempt, status, payment_error, final_amount_msat
 			).await?;
 
-			// Only mark linked HTLC-send vtxos as ln-spent once the attempt
-			// update has actually committed in this transaction; a lost
-			// optimistic-lock race would otherwise leave the vtxos flagged
-			// ln-spent for an attempt we did not transition.
-			if updated && preimage.is_some() {
-				let not_spendable = t.mark_htlc_send_vtxos_ln_spent(attempt.id).await?;
-				if !not_spendable.is_empty() {
-					warn!(
-						"Lightning payment attempt ({}): HTLC-send vtxos for payment hash {} \
-						were not spendable and left untouched: {:?}",
-						attempt.id, attempt.payment_hash, not_spendable,
-					);
-				}
+			let not_spendable = t.mark_htlc_send_vtxos_ln_spent(attempt.id).await?;
+			if !not_spendable.is_empty() {
+				warn!(
+					"Lightning payment attempt ({}): HTLC-send vtxos for payment hash {} \
+					were not spendable and left untouched: {:?}",
+					attempt.id, attempt.payment_hash, not_spendable,
+				);
 			}
 
 			Ok(updated)
@@ -128,7 +124,7 @@ impl<'a> PaymentAttemptHandler<'a> {
 				.context("payment update channel broken")?;
 
 			if status.is_final() {
-				self.post_lightning_send_finished(attempt.payment_hash, preimage).await;
+				self.post_lightning_send_finished(attempt).await;
 			}
 
 			// Record the fee only on the caller that actually transitioned
@@ -161,26 +157,23 @@ impl<'a> PaymentAttemptHandler<'a> {
 	}
 
 	/// Post a lightning send finished notification to the sender's mailbox.
-	async fn post_lightning_send_finished(
-		&self,
-		payment_hash: PaymentHash,
-		preimage: Option<Preimage>,
-	) {
-		let mailbox_id = match self.db.read(async |t|
-			t.get_lightning_sender_mailbox_id(payment_hash).await
-		).await {
-			Ok(Some(id)) => id,
-			Ok(None) => return,
-			Err(e) => {
-				warn!("Failed to look up mailbox_id for {}: {:#}", payment_hash, e);
-				return;
-			},
-		};
-
-		match self.db.write(async |t|
-			t.store_lightning_send_finished(mailbox_id, payment_hash, preimage).await
-		).await {
-			Ok(Some(checkpoint)) => {
+	pub(super) async fn post_lightning_send_finished(&self, attempt: &LightningPaymentAttempt) {
+		let payment_hash = attempt.payment_hash;
+		match self.db.write(async |t| {
+			let Some((_, outcome)) = t.lightning_payment_outcome(payment_hash, &[], Some(attempt.id)).await?
+				else { return Ok(None); };
+			let preimage = match outcome {
+				LightningSourceState::Discharged => Some(t.get_htlc_settlement_by_payment_hash(payment_hash)
+					.await?.context("source-specific payment success has no preimage")?),
+				LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. } => None,
+				_ => return Ok(None),
+			};
+			let Some(mailbox_id) = t.get_lightning_attempt_sender_mailbox_id(attempt.id, payment_hash).await?
+				else { return Ok(None); };
+			Ok(t.store_lightning_send_finished(mailbox_id, payment_hash, preimage).await?
+				.map(|checkpoint| (mailbox_id, checkpoint)))
+		}).await {
+			Ok(Some((mailbox_id, checkpoint))) => {
 				self.mailbox_manager.notify(mailbox_id, checkpoint);
 			},
 			Ok(None) => {},

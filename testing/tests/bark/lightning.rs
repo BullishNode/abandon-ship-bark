@@ -1374,9 +1374,10 @@ async fn bark_revoke_expired_pending_ln_payment() {
 		async fn check_lightning_payment(
 			&self,
 			_upstream: &mut ArkClient,
-			_req: server_rpc::protos::CheckLightningPaymentRequest,
+			req: server_rpc::protos::CheckLightningPaymentRequest,
 		) -> Result<server_rpc::protos::LightningPaymentStatus, tonic::Status> {
 			Ok(server_rpc::protos::LightningPaymentStatus {
+				htlc_vtxo_ids: req.htlc_vtxo_ids,
 				payment_status: Some(lightning_payment_status::PaymentStatus::Pending(protos::Empty {})),
 			})
 		}

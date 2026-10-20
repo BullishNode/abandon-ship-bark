@@ -14,7 +14,7 @@ pub(crate) async fn guard_obligation_changes(
 	let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
 	tx.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id = ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&ids]).await?;
 	if let Some(row) = tx.query_opt(
-		"SELECT vtxo_id FROM (SELECT vtxo_id FROM expiry_decided_coin WHERE vtxo_id=ANY($1) \
+		"SELECT vtxo_id FROM (SELECT vtxo_id FROM expiry_entitlement WHERE vtxo_id=ANY($1) \
 			UNION SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1)) fenced \
 			ORDER BY vtxo_id LIMIT 1",
 		&[&ids],
@@ -89,7 +89,7 @@ impl super::Tx<'_> {
 				self.execute("UPDATE vtxo SET spend_state='spendable',spent_in_round=NULL,updated_at=NOW() \
 					WHERE spent_in_round=$1 AND oor_spent_txid IS NULL AND offboarded_in IS NULL \
 					AND vtxo_id IN(SELECT vtxo_id FROM round_part_input WHERE participation_id=$2) \
-					AND NOT EXISTS(SELECT 1 FROM expiry_decided_coin d WHERE d.vtxo_id=vtxo.vtxo_id)", &[&round, &id]).await?;
+					AND NOT EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id)", &[&round, &id]).await?;
 			}
 		}
 		Ok(true)

@@ -127,9 +127,9 @@ async fn assert_physical_cut(
 	assert_eq!(actual_board_fee, board_fee);
 	fee_total += actual_board_fee;
 	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,e.gross_sat AS entitlement_gross,c.disposition,c.owner_mailbox, \
-		c.user_pubkey,c.spk,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.paying_txid,c.paying_height,c.paying_hash \
+		c.user_pubkey,c.spk,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,a.sweep_txid,a.status,a.confirmed_height,a.confirmed_hash \
 		FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-		WHERE c.active AND e.vtxo_id=ANY($1)", &[&coins]).await?)).await.unwrap();
+		JOIN expiry_allocation a ON a.id=c.allocation_id WHERE c.active AND e.vtxo_id=ANY($1)", &[&coins]).await?)).await.unwrap();
 	assert_eq!(rows.len(), coins.len());
 	let mut attributed_payout = Amount::ZERO;
 	let mut attributed_fee = Amount::ZERO;
@@ -144,9 +144,10 @@ async fn assert_physical_cut(
 		assert_eq!(row.get::<_, i64>("gross_sat"), 100_000);
 		assert_eq!(row.get::<_, i64>("entitlement_gross"), 100_000);
 		assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
-		assert_eq!(row.get::<_, Option<String>>("paying_txid"), Some(payer.to_string()));
-		assert_eq!(row.get::<_, Option<i64>>("paying_height"), Some(i64::from(point.height.to_u32())));
-		assert_eq!(row.get::<_, Option<String>>("paying_hash"), Some(point.hash.to_string()));
+		assert_eq!(row.get::<_, String>("status"), "confirmed");
+		assert_eq!(row.get::<_, Option<String>>("sweep_txid"), Some(payer.to_string()));
+		assert_eq!(row.get::<_, Option<i64>>("confirmed_height"), Some(i64::from(point.height.to_u32())));
+		assert_eq!(row.get::<_, Option<String>>("confirmed_hash"), Some(point.hash.to_string()));
 		let payout = sat(u64::try_from(row.get::<_, i64>("payout_sat")).unwrap());
 		let fee = sat(u64::try_from(row.get::<_, i64>("fee_sat")).unwrap());
 		assert_eq!(payout + fee, sat(100_000));
@@ -243,7 +244,7 @@ async fn assert_physical_cut(
 async fn decided_obligations(db: &Db, coins: &[String]) -> BTreeMap<String, (i64, i64, String)> {
 	let rows = db.read(async |tx| Ok(tx.query("SELECT e.id,e.vtxo_id,e.gross_sat, \
 		e.irreversible_facts::TEXT AS facts,v.spend_state::TEXT AS spend_state, \
-		(SELECT COUNT(*) FROM expiry_decided_coin d WHERE d.entitlement_id=e.id) AS fences \
+		(SELECT COUNT(*) FROM expiry_entitlement d WHERE d.id=e.id) AS fences \
 		FROM expiry_entitlement e JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE e.vtxo_id=ANY($1)",
 		&[&coins],
 	).await?)).await.unwrap();

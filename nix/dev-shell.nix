@@ -1,4 +1,4 @@
-{ system, pkgs, lib, fenix, slog-tools, buildShell, rustTargetWasm, cln-grpc, rustBuildToolchain,
+{ system, pkgs, lib, fenix, slog-tools, buildShell, rustTargetWasm, cln-grpc, clightning, rustBuildToolchain,
 }:
 let
 	bitcoinVersion = "31.0";
@@ -83,23 +83,6 @@ let
 			"electrum-client-0.8.0" = "sha256-HDRdGS7CwWsPXkA1HdurwrVu4lhEx0Ay8vHi08urjZ0=";
 		};
 	};
-
-	clightning = (if isDarwin then null else pkgs.clightning.overrideAttrs (old: {
-		version = lightningVersion;
-		src = pkgs.fetchurl {
-			url = "https://github.com/ElementsProject/lightning/releases/download/v${lightningVersion}/clightning-v${lightningVersion}.zip";
-			hash = "sha256-cZEfzDXkqyRuvH1FMcrPK8OBYGnZZ5jcj3pztAMgfO0=";
-		};
-		makeFlags = [ "VERSION=v${lightningVersion}" ];
-		postPatch = (old.postPatch or "") + ''
-			chmod +x devtools/blockreplace.py
-			patchShebangs devtools/blockreplace.py
-		'';
-		preInstall = ''
-			mkdir -p $out/libexec/c-lightning/plugins/
-			touch $out/libexec/c-lightning/plugins/clnrest
-		'';
-	}));
 
 	hold-invoice = rustPlatform.buildRustPackage rec {
 		pname = "hold-invoice";

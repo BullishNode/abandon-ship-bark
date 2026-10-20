@@ -14,6 +14,7 @@ use ark::{ServerVtxo, VtxoId};
 use super::expiry_chain::ExpiryViewToken;
 use super::expiry_inventory::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits};
 use super::expiry_ownership::{OwnershipDisposition, OwnershipEvidence, OwnershipProposal};
+use super::expiry_payout::MAX_PAYOUT_VSIZE;
 use super::{SpendState, Tx};
 use crate::watchman::settlement::{allocate, CustomerLeaf};
 
@@ -62,7 +63,7 @@ impl ReadyOutput {
 				.iter().map(|clause| clause.witness_size(root)).max().unwrap_or(66).max(66);
 			weight = weight.checked_add(u64::try_from(witness)?).context("expiry group witness overflow")?;
 		}
-		Ok(weight.div_ceil(4) <= 10_000)
+		Ok(weight.div_ceil(4) <= u64::try_from(MAX_PAYOUT_VSIZE)?)
 	}
 
 	pub fn root(&self) -> &ServerVtxo { &self.root }
@@ -245,10 +246,10 @@ impl Tx<'_> {
 						EXISTS(SELECT 1 FROM expiry_allocation_coin c
 							JOIN expiry_allocation a ON a.id=c.allocation_id
 							WHERE c.entitlement_id=e.id
-							AND ((c.active AND a.status<>'conflicted') OR c.paying_txid IS NOT NULL)) AS reserved,
+							AND ((c.active AND a.status<>'conflicted') OR a.status='confirmed')) AS reserved,
 						EXISTS(SELECT 1 FROM expiry_terminal_claim p WHERE p.entitlement_id=e.id) AS claimed
-					FROM expiry_decided_coin d JOIN expiry_entitlement e ON e.id=d.entitlement_id
-					WHERE d.vtxo_id=$1
+					FROM expiry_entitlement e
+					WHERE e.vtxo_id=$1
 				", &[&coin.ownership.id.to_string()]).await? {
 					valid &= !row.get::<_, bool>("reserved") && !row.get::<_, bool>("claimed")
 						&& u64::try_from(row.get::<_, i64>("gross_sat"))? == coin.ownership.gross.to_sat();
@@ -301,14 +302,12 @@ impl Tx<'_> {
 					self.execute("UPDATE expiry_allocation_coin SET active=FALSE WHERE entitlement_id=$1 AND active", &[existing]).await?;
 					*existing
 				} else {
-					let entitlement: i64 = self.query_one("
+					self.query_one("
 						INSERT INTO expiry_entitlement(vtxo_id,gross_sat,irreversible_facts)
 						VALUES($1,$2,$3::TEXT::JSONB)
 						RETURNING id
 					",
-						&[&proposal.id.to_string(),&i64::try_from(proposal.gross.to_sat())?,&stable.to_string()]).await?.get(0);
-					self.execute("INSERT INTO expiry_decided_coin(vtxo_id,entitlement_id) VALUES($1,$2)", &[&proposal.id.to_string(),&entitlement]).await?;
-					entitlement
+						&[&proposal.id.to_string(),&i64::try_from(proposal.gross.to_sat())?,&stable.to_string()]).await?.get(0)
 				};
 				let allocation = policy.get(&proposal.id);
 				let fee = allocation.map_or(Amount::ZERO, |a| a.fee).to_sat();

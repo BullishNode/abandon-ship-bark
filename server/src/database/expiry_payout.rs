@@ -11,8 +11,11 @@ use bitcoin_ext::TxOutExt;
 use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoPolicy};
 
 use super::expiry_chain::ExpiryViewToken;
-use super::expiry_inventory::{BackingSnapshot, BackingSnapshotLimits};
+use super::expiry_inventory::BackingSnapshot;
 use super::Tx;
+use crate::expiry_readiness::INVENTORY_LIMITS;
+
+pub(crate) const MAX_PAYOUT_VSIZE: usize = 10_000;
 
 struct SplitRecoveryPaths {
 	rows: BTreeSet<usize>,
@@ -155,7 +158,7 @@ impl Tx<'_> {
 		}
 		let input_value = inputs.iter().try_fold(0_u64, |sum,r| sum.checked_add(u64::try_from(r.get::<_, i64>("amount"))?).context("expiry input amount overflow"))?;
 		let output_value = parent.output.iter().try_fold(0_u64, |sum,o| sum.checked_add(o.value.to_sat()).context("expiry output amount overflow"))?;
-		ensure!(input_value == output_value && parent.version.0 == 3 && parent.vsize() <= 10_000,
+		ensure!(input_value == output_value && parent.version.0 == 3 && parent.vsize() <= MAX_PAYOUT_VSIZE,
 			"expiry parent violates zero-fee version-3 policy");
 		self.execute("UPDATE expiry_allocation SET sweep_txid=$2,sweep_tx=$3 WHERE id=$1", &[&id,&parent.compute_txid().to_string(),&raw]).await?;
 		Ok(())
@@ -240,7 +243,7 @@ impl Tx<'_> {
 	) -> anyhow::Result<bool> {
 		// Prepare without coin or chain-view locks. Only the short recheck below
 		// serializes against a new obligation, a key drop or a changed chain view.
-		let limits = BackingSnapshotLimits { max_rows: 250_000, max_serialized_bytes: 256 * 1024 * 1024 };
+		let limits = INVENTORY_LIMITS;
 		let snapshot = self.backing_snapshot(std::slice::from_ref(root), limits).await?;
 		let txids = snapshot.regular.iter().filter_map(|f| f.state.oor_spent_txid)
 			.map(|id| id.to_string()).collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();

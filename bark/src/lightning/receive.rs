@@ -138,16 +138,13 @@ impl Wallet {
 	/// steal the payment unless they provide a different address than the
 	/// desired end user.
 	///
-	/// It can still strand it: delivering the signed output to the
-	/// destination's mailbox is a separate step that only this wallet can
-	/// perform, and nothing else (not the server, not the destination) can
-	/// discover or recover that output until it does. The delivery is a
-	/// parked action that resumes automatically on restart, so a crash
-	/// recovers on its own — but for as long as this wallet stays offline
-	/// (or simply never delivers), the destination cannot claim funds that
-	/// are already theirs. Forwarding through a third party means trusting
-	/// it to eventually come back online and deliver, not trusting it with
-	/// custody.
+	/// Mailbox delivery is a separate step that only this wallet performs.
+	/// The parked delivery action resumes automatically on restart. If
+	/// delivery does not occur, the server can pay an expired receive to
+	/// the recipient's registered on-chain fallback script without this
+	/// wallet. An arbitrary `claim_destination` does not prove that the
+	/// recipient has registered a fallback destination. Callers that require
+	/// expiry fallback must ensure this registration before invoice creation.
 	pub async fn bolt11_invoice_for_address(
 		&self,
 		amount: Amount,

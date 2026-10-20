@@ -22,14 +22,7 @@ CREATE TABLE expiry_entitlement (
 	vtxo_id TEXT NOT NULL UNIQUE REFERENCES vtxo(vtxo_id),
 	gross_sat BIGINT NOT NULL CHECK (gross_sat > 0),
 	irreversible_facts JSONB NOT NULL DEFAULT '{}'::jsonb,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	UNIQUE (vtxo_id, id)
-);
-
-CREATE TABLE expiry_decided_coin (
-	vtxo_id TEXT PRIMARY KEY REFERENCES vtxo(vtxo_id),
-	entitlement_id BIGINT NOT NULL UNIQUE,
-	FOREIGN KEY (vtxo_id, entitlement_id) REFERENCES expiry_entitlement(vtxo_id, id)
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE expiry_cancelled_participation (
@@ -121,15 +114,10 @@ CREATE TABLE expiry_allocation_coin (
 	forfeited_sat BIGINT NOT NULL CHECK (forfeited_sat >= 0),
 	active BOOLEAN NOT NULL DEFAULT TRUE,
 	evidence JSONB NOT NULL,
-	paying_txid TEXT,
-	paying_height BIGINT,
-	paying_hash TEXT,
 	PRIMARY KEY (allocation_id, entitlement_id),
 	CHECK ((disposition = 'customer' AND owner_mailbox IS NOT NULL AND user_pubkey IS NOT NULL
 		AND spk IS NOT NULL AND gross_sat = fee_sat + payout_sat + forfeited_sat)
-		OR (disposition = 'operator' AND fee_sat = 0 AND payout_sat = 0 AND forfeited_sat = 0)),
-	CHECK ((paying_txid IS NULL) = (paying_height IS NULL)),
-	CHECK ((paying_height IS NULL) = (paying_hash IS NULL))
+		OR (disposition = 'operator' AND fee_sat = 0 AND payout_sat = 0 AND forfeited_sat = 0))
 );
 CREATE UNIQUE INDEX expiry_one_active_allocation_per_coin ON expiry_allocation_coin(entitlement_id) WHERE active;
 
@@ -204,8 +192,6 @@ $$;
 
 CREATE TRIGGER expiry_entitlement_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_entitlement
 	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_decided_coin_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_decided_coin
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
 CREATE TRIGGER expiry_allocation_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_allocation
 	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
 CREATE TRIGGER expiry_allocation_input_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_allocation_input
@@ -239,10 +225,20 @@ CREATE TABLE expiry_lightning_terminal_failure (
 	created_index BIGINT CHECK (created_index > 0),
 	updated_index BIGINT,
 	jsonrpc_error_code INTEGER,
+	-- Trusted supervised quiescence is distinct from an actual CLN failure.
+	-- Keep the bounded public manifest and its exact byte identity here, not in
+	-- another money ledger. This branch never manufactures a CLN index/error.
+	supervised_manifest_sha256 BYTEA CHECK (octet_length(supervised_manifest_sha256)=32),
+	supervised_manifest JSONB CHECK (pg_column_size(supervised_manifest)<=65536),
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	CONSTRAINT expiry_lightning_failure_provenance CHECK (
-		(created_index IS NOT NULL AND jsonrpc_error_code IS NULL)
-		OR (created_index IS NULL AND jsonrpc_error_code IS NOT NULL AND jsonrpc_error_code IN (205,207))
+		(created_index IS NOT NULL AND jsonrpc_error_code IS NULL
+			AND supervised_manifest_sha256 IS NULL AND supervised_manifest IS NULL)
+		OR (created_index IS NULL AND jsonrpc_error_code IS NOT NULL AND jsonrpc_error_code IN (205,207)
+			AND supervised_manifest_sha256 IS NULL AND supervised_manifest IS NULL)
+		OR (created_index IS NULL AND updated_index IS NULL AND jsonrpc_error_code IS NULL
+			AND supervised_manifest_sha256 IS NOT NULL AND supervised_manifest IS NOT NULL
+			AND jsonb_typeof(supervised_manifest)='object')
 	)
 );
 

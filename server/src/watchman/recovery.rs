@@ -201,10 +201,6 @@ impl Watchman {
 				SET confirmed_height = NULL, confirmed_hash = NULL
 			", &[]).await?;
 			t.execute("
-				UPDATE expiry_allocation_coin
-				SET paying_txid = NULL, paying_height = NULL, paying_hash = NULL
-			", &[]).await?;
-			t.execute("
 				DELETE
 				FROM expiry_terminal_claim
 			", &[]).await?;
@@ -257,27 +253,10 @@ impl Watchman {
 						WHERE b.height = (c.evidence->>'height')::BIGINT
 						AND b.hash = c.evidence->>'hash'))
 			", &[]).await?;
-			t.execute("
-				UPDATE expiry_allocation_coin c
-				SET paying_txid = a.sweep_txid, paying_height = a.confirmed_height, paying_hash = a.confirmed_hash
-				FROM expiry_allocation a
-				WHERE a.id = c.allocation_id
-				AND a.status = 'confirmed'
-			", &[]).await?;
 			for (id, txid, point) in &paid_claims {
 				t.execute("
 					INSERT INTO expiry_terminal_claim(entitlement_id, txid, height, hash)
 					VALUES($1, $2, $3, $4)
-				", &[
-					id,
-					&txid.to_string(),
-					&i64::from(point.height),
-					&point.hash.to_string()
-				]).await?;
-				t.execute("
-					UPDATE expiry_allocation_coin
-					SET paying_txid = $2, paying_height = $3, paying_hash = $4
-					WHERE entitlement_id = $1
 				", &[
 					id,
 					&txid.to_string(),
@@ -343,7 +322,7 @@ impl Watchman {
 				SET spend_state = 'spent', updated_at = NOW()
 				WHERE spend_state <> 'spent'
 				AND EXISTS(SELECT 1
-					FROM expiry_decided_coin d
+					FROM expiry_entitlement d
 					WHERE d.vtxo_id = vtxo.vtxo_id)
 			", &[]).await?;
 			t.finish_expiry_rebuild(view).await

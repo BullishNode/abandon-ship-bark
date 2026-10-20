@@ -403,7 +403,7 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 			attempt
 		} else {
 			let attempt=db.write(async |tx| {
-				tx.store_lightning_payment_start(node_id,&invoice,sat(100_000),None,&[source],None,tip,sat(0),None,Duration::from_secs(1)).await?;
+				tx.store_lightning_payment_start(node_id,&invoice,sat(100_000),None,&[source],None,tip,sat(0),None,Duration::from_secs(1), None).await?;
 				Ok(tx.get_open_lightning_payment_attempt_by_payment_hash(hash).await?.unwrap())
 			}).await.unwrap();
 			assert!(db.write(async |tx|tx.admit_lightning_dispatch(&attempt).await).await.unwrap());
@@ -773,7 +773,7 @@ async fn expiry_dispatch_rechecks_registered_sources_and_closed_attempts() {
 	", &[]).await?.get::<_, i64>("id"))).await.unwrap();
 	let attempt = db.write(async |t| {
 		t.store_lightning_payment_start(node_id, &invoice, sat(100_000), None,
-			&[htlc.id()], None, tip, sat(0), None, Duration::from_secs(1)).await?;
+			&[htlc.id()], None, tip, sat(0), None, Duration::from_secs(1), None).await?;
 		t.get_open_lightning_payment_attempt_by_payment_hash(hash).await?.ok_or_else( || anyhow::anyhow!("attempt disappeared"))
 	}).await.unwrap();
 	assert!(db.write(async |t| t.admit_lightning_dispatch(&attempt).await).await.unwrap());
@@ -784,7 +784,7 @@ async fn expiry_dispatch_rechecks_registered_sources_and_closed_attempts() {
 		LightningPaymentStatus::Failed, Some("closed before queued dispatch")).await).await.unwrap().is_some());
 	let replacement = db.write(async |t| {
 		t.store_lightning_payment_start(node_id, &invoice, sat(100_000), None,
-			&[htlc.id()], None, tip, sat(0), None, Duration::from_secs(1)).await?;
+			&[htlc.id()], None, tip, sat(0), None, Duration::from_secs(1), None).await?;
 		t.get_open_lightning_payment_attempt_by_payment_hash(hash).await?.ok_or_else( || anyhow::anyhow!("replacement disappeared"))
 	}).await.unwrap();
 	assert_ne!(replacement.id, attempt.id);

@@ -91,8 +91,12 @@ pub async fn generate_invoice(
 		(status = 400, description = "Bad request", body = error::BadRequestError),
 		(status = 500, description = "Internal server error", body = error::InternalServerError)
 	),
-	description = "Generates a new BOLT11 invoice. When paid, the wallet claims the Lightning \
-		receive and forwards the resulting Ark VTXO to the supplied Ark address mailbox.",
+	description = "Generates a new BOLT11 invoice. When paid, the wallet app claims the Lightning \
+		receive and forwards the resulting Ark VTXO to the specified Ark address mailbox. \
+		Automated fallback requires the final recipient's authenticated fallback registration on the Ark server. \
+		The destination key must derive from that registered xpub. Address validation does not verify fallback registration. \
+		At expiry, no matching registration and an incomplete attribution scan for a registered owner both require a hold. \
+		The recipient's bitcoin must not become provider or operator bitcoin.",
 	tag = "lightning"
 )]
 #[debug_handler]

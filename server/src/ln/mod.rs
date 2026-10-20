@@ -1311,8 +1311,7 @@ impl Server {
 			t.funded_internal_receive(sub.id, payment_hash).await
 		).await?.is_some();
 
-		let mut collection_deadline = None;
-		match sub.status {
+		let collection_expiry = match sub.status {
 			// Cosigning releases the granted HTLC-recv VTXOs; that is only safe
 			// while the incoming side can still be collected. For external
 			// receives the server recovers the grant by settling the hold
@@ -1322,21 +1321,8 @@ impl Server {
 			// refund them on-chain through the timeout clause, and a preimage
 			// recorded after that refund collects nothing.
 			LightningHtlcSubscriptionStatus::HtlcsReady => {
-				let lowest_incoming_htlc_expiry = sub.lowest_incoming_htlc_expiry
-					.context("no incoming HTLCs found for this payment")?;
-				let margin = if is_self_payment {
-					self.config.htlc_expiry_delta
-				} else {
-					RECEIVE_CLAIM_EXPIRY_MARGIN
-				};
-				if !collected_replay {
-					validate_receive_claim(
-						lowest_incoming_htlc_expiry,
-						self.sync_manager.chain_tip().height,
-						margin,
-					)?;
-					collection_deadline = Some((lowest_incoming_htlc_expiry, margin));
-				}
+				Some(sub.lowest_incoming_htlc_expiry
+					.context("no incoming HTLCs found for this payment")?)
 			},
 			// Idempotent retry of an already-settled claim; the value was
 			// released with the first claim, nothing new is at stake.
@@ -1344,19 +1330,26 @@ impl Server {
 				if !collected_replay && !self.db.read(async |t| t.receive_request_materialized(sub.id).await).await? {
 					// A coarse completed attempt can precede its own claim. It
 					// must not make an unmaterialized fresh request timeless.
-					let expiry = sub.lowest_incoming_htlc_expiry.context("settled receive has no incoming expiry")?;
-					let margin = if is_self_payment { self.config.htlc_expiry_delta } else { RECEIVE_CLAIM_EXPIRY_MARGIN };
-					validate_receive_claim(
-						expiry,
-						self.sync_manager.chain_tip().height,
-						margin,
-					)?;
-					collection_deadline = Some((expiry, margin));
+					Some(sub.lowest_incoming_htlc_expiry.context("settled receive has no incoming expiry")?)
+				} else {
+					None
 				}
 			},
-			LightningHtlcSubscriptionStatus::Canceled if collected_replay => {},
+			LightningHtlcSubscriptionStatus::Canceled if collected_replay => None,
 			_ => return badarg!("payment status in incorrect state: {}", sub.status),
-		}
+		};
+		let collection_deadline = match collection_expiry {
+			Some(expiry) if !collected_replay => {
+				let margin = if is_self_payment {
+					self.config.htlc_expiry_delta
+				} else {
+					RECEIVE_CLAIM_EXPIRY_MARGIN
+				};
+				validate_receive_claim(expiry, self.sync_manager.chain_tip().height, margin)?;
+				Some((expiry, margin))
+			},
+			_ => None,
+		};
 		// Only the first claim records the fee; Settled-replay must not.
 		let first_claim = sub.status == LightningHtlcSubscriptionStatus::HtlcsReady;
 		if sub.htlc_vtxos.is_empty() {

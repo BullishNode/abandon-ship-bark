@@ -486,6 +486,12 @@ async fn watchman_sweeps_round_vtxos() {
 		let hash = core.get_block_hash(u64::from(tip.to_u32())).unwrap();
 		loop {
 			if db.read(async |tx| {
+				// The one manual sweep must observe every committed ownership decision.
+				let allocated = tx.query("SELECT e.vtxo_id FROM expiry_entitlement e \
+					JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+					WHERE e.vtxo_id=ANY($1) AND c.active", &[&source_ids]).await?
+					.into_iter().map(|row| row.get::<_, String>("vtxo_id")).collect::<BTreeSet<_>>();
+				if allocated != expected_sources { return Ok(false); }
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
 					&& view.captaind.hash == hash && view.watchmand.hash == hash

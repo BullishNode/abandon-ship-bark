@@ -636,7 +636,7 @@ impl ClnXpayProcess {
 		// expired actual dispatches until their own remote group is proved.
 		let failed = self.db.write(async |t| t.unproven_expiry_lightning_dispatches(self.node_id, 16).await).await?;
 		for attempt in failed {
-			if let Err(error) = self.client.sync_payment_attempt_status(attempt).await {
+			if let Err(error) = self.client.sync_payment_attempt_status(attempt, None).await {
 				warn!(%error, "Checking terminal expiry Lightning dispatch failed");
 			}
 		}

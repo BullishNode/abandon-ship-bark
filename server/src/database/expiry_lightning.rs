@@ -36,7 +36,7 @@ fn grant_reclaim_is_deep(height: u32, depth: u32, completed: u32) -> bool {
 const INTERNAL_RECEIVE_FUNDING: &str = "
 	SELECT a.id,a.lightning_node_id,a.payment_hash,a.amount_msat,a.final_amount_msat,
 		a.status,a.error,a.block_height,a.user_fee_sat,a.retry_for_secs,a.user_agent,
-		a.lightning_htlc_subscription_id,a.created_at,a.updated_at,
+		a.lightning_htlc_subscription_id,a.max_routing_fee_msat,a.created_at,a.updated_at,
 		f.subscription_id AS funded_subscription_id,
 		(EXISTS(SELECT 1 FROM htlc_settlement hs WHERE hs.payment_hash=a.payment_hash)
 		AND EXISTS(SELECT 1 FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
@@ -341,7 +341,7 @@ impl Tx<'_> {
 		let query = format!("
 			WITH funding AS ({INTERNAL_RECEIVE_FUNDING})
 			SELECT id,lightning_node_id,payment_hash,
-			amount_msat,final_amount_msat,status,error,block_height,user_fee_sat,retry_for_secs,user_agent,
+			amount_msat,final_amount_msat,status,error,block_height,user_fee_sat,retry_for_secs,user_agent,max_routing_fee_msat,
 			lightning_htlc_subscription_id,created_at,updated_at,claim_complete
 			FROM funding
 			WHERE (claim_complete OR EXISTS(SELECT 1 FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
@@ -373,7 +373,7 @@ impl Tx<'_> {
 		let query = format!("
 			WITH funding AS ({INTERNAL_RECEIVE_FUNDING})
 			SELECT id,lightning_node_id,payment_hash,
-			amount_msat,final_amount_msat,status,error,block_height,user_fee_sat,retry_for_secs,user_agent,
+			amount_msat,final_amount_msat,status,error,block_height,user_fee_sat,retry_for_secs,user_agent,max_routing_fee_msat,
 			lightning_htlc_subscription_id,created_at,updated_at,claim_complete
 			FROM funding
 			WHERE funded_subscription_id=$1 AND payment_hash=$2

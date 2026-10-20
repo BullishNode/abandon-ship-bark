@@ -3228,14 +3228,31 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	assert_eq!(invoices[0].state(), hold::InvoiceState::Cancelled);
 	assert!(invoices[0].preimage.is_none());
 	lightning.internal.connect(&payer).await;
-	assert!(pay_task.wait_millis(30_000).await.unwrap().is_err());
-	let pays = payer.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
-		bolt11: None, payment_hash: Some(hash.to_vec()), status: None,
-		index: None, limit: None, start: None,
-	}).await.unwrap().into_inner().pays;
-	assert!(!pays.is_empty());
-	assert!(pays.iter().all(|pay| pay.payment_hash == hash.to_vec()
-		&& pay.status() == cln_rpc::listpays_pays::ListpaysPaysStatus::Failed && pay.preimage.is_none()));
+	// An xpay error can arrive before listpays reports terminal failure.
+	let mut payer_state = Vec::new();
+	let terminal_failure = tokio::time::timeout(Duration::from_secs(30), async {
+		assert!(pay_task.await.unwrap().is_err());
+		loop {
+			let pays = payer.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
+				bolt11: None, payment_hash: Some(hash.to_vec()), status: None,
+				index: None, limit: None, start: None,
+			}).await.unwrap().into_inner().pays;
+			payer_state = pays.iter().map(|pay| (
+				pay.status(), pay.payment_hash == hash.to_vec(), pay.preimage.is_some(),
+			)).collect::<Vec<_>>();
+			assert!(pays.iter().all(|pay| pay.payment_hash == hash.to_vec() && pay.preimage.is_none()
+				&& pay.status() != cln_rpc::listpays_pays::ListpaysPaysStatus::Complete),
+				"unexpected payer state (status, matching hash, preimage present): {:?}", payer_state);
+			if !pays.is_empty() && pays.iter().all(|pay| pay.payment_hash == hash.to_vec()
+				&& pay.status() == cln_rpc::listpays_pays::ListpaysPaysStatus::Failed && pay.preimage.is_none()) {
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await;
+	assert!(terminal_failure.is_ok(),
+		"payer terminal-failure deadline: count={}, (status, matching hash, preimage present)={:?}",
+		payer_state.len(), payer_state);
 
 	// The existing daemon helper reserves fresh ports at restart.
 	let grpc = lightning.internal.grpc_details().await;

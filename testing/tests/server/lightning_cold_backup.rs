@@ -394,6 +394,19 @@ async fn lightning_backup(unclean: bool) {
 			config.invoice_check_interval = Duration::from_secs(1);
 		}).watchmand_cfg(move |config| config.sweep_address = Some(operator_address.into_unchecked())).create()).await;
 	original.wait_for_vtxopool(&ctx).await;
+	// Capture the trusted issuance BEFORE any grant consumes its Pool coins.
+	// A later operator allocation may also sweep their untouched siblings.
+	let original_postgres = original.config().postgres.clone();
+	let initial_db = Db::connect(&original_postgres).await.unwrap();
+	let initial_pool = initial_db.read(async |tx| Ok(tx.query("SELECT p.vtxo,v.spend_state::TEXT AS state \
+		FROM vtxo_pool p JOIN vtxo v USING(vtxo_id) WHERE p.spent_at IS NULL ORDER BY p.vtxo_id", &[]).await?
+		.into_iter().map(|row| {
+			assert_eq!(row.get::<_, &str>("state"), "pool");
+			Vtxo::<Full>::deserialize(row.get("vtxo")).unwrap()
+		}).collect::<Vec<_>>())).await.unwrap();
+	assert_eq!(initial_pool.len(), 4);
+	assert_eq!(initial_pool.iter().map(|coin| coin.amount()).sum::<Amount>(), sat(200_000));
+	drop(initial_db);
 	let public_key = original.ark_info().await.server_pubkey;
 	let fee_address = original.watchmand().wait_wallet_address().await;
 	let mut sponsors = BTreeMap::new();
@@ -495,6 +508,28 @@ async fn lightning_backup(unclean: bool) {
 	assert_ne!(pool_root, customer_root);
 	let pool_funding = ctx.bitcoind().await_transaction(pool_root.txid).await;
 	assert_eq!(pool_funding.output[pool_root.vout as usize].value, sat(200_000));
+	let mut initial_pool_expiry_paths = BTreeMap::new();
+	for coin in &initial_pool {
+		assert_eq!(coin.chain_anchor(), pool_root);
+		assert_eq!(coin.server_pubkey(), public_key);
+		assert_eq!(coin.amount(), sat(50_000));
+		assert!(matches!(coin.policy(), VtxoPolicy::Pubkey(_)));
+		coin.validate(&pool_funding).unwrap();
+		let mut point = pool_root;
+		let mut previous = pool_funding.clone();
+		let steps = coin.transactions().collect::<Vec<_>>();
+		assert!(steps.len() <= 16);
+		for step in steps {
+			assert_ne!(point, coin.point());
+			let proof = (previous.clone(), coin.expiry_height());
+			if let Some(old) = initial_pool_expiry_paths.insert(point, proof.clone()) { assert_eq!(old, proof); }
+			assert_eq!(step.tx.input.len(), 1);
+			assert_eq!(step.tx.input[0].previous_output, point);
+			point = OutPoint::new(step.tx.compute_txid(), u32::try_from(step.output_idx).unwrap());
+			previous = step.tx.clone();
+		}
+		assert_eq!(point, coin.point()); // Pubkey leaves themselves have no server expiry clause.
+	}
 	for grant in &grants {
 		grant.validate(&pool_funding).unwrap();
 		let policy = grant.policy().as_server_htlc_recv().unwrap();
@@ -538,6 +573,21 @@ async fn lightning_backup(unclean: bool) {
 	let db = Db::connect(&server_config.postgres).await.unwrap();
 	let checkpoint = pending_checkpoint(&db, hash, source, &grants).await;
 	let ancestry = signed_grant_ancestry(&db, &grants).await;
+	let remaining_pool = db.read(async |tx| Ok(tx.query("SELECT p.vtxo,v.spend_state::TEXT AS state \
+		FROM vtxo_pool p JOIN vtxo v USING(vtxo_id) WHERE p.spent_at IS NULL ORDER BY p.vtxo_id", &[]).await?
+		.into_iter().map(|row| {
+			assert_eq!(row.get::<_, &str>("state"), "pool");
+			Vtxo::<Full>::deserialize(row.get("vtxo")).unwrap()
+		}).collect::<Vec<_>>())).await.unwrap();
+	for coin in &remaining_pool {
+		assert_eq!(coin.chain_anchor(), pool_root);
+		assert_eq!(coin.server_pubkey(), public_key);
+		assert!(matches!(coin.policy(), VtxoPolicy::Pubkey(_)));
+		coin.validate(&pool_funding).unwrap();
+		assert!(grants.iter().all(|grant| grant.id() != coin.id()));
+	}
+	assert_eq!(remaining_pool.iter().map(|coin| coin.amount()).sum::<Amount>(), sat(110_000));
+	assert_eq!(remaining_pool.iter().chain(grants.iter()).map(|coin| coin.amount()).sum::<Amount>(), sat(200_000));
 	assert_eq!(db.read(async |tx| tx.get_fallback(mailbox).await).await.unwrap(), Some(registration.clone()));
 	assert_eq!(db.read(async |tx| tx.get_fallback(receiver_mailbox).await).await.unwrap(), Some(receiver_registration.clone()));
 	let changesets = db.read(async |tx| Ok(tx.query("SELECT kind::TEXT AS kind,id,content FROM wallet_changeset ORDER BY kind,id", &[]).await?
@@ -735,8 +785,16 @@ async fn lightning_backup(unclean: bool) {
 				let tx: Transaction = deserialize(row.get("sweep_tx")).unwrap();
 				let info = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(tx.compute_txid(), None).unwrap();
 				if info.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6) {
-					assert!(tx.input.iter().all(|input| grant_path_inputs.contains(&input.previous_output)),
-						"an operator closure cannot absorb unrelated customer, pool-change or sponsor capital");
+					for input in tx.input.iter().filter(|input| !grant_path_inputs.contains(&input.previous_output)) {
+						let (previous, expiry) = initial_pool_expiry_paths.get(&input.previous_output)
+							.expect("extra closure inputs must be exact expiry ancestors of the original trusted Pool issuance");
+						assert_eq!(ctx.bitcoind().await_transaction(input.previous_output.txid).await, *previous);
+						canonical(&ctx, previous);
+						assert_eq!(previous.output[input.previous_output.vout as usize].value, sat(50_000));
+						assert!(canonical(&ctx, &tx).height >= *expiry);
+						assert_eq!(input.witness.taproot_leaf_script().unwrap().script,
+							ark::tree::signed::expiry_clause(public_key, *expiry).as_script());
+					}
 					assert!(tx.output.iter().all(|output| output.script_pubkey != registration.spk
 						&& output.script_pubkey != receiver_registration.spk));
 					let point = assert_grant_closure(&ctx, grant, &pool_funding, &tx, &operator_script,

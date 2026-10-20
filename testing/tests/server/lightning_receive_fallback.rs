@@ -9,8 +9,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use ark::lightning::PaymentHash;
+use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoPolicy};
+use ark::address::VtxoDelivery;
+use ark::mailbox::BlindedMailboxIdentifier;
+use ark::vtxo::Full;
 use ark_testing::{sat, TestContext};
-use ark_testing::daemon::captaind::{proxy::MailboxRpcProxy, MailboxClient};
+use ark_testing::daemon::captaind::{proxy::MailboxRpcProxy, MailboxClient, WalletAdminClient};
 use bark::FallbackDisposition;
 use bark::actions::lightning::receive::Progress;
 use bark::movement::MovementStatus;
@@ -18,11 +22,14 @@ use bitcoin::{Address, Amount, Network, OutPoint, Transaction};
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
-use bitcoin::secp256k1::Secp256k1;
-use bitcoin_ext::BlockDelta;
+use bitcoin::secp256k1::{Keypair, Secp256k1};
+use bitcoin_ext::{AmountExt, BlockDelta, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::{Db, SpendState};
+use server::database::expiry_inventory::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits};
 use server::vtxopool::VtxoTarget;
+use cln_rpc::listpays_pays::ListpaysPaysStatus;
+use cln_rpc::plugins::hold::{self, InvoiceState};
 use server_rpc::protos;
 
 #[derive(Clone, Default)]
@@ -57,14 +64,35 @@ async fn registered_receive_fallback() {
 			config.ln_receive_anti_dos_required = false;
 		}).watchmand().create().await;
 	srv.wait_for_vtxopool(&ctx).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert_eq!(srv.config().vtxopool.vtxo_target_issue_threshold, 50);
+	assert_eq!(srv.config().vtxopool.vtxo_pre_expiry, BlockDelta::new(12));
+	assert_eq!(srv.config().vtxopool.max_vtxo_exit_depth, 6);
+	let initial_rows = db.read(async |tx| Ok(tx.query(
+		"SELECT vtxo FROM vtxo_pool WHERE spent_at IS NULL", &[],
+	).await?)).await.unwrap();
+	let initial_pool = initial_rows.iter().map(|row|
+		Vtxo::<Full>::deserialize(row.get("vtxo")).unwrap()).collect::<Vec<_>>();
+	assert_eq!(initial_pool.len(), 2);
+	assert!(initial_pool.iter().all(|coin| coin.amount() == sat(100_000)));
+	let shared_anchor = initial_pool[0].chain_anchor();
+	assert!(initial_pool.iter().all(|coin| coin.chain_anchor() == shared_anchor));
+	let shared_funding = ctx.bitcoind().await_transaction(shared_anchor.txid).await;
+	for coin in &initial_pool { coin.validate(&shared_funding).unwrap(); }
+	let root_value = shared_funding.output[shared_anchor.vout as usize].value;
 	// Pool readiness only observes the issuance in the mempool. Confirm that
 	// backing and the separate watchman fee funds before making the invoice.
 	let fee_address = srv.watchmand().wait_wallet_address().await;
+	let operator_script = {
+		let config = srv.watchmand().config();
+		config.sweep_address.clone().unwrap().require_network(config.network).unwrap().script_pubkey()
+	};
 	let mut fee_funding = Vec::new();
 	for _ in 0..2 { fee_funding.push(ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await); }
 	let funded = ctx.generate_blocks(6).await;
 	srv.wait_for_sync_height(funded).await;
 	srv.watchmand().wait_for_sync_height(funded).await;
+	let mut sponsors = BTreeMap::new();
 	for txid in fee_funding {
 		let transaction = ctx.bitcoind().await_transaction(txid).await;
 		let vout = transaction.output.iter().position(|output|
@@ -72,7 +100,12 @@ async fn registered_receive_fallback() {
 		let output = ctx.bitcoind().sync_client().get_tx_out(&txid, vout as u32, Some(true)).unwrap().unwrap();
 		assert!(output.confirmations >= 6);
 		assert_eq!(output.value, sat(100_000));
+		let point = OutPoint::new(txid, vout as u32);
+		assert!(sponsors.insert(point, transaction.output[vout].clone()).is_none());
 	}
+	assert_eq!(sponsors.len(), 2);
+	let setup_height = ctx.bitcoind().get_block_count().await;
+	assert!(initial_pool.iter().all(|coin| coin.expiry_height().to_u32() as u64 > setup_height + 12));
 	let outage = OfflineRecipient::default();
 	let proxy = srv.start_proxy_with_mailbox((), outage.clone()).await;
 	let provider = ctx.bark_sdk("provider", &proxy).cfg(|config| config.daemon_manual_sync = true).create().await;
@@ -85,6 +118,8 @@ async fn registered_receive_fallback() {
 	let recipient_mailbox = recipient.mailbox_keypair().public_key().to_string();
 	assert_ne!(destination.account_xpub, provider_destination.account_xpub);
 	assert_ne!(destination.spk, provider_destination.spk);
+	assert_ne!(destination.spk, operator_script);
+	assert_ne!(provider_destination.spk, operator_script);
 	let seed = bip39::Mnemonic::from_str(tokio::fs::read_to_string(ctx.datadir.join("recipient/mnemonic"))
 		.await.unwrap().trim()).unwrap();
 	let secp = Secp256k1::new();
@@ -96,6 +131,26 @@ async fn registered_receive_fallback() {
 	).script_pubkey();
 	assert_eq!(destination.spk, expected_fallback_script, "the native fallback must use the seed-derived BIP86 destination");
 	assert!(destination.spk.is_p2tr());
+	destination.verify(Network::Regtest, recipient.mailbox_keypair().public_key()).unwrap();
+	provider_destination.verify(Network::Regtest, provider.mailbox_keypair().public_key()).unwrap();
+	// B has an independent key and a valid address, but no SDK wallet or
+	// account registration. Independent-key separation is the fixture premise;
+	// a bounded owner scan is not an exhaustive BIP32 non-membership proof.
+	let unknown_identity = Keypair::new(&secp, &mut bitcoin::secp256k1::rand::thread_rng());
+	let unknown_key = unknown_identity.public_key();
+	assert_ne!(unknown_key, address.policy().user_pubkey());
+	let unknown_address = ark::Address::new(true, address.ark_id(),
+		VtxoPolicy::new_pubkey(unknown_key), vec![VtxoDelivery::ServerMailbox {
+			blinded_id: BlindedMailboxIdentifier::from_pubkey(unknown_key),
+		}]);
+	provider.validate_arkoor_address(&unknown_address).await.unwrap();
+	let registry_before = db.read(async |tx| Ok(tx.query(
+		"SELECT mailbox_pk,account_xpub,spk FROM fallback_record ORDER BY mailbox_pk", &[],
+	).await?.into_iter().map(|row| (row.get::<_, String>(0), row.get::<_, String>(1),
+		row.get::<_, String>(2))).collect::<Vec<_>>())).await.unwrap();
+	assert_eq!(registry_before.len(), 2);
+	assert_eq!(registry_before.iter().map(|record| record.0.clone()).collect::<BTreeSet<_>>(),
+		BTreeSet::from([recipient_mailbox.clone(), provider.mailbox_keypair().public_key().to_string()]));
 	assert_eq!(recipient.balance().await.unwrap().spendable, sat(0));
 	drop(recipient);
 	// The original recipient is never reopened, synced, delivered to or
@@ -106,19 +161,55 @@ async fn registered_receive_fallback() {
 	let invoice = provider.bolt11_invoice_for_address(amount, address.clone(),
 		Some("registered receive rightful fallback".into()), None).await.unwrap();
 	let hash = PaymentHash::from(&invoice);
-	let (payment, delivery) = tokio::join!(
-		lightning.external.try_pay_bolt11(invoice.to_string()),
-		tokio::time::timeout(Duration::from_secs(30), async {
-			loop {
-				let _ = provider.try_claim_lightning_receive(hash, false).await;
-				if let Some(checkpoint) = provider.lightning_receive_checkpoint(hash).await.unwrap()
-					&& let Progress::Delivering(delivery) = checkpoint.progress { break delivery; }
-				tokio::time::sleep(Duration::from_millis(50)).await;
-			}
-		}),
-	);
-	payment.expect("the original external Lightning payment must actually settle");
-	let delivery = delivery.expect("receive must durably reach registered Delivering before provider stops");
+	let (delivery, unknown_delivery, unknown_hash, pool_change) = tokio::time::timeout(Duration::from_secs(30), async {
+		let (payment, delivery) = tokio::join!(
+			lightning.external.try_pay_bolt11(invoice.to_string()),
+			async {
+				loop {
+					let _ = provider.try_claim_lightning_receive(hash, false).await;
+					if let Some(checkpoint) = provider.lightning_receive_checkpoint(hash).await.unwrap()
+						&& let Progress::Delivering(delivery) = checkpoint.progress { break delivery; }
+					tokio::time::sleep(Duration::from_millis(50)).await;
+				}
+			},
+		);
+		payment.expect("A's original external payment must settle before B starts");
+		assert_eq!(ctx.bitcoind().get_block_count().await, setup_height);
+		let changes = db.read(async |tx| Ok(tx.query(
+			"SELECT vtxo FROM vtxo_pool WHERE spent_at IS NULL AND amount=90000", &[],
+		).await?)).await.unwrap();
+		assert_eq!(changes.len(), 1, "A must leave its actual usable90k change, not a replacement root");
+		let pool_change = Vtxo::<Full>::deserialize(changes[0].get("vtxo")).unwrap();
+		assert_eq!(pool_change.amount(), sat(90_000));
+		assert_eq!(pool_change.chain_anchor(), shared_anchor);
+		assert!(pool_change.exit_depth() <= 6);
+		assert!(pool_change.expiry_height().to_u32() as u64 > setup_height + 12);
+		pool_change.validate(&shared_funding).unwrap();
+		let remaining = db.read(async |tx| Ok(tx.query_one(
+			"SELECT COUNT(*) FROM vtxo_pool WHERE spent_at IS NULL AND amount=100000", &[],
+		).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(remaining, 1, "strict50percent refill threshold must not issue another tree");
+		// One30s boundary covers BOTH legitimate receives. A's90k change is
+		// inserted before its grant call returns; the picker selects it for B.
+		let invoice_b = provider.bolt11_invoice_for_address(amount, unknown_address.clone(),
+			Some("unregistered sibling held without appropriating its value".into()), None).await.unwrap();
+		let unknown_hash = PaymentHash::from(&invoice_b);
+		assert_ne!(unknown_hash, hash);
+		let (payment_b, unknown_delivery) = tokio::join!(
+			lightning.external.try_pay_bolt11(invoice_b.to_string()),
+			async {
+				loop {
+					let _ = provider.try_claim_lightning_receive(unknown_hash, false).await;
+					if let Some(checkpoint) = provider.lightning_receive_checkpoint(unknown_hash).await.unwrap()
+						&& let Progress::Delivering(delivery) = checkpoint.progress { break delivery; }
+					tokio::time::sleep(Duration::from_millis(50)).await;
+				}
+			},
+		);
+		payment_b.expect("B's actual external payer must settle, not merely expose a preimage");
+		assert_eq!(ctx.bitcoind().get_block_count().await, setup_height);
+		(delivery, unknown_delivery, unknown_hash, pool_change)
+	}).await.expect("both original receives must finish inside the single unchanged30s boundary");
 	assert!(outage.0.load(Ordering::SeqCst) > 0);
 	assert_eq!(delivery.vtxos.len(), 1, "one pool input must produce one 10k recipient output in this fixture");
 	let source = delivery.vtxos[0].clone();
@@ -126,16 +217,154 @@ async fn registered_receive_fallback() {
 	assert_eq!(source.policy(), address.policy());
 	provider.validate_vtxo(&source).await.unwrap();
 	assert!(provider.pubkey_keypair(&source.policy().user_pubkey()).await.unwrap().is_none());
-	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let registered = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
 	assert_eq!(registered.vtxo.id(), source.id());
 	assert_eq!(registered.vtxo.policy(), address.policy());
 	assert_eq!(registered.vtxo.amount(), source.amount());
 	assert_eq!(registered.spend_state, SpendState::Spendable);
 	let anchor = source.chain_anchor();
+	assert_eq!(anchor, shared_anchor);
+	assert_eq!(unknown_delivery.vtxos.len(), 1);
+	let unknown_source = unknown_delivery.vtxos[0].clone();
+	assert_eq!(unknown_source.amount(), amount);
+	assert_eq!(unknown_source.policy(), unknown_address.policy());
+	assert_eq!(unknown_source.chain_anchor(), shared_anchor);
+	unknown_source.validate(&shared_funding).unwrap();
+	assert!(unknown_source.transactions().any(|step| step.tx.input.iter()
+		.any(|input| input.previous_output == pool_change.point())), "B must spend A's exact90k change");
+	let mut unknown_grants = Vec::new();
+	for (payment_hash, output) in [(hash, &source), (unknown_hash, &unknown_source)] {
+		let grants = srv.htlc_vtxos(payment_hash).await;
+		let grant_ids = grants.iter().map(|grant| grant.vtxo.vtxo_id.to_string()).collect::<BTreeSet<_>>();
+		assert!(!grant_ids.is_empty());
+		assert_eq!(grant_ids.len(), grants.len());
+		let rows = db.read(async |tx| Ok(tx.query("SELECT c.source_vtxo_id,c.output_vtxo_id,c.materialized, \
+			s.status::TEXT AS status,s.invoice,h.offchain_resolution::TEXT AS resolution,v.vtxo AS actual \
+			FROM expiry_lightning_receive_claim c JOIN lightning_htlc_subscription s ON s.id=c.subscription_id \
+			JOIN vtxo g ON g.vtxo_id=c.source_vtxo_id AND g.lightning_htlc_subscription_id=s.id \
+			JOIN htlc_vtxo h ON h.id=g.id AND h.direction='outgoing' AND h.payment_hash=c.payment_hash \
+			JOIN vtxo v ON v.vtxo_id=c.output_vtxo_id WHERE c.payment_hash=$1 AND s.payment_hash=$1",
+			&[&payment_hash.to_string()],
+		).await?)).await.unwrap();
+		assert_eq!(rows.len(), grant_ids.len());
+		assert_eq!(rows.iter().map(|row| row.get::<_, String>("source_vtxo_id")).collect::<BTreeSet<_>>(), grant_ids);
+		assert_eq!(rows.iter().map(|row| row.get::<_, String>("output_vtxo_id")).collect::<BTreeSet<_>>(),
+			BTreeSet::from([output.id().to_string()]));
+		for row in &rows {
+			assert!(row.get::<_, bool>("materialized"));
+			assert_eq!(row.get::<_, String>("status"), "settled");
+			assert_eq!(row.get::<_, Option<String>>("resolution").as_deref(), Some("fulfilled"));
+			let actual = ServerVtxo::<Full>::deserialize(row.get("actual")).unwrap().try_into_user_vtxo().unwrap();
+			actual.validate(&shared_funding).unwrap();
+			assert_eq!(actual.serialize(), output.serialize());
+		}
+		let pays = lightning.external.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
+			payment_hash: Some(payment_hash.to_vec()), ..Default::default()
+		}).await.unwrap().into_inner().pays;
+		assert_eq!(pays.len(), 1);
+		assert_eq!(pays[0].status(), ListpaysPaysStatus::Complete);
+		assert_eq!(pays[0].amount_msat.as_ref().unwrap().msat, amount.to_msat());
+		let invoices = lightning.internal.hold_client().await.list(hold::ListRequest {
+			constraint: Some(hold::list_request::Constraint::PaymentHash(payment_hash.to_vec())),
+		}).await.unwrap().into_inner().invoices;
+		assert_eq!(invoices.len(), 1);
+		assert_eq!(invoices[0].state(), InvoiceState::Paid);
+		assert_eq!(invoices[0].payment_hash, payment_hash.to_vec());
+		assert_eq!(invoices[0].invoice, rows[0].get::<_, String>("invoice"));
+		if payment_hash == unknown_hash { unknown_grants.extend(grant_ids); }
+	}
+	let pool_rows = db.read(async |tx| Ok(tx.query(
+		"SELECT vtxo FROM vtxo_pool WHERE spent_at IS NULL", &[],
+	).await?)).await.unwrap();
+	let remaining_pool = pool_rows.iter().map(|row|
+		Vtxo::<Full>::deserialize(row.get("vtxo")).unwrap()).collect::<Vec<_>>();
+	assert_eq!(remaining_pool.len(), 2);
+	assert_eq!(remaining_pool.iter().map(|coin| coin.amount()).collect::<BTreeSet<_>>(),
+		BTreeSet::from([sat(80_000), sat(100_000)]));
+	let mut terminals = vec![ServerVtxo::from(source.clone()), ServerVtxo::from(unknown_source.clone())];
+	for coin in &remaining_pool {
+		assert_eq!(coin.chain_anchor(), shared_anchor);
+		coin.validate(&shared_funding).unwrap();
+		terminals.push(ServerVtxo::from(coin.clone()));
+	}
+	let limits = BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 10_000_000 };
+	let snapshot = db.read(async |tx| tx.backing_snapshot(&[terminals[0].to_bare()], limits).await).await.unwrap();
+	let physical_root = snapshot.regular.iter().find(|fact| fact.state.vtxo.point() == shared_anchor)
+		.expect("shared pool root must exist in its actual source inventory").state.vtxo.clone();
+	assert_eq!(physical_root.amount(), root_value);
+	let mut signed_prefixes = BTreeMap::new();
+	let mut residuals = BTreeMap::new();
+	for terminal in &terminals {
+		for step in terminal.transactions() {
+			if let Some(previous) = signed_prefixes.insert(step.tx.compute_txid(), step.tx.clone()) {
+				assert_eq!(previous, step.tx);
+			}
+			for (index, output) in step.tx.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor()) {
+				residuals.insert(OutPoint::new(step.tx.compute_txid(), index as u32), output.clone());
+			}
+		}
+	}
+	let residuals = residuals.into_iter().map(|(outpoint, txout)| BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
+	let partition = BackingSnapshot { roots: vec![physical_root], regular: Vec::new(), serialized_bytes: 0 }
+		.check_partition(&terminals, &[shared_funding.clone()], &residuals, limits).unwrap();
+	assert_eq!(partition.roots.len(), 1);
+	assert_eq!(partition.roots[0].terminal_amount + partition.roots[0].anchor_residual_amount, root_value);
+	let depth = source.exit_depth().max(unknown_source.exit_depth());
+	assert!(depth <= 8, "the declared fixed confirmation schedule only covers this bounded signed geometry");
+	let mut unknown_path = BTreeMap::from([(shared_anchor, shared_funding.output[shared_anchor.vout as usize].clone())]);
+	for step in unknown_source.transactions() {
+		unknown_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32),
+			step.tx.output[step.output_idx as usize].clone());
+	}
+	let mut recipient_path = BTreeMap::from([(shared_anchor, shared_funding.output[shared_anchor.vout as usize].clone())]);
+	for step in source.transactions() {
+		recipient_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32),
+			step.tx.output[step.output_idx].clone());
+	}
+	// Match signed pool-only branches to actual source policy and the server's
+	// real recovery identity. Read public membership only, never key tweaks.
+	let server_pubkey = srv.ark_info().await.server_pubkey;
+	let public_keys = snapshot.regular.iter().filter_map(|fact| match fact.state.vtxo.policy() {
+		ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) => Some(policy.user_pubkey.to_string()),
+		_ => None,
+	}).collect::<Vec<_>>();
+	let owned_keys = db.read(async |tx| Ok(tx.query(
+		"SELECT pubkey FROM ephemeral_tweak WHERE pubkey=ANY($1)", &[&public_keys],
+	).await?.into_iter().map(|row| row.get::<_, String>(0)).collect::<BTreeSet<_>>())).await.unwrap();
+	let mut pool_paths = BTreeMap::new();
+	for coin in &remaining_pool {
+		assert_eq!(coin.server_pubkey(), server_pubkey);
+		assert!(matches!(coin.policy(), VtxoPolicy::Pubkey(policy)
+			if owned_keys.contains(&policy.user_pubkey.to_string())), "live pool leaves need actual server-owned public keys");
+		for step in coin.transactions() {
+			pool_paths.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32),
+				step.tx.output[step.output_idx].clone());
+		}
+	}
+	let operator_points = snapshot.regular.iter().filter_map(|fact| {
+		let vtxo = &fact.state.vtxo;
+		let point = vtxo.point();
+		let output = pool_paths.get(&point)?;
+		if recipient_path.contains_key(&point) || unknown_path.contains_key(&point) { return None; }
+		assert_eq!(vtxo.txout(), *output, "policy metadata must commit to the actual fully signed pool path output");
+		assert_eq!(vtxo.server_pubkey(), server_pubkey);
+		assert_eq!(vtxo.chain_anchor(), shared_anchor);
+		let recoverable = match vtxo.policy() {
+			ServerVtxoPolicy::ServerOwned | ServerVtxoPolicy::Expiry(_)
+				| ServerVtxoPolicy::Checkpoint(_) | ServerVtxoPolicy::HarkLeaf(_)
+				| ServerVtxoPolicy::HarkLeaf_v0(_) => true,
+			ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) =>
+				policy.user_pubkey == server_pubkey || owned_keys.contains(&policy.user_pubkey.to_string()),
+			_ => false,
+		};
+		recoverable.then_some((point, output.clone()))
+	}).collect::<BTreeMap<_, _>>();
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&anchor.txid, anchor.vout, Some(true))
 		.unwrap().unwrap().confirmations >= 6, "the receive's actual pool backing must be confirmed");
-	let ancestor_deadline = srv.htlc_vtxos(hash).await.iter().map(|grant| grant.htlc.htlc_expiry)
+	let mut all_grants = srv.htlc_vtxos(hash).await;
+	all_grants.extend(srv.htlc_vtxos(unknown_hash).await);
+	unknown_grants.push(unknown_source.id().to_string());
+	let ancestor_deadline = all_grants.iter().map(|grant| grant.htlc.htlc_expiry)
 		.max().expect("a genuine receive must retain its actual HTLC grant");
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	assert!(source.expiry_height().to_u32() > height + provider.config().vtxo_exit_margin.to_u32());
@@ -147,10 +376,19 @@ async fn registered_receive_fallback() {
 	let stopped_posts = outage.0.load(Ordering::SeqCst);
 	let root_ids = vec![source.chain_anchor().to_string()];
 	let source_id = source.id().to_string();
-	let expired = ctx.generate_blocks(source.expiry_height().to_u32() + 1 - height).await;
-	srv.wait_for_sync_height(expired).await;
-	srv.watchmand().wait_for_sync_height(expired).await;
 	let parent = tokio::time::timeout(Duration::from_secs(30), async {
+		let expired = ctx.generate_blocks(source.expiry_height().to_u32() + 1 - height).await;
+		srv.wait_for_sync_height(expired).await;
+		srv.watchmand().wait_for_sync_height(expired).await;
+		// Fixed from signed geometry before expiry. These ordinary blocks let
+		// automatic prefix packages confirm; no split/progress/trigger call or
+		// extra mining batch is conditioned on a missing payout.
+		for _ in 0..=depth {
+			tokio::time::sleep(Duration::from_millis(1100)).await;
+			let tip = ctx.generate_blocks(6).await;
+			srv.wait_for_sync_height(tip).await;
+			srv.watchmand().wait_for_sync_height(tip).await;
+		}
 		loop {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
@@ -158,7 +396,11 @@ async fn registered_receive_fallback() {
 				&[&source_id],
 			).await?)).await.unwrap();
 			assert!(rows.len() <= 1, "one registered recipient coin cannot have duplicate active payouts");
-			if let Some(row) = rows.first() { break deserialize::<Transaction>(row.get("sweep_tx")).unwrap(); }
+			if let Some(row) = rows.first() {
+				let tx = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+				let info = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(tx.compute_txid(), None).unwrap();
+				if info.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6) { break tx; }
+			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("native expiry path must pay the absent recipient without its forwarding provider");
@@ -170,6 +412,18 @@ async fn registered_receive_fallback() {
 	let expected = source.amount() - sat(1_000);
 	assert_eq!(output.value, expected);
 	let payout = OutPoint::new(parent.compute_txid(), vout as u32);
+	let parent_anchors = parent.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor())
+		.map(|(vout, output)| { assert_eq!(output.value, Amount::ZERO); OutPoint::new(parent.compute_txid(), vout as u32) })
+		.collect::<Vec<_>>();
+	assert_eq!(parent_anchors.len(), 1);
+	let payout_anchor = parent_anchors[0];
+	assert_eq!(parent.input.len(), 1, "A's payout cannot use a sponsor or another branch as a subsidy");
+	let isolated = parent.input[0].previous_output;
+	let isolated_output = recipient_path.get(&isolated).expect("A parent must spend its authentic signed source path");
+	assert!(!unknown_path.contains_key(&isolated), "A must be isolated from B before its payout");
+	assert_eq!(isolated_output.value, source.amount());
+	let actual_source = ctx.bitcoind().await_transaction(isolated.txid).await;
+	assert_eq!(actual_source.output[isolated.vout as usize], *isolated_output);
 	let mut input_value = Amount::ZERO;
 	for input in &parent.input {
 		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
@@ -177,7 +431,7 @@ async fn registered_receive_fallback() {
 	}
 	assert_eq!(input_value, parent.output.iter().map(|output| output.value).sum::<Amount>(),
 		"the actual payout parent conserves operator remainder and customer value without a hidden miner debit");
-	let confirmed = ctx.generate_blocks(6).await;
+	let confirmed = bitcoin_ext::BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 	srv.wait_for_sync_height(confirmed).await;
 	srv.watchmand().wait_for_sync_height(confirmed).await;
 	let actual = ctx.bitcoind().sync_client().get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().unwrap();
@@ -216,6 +470,25 @@ async fn registered_receive_fallback() {
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
 		}).await.expect("both real daemon views and their financial ledger must finish rebuilding this Core tip");
+		let held = unknown_path.iter().filter_map(|(point, expected)| {
+			ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap()
+				.map(|actual| (*point, expected, actual))
+		}).collect::<Vec<_>>();
+		assert_eq!(held.len(), 1, "B must remain represented by one unspent compatible signed frontier");
+		assert!(held[0].2.confirmations >= 6);
+		assert_eq!(held[0].2.value, held[0].1.value);
+		assert_eq!(held[0].2.script_pub_key.script().unwrap(), held[0].1.script_pubkey);
+		assert!(held[0].2.value >= amount, "B's10k remains encumbered even when its branch also holds operator value");
+		let appropriated = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
+			JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE e.vtxo_id=ANY($1)",
+			&[&unknown_grants],
+		).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(appropriated, 0, "neither B nor its fulfilled grant ancestors may become operator income or another payout");
+		let registry = db.read(async |tx| Ok(tx.query(
+			"SELECT mailbox_pk,account_xpub,spk FROM fallback_record ORDER BY mailbox_pk", &[],
+		).await?.into_iter().map(|row| (row.get::<_, String>(0), row.get::<_, String>(1),
+			row.get::<_, String>(2))).collect::<Vec<_>>())).await.unwrap();
+		assert_eq!(registry, registry_before, "no account registration may be fabricated to free this backing");
 		let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk, \
 			c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.active,a.sweep_txid,a.status FROM expiry_allocation_coin c \
 			JOIN expiry_allocation a ON a.id=c.allocation_id \
@@ -322,4 +595,150 @@ async fn registered_receive_fallback() {
 	assert_eq!(recovered.value + recovery_fee + sat(1_000), source.amount());
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().is_none());
 	assert_eq!(ctx.bitcoind().await_transaction(recovery.compute_txid()).await, *recovery);
+	// Close the selected physical DAG, including every spend of either sponsor.
+	// A replacement pool tree may be issued while these blocks advance. Its
+	// unrelated funding is outside R, but it may not consume a reserved sponsor
+	// or its descendants and then disappear from this accounting.
+	let recorded = db.read(async |tx| Ok(tx.query("SELECT DISTINCT a.sweep_tx FROM expiry_allocation a \
+		JOIN expiry_allocation_input i ON i.allocation_id=a.id JOIN vtxo v ON v.vtxo_id=i.vtxo_id \
+		WHERE v.anchor_point=ANY($1) AND a.sweep_tx IS NOT NULL", &[&root_ids],
+	).await?)).await.unwrap();
+	let allocation_parents = recorded.iter().map(|row| {
+		let tx = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+		(tx.compute_txid(), tx)
+	}).collect::<BTreeMap<_, _>>();
+	let mut frontier = BTreeMap::from([(shared_anchor, (shared_funding.output[shared_anchor.vout as usize].clone(), false))]);
+	for (point, output) in &sponsors { assert!(frontier.insert(*point, (output.clone(), true)).is_none()); }
+	let mut total_miner_fees = Amount::ZERO;
+	let mut canonical_payouts = BTreeMap::new();
+	let mut tracked = BTreeSet::new();
+	let mut payout_children = Vec::new();
+	let mut payout_fee_frontier = BTreeSet::new();
+	let core = ctx.bitcoind().sync_client();
+	let end_height = ctx.bitcoind().get_block_count().await;
+	for height in setup_height + 1..=end_height {
+		let block_hash = core.get_block_hash(height).unwrap();
+		let block = core.get_block(&block_hash).unwrap();
+		for tx in block.txdata {
+			let txid = tx.compute_txid();
+			for (vout, output) in tx.output.iter().enumerate() {
+				assert_ne!(output.script_pubkey, provider_destination.spk, "no canonical provider refund may hide outside the selected allocations");
+				if output.script_pubkey == destination.spk {
+					assert!(canonical_payouts.insert(OutPoint::new(txid, vout as u32), output.value).is_none());
+				}
+			}
+			if !tx.input.iter().any(|input| frontier.contains_key(&input.previous_output)) { continue; }
+			assert!(tracked.insert(txid));
+			let points = tx.input.iter().map(|input| input.previous_output).collect::<BTreeSet<_>>();
+			assert_eq!(points.len(), tx.input.len());
+			let spends_payout_anchor = points.contains(&payout_anchor);
+			let spends_payout_change = points.iter().any(|point| payout_fee_frontier.contains(point));
+			for point in &points { payout_fee_frontier.remove(point); }
+			assert!(points.iter().all(|point| frontier.contains_key(point)),
+				"unrelated or refill inputs cannot be balancing funds for the selected root/sponsor cut");
+			let mut input_value = Amount::ZERO;
+			let mut anchor_inputs = 0;
+			let mut fee_inputs_only = true;
+			for point in points {
+				let (expected_output, fee_coin) = frontier.remove(&point).unwrap();
+				let previous = core.get_raw_transaction(&point.txid, None).unwrap();
+				assert_eq!(previous.output[point.vout as usize], expected_output);
+				input_value += expected_output.value;
+				if expected_output.is_p2a_fee_anchor() { anchor_inputs += 1; }
+				else { fee_inputs_only &= fee_coin; }
+			}
+			let output_value = tx.output.iter().map(|output| output.value).sum::<Amount>();
+			let miner_fee = input_value.checked_sub(output_value).unwrap();
+			let fee_child = if let Some(expected_tx) = signed_prefixes.get(&txid) {
+				assert_eq!(&tx, expected_tx);
+				assert_eq!(miner_fee, Amount::ZERO);
+				false
+			} else if let Some(expected_tx) = allocation_parents.get(&txid) {
+				assert_eq!(&tx, expected_tx);
+				assert_eq!(tx.version.0, 3);
+				assert_eq!(miner_fee, Amount::ZERO);
+				for (vout, output) in tx.output.iter().enumerate() {
+					if output.is_p2a_fee_anchor() { assert_eq!(output.value, Amount::ZERO); continue; }
+					if output.script_pubkey == destination.spk {
+						assert_eq!(OutPoint::new(txid, vout as u32), payout);
+						assert_eq!(output.value, expected);
+					} else {
+						assert_eq!(output.script_pubkey, operator_script,
+							"every allocation residual must use the actual configured operator drain");
+					}
+				}
+				false
+			} else if txid == recovery.compute_txid() {
+				assert_eq!(&tx, recovery);
+				assert_eq!(miner_fee, recovery_fee);
+				false
+			} else {
+				assert_eq!(anchor_inputs, 1, "every sponsor descendant spend must fund an actual selected P2A package");
+				assert!(fee_inputs_only, "no protected customer collateral may become a fee input");
+				assert_eq!(tx.version.0, 3);
+				assert!(miner_fee > Amount::ZERO);
+				assert!(tx.output.iter().all(|output| output.value > Amount::ZERO));
+				true
+			};
+			if spends_payout_anchor {
+				assert!(fee_child, "A's actual P2A spender must be a genuine fee child");
+				payout_children.push((tx.clone(), miner_fee));
+			}
+			assert!(!spends_payout_change || fee_child, "A's protected fee change may only sponsor another selected package");
+			total_miner_fees += miner_fee;
+			for (vout, output) in tx.output.iter().enumerate() {
+				let point = OutPoint::new(txid, vout as u32);
+				assert!(frontier.insert(point, (output.clone(), fee_child)).is_none());
+				if (spends_payout_anchor || spends_payout_change) && output.value > Amount::ZERO {
+					assert!(payout_fee_frontier.insert(point));
+				}
+			}
+		}
+	}
+	assert!(tracked.contains(&parent.compute_txid()) && tracked.contains(&recovery.compute_txid()));
+	assert_eq!(payout_children.len(), 1, "A's unique P2A anchor must have one canonical tracked child");
+	assert!(!frontier.contains_key(&payout_anchor));
+	let (payout_child, payout_child_fee) = &payout_children[0];
+	assert!(*payout_child_fee > Amount::ZERO);
+	assert!(payout_child.output.iter().any(|output| output.value > Amount::ZERO));
+	let child_rows = db.read(async |tx| Ok(tx.query("SELECT f.raw_tx,f.fee_sat FROM expiry_fee_child f \
+		JOIN expiry_allocation a ON a.id=f.allocation_id WHERE a.sweep_txid=$1 AND f.txid=$2",
+		&[&parent.compute_txid().to_string(), &payout_child.compute_txid().to_string()],
+	).await?)).await.unwrap();
+	assert_eq!(child_rows.len(), 1);
+	assert_eq!(deserialize::<Transaction>(child_rows[0].get("raw_tx")).unwrap(), *payout_child);
+	assert_eq!(child_rows[0].get::<_, i64>("fee_sat"), payout_child_fee.to_sat() as i64);
+	assert_eq!(canonical_payouts, BTreeMap::from([(payout, expected)]),
+		"historical scanning must include the already spent A payout and reject duplicates");
+	assert_eq!(frontier.values().map(|(output, _)| output.value).sum::<Amount>() + total_miner_fees,
+		root_value + sat(200_000), "R plus the two actual sponsors must conserve across every signed prefix, child and recovery");
+	let held = frontier.iter().filter(|(point, _)| unknown_path.contains_key(point)).collect::<Vec<_>>();
+	assert_eq!(held.len(), 1);
+	assert_eq!(held[0].1.0, unknown_path[held[0].0]);
+	assert!(held[0].1.0.value >= amount, "B's accepted10k obligation stays on its compatible unspent branch");
+	let mut fee_change = BTreeSet::new();
+	for (point, (output, fee_coin)) in &frontier {
+		if output.value == Amount::ZERO { assert!(output.is_p2a_fee_anchor()); continue; }
+		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+		assert!(actual.confirmations >= 6);
+		assert_eq!(actual.value, output.value);
+		assert_eq!(actual.script_pub_key.script().unwrap(), output.script_pubkey);
+		if *fee_coin { fee_change.insert(*point); }
+		else if *point == OutPoint::new(recovery.compute_txid(), 0) {
+			assert_eq!(output, &recovery.output[0]);
+		} else if unknown_path.contains_key(point) {
+			assert_eq!(output, &unknown_path[point]);
+		} else if output.script_pubkey != operator_script {
+			assert_eq!(operator_points.get(point), Some(output),
+				"every other terminal needs an exact signed pool-only recovery policy and actual public operator identity");
+		}
+	}
+	assert!(!fee_change.is_empty(), "actual unused sponsors or their positive owned change must remain");
+	assert!(!payout_fee_frontier.is_empty() && payout_fee_frontier.is_subset(&fee_change),
+		"A's real child must retain positive change or traced positive descendants in the owned terminal cut");
+	let mut admin = WalletAdminClient::connect(format!("http://{}", srv.watchmand().config().admin_address.unwrap())).await.unwrap();
+	let owned = admin.wallet_status(protos::Empty {}).await.unwrap().into_inner().watchman.unwrap()
+		.confirmed_utxos.into_iter().map(|point| point.parse::<OutPoint>().unwrap()).collect::<BTreeSet<_>>();
+	assert!(fee_change.is_subset(&owned),
+		"all terminal sponsor change and unused sponsors must belong to the actual watchman wallet");
 }

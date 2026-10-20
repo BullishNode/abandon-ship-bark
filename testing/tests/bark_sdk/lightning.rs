@@ -536,6 +536,11 @@ async fn pay_hold_refused() {
 		srv.watchmand().wait_for_sync_height(expired).await;
 		let db = Db::connect(&srv.config().postgres).await.unwrap();
 		let (parent, child, recorded_fee) = tokio::time::timeout(Duration::from_secs(60), async {
+			// Confirm only real signed prefixes when the ordinary watchman publishes them.
+			let mut pending_prefixes = source.transactions().map(|step| {
+				assert!(step.tx.input.iter().all(|input| input.sequence == bitcoin::Sequence::ZERO));
+				step.tx.compute_txid()
+			}).collect::<std::collections::BTreeSet<_>>();
 			loop {
 				let row = db.read(async |tx| Ok(tx.query_opt(
 					"SELECT a.sweep_tx,f.raw_tx,f.fee_sat FROM expiry_allocation a \
@@ -548,6 +553,20 @@ async fn pay_hold_refused() {
 				if let Some(row) = row {
 					break (deserialize::<Transaction>(row.get("sweep_tx")).unwrap(),
 						deserialize::<Transaction>(row.get("raw_tx")).unwrap(), row.get::<_, i64>("fee_sat"));
+				}
+				let core = ctx.bitcoind().sync_client();
+				if let Some(txid) = core.get_raw_mempool().unwrap().into_iter().find(|txid| pending_prefixes.contains(txid)) {
+					assert!(pending_prefixes.remove(&txid)); // At most one block per actual signed path transaction.
+					let tip = ctx.generate_blocks(1).await;
+					let hash = core.get_block_hash(u64::from(tip.to_u32())).unwrap();
+					loop {
+						if db.read(async |tx| {
+							let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+							Ok(view.captaind.height == tip && view.watchmand.height == tip
+								&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
+						}).await.unwrap() { break; }
+						tokio::time::sleep(Duration::from_millis(50)).await;
+					}
 				}
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}

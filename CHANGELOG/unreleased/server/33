@@ -11,3 +11,6 @@
   Require the qualified six-confirmation Core Lightning runtime and preserve
   source-specific incident evidence for supervised recovery.
   [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)
+- Recover operator collateral after an offboard forfeit
+  Reuse the existing claim path once the collateral is confirmed and mature.
+  [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)

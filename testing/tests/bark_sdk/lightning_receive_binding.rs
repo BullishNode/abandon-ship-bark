@@ -284,7 +284,7 @@ async fn receive_binding_internal_expired_before_replay_refunds_absent_sender_on
 	use bitcoin::{Amount, Network, OutPoint, Transaction};
 	use bitcoin::consensus::deserialize;
 	use bitcoin_ext::BlockDelta;
-	use bitcoin_ext::rpc::RpcApi;
+	use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 
 	tokio::time::timeout(Duration::from_secs(180), Box::pin(async {
 		let ctx = TestContext::new("bark_sdk/receive_binding_internal_expired_before_replay").await;
@@ -458,8 +458,10 @@ async fn receive_binding_internal_expired_before_replay_refunds_absent_sender_on
 				for row in rows {
 					let tx=deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
 					assert_eq!(tx.compute_txid().to_string(),row.get::<_,String>("sweep_txid"));
-					let info:serde_json::Value=core.call("getrawtransaction",&[serde_json::json!(tx.compute_txid().to_string()),serde_json::json!(true)]).unwrap();
-					deep &= info["confirmations"].as_u64().unwrap_or(0)>=6;
+					let Some(info)=core.custom_get_raw_transaction_info(tx.compute_txid(),None).unwrap() else {
+						deep=false; continue; // Publication on the server's Core can precede visibility here.
+					};
+					deep &= info.confirmations.unwrap_or(0)>=6;
 					closures.insert(row.get::<_,String>("vtxo_id"),tx);
 				}
 				if deep {break closures;}

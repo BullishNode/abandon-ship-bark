@@ -670,12 +670,15 @@ impl ClnXpayProcess {
 	}
 }
 
-/// Whether lightningd itself answered with an error, meaning xpay has stopped
-/// trying. cln-grpc words every failed call as `Error calling method ...`, but
-/// only an answer from lightningd carries `RpcError { code: Some(..) }`.
+/// Recognizes adapter RPC errors for coarse status and error recording.
+/// Source-specific terminal receipts are verified separately.
 fn is_cln_error(err: &anyhow::Error) -> bool {
-	err.downcast_ref::<tonic::Status>()
-		.is_some_and(|s| s.message().contains("RpcError { code: Some("))
+	err.downcast_ref::<tonic::Status>().is_some_and(|status|
+		status.metadata().get("abandon-cln-jsonrpc-error-code")
+			.and_then(|code| code.to_str().ok())
+			.is_some_and(|code| code.parse::<i32>().is_ok())
+			|| status.message().contains("RpcError { code: Some(")
+	)
 }
 
 /// Only typed receipts from the qualified gRPC adapter are accepted. In
@@ -824,6 +827,10 @@ mod test {
 		let cln = tonic::Status::unknown("Error calling method Xpay: RpcError { \
 			code: Some(205), message: \"no route\", data: None }");
 		assert!(is_cln_error(&cln.into()));
+
+		let mut structured = tonic::Status::unknown("CLN RPC failure");
+		structured.metadata_mut().insert("abandon-cln-jsonrpc-error-code", "205".parse().unwrap());
+		assert!(is_cln_error(&structured.into()));
 
 		let transport = tonic::Status::unavailable("transport error");
 		assert!(!is_cln_error(&transport.into()));

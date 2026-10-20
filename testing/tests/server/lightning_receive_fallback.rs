@@ -704,6 +704,12 @@ async fn registered_receive_fallback() {
 	assert_eq!(recovery.output[0].script_pubkey, recovery_address.script_pubkey());
 	let recovery_fee = expected.checked_sub(recovery.output[0].value).unwrap();
 	assert!(recovery_fee > Amount::ZERO);
+	// Stop new Pool refills before the existing final confirmation batch.
+	// Keep wallet ownership facts; Core still proves every terminal below.
+	let rounds = srv.wallet_status().await.rounds;
+	let server_coins = rounds.confirmed_utxos.into_iter().chain(rounds.unconfirmed_utxos)
+		.collect::<BTreeSet<_>>();
+	srv.stop().await.unwrap();
 	ctx.generate_blocks(6).await;
 	let recovered = ctx.bitcoind().sync_client().get_tx_out(&recovery.compute_txid(), 0, Some(true)).unwrap().unwrap();
 	assert!(recovered.confirmations >= 6);
@@ -918,7 +924,6 @@ async fn registered_receive_fallback() {
 	assert_eq!(held[0].1.0, unknown_path[held[0].0]);
 	assert!(held[0].1.0.value >= amount, "B's accepted10k obligation stays on its compatible unspent branch");
 	let mut fee_change = BTreeSet::new();
-	let server_coins = srv.wallet_status().await.rounds.confirmed_utxos.into_iter().collect::<BTreeSet<_>>();
 	for (point, (output, fee_coin)) in &frontier {
 		if output.value == Amount::ZERO { assert!(output.is_p2a_fee_anchor()); continue; }
 		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();

@@ -639,10 +639,14 @@ async fn funded_background_mode(count: u32, traffic_mode: bool) {
 	let mut rpc = srv.get_public_rpc().await;
 	let mut traffic = None;
 	let unfunded=count-(if traffic_mode { 18 } else { 2 });
+	let mut traffic_pressure = Vec::new();
 	for index in 0..unfunded {
-		set_record(&mut rpc, &signed_record(index)).await;
+		let record = signed_record(index);
+		set_record(&mut rpc, &record).await;
+		if traffic_mode && index < 24 { traffic_pressure.push(record); }
 	}
-	let pressure = (if traffic_mode { 0..8 } else { count..count+8 }).map(signed_record).collect::<Vec<_>>();
+	let pressure = if traffic_mode { traffic_pressure[..8].to_vec() }
+		else { (count..count+8).map(signed_record).collect::<Vec<_>>() };
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	if !traffic_mode {
 	assert_eq!(db.read(async |tx| Ok(tx.query_one("
@@ -730,11 +734,12 @@ async fn funded_background_mode(count: u32, traffic_mode: bool) {
 	// This owner performs no more operations until both payouts
 	// confirm. The daemon is manual throughout; background work is server-side.
 	drop(wallet);
-	let late_pressure = (if traffic_mode { 8..16 } else { count+8..count+16 }).map(signed_record).collect::<Vec<_>>();
+	let late_pressure = if traffic_mode { traffic_pressure[8..16].to_vec() }
+		else { (count+8..count+16).map(signed_record).collect::<Vec<_>>() };
 	let second = payout(&ctx, &srv, &db, &mut rpc, &late, 1, owner_mailbox, &destination, &late_pressure, None).await;
 	let wrong_payout = if let Some(traffic)=traffic.as_ref() {
 		let wrong=traffic.wrong.as_ref().unwrap();
-		let pressure=(16..24).map(signed_record).collect::<Vec<_>>();
+		let pressure=traffic_pressure[16..24].to_vec();
 		Some(payout(&ctx,&srv,&db,&mut rpc,wrong,17,
 			traffic.wallets[0].mailbox_identifier().as_pubkey(), &traffic.destinations[0], &pressure,
 			Some(traffic.wallets[1].mailbox_identifier().as_pubkey())).await)

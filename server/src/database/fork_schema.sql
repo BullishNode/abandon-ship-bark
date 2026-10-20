@@ -225,10 +225,20 @@ CREATE TABLE expiry_lightning_terminal_failure (
 	created_index BIGINT CHECK (created_index > 0),
 	updated_index BIGINT,
 	jsonrpc_error_code INTEGER,
+	-- Trusted supervised quiescence is distinct from an actual CLN failure.
+	-- Keep the bounded public manifest and its exact byte identity here, not in
+	-- another money ledger. This branch never manufactures a CLN index/error.
+	supervised_manifest_sha256 BYTEA CHECK (octet_length(supervised_manifest_sha256)=32),
+	supervised_manifest JSONB CHECK (pg_column_size(supervised_manifest)<=65536),
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	CONSTRAINT expiry_lightning_failure_provenance CHECK (
-		(created_index IS NOT NULL AND jsonrpc_error_code IS NULL)
-		OR (created_index IS NULL AND jsonrpc_error_code IS NOT NULL AND jsonrpc_error_code IN (205,207))
+		(created_index IS NOT NULL AND jsonrpc_error_code IS NULL
+			AND supervised_manifest_sha256 IS NULL AND supervised_manifest IS NULL)
+		OR (created_index IS NULL AND jsonrpc_error_code IS NOT NULL AND jsonrpc_error_code IN (205,207)
+			AND supervised_manifest_sha256 IS NULL AND supervised_manifest IS NULL)
+		OR (created_index IS NULL AND updated_index IS NULL AND jsonrpc_error_code IS NULL
+			AND supervised_manifest_sha256 IS NOT NULL AND supervised_manifest IS NOT NULL
+			AND jsonb_typeof(supervised_manifest)='object')
 	)
 );
 

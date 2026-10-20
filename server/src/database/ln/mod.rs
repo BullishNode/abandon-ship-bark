@@ -23,6 +23,14 @@ use crate::database::{Checkpoint, Tx};
 /// Identifier by which lightning nodes are stored in the database.
 pub type LightningNodeId = i64;
 
+/// Fixed invoices define the actual recipient principal independently of a
+/// caller's larger funding/fee allowance. Amountless invoices use that caller
+/// amount. Preserve millisatoshis and reject values PostgreSQL cannot store.
+fn payment_principal_msat(invoice_msat: Option<u64>, requested: Amount) -> anyhow::Result<i64> {
+	i64::try_from(invoice_msat.unwrap_or(requested.to_msat()))
+		.context("Lightning payment principal exceeds database range")
+}
+
 impl<'t> Tx<'t> {
 	// *******************
 	// * lightning state *
@@ -215,7 +223,7 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Fair bounded recovery polling for actually dispatched, expired sources.
+	/// Fair bounded recovery polling for actually dispatched, undecided sources.
 	/// Failed local status alone never resolves these obligations.
 	pub async fn unproven_expiry_lightning_dispatches(&self, node: LightningNodeId, limit: i64) -> anyhow::Result<Vec<LightningPaymentAttempt>> {
 		ensure!((1..=128).contains(&limit), "invalid expiry Lightning polling limit");
@@ -228,7 +236,7 @@ impl<'t> Tx<'t> {
 			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_terminal_failure f WHERE f.id=a.id)
 			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_external_success s WHERE s.id=a.id)
 			AND EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l JOIN vtxo v ON v.vtxo_id=l.vtxo_id
-				WHERE l.lightning_payment_attempt_id=a.id AND v.expiry<=COALESCE((SELECT MAX(height) FROM captaind_block),0)
+				WHERE l.lightning_payment_attempt_id=a.id
 				AND NOT EXISTS(SELECT 1 FROM expiry_entitlement e WHERE e.vtxo_id=v.vtxo_id))
 			ORDER BY d.checked_at NULLS FIRST,d.id LIMIT $2
 		", &[&node,&limit]).await?;
@@ -299,6 +307,7 @@ impl<'t> Tx<'t> {
 		retry_for: Duration,
 	) -> anyhow::Result<()> {
 		let payment_hash = invoice.payment_hash();
+		let principal_msat = payment_principal_msat(invoice.amount_msat(), amount)?;
 
 		let check_stmt = self.prepare("
 			SELECT id FROM lightning_payment_attempt
@@ -348,7 +357,7 @@ impl<'t> Tx<'t> {
 		let row = self.query_one(
 			&stmt,
 			&[
-				&node_id, &payment_hash.to_string(), &(amount.to_msat() as i64),
+				&node_id, &payment_hash.to_string(), &principal_msat,
 				&mailbox_str, &requested_status,
 				&block_height_i32, &user_fee_sat_i64, &user_agent, &retry_for_secs_i32,
 				&lightning_htlc_subscription_id,
@@ -820,34 +829,19 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Retrieve the sender's mailbox ID for a lightning payment.
-	pub async fn get_lightning_sender_mailbox_id(
-		&self,
-		payment_hash: PaymentHash,
-	) -> anyhow::Result<Option<ark::mailbox::MailboxIdentifier>> {
-		let stmt = self.prepare(
-			"SELECT sender_mailbox_id FROM lightning_payment_attempt
-			WHERE payment_hash = $1
-			ORDER BY created_at DESC
-			LIMIT 1"
-		).await?;
-		let row = self.query_opt(&stmt, &[&payment_hash.to_string()]).await?;
-
-		match row {
-			Some(row) => {
-				let id = row.get::<_, Option<String>>("sender_mailbox_id");
-				match id {
-					Some(s) => {
-						let id = ark::mailbox::MailboxIdentifier::from_str(&s)
-							.context("corrupt sender_mailbox_id in lightning_payment_attempt")?;
-						Ok(Some(id))
-					},
-					None => Ok(None),
-				}
-			},
-			None => Ok(None),
-		}
+	/// Bind a notification to the actual originating attempt, rather than the
+	/// newest sender who happens to use the same payment hash.
+	pub(crate) async fn get_lightning_attempt_sender_mailbox_id(
+		&self, attempt_id: i64, payment_hash: PaymentHash,
+	) -> anyhow::Result<Option<MailboxIdentifier>> {
+		let Some(row) = self.query_opt(
+			"SELECT sender_mailbox_id FROM lightning_payment_attempt WHERE id=$1 AND payment_hash=$2",
+			&[&attempt_id, &payment_hash.to_string()],
+		).await? else { return Ok(None); };
+		row.get::<_, Option<&str>>("sender_mailbox_id").map(MailboxIdentifier::from_str)
+			.transpose().context("corrupt sender_mailbox_id in original lightning_payment_attempt")
 	}
+
 
 	/// Retrieve an open HTLC subscription for a specific node by payment hash.
 	///
@@ -912,19 +906,33 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Transition every currently-`spendable` HTLC-send vtxo linked to any
-	/// attempt for the given payment hash to `ln-spent`. Called when a
-	/// lightning send settles, so the vtxo is explicitly marked as consumed
-	/// by a paid invoice.
-	///
-	/// Returns the ids of linked vtxos left untouched because their
-	/// `spend_state` was no longer `spendable` at update time (e.g. already
-	/// `ln-spent` from a prior reconciliation of this attempt). An
-	/// empty vec means every linked vtxo transitioned.
+	/// Lock the immutable actual attempt source set in the same order as expiry
+	/// writers, before an attempt row or the settlement WAL is locked. This is
+	/// exclusion only: a decided coin is not an error or permission to mutate it.
+	pub(crate) async fn lock_lightning_attempt_sources(&self, attempt_id: i64) -> anyhow::Result<()> {
+		self.query("SELECT v.vtxo_id FROM vtxo v \
+			JOIN lightning_payment_attempt_htlc_vtxo l ON l.vtxo_id=v.vtxo_id \
+			WHERE l.lightning_payment_attempt_id=$1 ORDER BY v.vtxo_id FOR UPDATE OF v", &[&attempt_id]).await?;
+		Ok(())
+	}
+
+	/// Mark only the actual attempt's fully discharged source set as ln-spent.
+	/// A global preimage or coarse Succeeded alone cannot consume these coins.
+	/// Returns genuinely nonspendable sources left untouched; already-ln-spent
+	/// sources are an idempotent success, not a spurious warning.
 	pub async fn mark_htlc_send_vtxos_ln_spent(
 		&self,
 		attempt_id: i64,
 	) -> anyhow::Result<Vec<VtxoId>> {
+		self.lock_lightning_attempt_sources(attempt_id).await?;
+		let Some(attempt) = self.query_opt(
+			"SELECT payment_hash FROM lightning_payment_attempt WHERE id=$1", &[&attempt_id],
+		).await? else { return Ok(Vec::new()); };
+		let hash = PaymentHash::from_str(attempt.get("payment_hash"))?;
+		if !matches!(self.lightning_payment_outcome(hash, &[], Some(attempt_id)).await?,
+			Some((_, super::expiry_lightning::LightningSourceState::Discharged))) {
+			return Ok(Vec::new());
+		}
 		let stmt = self.prepare("
 			WITH found AS (
 				SELECT vtxo.vtxo_id, vtxo.spend_state
@@ -941,7 +949,7 @@ impl<'t> Tx<'t> {
 				RETURNING vtxo.vtxo_id
 			)
 			SELECT vtxo_id FROM found
-			WHERE vtxo_id NOT IN (SELECT vtxo_id FROM updated)
+			WHERE vtxo_id NOT IN (SELECT vtxo_id FROM updated) AND spend_state <> 'ln-spent'
 		").await?;
 
 		let rows = self.query(&stmt, &[&attempt_id]).await
@@ -1113,5 +1121,33 @@ impl<'t> Tx<'t> {
 		).await?;
 
 		Ok(updated_at.is_some())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn fixed_invoice_principal_excludes_caller_overrequest() {
+		assert_eq!(payment_principal_msat(Some(100_000_000), Amount::from_sat(150_000)).unwrap(), 100_000_000);
+	}
+
+	#[test]
+	fn amountless_invoice_principal_uses_requested_amount() {
+		assert_eq!(payment_principal_msat(None, Amount::from_sat(150_000)).unwrap(), 150_000_000);
+	}
+
+	#[test]
+	fn fixed_invoice_principal_preserves_subsat_amount() {
+		assert_eq!(payment_principal_msat(Some(1_001), Amount::from_sat(2)).unwrap(), 1_001);
+	}
+
+	#[test]
+	fn payment_principal_rejects_database_overflow() {
+		assert_eq!(payment_principal_msat(Some(i64::MAX as u64), Amount::ZERO).unwrap(), i64::MAX);
+		assert!(payment_principal_msat(Some(i64::MAX as u64 + 1), Amount::ZERO).is_err());
+		assert!(payment_principal_msat(None, Amount::from_sat(i64::MAX as u64 / 1_000 + 1)).is_err());
+		assert!(payment_principal_msat(None, Amount::from_sat(u64::MAX)).is_err());
 	}
 }

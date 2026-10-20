@@ -10,11 +10,17 @@ mod receive_replay;
 
 use std::cmp;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
+use std::os::unix::fs::MetadataExt;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{bail, Context};
 use tokio::sync::broadcast;
 use bitcoin::Amount;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::PublicKey;
 use tracing::{error, info, trace, warn};
@@ -42,6 +48,271 @@ use crate::database::ln::{
 };
 use crate::error::ContextExt;
 use crate::{check_max_amount, telemetry, Server, CAPTAIND_API_KEY};
+
+/// Public incident identities, not wallet secrets or a preimage. Source IDs
+/// identify the COMPLETE original attempt link set, sorted by textual ID and
+/// hashed as its JSON string array. The manifest does not truncate that set.
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SupervisedLightningBinding {
+	pub incident: String,
+	pub operator: String,
+	pub epoch: String,
+	pub fence_path: PathBuf,
+	pub fence_device: u64,
+	pub fence_inode: u64,
+	pub cln_config_index: usize,
+	pub attempt_id: i64,
+	pub node_id: i64,
+	pub node_pubkey: PublicKey,
+	pub network: bitcoin::Network,
+	pub cln_version: String,
+	pub payment_hash: PaymentHash,
+	pub dispatch_label: String,
+	pub amount_msat: u64,
+	pub source_count: u64,
+	pub source_set_sha256: sha256::Hash,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct IncidentArtifact {
+	path: PathBuf,
+	sha256: sha256::Hash,
+}
+
+/// Fixed, bounded import format. The referenced records must be retained
+/// supervisor/shutdown/transport and original-store chronology records from
+/// the actual incident. Hash checking authenticates their BYTE IDENTITY only.
+/// An authorized operator remains responsible for their truth/completeness.
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct SupervisedLightningManifest {
+	version: u32,
+	binding: SupervisedLightningBinding,
+	quiescence: IncidentArtifact,
+	history_retention: IncidentArtifact,
+	no_redelivery: IncidentArtifact,
+	/// Optional retained ORIGINAL producer qualification. Current getinfo or
+	/// current binaries cannot establish an older dispatch's label propagation.
+	original_labelled_producer: Option<IncidentArtifact>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OriginalProducerPin {
+	source_sha256: sha256::Hash,
+	binary_sha256: sha256::Hash,
+	observed_at: chrono::DateTime<chrono::Utc>,
+	record_id: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OriginalGrpcProducerPin {
+	server_sha256: sha256::Hash,
+	conversion_sha256: sha256::Hash,
+	model_sha256: sha256::Hash,
+	binary_sha256: sha256::Hash,
+	observed_at: chrono::DateTime<chrono::Utc>,
+	record_id: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OriginalLabelledProducer {
+	binding_sha256: sha256::Hash,
+	dispatch_created_at: chrono::DateTime<chrono::Utc>,
+	original_epoch: String,
+	label_contract: String,
+	dispatcher: OriginalProducerPin,
+	grpc: OriginalGrpcProducerPin,
+	xpay: OriginalProducerPin,
+}
+
+pub(crate) enum SupervisedOriginalAbsence {
+	WholeHashEmpty,
+	QualifiedOwnLabel { dispatch_created_at: chrono::DateTime<chrono::Utc> },
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IncidentEvidence {
+	binding_sha256: sha256::Hash,
+	records: Vec<IncidentObservation>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IncidentObservation {
+	/// Service/process/transport/store identity, including its original epoch.
+	subject: String,
+	/// Retained supervisor or store-audit event identity, not a boolean.
+	record_id: String,
+	observed_at: chrono::DateTime<chrono::Utc>,
+	event: String,
+}
+
+fn read_incident_file(path: &Path, limit: u64) -> anyhow::Result<Vec<u8>> {
+	ensure!(path.is_absolute(), "incident evidence paths must be absolute");
+	let file = File::open(path).context("open retained incident evidence")?;
+	ensure!(file.metadata()?.is_file(), "incident evidence must be a regular file");
+	let mut bytes = Vec::new();
+	file.take(limit + 1).read_to_end(&mut bytes)?;
+	ensure!(!bytes.is_empty() && bytes.len() as u64 <= limit, "incident evidence exceeds its size bound");
+	Ok(bytes)
+}
+
+impl SupervisedLightningManifest {
+	/// These are trusted retained source/runtime qualification records, not a
+	/// reproducible-build proof. Every pin must describe the ORIGINAL producer
+	/// at/before this dispatch, never the recovery process's current version.
+	fn original_producer(&self) -> anyhow::Result<Option<OriginalLabelledProducer>> {
+		let Some(artifact) = &self.original_labelled_producer else { return Ok(None); };
+		let bytes = read_incident_file(&artifact.path, 1024 * 1024)?;
+		ensure!(sha256::Hash::hash(&bytes) == artifact.sha256, "original producer evidence bytes changed");
+		let producer: OriginalLabelledProducer = serde_json::from_slice(&bytes)
+			.context("invalid original producer provenance")?;
+		ensure!(producer.binding_sha256 == sha256::Hash::hash(&serde_json::to_vec(&serde_json::to_value(&self.binding)?)?)
+			&& !producer.original_epoch.is_empty() && producer.original_epoch.len() <= 128
+			&& producer.label_contract == "fork-native-xpay-label-abandon6-v1",
+			"original producer lacks the qualified complete label-propagation contract");
+		// Only the reviewed original label path is qualified here. These retained
+		// build/supervisor pins do not prove source-to-binary correspondence; that
+		// remains an explicit trusted-operations premise, never current-version
+		// inference. An unreviewed original build uses the whole-hash-empty route.
+		ensure!(producer.dispatcher.source_sha256 == sha256::Hash::from_str("41e27e3269a4fbb9a41c5c145046469e52de97fd10561d7f3837acb02af13ddd")?
+			&& producer.grpc.server_sha256 == sha256::Hash::from_str("765b38372a479ce29900ac243ad2fb0cc339fc5907b8a1451084e22b405dbbcc")?
+			&& producer.grpc.conversion_sha256 == sha256::Hash::from_str("d4c01103a076cb8d1ad90c38940f0b9aef180aabca9e15c09eeaf51fd8535d60")?
+			&& producer.grpc.model_sha256 == sha256::Hash::from_str("36538a5e672b3fb0409cfb5b6424d0b71880d316cb3709b99354163183652cd8")?
+			&& producer.xpay.source_sha256 == sha256::Hash::from_str("e65b19cef028b49acd3a8824dacf118206ed11074b2e72997074e3fabcd43d1c")?,
+			"original producer source path has not been reviewed");
+		for (binary, record, observed_at) in [
+			(&producer.dispatcher.binary_sha256, &producer.dispatcher.record_id, &producer.dispatcher.observed_at),
+			(&producer.grpc.binary_sha256, &producer.grpc.record_id, &producer.grpc.observed_at),
+			(&producer.xpay.binary_sha256, &producer.xpay.record_id, &producer.xpay.observed_at),
+		] {
+			ensure!(*binary != sha256::Hash::all_zeros()
+				&& !record.is_empty() && record.len() <= 512
+				&& *observed_at <= producer.dispatch_created_at,
+				"original producer qualification is missing or captured after dispatch");
+		}
+		Ok(Some(producer))
+	}
+
+	fn verify(&self) -> anyhow::Result<()> {
+		let b = &self.binding;
+		ensure!(self.version == 1 && b.attempt_id > 0 && b.node_id > 0 && b.amount_msat > 0,
+			"invalid supervised incident identity");
+		for value in [&b.incident, &b.operator, &b.epoch, &b.dispatch_label] {
+			ensure!(!value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control),
+				"invalid supervised incident identifier");
+		}
+		ensure!(b.cln_version == cln::QUALIFIED_CLN_VERSION, "unreviewed CLN persistence semantics");
+		ensure!(b.source_count > 0, "empty original source set");
+		ensure!(b.fence_path.is_absolute(), "supervisor fence must be absolute");
+		// JSON object keys use serde_json's canonical map ordering; artifact
+		// producers need not duplicate the Rust declaration's field ordering.
+		let binding = sha256::Hash::hash(&serde_json::to_vec(&serde_json::to_value(b)?)?);
+		let required: [(&IncidentArtifact, &[&str]); 3] = [
+			(&self.quiescence, &["original-producers-terminated", "transport-queues-extinguished", "lightningd-children-terminated"]),
+			(&self.history_retention, &["original-store-reopened", "no-history-rollback", "no-payment-pruning"]),
+			(&self.no_redelivery, &["supervisors-fenced", "old-request-redelivery-disabled"]),
+		];
+		for (artifact, events) in required {
+			let bytes = read_incident_file(&artifact.path, 1024 * 1024)?;
+			ensure!(sha256::Hash::hash(&bytes) == artifact.sha256, "retained incident artifact digest changed");
+			let evidence: IncidentEvidence = serde_json::from_slice(&bytes).context("invalid retained incident artifact")?;
+			ensure!(evidence.binding_sha256 == binding && !evidence.records.is_empty() && evidence.records.len() <= 256,
+				"artifact does not bind this original incident");
+			for record in &evidence.records {
+				ensure!(!record.subject.is_empty() && record.subject.len() <= 512
+					&& !record.record_id.is_empty() && record.record_id.len() <= 512
+					&& record.event.len() <= 64 && record.observed_at <= chrono::Utc::now(),
+					"invalid retained supervision observation");
+			}
+			ensure!(events.iter().all(|event| evidence.records.iter().any(|record| record.event == *event)),
+				"incomplete supervised quiescence/history/no-redelivery evidence");
+		}
+		let _ = self.original_producer()?;
+		Ok(())
+	}
+}
+
+/// Privileged local incident import, never exposed by the public RPC. The
+/// supervisor MUST fence every old producer and replay queue using the named
+/// exclusion file through this command's exit. The file lock is retained
+/// through DB commit; it cannot prove an uncooperative external producer dead.
+/// Intact history and real quiescence are explicitly trusted operations facts,
+/// backed by retained records, NOT cryptographic CLN failure attestations.
+pub async fn resolve_uninjected_lightning(cfg: &crate::Config, path: &Path) -> anyhow::Result<bool> {
+	let bytes = read_incident_file(path, 32 * 1024)?;
+	let manifest: SupervisedLightningManifest = serde_json::from_slice(&bytes).context("invalid supervised manifest")?;
+	manifest.verify()?;
+	let digest = sha256::Hash::hash(&bytes).to_byte_array();
+	let db = crate::database::Db::connect(&cfg.postgres).await?;
+	// An identical accepted incident remains idempotent after its lawful payout,
+	// even if the source is now decided. Never re-run a source guard first.
+	if db.read(async |tx| tx.supervised_lightning_failure_recorded(manifest.binding.attempt_id, &digest).await).await? {
+		return Ok(false);
+	}
+	ensure!(manifest.binding.network == cfg.network, "incident is for another network");
+	let fence = std::fs::OpenOptions::new().read(true).write(true).open(&manifest.binding.fence_path)
+		.context("open existing supervisor exclusion file")?;
+	ensure!(fence.metadata()?.is_file(), "supervisor exclusion must be a regular file");
+	fence.try_lock().context("supervisor exclusion is not available; producers must remain fenced")?;
+	let b = &manifest.binding;
+	let verify_fence = || -> anyhow::Result<()> {
+		let current = std::fs::metadata(&b.fence_path)?;
+		ensure!(current.dev() == b.fence_device && current.ino() == b.fence_inode
+			&& fence.metadata()?.dev() == current.dev() && fence.metadata()?.ino() == current.ino(),
+			"supervisor exclusion identity changed");
+		Ok(())
+	};
+	verify_fence()?;
+	let config = cfg.cln_array.get(b.cln_config_index).context("original CLN configuration index is absent")?;
+	let mut rpc = tokio::time::timeout(Duration::from_secs(20), config.build_grpc_client()).await??;
+	let info = tokio::time::timeout(Duration::from_secs(20), rpc.getinfo(cln_rpc::GetinfoRequest {})).await??.into_inner();
+	ensure!(info.id == b.node_pubkey.serialize().to_vec()
+		&& bitcoin::Network::from_str(&info.network)? == b.network && info.version == b.cln_version,
+		"original CLN identity/network/version changed");
+	// No status, index, start, limit or label filters: inspect ALL raw groups.
+	// Only ORIGINAL qualified label propagation can distinguish foreign rows;
+	// an unqualified/legacy producer retains the stricter whole-hash proof.
+	let sends = tokio::time::timeout(Duration::from_secs(20), rpc.list_send_pays(cln_rpc::ListsendpaysRequest {
+		payment_hash: Some(b.payment_hash.to_vec()), ..Default::default()
+	})).await??.into_inner();
+	let pays = tokio::time::timeout(Duration::from_secs(20), rpc.list_pays(cln_rpc::ListpaysRequest {
+		payment_hash: Some(b.payment_hash.to_vec()), ..Default::default()
+	})).await??.into_inner();
+	ensure!(sends.payments.iter().all(|pay| pay.payment_hash == b.payment_hash.to_vec())
+		&& pays.pays.iter().all(|pay| pay.payment_hash == b.payment_hash.to_vec()), "inconsistent original hash inventory");
+	let absence = if let Some(producer) = manifest.original_producer()? {
+		// Raw rows are decisive: listpays can aggregate different part labels
+		// under one group and must never hide an own raw row of ANY status.
+		ensure!(sends.payments.iter().all(|pay| pay.label.as_deref() != Some(b.dispatch_label.as_str()))
+			&& pays.pays.iter().all(|pay| pay.label.as_deref() != Some(b.dispatch_label.as_str())),
+			"original dispatch has own payment history; use genuine outcome reconciliation");
+		SupervisedOriginalAbsence::QualifiedOwnLabel { dispatch_created_at: producer.dispatch_created_at }
+	} else {
+		ensure!(sends.payments.is_empty() && pays.pays.is_empty(), "original hash has payment history; use genuine outcome reconciliation");
+		SupervisedOriginalAbsence::WholeHashEmpty
+	};
+	let receipt = serde_json::to_value(&manifest)?;
+	let recorded = db.write(async |tx| {
+		tx.batch_execute("SET LOCAL lock_timeout='10s'; SET LOCAL statement_timeout='30s'").await?;
+		verify_fence()?;
+		manifest.verify()?;
+		let recorded = tx.record_supervised_lightning_failure(b, &digest, &receipt, &absence).await?;
+		// Rehash retained facts immediately before COMMIT while the supervisor
+		// exclusion is still held. Do not resume old issuance after empty query.
+		manifest.verify()?;
+		verify_fence()?;
+		Ok(recorded)
+	}).await?;
+	drop(fence);
+	Ok(recorded)
+}
 
 
 
@@ -432,14 +703,15 @@ impl Server {
 		&self,
 		payment_hash: PaymentHash,
 		wait: bool,
-	) -> anyhow::Result<lightning_payment_status::PaymentStatus> {
-		let status = if wait {
-			self.lightning_manager.wait_payment_status(payment_hash).await?
+		source_ids: &[VtxoId],
+	) -> anyhow::Result<protos::LightningPaymentStatus> {
+		let (status, scope) = if wait {
+			self.lightning_manager.wait_payment_status(payment_hash, source_ids).await?
 		} else {
-			self.lightning_manager.get_payment_status(payment_hash).await?
+			self.lightning_manager.get_payment_status(payment_hash, source_ids).await?
 		};
 
-		Ok(match status {
+		let payment_status = match status {
 			PaymentStatus::Success(preimage) => {
 				lightning_payment_status::PaymentStatus::Success(protos::PaymentSuccessStatus {
 					preimage: preimage.to_vec(),
@@ -451,6 +723,10 @@ impl Server {
 			PaymentStatus::Pending => {
 				lightning_payment_status::PaymentStatus::Pending(protos::Empty {})
 			},
+		};
+		Ok(protos::LightningPaymentStatus {
+			payment_status: Some(payment_status),
+			htlc_vtxo_ids: scope.iter().map(|id| id.to_bytes().to_vec()).collect(),
 		})
 	}
 

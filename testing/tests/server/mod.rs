@@ -786,13 +786,22 @@ async fn max_vtxo_exit_depth() {
 #[tokio::test]
 async fn wallet_skips_vtxos_at_exit_depth_limit() {
 	let ctx = TestContext::new("server/wallet_skips_vtxos_at_exit_depth_limit").await;
+	let lightning = Box::pin(ctx.new_lightning_setup("lightningd")).await;
 
-	let srv = ctx.captaind("server").cfg(|cfg| {
+	let srv = Box::pin(ctx.captaind("server").lightningd(&lightning.internal).cfg(|cfg| {
 		cfg.max_vtxo_exit_depth = 10;
-	}).create().await;
+		cfg.max_arkoor_fanout = 4;
+		cfg.nb_round_nonces = 3;
+		cfg.vtxopool.max_vtxo_exit_depth = 9;
+		cfg.vtxopool.vtxo_targets = vec!["1000sat:10".parse().unwrap(), "10000sat:10".parse().unwrap()];
+		cfg.expiry_internal_refund_depth = 6;
+		cfg.round_interval = Duration::from_secs(3600);
+	}).create()).await;
 	ctx.fund_captaind(&srv, btc(10)).await;
+	assert!(srv.config().vtxopool.vtxo_targets.iter().map(|target| target.count).sum::<usize>() <= 64);
 
-	let bark1 = ctx.bark("bark1", &srv).funded(sat(1_000_000)).create().await;
+	let bark1 = Box::pin(ctx.bark("bark1", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
+		.funded(sat(1_000_000)).create()).await;
 
 	bark1.board_and_confirm_and_register(&ctx, sat(800_000)).await;
 
@@ -810,6 +819,47 @@ async fn wallet_skips_vtxos_at_exit_depth_limit() {
 		err.contains("Insufficient money"),
 		"expected insufficient money, got: {err}",
 	);
+
+	let client = bark1.client().await;
+	let before = client.spendable_vtxos().await.unwrap();
+	assert_eq!(before.len(), 1);
+	assert_eq!(before[0].exit_depth, 11);
+	let old = before[0].id();
+	let (refreshed, _) = tokio::join!(client.maintenance_refresh(), async {
+		tokio::time::sleep(Duration::from_secs(2)).await;
+		srv.trigger_round().await;
+	});
+	assert!(refreshed.unwrap().expect("depth maintenance must join a round").is_success());
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	client.sync().await;
+	let replacement = client.spendable_vtxos().await.unwrap();
+	assert_eq!(replacement.iter().map(|vtxo| vtxo.amount()).sum::<Amount>(), sat(800_000));
+	assert!(replacement.iter().all(|vtxo| vtxo.id() != old && vtxo.exit_depth < 10));
+	assert_eq!(client.get_vtxo_by_id(old).await.unwrap().state, bark::vtxo::VtxoState::Spent);
+	drop(client);
+
+	let receiver = ctx.bark("receiver", &srv).create().await;
+	bark1.send_oor(&receiver.address().await, sat(10_000)).await;
+	receiver.sync().await;
+	assert_eq!(receiver.offchain_balance().await.spendable, sat(10_000));
+	lightning.sync().await;
+	let invoice = lightning.external.invoice(Some(sat(20_000)), "after-depth-refresh", "refreshed payment").await;
+	bark1.pay_lightning_wait(&invoice, None).await;
+	lightning.external.wait_invoice_paid("after-depth-refresh").await;
+	bark1.sync().await;
+	let balance = bark1.offchain_balance().await;
+	assert_eq!(balance.spendable, sat(770_000));
+	assert_eq!(balance.needs_refresh, sat(0));
+	assert_eq!(balance.pending_lightning_send, sat(0));
+	let invoice: bark::lightning_invoice::Bolt11Invoice = invoice.parse().unwrap();
+	let hash = ark::lightning::PaymentHash::from(&invoice);
+	let pays = lightning.internal.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
+		payment_hash: Some(hash.to_vec()), ..Default::default()
+	}).await.unwrap().into_inner().pays;
+	assert_eq!(pays.len(), 1);
+	assert_eq!(pays[0].status(), cln_rpc::listpays_pays::ListpaysPaysStatus::Complete);
+	assert_eq!(pays[0].amount_msat.as_ref().unwrap().msat, 20_000_000);
+	assert_eq!(pays[0].amount_sent_msat.as_ref().unwrap().msat, 20_000_000);
 }
 
 #[tokio::test]

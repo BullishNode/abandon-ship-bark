@@ -1735,9 +1735,12 @@ async fn coarse_success_without_own_receipt_keeps_htlc_send_spendable() {
 
 	// A signed spendable HTLC-send source with no payment receipt.
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.arkoor_htlc_out_vtxo.clone());
-	db.write(async |t| t.upsert_vtxos([vtxo.clone()]).await).await.unwrap();
-
-	let hash = VTXO_VECTORS.arkoor_htlc_out_vtxo.policy().as_server_htlc_send().unwrap().payment_hash;
+	let htlc = VTXO_VECTORS.arkoor_htlc_out_vtxo.policy().as_server_htlc_send().unwrap();
+	let hash = htlc.payment_hash;
+	db.write(async |t| {
+		t.upsert_vtxos([vtxo.clone()]).await?;
+		htlc_vtxo::create_htlc_vtxos(t, &[(vtxo.id(), hash, htlc.htlc_expiry)], HtlcDirection::Incoming).await
+	}).await.unwrap();
 	let secp = Secp256k1::new();
 	let invoice_key = SecretKey::from_slice(&[41; 32]).unwrap();
 	let bolt11 = InvoiceBuilder::new(Currency::Regtest)

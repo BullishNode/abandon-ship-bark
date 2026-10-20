@@ -471,6 +471,25 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 		}
 		drop(paused_xpay);
 		lightning.internal.start().await.unwrap();
+		// Restart reserves new ports, while identity, store and certificate
+		// paths remain the same. Both the importer and restarted server must
+		// address the actual reopened original node.
+		let grpc = lightning.internal.grpc_details().await;
+		let hold = lightning.internal.hold_details().await;
+		{
+			let mut config = srv.config_mut();
+			let node = &mut config.cln_array[0];
+			assert_eq!(node.server_cert_path,grpc.server_cert_path);
+			assert_eq!(node.client_cert_path,grpc.client_cert_path);
+			assert_eq!(node.client_key_path,grpc.client_key_path);
+			node.uri = grpc.uri.parse().unwrap();
+			let plugin = node.hold_invoice.as_mut().unwrap();
+			assert_eq!(plugin.server_cert_path,hold.server_cert_path);
+			assert_eq!(plugin.client_cert_path,hold.client_cert_path);
+			assert_eq!(plugin.client_key_path,hold.client_key_path);
+			plugin.uri = hold.uri.parse().unwrap();
+		}
+		let cfg = srv.config().clone();
 		let original_status=db.read(async |tx|tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap().status;
 		let manifest = retained_supervised_manifest(&ctx, &cfg, &db, attempt.id,
 			if queued_original {"queued-original-incident"} else if foreign_complete {"foreign-complete-incident"}

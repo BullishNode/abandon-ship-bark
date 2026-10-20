@@ -183,8 +183,34 @@ async fn external_success_during_restart() {
 	// Now genuinely quiesce/reopen the ORIGINAL node/store. Its real Complete
 	// history must defeat the new zero-history route even though the original
 	// captaind never received the success and has no local settlement receipt.
+	let original_node = lightning.internal.grpc_client().await
+		.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
 	lightning.internal.stop().await.unwrap();
 	lightning.internal.start().await.unwrap();
+	let reopened_node = lightning.internal.grpc_client().await
+		.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
+	assert_eq!(reopened_node.id, original_node.id, "restart must retain the original CLN identity");
+	assert_eq!(reopened_node.network, original_node.network);
+	assert_eq!(reopened_node.version, original_node.version);
+	assert_eq!(remote_pays(&lightning.internal, hash).await, vec![remote.clone()],
+		"restart must retain the original completed payment history");
+	// The test daemon reserves fresh ports on every start. Refresh only its
+	// endpoints; retain the same original store and certificate identities.
+	let grpc = lightning.internal.grpc_details().await;
+	let hold = lightning.internal.hold_details().await;
+	{
+		let mut config = srv.config_mut();
+		let node = &mut config.cln_array[0];
+		assert_eq!(node.server_cert_path, grpc.server_cert_path);
+		assert_eq!(node.client_cert_path, grpc.client_cert_path);
+		assert_eq!(node.client_key_path, grpc.client_key_path);
+		node.uri = grpc.uri.parse().unwrap();
+		let plugin = node.hold_invoice.as_mut().unwrap();
+		assert_eq!(plugin.server_cert_path, hold.server_cert_path);
+		assert_eq!(plugin.client_cert_path, hold.client_cert_path);
+		assert_eq!(plugin.client_key_path, hold.client_key_path);
+		plugin.uri = hold.uri.parse().unwrap();
+	}
 	let cfg = srv.config().clone();
 	let incident = super::expiry_dispatch::retained_supervised_manifest(
 		&ctx, &cfg, &db, attempt, "paid-lost-reply-supervised-negative",
@@ -534,13 +560,30 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 		assert_no_success_in_original_mailbox(&srv, &mailbox, hash).await;
 		drop(later);
 
+		// The paid later sources and failed original source form two expiry
+		// cohorts. Preserve the same 100,000 sat fee capital, usable independently by
+		// both packages before any intervening block confirms their change.
+		assert_eq!(later_sources[0].expiry_height(), later_sources[1].expiry_height());
+		assert_ne!(old_source.expiry_height(), later_sources[0].expiry_height());
 		let fee_address = srv.watchmand().wait_wallet_address().await;
-		let sponsor = ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;
+		let mut sponsor_ids = Vec::new();
+		for _ in 0..2 {
+			sponsor_ids.push(ctx.bitcoind().fund_addr(fee_address.clone(), sat(50_000)).await);
+		}
 		ctx.generate_blocks(2).await;
-		let sponsor_tx = ctx.bitcoind().await_transaction(sponsor).await;
-		let sponsors = sponsor_tx.output.iter().enumerate().filter(|(_,out)|out.script_pubkey == fee_address.script_pubkey()).collect::<Vec<_>>();
-		assert_eq!(sponsors.len(), 1); assert_eq!(sponsors[0].1.value,sat(100_000));
-		let sponsor_point = OutPoint::new(sponsor,sponsors[0].0 as u32);
+		let mut sponsor_roots = BTreeMap::new();
+		for sponsor in sponsor_ids {
+			let tx = ctx.bitcoind().await_transaction(sponsor).await;
+			let outputs = tx.output.iter().enumerate().filter(|(_,out)|out.script_pubkey == fee_address.script_pubkey()).collect::<Vec<_>>();
+			assert_eq!(outputs.len(), 1); assert_eq!(outputs[0].1.value,sat(50_000));
+			let point = OutPoint::new(sponsor, outputs[0].0 as u32);
+			let actual = ctx.bitcoind().sync_client().get_tx_out(&point.txid,point.vout,Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations >= 2); assert_eq!(actual.value,sat(50_000));
+			assert_eq!(actual.script_pub_key.script().unwrap(),fee_address.script_pubkey());
+			assert!(sponsor_roots.insert(point, outputs[0].1.clone()).is_none());
+		}
+		assert_eq!(sponsor_roots.len(),2);
+		assert_eq!(sponsor_roots.values().map(|out|out.value).sum::<Amount>(),sat(100_000));
 		let height = ctx.bitcoind().get_block_count().await as u32;
 		assert!(height < old_send.htlc_expiry.to_u32());
 		let expired = ctx.generate_blocks(old_send.htlc_expiry.to_u32()+1-height).await;
@@ -608,14 +651,12 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 			assert_eq!(OutPoint::new(attempt.parent.as_ref().unwrap().compute_txid(),attempt.output_index.unwrap()),payout);
 		}
 
-		let mut roots = BTreeMap::from([
-			(old_source.chain_anchor(),old_funding.output[old_source.chain_anchor().vout as usize].clone()),
-			(sponsor_point,sponsors[0].1.clone()),
-		]);
+		let mut roots = sponsor_roots.clone();
+		assert!(roots.insert(old_source.chain_anchor(),old_funding.output[old_source.chain_anchor().vout as usize].clone()).is_none());
 		for (source,funding) in later_sources.iter().zip(&later_fundings) {
 			assert!(roots.insert(source.chain_anchor(),funding.output[source.chain_anchor().vout as usize].clone()).is_none());
 		}
-		assert_eq!(roots.len(),4); assert_eq!(roots.values().map(|out|out.value).sum::<Amount>(),sat(300_000));
+		assert_eq!(roots.len(),5); assert_eq!(roots.values().map(|out|out.value).sum::<Amount>(),sat(300_000));
 		let mut known = roots.clone(); let mut terminal = roots.clone(); let mut graph = BTreeMap::new();
 		let mut spent = BTreeSet::new(); let mut miner = Amount::ZERO;
 		let mut customer = BTreeSet::new();
@@ -637,6 +678,16 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 				}
 				assert!(graph.insert(txid,tx).is_none()); assert!(graph.len()<=64);
 			}
+		}
+		// Every canonical fee child must spend an actual declared sponsor,
+		// never customer principal or an undeclared funding input.
+		for tx in graph.values() {
+			let anchors = tx.input.iter().filter(|input|known[&input.previous_output].script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT).count();
+			if anchors == 0 { continue; }
+			assert_eq!(anchors,1);
+			let fee_inputs = tx.input.iter().filter(|input|known[&input.previous_output].script_pubkey!=*bitcoin_ext::fee::P2A_SCRIPT).collect::<Vec<_>>();
+			assert!(!fee_inputs.is_empty());
+			assert!(fee_inputs.iter().all(|input|sponsor_roots.contains_key(&input.previous_output)));
 		}
 		assert_eq!(customer,BTreeSet::from([payout]));
 		assert_eq!(sat(300_000),terminal.values().map(|out|out.value).sum::<Amount>()+miner);

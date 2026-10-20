@@ -599,7 +599,7 @@ async fn pay_hold_refused() {
 			let reopened = Wallet::open(Network::Regtest, WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic),
 				config.clone(), OpenWalletArgs { datadir: Some(ctx.datadir.join("absent_refund")),
 					run_daemon: false, ..Default::default() }).await.unwrap();
-			for _ in 0..2 { reopened.sync().await; }
+			for _ in 0..2 { Box::pin(reopened.sync()).await; }
 			assert!(reopened.lightning_send_checkpoint(hash).await.unwrap().is_none());
 			assert!(!reopened.is_invoice_paid(hash).await.unwrap());
 			let history = reopened.history().await.unwrap();

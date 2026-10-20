@@ -905,6 +905,12 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 		let tip_hash = core.get_block_hash(u64::from(tip.to_u32())).unwrap();
 		loop {
 			if db.read(async |tx| {
+				// The one manual sweep must observe every committed ownership decision.
+				let allocated = tx.query("SELECT e.vtxo_id FROM expiry_entitlement e \
+					JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+					WHERE e.vtxo_id=ANY($1) AND c.active", &[&source_ids]).await?
+					.into_iter().map(|row| row.get::<_, String>("vtxo_id")).collect::<BTreeSet<_>>();
+				if allocated != expected_sources { return Ok(false); }
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
 					&& view.captaind.hash == tip_hash && view.watchmand.hash == tip_hash
@@ -1286,6 +1292,12 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 		}
 		loop {
 			if db.read(async |tx| {
+				// The one manual sweep must observe every committed ownership decision.
+				let allocated = tx.query("SELECT e.vtxo_id FROM expiry_entitlement e \
+					JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+					WHERE e.vtxo_id=ANY($1) AND c.active", &[&source_ids]).await?
+					.into_iter().map(|row| row.get::<_, String>("vtxo_id")).collect::<BTreeSet<_>>();
+				if allocated != expected_sources { return Ok(false); }
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
 					&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
@@ -1501,7 +1513,9 @@ async fn watchman_sweeps_lightning_vtxos() {
 
 	let ctx = TestContext::new("server/watchman_sweeps_lightning_vtxos").await;
 	let ln = ctx.new_lightning_setup("ln").await;
-	let srv = ctx.captaind("server").lightningd(&ln.internal).funded(btc(10)).cfg(|cfg| {
+	// Observe and mine packages on the node used by both daemons.
+	// Zero-fee parent relay to another node has its own asynchronous delay.
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&ln.internal).funded(btc(10)).cfg(|cfg| {
 		cfg.vtxo_lifetime = BlockDelta::new(144);
 		cfg.vtxopool.vtxo_lifetime = BlockDelta::new(144);
 		cfg.vtxopool.vtxo_targets = vec![VtxoTarget { count: 10, amount: sat(10_000) }];
@@ -2222,6 +2236,12 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 					else { assert_eq!(facts["operator"], true); }
 				}
 				if db.read(async |tx| {
+					// The one manual sweep must observe every committed ownership decision.
+					let allocated = tx.query("SELECT e.vtxo_id FROM expiry_entitlement e \
+						JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+						WHERE e.vtxo_id=ANY($1) AND c.active", &[&source_ids]).await?
+						.into_iter().map(|row| row.get::<_, String>("vtxo_id")).collect::<BTreeSet<_>>();
+					if allocated != expected.keys().cloned().collect::<BTreeSet<_>>() { return Ok(false); }
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 					Ok(view.captaind.height == tip && view.watchmand.height == tip && view.captaind.hash == hash
 						&& view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)

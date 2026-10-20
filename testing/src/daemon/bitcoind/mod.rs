@@ -491,7 +491,7 @@ impl DaemonHelper for BitcoindHelper {
 
 		if let Some(a) = &self.add_node {
 			let sync_client = rpc::BitcoinRpcClient::new(&self.rpc_url(), self.auth())?;
-			let client = self.new_async_client();
+			let client = self.new_async_client(None);
 			let peer = a.clone();
 			async {
 				// addnode returns null, which only the sync client accepts.

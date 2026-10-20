@@ -396,6 +396,36 @@ async fn registered_receive_fallback() {
 	let stopped_posts = outage.0.load(Ordering::SeqCst);
 	let root_ids = vec![source.chain_anchor().to_string()];
 	let source_id = source.id().to_string();
+	// A confirmed isolated B obligation needs no deeper signed publication.
+	// Include mempool spends so a spent ancestor cannot stand in for B.
+	let b_isolated_confirmed = || {
+		let core = ctx.bitcoind().sync_client();
+		let held = unknown_path.iter().filter_map(|(point, expected)| {
+			core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap()
+				.map(|actual| (*point, expected, actual))
+		}).collect::<Vec<_>>();
+		if held.len() != 1 { return false; }
+		let (point, expected, actual) = &held[0];
+		assert_eq!(actual.value, expected.value);
+		assert_eq!(actual.script_pub_key.script().unwrap(), expected.script_pubkey);
+		if actual.confirmations < 6 || expected.value != amount
+			|| recipient_path.contains_key(point) || operator_points.contains_key(point) { return false; }
+		let Some(required) = b_confirmation_steps.iter().find(|tx| tx.compute_txid() == point.txid)
+			else { return false; };
+		assert_eq!(core.get_raw_transaction(&point.txid, None).unwrap(), *required);
+		let info = core.custom_get_raw_transaction_info(point.txid, None).unwrap().unwrap();
+		assert!(info.confirmations.unwrap_or(0) >= 6);
+		let block_hash = info.blockhash.unwrap();
+		let header = core.get_block_header_info(&block_hash).unwrap();
+		assert_eq!(core.get_block_hash(header.height as u64).unwrap(), block_hash);
+		let block = core.get_block(&block_hash).unwrap();
+		assert_eq!(block.block_hash(), block_hash);
+		assert!(block.txdata.iter().any(|tx| tx == required));
+		let Some(current) = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap() else { return false; };
+		assert_eq!(current.value, expected.value);
+		assert_eq!(current.script_pub_key.script().unwrap(), expected.script_pubkey);
+		current.confirmations >= 6
+	};
 	let parent = tokio::time::timeout(Duration::from_secs(30), async {
 		let expired = ctx.generate_blocks(source.expiry_height().to_u32() + 1 - height).await;
 		srv.wait_for_sync_height(expired).await;
@@ -409,10 +439,12 @@ async fn registered_receive_fallback() {
 			// at most D B-prefix packages plus one A package fit D+1 batches.
 			loop {
 				let core = ctx.bitcoind().sync_client();
-				let next_b = b_confirmation_steps.iter().find(|required| {
-					!core.custom_get_raw_transaction_info(required.compute_txid(), None).unwrap()
-						.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6)
-				}).cloned();
+				let next_b = if b_isolated_confirmed() { None } else {
+					b_confirmation_steps.iter().find(|required| {
+						!core.custom_get_raw_transaction_info(required.compute_txid(), None).unwrap()
+							.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6)
+					}).cloned()
+				};
 				let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
 					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL",
@@ -474,10 +506,7 @@ async fn registered_receive_fallback() {
 			srv.wait_for_sync_height(tip).await;
 			srv.watchmand().wait_for_sync_height(tip).await;
 		}
-		for required in &b_confirmation_steps {
-			assert!(ctx.bitcoind().sync_client().custom_get_raw_transaction_info(required.compute_txid(), None).unwrap()
-				.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6), "every preserved B prefix must fit the original fixed schedule");
-		}
+		assert!(b_isolated_confirmed(), "B's current isolated signed economic frontier must be six-confirmed within the fixed schedule");
 		loop {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \

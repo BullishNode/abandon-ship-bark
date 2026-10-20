@@ -253,9 +253,9 @@ impl Server {
 					}
 				}
 				if hold || needs_htlc_progress {
-					// Owner lookup and incomplete ordinary evidence never authorize
-					// tree progression: it could remove the server's expiry path.
-					if needs_htlc_progress && !hold {
+					// Separate held siblings only through signed steps that preserve
+					// every branch's server recovery path, as checked by the split request.
+					if needs_htlc_progress || (hold && cut.terminals.len() > 1) {
 						self.db.write(async |t| t.request_expiry_split(view, &root).await).await?;
 					}
 					return Ok(());

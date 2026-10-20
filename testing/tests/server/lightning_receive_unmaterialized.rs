@@ -233,19 +233,19 @@ async fn canonical_cut(ctx: &TestContext, srv: &Captaind, db: &Db, boundary: &BT
 		} else {
 			assert_eq!(allocations.get(&txid), Some(transaction), "only an actual retained expiry allocation may spend non-prefix backing");
 			assert_eq!(miner, 0);
-			if txid == payout.txid {
-				assert_eq!(transaction.input.len(), 1);
-				let point = transaction.input[0].previous_output;
-				let expected = source_path.get(&point).expect("payout needs its authentic collected source path");
-				let previous = inventory.iter().find(|(_, tx)| tx.compute_txid() == point.txid)
-					.map(|(_, tx)| tx.clone()).unwrap_or_else(|| core.get_raw_transaction(&point.txid, None).unwrap());
-				assert_eq!(previous.output[point.vout as usize], *expected);
-				assert!(expected.value >= source.amount());
-			} else {
-				for input in &transaction.input {
-					let point = input.previous_output;
-					assert!(!source_path.contains_key(&point), "operator allocation cannot spend recipient backing");
+			let mut collected_inputs = 0;
+			let mut pool_input_value = Amount::ZERO;
+			for input in &transaction.input {
+				let point = input.previous_output;
+				if let Some(expected) = source_path.get(&point) {
+					assert_eq!(txid, payout.txid, "operator allocation cannot spend recipient backing");
+					let previous = core.get_raw_transaction(&point.txid, None).unwrap();
+					assert_eq!(previous.output[point.vout as usize], *expected);
+					assert!(expected.value >= source.amount());
+					collected_inputs += 1;
+				} else {
 					let expected = pool_path.get(&point).expect("operator input needs the exact retained signed Pool path");
+					pool_input_value += expected.value;
 					let previous = core.get_raw_transaction(&point.txid, None).unwrap();
 					assert_eq!(previous.output[point.vout as usize], *expected);
 					assert!(*mined >= u64::from(pool.expiry_height().to_u32()));
@@ -283,6 +283,9 @@ async fn canonical_cut(ctx: &TestContext, srv: &Captaind, db: &Db, boundary: &BT
 					}
 				}
 			}
+			assert_eq!(collected_inputs, usize::from(txid == payout.txid), "one collected source input belongs to the unique customer payout");
+			assert!(pool_input_value <= pool.amount(), "grouped Pool inputs cannot exceed the original unused Pool principal");
+			assert!(input_value <= boundary[&source.chain_anchor()].value.to_sat(), "allocation inputs cannot exceed the original shared backing");
 			for (vout, output) in transaction.output.iter().enumerate() {
 				if output.is_p2a_fee_anchor() { assert_eq!(output.value, Amount::ZERO); }
 				else if output.script_pubkey == *recipient {
@@ -544,6 +547,35 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 		source_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32), step.tx.output[step.output_idx].clone());
 		step.tx
 	}).collect::<Vec<_>>();
+	let pool_path = operator_pool.transactions().map(|step| (
+		OutPoint::new(step.tx.compute_txid(), step.output_idx as u32), step.tx.output[step.output_idx].clone(),
+	)).collect::<BTreeMap<_, _>>();
+	// Same-expiry allocations may group the customer's root with the unused
+	// Pool root. Only one input carries this collected customer obligation.
+	let payout_input_value = |parent: &Transaction| {
+		let mut points = BTreeSet::new();
+		let mut collected_inputs = 0;
+		let mut pool_value = Amount::ZERO;
+		let mut total = Amount::ZERO;
+		for input in &parent.input {
+			let point = input.previous_output;
+			assert!(points.insert(point), "payout inputs must be distinct");
+			let expected = if let Some(expected) = source_path.get(&point) {
+				assert!(expected.value >= gross, "a prefix cannot reduce the collected recipient principal");
+				collected_inputs += 1;
+				expected
+			} else {
+				let expected = pool_path.get(&point).expect("additional payout input needs the exact exclusive signed Pool path");
+				pool_value += expected.value;
+				expected
+			};
+			total += expected.value;
+		}
+		assert_eq!(collected_inputs, 1, "payout needs exactly one collected customer source input");
+		assert!(pool_value <= operator_pool.amount());
+		assert!(total <= anchor_transaction.output[anchor.vout as usize].value);
+		total
+	};
 	let depth = original.source.exit_depth();
 	assert!(depth <= 8, "the original signed receive geometry bounds automatic prefix confirmation");
 	let operator_script = {
@@ -561,16 +593,13 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 			let mut candidates = Vec::new();
 			if let Some(row) = rows.first() {
 				let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
-				assert_eq!(parent.input.len(), 1);
-				let point = parent.input[0].previous_output;
-				let expected = source_path.get(&point).expect("payout must use its actual collected source path");
-				assert!(expected.value >= gross);
+				let input_value = payout_input_value(&parent);
 				assert_eq!(parent.output.iter().filter(|out| out.script_pubkey == destination.spk).count(), 1);
 				for output in &parent.output {
 					if output.script_pubkey == destination.spk { assert_eq!(output.value, sat(99_000)); }
 					else { assert!(output.script_pubkey == operator_script || output.is_p2a_fee_anchor()); }
 				}
-				assert_eq!(expected.value, parent.output.iter().map(|out| out.value).sum::<Amount>());
+				assert_eq!(input_value, parent.output.iter().map(|out| out.value).sum::<Amount>());
 				candidates.push((true, parent));
 			}
 			let core = ctx.bitcoind().sync_client();
@@ -581,10 +610,16 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 				let txid = required.compute_txid();
 				let Some(info) = core.custom_get_raw_transaction_info(txid, None).unwrap() else { continue; };
 				assert_eq!(core.get_raw_transaction(&txid, None).unwrap(), required);
-				assert_eq!(required.input.len(), 1);
-				let point = required.input[0].previous_output;
-				let previous = core.get_raw_transaction(&point.txid, None).unwrap();
-				assert_eq!(previous.output[point.vout as usize], source_path[&point]);
+				if !is_payout { assert_eq!(required.input.len(), 1); }
+				for input in &required.input {
+					let point = input.previous_output;
+					let expected = source_path.get(&point).or_else(|| {
+						assert!(is_payout, "a signed prefix must use its own source path");
+						pool_path.get(&point)
+					}).expect("accepted payout input needs its exact signed source or exclusive Pool path");
+					let previous = core.get_raw_transaction(&point.txid, None).unwrap();
+					assert_eq!(previous.output[point.vout as usize], *expected);
+				}
 				let anchors = required.output.iter().enumerate().filter(|(_, out)| out.is_p2a_fee_anchor())
 					.map(|(vout, out)| { assert_eq!(out.value, Amount::ZERO); OutPoint::new(txid, vout as u32) }).collect::<Vec<_>>();
 				assert_eq!(anchors.len(), 1);
@@ -627,11 +662,7 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 		parent_inputs += previous.output[input.previous_output.vout as usize].value;
 	}
 	assert_eq!(parent_inputs, parent.output.iter().map(|out| out.value).sum::<Amount>());
-	let point = parent.input[0].previous_output;
-	let previous = ctx.bitcoind().await_transaction(point.txid).await;
-	assert_eq!(previous.output[point.vout as usize], source_path[&point]);
-	assert!(source_path[&point].value >= gross, "a prefix cannot reduce the collected recipient principal");
-	assert_eq!(parent.input.len(), 1);
+	assert_eq!(parent_inputs, payout_input_value(&parent));
 	let confirmed = ctx.generate_blocks(6).await;
 	srv.wait_for_sync_height(confirmed).await;
 	srv.watchmand().wait_for_sync_height(confirmed).await;

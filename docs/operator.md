@@ -108,6 +108,15 @@ value to the operator. Preserve registered xpubs, address bindings and scan
 progress. A wrong mailbox hint does not replace proof against the registered
 xpub.
 
+Automated fallback requires the final recipient's authenticated fallback
+registration on the Ark server. The destination key must derive from that
+registered xpub. The `/receives/invoice/for-address` endpoint validates the
+address. It does not verify the recipient's fallback registration.
+
+At expiry, keep bitcoin held if no registration matches. Also keep bitcoin
+held while a registered owner's attribution scan is incomplete. Do not assign
+the recipient's bitcoin to the provider or operator.
+
 ## Backup and restore
 
 Back up the complete PostgreSQL database, the server and watchman data

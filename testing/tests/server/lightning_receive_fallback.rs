@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use ark::lightning::PaymentHash;
-use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoPolicy};
+use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
 use ark::address::VtxoDelivery;
 use ark::mailbox::BlindedMailboxIdentifier;
 use ark::vtxo::Full;
@@ -56,7 +56,8 @@ async fn registered_forwarded_receive_pays_absent_recipient_after_provider_stops
 async fn registered_receive_fallback() {
 	let ctx = TestContext::new("server/registered_receive_fallback").await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
-	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(sat(500_000))
+	let audit_start_height = ctx.bitcoind().get_block_count().await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal).funded(sat(500_000))
 		.cfg(|config| {
 			config.vtxo_lifetime = BlockDelta::new(32);
 			config.vtxopool.vtxo_lifetime = BlockDelta::new(32);
@@ -80,6 +81,11 @@ async fn registered_receive_fallback() {
 	let shared_funding = ctx.bitcoind().await_transaction(shared_anchor.txid).await;
 	for coin in &initial_pool { coin.validate(&shared_funding).unwrap(); }
 	let root_value = shared_funding.output[shared_anchor.vout as usize].value;
+	assert_eq!(shared_funding.input.len(), 1, "capture the original declared operator funding, not arbitrary balancing capital");
+	let original_funding_point = shared_funding.input[0].previous_output;
+	let original_funding = ctx.bitcoind().await_transaction(original_funding_point.txid).await;
+	let original_funding_output = original_funding.output[original_funding_point.vout as usize].clone();
+	assert_eq!(original_funding_output.value, sat(500_000));
 	// Pool readiness only observes the issuance in the mempool. Confirm that
 	// backing and the separate watchman fee funds before making the invoice.
 	let fee_address = srv.watchmand().wait_wallet_address().await;
@@ -341,7 +347,7 @@ async fn registered_receive_fallback() {
 				step.tx.output[step.output_idx].clone());
 		}
 	}
-	let operator_points = snapshot.regular.iter().filter_map(|fact| {
+	let mut operator_points = snapshot.regular.iter().filter_map(|fact| {
 		let vtxo = &fact.state.vtxo;
 		let point = vtxo.point();
 		let output = pool_paths.get(&point)?;
@@ -359,6 +365,20 @@ async fn registered_receive_fallback() {
 		};
 		recoverable.then_some((point, output.clone()))
 	}).collect::<BTreeMap<_, _>>();
+	// Observe the last signed B checkpoint that preserves a real server
+	// recovery path. Never require publication of B's user-only Pubkey leaf.
+	let b_steps = unknown_source.transactions().collect::<Vec<_>>();
+	let last_preserved = b_steps.iter().rposition(|step| {
+		let point = OutPoint::new(step.tx.compute_txid(), step.output_idx as u32);
+		let Some(fact) = snapshot.regular.iter().find(|fact| fact.state.vtxo.point() == point) else { return false; };
+		assert_eq!(fact.state.vtxo.txout(), step.tx.output[step.output_idx]);
+		assert_eq!(fact.state.vtxo.server_pubkey(), server_pubkey);
+		matches!(fact.state.vtxo.policy(), ServerVtxoPolicy::ServerOwned | ServerVtxoPolicy::Expiry(_)
+			| ServerVtxoPolicy::Checkpoint(_) | ServerVtxoPolicy::HarkLeaf(_) | ServerVtxoPolicy::HarkLeaf_v0(_)
+			| ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv(_) | VtxoPolicy::ServerHtlcRecv_v0(_)))
+	}).expect("B needs a fully signed preserved server-recovery checkpoint");
+	let b_confirmation_steps = b_steps[..=last_preserved].iter().map(|step| step.tx.clone()).collect::<Vec<_>>();
+	assert!(b_confirmation_steps.len() <= usize::from(depth));
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&anchor.txid, anchor.vout, Some(true))
 		.unwrap().unwrap().confirmations >= 6, "the receive's actual pool backing must be confirmed");
 	let mut all_grants = srv.htlc_vtxos(hash).await;
@@ -384,10 +404,79 @@ async fn registered_receive_fallback() {
 		// automatic prefix packages confirm; no split/progress/trigger call or
 		// extra mining batch is conditioned on a missing payout.
 		for _ in 0..=depth {
-			tokio::time::sleep(Duration::from_millis(1100)).await;
+			// Recompute B from actual confirmations, never from the batch index.
+			// A's genuine package may confirm first to release its fee change:
+			// at most D B-prefix packages plus one A package fit D+1 batches.
+			loop {
+				let core = ctx.bitcoind().sync_client();
+				let next_b = b_confirmation_steps.iter().find(|required| {
+					!core.custom_get_raw_transaction_info(required.compute_txid(), None).unwrap()
+						.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6)
+				}).cloned();
+				let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
+					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL",
+					&[&source_id],
+				).await?)).await.unwrap();
+				let mut a_confirmed = false;
+				let mut needed = next_b.into_iter().collect::<Vec<_>>();
+				if let Some(row) = row {
+					let payout_parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+					assert_eq!(payout_parent.input.len(), 1);
+					let point = payout_parent.input[0].previous_output;
+					let input = recipient_path.get(&point).expect("A must use its authentic signed source path");
+					assert!(!unknown_path.contains_key(&point), "A cannot use B's preserved backing");
+					assert_eq!(input.value, sat(10_000));
+					assert_eq!(payout_parent.output.iter().filter(|output| output.script_pubkey == destination.spk).count(), 1);
+					for output in &payout_parent.output {
+						if output.script_pubkey == destination.spk { assert_eq!(output.value, sat(9_000)); }
+						else { assert!(output.script_pubkey == operator_script || output.is_p2a_fee_anchor()); }
+					}
+					assert_eq!(input.value, payout_parent.output.iter().map(|output| output.value).sum::<Amount>());
+					a_confirmed = core.custom_get_raw_transaction_info(payout_parent.compute_txid(), None).unwrap()
+						.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6);
+					if !a_confirmed { needed.push(payout_parent); }
+				}
+				if needed.is_empty() && a_confirmed { tokio::time::sleep(Duration::from_millis(1100)).await; break; }
+				let mut ready = false;
+				for required in needed {
+					let txid = required.compute_txid();
+					let Some(info) = core.custom_get_raw_transaction_info(txid, None).unwrap() else { continue; };
+					assert_eq!(core.get_raw_transaction(&txid, None).unwrap(), required);
+					let anchors = required.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor())
+						.map(|(vout, output)| { assert_eq!(output.value, Amount::ZERO); OutPoint::new(txid, vout as u32) })
+						.collect::<Vec<_>>();
+					assert_eq!(anchors.len(), 1);
+					let candidates = if info.confirmations.unwrap_or(0) > 0 {
+						core.get_block(&info.blockhash.unwrap()).unwrap().txdata
+					} else {
+						let mempool = core.get_raw_mempool().unwrap();
+						if !mempool.contains(&txid) { continue; }
+						mempool.iter().map(|id| core.get_raw_transaction(id, None).unwrap()).collect()
+					};
+					let children = candidates.iter().filter(|tx| tx.input.iter().any(|input| input.previous_output == anchors[0]))
+						.collect::<Vec<_>>();
+					assert!(children.len() <= 1);
+					let Some(child) = children.first() else { continue; };
+					let mut value = Amount::ZERO;
+					for input in &child.input {
+						let previous = core.get_raw_transaction(&input.previous_output.txid, None).unwrap();
+						value += previous.output[input.previous_output.vout as usize].value;
+					}
+					assert!(value > child.output.iter().map(|output| output.value).sum::<Amount>());
+					ready = true;
+					break;
+				}
+				if ready { break; }
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
 			let tip = ctx.generate_blocks(6).await;
 			srv.wait_for_sync_height(tip).await;
 			srv.watchmand().wait_for_sync_height(tip).await;
+		}
+		for required in &b_confirmation_steps {
+			assert!(ctx.bitcoind().sync_client().custom_get_raw_transaction_info(required.compute_txid(), None).unwrap()
+				.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6), "every preserved B prefix must fit the original fixed schedule");
 		}
 		loop {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT a.sweep_tx FROM expiry_allocation a \
@@ -595,20 +684,73 @@ async fn registered_receive_fallback() {
 	assert_eq!(recovered.value + recovery_fee + sat(1_000), source.amount());
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().is_none());
 	assert_eq!(ctx.bitcoind().await_transaction(recovery.compute_txid()).await, *recovery);
-	// Close the selected physical DAG, including every spend of either sponsor.
-	// A replacement pool tree may be issued while these blocks advance. Its
-	// unrelated funding is outside R, but it may not consume a reserved sponsor
-	// or its descendants and then disappear from this accounting.
-	let recorded = db.read(async |tx| Ok(tx.query("SELECT DISTINCT a.sweep_tx FROM expiry_allocation a \
-		JOIN expiry_allocation_input i ON i.allocation_id=a.id JOIN vtxo v ON v.vtxo_id=i.vtxo_id \
-		WHERE v.anchor_point=ANY($1) AND a.sweep_tx IS NOT NULL", &[&root_ids],
+	// The whole existing funding is 500k operator capital plus two100k
+	// sponsors. A's earned1k can rejoin existing rounds change in a refill;
+	// count those actual descendants, never add the refill as fresh capital.
+	let pool_rows = db.read(async |tx| Ok(tx.query("SELECT vtxo FROM vtxo_pool", &[]).await?))
+		.await.unwrap();
+	let all_pool = pool_rows.iter().map(|row| Vtxo::<Full>::deserialize(row.get("vtxo")).unwrap()).collect::<Vec<_>>();
+	let keys = all_pool.iter().map(|coin| coin.user_pubkey().to_string()).collect::<Vec<_>>();
+	let owned_pool_keys = db.read(async |tx| Ok(tx.query(
+		"SELECT pubkey FROM ephemeral_tweak WHERE pubkey=ANY($1)", &[&keys],
+	).await?.into_iter().map(|row| row.get::<_, String>(0)).collect::<BTreeSet<_>>())).await.unwrap();
+	let mut pool_fundings = BTreeMap::new();
+	let mut pool_roots = BTreeSet::new();
+	let mut pool_expiry_paths = BTreeMap::new();
+	for coin in &all_pool {
+		assert_eq!(coin.server_pubkey(), server_pubkey);
+		assert!(matches!(coin.policy(), VtxoPolicy::Pubkey(_)));
+		let funding = ctx.bitcoind().await_transaction(coin.chain_anchor().txid).await;
+		coin.validate(&funding).unwrap();
+		pool_roots.insert(coin.chain_anchor());
+		if let Some(old) = pool_fundings.insert(funding.compute_txid(), funding.clone()) { assert_eq!(old, funding); }
+		let mut point = coin.chain_anchor();
+		let mut previous = funding;
+		for step in coin.transactions() {
+			assert_ne!(point, coin.point(), "a Pubkey leaf is not a server expiry proof");
+			let output = previous.output[point.vout as usize].clone();
+			let proof = (output.clone(), coin.expiry_height());
+			if let Some(old) = pool_expiry_paths.insert(point, proof.clone()) { assert_eq!(old, proof); }
+			let state = db.read(async |tx| tx.get_bare_vtxo_by_id(VtxoId::from(point)).await).await.unwrap();
+			assert_eq!(state.vtxo.txout(), output);
+			assert_eq!(state.vtxo.server_pubkey(), server_pubkey);
+			assert_eq!(state.vtxo.chain_anchor(), coin.chain_anchor());
+			let recoverable = match state.vtxo.policy() {
+				ServerVtxoPolicy::ServerOwned | ServerVtxoPolicy::Expiry(_) | ServerVtxoPolicy::Checkpoint(_)
+					| ServerVtxoPolicy::HarkLeaf(_) | ServerVtxoPolicy::HarkLeaf_v0(_) => true,
+				ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) => policy.user_pubkey == server_pubkey
+					|| owned_pool_keys.contains(&policy.user_pubkey.to_string()),
+				_ => false,
+			};
+			if recoverable && !recipient_path.contains_key(&point) && !unknown_path.contains_key(&point) {
+				if let Some(old) = operator_points.insert(point, output.clone()) { assert_eq!(old, output); }
+			}
+			assert_eq!(step.tx.input.len(), 1);
+			assert_eq!(step.tx.input[0].previous_output, point);
+			if let Some(old) = signed_prefixes.insert(step.tx.compute_txid(), step.tx.clone()) { assert_eq!(old, step.tx); }
+			point = OutPoint::new(step.tx.compute_txid(), step.output_idx as u32);
+			previous = step.tx;
+		}
+		assert_eq!(point, coin.point());
+		if owned_pool_keys.contains(&coin.user_pubkey().to_string())
+			&& !recipient_path.contains_key(&point) && !unknown_path.contains_key(&point) {
+			assert_eq!(previous.output[point.vout as usize], coin.txout());
+			operator_points.insert(point, coin.txout());
+		}
+	}
+	// The ledger only locates candidate parents. Their actual canonical
+	// inputs, recovery witnesses and exact outputs are proved below.
+	let recorded = db.read(async |tx| Ok(tx.query(
+		"SELECT sweep_tx FROM expiry_allocation WHERE sweep_tx IS NOT NULL", &[],
 	).await?)).await.unwrap();
 	let allocation_parents = recorded.iter().map(|row| {
 		let tx = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
 		(tx.compute_txid(), tx)
 	}).collect::<BTreeMap<_, _>>();
-	let mut frontier = BTreeMap::from([(shared_anchor, (shared_funding.output[shared_anchor.vout as usize].clone(), false))]);
+	let mut frontier = BTreeMap::from([(original_funding_point, (original_funding_output.clone(), false))]);
+	let mut rounds_points = BTreeSet::from([original_funding_point]);
 	for (point, output) in &sponsors { assert!(frontier.insert(*point, (output.clone(), true)).is_none()); }
+	assert_eq!(frontier.values().map(|(output, _)| output.value).sum::<Amount>(), sat(700_000));
 	let mut total_miner_fees = Amount::ZERO;
 	let mut canonical_payouts = BTreeMap::new();
 	let mut tracked = BTreeSet::new();
@@ -616,7 +758,7 @@ async fn registered_receive_fallback() {
 	let mut payout_fee_frontier = BTreeSet::new();
 	let core = ctx.bitcoind().sync_client();
 	let end_height = ctx.bitcoind().get_block_count().await;
-	for height in setup_height + 1..=end_height {
+	for height in audit_start_height + 1..=end_height {
 		let block_hash = core.get_block_hash(height).unwrap();
 		let block = core.get_block(&block_hash).unwrap();
 		for tx in block.txdata {
@@ -635,7 +777,13 @@ async fn registered_receive_fallback() {
 			let spends_payout_change = points.iter().any(|point| payout_fee_frontier.contains(point));
 			for point in &points { payout_fee_frontier.remove(point); }
 			assert!(points.iter().all(|point| frontier.contains_key(point)),
-				"unrelated or refill inputs cannot be balancing funds for the selected root/sponsor cut");
+				"every input must descend from the exact original500k and two100k sponsors; no balancing funds");
+			let pool_issuance = pool_fundings.contains_key(&txid);
+			if pool_issuance {
+				assert!(points.iter().all(|point| rounds_points.contains(point)),
+					"pool refills may use proven rounds/drain proceeds, never sponsor or protected customer capital");
+			}
+			for point in &points { rounds_points.remove(point); }
 			let mut input_value = Amount::ZERO;
 			let mut anchor_inputs = 0;
 			let mut fee_inputs_only = true;
@@ -649,7 +797,13 @@ async fn registered_receive_fallback() {
 			}
 			let output_value = tx.output.iter().map(|output| output.value).sum::<Amount>();
 			let miner_fee = input_value.checked_sub(output_value).unwrap();
-			let fee_child = if let Some(expected_tx) = signed_prefixes.get(&txid) {
+			let fee_child = if let Some(expected_tx) = pool_fundings.get(&txid) {
+				assert_eq!(&tx, expected_tx);
+				assert!(miner_fee > Amount::ZERO);
+				assert!(tx.output.iter().all(|output| output.value > Amount::ZERO));
+				assert!(pool_roots.iter().any(|point| point.txid == txid));
+				false
+			} else if let Some(expected_tx) = signed_prefixes.get(&txid) {
 				assert_eq!(&tx, expected_tx);
 				assert_eq!(miner_fee, Amount::ZERO);
 				false
@@ -657,6 +811,20 @@ async fn registered_receive_fallback() {
 				assert_eq!(&tx, expected_tx);
 				assert_eq!(tx.version.0, 3);
 				assert_eq!(miner_fee, Amount::ZERO);
+				if txid != parent.compute_txid() {
+					for input in &tx.input {
+						let point = input.previous_output;
+						assert!(!recipient_path.contains_key(&point) && !unknown_path.contains_key(&point),
+							"operator allocations cannot absorb A or B's signed branches");
+						let (output, expiry) = pool_expiry_paths.get(&point)
+							.expect("operator allocation input needs an exact original/refill signed Pool expiry ancestor");
+						let previous = core.get_raw_transaction(&point.txid, None).unwrap();
+						assert_eq!(previous.output[point.vout as usize], *output);
+						assert!(height >= u64::from(expiry.to_u32()));
+						assert_eq!(input.witness.taproot_leaf_script().unwrap().script,
+							ark::tree::signed::expiry_clause(server_pubkey, *expiry).as_script());
+					}
+				}
 				for (vout, output) in tx.output.iter().enumerate() {
 					if output.is_p2a_fee_anchor() { assert_eq!(output.value, Amount::ZERO); continue; }
 					if output.script_pubkey == destination.spk {
@@ -689,6 +857,10 @@ async fn registered_receive_fallback() {
 			for (vout, output) in tx.output.iter().enumerate() {
 				let point = OutPoint::new(txid, vout as u32);
 				assert!(frontier.insert(point, (output.clone(), fee_child)).is_none());
+				if (pool_issuance && !pool_roots.contains(&point))
+					|| (allocation_parents.contains_key(&txid) && output.script_pubkey == operator_script) {
+					assert!(rounds_points.insert(point));
+				}
 				if (spends_payout_anchor || spends_payout_change) && output.value > Amount::ZERO {
 					assert!(payout_fee_frontier.insert(point));
 				}
@@ -711,12 +883,13 @@ async fn registered_receive_fallback() {
 	assert_eq!(canonical_payouts, BTreeMap::from([(payout, expected)]),
 		"historical scanning must include the already spent A payout and reject duplicates");
 	assert_eq!(frontier.values().map(|(output, _)| output.value).sum::<Amount>() + total_miner_fees,
-		root_value + sat(200_000), "R plus the two actual sponsors must conserve across every signed prefix, child and recovery");
+		sat(700_000), "the original500k plus two100k sponsors conserves across all Pool refills/prefixes/allocations/children/recovery");
 	let held = frontier.iter().filter(|(point, _)| unknown_path.contains_key(point)).collect::<Vec<_>>();
 	assert_eq!(held.len(), 1);
 	assert_eq!(held[0].1.0, unknown_path[held[0].0]);
 	assert!(held[0].1.0.value >= amount, "B's accepted10k obligation stays on its compatible unspent branch");
 	let mut fee_change = BTreeSet::new();
+	let server_coins = srv.wallet_status().await.rounds.confirmed_utxos.into_iter().collect::<BTreeSet<_>>();
 	for (point, (output, fee_coin)) in &frontier {
 		if output.value == Amount::ZERO { assert!(output.is_p2a_fee_anchor()); continue; }
 		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
@@ -728,9 +901,9 @@ async fn registered_receive_fallback() {
 			assert_eq!(output, &recovery.output[0]);
 		} else if unknown_path.contains_key(point) {
 			assert_eq!(output, &unknown_path[point]);
-		} else if output.script_pubkey != operator_script {
+		} else if output.script_pubkey != operator_script && !server_coins.contains(point) {
 			assert_eq!(operator_points.get(point), Some(output),
-				"every other terminal needs an exact signed pool-only recovery policy and actual public operator identity");
+				"every other terminal needs an exact signed Pool recovery path/server key or actual rounds-wallet ownership");
 		}
 	}
 	assert!(!fee_change.is_empty(), "actual unused sponsors or their positive owned change must remain");
@@ -741,4 +914,9 @@ async fn registered_receive_fallback() {
 		.confirmed_utxos.into_iter().map(|point| point.parse::<OutPoint>().unwrap()).collect::<BTreeSet<_>>();
 	assert!(fee_change.is_subset(&owned),
 		"all terminal sponsor change and unused sponsors must belong to the actual watchman wallet");
+	for txid in core.get_raw_mempool().unwrap() {
+		let pending = core.get_raw_transaction(&txid, None).unwrap();
+		assert!(!pending.input.iter().any(|input| frontier.contains_key(&input.previous_output)),
+			"no unconfirmed continuation may hide a spend of this complete original-funding cut");
+	}
 }

@@ -1621,7 +1621,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 		let subscription: i64 = funding_rows[0].get("subscription_id");
 		let preimage = db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().unwrap();
 		assert_eq!(preimage.compute_payment_hash(), hash);
-		let incoming = db.read(async |tx| Ok(tx.query("SELECT l.vtxo_id,h.direction::TEXT,h.payment_hash,h.offchain_resolution::TEXT \
+		let incoming = db.read(async |tx| Ok(tx.query("SELECT l.vtxo_id,h.direction::TEXT,h.payment_hash,h.offchain_resolution::TEXT,h.chain_resolution::TEXT \
 			FROM lightning_payment_attempt_htlc_vtxo l LEFT JOIN vtxo v ON v.vtxo_id=l.vtxo_id \
 			LEFT JOIN htlc_vtxo h ON h.id=v.id WHERE l.lightning_payment_attempt_id=$1", &[&attempt]).await?)).await.unwrap();
 		assert!(!incoming.is_empty());
@@ -1630,10 +1630,12 @@ async fn watchman_sweeps_lightning_vtxos() {
 		for row in incoming {
 			assert_eq!(row.get::<_, String>("direction"), "incoming");
 			assert_eq!(row.get::<_, String>("payment_hash"), hash.to_string());
-			assert_eq!(row.get::<_, Option<String>>("offchain_resolution").as_deref(), Some("fulfilled"));
+			assert_ne!(row.get::<_, Option<String>>("offchain_resolution").as_deref(), Some("revoked"));
+			assert_ne!(row.get::<_, Option<String>>("chain_resolution").as_deref(), Some("revoked"));
 			let id = row.get::<_, String>("vtxo_id");
 			assert!(incoming_ids.insert(id.clone()));
 			let state = db.read(async |tx| tx.get_user_vtxo_by_id(ark::VtxoId::from_str(&id).unwrap()).await).await.unwrap();
+			assert_eq!(state.spend_state, server::database::SpendState::LnSpent);
 			let coin = state.vtxo;
 			assert_eq!(coin.chain_anchor(), boards[0].chain_anchor());
 			assert_eq!(coin.policy().as_server_htlc_send().unwrap().payment_hash, hash);
@@ -1947,9 +1949,9 @@ async fn watchman_sweeps_lightning_vtxos() {
 			assert_eq!(facts["operator"], true);
 			assert!(facts.get("customer_key").is_none());
 			if incoming_ids.contains(&id) {
-				assert_eq!(facts["kind"], "htlc_offchain");
+				assert_eq!(facts["kind"], "htlc_source_discharged");
 				assert_eq!(facts["payment_hash"], hash.to_string());
-				assert_eq!(facts["resolution"], "fulfilled");
+				assert!(facts.get("resolution").is_none());
 			} else { assert_eq!(facts["kind"], "pool"); }
 			assert_eq!(row.get::<_, String>("disposition"), "operator");
 			for field in ["owner_mailbox", "user_pubkey", "spk"] { assert!(row.get::<_, Option<String>>(field).is_none()); }

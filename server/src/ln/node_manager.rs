@@ -498,10 +498,10 @@ impl LightningManager {
 		payment_hash: PaymentHash,
 		source_ids: &[VtxoId],
 	) -> anyhow::Result<(PaymentStatus, Vec<VtxoId>)> {
-		let Some((scope, outcome)) = self.db.read_snapshot(async |t|
+		let Some(outcome) = self.db.read_snapshot(async |t|
 			t.lightning_payment_outcome(payment_hash, source_ids, None).await
 		).await? else { return Ok((PaymentStatus::Pending, Vec::new())); };
-		let status = match outcome {
+		let status = match outcome.state {
 			LightningSourceState::Discharged => {
 				let preimage = self.settler.is_settled(payment_hash).await?
 					.context("source-specific payment success has no preimage")?;
@@ -510,7 +510,7 @@ impl LightningManager {
 			LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. } => PaymentStatus::Failed,
 			_ => PaymentStatus::Pending,
 		};
-		Ok((status, scope))
+		Ok((status, outcome.sources))
 	}
 
 	/// Waits for a recorded scope; ambiguous or invalid scopes remain Pending.
@@ -1020,6 +1020,14 @@ impl LightningManagerProcess {
 			PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx)
 				.process_payment_attempt(&self.settler, &current.attempt, LightningPaymentStatus::Succeeded,
 					None, None, Some(preimage)).await?;
+		}
+		// Canceled issued grants can finish through an actual native refund
+		// without a returning wallet or another upstream attempt status write.
+		let refunded = self.db.read(async |t| t.native_refund_attempts(128).await).await?;
+		for attempt in refunded {
+			let _guard = self.payment_guards.lock(attempt.payment_hash).await;
+			PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx)
+				.post_lightning_send_finished(&attempt).await;
 		}
 		Ok(())
 	}

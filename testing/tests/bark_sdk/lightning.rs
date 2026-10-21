@@ -1032,6 +1032,17 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 	// ownership result, registration, or payout transaction into Postgres.
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let (parent, child, recorded_child_fee) = tokio::time::timeout(Duration::from_secs(60), async {
+		// Confirm only real signed prefixes when the ordinary watchman publishes them,
+		// then honor its configured grace before expecting the next signed step.
+		let mut pending_prefixes = source.transactions().map(|step| {
+			assert!(step.tx.input.iter().all(|input| input.sequence == bitcoin::Sequence::ZERO));
+			step.tx.compute_txid()
+		}).collect::<std::collections::BTreeSet<_>>();
+		let blocks_per_prefix = srv.watchmand().config().watchman.progress_grace_period.to_u32()
+			.checked_add(1).expect("prefix confirmation and grace block count must fit");
+		let prefix_block_budget = u32::try_from(pending_prefixes.len()).unwrap()
+			.checked_mul(blocks_per_prefix).expect("signed source path block budget must fit");
+		let mut mined_prefix_blocks = 0_u32;
 		loop {
 			let row = db.read(async |t| Ok(t.query_opt(
 				"SELECT a.sweep_tx,f.raw_tx,f.fee_sat FROM expiry_allocation a \
@@ -1044,6 +1055,22 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 			if let Some(row) = row {
 				break (deserialize::<Transaction>(row.get("sweep_tx")).unwrap(),
 					deserialize::<Transaction>(row.get("raw_tx")).unwrap(), row.get::<_, i64>("fee_sat"));
+			}
+			let core = ctx.bitcoind().sync_client();
+			if let Some(txid) = core.get_raw_mempool().unwrap().into_iter().find(|txid| pending_prefixes.contains(txid)) {
+				assert!(pending_prefixes.remove(&txid)); // Each actual signed prefix can authorize one batch.
+				mined_prefix_blocks = mined_prefix_blocks.checked_add(blocks_per_prefix).unwrap();
+				assert!(mined_prefix_blocks <= prefix_block_budget);
+				let tip = ctx.generate_blocks(blocks_per_prefix).await;
+				let hash = core.get_block_hash(u64::from(tip.to_u32())).unwrap();
+				loop {
+					if db.read(async |tx| {
+						let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+						Ok(view.captaind.height == tip && view.watchmand.height == tip
+							&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
+					}).await.unwrap() { break; }
+					tokio::time::sleep(Duration::from_millis(50)).await;
+				}
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}

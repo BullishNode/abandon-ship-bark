@@ -693,7 +693,9 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 				assert_eq!(anchors[0].1.value, Amount::ZERO);
 				assert_eq!(child.input.len(), 2);
 				assert_eq!(child.input.iter().map(|input| input.previous_output).collect::<HashSet<_>>(), HashSet::from([anchor, sponsor]));
-				assert!(child.input.iter().all(|input| !input.witness.is_empty()));
+				let anchor_input = child.input.iter().find(|input| input.previous_output == anchor).unwrap();
+				assert!(anchor_input.witness.is_empty() && anchor_input.script_sig.is_empty());
+				assert!(!child.input.iter().find(|input| input.previous_output == sponsor).unwrap().witness.is_empty());
 				let fee = sponsor_amount.checked_sub(child.output.iter().map(|out| out.value).sum::<Amount>()).unwrap();
 				assert!(fee > Amount::ZERO);
 				for (vout, output) in child.output.iter().enumerate().filter(|(_, out)| out.value > Amount::ZERO) {

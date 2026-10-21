@@ -83,6 +83,20 @@ impl Tx<'_> {
 	pub async fn queue_expiry_owner(
 		&self, user_pubkey: PublicKey, mailbox: Option<MailboxIdentifier>,
 	) -> anyhow::Result<()> {
+		self.queue_expiry_owner_inner(user_pubkey, mailbox, false).await
+	}
+
+	/// Readiness can prove a new key's candidate before materializing every
+	/// account cursor. Explicit scanner callers retain their queued work boundary.
+	pub(crate) async fn queue_expiry_owner_with_candidate_proof(
+		&self, user_pubkey: PublicKey, mailbox: Option<MailboxIdentifier>,
+	) -> anyhow::Result<()> {
+		self.queue_expiry_owner_inner(user_pubkey, mailbox, true).await
+	}
+
+	async fn queue_expiry_owner_inner(
+		&self, user_pubkey: PublicKey, mailbox: Option<MailboxIdentifier>, prove_candidate: bool,
+	) -> anyhow::Result<()> {
 		// Pair initialization cannot race a registration's pending-key query.
 		self.lock_fallback_registry().await?;
 		let key = user_pubkey.to_string();
@@ -99,6 +113,45 @@ impl Tx<'_> {
 			}
 			return Ok(());
 		}
+		// A concurrent candidate proof can cache the key and delete its pending
+		// row while our INSERT waits. READ COMMITTED's earlier NOT EXISTS does
+		// not recheck that new cache entry; use a fresh statement before queueing.
+		if self.query_opt("SELECT user_pubkey FROM expiry_owner_key WHERE user_pubkey=$1", &[&key]).await?.is_some() {
+			self.execute("DELETE FROM expiry_pending_key WHERE user_pubkey=$1", &[&key]).await?;
+			return Ok(());
+		}
+		if prove_candidate {
+			// Try the existing initial prefix before creating a key/account cursor
+			// matrix. The stored record was authenticated at immutable insertion;
+			// the mailbox hint alone is never proof. expiry_owner still verifies
+			// that record for the actual network and derives the key before paying.
+			if let Some(mailbox_pk) = mailbox.map(|id| id.as_pubkey()) {
+				if let Some(record) = self.get_fallback(mailbox_pk).await? {
+					let work = OwnerScanBatch {
+						mailbox_pk, xpub: record.account_xpub, start: 0, end: 32,
+						keys: BTreeMap::from([(user_pubkey, 0)]),
+					};
+					if let Ok(Ok(result)) = tokio::task::spawn_blocking(move || work.derive()).await {
+						if let Some(index) = result.matches.get(&user_pubkey) {
+							let mailbox = mailbox_pk.to_string();
+							self.execute("
+								INSERT INTO expiry_owner_key (user_pubkey, mailbox_pk, child_index)
+								VALUES ($1, $2, $3) ON CONFLICT (user_pubkey) DO NOTHING
+							", &[&key, &mailbox, &i64::from(*index)]).await?;
+							let owner = self.query_one("
+								SELECT mailbox_pk, child_index FROM expiry_owner_key WHERE user_pubkey=$1
+							", &[&key]).await?;
+							ensure!(owner.get::<_, &str>("mailbox_pk") == mailbox
+								&& owner.get::<_, i64>("child_index") == i64::from(*index),
+								"coin key derives from conflicting registered accounts");
+							self.execute("DELETE FROM expiry_pending_key WHERE user_pubkey=$1", &[&key]).await?;
+							return Ok(());
+						}
+					}
+				}
+			}
+		}
+		// A miss or failed derivation leaves every account's coverage at zero.
 		// The pending row and its complete initial cursor set commit together.
 		// Registrations append their own zero cursors under the writer fence,
 		// so a repeated readiness pass need not conflict-check every account.

@@ -504,8 +504,8 @@ async fn receive_binding_internal_expired_before_replay_refunds_absent_sender_on
 						core.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap(),
 						core.custom_get_raw_transaction_info(child.compute_txid(),None).unwrap(),
 					) {
-						assert_eq!(parent_info.transaction().unwrap(),parent);
-						assert_eq!(child_info.transaction().unwrap(),child);
+						assert_eq!(deserialize::<Transaction>(&parent_info.hex).unwrap(),parent);
+						assert_eq!(deserialize::<Transaction>(&child_info.hex).unwrap(),child);
 						break parent;
 					}
 				}

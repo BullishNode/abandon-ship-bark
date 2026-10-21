@@ -3606,17 +3606,19 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 	let failures = WatchmanFailureCollector::default();
 	let wm = srv.watchmand();
 	wm.add_slog_handler(failures.clone());
-	// Preserve the original100k capital. Two boards and two rounds have at most four expiry families.
+	// Preserve100k capital: one progress sponsor and seven independent current-root sponsors.
+	assert!(sat(12_500) >= wm.config().watchman.min_cpfp_amount);
 	let fee_address = wm.wait_wallet_address().await;
 	let mut sponsors = BTreeMap::new();
-	for _ in 0..4 {
-		let txid = ctx.bitcoind().fund_addr(fee_address.clone(), sat(25_000)).await;
+	for _ in 0..8 {
+		let txid = ctx.bitcoind().fund_addr(fee_address.clone(), sat(12_500)).await;
 		let tx = ctx.bitcoind().await_transaction(txid).await;
 		let outputs = tx.output.iter().enumerate().filter(|(_, output)|
-			output.script_pubkey == fee_address.script_pubkey() && output.value == sat(25_000)).collect::<Vec<_>>();
+			output.script_pubkey == fee_address.script_pubkey() && output.value == sat(12_500)).collect::<Vec<_>>();
 		assert_eq!(outputs.len(), 1);
 		assert!(sponsors.insert(OutPoint::new(txid, outputs[0].0 as u32), outputs[0].1.clone()).is_none());
 	}
+	assert_eq!(sponsors.values().map(|output| output.value).sum::<Amount>(), sat(100_000));
 	let bark1 = ctx.bark("bark1", &srv).funded(sat(500_000)).create().await;
 	let bark2 = ctx.bark("bark2", &srv).funded(sat(500_000)).create().await;
 	bark1.board_and_confirm_and_register(&ctx, sat(200_000)).await;
@@ -3857,7 +3859,8 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 			assert!(output.value > Amount::ZERO);
 			assert!(available.insert(OutPoint::new(progress_child.compute_txid(), index as u32), output.clone()).is_none());
 		}
-		assert!(available.len() >= 4, "actual confirmed progress change and untouched capital must cover all expiry families");
+		assert!(sponsors.keys().filter(|point| !consumed.contains(point)).count() >= roots.len(),
+			"untouched confirmed fee inputs must cover one package per actual current root");
 		loop {
 			let owned = watchman_confirmed_outpoints(wm).await;
 			if available.keys().all(|point| owned.contains(point)) { break; }
@@ -3916,7 +3919,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 			if seen == source_ids.iter().cloned().collect() && packages.values().all(|(parent, child, _)|
 				core.get_raw_transaction(&parent.compute_txid(), None).ok().as_ref() == Some(parent)
 				&& core.get_raw_transaction(&child.compute_txid(), None).ok().as_ref() == Some(child)) {
-				assert!(!packages.is_empty() && packages.len() <= 4, "actual cohort geometry must fit the original capital");
+				assert!(!packages.is_empty() && packages.len() <= roots.len(), "each package needs actual current backing");
 				break (packages, roots, expected, available);
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;

@@ -762,7 +762,7 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 		let funding = ctx.bitcoind().await_transaction(coin.chain_anchor().txid).await;
 		coin.validate(&funding).expect("payer must own the fully signed registered refund/change chain");
 		assert_eq!(payer.get_vtxo_key(&coin).await.unwrap().public_key(), coin.user_pubkey());
-		let registered = db.get_user_vtxo_by_id(*id).await.unwrap();
+		let registered = db.read(async |tx| tx.get_user_vtxo_by_id(*id).await).await.unwrap();
 		assert_eq!(registered.vtxo, coin);
 		assert_eq!(registered.spend_state, server::database::SpendState::Spendable);
 		refunded += coin.amount();

@@ -1,11 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tokio::fs;
 
-use ark::VtxoId;
+use ark::{ProtocolEncoding, VtxoId};
+use bark::movement::{MovementStatus, PaymentMethod};
+use bark::subsystem::Subsystem;
 use bark::vtxo::VtxoState;
 use server_rpc::protos;
 
@@ -143,9 +145,66 @@ async fn recovered_wallet_keeps_arkoor_batch_inputs_spent() {
 	}
 	target.sync().await;
 
+	let mut inputs = HashMap::new();
+	for coin in target.spendable_vtxos().await.expect("pre-send inputs") {
+		let full = target.get_full_vtxo(coin.id()).await.expect("signed pre-send input");
+		assert!(inputs.insert(coin.id(), full).is_none(), "duplicate pre-send input");
+	}
+	assert!(inputs.len() >= 10, "the return payment must consume the received batch");
+	let consumed_amount = inputs.values().map(|vtxo| vtxo.amount()).sum::<bitcoin::Amount>();
+	assert_eq!(consumed_amount, sat(10_000));
+
 	// Spend everything in a single arkoor send, leaving no change.
 	let back = source.new_address().await.expect("new address");
+	let return_destination = PaymentMethod::Ark(back.clone());
+	let recipient_before = source.balance().await.expect("recipient balance before return");
+	let earlier_fees = source.history().await.expect("source history").iter().filter(|movement|
+		movement.subsystem.is_subsystem(Subsystem::ARKOOR) && movement.subsystem.kind == "send"
+	).map(|movement| movement.offchain_fee).sum::<bitcoin::Amount>();
+	assert_eq!(recipient_before.total() + sat(10_000) + earlier_fees, sat(400_000));
 	target.send_arkoor_payment(&back, sat(10_000)).await.expect("arkoor send back");
+	let sends = target.history().await.expect("target history").into_iter().filter(|movement|
+		movement.subsystem.is_subsystem(Subsystem::ARKOOR) && movement.subsystem.kind == "send"
+	).collect::<Vec<_>>();
+	assert_eq!(sends.len(), 1, "the target made one actual return payment");
+	assert_eq!(sends[0].status, MovementStatus::Successful);
+	let consumed = sends[0].input_vtxos.iter().copied().collect::<HashSet<_>>();
+	assert_eq!(consumed.len(), sends[0].input_vtxos.len(), "duplicate consumed input");
+	assert_eq!(consumed, inputs.keys().copied().collect::<HashSet<_>>());
+	assert_eq!(sends[0].sent_to.len(), 1);
+	assert_eq!(sends[0].sent_to[0].destination, return_destination);
+	assert_eq!(sends[0].sent_to[0].amount, sat(10_000));
+	let target_after = target.balance().await.expect("target balance after return");
+	assert_eq!(target_after.total(), sat(0), "the old wallet must own no remaining Ark principal");
+	assert_eq!(target_after.spendable, sat(0));
+
+	source.sync().await;
+	let recipient_after = source.balance().await.expect("recipient balance after return");
+	assert!(recipient_after.total() >= recipient_before.total());
+	let received_amount = recipient_after.total() - recipient_before.total();
+	assert_eq!(received_amount, sat(10_000));
+	assert_eq!(recipient_after.spendable, recipient_before.spendable + received_amount);
+	assert!(consumed_amount >= received_amount + target_after.total());
+	let actual_fee = consumed_amount - received_amount - target_after.total();
+	assert_eq!(actual_fee, sends[0].offchain_fee);
+	let receives = source.history().await.expect("recipient history").into_iter().filter(|movement|
+		movement.subsystem.is_subsystem(Subsystem::ARKOOR) && movement.subsystem.kind == "receive"
+			&& movement.received_on.iter().any(|destination| destination.destination == return_destination)
+	).collect::<Vec<_>>();
+	assert_eq!(receives.len(), 1, "the recipient must credit the return once");
+	assert_eq!(receives[0].status, MovementStatus::Successful);
+	assert_eq!(receives[0].effective_balance, received_amount.to_signed().unwrap());
+	let output_ids = receives[0].output_vtxos.iter().copied().collect::<HashSet<_>>();
+	assert!(!output_ids.is_empty());
+	assert_eq!(output_ids.len(), receives[0].output_vtxos.len(), "duplicate return output");
+	let mut output_amount = sat(0);
+	for id in output_ids {
+		let output = source.get_full_vtxo(id).await.expect("actual return output");
+		assert_eq!(output.policy(), back.policy());
+		assert_eq!(source.get_vtxo_by_id(id).await.unwrap().state, VtxoState::Spendable);
+		output_amount += output.amount();
+	}
+	assert_eq!(output_amount, received_amount);
 
 	let mnemonic = fs::read_to_string(ctx.datadir.join("target/mnemonic")).await
 		.expect("target mnemonic file");
@@ -160,9 +219,19 @@ async fn recovered_wallet_keeps_arkoor_batch_inputs_spent() {
 	let vtxos = recovered.all_vtxos().await.expect("list recovered vtxos");
 	// One arkoor receive might have been delivered as multiple vtxos.
 	assert!(vtxos.len() >= 10, "expected at least ten vtxos, got {}", vtxos.len());
+	for id in consumed {
+		assert!(vtxos.iter().any(|vtxo| vtxo.id() == id && vtxo.state == VtxoState::Spent),
+			"actual return-payment input {id} must be recovered as spent");
+		let restored = recovered.get_full_vtxo(id).await.expect("recovered signed input");
+		assert_eq!(restored.amount(), inputs[&id].amount());
+		assert_eq!(restored.serialize(), inputs[&id].serialize(), "recovery must retain the signed input body");
+	}
 	for vtxo in vtxos {
 		assert_eq!(vtxo.state, VtxoState::Spent, "vtxo {} must be spent", vtxo.id());
 	}
+	let balance = recovered.balance().await.expect("recovered balance");
+	assert_eq!(balance.total(), sat(0), "recovery must not restore spent principal");
+	assert_eq!(balance.spendable, sat(0));
 }
 
 async fn read_mnemonic(ctx: &TestContext, wallet: &str) -> bip39::Mnemonic {

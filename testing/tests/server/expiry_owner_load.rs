@@ -25,7 +25,7 @@ use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::{Keypair, PublicKey};
 use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Transaction, TxOut};
 use bitcoin_ext::{BlockDelta, BlockHeight};
-use bitcoin_ext::rpc::RpcApi;
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use serde_json::{json, Value};
 use server::database::Db;
 use server_rpc::protos;
@@ -100,14 +100,128 @@ async fn board_key(ctx: &TestContext, wallet: &bark::Wallet, key: Keypair) -> Vt
 	source
 }
 
+// Resolve public transaction ancestry only as far as the already declared funding cut.
+// A concurrently replaced mempool transaction can disappear; it authorizes no mining.
+fn declared_coin(
+	core: &bitcoin_ext::rpc::BitcoinRpcClient, point: OutPoint,
+	known: &mut BTreeMap<OutPoint, TxOut>, checked: &mut BTreeSet<bitcoin::Txid>,
+) -> Option<TxOut> {
+	if let Some(output) = known.get(&point) { return Some(output.clone()); }
+	let info = core.custom_get_raw_transaction_info(point.txid, None).unwrap()?;
+	let tx = deserialize::<Transaction>(&info.hex).unwrap();
+	assert_eq!(tx.compute_txid(), point.txid);
+	assert!(!tx.is_coinbase(), "a fee package cannot introduce another funding root");
+	assert!(checked.insert(point.txid), "a funding ancestry cannot repeat a transaction");
+	assert!(checked.len() <= 1024, "retain the declared traffic graph bound");
+	let mut inputs = Amount::ZERO;
+	for input in &tx.input {
+		let Some(output) = declared_coin(core, input.previous_output, known, checked) else {
+			checked.remove(&point.txid);
+			return None;
+		};
+		inputs = inputs.checked_add(output.value).unwrap();
+	}
+	let outputs = tx.output.iter().map(|output| output.value).sum::<Amount>();
+	assert!(inputs.checked_sub(outputs).is_some(), "a declared-cut package must conserve value");
+	for (vout, output) in tx.output.iter().enumerate() {
+		known.insert(OutPoint::new(point.txid, vout as u32), output.clone());
+	}
+	Some(known.get(&point).expect("the public funding output must exist").clone())
+}
+
+struct CohortProgress {
+	prefixes: BTreeSet<bitcoin::Txid>,
+	confirmed: BTreeSet<bitcoin::Txid>,
+	known: BTreeMap<OutPoint, TxOut>,
+	checked: BTreeSet<bitcoin::Txid>,
+	first_height: u32,
+}
+
+impl CohortProgress {
+	fn new(source: Option<&Vtxo<Full>>, traffic: &FundedTraffic, roots: &BTreeMap<OutPoint, TxOut>, first_height: u32) -> Self {
+		let mut prefixes = BTreeSet::new();
+		for coin in source.into_iter().chain(traffic.terminals.values().map(|(_, coin)| coin)) {
+			for step in coin.transactions() {
+				assert!(step.tx.input.iter().all(|input| input.sequence == bitcoin::Sequence::ZERO));
+				prefixes.insert(step.tx.compute_txid());
+			}
+		}
+		Self { prefixes, confirmed: BTreeSet::new(), known: roots.clone(), checked: BTreeSet::new(), first_height }
+	}
+
+	// Confirm one real cohort package, including only its declared-cut fee funding.
+	// The existing transaction and total chain budgets also bound every later wait.
+	async fn confirm_one(&mut self, ctx: &TestContext, srv: &Captaind, db: &Db) {
+		let core = ctx.bitcoind().sync_client();
+		let mut mempool = BTreeMap::new();
+		for txid in core.get_raw_mempool().unwrap() {
+			if let Some(info) = core.custom_get_raw_transaction_info(txid, None).unwrap() {
+				let tx = deserialize::<Transaction>(&info.hex).unwrap();
+				assert_eq!(tx.compute_txid(), txid);
+				mempool.insert(txid, tx);
+			}
+		}
+		let mut packages = Vec::new();
+		for (txid, parent) in &mempool {
+			if !self.prefixes.contains(txid) || self.confirmed.contains(txid) { continue; }
+			let anchors = parent.output.iter().enumerate().filter(|(_, output)|
+				output.script_pubkey == *bitcoin_ext::fee::P2A_SCRIPT).collect::<Vec<_>>();
+			assert_eq!(anchors.len(), 1);
+			let anchor = OutPoint::new(*txid, anchors[0].0 as u32);
+			for child in mempool.values().filter(|tx| tx.input.iter().any(|input| input.previous_output == anchor)) {
+				packages.push((parent.clone(), child.clone()));
+			}
+		}
+		// Only the journal's latest actual fee child may authorize confirming a payout.
+		let published = db.read(async |tx| Ok(tx.query(
+			"SELECT DISTINCT ON (a.id) a.sweep_tx,f.raw_tx FROM expiry_allocation a JOIN expiry_fee_child f ON f.allocation_id=a.id WHERE a.broadcast_at IS NOT NULL ORDER BY a.id,f.id DESC", &[],
+		).await?)).await.unwrap();
+		for row in published {
+			let parent = deserialize::<Transaction>(&row.get::<_, Vec<u8>>(0)).unwrap();
+			let child = deserialize::<Transaction>(&row.get::<_, Vec<u8>>(1)).unwrap();
+			if mempool.get(&parent.compute_txid()) == Some(&parent)
+				&& mempool.get(&child.compute_txid()) == Some(&child)
+				&& !self.confirmed.contains(&parent.compute_txid()) { packages.push((parent, child)); }
+		}
+		for (parent, child) in packages {
+			let anchors = parent.output.iter().enumerate().filter(|(_, output)|
+				output.script_pubkey == *bitcoin_ext::fee::P2A_SCRIPT).collect::<Vec<_>>();
+			assert_eq!(anchors.len(), 1);
+			let anchor = OutPoint::new(parent.compute_txid(), anchors[0].0 as u32);
+			assert!(child.input.iter().any(|input| input.previous_output == anchor));
+			if !parent.input.iter().chain(&child.input).all(|input|
+				declared_coin(&core, input.previous_output, &mut self.known, &mut self.checked).is_some()) { continue; }
+			let current = core.get_raw_mempool().unwrap();
+			if !current.contains(&parent.compute_txid()) || !current.contains(&child.compute_txid()) { continue; }
+			assert!(self.confirmed.insert(parent.compute_txid()));
+			assert!(self.confirmed.len() <= 1024);
+			let blocks = srv.watchmand().config().watchman.progress_grace_period.to_u32().checked_add(1).unwrap();
+			let height = ctx.bitcoind().get_block_count().await as u32;
+			assert!(height.checked_add(blocks).unwrap().checked_sub(self.first_height).unwrap() <= 10_000);
+			let tip = ctx.generate_blocks(blocks).await;
+			let hash = core.get_block_hash(u64::from(tip.to_u32())).unwrap();
+			loop {
+				if db.read(async |tx| {
+					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+					Ok(view.captaind.height == tip && view.watchmand.height == tip
+						&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
+				}).await.unwrap() { break; }
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+			break; // Each observed parent can authorize only one bounded confirmation batch.
+		}
+	}
+}
+
 async fn payout(
 	ctx: &TestContext, srv: &Captaind, db: &Db, rpc: &mut ArkClient,
 	source: &Vtxo<Full>, expected_index: u32, owner_mailbox: PublicKey, destination: &FallbackRecord,
 	pressure: &[(PublicKey, FallbackRecord)], candidate: Option<PublicKey>,
+	progress: Option<(&FundedTraffic, &BTreeMap<OutPoint, TxOut>, u32)>,
 ) -> OutPoint {
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	assert!(candidate.is_some() || height < source.expiry_height().to_u32() + 1);
-	payout_ready(ctx, srv, db, rpc, source, expected_index, owner_mailbox, destination, pressure, candidate, true).await
+	payout_ready(ctx, srv, db, rpc, source, expected_index, owner_mailbox, destination, pressure, candidate, true, progress).await
 }
 
 // New qualification cases enter here after observing a genuine expired search.
@@ -116,6 +230,7 @@ async fn payout_ready(
 	ctx: &TestContext, srv: &Captaind, db: &Db, rpc: &mut ArkClient,
 	source: &Vtxo<Full>, expected_index: u32, owner_mailbox: PublicKey, destination: &FallbackRecord,
 	pressure: &[(PublicKey, FallbackRecord)], candidate: Option<PublicKey>, require_pressure: bool,
+	progress: Option<(&FundedTraffic, &BTreeMap<OutPoint, TxOut>, u32)>,
 ) -> OutPoint {
 	assert!(!require_pressure || !pressure.is_empty(), "ordinary pressure qualification needs registered pressure actors");
 	let height = ctx.bitcoind().get_block_count().await as u32;
@@ -130,6 +245,7 @@ async fn payout_ready(
 	let started = Instant::now();
 	let mut latencies = Vec::new();
 	let published = tokio::time::timeout(Duration::from_secs(120), async {
+		let mut progress = progress.map(|(traffic, roots, first)| CohortProgress::new(Some(source), traffic, roots, first));
 		loop {
 			let (row, mailbox_rows) = db.read(async |tx| {
 				let row = tx.query_opt("
@@ -164,6 +280,14 @@ async fn payout_ready(
 			if !pressure.is_empty() {
 				let record = &pressure[latencies.len()%pressure.len()];
 				latencies.push(set_record(rpc, record).await);
+			}
+			if let Some(progress) = progress.as_mut() {
+				// Preserve the ownership-search boundary before driving this target's publication.
+				let ready = db.read(async |tx| Ok(tx.query_one(
+					"SELECT EXISTS(SELECT 1 FROM expiry_allocation a JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.sweep_tx IS NOT NULL)",
+					&[&id],
+				).await?.get::<_, bool>(0))).await.unwrap();
+				if ready { progress.confirm_one(ctx, srv, db).await; }
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -505,12 +629,14 @@ async fn finish_traffic(
 	assert_eq!(roots.len(),22); assert_eq!(roots.values().map(|out|out.value).sum::<Amount>(),sat(33_375_000));
 	let ids=traffic.terminals.keys().map(ToString::to_string).collect::<Vec<_>>();
 	let rows=tokio::time::timeout(Duration::from_secs(120),async {
+		let mut progress=CohortProgress::new(None,traffic,roots,first);
 		loop {
 			let rows=db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat, \
 				c.spk,c.owner_mailbox,c.user_pubkey,a.sweep_tx FROM expiry_entitlement e \
 				JOIN expiry_allocation_coin c ON c.entitlement_id=e.id JOIN expiry_allocation a ON a.id=c.allocation_id \
 				WHERE e.vtxo_id=ANY($1) AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL",&[&ids]).await?)).await.unwrap();
 			assert!(rows.len()<=ids.len()); if rows.len()==ids.len() { break rows; }
+			progress.confirm_one(ctx,srv,db).await;
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("all funded traffic terminal rights must drain to actual payouts within120seconds");
@@ -798,7 +924,7 @@ async fn expiry_owner_late_first_registration_pays_existing_expired_source_once(
 		let resumed = db.read(async |tx| tx.expiry_owner(user.public_key(), Network::Regtest).await).await.unwrap();
 		assert_ne!(resumed, server::database::expiry_attribution::Attribution::NoRegisteredOwner,
 			"new authenticated registration must invalidate the completed negative result");
-		payout_ready(&ctx, &srv, &db, &mut rpc, &source, 80, owner_mailbox, &destination, &pressure, None, false).await
+		payout_ready(&ctx, &srv, &db, &mut rpc, &source, 80, owner_mailbox, &destination, &pressure, None, false, None).await
 	})).await.expect("expired negative lookup, first registration and actual funded payout exceeded the original120-second leg");
 	assert_eq!(core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap().value, sat(99_000));
 	let parent = ctx.bitcoind().await_transaction(point.txid).await;
@@ -966,9 +1092,9 @@ async fn funded_background_mode(count: u32, traffic_mode: bool) {
 		for wallet in &traffic.wallets { wallet.chain().invalidate_caches().await; wallet.sync().await; }
 		assert!(Box::pin(traffic_maintenance(&ctx,&srv,traffic)).await);
 		let ((),first)=tokio::join!(Box::pin(run_traffic(&ctx,&srv,&db,traffic,&old)),
-			Box::pin(payout(&ctx,&srv,&db,&mut rpc,&old,80,owner_mailbox,&destination,&pressure,None)));
+			Box::pin(payout(&ctx,&srv,&db,&mut rpc,&old,80,owner_mailbox,&destination,&pressure,None,None)));
 		first
-	} else { payout(&ctx, &srv, &db, &mut rpc, &old, 80, owner_mailbox, &destination, &pressure, None).await };
+	} else { payout(&ctx, &srv, &db, &mut rpc, &old, 80, owner_mailbox, &destination, &pressure, None, None).await };
 	// The separately funded ordinary actor must not be stranded by this
 	// account's deeper mailbox-less search. Its original wallet stays absent.
 	let control_parent = db.read(async |tx| Ok(tx.query_one(
@@ -1011,13 +1137,13 @@ async fn funded_background_mode(count: u32, traffic_mode: bool) {
 	drop(wallet);
 	let late_pressure = if traffic_mode { traffic_pressure[8..16].to_vec() }
 		else { (count+8..count+16).map(signed_record).collect::<Vec<_>>() };
-	let second = payout(&ctx, &srv, &db, &mut rpc, &late, 1, owner_mailbox, &destination, &late_pressure, None).await;
+	let second = payout(&ctx, &srv, &db, &mut rpc, &late, 1, owner_mailbox, &destination, &late_pressure, None, traffic.as_ref().map(|traffic| (traffic, &traffic_roots, first_height))).await;
 	let wrong_payout = if let Some(traffic)=traffic.as_ref() {
 		let wrong=traffic.wrong.as_ref().unwrap();
 		let pressure=traffic_pressure[16..24].to_vec();
 		Some(payout(&ctx,&srv,&db,&mut rpc,wrong,17,
 			traffic.wallets[0].mailbox_identifier().as_pubkey(), &traffic.destinations[0], &pressure,
-			Some(traffic.wallets[1].mailbox_identifier().as_pubkey())).await)
+			Some(traffic.wallets[1].mailbox_identifier().as_pubkey()), Some((traffic, &traffic_roots, first_height))).await)
 	} else { None };
 	let restored = create_wallet(ctx.bark_sdk("restored", &srv).mnemonic(seed)
 		.cfg(|cfg| cfg.daemon_manual_sync = true)).await;
@@ -1381,7 +1507,7 @@ async fn expiry_owner_funded_missing_mailbox_search_survives_postgres_restart() 
 			tokio::task::yield_now().await;
 		}
 		let mut rpc = srv.get_public_rpc().await;
-		let point = payout_ready(&ctx, &srv, &db, &mut rpc, &source, 256, mailbox, &destination, &pressure, None, false).await;
+		let point = payout_ready(&ctx, &srv, &db, &mut rpc, &source, 256, mailbox, &destination, &pressure, None, false, None).await;
 		(point, db, postgres)
 	}).await.expect("native unfinished search, actual daemon/PostgreSQL restart and publication exceeded original120s lookup budget");
 	let parent = ctx.bitcoind().await_transaction(point.txid).await;

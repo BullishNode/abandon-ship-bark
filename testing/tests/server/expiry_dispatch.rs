@@ -254,7 +254,7 @@ pub(super) async fn capture_original_labelled_producer(
 	let dispatcher = srv.get_custom_command(&[]).await.unwrap();
 	let dispatcher_binary = std::fs::canonicalize(dispatcher.as_std().get_program()).unwrap();
 	let dispatcher_source = sha256::Hash::hash(include_bytes!("../../../server/src/ln/cln/xpay.rs"));
-	assert_eq!(dispatcher_source.to_string(), "41e27e3269a4fbb9a41c5c145046469e52de97fd10561d7f3837acb02af13ddd");
+	assert_eq!(dispatcher_source.to_string(), "7743ce9d33087319cb47f30a59a9719b6856857b3c452eb76c9cddda36f30d99");
 	let mut grpc = pin("cln-grpc");
 	grpc["server_sha256"] = serde_json::json!("765b38372a479ce29900ac243ad2fb0cc339fc5907b8a1451084e22b405dbbcc");
 	grpc["conversion_sha256"] = serde_json::json!("d4c01103a076cb8d1ad90c38940f0b9aef180aabca9e15c09eeaf51fd8535d60");

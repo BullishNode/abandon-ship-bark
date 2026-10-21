@@ -184,7 +184,10 @@ impl SupervisedLightningManifest {
 		// build/supervisor pins do not prove source-to-binary correspondence; that
 		// remains an explicit trusted-operations premise, never current-version
 		// inference. An unreviewed original build uses the whole-hash-empty route.
-		ensure!(producer.dispatcher.source_sha256 == sha256::Hash::from_str("41e27e3269a4fbb9a41c5c145046469e52de97fd10561d7f3837acb02af13ddd")?
+		// The reconciliation update preserves the same one-shot labelled RPC path.
+		// Keep the earlier dispatcher qualified for retained original incidents.
+		ensure!((producer.dispatcher.source_sha256 == sha256::Hash::from_str("41e27e3269a4fbb9a41c5c145046469e52de97fd10561d7f3837acb02af13ddd")?
+			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("7743ce9d33087319cb47f30a59a9719b6856857b3c452eb76c9cddda36f30d99")?)
 			&& producer.grpc.server_sha256 == sha256::Hash::from_str("765b38372a479ce29900ac243ad2fb0cc339fc5907b8a1451084e22b405dbbcc")?
 			&& producer.grpc.conversion_sha256 == sha256::Hash::from_str("d4c01103a076cb8d1ad90c38940f0b9aef180aabca9e15c09eeaf51fd8535d60")?
 			&& producer.grpc.model_sha256 == sha256::Hash::from_str("36538a5e672b3fb0409cfb5b6424d0b71880d316cb3709b99354163183652cd8")?

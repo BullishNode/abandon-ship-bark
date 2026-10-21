@@ -54,7 +54,7 @@ impl Tx<'_> {
 		).await?;
 		let payee = match &ownership.disposition {
 			OwnershipDisposition::Customer { user_pubkey, mailbox } => {
-				self.queue_expiry_owner(*user_pubkey, *mailbox).await?;
+				self.queue_expiry_owner_with_candidate_proof(*user_pubkey, *mailbox).await?;
 				match self.expiry_owner(*user_pubkey, network).await? {
 					Attribution::Owned { mailbox_pk, child_index, spk } =>
 						Some(VerifiedPayee { mailbox: mailbox_pk, child_index, script: spk }),

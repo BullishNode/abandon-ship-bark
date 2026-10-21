@@ -7,18 +7,21 @@
 use std::collections::BTreeMap;
 
 use anyhow::Context;
-use bitcoin::Transaction;
+use bitcoin::{Amount, ScriptBuf, Transaction};
+use bitcoin::bip32::ChildNumber;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::taproot::LeafVersion;
 use tokio_postgres::Row;
 
-use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
+use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy, SECP};
+use ark::mailbox::MailboxType;
 use ark::vtxo::TapScriptClause;
 use ark::vtxo::policy::clause::{HashDelaySignClause, HashDelaySignClause_v0};
 use ark::lightning::{PaymentHash, Preimage};
 use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef};
 
 use super::{BlockTable, Tx};
+use super::expiry_chain::ExpiryViewToken;
 use super::ln::LightningPaymentAttempt;
 
 /// Source-specific internal routing survives completion of the initiating
@@ -59,6 +62,14 @@ pub(crate) enum LightningSourceState {
 	InternalCommitted { attempt_id: i64, subscription_id: i64 },
 	InternalZeroGrantCancelled { attempt_id: i64, subscription_id: i64 },
 	Discharged,
+}
+
+/// Chain-derived failure carries the exact completed view through to a
+/// mailbox writer; a status snapshot does not make a durable notification safe.
+pub(crate) struct LightningPaymentOutcome {
+	pub sources: Vec<VtxoId>,
+	pub state: LightningSourceState,
+	pub refund_view: Option<ExpiryViewToken>,
 }
 
 impl Tx<'_> {
@@ -442,7 +453,7 @@ impl Tx<'_> {
 	/// a success inferred from someone else's preimage.
 	pub(crate) async fn lightning_payment_outcome(
 		&self, hash: PaymentHash, source_ids: &[VtxoId], actual_attempt_id: Option<i64>,
-	) -> anyhow::Result<Option<(Vec<VtxoId>, LightningSourceState)>> {
+	) -> anyhow::Result<Option<LightningPaymentOutcome>> {
 		let mut requested = source_ids.to_vec();
 		requested.sort_unstable();
 		requested.dedup();
@@ -546,7 +557,110 @@ impl Tx<'_> {
 			}
 			if complete_refund { outcome = LightningSourceState::Failed; }
 		}
-		Ok(Some((canonical, outcome)))
+		let refund_view = if outcome != LightningSourceState::Discharged {
+			self.native_lightning_refund_view(hash, &canonical).await?
+		} else { None };
+		if refund_view.is_some() { outcome = LightningSourceState::Failed; }
+		Ok(Some(LightningPaymentOutcome { sources: canonical, state: outcome, refund_view }))
+	}
+
+	/// Every original incoming HTLC must have one actual confirmed customer
+	/// payout. A grant reclaim, allocation decision or partial refund is not
+	/// a terminal payment outcome. Reuse the immutable allocation/registration
+	/// authorities and the watchman's completed canonical reconstruction.
+	async fn native_lightning_refund_view(
+		&self, hash: PaymentHash, sources: &[VtxoId],
+	) -> anyhow::Result<Option<ExpiryViewToken>> {
+		if sources.is_empty() { return Ok(None); }
+		let Some(view) = self.expiry_rebuild_token().await? else { return Ok(None); };
+		if !self.expiry_view_is_rebuilt(view).await? { return Ok(None); }
+		let mut remaining = sources.iter().map(|id| (id.to_string(), *id)).collect::<BTreeMap<_, _>>();
+		if remaining.len() != sources.len() { return Ok(None); }
+		let ids = remaining.keys().cloned().collect::<Vec<_>>();
+		let rows = self.query("
+			SELECT v.vtxo_id,v.vtxo,h.direction::TEXT,h.payment_hash,
+				e.gross_sat AS entitlement_gross,c.user_pubkey,c.owner_mailbox,c.spk,
+				c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,
+				o.child_index,a.sweep_txid,a.sweep_tx,a.confirmed_height,a.confirmed_hash,
+				p.output_index,p.amount_sat,
+				(SELECT SUM(g.payout_sat)::BIGINT FROM expiry_allocation_coin g
+					WHERE g.allocation_id=c.allocation_id AND g.spk=c.spk) AS grouped_payout
+			FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
+			JOIN expiry_entitlement e ON e.vtxo_id=v.vtxo_id
+			JOIN expiry_allocation_coin c ON c.entitlement_id=e.id AND c.active AND c.disposition='customer'
+			JOIN expiry_allocation a ON a.id=c.allocation_id AND a.status='confirmed'
+			JOIN expiry_allocation_payout p ON p.allocation_id=a.id AND p.spk=c.spk
+			JOIN expiry_owner_key o ON o.user_pubkey=c.user_pubkey AND o.mailbox_pk=c.owner_mailbox
+			WHERE v.vtxo_id=ANY($1) ORDER BY v.vtxo_id
+		", &[&ids]).await?;
+		if rows.len() != remaining.len() { return Ok(None); }
+		for row in rows {
+			let Some(id) = remaining.remove(row.get::<_, &str>("vtxo_id")) else { return Ok(None); };
+			let source: ServerVtxo = ServerVtxo::deserialize(row.get("vtxo"))?;
+			let ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(policy)) = source.policy()
+				else { return Ok(None); };
+			if source.id() != id || policy.payment_hash != hash
+				|| row.get::<_, &str>("direction") != "incoming" || row.get::<_, &str>("payment_hash") != hash.to_string()
+				|| row.get::<_, &str>("user_pubkey") != policy.user_pubkey.to_string() { return Ok(None); }
+			let mailbox = row.get::<_, &str>("owner_mailbox").parse()?;
+			let Some(record) = self.get_fallback(mailbox).await? else { return Ok(None); };
+			let child = ChildNumber::from_normal_idx(u32::try_from(row.get::<_, i64>("child_index"))?)?;
+			let script = ScriptBuf::from_hex(row.get("spk"))?;
+			// The registration was authenticated at insertion and allocation;
+			// derive its cached owner again and require that same destination.
+			if record.account_xpub.ckd_pub(&SECP, child)?.public_key != policy.user_pubkey || record.spk != script {
+				return Ok(None);
+			}
+			let gross = i64::try_from(source.amount().to_sat())?;
+			let fee: i64 = row.get("fee_sat");
+			let payout: i64 = row.get("payout_sat");
+			if row.get::<_, i64>("gross_sat") != gross || row.get::<_, i64>("entitlement_gross") != gross
+				|| row.get::<_, i64>("forfeited_sat") != 0 || payout <= 0 || fee < 0
+				|| payout.checked_add(fee) != Some(gross) { return Ok(None); }
+			let (Some(raw), Some(height), Some(block_hash)) = (
+				row.get::<_, Option<&[u8]>>("sweep_tx"), row.get::<_, Option<i64>>("confirmed_height"),
+				row.get::<_, Option<&str>>("confirmed_hash"),
+			) else { return Ok(None); };
+			let parent: Transaction = bitcoin::consensus::deserialize(raw)?;
+			let index = usize::try_from(row.get::<_, i32>("output_index"))?;
+			let Some(output) = parent.output.get(index) else { return Ok(None); };
+			if row.get::<_, Option<&str>>("sweep_txid") != Some(parent.compute_txid().to_string().as_str())
+				|| parent.input.is_empty() || parent.input.iter().any(|input| input.witness.is_empty())
+				|| output.script_pubkey != script || output.value.to_sat() < u64::try_from(payout)?
+				|| output.value != Amount::from_sat(u64::try_from(row.get::<_, i64>("amount_sat"))?)
+				|| output.value.to_sat() != u64::try_from(row.get::<_, i64>("grouped_payout"))? { return Ok(None); }
+			let block = BlockRef { height: BlockHeight::try_from(height)?, hash: block_hash.parse()? };
+			if block.height > view.captaind.height || block.height > view.watchmand.height
+				|| self.get_block_by_height(BlockTable::Captaind, block.height).await? != Some(block)
+				|| self.get_block_by_height(BlockTable::Watchmand, block.height).await? != Some(block) { return Ok(None); }
+		}
+		if !remaining.is_empty() || self.expiry_rebuild_token().await? != Some(view)
+			|| !self.expiry_view_is_rebuilt(view).await? { return Ok(None); }
+		Ok(Some(view))
+	}
+
+	/// Bounded maintenance candidates only; the shared outcome rechecks every
+	/// original signed source and canonical refund before notifying its sender.
+	pub(crate) async fn native_refund_attempts(&self, limit: i64) -> anyhow::Result<Vec<LightningPaymentAttempt>> {
+		ensure!((1..=128).contains(&limit), "invalid native refund attempt limit");
+		let finished = String::from(MailboxType::LnSendFinished);
+		let rows = self.query("
+			SELECT a.id,a.lightning_node_id,a.payment_hash,a.amount_msat,a.final_amount_msat,
+				a.status,a.error,a.block_height,a.user_fee_sat,a.retry_for_secs,a.user_agent,
+				a.max_routing_fee_msat,a.lightning_htlc_subscription_id,a.created_at,a.updated_at
+			FROM lightning_payment_attempt a
+			WHERE a.sender_mailbox_id IS NOT NULL
+				AND NOT EXISTS(SELECT 1 FROM mailbox m WHERE m.payment_hash=a.payment_hash AND m.mailbox_type::TEXT=$2)
+				AND EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l WHERE l.lightning_payment_attempt_id=a.id)
+				AND NOT EXISTS(
+					SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l
+					LEFT JOIN expiry_entitlement e ON e.vtxo_id=l.vtxo_id
+					LEFT JOIN expiry_allocation_coin c ON c.entitlement_id=e.id AND c.active AND c.disposition='customer'
+					LEFT JOIN expiry_allocation p ON p.id=c.allocation_id AND p.status='confirmed'
+					WHERE l.lightning_payment_attempt_id=a.id AND p.id IS NULL)
+			ORDER BY a.id LIMIT $1
+		", &[&limit, &finished]).await?;
+		rows.into_iter().map(TryInto::try_into).collect()
 	}
 
 	/// Shared source-specific public proof for scoped status and the actual

@@ -176,14 +176,22 @@ impl<'a> PaymentAttemptHandler<'a> {
 	pub(super) async fn post_lightning_send_finished(&self, attempt: &LightningPaymentAttempt) {
 		let payment_hash = attempt.payment_hash;
 		match self.db.write(async |t| {
-			let Some((_, outcome)) = t.lightning_payment_outcome(payment_hash, &[], Some(attempt.id)).await?
+			let Some(outcome) = t.lightning_payment_outcome(payment_hash, &[], Some(attempt.id)).await?
 				else { return Ok(None); };
-			let preimage = match outcome {
+			let preimage = match outcome.state {
 				LightningSourceState::Discharged => Some(t.get_htlc_settlement_by_payment_hash(payment_hash)
 					.await?.context("source-specific payment success has no preimage")?),
 				LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. } => None,
 				_ => return Ok(None),
 			};
+			if let Some(view) = outcome.refund_view {
+				// Serialize this durable failure notification with invalidation.
+				// A stale status read can never authorize the mailbox write.
+				t.lock_valid_expiry_view(view).await?;
+				if t.expiry_rebuild_token().await? != Some(view) || !t.expiry_view_is_rebuilt(view).await? {
+					return Ok(None);
+				}
+			}
 			let failure = preimage.is_none().then(|| LightningFailureKind::classify(attempt.error.as_deref()));
 			let Some(mailbox_id) = t.get_lightning_attempt_sender_mailbox_id(attempt.id, payment_hash).await?
 				else { return Ok(None); };

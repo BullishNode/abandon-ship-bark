@@ -15,7 +15,7 @@ use server_rpc::protos;
 
 /// Grant delivery must leave every authentic signed ancestor durable on the
 /// server, even when neither wallet ever returns to register or claim it.
-async fn assert_stored_grant_ancestry(db: &Db, grants: &[Vtxo<Full>]) {
+pub(super) async fn assert_stored_grant_ancestry(db: &Db, grants: &[Vtxo<Full>]) {
 	let mut expected = std::collections::BTreeMap::new();
 	for grant in grants {
 		for step in grant.transactions() {

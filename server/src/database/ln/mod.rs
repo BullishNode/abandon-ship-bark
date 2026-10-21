@@ -960,8 +960,8 @@ impl<'t> Tx<'t> {
 			"SELECT payment_hash FROM lightning_payment_attempt WHERE id=$1", &[&attempt_id],
 		).await? else { return Ok(Vec::new()); };
 		let hash = PaymentHash::from_str(attempt.get("payment_hash"))?;
-		if !matches!(self.lightning_payment_outcome(hash, &[], Some(attempt_id)).await?,
-			Some((_, super::expiry_lightning::LightningSourceState::Discharged))) {
+		if !self.lightning_payment_outcome(hash, &[], Some(attempt_id)).await?
+			.is_some_and(|outcome| outcome.state == super::expiry_lightning::LightningSourceState::Discharged) {
 			return Ok(Vec::new());
 		}
 		let stmt = self.prepare("

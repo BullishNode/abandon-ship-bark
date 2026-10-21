@@ -13,6 +13,7 @@ mod expiry_state;
 mod expiry_ownership;
 mod expiry_dispatch;
 mod expiry_lightning_terminal;
+mod expiry_lightning_native_status;
 mod expiry_internal_replan;
 mod expiry_internal_reclaim_reorg;
 mod expiry_internal_partial_terminal;

@@ -472,14 +472,15 @@ async fn receive_binding_internal_expired_before_replay_refunds_absent_sender_on
 				ctx.generate_blocks(1).await;
 			}
 		}).await.expect("expired admitted grants must close autonomously within40s");
-		let binding=db.read(async |t|Ok(t.query_one("SELECT r.request,r.protocol_version,r.uncollected_at IS NOT NULL AS uncollected, \
+		let binding=db.read(async |t|Ok(t.query_one("SELECT r.request,r.protocol_version,s.status='canceled' AS canceled, \
 		EXISTS(SELECT 1 FROM htlc_settlement WHERE payment_hash=$1) AS wal, \
 		EXISTS(SELECT 1 FROM expiry_lightning_receive_claim WHERE payment_hash=$1 AND materialized) AS materialized, \
 		EXISTS(SELECT 1 FROM expiry_lightning_receive_claim c JOIN vtxo v ON v.vtxo_id=c.source_vtxo_id JOIN htlc_vtxo h ON h.id=v.id WHERE c.subscription_id=r.subscription_id AND h.offchain_resolution='fulfilled') AS fulfilled \
-		FROM expiry_lightning_receive_replay r WHERE r.subscription_id=$2",&[&hash.to_string(),&subscription]).await?)).await.unwrap();
+		FROM expiry_lightning_receive_replay r JOIN lightning_htlc_subscription s ON s.id=r.subscription_id AND s.payment_hash=r.payment_hash \
+		WHERE r.subscription_id=$2 AND r.payment_hash=$1",&[&hash.to_string(),&subscription]).await?)).await.unwrap();
 		assert!(binding.get::<_,Vec<u8>>("request")==original,"the admitted request must remain immutable");
 		assert_eq!(binding.get::<_,i64>("protocol_version"),protocol);
-		assert!(binding.get::<_,bool>("uncollected"));
+		assert!(binding.get::<_,bool>("canceled"));
 		assert!(!binding.get::<_,bool>("wal") && !binding.get::<_,bool>("materialized") && !binding.get::<_,bool>("fulfilled"));
 		let invoices=lightning.internal.hold_client().await.list(cln_rpc::plugins::hold::ListRequest {
 			constraint:Some(cln_rpc::plugins::hold::list_request::Constraint::PaymentHash(hash.to_vec())),

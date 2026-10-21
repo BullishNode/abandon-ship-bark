@@ -245,7 +245,9 @@ impl Server {
 						view,
 						self.config.network,
 						self.config.expiry_internal_refund_depth,
-					).await).await?;
+					).await).await.with_context(|| format!(
+						"expiry ownership preparation for terminal {}", snapshot.regular[*index].state.vtxo_id
+					))?;
 					match coin {
 						PreparedCoin::Ready(coin) => coins.push(coin),
 						PreparedCoin::Hold => hold = true,
@@ -256,7 +258,8 @@ impl Server {
 					// Separate held siblings only through signed steps that preserve
 					// every branch's server recovery path, as checked by the split request.
 					if needs_htlc_progress || (hold && cut.terminals.len() > 1) {
-						self.db.write(async |t| t.request_expiry_split(view, &root).await).await?;
+						self.db.write(async |t| t.request_expiry_split(view, &root).await).await
+							.context("expiry readiness split request")?;
 					}
 					return Ok(());
 				}
@@ -283,7 +286,8 @@ impl Server {
 				Ok::<_, anyhow::Error>(())
 			}.await;
 			if let Err(error) = result {
-				warn!(vtxo_id = %root.id(), %error, "Expiry output remains unready; siblings continue");
+				warn!(vtxo_id = %root.id(), %anchor, error = %format!("{error:#}"),
+					"Expiry output remains unready; siblings continue");
 			}
 		}
 		Ok(())

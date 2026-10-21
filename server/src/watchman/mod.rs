@@ -448,19 +448,22 @@ impl Watchman {
 				// A request may outlive a later refresh, offboard or key drop.
 				// Reprove preservation and retain its sorted path locks through
 				// publication, rather than trusting the old request's txid alone.
-				if !t.request_expiry_split(view, &root).await? { return Ok(()); }
+				if !t.request_expiry_split(view, &root).await
+					.context("expiry split request revalidation")? { return Ok(()); }
 				let current = t.query_one("
 					SELECT progress_txid FROM expiry_split_request
 					WHERE vtxo_id=$1
-				", &[&root.id().to_string()]).await?;
+				", &[&root.id().to_string()]).await.context("expiry split instruction lookup")?;
 				ensure!(
 					current.get::<_, &str>("progress_txid") == txid.to_string(),
 					"expiry split instruction changed"
 				);
-				t.lock_unallocated_watchman_inputs(&ids).await?;
+				t.lock_unallocated_watchman_inputs(&ids).await.context("expiry split input locks")?;
 				self.process_progress_tx(&mut wallet, txid, &root, fee_rate).await
+					.context("expiry split progress publication")
 			}).await {
-				warn!(vtxo_id = %ids[0], %error, "Expiry split remains pending");
+				warn!(vtxo_id = %ids[0], progress_txid = %txid, error = %format!("{error:#}"),
+					"Expiry split remains pending");
 			}
 		}
 		Ok(())

@@ -59,10 +59,11 @@ async fn native_refund_status(two_sources: bool) {
 	let recipient_destination = recipient.fallback_destination().await.unwrap();
 	let actor = ctx.bark("absent-sender", &srv).funded(sat(400_000)).create().await;
 	let first = actor.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	// Reserve the existing progress grace, six payout confirmations and two
+	// observation blocks before creating the second independent backing.
+	let partial_gap = srv.watchmand().config().watchman.progress_grace_period + BlockDelta::new(8);
 	let second = if two_sources {
-		// Two real roots expire separately. The first refund can reach six
-		// confirmations while the second original backing is still unexpired.
-		ctx.generate_blocks(8).await;
+		ctx.generate_blocks(partial_gap.to_u32()).await;
 		actor.board_and_confirm_and_register(&ctx, sat(100_000)).await
 	} else { Vec::new() };
 	let sender = actor.client().await;
@@ -78,6 +79,8 @@ async fn native_refund_status(two_sources: bool) {
 	let mailbox = sender.mailbox_identifier();
 	assert_ne!(destination.spk, recipient_destination.spk);
 	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let backing_expiries = inputs.iter().map(|input| (input.chain_anchor(), input.expiry_height()))
+		.collect::<BTreeMap<_, _>>();
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(inputs,
 		VtxoPolicy::new_server_htlc_send(keys[0].public_key(), hash, tip + srv.config().htlc_send_expiry_delta + BlockDelta::new(2)))
 		.unwrap().generate_user_nonces(&keys).unwrap();
@@ -89,6 +92,18 @@ async fn native_refund_status(two_sources: bool) {
 		.unwrap().build_signed_vtxos();
 	assert_eq!(sources.len(), if two_sources { 2 } else { 1 });
 	assert!(sources.iter().all(|source| source.amount() == sat(100_000)));
+	if two_sources {
+		// Check the actual fully signed sources, rather than assuming that the
+		// input separation survived the package cosign/build operation.
+		for source in &sources {
+			assert_eq!(source.expiry_height(), backing_expiries[&source.chain_anchor()]);
+			let funding = ctx.bitcoind().await_transaction(source.chain_anchor().txid).await;
+			source.validate(&funding).expect("native source must retain its real signed backing");
+		}
+		let mut expiries = sources.iter().map(Vtxo::expiry_height).collect::<Vec<_>>();
+		expiries.sort_unstable();
+		assert!(expiries[1] > expiries[0] + partial_gap);
+	}
 	sender.register_vtxo_transactions_with_server(&sources).await.unwrap();
 	let mut ids = sources.iter().map(|source| source.id().to_bytes().to_vec()).collect::<Vec<_>>();
 	ids.sort_unstable();

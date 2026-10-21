@@ -28,6 +28,7 @@ use bitcoin_ext::{BlockDelta, BlockHeight};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use serde_json::{json, Value};
 use server::database::Db;
+use server::database::expiry_inventory::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits};
 use server_rpc::protos;
 
 /// A temporary failure of the SDK's best-effort recovery post. Every
@@ -687,6 +688,14 @@ async fn finish_traffic(
 			(out.script_pubkey==script).then_some(OutPoint::new(tx.compute_txid(),vout as u32)))).collect::<BTreeSet<_>>();
 		assert_eq!(actual,wanted,"the complete declared funding graph must have no extra known customer payout");
 	}
+	// Retain original SDK ownership independently of the allocator's disposition.
+	let mut sdk_coins=BTreeMap::new();
+	for (actor,wallet) in traffic.wallets.iter().enumerate() {
+		for coin in wallet.all_vtxos().await.unwrap() {
+			assert!(sdk_coins.insert(coin.id(),(actor,coin)).is_none());
+		}
+	}
+	let mut proved_parts=BTreeSet::new(); let mut operator_originals=BTreeSet::new();
 	for parent in parents.values() {
 		assert_eq!(graph.get(&parent.compute_txid()),Some(parent));
 		let inputs=parent.input.iter().map(|input| {
@@ -709,7 +718,117 @@ async fn finish_traffic(
 		assert!(child_inputs>child[0].output.iter().map(|out|out.value).sum::<Amount>());
 		let payees=paid.keys().filter(|point|point.txid==parent.compute_txid()).count();
 		let returned=parent.output.iter().filter(|out|out.script_pubkey==operator).map(|out|out.value).sum::<Amount>();
-		assert_eq!(returned,sat(1000*payees as u64));
+		// Refresh spends can return already forfeited principal as well as charges.
+		// Neither a server-funded ancestor nor the observed remainder proves ownership.
+		let parent_id=parent.compute_txid().to_string();
+		let operator_rows=db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat \
+			FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+			JOIN expiry_allocation a ON a.id=c.allocation_id WHERE a.sweep_txid=$1 AND c.active AND c.disposition='operator'",
+			&[&parent_id]).await?)).await.unwrap();
+		let mut leaves=rows.iter().filter(|row| {
+			deserialize::<Transaction>(row.get("sweep_tx")).unwrap().compute_txid()==parent.compute_txid()
+		}).map(|row| ark::ServerVtxo::from(traffic.terminals[&VtxoId::from_str(row.get("vtxo_id")).unwrap()].1.clone())).collect::<Vec<_>>();
+		let mut principal=Amount::ZERO;
+		for row in operator_rows {
+			let id=VtxoId::from_str(row.get("vtxo_id")).unwrap();
+			let full=db.read(async |tx| tx.get_server_vtxo_by_id(id).await).await.unwrap().vtxo;
+			let funding=&graph[&full.chain_anchor().txid];
+			full.validate(funding).expect("operator principal requires a complete signed source path");
+			let original_id=if full.clone().try_into_user_vtxo().is_ok() { id } else {
+				assert!(matches!(full.policy(),ark::ServerVtxoPolicy::HarkForfeit(_)));
+				let step=full.transactions().find(|step|step.tx.compute_txid()==full.point().txid).unwrap();
+				assert_eq!(step.tx.input.len(),1); assert_eq!(full.point().vout,0);
+				VtxoId::from(step.tx.input[0].previous_output)
+			};
+			assert!(operator_originals.insert(original_id),"one forfeited source cannot return operator principal twice");
+			let (actor,old)=&sdk_coins[&original_id]; let wallet=&traffic.wallets[*actor];
+			assert_eq!(old.state,bark::vtxo::VtxoState::Spent);
+			let original=wallet.get_full_vtxo(original_id).await.unwrap();
+			original.validate(&graph[&original.chain_anchor().txid]).unwrap();
+			assert_eq!(wallet.get_vtxo_key(&original).await.unwrap().public_key(),original.user_pubkey());
+			assert_eq!(full.amount(),original.amount());
+			let native=db.read(async |tx| tx.get_user_vtxo_by_id(original_id).await).await.unwrap();
+			assert_eq!(native.vtxo,original);
+			let part=db.read(async |tx| Ok(tx.query_one("SELECT p.id,p.round_id,p.unlock_hash,i.signed_forfeit_tx \
+				FROM round_part_input i JOIN round_participation p ON p.id=i.participation_id \
+				JOIN round r ON r.funding_txid=p.round_id WHERE i.vtxo_id=$1 AND r.id=$2 \
+				AND p.forfeited_at IS NOT NULL AND i.signed_forfeit_tx IS NOT NULL",
+				&[&original_id.to_string(),&native.spent_in_round.unwrap()]).await?)).await.unwrap();
+			let forfeit=deserialize::<Transaction>(part.get("signed_forfeit_tx")).unwrap();
+			assert_eq!(forfeit.input.len(),1); assert_eq!(forfeit.input[0].witness.len(),1);
+			let signature=bitcoin::secp256k1::schnorr::Signature::from_slice(forfeit.input[0].witness.iter().next().unwrap()).unwrap();
+			let unlock_hash=ark::tree::signed::UnlockHash::from_str(part.get("unlock_hash")).unwrap();
+			assert_eq!(forfeit,ark::forfeit::create_hark_forfeit_tx(&original,unlock_hash,Some(&signature)));
+			let sighash=bitcoin::sighash::SighashCache::new(&forfeit).taproot_key_spend_signature_hash(0,
+				&bitcoin::sighash::Prevouts::All(&[original.txout()]),bitcoin::TapSighashType::Default).unwrap();
+			SECP.verify_schnorr(&signature,&sighash.into(),&original.output_taproot().output_key().to_x_only_public_key()).unwrap();
+			if id==original_id { assert_eq!(full.clone().try_into_user_vtxo().unwrap(),original); } else {
+				assert_eq!(full.point(),OutPoint::new(forfeit.compute_txid(),0));
+				assert_eq!(full.transactions().find(|step|step.tx.compute_txid()==forfeit.compute_txid()).unwrap().tx,forfeit);
+			}
+			let round=bitcoin::Txid::from_str(part.get("round_id")).unwrap();
+			if proved_parts.insert(part.get::<_,i64>("id")) {
+				let canonical=core.custom_get_raw_transaction_info(round,None).unwrap().unwrap();
+				assert!(canonical.confirmations.is_some_and(|depth|depth>=6));
+				assert_eq!(deserialize::<Transaction>(&canonical.hex).unwrap(),graph[&round]);
+				// The original owner's signed replacement coins must actually be delivered.
+				let part_id=part.get::<_,i64>("id");
+				let input_rows=db.read(async |tx| Ok(tx.query("SELECT vtxo_id FROM round_part_input WHERE participation_id=$1",&[&part_id]).await?)).await.unwrap();
+				let mut input_ids=BTreeSet::new(); let mut input_amount=Amount::ZERO;
+				for row in input_rows {
+					let id=VtxoId::from_str(row.get("vtxo_id")).unwrap(); assert!(input_ids.insert(id));
+					let (owner,coin)=&sdk_coins[&id];
+					assert_eq!(owner,actor); assert_eq!(coin.state,bark::vtxo::VtxoState::Spent);
+					let full=wallet.get_full_vtxo(id).await.unwrap();
+					full.validate(&graph[&full.chain_anchor().txid]).unwrap();
+					assert_eq!(wallet.get_vtxo_key(&full).await.unwrap().public_key(),full.user_pubkey());
+					input_amount+=full.amount();
+				}
+				let outputs=db.read(async |tx| Ok(tx.query("SELECT policy,amount FROM round_part_output WHERE participation_id=$1",&[&part_id]).await?)).await.unwrap();
+				assert!(!outputs.is_empty()); let mut delivered=BTreeSet::new(); let mut replacement=Amount::ZERO;
+				for output in outputs {
+					let amount=sat(u64::try_from(output.get::<_,i64>("amount")).unwrap());
+					let candidates=sdk_coins.iter().filter(|(_, (owner,coin))|owner==actor && coin.chain_anchor().txid==round
+						&& coin.amount()==amount && coin.policy().serialize()==output.get::<_,Vec<u8>>("policy")).collect::<Vec<_>>();
+					assert_eq!(candidates.len(),1); let (replacement_id,_)=candidates[0];
+					assert!(delivered.insert(*replacement_id));
+					let coin=wallet.get_full_vtxo(*replacement_id).await.unwrap();
+					coin.validate(&graph[&round]).unwrap();
+					assert_eq!(wallet.get_vtxo_key(&coin).await.unwrap().public_key(),coin.user_pubkey());
+					replacement+=coin.amount();
+				}
+				assert_eq!(replacement,input_amount,"a refresh must replace all forfeited customer value");
+			}
+			assert_eq!(row.get::<_,i64>("gross_sat"),full.amount().to_sat() as i64);
+			for field in ["fee_sat","payout_sat","forfeited_sat"] { assert_eq!(row.get::<_,i64>(field),0); }
+			principal+=full.amount(); leaves.push(full);
+		}
+		// Reuse the existing bounded complete-partition checker, with independently
+		// authenticated leaves: no unrepresented branch may become operator capital.
+		let mut backing=Vec::new(); let mut funding=BTreeMap::new(); let mut residuals=BTreeMap::new();
+		for input in &parent.input {
+			let root=db.read(async |tx| tx.get_bare_vtxo_by_id(input.previous_output.into()).await).await.unwrap().vtxo;
+			assert_eq!(root.txout(),graph[&input.previous_output.txid].output[input.previous_output.vout as usize]);
+			backing.push(root);
+		}
+		for leaf in &leaves {
+			funding.insert(leaf.chain_anchor().txid,graph[&leaf.chain_anchor().txid].clone());
+			let mut inside=false;
+			for step in leaf.transactions() {
+				inside|=backing.iter().any(|root|step.tx.input.iter().any(|input|input.previous_output==root.point()));
+				if inside { for (vout,out) in step.tx.output.iter().enumerate() {
+					if out.script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT {
+						residuals.insert(OutPoint::new(step.tx.compute_txid(),vout as u32),out.clone());
+					}
+				} }
+			}
+		}
+		let residuals=residuals.into_iter().map(|(outpoint,txout)|BackingPartitionResidual { outpoint,txout }).collect::<Vec<_>>();
+		BackingSnapshot { roots:backing,regular:Vec::new(),serialized_bytes:0 }.check_partition(&leaves,
+			&funding.into_values().collect::<Vec<_>>(),&residuals,BackingSnapshotLimits { max_rows:16_384,max_serialized_bytes:16*1024*1024 }).unwrap();
+		let charges=sat(1000*payees as u64);
+		assert_eq!(returned,principal+charges);
+		println!("traffic_parent={} authorized_refresh_principal_sat={} customer_charges_sat={}",parent_id,principal.to_sat(),charges.to_sat());
 		assert!(parent.output.iter().all(|out|out.script_pubkey==operator||out.script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT
 			||traffic.destinations.iter().any(|destination|out.script_pubkey==destination.spk)));
 	}

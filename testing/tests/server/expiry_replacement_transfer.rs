@@ -1,5 +1,6 @@
 //! A legitimate recipient keeps the new obligation after an accepted refresh.
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use ark_testing::{btc, sat, TestContext};
@@ -109,6 +110,17 @@ async fn expiry_transferred_refresh_replacement_survives_old_backing_settlement(
 	let mature = received.expiry_height().to_u32() + 1;
 	if height < mature { ctx.generate_blocks(mature - height).await; }
 	let customer_parent: Transaction = tokio::time::timeout(Duration::from_secs(30), async {
+		// Confirm only real signed prefixes published by the normal watchman;
+		// their children enter the frontier after confirmation and its grace.
+		let mut pending_prefixes = received.transactions().map(|step| {
+			assert!(step.tx.input.iter().all(|input| input.sequence == bitcoin::Sequence::ZERO));
+			step.tx.compute_txid()
+		}).collect::<BTreeSet<_>>();
+		let blocks_per_prefix = srv.watchmand().config().watchman.progress_grace_period.to_u32()
+			.checked_add(1).expect("prefix confirmation and grace block count must fit");
+		let prefix_block_budget = u32::try_from(pending_prefixes.len()).unwrap()
+			.checked_mul(blocks_per_prefix).expect("signed received path block budget must fit");
+		let mut mined_prefix_blocks = 0_u32;
 		loop {
 			let row = db.read(async |tx| Ok(tx.query_opt("
 				SELECT a.sweep_tx
@@ -121,6 +133,22 @@ async fn expiry_transferred_refresh_replacement_survives_old_backing_settlement(
 				AND a.broadcast_at IS NOT NULL
 			", &[&received.id().to_string()]).await?)).await.unwrap();
 			if let Some(row) = row { break deserialize(row.get("sweep_tx")).unwrap(); }
+			let core = ctx.bitcoind().sync_client();
+			if let Some(txid) = core.get_raw_mempool().unwrap().into_iter().find(|txid| pending_prefixes.contains(txid)) {
+				assert!(pending_prefixes.remove(&txid)); // One batch per observed signed prefix.
+				mined_prefix_blocks = mined_prefix_blocks.checked_add(blocks_per_prefix).unwrap();
+				assert!(mined_prefix_blocks <= prefix_block_budget);
+				let tip = ctx.generate_blocks(blocks_per_prefix).await;
+				let hash = core.get_block_hash(u64::from(tip.to_u32())).unwrap();
+				loop {
+					if db.read(async |tx| {
+						let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+						Ok(view.captaind.height == tip && view.watchmand.height == tip
+							&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
+					}).await.unwrap() { break; }
+					tokio::time::sleep(Duration::from_millis(50)).await;
+				}
+			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("a legitimate different recipient's replacement must not disappear when old backing settles");

@@ -82,6 +82,17 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 	ctx.generate_blocks(own.expiry_height().to_u32() + 1 - height).await;
 	let ids = vec![own.id().to_string(), received_id.to_string()];
 	let parents = tokio::time::timeout(Duration::from_secs(30), async {
+		// Confirm only real signed prefixes published by the normal watchman;
+		// their children enter the frontier after confirmation and its grace.
+		let mut pending_prefixes = received.transactions().map(|step| {
+			assert!(step.tx.input.iter().all(|input| input.sequence == bitcoin::Sequence::ZERO));
+			step.tx.compute_txid()
+		}).collect::<BTreeSet<_>>();
+		let blocks_per_prefix = srv.watchmand().config().watchman.progress_grace_period.to_u32()
+			.checked_add(1).expect("prefix confirmation and grace block count must fit");
+		let prefix_block_budget = u32::try_from(pending_prefixes.len()).unwrap()
+			.checked_mul(blocks_per_prefix).expect("signed received path block budget must fit");
+		let mut mined_prefix_blocks = 0_u32;
 		loop {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT a.id,a.sweep_tx,e.vtxo_id FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
@@ -92,6 +103,22 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 					.collect::<BTreeMap<_, _>>();
 			}
 			assert!(rows.len() <= 2, "one source must not have duplicate active fallback payments");
+			let core = ctx.bitcoind().sync_client();
+			if let Some(txid) = core.get_raw_mempool().unwrap().into_iter().find(|txid| pending_prefixes.contains(txid)) {
+				assert!(pending_prefixes.remove(&txid)); // One batch per observed signed prefix.
+				mined_prefix_blocks = mined_prefix_blocks.checked_add(blocks_per_prefix).unwrap();
+				assert!(mined_prefix_blocks <= prefix_block_budget);
+				let tip = ctx.generate_blocks(blocks_per_prefix).await;
+				let hash = core.get_block_hash(u64::from(tip.to_u32())).unwrap();
+				loop {
+					if db.read(async |tx| {
+						let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+						Ok(view.captaind.height == tip && view.watchmand.height == tip
+							&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
+					}).await.unwrap() { break; }
+					tokio::time::sleep(Duration::from_millis(50)).await;
+				}
+			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("both frozen customer coins must receive actual payouts despite the sender's historical forfeits");

@@ -1789,13 +1789,19 @@ async fn watchman_sweeps_lightning_vtxos() {
 				if allocated != expected { return Ok(false); }
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 				Ok(view.captaind.height == tip && view.watchmand.height == tip
-					&& view.captaind.hash == blockhash && view.watchmand.hash == blockhash
-					&& tx.expiry_view_is_rebuilt(view).await?)
+					&& view.captaind.hash == blockhash && view.watchmand.hash == blockhash)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
+		// The sweep rebuilds the view itself. Do not wait for the periodic rebuild before the trigger.
 		wm.trigger_sweep().await;
 		loop {
+			let rebuilt = db.read(async |tx| {
+				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+				Ok(view.captaind.height == tip && view.watchmand.height == tip
+					&& view.captaind.hash == blockhash && view.watchmand.hash == blockhash
+					&& tx.expiry_view_is_rebuilt(view).await?)
+			}).await.unwrap();
 			let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,a.id,a.sweep_tx,f.raw_tx,f.fee_sat \
 				FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
 				JOIN expiry_allocation a ON a.id=c.allocation_id \
@@ -1809,7 +1815,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 					deserialize::<Transaction>(row.get("raw_tx")).unwrap(), row.get::<_, i64>("fee_sat"));
 				if let Some(previous) = packages.insert(row.get::<_, i64>("id"), package.clone()) { assert_eq!(previous, package); }
 			}
-			if seen == expected && packages.values().all(|(parent, child, _)|
+			if rebuilt && seen == expected && packages.values().all(|(parent, child, _)|
 				core.get_raw_transaction(&parent.compute_txid(), None).is_ok()
 				&& core.get_raw_transaction(&child.compute_txid(), None).is_ok()) { break (packages, operators, incoming_ids, source_ids); }
 			tokio::time::sleep(Duration::from_millis(50)).await;

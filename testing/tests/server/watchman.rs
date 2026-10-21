@@ -3341,12 +3341,49 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 	assert_eq!(ids.len(), 1);
 	let replacement = bark2.client().await.get_full_vtxo(ids[0]).await.unwrap();
 	assert_eq!(replacement.amount(), sat(250_000));
+	// The singleton round also has one operator padding leaf. Bind its actual signed backing.
+	let round = db.read(async |tx| tx.get_round(replacement.chain_anchor().txid.into()).await).await.unwrap().unwrap();
+	assert_eq!(round.funding_txid.as_round_txid(), replacement.chain_anchor().txid);
+	let tree = round.into_cached_tree().unwrap();
+	let outputs = tree.output_vtxos().collect::<Vec<_>>();
+	assert_eq!(outputs.len(), 2);
+	assert_eq!(outputs.iter().filter(|coin| coin.id() == replacement.id()).count(), 1);
+	let padding = outputs.into_iter().find(|coin| coin.id() != replacement.id()).unwrap();
+	assert_eq!(padding.amount(), sat(330));
+	assert_eq!(padding.user_pubkey().to_string(), "02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c");
+	assert_eq!(padding.unlock_hash().unwrap().to_string(), "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+	assert_eq!(padding.chain_anchor(), replacement.chain_anchor());
+	assert_eq!(padding.expiry_height(), replacement.expiry_height());
+	let mut backing = tree.internal_vtxos().filter(|(coin, _)| matches!(coin.policy(),
+		ark::ServerVtxoPolicy::HarkLeaf(policy) if policy.user_pubkey == padding.user_pubkey()
+			&& Some(policy.unlock_hash) == padding.unlock_hash())).collect::<Vec<_>>();
+	assert_eq!(backing.len(), 1);
+	let (padding_backing, leaf_txid) = backing.remove(0);
+	assert_eq!(leaf_txid, padding.point().txid);
+	assert_eq!(padding_backing.amount(), padding.amount());
+	assert_eq!(padding_backing.chain_anchor(), padding.chain_anchor());
+	assert_eq!(padding_backing.expiry_height(), padding.expiry_height());
+	let leaf = padding.transactions().last().unwrap().tx;
+	assert_eq!(leaf.input.len(), 1);
+	assert_eq!(leaf.input[0].previous_output, padding_backing.point());
+	assert_eq!(leaf.output[padding.point().vout as usize], padding.txout());
+	let stored = db.read(async |tx| tx.get_bare_vtxo_by_id(padding_backing.id()).await).await.unwrap();
+	assert_eq!(stored.vtxo.txout(), padding_backing.txout());
+	assert_eq!(stored.vtxo.policy(), padding_backing.policy());
+	assert_eq!(stored.vtxo.chain_anchor(), padding.chain_anchor());
+	assert_eq!(stored.oor_spent_txid, Some(leaf_txid));
+	let stored = db.read(async |tx| tx.get_bare_vtxo_by_id(padding.id()).await).await.unwrap();
+	assert_eq!(stored.spend_state, server::database::SpendState::Unclaimed);
+	assert_eq!(stored.vtxo.txout(), padding.txout());
+	assert_eq!(stored.vtxo.chain_anchor(), padding.chain_anchor());
 	let mut fundings = BTreeMap::new();
 	for coin in originals.iter().chain([&stale, &recipient, &received, &replacement]).chain(changes.iter()) {
 		let funding = ctx.bitcoind().await_transaction(coin.chain_anchor().txid).await;
 		coin.validate(&funding).unwrap();
 		if let Some(previous) = fundings.insert(coin.chain_anchor().txid, funding.clone()) { assert_eq!(previous, funding); }
 	}
+	padding_backing.validate(&fundings[&padding.chain_anchor().txid]).unwrap();
+	padding.validate_unsigned(&fundings[&padding.chain_anchor().txid]).unwrap();
 	let backing_anchors = originals.iter().chain([&stale, &replacement]).map(|coin| coin.chain_anchor().to_string())
 		.collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
 	let core = ctx.bitcoind().sync_client();
@@ -3430,7 +3467,10 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		let mut semantic = originals.iter().chain([&recipient, &received]).cloned()
 			.map(|coin| (ark::ServerVtxo::from(coin), None)).collect::<Vec<_>>();
 		semantic.extend(changes.iter().cloned().map(|coin| (ark::ServerVtxo::from(coin), Some(0usize))));
-		if replacement_mature { semantic.push((ark::ServerVtxo::from(replacement.clone()), Some(1))); }
+		if replacement_mature {
+			semantic.push((ark::ServerVtxo::from(replacement.clone()), Some(1)));
+			semantic.push((ark::ServerVtxo::from(padding.clone()), None));
+		}
 		let mut expected = BTreeMap::new();
 		let mut terminals = Vec::new();
 		let mut residuals = BTreeMap::new();
@@ -3447,11 +3487,13 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 				coin = descendant;
 			}
 			let funding = &fundings[&coin.chain_anchor().txid];
-			coin.validate(funding).unwrap();
-			let root_id = selected.path_root(&coin, funding).unwrap().expect("every selected terminal needs one actual current root");
+			// Padding's unsigned leaf has no known preimage. Cover its signed current HarkLeaf instead.
+			let terminal = if coin.id() == padding.id() { padding_backing.clone() } else { coin.clone() };
+			terminal.validate(funding).unwrap();
+			let root_id = selected.path_root(&terminal, funding).unwrap().expect("every selected terminal needs one actual current root");
 			let root = roots.iter().find(|root| root.id() == root_id).unwrap();
 			let mut inside = false;
-			for step in coin.transactions() {
+			for step in terminal.transactions() {
 				inside |= step.tx.input[0].previous_output == root.point();
 				if inside { for (index, output) in step.tx.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor()) {
 					let point = OutPoint::new(step.tx.compute_txid(), index as u32);
@@ -3459,12 +3501,15 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 				} }
 			}
 			assert!(expected.insert(coin.id().to_string(), (coin.clone(), owner, root.point())).is_none());
-			terminals.push(coin);
+			terminals.push(terminal);
 		}
 		let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
 		let selected_funding = roots.iter().map(|root| root.chain_anchor().txid).collect::<BTreeSet<_>>().into_iter().map(|id| fundings[&id].clone()).collect::<Vec<_>>();
 		selected.check_partition(&terminals, &selected_funding, &residuals, limits).unwrap();
-		assert_eq!(expected.values().filter(|(_, owner, _)| owner.is_none()).map(|(coin, _, _)| coin.amount()).sum::<Amount>(), sat(650_000));
+		assert_eq!(expected.values().filter(|(coin, owner, _)| owner.is_none() && coin.id() != padding.id())
+			.map(|(coin, _, _)| coin.amount()).sum::<Amount>(), sat(650_000));
+		assert_eq!(expected.values().filter(|(coin, _, _)| coin.id() == padding.id())
+			.map(|(coin, _, _)| coin.amount()).sum::<Amount>(), if replacement_mature { sat(330) } else { Amount::ZERO });
 		assert_eq!(roots.iter().map(|root| root.amount()).sum::<Amount>(), expected.values().map(|(coin, _, _)| coin.amount()).sum::<Amount>());
 		let consumed = progress_child.input.iter().filter(|input| sponsors.contains_key(&input.previous_output)).map(|input| input.previous_output).collect::<BTreeSet<_>>();
 		let mut available = sponsors.iter().filter(|(point, _)| !consumed.contains(point)).map(|(point, output)| (*point, output.clone())).collect::<BTreeMap<_, _>>();
@@ -3486,9 +3531,11 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		}
 		if !replacement_mature {
 			assert!(replacement.expiry_height() > tip);
-			let count = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) AS count FROM expiry_entitlement WHERE vtxo_id=$1",
-				&[&replacement.id().to_string()]).await?.get::<_, i64>("count"))).await.unwrap();
-			assert_eq!(count, 0, "the separate unexpired replacement cannot be allocated early");
+			for id in [replacement.id(), padding.id()] {
+				let count = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) AS count FROM expiry_entitlement WHERE vtxo_id=$1",
+					&[&id.to_string()]).await?.get::<_, i64>("count"))).await.unwrap();
+				assert_eq!(count, 0, "the separate unexpired round outputs cannot be allocated early");
+			}
 		}
 		let source_ids = expected.keys().cloned().collect::<Vec<_>>();
 		// Captaind produces these entitlements independently; no trigger-created parent is a prerequisite.
@@ -3501,6 +3548,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 					let facts: serde_json::Value = serde_json::from_str(row.get("facts")).unwrap();
 					if owner.is_none() { assert_eq!(facts["operator"], true); }
 					else { assert_eq!(facts["customer_key"], coin.clone().try_into_user_vtxo().unwrap().user_pubkey().to_string()); }
+					if coin.id() == padding.id() { assert_eq!(facts["kind"], "padding"); }
 				}
 				if db.read(async |tx| {
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
@@ -3629,6 +3677,20 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 	for row in rows {
 		let id = row.get::<_, String>("vtxo_id");
 		assert!(seen.insert(id.clone()));
+		if !replacement_mature && id == padding.id().to_string() {
+			assert!(!row.get::<_, bool>("published"));
+			assert_eq!(row.get::<_, i64>("gross_sat"), 330);
+			let facts: serde_json::Value = serde_json::from_str(row.get("facts")).unwrap();
+			assert_eq!(facts["kind"], "padding");
+			assert_eq!(facts["operator"], true);
+			if row.get::<_, Option<i64>>("allocation_id").is_some() {
+				assert_eq!(row.get::<_, String>("disposition"), "operator");
+				for field in ["owner_mailbox", "user_pubkey", "spk"] { assert!(row.get::<_, Option<String>>(field).is_none()); }
+				for field in ["fee_sat", "payout_sat", "forfeited_sat"] { assert_eq!(row.get::<_, i64>(field), 0); }
+			}
+			assert!(seen.remove(&id));
+			continue;
+		}
 		if !replacement_mature && id == replacement.id().to_string() {
 			// The confirmation tail may mature this separate right; readiness is not payment.
 			assert!(!row.get::<_, bool>("published"));
@@ -3670,6 +3732,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		} else {
 			assert_eq!(row.get::<_, String>("disposition"), "operator");
 			assert_eq!(facts["operator"], true);
+			if id == padding.id().to_string() { assert_eq!(facts["kind"], "padding"); }
 			for field in ["owner_mailbox", "user_pubkey", "spk"] { assert!(row.get::<_, Option<String>>(field).is_none()); }
 			for field in ["fee_sat", "payout_sat"] { assert_eq!(row.get::<_, i64>(field), 0); }
 		}
@@ -3683,7 +3746,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		assert_eq!(outputs.len(), 1);
 		assert_eq!(outputs[0].value.to_sat(), payout as u64);
 	}
-	assert_eq!(operator, sat(650_000) + customer_fees);
+	assert_eq!(operator, sat(650_000) + if replacement_mature { sat(330) } else { Amount::ZERO } + customer_fees);
 	let mut observed = BTreeMap::new();
 	for height in scan_from..=ctx.bitcoind().get_block_count().await {
 		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {

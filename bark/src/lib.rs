@@ -1975,6 +1975,8 @@ impl Wallet {
 		F: Fn(RoundParticipation) -> Fut,
 		Fut: Future<Output = anyhow::Result<Option<RoundStateId>>>,
 	{
+		// Online maintenance needs the server's depth limit before selecting coins.
+		self.require_server().await?;
 		let mut excluded = HashSet::new();
 		let mut last_refusal = None;
 		for _ in 0..10 {
@@ -2031,6 +2033,8 @@ impl Wallet {
 	///
 	/// Returns a [RoundStatus] if a refresh occurs.
 	pub async fn maintenance_refresh(&self) -> anyhow::Result<Option<RoundStatus>> {
+		// The early empty check also depends on the server's depth limit.
+		self.require_server().await?;
 		if self.get_vtxos_to_refresh().await?.is_empty() {
 			return Ok(None);
 		}

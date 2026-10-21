@@ -489,8 +489,26 @@ async fn receive_binding_internal_expired_before_replay_refunds_absent_sender_on
 		assert_eq!(invoices[0].state(),cln_rpc::plugins::hold::InvoiceState::Cancelled);
 		let parent=tokio::time::timeout(Duration::from_secs(30),async {
 			loop {
-				let row=db.read(async |t|Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL",&[&source.id().to_string()]).await?)).await.unwrap();
-				if let Some(row)=row {break deserialize::<Transaction>(row.get(0)).unwrap();}
+				let row=db.read(async |t|Ok(t.query_opt("SELECT a.sweep_tx,a.sweep_txid,f.raw_tx,f.txid AS fee_child_txid FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id JOIN expiry_allocation a ON a.id=c.allocation_id JOIN expiry_fee_child f ON f.allocation_id=a.id WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL ORDER BY f.id DESC LIMIT 1",&[&source.id().to_string()]).await?)).await.unwrap();
+				if let Some(row)=row {
+					let parent=deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+					let child=deserialize::<Transaction>(row.get("raw_tx")).unwrap();
+					assert_eq!(parent.compute_txid().to_string(),row.get::<_,String>("sweep_txid"));
+					assert_eq!(child.compute_txid().to_string(),row.get::<_,String>("fee_child_txid"));
+					let anchors=parent.output.iter().enumerate().filter(|(_,out)|out.script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT).collect::<Vec<_>>();
+					assert_eq!(anchors.len(),1);
+					let anchor=OutPoint::new(parent.compute_txid(),anchors[0].0 as u32);
+					assert!(child.input.iter().any(|input|input.previous_output==anchor));
+					// Publication on the server's Core can precede both transactions reaching the mining Core.
+					if let (Some(parent_info),Some(child_info))=(
+						core.custom_get_raw_transaction_info(parent.compute_txid(),None).unwrap(),
+						core.custom_get_raw_transaction_info(child.compute_txid(),None).unwrap(),
+					) {
+						assert_eq!(parent_info.transaction().unwrap(),parent);
+						assert_eq!(child_info.transaction().unwrap(),child);
+						break parent;
+					}
+				}
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
 		}).await.expect("the original50k source must receive its rightful refund after grant closureN6");

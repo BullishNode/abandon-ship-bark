@@ -73,7 +73,7 @@ async fn registered_receive_fallback() {
 		(point, output)
 	}).collect::<BTreeMap<_, _>>();
 	assert_eq!(initial_roots.len(), 4);
-	assert_eq!(initial_roots.values().map(|output| output.value).sum::<Amount>(), sat(20_000_000_000));
+	assert_eq!(initial_roots.values().map(|output| output.value).sum::<Amount>(), Amount::from_sat(20_000_000_000));
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let audit_start_height = ctx.bitcoind().get_block_count().await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal).funded(sat(500_000))
@@ -1015,7 +1015,7 @@ async fn registered_receive_fallback() {
 				}
 			}
 		}
-		assert_eq!(cut.values().map(|output| output.value).sum::<Amount>() + miner_fees, sat(20_000_000_000));
+		assert_eq!(cut.values().map(|output| output.value).sum::<Amount>() + miner_fees, Amount::from_sat(20_000_000_000));
 		for (point, output) in &cut {
 			if output.value == Amount::ZERO { continue; }
 			let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();

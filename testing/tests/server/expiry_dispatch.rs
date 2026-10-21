@@ -4,6 +4,7 @@ use ark::arkoor::package::ArkoorPackageBuilder;
 use ark::lightning::{Invoice, PaymentHash, Preimage};
 use ark::VtxoPolicy;
 use bitcoin_ext::{BlockDelta, BlockHeight, TxOutExt};
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::ln::LightningPaymentStatus;
 use server_rpc::protos;
 use cln_rpc::plugins::hold;
@@ -575,10 +576,26 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 		srv.wait_for_sync_height(expired).await; srv.watchmand().wait_for_sync_height(expired).await;
 		let parent = tokio::time::timeout(Duration::from_secs(30), async {
 			loop {
-				let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
+				let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.sweep_tx,f.raw_tx FROM expiry_allocation a \
 					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL", &[&source.to_string()]).await?)).await.unwrap();
-				if let Some(row) = row { break bitcoin::consensus::deserialize::<bitcoin::Transaction>(row.get("sweep_tx")).unwrap(); }
+					JOIN expiry_fee_child f ON f.allocation_id=a.id \
+					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL \
+					ORDER BY f.id DESC LIMIT 1", &[&source.to_string()]).await?)).await.unwrap();
+				if let Some(row) = row {
+					let parent = bitcoin::consensus::deserialize::<bitcoin::Transaction>(row.get("sweep_tx")).unwrap();
+					let child = bitcoin::consensus::deserialize::<bitcoin::Transaction>(row.get("raw_tx")).unwrap();
+					// Publication is local to the publisher's Core. The actual miner
+					// must know both exact transactions before its six-block batch.
+					let core = ctx.bitcoind().sync_client();
+					if let (Some(actual_parent), Some(actual_child)) = (
+						core.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap(),
+						core.custom_get_raw_transaction_info(child.compute_txid(), None).unwrap(),
+					) {
+						assert_eq!(actual_parent.hex, bitcoin::consensus::serialize(&parent));
+						assert_eq!(actual_child.hex, bitcoin::consensus::serialize(&child));
+						break parent;
+					}
+				}
 				tokio::time::sleep(poll_interval()).await;
 			}
 		}).await.expect("supervised receipt must lead to an actual lawful fallback");
@@ -602,7 +619,6 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 			"every parent output pays the rightful user, legitimate configured operator, or zero anchor");
 		let confirmed = ctx.generate_blocks(6).await;
 		srv.wait_for_sync_height(confirmed).await; srv.watchmand().wait_for_sync_height(confirmed).await;
-		use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 		let actual = ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), vout as u32, Some(true)).unwrap().unwrap();
 		assert!(actual.confirmations >= 6); assert_eq!(actual.value, sat(99_000));
 		assert_eq!(actual.script_pub_key.script().unwrap(), destination.spk);

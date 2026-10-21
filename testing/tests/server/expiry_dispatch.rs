@@ -295,7 +295,7 @@ pub(super) async fn attach_original_labelled_producer(
 /// fallback. No xpay replay, fake error/index or changed attempt status.
 #[tokio::test]
 async fn expiry_supervised_pre_rpc_dispatch_refunds_once_after_real_quiescence() {
-	supervised_dispatch_refund(false, false).await;
+	supervised_dispatch_refund(false, false, false).await;
 }
 
 /// Different premise from the pre-call component: the real native dispatcher
@@ -303,20 +303,29 @@ async fn expiry_supervised_pre_rpc_dispatch_refunds_once_after_real_quiescence()
 /// is stopped, and private incoming IO proves remote admission before group1.
 #[tokio::test]
 async fn expiry_supervised_original_xpay_queued_before_first_group_refunds_once() {
-	supervised_dispatch_refund(true, false).await;
+	supervised_dispatch_refund(true, false, false).await;
 }
 
 /// A genuine operator-funded foreign payment is observed by the normal monitor
 /// BEFORE import. Its hash-level success cannot discharge this never-sent source.
 #[tokio::test]
 async fn expiry_supervised_own_label_absent_after_foreign_complete_refunds_own_source_once() {
-	supervised_dispatch_refund(false, true).await;
+	supervised_dispatch_refund(false, true, false).await;
 }
 
-async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: bool) {
+/// AcceptedPending is a real injected own payment, not zero-history absence.
+/// Reopen the original intact CLN, refuse that receipt, and let the original
+/// held payment genuinely fail before the existing full native-refund oracle.
+#[tokio::test]
+async fn expiry_supervised_own_pending_survives_reopen_then_actual_failure_refunds_once() {
+	supervised_dispatch_refund(false, false, true).await;
+}
+
+async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: bool, own_pending: bool) {
 	tokio::time::timeout(Duration::from_secs(180), async {
 		let ctx = TestContext::new(if queued_original {"server/expiry_supervised_original_xpay_queued"}
 			else if foreign_complete {"server/expiry_supervised_foreign_complete"}
+			else if own_pending {"server/expiry_supervised_own_pending_reopen"}
 			else {"server/expiry_supervised_pre_rpc_dispatch"}).await;
 		let lightning = ctx.new_lightning_setup("lightningd").await;
 		let srv = ctx.captaind("server").lightningd(&lightning.internal).no_vtxo_pool().funded(btc(10))
@@ -325,7 +334,7 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 				cfg.htlc_send_expiry_delta=BlockDelta::new(40);
 				// Keep the normal monitor enabled; the foreign case must really
 				// observe its coarse outcome without direct status mutation.
-				if foreign_complete {cfg.invoice_check_interval=Duration::from_secs(1);}
+				if foreign_complete || own_pending {cfg.invoice_check_interval=Duration::from_secs(1);}
 			})
 			.watchmand().create().await;
 		let sender = ctx.bark("sender", &srv).funded(sat(500_000)).create().await;
@@ -334,7 +343,16 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 		let destination = client.fallback_destination().await.unwrap();
 		let input = client.get_full_vtxo(ids[0]).await.unwrap();
 		let key = client.get_vtxo_key(&input).await.unwrap();
-		let invoice = lightning.external.invoice_with_preimage(Some(sat(100_000)), "supervised-never-injected", "supervised pre-RPC", [39;32]).await;
+		let invoice = if own_pending {
+			lightning.external.hold_client().await.invoice(hold::InvoiceRequest {
+				payment_hash: Preimage::from_slice(&[39;32]).unwrap().compute_payment_hash().to_vec(),
+				amount_msat: 100_000_000,
+				description: Some(hold::invoice_request::Description::Memo("own-pending-intact-reopen".into())),
+				min_final_cltv_expiry: Some(30), expiry: Some(3600), routing_hints: vec![],
+			}).await.unwrap().into_inner().bolt11
+		} else {
+			lightning.external.invoice_with_preimage(Some(sat(100_000)), "supervised-never-injected", "supervised pre-RPC", [39;32]).await
+		};
 		let invoice = Invoice::Bolt11(invoice.parse().unwrap());
 		let hash = invoice.payment_hash();
 		let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
@@ -364,18 +382,22 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 		let mut admission = None;
 		let mut original_tree = Vec::new();
 		let mut original_qualification = None;
+		let mut accepted_parts = None;
+		let mut accepted_pays = None;
 		let foreign_label = "independent-operator-funded-foreign-payment";
-		if foreign_complete {
+		if foreign_complete || own_pending {
 			let (qualification, pid, start) = capture_original_labelled_producer(&ctx, &srv, &lightning.internal).await;
 			let root = OriginalXpayProcess::capture(pid);
 			assert_eq!(root.start, start);
 			original_qualification = Some(qualification);
 			original_node = Some(root);
 		}
-		let attempt=if queued_original {
+		let attempt=if queued_original || own_pending {
 			lightning.sync().await;
-			let (root,paused)=pause_original_xpay(&ctx,&lightning.internal).await;
-			original_node=Some(root); paused_xpay=Some(paused);
+			if queued_original {
+				let (root,paused)=pause_original_xpay(&ctx,&lightning.internal).await;
+				original_node=Some(root); paused_xpay=Some(paused);
+			}
 			// ONE authentic public initiation; never call xpay from the test or
 			// resubmit an invoice/label to manufacture a result.
 			srv.get_public_rpc().await.initiate_lightning_payment(protos::InitiateLightningPaymentRequest{
@@ -392,15 +414,42 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 				}
 			}).await.expect("the one original native payment must acquire its genuine durable dispatch");
 			let label=db.read(async |tx|Ok(tx.query_one("SELECT label FROM expiry_lightning_dispatch WHERE id=$1",&[&attempt.id]).await?.get::<_,String>(0))).await.unwrap();
-			admission=Some(original_node_received_xpay(&lightning.internal,&invoice.to_string(),&label).await);
-			let paused=&paused_xpay.as_ref().unwrap().process;
-			assert!(matches!(OriginalXpayProcess::stat(paused.pid),Ok(Some(('T',parent,start))) if parent==paused.parent && start==paused.start));
+			if queued_original {
+				admission=Some(original_node_received_xpay(&lightning.internal,&invoice.to_string(),&label).await);
+				let paused=&paused_xpay.as_ref().unwrap().process;
+				assert!(matches!(OriginalXpayProcess::stat(paused.pid),Ok(Some(('T',parent,start))) if parent==paused.parent && start==paused.start));
+			} else {
+				lightning.external.wait_for_hold_invoice_accepted(hash).await;
+			}
 			let mut original=lightning.internal.grpc_client().await;
 			let live=original.getinfo(cln_rpc::GetinfoRequest{}).await.unwrap().into_inner();
 			let key=db.read(async |tx|Ok(tx.query_one("SELECT pubkey FROM lightning_node WHERE id=$1",&[&attempt.lightning_node_id]).await?.get::<_,Vec<u8>>(0))).await.unwrap();
 			assert_eq!(live.id,key);
 			let history=original.list_send_pays(cln_rpc::ListsendpaysRequest{payment_hash:Some(hash.to_vec()),..Default::default()}).await.unwrap().into_inner();
-			assert!(history.payments.is_empty(),"a remotely received original request must still have zero injected groups while xpay is stopped");
+			if own_pending {
+				assert!(!history.payments.is_empty());
+				assert!(history.payments.iter().all(|pay| pay.payment_hash == hash.to_vec()
+					&& pay.label.as_deref() == Some(label.as_str()) && pay.payment_preimage.is_none()
+					&& pay.status() == cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus::Pending));
+				assert_eq!(history.payments.iter().map(|pay| pay.amount_msat.as_ref().unwrap().msat).sum::<u64>(), 100_000_000);
+				let aggregate = original.list_pays(cln_rpc::ListpaysRequest {
+					payment_hash: Some(hash.to_vec()), ..Default::default()
+				}).await.unwrap().into_inner();
+				assert_eq!(aggregate.pays.len(), 1);
+				assert!(aggregate.pays.iter().all(|pay| pay.payment_hash == hash.to_vec()
+					&& pay.label.as_deref() == Some(label.as_str()) && pay.preimage.is_none()
+					&& pay.status() == cln_rpc::listpays_pays::ListpaysPaysStatus::Pending));
+				assert_eq!(aggregate.pays[0].amount_msat.as_ref().unwrap().msat, 100_000_000);
+				let status = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
+					hash: hash.to_vec(), wait: false, htlc_vtxo_ids: vec![source.to_bytes().to_vec()],
+				}).await.unwrap().into_inner();
+				assert!(matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Pending(_))));
+				assert_eq!(status.htlc_vtxo_ids, vec![source.to_bytes().to_vec()]);
+				accepted_parts = Some(history.payments);
+				accepted_pays = Some(aggregate.pays);
+			} else {
+				assert!(history.payments.is_empty(),"a remotely received original request must still have zero injected groups while xpay is stopped");
+			}
 			attempt
 		} else {
 			let attempt=db.write(async |tx| {
@@ -459,13 +508,13 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 			assert!(matches!(OriginalXpayProcess::stat(paused.process.pid),Ok(Some(('T',_,start))) if start==paused.process.start));
 			paused.process.signal(nix::sys::signal::Signal::SIGKILL); // NEVER SIGCONT
 		}
-		if foreign_complete {
+		if foreign_complete || own_pending {
 			let root = original_node.as_ref().unwrap();
 			assert!(root.remains());
 			original_tree = original_ln_tree(root.pid);
 		}
 		lightning.internal.stop().await.unwrap();
-		if queued_original || foreign_complete {
+		if queued_original || foreign_complete || own_pending {
 			tokio::time::timeout(Duration::from_secs(10),async {
 				while original_tree.iter().any(OriginalXpayProcess::remains) {tokio::time::sleep(poll_interval()).await;}
 			}).await.expect("every captured original CLN/plugin/channel process must actually be extinct and reaped");
@@ -497,7 +546,7 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 		let original_status=db.read(async |tx|tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap().status;
 		let manifest = retained_supervised_manifest(&ctx, &cfg, &db, attempt.id,
 			if queued_original {"queued-original-incident"} else if foreign_complete {"foreign-complete-incident"}
-			else {"pre-rpc-incident"}).await;
+			else if own_pending {"own-pending-reopen-incident"} else {"pre-rpc-incident"}).await;
 		if let Some(admission)=admission {
 			// Retain actual public process epochs and only the matched admission
 			// digest inside the existing artifact; never raw private IO records.
@@ -518,47 +567,131 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 		}
 		if let Some(qualification) = original_qualification {
 			assert!(server::ln::resolve_uninjected_lightning(&cfg, &manifest).await.is_err(),
-				"foreign history cannot pass the unqualified whole-hash-empty proof");
+				"nonempty history cannot pass the unqualified whole-hash-empty proof");
 			attach_original_labelled_producer(&manifest, &db, attempt.id, qualification).await;
 		}
-		let bytes = std::fs::read(&manifest).unwrap();
-		let mut wrong: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-		wrong["binding"]["source_count"] = serde_json::json!(2);
-		let wrong_path = manifest.with_file_name("wrong-sources.json");
-		std::fs::write(&wrong_path, serde_json::to_vec(&wrong).unwrap()).unwrap();
-		assert!(server::ln::resolve_uninjected_lightning(&cfg, &wrong_path).await.is_err());
-		let original: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-		let artifact_path = original["quiescence"]["path"].as_str().unwrap();
-		let artifact_bytes = std::fs::read(artifact_path).unwrap();
-		let mut changed = artifact_bytes.clone(); changed.push(b' ');
-		std::fs::write(artifact_path,changed).unwrap();
-		assert!(server::ln::resolve_uninjected_lightning(&cfg,&manifest).await.is_err(),"changed retained artifact bytes must refuse");
-		std::fs::write(artifact_path,artifact_bytes).unwrap();
-		let fence_path = serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["binding"]["fence_path"].as_str().unwrap().to_owned();
-		let held = std::fs::OpenOptions::new().read(true).write(true).open(fence_path).unwrap();
-		held.try_lock().unwrap();
-		assert!(server::ln::resolve_uninjected_lightning(&cfg, &manifest).await.is_err(), "a supervisor-held competing exclusion cannot be ignored");
-		drop(held);
 		let manifest_arg = manifest.to_str().unwrap();
-		let mut missing_ack = srv.get_custom_command(&[
-			"resolve-uninjected-lightning", "--manifest", manifest_arg,
-		]).await.unwrap();
-		missing_ack.kill_on_drop(true);
-		let refused = missing_ack.output().await.unwrap();
-		assert!(!refused.status.success(), "the actual privileged CLI must require explicit acknowledgment");
-		assert!(String::from_utf8_lossy(&refused.stderr).contains("requires --acknowledge-trusted-operations"));
-		assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_lightning_terminal_failure WHERE id=$1",
-			&[&attempt.id]).await?.get::<_,i64>(0))).await.unwrap(),0,"acknowledgment refusal cannot import a receipt");
-		let mut import = srv.get_custom_command(&[
-			"resolve-uninjected-lightning", "--manifest", manifest_arg, "--acknowledge-trusted-operations",
-		]).await.unwrap();
-		import.kill_on_drop(true);
-		let imported = import.output().await.unwrap();
-		assert!(imported.status.success(), "actual CLI import failed: {}",String::from_utf8_lossy(&imported.stderr));
-		assert!(String::from_utf8_lossy(&imported.stdout).contains("recorded supervised zero-history evidence"));
-		assert!(!server::ln::resolve_uninjected_lightning(&cfg, &manifest).await.unwrap());
-		assert_eq!(db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap().status, original_status);
+		let original: serde_json::Value = serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+		if own_pending {
+			let mut reopened = lightning.internal.grpc_client().await;
+			let raw = reopened.list_send_pays(cln_rpc::ListsendpaysRequest {
+				payment_hash: Some(hash.to_vec()), ..Default::default()
+			}).await.unwrap().into_inner();
+			let aggregate = reopened.list_pays(cln_rpc::ListpaysRequest {
+				payment_hash: Some(hash.to_vec()), ..Default::default()
+			}).await.unwrap().into_inner();
+			// Exact original rows, including labels/group/part/index, survive.
+			// Do not print payment records or any possible private preimage.
+			assert!(raw.payments == *accepted_parts.as_ref().unwrap(), "intact original raw Pending history changed");
+			assert!(aggregate.pays == *accepted_pays.as_ref().unwrap(), "intact original aggregate Pending history changed");
+			let error = server::ln::resolve_uninjected_lightning(&cfg, &manifest).await.unwrap_err();
+			assert!(format!("{error:#}").contains("original dispatch has own payment history"), "{error:#}");
+			let unchanged = db.read(async |tx| Ok(tx.query_one("SELECT \
+				EXISTS(SELECT 1 FROM expiry_lightning_terminal_failure WHERE id=$1) AS failure, \
+				EXISTS(SELECT 1 FROM expiry_lightning_external_success WHERE id=$1) AS success, \
+				EXISTS(SELECT 1 FROM htlc_settlement WHERE payment_hash=$2) AS wal, \
+				EXISTS(SELECT 1 FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+					WHERE e.vtxo_id=$3 AND c.active) AS allocated", &[&attempt.id,&hash.to_string(),&source.to_string()]).await?)).await.unwrap();
+			for field in ["failure", "success", "wal", "allocated"] { assert!(!unchanged.get::<_, bool>(field)); }
+		} else {
+			let bytes = std::fs::read(&manifest).unwrap();
+			let mut wrong: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+			wrong["binding"]["source_count"] = serde_json::json!(2);
+			let wrong_path = manifest.with_file_name("wrong-sources.json");
+			std::fs::write(&wrong_path, serde_json::to_vec(&wrong).unwrap()).unwrap();
+			assert!(server::ln::resolve_uninjected_lightning(&cfg, &wrong_path).await.is_err());
+			let artifact_path = original["quiescence"]["path"].as_str().unwrap();
+			let artifact_bytes = std::fs::read(artifact_path).unwrap();
+			let mut changed = artifact_bytes.clone(); changed.push(b' ');
+			std::fs::write(artifact_path,changed).unwrap();
+			assert!(server::ln::resolve_uninjected_lightning(&cfg,&manifest).await.is_err(),"changed retained artifact bytes must refuse");
+			std::fs::write(artifact_path,artifact_bytes).unwrap();
+			let fence_path = serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["binding"]["fence_path"].as_str().unwrap().to_owned();
+			let held = std::fs::OpenOptions::new().read(true).write(true).open(fence_path).unwrap();
+			held.try_lock().unwrap();
+			assert!(server::ln::resolve_uninjected_lightning(&cfg, &manifest).await.is_err(), "a supervisor-held competing exclusion cannot be ignored");
+			drop(held);
+			let mut missing_ack = srv.get_custom_command(&[
+				"resolve-uninjected-lightning", "--manifest", manifest_arg,
+			]).await.unwrap();
+			missing_ack.kill_on_drop(true);
+			let refused = missing_ack.output().await.unwrap();
+			assert!(!refused.status.success(), "the actual privileged CLI must require explicit acknowledgment");
+			assert!(String::from_utf8_lossy(&refused.stderr).contains("requires --acknowledge-trusted-operations"));
+			assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_lightning_terminal_failure WHERE id=$1",
+				&[&attempt.id]).await?.get::<_,i64>(0))).await.unwrap(),0,"acknowledgment refusal cannot import a receipt");
+			let mut import = srv.get_custom_command(&[
+				"resolve-uninjected-lightning", "--manifest", manifest_arg, "--acknowledge-trusted-operations",
+			]).await.unwrap();
+			import.kill_on_drop(true);
+			let imported = import.output().await.unwrap();
+			assert!(imported.status.success(), "actual CLI import failed: {}",String::from_utf8_lossy(&imported.stderr));
+			assert!(String::from_utf8_lossy(&imported.stdout).contains("recorded supervised zero-history evidence"));
+			assert!(!server::ln::resolve_uninjected_lightning(&cfg, &manifest).await.unwrap());
+			assert_eq!(db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap().status, original_status);
+		}
 		srv.start().await.unwrap(); srv.watchmand().start().await.unwrap();
+		if own_pending {
+			lightning.internal.connect(&lightning.external).await;
+			lightning.sync().await;
+			lightning.external.wait_for_hold_invoice_accepted(hash).await;
+			// The source's real backing expires while its actual own HTLC is
+			// still held. The new invoice's final CLTV30 fits maxdelay36 and
+			// exceeds this root's remaining lifetime; do not mine to its timeout.
+			let held_height = input.expiry_height() + BlockDelta::new(1);
+			let current = ctx.bitcoind().get_block_count().await as u32;
+			assert!(held_height < deadline);
+			let held_height = ctx.generate_blocks(held_height.to_u32().checked_sub(current).unwrap()).await;
+			srv.wait_for_sync_height(held_height).await; srv.watchmand().wait_for_sync_height(held_height).await;
+			let held_hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(held_height.to_u32())).unwrap();
+			tokio::time::timeout(Duration::from_secs(30), async {
+				loop {
+					if db.read(async |tx| {
+						let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+						Ok(view.captaind.height == held_height && view.watchmand.height == held_height
+							&& view.captaind.hash == held_hash && view.watchmand.hash == held_hash
+							&& tx.expiry_view_is_rebuilt(view).await?)
+					}).await.unwrap() { break; }
+					tokio::time::sleep(poll_interval()).await;
+				}
+			}).await.expect("expired Pending sample requires the completed rebuilt canonical view");
+			lightning.sync().await;
+			lightning.external.wait_for_hold_invoice_accepted(hash).await;
+			let mut original = lightning.internal.grpc_client().await;
+			let raw = original.list_send_pays(cln_rpc::ListsendpaysRequest {
+				payment_hash: Some(hash.to_vec()), ..Default::default()
+			}).await.unwrap().into_inner();
+			let aggregate = original.list_pays(cln_rpc::ListpaysRequest {
+				payment_hash: Some(hash.to_vec()), ..Default::default()
+			}).await.unwrap().into_inner();
+			assert!(raw.payments == *accepted_parts.as_ref().unwrap(), "backing expiry changed genuine original Pending parts");
+			assert!(aggregate.pays == *accepted_pays.as_ref().unwrap(), "backing expiry changed genuine original Pending aggregate");
+			assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
+				JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE e.vtxo_id=$1 AND c.active",
+				&[&source.to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0,
+				"expired backing with a genuine own Pending cannot authorize any payout");
+			let status = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
+				hash: hash.to_vec(), wait: false, htlc_vtxo_ids: vec![source.to_bytes().to_vec()],
+			}).await.unwrap().into_inner();
+			assert!(matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Pending(_))));
+			assert_eq!(status.htlc_vtxo_ids, vec![source.to_bytes().to_vec()]);
+			assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
+			// Only the genuine receiver changes the actual held HTLC outcome.
+			lightning.external.hold_client().await.cancel(hold::CancelRequest { payment_hash: hash.to_vec() }).await.unwrap();
+			tokio::time::timeout(Duration::from_secs(30), async {
+				loop {
+					let proof = db.read(async |tx| Ok(tx.query_opt("SELECT created_index,jsonrpc_error_code,supervised_manifest_sha256 \
+						FROM expiry_lightning_terminal_failure WHERE id=$1", &[&attempt.id]).await?)).await.unwrap();
+					if let Some(proof) = proof {
+						assert!(proof.get::<_, Option<i64>>("created_index").is_some());
+						assert!(proof.get::<_, Option<i32>>("jsonrpc_error_code").is_none());
+						assert!(proof.get::<_, Option<Vec<u8>>>("supervised_manifest_sha256").is_none());
+						break;
+					}
+					tokio::time::sleep(poll_interval()).await;
+				}
+			}).await.expect("genuine original Pending must reconcile its actual backend cancellation");
+		}
 		let fee_address = srv.watchmand().wait_wallet_address().await;
 		let mut sponsors = std::collections::BTreeSet::new();
 		for _ in 0..2 {
@@ -696,22 +829,32 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 		}
 		assert_eq!(known_payouts,std::collections::BTreeSet::from([(bitcoin::OutPoint::new(parent.compute_txid(),vout as u32),sat(99_000))]),
 			"only one canonical output may pay the known registered destination");
-		let mut repeat = srv.get_custom_command(&[
-			"resolve-uninjected-lightning", "--manifest", manifest_arg, "--acknowledge-trusted-operations",
-		]).await.unwrap();
-		repeat.kill_on_drop(true);
-		let repeated = repeat.output().await.unwrap();
-		assert!(repeated.status.success(), "post-payout CLI repeat failed: {}",String::from_utf8_lossy(&repeated.stderr));
-		assert!(String::from_utf8_lossy(&repeated.stdout).contains("same incident already recorded"),
-			"the actual CLI must return idempotently after payout, before the decided-source guard");
-		let different = manifest.with_file_name("different-receipt-bytes.json");
-		std::fs::write(&different,serde_json::to_vec_pretty(&original).unwrap()).unwrap();
-		let error = server::ln::resolve_uninjected_lightning(&cfg,&different).await.unwrap_err();
-		assert!(format!("{error:#}").contains("different terminal receipt"),"{error:#}");
-		let row = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) AS receipts, \
-			COUNT(*) FILTER(WHERE created_index IS NOT NULL OR jsonrpc_error_code IS NOT NULL) AS fabricated \
-			FROM expiry_lightning_terminal_failure WHERE id=$1", &[&attempt.id]).await?)).await.unwrap();
-		assert_eq!(row.get::<_, i64>("receipts"),1); assert_eq!(row.get::<_, i64>("fabricated"),0);
+		if own_pending {
+			assert!(server::ln::resolve_uninjected_lightning(&cfg, &manifest).await.is_err(),
+				"a refused absence incident must never replace the actual failure receipt after payout");
+			let row = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) AS receipts, \
+				COUNT(*) FILTER(WHERE created_index IS NOT NULL AND jsonrpc_error_code IS NULL \
+					AND supervised_manifest_sha256 IS NULL) AS genuine \
+				FROM expiry_lightning_terminal_failure WHERE id=$1", &[&attempt.id]).await?)).await.unwrap();
+			assert_eq!(row.get::<_, i64>("receipts"), 1); assert_eq!(row.get::<_, i64>("genuine"), 1);
+		} else {
+			let mut repeat = srv.get_custom_command(&[
+				"resolve-uninjected-lightning", "--manifest", manifest_arg, "--acknowledge-trusted-operations",
+			]).await.unwrap();
+			repeat.kill_on_drop(true);
+			let repeated = repeat.output().await.unwrap();
+			assert!(repeated.status.success(), "post-payout CLI repeat failed: {}",String::from_utf8_lossy(&repeated.stderr));
+			assert!(String::from_utf8_lossy(&repeated.stdout).contains("same incident already recorded"),
+				"the actual CLI must return idempotently after payout, before the decided-source guard");
+			let different = manifest.with_file_name("different-receipt-bytes.json");
+			std::fs::write(&different,serde_json::to_vec_pretty(&original).unwrap()).unwrap();
+			let error = server::ln::resolve_uninjected_lightning(&cfg,&different).await.unwrap_err();
+			assert!(format!("{error:#}").contains("different terminal receipt"),"{error:#}");
+			let row = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) AS receipts, \
+				COUNT(*) FILTER(WHERE created_index IS NOT NULL OR jsonrpc_error_code IS NOT NULL) AS fabricated \
+				FROM expiry_lightning_terminal_failure WHERE id=$1", &[&attempt.id]).await?)).await.unwrap();
+			assert_eq!(row.get::<_, i64>("receipts"),1); assert_eq!(row.get::<_, i64>("fabricated"),0);
+		}
 		assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_lightning_dispatch WHERE id=$1", &[&attempt.id]).await?.get::<_, i64>(0))).await.unwrap(),1);
 		let total=db.read(async |tx|Ok(tx.query_one("SELECT COUNT(*) AS attempts, \
 			COUNT(*) FILTER(WHERE d.id IS NOT NULL) AS dispatches, COUNT(*) FILTER(WHERE s.id IS NOT NULL) AS success \
@@ -739,6 +882,34 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 			assert_eq!(received.invoices.len(), 1);
 			assert_eq!(received.invoices[0].status(), cln_rpc::listinvoices_invoices::ListinvoicesInvoicesStatus::Paid);
 			assert_eq!(received.invoices[0].amount_received_msat.as_ref().unwrap().msat, 100_000_000);
+		} else if own_pending {
+			let original = accepted_parts.as_ref().unwrap();
+			assert_eq!(raw.payments.len(), original.len()); assert_eq!(aggregate.pays.len(), 1);
+			for pay in &raw.payments {
+				assert!(pay.payment_hash == hash.to_vec() && pay.payment_preimage.is_none()
+					&& pay.status() == cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus::Failed);
+				assert!(original.iter().any(|before| before.created_index == pay.created_index
+					&& before.groupid == pay.groupid && before.partid == pay.partid
+					&& before.label == pay.label && before.amount_msat == pay.amount_msat),
+					"only original injected parts may remain; no new dispatch or replay");
+			}
+			assert_eq!(raw.payments.iter().map(|pay| pay.amount_msat.as_ref().unwrap().msat).sum::<u64>(), 100_000_000);
+			let pay = &aggregate.pays[0];
+			let before = &accepted_pays.as_ref().unwrap()[0];
+			assert!(pay.payment_hash == hash.to_vec() && pay.preimage.is_none()
+				&& pay.status() == cln_rpc::listpays_pays::ListpaysPaysStatus::Failed);
+			assert!(pay.created_index == before.created_index && pay.label == before.label && pay.amount_msat == before.amount_msat);
+			let invoices = lightning.external.hold_client().await.list(hold::ListRequest {
+				constraint: Some(hold::list_request::Constraint::PaymentHash(hash.to_vec())),
+			}).await.unwrap().into_inner().invoices;
+			assert_eq!(invoices.len(), 1); assert_eq!(invoices[0].state(), hold::InvoiceState::Cancelled);
+			assert!(invoices[0].preimage.is_none());
+			assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
+			let status = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
+				hash: hash.to_vec(), wait: false, htlc_vtxo_ids: vec![source.to_bytes().to_vec()],
+			}).await.unwrap().into_inner();
+			assert!(matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Failed(_))));
+			assert_eq!(status.htlc_vtxo_ids, vec![source.to_bytes().to_vec()]);
 		} else {
 			assert!(raw.payments.is_empty() && aggregate.pays.is_empty(),
 				"restart/repeat must never replay the extinguished original request");

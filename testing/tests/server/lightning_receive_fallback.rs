@@ -13,18 +13,21 @@ use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPoli
 use ark::address::VtxoDelivery;
 use ark::mailbox::BlindedMailboxIdentifier;
 use ark::vtxo::Full;
+use ark::vtxo::policy::clause::TapScriptClause;
 use ark_testing::{sat, TestContext};
 use ark_testing::daemon::captaind::{proxy::MailboxRpcProxy, MailboxClient, WalletAdminClient};
 use bark::FallbackDisposition;
 use bark::actions::lightning::receive::Progress;
 use bark::movement::MovementStatus;
-use bitcoin::{Address, Amount, Network, OutPoint, Transaction};
+use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut, Witness};
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::{Keypair, Secp256k1};
+use bitcoin::sighash::{Prevouts, SighashCache, TapSighashType};
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin_ext::{AmountExt, BlockDelta, TxOutExt};
-use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi, json::SignRawTransactionInput};
 use server::database::{Db, SpendState};
 use server::database::expiry_inventory::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits};
 use server::vtxopool::VtxoTarget;
@@ -55,6 +58,22 @@ async fn registered_forwarded_receive_pays_absent_recipient_after_provider_stops
 
 async fn registered_receive_fallback() {
 	let ctx = TestContext::new("server/registered_receive_fallback").await;
+	// Capture the existing four mature Core coinbases before any setup spend.
+	// The follow-on manual exit may sponsor fees only from this same20B cut.
+	let core = ctx.bitcoind().sync_client();
+	let initial_height = core.get_block_count().unwrap();
+	let initial_roots = core.list_unspent(Some(1), None, None, None, None).unwrap().into_iter().map(|coin| {
+		assert!(coin.spendable && coin.solvable && coin.safe && coin.confirmations >= 100);
+		let point = OutPoint::new(coin.txid, coin.vout);
+		let transaction = core.get_raw_transaction(&coin.txid, None).unwrap();
+		assert!(transaction.is_coinbase());
+		let output = transaction.output[coin.vout as usize].clone();
+		assert_eq!(output.value, coin.amount);
+		assert_eq!(output.script_pubkey, coin.script_pub_key);
+		(point, output)
+	}).collect::<BTreeMap<_, _>>();
+	assert_eq!(initial_roots.len(), 4);
+	assert_eq!(initial_roots.values().map(|output| output.value).sum::<Amount>(), sat(20_000_000_000));
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let audit_start_height = ctx.bitcoind().get_block_count().await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal).funded(sat(500_000))
@@ -99,6 +118,7 @@ async fn registered_receive_fallback() {
 	srv.wait_for_sync_height(funded).await;
 	srv.watchmand().wait_for_sync_height(funded).await;
 	let mut sponsors = BTreeMap::new();
+	let manual_sponsor_funding = *fee_funding.last().unwrap();
 	for txid in fee_funding {
 		let transaction = ctx.bitcoind().await_transaction(txid).await;
 		let vout = transaction.output.iter().position(|output|
@@ -953,4 +973,188 @@ async fn registered_receive_fallback() {
 		assert!(!pending.input.iter().any(|input| frontier.contains_key(&input.previous_output)),
 			"no unconfirmed continuation may hide a spend of this complete original-funding cut");
 	}
+	// Original A payout/recovery, B held/no-appropriation and700k proofs above
+	// remain the precondition. This is B's raw-key MANUAL exit, not automatic
+	// unregistered fallback or seed recovery; the provider stays absent.
+	let owner_script = Address::p2tr(&secp, unknown_identity.x_only_public_key().0, None, Network::Regtest).script_pubkey();
+	assert_ne!(owner_script, destination.spk);
+	assert_ne!(owner_script, provider_destination.spk);
+	assert_ne!(owner_script, operator_script);
+	let whole_cut = || {
+		let mut cut = initial_roots.clone();
+		let mut miner_fees = Amount::ZERO;
+		let mut transactions = BTreeSet::new();
+		let mut owner_outputs = BTreeMap::new();
+		for height in initial_height + 1..=core.get_block_count().unwrap() {
+			let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
+			for tx in block.txdata {
+				for (vout, output) in tx.output.iter().enumerate() {
+					assert_ne!(output.script_pubkey, provider_destination.spk);
+					if output.script_pubkey == destination.spk {
+						assert_eq!(OutPoint::new(tx.compute_txid(), vout as u32), payout);
+						assert_eq!(output.value, expected);
+					}
+					if output.script_pubkey == owner_script {
+						assert!(owner_outputs.insert(OutPoint::new(tx.compute_txid(), vout as u32), output.value).is_none());
+					}
+				}
+				if !tx.input.iter().any(|input| cut.contains_key(&input.previous_output)) { continue; }
+				assert!(transactions.insert(tx.compute_txid()));
+				let points = tx.input.iter().map(|input| input.previous_output).collect::<BTreeSet<_>>();
+				assert_eq!(points.len(), tx.input.len());
+				assert!(points.iter().all(|point| cut.contains_key(point)), "no new capital may enter the original20B cut");
+				let mut input_value = Amount::ZERO;
+				for point in points {
+					let output = cut.remove(&point).unwrap();
+					assert_eq!(core.get_raw_transaction(&point.txid, None).unwrap().output[point.vout as usize], output);
+					input_value += output.value;
+				}
+				miner_fees += input_value.checked_sub(tx.output.iter().map(|output| output.value).sum()).unwrap();
+				for (vout, output) in tx.output.iter().cloned().enumerate() {
+					assert!(cut.insert(OutPoint::new(tx.compute_txid(), vout as u32), output).is_none());
+				}
+			}
+		}
+		assert_eq!(cut.values().map(|output| output.value).sum::<Amount>() + miner_fees, sat(20_000_000_000));
+		for (point, output) in &cut {
+			if output.value == Amount::ZERO { continue; }
+			let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+			assert!(actual.confirmations >= 6);
+			assert_eq!(actual.value, output.value);
+			assert_eq!(actual.script_pub_key.script().unwrap(), output.script_pubkey);
+		}
+		for txid in core.get_raw_mempool().unwrap() {
+			let pending = core.get_raw_transaction(&txid, None).unwrap();
+			assert!(!pending.input.iter().any(|input| cut.contains_key(&input.previous_output)));
+		}
+		(cut, miner_fees, owner_outputs)
+	};
+	let (before_manual, before_manual_fees, before_owner_outputs) = whole_cut();
+	assert!(before_owner_outputs.is_empty());
+	let funding = core.get_raw_transaction(&manual_sponsor_funding, None).unwrap();
+	let core_change = funding.output.iter().enumerate().filter_map(|(vout, output)| {
+		if output.script_pubkey == fee_address.script_pubkey() { return None; }
+		let address = Address::from_script(&output.script_pubkey, Network::Regtest).unwrap();
+		assert_eq!(core.get_address_info(&address).unwrap().is_mine, Some(true));
+		let point = OutPoint::new(manual_sponsor_funding, vout as u32);
+		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+		assert!(actual.confirmations >= 6);
+		assert_eq!(actual.value, output.value);
+		assert_eq!(before_manual.get(&point), Some(output));
+		Some((point, output.clone()))
+	}).collect::<Vec<_>>();
+	assert_eq!(core_change.len(), 1, "use only the explicit existing funding transaction's Core-owned change");
+	let (original_fee_point, original_fee_output) = core_change[0].clone();
+	let (mut fee_point, mut fee_output) = (original_fee_point, original_fee_output.clone());
+	let held_point = *held[0].0;
+	assert_ne!(held_point, unknown_source.point());
+	assert_eq!(before_manual.get(&held_point), Some(&unknown_path[&held_point]));
+	assert_eq!(unknown_path[&held_point].value, amount);
+	let held_step = b_steps.iter().find(|step| OutPoint::new(step.tx.compute_txid(), step.output_idx as u32) == held_point).unwrap();
+	assert_eq!(core.get_raw_transaction(&held_point.txid, None).unwrap(), held_step.tx);
+	assert_eq!(held_step.tx.output[held_point.vout as usize], unknown_path[&held_point]);
+	assert!(unknown_source.has_all_witnesses());
+	let first = b_steps.iter().position(|step| step.tx.input[0].previous_output == held_point).unwrap();
+	assert!(b_steps[first..].len() <= usize::from(depth));
+	let mut publication_fees = Amount::ZERO;
+	for step in &b_steps[first..] {
+		assert_eq!(step.tx.input.len(), 1);
+		let previous = core.get_tx_out(&step.tx.input[0].previous_output.txid,
+			step.tx.input[0].previous_output.vout, Some(true)).unwrap().unwrap();
+		assert!(previous.confirmations >= 6);
+		assert_eq!(previous.value, amount);
+		assert_eq!(previous.script_pub_key.script().unwrap(), unknown_path[&step.tx.input[0].previous_output].script_pubkey);
+		assert_eq!(step.tx.output[step.output_idx].value, amount);
+		let anchors = step.tx.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor()).collect::<Vec<_>>();
+		assert_eq!(anchors.len(), 1);
+		assert_eq!(anchors[0].1.value, Amount::ZERO);
+		assert_eq!(step.tx.output.iter().map(|output| output.value).sum::<Amount>(), amount);
+		let anchor = OutPoint::new(step.tx.compute_txid(), anchors[0].0 as u32);
+		let fee = sat(2_000);
+		let child = Transaction {
+			version: bitcoin::transaction::Version(3), lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: [anchor, fee_point].into_iter().map(|point| TxIn { previous_output: point,
+				script_sig: Default::default(), sequence: bitcoin::Sequence::ZERO, witness: Witness::new() }).collect(),
+			output: vec![TxOut { value: fee_output.value.checked_sub(fee).unwrap(), script_pubkey: original_fee_output.script_pubkey.clone() }],
+		};
+		let prevout = SignRawTransactionInput { txid: anchor.txid, vout: anchor.vout,
+			script_pub_key: anchors[0].1.script_pubkey.clone(), redeem_script: None, amount: Some(Amount::ZERO) };
+		let signed = core.sign_raw_transaction_with_wallet(&child, Some(&[prevout]), None).unwrap();
+		assert!(signed.complete);
+		let signed = signed.transaction().unwrap();
+		assert_eq!(signed.input.iter().map(|input| input.previous_output).collect::<Vec<_>>(), vec![anchor, fee_point]);
+		assert_eq!(signed.output, child.output);
+		let result = core.submit_package(&[&step.tx, &signed]).unwrap();
+		assert_eq!(result.package_msg, "success");
+		for tx in [&step.tx, &signed] {
+			assert!(result.tx_results.values().any(|entry| entry.txid == tx.compute_txid() && entry.error.is_none()));
+			assert_eq!(ctx.bitcoind().await_transaction(tx.compute_txid()).await, *tx);
+		}
+		ctx.generate_blocks(6).await;
+		fee_point = OutPoint::new(signed.compute_txid(), 0);
+		fee_output = signed.output[0].clone();
+		publication_fees += fee;
+	}
+	let leaf = core.get_tx_out(&unknown_source.point().txid, unknown_source.point().vout, Some(true)).unwrap().unwrap();
+	assert_eq!(leaf.value, amount);
+	assert_eq!(leaf.script_pub_key.script().unwrap(), unknown_source.txout().script_pubkey);
+	let clause = unknown_source.policy().as_pubkey().unwrap().user_pubkey_claim_clause(unknown_source.exit_delta());
+	assert_eq!(clause.pubkey, unknown_key);
+	assert_eq!(clause.block_delta.to_u32(), 12);
+	if leaf.confirmations <= 12 { ctx.generate_blocks(13 - leaf.confirmations as u32).await; }
+	let mature = core.get_tx_out(&unknown_source.point().txid, unknown_source.point().vout, Some(true)).unwrap().unwrap();
+	assert!(mature.confirmations > clause.block_delta.to_u32());
+	let control = clause.control_block(&unknown_source);
+	assert!(control.verify_taproot_commitment(&secp, unknown_source.output_taproot().output_key().to_x_only_public_key(), &clause.tapscript()));
+	let claim_fee = sat(1_000);
+	let fee_actual = core.get_tx_out(&fee_point.txid, fee_point.vout, Some(true)).unwrap().unwrap();
+	assert!(fee_actual.confirmations >= 6);
+	assert_eq!(fee_actual.value, fee_output.value);
+	assert_eq!(fee_actual.script_pub_key.script().unwrap(), fee_output.script_pubkey);
+	let mut claim = Transaction {
+		version: bitcoin::transaction::Version::TWO, lock_time: bitcoin::absolute::LockTime::ZERO,
+		input: vec![TxIn { previous_output: unknown_source.point(), script_sig: Default::default(),
+			sequence: clause.sequence(), witness: Witness::new() },
+			TxIn { previous_output: fee_point, script_sig: Default::default(), sequence: bitcoin::Sequence::ZERO, witness: Witness::new() }],
+		output: vec![TxOut { value: amount, script_pubkey: owner_script.clone() },
+			TxOut { value: fee_output.value.checked_sub(claim_fee).unwrap(), script_pubkey: original_fee_output.script_pubkey.clone() }],
+	};
+	let sighash = SighashCache::new(&claim).taproot_script_spend_signature_hash(0,
+		&Prevouts::All(&[unknown_source.txout(), fee_output.clone()]), TapLeafHash::from_script(&clause.tapscript(), LeafVersion::TapScript),
+		TapSighashType::Default).unwrap();
+	let signature = secp.sign_schnorr(&sighash.into(), &unknown_identity);
+	secp.verify_schnorr(&signature, &sighash.into(), &unknown_identity.x_only_public_key().0).unwrap();
+	claim.input[0].witness = clause.witness(&signature, &control);
+	let leaf_prevout = SignRawTransactionInput { txid: unknown_source.point().txid, vout: unknown_source.point().vout,
+		script_pub_key: unknown_source.txout().script_pubkey, redeem_script: None, amount: Some(amount) };
+	let signed = core.sign_raw_transaction_with_wallet(&claim, Some(&[leaf_prevout]), None).unwrap();
+	assert!(signed.complete);
+	let signed = signed.transaction().unwrap();
+	assert_eq!(signed.compute_txid(), claim.compute_txid(), "Core may only add the declared fee input's witness");
+	assert_eq!(signed.input[0].witness, claim.input[0].witness, "the raw B-owner signature must remain unchanged");
+	assert_eq!(signed.input.iter().map(|input| input.previous_output).collect::<Vec<_>>(), vec![unknown_source.point(), fee_point]);
+	assert_eq!(signed.output, claim.output);
+	assert_eq!(amount + fee_output.value, signed.output.iter().map(|output| output.value).sum::<Amount>() + claim_fee);
+	let claim = signed;
+	core.send_raw_transaction(&claim).unwrap();
+	ctx.generate_blocks(6).await;
+	assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await, claim);
+	let owner_point = OutPoint::new(claim.compute_txid(), 0);
+	let paid = core.get_tx_out(&owner_point.txid, owner_point.vout, Some(true)).unwrap().unwrap();
+	assert!(paid.confirmations >= 6);
+	assert_eq!(paid.script_pub_key.script().unwrap(), owner_script);
+	assert_eq!(paid.value, amount, "B retains its full10k; the declared Core change sponsors only miner fees");
+	assert!(unknown_path.keys().all(|point| core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_none()));
+	let (after_manual, after_manual_fees, owner_outputs) = whole_cut();
+	let mut expected_cut = before_manual;
+	assert!(expected_cut.remove(&held_point).is_some());
+	assert_eq!(expected_cut.remove(&original_fee_point), Some(original_fee_output));
+	assert!(expected_cut.insert(owner_point, claim.output[0].clone()).is_none());
+	assert!(expected_cut.insert(OutPoint::new(claim.compute_txid(), 1), claim.output[1].clone()).is_none());
+	assert_eq!(after_manual, expected_cut, "only B's genuine signed branch and the declared fee coin may change the complete cut");
+	assert_eq!(after_manual_fees, before_manual_fees + publication_fees + claim_fee);
+	assert_eq!(after_manual.iter().filter(|(_, output)| output.script_pubkey == owner_script).map(|(point, output)| (*point, output.value)).collect::<BTreeMap<_, _>>(),
+		BTreeMap::from([(owner_point, amount)]));
+	assert_eq!(owner_outputs, BTreeMap::from([(owner_point, amount)]), "historical scanning rejects duplicate B-owner outputs, including already spent ones");
+	assert_eq!(outage.0.load(Ordering::SeqCst), stopped_posts);
 }

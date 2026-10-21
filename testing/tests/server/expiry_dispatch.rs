@@ -898,7 +898,11 @@ async fn supervised_dispatch_refund(queued_original: bool, foreign_complete: boo
 			let before = &accepted_pays.as_ref().unwrap()[0];
 			assert!(pay.payment_hash == hash.to_vec() && pay.preimage.is_none()
 				&& pay.status() == cln_rpc::listpays_pays::ListpaysPaysStatus::Failed);
-			assert!(pay.created_index == before.created_index && pay.label == before.label && pay.amount_msat == before.amount_msat);
+			assert!(pay.created_index == before.created_index && pay.label == before.label);
+			// CLN tallies aggregate amounts only for Pending/Complete parts.
+			// Failed retains the original raw principal/identities checked above.
+			assert!(pay.amount_msat.is_none());
+			assert_eq!(pay.amount_sent_msat.as_ref().unwrap().msat, 0);
 			let invoices = lightning.external.hold_client().await.list(hold::ListRequest {
 				constraint: Some(hold::list_request::Constraint::PaymentHash(hash.to_vec())),
 			}).await.unwrap().into_inner().invoices;

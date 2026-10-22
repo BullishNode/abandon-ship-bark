@@ -1,7 +1,9 @@
+use bark::onchain::MakeCpfpFees;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::sync::Arc;
+use bdk_wallet::KeychainKind;
 use std::time::Duration;
 
 use log::{error, warn};
@@ -88,7 +90,7 @@ async fn watchman_sweeps_boards() {
 	require_bark_version!(> "0.5.0");
 
 	let ctx = TestContext::new("server/watchman_sweeps_boards").await;
-	let srv = ctx.captaind("server").funded(btc(10)).cfg(|cfg| {
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).funded(btc(10)).cfg(|cfg| {
 		cfg.vtxo_lifetime = BlockDelta::new(144);
 		cfg.vtxopool.vtxo_targets = vec![];
 	}).watchmand_cfg(|cfg| {
@@ -546,7 +548,7 @@ async fn watchman_sweeps_round_vtxos() {
 				assert_eq!(output.value, Amount::ZERO);
 				anchors.push(point);
 			} else if let Some(owner) = destinations.iter().position(|destination| destination.spk == output.script_pubkey) {
-				assert_eq!(output.value, sat(199_000));
+				assert_eq!(output.value, sat(198_000));
 				assert!(payouts.insert(owner, (point, output.value, *allocation)).is_none());
 				assert!(actual_payouts.insert(index as i32, output.clone()).is_none());
 				customer_value += output.value;
@@ -586,8 +588,8 @@ async fn watchman_sweeps_round_vtxos() {
 	}
 	assert_eq!(consumed_roots, frontiers.keys().copied().collect::<BTreeSet<_>>());
 	assert_eq!(payouts.len(), 2);
-	assert_eq!(customer_value, sat(398_000));
-	assert_eq!(operator_value, sat(402_000));
+	assert_eq!(customer_value, sat(396_000));
+	assert_eq!(operator_value, sat(404_000));
 	let unused = sponsors.difference(&consumed_sponsors).copied().collect::<BTreeSet<_>>();
 	// Customer liability is 400k; the old surrendered 400k is separate operator capital.
 	assert_eq!(sat(1_100_000), customer_value + operator_value + change_value
@@ -670,8 +672,8 @@ async fn watchman_sweeps_round_vtxos() {
 			assert_eq!(row.get::<_, String>("owner_mailbox"), mailboxes[owner].to_string());
 			assert_eq!(row.get::<_, String>("user_pubkey"), key);
 			assert_eq!(row.get::<_, String>("spk"), destinations[owner].spk.as_bytes().to_lower_hex_string());
-			assert_eq!(row.get::<_, i64>("fee_sat"), 1_000);
-			assert_eq!(row.get::<_, i64>("payout_sat"), 199_000);
+			assert_eq!(row.get::<_, i64>("fee_sat"), 2_000);
+			assert_eq!(row.get::<_, i64>("payout_sat"), 198_000);
 			assert_eq!(payouts[&owner].2, allocation);
 		}
 	}
@@ -737,6 +739,8 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 	assert_eq!(customer_sources.len(), 2);
 	assert_eq!(customer_sources.iter().map(|coin| coin.amount()).collect::<BTreeSet<_>>(),
 		BTreeSet::from([sat(50_000), sat(300_000)]));
+	assert_eq!(customer_sources.iter().map(|coin| coin.expiry_height()).collect::<BTreeSet<_>>().len(), 2,
+		"the sequential boards retain different original expiry heights");
 	let mut customer_fundings = BTreeMap::new();
 	for coin in &customer_sources {
 		let funding = ctx.bitcoind().await_transaction(coin.chain_anchor().txid).await;
@@ -961,7 +965,10 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 		assert_eq!(parent.output.iter().map(|output| output.value).sum::<Amount>(), gross);
 		let payouts = parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == destination.spk).collect::<Vec<_>>();
 		assert_eq!(payouts.len(), 1, "one actual customer output per same-script allocation");
-		assert_eq!(payouts[0].1.value + sat(1_000), gross);
+		let expected_fee = customer_sources.iter().filter(|coin| parent.input.iter().any(|input|
+			input.previous_output == source_frontiers[&coin.id().to_string()]))
+			.map(|coin| sat(coin.amount().to_sat().div_ceil(100).max(1_000))).sum::<Amount>();
+		assert_eq!(payouts[0].1.value + expected_fee, gross);
 		let payout = OutPoint::new(parent.compute_txid(), payouts[0].0 as u32);
 		assert!(expected_payouts.insert(payout, payouts[0].1.value).is_none());
 		customer_value += payouts[0].1.value;
@@ -976,7 +983,7 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 				remainder += output.value;
 			}
 		}
-		assert_eq!(remainder, sat(1_000));
+		assert_eq!(remainder, expected_fee);
 		operator_value += remainder;
 		assert_eq!(child.version.0, 3);
 		assert!(child.vsize() <= 1_000);
@@ -1007,7 +1014,8 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 	}
 	assert_eq!(consumed_roots, frontiers.keys().copied().collect::<BTreeSet<_>>());
 	assert_eq!(customer_value + operator_value, sat(350_000));
-	assert_eq!(operator_value, sat(1_000 * expected_payouts.len() as u64));
+	assert_eq!(operator_value, sat(4_000));
+	assert_eq!(customer_value, sat(346_000));
 	let unused_sponsors = sponsors.difference(&consumed_sponsors).copied().collect::<BTreeSet<_>>();
 	assert_eq!(sat(550_000), customer_value + operator_value + change_value
 		+ sat(100_000 * unused_sponsors.len() as u64) + miner_fees,
@@ -1118,7 +1126,10 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 	}
 	assert_eq!(ledger_sources, expected_sources);
 	for (allocation, (fees, payouts)) in group_totals {
-		assert_eq!(fees, 1_000, "charge per actual output, not checkpoint count");
+		let expected_fee = customer_sources.iter().filter(|source| packages[&allocation].0.input.iter().any(|input|
+			input.previous_output == source_frontiers[&source.id().to_string()]))
+			.map(|source| source.amount().to_sat().div_ceil(100).max(1_000)).sum::<u64>();
+		assert_eq!(fees, i64::try_from(expected_fee).unwrap(), "charge each original expiry height once");
 		let parent = &packages[&allocation].0;
 		assert_eq!(payouts as u64, parent.output.iter().filter(|output| output.script_pubkey == destination.spk)
 			.map(|output| output.value.to_sat()).sum::<u64>());
@@ -1158,6 +1169,7 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 	assert_eq!(changes.len(), 2);
 	assert!(changes.iter().all(|coin| coin.amount() == sat(125_000)));
 	assert_eq!(changes[0].chain_anchor(), changes[1].chain_anchor());
+	assert_eq!(changes[0].expiry_height(), changes[1].expiry_height());
 	let funding = ctx.bitcoind().await_transaction(changes[0].chain_anchor().txid).await;
 	for coin in &changes { coin.validate(&funding).unwrap(); }
 	let source_ids = changes.iter().map(|coin| coin.id().to_string()).collect::<Vec<_>>();
@@ -1347,7 +1359,8 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 		assert_eq!(parent.output.iter().map(|output| output.value).sum::<Amount>(), gross);
 		let payouts = parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == destination.spk).collect::<Vec<_>>();
 		assert_eq!(payouts.len(), 1, "one actual customer output per same-script allocation");
-		assert_eq!(payouts[0].1.value + sat(1_000), gross);
+		let expected_fee = sat(gross.to_sat().div_ceil(100));
+		assert_eq!(payouts[0].1.value + expected_fee, gross);
 		let payout = OutPoint::new(parent.compute_txid(), payouts[0].0 as u32);
 		assert!(expected_payouts.insert(payout, payouts[0].1.value).is_none());
 		customer_value += payouts[0].1.value;
@@ -1362,7 +1375,7 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 				remainder += output.value;
 			}
 		}
-		assert_eq!(remainder, sat(1_000));
+		assert_eq!(remainder, expected_fee);
 		operator_value += remainder;
 		assert_eq!(child.version.0, 3);
 		assert!(child.vsize() <= 1_000);
@@ -1391,7 +1404,8 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 	}
 	assert_eq!(consumed_roots, frontiers.keys().copied().collect::<BTreeSet<_>>());
 	assert_eq!(customer_value + operator_value, sat(250_000));
-	assert_eq!(operator_value, sat(1_000 * expected_payouts.len() as u64));
+	assert_eq!(operator_value, sat(2_500));
+	assert_eq!(customer_value, sat(247_500));
 	let unused_sponsors = sponsors.difference(&consumed_sponsors).copied().collect::<BTreeSet<_>>();
 	assert_eq!(sat(450_000), customer_value + operator_value + change_value
 		+ sat(100_000 * unused_sponsors.len() as u64) + miner_fees,
@@ -1499,7 +1513,8 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 	}
 	assert_eq!(ledger_sources, expected_sources);
 	for (allocation, (fees, payouts)) in group_totals {
-		assert_eq!(fees, 1_000, "charge per actual output, not checkpoint count");
+		assert_eq!(fees, i64::try_from(u64::try_from(fees + payouts).unwrap().div_ceil(100)).unwrap(),
+			"charge 1% of the original sender change");
 		let parent = &packages[&allocation].0;
 		assert_eq!(payouts as u64, parent.output.iter().filter(|output| output.script_pubkey == destination.spk)
 			.map(|output| output.value.to_sat()).sum::<u64>());
@@ -1601,6 +1616,12 @@ async fn watchman_sweeps_lightning_vtxos() {
 		.map(|(id, _)| id.clone()).collect::<BTreeSet<_>>();
 	assert!(!converted.is_empty());
 	assert_eq!(converted.iter().map(|id| customers[id].0.amount()).sum::<Amount>(), sat(50_000));
+	let mut customer_gross_by_expiry = BTreeMap::<(usize, u32), u64>::new();
+	for (source, owner) in customers.values() {
+		*customer_gross_by_expiry.entry((*owner, source.expiry_height().to_u32())).or_default() += source.amount().to_sat();
+	}
+	let expected_fees_by_expiry = customer_gross_by_expiry.iter().map(|(group, gross)|
+		(*group, gross.div_ceil(100).max(1_000))).collect::<BTreeMap<_, _>>();
 	let pool_remainder = futures::TryStreamExt::try_collect::<Vec<_>>(db.load_vtxopool().await.unwrap()).await.unwrap();
 	assert!(pool_remainder.iter().all(|coin| coin.chain_anchor() == pool_anchor));
 	assert_eq!(pool_remainder.iter().map(|coin| coin.amount()).sum::<Amount>(), sat(50_000));
@@ -1892,7 +1913,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 	}
 	assert_eq!(consumed_roots, frontiers.keys().copied().collect::<BTreeSet<_>>());
 	assert!(!payouts.is_empty());
-	let output_fees = sat(1_000 * payouts.len() as u64);
+	let output_fees = sat(expected_fees_by_expiry.values().copied().sum::<u64>());
 	assert_eq!(customer_value, sat(600_000) - output_fees);
 	assert_eq!(operator_value, sat(100_000) + output_fees);
 	let unused = sponsors.difference(&consumed_sponsors).copied().collect::<BTreeSet<_>>();
@@ -1946,6 +1967,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 	assert_eq!(rows.len(), source_ids.len(), "no extra customer grant or operator entitlement on these backings");
 	let mut ledger_sources = BTreeSet::new();
 	let mut groups = BTreeMap::new();
+	let mut charged_by_expiry = BTreeMap::<(usize, u32), u64>::new();
 	for row in rows {
 		let id = row.get::<_, String>("vtxo_id");
 		assert!(ledger_sources.insert(id.clone()));
@@ -1969,6 +1991,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 			let payout = row.get::<_, i64>("payout_sat");
 			assert!(fee >= 0 && payout >= 0);
 			assert_eq!(fee + payout, source.amount().to_sat() as i64);
+			*charged_by_expiry.entry((*owner, source.expiry_height().to_u32())).or_default() += u64::try_from(fee).unwrap();
 			let totals = groups.entry((allocation, *owner)).or_insert((0_i64, 0_i64, 0_i64));
 			totals.0 += source.amount().to_sat() as i64;
 			totals.1 += fee;
@@ -1992,9 +2015,12 @@ async fn watchman_sweeps_lightning_vtxos() {
 	}
 	assert_eq!(ledger_sources, source_ids.iter().cloned().collect::<BTreeSet<_>>());
 	assert_eq!(groups.len(), payouts.len());
+	assert_eq!(charged_by_expiry, expected_fees_by_expiry,
+		"all original customer rights pay once per script and expiry height across allocations");
 	let mut gross_by_owner = [0_i64; 2];
 	for ((allocation, owner), (gross, fees, payout)) in groups {
-		assert_eq!(fees, 1_000, "charge once per actual customer output, not per grant/checkpoint");
+		assert!(u64::try_from(fees).unwrap() <= u64::try_from(gross).unwrap().div_ceil(100).max(1_000),
+			"the incremental fee cannot exceed the bound for this output");
 		assert_eq!(gross, fees + payout);
 		let actual = payouts.values().filter(|(_, candidate, group)| *candidate == owner && *group == allocation)
 			.map(|(value, _, _)| *value).collect::<Vec<_>>();
@@ -2306,8 +2332,8 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 				if *point != input.previous_output { continue; }
 				group_terminals += 1;
 				if let Some(owner) = owner {
-					assert!(wanted.insert(destinations[*owner].spk.clone(), coin.amount() - sat(1_000)).is_none());
-					operator_gross += sat(1_000);
+					assert!(wanted.insert(destinations[*owner].spk.clone(), coin.amount() - sat(2_000)).is_none());
+					operator_gross += sat(2_000);
 				} else { operator_gross += coin.amount(); }
 			}
 		}
@@ -2394,8 +2420,8 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 			assert_eq!(row.get::<_, String>("spk"), destinations[*owner].spk.as_bytes().to_lower_hex_string());
 			assert_eq!(facts["customer_key"], replacements[*owner].user_pubkey().to_string());
 			assert_ne!(facts["operator"], true);
-			assert_eq!(row.get::<_, i64>("fee_sat"), 1_000);
-			assert_eq!(row.get::<_, i64>("payout_sat"), 199_000);
+			assert_eq!(row.get::<_, i64>("fee_sat"), 2_000);
+			assert_eq!(row.get::<_, i64>("payout_sat"), 198_000);
 		} else {
 			assert_eq!(coin.amount(), sat(200_000));
 			assert_eq!(row.get::<_, String>("disposition"), "operator");
@@ -2437,7 +2463,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 	let mut wanted = terminal_outputs.iter().filter(|(_, output)| destinations.iter().any(|destination| destination.spk == output.script_pubkey))
 		.map(|(point, output)| (*point, output.clone())).collect::<BTreeMap<_, _>>();
 	assert_eq!(wanted.len(), 8);
-	assert_eq!(wanted.values().map(|output| output.value).sum::<Amount>(), sat(1_592_000));
+	assert_eq!(wanted.values().map(|output| output.value).sum::<Amount>(), sat(1_584_000));
 	assert!(wanted.insert(OutPoint::new(claim.compute_txid(), 0), claim.output[0].clone()).is_none());
 	assert_eq!(observed, wanted, "eight rightful fallbacks and one real native claim, no duplicate or user1 refund");
 	let unclaimed = core.get_tx_out(&replacements[1].point().txid, replacements[1].point().vout, Some(true)).unwrap().unwrap();
@@ -3925,6 +3951,15 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("actual current-cut funded payout packages must appear within the original ten seconds");
+	let mut customer_gross_by_expiry = BTreeMap::<(usize, u32), u64>::new();
+	for (coin, owner, _) in expected.values() {
+		if let Some(owner) = owner {
+			*customer_gross_by_expiry.entry((*owner, coin.expiry_height().to_u32())).or_default() += coin.amount().to_sat();
+		}
+	}
+	let expected_fees_by_expiry = customer_gross_by_expiry.iter().map(|(group, gross)|
+		(*group, gross.div_ceil(100).max(1_000))).collect::<BTreeMap<_, _>>();
+	let mut parent_fees = BTreeMap::new();
 	let tip = ctx.generate_blocks(6).await;
 	srv.wait_for_sync_height(tip).await;
 	wm.wait_for_sync_height(tip).await;
@@ -3938,7 +3973,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 	let mut expected_outputs = BTreeMap::new();
 	let mut miner = raw_fee(&progress_child);
 	let mut operator = Amount::ZERO;
-	for (parent, child, recorded_fee) in packages.values() {
+	for (allocation, (parent, child, recorded_fee)) in &packages {
 		assert_canonical_watchman_tx(&ctx, parent);
 		assert_canonical_watchman_tx(&ctx, child);
 		assert_eq!(core.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap().blockhash,
@@ -3958,8 +3993,13 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		}
 		let mut wanted = BTreeMap::new();
 		for (owner, amount) in gross.into_iter().enumerate().filter(|(_, amount)| *amount > Amount::ZERO) {
-			wanted.insert(destinations[owner].spk.clone(), amount.checked_sub(sat(1_000)).unwrap());
-			operator_gross += sat(1_000);
+			let outputs = parent.output.iter().filter(|output| output.script_pubkey == destinations[owner].spk).collect::<Vec<_>>();
+			assert_eq!(outputs.len(), 1);
+			let fee = amount.checked_sub(outputs[0].value).unwrap();
+			assert!(fee.to_sat() <= amount.to_sat().div_ceil(100).max(1_000));
+			assert!(parent_fees.insert((*allocation, owner), fee).is_none());
+			wanted.insert(destinations[owner].spk.clone(), amount - fee);
+			operator_gross += fee;
 		}
 		wanted.insert(operator_script.clone(), operator_gross);
 		let outputs = parent.output.iter().filter(|output| !output.is_p2a_fee_anchor()).map(|output| (output.script_pubkey.clone(), output.value)).collect::<BTreeMap<_, _>>();
@@ -4017,6 +4057,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		LEFT JOIN expiry_allocation_coin c ON c.entitlement_id=e.id LEFT JOIN expiry_allocation a ON a.id=c.allocation_id WHERE v.anchor_point=ANY($1)", &[&backing_anchors]).await?)).await.unwrap();
 	let mut seen = BTreeSet::new();
 	let mut groups = BTreeMap::new();
+	let mut charged_by_expiry = BTreeMap::<(usize, u32), u64>::new();
 	for row in rows {
 		let id = row.get::<_, String>("vtxo_id");
 		assert!(seen.insert(id.clone()));
@@ -4070,6 +4111,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 			let payout = row.get::<_, i64>("payout_sat");
 			assert!(fee >= 0 && payout > 0);
 			assert_eq!(fee + payout, coin.amount().to_sat() as i64);
+			*charged_by_expiry.entry((*owner, coin.expiry_height().to_u32())).or_default() += u64::try_from(fee).unwrap();
 			let total = groups.entry((allocation, *owner)).or_insert((0i64, 0i64));
 			total.0 += fee; total.1 += payout;
 		} else {
@@ -4081,14 +4123,17 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		}
 	}
 	assert_eq!(seen, expected.keys().cloned().collect());
+	assert_eq!(charged_by_expiry, expected_fees_by_expiry,
+		"charge the original customer principal once per script and expiry height");
 	let mut customer_fees = Amount::ZERO;
 	for ((allocation, owner), (fees, payout)) in groups {
-		assert_eq!(fees, 1_000, "charge once per actual grouped customer output");
+		assert_eq!(u64::try_from(fees).unwrap(), parent_fees[&(allocation, owner)].to_sat());
 		customer_fees += sat(fees as u64);
 		let outputs = packages[&allocation].0.output.iter().filter(|output| output.script_pubkey == destinations[owner].spk).collect::<Vec<_>>();
 		assert_eq!(outputs.len(), 1);
 		assert_eq!(outputs[0].value.to_sat(), payout as u64);
 	}
+	assert_eq!(customer_fees, sat(expected_fees_by_expiry.values().copied().sum::<u64>()));
 	assert_eq!(operator, sat(650_000) + if replacement_mature { sat(330) } else { Amount::ZERO } + customer_fees);
 	let mut observed = BTreeMap::new();
 	for height in scan_from..=ctx.bitcoind().get_block_count().await {
@@ -4367,6 +4412,9 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 	assert!(customers.contains_key(&oldest.id().to_string()));
 	customers.remove(&oldest.id().to_string());
 	assert_eq!(customers.len(), 19);
+	assert!(customers.values().all(|coin| coin.amount() == sat(1_000)
+		&& coin.expiry_height() == oldest.expiry_height()));
+	assert_eq!(customers.values().map(|coin| coin.amount()).sum::<Amount>(), sat(19_000));
 
 	let grace = u32::from(wm.config().watchman.progress_grace_period);
 	let tip = ctx.generate_blocks(grace).await;
@@ -4494,7 +4542,13 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 		}
 		assert_eq!(parent.output.iter().map(|output| output.value).sum::<Amount>(), gross);
 		let mut wanted = BTreeMap::new();
-		let fee = if customer > Amount::ZERO { sat(1_000) } else { Amount::ZERO };
+		let fee = if customer > Amount::ZERO {
+			let outputs = parent.output.iter().filter(|output| output.script_pubkey == destination.spk).collect::<Vec<_>>();
+			assert_eq!(outputs.len(), 1);
+			let fee = customer.checked_sub(outputs[0].value).unwrap();
+			assert!(fee == Amount::ZERO || fee == sat(1_000));
+			fee
+		} else { Amount::ZERO };
 		if customer > Amount::ZERO { wanted.insert(destination.spk.clone(), customer.checked_sub(fee).unwrap()); }
 		wanted.insert(operator_script.clone(), gross.checked_sub(customer).unwrap() + fee);
 		let outputs = parent.output.iter().filter(|output| !output.is_p2a_fee_anchor())
@@ -4527,6 +4581,10 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 		}
 	}
 	assert_eq!(consumed_roots, roots.iter().map(|root| root.point()).collect());
+	assert_eq!(customer_paid, sat(18_000));
+	assert_eq!(operator_paid, sat(181_000));
+	assert_eq!(sat(19_000), customer_paid + sat(1_000),
+		"all 19 rights pay the 1,000 sat floor once across every allocation");
 	for (point, output) in &sponsors { if !consumed_sponsors.contains(point) { change.insert(*point, output.clone()); } }
 	let final_tip = ctx.generate_blocks(6).await;
 	assert!(final_tip >= claimable_height);
@@ -4606,8 +4664,10 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 	}
 	assert_eq!(seen, expected.keys().cloned().collect());
 	assert!(!seen.contains(&oldest.id().to_string()) && grants.is_disjoint(&seen));
+	assert_eq!(groups.values().map(|(fee, _)| *fee).sum::<i64>(), 1_000);
+	assert_eq!(groups.values().map(|(_, payout)| *payout).sum::<i64>(), 18_000);
 	for (allocation, (fees, payout)) in groups {
-		assert_eq!(fees, 1_000);
+		assert!(fees == 0 || fees == 1_000);
 		assert_eq!(packages[&allocation].0.output.iter().filter(|output| output.script_pubkey == destination.spk)
 			.map(|output| output.value.to_sat()).sum::<u64>(), payout as u64);
 	}
@@ -4628,6 +4688,10 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 	}
 
 	failures.assert_empty();
+	let customer_payouts = payouts.iter().filter(|(_, output)| output.script_pubkey == destination.spk).collect::<Vec<_>>();
+	assert_eq!(customer_payouts.len(), 1);
+	assert_eq!(customer_payouts[0].1.value, sat(18_000));
+	check_receive_seed_custody(&ctx, &srv, &wallet, &oldest, &destination, *customer_payouts[0].0, &customers).await;
 }
 
 /// Safety guard for the *checkpointed* arkoor case (counterpart to the lightning bug
@@ -4927,5 +4991,530 @@ async fn offboard_of_confirmed_exited_vtxo_never_costs_server() {
 		assert!(refusal_msg.contains("exit") || refusal_msg.contains("unusable"),
 			"expected an 'already exited' refusal from the server, got: {}", refusal,
 		);
+	}
+}
+
+async fn check_receive_seed_custody(
+	ctx: &TestContext, srv: &ark_testing::Captaind,
+	wallet: &bark::Wallet, oldest: &ark::Vtxo<ark::vtxo::Bare>, destination: &ark::fallback::FallbackRecord,
+	payout: OutPoint, remaining: &BTreeMap<String, ark::Vtxo>,
+) {
+	// Only the original seed and genesis birthday enter the new REST database.
+	// Keep the seed in memory and origin files, outside argv and public receipts.
+	let seed = bip39::Mnemonic::from_str(&std::fs::read_to_string(ctx.datadir.join("bark/mnemonic")).unwrap()).unwrap();
+	let original_debug = bark_json::cli::DebugInfo::from(wallet.debug_info().await.unwrap());
+	wallet.stop_daemon_wait().await.unwrap();
+	let restored = ctx.barkd("seed_only", srv).mnemonic(seed.to_string()).birthday_height(0)
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	restored.sync().await;
+	restored.onchain_sync().await;
+	restored.exit_progress().await;
+	let utxos = restored.onchain_utxos().await;
+	assert!(utxos.iter().any(|coin| coin.outpoint == payout && coin.amount == sat(18_000)),
+		"the fresh seed must recognize the actual full-cohort fallback output");
+	let recovered = restored.vtxos(Some(true)).await;
+	for id in remaining.keys() {
+		let coin = recovered.iter().find(|coin| coin.id.to_string() == *id)
+			.expect("the fresh seed must retain every paid right");
+		assert_eq!(coin.state, VtxoStateInfo::Spent, "a paid right must not become spendable during recovery");
+	}
+	let exits = restored.get_all_exit_status(Some(true), Some(false)).await;
+	let oldest_state = exits.iter().find(|exit| exit.vtxo_id == oldest.id());
+	let oldest_claimable = oldest_state.is_some_and(|exit| matches!(exit.state, bark_json::exit::ExitState::Claimable(_)));
+	let oldest_row = recovered.iter().find(|coin| coin.id == oldest.id());
+	if let Some(coin) = oldest_row {
+		assert_eq!(coin.amount, sat(1_000));
+		assert_eq!(coin.state, VtxoStateInfo::Exited);
+	}
+
+	// Read the stopped fresh database without a second recovery scan. Derive
+	// public descriptors from the seed, and compare its recovered key.
+	restored.stop().await.unwrap();
+	let cfg = toml::from_str(&std::fs::read_to_string(restored.datadir().join("config.toml")).unwrap()).unwrap();
+	let reader = bark::Wallet::open(Network::Regtest, bark::WalletSeed::new_from_mnemonic(Network::Regtest, &seed), cfg,
+		bark::OpenWalletArgs { datadir: Some(restored.datadir()), run_daemon: false, skip_recovery: true,
+			lock_manager: Some(Box::new(bark::lock_manager::memory::MemoryLockManager::new())), ..Default::default() }).await.unwrap();
+	let debug = bark_json::cli::DebugInfo::from(reader.debug_info().await.unwrap());
+	assert_eq!(serde_json::to_value(&debug).unwrap(), serde_json::to_value(&original_debug).unwrap());
+	let fallback = reader.fallback_destination().await.unwrap();
+	assert_eq!(&fallback, destination);
+	fallback.verify(Network::Regtest, reader.mailbox_keypair().public_key()).unwrap();
+	let oldest_key_index = if oldest_row.is_some() {
+		let signed = reader.get_full_vtxo(oldest.id()).await.unwrap();
+		assert_eq!(signed.to_bare(), *oldest);
+		let (index, _) = reader.pubkey_keypair(&signed.user_pubkey()).await.unwrap()
+			.expect("the recovered oldest exit must have a seed-derived key");
+		assert_eq!(reader.vtxo_xpub().derive_pub(&ark::SECP, &[index.into()]).unwrap().public_key, signed.user_pubkey());
+		Some(index)
+	} else { None };
+	drop(reader);
+	let db = Arc::new(bark::persist::sqlite::SqliteClient::open(restored.datadir().join("db.sqlite")).unwrap());
+	let onchain = bark::onchain::OnchainWallet::load_or_create(Network::Regtest, seed.to_seed(""), db).await.unwrap();
+	let master = bitcoin::bip32::Xpriv::new_master(Network::Regtest, &seed.to_seed("")).unwrap();
+	let (descriptor, _private_keys, _) = bdk_wallet::template::DescriptorTemplate::build(
+		bdk_wallet::template::Bip86(master, KeychainKind::External), Network::Regtest.into()).unwrap();
+	assert_eq!(descriptor, *onchain.inner.public_descriptor(KeychainKind::External));
+	drop(onchain);
+	restored.start().await.unwrap();
+
+	let mut oldest_claim = None;
+	if oldest_claimable && oldest_key_index.is_some() {
+		let address = restored.onchain_address().await;
+		let response = bark_rest_client::apis::exits_api::exit_claim_vtxos(&restored.client_config(),
+			bark_json::web::ExitClaimVtxosRequest { destination: address.to_string(),
+				vtxos: vec![oldest.id().to_string()], fee_rate: None }).await;
+		response.expect("fresh recovered oldest exit claim failed; inspect origin logs");
+		let core = ctx.bitcoind().sync_client();
+		let txid = tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				if let Some(txid) = core.get_mempool_spending_tx(oldest.point()).unwrap() { break txid; }
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+		}).await.expect("fresh oldest claim did not reach the verifying node");
+		let tx = ctx.bitcoind().await_transaction(txid).await;
+		assert_eq!(tx.input.len(), 1);
+		assert_eq!(tx.input[0].previous_output, oldest.point());
+		assert_eq!(tx.output.len(), 1);
+		assert_eq!(tx.output[0].script_pubkey, address.script_pubkey());
+		assert!(tx.output[0].value > Amount::ZERO && tx.output[0].value < oldest.amount());
+		ctx.generate_blocks(6).await;
+		assert_canonical_watchman_tx(ctx, &tx);
+		let claimed = core.get_tx_out(&txid, 0, Some(true)).unwrap().unwrap();
+		assert!(claimed.confirmations >= 6);
+		assert!(core.get_tx_out(&oldest.point().txid, oldest.point().vout, Some(true)).unwrap().is_none());
+		oldest_claim = Some(OutPoint::new(txid, 0));
+	}
+	restored.onchain_sync().await;
+	restored.exit_progress().await;
+	let recovery_address = ctx.bitcoind().get_new_address();
+	let drain = bark_rest_client::apis::onchain_api::onchain_drain(&restored.client_config(),
+		bark_json::web::OnchainDrainRequest { destination: recovery_address.to_string() }).await.unwrap();
+	let recovery = ctx.bitcoind().await_transaction(drain.txid).await;
+	assert_eq!(recovery.input.iter().filter(|input| input.previous_output == payout).count(), 1);
+	if let Some(point) = oldest_claim {
+		assert_eq!(recovery.input.iter().filter(|input| input.previous_output == point).count(), 1);
+	}
+	let input_value = recovery.input.iter().map(|input| {
+		let previous = ctx.bitcoind().sync_client().get_raw_transaction(&input.previous_output.txid, None).unwrap();
+		previous.output[input.previous_output.vout as usize].value
+	}).sum::<Amount>();
+	let fee = input_value - recovery.output.iter().map(|output| output.value).sum::<Amount>();
+	assert!(fee > Amount::ZERO);
+	ctx.generate_blocks(6).await;
+	assert_canonical_watchman_tx(ctx, &recovery);
+	let recipients = recovery.output.iter().enumerate().filter(|(_, output)|
+		output.script_pubkey == recovery_address.script_pubkey()).collect::<Vec<_>>();
+	assert_eq!(recipients.len(), 1);
+	let point = OutPoint::new(recovery.compute_txid(), recipients[0].0 as u32);
+	let deep = ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+	assert!(deep.confirmations >= 6);
+	assert_eq!(deep.value, recipients[0].1.value);
+	assert!(ctx.bitcoind().sync_client().get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().is_none());
+	restored.onchain_sync().await;
+	restored.exit_progress().await;
+	restored.stop().await.unwrap();
+}
+
+/// Preserve one same-source owner group across asynchronous backing progress.
+#[tokio::test]
+async fn expiry_same_owner_fragments_merge_before_dust_forfeiture() {
+	expiry_same_owner_fragments("server/expiry_same_owner_fragments_merge_before_dust_forfeiture", false).await;
+}
+
+#[tokio::test]
+async fn expiry_small_fragment_decided_first_waits_for_siblings() {
+	expiry_same_owner_fragments("server/expiry_small_fragment_decided_first_waits_for_siblings", true).await;
+}
+
+async fn expiry_same_owner_fragments(name: &str, small_first: bool) {
+	let ctx = TestContext::new(name).await;
+	let ln = ctx.new_lightning_setup("ln").await;
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&ln.internal).funded(btc(10)).cfg(|cfg| {
+		cfg.vtxo_lifetime = BlockDelta::new(144);
+		// The pool never issues a single vtxo at a time, so ask for the minimum of two.
+		cfg.vtxopool.vtxo_targets = vec![VtxoTarget { count: 2, amount: sat(100_000) }];
+		cfg.vtxopool.vtxo_lifetime = BlockDelta::new(144);
+		// Keep the change in the pool so all the receives share one allocation chain.
+		cfg.vtxopool.max_vtxo_exit_depth = 100;
+	}).watchmand_cfg(|cfg| {
+		cfg.watchman.reaction_interval = Duration::from_secs(15 * 60);
+		cfg.watchman.sweep_interval = Duration::from_secs(15 * 60);
+	}).create().await;
+	let failures = WatchmanFailureCollector::default();
+	let wm = srv.watchmand();
+	wm.add_slog_handler(failures.clone());
+	let mut log_progress = wm.subscribe_log::<ProgressBroadcast>();
+
+	// Keep the original one-million-sat budget, with one fee input for each original pool output.
+	let fee_address = wm.wait_wallet_address().await;
+	let mut sponsors = BTreeMap::new();
+	for _ in 0..2 {
+		let id = ctx.bitcoind().fund_addr(fee_address.clone(), sat(500_000)).await;
+		let tx = ctx.bitcoind().await_transaction(id).await;
+		let outputs = tx.output.iter().enumerate().filter(|(_, output)|
+			output.script_pubkey == fee_address.script_pubkey() && output.value == sat(500_000)).collect::<Vec<_>>();
+		assert_eq!(outputs.len(), 1);
+		assert!(sponsors.insert(OutPoint::new(id, outputs[0].0 as u32), outputs[0].1.clone()).is_none());
+	}
+
+	let wallet = ctx.bark_sdk("bark", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
+		.funded(sat(1_000_000)).create().await;
+	srv.wait_for_vtxopool(&ctx).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let initial = futures::TryStreamExt::try_collect::<Vec<_>>(db.load_vtxopool().await.unwrap()).await.unwrap();
+	assert_eq!(initial.len(), 2);
+	assert!(initial.iter().all(|coin| coin.amount() == sat(100_000)));
+	let anchor = initial[0].chain_anchor();
+	assert!(initial.iter().all(|coin| coin.chain_anchor() == anchor));
+	let funding = ctx.bitcoind().await_transaction(anchor.txid).await;
+	assert_eq!(funding.output[anchor.vout as usize].value, sat(200_000));
+	for coin in &initial { coin.validate(&funding).unwrap(); }
+	let destination = wallet.fallback_destination().await.unwrap();
+	let mailbox = wallet.mailbox_keypair().public_key();
+	let mut hashes = Vec::new();
+
+	// Receive sequentially so each allocation spends the change of the previous one.
+	for _ in 0..20 {
+		let invoice = wallet.bolt11_invoice(sat(1_000), None, None).await
+			.expect("creating the invoice");
+		hashes.push(PaymentHash::from(&invoice).to_string());
+		let (pay, _) = tokio::join!(
+			ln.external.try_pay_bolt11(invoice.to_string()),
+			wallet.try_claim_lightning_receive(PaymentHash::from(&invoice), true),
+		);
+		pay.expect("the lightning payment should succeed");
+	}
+	let mut customers = BTreeMap::new();
+	for coin in wallet.vtxos().await.unwrap() {
+		let full = wallet.get_full_vtxo(coin.id()).await.unwrap();
+		assert_eq!(full.chain_anchor(), anchor);
+		assert!(matches!(full.policy(), ark::VtxoPolicy::Pubkey(_)));
+		full.validate(&funding).unwrap();
+		assert!(customers.insert(full.id().to_string(), full).is_none());
+	}
+	assert_eq!(customers.len(), 20);
+	// Only the selected exit below is driven explicitly. The other coins
+	// must remain absent from the client's automatic expiry actions.
+	tokio::time::timeout(Duration::from_secs(30), wallet.stop_daemon_wait()).await
+		.expect("the absent wallet's daemon must finish before expiry").unwrap();
+	let remainder = futures::TryStreamExt::try_collect::<Vec<_>>(db.load_vtxopool().await.unwrap()).await.unwrap();
+	assert!(remainder.iter().all(|coin| coin.chain_anchor() == anchor));
+	let mut operators = BTreeMap::new();
+	for coin in remainder {
+		coin.validate(&funding).unwrap();
+		let stored = db.read(async |tx| tx.get_user_vtxo_by_id(coin.id()).await).await.unwrap();
+		assert_eq!(stored.spend_state, server::database::SpendState::Pool);
+		assert!(stored.oor_spent_txid.is_none());
+		assert!(operators.insert(coin.id().to_string(), coin.inner().clone()).is_none());
+	}
+	assert_eq!(customers.values().map(|coin| coin.amount()).sum::<Amount>()
+		+ operators.values().map(|coin| coin.amount()).sum::<Amount>(), sat(200_000));
+	let claims = db.read(async |tx| Ok(tx.query("SELECT source_vtxo_id,payment_hash,output_vtxo_id,output_vtxo,materialized \
+		FROM expiry_lightning_receive_claim WHERE payment_hash=ANY($1)", &[&hashes]).await?)).await.unwrap();
+	let mut grants = BTreeSet::new();
+	let mut converted = BTreeSet::new();
+	let mut settled = BTreeSet::new();
+	for row in claims {
+		assert!(row.get::<_, bool>("materialized"));
+		let hash = row.get::<_, String>("payment_hash");
+		assert!(hashes.contains(&hash));
+		settled.insert(hash.clone());
+		let source = row.get::<_, String>("source_vtxo_id");
+		assert!(grants.insert(source.clone()));
+		let grant = db.read(async |tx| tx.get_user_vtxo_by_id(ark::VtxoId::from_str(&source).unwrap()).await).await.unwrap().vtxo;
+		assert_eq!(grant.chain_anchor(), anchor);
+		assert_eq!(grant.policy().as_server_htlc_recv().unwrap().payment_hash.to_string(), hash);
+		grant.validate(&funding).unwrap();
+		let id = row.get::<_, String>("output_vtxo_id");
+		assert!(converted.insert(id.clone()));
+		let actual = &customers[&id];
+		let intent = <ark::Vtxo as ark::ProtocolEncoding>::deserialize(row.get("output_vtxo")).unwrap();
+		assert_eq!(intent.id(), actual.id());
+		assert_eq!(intent.amount(), actual.amount());
+		assert_eq!(intent.policy(), actual.policy());
+		assert_eq!(intent.chain_anchor(), actual.chain_anchor());
+		assert_eq!(intent.server_pubkey(), actual.server_pubkey());
+		assert_eq!(intent.expiry_height(), actual.expiry_height());
+		assert_eq!(intent.exit_delta(), actual.exit_delta());
+		assert_eq!(grant.amount(), actual.amount());
+		let registered = db.read(async |tx| tx.get_user_vtxo_by_id(actual.id()).await).await.unwrap();
+		assert!(registered.oor_spent_txid.is_none());
+		registered.vtxo.validate(&funding).unwrap();
+	}
+	assert_eq!(settled, hashes.iter().cloned().collect());
+	assert_eq!(converted, customers.keys().cloned().collect());
+	let limits = server::database::expiry_inventory::BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 10_000_000 };
+	let root = db.read(async |tx| tx.get_bare_vtxo_by_id(ark::VtxoId::from(anchor)).await).await.unwrap().vtxo;
+	let selected = server::database::expiry_inventory::BackingSnapshot { roots: vec![root], regular: Vec::new(), serialized_bytes: 0 };
+	let terminals = customers.values().chain(operators.values()).cloned().map(ark::ServerVtxo::from).collect::<Vec<_>>();
+	let mut residuals = BTreeMap::new();
+	for coin in &terminals { for step in coin.transactions() {
+		for (index, output) in step.tx.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor()) {
+			assert_eq!(output.value, Amount::ZERO);
+			let point = OutPoint::new(step.tx.compute_txid(), index as u32);
+			if let Some(previous) = residuals.insert(point, output.clone()) { assert_eq!(previous, *output); }
+		}
+	} }
+	let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
+	selected.check_partition(&terminals, &[funding.clone()], &residuals, limits).unwrap();
+
+	// The shortest exit chain belongs to the oldest receive. Exiting it drags the txs it
+	// shares with the other receives on-chain.
+	let oldest = wallet.vtxos().await.expect("listing vtxos").into_iter()
+		.min_by_key(|v| v.exit_depth)
+		.expect("there should be receives")
+		.vtxo;
+	wallet.exit_mgr().start_exit_for_vtxos(&[oldest.clone()]).await
+		.expect("starting the exit");
+	let mut state = None;
+	for _ in 0..30 {
+		wallet.sync_onchain().await.expect("onchain sync");
+		wallet.progress_exits().await.expect("progressing the exit");
+		state = wallet.exit_mgr().get_exit_vtxo(oldest.id()).await
+			.map(|exit| exit.state().clone());
+		if matches!(state, Some(ExitState::AwaitingDelta(_))) {
+			break;
+		}
+		ctx.generate_blocks(1).await;
+	}
+	assert!(matches!(state, Some(ExitState::AwaitingDelta(_))),
+		"the exit should have confirmed on-chain, was {:?}", state,
+	);
+	let _claimable_height = state.as_ref().unwrap().claimable_height().unwrap();
+	assert!(customers.contains_key(&oldest.id().to_string()));
+	customers.remove(&oldest.id().to_string());
+	assert_eq!(customers.len(), 19);
+
+	let grace = u32::from(wm.config().watchman.progress_grace_period);
+	let tip = ctx.generate_blocks(grace).await;
+	wm.wait_for_sync_height(tip).await;
+
+	// Give the watchman its chance to broadcast the receive chain; it must not take it.
+	wm.trigger_sweep().await;
+	assert!(log_progress.try_recv().is_err(), "the checkpoint must stop premature receive-chain progress");
+
+	let core = ctx.bitcoind().sync_client();
+	let operator_script = wm.config().sweep_address.clone().unwrap().require_network(Network::Regtest).unwrap().script_pubkey();
+	let first_height = core.get_block_count().unwrap() + 1;
+	let wanted = customers.keys().cloned().collect::<Vec<_>>();
+	// Resolve ownership before introducing the physical readiness gap. The
+	// scanner must prove the real registered keys, without fixture owner rows.
+	for coin in customers.values() {
+		db.write(async |tx| tx.queue_expiry_owner(coin.user_pubkey(), None).await).await.unwrap();
+	}
+	tokio::time::timeout(Duration::from_secs(10), async {
+		loop {
+			db.scan_expiry_owners(Network::Regtest, 10_000, 2).await.unwrap();
+			let mut complete = true;
+			for coin in customers.values() {
+				complete &= matches!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest).await).await.unwrap(),
+					server::database::expiry_attribution::Attribution::Owned { mailbox_pk, spk, .. }
+						if mailbox_pk == mailbox && spk == destination.spk);
+			}
+			if complete { break; }
+		}
+	}).await.expect("all original owners must be genuinely derived before fragmentation");
+	let next_step = async |point: OutPoint| {
+		let row = db.read(async |tx| Ok(tx.query_one("SELECT v.oor_spent_txid,t.signed_tx \
+			FROM vtxo v JOIN virtual_transaction t ON t.txid=v.oor_spent_txid WHERE v.vtxo_id=$1",
+			&[&ark::VtxoId::from(point).to_string()]).await?)).await.unwrap();
+		let transaction: Transaction = deserialize(row.get("signed_tx")).unwrap();
+		assert_eq!(transaction.compute_txid().to_string(), row.get::<_, String>("oor_spent_txid"));
+		assert_eq!(transaction.input.len(), 1);
+		assert_eq!(transaction.input[0].previous_output, point);
+		assert!(!transaction.input[0].witness.is_empty());
+		assert!(customers.values().any(|coin| coin.transactions().any(|step| step.tx == transaction)));
+		transaction
+	};
+	let publish = async |parent: &Transaction| {
+		wallet.sync_onchain().await.unwrap();
+		let onchain = wallet.onchain().unwrap();
+		let mut onchain = onchain.write().await;
+		let child = onchain.make_signed_p2a_cpfp(parent,
+			MakeCpfpFees::Effective(bitcoin::FeeRate::from_sat_per_vb(5).unwrap())).await.unwrap();
+		onchain.store_signed_p2a_cpfp(&child).await.unwrap();
+		drop(onchain);
+		let result = core.submit_package(&[parent, &child]).unwrap();
+		assert_eq!(result.package_msg, "success");
+		for transaction in [parent, &child] {
+			assert!(result.tx_results.values().any(|entry|
+				entry.txid == transaction.compute_txid() && entry.error.is_none()));
+			assert_eq!(ctx.bitcoind().await_transaction(transaction.compute_txid()).await, *transaction);
+		}
+	};
+	let rows = db.read(async |tx| Ok(tx.query("SELECT vtxo_id FROM vtxo WHERE anchor_point=$1 \
+		AND frontier_at IS NOT NULL AND onchain_spent_height IS NULL", &[&anchor.to_string()]).await?)).await.unwrap();
+	let mut backing = Vec::new();
+	for row in rows {
+		let id = ark::VtxoId::from_str(row.get("vtxo_id")).unwrap();
+		let vtxo = db.read(async |tx| tx.get_bare_vtxo_by_id(id).await).await.unwrap().vtxo;
+		if vtxo.amount() == sat(99_000) {
+			let output = core.get_tx_out(&vtxo.point().txid, vtxo.point().vout, Some(true)).unwrap().unwrap();
+			assert!(output.confirmations > 0);
+			assert_eq!(output.value, vtxo.amount());
+			assert_eq!(output.script_pub_key.script().unwrap(), vtxo.txout().script_pubkey);
+			assert!(matches!(vtxo.policy(), ark::ServerVtxoPolicy::Checkpoint(_)));
+			backing.push(vtxo.point());
+		}
+	}
+	assert_eq!(backing.len(), 1);
+	let open = next_step(backing[0]).await;
+	let open_index = open.output.iter().position(|output| output.value == sat(99_000)).unwrap();
+	assert_eq!(open.output.iter().map(|output| output.value).sum::<Amount>(), sat(99_000));
+	let split = next_step(OutPoint::new(open.compute_txid(), open_index as u32)).await;
+	assert_eq!(split.output.iter().map(|output| output.value).sum::<Amount>(), sat(99_000));
+	let small_index = split.output.iter().position(|output| output.value == sat(1_000)).unwrap();
+	let remainder_index = split.output.iter().position(|output| output.value == sat(98_000)).unwrap();
+	let small = OutPoint::new(split.compute_txid(), small_index as u32);
+	let remainder = OutPoint::new(split.compute_txid(), remainder_index as u32);
+	for point in [small, remainder] {
+		let vtxo = db.read(async |tx| tx.get_bare_vtxo_by_id(point.into()).await).await.unwrap().vtxo;
+		assert!(matches!(vtxo.policy(), ark::ServerVtxoPolicy::Checkpoint(_)));
+	}
+	for parent in [&open, &split] {
+		publish(parent).await;
+		ctx.generate_blocks(1).await;
+	}
+	let unavailable = next_step(remainder).await;
+	assert_eq!(unavailable.output.iter().map(|output| output.value).sum::<Amount>(), sat(98_000));
+	let unavailable_index = unavailable.output.iter().position(|output| output.value == sat(98_000)).unwrap();
+	let unavailable_point = OutPoint::new(unavailable.compute_txid(), unavailable_index as u32);
+	let release = next_step(unavailable_point).await;
+	assert!(release.output.iter().any(|output| output.value == sat(1_000)));
+	assert!(release.output.iter().any(|output| output.value == sat(97_000)));
+	assert_eq!(release.output.iter().map(|output| output.value).sum::<Amount>(), sat(98_000));
+	// Stop only the allocator while expiry blocks are mined. Publishing the
+	// signed sibling afterward leaves a real mempool-spent physical root.
+	srv.stop().await.unwrap();
+	ctx.generate_blocks_unsynced(150).await;
+	publish(&unavailable).await;
+	srv.start().await.unwrap();
+	let mut tip = bitcoin_ext::BlockHeight::new(ctx.bitcoind().get_block_count().await.try_into().unwrap());
+	srv.wait_for_sync_height(tip).await;
+	wm.wait_for_sync_height(tip).await;
+	let output = core.get_tx_out(&small.txid, small.vout, Some(true)).unwrap().unwrap();
+	assert!(output.confirmations >= 6);
+	assert_eq!(output.value, sat(1_000));
+	assert!(core.get_tx_out(&remainder.txid, remainder.vout, Some(true)).unwrap().is_none());
+	assert!(core.get_tx_out(&remainder.txid, remainder.vout, Some(false)).unwrap().is_some());
+	assert_eq!(core.get_tx_out(&unavailable_point.txid, unavailable_point.vout, Some(true)).unwrap().unwrap().confirmations, 0);
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			let progress = db.read(async |tx| Ok(tx.query_one("SELECT EXISTS(SELECT 1 FROM expiry_allocation_coin c \
+				JOIN expiry_allocation a ON a.id=c.allocation_id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE c.active AND a.status<>'conflicted' \
+				AND c.disposition='operator' AND c.gross_sat=100000 AND v.anchor_point=$1)", &[&anchor.to_string()]).await?
+				.get::<_, bool>(0))).await.unwrap();
+			if progress { break; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("the independent operator root must prove actual readiness progress during the gap");
+	let partial = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*),COALESCE(SUM(c.forfeited_sat),0)::BIGINT \
+		FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+		JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=ANY($1) AND c.active AND a.status<>'conflicted'",
+		&[&wanted]).await?)).await.unwrap();
+	if small_first {
+		assert_eq!(partial.get::<_, i64>(0), 0, "the first small fragment must wait for its undecided siblings");
+		assert_eq!(partial.get::<_, i64>(1), 0, "the hold must not forfeit any principal");
+	}
+	ctx.generate_blocks(1).await;
+	publish(&release).await;
+	tip = ctx.generate_blocks(1).await;
+	let mut settled = false;
+	for _ in 0..96 {
+		srv.wait_for_sync_height(tip).await;
+		wm.wait_for_sync_height(tip).await;
+		let hash = core.get_block_hash(u64::from(tip.to_u32())).unwrap();
+		tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				let ready = db.read(async |tx| {
+					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
+					Ok(view.captaind.height == tip && view.watchmand.height == tip
+						&& view.captaind.hash == hash && view.watchmand.hash == hash
+						&& tx.expiry_view_is_rebuilt(view).await?)
+				}).await.unwrap();
+				if ready { break; }
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+		}).await.expect("both actual canonical views must finish before recovery work");
+		wm.trigger_sweep().await;
+		// Give the bounded readiness worker a stable view between new blocks.
+		tokio::time::sleep(Duration::from_secs(2)).await;
+		let count = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(DISTINCT e.vtxo_id) \
+			FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+			JOIN expiry_allocation a ON a.id=c.allocation_id \
+			WHERE e.vtxo_id=ANY($1) AND c.active AND a.status='confirmed'", &[&wanted]).await?
+			.get::<_, i64>(0))).await.unwrap();
+		if count == i64::try_from(wanted.len()).unwrap() { settled = true; break; }
+		tip = ctx.generate_blocks(1).await;
+	}
+	assert!(settled, "every original customer right must reach a real confirmed allocation");
+	let final_height = ctx.generate_blocks(6).await;
+	srv.wait_for_sync_height(final_height).await;
+	wm.wait_for_sync_height(final_height).await;
+	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk, \
+		c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,a.id,a.sweep_tx,a.sweep_txid, \
+		a.confirmed_height,a.confirmed_hash,v.spend_state::TEXT AS spend_state \
+		FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
+		JOIN expiry_allocation a ON a.id=c.allocation_id JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
+		WHERE e.vtxo_id=ANY($1) AND c.active AND a.status='confirmed'", &[&wanted]).await?)).await.unwrap();
+	assert_eq!(rows.len(), 19);
+	let mut seen = BTreeSet::new();
+	let mut parents = BTreeMap::new();
+	let mut customer_fee = 0;
+	let mut customer_payout = 0;
+	for row in rows {
+		let id = row.get::<_, String>("vtxo_id");
+		assert!(seen.insert(id.clone()), "a customer right cannot have two confirmed allocations");
+		let coin = &customers[&id];
+		assert_eq!(row.get::<_, String>("owner_mailbox"), mailbox.to_string());
+		assert_eq!(row.get::<_, String>("user_pubkey"), coin.policy().user_pubkey().to_string());
+		assert_eq!(row.get::<_, String>("spk"), destination.spk.as_bytes().to_lower_hex_string());
+		assert_eq!(row.get::<_, i64>("gross_sat"), 1_000);
+		assert_eq!(row.get::<_, i64>("forfeited_sat"), 0, "partial readiness must never forfeit this owner's small fragment");
+		assert_eq!(row.get::<_, String>("spend_state"), "spent");
+		customer_fee += row.get::<_, i64>("fee_sat");
+		customer_payout += row.get::<_, i64>("payout_sat");
+		let parent: Transaction = deserialize(row.get("sweep_tx")).unwrap();
+		assert_eq!(parent.compute_txid().to_string(), row.get::<_, String>("sweep_txid"));
+		let info = core.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap();
+		assert!(info.confirmations.unwrap() >= 6);
+		assert_eq!(info.blockhash.unwrap().to_string(), row.get::<_, String>("confirmed_hash"));
+		assert_eq!(core.get_block_hash(u64::try_from(row.get::<_, i64>("confirmed_height")).unwrap()).unwrap(), info.blockhash.unwrap());
+		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+		parents.insert(row.get::<_, i64>("id"), parent);
+	}
+	assert_eq!(seen, customers.keys().cloned().collect());
+	assert_eq!(customer_fee, 1_000, "one fee for the merged same-owner output");
+	assert_eq!(customer_payout, 18_000);
+	let mut outputs = Vec::new();
+	for height in first_height..=u64::from(final_height.to_u32()) {
+		let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
+		for tx in block.txdata { for (vout, out) in tx.output.iter().enumerate() {
+			if out.script_pubkey == destination.spk {
+				outputs.push((OutPoint::new(tx.compute_txid(), vout as u32), out.clone()));
+			}
+		} }
+	}
+	assert_eq!(outputs.len(), 1, "the registered script must receive exactly one canonical payout");
+	assert_eq!(outputs[0].1.value, sat(18_000));
+	assert!(parents.values().any(|parent| parent.compute_txid() == outputs[0].0.txid));
+	for (allocation, parent) in parents {
+		let inputs = parent.input.iter().map(|input| core.get_raw_transaction(&input.previous_output.txid, None).unwrap()
+			.output[input.previous_output.vout as usize].value).sum::<Amount>();
+		assert_eq!(inputs, parent.output.iter().map(|out| out.value).sum::<Amount>(), "immutable payout parent fee must be zero");
+		let children = db.read(async |tx| Ok(tx.query("SELECT raw_tx,fee_sat FROM expiry_fee_child \
+			WHERE allocation_id=$1 AND confirmed_hash IS NOT NULL", &[&allocation]).await?)).await.unwrap();
+		assert_eq!(children.len(), 1);
+		let child: Transaction = deserialize(children[0].get("raw_tx")).unwrap();
+		let info = core.custom_get_raw_transaction_info(child.compute_txid(), None).unwrap().unwrap();
+		assert!(info.confirmations.unwrap() >= 6);
+		let paid = child.input.iter().map(|input| core.get_raw_transaction(&input.previous_output.txid, None).unwrap()
+			.output[input.previous_output.vout as usize].value).sum::<Amount>()
+			- child.output.iter().map(|out| out.value).sum::<Amount>();
+		assert_eq!(paid.to_sat(), u64::try_from(children[0].get::<_, i64>("fee_sat")).unwrap());
+		assert!(paid > Amount::ZERO);
+		assert!(parent.output.iter().filter(|out| !out.is_p2a_fee_anchor()
+			&& out.script_pubkey != destination.spk).all(|out| out.script_pubkey == operator_script));
 	}
 }

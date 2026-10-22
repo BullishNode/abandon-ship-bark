@@ -9,7 +9,6 @@ mod expiry_refresh_completion;
 mod expiry_replacement_transfer;
 mod expiry_operation_races;
 mod expiry_transfer_refresh;
-mod expiry_state;
 mod expiry_ownership;
 mod expiry_dispatch;
 mod expiry_lightning_terminal;
@@ -2823,3 +2822,5 @@ async fn board_exit_tx_prevents_registration() {
 	let balance = bark.spendable_balance_no_sync().await;
 	assert_eq!(balance, Amount::ZERO, "spendable balance should be zero since board was not registered");
 }
+
+mod watchman_successor;

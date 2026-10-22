@@ -33,6 +33,7 @@ pub(crate) const INVENTORY_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits
 enum PreparedCoin {
 	Ready(ReadyCoin),
 	Hold,
+	AwaitingAttribution,
 	NeedsHtlcProgress,
 }
 
@@ -58,7 +59,7 @@ impl Tx<'_> {
 				match self.expiry_owner(*user_pubkey, network).await? {
 					Attribution::Owned { mailbox_pk, child_index, spk } =>
 						Some(VerifiedPayee { mailbox: mailbox_pk, child_index, script: spk }),
-					Attribution::Unresolved => return Ok(PreparedCoin::Hold),
+					Attribution::Unresolved => return Ok(PreparedCoin::AwaitingAttribution),
 					Attribution::NoRegisteredOwner => {
 						warn!(vtxo_id = %ownership.id, "Expiry customer has no registered payout destination; no operator sweep authorized");
 						return Ok(PreparedCoin::Hold);
@@ -232,6 +233,7 @@ impl Server {
 				};
 				let mut coins = Vec::with_capacity(cut.terminals.len());
 				let mut hold = false;
+				let mut awaiting_attribution = false;
 				let mut needs_htlc_progress = false;
 				for index in &cut.terminals {
 					if self.rtmgr.shutdown_requested() {
@@ -251,13 +253,15 @@ impl Server {
 					match coin {
 						PreparedCoin::Ready(coin) => coins.push(coin),
 						PreparedCoin::Hold => hold = true,
+						PreparedCoin::AwaitingAttribution => awaiting_attribution = true,
 						PreparedCoin::NeedsHtlcProgress => needs_htlc_progress = true,
 					}
 				}
-				if hold || needs_htlc_progress {
+				if hold || awaiting_attribution || needs_htlc_progress {
 					// Separate held siblings only through signed steps that preserve
 					// every branch's server recovery path, as checked by the split request.
-					if needs_htlc_progress || (hold && cut.terminals.len() > 1) {
+					// Owner lookup does not require a chain spend.
+					if !awaiting_attribution && (needs_htlc_progress || (hold && cut.terminals.len() > 1)) {
 						self.db.write(async |t| t.request_expiry_split(view, &root).await).await
 							.context("expiry readiness split request")?;
 					}

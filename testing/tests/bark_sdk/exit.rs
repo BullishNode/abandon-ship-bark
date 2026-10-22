@@ -50,8 +50,9 @@ async fn assert_payouts_once(
 		assert_eq!(row.get::<_, Option<String>>("user_pubkey").as_ref(), Some(key));
 		assert_eq!(row.get::<_, Option<String>>("spk"), Some(script.to_hex_string()));
 		assert_eq!(row.get::<_, i64>("gross_sat"), gross.to_sat() as i64);
-		assert_eq!(row.get::<_, i64>("fee_sat"), 1_000);
-		assert_eq!(row.get::<_, i64>("payout_sat"), gross.to_sat() as i64 - 1_000);
+		let fee = gross.to_sat().div_ceil(100).max(1_000);
+		assert_eq!(row.get::<_, i64>("fee_sat"), i64::try_from(fee).unwrap());
+		assert_eq!(row.get::<_, i64>("payout_sat"), i64::try_from(gross.to_sat() - fee).unwrap());
 		assert_eq!(row.get::<_, i64>("forfeited_sat"), 0);
 		assert_eq!(row.get::<_, Option<String>>("sweep_txid"), Some(txid.to_string()));
 		let block = info.blockhash.unwrap();
@@ -285,7 +286,10 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 	}.wait_millis(15000).await;
 
 	let mut paid_points = std::collections::BTreeMap::new();
+	let mut total_fees = sat(0);
 	for (owner, id, gross) in owners {
+		let fee = sat(gross.to_sat().div_ceil(100).max(1_000));
+		total_fees += fee;
 		owner.chain().invalidate_caches().await;
 		owner.sync_fallback_payouts().await.unwrap();
 		let receipts = owner.fallback_payouts().await.unwrap();
@@ -299,8 +303,8 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 		let attempt = attempts[0];
 		assert_eq!(attempt.disposition, bark::FallbackDisposition::CustomerPayout);
 		assert_eq!(attempt.gross, gross);
-		assert_eq!(attempt.fee, sat(1_000));
-		assert_eq!(attempt.payout, gross - sat(1_000));
+		assert_eq!(attempt.fee, fee);
+		assert_eq!(attempt.payout, gross - fee);
 		assert_eq!(attempt.forfeited, sat(0));
 		let signed = attempt.parent.as_ref().unwrap();
 		let index = attempt.output_index.unwrap();
@@ -308,7 +312,7 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 		let expected_script = &expected[&id.to_string()].1;
 		assert_eq!(attempt.script.as_ref(), Some(expected_script));
 		assert_eq!(signed.output[index as usize].script_pubkey, *expected_script);
-		assert_eq!(signed.output[index as usize].value, gross - sat(1_000));
+		assert_eq!(signed.output[index as usize].value, gross - fee);
 		let info = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(point.txid, None).unwrap().unwrap();
 		assert!(info.confirmations.unwrap_or(0) >= 6);
 		let block = info.blockhash.unwrap();
@@ -318,9 +322,9 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 		assert_eq!(ctx.bitcoind().await_transaction(point.txid).await, *signed);
 		let output = ctx.bitcoind().sync_client().get_tx_out(&point.txid, index, Some(true)).unwrap().unwrap();
 		assert!(output.confirmations >= 6);
-		assert_eq!(output.value, gross - sat(1_000));
+		assert_eq!(output.value, gross - fee);
 		assert_eq!(output.script_pub_key.script().unwrap(), *expected_script);
-		assert!(paid_points.insert(expected_script.clone(), (point, gross - sat(1_000))).is_none());
+		assert!(paid_points.insert(expected_script.clone(), (point, gross - fee)).is_none());
 		assert_eq!(owner.get_vtxo_by_id(id).await.unwrap().state, bark::vtxo::VtxoState::Spent);
 		assert!(owner.vtxos().await.unwrap().is_empty());
 		assert!(!owner.awaiting_settlement_vtxos().await.unwrap().contains(&id));
@@ -331,15 +335,15 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 		assert_eq!(payouts[0].status, bark::movement::MovementStatus::Successful);
 		assert_eq!(payouts[0].metadata["fallback"]["chain_verified"], true);
 		assert_eq!(payouts[0].sent_to.len(), 1);
-		assert_eq!(payouts[0].sent_to[0].amount, gross - sat(1_000));
-		assert_eq!(payouts[0].offchain_fee, sat(1_000));
+		assert_eq!(payouts[0].sent_to[0].amount, gross - fee);
+		assert_eq!(payouts[0].offchain_fee, fee);
 		assert_eq!(payouts[0].effective_balance.to_sat(), -(gross.to_sat() as i64));
 		assert!(owner.refresh_vtxos([id]).await.unwrap().is_none(), "paid principal must not enter another round");
 		owner.sync_fallback_payouts().await.unwrap();
 		assert_eq!(owner.history().await.unwrap(), before_refresh, "refresh and receipt replay must not debit or mint again");
 	}
 	assert_eq!(paid_points.values().map(|entry| entry.1).sum::<bitcoin::Amount>()
-		+ sat(paid_points.len() as u64 * 1_000), sat(400_000));
+		+ total_fees, sat(400_000));
 
 	// Repeat after another real rebuilt tip. Include all generations and all root descendants,
 	// not just the selected active receipt, so an extra owner/operator allocation cannot hide.
@@ -559,7 +563,10 @@ async fn watchman_sweeps_vtxo_chain_during_exit() {
 	}.wait_millis(15000).await;
 
 	let mut paid_points = std::collections::BTreeMap::new();
+	let mut total_fees = sat(0);
 	for (owner, id, gross) in owners {
+		let fee = sat(gross.to_sat().div_ceil(100).max(1_000));
+		total_fees += fee;
 		owner.chain().invalidate_caches().await;
 		owner.sync_fallback_payouts().await.unwrap();
 		let receipts = owner.fallback_payouts().await.unwrap();
@@ -573,8 +580,8 @@ async fn watchman_sweeps_vtxo_chain_during_exit() {
 		let attempt = attempts[0];
 		assert_eq!(attempt.disposition, bark::FallbackDisposition::CustomerPayout);
 		assert_eq!(attempt.gross, gross);
-		assert_eq!(attempt.fee, sat(1_000));
-		assert_eq!(attempt.payout, gross - sat(1_000));
+		assert_eq!(attempt.fee, fee);
+		assert_eq!(attempt.payout, gross - fee);
 		assert_eq!(attempt.forfeited, sat(0));
 		let signed = attempt.parent.as_ref().unwrap();
 		let index = attempt.output_index.unwrap();
@@ -582,7 +589,7 @@ async fn watchman_sweeps_vtxo_chain_during_exit() {
 		let expected_script = &expected[&id.to_string()].1;
 		assert_eq!(attempt.script.as_ref(), Some(expected_script));
 		assert_eq!(signed.output[index as usize].script_pubkey, *expected_script);
-		assert_eq!(signed.output[index as usize].value, gross - sat(1_000));
+		assert_eq!(signed.output[index as usize].value, gross - fee);
 		let info = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(point.txid, None).unwrap().unwrap();
 		assert!(info.confirmations.unwrap_or(0) >= 6);
 		let block = info.blockhash.unwrap();
@@ -592,9 +599,9 @@ async fn watchman_sweeps_vtxo_chain_during_exit() {
 		assert_eq!(ctx.bitcoind().await_transaction(point.txid).await, *signed);
 		let output = ctx.bitcoind().sync_client().get_tx_out(&point.txid, index, Some(true)).unwrap().unwrap();
 		assert!(output.confirmations >= 6);
-		assert_eq!(output.value, gross - sat(1_000));
+		assert_eq!(output.value, gross - fee);
 		assert_eq!(output.script_pub_key.script().unwrap(), *expected_script);
-		assert!(paid_points.insert(expected_script.clone(), (point, gross - sat(1_000))).is_none());
+		assert!(paid_points.insert(expected_script.clone(), (point, gross - fee)).is_none());
 		assert_eq!(owner.get_vtxo_by_id(id).await.unwrap().state, bark::vtxo::VtxoState::Spent);
 		assert!(owner.vtxos().await.unwrap().is_empty());
 		assert!(!owner.awaiting_settlement_vtxos().await.unwrap().contains(&id));
@@ -605,15 +612,15 @@ async fn watchman_sweeps_vtxo_chain_during_exit() {
 		assert_eq!(payouts[0].status, bark::movement::MovementStatus::Successful);
 		assert_eq!(payouts[0].metadata["fallback"]["chain_verified"], true);
 		assert_eq!(payouts[0].sent_to.len(), 1);
-		assert_eq!(payouts[0].sent_to[0].amount, gross - sat(1_000));
-		assert_eq!(payouts[0].offchain_fee, sat(1_000));
+		assert_eq!(payouts[0].sent_to[0].amount, gross - fee);
+		assert_eq!(payouts[0].offchain_fee, fee);
 		assert_eq!(payouts[0].effective_balance.to_sat(), -(gross.to_sat() as i64));
 		assert!(owner.refresh_vtxos([id]).await.unwrap().is_none(), "paid principal must not enter another round");
 		owner.sync_fallback_payouts().await.unwrap();
 		assert_eq!(owner.history().await.unwrap(), before_refresh, "refresh and receipt replay must not debit or mint again");
 	}
 	assert_eq!(paid_points.values().map(|entry| entry.1).sum::<bitcoin::Amount>()
-		+ sat(paid_points.len() as u64 * 1_000), sat(400_000));
+		+ total_fees, sat(400_000));
 
 	// Repeat after another real rebuilt tip. Include all generations and all root descendants,
 	// not just the selected active receipt, so an extra owner/operator allocation cannot hide.

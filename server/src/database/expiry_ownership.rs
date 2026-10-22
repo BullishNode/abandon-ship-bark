@@ -21,6 +21,12 @@ use super::expiry_receive::ReceiveClaimSettlement;
 use super::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use super::{BlockTable, SpendState, Tx};
 
+lazy_static::lazy_static! {
+	// Same unspendable key as round/mod.rs uses for padding leaves.
+	static ref PADDING_KEY: PublicKey =
+		"02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c".parse().unwrap();
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnershipDisposition {
 	Customer { user_pubkey: PublicKey, mailbox: Option<MailboxIdentifier> },
@@ -196,6 +202,11 @@ impl Tx<'_> {
 			return Ok(proposal);
 		}
 		let Ok(user) = full.clone().try_into_user_vtxo() else { return Ok(proposal); };
+		if matches!(user.policy(), ark::VtxoPolicy::Pubkey(policy) if policy.user_pubkey == *PADDING_KEY) {
+			proposal.disposition = OwnershipDisposition::Operator;
+			proposal.evidence = Some(OwnershipEvidence::Padding);
+			return Ok(proposal);
+		}
 		// Receive claims carry their own authenticated destination. A provider
 		// checkpoint is not the recipient of a settled receive-for-address.
 		let mut cancelled_receive_claim = false;

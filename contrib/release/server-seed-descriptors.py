@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write a private Core descriptor import from an authentic server seed phrase."""
+"""Write a private Core descriptor import from a server seed phrase."""
 
 import argparse
 import hashlib
@@ -71,16 +71,22 @@ def main():
 	parser.add_argument("--wallet", required=True, choices=PATHS)
 	parser.add_argument("--range-end", required=True, type=int)
 	parser.add_argument("--next-index", required=True, type=int)
-	parser.add_argument("--output", required=True, type=Path)
+	destination = parser.add_mutually_exclusive_group(required=True)
+	destination.add_argument("--output", type=Path)
+	destination.add_argument("--stdout", action="store_true", help="pipe the private import directly to Core")
 	args = parser.parse_args()
 	if not 0 <= args.next_index <= args.range_end < 2**31:
 		parser.error("require 0 <= next-index <= range-end < 2^31")
 	input_stat = os.fstat(sys.stdin.fileno())
 	if not stat.S_ISREG(input_stat.st_mode) or input_stat.st_uid != os.getuid() or input_stat.st_mode & 0o077:
 		parser.error("stdin must be a regular owner-only seed file owned by this user")
-	parent_stat = args.output.parent.stat()
-	if parent_stat.st_uid != os.getuid() or parent_stat.st_mode & 0o077:
-		parser.error("output directory must be owner-only and owned by this user")
+	if args.stdout:
+		if not stat.S_ISFIFO(os.fstat(sys.stdout.fileno()).st_mode):
+			parser.error("stdout must be a pipe to the descriptor importer")
+	else:
+		parent_stat = args.output.parent.stat()
+		if parent_stat.st_uid != os.getuid() or parent_stat.st_mode & 0o077:
+			parser.error("output directory must be owner-only and owned by this user")
 	phrase = unicodedata.normalize("NFKD", " ".join(sys.stdin.read(4096).split()))
 	if len(phrase.split()) != 12 or any(not word.isascii() or not word.isalpha() or not word.islower() for word in phrase.split()):
 		parser.error("require the original 12-word English server seed phrase")
@@ -95,7 +101,11 @@ def main():
 		"active": True,
 		"internal": False,
 	}]
-	# Never overwrite an earlier recovery input or print private descriptors.
+	if args.stdout:
+		json.dump(request, sys.stdout)
+		sys.stdout.write("\n")
+		return
+	# Never overwrite an earlier recovery input.
 	fd = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 	with os.fdopen(fd, "w") as output:
 		json.dump(request, output)

@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use anyhow::Context;
-use bitcoin::{Amount, OutPoint, Transaction, TxOut, Txid};
+use bitcoin::{Amount, OutPoint, Transaction, TxIn, TxOut, Txid, ScriptBuf, Sequence, Witness, sighash};
 use bitcoin_ext::TxStatus;
 use bitcoin_ext::{fee, TransactionExt, TxOutExt};
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
@@ -18,7 +18,9 @@ use crate::database::expiry_chain::ExpiryViewToken;
 use crate::database::expiry_payout::{MAX_PAYOUT_VSIZE, PendingExpiryPayout};
 use crate::wallet::BdkWalletExt;
 
-use ark::ServerVtxo;
+use ark::{ServerVtxo, ServerVtxoPolicy};
+use ark::vtxo::policy::signing::VtxoSigner;
+use ark::vtxo::policy::clause::VtxoClause;
 
 use super::Watchman;
 
@@ -43,6 +45,89 @@ async fn mempool_child_fee(client: &bitcoind_async_client::Client, txid: Txid) -
 }
 
 impl Watchman {
+	async fn payout_inputs(
+		&self, vtxos: &[ServerVtxo],
+	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount, usize)> {
+		let mut inputs = Vec::with_capacity(vtxos.len());
+		let mut clauses = Vec::with_capacity(vtxos.len());
+		let mut total_input_weight = 0;
+		let mut total_input_amount = Amount::ZERO;
+
+		for vtxo in vtxos {
+			//TODO(stevenroose) try remove this special case
+			if *vtxo.policy() == ServerVtxoPolicy::ServerOwned {
+				let input = TxIn {
+					previous_output: vtxo.point(),
+					script_sig: ScriptBuf::new(),
+					sequence: Sequence::ZERO,
+					witness: Witness::new(),
+				};
+
+				// TxIn base weight (non-witness) + witness weight
+				total_input_weight += 4 * input.base_size() + (1 + 1 + 64); // nb items + sig
+				total_input_amount = total_input_amount.checked_add(vtxo.amount()).context("claim input amount overflow")?;
+
+				inputs.push(input);
+				clauses.push(None);
+			} else {
+				let clause = self.signer.find_signable_clause(vtxo).await
+					.context(vtxo.id())
+					.context("no signable clause for vtxo")?;
+
+				let input = TxIn {
+					previous_output: vtxo.point(),
+					script_sig: ScriptBuf::new(),
+					sequence: clause.sequence().unwrap_or(Sequence::ZERO),
+					witness: Witness::new(),
+				};
+
+				// TxIn base weight (non-witness) + witness weight
+				total_input_weight += 4 * input.base_size() + clause.witness_size(vtxo);
+				total_input_amount = total_input_amount.checked_add(vtxo.amount()).context("claim input amount overflow")?;
+
+				inputs.push(input);
+				clauses.push(Some(clause));
+			}
+
+			slog!(PreparingVtxoClaim, vtxo_id: vtxo.id(), policy: vtxo.policy().policy_type(),
+				value: vtxo.amount(),
+			);
+		}
+
+		Ok((inputs, clauses, total_input_amount, total_input_weight))
+	}
+	async fn sign_payout_inputs(
+		&self, vtxos: &[ServerVtxo], clauses: &[Option<VtxoClause>], mut tx: Transaction,
+	) -> anyhow::Result<Transaction> {
+		// Sign all inputs
+		let prevouts = vtxos.iter().map(|vtxo| vtxo.txout()).collect::<Vec<_>>();
+		let prevouts = sighash::Prevouts::All(&prevouts);
+
+		let mut sighash_cache = sighash::SighashCache::new(&mut tx);
+		for (input_idx, (vtxo, clause)) in vtxos.iter().zip(clauses).enumerate() {
+			if let Some(clause) = clause {
+				let witness = self.signer.sign_input_with_clause(
+					vtxo, clause, input_idx, &mut sighash_cache, &prevouts,
+				).await.with_context(|| format!(
+					"failed to sign script-spend input {} of tx {}",
+					input_idx, sighash_cache.transaction().compute_txid(),
+				))?;
+				*sighash_cache.witness_mut(input_idx).unwrap() = witness;
+			} else {
+				// keyspend
+				let witness = self.signer.sign_input_with_keyspend(
+					vtxo, input_idx, &mut sighash_cache, &prevouts,
+				).await.with_context(|| format!(
+					"failed to sign key-spend input {} of tx {}",
+					input_idx, sighash_cache.transaction().compute_txid(),
+				))?;
+				*sighash_cache.witness_mut(input_idx).unwrap() = witness;
+			}
+		}
+
+		Ok(tx)
+	}
+
 	/// Build the complete group as one transaction; callers must never feed a
 	/// committed group through process_claims, which retries individual inputs.
 	pub(crate) async fn build_expiry_payout(
@@ -61,7 +146,7 @@ impl Watchman {
 				"expiry payout backing is not the exact confirmed output");
 		}
 		ensure!(payouts.iter().all(|out| out.is_standard()), "expiry payout contains nonstandard or dust payee output");
-		let (inputs, clauses, input_amount, _) = self.claim_inputs(vtxos).await?;
+		let (inputs, clauses, input_amount, _) = self.payout_inputs(vtxos).await?;
 		let paid = payouts.iter().try_fold(Amount::ZERO, |sum, out|
 			sum.checked_add(out.value).context("expiry payout amount overflow"),
 		)?;
@@ -80,7 +165,7 @@ impl Watchman {
 			version: bitcoin::transaction::Version::non_standard(3),
 			lock_time, input: inputs, output: outputs,
 		};
-		let tx = self.sign_claim_inputs(vtxos, &clauses, tx).await?;
+		let tx = self.sign_payout_inputs(vtxos, &clauses, tx).await?;
 		ensure!(tx.vsize() <= MAX_PAYOUT_VSIZE, "expiry payout requires splitting: {} vbytes", tx.vsize());
 		let outputs = tx.output.iter().try_fold(Amount::ZERO, |sum, out|
 			sum.checked_add(out.value).context("expiry payout output overflow"),

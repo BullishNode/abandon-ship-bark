@@ -48,24 +48,52 @@ or recovery.
   not a balance mismatch. A same-release rehearsal does not qualify an
   upgrade or disaster recovery on a fresh host.
 
+## Changes in this source
+
+- Expiry payout and forfeiture decisions require the complete same-source
+  owner group, including siblings under separate physical outputs. Final checks
+  revalidate the source and ownership. Incomplete groups remain held; an
+  independently ready fragment must not incur another output fee.
+- The watchman uses Core's observed fee to replace an unrecognized P2A fee
+  child. It preserves the exact payout parent. An unrecognized child is not
+  evidence of operator funding or customer settlement.
+- Expiry preparation reuses immutable source paths and funding bytes within
+  one anchor pass. Selected-path, size, ownership, version and canonical-chain
+  checks remain required. This change does not establish a capacity envelope.
+- The optional `fee_estimator.max_fee_rate` ceiling clamps the initial fallback
+  rates before use and all later fetched or fallback rates. This ceiling does
+  not cap cumulative operator subsidy or every replacement fee.
+- Both daemons reject `min_trusted_confs = 0` during configuration validation.
+  A third-party unconfirmed deposit must not count as a trusted fee input.
+- Server and standalone watchman initialization await initial wallet storage
+  before success. Storage errors propagate to the caller. Database creation,
+  the seed file and each wallet commit remain separate steps. A failure can
+  leave partial state; preserve it and investigate before any retry.
+
+These changes describe source behavior. Runtime and financial qualification on
+matching final GNU programs and the final release bundle remain required.
+
 ## Known limits and remaining qualification
 
-- One owner's independently ready fragments can forfeit a small customer leaf
-  before its siblings are ready. A confirmed case paid 17,000 instead of the
-  merged 18,000 sats. The first proposed fix still forfeited 1,000 sats. A
-  complete logical-owner-group fix remains under qualification. Preserve every
-  customer right and hold incomplete groups. Do not relax financial checks.
-- An unrecognized foreign P2A fee child can stop payout fee replacement in
-  earlier programs. A targeted regression fails before the source fix and
-  passes after it. Independent review supports that fix's scoped financial
-  behavior. A new release build and bundle qualification remain pending.
-- The 4,096-payee native test took 1,543.594 seconds, including teardown, and
-  failed its unchanged 1,500-second limit. This is an accepted performance
-  limit. Separate chain verification supports 17 zero-fee parents, 17 fee
-  children with 925,040 sats in miner fees, and 4,096 distinct scripts paid
-  exactly 4,000 sats once each. It does not establish a complete match with
-  the registered-owner set or full operator-capital conservation. There is
-  no qualified production capacity envelope.
+- Earlier programs could forfeit a small customer leaf before the same
+  owner's siblings were ready. A confirmed case paid 17,000 instead of the
+  merged 18,000 sats. The first proposed fix still forfeited 1,000 sats. The
+  complete owner-group checks are now implemented, but final-program
+  qualification remains required. Preserve every customer right and hold
+  incomplete groups. Do not relax financial checks.
+- Earlier programs could stop payout fee replacement when an unrecognized
+  foreign P2A fee child appeared. A targeted regression fails before the
+  source fix and passes after it. Independent review supports that fix's
+  scoped financial behavior. These results retain their original program
+  identities. They do not qualify the final programs or bundle.
+- An earlier 4,096-payee native test took 1,543.594 seconds, including teardown,
+  and failed its unchanged 1,500-second limit. Later candidates also failed
+  that limit. Separate historical chain verification supports 17 zero-fee
+  parents, 17 fee children with 925,040 sats in miner fees, and 4,096 distinct
+  scripts paid exactly 4,000 sats once each. It does not establish a complete
+  match with the registered-owner set or full operator-capital conservation.
+  The current geometry reuse still requires the unchanged capacity test on
+  the final programs. There is no qualified production capacity envelope.
 - Ambiguous external Lightning outcomes can remain pending. Supervised
   recovery of a request that never reached Lightning requires intact original
   history, complete producer and queue shutdown, and retained incident records.
@@ -81,6 +109,12 @@ or recovery.
 - Payouts require confirmed usable watchman fee inputs. The operator miner
   subsidy has no hard cap. Monitor fee reserves and verify payout recovery
   after replenishment.
+- Ordinary watchman claims sign and broadcast before the surrounding
+  database transaction commits. A commit error or lost reply does not prove
+  that publication failed. Durable authorization before publication,
+  exact-byte replay after a crash and complete historical claim
+  reconciliation remain unqualified. Preserve original records and signed
+  transactions; source locks do not provide these guarantees.
 - Final artifact checks, the absent-wallet payout and seed-restored spend on
   the clean installation, disaster recovery, upgrade, reorg tests, the reviewed
   financial checker, randomized load and the final-candidate soak remain

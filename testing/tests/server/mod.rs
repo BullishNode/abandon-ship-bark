@@ -38,6 +38,7 @@ mod expiry_tiny_payout_grouping;
 mod expiry_dust_later_receipt;
 mod expiry_three_owner_forwarding;
 mod expiry_script_dust_boundaries;
+mod admin_proxy_boundaries;
 mod ban;
 mod blocklist;
 mod block_index;

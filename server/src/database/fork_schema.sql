@@ -32,29 +32,13 @@ CREATE TABLE expiry_cancelled_participation (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Only matches are cached. Exhaustive coverage belongs to each pending
--- key and registered account, not to an account-wide lifetime cursor.
-CREATE TABLE expiry_pending_key (
-	user_pubkey TEXT PRIMARY KEY,
-	mailbox_pk TEXT,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
+-- Owner matches are rechecked against the signed registration before payout.
 CREATE TABLE expiry_owner_key (
 	user_pubkey TEXT PRIMARY KEY,
 	mailbox_pk TEXT NOT NULL REFERENCES fallback_record(mailbox_pk),
 	child_index BIGINT NOT NULL CHECK (child_index >= 0 AND child_index < 2147483648),
 	UNIQUE (mailbox_pk, child_index)
 );
-
-CREATE TABLE expiry_scan (
-	user_pubkey TEXT NOT NULL REFERENCES expiry_pending_key(user_pubkey) ON DELETE CASCADE,
-	mailbox_pk TEXT NOT NULL REFERENCES fallback_record(mailbox_pk),
-	scanned_up_to BIGINT NOT NULL DEFAULT 0 CHECK (scanned_up_to >= 0 AND scanned_up_to <= 2147483648),
-	service_ticket BIGSERIAL NOT NULL,
-	PRIMARY KEY (user_pubkey, mailbox_pk)
-);
-CREATE INDEX expiry_scan_prefix_ix ON expiry_scan (scanned_up_to, mailbox_pk);
 
 -- Chain-derived decisions are invalid until both processes acknowledge their
 -- successful sync cycles and the rebuild verifies the current database tips.
@@ -272,10 +256,6 @@ CREATE TABLE expiry_lightning_internal_funding (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- The scheduler selects bounded keys and accounts, then compares each selected
--- key in its account's next interval without scanning other accounts.
-CREATE INDEX expiry_scan_record_prefix_ix ON expiry_scan (mailbox_pk, scanned_up_to);
-
 -- A validated receive destination survives collection and a missing claim caller.
 -- The output row need not exist until the later materialization transaction.
 CREATE TABLE expiry_lightning_receive_claim (
@@ -306,13 +286,6 @@ CREATE INDEX expiry_receive_replay_pending_order
 	ON expiry_lightning_receive_replay (last_attempt_at NULLS FIRST, subscription_id);
 CREATE INDEX expiry_receive_unmaterialized_subscription
 	ON expiry_lightning_receive_claim (subscription_id) WHERE NOT materialized;
-
-CREATE INDEX expiry_scan_service_ticket_ix
-	ON expiry_scan (service_ticket, user_pubkey, mailbox_pk)
-	WHERE scanned_up_to < 2147483648;
-CREATE INDEX expiry_scan_account_service_ticket_ix
-	ON expiry_scan (mailbox_pk, scanned_up_to, service_ticket, user_pubkey)
-	WHERE scanned_up_to < 2147483648;
 
 -- Confirmed user claims remain available for rebroadcast after a shallow reorg.
 CREATE TABLE user_exit_claim (

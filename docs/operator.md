@@ -182,7 +182,7 @@ validation does not establish liquidity, throughput or safe deadlines.
 | Receive admission and pool | `ln_receive_anti_dos_required`; `[vtxopool]`: `vtxo_targets`, `vtxo_target_issue_threshold`, `vtxo_lifetime`, `vtxo_pre_expiry`, `max_vtxo_exit_depth`. Reserve liquidity and test replenishment under the declared load. |
 | Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons separately. Check initial fallback rates separately from later estimates. |
 | Watchman policy | `[watchman]`: `reaction_interval`, `sweep_interval`, `progress_grace_period`, `claim_chunksize`, `incremental_relay_fee`, `min_cpfp_amount`, `expiry_fee_warning`. The warning defaults to `"10000 sat"` even when absent from the template. |
-| Attribution and recovery | `expiry_owner_scan_chunk_size`, `expiry_owner_scan_workers`, `recovery_xpub_nb_keys`, `max_read_mailbox_items`; PostgreSQL `max_connections`, `connection_timeout_secs`, `idle_timeout_secs`. |
+| Attribution and recovery | `recovery_xpub_nb_keys` (must be positive), `max_concurrent_xpub_recoveries`, `max_read_mailbox_items`; PostgreSQL `max_connections`, `connection_timeout_secs`, `idle_timeout_secs`. |
 | Offboard sessions | `offboard_session_timeout`, `offboard_check_interval`, `offboard_acceptable_fee_rate_duration`; the check interval must not exceed the timeout. |
 
 Expiry tables use `expiry_blocks_threshold` and `ppm`. Keep thresholds and
@@ -273,7 +273,7 @@ or when an expired customer remains unpaid beyond the declared operating
 window. Inspect these read-only tables with a restricted database account:
 
 - `expiry_chain_view` and `expiry_sync_ack`: completed chain views and rebuilds.
-- `expiry_pending_key` and `expiry_scan`: unresolved keys and derivation work.
+- `expiry_owner_key`: owner matches, rechecked against signed registrations before payout.
 - `expiry_entitlement`: decision fences, gross amounts and fixed source facts.
   A fence alone does not identify a final payee or establish payment.
 - `expiry_allocation_coin`: the allocated owner, script, disposition and amounts.
@@ -293,9 +293,8 @@ a local paid status or a mempool entry is insufficient. Check customer amounts,
 output fees, operator change and miner fees separately.
 
 Unknown ownership must remain unresolved. Do not assign an unknown customer's
-value to the operator. Preserve registered xpubs, address bindings and scan
-progress. A wrong mailbox hint does not replace proof against the registered
-xpub.
+value to the operator. Preserve registered xpubs and address bindings. A wrong
+mailbox hint does not replace proof against the registered xpub.
 
 Automated fallback requires the final recipient's authenticated fallback
 registration on the Ark server. The destination key must derive from that
@@ -306,8 +305,15 @@ At expiry, keep bitcoin held if no registration matches. Also keep bitcoin
 held while a registered owner's attribution scan is incomplete. Do not assign
 the recipient's bitcoin to the provider or operator.
 
-An unresolved owner lookup holds its output without a split. A partial derivation
-scan without a match does not prove that the key belongs to another owner.
+Owner lookup first checks cached matches, then the mailbox registration's first
+32 keys. A cache miss uses upstream wallet recovery, from index 0 on each search,
+with the mailbox registration first and then all other registrations. Recovery
+stops at an unused chunk of 10,000 keys. A coin beyond that gap remains held.
+HTLC keys are compared only within the range recovery covered. A search with
+no match is repeated when a registration is added, and once per day.
+
+An unresolved owner lookup holds its output and splits it away from ready
+siblings. A lookup never authorizes an operator claim of customer bitcoin.
 A sub-dust group remains held while another coin under the same source anchor at
 the same expiry height is undecided. Do not split or discard obligations to
 bypass these holds. Charge the cumulative fee per payout script and expiry height,
@@ -334,11 +340,11 @@ Use a read-only database role and retain private snapshots for comparison.
 | Either daemon exits or its required plugin is absent | Inspect the exact supervisor unit and plugin logs. Restore the pinned bytes and runtime environment. Require both daemons and plugins to resume useful work. |
 | Node tip advances but either daemon stays behind for 2 consecutive new blocks | Compare its `expiry_sync_ack` and stored block hash with the canonical node. Check RPC, disk and worker errors. Close only after both completed views reconcile. |
 | `expiry_chain_view.invalid` persists across 2 completed daemon sync cycles | Preserve the generation and acknowledgements. Investigate rebuild errors. Do not clear the invalid flag or force a financial decision. |
-| Owner-search backlog exists but its coverage makes no progress across 2 scheduled work cycles | Inspect `expiry_pending_key`, `expiry_scan` and owner-scan warnings. Check database/resource pressure and authenticated registrations. Keep unresolved bitcoin held. |
+| An expired customer remains unpaid | Check authenticated registrations, `expiry_owner_key`, recovery warnings and the 10,000-key stop rule. Check database/resource pressure. Keep unresolved bitcoin held. |
 | A customer's unpaid age exceeds the declared window, or backlog/value grows across observations | Identify its VTXO, rightful owner, decision fence and canonical spend. Resolve the specific hold, fee shortage or chain issue. A healthy process or a new allocation does not close the alert. |
 | Either confirmed-usable-funding warning occurs | Refill the watchman wallet. Check usable confirmed outpoints, then observe the queued payout confirm with correct customer amounts. |
 | `Proposed emergency payout operator subsidy exceeds warning level` occurs | Check package feerate and reserve headroom. Increase the operating reserve if needed. The warning does not cap spending or authorize a reduced customer payout. |
-| `Expiry payout remains pending`, readiness or owner-scan warnings recur without progress | Retain allocation/key identifiers and source-specific error records. Follow the relevant ownership, fee-child or Lightning procedure. Never delete a fence to clear an alert. |
+| `Expiry payout remains pending`, readiness or owner-lookup warnings recur without progress | Retain allocation/key identifiers and source-specific error records. Follow the relevant ownership, fee-child or Lightning procedure. Never delete a fence to clear an alert. |
 | Disk/WAL headroom falls below the configured alert, PostgreSQL backup fails, or RSS/database size grows without bound | Escalate before storage exhaustion. Preserve WAL and authoritative history. Verify the next backup and a separate restore; do not prune financial history to clear the alert. |
 | A canonical-chain money check finds a wrong amount, wrong script or duplicate payment | Suspend new admission under reviewed deployment controls. Preserve all stores and signed transactions. Keep protective claims available and reconcile every affected obligation before resumption. |
 

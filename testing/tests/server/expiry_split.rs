@@ -227,9 +227,7 @@ async fn expiry_unregistered_owner_does_not_block_registered_sibling() {
 	let state = db.read(async |tx| tx.expiry_owner(unknown, bitcoin::Network::Regtest).await).await.unwrap();
 	assert_eq!(state, server::database::expiry_attribution::Attribution::Unresolved);
 	assert!(db.read(async |tx| Ok(tx.query_one("SELECT \
-		EXISTS(SELECT 1 FROM expiry_pending_key WHERE user_pubkey=$1) \
-		AND EXISTS(SELECT 1 FROM expiry_scan WHERE user_pubkey=$1 AND scanned_up_to < 2147483648) \
-		AND NOT EXISTS(SELECT 1 FROM expiry_owner_key WHERE user_pubkey=$1) \
+		NOT EXISTS(SELECT 1 FROM expiry_owner_key WHERE user_pubkey=$1) \
 		AND NOT EXISTS(SELECT 1 FROM expiry_entitlement WHERE vtxo_id=$2)",
 		&[&unknown.to_string(), &held.id().to_string()],
 	).await?.get::<_, bool>(0))).await.unwrap());

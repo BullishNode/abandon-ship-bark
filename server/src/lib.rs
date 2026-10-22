@@ -33,7 +33,7 @@ mod intman;
 pub mod ln;
 pub mod nursery;
 mod offboards;
-mod expiry_owner_scan;
+mod expiry_owner;
 mod expiry_readiness;
 pub mod recovery;
 mod round;
@@ -49,7 +49,7 @@ pub use crate::intman::{CAPTAIND_API_KEY, CAPTAIND_CLI_API_KEY};
 pub use crate::config::Config;
 pub use bark_common::{fs_perms, secret};
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -226,6 +226,7 @@ pub struct Server {
 	xpub_recovery_queue: tokio::sync::Semaphore,
 	/// One permit for each xpub recovery scan that may run at once.
 	xpub_recovery_permits: tokio::sync::Semaphore,
+	expiry_owner_lookups: parking_lot::Mutex<HashMap<PublicKey, expiry_owner::OwnerLookup>>,
 	lightning_manager: LightningManager,
 	htlc_settler: Arc<HtlcSettler>,
 	vtxopool: VtxoPool,
@@ -482,6 +483,7 @@ impl Server {
 				cfg.max_concurrent_xpub_recoveries.saturating_add(recovery::XPUB_RECOVERY_QUEUE_SIZE),
 			),
 			xpub_recovery_permits: tokio::sync::Semaphore::new(cfg.max_concurrent_xpub_recoveries),
+			expiry_owner_lookups: parking_lot::Mutex::new(HashMap::new()),
 			config: cfg.clone(),
 			db,
 			server_pubkey: server_key.public_key(),
@@ -518,7 +520,6 @@ impl Server {
 		srv.lightning_manager.spawn_hold_settler(srv.clone(), settlement_stream);
 
 		srv.clone().start_offboard_retry_task().await;
-		srv.clone().start_expiry_owner_scan();
 		srv.clone().start_expiry_readiness();
 		srv.clone().start_receive_claim_recovery();
 

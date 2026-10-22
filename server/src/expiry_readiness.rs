@@ -6,12 +6,14 @@ use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::{OutPoint, Transaction};
+use bitcoin::secp256k1::PublicKey;
 use bitcoin_ext::BlockHeight;
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
 use bitcoind_async_client::traits::Reader;
 use tracing::{debug, info, warn};
 
 use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoPolicy};
+use ark::mailbox::MailboxIdentifier;
 
 use crate::Server;
 use crate::database::Tx;
@@ -33,6 +35,7 @@ pub(crate) const INVENTORY_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits
 enum PreparedCoin {
 	Ready(ReadyCoin),
 	Hold,
+	LookupOwner(PublicKey, Option<MailboxIdentifier>),
 	NeedsHtlcProgress,
 }
 
@@ -58,11 +61,7 @@ impl Tx<'_> {
 				match self.expiry_owner(*user_pubkey, network).await? {
 					Attribution::Owned { mailbox_pk, child_index, spk } =>
 						Some(VerifiedPayee { mailbox: mailbox_pk, child_index, script: spk }),
-					Attribution::Unresolved => return Ok(PreparedCoin::Hold),
-					Attribution::NoRegisteredOwner => {
-						warn!(vtxo_id = %ownership.id, "Expiry customer has no registered payout destination; no operator sweep authorized");
-						return Ok(PreparedCoin::Hold);
-					},
+					Attribution::Unresolved => return Ok(PreparedCoin::LookupOwner(*user_pubkey, *mailbox)),
 				}
 			},
 			OwnershipDisposition::Operator => None,
@@ -106,7 +105,7 @@ impl Server {
 		Ok(())
 	}
 
-	async fn expiry_readiness_pass(&self, cursor: i64) -> anyhow::Result<i64> {
+	async fn expiry_readiness_pass(self: &Arc<Self>, cursor: i64) -> anyhow::Result<i64> {
 		// Token validation takes a shared row lock, which PostgreSQL forbids
 		// in a read-only transaction. Release it before background preparation.
 		let Some(view) = self.db.write(async |t| {
@@ -179,7 +178,7 @@ impl Server {
 	}
 
 	pub(crate) async fn prepare_expiry_anchor(
-		&self,
+		self: &Arc<Self>,
 		view: ExpiryViewToken,
 		anchor: OutPoint,
 		roots: Vec<ServerVtxo>,
@@ -279,6 +278,12 @@ impl Server {
 					match coin {
 						PreparedCoin::Ready(coin) => coins.push(coin),
 						PreparedCoin::Hold => hold = true,
+						PreparedCoin::LookupOwner(key, mailbox) => {
+							hold = true;
+							let htlc = !matches!(snapshot.regular[*index].state.vtxo.policy(),
+								ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) if policy.user_pubkey == key);
+							self.queue_expiry_owner_lookup(key, mailbox, htlc).await?;
+						},
 						PreparedCoin::NeedsHtlcProgress => needs_htlc_progress = true,
 					}
 				}

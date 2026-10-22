@@ -54,8 +54,8 @@ or recovery.
   cumulative fee is the greater of 1,000 sats and 1% of the total gross paid,
   rounded up. Each new output pays that cumulative fee minus the fees already
   charged by non-conflicted allocations for the same script and height.
-- An unresolved owner lookup holds its output without a split. A group whose net
-  value is below dust also remains held while another coin under the same source
+- An unresolved owner lookup holds its output and splits it away from ready
+  siblings. A group whose net value is below dust also remains held while another coin under the same source
   anchor at that height is undecided. The dust decision completes once those
   coins are decided.
 - Padding leaves belong to the operator when their policy key is upstream's
@@ -101,7 +101,11 @@ matching final GNU programs and the final release bundle remain required.
 - Automated fallback requires the recipient's authenticated registration.
   Supplied-address forwarding does not verify that registration. Unknown
   owners and registered owners with incomplete attribution remain held and
-  can delay shared-tree payouts. Never assign their bitcoin to the operator.
+  split away from ready siblings. Owner lookup uses upstream wallet recovery
+  after the cached-match and 32-key mailbox checks. Recovery stops at an unused
+  chunk of 10,000 keys. A registered coin beyond that gap remains held. Every
+  cache miss starts from index 0; a completed no-match search is repeated after
+  a new registration or one day. Never assign held bitcoin to the operator.
   Restore must retain all accepted registrations and financial commitments.
 - The fallback payout fee remains fixed in code at max(1,000 sats, 1%), counted
   cumulatively per payout script and expiry height. Ordinary board, refresh,

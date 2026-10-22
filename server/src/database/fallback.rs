@@ -50,7 +50,6 @@ impl Tx<'_> {
 			&mailbox_pk.to_string(), &record.spk.as_bytes().to_lower_hex_string(), &account_xpub,
 			&account_pubkey, &account_chain_code, &record.mailbox_signature.to_string(), &record.account_signature.to_string(),
 		]).await.context("failed to store fallback record")?;
-		self.add_expiry_scan_record(mailbox_pk).await?;
 		Ok(record.clone())
 	}
 

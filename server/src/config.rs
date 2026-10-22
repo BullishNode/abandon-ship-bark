@@ -276,12 +276,6 @@ pub struct Config {
 	/// Must exceed the supported five-block reorg depth.
 	#[serde(default = "default_expiry_internal_refund_depth")]
 	pub expiry_internal_refund_depth: u32,
-	/// Children derived in one resumable owner-search chunk.
-	#[serde(default = "default_expiry_owner_scan_chunk_size")]
-	pub expiry_owner_scan_chunk_size: u32,
-	/// Maximum simultaneous owner-search derivation workers.
-	#[serde(default = "default_expiry_owner_scan_workers")]
-	pub expiry_owner_scan_workers: usize,
 
 	#[serde(with = "utils::serde::duration")]
 	pub round_interval: Duration,
@@ -498,8 +492,6 @@ pub struct Config {
 
 fn default_max_htlc_expiry_delta() -> BlockDelta { BlockDelta::new(288) }
 fn default_expiry_internal_refund_depth() -> u32 { 6 }
-fn default_expiry_owner_scan_chunk_size() -> u32 { 10_000 }
-fn default_expiry_owner_scan_workers() -> usize { 2 }
 
 impl Config {
 	fn load_with_custom_env(
@@ -582,8 +574,8 @@ impl Config {
 		if self.expiry_internal_refund_depth < 6 {
 			bail!("expiry_internal_refund_depth must be at least 6");
 		}
-		if self.expiry_owner_scan_chunk_size == 0 || self.expiry_owner_scan_workers == 0 {
-			bail!("expiry owner scan chunk size and worker count must be positive");
+		if self.recovery_xpub_nb_keys == 0 {
+			bail!("recovery_xpub_nb_keys must be positive for expiry owner lookup");
 		}
 		if self.max_htlc_expiry_delta < self.htlc_send_expiry_delta {
 			bail!("max_htlc_expiry_delta must cover htlc_send_expiry_delta");
@@ -635,7 +627,7 @@ impl Config {
 			bail!("Invalid configuration: max_read_mailbox_items must be at least 1");
 		}
 
-		// At 0 every xpub scan is rejected; recovery_xpub_nb_keys = 0 disables the rpc instead.
+		// At 0 every xpub scan is rejected.
 		if self.max_concurrent_xpub_recoveries == 0 {
 			bail!("Invalid configuration: max_concurrent_xpub_recoveries must be at least 1");
 		}
@@ -810,21 +802,14 @@ mod test {
 	}
 
 	#[test]
-	fn expiry_owner_scan_defaults_are_bounded_and_zero_is_rejected() {
+	fn expiry_owner_lookup_requires_xpub_recovery() {
 		let mut cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
 		cfg.bitcoind.cookie = Some(".cookie".into());
-		let mut fields = serde_json::to_value(&cfg).unwrap();
-		fields.as_object_mut().unwrap().remove("expiry_owner_scan_chunk_size");
-		fields.as_object_mut().unwrap().remove("expiry_owner_scan_workers");
-		let mut cfg: Config = serde_json::from_value(fields).unwrap();
-		assert_eq!(cfg.expiry_owner_scan_chunk_size, 10_000);
-		assert_eq!(cfg.expiry_owner_scan_workers, 2);
 		cfg.validate().unwrap();
-		cfg.expiry_owner_scan_chunk_size = 0;
-		assert!(cfg.validate().unwrap_err().to_string().contains("expiry owner scan"));
-		cfg.expiry_owner_scan_chunk_size = 10_000;
-		cfg.expiry_owner_scan_workers = 0;
-		assert!(cfg.validate().unwrap_err().to_string().contains("expiry owner scan"));
+		cfg.recovery_xpub_nb_keys = 0;
+		assert!(cfg.validate().unwrap_err().to_string().contains("recovery_xpub_nb_keys"));
+		cfg.recovery_xpub_nb_keys = 1;
+		cfg.validate().unwrap();
 	}
 
 	#[test]

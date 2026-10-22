@@ -406,8 +406,6 @@ async fn automatic_multilevel_split() {
 		cfg.max_vtxo_exit_depth = 100;
 		cfg.max_arkoor_fanout = 4;
 	}).watchmand().create().await;
-	assert_eq!(srv.config().expiry_owner_scan_chunk_size, 10_000);
-	assert_eq!(srv.config().expiry_owner_scan_workers, 2);
 	assert_eq!(srv.watchmand().config().watchman.progress_grace_period, BlockDelta::new(2));
 	// Give every owner a separate random account and payout destination.
 	let owners = (0..PAYEES).map(|_| owner()).collect::<Vec<_>>();

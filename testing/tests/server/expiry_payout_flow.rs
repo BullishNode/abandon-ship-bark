@@ -29,7 +29,6 @@ async fn expiry_payout_native_board_seed_restore(name: &str, board_fees: Option<
 	let srv = ctx.captaind("server").no_vtxo_pool()
 		.cfg(move |cfg| {
 			cfg.vtxo_lifetime = BlockDelta::new(24);
-			cfg.expiry_owner_scan_chunk_size = 1;
 			if let Some(fees) = board_fees { cfg.fees.board = fees; }
 		})
 		.watchmand().create().await;

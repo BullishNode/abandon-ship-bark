@@ -5291,23 +5291,6 @@ async fn expiry_same_owner_fragments(name: &str, small_first: bool) {
 	let operator_script = wm.config().sweep_address.clone().unwrap().require_network(Network::Regtest).unwrap().script_pubkey();
 	let first_height = core.get_block_count().unwrap() + 1;
 	let wanted = customers.keys().cloned().collect::<Vec<_>>();
-	// Resolve ownership before introducing the physical readiness gap. The
-	// scanner must prove the real registered keys, without fixture owner rows.
-	for coin in customers.values() {
-		db.write(async |tx| tx.queue_expiry_owner(coin.user_pubkey(), None).await).await.unwrap();
-	}
-	tokio::time::timeout(Duration::from_secs(10), async {
-		loop {
-			db.scan_expiry_owners(Network::Regtest, 10_000, 2).await.unwrap();
-			let mut complete = true;
-			for coin in customers.values() {
-				complete &= matches!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest).await).await.unwrap(),
-					server::database::expiry_attribution::Attribution::Owned { mailbox_pk, spk, .. }
-						if mailbox_pk == mailbox && spk == destination.spk);
-			}
-			if complete { break; }
-		}
-	}).await.expect("all original owners must be genuinely derived before fragmentation");
 	let next_step = async |point: OutPoint| {
 		let row = db.read(async |tx| Ok(tx.query_one("SELECT v.oor_spent_txid,t.signed_tx \
 			FROM vtxo v JOIN virtual_transaction t ON t.txid=v.oor_spent_txid WHERE v.vtxo_id=$1",
@@ -5387,6 +5370,18 @@ async fn expiry_same_owner_fragments(name: &str, small_first: bool) {
 	srv.wait_for_sync_height(tip).await;
 	wm.wait_for_sync_height(tip).await;
 	let output = core.get_tx_out(&small.txid, small.vout, Some(true)).unwrap().unwrap();
+	// The production readiness task resolves every owner through recovery.
+	tokio::time::timeout(Duration::from_secs(10), async {
+		loop {
+			let mut complete = true;
+			for coin in customers.values() {
+				complete &= matches!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest).await).await.unwrap(),
+					server::database::expiry_attribution::Attribution::Owned { mailbox_pk, spk, .. }
+						if mailbox_pk == mailbox && spk == destination.spk);
+			}
+			if complete { break; }
+		}
+	}).await.expect("all owners must derive through expiry readiness");
 	assert!(output.confirmations >= 6);
 	assert_eq!(output.value, sat(1_000));
 	assert!(core.get_tx_out(&remainder.txid, remainder.vout, Some(true)).unwrap().is_none());

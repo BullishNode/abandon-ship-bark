@@ -1,469 +1,332 @@
-use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::Duration;
 
+use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
 use ark::fallback::FallbackRecord;
-use ark::mailbox::MailboxIdentifier;
-use ark::SECP;
-use ark_testing::TestContext;
-use bitcoin::bip32::{ChildNumber, Xpriv, Xpub};
+use ark::lightning::PaymentHash;
+use ark::mailbox::{MailboxAuthorization, MailboxIdentifier};
+use ark::vtxo::Full;
+use ark::{ProtocolEncoding, Vtxo, VtxoPolicy, SECP};
+use ark_testing::{sat, Captaind, TestContext};
+use ark_testing::constants::BOARD_CONFIRMATIONS;
+use bitcoin::bip32::{ChildNumber, Xpriv};
+use bitcoin::consensus::{deserialize, serialize};
 use bitcoin::secp256k1::{Keypair, PublicKey};
-use bitcoin::{Network, ScriptBuf};
-use server::database::expiry_attribution::{Attribution, OWNER_KEYSPACE_END, OWNER_SCAN_MAX_KEYS};
+use bitcoin::{Amount, Network, OutPoint, Transaction, TxOut};
+use bitcoin_ext::{BlockDelta, BlockHeight};
+use bitcoin_ext::rpc::RpcApi;
 use server::database::Db;
+use server::database::expiry_attribution::Attribution;
+use server_rpc::protos;
 
-pub(super) fn key(account: &Xpriv, index: u32) -> PublicKey {
-	Xpub::from_priv(&SECP, account).ckd_pub(&SECP, ChildNumber::from_normal_idx(index).unwrap()).unwrap().public_key
+struct Owner {
+	account: Xpriv,
+	mailbox: Keypair,
+	record: FallbackRecord,
 }
 
-pub(super) async fn register(db: &Db, byte: u8) -> (Xpriv, MailboxIdentifier) {
-	let account = Xpriv::new_master(Network::Regtest, &[byte; 64]).unwrap();
-	let mailbox = Keypair::from_seckey_slice(&SECP, &[byte; 32]).unwrap();
-	let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
-	let record = FallbackRecord::new(Network::Regtest, spk, &account, &mailbox).unwrap();
-	db.write(async |tx| tx.set_fallback(mailbox.public_key(), &record, Network::Regtest).await).await.unwrap();
-	(account, MailboxIdentifier::from_pubkey(mailbox.public_key()))
-}
-
-async fn owner(db: &Db, key: PublicKey) -> Attribution {
-	db.read(async |tx| tx.expiry_owner(key, Network::Regtest).await).await.unwrap()
-}
-
-#[tokio::test]
-async fn expiry_attribution_batches_keys_and_recovers_late_lower_keys_after_restart() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_batches_keys_and_recovers_late_lower_keys_after_restart").await;
-	ctx.init_central_postgres().await;
-	let config = ctx.new_postgres("expiry_late_keys").await;
-	Db::create(&config).await.unwrap();
-	let db = Db::connect(&config).await.unwrap();
-	let (account, mailbox) = register(&db, 3).await;
-	let keys = [key(&account, 17), key(&account, 25)];
-	for key in keys { db.write(async |tx| tx.queue_expiry_owner(key, Some(mailbox)).await).await.unwrap(); }
-	let stats = db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap();
-	assert_eq!(stats.children_derived, 32, "one pass compares every pending key for this record");
-	assert_eq!(stats.keys_matched, 2);
-	for key in keys { assert!(matches!(owner(&db, key).await, Attribution::Owned { .. })); }
-	let remaining = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_scan", &[]).await?.get::<_, i64>(0))).await.unwrap();
-	assert_eq!(remaining, 0, "actual matches release their cross-record cursor storage");
-	drop(db);
-	let db = Db::connect(&config).await.unwrap();
-	let late = key(&account, 8);
-	db.write(async |tx| tx.queue_expiry_owner(late, Some(mailbox)).await).await.unwrap();
-	assert_eq!(owner(&db, late).await, Attribution::Unresolved);
-	assert_eq!(db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap().children_derived, 32);
-	assert!(matches!(owner(&db, late).await, Attribution::Owned { child_index: 8, .. }));
-}
-
-async fn coverage(db: &Db, key: PublicKey) -> BTreeMap<PublicKey, i64> {
-	db.read(async |tx| {
-		Ok(tx.query("SELECT mailbox_pk, scanned_up_to FROM expiry_scan WHERE user_pubkey=$1",
-			&[&key.to_string()]).await?.into_iter().map(|row|
-			(row.get::<_, &str>("mailbox_pk").parse().unwrap(), row.get("scanned_up_to"))).collect())
-	}).await.unwrap()
-}
-
-async fn cursor_tickets(db: &Db, key: PublicKey) -> BTreeMap<PublicKey, (i64, i64)> {
-	db.read(async |tx| {
-		Ok(tx.query("SELECT mailbox_pk, scanned_up_to, service_ticket FROM expiry_scan WHERE user_pubkey=$1",
-			&[&key.to_string()]).await?.into_iter().map(|row|
-			(row.get::<_, &str>("mailbox_pk").parse().unwrap(), (row.get("scanned_up_to"), row.get("service_ticket")))).collect())
-	}).await.unwrap()
-}
-
-#[tokio::test]
-async fn expiry_attribution_requeue_preserves_coverage_without_reinitializing_accounts() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_requeue_coverage").await;
-	ctx.init_central_postgres().await;
-	let config = ctx.new_postgres("expiry_requeue_coverage").await;
-	Db::create(&config).await.unwrap();
-	let db = Db::connect(&config).await.unwrap();
-	let (account, mailbox) = register(&db, 21).await;
-	let old = key(&account, 80);
-	let future_account = Xpriv::new_master(Network::Regtest, &[22; 64]).unwrap();
-	let future = key(&future_account, 7);
-	for key in [old, future] {
-		db.write(async |tx| tx.queue_expiry_owner(key, None).await).await.unwrap();
+impl Owner {
+	fn new(ctx: &TestContext) -> Self {
+		let account = Xpriv::new_master(Network::Regtest, &[117; 64]).unwrap();
+		let mailbox = account.to_keypair(&SECP);
+		let record = FallbackRecord::new(Network::Regtest,
+			ctx.bitcoind().get_new_address().script_pubkey(), &account, &mailbox).unwrap();
+		Self { account, mailbox, record }
 	}
-	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
-	let initial_tickets = cursor_tickets(&db, old).await;
-	let initial = BTreeMap::from([(mailbox.as_pubkey(), 32)]);
-	assert_eq!(coverage(&db, old).await, initial);
-	assert_eq!(coverage(&db, future).await, initial);
 
-	db.write(async |tx| {
-		// An already initialized key must not access the cross-account cursor
-		// table. This real relation lock blocks the old INSERT...ON CONFLICT
-		// path even when every proposed cursor would already exist.
-		tx.execute("LOCK TABLE expiry_scan IN ACCESS EXCLUSIVE MODE", &[]).await?;
-		let queued = db.clone();
-		tokio::time::timeout(std::time::Duration::from_secs(5), async move {
-			queued.write(async |tx| {
-				for _ in 0..3 {
-					tx.queue_expiry_owner(old, Some(mailbox)).await?;
-					tx.queue_expiry_owner(future, None).await?;
-				}
-				Ok(())
-			}).await
-		}).await.expect("requeue must not reinitialize cross-account cursors")?;
-		Ok(())
-	}).await.unwrap();
-	assert_eq!(coverage(&db, old).await, initial);
-	assert_eq!(coverage(&db, future).await, initial);
+	fn key(&self, index: u32) -> Keypair {
+		self.account.derive_priv(&SECP, &[ChildNumber::from_normal_idx(index).unwrap()]).unwrap().to_keypair(&SECP)
+	}
 
-	assert_eq!(cursor_tickets(&db, old).await, initial_tickets, "requeue must not reset queue age");
-	let (_, new_mailbox) = register(&db, 22).await;
-	let appended = BTreeMap::from([(mailbox.as_pubkey(), 32), (new_mailbox.as_pubkey(), 0)]);
-	assert_eq!(coverage(&db, old).await, appended);
-	assert_eq!(coverage(&db, future).await, appended);
-	let added_tickets = cursor_tickets(&db, old).await;
-	assert_eq!(added_tickets.get(&mailbox.as_pubkey()), initial_tickets.get(&mailbox.as_pubkey()));
-	assert!(added_tickets[&new_mailbox.as_pubkey()].1 > initial_tickets[&mailbox.as_pubkey()].1,
-		"new registration appends zero coverage behind existing waiting work");
-	// A later different hint cannot replace the first nonempty candidate or
-	// reset either account's coverage. It is never an ownership assertion.
-	db.write(async |tx| tx.queue_expiry_owner(old, Some(new_mailbox)).await).await.unwrap();
-	let candidate = db.read(async |tx| Ok(tx.query_one(
-		"SELECT mailbox_pk FROM expiry_pending_key WHERE user_pubkey=$1", &[&old.to_string()],
-	).await?.get::<_, String>(0))).await.unwrap();
-	assert_eq!(candidate, mailbox.as_pubkey().to_string());
-	assert_eq!(coverage(&db, old).await, appended);
+	async fn register(&self, srv: &Captaind) {
+		let result = srv.get_public_rpc().await.set_fallback(protos::SetFallbackRequest {
+			mailbox_pk: self.mailbox.public_key().serialize().to_vec(), record: self.record.serialize(),
+		}).await.unwrap().into_inner();
+		assert_eq!(result.record, self.record.serialize());
+	}
 
-	let work = db.prepare_expiry_owner_scan(32, 2).await.unwrap();
-	let late = key(&account, 8);
-	db.write(async |tx| tx.queue_expiry_owner(late, None).await).await.unwrap();
-	let zero = BTreeMap::from([(mailbox.as_pubkey(), 0), (new_mailbox.as_pubkey(), 0)]);
-	assert_eq!(coverage(&db, late).await, zero);
-	for work in work { db.commit_expiry_owner_scan(Network::Regtest, &work.derive().unwrap()).await.unwrap(); }
-	assert_eq!(coverage(&db, late).await, zero, "older work must not advance a late key");
-	// Existing higher-prefix work may take the first bounded lane before the
-	// new registration. Both must finish without inheriting late-key coverage.
-	for _ in 0..4 { db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap(); }
-	assert!(matches!(owner(&db, future).await, Attribution::Owned { mailbox_pk, child_index: 7, .. }
-		if mailbox_pk == new_mailbox.as_pubkey()));
-	assert!(matches!(owner(&db, late).await, Attribution::Owned { mailbox_pk, child_index: 8, .. }
-		if mailbox_pk == mailbox.as_pubkey()));
-	assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
-		if mailbox_pk == mailbox.as_pubkey()));
-	// A cached match is not queued again, even when another record arrives.
-	db.write(async |tx| tx.queue_expiry_owner(old, Some(new_mailbox)).await).await.unwrap();
-	register(&db, 23).await;
-	assert!(coverage(&db, old).await.is_empty());
+	async fn post_mailbox(&self, srv: &Captaind, coin: &Vtxo<Full>) {
+		let authorization = MailboxAuthorization::new(&self.mailbox,
+			chrono::Local::now() + Duration::from_secs(60));
+		srv.get_mailbox_public_rpc().await.post_recovery_vtxo_ids(protos::mailbox_server::PostRecoveryVtxoIdsRequest {
+			mailbox_id: MailboxIdentifier::from_pubkey(self.mailbox.public_key()).serialize(),
+			vtxo_ids: vec![coin.id().to_bytes().to_vec()], authorization: Some(authorization.serialize()),
+		}).await.unwrap();
+	}
 }
 
-#[tokio::test]
-async fn expiry_attribution_duplicate_cursors_do_not_starve_other_accounts() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_duplicate_cursors").await;
-	ctx.init_central_postgres().await;
-	let config = ctx.new_postgres("expiry_duplicate_cursors").await;
-	Db::create(&config).await.unwrap();
-	let db = Db::connect(&config).await.unwrap();
-	let mut wanted = Vec::new();
-	for byte in [11, 12, 13] {
-		let (account, mailbox) = register(&db, byte).await;
-		for index in [17, 25] {
-			let key = key(&account, index);
-			db.write(async |tx| tx.queue_expiry_owner(key, None).await).await.unwrap();
-			wanted.push((key, mailbox, index));
+async fn server(ctx: &TestContext) -> Arc<Captaind> {
+	let srv = ctx.captaind("server").no_vtxo_pool()
+		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).watchmand().create().await;
+	ctx.bitcoind().fund_addr(srv.watchmand().wait_wallet_address().await, sat(100_000)).await;
+	ctx.generate_blocks(2).await;
+	srv
+}
+
+/// Use the public board protocol. No wallet creation supplies a registration or mailbox.
+async fn board(ctx: &TestContext, srv: &Captaind, key: Keypair) -> Vtxo<Full> {
+	let core = ctx.bitcoind().sync_client();
+	let address = ctx.bitcoind().get_new_address();
+	let funding_id = ctx.bitcoind().fund_addr(&address, sat(200_000)).await;
+	let funding = ctx.bitcoind().await_transaction(funding_id).await;
+	let index = funding.output.iter().position(|output| output.script_pubkey == address.script_pubkey()).unwrap();
+	assert_eq!(funding.output[index].value, sat(200_000));
+	let tip = ctx.generate_blocks(6).await;
+	srv.wait_for_sync_height(tip).await;
+	srv.watchmand().wait_for_sync_height(tip).await;
+	let info = srv.ark_info().await;
+	let expiry = tip + info.vtxo_lifetime;
+	assert_eq!(info.fees.board.calculate(sat(100_000)).unwrap(), Amount::ZERO);
+	let builder = ark::board::BoardBuilder::new(key.public_key(), expiry, info.server_pubkey, info.vtxo_exit_delta);
+	let unsigned = Transaction {
+		version: bitcoin::transaction::Version::TWO, lock_time: bitcoin::absolute::LockTime::ZERO,
+		input: vec![bitcoin::TxIn { previous_output: OutPoint::new(funding_id, index as u32),
+			script_sig: Default::default(), sequence: bitcoin::Sequence::MAX, witness: bitcoin::Witness::new() }],
+		output: vec![TxOut { value: sat(100_000), script_pubkey: builder.funding_script_pubkey() },
+			TxOut { value: sat(99_000), script_pubkey: ctx.bitcoind().get_new_address().script_pubkey() }],
+	};
+	let signed = core.sign_raw_transaction_with_wallet(&unsigned, None, None).unwrap();
+	assert!(signed.complete);
+	let funding = signed.transaction().unwrap();
+	assert_eq!(funding.output, unsigned.output);
+	assert_eq!(sat(200_000) - funding.output.iter().map(|output| output.value).sum::<Amount>(), sat(1_000));
+	let point = OutPoint::new(funding.compute_txid(), 0);
+	let builder = builder.set_funding_details(sat(100_000), Amount::ZERO, point).unwrap().generate_user_nonces();
+	let mut rpc = srv.get_public_rpc().await;
+	let cosign = rpc.request_board_cosign(protos::BoardCosignRequest {
+		amount: 100_000, utxo: serialize(&point), expiry_height: expiry.into(),
+		user_pubkey: key.public_key().serialize().to_vec(), pub_nonce: builder.user_pub_nonce().serialize().to_vec(),
+		funding_tx: serialize(&funding),
+	}).await.unwrap().into_inner().try_into().unwrap();
+	assert!(builder.verify_cosign_response(&cosign));
+	let coin = builder.build_vtxo(&cosign, &key).unwrap();
+	coin.validate(&funding).unwrap();
+	assert_eq!(coin.amount(), sat(100_000));
+	assert_eq!(coin.user_pubkey(), key.public_key());
+	core.send_raw_transaction(&funding).unwrap();
+	let tip = ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+	srv.wait_for_sync_height(tip).await;
+	srv.watchmand().wait_for_sync_height(tip).await;
+	rpc.register_board_vtxo(protos::BoardVtxoRequest { board_vtxo: coin.serialize() }).await.unwrap();
+	coin
+}
+
+async fn expire(ctx: &TestContext, srv: &Captaind, height: BlockHeight) {
+	let current = ctx.bitcoind().get_block_count().await as u32;
+	let tip = ctx.generate_blocks(height.to_u32() + 1 - current).await;
+	srv.wait_for_sync_height(tip).await;
+	srv.watchmand().wait_for_sync_height(tip).await;
+}
+
+async fn assert_paid(ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>, index: u32) {
+	assert_paid_to_owner(ctx, srv, owner, coin, index, coin.user_pubkey()).await;
+}
+
+async fn assert_paid_to_owner(
+	ctx: &TestContext, srv: &Captaind, owner: &Owner, coin: &Vtxo<Full>, index: u32, owner_key: PublicKey,
+) {
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let parent = tokio::time::timeout(Duration::from_secs(45), async {
+		for _ in 0..24 {
+			let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
+				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+				WHERE e.vtxo_id=$1 AND c.active AND a.broadcast_at IS NOT NULL", &[&coin.id().to_string()]).await?)).await.unwrap();
+			if let Some(row) = row { return deserialize::<Transaction>(row.get("sweep_tx")).unwrap(); }
+			srv.watchmand().trigger_sweep().await;
+			tokio::time::sleep(Duration::from_millis(750)).await;
+			let tip = ctx.generate_blocks(1).await;
+			srv.wait_for_sync_height(tip).await;
+			srv.watchmand().wait_for_sync_height(tip).await;
 		}
-	}
-	let mut derived = 0;
-	// The bounded scheduler may select one account more than once from its
-	// first cursor rows. It must batch that work, then reach every other
-	// account without re-deriving a prefix or stranding its pending keys.
-	for _ in 0..3 {
-		derived += db.scan_expiry_owners(Network::Regtest, 32, 2).await.unwrap().children_derived;
-	}
-	assert_eq!(derived, 3 * 32);
-	for (key, mailbox, index) in wanted {
-		assert!(matches!(owner(&db, key).await, Attribution::Owned { mailbox_pk, child_index, .. }
-			if mailbox_pk==mailbox.as_pubkey() && child_index==index));
-	}
-}
-
-#[tokio::test]
-async fn expiry_attribution_match_serializes_with_requeue_and_registration() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_match_registry_race").await;
-	ctx.init_central_postgres().await;
-	let config = ctx.new_postgres("expiry_match_registry_race").await;
-	Db::create(&config).await.unwrap();
-	let db = Db::connect(&config).await.unwrap();
-	let (account, mailbox) = register(&db, 3).await;
-	let wanted = key(&account, 17);
-	db.write(async |tx| tx.queue_expiry_owner(wanted, None).await).await.unwrap();
-	let work = db.prepare_expiry_owner_scan(32, 1).await.unwrap().remove(0).derive().unwrap();
-	let (commit, queue, registration) = db.write(async |tx| {
-		// Stop the real commit at its cursor write, after it has acquired the
-		// registry writer fence. No coverage or match is fabricated.
-		tx.query_one("SELECT scanned_up_to FROM expiry_scan WHERE user_pubkey=$1 FOR UPDATE",
-			&[&wanted.to_string()]).await?;
-		let scan_db = db.clone();
-		let commit = tokio::spawn(async move {
-			scan_db.commit_expiry_owner_scan(Network::Regtest, &work).await.unwrap()
-		});
-		tokio::time::timeout(std::time::Duration::from_secs(5), async {
-			loop {
-				tx.query_one("SELECT pg_stat_clear_snapshot()", &[]).await?;
-				let waiting = tx.query_one("SELECT EXISTS(SELECT 1 FROM pg_stat_activity
-					WHERE datname=current_database() AND wait_event_type='Lock'
-					AND ltrim(query, chr(9) || chr(10) || chr(13) || ' ')
-						LIKE 'UPDATE expiry_scan SET scanned_up_to=%')", &[]).await?.get::<_, bool>(0);
-				if waiting { return Ok::<_, anyhow::Error>(()); }
-				tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-			}
-		}).await.expect("owner commit never reached its real cursor lock")?;
-		let queue_db = db.clone();
-		let queue = tokio::spawn(async move {
-			queue_db.write(async |tx| tx.queue_expiry_owner(wanted, Some(mailbox)).await).await.unwrap()
-		});
-		let registration_db = db.clone();
-		let registration = tokio::spawn(async move { register(&registration_db, 7).await });
-		tokio::time::timeout(std::time::Duration::from_secs(5), async {
-			loop {
-				let waiting = tx.query_one("SELECT COUNT(*) FROM pg_locks WHERE locktype='advisory'
-					AND database=(SELECT oid FROM pg_database WHERE datname=current_database())
-					AND objid=3 AND NOT granted", &[]).await?.get::<_, i64>(0);
-				if waiting == 2 { return Ok::<_, anyhow::Error>(()); }
-				tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-			}
-		}).await.expect("requeue and registration must wait behind the actual match")?;
-		Ok((commit, queue, registration))
-	}).await.unwrap();
-	assert_eq!(commit.await.unwrap(), 1);
-	queue.await.unwrap();
-	let (_, new_mailbox) = registration.await.unwrap();
-	assert!(db.read(async |tx| tx.get_fallback(new_mailbox.as_pubkey()).await).await.unwrap().is_some());
-	assert!(matches!(owner(&db, wanted).await, Attribution::Owned { child_index: 17, .. }));
-	let queued = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_pending_key", &[]).await?.get::<_, i64>(0))).await.unwrap();
-	assert_eq!(queued, 0, "a concurrent queue must not recreate a resolved key and strand other work");
-}
-
-#[tokio::test]
-async fn expiry_attribution_prepared_work_never_advances_a_new_pending_key() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_prepared_work_never_advances_a_new_pending_key").await;
-	ctx.init_central_postgres().await;
-	let config = ctx.new_postgres("expiry_mid_batch").await;
-	Db::create(&config).await.unwrap();
-	let db = Db::connect(&config).await.unwrap();
-	let (account, mailbox) = register(&db, 4).await;
-	let old = key(&account, 80);
-	db.write(async |tx| tx.queue_expiry_owner(old, None).await).await.unwrap();
-	let batch = db.prepare_expiry_owner_scan(32, 1).await.unwrap().remove(0);
-	let stale = db.prepare_expiry_owner_scan(32, 1).await.unwrap().remove(0);
-	let late = key(&account, 8);
-	db.write(async |tx| tx.queue_expiry_owner(late, Some(mailbox)).await).await.unwrap();
-	let result = batch.derive().unwrap();
-	db.commit_expiry_owner_scan(Network::Regtest, &result).await.unwrap();
-	assert_eq!(owner(&db, late).await, Attribution::Unresolved);
-	assert_eq!(coverage(&db, old).await.get(&mailbox.as_pubkey()), Some(&32));
-	assert_eq!(coverage(&db, late).await.get(&mailbox.as_pubkey()), Some(&0));
-	let old_tickets = cursor_tickets(&db, old).await;
-	let late_tickets = cursor_tickets(&db, late).await;
-	assert!(late_tickets[&mailbox.as_pubkey()].1 < old_tickets[&mailbox.as_pubkey()].1,
-		"committing the old prefix renews its ticket behind the unserved late key");
-	// Drop a newly prepared batch to model interruption before a completed
-	// derivation/commit. Preparation changes neither coverage nor waiting age.
-	drop(db.prepare_expiry_owner_scan(32, 1).await.unwrap());
-	assert_eq!(cursor_tickets(&db, old).await, old_tickets);
-	assert_eq!(cursor_tickets(&db, late).await, late_tickets);
-	drop(db);
-	let db = Db::connect(&config).await.unwrap();
-	assert_eq!(cursor_tickets(&db, old).await, old_tickets);
-	assert_eq!(cursor_tickets(&db, late).await, late_tickets);
-	// The late zero-prefix key kept its older ticket while the old key's
-	// successful commit renewed its ticket. Neither inherits the other's work.
-	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
-	assert_eq!(coverage(&db, old).await.get(&mailbox.as_pubkey()), Some(&32));
-	assert!(matches!(owner(&db, late).await, Attribution::Owned { mailbox_pk, child_index: 8, .. }
-		if mailbox_pk == mailbox.as_pubkey()));
-	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
-	assert_eq!(coverage(&db, old).await.get(&mailbox.as_pubkey()), Some(&64));
-	let before_stale = cursor_tickets(&db, old).await;
-	assert_eq!(db.commit_expiry_owner_scan(Network::Regtest, &stale.derive().unwrap()).await.unwrap(), 0);
-	assert_eq!(cursor_tickets(&db, old).await, before_stale,
-		"stale work changes neither contiguous coverage nor its waiting ticket");
-	assert!(matches!(owner(&db, late).await, Attribution::Owned { child_index: 8, .. }));
-	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
-	assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
-		if mailbox_pk == mailbox.as_pubkey()));
-}
-
-#[tokio::test]
-async fn expiry_attribution_wrong_mailbox_is_not_a_payee_and_registration_invalidates_no_owner() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_wrong_mailbox_is_not_a_payee_and_registration_invalidates_no_owner").await;
-	ctx.init_central_postgres().await;
-	let config = ctx.new_postgres("expiry_wrong_mailbox").await;
-	Db::create(&config).await.unwrap();
-	let db = Db::connect(&config).await.unwrap();
-	let (actual, actual_mailbox) = register(&db, 5).await;
-	let (_, wrong_mailbox) = register(&db, 6).await;
-	let customer = key(&actual, 7);
-	db.write(async |tx| tx.queue_expiry_owner(customer, Some(wrong_mailbox)).await).await.unwrap();
-	db.scan_expiry_owners(Network::Regtest, 16, 2).await.unwrap();
-	assert!(matches!(owner(&db, customer).await, Attribution::Owned { mailbox_pk, .. } if mailbox_pk == actual_mailbox.as_pubkey()));
-
-	let future_account = Xpriv::new_master(Network::Regtest, &[7; 64]).unwrap();
-	let unknown = key(&future_account, 1);
-	db.write(async |tx| tx.queue_expiry_owner(unknown, None).await).await.unwrap();
-	db.scan_expiry_owners(Network::Regtest, 16, 2).await.unwrap();
-	assert_eq!(owner(&db, unknown).await, Attribution::Unresolved);
-	// Fixture: the previous prefix was completed already. Exercise
-	// derivation of the final two normal indices and the terminal coverage check
-	// without making every test derive billions of keys.
-	db.write(async |tx| {
-		tx.execute("UPDATE expiry_scan SET scanned_up_to=$2 WHERE user_pubkey=$1",
-			&[&unknown.to_string(), &i64::from(OWNER_KEYSPACE_END - 2)]).await?;
-		Ok(())
-	}).await.unwrap();
-	db.scan_expiry_owners(Network::Regtest, 16, 2).await.unwrap();
-	assert!(matches!(owner(&db, unknown).await, Attribution::NoRegisteredOwner));
-	// Another pending key completed every registered account. A later key
-	// still starts at zero and must not inherit that terminal coverage.
-	let late = key(&actual, 8);
-	db.write(async |tx| tx.queue_expiry_owner(late, None).await).await.unwrap();
-	db.scan_expiry_owners(Network::Regtest, 16, 2).await.unwrap();
-	assert!(matches!(owner(&db, late).await, Attribution::Owned { child_index: 8, .. }));
-	let (_, new_mailbox) = register(&db, 7).await;
-	assert_eq!(coverage(&db, unknown).await[&new_mailbox.as_pubkey()], 0);
-	assert_eq!(owner(&db, unknown).await, Attribution::Unresolved);
-	db.scan_expiry_owners(Network::Regtest, 16, 2).await.unwrap();
-	assert!(matches!(owner(&db, unknown).await, Attribution::Owned { child_index: 1, .. }));
-}
-
-/// Run explicitly on the intended production build profile. These measurements
-/// resolve real registered low-index keys; they do not claim to time an exhaustive
-/// no-owner search through R * 2^31 children.
-#[tokio::test]
-#[ignore = "measures attribution at 100, 1,000 and 10,000 registered accounts"]
-async fn expiry_attribution_resolution_scale() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_resolution_scale").await;
-	ctx.init_central_postgres().await;
-	for count in [100_u32, 1_000, 10_000] {
-		let config = ctx.new_postgres(&format!("expiry_scale_{count}")).await;
-		Db::create(&config).await.unwrap();
-		let db = Db::connect(&config).await.unwrap();
-		let mut records = Vec::new();
-		for index in 0..count {
-			let mut seed = [0_u8; 64];
-			seed[..4].copy_from_slice(&index.to_le_bytes());
-			seed[63] = 71;
-			let account = Xpriv::new_master(Network::Regtest, &seed).unwrap();
-			let mailbox = account.to_keypair(&SECP);
-			let record = FallbackRecord::new(Network::Regtest,
-				ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap(), &account, &mailbox).unwrap();
-			records.push((account, mailbox.public_key(), record));
-		}
-		// The real owner sorts last among non-candidate records, so this is
-		// not a favorable first-record lookup disguised as a registry scan.
-		records.sort_by_key(|(_, mailbox, _)| mailbox.to_string());
-		for batch in records.chunks(100) {
-			db.write(async |tx| {
-				for (_, mailbox, record) in batch {
-					tx.set_fallback(*mailbox, record, Network::Regtest).await?;
-				}
-				Ok(())
-			}).await.unwrap();
-		}
-		let (account, mailbox, _) = records.last().unwrap();
-		let wrong = MailboxIdentifier::from_pubkey(records.first().unwrap().1);
-		for (child_index, candidate) in [(17, Some(wrong)), (18, None)] {
-			let wanted = key(account, child_index);
-			db.write(async |tx| tx.queue_expiry_owner(wanted, candidate).await).await.unwrap();
-			loop {
-				match owner(&db, wanted).await {
-					Attribution::Owned { mailbox_pk, child_index: found, .. } => {
-						assert_eq!(mailbox_pk, *mailbox);
-						assert_eq!(found, child_index);
-						break;
-					},
-					Attribution::NoRegisteredOwner => panic!("registered key was misclassified"),
-					Attribution::Unresolved => {},
-				}
-				let stats = db.scan_expiry_owners(Network::Regtest, 10_000, 2).await.unwrap();
-				assert!(stats.children_derived > 0, "unresolved attribution made no progress");
-			}
-
-		}
+		panic!("owner payout did not appear within 24 progress blocks");
+	}).await.expect("owner payout exceeded 45 seconds");
+	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+	let outputs = parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == owner.record.spk).collect::<Vec<_>>();
+	assert_eq!(outputs.len(), 1);
+	assert_eq!(outputs[0].1.value, sat(99_000));
+	let tip = ctx.generate_blocks(6).await;
+	srv.wait_for_sync_height(tip).await;
+	srv.watchmand().wait_for_sync_height(tip).await;
+	let core = ctx.bitcoind().sync_client();
+	let confirmed = core.get_tx_out(&parent.compute_txid(), outputs[0].0 as u32, Some(true)).unwrap().unwrap();
+	assert!(confirmed.confirmations >= 6);
+	assert_eq!(confirmed.value, sat(99_000));
+	assert_eq!(db.read(async |tx| tx.expiry_owner(owner_key, Network::Regtest).await).await.unwrap(),
+		Attribution::Owned { mailbox_pk: owner.mailbox.public_key(), child_index: index, spk: owner.record.spk.clone() });
+	let row = db.read(async |tx| Ok(tx.query_one("SELECT c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat \
+		FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+		WHERE e.vtxo_id=$1 AND c.active", &[&coin.id().to_string()]).await?)).await.unwrap();
+	for (field, amount) in [("gross_sat", 100_000), ("fee_sat", 1_000), ("payout_sat", 99_000), ("forfeited_sat", 0)] {
+		assert_eq!(row.get::<_, i64>(field), amount);
 	}
 }
 
 #[tokio::test]
-async fn expiry_attribution_old_prefix_progresses_while_fresh_mailbox_keys_arrive() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_fresh_arrivals").await;
-	ctx.init_central_postgres().await;
-	for workers in [1, 2] {
-		let config = ctx.new_postgres(&format!("expiry_fresh_arrivals_{workers}")).await;
-		Db::create(&config).await.unwrap();
-		let db = Db::connect(&config).await.unwrap();
-		let (account, mailbox) = register(&db, 31).await;
-		let old = key(&account, 80);
-		db.write(async |tx| tx.queue_expiry_owner(old, Some(mailbox)).await).await.unwrap();
-		db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
-		assert_eq!(coverage(&db, old).await[&mailbox.as_pubkey()], 32);
-		// A new high child arrives at zero before EVERY subsequent
-		// pass. The former per-account MIN(prefix) repeats 0..32 forever here.
-		for arrival in 0..3 {
-			let fresh = key(&account, 1_000 + arrival);
-			db.write(async |tx| tx.queue_expiry_owner(fresh, Some(mailbox)).await).await.unwrap();
-			let stats = db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
-			assert_eq!(stats.children_derived, 32, "same account is derived at most once per pass");
-			assert_eq!(owner(&db, fresh).await, Attribution::Unresolved);
-		}
-		assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
-			if mailbox_pk == mailbox.as_pubkey()), "older prefix must complete before arrivals stop");
-	}
+async fn expiry_owner_finds_mailbox_key() {
+	let ctx = TestContext::new("server/expiry_owner_finds_mailbox_key").await;
+	let srv = server(&ctx).await;
+	let owner = Owner::new(&ctx);
+	owner.register(&srv).await;
+	let coin = board(&ctx, &srv, owner.key(17)).await;
+	owner.post_mailbox(&srv, &coin).await;
+	expire(&ctx, &srv, coin.expiry_height()).await;
+	assert_paid(&ctx, &srv, &owner, &coin, 17).await;
 }
 
 #[tokio::test]
-async fn expiry_attribution_fair_lane_survives_wrong_mailbox_and_registration_pressure() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_fair_registry_pressure").await;
-	ctx.init_central_postgres().await;
-	for workers in [1, 2] {
-		let config = ctx.new_postgres(&format!("expiry_fair_pressure_{workers}")).await;
-		Db::create(&config).await.unwrap();
-		let db = Db::connect(&config).await.unwrap();
-		let (account, mailbox) = register(&db, 41).await;
-		let old = key(&account, 80);
-		db.write(async |tx| tx.queue_expiry_owner(old, None).await).await.unwrap();
-		db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
-		let (other, wrong_mailbox) = register(&db, 42).await;
-		db.write(async |tx| tx.queue_expiry_owner(old, Some(wrong_mailbox)).await).await.unwrap();
-		for arrival in 0..5 {
-			let fresh = key(&other, 1_000 + arrival);
-			db.write(async |tx| tx.queue_expiry_owner(fresh, Some(wrong_mailbox)).await).await.unwrap();
-			// immutable registrations append cursors without resetting
-			// the earlier work or granting ownership from a candidate mailbox.
-			register(&db, 43 + u8::try_from(arrival).unwrap()).await;
-			db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
-			assert_eq!(owner(&db, fresh).await, Attribution::Unresolved);
-		}
-		assert!(matches!(owner(&db, old).await, Attribution::Owned { mailbox_pk, child_index: 80, .. }
-			if mailbox_pk == mailbox.as_pubkey()), "wrong candidate cannot monopolize the oldest-work lane");
-	}
+async fn expiry_owner_finds_key_without_mailbox() {
+	let ctx = TestContext::new("server/expiry_owner_finds_key_without_mailbox").await;
+	let srv = server(&ctx).await;
+	let owner = Owner::new(&ctx);
+	owner.register(&srv).await;
+	let coin = board(&ctx, &srv, owner.key(500)).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM mailbox WHERE vtxo_id=$1",
+		&[&coin.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0);
+	expire(&ctx, &srv, coin.expiry_height()).await;
+	assert_paid(&ctx, &srv, &owner, &coin, 500).await;
 }
 
 #[tokio::test]
-async fn expiry_attribution_limits_key_fanout_and_services_the_unselected_tail() {
-	let mut ctx = TestContext::new_minimal("postgresd/expiry_attribution_key_fanout").await;
-	ctx.init_central_postgres().await;
-	let config = ctx.new_postgres("expiry_key_fanout").await;
-	Db::create(&config).await.unwrap();
-	let db = Db::connect(&config).await.unwrap();
-	let (account, mailbox) = register(&db, 51).await;
-	let keys = (0..u32::try_from(OWNER_SCAN_MAX_KEYS + 17).unwrap()).map(|i| key(&account, 1_000 + i)).collect::<Vec<_>>();
-	db.write(async |tx| {
-		for key in &keys { tx.queue_expiry_owner(*key, Some(mailbox)).await?; }
-		Ok(())
-	}).await.unwrap();
-	let stats = db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
-	assert_eq!(stats.children_derived, 32);
-	assert_eq!(stats.keys_matched, 0);
-	let prefixes = db.read(async |tx| Ok(tx.query("SELECT scanned_up_to, COUNT(*) AS n FROM expiry_scan
-		GROUP BY scanned_up_to ORDER BY scanned_up_to", &[]).await?.into_iter().map(|row|
-		(row.get::<_, i64>("scanned_up_to"), row.get::<_, i64>("n"))).collect::<BTreeMap<_, _>>())).await.unwrap();
-	assert_eq!(prefixes, BTreeMap::from([(0, 17), (32, i64::try_from(OWNER_SCAN_MAX_KEYS).unwrap())]),
-		"one pass advances only its bounded exact-prefix fanout");
-	db.scan_expiry_owners(Network::Regtest, 32, 1).await.unwrap();
-	for key in keys {
-		assert_eq!(coverage(&db, key).await[&mailbox.as_pubkey()], 32,
-			"the older unselected tail is serviced before re-deriving advanced keys");
-		assert_eq!(owner(&db, key).await, Attribution::Unresolved);
+async fn expiry_owner_finds_old_key_used_after_recovery() {
+	let ctx = TestContext::new("server/expiry_owner_finds_old_key_used_after_recovery").await;
+	let srv = server(&ctx).await;
+	let owner = Owner::new(&ctx);
+	owner.register(&srv).await;
+	let first = board(&ctx, &srv, owner.key(500)).await;
+	expire(&ctx, &srv, first.expiry_height()).await;
+	assert_paid(&ctx, &srv, &owner, &first, 500).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert_eq!(db.read(async |tx| tx.expiry_owner(owner.key(17).public_key(), Network::Regtest).await).await.unwrap(), Attribution::Unresolved);
+	let late = board(&ctx, &srv, owner.key(17)).await;
+	assert!(late.expiry_height() > first.expiry_height());
+	expire(&ctx, &srv, late.expiry_height()).await;
+	assert_paid(&ctx, &srv, &owner, &late, 17).await;
+}
+
+#[tokio::test]
+async fn expiry_owner_finds_htlc_key() {
+	let ctx = TestContext::new("server/expiry_owner_finds_htlc_key").await;
+	let srv = server(&ctx).await;
+	let owner = Owner::new(&ctx);
+	owner.register(&srv).await;
+	let input_key = owner.key(1);
+	let input = board(&ctx, &srv, input_key).await;
+	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let deadline = tip + srv.config().htlc_send_expiry_delta + BlockDelta::new(2);
+	let policy = VtxoPolicy::new_server_htlc_send(owner.key(500).public_key(), PaymentHash::from([19; 32]), deadline);
+	let builder = ArkoorPackageBuilder::new_with_checkpoints([input.clone()], vec![
+		ArkoorDestination { total_amount: sat(100_000), policy: policy.clone() },
+	]).unwrap().generate_user_nonces(&[input_key]).unwrap();
+	let mut rpc = srv.get_public_rpc().await;
+	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
+		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+	}).await.unwrap().into_inner();
+	let package = builder.user_cosign(&[input_key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
+	let leaves = package.build_signed_vtxos();
+	assert_eq!(leaves.len(), 1);
+	let coin = &leaves[0];
+	assert_eq!(coin.policy(), &policy);
+	assert_eq!(coin.amount(), sat(100_000));
+	let funding = ctx.bitcoind().await_transaction(input.chain_anchor().txid).await;
+	coin.validate(&funding).unwrap();
+	rpc.register_vtxo_transactions(protos::RegisterVtxoTransactionsRequest { vtxos: vec![coin.serialize()] }).await.unwrap();
+	expire(&ctx, &srv, deadline.max(coin.expiry_height())).await;
+	assert_paid(&ctx, &srv, &owner, coin, 500).await;
+}
+
+#[tokio::test]
+async fn expiry_owner_finds_revoked_htlc_input_key() {
+	let ctx = TestContext::new("server/expiry_owner_finds_revoked_htlc_input_key").await;
+	let srv = server(&ctx).await;
+	let owner = Owner::new(&ctx);
+	owner.register(&srv).await;
+	let input_key = owner.key(1);
+	let input = board(&ctx, &srv, input_key).await;
+	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let deadline = tip + srv.config().htlc_send_expiry_delta + BlockDelta::new(2);
+	let policy = VtxoPolicy::new_server_htlc_send(owner.key(500).public_key(), PaymentHash::from([19; 32]), deadline);
+	let builder = ArkoorPackageBuilder::new_with_checkpoints([input.clone()], vec![
+		ArkoorDestination { total_amount: sat(100_000), policy: policy.clone() },
+	]).unwrap().generate_user_nonces(&[input_key]).unwrap();
+	let mut rpc = srv.get_public_rpc().await;
+	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
+		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+	}).await.unwrap().into_inner();
+	let package = builder.user_cosign(&[input_key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
+	let leaves = package.build_signed_vtxos();
+	assert_eq!(leaves.len(), 1);
+	let coin = &leaves[0];
+	assert_eq!(coin.policy(), &policy);
+	assert_eq!(coin.amount(), sat(100_000));
+	let funding = ctx.bitcoind().await_transaction(input.chain_anchor().txid).await;
+	coin.validate(&funding).unwrap();
+	rpc.register_vtxo_transactions(protos::RegisterVtxoTransactionsRequest { vtxos: vec![coin.serialize()] }).await.unwrap();
+	let refund_key = Xpriv::new_master(Network::Regtest, &[118; 64]).unwrap().to_keypair(&SECP);
+	assert_ne!(refund_key.public_key(), owner.key(500).public_key());
+	let revoke = ArkoorPackageBuilder::new_claim_all_with_checkpoints(
+		vec![coin.clone()], VtxoPolicy::new_pubkey(refund_key.public_key()),
+	).unwrap().generate_user_nonces(&[owner.key(500)]).unwrap();
+	let response = rpc.request_lightning_pay_htlc_revocation(
+		protos::ArkoorPackageCosignRequest::from(revoke.cosign_request()),
+	).await.unwrap().into_inner();
+	let refunds = revoke.user_cosign(&[owner.key(500)],
+		ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap().build_signed_vtxos();
+	assert_eq!(refunds.len(), 1);
+	let refund = &refunds[0];
+	assert_eq!(refund.amount(), sat(100_000));
+	assert_eq!(refund.policy(), &VtxoPolicy::new_pubkey(refund_key.public_key()));
+	refund.validate(&funding).unwrap();
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let stored = db.read(async |tx| tx.get_bare_vtxo_by_id(refund.id()).await).await.unwrap();
+	assert_eq!(stored.spend_state, server::database::SpendState::Unregistered);
+	assert!(db.read(async |tx| tx.get_virtual_transaction_by_txid(refund.point().txid).await)
+		.await.unwrap().unwrap().signed_tx.is_none());
+	assert_eq!(db.read(async |tx| tx.expiry_owner(owner.key(500).public_key(), Network::Regtest).await)
+		.await.unwrap(), Attribution::Unresolved);
+	// Keep the signed refund local, so attribution must use the committed input owner.
+	expire(&ctx, &srv, deadline.max(refund.expiry_height())).await;
+	assert_paid_to_owner(&ctx, &srv, &owner, refund, 500, owner.key(500).public_key()).await;
+}
+
+
+#[tokio::test]
+async fn expiry_owner_holds_key_beyond_recovery_gap() {
+	let ctx = TestContext::new("server/expiry_owner_holds_key_beyond_recovery_gap").await;
+	let srv = server(&ctx).await;
+	let owner = Owner::new(&ctx);
+	owner.register(&srv).await;
+	let coin = board(&ctx, &srv, owner.key(20_001)).await;
+	expire(&ctx, &srv, coin.expiry_height()).await;
+	for _ in 0..8 {
+		srv.watchmand().trigger_sweep().await;
+		tokio::time::sleep(Duration::from_millis(750)).await;
+		let tip = ctx.generate_blocks(1).await;
+		srv.wait_for_sync_height(tip).await;
+		srv.watchmand().wait_for_sync_height(tip).await;
 	}
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert_eq!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest).await).await.unwrap(), Attribution::Unresolved);
+	assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1",
+		&[&coin.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0);
+	let point = coin.chain_anchor();
+	let backing = ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+	assert!(backing.confirmations >= 6);
+	assert_eq!(backing.value, sat(100_000));
+}
+
+#[tokio::test]
+async fn expiry_owner_rechecks_after_registration() {
+	let ctx = TestContext::new("server/expiry_owner_rechecks_after_registration").await;
+	let srv = server(&ctx).await;
+	let owner = Owner::new(&ctx);
+	let coin = board(&ctx, &srv, owner.key(500)).await;
+	expire(&ctx, &srv, coin.expiry_height()).await;
+	tokio::time::sleep(Duration::from_secs(3)).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert_eq!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest).await).await.unwrap(), Attribution::Unresolved);
+	assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1",
+		&[&coin.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0);
+	owner.register(&srv).await;
+	assert_paid(&ctx, &srv, &owner, &coin, 500).await;
 }

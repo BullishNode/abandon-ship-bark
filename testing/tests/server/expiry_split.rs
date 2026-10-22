@@ -98,7 +98,11 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 	let first = payout(&db, ordinary).await;
 	assert_eq!(ctx.bitcoind().await_transaction(first.compute_txid()).await, first);
 	let backing = first.input.iter().map(|i| ark::VtxoId::from(i.previous_output)).collect::<Vec<_>>();
-	let reserved = db.write(async |t| t.lock_unallocated_watchman_inputs(&backing).await).await
+	let mut backing_vtxos = Vec::new();
+	for id in &backing {
+		backing_vtxos.push(db.read(async |t| t.get_bare_vtxo_by_id(*id).await).await.unwrap().vtxo);
+	}
+	let reserved = db.write(async |t| t.lock_unallocated_watchman_inputs(&backing_vtxos, false).await).await
 		.expect_err("normal watchman progression must respect the actual payout's physical backing reservation");
 	let refusal = format!("{reserved:#}");
 	assert!(backing.iter().any(|id| refusal.contains(&format!("vtxo {id} is reserved for expiry recovery"))),
@@ -125,7 +129,10 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 	let second = payout(&db, htlc).await;
 	assert_ne!(first.compute_txid(), second.compute_txid());
 	assert_eq!(ctx.bitcoind().await_transaction(second.compute_txid()).await, second);
-	assert_eq!(second.output.iter().find(|o| o.script_pubkey == destination.spk).unwrap().value, sat(49_000));
+	assert_eq!(second.output.iter().find(|o| o.script_pubkey == destination.spk).unwrap().value, sat(50_000));
+	assert_eq!(first.output.iter().filter(|o| o.script_pubkey == destination.spk).map(|o| o.value).sum::<bitcoin::Amount>()
+		+ second.output.iter().filter(|o| o.script_pubkey == destination.spk).map(|o| o.value).sum::<bitcoin::Amount>(), sat(99_000),
+		"both 50,000 sat siblings pay the 1,000 sat floor once at their original expiry height");
 	let upstream = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, htlc).await).await.unwrap().unwrap();
 	assert_eq!(upstream.htlc.resolution(), None);
 	assert!(first.input.iter().all(|a| second.input.iter().all(|b| a.previous_output != b.previous_output)));

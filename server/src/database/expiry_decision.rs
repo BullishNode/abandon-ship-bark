@@ -42,11 +42,13 @@ impl ReadyOutput {
 	/// commit. Consensus serialization supplies the real CompactSize lengths;
 	/// the largest actual policy witness bounds the later signer's choice.
 	pub fn group_fits(outputs: &[&Self]) -> anyhow::Result<bool> {
-		let leaves = outputs.iter().flat_map(|o| &o.coins).filter_map(|c| c.payee.as_ref().map(|p| CustomerLeaf {
-			id: c.ownership.id, amount: c.ownership.gross, script: p.script.clone(),
-		})).collect();
-		let plan = allocate(leaves)?;
-		let mut payouts = plan.recipients.into_iter().map(|r| r.output).collect::<Vec<_>>();
+		// A prior payout can cover the fee for a small later output. Count
+		// every destination even when it cannot pay without that history.
+		let mut scripts = outputs.iter().flat_map(|o| &o.coins)
+			.filter_map(|c| c.payee.as_ref().map(|p| p.script.clone())).collect::<Vec<_>>();
+		scripts.sort(); scripts.dedup();
+		let mut payouts = scripts.into_iter().map(|script_pubkey|
+			TxOut { value: Amount::ZERO, script_pubkey }).collect::<Vec<_>>();
 		// Every address accepted for the operator drain has a script no
 		// larger than native P2WSH/P2TR. Count both drain and P2A even when
 		// a sub-dust operator remainder will use only the latter.
@@ -171,6 +173,9 @@ impl Tx<'_> {
 		self.lock_fallback_registry().await?;
 		let expiry = outputs[0].root.expiry_height();
 		ensure!(outputs.iter().all(|o| o.root.expiry_height() == expiry), "expiry group mixes expiry heights");
+		// Serialize fee history at this height before locking source rows.
+		// Two-integer advisory keys are separate from the upstream lock keys.
+		self.execute("SELECT pg_advisory_xact_lock($1,$2)", &[&5_i32, &i32::try_from(expiry.to_u32())?]).await?;
 		ensure!(outputs.iter().all(|o| o.root.expiry_height() <= view.captaind.height
 			&& o.root.expiry_height() <= view.watchmand.height), "expiry group is not mature in the completed view");
 		let mut ids = outputs.iter().flat_map(|o| o.versions.iter().map(|v| v.0.to_string())).collect::<Vec<_>>();
@@ -271,7 +276,61 @@ impl Tx<'_> {
 		let leaves = accepted.iter().flat_map(|o| &o.coins).filter_map(|c| c.payee.as_ref().map(|payee| CustomerLeaf {
 			id: c.ownership.id, script: payee.script.clone(), amount: c.ownership.gross,
 		})).collect();
-		let plan = allocate(leaves)?;
+		let paid = self.query("
+			SELECT c.spk,SUM(c.gross_sat)::BIGINT AS gross,SUM(c.fee_sat)::BIGINT AS fee
+			FROM expiry_allocation_coin c JOIN expiry_allocation a ON a.id=c.allocation_id
+			WHERE a.expiry_height=$1 AND a.status<>'conflicted'
+				AND c.disposition='customer' AND c.forfeited_sat=0
+			GROUP BY c.spk
+		", &[&i32::try_from(expiry.to_u32())?]).await?.into_iter().map(|row| {
+			Ok((ScriptBuf::from_hex(row.get("spk"))?, (
+				Amount::from_sat(u64::try_from(row.get::<_, i64>("gross"))?),
+				Amount::from_sat(u64::try_from(row.get::<_, i64>("fee"))?),
+			)))
+		}).collect::<anyhow::Result<BTreeMap<_, _>>>()?;
+		let mut plan = allocate(leaves, &paid)?;
+		if !plan.forfeits.is_empty() {
+			let anchors = accepted.iter().map(|o| o.root.chain_anchor().to_string()).collect::<Vec<_>>();
+			let included = accepted.iter().flat_map(|o| o.coins.iter().map(|c| c.ownership.id.to_string()))
+				.collect::<Vec<_>>();
+			// Follow only the current branch. Historical successors below a
+			// round or offboard do not create another payout obligation.
+			let undecided = self.query("
+				WITH RECURSIVE current_coin AS (
+					SELECT vtxo_id,anchor_point,oor_spent_txid,spent_in_round,offboarded_in
+					FROM vtxo WHERE vtxo_id=ANY($1) AND expiry=$2
+					UNION
+					SELECT v.vtxo_id,v.anchor_point,v.oor_spent_txid,v.spent_in_round,v.offboarded_in
+					FROM vtxo v JOIN current_coin p ON v.vtxo_txid=p.oor_spent_txid
+					WHERE p.spent_in_round IS NULL AND p.offboarded_in IS NULL
+				)
+				SELECT DISTINCT v.anchor_point FROM current_coin k JOIN vtxo v USING(vtxo_id)
+				WHERE (k.oor_spent_txid IS NULL OR k.spent_in_round IS NOT NULL OR k.offboarded_in IS NOT NULL)
+					AND v.onchain_spent_height IS NULL AND v.onchain_spent_txid IS NULL
+					AND NOT(v.vtxo_id=ANY($3))
+					AND NOT EXISTS(SELECT 1 FROM expiry_entitlement e
+						WHERE e.vtxo_id=v.vtxo_id AND (
+							EXISTS(SELECT 1 FROM expiry_allocation_coin c JOIN expiry_allocation a ON a.id=c.allocation_id
+								WHERE c.entitlement_id=e.id AND ((c.active AND a.status<>'conflicted') OR a.status='confirmed'))
+							OR EXISTS(SELECT 1 FROM expiry_terminal_claim p WHERE p.entitlement_id=e.id)))
+			", &[&anchors, &i32::try_from(expiry.to_u32())?, &included]).await?
+				.into_iter().map(|r| r.get::<_, String>("anchor_point")).collect::<Vec<_>>();
+			loop {
+				let count = accepted.len();
+				accepted.retain(|o| {
+					let hold = undecided.contains(&o.root.chain_anchor().to_string())
+						&& o.coins.iter().any(|c| plan.forfeits.iter().any(|f| f.id == c.ownership.id));
+					if hold { dropped.push(o.root.id()); }
+					!hold
+				});
+				if accepted.is_empty() { return Ok(None); }
+				if accepted.len() == count { break; }
+				let leaves = accepted.iter().flat_map(|o| &o.coins).filter_map(|c| c.payee.as_ref().map(|p| CustomerLeaf {
+					id: c.ownership.id, script: p.script.clone(), amount: c.ownership.gross,
+				})).collect();
+				plan = allocate(leaves, &paid)?;
+			}
+		}
 		let policy = plan.forfeits.iter().chain(plan.recipients.iter().flat_map(|r| &r.leaves))
 			.map(|a| (a.id,a)).collect::<BTreeMap<_, _>>();
 		let id: i64 = self.query_one("INSERT INTO expiry_allocation(expiry_height,generation,status) VALUES($1,$2,'pending') RETURNING id",

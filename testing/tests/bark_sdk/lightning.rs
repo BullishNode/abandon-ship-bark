@@ -665,7 +665,7 @@ async fn pay_hold_refused() {
 					fees += attempt.fee;
 				}
 				assert_eq!(gross, board);
-				assert_eq!(fees, ark_testing::sat(1_000 * points.len() as u64));
+				assert_eq!(fees, ark_testing::sat(3_000));
 				assert_eq!(points.values().copied().sum::<bitcoin::Amount>(), board - fees);
 				for (point, value) in &points {
 					let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
@@ -1012,7 +1012,7 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 	assert_eq!(status.spend_state, protos::VtxoSpendState::Spendable as i32);
 	let registration = reopened.fallback_destination().await.unwrap();
 	assert!(registration.spk.is_p2wpkh());
-	let expected = source.amount() - ark_testing::sat(1_000);
+	let expected = source.amount() - ark_testing::sat(500_000);
 	let absent_height = ctx.bitcoind().get_block_count().await;
 	drop(reopened);
 

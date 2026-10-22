@@ -372,7 +372,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 		}
 		assert_eq!(parent.output.iter().map(|output| output.value).sum::<bitcoin::Amount>(),amount);
 	}
-	assert_eq!(actual_paid,sat(200_000-1_000*parents.len() as u64),"charge once per actual payout output");
+	assert_eq!(actual_paid,sat(198_000),"the same-expiry 200,000 sat source pays 2,000 sats across all allocations");
 	ctx.generate_blocks(6).await;
 	for (txid,parent) in &parents {
 		let index = parent.output.iter().position(|output| output.script_pubkey==destination.spk).unwrap();
@@ -499,8 +499,8 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 		assert_eq!(parent.output.iter().map(|output| output.value).sum::<bitcoin::Amount>(),amount,
 			"each actual canonical parent must conserve its complete inputs at zero fee");
 	}
-	assert_eq!(canonical_paid,sat(200_000-1_000*unique_parents.len() as u64),
-		"the post-fork canonical payouts must preserve all principal less actual output fees");
+	assert_eq!(canonical_paid,sat(198_000),
+		"the post-fork canonical payouts retain one 1% fee for the original expiry height");
 	assert!(ctx.bitcoind().get_block_count().await as u32>shorter);
 	for parent in parents.values() {
 		let raw = db.read(async |t| Ok(t.query_one("SELECT sweep_tx FROM expiry_allocation WHERE sweep_txid=$1", &[&parent.compute_txid().to_string()]).await?)).await.unwrap();

@@ -294,6 +294,12 @@ impl<'a> BarkdBuilder<'a> {
 		self
 	}
 
+	/// Set the chain birthday for a seed restore.
+	pub fn birthday_height(mut self, height: u32) -> Self {
+		self.birthday_height = Some(height);
+		self
+	}
+
 	/// Enable the `GET /wallet/mnemonic` endpoint, which barkd disables by
 	/// default. Needed by tests that read the seed back out of the daemon.
 	pub fn expose_mnemonic(self) -> Self {

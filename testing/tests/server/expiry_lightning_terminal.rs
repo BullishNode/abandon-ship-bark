@@ -749,7 +749,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 	assert_grants_reclaimed(&ctx, &db, &grants, &recipient_destination.spk).await;
 	let payouts = parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == destination.spk).collect::<Vec<_>>();
 	assert_eq!(payouts.len(), 1);
-	assert_eq!(payouts[0].1.value, sat(199_000), "same-root same-user payout charges one output fee");
+	assert_eq!(payouts[0].1.value, sat(198_000), "the same 200,000 sat source pays one 1% fee");
 	assert!(parent.output.iter().all(|output| output.script_pubkey != recipient_destination.spk));
 	let mut input_sat = 0;
 	for input in &parent.input {

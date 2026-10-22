@@ -53,7 +53,6 @@ use tracing::{info, trace, warn};
 
 use ark::{ServerVtxo, ServerVtxoPolicy, VtxoId};
 use ark::vtxo::policy::signing::VtxoSigner;
-use ark::vtxo::policy::clause::VtxoClause;
 use bitcoin_ext::{fee, BlockHeight, BlockRef, TxStatus, P2TR_DUST};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
 use bitcoin_ext::cpfp::MakeCpfpFees;
@@ -458,7 +457,7 @@ impl Watchman {
 					current.get::<_, &str>("progress_txid") == txid.to_string(),
 					"expiry split instruction changed"
 				);
-				t.lock_unallocated_watchman_inputs(&ids).await.context("expiry split input locks")?;
+				t.lock_unallocated_watchman_inputs(std::slice::from_ref(&root), false).await.context("expiry split input locks")?;
 				self.process_progress_tx(&mut wallet, txid, &root, fee_rate).await
 					.context("expiry split progress publication")
 			}).await {
@@ -610,9 +609,8 @@ impl Watchman {
 	) -> anyhow::Result<()> {
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
 		let txid = tx.compute_txid();
-		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
 		self.db.write(async |t| {
-			t.lock_unallocated_watchman_inputs(&ids).await?;
+			t.lock_unallocated_watchman_inputs(vtxos, true).await?;
 			for vtxo in vtxos.iter().filter(|v| *v.policy() == ServerVtxoPolicy::ServerOwned) {
 				// Exclude mempool effects so our existing native RBF path can
 				// replace its own claim; canonical consumption always refuses.
@@ -646,9 +644,11 @@ impl Watchman {
 		Ok(())
 	}
 
-	async fn claim_inputs(
-		&self, vtxos: &[ServerVtxo],
-	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount, usize)> {
+	async fn build_claim_tx(
+		&self,
+		vtxos: &[ServerVtxo],
+		fee_rate: FeeRate,
+	) -> anyhow::Result<Transaction> {
 		let mut inputs = Vec::with_capacity(vtxos.len());
 		let mut clauses = Vec::with_capacity(vtxos.len());
 		let mut total_input_weight = 0;
@@ -666,7 +666,7 @@ impl Watchman {
 
 				// TxIn base weight (non-witness) + witness weight
 				total_input_weight += 4 * input.base_size() + (1 + 1 + 64); // nb items + sig
-				total_input_amount = total_input_amount.checked_add(vtxo.amount()).context("claim input amount overflow")?;
+				total_input_amount += vtxo.amount();
 
 				inputs.push(input);
 				clauses.push(None);
@@ -684,7 +684,7 @@ impl Watchman {
 
 				// TxIn base weight (non-witness) + witness weight
 				total_input_weight += 4 * input.base_size() + clause.witness_size(vtxo);
-				total_input_amount = total_input_amount.checked_add(vtxo.amount()).context("claim input amount overflow")?;
+				total_input_amount += vtxo.amount();
 
 				inputs.push(input);
 				clauses.push(Some(clause));
@@ -694,16 +694,6 @@ impl Watchman {
 				value: vtxo.amount(),
 			);
 		}
-
-		Ok((inputs, clauses, total_input_amount, total_input_weight))
-	}
-
-	async fn build_claim_tx(
-		&self,
-		vtxos: &[ServerVtxo],
-		fee_rate: FeeRate,
-	) -> anyhow::Result<Transaction> {
-		let (inputs, clauses, total_input_amount, total_input_weight) = self.claim_inputs(vtxos).await?;
 
 		let lock_time = self.sync_height().height.to_locktime()
 			.expect("valid block height");
@@ -735,24 +725,19 @@ impl Watchman {
 			value: output_amount,
 		};
 
-		let tx = Transaction {
+		let mut tx = Transaction {
 			version: bitcoin::transaction::Version::TWO,
 			lock_time,
 			input: inputs,
 			output: vec![output],
 		};
 
-		self.sign_claim_inputs(vtxos, &clauses, tx).await
-	}
-	async fn sign_claim_inputs(
-		&self, vtxos: &[ServerVtxo], clauses: &[Option<VtxoClause>], mut tx: Transaction,
-	) -> anyhow::Result<Transaction> {
 		// Sign all inputs
 		let prevouts = vtxos.iter().map(|vtxo| vtxo.txout()).collect::<Vec<_>>();
 		let prevouts = sighash::Prevouts::All(&prevouts);
 
 		let mut sighash_cache = sighash::SighashCache::new(&mut tx);
-		for (input_idx, (vtxo, clause)) in vtxos.iter().zip(clauses).enumerate() {
+		for (input_idx, (vtxo, clause)) in vtxos.iter().zip(&clauses).enumerate() {
 			if let Some(clause) = clause {
 				let witness = self.signer.sign_input_with_clause(
 					vtxo, clause, input_idx, &mut sighash_cache, &prevouts,
@@ -826,7 +811,7 @@ impl Watchman {
 			if let Err(e) = self.db.write(async |t| {
 				// Normal exit progression competes with payouts for the same
 				// physical backing too. Hold its coin locks through publication.
-				t.lock_unallocated_watchman_inputs(&[vtxo.id()]).await?;
+				t.lock_unallocated_watchman_inputs(std::slice::from_ref(&vtxo), false).await?;
 				self.process_progress_tx(&mut wallet, progress_txid, &vtxo, fee_rate).await
 			}).await {
 				slog!(ProgressCpfpFailure, vtxo_id: vtxo.id(), txid: progress_txid,

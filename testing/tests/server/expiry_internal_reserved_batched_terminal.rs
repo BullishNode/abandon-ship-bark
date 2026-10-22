@@ -121,6 +121,8 @@ async fn reserved_batched_terminal(reorg:bool) {
 	}
 	assert_eq!(inputs.iter().map(Vtxo::chain_anchor).collect::<BTreeSet<_>>().len(),3);
 	assert!(inputs.iter().all(|input|input.amount()==sat(100_000)));
+	assert_eq!(inputs.iter().map(|input|input.expiry_height()).collect::<BTreeSet<_>>().len(),3,
+		"each sequential board has a distinct original expiry height");
 	let fallback = sender.fallback_destination().await.unwrap();
 	fallback.verify(bitcoin::Network::Regtest,sender.mailbox_identifier().as_pubkey()).unwrap();
 	assert_ne!(fallback.spk,receive_destination.spk);
@@ -219,7 +221,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 	}).await.expect("receive grants must close in funded operator payouts six confirmations deep");
 	// Freeze the tip so every original reservation is still noncanonical.
 	// Each original is reserved by an ordinary payout. Different expiry
-	// heights remain separate, with a 1,000 sat fee per payout output.
+	// heights remain separate, with a 1,000 sat fee for each original height.
 	let reservations:BTreeMap<String,(i64,Transaction)>=tokio::time::timeout(Duration::from_secs(20),async {
 		loop {
 			let rows=db.read(async |t|Ok(t.query("SELECT e.vtxo_id,a.id,a.sweep_tx FROM expiry_allocation a \
@@ -249,8 +251,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 	assert_eq!(reserved.0,expected_reserved);
 	let parents=reserved_ids.iter().map(|id|reservations.values().find(|(r,_)|r==id).unwrap().1.clone()).collect::<Vec<_>>();
 	let reserved_fallback=parents.iter().flat_map(|p|&p.output).filter(|out|out.script_pubkey==fallback.spk).map(|out|out.value).sum::<bitcoin::Amount>();
-	let fallback_outputs=parents.iter().flat_map(|p|&p.output).filter(|out|out.script_pubkey==fallback.spk).count() as u64;
-	assert_eq!(reserved_fallback,sat(300_000-1_000*fallback_outputs),"one 1,000 sat fee per payout output");
+	assert_eq!(reserved_fallback,sat(297_000),"three 100,000 sat sources at distinct expiry heights each pay 1,000 sats");
 	for parent in &parents {
 		assert_eq!(parent.output.iter().map(|out|out.value).sum::<bitcoin::Amount>(),
 			parent.input.iter().map(|i|if prefixes.contains(&i.previous_output) {sat(100_000)} else {panic!("unexpected input")}).sum::<bitcoin::Amount>());

@@ -122,8 +122,8 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("both frozen customer coins must receive actual payouts despite the sender's historical forfeits");
-	// Opportunistic ready grouping may pay one or two outputs. Each actual
-	// output pays exactly the policy fee; no readiness delay hides a lost coin.
+	// Both source coins have the same payout script and expiry height.
+	// One or two allocations must charge the 1,000 sat floor only once.
 	let mut total = Amount::ZERO;
 	let mut outputs = Vec::<(Txid, u32)>::new();
 	for parent in parents.values() {
@@ -133,7 +133,7 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 		total += matching[0].1.value;
 		outputs.push((parent.compute_txid(), matching[0].0 as u32));
 	}
-	assert_eq!(total + sat(parents.len() as u64 * 1_000), own.amount() + received.amount());
+	assert_eq!(total + sat(1_000), own.amount() + received.amount());
 	let confirmed = ctx.generate_blocks(6).await;
 	let mut expected_outputs = BTreeMap::new();
 	for (txid, vout) in &outputs {
@@ -179,7 +179,7 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 		receipt_fees += attempt.fee;
 		receipt_payouts += attempt.payout;
 	}
-	assert_eq!(receipt_fees, sat(expected_outputs.len() as u64 * 1_000));
+	assert_eq!(receipt_fees, sat(1_000));
 	assert_eq!(receipt_payouts, total);
 	let payout_address = PaymentMethod::Bitcoin(Address::from_script(&destination.spk, Network::Regtest).unwrap().into_unchecked());
 	// Retain existing debits, including any earlier native operation, but do
@@ -215,9 +215,10 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 			assert_eq!(movement.sent_to.len(), 1);
 			assert_eq!(movement.sent_to[0].destination, payout_address);
 			assert_eq!(movement.sent_to[0].amount, expected_outputs[&point]);
-			assert_eq!(movement.offchain_fee, sat(1_000));
 			assert_eq!(movement.input_vtxos.iter().copied().collect::<BTreeSet<_>>(), receipt_inputs[&point]);
 			let expected_debit = movement.input_vtxos.iter().map(|id| expected_coins[id].to_sat() as i64).sum::<i64>();
+			assert_eq!(movement.offchain_fee, sat(u64::try_from(expected_debit).unwrap()) - expected_outputs[&point]);
+			assert!(movement.offchain_fee == Amount::ZERO || movement.offchain_fee == sat(1_000));
 			assert_eq!(movement.effective_balance.to_sat(), -expected_debit);
 			for input in &movement.input_vtxos { assert!(inputs.insert(*input), "a coin was debited in two payout movements"); }
 			debit += movement.effective_balance.to_sat();

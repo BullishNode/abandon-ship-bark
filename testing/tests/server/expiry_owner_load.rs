@@ -643,6 +643,7 @@ async fn finish_traffic(
 	}).await.expect("all funded traffic terminal rights must drain to actual payouts within120seconds");
 	let mut paid=BTreeMap::<OutPoint,(usize,Amount)>::new(); let mut parents=BTreeMap::new();
 	let mut row_fees=vec![Amount::ZERO;16]; let mut gross=vec![Amount::ZERO;16];
+	let mut by_expiry=BTreeMap::<(usize,u32),(Amount,Amount)>::new();
 	for row in &rows {
 		let id=VtxoId::from_str(&row.get::<_,String>("vtxo_id")).unwrap();
 		let (actor,coin)=&traffic.terminals[&id]; let destination=&traffic.destinations[*actor];
@@ -652,7 +653,10 @@ async fn finish_traffic(
 		assert_eq!(row.get::<_,String>("spk"),destination.spk.as_bytes().to_lower_hex_string());
 		assert_eq!(row.get::<_,String>("owner_mailbox"),traffic.wallets[*actor].mailbox_identifier().as_pubkey().to_string());
 		assert_eq!(row.get::<_,String>("user_pubkey"),coin.policy().user_pubkey().to_string());
-		row_fees[*actor]+=sat(u64::try_from(row.get::<_,i64>("fee_sat")).unwrap()); gross[*actor]+=coin.amount();
+		let fee=sat(u64::try_from(row.get::<_,i64>("fee_sat")).unwrap());
+		row_fees[*actor]+=fee; gross[*actor]+=coin.amount();
+		let group=by_expiry.entry((*actor,coin.expiry_height().to_u32())).or_insert((Amount::ZERO,Amount::ZERO));
+		group.0+=coin.amount(); group.1+=fee;
 		let parent=deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
 		let outputs=parent.output.iter().enumerate().filter(|(_,out)|out.script_pubkey==destination.spk).collect::<Vec<_>>();
 		assert_eq!(outputs.len(),1);
@@ -669,7 +673,11 @@ async fn finish_traffic(
 	}
 	for actor in 0..16 {
 		let own=paid.values().filter(|(index,_)|*index==actor).collect::<Vec<_>>();
-		let fees=sat(1_000*own.len() as u64);
+		let fees=by_expiry.iter().filter(|((index,_),_)|*index==actor).map(|(_, (source_gross,charged))| {
+			let fee=sat(source_gross.to_sat().div_ceil(100).max(1_000));
+			assert_eq!(*charged,fee,"charge each original source expiry height once");
+			fee
+		}).sum::<Amount>();
 		assert_eq!(row_fees[actor],fees); assert_eq!(gross[actor],own.iter().map(|(_,value)|*value).sum::<Amount>()+fees);
 		assert!(traffic.wallets[actor].pending_arkoor_sends().await.unwrap().is_empty());
 		for (point,(index,amount)) in &paid {

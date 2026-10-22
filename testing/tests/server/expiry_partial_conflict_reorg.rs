@@ -73,7 +73,10 @@ async fn assert_physical_cut(
 		customer_total += payee.value;
 		let remainder = parent.output.iter().filter(|output| &output.script_pubkey != customer)
 			.map(|output| output.value).sum::<Amount>();
-		assert_eq!(remainder, sat(1_000));
+		let parent_gross=parent.input.iter().map(|input|backing[&input.previous_output].value).sum::<Amount>();
+		let expected_fee=sat(parent_gross.to_sat().div_ceil(100).max(1_000));
+		assert_eq!(payee.value+expected_fee,parent_gross);
+		assert_eq!(remainder, expected_fee);
 		for output in parent.output.iter().filter(|output| &output.script_pubkey != customer) {
 			assert!(output.is_p2a_fee_anchor() || output.script_pubkey == operator);
 		}
@@ -95,7 +98,7 @@ async fn assert_physical_cut(
 			FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2", &[allocation, &child.compute_txid().to_string()]).await?)).await.unwrap();
 		assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(), child);
 		assert_eq!(stored.get::<_, i64>("fee_sat"), i64::try_from(child_fee.to_sat()).unwrap());
-		assert_eq!(stored.get::<_, i64>("operator_remainder_sat"), 1_000);
+		assert_eq!(stored.get::<_, i64>("operator_remainder_sat"), i64::try_from(expected_fee.to_sat()).unwrap());
 		assert_eq!(stored.get::<_, Option<i64>>("confirmed_height"), Some(i64::from(point.height.to_u32())));
 		assert_eq!(stored.get::<_, Option<String>>("confirmed_hash"), Some(hash.to_string()));
 		let persisted = db.read(async |tx| Ok(tx.query_one("SELECT status,sweep_tx,sweep_txid,confirmed_height,confirmed_hash \
@@ -155,7 +158,7 @@ async fn assert_physical_cut(
 		attributed_fee += fee;
 	}
 	assert_eq!(attributed_payout, customer_total);
-	assert_eq!(attributed_fee, sat(canonical.len() as u64 * 1_000));
+	assert_eq!(attributed_fee, sat(2_000));
 	assert_eq!(graph.values().flat_map(|transaction| transaction.output.iter())
 		.filter(|output| &output.script_pubkey == customer).count(), canonical.len(),
 		"no accidental extra customer output may hide in a sponsor child");
@@ -436,7 +439,7 @@ async fn partial_conflict_reorg() {
 	let payouts = original.output.iter().enumerate().filter(|(_, out)| out.script_pubkey == destination.spk)
 		.collect::<Vec<_>>();
 	assert_eq!(payouts.len(), 1);
-	assert_eq!(payouts[0].1.value, sat(199_000));
+	assert_eq!(payouts[0].1.value, sat(198_000));
 	assert!(!ctx.bitcoind().sync_client().get_raw_mempool().unwrap().contains(&original_txid));
 	let permanent = decided_obligations(&db, &coins).await;
 
@@ -642,7 +645,8 @@ async fn partial_conflict_reorg() {
 			.collect::<Vec<_>>();
 		assert_eq!(payouts.len(), 1);
 		let (index, payout) = payouts[0];
-		assert_eq!(payout.value + sat(1_000), gross, "one fee per actual canonical payout output");
+		assert_eq!(payout.value + sat(gross.to_sat().div_ceil(100).max(1_000)), gross,
+			"charge the original source principal at its expiry height");
 		let output = rpc.get_tx_out(&txid, index as u32, Some(true)).unwrap().unwrap();
 		assert!(output.confirmations >= 6);
 		assert_eq!(output.value, payout.value);
@@ -650,7 +654,7 @@ async fn partial_conflict_reorg() {
 		paid += output.value;
 	}
 	assert_eq!(root_payments.keys().copied().collect::<BTreeSet<_>>(), backing.keys().copied().collect::<BTreeSet<_>>());
-	assert_eq!(paid + sat(canonical.len() as u64 * 1_000), exiting.amount() + untouched.amount());
+	assert_eq!(paid + sat(2_000), exiting.amount() + untouched.amount());
 	assert!(canonical.len() == 1 || canonical.len() == 2,
 		"a merged original or separate regrouped winners must pay each coin exactly once");
 	let expected_payers = BTreeMap::from([

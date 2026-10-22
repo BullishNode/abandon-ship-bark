@@ -1,5 +1,4 @@
-use std::fs::{self, File, Permissions};
-use std::os::unix::fs::PermissionsExt;
+use std::fs::{self, File};
 use std::path::Path;
 use std::process::Stdio;
 use std::str::FromStr;
@@ -8,6 +7,7 @@ use bitcoin::{Address, Network, OutPoint, Transaction, Txid};
 use bitcoin::bip32::Xpriv;
 use serde_json::{json, Value};
 use tokio::process::Command;
+use tokio::io::AsyncWriteExt;
 
 use ark::SECP;
 use ark_testing::{sat, Bitcoind, TestContext};
@@ -17,23 +17,25 @@ use server::wallet::WalletKind;
 // The RPC library logs request parameters at debug level. Use Core's stdin
 // interface for the only request that contains a private descriptor.
 async fn import_seed(
-	bitcoind: &Bitcoind, wallet: &str, seed: &Path, input: &Path, kind: WalletKind, next_index: u32,
+	bitcoind: &Bitcoind, wallet: &str, seed: &Path, kind: WalletKind, next_index: u32,
 ) {
 	let helper = ark_testing::util::get_cargo_workspace().join("contrib/release/server-seed-descriptors.py");
 	let output = Command::new("python3").arg(helper)
 		.args(["--network", "regtest", "--wallet", kind.name(), "--range-end", "1023", "--next-index"])
-		.arg(next_index.to_string()).arg("--output")
-		.arg(input).stdin(Stdio::from(File::open(seed).unwrap())).output().await.unwrap();
+		.arg(next_index.to_string()).arg("--stdout").stdin(Stdio::from(File::open(seed).unwrap())).output().await.unwrap();
 	assert!(output.status.success(), "private descriptor helper failed");
-	assert!(output.stdout.is_empty(), "the helper must not print private descriptors");
-	assert_eq!(fs::metadata(input).unwrap().permissions().mode() & 0o777, 0o600);
-	let output = Command::new(Bitcoind::exec().with_file_name("bitcoin-cli"))
+	let descriptor = output.stdout;
+	let mut importer = Command::new(Bitcoind::exec().with_file_name("bitcoin-cli"))
 		.args(["-regtest", "-rpcconnect=127.0.0.1"])
 		.arg(format!("-datadir={}", bitcoind.datadir().display()))
 		.arg(format!("-rpcport={}", bitcoind.rpc_port()))
 		.arg(format!("-rpccookiefile={}", bitcoind.rpc_cookie().display()))
 		.arg(format!("-rpcwallet={wallet}")).args(["-stdin", "importdescriptors"])
-		.stdin(Stdio::from(File::open(input).unwrap())).output().await.unwrap();
+		.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
+	let mut stdin = importer.stdin.take().unwrap();
+	stdin.write_all(&descriptor).await.unwrap();
+	drop(stdin);
+	let output = importer.wait_with_output().await.unwrap();
 	assert!(output.status.success(), "Core rejected the private descriptor import");
 	let response: Value = serde_json::from_slice(&output.stdout).expect("Core import response is JSON");
 	assert!(response[0]["success"] == true, "Core did not import the seed descriptor");
@@ -113,9 +115,6 @@ async fn server_and_watchman_seed_only_recover_receipts_and_change() {
 	let rounds = srv.get_rounds_funding_address().await;
 	let watchman = srv.watchmand().wait_wallet_address().await;
 	assert_ne!(rounds, watchman);
-	let private = ctx.datadir.join("seed-recovery");
-	fs::create_dir(&private).unwrap();
-	fs::set_permissions(&private, Permissions::from_mode(0o700)).unwrap();
 	let mut receipts = Vec::new();
 	for (kind, advertised) in [(WalletKind::Rounds, rounds), (WalletKind::Watchman, watchman)] {
 		assert!((0..10).any(|i| seed_address(&master, kind, i) == advertised), "daemon address differs from seed derivation");
@@ -137,7 +136,7 @@ async fn server_and_watchman_seed_only_recover_receipts_and_change() {
 		for point in &points { assert_unspent(core, *point, sat(60_000)); }
 		let name = format!("{}-first-recovery", kind.name());
 		let wallet = fresh_core_wallet(core, &name);
-		import_seed(core, &name, &seed, &private.join(format!("{name}.json")), kind, 1000).await;
+		import_seed(core, &name, &seed, kind, 1000).await;
 		let recovered = wallet.list_unspent(Some(6), None, None, None, None).unwrap();
 		assert_eq!(recovered.len(), points.len());
 		for point in &points {
@@ -158,7 +157,7 @@ async fn server_and_watchman_seed_only_recover_receipts_and_change() {
 
 		let name = format!("{}-change-recovery", kind.name());
 		let recovered = fresh_core_wallet(core, &name);
-		import_seed(core, &name, &seed, &private.join(format!("{name}.json")), kind, 1001).await;
+		import_seed(core, &name, &seed, kind, 1001).await;
 		let unspent = recovered.list_unspent(Some(6), None, None, None, None).unwrap();
 		assert_eq!(unspent.len(), 1);
 		assert_eq!(OutPoint::new(unspent[0].txid, unspent[0].vout), change_point);

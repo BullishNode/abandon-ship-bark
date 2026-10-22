@@ -54,7 +54,7 @@ async fn expiry_actual_partial_exit_conflict_regroups_after_restart() {
 	assert_eq!(original.input.len(), 2);
 	let payouts = original.output.iter().filter(|o| o.script_pubkey == destination.spk).collect::<Vec<_>>();
 	assert_eq!(payouts.len(), 1);
-	assert_eq!(payouts[0].value, exiting.amount() + untouched.amount() - sat(1_000));
+	assert_eq!(payouts[0].value, exiting.amount() + untouched.amount() - sat(2_000));
 	assert!(ctx.bitcoind().sync_client().get_mempool_entry(&original.compute_txid()).is_err(),
 		"the unfunded watchman must not publish its zero-fee parent without a fee child");
 

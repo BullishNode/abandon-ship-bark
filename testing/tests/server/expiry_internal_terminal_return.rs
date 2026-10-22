@@ -61,6 +61,10 @@ async fn reserved_terminal(reorg:bool,partial:bool) {
 	let sender=actor.client().await;
 	let inputs=vec![sender.get_full_vtxo(a[0]).await.unwrap(),sender.get_full_vtxo(b[0]).await.unwrap()];
 	assert_ne!(inputs[0].chain_anchor(),inputs[1].chain_anchor());
+	let mut gross_by_expiry=BTreeMap::<_,u64>::new();
+	for input in &inputs { *gross_by_expiry.entry(input.expiry_height()).or_default()+=input.amount().to_sat(); }
+	let expected_payout=sat(inputs.iter().map(|input|input.amount().to_sat()).sum::<u64>()
+		-gross_by_expiry.values().map(|gross|1_000_u64.max(gross.div_ceil(100))).sum::<u64>());
 	let keys=vec![sender.get_vtxo_key(&inputs[0]).await.unwrap(),sender.get_vtxo_key(&inputs[1]).await.unwrap()];
 	let fallback=sender.fallback_destination().await.unwrap();
 	let tip=BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
@@ -163,7 +167,7 @@ async fn reserved_terminal(reorg:bool,partial:bool) {
 				let inputs=parents.values().flat_map(|p|p.input.iter().map(|i|i.previous_output.to_string())).collect::<BTreeSet<_>>();
 				assert_eq!(inputs,prefixes.iter().map(ToString::to_string).collect(),"each refund spends only its sources' backing");
 				let outputs=parents.values().flat_map(|p|&p.output).filter(|o|o.script_pubkey==fallback.spk).map(|o|o.value).collect::<Vec<_>>();
-				assert_eq!(outputs.iter().copied().sum::<bitcoin::Amount>(),sat(200_000-1_000*outputs.len() as u64),"one fee per payout output");
+				assert_eq!(outputs.iter().copied().sum::<bitcoin::Amount>(),expected_payout,"charge each original expiry height once");
 				super::expiry_lightning_terminal::assert_grants_reclaimed(&ctx,&db,&grants,&receive_spk).await;
 				return OriginalReservation {by_source,entitlements};
 			}

@@ -10,13 +10,9 @@ use tracing::error;
 use ark::vtxo::{HashDelaySignClause, HashDelaySignClause_v0, ServerVtxoPolicy, Vtxo};
 use ark::vtxo::policy::clause::{TapScriptClause, VtxoClause, HashSignClause, HashSignClause_v0};
 use ark::vtxo::policy::signing::VtxoSigner;
-use ark::VtxoId;
-use ark::lightning::PaymentHash;
 use bitcoin_ext::KeypairExt;
 
 use crate::database::Db;
-use crate::database::expiry_lightning::LightningSourceState;
-use crate::database::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use crate::secret::Secret;
 use crate::SECP;
 
@@ -58,16 +54,9 @@ impl WatchmanSigner {
 			VtxoClause::HashSign(HashSignClause { hash, ..})
 				| VtxoClause::HashSign_v0(HashSignClause_v0 { hash, ..}) =>
 			{
-				let hark = self.db.read(async |t| {
-					if t.query_opt("
-						SELECT participation_id FROM expiry_cancelled_participation
-						WHERE unlock_hash=$1
-					", &[&hash.to_string()]).await?.is_some() {
-						return Ok(None);
-					}
-					Ok(t.get_round_participation_by_unlock_hash(*hash).await?
-						.filter(|part| part.forfeited_at.is_some()))
-				}).await.ok()??;
+				let hark = self.db.read(async |t|
+					t.get_round_participation_by_unlock_hash(*hash).await
+				).await.ok()??;
 				self.log_if_duplicate_hash(*hash, true).await;
 				Some(hark.unlock_preimage)
 			},
@@ -99,28 +88,12 @@ impl WatchmanSigner {
 			slog!(DuplicateSecretHash, hash);
 		}
 	}
-
-	async fn source_was_discharged(&self, id: VtxoId, hash: PaymentHash) -> bool {
-		self.db.read(async |t| {
-			let Some(htlc) = htlc_vtxo::get_htlc_vtxo(t, id).await? else {
-				return Ok(false);
-			};
-			if htlc.direction() != HtlcDirection::Incoming
-				|| htlc.htlc.payment_hash != hash
-				|| htlc.htlc.offchain_resolution == Some(HtlcResolution::Revoked)
-				|| htlc.htlc.chain_resolution.is_some()
-			{
-				return Ok(false);
-			}
-			Ok(t.lightning_source_state(id, hash).await? == LightningSourceState::Discharged)
-		}).await.unwrap_or(false)
-	}
 }
 
 #[async_trait::async_trait]
 impl VtxoSigner<ServerVtxoPolicy> for WatchmanSigner {
 	async fn can_sign<G: Sync + Send>(
-		&self, clause: &VtxoClause, vtxo: &Vtxo<G, ServerVtxoPolicy>,
+		&self, clause: &VtxoClause, _vtxo: &Vtxo<G, ServerVtxoPolicy>,
 	) -> bool {
 		// first check for the key to sign
 		let have_key = if clause.pubkey() == self.server_keypair.leak_ref().public_key() {
@@ -135,10 +108,8 @@ impl VtxoSigner<ServerVtxoPolicy> for WatchmanSigner {
 
 		// then check for other witness items
 		match clause {
-			VtxoClause::HashDelaySign(c) => self.source_was_discharged(vtxo.id(), c.hash.into()).await
-				&& self.get_preimage(clause).await.is_some(),
-			VtxoClause::HashDelaySign_v0(c) => self.source_was_discharged(vtxo.id(), c.hash.into()).await
-				&& self.get_preimage(clause).await.is_some(),
+			VtxoClause::HashDelaySign(_) => self.get_preimage(clause).await.is_some(),
+			VtxoClause::HashDelaySign_v0(_) => self.get_preimage(clause).await.is_some(),
 			VtxoClause::HashSign(_) => self.get_preimage(clause).await.is_some(),
 			VtxoClause::HashSign_v0(_) => self.get_preimage(clause).await.is_some(),
 			// others are simple signatures

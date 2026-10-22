@@ -16,7 +16,9 @@ use super::payouts::{FallbackAttempt, FallbackBlock, FallbackDisposition, Fallba
 	FallbackVerifiedPayout, FallbackVerifiedTerminal, FallbackTerminalDisposition};
 
 const PAYOUT_CONFIRMATIONS: BlockDelta = BlockDelta::new(6);
-const PAYOUT_OUTPUT_FEE: Amount = Amount::from_sat(1_000);
+fn payout_output_fee(gross: Amount) -> Amount {
+	Amount::from_sat(1_000.max(gross.to_sat().div_ceil(100)))
+}
 
 /// Claims assigned to the same outpoint share its value. Check their sum
 /// even when the server gives them different allocation IDs.
@@ -44,7 +46,7 @@ fn verify_output_group(
 	}
 	// Other registered accounts may deliberately share this same destination;
 	// this account's authenticated history need not enumerate their claims.
-	ensure!(fee <= PAYOUT_OUTPUT_FEE && gross.checked_sub(fee) == Some(payout),
+	ensure!(fee <= payout_output_fee(gross) && gross.checked_sub(fee) == Some(payout),
 		"payout output charges more than the agreed fee");
 	ensure!(payout > Amount::ZERO && payout <= output.value, "one chain output cannot cover these claims");
 	Ok(())
@@ -65,7 +67,7 @@ fn verify_dust_group(attempts: &[&FallbackAttempt], expected: &Script) -> anyhow
 			"dust receipt names a payout, charges a fee or changes its principal");
 		gross = gross.checked_add(attempt.gross).context("dust principal overflow")?;
 	}
-	let net = gross.checked_sub(PAYOUT_OUTPUT_FEE).unwrap_or(Amount::ZERO);
+	let net = gross.checked_sub(payout_output_fee(gross)).unwrap_or(Amount::ZERO);
 	ensure!(net < expected.minimal_non_dust(), "dust group is large enough to pay out");
 	Ok(())
 }
@@ -315,6 +317,28 @@ mod tests {
 	}
 
 	#[test]
+	fn payout_accepts_percentage_fee_and_a_prepaid_later_output() {
+		let (script, mut parent, mut attempt) = group();
+		attempt.gross = Amount::from_sat(200_000);
+		attempt.fee = Amount::from_sat(2_000);
+		attempt.payout = Amount::from_sat(198_000);
+		parent.output[0].value = attempt.payout;
+		attempt.output_amount = Some(attempt.payout);
+		let point = OutPoint::new(parent.compute_txid(), 0);
+		assert!(verify_output_group(&[&attempt], &parent, point, &script).is_ok());
+		attempt.fee += Amount::from_sat(1);
+		attempt.payout -= Amount::from_sat(1);
+		assert!(verify_output_group(&[&attempt], &parent, point, &script).is_err());
+		attempt.gross = Amount::from_sat(1_000);
+		attempt.fee = Amount::ZERO;
+		attempt.payout = attempt.gross;
+		parent.output[0].value = attempt.payout;
+		attempt.output_amount = Some(attempt.payout);
+		let point = OutPoint::new(parent.compute_txid(), 0);
+		assert!(verify_output_group(&[&attempt], &parent, point, &script).is_ok());
+	}
+
+	#[test]
 	fn regroup_ids_cannot_reuse_one_output_as_two_payments() {
 		let (script, parent, attempt) = group();
 		let point = OutPoint::new(parent.compute_txid(), 0);
@@ -342,7 +366,7 @@ mod tests {
 		assert!(verify_dust_group(&[&dust], &script).is_ok());
 		assert!(verify_dust_group(&[&dust, &dust], &script).is_err(),
 			"two individually sub-dust coins must pay when the group clears dust");
-		dust.gross = PAYOUT_OUTPUT_FEE + script.minimal_non_dust();
+		dust.gross = Amount::from_sat(1_000) + script.minimal_non_dust();
 		dust.forfeited = dust.gross;
 		assert!(verify_dust_group(&[&dust], &script).is_err(), "the exact dust threshold must pay");
 		dust.gross -= Amount::from_sat(1);

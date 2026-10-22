@@ -3180,7 +3180,7 @@ async fn watchman_sweeps_offboard_connectors() {
 #[tokio::test]
 async fn watchman_sweeps_offboard_forfeit_after_confiscation() {
 	let ctx = TestContext::new("server/watchman_sweeps_offboard_forfeit_after_confiscation").await;
-	let srv = ctx.captaind("server").funded(btc(10)).cfg(|cfg| {
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).funded(btc(10)).cfg(|cfg| {
 		cfg.vtxo_lifetime = BlockDelta::new(144);
 		cfg.vtxopool.vtxo_targets = vec![];
 	}).watchmand_cfg(|cfg| {

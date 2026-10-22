@@ -378,13 +378,7 @@ impl RestServer {
 		log::info!("Server starting on http://{}", socket_addr);
 
 		if web_ui_attached {
-			if let Some(token) = state.auth_token() {
-				log::info!("The web-ui is available at http://{}/?auth_token={}",
-					socket_addr, token.encode(),
-				);
-			} else {
-				log::info!("The web-ui is available at http://{}/", socket_addr);
-			}
+			log::info!("The web-ui is available at http://{}/", socket_addr);
 		}
 
 		// then finish running the server

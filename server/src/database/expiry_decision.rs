@@ -13,6 +13,7 @@ use chrono::{DateTime, Local};
 use ark::{ServerVtxo, VtxoId};
 
 use super::expiry_chain::ExpiryViewToken;
+use super::expiry_geometry::BackingGeometry;
 use super::expiry_inventory::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits};
 use super::expiry_ownership::{OwnershipDisposition, OwnershipEvidence, OwnershipProposal};
 use super::expiry_payout::MAX_PAYOUT_VSIZE;
@@ -142,10 +143,30 @@ impl ReadyOutput {
 		residuals: &[BackingPartitionResidual],
 		limits: BackingSnapshotLimits,
 	) -> anyhow::Result<Self> {
+		Self::prove_inner(snapshot, coins, funding, residuals, limits, None)
+	}
+
+	pub(crate) fn prove_with_geometry(
+		geometry: &BackingGeometry, root: ServerVtxo, visited: &[usize], bytes: usize,
+		coins: Vec<ReadyCoin>, residuals: &[BackingPartitionResidual], limits: BackingSnapshotLimits,
+	) -> anyhow::Result<Self> {
+		let snapshot = BackingSnapshot {
+			roots: vec![root], regular: visited.iter().map(|index| geometry.snapshot().regular[*index].clone()).collect(),
+			serialized_bytes: bytes,
+		};
+		Self::prove_inner(snapshot, coins, std::slice::from_ref(geometry.funding()), residuals, limits, Some((geometry, visited)))
+	}
+
+	fn prove_inner(
+		snapshot: BackingSnapshot, coins: Vec<ReadyCoin>, funding: &[Transaction],
+		residuals: &[BackingPartitionResidual], limits: BackingSnapshotLimits,
+		geometry: Option<(&BackingGeometry, &[usize])>,
+	) -> anyhow::Result<Self> {
 		ensure!(snapshot.roots.len() == 1, "readiness is isolated per backing output");
 		ensure!(snapshot.regular.iter().all(|fact| fact.onchain_spent_height.is_none() && fact.onchain_spent_txid.is_none()),
 			"ready backing contains a spent or reorg-lagged source; rebuild before allocation");
 		let mut terminals = Vec::with_capacity(coins.len());
+		let mut terminal_indices = Vec::with_capacity(coins.len());
 		let mut versions = snapshot.regular.iter().map(|fact|
 			(fact.state.vtxo_id, fact.state.updated_at, fact.state.spend_state)
 		).collect::<Vec<_>>();
@@ -157,14 +178,18 @@ impl ReadyOutput {
 				(OwnershipDisposition::Operator, None) => {},
 				_ => bail!("ready ownership lacks a verified customer payee or has an invalid operator payee"),
 			}
-			let fact = snapshot.regular.iter().find(|f| f.state.vtxo_id == coin.ownership.id)
+			let (index, fact) = snapshot.regular.iter().enumerate().find(|(_, f)| f.state.vtxo_id == coin.ownership.id)
 				.context("ready coin is absent from source inventory")?;
 			ensure!(coin.ownership.gross == fact.state.vtxo.amount()
 				&& coin.ownership.updated_at == fact.state.updated_at && coin.ownership.spend_state == fact.state.spend_state,
 				"ready coin differs from its source row");
 			terminals.push(fact.full_vtxo.clone().context("ready coin lacks its actual genesis")?);
+			if let Some((_, indices)) = geometry { terminal_indices.push(indices[index]); }
 		}
-		snapshot.check_partition(&terminals, funding, residuals, limits)?;
+		match geometry {
+			Some((geometry, _)) => geometry.check_partition(&snapshot.roots, &terminal_indices, residuals, limits),
+			None => snapshot.check_partition(&terminals, funding, residuals, limits),
+		}?;
 		let root = snapshot.roots[0].clone();
 		ensure!(snapshot.regular.iter().any(|f| f.state.vtxo_id == root.id()),
 			"readiness inventory omits its physical backing root");

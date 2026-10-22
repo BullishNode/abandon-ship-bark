@@ -19,10 +19,10 @@ use crate::database::expiry_attribution::Attribution;
 use crate::database::expiry_chain::ExpiryViewToken;
 use crate::database::expiry_decision::{CommittedExpiryVersions, ReadyCoin, ReadyOutput, VerifiedPayee};
 use crate::database::expiry_inventory::{
-	BackingSnapshot, BackingSnapshotLimits, BackingVtxoFact,
+	BackingSnapshotLimits, BackingVtxoFact,
 };
 use crate::database::expiry_ownership::OwnershipDisposition;
-use crate::database::expiry_geometry::{economic_cut, source_transitions};
+use crate::database::expiry_geometry::BackingGeometry;
 
 const ROOTS_PER_PASS: i64 = 64;
 pub(crate) const INVENTORY_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits {
@@ -202,13 +202,15 @@ impl Server {
 		ensure!(funding.compute_txid() == anchor.txid, "expiry funding transaction differs from its anchor");
 		// Path validation can traverse a large signed tree. Keep it outside
 		// both database transactions and the async executor's worker threads.
-		let (snapshot, funding, transitions, source_cut) = tokio::task::spawn_blocking(move || {
-			let transitions = source_transitions(&snapshot, &funding)?;
-			let source = snapshot.regular.iter().find(|fact| fact.state.vtxo.point() == anchor)
+		let (geometry, source_cut) = tokio::task::spawn_blocking(move || {
+			let geometry = Arc::new(BackingGeometry::new(snapshot, funding, INVENTORY_LIMITS)?);
+			let source = geometry.snapshot().regular.iter().find(|fact| fact.state.vtxo.point() == anchor)
 				.context("expiry source cohort lacks its original backing anchor")?;
-			let source_cut = economic_cut(&snapshot, &source.state.vtxo, &funding, &transitions, INVENTORY_LIMITS)?;
-			Ok::<_, anyhow::Error>((snapshot, funding, transitions, source_cut))
+			let source_cut = geometry.economic_cut(&source.state.vtxo, INVENTORY_LIMITS)?;
+			Ok::<_, anyhow::Error>((geometry, source_cut))
 		}).await.context("expiry source validation task failed")??;
+		let snapshot = geometry.snapshot();
+		let funding = geometry.funding();
 		debug!(%anchor, roots = roots.len(), rows = snapshot.regular.len(),
 			terminals = source_cut.terminals.len(), elapsed_secs = started.elapsed().as_secs_f64(),
 			"Expiry source geometry prepared");
@@ -273,8 +275,6 @@ impl Server {
 		}
 		debug!(%anchor, terminals = prepared.len(), owner_groups = owners.len(), complete,
 			elapsed_secs = owner_preparation.elapsed().as_secs_f64(), "Expiry source owners prepared");
-		let snapshot = Arc::new(snapshot);
-		let transitions = Arc::new(transitions);
 		for root in roots {
 			let result = async {
 				ensure!(root.server_pubkey() == self.server_pubkey, "expiry backing belongs to a different server key");
@@ -296,15 +296,12 @@ impl Server {
 					&& output.script_pub_key.script()? == root.txout().script_pubkey,
 					"expiry physical backing differs from the confirmed output");
 				let cut = {
-					let snapshot = Arc::clone(&snapshot);
-					let transitions = Arc::clone(&transitions);
-					let funding = funding.clone();
+					let geometry = Arc::clone(&geometry);
 					let root = root.clone();
 					// Building the current economic cut also traverses the complete
 					// inventory. It must not starve unrelated async RPC work.
-					tokio::task::spawn_blocking(move || economic_cut(
-						&snapshot, &root, &funding, &transitions, INVENTORY_LIMITS,
-					)).await.context("expiry economic cut task failed")??
+					tokio::task::spawn_blocking(move || geometry.economic_cut(&root, INVENTORY_LIMITS))
+						.await.context("expiry economic cut task failed")??
 				};
 				let mut coins = Vec::with_capacity(cut.terminals.len());
 				let mut hold = false;
@@ -350,14 +347,11 @@ impl Server {
 				})?;
 				let next_bytes = prepared_bytes.checked_add(bytes).context("expiry pass byte count overflow")?;
 				ensure!(next_bytes <= INVENTORY_LIMITS.max_serialized_bytes, "expiry readiness pass byte budget reached");
-				let selected = BackingSnapshot {
-					roots: vec![root.clone()],
-					regular: cut.visited.iter().map(|i| snapshot.regular[*i].clone()).collect(),
-					serialized_bytes: bytes,
-				};
-				let output = ReadyOutput::prove(
-					selected, coins, std::slice::from_ref(&funding), &cut.residuals, INVENTORY_LIMITS
-				)?;
+				let geometry = Arc::clone(&geometry);
+				let proof_root = root.clone();
+				let output = tokio::task::spawn_blocking(move || ReadyOutput::prove_with_geometry(
+					&geometry, proof_root, &cut.visited, bytes, coins, &cut.residuals, INVENTORY_LIMITS,
+				)).await.context("expiry ready output proof task failed")??;
 				*prepared_bytes = next_bytes;
 				outputs.push(output);
 				Ok::<_, anyhow::Error>(())

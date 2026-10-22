@@ -14,6 +14,7 @@ use ark::{ProtocolDecodingError, ProtocolEncoding, ServerVtxo, ServerVtxoPolicy,
 use ark::vtxo::{Bare, Full, VtxoValidationError};
 
 use super::{Tx, VtxoState};
+use super::expiry_geometry::{BackingGeometry, BackingPath};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BackingSnapshotLimits {
@@ -88,15 +89,19 @@ impl BackingSnapshot {
 	pub fn path_root(
 		&self, source: &ServerVtxo<Full>, funding: &Transaction,
 	) -> anyhow::Result<Option<VtxoId>> {
-		ensure!(funding.compute_txid() == source.chain_anchor().txid,
-			"backing path funding transaction differs from its anchor");
-		source.validate_unsigned(funding).context("invalid backing source path")?;
+		let path = BackingPath::uncached(source, funding)?;
+		self.path_root_from_geometry(source, funding, &path)
+	}
+
+	fn path_root_from_geometry(
+		&self, source: &ServerVtxo<Full>, funding: &Transaction, geometry: &BackingPath<'_>,
+	) -> anyhow::Result<Option<VtxoId>> {
 		let path = std::iter::once((source.chain_anchor(),
 			funding.output.get(source.chain_anchor().vout as usize)
 				.context("backing anchor output is missing")?.clone()))
-			.chain(source.transactions().map(|item| (
-				OutPoint::new(item.tx.compute_txid(), item.output_idx as u32),
-				item.tx.output[item.output_idx].clone(),
+			.chain(geometry.iter().map(|(tx, output)| (
+				OutPoint::new(tx.compute_txid(), output as u32),
+				tx.output[output].clone(),
 			))).collect::<Vec<_>>();
 		let mut matched = None;
 		for root in &self.roots {
@@ -127,6 +132,17 @@ impl BackingSnapshot {
 		funding: &[Transaction],
 		residuals: &[BackingPartitionResidual],
 		limits: BackingSnapshotLimits,
+	) -> anyhow::Result<BackingPartition> {
+		self.check_partition_inner(&terminals.iter().collect::<Vec<_>>(), funding, residuals, limits, None)
+	}
+
+	pub(super) fn check_partition_inner(
+		&self,
+		terminals: &[&ServerVtxo<Full>],
+		funding: &[Transaction],
+		residuals: &[BackingPartitionResidual],
+		limits: BackingSnapshotLimits,
+		geometry: Option<(&BackingGeometry, &[usize])>,
 	) -> anyhow::Result<BackingPartition> {
 		ensure!(!self.roots.is_empty() && !terminals.is_empty(), "backing partition requires roots and terminals");
 		ensure!(limits.max_rows > 0 && limits.max_serialized_bytes > 0, "backing partition budgets must be positive");
@@ -160,18 +176,22 @@ impl BackingSnapshot {
 		ensure!(residuals.iter().all(|r| r.txout.is_p2a_fee_anchor()), "backing partition residual must be an exact P2A anchor");
 		let mut used_funding = BTreeSet::new();
 		let mut transitions = BTreeMap::<OutPoint, (TxOut, Transaction)>::new();
-		for source in terminals {
+		for (index, source) in terminals.iter().enumerate() {
 			let anchor = anchors.get(&source.chain_anchor().txid).context("backing partition funding is missing")?;
-			let root_id = self.path_root(source, anchor)?.context("backing partition terminal is outside supplied roots")?;
+			let path = match geometry {
+				Some((geometry, indices)) => geometry.path(indices[index])?,
+				None => BackingPath::uncached(source, anchor)?,
+			};
+			let root_id = self.path_root_from_geometry(source, anchor, &path)?.context("backing partition terminal is outside supplied roots")?;
 			let root = self.roots.iter().find(|r| r.id() == root_id).context("backing partition root is missing")?;
 			used_funding.insert(source.chain_anchor().txid);
 			let mut point = source.chain_anchor();
 			let mut output = anchor.output[point.vout as usize].clone();
 			let mut inside = false;
-			for item in source.transactions() {
+			for (transaction, output_idx) in path.iter() {
 				inside |= point == root.point();
 				if inside {
-					let mut tx = item.tx.clone();
+					let mut tx = transaction.as_ref().clone();
 					// Witnesses do not determine partition geometry. They require
 					// separate authorization and signature validation by the caller.
 					for input in &mut tx.input { input.witness.clear(); }
@@ -181,8 +201,8 @@ impl BackingSnapshot {
 						transitions.insert(point, (output.clone(), tx));
 					}
 				}
-				point = OutPoint::new(item.tx.compute_txid(), u32::try_from(item.output_idx)?);
-				output = item.tx.output[item.output_idx].clone();
+				point = OutPoint::new(transaction.compute_txid(), u32::try_from(output_idx)?);
+				output = transaction.output[output_idx].clone();
 			}
 		}
 		ensure!(used_funding.len() == anchors.len(), "backing partition has extra funding transactions");

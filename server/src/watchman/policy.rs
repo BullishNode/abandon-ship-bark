@@ -88,7 +88,6 @@ struct HtlcRecvExtra {
 	next_tx: Option<ProgressSpec>,
 	htlc_expiry: BlockHeight,
 	htlc_expiry_delta: BlockDelta,
-	funded_timeout: Option<bool>,
 }
 
 /// Check if we can continue to the next tx in the chain from these params
@@ -223,13 +222,7 @@ fn decide_action_server_htlc_recv(params: &ActionParams<HtlcRecvExtra>) -> Actio
 
 	let claim_height = std::cmp::max(params.policy_extras.htlc_expiry, confirmed_plus_exit);
 	if params.chain_tip_height >= claim_height {
-		// Uncollected grants use the funded expiry payout, including leaves
-		// too small to pay a claim fee and leave a standard output.
-		return match params.policy_extras.funded_timeout {
-			Some(true) => Action::Sweep,
-			Some(false) => Action::Claim { deadline },
-			None => Action::Wait,
-		};
+		return Action::Claim { deadline };
 	}
 
 	Action::Wait
@@ -299,7 +292,6 @@ impl ActionContextFetcher<'_> {
 					next_tx: self.fetch_progress(vtxo).await,
 					htlc_expiry: p.htlc_expiry,
 					htlc_expiry_delta: p.htlc_expiry_delta,
-					funded_timeout: self.funded_receive_timeout(vtxo.id(), p.payment_hash).await,
 				});
 				decide_action_server_htlc_recv(&params)
 			},
@@ -308,7 +300,6 @@ impl ActionContextFetcher<'_> {
 					next_tx: self.fetch_progress(vtxo).await,
 					htlc_expiry: p.htlc_expiry,
 					htlc_expiry_delta: p.htlc_expiry_delta,
-					funded_timeout: self.funded_receive_timeout(vtxo.id(), p.payment_hash).await,
 				});
 				decide_action_server_htlc_recv(&params)
 			},
@@ -422,17 +413,6 @@ impl ActionContextFetcher<'_> {
 			next_txid: oor_txid,
 			is_signed: vtx.signed_tx.is_some(),
 		})
-	}
-
-	async fn funded_receive_timeout(&self, id: VtxoId, hash: PaymentHash) -> Option<bool> {
-		self.db.read(async |t| Ok(t.query_one(
-			"SELECT EXISTS (
-				SELECT 1 FROM vtxo v JOIN htlc_vtxo h ON h.id = v.id
-				WHERE v.vtxo_id = $1 AND h.direction = 'outgoing' AND h.payment_hash = $2
-				AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL
-				AND NOT EXISTS (SELECT 1 FROM htlc_settlement s WHERE s.payment_hash = h.payment_hash)
-			) AS uncollected", &[&id.to_string(), &hash.to_string()]).await?.get::<_, bool>("uncollected")))
-			.await.inspect_err(|e| error!("DB error: {:#}", e)).ok()
 	}
 
 	async fn check_have_payment_preimage(&self, payment_hash: PaymentHash) -> bool {
@@ -851,7 +831,6 @@ mod tests {
 				next_tx: Some(ProgressSpec { next_txid: txid, is_signed: true }),
 				htlc_expiry: BlockHeight::new(500),
 				htlc_expiry_delta: BlockDelta::new(40),
-				funded_timeout: Some(false),
 			},
 		};
 		assert_eq!(decide_action_server_htlc_recv(&params), Action::Wait);
@@ -873,7 +852,6 @@ mod tests {
 				next_tx: Some(ProgressSpec { next_txid: txid, is_signed: true }),
 				htlc_expiry: BlockHeight::new(500),
 				htlc_expiry_delta: BlockDelta::new(40),
-				funded_timeout: Some(false),
 			},
 		};
 		// deadline = confirmed_at + htlc_expiry_delta + exit_delta = 100 + 40 + 144 = 284
@@ -898,7 +876,6 @@ mod tests {
 				next_tx: None,
 				htlc_expiry: BlockHeight::new(500),
 				htlc_expiry_delta: BlockDelta::new(40),
-				funded_timeout: Some(false),
 			},
 		};
 		// claim_height = max(500, 100 + 144) = max(500, 244) = 500
@@ -920,40 +897,11 @@ mod tests {
 				next_tx: None,
 				htlc_expiry: BlockHeight::new(500),
 				htlc_expiry_delta: BlockDelta::new(40),
-				funded_timeout: Some(false),
 			},
 		};
 		// claim_height = max(500, 244) = 500, chain_tip >= claim_height
 		// deadline = 100 + 40 + 144 = 284
 		assert_eq!(decide_action_server_htlc_recv(&params), Action::Claim { deadline: BlockHeight::new(284) });
-	}
-
-	#[test]
-	fn uncollected_recv_uses_funded_sweep_after_timeout() {
-		let mut params = ActionParams {
-			vtxo_id: test_vtxo_id(),
-			chain_tip_height: BlockHeight::new(499),
-			progress_grace_period: Some(BlockDelta::new(6)),
-			expiry_height: BlockHeight::new(1000),
-			exit_delta: BlockDelta::new(144),
-			confirmed_at: BlockHeight::new(100),
-			policy_extras: HtlcRecvExtra {
-				next_tx: None,
-				htlc_expiry: BlockHeight::new(500),
-				htlc_expiry_delta: BlockDelta::new(40),
-				funded_timeout: Some(true),
-			},
-		};
-		assert_eq!(decide_action_server_htlc_recv(&params), Action::Wait);
-		params.chain_tip_height = BlockHeight::new(500);
-		assert_eq!(decide_action_server_htlc_recv(&params), Action::Sweep);
-		params.policy_extras.funded_timeout = None;
-		assert_eq!(decide_action_server_htlc_recv(&params), Action::Wait);
-		params.policy_extras.funded_timeout = Some(true);
-		let txid = Txid::from_byte_array([2; 32]);
-		params.policy_extras.next_tx = Some(ProgressSpec { next_txid: txid, is_signed: true });
-		assert_eq!(decide_action_server_htlc_recv(&params),
-			Action::Progress { txid, deadline: BlockHeight::new(284) });
 	}
 
 	fn p2tr_spk() -> bitcoin::ScriptBuf {

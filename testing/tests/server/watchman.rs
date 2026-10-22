@@ -10,15 +10,18 @@ use log::{error, warn};
 use parking_lot::Mutex;
 use bitcoincore_rpc::RpcApi;
 
+use ark::{ProtocolEncoding, Vtxo, SECP};
 use ark::fees::{BoardFees, PpmFeeRate};
 use ark::lightning::PaymentHash;
+use ark::vtxo::Full;
 use bark::exit::ExitState;
 use bark_json::primitives::VtxoStateInfo;
 use bitcoin::{Amount, Network, OutPoint, Transaction};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
+use bitcoin::secp256k1::Keypair;
 use bitcoin_ext::rpc::BitcoinRpcExt;
-use bitcoin_ext::{BlockDelta, TxOutExt, TxStatus};
+use bitcoin_ext::{BlockDelta, BlockHeight, TxOutExt, TxStatus};
 use server::database::Db;
 use server::vtxopool::VtxoTarget;
 use server_rpc::protos;
@@ -4246,6 +4249,120 @@ async fn offboard_exit_attack(test_name: &str, n_vtxos: usize) -> bitcoin::Amoun
 	println!("{}: attacker double-spent {} on top of the {} offboard payout",
 		test_name, stolen, payout_received);
 	stolen
+}
+
+/// A receiver withholds its preimage until the Lightning payment fails, then
+/// publishes its grant. The server must claim before the receiver can spend it.
+#[tokio::test]
+async fn watchman_claims_expired_receive_grant_before_receiver() {
+	let ctx = TestContext::new("server/watchman_claims_expired_receive_grant_before_receiver").await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal)
+		.funded(btc(10)).watchmand().create().await;
+	let wm = srv.watchmand();
+	let mut claims = wm.subscribe_log::<ClaimBroadcast>();
+	srv.wait_for_vtxopool(&ctx).await;
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+
+	// Request a grant without ever sending the preimage to the server.
+	let preimage = ark::lightning::Preimage::random();
+	let hash = preimage.compute_payment_hash();
+	let receiver_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	let mut rpc = srv.get_public_rpc().await;
+	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 18,
+		mailbox_id: None, description: None,
+	}).await.unwrap().into_inner().bolt11;
+	let payer = Arc::new(lightning.external);
+	let pay_task = {
+		let payer = Arc::clone(&payer);
+		tokio::spawn(async move { payer.try_pay_bolt11(invoice).await })
+	};
+	srv.wait_for_lightning_receive_accepted(hash).await;
+	let subscription = db.read(async |tx| tx.get_htlc_subscription_by_payment_hash(hash).await)
+		.await.unwrap().unwrap();
+	let expiry = subscription.lowest_incoming_htlc_expiry.unwrap()
+		.saturating_sub(srv.config().htlc_expiry_delta);
+	let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		payment_hash: hash.to_vec(), user_pubkey: receiver_key.public_key().serialize().to_vec(),
+		htlc_recv_expiry: expiry.into(), lightning_receive_anti_dos: None,
+	}).await.unwrap().into_inner().htlc_vtxos.into_iter()
+		.map(|bytes| Vtxo::<Full>::deserialize(&bytes).unwrap()).collect::<Vec<_>>();
+	assert_eq!(grants.len(), 1);
+	let grant = &grants[0];
+	let policy = grant.policy().as_server_htlc_recv().unwrap();
+	assert_eq!(policy.payment_hash, hash);
+	assert_eq!(policy.htlc_expiry, expiry);
+	assert_eq!(grant.amount(), sat(100_000));
+	let funding = ctx.bitcoind().await_transaction(grant.chain_anchor().txid).await;
+	grant.validate(&funding).unwrap();
+	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await)
+		.await.unwrap().is_none());
+
+	let height = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	let tip = ctx.generate_blocks(expiry.checked_blocks_since(height).unwrap() + 1).await;
+	srv.wait_for_sync_height(tip).await;
+	assert!(pay_task.wait_millis(30_000).await.unwrap().is_err(), "the payer must be refunded");
+	async {
+		loop {
+			let pays = payer.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
+				bolt11: None, payment_hash: Some(hash.to_vec()), status: None,
+				index: None, limit: None, start: None,
+			}).await.unwrap().into_inner().pays;
+			assert!(pays.iter().all(|pay| pay.payment_hash == hash.to_vec()
+				&& pay.preimage.is_none()
+				&& pay.status() != cln_rpc::listpays_pays::ListpaysPaysStatus::Complete));
+			if !pays.is_empty() && pays.iter().all(|pay|
+				pay.status() == cln_rpc::listpays_pays::ListpaysPaysStatus::Failed) { break; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}.wait_millis(30_000).await;
+	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await)
+		.await.unwrap().is_none());
+
+	// The receiver now publishes the grant it retained after the refund.
+	for step in grant.transactions() {
+		ctx.broadcast_cpfp(&step.tx).await;
+		ctx.generate_blocks(1).await;
+	}
+	let core = ctx.bitcoind().sync_client();
+	let point = grant.point();
+	let output = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+	assert_eq!(output.value, grant.amount());
+	assert_eq!(output.script_pub_key.script().unwrap(), grant.txout().script_pubkey);
+	let info = core.custom_get_raw_transaction_info(point.txid, None).unwrap().unwrap();
+	let blockhash = info.blockhash.unwrap();
+	let confirmed_at = BlockHeight::new(core.get_block_header_info(&blockhash).unwrap().height as u32);
+	assert_eq!(core.get_block_hash(u64::from(confirmed_at.to_u32())).unwrap(), blockhash);
+	let claim_height = confirmed_at + grant.exit_delta();
+	let receiver_height = claim_height + policy.htlc_expiry_delta;
+	assert!(receiver_height < grant.expiry_height(), "the default pool must outlive the claim window");
+	let height = BlockHeight::new(core.get_block_count().unwrap() as u32);
+	let tip = ctx.generate_blocks(claim_height.checked_blocks_since(height).unwrap()).await;
+	wm.wait_for_sync_height(tip).await;
+	wm.trigger_sweep().await;
+	let claim = claims.recv().wait_millis(15_000).await.expect("the watchman must claim the grant");
+	assert_eq!(claim.vtxo_ids, vec![grant.id()]);
+	assert_eq!(claim.total_input_value, grant.amount());
+	let tx = core.get_raw_transaction(&claim.txid, None).unwrap();
+	assert_eq!(tx.input.len(), 1);
+	assert_eq!(tx.input[0].previous_output, point);
+	let server_script = wm.config().sweep_address.clone().unwrap().require_network(Network::Regtest)
+		.unwrap().script_pubkey();
+	assert_eq!(tx.output.len(), 1);
+	assert_eq!(tx.output[0].script_pubkey, server_script);
+	assert!(claim.fee > Amount::ZERO);
+	assert_eq!(tx.output[0].value + claim.fee, grant.amount());
+
+	ctx.generate_blocks(1).await;
+	let info = core.custom_get_raw_transaction_info(claim.txid, None).unwrap().unwrap();
+	assert!(info.confirmations.unwrap_or(0) >= 1);
+	let blockhash = info.blockhash.unwrap();
+	let claim_confirmed_at = core.get_block_header_info(&blockhash).unwrap().height as u32;
+	assert_eq!(core.get_block_hash(u64::from(claim_confirmed_at)).unwrap(), blockhash);
+	assert!(claim_confirmed_at < receiver_height.to_u32(), "the server claim must confirm before the preimage path");
+	assert!(core.get_block(&blockhash).unwrap().txdata.iter().any(|actual| actual == &tx));
+	assert!(core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_none());
 }
 
 /// The vtxopool funds each lightning receive from the change of the previous one, so all the

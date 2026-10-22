@@ -647,6 +647,12 @@ impl Watchman {
 	async fn claim_inputs(
 		&self, vtxos: &[ServerVtxo],
 	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount, usize)> {
+		self.claim_inputs_with_signer(vtxos, &self.signer).await
+	}
+
+	async fn claim_inputs_with_signer(
+		&self, vtxos: &[ServerVtxo], signer: &(impl VtxoSigner<ServerVtxoPolicy> + Sync),
+	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount, usize)> {
 		let mut inputs = Vec::with_capacity(vtxos.len());
 		let mut clauses = Vec::with_capacity(vtxos.len());
 		let mut total_input_weight = 0;
@@ -669,7 +675,7 @@ impl Watchman {
 				inputs.push(input);
 				clauses.push(None);
 			} else {
-				let clause = self.signer.find_signable_clause(vtxo).await
+				let clause = signer.find_signable_clause(vtxo).await
 					.context(vtxo.id())
 					.context("no signable clause for vtxo")?;
 
@@ -743,7 +749,14 @@ impl Watchman {
 		self.sign_claim_inputs(vtxos, &clauses, tx).await
 	}
 	async fn sign_claim_inputs(
+		&self, vtxos: &[ServerVtxo], clauses: &[Option<VtxoClause>], tx: Transaction,
+	) -> anyhow::Result<Transaction> {
+		self.sign_claim_inputs_with_signer(vtxos, clauses, tx, &self.signer).await
+	}
+
+	async fn sign_claim_inputs_with_signer(
 		&self, vtxos: &[ServerVtxo], clauses: &[Option<VtxoClause>], mut tx: Transaction,
+		signer: &(impl VtxoSigner<ServerVtxoPolicy> + Sync),
 	) -> anyhow::Result<Transaction> {
 		// Sign all inputs
 		let prevouts = vtxos.iter().map(|vtxo| vtxo.txout()).collect::<Vec<_>>();
@@ -752,7 +765,7 @@ impl Watchman {
 		let mut sighash_cache = sighash::SighashCache::new(&mut tx);
 		for (input_idx, (vtxo, clause)) in vtxos.iter().zip(clauses).enumerate() {
 			if let Some(clause) = clause {
-				let witness = self.signer.sign_input_with_clause(
+				let witness = signer.sign_input_with_clause(
 					vtxo, clause, input_idx, &mut sighash_cache, &prevouts,
 				).await.with_context(|| format!(
 					"failed to sign script-spend input {} of tx {}",
@@ -761,7 +774,7 @@ impl Watchman {
 				*sighash_cache.witness_mut(input_idx).unwrap() = witness;
 			} else {
 				// keyspend
-				let witness = self.signer.sign_input_with_keyspend(
+				let witness = signer.sign_input_with_keyspend(
 					vtxo, input_idx, &mut sighash_cache, &prevouts,
 				).await.with_context(|| format!(
 					"failed to sign key-spend input {} of tx {}",

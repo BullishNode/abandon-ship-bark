@@ -95,6 +95,44 @@ pub struct PendingExpiryPayout {
 }
 
 impl Tx<'_> {
+	/// Keep the allocation locked from the last ownership check through first
+	/// signing and parent storage. Legacy padding facts were only a public tuple,
+	/// not proof that the operator paid for the leaf. Retain that unsigned plan
+	/// and all its fences until economic evidence can resolve it. A parent that
+	/// was already signed remains an immutable obligation, including after reorg.
+	pub async fn lock_expiry_parent_for_signing(
+		&self, view: ExpiryViewToken, id: i64,
+	) -> anyhow::Result<Option<Transaction>> {
+		self.lock_valid_expiry_view(view).await?;
+		let row = self.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1 FOR UPDATE", &[&id]).await?;
+		ensure!(row.get::<_, &str>("status") == "pending", "expiry allocation is no longer pending");
+		if let Some(raw) = row.get::<_, Option<&[u8]>>("sweep_tx") {
+			return Ok(Some(deserialize(raw)?));
+		}
+		self.check_unsigned_expiry_ownership(id).await?;
+		Ok(None)
+	}
+
+	/// The caller holds the allocation lock and has checked that no signed
+	/// parent exists. Do not remove the plan or its spend fences on refusal.
+	async fn check_unsigned_expiry_ownership(&self, id: i64) -> anyhow::Result<()> {
+		let unsupported = self.query_opt("
+			SELECT e.vtxo_id
+			FROM expiry_allocation_coin c
+			JOIN expiry_entitlement e ON e.id=c.entitlement_id
+			WHERE c.allocation_id=$1
+			AND (c.evidence->>'kind'='padding'
+				OR (c.evidence->>'kind'='irreversible_entitlement'
+					AND e.irreversible_facts->>'kind'='padding'))
+			ORDER BY e.vtxo_id LIMIT 1
+		", &[&id]).await?;
+		if let Some(row) = unsupported {
+			bail!("unsigned expiry allocation held: legacy padding lacks economic ownership evidence for {}",
+				row.get::<_, &str>("vtxo_id"));
+		}
+		Ok(())
+	}
+
 	/// A group is processed as a whole. Individual-input retries would lose its
 	/// cross-tree output aggregation and could charge the output fee twice.
 	pub async fn pending_expiry_payouts(&self) -> anyhow::Result<Vec<PendingExpiryPayout>> {
@@ -140,6 +178,7 @@ impl Tx<'_> {
 			ensure!(old == raw.as_slice(), "attempt to replace immutable expiry parent");
 			return Ok(());
 		}
+		self.check_unsigned_expiry_ownership(id).await?;
 		let inputs = self.query("
 			SELECT v.vtxo_id,v.amount
 			FROM expiry_allocation_input i JOIN vtxo v ON v.vtxo_id=i.vtxo_id

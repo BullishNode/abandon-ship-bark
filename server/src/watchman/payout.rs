@@ -15,6 +15,7 @@ use tracing::warn;
 use crate::bitcoind as bcd;
 use crate::bitcoind::BitcoindErrorExt;
 use crate::database::expiry_chain::ExpiryViewToken;
+use crate::database::Tx;
 use crate::database::expiry_payout::{MAX_PAYOUT_VSIZE, PendingExpiryPayout};
 use crate::wallet::BdkWalletExt;
 
@@ -47,6 +48,7 @@ impl Watchman {
 	/// committed group through process_claims, which retries individual inputs.
 	pub(crate) async fn build_expiry_payout(
 		&self,
+		transaction: &Tx<'_>,
 		vtxos: &[ServerVtxo],
 		payouts: &[TxOut],
 	) -> anyhow::Result<Transaction> {
@@ -61,7 +63,8 @@ impl Watchman {
 				"expiry payout backing is not the exact confirmed output");
 		}
 		ensure!(payouts.iter().all(|out| out.is_standard()), "expiry payout contains nonstandard or dust payee output");
-		let (inputs, clauses, input_amount, _) = self.claim_inputs(vtxos).await?;
+		let signer = self.signer.with_tx(transaction);
+		let (inputs, clauses, input_amount, _) = self.claim_inputs_with_signer(vtxos, &signer).await?;
 		let paid = payouts.iter().try_fold(Amount::ZERO, |sum, out|
 			sum.checked_add(out.value).context("expiry payout amount overflow"),
 		)?;
@@ -80,7 +83,7 @@ impl Watchman {
 			version: bitcoin::transaction::Version::non_standard(3),
 			lock_time, input: inputs, output: outputs,
 		};
-		let tx = self.sign_claim_inputs(vtxos, &clauses, tx).await?;
+		let tx = self.sign_claim_inputs_with_signer(vtxos, &clauses, tx, &signer).await?;
 		ensure!(tx.vsize() <= MAX_PAYOUT_VSIZE, "expiry payout requires splitting: {} vbytes", tx.vsize());
 		let outputs = tx.output.iter().try_fold(Amount::ZERO, |sum, out|
 			sum.checked_add(out.value).context("expiry payout output overflow"),
@@ -103,11 +106,17 @@ impl Watchman {
 	}
 
 	async fn process_expiry_payout(&self, view: ExpiryViewToken, group: PendingExpiryPayout) -> anyhow::Result<()> {
-		let parent = match group.parent {
-			Some(parent) => parent,
-			None => self.build_expiry_payout(&group.inputs, &group.payouts).await?,
-		};
-		self.db.write(async |t| t.store_expiry_parent(view, group.id, &parent).await).await?;
+		// The pending list is only a snapshot. Recheck the authoritative plan
+		// before creating any new signature, holding the allocation and completed
+		// view locks until its exact signed bytes are durable.
+		let parent = self.db.write(async |t| {
+			let parent = match t.lock_expiry_parent_for_signing(view, group.id).await? {
+				Some(parent) => parent,
+				None => self.build_expiry_payout(t, &group.inputs, &group.payouts).await?,
+			};
+			t.store_expiry_parent(view, group.id, &parent).await?;
+			Ok(parent)
+		}).await?;
 		let mut wallet = self.watchman_wallet.lock().await;
 		let target = self.fee_estimator.regular();
 		let (anchor, _) = parent.fee_anchor().context("expiry parent has no fee anchor")?;

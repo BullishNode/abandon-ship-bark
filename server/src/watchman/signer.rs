@@ -14,7 +14,7 @@ use ark::VtxoId;
 use ark::lightning::PaymentHash;
 use bitcoin_ext::KeypairExt;
 
-use crate::database::Db;
+use crate::database::{Db, Tx};
 use crate::database::expiry_lightning::LightningSourceState;
 use crate::database::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use crate::secret::Secret;
@@ -45,6 +45,29 @@ impl WatchmanSigner {
 		Self { server_keypair, ephemeral_master_key, db }
 	}
 
+	/// Use the allocation transaction for first payout signing. This avoids a
+	/// second pool connection while its allocation and chain-view locks are held.
+	pub(super) fn with_tx<'a, 't>(&'a self, tx: &'a Tx<'t>) -> SigningContext<'a, 't> {
+		SigningContext { signer: self, transaction: Some(tx) }
+	}
+}
+
+pub(super) struct SigningContext<'a, 't> {
+	signer: &'a WatchmanSigner,
+	transaction: Option<&'a Tx<'t>>,
+}
+
+impl SigningContext<'_, '_> {
+	async fn read<R, F>(&self, f: F) -> anyhow::Result<R>
+	where
+		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
+	{
+		match self.transaction {
+			Some(tx) => f(tx).await,
+			None => self.signer.db.read(f).await,
+		}
+	}
+
 	/// Get the preimage for a hash-locked clause from the database.
 	///
 	/// The same secret can exist in `htlc_settlement` (a settled LN payment)
@@ -58,7 +81,7 @@ impl WatchmanSigner {
 			VtxoClause::HashSign(HashSignClause { hash, ..})
 				| VtxoClause::HashSign_v0(HashSignClause_v0 { hash, ..}) =>
 			{
-				let hark = self.db.read(async |t| {
+				let hark = self.read(async |t| {
 					if t.query_opt("
 						SELECT participation_id FROM expiry_cancelled_participation
 						WHERE unlock_hash=$1
@@ -74,7 +97,7 @@ impl WatchmanSigner {
 			VtxoClause::HashDelaySign(HashDelaySignClause { hash, .. })
 				| VtxoClause::HashDelaySign_v0(HashDelaySignClause_v0 { hash, .. }) =>
 			{
-				let settlement = self.db.read(async |t|
+				let settlement = self.read(async |t|
 					t.get_htlc_settlement_by_payment_hash((*hash).into()).await
 				).await.ok()??;
 				self.log_if_duplicate_hash(*hash, false).await;
@@ -89,10 +112,10 @@ impl WatchmanSigner {
 	/// visibility only.
 	async fn log_if_duplicate_hash(&self, hash: sha256::Hash, in_hark: bool) {
 		let duplicate = if in_hark {
-			self.db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash.into()).await).await
+			self.read(async |t| t.get_htlc_settlement_by_payment_hash(hash.into()).await).await
 				.ok().flatten().is_some()
 		} else {
-			self.db.read(async |t| t.get_round_participation_by_unlock_hash(hash).await).await
+			self.read(async |t| t.get_round_participation_by_unlock_hash(hash).await).await
 				.ok().flatten().is_some()
 		};
 		if duplicate {
@@ -101,7 +124,7 @@ impl WatchmanSigner {
 	}
 
 	async fn source_was_discharged(&self, id: VtxoId, hash: PaymentHash) -> bool {
-		self.db.read(async |t| {
+		self.read(async |t| {
 			let Some(htlc) = htlc_vtxo::get_htlc_vtxo(t, id).await? else {
 				return Ok(false);
 			};
@@ -118,15 +141,15 @@ impl WatchmanSigner {
 }
 
 #[async_trait::async_trait]
-impl VtxoSigner<ServerVtxoPolicy> for WatchmanSigner {
+impl VtxoSigner<ServerVtxoPolicy> for SigningContext<'_, '_> {
 	async fn can_sign<G: Sync + Send>(
 		&self, clause: &VtxoClause, vtxo: &Vtxo<G, ServerVtxoPolicy>,
 	) -> bool {
 		// first check for the key to sign
-		let have_key = if clause.pubkey() == self.server_keypair.leak_ref().public_key() {
+		let have_key = if clause.pubkey() == self.signer.server_keypair.leak_ref().public_key() {
 			true
 		} else {
-			self.db.read(async |t| t.fetch_ephemeral_tweak(clause.pubkey()).await).await
+			self.read(async |t| t.fetch_ephemeral_tweak(clause.pubkey()).await).await
 				.ok().flatten().is_some()
 		};
 		if !have_key {
@@ -154,14 +177,14 @@ impl VtxoSigner<ServerVtxoPolicy> for WatchmanSigner {
 		sighash: TapSighash,
 	) -> Option<schnorr::Signature> {
 		let taproot = vtxo.output_taproot();
-		let server_pubkey = self.server_keypair.leak_ref().public_key();
+		let server_pubkey = self.signer.server_keypair.leak_ref().public_key();
 		if taproot.internal_key() != server_pubkey.x_only_public_key().0 {
 			error!("Watchman asked to sign VTXO {} which has internal key {} but our key is {}",
 				vtxo.id(), taproot.internal_key(), server_pubkey,
 			);
 			return None;
 		}
-		let key = self.server_keypair.leak_ref().for_keyspend(&*SECP, taproot.merkle_root());
+		let key = self.signer.server_keypair.leak_ref().for_keyspend(&*SECP, taproot.merkle_root());
 		Some(ark::SECP.sign_schnorr(&sighash.into(), &key))
 	}
 
@@ -172,11 +195,11 @@ impl VtxoSigner<ServerVtxoPolicy> for WatchmanSigner {
 		sighash: TapSighash,
 	) -> Option<Witness> {
 		// Only sign if the clause pubkey matches our server pubkey
-		let key = if clause.pubkey() == self.server_keypair.leak_ref().public_key() {
-			self.server_keypair.leak_owned()
+		let key = if clause.pubkey() == self.signer.server_keypair.leak_ref().public_key() {
+			self.signer.server_keypair.leak_owned()
 		} else {
-			let tweak = self.db.read(async |t| t.fetch_ephemeral_tweak(clause.pubkey()).await).await.ok()??;
-			let seckey = self.ephemeral_master_key.leak_ref().secret_key()
+			let tweak = self.read(async |t| t.fetch_ephemeral_tweak(clause.pubkey()).await).await.ok()??;
+			let seckey = self.signer.ephemeral_master_key.leak_ref().secret_key()
 				.add_tweak(&tweak).expect("tweak error");
 			Keypair::from_secret_key(&*SECP, &seckey)
 		};
@@ -206,5 +229,26 @@ impl VtxoSigner<ServerVtxoPolicy> for WatchmanSigner {
 				Some(c.witness(&(signature, *preimage.leak_ref()), control_block))
 			},
 		}
+	}
+}
+
+#[async_trait::async_trait]
+impl VtxoSigner<ServerVtxoPolicy> for WatchmanSigner {
+	async fn can_sign<G: Sync + Send>(
+		&self, clause: &VtxoClause, vtxo: &Vtxo<G, ServerVtxoPolicy>,
+	) -> bool {
+		SigningContext { signer: self, transaction: None }.can_sign(clause, vtxo).await
+	}
+
+	async fn sign_keyspend<G: Sync + Send>(
+		&self, vtxo: &Vtxo<G, ServerVtxoPolicy>, sighash: TapSighash,
+	) -> Option<schnorr::Signature> {
+		SigningContext { signer: self, transaction: None }.sign_keyspend(vtxo, sighash).await
+	}
+
+	async fn witness(
+		&self, clause: &VtxoClause, control_block: &ControlBlock, sighash: TapSighash,
+	) -> Option<Witness> {
+		SigningContext { signer: self, transaction: None }.witness(clause, control_block, sighash).await
 	}
 }

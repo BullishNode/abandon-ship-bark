@@ -17,7 +17,7 @@ use crate::Server;
 use crate::database::Tx;
 use crate::database::expiry_attribution::Attribution;
 use crate::database::expiry_chain::ExpiryViewToken;
-use crate::database::expiry_decision::{ReadyCoin, ReadyOutput, VerifiedPayee};
+use crate::database::expiry_decision::{CommittedExpiryVersions, ReadyCoin, ReadyOutput, VerifiedPayee};
 use crate::database::expiry_inventory::{
 	BackingSnapshot, BackingSnapshotLimits, BackingVtxoFact,
 };
@@ -160,13 +160,14 @@ impl Server {
 				warn!(%anchor, %error, "Expiry anchor remains unready; other anchors continue");
 			}
 		}
+		let mut committed = CommittedExpiryVersions::default();
 		for outputs in ready.into_values() {
 			let mut group = Vec::new();
 			for output in outputs {
 				let mut proposed = group.iter().collect::<Vec<_>>();
 				proposed.push(&output);
 				if !ReadyOutput::group_fits(&proposed)? && !group.is_empty() {
-					self.commit_ready_group(view, std::mem::take(&mut group)).await?;
+					self.commit_ready_group(view, std::mem::take(&mut group), &mut committed).await?;
 				}
 				if !ReadyOutput::group_fits(&[&output])? {
 					self.db.write(async |t| t.request_expiry_split(view, output.root()).await).await?;
@@ -174,7 +175,7 @@ impl Server {
 					group.push(output);
 				}
 			}
-			self.commit_ready_group(view, group).await?;
+			self.commit_ready_group(view, group, &mut committed).await?;
 		}
 		Ok(next)
 	}
@@ -353,7 +354,9 @@ impl Server {
 		Ok(())
 	}
 
-	async fn commit_ready_group(&self, view: ExpiryViewToken, outputs: Vec<ReadyOutput>) -> anyhow::Result<()> {
+	async fn commit_ready_group(
+		&self, view: ExpiryViewToken, outputs: Vec<ReadyOutput>, committed: &mut CommittedExpiryVersions,
+	) -> anyhow::Result<()> {
 		let outputs = ReadyOutput::retain_complete_owner_groups(outputs);
 		if outputs.is_empty() {
 			return Ok(());
@@ -364,13 +367,15 @@ impl Server {
 			outputs,
 			self.config.network,
 			self.config.expiry_internal_refund_depth,
+			committed,
 		).await).await {
-			Ok(Some(group)) => info!(
-				allocation_id = group.id,
-				inputs = group.inputs.len(),
-				dropped = group.dropped.len(),
-				"Expiry payout decision committed"
-			),
+			Ok(Some(group)) => {
+				// Db::write returns only after commit. An aborted decision must
+				// never advance another group's source fence.
+				committed.append(group.version_changes)?;
+				info!(allocation_id = group.id, inputs = group.inputs.len(), dropped = group.dropped.len(),
+					"Expiry payout decision committed");
+			},
 			Ok(None) => {},
 			Err(error) => warn!(%error, "Expiry group was not committed; other ready groups continue"),
 		}

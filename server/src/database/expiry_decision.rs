@@ -39,6 +39,26 @@ pub struct ReadyOutput {
 	source_cohort: Option<Arc<SourceCohort>>,
 }
 
+type CohortVersion = (DateTime<Local>, String, bool);
+
+/// Exact row changes from successful decisions in this readiness pass.
+#[derive(Default)]
+pub struct CommittedExpiryVersions(BTreeMap<String, (CohortVersion, CohortVersion)>);
+
+impl CommittedExpiryVersions {
+	fn expected<'a>(&'a self, id: &str, original: &'a CohortVersion) -> &'a CohortVersion {
+		self.0.get(id).filter(|(before, _)| before == original)
+			.map_or(original, |(_, after)| after)
+	}
+
+	pub fn append(&mut self, committed: Self) -> anyhow::Result<()> {
+		ensure!(committed.0.keys().all(|id| !self.0.contains_key(id)),
+			"expiry decision changed a previously committed source");
+		self.0.extend(committed.0);
+		Ok(())
+	}
+}
+
 struct SourceCohort {
 	complete: bool,
 	owners: BTreeMap<PublicKey, BTreeSet<VtxoId>>,
@@ -158,6 +178,7 @@ pub struct CommittedExpiryGroup {
 	pub id: i64,
 	pub inputs: Vec<VtxoId>,
 	pub dropped: Vec<VtxoId>,
+	pub version_changes: CommittedExpiryVersions,
 }
 
 fn evidence_json(evidence: &OwnershipEvidence, preimage: bool) -> serde_json::Value {
@@ -209,6 +230,7 @@ impl Tx<'_> {
 		outputs: Vec<ReadyOutput>,
 		network: Network,
 		internal_refund_depth: u32,
+		preceding: &CommittedExpiryVersions,
 	) -> anyhow::Result<Option<CommittedExpiryGroup>> {
 		if outputs.is_empty() { return Ok(None); }
 		ensure!(ReadyOutput::group_fits(&outputs.iter().collect::<Vec<_>>())?, "expiry group exceeds version-3 sweep size");
@@ -279,7 +301,10 @@ impl Tx<'_> {
 			let mut valid = output.versions.iter().all(|(id, time, state)|
 				actual.get(&id.to_string()) == Some(&(*time, state.as_str().to_owned(), false)));
 			if let Some(cohort) = &output.source_cohort {
-				valid &= cohort.versions.iter().all(|(id, expected)| actual.get(id) == Some(expected));
+				// Keep the full source fence. Only this pass's committed row
+				// changes can advance an otherwise exact original version.
+				valid &= cohort.versions.iter().all(|(id, expected)|
+					actual.get(id) == Some(preceding.expected(id, expected)));
 			}
 			for coin in &output.coins {
 				let fact = output.snapshot.regular.iter().find(|f| f.state.vtxo_id == coin.ownership.id)
@@ -341,6 +366,7 @@ impl Tx<'_> {
 			self.execute("INSERT INTO expiry_allocation_payout(allocation_id,output_index,spk,amount_sat) VALUES($1,$2,$3,$4)",
 				&[&id,&i32::try_from(index)?,&recipient.output.script_pubkey.as_bytes().to_lower_hex_string(),&i64::try_from(recipient.output.value.to_sat())?]).await?;
 		}
+		let mut version_changes = CommittedExpiryVersions::default();
 		for output in &accepted {
 			self.execute("INSERT INTO expiry_allocation_input(allocation_id,vtxo_id) VALUES($1,$2)", &[&id,&output.root.id().to_string()]).await?;
 			for coin in &output.coins {
@@ -404,11 +430,19 @@ impl Tx<'_> {
 						&i64::try_from(forfeited)?,
 						&observed.to_string()
 					]).await?;
-				self.execute("UPDATE vtxo SET spend_state='spent',updated_at=NOW() WHERE vtxo_id=$1", &[&proposal.id.to_string()]).await?;
+				let source_id = proposal.id.to_string();
+				let row = self.query_one("UPDATE vtxo SET spend_state='spent',updated_at=NOW() WHERE vtxo_id=$1
+					RETURNING updated_at,spend_state::TEXT,
+					onchain_spent_height IS NOT NULL OR onchain_spent_txid IS NOT NULL AS chain_spent",
+					&[&source_id]).await?;
+				let after = (row.get("updated_at"), row.get("spend_state"), row.get("chain_spent"));
+				let before = actual.get(&source_id).context("committed expiry source was not locked")?.clone();
+				ensure!(version_changes.0.insert(source_id, (before, after)).is_none(),
+					"expiry decision repeats a source");
 			}
 		}
 		let inputs = accepted.iter().map(|o| o.root.id()).collect();
-		Ok(Some(CommittedExpiryGroup { id, inputs, dropped }))
+		Ok(Some(CommittedExpiryGroup { id, inputs, dropped, version_changes }))
 	}
 
 	async fn revalidate_expiry_payee(&self, coin: &ReadyCoin, network: Network) -> anyhow::Result<bool> {
@@ -419,5 +453,41 @@ impl Tx<'_> {
 				mailbox_pk == payee.mailbox && child_index == payee.child_index && spk == payee.script,
 			_ => false,
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn committed_cohort_versions_preserve_unrelated_change_fences() {
+		let time = DateTime::from_timestamp(1_700_000_000, 0).unwrap().with_timezone(&Local);
+		let original = (time, "spendable".to_owned(), false);
+		let allocated = (time + chrono::Duration::seconds(1), "spent".to_owned(), false);
+		let mut committed = CommittedExpiryVersions::default();
+		assert_ne!(committed.expected("source", &original), &allocated,
+			"an uncommitted or aborted change cannot advance the source fence");
+		committed.append(CommittedExpiryVersions(BTreeMap::from([
+			("source".to_owned(), (original.clone(), allocated.clone())),
+		]))).unwrap();
+		assert_eq!(committed.expected("source", &original), &allocated);
+		assert_eq!(committed.expected("other", &original), &original,
+			"another source still requires its exact original version");
+		for changed in [
+			(time + chrono::Duration::seconds(2), "spendable".to_owned(), false),
+			(time, "spent".to_owned(), false),
+			(time, "spendable".to_owned(), true),
+		] {
+			assert_eq!(committed.expected("source", &changed), &changed,
+				"a receipt cannot replace a different original source version");
+		}
+		let external = (allocated.0 + chrono::Duration::seconds(1), allocated.1.clone(), false);
+		assert_ne!(committed.expected("source", &original), &external,
+			"a later external update must still invalidate the cohort");
+		assert!(committed.append(CommittedExpiryVersions(BTreeMap::from([
+			("source".to_owned(), (allocated.clone(), external)),
+		]))).is_err(), "one pass cannot advance the same source twice");
+		assert_eq!(committed.expected("source", &original), &allocated);
 	}
 }

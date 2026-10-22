@@ -93,7 +93,7 @@ async fn same_hash_sources(cooperative_refund: bool) {
 		let snapshot = db.read(async |t| t.backing_snapshot(&[ark::ServerVtxo::from(input.clone()).to_bare()],
 			server::database::expiry_inventory::BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 10_000_000 }).await).await.unwrap();
 		let fact = snapshot.regular.iter().find(|fact| fact.state.vtxo_id == grants[index]).unwrap();
-		let proposal = db.read(async |t| t.propose_expiry_ownership(
+		let proposal = db.write(async |t| t.propose_expiry_ownership(
 			fact, &funding, height, Some(height), srv.config().expiry_internal_refund_depth,
 		).await).await.unwrap();
 		if index == 0 {

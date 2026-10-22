@@ -1162,7 +1162,9 @@ CREATE TABLE public.round (
     signed_tree bytea NOT NULL,
     expiry integer NOT NULL,
     swept_at timestamp with time zone,
-    created_at timestamp with time zone NOT NULL
+    created_at timestamp with time zone NOT NULL,
+    padding_issuance jsonb,
+    CONSTRAINT round_padding_issuance_check CHECK (padding_issuance IS NULL OR (jsonb_typeof(padding_issuance)='object' AND octet_length(padding_issuance::TEXT)<=4194304))
 );
 
 
@@ -2929,3 +2931,16 @@ ALTER TABLE ONLY public.vtxo_pool
 --
 
 
+
+
+CREATE FUNCTION public.round_padding_issuance_immutable() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.padding_issuance IS DISTINCT FROM OLD.padding_issuance THEN
+        RAISE EXCEPTION 'round padding issuance cannot be updated';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER round_padding_issuance_immutable BEFORE UPDATE OF padding_issuance ON public.round
+    FOR EACH ROW EXECUTE FUNCTION public.round_padding_issuance_immutable();

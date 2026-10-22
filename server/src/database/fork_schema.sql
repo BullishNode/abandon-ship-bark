@@ -320,3 +320,7 @@ CREATE TABLE user_exit_claim (
 	raw_tx BYTEA NOT NULL,
 	confirmed_height INT4
 );
+
+-- New issuance changes the evidence consumed by the next completed expiry view.
+CREATE TRIGGER expiry_round_padding_revision AFTER INSERT OR DELETE OR UPDATE OF padding_issuance ON round
+	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();

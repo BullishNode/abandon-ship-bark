@@ -17,6 +17,7 @@ use bitcoin::{Amount, FeeRate, OutPoint, Psbt, Transaction, TxOut, Txid};
 use ark::rounds::ROUND_TX_VTXO_TREE_VOUT;
 use bitcoin_ext::bdk::{PreferConfirmedCoinSelection, WithGuaranteedChange};
 
+use crate::round::padding::FundingPrevout;
 use crate::utils::InstrumentedLock;
 use crate::wallet::{PersistedWallet, WalletUtxoGuard, WalletUtxosGuard};
 
@@ -30,6 +31,8 @@ pub struct FundingTxSpec {
 	/// If `Some`, the wallet is forced to include this input in the new tx.
 	/// `None` on the first attempt.
 	pub pinned_input: Option<WalletUtxoGuard>,
+	/// Retain public prevouts only when this attempt appends padding leaves.
+	pub capture_padding_prevouts: bool,
 }
 
 impl FundingTxSpec {
@@ -88,6 +91,17 @@ impl FundingTxSpec {
 		let _extra_inputs = wallet.lock_wallet_utxos(extra_outpoints)
 			.context("failed to lock extra inputs")?;
 
+		// Read each selected public prevout under this wallet lock. Do not trust
+		// a PSBT amount without the corresponding actual rounds-wallet output.
+		let public_prevouts = if self.capture_padding_prevouts {
+			psbt.unsigned_tx.input.iter().zip(&psbt.inputs).map(|(input, psbt_input)| {
+				let output = wallet.get_utxo(input.previous_output)
+					.context("padding funding input is absent from rounds wallet")?;
+				ensure!(!output.is_spent && psbt_input.witness_utxo.as_ref() == Some(&output.txout),
+					"padding funding prevout differs from rounds wallet");
+				Ok(FundingPrevout { outpoint: input.previous_output, txout: output.txout })
+			}).collect::<anyhow::Result<Vec<_>>>()?
+		} else { Vec::new() };
 		let txid = psbt.unsigned_tx.compute_txid();
 		let total_output_amount = psbt.unsigned_tx.output.iter()
 			.map(|o| o.value)
@@ -97,7 +111,7 @@ impl FundingTxSpec {
 			pinned_input: pinned_input.utxo(),
 			build_time: start.elapsed(),
 		);
-		Ok(UnsignedFundingTx { psbt, txid, pinned_input, _extra_inputs })
+		Ok(UnsignedFundingTx { psbt, txid, pinned_input, _extra_inputs, public_prevouts })
 	}
 }
 
@@ -106,6 +120,7 @@ impl FundingTxSpec {
 /// consumes. Built by [`FundingTxSpec::build`].
 pub struct UnsignedFundingTx {
 	psbt: Psbt,
+	public_prevouts: Vec<FundingPrevout>,
 	txid: Txid,
 	pinned_input: WalletUtxoGuard,
 	/// Held only for its Drop impl: releases the locks on the extra inputs
@@ -114,6 +129,10 @@ pub struct UnsignedFundingTx {
 }
 
 impl UnsignedFundingTx {
+	pub(crate) fn public_prevouts(&self) -> &[FundingPrevout] {
+		&self.public_prevouts
+	}
+
 	pub fn psbt(&self) -> &Psbt {
 		&self.psbt
 	}

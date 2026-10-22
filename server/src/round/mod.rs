@@ -1,5 +1,6 @@
 pub mod forfeit;
 pub mod funding;
+pub(crate) mod padding;
 
 
 use std::mem;
@@ -843,6 +844,17 @@ impl CollectingPayments {
 
 		let round_step = self.next_step(RoundStep::ConstructVtxoTree);
 
+		let mut padding_draft = if self.all_outputs.len() < 2 { Some(padding::PaddingDraft::capture(
+			self.all_outputs.iter().map(|participant| participant.req.clone()).collect(),
+			self.all_inputs.iter().map(|(id, vtxo)| (*id, vtxo.amount())).collect(),
+			self.interactive_participants.values().flat_map(|part| part.inputs.iter().copied())
+				.chain(self.delegated_participants.values().flat_map(|part| part.inputs.iter().copied())).collect(),
+			self.interactive_participants.values().map(|part| part.user_fee_sat)
+				.chain(self.delegated_participants.values().map(|part| part.user_fee_sat))
+				.try_fold(0u64, u64::checked_add).map(Amount::from_sat)
+				.context("padding issuance refresh surplus overflow").map_err(RoundError::Recoverable)?,
+		).map_err(RoundError::Recoverable)?) } else { None };
+
 		// Snapshot of real (non-padding) outputs for downstream telemetry.
 		// Captured here, before the padding loop below adds UNSPENDABLE
 		// placeholders, so the success path can bucket by policy without
@@ -874,6 +886,7 @@ impl CollectingPayments {
 				cosign_pubkey: None,
 				unlock_hash: *UNLOCK_HASH,
 			};
+			if let Some(draft) = &mut padding_draft { draft.appended(&req); }
 			self.all_outputs.push(VtxoParticipant {
 				req: req.clone(),
 				nonces: None,
@@ -901,6 +914,7 @@ impl CollectingPayments {
 			},
 			fee_rate: srv.fee_estimator.fast(),
 			pinned_input: self.common_round_tx_input.take(),
+			capture_padding_prevouts: padding_draft.is_some(),
 		}.build(&srv.rounds_wallet).await.map_err(RoundError::Recoverable)?;
 
 		// Generate vtxo nonces and combine with user's nonces.
@@ -973,6 +987,7 @@ impl CollectingPayments {
 			interactive_participants: self.interactive_participants,
 			delegated_participants: self.delegated_participants,
 			real_outputs,
+			padding_draft,
 			cosign_part_sigs: HashMap::with_capacity(unsigned_vtxo_tree.nb_leaves()),
 			unsigned_vtxo_tree,
 			funding_tx,
@@ -1022,6 +1037,7 @@ pub struct SigningVtxoTree {
 	/// tree-shape padding is added. Used to emit per-policy telemetry once
 	/// the round is known to have succeeded.
 	real_outputs: Vec<VtxoRequest>,
+	padding_draft: Option<padding::PaddingDraft>,
 	/// Mailbox IDs for each output VTXO (in same order as vtxo tree leaves).
 	/// Used to post VTXOs to mailboxes after round finalization for wallet recovery.
 	/// None for server-generated padding VTXOs which don't need mailbox delivery.
@@ -1278,6 +1294,9 @@ async fn persist_round(
 	state.round_step = round_step;
 
 	let unsigned_funding_tx = state.funding_tx.unsigned_tx();
+	let padding_issuance = state.padding_draft.as_ref().map(|draft| draft.finish(
+		signed_vtxos, unsigned_funding_tx, state.funding_tx.public_prevouts(), state.funding_tx.fee(),
+	)).transpose().map_err(RoundError::Fatal)?.flatten();
 
 	trace!("Storing round result");
 	if tracing::enabled!(RoundVtxoCreated::LEVEL) {
@@ -1295,6 +1314,7 @@ async fn persist_round(
 			state.all_inputs.keys().copied(),
 			signed_vtxos,
 			&state.interactive_participants,
+			padding_issuance.as_ref(),
 		).await?;
 
 		// Post VTXOs to mailboxes for wallet recovery support.

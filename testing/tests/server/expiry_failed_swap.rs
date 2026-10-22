@@ -281,7 +281,7 @@ async fn failed_swap_during_restart() {
 	let snapshot = db.read(async |tx| tx.backing_snapshot(&[ark::ServerVtxo::from(input.clone()).to_bare()],
 		BackingSnapshotLimits { max_rows: 1_000, max_serialized_bytes: 1_000_000 }).await).await.unwrap();
 	let fact = snapshot.regular.iter().find(|fact| fact.state.vtxo_id == source).unwrap();
-	let proposal = db.read(async |tx| tx.propose_expiry_ownership(fact, &funding,
+	let proposal = db.write(async |tx| tx.propose_expiry_ownership(fact, &funding,
 		before_deadline, Some(before_deadline), srv.config().expiry_internal_refund_depth).await).await.unwrap();
 	assert!(matches!(proposal.disposition, OwnershipDisposition::Unresolved(_)));
 	assert!(!proposal.needs_chain_progress);

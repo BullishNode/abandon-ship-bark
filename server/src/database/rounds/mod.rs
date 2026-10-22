@@ -1,5 +1,6 @@
 
 mod model;
+mod padding;
 pub use model::*;
 
 
@@ -21,17 +22,19 @@ use bitcoin_ext::BlockHeight;
 
 use crate::database::{query, tree, Tx};
 use crate::round::InteractiveParticipation;
+use crate::round::padding::PaddingIssuance;
 
 
 impl<'t> Tx<'t> {
-	#[tracing::instrument(skip(self, unsigned_funding_tx, input_vtxos, signed_tree, interactive_participations))]
-	pub async fn finish_round(
+	#[tracing::instrument(skip(self, unsigned_funding_tx, input_vtxos, signed_tree, interactive_participations, padding_issuance))]
+	pub(crate) async fn finish_round(
 		&self,
 		round_seq: RoundSeq,
 		unsigned_funding_tx: &Transaction,
 		input_vtxos: impl IntoIterator<Item = VtxoId>,
 		signed_tree: &CachedSignedVtxoTree,
 		interactive_participations: &HashMap<UnlockHash, InteractiveParticipation>,
+		padding_issuance: Option<&PaddingIssuance>,
 	) -> anyhow::Result<()> {
 		let input_vtxos = input_vtxos.into_iter().collect::<Vec<_>>();
 		crate::database::expiry_guard::guard_obligation_changes(self, &input_vtxos).await?;
@@ -40,15 +43,21 @@ impl<'t> Tx<'t> {
 				crate::database::expiry_guard::guard_participation(self, row.get("id")).await?;
 			}
 		}
+		if let Some(issuance) = padding_issuance {
+			issuance.validate(signed_tree, unsigned_funding_tx)?;
+			let stored_inputs = self.get_user_vtxos_by_id(&input_vtxos).await?;
+			issuance.validate_inputs(stored_inputs.iter().map(|state| (state.vtxo_id, state.vtxo.amount())))?;
+		}
+		let padding_issuance = padding_issuance.map(serde_json::to_string).transpose()?;
 		let funding_txid = unsigned_funding_tx.compute_txid();
 		info!("Storing finished round with funding txid {}", funding_txid);
 
 		// First, store the round itself.
 		let stmt = self.prepare_typed(
-			"INSERT INTO round (seq, funding_txid, funding_tx, signed_tree, expiry, created_at)
-			VALUES ($1, $2, $3, $4, $5, NOW())
+			"INSERT INTO round (seq, funding_txid, funding_tx, signed_tree, expiry, padding_issuance, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6::TEXT::JSONB, NOW())
 			RETURNING id;",
-			&[Type::INT8, Type::TEXT, Type::BYTEA, Type::BYTEA, Type::INT4],
+			&[Type::INT8, Type::TEXT, Type::BYTEA, Type::BYTEA, Type::INT4, Type::TEXT],
 		).await?;
 		let row = self.query_one(
 			&stmt,
@@ -57,7 +66,8 @@ impl<'t> Tx<'t> {
 				&funding_txid.to_string(),
 				&serialize(&unsigned_funding_tx),
 				&signed_tree.spec.serialize(),
-				&(signed_tree.spec.spec.expiry_height.to_u32() as i32)
+				&(signed_tree.spec.spec.expiry_height.to_u32() as i32),
+				&padding_issuance,
 			]
 		).await?;
 		let round_id = row.get::<_, i64>("id");
@@ -409,6 +419,7 @@ impl<'t> Tx<'t> {
 	}
 
 	pub async fn undo_round(&self, round_id: RoundId) -> anyhow::Result<()> {
+		self.query_one("SELECT id FROM expiry_chain_view WHERE id=1 FOR SHARE", &[]).await?;
 		let round = self.get_round(round_id).await?
 			.with_context(|| format!("round {} not found", round_id))?;
 
@@ -432,6 +443,14 @@ impl<'t> Tx<'t> {
 			.map(|txid| txid.to_string())
 			.collect::<Vec<_>>();
 
+		let all_ids = output_vtxo_ids.iter().cloned().chain(
+			self.query("SELECT vtxo_id FROM vtxo WHERE spent_in_round=$1", &[&round_db_id]).await?
+				.into_iter().map(|row| row.get::<_, String>("vtxo_id"))
+		).collect::<Vec<_>>();
+		let ids = all_ids.iter().map(|id| id.parse()).collect::<Result<Vec<ark::VtxoId>, _>>()?;
+		crate::database::expiry_guard::guard_obligation_changes(self, &ids).await?;
+		// Issuance revalidation takes this lock after the same sorted coin locks.
+		self.query_one("SELECT id FROM round WHERE id=$1 FOR UPDATE", &[&round_db_id]).await?;
 		let round_id_str = round_id.to_string();
 
 		// Restore input vtxos: set them back to spendable.

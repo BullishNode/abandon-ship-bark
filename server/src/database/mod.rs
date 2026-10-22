@@ -220,6 +220,12 @@ impl Db {
 		{
 			tx.batch_execute(include_str!("fork_schema.sql")).await?;
 		}
+		// Existing fork databases also need the new issuance revision trigger.
+		if tx.query_one("SELECT NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='round'::regclass AND tgname='expiry_round_padding_revision')", &[])
+			.await?.get::<_, bool>(0)
+		{
+			tx.batch_execute("CREATE TRIGGER expiry_round_padding_revision AFTER INSERT OR DELETE OR UPDATE OF padding_issuance ON round FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit()").await?;
+		}
 		tx.commit().await?;
 		connection.finish();
 		info!("All migrations got successfully run");

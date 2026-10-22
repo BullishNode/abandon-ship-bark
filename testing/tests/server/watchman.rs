@@ -3892,7 +3892,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 					let facts: serde_json::Value = serde_json::from_str(row.get("facts")).unwrap();
 					if owner.is_none() { assert_eq!(facts["operator"], true); }
 					else { assert_eq!(facts["customer_key"], coin.clone().try_into_user_vtxo().unwrap().user_pubkey().to_string()); }
-					if coin.id() == padding.id() { assert_eq!(facts["kind"], "padding"); }
+					if coin.id() == padding.id() { assert_eq!(facts["kind"], "round_padding_issuance"); }
 				}
 				if db.read(async |tx| {
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
@@ -4025,7 +4025,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 			assert!(!row.get::<_, bool>("published"));
 			assert_eq!(row.get::<_, i64>("gross_sat"), 330);
 			let facts: serde_json::Value = serde_json::from_str(row.get("facts")).unwrap();
-			assert_eq!(facts["kind"], "padding");
+			assert_eq!(facts["kind"], "round_padding_issuance");
 			assert_eq!(facts["operator"], true);
 			if row.get::<_, Option<i64>>("allocation_id").is_some() {
 				assert_eq!(row.get::<_, String>("disposition"), "operator");
@@ -4076,7 +4076,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 		} else {
 			assert_eq!(row.get::<_, String>("disposition"), "operator");
 			assert_eq!(facts["operator"], true);
-			if id == padding.id().to_string() { assert_eq!(facts["kind"], "padding"); }
+			if id == padding.id().to_string() { assert_eq!(facts["kind"], "round_padding_issuance"); }
 			for field in ["owner_mailbox", "user_pubkey", "spk"] { assert!(row.get::<_, Option<String>>(field).is_none()); }
 			for field in ["fee_sat", "payout_sat"] { assert_eq!(row.get::<_, i64>(field), 0); }
 		}

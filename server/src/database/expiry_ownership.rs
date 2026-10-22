@@ -37,7 +37,7 @@ pub enum OwnershipEvidence {
 	InputOwner,
 	LightningReceiveClaim { source: VtxoId, subscription_id: i64, payment_hash: PaymentHash, output: VtxoId },
 	Pool,
-	Padding,
+	RoundPaddingIssuance { funding_txid: Txid, leaf_index: u32 },
 	Forfeit,
 	Offboard(Txid),
 	Exchange { participation_id: i64, unlock_hash: String, forfeited: bool },
@@ -92,6 +92,9 @@ impl OwnershipProposal {
 impl Tx<'_> {
 	/// Resolve one selected economic terminal. The caller supplies its actual
 	/// funding transaction and must already have proved the complete partition.
+	/// Use a write-capable transaction (`Db::write`). Padding provenance takes a
+	/// round SHARE lock even when the round has no provenance record. Retain the
+	/// transaction through allocation commit for the authoritative recheck.
 	pub async fn propose_expiry_ownership(
 		&self,
 		fact: &BackingVtxoFact,
@@ -113,6 +116,15 @@ impl Tx<'_> {
 			return Ok(proposal);
 		}
 
+		// This is an immutable creation role, not a public key/hash/value match.
+		// Re-read it for spent-state replanning too; a bare old padding fact
+		// cannot authorize another allocation.
+		if let Some((funding_txid, leaf_index)) = self.round_padding_issuance(fact, funding).await? {
+			proposal.disposition = OwnershipDisposition::Operator;
+			proposal.evidence = Some(OwnershipEvidence::RoundPaddingIssuance { funding_txid, leaf_index });
+			return Ok(proposal);
+		}
+
 		// A conflicted payout keeps its original spend fence. Replanning
 		// reads the already committed irreversible owner rather than treating
 		// our own "spent" status as proof that the customer disappeared.
@@ -129,7 +141,6 @@ impl Tx<'_> {
 						| "input_owner"
 						| "lightning_receive_claim"
 						| "pool"
-						| "padding"
 						| "forfeit"
 						| "offboard"
 						| "exchange"
@@ -255,11 +266,6 @@ impl Tx<'_> {
 					participation_id: cancelled.get("participation_id"),
 					unlock_hash: hash.to_string(), forfeited: false,
 				});
-			} else if user.user_pubkey().to_string() == "02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c"
-				&& hash.to_string() == "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-				&& user.amount() == Amount::from_sat(330) {
-				proposal.disposition = OwnershipDisposition::Operator;
-				proposal.evidence = Some(OwnershipEvidence::Padding);
 			}
 			return Ok(proposal);
 		}

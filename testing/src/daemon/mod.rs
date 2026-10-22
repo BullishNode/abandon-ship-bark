@@ -8,10 +8,17 @@ pub mod tor;
 pub mod watchmand;
 
 use std::fs;
+#[cfg(target_os = "linux")]
+use std::io::Read;
+use std::io::Write;
+#[cfg(target_os = "linux")]
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context;
+#[cfg(target_os = "linux")]
+use bitcoin::hashes::{sha256, Hash, HashEngine};
 use log::{error, info, trace, warn};
 use nix::sys::signal;
 use nix::unistd::Pid;
@@ -203,6 +210,8 @@ impl<T> Daemon<T>
 
 		match result {
 			Ok(()) => {
+				// Record the live child before start returns and a caller can stop it.
+				self.record_executable_receipt(&child);
 				*self.child.lock().await = Some(child);
 				Ok(())
 			},
@@ -225,6 +234,36 @@ impl<T> Daemon<T>
 				Err(e)
 			}
 		}
+	}
+
+	fn record_executable_receipt(&self, child: &Child) {
+		let mut receipt = serde_json::json!({
+			"schema_version": 1,
+			"daemon_name": self.name(),
+			"child_pid": child.id(),
+			"observed_at": chrono::Utc::now().to_rfc3339(),
+			"phase": "after-init-before-start-return",
+			// Wrappers and docker clients do not attest their descendants.
+			"scope": "direct-child-at-observation",
+			"platform": std::env::consts::OS,
+			"executable": executable_observation(child.id()),
+		});
+		let result = (|| -> anyhow::Result<()> {
+			let directory = self.inner.datadir().join("executable-receipts");
+			fs::create_dir_all(&directory)?;
+			let path = directory.join(format!("{}.json", uuid::Uuid::new_v4()));
+			let mut file = fs::File::options().write(true).create_new(true).open(&path)?;
+			serde_json::to_writer(&mut file, &receipt)?;
+			file.write_all(b"\n")?;
+			file.flush()?;
+			Ok(())
+		})();
+		if let Err(e) = result {
+			warn!("Failed to retain executable receipt for {}: {:#}", self.name(), e);
+			receipt["artifact_write_failed"] = true.into();
+		}
+		// One logger call preserves the public receipt if its artifact write fails.
+		info!("daemon_executable_receipt={}", receipt);
 	}
 
 	pub async fn stop(&self) -> anyhow::Result<()> {
@@ -324,6 +363,44 @@ impl<T> Drop for Daemon<T>
 		// but a killed docker client left its container running.
 		self.inner.cleanup_external();
 	}
+}
+
+#[cfg(target_os = "linux")]
+fn executable_observation(pid: Option<u32>) -> serde_json::Value {
+	let result = (|| -> anyhow::Result<serde_json::Value> {
+		let pid = pid.context("child PID is unavailable")?;
+		let mut executable = fs::File::open(format!("/proc/{pid}/exe"))?;
+		// Resolve the opened file, not a second lookup of a process that can exec.
+		let path = fs::read_link(format!("/proc/self/fd/{}", executable.as_raw_fd()))?;
+		let path = path.to_str().context("kernel executable path is not UTF-8")?;
+		let mut engine = sha256::Hash::engine();
+		let mut buffer = [0u8; 64 * 1024];
+		let mut size = 0u64;
+		loop {
+			let read = match executable.read(&mut buffer) {
+				Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+				other => other?,
+			};
+			if read == 0 { break; }
+			engine.input(&buffer[..read]);
+			size += read as u64;
+		}
+		Ok(serde_json::json!({
+			"status": "captured",
+			"kernel_executable_path": path,
+			"sha256": sha256::Hash::from_engine(engine).to_string(),
+			"size_bytes": size,
+		}))
+	})();
+	match result {
+		Ok(observation) => observation,
+		Err(e) => serde_json::json!({ "status": "unavailable", "reason": e.to_string() }),
+	}
+}
+
+#[cfg(not(target_os = "linux"))]
+fn executable_observation(_pid: Option<u32>) -> serde_json::Value {
+	serde_json::json!({ "status": "unsupported" })
 }
 
 

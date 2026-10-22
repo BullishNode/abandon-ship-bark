@@ -91,10 +91,17 @@ captaind -C /path/to/captaind.toml create
 ```
 
 `create` initializes the database and writes `mnemonic` in the server data
-directory. It does not generate a config file. There is no `watchmand create`
-CLI command. The watchman must read the same seed phrase and database as its
-server. Provision an owner-only copy of the original server `mnemonic` in the
-watchman data directory through the local secret-custody procedure. Compare
+directory. It waits for the rounds and watchman wallet states to commit before
+it returns success. Each initial wallet state includes the creation-time deep
+chain checkpoint. It does not generate a config file. Schema creation, seed-file
+creation and the two wallet stores are separate operations. A failure can leave
+partial state. Stop on any error and preserve the data directory and database.
+Do not retry initialization by removing the seed or clearing the database.
+
+There is no `watchmand create` CLI command. The watchman must read the same
+seed phrase and database as its server. Provision an owner-only copy of the
+original server `mnemonic` in the watchman data directory through the local
+secret-custody procedure. Compare
 the files locally without displaying them. Never generate another seed phrase
 for the watchman. Retain a private backup before funding the wallets.
 
@@ -130,6 +137,10 @@ The internal Lightning refund depth must be at least 6. The supported protocol
 assumption excludes reorgs that remove 6 or more blocks. It includes reorgs that
 remove 1 through 5 blocks. This assumption does not make bitcoin finality
 absolute. Qualification of the reorg boundary remains incomplete.
+
+Set `min_trusted_confs` to at least 1 in both daemon configurations. Both daemons
+reject zero. This minimum keeps unconfirmed third-party deposits out of trusted
+fee spending.
 
 For the short public-Signet configuration, use `vtxo_lifetime = 16` or
 longer. With two board confirmations and the native client's 12-block exit
@@ -179,7 +190,7 @@ validation does not establish liquidity, throughput or safe deadlines.
 | Chain timing | `vtxo_lifetime`, `vtxo_exit_delta`, `required_board_confirmations`, `min_trusted_confs`, `expiry_internal_refund_depth`, `require_board_funding_tx`, `allow_expired_arkoor`, `nursery_confirm_target_blocks`. Refund depth defaults to 6 and validation rejects lower values. |
 | Lightning timing | `htlc_expiry_delta`, `htlc_send_expiry_delta`, `max_htlc_expiry_delta`, `max_user_invoice_cltv_delta`, `invoice_expiry`, `receive_htlc_forward_timeout`, `cln_xpay_timeout`, `cln_xpay_max_retry_for`. A retry deadline does not prove payment failure. |
 | Receive admission and pool | `ln_receive_anti_dos_required`; `[vtxopool]`: `vtxo_targets`, `vtxo_target_issue_threshold`, `vtxo_lifetime`, `vtxo_pre_expiry`, `max_vtxo_exit_depth`. Reserve liquidity and test replenishment under the declared load. |
-| Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons. A ceiling can delay confirmation during a fee spike. |
+| Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons separately. The ceiling applies to initial fallback rates and all later fetched or fallback rates. |
 | Watchman policy | `[watchman]`: `reaction_interval`, `sweep_interval`, `progress_grace_period`, `claim_chunksize`, `incremental_relay_fee`, `min_cpfp_amount`, `expiry_fee_warning`. The warning defaults to `"10000 sat"` even when absent from the template. |
 | Attribution and recovery | `expiry_owner_scan_chunk_size`, `expiry_owner_scan_workers`, `recovery_xpub_nb_keys`, `max_read_mailbox_items`; PostgreSQL `max_connections`, `connection_timeout_secs`, `idle_timeout_secs`. |
 | Offboard sessions | `offboard_session_timeout`, `offboard_check_interval`, `offboard_acceptable_fee_rate_duration`; the check interval must not exceed the timeout. |
@@ -191,6 +202,14 @@ maximum. A round maximum below an existing VTXO can prevent its refresh; the
 client does not automatically split it to fit. Plan its emergency exit before
 you reduce that limit.
 
+Both templates start with fallback feerates of 25, 10 and 4 sat/vB for the fast,
+regular and slow targets. `max_fee_rate` is unset by default, with no ceiling.
+When set, it clamps these initial rates before they are available to other
+workers. It also clamps later estimates when the backend succeeds or fails.
+A restart clears the in-memory fee history and starts from the configured
+fallback rates under that ceiling. A ceiling can delay confirmation during a
+fee spike. It is not a total miner-fee or operator-subsidy budget.
+
 The current fallback output fee is fixed in code at 1,000 sats. There is no
 TOML key for it. Within an allocation, leaves with the same payout script
 share one output fee. If gross minus the fee is below that script's dust
@@ -199,6 +218,15 @@ Unknown ownership is never this dust case. Miner fees come from the watchman
 fee child, separately from customer outputs. There is no enforced operator
 subsidy cap. Do not describe this candidate as having every fee configurable.
 No setting establishes a guaranteed payout deadline or a qualified capacity.
+
+Account for a board service fee separately from the fallback output fee. For
+a direct payout of one unprogressed board, let `G` be its physical backing
+value and `F` its board service fee. The signed customer VTXO has value
+`N = G - F`. If `N - 1000` meets the payout script's dust threshold, the
+customer output is `N - 1000` sats. The zero-fee payout parent returns
+`F + 1000` sats to the operator. Do not deduct `F` from `N` a second time. Account
+for the original board miner fee and the watchman fee child's miner fee
+separately.
 
 ## Supply watchman fees
 
@@ -235,10 +263,11 @@ budget. After replenishment confirms, verify that queued payouts resume.
 
 If a foreign transaction spends a payout fee anchor, retain its raw bytes,
 fee, inputs and replacement history. Inspect parent and child together. Do not
-delete the allocation or alter customer amounts. The foreign-child replacement
-fix still needs qualification on the final release programs. If replacement
-cannot progress, retain the unpaid obligation and escalate with the actual
-package evidence.
+delete the allocation or alter customer amounts. The watchman uses Core's
+observed fee when it replaces an unrecognized child. It preserves the exact
+payout parent. Require replacement qualification on the final release programs.
+If replacement cannot progress, retain the unpaid obligation and escalate with
+the actual package evidence.
 
 ## Monitor payment and ownership
 
@@ -281,6 +310,13 @@ address. It does not verify the recipient's fallback registration.
 At expiry, keep bitcoin held if no registration matches. Also keep bitcoin
 held while a registered owner's attribution scan is incomplete. Do not assign
 the recipient's bitcoin to the provider or operator.
+
+The server requires each owner's complete same-source group before it pays or
+forfeits that group. This includes leaves under separate physical outputs.
+An unknown owner in a shared source can also hold a known recipient's payout.
+A partial derivation scan without a match does not prove that the key belongs
+to another owner. Do not split or discard obligations to bypass that hold or
+charge another output fee for an independently ready fragment.
 
 ### Alert rules and first actions
 
@@ -623,6 +659,16 @@ request or import an invented node error. Recover the original node identity
 and intact history, then reconcile the exact dispatch label and payment group.
 Keep outstanding liabilities visible while investigation continues.
 
+Ordinary watchman claims still sign and broadcast before the surrounding
+database transaction commits. A commit error or lost commit reply does not
+prove that no transaction was published. Do not assume durable authorization
+before publication, exact-byte replay after a crash, or complete historical
+claim reconciliation. Source locks and the fallback allocation records do not
+provide those guarantees for ordinary claims. After a crash or reorg, preserve
+the original records and signed transactions. Reconcile each affected source,
+its successors and outstanding customer rights against the canonical chain
+before admission resumes.
+
 ## Resolve a request that never reached Lightning
 
 Use this procedure only for an external payment whose server dispatch is
@@ -693,9 +739,9 @@ load and tree geometry actually qualified in its release. No production capacity
 claim follows from the current source fixtures. The current candidate still
 requires financial, recovery and operational qualification.
 
-The known same-owner fragmentation defect can forfeit a small leaf before its
-siblings are ready. Its complete-group fix remains under qualification. Unknown
-or incomplete ownership must remain held. A separate fee-replacement fix has a
-passing targeted regression and scoped independent review, but the new release
-build remains pending. See `RELEASE_NOTES.md` for the accepted large-tree
-timing limit and the exact limits of its chain verification.
+Complete owner-group checks and foreign fee-child replacement are implemented
+in this source. They still require qualification on the final release programs.
+Unknown or incomplete ownership must remain held. Large-tree payout time and
+complete financial conservation remain unqualified. A timing result or limited
+chain check from earlier programs does not establish a capacity or conservation
+guarantee for this release.

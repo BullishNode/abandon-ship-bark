@@ -4,13 +4,46 @@ use std::collections::BTreeMap;
 use bitcoin::Txid;
 use tokio_postgres::types::Type;
 
-use ark::{ProtocolEncoding, ServerVtxo, VtxoId};
+use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
 use bitcoin_ext::BlockHeight;
 use tokio_stream::StreamExt;
 
 use crate::database::{Tx, NOARG};
 
 impl<'t> Tx<'t> {
+	/// A frontier scan cannot authorize a later signature. Re-read each source
+	/// after taking the shared obligation locks and retain them through the
+	/// claim's publication and commit. A linked successor takes priority over
+	/// a pool-key sweep or HTLC-send preimage claim, regardless of its signature.
+	pub async fn lock_watchman_claim_inputs(&self, vtxos: &[ServerVtxo]) -> anyhow::Result<()> {
+		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
+		let id_strings = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+		let rows = self.query("
+			SELECT vtxo_id,vtxo,confirmed_height,onchain_spent_height,onchain_spent_txid,oor_spent_txid
+			FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE
+		", &[&id_strings]).await?;
+		ensure!(rows.len() == vtxos.len(), "watchman claim source is missing or repeated");
+		self.lock_unallocated_watchman_inputs(&ids).await?;
+		let rows = rows.into_iter().map(|r| (r.get::<_, String>("vtxo_id"), r))
+			.collect::<BTreeMap<_, _>>();
+		for vtxo in vtxos {
+			let row = &rows[&vtxo.id().to_string()];
+			let current: ServerVtxo = ServerVtxo::deserialize(row.get("vtxo"))?;
+			ensure!(current.to_bare().serialize() == vtxo.serialize(), "watchman claim source changed since scan");
+			ensure!(row.get::<_, Option<i32>>("confirmed_height").is_some()
+				&& row.get::<_, Option<i32>>("onchain_spent_height").is_none()
+				&& row.get::<_, Option<&str>>("onchain_spent_txid").is_none(),
+				"watchman claim source is not confirmed and unspent");
+			if matches!(vtxo.policy(), ServerVtxoPolicy::User(VtxoPolicy::Pubkey(_)
+				| VtxoPolicy::ServerHtlcSend(_) | VtxoPolicy::ServerHtlcSend_v0(_)))
+			{
+				ensure!(row.get::<_, Option<&str>>("oor_spent_txid").is_none(),
+					"watchman claim source has a successor");
+			}
+		}
+		Ok(())
+	}
+
 	/// Add all vtxos whose vtxo_txid matches `funding_txid` to the frontier.
 	///
 	/// Used when a new funding tx is registered (finish_round, register_board,

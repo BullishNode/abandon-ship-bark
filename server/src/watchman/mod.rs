@@ -63,7 +63,7 @@ use bitcoind_async_client::Client as BitcoindClient;
 use bitcoind_async_client::traits::Reader;
 
 use crate::bitcoind as bcd;
-use crate::database::{BlockTable, Db};
+use crate::database::{BlockTable, Db, Tx};
 use crate::fee_estimator::FeeEstimator;
 use crate::system::RuntimeManager;
 use crate::utils::InstrumentedLock;
@@ -608,11 +608,10 @@ impl Watchman {
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
 	) -> anyhow::Result<()> {
-		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
-		let txid = tx.compute_txid();
-		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
-		self.db.write(async |t| {
-			t.lock_unallocated_watchman_inputs(&ids).await?;
+		let tx = self.db.write(async |t| {
+			// The scan is only a work list. Keep the source locks from this
+			// final authorization through signing, publication and commit.
+			t.lock_watchman_claim_inputs(vtxos).await?;
 			for vtxo in vtxos.iter().filter(|v| *v.policy() == ServerVtxoPolicy::ServerOwned) {
 				// Exclude mempool effects so our existing native RBF path can
 				// replace its own claim; canonical consumption always refuses.
@@ -622,9 +621,11 @@ impl Watchman {
 					&& output.script_pub_key.script()? == vtxo.txout().script_pubkey,
 					"operator collateral differs from its confirmed server-owned output");
 			}
+			let tx = self.build_claim_tx(t, vtxos, fee_rate).await?;
 			bcd::broadcast_tx(&self.bitcoind, &tx).await?;
-			Ok(())
+			Ok(tx)
 		}).await?;
+		let txid = tx.compute_txid();
 
 		let total_output_value = tx.output.iter().map(|o| o.value).sum::<Amount>();
 		let total_input_value = vtxos.iter().map(|v| v.amount()).sum::<Amount>();
@@ -644,12 +645,6 @@ impl Watchman {
 			mempool_spends.insert(vtxo.id(), claim.clone());
 		}
 		Ok(())
-	}
-
-	async fn claim_inputs(
-		&self, vtxos: &[ServerVtxo],
-	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount, usize)> {
-		self.claim_inputs_with_signer(vtxos, &self.signer).await
 	}
 
 	async fn claim_inputs_with_signer(
@@ -706,10 +701,12 @@ impl Watchman {
 
 	async fn build_claim_tx(
 		&self,
+		transaction: &Tx<'_>,
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
 	) -> anyhow::Result<Transaction> {
-		let (inputs, clauses, total_input_amount, total_input_weight) = self.claim_inputs(vtxos).await?;
+		let signer = self.signer.with_tx(transaction);
+		let (inputs, clauses, total_input_amount, total_input_weight) = self.claim_inputs_with_signer(vtxos, &signer).await?;
 
 		let lock_time = self.sync_height().height.to_locktime()
 			.expect("valid block height");
@@ -748,12 +745,7 @@ impl Watchman {
 			output: vec![output],
 		};
 
-		self.sign_claim_inputs(vtxos, &clauses, tx).await
-	}
-	async fn sign_claim_inputs(
-		&self, vtxos: &[ServerVtxo], clauses: &[Option<VtxoClause>], tx: Transaction,
-	) -> anyhow::Result<Transaction> {
-		self.sign_claim_inputs_with_signer(vtxos, clauses, tx, &self.signer).await
+		self.sign_claim_inputs_with_signer(vtxos, &clauses, tx, &signer).await
 	}
 
 	async fn sign_claim_inputs_with_signer(

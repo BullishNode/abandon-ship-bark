@@ -201,7 +201,7 @@ def main():
 	store_root(grpc_files.pop())
 	if not (core / "bin/bitcoin-cli").is_file() or not (core / "bin/bitcoind").is_file():
 		raise ValueError("Core output lacks bitcoin-cli or bitcoind")
-	if not re.match(r"Bitcoin Core version v31\.0(?:\.0)?(?:\s|$)",
+	if not re.match(r"Bitcoin Core(?: daemon)? version v31\.0(?:\.0)?(?:\s|$)",
 		run(str(core / "bin/bitcoind"), "--version")):
 		raise ValueError("unexpected Bitcoin Core version")
 	libraries = sorted(set(p.resolve(strict=True) for p in args.hold_lib_dir))

@@ -745,6 +745,11 @@ pub mod watchmand {
 		pub fn validate(&self) -> anyhow::Result<()> {
 			self.bitcoind.validate()?;
 			validate_admin_address(self.admin_address)?;
+			if self.min_trusted_confs == 0 {
+				bail!("Invalid configuration: min_trusted_confs must be at least 1, \
+					otherwise unconfirmed deposits from third parties count as trusted.",
+				);
+			}
 			Ok(())
 		}
 
@@ -1026,6 +1031,22 @@ mod test {
 
 		cfg.min_trusted_confs = 1;
 		cfg.validate().expect("one confirmation is valid");
+	}
+
+	#[test]
+	fn validate_watchmand_min_trusted_confs() {
+		let mut cfg = watchmand::Config::load(DEFAULT_WATCHMAND_CONFIG_PATH).unwrap();
+		cfg.bitcoind.cookie = Some(".cookie".into());
+		cfg.validate().expect("the default confirmation count is valid");
+
+		cfg.min_trusted_confs = 0;
+		let err = cfg.validate().expect_err("trusting unconfirmed deposits is invalid");
+		assert!(err.to_string().contains("min_trusted_confs"), "{}", err);
+
+		for confirmations in [1, 6, u32::MAX] {
+			cfg.min_trusted_confs = confirmations;
+			cfg.validate().expect("a positive confirmation count is valid");
+		}
 	}
 
 	#[test]

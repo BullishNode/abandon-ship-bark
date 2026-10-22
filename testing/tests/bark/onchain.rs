@@ -75,7 +75,7 @@ async fn list_utxos() {
 
 	let utxos = bark.utxos().await;
 
-	let payout = ctx.bitcoind().await_transaction(offboard.offboard_txid).await;
+	let payout = ctx.bitcoind().await_transaction(offboard).await;
 	let payouts = payout.output.iter().enumerate().filter(|(_, output)|
 		output.script_pubkey == addr.script_pubkey()).collect::<Vec<_>>();
 	assert_eq!(payouts.len(), 1);

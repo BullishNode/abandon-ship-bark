@@ -46,7 +46,11 @@ fn verify_output_group(
 	}
 	// Other registered accounts may deliberately share this same destination;
 	// this account's authenticated history need not enumerate their claims.
-	ensure!(fee <= payout_output_fee(gross) && gross.checked_sub(fee) == Some(payout),
+	// Include their payout value in the fee bound. Adding this account's fee
+	// recovers the output gross when it pays the whole fee; a smaller share
+	// still fits this bound without the other accounts' fee history.
+	let output_gross = output.value.checked_add(fee).context("payout output principal overflow")?;
+	ensure!(fee <= payout_output_fee(output_gross) && gross.checked_sub(fee) == Some(payout),
 		"payout output charges more than the agreed fee");
 	ensure!(payout > Amount::ZERO && payout <= output.value, "one chain output cannot cover these claims");
 	Ok(())
@@ -328,6 +332,9 @@ mod tests {
 		assert!(verify_output_group(&[&attempt], &parent, point, &script).is_ok());
 		attempt.fee += Amount::from_sat(1);
 		attempt.payout -= Amount::from_sat(1);
+		parent.output[0].value = attempt.payout;
+		attempt.output_amount = Some(attempt.payout);
+		let point = OutPoint::new(parent.compute_txid(), 0);
 		assert!(verify_output_group(&[&attempt], &parent, point, &script).is_err());
 		attempt.gross = Amount::from_sat(1_000);
 		attempt.fee = Amount::ZERO;
@@ -336,6 +343,25 @@ mod tests {
 		attempt.output_amount = Some(attempt.payout);
 		let point = OutPoint::new(parent.compute_txid(), 0);
 		assert!(verify_output_group(&[&attempt], &parent, point, &script).is_ok());
+	}
+
+	#[test]
+	fn shared_destination_fee_uses_the_whole_output() {
+		let (script, mut parent, mut attempt) = group();
+		// This account supplies 50,000 of the output's 400,000 gross sats.
+		attempt.gross = Amount::from_sat(50_000);
+		attempt.fee = Amount::from_sat(4_000);
+		attempt.payout = Amount::from_sat(46_000);
+		parent.output[0].value = Amount::from_sat(396_000);
+		attempt.output_amount = Some(parent.output[0].value);
+		let point = OutPoint::new(parent.compute_txid(), 0);
+		assert!(verify_output_group(&[&attempt], &parent, point, &script).is_ok());
+		attempt.fee += Amount::from_sat(1);
+		attempt.payout -= Amount::from_sat(1);
+		parent.output[0].value -= Amount::from_sat(1);
+		attempt.output_amount = Some(parent.output[0].value);
+		let point = OutPoint::new(parent.compute_txid(), 0);
+		assert!(verify_output_group(&[&attempt], &parent, point, &script).is_err());
 	}
 
 	#[test]

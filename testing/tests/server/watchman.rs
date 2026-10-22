@@ -90,7 +90,7 @@ async fn watchman_sweeps_boards() {
 	require_bark_version!(> "0.5.0");
 
 	let ctx = TestContext::new("server/watchman_sweeps_boards").await;
-	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).funded(btc(10)).cfg(|cfg| {
+	let srv = ctx.captaind("server").funded(btc(10)).cfg(|cfg| {
 		cfg.vtxo_lifetime = BlockDelta::new(144);
 		cfg.vtxopool.vtxo_targets = vec![];
 	}).watchmand_cfg(|cfg| {
@@ -133,7 +133,7 @@ async fn watchman_sweeps_boards() {
 
 	ctx.refresh_all(&srv, &[&bark1]).await;
 
-	// Stop at the actual old-board maturity so six confirmation blocks do not
+	// Stop at the old-board maturity so six confirmation blocks do not
 	// also expire the genuinely later replacement.
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	assert!(height < original.expiry_height().to_u32());
@@ -162,7 +162,7 @@ async fn watchman_sweeps_boards() {
 			&[&original.id().to_string(), &replacement.chain_anchor().txid.to_string()]).await?)).await.unwrap();
 		assert_eq!(forfeits.len(), 1, "operator recovery needs the actual accepted refresh");
 		assert!(replacement.expiry_height().to_u32() > tip.to_u32() + 6);
-		// Both actual-view barriers consume the original financial deadline.
+		// Both chain view barriers consume the original financial deadline.
 		srv.wait_for_sync_height(tip).await;
 		wm.wait_for_sync_height(tip).await;
 		let core = ctx.bitcoind().sync_client();
@@ -470,7 +470,7 @@ async fn watchman_sweeps_round_vtxos() {
 	let tip = ctx.generate_blocks(150).await;
 	assert!(originals.iter().chain(replacements.iter()).all(|coin| coin.expiry_height() < tip));
 	let (packages, participations) = tokio::time::timeout(Duration::from_secs(15), async {
-		// Attribution, actual view rebuilding and publication share the original clock.
+		// Attribution, view rebuilding and publication share the original clock.
 		let mut participations = BTreeMap::new();
 		for original in &originals {
 			let old = db.read(async |tx| tx.get_user_vtxo_by_id(original.id()).await).await.unwrap();
@@ -805,7 +805,7 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 	assert!(claim_fee > Amount::ZERO);
 
 	// Bind each physical checkpoint to its complete signed source path before
-	// expiry. The sender's actual exit exposes the receiver's two backing roots.
+	// expiry. The sender's exit exposes the receiver's two backing roots.
 	let mut frontiers = BTreeMap::new();
 	let mut source_frontiers = BTreeMap::new();
 	for coin in &customer_sources {
@@ -1241,7 +1241,7 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 	assert!(claim_fee > Amount::ZERO);
 
 	// Bind each physical checkpoint to its complete signed source path before
-	// expiry. The receiver's actual exit exposes these two sender-owned roots.
+	// expiry. The receiver's exit exposes these two sender-owned roots.
 	let mut frontiers = BTreeMap::new();
 	let mut source_frontiers = BTreeMap::new();
 	for coin in &changes {
@@ -1277,7 +1277,7 @@ async fn watchman_sweeps_arkoor_vtxos_receiver_exit() {
 	let tip = ctx.generate_blocks(150).await;
 	assert!(changes.iter().all(|coin| coin.expiry_height() < tip));
 	let packages = tokio::time::timeout(Duration::from_secs(5), async {
-		// These actual-view barriers consume the original five-second clock.
+		// These chain view barriers consume the original five-second clock.
 		srv.wait_for_sync_height(tip).await;
 		wm.wait_for_sync_height(tip).await;
 		assert_eq!(core.get_block_count().unwrap(), u64::from(tip.to_u32()));
@@ -1597,7 +1597,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 		async move { receiver.lightning_receive_all().wait_millis(60_000).await; },
 	);
 
-	// Read the actual registered outputs, without replacing the real receive action.
+	// Read the registered outputs, without replacing the real receive action.
 	let mut customers = BTreeMap::new();
 	for (owner, bark) in [&bark1, &bark2].into_iter().enumerate() {
 		let client = bark.client().await;
@@ -1652,7 +1652,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 	let tip = ctx.generate_blocks(150).await;
 	assert!(customers.values().all(|(coin, _)| coin.expiry_height() < tip));
 	let (packages, operators, incoming_ids, source_ids) = tokio::time::timeout(Duration::from_secs(5), async {
-		// Source attribution, actual rebuilt views and publication share the original five seconds.
+		// Source attribution, rebuilt views and publication share the original five seconds.
 		let funding_rows = db.read(async |tx| Ok(tx.query("SELECT f.id,f.subscription_id FROM expiry_lightning_internal_funding f \
 			JOIN lightning_payment_attempt a ON a.id=f.id AND a.lightning_htlc_subscription_id=f.subscription_id \
 			JOIN lightning_htlc_subscription s ON s.id=f.subscription_id AND s.payment_hash=a.payment_hash \
@@ -1717,7 +1717,7 @@ async fn watchman_sweeps_lightning_vtxos() {
 			assert!(claimed_outputs.insert(output_id.clone()));
 			let (actual, owner) = &customers[&output_id];
 			assert_eq!(*owner, 1);
-			// The stored destination is unsigned; validate the actual registered signed row instead.
+			// The stored destination is unsigned; validate the registered signed row instead.
 			let intent = <ark::Vtxo as ark::ProtocolEncoding>::deserialize(row.get("output_vtxo")).unwrap();
 			assert_eq!(intent.id(), actual.id());
 			assert_eq!(intent.amount(), grant_amounts[&source]);
@@ -2172,7 +2172,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 	assert!(destinations.iter().all(|destination| destination.spk != operator_script));
 	let tip = ctx.generate_blocks(150).await;
 	let (packages, roots, expected) = tokio::time::timeout(Duration::from_secs(15), async {
-		// Attribution, actual completed view and all funded publication share the original clock.
+		// Attribution, completed view and all funded publication share the original clock.
 		for original in &originals {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT p.id FROM round_part_input i \
 				JOIN round_participation p ON p.id=i.participation_id JOIN round r ON r.funding_txid=p.round_id \
@@ -3205,7 +3205,7 @@ async fn watchman_sweeps_offboard_connectors() {
 #[tokio::test]
 async fn watchman_sweeps_offboard_forfeit_after_confiscation() {
 	let ctx = TestContext::new("server/watchman_sweeps_offboard_forfeit_after_confiscation").await;
-	let srv = ctx.captaind("server").funded(btc(10)).cfg(|cfg| {
+	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).funded(btc(10)).cfg(|cfg| {
 		cfg.vtxo_lifetime = BlockDelta::new(144);
 		cfg.vtxopool.vtxo_targets = vec![];
 	}).watchmand_cfg(|cfg| {
@@ -3247,7 +3247,7 @@ async fn watchman_sweeps_offboard_forfeit_after_confiscation() {
 
 	let payout = ctx.bitcoind().get_new_address();
 	assert_ne!(payout.script_pubkey(), destination.spk);
-	let offboard_txid = bark.offboard_all(&payout).await.offboard_txid;
+	let offboard_txid = bark.offboard_all(&payout).await;
 	ctx.generate_blocks(1).await;
 
 	let spent = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
@@ -3317,7 +3317,7 @@ async fn watchman_sweeps_offboard_forfeit_after_confiscation() {
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-		// The authentic forfeit is Bare: its exclusive server key needs no invented Full path or customer allocation.
+		// The forfeit is Bare: its exclusive server key needs no invented Full path or customer allocation.
 		let stored = db.read(async |tx| tx.get_bare_vtxo_by_id(forfeit_id).await).await.unwrap();
 		assert_eq!(stored.spend_state, server::database::SpendState::OffboardForfeit);
 		assert_eq!(*stored.vtxo.policy(), ark::ServerVtxoPolicy::ServerOwned);
@@ -3709,7 +3709,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 	assert_eq!(ids.len(), 1);
 	let replacement = bark2.client().await.get_full_vtxo(ids[0]).await.unwrap();
 	assert_eq!(replacement.amount(), sat(250_000));
-	// The singleton round also has one operator padding leaf. Bind its actual signed backing.
+	// The singleton round also has one operator padding leaf. Bind its signed backing.
 	let round = db.read(async |tx| tx.get_round(replacement.chain_anchor().txid.into()).await).await.unwrap().unwrap();
 	assert_eq!(round.funding_txid.as_round_txid(), replacement.chain_anchor().txid);
 	let tree = round.into_cached_tree().unwrap();
@@ -3793,7 +3793,7 @@ async fn watchman_sweeps_exit_after_oor_then_forfeit() {
 	assert_ne!(destinations[0].spk, destinations[1].spk);
 	let replacement_mature = replacement.expiry_height() <= tip;
 	let (packages, roots, expected, available) = tokio::time::timeout(Duration::from_secs(10), async {
-		// All new attribution, the actual current view and publication share the original clock.
+		// All new attribution, the current view and publication share the original clock.
 		for (coin, round) in originals.iter().map(|coin| (coin, stale.chain_anchor().txid))
 			.chain([(&recipient, replacement.chain_anchor().txid), (&received, replacement.chain_anchor().txid)]) {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT p.id FROM round_part_input i \

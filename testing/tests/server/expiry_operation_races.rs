@@ -19,8 +19,8 @@ use server::database::{Db, Tx};
 use server_rpc::protos;
 use tokio::sync::{Notify, oneshot};
 
-/// Park an actual SDK request after prepare/signing, before the server's
-/// durable registration. Every transaction and signature is genuine.
+/// Park an SDK request after prepare/signing, before the server's
+/// durable registration. The request uses signed transactions.
 #[derive(Clone)]
 struct HoldFinish {
 	arrived: Arc<Mutex<Option<oneshot::Sender<protos::FinishOffboardRequest>>>>,
@@ -128,7 +128,7 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 			wait_for_query_lock(tx, "SELECT vtxo_id,updated_at,spend_state::TEXT,%").await?;
 			Ok(())
 		}).await.unwrap();
-		let actual = tokio::time::timeout(Duration::from_secs(20), operation).await.unwrap().unwrap().unwrap();
+		let actual = tokio::time::timeout(Duration::from_secs(20), operation).await.unwrap().unwrap().unwrap().txid;
 		assert_eq!(actual, offboard_txid);
 		let response = gate.response.lock().unwrap().clone().unwrap().unwrap();
 		let signed: Transaction = deserialize(&response.signed_offboard_tx).unwrap();

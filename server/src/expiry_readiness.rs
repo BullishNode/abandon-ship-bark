@@ -189,7 +189,35 @@ impl Server {
 	) -> anyhow::Result<()> {
 		// One immutable inventory per anchor per pass, including after a split.
 		// Repeating the whole anchor SQL query once per child is quadratic work.
-		let snapshot = self.db.read(async |t| t.backing_snapshot(&roots, INVENTORY_LIMITS).await).await?;
+		let (snapshot, roots) = self.db.read(async |t| {
+			let snapshot = t.backing_snapshot(&roots, INVENTORY_LIMITS).await?;
+			// The cursor selects anchors. Revisit held roots at the same anchor
+			// so a later cursor page does not pay their siblings separately.
+			let tip = i32::try_from(view.captaind.height.min(view.watchmand.height).to_u32())?;
+			let limit = i64::try_from(INVENTORY_LIMITS.max_rows)?.checked_add(1)
+				.context("expiry root row budget overflow")?;
+			let eligible = t.query("
+				SELECT v.vtxo_id FROM vtxo v
+				WHERE v.anchor_point=$1 AND v.expiry<=$2
+					AND v.frontier_at IS NOT NULL AND v.confirmed_height<=$2
+					AND v.onchain_spent_height IS NULL
+					AND NOT EXISTS(SELECT 1 FROM expiry_allocation_input i
+						JOIN expiry_allocation a ON a.id=i.allocation_id
+						WHERE i.vtxo_id=v.vtxo_id AND a.status<>'conflicted')
+				ORDER BY v.id
+				LIMIT $3
+			", &[&anchor.to_string(), &tip, &limit]).await?;
+			ensure!(eligible.len() <= INVENTORY_LIMITS.max_rows, "expiry frontier exceeds row budget");
+			let inventory = snapshot.regular.iter().map(|fact|
+				(fact.state.vtxo_id.to_string(), &fact.state.vtxo)
+			).collect::<BTreeMap<_, _>>();
+			let roots = eligible.into_iter().map(|row| {
+				let id = row.get::<_, String>("vtxo_id");
+				inventory.get(&id).map(|root| (*root).clone())
+					.context("expiry frontier changed after the anchor inventory was read")
+			}).collect::<anyhow::Result<Vec<_>>>()?;
+			Ok((snapshot, roots))
+		}).await?;
 		let funding = self.bitcoind.get_raw_transaction_verbosity_zero(&anchor.txid).await?.0;
 		ensure!(funding.compute_txid() == anchor.txid, "expiry funding transaction differs from its anchor");
 		// Path validation can traverse a large signed tree. Keep it outside

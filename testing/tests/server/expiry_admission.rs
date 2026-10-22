@@ -85,7 +85,7 @@ async fn expiry_native_rpc_refusals_have_stable_reasons() {
 	let (full,bare,policy) = db.read(async |t| Ok((
 		t.get_user_vtxo_by_id(source.id()).await?,
 		t.get_bare_vtxo_by_id(source.id()).await?,
-		t.get_vtxos_by_policy(&[source.policy().clone()]).await?,
+		t.get_vtxos_by_policy_page(source.policy(), None, 10).await?,
 	))).await.unwrap();
 	assert!(full.decided_for_fallback && bare.decided_for_fallback);
 	assert!(policy.iter().find(|v| v.vtxo_id==source.id()).unwrap().decided_for_fallback);

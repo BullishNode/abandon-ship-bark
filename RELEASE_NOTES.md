@@ -50,50 +50,50 @@ or recovery.
 
 ## Changes in this source
 
-- Expiry payout and forfeiture decisions require the complete same-source
-  owner group, including siblings under separate physical outputs. Final checks
-  revalidate the source and ownership. Incomplete groups remain held; an
-  independently ready fragment must not incur another output fee.
-- The watchman uses Core's observed fee to replace an unrecognized P2A fee
-  child. It preserves the exact payout parent. An unrecognized child is not
-  evidence of operator funding or customer settlement.
-- Expiry preparation reuses immutable source paths and funding bytes within
-  one anchor pass. Selected-path, size, ownership, version and canonical-chain
-  checks remain required. This change does not establish a capacity envelope.
-- The optional `fee_estimator.max_fee_rate` ceiling clamps the initial fallback
-  rates before use and all later fetched or fallback rates. This ceiling does
-  not cap cumulative operator subsidy or every replacement fee.
-- Both daemons reject `min_trusted_confs = 0` during configuration validation.
-  A third-party unconfirmed deposit must not count as a trusted fee input.
-- Server and standalone watchman initialization await initial wallet storage
-  before success. Storage errors propagate to the caller. Database creation,
-  the seed file and each wallet commit remain separate steps. A failure can
-  leave partial state; preserve it and investigate before any retry.
+- Expiry payouts charge each owner payout script once per expiry height. The
+  cumulative fee is the greater of 1,000 sats and 1% of the total gross paid,
+  rounded up. Each new output pays that cumulative fee minus the fees already
+  charged by non-conflicted allocations for the same script and height.
+- An unresolved owner lookup holds its output without a split. A group whose net
+  value is below dust also remains held while another coin under the same source
+  anchor at that height is undecided. The dust decision completes once those
+  coins are decided.
+- Padding leaves belong to the operator when their policy key is upstream's
+  unspendable key, `0x02 || sha256("unspendable1")`. There is no provenance table or
+  change to upstream round creation. This also assigns coins deliberately locked
+  to that key to the operator, an accepted exception to the rule that the operator
+  keeps only value it paid for. No one can spend with that key.
+- Before a claim can publish, the fork rechecks the source inside the write
+  transaction. The source row must be unchanged, confirmed and unspent. Pubkey
+  and HTLC-send sources must have no successor. A refused claim is not broadcast.
+- The watchman uses Core's observed fee to replace an unrecognized P2A fee child.
+  It preserves the exact payout parent. An unrecognized child does not establish
+  operator funding or customer settlement.
+- Deployment controls belong to the operator. Bind admin RPC to loopback, block
+  public access with the firewall, and restrict any reverse proxy to the public
+  API. Admin RPC has no authentication. The daemon does not enforce these
+  isolation or proxy-trust rules.
 
 These changes describe source behavior. Runtime and financial qualification on
 matching final GNU programs and the final release bundle remain required.
 
 ## Known limits and remaining qualification
 
-- Earlier programs could forfeit a small customer leaf before the same
-  owner's siblings were ready. A confirmed case paid 17,000 instead of the
-  merged 18,000 sats. The first proposed fix still forfeited 1,000 sats. The
-  complete owner-group checks are now implemented, but final-program
-  qualification remains required. Preserve every customer right and hold
-  incomplete groups. Do not relax financial checks.
+- Earlier programs could forfeit a 1,000-sat customer coin before the same
+  owner's other coins were ready. The regression requires 19 rights to pay
+  18,000 sats with one 1,000-sat fee and no forfeiture. The cumulative fee and
+  sub-dust hold require qualification on the final programs. Earlier results do
+  not qualify this release.
 - Earlier programs could stop payout fee replacement when an unrecognized
-  foreign P2A fee child appeared. A targeted regression fails before the
-  source fix and passes after it. Independent review supports that fix's
-  scoped financial behavior. These results retain their original program
-  identities. They do not qualify the final programs or bundle.
-- An earlier 4,096-payee native test took 1,543.594 seconds, including teardown,
-  and failed its unchanged 1,500-second limit. Later candidates also failed
-  that limit. Separate historical chain verification supports 17 zero-fee
-  parents, 17 fee children with 925,040 sats in miner fees, and 4,096 distinct
-  scripts paid exactly 4,000 sats once each. It does not establish a complete
-  match with the registered-owner set or full operator-capital conservation.
-  The current geometry reuse still requires the unchanged capacity test on
-  the final programs. There is no qualified production capacity envelope.
+  foreign P2A fee child appeared. A targeted regression and its independent
+  review retain their original program identities. They do not qualify the
+  final programs or bundle.
+- The owner accepts the 4,096-owner capacity failure as an operating limit. An
+  earlier test took 1,543.594 seconds, including teardown, against its unchanged
+  1,500-second bound. Later candidates also failed that bound. The fork does not
+  add a geometry cache to meet it. This size is not a qualified production
+  envelope. Historical payments and timing do not prove the final release's
+  capacity or complete financial conservation.
 - Ambiguous external Lightning outcomes can remain pending. Supervised
   recovery of a request that never reached Lightning requires intact original
   history, complete producer and queue shutdown, and retained incident records.
@@ -103,9 +103,10 @@ matching final GNU programs and the final release bundle remain required.
   owners and registered owners with incomplete attribution remain held and
   can delay shared-tree payouts. Never assign their bitcoin to the operator.
   Restore must retain all accepted registrations and financial commitments.
-- The fallback output fee remains fixed in code at 1,000 sats. Ordinary board,
-  refresh, offboard and Lightning fees are configured in TOML. This candidate
-  does not make every fee configurable.
+- The fallback payout fee remains fixed in code at max(1,000 sats, 1%), counted
+  cumulatively per payout script and expiry height. Ordinary board, refresh,
+  offboard and Lightning fees are configured in TOML. This candidate does not
+  make every fee configurable.
 - Payouts require confirmed usable watchman fee inputs. The operator miner
   subsidy has no hard cap. Monitor fee reserves and verify payout recovery
   after replenishment.

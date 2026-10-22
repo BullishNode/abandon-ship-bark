@@ -1,6 +1,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 
 use anyhow::bail;
 use bitcoin::{Address, address::NetworkUnchecked};
@@ -9,9 +10,10 @@ use bitcoin::{Address, address::NetworkUnchecked};
 use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef};
 use bitcoin_ext::rpc::{BitcoinRpcExt, BitcoinRpcClient, RpcApi};
 
-use server::sync::{ChainEventListener, RawMempool, BlockData};
+use server::sync::{ChainEventListener, RawMempool, BlockData, SyncManager};
 use server::sync::block_index::{BlockIndex};
 use server::database::{BlockTable, Db};
+use server::system::RuntimeManager;
 
 use ark_testing::TestContext;
 
@@ -273,3 +275,85 @@ async fn test_block_index_reorg_retry() {
 	assert_eq!(completed.load(Ordering::SeqCst), 3, "equal-tip restart cycles must acknowledge completion");
 }
 
+struct FailOnceMempoolListener {
+	calls: Arc<AtomicUsize>,
+	accepted: Arc<AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl ChainEventListener for FailOnceMempoolListener {
+	async fn on_block_added(&self, _block: &BlockData) -> anyhow::Result<()> {
+		bail!("unexpected block after the index reached the unchanged tip");
+	}
+
+	async fn on_reorg(&self, _block: BlockRef) -> anyhow::Result<()> {
+		bail!("unexpected reorg at the unchanged tip");
+	}
+
+	async fn on_mempool_update(&self, _raw: &RawMempool) -> anyhow::Result<()> {
+		if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+			bail!("simulated mempool listener failure");
+		}
+		self.accepted.fetch_add(1, Ordering::SeqCst);
+		Ok(())
+	}
+}
+
+#[tokio::test]
+async fn test_sync_manager_polls_mempool_at_equal_tip_and_retries_listener() {
+	let mut ctx = TestContext::new_minimal("block_index/equal_tip_mempool_retry").await;
+	ctx.init_central_postgres().await;
+	let postgres_cfg = ctx.new_postgres(&ctx.test_name).await;
+	Db::create(&postgres_cfg).await.expect("Database created");
+	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+
+	ctx.init_central_bitcoind().await;
+	let bitcoind = ctx.bitcoind().sync_client();
+	let bitcoind_async = ctx.bitcoind().async_client();
+	let birthday = bitcoind.deep_tip().expect("deep tip");
+	let tip = bitcoind.tip().expect("chain tip");
+
+	// Persist the current tip before the sync manager starts, as on a restart.
+	let mut block_index = BlockIndex::new(
+		bitcoind_async.clone(), db.clone(), Vec::new(), birthday, BlockTable::Captaind,
+	).await.expect("block index created");
+	block_index.sync().await.expect("warm block index");
+	assert_eq!(block_index.sync_tip(), tip);
+	assert!(!block_index.sync().await.expect("equal-tip sync"));
+	drop(block_index);
+
+	let calls = Arc::new(AtomicUsize::new(0));
+	let accepted = Arc::new(AtomicUsize::new(0));
+	let listeners = vec![Box::new(FailOnceMempoolListener {
+		calls: calls.clone(), accepted: accepted.clone(),
+	}) as Box<dyn ChainEventListener>];
+	let rtmgr = RuntimeManager::new();
+	let manager = SyncManager::start(
+		rtmgr.clone(), bitcoind_async, db.clone(), listeners, birthday,
+		Duration::from_millis(100), BlockTable::Captaind,
+	).await.expect("sync manager started");
+	assert_eq!(manager.sync_height(), tip);
+
+	// No block is mined. The first poll must occur at the equal tip, and a
+	// later cycle must retry the refused callback after the normal backoff.
+	let retried = tokio::time::timeout(Duration::from_secs(30), async {
+		while accepted.load(Ordering::SeqCst) == 0 {
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}).await;
+	let repeated = tokio::time::timeout(Duration::from_millis(350), async {
+		while calls.load(Ordering::SeqCst) <= 2 {
+			tokio::time::sleep(Duration::from_millis(10)).await;
+		}
+	}).await;
+	tokio::time::timeout(Duration::from_secs(10), rtmgr.shutdown_wait()).await
+		.expect("sync manager shut down");
+	retried.expect("mempool listener retried without a new block");
+	assert!(repeated.is_err(), "successful equal-tip polling must not repeat at the block-poll interval");
+	assert_eq!(calls.load(Ordering::SeqCst), 2);
+	assert_eq!(bitcoind.tip().expect("unchanged chain tip"), tip);
+	assert_eq!(manager.chain_tip(), tip);
+	assert_eq!(manager.sync_height(), tip);
+	let persisted = db.read(async |t| t.get_highest_block(BlockTable::Captaind).await).await.unwrap();
+	assert_eq!(persisted, Some(tip));
+}

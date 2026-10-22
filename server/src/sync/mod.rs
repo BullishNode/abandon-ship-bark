@@ -80,8 +80,8 @@ pub trait ChainEventListener: Send + Sync {
 	/// Called when the mempool has been polled.
 	///
 	/// Contains a complete snapshot of all transaction IDs currently in the
-	/// mempool (not a diff). This is called periodically and always immediately
-	/// after a new block is added.
+	/// mempool (not a diff). Polls follow successful block sync at startup,
+	/// after new blocks, and when a failed poll needs to retry.
 	async fn on_mempool_update(&self, mempool: &RawMempool) -> anyhow::Result<()>;
 }
 
@@ -95,29 +95,33 @@ impl Process {
 	/// Runs the sync process loop.
 	///
 	/// This loop is responsible for keeping the server in sync with the blockchain:
-	/// - Polls for new blocks every second and updates the block index
-	/// - Polls the mempool immediately after a new blocks are found
+	/// - Polls for new blocks at the configured interval and updates the block index
+	/// - Polls the mempool at startup, after new blocks, and after poll failures
 	async fn run(mut self, rtmgr: RuntimeManager) -> anyhow::Result<()> {
 		let _worker = rtmgr.spawn_critical("SyncManager");
 
 		let mut block_interval = tokio::time::interval(self.block_poll_interval);
 		block_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+		let mut mempool_due = true;
 
 		loop {
 			tokio::select!{
 				_ = block_interval.tick() => {
 					match self.block_index.sync().await {
-						// New block found: poll mempool to update tx statuses
-						Ok(true) => {
+						// A warm database still needs its first mempool snapshot.
+						Ok(changed) if changed || mempool_due => {
+							mempool_due = true;
 							if let Err(e) = self.poll_mempool().await {
 								error!("Error polling mempool: {}", e);
 								// Back off to avoid overwhelming a struggling downstream system
 								tokio::time::sleep(Duration::from_secs(10)).await;
+							} else {
+								mempool_due = false;
 							}
 						},
-						// Already in sync, nothing to do
-						Ok(false) => {},
+						Ok(_) => {},
 						Err(e) => {
+							mempool_due = true;
 							error!("Error syncing block index: {}", e);
 							// Back off to avoid overwhelming a struggling downstream system
 							tokio::time::sleep(Duration::from_secs(10)).await;

@@ -1,6 +1,6 @@
 //! Background preparation of independently ready expiry backing outputs.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,6 +33,7 @@ pub(crate) const INVENTORY_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits
 enum PreparedCoin {
 	Ready(ReadyCoin),
 	Hold,
+	AwaitingAttribution,
 	NeedsHtlcProgress,
 }
 
@@ -58,7 +59,7 @@ impl Tx<'_> {
 				match self.expiry_owner(*user_pubkey, network).await? {
 					Attribution::Owned { mailbox_pk, child_index, spk } =>
 						Some(VerifiedPayee { mailbox: mailbox_pk, child_index, script: spk }),
-					Attribution::Unresolved => return Ok(PreparedCoin::Hold),
+					Attribution::Unresolved => return Ok(PreparedCoin::AwaitingAttribution),
 					Attribution::NoRegisteredOwner => {
 						warn!(vtxo_id = %ownership.id, "Expiry customer has no registered payout destination; no operator sweep authorized");
 						return Ok(PreparedCoin::Hold);
@@ -188,15 +189,69 @@ impl Server {
 	) -> anyhow::Result<()> {
 		// One immutable inventory per anchor per pass, including after a split.
 		// Repeating the whole anchor SQL query once per child is quadratic work.
+		let mut outputs = Vec::new();
 		let snapshot = self.db.read(async |t| t.backing_snapshot(&roots, INVENTORY_LIMITS).await).await?;
 		let funding = self.bitcoind.get_raw_transaction_verbosity_zero(&anchor.txid).await?.0;
 		ensure!(funding.compute_txid() == anchor.txid, "expiry funding transaction differs from its anchor");
 		// Path validation can traverse a large signed tree. Keep it outside
 		// both database transactions and the async executor's worker threads.
-		let (snapshot, funding, transitions) = tokio::task::spawn_blocking(move || {
+		let (snapshot, funding, transitions, source_cut) = tokio::task::spawn_blocking(move || {
 			let transitions = source_transitions(&snapshot, &funding)?;
-			Ok::<_, anyhow::Error>((snapshot, funding, transitions))
+			let source = snapshot.regular.iter().find(|fact| fact.state.vtxo.point() == anchor)
+				.context("expiry source cohort lacks its original backing anchor")?;
+			let source_cut = economic_cut(&snapshot, &source.state.vtxo, &funding, &transitions, INVENTORY_LIMITS)?;
+			Ok::<_, anyhow::Error>((snapshot, funding, transitions, source_cut))
 		}).await.context("expiry source validation task failed")??;
+		let reserved = self.db.read(async |t| Ok(t.query("
+			SELECT e.vtxo_id FROM expiry_entitlement e JOIN vtxo v ON v.vtxo_id=e.vtxo_id
+			WHERE v.anchor_point=$1 AND (
+				EXISTS(SELECT 1 FROM expiry_allocation_coin c
+					JOIN expiry_allocation a ON a.id=c.allocation_id
+					WHERE c.entitlement_id=e.id AND ((c.active AND a.status<>'conflicted') OR a.status='confirmed'))
+				OR EXISTS(SELECT 1 FROM expiry_terminal_claim p WHERE p.entitlement_id=e.id))
+		", &[&anchor.to_string()]).await?.into_iter().map(|row| row.get::<_, String>(0))
+			.collect::<BTreeSet<_>>())).await?;
+		let versions = source_cut.visited.iter().map(|index| {
+			let fact = &snapshot.regular[*index];
+			(fact.state.vtxo_id.to_string(), (fact.state.updated_at, fact.state.spend_state.as_str().to_owned(),
+				fact.onchain_spent_height.is_some() || fact.onchain_spent_txid.is_some()))
+		}).collect();
+		let mut complete = true;
+		let mut owners = BTreeMap::<bitcoin::secp256k1::PublicKey, BTreeSet<ark::VtxoId>>::new();
+		let mut prepared = BTreeMap::new();
+		for index in source_cut.terminals {
+			let fact = &snapshot.regular[index];
+			if fact.onchain_spent_height.is_some() || fact.onchain_spent_txid.is_some()
+				|| reserved.contains(&fact.state.vtxo_id.to_string()) { continue; }
+			if fact.frontier_at.is_some() {
+				if let ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) = fact.state.vtxo.policy() {
+					let owned = policy.user_pubkey == self.server_pubkey || self.db.read(async |t|
+						t.fetch_ephemeral_tweak(policy.user_pubkey).await
+					).await?.is_some();
+					if !owned {
+						if let Some(output) = self.bitcoind.try_get_tx_out(fact.state.vtxo.point(), true).await? {
+							ensure!(output.confirmations > 0 && output.value == fact.state.vtxo.amount()
+								&& output.script_pub_key.script()? == fact.state.vtxo.txout().script_pubkey,
+								"expiry user exit differs from its confirmed output");
+							// This right is already in the user's on-chain custody.
+							// It cannot join a payout the server must sign.
+							continue;
+						}
+					}
+				}
+			}
+			if self.rtmgr.shutdown_requested() { return Ok(()); }
+			let coin = self.db.write(async |t| t.prepare_expiry_coin(
+				fact, &funding, view, self.config.network, self.config.expiry_internal_refund_depth,
+			).await).await?;
+			match &coin {
+				PreparedCoin::Ready(coin) => if let Some(payee) = &coin.payee {
+					owners.entry(payee.mailbox).or_default().insert(coin.ownership.id);
+				},
+				PreparedCoin::Hold | PreparedCoin::AwaitingAttribution | PreparedCoin::NeedsHtlcProgress => complete = false,
+			}
+			prepared.insert(fact.state.vtxo_id, coin);
+		}
 		let snapshot = Arc::new(snapshot);
 		let transitions = Arc::new(transitions);
 		for root in roots {
@@ -232,6 +287,7 @@ impl Server {
 				};
 				let mut coins = Vec::with_capacity(cut.terminals.len());
 				let mut hold = false;
+				let mut awaiting_attribution = false;
 				let mut needs_htlc_progress = false;
 				for index in &cut.terminals {
 					if self.rtmgr.shutdown_requested() {
@@ -239,25 +295,25 @@ impl Server {
 					}
 					// Release the registry lock between coins. A large tree must
 					// not block registrations while preparing all of its owners.
-					let coin = self.db.write(async |t| t.prepare_expiry_coin(
-						&snapshot.regular[*index],
-						&funding,
-						view,
-						self.config.network,
-						self.config.expiry_internal_refund_depth,
-					).await).await.with_context(|| format!(
-						"expiry ownership preparation for terminal {}", snapshot.regular[*index].state.vtxo_id
-					))?;
+					let fact = &snapshot.regular[*index];
+					let coin = if let Some(coin) = prepared.remove(&fact.state.vtxo_id) { coin } else {
+						self.db.write(async |t| t.prepare_expiry_coin(
+							fact, &funding, view, self.config.network, self.config.expiry_internal_refund_depth,
+						).await).await.with_context(|| format!("expiry ownership preparation for terminal {}", fact.state.vtxo_id))?
+					};
 					match coin {
 						PreparedCoin::Ready(coin) => coins.push(coin),
 						PreparedCoin::Hold => hold = true,
+						PreparedCoin::AwaitingAttribution => awaiting_attribution = true,
 						PreparedCoin::NeedsHtlcProgress => needs_htlc_progress = true,
 					}
 				}
-				if hold || needs_htlc_progress {
+				if hold || awaiting_attribution || needs_htlc_progress {
 					// Separate held siblings only through signed steps that preserve
 					// every branch's server recovery path, as checked by the split request.
-					if needs_htlc_progress || (hold && cut.terminals.len() > 1) {
+					// Attribution can finish without spending this backing. Wait
+					// for it before splitting a potentially payable owner group.
+					if needs_htlc_progress || (hold && !awaiting_attribution && cut.terminals.len() > 1) {
 						self.db.write(async |t| t.request_expiry_split(view, &root).await).await
 							.context("expiry readiness split request")?;
 					}
@@ -282,7 +338,7 @@ impl Server {
 					selected, coins, std::slice::from_ref(&funding), &cut.residuals, INVENTORY_LIMITS
 				)?;
 				*prepared_bytes = next_bytes;
-				ready.entry(root.expiry_height()).or_default().push(output);
+				outputs.push(output);
 				Ok::<_, anyhow::Error>(())
 			}.await;
 			if let Err(error) = result {
@@ -290,10 +346,15 @@ impl Server {
 					"Expiry output remains unready; siblings continue");
 			}
 		}
+		ReadyOutput::bind_source_cohort(&mut outputs, complete, owners, versions)?;
+		for output in outputs {
+			ready.entry(output.root().expiry_height()).or_default().push(output);
+		}
 		Ok(())
 	}
 
 	async fn commit_ready_group(&self, view: ExpiryViewToken, outputs: Vec<ReadyOutput>) -> anyhow::Result<()> {
+		let outputs = ReadyOutput::retain_complete_owner_groups(outputs);
 		if outputs.is_empty() {
 			return Ok(());
 		}

@@ -1,6 +1,7 @@
 //! Short durable allocation commits for independently ready, same-expiry outputs.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use anyhow::Context;
 use bitcoin::{Amount, Network, ScriptBuf, Transaction, TxIn, TxOut, Sequence, Witness};
@@ -35,9 +36,53 @@ pub struct ReadyOutput {
 	versions: Vec<(VtxoId, DateTime<Local>, SpendState)>,
 	snapshot: BackingSnapshot,
 	funding: Vec<Transaction>,
+	source_cohort: Option<Arc<SourceCohort>>,
+}
+
+struct SourceCohort {
+	complete: bool,
+	owners: BTreeMap<PublicKey, BTreeSet<VtxoId>>,
+	versions: BTreeMap<String, (DateTime<Local>, String, bool)>,
 }
 
 impl ReadyOutput {
+	fn owner_group_is_complete(&self, coin: &ReadyCoin, included: &BTreeSet<VtxoId>) -> bool {
+		let Some(payee) = &coin.payee else { return true; };
+		self.source_cohort.as_ref().is_some_and(|cohort| cohort.complete
+			&& cohort.owners.get(&payee.mailbox).is_some_and(|ids| ids.is_subset(included)))
+	}
+
+	/// Hold whole physical outputs, never remove a customer's leaf from its
+	/// partition. Unrelated payable roots can still commit in this pass.
+	pub(crate) fn retain_complete_owner_groups(mut outputs: Vec<Self>) -> Vec<Self> {
+		loop {
+			let included = outputs.iter().flat_map(|output| output.coins.iter().map(|coin| coin.ownership.id))
+				.collect::<BTreeSet<_>>();
+			let held = outputs.iter().filter(|output| output.coins.iter().any(|coin|
+				!output.owner_group_is_complete(coin, &included)))
+				.map(|output| output.root.id()).collect::<BTreeSet<_>>();
+			if held.is_empty() { return outputs; }
+			outputs.retain(|output| !held.contains(&output.root.id()));
+		}
+	}
+
+	/// The complete logical source cut includes siblings whose physical backing
+	/// has not reached the frontier yet. Sharing its proof avoids copying it
+	/// once per ready backing output.
+	pub(crate) fn bind_source_cohort(
+		outputs: &mut [Self], complete: bool,
+		owners: BTreeMap<PublicKey, BTreeSet<VtxoId>>,
+		versions: BTreeMap<String, (DateTime<Local>, String, bool)>,
+	) -> anyhow::Result<()> {
+		let Some(first) = outputs.first() else { return Ok(()); };
+		let anchor = first.root.chain_anchor();
+		ensure!(outputs.iter().all(|output| output.root.chain_anchor() == anchor),
+			"expiry owner cohort mixes source anchors");
+		let cohort = Arc::new(SourceCohort { complete, owners, versions });
+		for output in outputs { output.source_cohort = Some(Arc::clone(&cohort)); }
+		Ok(())
+	}
+
 	/// Conservatively preflight complete groups before their short decision
 	/// commit. Consensus serialization supplies the real CompactSize lengths;
 	/// the largest actual policy witness bounds the later signer's choice.
@@ -105,7 +150,7 @@ impl ReadyOutput {
 			"readiness inventory omits its physical backing root");
 		versions.sort_by_key(|v| v.0);
 		versions.dedup_by_key(|v| v.0);
-		Ok(Self { root, coins, versions, snapshot, funding: funding.to_vec() })
+		Ok(Self { root, coins, versions, snapshot, funding: funding.to_vec(), source_cohort: None })
 	}
 }
 
@@ -174,6 +219,11 @@ impl Tx<'_> {
 		ensure!(outputs.iter().all(|o| o.root.expiry_height() <= view.captaind.height
 			&& o.root.expiry_height() <= view.watchmand.height), "expiry group is not mature in the completed view");
 		let mut ids = outputs.iter().flat_map(|o| o.versions.iter().map(|v| v.0.to_string())).collect::<Vec<_>>();
+		for output in &outputs {
+			if let Some(cohort) = &output.source_cohort {
+				ids.extend(cohort.versions.keys().cloned());
+			}
+		}
 		let participations = outputs.iter().flat_map(|o| o.coins.iter().flat_map(|c| c.ownership.cancellations.iter().copied())).collect::<Vec<_>>();
 		if !participations.is_empty() {
 			ids.extend(self.query("SELECT vtxo_id FROM round_part_input WHERE participation_id=ANY($1)", &[&participations]).await?
@@ -228,6 +278,9 @@ impl Tx<'_> {
 		for output in outputs {
 			let mut valid = output.versions.iter().all(|(id, time, state)|
 				actual.get(&id.to_string()) == Some(&(*time, state.as_str().to_owned(), false)));
+			if let Some(cohort) = &output.source_cohort {
+				valid &= cohort.versions.iter().all(|(id, expected)| actual.get(id) == Some(expected));
+			}
 			for coin in &output.coins {
 				let fact = output.snapshot.regular.iter().find(|f| f.state.vtxo_id == coin.ownership.id)
 					.context("ready coin source disappeared")?;
@@ -272,6 +325,14 @@ impl Tx<'_> {
 			id: c.ownership.id, script: payee.script.clone(), amount: c.ownership.gross,
 		})).collect();
 		let plan = allocate(leaves)?;
+		let included = accepted.iter().flat_map(|output| output.coins.iter().map(|coin| coin.ownership.id))
+			.collect::<BTreeSet<_>>();
+		for output in &accepted {
+			for coin in &output.coins {
+				ensure!(output.owner_group_is_complete(coin, &included),
+					"customer funds remain held until their current same-source owner group is complete");
+			}
+		}
 		let policy = plan.forfeits.iter().chain(plan.recipients.iter().flat_map(|r| &r.leaves))
 			.map(|a| (a.id,a)).collect::<BTreeMap<_, _>>();
 		let id: i64 = self.query_one("INSERT INTO expiry_allocation(expiry_height,generation,status) VALUES($1,$2,'pending') RETURNING id",

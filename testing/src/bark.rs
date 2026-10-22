@@ -5,7 +5,7 @@ use std::{env, fmt};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -48,6 +48,7 @@ pub struct Bark {
 	datadir: PathBuf,
 	config: Config,
 	counter: AtomicUsize,
+	observe_executables: AtomicBool,
 	timeout: Option<Duration>,
 	bitcoind: Option<Arc<Bitcoind>>,
 	command_log: Mutex<fs::File>,
@@ -115,6 +116,7 @@ impl Bark {
 			datadir: self.datadir.clone(),
 			config: self.config.clone(),
 			counter: AtomicUsize::new(self.counter.load(Ordering::Relaxed)),
+			observe_executables: AtomicBool::new(self.observe_executables.load(Ordering::Relaxed)),
 			timeout: self.timeout,
 			bitcoind: self.bitcoind.clone(),
 			command_log: Mutex::new(command_log),
@@ -215,6 +217,7 @@ impl Bark {
 			config: config,
 			name: name.as_ref().to_string(),
 			counter: AtomicUsize::new(0),
+			observe_executables: AtomicBool::new(false),
 			timeout: None,
 			command_log: Mutex::new(fs::File::create(datadir.join(COMMAND_LOG_FILE)).await?),
 			datadir: datadir,
@@ -224,6 +227,12 @@ impl Bark {
 
 	pub fn name(&self) -> &str {
 		&self.name
+	}
+
+	/// Retain live executable observations for this wallet's subsequent CLI calls.
+	/// An unavailable observation remains unavailable; a path hash is no substitute.
+	pub fn observe_executables(&self) {
+		self.observe_executables.store(true, Ordering::Relaxed);
 	}
 
 	pub fn datadir(&self) -> &Path {
@@ -1202,6 +1211,17 @@ impl Bark {
 		command.stdout(Stdio::piped());
 
 		let mut child = command.spawn()?;
+		if self.observe_executables.load(Ordering::Relaxed) {
+			let receipt = serde_json::json!({
+				"schema_version": 1,
+				"child_pid": child.id(),
+				"observed_at": chrono::Utc::now().to_rfc3339(),
+				"phase": "after-spawn-before-wait",
+				"scope": "direct-child-at-observation",
+				"executable": crate::daemon::executable_observation(child.id()),
+			});
+			fs::write(folder.join("executable-receipt.json"), serde_json::to_vec_pretty(&receipt)?).await?;
+		}
 
 		// The priority is the bark instances' timeout, the env timeout then the default timeout
 		let timeout = self.timeout.unwrap_or_else(|| {
@@ -1316,6 +1336,7 @@ impl Bark {
 			config: cfg,
 			name: new_name.to_string(),
 			counter: AtomicUsize::new(0),
+			observe_executables: AtomicBool::new(self.observe_executables.load(Ordering::Relaxed)),
 			timeout: None,
 			command_log: Mutex::new(
 				fs::File::create(datadir.join(COMMAND_LOG_FILE)).await

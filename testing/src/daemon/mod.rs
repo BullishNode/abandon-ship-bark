@@ -366,7 +366,7 @@ impl<T> Drop for Daemon<T>
 }
 
 #[cfg(target_os = "linux")]
-fn executable_observation(pid: Option<u32>) -> serde_json::Value {
+pub(crate) fn executable_observation(pid: Option<u32>) -> serde_json::Value {
 	let result = (|| -> anyhow::Result<serde_json::Value> {
 		let pid = pid.context("child PID is unavailable")?;
 		let mut executable = fs::File::open(format!("/proc/{pid}/exe"))?;
@@ -399,7 +399,7 @@ fn executable_observation(pid: Option<u32>) -> serde_json::Value {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn executable_observation(_pid: Option<u32>) -> serde_json::Value {
+pub(crate) fn executable_observation(_pid: Option<u32>) -> serde_json::Value {
 	serde_json::json!({ "status": "unsupported" })
 }
 

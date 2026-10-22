@@ -1,10 +1,14 @@
+mod evidence;
+
 use std::time::Duration;
 
 use ark_testing::{sat, TestContext};
+use ark_testing::constants::BOARD_CONFIRMATIONS;
 use bitcoin::{OutPoint, Transaction};
 use bitcoin::consensus::deserialize;
 use bitcoin_ext::BlockDelta;
 use bitcoin_ext::rpc::RpcApi;
+use serde_json::json;
 use server::database::Db;
 
 /// No allocation, spend fence or chain acknowledgment is inserted by the test.
@@ -19,28 +23,63 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 			cfg.expiry_owner_scan_chunk_size = 1;
 		})
 		.watchmand().create().await;
-	let wallet = ctx.bark("abandoned", &srv).funded(sat(200_000)).create().await;
+	let mut evidence = evidence::Evidence::new(&ctx, &srv).await;
+	let wallet = ctx.bark("abandoned", &srv).create().await;
+	wallet.observe_executables();
+	evidence.action(&ctx, "original-database-created", json!({"incarnation": evidence.source_incarnation,
+		"origin_directory": wallet.datadir().strip_prefix(&ctx.datadir).unwrap()}));
+	evidence.sql("baseline").await;
+	evidence.source(&ctx, &wallet, "baseline").await;
+	let funding = ctx.fund_bark(&wallet, sat(200_000)).await;
+	evidence.action(&ctx, "customer-funding", json!({"txid": funding, "amount_sat": 200_000}));
+	wallet.onchain_balance().await;
+	evidence.source(&ctx, &wallet, "funded").await;
 	let issuer = wallet.client().await;
 	for _ in 0..250 { issuer.new_address_with_index().await.unwrap(); }
 	drop(issuer);
-	let ids = wallet.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	evidence.action(&ctx, "original-key-issuance", json!({"count": 250}));
+	let board = wallet.board(sat(100_000)).await;
+	evidence.action(&ctx, "board-submitted", serde_json::to_value(&board).unwrap());
+	evidence.source(&ctx, &wallet, "board-submitted").await;
+	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+	wallet.sync().await;
+	let ids = board.vtxos;
 	assert_eq!(ids.len(), 1);
 	let seed = wallet.mnemonic().await.unwrap();
 	let client = wallet.client().await;
 	let source = client.get_full_vtxo(ids[0]).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
 	let expected = source.amount() - sat(1_000);
+	let (source_child_index, _) = client.pubkey_keypair(&source.user_pubkey()).await.unwrap()
+		.expect("original source public key must have a stored derivation index");
 	drop(client);
+	evidence.source(&ctx, &wallet, "board-registered").await;
+	evidence.right(&ctx, &source, board.movement_id, source_child_index).await;
+	evidence.source_descriptor(&ctx, &wallet).await;
+	let expectation_tip = evidence::tip(&ctx);
+	evidence::write_json(evidence.dir.join("original-expectation.json"), &json!({
+		"captured_at": chrono::Utc::now().to_rfc3339(),
+		"height": expectation_tip["blocks"], "hash": expectation_tip["bestblockhash"],
+		"wallet": "customer", "source_incarnation": evidence.source_incarnation,
+		"vtxo_id": source.id(), "gross_sat": source.amount().to_sat(), "fee_sat": 1_000,
+		"payout_sat": expected.to_sat(), "signed_fallback_record": destination,
+		"provenance": "original source before expiry or allocation; no final ledger values"}));
+	evidence.source(&ctx, &wallet, "absence-start").await;
+	evidence.source_history();
 
 	// Fund the actual distinct watchman wallet, rather than assuming the
 	// captaind rounds wallet can sponsor this zero-fee payout parent.
 	let fee_address = srv.watchmand().wait_wallet_address().await;
-	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
+	let fee_funding = ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;
+	evidence.action(&ctx, "watchman-capital", json!({"txid": fee_funding,
+		"address": fee_address, "amount_sat": 100_000, "customer_deposit": false}));
 	ctx.generate_blocks(2).await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	assert!(height < source.expiry_height().to_u32());
 	let expired = ctx.generate_blocks(source.expiry_height().to_u32() + 1 - height).await;
+	evidence.action(&ctx, "advance-expiry", json!({"height": expired.to_u32(),
+		"source_expiry_height": source.expiry_height().to_u32()}));
 	srv.wait_for_sync_height(expired).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
 
@@ -98,15 +137,38 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 		.unwrap().expect("fallback output must be independently unspent in Core");
 	assert!(confirmed_payout.confirmations >= 6, "a mempool parent is not a confirmed payout");
 	assert_eq!(confirmed_payout.value, expected);
+	evidence.transaction(&ctx, "payout", &parent);
+	evidence.transaction(&ctx, "fee-child", &child);
+	evidence.action(&ctx, "confirmed-payout", json!({"outpoint": payout_point,
+		"amount_sat": expected.to_sat(), "confirmations": confirmed_payout.confirmations,
+		"adapter": "original-right-to-payout", "adapter_status": "EVIDENCE_INCOMPLETE"}));
 
 	// A fresh database receives only the original seed and genesis birthday.
 	// No private VTXO, payout transaction or address is imported into it.
-	let restored = ctx.bark("seed_only", &srv).mnemonic(seed).create().await;
-	assert_eq!(restored.client().await.fallback_destination().await.unwrap(), destination);
+	// The existing REST create path keeps the seed in memory, outside argv
+	// and command receipts. Manual sync prevents maintenance changing custody.
+	let restored = ctx.barkd("seed_only", &srv).mnemonic(seed.to_string()).birthday_height(0)
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	evidence.action(&ctx, "fresh-database-created", json!({"incarnation": evidence.observer_incarnation,
+		"origin_directory": restored.datadir().strip_prefix(&ctx.datadir).unwrap(), "birth_height": 0}));
+	restored.sync().await;
+	restored.onchain_sync().await;
 	let utxos = restored.onchain_utxos().await;
 	assert!(utxos.iter().any(|u| u.outpoint == payout_point && u.amount == expected));
+	let confirmed_height = bitcoin_ext::BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+	srv.wait_for_sync_height(confirmed_height).await;
+	srv.watchmand().wait_for_sync_height(confirmed_height).await;
+	evidence.observer(&ctx, &restored, &seed, &destination).await;
+	evidence.sql("final").await;
+	evidence.operator_descriptors(&ctx, &srv, &db).await;
+	evidence.chain(&ctx, "custody-before-drain");
 	let recovery_address = ctx.bitcoind().get_new_address();
-	restored.onchain_drain(&recovery_address).await;
+	restored.start().await.unwrap();
+	let config = restored.client_config();
+	let drain = bark_rest_client::apis::onchain_api::onchain_drain(&config,
+		bark_json::web::OnchainDrainRequest { destination: recovery_address.to_string() }).await.unwrap();
+	evidence.action(&ctx, "recovery-drain", json!({"txid": drain.txid,
+		"destination": recovery_address, "source_observer_incarnation": evidence.observer_incarnation}));
 	let mempool = ctx.bitcoind().sync_client().get_raw_mempool().unwrap();
 	let mut recovery = None;
 	for txid in mempool {
@@ -128,4 +190,16 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 	let raw = db.read(async |t| Ok(t.query_one("SELECT sweep_tx FROM expiry_allocation WHERE id=$1", &[&allocation]).await?
 		.get::<_, Vec<u8>>(0))).await.unwrap();
 	assert_eq!(deserialize::<Transaction>(&raw).unwrap(), parent, "confirmation/recovery must not rewrite the payout parent");
+	// Preserve the original one-block spend check above, then independently
+	// retain the same recipient at six confirmations for the spend checkpoint.
+	ctx.generate_blocks(5).await;
+	let deep = ctx.bitcoind().sync_client().get_tx_out(&recovery.compute_txid(), recovered_output as u32, Some(true))
+		.unwrap().unwrap();
+	assert!(deep.confirmations >= 6);
+	evidence.transaction(&ctx, "six-deep-recovery", &recovery);
+	evidence.chain(&ctx, "six-deep-recovery");
+	evidence.action(&ctx, "six-deep-recovery", json!({"txid": recovery.compute_txid(),
+		"output_index": recovered_output, "amount_sat": deep.value.to_sat(), "confirmations": deep.confirmations}));
+	evidence.finish(&ctx, &srv);
+	restored.stop().await.unwrap();
 }

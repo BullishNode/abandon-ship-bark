@@ -50,7 +50,7 @@ async fn assert_one_source_dispatch(
 	assert_eq!(row.get::<_, String>("label"), label);
 	assert_eq!(row.get::<_, i64>("amount_msat"), 100_000_000);
 	assert_eq!(row.get::<_, Option<i64>>("user_fee_sat"), Some(0));
-	assert_eq!(row.get::<_, i64>("attempts"), 1, "restart must reconcile the original attempt rather than retrying payment");
+	assert_eq!(row.get::<_, i64>("attempts"), 1, "restart must reconcile the previous attempt rather than retrying payment");
 	assert_eq!(row.get::<_, i64>("dispatches"), 1);
 	assert_eq!(row.get::<_, i64>("successes"), if succeeded { 1 } else { 0 });
 	assert_eq!(row.get::<_, i64>("failures"), 0, "an accepted ambiguous dispatch is not terminal failure");
@@ -63,13 +63,13 @@ async fn assert_one_source_dispatch(
 }
 
 #[tokio::test]
-async fn expiry_external_success_during_restart_is_bound_to_its_actual_source() {
+async fn recovery_binds_restarted_payment_success_to_source() {
 	tokio::time::timeout(Duration::from_secs(180), external_success_during_restart()).await
 		.expect("the bounded real external receipt/restart case must finish");
 }
 
 async fn external_success_during_restart() {
-	let ctx = TestContext::new("server/lightning_dispatch_reply_loss_lost_dispatch_reply").await;
+	let ctx = TestContext::new("server/recovery_binds_restarted_payment_success_to_source").await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal)
 		.no_vtxo_pool().funded(btc(10)).cfg(|config| {
@@ -119,7 +119,7 @@ async fn external_success_during_restart() {
 	assert_ne!(roots[0], roots[1]);
 	assert_eq!(grants[0].expiry_height(), grants[1].expiry_height());
 	assert!(deadline > grants[0].expiry_height());
-	// Use the fixture's ACTUAL existing fee schedule. Do not overfund a90k
+	// Use the fixture's existing fee schedule. Do not overfund a90k
 	// invoice with a100k source and silently discard the10k excess as a fee.
 	let fee = srv.config().fees.lightning_send.calculate(sat(100_000),
 		[VtxoFeeInfo::from_vtxo_and_tip(&grants[0], tip)]).unwrap();
@@ -132,7 +132,7 @@ async fn external_success_during_restart() {
 		min_final_cltv_expiry: Some(18), expiry: Some(3600), routing_hints: vec![],
 	}).await.unwrap().into_inner().bolt11;
 	lightning.sync().await;
-	let (original_qualification, _, _) = super::expiry_dispatch::capture_original_labelled_producer(
+	let (dispatch_qualification, _, _) = super::expiry_dispatch::producer_qualification(
 		&ctx, &srv, &lightning.internal,
 	).await;
 	rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
@@ -158,7 +158,7 @@ async fn external_success_during_restart() {
 	assert!(pending[0].preimage.is_none());
 	// The external payment survives loss of the local xpay task/response.
 	// Both product processes are stopped, while the two owned CLN peers stay
-	// running. This is an authentic unresolved dispatch, not a forged status.
+	// running. This is an unresolved dispatch, not a forged status.
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
 	receiver.settle(hold::SettleRequest { payment_preimage: preimage.to_vec() }).await.unwrap();
@@ -169,7 +169,7 @@ async fn external_success_during_restart() {
 			if pays[0].status() == ListpaysPaysStatus::Complete { break pays.into_iter().next().unwrap(); }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("the actual external receiver did not settle while the product was down");
+	}).await.expect("the external receiver did not settle while the product was down");
 	assert_eq!(remote.label.as_deref(), Some(label.as_str()));
 	assert_eq!(remote.payment_hash, hash.to_vec());
 	assert_eq!(remote.preimage.as_deref(), Some(preimage.as_ref()));
@@ -180,22 +180,22 @@ async fn external_success_during_restart() {
 	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, false).await;
 	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none(),
 		"the real remote result must not appear in product state before its observer restarts");
-	// Now genuinely quiesce/reopen the ORIGINAL node/store. Its real Complete
-	// history must defeat the new zero-history route even though the original
+	// Now quiesce/reopen the node/store. Its real Complete
+	// history must defeat the new zero-history route even though the previous
 	// captaind never received the success and has no local settlement receipt.
-	let original_node = lightning.internal.grpc_client().await
+	let dispatch_node = lightning.internal.grpc_client().await
 		.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
 	lightning.internal.stop().await.unwrap();
 	lightning.internal.start().await.unwrap();
 	let reopened_node = lightning.internal.grpc_client().await
 		.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
-	assert_eq!(reopened_node.id, original_node.id, "restart must retain the original CLN identity");
-	assert_eq!(reopened_node.network, original_node.network);
-	assert_eq!(reopened_node.version, original_node.version);
+	assert_eq!(reopened_node.id, dispatch_node.id, "restart must retain the previous CLN identity");
+	assert_eq!(reopened_node.network, dispatch_node.network);
+	assert_eq!(reopened_node.version, dispatch_node.version);
 	assert_eq!(remote_pays(&lightning.internal, hash).await, vec![remote.clone()],
-		"restart must retain the original completed payment history");
+		"restart must retain the previous completed payment history");
 	// The test daemon reserves fresh ports on every start. Refresh only its
-	// endpoints; retain the same original store and certificate identities.
+	// endpoints; retain the same store and certificate identities.
 	let grpc = lightning.internal.grpc_details().await;
 	let hold = lightning.internal.hold_details().await;
 	{
@@ -212,10 +212,8 @@ async fn external_success_during_restart() {
 		plugin.uri = hold.uri.parse().unwrap();
 	}
 	let cfg = srv.config().clone();
-	let incident = super::expiry_dispatch::retained_supervised_manifest(
-		&ctx, &cfg, &db, attempt, "paid-lost-reply-supervised-negative",
-	).await;
-	super::expiry_dispatch::attach_original_labelled_producer(&incident, &db, attempt, original_qualification).await;
+	let incident = super::expiry_dispatch::recovery_manifest(&cfg, &db, attempt).await;
+	super::expiry_dispatch::add_producer_qualification(&incident, &db, attempt, dispatch_qualification).await;
 	let error = server::ln::resolve_uninjected_lightning(&cfg, &incident).await.unwrap_err();
 	assert!(format!("{error:#}").contains("original dispatch has own payment history"), "{error:#}");
 	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, false).await;
@@ -233,12 +231,12 @@ async fn external_success_during_restart() {
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("restart must reconcile the ORIGINAL source-bound CLN receipt and actual preimage");
+	}).await.expect("restart must reconcile the previous source-bound CLN receipt and preimage");
 	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, true).await;
 	let status = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
 		hash: hash.to_vec(), wait: false, htlc_vtxo_ids: vec![sources[0].to_bytes().to_vec()],
 	}).await.unwrap().into_inner();
-	assert_eq!(status.htlc_vtxo_ids, vec![sources[0].to_bytes().to_vec()],"status must echo the exact validated original source set");
+	assert_eq!(status.htlc_vtxo_ids, vec![sources[0].to_bytes().to_vec()],"status must echo the exact validated previous source set");
 	assert!(matches!(status.payment_status,
 		Some(protos::lightning_payment_status::PaymentStatus::Success(ref success))
 		if success.preimage == preimage.to_vec()));
@@ -260,7 +258,7 @@ async fn external_success_during_restart() {
 			if let Some(row) = row { break deserialize::<Transaction>(row.get("sweep_tx")).unwrap(); }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("the UNUSED same-hash source must automatically refund its absent owner after actual deadline");
+	}).await.expect("the UNUSED same-hash source must automatically refund its absent owner after deadline");
 	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
 	let payouts = parent.output.iter().enumerate().filter(|(_, output)| output.script_pubkey == destination.spk)
 		.collect::<Vec<_>>();
@@ -276,11 +274,11 @@ async fn external_success_during_restart() {
 	let confirmed = ctx.generate_blocks(6).await;
 	srv.wait_for_sync_height(confirmed).await;
 	srv.watchmand().wait_for_sync_height(confirmed).await;
-	let actual = ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true))
+	let utxo = ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true))
 		.unwrap().unwrap();
-	assert!(actual.confirmations >= 6);
-	assert_eq!(actual.value, sat(99_000));
-	assert_eq!(actual.script_pub_key.script().unwrap(), destination.spk);
+	assert!(utxo.confirmations >= 6);
+	assert_eq!(utxo.value, sat(99_000));
+	assert_eq!(utxo.script_pub_key.script().unwrap(), destination.spk);
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let row = db.read(async |tx| Ok(tx.query_one("SELECT \
@@ -310,8 +308,8 @@ async fn external_success_during_restart() {
 		WHERE v.anchor_point=$1 AND c.disposition='customer'", &[&roots[0].to_string()],
 	).await?.get::<_, i64>(0))).await.unwrap();
 	assert_eq!(paid_customer_rows, 0,
-		"no predecessor or descendant under the actual paid backing root may receive a second customer refund");
-	// Reconcile ALL canonical customer outputs from both original roots,
+		"no predecessor or descendant under the paid backing root may receive a second customer refund");
+	// Reconcile ALL canonical customer outputs from both roots,
 	// including historical predecessor entitlements. Counting only the chosen
 	// grant leaf/output could hide a second refund elsewhere in that lineage.
 	let root_ids = roots.iter().map(ToString::to_string).collect::<Vec<_>>();
@@ -337,7 +335,7 @@ async fn external_success_during_restart() {
 	assert_eq!(customer_outputs, BTreeSet::from([OutPoint::new(parent.compute_txid(), index as u32)]));
 	assert_eq!(customer_total, sat(99_000), "no other canonical customer output may hide an extra same-root refund");
 	assert_eq!(sat(100_000) + customer_total + sat(1_000), grants.iter().map(|grant| grant.amount()).sum::<bitcoin::Amount>(),
-		"actual external principal plus ALL canonical customer outputs and their fee conserve both grants");
+		"external principal plus ALL canonical customer outputs and their fee conserve both grants");
 	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, true).await;
 	let final_pays = remote_pays(&lightning.internal, hash).await;
 	assert_eq!(final_pays.len(), 1);
@@ -350,8 +348,8 @@ async fn external_success_during_restart() {
 
 /// Inspect the authenticated wire pages before letting the returning wallet
 /// process them. A valid preimage for the hash is insufficient when another
-/// Ark attempt, using different signed inputs, actually paid that hash.
-async fn assert_no_success_in_original_mailbox(
+/// Ark attempt, using different signed inputs, paid that hash.
+async fn assert_no_success_in_sender_mailbox(
 	srv: &Captaind, auth: &ark::mailbox::MailboxAuthorization, hash: PaymentHash,
 ) {
 	let mut rpc = srv.get_mailbox_public_rpc().await;
@@ -376,10 +374,10 @@ async fn assert_no_success_in_original_mailbox(
 			return;
 		}
 	}
-	panic!("the bounded original mailbox inventory did not finish");
+	panic!("the bounded previous mailbox inventory did not finish");
 }
 
-async fn reopen_original_app(ctx: &TestContext, srv: &Captaind, name: &str, seed: &bip39::Mnemonic) -> Wallet {
+async fn reopen_sender(ctx: &TestContext, srv: &Captaind, name: &str, seed: &bip39::Mnemonic) -> Wallet {
 	let db: Arc<dyn BarkPersister> = Arc::new(SqliteClient::open(ctx.datadir.join(name).join("db.sqlite")).unwrap());
 	let onchain = AppBip84Wallet::load_or_create(Network::Regtest, seed.to_seed(""), db.clone(),
 		ctx.bitcoind().sync_client()).await.unwrap();
@@ -420,7 +418,7 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 			config.sweep_address.clone().unwrap().require_network(Network::Regtest).unwrap().script_pubkey()
 		};
 		let mnemonic = bip39::Mnemonic::generate(12).unwrap();
-		let old = Box::pin(ctx.bark_sdk("original-sender", &srv).mnemonic(mnemonic.clone()).app_bip84()
+		let old = Box::pin(ctx.bark_sdk("failed-sender", &srv).mnemonic(mnemonic.clone()).app_bip84()
 			.cfg(|config| { config.daemon_manual_sync = true; config.vtxo_refresh_expiry_threshold=BlockDelta::new(4); config.vtxo_exit_margin=BlockDelta::new(2); }).boarded(sat(100_000)).create()).await;
 		old.stop_daemon_wait().await.unwrap();
 		let destination = old.fallback_destination().await.unwrap();
@@ -430,7 +428,7 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 		let mut first_hold = lightning.external.hold_client().await;
 		let first_invoice = first_hold.invoice(hold::InvoiceRequest {
 			payment_hash: hash.to_vec(), amount_msat: 100_000_000,
-			description: Some(hold::invoice_request::Description::Memo("original native failed sender".into())),
+			description: Some(hold::invoice_request::Description::Memo("previous native failed sender".into())),
 			min_final_cltv_expiry: Some(18), expiry: Some(3600), routing_hints: vec![],
 		}).await.unwrap().into_inner().bolt11;
 		lightning.sync().await;
@@ -440,7 +438,7 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 		let old_send = old.lightning_send_checkpoint(hash).await.unwrap().unwrap();
 		let old_htlcs = match &old_send.progress {
 			Progress::PaymentInitiated(htlcs) => htlcs.clone(),
-			other => panic!("original send must be durably initiated: {other:?}"),
+			other => panic!("previous send must be durably initiated: {other:?}"),
 		};
 		assert_eq!(old_htlcs.vtxo_ids.len(), 1);
 		assert_eq!(old_htlcs.mailbox_id, old.mailbox_identifier());
@@ -458,7 +456,7 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 		srv.watchmand().stop().await.unwrap();
 		srv.stop().await.unwrap();
 		first_hold.cancel(hold::CancelRequest { payment_hash: hash.to_vec() }).await.unwrap();
-		let original_remote = tokio::time::timeout(Duration::from_secs(30), async {
+		let failed_payment = tokio::time::timeout(Duration::from_secs(30), async {
 			loop {
 				let pays = remote_pays(&lightning.internal, hash).await;
 				assert_eq!(pays.len(), 1);
@@ -469,20 +467,20 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 				}
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
-		}).await.expect("the real original payment must fail while its wallet and server are absent");
+		}).await.expect("the real previous payment must fail while its wallet and server are absent");
 		srv.start().await.unwrap();
 		srv.watchmand().start().await.unwrap();
 		tokio::time::timeout(Duration::from_secs(45), async {
 			loop {
 				let receipt = db.read(async |tx| Ok(tx.query_opt("SELECT f.created_index,a.status::TEXT FROM expiry_lightning_terminal_failure f JOIN lightning_payment_attempt a ON a.id=f.id WHERE f.id=$1", &[&old_attempt]).await?)).await.unwrap();
 				if let Some(receipt) = receipt {
-					assert_eq!(receipt.get::<_,Option<i64>>(0), original_remote.created_index.map(|index|i64::try_from(index).unwrap()));
+					assert_eq!(receipt.get::<_,Option<i64>>(0), failed_payment.created_index.map(|index|i64::try_from(index).unwrap()));
 					if receipt.get::<_,String>(1) == "failed" { break; }
 				}
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
-		}).await.expect("the normal monitor must close the original genuine failure before a later Ark attempt");
-		assert_no_success_in_original_mailbox(&srv, &mailbox, hash).await;
+		}).await.expect("the normal monitor must close the previous failure before a later Ark attempt");
+		assert_no_success_in_sender_mailbox(&srv, &mailbox, hash).await;
 
 		let later = Box::pin(ctx.bark_sdk("later-sender", &srv).app_bip84()
 			.cfg(|config| { config.daemon_manual_sync = true; config.vtxo_refresh_expiry_threshold=BlockDelta::new(4); config.vtxo_exit_margin=BlockDelta::new(2); }).boarded(sat(50_000)).boarded(sat(50_000)).create()).await;
@@ -507,7 +505,7 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 		};
 		assert_eq!(later_send.total_amount(),sat(100_000));
 		assert_eq!(later_send.fee,Amount::ZERO);
-		assert_eq!(later_htlcs.vtxo_ids.len(), 2, "the later native send must have a genuine incomplete-scope boundary");
+		assert_eq!(later_htlcs.vtxo_ids.len(), 2, "the later native send must have a incomplete-scope boundary");
 		assert_ne!(later_htlcs.vtxo_ids, old_htlcs.vtxo_ids);
 		let mut later_sources = Vec::new();
 		let mut later_fundings = Vec::new();
@@ -557,11 +555,11 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 			assert!(status.htlc_vtxo_ids.is_empty());
 			assert!(matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Pending(_))));
 		}
-		assert_no_success_in_original_mailbox(&srv, &mailbox, hash).await;
+		assert_no_success_in_sender_mailbox(&srv, &mailbox, hash).await;
 		drop(later);
 
-		// The paid later sources and failed original source form two expiry
-		// cohorts. Preserve the same 100,000 sat fee capital, usable independently by
+		// The paid later sources and failed source form two expiry
+		// heights. Preserve the same 100,000 sat fee capital, usable independently by
 		// both packages before any intervening block confirms their change.
 		assert_eq!(later_sources[0].expiry_height(), later_sources[1].expiry_height());
 		assert_ne!(old_source.expiry_height(), later_sources[0].expiry_height());
@@ -577,9 +575,9 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 			let outputs = tx.output.iter().enumerate().filter(|(_,out)|out.script_pubkey == fee_address.script_pubkey()).collect::<Vec<_>>();
 			assert_eq!(outputs.len(), 1); assert_eq!(outputs[0].1.value,sat(50_000));
 			let point = OutPoint::new(sponsor, outputs[0].0 as u32);
-			let actual = ctx.bitcoind().sync_client().get_tx_out(&point.txid,point.vout,Some(true)).unwrap().unwrap();
-			assert!(actual.confirmations >= 2); assert_eq!(actual.value,sat(50_000));
-			assert_eq!(actual.script_pub_key.script().unwrap(),fee_address.script_pubkey());
+			let utxo = ctx.bitcoind().sync_client().get_tx_out(&point.txid,point.vout,Some(true)).unwrap().unwrap();
+			assert!(utxo.confirmations >= 2); assert_eq!(utxo.value,sat(50_000));
+			assert_eq!(utxo.script_pub_key.script().unwrap(),fee_address.script_pubkey());
 			assert!(sponsor_roots.insert(point, outputs[0].1.clone()).is_none());
 		}
 		assert_eq!(sponsor_roots.len(),2);
@@ -595,7 +593,7 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 				if let Some(row) = row { break deserialize::<Transaction>(row.get(0)).unwrap(); }
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
-		}).await.expect("the absent original failed sender must receive its actual fallback despite the later payment");
+		}).await.expect("the absent previous failed sender must receive its fallback despite the later payment");
 		ctx.bitcoind().await_transaction(parent.compute_txid()).await;
 		let outputs = parent.output.iter().enumerate().filter(|(_,out)|out.script_pubkey==destination.spk).collect::<Vec<_>>();
 		assert_eq!(outputs.len(),1); assert_eq!(outputs[0].1.value,sat(99_000));
@@ -604,20 +602,20 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 		srv.wait_for_sync_height(confirmed).await;
 		srv.watchmand().wait_for_sync_height(confirmed).await;
 		let core = ctx.bitcoind().sync_client();
-		let actual = core.get_tx_out(&payout.txid,payout.vout,Some(true)).unwrap().unwrap();
-		assert!(actual.confirmations>=6); assert_eq!(actual.value,sat(99_000));
-		assert_eq!(actual.script_pub_key.script().unwrap(),destination.spk);
-		assert_no_success_in_original_mailbox(&srv, &mailbox, hash).await;
+		let utxo = core.get_tx_out(&payout.txid,payout.vout,Some(true)).unwrap().unwrap();
+		assert!(utxo.confirmations>=6); assert_eq!(utxo.value,sat(99_000));
+		assert_eq!(utxo.script_pub_key.script().unwrap(),destination.spk);
+		assert_no_success_in_sender_mailbox(&srv, &mailbox, hash).await;
 		tokio::time::timeout(Duration::from_secs(30),async {
 			loop {
 				let confirmed=db.read(async |tx| Ok(tx.query_opt("SELECT a.id FROM expiry_allocation a JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.status='confirmed' AND a.sweep_txid=$2",&[&old_source.id().to_string(),&parent.compute_txid().to_string()]).await?.is_some())).await.unwrap();
 				if confirmed { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
-		}).await.expect("the actual canonical refund must enter confirmed server history before client adoption");
+		}).await.expect("the canonical refund must enter confirmed server history before client adoption");
 		let mut receipt_id = None;
 		for _ in 0..2 {
-			let returned = Box::pin(reopen_original_app(&ctx,&srv,"original-sender",&mnemonic)).await;
+			let returned = Box::pin(reopen_sender(&ctx,&srv,"failed-sender",&mnemonic)).await;
 			for _ in 0..2 {
 				returned.chain().invalidate_caches().await;
 				returned.sync_fallback_payouts().await.unwrap();
@@ -674,12 +672,12 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 				for (vout,out) in tx.output.iter().enumerate() {
 					let point=OutPoint::new(txid,vout as u32); known.insert(point,out.clone()); terminal.insert(point,out.clone());
 					if out.script_pubkey==destination.spk { customer.insert(point); assert_eq!(out.value,sat(99_000)); }
-					assert_ne!(out.script_pubkey,later_destination.spk,"the genuinely paid later source must not get a fallback");
+					assert_ne!(out.script_pubkey,later_destination.spk,"the paid later source must not get a fallback");
 				}
 				assert!(graph.insert(txid,tx).is_none()); assert!(graph.len()<=64);
 			}
 		}
-		// Every canonical fee child must spend an actual declared sponsor,
+		// Every canonical fee child must spend a declared sponsor,
 		// never customer principal or an undeclared funding input.
 		for tx in graph.values() {
 			let anchors = tx.input.iter().filter(|input|known[&input.previous_output].script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT).count();
@@ -713,14 +711,14 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 		let watch_points=watch.wallet_status(protos::Empty{}).await.unwrap().into_inner().watchman.unwrap().confirmed_utxos.into_iter().map(|point|point.parse::<OutPoint>().unwrap()).collect::<BTreeSet<_>>();
 		for (point,out) in terminal {
 			if out.value==Amount::ZERO { continue; }
-			let actual=core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().unwrap();
-			assert!(actual.confirmations>=6); assert_eq!(actual.value,out.value); assert_eq!(actual.script_pub_key.script().unwrap(),out.script_pubkey);
+			let utxo=core.get_tx_out(&point.txid,point.vout,Some(true)).unwrap().unwrap();
+			assert!(utxo.confirmations>=6); assert_eq!(utxo.value,out.value); assert_eq!(utxo.script_pub_key.script().unwrap(),out.script_pubkey);
 			assert!(point==payout||out.script_pubkey==operator_script||watch_points.contains(&point));
 		}
 		let final_pays=remote_pays(&lightning.internal,hash).await;
 		assert_eq!(final_pays.len(),2);
 		let failed=final_pays.iter().find(|pay|pay.label.as_deref()==Some(old_label.as_str())).unwrap();
-		assert_eq!(failed.status(),ListpaysPaysStatus::Failed); assert_eq!(failed.created_index,original_remote.created_index); assert!(failed.preimage.is_none());
+		assert_eq!(failed.status(),ListpaysPaysStatus::Failed); assert_eq!(failed.created_index,failed_payment.created_index); assert!(failed.preimage.is_none());
 		let paid=final_pays.iter().find(|pay|pay.label.as_deref()==Some(later_label.as_str())).unwrap();
 		assert_eq!(paid.status(),ListpaysPaysStatus::Complete); assert_eq!(paid.preimage.as_deref(),Some(preimage.as_ref()));
 		assert_eq!(paid.amount_msat.as_ref().unwrap().msat,100_000_000); assert_eq!(paid.amount_sent_msat.as_ref().unwrap().msat,100_000_000);
@@ -749,7 +747,7 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 		assert_eq!(invoices[0].payment_hash,hash.to_vec()); assert_eq!(invoices[0].preimage.as_deref(),Some(preimage.as_ref()));
 		assert_eq!(invoices[0].htlcs.iter().filter(|htlc|htlc.state()==hold::InvoiceState::Paid).map(|htlc|htlc.msat).sum::<u64>(),100_000_000);
 		let attempts=db.read(async |tx|Ok(tx.query_one("SELECT COUNT(*) FROM lightning_payment_attempt WHERE payment_hash=$1",&[&hash.to_string()]).await?.get::<_,i64>(0))).await.unwrap();
-		assert_eq!(attempts,2,"both actual source-distinct Ark attempts must remain historical");
+		assert_eq!(attempts,2,"both source-distinct Ark attempts must remain historical");
 		assert!(ctx.bitcoind().get_block_count().await-start_height<=96);
-	})).await.expect("the two authentic Ark attempts and returning original store exceeded180seconds");
+	})).await.expect("the two Ark attempts and returning previous store exceeded180seconds");
 }

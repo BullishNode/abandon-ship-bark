@@ -177,6 +177,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-postgres",
  "tokio-stream",

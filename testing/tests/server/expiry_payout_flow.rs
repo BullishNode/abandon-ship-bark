@@ -28,8 +28,8 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 	wallet.observe_executables();
 	evidence.action(&ctx, "original-database-created", json!({"incarnation": evidence.source_incarnation,
 		"origin_directory": wallet.datadir().strip_prefix(&ctx.datadir).unwrap()}));
-	evidence.sql("baseline").await;
 	evidence.source(&ctx, &wallet, "baseline").await;
+	evidence.sql("baseline").await;
 	let funding = ctx.fund_bark(&wallet, sat(200_000)).await;
 	evidence.action(&ctx, "customer-funding", json!({"txid": funding, "amount_sat": 200_000}));
 	wallet.onchain_balance().await;

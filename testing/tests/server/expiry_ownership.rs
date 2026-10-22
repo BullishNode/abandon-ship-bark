@@ -16,7 +16,7 @@ use ark_testing::{btc, sat, TestContext};
 #[tokio::test]
 async fn expiry_future_padding_has_creation_provenance() {
 	let ctx = TestContext::new("server/expiry_future_padding_provenance").await;
-	let srv = ctx.captaind("server").funded(btc(10)).no_vtxo_pool().create().await;
+	let srv = ctx.captaind("server").funded(btc(10)).no_vtxo_pool().watchmand().create().await;
 	let wallet = ctx.bark("wallet", &srv).funded(sat(500_000)).create().await;
 	let originals = wallet.board_and_confirm_and_register(&ctx, sat(200_000)).await;
 	ctx.refresh_all(&srv, &[&wallet]).await;
@@ -145,7 +145,7 @@ async fn expiry_future_padding_has_creation_provenance() {
 async fn expiry_customer_padding_key_and_amount_are_not_an_issuance_role() {
 	let ctx = TestContext::new("server/expiry_customer_padding_tuple").await;
 	let srv = ctx.captaind("server").funded(btc(10)).no_vtxo_pool()
-		.cfg(|config| config.round_interval = std::time::Duration::from_secs(3600)).create().await;
+		.cfg(|config| config.round_interval = std::time::Duration::from_secs(3600)).watchmand().create().await;
 	let wallet = ctx.bark("wallet", &srv).funded(sat(500_000))
 		.cfg(|config| config.daemon_manual_sync = true).create().await;
 	let ids = wallet.board_and_confirm_and_register(&ctx, sat(200_000)).await;

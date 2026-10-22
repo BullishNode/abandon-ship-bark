@@ -75,6 +75,8 @@ async fn admin_bind_native_config_and_start_refuse_non_loopback() {
 	let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
 	let mut captain = Config::load(workspace.join("server/captaind.default.toml")).unwrap();
 	let mut watchman = config::watchmand::Config::load(workspace.join("server/watchmand.default.toml")).unwrap();
+	captain.bitcoind.cookie = Some(ctx.datadir.join("unused.cookie"));
+	watchman.bitcoind.cookie = Some(ctx.datadir.join("unused.cookie"));
 	captain.data_dir = ctx.datadir.join("unused-captaind-data");
 	watchman.data_dir = ctx.datadir.join("unused-watchmand-data");
 

@@ -73,9 +73,9 @@ async fn store_successor(db: &Db, source: &ServerVtxo<Full>, tx: &Transaction, s
 	db.write(async |t| {
 		t.execute("INSERT INTO virtual_transaction(txid, signed_tx, is_funding, created_at, updated_at)
 			VALUES($1, $2, false, NOW(), NOW())
-			ON CONFLICT(txid) DO UPDATE SET signed_tx = EXCLUDED.signed_tx",
+			ON CONFLICT(txid) DO UPDATE SET signed_tx = EXCLUDED.signed_tx, updated_at = NOW()",
 			&[&txid, &bytes]).await?;
-		t.execute("UPDATE vtxo SET oor_spent_txid = $1 WHERE vtxo_id = $2",
+		t.execute("UPDATE vtxo SET oor_spent_txid = $1, updated_at = NOW() WHERE vtxo_id = $2",
 			&[&txid, &source.id().to_string()]).await?;
 		Ok(())
 	}).await.unwrap();
@@ -142,12 +142,12 @@ async fn htlc_send_fetcher_holds_unknown_successors_and_recovers() {
 		db.write(async |t| t.upsert_vtxos([&source]).await).await.unwrap();
 		assert_eq!(fetcher.get_action(&source.to_bare(), confirmed).await, claim, "healthy absence permits the original claim");
 		db.write(async |t| {
-			t.batch_execute("ALTER TABLE vtxo RENAME COLUMN vtxo TO fixture_vtxo").await?;
+			t.batch_execute("ALTER TABLE vtxo RENAME TO fixture_vtxo").await?;
 			Ok(())
 		}).await.unwrap();
 		assert_eq!(fetcher.get_action(&source.to_bare(), confirmed).await, Action::Wait, "VTXO query failure is unknown");
 		db.write(async |t| {
-			t.batch_execute("ALTER TABLE vtxo RENAME COLUMN fixture_vtxo TO vtxo").await?;
+			t.batch_execute("ALTER TABLE fixture_vtxo RENAME TO vtxo").await?;
 			Ok(())
 		}).await.unwrap();
 		assert_eq!(fetcher.get_action(&source.to_bare(), confirmed).await, claim);
@@ -167,7 +167,7 @@ async fn htlc_send_fetcher_holds_unknown_successors_and_recovers() {
 		assert_eq!(fetcher.get_action(&source.to_bare(), confirmed).await, Action::Wait, "missing linked row is unknown");
 		store_successor(&db, &source, &tx, false).await;
 		db.write(async |t| {
-			t.execute("UPDATE virtual_transaction SET signed_tx = $1 WHERE txid = $2",
+			t.execute("UPDATE virtual_transaction SET signed_tx = $1, updated_at = NOW() WHERE txid = $2",
 				&[&vec![0u8], &txid.to_string()]).await?;
 			Ok(())
 		}).await.unwrap();
@@ -194,7 +194,7 @@ async fn htlc_send_fetcher_holds_unknown_successors_and_recovers() {
 		restore_transaction_table(&db).await;
 		for bytes in [None, Some(vec![0u8])] {
 			db.write(async |t| {
-				t.execute("UPDATE virtual_transaction SET signed_tx = $1 WHERE txid = $2",
+				t.execute("UPDATE virtual_transaction SET signed_tx = $1, updated_at = NOW() WHERE txid = $2",
 					&[&bytes, &parent_txid.to_string()]).await?;
 				Ok(())
 			}).await.unwrap();
@@ -202,7 +202,7 @@ async fn htlc_send_fetcher_holds_unknown_successors_and_recovers() {
 				Action::Wait, "an unsigned or malformed dependency cannot authorize a claim");
 		}
 		db.write(async |t| {
-			t.execute("UPDATE virtual_transaction SET signed_tx = $1 WHERE txid = $2",
+			t.execute("UPDATE virtual_transaction SET signed_tx = $1, updated_at = NOW() WHERE txid = $2",
 				&[&serialize(&parent), &parent_txid.to_string()]).await?;
 			Ok(())
 		}).await.unwrap();

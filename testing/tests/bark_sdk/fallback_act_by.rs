@@ -215,7 +215,7 @@ async fn fallback_protection_lost_forfeit_reply_keeps_signed_replacements_durabl
 	finished.recv().wait(Duration::from_secs(30)).await.unwrap();
 	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
 	wallet.chain().invalidate_caches().await;
-	// Drop the actual client future after the upstream accepted the forfeits,
+	// Drop the client future after the upstream accepted the forfeits,
 	// while the reply is held. The checkpoint must already be durable.
 	let mut syncing = Box::pin(wallet.sync_pending_rounds());
 	tokio::select! {
@@ -325,7 +325,7 @@ async fn fallback_binding_refresh_recovers_from_actual_chain_preimage_without_ar
 	let funding = srv.watchmand().wait_wallet_address().await;
 	ctx.bitcoind().fund_addr(funding, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
-	// An actual ageing coin refreshes into a newer tree. The original and
+	// An ageing coin refreshes into a newer tree. The original and
 	// replacement have different expiry windows; no clock or proof is faked.
 	advance_to(&ctx, original.expiry_height().saturating_sub(BlockDelta::new(30))).await;
 	let round = wallet.refresh_vtxos_delegated([original.id()]).await.unwrap().unwrap();
@@ -390,7 +390,7 @@ async fn fallback_binding_refresh_recovers_from_actual_chain_preimage_without_ar
 	// starts at claimable_since and can miss an earlier server forfeit; a
 	// server forfeit seen later can also be labelled Claimed. Neither pays us.
 	// The controller has seen the real response, but never gives its secret
-	// to the wallet. Only the existing watchman's actual chain witness can.
+	// to the wallet. Only the existing watchman's chain witness can.
 	wallet.sync_pending_rounds().await.unwrap();
 	let recovered = database.get_round_state_by_id(round.id()).await.unwrap().unwrap();
 	for coin in recovered.state().output_vtxos().unwrap() { coin.validate(&funding_tx).unwrap(); }

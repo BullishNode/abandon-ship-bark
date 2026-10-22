@@ -136,7 +136,7 @@ async fn bark_send_onchain() {
 		rate_quote.sat_vkb,
 	);
 	// The fixture charges no base/expiry fee and 100 additional vbytes.
-	// Include the actual BIP84 or BIP86 destination script in the quoted size.
+	// Include the BIP84 or BIP86 destination script in the quoted size.
 	let charged_weight = bitcoin::Weight::from_vb(100 + addr.script_pubkey().len() as u64).unwrap();
 	let offboard_fee = fee_rate.checked_mul_by_weight(charged_weight).unwrap();
 	bark1.send_onchain(&addr, send_amount).await;

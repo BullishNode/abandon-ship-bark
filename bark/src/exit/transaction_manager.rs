@@ -205,7 +205,7 @@ impl ExitTransactionManager {
 			// confirmed it). Log and move on — the next sync tick will retry. Each exit's
 			// own `progress()` call surfaces fatal problems via its per-VTXO error field.
 			// Both parent and child index entries can point at one package.
-			// Normalize to the actual parent before applying the suppression.
+			// Normalize to the parent before applying the suppression.
 			let broadcast_local = match self.index.get(&txid).and_then(Weak::upgrade) {
 				Some(package) => !no_rebroadcast.contains(&package.read().await.exit.txid),
 				None => true, // No package means this path only reads chain status.

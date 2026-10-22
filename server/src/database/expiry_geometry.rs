@@ -1,4 +1,4 @@
-//! Current economic cuts through complete, evidenced expiry backing paths.
+//! Current economic cuts through complete, validated expiry backing paths.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -67,7 +67,7 @@ pub(crate) fn economic_cut(
 	// Transition lookup is only a candidate graph. Validate the complete current
 	// terminal paths and their conserving partition before attribution, splitting
 	// or any financial decision. Historical descendants beyond a binding round or
-	// offboard are not evidence for this cut and cannot poison its preparation.
+	// offboard are not proof for this cut and cannot poison its preparation.
 	let terminals = cut.terminals.iter().map(|index| snapshot.regular[*index].full_vtxo.clone()
 		.context("expiry current terminal lacks its complete source path"))
 		.collect::<anyhow::Result<Vec<_>>>()?;

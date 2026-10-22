@@ -125,7 +125,7 @@ impl BlockIndex {
 		}
 
 		// Height is not monotonic: a shorter branch can have more chainwork.
-		// Find the actual common ancestor instead of panicking on its height.
+		// Find the common ancestor instead of panicking on its height.
 
 		debug!("Discovered new tip with height={} and hash={}", bitcoind_tip.height, bitcoind_tip.hash);
 

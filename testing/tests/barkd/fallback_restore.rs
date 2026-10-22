@@ -42,7 +42,7 @@ async fn fallback_payout_history_and_seed_restore() {
 	let expected = coin.vtxo.amount - sat(1_000);
 	let returning_address = barkd.ark_address().await;
 
-	// Absence means the actual native process is stopped, including every
+	// Absence means the native process is stopped, including every
 	// maintenance and sync task. No wallet observer opens it during expiry.
 	barkd.stop().await.unwrap();
 	let fee_address = srv.watchmand().wait_wallet_address().await;
@@ -72,7 +72,7 @@ async fn fallback_payout_history_and_seed_restore() {
 		.unwrap().unwrap().value, expected);
 	barkd.start().await.unwrap();
 	// Before any status adoption, a returning wallet may still cache the
-	// old spendable coin. The actual decided server must explain its fence.
+	// old spendable coin. The decided server must explain its fence.
 	let returning = barkd.client_config();
 	let refusal = returning.client.post(format!("{}/api/v1/wallet/send", returning.base_path))
 		.json(&serde_json::json!({ "destination": returning_address, "amount_sat": 1_000 }))
@@ -82,7 +82,7 @@ async fn fallback_payout_history_and_seed_restore() {
 	assert_eq!(refusal["code"], "decided_for_fallback");
 	assert_eq!(refusal["message"], "This coin expired and is being paid to your fallback address.");
 	// Core confirmation precedes the background ledger's observation. Wait
-	// for the actual native receipt instead of assuming a tip ACK means the
+	// for the native receipt instead of assuming a tip ACK means the
 	// payout projection has already caught up.
 	let history = tokio::time::timeout(Duration::from_secs(10), async {
 		loop {

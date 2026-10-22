@@ -122,7 +122,7 @@ async fn board_board() {
 	assert_eq!(funding.compute_txid(), chain_anchor.txid);
 	assert_eq!(funding.output[chain_anchor.vout as usize].value, sat(100_000));
 
-	// Resolve the actual signed funding fee independently of descriptor and signature size.
+	// Resolve the signed funding fee independently of descriptor and signature size.
 	let mut input_value = sat(0);
 	for input in &funding.input {
 		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
@@ -408,7 +408,7 @@ async fn movement_offboard() {
 		rate_quote.sat_vkb,
 	);
 	// The fixture charges no base/expiry fee and 100 additional vbytes.
-	// Include the actual BIP84 or BIP86 destination script in the quoted size.
+	// Include the BIP84 or BIP86 destination script in the quoted size.
 	let charged_weight = bitcoin::Weight::from_vb(100 + addr.script_pubkey().len() as u64).unwrap();
 	let offboard_fee = fee_rate.checked_mul_by_weight(charged_weight).unwrap();
 	let offb_vtxo = vtxos.first().unwrap();
@@ -512,7 +512,7 @@ async fn movement_send_onchain() {
 		rate_quote.sat_vkb,
 	);
 	// The fixture charges no base/expiry fee and 100 additional vbytes.
-	// Include the actual BIP84 or BIP86 destination script in the quoted size.
+	// Include the BIP84 or BIP86 destination script in the quoted size.
 	let charged_weight = bitcoin::Weight::from_vb(100 + addr.script_pubkey().len() as u64).unwrap();
 	let offboard_fee = fee_rate.checked_mul_by_weight(charged_weight).unwrap();
 	let amount = sat(50_000);

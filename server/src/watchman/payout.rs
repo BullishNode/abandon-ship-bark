@@ -24,7 +24,7 @@ use ark::vtxo::policy::clause::VtxoClause;
 
 use super::Watchman;
 
-/// The fee of the actual transaction being replaced, not a stale historical
+/// The fee of the transaction being replaced, not a stale historical
 /// child or its entire mempool chunk.
 async fn mempool_child_fee(client: &bitcoind_async_client::Client, txid: Txid) -> anyhow::Result<Option<Amount>> {
 	#[derive(Debug, serde::Deserialize)]
@@ -237,8 +237,8 @@ impl Watchman {
 						},
 						Err(error) => {
 							// An unrecognized anchor spender is a replacement target,
-							// never evidence of our own funding or settlement. Keep
-							// Core's actual fee for the existing RBF path below.
+							// never proof of our own funding or settlement. Keep
+							// Core's fee for the existing RBF path below.
 							warn!(allocation_id = group.id, %txid, %error,
 								"Replacing unrecognized expiry fee child");
 							None
@@ -250,7 +250,7 @@ impl Watchman {
 			None => None,
 		};
 		// A recognized older child or independent fee-only sponsor can already
-		// provide the package's fee. Preserve its genuine signed body unchanged.
+		// provide the package's fee. Preserve its signed body unchanged.
 		let reusable = active_record.or(group.fee_child);
 		let fees = if let Some((child, fee)) = &reusable {
 			// A side-chain getrawtransaction result is not mempool membership.
@@ -289,7 +289,7 @@ impl Watchman {
 				warn!(allocation_id = group.id, "Expiry payouts need confirmed usable watchman funds");
 				return Ok(());
 			}
-			// BDK's retained graph can lag a fork. Constrain selection to actual
+			// BDK's retained graph can lag a fork. Constrain selection to
 			// confirmed, unspent Core outputs before signing any replacement.
 			let candidates = wallet.list_unspent().map(|utxo| utxo.outpoint).collect::<Vec<OutPoint>>();
 			let mut excluded = Vec::new();
@@ -342,7 +342,7 @@ impl Watchman {
 			wallet.persist().await?;
 		}
 		drop(wallet);
-		// Re-check the actual completed canonical hashes immediately before
+		// Re-check the completed canonical hashes immediately before
 		// publication. Hold the durable barrier shared through the RPC.
 		self.verify_expiry_view(view).await?;
 		self.db.write(async |t| {
@@ -370,7 +370,7 @@ impl Watchman {
 
 	/// Use creating transactions and their real active-chain confirmations:
 	/// a confirmed child has already consumed its prevouts, so gettxout=false
-	/// alone cannot reconstruct this evidence. The parent is supplied exactly.
+	/// alone cannot reconstruct this proof. The parent is supplied exactly.
 	pub(super) async fn observed_fee_prevouts(
 		&self, view: ExpiryViewToken, parent: &Transaction, child: &Transaction,
 	) -> anyhow::Result<Vec<TxOut>> {

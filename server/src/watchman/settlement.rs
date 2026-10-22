@@ -80,7 +80,7 @@ pub(crate) fn payout_fee_accounting_with_contribution(
 		outside_scope_contribution, subsidy, net_operator_result })
 }
 
-/// Group by actual output, with stable per-leaf amounts for persisted attribution.
+/// Group by output, with stable per-leaf amounts for persisted attribution.
 /// Mining cost is independent: the watchman wallet funds the fee child,
 /// and the sweep remainder returns to the operator.
 pub(crate) fn allocate(

@@ -52,7 +52,7 @@ async fn payout_reorg(depth: u32) {
 	let name = format!("server/expiry_payout_reorg_{depth}");
 	let ctx = TestContext::new(&name).await;
 	// Core invalidation is local to a node. Both daemons must observe the
-	// same actual Core that this test forks, as in the Signet deployment.
+	// same Core that this test forks, as in the Signet deployment.
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
 		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).watchmand().create().await;
 	let wallet = ctx.bark("abandoned", &srv).funded(sat(200_000)).create().await;
@@ -119,7 +119,7 @@ async fn payout_reorg(depth: u32) {
 					&& t.get_highest_block(BlockTable::Watchmand).await? == Some(fork))
 			}).await.unwrap();
 			// Core may retain the package through the reorg; otherwise the
-			// actual watchman must rebroadcast it before replacement mining.
+			// watchman must rebroadcast it before replacement mining.
 			if valid && rpc.get_mempool_entry(&txid).is_ok() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}

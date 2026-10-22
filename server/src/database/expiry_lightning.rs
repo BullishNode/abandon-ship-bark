@@ -2,7 +2,7 @@
 //!
 //! A preimage is shared by every grant using its hash. It does not prove that
 //! each of those grants funded a payment. Keep that cryptographic knowledge in
-//! the upstream WAL and bind financial conclusions to actual attempt links.
+//! the upstream WAL and bind financial conclusions to attempt links.
 
 use std::collections::BTreeMap;
 
@@ -25,7 +25,7 @@ use super::expiry_chain::ExpiryViewToken;
 use super::ln::LightningPaymentAttempt;
 
 /// Source-specific internal routing survives completion of the initiating
-/// attempt. A current subscription sharing its hash is never routing evidence.
+/// attempt. A current subscription sharing its hash is never routing proof.
 pub(crate) struct InternalReceiveFunding {
 	pub attempt: LightningPaymentAttempt,
 	pub claim_complete: bool,
@@ -141,7 +141,7 @@ impl Tx<'_> {
 		};
 		// The ordinary monitor can infer Succeeded/final_amount from a foreign
 		// same-hash group. Only qualified ORIGINAL own-label absence supersedes
-		// those coarse fields. Actual own commitments/resolutions remain fenced.
+		// those coarse fields. own commitments/resolutions remain fenced.
 		let coarse_uncommitted = attempt.get::<_, Option<i64>>("final_amount_msat").is_none()
 			&& attempt.get::<_, &str>("status") != "succeeded";
 		ensure!(attempt.get::<_, bool>("queued") && !attempt.get::<_, bool>("success")
@@ -172,7 +172,7 @@ impl Tx<'_> {
 				"source has a contradictory claim, refund, or spend");
 		}
 		// A preimage shared by an unrelated hash sibling is not proof this
-		// particular source paid. Check actual funding/success on its links.
+		// particular source paid. Check funding/success on its links.
 		ensure!(self.query_opt("
 			SELECT l.vtxo_id FROM lightning_payment_attempt_htlc_vtxo l
 			WHERE l.vtxo_id=ANY($1) AND (
@@ -218,7 +218,7 @@ impl Tx<'_> {
 			&[&attempt_id, &hash.to_string()]).await?.map(|r| r.get("subscription_id")))
 	}
 
-	/// Lock the actual funding source and recipient grants together before a
+	/// Lock the funding source and recipient grants together before a
 	/// NEW internal claim publishes its preimage. A global WAL or LnSpent flag
 	/// cannot replace this source-specific, still-collectible signed grant.
 	pub(crate) async fn lock_internal_receive_claim(
@@ -275,7 +275,7 @@ impl Tx<'_> {
 		Ok(())
 	}
 
-	/// Off-chain fulfillment or an actual confirmed user preimage spend must
+	/// Off-chain fulfillment or a confirmed user preimage spend must
 	/// cover the entire issued set. Shared preimage knowledge alone says nothing
 	/// about which subscription paid its recipient.
 	async fn internal_receive_grants_claimed(&self, subscription_id: i64, hash: PaymentHash) -> anyhow::Result<bool> {
@@ -447,7 +447,7 @@ impl Tx<'_> {
 	}
 
 	/// Resolve only a complete signed source-set identity, never the newest
-	/// same-hash attempt. Mailbox callers constrain the actual attempt ID;
+	/// same-hash attempt. Mailbox callers constrain the attempt ID;
 	/// hash-only callers get no proof when several source sets are possible.
 	/// Invalid/partial/duplicate/unlinked scopes return None, not a failure or
 	/// a success inferred from someone else's preimage.
@@ -564,7 +564,7 @@ impl Tx<'_> {
 		Ok(Some(LightningPaymentOutcome { sources: canonical, state: outcome, refund_view }))
 	}
 
-	/// Every original incoming HTLC must have one actual confirmed customer
+	/// Every original incoming HTLC must have one confirmed customer
 	/// payout. A grant reclaim, allocation decision or partial refund is not
 	/// a terminal payment outcome. Reuse the immutable allocation/registration
 	/// authorities and the watchman's completed canonical reconstruction.
@@ -663,7 +663,7 @@ impl Tx<'_> {
 		rows.into_iter().map(TryInto::try_into).collect()
 	}
 
-	/// Shared source-specific public proof for scoped status and the actual
+	/// Shared source-specific public proof for scoped status and the
 	/// attempt's mailbox. The existing expiry spending guard is unchanged;
 	/// coarse final fields never discharge this public outcome either.
 	async fn lightning_attempts_outcome(

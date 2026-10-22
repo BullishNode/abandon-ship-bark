@@ -625,7 +625,7 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 	assert_eq!(log.reason, "htlc-recv vtxos expired");
 	assert!(!invoice.is_expired());
 
-	// Cancellation is a label, not a refund while authentic grants remain live.
+	// Cancellation is a label, not a refund while grants remain live.
 	let pending = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
 		hash: payment_hash.to_vec(), wait: false, htlc_vtxo_ids: payer_htlc_vtxo_ids.clone(),
 	}).wait_millis(30_000).await.unwrap().into_inner();
@@ -3428,7 +3428,7 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 		grants.clone(), ark::VtxoPolicy::new_pubkey(receiver.public_key()),
 	).unwrap().generate_user_nonces(&[receiver]).unwrap();
 
-	// The backend is unavailable for the actual settlement call. The request
+	// The backend is unavailable for the settlement call. The request
 	// must already be durable, but the server must not release its destination.
 	let original_node = lightning.internal.grpc_client().await.getinfo(cln_rpc::GetinfoRequest {})
 		.await.unwrap().into_inner();

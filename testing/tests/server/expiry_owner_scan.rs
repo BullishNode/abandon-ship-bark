@@ -16,7 +16,7 @@ async fn expiry_owner_scan_runs_in_captaind_and_stops_gracefully() {
 	let (account, mailbox) = register(&db, 19).await;
 	let wanted = key(&account, 250);
 	db.write(async |tx| tx.queue_expiry_owner(wanted, Some(mailbox)).await).await.unwrap();
-	// No manual scanner invocation: only the actual captaind task can resolve
+	// No manual scanner invocation: only the captaind task can resolve
 	// this key. The index also requires several immediately consecutive passes.
 	tokio::time::timeout(Duration::from_secs(10), async {
 		loop {
@@ -39,7 +39,7 @@ async fn expiry_owner_scan_runs_in_captaind_and_stops_gracefully() {
 		}
 	}).await.unwrap();
 	// The daemon log subscriber can stop when the process is reaped, before
-	// forwarding its final line. Check the actual new persisted log suffix;
+	// forwarding its final line. Check the new persisted log suffix;
 	// an earlier run's shutdown record must not satisfy this assertion.
 	let logs = tokio::fs::read(&log_path).await.unwrap();
 	assert!(logs[log_offset..].split(|byte| *byte==b'\n').any(|line|

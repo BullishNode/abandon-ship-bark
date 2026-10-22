@@ -403,7 +403,7 @@ async fn financial_cut(
 }
 
 /// A full-value SDK send must really register, deliver, and finalize before
-/// its recipient can forward. The RPC proof is authentic signed evidence,
+/// its recipient can forward. The RPC proof is signed proof,
 /// independent of the sender's local Spent flag.
 async fn send_full(
 	srv: &Captaind, db: &Db, sender: &Wallet,

@@ -36,7 +36,7 @@ pub enum SnapshotGenesis {
 #[derive(Clone)]
 pub struct BackingVtxoFact {
 	pub state: VtxoState<Bare, ServerVtxoPolicy>,
-	/// Present only when the actual stored encoding supplies a complete path.
+	/// Present only when the stored encoding supplies a complete path.
 	/// Availability still does not prove signatures or physical containment.
 	pub full_vtxo: Option<ServerVtxo<Full>>,
 	pub genesis: SnapshotGenesis,
@@ -48,8 +48,8 @@ pub struct BackingVtxoFact {
 
 /// Complete known rows for the queried anchors, including spent and intermediate
 /// representations. A progressed backing's anchor lookup is only a superset:
-/// the caller must validate actual full genesis/path containment before treating
-/// any row as a financially covered leaf. MissingPath is never operator evidence.
+/// the caller must validate full genesis/path containment before treating
+/// any row as a financially covered leaf. MissingPath is never operator proof.
 /// Committed expiry decisions take precedence in the ownership resolver.
 pub struct BackingSnapshot {
 	pub roots: Vec<ServerVtxo>,
@@ -57,7 +57,7 @@ pub struct BackingSnapshot {
 	pub serialized_bytes: usize,
 }
 
-/// A caller-supplied transition anchor. Its exact output must be evidenced by
+/// A caller-supplied transition anchor. Its exact output must be validated by
 /// the full paths. Even zero-valued anchors must be explicit. This is no payee.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackingPartitionResidual {
@@ -110,7 +110,7 @@ impl BackingSnapshot {
 	}
 
 	/// Prove one disjoint, complete geometric cut through the supplied roots.
-	/// Every evidenced sibling must continue to another evidenced transition or
+	/// Every validated sibling must continue to another validated transition or
 	/// be one supplied terminal. Every P2A output must be an exact explicit
 	/// residual. Current transitions conserve their whole input in outputs;
 	/// unrepresented miner fees and unproved alternatives are refused.

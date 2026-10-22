@@ -149,7 +149,7 @@ impl ClnXpayClient {
 		let pay_error = match result {
 			Ok(preimage) => {
 				// The attempt may already be coarse-final after a lost status
-				// race. Never discard the actual xpay result in that case.
+				// race. Never discard the xpay result in that case.
 				if preimage.compute_payment_hash() != payment_hash {
 					error!(%payment_hash, "xpay returned a preimage for another payment hash");
 					return;
@@ -367,8 +367,8 @@ impl ClnXpayClient {
 			}
 		} else {
 			// A coarse final attempt status can be stale after a lost response
-			// or optimistic-write race. Every authentic preimage is settlement
-			// evidence, including one attached to an older CLN payment group.
+			// or optimistic-write race. Every valid preimage is settlement
+			// proof, including one attached to an older CLN payment group.
 			// Preserve it before deciding whether a status transition applies.
 			for pay in &listpays_response.pays {
 				if let Some(bytes) = &pay.preimage {
@@ -633,7 +633,7 @@ impl ClnXpayProcess {
 		}
 
 		// A coarse Failed row can precede CLN's terminal result. Keep checking
-		// expired actual dispatches until their own remote group is proved.
+		// expired dispatches until their own remote group is proved.
 		let failed = self.db.write(async |t| t.unproven_expiry_lightning_dispatches(self.node_id, 16).await).await?;
 		for attempt in failed {
 			if let Err(error) = self.client.sync_payment_attempt_status(attempt, None).await {

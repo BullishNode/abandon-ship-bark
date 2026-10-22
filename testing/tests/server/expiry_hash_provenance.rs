@@ -13,7 +13,7 @@ use server::database::Db;
 use server_rpc::protos;
 
 
-/// Two grants share a hash, but only one funds an actual paid attempt.
+/// Two grants share a hash, but only one funds a paid attempt.
 /// Its preimage must neither collect the unused grant nor block its refund.
 async fn same_hash_sources(cooperative_refund: bool) {
 	let name = if cooperative_refund { "server/expiry_unused_same_hash_cooperative_refund" }

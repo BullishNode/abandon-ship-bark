@@ -212,7 +212,7 @@ pub async fn submit_package<T: Borrow<Transaction>>(
 /// RPC transport success does not mean Core admitted the package. Require an
 /// error-free result for every submitted transaction before recording its
 /// publication. Core can already hold another valid witness for the same txid;
-/// confirmation still requires separate canonical chain evidence.
+/// confirmation still requires separate canonical chain proof.
 pub(crate) fn require_package_acceptance(
 	result: &SubmitPackageResult, transactions: &[&Transaction],
 ) -> anyhow::Result<()> {

@@ -56,7 +56,7 @@ enum Command {
 	#[command()]
 	Start,
 
-	/// Import supervised original-node zero-history evidence. Local privileged
+	/// Import supervised original-node zero-history proof. Local privileged
 	/// recovery only: this never sends or retries a Lightning payment.
 	ResolveUninjectedLightning {
 		#[arg(long)]

@@ -164,7 +164,7 @@ async fn balance_sets_aside_expired_vtxos() {
 	assert_eq!(balance.needs_refresh, Amount::ZERO, "refreshed: {balance:?}");
 }
 
-/// Client-cache projection, not evidence of a server payout. The real admitted
+/// Client-cache projection, not proof of a server payout. The real admitted
 /// coin remains locally Spendable while durable receipt/status metadata must
 /// fence its available balance independently of the latest observed chain tip.
 #[tokio::test]
@@ -245,7 +245,7 @@ async fn fallback_balance_keeps_unknown_value_owned_without_advertising_it_spend
 	assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO);
 }
 
-/// Actual accepted refresh replaces one principal; its operator-owned old
+/// accepted refresh replaces one principal; its operator-owned old
 /// backing must not add the old source to the customer's replacement balance.
 #[tokio::test]
 async fn fallback_balance_completed_refresh_and_operator_backing_conserve_one_principal() {

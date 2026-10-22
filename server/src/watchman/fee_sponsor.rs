@@ -1,5 +1,5 @@
 //! Economic recognition of an observed fee child. This never proves chain
-//! acceptance: callers must independently obtain actual Core presence evidence.
+//! acceptance: callers must independently obtain Core presence proof.
 
 use std::collections::BTreeSet;
 

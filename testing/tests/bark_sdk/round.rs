@@ -1440,7 +1440,7 @@ async fn cancelled_issued_refresh_reopens_and_receives_one_fallback_payout() {
 		let miner_fee = child_value.checked_sub(change).unwrap();
 		assert!(miner_fee > Amount::ZERO);
 		assert_eq!(source.amount(), sat(99_000) + sat(1_000));
-		// This cut includes the customer parent and its one actual fee sponsor.
+		// This cut includes the customer parent and its one fee sponsor.
 		// The separate cancelled-round tree and its sponsor are outside this equation.
 		assert_eq!(parent_value + sat(100_000), sat(99_000) + operator_value + change + miner_fee);
 		let paid = core.get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().unwrap();

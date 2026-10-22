@@ -23,7 +23,7 @@ use crate::database::{Checkpoint, Tx};
 /// Identifier by which lightning nodes are stored in the database.
 pub type LightningNodeId = i64;
 
-/// Fixed invoices define the actual recipient principal independently of a
+/// Fixed invoices define the recipient principal independently of a
 /// caller's larger funding/fee allowance. Amountless invoices use that caller
 /// amount. Preserve millisatoshis and reject values PostgreSQL cannot store.
 fn payment_principal_msat(invoice_msat: Option<u64>, requested: Amount) -> anyhow::Result<i64> {
@@ -249,7 +249,7 @@ impl<'t> Tx<'t> {
 		Ok(attempts)
 	}
 
-	/// Recheck a queued external dispatch at its actual execution boundary.
+	/// Recheck a queued external dispatch at its execution boundary.
 	/// Call under the payment hash guard. Coin and WAL locks are short-lived;
 	/// no database transaction is held while the Lightning RPC runs.
 	pub async fn admit_lightning_dispatch(&self, attempt: &LightningPaymentAttempt) -> anyhow::Result<bool> {
@@ -274,7 +274,7 @@ impl<'t> Tx<'t> {
 		// The process-local payment guard is not a cross-instance fence.
 		// A committed claim prevents a second dispatcher, including after a
 		// restart, from issuing this same attempt again. It is deliberately
-		// not evidence that the remote node completed or failed a payment.
+		// not proof that the remote node completed or failed a payment.
 		Ok(self.query_opt("
 			INSERT INTO expiry_lightning_dispatch(id) VALUES($1)
 			ON CONFLICT(id) DO NOTHING RETURNING id
@@ -860,7 +860,7 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Bind a notification to the actual originating attempt, rather than the
+	/// Bind a notification to the originating attempt, rather than the
 	/// newest sender who happens to use the same payment hash.
 	pub(crate) async fn get_lightning_attempt_sender_mailbox_id(
 		&self, attempt_id: i64, payment_hash: PaymentHash,
@@ -937,7 +937,7 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Lock the immutable actual attempt source set in the same order as expiry
+	/// Lock the immutable attempt source set in the same order as expiry
 	/// writers, before an attempt row or the settlement WAL is locked. This is
 	/// exclusion only: a decided coin is not an error or permission to mutate it.
 	pub(crate) async fn lock_lightning_attempt_sources(&self, attempt_id: i64) -> anyhow::Result<()> {
@@ -947,7 +947,7 @@ impl<'t> Tx<'t> {
 		Ok(())
 	}
 
-	/// Mark only the actual attempt's fully discharged source set as ln-spent.
+	/// Mark only the attempt's fully discharged source set as ln-spent.
 	/// A global preimage or coarse Succeeded alone cannot consume these coins.
 	/// Returns genuinely nonspendable sources left untouched; already-ln-spent
 	/// sources are an idempotent success, not a spurious warning.

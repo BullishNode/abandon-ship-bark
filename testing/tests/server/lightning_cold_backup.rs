@@ -1,4 +1,4 @@
-//! Orderly and unclean-PostgreSQL physical backups at genuine internal HtlcsReady,
+//! Orderly and unclean-PostgreSQL physical backups at internal HtlcsReady,
 //! followed by automatic sender refund and fresh-seed BIP86 recovery. Core and CLN continue.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -335,7 +335,7 @@ async fn signed_grant_ancestry(db: &Db, grants: &[Vtxo<Full>]) -> BTreeMap<Strin
 	expected
 }
 
-/// A finite case-local physical cut. Only actual canonical descendants of the
+/// A finite case-local physical cut. Only canonical descendants of the
 /// four original funding outputs enter this graph. Any extra input fails the
 /// cut rather than silently adding an unbudgeted sponsor or historic liability.
 fn canonical_descendants(ctx: &TestContext, first_height: u32, external: &BTreeMap<OutPoint, Amount>) -> BTreeMap<bitcoin::Txid, Transaction> {
@@ -1026,7 +1026,7 @@ async fn lightning_backup(unclean: bool) {
 		}
 		assert_eq!(graph.get(&grant_closures[&grant.id()].compute_txid()), Some(&grant_closures[&grant.id()]));
 	}
-	// Independently trace every actual fee child's non-anchor inputs back to
+	// Independently trace every fee child's non-anchor inputs back to
 	// the original watchman sponsors. Customer and pool principal cannot pay it.
 	let is_anchor = |point: OutPoint| graph.get(&point.txid).is_some_and(|tx| {
 		let output = &tx.output[point.vout as usize];

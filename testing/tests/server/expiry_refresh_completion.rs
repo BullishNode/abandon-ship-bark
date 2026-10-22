@@ -149,7 +149,7 @@ async fn refresh_completion_race(forfeit_wins: bool) {
 		let preimage = response.unlock_preimage.as_slice().try_into().unwrap();
 		for coin in &mut replacements {
 			assert!(coin.provide_unlock_preimage(preimage));
-			// The status tree omits our leaf signature. Validate the actual
+			// The status tree omits our leaf signature. Validate the
 			// signed replacement the SDK durably stored after this exchange.
 			let signed = wallet.get_full_vtxo(coin.id()).await.unwrap();
 			assert_eq!(signed.amount(), coin.amount());
@@ -161,7 +161,7 @@ async fn refresh_completion_race(forfeit_wins: bool) {
 		let source = db.read(async |tx| tx.get_user_vtxos_by_id(&[original.id()]).await).await.unwrap();
 		assert!(source[0].spent_in_round.is_some());
 		// A zero customer count before the competing worker finishes would
-		// prove nothing. Wait for its actual operator-only decision and sweep.
+		// prove nothing. Wait for its operator-only decision and sweep.
 		let (allocation, parent): (i64, Transaction) = tokio::time::timeout(Duration::from_secs(30), async {
 			loop {
 				let row = db.read(async |tx| Ok(tx.query_opt("
@@ -189,7 +189,7 @@ async fn refresh_completion_race(forfeit_wins: bool) {
 		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
 		ctx.generate_blocks(6).await;
 		// Core 31 reports the P2A output as `anchor`, which the older
-		// verbose RPC model does not recognize. Read Core's actual depth.
+		// verbose RPC model does not recognize. Read Core's depth.
 		let confirmed: serde_json::Value = ctx.bitcoind().sync_client().call(
 			"getrawtransaction", &[json!(parent.compute_txid().to_string()), json!(true)],
 		).unwrap();

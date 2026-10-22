@@ -58,7 +58,7 @@ async fn mnemonic(ctx: &TestContext, name: &str) -> bip39::Mnemonic {
 
 async fn reopen(ctx: &TestContext, name: &str, srv: &captaind::Captaind) -> Wallet {
 	// The harness deliberately reallocates listener ports after stop/start.
-	// Reopen the actual existing databases against its current endpoint.
+	// Reopen the existing databases against its current endpoint.
 	let mnemonic = mnemonic(ctx, name).await;
 	let db = Arc::new(SqliteClient::open(ctx.datadir.join(name).join("db.sqlite")).unwrap());
 	let onchain = OnchainWallet::load_or_create(Network::Regtest, mnemonic.to_seed(""), db.clone()).await.unwrap();
@@ -336,7 +336,7 @@ async fn history_native_and_other_device_claim_share_one_principal_debit() {
 	}
 
 	// The server never receives fee liquidity. Only this device publishes the
-	// genuine signed user path and its explicitly authorized final claim.
+	// signed user path and its explicitly authorized final claim.
 	tokio::time::timeout(Duration::from_secs(40), async {
 		loop {
 			claimant.chain().invalidate_caches().await;
@@ -441,7 +441,7 @@ async fn history_payment_method_queries_preserve_order_and_variant_identity() {
 	wallet.movements_mgr().register_subsystem(subsystem).await.unwrap();
 	let mut ids = Vec::new();
 	// These pending zero-value annotations exercise query matching only. They
-	// are not ownership, financial operations, receipts or settlement evidence.
+	// are not ownership, financial operations, receipts or settlement proof.
 	for method in &methods {
 		let mut matching = Vec::new();
 		for direction in 0..3 {
@@ -513,7 +513,7 @@ async fn fallback_adoption_fresh_seed_retains_unfunded_decision_and_protects_off
 		VtxoState::Locked { holder: Some(exit.movement_id().unwrap().into()) });
 
 	// A second independently restored database stays quarantined while the
-	// first has its own protective movement. Fund the actual fee wallet and
+	// first has its own protective movement. Fund the fee wallet and
 	// cache the real signed payout before taking Ark offline at confirmation.
 	srv.start().await.unwrap();
 	drop(paid);
@@ -671,7 +671,7 @@ async fn fallback_spent_without_complete_signed_proof_retains_body_without_inven
 	let proxy = srv.start_proxy_no_mailbox(gate.clone()).await;
 	// This real second device already positively owned the input before the
 	// other device paid. Its original principal must neither vanish nor be
-	// counted again alongside the actual signed change it recovers later.
+	// counted again alongside the signed change it recovers later.
 	let older = create_proof_wallet(ctx.bark_sdk("older-device", &proxy).cfg(config).mnemonic(seed.clone())).await;
 	assert_eq!(older.balance().await.unwrap().total(), sat(100_000));
 	target.send_arkoor_payment(&source.new_address().await.unwrap(), sat(60_000)).await.unwrap();
@@ -751,7 +751,7 @@ async fn fallback_spent_without_complete_signed_proof_retains_body_without_inven
 	assert_eq!(restored.get_full_vtxo(original.id()).await.unwrap().serialize(), signed.serialize(),
 		"verified retirement must retain signed recovery material");
 	// Restore only the LOCAL checkpoint boundary before atomic retirement.
-	// The signature fact is genuine from the completed transfer above; no
+	// The signature fact is from the completed transfer above; no
 	// server financial table or transaction is modified by this crash model.
 	let mut interrupted = db.get_fallback_snapshot().await.unwrap();
 	assert!(interrupted.verified_ordinary_spends.contains(&original.id()));
@@ -782,7 +782,7 @@ impl captaind::proxy::ArkRpcProxy for MissingHistoryGate {
 		-> Result<protos::GetFallbackPayoutsResponse, tonic::Status>
 	{
 		// An API-negative missing-history response, never a financial DB edit.
-		// Status still comes from the actual admitted unpaid decision.
+		// Status still comes from the admitted unpaid decision.
 		let mut response = upstream.get_fallback_payouts(request).await?.into_inner();
 		response.entitlements.clear();
 		response.next_after_entitlement_id = None;

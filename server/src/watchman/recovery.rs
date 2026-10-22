@@ -93,7 +93,7 @@ impl Watchman {
 			}
 		}
 		// The ordinary package's child may confirm before any sweep observes
-		// it in the mempool. Recover its actual body from the parent's canonical
+		// it in the mempool. Recover its body from the parent's canonical
 		// block, including after restart; no anchor-discovery hint marks it paid.
 		let parents = self.db.read(async |t| Ok(t.query("
 			SELECT a.id, a.sweep_tx, (SELECT COUNT(*)

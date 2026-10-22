@@ -1,4 +1,4 @@
-//! Native changed-frontier replan, with genuine original funding and grants.
+//! Native changed-frontier replan, with original funding and grants.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
@@ -328,7 +328,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 	// groups can need fee children at this frozen tip. A single confirmed
 	// deposit funds one child; its change is then unconfirmed and cannot
 	// sponsor another version-3 parent. Give this bounded topology four
-	// independent confirmed fee inputs, preserving the actual funding rule.
+	// independent confirmed fee inputs, preserving the funding rule.
 	for _ in 0..4 {
 		ctx.bitcoind().fund_addr(fee_address.clone(),sat(150_000)).await;
 	}
@@ -422,7 +422,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 		.any(|coin| OutPoint::new(coin.txid, coin.vout) == reserve_point));
 	info!("Unlocked independently confirmed controller recovery funds after actual fork: outpoint={} amount_sat={} confirmations={}",
 		reserve_point, actual.value.to_sat(), actual.confirmations);
-	// Keep the same four genuine sponsor deposits and the same two blocks;
+	// Keep the same four sponsor deposits and the same two blocks;
 	// no abandonment, financial SQL, injected principal or retry is used.
 	for _ in 0..4 {
 		ctx.bitcoind().fund_addr(fee_address.clone(), sat(150_000)).await;
@@ -433,7 +433,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 	let canonical_parents = tokio::time::timeout(Duration::from_secs(60), async {
 		for _ in 0..30 {
 			// New v3 children can need their original signed ancestors to
-			// reconfirm first. Give actual daemon cycles and chain depth to
+			// reconfirm first. Give daemon cycles and chain depth to
 			// each stage instead of inferring publication from a generated tip.
 			rpc.generate_to_address(1,&mining_address).unwrap();
 			let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);

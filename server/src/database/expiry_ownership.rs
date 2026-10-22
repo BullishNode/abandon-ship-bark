@@ -1,5 +1,5 @@
 //! Terminal ownership proposals for a proven geometric backing partition.
-//! No proposal is an authorization: allocation revalidates its evidence under
+//! No proposal is an authorization: allocation revalidates its proof under
 //! coin, participation and chain-view locks before committing a spend fence.
 
 use std::str::FromStr;
@@ -79,8 +79,8 @@ pub struct OwnershipProposal {
 	pub cancellations: Vec<i64>,
 	/// Preserve newly learned preimages even when the chain conclusion rolls back.
 	pub has_stored_preimage: bool,
-	/// Only a fully evidenced, expired HTLC settlement can request actual
-	/// signed progression. Missing ownership or path evidence never does.
+	/// Only a fully validated, expired HTLC settlement can request
+	/// signed progression. Missing ownership or path proof never does.
 	pub needs_chain_progress: bool,
 }
 
@@ -96,7 +96,7 @@ impl OwnershipProposal {
 }
 
 impl Tx<'_> {
-	/// Resolve one selected economic terminal. The caller supplies its actual
+	/// Resolve one selected economic terminal. The caller supplies its
 	/// funding transaction and must already have proved the complete partition.
 	pub async fn propose_expiry_ownership(
 		&self,
@@ -298,7 +298,7 @@ impl Tx<'_> {
 				}
 				if proposal.has_stored_preimage && htlc.direction() == HtlcDirection::Outgoing && !cancelled_receive_claim {
 					// A granted receive is already a signed obligation to this
-					// recipient. Sending grants require their own funding evidence.
+					// recipient. Sending grants require their own funding proof.
 					proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
 					proposal.evidence = Some(OwnershipEvidence::HtlcStoredPreimage { payment_hash: hash });
 					return Ok(proposal);
@@ -329,7 +329,7 @@ impl Tx<'_> {
 					}
 				}
 				// A same-hash receive funded by another source cannot retain
-				// this sender's money. Attempts without outcome evidence still wait.
+				// this sender's money. Attempts without outcome proof still wait.
 				if matches!(source, LightningSourceState::Unattempted | LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. })
 					&& fact.onchain_spent_height.is_none() && htlc.htlc.chain_resolution.is_none()
 					&& htlc.htlc.htlc_expiry <= tip && watchman_tip.is_some_and(|h| htlc.htlc.htlc_expiry <= h) {

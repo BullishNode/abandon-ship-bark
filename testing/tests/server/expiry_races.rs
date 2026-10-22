@@ -8,7 +8,7 @@ use server::database::{Db, SpendState};
 use server::database::tree::VtxoTreeUpdate;
 use ark_testing::TestContext;
 
-/// Exercise the actual shared tree writer, not a process-local flux lock. The
+/// Exercise the shared tree writer, not a process-local flux lock. The
 /// fixture installs a durable allocation fence while the competing writer is
 /// observably waiting on the same Postgres coin row.
 #[tokio::test]

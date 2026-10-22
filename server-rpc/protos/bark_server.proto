@@ -853,7 +853,7 @@ message FallbackPayoutAttempt {
 	uint64 payout_sat = 9;
 	uint64 forfeited_sat = 10;
 	optional uint64 output_amount_sat = 11;
-	// Actual signed parent, if constructed. Storage alone is only Committed.
+	// signed parent, if constructed. Storage alone is only Committed.
 	bytes parent_tx = 12;
 	FallbackPayoutBlock confirmation = 13;
 }

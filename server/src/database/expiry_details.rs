@@ -94,7 +94,7 @@ fn point(height: Option<i64>, hash: Option<&str>) -> anyhow::Result<Option<Block
 
 impl Tx<'_> {
 	/// The public RPC first verifies the existing server-bound xpub recovery
-	/// authorization. The record is matched by its actual derivation identity,
+	/// authorization. The record is matched by its derivation identity,
 	/// so changing an xpub's header cannot discover another account's funds.
 	pub async fn fallback_payout_details_by_account(
 		&self, account: Xpub, network: Network, after_entitlement_id: i64, limit: u32,

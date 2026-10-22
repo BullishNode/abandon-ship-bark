@@ -77,14 +77,14 @@ async fn expiry_abandoned_registered_send_needs_no_client_refund() {
 			| server::database::expiry_ownership::OwnershipEvidence::IrreversibleEntitlement { .. }
 	)));
 	// Readiness never invents an upstream off-chain revocation. A concurrent
-	// background allocation may already have recorded the genuine spend fence.
+	// background allocation may already have recorded the spend fence.
 	let upstream = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, htlc.id()).await).await.unwrap().unwrap();
 	assert_eq!(upstream.htlc.resolution(), None);
 }
 
-/// An actual issued refresh can be cancelled before its forfeit binds. The
+/// An issued refresh can be cancelled before its forfeit binds. The
 /// product's participation-removal method must not erase the old unclaimed
-/// output's ownership. This tests settlement evidence, not a payout race.
+/// output's ownership. This tests settlement proof, not a payout race.
 #[tokio::test]
 async fn expiry_cancelled_unclaimed_output_keeps_owner_after_participation_removed() {
 	let ctx = TestContext::new("server/expiry_cancelled_unclaimed_tombstone").await;

@@ -32,7 +32,7 @@ CREATE TABLE expiry_cancelled_participation (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Only actual matches are cached. Exhaustive coverage belongs to each pending
+-- Only matches are cached. Exhaustive coverage belongs to each pending
 -- key and registered account, not to an account-wide lifetime cursor.
 CREATE TABLE expiry_pending_key (
 	user_pubkey TEXT PRIMARY KEY,
@@ -131,7 +131,7 @@ CREATE TABLE expiry_allocation_payout (
 );
 
 -- The full signed parent is stored once. Fee children may be replaced and each
--- exact version remains available for confirmation and actual subsidy accounting.
+-- exact version remains available for confirmation and subsidy accounting.
 CREATE TABLE expiry_fee_child (
 	id BIGSERIAL PRIMARY KEY,
 	allocation_id BIGINT NOT NULL REFERENCES expiry_allocation(id),
@@ -218,14 +218,14 @@ CREATE TABLE expiry_lightning_dispatch (
 );
 
 -- This records a particular CLN dispatch, not a coarse local Failed status.
--- Its randomly unique label must occur in CLN's actual sendpay history, and
+-- Its randomly unique label must occur in CLN's sendpay history, and
 -- every same-hash group must be Failed with no live xpay object or preimage.
 CREATE TABLE expiry_lightning_terminal_failure (
 	id BIGINT PRIMARY KEY REFERENCES expiry_lightning_dispatch(id),
 	created_index BIGINT CHECK (created_index > 0),
 	updated_index BIGINT,
 	jsonrpc_error_code INTEGER,
-	-- Trusted supervised quiescence is distinct from an actual CLN failure.
+	-- Trusted supervised quiescence is distinct from a CLN failure.
 	-- Keep the bounded public manifest and its exact byte identity here, not in
 	-- another money ledger. This branch never manufactures a CLN index/error.
 	supervised_manifest_sha256 BYTEA CHECK (octet_length(supervised_manifest_sha256)=32),
@@ -250,7 +250,7 @@ CREATE TABLE expiry_lightning_rpc_rejection (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- These rows describe execution of an actual attempt, never merely knowledge
+-- These rows describe execution of an attempt, never merely knowledge
 -- of an invoice preimage. An attempt without a queue marker stays unresolved.
 CREATE TABLE expiry_lightning_queued_attempt (
 	id BIGINT PRIMARY KEY REFERENCES lightning_payment_attempt(id),

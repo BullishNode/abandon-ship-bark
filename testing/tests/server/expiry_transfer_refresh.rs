@@ -29,7 +29,7 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 		.watchmand().create().await;
 	let absent = ctx.bark("absent", &srv).funded(sat(500_000)).create().await;
 	let control = ctx.bark("control", &srv).funded(sat(500_000)).create().await;
-	// No intervening block: both actual backing roots have the same expiry.
+	// No intervening block: both backing roots have the same expiry.
 	let own_board = absent.board(sat(30_000)).await;
 	let sender_board = control.board(sat(30_000)).await;
 	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;

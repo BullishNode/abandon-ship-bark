@@ -1,4 +1,4 @@
-//! Bounded evidence for an ordinary transfer, never a replacement obligation.
+//! Bounded proof for an ordinary transfer, never a replacement obligation.
 
 use anyhow::Context;
 use bitcoin::OutPoint;
@@ -10,7 +10,7 @@ use super::{Tx, VtxoState};
 impl Tx<'_> {
 	/// Only return a complete current-format ordinary OOR proof. A forfeit,
 	/// conditional payment, partial registration or oversized branch set is not
-	/// evidence that the old user's financial claim has been discharged.
+	/// proof that the old user's financial claim has been discharged.
 	pub(crate) async fn ordinary_spend_proof(&self, source: &VtxoState) -> anyhow::Result<Vec<Vec<u8>>> {
 		ensure!(matches!(source.vtxo.policy(), VtxoPolicy::Pubkey(_))
 			&& source.spent_in_round.is_none() && source.offboarded_in.is_none(), "source is not an ordinary OOR spend");

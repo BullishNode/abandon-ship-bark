@@ -61,7 +61,7 @@ impl Server {
 					&& self.lightning_manager.original_receive_invoice_state(&subscription).await? == Some(InvoiceState::Cancelled) {
 					// Internal promotion cancels the native invoice before a claim
 					// necessarily collects its original sources. Terminal backend
-					// evidence plus expired collection permits only ordinary grant
+					// proof plus expired collection permits only ordinary grant
 					// recovery, never an immediate sender refund.
 					let view = self.db.read(async |t| t.expiry_rebuild_token().await).await?
 						.context("uncollected internal receive needs completed chain views")?;
@@ -75,7 +75,7 @@ impl Server {
 			} else {
 				match self.lightning_manager.original_receive_invoice_state(&subscription).await? {
 					Some(InvoiceState::Paid) => {
-						// Actual Paid is irreversible evidence from the exact node
+						// Paid is irreversible proof from the exact node
 						// and invoice. Repair coarse state through the existing path.
 						self.htlc_settler.settle(original.preimage).await?;
 						self.lightning_manager.settle_invoice(subscription_id, original.preimage).await?;

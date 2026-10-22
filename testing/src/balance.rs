@@ -21,7 +21,7 @@ pub(crate) fn history_receipts(history: &[Movement]) -> Vec<bark::FallbackEntitl
 		}).collect()
 }
 
-/// Check public ownership evidence before comparing balance categories. A server
+/// Check public ownership proof before comparing balance categories. A server
 /// receipt's stage alone never proves payment. This checks the wallet's current
 /// chain-verified history projection, not independent on-chain settlement.
 /// Ambiguous historic imports require a fixture-specific ownership assertion.

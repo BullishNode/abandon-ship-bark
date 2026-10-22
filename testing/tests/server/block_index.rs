@@ -153,7 +153,7 @@ async fn test_block_index_basic_sync() {
 	let addrs = Address::<NetworkUnchecked>::from_str("bcrt1pnvttf55269k90h8r4xcwewqr9nvlyngge06srk4gmddu6sjjk9gq82vrkf").unwrap().assume_checked();
 	bitcoind.invalidate_block(&block_120.hash).expect("Invalidated block");
 	// Core can select a canonical tip below our current height. Roll back
-	// against that actual tip before replacements arrive, without panicking.
+	// against that tip before replacements arrive, without panicking.
 	block_index.sync().await.expect("shorter canonical tip sync");
 	assert_eq!(block_index.sync_tip().height, BlockHeight::new(119));
 	check_block_index_is_consistent(&db, BlockTable::Captaind, &bitcoind).await;

@@ -26,7 +26,7 @@ struct SplitRecoveryPaths {
 /// A signed next transaction alone is insufficient. For example, a board's
 /// next transaction ends at a user-only leaf: publishing it would destroy our
 /// expiry path for an abandoned wallet. Follow every branch until there is an
-/// actual server recovery path, accounting for each sibling and anchor.
+/// server recovery path, accounting for each sibling and anchor.
 fn split_recovery_paths(
 	root: &ServerVtxo, snapshot: &BackingSnapshot,
 	signed: &BTreeMap<Txid, Transaction>, owned: &BTreeSet<PublicKey>,
@@ -236,7 +236,7 @@ impl Tx<'_> {
 }
 
 impl Tx<'_> {
-	/// Request only an actual one-input signed tree step. No manufactured
+	/// Request only an one-input signed tree step. No manufactured
 	/// transaction or arbitrary txid can become a split instruction.
 	pub async fn request_expiry_split(
 		&self, view: ExpiryViewToken, root: &ServerVtxo,
@@ -470,7 +470,7 @@ mod tests {
 		assert!(split_recovery_paths(&snapshot.roots[0], &snapshot, &signed, &BTreeSet::new()).unwrap().is_none(),
 			"every sibling needs its actual output metadata, including the ordinary branch");
 		snapshot.regular.insert(sibling, removed);
-		// Removing the actual signed bridge must not be substituted by the
+		// Removing the signed bridge must not be substituted by the
 		// unsigned geometry available in the descendant's full encoding.
 		let bridge = snapshot.regular[1].state.oor_spent_txid.unwrap();
 		signed.remove(&bridge);

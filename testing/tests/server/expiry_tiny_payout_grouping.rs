@@ -322,7 +322,7 @@ async fn tiny_group() {
 	}
 
 	// Reconstruct the complete finite cut in canonical block order. Retain
-	// unused declared sponsors and follow actual child change, not an assumed
+	// unused declared sponsors and follow child change, not an assumed
 	// fee-wallet output shape. An undeclared additional input is a failure.
 	let mut cut = sponsors.clone();
 	assert!(cut.insert(root, board.output[root.vout as usize].clone()).is_none());

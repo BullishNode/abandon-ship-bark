@@ -137,7 +137,7 @@ pub struct BalanceSummary {
 
 impl Wallet {
 	/// Only pending positive sources need this exceptional overlap check.
-	/// Previously validated retained bodies supply their actual signed paths;
+	/// Previously validated retained bodies supply their signed paths;
 	/// no server call or chain lookup can block ordinary balance reporting.
 	async fn retained_pending_principal(
 		&self, owned: &HashMap<VtxoId, WalletVtxo>, pending: &BTreeSet<VtxoId>,
@@ -184,7 +184,7 @@ impl Wallet {
 			&[VtxoStateKind::Spendable, VtxoStateKind::Locked, VtxoStateKind::Exited],
 		).await?.into_iter().map(|v| (v.id(), v)).collect::<HashMap<_, _>>();
 		// A signed body retained for historic recovery is not another owned
-		// claim. Keep only current positive local ownership and actual customer
+		// claim. Keep only current positive local ownership and customer
 		// receipt principal; an Operator label cannot synthesize either.
 		let mut owned = retained.iter().filter(|(id, _)| !fallback.unproven_spent_vtxos.contains(id)
 			&& !fallback.verified_ordinary_spends.contains(id)).map(|(id, coin)| (*id, coin.clone()))
@@ -242,7 +242,7 @@ impl Wallet {
 		let decided = fallback.entitlements.values().map(|receipt| receipt.vtxo_id).collect::<HashSet<_>>();
 
 		// A permanent decision removes ordinary Ark availability, not the
-		// owned claim while its actual settlement is still unconfirmed.
+		// owned claim while its settlement is still unconfirmed.
 		let owned = self.retained_owned_principal(&fallback).await?;
 		let pending_principal = self.retained_pending_principal(&owned, &fallback.awaiting_settlement).await?;
 		let mut awaiting_decided = Amount::ZERO;
@@ -360,7 +360,7 @@ impl Wallet {
 	}
 }
 
-/// A native intent alone is not a reservation. Require its actual pending
+/// A native intent alone is not a reservation. Require its pending
 /// movement and its exact live holder; a binding round or another operation
 /// remains accounted for by its own bucket. Call only for already-filtered
 /// positive-owned coins, after decided/unproven/discharged sources are removed.

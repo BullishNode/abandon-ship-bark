@@ -1821,7 +1821,7 @@ async fn lightning_payment_attempt_error_cleared_on_success() {
 	assert_eq!(succeeded.error, None);
 }
 
-/// Coarse Succeeded without an actual attempt receipt must leave a matching
+/// Coarse Succeeded without an attempt receipt must leave a matching
 /// signed HTLC source spendable.
 #[tokio::test]
 async fn coarse_success_without_own_receipt_keeps_htlc_send_spendable() {

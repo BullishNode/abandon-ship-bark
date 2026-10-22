@@ -64,7 +64,7 @@ pub struct FallbackEntitlement {
 	pub last_updated: DateTime<Local>,
 }
 
-/// Evidence obtained independently from the wallet's own chain backend.
+/// proof obtained independently from the wallet's own chain backend.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FallbackVerifiedPayout {
 	pub allocation_id: i64,

@@ -1,5 +1,5 @@
 //! Current-protocol partial-terminal recovery and exact signed-claim replay.
-//! One actual attempt uses TWO original inputs and one complete receive set.
+//! One attempt uses TWO original inputs and one complete receive set.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -157,7 +157,7 @@ async fn partial_terminal(case: TerminalCase) {
 	}).await.unwrap();
 	assert_eq!(scope.0, sources.iter().map(|source| source.id().to_string()).collect());
 	assert_eq!(scope.1, grants.iter().map(|grant| grant.id().to_string()).collect());
-	// Preserve every actual grant. No receiver claim, preimage or returning
+	// Preserve every grant. No receiver claim, preimage or returning
 	// wallet action is used to discharge the receive side.
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	srv.watchmand().stop().await.unwrap();
@@ -166,10 +166,10 @@ async fn partial_terminal(case: TerminalCase) {
 	confirm_actual_path(&ctx, &sources[0], &mut seen).await;
 	let mut unpaid_backing = sources[1].chain_anchor();
 	if reorg_a {
-		// Keep B's actual server-recoverable prefix on both branches. The
+		// Keep B's server-recoverable prefix on both branches. The
 		// original mode still exercises ordinary background B progression.
 		unpaid_backing = confirm_recoverable_prefix(&ctx,&db,&sources[1],&mut seen).await;
-		// These actual independent fee inputs precede A's claim block and
+		// These independent fee inputs precede A's claim block and
 		// survive its fork. The reorg must test claim recovery, not depend on
 		// a future-locktime orphaned controller sponsor or fresh funding.
 		for _ in 0..4 { ctx.bitcoind().fund_addr(fee_address.clone(), sat(150_000)).await; }
@@ -411,7 +411,7 @@ async fn expiry_internal_all_sources_exited_returns_all_grants() {
 	Box::pin(partial_terminal(TerminalCase::All)).await;
 }
 
-/// Both customers already have their genuine on-chain receipts. Remaining G
+/// Both customers already have their on-chain receipts. Remaining G
 /// principal belongs to the operator, and must not stay held as a nonexistent
 /// customer refund. Observe normal watchman timeout transactions, not flags.
 async fn all_terminal_returns(

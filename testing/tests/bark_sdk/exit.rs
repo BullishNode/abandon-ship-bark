@@ -180,7 +180,7 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 
 	let owners = [(&wallet, vtxo, amount)];
 
-	// Capture the actual registered owners before the absent-client interval.
+	// Capture the registered owners before the absent-client interval.
 	let first_height = ctx.bitcoind().get_block_count().await;
 	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
 	let operator_script = {
@@ -428,7 +428,7 @@ async fn watchman_sweeps_vtxo_chain_during_exit() {
 	let anchor = vtxos[0].vtxo.chain_anchor();
 
 
-	// Capture the actual registered owners before the absent-client interval.
+	// Capture the registered owners before the absent-client interval.
 	let first_height = ctx.bitcoind().get_block_count().await;
 	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
 	let operator_script = {

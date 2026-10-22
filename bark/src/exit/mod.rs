@@ -208,7 +208,7 @@ pub(crate) struct ExitInner {
 }
 
 // Signed single-parent exit paths have a confirmed prefix. Probe it in
-// logarithmic network work; errors remain errors, never absence evidence.
+// logarithmic network work; errors remain errors, never absence proof.
 async fn confirmed_path_prefix_len<F, Fut>(len: usize, mut confirmed: F) -> anyhow::Result<usize>
 where
 	F: FnMut(usize) -> Fut,
@@ -546,7 +546,7 @@ impl ExitInner {
 		}
 		// Status synchronization itself can rebroadcast a saved fee child.
 		// Suppress spent-only packages before that pass; a shared ancestor
-		// needed by another genuine exit remains eligible.
+		// needed by another exit remains eligible.
 		let no_rebroadcast = candidates.difference(&live).copied().collect();
 		self.tx_manager.sync(&no_rebroadcast).await?;
 		Ok(())
@@ -1148,7 +1148,7 @@ impl Exit {
 		}
 
 		// A native Claimable scan also labels server forfeits as Claimed.
-		// The owning binding round verifies the actual user witness before
+		// The owning binding round verifies the user witness before
 		// finalizing either its old intent or replacement exit movement.
 		if binding {
 			// A normal cooperative round may have completed after the exit
@@ -1673,7 +1673,7 @@ fn resumed_claim_shape(entry: &StoredExit) -> bool {
 }
 
 /// Candidate selection for read-only completion only. A caller must independently
-/// revalidate the actual canonical transaction, exact owned user leaf and tip.
+/// revalidate the canonical transaction, exact owned user leaf and tip.
 fn reconfirmed_claim_candidate(
 	entry: &StoredExit, movement: &crate::movement::Movement, state: &VtxoState,
 	amount: Amount, snapshot: &crate::fallback::payouts::FallbackSnapshot,

@@ -21,7 +21,7 @@ use super::helpers::{
 
 /// Separate spendable leaves from retained historical recovery material.
 /// Conditional and offboard histories can lack a supported discharge proof;
-/// those tests must separately prove balances and an actual recovered spend.
+/// those tests must separately prove balances and a recovered spend.
 fn partition_recovered(
 	vtxos: Vec<WalletVtxoInfo>, allow_quarantined_history: bool,
 ) -> (Vec<WalletVtxoInfo>, Vec<WalletVtxoInfo>) {
@@ -105,7 +105,7 @@ async fn recovered_wallet_finds_boarded_vtxo() {
 	let spend_amount = recovered_vtxo.vtxo.amount;
 	assert!(spend_amount > Amount::ZERO);
 
-	// Spend the actual recovered coin, whose net value includes its native funding fee.
+	// Spend the recovered coin, whose net value includes its native funding fee.
 	let recipient = ctx.barkd("recipient", &srv).create().await;
 	recovered.send(&recipient.ark_address().await, spend_amount).await;
 	wait_for_spendable(&recipient, spend_amount).await;
@@ -345,7 +345,7 @@ async fn recovered_wallet_finds_round_vtxo() {
 	assert_eq!(after[0].vtxo.id, round_id, "recovered VTXO should be the round output");
 	assert!(spent.is_empty(), "only the known locked round ancestor may accompany the current cut");
 
-	// The fixture's native refresh fee is zero: preserve the actual boarded value.
+	// The fixture's native refresh fee is zero: preserve the boarded value.
 	assert_eq!(after_refresh[0].vtxo.amount, board[0].vtxo.amount);
 	assert_eq!(after[0].state, VtxoStateInfo::Spendable);
 	assert_eq!(after[0].vtxo.amount, after_refresh[0].vtxo.amount);
@@ -1115,7 +1115,7 @@ async fn recovered_wallet_locks_vtxos_without_a_status() {
 }
 
 /// Invalid signed bodies cannot establish a historical spend or wallet balance.
-/// A fresh restore with the genuine bodies recognizes the actual native spend.
+/// A fresh restore with the bodies recognizes the native spend.
 #[tokio::test]
 async fn recovered_wallet_quarantines_invalid_spent_vtxos() {
 

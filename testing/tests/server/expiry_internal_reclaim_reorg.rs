@@ -105,7 +105,7 @@ async fn rebuilt_current_view(ctx: &TestContext, db: &Db) -> bool {
 }
 
 /// Inspect the complete current non-coinbase graph, not orphaned receipts or
-/// database status alone. Its boundary consists of actual external prevouts.
+/// database status alone. Its boundary consists of external prevouts.
 async fn assert_canonical_money(
 	ctx: &TestContext, sender: &bitcoin::Script, receiver: &bitcoin::Script,
 	sender_amount: bitcoin::Amount, receiver_amount: bitcoin::Amount,
@@ -401,7 +401,7 @@ async fn reclaim_reorg(when: When) {
 	};
 	let started_at_fault = when == When::AfterSignedRefundFive;
 	if started_at_fault {
-		// Reopen against the actual one-deep closure before replacing any block.
+		// Reopen against the one-deep closure before replacing any block.
 		// The existing case bound covers this static-height observer wait.
 		srv.start().await.unwrap();
 		let invalid = db.read(async |t| Ok(t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?
@@ -563,7 +563,7 @@ async fn reclaim_reorg(when: When) {
 			assert_eq!(deserialize::<Transaction>(recorded.get("raw_tx")).unwrap(), *child);
 			assert_eq!(u64::try_from(recorded.get::<_, i64>("fee_sat")).unwrap(), child_fee.to_sat());
 			// Follow any real later reuse of the sponsor's change, then bind
-			// every terminal output to the actual watchman wallet and Core.
+			// every terminal output to the watchman wallet and Core.
 			let mut descendants = child.output.iter().enumerate().map(|(vout, _)| OutPoint::new(child.compute_txid(), vout as u32))
 				.collect::<BTreeSet<_>>();
 			let mut followed = BTreeSet::new();

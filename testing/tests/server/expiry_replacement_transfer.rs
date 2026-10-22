@@ -79,7 +79,7 @@ async fn expiry_transferred_refresh_replacement_survives_old_backing_settlement(
 	assert_eq!(received.expiry_height(), replacement.expiry_height());
 	assert!(former.spendable_vtxos().await.unwrap().is_empty());
 	// Both actors now disappear. Every later disposition is determined by
-	// actual stored protocol facts and the server/watchman, not wallet sync.
+	// stored protocol facts and the server/watchman, not wallet sync.
 	drop(former);
 	drop(recipient);
 	let height = ctx.bitcoind().get_block_count().await as u32;

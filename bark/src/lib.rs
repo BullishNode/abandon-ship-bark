@@ -2013,7 +2013,7 @@ impl Wallet {
 					warn!("Maintenance refresh rejected {} unusable input(s) ({:?}); \
 						retrying without them", rejected.len(), rejected);
 					excluded.extend(rejected);
-					// Preserve the actual typed reason if the decision raced the
+					// Preserve the typed reason if the decision raced the
 					// preflight and leaves no other inputs to submit.
 					last_refusal = Some(e);
 				},

@@ -36,7 +36,7 @@ async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
 	inputs.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
 }
 
-/// Reconcile the winning parents and their actual canonical anchor spenders.
+/// Reconcile the winning parents and their canonical anchor spenders.
 /// Losing allocations remain signed and immutable; neither their age nor an
 /// attempted fee-child row determines the rightful canonical payment.
 async fn assert_physical_cut(
@@ -555,7 +555,7 @@ async fn partial_conflict_reorg() {
 	let mining_address = ctx.bitcoind().get_new_address();
 	rpc.generate_to_address(u64::from(removed + 2), &mining_address).unwrap();
 	// Two separate canonical winners are valid. The production fee-child
-	// builder excludes unconfirmed inputs, so provide two genuine independent
+	// builder excludes unconfirmed inputs, so provide two independent
 	// confirmed sponsors instead of implicitly requiring the merged old parent.
 	let mut fee_sponsors = BTreeMap::new();
 	for _ in 0..2 {

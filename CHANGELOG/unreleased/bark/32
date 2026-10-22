@@ -1,5 +1,5 @@
 - Track emergency payouts and protect unpaid VTXOs during recovery
   Register the application's payout address and show pending settlement until
-  canonical payment evidence discharges the obligation.
+  canonical payment proof discharges the obligation.
   [#32](https://github.com/BullishNode/abandon-ship-bark/pull/32)
   - **BREAKING:** `OpenWalletArgs` includes `fallback_spk`. Custom persisters need fallback storage and atomic holder retirement.

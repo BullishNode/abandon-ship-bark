@@ -2942,7 +2942,7 @@ impl Wallet {
 				Some(state) => state,
 				None => {
 					// Another wallet task may have completed and removed it
-					// while the stream was idle. Read its actual durable result.
+					// while the stream was idle. Read its durable result.
 					if let Some(movement_id) = movement_id {
 						let movement = self.inner.db.get_movement_by_id(movement_id).await?;
 						if movement.status == MovementStatus::Successful {

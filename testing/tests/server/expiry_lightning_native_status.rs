@@ -93,7 +93,7 @@ async fn native_refund_status(two_sources: bool) {
 	assert_eq!(sources.len(), if two_sources { 2 } else { 1 });
 	assert!(sources.iter().all(|source| source.amount() == sat(100_000)));
 	if two_sources {
-		// Check the actual fully signed sources, rather than assuming that the
+		// Check the fully signed sources, rather than assuming that the
 		// input separation survived the package cosign/build operation.
 		for source in &sources {
 			assert_eq!(source.expiry_height(), backing_expiries[&source.chain_anchor()]);

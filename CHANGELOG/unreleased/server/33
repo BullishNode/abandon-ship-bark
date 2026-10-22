@@ -9,7 +9,7 @@
   Keep unidentified recipients from blocking ready payouts when their shared
   tree can be split safely.
   Require the qualified six-confirmation Core Lightning runtime and preserve
-  source-specific incident evidence for supervised recovery.
+  source-specific incident records for supervised recovery.
   [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)
 - Recover operator collateral after an offboard forfeit
   Reuse the existing claim path once the collateral is confirmed and mature.

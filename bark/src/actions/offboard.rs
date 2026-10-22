@@ -400,9 +400,9 @@ impl WalletAction for Offboard {
 					// The requested offboard did not complete. Its pending debit
 					// must not duplicate the fallback receipt's eventual debit.
 					or_retry!(self, cancel_superseded_movement(wallet, *movement_id).await);
-					// This is an admission fence, not evidence of payment or
+					// This is an admission fence, not proof of payment or
 					// a lost session. Retain the full checkpoint and its holder
-					// while returning the authentic refusal to the caller.
+					// while returning the refusal to the caller.
 					return Advance::Park {
 						state: self, wake_after: Some(CONFIRMATION_POLL_INTERVAL),
 						error: Some(error),

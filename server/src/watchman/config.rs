@@ -33,7 +33,7 @@ pub struct Config {
 	#[serde(with = "crate::utils::serde::string")]
 	pub min_cpfp_amount: Amount,
 
-	/// Warn above this actual fee subsidy without limiting emergency payouts.
+	/// Warn above this fee subsidy without limiting emergency payouts.
 	#[serde(default = "default_expiry_fee_warning", with = "crate::utils::serde::string")]
 	pub expiry_fee_warning: Amount,
 }

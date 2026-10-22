@@ -347,7 +347,7 @@ async fn registered_receive_fallback() {
 		recipient_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32),
 			step.tx.output[step.output_idx].clone());
 	}
-	// Match signed pool-only branches to actual source policy and the server's
+	// Match signed pool-only branches to source policy and the server's
 	// real recovery identity. Read public membership only, never key tweaks.
 	let server_pubkey = srv.ark_info().await.server_pubkey;
 	let public_keys = snapshot.regular.iter().filter_map(|fact| match fact.state.vtxo.policy() {
@@ -454,8 +454,8 @@ async fn registered_receive_fallback() {
 		// automatic prefix packages confirm; no split/progress/trigger call or
 		// extra mining batch is conditioned on a missing payout.
 		for _ in 0..=depth {
-			// Recompute B from actual confirmations, never from the batch index.
-			// A's genuine package may confirm first to release its fee change:
+			// Recompute B from confirmations, never from the batch index.
+			// A's package may confirm first to release its fee change:
 			// at most D B-prefix packages plus one A package fit D+1 batches.
 			loop {
 				let core = ctx.bitcoind().sync_client();
@@ -741,7 +741,7 @@ async fn registered_receive_fallback() {
 	assert_eq!(ctx.bitcoind().await_transaction(recovery.compute_txid()).await, *recovery);
 	// The whole existing funding is 500k operator capital plus two100k
 	// sponsors. A's earned1k can rejoin existing rounds change in a refill;
-	// count those actual descendants, never add the refill as fresh capital.
+	// count those descendants, never add the refill as fresh capital.
 	let pool_rows = db.read(async |tx| Ok(tx.query("SELECT vtxo FROM vtxo_pool", &[]).await?))
 		.await.unwrap();
 	let all_pool = pool_rows.iter().map(|row| Vtxo::<Full>::deserialize(row.get("vtxo")).unwrap()).collect::<Vec<_>>();
@@ -793,7 +793,7 @@ async fn registered_receive_fallback() {
 			operator_points.insert(point, coin.txout());
 		}
 	}
-	// The ledger only locates candidate parents. Their actual canonical
+	// The ledger only locates candidate parents. Their canonical
 	// inputs, recovery witnesses and exact outputs are proved below.
 	let recorded = db.read(async |tx| Ok(tx.query(
 		"SELECT sweep_tx FROM expiry_allocation WHERE sweep_tx IS NOT NULL", &[],

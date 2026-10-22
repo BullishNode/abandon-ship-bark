@@ -150,7 +150,7 @@ impl CohortProgress {
 		Self { prefixes, confirmed: BTreeSet::new(), known: roots.clone(), checked: BTreeSet::new(), first_height }
 	}
 
-	// Confirm one real cohort package, including only its declared-cut fee funding.
+	// Confirm one real group package, including only its declared-cut fee funding.
 	// The existing transaction and total chain budgets also bound every later wait.
 	async fn confirm_one(&mut self, ctx: &TestContext, srv: &Captaind, db: &Db) {
 		let core = ctx.bitcoind().sync_client();
@@ -173,7 +173,7 @@ impl CohortProgress {
 				packages.push((parent.clone(), child.clone()));
 			}
 		}
-		// Only the journal's latest actual fee child may authorize confirming a payout.
+		// Only the journal's latest fee child may authorize confirming a payout.
 		let published = db.read(async |tx| Ok(tx.query(
 			"SELECT DISTINCT ON (a.id) a.sweep_tx,f.raw_tx FROM expiry_allocation a JOIN expiry_fee_child f ON f.allocation_id=a.id WHERE a.broadcast_at IS NOT NULL ORDER BY a.id,f.id DESC", &[],
 		).await?)).await.unwrap();
@@ -225,7 +225,7 @@ async fn payout(
 	payout_ready(ctx, srv, db, rpc, source, expected_index, owner_mailbox, destination, pressure, candidate, true, progress).await
 }
 
-// New qualification cases enter here after observing a genuine expired search.
+// New qualification cases enter here after observing a expired search.
 // Their outer120s deadline includes the interruption/registration and this wait.
 async fn payout_ready(
 	ctx: &TestContext, srv: &Captaind, db: &Db, rpc: &mut ArkClient,
@@ -1069,7 +1069,7 @@ async fn expiry_owner_late_first_registration_pays_existing_expired_source_once(
 	assert_eq!(customer[0].get::<_, String>("spk"), destination.spk.as_bytes().to_lower_hex_string());
 	assert_eq!(customer[0].get::<_, String>("disposition"), "customer");
 	for (field, value) in [("gross_sat", 100_000), ("fee_sat", 1_000), ("payout_sat", 99_000), ("forfeited_sat", 0)] { assert_eq!(customer[0].get::<_, i64>(field), value); }
-	// Raw-account recovery: its actual P2WPKH key signs the actual99k payout.
+	// Raw-account recovery: its P2WPKH key signs the 99k payout.
 	// No SDK mnemonic, offchain balance or SDK history assertion is invented.
 	let recipient = ctx.bitcoind().get_new_address();
 	let mut recovery = Transaction {
@@ -1211,7 +1211,7 @@ async fn funded_background_mode(count: u32, traffic_mode: bool) {
 	}
 	ctx.generate_blocks(2).await;
 	let first = if let Some(traffic)=traffic.as_mut() {
-		// Refresh the actual funded actors near the old search coin's expiry,
+		// Refresh the funded actors near the old search coin's expiry,
 		// so that its lookup can overlap traffic without expiring the actors.
 		let target=old.expiry_height().to_u32()-ROUND_CONFIRMATIONS-2;
 		let tip=ctx.bitcoind().get_block_count().await as u32; assert!(tip<target);
@@ -1437,7 +1437,7 @@ async fn expiry_owner_live_funded_1000_registrations() {
 }
 
 #[tokio::test]
-#[ignore = "18 funded wallets/1000 registered, 120 actual paced transfers, serial finite600s qualification"]
+#[ignore = "18 funded wallets/1000 registered, 120 paced transfers, serial finite600s qualification"]
 async fn expiry_owner_funded_traffic_18_of_1000() {
 	tokio::time::timeout(Duration::from_secs(600),Box::pin(funded_background_mode(1000,true))).await
 		.expect("funded traffic plus attribution, payout and seed recovery exceeded600seconds");
@@ -1587,7 +1587,7 @@ async fn expiry_owner_funded_missing_mailbox_search_survives_postgres_restart() 
 			Ok((system, oid, lsn))
 		}).await.unwrap();
 		assert_eq!(assert_owner_funding_cut(&ctx, &roots, start_height, &known).await.0,
-			// Only the authentic board has spent declared capital at this point.
+			// Only the board has spent declared capital at this point.
 			{
 				let board = ctx.bitcoind().await_transaction(source.chain_anchor().txid).await;
 				let inputs = roots.iter().filter(|(point, _)| board.input.iter().any(|input| input.previous_output == **point)).map(|(_, output)| output.value).sum::<Amount>();

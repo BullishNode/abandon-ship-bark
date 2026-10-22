@@ -141,7 +141,7 @@ async fn transfer(
 	recipient.sync_mailbox().await.unwrap();
 	sender.sync_mailbox().await.unwrap();
 	// A manual signed package is not an SDK send action. Retire the source
-	// only through the actual complete ordinary-spend proof, never SQL.
+	// only through the complete ordinary-spend proof, never SQL.
 	sender.recover_vtxos([source.id()], None).await.unwrap();
 	assert_eq!(sender.get_vtxo_by_id(source.id()).await.unwrap().state, VtxoState::Spent);
 	assert_eq!(sender.get_full_vtxo(source.id()).await.unwrap().serialize(), source.serialize());
@@ -574,7 +574,7 @@ async fn two_receipts() {
 	assert_eq!(history(recipient.history().await.unwrap(), &baseline, &[&old]), first_history);
 	balances(&recipient, Amount::ZERO).await;
 
-	// Only after genuine terminal dust proof AND SDK acceptance create a
+	// Only after terminal dust proof AND SDK acceptance create a
 	// disjoint later donor. Default operator sweep remains the captaind rounds
 	// wallet, not the Core funding wallet, and no pool can recycle that return.
 	let later_cli = ctx.bark("later_donor", &srv).cfg(|config| config.daemon_manual_sync = true)

@@ -13,7 +13,7 @@ use cln_rpc::plugins::hold;
 use server::database::Db;
 use server_rpc::protos;
 
-/// Grant delivery must leave every authentic signed ancestor durable on the
+/// Grant delivery must leave every signed ancestor durable on the
 /// server, even when neither wallet ever returns to register or claim it.
 pub(super) async fn assert_stored_grant_ancestry(db: &Db, grants: &[Vtxo<Full>]) {
 	let mut expected = std::collections::BTreeMap::new();
@@ -509,7 +509,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 			&[&source.to_string()]).await?)).await.unwrap().is_none(), "sender refund must wait for six grant confirmations");
 		ctx.generate_blocks(1).await;
 	}
-	// Normal watchman progress has to reach every actual HTLC leaf. Mine only
+	// Normal watchman progress has to reach every HTLC leaf. Mine only
 	// through completed sync cycles and leave reaction/readiness time each block.
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {
 		for _ in 0..100 {
@@ -670,7 +670,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 				JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE c.allocation_id=a.id AND e.vtxo_id=ANY($1))=2",
 				&[&ids]).await?)).await.unwrap();
 			if let Some(row) = published { return deserialize(row.get("sweep_tx")).unwrap(); }
-			// The initial single sponsor also pays genuine grant progression
+			// The initial single sponsor also pays grant progression
 			// and other pool expiries. Its change can be unconfirmed when the
 			// customer refund decision finally exists. Holding the mature tip
 			// then cannot make that change usable for the payout fee child.
@@ -692,7 +692,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 				srv.watchmand().wait_for_sync_height(height).await;
 				continue;
 			}
-			// Keep automatic watchman progression until ALL actual grant leaves
+			// Keep automatic watchman progression until ALL grant leaves
 			// confirm. Then mine only their exact remaining signed CSV/CLTV
 			// maturity and hold that tip for readiness. Repeated one-block syncs
 			// otherwise consume this same 150s budget before one mature pass.

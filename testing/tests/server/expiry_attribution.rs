@@ -304,7 +304,7 @@ async fn expiry_attribution_wrong_mailbox_is_not_a_payee_and_registration_invali
 	db.write(async |tx| tx.queue_expiry_owner(unknown, None).await).await.unwrap();
 	db.scan_expiry_owners(Network::Regtest, 16, 2).await.unwrap();
 	assert_eq!(owner(&db, unknown).await, Attribution::Unresolved);
-	// Fixture: the previous prefix was completed already. Exercise actual
+	// Fixture: the previous prefix was completed already. Exercise
 	// derivation of the final two normal indices and the terminal coverage check
 	// without making every test derive billions of keys.
 	db.write(async |tx| {
@@ -408,7 +408,7 @@ async fn expiry_attribution_old_prefix_progresses_while_fresh_mailbox_keys_arriv
 		db.write(async |tx| tx.queue_expiry_owner(old, Some(mailbox)).await).await.unwrap();
 		db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();
 		assert_eq!(coverage(&db, old).await[&mailbox.as_pubkey()], 32);
-		// A new genuine high child arrives at zero before EVERY subsequent
+		// A new high child arrives at zero before EVERY subsequent
 		// pass. The former per-account MIN(prefix) repeats 0..32 forever here.
 		for arrival in 0..3 {
 			let fresh = key(&account, 1_000 + arrival);
@@ -439,7 +439,7 @@ async fn expiry_attribution_fair_lane_survives_wrong_mailbox_and_registration_pr
 		for arrival in 0..5 {
 			let fresh = key(&other, 1_000 + arrival);
 			db.write(async |tx| tx.queue_expiry_owner(fresh, Some(wrong_mailbox)).await).await.unwrap();
-			// Actual immutable registrations append cursors without resetting
+			// immutable registrations append cursors without resetting
 			// the earlier work or granting ownership from a candidate mailbox.
 			register(&db, 43 + u8::try_from(arrival).unwrap()).await;
 			db.scan_expiry_owners(Network::Regtest, 32, workers).await.unwrap();

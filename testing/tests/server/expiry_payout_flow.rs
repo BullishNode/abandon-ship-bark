@@ -87,7 +87,7 @@ async fn expiry_payout_native_board_seed_restore(name: &str, board_fees: Option<
 		assert_eq!(movement["output_vtxos"], json!([source.id()]));
 	}
 
-	// Fund the actual distinct watchman wallet, rather than assuming the
+	// Fund the distinct watchman wallet, rather than assuming the
 	// captaind rounds wallet can sponsor this zero-fee payout parent.
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	let fee_funding = ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;

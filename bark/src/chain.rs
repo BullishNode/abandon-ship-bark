@@ -800,9 +800,9 @@ impl ChainSource {
 		}
 	}
 
-	/// Positive confirmed-UTXO evidence for a recovery frontier. The caller must
+	/// Positive confirmed-UTXO proof for a recovery frontier. The caller must
 	/// independently prove the creating transaction canonical in the same stable
-	/// tip view. Missing output/status is not evidence of an unspent output.
+	/// tip view. Missing output/status is not proof of an unspent output.
 	/// Like `outpoint_spent_confirmed`, a known mempool-only spend is not final.
 	pub(crate) async fn confirmed_output_is_unspent(
 		&self, outpoint: OutPoint, expected: &TxOut,

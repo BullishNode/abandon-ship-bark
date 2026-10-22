@@ -635,7 +635,7 @@ impl Process {
 		let tx = wallet.finish_tx(funding_psbt).context("error finishing tree funding tx")?;
 
 		// The cached tree still holds unsigned hArk leaf transactions. The
-		// finalized VTXOs above carry their actual signatures AND preimage;
+		// finalized VTXOs above carry their signatures AND preimage;
 		// persist that full path before handing any pool coin to a receive.
 		// Deduplicate shared ancestors so one INSERT cannot update one txid twice.
 		let mut signed_txs = BTreeMap::new();

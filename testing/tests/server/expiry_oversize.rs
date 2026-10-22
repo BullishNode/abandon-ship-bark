@@ -124,7 +124,7 @@ async fn actual_fee(ctx: &TestContext, tx: &Transaction) -> u64 {
 	inputs - tx.output.iter().map(|out| out.value.to_sat()).sum::<u64>()
 }
 
-/// Observe actual publication, then mine its package. A package already mined
+/// Observe publication, then mine its package. A package already mined
 /// alongside another observed level is checked through its canonical block.
 async fn confirm_package(
 	ctx: &TestContext, srv: &Captaind, parent: &Transaction,
@@ -555,7 +555,7 @@ async fn automatic_multilevel_split() {
 	assert_eq!(large_branch.checkpoint.txid, nodes[0].checkpoint_tx.compute_txid());
 	// This physical checkpoint still represents 324 distinct recipients and
 	// cannot fit a payout at the production size limit. Only the automatic
-	// readiness/split path can authorize its actual signed branch exit.
+	// readiness/split path can authorize its signed branch exit.
 	confirm_package(&ctx, &srv, &large_branch.exit_tx, &mut graph).await;
 	ctx.generate_blocks(grace).await;
 	confirm_package(&ctx, &srv, &large.checkpoint_tx, &mut graph).await;
@@ -629,7 +629,7 @@ async fn finish_payouts(
 	let core = ctx.bitcoind().sync_client();
 	// Native progression can publish additional signed substeps alongside
 	// packages already observed. Include every canonical path transaction and
-	// its actual sponsor, so change/drain accounting never omits a real edge.
+	// its sponsor, so change/drain accounting never omits a real edge.
 	for (txid, path) in signed_paths {
 		if graph.contains_key(txid) { continue; }
 		let Some(info) = core.custom_get_raw_transaction_info(*txid, None).unwrap() else { continue; };

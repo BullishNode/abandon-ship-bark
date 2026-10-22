@@ -1,4 +1,4 @@
-//! A real server admission decision is not evidence that the customer was paid.
+//! A real server admission decision is not proof that the customer was paid.
 
 use std::time::Duration;
 
@@ -29,7 +29,7 @@ async fn fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payme
 	srv.wait_for_sync_height(expired).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
 
-	// The watchman is deliberately unfunded. Actual background readiness and
+	// The watchman is deliberately unfunded. background readiness and
 	// allocation create the fence; the test writes no ledger or receipt rows.
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
@@ -85,7 +85,7 @@ async fn fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payme
 	assert_eq!(paid_balance.awaiting_settlement, Amount::ZERO);
 	assert_eq!(paid_balance.total(), Amount::ZERO, "the actual settled onchain payout is not counted again as Ark value");
 
-	// No server RPC is needed to learn that the actual chain undid payment.
+	// No server RPC is needed to learn that the chain undid payment.
 	srv.stop().await.unwrap();
 	ctx.bitcoind().sync_client().invalidate_block(&confirmation_hash).unwrap();
 	wallet.chain().invalidate_caches().await;
@@ -148,7 +148,7 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 			if let Some(parent) = receipts.iter().filter(|entry| entry.vtxo_id == coin.id())
 				.flat_map(|entry| &entry.attempts).filter(|attempt| attempt.active)
 				.find_map(|attempt| attempt.parent.as_ref()) {
-				// A stored signed transaction alone is not broadcast evidence.
+				// A stored signed transaction alone is not broadcast proof.
 				return ctx.bitcoind().await_transaction(parent.compute_txid()).await;
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -195,7 +195,7 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	assert_eq!(owed_again.spendable, Amount::ZERO);
 	assert_eq!(owed_again.awaiting_settlement, sat(1_200));
 	assert_eq!(owed_again.total(), sat(1_200));
-	// Retained authentic transaction observations can confirm again without
+	// Retained transaction observations can confirm again without
 	// asking the stopped Ark server for another receipt or moving principal.
 	ctx.generate_blocks(6).await;
 	wallet.chain().invalidate_caches().await;

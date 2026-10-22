@@ -88,7 +88,7 @@ async fn interrupted_forwarding() {
 		lightning.external.try_pay_bolt11(invoice.to_string()),
 		tokio::time::timeout(Duration::from_secs(30), async {
 			loop {
-				// A parked delivery error is expected from the actual proxy.
+				// A parked delivery error is expected from the proxy.
 				// Only the durable, registered Delivering checkpoint can pass.
 				let _ = provider.try_claim_lightning_receive(hash, false).await;
 				if let Some(checkpoint) = provider.lightning_receive_checkpoint(hash).await.unwrap()

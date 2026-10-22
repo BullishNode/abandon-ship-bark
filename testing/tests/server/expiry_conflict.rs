@@ -32,7 +32,7 @@ async fn expiry_actual_partial_exit_conflict_regroups_after_restart() {
 	assert_ne!(exiting.chain_anchor(), untouched.chain_anchor());
 	assert_eq!(exiting.expiry_height(), untouched.expiry_height());
 	drop(client);
-	// This persists an actual holder exit before the payout decision, without
+	// This persists a holder exit before the payout decision, without
 	// broadcasting its signed path or requesting any new server signatures.
 	wallet.start_exit_vtxos([exiting.id()]).await;
 	let height = ctx.bitcoind().get_block_count().await as u32;

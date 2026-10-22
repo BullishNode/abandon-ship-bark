@@ -40,7 +40,7 @@ pub struct ReadyOutput {
 impl ReadyOutput {
 	/// Conservatively preflight complete groups before their short decision
 	/// commit. Consensus serialization supplies the real CompactSize lengths;
-	/// the largest actual policy witness bounds the later signer's choice.
+	/// the largest policy witness bounds the later signer's choice.
 	pub fn group_fits(outputs: &[&Self]) -> anyhow::Result<bool> {
 		// A prior payout can cover the fee for a small later output. Count
 		// every destination even when it cannot pay without that history.
@@ -70,8 +70,8 @@ impl ReadyOutput {
 
 	pub fn root(&self) -> &ServerVtxo { &self.root }
 
-	/// No geometric cut supplied by an external caller can bypass the actual
-	/// partition proof. Signature and settlement evidence require separate checks.
+	/// No geometric cut supplied by an external caller can bypass the
+	/// partition proof. Signature and settlement proof require separate checks.
 	pub fn prove(
 		snapshot: BackingSnapshot,
 		coins: Vec<ReadyCoin>,
@@ -187,7 +187,7 @@ impl Tx<'_> {
 		// Zero-grant internal closure is source-specific. Lock the complete
 		// original funding set before the WAL barrier and final predicate read,
 		// including inputs under other backing outputs. Signed-grant closure
-		// requires chain evidence and is deliberately outside this case.
+		// requires chain proof and is deliberately outside this case.
 		let internal_attempts = outputs.iter().flat_map(|o| &o.coins).filter_map(|c| match c.ownership.evidence.as_ref() {
 			Some(OwnershipEvidence::HtlcInternalZeroGrantCancelled { attempt_id, .. }) => Some(*attempt_id),
 			Some(OwnershipEvidence::HtlcInternalGrantsReclaimed { attempt_id, .. }) => Some(*attempt_id),

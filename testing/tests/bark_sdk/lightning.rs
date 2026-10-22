@@ -252,7 +252,7 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		assert!(!native.decided_for_fallback);
 		assert_not_dispatched(&db, &lightning.internal, &mut hold_client, refused_hash).await;
 
-		// A genuine round replaces the expired source; no expiry is extended
+		// A round replaces the expired source; no expiry is extended
 		// and no financial state is injected by the fixture.
 		let (refresh, _) = tokio::join!(wallet.refresh_vtxos([source.id()]), async {
 			tokio::time::sleep(Duration::from_secs(2)).await;
@@ -501,7 +501,7 @@ async fn pay_hold_refused() {
 		}).await;
 
 		Box::pin(async {
-			// A second genuine payment fails while its sender is absent. This time
+			// A second payment fails while its sender is absent. This time
 			// the watchman, rather than a cooperative revocation, returns its HTLC.
 			let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 			let board = ark_testing::sat(300_000);
@@ -945,7 +945,7 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 	}).await.unwrap().into_inner().invoices;
 	assert_eq!(invoices.first().unwrap().state(), hold::InvoiceState::Paid,
 		"the real receiver hold invoice, not an injected RPC failure, must already be settled");
-	// Assert only after the actual external payment and receiver settlement
+	// Assert only after the external payment and receiver settlement
 	// succeed. The snapshot itself was read while the client awaited a reply.
 	let phase = match &checkpoint.progress {
 		bark::actions::lightning::receive::Progress::AwaitingPayment => "awaiting_payment",
@@ -1106,7 +1106,7 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 	srv.wait_for_sync_height(confirmed).await;
 	srv.watchmand().wait_for_sync_height(confirmed).await;
 	// Core 31 reports P2A as `anchor`; raw JSON avoids the old RPC model's
-	// unsupported script-type decoder while checking the actual canonical block.
+	// unsupported script-type decoder while checking the canonical block.
 	let core = ctx.bitcoind().sync_client();
 	let parent_chain: serde_json::Value = core.call("getrawtransaction", &[
 		serde_json::json!(parent.compute_txid().to_string()), serde_json::json!(true),
@@ -1127,7 +1127,7 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 	assert!(payout.confirmations >= 6);
 	assert_eq!(payout.value, expected);
 	// The payout script belongs to the absent SDK wallet, not Core's test
-	// treasury. Count actual chain outputs without wallet import/accounting.
+	// treasury. Count chain outputs without wallet import/accounting.
 	let mut received = bitcoin::Amount::ZERO;
 	for height in absent_height + 1..=u64::from(confirmed.to_u32()) {
 		let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();

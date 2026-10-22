@@ -588,8 +588,8 @@ impl LightningManager {
 		Ok(invoice)
 	}
 
-	/// Read collection evidence from the backend which issued the exact original
-	/// invoice. A missing record or an unknown state is not payment evidence.
+	/// Read collection proof from the backend which issued the exact original
+	/// invoice. A missing record or an unknown state is not payment proof.
 	pub(crate) async fn original_receive_invoice_state(
 		&self, subscription: &database::ln::LightningHtlcSubscription,
 	) -> anyhow::Result<Option<hold_plugin::InvoiceState>> {
@@ -843,7 +843,7 @@ async fn try_settle_hold_invoice(
 	if let Err(e) = srv.lightning_manager.settle_invoice(sub.id, preimage).await {
 		if e.downcast_ref::<DeferredInternalReceive>().is_some() {
 			// This cursor records observation, not financial completion. The
-			// manager's bounded maintenance pass revisits actual claim facts;
+			// manager's bounded maintenance pass revisits claim facts;
 			// do not pin unrelated subscriptions behind this deferred receive.
 			debug!("Deferring internal receive settlement for {}: {:#}", payment_hash, e);
 			return true;
@@ -1021,7 +1021,7 @@ impl LightningManagerProcess {
 				.process_payment_attempt(&self.settler, &current.attempt, LightningPaymentStatus::Succeeded,
 					None, None, Some(preimage)).await?;
 		}
-		// Canceled issued grants can finish through an actual native refund
+		// Canceled issued grants can finish through a native refund
 		// without a returning wallet or another upstream attempt status write.
 		let refunded = self.db.read(async |t| t.native_refund_attempts(128).await).await?;
 		for attempt in refunded {

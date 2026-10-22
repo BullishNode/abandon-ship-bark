@@ -53,7 +53,7 @@ async fn board_all_barkd() {
 	assert_eq!(output_value, gross, "board_all must drain into its funding output");
 	let miner_fee = input_value.checked_sub(output_value).expect("funding outputs exceed inputs");
 	assert!(miner_fee > Amount::ZERO);
-	// Apply the declared base and ceiling-rounded 1% to the actual gross funding value.
+	// Apply the declared base and ceiling-rounded 1% to the gross funding value.
 	let ark_fee = sat(100 + gross.to_sat().div_ceil(100));
 	let expected_net = gross.checked_sub(ark_fee).expect("Ark fee exceeds gross board value");
 	assert_eq!(board.amount, expected_net, "board_all net amount should match expected");

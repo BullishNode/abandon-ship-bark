@@ -193,7 +193,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 			.max(now+1-u32::try_from(actual.confirmations).unwrap()+source.exit_delta().to_u32());
 	}
 	if mature>=now {ctx.generate_blocks(mature-now+1).await;}
-	// Close the exposed grants with genuine fee funding before admitting any
+	// Close the exposed grants with fee funding before admitting any
 	// sender refund. Later conflicting user paths can replace a pending refund.
 	for _ in 0..5 { ctx.bitcoind().fund_addr(fee_address.clone(), sat(150_000)).await; }
 	ctx.generate_blocks(2).await;
@@ -265,8 +265,8 @@ async fn reserved_batched_terminal(reorg:bool) {
 		.into_iter().map(|row|(row.get::<_,String>("vtxo_id"),row.get::<_,i64>("entitlement_id"))).collect::<BTreeMap<_,_>>())).await.unwrap();
 	assert_eq!(decided,reserved.1.iter().map(|(source,coin)|(source.clone(),coin.entitlement)).collect());
 	srv.watchmand().stop().await.unwrap();
-	// These genuine signed path transactions consume two old reserved prefix
-	// inputs. They create actual Bitcoin conflicts, never a hand-set status.
+	// These signed path transactions consume two old reserved prefix
+	// inputs. They create Bitcoin conflicts, never a hand-set status.
 	for source in &sources[..2] {
 		let (_, old_parent) = &reservations[&source.id().to_string()];
 		let mut published = 0;

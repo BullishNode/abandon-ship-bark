@@ -31,7 +31,7 @@ async fn payout(db: &Db, id: ark::VtxoId) -> Transaction {
 	}).await.expect("native watchman did not publish this sibling's payout")
 }
 
-/// Exercise the split API on an actual registered mixed tree, not manufactured
+/// Exercise the split API on a registered mixed tree, not manufactured
 /// vtxo/transaction rows. The test requests the first split explicitly to cover
 /// its SQL checks; both daemon progression and subsequent payouts are automatic.
 #[tokio::test]
@@ -119,7 +119,7 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 	let output_index = first.output.iter().position(|o| o.script_pubkey == destination.spk).unwrap() as u32;
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&first.compute_txid(), output_index, Some(true)).unwrap().unwrap().confirmations >= 6);
 
-	// This registered send was never initiated. Once its actual refund deadline
+	// This registered send was never initiated. Once its refund deadline
 	// passes, the retained checkpoint can pay it without a user signature or
 	// a fabricated upstream off-chain Revoked state.
 	let height = ctx.bitcoind().get_block_count().await as u32;

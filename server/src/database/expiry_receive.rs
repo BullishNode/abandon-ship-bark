@@ -240,7 +240,7 @@ impl Tx<'_> {
 				return Ok(false);
 			}
 		}
-		// Keep actual terminal cancellation independent of a missed coarse-state
+		// Keep terminal cancellation independent of a missed coarse-state
 		// update. Cancellation must not override an already materialized or
 		// fulfilled destination; entitlement recovery proves collection separately.
 		let changed = self.execute("
@@ -304,7 +304,7 @@ impl Tx<'_> {
 		Ok(())
 	}
 
-	/// Must share the actual tree-update/Fulfilled transaction. A missing intent
+	/// Must share the tree-update/Fulfilled transaction. A missing intent
 	/// is an error; this method never silently invents a post-settlement payee.
 	pub(crate) async fn materialize_receive_claims(&self, bindings: &[ReceiveClaimBinding]) -> anyhow::Result<()> {
 		for binding in bindings {
@@ -368,7 +368,7 @@ impl Tx<'_> {
 }
 
 // Canceling the native hold invoice is part of a successful intra-Ark payment,
-// so it cannot erase actual source-specific collection. Funding alone is not
+// so it cannot erase source-specific collection. Funding alone is not
 // collection: the original claim can expire after its destination was recorded.
 fn receive_claim_settlement(settled: bool, canceled: bool, materialized: bool, internally_collected: bool, fulfilled: bool) -> ReceiveClaimSettlement {
 	if settled { ReceiveClaimSettlement::Settled }

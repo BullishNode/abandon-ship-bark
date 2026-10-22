@@ -124,7 +124,7 @@ impl Tx<'_> {
 			// Try the existing initial prefix before creating a key/account cursor
 			// matrix. The stored record was authenticated at immutable insertion;
 			// the mailbox hint alone is never proof. expiry_owner still verifies
-			// that record for the actual network and derives the key before paying.
+			// that record for the network and derives the key before paying.
 			if let Some(mailbox_pk) = mailbox.map(|id| id.as_pubkey()) {
 				if let Some(record) = self.get_fallback(mailbox_pk).await? {
 					let work = OwnerScanBatch {
@@ -206,7 +206,7 @@ impl Tx<'_> {
 	}
 
 	async fn prepare_expiry_scans(&self, chunk_size: u32, workers: usize) -> anyhow::Result<Vec<OwnerScanBatch>> {
-		// Tickets age only after genuine compare-and-advance coverage. New keys
+		// Tickets age only after compare-and-advance coverage. New keys
 		// and registrations join behind existing waiting cursors, irrespective
 		// of their prefix or an unverified mailbox candidate. Fetch bounded rows
 		// before coalescing accounts; duplicate accounts can leave spare lanes.
@@ -284,7 +284,7 @@ impl Tx<'_> {
 				", &[&encoded_key]).await?;
 				ensure!(row.get::<_, &str>("mailbox_pk") == mailbox && row.get::<_, i64>("child_index") == i64::from(*index),
 					"coin key derives from conflicting registered accounts");
-				// A verified actual match replaces the cross-record search state.
+				// A verified match replaces the cross-record search state.
 				// Retain only its sparse key mapping, rather than every completed
 				// or unstarted registry cursor for the lifetime of this coin.
 				self.execute("DELETE FROM expiry_pending_key WHERE user_pubkey=$1", &[&encoded_key]).await?;
@@ -303,7 +303,7 @@ impl Db {
 		self.write(async |tx| tx.prepare_expiry_scans(chunk_size, workers).await).await
 	}
 
-	/// Publish only completed work. Every pending-key cursor and actual match
+	/// Publish only completed work. Every pending-key cursor and match
 	/// commits atomically; keys queued after preparation retain their own prefix.
 	pub async fn commit_expiry_owner_scan(&self, network: Network, result: &OwnerScanResult) -> anyhow::Result<usize> {
 		self.write(async |tx| {
@@ -317,7 +317,7 @@ impl Db {
 	}
 
 	/// One bounded pass. Derivation runs without a database transaction; only
-	/// actual matches and contiguous coverage are persisted in the commit.
+	/// matches and contiguous coverage are persisted in the commit.
 	pub async fn scan_expiry_owners(
 		&self, network: Network, chunk_size: u32, workers: usize,
 	) -> anyhow::Result<ScanStatistics> {

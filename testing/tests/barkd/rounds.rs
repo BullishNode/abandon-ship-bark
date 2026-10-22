@@ -98,7 +98,7 @@ async fn setup_barkd_with_rejected_vtxo(
 	(barkd, proxy, bad_id, good_id)
 }
 
-/// Derive the common early-refresh window from the actual signed boards and
+/// Derive the common early-refresh window from the signed boards and
 /// current chain. Keep normal protection enabled and leave room to confirm
 /// the cooperative replacement before any original coin's exit deadline.
 async fn age_boards_for_maintenance(

@@ -24,7 +24,7 @@ fn process_name(process: BlockTable) -> &'static str {
 }
 
 impl ExpiryChainListener {
-	/// A restarted process must complete an actual sync before its old ack can
+	/// A restarted process must complete a sync before its old ack can
 	/// authorize a rebuild. Initial invalidation is also durable across crashes.
 	pub async fn start(db: Db, process: BlockTable) -> anyhow::Result<Self> {
 		db.write(async |t| {
@@ -112,7 +112,7 @@ impl Tx<'_> {
 	pub async fn finish_expiry_rebuild(&self, token: ExpiryViewToken) -> anyhow::Result<bool> {
 		self.query_one("SELECT generation FROM expiry_chain_view WHERE id=1 FOR UPDATE", &[]).await?;
 		if self.expiry_rebuild_token().await? != Some(token) { return Ok(false); }
-		// Include this actual rebuild transaction before taking the ledger
+		// Include this rebuild transaction before taking the ledger
 		// watermark. The row trigger deduplicates the following view update.
 		self.execute("INSERT INTO expiry_ledger_commit(transaction_id) VALUES(pg_current_xact_id()) ON CONFLICT(transaction_id) DO NOTHING", &[]).await?;
 		let ledger = self.query_one("SELECT COUNT(*) AS count,COALESCE(MAX(revision),0) AS revision FROM expiry_ledger_commit", &[]).await?;

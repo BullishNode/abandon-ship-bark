@@ -54,6 +54,7 @@ mod offboard;
 mod postgres;
 mod postgres_migrations;
 mod recovery;
+mod seed_wallet_recovery;
 mod registration;
 mod settler;
 mod watchman;

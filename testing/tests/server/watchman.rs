@@ -4313,6 +4313,196 @@ async fn capture_receive_wallet(ctx: &TestContext, evidence: &Evidence, wallet: 
 			"hex": serialize_hex(&item.tx_node.tx)})).collect::<Vec<_>>() }));
 }
 
+async fn capture_receive_fresh_wallet(
+	ctx: &TestContext, evidence: &Evidence, restored: &ark_testing::Barkd, incarnation: &str, phase: &str,
+) {
+	let before = evidence::tip(ctx);
+	let balance = restored.bark_balance().await;
+	let vtxos = restored.vtxos(Some(true)).await;
+	let mut movements = restored.history(None, None).await;
+	for movement in &mut movements {
+		movement.metadata = movement.metadata.take().map(public_receive_metadata);
+	}
+	let utxos = restored.onchain_utxos().await;
+	let transactions = restored.onchain_transactions().await;
+	let exits = restored.get_all_exit_status(Some(true), Some(false)).await;
+	assert_eq!(before["bestblockhash"], evidence::tip(ctx)["bestblockhash"]);
+	evidence::write_json(evidence.dir.join(format!("fresh-{phase}.json")), &json!({
+		"origin": "fresh REST-created own-seed database; separate public API reads",
+		"incarnation": incarnation, "original_source_incarnation": evidence.source_incarnation,
+		"captured_at": chrono::Utc::now().to_rfc3339(), "before": before, "after": evidence::tip(ctx),
+		"birth_height": 0, "history_complete": true, "vtxos_all": true,
+		"raw_balance": balance, "raw_vtxos": vtxos, "movements": movements,
+		"movement_metadata_projection": ["payment_hash", "htlc_vtxos"],
+		"omitted_movement_metadata": "all other fields, including payment_preimage",
+		"onchain_utxos": utxos, "onchain_transactions": transactions, "exits": exits}));
+}
+
+/// Observe recovery from the seed before requesting either recovery spend.
+async fn capture_receive_seed_custody(
+	ctx: &TestContext, srv: &ark_testing::Captaind, evidence: &Evidence,
+	wallet: &bark::Wallet, oldest: &ark::Vtxo<ark::vtxo::Bare>, destination: &ark::fallback::FallbackRecord,
+	payout: OutPoint, remaining: &BTreeMap<String, ark::Vtxo>,
+) -> bool {
+	// Only the original seed and genesis birthday enter the new REST database.
+	// Keep the seed in memory and origin files, outside argv and public receipts.
+	let seed = bip39::Mnemonic::from_str(&std::fs::read_to_string(ctx.datadir.join("bark/mnemonic")).unwrap()).unwrap();
+	let incarnation = uuid::Uuid::new_v4().to_string();
+	let original_debug = bark_json::cli::DebugInfo::from(wallet.debug_info().await.unwrap());
+	wallet.stop_daemon_wait().await.unwrap();
+	let restored = ctx.barkd("seed_only", srv).mnemonic(seed.to_string()).birthday_height(0)
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	evidence.action(ctx, "fresh-database-created", json!({"birth_height": 0,
+		"incarnation": incarnation, "original_source_incarnation": evidence.source_incarnation,
+		"origin_directory": restored.datadir().strip_prefix(&ctx.datadir).unwrap(),
+		"imported_vtxos": false, "imported_transactions": false, "imported_addresses": false}));
+	restored.sync().await;
+	restored.onchain_sync().await;
+	restored.exit_progress().await;
+	capture_receive_fresh_wallet(ctx, evidence, &restored, &incarnation, "custody-before-claim").await;
+	let utxos = restored.onchain_utxos().await;
+	assert!(utxos.iter().any(|coin| coin.outpoint == payout && coin.amount == sat(18_000)),
+		"the fresh seed must recognize the actual full-cohort fallback output");
+	let recovered = restored.vtxos(Some(true)).await;
+	for id in remaining.keys() {
+		let coin = recovered.iter().find(|coin| coin.id.to_string() == *id)
+			.expect("the fresh seed must retain every paid right");
+		assert_eq!(coin.state, VtxoStateInfo::Spent, "a paid right must not become spendable during recovery");
+	}
+	let exits = restored.get_all_exit_status(Some(true), Some(false)).await;
+	let oldest_state = exits.iter().find(|exit| exit.vtxo_id == oldest.id());
+	let oldest_claimable = oldest_state.is_some_and(|exit| matches!(exit.state, bark_json::exit::ExitState::Claimable(_)));
+	let oldest_row = recovered.iter().find(|coin| coin.id == oldest.id());
+	if let Some(coin) = oldest_row {
+		assert_eq!(coin.amount, sat(1_000));
+		assert_eq!(coin.state, VtxoStateInfo::Exited);
+	}
+
+	// Read the stopped fresh database without a second recovery scan. Derive
+	// public descriptors from the seed, and compare its actual recovered key.
+	restored.stop().await.unwrap();
+	let cfg = toml::from_str(&std::fs::read_to_string(restored.datadir().join("config.toml")).unwrap()).unwrap();
+	let reader = bark::Wallet::open(Network::Regtest, bark::WalletSeed::new_from_mnemonic(Network::Regtest, &seed), cfg,
+		bark::OpenWalletArgs { datadir: Some(restored.datadir()), run_daemon: false, skip_recovery: true,
+			lock_manager: Some(Box::new(bark::lock_manager::memory::MemoryLockManager::new())), ..Default::default() }).await.unwrap();
+	let debug = bark_json::cli::DebugInfo::from(reader.debug_info().await.unwrap());
+	assert_eq!(serde_json::to_value(&debug).unwrap(), serde_json::to_value(&original_debug).unwrap());
+	let fallback = reader.fallback_destination().await.unwrap();
+	assert_eq!(&fallback, destination);
+	fallback.verify(Network::Regtest, reader.mailbox_keypair().public_key()).unwrap();
+	let oldest_key_index = if oldest_row.is_some() {
+		let signed = reader.get_full_vtxo(oldest.id()).await.unwrap();
+		assert_eq!(signed.to_bare(), *oldest);
+		let (index, _) = reader.pubkey_keypair(&signed.user_pubkey()).await.unwrap()
+			.expect("the recovered oldest exit must have a seed-derived key");
+		assert_eq!(reader.vtxo_xpub().derive_pub(&ark::SECP, &[index.into()]).unwrap().public_key, signed.user_pubkey());
+		Some(index)
+	} else { None };
+	drop(reader);
+	let db = Arc::new(bark::persist::sqlite::SqliteClient::open(restored.datadir().join("db.sqlite")).unwrap());
+	let onchain = bark::onchain::OnchainWallet::load_or_create(Network::Regtest, seed.to_seed(""), db).await.unwrap();
+	let master = bitcoin::bip32::Xpriv::new_master(Network::Regtest, &seed.to_seed("")).unwrap();
+	let (descriptor, _private_keys, _) = bdk_wallet::template::DescriptorTemplate::build(
+		bdk_wallet::template::Bip86(master, KeychainKind::External), Network::Regtest.into()).unwrap();
+	assert_eq!(descriptor, *onchain.inner.public_descriptor(KeychainKind::External));
+	let derivation = evidence::public_derivation(ctx, &descriptor.to_string(), onchain.inner.derivation_index(KeychainKind::External));
+	drop(onchain);
+	evidence::write_json(evidence.dir.join("fresh-seed-authority.json"), &json!({
+		"origin": "linked SDK read of stopped fresh REST-created database; independent seed public derivation",
+		"incarnation": incarnation, "original_source_incarnation": evidence.source_incarnation,
+		"captured_at": chrono::Utc::now().to_rfc3339(), "tip": evidence::tip(ctx), "birth_height": 0,
+		"raw_debug": debug, "signed_fallback_record": fallback, "onchain_derivation": derivation,
+		"oldest_id": oldest.id(), "oldest_amount_sat": oldest.amount().to_sat(),
+		"oldest_recovered": oldest_row.is_some(), "oldest_claimable": oldest_claimable,
+		"oldest_public_key": oldest.user_pubkey(), "oldest_child_index": oldest_key_index,
+		"recovery_input": "original seed and genesis birthday only; no original database or VTXO import"}));
+	restored.start().await.unwrap();
+
+	let mut oldest_claim = None;
+	if oldest_claimable && oldest_key_index.is_some() {
+		let address = restored.onchain_address().await;
+		let response = bark_rest_client::apis::exits_api::exit_claim_vtxos(&restored.client_config(),
+			bark_json::web::ExitClaimVtxosRequest { destination: address.to_string(),
+				vtxos: vec![oldest.id().to_string()], fee_rate: None }).await;
+		evidence.action(ctx, "fresh-oldest-claim-request", json!({"id": oldest.id(),
+			"incarnation": incarnation,
+			"destination": address, "request_succeeded": response.is_ok(),
+			"unfiltered_errors_exported": false}));
+		response.expect("fresh recovered oldest exit claim failed; inspect origin logs");
+		let core = ctx.bitcoind().sync_client();
+		let txid = tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				if let Some(txid) = core.get_mempool_spending_tx(oldest.point()).unwrap() { break txid; }
+				tokio::time::sleep(Duration::from_millis(50)).await;
+			}
+		}).await.expect("fresh oldest claim did not reach the verifying node");
+		let tx = ctx.bitcoind().await_transaction(txid).await;
+		assert_eq!(tx.input.len(), 1);
+		assert_eq!(tx.input[0].previous_output, oldest.point());
+		assert_eq!(tx.output.len(), 1);
+		assert_eq!(tx.output[0].script_pubkey, address.script_pubkey());
+		assert!(tx.output[0].value > Amount::ZERO && tx.output[0].value < oldest.amount());
+		ctx.generate_blocks(6).await;
+		assert_canonical_watchman_tx(ctx, &tx);
+		let claimed = core.get_tx_out(&txid, 0, Some(true)).unwrap().unwrap();
+		assert!(claimed.confirmations >= 6);
+		assert!(core.get_tx_out(&oldest.point().txid, oldest.point().vout, Some(true)).unwrap().is_none());
+		evidence.transaction(ctx, "fresh-oldest-claim", &tx);
+		evidence.action(ctx, "fresh-oldest-claim-confirmed", json!({"id": oldest.id(), "txid": txid,
+			"incarnation": incarnation,
+			"output": OutPoint::new(txid, 0), "amount_sat": claimed.value.to_sat(),
+			"miner_fee_sat": (oldest.amount() - claimed.value).to_sat(), "confirmations": claimed.confirmations}));
+		oldest_claim = Some(OutPoint::new(txid, 0));
+	} else {
+		evidence.action(ctx, "fresh-oldest-custody-incomplete", json!({"id": oldest.id(),
+			"incarnation": incarnation,
+			"status": "EVIDENCE_INCOMPLETE", "recovered": oldest_row.is_some(), "claimable": oldest_claimable,
+			"required_producer": "seed recovery must retain the confirmed signed right and register a claimable exit",
+			"source_entry_points": ["Wallet::recover_from_xpub", "Wallet::check_vtxo_onchain_status", "Exit::start_exit_for_vtxos_including_non_standard"],
+			"no_original_vtxo_import_attempted": true}));
+	}
+	restored.onchain_sync().await;
+	restored.exit_progress().await;
+	capture_receive_fresh_wallet(ctx, evidence, &restored, &incarnation, "custody-before-drain").await;
+	evidence.chain(ctx, "fresh-custody-before-drain");
+	let recovery_address = ctx.bitcoind().get_new_address();
+	let drain = bark_rest_client::apis::onchain_api::onchain_drain(&restored.client_config(),
+		bark_json::web::OnchainDrainRequest { destination: recovery_address.to_string() }).await.unwrap();
+	let recovery = ctx.bitcoind().await_transaction(drain.txid).await;
+	assert_eq!(recovery.input.iter().filter(|input| input.previous_output == payout).count(), 1);
+	if let Some(point) = oldest_claim {
+		assert_eq!(recovery.input.iter().filter(|input| input.previous_output == point).count(), 1);
+	}
+	let input_value = recovery.input.iter().map(|input| {
+		let previous = ctx.bitcoind().sync_client().get_raw_transaction(&input.previous_output.txid, None).unwrap();
+		previous.output[input.previous_output.vout as usize].value
+	}).sum::<Amount>();
+	let fee = input_value - recovery.output.iter().map(|output| output.value).sum::<Amount>();
+	assert!(fee > Amount::ZERO);
+	ctx.generate_blocks(6).await;
+	assert_canonical_watchman_tx(ctx, &recovery);
+	let recipients = recovery.output.iter().enumerate().filter(|(_, output)|
+		output.script_pubkey == recovery_address.script_pubkey()).collect::<Vec<_>>();
+	assert_eq!(recipients.len(), 1);
+	let point = OutPoint::new(recovery.compute_txid(), recipients[0].0 as u32);
+	let deep = ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+	assert!(deep.confirmations >= 6);
+	assert_eq!(deep.value, recipients[0].1.value);
+	assert!(ctx.bitcoind().sync_client().get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().is_none());
+	evidence.transaction(ctx, "fresh-six-deep-recovery", &recovery);
+	evidence.chain(ctx, "fresh-six-deep-recovery");
+	evidence.action(ctx, "fresh-six-deep-recovery", json!({"txid": recovery.compute_txid(),
+		"incarnation": incarnation,
+		"recipient": point, "amount_sat": deep.value.to_sat(), "confirmations": deep.confirmations,
+		"miner_fee_sat": fee.to_sat(), "fallback_input": payout, "oldest_claim_input": oldest_claim,
+		"oldest_custody_complete": oldest_claim.is_some(), "financial_qualification": "NOT_RUN"}));
+	restored.onchain_sync().await;
+	restored.exit_progress().await;
+	capture_receive_fresh_wallet(ctx, evidence, &restored, &incarnation, "six-deep-recovery").await;
+	restored.stop().await.unwrap();
+	oldest_claim.is_some()
+}
+
 /// Keep every returned item, but omit private preimages, error onions and RPC credentials.
 async fn capture_receive_lightning(
 	ctx: &TestContext, evidence: &Evidence, node: &ark_testing::Lightningd, role: &str, phase: &str,
@@ -4936,6 +5126,10 @@ async fn watchman_receive_chain(name: &str, capture: bool) {
 		capture_receive_lightning(&ctx, evidence, &ln.internal, "internal", "final").await;
 		capture_receive_lightning(&ctx, evidence, &ln.external, "external", "final").await;
 		evidence.operator_descriptors(&ctx, &srv, &db).await;
+		let customer_outputs = payouts.iter().filter(|(_, output)| output.script_pubkey == destination.spk).collect::<Vec<_>>();
+		assert_eq!(customer_outputs.len(), 1, "the full same-owner cohort must have one fallback output");
+		let oldest_custody_complete = capture_receive_seed_custody(&ctx, &srv, evidence, &wallet, &oldest,
+			&destination, *customer_outputs[0].0, &customers).await;
 		let mut executables = Vec::new();
 		evidence::collect_executables(&ctx.datadir, &ctx.datadir, &mut executables);
 		evidence::write_json(evidence.dir.join("actual-executable-receipts.json"), &json!(executables));
@@ -4945,8 +5139,10 @@ async fn watchman_receive_chain(name: &str, capture: bool) {
 			"unsupported": ["selected checker has no pool/receive/progressed-right accounting adapter",
 				"public RPC projections omit private payment preimages and error onions",
 				"source, role, Lightning and cash reconciliation require an independent adapter and review",
-				"candidate/build-kind admission requires independent retained executable readback",
-				"fresh own-seed observer for oldest exit and fallback receipt, control and drain remains unavailable"],
+				"candidate/build-kind admission requires independent retained executable readback"],
+			"fresh_own_seed_fallback_spend_six_deep": true,
+			"fresh_own_seed_oldest_claim_six_deep": oldest_custody_complete,
+			"oldest_custody_status": if oldest_custody_complete { "ACQUIRED_REQUIRES_INDEPENDENT_CHECK" } else { "EVIDENCE_INCOMPLETE" },
 			"checker": "NOT_RUN", "financial_qualification": "NOT_RUN"}));
 	}
 }

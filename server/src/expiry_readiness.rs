@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use bitcoin::{OutPoint, Transaction};
@@ -188,6 +188,12 @@ impl Server {
 		ready: &mut BTreeMap<BlockHeight, Vec<ReadyOutput>>,
 		prepared_bytes: &mut usize,
 	) -> anyhow::Result<()> {
+		let started = Instant::now();
+		if self.expiry_roots_have_no_unspent_outputs(&roots).await {
+			debug!(%anchor, roots = roots.len(), elapsed_secs = started.elapsed().as_secs_f64(),
+				"Expiry preparation skipped absent physical roots");
+			return Ok(());
+		}
 		// One immutable inventory per anchor per pass, including after a split.
 		// Repeating the whole anchor SQL query once per child is quadratic work.
 		let mut outputs = Vec::new();
@@ -203,6 +209,17 @@ impl Server {
 			let source_cut = economic_cut(&snapshot, &source.state.vtxo, &funding, &transitions, INVENTORY_LIMITS)?;
 			Ok::<_, anyhow::Error>((snapshot, funding, transitions, source_cut))
 		}).await.context("expiry source validation task failed")??;
+		debug!(%anchor, roots = roots.len(), rows = snapshot.regular.len(),
+			terminals = source_cut.terminals.len(), elapsed_secs = started.elapsed().as_secs_f64(),
+			"Expiry source geometry prepared");
+		// Reject obsolete preparation before performing all owner lookups.
+		// The decision and split transactions retain their final view locks.
+		self.db.write(async |t| t.lock_valid_expiry_view(view).await).await?;
+		if self.expiry_roots_have_no_unspent_outputs(&roots).await {
+			debug!(%anchor, roots = roots.len(), elapsed_secs = started.elapsed().as_secs_f64(),
+				"Expiry physical roots disappeared during source preparation");
+			return Ok(());
+		}
 		let reserved = self.db.read(async |t| Ok(t.query("
 			SELECT e.vtxo_id FROM expiry_entitlement e JOIN vtxo v ON v.vtxo_id=e.vtxo_id
 			WHERE v.anchor_point=$1 AND (
@@ -220,6 +237,7 @@ impl Server {
 		let mut complete = true;
 		let mut owners = BTreeMap::<bitcoin::secp256k1::PublicKey, BTreeSet<ark::VtxoId>>::new();
 		let mut prepared = BTreeMap::new();
+		let owner_preparation = Instant::now();
 		for index in source_cut.terminals {
 			let fact = &snapshot.regular[index];
 			if fact.onchain_spent_height.is_some() || fact.onchain_spent_txid.is_some()
@@ -253,6 +271,8 @@ impl Server {
 			}
 			prepared.insert(fact.state.vtxo_id, coin);
 		}
+		debug!(%anchor, terminals = prepared.len(), owner_groups = owners.len(), complete,
+			elapsed_secs = owner_preparation.elapsed().as_secs_f64(), "Expiry source owners prepared");
 		let snapshot = Arc::new(snapshot);
 		let transitions = Arc::new(transitions);
 		for root in roots {
@@ -352,6 +372,18 @@ impl Server {
 			ready.entry(output.root().expiry_height()).or_default().push(output);
 		}
 		Ok(())
+	}
+
+	async fn expiry_roots_have_no_unspent_outputs(&self, roots: &[ServerVtxo]) -> bool {
+		for root in roots {
+			match self.bitcoind.try_get_tx_out(root.point(), true).await {
+				Ok(None) => {},
+				// An unavailable preflight leaves the existing preparation and
+				// final Core, ownership and transaction checks in control.
+				Ok(Some(_)) | Err(_) => return false,
+			}
+		}
+		true
 	}
 
 	async fn commit_ready_group(

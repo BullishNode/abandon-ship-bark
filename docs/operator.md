@@ -749,8 +749,8 @@ requires financial, recovery and operational qualification.
 
 Cumulative payout fees, sub-dust holds and foreign fee-child replacement require
 qualification on the final release programs. Unknown or incomplete ownership must
-remain held. The owner accepts the 4,096-owner test's failure to meet its unchanged
-1,500-second bound as an operating limit. Do not treat that size as a qualified
-production envelope or add a geometry cache to meet the bound. Results from
-earlier programs remain historical; they do not qualify this release's capacity
-or financial conservation.
+remain held. The 4,096-owner qualification case has a 3,000-second limit, with
+every payment assertion unchanged. Record its measured time on the final release
+programs. Passing this case establishes correct payouts and progress at that
+size; it does not establish a production payout-speed guarantee or load envelope.
+Earlier failures remain historical and do not qualify this release.

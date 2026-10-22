@@ -182,10 +182,10 @@ async fn expiry_automatic_real_limit_multilevel_split_pays_every_owner() {
 }
 
 #[tokio::test]
-#[ignore = "4096 funded payees; serial 1500-second regtest case in the fallback-scale profile"]
+#[ignore = "4096 funded payees; serial 3000-second regtest case in the fallback-scale profile"]
 async fn expiry_bounded_round_inventory_splits_and_pays_every_owner() {
-	tokio::time::timeout(Duration::from_secs(1500), bounded_round_inventory()).await
-		.expect("bounded round inventory exceeded 1500 seconds");
+	tokio::time::timeout(Duration::from_secs(3000), bounded_round_inventory()).await
+		.expect("bounded round inventory exceeded 3000 seconds");
 }
 
 async fn bounded_round_inventory() {

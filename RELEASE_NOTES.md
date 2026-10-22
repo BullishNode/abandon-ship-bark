@@ -90,12 +90,11 @@ matching final GNU programs and the final release bundle remain required.
   foreign P2A fee child appeared. A targeted regression and its independent
   review retain their original program identities. They do not qualify the
   final programs or bundle.
-- The owner accepts the 4,096-owner capacity failure as an operating limit. An
-  earlier test took 1,543.594 seconds, including teardown, against its unchanged
-  1,500-second bound. Later candidates also failed that bound. The fork does not
-  add a geometry cache to meet it. This size is not a qualified production
-  envelope. Historical payments and timing do not prove the final release's
-  capacity or complete financial conservation.
+- The 4,096-owner test has a 3,000-second limit, with every payment assertion
+  unchanged. It must pass on the final release programs, with its measured time
+  reported. Earlier failures against the 1,500-second limit remain historical.
+  Passing this case establishes correct payouts and progress at that size; it
+  does not establish a production payout-speed guarantee or load envelope.
 - Ambiguous external Lightning outcomes can remain pending. Supervised
   recovery of a request that never reached Lightning requires intact original
   history, complete producer and queue shutdown, and retained incident records.

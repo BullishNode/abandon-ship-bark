@@ -249,7 +249,9 @@ impl<T> Daemon<T>
 			"executable": executable_observation(child.id()),
 		});
 		let result = (|| -> anyhow::Result<()> {
-			let directory = self.inner.datadir().join("executable-receipts");
+			// Wallet creation requires its own datadir to contain only known files.
+			let directory = self.inner.datadir().parent()
+				.context("daemon datadir has no parent")?.join("executable-receipts");
 			fs::create_dir_all(&directory)?;
 			let path = directory.join(format!("{}.json", uuid::Uuid::new_v4()));
 			let mut file = fs::File::options().write(true).create_new(true).open(&path)?;

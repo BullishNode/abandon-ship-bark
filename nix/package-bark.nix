@@ -30,7 +30,6 @@ let
 		root = ./..;
 		fileset = lib.fileset.unions [
 			(craneLib.fileset.commonCargoSources ./..)
-			./../bark-rest/swagger-ui
 			./../server-rpc/protos
 			./../cln-rpc/protos
 			./../bark-rest/swagger-ui

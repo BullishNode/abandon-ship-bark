@@ -266,11 +266,6 @@ impl Tx<'_> {
 					participation_id: cancelled.get("participation_id"),
 					unlock_hash: hash.to_string(), forfeited: false,
 				});
-			} else if user.user_pubkey().to_string() == "02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c"
-				&& hash.to_string() == "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-				&& user.amount() == Amount::from_sat(330) {
-				proposal.disposition = OwnershipDisposition::Operator;
-				proposal.evidence = Some(OwnershipEvidence::Padding);
 			}
 			return Ok(proposal);
 		}

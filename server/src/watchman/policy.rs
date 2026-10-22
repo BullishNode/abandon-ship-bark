@@ -1,4 +1,5 @@
 
+use anyhow::{bail, Context};
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::{Amount, Transaction, Txid};
 
@@ -193,8 +194,9 @@ fn decide_action_server_htlc_send(params: &ActionParams<HtlcSendExtra>) -> Actio
 	let confirmed_plus_2x = params.confirmed_at + params.exit_delta * 2;
 	let deadline = std::cmp::min(params.policy_extras.htlc_expiry, confirmed_plus_2x);
 
-	if let Some(action) = try_progress(params, params.policy_extras.next_tx, deadline) {
-		return action;
+	// An unsigned successor must not fall back to a preimage claim.
+	if params.policy_extras.next_tx.is_some() {
+		return try_progress(params, params.policy_extras.next_tx, deadline).unwrap_or(Action::Wait);
 	}
 
 	if params.policy_extras.has_preimage {
@@ -253,6 +255,19 @@ impl ActionContextFetcher<'_> {
 		};
 
 		let params = self.build_params(vtxo, confirmed_at).await;
+		// Only a successful lookup with no spend link establishes absence.
+		// A failed or unusable successor lookup must not authorize a claim.
+		let next_tx = if matches!(vtxo.policy(), ServerVtxoPolicy::User(_)) {
+			match self.fetch_progress(vtxo).await {
+				Ok(progress) => progress,
+				Err(e) => {
+					warn!("Cannot establish successor for VTXO {}: {:#}", vtxo.id(), e);
+					return Action::Wait;
+				},
+			}
+		} else {
+			None
+		};
 
 		let action = match vtxo.policy() {
 			ServerVtxoPolicy::ServerOwned => {
@@ -272,7 +287,7 @@ impl ActionContextFetcher<'_> {
 			},
 			ServerVtxoPolicy::User(VtxoPolicy::Pubkey(p)) => {
 				let params = params.with_policy_extras(PubkeyExtra {
-					next_tx: self.fetch_progress(vtxo).await,
+					next_tx,
 					server_knows_key: self.check_server_knows_pubkey(p.user_pubkey).await,
 				});
 
@@ -280,7 +295,7 @@ impl ActionContextFetcher<'_> {
 			},
 			ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(p)) => {
 				let params = params.with_policy_extras(HtlcSendExtra {
-					next_tx: self.fetch_progress(vtxo).await,
+					next_tx,
 					htlc_expiry: p.htlc_expiry,
 					has_preimage: self.check_have_payment_preimage(p.payment_hash).await,
 				});
@@ -288,7 +303,7 @@ impl ActionContextFetcher<'_> {
 			},
 			ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend_v0(p)) => {
 				let params = params.with_policy_extras(HtlcSendExtra {
-					next_tx: self.fetch_progress(vtxo).await,
+					next_tx,
 					htlc_expiry: p.htlc_expiry,
 					has_preimage: self.check_have_payment_preimage(p.payment_hash).await,
 				});
@@ -296,7 +311,7 @@ impl ActionContextFetcher<'_> {
 			},
 			ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv(p)) => {
 				let params = params.with_policy_extras(HtlcRecvExtra {
-					next_tx: self.fetch_progress(vtxo).await,
+					next_tx,
 					htlc_expiry: p.htlc_expiry,
 					htlc_expiry_delta: p.htlc_expiry_delta,
 					funded_timeout: self.funded_receive_timeout(vtxo.id(), p.payment_hash).await,
@@ -305,7 +320,7 @@ impl ActionContextFetcher<'_> {
 			},
 			ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv_v0(p)) => {
 				let params = params.with_policy_extras(HtlcRecvExtra {
-					next_tx: self.fetch_progress(vtxo).await,
+					next_tx,
 					htlc_expiry: p.htlc_expiry,
 					htlc_expiry_delta: p.htlc_expiry_delta,
 					funded_timeout: self.funded_receive_timeout(vtxo.id(), p.payment_hash).await,
@@ -364,20 +379,21 @@ impl ActionContextFetcher<'_> {
 		}
 	}
 
-	/// Fetch the next tx in the offchain tx chain for this VTXO and whether it is signed
-	async fn fetch_progress(&self, vtxo: &ServerVtxo) -> Option<ProgressSpec> {
+	/// Fetch the successor and its signature state. Only `Ok(None)` proves absence.
+	async fn fetch_progress(&self, vtxo: &ServerVtxo) -> anyhow::Result<Option<ProgressSpec>> {
 		let vtxo_state = self.db.read(async |t| t.get_server_vtxo_by_id(vtxo.id()).await).await
-			.inspect_err(|e| warn!("DB error: {:#}", e))
-			.ok()?;
-		let oor_txid = vtxo_state.oor_spent_txid?;
+			.context("read VTXO successor link")?;
+		let Some(oor_txid) = vtxo_state.oor_spent_txid else {
+			return Ok(None);
+		};
 		let vtx = self.db.read(async |t| t.get_virtual_transaction_by_txid(oor_txid).await).await
-			.inspect_err(|e| warn!("DB error: {:#}", e))
-			.ok()??;
+			.context("read successor transaction")?
+			.context("linked successor transaction is missing")?;
 
 		if let Some(ref tx) = vtx.signed_tx {
 			if is_ignorable_dust(tx.as_ref(), vtxo.amount()) {
 				slog!(ProgressIgnoredDust, vtxo_id: vtxo.id(), txid: oor_txid);
-				return None;
+				bail!("successor {} has non-standard dust outputs", oor_txid);
 			}
 		}
 
@@ -397,10 +413,11 @@ impl ActionContextFetcher<'_> {
 					warn!("bitcoind rpc error fetching parent progress tx {} for {}: {:#}",
 						parent_txid, child_txid, e,
 					);
-				}).ok()?;
+				}).context("read successor dependency chain status")?;
 				if !status.is_confirmed() {
 					let vtx = self.db.read(async |t| t.get_virtual_transaction_by_txid(parent_txid).await).await
-						.inspect_err(|e| warn!("DB error: {:#}", e)).ok()??;
+						.context("read successor dependency transaction")?
+						.context("successor dependency transaction is missing")?;
 					if vtx.signed_tx.is_none() {
 						// connector txs should be signed
 						error!("Progress {} depends on (connector) tx {} without signed_tx",
@@ -410,18 +427,18 @@ impl ActionContextFetcher<'_> {
 
 					slog!(BroadcastingDependentTx, child_txid, parent_txid);
 
-					return Some(ProgressSpec {
+					return Ok(Some(ProgressSpec {
 						next_txid: parent_txid,
 						is_signed: vtx.signed_tx.is_some(),
-					});
+					}));
 				}
 			}
 		}
 
-		Some(ProgressSpec {
+		Ok(Some(ProgressSpec {
 			next_txid: oor_txid,
 			is_signed: vtx.signed_tx.is_some(),
-		})
+		}))
 	}
 
 	async fn funded_receive_timeout(&self, id: VtxoId, hash: PaymentHash) -> Option<bool> {
@@ -772,6 +789,39 @@ mod tests {
 		};
 		// deadline = min(htlc_expiry, confirmed_at + 2*exit_delta) = min(500, 100 + 288) = 388
 		assert_eq!(decide_action_server_htlc_send(&params), Action::Progress { txid, deadline: BlockHeight::new(388) });
+	}
+
+	/// A successor takes priority over a preimage claim, even without a signature.
+	#[test]
+	fn htlc_send_next_tx_takes_priority_over_preimage_claim() {
+		let txid = Txid::from_byte_array([1; 32]);
+		let mut params = ActionParams {
+			vtxo_id: test_vtxo_id(),
+			chain_tip_height: BlockHeight::new(300),
+			progress_grace_period: Some(BlockDelta::new(6)),
+			expiry_height: BlockHeight::new(1000),
+			exit_delta: BlockDelta::new(144),
+			confirmed_at: BlockHeight::new(100),
+			policy_extras: HtlcSendExtra {
+				next_tx: Some(ProgressSpec { next_txid: txid, is_signed: false }),
+				htlc_expiry: BlockHeight::new(350),
+				has_preimage: true,
+			},
+		};
+		assert_eq!(decide_action_server_htlc_send(&params), Action::Wait);
+		params.chain_tip_height = BlockHeight::new(900);
+		params.progress_grace_period = None;
+		assert_eq!(decide_action_server_htlc_send(&params), Action::Wait);
+		params.policy_extras.next_tx.as_mut().unwrap().is_signed = true;
+		assert_eq!(decide_action_server_htlc_send(&params), Action::Progress { txid, deadline: BlockHeight::new(350) });
+		params.chain_tip_height = BlockHeight::new(105);
+		params.progress_grace_period = Some(BlockDelta::new(6));
+		assert_eq!(decide_action_server_htlc_send(&params), Action::Wait);
+		params.chain_tip_height = BlockHeight::new(300);
+		params.policy_extras.next_tx = None;
+		assert_eq!(decide_action_server_htlc_send(&params), Action::Claim { deadline: BlockHeight::new(350) });
+		params.policy_extras.has_preimage = false;
+		assert_eq!(decide_action_server_htlc_send(&params), Action::Wait);
 	}
 
 	/// Server has the preimage but must wait until the claim height

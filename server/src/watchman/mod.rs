@@ -20,6 +20,7 @@ pub(crate) mod settlement;
 pub use self::config::Config;
 pub use self::daemon::Daemon;
 pub use self::frontier::VtxoExitFrontier;
+pub use self::policy::ActionContextFetcher;
 pub use self::signer::WatchmanSigner;
 
 /// Control messages that can be sent to a running [Watchman].
@@ -67,7 +68,6 @@ use crate::fee_estimator::FeeEstimator;
 use crate::system::RuntimeManager;
 use crate::utils::InstrumentedLock;
 use crate::wallet::PersistedWallet;
-use crate::watchman::policy::ActionContextFetcher;
 
 /// The kind of mempool spend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

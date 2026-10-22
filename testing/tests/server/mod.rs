@@ -58,6 +58,7 @@ mod seed_wallet_recovery;
 mod registration;
 mod settler;
 mod watchman;
+mod watchman_successor;
 mod watchman_wallet;
 
 use std::iter;

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use bdk_wallet::{KeychainKind, Wallet};
 use bdk_wallet::template::{Bip86, DescriptorTemplate};
-use bitcoin::{Network, Transaction};
+use bitcoin::{Amount, Network, Transaction};
 use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::hashes::{sha256, Hash};
@@ -31,6 +31,7 @@ use bark::persist::sqlite::SqliteClient;
 use bitcoin_ext::rpc::RpcApi;
 use server::database::Db;
 use server::wallet::WalletKind;
+use server_rpc::protos;
 
 const FINANCIAL: &str = include_str!("financial.sql");
 const PATHS: &str = "SELECT COALESCE(jsonb_agg(jsonb_build_object(\
@@ -74,13 +75,14 @@ pub(super) struct Evidence {
 	captures: Vec<Value>,
 	owned: BTreeSet<String>,
 	configurations: Vec<Value>,
+	board_fee_authority: Option<Value>,
 	baseline: Option<Value>,
 	final_sql: Option<Value>,
 	reader: Client,
 }
 
 impl Evidence {
-	pub(super) async fn new(ctx: &TestContext, srv: &Captaind) -> Self {
+	pub(super) async fn new(ctx: &TestContext, srv: &Captaind, board_fee: bool) -> Self {
 		let dir = ctx.datadir.join("money-evidence");
 		fs::create_dir(&dir).unwrap();
 		let config = srv.config().postgres.clone();
@@ -112,23 +114,30 @@ impl Evidence {
 		tokio::spawn(async move { connection.await.expect("evidence reader connection failed"); });
 		let mut ret = Self { dir, source_incarnation: Uuid::new_v4().to_string(),
 			observer_incarnation: Uuid::new_v4().to_string(), debug: None, captures: vec![],
-			owned: BTreeSet::new(), configurations: vec![], baseline: None, final_sql: None, reader };
-		ret.configuration(srv, "baseline");
+			owned: BTreeSet::new(), configurations: vec![], board_fee_authority: board_fee.then(|| json!({
+				"schema": 1, "kind": "original-board-fee-authority-v1",
+				"candidate": std::env::var("GIT_HASH").expect("the native runner must declare its candidate"),
+				"configuration_history_complete": true, "configurations": [], "action_ids": {}})),
+			baseline: None, final_sql: None, reader };
+		ret.configuration(ctx, srv, "baseline").await;
 		ret
 	}
 
-	pub(super) fn action(&self, ctx: &TestContext, kind: &str, receipt: Value) {
+	pub(super) fn action(&self, ctx: &TestContext, kind: &str, receipt: Value) -> String {
 		let observed = tip(ctx);
+		let id = Uuid::new_v4().to_string();
 		let mut file = OpenOptions::new().create(true).append(true)
 			.open(self.dir.join("actions.jsonl")).unwrap();
-		serde_json::to_writer(&mut file, &json!({"id": Uuid::new_v4().to_string(),
+		serde_json::to_writer(&mut file, &json!({"id": id,
 			"kind": kind, "captured_at": Utc::now().to_rfc3339(),
 			"height": observed["blocks"], "hash": observed["bestblockhash"], "receipt": receipt})).unwrap();
 		file.write_all(b"\n").unwrap();
 		file.sync_all().unwrap();
+		id
 	}
 
-	fn configuration(&mut self, srv: &Captaind, phase: &str) {
+	async fn configuration(&mut self, ctx: &TestContext, srv: &Captaind, phase: &str) {
+		let info = if self.board_fee_authority.is_some() { Some(srv.ark_info().await) } else { None };
 		let cfg = srv.config();
 		let admitted = server::config::Config::load(cfg.data_dir.join("config.toml")).unwrap();
 		assert!(admitted.cln_array.is_empty(), "this fixture admits no Lightning nodes");
@@ -137,9 +146,93 @@ impl Evidence {
 		let file = format!("public-config-{}.json", self.configurations.len());
 		write_json(self.dir.join(&file), &raw);
 		let bytes = fs::read(self.dir.join(&file)).unwrap();
+		let captured_at = if let Some(info) = info {
+			assert_eq!(info.network, admitted.network);
+			assert_eq!(info.fees.board, admitted.fees.board);
+			let authority = self.board_fee_authority.as_mut().unwrap();
+			if phase == "baseline" {
+				authority["wallet"] = json!("customer");
+				authority["source_incarnation"] = json!(self.source_incarnation);
+				authority["network"] = json!(info.network);
+				authority["server_pubkey"] = json!(info.server_pubkey);
+				authority["service_id"] = json!(srv.ark_url());
+			} else {
+				assert_eq!(authority["network"], json!(info.network));
+				assert_eq!(authority["server_pubkey"], json!(info.server_pubkey));
+				assert_eq!(authority["service_id"], json!(srv.ark_url()));
+			}
+			let mut observation = self.fee_observation(ctx, "public-configuration-projection",
+				"server::config::Config::load; allowlisted admitted board schedule",
+				json!({"network": admitted.network, "server_pubkey": info.server_pubkey, "board": admitted.fees.board}),
+				&format!("board-fee-config-{}.json", self.configurations.len()));
+			observation["sequence"] = json!(self.configurations.len());
+			observation["phase"] = json!(phase);
+			let captured_at = observation["captured_at"].clone();
+			self.board_fee_authority.as_mut().unwrap()["configurations"].as_array_mut().unwrap().push(observation);
+			captured_at
+		} else { json!(Utc::now().to_rfc3339()) };
 		self.configurations.push(json!({"sequence": self.configurations.len(), "phase": phase,
-			"captured_at": Utc::now().to_rfc3339(), "raw_public_config": raw,
+			"captured_at": captured_at, "raw_public_config": raw,
 			"source_receipt": {"file": file, "sha256": sha256::Hash::hash(&bytes).to_string()}}));
+	}
+
+	fn fee_observation(&self, ctx: &TestContext, kind: &str, entry_point: &str, data: Value, file: &str) -> Value {
+		let authority = self.board_fee_authority.as_ref().unwrap();
+		let observed = tip(ctx);
+		let captured_at = Utc::now().to_rfc3339();
+		write_json(self.dir.join(file), &data);
+		let bytes = fs::read(self.dir.join(file)).unwrap();
+		json!({"wallet": "customer", "source_incarnation": self.source_incarnation,
+			"network": authority["network"], "server_pubkey": authority["server_pubkey"], "service_id": authority["service_id"],
+			"captured_at": captured_at, "height": observed["blocks"], "hash": observed["bestblockhash"],
+			"acquisition": {"kind": kind, "entry_point": entry_point}, "public_data": data,
+			"source_receipt": {"file": file, "sha256": sha256::Hash::hash(&bytes).to_string()}})
+	}
+
+	pub(super) async fn board_fee_quote(&mut self, ctx: &TestContext, srv: &Captaind, wallet: &Bark, amount: Amount) -> bark::FeeEstimate {
+		assert_eq!(self.captures.last().unwrap()["phase"], "funded");
+		assert!(self.baseline.is_some());
+		assert!(self.board_fee_authority.as_ref().unwrap().get("quote").is_none());
+		let before = tip(ctx);
+		let response = srv.get_public_rpc().await.get_ark_info(protos::Empty {}).await.unwrap().into_inner();
+		let info: ark::ArkInfo = response.clone().try_into().unwrap();
+		let fees = response.fees.as_ref().unwrap().board.as_ref().unwrap();
+		assert_eq!(self.board_fee_authority.as_ref().unwrap()["server_pubkey"], json!(info.server_pubkey));
+		assert_eq!(self.board_fee_authority.as_ref().unwrap()["network"], json!(info.network));
+		assert_eq!(info.fees.board, srv.config().fees.board);
+		let ark_info = self.fee_observation(ctx, "generated-rpc-response",
+			"srv.get_public_rpc().get_ark_info; generated response public-field projection, not raw protobuf wire bytes",
+			json!({"network": response.network, "server_pubkey": info.server_pubkey,
+				"vtxo_exit_delta": response.vtxo_exit_delta, "min_board_amount": response.min_board_amount,
+				"max_vtxo_amount": response.max_vtxo_amount, "fees": {"board": {
+					"min_fee_sat": fees.min_fee_sat, "base_fee_sat": fees.base_fee_sat, "ppm": fees.ppm}}}),
+			"board-fee-ark-info.json");
+		let estimate = wallet.client().await.estimate_board_offchain_fee(amount).await.unwrap();
+		assert!(estimate.fee > Amount::ZERO);
+		assert_eq!(estimate.fee, info.fees.board.calculate(amount).unwrap());
+		assert_eq!(estimate.gross_amount, amount);
+		assert_eq!(estimate.net_amount + estimate.fee, amount);
+		assert!(estimate.net_amount > Amount::from_sat(1_000));
+		assert!(estimate.vtxos_spent.is_empty());
+		let quote = self.fee_observation(ctx, "linked-sdk-response",
+			"original wallet.client().estimate_board_offchain_fee; FeeEstimateResponse projection, not a GNU CLI or HTTP receipt",
+			json!({"request": {"amount_sat": amount.to_sat(), "fee_limit_sat": null},
+				"response": bark_json::web::FeeEstimateResponse::from(estimate.clone())}), "board-fee-quote.json");
+		assert_eq!(before["bestblockhash"], tip(ctx)["bestblockhash"]);
+		let id = self.action(ctx, "board-fee-quote", json!({"requested_amount_sat": amount.to_sat(),
+			"fee_quote": quote["source_receipt"]}));
+		let authority = self.board_fee_authority.as_mut().unwrap();
+		authority["ark_info"] = ark_info;
+		authority["quote"] = quote;
+		authority["action_ids"]["quote"] = json!(id);
+		estimate
+	}
+
+	pub(super) fn board_fee_board_action(&mut self, id: String) {
+		let authority = self.board_fee_authority.as_mut().unwrap();
+		assert!(authority.get("quote").is_some());
+		assert!(authority["action_ids"].get("board").is_none());
+		authority["action_ids"]["board"] = json!(id);
 	}
 
 	pub(super) async fn sql(&mut self, phase: &str) -> Value {
@@ -197,6 +290,18 @@ impl Evidence {
 	pub(super) async fn right(&self, ctx: &TestContext, source: &Vtxo<Full>, movement_id: u32, child_index: u32) {
 		let anchor = ctx.bitcoind().await_transaction(source.chain_anchor().txid).await;
 		source.validate(&anchor).expect("original source signed lineage must validate before absence");
+		if let Some(authority) = &self.board_fee_authority {
+			let quote = &authority["quote"]["public_data"]["response"];
+			let movements = self.captures.last().unwrap()["movements"].as_array().unwrap();
+			let board = movements.iter().filter(|movement| movement["id"] == movement_id).collect::<Vec<_>>();
+			assert_eq!(board.len(), 1);
+			assert_eq!(board[0]["subsystem"], json!({"name": "bark.board", "kind": "board"}));
+			assert_eq!(board[0]["status"], "successful");
+			assert_eq!(board[0]["intended_balance_sat"], quote["gross_amount_sat"]);
+			assert_eq!(board[0]["effective_balance_sat"], quote["net_amount_sat"]);
+			assert_eq!(board[0]["offchain_fee_sat"], quote["fee_sat"]);
+			assert_eq!(board[0]["output_vtxos"], json!([source.id()]));
+		}
 		let xpub: Xpub = serde_json::from_value(self.debug.as_ref().unwrap()["vtxo_xpub"].clone()).unwrap();
 		assert_eq!(xpub.derive_pub(&SECP, &[child_index.into()]).unwrap().public_key,
 			source.user_pubkey(), "the stored source child must belong to the original public identity");
@@ -257,6 +362,14 @@ impl Evidence {
 		let raw_balance = raw_response("/api/v1/wallet/balance", "balance").await;
 		let raw_vtxos = raw_response("/api/v1/wallet/vtxos?all=true", "vtxos").await;
 		let movements = raw_response("/api/v1/history", "history").await;
+		if self.board_fee_authority.is_some() {
+			let payouts = movements.as_array().unwrap().iter().filter(|movement|
+				movement["subsystem"]["name"] == "abandon.fallback_payout").collect::<Vec<_>>();
+			assert_eq!(payouts.len(), 1);
+			assert_eq!(payouts[0]["intended_balance_sat"], 0);
+			assert_eq!(payouts[0]["effective_balance_sat"], 0);
+			assert_eq!(payouts[0]["offchain_fee_sat"], 1_000);
+		}
 		let onchain_utxos = raw_response("/api/v1/onchain/utxos", "utxos").await;
 		let registration = raw_response("/api/v1/wallet/fallback", "fallback").await;
 		restored.stop().await.unwrap();
@@ -319,8 +432,15 @@ impl Evidence {
 		write_json(self.dir.join(format!("transaction-{phase}.json")), &json!({"raw": raw, "previous_transactions": previous}));
 	}
 
-	pub(super) fn finish(&mut self, ctx: &TestContext, srv: &Captaind) {
-		self.configuration(srv, "final");
+	pub(super) async fn finish(&mut self, ctx: &TestContext, srv: &Captaind) {
+		self.configuration(ctx, srv, "final").await;
+		if let Some(authority) = &mut self.board_fee_authority {
+			assert!(authority["action_ids"]["board"].is_string());
+			let file = "chain-six-deep-recovery.json";
+			let bytes = fs::read(self.dir.join(file)).unwrap();
+			authority["later_configuration_chain"] = json!({"file": file, "sha256": sha256::Hash::hash(&bytes).to_string()});
+			write_json(self.dir.join("board-fee-authority.json"), authority);
+		}
 		let mut executable_receipts = vec![];
 		collect_executables(&ctx.datadir, &ctx.datadir, &mut executable_receipts);
 		write_json(self.dir.join("actual-executable-receipts.json"), &json!(executable_receipts));

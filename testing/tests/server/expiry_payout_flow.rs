@@ -2,6 +2,7 @@ mod evidence;
 
 use std::time::Duration;
 
+use ark::fees::{BoardFees, PpmFeeRate};
 use ark_testing::{sat, TestContext};
 use ark_testing::constants::BOARD_CONFIRMATIONS;
 use bitcoin::{OutPoint, Transaction};
@@ -16,14 +17,25 @@ use server::database::Db;
 /// the payout, and Bitcoin Core independently checks its real inputs and outputs.
 #[tokio::test]
 async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
-	let ctx = TestContext::new("server/expiry_payout_native_board_seed_restore").await;
+	expiry_payout_native_board_seed_restore("server/expiry_payout_native_board_seed_restore", None).await;
+}
+
+#[tokio::test]
+async fn expiry_payout_native_board_fee_seed_restore_and_confirmed_spend() {
+	expiry_payout_native_board_seed_restore("server/expiry_payout_native_board_fee_seed_restore",
+		Some(BoardFees { min_fee: sat(330), base_fee: sat(0), ppm: PpmFeeRate::ZERO })).await;
+}
+
+async fn expiry_payout_native_board_seed_restore(name: &str, board_fees: Option<BoardFees>) {
+	let ctx = TestContext::new(name).await;
 	let srv = ctx.captaind("server").no_vtxo_pool()
-		.cfg(|cfg| {
+		.cfg(move |cfg| {
 			cfg.vtxo_lifetime = BlockDelta::new(24);
 			cfg.expiry_owner_scan_chunk_size = 1;
+			if let Some(fees) = board_fees { cfg.fees.board = fees; }
 		})
 		.watchmand().create().await;
-	let mut evidence = evidence::Evidence::new(&ctx, &srv).await;
+	let mut evidence = evidence::Evidence::new(&ctx, &srv, board_fees.is_some()).await;
 	let wallet = ctx.bark("abandoned", &srv).create().await;
 	wallet.observe_executables();
 	evidence.action(&ctx, "original-database-created", json!({"incarnation": evidence.source_incarnation,
@@ -38,8 +50,15 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 	for _ in 0..250 { issuer.new_address_with_index().await.unwrap(); }
 	drop(issuer);
 	evidence.action(&ctx, "original-key-issuance", json!({"count": 250}));
+	let quote = if board_fees.is_some() {
+		Some(evidence.board_fee_quote(&ctx, &srv, &wallet, sat(100_000)).await)
+	} else { None };
 	let board = wallet.board(sat(100_000)).await;
-	evidence.action(&ctx, "board-submitted", serde_json::to_value(&board).unwrap());
+	let board_action = evidence.action(&ctx, "board-submitted", serde_json::to_value(&board).unwrap());
+	if let Some(quote) = &quote {
+		assert_eq!(board.amount, quote.net_amount);
+		evidence.board_fee_board_action(board_action);
+	}
 	evidence.source(&ctx, &wallet, "board-submitted").await;
 	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
 	wallet.sync().await;
@@ -48,6 +67,17 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 	let seed = wallet.mnemonic().await.unwrap();
 	let client = wallet.client().await;
 	let source = client.get_full_vtxo(ids[0]).await.unwrap();
+	if let Some(quote) = &quote {
+		assert_eq!(source.amount(), quote.net_amount);
+		let path = source.transactions().collect::<Vec<_>>();
+		assert_eq!(path.len(), 1, "the board must have one signed exit");
+		assert_eq!(path[0].tx.output.len(), 2);
+		assert_eq!(path[0].tx.output[0].value, source.amount());
+		assert_eq!(path[0].tx.output[1], bitcoin_ext::fee::fee_anchor_with_amount(quote.fee));
+		let funding = ctx.bitcoind().await_transaction(source.chain_anchor().txid).await;
+		assert_eq!(funding.output[source.chain_anchor().vout as usize].value, quote.gross_amount);
+		assert_eq!(quote.gross_amount, source.amount() + quote.fee);
+	}
 	let destination = client.fallback_destination().await.unwrap();
 	let expected = source.amount() - sat(1_000);
 	let (source_child_index, _) = client.pubkey_keypair(&source.user_pubkey()).await.unwrap()
@@ -124,6 +154,20 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 		parent_inputs += previous.output[input.previous_output.vout as usize].value.to_sat();
 	}
 	assert_eq!(parent_inputs, parent.output.iter().map(|o| o.value.to_sat()).sum::<u64>());
+	if let Some(quote) = &quote {
+		assert_eq!(parent.input.len(), 1);
+		assert_eq!(parent.input[0].previous_output, source.chain_anchor());
+		assert_eq!(parent_inputs, quote.gross_amount.to_sat());
+		assert_eq!(parent.output.len(), 3);
+		assert_eq!(payouts[0].0, 0);
+		assert_eq!(parent.output[1].value, quote.fee + sat(1_000));
+		assert_ne!(parent.output[1].script_pubkey, destination.spk);
+		assert_eq!(parent.output[2], bitcoin_ext::fee::fee_anchor());
+		assert_eq!(child.input.len(), 2);
+		assert!(child.input.iter().any(|input| input.previous_output == OutPoint::new(parent_txid, 2)));
+		assert!(child.input.iter().any(|input| input.previous_output.txid == fee_funding));
+		assert_eq!(child.output.len(), 1);
+	}
 	let mut child_inputs = 0;
 	for input in &child.input {
 		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
@@ -132,6 +176,10 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 	let actual_child_fee = child_inputs - child.output.iter().map(|o| o.value.to_sat()).sum::<u64>();
 	assert!(actual_child_fee > 0);
 	assert_eq!(actual_child_fee, u64::try_from(recorded_child_fee).unwrap());
+	if quote.is_some() {
+		assert_eq!(child_inputs, 100_000);
+		assert_eq!(child.output[0].value.to_sat() + actual_child_fee, 100_000);
+	}
 	ctx.generate_blocks(6).await;
 	let confirmed_payout = ctx.bitcoind().sync_client().get_tx_out(&parent_txid, payout_point.vout, Some(true))
 		.unwrap().expect("fallback output must be independently unspent in Core");
@@ -203,6 +251,6 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 	evidence.chain(&ctx, "six-deep-recovery");
 	evidence.action(&ctx, "six-deep-recovery", json!({"txid": recovery.compute_txid(),
 		"output_index": recovered_output, "amount_sat": deep.value.to_sat(), "confirmations": deep.confirmations}));
-	evidence.finish(&ctx, &srv);
+	evidence.finish(&ctx, &srv).await;
 	restored.stop().await.unwrap();
 }

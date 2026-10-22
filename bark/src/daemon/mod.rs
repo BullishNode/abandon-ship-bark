@@ -432,9 +432,7 @@ impl DaemonProcess {
 			info!("Starting daemon for wallet {}", wallet.fingerprint());
 		}
 
-		if bark_runtime::timeout(self.sync_interval, self.run_startup_tasks()).await.is_err() {
-			warn!("Daemon startup sync exceeded its interval; starting independent protection tasks");
-		}
+		self.run_startup_tasks().await;
 		trace!("Daemon startup tasks complete, starting background processes");
 
 		if self.manual_sync {

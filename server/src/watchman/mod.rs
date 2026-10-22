@@ -466,6 +466,8 @@ impl Watchman {
 					"Expiry split remains pending");
 			}
 		}
+		// Reconcile financial writes from this sweep before waiting for another timer tick.
+		self.rebuild_expiry_state().await?;
 		Ok(())
 	}
 

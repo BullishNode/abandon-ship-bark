@@ -44,6 +44,7 @@ mod blocklist;
 mod block_index;
 mod forfeit;
 mod fallback;
+mod fee_ceiling;
 mod expiry_attribution;
 mod expiry_registration_scale;
 mod expiry_owner_scan;

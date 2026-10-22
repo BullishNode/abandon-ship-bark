@@ -176,7 +176,7 @@ async fn reserved_terminal(reorg:bool,partial:bool) {
 	}).await.expect("normal refund reservations were not committed");
 	srv.watchmand().stop().await.unwrap();
 	// All physical conflicts and fee UTXOs precede the user-claim fork. Thus
-	// old reservations remain genuinely conflicted even when those claims are
+	// old reservations remain conflicted even when those claims are
 	// unconfirmed; neither test nor product assigns that status by hand.
 	for source in sources.iter().take(if partial {1}else{sources.len()}) {
 		let (_,old_parent)=&reserved.by_source[&source.id().to_string()];

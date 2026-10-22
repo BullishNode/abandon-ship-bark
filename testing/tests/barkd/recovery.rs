@@ -123,6 +123,7 @@ async fn recovered_wallet_finds_boarded_vtxo() {
 /// store the output as spendable again.
 #[tokio::test]
 async fn recovered_wallet_keeps_spent_round_vtxo_spent() {
+	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("barkd/recovered_wallet_keeps_spent_round_vtxo_spent").await;
 	let srv = ctx.captaind("server").funded(btc(10)).create().await;
@@ -189,6 +190,7 @@ async fn recovered_wallet_keeps_spent_round_vtxo_spent() {
 /// wallet was gone.
 #[tokio::test]
 async fn recovered_wallet_finds_scheduled_delegated_refresh_output() {
+	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("barkd/recovered_wallet_finds_scheduled_delegated_refresh_output").await;
 	let srv = ctx.captaind("server").funded(btc(10)).create().await;
@@ -240,6 +242,7 @@ async fn recovered_wallet_finds_scheduled_delegated_refresh_output() {
 /// already expired by the time the wallet recovers from seed.
 #[tokio::test]
 async fn recovered_wallet_finds_delegated_refresh_output_expired_output() {
+	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("barkd/recovered_wallet_finds_delegated_refresh_output_expired_output").await;
 	let srv = ctx.captaind("server").funded(btc(10)).create().await;
@@ -1459,6 +1462,7 @@ async fn recovered_wallet_finds_vtxo_only_within_the_gap_limit() {
 /// beyond the wallet's gap limit is recovered anyway.
 #[tokio::test]
 async fn recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub() {
+	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("barkd/recovered_wallet_finds_vtxo_beyond_the_gap_limit_via_xpub").await;
 	let srv = ctx.captaind("server").funded(btc(10)).create().await;

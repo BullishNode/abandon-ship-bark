@@ -243,7 +243,6 @@ async fn payout_ready(
 	let key = source.policy().user_pubkey().to_string();
 	let id = source.id().to_string();
 	let expected = source.amount() - sat(1_000);
-	let started = Instant::now();
 	let mut latencies = Vec::new();
 	let published = tokio::time::timeout(Duration::from_secs(120), async {
 		let mut progress = progress.map(|(traffic, roots, first)| CohortProgress::new(Some(source), traffic, roots, first));
@@ -293,15 +292,8 @@ async fn payout_ready(
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await;
-	println!("child_index={expected_index} lookup_publication_seconds={} registration_requests={}",
-		started.elapsed().as_secs_f64(), latencies.len());
 	let (parent, child, fee) = published.expect("live funded background attribution exceeded the declared 120-second leg budget");
 	assert!(!require_pressure || candidate.is_some() || !latencies.is_empty(), "the funded search must overlap registration pressure");
-	latencies.sort_by(f64::total_cmp);
-	if !latencies.is_empty() {
-		println!("registration_rpc_p50_seconds={} p95_seconds={} p99_seconds={}",
-			latencies[latencies.len()/2], latencies[latencies.len()*95/100], latencies[latencies.len()*99/100]);
-	}
 	let attribution = db.read(async |tx| Ok(tx.query_one(
 		"
 			SELECT mailbox_pk, child_index
@@ -520,7 +512,7 @@ async fn traffic_maintenance(ctx: &TestContext,srv: &Captaind,traffic: &FundedTr
 async fn run_traffic(ctx: &TestContext,srv: &Captaind,db: &Db,traffic: &mut FundedTraffic,search: &Vtxo<Full>) {
 	let start=Instant::now();
 	let mut latencies=Vec::new();
-	let mut rounds=0; let mut credits=BTreeSet::new();
+	let mut credits=BTreeSet::new();
 	let mut completed_during_lookup=0;
 	let search_key=search.policy().user_pubkey().to_string();
 	for batch in 0..60usize {
@@ -539,19 +531,11 @@ async fn run_traffic(ctx: &TestContext,srv: &Captaind,db: &Db,traffic: &mut Fund
 			"SELECT EXISTS(SELECT 1 FROM expiry_pending_key WHERE user_pubkey=$1) AND NOT EXISTS(SELECT 1 FROM expiry_owner_key WHERE user_pubkey=$1)",
 			&[&search_key]).await?.get::<_,bool>(0))).await.unwrap();
 		if start_height>=search.expiry_height().to_u32()+1 && pending_before && unresolved { completed_during_lookup+=2; }
-		if batch%8==7 && Box::pin(traffic_maintenance(ctx,srv,traffic)).await { rounds+=1; }
-		let stats=db.read(async |tx| Ok(tx.query_one("SELECT (SELECT COUNT(*) FROM expiry_pending_key) AS pending, \
-			(SELECT COUNT(*) FROM expiry_scan) AS scans, pg_database_size(current_database()) AS bytes",&[]).await?)).await.unwrap();
-		println!("traffic_completed={} in_flight=0 concurrency_bound=2 elapsed_seconds={} pending_keys={} scan_rows={} database_bytes={}",
-			latencies.len(),start.elapsed().as_secs_f64(),stats.get::<_,i64>("pending"),stats.get::<_,i64>("scans"),stats.get::<_,i64>("bytes"));
+		if batch%8==7 { Box::pin(traffic_maintenance(ctx,srv,traffic)).await; }
 		tokio::time::sleep_until(tokio::time::Instant::from_std(start+Duration::from_secs((batch+1) as u64))).await;
 	}
 	assert_eq!(latencies.len(),120); assert!(start.elapsed()>=Duration::from_secs(60));
 	assert!(completed_during_lookup>0,"no durable transfer completed while the expired funded search remained pending and unresolved");
-	println!("durable_completed_during_unresolved_funded_lookup={completed_during_lookup}");
-	latencies.sort_by(f64::total_cmp);
-	println!("funded_wallets=18 registered=1000 completed_transfers=120 amount_sat=5000 traffic_seconds={} p50={} p95={} p99={} maintenance_rounds={rounds}",
-		start.elapsed().as_secs_f64(),latencies[60],latencies[114],latencies[118]);
 	let wrong=board_key(ctx,&traffic.wallets[0],traffic.reserved).await;
 	let key=traffic.wallets[1].mailbox_keypair();
 	let mailbox=traffic.wallets[1].mailbox_identifier();
@@ -836,7 +820,6 @@ async fn finish_traffic(
 			&funding.into_values().collect::<Vec<_>>(),&residuals,BackingSnapshotLimits { max_rows:16_384,max_serialized_bytes:16*1024*1024 }).unwrap();
 		let charges=sat(1000*payees as u64);
 		assert_eq!(returned,principal+charges);
-		println!("traffic_parent={} authorized_refresh_principal_sat={} customer_charges_sat={}",parent_id,principal.to_sat(),charges.to_sat());
 		assert!(parent.output.iter().all(|out|out.script_pubkey==operator||out.script_pubkey==*bitcoin_ext::fee::P2A_SCRIPT
 			||traffic.destinations.iter().any(|destination|out.script_pubkey==destination.spk)));
 	}
@@ -912,11 +895,9 @@ async fn finish_traffic(
 	let backlog=db.read(async |tx| Ok(tx.query_one("SELECT (SELECT COUNT(*) FROM expiry_pending_key WHERE user_pubkey=ANY($1)) AS cohort, \
 		(SELECT COUNT(*) FROM expiry_pending_key) AS pending, (SELECT COUNT(*) FROM fallback_record) AS registered",&[&keys]).await?)).await.unwrap();
 	assert_eq!(backlog.get::<_,i64>("cohort"),0); assert_eq!(backlog.get::<_,i64>("registered"),1000);
-	println!("traffic_final funded_wallets=18 registered=1000 source_rights={} actual_payout_outputs={} terminal_outputs={} miner_fees_sat={} cohort_pending=0 global_pending={}",
-		ids.len(),paid.len(),terminal.len(),fees.to_sat(),backlog.get::<_,i64>("pending"));
 }
 
-/// An expired, genuinely unregistered raw account becomes payable only after
+/// An expired, unregistered raw account becomes payable only after
 /// its FIRST authenticated registration. This is native/raw admission, not SDK
 /// wallet creation or SDK seed/history recovery (creation already registers).
 #[tokio::test]
@@ -1708,7 +1689,6 @@ async fn expiry_owner_funded_missing_mailbox_search_survives_postgres_restart() 
 		assert_eq!(ctx.bitcoind().sync_client().get_address_info(&address).unwrap().is_mine, Some(true),
 			"every terminal must be actual watchman-owned fee capital or the declared Core-owned operator/seed-drain destination");
 	}
-	println!("owner_search_postgres_restart source={} child=256 payout={} gross_sat=100000 payout_sat=99000 root_sat=800000 actual_total_miner_fees_sat={} seed_recovery={} seed_paid_sat={} seed_miner_fee_sat={}", source.id(), point, fees.to_sat(), recovery.compute_txid(), paid.value.to_sat(), recovery_fee.to_sat());
 	drop(restored);
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();

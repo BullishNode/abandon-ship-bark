@@ -15,7 +15,7 @@ use bitcoin_ext::BlockHeight;
 use server::database::{Db, Tx};
 use server::database::tree::VtxoTreeUpdate;
 
-/// These synthetic VTXOs exercise the policy fetcher and database decoder.
+/// These synthetic VTXOs exercise the claim guard and database decoder.
 /// They do not establish claim authorization, chain settlement, or monetary safety.
 fn sources(amount: Amount, preimage: Preimage) -> Vec<ServerVtxo<Full>> {
 	let key = DUMMY_USER_KEY.public_key();

@@ -949,7 +949,7 @@ impl<'t> Tx<'t> {
 
 	/// Mark only the attempt's fully discharged source set as ln-spent.
 	/// A global preimage or coarse Succeeded alone cannot consume these coins.
-	/// Returns genuinely nonspendable sources left untouched; already-ln-spent
+	/// Returns nonspendable sources left untouched; already-ln-spent
 	/// sources are an idempotent success, not a spurious warning.
 	pub async fn mark_htlc_send_vtxos_ln_spent(
 		&self,

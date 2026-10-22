@@ -363,12 +363,9 @@ async fn expiry_attribution_resolution_scale() {
 		}
 		let (account, mailbox, _) = records.last().unwrap();
 		let wrong = MailboxIdentifier::from_pubkey(records.first().unwrap().1);
-		for (label, child_index, candidate) in [("wrong-mailbox", 17, Some(wrong)), ("absent-mailbox", 18, None)] {
+		for (child_index, candidate) in [(17, Some(wrong)), (18, None)] {
 			let wanted = key(account, child_index);
-			let start = std::time::Instant::now();
 			db.write(async |tx| tx.queue_expiry_owner(wanted, candidate).await).await.unwrap();
-			let mut passes = 0_u64;
-			let mut derived = 0_u64;
 			loop {
 				match owner(&db, wanted).await {
 					Attribution::Owned { mailbox_pk, child_index: found, .. } => {
@@ -381,16 +378,8 @@ async fn expiry_attribution_resolution_scale() {
 				}
 				let stats = db.scan_expiry_owners(Network::Regtest, 10_000, 2).await.unwrap();
 				assert!(stats.children_derived > 0, "unresolved attribution made no progress");
-				derived += stats.children_derived;
-				passes += 1;
 			}
-			let result = serde_json::json!({
-				"records": count, "case": label, "owner_child_index": child_index,
-				"owner_sorted_position": count - 1, "chunk_size_max": 10_000, "workers": 2,
-				"elapsed_seconds": start.elapsed().as_secs_f64(), "children_derived": derived,
-				"passes": passes, "debug_assertions": cfg!(debug_assertions),
-			});
-			println!("{result}");
+
 		}
 	}
 }

@@ -134,7 +134,7 @@ async fn watchman_sweeps_boards() {
 	ctx.refresh_all(&srv, &[&bark1]).await;
 
 	// Stop at the old-board maturity so six confirmation blocks do not
-	// also expire the genuinely later replacement.
+	// also expire the later replacement.
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	assert!(height < original.expiry_height().to_u32());
 	let scan_from = u64::from(original.expiry_height().to_u32());
@@ -862,16 +862,14 @@ async fn watchman_sweeps_arkoor_vtxos_sender_exit() {
 			}
 		}
 	}
-	let mut prior_path_fees = Amount::ZERO;
 	for tx in native_path.values().chain(native_fee_children.values()) {
 		let inputs = tx.input.iter().map(|input| {
 			let previous = core.get_raw_transaction(&input.previous_output.txid, None).unwrap();
 			previous.output[input.previous_output.vout as usize].value
 		}).sum::<Amount>();
 		let outputs = tx.output.iter().map(|output| output.value).sum::<Amount>();
-		prior_path_fees += inputs.checked_sub(outputs).unwrap();
+		let _ = inputs.checked_sub(outputs).unwrap();
 	}
-	println!("Prior native-path fees={prior_path_fees}, sender gross claim=250000, claim fee={claim_fee}; frontier cut=550000 excludes prior funding/change");
 
 	let before_expiry = ctx.bitcoind().get_block_count().await;
 	assert!(customer_sources.iter().all(|coin| u64::from(coin.expiry_height().to_u32()) > before_expiry));
@@ -2204,7 +2202,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 		let mut roots = Vec::new();
 		for row in rows {
 			let id = ark::VtxoId::from_str(row.get("vtxo_id")).unwrap();
-			if id == replacements[1].id() { continue; } // This genuine user-only200k remains outside the sweep.
+			if id == replacements[1].id() { continue; } // This user-only200k remains outside the sweep.
 			let root = db.read(async |tx| tx.get_bare_vtxo_by_id(id).await).await.unwrap().vtxo;
 			if let Some(actual) = core.get_tx_out(&root.point().txid, root.point().vout, Some(true)).unwrap() {
 				assert!(actual.confirmations >= 1);
@@ -2435,7 +2433,6 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 	assert_eq!(seen, expected.keys().cloned().collect());
 	let mut claims = BTreeMap::new();
 	let mut observed = BTreeMap::new();
-	let mut exit_fees = Amount::ZERO;
 	let exit_txs = replacements.iter().take(2).flat_map(|coin| coin.transactions()).map(|step| step.tx).collect::<Vec<_>>();
 	let exit_ids = exit_txs.iter().map(|tx| tx.compute_txid()).collect::<BTreeSet<_>>();
 	let exit_anchors = exit_txs.iter().flat_map(|tx| tx.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor())
@@ -2443,7 +2440,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 	for height in scan_from..=ctx.bitcoind().get_block_count().await {
 		for tx in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
 			if tx.input.iter().any(|input| input.previous_output == replacements[0].point()) { claims.insert(tx.compute_txid(), tx.clone()); }
-			if exit_ids.contains(&tx.compute_txid()) || tx.input.iter().any(|input| exit_anchors.contains(&input.previous_output)) { exit_fees += raw_fee(&tx); }
+			if exit_ids.contains(&tx.compute_txid()) || tx.input.iter().any(|input| exit_anchors.contains(&input.previous_output)) { raw_fee(&tx); }
 			for (index, output) in tx.output.iter().enumerate().filter(|(_, output)|
 				destinations.iter().any(|destination| destination.spk == output.script_pubkey) || output.script_pubkey == claim_address.script_pubkey()) {
 				observed.insert(OutPoint::new(tx.compute_txid(), index as u32), output.clone());
@@ -2471,7 +2468,6 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 	assert_eq!(unclaimed.value, sat(200_000));
 	assert_eq!(unclaimed.script_pub_key.script().unwrap(), replacements[1].output_script_pubkey());
 	assert_canonical_watchman_tx(&ctx, &core.get_raw_transaction(&replacements[1].point().txid, None).unwrap());
-	println!("Separate user native exit package fees {}, claim fee {}; user1 retains200k unclaimed", exit_fees, claim_fee);
 	failures.assert_empty();
 }
 
@@ -3368,7 +3364,6 @@ async fn watchman_sweeps_offboard_forfeit_after_confiscation() {
 
 	let mut prior_children = Vec::new();
 	let mut delivered = BTreeMap::new();
-	let mut exit_package_fee = Amount::ZERO;
 	let exit_txs = source.transactions().map(|step| step.tx).collect::<Vec<_>>();
 	let exit_anchors = exit_txs.iter().flat_map(|tx| tx.output.iter().enumerate()
 		.filter(|(_, output)| output.is_p2a_fee_anchor()).map(|(index, _)| OutPoint::new(tx.compute_txid(), index as u32))).collect::<BTreeSet<_>>();
@@ -3376,7 +3371,7 @@ async fn watchman_sweeps_offboard_forfeit_after_confiscation() {
 		for tx in client.get_block(&client.get_block_hash(height).unwrap()).unwrap().txdata {
 			if tx.input.iter().any(|input| input.previous_output == anchor) { prior_children.push(tx.clone()); }
 			if exit_txs.iter().any(|exit| exit.compute_txid() == tx.compute_txid())
-				|| tx.input.iter().any(|input| exit_anchors.contains(&input.previous_output)) { exit_package_fee += raw_fee(&tx); }
+				|| tx.input.iter().any(|input| exit_anchors.contains(&input.previous_output)) { raw_fee(&tx); }
 			for (index, output) in tx.output.iter().enumerate() {
 				assert_ne!(output.script_pubkey, destination.spk, "offboarded principal must not be paid again to the customer");
 				if output.script_pubkey == payout.script_pubkey() {
@@ -3425,7 +3420,6 @@ async fn watchman_sweeps_offboard_forfeit_after_confiscation() {
 	assert_eq!(customer_allocations, 0);
 	assert_eq!(srv.wallet_status().await.rounds.total_balance, rounds_balance + msg.total_output_value,
 		"the actual operator net claim must land in the rounds wallet");
-	println!("Prior native exit package fee outside the selected frontier: {}", exit_package_fee);
 	failures.assert_empty();
 }
 

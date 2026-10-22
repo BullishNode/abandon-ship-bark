@@ -566,7 +566,7 @@ async fn pay_hold_refused() {
 					}
 					let core = ctx.bitcoind().sync_client();
 					if let Some(txid) = core.get_raw_mempool().unwrap().into_iter().find(|txid| pending_prefixes.contains(txid)) {
-						assert!(pending_prefixes.remove(&txid)); // Each actual signed prefix can authorize one batch.
+						assert!(pending_prefixes.remove(&txid)); // Each signed prefix can authorize one batch.
 						mined_prefix_blocks = mined_prefix_blocks.checked_add(blocks_per_prefix).unwrap();
 						assert!(mined_prefix_blocks <= prefix_block_budget);
 						let tip = ctx.generate_blocks(blocks_per_prefix).await;
@@ -1058,7 +1058,7 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 			}
 			let core = ctx.bitcoind().sync_client();
 			if let Some(txid) = core.get_raw_mempool().unwrap().into_iter().find(|txid| pending_prefixes.contains(txid)) {
-				assert!(pending_prefixes.remove(&txid)); // Each actual signed prefix can authorize one batch.
+				assert!(pending_prefixes.remove(&txid)); // Each signed prefix can authorize one batch.
 				mined_prefix_blocks = mined_prefix_blocks.checked_add(blocks_per_prefix).unwrap();
 				assert!(mined_prefix_blocks <= prefix_block_budget);
 				let tip = ctx.generate_blocks(blocks_per_prefix).await;

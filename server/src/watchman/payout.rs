@@ -47,10 +47,9 @@ async fn mempool_child_fee(client: &bitcoind_async_client::Client, txid: Txid) -
 impl Watchman {
 	async fn payout_inputs(
 		&self, vtxos: &[ServerVtxo],
-	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount, usize)> {
+	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount)> {
 		let mut inputs = Vec::with_capacity(vtxos.len());
 		let mut clauses = Vec::with_capacity(vtxos.len());
-		let mut total_input_weight = 0;
 		let mut total_input_amount = Amount::ZERO;
 
 		for vtxo in vtxos {
@@ -63,8 +62,6 @@ impl Watchman {
 					witness: Witness::new(),
 				};
 
-				// TxIn base weight (non-witness) + witness weight
-				total_input_weight += 4 * input.base_size() + (1 + 1 + 64); // nb items + sig
 				total_input_amount = total_input_amount.checked_add(vtxo.amount()).context("claim input amount overflow")?;
 
 				inputs.push(input);
@@ -81,8 +78,6 @@ impl Watchman {
 					witness: Witness::new(),
 				};
 
-				// TxIn base weight (non-witness) + witness weight
-				total_input_weight += 4 * input.base_size() + clause.witness_size(vtxo);
 				total_input_amount = total_input_amount.checked_add(vtxo.amount()).context("claim input amount overflow")?;
 
 				inputs.push(input);
@@ -94,7 +89,7 @@ impl Watchman {
 			);
 		}
 
-		Ok((inputs, clauses, total_input_amount, total_input_weight))
+		Ok((inputs, clauses, total_input_amount))
 	}
 	async fn sign_payout_inputs(
 		&self, vtxos: &[ServerVtxo], clauses: &[Option<VtxoClause>], mut tx: Transaction,
@@ -146,7 +141,7 @@ impl Watchman {
 				"expiry payout backing is not the exact confirmed output");
 		}
 		ensure!(payouts.iter().all(|out| out.is_standard()), "expiry payout contains nonstandard or dust payee output");
-		let (inputs, clauses, input_amount, _) = self.payout_inputs(vtxos).await?;
+		let (inputs, clauses, input_amount) = self.payout_inputs(vtxos).await?;
 		let paid = payouts.iter().try_fold(Amount::ZERO, |sum, out|
 			sum.checked_add(out.value).context("expiry payout amount overflow"),
 		)?;

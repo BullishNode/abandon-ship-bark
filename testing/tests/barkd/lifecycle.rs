@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use tokio::process::Command;
 
-use ark_testing::TestContext;
+use ark_testing::{TestContext, require_bark_version};
 use ark_testing::constants::env::BARK_EXEC;
 use ark_testing::daemon::barkd::{Barkd, BarkdChainSource};
 use ark_testing::ports::pick_port;
@@ -16,6 +16,7 @@ use bark_rest_client::models::WalletDeleteRequest;
 /// CLI creation must not change a datadir that a daemon owns, even without a wallet.
 #[tokio::test]
 async fn cli_create_refuses_running_daemon() {
+	require_bark_version!(> "0.7.1");
 	let bark_exec = resolve_path(std::env::var(BARK_EXEC).expect("BARK_EXEC env not set"))
 		.expect("failed to resolve BARK_EXEC");
 	let ctx = TestContext::new_minimal("barkd/cli_create_refuses_running_daemon").await;

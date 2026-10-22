@@ -205,7 +205,7 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 	wm.wait_for_sync_height(tip).await;
 	assert!(tip >= expiry, "the vtxo should be expired, tip {} expiry {}", tip, expiry);
 
-	// Wait for a genuinely broadcast native customer parent, never inject a financial decision.
+	// Wait for a broadcast native customer parent, never inject a financial decision.
 	let parent = async {
 		'found: loop {
 			wm.trigger_sweep().await;
@@ -378,7 +378,7 @@ async fn watchman_sweeps_funding_tx_during_exit() {
 	}
 }
 
-/// Race a genuinely partial exit chain against the native registered-customer
+/// Race a partial exit chain against the native registered-customer
 /// payout path; both same-root owners must receive their exact net principal once.
 #[tokio::test]
 async fn watchman_sweeps_vtxo_chain_during_exit() {
@@ -480,7 +480,7 @@ async fn watchman_sweeps_vtxo_chain_during_exit() {
 	wm.wait_for_sync_height(tip).await;
 	assert!(tip >= expiry, "the vtxo should be expired, tip {} expiry {}", tip, expiry);
 
-	// Wait for a genuinely broadcast native customer parent, never inject a financial decision.
+	// Wait for a broadcast native customer parent, never inject a financial decision.
 	let parent = async {
 		let mut advances = 0;
 		'found: loop {

@@ -344,7 +344,7 @@ async fn partial_conflict_reorg() {
 			cfg.vtxo_lifetime = BlockDelta::new(24);
 			cfg.vtxo_exit_delta = BlockDelta::new(3);
 		}).watchmand().create().await;
-	// Keep the watchman genuinely unfunded until the alternate branch. The
+	// Keep the watchman unfunded until the alternate branch. The
 	// original immutable parent and later regroup must not broadcast early.
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	let wallet = ctx.bark("holder", &srv).cfg(|cfg| cfg.daemon_manual_sync = true).create().await;

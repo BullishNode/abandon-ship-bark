@@ -245,11 +245,7 @@ async fn history_projection_agrees_after_protective_exit_payout_and_reorg() {
 	assert_eq!(receipts[0].sent_to, vec![MovementDestination::new(payout_method, sat(99_000))]);
 	assert_one_principal_debit(&paid, coin.id(), receipt_id);
 	assert_eq!(owner.balance().await.unwrap().total(), sat(0));
-	let sample_movements = db.get_all_movements().await.unwrap().len();
-	let sample_entitlements = db.get_fallback_snapshot().await.unwrap().entitlements.len();
-	let sample_started = std::time::Instant::now();
 	let sampled_query = owner.history_by_payment_method(&exit_method).await.unwrap();
-	let query_sample_us = sample_started.elapsed().as_micros();
 	assert_eq!(sampled_query, vec![exit.clone()]);
 	drop(owner);
 	let owner = Box::pin(reopen(&ctx, "owner", &srv)).await;
@@ -277,10 +273,6 @@ async fn history_projection_agrees_after_protective_exit_payout_and_reorg() {
 	let owner = Box::pin(reopen(&ctx, "owner", &srv)).await;
 	assert_eq!(assert_history_views(&owner, &methods).await, reorged, "offline reopen must retain reversal");
 	assert_one_principal_debit(&owner.history().await.unwrap(), coin.id(), exit_id);
-	log::info!("History deep client reversal: coin={}, parent={}, payout={}, payout_sat=99000, output_fee_sat=1000, removed_block={}, exit_id={}, fallback_id={}, scan_after_height={}",
-		coin.id(), parent.compute_txid(), outputs[0].0, confirmation_hash, exit_id, receipt_id, scan_start);
-	log::info!("History query sample: elapsed_us={}, stored_movements={}, entitlements={}, matched_rows={}",
-		query_sample_us, sample_movements, sample_entitlements, sampled_query.len());
 }
 
 #[tokio::test]
@@ -423,9 +415,6 @@ async fn history_native_and_other_device_claim_share_one_principal_debit() {
 	let claimant = Box::pin(reopen(&ctx, "claimant", &srv)).await;
 	assert_eq!(assert_history_views(&observer, &methods).await, remote_history);
 	assert_eq!(assert_history_views(&claimant, &methods).await, native_history);
-	log::info!("History two-device claim: coin={}, txid={}, block={}, height={}, gross_sat=100000, paid_sat={}, miner_fee_sat={}, native_id={}, other_device_id={}, scan_after_height={}",
-		coin.id(), claim.compute_txid(), block, height, claim.output[0].value.to_sat(), miner_fee.to_sat(),
-		movement, exits[0].id, scan_start);
 }
 
 #[tokio::test]
@@ -464,11 +453,7 @@ async fn history_payment_method_queries_preserve_order_and_variant_identity() {
 		assert!(row.input_vtxos.is_empty() && row.output_vtxos.is_empty() && row.exited_vtxos.is_empty());
 	}
 	for (method, expected) in methods.iter().zip(&ids) {
-		let started = std::time::Instant::now();
 		let queried = wallet.history_by_payment_method(method).await.unwrap();
-		let query_sample_us = started.elapsed().as_micros();
-		log::info!("History query-only sample: method={:?}, elapsed_us={}, stored_movements={}, matched_rows={}",
-			method, query_sample_us, full.len(), queried.len());
 		assert_eq!(queried.iter().map(|row| row.id).collect::<Vec<_>>(), *expected);
 	}
 	assert_ne!(ids[0], ids[1], "equal scripts do not erase the payment-method variant");

@@ -1298,7 +1298,7 @@ impl Exit {
 			.map_err(|error| ExitError::InternalError { error: error.to_string() })?;
 		// A child may have been prepared before a complete ordinary proof was
 		// checkpointed. Check BEFORE the broadcast, not only in later progress.
-		// A genuinely live sibling may still need this exact shared ancestor.
+		// A live sibling may still need this exact shared ancestor.
 		let mut owners = Vec::new();
 		let mut blocked = snapshot.verified_ordinary_spends.clone();
 		for exit in inner.exit_vtxos.iter().filter(|exit|

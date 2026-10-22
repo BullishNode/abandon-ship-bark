@@ -247,7 +247,7 @@ impl Tx<'_> {
 			.context("internal receive funding disappeared")?;
 		ensure!(current.attempt.id == funding.attempt.id, "internal funding attempt changed");
 		if current.claim_complete || self.internal_receive_collected(subscription_id, hash).await? {
-			return Ok(()); // Actual prior commitment, never a coarse attempt flag.
+			return Ok(()); // Prior commitment, never a coarse attempt flag.
 		}
 		let rows = self.query("
 			SELECT v.vtxo_id,v.spend_state::TEXT,h.direction::TEXT,h.payment_hash,

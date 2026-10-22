@@ -454,7 +454,7 @@ mod test {
 		let response = BoardBuilder::new_for_cosign(board.user_pubkey(), board.expiry_height(), board.server_pubkey(),
 			board.exit_delta(), snapshot.roots[0].amount(), Amount::from_sat(331), board.chain_anchor(), *user.user_pub_nonce())
 			.server_cosign(&VTXO_VECTORS.server_key);
-		// The public fixture's board key signs a genuinely valid alternative,
+		// The public fixture's board key signs a valid alternative,
 		// spending the same funding with a different fee/output partition.
 		let key = Keypair::from_str("fab9e598081a3e74b2233d470c4ad87bcc285b6912ed929568e62ac0e9409879").unwrap();
 		let alternative = user.build_vtxo(&response, &key).unwrap();

@@ -798,6 +798,8 @@ async fn interactive_round_redelegates_the_inputs_it_did_not_take() {
 	//! the two a round will pick. The round settles it, taking the shared
 	//! input, and the inputs it did not take are re-delegated.
 
+	require_bark_version!(> "0.7.1");
+
 	// Unlike the other round participation tests, this one drives its
 	// refreshes through the CLI, so it exercises the bark binary under test
 	// rather than the current bark-wallet crate. It needs a binary that

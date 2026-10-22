@@ -171,8 +171,5 @@ async fn server_and_watchman_seed_only_recover_receipts_and_change() {
 		assert_eq!(sat(120_000), sat(50_000) + sat(20_000) + first_fee + second_fee + remainder.value);
 		let index = second.output.iter().position(|o| o == remainder).unwrap();
 		assert_unspent(core, OutPoint::new(second.compute_txid(), index as u32), remainder.value);
-		log::info!("{} seed recovery: receipts={:?}, first_spend={}, change={}, second_spend={}, miner_fees={} sat, remainder={} sat",
-			kind.name(), points, first.compute_txid(), change_point, second.compute_txid(),
-			(first_fee + second_fee).to_sat(), remainder.value.to_sat());
 	}
 }

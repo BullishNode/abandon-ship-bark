@@ -177,7 +177,7 @@ async fn expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_ch
 	let coin = client.get_full_vtxo(ids[0]).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
 	drop(client);
-	// Two genuinely confirmed funding outputs allow a replacement to select
+	// Two confirmed funding outputs allow a replacement to select
 	// another usable sponsor while the first child remains in the mempool.
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	for _ in 0..2 { ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await; }

@@ -1,7 +1,7 @@
 //! Real-size native splitting. Run explicitly with the fallback-scale profile.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
 use ark::fallback::FallbackRecord;
@@ -22,7 +22,6 @@ use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::Db;
 use server::database::expiry_inventory::{BackingPartitionResidual, BackingSnapshotLimits};
 use server_rpc::protos;
-use log::info;
 
 const PAYEES: usize = 327;
 const LEAF_SAT: u64 = 5_000;
@@ -191,7 +190,6 @@ async fn expiry_bounded_round_inventory_splits_and_pays_every_owner() {
 
 async fn bounded_round_inventory() {
 	const COUNT: usize = 4096;
-	let started = Instant::now();
 	let ctx = TestContext::new("server/expiry_bounded_round_inventory").await;
 	let srv = Box::pin(ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
 		.cfg(|cfg| {
@@ -325,17 +323,14 @@ async fn bounded_round_inventory() {
 	let limits = BackingSnapshotLimits { max_rows: 250_000, max_serialized_bytes: 256 * 1024 * 1024 };
 	let root = db.read(async |tx| Ok(tx.get_bare_vtxo_by_id(ark::VtxoId::from(anchor)).await?.vtxo))
 		.await.unwrap();
-	let snapshot_started = Instant::now();
 	let snapshot = db.read(async |tx| tx.backing_snapshot(std::slice::from_ref(&root), limits).await)
 		.await.unwrap();
-	let snapshot_elapsed = snapshot_started.elapsed();
 	let residuals = signed_paths.values().flat_map(|tx| tx.output.iter().enumerate().filter_map(|(vout, output)| {
 		output.is_p2a_fee_anchor().then_some(BackingPartitionResidual {
 			outpoint: OutPoint::new(tx.compute_txid(), vout as u32), txout: output.clone(),
 		})
 	})).collect::<Vec<_>>();
 	let sources = terminals.iter().map(|(_, leaf)| ark::ServerVtxo::from(leaf.clone())).collect::<Vec<_>>();
-	let proof_started = Instant::now();
 	let partition = snapshot.check_partition(&sources, std::slice::from_ref(&funding), &residuals, limits).unwrap();
 	assert_eq!(partition.roots.len(), 1);
 	assert_eq!(partition.roots[0].terminals.len(), COUNT);
@@ -355,8 +350,6 @@ async fn bounded_round_inventory() {
 	assert!(bytes > 0 && bytes < 256 * 1024 * 1024);
 	assert_eq!(snapshot.regular.len(), rows as usize);
 	assert_eq!(snapshot.serialized_bytes, bytes as usize);
-	info!("round inventory: {rows} rows/{bytes} bytes in {snapshot_elapsed:?}; proof: {proof_rows} rows/{proof_bytes} bytes in {:?}; build {:?}",
-		proof_started.elapsed(), started.elapsed());
 	let mut mailbox = srv.get_mailbox_public_rpc().await;
 	let mailbox_pubkey = srv.ark_info().await.mailbox_pubkey;
 	for (index, leaf) in &terminals {
@@ -403,7 +396,6 @@ async fn bounded_round_inventory() {
 			}
 		}
 	}
-	info!("round inventory and all payouts completed in {:?}", started.elapsed());
 }
 
 async fn automatic_multilevel_split() {
@@ -761,7 +753,6 @@ async fn finish_payouts(
 			external_inputs += expected.value.to_sat();
 			remaining += actual.value.to_sat();
 		}
-		info!("complete declared backing and fee cut: {external_inputs} = {remaining} terminal + {fees} miner sat");
 	}
 	assert_eq!(external_inputs, remaining + fees, "actual canonical DAG must conserve principal and sponsor funds");
 }

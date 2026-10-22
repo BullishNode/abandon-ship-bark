@@ -563,7 +563,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 	})
 }
 
-/// Two genuinely different internal payments share one original customer
+/// Two different internal payments share one original customer
 /// backing. Every grant set must close together; per-attempt readiness cannot
 /// permanently hold each one behind the other's unresolved source.
 #[tokio::test]

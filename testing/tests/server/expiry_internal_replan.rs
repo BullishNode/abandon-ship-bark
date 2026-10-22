@@ -18,7 +18,6 @@ use bitcoin_ext::{BlockDelta, BlockHeight, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi, json::SignRawTransactionInput};
 use server::database::Db;
 use server_rpc::protos;
-use log::info;
 
 // Keep large debug create futures off the native test poll frame.
 #[inline(never)]
@@ -229,8 +228,6 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 	assert!(!controller.list_unspent(Some(1), None, None, None, None).unwrap().iter()
 		.any(|coin| OutPoint::new(coin.txid, coin.vout) == reserve_point),
 		"the manual CPFP helper's exact listunspent path must exclude the genuine reserve");
-	info!("Locked canonical controller recovery reserve before normal grant progress: outpoint={} amount_sat={} script={} confirmations={}",
-		reserve_point, reserve.amount.to_sat(), reserve.script_pub_key, reserve_output.confirmations);
 	confirm_original_grants(&ctx, &grants).await;
 	drop(sender);
 	drop(recipient);
@@ -420,8 +417,6 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 	assert!(rpc.call::<bool>("lockunspent", &[serde_json::json!(true), lock_arg]).unwrap());
 	assert!(rpc.list_unspent(Some(1), None, None, None, None).unwrap().iter()
 		.any(|coin| OutPoint::new(coin.txid, coin.vout) == reserve_point));
-	info!("Unlocked independently confirmed controller recovery funds after actual fork: outpoint={} amount_sat={} confirmations={}",
-		reserve_point, actual.value.to_sat(), actual.confirmations);
 	// Keep the same four sponsor deposits and the same two blocks;
 	// no abandonment, financial SQL, injected principal or retry is used.
 	for _ in 0..4 {

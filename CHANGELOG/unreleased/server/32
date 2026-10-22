@@ -3,4 +3,5 @@
   expired receiver grants before an internal Lightning refund, at depth six.
   Retain confirmed user exit claims for rebroadcast after supported reorgs.
   [#32](https://github.com/BullishNode/abandon-ship-bark/pull/32)
-  - **BREAKING:** The fork defines a fresh schema. Earlier fork databases are refused.
+  - **BREAKING:** The fork defines a fresh schema. Fresh stores are required;
+    earlier fork formats are not converted.

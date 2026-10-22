@@ -800,6 +800,7 @@ async fn bark_claims_lightning_receive_after_blocks_mined(
 	srv: &Captaind,
 	pay: impl AsyncFn(String),
 ) {
+	require_bark_version!(> "0.7.1");
 
 	srv.wait_for_vtxopool(&ctx).await;
 

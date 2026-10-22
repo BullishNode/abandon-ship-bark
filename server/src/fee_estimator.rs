@@ -75,7 +75,7 @@ pub struct Config {
 	/// Fallback fee rate for slow transactions when estimation fails.
 	#[serde(with = "crate::utils::serde::fee_rate")]
 	pub fallback_fee_rate_slow: FeeRate,
-	/// Optional ceiling applied to every fetched fee rate.
+	/// Optional ceiling applied to fetched and fallback fee rates.
 	///
 	/// If the backend returns a rate above this value (e.g. due to a bad
 	/// mempool spike), it is clamped down to this maximum instead of being
@@ -106,10 +106,14 @@ pub struct FeeEstimator {
 
 impl FeeEstimator {
 	fn new(
-		initial: OnchainFeeRates,
+		mut initial: OnchainFeeRates,
 		history_duration: Duration,
 		max_fee_rate: Option<FeeRate>,
 	) -> Self {
+		if let Some(max) = max_fee_rate {
+			initial.clamp(max);
+		}
+
 		Self {
 			fee_rates: parking_lot::RwLock::new([(initial, Instant::now())].into()),
 			history_duration, max_fee_rate,
@@ -356,6 +360,63 @@ mod test {
 			Duration::from_secs(3600),
 			None,
 		)
+	}
+
+	fn assert_initial_rates(est: &FeeEstimator, fast: u64, regular: u64, slow: u64) {
+		let d = Duration::from_secs(3600);
+		assert_eq!(est.fast(), rate(fast));
+		assert_eq!(est.regular(), rate(regular));
+		assert_eq!(est.slow(), rate(slow));
+		assert!(est.is_historical_fast_rate(rate(fast), d));
+		assert!(est.is_historical_regular_rate(rate(regular), d));
+		assert!(est.is_historical_slow_rate(rate(slow), d));
+		assert!(!est.is_historical_fast_rate(rate(fast + 1), d));
+		assert!(!est.is_historical_regular_rate(rate(regular + 1), d));
+		assert!(!est.is_historical_slow_rate(rate(slow + 1), d));
+	}
+
+	#[test]
+	fn initial_rates_clamp_all_targets_and_history() {
+		let est = FeeEstimator::new(
+			OnchainFeeRates { fast: rate(30), regular: rate(20), slow: rate(10) },
+			Duration::from_secs(3600), Some(rate(5)),
+		);
+		assert_initial_rates(&est, 5, 5, 5);
+	}
+
+	#[test]
+	fn initial_rates_below_ceiling_are_unchanged() {
+		let est = FeeEstimator::new(
+			OnchainFeeRates { fast: rate(9), regular: rate(5), slow: rate(2) },
+			Duration::from_secs(3600), Some(rate(10)),
+		);
+		assert_initial_rates(&est, 9, 5, 2);
+	}
+
+	#[test]
+	fn initial_rates_without_ceiling_are_unchanged() {
+		let est = estimator(30, 20, 10);
+		assert_initial_rates(&est, 30, 20, 10);
+	}
+
+	#[test]
+	fn rate_updates_retain_bounded_quote_history() {
+		let est = FeeEstimator::new(
+			OnchainFeeRates { fast: rate(3), regular: rate(2), slow: rate(1) },
+			Duration::from_secs(3600), Some(rate(10)),
+		);
+		est.update(OnchainFeeRates { fast: rate(30), regular: rate(20), slow: rate(15) });
+		assert_eq!((est.fast(), est.regular(), est.slow()), (rate(10), rate(10), rate(10)));
+		est.update(OnchainFeeRates { fast: rate(4), regular: rate(3), slow: rate(2) });
+		assert_eq!((est.fast(), est.regular(), est.slow()), (rate(4), rate(3), rate(2)));
+
+		let d = Duration::from_secs(3600);
+		assert!(est.is_historical_fast_rate(rate(10), d));
+		assert!(est.is_historical_regular_rate(rate(10), d));
+		assert!(est.is_historical_slow_rate(rate(10), d));
+		assert!(!est.is_historical_fast_rate(rate(11), d));
+		assert!(!est.is_historical_regular_rate(rate(11), d));
+		assert!(!est.is_historical_slow_rate(rate(11), d));
 	}
 
 	#[test]

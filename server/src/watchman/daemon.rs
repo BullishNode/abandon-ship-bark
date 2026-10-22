@@ -92,7 +92,7 @@ impl Daemon {
 		let _wallet = PersistedWallet::load_from_xpriv(
 			db.clone(), bitcoind.clone(), cfg.network, &wallet_xpriv, WalletKind::Watchman, deep_tip,
 			cfg.min_trusted_confs,
-		);
+		).await?;
 
 		Ok(())
 	}

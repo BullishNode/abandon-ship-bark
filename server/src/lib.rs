@@ -274,7 +274,7 @@ impl Server {
 			let _wallet = PersistedWallet::load_derive_from_master_xpriv(
 				db.clone(), bitcoind.clone(), cfg.network, &master_xpriv, wallet, deep_tip,
 				cfg.min_trusted_confs,
-			);
+			).await?;
 		}
 
 		Ok(())

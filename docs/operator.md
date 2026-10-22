@@ -91,12 +91,11 @@ captaind -C /path/to/captaind.toml create
 ```
 
 `create` initializes the database and writes `mnemonic` in the server data
-directory. It waits for the rounds and watchman wallet states to commit before
-it returns success. Each initial wallet state includes the creation-time deep
-chain checkpoint. It does not generate a config file. Schema creation, seed-file
-creation and the two wallet stores are separate operations. A failure can leave
-partial state. Stop on any error and preserve the data directory and database.
-Do not retry initialization by removing the seed or clearing the database.
+directory. It does not generate a config file. Schema creation, seed-file
+creation and the two wallet stores are separate operations. Command success does
+not establish an atomic initialization. A failure can leave partial state.
+Preserve the data directory and database on any error. Do not retry
+initialization by removing the seed or clearing the database.
 
 There is no `watchmand create` CLI command. The watchman must read the same
 seed phrase and database as its server. Provision an owner-only copy of the
@@ -107,9 +106,15 @@ for the watchman. Retain a private backup before funding the wallets.
 
 ## Configure and start
 
-Keep the server and watchman admin ports on loopback or a private management
-network. Their admin RPC is not authenticated. Protect the PostgreSQL and
-Lightning endpoints with the deployment's existing access controls.
+Bind the server and watchman admin ports to loopback. Their admin RPC has no
+authentication. The operator must enforce this restriction in the configuration,
+firewall and network routing. Do not proxy admin RPC to public clients. Protect
+PostgreSQL, Lightning and integration endpoints with the same deployment controls.
+
+If a reverse proxy serves the public API, the operator must authenticate access
+where required, restrict its upstream to the public API and remove untrusted
+forwarded-address headers. The daemon does not enforce proxy trust or isolate
+admin methods for the operator.
 
 Validate both configuration files before starting the services:
 
@@ -123,9 +128,9 @@ assumption excludes reorgs that remove 6 or more blocks. It includes reorgs that
 remove 1 through 5 blocks. This assumption does not make bitcoin finality
 absolute. Qualification of the reorg boundary remains incomplete.
 
-Set `min_trusted_confs` to at least 1 in both daemon configurations. Both daemons
-reject zero. This minimum keeps unconfirmed third-party deposits out of trusted
-fee spending.
+Set `min_trusted_confs` to at least 1 in both daemon configurations. Check the
+value in the deployment configuration; do not rely on rejection of zero. Check
+fee inputs against the node before use.
 
 For the short public-Signet configuration, use `vtxo_lifetime = 16` or
 longer. With two board confirmations and the native client's 12-block exit
@@ -160,13 +165,13 @@ validate it before restart. Server environment overrides use `BARK_SERVER__`,
 for example
 `BARK_SERVER__BITCOIND__COOKIE`. Watchman overrides use `WATCHMAND__`, for
 example `WATCHMAND__POSTGRES__PORT`. Nested keys use `__`.
-Inspect the actual supervisor environment as well as the files. Config
+Inspect the supervisor environment as well as the files. Config
 validation does not establish liquidity, throughput or safe deadlines.
 
 | Area | Configuration keys and effect |
 | --- | --- |
 | Board fee | `[fees.board]`: `min_fee_sat`, `base_fee_sat`, `ppm`; charge the greater of the minimum and base plus rounded-up proportional fee. |
-| Offboard fee | `[fees.offboard]`: `base_fee_sat`, `fixed_additional_vb`, `ppm_expiry_table`; includes a feerate charge for fixed bytes plus destination script bytes. Account for the actual miner fee separately. |
+| Offboard fee | `[fees.offboard]`: `base_fee_sat`, `fixed_additional_vb`, `ppm_expiry_table`; includes a feerate charge for fixed bytes plus destination script bytes. Account for the miner fee separately. |
 | Refresh fee | `[fees.refresh]`: `base_fee_sat`, `ppm_expiry_table`; charge each refresh, including repeated refreshes. |
 | Lightning receive fee | `[fees.lightning_receive]`: `base_fee_sat`, `ppm`. |
 | Lightning send fee | `[fees.lightning_send]`: `min_fee_sat`, `base_fee_sat`, `ppm_expiry_table`. `ln_max_fee_ppm` assigns a fraction of that customer fee to CLN's routing budget. Additional input value beyond principal plus the fee also increases that budget. |
@@ -175,7 +180,7 @@ validation does not establish liquidity, throughput or safe deadlines.
 | Chain timing | `vtxo_lifetime`, `vtxo_exit_delta`, `required_board_confirmations`, `min_trusted_confs`, `expiry_internal_refund_depth`, `require_board_funding_tx`, `allow_expired_arkoor`, `nursery_confirm_target_blocks`. Refund depth defaults to 6 and validation rejects lower values. |
 | Lightning timing | `htlc_expiry_delta`, `htlc_send_expiry_delta`, `max_htlc_expiry_delta`, `max_user_invoice_cltv_delta`, `invoice_expiry`, `receive_htlc_forward_timeout`, `cln_xpay_timeout`, `cln_xpay_max_retry_for`. A retry deadline does not prove payment failure. |
 | Receive admission and pool | `ln_receive_anti_dos_required`; `[vtxopool]`: `vtxo_targets`, `vtxo_target_issue_threshold`, `vtxo_lifetime`, `vtxo_pre_expiry`, `max_vtxo_exit_depth`. Reserve liquidity and test replenishment under the declared load. |
-| Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons separately. The ceiling applies to initial fallback rates and all later fetched or fallback rates. |
+| Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons separately. Check initial fallback rates separately from later estimates. |
 | Watchman policy | `[watchman]`: `reaction_interval`, `sweep_interval`, `progress_grace_period`, `claim_chunksize`, `incremental_relay_fee`, `min_cpfp_amount`, `expiry_fee_warning`. The warning defaults to `"10000 sat"` even when absent from the template. |
 | Attribution and recovery | `expiry_owner_scan_chunk_size`, `expiry_owner_scan_workers`, `recovery_xpub_nb_keys`, `max_read_mailbox_items`; PostgreSQL `max_connections`, `connection_timeout_secs`, `idle_timeout_secs`. |
 | Offboard sessions | `offboard_session_timeout`, `offboard_check_interval`, `offboard_acceptable_fee_rate_duration`; the check interval must not exceed the timeout. |
@@ -188,30 +193,35 @@ client does not automatically split it to fit. Plan its emergency exit before
 you reduce that limit.
 
 Both templates start with fallback feerates of 25, 10 and 4 sat/vB for the fast,
-regular and slow targets. `max_fee_rate` is unset by default, with no ceiling.
-When set, it clamps these initial rates before they are available to other
-workers. It also clamps later estimates when the backend succeeds or fails.
-A restart clears the in-memory fee history and starts from the configured
-fallback rates under that ceiling. A ceiling can delay confirmation during a
-fee spike. It is not a total miner-fee or operator-subsidy budget.
+regular and slow targets. A restart clears the in-memory fee history and starts
+from those configured rates. The optional `max_fee_rate` applies to later
+updates, not the initial fallback rates. Neither it nor any other setting caps
+the total miner fee or operator subsidy.
 
-The current fallback output fee is fixed in code at 1,000 sats. There is no
-TOML key for it. Within an allocation, leaves with the same payout script
-share one output fee. If gross minus the fee is below that script's dust
-threshold, the entire group is forfeited and no output fee is recorded.
-Unknown ownership is never this dust case. Miner fees come from the watchman
-fee child, separately from customer outputs. There is no enforced operator
-subsidy cap. Do not describe this candidate as having every fee configurable.
-No setting establishes a guaranteed payout deadline or a qualified capacity.
+The fallback payout fee is fixed in code. For each owner payout script and expiry
+height, let `G` be the gross value paid so far, including the new output. The
+cumulative fee is `max(1000, ceil(G / 100))` sats. The new output pays that fee
+minus the fees already charged by non-conflicted allocations for the same script
+and height. Splitting payment across allocations therefore costs no more than
+one payment of the combined gross amount. Different scripts or expiry heights
+have separate fees. There is no TOML key for this fee.
 
-Account for a board service fee separately from the fallback output fee. For
-a direct payout of one unprogressed board, let `G` be its physical backing
-value and `F` its board service fee. The signed customer VTXO has value
-`N = G - F`. If `N - 1000` meets the payout script's dust threshold, the
-customer output is `N - 1000` sats. The zero-fee payout parent returns
-`F + 1000` sats to the operator. Do not deduct `F` from `N` a second time. Account
-for the original board miner fee and the watchman fee child's miner fee
-separately.
+A group whose net amount is below its script's dust threshold remains held while
+another coin under the same source anchor at that expiry height is undecided.
+An unresolved owner lookup also holds the output without a split. When all such
+coins are decided, the dust decision can complete. A final dust forfeiture records
+no payout fee. Unknown ownership must remain held. Miner fees come from the
+watchman fee child, separately from customer outputs. No setting establishes a
+guaranteed payout deadline or a qualified capacity.
+
+Account for a board service fee separately from the fallback payout fee. For a
+direct payout of one unprogressed board with no earlier payout to the same script
+at that height, let `B` be its backing value and `F` its board service fee. The
+signed customer VTXO has value `N = B - F`. Let `P = max(1000, ceil(N / 100))`.
+If `N - P` meets the script's dust threshold, the customer receives `N - P` sats.
+The zero-fee payout parent returns `F + P` sats to the operator. Do not deduct `F`
+from `N` a second time. Account for the board miner fee and the watchman fee
+child's miner fee separately.
 
 ## Supply watchman fees
 
@@ -233,7 +243,7 @@ outpoint with the configured bitcoin node's `gettxout`, including mempool
 spends. It must belong to the watchman wallet, meet its configured
 `min_trusted_confs`, and remain available under its coin-selection rules.
 Reserved or otherwise excluded outputs cannot supply the fee. The available
-value must cover `watchman.min_cpfp_amount` and the actual package fee.
+value must cover `watchman.min_cpfp_amount` and the package fee.
 A confirmed-output list or balance total alone does not prove usability.
 
 Alert on these warnings:
@@ -252,7 +262,7 @@ delete the allocation or alter customer amounts. The watchman uses Core's
 observed fee when it replaces an unrecognized child. It preserves the exact
 payout parent. Require replacement qualification on the final release programs.
 If replacement cannot progress, retain the unpaid obligation and escalate with
-the actual package evidence.
+the package transaction records.
 
 ## Monitor payment and ownership
 
@@ -273,11 +283,11 @@ window. Inspect these read-only tables with a restricted database account:
 - `expiry_terminal_claim`: independently confirmed customer claims.
 - `expiry_lightning_dispatch`, `expiry_lightning_external_success` and
   `expiry_lightning_terminal_failure`: particular external payment requests and
-  their outcome evidence.
+  their outcome records.
 
 These records guide investigation. They do not by themselves establish
 payment. Decode the retained signed transaction, identify the rightful script
-and amount, and check its actual outpoint on the canonical chain. Check all
+and amount, and check its outpoint on the canonical chain. Check all
 relevant previous payouts and customer claims for duplicates. A successful RPC,
 a local paid status or a mempool entry is insufficient. Check customer amounts,
 output fees, operator change and miner fees separately.
@@ -296,12 +306,19 @@ At expiry, keep bitcoin held if no registration matches. Also keep bitcoin
 held while a registered owner's attribution scan is incomplete. Do not assign
 the recipient's bitcoin to the provider or operator.
 
-The server requires each owner's complete same-source group before it pays or
-forfeits that group. This includes leaves under separate physical outputs.
-An unknown owner in a shared source can also hold a known recipient's payout.
-A partial derivation scan without a match does not prove that the key belongs
-to another owner. Do not split or discard obligations to bypass that hold or
-charge another output fee for an independently ready fragment.
+An unresolved owner lookup holds its output without a split. A partial derivation
+scan without a match does not prove that the key belongs to another owner.
+A sub-dust group remains held while another coin under the same source anchor at
+the same expiry height is undecided. Do not split or discard obligations to
+bypass these holds. Charge the cumulative fee per payout script and expiry height,
+including earlier non-conflicted payments.
+
+The fork assigns padding leaves to the operator when their policy key equals
+upstream's unspendable key, `0x02 || sha256("unspendable1")`. It does not use an
+amount, transaction hash or issuance record to identify padding. This also assigns
+a coin deliberately locked by a customer to that key to the operator. No one can
+spend with that key. This is an accepted exception to the rule that the operator
+keeps only value it paid for.
 
 ### Alert rules and first actions
 
@@ -318,16 +335,16 @@ Use a read-only database role and retain private snapshots for comparison.
 | Node tip advances but either daemon stays behind for 2 consecutive new blocks | Compare its `expiry_sync_ack` and stored block hash with the canonical node. Check RPC, disk and worker errors. Close only after both completed views reconcile. |
 | `expiry_chain_view.invalid` persists across 2 completed daemon sync cycles | Preserve the generation and acknowledgements. Investigate rebuild errors. Do not clear the invalid flag or force a financial decision. |
 | Owner-search backlog exists but its coverage makes no progress across 2 scheduled work cycles | Inspect `expiry_pending_key`, `expiry_scan` and owner-scan warnings. Check database/resource pressure and authenticated registrations. Keep unresolved bitcoin held. |
-| A customer's unpaid age exceeds the declared window, or backlog/value grows across observations | Identify its VTXO, rightful owner, decision fence and actual canonical spend. Resolve the specific hold, fee shortage or chain issue. A healthy process or a new allocation does not close the alert. |
+| A customer's unpaid age exceeds the declared window, or backlog/value grows across observations | Identify its VTXO, rightful owner, decision fence and canonical spend. Resolve the specific hold, fee shortage or chain issue. A healthy process or a new allocation does not close the alert. |
 | Either confirmed-usable-funding warning occurs | Refill the watchman wallet. Check usable confirmed outpoints, then observe the queued payout confirm with correct customer amounts. |
-| `Proposed emergency payout operator subsidy exceeds warning level` occurs | Check actual package feerate and reserve headroom. Increase the operating reserve if needed. The warning does not cap spending or authorize a reduced customer payout. |
+| `Proposed emergency payout operator subsidy exceeds warning level` occurs | Check package feerate and reserve headroom. Increase the operating reserve if needed. The warning does not cap spending or authorize a reduced customer payout. |
 | `Expiry payout remains pending`, readiness or owner-scan warnings recur without progress | Retain allocation/key identifiers and source-specific error records. Follow the relevant ownership, fee-child or Lightning procedure. Never delete a fence to clear an alert. |
 | Disk/WAL headroom falls below the configured alert, PostgreSQL backup fails, or RSS/database size grows without bound | Escalate before storage exhaustion. Preserve WAL and authoritative history. Verify the next backup and a separate restore; do not prune financial history to clear the alert. |
 | A canonical-chain money check finds a wrong amount, wrong script or duplicate payment | Suspend new admission under reviewed deployment controls. Preserve all stores and signed transactions. Keep protective claims available and reconcile every affected obligation before resumption. |
 
 For each alert retain onset, affected value, oldest obligation, canonical tip,
 process versions and the action taken. Close it with observed progress or
-canonical transaction/accounting evidence. Do not close it from silence in logs.
+canonical transaction and accounting records. Do not close it from silence in logs.
 
 ## Backup and restore
 
@@ -349,7 +366,7 @@ reconcile before relying on payout decisions. Reconcile registrations, customer
 obligations, source-specific Lightning outcomes and canonical transactions.
 The retained registry must cover customer registrations that the server already
 accepted. Do not resume admission from an older backup that omits these records.
-Recover them from intact PostgreSQL/WAL or authentic identical registration.
+Recover them from intact PostgreSQL/WAL or the same signed registration.
 A missing record remains unresolved; it never makes customer bitcoin operator
 bitcoin. An absent client cannot recreate its lost server registration for you.
 Restoring a backup that predates commitments does not prove those commitments
@@ -379,7 +396,7 @@ HSM secret. Keep absent customer wallets closed. Follow the
 `ROLLBACK.md` bundled with the release.
 
 A successful database open is not a completed recovery drill. Verify a rightful
-customer payout and an actual seed-restored spend. Test crash recovery
+customer payout and a seed-restored spend. Test crash recovery
 separately from orderly cold backup recovery.
 
 ### Consistent backup and restore drill
@@ -434,7 +451,7 @@ separately from orderly cold backup recovery.
    node's supported channel-recovery procedure; a generic old-file restore
    does not prove safe channel recovery.
 7. Point private configs at the restored paths/database. Check identity files
-   locally against the authentic backups. Validate configs and installed bytes.
+   locally against the original backups. Validate configs and installed bytes.
    Start the original CLN identity and then both application daemons. Wait for
    both completed canonical chain views. Reconcile all registrations,
    obligations, balances, UTXOs and source-specific Lightning outcomes.
@@ -442,13 +459,13 @@ separately from orderly cold backup recovery.
    survive. Require the pending allocation to complete exactly once, the held
    coin to remain held, and the next new payout to pay its rightful owner.
    Independently close customer principal, stated fees, operator remainder and
-   actual miner fees on the canonical chain. An allocation status is not proof.
+   miner fees on the canonical chain. An allocation status is not proof.
 9. Perform the separate seed-only payout spend below. Keep the absent original
    wallet closed throughout. Retain the commands, exit results and public
    transaction facts with secrets removed. Correct any procedure that the
    drill cannot execute. An orderly drill does not qualify crash/WAL recovery.
 
-### Authentic seed custody and seed-only spend
+### Seed custody and seed-only spend
 
 At wallet creation, retain the original seed phrase in protected custody on
 the host that created it. Retain its network, derivation scheme, account
@@ -460,7 +477,7 @@ or include them in test reports, Git, chat or release bundles.
 A seed-only drill starts from a fresh wallet without its old database, mailbox
 or Ark server connection. Use an independent on-chain recovery wallet that
 supports the original derivation. A displayed address or a discovered balance
-is insufficient. Match the registered fallback script and actual payout
+is insufficient. Match the registered fallback script and payout
 outpoint, then sign and broadcast a spend from that exact payout. Verify its
 confirmation and exact change script. To prove change recovery, discover and
 spend that change from another fresh seed-only wallet too. Account for every
@@ -488,7 +505,7 @@ Each wallet has one Taproot key chain for both receipts and change. Its Core
 descriptor is `tr(MASTER_XPRIV/1856555996h/0/*)` or
 `tr(MASTER_XPRIV/38644432h/0/*)`, respectively. Equivalently, derive that
 hardened child first and use `tr(WALLET_XPRIV/0/*)`. There is no `/1/*` change
-chain and no BIP86 account path. Recover each daemon from its authentic seed
+chain and no BIP86 account path. Recover each daemon from its original seed
 file. A separate watchman initialization can have a different seed.
 
 Use the following procedure only on signet or regtest. It is a qualification
@@ -506,9 +523,9 @@ import file in an owner-only directory, without printing the seed or private
 descriptor. It serializes the BIP32 master key; Core derives the child keys.
 It does not validate BIP39 words or their checksum. Verify original seed
 identity locally, then require the recovered public funding scripts to match
-the authentic recorded scripts before any spend. Never run `listdescriptors`
+the recorded scripts before any spend. Never run `listdescriptors`
 with private keys, enable RPC request tracing, or attach private recovery files
-to an evidence report.
+to a report.
 
 Choose `RANGE_END` to include every issued index, including change. Use the
 public address/index inventory retained at creation and during operation.
@@ -517,13 +534,13 @@ are found. A finite scan with an unknown gap is not proof of a complete wallet.
 Choose `NEXT_UNUSED` beyond every issued index and within that scan range.
 Use a new unused index for every change output. Keep the daemons stopped so
 they cannot concurrently issue or spend those indices. The example values
-below fit the native drill; replace them with the actual inventory limits.
+below fit the native drill; replace them with the inventory limits.
 The import rescans from genesis, so it does not depend on an old birthday or
 application database.
 
 The example uses signet. For regtest, replace both `-signet` and the helper's
 `--network signet`, and require `regtest` in the chain check. Set `BUNDLE`,
-`CORE_DATA` and `SEED_FILE` to local paths. `SEED_FILE` is the authentic seed
+`CORE_DATA` and `SEED_FILE` to local paths. `SEED_FILE` is the original seed
 backup on its original host. The signet Core node must already be synchronized.
 
 ```bash
@@ -533,7 +550,7 @@ umask 077
 BUNDLE=/opt/abandon/current
 CORE_DATA=/srv/abandon/bitcoin
 SEED_FILE=/srv/abandon/captaind/mnemonic
-KIND=rounds # Repeat the complete drill with KIND=watchman and its authentic seed.
+KIND=rounds # Repeat the complete drill with KIND=watchman and its original seed.
 RANGE_END=1023
 NEXT_UNUSED=1000
 RECOVERY=$(mktemp -d /srv/abandon/recovery.XXXXXXXX)
@@ -554,7 +571,7 @@ python3 -c 'import json,sys; assert all(x["success"] for x in json.load(open(sys
 Require the expected receipt outpoints, scripts and amounts in `utxos.json`.
 Check each against Core `gettxout TXID VOUT true` and its confirmed transaction.
 Select those exact inputs and an independently controlled destination. For
-example, set `INPUTS='[{"txid":"ACTUAL_TXID","vout":0}]'`, `DESTINATION` to
+example, set `INPUTS='[{"txid":"PAYOUT_TXID","vout":0}]'`, `DESTINATION` to
 that network's address, and `AMOUNT_SAT=50000` for a sufficiently large drill
 output. These variables contain public transaction facts. The next commands
 create a partial spend with explicit change on the same `/0/*` chain. They
@@ -580,7 +597,7 @@ TXID=$("${WALLET[@]}" -stdin sendrawtransaction < "$RECOVERY/broadcast-input.txt
 ```
 
 Wait for at least 6 confirmations. On regtest, mine 6 blocks to an independent
-test address; on signet, wait for actual blocks. Require `gettxout` to show the
+test address; on signet, wait for blocks. Require `gettxout` to show the
 destination and the exact change output with at least 6 confirmations. Require
 each original input to be spent. Compute the miner fee from the confirmed input
 and output amounts and compare it with `funded.json`. Close input value =
@@ -594,7 +611,7 @@ PSBT. Require it to discover the first confirmed change outpoint. Repeat the
 spend block with `INPUTS` set to that exact change and a smaller `AMOUNT_SAT`.
 Confirm the second spend, its destination and remainder. Close both miner fees
 and the remainder against the original receipt amounts. Repeat for the other
-wallet kind. Retain only public transaction facts as evidence.
+wallet kind. Retain only public transaction facts.
 
 The existing native test
 `seed_wallet_recovery::server_and_watchman_seed_only_recover_receipts_and_change`
@@ -627,7 +644,7 @@ the stopped state and investigate; never initialize a replacement identity.
 
 ## Reorgs and unresolved Lightning requests
 
-After a reorg, preserve the signed transactions and original payment evidence.
+After a reorg, preserve the signed transactions and original payment records.
 Allow the existing chain listeners to rebuild facts from both completed views.
 Verify canonical transactions and fees again. Do not clear decision fences or
 replace financial rows to resume service. If a reorg removes 6 or more blocks,
@@ -658,12 +675,12 @@ before admission resumes.
 
 Use this procedure only for an external payment whose server dispatch is
 committed but whose original node has no record of that dispatch. A request with
-an actual HTLC must use its genuine outcome. Do not use an elapsed deadline,
+an HTLC must use its recorded outcome. Do not use an elapsed deadline,
 shared payment hash, missing reply or current program version as failure proof.
 
 1. Disable automatic restart and request replay for every original producer.
    Establish that the original server process, transport queues, Lightning node
-   children and delayed requests have terminated. Record their actual process
+   children and delayed requests have terminated. Record their process
    and service identities. Disabling a node in the server is insufficient.
 2. Preserve the original stores and incident records. Reopen the original
    Lightning node with its intact history. Do not roll back or prune its store.
@@ -679,7 +696,7 @@ shared payment hash, missing reply or current program version as failure proof.
    original source and executable versions. Current versions cannot replace
    missing original records. Without this qualification, the command requires
    the entire hash to have no raw or aggregate payment history.
-5. Review the operational evidence independently. The program checks its shape,
+5. Review the operational records independently. The program checks its shape,
    binding and byte identity. It cannot establish that the recorded events are
    true or that an uncooperative remote producer has stopped.
 6. Run the local command with the original server configuration:
@@ -689,7 +706,7 @@ shared payment hash, missing reply or current program version as failure proof.
      --manifest /path/to/incident.json --acknowledge-trusted-operations
    ```
 
-7. Retain the command result and original records. The command checks the actual
+7. Retain the command result and original records. The command checks the
    original node identity, network, version and unfiltered payment history. It
    rejects any own payment row in the qualified-label route. It records one
    source-specific resolution under the existing financial locks. It does not
@@ -707,7 +724,7 @@ and `OriginalLabelledProducer`. The manifest is at most 32KiB. Each referenced
 record is at most 1MiB. Keep secrets out of these records. There is no automatic
 incident-record generator or general operator permission to mark payments failed.
 Loss of original history or failure to establish complete quiescence can prevent
-this procedure. Preserve the liability and investigate; never invent evidence.
+this procedure. Preserve the liability and investigate; never invent records.
 
 ## Safe shutdown and operating limits
 
@@ -718,15 +735,16 @@ or remove protective claims merely because an application stops. A stopped
 server does not cancel an in-flight Lightning request or retract a signed refund.
 
 The operator must maintain usable fee reserves and chain observation. Monitor
-actual completed work, backlog age and resource use. Synthetic registrations and
+completed work, backlog age and resource use. Synthetic registrations and
 scheduled transfers do not establish throughput. Keep the deployment within the
-load and tree geometry actually qualified in its release. No production capacity
+load and tree geometry qualified in its release. No production capacity
 claim follows from the current source fixtures. The current candidate still
 requires financial, recovery and operational qualification.
 
-Complete owner-group checks and foreign fee-child replacement are implemented
-in this source. They still require qualification on the final release programs.
-Unknown or incomplete ownership must remain held. Large-tree payout time and
-complete financial conservation remain unqualified. A timing result or limited
-chain check from earlier programs does not establish a capacity or conservation
-guarantee for this release.
+Cumulative payout fees, sub-dust holds and foreign fee-child replacement require
+qualification on the final release programs. Unknown or incomplete ownership must
+remain held. The owner accepts the 4,096-owner test's failure to meet its unchanged
+1,500-second bound as an operating limit. Do not treat that size as a qualified
+production envelope or add a geometry cache to meet the bound. Results from
+earlier programs remain historical; they do not qualify this release's capacity
+or financial conservation.

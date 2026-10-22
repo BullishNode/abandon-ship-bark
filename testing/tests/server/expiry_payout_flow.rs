@@ -169,6 +169,9 @@ async fn expiry_payout_native_board_seed_restore_and_confirmed_spend() {
 		bark_json::web::OnchainDrainRequest { destination: recovery_address.to_string() }).await.unwrap();
 	evidence.action(&ctx, "recovery-drain", json!({"txid": drain.txid,
 		"destination": recovery_address, "source_observer_incarnation": evidence.observer_incarnation}));
+	// The REST wallet broadcasts to its own node. Observe the same transaction
+	// on the node that verifies and mines the recovery spend.
+	ctx.bitcoind().await_transaction(drain.txid).await;
 	let mempool = ctx.bitcoind().sync_client().get_raw_mempool().unwrap();
 	let mut recovery = None;
 	for txid in mempool {

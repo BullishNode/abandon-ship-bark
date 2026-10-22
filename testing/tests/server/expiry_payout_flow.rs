@@ -1,4 +1,4 @@
-mod evidence;
+pub(super) mod evidence;
 
 use std::time::Duration;
 

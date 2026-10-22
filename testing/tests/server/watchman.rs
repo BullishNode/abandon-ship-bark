@@ -12,15 +12,22 @@ use ark::fees::{BoardFees, PpmFeeRate};
 use ark::lightning::PaymentHash;
 use bark::exit::ExitState;
 use bark::onchain::MakeCpfpFees;
+use bark::persist::BarkPersister;
+use bdk_wallet::KeychainKind;
 use bark_json::primitives::VtxoStateInfo;
 use bitcoin::{Amount, Network, OutPoint, Transaction};
-use bitcoin::consensus::deserialize;
+use bitcoin::consensus::{deserialize, encode::serialize_hex};
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::hex::DisplayHex;
 use bitcoin_ext::rpc::BitcoinRpcExt;
 use bitcoin_ext::{BlockDelta, TxOutExt, TxStatus};
 use server::database::Db;
 use server::vtxopool::VtxoTarget;
 use server_rpc::protos;
+use serde_json::json;
+use ark::ProtocolEncoding;
+
+use super::expiry_payout_flow::evidence::{self, Evidence};
 use server_log::{
 	ArkFeeRecorded, ClaimBroadcast, ClaimBroadcastFailure, ClaimChunkBroadcastFailure,
 	ProgressBroadcast, ProgressCpfpFailure,
@@ -4214,13 +4221,194 @@ async fn offboard_exit_attack(test_name: &str, n_vtxos: usize) -> bitcoin::Amoun
 	stolen
 }
 
+
+/// Use the same payer request as the original fixture and retain only public results.
+async fn capture_receive_payment(
+	ctx: &TestContext, evidence: &Evidence, payer: &ark_testing::Lightningd,
+	invoice: String, hash: PaymentHash,
+) -> anyhow::Result<()> {
+	payer.wait_for_block_sync().await;
+	let response = payer.grpc_client().await.xpay(cln_rpc::XpayRequest {
+		invstring: invoice, amount_msat: None, maxfee: None, layers: vec![],
+		retry_for: None, partial_msat: None, maxdelay: None, payer_note: None,
+		label: None, localinvreqid: None, dev_use_shadow: None,
+	}).await?.into_inner();
+	anyhow::ensure!(!response.payment_preimage.is_empty(), "xpay returned no payment preimage");
+	assert_eq!(sha256::Hash::hash(&response.payment_preimage), hash.to_sha256_hash());
+	evidence.action(ctx, "receive-payer-completed", json!({"payment_hash": hash,
+		"acquisition": "original external CLN xpay response; public projection",
+		"amount_msat": response.amount_msat.map(|amount| amount.msat),
+		"amount_sent_msat": response.amount_sent_msat.map(|amount| amount.msat),
+		"failed_parts": response.failed_parts, "successful_parts": response.successful_parts,
+		"payment_preimage_hash_verified_at_origin": true,
+		"omitted_fields": ["payment_preimage"],
+		"response_has_no_fields": ["payment_hash", "status", "groupid", "partid"]}));
+	Ok(())
+}
+
+/// Project typed public lineage without exporting arbitrary movement metadata.
+fn public_receive_metadata(metadata: serde_json::Map<String, serde_json::Value>) -> serde_json::Map<String, serde_json::Value> {
+	let mut public = serde_json::Map::new();
+	if let Some(value) = metadata.get("payment_hash") {
+		let hash: PaymentHash = serde_json::from_value(value.clone()).expect("stored payment hash must be valid");
+		public.insert("payment_hash".into(), json!(hash));
+	}
+	if let Some(value) = metadata.get("htlc_vtxos") {
+		let ids: Vec<ark::VtxoId> = serde_json::from_value(value.clone()).expect("stored HTLC identifiers must be valid");
+		public.insert("htlc_vtxos".into(), json!(ids));
+	}
+	public
+}
+
+#[test]
+fn receive_capture_history_excludes_private_metadata() {
+	let hash = PaymentHash::from_str(&"22".repeat(32)).unwrap();
+	let id = ark::VtxoId::from(OutPoint::from_str(&format!("{}:0", "11".repeat(32))).unwrap());
+	let original = json!({"payment_hash": hash, "htlc_vtxos": [id],
+		"payment_preimage": "private-test-marker", "unknown": {"secret": "nested-private-test-marker"}});
+	assert_eq!(json!(public_receive_metadata(original.as_object().unwrap().clone())),
+		json!({"payment_hash": hash, "htlc_vtxos": [id]}));
+	assert!(public_receive_metadata(serde_json::Map::new()).is_empty());
+}
+
+async fn capture_receive_wallet(ctx: &TestContext, evidence: &Evidence, wallet: &bark::Wallet, phase: &str) {
+	let before = evidence::tip(ctx);
+	let db = bark::persist::sqlite::SqliteClient::open(ctx.datadir.join("bark/db.sqlite")).unwrap();
+	let stored = db.initialize_bdk_wallet().await.unwrap();
+	let onchain = bdk_wallet::Wallet::load().check_network(Network::Regtest)
+		.load_wallet_no_persist(stored).unwrap().expect("the source wallet must have persisted creation state");
+	let descriptor = evidence::public_derivation(ctx,
+		&onchain.public_descriptor(KeychainKind::External).to_string(), onchain.derivation_index(KeychainKind::External));
+	let mut full = Vec::new();
+	let coins = wallet.all_vtxos().await.unwrap();
+	for coin in &coins {
+		let signed = wallet.get_full_vtxo(coin.id()).await.unwrap();
+		let key_index = db.get_public_key_idx(&signed.user_pubkey()).await.unwrap();
+		if let Some(index) = key_index {
+			assert_eq!(wallet.vtxo_xpub().derive_pub(&ark::SECP, &[index.into()]).unwrap().public_key, signed.user_pubkey());
+		}
+		full.push(json!({"id": signed.id(), "signed_vtxo_hex": signed.serialize_hex(), "child_index": key_index}));
+	}
+	let fallback = wallet.fallback_destination().await.unwrap();
+	fallback.verify(Network::Regtest, wallet.mailbox_keypair().public_key()).unwrap();
+	let history = wallet.history().await.unwrap().into_iter().map(|movement| {
+		let mut public = bark_json::movements::Movement::from(movement);
+		public.metadata = public.metadata.map(public_receive_metadata);
+		public
+	}).collect::<Vec<_>>();
+	let debug = bark_json::cli::DebugInfo::from(wallet.debug_info().await.unwrap());
+	assert_eq!(before["bestblockhash"], evidence::tip(ctx)["bestblockhash"]);
+	evidence::write_json(evidence.dir.join(format!("source-{phase}.json")), &json!({
+		"origin": "original linked SDK wallet; separate public API reads", "source_incarnation": evidence.source_incarnation,
+		"captured_at": chrono::Utc::now().to_rfc3339(), "before": before, "after": evidence::tip(ctx),
+		"history_complete": true, "vtxos_all": true, "raw_debug": debug, "movements": history,
+		"movement_metadata_projection": ["payment_hash", "htlc_vtxos"],
+		"omitted_movement_metadata": "all other fields, including payment_preimage",
+		"raw_vtxos": coins.iter().map(bark_json::primitives::WalletVtxoInfo::from).collect::<Vec<_>>(),
+		"full_vtxos": full, "signed_fallback_record": fallback, "onchain_derivation": descriptor,
+		"onchain_utxos": onchain.list_unspent().map(|coin| json!({"outpoint": coin.outpoint,
+			"value_sat": coin.txout.value.to_sat(), "script_pubkey": coin.txout.script_pubkey.as_bytes().to_lower_hex_string(),
+			"is_spent": coin.is_spent})).collect::<Vec<_>>(),
+		"onchain_transactions": onchain.transactions().map(|item| json!({"txid": item.tx_node.txid,
+			"hex": serialize_hex(&item.tx_node.tx)})).collect::<Vec<_>>() }));
+}
+
+/// Keep every returned item, but omit private preimages, error onions and RPC credentials.
+async fn capture_receive_lightning(
+	ctx: &TestContext, evidence: &Evidence, node: &ark_testing::Lightningd, role: &str, phase: &str,
+) {
+	let before = evidence::tip(ctx);
+	let mut client = node.grpc_client().await;
+	let info = client.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
+	let pays = client.list_pays(cln_rpc::ListpaysRequest::default()).await.unwrap().into_inner().pays;
+	let parts = client.list_send_pays(cln_rpc::ListsendpaysRequest::default()).await.unwrap().into_inner().payments;
+	let invoices = client.list_invoices(cln_rpc::ListinvoicesRequest::default()).await.unwrap().into_inner().invoices;
+	let peers = client.list_peer_channels(cln_rpc::ListpeerchannelsRequest::default()).await.unwrap().into_inner().channels;
+	let funds = client.list_funds(cln_rpc::ListfundsRequest { spent: Some(true) }).await.unwrap().into_inner();
+	let hold = node.hold_client().await.list(cln_rpc::plugins::hold::ListRequest { constraint: None })
+		.await.unwrap().into_inner().invoices;
+	let counts = json!({"listpays": pays.len(), "listsendpays": parts.len(), "listinvoices": invoices.len(),
+		"listpeerchannels": peers.len(), "listfunds_outputs": funds.outputs.len(),
+		"listfunds_channels": funds.channels.len(), "hold_list": hold.len()});
+	let pays = pays.iter().map(|pay| json!({"payment_hash": pay.payment_hash.to_lower_hex_string(),
+		"status": pay.status().as_str_name(), "destination": pay.destination.as_ref().map(|key| key.to_lower_hex_string()),
+		"created_at": pay.created_at, "completed_at": pay.completed_at, "label": pay.label,
+		"bolt11": pay.bolt11, "bolt12": pay.bolt12, "amount_msat": pay.amount_msat.as_ref().map(|amount| amount.msat),
+		"amount_sent_msat": pay.amount_sent_msat.as_ref().map(|amount| amount.msat),
+		"number_of_parts": pay.number_of_parts, "created_index": pay.created_index, "updated_index": pay.updated_index})).collect::<Vec<_>>();
+	let parts = parts.iter().map(|pay| json!({"id": pay.id, "groupid": pay.groupid, "partid": pay.partid,
+		"payment_hash": pay.payment_hash.to_lower_hex_string(), "status": pay.status().as_str_name(),
+		"destination": pay.destination.as_ref().map(|key| key.to_lower_hex_string()), "label": pay.label,
+		"bolt11": pay.bolt11, "bolt12": pay.bolt12, "created_at": pay.created_at, "completed_at": pay.completed_at,
+		"created_index": pay.created_index, "updated_index": pay.updated_index,
+		"amount_msat": pay.amount_msat.as_ref().map(|amount| amount.msat),
+		"amount_sent_msat": pay.amount_sent_msat.as_ref().map(|amount| amount.msat)})).collect::<Vec<_>>();
+	let invoices = invoices.iter().map(|invoice| json!({"payment_hash": invoice.payment_hash.to_lower_hex_string(),
+		"status": invoice.status().as_str_name(), "label": invoice.label, "bolt11": invoice.bolt11, "bolt12": invoice.bolt12,
+		"amount_msat": invoice.amount_msat.as_ref().map(|amount| amount.msat),
+		"amount_received_msat": invoice.amount_received_msat.as_ref().map(|amount| amount.msat),
+		"pay_index": invoice.pay_index, "paid_at": invoice.paid_at, "created_index": invoice.created_index,
+		"updated_index": invoice.updated_index, "expires_at": invoice.expires_at})).collect::<Vec<_>>();
+	let peers = peers.iter().map(|channel| json!({"peer_id": channel.peer_id.to_lower_hex_string(),
+		"state": channel.state().as_str_name(), "channel_id": channel.channel_id.as_ref().map(|id| id.to_lower_hex_string()),
+		"short_channel_id": channel.short_channel_id, "funding_txid": channel.funding_txid.as_ref().map(|id| id.to_lower_hex_string()),
+		"funding_outnum": channel.funding_outnum, "to_us_msat": channel.to_us_msat.as_ref().map(|amount| amount.msat),
+		"total_msat": channel.total_msat.as_ref().map(|amount| amount.msat),
+		"spendable_msat": channel.spendable_msat.as_ref().map(|amount| amount.msat),
+		"receivable_msat": channel.receivable_msat.as_ref().map(|amount| amount.msat),
+		"in_payments_fulfilled": channel.in_payments_fulfilled, "out_payments_fulfilled": channel.out_payments_fulfilled,
+		"in_fulfilled_msat": channel.in_fulfilled_msat.as_ref().map(|amount| amount.msat),
+		"out_fulfilled_msat": channel.out_fulfilled_msat.as_ref().map(|amount| amount.msat),
+		"htlcs": channel.htlcs.iter().map(|htlc| json!({"id": htlc.id, "direction": htlc.direction().as_str_name(),
+			"payment_hash": htlc.payment_hash.to_lower_hex_string(), "amount_msat": htlc.amount_msat.as_ref().map(|amount| amount.msat),
+			"expiry": htlc.expiry})).collect::<Vec<_>>() })).collect::<Vec<_>>();
+	let outputs = funds.outputs.iter().map(|output| json!({"txid": output.txid.to_lower_hex_string(), "output": output.output,
+		"amount_msat": output.amount_msat.as_ref().map(|amount| amount.msat),
+		"scriptpubkey": output.scriptpubkey.to_lower_hex_string(), "address": output.address,
+		"status": output.status().as_str_name(), "blockheight": output.blockheight, "reserved": output.reserved})).collect::<Vec<_>>();
+	let channels = funds.channels.iter().map(|channel| json!({"peer_id": channel.peer_id.to_lower_hex_string(),
+		"channel_id": channel.channel_id.to_lower_hex_string(), "funding_txid": channel.funding_txid.to_lower_hex_string(),
+		"funding_output": channel.funding_output, "short_channel_id": channel.short_channel_id,
+		"our_amount_msat": channel.our_amount_msat.as_ref().map(|amount| amount.msat),
+		"amount_msat": channel.amount_msat.as_ref().map(|amount| amount.msat), "state": channel.state().as_str_name()})).collect::<Vec<_>>();
+	let hold = hold.iter().map(|invoice| json!({"id": invoice.id, "payment_hash": invoice.payment_hash.to_lower_hex_string(),
+		"invoice": invoice.invoice, "state": invoice.state().as_str_name(), "created_at": invoice.created_at,
+		"settled_at": invoice.settled_at, "min_cltv_expiry": invoice.min_cltv_expiry,
+		"htlcs": invoice.htlcs.iter().map(|htlc| json!({"id": htlc.id, "state": htlc.state().as_str_name(),
+			"scid": htlc.scid, "channel_id": htlc.channel_id, "msat": htlc.msat,
+			"created_at": htlc.created_at, "cltv_expiry": htlc.cltv_expiry})).collect::<Vec<_>>() })).collect::<Vec<_>>();
+	assert_eq!(before["bestblockhash"], evidence::tip(ctx)["bestblockhash"]);
+	evidence::write_json(evidence.dir.join(format!("cln-{role}-{phase}.json")), &json!({"schema": 1,
+		"captured_at": chrono::Utc::now().to_rfc3339(), "before": before, "after": evidence::tip(ctx), "role": role,
+		"acquisition": "unfiltered CLN gRPC collections; explicit public projections; separate RPC observations",
+		"item_counts": counts, "getinfo": {"id": info.id.to_lower_hex_string(), "network": info.network,
+			"version": info.version, "blockheight": info.blockheight, "num_peers": info.num_peers,
+			"num_active_channels": info.num_active_channels, "num_pending_channels": info.num_pending_channels,
+			"num_inactive_channels": info.num_inactive_channels,
+			"fees_collected_msat": info.fees_collected_msat.as_ref().map(|amount| amount.msat)},
+		"listpays": pays, "listsendpays": parts, "listinvoices": invoices, "listpeerchannels": peers,
+		"listfunds": {"spent": true, "outputs": outputs, "channels": channels}, "hold_list": hold,
+		"omitted_fields": ["private preimages", "error onions", "RPC credentials", "node private paths", "channel PSBTs"],
+		"independent_preimage_verification": "UNAVAILABLE_IN_PUBLIC_PROJECTION"}));
+}
+
 /// The vtxopool funds each lightning receive from the change of the previous one, so all the
 /// receives hang off a single allocation chain. When a user exits the oldest receive, the txs
 /// it shares with the others hit the chain, but the checkpoint caps how far that reaches: the
 /// watchman broadcasts nothing, and the pool remainder is swept once the pool vtxos expire.
 #[tokio::test]
 async fn watchman_doesnt_broadcast_htlc_recv_chain() {
-	let ctx = TestContext::new("server/watchman_doesnt_broadcast_htlc_recv_chain").await;
+	watchman_receive_chain("server/watchman_doesnt_broadcast_htlc_recv_chain", false).await;
+}
+
+/// Retain original public facts for a separate pool/receive accounting adapter.
+#[tokio::test]
+async fn watchman_htlc_recv_chain_financial_capture() {
+	watchman_receive_chain("server/watchman_htlc_recv_chain_financial_capture", true).await;
+}
+
+async fn watchman_receive_chain(name: &str, capture: bool) {
+	let ctx = TestContext::new(name).await;
 	let ln = ctx.new_lightning_setup("ln").await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&ln.internal).funded(btc(10)).cfg(|cfg| {
 		cfg.vtxo_lifetime = BlockDelta::new(144);
@@ -4233,6 +4421,26 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 		cfg.watchman.reaction_interval = Duration::from_secs(15 * 60);
 		cfg.watchman.sweep_interval = Duration::from_secs(15 * 60);
 	}).create().await;
+	let mut evidence = if capture { Some(Evidence::new_receive_chain(&ctx, &srv).await) } else { None };
+	if let Some(evidence) = &mut evidence {
+		evidence::write_json(evidence.dir.join("acquisition-status.json"), &json!({"schema": 1,
+			"status": "EVIDENCE_INCOMPLETE", "scope": "progressed pool and Lightning receive acquisition",
+			"candidate": std::env::var("GIT_HASH").unwrap(), "source_incarnation": evidence.source_incarnation,
+			"unsupported": ["pool/receive/progressed-right checker adapter and independent review",
+				"fresh own-seed observer, cash control and drain", "public preimage verification",
+				"independent candidate/build-kind executable admission"],
+			"checker": "NOT_RUN", "financial_qualification": "NOT_RUN"}));
+		evidence.action(&ctx, "receive-chain-baseline", json!({"candidate": std::env::var("GIT_HASH").unwrap(),
+			"network": "regtest", "source_incarnation": evidence.source_incarnation,
+			"server_pubkey": srv.ark_info().await.server_pubkey, "service_id": srv.ark_url(),
+			"cln_nodes": srv.config().cln_array.iter().map(|node| json!({"uri": node.uri.to_string(), "priority": node.priority})).collect::<Vec<_>>()}));
+		evidence.action(&ctx, "public-cut-start", json!({"phase": "baseline"}));
+		evidence.sql("baseline").await;
+		evidence.chain(&ctx, "baseline");
+		evidence.action(&ctx, "public-cut-end", json!({"phase": "baseline", "sql_and_chain_are_separate_observations": true}));
+		capture_receive_lightning(&ctx, evidence, &ln.internal, "internal", "baseline").await;
+		capture_receive_lightning(&ctx, evidence, &ln.external, "external", "baseline").await;
+	}
 	let failures = WatchmanFailureCollector::default();
 	let wm = srv.watchmand();
 	wm.add_slog_handler(failures.clone());
@@ -4264,17 +4472,49 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 	let destination = wallet.fallback_destination().await.unwrap();
 	let mailbox = wallet.mailbox_keypair().public_key();
 	let mut hashes = Vec::new();
+	if let Some(evidence) = &mut evidence {
+		capture_receive_wallet(&ctx, evidence, &wallet, "funded").await;
+		evidence.transaction(&ctx, "pool-funding", &funding);
+		evidence::write_json(evidence.dir.join("initial-pool.json"), &json!({"anchor": anchor,
+			"funding_hex": serialize_hex(&funding), "initial": initial.iter().map(|coin| json!({
+				"id": coin.id(), "signed_vtxo_hex": coin.inner().serialize_hex()})).collect::<Vec<_>>(),
+			"watchman_capital": sponsors.iter().map(|(point, output)| json!({"outpoint": point,
+				"value_sat": output.value.to_sat(), "script_pubkey": output.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>() }));
+		for (index, point) in sponsors.keys().enumerate() {
+			evidence.transaction(&ctx, &format!("watchman-funding-{index}"), &ctx.bitcoind().await_transaction(point.txid).await);
+		}
+		evidence.action(&ctx, "public-cut-start", json!({"phase": "funded"}));
+		evidence.sql("funded").await;
+		evidence.chain(&ctx, "funded");
+		evidence.action(&ctx, "public-cut-end", json!({"phase": "funded", "sql_and_chain_are_separate_observations": true}));
+	}
 
 	// Receive sequentially so each allocation spends the change of the previous one.
 	for _ in 0..20 {
 		let invoice = wallet.bolt11_invoice(sat(1_000), None, None).await
 			.expect("creating the invoice");
 		hashes.push(PaymentHash::from(&invoice).to_string());
-		let (pay, _) = tokio::join!(
-			ln.external.try_pay_bolt11(invoice.to_string()),
+		if let Some(evidence) = &evidence {
+			evidence.action(&ctx, "receive-invoice-created", json!({"payment_hash": PaymentHash::from(&invoice), "invoice": invoice.to_string()}));
+		}
+		let pay_invoice = async {
+			if let Some(evidence) = &evidence {
+				capture_receive_payment(&ctx, evidence, &ln.external, invoice.to_string(), PaymentHash::from(&invoice)).await
+			} else { ln.external.try_pay_bolt11(invoice.to_string()).await }
+		};
+		let (pay, claim) = tokio::join!(
+			pay_invoice,
 			wallet.try_claim_lightning_receive(PaymentHash::from(&invoice), true),
 		);
 		pay.expect("the lightning payment should succeed");
+		if let Some(evidence) = &evidence {
+			let claim = claim.expect("the genuine receive must return its actual state");
+			let public = bark_json::cli::LightningReceiveInfo::from_state(&claim);
+			evidence.action(&ctx, "receive-claim-returned", json!({"payment_hash": public.payment_hash,
+				"invoice": public.invoice, "state": public.state, "amount_sat": public.amount.to_sat(),
+				"settled_at": public.settled_at, "htlc_vtxo_ids": public.htlc_vtxo_ids,
+				"omitted_fields": ["payment_preimage"]}));
+		}
 	}
 	let mut customers = BTreeMap::new();
 	for coin in wallet.vtxos().await.unwrap() {
@@ -4345,6 +4585,27 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 	} }
 	let residuals = residuals.into_iter().map(|(outpoint, txout)| server::database::expiry_inventory::BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
 	selected.check_partition(&terminals, &[funding.clone()], &residuals, limits).unwrap();
+	if let Some(evidence) = &mut evidence {
+		let mut rights = Vec::new();
+		for source in &grants {
+			let grant = db.read(async |tx| tx.get_user_vtxo_by_id(ark::VtxoId::from_str(source).unwrap()).await).await.unwrap().vtxo;
+			rights.push(json!({"id": grant.id(), "signed_vtxo_hex": grant.serialize_hex()}));
+		}
+		evidence::write_json(evidence.dir.join("receive-rights.json"), &json!({
+			"payment_hashes": hashes, "signed_grants": rights,
+			"customer": customers.values().map(|coin| json!({"id": coin.id(), "signed_vtxo_hex": coin.serialize_hex()})).collect::<Vec<_>>(),
+			"operator": operators.values().map(|coin| json!({"id": coin.id(), "signed_vtxo_hex": coin.serialize_hex()})).collect::<Vec<_>>(),
+			"partition_roots": selected.roots.iter().map(|root| json!({"id": root.id(), "bare_vtxo_hex": root.serialize_hex()})).collect::<Vec<_>>(),
+			"zero_residuals": residuals.iter().map(|residual| json!({"outpoint": residual.outpoint,
+				"value_sat": residual.txout.value.to_sat(), "script_pubkey": residual.txout.script_pubkey.as_bytes().to_lower_hex_string()})).collect::<Vec<_>>() }));
+		capture_receive_wallet(&ctx, evidence, &wallet, "received").await;
+		evidence.action(&ctx, "public-cut-start", json!({"phase": "received"}));
+		evidence.sql("received").await;
+		evidence.chain(&ctx, "received");
+		evidence.action(&ctx, "public-cut-end", json!({"phase": "received", "sql_and_chain_are_separate_observations": true}));
+		capture_receive_lightning(&ctx, evidence, &ln.internal, "internal", "received").await;
+		capture_receive_lightning(&ctx, evidence, &ln.external, "external", "received").await;
+	}
 
 	// The shortest exit chain belongs to the oldest receive. Exiting it drags the txs it
 	// shares with the other receives on-chain.
@@ -4386,6 +4647,17 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 	let scan_from = core.get_block_count().unwrap() + 1;
 	let operator_script = wm.config().sweep_address.clone().unwrap().require_network(Network::Regtest).unwrap().script_pubkey();
 	assert_ne!(operator_script, destination.spk);
+	if let Some(evidence) = &mut evidence {
+		evidence.action(&ctx, "oldest-exit-confirmed", json!({"id": oldest.id(),
+			"signed_vtxo_hex": oldest.serialize_hex(), "claimable_height": claimable_height.to_u32(),
+			"remaining_customer_ids": customers.keys().collect::<Vec<_>>(), "operator_script": operator_script.as_bytes().to_lower_hex_string()}));
+		capture_receive_wallet(&ctx, evidence, &wallet, "exited").await;
+		evidence.transaction(&ctx, "oldest-exit", &core.get_raw_transaction(&oldest.point().txid, None).unwrap());
+		evidence.action(&ctx, "public-cut-start", json!({"phase": "exited"}));
+		evidence.sql("exited").await;
+		evidence.chain(&ctx, "exited");
+		evidence.action(&ctx, "public-cut-end", json!({"phase": "exited", "sql_and_chain_are_separate_observations": true}));
+	}
 	let tip = ctx.generate_blocks(150).await;
 	let (packages, roots, expected) = tokio::time::timeout(Duration::from_secs(30), async {
 		srv.wait_for_sync_height(tip).await;
@@ -4477,6 +4749,20 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("the complete current cut must publish real funded packages within the original30seconds");
+	if let Some(evidence) = &mut evidence {
+		evidence.action(&ctx, "current-cut-packages-published", json!({"tip_height": tip.to_u32(),
+			"roots": roots.iter().map(|root| json!({"id": root.id(), "bare_vtxo_hex": root.serialize_hex()})).collect::<Vec<_>>(),
+			"membership": expected.iter().map(|(id, (coin, root))| json!({"id": id,
+				"root": root, "signed_vtxo_hex": coin.serialize_hex()})).collect::<Vec<_>>()}));
+		for (id, (parent, child, _)) in &packages {
+			evidence.transaction(&ctx, &format!("published-parent-{id}"), parent);
+			evidence.transaction(&ctx, &format!("published-child-{id}"), child);
+		}
+		evidence.action(&ctx, "public-cut-start", json!({"phase": "published"}));
+		evidence.sql("published").await;
+		evidence.chain(&ctx, "published");
+		evidence.action(&ctx, "public-cut-end", json!({"phase": "published", "sql_and_chain_are_separate_observations": true}));
+	}
 	assert!(!packages.is_empty() && packages.len() <= 2);
 	let mut consumed_roots = BTreeSet::new();
 	let mut consumed_sponsors = BTreeSet::new();
@@ -4633,6 +4919,36 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 	}
 
 	failures.assert_empty();
+	if let Some(evidence) = &mut evidence {
+		assert_eq!(customers.values().map(|coin| coin.amount()).sum::<Amount>(), sat(19_000));
+		assert_eq!(customer_paid, sat(18_000));
+		assert_eq!(sat(19_000).checked_sub(customer_paid).unwrap(), sat(1_000));
+		evidence.action(&ctx, "final-financial-cut", json!({"oldest_exit_sat": oldest.amount().to_sat(),
+			"customer_gross_sat": 19_000, "customer_paid_sat": customer_paid.to_sat(),
+			"operator_paid_sat": operator_paid.to_sat(), "fallback_fee_sat": 1_000,
+			"watchman_remaining_sat": change.values().map(|output| output.value.to_sat()).sum::<u64>(),
+			"package_miner_fee_sat": miner.to_sat(), "watchman_initial_capital_sat": 1_000_000}));
+		capture_receive_wallet(&ctx, evidence, &wallet, "final").await;
+		evidence.action(&ctx, "public-cut-start", json!({"phase": "final"}));
+		evidence.sql("final").await;
+		evidence.chain(&ctx, "final");
+		evidence.action(&ctx, "public-cut-end", json!({"phase": "final", "sql_and_chain_are_separate_observations": true}));
+		capture_receive_lightning(&ctx, evidence, &ln.internal, "internal", "final").await;
+		capture_receive_lightning(&ctx, evidence, &ln.external, "external", "final").await;
+		evidence.operator_descriptors(&ctx, &srv, &db).await;
+		let mut executables = Vec::new();
+		evidence::collect_executables(&ctx.datadir, &ctx.datadir, &mut executables);
+		evidence::write_json(evidence.dir.join("actual-executable-receipts.json"), &json!(executables));
+		evidence::write_json(evidence.dir.join("acquisition-finished.json"), &json!({"schema": 1,
+			"status": "EVIDENCE_INCOMPLETE", "scope": "progressed pool, 20 successful receives, oldest exit and 19 remaining rights",
+			"candidate": std::env::var("GIT_HASH").unwrap(), "source_incarnation": evidence.source_incarnation,
+			"unsupported": ["selected checker has no pool/receive/progressed-right accounting adapter",
+				"public RPC projections omit private payment preimages and error onions",
+				"source, role, Lightning and cash reconciliation require an independent adapter and review",
+				"candidate/build-kind admission requires independent retained executable readback",
+				"fresh own-seed observer for oldest exit and fallback receipt, control and drain remains unavailable"],
+			"checker": "NOT_RUN", "financial_qualification": "NOT_RUN"}));
+	}
 }
 
 /// Preserve one same-source owner group across asynchronous backing progress.

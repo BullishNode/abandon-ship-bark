@@ -34,11 +34,33 @@ use server::wallet::WalletKind;
 use server_rpc::protos;
 
 const FINANCIAL: &str = include_str!("financial.sql");
+const RECEIVE_CHAIN: &str = "SELECT jsonb_build_object(\
+	'vtxos',COALESCE((SELECT jsonb_agg(jsonb_build_object(\
+	'id',id,'vtxo_id',vtxo_id,'lightning_htlc_subscription_id',lightning_htlc_subscription_id,\
+	'vtxo_hex',encode(vtxo,'hex'))) FROM public.vtxo),'[]'::jsonb),\
+	'htlc_vtxos',COALESCE((SELECT jsonb_agg(jsonb_build_object(\
+	'id',id,'payment_hash',payment_hash,'direction',direction,'offchain_resolution',offchain_resolution,\
+	'chain_resolution',chain_resolution,'chain_resolution_height',chain_resolution_height,\
+	'htlc_expiry',htlc_expiry,'created_at',created_at)) FROM public.htlc_vtxo),'[]'::jsonb),\
+	'pool',COALESCE((SELECT jsonb_agg(jsonb_build_object(\
+	'id',id,'vtxo_id',vtxo_id,'vtxo_hex',encode(vtxo,'hex'),'amount',amount,\
+	'expiry_height',expiry_height,'spent_at',spent_at,'created_at',created_at)) FROM public.vtxo_pool),'[]'::jsonb),\
+	'settlements',COALESCE((SELECT jsonb_agg(jsonb_build_object(\
+	'id',id,'payment_hash',payment_hash,'created_at',created_at)) FROM public.htlc_settlement),'[]'::jsonb),\
+	'subscriptions',COALESCE((SELECT jsonb_agg(jsonb_build_object(\
+	'id',id,'lightning_node_id',lightning_node_id,'payment_hash',payment_hash,'invoice',invoice,\
+	'final_amount_msat',final_amount_msat,'receiver_mailbox_id',receiver_mailbox_id,\
+	'status',status,'accepted_at',accepted_at,'created_at',created_at,'updated_at',updated_at))\
+	FROM public.lightning_htlc_subscription),'[]'::jsonb),\
+	'claims',COALESCE((SELECT jsonb_agg(jsonb_build_object(\
+	'source_vtxo_id',source_vtxo_id,'subscription_id',subscription_id,'payment_hash',payment_hash,\
+	'output_vtxo_id',output_vtxo_id,'output_vtxo_hex',encode(output_vtxo,'hex'),\
+	'materialized',materialized,'created_at',created_at)) FROM public.expiry_lightning_receive_claim),'[]'::jsonb))";
 const PATHS: &str = "SELECT COALESCE(jsonb_agg(jsonb_build_object(\
 	'txid',txid,'hex',encode(signed_tx,'hex'))),'[]'::jsonb) \
 	FROM public.virtual_transaction WHERE signed_tx IS NOT NULL";
 
-pub(super) fn write_json(path: impl AsRef<Path>, value: &Value) {
+pub(crate) fn write_json(path: impl AsRef<Path>, value: &Value) {
 	let mut file = OpenOptions::new().write(true).create_new(true).open(path)
 		.expect("evidence receipt must be created once");
 	serde_json::to_writer_pretty(&mut file, value).unwrap();
@@ -46,11 +68,11 @@ pub(super) fn write_json(path: impl AsRef<Path>, value: &Value) {
 	file.sync_all().unwrap();
 }
 
-pub(super) fn tip(ctx: &TestContext) -> Value {
+pub(crate) fn tip(ctx: &TestContext) -> Value {
 	ctx.bitcoind().sync_client().call("getblockchaininfo", &[]).unwrap()
 }
 
-fn public_derivation(ctx: &TestContext, descriptor: &str, high_water: Option<u32>) -> Value {
+pub(crate) fn public_derivation(ctx: &TestContext, descriptor: &str, high_water: Option<u32>) -> Value {
 	let rpc = ctx.bitcoind().sync_client();
 	let info: Value = rpc.call("getdescriptorinfo", &[json!(descriptor)]).unwrap();
 	assert_eq!(info["hasprivatekeys"], false, "only public descriptors may leave the origin");
@@ -67,9 +89,9 @@ fn public_derivation(ctx: &TestContext, descriptor: &str, high_water: Option<u32
 		"range": [0, end], "creation_high_water_mark": high_water})
 }
 
-pub(super) struct Evidence {
-	pub(super) dir: PathBuf,
-	pub(super) source_incarnation: String,
+pub(crate) struct Evidence {
+	pub(crate) dir: PathBuf,
+	pub(crate) source_incarnation: String,
 	pub(super) observer_incarnation: String,
 	debug: Option<Value>,
 	captures: Vec<Value>,
@@ -79,10 +101,22 @@ pub(super) struct Evidence {
 	baseline: Option<Value>,
 	final_sql: Option<Value>,
 	reader: Client,
+	receive_chain: bool,
 }
 
 impl Evidence {
 	pub(super) async fn new(ctx: &TestContext, srv: &Captaind, board_fee: bool) -> Self {
+		let mut ret = Self::new_capture(ctx, srv, board_fee, false).await;
+		ret.configuration(ctx, srv, "baseline").await;
+		ret
+	}
+
+	/// Reuse public fact exports without the board fixture's no-Lightning admission.
+	pub(crate) async fn new_receive_chain(ctx: &TestContext, srv: &Captaind) -> Self {
+		Self::new_capture(ctx, srv, false, true).await
+	}
+
+	async fn new_capture(ctx: &TestContext, srv: &Captaind, board_fee: bool, receive_chain: bool) -> Self {
 		let dir = ctx.datadir.join("money-evidence");
 		fs::create_dir(&dir).unwrap();
 		let config = srv.config().postgres.clone();
@@ -100,10 +134,11 @@ impl Evidence {
 			REVOKE CREATE ON SCHEMA public FROM PUBLIC; \
 			REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC; \
 			GRANT CONNECT ON DATABASE {database} TO {role}; GRANT USAGE ON SCHEMA public TO {role}")).await.unwrap();
-		let tables = FINANCIAL.lines().filter_map(|line| line.split("FROM public.").nth(1))
+		let mut tables = FINANCIAL.lines().filter_map(|line| line.split("FROM public.").nth(1))
 			.map(|part| part.split(|c: char| !c.is_ascii_alphanumeric() && c != '_').next().unwrap())
 			.chain(std::iter::once("virtual_transaction")).collect::<BTreeSet<_>>();
 		assert_eq!(tables.len(), 29, "financial table allowlist changed");
+		if receive_chain { tables.extend(["htlc_settlement", "htlc_vtxo", "vtxo_pool"]); }
 		for table in tables {
 			admin.batch_execute(&format!("GRANT SELECT ON public.{table} TO {role}")).await.unwrap();
 		}
@@ -112,18 +147,16 @@ impl Evidence {
 		cfg.user(&role).password(password);
 		let (reader, connection) = cfg.connect(NoTls).await.expect("independent SELECT-only role must connect");
 		tokio::spawn(async move { connection.await.expect("evidence reader connection failed"); });
-		let mut ret = Self { dir, source_incarnation: Uuid::new_v4().to_string(),
+		Self { dir, source_incarnation: Uuid::new_v4().to_string(),
 			observer_incarnation: Uuid::new_v4().to_string(), debug: None, captures: vec![],
 			owned: BTreeSet::new(), configurations: vec![], board_fee_authority: board_fee.then(|| json!({
 				"schema": 1, "kind": "original-board-fee-authority-v1",
 				"candidate": std::env::var("GIT_HASH").expect("the native runner must declare its candidate"),
 				"configuration_history_complete": true, "configurations": [], "action_ids": {}})),
-			baseline: None, final_sql: None, reader };
-		ret.configuration(ctx, srv, "baseline").await;
-		ret
+			baseline: None, final_sql: None, reader, receive_chain }
 	}
 
-	pub(super) fn action(&self, ctx: &TestContext, kind: &str, receipt: Value) -> String {
+	pub(crate) fn action(&self, ctx: &TestContext, kind: &str, receipt: Value) -> String {
 		let observed = tip(ctx);
 		let id = Uuid::new_v4().to_string();
 		let mut file = OpenOptions::new().create(true).append(true)
@@ -235,7 +268,7 @@ impl Evidence {
 		authority["action_ids"]["board"] = json!(id);
 	}
 
-	pub(super) async fn sql(&mut self, phase: &str) -> Value {
+	pub(crate) async fn sql(&mut self, phase: &str) -> Value {
 		let tx = self.reader.build_transaction().isolation_level(tokio_postgres::IsolationLevel::RepeatableRead)
 			.read_only(true).start().await.unwrap();
 		let privileges = query_json(&tx, include_str!("reader-privileges.sql")).await;
@@ -247,12 +280,17 @@ impl Evidence {
 		assert_eq!(privileges["role"], privileges["session_role"], "SET ROLE is not independent admission");
 		let financial = query_json(&tx, FINANCIAL).await;
 		let paths = query_json(&tx, PATHS).await;
-		let receipt = json!({"same_read_only_snapshot": true, "snapshot": financial["snapshot"],
+		let receives = if self.receive_chain { Some(query_json(&tx, RECEIVE_CHAIN).await) } else { None };
+		let mut receipt = json!({"same_read_only_snapshot": true, "snapshot": financial["snapshot"],
 			"captured_at": financial["captured_at"], "transaction_read_only": financial["transaction_read_only"],
 			"isolation": financial["isolation"], "effective_privileges": privileges,
 			"financial_sql_sha256": sha256::Hash::hash(FINANCIAL.as_bytes()).to_string(),
 			"paths_sql_sha256": sha256::Hash::hash(PATHS.as_bytes()).to_string()});
 		tx.rollback().await.unwrap();
+		if let Some(receives) = receives {
+			receipt["receive_chain_sql_sha256"] = json!(sha256::Hash::hash(RECEIVE_CHAIN.as_bytes()).to_string());
+			write_json(self.dir.join(format!("receive-authority-{phase}.json")), &receives);
+		}
 		write_json(self.dir.join(format!("db-{phase}.json")), &financial);
 		write_json(self.dir.join(format!("raw-paths-{phase}.json")), &paths);
 		write_json(self.dir.join(format!("sql-acquisition-{phase}.json")), &receipt);
@@ -325,7 +363,7 @@ impl Evidence {
 			onchain.inner.derivation_index(KeychainKind::External)));
 	}
 
-	pub(super) async fn operator_descriptors(&self, ctx: &TestContext, srv: &Captaind, db: &Db) {
+	pub(crate) async fn operator_descriptors(&self, ctx: &TestContext, srv: &Captaind, db: &Db) {
 		let mnemonic = server::wallet::read_mnemonic_from_datadir(&srv.config().data_dir).unwrap();
 		let master = Xpriv::new_master(Network::Regtest, &mnemonic.to_seed("")).unwrap();
 		let mut records = vec![];
@@ -402,7 +440,7 @@ impl Evidence {
 			"fallback_registration": registration, "signed_fallback_record": fallback}));
 	}
 
-	pub(super) fn chain(&self, ctx: &TestContext, phase: &str) {
+	pub(crate) fn chain(&self, ctx: &TestContext, phase: &str) {
 		let rpc = ctx.bitcoind().sync_client();
 		let before = tip(ctx);
 		let mut blocks = vec![];
@@ -424,7 +462,7 @@ impl Evidence {
 			"scan_start_height": 0, "blocks": blocks, "previous_transactions": [], "mempool_transactions": transactions}));
 	}
 
-	pub(super) fn transaction(&self, ctx: &TestContext, phase: &str, tx: &Transaction) {
+	pub(crate) fn transaction(&self, ctx: &TestContext, phase: &str, tx: &Transaction) {
 		let rpc = ctx.bitcoind().sync_client();
 		let raw: Value = rpc.call("getrawtransaction", &[json!(tx.compute_txid()), json!(true)]).unwrap();
 		let previous = tx.input.iter().map(|input| rpc.call::<Value>("getrawtransaction",
@@ -459,7 +497,7 @@ impl Evidence {
 	}
 }
 
-fn collect_executables(root: &Path, directory: &Path, receipts: &mut Vec<Value>) {
+pub(crate) fn collect_executables(root: &Path, directory: &Path, receipts: &mut Vec<Value>) {
 	let mut entries = fs::read_dir(directory).unwrap().map(|entry| entry.unwrap()).collect::<Vec<_>>();
 	entries.sort_by_key(|entry| entry.file_name());
 	for entry in entries {

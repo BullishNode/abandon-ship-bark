@@ -16,19 +16,8 @@ impl server_rpc::server::IntegrationService for Server {
 		&self,
 		req: tonic::Request<protos::intman::TokensRequest>,
 	) -> Result<tonic::Response<protos::intman::Tokens>, tonic::Status> {
-		// The extension prefers `X-Forwarded-For`, which is client-
-		// controlled. Trustworthy here because the integration listener
-		// is reachable only via the traefik->envoy chain (traefik strips
-		// client XFF, envoy resolves via `xff_num_trusted_hops: 1`) and
-		// UFW closes the raw port. See `RemoteAddrService` docs.
-		let client_address =
-			if let Some(remote_addr) = req.extensions().get::<SocketAddr>().cloned() {
-				Some(remote_addr)
-			} else if let Some(remote_addr) = req.remote_addr() {
-				Some(remote_addr)
-			} else {
-				None
-			};
+		// RemoteAddrLayer derives this extension from the TCP peer and explicitly trusted proxies.
+		let client_address = req.extensions().get::<SocketAddr>().copied();
 		let req = req.into_inner();
 		let api_key = uuid::Uuid::try_from(req.api_key.clone()).badarg("invalid API key")?;
 
@@ -60,19 +49,8 @@ impl server_rpc::server::IntegrationService for Server {
 		&self,
 		req: tonic::Request<protos::intman::TokenInfoRequest>,
 	) -> Result<tonic::Response<protos::intman::TokenInfo>, tonic::Status> {
-		// The extension prefers `X-Forwarded-For`, which is client-
-		// controlled. Trustworthy here because the integration listener
-		// is reachable only via the traefik->envoy chain (traefik strips
-		// client XFF, envoy resolves via `xff_num_trusted_hops: 1`) and
-		// UFW closes the raw port. See `RemoteAddrService` docs.
-		let client_address =
-			if let Some(remote_addr) = req.extensions().get::<SocketAddr>().cloned() {
-				Some(remote_addr)
-			} else if let Some(remote_addr) = req.remote_addr() {
-				Some(remote_addr)
-			} else {
-				None
-			};
+		// RemoteAddrLayer derives this extension from the TCP peer and explicitly trusted proxies.
+		let client_address = req.extensions().get::<SocketAddr>().copied();
 		let req = req.into_inner();
 		let api_key = uuid::Uuid::try_from(req.api_key).badarg("invalid API key")?;
 
@@ -103,19 +81,8 @@ impl server_rpc::server::IntegrationService for Server {
 		&self,
 		req: tonic::Request<protos::intman::UpdateTokenRequest>,
 	) -> Result<tonic::Response<protos::intman::TokenInfo>, tonic::Status> {
-		// The extension prefers `X-Forwarded-For`, which is client-
-		// controlled. Trustworthy here because the integration listener
-		// is reachable only via the traefik->envoy chain (traefik strips
-		// client XFF, envoy resolves via `xff_num_trusted_hops: 1`) and
-		// UFW closes the raw port. See `RemoteAddrService` docs.
-		let client_address =
-			if let Some(remote_addr) = req.extensions().get::<SocketAddr>().cloned() {
-				Some(remote_addr)
-			} else if let Some(remote_addr) = req.remote_addr() {
-				Some(remote_addr)
-			} else {
-				None
-			};
+		// RemoteAddrLayer derives this extension from the TCP peer and explicitly trusted proxies.
+		let client_address = req.extensions().get::<SocketAddr>().copied();
 		let req = req.into_inner();
 		let api_key = uuid::Uuid::try_from(req.api_key.clone()).badarg("invalid API key")?;
 
@@ -150,12 +117,8 @@ impl server_rpc::server::IntegrationService for Server {
 
 /// Run the integration gRPC endpoint.
 ///
-/// `config.rpc.integration_address` must be reachable only through the
-/// trusted proxy chain (traefik -> envoy -> captaind). `RemoteAddrLayer`
-/// honours `X-Forwarded-For` unconditionally, so the per-key IP
-/// filters downstream are meaningful only while traefik normalises XFF
-/// (`trustedIPs: []`), envoy resolves it (`xff_num_trusted_hops: 1`),
-/// and UFW blocks direct access to the port.
+/// `RemoteAddrLayer` uses the TCP peer unless that peer appears in
+/// `config.rpc.integration_trusted_proxies`. See its docs for the proxy contract.
 pub async fn run_rpc_server(server: Arc<Server>) -> anyhow::Result<()> {
 	crate::rpcserver::RPC_RICH_ERRORS.store(server.config.rpc_rich_errors, atomic::Ordering::Relaxed);
 
@@ -172,7 +135,9 @@ pub async fn run_rpc_server(server: Arc<Server>) -> anyhow::Result<()> {
 		))
 		.layer(OtelGrpcLayer::default())
 		.layer(crate::rpcserver::middleware::TelemetryMetricsLayer)
-		.layer(crate::rpcserver::middleware::RemoteAddrLayer)
+		.layer(crate::rpcserver::middleware::RemoteAddrLayer::new(
+			&server.config.rpc.integration_trusted_proxies,
+		))
 		.add_service(integration_server)
 		.serve_with_shutdown(addr, server.rtmgr.shutdown_signal()).await
 		.map_err(|e| {

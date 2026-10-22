@@ -570,11 +570,14 @@ impl DaemonHelper for CaptaindHelper {
 		trace!("admin rpc address: {}", admin_address.to_string());
 		trace!("integration rpc address: {}", integration_port.to_string());
 
-		self.cfg.lock().rpc = config::Rpc {
+		let mut cfg = self.cfg.lock();
+		let integration_trusted_proxies = cfg.rpc.integration_trusted_proxies.clone();
+		cfg.rpc = config::Rpc {
 			public_address: SocketAddr::from_str(public_address.as_str())?,
 			max_pending_accept_reset_streams: None,
 			admin_address: Some(SocketAddr::from_str(admin_address.as_str())?),
 			integration_address: Some(SocketAddr::from_str(integration_address.as_str())?),
+			integration_trusted_proxies,
 		};
 
 		Ok(())

@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -39,33 +40,60 @@ impl RpcMethodDetails {
 }
 
 #[derive(Clone)]
-pub struct RemoteAddrLayer;
+pub struct RemoteAddrLayer {
+	trusted_proxies: Arc<[IpAddr]>,
+}
+
+impl RemoteAddrLayer {
+	pub fn new(trusted_proxies: &[IpAddr]) -> Self {
+		Self { trusted_proxies: trusted_proxies.into() }
+	}
+}
 
 impl<S> Layer<S> for RemoteAddrLayer {
 	type Service = RemoteAddrService<S>;
 
 	fn layer(&self, inner: S) -> Self::Service {
-		RemoteAddrService { inner }
+		RemoteAddrService { inner, trusted_proxies: self.trusted_proxies.clone() }
 	}
 }
 
-/// Populates the request extensions with a `SocketAddr` for the client,
-/// preferring the leftmost hop of `X-Forwarded-For` when present and
-/// falling back to the TCP peer otherwise.
+/// Populates the request extensions with a `SocketAddr` for the client.
 ///
-/// `X-Forwarded-For` is client-controlled; this layer does not validate
-/// the TCP peer. The extension is trustworthy only when the listener is
-/// reached exclusively through a proxy chain that overwrites XFF at
-/// ingress. In the Second/Ark deployment that means traefik
-/// (`forwardedHeaders.trustedIPs: []`) plus envoy
-/// (`xff_num_trusted_hops: 1`), with UFW closing the raw integration
-/// port. Under those conditions the XFF reaching this layer is
-/// proxy-attested and safe for authorization. Otherwise, use
-/// [`tonic::Request::remote_addr`] and treat the header as annotation
-/// only.
+/// The TCP peer is authoritative unless its IP is an explicitly trusted proxy.
+/// Starting at that peer, examine `X-Forwarded-For` from right to left. Stop at
+/// the first untrusted hop. Each configured proxy must append its actual peer
+/// or replace untrusted headers. A malformed header from a trusted proxy gives
+/// no client address, so IP filters refuse the request.
 #[derive(Clone)]
 pub struct RemoteAddrService<S> {
 	inner: S,
+	trusted_proxies: Arc<[IpAddr]>,
+}
+
+fn client_address(
+	headers: &HeaderMap,
+	peer: Option<SocketAddr>,
+	trusted_proxies: &[IpAddr],
+) -> Option<SocketAddr> {
+	let mut address = peer?;
+	if !trusted_proxies.contains(&address.ip()) {
+		return Some(address);
+	}
+
+	let mut forwarded = Vec::new();
+	for header in headers.get_all("x-forwarded-for") {
+		for hop in header.to_str().ok()?.split(',') {
+			forwarded.push(hop.trim().parse::<IpAddr>().ok()?);
+		}
+	}
+	for hop in forwarded.into_iter().rev() {
+		if !trusted_proxies.contains(&address.ip()) {
+			break;
+		}
+		address = SocketAddr::new(hop, 0);
+	}
+	Some(address)
 }
 
 impl<S, ReqBody> Service<hyper::Request<ReqBody>> for RemoteAddrService<S>
@@ -84,21 +112,12 @@ where
 	}
 
 	fn call(&mut self, mut req: hyper::Request<ReqBody>) -> Self::Future {
-		if let Some(ff) = req
-			.headers()
-			.get("x-forwarded-for")
-			.and_then(|v| v.to_str().ok())
-			.and_then(|s| s.split(',').next())
-			.and_then(|ip| ip.trim().parse::<std::net::IpAddr>().ok())
-		{
-			req.extensions_mut().insert(std::net::SocketAddr::new(ff, 0));
-		} else if let Some(remote) = req
-			.extensions()
+		let peer = req.extensions()
 			.get::<TcpConnectInfo>()
-			.and_then(|info| info.remote_addr())
-		{
-			// 2. Fallback: the TCP peer (nginx or direct client)
-			req.extensions_mut().insert(remote);
+			.and_then(|info| info.remote_addr());
+		req.extensions_mut().remove::<SocketAddr>();
+		if let Some(address) = client_address(req.headers(), peer, &self.trusted_proxies) {
+			req.extensions_mut().insert(address);
 		}
 
 		self.inner.call(req)
@@ -443,6 +462,113 @@ impl<S> tower::Layer<S> for TelemetryMetricsLayer {
 
 	fn layer(&self, inner: S) -> Self::Service {
 		TelemetryMetricsService::new(inner)
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use std::convert::Infallible;
+	use std::future::{ready, Ready};
+
+	use hickory_resolver::config::ResolverConfig;
+	use hickory_resolver::net::runtime::TokioRuntimeProvider;
+	use hickory_resolver::TokioResolver;
+
+	use crate::filters::Filters;
+
+	use super::*;
+
+	#[derive(Clone)]
+	struct AddressEcho;
+
+	impl Service<hyper::Request<tonic::body::Body>> for AddressEcho {
+		type Response = Option<SocketAddr>;
+		type Error = Infallible;
+		type Future = Ready<Result<Self::Response, Self::Error>>;
+
+		fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+			Poll::Ready(Ok(()))
+		}
+
+		fn call(&mut self, request: hyper::Request<tonic::body::Body>) -> Self::Future {
+			ready(Ok(request.extensions().get::<SocketAddr>().copied()))
+		}
+	}
+
+	async fn remote_address(peer: Option<&str>, forwarded: &[&str], proxies: &[&str]) -> Option<SocketAddr> {
+		let mut request = hyper::Request::new(tonic::body::Body::empty());
+		if let Some(peer) = peer {
+			request.extensions_mut().insert(TcpConnectInfo {
+				local_addr: None, remote_addr: Some(peer.parse().unwrap()),
+			});
+		}
+		// A stale extension must not survive a missing or malformed transport identity.
+		request.extensions_mut().insert("192.0.2.99:9".parse::<SocketAddr>().unwrap());
+		for header in forwarded {
+			request.headers_mut().append("x-forwarded-for", header.parse().unwrap());
+		}
+		let proxies = proxies.iter().map(|ip| ip.parse().unwrap()).collect::<Vec<_>>();
+		RemoteAddrLayer::new(&proxies).layer(AddressEcho).call(request).await.unwrap()
+	}
+
+	#[tokio::test]
+	async fn integration_direct_peer_cannot_spoof_allowed_source_ip() {
+		let peer = "198.51.100.9:54321";
+		let address = remote_address(Some(peer), &["192.0.2.44"], &[]).await.unwrap();
+		assert_eq!(address, peer.parse().unwrap());
+		let resolver = TokioResolver::builder_with_config(
+			ResolverConfig::default(), TokioRuntimeProvider::default(),
+		).build().unwrap();
+		assert!(!Filters::init(vec!["192.0.2.44".into()], vec![]).allowed(&resolver, &address).await);
+		assert!(Filters::init(vec!["198.51.100.9".into()], vec![]).allowed(&resolver, &address).await);
+		assert_eq!(remote_address(Some(peer), &["malformed"], &["192.0.2.2"]).await, Some(address));
+	}
+
+	#[tokio::test]
+	async fn integration_loopback_peer_is_not_automatically_a_trusted_proxy() {
+		for peer in ["127.0.0.1:1234", "[::1]:1234"] {
+			assert_eq!(remote_address(Some(peer), &["192.0.2.44"], &[]).await, Some(peer.parse().unwrap()));
+		}
+	}
+
+	#[tokio::test]
+	async fn integration_explicit_proxy_can_attest_allowed_ipv4_and_ipv6_sources() {
+		let resolver = TokioResolver::builder_with_config(
+			ResolverConfig::default(), TokioRuntimeProvider::default(),
+		).build().unwrap();
+		for (peer, proxy, client) in [
+			("192.0.2.2:1234", "192.0.2.2", "198.51.100.44"),
+			("[2001:db8::2]:1234", "2001:db8::2", "2001:db8::44"),
+		] {
+			let address = remote_address(Some(peer), &[client], &[proxy]).await.unwrap();
+			assert_eq!(address, SocketAddr::new(client.parse().unwrap(), 0));
+			assert!(Filters::init(vec![client.into()], vec![]).allowed(&resolver, &address).await);
+		}
+	}
+
+	#[tokio::test]
+	async fn integration_proxy_chain_stops_at_the_first_untrusted_hop() {
+		// The untrusted client supplies an allowed IP; the trusted ingress appends the real peer.
+		let address = remote_address(Some("192.0.2.2:1234"),
+			&["192.0.2.44, 198.51.100.9, 192.0.2.3"], &["192.0.2.2", "192.0.2.3"]).await;
+		assert_eq!(address, Some("198.51.100.9:0".parse().unwrap()));
+		// Separate header fields have the same ordering as one comma-separated field.
+		assert_eq!(remote_address(Some("192.0.2.2:1234"),
+			&["192.0.2.44, 198.51.100.9", "192.0.2.3"], &["192.0.2.2", "192.0.2.3"]).await, address);
+		// If only the final proxy is trusted, do not cross the preceding proxy.
+		assert_eq!(remote_address(Some("192.0.2.2:1234"),
+			&["198.51.100.9, 192.0.2.3"], &["192.0.2.2"]).await, Some("192.0.2.3:0".parse().unwrap()));
+	}
+
+	#[tokio::test]
+	async fn integration_proxy_requires_a_peer_and_a_well_formed_forwarded_chain() {
+		assert_eq!(remote_address(None, &["192.0.2.44"], &["192.0.2.2"]).await, None);
+		for header in ["", "malformed", "192.0.2.44,", "192.0.2.44, unknown", "192.0.2.44:80"] {
+			assert_eq!(remote_address(Some("192.0.2.2:1234"), &[header], &["192.0.2.2"]).await, None);
+		}
+		// Without a forwarded header, the real TCP peer remains the client address.
+		assert_eq!(remote_address(Some("192.0.2.2:1234"), &[], &["192.0.2.2"]).await,
+			Some("192.0.2.2:1234".parse().unwrap()));
 	}
 }
 

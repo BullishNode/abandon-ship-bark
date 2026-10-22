@@ -150,10 +150,9 @@ impl Server {
 	/// The bearer UUID is the primary auth factor; the IP filter is
 	/// defense-in-depth and only meaningful when `client_address`
 	/// reflects the real peer. `client_address` comes from
-	/// [`crate::rpcserver::middleware::RemoteAddrService`], which prefers
-	/// `X-Forwarded-For`; see its docs for the proxy-chain + UFW
-	/// invariants that keep the derived value trustworthy. If those
-	/// break, only the bearer UUID protects the endpoint.
+	/// [`crate::rpcserver::middleware::RemoteAddrService`], which trusts
+	/// `X-Forwarded-For` only through explicitly configured proxy IPs.
+	/// See its docs for the proxy contract.
 	async fn verify_integration_api_key(
 		&self,
 		client_address: Option<SocketAddr>,

@@ -1,5 +1,5 @@
 use std::{cmp, fs, io};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -89,10 +89,22 @@ pub struct Rpc {
 
 	/// The socket to bind to for the private admin gRPC.
 	///
-	/// Unauthenticated by design, see [crate::rpcserver::admin]. Keep it on loopback.
+	/// Unauthenticated by design, see [crate::rpcserver::admin]. Must be a loopback address.
 	pub admin_address: Option<SocketAddr>,
 	/// The socket to bind to for the integrations gRPC.
 	pub integration_address: Option<SocketAddr>,
+	/// Proxy IPs that may attest integration client addresses through X-Forwarded-For.
+	/// Empty by default. Each proxy must append its actual peer or replace untrusted headers.
+	#[serde(default)]
+	pub integration_trusted_proxies: Vec<IpAddr>,
+}
+
+pub(crate) fn validate_admin_address(address: Option<SocketAddr>) -> anyhow::Result<()> {
+	if let Some(address) = address && !address.ip().is_loopback() {
+		bail!("Invalid configuration: admin_address must use a loopback IP address; \
+			the admin gRPC API has no authentication");
+	}
+	Ok(())
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -564,6 +576,7 @@ impl Config {
 	pub fn validate(&self) -> anyhow::Result<()> {
 		self.bitcoind.validate()?;
 		self.fees.validate()?;
+		validate_admin_address(self.rpc.admin_address)?;
 
 		if self.expiry_internal_refund_depth < 6 {
 			bail!("expiry_internal_refund_depth must be at least 6");
@@ -676,7 +689,7 @@ pub mod watchmand {
 		/// Address to expose the admin gRPC server on (e.g. "127.0.0.1:3538").
 		/// If absent, no admin RPC server is started.
 		///
-		/// Unauthenticated by design, see [crate::rpcserver::admin]. Keep it on loopback.
+		/// Unauthenticated by design, see [crate::rpcserver::admin]. Must be a loopback address.
 		pub admin_address: Option<std::net::SocketAddr>,
 
 		pub postgres: Postgres,
@@ -731,6 +744,7 @@ pub mod watchmand {
 		/// It also checks if all required configurations are available
 		pub fn validate(&self) -> anyhow::Result<()> {
 			self.bitcoind.validate()?;
+			validate_admin_address(self.admin_address)?;
 			Ok(())
 		}
 
@@ -769,6 +783,56 @@ mod test {
 		cfg.bitcoind.cookie = Some(".cookie".into());
 
 		cfg.validate().expect("error validating default config");
+	}
+
+	#[test]
+	fn admin_addresses_allow_only_loopback_or_disabled() {
+		let mut server = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
+		server.bitcoind.cookie = Some(".cookie".into());
+		let mut watchman = watchmand::Config::load(DEFAULT_WATCHMAND_CONFIG_PATH).unwrap();
+		watchman.bitcoind.cookie = Some(".cookie".into());
+
+		for address in [None, Some("127.0.0.1:3536"), Some("127.9.8.7:3536"), Some("[::1]:3536")] {
+			let address = address.map(|s| s.parse().unwrap());
+			server.rpc.admin_address = address;
+			watchman.admin_address = address;
+			server.validate().unwrap();
+			watchman.validate().unwrap();
+		}
+
+		for address in [
+			"0.0.0.0:3536", "[::]:3536", "10.0.0.1:3536", "192.0.2.1:3536",
+			"169.254.1.1:3536", "[fd00::1]:3536", "[2001:db8::1]:3536", "[::ffff:127.0.0.1]:3536",
+		] {
+			let address = Some(address.parse().unwrap());
+			server.rpc.admin_address = address;
+			watchman.admin_address = address;
+			assert!(server.validate().unwrap_err().to_string().contains("admin_address must use a loopback"));
+			assert!(watchman.validate().unwrap_err().to_string().contains("admin_address must use a loopback"));
+		}
+	}
+
+	#[test]
+	fn integration_proxy_trust_defaults_to_empty_and_accepts_only_exact_ips() {
+		let cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
+		assert!(cfg.rpc.integration_trusted_proxies.is_empty());
+		let mut rpc = serde_json::to_value(&cfg.rpc).unwrap();
+		rpc.as_object_mut().unwrap().remove("integration_trusted_proxies");
+		assert!(serde_json::from_value::<Rpc>(rpc.clone()).unwrap().integration_trusted_proxies.is_empty());
+
+		rpc["integration_trusted_proxies"] = serde_json::json!(["192.0.2.2", "2001:db8::2"]);
+		assert_eq!(serde_json::from_value::<Rpc>(rpc.clone()).unwrap().integration_trusted_proxies,
+			vec!["192.0.2.2".parse::<IpAddr>().unwrap(), "2001:db8::2".parse::<IpAddr>().unwrap()]);
+		let configured: Rpc = toml::from_str(r#"
+			public_address = "127.0.0.1:3535"
+			integration_trusted_proxies = ["192.0.2.2", "2001:db8::2"]
+		"#).unwrap();
+		assert_eq!(configured.integration_trusted_proxies,
+			vec!["192.0.2.2".parse::<IpAddr>().unwrap(), "2001:db8::2".parse::<IpAddr>().unwrap()]);
+		for invalid in ["192.0.2.0/24", "proxy.example", "192.0.2.2:443"] {
+			rpc["integration_trusted_proxies"] = serde_json::json!([invalid]);
+			assert!(serde_json::from_value::<Rpc>(rpc.clone()).is_err());
+		}
 	}
 
 	#[test]

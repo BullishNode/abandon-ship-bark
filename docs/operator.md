@@ -100,9 +100,24 @@ for the watchman. Retain a private backup before funding the wallets.
 
 ## Configure and start
 
-Keep the server and watchman admin ports on loopback or a private management
-network. Their admin RPC is not authenticated. Protect the PostgreSQL and
-Lightning endpoints with the deployment's existing access controls.
+The server and watchman refuse non-loopback admin addresses. Their admin RPC
+is not authenticated. Restrict access to local processes. Use an SSH tunnel
+for remote administration. Do not publish the admin port through a proxy.
+Protect the PostgreSQL and Lightning endpoints with the deployment's existing
+access controls.
+
+The integration manager uses the TCP peer address for per-key IP and DNS
+filters. It ignores `X-Forwarded-For` unless the peer IP appears in
+`rpc.integration_trusted_proxies`. This list is empty by default and accepts
+exact IPv4 or IPv6 addresses. There is no automatic trust for loopback or
+private networks. Set this list in the TOML file; the environment loader does
+not parse proxy IP arrays. To use a proxy chain, list every trusted proxy IP. Each
+proxy must append its actual peer address or replace untrusted headers.
+The daemon reads the chain from right to left and stops at the first
+untrusted hop. A malformed header from a trusted proxy gives no client
+address; a key with IP or DNS filters then refuses the request. Keep direct
+access to the integration listener restricted. A proxy that replaces the
+header with one verified client IP needs only its own IP in this list.
 
 Validate both configuration files before starting the services:
 

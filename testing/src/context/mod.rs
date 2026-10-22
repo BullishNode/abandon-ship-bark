@@ -483,6 +483,7 @@ impl TestContext {
 				max_pending_accept_reset_streams: None,
 				admin_address: None,
 				integration_address: None,
+				integration_trusted_proxies: Vec::new(),
 			},
 			bitcoind: server::config::Bitcoind {
 				url: bitcoind.rpc_url(),

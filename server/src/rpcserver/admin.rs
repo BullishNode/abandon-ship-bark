@@ -1,8 +1,8 @@
 //! The admin gRPC interface of captaind and watchmand.
 //!
 //! This interface deliberately has no authentication, authorization or transport encryption. It is
-//! an operator plane as privileged as shell access on the host, kept unreachable by deployment and
-//! not by the daemon.
+//! an operator plane as privileged as shell access on the host. The daemon refuses non-loopback
+//! binds. The operator must restrict local access and must not publish this port through a proxy.
 
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -242,6 +242,7 @@ pub async fn run_rpc_server(srv: Arc<Server>) -> anyhow::Result<()> {
 	let _worker = srv.rtmgr.spawn_critical("AdminRpcServer");
 
 	let addr = srv.config.rpc.admin_address.expect("shouldn't call this method otherwise");
+	crate::config::validate_admin_address(Some(addr))?;
 	info!("Starting admin gRPC service on address {}", addr);
 
 	let routes = tonic::service::Routes::default()
@@ -270,6 +271,7 @@ pub async fn run_watchmand_admin_rpc_server(
 	daemon: Arc<crate::watchman::Daemon>,
 	rtmgr: RuntimeManager,
 ) -> anyhow::Result<()> {
+	crate::config::validate_admin_address(Some(addr))?;
 	info!("Starting watchmand admin gRPC service on address {}", addr);
 
 	let routes = tonic::service::Routes::default()

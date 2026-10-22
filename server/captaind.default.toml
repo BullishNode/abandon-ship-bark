@@ -353,10 +353,16 @@ fallback_fee_rate_slow = "4sat/vb"
 public_address = "127.0.0.1:3535"
 # Listen address for the private admin gRPC API.
 # Unauthenticated by design and as privileged as shell access to this host.
-# Keep it on loopback, or comment it out to not start it.
+# Non-loopback addresses are refused. Comment it out to disable the API.
 admin_address = "127.0.0.1:3536"
 # Listen address for the integration manager gRPC API
 integration_address = "127.0.0.1:3537"
+# Exact proxy IPs that may attest integration client addresses through X-Forwarded-For.
+# Empty by default: use the TCP peer and ignore client-supplied headers.
+# Each proxy must append its actual peer or replace untrusted headers.
+# List every trusted hop. Do not list client IPs or an entire private network.
+# Set this list in TOML; the environment loader does not parse proxy IP arrays.
+#integration_trusted_proxies = ["127.0.0.1", "::1"]
 
 
 #################

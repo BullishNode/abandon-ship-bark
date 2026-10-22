@@ -423,7 +423,7 @@ impl Wallet {
 			errors.push(PaymentMethodParsingError::NetworkMismatch);
 		}
 
-		let offer_amount = offer.amount().map(|a| a.to_bitcoin_amount().unwrap());
+		let offer_amount = offer.amount().and_then(|a| a.to_bitcoin_amount());
 		match (offer_amount, uri_amount) {
 			(Some(offer_amount), Some(amount)) => {
 				if offer_amount != amount {
@@ -649,7 +649,7 @@ impl Wallet {
 
 			return Some(PaymentRequest {
 				label: None,
-				amount: offer.amount().map(|a| a.to_bitcoin_amount().unwrap()),
+				amount: offer.amount().and_then(|a| a.to_bitcoin_amount()),
 				message: offer.description().map(|d| d.to_string()),
 				options: vec![details],
 			});
@@ -917,16 +917,129 @@ fn lnurlp_scheme_to_lnurl(s: &str) -> Option<LnUrl> {
 #[cfg(test)]
 mod test {
 	use std::str::FromStr;
+	#[cfg(feature = "sqlite")]
+	use std::sync::Arc;
 
 	use ark::{SECP, VtxoPolicy};
+	use ark::lightning::{CheckAmountError, OfferAmount, offer_request_amount};
 	use bitcoin::Amount;
-	use bitcoin::secp256k1::Keypair;
+	use bitcoin::secp256k1::{Keypair, PublicKey};
 	use bitcoin::secp256k1::rand::thread_rng;
+	use lightning::offers::offer::OfferBuilder;
+
+	#[cfg(feature = "sqlite")]
+	use crate::{
+		Config, WalletInner, WalletProperties, WalletSeed,
+		chain::ChainSource,
+		exit::Exit,
+		lock_manager::memory::MemoryLockManager,
+		movement::manager::MovementManager,
+		notification::NotificationDispatch,
+		persist::{BarkPersister, adaptor::StorageAdaptorWrapper},
+		round::RoundSecretNonces,
+	};
 
 	use super::*;
 
 	const INVOICE: &str = "lntbs100u1p5j0x82sp5d0rwfh7tgrrlwsegy9rx3tzpt36cqwjqza5x4wvcjxjzscfaf6jspp5d8q7354dg3p8h0kywhqq5dq984r8f5en98hf9ln85ug0w8fx6hhsdqqcqzpc9qyysgqyk54v7tpzprxll7e0jyvtxcpgwttzk84wqsfjsqvcdtq47zt2wssxsmtjhz8dka62mdnf9jafhu3l4cpyfnsx449v4wstrwzzql2w5qqs8uh7p";
 	const ONCHAIN_ADDRESS: &str = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa";
+	// lightning 0.2.2's offers::offer::bolt12_tests currency test vector.
+	const CURRENCY_OFFER: &str = "lno1qcp4256ypqpzwyq2p32x2um5ypmx2cm5dae8x93pqthvwfzadd7jejes8q9lhc4rvjxd022zv5l44g6qah82ru5rdpnpj";
+
+	#[cfg(feature = "sqlite")]
+	async fn offline_parser_wallet(network: Network) -> Wallet {
+		let seed = WalletSeed::new_from_seed(network, &[1; 64]);
+		let db = Arc::new(StorageAdaptorWrapper::new_memory());
+		db.init_wallet(&WalletProperties {
+			network, fingerprint: seed.fingerprint(),
+			server_pubkey: None, server_mailbox_pubkey: None,
+		}).await.unwrap();
+		let chain = Arc::new(ChainSource::offline_for_test(network));
+		let notifications = NotificationDispatch::new();
+		let movements = Arc::new(MovementManager::new(db.clone(), notifications.clone()));
+		let exit = Exit::new(db.clone(), chain.clone(), movements.clone()).await.unwrap();
+		Wallet { inner: Arc::new(WalletInner {
+			chain, exit, movements, notifications, db, seed,
+			config: Config::network_default(network),
+			lock_manager: Box::new(MemoryLockManager::new()),
+			server: tokio::sync::OnceCell::new(),
+			onchain: None,
+			daemon: parking_lot::Mutex::new(None),
+			last_force_exit_scan_tip: tokio::sync::Mutex::new(None),
+			round_secret_nonces: RoundSecretNonces::new(),
+		}) }
+	}
+
+	#[cfg(feature = "sqlite")]
+	#[tokio::test]
+	async fn currency_offer_payment_request_paths() {
+		let wallet = offline_parser_wallet(Network::Bitcoin).await;
+		let offer = Offer::from_str(CURRENCY_OFFER).unwrap();
+		assert!(matches!(offer.amount(), Some(OfferAmount::Currency { .. })));
+
+		for input in [CURRENCY_OFFER.to_owned(), format!("LiGhTnInG:{}", CURRENCY_OFFER),
+			format!("bitcoin:?lno={}", CURRENCY_OFFER)]
+		{
+			let req = wallet.parse_payment_request(&input).await.unwrap();
+			assert_eq!(req.amount, None);
+			assert_eq!(req.options.len(), 1);
+			let option = req.default_option().unwrap();
+			assert_eq!(option.method, PaymentMethod::Offer(offer.clone()));
+			assert!(option.errors.is_empty());
+			assert!(option.method.requires_amount());
+		}
+
+		// A URI's bitcoin amount remains explicit input, never a currency conversion.
+		let req = wallet.parse_payment_request(&format!(
+			"bitcoin:{}?amount=0.00000042&lno={}", ONCHAIN_ADDRESS, CURRENCY_OFFER,
+		)).await.unwrap();
+		assert_eq!(req.amount, Some(Amount::from_sat(42)));
+		assert_eq!(req.options.len(), 2);
+		assert_eq!(req.default_option().unwrap().method, PaymentMethod::Offer(offer));
+		assert!(req.options.iter().all(|o| o.errors.is_empty()));
+	}
+
+	#[cfg(feature = "sqlite")]
+	#[tokio::test]
+	async fn unicode_payment_destination_is_rejected() {
+		let wallet = offline_parser_wallet(Network::Bitcoin).await;
+		for input in ["bitcoiné", "bitcoin€", "bitcoin💸"] {
+			let err = wallet.parse_payment_request(input).await.unwrap_err();
+			assert!(format!("{:#}", err).contains("No valid payment option found"));
+		}
+	}
+
+	#[test]
+	fn currency_offer_explicit_amount_and_network_validation() {
+		let offer = Offer::from_str(CURRENCY_OFFER).unwrap();
+		let amount = Amount::from_sat(42);
+		assert_eq!(offer_request_amount(&offer, Some(amount)).unwrap(), amount);
+		assert!(matches!(offer_request_amount(&offer, None),
+			Err(CheckAmountError::UnsupportedCurrency { .. })));
+
+		let details = Wallet::details_for_offer(&offer, Network::Signet, Some(amount));
+		assert_eq!(details.errors, vec![PaymentMethodParsingError::NetworkMismatch]);
+		assert!(request(vec![details]).default_option().is_none());
+	}
+
+	#[test]
+	fn bitcoin_offer_amount_rounding_and_mismatch() {
+		let pubkey = PublicKey::from_str(
+			"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+		).unwrap();
+		let offer = OfferBuilder::new(pubkey).description("rounded amount".into())
+			.amount_msats(1_500).build().unwrap();
+		let rounded = Amount::from_sat(2);
+		let req = Wallet::parse_lightning_payload(Network::Bitcoin, &offer.to_string()).unwrap();
+		assert_eq!(req.amount, Some(rounded));
+		assert!(!req.default_option().unwrap().method.requires_amount());
+		assert_eq!(offer_request_amount(&offer, None).unwrap(), rounded);
+		assert!(Wallet::details_for_offer(&offer, Network::Bitcoin, Some(rounded)).errors.is_empty());
+		let explicit = Amount::from_sat(1);
+		assert_eq!(offer_request_amount(&offer, Some(explicit)).unwrap(), explicit);
+		assert_eq!(Wallet::details_for_offer(&offer, Network::Bitcoin, Some(explicit)).errors,
+			vec![PaymentMethodParsingError::AmountMismatch { expected: rounded, got: explicit }]);
+	}
 
 	fn dummy_ark_address(testnet: bool) -> ark::Address {
 		let server = Keypair::new(&SECP, &mut thread_rng()).public_key();

@@ -439,7 +439,8 @@ impl<E: ExtensionHandler> Default for Bip321Uri<E> {
 
 /// Case-insensitive prefix strip.
 fn strip_prefix_ignore_case<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
-	if s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix) {
+	let head = s.get(..prefix.len())?;
+	if head.eq_ignore_ascii_case(prefix) {
 		Some(&s[prefix.len()..])
 	} else {
 		None
@@ -464,11 +465,8 @@ impl<E: ExtensionHandler> FromStr for Bip321Uri<E> {
 		if input.len() < SCHEME.len() {
 			return Err(Bip321Error::TooShort);
 		}
-		if !input[..SCHEME.len()].eq_ignore_ascii_case(SCHEME) {
-			return Err(Bip321Error::InvalidScheme);
-		}
-
-		let body = &input[SCHEME.len()..];
+		let body = strip_prefix_ignore_case(input, SCHEME)
+			.ok_or(Bip321Error::InvalidScheme)?;
 		let (address_str, query_str) = {
 			let mut split = body.splitn(2, '?');
 			(split.next().unwrap(), split.next())
@@ -944,6 +942,23 @@ mod tests {
 	fn reject_wrong_scheme() {
 		let err = parse_no_ext("litecoin:addr123").unwrap_err();
 		assert_eq!(err, Bip321Error::InvalidScheme);
+	}
+
+	#[test]
+	fn reject_unicode_scheme() {
+		// These characters straddle byte eight, where the scheme would end.
+		for input in ["bitcoiné", "bitcoin€", "bitcoin💸", " \tbitcoin€\n"] {
+			assert_eq!(parse_no_ext(input).unwrap_err(), Bip321Error::InvalidScheme);
+		}
+		assert_eq!(parse_no_ext("é").unwrap_err(), Bip321Error::TooShort);
+	}
+
+	#[test]
+	fn unicode_parameter_prefix() {
+		let uri = parse_no_ext("bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?req€=value").unwrap();
+		assert_eq!(uri.custom["req€"][0].inner(), "value");
+		let err = parse_no_ext("bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa?REQ-€=value").unwrap_err();
+		assert_eq!(err, Bip321Error::UnsupportedRequiredParam("€".into()));
 	}
 
 	#[test]

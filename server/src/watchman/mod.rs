@@ -457,7 +457,7 @@ impl Watchman {
 					current.get::<_, &str>("progress_txid") == txid.to_string(),
 					"expiry split instruction changed"
 				);
-				t.lock_unallocated_watchman_inputs(std::slice::from_ref(&root), false).await.context("expiry split input locks")?;
+				t.lock_unallocated_watchman_inputs(&ids).await.context("expiry split input locks")?;
 				self.process_progress_tx(&mut wallet, txid, &root, fee_rate).await
 					.context("expiry split progress publication")
 			}).await {
@@ -609,8 +609,9 @@ impl Watchman {
 	) -> anyhow::Result<()> {
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
 		let txid = tx.compute_txid();
+		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
 		self.db.write(async |t| {
-			t.lock_unallocated_watchman_inputs(vtxos, true).await?;
+			t.lock_unallocated_watchman_inputs(&ids).await?;
 			for vtxo in vtxos.iter().filter(|v| *v.policy() == ServerVtxoPolicy::ServerOwned) {
 				// Exclude mempool effects so our existing native RBF path can
 				// replace its own claim; canonical consumption always refuses.
@@ -811,7 +812,7 @@ impl Watchman {
 			if let Err(e) = self.db.write(async |t| {
 				// Normal exit progression competes with payouts for the same
 				// physical backing too. Hold its coin locks through publication.
-				t.lock_unallocated_watchman_inputs(std::slice::from_ref(&vtxo), false).await?;
+				t.lock_unallocated_watchman_inputs(&[vtxo.id()]).await?;
 				self.process_progress_tx(&mut wallet, progress_txid, &vtxo, fee_rate).await
 			}).await {
 				slog!(ProgressCpfpFailure, vtxo_id: vtxo.id(), txid: progress_txid,

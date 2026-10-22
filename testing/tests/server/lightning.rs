@@ -12,7 +12,7 @@ use futures::future::join_all;
 use log::{info, trace};
 
 use ark::{ProtocolEncoding, Vtxo, SECP};
-use ark::lightning::{PaymentHash, Preimage};
+use ark::lightning::PaymentHash;
 use bitcoin_ext::{BlockDelta, BlockHeight, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use ark::arkoor::ArkoorDestination;
@@ -23,10 +23,7 @@ use ark::vtxo::policy::VtxoPolicyKind;
 use bark::Wallet;
 use bark::lightning_invoice::Bolt11Invoice;
 use bark_json::primitives::{VtxoStateInfo, WalletVtxoInfo};
-use server_log::{
-	ClaimBroadcast, ClaimBroadcastFailure, LightningReceiveCanceled, LightningReceiveKeptCommitted,
-	ProgressBroadcast,
-};
+use server_log::{LightningReceiveCanceled, LightningReceiveKeptCommitted};
 use server_rpc::protos;
 use server::database::Db;
 use server::database::htlc_vtxo::HtlcDirection;
@@ -3657,171 +3654,4 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	for field in ["splits", "customers", "materialized"] { assert_eq!(final_state.get::<_, i64>(field), 0, "{field}"); }
 	assert_eq!(final_state.get::<_, i64>("allocations"), 1);
 	assert_eq!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap(), Some(preimage));
-}
-
-/// A revocation takes priority over a late preimage, before and after the
-/// sender registers the signed replacement chain.
-#[tokio::test]
-async fn watchman_preserves_revoked_htlc_when_preimage_arrives_late() {
-	require_bark_version!(> "0.5.0");
-	let ctx = TestContext::new(
-		"server/watchman_preserves_revoked_htlc_when_preimage_arrives_late",
-	).await;
-	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).funded(btc(10)).no_vtxo_pool()
-		.watchmand_cfg(|cfg| {
-			cfg.watchman.reaction_interval = Duration::from_secs(15 * 60);
-			cfg.watchman.sweep_interval = Duration::from_secs(15 * 60);
-		}).create().await;
-	let wm = srv.watchmand();
-	ctx.bitcoind().fund_addr(wm.wait_wallet_address().await, sat(100_000)).await;
-	let sender = ctx.bark("sender", &srv).funded(sat(500_000)).create().await;
-	let input_ids = sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
-	let wallet = sender.client().await;
-	let htlc_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
-	let refund_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
-	let preimage = Preimage::random();
-	let hash = preimage.compute_payment_hash();
-	let htlcs = cosign_htlc_send_to_pubkey(
-		&ctx, &srv, &wallet, &input_ids, htlc_key.public_key(), hash,
-	).await;
-	assert_eq!(htlcs.len(), 1);
-	let source = &htlcs[0];
-	assert_eq!(source.amount(), sat(100_000));
-	wallet.register_vtxo_transactions_with_server(&htlcs).await.unwrap();
-
-	// Keep the signed revocation in the sender's hands. The server has its
-	// committed spend link, but does not yet have the signature to publish it.
-	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
-		htlcs.clone(), ark::VtxoPolicy::new_pubkey(refund_key.public_key()),
-	).unwrap().generate_user_nonces(&[htlc_key]).unwrap();
-	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_lightning_pay_htlc_revocation(
-		protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
-	).await.unwrap().into_inner();
-	let response = ark::arkoor::package::ArkoorPackageCosignResponse::try_from(response).unwrap();
-	let replacements = builder.user_cosign(&[htlc_key], response).unwrap().build_signed_vtxos();
-	assert_eq!(replacements.len(), 1);
-	let replacement = &replacements[0];
-	assert_eq!(replacement.amount(), source.amount());
-	assert_eq!(replacement.policy(), &ark::VtxoPolicy::new_pubkey(refund_key.public_key()));
-	let funding = ctx.bitcoind().await_transaction(source.chain_anchor().txid).await;
-	source.validate(&funding).unwrap();
-	replacement.validate(&funding).unwrap();
-	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	let state = db.read(async |t| t.get_bare_vtxo_by_id(source.id()).await).await.unwrap();
-	let successor = state.oor_spent_txid.expect("revocation must commit the source spend link");
-	let successor_tx = replacement.transactions().find(|step| step.tx.compute_txid() == successor)
-		.expect("the committed successor must be on the signed replacement chain").tx;
-	assert_eq!(successor_tx.input.len(), 1);
-	assert_eq!(successor_tx.input[0].previous_output, source.point());
-	assert!(db.read(async |t| t.get_virtual_transaction_by_txid(successor).await)
-		.await.unwrap().unwrap().signed_tx.is_none());
-
-	// A stale sender publishes the HTLC instead of its revocation.
-	let scan_from = ctx.bitcoind().get_block_count().await + 1;
-	for step in source.transactions() {
-		ctx.broadcast_cpfp(&step.tx).await;
-		ctx.generate_blocks(1).await;
-	}
-	let tip = ctx.generate_blocks(source.exit_delta().to_u32()).await;
-	srv.wait_for_sync_height(tip).await;
-	wm.wait_for_sync_height(tip).await;
-	assert!(tip < source.expiry_height());
-	let core = ctx.bitcoind().sync_client();
-	let before = core.get_tx_out(&source.point().txid, source.point().vout, Some(true)).unwrap().unwrap();
-	assert!(before.confirmations > source.exit_delta().to_u32());
-	assert_eq!(before.value, source.amount());
-	assert_eq!(before.script_pub_key.script().unwrap(), source.output_script_pubkey());
-	let state = db.read(async |t| t.get_bare_vtxo_by_id(source.id()).await).await.unwrap();
-	assert_eq!(state.vtxo.serialize(), ark::ServerVtxo::from(source.clone()).to_bare().serialize());
-	assert!(state.confirmed_height.is_some());
-	assert_eq!(state.oor_spent_txid, Some(successor));
-	assert!(db.read(async |t| Ok(t.query_one(
-		"SELECT onchain_spent_height IS NULL AND onchain_spent_txid IS NULL \
-		FROM vtxo WHERE vtxo_id=$1", &[&source.id().to_string()],
-	).await?.get::<_, bool>(0))).await.unwrap());
-	assert!(db.read(async |t| Ok(t.query_one(
-		"SELECT NOT EXISTS(SELECT 1 FROM expiry_entitlement WHERE vtxo_id=$1) \
-		AND NOT EXISTS(SELECT 1 FROM expiry_allocation_input WHERE vtxo_id=$1)",
-		&[&source.id().to_string()],
-	).await?.get::<_, bool>(0))).await.unwrap());
-	let mut claims = wm.subscribe_log::<ClaimBroadcast>();
-	db.write(async |t| t.store_htlc_settlement(preimage).await).await.unwrap();
-	assert_eq!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash).await)
-		.await.unwrap(), Some(preimage));
-
-	for unavailable_successor in [false, true] {
-		if unavailable_successor {
-			db.write(async |t| Ok(t.batch_execute(
-				"ALTER TABLE virtual_transaction RENAME COLUMN signed_tx TO unavailable_signed_tx",
-			).await?)).await.unwrap();
-			assert!(db.read(async |t| t.get_virtual_transaction_by_txid(successor).await).await.is_err());
-		}
-		let mut refused = wm.subscribe_log::<ClaimBroadcastFailure>();
-		tokio::time::timeout(Duration::from_secs(10), async {
-			wm.trigger_sweep().await;
-			loop {
-				let failure = refused.recv().await.expect("watchman claim refusal");
-				if failure.vtxo_id == source.id() {
-					assert_eq!(failure.error, "tx body error");
-					break;
-				}
-			}
-		}).await.expect("the daemon must refuse the source claim within ten seconds");
-		if unavailable_successor {
-			db.write(async |t| Ok(t.batch_execute(
-				"ALTER TABLE virtual_transaction RENAME COLUMN unavailable_signed_tx TO signed_tx",
-			).await?)).await.unwrap();
-		}
-		let held = core.get_tx_out(&source.point().txid, source.point().vout, Some(true)).unwrap().unwrap();
-		assert_eq!(held.value, before.value);
-		assert_eq!(held.script_pub_key.script().unwrap(), source.output_script_pubkey());
-		assert!(core.get_raw_mempool().unwrap().into_iter().all(|txid| {
-			let tx = core.get_raw_transaction(&txid, None).unwrap();
-			tx.input.iter().all(|input| input.previous_output != source.point())
-		}));
-	}
-
-	// Register the held signature through the normal RPC. The watchman must
-	// progress to the revocation, then the sender can publish its replacement.
-	wallet.register_vtxo_transactions_with_server(&replacements).await.unwrap();
-	let mut progress = wm.subscribe_log::<ProgressBroadcast>();
-	tokio::time::timeout(Duration::from_secs(10), async {
-		wm.trigger_sweep().await;
-		loop {
-			let message = progress.recv().await.expect("watchman revocation progress");
-			if message.vtxo_id == source.id() {
-				assert_eq!(message.txid, successor);
-				ctx.await_transactions_across_nodes([message.cpfp_txid], [wm.bitcoind().as_ref()]).await;
-				assert_eq!(core.get_raw_transaction(&message.txid, None).unwrap(), successor_tx);
-				break;
-			}
-		}
-	}).await.expect("the signed revocation must progress within ten seconds");
-	ctx.generate_blocks(1).await;
-	for step in replacement.transactions() {
-		if core.get_raw_transaction_info(&step.tx.compute_txid(), None).is_err() {
-			ctx.broadcast_cpfp(&step.tx).await;
-			ctx.generate_blocks(1).await;
-		}
-	}
-	let final_tip = ctx.generate_blocks(6).await;
-	wm.wait_for_sync_height(final_tip).await;
-	let restored = core.get_tx_out(&replacement.point().txid, replacement.point().vout, Some(true)).unwrap().unwrap();
-	assert!(restored.confirmations >= 6);
-	assert_eq!(restored.value, source.amount());
-	assert_eq!(restored.script_pub_key.script().unwrap(), replacement.output_script_pubkey());
-	let mut spends = HashSet::new();
-	for height in scan_from..=final_tip.to_u32() as u64 {
-		let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
-		for tx in block.txdata {
-			if tx.input.iter().any(|input| input.previous_output == source.point()) {
-				spends.insert(tx.compute_txid());
-			}
-		}
-	}
-	assert_eq!(spends, HashSet::from([successor]));
-	while let Ok(claim) = claims.try_recv() {
-		assert!(!claim.vtxo_ids.contains(&source.id()), "revoked HTLC must never enter a broadcast claim");
-	}
 }

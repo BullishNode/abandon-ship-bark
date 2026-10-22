@@ -98,11 +98,7 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 	let first = payout(&db, ordinary).await;
 	assert_eq!(ctx.bitcoind().await_transaction(first.compute_txid()).await, first);
 	let backing = first.input.iter().map(|i| ark::VtxoId::from(i.previous_output)).collect::<Vec<_>>();
-	let mut backing_vtxos = Vec::new();
-	for id in &backing {
-		backing_vtxos.push(db.read(async |t| t.get_bare_vtxo_by_id(*id).await).await.unwrap().vtxo);
-	}
-	let reserved = db.write(async |t| t.lock_unallocated_watchman_inputs(&backing_vtxos, false).await).await
+	let reserved = db.write(async |t| t.lock_unallocated_watchman_inputs(&backing).await).await
 		.expect_err("normal watchman progression must respect the actual payout's physical backing reservation");
 	let refusal = format!("{reserved:#}");
 	assert!(backing.iter().any(|id| refusal.contains(&format!("vtxo {id} is reserved for expiry recovery"))),

@@ -63,9 +63,6 @@ or recovery.
   change to upstream round creation. This also assigns coins deliberately locked
   to that key to the operator, an accepted exception to the rule that the operator
   keeps only value it paid for. No one can spend with that key.
-- Before a claim can publish, the fork rechecks the source inside the write
-  transaction. The source row must be unchanged, confirmed and unspent. Pubkey
-  and HTLC-send sources must have no successor. A refused claim is not broadcast.
 - The watchman uses Core's observed fee to replace an unrecognized P2A fee child.
   It preserves the exact payout parent. An unrecognized child does not establish
   operator funding or customer settlement.
@@ -79,6 +76,11 @@ matching final GNU programs and the final release bundle remain required.
 
 ## Known limits and remaining qualification
 
+- The owner accepts the upstream watchman HTLC-send claim policy limit (E-1).
+  A refund successor and a payment preimage for the same coin can compete.
+  The fork refuses refunds while a payment is paid or pending and trusts its
+  database writer; it adds no successor claim guard or locked claim-source
+  recheck for this upstream limit.
 - Earlier programs could forfeit a 1,000-sat customer coin before the same
   owner's other coins were ready. The regression requires 19 rights to pay
   18,000 sats with one 1,000-sat fee and no forfeiture. The cumulative fee and
@@ -111,9 +113,10 @@ matching final GNU programs and the final release bundle remain required.
   cumulatively per payout script and expiry height. Ordinary board, refresh,
   offboard and Lightning fees are configured in TOML. This candidate does not
   make every fee configurable.
-- Payouts require confirmed usable watchman fee inputs. The operator miner
-  subsidy has no hard cap. Monitor fee reserves and verify payout recovery
-  after replenishment.
+- The operator always sponsors payout mining fees, with no cap or budget
+  condition (E-4, accepted by the owner). Payouts require confirmed usable
+  watchman fee inputs. Monitor fee reserves and verify payout recovery after
+  replenishment.
 - Ordinary watchman claims sign and broadcast before the surrounding
   database transaction commits. A commit error or lost reply does not prove
   that publication failed. Durable authorization before publication,

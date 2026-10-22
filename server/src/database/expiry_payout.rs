@@ -356,34 +356,11 @@ impl Tx<'_> {
 	/// for its physical backing. Use the allocator's sorted coin lock order and
 	/// keep these locks through broadcast, including when the root is not itself
 	/// one of the economic customer terminals.
-	pub async fn lock_unallocated_watchman_inputs(&self, vtxos: &[ServerVtxo], is_claim: bool) -> anyhow::Result<()> {
-		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
-		super::expiry_guard::guard_obligation_changes(self, &ids).await?;
+	pub async fn lock_unallocated_watchman_inputs(&self, ids: &[ark::VtxoId]) -> anyhow::Result<()> {
+		super::expiry_guard::guard_obligation_changes(self, ids).await?;
 		let ids = ids.iter().map(ToString::to_string).collect::<Vec<_>>();
 		ensure!(self.query_opt("SELECT vtxo_id FROM expiry_allocation_input WHERE vtxo_id=ANY($1) ORDER BY vtxo_id LIMIT 1", &[&ids]).await?.is_none(),
 			"watchman claim backing is reserved for expiry payouts");
-		if is_claim {
-			let rows = self.query("
-				SELECT vtxo_id,vtxo,confirmed_height,onchain_spent_height,onchain_spent_txid,oor_spent_txid
-				FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE
-			", &[&ids]).await?;
-			ensure!(rows.len() == vtxos.len(), "watchman claim source is missing or repeated");
-			for vtxo in vtxos {
-				let row = rows.iter().find(|row| row.get::<_, &str>("vtxo_id") == vtxo.id().to_string())
-					.context("watchman claim source is missing")?;
-				let current: ServerVtxo = ServerVtxo::deserialize(row.get("vtxo"))?;
-				ensure!(current.serialize() == vtxo.serialize(), "watchman claim source changed since scan");
-				ensure!(row.get::<_, Option<i32>>("confirmed_height").is_some()
-					&& row.get::<_, Option<i32>>("onchain_spent_height").is_none()
-					&& row.get::<_, Option<&str>>("onchain_spent_txid").is_none(),
-					"watchman claim source is not confirmed and unspent");
-				if matches!(vtxo.policy(), ServerVtxoPolicy::User(VtxoPolicy::Pubkey(_)
-					| VtxoPolicy::ServerHtlcSend(_) | VtxoPolicy::ServerHtlcSend_v0(_))) {
-					ensure!(row.get::<_, Option<&str>>("oor_spent_txid").is_none(),
-						"watchman claim source has a successor");
-				}
-			}
-		}
 		Ok(())
 	}
 }

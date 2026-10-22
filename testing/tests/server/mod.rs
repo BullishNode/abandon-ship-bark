@@ -2819,5 +2819,3 @@ async fn board_exit_tx_prevents_registration() {
 	let balance = bark.spendable_balance_no_sync().await;
 	assert_eq!(balance, Amount::ZERO, "spendable balance should be zero since board was not registered");
 }
-
-mod watchman_successor;

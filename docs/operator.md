@@ -443,12 +443,22 @@ separately from orderly cold backup recovery.
    restore as the intended application owner:
 
    ```sh
+   set -eu
    /usr/lib/postgresql/17/bin/createdb --host="$PGHOST" --port="$PGPORT" \
      --username="$PGADMIN" --owner="$APP_DB_OWNER" "$RESTORE_DATABASE"
    /usr/lib/postgresql/17/bin/pg_restore --single-transaction --exit-on-error \
      --no-owner --host="$PGHOST" --port="$PGPORT" \
      --username="$APP_DB_OWNER" --dbname="$RESTORE_DATABASE" "$PRIVATE_DUMP"
+   /usr/lib/postgresql/17/bin/psql --host="$PGHOST" --port="$PGPORT" \
+     --username="$APP_DB_OWNER" --dbname="$RESTORE_DATABASE" \
+     --set=ON_ERROR_STOP=1 --command='TRUNCATE expiry_ledger_commit;'
    ```
+
+   After a successful logical restore, clear only `expiry_ledger_commit` before
+   either application daemon starts. This invalidates the restored expiry
+   watermark so both chain views rebuild. Preserve obligations, allocations,
+   entitlements, history sequences and Lightning records. Do not run the reset
+   on ordinary startup or a binary-only rollback. Stop if either command fails.
 
 6. Exclude all original producers before any restored instance starts. For an
    isolated rehearsal, use the stopped original CLN state at the backup
@@ -461,8 +471,10 @@ separately from orderly cold backup recovery.
    Start the original CLN identity and then both application daemons. Wait for
    both completed canonical chain views. Reconcile all registrations,
    obligations, balances, UTXOs and source-specific Lightning outcomes.
-8. Require every previously accepted registration and unpaid obligation to
-   survive. Require the pending allocation to complete exactly once, the held
+8. Require the expiry ledger to rebuild before financial work resumes. A
+   subsequent financial commit on the same chain view must change its history
+   token. Require every previously accepted registration and unpaid obligation
+   to survive. Require the pending allocation to complete exactly once, the held
    coin to remain held, and the next new payout to pay its rightful owner.
    Independently close customer principal, stated fees, operator remainder and
    miner fees on the canonical chain. An allocation status is not proof.

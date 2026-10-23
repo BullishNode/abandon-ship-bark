@@ -3,6 +3,7 @@
 use anyhow::Context;
 use bitcoin::BlockHash;
 use bitcoin_ext::{BlockHeight, BlockRef};
+use bitcoind_async_client::traits::Reader;
 
 use super::{BlockTable, Db, Tx};
 use crate::sync::{BlockData, ChainEventListener, RawMempool};
@@ -12,6 +13,16 @@ pub struct ExpiryViewToken {
 	pub generation: i64,
 	pub captaind: BlockRef,
 	pub watchmand: BlockRef,
+}
+
+impl ExpiryViewToken {
+	pub(crate) async fn verify(self, client: &bitcoind_async_client::Client) -> anyhow::Result<()> {
+		for point in [self.captaind, self.watchmand] {
+			ensure!(client.get_block_hash(point.height.into()).await? == point.hash,
+				"expiry completed sync view is no longer canonical");
+		}
+		Ok(())
+	}
 }
 
 pub struct ExpiryChainListener {

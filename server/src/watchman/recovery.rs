@@ -43,7 +43,7 @@ impl Watchman {
 		let Some(view) = self.db.read(async |t| t.expiry_rebuild_token().await).await? else {
 			return Ok(None);
 		};
-		self.verify_expiry_view(view).await?;
+		view.verify(&self.bitcoind).await?;
 		let (ids, recheck, txids, claims) = self.db.read(async |t| {
 			let allocations = t.query("
 				SELECT id, sweep_txid, status <> 'confirmed'
@@ -100,7 +100,7 @@ impl Watchman {
 				paid_claims.push((id, txid, *point));
 			}
 		}
-		self.verify_expiry_view(view).await?;
+		view.verify(&self.bitcoind).await?;
 		let rebuilt = self.db.write(async |t| {
 			t.query_one("
 				SELECT generation

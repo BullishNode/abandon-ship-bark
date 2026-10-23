@@ -44,13 +44,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Context;
-use bitcoin::{Address, Amount, FeeRate, Transaction, TxIn, TxOut, Sequence, ScriptBuf, Weight, Witness, sighash};
+use bitcoin::{Address, Amount, FeeRate, Transaction, TxOut, ScriptBuf, Weight};
 use bitcoin::Txid;
 use tokio::sync::watch;
 use tracing::{info, trace, warn};
 
 use ark::{ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
-use ark::vtxo::policy::signing::VtxoSigner;
 use bitcoin_ext::{fee, BlockHeight, BlockRef, TxStatus, P2TR_DUST};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
 use bitcoin_ext::cpfp::MakeCpfpFees;
@@ -438,7 +437,7 @@ impl Watchman {
 		if !claims.is_empty() { self.process_claims(claims).await?; }
 		let splits = self.db.read(async |t| t.pending_expiry_splits().await).await?;
 		for (txid, root) in splits {
-			self.verify_expiry_view(view).await?;
+			view.verify(&self.bitcoind).await?;
 			let ids = [root.id()];
 			// Match the fee-payout path's wallet -> view -> coin lock order.
 			// A reorg invalidation waiting on the view cannot invert it.
@@ -661,51 +660,10 @@ impl Watchman {
 		vtxos: &[ServerVtxo],
 		fee_rate: FeeRate,
 	) -> anyhow::Result<Transaction> {
-		let mut inputs = Vec::with_capacity(vtxos.len());
-		let mut clauses = Vec::with_capacity(vtxos.len());
-		let mut total_input_weight = 0;
-		let mut total_input_amount = Amount::ZERO;
-
-		for vtxo in vtxos {
-			//TODO(stevenroose) try remove this special case
-			if *vtxo.policy() == ServerVtxoPolicy::ServerOwned {
-				let input = TxIn {
-					previous_output: vtxo.point(),
-					script_sig: ScriptBuf::new(),
-					sequence: Sequence::ZERO,
-					witness: Witness::new(),
-				};
-
-				// TxIn base weight (non-witness) + witness weight
-				total_input_weight += 4 * input.base_size() + (1 + 1 + 64); // nb items + sig
-				total_input_amount += vtxo.amount();
-
-				inputs.push(input);
-				clauses.push(None);
-			} else {
-				let clause = self.signer.find_signable_clause(vtxo).await
-					.context(vtxo.id())
-					.context("no signable clause for vtxo")?;
-
-				let input = TxIn {
-					previous_output: vtxo.point(),
-					script_sig: ScriptBuf::new(),
-					sequence: clause.sequence().unwrap_or(Sequence::ZERO),
-					witness: Witness::new(),
-				};
-
-				// TxIn base weight (non-witness) + witness weight
-				total_input_weight += 4 * input.base_size() + clause.witness_size(vtxo);
-				total_input_amount += vtxo.amount();
-
-				inputs.push(input);
-				clauses.push(Some(clause));
-			}
-
-			slog!(PreparingVtxoClaim, vtxo_id: vtxo.id(), policy: vtxo.policy().policy_type(),
-				value: vtxo.amount(),
-			);
-		}
+		let (inputs, clauses, total_input_amount) = self.claim_inputs(vtxos).await?;
+		let total_input_weight = inputs.iter().zip(&clauses).zip(vtxos).map(|((input, clause), vtxo)| {
+			4 * input.base_size() + clause.as_ref().map(|c| c.witness_size(vtxo)).unwrap_or(1 + 1 + 64)
+		}).sum::<usize>();
 
 		let lock_time = self.sync_height().height.to_locktime()
 			.expect("valid block height");
@@ -737,40 +695,14 @@ impl Watchman {
 			value: output_amount,
 		};
 
-		let mut tx = Transaction {
+		let tx = Transaction {
 			version: bitcoin::transaction::Version::TWO,
 			lock_time,
 			input: inputs,
 			output: vec![output],
 		};
 
-		// Sign all inputs
-		let prevouts = vtxos.iter().map(|vtxo| vtxo.txout()).collect::<Vec<_>>();
-		let prevouts = sighash::Prevouts::All(&prevouts);
-
-		let mut sighash_cache = sighash::SighashCache::new(&mut tx);
-		for (input_idx, (vtxo, clause)) in vtxos.iter().zip(&clauses).enumerate() {
-			if let Some(clause) = clause {
-				let witness = self.signer.sign_input_with_clause(
-					vtxo, clause, input_idx, &mut sighash_cache, &prevouts,
-				).await.with_context(|| format!(
-					"failed to sign script-spend input {} of tx {}",
-					input_idx, sighash_cache.transaction().compute_txid(),
-				))?;
-				*sighash_cache.witness_mut(input_idx).unwrap() = witness;
-			} else {
-				// keyspend
-				let witness = self.signer.sign_input_with_keyspend(
-					vtxo, input_idx, &mut sighash_cache, &prevouts,
-				).await.with_context(|| format!(
-					"failed to sign key-spend input {} of tx {}",
-					input_idx, sighash_cache.transaction().compute_txid(),
-				))?;
-				*sighash_cache.witness_mut(input_idx).unwrap() = witness;
-			}
-		}
-
-		Ok(tx)
+		self.sign_claim_inputs(vtxos, &clauses, tx).await
 	}
 
 	/// Process vtxos that need to be progressed.

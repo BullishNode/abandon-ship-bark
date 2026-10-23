@@ -49,7 +49,7 @@ async fn mempool_child_fee(
 }
 
 impl Watchman {
-	async fn payout_inputs(
+	pub(super) async fn claim_inputs(
 		&self, vtxos: &[ServerVtxo],
 	) -> anyhow::Result<(Vec<TxIn>, Vec<Option<VtxoClause>>, Amount)> {
 		let mut inputs = Vec::with_capacity(vtxos.len());
@@ -95,7 +95,7 @@ impl Watchman {
 
 		Ok((inputs, clauses, total_input_amount))
 	}
-	async fn sign_payout_inputs(
+	pub(super) async fn sign_claim_inputs(
 		&self, vtxos: &[ServerVtxo], clauses: &[Option<VtxoClause>], mut tx: Transaction,
 	) -> anyhow::Result<Transaction> {
 		// Sign all inputs
@@ -145,7 +145,7 @@ impl Watchman {
 				"expiry payout backing is not the exact confirmed output");
 		}
 		ensure!(payouts.iter().all(|out| out.is_standard()), "expiry payout contains nonstandard or dust payee output");
-		let (inputs, clauses, input_amount) = self.payout_inputs(vtxos).await?;
+		let (inputs, clauses, input_amount) = self.claim_inputs(vtxos).await?;
 		let paid = payouts.iter().try_fold(Amount::ZERO, |sum, out|
 			sum.checked_add(out.value).context("expiry payout amount overflow"),
 		)?;
@@ -164,7 +164,7 @@ impl Watchman {
 			version: bitcoin::transaction::Version::non_standard(3),
 			lock_time, input: inputs, output: outputs,
 		};
-		let tx = self.sign_payout_inputs(vtxos, &clauses, tx).await?;
+		let tx = self.sign_claim_inputs(vtxos, &clauses, tx).await?;
 		ensure!(tx.vsize() <= MAX_PAYOUT_VSIZE, "expiry payout requires splitting: {} vbytes", tx.vsize());
 		let outputs = tx.output.iter().try_fold(Amount::ZERO, |sum, out|
 			sum.checked_add(out.value).context("expiry payout output overflow"),
@@ -279,7 +279,7 @@ impl Watchman {
 		// wallet/Core state. Persist address allocation, not a child ledger.
 		wallet.persist().await?;
 		drop(wallet);
-		self.verify_expiry_view(view).await?;
+		view.verify(&self.bitcoind).await?;
 		self.db.write(async |t| {
 			t.lock_valid_expiry_view(view).await?;
 			let row = t.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1 FOR UPDATE",
@@ -293,14 +293,6 @@ impl Watchman {
 				&[&group.id]).await?;
 			Ok(())
 		}).await?;
-		Ok(())
-	}
-
-	pub(crate) async fn verify_expiry_view(&self, view: ExpiryViewToken) -> anyhow::Result<()> {
-		for point in [view.captaind, view.watchmand] {
-			ensure!(self.bitcoind.get_block_hash(point.height.into()).await? == point.hash,
-				"expiry completed sync view is no longer canonical");
-		}
 		Ok(())
 	}
 

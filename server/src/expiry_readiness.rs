@@ -95,14 +95,6 @@ impl Server {
 		});
 	}
 
-	pub(crate) async fn verify_readiness_view(&self, view: ExpiryViewToken) -> anyhow::Result<()> {
-		for point in [view.captaind, view.watchmand] {
-			ensure!(self.bitcoind.get_block_hash(point.height.into()).await? == point.hash,
-				"expiry readiness view is no longer canonical");
-		}
-		Ok(())
-	}
-
 	async fn expiry_readiness_pass(self: &Arc<Self>, cursor: i64) -> anyhow::Result<i64> {
 		// Token validation takes a shared row lock, which PostgreSQL forbids
 		// in a read-only transaction. Release it before background preparation.
@@ -115,7 +107,7 @@ impl Server {
 		}).await? else {
 			return Ok(cursor);
 		};
-		self.verify_readiness_view(view).await?;
+		view.verify(&self.bitcoind).await?;
 		let tip = i32::try_from(view.captaind.height.min(view.watchmand.height).to_u32())?;
 		let rows = self.db.read(async |t| Ok(t.query(
 			"
@@ -321,7 +313,7 @@ impl Server {
 		if outputs.is_empty() {
 			return Ok(());
 		}
-		self.verify_readiness_view(view).await?;
+		view.verify(&self.bitcoind).await?;
 		match self.db.write(async |t| t.commit_expiry_group(
 			view,
 			outputs,

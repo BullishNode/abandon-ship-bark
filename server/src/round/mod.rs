@@ -48,6 +48,12 @@ use crate::wallet::{BdkWalletExt, PersistedWallet, WalletUtxoGuard};
 
 use self::funding::{UnsignedFundingTx, FundingTxSpec};
 
+lazy_static::lazy_static! {
+	/// Unspendable pubkey: 0x02 ++ sha256("unspendable1").
+	pub(crate) static ref UNSPENDABLE: PublicKey =
+		"02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c".parse().unwrap();
+}
+
 #[macro_export]
 macro_rules! server_rslog {
 	($struct:ident, $step:expr, $( $args:tt )*) => {
@@ -858,10 +864,6 @@ impl CollectingPayments {
 		// the single-output case is also annoying, so we require at least two.
 		while self.all_outputs.len() <= 1 {
 			lazy_static::lazy_static! {
-				/// Unspendable pubkey
-				/// 0x02 ++ sha256("unspendable1")
-				static ref UNSPENDABLE: PublicKey =
-					"02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c".parse().unwrap();
 				/// hash without known preimage
 				static ref UNLOCK_HASH: sha256::Hash =
 					"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".parse().unwrap();

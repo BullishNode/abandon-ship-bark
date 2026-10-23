@@ -21,11 +21,13 @@ use ark_testing::onchain::AppBip84Wallet;
 use ark_testing::balance::assert_balance_consistent;
 use bitcoin::{Amount, Network, OutPoint, Transaction};
 use bitcoin::consensus::deserialize;
+use bitcoin::hex::DisplayHex;
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use cln_rpc::listpays_pays::ListpaysPaysStatus;
 use cln_rpc::plugins::hold;
 use server::database::Db;
+use server_log::ArkFeeRecorded;
 use server_rpc::protos;
 
 async fn remote_pays(node: &Lightningd, hash: PaymentHash) -> Vec<cln_rpc::ListpaysPays> {
@@ -36,7 +38,7 @@ async fn remote_pays(node: &Lightningd, hash: PaymentHash) -> Vec<cln_rpc::Listp
 }
 
 async fn assert_one_source_dispatch(
-	db: &Db, hash: PaymentHash, sources: &[VtxoId], attempt: i64, label: &str, succeeded: bool,
+	db: &Db, hash: PaymentHash, sources: &[VtxoId], attempt: i64, label: &str, succeeded: bool, user_fee: Amount,
 ) {
 	let row = db.read(async |tx| Ok(tx.query_one("SELECT d.label,a.amount_msat,a.user_fee_sat, \
 		(SELECT COUNT(*) FROM lightning_payment_attempt other WHERE other.payment_hash=a.payment_hash) AS attempts, \
@@ -49,7 +51,7 @@ async fn assert_one_source_dispatch(
 	).await?)).await.unwrap();
 	assert_eq!(row.get::<_, String>("label"), label);
 	assert_eq!(row.get::<_, i64>("amount_msat"), 100_000_000);
-	assert_eq!(row.get::<_, Option<i64>>("user_fee_sat"), Some(0));
+	assert_eq!(row.get::<_, Option<i64>>("user_fee_sat"), Some(i64::try_from(user_fee.to_sat()).unwrap()));
 	assert_eq!(row.get::<_, i64>("attempts"), 1, "restart must reconcile the previous attempt rather than retrying payment");
 	assert_eq!(row.get::<_, i64>("dispatches"), 1);
 	assert_eq!(row.get::<_, i64>("successes"), if succeeded { 1 } else { 0 });
@@ -64,27 +66,81 @@ async fn assert_one_source_dispatch(
 
 #[tokio::test]
 async fn recovery_binds_restarted_payment_success_to_source() {
-	tokio::time::timeout(Duration::from_secs(180), external_success_during_restart()).await
+	tokio::time::timeout(Duration::from_secs(180), external_success_during_restart(false)).await
 		.expect("the bounded real external receipt/restart case must finish");
 }
 
-async fn external_success_during_restart() {
-	let ctx = TestContext::new("server/recovery_binds_restarted_payment_success_to_source").await;
+#[tokio::test]
+async fn recovery_records_its_native_routing_fee() {
+	tokio::time::timeout(Duration::from_secs(180), external_success_during_restart(true)).await
+		.expect("routing fee reconciliation must finish within 180 seconds");
+}
+
+async fn external_success_during_restart(routed: bool) {
+	let ctx = TestContext::new(if routed { "server/recovery_records_its_native_routing_fee" }
+		else { "server/recovery_binds_restarted_payment_success_to_source" }).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let routed_receiver = if routed {
+		let receiver = ctx.lightningd("receiver").create().await;
+		ctx.fund_lightning(&lightning.external, btc(12)).await;
+		ctx.generate_blocks(6).await;
+		lightning.external.wait_for_block_sync().await;
+		lightning.external.connect(&receiver).await;
+		let funding = lightning.external.fund_channel(&receiver, btc(10)).await;
+		ctx.await_transaction(funding).await;
+		ctx.generate_blocks(6).await;
+		lightning.internal.wait_for_gossip(2).await;
+		lightning.external.wait_for_gossip(2).await;
+		receiver.wait_for_gossip(2).await;
+		let policy = lightning.external.grpc_client().await.set_channel(cln_rpc::SetchannelRequest {
+			id: receiver.id().await.as_hex().to_string(),
+			feebase: Some(cln_rpc::Amount { msat: 25_000 }), feeppm: Some(1_000),
+			enforcedelay: Some(0), ..Default::default()
+		}).await.unwrap().into_inner();
+		assert_eq!(policy.channels.len(), 1);
+		assert_eq!(policy.channels[0].peer_id, receiver.id().await);
+		assert_eq!(policy.channels[0].fee_base_msat.as_ref().unwrap().msat, 25_000);
+		assert_eq!(policy.channels[0].fee_proportional_millionths, 1_000);
+		let router_id = lightning.external.id().await;
+		let receiver_id = receiver.id().await;
+		tokio::time::timeout(Duration::from_secs(20), async {
+			loop {
+				let channels = lightning.internal.grpc_client().await.list_channels(cln_rpc::ListchannelsRequest::default())
+					.await.unwrap().into_inner().channels;
+				if channels.iter().any(|channel| channel.source == router_id && channel.destination == receiver_id
+					&& channel.active && channel.base_fee_millisatoshi == 25_000 && channel.fee_per_millionth == 1_000
+					&& channel.delay == 6) { break; }
+				tokio::time::sleep(Duration::from_millis(20)).await;
+			}
+		}).await.expect("payer must observe the router's forwarding fee before dispatch");
+		assert!(lightning.external.grpc_client().await.list_forwards(cln_rpc::ListforwardsRequest::default())
+			.await.unwrap().into_inner().forwards.is_empty());
+		Some(receiver)
+	} else { None };
+	let receiving_node = routed_receiver.as_ref().unwrap_or(&lightning.external);
+	let user_fee = if routed { sat(1_000) } else { sat(0) };
+	let source_amount = sat(100_000) + user_fee;
+	let routing_fee_msat = if routed { 125_000 } else { 0 };
+	let refund_fee = if routed { sat(1_010) } else { sat(1_000) };
+	let refund_amount = source_amount - refund_fee;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal)
-		.no_vtxo_pool().funded(btc(10)).cfg(|config| {
+		.no_vtxo_pool().funded(btc(10)).cfg(move |config| {
 			config.vtxo_lifetime = BlockDelta::new(24);
 			config.vtxo_exit_delta = BlockDelta::new(3);
-			// One direct channel with final CLTV18 and the native six-block
-			// settlement margin; no production-lifetime claim follows.
+			// Final CLTV18 plus at most one regtest forwarding delta6 fits
+			// the existing native margin; no production deadline is qualified.
 			config.htlc_send_expiry_delta = BlockDelta::new(40);
 			config.invoice_check_interval = Duration::from_secs(1);
+			if routed {
+				config.fees.lightning_send.base_fee = sat(1_000);
+				config.ln_max_fee_ppm = 1_000_000;
+			}
 		}).watchmand().create().await;
 	let first_height = ctx.bitcoind().get_block_count().await;
 	let wallet = ctx.bark("absent-sender", &srv).cfg(|config| config.daemon_manual_sync = true)
 		.funded(sat(500_000)).create().await;
-	let first = wallet.board(sat(100_000)).await;
-	let second = wallet.board(sat(100_000)).await;
+	let first = wallet.board(source_amount).await;
+	let second = wallet.board(source_amount).await;
 	ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
 	wallet.sync().await;
 	assert_eq!((first.vtxos.len(), second.vtxos.len()), (1, 1));
@@ -99,7 +155,7 @@ async fn external_success_during_restart() {
 	let mut roots = Vec::new();
 	for id in [first.vtxos[0], second.vtxos[0]] {
 		let input = client.get_full_vtxo(id).await.unwrap();
-		assert_eq!(input.amount(), sat(100_000));
+		assert_eq!(input.amount(), source_amount);
 		roots.push(input.chain_anchor());
 		let key = client.get_vtxo_key(&input).await.unwrap();
 		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([input.clone()],
@@ -111,7 +167,7 @@ async fn external_success_during_restart() {
 		let leaves = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 			.unwrap().build_signed_vtxos();
 		assert_eq!(leaves.len(), 1);
-		assert_eq!(leaves[0].amount(), sat(100_000));
+		assert_eq!(leaves[0].amount(), source_amount);
 		assert_eq!(leaves[0].chain_anchor(), input.chain_anchor());
 		client.register_vtxo_transactions_with_server(&leaves).await.unwrap();
 		grants.push(leaves[0].clone());
@@ -119,13 +175,16 @@ async fn external_success_during_restart() {
 	assert_ne!(roots[0], roots[1]);
 	assert_eq!(grants[0].expiry_height(), grants[1].expiry_height());
 	assert!(deadline > grants[0].expiry_height());
-	// Use the fixture's existing fee schedule. Do not overfund a90k
-	// invoice with a100k source and silently discard the10k excess as a fee.
+	// Fund the invoice and declared user fee exactly; forwarding cost is
+	// paid from that fee rather than silently taking extra principal.
 	let fee = srv.config().fees.lightning_send.calculate(sat(100_000),
 		[VtxoFeeInfo::from_vtxo_and_tip(&grants[0], tip)]).unwrap();
-	assert_eq!(fee, sat(0), "this direct-channel fixture requires its declared native zero-fee schedule");
+	assert_eq!(fee, user_fee);
+	assert_eq!(source_amount, sat(100_000) + fee);
 	let sources = grants.iter().map(|grant| grant.id()).collect::<Vec<_>>();
-	let mut receiver = lightning.external.hold_client().await;
+	let mailbox = ark::mailbox::MailboxAuthorization::new(&client.mailbox_keypair(),
+		chrono::Local::now() + Duration::from_secs(300));
+	let mut receiver = receiving_node.hold_client().await;
 	let invoice = receiver.invoice(hold::InvoiceRequest {
 		payment_hash: hash.to_vec(), amount_msat: 100_000_000,
 		description: Some(hold::invoice_request::Description::Memo("native lost dispatch reply".into())),
@@ -137,9 +196,9 @@ async fn external_success_during_restart() {
 	).await;
 	rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
 		invoice, payment_amount_sat: 100_000, htlc_vtxo_ids: vec![sources[0].to_bytes().to_vec()],
-		mailbox_id: None, retry_for_secs: Some(5),
+		mailbox_id: routed.then(|| mailbox.mailbox().serialize()), retry_for_secs: Some(5),
 	}).await.unwrap();
-	lightning.external.wait_for_hold_invoice_accepted(hash).await;
+	receiving_node.wait_for_hold_invoice_accepted(hash).await;
 	drop(client);
 	drop(wallet);
 	// The accepted sender is now fenced: no later client open/sync,
@@ -149,13 +208,28 @@ async fn external_success_during_restart() {
 		FROM lightning_payment_attempt a JOIN expiry_lightning_dispatch d ON d.id=a.id \
 		WHERE a.payment_hash=$1", &[&hash.to_string()],
 	).await.map(|row| (row.get::<_, i64>("id"), row.get::<_, String>("label")))?)).await.unwrap();
-	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, false).await;
+	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, false, user_fee).await;
 	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
 	let pending = remote_pays(&lightning.internal, hash).await;
 	assert_eq!(pending.len(), 1);
 	assert_eq!(pending[0].label.as_deref(), Some(label.as_str()));
 	assert_eq!(pending[0].status(), ListpaysPaysStatus::Pending);
 	assert!(pending[0].preimage.is_none());
+	let pending_part = if routed {
+		let parts = lightning.internal.grpc_client().await.list_send_pays(cln_rpc::ListsendpaysRequest {
+			payment_hash: Some(hash.to_vec()), ..Default::default()
+		}).await.unwrap().into_inner().payments;
+		assert_eq!(parts.len(), 1);
+		let part = &parts[0];
+		assert_eq!(part.status(), cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus::Pending);
+		assert_eq!(part.payment_hash, hash.to_vec());
+		assert_eq!(part.label.as_deref(), Some(label.as_str()));
+		assert_eq!(part.amount_msat.as_ref().unwrap().msat, 100_000_000);
+		assert_eq!(part.amount_sent_msat.as_ref().unwrap().msat, 100_125_000);
+		assert!(part.payment_preimage.is_none());
+		assert!(part.created_index > 0);
+		Some((part.id, part.groupid, part.partid, part.created_index))
+	} else { None };
 	// The external payment survives loss of the local xpay task/response.
 	// Both product processes are stopped, while the two owned CLN peers stay
 	// running. This is an unresolved dispatch, not a forged status.
@@ -174,10 +248,34 @@ async fn external_success_during_restart() {
 	assert_eq!(remote.payment_hash, hash.to_vec());
 	assert_eq!(remote.preimage.as_deref(), Some(preimage.as_ref()));
 	assert_eq!(remote.amount_msat.as_ref().unwrap().msat, 100_000_000);
-	assert_eq!(remote.amount_sent_msat.as_ref().unwrap().msat, 100_000_000,
-		"the single direct channel must not hide routing cost or change in the paid principal");
+	assert_eq!(remote.amount_sent_msat.as_ref().unwrap().msat, 100_000_000 + routing_fee_msat);
+	if routed {
+		let forwards = lightning.external.grpc_client().await.list_forwards(cln_rpc::ListforwardsRequest::default())
+			.await.unwrap().into_inner().forwards;
+		assert_eq!(forwards.len(), 1);
+		assert_eq!(forwards[0].status(), cln_rpc::listforwards_forwards::ListforwardsForwardsStatus::Settled);
+		assert_eq!(forwards[0].in_msat.as_ref().unwrap().msat, 100_125_000);
+		assert_eq!(forwards[0].out_msat.as_ref().unwrap().msat, 100_000_000);
+		assert_eq!(forwards[0].fee_msat.as_ref().unwrap().msat, 125_000);
+	}
+	let complete_parts = if let Some(pending) = pending_part {
+		let parts = lightning.internal.grpc_client().await.list_send_pays(cln_rpc::ListsendpaysRequest {
+			payment_hash: Some(hash.to_vec()), ..Default::default()
+		}).await.unwrap().into_inner().payments;
+		assert_eq!(parts.len(), 1);
+		let part = &parts[0];
+		assert_eq!((part.id, part.groupid, part.partid, part.created_index), pending);
+		assert_eq!(part.status(), cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus::Complete);
+		assert_eq!(part.payment_hash, hash.to_vec());
+		assert_eq!(part.label.as_deref(), Some(label.as_str()));
+		assert_eq!(part.amount_msat.as_ref().unwrap().msat, 100_000_000);
+		assert_eq!(part.amount_sent_msat.as_ref().unwrap().msat, 100_125_000);
+		assert_eq!(part.payment_preimage.as_deref(), Some(preimage.as_ref()));
+		assert_eq!(remote.created_index, Some(part.created_index));
+		Some(parts)
+	} else { None };
 	assert!(remote.created_index.unwrap() > 0);
-	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, false).await;
+	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, false, user_fee).await;
 	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none(),
 		"the real remote result must not appear in product state before its observer restarts");
 	// Now quiesce/reopen the node/store. Its real Complete
@@ -216,8 +314,18 @@ async fn external_success_during_restart() {
 	super::expiry_dispatch::add_producer_qualification(&incident, &db, attempt, dispatch_qualification).await;
 	let error = server::ln::resolve_uninjected_lightning(&cfg, &incident).await.unwrap_err();
 	assert!(format!("{error:#}").contains("original dispatch has own payment history"), "{error:#}");
-	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, false).await;
-	srv.start().await.unwrap();
+	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, false, user_fee).await;
+	let mut fee_logs = if routed {
+		Some(db.write(async |tx| {
+			let locked = tx.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=$1 FOR UPDATE",
+				&[&sources[0].to_string()]).await?;
+			assert_eq!(locked.len(), 1);
+			srv.start().await.unwrap();
+			// Restart replaces the helper's log subscribers. Keep receipt
+			// publication blocked until its typed fee observer is attached.
+			Ok(srv.subscribe_log::<ArkFeeRecorded>())
+		}).await.unwrap())
+	} else { srv.start().await.unwrap(); None };
 	srv.watchmand().start().await.unwrap();
 	tokio::time::timeout(Duration::from_secs(45), async {
 		loop {
@@ -232,7 +340,29 @@ async fn external_success_during_restart() {
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("restart must reconcile the previous source-bound CLN receipt and preimage");
-	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, true).await;
+	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, true, user_fee).await;
+	let terminal_snapshot = if routed {
+		let event = tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				let event = fee_logs.as_mut().unwrap().recv().await.expect("fee subscriber closed");
+				if event.op_type == "lightning_send" { break event; }
+			}
+		}).await.expect("reconciliation must record the native forwarding cost");
+		assert_eq!(event.user_fee_sat, 1_000);
+		assert_eq!(event.routing_fee_sat, Some(125));
+		assert_eq!(event.net_fee_sat, 875);
+		assert_eq!(event.round_seq, None);
+		let row = db.read(async |tx| Ok(tx.query_one("SELECT a.status::text,a.final_amount_msat,a.updated_at::text, \
+			s.amount_sent_msat,s.created_index,s.updated_index, \
+			(SELECT COUNT(*) FROM lightning_payment_attempt_history h WHERE h.id=a.id) AS history \
+			FROM lightning_payment_attempt a JOIN expiry_lightning_external_success s ON s.id=a.id WHERE a.id=$1",
+			&[&attempt]).await?)).await.unwrap();
+		assert_eq!(row.get::<_, String>(0), "succeeded");
+		assert_eq!(row.get::<_, Option<i64>>(1), Some(100_125_000));
+		assert_eq!(row.get::<_, i64>(3), 100_125_000);
+		Some((row.get::<_, String>(2), row.get::<_, i64>(3), row.get::<_, i64>(4),
+			row.get::<_, Option<i64>>(5), row.get::<_, i64>(6)))
+	} else { None };
 	let status = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
 		hash: hash.to_vec(), wait: false, htlc_vtxo_ids: vec![sources[0].to_bytes().to_vec()],
 	}).await.unwrap().into_inner();
@@ -264,7 +394,7 @@ async fn external_success_during_restart() {
 		.collect::<Vec<_>>();
 	assert_eq!(payouts.len(), 1);
 	let (index, output) = payouts[0];
-	assert_eq!(output.value, sat(99_000));
+	assert_eq!(output.value, refund_amount);
 	let mut backing = 0;
 	for input in &parent.input {
 		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
@@ -277,7 +407,7 @@ async fn external_success_during_restart() {
 	let utxo = ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true))
 		.unwrap().unwrap();
 	assert!(utxo.confirmations >= 6);
-	assert_eq!(utxo.value, sat(99_000));
+	assert_eq!(utxo.value, refund_amount);
 	assert_eq!(utxo.script_pub_key.script().unwrap(), destination.spk);
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
@@ -296,8 +426,8 @@ async fn external_success_during_restart() {
 			if row.get::<_, i64>("paid") == 1 {
 				assert_eq!(row.get::<_, i64>("active"), 1);
 				assert_eq!(row.get::<_, Option<String>>("payer"), Some(parent.compute_txid().to_string()));
-				assert_eq!(row.get::<_, Option<i64>>("fee"), Some(1_000));
-				assert_eq!(row.get::<_, Option<i64>>("payout"), Some(99_000));
+				assert_eq!(row.get::<_, Option<i64>>("fee"), Some(i64::try_from(refund_fee.to_sat()).unwrap()));
+				assert_eq!(row.get::<_, Option<i64>>("payout"), Some(i64::try_from(refund_amount.to_sat()).unwrap()));
 				break;
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -333,17 +463,68 @@ async fn external_success_during_restart() {
 		}
 	}
 	assert_eq!(customer_outputs, BTreeSet::from([OutPoint::new(parent.compute_txid(), index as u32)]));
-	assert_eq!(customer_total, sat(99_000), "no other canonical customer output may hide an extra same-root refund");
-	assert_eq!(sat(100_000) + customer_total + sat(1_000), grants.iter().map(|grant| grant.amount()).sum::<bitcoin::Amount>(),
-		"external principal plus ALL canonical customer outputs and their fee conserve both grants");
-	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, true).await;
+	assert_eq!(customer_total, refund_amount, "no other canonical customer output may hide an extra same-root refund");
+	assert_eq!(sat(100_000) + user_fee + customer_total + refund_fee,
+		grants.iter().map(|grant| grant.amount()).sum::<bitcoin::Amount>(),
+		"invoice principal, user fee and every customer payout plus payout fee conserve both sources");
+	if routed {
+		assert_eq!(sat(100_125) + sat(875) + customer_total + refund_fee,
+			grants.iter().map(|grant| grant.amount()).sum::<Amount>());
+	}
+	assert_one_source_dispatch(&db, hash, &sources, attempt, &label, true, user_fee).await;
 	let final_pays = remote_pays(&lightning.internal, hash).await;
 	assert_eq!(final_pays.len(), 1);
 	assert_eq!(final_pays[0].created_index, remote.created_index);
 	assert_eq!(final_pays[0].label, remote.label);
 	assert_eq!(final_pays[0].status(), ListpaysPaysStatus::Complete);
+	if let Some(snapshot) = terminal_snapshot {
+		while let Ok(event) = fee_logs.as_mut().unwrap().try_recv() {
+			assert_ne!(event.op_type, "lightning_send", "one reconciliation must record the fee once");
+		}
+		for restart in 0..=2 {
+			let mut rpc = srv.get_mailbox_public_rpc().await;
+			let mut checkpoint = 0;
+			let mut finished = Vec::new();
+			for page_number in 0..32 {
+				let page = rpc.read_mailbox(protos::mailbox_server::MailboxRequest {
+					mailbox_id: mailbox.mailbox().serialize(), authorization: Some(mailbox.serialize()), checkpoint,
+				}).await.unwrap().into_inner();
+				for item in page.messages {
+					assert!(item.checkpoint > checkpoint);
+					checkpoint = item.checkpoint;
+					if let Some(protos::mailbox_server::mailbox_message::Message::LightningSendFinished(message)) = item.message {
+						if message.payment_hash == hash.to_vec() { finished.push(message); }
+					}
+				}
+				if !page.have_more { break; }
+				assert!(page_number < 31, "mailbox pagination must finish");
+			}
+			assert_eq!(finished.len(), 1);
+			assert_eq!(finished[0].preimage.as_deref(), Some(preimage.as_ref()));
+			if restart == 2 { break; }
+			srv.watchmand().stop().await.unwrap();
+			srv.stop().await.unwrap();
+			srv.start().await.unwrap();
+			srv.watchmand().start().await.unwrap();
+			let row = db.read(async |tx| Ok(tx.query_one("SELECT a.status::text,a.final_amount_msat,a.updated_at::text, \
+				s.amount_sent_msat,s.created_index,s.updated_index, \
+				(SELECT COUNT(*) FROM lightning_payment_attempt_history h WHERE h.id=a.id) AS history \
+				FROM lightning_payment_attempt a JOIN expiry_lightning_external_success s ON s.id=a.id WHERE a.id=$1",
+				&[&attempt]).await?)).await.unwrap();
+			assert_eq!(row.get::<_, String>(0), "succeeded");
+			assert_eq!(row.get::<_, Option<i64>>(1), Some(100_125_000));
+			assert_eq!((row.get::<_, String>(2), row.get::<_, i64>(3), row.get::<_, i64>(4),
+				row.get::<_, Option<i64>>(5), row.get::<_, i64>(6)), snapshot);
+			assert_eq!(remote_pays(&lightning.internal, hash).await, vec![remote.clone()]);
+			let parts = lightning.internal.grpc_client().await.list_send_pays(cln_rpc::ListsendpaysRequest {
+				payment_hash: Some(hash.to_vec()), ..Default::default()
+			}).await.unwrap().into_inner().payments;
+			assert_eq!(&parts, complete_parts.as_ref().unwrap());
+			assert_one_source_dispatch(&db, hash, &sources, attempt, &label, true, user_fee).await;
+		}
+	}
 	assert!(ctx.bitcoind().get_block_count().await - first_height <= 96,
-		"this direct-channel fixture must remain a bounded native case");
+		"receipt reconciliation must remain a bounded native case");
 }
 
 /// Inspect the authenticated wire pages before letting the returning wallet

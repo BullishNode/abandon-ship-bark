@@ -102,7 +102,6 @@ impl Tx<'_> {
 		funding: &Transaction,
 		tip: BlockHeight,
 		watchman_tip: Option<BlockHeight>,
-		internal_refund_depth: u32,
 	) -> anyhow::Result<OwnershipProposal> {
 		let mut proposal = OwnershipProposal::pending(fact, "missing complete source path");
 		let Some(full) = &fact.full_vtxo else { return Ok(proposal); };
@@ -292,7 +291,7 @@ impl Tx<'_> {
 					&& fact.onchain_spent_txid.is_none() && htlc.htlc.chain_resolution.is_none() {
 					if let Some(watchman_tip) = watchman_tip {
 						if let Some((attempts, block)) = self.internal_grants_reclaimed(
-							state.vtxo_id, hash, tip, watchman_tip, internal_refund_depth,
+							state.vtxo_id, hash, tip, watchman_tip,
 						).await? {
 							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
 							proposal.evidence = Some(OwnershipEvidence::HtlcInternalGrantsReclaimed {

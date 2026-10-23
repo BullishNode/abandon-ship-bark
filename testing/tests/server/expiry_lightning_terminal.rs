@@ -80,11 +80,12 @@ async fn failed_external_payout(no_channel: bool) {
 	let lightning = if no_channel { ctx.new_lightning_setup_no_channel("lightningd").await }
 		else { ctx.new_lightning_setup("lightningd").await };
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).no_vtxo_pool()
-		.funded(btc(10)).cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).watchmand().create().await;
+		.funded(btc(10)).cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(400)).watchmand().create().await;
 	let wallet = ctx.bark("abandoned", &srv).funded(sat(200_000)).create().await;
 	let ids = wallet.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	let client = wallet.client().await;
 	let input = client.get_full_vtxo(ids[0]).await.unwrap();
+	let source_expiry = input.expiry_height();
 	let key = client.get_vtxo_key(&input).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
 	let preimage = Preimage::random();
@@ -139,7 +140,7 @@ async fn failed_external_payout(no_channel: bool) {
 	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
 	let height = ctx.bitcoind().get_block_count().await as u32;
-	let expired = ctx.generate_blocks(deadline.to_u32() + 1 - height).await;
+	let expired = ctx.generate_blocks(source_expiry.to_u32() + 1 - height).await;
 	srv.wait_for_sync_height(expired).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(30), async {
@@ -196,7 +197,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	let builder = builder.no_vtxo_pool();
 	let srv = builder
 		.funded(btc(10)).cfg(move |cfg| {
-			cfg.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxo_lifetime = BlockDelta::new(400);
 			cfg.receive_htlc_forward_timeout = Duration::from_secs(2);
 			cfg.invoice_check_interval = Duration::from_secs(1);
 		}).watchmand().create().await;
@@ -210,6 +211,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	let ids = sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	let client = sender.client().await;
 	let input = client.get_full_vtxo(ids[0]).await.unwrap();
+	let source_expiry = input.expiry_height();
 	assert_eq!(input.amount(), sat(100_000));
 	let key = client.get_vtxo_key(&input).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
@@ -238,7 +240,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 		loop {
 			let row = db.read(async |t| Ok(t.query_opt("SELECT a.id,a.lightning_htlc_subscription_id AS subscription_id FROM lightning_payment_attempt a \
 				JOIN lightning_htlc_subscription s ON s.id=a.lightning_htlc_subscription_id AND s.payment_hash=a.payment_hash \
-				WHERE a.payment_hash=$1 AND s.status='canceled'", &[&hash.to_string()]).await?)).await.unwrap();
+				WHERE a.payment_hash=$1 AND a.status='failed' AND s.status='canceled'", &[&hash.to_string()]).await?)).await.unwrap();
 			if let Some(row) = row { break (row.get::<_, i64>("id"), row.get::<_, i64>("subscription_id")); }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -269,7 +271,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	}
 	ctx.generate_blocks(2).await;
 	let height = ctx.bitcoind().get_block_count().await as u32;
-	let expired = ctx.generate_blocks(deadline.to_u32() + 1 - height).await;
+	let expired = ctx.generate_blocks(source_expiry.to_u32() + 1 - height).await;
 	srv.wait_for_sync_height(expired).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(30), async {
@@ -355,7 +357,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_s
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
 		.funded(btc(10)).cfg(move |cfg| {
-			cfg.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxo_lifetime = BlockDelta::new(400);
 			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
 			cfg.vtxopool.vtxo_targets = if expose_small_grant {
@@ -379,6 +381,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_s
 	let ids = sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	let client = sender.client().await;
 	let input = client.get_full_vtxo(ids[0]).await.unwrap();
+	let source_expiry = input.expiry_height();
 	assert_eq!(input.amount(), sat(100_000));
 	let key = client.get_vtxo_key(&input).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
@@ -440,7 +443,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_s
 	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
 	if past_source_expiry {
 		let height = ctx.bitcoind().get_block_count().await as u32;
-		let height = ctx.generate_blocks(incoming_deadline.to_u32() + 1 - height).await;
+		let height = ctx.generate_blocks(source_expiry.to_u32() + 1 - height).await;
 		srv.wait_for_sync_height(height).await;
 		srv.watchmand().wait_for_sync_height(height).await;
 		tokio::time::timeout(Duration::from_secs(15), async {
@@ -562,6 +565,17 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_s
 			&[&source.to_string()]).await?)).await.unwrap().is_none(), "sender refund must wait for six grant confirmations");
 		ctx.generate_blocks(1).await;
 	}
+	// The send contract now requires a backing coin that outlives its HTLC.
+	// Reach the original 100-block reaction window without shortening that backing.
+	if !past_source_expiry {
+		let height = ctx.bitcoind().get_block_count().await as u32;
+		let target = source_expiry.saturating_sub(BlockDelta::new(80)).to_u32();
+		if target > height {
+			let height = ctx.generate_blocks(target - height).await;
+			srv.wait_for_sync_height(height).await;
+			srv.watchmand().wait_for_sync_height(height).await;
+		}
+	}
 	// Normal watchman progress has to reach every HTLC leaf. Mine only
 	// through completed sync cycles and leave reaction/readiness time each block.
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {
@@ -625,7 +639,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
 		.funded(btc(10)).cfg(|cfg| {
-			cfg.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxo_lifetime = BlockDelta::new(400);
 			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
 			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 8 }];
@@ -712,6 +726,14 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	ctx.bitcoind().fund_addr(fee_address, sat(150_000)).await;
 	ctx.generate_blocks(2).await;
+	// Keep the original 100-block reaction budget around this now-valid root's expiry.
+	let height = ctx.bitcoind().get_block_count().await as u32;
+	let target = original_body.expiry_height().saturating_sub(BlockDelta::new(80)).to_u32();
+	if target > height {
+		let height = ctx.generate_blocks(target - height).await;
+		srv.wait_for_sync_height(height).await;
+		srv.watchmand().wait_for_sync_height(height).await;
+	}
 	let grant_ids = grants.iter().map(|grant| grant.id().to_string()).collect::<Vec<_>>();
 	let mut final_fee_sponsored = false;
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {

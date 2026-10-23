@@ -2189,6 +2189,54 @@ async fn settled_hash_cannot_be_granted_htlc_recv_vtxos() {
 	assert_vtxopool_consistency(&srv).await;
 }
 
+/// Refreshing replaces an otherwise spendable source that cannot safely
+/// outlive the requested Lightning timeout.
+#[tokio::test]
+async fn lightning_send_needs_lifetime_margin_then_succeeds_after_refresh() {
+	let ctx = TestContext::new("server/lightning_send_lifetime_margin_refresh").await;
+	let srv = ctx.captaind("server").funded(btc(10)).no_vtxo_pool().create().await;
+	let sender = ctx.bark("sender", &srv).funded(sat(200_000)).create().await;
+	sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	let height = ctx.generate_blocks(150).await;
+	srv.wait_for_sync_height(height).await;
+	let deadline = height + srv.config().htlc_send_expiry_delta + BlockDelta::new(2);
+	let hash = ark::lightning::Preimage::random().compute_payment_hash();
+	for refreshed in [false, true] {
+		if refreshed { ctx.refresh_all(&srv, &[&sender]).await; }
+		let wallet = sender.client().await;
+		let coins = wallet.spendable_vtxos().await.unwrap();
+		assert!(!coins.is_empty());
+		let mut inputs = Vec::new();
+		let mut keys = Vec::new();
+		for coin in coins {
+			let input = wallet.get_full_vtxo(coin.id()).await.unwrap();
+			assert_eq!(input.expiry_height() > deadline + BlockDelta::new(30), refreshed);
+			keys.push(wallet.get_vtxo_key(&input).await.unwrap());
+			inputs.push(input);
+		}
+		let amount = inputs.iter().map(Vtxo::amount).sum::<Amount>();
+		let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
+			inputs, ark::VtxoPolicy::new_server_htlc_send(keys[0].public_key(), hash, deadline),
+		).unwrap().generate_user_nonces(&keys).unwrap();
+		let response = srv.get_public_rpc().await.request_lightning_pay_htlc_cosign(
+			protos::LightningPayHtlcCosignRequest {
+				parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+			},
+		).await;
+		if !refreshed {
+			let error = response.expect_err("short-lived sources must be refused before spending");
+			assert!(error.message().contains("outlive"), "{error}");
+		} else {
+			let reply = response.expect("the same timeout must work after refreshing").into_inner();
+			let sends = builder.user_cosign(&keys,
+				ark::arkoor::package::ArkoorPackageCosignResponse::try_from(reply).unwrap())
+				.unwrap().build_signed_vtxos();
+			assert_eq!(sends.iter().map(Vtxo::amount).sum::<Amount>(), amount);
+			wallet.register_vtxo_transactions_with_server(&sends).await.unwrap();
+		}
+	}
+}
+
 /// A receive funded over Lightning must not become collateral for an
 /// unsuccessful Ark sender merely because both use the same invoice.
 #[tokio::test]
@@ -2209,9 +2257,11 @@ async fn failed_intra_ark_promotion_does_not_bind_another_payers_grants() {
 		mailbox_id: None, description: None,
 	}).await.unwrap().into_inner().bolt11;
 	lightning.sync().await;
-	let payer = lightning.external.clone();
+	let mut payer = lightning.external.grpc_client().await;
 	let external_invoice = invoice.clone();
-	let payment = tokio::spawn(async move { payer.try_pay_bolt11(external_invoice).await });
+	let payment = tokio::spawn(async move { payer.xpay(cln_rpc::XpayRequest {
+		invstring: external_invoice, ..Default::default()
+	}).await });
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	wait_for_subscription_status(&db, hash, "accepted").await;
 	let receiver = Keypair::new(&SECP, &mut bip39::rand::thread_rng());

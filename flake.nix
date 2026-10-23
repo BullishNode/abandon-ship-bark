@@ -228,7 +228,7 @@
 
 				serverPackages = import ./nix/package-server.nix {
 					pkgs = releasePkgs;
-					inherit lib craneLib cln-grpc;
+					inherit lib craneLib;
 					gitHash = self.rev or self.dirtyRev or "unknown";
 					targets = [
 						"x86_64-unknown-linux-gnu"

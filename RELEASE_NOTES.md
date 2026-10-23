@@ -12,11 +12,10 @@ stores and backups.
 
 Use the release-pinned complete Core Lightning runtime,
 `v26.06.6-abandon6`, with its matching subdaemons and qualified plugin bytes.
-The ordinary upstream runtime does not provide the required on-chain HTLC
-failure boundary. Internal Lightning sender refunds require all necessary
-grant closures to reach the configured depth. That depth defaults to 6
-confirmations and cannot be lower. The protocol assumes that no reorg removes
-6 or more blocks. Qualification of this boundary and protection of customers
+That runtime carries one patch: `onchaind` reports a timed-out on-chain HTLC
+after 6 confirmations instead of 3, so Core Lightning marks a payment failed
+only outside the supported reorg window. The protocol assumes that no reorg
+removes 6 or more blocks. Qualification of this boundary and protection of customers
 beyond it remain incomplete.
 
 Read `docs/operator.md` and `contrib/release/README.md` in the source, or
@@ -97,6 +96,10 @@ matching final GNU programs and the final release bundle remain required.
   scan. The payout receipts API, history tokens, commit ledger and supervised
   Lightning manifest recovery have been removed. Logical restore retains the
   financial state and rebuilds canonical observations, with no ledger reset.
+- The server does not retain or replay customer emergency-exit claims. Core
+  can evict a claim when a reorg makes its timelock nonfinal. The holder must
+  retain the signed claim and resubmit it when its timelocks are valid again.
+  Automatic server replay for an absent holder is no longer provided.
 - Expiry fee children are rebuilt from current wallet and Core state. The payout
   parent stays immutable; no fee-child or operator subsidy ledger is retained.
 - Earlier programs could forfeit a 1,000-sat customer coin before the same

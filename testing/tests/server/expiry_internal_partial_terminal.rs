@@ -300,14 +300,13 @@ async fn partial_terminal(case: TerminalCase) {
 	wait_partial_confirmation(&ctx,&srv,&db,height,sources[0].id(),claim.compute_txid(),unpaid,&parent).await;
 }
 
-/// The server records both the confirmed spend and its original transaction.
+/// The server records the confirmed source spend. The holder keeps the signed claim.
 pub(super) async fn assert_retained_claim(db:&Db,source:VtxoId,claim:&Transaction) -> bool {
 	db.read(async |t| {
-		let row=t.query_opt("SELECT c.raw_tx,c.confirmed_height,v.onchain_spent_height FROM vtxo v \
-			JOIN user_exit_claim c ON c.id=v.onchain_spent_txid WHERE v.vtxo_id=$1",&[&source.to_string()]).await?;
-		Ok(row.is_some_and(|row| row.get::<_,Vec<u8>>("raw_tx") == bitcoin::consensus::serialize(claim)
-			&& row.get::<_,Option<i32>>("confirmed_height").is_some()
-			&& row.get::<_,Option<i32>>("confirmed_height") == row.get::<_,Option<i32>>("onchain_spent_height")))
+		let row=t.query_opt("SELECT onchain_spent_txid,onchain_spent_height FROM vtxo WHERE vtxo_id=$1",
+			&[&source.to_string()]).await?;
+		Ok(row.is_some_and(|row| row.get::<_,Option<&str>>("onchain_spent_txid") == Some(claim.compute_txid().to_string().as_str())
+			&& row.get::<_,Option<i32>>("onchain_spent_height").is_some()))
 	}).await.unwrap()
 }
 
@@ -320,11 +319,17 @@ pub(super) async fn reorg_user_exit_claims(
 	srv.wait_for_sync_height(observed).await;
 	srv.watchmand().wait_for_sync_height(observed).await;
 	for claim in claims {
-		let stored = db.read(async |t| Ok(t.query_one(
-			"SELECT raw_tx,confirmed_height FROM user_exit_claim WHERE id=$1", &[&claim.compute_txid().to_string()],
-		).await?)).await.unwrap();
-		assert_eq!(stored.get::<_,Vec<u8>>("raw_tx"), bitcoin::consensus::serialize(claim));
-		assert_eq!(stored.get::<_,Option<i32>>("confirmed_height"), Some(i32::try_from(observed.to_u32() - 1).unwrap()));
+		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await, *claim);
+		let info = chain.custom_get_raw_transaction_info(claim.compute_txid(), None).unwrap().unwrap();
+		assert_eq!(info.confirmations, Some(2));
+		for input in &claim.input {
+			let source = VtxoId::from(input.previous_output);
+			let recorded = db.read(async |t| Ok(t.query_one(
+				"SELECT onchain_spent_txid,onchain_spent_height FROM vtxo WHERE vtxo_id=$1", &[&source.to_string()],
+			).await?)).await.unwrap();
+			assert_eq!(recorded.get::<_,&str>("onchain_spent_txid"), claim.compute_txid().to_string());
+			assert_eq!(recorded.get::<_,Option<i32>>("onchain_spent_height"), Some(i32::try_from(observed.to_u32() - 1).unwrap()));
+		}
 	}
 	srv.watchmand().stop().await.unwrap();
 	for grant in unspent_grants {
@@ -343,12 +348,17 @@ pub(super) async fn reorg_user_exit_claims(
 		assert!(chain.get_mempool_entry(&claim.compute_txid()).is_err(), "Core did not retain the disconnected claim");
 	}
 	srv.watchmand().start().await.unwrap();
+	// The rightful holder returns with the same signed claims after maturity.
+	// The server does not retain or replay customer transactions.
+	for claim in claims {
+		assert_eq!(chain.send_raw_transaction(claim).unwrap(), claim.compute_txid());
+	}
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			if claims.iter().all(|claim| chain.get_mempool_entry(&claim.compute_txid()).is_ok()) { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("the server did not rebroadcast the retained user claims after maturity");
+	}).await.expect("the holder's original signed claims did not enter the mempool after maturity");
 	for claim in claims {
 		assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await, *claim);
 	}

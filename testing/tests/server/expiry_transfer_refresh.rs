@@ -3,12 +3,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
-use bark::FallbackDisposition;
-use bark::movement::{Movement, MovementStatus, PaymentMethod};
 use ark_testing::{btc, sat, TestContext};
 use ark_testing::constants::{BOARD_CONFIRMATIONS, ROUND_CONFIRMATIONS};
 use ark_testing::util::FutureExt;
-use bitcoin::{Address, Amount, Network, OutPoint, Transaction, Txid};
+use bitcoin::{Amount, OutPoint, Transaction, Txid};
 use bitcoin::consensus::deserialize;
 use bitcoin_ext::BlockDelta;
 use bitcoin_ext::rpc::RpcApi;
@@ -57,7 +55,6 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 	assert_eq!(received.chain_anchor(), original.chain_anchor());
 	assert_ne!(received.chain_anchor(), own.chain_anchor(), "history must cover two distinct backing roots");
 	assert_eq!(received.expiry_height(), own.expiry_height());
-	let history_before_absence = owner.history().await.unwrap();
 	drop(owner);
 	// Do not reopen the absent actor until every original payout has at least
 	// six independent Core confirmations. Only then test its returning history.
@@ -114,7 +111,7 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 					if db.read(async |tx| {
 						let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 						Ok(view.captaind.height == tip && view.watchmand.height == tip
-							&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
+							&& view.captaind.hash == hash && view.watchmand.hash == hash && super::expiry_view_is_rebuilt(tx, view).await?)
 					}).await.unwrap() { break; }
 					tokio::time::sleep(Duration::from_millis(50)).await;
 				}
@@ -146,98 +143,30 @@ async fn expiry_frozen_recipient_is_paid_after_sender_change_refresh() {
 	srv.wait_for_sync_height(confirmed).await;
 	srv.watchmand().wait_for_sync_height(confirmed).await;
 	let returned = absent.client().await;
-	let history = tokio::time::timeout(Duration::from_secs(10), async {
+	tokio::time::timeout(Duration::from_secs(10), async {
 		loop {
 			returned.chain().invalidate_caches().await;
-			returned.sync_fallback_payouts().await.expect("authenticated returning-wallet payout history");
-			let history = returned.history().await.unwrap();
-			let payouts = history.iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-			if payouts.len() == expected_outputs.len() && payouts.iter().all(|movement|
-				movement.status == MovementStatus::Successful && movement.metadata["fallback"]["stage"] == "confirmed") {
-				break history;
-			}
+			returned.sync_fallback_payouts().await.unwrap();
+			if returned.get_vtxo_by_id(own.id()).await.unwrap().state == bark::vtxo::VtxoState::Spent
+				&& returned.get_vtxo_by_id(received_id).await.unwrap().state == bark::vtxo::VtxoState::Spent { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("confirmed two-root payout history did not catch up with Core");
-	let expected_coins = BTreeMap::from([(own.id(), own.amount()), (received_id, received.amount())]);
-	let receipts = returned.fallback_payouts().await.unwrap();
-	assert_eq!(receipts.len(), 2);
-	assert_eq!(receipts.iter().map(|receipt| (receipt.vtxo_id, receipt.gross)).collect::<BTreeMap<_, _>>(), expected_coins);
-	let mut receipt_fees = Amount::ZERO;
-	let mut receipt_payouts = Amount::ZERO;
-	let mut receipt_inputs = BTreeMap::<OutPoint, BTreeSet<_>>::new();
-	for receipt in receipts {
-		let active = receipt.attempts.iter().filter(|attempt| attempt.active).collect::<Vec<_>>();
-		assert_eq!(active.len(), 1);
-		let attempt = active[0];
-		assert_eq!(attempt.disposition, FallbackDisposition::CustomerPayout);
-		let point = OutPoint::new(attempt.parent.as_ref().unwrap().compute_txid(), attempt.output_index.unwrap());
-		assert_eq!(attempt.output_amount, Some(expected_outputs[&point]));
-		assert_eq!(attempt.script.as_ref(), Some(&destination.spk));
-		assert_eq!(attempt.payout + attempt.fee, receipt.gross);
-		receipt_inputs.entry(point).or_default().insert(receipt.vtxo_id);
-		receipt_fees += attempt.fee;
-		receipt_payouts += attempt.payout;
-	}
-	assert_eq!(receipt_fees, sat(1_000));
-	assert_eq!(receipt_payouts, total);
-	let payout_address = PaymentMethod::Bitcoin(Address::from_script(&destination.spk, Network::Regtest).unwrap().into_unchecked());
-	// Retain existing debits, including any earlier native operation, but do
-	// not let another subsystem also debit either of the two payout inputs.
-	let baseline_other_debits = history_before_absence.iter().filter(|movement|
-		movement.subsystem.name != "abandon.fallback_payout" && movement.effective_balance.to_sat() < 0
-		&& movement.input_vtxos.iter().any(|id| expected_coins.contains_key(id)))
-		.map(|movement| (movement.id, movement.effective_balance.to_sat())).collect::<BTreeMap<_, _>>();
-	let summarize = |history: Vec<Movement>| {
-		let mut other_debits = BTreeMap::new();
-		let mut all_subsystem_debit = 0;
-		for movement in &history {
-			if movement.effective_balance.to_sat() >= 0
-				|| !movement.input_vtxos.iter().any(|id| expected_coins.contains_key(id)) { continue; }
-			all_subsystem_debit += movement.effective_balance.to_sat();
-			if movement.subsystem.name != "abandon.fallback_payout" {
-				assert!(other_debits.insert(movement.id, movement.effective_balance.to_sat()).is_none());
-			}
-		}
-		assert_eq!(other_debits, baseline_other_debits, "another subsystem added or changed a debit of a payout input");
-		assert_eq!(all_subsystem_debit, baseline_other_debits.values().sum::<i64>() - 39_670,
-			"the two original coins must incur only their single payout debit across all subsystems");
-		let mut summary = BTreeMap::new();
-		let mut inputs = BTreeSet::new();
-		let mut debit = 0;
-		for movement in history.into_iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout") {
-			let metadata = &movement.metadata["fallback"];
-			let point = OutPoint::new(serde_json::from_value::<Txid>(metadata["txid"].clone()).unwrap(),
-				metadata["output_index"].as_u64().unwrap().try_into().unwrap());
-			assert_eq!(movement.status, MovementStatus::Successful);
-			assert_eq!(metadata["stage"], "confirmed");
-			assert_eq!(metadata["chain_verified"], true);
-			assert_eq!(movement.sent_to.len(), 1);
-			assert_eq!(movement.sent_to[0].destination, payout_address);
-			assert_eq!(movement.sent_to[0].amount, expected_outputs[&point]);
-			assert_eq!(movement.input_vtxos.iter().copied().collect::<BTreeSet<_>>(), receipt_inputs[&point]);
-			let expected_debit = movement.input_vtxos.iter().map(|id| expected_coins[id].to_sat() as i64).sum::<i64>();
-			assert_eq!(movement.offchain_fee, sat(u64::try_from(expected_debit).unwrap()) - expected_outputs[&point]);
-			assert!(movement.offchain_fee == Amount::ZERO || movement.offchain_fee == sat(1_000));
-			assert_eq!(movement.effective_balance.to_sat(), -expected_debit);
-			for input in &movement.input_vtxos { assert!(inputs.insert(*input), "a coin was debited in two payout movements"); }
-			debit += movement.effective_balance.to_sat();
-			assert!(summary.insert(point, (movement.id, movement.effective_balance, movement.offchain_fee,
-				movement.sent_to[0].amount, movement.input_vtxos)).is_none(), "an output appeared in two payout movements");
-		}
-		assert_eq!(summary.len(), expected_outputs.len());
-		assert_eq!(inputs, expected_coins.keys().copied().collect::<BTreeSet<_>>());
-		assert_eq!(debit, -39_670, "the original locally held coins must be debited exactly once");
-		summary
-	};
-	let original_history = summarize(history);
-	for _ in 0..2 {
-		returned.sync_fallback_payouts().await.unwrap();
-		assert_eq!(summarize(returned.history().await.unwrap()), original_history);
-	}
+	}).await.expect("canonical outputs must retire both original sources exactly once");
+	assert_eq!(returned.balance().await.unwrap().awaiting_settlement, Amount::ZERO);
+	for _ in 0..2 { returned.sync_fallback_payouts().await.unwrap(); }
 	drop(returned);
 	let reopened = absent.client().await;
 	reopened.sync_fallback_payouts().await.unwrap();
-	assert_eq!(summarize(reopened.history().await.unwrap()), original_history,
-		"reopening the original database must preserve payout movement IDs and the single debit");
+	for id in [own.id(), received_id] {
+		assert_eq!(reopened.get_vtxo_by_id(id).await.unwrap().state, bark::vtxo::VtxoState::Spent);
+	}
+	let core = ctx.bitcoind().sync_client();
+	for (point, expected) in expected_outputs {
+		let output = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+		assert!(output.confirmations >= 6);
+		assert_eq!(output.value, expected);
+		assert_eq!(output.script_pub_key.script().unwrap(), destination.spk);
+	}
+	assert_eq!(total + sat(1_000), own.amount() + received.amount());
+
 }

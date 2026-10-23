@@ -31,7 +31,7 @@ async fn wait_batched_parent(
 			let finished=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=hash || view.watchmand.hash!=hash
-					|| !t.expiry_view_is_rebuilt(view).await? {return Ok(false);}
+					|| !!t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0) {return Ok(false);}
 				let row=t.query_one("SELECT status,sweep_txid,sweep_tx,confirmed_hash FROM expiry_allocation WHERE id=$1",&[&allocation]).await?;
 				assert_eq!(row.get::<_,Option<&str>>("sweep_txid"),Some(parent.compute_txid().to_string().as_str()));
 				assert_eq!(row.get::<_,Option<&[u8]>>("sweep_tx"),Some(serialize(parent).as_slice()));
@@ -113,9 +113,8 @@ async fn batched_terminal(reorg: bool) {
 	let paid_ids = originals[..2].to_vec();
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let scope = db.read(async |t| {
-		let rows = t.query("SELECT f.id,f.subscription_id FROM expiry_lightning_internal_funding f \
-			JOIN lightning_payment_attempt a ON a.id=f.id AND a.lightning_htlc_subscription_id=f.subscription_id \
-			WHERE a.payment_hash=$1",&[&hash.to_string()]).await?;
+		let rows = t.query("SELECT a.id,a.lightning_htlc_subscription_id AS subscription_id FROM lightning_payment_attempt a \
+			WHERE a.payment_hash=$1 AND a.lightning_htlc_subscription_id IS NOT NULL",&[&hash.to_string()]).await?;
 		assert_eq!(rows.len(),1,"this is one actual attempt, not unrelated same-hash liabilities");
 		let attempt:i64=rows[0].get("id"); let subscription:i64=rows[0].get("subscription_id");
 		let incoming=t.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
@@ -287,18 +286,15 @@ async fn batched_terminal(reorg: bool) {
 	assert!(chain.get_tx_out(&claim.compute_txid(),0,Some(true)).unwrap().unwrap().confirmations>=6);
 	let parent_info:serde_json::Value=chain.call("getrawtransaction",&[serde_json::json!(parent.compute_txid().to_string()),serde_json::json!(true)]).unwrap();
 	assert!(parent_info["confirmations"].as_u64().unwrap()>=6);
-	let child_row=db.read(async |t|Ok(t.query_one("SELECT txid,raw_tx,fee_sat,confirmed_hash FROM expiry_fee_child \
-		WHERE allocation_id=$1 AND confirmed_hash IS NOT NULL",&[&allocation]).await?)).await.unwrap();
-	let child:Transaction=deserialize(child_row.get("raw_tx")).unwrap();
-	assert_eq!(child_row.get::<_,&str>("txid"),child.compute_txid().to_string());
+	let (child, measured_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent)
+		.expect("the canonical parent must have a fee sponsor");
 	assert_eq!(child.input.iter().filter(|input|input.previous_output==anchor).count(),1);
 	let child_info:serde_json::Value=chain.call("getrawtransaction",&[serde_json::json!(child.compute_txid().to_string()),serde_json::json!(true)]).unwrap();
 	assert!(child_info["confirmations"].as_u64().unwrap()>=6); assert_eq!(child_info["blockhash"],parent_info["blockhash"]);
-	assert_eq!(child_row.get::<_,&str>("confirmed_hash"),child_info["blockhash"].as_str().unwrap());
 	let mut fee_inputs=sat(0);
 	for input in &child.input {fee_inputs+=ctx.bitcoind().await_transaction(input.previous_output.txid).await.output[input.previous_output.vout as usize].value;}
 	let actual_fee=fee_inputs-child.output.iter().map(|output|output.value).sum::<bitcoin::Amount>();
-	assert!(actual_fee>sat(0)); assert_eq!(actual_fee,sat(u64::try_from(child_row.get::<_,i64>("fee_sat")).unwrap()));
+	assert!(actual_fee>sat(0)); assert_eq!(actual_fee,sat(u64::try_from(measured_fee).unwrap()));
 	let recorded=db.read(async |t|Ok(t.query_one("SELECT sweep_txid,sweep_tx,confirmed_hash FROM expiry_allocation WHERE id=$1",&[&allocation]).await?)).await.unwrap();
 	assert_eq!(recorded.get::<_,&str>("sweep_txid"),parent.compute_txid().to_string());
 	assert_eq!(recorded.get::<_,&[u8]>("sweep_tx"),serialize(&parent).as_slice());
@@ -312,8 +308,7 @@ async fn batched_terminal(reorg: bool) {
 		let discharged=t.query("SELECT v.vtxo_id,v.onchain_spent_txid,h.chain_resolution::TEXT,h.offchain_resolution::TEXT FROM vtxo v \
 			JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=ANY($1) ORDER BY v.vtxo_id",
 			&[&grant_ids.iter().cloned().collect::<Vec<_>>()]).await?;
-		let claims=t.query_one("SELECT (SELECT COUNT(*) FROM expiry_lightning_receive_claim WHERE subscription_id=$1) AS claims, \
-			(SELECT COUNT(*) FROM expiry_lightning_receive_replay WHERE subscription_id=$1) AS intents",&[&scope.1]).await?;
+		let claims=t.query_one("SELECT COUNT(*) AS claims FROM expiry_lightning_receive_claim WHERE subscription_id=$1",&[&scope.1]).await?;
 		let no_duplicate_ids=paid_ids.iter().cloned().chain(grant_ids.iter().cloned()).collect::<Vec<_>>();
 		let active_duplicates=t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 			WHERE e.vtxo_id=ANY($1) AND c.disposition='customer' AND c.active",&[&no_duplicate_ids]).await?.get::<_,i64>(0);
@@ -334,7 +329,7 @@ async fn batched_terminal(reorg: bool) {
 		assert_eq!(row.get::<_,Option<&str>>("chain_resolution"),Some("revoked"));
 		assert!(row.get::<_,Option<&str>>("offchain_resolution").is_none(),"actual grant timeout cannot be manufactured as off-chain cancellation");
 	}
-	assert_eq!(final_rows.3.get::<_,i64>("claims"),0); assert_eq!(final_rows.3.get::<_,i64>("intents"),0);
+	assert_eq!(final_rows.3.get::<_,i64>("claims"),0);
 	assert_eq!(final_rows.4,0,"already-received A and consensus-spent G cannot retain another active customer obligation");
 	assert!(assert_retained_claim(&db,sources[0].id(),&claim).await);
 	assert!(assert_retained_claim(&db,sources[1].id(),&claim).await);

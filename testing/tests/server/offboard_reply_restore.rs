@@ -145,7 +145,7 @@ async fn wait_rebuilt(db: &Db, point: BlockRef) {
 		loop {
 			let ready = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
 			}).await.unwrap();
 			if ready { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -515,8 +515,6 @@ async fn restored_finish() {
 	restored.sync_pending_offboards().await.unwrap();
 	restored.sync_fallback_payouts().await.unwrap();
 	assert!(restored.pending_offboards().await.unwrap().is_empty());
-	assert!(restored.fallback_payouts().await.unwrap().iter().all(|receipt| receipt.attempts.iter()
-		.all(|attempt| attempt.disposition != bark::FallbackDisposition::CustomerPayout)));
 	assert_eq!(restored.history().await.unwrap(), completed);
 	assert_ark_balance(&restored, Amount::ZERO, Amount::ZERO).await;
 	assert_eq!(restored.get_vtxo_by_id(source).await.unwrap().state, bark::vtxo::VtxoState::Spent);

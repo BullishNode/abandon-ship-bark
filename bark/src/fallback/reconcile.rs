@@ -23,9 +23,6 @@ impl Wallet {
 		Ok(snapshot.awaiting_settlement.into_iter().chain(pending.into_keys()).collect())
 	}
 
-	pub async fn fallback_history_awaiting_sync(&self) -> anyhow::Result<bool> {
-		Ok(self.inner.db.get_fallback_snapshot().await?.awaiting_sync)
-	}
 
 	pub(crate) async fn reconcile_expired_inputs(&self, ids: &[VtxoId]) -> anyhow::Result<HashSet<VtxoId>> {
 		if ids.is_empty() { return Ok(HashSet::new()); }
@@ -49,12 +46,11 @@ impl Wallet {
 			Ok(statuses) => statuses,
 			Err(error) => {
 				snapshot.awaiting_settlement.extend(ids.iter().copied());
-				snapshot.awaiting_sync = true;
 				self.inner.db.store_fallback_snapshot(&snapshot).await?;
 				return Err(error).context("expired coins await an authoritative server status");
 			},
 		};
-		let decided = snapshot.entitlements.values().map(|e| e.vtxo_id).collect::<HashSet<_>>();
+		let decided = snapshot.adopted_payout_vtxos.clone();
 		let mut eligible = HashSet::new();
 
 		for id in ids {
@@ -88,7 +84,7 @@ impl Wallet {
 		}
 		if expired.is_empty() { return Ok(inputs); }
 		if let Err(error) = self.sync_fallback_payouts().await {
-			warn!("Could not update fallback receipt history before refresh: {:#}", error);
+			warn!("Could not verify fallback outputs before refresh: {:#}", error);
 		}
 		let ids = expired.iter().copied().collect::<Vec<_>>();
 		let eligible = self.reconcile_expired_inputs(&ids).await?;

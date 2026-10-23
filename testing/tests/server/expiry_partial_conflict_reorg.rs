@@ -94,13 +94,6 @@ async fn assert_physical_cut(
 		let child_fee = actual_fee(ctx, &child).await;
 		assert!(child_fee > Amount::ZERO);
 		fee_total += child_fee;
-		let stored = db.read(async |tx| Ok(tx.query_one("SELECT raw_tx,fee_sat,operator_remainder_sat,confirmed_height,confirmed_hash \
-			FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2", &[allocation, &child.compute_txid().to_string()]).await?)).await.unwrap();
-		assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(), child);
-		assert_eq!(stored.get::<_, i64>("fee_sat"), i64::try_from(child_fee.to_sat()).unwrap());
-		assert_eq!(stored.get::<_, i64>("operator_remainder_sat"), i64::try_from(expected_fee.to_sat()).unwrap());
-		assert_eq!(stored.get::<_, Option<i64>>("confirmed_height"), Some(i64::from(point.height.to_u32())));
-		assert_eq!(stored.get::<_, Option<String>>("confirmed_hash"), Some(hash.to_string()));
 		let persisted = db.read(async |tx| Ok(tx.query_one("SELECT status,sweep_tx,sweep_txid,confirmed_height,confirmed_hash \
 			FROM expiry_allocation WHERE id=$1", &[allocation]).await?)).await.unwrap();
 		assert_eq!(persisted.get::<_, String>("status"), "confirmed");
@@ -264,7 +257,7 @@ async fn rebuilt_generation(db: &Db, point: BlockRef) -> i64 {
 		loop {
 			let generation = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(None); };
-				if view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await? {
+				if view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0) {
 					Ok(Some(view.generation))
 				} else { Ok(None) }
 			}).await.unwrap();

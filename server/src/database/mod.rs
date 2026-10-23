@@ -17,7 +17,6 @@ pub mod expiry_chain;
 pub mod expiry_decision;
 pub mod expiry_ownership;
 pub mod expiry_payout;
-pub mod expiry_details;
 pub(crate) mod expiry_lightning;
 pub(crate) mod expiry_receive;
 pub(crate) mod expiry_geometry;

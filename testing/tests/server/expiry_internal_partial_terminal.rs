@@ -141,9 +141,8 @@ async fn partial_terminal(case: TerminalCase) {
 	assert!(grants.len() >= 2);
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let scope = db.read(async |t| {
-		let rows = t.query("SELECT f.id,f.subscription_id FROM expiry_lightning_internal_funding f \
-			JOIN lightning_payment_attempt a ON a.id=f.id AND a.lightning_htlc_subscription_id=f.subscription_id \
-			WHERE a.payment_hash=$1", &[&hash.to_string()]).await?;
+		let rows = t.query("SELECT a.id,a.lightning_htlc_subscription_id AS subscription_id FROM lightning_payment_attempt a \
+			WHERE a.payment_hash=$1 AND a.lightning_htlc_subscription_id IS NOT NULL", &[&hash.to_string()]).await?;
 		assert_eq!(rows.len(), 1, "one actual funding attempt must own this receive subscription");
 		let attempt: i64 = rows[0].get("id");
 		let subscription: i64 = rows[0].get("subscription_id");
@@ -369,7 +368,7 @@ pub(super) async fn wait_partial_confirmation(
 				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
 				if view.captaind.height != height || view.watchmand.height != height
 					|| view.captaind.hash != expected_hash || view.watchmand.hash != expected_hash
-					|| !t.expiry_view_is_rebuilt(view).await?
+					|| !!t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0)
 				{ return Ok(false); }
 				t.lock_valid_expiry_view(view).await?;
 				let recorded = t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
@@ -499,11 +498,6 @@ async fn all_terminal_returns(
 		}
 		let child_fee=child_inputs-child.output.iter().map(|output|output.value).sum::<bitcoin::Amount>();
 		assert!(child_fee>sat(0));
-		let stored=db.read(async |t|Ok(t.query_one("SELECT f.raw_tx,f.fee_sat FROM expiry_fee_child f \
-			JOIN expiry_allocation a ON a.id=f.allocation_id WHERE a.sweep_txid=$1 AND f.txid=$2",
-			&[&txid.to_string(),&child.compute_txid().to_string()]).await?)).await.unwrap();
-		assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(),*child);
-		assert_eq!(sat(u64::try_from(stored.get::<_,i64>("fee_sat")).unwrap()),child_fee);
 		fees+=child_fee;
 		graph.insert(*txid,tx);
 		assert!(graph.insert(child.compute_txid(),child.clone()).is_none());
@@ -572,7 +566,7 @@ async fn all_terminal_returns(
 			let rebuilt=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				Ok(view.captaind.height==height && view.watchmand.height==height
-					&& view.captaind.hash==expected_hash && view.watchmand.hash==expected_hash && t.expiry_view_is_rebuilt(view).await?)
+					&& view.captaind.hash==expected_hash && view.watchmand.hash==expected_hash && !t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 			}).await.unwrap();
 			if rebuilt {break;}
 			tokio::time::sleep(Duration::from_millis(50)).await;

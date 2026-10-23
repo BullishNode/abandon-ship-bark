@@ -16,9 +16,7 @@ use ark::vtxo::Full;
 use ark::vtxo::policy::clause::TapScriptClause;
 use ark_testing::{sat, TestContext};
 use ark_testing::daemon::captaind::{proxy::MailboxRpcProxy, MailboxClient, WalletAdminClient};
-use bark::FallbackDisposition;
 use bark::actions::lightning::receive::Progress;
-use bark::movement::MovementStatus;
 use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut, Witness};
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::consensus::deserialize;
@@ -264,7 +262,7 @@ async fn registered_receive_fallback() {
 		let grant_ids = grants.iter().map(|grant| grant.vtxo.vtxo_id.to_string()).collect::<BTreeSet<_>>();
 		assert!(!grant_ids.is_empty());
 		assert_eq!(grant_ids.len(), grants.len());
-		let rows = db.read(async |tx| Ok(tx.query("SELECT c.source_vtxo_id,c.output_vtxo_id,c.materialized, \
+		let rows = db.read(async |tx| Ok(tx.query("SELECT c.source_vtxo_id,c.output_vtxo_id, \
 			s.status::TEXT AS status,s.invoice,h.offchain_resolution::TEXT AS resolution,v.vtxo AS actual \
 			FROM expiry_lightning_receive_claim c JOIN lightning_htlc_subscription s ON s.id=c.subscription_id \
 			JOIN vtxo g ON g.vtxo_id=c.source_vtxo_id AND g.lightning_htlc_subscription_id=s.id \
@@ -277,7 +275,6 @@ async fn registered_receive_fallback() {
 		assert_eq!(rows.iter().map(|row| row.get::<_, String>("output_vtxo_id")).collect::<BTreeSet<_>>(),
 			BTreeSet::from([output.id().to_string()]));
 		for row in &rows {
-			assert!(row.get::<_, bool>("materialized"));
 			assert_eq!(row.get::<_, String>("status"), "settled");
 			assert_eq!(row.get::<_, Option<String>>("resolution").as_deref(), Some("fulfilled"));
 			let actual = ServerVtxo::<Full>::deserialize(row.get("actual")).unwrap().try_into_user_vtxo().unwrap();
@@ -602,7 +599,7 @@ async fn registered_receive_fallback() {
 			loop {
 				let rebuilt = db.read(async |tx| {
 					let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-					Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+					Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 				}).await.unwrap();
 				if rebuilt { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;
@@ -676,26 +673,8 @@ async fn registered_receive_fallback() {
 	let client = restored.client().await;
 	assert_eq!(client.fallback_destination().await.unwrap(), destination);
 	client.sync_fallback_payouts().await.unwrap();
-	let receipts = client.fallback_payouts().await.unwrap();
-	assert_eq!(receipts.len(), 1);
-	assert_eq!(receipts[0].vtxo_id, source.id());
-	assert_eq!(receipts[0].gross, source.amount());
-	let attempts = receipts[0].attempts.iter().filter(|attempt| attempt.active).collect::<Vec<_>>();
-	assert_eq!(attempts.len(), 1);
-	assert_eq!(attempts[0].disposition, FallbackDisposition::CustomerPayout);
-	assert_eq!(attempts[0].parent.as_ref().unwrap(), &parent);
-	assert_eq!(attempts[0].output_index, Some(payout.vout));
-	assert_eq!(attempts[0].script.as_ref(), Some(&destination.spk));
-	assert_eq!(attempts[0].payout, expected);
-	assert_eq!(attempts[0].fee, sat(1_000));
+	assert_eq!(client.verify_fallback_output(payout).await.unwrap(), expected);
 	let history = client.history().await.unwrap();
-	let movements = history.iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-	assert_eq!(movements.len(), 1);
-	assert_eq!(movements[0].status, MovementStatus::Successful);
-	assert_eq!(movements[0].metadata["fallback"]["chain_verified"], true);
-	assert_eq!(movements[0].effective_balance.to_sat(), 0, "seed-only recovery never held the undelivered Ark leaf");
-	assert_eq!(movements[0].sent_to[0].amount, expected);
-	assert_eq!(movements[0].offchain_fee, sat(1_000));
 	assert!(!history.iter().any(|movement| movement.effective_balance.to_sat() < 0 && movement.input_vtxos.contains(&source.id())));
 	drop(client);
 	let utxos = restored.onchain_utxos().await;
@@ -928,13 +907,6 @@ async fn registered_receive_fallback() {
 	let (payout_child, payout_child_fee) = &payout_children[0];
 	assert!(*payout_child_fee > Amount::ZERO);
 	assert!(payout_child.output.iter().any(|output| output.value > Amount::ZERO));
-	let child_rows = db.read(async |tx| Ok(tx.query("SELECT f.raw_tx,f.fee_sat FROM expiry_fee_child f \
-		JOIN expiry_allocation a ON a.id=f.allocation_id WHERE a.sweep_txid=$1 AND f.txid=$2",
-		&[&parent.compute_txid().to_string(), &payout_child.compute_txid().to_string()],
-	).await?)).await.unwrap();
-	assert_eq!(child_rows.len(), 1);
-	assert_eq!(deserialize::<Transaction>(child_rows[0].get("raw_tx")).unwrap(), *payout_child);
-	assert_eq!(child_rows[0].get::<_, i64>("fee_sat"), payout_child_fee.to_sat() as i64);
 	assert_eq!(canonical_payouts, BTreeMap::from([(payout, expected)]),
 		"historical scanning must include the already spent A payout and reject duplicates");
 	assert_eq!(frontier.values().map(|(output, _)| output.value).sum::<Amount>() + total_miner_fees,

@@ -163,7 +163,7 @@ async fn rebuilt(db: &Db, point: BlockRef) {
 		loop {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -351,13 +351,6 @@ async fn cold_backup() {
 	assert!(child.vsize() <= 1_000);
 	let package_fee = actual_fee(&ctx, &child).await;
 	assert!(package_fee > Amount::ZERO);
-	let stored_child = db.read(async |tx| Ok(tx.query_one("SELECT raw_tx,fee_sat,operator_remainder_sat,confirmed_height,confirmed_hash \
-		FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2", &[&allocation, &child.compute_txid().to_string()]).await?)).await.unwrap();
-	assert_eq!(deserialize::<Transaction>(stored_child.get("raw_tx")).unwrap(), child);
-	assert_eq!(stored_child.get::<_, i64>("fee_sat"), i64::try_from(package_fee.to_sat()).unwrap());
-	assert_eq!(stored_child.get::<_, i64>("operator_remainder_sat"), 1_000);
-	assert_eq!(stored_child.get::<_, Option<i64>>("confirmed_height"), Some(i64::from(parent_block.height.to_u32())));
-	assert_eq!(stored_child.get::<_, Option<String>>("confirmed_hash"), Some(parent_block.hash.to_string()));
 	let graph = BTreeMap::from([(parent.compute_txid(), parent.clone()), (child.compute_txid(), child.clone())]);
 	assert_eq!(graph.values().flat_map(|tx| tx.output.iter()).filter(|output| output.script_pubkey == registration.spk).count(), 1);
 	let mut spent = BTreeSet::new();

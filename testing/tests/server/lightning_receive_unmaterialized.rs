@@ -19,7 +19,7 @@ use bitcoin_ext::{AmountExt, BlockDelta, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use cln_rpc::plugins::hold;
 use cln_rpc::listpays_pays::ListpaysPaysStatus;
-use server::database::{Db, SpendState};
+use server::database::Db;
 use server::vtxopool::VtxoTarget;
 use server_rpc::protos;
 use tokio::sync::Notify;
@@ -70,24 +70,20 @@ impl captaind::proxy::MailboxRpcProxy for ReceiveGate {
 }
 
 struct Binding {
-	request: Vec<u8>,
-	protocol: i64,
 	subscription: i64,
 	source: Vtxo<Full>,
 	promised: Vtxo<Full>,
 }
 
-async fn original_binding(db: &Db, hash: PaymentHash, materialized: bool) -> Binding {
-	let rows = db.read(async |tx| Ok(tx.query("SELECT r.request,r.protocol_version,r.subscription_id, \
-		c.source_vtxo_id,c.output_vtxo_id,c.output_vtxo,c.materialized,source.vtxo AS source_vtxo, \
-		s.status::TEXT AS status,h.offchain_resolution::TEXT AS resolution, \
-		actual.vtxo AS actual_vtxo,actual.spend_state::TEXT AS output_state \
-		FROM expiry_lightning_receive_replay r JOIN expiry_lightning_receive_claim c \
-		ON c.subscription_id=r.subscription_id AND c.payment_hash=r.payment_hash \
-		JOIN lightning_htlc_subscription s ON s.id=r.subscription_id AND s.payment_hash=r.payment_hash \
+async fn original_binding(db: &Db, hash: PaymentHash) -> Binding {
+	let rows = db.read(async |tx| Ok(tx.query("SELECT c.subscription_id, \
+		c.source_vtxo_id,c.output_vtxo_id,c.output_vtxo,source.vtxo AS source_vtxo, \
+		s.status::TEXT AS status,h.offchain_resolution::TEXT AS resolution,actual.vtxo AS actual_vtxo \
+		FROM expiry_lightning_receive_claim c \
+		JOIN lightning_htlc_subscription s ON s.id=c.subscription_id AND s.payment_hash=c.payment_hash \
 		JOIN vtxo source ON source.vtxo_id=c.source_vtxo_id AND source.lightning_htlc_subscription_id=s.id \
-		JOIN htlc_vtxo h ON h.id=source.id AND h.direction='outgoing' AND h.payment_hash=r.payment_hash \
-		LEFT JOIN vtxo actual ON actual.vtxo_id=c.output_vtxo_id WHERE r.payment_hash=$1",
+		JOIN htlc_vtxo h ON h.id=source.id AND h.direction='outgoing' AND h.payment_hash=c.payment_hash \
+		LEFT JOIN vtxo actual ON actual.vtxo_id=c.output_vtxo_id WHERE c.payment_hash=$1",
 		&[&hash.to_string()]).await?)).await.unwrap();
 	assert_eq!(rows.len(), 1, "one receive source and one immutable destination");
 	let row = &rows[0];
@@ -96,30 +92,12 @@ async fn original_binding(db: &Db, hash: PaymentHash, materialized: bool) -> Bin
 	assert_eq!(row.get::<_, &str>("source_vtxo_id"), source.id().to_string());
 	assert_eq!(row.get::<_, &str>("output_vtxo_id"), promised.id().to_string());
 	assert_eq!(row.get::<_, &str>("status"), "settled");
-	assert_eq!(row.get::<_, bool>("materialized"), materialized);
-	if materialized {
-		assert_eq!(row.get::<_, Option<&str>>("resolution"), Some("fulfilled"));
-		assert_eq!(row.get::<_, Option<&str>>("output_state"), Some("unregistered"));
-		let actual = Vtxo::<Full>::deserialize(row.get::<_, Option<&[u8]>>("actual_vtxo").unwrap()).unwrap();
-		assert_eq!(actual.id(), promised.id());
-		assert_eq!(actual.policy(), promised.policy());
-		assert_eq!(actual.amount(), promised.amount());
-		assert!(!actual.has_all_witnesses(), "callerless recovery does not invent the absent provider's signatures");
-	} else {
-		assert!(row.get::<_, Option<&[u8]>>("actual_vtxo").is_none());
-		assert!(row.get::<_, Option<&str>>("resolution").is_none());
-	}
-	let request = row.get::<_, Vec<u8>>("request");
-	assert!(!request.is_empty());
-	let protocol = row.get("protocol_version");
-	assert!(protocol > 0);
-	Binding { request, protocol, subscription: row.get("subscription_id"), source, promised }
+	assert!(row.get::<_, Option<&[u8]>>("actual_vtxo").is_none(), "an absent provider does not upload the signed output");
+	assert!(row.get::<_, Option<&str>>("resolution").is_none());
+	Binding { subscription: row.get("subscription_id"), source, promised }
 }
 
 fn unchanged(original: &Binding, actual: &Binding) {
-	// The stored request contains a preimage. Never print its bytes on failure.
-	assert!(actual.request == original.request, "original admitted request changed");
-	assert_eq!(actual.protocol, original.protocol);
 	assert_eq!(actual.subscription, original.subscription);
 	assert_eq!(actual.source.id(), original.source.id());
 	assert_eq!(actual.promised.id(), original.promised.id());
@@ -133,7 +111,7 @@ async fn rebuilt(ctx: &TestContext, db: &Db) {
 		loop {
 			let done = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
 			}).await.unwrap();
 			if done { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -362,7 +340,7 @@ async fn canonical_cut(ctx: &TestContext, srv: &Captaind, db: &Db, boundary: &BT
 }
 
 #[tokio::test]
-async fn collected_external_receive_materializes_without_provider_then_pays_recipient_once() {
+async fn collected_external_receive_pays_recipient_without_provider() {
 	let ctx = TestContext::new("server/lightning_receive_unmaterialized").await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(sat(500_000))
@@ -461,7 +439,7 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 		assert_eq!(pays[0].payment_hash, hash.to_vec());
 		assert_eq!(pays[0].status(), ListpaysPaysStatus::Complete);
 		assert_eq!(pays[0].amount_msat.as_ref().unwrap().msat, gross.to_msat());
-		let original = original_binding(&db, hash, false).await;
+		let original = original_binding(&db, hash).await;
 		assert_eq!(original.source.amount(), gross);
 		assert_eq!(original.promised.amount(), gross);
 		assert_eq!(original.promised.policy(), address.policy());
@@ -480,7 +458,7 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 		let _ = claim.await;
 		drop(provider);
 		let _ = proxy.stop.send(());
-		unchanged(&original, &original_binding(&db, hash, false).await);
+		unchanged(&original, &original_binding(&db, hash).await);
 		assert_eq!(gate.claims.load(Ordering::SeqCst), 1);
 		assert_eq!(gate.registrations.load(Ordering::SeqCst), 0);
 		assert_eq!(gate.posts.load(Ordering::SeqCst), 0);
@@ -495,7 +473,7 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("stopped tree writer must release its incomplete transaction");
-	unchanged(&original, &original_binding(&db, hash, false).await);
+	unchanged(&original, &original_binding(&db, hash).await);
 	let ancestor_deadline = original.source.policy().as_server_htlc_recv().unwrap().htlc_expiry;
 	let anchor = original.source.chain_anchor();
 	let anchor_transaction = ctx.bitcoind().await_transaction(anchor.txid).await;
@@ -519,23 +497,13 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 	let owned_pool_key = db.read(async |tx| Ok(tx.query_opt("SELECT pubkey FROM ephemeral_tweak WHERE pubkey=$1",
 		&[&operator_pool.user_pubkey().to_string()]).await?.is_some())).await.unwrap();
 	assert!(owned_pool_key, "unused Pool capital needs the actual server-owned public key");
-	// The original signed grants, unused pool principal and callerless request
+	// The original signed grants, unused pool principal and validated recipient mapping
 	// remain intact. Disable only future issuance through the ordinary config:
 	// after expiry a two-target replenishment could recycle operator capital
 	// into unrelated new backing and contaminate this finite physical cut.
 	srv.config_mut().vtxopool.vtxo_targets.clear();
 	srv.start().await.unwrap();
-	tokio::time::timeout(Duration::from_secs(20), async {
-		loop {
-			let done = db.read(async |tx| Ok(tx.query_one("SELECT c.materialized FROM expiry_lightning_receive_claim c WHERE c.payment_hash=$1",
-				&[&hash.to_string()]).await?.get::<_, bool>(0))).await.unwrap();
-			if done { break; }
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-	}).await.expect("callerless original-request recovery must materialize without the provider");
-	unchanged(&original, &original_binding(&db, hash, true).await);
-	let stored = db.read(async |tx| tx.get_user_vtxo_by_id(original.promised.id()).await).await.unwrap();
-	assert_eq!(stored.spend_state, SpendState::Unregistered);
+	unchanged(&original, &original_binding(&db, hash).await);
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	let target = original.source.expiry_height().to_u32() + 1;
 	assert!(target > height);
@@ -588,7 +556,7 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 			let rows = db.read(async |tx| Ok(tx.query("SELECT a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 				WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL",
-				&[&original.promised.id().to_string()]).await?)).await.unwrap();
+				&[&original.source.id().to_string()]).await?)).await.unwrap();
 			assert!(rows.len() <= 1);
 			let mut candidates = Vec::new();
 			if let Some(row) = rows.first() {
@@ -682,7 +650,7 @@ async fn collected_external_receive_materializes_without_provider_then_pays_reci
 			WHERE v.anchor_point=$1 AND c.disposition='customer'", &[&anchor.to_string()]).await?)).await.unwrap();
 		assert_eq!(rows.len(), 1, "old grant, provider checkpoint and recipient leaf cannot each get paid");
 		let row = &rows[0];
-		assert_eq!(row.get::<_, &str>("vtxo_id"), original.promised.id().to_string());
+		assert_eq!(row.get::<_, &str>("vtxo_id"), original.source.id().to_string());
 		assert_eq!(row.get::<_, &str>("owner_mailbox"), recipient_mailbox);
 		assert_eq!(row.get::<_, &str>("user_pubkey"), recipient_key.to_string());
 		assert_eq!(row.get::<_, &str>("spk"), destination.spk.as_bytes().to_lower_hex_string());

@@ -9,7 +9,6 @@
 mod config;
 mod daemon;
 mod frontier;
-pub(crate) mod fee_sponsor;
 mod policy;
 mod payout;
 mod recovery;
@@ -51,7 +50,7 @@ use bitcoin::Txid;
 use tokio::sync::watch;
 use tracing::{info, trace, warn};
 
-use ark::{ServerVtxo, ServerVtxoPolicy, VtxoId};
+use ark::{ServerVtxo, ServerVtxoPolicy, VtxoId, VtxoPolicy};
 use ark::vtxo::policy::signing::VtxoSigner;
 use bitcoin_ext::{fee, BlockHeight, BlockRef, TxStatus, P2TR_DUST};
 use bitcoin_ext::bdk::{WalletExt, KEYCHAIN};
@@ -414,16 +413,31 @@ impl Watchman {
 		// Use the original native claim: its miner fee comes from operator
 		// collateral, not from a customer payout or a new wallet subsidy.
 		let sweeps = self.scan_frontier().await.sweeps;
-		let ids = sweeps.iter().filter(|v| *v.policy() == ServerVtxoPolicy::ServerOwned)
+		let ids = sweeps.iter().filter(|v| matches!(v.policy(), ServerVtxoPolicy::ServerOwned
+			| ServerVtxoPolicy::User(VtxoPolicy::Pubkey(_))))
 			.map(|v| v.id().to_string()).collect::<Vec<_>>();
 		let eligible = self.db.read(async |t| Ok(t.query(
-			"SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state='offboard-forfeit'",
-			&[&ids]).await?.into_iter().map(|r| r.get::<_, String>(0)).collect::<HashSet<_>>()
+			"SELECT vtxo_id,spend_state::TEXT FROM vtxo WHERE vtxo_id=ANY($1) AND spend_state IN ('offboard-forfeit','pool')",
+			&[&ids]).await?.into_iter().map(|r| (r.get::<_, String>(0),r.get::<_, String>(1))).collect::<HashMap<_, _>>()
 		)).await?;
-		let forfeits = sweeps.into_iter().filter(|v| *v.policy() == ServerVtxoPolicy::ServerOwned
-			&& eligible.contains(&v.id().to_string())).collect::<Vec<_>>();
-		for vtxo in &forfeits { self.update_mempool_spend(vtxo.id()).await; }
-		if !forfeits.is_empty() { self.process_claims(forfeits).await?; }
+		let mut claims = Vec::new();
+		for vtxo in sweeps {
+			let state = eligible.get(&vtxo.id().to_string()).map(String::as_str);
+			let owned = match (vtxo.policy(), state) {
+				(ServerVtxoPolicy::ServerOwned, Some("offboard-forfeit")) => true,
+				(ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)), Some("pool")) => {
+					policy.user_pubkey == vtxo.server_pubkey() || self.db.read(async |t|
+						t.fetch_ephemeral_tweak(policy.user_pubkey).await
+					).await?.is_some()
+				},
+				_ => false,
+			};
+			if owned {
+				self.update_mempool_spend(vtxo.id()).await;
+				claims.push(vtxo);
+			}
+		}
+		if !claims.is_empty() { self.process_claims(claims).await?; }
 		let splits = self.db.read(async |t| t.pending_expiry_splits().await).await?;
 		for (txid, root) in splits {
 			self.verify_expiry_view(view).await?;

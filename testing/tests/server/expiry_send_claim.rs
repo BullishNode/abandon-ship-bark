@@ -265,8 +265,7 @@ async fn unattempted_shared_preimage(legacy: bool) {
 		assert!(lightning.internal.grpc_client().await.list_send_pays(cln_rpc::ListsendpaysRequest {
 			payment_hash: Some(hash.to_vec()), ..Default::default()
 		}).await.unwrap().into_inner().payments.is_empty());
-		assert_eq!(db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM expiry_lightning_dispatch d \
-			JOIN lightning_payment_attempt a ON a.id=d.id WHERE a.payment_hash=$1", &[&hash.to_string()])
+		assert_eq!(db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM lightning_payment_attempt a WHERE a.payment_hash=$1", &[&hash.to_string()])
 			.await?.get::<_, i64>(0))).await.unwrap(), 0);
 	}
 	let receive = signed_leaf(&ctx, &srv, &wallet, receive_input,
@@ -532,37 +531,24 @@ async fn assert_linked_send(
 	assert_native_send(history, hash, label, failed);
 	db.read(async |t| {
 		let row = t.query_one("SELECT a.amount_msat,a.final_amount_msat,a.user_fee_sat,a.status::TEXT, \
-			a.lightning_htlc_subscription_id,n.pubkey,d.label,f.created_index,f.updated_index,f.jsonrpc_error_code, \
+			a.lightning_htlc_subscription_id,n.pubkey, \
 			(SELECT COUNT(*) FROM lightning_payment_attempt p WHERE p.payment_hash=a.payment_hash) AS attempts, \
-			(SELECT COUNT(*) FROM expiry_lightning_dispatch x JOIN lightning_payment_attempt p ON p.id=x.id WHERE p.payment_hash=a.payment_hash) AS dispatches, \
 			(SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo l WHERE l.lightning_payment_attempt_id=a.id) AS links, \
-			(SELECT COUNT(*) FROM expiry_lightning_terminal_failure x WHERE x.id=a.id) AS failures, \
-			(SELECT COUNT(*) FROM expiry_lightning_external_success x WHERE x.id=a.id) AS successes, \
-			(SELECT COUNT(*) FROM expiry_lightning_rpc_rejection x WHERE x.id=a.id) AS rejections, \
-			(SELECT COUNT(*) FROM expiry_lightning_internal_funding x JOIN lightning_payment_attempt p ON p.id=x.id WHERE p.payment_hash=a.payment_hash) AS funding, \
 			(SELECT COUNT(*) FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE h.payment_hash=a.payment_hash AND h.direction='outgoing') AS grants, \
 			jsonb_build_array(a.id,a.lightning_node_id,a.amount_msat,a.status,a.error,a.created_at,a.updated_at, \
 				a.payment_hash,a.final_amount_msat,a.sender_mailbox_id,a.lightning_htlc_subscription_id, \
-				a.block_height,a.user_fee_sat,a.user_agent,a.retry_for_secs,a.max_routing_fee_msat,d.label,d.created_at)::TEXT AS snapshot \
+				a.block_height,a.user_fee_sat,a.user_agent,a.retry_for_secs,a.max_routing_fee_msat)::TEXT AS snapshot \
 			FROM lightning_payment_attempt a JOIN lightning_node n ON n.id=a.lightning_node_id \
-			JOIN expiry_lightning_dispatch d ON d.id=a.id LEFT JOIN expiry_lightning_terminal_failure f ON f.id=a.id \
 			WHERE a.id=$1 AND a.payment_hash=$2", &[&attempt, &hash.to_string()]).await?;
 		assert_eq!(row.get::<_, i64>("amount_msat"), 100_000_000);
-		assert!(row.get::<_, Option<i64>>("final_amount_msat").is_none());
+		assert_eq!(row.get::<_, Option<i64>>("final_amount_msat"), if failed { Some(0) } else { None });
 		assert_eq!(row.get::<_, Option<i64>>("user_fee_sat"), Some(0));
 		assert_eq!(row.get::<_, Vec<u8>>("pubkey"), payer);
-		assert_eq!(row.get::<_, &str>("label"), label);
 		assert!(row.get::<_, Option<i64>>("lightning_htlc_subscription_id").is_none());
 		if failed { assert_eq!(row.get::<_, &str>("status"), "failed"); }
 		else { assert!(matches!(row.get::<_, &str>("status"), "requested" | "submitted")); }
-		for field in ["attempts", "dispatches", "links"] { assert_eq!(row.get::<_, i64>(field), 1); }
-		assert_eq!(row.get::<_, i64>("failures"), if failed { 1 } else { 0 });
-		for field in ["successes", "rejections", "funding", "grants"] { assert_eq!(row.get::<_, i64>(field), 0); }
-		assert_eq!(row.get::<_, Option<i64>>("created_index"), failed.then(|| i64::try_from(history.1[0].created_index.unwrap()).unwrap()));
-		assert_eq!(row.get::<_, Option<i64>>("updated_index"), if failed {
-			history.1[0].updated_index.map(|index| i64::try_from(index).unwrap())
-		} else { None });
-		assert!(row.get::<_, Option<i32>>("jsonrpc_error_code").is_none());
+		for field in ["attempts", "links"] { assert_eq!(row.get::<_, i64>(field), 1); }
+		assert_eq!(row.get::<_, i64>("grants"), 0);
 		if let Some(subscription) = t.get_htlc_subscription_by_payment_hash(hash).await? {
 			assert_eq!(subscription.status, server::database::ln::LightningHtlcSubscriptionStatus::Created);
 			assert!(subscription.lowest_incoming_htlc_expiry.is_none());
@@ -760,9 +746,9 @@ async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: b
 		mailbox_id: None, retry_for_secs: Some(1),
 	}).await.unwrap();
 	lightning.external.wait_for_hold_invoice_accepted(hash).await;
-	let (attempt, label) = db.read(async |t| Ok(t.query_one("SELECT a.id,d.label FROM lightning_payment_attempt a \
-		JOIN expiry_lightning_dispatch d ON d.id=a.id WHERE a.payment_hash=$1", &[&hash.to_string()]).await
-		.map(|row| (row.get::<_, i64>("id"), row.get::<_, String>("label")))?)).await.unwrap();
+	let attempt = db.read(async |t| Ok(t.query_one("SELECT id FROM lightning_payment_attempt WHERE payment_hash=$1",
+		&[&hash.to_string()]).await?.get::<_, i64>(0))).await.unwrap();
+	let label = attempt.to_string();
 	tokio::time::timeout(Duration::from_secs(10), async {
 		loop {
 			let requested = db.read(async |t| Ok(t.query_one(
@@ -802,13 +788,12 @@ async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: b
 				let terminal = !history.0.is_empty() && history.0.iter().all(|part|
 					part.status() == cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus::Failed)
 					&& history.1.len() == 1 && history.1[0].status() == cln_rpc::listpays_pays::ListpaysPaysStatus::Failed;
-				let recorded = db.read(async |t| Ok(t.query_one("SELECT EXISTS(SELECT 1 FROM lightning_payment_attempt a \
-					JOIN expiry_lightning_terminal_failure f ON f.id=a.id WHERE a.id=$1 AND a.status='failed')",
+				let recorded = db.read(async |t| Ok(t.query_one("SELECT status='failed' FROM lightning_payment_attempt WHERE id=$1",
 					&[&attempt]).await?.get::<_, bool>(0))).await.unwrap();
 				if terminal && recorded { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
-		}).await.expect("receiver cancellation must produce the normal own-source terminal receipt");
+		}).await.expect("receiver cancellation must produce the upstream Failed outcome");
 	}
 	let history = send_history(&lightning.internal, hash).await;
 	assert_linked_send(&db, &source, hash, attempt, &label, &payer_info.id, failed, &history).await;

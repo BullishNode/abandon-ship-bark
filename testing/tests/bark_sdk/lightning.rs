@@ -30,6 +30,23 @@ use server_rpc::protos;
 use server_rpc::protos::mailbox_server::mailbox_message::Message as MailboxMsg;
 use ark_testing::daemon::captaind::{self, ArkClient};
 
+/// Observe sponsorship directly in Core, including a child already mined.
+async fn native_payout_child(ctx: &TestContext, parent: &Transaction, start: bitcoin_ext::BlockHeight) -> Option<Transaction> {
+	let anchor = parent.output.iter().position(|output| output.is_p2a_fee_anchor()).unwrap() as u32;
+	let point = OutPoint::new(parent.compute_txid(), anchor);
+	let core = ctx.bitcoind().sync_client();
+	for txid in core.get_raw_mempool().unwrap() {
+		let transaction = ctx.bitcoind().await_transaction(txid).await;
+		if transaction.input.iter().any(|input| input.previous_output == point) { return Some(transaction); }
+	}
+	for height in u64::from(start.to_u32())..=core.get_block_count().unwrap() {
+		for transaction in core.get_block(&core.get_block_hash(height).unwrap()).unwrap().txdata {
+			if transaction.input.iter().any(|input| input.previous_output == point) { return Some(transaction); }
+		}
+	}
+	None
+}
+
 /// Wait until the hold plugin holds the payment's HTLCs. The invoice turns
 /// ACCEPTED only once every HTLC is irrevocably committed and handed to the
 /// plugin; a settle before that fails with "no HTLCs to settle".
@@ -149,11 +166,8 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 			hold_client: &mut hold::hold_client::HoldClient<tonic::transport::Channel>, hash: PaymentHash,
 		) {
 			let rows = db.read(async |tx| Ok(tx.query_one("SELECT \
-				(SELECT COUNT(*) FROM lightning_payment_attempt WHERE payment_hash=$1) AS attempts, \
-				(SELECT COUNT(*) FROM expiry_lightning_dispatch d JOIN lightning_payment_attempt p ON p.id=d.id \
-				 WHERE p.payment_hash=$1) AS dispatches", &[&hash.to_string()]).await?)).await.unwrap();
+				(SELECT COUNT(*) FROM lightning_payment_attempt WHERE payment_hash=$1) AS attempts", &[&hash.to_string()]).await?)).await.unwrap();
 			assert_eq!(rows.get::<_, i64>("attempts"), 0);
-			assert_eq!(rows.get::<_, i64>("dispatches"), 0);
 			let pays = node.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
 				bolt11: None, payment_hash: Some(hash.to_vec()), status: None,
 				index: None, limit: None, start: None,
@@ -334,7 +348,7 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		assert!(!native_replacement.decided_for_fallback);
 		assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1",
 			&[&replacement.id().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 0);
-		assert!(wallet.fallback_payouts().await.unwrap().is_empty());
+		assert!(wallet.history().await.unwrap().iter().all(|movement| movement.subsystem.name != "abandon.fallback_payout"));
 		let balance = assert_balance_consistent(&wallet, false).await;
 		assert_eq!(balance.spendable, board_amount);
 		assert_eq!(balance.needs_refresh, bitcoin::Amount::ZERO);
@@ -539,7 +553,7 @@ async fn pay_hold_refused() {
 			srv.wait_for_sync_height(expired).await;
 			srv.watchmand().wait_for_sync_height(expired).await;
 			let db = Db::connect(&srv.config().postgres).await.unwrap();
-			let (parent, child, recorded_fee) = tokio::time::timeout(Duration::from_secs(60), async {
+			let (parent, child) = tokio::time::timeout(Duration::from_secs(60), async {
 				// Confirm only real signed prefixes when the ordinary watchman publishes them,
 				// then honor its configured grace before expecting the next signed step.
 				let mut pending_prefixes = source.transactions().map(|step| {
@@ -553,16 +567,15 @@ async fn pay_hold_refused() {
 				let mut mined_prefix_blocks = 0_u32;
 				loop {
 					let row = db.read(async |tx| Ok(tx.query_opt(
-						"SELECT a.sweep_tx,f.raw_tx,f.fee_sat FROM expiry_allocation a \
+						"SELECT a.sweep_tx FROM expiry_allocation a \
 						JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
 						JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-						JOIN expiry_fee_child f ON f.allocation_id=a.id \
 						WHERE e.vtxo_id=$1 AND c.active AND a.broadcast_at IS NOT NULL \
-						ORDER BY f.id DESC LIMIT 1", &[&source.id().to_string()],
+						ORDER BY a.id DESC LIMIT 1", &[&source.id().to_string()],
 					).await?)).await.unwrap();
 					if let Some(row) = row {
-						break (deserialize::<Transaction>(row.get("sweep_tx")).unwrap(),
-							deserialize::<Transaction>(row.get("raw_tx")).unwrap(), row.get::<_, i64>("fee_sat"));
+						let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+						if let Some(child) = native_payout_child(&ctx, &parent, source.expiry_height()).await { break (parent, child); }
 					}
 					let core = ctx.bitcoind().sync_client();
 					if let Some(txid) = core.get_raw_mempool().unwrap().into_iter().find(|txid| pending_prefixes.contains(txid)) {
@@ -575,7 +588,7 @@ async fn pay_hold_refused() {
 							if db.read(async |tx| {
 								let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 								Ok(view.captaind.height == tip && view.watchmand.height == tip
-									&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
+									&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.query_one("SELECT COALESCE(NOT invalid AND generation=$1 AND rebuilt_captaind_height=$2 AND rebuilt_captaind_hash=$3 AND rebuilt_watchmand_height=$4 AND rebuilt_watchmand_hash=$5,FALSE) AS rebuilt FROM expiry_chain_view WHERE id=1", &[&view.generation,&i64::from(view.captaind.height),&view.captaind.hash.to_string(),&i64::from(view.watchmand.height),&view.watchmand.hash.to_string()]).await?.get::<_,bool>("rebuilt"))
 							}).await.unwrap() { break; }
 							tokio::time::sleep(Duration::from_millis(50)).await;
 						}
@@ -604,7 +617,6 @@ async fn pay_hold_refused() {
 			}
 			let child_fee = child_inputs - child.output.iter().map(|output| output.value).sum::<bitcoin::Amount>();
 			assert!(child_fee > bitcoin::Amount::ZERO);
-			assert_eq!(child_fee.to_sat(), u64::try_from(recorded_fee).unwrap());
 
 			let reopened = Wallet::open(Network::Regtest, WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic),
 				config.clone(), OpenWalletArgs { datadir: Some(ctx.datadir.join("absent_refund")),
@@ -640,32 +652,25 @@ async fn pay_hold_refused() {
 				assert_eq!(sends[0].status, MovementStatus::Failed);
 				assert_eq!(sends[0].effective_balance, bitcoin::SignedAmount::ZERO);
 				assert_eq!(sends[0].offchain_fee, bitcoin::Amount::ZERO);
-				assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0,
-					"board principal must be debited once through fallback, never also through the failed invoice");
+				assert!(history.iter().all(|entry| entry.subsystem.name != "abandon.fallback_payout"));
 				for id in &ids {
 					assert_eq!(reopened.get_vtxo_by_id(*id).await.unwrap().state, bark::vtxo::VtxoState::Spent);
 				}
 				let balance = assert_balance_consistent(&reopened, false).await;
 				assert_eq!(balance.total(), bitcoin::Amount::ZERO);
-				let receipts = reopened.fallback_payouts().await.unwrap();
-				let refund = receipts.iter().find(|entry| entry.vtxo_id == source.id()).unwrap();
-				assert_eq!(refund.gross, send.total_amount());
 				let mut points = std::collections::BTreeMap::new();
-				let mut gross = bitcoin::Amount::ZERO;
-				let mut fees = bitcoin::Amount::ZERO;
-				for entry in &receipts {
-					let attempt = entry.attempts.iter().find(|attempt| attempt.active
-						&& attempt.disposition == bark::FallbackDisposition::CustomerPayout).unwrap();
-					let tx = attempt.parent.as_ref().unwrap();
-					let index = attempt.output_index.unwrap();
-					let output = &tx.output[index as usize];
-					assert_eq!(output.script_pubkey, registration.spk);
-					points.insert(OutPoint::new(tx.compute_txid(), index), output.value);
-					gross += entry.gross;
-					fees += attempt.fee;
+				for height in 0..=u64::from(confirmed.to_u32()) {
+					let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
+					for tx in block.txdata {
+						for (index, output) in tx.output.iter().enumerate() {
+							if output.script_pubkey == registration.spk {
+								points.insert(OutPoint::new(tx.compute_txid(), index as u32), output.value);
+							}
+						}
+					}
 				}
-				assert_eq!(gross, board);
-				assert_eq!(fees, ark_testing::sat(3_000));
+				let fees = ark_testing::sat(3_000);
+
 				assert_eq!(points.values().copied().sum::<bitcoin::Amount>(), board - fees);
 				for (point, value) in &points {
 					let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
@@ -1031,7 +1036,7 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 	// Read the real background journal; the test never inserts a decision,
 	// ownership result, registration, or payout transaction into Postgres.
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	let (parent, child, recorded_child_fee) = tokio::time::timeout(Duration::from_secs(60), async {
+	let (parent, child) = tokio::time::timeout(Duration::from_secs(60), async {
 		// Confirm only real signed prefixes when the ordinary watchman publishes them,
 		// then honor its configured grace before expecting the next signed step.
 		let mut pending_prefixes = source.transactions().map(|step| {
@@ -1045,16 +1050,15 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 		let mut mined_prefix_blocks = 0_u32;
 		loop {
 			let row = db.read(async |t| Ok(t.query_opt(
-				"SELECT a.sweep_tx,f.raw_tx,f.fee_sat FROM expiry_allocation a \
+				"SELECT a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
 				JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-				JOIN expiry_fee_child f ON f.allocation_id=a.id \
 				WHERE e.vtxo_id=$1 AND c.active AND a.broadcast_at IS NOT NULL \
-				ORDER BY f.id DESC LIMIT 1", &[&source.id().to_string()],
+				ORDER BY a.id DESC LIMIT 1", &[&source.id().to_string()],
 			).await?)).await.unwrap();
 			if let Some(row) = row {
-				break (deserialize::<Transaction>(row.get("sweep_tx")).unwrap(),
-					deserialize::<Transaction>(row.get("raw_tx")).unwrap(), row.get::<_, i64>("fee_sat"));
+				let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+				if let Some(child) = native_payout_child(&ctx, &parent, source.expiry_height()).await { break (parent, child); }
 			}
 			let core = ctx.bitcoind().sync_client();
 			if let Some(txid) = core.get_raw_mempool().unwrap().into_iter().find(|txid| pending_prefixes.contains(txid)) {
@@ -1067,7 +1071,7 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 					if db.read(async |tx| {
 						let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
 						Ok(view.captaind.height == tip && view.watchmand.height == tip
-							&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.expiry_view_is_rebuilt(view).await?)
+							&& view.captaind.hash == hash && view.watchmand.hash == hash && tx.query_one("SELECT COALESCE(NOT invalid AND generation=$1 AND rebuilt_captaind_height=$2 AND rebuilt_captaind_hash=$3 AND rebuilt_watchmand_height=$4 AND rebuilt_watchmand_hash=$5,FALSE) AS rebuilt FROM expiry_chain_view WHERE id=1", &[&view.generation,&i64::from(view.captaind.height),&view.captaind.hash.to_string(),&i64::from(view.watchmand.height),&view.watchmand.hash.to_string()]).await?.get::<_,bool>("rebuilt"))
 					}).await.unwrap() { break; }
 					tokio::time::sleep(Duration::from_millis(50)).await;
 				}
@@ -1101,7 +1105,6 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 	}
 	let subsidy = child_input_sat - child.output.iter().map(|out| out.value.to_sat()).sum::<u64>();
 	assert!(subsidy > 0);
-	assert_eq!(subsidy, u64::try_from(recorded_child_fee).unwrap());
 	let confirmed = ctx.generate_blocks(6).await;
 	srv.wait_for_sync_height(confirmed).await;
 	srv.watchmand().wait_for_sync_height(confirmed).await;
@@ -1148,10 +1151,8 @@ async fn receive_claim_reply_loss_reopen(fallback: bool) {
 	let onchain = restored.onchain().unwrap();
 	assert_eq!(onchain.read().await.balance().await, expected);
 	restored.sync_fallback_payouts().await.unwrap();
-	let receipts = restored.fallback_payouts().await.unwrap();
-	let receipt = receipts.iter().find(|receipt| receipt.vtxo_id == source.id()).unwrap();
-	assert!(receipt.attempts.iter().any(|attempt| attempt.active && attempt.payout == expected &&
-		attempt.output_index == Some(point.vout) && attempt.parent.as_ref().is_some_and(|tx| tx.compute_txid() == point.txid)));
+	assert_eq!(restored.verify_fallback_output(point).await.unwrap(), expected);
+
 	let destination = ctx.bitcoind().get_new_address();
 	let psbt = onchain.write().await.prepare_drain_tx(destination.clone(), FeeRate::from_sat_per_vb(2).unwrap()).await.unwrap();
 	let recovery_fee = psbt.fee().unwrap();

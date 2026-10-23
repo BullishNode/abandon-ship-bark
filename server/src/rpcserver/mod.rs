@@ -23,7 +23,7 @@ use tracing::{trace, warn};
 
 use server_rpc::{pver, RequestExt};
 
-use crate::error::{BadArgument, FallbackHistoryViewChanged, FallbackRefusal, NotFound, RoundCancelledBeforeForfeit, UnusableInputs};
+use crate::error::{BadArgument, FallbackRefusal, NotFound, RoundCancelledBeforeForfeit, UnusableInputs};
 
 
 /// The minimum protocol version supported by the server.
@@ -89,12 +89,6 @@ impl ToStatus for anyhow::Error {
 			metadata.insert("abandon-reason", tonic::metadata::MetadataValue::from_static("round_cancelled_before_forfeit"));
 			metadata.insert("identifiers", cancelled.0.to_string().parse().expect("unlock hashes are ASCII"));
 			tonic::Status::with_metadata(tonic::Code::NotFound, format!("{:#}", self), metadata)
-		} else if self.is::<crate::error::FallbackHistoryTooLarge>() {
-			tonic::Status::resource_exhausted(format!("{:#}", self))
-		} else if self.is::<FallbackHistoryViewChanged>() {
-			let mut metadata = tonic::metadata::MetadataMap::new();
-			metadata.insert("abandon-reason", tonic::metadata::MetadataValue::from_static("payout_view_changed"));
-			tonic::Status::with_metadata(tonic::Code::Aborted, format!("{:#}", self), metadata)
 		} else if let Some(refusal) = self.downcast_ref::<FallbackRefusal>() {
 			let mut metadata = tonic::metadata::MetadataMap::new();
 			metadata.insert("abandon-reason", tonic::metadata::MetadataValue::from_static(refusal.reason()));

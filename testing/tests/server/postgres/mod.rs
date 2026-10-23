@@ -1,4 +1,3 @@
-mod lightning_attempt;
 mod pool;
 mod tree;
 
@@ -1587,8 +1586,7 @@ async fn round_participation_same_vtxo_multiple_pending() {
 const DUMMY_PUBKEY: &str = "038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354";
 const BOLT11_INVOICE: &str = "lnbcrt11p59rr6msp534kz2tahyrxl0rndcjrt8qpqvd0dynxxwfd28ea74rxjuj0tphfspp5nc0gf6vamuphaf4j49qzjvz2rg3del5907vdhncn686cj5yykvfsdqqcqzzs9qyysgqgalnpu3selnlgw8n66qmdpuqdjpqak900ru52v572742wk4mags8a8nec2unls57r5j95kkxxp4lr6wy9048uzgsvdhrz7dh498va2cq4t6qh8";
 
-// These rows use the format from before the execution queue. New queue
-// admission is exercised separately through store_lightning_payment_start.
+// Insert an existing upstream attempt for the database transition tests.
 async fn legacy_payment_attempt(db: &Db, node_id: i64, invoice: &Invoice, sources: &[VtxoId]) {
 	let principal = i64::try_from(invoice.amount_msat().expect("fixed invoice fixture")).unwrap();
 	let hash = invoice.payment_hash().to_string();
@@ -1603,8 +1601,7 @@ async fn legacy_payment_attempt(db: &Db, node_id: i64, invoice: &Invoice, source
 			t.execute("INSERT INTO lightning_payment_attempt_htlc_vtxo(lightning_payment_attempt_id,vtxo_id) \
 				SELECT $1,unnest($2::TEXT[])", &[&id, &ids]).await?;
 		}
-		assert!(!t.query_one("SELECT EXISTS(SELECT 1 FROM expiry_lightning_queued_attempt WHERE id=$1) \
-			OR EXISTS(SELECT 1 FROM expiry_lightning_dispatch WHERE id=$1)", &[&id]).await?.get::<_, bool>(0));
+
 		Ok(())
 	}).await.unwrap();
 }
@@ -1656,25 +1653,15 @@ async fn lightning_payment_attempt_lifecycle() {
 	// Update attempt status to Submitted
 	db.write(async |t| t.update_lightning_payment_attempt_status(&attempt, LightningPaymentStatus::Submitted, None).await).await.unwrap();
 
-	// Queue admission alone cannot justify success, even without source links.
+	// Upstream status transitions close the attempt without a fork receipt.
 	let refreshed = db.read(async |t| t.get_open_lightning_payment_attempts(node_id).await).await.unwrap();
-	assert_eq!(refreshed.len(), 1); // Submitted is still "open"
+	assert_eq!(refreshed.len(), 1);
+	assert_eq!(refreshed[0].status, LightningPaymentStatus::Submitted);
 	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(
 		&refreshed[0], LightningPaymentStatus::Succeeded, None,
-	).await).await.is_err());
-	let refused = db.read(async |t| t.get_open_lightning_payment_attempts(node_id).await).await.unwrap();
-	assert_eq!(refused.len(), 1);
-	assert_eq!(refused[0].status, LightningPaymentStatus::Submitted);
-	assert_eq!(refused[0].final_amount_msat, None);
-	assert_eq!(refused[0].error, refreshed[0].error);
-	assert_eq!(refused[0].updated_at, refreshed[0].updated_at);
-
-	// A local failure before injection still closes the queued attempt.
-	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(
-		&refused[0], LightningPaymentStatus::Failed, Some("not dispatched"),
 	).await).await.unwrap().is_some());
-	let open = db.read(async |t| t.get_open_lightning_payment_attempts(node_id).await).await.unwrap();
-	assert!(open.is_empty(), "failed queued attempt is closed");
+	assert!(db.read(async |t| t.get_open_lightning_payment_attempts(node_id).await).await.unwrap().is_empty());
+
 }
 
 #[tokio::test]
@@ -1882,13 +1869,12 @@ async fn legacy_lightning_payment_attempt_error_cleared_on_success() {
 	assert_eq!(succeeded.error, None);
 }
 
-/// A legacy coarse Succeeded without an attempt receipt leaves a matching
-/// signed HTLC source spendable.
+/// An existing successful attempt consumes only its linked signed HTLC sources.
 #[tokio::test]
-async fn legacy_coarse_success_without_own_receipt_keeps_htlc_send_spendable() {
+async fn successful_attempt_consumes_its_linked_htlc_send() {
 	use server::database::ln::LightningPaymentStatus;
 
-	let mut ctx = TestContext::new_minimal("postgresd/legacy_coarse_success_without_own_receipt").await;
+	let mut ctx = TestContext::new_minimal("postgresd/successful_attempt_consumes_linked_source").await;
 	ctx.init_central_postgres().await;
 	let postgres_cfg = ctx.new_postgres(&ctx.test_name).await;
 
@@ -1898,7 +1884,7 @@ async fn legacy_coarse_success_without_own_receipt_keeps_htlc_send_spendable() {
 	let pubkey = PublicKey::from_str(DUMMY_PUBKEY).unwrap();
 	let (node_id, _) = db.write(async |t| t.register_lightning_node(&pubkey).await).await.unwrap();
 
-	// A signed spendable HTLC-send source with no payment receipt.
+	// A signed spendable HTLC-send source linked to its existing attempt.
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.arkoor_htlc_out_vtxo.clone());
 	let htlc = VTXO_VECTORS.arkoor_htlc_out_vtxo.policy().as_server_htlc_send().unwrap();
 	let hash = htlc.payment_hash;
@@ -1930,26 +1916,23 @@ async fn legacy_coarse_success_without_own_receipt_keeps_htlc_send_spendable() {
 		(&bolt11).into()
 	).await).await.unwrap().expect("open attempt present");
 
-	// Make only the coarse flag final: no payment, preimage or own receipt.
+	// Persist the upstream attempt outcome before consuming its source.
 	db.write(async |t| t.update_lightning_payment_attempt_result(
 		&attempt, LightningPaymentStatus::Succeeded, None, None,
 	).await).await.unwrap().expect("attempt should have transitioned to Succeeded");
 
 	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
-	assert!(!db.read(async |tx| Ok(tx.query_one("SELECT EXISTS(SELECT 1 FROM expiry_lightning_external_success WHERE id=$1) \
-		OR EXISTS(SELECT 1 FROM expiry_lightning_internal_funding WHERE id=$1)", &[&attempt.id]).await?.get::<_, bool>(0)))
-		.await.unwrap());
+
 	db.write(async |t| t.mark_htlc_send_vtxos_ln_spent(attempt.id).await).await.unwrap();
 
-	// No real source-specific discharge occurred; the source stays spendable.
+	// The existing source link identifies the coin consumed by this success.
 	let db_client = ctx.postgres_manager().database_client(Some(&ctx.test_name)).await;
 	let row = db_client.query_one(
 		"SELECT spend_state::text AS spend_state FROM vtxo WHERE vtxo_id = $1",
 		&[&vtxo.id().to_string()],
 	).await.unwrap();
 	let spend_state: String = row.get("spend_state");
-	assert_eq!(spend_state, "spendable",
-		"coarse Succeeded without an own receipt must not consume a matching signed HTLC source");
+	assert_eq!(spend_state, "ln-spent", "the successful attempt consumes its linked source");
 }
 
 /// `store_lightning_payment_start` must persist `block_height`, `user_fee`

@@ -89,40 +89,17 @@ impl Tx<'_> {
 		Ok(Some(token))
 	}
 
-	/// A completed view with exactly the same visible financial commits needs
-	/// no reconstruction. The watchman still verifies these hashes against Core.
-	pub async fn expiry_view_is_rebuilt(&self, token: ExpiryViewToken) -> anyhow::Result<bool> {
-		let row = self.query_one("SELECT invalid,generation,rebuilt_captaind_height,rebuilt_captaind_hash, \
-			rebuilt_watchmand_height,rebuilt_watchmand_hash,rebuilt_ledger_count,rebuilt_ledger_revision, \
-			(SELECT COUNT(*) FROM expiry_ledger_commit) AS ledger_count, \
-			(SELECT COALESCE(MAX(revision),0) FROM expiry_ledger_commit) AS ledger_revision \
-			FROM expiry_chain_view WHERE id=1", &[]).await?;
-		Ok(!row.get::<_, bool>("invalid") && row.get::<_, i64>("generation")==token.generation
-			&& row.get::<_, Option<i64>>("rebuilt_captaind_height")==Some(i64::from(token.captaind.height))
-			&& row.get::<_, Option<&str>>("rebuilt_captaind_hash")==Some(token.captaind.hash.to_string().as_str())
-			&& row.get::<_, Option<i64>>("rebuilt_watchmand_height")==Some(i64::from(token.watchmand.height))
-			&& row.get::<_, Option<&str>>("rebuilt_watchmand_hash")==Some(token.watchmand.hash.to_string().as_str())
-			&& row.get::<_, Option<i64>>("rebuilt_ledger_count")==Some(row.get::<_, i64>("ledger_count"))
-			&& row.get::<_, Option<i64>>("rebuilt_ledger_revision")==Some(row.get::<_, i64>("ledger_revision")))
-	}
-
 	/// Call only after every chain-derived allocation and entitlement relationship
 	/// has been rebuilt in this same transaction from the token's canonical view.
 	/// An older rebuild can never clear a later invalidation.
 	pub async fn finish_expiry_rebuild(&self, token: ExpiryViewToken) -> anyhow::Result<bool> {
 		self.query_one("SELECT generation FROM expiry_chain_view WHERE id=1 FOR UPDATE", &[]).await?;
 		if self.expiry_rebuild_token().await? != Some(token) { return Ok(false); }
-		// Include this rebuild transaction before taking the ledger
-		// watermark. The row trigger deduplicates the following view update.
-		self.execute("INSERT INTO expiry_ledger_commit(transaction_id) VALUES(pg_current_xact_id()) ON CONFLICT(transaction_id) DO NOTHING", &[]).await?;
-		let ledger = self.query_one("SELECT COUNT(*) AS count,COALESCE(MAX(revision),0) AS revision FROM expiry_ledger_commit", &[]).await?;
 		let n = self.execute("UPDATE expiry_chain_view SET invalid=FALSE, rebuilt_captaind_height=$2, \
-			rebuilt_captaind_hash=$3, rebuilt_watchmand_height=$4, rebuilt_watchmand_hash=$5, \
-			rebuilt_ledger_count=$6,rebuilt_ledger_revision=$7 \
+			rebuilt_captaind_hash=$3, rebuilt_watchmand_height=$4, rebuilt_watchmand_hash=$5 \
 			WHERE id=1 AND generation=$1",
 			&[&token.generation, &i64::from(token.captaind.height), &token.captaind.hash.to_string(),
-				&i64::from(token.watchmand.height), &token.watchmand.hash.to_string(),
-				&ledger.get::<_, i64>("count"), &ledger.get::<_, i64>("revision")]).await?;
+				&i64::from(token.watchmand.height), &token.watchmand.hash.to_string()]).await?;
 		Ok(n == 1)
 	}
 

@@ -2,7 +2,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use bark::onchain::OnchainWalletTrait;
@@ -17,7 +16,7 @@ use tokio::sync::RwLock;
 
 use ark_testing::{sat, TestContext};
 use ark_testing::onchain::AppBip84Wallet;
-use ark_testing::daemon::captaind::{self, ArkClient, WalletAdminClient};
+use ark_testing::daemon::captaind::{self, WalletAdminClient};
 
 #[tokio::test]
 async fn fallback_external_bip84_wallet_registers_and_restores_without_ark_seed_assumptions() {
@@ -243,19 +242,13 @@ async fn fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend(
 		(output.outpoint, output.txout)).collect::<BTreeMap<_, _>>();
 	assert_eq!(discovered, expected_inputs, "fresh seed discovery must find exactly the actual payout and legitimate board change");
 
-	// Fetch payout history using the restored account identity.
-	// The restored wallet receives no source ID or transaction hint.
-	restored.sync_fallback_payouts().await.expect("native authenticated account payout history");
-	let receipts = restored.fallback_payouts().await.unwrap();
-	let receipt = receipts.iter().find(|receipt| receipt.vtxo_id == source.id()).expect("seed-only account history missed its payout entitlement");
-	assert!(receipt.attempts.iter().any(|attempt| attempt.active && attempt.payout == expected &&
-		attempt.parent.as_ref().is_some_and(|tx| tx.compute_txid() == point.txid) && attempt.output_index == Some(point.vout)));
-	let history = restored.history().await.unwrap();
-	let payouts = history.iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-	assert_eq!(payouts.len(), 1);
-	assert_eq!(payouts[0].sent_to[0].amount, expected);
-	assert_eq!(payouts[0].offchain_fee, sat(1_000));
-	assert_eq!(payouts[0].effective_balance.to_sat(), 0, "a seed-restored unknown Ark leaf must not invent another debit");
+	assert_eq!(restored.verify_fallback_output(point).await.unwrap(), expected);
+	let wrong_index = parent.output.iter().position(|output| output.script_pubkey != registration.spk
+		&& output.value > Amount::ZERO).expect("the payout retains its operator fee separately") as u32;
+	assert!(restored.verify_fallback_output(OutPoint::new(parent.compute_txid(), wrong_index)).await.is_err(),
+		"a canonical operator output cannot substitute for the registered customer's output");
+
+	assert!(restored.history().await.unwrap().iter().all(|movement| movement.subsystem.name != "abandon.fallback_payout"));
 
 	let destination = ctx.bitcoind().get_new_address();
 	let psbt = restored_app.write().await.prepare_drain_tx(destination.clone(), FeeRate::from_sat_per_vb(2).unwrap()).await.unwrap();
@@ -331,26 +324,12 @@ async fn fallback_external_bip84_actual_payout_seed_restore_and_confirmed_spend(
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_none());
 }
 
-/// The proxy makes only history requests unavailable.
-/// Registration and mailbox requests still use the server.
+/// Registration uses the server before the recovery scenario stops it.
 #[derive(Clone, Default)]
-struct ExternalRecoveryHistoryGate {
-	refuse: Arc<AtomicBool>,
-	refused_requests: Arc<AtomicUsize>,
-}
+struct ExternalRecoveryHistoryGate;
 
 #[async_trait::async_trait]
-impl captaind::proxy::ArkRpcProxy for ExternalRecoveryHistoryGate {
-	async fn get_fallback_payouts(&self, upstream: &mut ArkClient, request: protos::GetFallbackPayoutsRequest)
-		-> Result<protos::GetFallbackPayoutsResponse, tonic::Status>
-	{
-		if self.refuse.load(Ordering::SeqCst) {
-			self.refused_requests.fetch_add(1, Ordering::SeqCst);
-			return Err(tonic::Status::unavailable("fallback history transport unavailable"));
-		}
-		Ok(upstream.get_fallback_payouts(request).await?.into_inner())
-	}
-}
+impl captaind::proxy::ArkRpcProxy for ExternalRecoveryHistoryGate {}
 
 /// The app can discover and spend its payout from its seed while Ark history is unavailable.
 #[tokio::test]
@@ -496,7 +475,6 @@ async fn fallback_external_bip84_seed_restore_spends_actual_payout_while_history
 		// Pass only the two seeds, fresh stores and public endpoints to recovery.
 		// Observed transaction IDs and outpoints are assertion inputs; the restored
 		// wallet receives no cached descriptor, receipt or signed transaction.
-		gate.refuse.store(true, Ordering::SeqCst);
 		let fresh_app_path = ctx.datadir.join("restored-app.sqlite");
 		let fresh_ark_path = ctx.datadir.join("restored-ark.sqlite");
 		assert!(!fresh_app_path.exists() && !fresh_ark_path.exists());
@@ -509,21 +487,17 @@ async fn fallback_external_bip84_seed_restore_spends_actual_payout_while_history
 		let restored_app: Arc<RwLock<dyn OnchainWalletTrait>> = restored_impl.clone();
 		let restored_db: Arc<dyn BarkPersister> = Arc::new(SqliteClient::open(fresh_ark_path).unwrap());
 		assert!(restored_db.get_fallback_record().await.unwrap().is_none());
-		let initial_snapshot = restored_db.get_fallback_snapshot().await.unwrap();
-		assert!(initial_snapshot.entitlements.is_empty() && initial_snapshot.verified_payouts.is_empty()
-			&& initial_snapshot.payout_observations.is_empty() && initial_snapshot.movement_ids.is_empty()
-			&& initial_snapshot.view_token.is_empty());
+
 		let restored = Wallet::open(network, WalletSeed::new_from_seed(network, &ark_seed), config, OpenWalletArgs {
 			persister: Some(restored_db.clone()), onchain: Some(restored_app.clone()), fallback_spk: Some(restored_script),
 			run_daemon: false, ..Default::default()
 		}).await.unwrap();
 		assert_eq!(restored.fallback_destination().await.unwrap(), registration);
-		assert!(restored.sync_fallback_payouts().await.is_err());
-		assert!(gate.refused_requests.load(Ordering::SeqCst) > 0);
-		let snapshot = restored_db.get_fallback_snapshot().await.unwrap();
-		assert!(snapshot.entitlements.is_empty() && snapshot.verified_payouts.is_empty() && snapshot.payout_observations.is_empty());
-		assert!(snapshot.movement_ids.is_empty() && snapshot.awaiting_sync);
+		srv.stop().await.unwrap();
+		restored.sync_fallback_payouts().await.unwrap();
+		assert_eq!(restored.verify_fallback_output(payout).await.unwrap(), expected);
 		assert!(restored.history().await.unwrap().iter().all(|movement| movement.subsystem.name != "abandon.fallback_payout"));
+
 		restored_app.write().await.sync(restored.chain()).await.unwrap();
 		assert_eq!(restored_app.read().await.balance().await, expected);
 		let utxos = restored_impl.read().await.utxos();
@@ -576,10 +550,7 @@ async fn fallback_external_bip84_seed_restore_spends_actual_payout_while_history
 			}
 		}
 		assert_eq!(actual_payouts, vec![(payout, expected)], "one correct output must not conceal another canonical payout");
-		assert!(restored.sync_fallback_payouts().await.is_err());
-		let snapshot = restored_db.get_fallback_snapshot().await.unwrap();
-		assert!(snapshot.entitlements.is_empty() && snapshot.verified_payouts.is_empty() && snapshot.payout_observations.is_empty());
-		assert!(snapshot.movement_ids.is_empty() && snapshot.awaiting_sync);
+		restored.sync_fallback_payouts().await.unwrap();
 		assert!(restored.history().await.unwrap().iter().all(|movement| movement.subsystem.name != "abandon.fallback_payout"));
 	})).await.expect("chain-only external recovery exceeded the unchanged 180-second case budget");
 }

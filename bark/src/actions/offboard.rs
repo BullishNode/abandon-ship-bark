@@ -1096,40 +1096,26 @@ async fn cancel_superseded_movement(wallet: &Wallet, movement: MovementId) -> an
 	).await.context("failed to reconcile the superseded offboard movement")
 }
 
-/// Retire only this action's inputs, after our own chain independently proves
-/// a payout or terminal disposition for every input. The full signed bodies
-/// remain in storage; the adoption marker reopens protection after a reorg.
+/// Retire this action only when the same canonical transaction consumed all
+/// its inputs and paid the registered destination.
 async fn reconcile_fallback_payout(
 	wallet: &Wallet, action: &Offboard, inputs: &[VtxoId], movement: MovementId,
 ) -> anyhow::Result<bool> {
 	if inputs.is_empty() { return Ok(false); }
-	let snapshot = wallet.inner.db.get_fallback_snapshot().await?;
-	if inputs.iter().any(|id| !snapshot.entitlements.values().any(|entry| entry.vtxo_id == *id)) {
-		return Ok(false);
-	}
 	let Some(record) = wallet.fallback_registration().await? else { return Ok(false); };
-	let _history = wallet.inner.lock_manager.lock(
-		&format!("{}.fallback-history", wallet.fingerprint()), CONFIRMATION_POLL_INTERVAL,
-	).await?;
-	let mut snapshot = wallet.inner.db.get_fallback_snapshot().await?;
-	wallet.verify_fallback_chain_evidence(&mut snapshot, &record.spk).await?;
-	let paid = snapshot.entitlements.iter().filter(|(id, _)| snapshot.is_discharged(**id))
-		.map(|(_, entry)| entry.vtxo_id).collect::<HashSet<_>>();
-	if !inputs.iter().all(|id| paid.contains(id)) {
-		wallet.inner.db.store_fallback_snapshot(&snapshot).await?;
-		return Ok(false);
-	}
+	let mut coins = Vec::new();
+	for id in inputs { coins.push(wallet.get_full_vtxo(*id).await?); }
+	let paid = wallet.confirmed_fallback_vtxos(&coins, &record.spk).await?;
+	if !inputs.iter().all(|id| paid.contains(id)) { return Ok(false); }
+	let _guard = wallet.lock_fallback_history(CONFIRMATION_POLL_INTERVAL).await?;
 	let holder = VtxoLockHolder::Action { id: action.id.clone() };
+	let mut snapshot = wallet.inner.db.get_fallback_snapshot().await?;
 	for id in inputs {
 		let coin = wallet.inner.db.get_wallet_vtxo(*id).await?.context("offboard input is unavailable")?;
 		ensure!(coin.state == (VtxoState::Locked { holder: Some(holder.clone()) })
 			|| (coin.state == VtxoState::Spent && snapshot.adopted_payout_vtxos.contains(id)),
-			"fallback evidence cannot retire another operation's holder");
+			"fallback output cannot retire another operation's holder");
 	}
-	// Persist recovery ownership before touching any input. Exact-holder
-	// release cannot steal a foreign lock, and the following state update
-	// refuses Locked entirely. Permanent entitlements exclude the brief
-	// Spendable transition from ordinary input selection.
 	snapshot.adopted_payout_vtxos.extend(inputs.iter().copied());
 	wallet.inner.db.store_fallback_snapshot(&snapshot).await?;
 	for id in inputs {

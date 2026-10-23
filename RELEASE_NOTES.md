@@ -76,11 +76,29 @@ matching final GNU programs and the final release bundle remain required.
 
 ## Known limits and remaining qualification
 
-- The owner accepts the upstream watchman HTLC-send claim policy limit (E-1).
-  A refund successor and a payment preimage for the same coin can compete.
-  The fork refuses refunds while a payment is paid or pending and trusts its
-  database writer; it adds no successor claim guard or locked claim-source
-  recheck for this upstream limit.
+- Native HTLC-send claims require the coin's own upstream attempt to have
+  succeeded, with contract, confirmation, spend and revocation checks retained.
+  CLN must run `xpay-slow-mode=true`. Upstream marks an open attempt Failed when
+  `listpays` is empty after the local in-flight guard is released. A received
+  native command can still have no first part at that instant; this inherited
+  transport/restart race remains an accepted limit.
+- Receive timeout claims refuse settled or fulfilled grants and conservatively
+  hold a disclosed preimage while collection remains unresolved. A timeout
+  already broadcast before a later collection cannot be retracted by this
+  guard. An exposed forwarded grant still requires its original provider's key
+  to spend; no new recipient signing protocol is introduced.
+- Exposed uncollected receive grants use upstream's native timeout claim. It
+  pays the actual miner fee from reclaimed operator funds rather than using a
+  sponsored payout child. A grant that cannot cover its claim fee plus a
+  non-dust drain output cannot be reclaimed alone; co-batching with larger
+  eligible grants can make the claim economical. Such a grant can keep an
+  internal sender refund pending while its required closure remains unconfirmed.
+- Wallets discover registered fallback outputs through their ordinary chain
+  scan. The payout receipts API, history tokens, commit ledger and supervised
+  Lightning manifest recovery have been removed. Logical restore retains the
+  financial state and rebuilds canonical observations, with no ledger reset.
+- Expiry fee children are rebuilt from current wallet and Core state. The payout
+  parent stays immutable; no fee-child or operator subsidy ledger is retained.
 - Earlier programs could forfeit a 1,000-sat customer coin before the same
   owner's other coins were ready. The regression requires 19 rights to pay
   18,000 sats with one 1,000-sat fee and no forfeiture. The cumulative fee and
@@ -95,10 +113,9 @@ matching final GNU programs and the final release bundle remain required.
   reported. Earlier failures against the 1,500-second limit remain historical.
   Passing this case establishes correct payouts and progress at that size; it
   does not establish a production payout-speed guarantee or load envelope.
-- Ambiguous external Lightning outcomes can remain pending. Supervised
-  recovery of a request that never reached Lightning requires intact original
-  history, complete producer and queue shutdown, and retained incident records.
-  A timeout, empty history or shared payment hash does not prove failure.
+- Open external Lightning outcomes follow their own upstream attempt status.
+  A timeout alone does not resolve them. Empty native history uses upstream's
+  Failed rule with the transport/restart limit described above.
 - Automated fallback requires the recipient's authenticated registration.
   Supplied-address forwarding does not verify that registration. Unknown
   owners and registered owners with incomplete attribution remain held and

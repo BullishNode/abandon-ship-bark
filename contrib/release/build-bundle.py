@@ -24,6 +24,7 @@ DOCUMENTS = {
 	"contrib/release/README.md": "BUNDLE.md",
 	"server/captaind.default.toml": "captaind.default.toml",
 	"server/watchmand.default.toml": "watchmand.default.toml",
+	"contrib/release/cln.conf": "cln.conf",
 	"contrib/release/server-seed-descriptors.py": "server-seed-descriptors.py",
 }
 
@@ -244,7 +245,8 @@ def main():
 		"host. Point the release's runtime-cln symlink to the CLN store output in "
 		"release-artifacts.json. Load cln-runtime.env only in the CLN service. "
 		"Configure CLN's bitcoin-cli to the Core store output's bin/bitcoin-cli. "
-		"Configure both bundled plugins as important plugins.\n\n"
+		"Configure both bundled plugins as important plugins. Merge cln.conf into "
+		"the node configuration and verify xpay-slow-mode with listconfigs.\n\n"
 		"Use fresh application state and PostgreSQL 17. Validate both configs "
 		"before start. Keep admin ports on loopback, preserve identities and "
 		"follow OPERATOR.md and ROLLBACK.md. The bundle contains no deployment "

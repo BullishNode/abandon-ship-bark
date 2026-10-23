@@ -56,16 +56,6 @@ enum Command {
 	#[command()]
 	Start,
 
-	/// Import supervised original-node zero-history proof. Local privileged
-	/// recovery only: this never sends or retries a Lightning payment.
-	ResolveUninjectedLightning {
-		#[arg(long)]
-		manifest: PathBuf,
-		/// Accept responsibility for the manifest's trusted operational premises.
-		#[arg(long)]
-		acknowledge_trusted_operations: bool,
-	},
-
 	/// Drain funds from the server
 	#[command()]
 	Drain {
@@ -607,13 +597,6 @@ async fn inner_main() -> anyhow::Result<()> {
 					println!("{}", token.id);
 				}
 			}
-		},
-		Command::ResolveUninjectedLightning { manifest, acknowledge_trusted_operations } => {
-			if !acknowledge_trusted_operations {
-				bail!("supervised recovery requires --acknowledge-trusted-operations");
-			}
-			let recorded = server::ln::resolve_uninjected_lightning(&cfg, &manifest).await?;
-			println!("{}", if recorded { "recorded supervised zero-history evidence" } else { "same incident already recorded" });
 		},
 		Command::UndoRound { funding_txid, dangerous, force } => {
 			let db = server::database::Db::connect(&cfg.postgres).await?;

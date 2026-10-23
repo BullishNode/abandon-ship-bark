@@ -8,7 +8,7 @@ use bitcoin_ext::BlockHeight;
 use bitcoin_ext::rpc::RpcApi;
 use server::database::Db;
 
-async fn wait_rebuilt(ctx: &TestContext, db: &Db, height: BlockHeight) -> (i64, i64) {
+async fn wait_rebuilt(ctx: &TestContext, db: &Db, height: BlockHeight) -> server::database::expiry_chain::ExpiryViewToken {
 	let hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();
 	tokio::time::timeout(Duration::from_secs(10), async {
 		loop {
@@ -18,14 +18,10 @@ async fn wait_rebuilt(ctx: &TestContext, db: &Db, height: BlockHeight) -> (i64, 
 				};
 				if view.captaind.height != height || view.watchmand.height != height
 					|| view.captaind.hash != hash || view.watchmand.hash != hash
-					|| !t.expiry_view_is_rebuilt(view).await? {
+					|| !super::expiry_view_is_rebuilt(t, view).await? {
 					return Ok(None);
 				}
-				let row = t.query_one("
-					SELECT COUNT(*) AS count, COALESCE(MAX(revision), 0) AS revision
-					FROM expiry_ledger_commit
-				", &[]).await?;
-				Ok(Some((row.get("count"), row.get("revision"))))
+				Ok(Some(view))
 			}).await.unwrap();
 			if let Some(ledger) = ledger {
 				return ledger;
@@ -83,12 +79,11 @@ async fn expiry_view_rebuild_services_delayed_cap_ack_and_next_block_without_fin
 	srv.start().await.unwrap();
 	let height = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 	let initial = wait_rebuilt(&ctx, &db, height).await;
-	// A full rebuild inserts its own ledger transaction. Across several real
-	// service ticks, an unchanged token/ledger must take the existing fast path.
+	// The completed canonical view must remain available across service ticks.
 	for _ in 0..3 {
 		tokio::time::sleep(Duration::from_millis(1100)).await;
 		assert_eq!(wait_rebuilt(&ctx, &db, height).await, initial,
-			"unchanged readiness service must not rerun financial reconstruction");
+			"unchanged canonical acknowledgments must retain the same view");
 	}
 	let next = ctx.generate_blocks(1).await;
 	assert!(next>height);

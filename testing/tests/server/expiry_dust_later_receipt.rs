@@ -10,10 +10,10 @@ use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
 use ark::vtxo::Full;
 use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
 use ark_testing::daemon::captaind::WalletAdminClient;
-use bark::{FallbackDisposition, FallbackEntitlement, FallbackPayoutStage, Wallet};
-use bark::movement::{Movement, MovementStatus, PaymentMethod};
+use bark::{Wallet};
+use bark::movement::Movement;
 use bark::vtxo::VtxoState;
-use bitcoin::{Address, Amount, BlockHash, Network, OutPoint, ScriptBuf, Transaction, Txid, TxOut};
+use bitcoin::{Amount, BlockHash, Network, OutPoint, ScriptBuf, Transaction, Txid, TxOut};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
 use bitcoin_ext::{BlockDelta, BlockRef, TxOutExt};
@@ -46,7 +46,7 @@ async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
 		loop {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -265,11 +265,6 @@ async fn confirm_epoch(
 		assert!(info.confirmations.unwrap_or(0) >= 6);
 		let fee = actual_fee(ctx, child).await;
 		assert!(fee > Amount::ZERO);
-		let stored = db.read(async |tx| Ok(tx.query_one("SELECT raw_tx,fee_sat,confirmed_hash FROM expiry_fee_child WHERE txid=$1",
-			&[&child.compute_txid().to_string()]).await?)).await.unwrap();
-		assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(), *child);
-		assert_eq!(stored.get::<_, i64>("fee_sat"), fee.to_sat() as i64);
-		assert_eq!(stored.get::<_, String>("confirmed_hash"), hash.to_string());
 		result.packages.push(json!({"parent_txid": txid, "child_txid": child.compute_txid(),
 			"canonical_hash": hash, "canonical_height": result.heights[txid].to_u32(),
 			"parent_miner_fee_sat": 0, "actual_child_miner_fee_sat": fee.to_sat()}));
@@ -279,76 +274,35 @@ async fn confirm_epoch(
 	result
 }
 
-async fn receipt(wallet: &Wallet, leaf: &ExpectedLeaf, epoch: &Epoch) -> FallbackEntitlement {
-	let receipts = wallet.fallback_payouts().await.unwrap();
-	let receipt = receipts.iter().find(|entry| entry.vtxo_id == leaf.coin.id()).unwrap().clone();
-	assert_eq!(receipt.gross, leaf.coin.amount());
-	assert!(receipt.chain_view_valid && receipt.terminal_claim.is_none());
-	assert_eq!(receipt.attempts.len(), 1);
-	let attempt = &receipt.attempts[0];
-	assert!(attempt.active);
-	assert_eq!(attempt.allocation_id, epoch.allocations[&leaf.coin.id()]);
-	assert_eq!(attempt.stage, FallbackPayoutStage::Confirmed);
-	assert_eq!(attempt.disposition, if leaf.payout == 0 { FallbackDisposition::BelowDust } else { FallbackDisposition::CustomerPayout });
-	assert_eq!(attempt.gross, leaf.coin.amount());
-	assert_eq!(attempt.fee, sat(leaf.fee));
-	assert_eq!(attempt.payout, sat(leaf.payout));
-	assert_eq!(attempt.forfeited, sat(leaf.forfeited));
-	assert_eq!(attempt.script.as_ref(), Some(&leaf.script));
-	let parent = attempt.parent.as_ref().unwrap();
-	assert_eq!(epoch.parents.get(&parent.compute_txid()), Some(parent));
-	assert_eq!(attempt.confirmation.as_ref().unwrap().hash, epoch.hashes[&parent.compute_txid()]);
-	assert_eq!(attempt.confirmation.as_ref().unwrap().height, epoch.heights[&parent.compute_txid()]);
-	assert_eq!(attempt.output_index, epoch.outputs[&leaf.coin.id()].map(|point| point.vout));
-	assert_eq!(attempt.output_amount, (leaf.payout > 0).then_some(sat(leaf.payout)));
+async fn receipt(wallet: &Wallet, leaf: &ExpectedLeaf, epoch: &Epoch) -> Option<OutPoint> {
+	let point = epoch.outputs[&leaf.coin.id()];
+	assert_eq!(leaf.coin.amount(), sat(leaf.fee + leaf.payout + leaf.forfeited));
+	if let Some(point) = point {
+		let parent = &epoch.parents[&point.txid];
+		let output = &parent.output[point.vout as usize];
+		assert_eq!(output.script_pubkey, leaf.script);
+		assert_eq!(output.value, sat(leaf.payout));
+		assert_eq!(wallet.verify_fallback_output(point).await.unwrap(), output.value);
+	} else {
+		assert_eq!(leaf.payout, 0);
+		assert!(epoch.parents.values().all(|parent| parent.output.iter().all(|out| out.script_pubkey != leaf.script)));
+	}
 	assert_eq!(wallet.get_vtxo_by_id(leaf.coin.id()).await.unwrap().state, VtxoState::Spent);
 	assert_eq!(wallet.get_full_vtxo(leaf.coin.id()).await.unwrap().serialize(), leaf.coin.serialize());
-	receipt
+	point
 }
 
-fn history(
-	current: Vec<Movement>, baseline: &[Movement], leaves: &[&ExpectedLeaf],
-) -> BTreeMap<VtxoId, Movement> {
-	let ids = leaves.iter().map(|leaf| leaf.coin.id()).collect::<BTreeSet<_>>();
-	let other_debits = |items: &[Movement]| items.iter().filter(|movement|
-		movement.subsystem.name != "abandon.fallback_payout" && movement.effective_balance.to_sat() < 0
-		&& movement.input_vtxos.iter().any(|id| ids.contains(id)))
-		.map(|movement| (movement.id, movement.effective_balance.to_sat())).collect::<BTreeMap<_, _>>();
-	let previous = other_debits(baseline);
-	assert_eq!(other_debits(&current), previous);
-	let gross = leaves.iter().map(|leaf| leaf.coin.amount().to_sat() as i64).sum::<i64>();
-	let debit = current.iter().filter(|movement| movement.effective_balance.to_sat() < 0
-		&& movement.input_vtxos.iter().any(|id| ids.contains(id)))
-		.map(|movement| movement.effective_balance.to_sat()).sum::<i64>();
-	assert_eq!(debit, previous.values().sum::<i64>() - gross);
+fn history(current: Vec<Movement>, baseline: &[Movement], leaves: &[&ExpectedLeaf]) -> BTreeMap<VtxoId, Vec<Movement>> {
+	for previous in baseline { assert!(current.contains(previous), "ordinary history must survive payout discovery"); }
 	let mut result = BTreeMap::new();
-	for movement in current.into_iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout") {
-		assert_eq!(movement.input_vtxos.len(), 1);
-		let id = movement.input_vtxos[0];
-		let leaf = leaves.iter().find(|leaf| leaf.coin.id() == id).unwrap();
-		assert_eq!(movement.status, MovementStatus::Successful);
-		assert_eq!(movement.intended_balance.to_sat(), -(leaf.coin.amount().to_sat() as i64));
-		assert_eq!(movement.effective_balance, movement.intended_balance);
-		assert_eq!(movement.offchain_fee, sat(leaf.fee));
-		assert_eq!(movement.metadata["fallback"]["chain_verified"], true);
-		assert_eq!(movement.metadata["fallback"]["forfeited_sat"], leaf.forfeited);
-		assert_eq!(movement.metadata["fallback"]["payout_sat"], leaf.payout);
-		if leaf.payout == 0 {
-			assert_eq!(movement.metadata["fallback"]["stage"], "below_dust");
-			assert_eq!(movement.metadata["fallback"]["disposition"], "below_dust");
-			assert!(movement.metadata["fallback"]["output_index"].is_null());
-			assert!(movement.sent_to.is_empty());
-		} else {
-			assert_eq!(movement.metadata["fallback"]["stage"], "confirmed");
-			assert_eq!(movement.metadata["fallback"]["disposition"], "customer_payout");
-			assert_eq!(movement.sent_to.len(), 1);
-			assert_eq!(movement.sent_to[0].amount, sat(leaf.payout));
-			assert_eq!(movement.sent_to[0].destination,
-				PaymentMethod::Bitcoin(Address::from_script(&leaf.script, Network::Regtest).unwrap().into_unchecked()));
-		}
-		assert!(result.insert(id, movement).is_none());
+	for leaf in leaves {
+		let debits = |items: &[Movement]| items.iter().filter(|movement|
+			movement.effective_balance.to_sat() < 0 && movement.input_vtxos.contains(&leaf.coin.id()))
+			.cloned().collect::<Vec<_>>();
+		let actual = debits(&current);
+		assert_eq!(actual, debits(baseline), "chain discovery must not add another ordinary debit");
+		result.insert(leaf.coin.id(), actual);
 	}
-	assert_eq!(result.keys().copied().collect::<BTreeSet<_>>(), ids);
 	result
 }
 
@@ -557,7 +511,6 @@ async fn two_receipts() {
 	assert_eq!(first_cut["selected_input_sat"], 500_000);
 	let returned = recipient_cli.client().await;
 	returned.sync_fallback_payouts().await.unwrap();
-	assert_eq!(returned.fallback_payouts().await.unwrap().len(), 1);
 	let old_receipt = receipt(&returned, &old, &first).await;
 	let first_history = history(returned.history().await.unwrap(), &baseline, &[&old]);
 	balances(&returned, Amount::ZERO).await;
@@ -634,7 +587,6 @@ async fn two_receipts() {
 	assert_eq!(final_cut["selected_input_sat"], 600_000);
 	let final_wallet = recipient_cli.client().await;
 	final_wallet.sync_fallback_payouts().await.unwrap();
-	assert_eq!(final_wallet.fallback_payouts().await.unwrap().len(), 2);
 	assert_eq!(receipt(&final_wallet, &old, &first).await, old_receipt);
 	let new_receipt = receipt(&final_wallet, &new, &second).await;
 	let final_history = history(final_wallet.history().await.unwrap(), &baseline, &[&old, &new]);

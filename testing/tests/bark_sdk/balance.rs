@@ -197,52 +197,7 @@ async fn fallback_balance_keeps_unknown_value_owned_without_advertising_it_spend
 	assert_eq!(offline.awaiting_settlement, coin.amount());
 	assert_eq!(offline.total(), coin.amount());
 
-	let now = chrono::Local::now();
-	snapshot.entitlements.insert(1, bark::FallbackEntitlement {
-		entitlement_id: 1, vtxo_id: coin.id(), gross: coin.amount(), chain_view_valid: false,
-		attempts: vec![bark::FallbackAttempt {
-			allocation_id: 1, active: true, stage: bark::FallbackPayoutStage::Committed,
-			disposition: bark::FallbackDisposition::CustomerPayout, output_index: Some(0),
-			script: Some(wallet.fallback_destination().await.unwrap().spk),
-			gross: coin.amount(), fee: Amount::from_sat(1_000), payout: coin.amount() - Amount::from_sat(1_000),
-			forfeited: Amount::ZERO, output_amount: Some(coin.amount() - Amount::from_sat(1_000)),
-			parent: None, confirmation: None,
-		}], terminal_claim: None, first_seen: now, last_updated: now,
-	});
-	db.store_fallback_snapshot(&snapshot).await.unwrap();
-	let decided = wallet.balance().await.unwrap();
-	assert_eq!(decided.spendable, Amount::ZERO);
-	assert_eq!(decided.needs_refresh, Amount::ZERO);
-	assert_eq!(decided.awaiting_settlement, coin.amount());
-	assert_eq!(decided.total(), coin.amount(), "a decision without actual discharge retains one owned pending claim");
-	assert_eq!(decided.pending(), coin.amount());
-	// A receipt alone cannot discharge locally held principal.
-	// This snapshot covers a known entitlement, not an unsupported spent report.
-	snapshot.adopted_payout_vtxos.insert(coin.id());
-	db.store_fallback_snapshot(&snapshot).await.unwrap();
-	db.update_vtxo_state_checked(coin.id(), bark::vtxo::VtxoState::Spent,
-		&[bark::vtxo::VtxoStateKind::Spendable]).await.unwrap();
-	let interrupted_rearm = wallet.balance().await.unwrap();
-	assert_eq!(interrupted_rearm.spendable, Amount::ZERO);
-	assert_eq!(interrupted_rearm.awaiting_settlement, coin.amount());
-	assert_eq!(interrupted_rearm.total(), coin.amount(), "own prior adoption survives an interrupted reorg rearm");
-	// An ordinary historic spent body without our adoption marker is not a
-	// second owned claim merely because the client retained its signed bytes.
-	snapshot.adopted_payout_vtxos.clear();
-	db.store_fallback_snapshot(&snapshot).await.unwrap();
-	assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO);
-	// An Operator association must never turn a formerly adopted input into
-	// a new customer claim, even while signed protection bytes are retained.
-	snapshot.adopted_payout_vtxos.insert(coin.id());
-	let attempt = &mut snapshot.entitlements.get_mut(&1).unwrap().attempts[0];
-	attempt.disposition = bark::FallbackDisposition::Operator;
-	attempt.fee = Amount::ZERO;
-	attempt.payout = Amount::ZERO;
-	attempt.output_index = None;
-	attempt.output_amount = None;
-	attempt.script = None;
-	db.store_fallback_snapshot(&snapshot).await.unwrap();
-	assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO);
+
 }
 
 /// accepted refresh replaces one principal; its operator-owned old

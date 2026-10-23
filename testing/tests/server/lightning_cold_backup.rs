@@ -276,7 +276,7 @@ async fn rebuilt(db: &Db, point: BlockRef) {
 		loop {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -293,10 +293,9 @@ async fn pending_checkpoint(db: &Db, hash: PaymentHash, source: VtxoId, grants: 
 		(SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo l WHERE l.lightning_payment_attempt_id=a.id AND l.vtxo_id=$2) AS source, \
 		(SELECT COUNT(*) FROM vtxo v WHERE v.lightning_htlc_subscription_id=s.id) AS grants, \
 		(SELECT COUNT(*) FROM expiry_lightning_receive_claim c WHERE c.subscription_id=s.id) AS claims, \
-		(SELECT COUNT(*) FROM expiry_lightning_dispatch d WHERE d.id=a.id) AS dispatches, \
 		(SELECT COUNT(*) FROM expiry_entitlement) AS entitlements \
-		FROM expiry_lightning_internal_funding f JOIN lightning_payment_attempt a ON a.id=f.id \
-		JOIN lightning_htlc_subscription s ON s.id=f.subscription_id AND a.lightning_htlc_subscription_id=s.id \
+		FROM lightning_payment_attempt a \
+		JOIN lightning_htlc_subscription s ON a.lightning_htlc_subscription_id=s.id \
 		WHERE a.payment_hash=$1 AND s.payment_hash=a.payment_hash", &[&hash.to_string(), &source.to_string()]).await?)).await.unwrap();
 	assert_eq!(row.get::<_, String>("receive_status"), "htlcs-ready");
 	let status: String = row.get("attempt_status");
@@ -304,7 +303,7 @@ async fn pending_checkpoint(db: &Db, hash: PaymentHash, source: VtxoId, grants: 
 	assert_eq!(row.get::<_, Option<i64>>("user_fee_sat"), Some(0));
 	for name in ["attempts", "inputs", "source"] { assert_eq!(row.get::<_, i64>(name), 1); }
 	assert_eq!(row.get::<_, i64>("grants"), i64::try_from(grants.len()).unwrap());
-	for name in ["claims", "dispatches", "entitlements"] { assert_eq!(row.get::<_, i64>(name), 0); }
+	for name in ["claims", "entitlements"] { assert_eq!(row.get::<_, i64>(name), 0); }
 	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
 	let incoming = db.read(async |tx| server::database::htlc_vtxo::get_htlc_vtxo(tx, source).await).await.unwrap().unwrap();
 	assert!(incoming.htlc.offchain_resolution.is_none() && incoming.htlc.chain_resolution.is_none());
@@ -879,13 +878,6 @@ async fn lightning_backup(unclean: bool) {
 	let operator_remainder = parent.output.iter().filter(|output| output.script_pubkey != registration.spk).map(|output| output.value).sum::<Amount>();
 	assert_eq!(operator_remainder, sat(1_000), "receive grant capital returns in its separate operator closures");
 	assert!(pool_change.values().copied().sum::<Amount>() + operator_remainder < sat(100_000));
-	let stored_child = db.read(async |tx| Ok(tx.query_one("SELECT raw_tx,fee_sat,operator_remainder_sat,confirmed_height,confirmed_hash \
-		FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2", &[&allocation, &child.compute_txid().to_string()]).await?)).await.unwrap();
-	assert_eq!(deserialize::<Transaction>(stored_child.get("raw_tx")).unwrap(), child);
-	assert_eq!(stored_child.get::<_, i64>("fee_sat"), i64::try_from(child_fee.to_sat()).unwrap());
-	assert_eq!(stored_child.get::<_, i64>("operator_remainder_sat"), i64::try_from(operator_remainder.to_sat()).unwrap());
-	assert_eq!(stored_child.get::<_, Option<i64>>("confirmed_height"), Some(i64::from(parent_block.height.to_u32())));
-	assert_eq!(stored_child.get::<_, Option<String>>("confirmed_hash"), Some(parent_block.hash.to_string()));
 	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk,c.gross_sat,c.fee_sat, \
 		c.payout_sat,c.forfeited_sat,c.active,a.sweep_txid,a.id,a.status,a.sweep_tx FROM expiry_allocation_coin c \
 		JOIN expiry_entitlement e ON e.id=c.entitlement_id JOIN expiry_allocation a ON a.id=c.allocation_id \
@@ -909,17 +901,15 @@ async fn lightning_backup(unclean: bool) {
 	let state = db.read(async |tx| server::database::htlc_vtxo::get_htlc_vtxo(tx, source).await).await.unwrap().unwrap();
 	assert!(state.htlc.offchain_resolution.is_none(), "physical recovery must never manufacture a cooperative revocation");
 	let kept = db.read(async |tx| Ok(tx.query_one("SELECT \
-		(SELECT COUNT(*) FROM expiry_lightning_internal_funding WHERE id=$1 AND subscription_id=$2) AS funding, \
+		(SELECT COUNT(*) FROM lightning_payment_attempt WHERE id=$1 AND lightning_htlc_subscription_id=$2) AS funding, \
 		(SELECT COUNT(*) FROM lightning_payment_attempt WHERE payment_hash=$3) AS attempts, \
 		(SELECT COUNT(*) FROM vtxo WHERE lightning_htlc_subscription_id=$2) AS grants, \
-		(SELECT COUNT(*) FROM expiry_lightning_receive_claim WHERE subscription_id=$2) AS claims, \
-		(SELECT COUNT(*) FROM expiry_lightning_dispatch WHERE id=$1) AS dispatches",
+		(SELECT COUNT(*) FROM expiry_lightning_receive_claim WHERE subscription_id=$2) AS claims",
 		&[&checkpoint.0,&checkpoint.1,&hash.to_string()]).await?)).await.unwrap();
 	assert_eq!(kept.get::<_, i64>("funding"), 1);
 	assert_eq!(kept.get::<_, i64>("attempts"), 1);
 	assert_eq!(kept.get::<_, i64>("grants"), 2);
 	assert_eq!(kept.get::<_, i64>("claims"), 0);
-	assert_eq!(kept.get::<_, i64>("dispatches"), 0);
 
 	// Only now may a NEW directory use the sender seed and genesis birthday.
 	// No original client database, signed VTXO or payout transaction is imported.
@@ -932,17 +922,7 @@ async fn lightning_backup(unclean: bool) {
 	rebound.verify(Network::Regtest, mailbox).unwrap();
 	assert!(rebound.same_binding(&registration));
 	client.sync_fallback_payouts().await.unwrap();
-	let receipts = client.fallback_payouts().await.unwrap();
-	assert_eq!(receipts.len(), 1);
-	assert_eq!(receipts[0].vtxo_id, source);
-	assert_eq!(receipts[0].gross, sat(100_000));
-	let active = receipts[0].attempts.iter().filter(|attempt| attempt.active).collect::<Vec<_>>();
-	assert_eq!(active.len(), 1);
-	assert_eq!(active[0].disposition, bark::FallbackDisposition::CustomerPayout);
-	assert_eq!(active[0].parent.as_ref(), Some(&parent));
-	assert_eq!(active[0].output_index, Some(payout.vout));
-	assert_eq!(active[0].payout, sat(99_000));
-	assert_eq!(active[0].fee, sat(1_000));
+	assert_eq!(client.verify_fallback_output(payout).await.unwrap(), sat(99_000));
 	let balance = client.balance().await.unwrap();
 	assert_eq!([
 		balance.spendable, balance.needs_refresh, balance.awaiting_settlement,

@@ -7,75 +7,21 @@ use bitcoin::Amount;
 use ark::VtxoId;
 use bark::actions::WalletAction;
 use bark::vtxo::VtxoState;
-use bark_json::movements::{Movement, MovementStatus};
 use bark_json::primitives::{VtxoStateInfo, WalletVtxoInfo};
 
-/// Receipts in the public history retain their complete allocation associations.
-pub(crate) fn history_receipts(history: &[Movement]) -> Vec<bark::FallbackEntitlement> {
-	history.iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout")
-		.flat_map(|movement| {
-			let metadata = movement.metadata.as_ref().expect("fallback history metadata");
-			serde_json::from_value::<Vec<bark::FallbackEntitlement>>(
-				metadata["fallback"]["entitlements"].clone(),
-			).expect("fallback history entitlements")
-		}).collect()
-}
-
-/// Check public ownership proof before comparing balance categories. A server
-/// receipt's stage alone never proves payment. This checks the wallet's current
-/// chain-verified history projection, not independent on-chain settlement.
-/// Ambiguous historic imports require a fixture-specific ownership assertion.
+/// Generic consistency checks use retained local ownership, never server
+/// payout history. Ambiguous historical imports need fixture-specific proof.
 pub(crate) fn retained_principal(
-	vtxos: &[WalletVtxoInfo], history: &[Movement], receipts: &[bark::FallbackEntitlement],
-	awaiting: &mut HashSet<VtxoId>, paths: &[(VtxoId, Vec<VtxoId>)],
-) -> (HashMap<VtxoId, Amount>, HashSet<VtxoId>) {
-	let mut terminal = HashSet::new();
-	let mut projected = HashSet::new();
-	for movement in history.iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout") {
-		let metadata = &movement.metadata.as_ref().expect("fallback metadata")["fallback"];
-		projected.extend(movement.input_vtxos.iter().copied());
-		if movement.status == MovementStatus::Successful && metadata["chain_verified"] == true {
-			assert!(matches!(metadata["stage"].as_str(), Some("confirmed" | "below_dust" | "exited")),
-				"successful fallback history lacks a terminal chain projection");
-			terminal.extend(movement.input_vtxos.iter().copied());
-		}
-	}
-	let mut decided = HashSet::new();
-	let mut excluded = terminal;
-	for receipt in receipts {
-		decided.insert(receipt.vtxo_id);
-		let active = receipt.attempts.iter().filter(|attempt| attempt.active).collect::<Vec<_>>();
-		assert!(active.len() <= 1, "multiple active fallback allocations");
-		if active.first().is_some_and(|attempt| attempt.disposition == bark::FallbackDisposition::Operator) {
-			assert!(excluded.contains(&receipt.vtxo_id) || !vtxos.iter().any(|coin|
-				coin.id == receipt.vtxo_id && coin.state != VtxoStateInfo::Spent),
-				"operator receipt cannot discard retained positive principal without verified ownership or spend evidence");
-			excluded.insert(receipt.vtxo_id);
-		} else if !excluded.contains(&receipt.vtxo_id) {
-			assert!(active.first().is_some_and(|attempt| matches!(attempt.disposition,
-				bark::FallbackDisposition::CustomerPayout | bark::FallbackDisposition::BelowDust)),
-				"unallocated receipt needs an independent ownership assertion");
-			assert!(projected.contains(&receipt.vtxo_id),
-				"pending receipt lacks public ownership projection; check native exit separately");
-			assert!(vtxos.iter().any(|coin| coin.id == receipt.vtxo_id),
-				"pending customer receipt lacks its retained ownership body");
-			assert!(!vtxos.iter().any(|coin| coin.id == receipt.vtxo_id && coin.state == VtxoStateInfo::Spent),
-				"pending receipt for retained Spent body needs an independent adoption ownership assertion");
-			awaiting.insert(receipt.vtxo_id);
-		}
-	}
+	vtxos: &[WalletVtxoInfo], awaiting: &HashSet<VtxoId>, paths: &[(VtxoId, Vec<VtxoId>)],
+) -> HashMap<VtxoId, Amount> {
 	let mut principal = HashMap::new();
 	for coin in vtxos {
-		if coin.state == VtxoStateInfo::Spent || excluded.contains(&coin.id) { continue; }
-		if awaiting.contains(&coin.id) && matches!(coin.state,
-			VtxoStateInfo::Locked { movement_id: None, action_id: None }) {
-			assert!(decided.contains(&coin.id),
-				"holderless pending import needs independent ownership evidence, not its retained body");
-		}
+		if coin.state == VtxoStateInfo::Spent { continue; }
+		assert!(!(awaiting.contains(&coin.id) && matches!(coin.state,
+			VtxoStateInfo::Locked { movement_id: None, action_id: None })),
+			"holderless pending import needs a fixture-specific ownership assertion");
 		assert!(principal.insert(coin.id, coin.amount).is_none(), "duplicate retained VTXO ID");
 	}
-	// A generic consistency check cannot assign value between overlapping
-	// claims. Their fixture must assert its known conservation boundary.
 	let mut seen = HashSet::new();
 	for (child, path) in paths.iter().filter(|(id, _)| principal.contains_key(id)) {
 		assert!(seen.insert(*child), "duplicate signed ancestry body");
@@ -85,7 +31,7 @@ pub(crate) fn retained_principal(
 	if principal.keys().any(|id| awaiting.contains(id)) && principal.len() > 1 {
 		assert_eq!(seen.len(), principal.len(), "missing signed bodies for pending ownership check");
 	}
-	(principal, decided)
+	principal
 }
 
 /// Fetch the balance, syncing first when `sync` is set, and assert that it
@@ -99,25 +45,20 @@ pub async fn assert_balance_consistent(wallet: &bark::Wallet, sync: bool) -> bar
 		wallet.sync().await;
 	}
 	let balance = wallet.balance().await.expect("balance");
-	let receipts = wallet.fallback_payouts().await.expect("fallback receipts");
-	let history = wallet.history().await.expect("history").into_iter().map(Movement::from).collect::<Vec<_>>();
-	let mut awaiting = wallet.awaiting_settlement_vtxos().await.expect("awaiting settlement")
+	let awaiting = wallet.awaiting_settlement_vtxos().await.expect("awaiting settlement")
 		.into_iter().collect::<HashSet<_>>();
 	let retained = wallet.all_vtxos().await.expect("retained vtxos");
 	let infos = retained.iter().map(WalletVtxoInfo::from).collect::<Vec<_>>();
 	let mut paths = Vec::new();
-	if !awaiting.is_empty() || !receipts.is_empty() {
+	if !awaiting.is_empty() {
 		for coin in &retained {
 			if coin.state != VtxoState::Spent {
 				paths.push((coin.id(), wallet.get_full_vtxo(coin.id()).await.expect("signed body").ancestor_ids()));
 			}
 		}
 	}
-	let (principal, decided) = retained_principal(&infos, &history, &receipts, &mut awaiting, &paths);
-	let awaiting_decided = principal.iter().filter(|(id, _)| decided.contains(*id))
-		.map(|(_, amount)| *amount).sum::<Amount>();
-	let vtxos = retained.into_iter().filter(|coin| principal.contains_key(&coin.id())
-		&& !decided.contains(&coin.id())).collect::<Vec<_>>();
+	let principal = retained_principal(&infos, &awaiting, &paths);
+	let vtxos = retained.into_iter().filter(|coin| principal.contains_key(&coin.id())).collect::<Vec<_>>();
 
 	let locked_amount_of = |ids: &[VtxoId]| -> Amount {
 		vtxos.iter()
@@ -130,7 +71,7 @@ pub async fn assert_balance_consistent(wallet: &bark::Wallet, sync: bool) -> bar
 	let max_exit_depth = wallet.ark_info().await.expect("ark info").map(|i| i.max_vtxo_exit_depth);
 	let mut spendable = Amount::ZERO;
 	let mut needs_refresh = Amount::ZERO;
-	let mut awaiting_settlement = awaiting_decided;
+	let mut awaiting_settlement = Amount::ZERO;
 	let mut locked = Amount::ZERO;
 	for vtxo in &vtxos {
 		match vtxo.state {

@@ -43,9 +43,6 @@ use self::xpay::{ClnXpay, ClnXpayClient, ClnXpayConfig};
 
 type ClnGrpcClient = NodeClient<Channel>;
 
-/// Node build whose chain-derived failures survive the supported reorg depth.
-pub(crate) const QUALIFIED_CLN_VERSION: &str = "v26.06.6-abandon6";
-
 /// Cheap, cloneable command handle to a running node.
 ///
 /// Returned by the manager's node getters so callers can issue RPCs to the
@@ -130,10 +127,6 @@ impl ClnNodeInfo {
 		let info = rpc.getinfo(cln_rpc::GetinfoRequest {}).await
 			.context("failed to get info from rpc")?
 			.into_inner();
-		if info.version != QUALIFIED_CLN_VERSION {
-			let msg = format!("CLN {} is not the qualified node build {QUALIFIED_CLN_VERSION}", info.version);
-			return Err(anyhow::Error::msg(msg.clone()).context(NodeState::invalid(msg)));
-		}
 
 		let network = bitcoin::Network::from_str(info.network.as_str())
 			.context(NodeState::invalid("network invalid"))?;

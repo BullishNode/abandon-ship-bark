@@ -108,16 +108,17 @@ async fn expiry_ready_root_does_not_wait_for_unresolved_same_expiry_root() {
 	let (allocation, parent, child, recorded_fee) = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			assert_pending_root_is_untouched(&ctx, &db, htlc, pending.chain_anchor(), &pending_backing).await;
-			let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.id,a.sweep_tx,f.raw_tx,f.fee_sat \
+			let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.id,a.sweep_tx \
 				FROM expiry_allocation a JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
 				JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-				JOIN expiry_fee_child f ON f.allocation_id=a.id \
 				WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' \
-				AND a.broadcast_at IS NOT NULL ORDER BY f.id DESC LIMIT 1", &[&ready.id().to_string()],
+				AND a.broadcast_at IS NOT NULL ORDER BY a.id DESC LIMIT 1", &[&ready.id().to_string()],
 			).await?)).await.unwrap();
 			if let Some(row) = row {
-				break (row.get::<_, i64>("id"), deserialize::<Transaction>(row.get("sweep_tx")).unwrap(),
-					deserialize::<Transaction>(row.get("raw_tx")).unwrap(), row.get::<_, i64>("fee_sat"));
+				let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+				if let Some((child, fee)) = super::watchman::observed_payout_fee_child(&ctx, &parent) {
+					break (row.get::<_, i64>("id"), parent, child, fee);
+				}
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -157,32 +158,22 @@ async fn expiry_ready_root_does_not_wait_for_unresolved_same_expiry_root() {
 	// the unique confirmed sponsor and verify its block and fee against Core.
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
-			let rows = db.read(async |tx| Ok(tx.query("SELECT txid,raw_tx,fee_sat,confirmed_hash \
-				FROM expiry_fee_child WHERE allocation_id=$1 AND confirmed_hash IS NOT NULL",
-				&[&allocation],
-			).await?)).await.unwrap();
-			if !rows.is_empty() {
-				assert_eq!(rows.len(), 1, "a superseded fee child cannot count as another confirmed sponsor");
-				let row = &rows[0];
-				let sponsor = deserialize::<Transaction>(row.get("raw_tx")).unwrap();
-				assert_eq!(row.get::<_, String>("txid"), sponsor.compute_txid().to_string());
+			if let Some((sponsor, measured_fee)) = super::watchman::observed_payout_fee_child(&ctx, &parent) {
 				assert!(sponsor.input.iter().any(|input| input.previous_output.txid == parent.compute_txid()));
 				let info = ctx.bitcoind().sync_client()
 					.custom_get_raw_transaction_info(sponsor.compute_txid(), None).unwrap()
 					.expect("the stored confirmed sponsor must exist in Core");
 				assert!(info.confirmations.unwrap_or(0) >= 6,
 					"the actual canonical fee child must have six confirmations");
-				assert_eq!(info.blockhash.expect("a confirmed fee child has a block").to_string(),
-					row.get::<_, String>("confirmed_hash"));
 				assert_eq!(ctx.bitcoind().await_transaction(sponsor.compute_txid()).await, sponsor);
 				let fee = actual_transaction_fee(&ctx, &sponsor).await;
 				assert!(fee > 0);
-				assert_eq!(fee, u64::try_from(row.get::<_, i64>("fee_sat")).unwrap());
+				assert_eq!(fee, u64::try_from(measured_fee).unwrap());
 				break;
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("the actual confirmed fee sponsor must reconcile with Core and the watchman ledger");
+	}).await.expect("the actual confirmed fee sponsor must be canonical in Core");
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let row = db.read(async |tx| Ok(tx.query_one("SELECT a.status,a.sweep_tx, \

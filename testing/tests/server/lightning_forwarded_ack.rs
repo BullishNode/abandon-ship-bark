@@ -184,13 +184,13 @@ fn accepted_reply_loss() -> Pin<Box<dyn Future<Output = ()>>> {
 		assert_eq!(receives[0].sent_to[0].destination, PaymentMethod::Ark(address));
 		assert_eq!(receives[0].sent_to[0].amount, net);
 		assert_eq!(provider.balance().await.unwrap().spendable, sat(0));
-		let bindings = db.read(async |tx| Ok(tx.query("SELECT c.output_vtxo_id,c.materialized,s.status::TEXT AS status \
+		let bindings = db.read(async |tx| Ok(tx.query("SELECT c.output_vtxo_id,s.status::TEXT AS status \
 			FROM expiry_lightning_receive_claim c JOIN lightning_htlc_subscription s ON s.id=c.subscription_id \
 			WHERE c.payment_hash=$1", &[&hash.to_string()]).await?)).await.unwrap();
 		assert_eq!(bindings.len(), ids.len());
 		assert_eq!(bindings.iter().map(|row| row.get::<_, &str>("output_vtxo_id").parse::<VtxoId>().unwrap())
 			.collect::<BTreeSet<_>>(), ids);
-		assert!(bindings.iter().all(|row| row.get::<_, bool>("materialized") && row.get::<_, &str>("status") == "settled"));
+		assert!(bindings.iter().all(|row| row.get::<_, &str>("status") == "settled"));
 		let pays = lightning.external.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
 			bolt11: None, payment_hash: Some(hash.to_vec()), status: None,
 			index: None, limit: None, start: None,

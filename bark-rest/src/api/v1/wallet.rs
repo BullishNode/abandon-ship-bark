@@ -358,7 +358,6 @@ pub async fn fallback_registration(
 	};
 	Ok(Json(bark_json::web::FallbackRegistrationInfo {
 		registered: registration.is_some(), payout_address,
-		history_awaiting_sync: wallet.fallback_history_awaiting_sync().await?,
 	}))
 }
 

@@ -1,4 +1,4 @@
-//! Exact signed payout parents and their independently replaceable fee children.
+//! Exact signed payout parents and their allocated backing.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,11 +13,28 @@ use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoPolicy};
 use super::expiry_chain::ExpiryViewToken;
 use super::expiry_lightning::LightningSourceState;
 use super::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
+use super::ln::LightningHtlcSubscriptionStatus;
 use super::expiry_inventory::BackingSnapshot;
 use super::Tx;
 use crate::expiry_readiness::INVENTORY_LIMITS;
 
 pub(crate) const MAX_PAYOUT_VSIZE: usize = 10_000;
+
+fn receive_timeout_allowed(
+	status: LightningHtlcSubscriptionStatus,
+	offchain: Option<HtlcResolution>,
+	onchain: Option<HtlcResolution>,
+	preimage_known: bool,
+) -> bool {
+	if offchain == Some(HtlcResolution::Fulfilled) || onchain == Some(HtlcResolution::Fulfilled) {
+		return false;
+	}
+	match status {
+		LightningHtlcSubscriptionStatus::Canceled => true,
+		LightningHtlcSubscriptionStatus::HtlcsReady => !preimage_known,
+		_ => false,
+	}
+}
 
 struct SplitRecoveryPaths {
 	rows: BTreeSet<usize>,
@@ -93,7 +110,6 @@ pub struct PendingExpiryPayout {
 	pub inputs: Vec<ServerVtxo>,
 	pub payouts: Vec<TxOut>,
 	pub parent: Option<Transaction>,
-	pub fee_child: Option<(Transaction, Amount)>,
 }
 
 impl Tx<'_> {
@@ -117,14 +133,7 @@ impl Tx<'_> {
 					value: Amount::from_sat(u64::try_from(r.get::<_, i64>("amount_sat"))?),
 				})).collect::<anyhow::Result<Vec<_>>>()?;
 			let parent = row.get::<_, Option<&[u8]>>("sweep_tx").map(deserialize).transpose()?;
-			let fee_child = self.query_opt("SELECT raw_tx,fee_sat FROM expiry_fee_child WHERE allocation_id=$1 ORDER BY id DESC LIMIT 1", &[&id]).await?
-				.map(|r| -> anyhow::Result<_> {
-					let tx = deserialize::<Transaction>(r.get("raw_tx"))?;
-					let fee = Amount::from_sat(u64::try_from(r.get::<_, i64>("fee_sat"))?);
-					Ok((tx, fee))
-				})
-				.transpose()?;
-			ret.push(PendingExpiryPayout { id, inputs, payouts, parent, fee_child });
+			ret.push(PendingExpiryPayout { id, inputs, payouts, parent });
 		}
 		Ok(ret)
 	}
@@ -166,75 +175,6 @@ impl Tx<'_> {
 		Ok(())
 	}
 
-	pub async fn store_expiry_fee_child(
-		&self, view: ExpiryViewToken, id: i64, parent: &Transaction,
-		child: &Transaction, fee: Amount,
-	) -> anyhow::Result<()> {
-		self.lock_valid_expiry_view(view).await?;
-		let row = self.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1 FOR UPDATE", &[&id]).await?;
-		ensure!(row.get::<_, &str>("status") == "pending"
-			&& row.get::<_, Option<&[u8]>>("sweep_tx") == Some(serialize(parent).as_slice()), "expiry parent changed before fee child storage");
-		let anchor = parent.output.iter().enumerate()
-			.find(|(_,o)| o.script_pubkey == *bitcoin_ext::fee::P2A_SCRIPT)
-			.map(|(i,_)| bitcoin::OutPoint::new(parent.compute_txid(), i as u32))
-			.context("expiry parent has no fee anchor")?;
-		ensure!(child.input.iter().filter(|i| i.previous_output == anchor).count() == 1,
-			"expiry fee child must spend its parent's anchor exactly once");
-		ensure!(child.version.0 == 3, "expiry fee child is not version 3");
-		let customer_outputs = usize::try_from(self.query_one("SELECT COUNT(*) FROM expiry_allocation_payout WHERE allocation_id=$1", &[&id]).await?.get::<_, i64>(0))?;
-		let accounting = crate::watchman::settlement::payout_fee_accounting(parent,customer_outputs,fee)?;
-		self.insert_expiry_fee_child(id,child,fee,accounting.operator_remainder,"watchman",fee,None).await
-	}
-
-	/// An observation cannot authorize customer payment. It may be stored during
-	/// reconstruction before the matching completed view is marked rebuilt.
-	pub(crate) async fn store_observed_expiry_fee_child(
-		&self, view: ExpiryViewToken, id: i64, parent: &Transaction,
-		observed: &crate::watchman::fee_sponsor::ObservedFeeChild,
-	) -> anyhow::Result<()> {
-		self.query_one("SELECT generation FROM expiry_chain_view WHERE id=1 FOR SHARE", &[]).await?;
-		ensure!(self.expiry_rebuild_token().await? == Some(view), "observed fee child chain view changed");
-		let row = self.query_one("SELECT status,sweep_tx FROM expiry_allocation WHERE id=$1 FOR UPDATE", &[&id]).await?;
-		ensure!(row.get::<_, Option<&[u8]>>("sweep_tx") == Some(serialize(parent).as_slice()),
-			"observed fee child allocation changed");
-		let count = usize::try_from(self.query_one("SELECT COUNT(*) FROM expiry_allocation_payout WHERE allocation_id=$1", &[&id]).await?.get::<_, i64>(0))?;
-		let accounting = crate::watchman::settlement::payout_fee_accounting_with_contribution(
-			parent,count,observed.fee,observed.operator_contribution.to_signed()?,
-		)?;
-		self.insert_expiry_fee_child(id,&observed.child,observed.fee,accounting.operator_remainder,
-			"observed_fee_only",observed.operator_contribution,Some(serialize(&observed.prevouts))).await
-	}
-
-	async fn insert_expiry_fee_child(
-		&self, id: i64, child: &Transaction, fee: Amount, remainder: Amount,
-		kind: &str, contribution: Amount, prevouts: Option<Vec<u8>>,
-	) -> anyhow::Result<()> {
-		let raw = serialize(child);
-		let txid = child.compute_txid().to_string();
-		let fee = i64::try_from(fee.to_sat())?;
-		let remainder = i64::try_from(remainder.to_sat())?;
-		let contribution = i64::try_from(contribution.to_sat())?;
-		self.execute("
-			INSERT INTO expiry_fee_child(
-				allocation_id,txid,raw_tx,fee_sat,operator_remainder_sat,
-				funding_kind,operator_net_contribution_sat,observed_prevouts)
-			VALUES($1,$2,$3,$4,$5,$6,$7,$8)
-			ON CONFLICT(txid) DO NOTHING
-		",
-			&[&id,&txid,&raw,&fee,&remainder,&kind,&contribution,&prevouts]).await?;
-		let stored = self.query_one("
-			SELECT allocation_id,raw_tx,fee_sat,operator_remainder_sat,
-				funding_kind,operator_net_contribution_sat,observed_prevouts
-			FROM expiry_fee_child
-			WHERE txid=$1
-		", &[&txid]).await?;
-		ensure!(stored.get::<_, i64>("allocation_id")==id && stored.get::<_, &[u8]>("raw_tx")==raw.as_slice()
-			&& stored.get::<_, i64>("fee_sat")==fee && stored.get::<_, i64>("operator_remainder_sat")==remainder
-			&& stored.get::<_, &str>("funding_kind")==kind && stored.get::<_, i64>("operator_net_contribution_sat")==contribution
-			&& stored.get::<_, Option<&[u8]>>("observed_prevouts")==prevouts.as_deref(),
-			"existing fee-child history differs from immutable observation");
-		Ok(())
-	}
 }
 
 impl Tx<'_> {
@@ -360,9 +300,11 @@ impl Tx<'_> {
 		let ids = vtxos.iter().map(|vtxo| vtxo.id()).collect::<Vec<_>>();
 		self.lock_unallocated_watchman_inputs(&ids).await?;
 		for candidate in vtxos {
-			let (hash, expiry) = match candidate.policy() {
-				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(policy)) => (policy.payment_hash, policy.htlc_expiry),
-				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend_v0(policy)) => (policy.payment_hash, policy.htlc_expiry),
+			let (hash, expiry, sending) = match candidate.policy() {
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(policy)) => (policy.payment_hash, policy.htlc_expiry, true),
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend_v0(policy)) => (policy.payment_hash, policy.htlc_expiry, true),
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv(policy)) => (policy.payment_hash, policy.htlc_expiry, false),
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv_v0(policy)) => (policy.payment_hash, policy.htlc_expiry, false),
 				_ => continue,
 			};
 			let state = self.get_server_vtxo_by_id(candidate.id()).await?;
@@ -377,13 +319,28 @@ impl Tx<'_> {
 			ensure!(unspent, "Lightning claim source is already spent on chain");
 			let htlc = htlc_vtxo::get_htlc_vtxo(self, candidate.id()).await?
 				.context("Lightning claim source has no registered HTLC")?;
-			ensure!(htlc.vtxo.vtxo_id == candidate.id() && htlc.htlc.direction == HtlcDirection::Incoming
-				&& htlc.htlc.payment_hash == hash && htlc.htlc.htlc_expiry == expiry
-				&& htlc.htlc.offchain_resolution != Some(HtlcResolution::Revoked)
-				&& htlc.htlc.chain_resolution != Some(HtlcResolution::Revoked),
-				"Lightning claim source has a different or revoked HTLC");
-			ensure!(self.lightning_source_state(candidate.id(), hash).await? == LightningSourceState::Discharged,
-				"Lightning source is not discharged");
+			let direction = if sending { HtlcDirection::Incoming } else { HtlcDirection::Outgoing };
+			ensure!(htlc.vtxo.vtxo_id == candidate.id() && htlc.htlc.direction == direction
+				&& htlc.htlc.payment_hash == hash && htlc.htlc.htlc_expiry == expiry,
+				"Lightning claim source has a different HTLC");
+			if sending {
+				ensure!(htlc.htlc.offchain_resolution != Some(HtlcResolution::Revoked)
+					&& htlc.htlc.chain_resolution != Some(HtlcResolution::Revoked),
+					"Lightning claim source was revoked");
+				ensure!(self.lightning_source_state(candidate.id(), hash).await? == LightningSourceState::Discharged,
+					"Lightning source is not discharged");
+			} else {
+				// A preimage can be durable before the native invoice's Settled update.
+				self.lock_htlc_settlements().await?;
+				let subscription = self.query_opt("SELECT s.status,s.payment_hash FROM lightning_htlc_subscription s \
+					JOIN vtxo v ON v.lightning_htlc_subscription_id=s.id WHERE v.id=$1 FOR UPDATE OF s",
+					&[&state.id]).await?.context("receive claim source has no subscription")?;
+				ensure!(subscription.get::<_, &str>("payment_hash") == hash.to_string(),
+					"receive claim source has a different subscription");
+				let preimage_known = self.get_htlc_settlement_by_payment_hash(hash).await?.is_some();
+				ensure!(receive_timeout_allowed(subscription.get("status"), htlc.htlc.offchain_resolution,
+					htlc.htlc.chain_resolution, preimage_known), "receive grant may have been collected");
+			}
 		}
 		Ok(())
 	}
@@ -412,6 +369,25 @@ mod tests {
 	use bitcoin_ext::BlockDelta;
 	use crate::database::{SpendState, VtxoState};
 	use crate::database::expiry_inventory::{BackingVtxoFact, SnapshotGenesis};
+	use LightningHtlcSubscriptionStatus::{Canceled, Created, Accepted, HtlcsReady, Settled};
+	use HtlcResolution::{Fulfilled, Revoked};
+
+	#[test]
+	fn receive_timeout_keeps_collected_and_inflight_grants() {
+		assert!(receive_timeout_allowed(HtlcsReady, None, None, false));
+		assert!(!receive_timeout_allowed(HtlcsReady, None, None, true));
+		for known in [false, true] {
+			assert!(receive_timeout_allowed(Canceled, None, None, known));
+			assert!(receive_timeout_allowed(Canceled, Some(Revoked), None, known));
+			for status in [Created, Accepted, HtlcsReady, Settled, Canceled] {
+				assert!(!receive_timeout_allowed(status, Some(Fulfilled), None, known));
+				assert!(!receive_timeout_allowed(status, None, Some(Fulfilled), known));
+			}
+			for status in [Created, Accepted, Settled] {
+				assert!(!receive_timeout_allowed(status, None, None, known));
+			}
+		}
+	}
 
 	fn fact(vtxo: ark::ServerVtxo<Full>, spent: Option<Txid>) -> BackingVtxoFact {
 		BackingVtxoFact {

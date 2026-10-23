@@ -400,10 +400,7 @@ mod daemon;
 mod fallback;
 pub use fallback::{FallbackRefusal, ExitProtectionOutcome, ExitProtectionSchedule,
 	ExitProtectionReport, ExitProtectionIssue, ExitProtectionIncomplete};
-pub use fallback::payouts::{
-	FallbackAttempt, FallbackBlock, FallbackDisposition, FallbackEntitlement,
-	FallbackPayoutStage, FallbackSnapshot, FallbackTerminalClaim,
-};
+pub use fallback::payouts::FallbackSnapshot;
 mod fees;
 mod import;
 mod lightning;
@@ -1734,9 +1731,7 @@ impl Wallet {
 
 	/// Fetches all wallet fund movements ordered from newest to oldest.
 	pub async fn history(&self) -> anyhow::Result<Vec<Movement>> {
-		let snapshot = self.inner.db.get_fallback_snapshot().await?;
-		let stored = self.inner.db.get_all_movements().await?;
-		snapshot.project(stored, self.network().await?)
+		self.inner.db.get_all_movements().await
 	}
 
 	/// Applies an [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) JSON Merge Patch to the
@@ -1772,17 +1767,7 @@ impl Wallet {
 		&self,
 		payment_method: &PaymentMethod,
 	) -> anyhow::Result<Vec<Movement>> {
-		let mut ret = if payment_method.is_bitcoin() {
-			// Projection also changes ordinary exits and needs their complete
-			// context to avoid a second debit for the same principal.
-			self.history().await?.into_iter()
-				.filter(|movement| movement.sent_to(payment_method) || movement.received_on(payment_method))
-				.collect::<Vec<_>>()
-		} else {
-			let mut indexed = self.inner.db.get_movements_by_payment_method(payment_method).await?;
-			indexed.retain(|movement| movement.subsystem.name != fallback::payouts::FALLBACK_SUBSYSTEM);
-			indexed
-		};
+		let mut ret = self.inner.db.get_movements_by_payment_method(payment_method).await?;
 		ret.sort_by_key(|m| m.id);
 		Ok(ret)
 	}
@@ -1809,7 +1794,7 @@ impl Wallet {
 		let mut vtxos = self.vtxos_with(&VtxoStateKind::Spendable).await?;
 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
 		let pending = self.fallback_pending_principal(&snapshot).await?;
-		let decided = snapshot.entitlements.values().map(|entitlement| entitlement.vtxo_id).collect::<HashSet<_>>();
+		let decided = snapshot.adopted_payout_vtxos.clone();
 		vtxos.retain(|vtxo| !decided.contains(&vtxo.id()) && !snapshot.awaiting_settlement.contains(&vtxo.id())
 			&& !pending.contains_key(&vtxo.id()));
 		Ok(vtxos)
@@ -2071,13 +2056,13 @@ impl Wallet {
 		}
 		self.inner.chain.invalidate_caches().await;
 		if let Err(error) = self.sync_fallback_payouts().await {
-			warn!("Fallback payout history awaits sync: {:#}", error);
+			warn!("Fallback chain checks await sync: {:#}", error);
 		}
 		if let Err(error) = self.reconcile_all_expired_vtxos().await {
 			warn!("Expired coins await settlement: {:#}", error);
 		}
 		if let Err(error) = self.sync_recovery_quarantine().await {
-			warn!("Recovered coins await their post-status history: {:#}", error);
+			warn!("Recovered coins await spend verification: {:#}", error);
 		}
 
 		futures::join!(

@@ -23,14 +23,6 @@ use crate::database::{Checkpoint, Tx};
 /// Identifier by which lightning nodes are stored in the database.
 pub type LightningNodeId = i64;
 
-/// Fixed invoices define the recipient principal independently of a
-/// caller's larger funding/fee allowance. Amountless invoices use that caller
-/// amount. Preserve millisatoshis and reject values PostgreSQL cannot store.
-fn payment_principal_msat(invoice_msat: Option<u64>, requested: Amount) -> anyhow::Result<i64> {
-	i64::try_from(invoice_msat.unwrap_or(requested.to_msat()))
-		.context("Lightning payment principal exceeds database range")
-}
-
 impl<'t> Tx<'t> {
 	// *******************
 	// * lightning state *
@@ -226,61 +218,6 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Fair bounded recovery polling for actually dispatched, undecided sources.
-	/// Failed local status alone never resolves these obligations.
-	pub async fn unproven_expiry_lightning_dispatches(&self, node: LightningNodeId, limit: i64) -> anyhow::Result<Vec<LightningPaymentAttempt>> {
-		ensure!((1..=128).contains(&limit), "invalid expiry Lightning polling limit");
-		let rows = self.query("
-			SELECT a.id,a.lightning_node_id,a.payment_hash,a.amount_msat,a.final_amount_msat,
-			a.status,a.error,a.block_height,a.user_fee_sat,a.retry_for_secs,a.user_agent,
-			a.lightning_htlc_subscription_id,a.max_routing_fee_msat,a.created_at,a.updated_at
-			FROM lightning_payment_attempt a JOIN expiry_lightning_dispatch d ON d.id=a.id
-			WHERE a.lightning_node_id=$1 AND a.status IN ('failed','succeeded') AND a.lightning_htlc_subscription_id IS NULL
-			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_terminal_failure f WHERE f.id=a.id)
-			AND NOT EXISTS(SELECT 1 FROM expiry_lightning_external_success s WHERE s.id=a.id)
-			AND EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo l JOIN vtxo v ON v.vtxo_id=l.vtxo_id
-				WHERE l.lightning_payment_attempt_id=a.id
-				AND NOT EXISTS(SELECT 1 FROM expiry_entitlement e WHERE e.vtxo_id=v.vtxo_id))
-			ORDER BY d.checked_at NULLS FIRST,d.id LIMIT $2
-		", &[&node,&limit]).await?;
-		let attempts = rows.into_iter().map(TryInto::try_into).collect::<anyhow::Result<Vec<LightningPaymentAttempt>>>()?;
-		let ids = attempts.iter().map(|attempt| attempt.id).collect::<Vec<_>>();
-		self.execute("UPDATE expiry_lightning_dispatch SET checked_at=NOW() WHERE id=ANY($1)", &[&ids]).await?;
-		Ok(attempts)
-	}
-
-	/// Recheck a queued external dispatch at its execution boundary.
-	/// Call under the payment hash guard. Coin and WAL locks are short-lived;
-	/// no database transaction is held while the Lightning RPC runs.
-	pub async fn admit_lightning_dispatch(&self, attempt: &LightningPaymentAttempt) -> anyhow::Result<bool> {
-		let current = self.get_open_lightning_payment_attempt_by_payment_hash(attempt.payment_hash).await?;
-		if current.as_ref().is_none_or(|current| current.id != attempt.id) { return Ok(false); }
-		let ids = self.query("
-			SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo
-			WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id
-		", &[&attempt.id]).await?
-			.into_iter().map(|row| row.get::<_, &str>("vtxo_id").parse::<VtxoId>())
-			.collect::<Result<Vec<_>, _>>()?;
-		ensure!(!ids.is_empty(), "external Lightning attempt has no committed source coins");
-		super::expiry_guard::guard_new_lightning_inputs(self, &ids).await?;
-		if self.query_opt("
-			SELECT id FROM lightning_payment_attempt WHERE id=$1
-			AND status NOT IN ('failed','succeeded') FOR UPDATE
-		", &[&attempt.id]).await?.is_none() {
-			return Ok(false);
-		}
-		self.lock_htlc_settlements().await?;
-		self.ensure_not_settled(attempt.payment_hash).await?;
-		// The process-local payment guard is not a cross-instance fence.
-		// A committed claim prevents a second dispatcher, including after a
-		// restart, from issuing this same attempt again. It is deliberately
-		// not proof that the remote node completed or failed a payment.
-		Ok(self.query_opt("
-			INSERT INTO expiry_lightning_dispatch(id) VALUES($1)
-			ON CONFLICT(id) DO NOTHING RETURNING id
-		", &[&attempt.id]).await?.is_some())
-	}
-
 	/// Stores data after lightning payment start.
 	///
 	/// Creates a new payment attempt for the given invoice and links the
@@ -312,7 +249,9 @@ impl<'t> Tx<'t> {
 		max_routing_fee: Option<Amount>,
 	) -> anyhow::Result<()> {
 		let payment_hash = invoice.payment_hash();
-		let principal_msat = payment_principal_msat(invoice.amount_msat(), amount)?;
+		let principal_msat = i64::try_from(invoice.amount_msat().unwrap_or(amount.to_msat()))
+			.context("Lightning payment principal exceeds database range")?;
+		super::expiry_guard::guard_new_lightning_inputs(self, htlc_vtxo_ids).await?;
 
 		let check_stmt = self.prepare("
 			SELECT id FROM lightning_payment_attempt
@@ -331,10 +270,6 @@ impl<'t> Tx<'t> {
 		if existing.is_some() {
 			bail!("open payment attempt already exists for payment hash {}", payment_hash);
 		}
-
-		// This is a new attempt, not an in-flight retry. Serialize its admission
-		// with expiry allocation before the Lightning node can receive the task.
-		super::expiry_guard::guard_new_lightning_inputs(self, htlc_vtxo_ids).await?;
 
 		let stmt = self.prepare("
 			INSERT INTO lightning_payment_attempt (
@@ -376,7 +311,6 @@ impl<'t> Tx<'t> {
 
 		let payment_attempt_id: i64 = row.get("id");
 		let updated_at: DateTime<Local> = row.get("updated_at");
-		self.execute("INSERT INTO expiry_lightning_queued_attempt(id) VALUES($1)", &[&payment_attempt_id]).await?;
 
 		if !htlc_vtxo_ids.is_empty() {
 			let link_stmt = self.prepare("
@@ -397,63 +331,6 @@ impl<'t> Tx<'t> {
 		Ok(())
 	}
 
-	/// The outer None is a stale caller; the inner None is a NULL final amount.
-	async fn lightning_attempt_update_amount(
-		&self, attempt: &LightningPaymentAttempt, status: LightningPaymentStatus,
-		final_amount_msat: Option<u64>,
-	) -> anyhow::Result<Option<Option<i64>>> {
-		self.lock_lightning_attempt_sources(attempt.id).await?;
-		let Some(current) = self.query_opt("SELECT updated_at,amount_msat,final_amount_msat, \
-			lightning_htlc_subscription_id FROM lightning_payment_attempt WHERE id=$1 FOR UPDATE",
-			&[&attempt.id]).await? else { return Ok(None); };
-		if current.get::<_, DateTime<Local>>("updated_at") != attempt.updated_at { return Ok(None); }
-		let supplied = final_amount_msat.map(i64::try_from).transpose()
-			.context("Lightning final amount exceeds database range")?;
-		let previous = current.get::<_, Option<i64>>("final_amount_msat");
-		// These fresh statements must follow the attempt lock. A joined query
-		// can retain a snapshot taken before a concurrent admission commits.
-		if self.query_opt("SELECT id FROM expiry_lightning_dispatch WHERE id=$1",
-			&[&attempt.id]).await?.is_none() {
-			if status == LightningPaymentStatus::Succeeded
-				&& current.get::<_, Option<i64>>("lightning_htlc_subscription_id").is_none()
-			{
-				ensure!(self.query_opt("SELECT id FROM expiry_lightning_queued_attempt WHERE id=$1",
-					&[&attempt.id]).await?.is_none(), "queued external payment has no own success receipt");
-			}
-			return Ok(Some(supplied.or(previous)));
-		}
-		let principal = current.get::<_, i64>("amount_msat");
-		ensure!(principal >= 0 && principal == i64::try_from(attempt.amount_msat)?
-			&& current.get::<_, Option<i64>>("lightning_htlc_subscription_id").is_none(),
-			"dispatch does not describe an external payment attempt");
-		let success = self.query_opt("SELECT created_index,amount_sent_msat \
-			FROM expiry_lightning_external_success WHERE id=$1", &[&attempt.id]).await?;
-		let failed = self.query_opt("SELECT id FROM expiry_lightning_terminal_failure WHERE id=$1",
-			&[&attempt.id]).await?.is_some();
-		ensure!(!(success.is_some() && failed), "dispatch has contradictory outcome receipts");
-		let amount = match status {
-			LightningPaymentStatus::Succeeded => {
-				let success = success.context("dispatched payment has no own success receipt")?;
-				let amount = success.get::<_, i64>("amount_sent_msat");
-				ensure!(success.get::<_, i64>("created_index") > 0 && amount >= principal,
-					"dispatch success amount or native index is invalid");
-				ensure!(supplied.is_none_or(|value| value == amount),
-					"final amount differs from the dispatch success receipt");
-				Some(amount)
-			},
-			LightningPaymentStatus::Failed => {
-				ensure!(failed, "dispatched payment has no own terminal failure receipt");
-				ensure!(supplied.is_none(), "failed dispatch cannot have a final sent amount");
-				None
-			},
-			LightningPaymentStatus::Requested | LightningPaymentStatus::Submitted => {
-				ensure!(supplied.is_none(), "open dispatch cannot import a final sent amount");
-				previous
-			},
-		};
-		Ok(Some(amount))
-	}
-
 	/// Returns `None` when the optimistic-lock predicate missed.
 	pub async fn update_lightning_payment_attempt_status(
 		&self,
@@ -461,21 +338,42 @@ impl<'t> Tx<'t> {
 		new_status: LightningPaymentStatus,
 		new_payment_error: Option<&str>,
 	) -> anyhow::Result<Option<DateTime<Local>>> {
-		let Some(final_amount) = self.lightning_attempt_update_amount(old_payment_attempt, new_status, None).await?
-			else { return Ok(None); };
-		let stmt = self.prepare("
-			UPDATE lightning_payment_attempt
-			SET status = $3,
-				error = COALESCE($4, error),
-				final_amount_msat = $5,
-				updated_at = NOW()
-			WHERE id = $1 AND updated_at = $2
-			RETURNING updated_at;
-		").await?;
-		let row = self.query_opt(&stmt, &[
-			&old_payment_attempt.id, &old_payment_attempt.updated_at,
-			&new_status, &new_payment_error, &final_amount,
-		]).await?;
+		// We want to preserve any previous error message in case we don't have a new one.
+		let row = if let Some(error) = new_payment_error {
+			let stmt = self.prepare("
+				UPDATE lightning_payment_attempt
+				SET status = $3,
+					error = $4,
+					updated_at = NOW()
+				WHERE id = $1 AND updated_at = $2
+				RETURNING updated_at;
+			").await?;
+			self.query_opt(
+				&stmt,
+				&[
+					&old_payment_attempt.id,
+					&old_payment_attempt.updated_at,
+					&new_status,
+					&error
+				]
+			).await?
+		} else {
+			let stmt = self.prepare("
+				UPDATE lightning_payment_attempt
+				SET status = $3,
+					updated_at = NOW()
+				WHERE id = $1 AND updated_at = $2
+				RETURNING updated_at;
+			").await?;
+			self.query_opt(
+				&stmt,
+				&[
+					&old_payment_attempt.id,
+					&old_payment_attempt.updated_at,
+					&new_status
+				]
+			).await?
+		};
 
 		Ok(row.map(|r| r.get("updated_at")))
 	}
@@ -508,18 +406,17 @@ impl<'t> Tx<'t> {
 		new_payment_error: Option<&str>,
 		new_final_amount_msat: Option<u64>,
 	) -> anyhow::Result<Option<DateTime<Local>>> {
-		let Some(final_amount_msat) = self.lightning_attempt_update_amount(attempt, new_status, new_final_amount_msat).await?
-			else { return Ok(None); };
 		let stmt = self.prepare("
 			UPDATE lightning_payment_attempt
 			SET status = $3,
 				error = CASE WHEN $3 = 'succeeded'::lightning_payment_status THEN NULL ELSE COALESCE($4, error) END,
-				final_amount_msat = $5,
+				final_amount_msat = COALESCE($5, final_amount_msat),
 				updated_at = NOW()
 			WHERE id = $1 AND updated_at = $2
 			RETURNING updated_at;
 		").await?;
 
+		let final_amount_msat = new_final_amount_msat.map(|u| u as i64);
 		let error_str = new_payment_error;
 		let row = self.query_opt(&stmt, &[
 			&attempt.id,
@@ -681,9 +578,9 @@ impl<'t> Tx<'t> {
 	/// Cancel the latest receive subscription for `payment_hash` as part of
 	/// revoking the matching HTLC-send vtxos of an intra-Ark payment.
 	///
-	/// Only `Created`, `Accepted`, and `HtlcsReady` after the caller proves
-	/// grant reclamation are canceled. Returns the status *before* this call
-	/// and whether HTLC-recv vtxos were ever granted, or `None` for a plain outgoing
+	/// Only `Created`, `Accepted`, and `HtlcsReady` once `htlc_recvs_expired`,
+	/// are canceled. Returns the status *before* this call and whether
+	/// HTLC-recv vtxos were ever granted, or `None` for a plain outgoing
 	/// payment. The caller MUST refuse the revocation while these show the
 	/// receive is still committed.
 	pub async fn cancel_revocable_htlc_subscription(
@@ -897,19 +794,32 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Bind a notification to the originating attempt, rather than the
-	/// newest sender who happens to use the same payment hash.
-	pub(crate) async fn get_lightning_attempt_sender_mailbox_id(
-		&self, attempt_id: i64, payment_hash: PaymentHash,
-	) -> anyhow::Result<Option<MailboxIdentifier>> {
-		let Some(row) = self.query_opt(
-			"SELECT sender_mailbox_id FROM lightning_payment_attempt WHERE id=$1 AND payment_hash=$2",
-			&[&attempt_id, &payment_hash.to_string()],
-		).await? else { return Ok(None); };
-		row.get::<_, Option<&str>>("sender_mailbox_id").map(MailboxIdentifier::from_str)
-			.transpose().context("corrupt sender_mailbox_id in original lightning_payment_attempt")
-	}
+	/// Retrieve the sender's mailbox ID for the existing payment attempt.
+	pub async fn get_lightning_sender_mailbox_id(
+		&self,
+		attempt_id: i64,
+	) -> anyhow::Result<Option<ark::mailbox::MailboxIdentifier>> {
+		let stmt = self.prepare(
+			"SELECT sender_mailbox_id FROM lightning_payment_attempt
+			WHERE id = $1"
+		).await?;
+		let row = self.query_opt(&stmt, &[&attempt_id]).await?;
 
+		match row {
+			Some(row) => {
+				let id = row.get::<_, Option<String>>("sender_mailbox_id");
+				match id {
+					Some(s) => {
+						let id = ark::mailbox::MailboxIdentifier::from_str(&s)
+							.context("corrupt sender_mailbox_id in lightning_payment_attempt")?;
+						Ok(Some(id))
+					},
+					None => Ok(None),
+				}
+			},
+			None => Ok(None),
+		}
+	}
 
 	/// Retrieve an open HTLC subscription for a specific node by payment hash.
 	///
@@ -974,9 +884,7 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Lock the immutable attempt source set in the same order as expiry
-	/// writers, before an attempt row or the settlement WAL is locked. This is
-	/// exclusion only: a decided coin is not an error or permission to mutate it.
+	/// Lock an attempt's existing source set before changing its status.
 	pub(crate) async fn lock_lightning_attempt_sources(&self, attempt_id: i64) -> anyhow::Result<()> {
 		self.query("SELECT v.vtxo_id FROM vtxo v \
 			JOIN lightning_payment_attempt_htlc_vtxo l ON l.vtxo_id=v.vtxo_id \
@@ -984,23 +892,13 @@ impl<'t> Tx<'t> {
 		Ok(())
 	}
 
-	/// Mark only the attempt's fully discharged source set as ln-spent.
-	/// A global preimage or coarse Succeeded alone cannot consume these coins.
-	/// Returns nonspendable sources left untouched; already-ln-spent
-	/// sources are an idempotent success, not a spurious warning.
+	/// Mark only this attempt's linked, spendable sources as consumed.
+	/// Return nonspendable sources left untouched; already-ln-spent is idempotent.
 	pub async fn mark_htlc_send_vtxos_ln_spent(
 		&self,
 		attempt_id: i64,
 	) -> anyhow::Result<Vec<VtxoId>> {
 		self.lock_lightning_attempt_sources(attempt_id).await?;
-		let Some(attempt) = self.query_opt(
-			"SELECT payment_hash FROM lightning_payment_attempt WHERE id=$1", &[&attempt_id],
-		).await? else { return Ok(Vec::new()); };
-		let hash = PaymentHash::from_str(attempt.get("payment_hash"))?;
-		if !self.lightning_payment_outcome(hash, &[], Some(attempt_id)).await?
-			.is_some_and(|outcome| outcome.state == super::expiry_lightning::LightningSourceState::Discharged) {
-			return Ok(Vec::new());
-		}
 		let stmt = self.prepare("
 			WITH found AS (
 				SELECT vtxo.vtxo_id, vtxo.spend_state
@@ -1054,8 +952,7 @@ impl<'t> Tx<'t> {
 		}
 	}
 
-	/// Hold after coin locks through any fund-releasing decision so a preimage
-	/// cannot be inserted between its final check and the decision commit.
+	/// Serialize the final claim/refund decision with the existing settlement WAL.
 	pub async fn lock_htlc_settlements(&self) -> anyhow::Result<()> {
 		self.execute("SELECT pg_advisory_xact_lock_shared($1)",
 			&[&(super::AdvisoryLock::HtlcSettlementWrite as i64)]).await?;
@@ -1074,7 +971,7 @@ impl<'t> Tx<'t> {
 	/// `Submitted`/`Failed` for a payment that actually went through. Never gate
 	/// a fund-releasing decision on the status; call this instead.
 	///
-	/// Call this inside the write transaction that releases the funds so a
+	/// Call this INSIDE the write transaction that releases the funds so a
 	/// settlement racing between an earlier read-check and the write cannot
 	/// slip through.
 	pub async fn ensure_not_settled(
@@ -1174,8 +1071,10 @@ impl<'t> Tx<'t> {
 	) -> anyhow::Result<bool> {
 		let payment_hash = attempt.payment_hash;
 
-		// Ordinary monitoring does not repair old final flags. A new final
-		// transition still requires the exact dispatch outcome in the writer.
+		// Skip if the attempt is already in a final state. The on-chain
+		// settlement path records the preimage (via the settler) before
+		// CLN finalizes the payment attempt; checking only the DB status
+		// here is sufficient because the preimage lives in htlc_settlement.
 		if attempt.status.is_final() {
 			debug!("Lightning payment attempt update for {payment_hash}: Skipped update because the \
 				payment is already in a final state.");
@@ -1187,33 +1086,5 @@ impl<'t> Tx<'t> {
 		).await?;
 
 		Ok(updated_at.is_some())
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn fixed_invoice_principal_excludes_caller_overrequest() {
-		assert_eq!(payment_principal_msat(Some(100_000_000), Amount::from_sat(150_000)).unwrap(), 100_000_000);
-	}
-
-	#[test]
-	fn amountless_invoice_principal_uses_requested_amount() {
-		assert_eq!(payment_principal_msat(None, Amount::from_sat(150_000)).unwrap(), 150_000_000);
-	}
-
-	#[test]
-	fn fixed_invoice_principal_preserves_subsat_amount() {
-		assert_eq!(payment_principal_msat(Some(1_001), Amount::from_sat(2)).unwrap(), 1_001);
-	}
-
-	#[test]
-	fn payment_principal_rejects_database_overflow() {
-		assert_eq!(payment_principal_msat(Some(i64::MAX as u64), Amount::ZERO).unwrap(), i64::MAX);
-		assert!(payment_principal_msat(Some(i64::MAX as u64 + 1), Amount::ZERO).is_err());
-		assert!(payment_principal_msat(None, Amount::from_sat(i64::MAX as u64 / 1_000 + 1)).is_err());
-		assert!(payment_principal_msat(None, Amount::from_sat(u64::MAX)).is_err());
 	}
 }

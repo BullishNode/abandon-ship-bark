@@ -8,7 +8,7 @@ use bitcoin_ext::bdk::WalletExt;
 use bitcoin_ext::cpfp::MakeCpfpFees;
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::{BlockTable, Db};
-use server::wallet::{BdkWalletExt, PersistedWallet, WalletKind};
+use server::wallet::{PersistedWallet, WalletKind};
 use server_rpc::admin::WalletAdminServiceClient;
 use server_rpc::protos;
 
@@ -60,17 +60,11 @@ async fn assert_fee_funding_released(
 
 #[tokio::test]
 async fn expiry_payout_refuses_oversized_fee_child() {
-	oversized_fee_child(false).await;
+	oversized_fee_child().await;
 }
 
-#[tokio::test]
-async fn expiry_payout_replaces_oversized_retained_fee_child() {
-	oversized_fee_child(true).await;
-}
-
-async fn oversized_fee_child(retained: bool) {
-	let ctx = TestContext::new(if retained { "server/expiry_payout_replaces_oversized_retained_fee_child" }
-		else { "server/expiry_payout_refuses_oversized_fee_child" }).await;
+async fn oversized_fee_child() {
+	let ctx = TestContext::new("server/expiry_payout_refuses_oversized_fee_child").await;
 	let endpoints = (ctx.bitcoind().rpc_url(), ctx.bitcoind().p2p_url(), ctx.bitcoind().zmq_url());
 	let tip = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
 	ctx.bitcoind().stop().await.unwrap();
@@ -174,44 +168,23 @@ async fn oversized_fee_child(retained: bool) {
 		loop {
 			if db.read(async |t| {
 				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && t.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && !t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("the exact Core tip must have a completed expiry reconstruction");
 	srv.watchmand().stop().await.unwrap();
 	let mut wallet = load_fee_wallet(&ctx, &srv, &db).await;
-	let child = if retained {
-		wallet.make_signed_p2a_cpfp(&parent, MakeCpfpFees::Effective(target)).unwrap()
-	} else {
-		wallet.make_signed_p2a_cpfp_with_coin_selection(&parent, MakeCpfpFees::Effective(target), &[],
-			bdk_wallet::coin_selection::LargestFirstCoinSelection).unwrap()
-	};
+	let child = wallet.make_signed_p2a_cpfp_with_coin_selection(&parent, MakeCpfpFees::Effective(target), &[],
+		bdk_wallet::coin_selection::LargestFirstCoinSelection).unwrap();
 	assert!(child.vsize() > 1_000, "the signed fixture must exceed Core's child limit");
 	let old_inputs = child.input.iter().filter(|input| input.previous_output.txid != parent.compute_txid())
 		.map(|input| input.previous_output).collect::<Vec<_>>();
 	assert!(old_inputs.iter().all(|point| funding.contains(point)));
 	let fee = sat(600 * old_inputs.len() as u64) - child.output.iter().map(|out| out.value).sum::<bitcoin::Amount>();
 	assert!(fee >= target * (parent.weight() + child.weight()));
-	if retained {
-		db.write(async |t| {
-			let view = t.expiry_rebuild_token().await?.expect("both sync acknowledgments required");
-			assert_eq!(view.captaind, point);
-			assert_eq!(view.watchmand, point);
-			assert!(t.expiry_view_is_rebuilt(view).await?);
-			t.store_expiry_fee_child(view, allocation, &parent, &child, fee).await
-		}).await.unwrap();
-		wallet.commit_tx(&child);
-		wallet.persist().await.unwrap();
-		drop(wallet);
-		let wallet = load_fee_wallet(&ctx, &srv, &db).await;
-		let unspent = wallet.list_unspent().map(|utxo| utxo.outpoint).collect::<Vec<_>>();
-		assert!(old_inputs.iter().all(|point| !unspent.contains(point)), "retained child must reserve its fee inputs");
-		assert!(wallet.unconfirmed_txids().any(|txid| txid == child.compute_txid()));
-	} else {
-		wallet.mark_output_keys_unused(&child);
-		wallet.persist().await.unwrap();
-	}
+	wallet.mark_output_keys_unused(&child);
+	wallet.persist().await.unwrap();
 	assert_fallback();
 	let started = chrono::Utc::now();
 	srv.watchmand().start().await.unwrap();
@@ -231,34 +204,14 @@ async fn oversized_fee_child(retained: bool) {
 		}
 		false
 	});
-	if retained {
-		// The real block listener must persist eviction before new funding
-		// can hide a still-reserved old input or phantom change.
-		ctx.generate_blocks(1).await;
-		tokio::time::timeout(Duration::from_secs(30), async {
-			loop {
-				let wallet = load_fee_wallet(&ctx, &srv, &db).await;
-				let unspent = wallet.list_unspent().map(|utxo| utxo.outpoint).collect::<Vec<_>>();
-				if old_inputs.iter().all(|point| unspent.contains(point)) {
-					assert!(!unspent.iter().any(|point| point.txid == child.compute_txid()));
-					assert!(!wallet.unconfirmed_txids().any(|txid| txid == child.compute_txid()));
-					assert!(wallet.tx_graph().get_tx(child.compute_txid()).is_some());
-					break;
-				}
-				tokio::time::sleep(Duration::from_millis(50)).await;
-			}
-		}).await.expect("persisted eviction must release the retained fee inputs before replenishment");
-	}
 	tokio::time::timeout(Duration::from_secs(30), warning_rx.recv()).await
 		.expect("the sweeper must reject its newly signed oversized child").unwrap();
 	assert_fee_funding_released(&ctx, &srv, &db, &funding).await;
 	let held = db.read(async |t| Ok(t.query_one("SELECT a.status,a.sweep_tx,a.broadcast_at IS NULL AS unpublished, \
-		(SELECT COUNT(*) FROM expiry_fee_child f WHERE f.allocation_id=a.id) AS children, \
 		e.irreversible_facts::TEXT AS facts FROM expiry_allocation a,expiry_entitlement e \
 		WHERE a.id=$1 AND e.id=$2", &[&allocation, &entitlement]).await?)).await.unwrap();
 	assert_eq!(held.get::<_, String>("status"), "pending");
 	assert!(held.get::<_, bool>("unpublished"));
-	assert_eq!(held.get::<_, i64>("children"), i64::from(retained));
 	assert_eq!(held.get::<_, String>("facts"), facts);
 	assert_eq!(deserialize::<Transaction>(held.get("sweep_tx")).unwrap(), parent);
 	assert!(rpc.get_mempool_entry(&parent.compute_txid()).is_err());
@@ -278,9 +231,8 @@ async fn oversized_fee_child(retained: bool) {
 	ctx.generate_blocks(1).await;
 	let (published, actual_parent) = wait_for_payout(&db, ids[0]).await;
 	assert_eq!((published, actual_parent), (allocation, parent.clone()));
-	let row = db.read(async |t| Ok(t.query_one("SELECT raw_tx,fee_sat FROM expiry_fee_child \
-		WHERE allocation_id=$1 ORDER BY id DESC LIMIT 1", &[&allocation]).await?)).await.unwrap();
-	let replacement: Transaction = deserialize(row.get("raw_tx")).unwrap();
+	let (replacement, measured_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent)
+		.expect("the funded parent must have a real Core child");
 	assert!(replacement.vsize() <= 1_000);
 	assert_ne!(replacement.compute_txid(), child.compute_txid());
 	assert!(replacement.input.iter().any(|input| input.previous_output.txid == large_txid));
@@ -290,7 +242,7 @@ async fn oversized_fee_child(retained: bool) {
 		actual_input += tx.output[input.previous_output.vout as usize].value;
 	}
 	let actual_fee = actual_input - replacement.output.iter().map(|out| out.value).sum::<bitcoin::Amount>();
-	assert_eq!(actual_fee.to_sat(), u64::try_from(row.get::<_, i64>("fee_sat")).unwrap());
+	assert_eq!(actual_fee.to_sat(), u64::try_from(measured_fee).unwrap());
 	assert!(actual_fee >= target * (parent.weight() + replacement.weight()));
 	let payees = parent.output.iter().enumerate().filter(|(_, out)| out.script_pubkey == destination.spk).collect::<Vec<_>>();
 	assert_eq!(payees.len(), 1);
@@ -303,19 +255,9 @@ async fn oversized_fee_child(retained: bool) {
 	let paid = rpc.get_tx_out(&parent.compute_txid(), payees[0].0 as u32, Some(true)).unwrap().unwrap();
 	assert_eq!(paid.value, coin.amount() - sat(1_000));
 	assert!(paid.confirmations >= 6);
-	let costs = db.read(async |t| Ok(t.query("SELECT txid,fee_sat FROM expiry_fee_child \
-		WHERE allocation_id=$1 AND confirmed_hash IS NOT NULL", &[&allocation]).await?)).await.unwrap();
-	assert_eq!(costs.len(), 1);
-	assert_eq!(costs[0].get::<_, String>("txid"), replacement.compute_txid().to_string());
-	assert_eq!(costs[0].get::<_, i64>("fee_sat"), i64::try_from(actual_fee.to_sat()).unwrap());
-	if retained {
-		let old = db.read(async |t| Ok(t.query_one("SELECT raw_tx,fee_sat,confirmed_hash \
-			FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2",
-			&[&allocation, &child.compute_txid().to_string()]).await?)).await.unwrap();
-		assert_eq!(deserialize::<Transaction>(old.get("raw_tx")).unwrap(), child);
-		assert_eq!(old.get::<_, i64>("fee_sat"), i64::try_from(fee.to_sat()).unwrap());
-		assert!(old.get::<_, Option<String>>("confirmed_hash").is_none());
-	}
+	let (canonical_child, canonical_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent).unwrap();
+	assert_eq!(canonical_child, replacement);
+	assert_eq!(canonical_fee, i64::try_from(actual_fee.to_sat()).unwrap());
 }
 
 async fn wait_for_payout(db: &Db, coin: ark::VtxoId) -> (i64, Transaction) {
@@ -495,10 +437,8 @@ async fn expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_ch
 	ctx.generate_blocks(coin.expiry_height().to_u32() + 1 - before).await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let (allocation, parent) = wait_for_payout(&db, ids[0]).await;
-	let first = db.read(async |t| Ok(t.query_one("SELECT raw_tx,fee_sat FROM expiry_fee_child \
-		WHERE allocation_id=$1 ORDER BY id DESC LIMIT 1", &[&allocation]).await?)).await.unwrap();
-	let first_child: Transaction = deserialize(first.get("raw_tx")).unwrap();
-	let first_fee = u64::try_from(first.get::<_, i64>("fee_sat")).unwrap();
+	let (first_child, first_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent).unwrap();
+	let first_fee = u64::try_from(first_fee).unwrap();
 	assert_eq!(ctx.bitcoind().await_transaction(first_child.compute_txid()).await, first_child);
 	let target = bitcoin::FeeRate::from_sat_per_vb(100).unwrap();
 	assert!(sat(first_fee) < target * (parent.weight() + first_child.weight()));
@@ -516,14 +456,14 @@ async fn expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_ch
 	let rpc = ctx.bitcoind().sync_client();
 	let (replacement, recorded_fee) = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
-			let row = db.read(async |t| Ok(t.query_one("SELECT a.sweep_tx,f.raw_tx,f.fee_sat \
-				FROM expiry_allocation a JOIN expiry_fee_child f ON f.allocation_id=a.id \
-				WHERE a.id=$1 ORDER BY f.id DESC LIMIT 1", &[&allocation]).await?)).await.unwrap();
-			let saved: Transaction = deserialize(row.get("sweep_tx")).unwrap();
-			assert_eq!(saved, parent, "fee replacement must never change the payout parent");
-			let child: Transaction = deserialize(row.get("raw_tx")).unwrap();
+			let saved: Vec<u8> = db.read(async |t| Ok(t.query_one("SELECT sweep_tx FROM expiry_allocation WHERE id=$1",
+				&[&allocation]).await?.get(0))).await.unwrap();
+			assert_eq!(deserialize::<Transaction>(&saved).unwrap(), parent, "fee replacement must never change the payout parent");
+			let Some((child, measured_fee)) = super::watchman::observed_payout_fee_child(&ctx, &parent) else {
+				tokio::time::sleep(Duration::from_millis(50)).await; continue;
+			};
 			if child != first_child && rpc.get_mempool_entry(&child.compute_txid()).is_ok() {
-				break (child, u64::try_from(row.get::<_, i64>("fee_sat")).unwrap());
+				break (child, u64::try_from(measured_fee).unwrap());
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -541,14 +481,13 @@ async fn expiry_payout_fee_replacement_keeps_parent_and_counts_only_confirmed_ch
 	ctx.generate_blocks(6).await;
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
-			let rows = db.read(async |t| Ok(t.query("SELECT txid,fee_sat,operator_remainder_sat \
-				FROM expiry_fee_child WHERE allocation_id=$1 AND confirmed_hash IS NOT NULL", &[&allocation]).await?)).await.unwrap();
-			if !rows.is_empty() {
-				assert_eq!(rows.len(), 1, "superseded children must not be counted as miner costs");
-				assert_eq!(rows[0].get::<_, String>("txid"), replacement.compute_txid().to_string());
-				assert_eq!(rows[0].get::<_, i64>("fee_sat"), i64::try_from(recorded_fee).unwrap());
-				assert_eq!(rows[0].get::<_, i64>("operator_remainder_sat"), 1_000);
-				break;
+			if let Some((child, fee)) = super::watchman::observed_payout_fee_child(&ctx, &parent) {
+				let info = rpc.custom_get_raw_transaction_info(child.compute_txid(), None).unwrap().unwrap();
+				if info.confirmations.unwrap_or(0) >= 6 {
+					assert_eq!(child, replacement);
+					assert_eq!(u64::try_from(fee).unwrap(), recorded_fee);
+					break;
+				}
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -589,8 +528,7 @@ async fn expiry_payout_replaces_orphan_funding_child_without_changing_parent() {
 	let funding_block = rpc.custom_get_raw_transaction_info(funding, None).unwrap().unwrap().blockhash.unwrap();
 	let (published, published_parent) = wait_for_payout(&db, ids[0]).await;
 	assert_eq!((published, published_parent), (allocation, parent.clone()));
-	let original: Transaction = db.read(async |t| Ok(deserialize(t.query_one("SELECT raw_tx FROM expiry_fee_child \
-		WHERE allocation_id=$1 ORDER BY id DESC LIMIT 1", &[&allocation]).await?.get("raw_tx"))?)).await.unwrap();
+	let (original, _) = super::watchman::observed_payout_fee_child(&ctx, &parent).unwrap();
 	assert!(original.input.iter().any(|input| input.previous_output.txid == funding));
 	assert_eq!(ctx.bitcoind().await_transaction(original.compute_txid()).await, original);
 	ctx.generate_blocks(6).await;
@@ -618,10 +556,12 @@ async fn expiry_payout_replaces_orphan_funding_child_without_changing_parent() {
 	srv.watchmand().start().await.unwrap();
 	let child = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
-			let raw = db.read(async |t| Ok(t.query_one("SELECT a.sweep_tx,f.raw_tx FROM expiry_allocation a \
-				JOIN expiry_fee_child f ON f.allocation_id=a.id WHERE a.id=$1 ORDER BY f.id DESC LIMIT 1", &[&allocation]).await?)).await.unwrap();
-			assert_eq!(deserialize::<Transaction>(raw.get("sweep_tx")).unwrap(), parent);
-			let child: Transaction = deserialize(raw.get("raw_tx")).unwrap();
+			let raw: Vec<u8> = db.read(async |t| Ok(t.query_one("SELECT sweep_tx FROM expiry_allocation WHERE id=$1",
+				&[&allocation]).await?.get(0))).await.unwrap();
+			assert_eq!(deserialize::<Transaction>(&raw).unwrap(), parent);
+			let Some((child, _)) = super::watchman::observed_payout_fee_child(&ctx, &parent) else {
+				tokio::time::sleep(Duration::from_millis(50)).await; continue;
+			};
 			if child != original && rpc.get_mempool_entry(&child.compute_txid()).is_ok() { break child; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -657,13 +597,9 @@ async fn expiry_payout_replaces_orphan_funding_child_without_changing_parent() {
 		input_value += previous.output[input.previous_output.vout as usize].value;
 	}
 	let measured_fee = input_value - child.output.iter().map(|output| output.value).sum::<bitcoin::Amount>();
-	let rows = db.read(async |t| Ok(t.query("SELECT txid,fee_sat,confirmed_hash FROM expiry_fee_child WHERE allocation_id=$1", &[&allocation]).await?)).await.unwrap();
-	assert!(rows.iter().any(|row| row.get::<_, String>("txid") == original.compute_txid().to_string()
-		&& row.get::<_, Option<String>>("confirmed_hash").is_none()), "retain orphaned fee history without charging it");
-	let confirmed = rows.iter().filter(|row| row.get::<_, Option<String>>("confirmed_hash").is_some()).collect::<Vec<_>>();
-	assert_eq!(confirmed.len(), 1);
-	assert_eq!(confirmed[0].get::<_, String>("txid"), child.compute_txid().to_string());
-	assert_eq!(confirmed[0].get::<_, i64>("fee_sat"), i64::try_from(measured_fee.to_sat()).unwrap());
+	let (canonical_child, canonical_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent).unwrap();
+	assert_eq!(canonical_child, child);
+	assert_eq!(canonical_fee, i64::try_from(measured_fee.to_sat()).unwrap());
 }
 
 /// A separate owned controller sponsors the ordinary immutable package. The
@@ -724,10 +660,8 @@ async fn independently_sponsored_payout(confirm_before_restart: bool) {
 	if !confirm_before_restart {
 		tokio::time::timeout(Duration::from_secs(30),async {
 			loop {
-				let found=db.read(async |t|Ok(t.query_opt("SELECT f.funding_kind FROM expiry_fee_child f \
-					JOIN expiry_allocation a ON a.id=f.allocation_id \
-					WHERE f.allocation_id=$1 AND f.txid=$2 AND a.broadcast_at IS NOT NULL",
-					&[&allocation,&child_id.to_string()]).await?.is_some())).await.unwrap();
+				let found = super::watchman::observed_payout_fee_child(&ctx, &parent)
+					.is_some_and(|(actual, _)| actual == child);
 				if found { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
@@ -742,22 +676,9 @@ async fn independently_sponsored_payout(confirm_before_restart: bool) {
 	let hash:BlockHash=parent_info["blockhash"].as_str().unwrap().parse().unwrap();
 	let tip=server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
 	wait_for_confirmation(&db,allocation,tip,hash).await;
-	let rows=db.read(async |t|Ok(t.query("SELECT raw_tx,funding_kind,fee_sat,operator_remainder_sat, \
-		operator_net_contribution_sat,observed_prevouts,confirmed_hash \
-		FROM expiry_fee_child WHERE allocation_id=$1",&[&allocation]).await?)).await.unwrap();
-	assert_eq!(rows.len(),1,"independent sponsorship must not invent another operator expense");
-	let row=&rows[0];
-	assert_eq!(deserialize::<Transaction>(row.get("raw_tx")).unwrap(),child);
-	assert_eq!(row.get::<_,&str>("funding_kind"),"observed_fee_only");
-	assert_eq!(row.get::<_,i64>("fee_sat"),i64::try_from(fee).unwrap());
-	assert_eq!(row.get::<_,i64>("operator_remainder_sat"),1_000);
-	assert_eq!(row.get::<_,i64>("operator_net_contribution_sat"),0);
-	assert_eq!(row.get::<_,Option<&str>>("confirmed_hash"),Some(hash.to_string().as_str()));
-	let prevouts:Vec<bitcoin::TxOut>=deserialize(row.get::<_,&[u8]>("observed_prevouts")).unwrap();
-	assert_eq!(prevouts.len(),child.input.len());
-	for (input,previous) in child.input.iter().zip(prevouts) {
-		assert_eq!(previous,rpc.get_raw_transaction(&input.previous_output.txid,None).unwrap().output[input.previous_output.vout as usize]);
-	}
+	let (observed, measured_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent).unwrap();
+	assert_eq!(observed, child);
+	assert_eq!(u64::try_from(measured_fee).unwrap(), fee);
 	assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await,parent);
 }
 
@@ -846,14 +767,8 @@ async fn expiry_payout_replaces_unrecognized_foreign_fee_child() {
 	srv.watchmand().start().await.unwrap();
 	let replacement = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
-			let row = db.read(async |t| Ok(t.query_opt("SELECT f.raw_tx,a.sweep_tx FROM expiry_fee_child f \
-				JOIN expiry_allocation a ON a.id=f.allocation_id \
-				WHERE f.allocation_id=$1 AND f.funding_kind='watchman' ORDER BY f.id DESC LIMIT 1",
-				&[&allocation]).await?)).await.unwrap();
-			if let Some(row) = row {
-				assert_eq!(deserialize::<Transaction>(row.get("sweep_tx")).unwrap(), parent);
-				let child: Transaction = deserialize(row.get("raw_tx")).unwrap();
-				if rpc.get_mempool_entry(&child.compute_txid()).is_ok() { break child; }
+			if let Some((child, _)) = super::watchman::observed_payout_fee_child(&ctx, &parent) {
+				if child.compute_txid() != foreign_id && rpc.get_mempool_entry(&child.compute_txid()).is_ok() { break child; }
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -871,11 +786,9 @@ async fn expiry_payout_replaces_unrecognized_foreign_fee_child() {
 	let payees = parent.output.iter().filter(|out| out.script_pubkey == destination.spk).collect::<Vec<_>>();
 	assert_eq!(payees.len(), 1);
 	assert_eq!(payees[0].value, coin.amount() - sat(1_000));
-	let children = db.read(async |t| Ok(t.query("SELECT txid,fee_sat FROM expiry_fee_child \
-		WHERE allocation_id=$1 AND confirmed_hash IS NOT NULL", &[&allocation]).await?)).await.unwrap();
-	assert_eq!(children.len(), 1);
-	assert_eq!(children[0].get::<_, String>("txid"), replacement.compute_txid().to_string());
-	assert_eq!(children[0].get::<_, i64>("fee_sat"), i64::try_from(fee.to_sat()).unwrap());
+	let (canonical_child, canonical_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent).unwrap();
+	assert_eq!(canonical_child, replacement);
+	assert_eq!(canonical_fee, i64::try_from(fee.to_sat()).unwrap());
 }
 
 
@@ -1006,12 +919,10 @@ async fn expiry_payout_recovers_same_parent_when_positive_untrusted_funds_mature
 		.expect("configured sweeper must warn for this positive-but-untrusted allocation")
 		.expect("watchman warning handler closed");
 	let held = db.read(async |t| Ok(t.query_one("SELECT a.status,a.sweep_tx,a.broadcast_at IS NULL AS unpublished, \
-		(SELECT COUNT(*) FROM expiry_fee_child f WHERE f.allocation_id=a.id) AS children, \
 		e.irreversible_facts::TEXT AS facts FROM expiry_allocation a,expiry_entitlement e \
 		WHERE a.id=$1 AND e.id=$2", &[&allocation,&entitlement]).await?)).await.unwrap();
 	assert_eq!(held.get::<_, String>("status"), "pending");
 	assert!(held.get::<_, bool>("unpublished"));
-	assert_eq!(held.get::<_, i64>("children"), 0);
 	assert_eq!(held.get::<_, String>("facts"), facts);
 	assert_eq!(deserialize::<Transaction>(held.get("sweep_tx")).unwrap(), parent);
 	assert!(rpc.get_mempool_entry(&parent.compute_txid()).is_err());
@@ -1024,20 +935,14 @@ async fn expiry_payout_recovers_same_parent_when_positive_untrusted_funds_mature
 	assert_eq!(eligible.confirmations, 2);
 	let (published, actual_parent) = wait_for_payout(&db, ids[0]).await;
 	assert_eq!((published, actual_parent), (allocation, parent.clone()));
-	let child_row = db.read(async |t| Ok(t.query_one("SELECT txid,raw_tx,fee_sat,funding_kind,operator_remainder_sat, \
-		operator_net_contribution_sat FROM expiry_fee_child WHERE allocation_id=$1 ORDER BY id DESC LIMIT 1", &[&allocation]).await?)).await.unwrap();
-	let child: Transaction = deserialize(child_row.get("raw_tx")).unwrap();
-	assert_eq!(child_row.get::<_, String>("txid"), child.compute_txid().to_string());
-	assert_eq!(child_row.get::<_, String>("funding_kind"), "watchman");
+	let (child, measured_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent).unwrap();
 	assert_eq!(child.input.len(), 2);
 	assert_eq!(child.input.iter().map(|input| input.previous_output).collect::<std::collections::BTreeSet<_>>(),
 		[anchor, fee_point].into_iter().collect::<std::collections::BTreeSet<_>>());
 	assert_eq!(ctx.bitcoind().await_transaction(child.compute_txid()).await, child);
 	let fee = sat(100_000) - child.output.iter().map(|out| out.value).sum::<bitcoin::Amount>();
 	assert!(fee > sat(0));
-	assert_eq!(child_row.get::<_, i64>("fee_sat"), i64::try_from(fee.to_sat()).unwrap());
-	assert_eq!(child_row.get::<_, i64>("operator_net_contribution_sat"), i64::try_from(fee.to_sat()).unwrap());
-	assert_eq!(child_row.get::<_, i64>("operator_remainder_sat"), 1_000);
+	assert_eq!(i64::try_from(fee.to_sat()).unwrap(), measured_fee);
 	assert!(child.output.iter().all(|out| out.script_pubkey != destination.spk));
 
 	ctx.generate_blocks(6).await;
@@ -1075,9 +980,7 @@ async fn expiry_payout_recovers_same_parent_when_positive_untrusted_funds_mature
 		(SELECT COUNT(DISTINCT a.sweep_txid) FROM expiry_allocation_coin c JOIN expiry_allocation a ON a.id=c.allocation_id \
 		 WHERE c.entitlement_id=e.id AND a.status='confirmed') AS payments, \
 		(SELECT fee_sat FROM expiry_allocation_coin c WHERE c.entitlement_id=e.id AND c.allocation_id=$2) AS output_fee, \
-		(SELECT sweep_tx FROM expiry_allocation WHERE id=$2) AS raw, \
-		(SELECT COUNT(*) FROM expiry_fee_child f WHERE f.allocation_id=$2) AS children, \
-		(SELECT confirmed_hash FROM expiry_fee_child f WHERE f.allocation_id=$2) AS child_block \
+		(SELECT sweep_tx FROM expiry_allocation WHERE id=$2) AS raw \
 		FROM expiry_entitlement e WHERE e.id=$1", &[&entitlement,&allocation]).await?)).await.unwrap();
 	assert_eq!(final_state.get::<_, String>("facts"), facts);
 	assert_eq!(final_state.get::<_, i64>("fences"), 1);
@@ -1085,8 +988,6 @@ async fn expiry_payout_recovers_same_parent_when_positive_untrusted_funds_mature
 	assert_eq!(final_state.get::<_, i64>("associations"), 1);
 	assert_eq!(final_state.get::<_, i64>("payments"), 1);
 	assert_eq!(final_state.get::<_, i64>("output_fee"), 1_000);
-	assert_eq!(final_state.get::<_, i64>("children"), 1);
-	assert_eq!(final_state.get::<_, Option<String>>("child_block"), Some(block.to_string()));
 	assert_eq!(deserialize::<Transaction>(final_state.get("raw")).unwrap(), parent);
 	// Exact selected cut: customer backing100k + independent fee capital100k.
 	// The 1k output charge is operator capital, not an extra miner expense.

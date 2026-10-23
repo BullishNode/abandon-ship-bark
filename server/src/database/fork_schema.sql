@@ -50,9 +50,7 @@ CREATE TABLE expiry_chain_view (
 	rebuilt_captaind_height BIGINT,
 	rebuilt_captaind_hash TEXT,
 	rebuilt_watchmand_height BIGINT,
-	rebuilt_watchmand_hash TEXT,
-	rebuilt_ledger_count BIGINT,
-	rebuilt_ledger_revision BIGINT
+	rebuilt_watchmand_hash TEXT
 );
 INSERT INTO expiry_chain_view (id) VALUES (1);
 
@@ -114,32 +112,6 @@ CREATE TABLE expiry_allocation_payout (
 	UNIQUE (allocation_id, spk)
 );
 
--- The full signed parent is stored once. Fee children may be replaced and each
--- exact version remains available for confirmation and subsidy accounting.
-CREATE TABLE expiry_fee_child (
-	id BIGSERIAL PRIMARY KEY,
-	allocation_id BIGINT NOT NULL REFERENCES expiry_allocation(id),
-	txid TEXT NOT NULL UNIQUE,
-	raw_tx BYTEA NOT NULL,
-	fee_sat BIGINT NOT NULL CHECK (fee_sat >= 0),
-	-- All parent value retained by the operator, including drain and P2A.
-	operator_remainder_sat BIGINT NOT NULL CHECK (operator_remainder_sat >= 0),
-	confirmed_height BIGINT,
-	confirmed_hash TEXT,
-	funding_kind TEXT NOT NULL DEFAULT 'watchman',
-	operator_net_contribution_sat BIGINT NOT NULL,
-	observed_prevouts BYTEA,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	CONSTRAINT expiry_fee_child_funding_scope CHECK (
-		(funding_kind='watchman' AND observed_prevouts IS NULL
-			AND operator_net_contribution_sat=fee_sat)
-		OR (funding_kind='observed_fee_only' AND observed_prevouts IS NOT NULL
-			AND operator_net_contribution_sat>=0
-			AND operator_net_contribution_sat<=operator_remainder_sat)
-	),
-	CHECK ((confirmed_height IS NULL) = (confirmed_hash IS NULL))
-);
-
 -- Splitting is a chain action, not another payout decision or customer fee.
 CREATE TABLE expiry_split_request (
 	vtxo_id TEXT PRIMARY KEY REFERENCES vtxo(vtxo_id),
@@ -155,138 +127,15 @@ CREATE TABLE expiry_terminal_claim (
 	hash TEXT NOT NULL
 );
 
--- Append-only, one visible row per financial modifying transaction. Sequence
--- MAX alone misses a late commit allocated before a later committed revision;
--- the visible row count changes for every commit regardless of that ordering.
-CREATE TABLE expiry_ledger_commit (
-	transaction_id XID8 PRIMARY KEY,
-	revision BIGSERIAL NOT NULL UNIQUE
-);
-
-CREATE FUNCTION expiry_record_ledger_commit() RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-	IF TG_OP = 'UPDATE' AND OLD IS NOT DISTINCT FROM NEW THEN
-		RETURN NULL;
-	END IF;
-	INSERT INTO expiry_ledger_commit(transaction_id) VALUES(pg_current_xact_id())
-		ON CONFLICT(transaction_id) DO NOTHING;
-	RETURN NULL;
-END;
-$$;
-
-CREATE TRIGGER expiry_entitlement_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_entitlement
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_allocation_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_allocation
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_allocation_input_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_allocation_input
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_allocation_coin_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_allocation_coin
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_allocation_payout_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_allocation_payout
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_fee_child_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_fee_child
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_terminal_claim_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_terminal_claim
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-CREATE TRIGGER expiry_chain_view_revision AFTER INSERT OR UPDATE OR DELETE ON expiry_chain_view
-	FOR EACH ROW EXECUTE FUNCTION expiry_record_ledger_commit();
-
--- One-shot execution claims, not payment or refund outcomes. A committed
--- claim can outlive a crashed dispatcher and never implies remote failure.
--- Remote settlement must still be established independently.
-CREATE TABLE expiry_lightning_dispatch (
-	id BIGINT PRIMARY KEY REFERENCES lightning_payment_attempt(id),
-	label TEXT NOT NULL DEFAULT gen_random_uuid()::TEXT UNIQUE,
-	checked_at TIMESTAMPTZ,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- This records a particular CLN dispatch, not a coarse local Failed status.
--- Its randomly unique label must occur in CLN's sendpay history, and
--- every same-hash group must be Failed with no live xpay object or preimage.
-CREATE TABLE expiry_lightning_terminal_failure (
-	id BIGINT PRIMARY KEY REFERENCES expiry_lightning_dispatch(id),
-	created_index BIGINT CHECK (created_index > 0),
-	updated_index BIGINT,
-	jsonrpc_error_code INTEGER,
-	-- Trusted supervised quiescence is distinct from a CLN failure.
-	-- Keep the bounded public manifest and its exact byte identity here, not in
-	-- another money ledger. This branch never manufactures a CLN index/error.
-	supervised_manifest_sha256 BYTEA CHECK (octet_length(supervised_manifest_sha256)=32),
-	supervised_manifest JSONB CHECK (pg_column_size(supervised_manifest)<=65536),
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	CONSTRAINT expiry_lightning_failure_provenance CHECK (
-		(created_index IS NOT NULL AND jsonrpc_error_code IS NULL
-			AND supervised_manifest_sha256 IS NULL AND supervised_manifest IS NULL)
-		OR (created_index IS NULL AND jsonrpc_error_code IS NOT NULL AND jsonrpc_error_code IN (205,207,-32602)
-			AND supervised_manifest_sha256 IS NULL AND supervised_manifest IS NULL)
-		OR (created_index IS NULL AND updated_index IS NULL AND jsonrpc_error_code IS NULL
-			AND supervised_manifest_sha256 IS NOT NULL AND supervised_manifest IS NOT NULL
-			AND jsonb_typeof(supervised_manifest)='object')
-	)
-);
-
--- Receipt of an explicit upstream no-attempt error, distinct from a transport
--- failure. Only source-reviewed CLN26.06.6 errors are admitted here.
-CREATE TABLE expiry_lightning_rpc_rejection (
-	id BIGINT PRIMARY KEY REFERENCES expiry_lightning_dispatch(id),
-	code INTEGER NOT NULL CHECK (code IN (205,207,-32602)),
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- These rows describe execution of an attempt, never merely knowledge
--- of an invoice preimage. An attempt without a queue marker stays unresolved.
-CREATE TABLE expiry_lightning_queued_attempt (
-	id BIGINT PRIMARY KEY REFERENCES lightning_payment_attempt(id),
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE expiry_lightning_external_success (
-	id BIGINT PRIMARY KEY REFERENCES expiry_lightning_dispatch(id),
-	created_index BIGINT NOT NULL CHECK (created_index >= 0),
-	updated_index BIGINT,
-	amount_sent_msat BIGINT NOT NULL CHECK (amount_sent_msat >= 0),
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- A failed attempt may name a subscription somebody else already funded.
--- Only the transaction which actually promotes Created -> Accepted writes this.
-CREATE TABLE expiry_lightning_internal_funding (
-	id BIGINT PRIMARY KEY REFERENCES lightning_payment_attempt(id),
-	subscription_id BIGINT NOT NULL UNIQUE REFERENCES lightning_htlc_subscription(id),
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- A validated receive destination survives collection and a missing claim caller.
--- The output row need not exist until the later materialization transaction.
+-- A collected forwarding receive names its final payee independently of the
+-- provider's grant key. Outcome remains the upstream subscription's status.
 CREATE TABLE expiry_lightning_receive_claim (
 	source_vtxo_id TEXT PRIMARY KEY REFERENCES vtxo(vtxo_id),
 	subscription_id BIGINT NOT NULL REFERENCES lightning_htlc_subscription(id),
 	payment_hash TEXT NOT NULL,
 	output_vtxo_id TEXT NOT NULL UNIQUE,
-	output_vtxo BYTEA NOT NULL,
-	materialized BOOLEAN NOT NULL DEFAULT FALSE,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	output_vtxo BYTEA NOT NULL
 );
-
--- An admitted claim can be retried without the original provider. The request
--- includes its public signing nonces, attestation and payment preimage, never
--- the user's signing secret.
-CREATE TABLE expiry_lightning_receive_replay (
-	subscription_id BIGINT PRIMARY KEY REFERENCES lightning_htlc_subscription(id),
-	payment_hash TEXT NOT NULL UNIQUE,
-	encoding_version INTEGER NOT NULL CHECK (encoding_version > 0),
-	protocol_version BIGINT NOT NULL CHECK (protocol_version > 0),
-	request BYTEA NOT NULL CHECK (octet_length(request) <= 4194304),
-	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-	last_attempt_at TIMESTAMPTZ,
-	uncollected_at TIMESTAMPTZ
-);
-
-CREATE INDEX expiry_receive_replay_pending_order
-	ON expiry_lightning_receive_replay (last_attempt_at NULLS FIRST, subscription_id);
-CREATE INDEX expiry_receive_unmaterialized_subscription
-	ON expiry_lightning_receive_claim (subscription_id) WHERE NOT materialized;
 
 -- Confirmed user claims remain available for rebroadcast after a shallow reorg.
 CREATE TABLE user_exit_claim (

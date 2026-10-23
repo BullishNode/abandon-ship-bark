@@ -655,14 +655,13 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 			srv.watchmand().wait_for_sync_height(point.height).await;
 			let rebuilt = db.read(async |t| {
 				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && t.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(t, view).await?)
 			}).await.unwrap();
 			if !rebuilt { tokio::time::sleep(Duration::from_millis(50)).await; continue; }
 			let rows = db.read(async |t| Ok(t.query(
-				"SELECT DISTINCT e.vtxo_id,a.sweep_tx,a.sweep_txid,a.status='confirmed' AS confirmed,f.raw_tx,f.fee_sat \
+				"SELECT DISTINCT e.vtxo_id,a.sweep_tx,a.sweep_txid,a.status='confirmed' AS confirmed \
 				FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
 				JOIN expiry_allocation a ON a.id=c.allocation_id \
-				JOIN LATERAL (SELECT raw_tx,fee_sat FROM expiry_fee_child WHERE allocation_id=a.id ORDER BY id DESC LIMIT 1) f ON TRUE \
 				WHERE e.vtxo_id=ANY($1) AND c.active AND c.disposition='operator' AND a.broadcast_at IS NOT NULL",
 				&[&grant_ids],
 			).await?)).await.unwrap();
@@ -672,7 +671,7 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 			for row in rows {
 				let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
 				deep &= row.get::<_, bool>("confirmed");
-				let child = deserialize::<Transaction>(row.get("raw_tx")).unwrap();
+				let Some((child, child_fee)) = super::watchman::observed_payout_fee_child(&ctx, &parent) else { deep = false; continue; };
 				assert_eq!(parent.compute_txid().to_string(), row.get::<_, String>("sweep_txid"));
 				let granted_id = row.get::<_, String>("vtxo_id");
 				let granted = grants.iter().find(|grant| grant.id().to_string() == granted_id).unwrap();
@@ -702,7 +701,7 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 					fee_change.insert(OutPoint::new(child.compute_txid(), vout as u32));
 					assert!(output.value < sponsor_amount);
 				}
-				assert_eq!(fee.to_sat(), u64::try_from(row.get::<_, i64>("fee_sat")).unwrap());
+				assert_eq!(fee.to_sat(), u64::try_from(child_fee).unwrap());
 				let Some(parent_info) = core.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap() else { deep = false; continue; };
 				let Some(child_info) = core.custom_get_raw_transaction_info(child.compute_txid(), None).unwrap() else { deep = false; continue; };
 				assert_eq!(deserialize::<Transaction>(&parent_info.hex).unwrap(), parent);
@@ -3439,18 +3438,12 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	}).wait_millis(10_000).await.expect_err("an unavailable original backend cannot collect the invoice");
 	assert!(error.message().contains("could not settle hold invoice"), "unexpected error: {error}");
 	assert_eq!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap(), Some(preimage));
-	let binding = db.read(async |tx| Ok(tx.query_one("SELECT c.materialized,h.offchain_resolution::TEXT AS resolution, \
-		EXISTS(SELECT 1 FROM expiry_lightning_receive_replay r WHERE r.subscription_id=c.subscription_id \
-		AND r.payment_hash=c.payment_hash AND r.uncollected_at IS NULL AND OCTET_LENGTH(r.request)>0) AS replay, \
-		EXISTS(SELECT 1 FROM expiry_lightning_internal_funding f WHERE f.subscription_id=c.subscription_id) AS internal \
+	let resolution = db.read(async |tx| Ok(tx.query_one("SELECT h.offchain_resolution::TEXT AS resolution \
 		FROM expiry_lightning_receive_claim c JOIN vtxo v ON v.vtxo_id=c.source_vtxo_id \
 		JOIN htlc_vtxo h ON h.id=v.id WHERE c.source_vtxo_id=$1 AND c.payment_hash=$2",
-		&[&grant.id().to_string(), &hash.to_string()],
-	).await?)).await.unwrap();
-	assert!(!binding.get::<_, bool>("materialized"));
-	assert_eq!(binding.get::<_, Option<String>>("resolution"), None);
-	assert!(binding.get::<_, bool>("replay"));
-	assert!(!binding.get::<_, bool>("internal"));
+		&[&grant.id().to_string(), &hash.to_string()]).await?.get::<_, Option<String>>(0))).await.unwrap();
+	assert_eq!(resolution, None);
+
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();
 
@@ -3516,16 +3509,7 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	let expired = ctx.generate_blocks(incoming_expiry.to_u32() + 1 - tip).await;
 	srv.wait_for_sync_height(expired).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
-	async {
-		loop {
-			let stopped = db.read(async |tx| Ok(tx.query_one("SELECT uncollected_at IS NOT NULL \
-				FROM expiry_lightning_receive_replay WHERE subscription_id=$1 AND payment_hash=$2",
-				&[&subscription.id, &hash.to_string()],
-			).await?.get::<_, bool>(0))).await.unwrap();
-			if stopped { break; }
-			tokio::time::sleep(poll_interval()).await;
-		}
-	}.wait_millis(15_000).await;
+	wait_for_subscription_status(&db, hash, "canceled").await;
 
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	let fee_funding = ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;
@@ -3572,10 +3556,7 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	assert_eq!(anchors.len(), 1);
 	let child = async {
 		loop {
-			let row = db.read(async |tx| Ok(tx.query_opt("SELECT raw_tx FROM expiry_fee_child \
-				WHERE allocation_id=$1 ORDER BY id DESC LIMIT 1", &[&allocation],
-			).await?)).await.unwrap();
-			if let Some(row) = row { break deserialize::<Transaction>(row.get("raw_tx")).unwrap(); }
+			if let Some((child, _)) = super::watchman::observed_payout_fee_child(&ctx, &parent) { break child; }
 			tokio::time::sleep(poll_interval()).await;
 		}
 	}.wait_millis(10_000).await;
@@ -3606,11 +3587,9 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	let change = child.output.iter().map(|out| out.value).sum::<Amount>();
 	let actual_fee = sat(100_000).checked_sub(change).unwrap();
 	assert!(actual_fee > Amount::ZERO);
-	let stored = db.read(async |tx| Ok(tx.query_one("SELECT raw_tx,fee_sat FROM expiry_fee_child \
-		WHERE allocation_id=$1 AND txid=$2", &[&allocation, &child.compute_txid().to_string()],
-	).await?)).await.unwrap();
-	assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(), *child);
-	assert_eq!(stored.get::<_, i64>("fee_sat"), i64::try_from(actual_fee.to_sat()).unwrap());
+	let (observed, observed_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent).unwrap();
+	assert_eq!(observed, *child);
+	assert_eq!(observed_fee, i64::try_from(actual_fee.to_sat()).unwrap());
 	let expected_change = child.output.iter().enumerate().filter(|(_, out)| out.value > Amount::ZERO)
 		.map(|(vout, _)| OutPoint::new(child.compute_txid(), vout as u32)).collect::<HashSet<_>>();
 	assert!(!expected_change.is_empty());
@@ -3646,12 +3625,11 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 		(SELECT COUNT(*) FROM expiry_split_request s JOIN vtxo v ON v.vtxo_id=s.vtxo_id WHERE v.anchor_point=$1) AS splits, \
 		(SELECT COUNT(*) FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 		JOIN vtxo v ON v.vtxo_id=e.vtxo_id WHERE v.anchor_point=$1 AND c.disposition<>'operator') AS customers, \
-		(SELECT COUNT(*) FROM expiry_lightning_receive_claim WHERE subscription_id=$2 AND materialized) AS materialized, \
 		(SELECT COUNT(*) FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-		JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=$3 AND a.status='confirmed') AS allocations",
-		&[&root.to_string(), &subscription.id, &grant.id().to_string()],
+		JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=$2 AND a.status='confirmed') AS allocations",
+		&[&root.to_string(), &grant.id().to_string()],
 	).await?)).await.unwrap();
-	for field in ["splits", "customers", "materialized"] { assert_eq!(final_state.get::<_, i64>(field), 0, "{field}"); }
+	for field in ["splits", "customers"] { assert_eq!(final_state.get::<_, i64>(field), 0, "{field}"); }
 	assert_eq!(final_state.get::<_, i64>("allocations"), 1);
 	assert_eq!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap(), Some(preimage));
 }

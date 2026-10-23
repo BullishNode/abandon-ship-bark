@@ -40,17 +40,11 @@ set -eu
 /usr/lib/postgresql/17/bin/pg_restore --single-transaction --exit-on-error \
   --no-owner --host="$PGHOST" --port="$PGPORT" \
   --username="$APP_DB_OWNER" --dbname="$RESTORE_DATABASE" "$PRIVATE_DUMP"
-/usr/lib/postgresql/17/bin/psql --host="$PGHOST" --port="$PGPORT" \
-  --username="$APP_DB_OWNER" --dbname="$RESTORE_DATABASE" \
-  --set=ON_ERROR_STOP=1 --command='TRUNCATE expiry_ledger_commit;'
 ```
 
-Run the reset only after a successful logical restore and before either
-application daemon starts. Clear only `expiry_ledger_commit` so the restored
-expiry watermark cannot authorize financial work before both chain views
-rebuild. Preserve obligations, allocations, entitlements, history sequences and
-Lightning records. Do not run it on ordinary startup or a binary-only rollback.
-Stop if the restore or reset fails.
+Preserve obligations, allocations, entitlements and Lightning records.
+After reopening, both daemons must complete chain sync and rebuild payout facts
+from canonical transactions before financial work proceeds. Stop if restore fails.
 
 Create the database as its administrator. Run the restore as the intended
 database owner, provision the original grants,
@@ -60,7 +54,7 @@ program against a newer schema without a qualified compatibility path.
 Start CLN and the application services. Verify installed versions and bundle
 checksums, then wait for both completed canonical chain views to reconcile.
 Require the expiry ledger to rebuild. A subsequent financial commit on the
-same chain view must change its history token. Compare all registrations,
+same chain view must be reflected in its canonical payout state. Compare all registrations,
 balance fields, UTXO sets and source spend fences. Require any pending payout
 to complete exactly once after recovery.
 The wallet RPC reveals a new receiving address on each call; that field alone

@@ -37,8 +37,8 @@ pub(super) async fn assert_stored_grant_ancestry(db: &Db, grants: &[Vtxo<Full>])
 	}
 }
 
-/// Every receive grant closes through a confirmed funded operator payout,
-/// either at its exposed leaf or at an earlier recoverable tree output.
+/// Every receive grant closes through a confirmed native timeout claim or
+/// a funded operator payout of an earlier recoverable tree output.
 pub(super) async fn assert_grants_reclaimed(ctx: &TestContext, db: &Db, grants: &[Vtxo<Full>], receiver: &bitcoin::Script) {
 	let chain = ctx.bitcoind().sync_client();
 	for grant in grants {
@@ -51,12 +51,12 @@ pub(super) async fn assert_grants_reclaimed(ctx: &TestContext, db: &Db, grants: 
 		assert_eq!(row.get::<_, &str>("payment_hash"), grant.policy().as_server_htlc_recv().unwrap().payment_hash.to_string());
 		assert_eq!(row.get::<_, &str>("direction"), "outgoing");
 		assert_ne!(row.get::<_, Option<&str>>(1), Some("fulfilled"), "grant {} was claimed with the preimage", grant.id());
-		let funded: bitcoin::Txid = row.get::<_, Option<&str>>(2)
-			.expect("receive grant must close through a confirmed operator allocation").parse().unwrap();
 		let closure: bitcoin::Txid = match (row.get::<_, Option<&str>>(1), row.get::<_, Option<&str>>(2)) {
-			(Some("revoked"), _) => {
+			(Some("revoked"), swept) => {
 				let txid: bitcoin::Txid = row.get::<_, Option<&str>>(0).unwrap().parse().unwrap();
-				assert_eq!(txid, funded, "the exposed timeout spend must be its funded operator payout");
+				if let Some(swept) = swept {
+					assert_eq!(txid, swept.parse::<bitcoin::Txid>().unwrap());
+				}
 				let reclaim = ctx.bitcoind().await_transaction(txid).await;
 				let input = reclaim.input.iter().find(|i| i.previous_output == grant.point()).unwrap();
 				let policy = grant.policy().as_server_htlc_recv().unwrap();
@@ -121,19 +121,18 @@ async fn failed_external_payout(no_channel: bool) {
 	let attempt = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let row = db.read(async |t| Ok(t.query_opt("SELECT a.id FROM lightning_payment_attempt a \
-				JOIN expiry_lightning_terminal_failure f ON f.id=a.id WHERE a.payment_hash=$1", &[&hash.to_string()]).await?)).await.unwrap();
+				JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=a.id \
+				WHERE a.payment_hash=$1 AND l.vtxo_id=$2 AND a.status='failed'",
+				&[&hash.to_string(), &id.to_string()]).await?)).await.unwrap();
 			if let Some(row) = row { break row.get::<_, i64>("id"); }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("actual CLN dispatch never produced its own terminal failure proof");
-	let proof = db.read(async |t| Ok(t.query_one("SELECT created_index,jsonrpc_error_code FROM expiry_lightning_terminal_failure WHERE id=$1", &[&attempt]).await?)).await.unwrap();
-	if no_channel {
-		assert_eq!(proof.get::<_, Option<i64>>("created_index"), None);
-		assert_eq!(proof.get::<_, Option<i32>>("jsonrpc_error_code"), Some(205));
-	} else {
-		assert!(proof.get::<_, Option<i64>>("created_index").is_some());
-		assert_eq!(proof.get::<_, Option<i32>>("jsonrpc_error_code"), None);
-	}
+	}).await.expect("actual CLN dispatch never reached upstream Failed");
+	let native = lightning.internal.grpc_client().await.list_send_pays(cln_rpc::ListsendpaysRequest {
+		payment_hash: Some(hash.to_vec()), ..Default::default()
+	}).await.unwrap().into_inner().payments;
+	assert!(native.iter().all(|payment| payment.status == cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus::Failed as i32));
+	if !no_channel { assert!(!native.is_empty(), "the accepted native HTLC must have a terminal failure"); }
 	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
 	drop(client);
 	let fee_address = srv.watchmand().wait_wallet_address().await;
@@ -165,7 +164,8 @@ async fn failed_external_payout(no_channel: bool) {
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
 	let upstream = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, id).await).await.unwrap().unwrap();
 	assert_eq!(upstream.htlc.resolution(), None, "fallback must not manufacture a cooperative user revocation");
-	assert_eq!(db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM expiry_lightning_dispatch WHERE id=$1", &[&attempt]).await?.get::<_, i64>(0))).await.unwrap(), 1);
+	assert_eq!(db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo \
+		WHERE lightning_payment_attempt_id=$1 AND vtxo_id=$2", &[&attempt, &id.to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 1);
 }
 
 #[tokio::test]
@@ -236,9 +236,8 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let (attempt, subscription) = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
-			let row = db.read(async |t| Ok(t.query_opt("SELECT a.id,f.subscription_id FROM expiry_lightning_internal_funding f \
-				JOIN lightning_payment_attempt a ON a.id=f.id AND a.lightning_htlc_subscription_id=f.subscription_id \
-				JOIN lightning_htlc_subscription s ON s.id=f.subscription_id AND s.payment_hash=a.payment_hash \
+			let row = db.read(async |t| Ok(t.query_opt("SELECT a.id,a.lightning_htlc_subscription_id AS subscription_id FROM lightning_payment_attempt a \
+				JOIN lightning_htlc_subscription s ON s.id=a.lightning_htlc_subscription_id AND s.payment_hash=a.payment_hash \
 				WHERE a.payment_hash=$1 AND s.status='canceled'", &[&hash.to_string()]).await?)).await.unwrap();
 			if let Some(row) = row { break (row.get::<_, i64>("id"), row.get::<_, i64>("subscription_id")); }
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -257,12 +256,11 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	let unclaimed = db.read(async |t| Ok(t.query_one("SELECT \
 		(SELECT COUNT(*) FROM vtxo WHERE lightning_htlc_subscription_id=$1) AS grants, \
 		(SELECT COUNT(*) FROM expiry_lightning_receive_claim WHERE subscription_id=$1) AS bindings, \
-		EXISTS(SELECT 1 FROM expiry_lightning_dispatch WHERE id=$2) AS dispatched, \
-		EXISTS(SELECT 1 FROM htlc_settlement WHERE payment_hash=$3) AS wal",
-		&[&subscription,&attempt,&hash.to_string()]).await?)).await.unwrap();
+		EXISTS(SELECT 1 FROM htlc_settlement WHERE payment_hash=$2) AS wal",
+		&[&subscription,&hash.to_string()]).await?)).await.unwrap();
 	assert_eq!(unclaimed.get::<_, i64>("grants"), 0);
 	assert_eq!(unclaimed.get::<_, i64>("bindings"), 0);
-	assert!(!unclaimed.get::<_, bool>("dispatched") && !unclaimed.get::<_, bool>("wal"));
+	assert!(!unclaimed.get::<_, bool>("wal"));
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	// Each concurrent parent needs its own CONFIRMED fee input at the held tip.
 	let fee_inputs = 1;
@@ -278,8 +276,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 		loop {
 			let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-				WHERE e.vtxo_id=$1 AND a.broadcast_at IS NOT NULL \
-				AND c.evidence->>'kind'='htlc_internal_zero_grant_cancelled'", &[&source.to_string()]).await?)).await.unwrap();
+				WHERE e.vtxo_id=$1 AND a.broadcast_at IS NOT NULL", &[&source.to_string()]).await?)).await.unwrap();
 			if let Some(row) = row { break deserialize(row.get("sweep_tx")).unwrap(); }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -297,7 +294,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	ctx.generate_blocks(6).await;
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
 	let kept = db.read(async |t| Ok(t.query_one("SELECT \
-		EXISTS(SELECT 1 FROM expiry_lightning_internal_funding WHERE id=$1 AND subscription_id=$2) AS funding, \
+		EXISTS(SELECT 1 FROM lightning_payment_attempt WHERE id=$1 AND lightning_htlc_subscription_id=$2) AS funding, \
 		(SELECT COUNT(*) FROM vtxo WHERE lightning_htlc_subscription_id=$2) AS grants, \
 		(SELECT COUNT(*) FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 			WHERE e.vtxo_id=$3 AND c.active AND c.disposition='customer') AS paid_once",
@@ -446,21 +443,20 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 				let mut closures = Vec::new();
 				for grant in &grants {
 					let row = db.read(async |t| Ok(t.query_opt(
-						"SELECT a.sweep_tx FROM expiry_allocation a
-						 JOIN expiry_allocation_coin c ON c.allocation_id = a.id
-						 JOIN expiry_entitlement e ON e.id = c.entitlement_id
-						 WHERE e.vtxo_id = $1 AND c.disposition = 'operator'
-						 AND c.evidence->>'kind' = 'htlc_recv_expired' AND a.broadcast_at IS NOT NULL",
+						"SELECT v.onchain_spent_txid FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id
+						 WHERE v.vtxo_id=$1 AND h.chain_resolution='revoked'
+						 AND v.onchain_spent_txid IS NOT NULL",
 						&[&grant.id().to_string()]).await?)).await.unwrap();
 					let Some(row) = row else { continue; };
-					let closure: Transaction = deserialize(row.get("sweep_tx")).unwrap();
+					let txid = row.get::<_, &str>("onchain_spent_txid").parse().unwrap();
+					let closure = ctx.bitcoind().await_transaction(txid).await;
 					let info = chain.custom_get_raw_transaction_info(closure.compute_txid(), None).unwrap().unwrap();
 					if info.confirmations.unwrap_or(0) > 0 { closures.push((closure, info.confirmations.unwrap())); }
 				}
 				if closures.len() == grants.len() { break closures; }
 				tokio::time::sleep(Duration::from_millis(100)).await;
 			}
-		}).await.expect("exposed receive grants must close through funded payouts");
+		}).await.expect("exposed receive grants must close through native timeout claims");
 		let small = grants.iter().find(|grant| grant.amount() == sat(330)).unwrap();
 		let closure = closures.iter().find(|(tx, _)| tx.input.iter().any(|input| input.previous_output == small.point())).unwrap();
 		let input = closure.0.input.iter().find(|input| input.previous_output == small.point()).unwrap();
@@ -472,20 +468,13 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 			value += ctx.bitcoind().await_transaction(input.previous_output.txid).await
 				.output[input.previous_output.vout as usize].value;
 		}
-		assert_eq!(closure.0.output.iter().map(|output| output.value).sum::<bitcoin::Amount>(), value);
+		let retained = closure.0.output.iter().map(|output| output.value).sum::<bitcoin::Amount>();
+		assert!(retained < value, "the native claim pays its actual miner fee from operator funds");
+		assert_eq!(closure.0.version, bitcoin::transaction::Version::TWO);
 		assert!(closure.0.output.iter().all(|output| output.script_pubkey != receiver_destination.spk));
-		let anchor = bitcoin::OutPoint::new(closure.0.compute_txid(), closure.0.output.iter()
-			.position(|output| output.script_pubkey == *bitcoin_ext::fee::P2A_SCRIPT).unwrap() as u32);
-		let info = chain.custom_get_raw_transaction_info(closure.0.compute_txid(), None).unwrap().unwrap();
-		let block = chain.get_block(&info.blockhash.unwrap()).unwrap();
-		let child = block.txdata.iter().find(|tx| tx.input.iter().any(|input| input.previous_output == anchor)).unwrap();
-		assert!(child.input.iter().any(|input| input.previous_output != anchor));
-		let mut child_inputs = sat(0);
-		for input in &child.input {
-			child_inputs += ctx.bitcoind().await_transaction(input.previous_output.txid).await
-				.output[input.previous_output.vout as usize].value;
-		}
-		assert!(child_inputs > child.output.iter().map(|output| output.value).sum::<bitcoin::Amount>());
+		let operator_script = srv.watchmand().config().sweep_address.clone().unwrap().assume_checked().script_pubkey();
+		assert!(closure.0.output.iter().all(|output| output.script_pubkey == operator_script),
+			"native operator reclamation cannot redirect principal to another recipient");
 		let depth = closures.iter().map(|(_, depth)| *depth).min().unwrap();
 		assert!(depth < 6);
 		let height = ctx.generate_blocks((5 - depth) as u32).await;
@@ -496,7 +485,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 			loop {
 				if db.read(async |t| {
 					let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-					Ok(view.captaind == point && view.watchmand == point && t.expiry_view_is_rebuilt(view).await?)
+					Ok(view.captaind == point && view.watchmand == point && !t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 				}).await.unwrap() { break; }
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
@@ -651,9 +640,9 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 	drop(recipient);
 	drop(rpc); // Neither actor reveals a preimage or returns to cancel anything.
 	let ids = sources.iter().map(ToString::to_string).collect::<Vec<_>>();
-	let actual = db.read(async |t| Ok(t.query_one("SELECT COUNT(DISTINCT f.id) AS attempts,COUNT(DISTINCT f.subscription_id) AS subscriptions \
-		FROM expiry_lightning_internal_funding f JOIN lightning_payment_attempt_htlc_vtxo l \
-		ON l.lightning_payment_attempt_id=f.id WHERE l.vtxo_id=ANY($1)", &[&ids]).await?)).await.unwrap();
+	let actual = db.read(async |t| Ok(t.query_one("SELECT COUNT(DISTINCT a.id) AS attempts,COUNT(DISTINCT a.lightning_htlc_subscription_id) AS subscriptions \
+		FROM lightning_payment_attempt a JOIN lightning_payment_attempt_htlc_vtxo l \
+		ON l.lightning_payment_attempt_id=a.id WHERE l.vtxo_id=ANY($1)", &[&ids]).await?)).await.unwrap();
 	assert_eq!(actual.get::<_, i64>("attempts"), 2);
 	assert_eq!(actual.get::<_, i64>("subscriptions"), 2);
 	let fee_address = srv.watchmand().wait_wallet_address().await;
@@ -724,7 +713,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 			if let Some(target) = maturity {
 				let mature_view = db.read(async |t| {
 					let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-					Ok(view.captaind.height>=target && view.watchmand.height>=target && t.expiry_view_is_rebuilt(view).await?)
+					Ok(view.captaind.height>=target && view.watchmand.height>=target && !t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 				}).await.unwrap();
 				if !mature_view { continue; }
 			}

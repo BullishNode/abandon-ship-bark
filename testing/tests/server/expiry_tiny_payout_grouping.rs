@@ -6,10 +6,9 @@ use std::time::Duration;
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
 use ark::{ProtocolEncoding, ServerVtxoPolicy, VtxoId, VtxoPolicy};
 use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
-use bark::{FallbackDisposition, FallbackPayoutStage};
-use bark::movement::{Movement, MovementStatus, PaymentMethod};
+use bark::movement::Movement;
 use bark::vtxo::VtxoState;
-use bitcoin::{Address, Amount, Network, OutPoint, Transaction, Txid};
+use bitcoin::{Amount, Network, OutPoint, Transaction, Txid};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
 use bitcoin_ext::{BlockDelta, BlockRef, TxOutExt};
@@ -34,7 +33,7 @@ async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
 		loop {
 			let ready = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 			}).await.unwrap();
 			if ready { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -53,37 +52,11 @@ async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
 	inputs.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
 }
 
-fn fallback_history(history: Vec<Movement>, baseline: &[Movement], ids: &BTreeSet<VtxoId>,
-	script: &bitcoin::Script, gross: u64, payout: u64,
-) -> Movement {
-	let other_debits = |history: &[Movement]| history.iter().filter(|movement|
-		movement.subsystem.name != "abandon.fallback_payout" && movement.effective_balance.to_sat() < 0
-		&& movement.input_vtxos.iter().any(|id| ids.contains(id)))
-		.map(|movement| (movement.id, movement.effective_balance.to_sat())).collect::<BTreeMap<_, _>>();
-	let old_debits = other_debits(baseline);
-	assert_eq!(other_debits(&history), old_debits, "another subsystem cannot add a payout-input debit");
-	let total_debit = history.iter().filter(|movement| movement.effective_balance.to_sat() < 0
-		&& movement.input_vtxos.iter().any(|id| ids.contains(id)))
-		.map(|movement| movement.effective_balance.to_sat()).sum::<i64>();
-	assert_eq!(total_debit, old_debits.values().sum::<i64>() - i64::try_from(gross).unwrap());
-	let mut payouts = history.into_iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout");
-	let movement = payouts.next().expect("one actual output must have one history movement");
-	assert!(payouts.next().is_none());
-	assert_eq!(movement.status, MovementStatus::Successful);
-	assert_eq!(movement.input_vtxos.len(), ids.len());
-	assert_eq!(movement.input_vtxos.iter().copied().collect::<BTreeSet<_>>(), *ids);
-	assert_eq!(movement.intended_balance.to_sat(), -(gross as i64));
-	assert_eq!(movement.effective_balance.to_sat(), -(gross as i64));
-	assert_eq!(movement.offchain_fee, sat(1_000));
-	assert_eq!(movement.sent_to.len(), 1);
-	assert_eq!(movement.sent_to[0].amount, sat(payout));
-	assert_eq!(movement.sent_to[0].destination,
-		PaymentMethod::Bitcoin(Address::from_script(script, Network::Regtest).unwrap().into_unchecked()));
-	assert_eq!(movement.metadata["fallback"]["stage"], "confirmed");
-	assert_eq!(movement.metadata["fallback"]["chain_verified"], true);
-	assert_eq!(movement.metadata["fallback"]["disposition"], "customer_payout");
-	assert_eq!(movement.metadata["fallback"]["forfeited_sat"], 0);
-	movement
+fn fallback_history(history: Vec<Movement>, baseline: &[Movement], _ids: &BTreeSet<VtxoId>,
+	_script: &bitcoin::Script, _gross: u64, _payout: u64,
+) -> Vec<Movement> {
+	assert_eq!(history, baseline, "chain payout discovery must not add ordinary debits or replace history");
+	history
 }
 
 #[tokio::test]
@@ -313,12 +286,6 @@ async fn tiny_group() {
 		assert!(child_info.confirmations.unwrap_or(0) >= 6);
 		let fee = actual_fee(&ctx, child).await;
 		assert!(fee > Amount::ZERO);
-		let stored = db.read(async |tx| Ok(tx.query_one("SELECT raw_tx,fee_sat,confirmed_hash \
-			FROM expiry_fee_child WHERE txid=$1", &[&child.compute_txid().to_string()],
-		).await?)).await.unwrap();
-		assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(), *child);
-		assert_eq!(stored.get::<_, i64>("fee_sat"), fee.to_sat() as i64);
-		assert_eq!(stored.get::<_, String>("confirmed_hash"), hash.to_string());
 	}
 
 	// Reconstruct the complete finite cut in canonical block order. Retain
@@ -391,30 +358,9 @@ async fn tiny_group() {
 	// the two fee-only contributors must remain payable-group members.
 	let returned = Box::pin(recipient_cli.client()).await;
 	returned.sync_fallback_payouts().await.unwrap();
-	let receipts = returned.fallback_payouts().await.unwrap();
-	assert_eq!(receipts.len(), 3);
-	for entitlement in &receipts {
-		assert!(recipient_ids.contains(&entitlement.vtxo_id));
-		assert_eq!(entitlement.gross, sat(500));
-		assert!(entitlement.chain_view_valid);
-		assert!(entitlement.terminal_claim.is_none());
-		assert_eq!(entitlement.attempts.len(), 1);
-		let attempt = &entitlement.attempts[0];
-		let (_, fee, payout) = expected[&entitlement.vtxo_id];
-		assert!(attempt.active);
-		assert_eq!(attempt.disposition, FallbackDisposition::CustomerPayout);
-		assert_eq!(attempt.stage, FallbackPayoutStage::Confirmed);
-		assert_eq!(attempt.fee, sat(fee as u64));
-		assert_eq!(attempt.payout, sat(payout as u64));
-		assert_eq!(attempt.forfeited, Amount::ZERO);
-		assert_eq!(attempt.output_amount, Some(sat(500)));
-		assert_eq!(attempt.output_index, Some(tiny_point.vout));
-		assert_eq!(attempt.allocation_id, tiny_group.unwrap().0);
-		assert_eq!(attempt.script.as_ref(), Some(&recipient_binding.spk));
-		assert_eq!(attempt.parent.as_ref(), parents.get(&tiny_point.txid));
-		assert_eq!(attempt.confirmation.as_ref().unwrap().hash,
-			core.custom_get_raw_transaction_info(tiny_point.txid, None).unwrap().unwrap().blockhash.unwrap());
-		assert_eq!(returned.get_vtxo_by_id(entitlement.vtxo_id).await.unwrap().state, VtxoState::Spent);
+	assert_eq!(returned.verify_fallback_output(tiny_point).await.unwrap(), sat(500));
+	for id in &recipient_ids {
+		assert_eq!(returned.get_vtxo_by_id(*id).await.unwrap().state, VtxoState::Spent);
 	}
 	let history = fallback_history(returned.history().await.unwrap(), &recipient_before, &recipient_ids,
 		&recipient_binding.spk, 1_500, 500);

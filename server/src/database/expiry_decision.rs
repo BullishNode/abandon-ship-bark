@@ -123,9 +123,8 @@ fn evidence_json(evidence: &OwnershipEvidence, preimage: bool) -> serde_json::Va
 			serde_json::json!({"kind":"irreversible_entitlement","entitlement_id":entitlement_id}),
 		OwnershipEvidence::Pubkey => serde_json::json!({"kind":"pubkey"}),
 		OwnershipEvidence::InputOwner => serde_json::json!({"kind":"input_owner"}),
-		OwnershipEvidence::LightningReceiveClaim { source, subscription_id, payment_hash, output } =>
-			serde_json::json!({"kind":"lightning_receive_claim","source":source.to_string(),
-				"subscription_id":subscription_id,"payment_hash":payment_hash.to_string(),"output":output.to_string()}),
+		OwnershipEvidence::LightningReceiveClaim { source, output } =>
+			serde_json::json!({"kind":"lightning_receive_claim","source":source.to_string(),"output":output.to_string()}),
 		OwnershipEvidence::Pool => serde_json::json!({"kind":"pool"}),
 		OwnershipEvidence::Padding => serde_json::json!({"kind":"padding"}),
 		OwnershipEvidence::Forfeit => serde_json::json!({"kind":"forfeit"}),
@@ -138,14 +137,8 @@ fn evidence_json(evidence: &OwnershipEvidence, preimage: bool) -> serde_json::Va
 			serde_json::json!({"kind":"htlc_source_discharged","payment_hash":payment_hash.to_string()}),
 		OwnershipEvidence::HtlcExternalFailed { payment_hash, htlc_expiry } =>
 			serde_json::json!({"kind":"htlc_external_failed","payment_hash":payment_hash.to_string(),"htlc_expiry":htlc_expiry.to_u32()}),
-		OwnershipEvidence::HtlcInternalZeroGrantCancelled { payment_hash, htlc_expiry, attempt_id, subscription_id } =>
-			serde_json::json!({"kind":"htlc_internal_zero_grant_cancelled","payment_hash":payment_hash.to_string(),
-				"htlc_expiry":htlc_expiry.to_u32(),"attempt_id":attempt_id,"subscription_id":subscription_id}),
 		OwnershipEvidence::HtlcRecvExpired { payment_hash, htlc_expiry } =>
 			serde_json::json!({"kind":"htlc_recv_expired","payment_hash":payment_hash.to_string(),"htlc_expiry":htlc_expiry.to_u32()}),
-		OwnershipEvidence::HtlcInternalGrantsReclaimed { payment_hash, attempt_id, subscription_id, block } =>
-			serde_json::json!({"kind":"htlc_internal_grants_reclaimed","payment_hash":payment_hash.to_string(),
-				"attempt_id":attempt_id,"subscription_id":subscription_id,"height":block.height.to_u32(),"hash":block.hash.to_string()}),
 		OwnershipEvidence::HtlcUnattemptedExpired { payment_hash, htlc_expiry } =>
 			serde_json::json!({"kind":"htlc_unattempted_expired","payment_hash":payment_hash.to_string(),"htlc_expiry":htlc_expiry.to_u32()}),
 		OwnershipEvidence::HtlcOffchain { payment_hash, resolution } =>
@@ -184,22 +177,6 @@ impl Tx<'_> {
 			ids.extend(self.query("SELECT vtxo_id FROM round_part_input WHERE participation_id=ANY($1)", &[&participations]).await?
 				.into_iter().map(|r| r.get::<_, String>("vtxo_id")));
 		}
-		// Zero-grant internal closure is source-specific. Lock the complete
-		// original funding set before the WAL barrier and final predicate read,
-		// including inputs under other backing outputs. Signed-grant closure
-		// requires chain proof and is deliberately outside this case.
-		let internal_attempts = outputs.iter().flat_map(|o| &o.coins).filter_map(|c| match c.ownership.evidence.as_ref() {
-			Some(OwnershipEvidence::HtlcInternalZeroGrantCancelled { attempt_id, .. }) => Some(*attempt_id),
-			Some(OwnershipEvidence::HtlcInternalGrantsReclaimed { attempt_id, .. }) => Some(*attempt_id),
-			_ => None,
-		}).collect::<Vec<_>>();
-		if !internal_attempts.is_empty() {
-			ids.extend(self.query("
-				SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo
-				WHERE lightning_payment_attempt_id=ANY($1)
-			", &[&internal_attempts]).await?
-				.into_iter().map(|r| r.get::<_, String>("vtxo_id")));
-		}
 		ids.sort(); ids.dedup();
 		let rows = self.query("
 			SELECT vtxo_id,updated_at,spend_state::TEXT,onchain_spent_height IS NOT NULL OR onchain_spent_txid IS NOT NULL AS chain_spent
@@ -208,17 +185,6 @@ impl Tx<'_> {
 			ORDER BY vtxo_id FOR UPDATE
 		", &[&ids]).await?;
 		self.lock_htlc_settlements().await?;
-		let mut subscriptions = Vec::new();
-		if !internal_attempts.is_empty() {
-			subscriptions.extend(self.query("SELECT subscription_id FROM expiry_lightning_internal_funding WHERE id=ANY($1)",
-				&[&internal_attempts]).await?.into_iter().map(|row| row.get::<_, i64>("subscription_id")));
-		}
-		subscriptions.sort_unstable(); subscriptions.dedup();
-		if !subscriptions.is_empty() {
-			let locked = self.query("SELECT id FROM lightning_htlc_subscription WHERE id=ANY($1) ORDER BY id FOR UPDATE",
-				&[&subscriptions]).await?;
-			ensure!(locked.len() == subscriptions.len(), "expiry settlement subscription disappeared");
-		}
 		let actual = rows.into_iter().map(|r| (
 			r.get::<_, String>("vtxo_id"),
 			(
@@ -345,7 +311,7 @@ impl Tx<'_> {
 				let proposal = &coin.ownership;
 				let evidence = proposal.evidence.as_ref().context("ready ownership lacks evidence")?;
 				let observed = evidence_json(evidence, proposal.has_stored_preimage);
-				let conditional = matches!(evidence, OwnershipEvidence::HtlcChain { .. } | OwnershipEvidence::HtlcInternalGrantsReclaimed { .. }
+				let conditional = matches!(evidence, OwnershipEvidence::HtlcChain { .. }
 					| OwnershipEvidence::HtlcRecvExpired { .. });
 				let mut stable = if conditional {
 					serde_json::json!({"stored_preimage": proposal.has_stored_preimage})

@@ -36,12 +36,12 @@ struct HistoryGate {
 
 #[async_trait::async_trait]
 impl captaind::proxy::ArkRpcProxy for HistoryGate {
-	async fn get_fallback_payouts(&self, upstream: &mut ArkClient, request: protos::GetFallbackPayoutsRequest)
-		-> Result<protos::GetFallbackPayoutsResponse, tonic::Status>
+	async fn get_vtxo_spend_proof(&self, upstream: &mut ArkClient, request: protos::GetVtxoStatusRequest)
+		-> Result<protos::GetVtxoSpendProofResponse, tonic::Status>
 	{
 		self.requests.fetch_add(1, Ordering::SeqCst);
 		if self.refuse.load(Ordering::SeqCst) { return Err(tonic::Status::unavailable("history deliberately unavailable")); }
-		Ok(upstream.get_fallback_payouts(request).await?.into_inner())
+		Ok(upstream.get_vtxo_spend_proof(request).await?.into_inner())
 	}
 }
 
@@ -205,7 +205,7 @@ async fn history_projection_agrees_after_protective_exit_payout_and_reorg() {
 	assert!(parent.input.iter().any(|input| input.previous_output == signed.chain_anchor()));
 	assert!(ctx.bitcoind().sync_client().get_mempool_entry(&parent.compute_txid()).is_ok());
 	owner.sync_fallback_payouts().await.unwrap();
-	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.is_empty());
+	assert!(db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.is_empty());
 	assert_one_principal_debit(&assert_history_views(&owner, &methods).await, coin.id(), exit_id);
 	let first_confirmation = ctx.generate_blocks(1).await;
 	let core = ctx.bitcoind().sync_client();
@@ -226,24 +226,14 @@ async fn history_projection_agrees_after_protective_exit_payout_and_reorg() {
 	assert_eq!(actual.script_pub_key.script().unwrap(), script);
 	owner.chain().invalidate_caches().await;
 	owner.sync_fallback_payouts().await.unwrap();
-	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.values()
-		.any(|proof| proof.outpoint == outputs[0].0));
-	// Sync must not manufacture the premise by rewriting the ordinary intent.
+	assert!(db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.contains(&coin.id()));
+	assert_eq!(owner.verify_fallback_output(outputs[0].0).await.unwrap(), sat(99_000));
 	assert_eq!(db.get_movement_by_id(exit_id).await.unwrap().status, MovementStatus::Pending);
 	let paid = assert_history_views(&owner, &methods).await;
 	let exit = paid.iter().find(|row| row.id == exit_id).unwrap();
-	assert_eq!(exit.status, MovementStatus::Canceled);
-	assert_eq!(exit.effective_balance.to_sat(), 0);
 	assert_eq!(exit.intended_balance, stored.intended_balance);
-	let receipts = paid.iter().filter(|row| row.subsystem.name == "abandon.fallback_payout"
-		&& row.input_vtxos.contains(&coin.id())).collect::<Vec<_>>();
-	assert_eq!(receipts.len(), 1);
-	let receipt_id = receipts[0].id;
-	assert_eq!(receipts[0].input_vtxos, vec![coin.id()]);
-	assert_eq!(receipts[0].status, MovementStatus::Successful);
-	assert_eq!(receipts[0].offchain_fee, sat(1_000));
-	assert_eq!(receipts[0].sent_to, vec![MovementDestination::new(payout_method, sat(99_000))]);
-	assert_one_principal_debit(&paid, coin.id(), receipt_id);
+	assert!(paid.iter().all(|row| row.subsystem.name != "abandon.fallback_payout"));
+
 	assert_eq!(owner.balance().await.unwrap().total(), sat(0));
 	let sampled_query = owner.history_by_payment_method(&exit_method).await.unwrap();
 	assert_eq!(sampled_query, vec![exit.clone()]);
@@ -257,13 +247,12 @@ async fn history_projection_agrees_after_protective_exit_payout_and_reorg() {
 	// deep client-history reversal, not the <=3-block protocol gate.
 	core.invalidate_block(&confirmation_hash).unwrap();
 	owner.chain().invalidate_caches().await;
-	assert!(owner.sync_fallback_payouts().await.is_err(), "the stopped server cannot supply new history");
-	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.is_empty());
+	owner.sync_fallback_payouts().await.unwrap();
+	assert!(db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.is_empty());
 	assert!(canonical_script_outputs(&ctx, scan_start, &script).is_empty());
 	let reorged = assert_history_views(&owner, &methods).await;
 	assert_one_principal_debit(&reorged, coin.id(), exit_id);
 	assert_eq!(reorged.iter().find(|row| row.id == exit_id).unwrap().status, MovementStatus::Pending);
-	assert_eq!(reorged.iter().find(|row| row.id == receipt_id).unwrap().status, MovementStatus::Pending);
 	let owed_again = owner.balance().await.unwrap();
 	assert_eq!(owed_again.spendable, sat(0));
 	assert_eq!(owed_again.awaiting_settlement + owed_again.pending_exit, sat(100_000));
@@ -378,9 +367,7 @@ async fn history_native_and_other_device_claim_share_one_principal_debit() {
 			let local = claimant_db.get_exit_vtxo_entry(&coin.id()).await.unwrap().unwrap();
 			let snapshot = observer_db.get_fallback_snapshot().await.unwrap();
 			if matches!(local.state, ExitState::Claimed(done) if done.txid == claim.compute_txid())
-				&& snapshot.entitlements.values().any(|entry| entry.vtxo_id == coin.id()
-					&& entry.terminal_claim.as_ref().is_some_and(|terminal| terminal.txid == claim.compute_txid()))
-				&& snapshot.verified_terminals.values().any(|proof| proof.transaction == claim) { break; }
+				&& snapshot.adopted_payout_vtxos.contains(&coin.id()) { break; }
 			tokio::time::sleep(Duration::from_millis(100)).await;
 		}
 	}).await.expect("both genuine stores must independently reconcile the actual terminal claim");
@@ -394,18 +381,9 @@ async fn history_native_and_other_device_claim_share_one_principal_debit() {
 	let methods = [native_method, PaymentMethod::Bitcoin(destination.into_unchecked()),
 		PaymentMethod::Bitcoin(Address::from_script(&script, Network::Regtest).unwrap().into_unchecked())];
 	let remote_history = assert_history_views(&observer, &methods).await;
-	let exits = remote_history.iter().filter(|row| row.input_vtxos.contains(&coin.id())
-		&& row.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-	assert_eq!(exits.len(), 1);
-	assert_eq!(exits[0].input_vtxos, vec![coin.id()]);
-	assert_one_principal_debit(&remote_history, coin.id(), exits[0].id);
-	assert_eq!(exits[0].status, MovementStatus::Successful);
-	assert_eq!(exits[0].subsystem.kind, "exit");
-	assert_eq!(exits[0].offchain_fee, sat(0));
-	assert!(exits[0].sent_to.is_empty(), "another device's claim must not invent a payout destination");
-	assert_eq!(exits[0].metadata["fallback"]["disposition"], "exited");
-	assert_eq!(exits[0].metadata["fallback"]["payout_sat"], 0);
-	assert_eq!(exits[0].metadata["fallback"]["txid"], serde_json::json!(claim.compute_txid()));
+	assert!(remote_history.iter().all(|row| row.subsystem.name != "abandon.fallback_payout"));
+	assert!(matches!(observer.chain().tx_status(claim.compute_txid()).await.unwrap(), bitcoin_ext::TxStatus::Confirmed(_)));
+
 	assert!(observer.exit_mgr().get_exit_vtxo(coin.id()).await.is_none());
 	assert_eq!(observer.balance().await.unwrap().total(), sat(0));
 	assert_eq!(claimant.balance().await.unwrap().total(), sat(0));
@@ -467,7 +445,7 @@ async fn history_payment_method_queries_preserve_order_and_variant_identity() {
 }
 
 #[tokio::test]
-async fn fallback_adoption_fresh_seed_retains_unfunded_decision_and_protects_offline() {
+async fn fallback_adoption_fresh_seed_retains_unpaid_body_and_recovers_registered_payout() {
 	let ctx = TestContext::new("bark_sdk/fallback_adoption_seed_pending").await;
 	let srv = ctx.captaind("server").no_vtxo_pool().cfg(|config| {
 		config.vtxo_lifetime = BlockDelta::new(24);
@@ -485,17 +463,25 @@ async fn fallback_adoption_fresh_seed_retains_unfunded_decision_and_protects_off
 	assert_eq!(restored.get_full_vtxo(coin.id()).await.unwrap().serialize(), signed.serialize());
 	assert!(restored.spendable_vtxos().await.unwrap().is_empty());
 	assert!(restored.awaiting_settlement_vtxos().await.unwrap().contains(&coin.id()));
-	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.is_empty());
+	assert!(db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.is_empty());
 	assert!(restored.history().await.unwrap().iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout")
 		.all(|movement| movement.effective_balance.to_sat() == 0), "fresh restore must not invent an earlier Ark debit");
 	let paid = ctx.bark_sdk("paid", &srv).cfg(config)
 		.mnemonic(mnemonic(&ctx, "original").await).create().await;
 	srv.stop().await.unwrap();
-	let protection = restored.protect_expiring_vtxos().await.unwrap();
-	assert_eq!(protection.exits_started, vec![coin.id()]);
-	let exit = restored.exit_mgr().get_exit_vtxo(coin.id()).await.unwrap();
-	assert_eq!(db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state,
-		VtxoState::Locked { holder: Some(exit.movement_id().unwrap().into()) });
+	// Old: an authenticated customer receipt authorized this fresh seed's
+	// automatic exit. New: without that API, a retained historic body alone
+	// cannot establish current ownership. Keep it quarantined until payment.
+	let protection = restored.protect_expiring_vtxos().await
+		.expect_err("a fresh historical body has no current-ownership proof");
+	let partial = protection.downcast_ref::<ExitProtectionIncomplete>().unwrap();
+	assert!(partial.outcome.exits_started.is_empty());
+	assert!(partial.outcome.blocked.contains(&coin.id()));
+	assert!(restored.exit_mgr().get_exit_vtxo(coin.id()).await.is_none());
+	assert_eq!(db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Locked { holder: None });
+	assert!(db.get_fallback_snapshot().await.unwrap().unproven_spent_vtxos.contains(&coin.id()));
+	assert_eq!(restored.get_full_vtxo(coin.id()).await.unwrap().serialize(), signed.serialize());
+	assert_eq!(restored.balance().await.unwrap().total(), sat(0), "an unknown historical body is not new principal");
 
 	// A second independently restored database stays quarantined while the
 	// first has its own protective movement. Fund the fee wallet and
@@ -524,10 +510,12 @@ async fn fallback_adoption_fresh_seed_retains_unfunded_decision_and_protects_off
 	ctx.generate_blocks(6).await;
 	srv.stop().await.unwrap();
 	paid.chain().invalidate_caches().await;
-	assert!(paid.sync_fallback_payouts().await.is_err());
+	paid.sync_fallback_payouts().await.unwrap();
 	let paid_db = SqliteClient::open(ctx.datadir.join("paid/db.sqlite")).unwrap();
 	assert_eq!(paid_db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spent);
-	assert!(paid_db.get_fallback_snapshot().await.unwrap().verified_payouts.values().any(|proof| proof.outpoint.txid == payout));
+	assert!(paid_db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.contains(&coin.id()));
+	let transaction = ctx.bitcoind().await_transaction(payout).await;
+	assert!(transaction.output.iter().any(|output| output.script_pubkey == script && output.value == sat(99_000)));
 	assert!(paid.exit_protection_schedule().await.unwrap().is_empty());
 }
 
@@ -573,34 +561,12 @@ async fn fallback_adoption_history_failure_quarantines_then_reconciles_an_ordina
 	assert_eq!(balance.spendable, sat(0));
 	assert_eq!(balance.awaiting_settlement, sat(0), "historic import cannot invent principal from a completed payment");
 	assert_eq!(balance.total(), sat(0));
-	assert!(db.get_fallback_snapshot().await.unwrap().entitlements.is_empty());
+	assert!(db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.is_empty());
 	gate.refuse.store(false, Ordering::SeqCst);
 	owner.sync().await;
 	assert_eq!(db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spent);
 	assert!(owner.exit_protection_schedule().await.unwrap().is_empty(), "ordinary historic outgoing is not resurrected");
 	assert_eq!(owner.balance().await.unwrap().awaiting_settlement, sat(0));
-}
-
-#[tokio::test]
-async fn fallback_adoption_status_uses_history_newer_than_the_decision() {
-	let ctx = TestContext::new("bark_sdk/fallback_adoption_post_status_barrier").await;
-	let srv = ctx.captaind("server").no_vtxo_pool().cfg(|config| {
-		config.vtxo_lifetime = BlockDelta::new(24);
-	}).watchmand().create().await;
-	let gate = HistoryGate::default();
-	let proxy = srv.start_proxy_no_mailbox(gate.clone()).await;
-	let owner = ctx.bark_sdk("owner", &proxy).cfg(config).boarded(sat(100_000)).create().await;
-	let coin = owner.spendable_vtxos().await.unwrap().remove(0);
-	owner.sync_fallback_payouts().await.unwrap();
-	assert!(owner.fallback_payouts().await.unwrap().is_empty());
-	let before = gate.requests.load(Ordering::SeqCst);
-	await_decision(&ctx, &srv, &coin).await;
-	assert_eq!(owner.trust_and_adopt_server_vtxo_status(coin.id()).await.unwrap(), None);
-	assert!(gate.requests.load(Ordering::SeqCst) > before, "the cached empty history predates the decision");
-	let db = SqliteClient::open(ctx.datadir.join("owner/db.sqlite")).unwrap();
-	assert_eq!(db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spendable);
-	assert!(owner.awaiting_settlement_vtxos().await.unwrap().contains(&coin.id()));
-	assert!(owner.spendable_vtxos().await.unwrap().is_empty());
 }
 
 /// Historical transfers remain restorable when their spend proof is unavailable.
@@ -712,7 +678,7 @@ async fn fallback_spent_without_complete_signed_proof_retains_body_without_inven
 	assert_eq!(restored.get_full_vtxo(original.id()).await.unwrap().serialize(), signed.serialize());
 	assert!(restored.awaiting_settlement_vtxos().await.unwrap().contains(&original.id()));
 	assert_eq!(restored.balance().await.unwrap().total(), sat(30_000), "retained old input is not additional owned principal");
-	assert!(db.get_fallback_snapshot().await.unwrap().entitlements.is_empty());
+	assert!(db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.is_empty());
 	assert!(restored.history().await.unwrap().iter().all(|movement| movement.subsystem.name != "abandon.fallback_payout"));
 
 	gate.mode.store(1, Ordering::SeqCst);
@@ -763,16 +729,6 @@ struct MissingHistoryGate {
 
 #[async_trait::async_trait]
 impl captaind::proxy::ArkRpcProxy for MissingHistoryGate {
-	async fn get_fallback_payouts(&self, upstream: &mut ArkClient, request: protos::GetFallbackPayoutsRequest)
-		-> Result<protos::GetFallbackPayoutsResponse, tonic::Status>
-	{
-		// An API-negative missing-history response, never a financial DB edit.
-		// Status still comes from the admitted unpaid decision.
-		let mut response = upstream.get_fallback_payouts(request).await?.into_inner();
-		response.entitlements.clear();
-		response.next_after_entitlement_id = None;
-		Ok(response)
-	}
 
 	async fn get_vtxo_spend_proof(&self, _upstream: &mut ArkClient, _request: protos::GetVtxoStatusRequest)
 		-> Result<protos::GetVtxoSpendProofResponse, tonic::Status>
@@ -800,7 +756,7 @@ async fn fallback_locally_owned_unpaid_spent_retains_principal_with_missing_hist
 	owner.recover_vtxos([coin.id()], None).await.unwrap();
 	let db = SqliteClient::open(ctx.datadir.join("owner/db.sqlite")).unwrap();
 	let snapshot = db.get_fallback_snapshot().await.unwrap();
-	assert!(snapshot.entitlements.is_empty(), "negative API response must reach the actual client");
+	assert!(snapshot.adopted_payout_vtxos.is_empty(), "an unpaid source has no canonical payout");
 	assert!(gate.proof_requests.load(Ordering::SeqCst) > 0);
 	assert!(!snapshot.unproven_spent_vtxos.contains(&coin.id()), "known local ownership is not a fresh historic import");
 	assert_eq!(owner.get_full_vtxo(coin.id()).await.unwrap().serialize(), signed.serialize());

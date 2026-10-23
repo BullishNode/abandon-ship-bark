@@ -92,8 +92,7 @@ async fn reserved_terminal(reorg:bool,partial:bool) {
 	let original_ids=sources.iter().map(|source|source.id().to_string()).collect::<Vec<_>>();
 	let grant_ids=grants.iter().map(|grant|grant.id().to_string()).collect::<BTreeSet<_>>();
 	let scope=db.read(async |t| {
-		let rows=t.query("SELECT f.id,f.subscription_id FROM expiry_lightning_internal_funding f \
-			JOIN lightning_payment_attempt a ON a.id=f.id WHERE a.payment_hash=$1",&[&hash.to_string()]).await?;
+		let rows=t.query("SELECT a.id,a.lightning_htlc_subscription_id AS subscription_id FROM lightning_payment_attempt a WHERE a.payment_hash=$1 AND a.lightning_htlc_subscription_id IS NOT NULL",&[&hash.to_string()]).await?;
 		assert_eq!(rows.len(),1);
 		let attempt:i64=rows[0].get("id"); let subscription:i64=rows[0].get("subscription_id");
 		let originals=t.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id",&[&attempt]).await?
@@ -354,12 +353,11 @@ async fn confirm_reserved_partial(
 	assert!(chain.get_tx_out(&claim.compute_txid(),0,Some(true)).unwrap().unwrap().confirmations>=6);
 	wait_partial_confirmation(ctx,srv,db,height,sources[0].id(),claim.compute_txid(),unpaid,&parent).await;
 	assert!(assert_retained_claim(db,sources[0].id(),claim).await);
-	let child=db.read(async |t|Ok(t.query_one("SELECT f.raw_tx,f.fee_sat FROM expiry_fee_child f JOIN expiry_allocation a ON a.id=f.allocation_id \
-		WHERE a.sweep_txid=$1 AND f.confirmed_hash IS NOT NULL",&[&parent.compute_txid().to_string()]).await?)).await.unwrap();
-	let fee_child:Transaction=deserialize(child.get::<_,&[u8]>(0)).unwrap();
+	let (fee_child, measured_fee) = super::watchman::observed_payout_fee_child(&ctx, &parent)
+		.expect("the canonical parent must have a fee sponsor");
 	let mut fee_inputs=sat(0);
 	for input in &fee_child.input {fee_inputs+=ctx.bitcoind().await_transaction(input.previous_output.txid).await.output[input.previous_output.vout as usize].value;}
-	assert_eq!(fee_inputs-fee_child.output.iter().map(|o|o.value).sum::<bitcoin::Amount>(),sat(u64::try_from(child.get::<_,i64>(1)).unwrap()));
+	assert_eq!(fee_inputs-fee_child.output.iter().map(|o|o.value).sum::<bitcoin::Amount>(),sat(u64::try_from(measured_fee).unwrap()));
 	let (_,old_claimed_parent)=&reserved.by_source[&sources[0].id().to_string()];
 	assert!(chain.custom_get_raw_transaction_info(old_claimed_parent.compute_txid(),None).unwrap()
 		.is_none_or(|info|info.confirmations.unwrap_or(0)==0),

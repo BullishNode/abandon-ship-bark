@@ -11,7 +11,7 @@ use ark::vtxo::policy::signing::VtxoSigner;
 
 use crate::Wallet;
 use crate::vtxo::{VtxoState, VtxoStateKind};
-use super::payouts::{FallbackDisposition, FallbackPayoutStage, FallbackSnapshot};
+use super::payouts::FallbackSnapshot;
 
 /// A present wallet must refresh before this deadline, or begin protecting
 /// its signed exit path. None of these heights comes from a server spend flag.
@@ -93,17 +93,8 @@ impl ExitProtectionReport {
 }
 
 fn automatic_exit_ownership_known(snapshot: &FallbackSnapshot, id: VtxoId) -> anyhow::Result<bool> {
-	if snapshot.verified_ordinary_spends.contains(&id) || snapshot.entitlements.iter().any(|(key, receipt)|
-		receipt.vtxo_id == id && snapshot.is_discharged(*key)) { return Ok(false); }
-	if !snapshot.unproven_spent_vtxos.contains(&id) { return Ok(true); }
-	for (key, entitlement) in &snapshot.entitlements {
-		if entitlement.vtxo_id == id && entitlement.chain_view_valid && !snapshot.is_discharged(*key)
-			&& entitlement.active_attempt()?.is_some_and(|attempt| attempt.stage != FallbackPayoutStage::Conflicted
-				&& matches!(attempt.disposition, FallbackDisposition::CustomerPayout | FallbackDisposition::BelowDust)) {
-			return Ok(true);
-		}
-	}
-	Ok(false)
+	Ok(!snapshot.verified_ordinary_spends.contains(&id) && !snapshot.adopted_payout_vtxos.contains(&id)
+		&& !snapshot.unproven_spent_vtxos.contains(&id))
 }
 
 fn deadlines(expiry: BlockHeight, path_blocks: u32, claim_csv: u32, margin: u32) -> (BlockHeight, BlockHeight, u32) {
@@ -141,22 +132,10 @@ impl Wallet {
 		let budget = Duration::from_secs(self.config().daemon_sync_interval_secs.max(1));
 		let mut report = ExitProtectionReport::default();
 
-		// A receipt verification error must not prevent exits for other coins.
-		// Persist the cleared verification state, progress other coins, then
-		// report the error.
-		if let Some(record) = self.fallback_registration().await? {
-			let _history = self.lock_fallback_history(budget).await?;
-			let mut snapshot = self.inner.db.get_fallback_snapshot().await?;
-			if let Err(error) = self.verify_fallback_chain_evidence(&mut snapshot, &record.spk).await {
-				snapshot.verified_payouts.clear();
-				snapshot.verified_terminals.clear();
-				report.issue(None, "verify_receipts", format!("{:#}", error));
-			}
-			self.inner.db.store_fallback_snapshot(&snapshot).await?;
-			if let Err(error) = self.apply_fallback_chain_states(&snapshot).await {
-				report.issue(None, "apply_receipts", format!("{:#}", error));
-			}
+		if let Err(error) = self.sync_fallback_payouts().await {
+			report.issue(None, "verify_payouts", format!("{:#}", error));
 		}
+
 		let tip = self.chain().tip_ref_uncached().await?.height;
 		let initial = self.exit_protection_report().await?;
 		for issue in initial.issues { report.issue(issue.vtxo_id, &issue.operation, issue.detail); }
@@ -277,8 +256,7 @@ impl Wallet {
 	pub async fn exit_protection_report(&self) -> anyhow::Result<ExitProtectionReport> {
 		let tip = self.chain().tip_ref_uncached().await?;
 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
-		let discharged = snapshot.entitlements.iter().filter(|(id, _)| snapshot.is_discharged(**id))
-			.map(|(_, entitlement)| entitlement.vtxo_id).collect::<HashSet<_>>();
+		let discharged = &snapshot.adopted_payout_vtxos;
 		let mut report = ExitProtectionReport::default();
 		for stored in self.inner.db.get_vtxos_by_state(&[VtxoStateKind::Spendable, VtxoStateKind::Locked]).await? {
 			if discharged.contains(&stored.id()) || snapshot.verified_ordinary_spends.contains(&stored.id())
@@ -328,9 +306,6 @@ impl Wallet {
 
 #[cfg(test)]
 mod tests {
-	use bitcoin::Amount;
-	use chrono::Local;
-	use crate::{FallbackAttempt, FallbackEntitlement};
 	use super::*;
 
 	#[test]
@@ -362,42 +337,6 @@ mod tests {
 		assert!(!automatic_exit_ownership_known(&snapshot, id).unwrap(), "retention and waiting are not current ownership evidence");
 	}
 
-	#[test]
-	fn historic_autoexit_requires_current_customer_claim_instead_of_an_operator_label() {
-		let id = VtxoId::from_slice(&[4; 36]).unwrap();
-		let mut snapshot = FallbackSnapshot::default();
-		snapshot.unproven_spent_vtxos.insert(id);
-		// This test covers cache policy for an authenticated account snapshot.
-		// It does not validate signatures or chain payments.
-		snapshot.entitlements.insert(1, FallbackEntitlement { entitlement_id: 1, vtxo_id: id,
-			gross: Amount::from_sat(5_000), chain_view_valid: true, terminal_claim: None,
-			first_seen: Local::now(), last_updated: Local::now(), attempts: vec![FallbackAttempt {
-				allocation_id: 1, active: true, stage: FallbackPayoutStage::Committed,
-				disposition: FallbackDisposition::Operator, output_index: None, script: None,
-				gross: Amount::from_sat(5_000), fee: Amount::ZERO, payout: Amount::ZERO,
-				forfeited: Amount::ZERO, output_amount: None, parent: None, confirmation: None,
-			}],
-		});
-		assert!(!automatic_exit_ownership_known(&snapshot, id).unwrap());
-		snapshot.entitlements.get_mut(&1).unwrap().attempts[0].disposition = FallbackDisposition::CustomerPayout;
-		assert!(automatic_exit_ownership_known(&snapshot, id).unwrap(), "current admitted customer debt stays protected");
-		snapshot.entitlements.get_mut(&1).unwrap().chain_view_valid = false;
-		assert!(!automatic_exit_ownership_known(&snapshot, id).unwrap(), "invalid chain view cannot authorize historic autoexit");
-		snapshot.entitlements.get_mut(&1).unwrap().chain_view_valid = true;
-		snapshot.entitlements.get_mut(&1).unwrap().attempts[0].stage = FallbackPayoutStage::Conflicted;
-		assert!(!automatic_exit_ownership_known(&snapshot, id).unwrap(), "conflicted customer attempt is not current evidence");
-		snapshot.entitlements.get_mut(&1).unwrap().attempts[0].stage = FallbackPayoutStage::Committed;
-		snapshot.entitlements.get_mut(&1).unwrap().attempts[0].active = false;
-		assert!(!automatic_exit_ownership_known(&snapshot, id).unwrap(), "inactive/superseded history alone is insufficient");
-		snapshot.entitlements.get_mut(&1).unwrap().attempts[0].active = true;
-		snapshot.verified_ordinary_spends.insert(id);
-		assert!(!automatic_exit_ownership_known(&snapshot, id).unwrap(), "an exact signed discharge cannot be rearmed");
-		snapshot.verified_ordinary_spends.remove(&id);
-		snapshot.unproven_spent_vtxos.remove(&id);
-		snapshot.entitlements.get_mut(&1).unwrap().chain_view_valid = false;
-		snapshot.entitlements.get_mut(&1).unwrap().attempts[0].active = false;
-		assert!(automatic_exit_ownership_known(&snapshot, id).unwrap(), "prior positive local ownership is not removed by an invalid receipt view");
-	}
 
 	#[test]
 	fn signed_path_and_claim_delay_can_require_refresh_before_the_normal_threshold() {

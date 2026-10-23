@@ -7,23 +7,16 @@ pub mod ledger;
 pub mod settler;
 
 mod payment_handler;
-mod receive_replay;
 
 pub use self::failure::LightningFailureKind;
 
 use std::cmp;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
-use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{bail, Context};
 use tokio::sync::broadcast;
 use bitcoin::Amount;
-use bitcoin::hashes::{sha256, Hash};
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::PublicKey;
 use tracing::{error, info, trace, warn};
@@ -43,6 +36,7 @@ use server_rpc::TryFromBytes;
 use bitcoin_ext::{AmountExt, BlockDelta, BlockHeight};
 
 use crate::arkoor::ArkoorCosignRequestValidationParams;
+use crate::database::block::BlockTable;
 use crate::database::expiry_lightning::LightningSourceState;
 use crate::database::htlc_vtxo::{self, HtlcDirection, HtlcResolution, HtlcVtxo};
 use crate::database::tree::VtxoTreeUpdate;
@@ -52,278 +46,15 @@ use crate::database::ln::{
 use crate::error::ContextExt;
 use crate::{check_max_amount, telemetry, Server, CAPTAIND_API_KEY};
 
-/// Public incident identities, not wallet secrets or a preimage. Source IDs
-/// identify the COMPLETE original attempt link set, sorted by textual ID and
-/// hashed as its JSON string array. The manifest does not truncate that set.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct SupervisedLightningBinding {
-	pub incident: String,
-	pub operator: String,
-	pub epoch: String,
-	pub fence_path: PathBuf,
-	pub fence_device: u64,
-	pub fence_inode: u64,
-	pub cln_config_index: usize,
-	pub attempt_id: i64,
-	pub node_id: i64,
-	pub node_pubkey: PublicKey,
-	pub network: bitcoin::Network,
-	pub cln_version: String,
-	pub payment_hash: PaymentHash,
-	pub dispatch_label: String,
-	pub amount_msat: u64,
-	pub source_count: u64,
-	pub source_set_sha256: sha256::Hash,
-}
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
-struct IncidentArtifact {
-	path: PathBuf,
-	sha256: sha256::Hash,
-}
 
-/// Fixed, bounded import format. The referenced records must be retained
-/// supervisor/shutdown/transport and original-store chronology records from
-/// the incident. Hash checking authenticates their BYTE IDENTITY only.
-/// An authorized operator remains responsible for their truth/completeness.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
-struct SupervisedLightningManifest {
-	version: u32,
-	binding: SupervisedLightningBinding,
-	quiescence: IncidentArtifact,
-	history_retention: IncidentArtifact,
-	no_redelivery: IncidentArtifact,
-	/// Optional retained ORIGINAL producer qualification. Current getinfo or
-	/// current binaries cannot establish an older dispatch's label propagation.
-	original_labelled_producer: Option<IncidentArtifact>,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct OriginalProducerPin {
-	source_sha256: sha256::Hash,
-	binary_sha256: sha256::Hash,
-	observed_at: chrono::DateTime<chrono::Utc>,
-	record_id: String,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct OriginalGrpcProducerPin {
-	server_sha256: sha256::Hash,
-	conversion_sha256: sha256::Hash,
-	model_sha256: sha256::Hash,
-	binary_sha256: sha256::Hash,
-	observed_at: chrono::DateTime<chrono::Utc>,
-	record_id: String,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct OriginalLabelledProducer {
-	binding_sha256: sha256::Hash,
-	dispatch_created_at: chrono::DateTime<chrono::Utc>,
-	original_epoch: String,
-	label_contract: String,
-	dispatcher: OriginalProducerPin,
-	grpc: OriginalGrpcProducerPin,
-	xpay: OriginalProducerPin,
-}
-
-pub(crate) enum SupervisedOriginalAbsence {
-	WholeHashEmpty,
-	QualifiedOwnLabel { dispatch_created_at: chrono::DateTime<chrono::Utc> },
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct IncidentEvidence {
-	binding_sha256: sha256::Hash,
-	records: Vec<IncidentObservation>,
-}
-
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct IncidentObservation {
-	/// Service/process/transport/store identity, including its original epoch.
-	subject: String,
-	/// Retained supervisor or store-audit event identity, not a boolean.
-	record_id: String,
-	observed_at: chrono::DateTime<chrono::Utc>,
-	event: String,
-}
-
-fn read_incident_file(path: &Path, limit: u64) -> anyhow::Result<Vec<u8>> {
-	ensure!(path.is_absolute(), "incident evidence paths must be absolute");
-	let file = File::open(path).context("open retained incident evidence")?;
-	ensure!(file.metadata()?.is_file(), "incident evidence must be a regular file");
-	let mut bytes = Vec::new();
-	file.take(limit + 1).read_to_end(&mut bytes)?;
-	ensure!(!bytes.is_empty() && bytes.len() as u64 <= limit, "incident evidence exceeds its size bound");
-	Ok(bytes)
-}
-
-impl SupervisedLightningManifest {
-	/// These are trusted retained source/runtime qualification records, not a
-	/// reproducible-build proof. Every pin must describe the ORIGINAL producer
-	/// at/before this dispatch, never the recovery process's current version.
-	fn original_producer(&self) -> anyhow::Result<Option<OriginalLabelledProducer>> {
-		let Some(artifact) = &self.original_labelled_producer else { return Ok(None); };
-		let bytes = read_incident_file(&artifact.path, 1024 * 1024)?;
-		ensure!(sha256::Hash::hash(&bytes) == artifact.sha256, "original producer evidence bytes changed");
-		let producer: OriginalLabelledProducer = serde_json::from_slice(&bytes)
-			.context("invalid original producer provenance")?;
-		ensure!(producer.binding_sha256 == sha256::Hash::hash(&serde_json::to_vec(&serde_json::to_value(&self.binding)?)?)
-			&& !producer.original_epoch.is_empty() && producer.original_epoch.len() <= 128
-			&& producer.label_contract == "fork-native-xpay-label-abandon6-v1",
-			"original producer lacks the qualified complete label-propagation contract");
-		// Only the reviewed original label path is qualified here. These retained
-		// build/supervisor pins do not prove source-to-binary correspondence; that
-		// remains an explicit trusted-operations premise, never current-version
-		// inference. An unreviewed original build uses the whole-hash-empty route.
-		// The reconciliation update preserves the same one-shot labelled RPC path.
-		// Keep the earlier dispatcher qualified for retained original incidents.
-		ensure!((producer.dispatcher.source_sha256 == sha256::Hash::from_str("41e27e3269a4fbb9a41c5c145046469e52de97fd10561d7f3837acb02af13ddd")?
-			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("7743ce9d33087319cb47f30a59a9719b6856857b3c452eb76c9cddda36f30d99")?
-			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("3fc64b45b98696de27f18b71bdd6be0e7400aa62ad92bdb5e154876d3c5a5050")?
-			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("a3311a24b3810719c311ae2d5450b583da8bf3850ebdf164cf830e918d4dc3b7")?
-			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("b6bcd846e5fe21c840dda176866dc5d9a952aa9df69be68fa0b6bb53ac28fec6")?)
-			&& producer.grpc.server_sha256 == sha256::Hash::from_str("765b38372a479ce29900ac243ad2fb0cc339fc5907b8a1451084e22b405dbbcc")?
-			&& producer.grpc.conversion_sha256 == sha256::Hash::from_str("d4c01103a076cb8d1ad90c38940f0b9aef180aabca9e15c09eeaf51fd8535d60")?
-			&& producer.grpc.model_sha256 == sha256::Hash::from_str("36538a5e672b3fb0409cfb5b6424d0b71880d316cb3709b99354163183652cd8")?
-			&& producer.xpay.source_sha256 == sha256::Hash::from_str("e65b19cef028b49acd3a8824dacf118206ed11074b2e72997074e3fabcd43d1c")?,
-			"original producer source path has not been reviewed");
-		for (binary, record, observed_at) in [
-			(&producer.dispatcher.binary_sha256, &producer.dispatcher.record_id, &producer.dispatcher.observed_at),
-			(&producer.grpc.binary_sha256, &producer.grpc.record_id, &producer.grpc.observed_at),
-			(&producer.xpay.binary_sha256, &producer.xpay.record_id, &producer.xpay.observed_at),
-		] {
-			ensure!(*binary != sha256::Hash::all_zeros()
-				&& !record.is_empty() && record.len() <= 512
-				&& *observed_at <= producer.dispatch_created_at,
-				"original producer qualification is missing or captured after dispatch");
-		}
-		Ok(Some(producer))
+fn validate_htlc_duration(tip: BlockHeight, requested: BlockHeight, maximum: BlockDelta) -> anyhow::Result<()> {
+	let last = tip.checked_add(maximum).badarg("HTLC expiry limit overflows")?;
+	if requested <= tip || requested > last {
+		return badarg!("requested HTLC expiry {} must be after tip {} and at most {}", requested, tip, last);
 	}
-
-	fn verify(&self) -> anyhow::Result<()> {
-		let b = &self.binding;
-		ensure!(self.version == 1 && b.attempt_id > 0 && b.node_id > 0 && b.amount_msat > 0,
-			"invalid supervised incident identity");
-		for value in [&b.incident, &b.operator, &b.epoch, &b.dispatch_label] {
-			ensure!(!value.is_empty() && value.len() <= 128 && !value.chars().any(char::is_control),
-				"invalid supervised incident identifier");
-		}
-		ensure!(b.cln_version == cln::QUALIFIED_CLN_VERSION, "unreviewed CLN persistence semantics");
-		ensure!(b.source_count > 0, "empty original source set");
-		ensure!(b.fence_path.is_absolute(), "supervisor fence must be absolute");
-		// JSON object keys use serde_json's canonical map ordering; artifact
-		// producers need not duplicate the Rust declaration's field ordering.
-		let binding = sha256::Hash::hash(&serde_json::to_vec(&serde_json::to_value(b)?)?);
-		let required: [(&IncidentArtifact, &[&str]); 3] = [
-			(&self.quiescence, &["original-producers-terminated", "transport-queues-extinguished", "lightningd-children-terminated"]),
-			(&self.history_retention, &["original-store-reopened", "no-history-rollback", "no-payment-pruning"]),
-			(&self.no_redelivery, &["supervisors-fenced", "old-request-redelivery-disabled"]),
-		];
-		for (artifact, events) in required {
-			let bytes = read_incident_file(&artifact.path, 1024 * 1024)?;
-			ensure!(sha256::Hash::hash(&bytes) == artifact.sha256, "retained incident artifact digest changed");
-			let evidence: IncidentEvidence = serde_json::from_slice(&bytes).context("invalid retained incident artifact")?;
-			ensure!(evidence.binding_sha256 == binding && !evidence.records.is_empty() && evidence.records.len() <= 256,
-				"artifact does not bind this original incident");
-			for record in &evidence.records {
-				ensure!(!record.subject.is_empty() && record.subject.len() <= 512
-					&& !record.record_id.is_empty() && record.record_id.len() <= 512
-					&& record.event.len() <= 64 && record.observed_at <= chrono::Utc::now(),
-					"invalid retained supervision observation");
-			}
-			ensure!(events.iter().all(|event| evidence.records.iter().any(|record| record.event == *event)),
-				"incomplete supervised quiescence/history/no-redelivery evidence");
-		}
-		let _ = self.original_producer()?;
-		Ok(())
-	}
+	Ok(())
 }
-
-/// Privileged local incident import, never exposed by the public RPC. The
-/// supervisor MUST fence every old producer and replay queue using the named
-/// exclusion file through this command's exit. The file lock is retained
-/// through DB commit; it cannot prove an uncooperative external producer dead.
-/// Intact history and real quiescence are explicitly trusted operations facts,
-/// backed by retained records, NOT cryptographic CLN failure attestations.
-pub async fn resolve_uninjected_lightning(cfg: &crate::Config, path: &Path) -> anyhow::Result<bool> {
-	let bytes = read_incident_file(path, 32 * 1024)?;
-	let manifest: SupervisedLightningManifest = serde_json::from_slice(&bytes).context("invalid supervised manifest")?;
-	manifest.verify()?;
-	let digest = sha256::Hash::hash(&bytes).to_byte_array();
-	let db = crate::database::Db::connect(&cfg.postgres).await?;
-	// An identical accepted incident remains idempotent after its lawful payout,
-	// even if the source is now decided. Never re-run a source guard first.
-	if db.read(async |tx| tx.supervised_lightning_failure_recorded(manifest.binding.attempt_id, &digest).await).await? {
-		return Ok(false);
-	}
-	ensure!(manifest.binding.network == cfg.network, "incident is for another network");
-	let fence = std::fs::OpenOptions::new().read(true).write(true).open(&manifest.binding.fence_path)
-		.context("open existing supervisor exclusion file")?;
-	ensure!(fence.metadata()?.is_file(), "supervisor exclusion must be a regular file");
-	fence.try_lock().context("supervisor exclusion is not available; producers must remain fenced")?;
-	let b = &manifest.binding;
-	let verify_fence = || -> anyhow::Result<()> {
-		let current = std::fs::metadata(&b.fence_path)?;
-		ensure!(current.dev() == b.fence_device && current.ino() == b.fence_inode
-			&& fence.metadata()?.dev() == current.dev() && fence.metadata()?.ino() == current.ino(),
-			"supervisor exclusion identity changed");
-		Ok(())
-	};
-	verify_fence()?;
-	let config = cfg.cln_array.get(b.cln_config_index).context("original CLN configuration index is absent")?;
-	let mut rpc = tokio::time::timeout(Duration::from_secs(20), config.build_grpc_client()).await??;
-	let info = tokio::time::timeout(Duration::from_secs(20), rpc.getinfo(cln_rpc::GetinfoRequest {})).await??.into_inner();
-	ensure!(info.id == b.node_pubkey.serialize().to_vec()
-		&& bitcoin::Network::from_str(&info.network)? == b.network && info.version == b.cln_version,
-		"original CLN identity/network/version changed");
-	// No status, index, start, limit or label filters: inspect ALL raw groups.
-	// Only ORIGINAL qualified label propagation can distinguish foreign rows;
-	// an unqualified/legacy producer retains the stricter whole-hash proof.
-	let sends = tokio::time::timeout(Duration::from_secs(20), rpc.list_send_pays(cln_rpc::ListsendpaysRequest {
-		payment_hash: Some(b.payment_hash.to_vec()), ..Default::default()
-	})).await??.into_inner();
-	let pays = tokio::time::timeout(Duration::from_secs(20), rpc.list_pays(cln_rpc::ListpaysRequest {
-		payment_hash: Some(b.payment_hash.to_vec()), ..Default::default()
-	})).await??.into_inner();
-	ensure!(sends.payments.iter().all(|pay| pay.payment_hash == b.payment_hash.to_vec())
-		&& pays.pays.iter().all(|pay| pay.payment_hash == b.payment_hash.to_vec()), "inconsistent original hash inventory");
-	let absence = if let Some(producer) = manifest.original_producer()? {
-		// Raw rows are decisive: listpays can aggregate different part labels
-		// under one group and must never hide an own raw row of ANY status.
-		ensure!(sends.payments.iter().all(|pay| pay.label.as_deref() != Some(b.dispatch_label.as_str()))
-			&& pays.pays.iter().all(|pay| pay.label.as_deref() != Some(b.dispatch_label.as_str())),
-			"original dispatch has own payment history; use genuine outcome reconciliation");
-		SupervisedOriginalAbsence::QualifiedOwnLabel { dispatch_created_at: producer.dispatch_created_at }
-	} else {
-		ensure!(sends.payments.is_empty() && pays.pays.is_empty(), "original hash has payment history; use genuine outcome reconciliation");
-		SupervisedOriginalAbsence::WholeHashEmpty
-	};
-	let receipt = serde_json::to_value(&manifest)?;
-	let recorded = db.write(async |tx| {
-		tx.batch_execute("SET LOCAL lock_timeout='10s'; SET LOCAL statement_timeout='30s'").await?;
-		verify_fence()?;
-		manifest.verify()?;
-		let recorded = tx.record_supervised_lightning_failure(b, &digest, &receipt, &absence).await?;
-		// Rehash retained facts immediately before COMMIT while the supervisor
-		// exclusion is still held. Do not resume old issuance after empty query.
-		manifest.verify()?;
-		verify_fence()?;
-		Ok(recorded)
-	}).await?;
-	drop(fence);
-	Ok(recorded)
-}
-
-
 
 /// Validate the client-requested HTLC-recv VTXO expiry leaves at
 /// least `htlc_expiry_delta` blocks of settlement margin below the
@@ -352,16 +83,6 @@ fn validate_htlc_recv_expiry(
 			"Requested HTLC recv expiry too close to inbound HTLC expiry: \
 			{requested} + htlc_expiry_delta {delta} > lowest incoming HTLC expiry {lowest_incoming_htlc_expiry}"
 		);
-	}
-	Ok(())
-}
-
-/// Limit requested timelocks rather than requiring them to precede backing
-/// expiry. An admitted payment can delay only its own tree until resolution.
-fn validate_htlc_duration(tip: BlockHeight, requested: BlockHeight, maximum: BlockDelta) -> anyhow::Result<()> {
-	let last = tip.checked_add(maximum).badarg("HTLC expiry limit overflows")?;
-	if requested <= tip || requested > last {
-		return badarg!("requested HTLC expiry {} must be after tip {} and at most {}", requested, tip, last);
 	}
 	Ok(())
 }
@@ -506,6 +227,7 @@ impl Server {
 			.clone();
 
 		let payment_hash = requested_policy.payment_hash;
+		validate_htlc_duration(self.chain_tip().height, requested_policy.htlc_expiry, self.config.max_htlc_expiry_delta)?;
 
 		let htlc_amount = htlc_vtxos.iter().map(|v| v.total_amount).sum::<Amount>();
 		check_max_amount("lightning send", htlc_amount, self.config.max_ln_send_amount)?;
@@ -533,11 +255,7 @@ impl Server {
 		// Verify that the proposed expiry makes sense for us
 		let tip = self.sync_manager.chain_tip().height;
 		let expiry = tip + self.config.htlc_send_expiry_delta;
-		let retry = input_vtxos.iter().all(|v| v.spend_state == crate::database::SpendState::Spent);
-		if !retry {
-			validate_htlc_duration(tip, requested_policy.htlc_expiry, self.config.max_htlc_expiry_delta)?;
-		}
-		if !retry && requested_policy.htlc_expiry < expiry.saturating_sub(BlockDelta::new(1)) {
+		if requested_policy.htlc_expiry < expiry.saturating_sub(BlockDelta::new(1)) {
 			return badarg!(
 				"requested expiry is too low. our tip is {tip}. \
 				sync your node and try again",
@@ -566,9 +284,6 @@ impl Server {
 		for vtxo in input_vtxos {
 			let spending_txid = spend_map.get(&vtxo.vtxo_id)
 				.context("missing spend info for input vtxo")?;
-			if vtxo.spend_state != crate::database::SpendState::Spent || vtxo.oor_spent_txid != Some(*spending_txid) {
-				vtxo.check_new_lightning_admission(chain_tip)?;
-			}
 			vtxo.check_spendable_for_oor(chain_tip, *spending_txid)?;
 		}
 
@@ -603,7 +318,6 @@ impl Server {
 		// while the payment is validated and handed to the lightning node.
 		let _guard = self.payment_guards.lock(payment_hash).await;
 
-		let admitted_attempt = self.db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await).await?.is_some();
 		let htlc_vtxos = self.db.read(async |t| t.get_user_vtxos_by_id(&htlc_vtxo_ids).await).await?;
 
 		slog!(LightningPaymentInitRequested, payment_hash, htlc_vtxo_ids: htlc_vtxo_ids.clone());
@@ -611,7 +325,6 @@ impl Server {
 		let chain_tip = self.sync_manager.chain_tip().height;
 		let mut vtxos = vec![];
 		for htlc_vtxo in htlc_vtxos {
-			if !admitted_attempt { htlc_vtxo.check_new_lightning_admission(chain_tip)?; }
 			htlc_vtxo.check_htlc_send_spendable(chain_tip)?;
 
 			let vtxo = htlc_vtxo.vtxo.clone();
@@ -811,101 +524,36 @@ impl Server {
 			.insert_oor_spent_vtxos(builder.build_unsigned_internal_vtxos())
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
-		// Chain-derived grant recovery needs the same rebuilt, canonical view
-		// as expiry allocation. Select it before taking coin locks; a payment
-		// that becomes internally committed meanwhile is refused below.
-		let reclaim_view = self.db.read(async |t| {
-			for source in &htlc_vtxo_ids {
-				if let LightningSourceState::InternalCommitted { subscription_id, .. } =
-					t.lightning_source_state(*source, payment_hash).await?
-				{
-					let granted = t.query_one(
-						"SELECT EXISTS(SELECT 1 FROM vtxo WHERE lightning_htlc_subscription_id=$1)",
-						&[&subscription_id]
-					).await?.get::<_, bool>(0);
-					if !granted {
-						continue;
-					}
-					let Some(view) = t.expiry_rebuild_token().await? else {
-						return Ok(None);
-					};
-					return Ok(if t.expiry_view_is_rebuilt(view).await? {
-						Some(view)
-					} else {
-						None
-					});
-				}
-			}
-			Ok(None)
-		}).await?;
 		self.db.write(async |t| {
-			// Match expiry allocation's lock order: chain view, coins,
-			// settlement barrier, then receive subscription. The shared view
-			// lock fences invalidation through the refund commit.
-			if let Some(view) = reclaim_view {
-				t.lock_valid_expiry_view(view).await
-					.badarg("invoice receive is already committed: grant recovery view changed")?;
-				if !t.expiry_view_is_rebuilt(view).await? {
-					return badarg!("invoice receive is already committed: grant recovery view needs rebuilding");
-				}
-				self.verify_readiness_view(view).await
-					.badarg("invoice receive is already committed: grant recovery view is not canonical")?;
-			}
 			crate::database::expiry_guard::guard_obligation_changes(t, &htlc_vtxo_ids).await?;
-			t.lock_htlc_settlements().await?;
-			let mut internal_funding = false;
 			for source in &htlc_vtxo_ids {
 				match t.lightning_source_state(*source, payment_hash).await? {
 					LightningSourceState::Discharged => return badarg!("invoice has already been paid"),
 					LightningSourceState::Pending => return badarg!("source payment outcome is not yet terminal"),
-					LightningSourceState::InternalCommitted { .. } => internal_funding = true,
-					LightningSourceState::Unattempted
-						| LightningSourceState::Failed
-						| LightningSourceState::InternalZeroGrantCancelled { .. } => {},
+					LightningSourceState::Failed | LightningSourceState::Unattempted => {},
 				}
 			}
-
-			// Only cancel a receive actually funded by these source coins.
-			// An unrelated receive with the same hash retains its obligation.
-			if internal_funding {
-				let subscriptions = t.lightning_source_subscriptions(&htlc_vtxo_ids).await?;
-				let current = t.get_htlc_subscription_by_payment_hash(payment_hash).await?
-					.context("funded receive subscription disappeared")?;
-				ensure!(subscriptions == [current.id], "source funding does not match receive subscription");
-				// Serialize grant admission before inspecting the complete grant
-				// set. Expiry alone never retires a signed recipient commitment.
-				t.query_one(
-					"SELECT id FROM lightning_htlc_subscription WHERE id=$1 FOR UPDATE",
-					&[&current.id]
-				).await?;
-				let granted = t.query_one(
-					"SELECT EXISTS(SELECT 1 FROM vtxo WHERE lightning_htlc_subscription_id=$1)",
-					&[&current.id]
-				).await?.get::<_, bool>(0);
-				let grants_reclaimed = if granted {
-					let Some(view) = reclaim_view else {
-						return badarg!("invoice receive is already committed: grant recovery is not confirmed");
-					};
-					t.internal_grants_reclaimed(
-						current.id,
-						payment_hash,
-						view.captaind.height,
-						view.watchmand.height,
-						self.config.expiry_internal_refund_depth
-					).await?.is_some()
-				} else {
-					false
-				};
+			let ids = htlc_vtxo_ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+			let internal = t.query_one("SELECT EXISTS(SELECT 1 FROM lightning_payment_attempt a \
+				JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=a.id \
+				WHERE l.vtxo_id=ANY($1) AND a.payment_hash=$2 AND a.lightning_htlc_subscription_id IS NOT NULL)",
+				&[&ids, &payment_hash.to_string()]).await?.get::<_, bool>(0);
+			// Only this source's internal receive can retain its refund.
+			if internal {
+				let htlc_vtxos = htlc_vtxo::get_htlc_vtxo_states_by_payment_hash(&t, payment_hash).await?;
+				let watchman_tip = t.get_highest_block(BlockTable::Watchmand).await?.map(|b| b.height);
+				let htlc_recvs_expired = htlc_recvs_expired(&htlc_vtxos, tip, watchman_tip);
 				if let Some((status, htlc_recvs_granted)) =
-					t.cancel_revocable_htlc_subscription(payment_hash, grants_reclaimed).await?
+					t.cancel_revocable_htlc_subscription(payment_hash, htlc_recvs_expired).await?
 				{
-					// Existing signed receiver grants must cease to be claimable
-					// before this source can receive a cooperative signed refund.
+					// Stays committed even once the grants expired: the sender then
+					// refunds on-chain, where our preimage clause stays an alternative
+					// only until the sender spends the timeout branch.
 					let committed = match status {
 						LightningHtlcSubscriptionStatus::Settled => true,
-						_ if htlc_recvs_granted => !grants_reclaimed,
-						LightningHtlcSubscriptionStatus::HtlcsReady => true,
-						LightningHtlcSubscriptionStatus::Canceled => false,
+						LightningHtlcSubscriptionStatus::HtlcsReady => !htlc_recvs_expired,
+						LightningHtlcSubscriptionStatus::Canceled =>
+							htlc_recvs_granted && !htlc_recvs_expired,
 						LightningHtlcSubscriptionStatus::Created
 							| LightningHtlcSubscriptionStatus::Accepted => false,
 					};
@@ -1183,6 +831,7 @@ impl Server {
 
 		let lowest_incoming_htlc_expiry = sub.lowest_incoming_htlc_expiry
 			.context("no incoming HTLCs found for this payment")?;
+		validate_htlc_duration(self.chain_tip().height, htlc_recv_expiry, self.config.max_htlc_expiry_delta)?;
 		validate_htlc_recv_expiry(
 			lowest_incoming_htlc_expiry,
 			self.sync_manager.chain_tip().height,
@@ -1190,7 +839,6 @@ impl Server {
 			htlc_recv_expiry,
 		)?;
 
-		validate_htlc_duration(self.chain_tip().height, htlc_recv_expiry, self.config.max_htlc_expiry_delta)?;
 		let dest = ArkoorDestination {
 			total_amount: htlc_amount,
 			policy: VtxoPolicy::new_server_htlc_recv(
@@ -1292,20 +940,10 @@ impl Server {
 		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
 		pver: u64,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
+		// Held for the whole call, so no other call decides on this payment
+		// while the claim is validated, settled and cosigned.
 		let _guard = self.payment_guards.lock(payment_hash).await;
-		self.claim_lightning_receive_inner(payment_hash, payment_preimage, cosign_request, pver, false).await
-	}
 
-	/// Both entry points hold the original payment guard through collection and
-	/// materialization. Recovery must not recursively acquire that same guard.
-	async fn claim_lightning_receive_inner(
-		&self,
-		payment_hash: PaymentHash,
-		payment_preimage: Preimage,
-		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
-		pver: u64,
-		collected_replay: bool,
-	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		if payment_hash != payment_preimage.compute_payment_hash() {
 			return badarg!("preimage doesn't match payment hash");
 		}
@@ -1317,23 +955,12 @@ impl Server {
 
 		let sub = self.db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await).await?
 			.not_found([payment_hash], "no pending payment with this payment hash")?;
-		let original_request = crate::database::expiry_receive::ReceiveClaimRequest {
-			payment_hash, preimage: payment_preimage, request: cosign_request.clone(), protocol_version: pver,
-		};
-		if collected_replay {
-			// Only callerless recovery with independently proved collection can
-			// reach this branch. Destination equivalence alone never waives time.
-			let stored = self.db.read(async |t| t.receive_claim_request(sub.id).await).await?
-				.context("collected replay has no admitted original request")?;
-			ensure!(stored.protocol_version == pver && stored.encode()? == original_request.encode()?,
-				"collected replay differs from admitted original request");
-		}
 
 		let is_self_payment = self.db.read(async |t|
-			t.funded_internal_receive(sub.id, payment_hash).await
+			t.get_open_lightning_payment_attempt_by_subscription_id(sub.id).await
 		).await?.is_some();
 
-		let collection_expiry = match sub.status {
+		match sub.status {
 			// Cosigning releases the granted HTLC-recv VTXOs; that is only safe
 			// while the incoming side can still be collected. For external
 			// receives the server recovers the grant by settling the hold
@@ -1343,35 +970,24 @@ impl Server {
 			// refund them on-chain through the timeout clause, and a preimage
 			// recorded after that refund collects nothing.
 			LightningHtlcSubscriptionStatus::HtlcsReady => {
-				Some(sub.lowest_incoming_htlc_expiry
-					.context("no incoming HTLCs found for this payment")?)
-			},
-			// Idempotent retry of an already-settled claim; the value was
-			// released with the first claim, nothing new is at stake.
-			LightningHtlcSubscriptionStatus::Settled => {
-				if !collected_replay && !self.db.read(async |t| t.receive_request_materialized(sub.id).await).await? {
-					// A coarse completed attempt can precede its own claim. It
-					// must not make an unmaterialized fresh request timeless.
-					Some(sub.lowest_incoming_htlc_expiry.context("settled receive has no incoming expiry")?)
-				} else {
-					None
-				}
-			},
-			LightningHtlcSubscriptionStatus::Canceled if collected_replay => None,
-			_ => return badarg!("payment status in incorrect state: {}", sub.status),
-		};
-		let collection_deadline = match collection_expiry {
-			Some(expiry) if !collected_replay => {
+				let lowest_incoming_htlc_expiry = sub.lowest_incoming_htlc_expiry
+					.context("no incoming HTLCs found for this payment")?;
 				let margin = if is_self_payment {
 					self.config.htlc_expiry_delta
 				} else {
 					RECEIVE_CLAIM_EXPIRY_MARGIN
 				};
-				validate_receive_claim(expiry, self.sync_manager.chain_tip().height, margin)?;
-				Some((expiry, margin))
+				validate_receive_claim(
+					lowest_incoming_htlc_expiry,
+					self.sync_manager.chain_tip().height,
+					margin,
+				)?;
 			},
-			_ => None,
-		};
+			// Idempotent retry of an already-settled claim; the value was
+			// released with the first claim, nothing new is at stake.
+			LightningHtlcSubscriptionStatus::Settled => {},
+			_ => return badarg!("payment status in incorrect state: {}", sub.status),
+		}
 		// Only the first claim records the fee; Settled-replay must not.
 		let first_claim = sub.status == LightningHtlcSubscriptionStatus::HtlcsReady;
 		if sub.htlc_vtxos.is_empty() {
@@ -1413,37 +1029,26 @@ impl Server {
 		let builder = self.validate_cosign_request(validation, cosign_request)
 			.badarg("invalid cosign request")?;
 
-		// Bind the validated final destination before collecting the invoice. The
-		// receive provider's checkpoint key is not the destination's ownership.
 		let receive_claims = crate::database::expiry_receive::ReceiveClaimBinding::from_package(&builder)
-			.badarg("invalid receive claim destination")?;
+			.badarg("invalid receive destination")?;
 		ensure!(receive_claims.len() == htlc_ids.len(), "receive claim contains a non-receive source");
-		self.db.write(async |t| t.prepare_receive_request(&original_request, &receive_claims, collection_deadline).await).await?;
+		self.db.write(async |t| t.prepare_receive_claims(&receive_claims).await).await?;
 
 		// Record the preimage in the settler so the watchman signer/policy
 		// can find it if this VTXO ends up being claimed on-chain.
 		// The settler is the single source of truth for preimages; all
 		// settlement paths (cooperative and on-chain) converge here.
-		if !is_self_payment {
-			self.htlc_settler.settle(payment_preimage).await
-				.context("could not record htlc settlement")?;
-		}
+		self.htlc_settler.settle(payment_preimage).await
+			.context("could not record htlc settlement")?;
 
 		// Settle the hold invoice before releasing the grant, so the inbound
 		// HTLC is collected while it is still live.
-		if !is_self_payment && (matches!(sub.status, LightningHtlcSubscriptionStatus::HtlcsReady) || collected_replay) {
+		if !is_self_payment && matches!(sub.status, LightningHtlcSubscriptionStatus::HtlcsReady) {
 			self.lightning_manager.settle_invoice(sub.id, payment_preimage).await
 				.context("could not settle hold invoice, refusing to release the claim")?;
 		}
 
-		let (builder, _) = if is_self_payment {
-			let signed = self.cosign_internal_receive(builder, sub.id, payment_preimage).await?;
-			self.lightning_manager.settle_invoice(sub.id, payment_preimage).await
-				.context("could not finalize internal Lightning receive")?;
-			signed
-		} else {
-			self.cosign_oor_with_builder(builder).await?
-		};
+		let (builder, _) = self.cosign_oor_with_builder(builder).await?;
 		let vtxo_request = VtxoRequest {
 			amount: sub.amount(),
 			policy: vtxo_policy,
@@ -1510,17 +1115,6 @@ mod tests {
 			updated_at: now,
 			htlc_vtxos: vec![],
 		}
-	}
-
-	#[test]
-	fn new_htlc_duration_is_finite_and_tip_relative() {
-		let tip = BlockHeight::new(1_000);
-		let maximum = BlockDelta::new(288);
-		assert!(validate_htlc_duration(tip, BlockHeight::new(1_001), maximum).is_ok());
-		assert!(validate_htlc_duration(tip, BlockHeight::new(1_288), maximum).is_ok());
-		assert!(validate_htlc_duration(tip, tip, maximum).is_err());
-		assert!(validate_htlc_duration(tip, BlockHeight::new(1_289), maximum).is_err());
-		assert!(validate_htlc_duration(BlockHeight::MAX, BlockHeight::MAX, maximum).is_err());
 	}
 
 	#[test]

@@ -26,14 +26,14 @@ struct HistoryUnavailable {
 
 #[async_trait::async_trait]
 impl captaind::proxy::ArkRpcProxy for HistoryUnavailable {
-	async fn get_fallback_payouts(&self, upstream: &mut ArkClient, request: protos::GetFallbackPayoutsRequest)
-		-> Result<protos::GetFallbackPayoutsResponse, tonic::Status>
+	async fn get_vtxo_spend_proof(&self, upstream: &mut ArkClient, request: protos::GetVtxoStatusRequest)
+		-> Result<protos::GetVtxoSpendProofResponse, tonic::Status>
 	{
 		if self.refuse.load(Ordering::SeqCst) {
 			self.hits.fetch_add(1, Ordering::SeqCst);
 			return Err(tonic::Status::unavailable("owned fixture: authenticated history unavailable"));
 		}
-		Ok(upstream.get_fallback_payouts(request).await?.into_inner())
+		Ok(upstream.get_vtxo_spend_proof(request).await?.into_inner())
 	}
 }
 
@@ -141,7 +141,7 @@ async fn run() {
 	owner.recover_vtxos([owned.id()], None).await.unwrap();
 	assert!(gate.hits.load(Ordering::SeqCst) > 0);
 	let snapshot = db.get_fallback_snapshot().await.unwrap();
-	assert!(snapshot.entitlements.is_empty());
+	assert!(snapshot.adopted_payout_vtxos.is_empty());
 	assert!(snapshot.awaiting_settlement.contains(&owned.id()));
 	assert!(!snapshot.unproven_spent_vtxos.contains(&owned.id()));
 	assert_eq!(owner.get_full_vtxo(owned.id()).await.unwrap().serialize(), owned_bytes);

@@ -52,7 +52,7 @@ async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
 }
 
 async fn canonical_package(
-	ctx: &TestContext, db: &Db, allocation: i64, parent: &Transaction, operator_remainder: Amount,
+	ctx: &TestContext, parent: &Transaction,
 	customer_script: &ScriptBuf, operator_script: &ScriptBuf,
 ) -> (BlockRef, Transaction) {
 	let core = ctx.bitcoind().sync_client();
@@ -86,15 +86,6 @@ async fn canonical_package(
 	assert_eq!(child_info.blockhash, Some(hash));
 	let fee = actual_fee(ctx, &child).await;
 	assert!(fee > Amount::ZERO);
-	let stored = db.read(async |tx| Ok(tx.query_one("SELECT raw_tx,fee_sat,operator_remainder_sat, \
-		confirmed_height,confirmed_hash FROM expiry_fee_child WHERE allocation_id=$1 AND txid=$2",
-		&[&allocation, &child.compute_txid().to_string()],
-	).await?)).await.unwrap();
-	assert_eq!(deserialize::<Transaction>(stored.get("raw_tx")).unwrap(), child);
-	assert_eq!(stored.get::<_, i64>("fee_sat"), i64::try_from(fee.to_sat()).unwrap());
-	assert_eq!(stored.get::<_, i64>("operator_remainder_sat"), i64::try_from(operator_remainder.to_sat()).unwrap());
-	assert_eq!(stored.get::<_, Option<i64>>("confirmed_height"), Some(i64::try_from(header.height).unwrap()));
-	assert_eq!(stored.get::<_, Option<String>>("confirmed_hash"), Some(hash.to_string()));
 	(BlockRef { height: BlockHeight::new(u32::try_from(header.height).unwrap()), hash }, child)
 }
 
@@ -102,29 +93,18 @@ async fn assert_original_attempt(
 	db: &Db, hash: PaymentHash, source: VtxoId, attempt: i64, label: &str,
 	proof: Option<(i64, Option<i64>)>,
 ) {
-	let row = db.read(async |tx| Ok(tx.query_one("SELECT d.label,a.status::TEXT AS status,a.amount_msat,a.user_fee_sat, \
-		f.created_index,f.updated_index,f.jsonrpc_error_code, \
+	let row = db.read(async |tx| Ok(tx.query_one("SELECT a.status::TEXT AS status,a.amount_msat,a.user_fee_sat, \
 		(SELECT COUNT(*) FROM lightning_payment_attempt p WHERE p.payment_hash=a.payment_hash) AS attempts, \
 		(SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo l WHERE l.lightning_payment_attempt_id=a.id) AS links, \
-		(SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo l WHERE l.lightning_payment_attempt_id=a.id AND l.vtxo_id=$2) AS source, \
-		(SELECT COUNT(*) FROM expiry_lightning_dispatch d2 JOIN lightning_payment_attempt p ON p.id=d2.id WHERE p.payment_hash=a.payment_hash) AS dispatches, \
-		(SELECT COUNT(*) FROM expiry_lightning_terminal_failure f2 WHERE f2.id=a.id) AS failures, \
-		(SELECT COUNT(*) FROM expiry_lightning_external_success s WHERE s.id=a.id) AS successes \
-		FROM lightning_payment_attempt a JOIN expiry_lightning_dispatch d ON d.id=a.id \
-		LEFT JOIN expiry_lightning_terminal_failure f ON f.id=a.id WHERE a.id=$1 AND a.payment_hash=$3",
+		(SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo l WHERE l.lightning_payment_attempt_id=a.id AND l.vtxo_id=$2) AS source \
+		FROM lightning_payment_attempt a WHERE a.id=$1 AND a.payment_hash=$3",
 		&[&attempt, &source.to_string(), &hash.to_string()],
 	).await?)).await.unwrap();
-	assert_eq!(row.get::<_, String>("label"), label);
+	assert_eq!(label, attempt.to_string());
 	if proof.is_some() { assert_eq!(row.get::<_, String>("status"), "failed"); }
 	assert_eq!(row.get::<_, i64>("amount_msat"), 100_000_000);
 	assert_eq!(row.get::<_, Option<i64>>("user_fee_sat"), Some(0));
-	for field in ["attempts", "links", "source", "dispatches"] { assert_eq!(row.get::<_, i64>(field), 1); }
-	assert_eq!(row.get::<_, i64>("failures"), if proof.is_some() { 1 } else { 0 });
-	assert_eq!(row.get::<_, i64>("successes"), 0);
-	assert_eq!(row.get::<_, Option<i64>>("created_index"), proof.map(|p| p.0));
-	assert_eq!(row.get::<_, Option<i64>>("updated_index"), proof.and_then(|p| p.1));
-	assert_eq!(row.get::<_, Option<i32>>("jsonrpc_error_code"), None,
-		"the failure must name an accepted payment group");
+	for field in ["attempts", "links", "source"] { assert_eq!(row.get::<_, i64>(field), 1); }
 	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
 }
 
@@ -133,7 +113,7 @@ async fn wait_rebuilt(db: &Db, point: BlockRef) {
 		loop {
 			let rebuilt = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && tx.expiry_view_is_rebuilt(view).await?)
+				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
 			}).await.unwrap();
 			if rebuilt { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -216,11 +196,10 @@ async fn failed_swap_during_restart() {
 	drop(wallet);
 	// Original sender stays absent from here; no revocation or payment retry.
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	let row = db.read(async |tx| Ok(tx.query_one("SELECT a.id,d.label FROM lightning_payment_attempt a \
-		JOIN expiry_lightning_dispatch d ON d.id=a.id WHERE a.payment_hash=$1", &[&hash.to_string()],
+	let row = db.read(async |tx| Ok(tx.query_one("SELECT a.id FROM lightning_payment_attempt a WHERE a.payment_hash=$1", &[&hash.to_string()],
 	).await?)).await.unwrap();
 	let attempt: i64 = row.get("id");
-	let label: String = row.get("label");
+	let label = attempt.to_string();
 	assert_original_attempt(&db, hash, source, attempt, &label, None).await;
 	let pending = remote_pays(&lightning.internal, hash).await;
 	assert!(pending.iter().any(|pay| pay.payment_hash == hash.to_vec() && pay.label.as_deref() == Some(label.as_str())
@@ -251,16 +230,8 @@ async fn failed_swap_during_restart() {
 	srv.watchmand().start().await.unwrap();
 	tokio::time::timeout(Duration::from_secs(45), async {
 		loop {
-			let receipt = db.read(async |tx| Ok(tx.query_opt("SELECT created_index,updated_index,jsonrpc_error_code \
-				FROM expiry_lightning_terminal_failure WHERE id=$1", &[&attempt],
-			).await?)).await.unwrap();
-			if let Some(receipt) = receipt {
-				assert_eq!(receipt.get::<_, Option<i64>>("created_index"), Some(remote_proof.0));
-				assert_eq!(receipt.get::<_, Option<i64>>("updated_index"), remote_proof.1);
-				assert_eq!(receipt.get::<_, Option<i32>>("jsonrpc_error_code"), None);
-				if db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap()
-					.unwrap().status == LightningPaymentStatus::Failed { break; }
-			}
+			if db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap()
+				.unwrap().status == LightningPaymentStatus::Failed { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("restart must reconcile the original failed dispatch rather than fabricate or retry it");
@@ -325,7 +296,7 @@ async fn failed_swap_during_restart() {
 	let operator_remainder = parent.output.iter().filter(|out| out.script_pubkey != destination.spk)
 		.map(|out| out.value).sum::<Amount>();
 	assert_eq!(operator_remainder, sat(1_000));
-	let (parent_block, child) = canonical_package(&ctx, &db, allocation, &parent, operator_remainder,
+	let (parent_block, child) = canonical_package(&ctx, &parent,
 		&destination.spk, &operator_script).await;
 	let child_txid = child.compute_txid();
 	let mut graph = BTreeMap::from([(parent.compute_txid(), parent.clone()), (child_txid, child)]);
@@ -374,9 +345,7 @@ async fn failed_swap_during_restart() {
 		if graph.contains_key(&txid) { continue; }
 		let Some(info) = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(txid, None).unwrap() else { continue; };
 		if info.confirmations.unwrap_or(0) == 0 { continue; }
-		let remainder = recorded.output.iter().filter(|out| out.script_pubkey != destination.spk)
-			.map(|out| out.value).sum::<Amount>();
-		let (_, sponsor) = canonical_package(&ctx, &db, row.get("id"), &recorded, remainder,
+		let (_, sponsor) = canonical_package(&ctx, &recorded,
 			&destination.spk, &operator_script).await;
 		graph.insert(txid, recorded);
 		graph.insert(sponsor.compute_txid(), sponsor);

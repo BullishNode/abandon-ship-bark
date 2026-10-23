@@ -226,6 +226,13 @@ impl ExitVtxo {
 			}
 			match self.state.clone().progress(&mut context).await {
 				Ok(new_state) => {
+					if let ExitState::Claimed(claim) = &new_state {
+						let transaction = wallet.chain().get_tx(&claim.txid).await
+							.map_err(|error| ExitError::InternalError { error: error.to_string() })?
+							.ok_or_else(|| ExitError::InternalError { error: "confirmed own claim body is unavailable".into() })?;
+						wallet.retain_own_claim(&self.get_full_vtxo(&*wallet.inner.db).await?, &transaction).await
+							.map_err(|error| ExitError::DatabaseVtxoStoreFailure { vtxo_id: self.id(), error: error.to_string() })?;
+					}
 					self.update_state_if_newer(new_state, &*wallet.inner.db).await?;
 					if !continue_until_finished {
 						return Ok(());

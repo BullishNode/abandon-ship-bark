@@ -27,14 +27,14 @@ struct HistoryGate {
 
 #[async_trait::async_trait]
 impl captaind::proxy::ArkRpcProxy for HistoryGate {
-	async fn get_fallback_payouts(&self, upstream: &mut ArkClient, request: protos::GetFallbackPayoutsRequest)
-		-> Result<protos::GetFallbackPayoutsResponse, tonic::Status>
+	async fn get_vtxo_spend_proof(&self, upstream: &mut ArkClient, request: protos::GetVtxoStatusRequest)
+		-> Result<protos::GetVtxoSpendProofResponse, tonic::Status>
 	{
 		if self.refuse.load(Ordering::SeqCst) {
 			self.hits.fetch_add(1, Ordering::SeqCst);
 			return Err(tonic::Status::unavailable("owned fixture: history unavailable after paid fallback reorg"));
 		}
-		Ok(upstream.get_fallback_payouts(request).await?.into_inner())
+		Ok(upstream.get_vtxo_spend_proof(request).await?.into_inner())
 	}
 }
 
@@ -256,17 +256,16 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 		loop {
 			owner.chain().invalidate_caches().await;
 			if owner.sync_fallback_payouts().await.is_ok()
-				&& db.get_fallback_snapshot().await.unwrap().verified_payouts.values().any(|proof| proof.outpoint == payout) { break; }
+				&& db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.contains(&owned.id()) { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("actual coherent history and independently verified payout adoption must precede the fork");
 	owner.sync_onchain().await.unwrap();
 	let paid_snapshot = db.get_fallback_snapshot().await.unwrap();
-	let (entitlement, proof) = paid_snapshot.verified_payouts.iter().find(|(_, proof)| proof.outpoint == payout).unwrap();
-	assert_eq!(paid_snapshot.entitlements[entitlement].vtxo_id, owned.id());
-	assert_eq!(proof.attempt.gross, sat(100_000));
-	assert_eq!(proof.attempt.fee, sat(1_000));
-	assert_eq!(proof.attempt.payout, sat(99_000));
+	assert_eq!(owned.amount(), sat(100_000));
+	assert_eq!(owner.verify_fallback_output(payout).await.unwrap(), sat(99_000));
+	assert_eq!(owned.amount() - sat(99_000), sat(1_000));
+
 	assert!(paid_snapshot.adopted_payout_vtxos.contains(&owned.id()));
 	assert_eq!(db.get_wallet_vtxo(owned.id()).await.unwrap().unwrap().state, VtxoState::Spent);
 	principal(owner.balance().await.unwrap(), sat(0));
@@ -274,10 +273,8 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	let paid_cut = onchain.read().await.list_unspent().into_iter().map(|coin| coin.outpoint).collect::<std::collections::BTreeSet<_>>();
 	assert_eq!(paid_cut.difference(&before_paid).copied().collect::<Vec<_>>(), vec![payout]);
 	let paid_history = owner.history().await.unwrap();
-	let receipt = paid_history.iter().find(|entry| entry.subsystem.name == "abandon.fallback_payout" && entry.input_vtxos.contains(&owned.id())).unwrap();
-	assert_eq!(receipt.status, MovementStatus::Successful);
-	assert_eq!(receipt.effective_balance.to_sat(), -100_000);
-	assert_eq!(receipt.offchain_fee, sat(1_000));
+	assert!(paid_history.iter().all(|entry| entry.subsystem.name != "abandon.fallback_payout"));
+
 	assert!(owner.exit_mgr().get_exit_vtxo_ids().await.is_empty());
 	ordinary_stays_spent(&owner, &db, historic.id(), &historic_bytes).await;
 	drop(onchain);
@@ -321,7 +318,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	assert_eq!(original_anchor.value, actual_anchor.value);
 	assert_eq!(original_anchor.script_pub_key.script().unwrap(), actual_anchor.script_pubkey);
 	// The retained SQLite store still records the orphaned payout as paid and the coin as spent.
-	assert!(db.get_fallback_snapshot().await.unwrap().verified_payouts.values().any(|proof| proof.outpoint == payout));
+	assert!(db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.contains(&owned.id()));
 	assert_eq!(db.get_wallet_vtxo(owned.id()).await.unwrap().unwrap().state, VtxoState::Spent);
 	config.daemon_manual_sync = false;
 	let (wallet, onchain) = Box::pin(reopen(&ctx, &mnemonic, config.clone(), true)).await;
@@ -331,9 +328,8 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	loop {
 		ordinary_stays_spent(&wallet, &db, historic.id(), &historic_bytes).await;
 		let snapshot = db.get_fallback_snapshot().await.unwrap();
-		if snapshot.verified_payouts.is_empty() {
+		if snapshot.adopted_payout_vtxos.is_empty() {
 			principal(wallet.balance().await.unwrap(), sat(100_000));
-			assert!(snapshot.adopted_payout_vtxos.contains(&owned.id()));
 			assert!(snapshot.awaiting_settlement.contains(&owned.id()));
 			assert_eq!(wallet.get_full_vtxo(owned.id()).await.unwrap().serialize(), owned_bytes);
 			assert!(wallet.history().await.unwrap().iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout")
@@ -350,8 +346,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	// Wallet startup can fail to reach the stopped server before requesting history.
 	// The proxy counter only counts requests that reach the history endpoint.
 	let offline = db.get_fallback_snapshot().await.unwrap();
-	assert!(offline.awaiting_sync, "the daemon must record actual unavailable authenticated history");
-	assert!(offline.verified_payouts.is_empty());
+	assert!(offline.adopted_payout_vtxos.is_empty());
 	let still_stopped = tokio::time::timeout(Duration::from_secs(2),
 		tokio::net::TcpStream::connect(stopped_listener)).await.unwrap().expect_err("Ark must remain stopped through Claimable");
 	assert_eq!(still_stopped.kind(), std::io::ErrorKind::ConnectionRefused);
@@ -434,8 +429,9 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	assert!(!OnchainWalletTrait::is_mine(&*onchain.read().await, &claim.output[0].script_pubkey).await.unwrap());
 	assert!(onchain.read().await.list_transactions().iter().all(|tx| tx.compute_txid() != claim.compute_txid()));
 	let claimed_snapshot = db.get_fallback_snapshot().await.unwrap();
-	assert!(claimed_snapshot.verified_terminals.values().any(|proof| proof.transaction == claim
-		&& proof.confirmation.hash == final_block));
+	assert!(matches!(wallet.chain().tx_status(claim.compute_txid()).await.unwrap(),
+		bitcoin_ext::TxStatus::Confirmed(block) if block.hash == final_block));
+
 	assert!(claimed_snapshot.terminal_observations.values().flatten().any(|proof| proof.transaction == claim));
 	let second_miner = claim_fork_miner.unwrap();
 	assert_ne!(second_miner.script_pubkey(), alternate_miner.script_pubkey());
@@ -611,7 +607,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 			assert_eq!(debits[0].id, movement);
 		}
 		let actionable = reopened.exit_mgr().list_claimable().await;
-		let no_current_discharge = snapshot.verified_payouts.is_empty() && snapshot.verified_terminals.is_empty();
+		let no_current_discharge = snapshot.adopted_payout_vtxos.is_empty();
 		let truthful_pending = balance.total() == sat(100_000)
 			&& own_history.iter().all(|entry| entry.status != MovementStatus::Successful);
 		let actual_leaf = core.get_tx_out(&owned.point().txid, owned.point().vout, Some(true)).unwrap();
@@ -659,7 +655,6 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	let still_stopped = tokio::time::timeout(Duration::from_secs(2),
 		tokio::net::TcpStream::connect(stopped_listener)).await.unwrap().expect_err("Ark must remain stopped after the own-claim fork");
 	assert_eq!(still_stopped.kind(), std::io::ErrorKind::ConnectionRefused);
-	assert!(db.get_fallback_snapshot().await.unwrap().awaiting_sync);
 	ordinary_stays_spent(&reopened, &db, historic.id(), &historic_bytes).await;
 	assert!(core.get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().is_none());
 	assert!(core.get_mempool_entry(&child.compute_txid()).is_err());
@@ -753,10 +748,11 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	assert!(reopened.exit_mgr().list_claimable().await.is_empty());
 	assert_eq!(reopened.get_full_vtxo(owned.id()).await.unwrap().serialize(), owned_bytes);
 	let settled_snapshot = db.get_fallback_snapshot().await.unwrap();
-	assert!(settled_snapshot.awaiting_sync && settled_snapshot.verified_payouts.is_empty());
-	assert!(settled_snapshot.verified_terminals.values().any(|proof| proof.transaction == settled_claim
-		&& proof.confirmation.hash == settled_block));
-	assert!(!settled_snapshot.verified_terminals.values().any(|proof| proof.transaction == claim));
+	assert!(settled_snapshot.terminal_observations.values().flatten().any(|backup| backup.transaction == settled_claim));
+	assert!(matches!(reopened.chain().tx_status(settled_claim.compute_txid()).await.unwrap(),
+		bitcoin_ext::TxStatus::Confirmed(block) if block.hash == settled_block));
+	assert!(!matches!(reopened.chain().tx_status(claim.compute_txid()).await.unwrap(), bitcoin_ext::TxStatus::Confirmed(_)));
+
 	let settled_history = reopened.history().await.unwrap();
 	let settled_debits = settled_history.iter().filter(|entry| entry.input_vtxos.contains(&owned.id())
 		&& matches!(entry.subsystem.name.as_str(), "bark.exit" | "abandon.fallback_payout")

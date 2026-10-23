@@ -116,6 +116,15 @@ where required, restrict its upstream to the public API and remove untrusted
 forwarded-address headers. The daemon does not enforce proxy trust or isolate
 admin methods for the operator.
 
+Enable slow mode in the CLN node's configuration before starting it:
+
+```conf
+xpay-slow-mode=true
+```
+
+Verify the effective setting with `lightning-cli listconfigs xpay-slow-mode`.
+This is required on the deployed node, not only in the test harness.
+
 Validate both configuration files before starting the services:
 
 ```sh
@@ -181,7 +190,7 @@ validation does not establish liquidity, throughput or safe deadlines.
 | Lightning timing | `htlc_expiry_delta`, `htlc_send_expiry_delta`, `max_htlc_expiry_delta`, `max_user_invoice_cltv_delta`, `invoice_expiry`, `receive_htlc_forward_timeout`, `cln_xpay_timeout`, `cln_xpay_max_retry_for`. A retry deadline does not prove payment failure. |
 | Receive admission and pool | `ln_receive_anti_dos_required`; `[vtxopool]`: `vtxo_targets`, `vtxo_target_issue_threshold`, `vtxo_lifetime`, `vtxo_pre_expiry`, `max_vtxo_exit_depth`. Reserve liquidity and test replenishment under the declared load. |
 | Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons separately. Check initial fallback rates separately from later estimates. |
-| Watchman policy | `[watchman]`: `reaction_interval`, `sweep_interval`, `progress_grace_period`, `claim_chunksize`, `incremental_relay_fee`, `min_cpfp_amount`, `expiry_fee_warning`. The warning defaults to `"10000 sat"` even when absent from the template. |
+| Watchman policy | `[watchman]`: `reaction_interval`, `sweep_interval`, `progress_grace_period`, `claim_chunksize`, `incremental_relay_fee`, `min_cpfp_amount`. |
 | Attribution and recovery | `recovery_xpub_nb_keys` (must be positive), `max_concurrent_xpub_recoveries`, `max_read_mailbox_items`; PostgreSQL `max_connections`, `connection_timeout_secs`, `idle_timeout_secs`. |
 | Offboard sessions | `offboard_session_timeout`, `offboard_check_interval`, `offboard_acceptable_fee_rate_duration`; the check interval must not exceed the timeout. |
 
@@ -250,9 +259,8 @@ Alert on these warnings:
 
 - `Expiry payouts need confirmed usable watchman funds`
 - `Expiry splitting needs confirmed usable watchman funds`
-- `Proposed emergency payout operator subsidy exceeds warning level`
 
-The subsidy warning is not a spending cap. The operator pays miner fees. Do not
+The operator pays miner fees. Do not
 change customer payout amounts or delete an unpaid obligation to meet a fee
 budget. After replenishment confirms, verify that queued payouts resume.
 
@@ -277,13 +285,12 @@ window. Inspect these read-only tables with a restricted database account:
 - `expiry_entitlement`: decision fences, gross amounts and fixed source facts.
   A fence alone does not identify a final payee or establish payment.
 - `expiry_allocation_coin`: the allocated owner, script, disposition and amounts.
-- `expiry_allocation_input`, `expiry_allocation`, `expiry_allocation_payout` and
-  `expiry_fee_child`: backing inputs, signed parents, recipient outputs and fee
-  children.
+- `expiry_allocation_input`, `expiry_allocation`, `expiry_allocation_payout`:
+  backing inputs, immutable signed parents and recipient outputs.
+- Bitcoin Core: canonical parent and fee-child transactions, inputs and fees.
 - `expiry_terminal_claim`: independently confirmed customer claims.
-- `expiry_lightning_dispatch`, `expiry_lightning_external_success` and
-  `expiry_lightning_terminal_failure`: particular external payment requests and
-  their outcome records.
+- `lightning_payment_attempt` and its source links: upstream attempt status for
+  the exact coins that funded each payment.
 
 These records guide investigation. They do not by themselves establish
 payment. Decode the retained signed transaction, identify the rightful script
@@ -343,7 +350,6 @@ Use a read-only database role and retain private snapshots for comparison.
 | An expired customer remains unpaid | Check authenticated registrations, `expiry_owner_key`, recovery warnings and the 10,000-key stop rule. Check database/resource pressure. Keep unresolved bitcoin held. |
 | A customer's unpaid age exceeds the declared window, or backlog/value grows across observations | Identify its VTXO, rightful owner, decision fence and canonical spend. Resolve the specific hold, fee shortage or chain issue. A healthy process or a new allocation does not close the alert. |
 | Either confirmed-usable-funding warning occurs | Refill the watchman wallet. Check usable confirmed outpoints, then observe the queued payout confirm with correct customer amounts. |
-| `Proposed emergency payout operator subsidy exceeds warning level` occurs | Check package feerate and reserve headroom. Increase the operating reserve if needed. The warning does not cap spending or authorize a reduced customer payout. |
 | `Expiry payout remains pending`, readiness or owner-lookup warnings recur without progress | Retain allocation/key identifiers and source-specific error records. Follow the relevant ownership, fee-child or Lightning procedure. Never delete a fence to clear an alert. |
 | Disk/WAL headroom falls below the configured alert, PostgreSQL backup fails, or RSS/database size grows without bound | Escalate before storage exhaustion. Preserve WAL and authoritative history. Verify the next backup and a separate restore; do not prune financial history to clear the alert. |
 | A canonical-chain money check finds a wrong amount, wrong script or duplicate payment | Suspend new admission under reviewed deployment controls. Preserve all stores and signed transactions. Keep protective claims available and reconcile every affected obligation before resumption. |
@@ -449,16 +455,11 @@ separately from orderly cold backup recovery.
    /usr/lib/postgresql/17/bin/pg_restore --single-transaction --exit-on-error \
      --no-owner --host="$PGHOST" --port="$PGPORT" \
      --username="$APP_DB_OWNER" --dbname="$RESTORE_DATABASE" "$PRIVATE_DUMP"
-   /usr/lib/postgresql/17/bin/psql --host="$PGHOST" --port="$PGPORT" \
-     --username="$APP_DB_OWNER" --dbname="$RESTORE_DATABASE" \
-     --set=ON_ERROR_STOP=1 --command='TRUNCATE expiry_ledger_commit;'
    ```
 
-   After a successful logical restore, clear only `expiry_ledger_commit` before
-   either application daemon starts. This invalidates the restored expiry
-   watermark so both chain views rebuild. Preserve obligations, allocations,
-   entitlements, history sequences and Lightning records. Do not run the reset
-   on ordinary startup or a binary-only rollback. Stop if either command fails.
+   Preserve obligations, allocations, entitlements and Lightning records.
+   Reopening both daemons completes their chain sync before payout state is
+   rebuilt from canonical transactions. Stop if the restore fails.
 
 6. Exclude all original producers before any restored instance starts. For an
    isolated rehearsal, use the stopped original CLN state at the backup
@@ -673,11 +674,15 @@ incident halt. Stopping a service cannot retract an already signed or public
 refund. Reconcile the affected Lightning payments and refunds before resuming.
 The supported reorg assumption no longer applies.
 
-A timeout, local Failed status, shared payment hash or empty Lightning history
-does not prove that an external payment failed. Do not replay an ambiguous
-request or import an invented node error. Recover the original node identity
-and intact history, then reconcile the exact dispatch label and payment group.
-Keep outstanding liabilities visible while investigation continues.
+Lightning ownership follows each coin's own upstream payment attempt. Configure
+`xpay-slow-mode=true` on every CLN node and verify it with `lightning-cli
+listconfigs xpay-slow-mode`. The local monitor skips a dispatch still in flight
+in that process. Otherwise upstream marks an open attempt Failed when
+`listpays` is empty; an already-final attempt is not overwritten by absence.
+A command received by CLN can still have no first native part at that instant,
+particularly after transport loss or restart. This upstream race is an accepted
+limit; slow mode does not remove it. There is no manifest import or manual
+per-send classification procedure. Keep the original node identity and history.
 
 Ordinary watchman claims still sign and broadcast before the surrounding
 database transaction commits. A commit error or lost commit reply does not
@@ -688,61 +693,6 @@ provide those guarantees for ordinary claims. After a crash or reorg, preserve
 the original records and signed transactions. Reconcile each affected source,
 its successors and outstanding customer rights against the canonical chain
 before admission resumes.
-
-## Resolve a request that never reached Lightning
-
-Use this procedure only for an external payment whose server dispatch is
-committed but whose original node has no record of that dispatch. A request with
-an HTLC must use its recorded outcome. Do not use an elapsed deadline,
-shared payment hash, missing reply or current program version as failure proof.
-
-1. Disable automatic restart and request replay for every original producer.
-   Establish that the original server process, transport queues, Lightning node
-   children and delayed requests have terminated. Record their process
-   and service identities. Disabling a node in the server is insufficient.
-2. Preserve the original stores and incident records. Reopen the original
-   Lightning node with its intact history. Do not roll back or prune its store.
-   Keep the old producers and request redelivery disabled throughout recovery.
-3. Prepare the version-1 incident manifest from the retained operational records.
-   Bind it to the original network, node, attempt, dispatch label, amount and
-   complete sorted source set. Bind the existing supervisor exclusion file by
-   its device and inode. Reference the retained quiescence, history-retention and
-   no-redelivery records by absolute path and SHA256. Keep their bytes unchanged.
-4. If another payment uses the same hash, include retained qualification of the
-   original dispatcher, grpc plugin and xpay plugin. These records must precede
-   the dispatch. They must establish the reviewed label propagation through the
-   original source and executable versions. Current versions cannot replace
-   missing original records. Without this qualification, the command requires
-   the entire hash to have no raw or aggregate payment history.
-5. Review the operational records independently. The program checks its shape,
-   binding and byte identity. It cannot establish that the recorded events are
-   true or that an uncooperative remote producer has stopped.
-6. Run the local command with the original server configuration:
-
-   ```sh
-   captaind -C /path/to/captaind.toml resolve-uninjected-lightning \
-     --manifest /path/to/incident.json --acknowledge-trusted-operations
-   ```
-
-7. Retain the command result and original records. The command checks the
-   original node identity, network, version and unfiltered payment history. It
-   rejects any own payment row in the qualified-label route. It records one
-   source-specific resolution under the existing financial locks. It does not
-   send a payment or retry the original request.
-8. Resume normal observation with duplicate producers still excluded. Verify
-   that the rightful customer eventually receives the fallback payout. Check
-   the canonical outpoint, amount, script, fees and absence of another payment.
-   Reimport of the same accepted incident is idempotent; it is not another refund.
-   An identical accepted reimport returns before fresh node checks. Its result
-   does not establish a new observation of node history or quiescence.
-
-The JSON field definitions are in `server/src/ln/mod.rs`:
-`SupervisedLightningBinding`, `SupervisedLightningManifest`, `IncidentEvidence`
-and `OriginalLabelledProducer`. The manifest is at most 32KiB. Each referenced
-record is at most 1MiB. Keep secrets out of these records. There is no automatic
-incident-record generator or general operator permission to mark payments failed.
-Loss of original history or failure to establish complete quiescence can prevent
-this procedure. Preserve the liability and investigate; never invent records.
 
 ## Safe shutdown and operating limits
 

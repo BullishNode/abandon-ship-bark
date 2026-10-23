@@ -186,24 +186,10 @@ impl Wallet {
 		// A signed body retained for historic recovery is not another owned
 		// claim. Keep only current positive local ownership and customer
 		// receipt principal; an Operator label cannot synthesize either.
-		let mut owned = retained.iter().filter(|(id, _)| !fallback.unproven_spent_vtxos.contains(id)
-			&& !fallback.verified_ordinary_spends.contains(id)).map(|(id, coin)| (*id, coin.clone()))
+		let owned = retained.iter().filter(|(id, _)| !fallback.unproven_spent_vtxos.contains(id)
+			&& !fallback.verified_ordinary_spends.contains(id) && !fallback.adopted_payout_vtxos.contains(id)).map(|(id, coin)| (*id, coin.clone()))
 			.collect::<HashMap<_, _>>();
-		for (id, receipt) in &fallback.entitlements {
-			let customer = receipt.active_attempt()?.is_some_and(|attempt| matches!(attempt.disposition,
-				crate::FallbackDisposition::CustomerPayout | crate::FallbackDisposition::BelowDust));
-			if !customer || fallback.is_discharged(*id) || fallback.verified_ordinary_spends.contains(&receipt.vtxo_id) {
-				owned.remove(&receipt.vtxo_id);
-				continue;
-			}
-			if let Some(coin) = retained.get(&receipt.vtxo_id) {
-				owned.insert(coin.id(), coin.clone());
-			} else if !owned.contains_key(&receipt.vtxo_id) && fallback.adopted_payout_vtxos.contains(&receipt.vtxo_id) {
-				if let Some(coin) = self.inner.db.get_wallet_vtxo(receipt.vtxo_id).await? {
-					if coin.state == VtxoState::Spent { owned.insert(coin.id(), coin); }
-				}
-			}
-		}
+
 		Ok(owned)
 	}
 
@@ -239,24 +225,11 @@ impl Wallet {
 		};
 
 		let fallback = self.inner.db.get_fallback_snapshot().await?;
-		let decided = fallback.entitlements.values().map(|receipt| receipt.vtxo_id).collect::<HashSet<_>>();
-
-		// A permanent decision removes ordinary Ark availability, not the
-		// owned claim while its settlement is still unconfirmed.
-		let owned = self.retained_owned_principal(&fallback).await?;
-		let pending_principal = self.retained_pending_principal(&owned, &fallback.awaiting_settlement).await?;
-		let mut awaiting_decided = Amount::ZERO;
-		let mut pending_ids = HashSet::new();
-		for receipt in fallback.entitlements.values() {
-			if !pending_ids.insert(receipt.vtxo_id) { continue; }
-			if let Some(coin) = owned.get(&receipt.vtxo_id) {
-				awaiting_decided += principal(coin, &pending_principal);
-			}
-		}
-		let vtxos = owned.into_iter().filter(|(id, _)| !decided.contains(id)).collect::<HashMap<_, _>>();
+		let vtxos = self.retained_owned_principal(&fallback).await?;
+		let pending_principal = self.retained_pending_principal(&vtxos, &fallback.awaiting_settlement).await?;
 
 		let mut balance = Balance {
-			awaiting_settlement: awaiting_decided,
+			awaiting_settlement: Amount::ZERO,
 			spendable: Amount::ZERO,
 			needs_refresh: Amount::ZERO,
 			pending_in_round: Amount::ZERO,
@@ -328,7 +301,6 @@ impl Wallet {
 		let exits = self.inner.db
 			.get_exit_vtxo_entries_with_states(ExitStateKind::LIVE_STATES).await?;
 		for exit in exits {
-			if decided.contains(&exit.vtxo_id) { continue; }
 			if let Some(coin) = vtxos.get(&exit.vtxo_id)
 				&& let VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { id }) } = &coin.state
 				&& exit.movement_id == Some(*id) && !counted.contains(&coin.id()) {

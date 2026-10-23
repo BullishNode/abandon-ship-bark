@@ -575,31 +575,26 @@ impl Bark {
 		let vtxos = serde_json::from_str::<Vec<WalletVtxoInfo>>(
 			&self.run(["vtxos", "--all", "--no-sync"]).await,
 		).expect("retained vtxos");
-		let history = serde_json::from_str::<Vec<json::movements::Movement>>(
-			&self.run(["history", "--no-sync"]).await,
-		).expect("history");
-		let receipts = crate::balance::history_receipts(&history);
-		let mut awaiting = vtxos.iter().filter(|coin| coin.awaiting_settlement)
+
+		let awaiting = vtxos.iter().filter(|coin| coin.awaiting_settlement)
 			.map(|coin| coin.id).collect::<std::collections::HashSet<_>>();
 		let mut paths = Vec::new();
-		if !awaiting.is_empty() || !receipts.is_empty() {
+		if !awaiting.is_empty() {
 			for coin in &vtxos {
 				if coin.state != VtxoStateInfo::Spent {
 					paths.push((coin.id, self.raw_vtxo(coin.id).await.ancestor_ids()));
 				}
 			}
 		}
-		let (principal, decided) = crate::balance::retained_principal(
-			&vtxos, &history, &receipts, &mut awaiting, &paths,
-		);
+		let principal = crate::balance::retained_principal(&vtxos, &awaiting, &paths);
 		let spendable_vtxos = vtxos.iter().filter(|coin| principal.contains_key(&coin.id)
-			&& (coin.state == VtxoStateInfo::Spendable || decided.contains(&coin.id)))
+			&& coin.state == VtxoStateInfo::Spendable)
 			.map(|coin| principal[&coin.id]).sum::<Amount>();
 		let awaiting_vtxos = vtxos.iter().filter(|coin| principal.contains_key(&coin.id)
-			&& (decided.contains(&coin.id) || (coin.state == VtxoStateInfo::Spendable && awaiting.contains(&coin.id))))
+			&& (coin.state == VtxoStateInfo::Spendable && awaiting.contains(&coin.id)))
 			.map(|coin| principal[&coin.id]).sum::<Amount>();
 		let locked_vtxos = vtxos.iter().filter(|coin| principal.contains_key(&coin.id)
-			&& !decided.contains(&coin.id) && matches!(coin.state, VtxoStateInfo::Locked { .. }))
+			&& matches!(coin.state, VtxoStateInfo::Locked { .. }))
 			.map(|coin| principal[&coin.id]).sum::<Amount>();
 
 		assert_eq!(balance.awaiting_settlement, awaiting_vtxos,

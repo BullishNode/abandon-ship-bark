@@ -10,6 +10,8 @@ use bitcoin_ext::rpc::RpcApi;
 use serde_json::json;
 use server::database::Db;
 
+use super::watchman::observed_payout_fee_child;
+
 /// No allocation, spend fence or chain acknowledgment is inserted by the test.
 /// The running captaind and watchmand must discover, decide, sign and publish
 /// the payout, and Bitcoin Core independently checks its real inputs and outputs.
@@ -100,14 +102,13 @@ async fn expiry_payout_native_board_seed_restore(name: &str, board_fees: Option<
 
 	// Do not open or sync the abandoned wallet while waiting. In particular,
 	// its expired input must not be refreshed by a test helper before deciding.
-	let (allocation, parent, child, recorded_child_fee) = tokio::time::timeout(Duration::from_secs(30), async {
+	let (allocation, parent, child, observed_child_fee) = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let row = db.read(async |t| Ok(t.query_opt(
-				"SELECT a.id,a.sweep_tx,f.raw_tx,f.fee_sat FROM expiry_allocation a \
+				"SELECT a.id,a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
 				JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-				JOIN expiry_fee_child f ON f.allocation_id=a.id \
-				WHERE e.vtxo_id=$1 AND a.broadcast_at IS NOT NULL ORDER BY f.id DESC LIMIT 1",
+				WHERE e.vtxo_id=$1 AND a.broadcast_at IS NOT NULL ORDER BY a.id DESC LIMIT 1",
 				&[&source.id().to_string()],
 			).await?)).await.unwrap();
 			let split_count = db.read(async |t| Ok(t.query_one(
@@ -115,10 +116,10 @@ async fn expiry_payout_native_board_seed_restore(name: &str, board_fees: Option<
 			).await?.get::<_, i64>(0))).await.unwrap();
 			assert_eq!(split_count, 0, "pending owner search must not progress a board into a user-only leaf");
 			if let Some(row) = row {
-				break (row.get::<_, i64>("id"),
-					deserialize::<Transaction>(row.get("sweep_tx")).unwrap(),
-					deserialize::<Transaction>(row.get("raw_tx")).unwrap(),
-					row.get::<_, i64>("fee_sat"));
+				let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+				if let Some((child, measured_fee)) = observed_payout_fee_child(&ctx, &parent) {
+					break (row.get::<_, i64>("id"), parent, child, measured_fee);
+				}
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -160,7 +161,7 @@ async fn expiry_payout_native_board_seed_restore(name: &str, board_fees: Option<
 	}
 	let actual_child_fee = child_inputs - child.output.iter().map(|o| o.value.to_sat()).sum::<u64>();
 	assert!(actual_child_fee > 0);
-	assert_eq!(actual_child_fee, u64::try_from(recorded_child_fee).unwrap());
+	assert_eq!(actual_child_fee, u64::try_from(observed_child_fee).unwrap());
 	if quote.is_some() {
 		assert_eq!(child_inputs, 100_000);
 		assert_eq!(child.output[0].value.to_sat() + actual_child_fee, 100_000);
@@ -184,17 +185,6 @@ async fn expiry_payout_native_board_seed_restore(name: &str, board_fees: Option<
 	let confirmed_height = bitcoin_ext::BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 	srv.wait_for_sync_height(confirmed_height).await;
 	srv.watchmand().wait_for_sync_height(confirmed_height).await;
-	if quote.is_some() {
-		let config = restored.client_config();
-		let movements: serde_json::Value = config.client.get(format!("{}/api/v1/history", config.base_path))
-			.send().await.unwrap().error_for_status().unwrap().json().await.unwrap();
-		let payouts = movements.as_array().unwrap().iter().filter(|m|
-			m["subsystem"]["name"] == "abandon.fallback_payout").collect::<Vec<_>>();
-		assert_eq!(payouts.len(), 1);
-		assert_eq!(payouts[0]["intended_balance_sat"], 0);
-		assert_eq!(payouts[0]["effective_balance_sat"], 0);
-		assert_eq!(payouts[0]["offchain_fee_sat"], 1_000);
-	}
 	restored.stop().await.unwrap();
 	let cfg = toml::from_str(&std::fs::read_to_string(restored.datadir().join("config.toml")).unwrap()).unwrap();
 	let reader = bark::Wallet::open(bitcoin::Network::Regtest,

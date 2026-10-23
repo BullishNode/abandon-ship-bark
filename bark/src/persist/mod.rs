@@ -453,10 +453,10 @@ pub trait BarkPersister: Send + Sync + 'static {
 		Ok(())
 	}
 
-	/// The last complete, coherently paginated account receipt snapshot.
+	/// Local ownership retained while a reported spend is verified.
 	async fn get_fallback_snapshot(&self) -> anyhow::Result<crate::FallbackSnapshot>;
 
-	/// Atomically replace the visible account history generation.
+	/// Atomically replace local recovery ownership.
 	async fn store_fallback_snapshot(&self, snapshot: &crate::FallbackSnapshot) -> anyhow::Result<()>;
 
 	/// Read the immutable signed fallback destination.

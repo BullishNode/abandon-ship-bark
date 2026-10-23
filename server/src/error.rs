@@ -20,23 +20,6 @@ impl fmt::Display for RoundCancelledBeforeForfeit {
 
 impl StdError for RoundCancelledBeforeForfeit {}
 
-/// A paginated history collection must restart without replacing its last
-/// coherent cache when another financial transaction commits between pages.
-#[derive(Debug)]
-pub struct FallbackHistoryViewChanged;
-impl fmt::Display for FallbackHistoryViewChanged {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str("fallback payout history view changed; restart collection") }
-}
-impl StdError for FallbackHistoryViewChanged {}
-
-/// Refuse oversized historical proofs instead of sending an undecodable page.
-#[derive(Debug)]
-pub struct FallbackHistoryTooLarge;
-impl fmt::Display for FallbackHistoryTooLarge {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str("fallback payout history exceeds the response byte budget") }
-}
-impl StdError for FallbackHistoryTooLarge {}
-
 /// Stable client refusal reasons, independent of explanatory error text.
 #[derive(Debug, Clone, Copy)]
 pub enum FallbackRefusal {

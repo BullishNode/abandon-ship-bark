@@ -229,16 +229,10 @@ impl Server {
 		for root in roots {
 			let result = async {
 				ensure!(root.server_pubkey() == self.server_pubkey, "expiry backing belongs to a different server key");
-				if let ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) = root.policy() {
-					let owned = policy.user_pubkey == self.server_pubkey || self.db.read(async |t|
-						t.fetch_ephemeral_tweak(policy.user_pubkey).await
-					).await?.is_some();
-					if !owned {
-						// This user exit has reached a leaf the server cannot sign.
-						// Leave upstream's progress/exit handling intact; do not fence
-						// the coin behind an allocation that can never be broadcast.
-						return Ok(());
-					}
+				if matches!(root.policy(), ServerVtxoPolicy::User(_)) {
+					// A fully exposed leaf follows its own claim/refund contract.
+					// Do not commit unrelated payouts against that physical input.
+					return Ok(());
 				}
 				let Some(output) = self.bitcoind.try_get_tx_out(root.point(), true).await? else {
 					return Ok(());

@@ -521,7 +521,6 @@ impl Server {
 
 		srv.clone().start_offboard_retry_task().await;
 		srv.clone().start_expiry_readiness();
-		srv.clone().start_receive_claim_recovery();
 
 		let srv2 = srv.clone();
 		tokio::spawn(async move {

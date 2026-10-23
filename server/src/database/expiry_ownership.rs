@@ -17,7 +17,7 @@ use ark::vtxo::Full;
 
 use super::expiry_inventory::BackingVtxoFact;
 use super::expiry_lightning::LightningSourceState;
-use super::expiry_receive::ReceiveClaimSettlement;
+use super::ln::LightningHtlcSubscriptionStatus;
 use super::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use super::{BlockTable, SpendState, Tx};
 
@@ -41,7 +41,7 @@ pub enum OwnershipEvidence {
 	Pubkey,
 	IrreversibleEntitlement { entitlement_id: i64 },
 	InputOwner,
-	LightningReceiveClaim { source: VtxoId, subscription_id: i64, payment_hash: PaymentHash, output: VtxoId },
+	LightningReceiveClaim { source: VtxoId, output: VtxoId },
 	Pool,
 	Padding,
 	Forfeit,
@@ -55,10 +55,6 @@ pub enum OwnershipEvidence {
 	/// upstream off-chain revocation.
 	HtlcUnattemptedExpired { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
 	HtlcExternalFailed { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
-	HtlcInternalZeroGrantCancelled { payment_hash: PaymentHash, htlc_expiry: BlockHeight, attempt_id: i64, subscription_id: i64 },
-	/// Every receive grant of the internal receive was taken back on chain by
-	/// the server's timeout clause. Chain-derived: invalidated with its block.
-	HtlcInternalGrantsReclaimed { payment_hash: PaymentHash, attempt_id: i64, subscription_id: i64, block: BlockRef },
 	/// An unsettled receive grant past its HTLC expiry and unspent on chain.
 	/// The operator takes it back with the expiry sweep of its tree output.
 	/// Chain-derived: a later preimage spend conflicts the sweep.
@@ -104,7 +100,7 @@ impl Tx<'_> {
 		funding: &Transaction,
 		tip: BlockHeight,
 		watchman_tip: Option<BlockHeight>,
-		internal_refund_depth: u32,
+		_internal_refund_depth: u32,
 	) -> anyhow::Result<OwnershipProposal> {
 		let mut proposal = OwnershipProposal::pending(fact, "missing complete source path");
 		let Some(full) = &fact.full_vtxo else { return Ok(proposal); };
@@ -141,7 +137,6 @@ impl Tx<'_> {
 						| "exchange"
 						| "htlc_unattempted_expired"
 						| "htlc_external_failed"
-						| "htlc_internal_zero_grant_cancelled"
 						| "htlc_source_discharged"
 				)) {
 					proposal.disposition = if let Some(key) = facts.get("customer_key").and_then(serde_json::Value::as_str) {
@@ -207,36 +202,10 @@ impl Tx<'_> {
 			proposal.evidence = Some(OwnershipEvidence::Padding);
 			return Ok(proposal);
 		}
-		// Receive claims carry their own authenticated destination. A provider
-		// checkpoint is not the recipient of a settled receive-for-address.
-		let mut cancelled_receive_claim = false;
-		if state.spend_state == SpendState::Unregistered || matches!(user.policy(), ark::VtxoPolicy::ServerHtlcRecv(..) | ark::VtxoPolicy::ServerHtlcRecv_v0(..)) {
-			if let Some(claim) = self.receive_claim_entitlement(state.vtxo_id).await? {
-				match claim.settlement {
-					ReceiveClaimSettlement::CancelledUncollected => {
-						// Cancellation creates no customer principal. Preserve the
-						// grant's normal terminal revocation/expiry proof below;
-						// a shared preimage cannot redirect it to the provider.
-						cancelled_receive_claim = true;
-					},
-					ReceiveClaimSettlement::Pending => {
-						proposal.disposition = OwnershipDisposition::Unresolved("receive claim settlement is not confirmed");
-						return Ok(proposal);
-					},
-					ReceiveClaimSettlement::Settled => {
-						if let Some(key) = claim.recipient {
-							proposal.disposition = self.expiry_customer(claim.output_id, key).await?;
-							proposal.evidence = Some(OwnershipEvidence::LightningReceiveClaim {
-								source: claim.source, subscription_id: claim.subscription_id,
-								payment_hash: claim.payment_hash, output: claim.output_id,
-							});
-						} else {
-							proposal.disposition = OwnershipDisposition::Unresolved("receive destination has conditional policy");
-						}
-						return Ok(proposal);
-					},
-				}
-			}
+		if let Some((output, key)) = self.receive_claim_recipient(state.vtxo_id).await? {
+			proposal.disposition = self.expiry_customer(output, key).await?;
+			proposal.evidence = Some(OwnershipEvidence::LightningReceiveClaim { source: state.vtxo_id, output });
+			return Ok(proposal);
 		}
 		if state.spend_state == SpendState::Unregistered {
 			if let Some((parent, key)) = self.expiry_unregistered_input_owner(full).await? {
@@ -273,8 +242,13 @@ impl Tx<'_> {
 			proposal.disposition = OwnershipDisposition::Unresolved("terminal has registered descendants");
 			return Ok(proposal);
 		}
-		let payment = user.policy().as_server_htlc_send().map(|p| p.payment_hash)
-			.or_else(|| user.policy().as_server_htlc_recv().map(|p| p.payment_hash));
+		let payment = match user.policy() {
+			ark::VtxoPolicy::ServerHtlcSend(p) => Some(p.payment_hash),
+			ark::VtxoPolicy::ServerHtlcSend_v0(p) => Some(p.payment_hash),
+			ark::VtxoPolicy::ServerHtlcRecv(p) => Some(p.payment_hash),
+			ark::VtxoPolicy::ServerHtlcRecv_v0(p) => Some(p.payment_hash),
+			_ => None,
+		};
 		if let Some(hash) = payment {
 			let htlcs = htlc_vtxo::get_htlc_vtxo_states_by_payment_hash(self, hash).await?;
 			let Some(htlc) = htlcs.iter().find(|h| h.vtxo.vtxo_id == proposal.id) else { return Ok(proposal); };
@@ -283,19 +257,25 @@ impl Tx<'_> {
 				&& watchman_tip.is_some_and(|height| htlc.htlc.htlc_expiry <= height)
 				&& fact.onchain_spent_height.is_none() && fact.onchain_spent_txid.is_none();
 			let Some(resolution) = htlc.htlc.resolution() else {
-				// Use the funded operator sweep even when the receiver exposed
-				// the grant: a small grant cannot pay for its own timeout claim.
-				if htlc.direction() == HtlcDirection::Outgoing
-					&& (!proposal.has_stored_preimage || cancelled_receive_claim) && expired_contract {
-					proposal.disposition = OwnershipDisposition::Operator;
-					proposal.evidence = Some(OwnershipEvidence::HtlcRecvExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry });
-					return Ok(proposal);
-				}
-				if proposal.has_stored_preimage && htlc.direction() == HtlcDirection::Outgoing && !cancelled_receive_claim {
-					// A granted receive is already a signed obligation to this
-					// recipient. Sending grants require their own funding proof.
-					proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
-					proposal.evidence = Some(OwnershipEvidence::HtlcStoredPreimage { payment_hash: hash });
+				if htlc.direction() == HtlcDirection::Outgoing {
+					let Some(subscription_id) = fact.lightning_htlc_subscription_id else { return Ok(proposal); };
+					let Some(subscription) = self.get_htlc_subscription_by_id(subscription_id).await? else { return Ok(proposal); };
+					if subscription.payment_hash != hash { return Ok(proposal); }
+					match subscription.status {
+						LightningHtlcSubscriptionStatus::Settled => {
+							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
+							proposal.evidence = Some(OwnershipEvidence::HtlcStoredPreimage { payment_hash: hash });
+						},
+						LightningHtlcSubscriptionStatus::Canceled if expired_contract => {
+							proposal.disposition = OwnershipDisposition::Operator;
+							proposal.evidence = Some(OwnershipEvidence::HtlcRecvExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry });
+						},
+						LightningHtlcSubscriptionStatus::HtlcsReady if expired_contract && !proposal.has_stored_preimage => {
+							proposal.disposition = OwnershipDisposition::Operator;
+							proposal.evidence = Some(OwnershipEvidence::HtlcRecvExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry });
+						},
+						_ => proposal.disposition = OwnershipDisposition::Unresolved("Lightning receive remains open"),
+					}
 					return Ok(proposal);
 				}
 				let source = if htlc.direction() == HtlcDirection::Incoming {
@@ -306,32 +286,13 @@ impl Tx<'_> {
 					proposal.evidence = Some(OwnershipEvidence::HtlcSourceDischarged { payment_hash: hash });
 					return Ok(proposal);
 				}
-				// An uncollected internal payment: once every receive grant is
-				// back with the server on chain, the sender's source is theirs.
-				// Its own send expiry can lie beyond the tree's expiry and does
-				// not matter: no one can collect the payment any more.
-				let unspent = fact.onchain_spent_height.is_none() && fact.onchain_spent_txid.is_none()
-					&& htlc.htlc.chain_resolution.is_none();
-				if let LightningSourceState::InternalCommitted { attempt_id, subscription_id } = source {
-					if let Some(watchman_tip) = watchman_tip.filter(|_| unspent) {
-						if let Some(block) = self.internal_grants_reclaimed(subscription_id, hash, tip, watchman_tip, internal_refund_depth).await? {
-							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
-							proposal.evidence = Some(OwnershipEvidence::HtlcInternalGrantsReclaimed {
-								payment_hash: hash, attempt_id, subscription_id, block,
-							});
-							return Ok(proposal);
-						}
-					}
-				}
 				// A same-hash receive funded by another source cannot retain
-				// this sender's money. Attempts without outcome proof still wait.
-				if matches!(source, LightningSourceState::Unattempted | LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. })
+				// this sender's money. Open attempts still wait.
+				if matches!(source, LightningSourceState::Unattempted | LightningSourceState::Failed)
 					&& fact.onchain_spent_height.is_none() && htlc.htlc.chain_resolution.is_none()
 					&& htlc.htlc.htlc_expiry <= tip && watchman_tip.is_some_and(|h| htlc.htlc.htlc_expiry <= h) {
 					proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
 					proposal.evidence = Some(match source {
-						LightningSourceState::InternalZeroGrantCancelled { attempt_id, subscription_id } =>
-							OwnershipEvidence::HtlcInternalZeroGrantCancelled { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry, attempt_id, subscription_id },
 						LightningSourceState::Failed => OwnershipEvidence::HtlcExternalFailed { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry },
 						_ => OwnershipEvidence::HtlcUnattemptedExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry },
 					});

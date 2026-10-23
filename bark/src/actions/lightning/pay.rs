@@ -37,9 +37,8 @@ use crate::arkoor::{resolve_change_pieces, split_change_amount};
 use crate::movement::update::MovementUpdate;
 use crate::movement::{MovementDestination, MovementId, MovementStatus, PaymentMethod};
 use crate::persist::models::PaidInvoice;
-use crate::fallback::payouts::{FallbackDisposition, FallbackSnapshot};
 use crate::subsystem::{LightningMovement, LightningSendMovement, Subsystem};
-use crate::vtxo::{VtxoLockHolder, VtxoState};
+use crate::vtxo::VtxoLockHolder;
 
 const LN_PAY_NAMESPACE: &str = "ln_pay";
 
@@ -669,61 +668,33 @@ fn payment_status_scope_matches(ids: &[VtxoId], scope: &[Vec<u8>]) -> bool {
 	received.is_ok_and(|received| received == expected)
 }
 
-/// Only the checkpoint's complete HTLC set can refund this send. Another
-/// payment's receipt, its change or an operator sweep cannot close it.
-fn fallback_refund_amount(snapshot: &FallbackSnapshot, ids: &[VtxoId]) -> Option<Amount> {
-	if ids.is_empty() || ids.iter().collect::<HashSet<_>>().len() != ids.len() { return None; }
-	ids.iter().try_fold(Amount::ZERO, |total, id| {
-		let mut entries = snapshot.entitlements.iter().filter(|(_, entry)| entry.vtxo_id == *id);
-		let (key, entry) = entries.next()?;
-		if entries.next().is_some() { return None; }
-		let proof = snapshot.verified_payouts.get(key)?;
-		if proof.attempt.disposition != FallbackDisposition::CustomerPayout
-			|| proof.attempt.gross != entry.gross { return None; }
-		total.checked_add(entry.gross)
-	})
-}
-
-/// A stopped wallet can return after the watchman already paid its refund.
-/// Check and persist current chain proof before retiring the action's locks;
-/// the executor must never return already-paid HTLCs to Spendable.
+/// A refund is adopted only when its own complete HTLC set was consumed by
+/// a canonical payment to the registered destination.
 async fn finish_fallback_refund(wallet: &Wallet, send: &LightningSend, htlcs: &Htlcs) -> anyhow::Result<bool> {
-	let snapshot = wallet.inner.db.get_fallback_snapshot().await?;
-	let observed = snapshot.entitlements.iter().any(|(key, entry)| htlcs.vtxo_ids.contains(&entry.vtxo_id)
-		&& (snapshot.verified_payouts.contains_key(key)
-			|| snapshot.payout_observations.get(key).is_some_and(|proofs| !proofs.is_empty())));
-	if !observed { return Ok(false); }
-	// Only success bound to this complete HTLC set can settle the send.
-	// Server unavailability cannot prevent independently verified recovery.
+	let Some(record) = wallet.fallback_registration().await? else { return Ok(false); };
+	let mut coins = Vec::new();
+	let mut total = Amount::ZERO;
+	let policy = VtxoPolicy::new_server_htlc_send(send.htlc_key, send.invoice.payment_hash(), send.htlc_expiry);
+	for id in &htlcs.vtxo_ids {
+		let coin = wallet.get_full_vtxo(*id).await?;
+		ensure!(coin.policy() == &policy, "fallback refund is not this send's HTLC");
+		total = total.checked_add(coin.amount()).context("fallback refund amount overflow")?;
+		coins.push(coin);
+	}
+	if coins.is_empty() { return Ok(false); }
+	ensure!(total == send.total_amount(), "fallback refund does not cover the complete send");
+	let paid = wallet.confirmed_fallback_vtxos(&coins, &record.spk).await?;
+	if !htlcs.vtxo_ids.iter().all(|id| paid.contains(id)) { return Ok(false); }
 	if let Ok(PaymentStatus::Success(preimage)) = check_lightning_send_payment_status(wallet, send, htlcs).await {
 		settle_lightning_send_payment(wallet, send, htlcs, preimage).await.into_anyhow()?;
 		return Ok(true);
 	}
-	let record = wallet.fallback_destination().await?;
 	let _guard = wallet.lock_fallback_history(Duration::from_secs(30)).await?;
-	let mut snapshot = wallet.inner.db.get_fallback_snapshot().await?;
-	wallet.verify_fallback_chain_evidence(&mut snapshot, &record.spk).await?;
-	ensure!(fallback_refund_amount(&snapshot, &htlcs.vtxo_ids) == Some(send.total_amount()),
-		"lightning refund awaits complete current payout proof");
-	let expected_policy = VtxoPolicy::new_server_htlc_send(send.htlc_key, send.invoice.payment_hash(), send.htlc_expiry);
-	let holder = VtxoLockHolder::Action { id: send.id() };
-	let mut total = Amount::ZERO;
-	for id in &htlcs.vtxo_ids {
-		let coin = wallet.inner.db.get_full_vtxo(*id).await?.context("fallback refund lacks its signed HTLC")?;
-		ensure!(coin.id() == *id && coin.policy() == &expected_policy, "fallback refund is not this send's HTLC");
-		let receipt = snapshot.entitlements.values().find(|entry| entry.vtxo_id == *id)
-			.context("fallback refund HTLC lacks its entitlement")?;
-		ensure!(receipt.gross == coin.amount(), "fallback refund differs from its signed HTLC value");
-		total = total.checked_add(coin.amount()).context("fallback refund amount overflow")?;
-		let stored = wallet.inner.db.get_wallet_vtxo(*id).await?.context("fallback refund HTLC is missing")?;
-		ensure!(stored.state == VtxoState::Spent || stored.state == (VtxoState::Locked { holder: Some(holder.clone()) }),
-			"fallback refund HTLC is no longer held by this action");
-	}
-	ensure!(total == send.total_amount(), "fallback refund does not cover the complete send");
 	ensure!(wallet.inner.db.get_paid_invoice(send.invoice.payment_hash()).await?.is_none(),
 		"confirmed lightning refund conflicts with a paid invoice");
-	let movement = wallet.inner.db.get_movement_by_id(htlcs.movement_id).await?;
-	ensure!(movement.status != MovementStatus::Successful, "successful lightning send lacks its paid invoice");
+	let holder = VtxoLockHolder::Action { id: send.id() };
+	let mut snapshot = wallet.inner.db.get_fallback_snapshot().await?;
+	snapshot.adopted_payout_vtxos.extend(paid);
 	wallet.inner.db.store_fallback_snapshot(&snapshot).await?;
 	for id in &htlcs.vtxo_ids {
 		ensure!(wallet.inner.db.retire_vtxo_lock(*id, Some(&holder)).await?, "fallback refund HTLC holder changed");

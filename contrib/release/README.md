@@ -73,7 +73,9 @@ private configuration, wallets or credentials. Follow `OPERATOR.md` and
 release qualification. Bundle assembly does not publish release assets.
 
 The bundle includes matching public `captaind.default.toml` and
-`watchmand.default.toml` templates. Copy and edit them as described in
+`watchmand.default.toml` templates, and a `cln.conf` fragment requiring
+`xpay-slow-mode=true`. Merge the fragment into the CLN configuration and verify
+it with `lightning-cli listconfigs xpay-slow-mode`. Copy and edit the templates as described in
 `OPERATOR.md`; private deployment configuration must remain outside the release.
 It also includes `server-seed-descriptors.py` for the private, non-mainnet
 seed-only recovery procedure in `OPERATOR.md`. This helper needs Python 3.

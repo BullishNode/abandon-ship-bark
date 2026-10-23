@@ -208,7 +208,7 @@ async fn protect_with_one_unavailable_record() {
 		.unwrap().unwrap();
 	assert_eq!(pending.value, backing.value);
 	assert_eq!(pending.script_pub_key.script().unwrap(), backing.script_pubkey);
-	assert!(database.get_fallback_snapshot().await.unwrap().entitlements.is_empty(),
+	assert!(database.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.is_empty(),
 		"no manufactured entitlement or payout may explain preserved principal");
 	*fault.coin.lock().unwrap() = None;
 	assert_eq!(wallet.get_full_vtxo(unavailable.id()).await.unwrap().serialize(), unavailable.serialize());

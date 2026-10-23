@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use anyhow::Context;
+use bdk_wallet::coin_selection::LargestFirstCoinSelection;
 use bitcoin::{Amount, OutPoint, Transaction, TxIn, TxOut, Txid, ScriptBuf, Sequence, Witness, sighash};
 use bitcoin_ext::TxStatus;
 use bitcoin_ext::{fee, TransactionExt, TxOutExt};
@@ -23,6 +24,9 @@ use ark::vtxo::policy::signing::VtxoSigner;
 use ark::vtxo::policy::clause::VtxoClause;
 
 use super::Watchman;
+
+/// Core's version-3 child limit for a package with an unconfirmed parent.
+const MAX_FEE_CHILD_VSIZE: usize = 1_000;
 
 /// The fee of the transaction being replaced, not a stale historical
 /// child or its entire mempool chunk.
@@ -265,7 +269,8 @@ impl Watchman {
 				}
 				usable
 			};
-			if funding_usable && (active_child.is_none() || is_active)
+			if child.vsize() <= MAX_FEE_CHILD_VSIZE
+				&& funding_usable && (active_child.is_none() || is_active)
 				&& *fee >= (parent.weight() + child.weight()) * target
 			{
 				None
@@ -295,8 +300,15 @@ impl Watchman {
 					excluded.push(point);
 				}
 			}
-			let child = wallet.make_signed_p2a_cpfp_excluding(&parent, fees, &excluded)
+			let child = wallet.make_signed_p2a_cpfp_with_coin_selection(
+				&parent, fees, &excluded, LargestFirstCoinSelection,
+			)
 				.context("funding expiry payout fee child")?;
+			if child.vsize() > MAX_FEE_CHILD_VSIZE {
+				wallet.mark_output_keys_unused(&child);
+				wallet.persist().await?;
+				bail!("expiry fee child exceeds {} vbytes: {}", MAX_FEE_CHILD_VSIZE, child.vsize());
+			}
 			let mut input_value = Amount::ZERO;
 			for input in &child.input {
 				let value = if input.previous_output.txid == parent.compute_txid() {

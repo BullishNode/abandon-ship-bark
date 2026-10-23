@@ -403,6 +403,20 @@ pub trait WalletExt: BorrowMut<Wallet> {
 		fees: MakeCpfpFees,
 		excluded: &[OutPoint],
 	) -> Result<Transaction, CpfpInternalError> {
+		self.make_signed_p2a_cpfp_with_coin_selection(
+			tx, fees, excluded, DefaultCoinSelectionAlgorithm::default(),
+		)
+	}
+
+	/// Fund a fee child with the caller's selection algorithm, keeping the
+	/// same confirmed-input, exclusion and non-dust change requirements.
+	fn make_signed_p2a_cpfp_with_coin_selection<Cs: CoinSelectionAlgorithm + Clone>(
+		&mut self,
+		tx: &Transaction,
+		fees: MakeCpfpFees,
+		excluded: &[OutPoint],
+		coin_selection: Cs,
+	) -> Result<Transaction, CpfpInternalError> {
 		let wallet = self.borrow_mut();
 		let (fee_anchor_point, fee_anchor_txout) = tx.fee_anchor()
 			.ok_or_else(|| CpfpInternalError::NoFeeAnchor(tx.compute_txid()))?;
@@ -423,7 +437,7 @@ pub trait WalletExt: BorrowMut<Wallet> {
 			// The change is this transaction's only output, so use a coin selection that
 			// guarantees it stays above the dust limit.
 			let mut b = wallet.build_tx()
-				.coin_selection(WithGuaranteedChange(DefaultCoinSelectionAlgorithm::default()));
+				.coin_selection(WithGuaranteedChange(coin_selection.clone()));
 			b.only_witness_utxo();
 			b.unspendable(excluded.to_vec());
 			b.exclude_unconfirmed();
@@ -479,8 +493,9 @@ mod test {
 
 	use bdk_wallet::KeychainKind;
 	use bdk_wallet::chain::BlockId;
+	use bdk_wallet::coin_selection::LargestFirstCoinSelection;
 	use bdk_wallet::test_utils::{
-		get_test_wpkh, insert_checkpoint, receive_output, receive_output_in_latest_block,
+		get_test_tr_single_sig_xprv, get_test_wpkh, insert_checkpoint, receive_output, receive_output_in_latest_block,
 		ReceiveTo,
 	};
 	use bitcoin::Network;
@@ -496,6 +511,56 @@ mod test {
 		let op1 = receive_output_in_latest_block(&mut wallet, Amount::from_sat(1_000));
 		receive_output_in_latest_block(&mut wallet, Amount::from_sat(1_001));
 		(wallet, op1)
+	}
+
+	#[test]
+	fn cpfp_largest_first_uses_large_confirmed_funding() {
+		let mut wallet = Wallet::create_single(get_test_tr_single_sig_xprv())
+			.network(Network::Regtest).create_wallet_no_persist().unwrap();
+		insert_checkpoint(&mut wallet, BlockId { height: 1_000, hash: BlockHash::all_zeros() });
+		for _ in 0..100 {
+			receive_output_in_latest_block(&mut wallet, Amount::from_sat(600));
+		}
+		let funding = wallet.list_unspent().collect::<Vec<_>>();
+		assert_eq!(funding.len(), 100);
+		assert_eq!(funding.iter().map(|utxo| utxo.outpoint).collect::<HashSet<_>>().len(), 100);
+		assert!(funding.iter().all(|utxo|
+			utxo.txout.value == Amount::from_sat(600) && utxo.chain_position.is_confirmed()));
+		let parent = Transaction {
+			version: bitcoin::transaction::Version::non_standard(3),
+			lock_time: bitcoin::absolute::LockTime::ZERO,
+			input: vec![bitcoin::TxIn {
+				witness: Witness::from_slice(&[vec![0; 64], vec![0; 137], vec![0; 33]]),
+				..bitcoin::TxIn::default()
+			}],
+			output: vec![TxOut {
+				value: Amount::from_sat(100_000),
+				script_pubkey: wallet.peek_next_address().address.script_pubkey(),
+			}, crate::fee::fee_anchor()],
+		};
+		assert_eq!(parent.weight().to_wu(), 668, "fixed script-spend parent geometry");
+		let original = serialize(&parent);
+		let target = FeeRate::from_sat_per_vb(8).unwrap();
+		let fragmented = wallet.make_signed_p2a_cpfp_with_coin_selection(
+			&parent, MakeCpfpFees::Effective(target), &[], LargestFirstCoinSelection,
+		).unwrap();
+		assert!(fragmented.vsize() > 1_000, "fragmented signed child must exceed the package limit");
+		wallet.mark_output_keys_unused(&fragmented);
+
+		let large = receive_output_in_latest_block(&mut wallet, Amount::from_sat(100_000));
+		let excluded = receive_output_in_latest_block(&mut wallet, Amount::from_sat(200_000));
+		let unconfirmed = receive_output(&mut wallet, Amount::from_sat(1_000_000), ReceiveTo::Mempool(1));
+		let child = wallet.make_signed_p2a_cpfp_with_coin_selection(
+			&parent, MakeCpfpFees::Effective(target), &[excluded], LargestFirstCoinSelection,
+		).unwrap();
+		assert!(child.vsize() <= 1_000);
+		assert_eq!(child.input.len(), 2);
+		assert!(child.input.iter().any(|input| input.previous_output == large));
+		assert!(child.input.iter().any(|input| input.previous_output == OutPoint::new(parent.compute_txid(), 1)));
+		assert!(!child.input.iter().any(|input| input.previous_output == excluded || input.previous_output == unconfirmed));
+		let fee = Amount::from_sat(100_000) - child.output.iter().map(|output| output.value).sum::<Amount>();
+		assert!(fee >= target * (parent.weight() + child.weight()));
+		assert_eq!(serialize(&parent), original);
 	}
 
 	#[test]

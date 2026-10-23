@@ -202,19 +202,6 @@ impl<G, P: Policy> VtxoState<G, P> {
 		self.check_state_spendable(chain_tip)
 	}
 
-	/// A new Lightning obligation may not consume already expired backing.
-	/// Existing admitted attempts and their resolution use the ordinary lifecycle
-	/// checks, so expiry alone never prevents them from completing.
-	pub fn check_new_lightning_admission(&self, chain_tip: BlockHeight) -> anyhow::Result<()> {
-		if self.decided_for_fallback {
-			return Err(crate::error::FallbackRefusal::DecidedForFallback(self.vtxo_id).into());
-		}
-		if self.vtxo.expiry_height() <= chain_tip {
-			return Err(crate::error::FallbackRefusal::ExpiredNewLightning(self.vtxo_id).into());
-		}
-		Ok(())
-	}
-
 	/// The spend-lifecycle half of the checks above, shared by both.
 	fn check_state_spendable(&self, chain_tip: BlockHeight) -> anyhow::Result<()> {
 		if self.decided_for_fallback {
@@ -523,8 +510,6 @@ mod test {
 		let mut v = spendable();
 		let expiry = v.vtxo.expiry_height();
 		assert!(v.check_spendable(expiry).is_ok());
-		assert!(v.check_new_lightning_admission(expiry).is_err());
-		assert!(v.check_new_lightning_admission(expiry.saturating_sub(bitcoin_ext::BlockDelta::new(1))).is_ok());
 		v.spend_state = SpendState::Spent;
 		assert!(v.check_spendable(expiry).is_err());
 	}

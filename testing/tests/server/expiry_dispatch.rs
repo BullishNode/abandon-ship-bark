@@ -757,7 +757,7 @@ impl FrozenLightningTree {
 		self.signal(&self.processes[0], nix::sys::signal::Signal::SIGSTOP);
 	}
 
-	fn capture_stopped_tree(&mut self) {
+	fn capture_stopped_tree(&mut self, stage: &str) {
 		self.assert_root_stopped();
 		self.assert_channel_stopped();
 		let root = &self.processes[0];
@@ -766,7 +766,10 @@ impl FrozenLightningTree {
 		for captured in &self.processes {
 			assert!(tree.iter().any(|process| process.pid == captured.pid && process.start == captured.start
 				&& process.parent == captured.parent && process.uid == captured.uid && process.exe == captured.exe),
-				"a captured process disappeared or changed before hard stop");
+				"captured child {} ({}) changed at {}: expected start={}, parent={}, uid={}, observed={:?}",
+				captured.pid, captured.exe.display(), stage, captured.start, captured.parent, captured.uid,
+				tree.iter().find(|process| process.pid == captured.pid)
+					.map(|process| (process.start, process.parent, process.uid, &process.exe)));
 		}
 		let channel_index = tree.iter().position(|process| process.pid == channel.pid && process.start == channel.start).unwrap();
 		self.processes = tree;
@@ -995,13 +998,13 @@ async fn recovery_refuses_pending_payment_before_channel_commitment() {
 		assert_pending_parts(&parts, hash, &label, principal.to_sat() * 1_000);
 		parts.sort_by_key(|part| (part.groupid, part.partid, part.id));
 		// Capture any intervening children before a cancellable shutdown await.
-		frozen.capture_stopped_tree();
+		frozen.capture_stopped_tree("before daemon stop");
 		drop(payer);
 		drop(public);
 		drop(wallet);
 		srv.watchmand().stop().await.unwrap();
 		srv.stop().await.unwrap();
-		frozen.capture_stopped_tree();
+		frozen.capture_stopped_tree("after daemon stop");
 		frozen.kill_descendants();
 		frozen.assert_root_stopped();
 		lightning.internal.crash_stop().await.unwrap();

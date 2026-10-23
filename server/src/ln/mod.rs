@@ -188,7 +188,8 @@ impl SupervisedLightningManifest {
 		// Keep the earlier dispatcher qualified for retained original incidents.
 		ensure!((producer.dispatcher.source_sha256 == sha256::Hash::from_str("41e27e3269a4fbb9a41c5c145046469e52de97fd10561d7f3837acb02af13ddd")?
 			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("7743ce9d33087319cb47f30a59a9719b6856857b3c452eb76c9cddda36f30d99")?
-			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("3fc64b45b98696de27f18b71bdd6be0e7400aa62ad92bdb5e154876d3c5a5050")?)
+			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("3fc64b45b98696de27f18b71bdd6be0e7400aa62ad92bdb5e154876d3c5a5050")?
+			|| producer.dispatcher.source_sha256 == sha256::Hash::from_str("a3311a24b3810719c311ae2d5450b583da8bf3850ebdf164cf830e918d4dc3b7")?)
 			&& producer.grpc.server_sha256 == sha256::Hash::from_str("765b38372a479ce29900ac243ad2fb0cc339fc5907b8a1451084e22b405dbbcc")?
 			&& producer.grpc.conversion_sha256 == sha256::Hash::from_str("d4c01103a076cb8d1ad90c38940f0b9aef180aabca9e15c09eeaf51fd8535d60")?
 			&& producer.grpc.model_sha256 == sha256::Hash::from_str("36538a5e672b3fb0409cfb5b6424d0b71880d316cb3709b99354163183652cd8")?

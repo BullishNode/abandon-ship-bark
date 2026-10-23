@@ -10,15 +10,14 @@ use log::{info, warn};
 use server_rpc::protos;
 
 use ark::lightning::{
-	offer_request_amount, Bolt12Invoice, Bolt12InvoiceExt, Invoice, Offer, PaymentHash, Preimage,
+	offer_request_amount, Bolt12Invoice, Bolt12InvoiceExt, Invoice, Offer, PaymentHash,
 };
 
 use crate::Wallet;
 use crate::WalletVtxo;
-use crate::actions::{AdvanceResultExt, DriveMode, WalletAction};
+use crate::actions::{DriveMode, WalletAction};
 use crate::actions::lightning::pay::{
-	Htlcs, LightningSend, LightningSendState, settle_lightning_send_payment,
-	start_lightning_send, ln_pay_action_id,
+	LightningSend, LightningSendState, start_lightning_send, ln_pay_action_id,
 };
 use crate::lightning::{lnaddr_invoice, lnurlp_invoice};
 use crate::movement::PaymentMethod;
@@ -132,11 +131,11 @@ impl Wallet {
 	pub async fn lightning_send_state(&self, hash: PaymentHash)
 		-> anyhow::Result<LightningSendState>
 	{
-		if let Some(paid) = self.inner.db.get_paid_invoice(hash).await? {
-			return Ok(LightningSendState::Paid(paid));
-		}
 		if let Some(cp) = self.lightning_send_checkpoint(hash).await? {
 			return Ok(LightningSendState::InProgress(cp));
+		}
+		if let Some(paid) = self.inner.db.get_paid_invoice(hash).await? {
+			return Ok(LightningSendState::Paid(paid));
 		}
 		Ok(LightningSendState::Unknown)
 	}
@@ -160,25 +159,6 @@ impl Wallet {
 		let mode = if wait { DriveMode::UntilDone } else { DriveMode::UntilParkOrDone };
 		self.drive_action(send, mode).await?;
 		self.lightning_send_state(hash).await
-	}
-
-	/// Settle a payment using a preimage we already have (e.g. from a
-	/// mailbox notification), skipping the server poll.
-	pub(crate) async fn settle_lightning_send_with_preimage(
-		&self,
-		send: LightningSend,
-		htlcs: Htlcs,
-		preimage: Preimage,
-	) -> anyhow::Result<()> {
-		let payment_hash = send.invoice.payment_hash();
-		if preimage.compute_payment_hash() != payment_hash {
-			bail!("preimage mismatch for payment hash {}", payment_hash);
-		}
-		settle_lightning_send_payment(self, &send, &htlcs, preimage).await.into_anyhow()?;
-		// Remove the in-progress row now that the paid_invoice record
-		// is the source of truth.
-		self.inner.db.remove_wallet_action_checkpoint(&ln_pay_action_id(payment_hash)).await?;
-		Ok(())
 	}
 
 	/// Pays a Lightning [Invoice] using Ark VTXOs.

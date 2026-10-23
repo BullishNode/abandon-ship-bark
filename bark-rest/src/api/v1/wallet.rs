@@ -35,6 +35,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		.route("/create", post(create_wallet))
 		.route("/mnemonic", get(mnemonic))
 		.route("/ark-info", get(ark_info))
+		.route("/fallback", get(fallback_registration))
 		.route("/next-round", get(next_round))
 		.route("/addresses/next", post(address))
 		.route("/addresses/index/{index}", get(peek_address))
@@ -68,6 +69,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		create_wallet,
 		mnemonic,
 		ark_info,
+		fallback_registration,
 		next_round,
 		address,
 		peek_address,
@@ -97,6 +99,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		bark_json::web::Bip321UriQuery,
 		bark_json::web::Bip321UriResponse,
 		bark_json::web::WalletExistsResponse,
+		bark_json::web::FallbackRegistrationInfo,
 		bark_json::web::WalletDeleteRequest,
 		bark_json::web::WalletDeleteResponse,
 		bark_json::web::ConnectedResponse,
@@ -123,6 +126,7 @@ pub fn router() -> Router<Arc<ServerState>> {
 		error::InternalServerError,
 		error::NotFoundError,
 		error::BadRequestError,
+		error::FallbackRefusalError,
 	)),
 	tags(
 		(name = "wallet", description = "Manage Ark balances and VTXOs, send payments via Ark, LN, and on-chain."),
@@ -332,6 +336,34 @@ pub async fn ark_info(
 
 #[utoipa::path(
 	get,
+	path = "/fallback",
+	summary = "Get fallback registration and payout address",
+	responses(
+		(status = 200, description = "Authenticated fallback registration, if present", body = bark_json::web::FallbackRegistrationInfo),
+		(status = 404, description = "No wallet is loaded", body = error::NotFoundError),
+		(status = 500, description = "Registration cannot be authenticated", body = error::InternalServerError)
+	),
+	tag = "wallet"
+)]
+#[debug_handler]
+pub async fn fallback_registration(
+	State(state): State<Arc<ServerState>>,
+) -> HandlerResult<Json<bark_json::web::FallbackRegistrationInfo>> {
+	let wallet = state.require_wallet()?;
+	let registration = wallet.fallback_registration().await?;
+	let payout_address = match registration.as_ref() {
+		Some(record) => Some(bitcoin::Address::from_script(&record.spk, wallet.network().await?)
+			.context("invalid authenticated fallback address")?.to_string()),
+		None => None,
+	};
+	Ok(Json(bark_json::web::FallbackRegistrationInfo {
+		registered: registration.is_some(), payout_address,
+		history_awaiting_sync: wallet.fallback_history_awaiting_sync().await?,
+	}))
+}
+
+#[utoipa::path(
+	get,
 	path = "/next-round",
 	summary = "Get next round time",
 	responses(
@@ -533,9 +565,12 @@ pub async fn vtxos(
 		wallet.vtxos().await.context("Failed to get VTXOs")?
 	};
 
-	let vtxo_infos = wallet_vtxos.iter()
-		.map(bark_json::primitives::WalletVtxoInfo::from)
-		.collect();
+	let awaiting = wallet.awaiting_settlement_vtxos().await?;
+	let vtxo_infos = wallet_vtxos.iter().map(|vtxo| {
+		let mut info = bark_json::primitives::WalletVtxoInfo::from(vtxo);
+		info.awaiting_settlement = awaiting.contains(&vtxo.id());
+		info
+	}).collect();
 
 	Ok(axum::Json(vtxo_infos))
 }
@@ -567,7 +602,9 @@ pub async fn get_vtxo(
 	let wallet_vtxo = wallet.get_vtxo_by_id(vtxo_id).await
 		.not_found([vtxo_id], "VTXO not found")?;
 
-	Ok(axum::Json((&wallet_vtxo).into()))
+	let mut info = bark_json::primitives::WalletVtxoInfo::from(&wallet_vtxo);
+	info.awaiting_settlement = wallet.awaiting_settlement_vtxos().await?.contains(&vtxo_id);
+	Ok(axum::Json(info))
 }
 
 #[utoipa::path(
@@ -681,7 +718,7 @@ pub async fn pending_rounds(
 			continue;
 		};
 
-		let sync = round.state_mut().sync(&wallet).await;
+		let sync = round.sync(&wallet).await;
 		infos.push(PendingRoundInfo::new(&round, sync));
 	}
 	Ok(axum::Json(infos))
@@ -816,7 +853,7 @@ pub async fn refresh_vtxos(
 				.join_next_round(participation, Some(RoundMovement::Refresh)).await
 				.context("Failed to store round participation")?;
 
-			let sync = round.state_mut().sync(&wallet).await;
+			let sync = round.sync(&wallet).await;
 			Ok(axum::Json(PendingRoundInfo::new(&round, sync)))
 		}
 		None => {
@@ -912,7 +949,7 @@ pub async fn refresh_all(
 				.join_next_round(participation, Some(RoundMovement::Refresh)).await
 				.context("Failed to store round participation")?;
 
-			let sync = round.state_mut().sync(&wallet).await;
+			let sync = round.sync(&wallet).await;
 			Ok(axum::Json(PendingRoundInfo::new(&round, sync)))
 		}
 		None => {
@@ -959,7 +996,7 @@ pub async fn refresh_counterparty(
 				.join_next_round(participation, Some(RoundMovement::Refresh)).await
 				.context("Failed to store round participation")?;
 
-			let sync = round.state_mut().sync(&wallet).await;
+			let sync = round.sync(&wallet).await;
 			Ok(axum::Json(PendingRoundInfo::new(&round, sync)))
 		}
 		None => {

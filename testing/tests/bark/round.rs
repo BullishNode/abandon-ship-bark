@@ -744,7 +744,7 @@ async fn stepwise_round() {
 				break;
 			} else {
 				if let RoundEvent::Finished(_) = event {
-					let status = ours.state_mut().sync(&bark).await.unwrap();
+					let status = ours.sync(&bark).await.unwrap();
 					panic!("Our round state says ongoing participation but we just got round \
 						finished event. status: {:?}", status,
 					);
@@ -774,7 +774,7 @@ async fn stepwise_round() {
 		let states = print_pending_rounds(&bark).await;
 		if let Some(ours) = states.into_iter().find(|s| s.id() == state_id) {
 			let mut ours = bark.lock_wait_round_state(ours.id()).await.unwrap().unwrap();
-			debug!("Result: {:#?}", ours.state_mut().sync(&bark).await);
+			debug!("Result: {:#?}", ours.sync(&bark).await);
 		} else {
 			info!("Our state is gone!");
 			break;
@@ -803,7 +803,6 @@ async fn interactive_round_redelegates_the_inputs_it_did_not_take() {
 	// rather than the current bark-wallet crate. It needs a binary that
 	// re-delegates a participation that lost inputs instead of failing it
 	// wholesale.
-	require_bark_version!(> "0.7.1");
 
 	let ctx = TestContext::new("bark/interactive_round_redelegates_the_inputs_it_did_not_take").await;
 	let srv = ctx.captaind("server").cfg(|cfg| {

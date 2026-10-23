@@ -1,5 +1,5 @@
 {
-	craneLib, pkgs, lib,
+	craneLib, pkgs, lib, cln-grpc,
 	gitHash ? "unknown",
 	targets ? [ "x86_64-unknown-linux-gnu" ],
 }:
@@ -23,8 +23,9 @@ let
 			(craneLib.fileset.commonCargoSources ./..)
 			./../server-rpc/protos
 			./../cln-rpc/protos
-			# embed_migrations! reads these SQL files at compile time.
+			# The server embeds these SQL files at compile time.
 			./../server/src/database/migrations
+			./../server/src/database/fork_schema.sql
 		];
 	};
 
@@ -37,6 +38,10 @@ let
 		inherit src cargoVendorDir;
 		strictDeps = true;
 		doCheck = false;
+
+		# The connected CLN node must load this plugin to preserve typed xpay errors.
+		propagatedBuildInputs = [ cln-grpc ];
+		passthru.requiredClnGrpc = cln-grpc;
 
 		# Strip via rustc instead of the stdenv fixup phase: the host GNU strip
 		# only understands ELF, so a Mach-O or PE artifact would ship unstripped

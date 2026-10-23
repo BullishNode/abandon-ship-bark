@@ -32,4 +32,10 @@ pub struct Config {
 	/// Minimum confirmed funds in sats required to create a CPFP transaction.
 	#[serde(with = "crate::utils::serde::string")]
 	pub min_cpfp_amount: Amount,
+
+	/// Warn above this actual fee subsidy without limiting emergency payouts.
+	#[serde(default = "default_expiry_fee_warning", with = "crate::utils::serde::string")]
+	pub expiry_fee_warning: Amount,
 }
+
+fn default_expiry_fee_warning() -> Amount { Amount::from_sat(10_000) }

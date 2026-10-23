@@ -56,6 +56,16 @@ enum Command {
 	#[command()]
 	Start,
 
+	/// Import supervised original-node zero-history evidence. Local privileged
+	/// recovery only: this never sends or retries a Lightning payment.
+	ResolveUninjectedLightning {
+		#[arg(long)]
+		manifest: PathBuf,
+		/// Accept responsibility for the manifest's trusted operational premises.
+		#[arg(long)]
+		acknowledge_trusted_operations: bool,
+	},
+
 	/// Drain funds from the server
 	#[command()]
 	Drain {
@@ -598,6 +608,13 @@ async fn inner_main() -> anyhow::Result<()> {
 				}
 			}
 		},
+		Command::ResolveUninjectedLightning { manifest, acknowledge_trusted_operations } => {
+			if !acknowledge_trusted_operations {
+				bail!("supervised recovery requires --acknowledge-trusted-operations");
+			}
+			let recorded = server::ln::resolve_uninjected_lightning(&cfg, &manifest).await?;
+			println!("{}", if recorded { "recorded supervised zero-history evidence" } else { "same incident already recorded" });
+		},
 		Command::UndoRound { funding_txid, dangerous, force } => {
 			let db = server::database::Db::connect(&cfg.postgres).await?;
 			let round_id = ark::rounds::RoundId::new(funding_txid);
@@ -681,9 +698,11 @@ async fn run_rpc(addr: &str, cmd: RpcCommand) -> anyhow::Result<()> {
 				.await.context("failed to connect to rpc")?;
 
 			let res = rpc.wallet_status(protos::Empty {}).await?.into_inner();
-			let ret = serde_json::json!({
-				"rounds": WalletStatus(res.rounds.unwrap().try_into().expect("invalid response")),
-			});
+			let rounds = res.rounds.map(rpc::WalletStatus::try_from).transpose()
+				.context("invalid rounds wallet status")?.map(WalletStatus);
+			let watchman = res.watchman.map(rpc::WalletStatus::try_from).transpose()
+				.context("invalid watchman wallet status")?.map(WalletStatus);
+			let ret = serde_json::json!({ "rounds": rounds, "watchman": watchman });
 			serde_json::to_writer_pretty(std::io::stdout(), &ret).unwrap();
 			println!("");
 		},

@@ -453,6 +453,19 @@ pub async fn execute_vtxo_tree_update(
 ) -> anyhow::Result<u64> {
 	debug_assert!(validate(&update).is_ok(), "{}", validate(&update).unwrap_err());
 
+	let changes = &update.vtxo_updates;
+	let mut obligation_ids = changes.oor_spends.iter().map(|s| s.vtxo_id)
+		.chain(changes.round_spends.iter().map(|s| s.vtxo_id))
+		.chain(changes.offboard_spends.iter().map(|s| s.vtxo_id))
+		.chain(changes.round_forfeits.iter().map(|s| s.vtxo_id))
+		.chain(changes.claims.iter().copied())
+		.chain(changes.registrations.iter().copied())
+		.chain(changes.provide_signatures.iter().map(|v| v.id()))
+		.collect::<Vec<_>>();
+	obligation_ids.sort_unstable();
+	obligation_ids.dedup();
+	super::expiry_guard::guard_obligation_changes(tx, &obligation_ids).await?;
+
 	upsert_virtual_transactions(tx, &update.tx_inserts).await?;
 	let inserted = insert_vtxos(tx, &update.vtxo_inserts).await?;
 	apply_vtxo_updates(tx, &update.vtxo_updates).await?;
@@ -801,6 +814,7 @@ async fn do_undo_round_updates(
 		UPDATE vtxo
 		SET spend_state = 'spendable', spent_in_round = NULL, oor_spent_txid = NULL, updated_at = NOW()
 		WHERE spent_in_round = ANY($1::int8[])
+			AND NOT EXISTS(SELECT 1 FROM expiry_entitlement d WHERE d.vtxo_id=vtxo.vtxo_id)
 	", &[&round_ids]).await.context("failed to undo round spend on VTXOs")?;
 	Ok(())
 }

@@ -8,6 +8,20 @@ mod embedded {
 	}
 }
 
+pub mod fallback;
+pub(crate) mod ordinary_spend;
+pub mod expiry_attribution;
+pub(crate) mod expiry_guard;
+pub mod expiry_inventory;
+pub mod expiry_chain;
+pub mod expiry_decision;
+pub mod expiry_ownership;
+pub mod expiry_payout;
+pub mod expiry_details;
+pub(crate) mod expiry_lightning;
+pub(crate) mod expiry_receive;
+pub(crate) mod expiry_geometry;
+
 mod ban;
 pub mod block;
 pub mod data_migrations;
@@ -19,6 +33,7 @@ pub mod nursery;
 pub mod rounds;
 pub mod tree;
 pub mod vtxopool;
+pub(crate) mod user_exit_claim;
 
 mod model;
 mod query;
@@ -47,7 +62,7 @@ use bitcoin::consensus::{serialize, deserialize};
 use bitcoin::secp256k1::{self, PublicKey};
 use chrono::Local;
 use futures::Stream;
-use tokio_postgres::{Client, NoTls, RowStream};
+use tokio_postgres::{Client, IsolationLevel, NoTls, RowStream};
 use tokio_postgres::types::Type;
 use tracing::{info, warn};
 use ark::{ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
@@ -66,7 +81,7 @@ const NOARG: &[&bool] = &[];
 
 const DEFAULT_DATABASE: &str = "postgres";
 
-/// Advisory lock keys for `pg_advisory_xact_lock`.
+/// Advisory lock keys for PostgreSQL transaction and session locks.
 ///
 /// Each variant maps to a unique lock id. Using an enum avoids
 /// computing `hashtext(...)` at runtime and makes every lock site
@@ -75,6 +90,40 @@ const DEFAULT_DATABASE: &str = "postgres";
 enum AdvisoryLock {
 	MailboxWrite = 1,
 	HtlcSettlementWrite = 2,
+	// Key 3 is reserved for the fallback registration snapshot.
+	Migrations = 4,
+}
+
+/// Keep the driver alive until PostgreSQL receives a cancellation request.
+/// Closing a socket alone does not interrupt a backend that waits on a lock.
+struct MigrationConnection {
+	driver: Option<tokio::task::JoinHandle<Result<(), tokio_postgres::Error>>>,
+	cancel: tokio_postgres::CancelToken,
+}
+
+impl MigrationConnection {
+	fn finish(mut self) {
+		if let Some(driver) = self.driver.take() {
+			driver.abort();
+		}
+	}
+}
+
+impl Drop for MigrationConnection {
+	fn drop(&mut self) {
+		let Some(driver) = self.driver.take() else {
+			return;
+		};
+		let cancel = self.cancel.clone();
+		if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+			runtime.spawn(async move {
+				let _ = tokio::time::timeout(Duration::from_secs(5), cancel.cancel_query(NoTls)).await;
+				driver.abort();
+			});
+		} else {
+			driver.abort();
+		}
+	}
 }
 
 /// An uncommitted offboard fetched for the retry-task commit path. Carries
@@ -146,9 +195,30 @@ pub struct Db {
 }
 
 impl Db {
-	async fn run_migrations(&self) -> anyhow::Result<()> {
-		let mut conn = self.get_conn().await?;
+	async fn run_migrations(config: &PostgresConfig) -> anyhow::Result<()> {
+		// The server and watchman can start together. Serialize upstream
+		// migrations and fork schema initialization on the same connection.
+		// Use a dedicated session. Cancel its query before closing on a dropped
+		// startup future; a blocked backend may not notice a closed socket yet.
+		let pg_config = Self::config(&config.name, config);
+		let (mut conn, connection) = tokio::time::timeout(
+			Duration::from_secs(config.connection_timeout_secs), pg_config.connect(NoTls),
+		).await.context("migration database connection timed out")??;
+		let connection = MigrationConnection {
+			cancel: conn.cancel_token(), driver: Some(tokio::spawn(connection)),
+		};
+		conn.query_one("SELECT pg_advisory_lock($1)", &[&(AdvisoryLock::Migrations as i64)]).await?;
 		embedded::migrations::runner().run_async::<Client>(&mut conn).await?;
+		let tx = conn.transaction().await?;
+		// The marker and all fork objects commit together on a fresh database.
+		// Reopening the same schema must not reset its chain view or obligations.
+		if tx.query_one("SELECT to_regclass('expiry_chain_view') IS NULL", &[])
+			.await?.get::<_, bool>(0)
+		{
+			tx.batch_execute(include_str!("fork_schema.sql")).await?;
+		}
+		tx.commit().await?;
+		connection.finish();
 		info!("All migrations got successfully run");
 		Ok(())
 	}
@@ -219,10 +289,10 @@ impl Db {
 	}
 
 	pub async fn connect(config: &PostgresConfig) -> anyhow::Result<Self> {
+		Self::run_migrations(config).await?;
 		let pool = Self::pool_connect(&config.name, config).await?;
 
 		let db = Db { pool };
-		db.run_migrations().await?;
 
 		Ok(db)
 	}
@@ -301,13 +371,14 @@ impl Db {
 	}
 
 	/// Perform db operations in a tx
-	async fn do_in_tx<R, F>(&self, read_only: bool, f: F) -> anyhow::Result<R>
+	async fn do_in_tx<R, F>(&self, read_only: bool, isolation: IsolationLevel, f: F) -> anyhow::Result<R>
 	where
 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
 	{
 		let mut conn = self.get_conn().await.context("unable to get db connection")?;
 		let pgtx = conn.build_transaction()
 			.read_only(read_only)
+			.isolation_level(isolation)
 			.start().await
 			.context("unable to start db tx")?;
 		let tx = Tx { inner: &pgtx };
@@ -331,7 +402,16 @@ impl Db {
 	where
 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
 	{
-		self.do_in_tx(true, f).await
+		self.do_in_tx(true, IsolationLevel::ReadCommitted, f).await
+	}
+
+	/// One bounded RPC page observes one immutable database snapshot. The
+	/// transaction ends with the page; callers never retain it across requests.
+	pub async fn read_snapshot<R, F>(&self, f: F) -> anyhow::Result<R>
+	where
+		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
+	{
+		self.do_in_tx(true, IsolationLevel::RepeatableRead, f).await
 	}
 
 	/// Perform db operations in write mode
@@ -339,7 +419,7 @@ impl Db {
 	where
 		F: AsyncFnOnce(&Tx<'_>) -> anyhow::Result<R>,
 	{
-		self.do_in_tx(false, f).await
+		self.do_in_tx(false, IsolationLevel::ReadCommitted, f).await
 	}
 }
 

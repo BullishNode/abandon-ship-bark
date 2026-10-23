@@ -52,7 +52,6 @@ use ark::lightning::{Bolt12Invoice, Bolt12InvoiceExt, Invoice, Offer, PaymentHas
 use ark::mailbox::MailboxIdentifier;
 
 use crate::Server;
-use crate::error::ContextExt;
 use crate::ln::cln::{ClnNodeInfo, ClnNodeOnlineState, NodeHandle};
 use crate::ln::cln::hold::ClnHoldConfig;
 use crate::ln::cln::xpay::ClnXpayConfig;
@@ -63,8 +62,10 @@ use crate::sync::SyncManager;
 use crate::system::RuntimeManager;
 use crate::config::Config;
 use crate::database;
+use crate::database::expiry_lightning::LightningSourceState;
 use crate::database::ln::{
 	LightningNodeId, LightningHtlcSubscription, LightningHtlcSubscriptionStatus, LightningPaymentStatus,
+	LightningPaymentAttempt,
 };
 use crate::telemetry;
 
@@ -81,6 +82,15 @@ enum PayInvoiceRace {
 
 	#[error("invoice was canceled and can no longer be paid")]
 	Canceled,
+}
+
+/// The original claim may still materialize later. This is neither a failed
+/// external collection nor permission to complete/refund the internal payment.
+/// Its durable funding/claim facts are revisited by manager maintenance.
+#[derive(Debug, thiserror::Error)]
+#[error("internal receive {subscription_id} awaits its recorded recipient claim")]
+struct DeferredInternalReceive {
+	subscription_id: i64,
 }
 
 /// Handle for the cln manager process.
@@ -325,13 +335,15 @@ impl LightningManager {
 		// label: the column has no cardinality budget.
 		let user_agent = telemetry::current_user_agent();
 
-		self.db.write(async |t|
+		let attempt = self.db.write(async |t| {
 			t.store_lightning_payment_start(
 				node.id, &invoice, amount, sender_mailbox_id, htlc_vtxo_ids,
 				lightning_htlc_subscription_id,
 				attempt_block_height, user_fee, user_agent.as_deref(), retry_for,
-			).await
-		).await?;
+			).await?;
+			t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await?
+				.context("new Lightning attempt disappeared before commit")
+		}).await?;
 
 		// If there is an existing subscription, it's an intra-Ark lightning
 		// payment so we can directly mark it as accepted, then skip cln payment.
@@ -344,7 +356,7 @@ impl LightningManager {
 			// receive registered after that check would otherwise land here
 			// unvalidated and be paid out of our vtxopool.
 			let res = match validate_intra_ark_payment(&sub, &invoice, amount) {
-				Ok(()) => self.set_created_subscription_to_accepted(sub, htlc_send_expiry_height).await,
+				Ok(()) => self.set_created_subscription_to_accepted(sub, htlc_send_expiry_height, &attempt).await,
 				Err(e) => Err(e),
 			};
 			if let Err(e) = res {
@@ -376,6 +388,7 @@ impl LightningManager {
 		let xpay_client = node.xpay.clone();
 		tokio::spawn(async move {
 			xpay_client.pay(
+				attempt,
 				invoice,
 				amount,
 				max_routing_fee,
@@ -397,18 +410,39 @@ impl LightningManager {
 		&self,
 		subscription: LightningHtlcSubscription,
 		htlc_send_expiry_height: BlockHeight,
+		attempt: &LightningPaymentAttempt,
 	) -> anyhow::Result<()> {
 		// `subscription` is a snapshot read without a lock, so its status can be
 		// stale. The promotion is guarded on `Created` in the same statement, and
 		// when it does not apply we re-read to report the race instead of acting
 		// on what we thought we saw.
 		let promoted = subscription.status == LightningHtlcSubscriptionStatus::Created
-			&& self.db.write(async |t| t.store_lightning_htlc_subscription_status(
-				subscription.id,
-				LightningHtlcSubscriptionStatus::Accepted,
-				Some(htlc_send_expiry_height),
-				Some(LightningHtlcSubscriptionStatus::Created),
-			).await).await?;
+			&& self.db.write(async |t| {
+				let ids = t.query("
+					SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo
+					WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id
+				", &[&attempt.id]).await?
+					.into_iter().map(|row| row.get::<_, &str>("vtxo_id").parse::<VtxoId>())
+					.collect::<Result<Vec<_>, _>>()?;
+				ensure!(!ids.is_empty(), "internal Lightning attempt has no source coins");
+				crate::database::expiry_guard::guard_new_lightning_inputs(t, &ids).await?;
+				t.lock_htlc_settlements().await?;
+				t.ensure_not_settled(attempt.payment_hash).await?;
+				ensure!(t.query_opt("
+					SELECT id FROM lightning_payment_attempt WHERE id=$1
+					AND lightning_htlc_subscription_id=$2 AND status NOT IN ('failed','succeeded') FOR UPDATE
+				",
+					&[&attempt.id,&subscription.id]).await?.is_some(), "internal Lightning source attempt already closed");
+				let promoted = t.store_lightning_htlc_subscription_status(
+					subscription.id, LightningHtlcSubscriptionStatus::Accepted,
+					Some(htlc_send_expiry_height), Some(LightningHtlcSubscriptionStatus::Created),
+				).await?;
+				if promoted {
+					t.execute("INSERT INTO expiry_lightning_internal_funding(id,subscription_id) VALUES($1,$2)",
+						&[&attempt.id,&subscription.id]).await?;
+				}
+				Ok(promoted)
+			}).await?;
 
 		if !promoted {
 			let current = self.db
@@ -455,44 +489,33 @@ impl LightningManager {
 		Ok(())
 	}
 
-	/// Gets the current payment status for a given payment hash.
+	/// Gets the outcome of a complete, recorded payment input set.
 	pub async fn get_payment_status(
 		&self,
 		payment_hash: PaymentHash,
-	) -> anyhow::Result<PaymentStatus> {
-		trace!("Getting payment status for payment hash: {}", payment_hash);
-
-		let attempt = self.db.read(async |t|
-			t.get_latest_payment_attempt_by_payment_hash(payment_hash).await
-		).await?.not_found([payment_hash], "payment attempt not found")?;
-
-		trace!("Payment attempt status for payment {}: {}",
-			payment_hash, attempt.status,
-		);
-
-		if attempt.status == LightningPaymentStatus::Succeeded {
-			let preimage = self.settler.is_settled(payment_hash).await?
-				.context("missing preimage on payment success")?;
-			debug!(payment_hash = %payment_hash, "CheckLightningPayment responding with success");
-			return Ok(PaymentStatus::Success(preimage));
-		}
-
-		if attempt.status == LightningPaymentStatus::Failed {
-			debug!(payment_hash = %payment_hash, "CheckLightningPayment responding with failed");
-			return Ok(PaymentStatus::Failed);
-		}
-
-		trace!(payment_hash = %payment_hash, "payment still pending");
-		Ok(PaymentStatus::Pending)
+		source_ids: &[VtxoId],
+	) -> anyhow::Result<(PaymentStatus, Vec<VtxoId>)> {
+		let Some((scope, outcome)) = self.db.read_snapshot(async |t|
+			t.lightning_payment_outcome(payment_hash, source_ids, None).await
+		).await? else { return Ok((PaymentStatus::Pending, Vec::new())); };
+		let status = match outcome {
+			LightningSourceState::Discharged => {
+				let preimage = self.settler.is_settled(payment_hash).await?
+					.context("source-specific payment success has no preimage")?;
+				PaymentStatus::Success(preimage)
+			},
+			LightningSourceState::Failed | LightningSourceState::InternalZeroGrantCancelled { .. } => PaymentStatus::Failed,
+			_ => PaymentStatus::Pending,
+		};
+		Ok((status, scope))
 	}
 
-	/// Waits until the payment for the given payment hash reaches a final state.
-	///
-	/// Never returns [`PaymentStatus::Pending`].
+	/// Waits for a recorded scope; ambiguous or invalid scopes remain Pending.
 	pub async fn wait_payment_status(
 		&self,
 		payment_hash: PaymentHash,
-	) -> anyhow::Result<PaymentStatus> {
+		source_ids: &[VtxoId],
+	) -> anyhow::Result<(PaymentStatus, Vec<VtxoId>)> {
 		trace!("Waiting for payment status for payment hash: {}", payment_hash);
 
 		// Subscribe before the first check, otherwise we can miss an update
@@ -501,9 +524,10 @@ impl LightningManager {
 		let mut poll_interval = tokio::time::interval(self.invoice_poll_interval);
 
 		loop {
-			match self.get_payment_status(payment_hash).await? {
-				PaymentStatus::Success(preimage) => return Ok(PaymentStatus::Success(preimage)),
-				PaymentStatus::Failed => return Ok(PaymentStatus::Failed),
+			let (status, scope) = self.get_payment_status(payment_hash, source_ids).await?;
+			match status {
+				PaymentStatus::Success(_) | PaymentStatus::Failed => return Ok((status, scope)),
+				PaymentStatus::Pending if scope.is_empty() => return Ok((status, scope)),
 				PaymentStatus::Pending => {},
 			}
 
@@ -561,11 +585,25 @@ impl LightningManager {
 		Ok(invoice)
 	}
 
-	/// Settle a hold invoice in CLN or, for intra-ark payments, mark the
-	/// invoice as succeeded directly.
-	///
-	/// The caller must ensure the preimage has already been recorded in
-	/// the [`HtlcSettler`] before calling this.
+	/// Read collection evidence from the backend which issued the exact original
+	/// invoice. A missing record or an unknown state is not payment evidence.
+	pub(crate) async fn original_receive_invoice_state(
+		&self, subscription: &database::ln::LightningHtlcSubscription,
+	) -> anyhow::Result<Option<hold_plugin::InvoiceState>> {
+		let mut client = self.node_by_id(subscription.lightning_node_id)
+			.context("original receive node is offline")?.hold_rpc.context("original node has no hold backend")?;
+		let response = client.list(hold_plugin::ListRequest {
+			constraint: Some(hold_plugin::list_request::Constraint::PaymentHash(subscription.payment_hash.to_vec())),
+		}).await?.into_inner();
+		let invoice = response.invoices.iter().find(|i|
+			i.payment_hash == subscription.payment_hash.to_vec() && i.invoice == subscription.invoice.to_string()
+		);
+		Ok(invoice.and_then(|i| hold_plugin::InvoiceState::try_from(i.state).ok()))
+	}
+
+	/// Settle only through the existing source-specific internal route or the
+	/// backend which issued this invoice, never a node selected by shared hash.
+	/// The caller must first record the preimage in [`HtlcSettler`].
 	pub(crate) async fn settle_invoice(
 		&self,
 		subscription_id: i64,
@@ -577,22 +615,31 @@ impl LightningManager {
 			.read(async |t| t.get_htlc_subscription_by_id(subscription_id).await).await?
 			.expect("can only settle known invoice");
 
-		// If an open self-payment attempt exists for the payment hash, it is an
-		// intra-Ark lightning payment so we can mark it as succeeded,
-		// then skip hold invoice settlement.
-		let attempt = self.db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await).await?
-			.filter(|attempt| attempt.is_self_payment());
-		let is_self_payment = attempt.is_some();
-		if let Some(attempt) = attempt {
-			// NB: the xpay reconciliation loop may also post the mailbox notification
-			// for the same payment hash. The DB insert is idempotent (ON CONFLICT DO NOTHING).
-			self.payment_handler().process_payment_attempt(
-				&self.settler, &attempt,
-				LightningPaymentStatus::Succeeded,
-				None,
-				None,
-				Some(preimage),
-			).await?;
+		ensure!(htlc_subscription.payment_hash == payment_hash, "receive settlement preimage does not match subscription");
+		// The durable funding link survives completion. A closed internal
+		// attempt must never be rerouted to its intentionally canceled hold.
+		let funding = self.db.read(async |t| t.funded_internal_receive(subscription_id, payment_hash).await).await?;
+		let is_self_payment = funding.is_some();
+		if let Some(funding) = funding {
+			let attempt = funding.attempt;
+			if !funding.claim_complete {
+				return Err(DeferredInternalReceive { subscription_id }.into());
+			}
+			if !attempt.status.is_final() {
+				// Mailbox notifications remain idempotent through the existing handler.
+				self.payment_handler().process_payment_attempt(
+					&self.settler, &attempt,
+					LightningPaymentStatus::Succeeded,
+					None,
+					None,
+					Some(preimage),
+				).await?;
+				let current = self.db.read(async |t| t.funded_internal_receive(subscription_id, payment_hash).await).await?
+					.context("internal funding disappeared during settlement")?;
+				if !current.claim_complete {
+					return Err(DeferredInternalReceive { subscription_id }.into());
+				}
+			}
 		} else {
 			// Settle the hold invoice on the node that created the
 			// subscription - that's where the HTLCs are locked. The user has
@@ -621,12 +668,18 @@ impl LightningManager {
 		// Update the subscription status to settled and notify waiters.
 		// This covers both intra-ark (no CLN hook fires) and regular
 		// hold-invoice paths.
-		let newly_settled = self.db.write(async |t| t.store_lightning_htlc_subscription_status(
-			subscription_id,
-			LightningHtlcSubscriptionStatus::Settled,
-			None,
-			None,
-		).await).await?;
+		let newly_settled = self.db.write(async |t| {
+			if let Some(funding) = t.funded_internal_receive(subscription_id, payment_hash).await? {
+				t.lock_lightning_attempt_sources(funding.attempt.id).await?;
+				t.mark_htlc_send_vtxos_ln_spent(funding.attempt.id).await?;
+			}
+			t.store_lightning_htlc_subscription_status(
+				subscription_id,
+				LightningHtlcSubscriptionStatus::Settled,
+				None,
+				None,
+			).await
+		}).await?;
 		let _ = self.payment_update_tx.send(payment_hash);
 
 		// Only meter on the caller that actually flipped the row; retries
@@ -772,8 +825,10 @@ async fn try_settle_hold_invoice(
 	};
 
 	if !matches!(sub.status, LightningHtlcSubscriptionStatus::HtlcsReady) {
-		// Safe to skip: no HTLC-recv vtxos were granted, so the server has
-		// nothing to recover. A subscription that is only Accepted can never
+		// Completed internal claims in another coarse state are repaired by
+		// the manager's source-specific maintenance pass. Other non-ready
+		// subscriptions need no new external collection here.
+		// A subscription that is only Accepted can never
 		// reach HtlcsReady now, because the grant refuses a settled hash. It
 		// stays Accepted until the forward timeout cancels it and the inbound
 		// HTLC fails back to the payer.
@@ -781,6 +836,13 @@ async fn try_settle_hold_invoice(
 	}
 
 	if let Err(e) = srv.lightning_manager.settle_invoice(sub.id, preimage).await {
+		if e.downcast_ref::<DeferredInternalReceive>().is_some() {
+			// This cursor records observation, not financial completion. The
+			// manager's bounded maintenance pass revisits actual claim facts;
+			// do not pin unrelated subscriptions behind this deferred receive.
+			debug!("Deferring internal receive settlement for {}: {:#}", payment_hash, e);
+			return true;
+		}
 		warn!("Hold invoice settlement failed for {}, will retry: {:#}", payment_hash, e);
 		return false;
 	}
@@ -933,6 +995,30 @@ struct LightningManagerProcess {
 }
 
 impl LightningManagerProcess {
+	async fn finish_completed_internal_attempts(&self) -> anyhow::Result<()> {
+		let ready = self.db.read(async |t| t.completed_internal_attempts(128).await).await?;
+		for candidate in ready {
+			let hash = candidate.attempt.payment_hash;
+			let _guard = self.payment_guards.lock(hash).await;
+			let subscription_id = candidate.attempt.lightning_htlc_subscription_id.context("internal candidate lacks subscription")?;
+			let current = self.db.read(async |t| t.funded_internal_receive(subscription_id, hash).await).await?
+				.context("completed internal candidate lost its source")?;
+			if current.attempt.id != candidate.attempt.id || !current.claim_complete { continue; }
+			if current.attempt.status.is_final() {
+				self.db.write(async |t| t.mark_htlc_send_vtxos_ln_spent(current.attempt.id).await).await?;
+				let _ = self.payment_update_tx.send(hash);
+				PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx)
+					.post_lightning_send_finished(&current.attempt).await;
+				continue;
+			}
+			let preimage = self.settler.is_settled(hash).await?.context("completed internal claim lacks its WAL")?;
+			PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx)
+				.process_payment_attempt(&self.settler, &current.attempt, LightningPaymentStatus::Succeeded,
+					None, None, Some(preimage)).await?;
+		}
+		Ok(())
+	}
+
 	/// Rebuild the shared snapshot of command handles for the currently-online
 	/// nodes. Called after every maintenance pass and state change so the
 	/// manager's getters route to nodes that were online as of the last pass.
@@ -1147,6 +1233,20 @@ impl LightningManagerProcess {
 					self.check_nodes().await;
 				},
 				_ = interval.tick() => {
+					if let Err(error) = self.finish_completed_internal_attempts().await {
+						warn!("Completed internal payer attempts await reconciliation: {:#}", error);
+					}
+					// Recheck durable completed internal claims even when their
+					// old preimage cursor passed before materialization or the
+					// subscription's coarse status was already terminal.
+					match self.db.write(async |t| t.reconcile_completed_internal_receives(128).await).await {
+						Ok(hashes) => {
+							for hash in hashes {
+								let _ = self.payment_update_tx.send(hash);
+							}
+						},
+						Err(e) => warn!("Failed to reconcile completed internal receives: {:#}", e),
+					}
 					trace!("LightningManagerProcess checking nodes on interval");
 					self.check_nodes().await;
 				},
@@ -1166,5 +1266,21 @@ impl LightningManagerProcess {
 				},
 			};
 		}
+	}
+}
+
+#[cfg(test)]
+mod internal_receive_tests {
+	use super::*;
+
+	#[test]
+	fn internal_receive_deferral_remains_typed_through_context() {
+		let deferred = anyhow::Error::new(DeferredInternalReceive { subscription_id: 7 })
+			.context("normal receive reconciliation");
+		assert_eq!(deferred.downcast_ref::<DeferredInternalReceive>().unwrap().subscription_id, 7);
+		let database_failure = anyhow::anyhow!("database connection unavailable");
+		assert!(database_failure.downcast_ref::<DeferredInternalReceive>().is_none());
+		let transport_failure = anyhow::Error::new(tonic::Status::unavailable("hold connection unavailable"));
+		assert!(transport_failure.downcast_ref::<DeferredInternalReceive>().is_none());
 	}
 }

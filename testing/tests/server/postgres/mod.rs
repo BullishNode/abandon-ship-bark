@@ -4,7 +4,7 @@ mod tree;
 use std::str::FromStr;
 use std::time::Duration;
 
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use bitcoin::Transaction;
 use chrono::Local;
 
@@ -18,7 +18,7 @@ use ark::test_util::VTXO_VECTORS;
 use ark::tree::signed::{UnlockHash, UnlockPreimage};
 
 use bitcoin::hashes::{sha256, Hash};
-use bark::lightning_invoice::Bolt11Invoice;
+use bark::lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
 use bitcoin_ext::{BlockHeight, BlockRef};
 use cln_rpc::listsendpays_request::ListsendpaysIndex;
 
@@ -1618,7 +1618,8 @@ async fn lightning_payment_attempt_lifecycle() {
 	// One open attempt
 	let attempts = db.read(async |t| t.get_open_lightning_payment_attempts(node_id).await).await.unwrap();
 	assert_eq!(attempts.len(), 1);
-	assert_eq!(attempts[0].amount_msat, 2000);
+	assert_eq!(attempts[0].amount_msat, invoice.amount_msat().unwrap(),
+		"the fixed invoice principal is independent of the caller funding amount");
 
 	let attempt = db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(
 		(&bolt11).into()
@@ -1716,15 +1717,13 @@ async fn lightning_payment_attempt_result_update() {
 	assert_eq!(attempt2.final_amount_msat, Some(9999));
 }
 
-/// `mark_htlc_send_vtxos_ln_spent` flags a linked spendable vtxo `ln-spent`,
-/// including when its attempt has already reached `Succeeded`. The settlement
-/// path transitions the attempt to `Succeeded` before marking its vtxos, so the
-/// mark must not depend on the attempt still being open.
+/// Coarse Succeeded without an actual attempt receipt must leave a matching
+/// signed HTLC source spendable.
 #[tokio::test]
-async fn mark_htlc_send_vtxos_ln_spent_for_settled_attempt() {
+async fn coarse_success_without_own_receipt_keeps_htlc_send_spendable() {
 	use server::database::ln::LightningPaymentStatus;
 
-	let mut ctx = TestContext::new_minimal("postgresd/ln_spent_settled_attempt").await;
+	let mut ctx = TestContext::new_minimal("postgresd/coarse_success_without_own_receipt").await;
 	ctx.init_central_postgres().await;
 	let postgres_cfg = ctx.new_postgres(&ctx.test_name).await;
 
@@ -1734,12 +1733,30 @@ async fn mark_htlc_send_vtxos_ln_spent_for_settled_attempt() {
 	let pubkey = PublicKey::from_str(DUMMY_PUBKEY).unwrap();
 	let (node_id, _) = db.write(async |t| t.register_lightning_node(&pubkey).await).await.unwrap();
 
-	// A spendable HTLC-send vtxo that funds the payment.
+	// A signed spendable HTLC-send source with no payment receipt.
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.arkoor_htlc_out_vtxo.clone());
-	db.write(async |t| t.upsert_vtxos([vtxo.clone()]).await).await.unwrap();
-
-	let bolt11 = Bolt11Invoice::from_str(BOLT11_INVOICE).unwrap();
+	let htlc = VTXO_VECTORS.arkoor_htlc_out_vtxo.policy().as_server_htlc_send().unwrap();
+	let hash = htlc.payment_hash;
+	db.write(async |t| {
+		t.upsert_vtxos([vtxo.clone()]).await?;
+		htlc_vtxo::create_htlc_vtxos(t, &[(vtxo.id(), hash, htlc.htlc_expiry)], HtlcDirection::Incoming).await
+	}).await.unwrap();
+	let secp = Secp256k1::new();
+	let invoice_key = SecretKey::from_slice(&[41; 32]).unwrap();
+	let bolt11 = InvoiceBuilder::new(Currency::Regtest)
+		.description("source-matching coarse-status negative".into())
+		.payment_hash(hash.to_sha256_hash())
+		.payment_secret(PaymentSecret([42; 32]))
+		.current_timestamp().min_final_cltv_expiry_delta(18)
+		.amount_milli_satoshis(vtxo.amount().to_sat() * 1_000)
+		.build_signed(|message| secp.sign_ecdsa_recoverable(message, &invoice_key)).unwrap();
 	let invoice = Invoice::Bolt11(bolt11.clone());
+	assert_eq!(invoice.payment_hash(), hash, "negative must bind the actual signed source hash");
+	let source = db.read(async |tx| Ok(tx.query_one("SELECT h.direction::TEXT,h.payment_hash \
+		FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=$1", &[&vtxo.id().to_string()]).await?))
+		.await.unwrap();
+	assert_eq!(source.get::<_, &str>("direction"), "incoming");
+	assert_eq!(source.get::<_, &str>("payment_hash"), hash.to_string());
 
 	// Open attempt linked to the HTLC-send vtxo.
 	db.write(async |t| t.store_lightning_payment_start(
@@ -1750,22 +1767,26 @@ async fn mark_htlc_send_vtxos_ln_spent_for_settled_attempt() {
 		(&bolt11).into()
 	).await).await.unwrap().expect("open attempt present");
 
-	// Settle the attempt, then mark its linked vtxos.
+	// Make only the coarse flag final: no payment, preimage or own receipt.
 	db.write(async |t| t.update_lightning_payment_attempt_result(
 		&attempt, LightningPaymentStatus::Succeeded, None, None,
 	).await).await.unwrap().expect("attempt should have transitioned to Succeeded");
 
-	db.write(async |t| t.mark_htlc_send_vtxos_ln_spent(attempt.payment_hash).await).await.unwrap();
+	assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
+	assert!(!db.read(async |tx| Ok(tx.query_one("SELECT EXISTS(SELECT 1 FROM expiry_lightning_external_success WHERE id=$1) \
+		OR EXISTS(SELECT 1 FROM expiry_lightning_internal_funding WHERE id=$1)", &[&attempt.id]).await?.get::<_, bool>(0)))
+		.await.unwrap());
+	db.write(async |t| t.mark_htlc_send_vtxos_ln_spent(attempt.id).await).await.unwrap();
 
-	// The funding vtxo must be flagged ln-spent.
+	// No real source-specific discharge occurred; the source stays spendable.
 	let db_client = ctx.postgres_manager().database_client(Some(&ctx.test_name)).await;
 	let row = db_client.query_one(
 		"SELECT spend_state::text AS spend_state FROM vtxo WHERE vtxo_id = $1",
 		&[&vtxo.id().to_string()],
 	).await.unwrap();
 	let spend_state: String = row.get("spend_state");
-	assert_eq!(spend_state, "ln-spent",
-		"HTLC-send vtxo should be ln-spent for a settled payment attempt");
+	assert_eq!(spend_state, "spendable",
+		"coarse Succeeded without an own receipt must not consume a matching signed HTLC source");
 }
 
 /// `store_lightning_payment_start` must persist `block_height`, `user_fee`

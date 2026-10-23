@@ -269,8 +269,11 @@ impl ExitStateProgress for ExitAwaitingDeltaState {
 	) -> anyhow::Result<ExitState, ExitProgressError> {
 		let tip = ctx.tip_height().await?;
 
-		// Ensure the exit transaction hasn't disappeared from the mempool due to a reorg
-		if !ctx.check_confirmed(ctx.vtxo.point().txid).await {
+		// A leaf can disappear and reconfirm later between polls. A cached
+		// boolean must not preserve its old CSV maturity across that fork.
+		let previous_block_is_current = tip >= self.confirmed_block.height
+			&& ctx.get_block_ref(self.confirmed_block.height).await? == self.confirmed_block;
+		if !previous_block_is_current || !ctx.check_confirmed(ctx.vtxo.point().txid).await {
 			error!("Exit for VTXO ({}) is no longer confirmed, verifying all transactions...",
 				ctx.vtxo.id(),
 			);

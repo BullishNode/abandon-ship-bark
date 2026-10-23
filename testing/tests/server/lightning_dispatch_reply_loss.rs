@@ -527,6 +527,292 @@ async fn external_success_during_restart(routed: bool) {
 		"receipt reconciliation must remain a bounded native case");
 }
 
+async fn queued_send_snapshot(db: &Db, hash: PaymentHash, sources: &[VtxoId]) -> serde_json::Value {
+	db.read(async |tx| {
+		let row = tx.query_one("SELECT a.id,a.status::TEXT,a.amount_msat,a.final_amount_msat,a.user_fee_sat, \
+			jsonb_build_array(a.id,a.lightning_node_id,a.payment_hash,a.amount_msat,a.final_amount_msat, \
+				a.sender_mailbox_id,a.status,a.error,a.created_at,a.updated_at,a.lightning_htlc_subscription_id, \
+				a.block_height,a.user_fee_sat,a.retry_for_secs,a.max_routing_fee_msat,a.user_agent)::TEXT AS snapshot, \
+			(SELECT COUNT(*) FROM lightning_payment_attempt WHERE payment_hash=$1) AS attempts, \
+			(SELECT COUNT(*) FROM expiry_lightning_queued_attempt q WHERE q.id=a.id) AS queued, \
+			(SELECT COUNT(*) FROM expiry_lightning_dispatch d WHERE d.id=a.id) AS dispatched, \
+			(SELECT COUNT(*) FROM expiry_lightning_external_success s WHERE s.id=a.id) AS success, \
+			(SELECT COUNT(*) FROM expiry_lightning_terminal_failure f WHERE f.id=a.id) AS failure, \
+			(SELECT COUNT(*) FROM expiry_lightning_rpc_rejection r WHERE r.id=a.id) AS rejection, \
+			(SELECT COUNT(*) FROM expiry_lightning_internal_funding i WHERE i.id=a.id) AS internal \
+			FROM lightning_payment_attempt a WHERE a.payment_hash=$1", &[&hash.to_string()]).await?;
+		assert_eq!(row.get::<_, String>("status"), "requested");
+		assert_eq!(row.get::<_, i64>("amount_msat"), 100_000_000);
+		assert_eq!(row.get::<_, Option<i64>>("final_amount_msat"), None);
+		assert_eq!(row.get::<_, Option<i64>>("user_fee_sat"), Some(1_000));
+		assert_eq!(row.get::<_, i64>("attempts"), 1);
+		assert_eq!(row.get::<_, i64>("queued"), 1);
+		for field in ["dispatched", "success", "failure", "rejection", "internal"] {
+			assert_eq!(row.get::<_, i64>(field), 0);
+		}
+		let attempt = row.get::<_, i64>("id");
+		let links = tx.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+			WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id", &[&attempt]).await?
+			.into_iter().map(|row| row.get::<_, String>(0)).collect::<Vec<_>>();
+		assert_eq!(links, vec![sources[0].to_string()]);
+		for source in sources {
+			let state = tx.query_one("SELECT v.spend_state::TEXT,v.oor_spent_txid,v.spent_in_round,v.offboarded_in, \
+				v.onchain_spent_height,v.onchain_spent_txid,h.offchain_resolution::TEXT,h.chain_resolution::TEXT, \
+				(SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1) AS entitled, \
+				(SELECT COUNT(*) FROM expiry_allocation_input WHERE vtxo_id=$1) AS allocated \
+				FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=$1", &[&source.to_string()]).await?;
+			for field in ["oor_spent_txid", "offboarded_in", "onchain_spent_txid", "offchain_resolution", "chain_resolution"] {
+				assert_eq!(state.get::<_, Option<String>>(field), None);
+			}
+			assert_eq!(state.get::<_, String>("spend_state"), "spendable");
+			assert_eq!(state.get::<_, Option<i64>>("spent_in_round"), None);
+			assert_eq!(state.get::<_, Option<i32>>("onchain_spent_height"), None);
+			for field in ["entitled", "allocated"] { assert_eq!(state.get::<_, i64>(field), 0); }
+		}
+		Ok(serde_json::from_str::<serde_json::Value>(&row.get::<_, String>("snapshot"))?)
+	}).await.unwrap()
+}
+
+#[tokio::test]
+async fn queued_send_does_not_inherit_completed_payment() {
+	tokio::time::timeout(Duration::from_secs(180), Box::pin(async {
+		let ctx = TestContext::new("server/queued_send_does_not_inherit_completed_payment").await;
+		let lightning = ctx.new_lightning_setup("lightningd").await;
+		let preimage = Preimage::random();
+		let hash = preimage.compute_payment_hash();
+		let preimage_bytes: [u8; 32] = preimage.to_vec().try_into().unwrap();
+		let invoice = lightning.external.invoice_with_preimage(Some(sat(100_000)),
+			"separate-native-payment", "separate native payment", preimage_bytes).await;
+		lightning.sync().await;
+		let paid = lightning.internal.grpc_client().await.xpay(cln_rpc::XpayRequest {
+			invstring: invoice.clone(), label: Some("separate-native-payment".into()),
+			amount_msat: None, maxfee: None, layers: vec![], retry_for: Some(1),
+			partial_msat: None, maxdelay: None, payer_note: None, localinvreqid: None, dev_use_shadow: None,
+		}).await.unwrap().into_inner();
+		assert_eq!(Preimage::from_slice(&paid.payment_preimage).unwrap(), preimage);
+		lightning.external.wait_invoice_paid("separate-native-payment").await;
+		let native = remote_pays(&lightning.internal, hash).await;
+		assert_eq!(native.len(), 1);
+		assert_eq!(native[0].status(), ListpaysPaysStatus::Complete);
+		assert_eq!(native[0].payment_hash, hash.to_vec());
+		assert_eq!(native[0].label.as_deref(), Some("separate-native-payment"));
+		assert_eq!(native[0].amount_msat.as_ref().unwrap().msat, 100_000_000);
+		assert_eq!(native[0].amount_sent_msat.as_ref().unwrap().msat, 100_000_000);
+		assert_eq!(native[0].preimage.as_deref(), Some(preimage.as_ref()));
+		let parts = lightning.internal.grpc_client().await.list_send_pays(cln_rpc::ListsendpaysRequest {
+			payment_hash: Some(hash.to_vec()), ..Default::default()
+		}).await.unwrap().into_inner().payments;
+		assert_eq!(parts.len(), 1);
+		assert_eq!(parts[0].status(), cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus::Complete);
+		assert_eq!(parts[0].label.as_deref(), Some("separate-native-payment"));
+		assert_eq!(parts[0].amount_msat.as_ref().unwrap().msat, 100_000_000);
+		assert_eq!(parts[0].amount_sent_msat.as_ref().unwrap().msat, 100_000_000);
+		assert_eq!(parts[0].payment_preimage.as_deref(), Some(preimage.as_ref()));
+		assert!(parts[0].created_index > 0);
+		assert_eq!(parts[0].payment_hash, hash.to_vec());
+		assert_eq!(native[0].created_index, Some(parts[0].created_index));
+		assert_eq!(native[0].updated_index, parts[0].updated_index);
+		let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal)
+			.no_vtxo_pool().funded(btc(10)).cfg(|config| {
+				config.vtxo_lifetime = BlockDelta::new(1_000);
+				config.vtxo_exit_delta = BlockDelta::new(144);
+				config.htlc_send_expiry_delta = BlockDelta::new(286);
+				config.htlc_expiry_delta = BlockDelta::new(40);
+				config.max_htlc_expiry_delta = BlockDelta::new(288);
+				config.invoice_check_interval = Duration::from_secs(1);
+				config.fees.lightning_send.base_fee = sat(1_000);
+				config.ln_max_fee_ppm = 1_000_000;
+			}).watchmand().watchmand_cfg(|config| {
+				config.watchman.reaction_interval = Duration::from_secs(600);
+				config.watchman.sweep_interval = Duration::from_secs(600);
+			}).create().await;
+		let sender = ctx.bark("sender", &srv).cfg(|config| config.daemon_manual_sync = true)
+			.funded(sat(500_000)).create().await;
+		let board = sender.board_and_confirm_and_register(&ctx, sat(101_000)).await;
+		let spare_board = sender.board_and_confirm_and_register(&ctx, sat(101_000)).await;
+		assert_eq!((board.len(), spare_board.len()), (1, 1));
+		let wallet = sender.client().await;
+		let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		let deadline = tip + BlockDelta::new(286);
+		let mut sources = Vec::new();
+		for id in [board[0], spare_board[0]] {
+			let input = wallet.get_full_vtxo(id).await.unwrap();
+			let key = wallet.get_vtxo_key(&input).await.unwrap();
+			sources.push(super::expiry_send_claim::signed_leaf(&ctx, &srv, &wallet, input,
+				VtxoPolicy::new_server_htlc_send(key.public_key(), hash, deadline)).await);
+		}
+		assert_ne!(sources[0].chain_anchor(), sources[1].chain_anchor());
+		assert!(sources.iter().all(|source| source.amount() == sat(101_000)));
+		let fee = srv.config().fees.lightning_send.calculate(sat(100_000),
+			[VtxoFeeInfo::from_vtxo_and_tip(&sources[0], tip)]).unwrap();
+		assert_eq!(fee, sat(1_000));
+		assert_eq!(sat(100_000) + fee, sources[0].amount());
+		let mailbox = ark::mailbox::MailboxAuthorization::new(&wallet.mailbox_keypair(),
+			chrono::Local::now() + Duration::from_secs(300));
+		let db = Db::connect(&srv.config().postgres).await.unwrap();
+		assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
+		assert!(db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().is_none());
+		assert!(db.read(async |tx| tx.get_htlc_subscription_by_payment_hash(hash).await).await.unwrap().is_none());
+		srv.watchmand().stop().await.unwrap();
+		let (attempt, node_id, blocked) = db.write(async |tx| {
+			tx.batch_execute("LOCK TABLE expiry_lightning_dispatch IN SHARE MODE").await?;
+			let blocker = tx.query_one("SELECT pg_backend_pid()", &[]).await?.get::<_, i32>(0);
+			srv.get_public_rpc().await.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
+				invoice: invoice.clone(), payment_amount_sat: 100_000,
+				htlc_vtxo_ids: vec![sources[0].id().to_bytes().to_vec()],
+				mailbox_id: Some(mailbox.mailbox().serialize()), retry_for_secs: Some(1),
+			}).await.unwrap();
+			let blocked = tokio::time::timeout(Duration::from_secs(15), async {
+				loop {
+					tx.query_one("SELECT pg_stat_clear_snapshot()", &[]).await?;
+					let rows = tx.query("SELECT DISTINCT a.pid,a.backend_start FROM pg_stat_activity a \
+						JOIN pg_locks l ON l.pid=a.pid WHERE a.datname=current_database() \
+						AND a.wait_event_type='Lock' AND a.query LIKE '%INSERT INTO expiry_lightning_dispatch%' \
+						AND l.relation='expiry_lightning_dispatch'::regclass AND NOT l.granted \
+						AND l.mode='RowExclusiveLock' AND $1=ANY(pg_blocking_pids(a.pid))", &[&blocker]).await?;
+					assert!(rows.len() <= 1);
+					if let Some(row) = rows.first() {
+						break Ok::<_, anyhow::Error>((row.get::<_, i32>(0), row.get::<_, chrono::DateTime<chrono::Utc>>(1)));
+					}
+					tokio::time::sleep(Duration::from_millis(20)).await;
+				}
+			}).await.expect("the public request must reach the held dispatch insertion")?;
+			let attempt = tx.get_latest_payment_attempt_by_payment_hash(hash).await?.unwrap();
+			assert_eq!(attempt.amount_msat, 100_000_000);
+			assert_eq!(attempt.final_amount_msat, None);
+			assert_eq!(attempt.lightning_htlc_subscription_id, None);
+			assert_eq!(attempt.status, server::database::ln::LightningPaymentStatus::Requested);
+			assert!(tx.query_opt("SELECT id FROM expiry_lightning_dispatch WHERE id=$1", &[&attempt.id]).await?.is_none());
+			assert_eq!(remote_pays(&lightning.internal, hash).await, native);
+			// The retained Child is stopped and reaped while its INSERT stays blocked.
+			srv.stop().await.unwrap();
+			Ok((attempt.id, attempt.lightning_node_id, blocked))
+		}).await.unwrap();
+		tokio::time::timeout(Duration::from_secs(15), async {
+			loop {
+				let present = db.read(async |tx| Ok(tx.query_one("SELECT EXISTS(SELECT 1 FROM pg_stat_activity \
+					WHERE pid=$1 AND backend_start=$2)", &[&blocked.0, &blocked.1]).await?.get::<_, bool>(0))).await.unwrap();
+				if !present { break; }
+				tokio::time::sleep(Duration::from_millis(20)).await;
+			}
+		}).await.expect("the stopped task's incomplete dispatch transaction must roll back");
+		let ids = sources.iter().map(|source| source.id()).collect::<Vec<_>>();
+		let before = queued_send_snapshot(&db, hash, &ids).await;
+		assert!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
+		let stdout_path = srv.config().data_dir.join(ark_testing::daemon::STDOUT_LOGFILE);
+		let stdout_offset = usize::try_from(std::fs::metadata(&stdout_path).unwrap().len()).unwrap();
+		let (checked_tx, mut checked_rx) = tokio::sync::mpsc::unbounded_channel();
+		let mut fee_logs = db.write(async |tx| {
+			tx.lock_htlc_settlements().await?;
+			srv.start().await.unwrap();
+			let fee_logs = srv.subscribe_log::<ArkFeeRecorded>();
+			let prefix = format!("Lightning payment attempt ({attempt}): Check ");
+			let checked_tx = checked_tx.clone();
+			srv.add_stdout_handler(move |line: &str| {
+				if let Ok(record) = server_log::parse_record(line) {
+					if record.message.starts_with(&prefix) && record.message.contains(" done, updated next check to ") {
+						let _ = checked_tx.send(record.timestamp);
+					}
+				}
+				false
+			});
+			Ok(fee_logs)
+		}).await.unwrap();
+		let checked_at = tokio::time::timeout(Duration::from_secs(45), async {
+			loop {
+				let wal = db.read(async |tx| Ok(tx.query_opt("SELECT created_at FROM htlc_settlement \
+					WHERE payment_hash=$1", &[&hash.to_string()]).await?
+					.map(|row| row.get::<_, chrono::DateTime<chrono::Local>>(0)))).await.unwrap();
+				if let Some(wal) = wal {
+					let mut checked = checked_rx.recv().await.unwrap();
+					while checked < wal { checked = checked_rx.recv().await.unwrap(); }
+					break checked;
+				}
+				tokio::time::sleep(Duration::from_millis(20)).await;
+			}
+		}).await.expect("the normal monitor must retain the native preimage and finish its check");
+		let output = std::fs::read(&stdout_path).unwrap();
+		assert!(output.len() >= stdout_offset, "the application log must remain append-only across restart");
+		let epoch = std::str::from_utf8(&output[stdout_offset..]).unwrap();
+		let records = epoch.lines().filter_map(|line| server_log::parse_record(line).ok()).collect::<Vec<_>>();
+		let starts = records.iter().filter(|record| record.is::<server_log::XpayStarted>())
+			.filter_map(|record| {
+				let started = record.try_as::<server_log::XpayStarted>().unwrap();
+				(started.node_id == node_id).then_some(record.timestamp)
+			}).collect::<Vec<_>>();
+		assert_eq!(starts.len(), 1, "the restarted node must have exactly one payment monitor");
+		assert!(starts[0] <= checked_at, "the monitor must start before the observed check");
+		assert!(records.iter().filter(|record| record.is::<server_log::XpayStopped>())
+			.all(|record| record.try_as::<server_log::XpayStopped>().unwrap().node_id != node_id),
+			"the payment monitor must not stop during the observed restart epoch");
+		assert_eq!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap(), Some(preimage));
+		assert!(queued_send_snapshot(&db, hash, &ids).await == before, "a separate payment cannot close this queued request");
+		while let Ok(event) = fee_logs.try_recv() {
+			assert_ne!(event.op_type, "lightning_send", "an unpaid queued source must not record send revenue");
+		}
+		assert_eq!(remote_pays(&lightning.internal, hash).await, native);
+		assert_eq!(lightning.internal.grpc_client().await.list_send_pays(cln_rpc::ListsendpaysRequest {
+			payment_hash: Some(hash.to_vec()), ..Default::default()
+		}).await.unwrap().into_inner().payments, parts);
+		let mut seen = BTreeSet::new();
+		super::expiry_internal_partial_terminal::confirm_actual_path(&ctx, &sources[0], &mut seen).await;
+		let confirmed = super::expiry_send_claim::confirmed_height(&ctx, &sources[0]);
+		let mature = confirmed + 145;
+		let height = ctx.bitcoind().get_block_count().await as u32;
+		if mature > height { ctx.generate_blocks(mature - height).await; }
+		let height = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		assert!(height < deadline && height < sources[0].expiry_height());
+		srv.wait_for_sync_height(height).await;
+		srv.watchmand().start().await.unwrap();
+		srv.watchmand().wait_for_sync_height(height).await;
+		for _ in 0..2 {
+			let source = ark::ServerVtxo::from(sources[0].to_bare());
+			let refused = db.write(async |tx| tx.lock_watchman_claim_inputs(&[source]).await).await.unwrap_err();
+			assert!(format!("{refused:#}").contains("Lightning source is not discharged"));
+			let mut refusals = srv.watchmand().subscribe_log::<server_log::ClaimBroadcastFailure>();
+			srv.watchmand().trigger_sweep().await;
+			tokio::time::timeout(Duration::from_secs(15), async {
+				loop {
+					let refusal = refusals.recv().await.unwrap();
+					if refusal.vtxo_id == ids[0] { assert_eq!(refusal.error, "tx body error"); break; }
+				}
+			}).await.expect("the watchman must refuse collection from the queued source");
+			super::expiry_send_claim::assert_unspent(&ctx, &sources[0]);
+			assert!(queued_send_snapshot(&db, hash, &ids).await == before, "queued liability must remain unchanged");
+		}
+		let spare = ctx.bitcoind().sync_client().get_tx_out(&sources[1].chain_anchor().txid,
+			sources[1].chain_anchor().vout, Some(true)).unwrap().unwrap();
+		assert_eq!(spare.value, sat(101_000));
+		let status = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
+			hash: hash.to_vec(), wait: false, htlc_vtxo_ids: vec![ids[0].to_bytes().to_vec()],
+		}).await.unwrap().into_inner();
+		assert!(matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Pending(_))));
+		let mut checkpoint = 0;
+		for page_number in 0..32 {
+			let page = srv.get_mailbox_public_rpc().await.read_mailbox(protos::mailbox_server::MailboxRequest {
+				mailbox_id: mailbox.mailbox().serialize(), authorization: Some(mailbox.serialize()), checkpoint,
+			}).await.unwrap().into_inner();
+			for item in page.messages {
+				assert!(item.checkpoint > checkpoint);
+				checkpoint = item.checkpoint;
+				if let Some(protos::mailbox_server::mailbox_message::Message::LightningSendFinished(message)) = item.message {
+					assert_ne!(message.payment_hash, hash.to_vec(), "the queued payment has no terminal mailbox outcome");
+				}
+			}
+			if !page.have_more { break; }
+			assert!(page_number < 31, "mailbox pagination must finish");
+		}
+		assert!(db.read(async |tx| tx.get_htlc_subscription_by_payment_hash(hash).await).await.unwrap().is_none());
+		while let Ok(event) = fee_logs.try_recv() {
+			assert_ne!(event.op_type, "lightning_send", "queued liability must not record send revenue");
+		}
+		assert_eq!(sat(100_000) + sat(1_000), sources[0].amount());
+		assert_eq!(sources.iter().map(|source| source.amount()).sum::<Amount>(), sat(202_000));
+		assert_eq!(remote_pays(&lightning.internal, hash).await, native);
+	})).await.expect("queued payment restart safety exceeded 180 seconds");
+}
+
+
 /// Inspect the authenticated wire pages before letting the returning wallet
 /// process them. A valid preimage for the hash is insufficient when another
 /// Ark attempt, using different signed inputs, paid that hash.

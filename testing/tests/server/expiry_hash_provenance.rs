@@ -94,7 +94,7 @@ async fn same_hash_sources(cooperative_refund: bool) {
 			server::database::expiry_inventory::BackingSnapshotLimits { max_rows: 10_000, max_serialized_bytes: 10_000_000 }).await).await.unwrap();
 		let fact = snapshot.regular.iter().find(|fact| fact.state.vtxo_id == grants[index]).unwrap();
 		let proposal = db.read(async |t| t.propose_expiry_ownership(
-			fact, &funding, height, Some(height), srv.config().expiry_internal_refund_depth,
+			fact, &funding, height, Some(height),
 		).await).await.unwrap();
 		if index == 0 {
 			assert_eq!(proposal.disposition, OwnershipDisposition::Operator, "the source that actually funded the paid invoice is discharged");

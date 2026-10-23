@@ -12,11 +12,10 @@ stores and backups.
 
 Use the release-pinned complete Core Lightning runtime,
 `v26.06.6-abandon6`, with its matching subdaemons and qualified plugin bytes.
-The ordinary upstream runtime does not provide the required on-chain HTLC
-failure boundary. Internal Lightning sender refunds require all necessary
-grant closures to reach the configured depth. That depth defaults to 6
-confirmations and cannot be lower. The protocol assumes that no reorg removes
-6 or more blocks. Qualification of this boundary and protection of customers
+That runtime carries one patch: `onchaind` reports a timed-out on-chain HTLC
+after 6 confirmations instead of 3, so Core Lightning marks a payment failed
+only outside the supported reorg window. The protocol assumes that no reorg
+removes 6 or more blocks. Qualification of this boundary and protection of customers
 beyond it remain incomplete.
 
 Read `docs/operator.md` and `contrib/release/README.md` in the source, or

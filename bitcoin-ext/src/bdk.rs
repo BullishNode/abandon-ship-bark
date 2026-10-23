@@ -392,19 +392,8 @@ pub trait WalletExt: BorrowMut<Wallet> {
 		tx: &Transaction,
 		fees: MakeCpfpFees,
 	) -> Result<Transaction, CpfpInternalError> {
-		self.make_signed_p2a_cpfp_excluding(tx, fees, &[])
-	}
-
-	/// Exclude prevouts that an authoritative chain lookup found unavailable.
-	/// A wallet can still retain an orphan's old confirmation during recovery.
-	fn make_signed_p2a_cpfp_excluding(
-		&mut self,
-		tx: &Transaction,
-		fees: MakeCpfpFees,
-		excluded: &[OutPoint],
-	) -> Result<Transaction, CpfpInternalError> {
 		self.make_signed_p2a_cpfp_with_coin_selection(
-			tx, fees, excluded, DefaultCoinSelectionAlgorithm::default(),
+			tx, fees, &[], DefaultCoinSelectionAlgorithm::default(),
 		)
 	}
 
@@ -574,8 +563,8 @@ mod test {
 			output: vec![crate::fee::fee_anchor()],
 		};
 		let original = serialize(&parent);
-		let child = wallet.make_signed_p2a_cpfp_excluding(&parent,
-			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &[excluded]).unwrap();
+		let child = wallet.make_signed_p2a_cpfp_with_coin_selection(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &[excluded], DefaultCoinSelectionAlgorithm::default()).unwrap();
 		assert_eq!(serialize(&parent), original);
 		assert!(!child.input.iter().any(|input| input.previous_output == excluded));
 		assert!(child.input.iter().any(|input| input.previous_output.txid == parent.compute_txid()));
@@ -587,12 +576,12 @@ mod test {
 
 		// The unconfirmed coin remains available in the wallet, but cannot
 		// replace the confirmed funding excluded by the caller.
-		assert!(matches!(wallet.make_signed_p2a_cpfp_excluding(&parent,
-			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &confirmed),
+		assert!(matches!(wallet.make_signed_p2a_cpfp_with_coin_selection(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &confirmed, DefaultCoinSelectionAlgorithm::default()),
 			Err(CpfpInternalError::InsufficientConfirmedFunds(_))));
 		let all = wallet.list_unspent().map(|utxo| utxo.outpoint).collect::<Vec<_>>();
-		assert!(wallet.make_signed_p2a_cpfp_excluding(&parent,
-			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &all).is_err());
+		assert!(wallet.make_signed_p2a_cpfp_with_coin_selection(&parent,
+			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap()), &all, DefaultCoinSelectionAlgorithm::default()).is_err());
 
 		let child = wallet.make_signed_p2a_cpfp(&parent,
 			MakeCpfpFees::Effective(FeeRate::from_sat_per_vb(1).unwrap())).unwrap();

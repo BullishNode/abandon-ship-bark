@@ -15,7 +15,6 @@ in rustPlatform.buildRustPackage rec {
 		hash = "sha256-bra45wREkyt4byY7/oemRQsmqSiVX/8vVuwYcYjcQHQ=";
 	};
 	buildAndTestSubdir = "plugins/grpc-plugin";
-	patches = [ ../contrib/cln-grpc/structured-xpay-errors.patch ];
 	nativeBuildInputs = [ rustBuildToolchain pkgs.protobuf ];
 	buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
 		pkgs.darwin.apple_sdk.frameworks.Security

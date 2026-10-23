@@ -46,14 +46,12 @@ impl Tx<'_> {
 		funding: &Transaction,
 		view: ExpiryViewToken,
 		network: bitcoin::Network,
-		internal_refund_depth: u32,
 	) -> anyhow::Result<PreparedCoin> {
 		let ownership = self.propose_expiry_ownership(
 			fact,
 			funding,
 			view.captaind.height,
 			Some(view.watchmand.height),
-			internal_refund_depth,
 		).await?;
 		let payee = match &ownership.disposition {
 			OwnershipDisposition::Customer { user_pubkey, mailbox } => {
@@ -265,7 +263,6 @@ impl Server {
 						&funding,
 						view,
 						self.config.network,
-						self.config.expiry_internal_refund_depth,
 					).await).await.with_context(|| format!(
 						"expiry ownership preparation for terminal {}", snapshot.regular[*index].state.vtxo_id
 					))?;
@@ -329,7 +326,6 @@ impl Server {
 			view,
 			outputs,
 			self.config.network,
-			self.config.expiry_internal_refund_depth,
 		).await).await {
 			Ok(Some(group)) => info!(
 				allocation_id = group.id,

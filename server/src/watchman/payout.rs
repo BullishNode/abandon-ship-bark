@@ -1,6 +1,7 @@
 //! Immutable zero-fee sweep parents. Fee replacements affect only their child.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use anyhow::Context;
 use bdk_wallet::coin_selection::LargestFirstCoinSelection;
@@ -198,7 +199,7 @@ impl Watchman {
 		let (anchor, _) = parent.fee_anchor().context("expiry parent has no fee anchor")?;
 		let active = bcd::get_mempool_spending_tx(&self.bitcoind, anchor).await?;
 		let mut replacing_inputs = BTreeSet::new();
-		let fees = if let Some(txid) = active {
+		let mut fees = if let Some(txid) = active {
 			let (current_package_fee, weight) = mempool_child_fee(&self.bitcoind, txid).await?
 				.context("expiry fee child left the mempool")?;
 			if current_package_fee >= (parent.weight() + weight) * target {
@@ -213,7 +214,45 @@ impl Watchman {
 			MakeCpfpFees::Effective(target)
 		};
 		let mut wallet = self.watchman_wallet.lock().await;
-		if !wallet.has_trusted_balance(self.config.min_cpfp_amount) {
+		let mut replacement = None;
+		if active.is_none() {
+			// BDK can retain an orphaned child's spend after eviction. Recover
+			// only its own confirmed inputs, independently checked against Core.
+			let children = wallet.tx_graph().outspends(anchor).iter().copied().collect::<Vec<_>>();
+			for id in children {
+				if !wallet.get_tx(id).is_some_and(|tx| tx.chain_position.is_unconfirmed()) { continue }
+				let Some(child) = wallet.tx_graph().get_tx(id) else { continue };
+				if child.output.len() != 1 || !wallet.is_mine(child.output[0].script_pubkey.clone())
+					|| mempool_child_fee(&self.bitcoind, id).await?.is_some()
+					|| matches!(bcd::tx_status(&self.bitcoind, id).await?, TxStatus::Confirmed(_)) {
+					continue;
+				}
+				let mut funding = Amount::ZERO;
+				let mut available = true;
+				for input in child.input.iter().filter(|i| i.previous_output != anchor) {
+					let point = input.previous_output;
+					let Some(known) = wallet.tx_graph().get_txout(point) else { available = false; break };
+					let Some(output) = self.bitcoind.try_get_tx_out(point, true).await? else { available = false; break };
+					if !wallet.is_mine(known.script_pubkey.clone())
+						|| output.confirmations == 0 || output.confirmations < wallet.min_trusted_confs()
+						|| output.value != known.value
+						|| output.script_pub_key.script()? != known.script_pubkey {
+						available = false;
+						break;
+					}
+					funding = funding.checked_add(output.value).context("fee funding overflow")?;
+				}
+				if !available || funding < self.config.min_cpfp_amount { continue }
+				let mut update = bdk_wallet::Update::default();
+				update.tx_update.txs.push(Arc::new(parent.clone()));
+				wallet.apply_update(update)?;
+				fees = MakeCpfpFees::Rbf { min_effective_fee_rate: target,
+					current_package_fee: wallet.calculate_fee(&child)? };
+				replacement = Some(id);
+				break;
+			}
+		}
+		if replacement.is_none() && !wallet.has_trusted_balance(self.config.min_cpfp_amount) {
 			warn!(allocation_id = group.id, "Expiry payouts need confirmed usable watchman funds");
 			return Ok(());
 		}
@@ -228,8 +267,8 @@ impl Watchman {
 				|| self.bitcoind.try_get_tx_out(point, true).await?.is_some();
 			if !confirmed || !available { excluded.push(point); }
 		}
-		let child = wallet.make_signed_p2a_cpfp_with_coin_selection(
-			&parent, fees, &excluded, LargestFirstCoinSelection,
+		let child = wallet.make_signed_p2a_cpfp_replacing(
+			&parent, fees, &excluded, LargestFirstCoinSelection, replacement,
 		).context("funding expiry payout fee child")?;
 		if child.vsize() > MAX_FEE_CHILD_VSIZE {
 			wallet.mark_output_keys_unused(&child);

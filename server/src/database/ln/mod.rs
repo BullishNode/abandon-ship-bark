@@ -224,9 +224,8 @@ impl<'t> Tx<'t> {
 	/// HTLC-send vtxos that were committed to it. Errors if there is
 	/// already an open attempt for the same payment hash.
 	///
-	/// `lightning_htlc_subscription_id` records the subscription the payment
-	/// was initiated against, making it an intra-Ark self-payment. This is
-	/// decided at initiation time and stored; it is never re-derived.
+	/// `lightning_htlc_subscription_id` records the receive this attempt
+	/// successfully funded, not merely the invoice's routing destination.
 	///
 	/// `user_agent` is the raw `x-user-agent` of the initiating client
 	/// ([`crate::telemetry::current_user_agent`]), not the bucketed metric

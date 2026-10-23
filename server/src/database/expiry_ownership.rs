@@ -301,6 +301,17 @@ impl Tx<'_> {
 							return Ok(proposal);
 						}
 					}
+					// An issued internal receive still commits its funding source
+					// until every grant is reclaimed, even past the source's CLTV.
+					let issued = self.query_one("SELECT EXISTS(SELECT 1 FROM lightning_payment_attempt a \
+						JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=a.id \
+						JOIN vtxo g ON g.lightning_htlc_subscription_id=a.lightning_htlc_subscription_id \
+						JOIN htlc_vtxo h ON h.id=g.id WHERE l.vtxo_id=$1 AND a.payment_hash=$2)",
+						&[&state.vtxo_id.to_string(), &hash.to_string()]).await?.get::<_, bool>(0);
+					if issued {
+						proposal.disposition = OwnershipDisposition::Unresolved("internal receive grants not reclaimed");
+						return Ok(proposal);
+					}
 				}
 				// A same-hash receive funded by another source cannot retain
 				// this sender's money. Open attempts still wait.

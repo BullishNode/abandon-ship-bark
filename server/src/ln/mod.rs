@@ -48,6 +48,17 @@ use crate::{check_max_amount, telemetry, Server, CAPTAIND_API_KEY};
 
 
 
+pub(crate) const HTLC_EXPIRY_MARGIN: BlockDelta = BlockDelta::new(30);
+
+pub(crate) fn validate_htlc_source_expiry(source: BlockHeight, htlc: BlockHeight) -> anyhow::Result<()> {
+	let minimum = htlc.checked_add(HTLC_EXPIRY_MARGIN).badarg("HTLC funding expiry overflows")?;
+	if source <= minimum {
+		return badarg!("funding coin expiry {} must be after HTLC expiry {} plus {} blocks; refresh the coin first",
+			source, htlc, HTLC_EXPIRY_MARGIN);
+	}
+	Ok(())
+}
+
 fn validate_htlc_duration(tip: BlockHeight, requested: BlockHeight, maximum: BlockDelta) -> anyhow::Result<()> {
 	let last = tip.checked_add(maximum).badarg("HTLC expiry limit overflows")?;
 	if requested <= tip || requested > last {
@@ -542,7 +553,11 @@ impl Server {
 			if internal {
 				let htlc_vtxos = htlc_vtxo::get_htlc_vtxo_states_by_payment_hash(&t, payment_hash).await?;
 				let watchman_tip = t.get_highest_block(BlockTable::Watchmand).await?.map(|b| b.height);
-				let htlc_recvs_expired = htlc_recvs_expired(&htlc_vtxos, tip, watchman_tip);
+				let htlc_recvs_expired = htlc_recvs_expired(&htlc_vtxos, tip, watchman_tip)
+					&& htlc_vtxos.iter().filter(|h| h.direction() == HtlcDirection::Outgoing)
+						.all(|h| h.htlc.chain_resolution != Some(HtlcResolution::Revoked)
+							|| h.htlc.chain_resolution_height.is_some_and(|height|
+								watchman_tip.is_some_and(|tip| tip.to_u32().saturating_sub(height.to_u32()) >= 6)));
 				if let Some((status, htlc_recvs_granted)) =
 					t.cancel_revocable_htlc_subscription(payment_hash, htlc_recvs_expired).await?
 				{
@@ -1166,6 +1181,15 @@ mod tests {
 
 		validate_intra_ark_payment(&sub, &Invoice::Bolt11(amountless), Amount::from_sat(1000))
 			.expect_err("amountless invoice must be rejected");
+	}
+
+	#[test]
+	fn htlc_source_outlives_timeout_margin() {
+		let expiry = BlockHeight::new(100);
+		assert!(validate_htlc_source_expiry(BlockHeight::new(129), expiry).is_err());
+		assert!(validate_htlc_source_expiry(BlockHeight::new(130), expiry).is_err());
+		assert!(validate_htlc_source_expiry(BlockHeight::new(131), expiry).is_ok());
+		assert!(validate_htlc_source_expiry(BlockHeight::MAX, BlockHeight::MAX).is_err());
 	}
 
 	#[test]

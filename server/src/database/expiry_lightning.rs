@@ -87,8 +87,7 @@ impl Tx<'_> {
 				};
 				let Some(height) = height else { return Ok(None); };
 				let height = u32::try_from(height)?;
-				if !depth.checked_sub(1).and_then(|delta| height.checked_add(delta))
-					.is_some_and(|required| required <= completed) { return Ok(None); }
+				if !height.checked_add(depth).is_some_and(|required| required <= completed) { return Ok(None); }
 				last = last.max(height);
 			}
 		}

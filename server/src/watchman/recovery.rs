@@ -44,14 +44,23 @@ impl Watchman {
 			return Ok(None);
 		};
 		self.verify_expiry_view(view).await?;
-		let (ids, txids, claims) = self.db.read(async |t| {
+		let (ids, recheck, txids, claims) = self.db.read(async |t| {
 			let allocations = t.query("
-				SELECT id, sweep_txid
+				SELECT id, sweep_txid, status <> 'confirmed'
+					OR confirmed_height + 6 >= $1
+					OR NOT EXISTS(SELECT 1 FROM watchmand_block b
+						WHERE b.height=confirmed_height AND b.hash=confirmed_hash) AS recheck
 				FROM expiry_allocation
 				ORDER BY id
-			", &[]).await?;
+			", &[&i64::from(view.captaind.height.min(view.watchmand.height))]).await?;
 			let ids = allocations.iter().map(|r| r.get::<_, i64>("id")).collect::<Vec<_>>();
-			let mut txids = allocations.iter().filter_map(|r| r.get::<_, Option<&str>>("sweep_txid"))
+			let recheck = allocations.iter().filter(|r| r.get::<_, bool>("recheck"))
+				.map(|r| r.get::<_, i64>("id")).collect::<Vec<_>>();
+			let mut txids = allocations.iter().filter(|r| r.get::<_, bool>("recheck"))
+				.filter_map(|r| r.get::<_, Option<&str>>("sweep_txid"))
+				.map(Txid::from_str).collect::<Result<BTreeSet<_>, _>>()?;
+			let settled = allocations.iter().filter(|r| !r.get::<_, bool>("recheck"))
+				.filter_map(|r| r.get::<_, Option<&str>>("sweep_txid"))
 				.map(Txid::from_str).collect::<Result<BTreeSet<_>, _>>()?;
 			let mut claims = Vec::new();
 			for row in t.query("
@@ -62,6 +71,7 @@ impl Watchman {
 				AND v.onchain_spent_height <= $1
 			", &[&i32::try_from(view.captaind.height.min(view.watchmand.height).to_u32())?]).await? {
 				let txid: Txid = row.get::<_, &str>("onchain_spent_txid").parse()?;
+				if settled.contains(&txid) { continue; }
 				// The persisted virtual transaction index distinguishes known
 				// intermediate steps from a terminal claimant transaction.
 				if t.get_virtual_transaction_by_txid(txid).await?.is_some() {
@@ -70,7 +80,7 @@ impl Watchman {
 				txids.insert(txid);
 				claims.push((row.get::<_, i64>("id"), ServerVtxo::deserialize(row.get("vtxo"))?, txid));
 			}
-			Ok((ids, txids, claims))
+			Ok((ids, recheck, txids, claims))
 		}).await?;
 		let mut confirmed = BTreeMap::<Txid, BlockRef>::new();
 		for txid in txids {
@@ -112,7 +122,8 @@ impl Watchman {
 			t.execute("
 				UPDATE expiry_allocation
 				SET confirmed_height = NULL, confirmed_hash = NULL, status = 'pending'
-			", &[]).await?;
+				WHERE id = ANY($1)
+			", &[&recheck]).await?;
 			t.execute("
 				DELETE
 				FROM expiry_terminal_claim

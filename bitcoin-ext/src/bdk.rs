@@ -417,6 +417,19 @@ pub trait WalletExt: BorrowMut<Wallet> {
 		excluded: &[OutPoint],
 		coin_selection: Cs,
 	) -> Result<Transaction, CpfpInternalError> {
+		self.make_signed_p2a_cpfp_replacing(tx, fees, excluded, coin_selection, None)
+	}
+
+	/// Reuse the confirmed funding of a verified orphaned child when BDK still
+	/// considers those inputs spent. The caller must verify availability in Core.
+	fn make_signed_p2a_cpfp_replacing<Cs: CoinSelectionAlgorithm + Clone>(
+		&mut self,
+		tx: &Transaction,
+		fees: MakeCpfpFees,
+		excluded: &[OutPoint],
+		coin_selection: Cs,
+		replacement: Option<Txid>,
+	) -> Result<Transaction, CpfpInternalError> {
 		let wallet = self.borrow_mut();
 		let (fee_anchor_point, fee_anchor_txout) = tx.fee_anchor()
 			.ok_or_else(|| CpfpInternalError::NoFeeAnchor(tx.compute_txid()))?;
@@ -432,12 +445,18 @@ pub trait WalletExt: BorrowMut<Wallet> {
 		// We will loop, constructing the transaction and signing it until we exceed the effective
 		// fee rate and meet any minimum fee requirements
 		let mut final_child_weight = Weight::ZERO;
-		let mut fee_needed = extra_fee_needed;
+		let mut fee_needed = replacement.and_then(|id| wallet.tx_graph().get_tx(id))
+			.map(|child| fees.package_fee(parent_weight, child.weight())).unwrap_or(extra_fee_needed);
 		for i in 0..100 {
 			// The change is this transaction's only output, so use a coin selection that
 			// guarantees it stays above the dust limit.
-			let mut b = wallet.build_tx()
-				.coin_selection(WithGuaranteedChange(coin_selection.clone()));
+			let builder = match replacement {
+				Some(id) => wallet.build_fee_bump(id)
+					.map_err(|e| CpfpInternalError::General(e.to_string()))?,
+				None => wallet.build_tx(),
+			};
+			let mut b = builder.coin_selection(WithGuaranteedChange(coin_selection.clone()));
+			b.set_recipients(Vec::new());
 			b.only_witness_utxo();
 			b.unspendable(excluded.to_vec());
 			b.exclude_unconfirmed();

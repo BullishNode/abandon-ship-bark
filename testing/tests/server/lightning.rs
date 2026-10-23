@@ -2189,6 +2189,74 @@ async fn settled_hash_cannot_be_granted_htlc_recv_vtxos() {
 	assert_vtxopool_consistency(&srv).await;
 }
 
+/// A receive funded over Lightning must not become collateral for an
+/// unsuccessful Ark sender merely because both use the same invoice.
+#[tokio::test]
+async fn failed_intra_ark_promotion_does_not_bind_another_payers_grants() {
+	let ctx = TestContext::new("server/failed_intra_ark_promotion_other_payer").await;
+	let lightning = ctx.new_lightning_setup("lightningd").await;
+	let srv = ctx.captaind("server").lightningd(&lightning.internal).funded(btc(10))
+		.cfg(|cfg| cfg.receive_htlc_forward_timeout = Duration::from_secs(3600)).create().await;
+	srv.wait_for_vtxopool(&ctx).await;
+	let sender = ctx.bark("sender", &srv).funded(sat(200_000)).create().await;
+	let ids = sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	let wallet = sender.client().await;
+	let preimage = ark::lightning::Preimage::random();
+	let hash = preimage.compute_payment_hash();
+	let mut rpc = srv.get_public_rpc().await;
+	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 128,
+		mailbox_id: None, description: None,
+	}).await.unwrap().into_inner().bolt11;
+	lightning.sync().await;
+	let payer = lightning.external.clone();
+	let external_invoice = invoice.clone();
+	let payment = tokio::spawn(async move { payer.try_pay_bolt11(external_invoice).await });
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	wait_for_subscription_status(&db, hash, "accepted").await;
+	let receiver = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	let tip = ctx.bitcoind().get_block_count().await as u32;
+	let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
+		htlc_recv_expiry: tip + 64, lightning_receive_anti_dos: None,
+	}).await.unwrap().into_inner().htlc_vtxos;
+	assert!(!grants.is_empty());
+	wait_for_subscription_status(&db, hash, "htlcs-ready").await;
+	let owner = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	let sources = cosign_htlc_send_to_pubkey(&ctx, &srv, &wallet, &ids, owner.public_key(), hash).await;
+	wallet.register_vtxo_transactions_with_server(&sources).await.unwrap();
+	rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
+		invoice, payment_amount_sat: 90_000,
+		htlc_vtxo_ids: sources.iter().map(|v| v.id().to_bytes().to_vec()).collect(),
+		mailbox_id: None, retry_for_secs: Some(5),
+	}).await.unwrap();
+	wait_for_attempt_status(&db, hash, "failed").await;
+	let attempt = db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap();
+	assert_eq!(attempt.status, server::database::ln::LightningPaymentStatus::Failed);
+	assert!(attempt.error.as_deref().unwrap().contains("already being paid"));
+	assert_eq!(attempt.lightning_htlc_subscription_id, None, "a failed promotion funded no grants");
+	let keys = vec![owner; sources.len()];
+	let builder = ark::arkoor::package::ArkoorPackageBuilder::new_claim_all_with_checkpoints(
+		sources, ark::VtxoPolicy::new_pubkey(owner.public_key()),
+	).unwrap().generate_user_nonces(&keys).unwrap();
+	let reply = rpc.request_lightning_pay_htlc_revocation(
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+	).await.expect("the unsuccessful sender must retain its cooperative refund").into_inner();
+	let refund = builder.user_cosign(&keys,
+		ark::arkoor::package::ArkoorPackageCosignResponse::try_from(reply).unwrap())
+		.unwrap().build_signed_vtxos();
+	assert_eq!(refund.iter().map(Vtxo::amount).sum::<Amount>(), sat(100_000));
+	wallet.register_vtxo_transactions_with_server(&refund).await.unwrap();
+	assert_eq!(lightning_subscription_status(&db, hash).await.as_deref(), Some("htlcs-ready"));
+	let native = lightning.internal.hold_client().await.list(hold::ListRequest {
+		constraint: Some(hold::list_request::Constraint::PaymentHash(hash.to_vec())),
+	}).await.unwrap().into_inner().invoices;
+	assert_eq!(native.len(), 1);
+	assert_eq!(native[0].state(), hold::InvoiceState::Accepted);
+	assert!(!payment.is_finished(), "the unrelated native payer must remain held");
+	payment.abort();
+}
+
 /// An intra-Ark payment of a receive is refused while an outgoing payment to
 /// another invoice with the same payment hash is still open.
 ///

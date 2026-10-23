@@ -32,7 +32,6 @@ pub mod nursery;
 pub mod rounds;
 pub mod tree;
 pub mod vtxopool;
-pub(crate) mod user_exit_claim;
 
 mod model;
 mod query;

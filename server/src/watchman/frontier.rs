@@ -102,12 +102,8 @@ impl VtxoExitFrontier {
 			}
 
 			let chain_resolution = classify_htlc_spend(&vtxo, witness);
-			let user_claim = super::user_claim::is_user_exit_claim(&vtxo, witness);
 			self.db.write(async |t| {
 				t.register_vtxo_spend(vtxo_id, spent_height, spent_txid).await?;
-				if user_claim {
-					t.record_user_exit_claim(transaction, spent_height).await?;
-				}
 				if let Some(resolution) = chain_resolution {
 					htlc_vtxo::set_htlc_vtxo_chain_resolution(
 						&t, vtxo_id, resolution, spent_height,
@@ -295,9 +291,6 @@ impl ChainEventListener for Arc<RwLock<VtxoExitFrontier>> {
 		// detection below works correctly for all frontier entries.
 		frontier.sync_new_vtxos_from_db().await?;
 
-		let txids = block.block.txdata.iter().map(Transaction::compute_txid).collect::<Vec<_>>();
-		frontier.db.write(async |t| t.confirm_user_exit_claims(&txids, height).await).await?;
-
 		for tx in &block.block.txdata {
 			let txid = tx.compute_txid();
 
@@ -343,7 +336,6 @@ impl ChainEventListener for Arc<RwLock<VtxoExitFrontier>> {
 		// Rollback all transactions that ocurred above this block
 		frontier.db.write(async |t| {
 			t.reorg_frontier(block_ref.height).await?;
-			t.reorg_user_exit_claims(block_ref.height).await?;
 			htlc_vtxo::clear_htlc_vtxo_chain_resolutions_above(&t, block_ref.height).await?;
 			Ok(())
 		}).await?;

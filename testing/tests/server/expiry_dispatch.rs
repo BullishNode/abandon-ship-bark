@@ -461,7 +461,17 @@ async fn assert_dispatch_recovery(queued_request: bool, foreign_complete: bool, 
 			assert!(db.write(async |tx|tx.admit_lightning_dispatch(&attempt).await).await.unwrap());
 			attempt
 		};
+		let (sync_done, mut sync_done_rx) = tokio::sync::mpsc::unbounded_channel();
 		if foreign_complete {
+			let prefix = format!("Lightning payment attempt ({}): Check ", attempt.id);
+			srv.add_stdout_handler(move |line: &str| {
+				if let Ok(record) = server_log::parse_record(line) {
+					if record.message.starts_with(&prefix) && record.message.contains(" done, updated next check to ") {
+						let _ = sync_done.send(record.timestamp);
+					}
+				}
+				false
+			});
 			// The operator channel pays this real external invoice; no
 			// Bark attempt/source is linked to that foreign payment. Never fake
 			// a historical row, outcome, preimage or remote error.
@@ -476,20 +486,32 @@ async fn assert_dispatch_recovery(queued_request: bool, foreign_complete: bool, 
 		}
 		if foreign_complete {
 			// No direct monitor call or pause: wait for the normal server loop
-			// to observe the foreign group and commit the misleading coarse fields.
+			// to retain the foreign preimage without closing the original dispatch.
 			tokio::time::timeout(Duration::from_secs(35), async {
 				loop {
-					let observed = db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap();
-					if observed.status == LightningPaymentStatus::Succeeded {
-						assert!(observed.final_amount_msat.is_some());
+					let recorded = db.read(async |tx| Ok(tx.query_opt(
+						"SELECT created_at FROM htlc_settlement WHERE payment_hash=$1", &[&hash.to_string()],
+					).await?.map(|row| row.get::<_, chrono::DateTime<chrono::Local>>(0)))).await.unwrap();
+					if let Some(recorded) = recorded {
+						// WAL retention precedes reconciliation. Observe the existing
+						// end-of-check trace before asserting the resulting fields.
+						while sync_done_rx.recv().await.unwrap() < recorded {}
+						let observed = db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap();
+						assert_eq!(observed.id, attempt.id);
+						assert!(matches!(observed.status, LightningPaymentStatus::Requested | LightningPaymentStatus::Submitted));
+						assert!(observed.final_amount_msat.is_none());
 						let source_state = db.read(async |tx| Ok(tx.query_one("SELECT v.spend_state::TEXT,h.offchain_resolution::TEXT, \
 							EXISTS(SELECT 1 FROM expiry_lightning_external_success WHERE id=$1) AS success, \
-							EXISTS(SELECT 1 FROM expiry_lightning_internal_funding WHERE id=$1) AS funding \
-							FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=$2", &[&attempt.id,&source.to_string()]).await?)).await.unwrap();
+							EXISTS(SELECT 1 FROM expiry_lightning_internal_funding WHERE id=$1) AS funding, \
+							EXISTS(SELECT 1 FROM expiry_lightning_terminal_failure WHERE id=$1) AS failed, \
+							EXISTS(SELECT 1 FROM mailbox WHERE payment_hash=$3) AS notified \
+							FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=$2", &[&attempt.id,&source.to_string(),&hash.to_string()]).await?)).await.unwrap();
 						assert_eq!(source_state.get::<_, &str>("spend_state"), "spendable",
 							"foreign payment success must not consume the untouched own source");
 						assert!(source_state.get::<_, Option<&str>>("offchain_resolution").is_none());
 						assert!(!source_state.get::<_, bool>("success") && !source_state.get::<_, bool>("funding"));
+						assert!(!source_state.get::<_, bool>("failed"));
+						assert!(!source_state.get::<_, bool>("notified"));
 						break;
 					}
 					tokio::time::sleep(poll_interval()).await;
@@ -948,10 +970,6 @@ async fn expiry_dispatch_rechecks_registered_sources_and_closed_attempts() {
 			&[htlc.id()], None, tip, sat(0), None, Duration::from_secs(1), None).await?;
 		t.get_open_lightning_payment_attempt_by_payment_hash(hash).await?.ok_or_else( || anyhow::anyhow!("attempt disappeared"))
 	}).await.unwrap();
-	assert!(db.write(async |t| t.admit_lightning_dispatch(&attempt).await).await.unwrap());
-	let separate_dispatcher = server::database::Db::connect(&srv.config().postgres).await.unwrap();
-	assert!(!separate_dispatcher.write(async |t| t.admit_lightning_dispatch(&attempt).await).await.unwrap(),
-		"a separate connection cannot dispatch the same durable attempt twice");
 	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(&attempt,
 		LightningPaymentStatus::Failed, Some("closed before queued dispatch")).await).await.unwrap().is_some());
 	let replacement = db.write(async |t| {
@@ -963,6 +981,11 @@ async fn expiry_dispatch_rechecks_registered_sources_and_closed_attempts() {
 	assert!(!db.write(async |t| t.admit_lightning_dispatch(&attempt).await).await.unwrap(),
 		"an obsolete queued task cannot dispatch a replacement attempt");
 	assert!(db.write(async |t| t.admit_lightning_dispatch(&replacement).await).await.unwrap());
+	let separate_dispatcher = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	assert!(!separate_dispatcher.write(async |t| t.admit_lightning_dispatch(&replacement).await).await.unwrap(),
+		"a separate connection cannot dispatch the same durable attempt twice");
+	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(&replacement,
+		LightningPaymentStatus::Failed, Some("unproven failure after dispatch")).await).await.is_err());
 	let expired = ctx.generate_blocks(input.expiry_height().to_u32() + 1 - tip.to_u32()).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
 	let error = db.write(async |t| t.admit_lightning_dispatch(&replacement).await).await.unwrap_err();
@@ -1005,10 +1028,19 @@ async fn expiry_xpay_preserves_late_preimage_after_coarse_failure() {
 		.into_iter().map(|row| (row.get::<_, i32>("expiry"), row.get::<_, i32>("htlc_expiry"))).collect::<Vec<_>>()))
 		.await.unwrap();
 	assert_eq!(source_expiries.len(), source_ids.len());
-	// Inject the stale status at the database writer; neither the
-	// receiver's HTLC nor the real xpay call is synthesized or cancelled.
+	// The ordinary writer refuses an unproven terminal update.
 	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(&attempt,
-		LightningPaymentStatus::Failed, Some("injected stale coarse reconciliation")).await).await.unwrap().is_some());
+		LightningPaymentStatus::Failed, Some("unproven coarse reconciliation")).await).await.is_err());
+	// Retain a legacy coarse-state fixture under the same source/attempt
+	// exclusion. The actual native held part and outcome history stay intact.
+	db.write(async |t| {
+		let sources = source_ids.iter().map(ToString::to_string).collect::<Vec<_>>();
+		t.query("SELECT vtxo_id FROM vtxo WHERE vtxo_id=ANY($1) ORDER BY vtxo_id FOR UPDATE", &[&sources]).await?;
+		t.query_one("SELECT id FROM lightning_payment_attempt WHERE id=$1 FOR UPDATE", &[&attempt.id]).await?;
+		t.execute("UPDATE lightning_payment_attempt SET status='failed',error='legacy coarse reconciliation', \
+			updated_at=NOW() WHERE id=$1", &[&attempt.id]).await?;
+		Ok(())
+	}).await.unwrap();
 	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
 	receiver.settle(hold::SettleRequest { payment_preimage: preimage.to_vec() }).await.unwrap();
 	async {
@@ -1043,6 +1075,4 @@ async fn expiry_xpay_preserves_late_preimage_after_coarse_failure() {
 	assert!(source_expiries.iter().all(|(backing, htlc)|
 		success_tip < u64::try_from(*backing).unwrap() && success_tip < u64::try_from(*htlc).unwrap()),
 		"public Success must be usable before source expiry too");
-	assert_eq!(db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap().status,
-		LightningPaymentStatus::Failed, "the public result must use settlement rather than trusting this stale row");
 }

@@ -429,13 +429,13 @@ impl LightningManager {
 					.collect::<Result<Vec<_>, _>>()?;
 				ensure!(!ids.is_empty(), "internal Lightning attempt has no source coins");
 				crate::database::expiry_guard::guard_new_lightning_inputs(t, &ids).await?;
-				t.lock_htlc_settlements().await?;
-				t.ensure_not_settled(attempt.payment_hash).await?;
 				ensure!(t.query_opt("
 					SELECT id FROM lightning_payment_attempt WHERE id=$1
 					AND lightning_htlc_subscription_id=$2 AND status NOT IN ('failed','succeeded') FOR UPDATE
 				",
 					&[&attempt.id,&subscription.id]).await?.is_some(), "internal Lightning source attempt already closed");
+				t.lock_htlc_settlements().await?;
+				t.ensure_not_settled(attempt.payment_hash).await?;
 				let promoted = t.store_lightning_htlc_subscription_status(
 					subscription.id, LightningHtlcSubscriptionStatus::Accepted,
 					Some(htlc_send_expiry_height), Some(LightningHtlcSubscriptionStatus::Created),

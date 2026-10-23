@@ -230,18 +230,10 @@ impl ClnXpayClient {
 		}
 	}
 
-	/// Queries CLN's `listpays` for the given attempt and updates the DB to match.
-	///
-	/// If CLN has no record of the payment and the attempt is still open, it is
-	/// marked `Failed`. If CLN reports a different status than the DB, the DB is
-	/// updated (unless the DB status is already final, which is logged as an error).
-	/// Sends on `payment_update_tx` when the status changes.
-	///
-	/// `pay_error` is the error CLN returned for the xpay call this follows.
-	/// xpay only returns once it has stopped trying, so the attempt is failed
-	/// even when `listpays` still reports it pending. The monitor loop passes
-	/// `None`; it is reconciling attempts it did not make.
-	/// Source-specific receipts alone decide source release and mailbox completion.
+	/// Reconcile native history and retain its valid preimages independently.
+	/// A dispatched attempt closes only on its own exact outcome receipt.
+	/// Missing history, a foreign group or an RPC error leaves it open.
+	/// Legacy attempts without a dispatch retain their existing reconciliation.
 	pub async fn sync_payment_attempt_status(&self, attempt: LightningPaymentAttempt, pay_error: Option<&str>) -> anyhow::Result<()> {
 		// A pending xpay reconciles its own result, even across a reconnect.
 		// Always take dispatch before decision; skip rather than wait here.
@@ -360,6 +352,28 @@ impl ClnXpayClient {
 					self.payment_handler().post_lightning_send_finished(&attempt).await;
 				}
 			}
+			// Hash-wide aggregates cannot close this dispatch or supply its fee.
+			// The shared writer rechecks these receipts under the admission locks.
+			if !attempt.status.is_final() {
+				let outcome = self.db.read(async |t| {
+					let success = t.query_opt("SELECT amount_sent_msat FROM expiry_lightning_external_success WHERE id=$1",
+						&[&attempt.id]).await?;
+					let failed = t.query_opt("SELECT id FROM expiry_lightning_terminal_failure WHERE id=$1",
+						&[&attempt.id]).await?.is_some();
+					ensure!(!(success.is_some() && failed), "dispatch has contradictory outcome receipts");
+					if let Some(success) = success {
+						let amount = u64::try_from(success.get::<_, i64>("amount_sent_msat"))?;
+						Ok(Some((LightningPaymentStatus::Succeeded, Some(amount))))
+					} else if failed {
+						Ok(Some((LightningPaymentStatus::Failed, None)))
+					} else { Ok(None) }
+				}).await?;
+				if let Some((status, amount)) = outcome {
+					self.payment_handler().process_payment_attempt(&self.settler, &attempt,
+						status, error, amount, None).await?;
+				}
+			}
+			return Ok(());
 		}
 		if listpays_response.pays.is_empty() {
 			match attempt.status {

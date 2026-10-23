@@ -397,6 +397,57 @@ impl<'t> Tx<'t> {
 		Ok(())
 	}
 
+	/// The outer None is a stale caller; the inner None is a NULL final amount.
+	async fn lightning_attempt_update_amount(
+		&self, attempt: &LightningPaymentAttempt, status: LightningPaymentStatus,
+		final_amount_msat: Option<u64>,
+	) -> anyhow::Result<Option<Option<i64>>> {
+		self.lock_lightning_attempt_sources(attempt.id).await?;
+		let Some(current) = self.query_opt("SELECT updated_at,amount_msat,final_amount_msat, \
+			lightning_htlc_subscription_id FROM lightning_payment_attempt WHERE id=$1 FOR UPDATE",
+			&[&attempt.id]).await? else { return Ok(None); };
+		if current.get::<_, DateTime<Local>>("updated_at") != attempt.updated_at { return Ok(None); }
+		let supplied = final_amount_msat.map(i64::try_from).transpose()
+			.context("Lightning final amount exceeds database range")?;
+		let previous = current.get::<_, Option<i64>>("final_amount_msat");
+		// These fresh statements must follow the attempt lock. A joined query
+		// can retain a snapshot taken before a concurrent admission commits.
+		if self.query_opt("SELECT id FROM expiry_lightning_dispatch WHERE id=$1",
+			&[&attempt.id]).await?.is_none() {
+			return Ok(Some(supplied.or(previous)));
+		}
+		let principal = current.get::<_, i64>("amount_msat");
+		ensure!(principal >= 0 && principal == i64::try_from(attempt.amount_msat)?
+			&& current.get::<_, Option<i64>>("lightning_htlc_subscription_id").is_none(),
+			"dispatch does not describe an external payment attempt");
+		let success = self.query_opt("SELECT created_index,amount_sent_msat \
+			FROM expiry_lightning_external_success WHERE id=$1", &[&attempt.id]).await?;
+		let failed = self.query_opt("SELECT id FROM expiry_lightning_terminal_failure WHERE id=$1",
+			&[&attempt.id]).await?.is_some();
+		ensure!(!(success.is_some() && failed), "dispatch has contradictory outcome receipts");
+		let amount = match status {
+			LightningPaymentStatus::Succeeded => {
+				let success = success.context("dispatched payment has no own success receipt")?;
+				let amount = success.get::<_, i64>("amount_sent_msat");
+				ensure!(success.get::<_, i64>("created_index") > 0 && amount >= principal,
+					"dispatch success amount or native index is invalid");
+				ensure!(supplied.is_none_or(|value| value == amount),
+					"final amount differs from the dispatch success receipt");
+				Some(amount)
+			},
+			LightningPaymentStatus::Failed => {
+				ensure!(failed, "dispatched payment has no own terminal failure receipt");
+				ensure!(supplied.is_none(), "failed dispatch cannot have a final sent amount");
+				None
+			},
+			LightningPaymentStatus::Requested | LightningPaymentStatus::Submitted => {
+				ensure!(supplied.is_none(), "open dispatch cannot import a final sent amount");
+				previous
+			},
+		};
+		Ok(Some(amount))
+	}
+
 	/// Returns `None` when the optimistic-lock predicate missed.
 	pub async fn update_lightning_payment_attempt_status(
 		&self,
@@ -404,42 +455,21 @@ impl<'t> Tx<'t> {
 		new_status: LightningPaymentStatus,
 		new_payment_error: Option<&str>,
 	) -> anyhow::Result<Option<DateTime<Local>>> {
-		// We want to preserve any previous error message in case we don't have a new one.
-		let row = if let Some(error) = new_payment_error {
-			let stmt = self.prepare("
-				UPDATE lightning_payment_attempt
-				SET status = $3,
-					error = $4,
-					updated_at = NOW()
-				WHERE id = $1 AND updated_at = $2
-				RETURNING updated_at;
-			").await?;
-			self.query_opt(
-				&stmt,
-				&[
-					&old_payment_attempt.id,
-					&old_payment_attempt.updated_at,
-					&new_status,
-					&error
-				]
-			).await?
-		} else {
-			let stmt = self.prepare("
-				UPDATE lightning_payment_attempt
-				SET status = $3,
-					updated_at = NOW()
-				WHERE id = $1 AND updated_at = $2
-				RETURNING updated_at;
-			").await?;
-			self.query_opt(
-				&stmt,
-				&[
-					&old_payment_attempt.id,
-					&old_payment_attempt.updated_at,
-					&new_status
-				]
-			).await?
-		};
+		let Some(final_amount) = self.lightning_attempt_update_amount(old_payment_attempt, new_status, None).await?
+			else { return Ok(None); };
+		let stmt = self.prepare("
+			UPDATE lightning_payment_attempt
+			SET status = $3,
+				error = COALESCE($4, error),
+				final_amount_msat = $5,
+				updated_at = NOW()
+			WHERE id = $1 AND updated_at = $2
+			RETURNING updated_at;
+		").await?;
+		let row = self.query_opt(&stmt, &[
+			&old_payment_attempt.id, &old_payment_attempt.updated_at,
+			&new_status, &new_payment_error, &final_amount,
+		]).await?;
 
 		Ok(row.map(|r| r.get("updated_at")))
 	}
@@ -472,17 +502,18 @@ impl<'t> Tx<'t> {
 		new_payment_error: Option<&str>,
 		new_final_amount_msat: Option<u64>,
 	) -> anyhow::Result<Option<DateTime<Local>>> {
+		let Some(final_amount_msat) = self.lightning_attempt_update_amount(attempt, new_status, new_final_amount_msat).await?
+			else { return Ok(None); };
 		let stmt = self.prepare("
 			UPDATE lightning_payment_attempt
 			SET status = $3,
 				error = CASE WHEN $3 = 'succeeded'::lightning_payment_status THEN NULL ELSE COALESCE($4, error) END,
-				final_amount_msat = COALESCE($5, final_amount_msat),
+				final_amount_msat = $5,
 				updated_at = NOW()
 			WHERE id = $1 AND updated_at = $2
 			RETURNING updated_at;
 		").await?;
 
-		let final_amount_msat = new_final_amount_msat.map(|u| u as i64);
 		let error_str = new_payment_error;
 		let row = self.query_opt(&stmt, &[
 			&attempt.id,
@@ -1137,10 +1168,8 @@ impl<'t> Tx<'t> {
 	) -> anyhow::Result<bool> {
 		let payment_hash = attempt.payment_hash;
 
-		// Skip if the attempt is already in a final state. The on-chain
-		// settlement path records the preimage (via the settler) before
-		// CLN finalizes the payment attempt; checking only the DB status
-		// here is sufficient because the preimage lives in htlc_settlement.
+		// Ordinary monitoring does not repair old final flags. A new final
+		// transition still requires the exact dispatch outcome in the writer.
 		if attempt.status.is_final() {
 			debug!("Lightning payment attempt update for {payment_hash}: Skipped update because the \
 				payment is already in a final state.");

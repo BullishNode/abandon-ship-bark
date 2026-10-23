@@ -95,14 +95,12 @@ impl<'a> PaymentAttemptHandler<'a> {
 				matches!(status, LightningPaymentStatus::Succeeded),
 				"payment is succeeded if preimage is known, not {}", status,
 			);
-			debug_assert!(
-				preimage.compute_payment_hash() == attempt.payment_hash,
-				"preimage must match payment hash",
-			);
+			ensure!(preimage.compute_payment_hash() == attempt.payment_hash,
+				"preimage must match payment hash");
 			settler.settle(preimage).await?;
 		}
 
-		let updated = self.db.write(async |t| {
+		let (updated, effective_amount_msat) = self.db.write(async |t| {
 			t.lock_lightning_attempt_sources(attempt.id).await?;
 			let updated = t.verify_and_update_payment_attempt(
 				attempt, status, payment_error, final_amount_msat
@@ -117,7 +115,12 @@ impl<'a> PaymentAttemptHandler<'a> {
 				);
 			}
 
-			Ok(updated)
+			let amount = if updated {
+				t.query_one("SELECT final_amount_msat FROM lightning_payment_attempt WHERE id=$1",
+					&[&attempt.id]).await?.get::<_, Option<i64>>(0)
+					.map(u64::try_from).transpose().context("negative Lightning final amount")?
+			} else { None };
+			Ok((updated, amount))
 		}).await?;
 
 		if updated {
@@ -142,7 +145,7 @@ impl<'a> PaymentAttemptHandler<'a> {
 			// rows have no stored fee and are silently skipped.
 			if status == LightningPaymentStatus::Succeeded {
 				if let Some(user_fee) = attempt.user_fee {
-					let routing_fee_sat = attempt.routing_fee_sat_from(final_amount_msat);
+					let routing_fee_sat = attempt.routing_fee_sat_from(effective_amount_msat);
 					telemetry::record_ark_fee_lightning_send(user_fee.to_sat(), routing_fee_sat);
 				}
 
@@ -152,7 +155,7 @@ impl<'a> PaymentAttemptHandler<'a> {
 				// Utilisation only means something once a routing fee was
 				// actually paid.
 				let utilisation = (status == LightningPaymentStatus::Succeeded)
-					.then(|| attempt.routing_budget_utilisation_ppm(final_amount_msat))
+					.then(|| attempt.routing_budget_utilisation_ppm(effective_amount_msat))
 					.flatten();
 				// Attempted amount (not final_amount_msat / CLN's amount_sent_msat)
 				// so failed/succeeded volumes stay comparable.

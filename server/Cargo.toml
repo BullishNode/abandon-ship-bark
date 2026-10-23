@@ -53,7 +53,6 @@ async-trait.workspace = true
 async-stream.workspace = true
 pin-project.workspace = true
 serde_json.workspace = true
-prost.workspace = true
 rmp-serde.workspace = true
 config.workspace = true
 toml.workspace = true

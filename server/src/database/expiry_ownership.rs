@@ -100,7 +100,6 @@ impl Tx<'_> {
 		funding: &Transaction,
 		tip: BlockHeight,
 		watchman_tip: Option<BlockHeight>,
-		_internal_refund_depth: u32,
 	) -> anyhow::Result<OwnershipProposal> {
 		let mut proposal = OwnershipProposal::pending(fact, "missing complete source path");
 		let Some(full) = &fact.full_vtxo else { return Ok(proposal); };

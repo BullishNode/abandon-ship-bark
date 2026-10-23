@@ -186,7 +186,6 @@ async fn reclaim_reorg(when: When) {
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
 			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 4 }];
 			cfg.invoice_check_interval = Duration::from_secs(1);
-			cfg.expiry_internal_refund_depth = 6;
 		}).watchmand().create().await;
 	srv.wait_for_vtxopool(&ctx).await;
 	let operator_script = {
@@ -267,7 +266,7 @@ async fn reclaim_reorg(when: When) {
 				When::BeforeRefund | When::BeforeRefundFive => {
 					let depths = reclaims.iter().map(|txid| chain.custom_get_raw_transaction_info(*txid, None).unwrap()
 						.unwrap().confirmations.unwrap()).collect::<Vec<_>>();
-					assert!(depths.iter().all(|depth| *depth > 0 && *depth < srv.config().expiry_internal_refund_depth));
+					assert!(depths.iter().all(|depth| *depth > 0 && *depth < 6));
 					if when == When::BeforeRefundFive && depths.iter().any(|depth| *depth != 5) { continue; }
 					break reclaims;
 				},

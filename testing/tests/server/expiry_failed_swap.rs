@@ -253,7 +253,7 @@ async fn failed_swap_during_restart() {
 		BackingSnapshotLimits { max_rows: 1_000, max_serialized_bytes: 1_000_000 }).await).await.unwrap();
 	let fact = snapshot.regular.iter().find(|fact| fact.state.vtxo_id == source).unwrap();
 	let proposal = db.read(async |tx| tx.propose_expiry_ownership(fact, &funding,
-		before_deadline, Some(before_deadline), srv.config().expiry_internal_refund_depth).await).await.unwrap();
+		before_deadline, Some(before_deadline)).await).await.unwrap();
 	assert!(matches!(proposal.disposition, OwnershipDisposition::Unresolved(_)));
 	assert!(!proposal.needs_chain_progress);
 	let early = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_entitlement e \

@@ -132,7 +132,9 @@ captaind check-config /path/to/captaind.toml
 captaind check-config --watchman /path/to/watchmand.toml
 ```
 
-The internal Lightning refund depth must be at least 6. The supported protocol
+The bundled Core Lightning carries one patch: `onchaind` reports a timed-out
+on-chain HTLC to `lightningd` after 6 confirmations instead of 3, so a payment
+is only marked failed outside the supported reorg window. The supported protocol
 assumption excludes reorgs that remove 6 or more blocks. It includes reorgs that
 remove 1 through 5 blocks. This assumption does not make bitcoin finality
 absolute. Qualification of the reorg boundary remains incomplete.
@@ -186,7 +188,7 @@ validation does not establish liquidity, throughput or safe deadlines.
 | Lightning send fee | `[fees.lightning_send]`: `min_fee_sat`, `base_fee_sat`, `ppm_expiry_table`. `ln_max_fee_ppm` assigns a fraction of that customer fee to CLN's routing budget. Additional input value beyond principal plus the fee also increases that budget. |
 | Amount admission | `min_board_amount`, `max_vtxo_amount`, `max_board_amount`, `max_offboard_amount`, `max_arkoor_amount`, `max_ln_send_amount`, `max_ln_receive_amount`, `max_round_amount`. Unset optional maxima are unbounded. Zero disables the corresponding operation for the operation maxima. |
 | Tree and round geometry | `max_vtxo_exit_depth`, `max_arkoor_fanout`, `nb_round_nonces`, `round_interval`, `round_submit_time`, `round_sign_time`, `round_forfeit_nonces_timeout`. Geometry is not a measured capacity guarantee. |
-| Chain timing | `vtxo_lifetime`, `vtxo_exit_delta`, `required_board_confirmations`, `min_trusted_confs`, `expiry_internal_refund_depth`, `require_board_funding_tx`, `allow_expired_arkoor`, `nursery_confirm_target_blocks`. Refund depth defaults to 6 and validation rejects lower values. |
+| Chain timing | `vtxo_lifetime`, `vtxo_exit_delta`, `required_board_confirmations`, `min_trusted_confs`, `require_board_funding_tx`, `allow_expired_arkoor`, `nursery_confirm_target_blocks`. |
 | Lightning timing | `htlc_expiry_delta`, `htlc_send_expiry_delta`, `max_htlc_expiry_delta`, `max_user_invoice_cltv_delta`, `invoice_expiry`, `receive_htlc_forward_timeout`, `cln_xpay_timeout`, `cln_xpay_max_retry_for`. A retry deadline does not prove payment failure. |
 | Receive admission and pool | `ln_receive_anti_dos_required`; `[vtxopool]`: `vtxo_targets`, `vtxo_target_issue_threshold`, `vtxo_lifetime`, `vtxo_pre_expiry`, `max_vtxo_exit_depth`. Reserve liquidity and test replenishment under the declared load. |
 | Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons separately. Check initial fallback rates separately from later estimates. |

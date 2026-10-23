@@ -158,7 +158,6 @@ impl Tx<'_> {
 		view: ExpiryViewToken,
 		outputs: Vec<ReadyOutput>,
 		network: Network,
-		internal_refund_depth: u32,
 	) -> anyhow::Result<Option<CommittedExpiryGroup>> {
 		if outputs.is_empty() { return Ok(None); }
 		ensure!(ReadyOutput::group_fits(&outputs.iter().collect::<Vec<_>>())?, "expiry group exceeds version-3 sweep size");
@@ -205,7 +204,7 @@ impl Tx<'_> {
 				let funding = output.funding.iter().find(|t| t.compute_txid() == fact.state.vtxo.chain_anchor().txid)
 					.context("ready coin funding disappeared")?;
 				let current = self.propose_expiry_ownership(
-					fact, funding, view.captaind.height, Some(view.watchmand.height), internal_refund_depth,
+					fact, funding, view.captaind.height, Some(view.watchmand.height),
 				).await?;
 				valid &= current.disposition == coin.ownership.disposition && current.evidence == coin.ownership.evidence
 					&& current.has_stored_preimage == coin.ownership.has_stored_preimage

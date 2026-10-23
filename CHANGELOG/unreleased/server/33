@@ -8,8 +8,7 @@
   Resume or refund internal payments after an interrupted receive claim.
   Keep unidentified recipients from blocking ready payouts when their shared
   tree can be split safely.
-  Require the qualified six-confirmation Core Lightning runtime and preserve
-  source-specific incident records for supervised recovery.
+  Require the six-confirmation Core Lightning runtime.
   [#33](https://github.com/BullishNode/abandon-ship-bark/pull/33)
 - Recover operator collateral after an offboard forfeit
   Reuse the existing claim path once the collateral is confirmed and mature.

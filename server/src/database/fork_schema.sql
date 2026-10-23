@@ -218,7 +218,7 @@ CREATE TABLE expiry_lightning_terminal_failure (
 	CONSTRAINT expiry_lightning_failure_provenance CHECK (
 		(created_index IS NOT NULL AND jsonrpc_error_code IS NULL
 			AND supervised_manifest_sha256 IS NULL AND supervised_manifest IS NULL)
-		OR (created_index IS NULL AND jsonrpc_error_code IS NOT NULL AND jsonrpc_error_code IN (205,207)
+		OR (created_index IS NULL AND jsonrpc_error_code IS NOT NULL AND jsonrpc_error_code IN (205,207,-32602)
 			AND supervised_manifest_sha256 IS NULL AND supervised_manifest IS NULL)
 		OR (created_index IS NULL AND updated_index IS NULL AND jsonrpc_error_code IS NULL
 			AND supervised_manifest_sha256 IS NOT NULL AND supervised_manifest IS NOT NULL
@@ -230,7 +230,7 @@ CREATE TABLE expiry_lightning_terminal_failure (
 -- failure. Only source-reviewed CLN26.06.6 errors are admitted here.
 CREATE TABLE expiry_lightning_rpc_rejection (
 	id BIGINT PRIMARY KEY REFERENCES expiry_lightning_dispatch(id),
-	code INTEGER NOT NULL CHECK (code IN (205,207)),
+	code INTEGER NOT NULL CHECK (code IN (205,207,-32602)),
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

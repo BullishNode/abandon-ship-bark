@@ -4,10 +4,10 @@
 //! ## Payment lifecycle
 //!
 //! [`ClnXpay::pay`] is fire-and-forget: it spawns a task that calls `xpay` over gRPC.
-//! When CLN answers, success or error, the attempt is reconciled right away, and an
-//! error is trusted as a final failure. When the call breaks in transport, xpay may
-//! still be running, so the monitor reconciles the attempt once its retry time has
-//! passed.
+//! When CLN answers, reconcile the result. A dispatched attempt closes only
+//! after its own qualified outcome is retained.
+//! An ambiguous RPC or transport result stays open. The monitor continues to
+//! reconcile it; elapsed retry time does not prove failure.
 //!
 //! ## Sendpay stream
 //!
@@ -89,8 +89,8 @@ impl ClnXpayClient {
 	///
 	/// On RPC success the sendpay stream will pick up the result, but we still
 	/// reconcile afterwards to handle edge cases (e.g. the stream missing an event).
-	/// An error from CLN means xpay stopped trying, so the attempt is failed.
-	/// On a transport error it is left to the monitor.
+	/// A dispatched attempt requires its own qualified outcome before closure.
+	/// An ambiguous error leaves it open for monitoring and recovery.
 	#[tracing::instrument(skip_all, fields(
 		payment_hash = %invoice.payment_hash(),
 		invoice = %invoice,
@@ -326,10 +326,7 @@ impl ClnXpayClient {
 					observed = None;
 				}
 			}
-			let no_attempt = rejection.filter(|code| matches!(code,205|207))
-				.filter(|_| listpays_response.pays.iter().all(|pay|
-					pay.payment_hash == payment_hash.to_vec() && pay.status() == ListpaysPaysStatus::Failed && pay.preimage.is_none()
-				));
+			let no_attempt = no_attempt_failure(&sends, &listpays_response.pays, &label, payment_hash, rejection);
 			if observed.is_some() || no_attempt.is_some() {
 				let version = self.rpc.clone().getinfo(cln_rpc::GetinfoRequest {}).await?.into_inner().version;
 				ensure!(version == super::QUALIFIED_CLN_VERSION, "CLN {version} terminal failure semantics have not been qualified");
@@ -700,12 +697,23 @@ fn is_cln_error(err: &anyhow::Error) -> bool {
 
 /// Only typed receipts from the qualified gRPC adapter are accepted. In
 /// CLN26.06.6, 205 is returned before any new_attempt (later routing failures
-/// map to 209), and 207 precedes routing. Generic and transport errors do not
-/// establish quiescence, even if their explanatory text looks identical.
+/// map to 209), 207 precedes routing, and the reviewed -32602 parameter paths
+/// precede injection. Generic and transport errors do not establish quiescence,
+/// even if their explanatory text looks identical.
 fn no_attempt_rejection(status: &tonic::Status) -> Option<i32> {
 	if status.code() != tonic::Code::Unknown { return None; }
 	let code = status.metadata().get("abandon-cln-jsonrpc-error-code")?.to_str().ok()?.parse().ok()?;
-	matches!(code,205|207).then_some(code)
+	matches!(code,205|207|-32602).then_some(code)
+}
+
+fn no_attempt_failure(
+	sends: &[cln_rpc::ListsendpaysPayments], pays: &[cln_rpc::ListpaysPays],
+	label: &str, hash: PaymentHash, rejection: Option<i32>,
+) -> Option<i32> {
+	if label.is_empty() || sends.iter().any(|part| part.label.as_deref() == Some(label)) { return None; }
+	rejection.filter(|code| matches!(code,205|207|-32602)).filter(|_| pays.iter().all(|pay|
+		pay.payment_hash == hash.to_vec() && pay.status() == ListpaysPaysStatus::Failed && pay.preimage.is_none()
+	))
 }
 
 fn source_success(
@@ -883,10 +891,50 @@ mod expiry_tests {
 	fn no_attempt_rejection_requires_typed_source_reviewed_code() {
 		let mut status = tonic::Status::unknown("even convincing error text is not a receipt");
 		assert_eq!(no_attempt_rejection(&status), None);
-		for (code,expected) in [("205",Some(205)),("207",Some(207)),("200",None),("209",None),("garbled",None)] {
+		for (code,expected) in [("205",Some(205)),("207",Some(207)),("-32602",Some(-32602)),
+			("200",None),("209",None),("-32600",None),("2147483648",None),("garbled",None)]
+		{
 			status.metadata_mut().insert("abandon-cln-jsonrpc-error-code",code.parse().unwrap());
 			assert_eq!(no_attempt_rejection(&status), expected);
 		}
+		for code in [tonic::Code::Unavailable, tonic::Code::Internal, tonic::Code::Cancelled] {
+			let mut status = tonic::Status::new(code, "native-looking parameter failure");
+			status.metadata_mut().insert("abandon-cln-jsonrpc-error-code", "-32602".parse().unwrap());
+			assert_eq!(no_attempt_rejection(&status), None);
+		}
+	}
+
+	#[test]
+	fn no_attempt_failure_refuses_own_execution_history() {
+		let hash = PaymentHash::from([17;32]);
+		for code in [205,207,-32602] {
+			assert_eq!(no_attempt_failure(&[], &[], "own", hash, Some(code)), Some(code));
+			assert_eq!(no_attempt_failure(&[], &[failed("foreign", hash)], "own", hash, Some(code)), Some(code));
+		}
+		assert_eq!(no_attempt_failure(&[], &[], "own", hash, None), None);
+		assert_eq!(no_attempt_failure(&[], &[], "own", hash, Some(209)), None);
+		assert_eq!(no_attempt_failure(&[], &[], "", hash, Some(-32602)), None);
+		for status in [ListsendpaysPaymentsStatus::Pending, ListsendpaysPaymentsStatus::Complete,
+			ListsendpaysPaymentsStatus::Failed]
+		{
+			let mut own = failed_part("own", hash, 1, 0);
+			own.status = status as i32;
+			assert_eq!(no_attempt_failure(&[own.clone()], &[], "own", hash, Some(-32602)), None);
+			assert_eq!(no_attempt_failure(&[own.clone()], &[failed("own", hash)], "own", hash, Some(-32602)), None);
+			own.payment_preimage = Some(vec![1;32]);
+			assert_eq!(no_attempt_failure(&[own], &[], "own", hash, Some(-32602)), None);
+		}
+		let foreign = failed_part("foreign", hash, 1, 7);
+		assert_eq!(no_attempt_failure(&[foreign], &[failed("foreign", hash)], "own", hash, Some(-32602)), Some(-32602));
+		for status in [ListpaysPaysStatus::Pending, ListpaysPaysStatus::Complete] {
+			let mut pay = failed("foreign", hash);
+			pay.status = status as i32;
+			assert_eq!(no_attempt_failure(&[], &[pay], "own", hash, Some(-32602)), None);
+		}
+		let mut known = failed("foreign", hash);
+		known.preimage = Some(vec![1;32]);
+		assert_eq!(no_attempt_failure(&[], &[known], "own", hash, Some(-32602)), None);
+		assert_eq!(no_attempt_failure(&[], &[failed("foreign", PaymentHash::from([18;32]))], "own", hash, Some(-32602)), None);
 	}
 
 	#[test]

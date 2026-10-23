@@ -90,3 +90,6 @@ parking_lot.workspace = true
 
 axum = { version = "0.8.4", features = ["macros", "tokio", "query"], default-features = false }
 tower-http = { version = "0.5", features = ["cors", "set-header"] }
+
+[dev-dependencies]
+lightning.workspace = true

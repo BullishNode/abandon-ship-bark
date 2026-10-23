@@ -43,9 +43,9 @@ pub enum LightningPaymentStatus {
 	/// updating the status), so the status may still read `Submitted` or even
 	/// `Failed` for a payment that actually completed. Never gate a
 	/// fund-releasing decision (revocation, refund, re-issuing sender vtxos) on
-	/// this variant: use `HtlcSettler::is_settled` or the transaction's
-	/// `ensure_not_settled`, as the `htlc_settlement` table is the single source
-	/// of truth for settlement.
+	/// this variant. Source-specific receipts and resolution govern release.
+	/// The shared `htlc_settlement` preimage preserves signing knowledge;
+	/// it does not prove the economic outcome of a particular source.
 	#[postgres(name = "succeeded")]
 	Succeeded,
 	#[postgres(name = "failed")]

@@ -73,6 +73,41 @@ pub(crate) struct LightningPaymentOutcome {
 }
 
 impl Tx<'_> {
+	/// Retain the exact native dispatch's successful amount for later coarse
+	/// status repair. A duplicate must describe the same outcome in full.
+	pub(crate) async fn record_lightning_external_success(
+		&self, attempt: &LightningPaymentAttempt, label: &str, preimage: Preimage,
+		created: i64, updated: Option<i64>, amount_sent_msat: i64,
+	) -> anyhow::Result<bool> {
+		self.lock_lightning_attempt_sources(attempt.id).await?;
+		let row = self.query_one("SELECT a.payment_hash,a.amount_msat,a.lightning_node_id, \
+			a.lightning_htlc_subscription_id,d.label FROM lightning_payment_attempt a \
+			JOIN expiry_lightning_dispatch d ON d.id=a.id WHERE a.id=$1 FOR UPDATE OF a,d",
+			&[&attempt.id]).await?;
+		ensure!(row.get::<_, &str>("payment_hash") == attempt.payment_hash.to_string()
+			&& preimage.compute_payment_hash() == attempt.payment_hash
+			&& row.get::<_, i64>("amount_msat") == i64::try_from(attempt.amount_msat)?
+			&& row.get::<_, i64>("lightning_node_id") == attempt.lightning_node_id
+			&& row.get::<_, Option<i64>>("lightning_htlc_subscription_id").is_none()
+			&& row.get::<_, &str>("label") == label,
+			"success does not describe the dispatched attempt");
+		ensure!(created > 0 && amount_sent_msat >= row.get::<_, i64>("amount_msat"),
+			"success amount or native index is invalid");
+		ensure!(self.query_opt("SELECT id FROM expiry_lightning_terminal_failure WHERE id=$1",
+			&[&attempt.id]).await?.is_none(), "success conflicts with a terminal failure receipt");
+		self.store_htlc_settlement(preimage).await?;
+		let inserted = self.execute("INSERT INTO expiry_lightning_external_success \
+			(id,created_index,updated_index,amount_sent_msat) VALUES($1,$2,$3,$4) \
+			ON CONFLICT(id) DO NOTHING", &[&attempt.id, &created, &updated, &amount_sent_msat]).await?;
+		let stored = self.query_one("SELECT created_index,updated_index,amount_sent_msat \
+			FROM expiry_lightning_external_success WHERE id=$1", &[&attempt.id]).await?;
+		ensure!(stored.get::<_, i64>("created_index") == created
+			&& stored.get::<_, Option<i64>>("updated_index") == updated
+			&& stored.get::<_, i64>("amount_sent_msat") == amount_sent_msat,
+			"success receipt differs from its retained outcome");
+		Ok(inserted != 0)
+	}
+
 	/// Read before the current source guard: identical accepted incidents stay
 	/// idempotent after payout. A different receipt must never overwrite one.
 	pub(crate) async fn supervised_lightning_failure_recorded(

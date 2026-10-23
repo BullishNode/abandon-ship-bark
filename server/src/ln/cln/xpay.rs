@@ -282,6 +282,16 @@ impl ClnXpayClient {
 		let listpays_response = self.rpc.clone().list_pays(req).await
 			.context("Could not fetch cln payments")?
 			.into_inner();
+		// Retain cryptographic knowledge in its own committed WAL transaction.
+		// A later source-receipt conflict must not discard a valid preimage.
+		for pay in &listpays_response.pays {
+			if let Some(bytes) = &pay.preimage {
+				let preimage = Preimage::from_slice(bytes)
+					.context("CLN returned a preimage that is not 32 bytes")?;
+				ensure!(preimage.compute_payment_hash() == payment_hash, "CLN returned a preimage for another payment hash");
+				self.settler.settle(preimage).await?;
+			}
+		}
 		if let Some((label,rejection)) = dispatch {
 			// A group label comes only from its first part. Require this
 			// dispatch's raw successful parts to cover the whole principal.
@@ -289,13 +299,14 @@ impl ClnXpayClient {
 				let Some(preimage) = source_success(&sends, pay, &label, payment_hash, attempt.amount_msat) else { continue; };
 				let created = i64::try_from(pay.created_index.context("completed source dispatch has no index")?)?;
 				let updated = pay.updated_index.map(i64::try_from).transpose()?;
+				let amount_sent_msat = pay.amount_sent_msat.as_ref()
+					.context("completed source dispatch has no sent amount")?.msat;
+				ensure!(amount_sent_msat >= attempt.amount_msat, "completed source sent less than its principal");
+				let amount_sent_msat = i64::try_from(amount_sent_msat)?;
 				let recorded = self.db.write(async |t| {
-					t.lock_lightning_attempt_sources(attempt.id).await?;
-					t.store_htlc_settlement(preimage).await?;
-					let recorded = t.execute("
-						INSERT INTO expiry_lightning_external_success(id,created_index,updated_index)
-						VALUES($1,$2,$3) ON CONFLICT(id) DO NOTHING
-					", &[&attempt.id,&created,&updated]).await?;
+					let recorded = t.record_lightning_external_success(
+						&attempt, &label, preimage, created, updated, amount_sent_msat,
+					).await?;
 					let not_spendable = t.mark_htlc_send_vtxos_ln_spent(attempt.id).await?;
 					if !not_spendable.is_empty() {
 						warn!("Completed Lightning attempt {} left nonspendable sources untouched: {:?}",
@@ -303,7 +314,7 @@ impl ClnXpayClient {
 					}
 					Ok(recorded)
 				}).await?;
-				if recorded != 0 {
+				if recorded {
 					let _ = self.payment_update_tx.send(payment_hash);
 					self.payment_handler().post_lightning_send_finished(&attempt).await;
 				}
@@ -334,6 +345,11 @@ impl ClnXpayClient {
 				let updated = observed.and_then(|(_,updated)| updated).map(i64::try_from).transpose()?;
 				let error_code = if observed.is_some() { None } else { no_attempt };
 				let recorded = self.db.write(async |t| {
+					t.lock_lightning_attempt_sources(attempt.id).await?;
+					t.query_one("SELECT id FROM lightning_payment_attempt WHERE id=$1 FOR UPDATE",
+						&[&attempt.id]).await?;
+					ensure!(t.query_opt("SELECT id FROM expiry_lightning_external_success WHERE id=$1",
+						&[&attempt.id]).await?.is_none(), "failure conflicts with a success receipt");
 					Ok(t.execute("
 						INSERT INTO expiry_lightning_terminal_failure(id,created_index,updated_index,jsonrpc_error_code)
 						VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING
@@ -366,19 +382,6 @@ impl ClnXpayClient {
 				},
 			}
 		} else {
-			// A coarse final attempt status can be stale after a lost response
-			// or optimistic-write race. Every valid preimage is settlement
-			// proof, including one attached to an older CLN payment group.
-			// Preserve it before deciding whether a status transition applies.
-			for pay in &listpays_response.pays {
-				if let Some(bytes) = &pay.preimage {
-					let preimage = Preimage::from_slice(bytes)
-						.context("CLN returned a preimage that is not 32 bytes")?;
-					ensure!(preimage.compute_payment_hash() == payment_hash, "CLN returned a preimage for another payment hash");
-					self.settler.settle(preimage).await?;
-				}
-			}
-
 			let latest = listpays_response.pays.into_iter().max_by_key(|p| {
 				p.created_index.expect("should have index")
 			}).expect("we have at least one");

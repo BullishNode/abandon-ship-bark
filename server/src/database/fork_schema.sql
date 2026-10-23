@@ -245,6 +245,7 @@ CREATE TABLE expiry_lightning_external_success (
 	id BIGINT PRIMARY KEY REFERENCES expiry_lightning_dispatch(id),
 	created_index BIGINT NOT NULL CHECK (created_index >= 0),
 	updated_index BIGINT,
+	amount_sent_msat BIGINT NOT NULL CHECK (amount_sent_msat >= 0),
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

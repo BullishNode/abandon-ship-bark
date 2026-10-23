@@ -674,6 +674,500 @@ pub(super) async fn add_producer_qualification(
 	std::fs::write(manifest, serde_json::to_vec(&body).unwrap()).unwrap();
 }
 
+/// Own every captured node process before either the channel or node is paused.
+/// Declare after the fixture so cancellation drops this guard first.
+struct FrozenLightningTree {
+	processes: Vec<ProcessIdentity>,
+	channel: usize,
+}
+
+impl FrozenLightningTree {
+	fn new(root: ProcessIdentity, channel_exe: &Path) -> Self {
+		let processes = lightning_process_tree(root.pid);
+		assert_eq!(processes[0].pid, root.pid);
+		assert_eq!(processes[0].start, root.start);
+		assert_eq!(processes[0].parent, root.parent);
+		assert_eq!(processes[0].uid, root.uid);
+		assert_eq!(processes[0].exe, root.exe);
+		let channels = processes.iter().enumerate().filter(|(_, process)| {
+			process.parent == root.pid && process.uid == root.uid && process.exe.as_path() == channel_exe
+		}).map(|(index, _)| index).collect::<Vec<_>>();
+		assert_eq!(channels.len(), 1, "require exactly one direct canonical channel child");
+		Self { processes, channel: channels[0] }
+	}
+
+	/// A killed parent can already be a zombie while its children are adopted.
+	/// Accept adoption only by init or this test, after the captured parent died.
+	fn parent_died(&self, parent: i32) -> bool {
+		let Some(captured) = self.processes.iter().find(|process| process.pid == parent) else {
+			return false;
+		};
+		match ProcessIdentity::stat(parent) {
+			Ok(None) => true,
+			Ok(Some((state, _, start))) => start != captured.start || matches!(state, 'Z' | 'X'),
+			Err(()) => false,
+		}
+	}
+
+	/// None means gone, reused, unreadable, dead, or outside the captured tree.
+	/// Such a PID is never signalled, including from Drop.
+	fn live_state(&self, process: &ProcessIdentity) -> Option<char> {
+		let (state, parent, start) = ProcessIdentity::stat(process.pid).ok()??;
+		let adopted = (parent == 1 || parent == std::process::id() as i32)
+			&& self.parent_died(process.parent);
+		if start != process.start || matches!(state, 'Z' | 'X')
+			|| !(parent == process.parent || adopted)
+			|| std::fs::metadata(format!("/proc/{}", process.pid)).ok()?.uid() != process.uid
+			|| std::fs::read_link(format!("/proc/{}/exe", process.pid)).ok()? != process.exe
+		{
+			return None;
+		}
+		Some(state)
+	}
+
+	fn signal(&self, process: &ProcessIdentity, signal: nix::sys::signal::Signal) {
+		assert!(self.live_state(process).is_some(), "captured process identity changed before signal");
+		nix::sys::signal::kill(nix::unistd::Pid::from_raw(process.pid), signal).unwrap();
+	}
+
+	fn assert_root_stopped(&self) {
+		assert_eq!(self.live_state(&self.processes[0]), Some('T'));
+	}
+
+	fn assert_channel_stopped(&self) {
+		let root = &self.processes[0];
+		let channel = &self.processes[self.channel];
+		assert_eq!(self.live_state(channel), Some('T'));
+		assert!(matches!(ProcessIdentity::stat(channel.pid), Ok(Some(('T', parent, start)))
+			if parent == root.pid && start == channel.start));
+		let tree = lightning_process_tree(root.pid);
+		let peers = tree.iter().filter(|process| process.parent == root.pid && process.exe == channel.exe)
+			.collect::<Vec<_>>();
+		assert_eq!(peers.len(), 1, "the first-hop child must not have been replaced");
+		assert_eq!(peers[0].pid, channel.pid);
+		assert_eq!(peers[0].start, channel.start);
+	}
+
+	fn pause_channel(&self) {
+		self.signal(&self.processes[self.channel], nix::sys::signal::Signal::SIGSTOP);
+	}
+
+	/// Must be the first operation after the final Pending RPC response: no await.
+	fn pause_root(&self) {
+		self.signal(&self.processes[0], nix::sys::signal::Signal::SIGSTOP);
+	}
+
+	fn capture_stopped_tree(&mut self) {
+		self.assert_root_stopped();
+		self.assert_channel_stopped();
+		let root = &self.processes[0];
+		let channel = &self.processes[self.channel];
+		let tree = lightning_process_tree(root.pid);
+		for captured in &self.processes {
+			assert!(tree.iter().any(|process| process.pid == captured.pid && process.start == captured.start
+				&& process.parent == captured.parent && process.uid == captured.uid && process.exe == captured.exe),
+				"a captured process disappeared or changed before hard stop");
+		}
+		let channel_index = tree.iter().position(|process| process.pid == channel.pid && process.start == channel.start).unwrap();
+		self.processes = tree;
+		self.channel = channel_index;
+	}
+
+	fn kill_descendants(&self) {
+		self.assert_root_stopped();
+		// Discovery visits each parent before its descendants. Kill leaves first.
+		for process in self.processes.iter().skip(1).rev() {
+			match ProcessIdentity::stat(process.pid).expect("captured descendant state must be readable") {
+				None => {},
+				Some((_, _, start)) if start != process.start => {},
+				Some(('Z' | 'X', _, _)) => {},
+				Some(_) => self.signal(process, nix::sys::signal::Signal::SIGKILL),
+			}
+		}
+		self.assert_root_stopped();
+	}
+}
+
+impl Drop for FrozenLightningTree {
+	fn drop(&mut self) {
+		let root = &self.processes[0];
+		// Never resume the root. On cancellation it must not process a destroyed
+		// channel and persist a graceful Failed result before it is killed.
+		if self.live_state(root).is_some() {
+			let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(root.pid), nix::sys::signal::Signal::SIGSTOP);
+			let until = std::time::Instant::now() + Duration::from_millis(250);
+			while self.live_state(root).is_some_and(|state| state != 'T') && std::time::Instant::now() < until {
+				std::thread::sleep(Duration::from_millis(1));
+			}
+		}
+		let root_dead = || match ProcessIdentity::stat(root.pid) {
+			Ok(None) => true,
+			Ok(Some((state, _, start))) => start != root.start || matches!(state, 'Z' | 'X'),
+			Err(()) => false,
+		};
+		if self.live_state(root) != Some('T') && !root_dead() {
+			// If STOP was not observed, kill the verified root before touching
+			// children. A running parent must never consume a child death.
+			if self.live_state(root).is_some() {
+				let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(root.pid), nix::sys::signal::Signal::SIGKILL);
+			}
+			let until = std::time::Instant::now() + Duration::from_secs(1);
+			while !root_dead() && std::time::Instant::now() < until {
+				std::thread::sleep(Duration::from_millis(1));
+			}
+		}
+		if self.live_state(root) != Some('T') && !root_dead() {
+			// Unreadable identity is never permission to signal an arbitrary
+			// PID. Timeout/unwind retains the outer context for inspection.
+			return;
+		}
+		// Parent zombies qualify adoption even before the Daemon reaps its root.
+		// Full PID/start/UID/executable checks still apply to every live child.
+		for process in self.processes.iter().skip(1).rev() {
+			if self.live_state(process).is_some() {
+				let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(process.pid), nix::sys::signal::Signal::SIGKILL);
+			}
+		}
+		if self.live_state(root).is_some() {
+			let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(root.pid), nix::sys::signal::Signal::SIGKILL);
+		}
+	}
+}
+
+#[tokio::test]
+async fn recovery_refuses_pending_payment_before_channel_commitment() {
+	// Keep the context outside the timed future. On timeout, process guards
+	// and fixtures drop first; expect then panics before context data cleanup.
+	let mut context = None;
+	tokio::time::timeout(Duration::from_secs(180), async {
+		context = Some(TestContext::new("server/recovery_refuses_pending_payment_before_channel_commitment").await);
+		let ctx = context.as_ref().unwrap();
+		assert!(std::env::var_os("LIGHTNINGD_DOCKER_IMAGE").is_none(), "this test requires native child supervision");
+		let lightning = ctx.new_lightning_setup("lightningd").await;
+		let srv = ctx.captaind("server").lightningd(&lightning.internal).no_vtxo_pool().funded(btc(10))
+			.cfg(|cfg| cfg.invoice_check_interval = Duration::from_secs(1)).watchmand().create().await;
+		let sender = ctx.bark("sender", &srv).funded(sat(500_000)).create().await;
+		let board = sender.board_and_confirm_and_register(ctx, sat(100_000)).await[0];
+		let wallet = sender.client().await;
+		let input = wallet.get_full_vtxo(board).await.unwrap();
+		assert_eq!(input.amount(), sat(100_000));
+		let key = wallet.get_vtxo_key(&input).await.unwrap();
+		let hash = Preimage::from_slice(&[74; 32]).unwrap().compute_payment_hash();
+		let principal = sat(90_000);
+		let invoice = lightning.external.hold_client().await.invoice(hold::InvoiceRequest {
+			payment_hash: hash.to_vec(), amount_msat: principal.to_sat() * 1_000,
+			description: Some(hold::invoice_request::Description::Memo("pending before channel commitment".into())),
+			min_final_cltv_expiry: Some(18), expiry: Some(3600), routing_hints: vec![],
+		}).await.unwrap().into_inner().bolt11;
+		let invoice = Invoice::Bolt11(invoice.parse().unwrap());
+		assert_eq!(invoice.payment_hash(), hash);
+		let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		let deadline = tip + srv.config().htlc_send_expiry_delta + BlockDelta::new(2);
+		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([input],
+			VtxoPolicy::new_server_htlc_send(key.public_key(), hash, deadline)).unwrap()
+			.generate_user_nonces(&[key]).unwrap();
+		let mut public = srv.get_public_rpc().await;
+		let response = public.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
+			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		}).await.unwrap().into_inner();
+		let grants = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
+			.unwrap().build_signed_vtxos();
+		assert_eq!(grants.len(), 1);
+		assert_eq!(grants[0].amount(), sat(100_000));
+		wallet.register_vtxo_transactions_with_server(&grants).await.unwrap();
+		let source = grants[0].id();
+		let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+		let before = db.read(async |tx| server::database::htlc_vtxo::get_htlc_vtxo(tx, source).await)
+			.await.unwrap().unwrap();
+		assert!(before.htlc.offchain_resolution.is_none());
+		assert_eq!(before.amount(), sat(100_000));
+		assert!(db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().is_none());
+		lightning.sync().await;
+		let mut payer = lightning.internal.grpc_client().await;
+		let payer_info = payer.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
+		let receiver_info = lightning.external.grpc_client().await.getinfo(cln_rpc::GetinfoRequest {})
+			.await.unwrap().into_inner();
+		assert_eq!(payer_info.network, "regtest");
+		assert_eq!(payer_info.version, "v26.06.6-abandon6");
+		assert_eq!(receiver_info.network, "regtest");
+		assert_eq!(receiver_info.version, "v26.06.6-abandon6");
+		assert_ne!(payer_info.id, receiver_info.id, "the payment must leave the payer node");
+		let node = db.read(async |tx| Ok(tx.query_one("SELECT id,pubkey FROM lightning_node WHERE pubkey=$1",
+			&[&payer_info.id]).await?)).await.unwrap();
+		assert_eq!(node.get::<_, Vec<u8>>("pubkey"), payer_info.id);
+		let node_id = node.get::<_, i64>("id");
+
+		// The setup's balancing payment is unrelated. Inspect complete native
+		// inventories, selecting this fresh hash only after each RPC response.
+		assert!(!payer.list_send_pays(cln_rpc::ListsendpaysRequest::default()).await.unwrap().into_inner()
+			.payments.iter().any(|payment| payment.payment_hash == hash.to_vec()));
+		assert!(!payer.list_pays(cln_rpc::ListpaysRequest::default()).await.unwrap().into_inner()
+			.pays.iter().any(|payment| payment.payment_hash == hash.to_vec()));
+		assert_no_committed_htlc(&lightning.internal, hash).await;
+		assert_no_committed_htlc(&lightning.external, hash).await;
+		assert_hold_invoice_unpaid(&lightning.external, hash).await;
+		let channels = tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				let channels = payer.list_peer_channels(cln_rpc::ListpeerchannelsRequest {
+					id: None, short_channel_id: None, channel_id: None,
+				}).await.unwrap().into_inner().channels;
+				assert_eq!(channels.len(), 1, "all parts must use the sole first hop");
+				let channel = &channels[0];
+				assert_eq!(channel.peer_id, receiver_info.id);
+				if channel.peer_connected && channel.state() == cln_rpc::ChannelState::ChanneldNormal
+					&& channel.owner.as_deref() == Some("lightning_channeld") && channel.reestablished == Some(true)
+				{ break channels; }
+				tokio::time::sleep(poll_interval()).await;
+			}
+		}).await.expect("the sole first hop must be fully reestablished");
+		assert_eq!(channels[0].peer_id, receiver_info.id);
+		let (qualification, root_pid, root_start) = producer_qualification(ctx, &srv, &lightning.internal).await;
+		let root = ProcessIdentity::read(root_pid);
+		assert_eq!(root.start, root_start);
+		let package = root.exe.parent().unwrap().parent().unwrap();
+		assert!(package.file_name().unwrap().to_string_lossy().ends_with("-clightning-26.06.6-abandon6"));
+		assert_eq!(root.exe, std::fs::canonicalize(package.join("bin/lightningd")).unwrap());
+		let channel_exe = std::fs::canonicalize(package.join("libexec/c-lightning/lightning_channeld")).unwrap();
+		// Own the complete captured tree BEFORE pausing the first process.
+		let mut frozen = FrozenLightningTree::new(root, &channel_exe);
+		frozen.pause_channel();
+		tokio::time::timeout(Duration::from_secs(5), async {
+			while frozen.live_state(&frozen.processes[frozen.channel]) != Some('T') {
+				tokio::time::sleep(poll_interval()).await;
+			}
+		}).await.expect("the verified first hop must enter stopped state");
+		frozen.assert_channel_stopped();
+		// ONE public initiation; never retry injection or invoke xpay directly.
+		public.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
+			invoice: invoice.to_string(), payment_amount_sat: principal.to_sat(),
+			htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(1),
+		}).await.unwrap();
+		let (attempt, label) = tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				if let Some(attempt) = db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap() {
+					if let Some(row) = db.read(async |tx| Ok(tx.query_opt("SELECT label FROM expiry_lightning_dispatch WHERE id=$1",
+						&[&attempt.id]).await?)).await.unwrap()
+					{ break (attempt, row.get::<_, String>("label")); }
+				}
+				tokio::time::sleep(poll_interval()).await;
+			}
+		}).await.expect("the one public initiation must persist its dispatch");
+		assert_eq!(attempt.lightning_node_id, node_id);
+		assert_eq!(attempt.amount_msat, principal.to_sat() * 1_000);
+		assert!(attempt.final_amount_msat.is_none());
+		assert!(matches!(attempt.status, LightningPaymentStatus::Requested | LightningPaymentStatus::Submitted));
+		assert!(!label.is_empty());
+		let links = db.read(async |tx| Ok(tx.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+			WHERE lightning_payment_attempt_id=$1 ORDER BY vtxo_id", &[&attempt.id]).await?
+			.into_iter().map(|row| row.get::<_, String>(0)).collect::<Vec<_>>())).await.unwrap();
+		assert_eq!(links, vec![source.to_string()]);
+		assert_pending_source(&db, attempt.id, hash, source, node_id, &label, principal.to_sat() * 1_000).await;
+		tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				frozen.assert_channel_stopped();
+				let parts = payer.list_send_pays(cln_rpc::ListsendpaysRequest::default()).await.unwrap().into_inner()
+					.payments.into_iter().filter(|part| part.payment_hash == hash.to_vec()).collect::<Vec<_>>();
+				if !parts.is_empty() {
+					assert_pending_parts(&parts, hash, &label, principal.to_sat() * 1_000);
+					break;
+				}
+				tokio::time::sleep(poll_interval()).await;
+			}
+		}).await.expect("the stopped first hop must leave a native Pending payment");
+		let aggregates = payer.list_pays(cln_rpc::ListpaysRequest::default()).await.unwrap().into_inner()
+			.pays.into_iter().filter(|pay| pay.payment_hash == hash.to_vec()).collect::<Vec<_>>();
+		assert_pending_aggregate(&aggregates, hash, &label, principal.to_sat() * 1_000);
+		assert_no_committed_htlc(&lightning.internal, hash).await;
+		assert_no_committed_htlc(&lightning.external, hash).await;
+		assert_hold_invoice_unpaid(&lightning.external, hash).await;
+		frozen.assert_channel_stopped();
+		// No unrelated await, assertion, shutdown or yield may separate these.
+		let final_history = payer.list_send_pays(cln_rpc::ListsendpaysRequest::default()).await.unwrap().into_inner();
+		frozen.pause_root();
+		tokio::time::timeout(Duration::from_secs(5), async {
+			while frozen.live_state(&frozen.processes[0]) != Some('T') {
+				tokio::time::sleep(poll_interval()).await;
+			}
+		}).await.expect("the verified node must enter stopped state");
+		frozen.assert_root_stopped();
+		frozen.assert_channel_stopped();
+		let mut parts = final_history.payments.into_iter().filter(|part| part.payment_hash == hash.to_vec()).collect::<Vec<_>>();
+		assert_pending_parts(&parts, hash, &label, principal.to_sat() * 1_000);
+		parts.sort_by_key(|part| (part.groupid, part.partid, part.id));
+		// Capture any intervening children before a cancellable shutdown await.
+		frozen.capture_stopped_tree();
+		drop(payer);
+		drop(public);
+		drop(wallet);
+		srv.watchmand().stop().await.unwrap();
+		srv.stop().await.unwrap();
+		frozen.capture_stopped_tree();
+		frozen.kill_descendants();
+		frozen.assert_root_stopped();
+		lightning.internal.crash_stop().await.unwrap();
+		tokio::time::timeout(Duration::from_secs(10), async {
+			while frozen.processes.iter().any(ProcessIdentity::remains) {
+				tokio::time::sleep(poll_interval()).await;
+			}
+		}).await.expect("every captured node process, including adopted zombies, must be extinct before reopen");
+		drop(frozen);
+
+		lightning.internal.start().await.unwrap();
+		let mut payer = lightning.internal.grpc_client().await;
+		let reopened_info = payer.getinfo(cln_rpc::GetinfoRequest {}).await.unwrap().into_inner();
+		assert_eq!(reopened_info.id, payer_info.id);
+		assert_eq!(reopened_info.network, payer_info.network);
+		assert_eq!(reopened_info.version, payer_info.version);
+		let grpc = lightning.internal.grpc_details().await;
+		let hold = lightning.internal.hold_details().await;
+		{
+			let mut config = srv.config_mut();
+			let node = &mut config.cln_array[0];
+			assert_eq!(node.server_cert_path, grpc.server_cert_path);
+			assert_eq!(node.client_cert_path, grpc.client_cert_path);
+			assert_eq!(node.client_key_path, grpc.client_key_path);
+			node.uri = grpc.uri.parse().unwrap();
+			let plugin = node.hold_invoice.as_mut().unwrap();
+			assert_eq!(plugin.server_cert_path, hold.server_cert_path);
+			assert_eq!(plugin.client_cert_path, hold.client_cert_path);
+			assert_eq!(plugin.client_key_path, hold.client_key_path);
+			plugin.uri = hold.uri.parse().unwrap();
+		}
+		let cfg = srv.config().clone();
+		let config_path = cfg.data_dir.join(ark_testing::daemon::captaind::CAPTAIND_CONFIG_FILE);
+		cfg.write_into(&mut std::fs::File::create(config_path).unwrap()).unwrap();
+		let mut reopened_parts = payer.list_send_pays(cln_rpc::ListsendpaysRequest::default()).await.unwrap().into_inner()
+			.payments.into_iter().filter(|part| part.payment_hash == hash.to_vec()).collect::<Vec<_>>();
+		assert_pending_parts(&reopened_parts, hash, &label, principal.to_sat() * 1_000);
+		reopened_parts.sort_by_key(|part| (part.groupid, part.partid, part.id));
+		assert!(reopened_parts == parts, "same-store reopen changed Pending part identities or principal");
+		let reopened_pays = payer.list_pays(cln_rpc::ListpaysRequest::default()).await.unwrap().into_inner()
+			.pays.into_iter().filter(|pay| pay.payment_hash == hash.to_vec()).collect::<Vec<_>>();
+		assert_pending_aggregate(&reopened_pays, hash, &label, principal.to_sat() * 1_000);
+		assert!(reopened_pays == aggregates, "same-store reopen changed Pending aggregate");
+		assert_no_committed_htlc(&lightning.internal, hash).await;
+		assert_no_committed_htlc(&lightning.external, hash).await;
+		assert_hold_invoice_unpaid(&lightning.external, hash).await;
+		let manifest = recovery_manifest(&cfg, &db, attempt.id).await;
+		add_producer_qualification(&manifest, &db, attempt.id, qualification).await;
+		let mut recover = srv.get_custom_command(&[
+			"resolve-uninjected-lightning", "--manifest", manifest.to_str().unwrap(), "--acknowledge-trusted-operations",
+		]).await.unwrap();
+		recover.kill_on_drop(true);
+		let refused = recover.output().await.unwrap();
+		assert!(!refused.status.success(), "own Pending history must refuse absence recovery");
+		assert!(String::from_utf8_lossy(&refused.stderr).contains("original dispatch has own payment history"),
+			"recovery must reach the own-history refusal");
+		assert_pending_source(&db, attempt.id, hash, source, node_id, &label, principal.to_sat() * 1_000).await;
+		srv.start().await.unwrap();
+		srv.watchmand().start().await.unwrap();
+		let mut public = srv.get_public_rpc().await;
+		let status = public.check_lightning_payment(protos::CheckLightningPaymentRequest {
+			hash: hash.to_vec(), wait: false, htlc_vtxo_ids: vec![source.to_bytes().to_vec()],
+		}).await.unwrap().into_inner();
+		assert!(matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Pending(_))));
+		assert_eq!(status.htlc_vtxo_ids, vec![source.to_bytes().to_vec()]);
+		let refund = ArkoorPackageBuilder::new_claim_all_with_checkpoints([grants[0].clone()],
+			VtxoPolicy::new_pubkey(key.public_key())).unwrap().generate_user_nonces(&[key]).unwrap();
+		let refused = public.request_lightning_pay_htlc_revocation(
+			protos::ArkoorPackageCosignRequest::from(refund.cosign_request()),
+		).await.unwrap_err();
+		assert_eq!(refused.code(), tonic::Code::InvalidArgument);
+		assert!(refused.message().contains("source payment outcome is not yet terminal"));
+		assert_pending_source(&db, attempt.id, hash, source, node_id, &label, principal.to_sat() * 1_000).await;
+		let mut after_parts = payer.list_send_pays(cln_rpc::ListsendpaysRequest::default()).await.unwrap().into_inner()
+			.payments.into_iter().filter(|part| part.payment_hash == hash.to_vec()).collect::<Vec<_>>();
+		assert_pending_parts(&after_parts, hash, &label, principal.to_sat() * 1_000);
+		after_parts.sort_by_key(|part| (part.groupid, part.partid, part.id));
+		assert!(after_parts == parts, "refused recovery/refund changed native Pending parts");
+		let after_pays = payer.list_pays(cln_rpc::ListpaysRequest::default()).await.unwrap().into_inner()
+			.pays.into_iter().filter(|pay| pay.payment_hash == hash.to_vec()).collect::<Vec<_>>();
+		assert_pending_aggregate(&after_pays, hash, &label, principal.to_sat() * 1_000);
+		assert!(after_pays == aggregates, "refused recovery/refund changed native Pending aggregate");
+		assert_no_committed_htlc(&lightning.internal, hash).await;
+		assert_no_committed_htlc(&lightning.external, hash).await;
+		assert_hold_invoice_unpaid(&lightning.external, hash).await;
+		// Do not manufacture a resolution or infer eventual recovery here.
+	}).await.expect("pre-commit Pending safety test exceeded the unchanged 180-second limit");
+}
+
+async fn assert_no_committed_htlc(node: &ark_testing::daemon::lightningd::Lightningd, hash: PaymentHash) {
+	let inventory = node.grpc_client().await.list_htlcs(cln_rpc::ListhtlcsRequest {
+		id: None, index: None, start: None, limit: None,
+	}).await.unwrap().into_inner();
+	assert!(!inventory.htlcs.iter().any(|htlc| htlc.payment_hash == hash.to_vec()), "fresh hash must have no durable channel HTLC");
+}
+
+async fn assert_hold_invoice_unpaid(node: &ark_testing::daemon::lightningd::Lightningd, hash: PaymentHash) {
+	let invoices = node.hold_client().await.list(hold::ListRequest {
+		constraint: Some(hold::list_request::Constraint::PaymentHash(hash.to_vec())),
+	}).await.unwrap().into_inner().invoices;
+	assert_eq!(invoices.len(), 1);
+	assert_eq!(invoices[0].payment_hash, hash.to_vec());
+	assert_eq!(invoices[0].state(), hold::InvoiceState::Unpaid);
+	assert!(invoices[0].htlcs.is_empty());
+	assert!(invoices[0].preimage.is_none());
+}
+
+fn assert_pending_parts(parts: &[cln_rpc::ListsendpaysPayments], hash: PaymentHash, label: &str, amount: u64) {
+	assert!(!parts.is_empty());
+	assert!(parts.iter().all(|part| part.payment_hash == hash.to_vec() && part.label.as_deref() == Some(label)
+		&& part.status() == cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus::Pending && part.payment_preimage.is_none()));
+	let identities = parts.iter().map(|part| (part.groupid, part.partid)).collect::<std::collections::BTreeSet<_>>();
+	assert_eq!(identities.len(), parts.len(), "each own group/part must be counted once");
+	assert_eq!(parts.iter().map(|part| part.amount_msat.as_ref().unwrap().msat).sum::<u64>(), amount);
+}
+
+fn assert_pending_aggregate(pays: &[cln_rpc::ListpaysPays], hash: PaymentHash, label: &str, amount: u64) {
+	assert_eq!(pays.len(), 1);
+	assert_eq!(pays[0].payment_hash, hash.to_vec());
+	assert_eq!(pays[0].label.as_deref(), Some(label));
+	assert_eq!(pays[0].status(), cln_rpc::listpays_pays::ListpaysPaysStatus::Pending);
+	assert!(pays[0].preimage.is_none());
+	assert_eq!(pays[0].amount_msat.as_ref().unwrap().msat, amount);
+}
+
+async fn assert_pending_source(
+	db: &server::database::Db, attempt: i64, hash: PaymentHash, source: ark::VtxoId,
+	node: i64, label: &str, amount: u64,
+) {
+	let coin = db.read(async |tx| server::database::htlc_vtxo::get_htlc_vtxo(tx, source).await).await.unwrap().unwrap();
+	assert_eq!(coin.amount(), sat(100_000));
+	assert!(coin.htlc.offchain_resolution.is_none());
+	let current = db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap();
+	assert_eq!(current.id, attempt);
+	assert_eq!(current.lightning_node_id, node);
+	assert_eq!(current.amount_msat, amount);
+	assert!(current.final_amount_msat.is_none());
+	assert!(matches!(current.status, LightningPaymentStatus::Requested | LightningPaymentStatus::Submitted));
+	let state = db.read(async |tx| Ok(tx.query_one("SELECT v.spend_state::TEXT,h.offchain_resolution::TEXT,d.label, \
+		(SELECT COUNT(*) FROM lightning_payment_attempt WHERE payment_hash=$2) AS attempts, \
+		(SELECT COUNT(*) FROM expiry_lightning_dispatch e JOIN lightning_payment_attempt a ON a.id=e.id WHERE a.payment_hash=$2) AS dispatches, \
+		(SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo WHERE lightning_payment_attempt_id=$1) AS sources, \
+		EXISTS(SELECT 1 FROM lightning_payment_attempt_htlc_vtxo WHERE lightning_payment_attempt_id=$1 AND vtxo_id=$3) AS bound, \
+		EXISTS(SELECT 1 FROM expiry_lightning_terminal_failure WHERE id=$1) AS failure, \
+		EXISTS(SELECT 1 FROM expiry_lightning_rpc_rejection WHERE id=$1) AS rejection, \
+		EXISTS(SELECT 1 FROM expiry_lightning_external_success WHERE id=$1) AS success, \
+		EXISTS(SELECT 1 FROM expiry_lightning_internal_funding WHERE id=$1) AS funding, \
+		EXISTS(SELECT 1 FROM htlc_settlement WHERE payment_hash=$2) AS wal, \
+		EXISTS(SELECT 1 FROM expiry_entitlement WHERE vtxo_id=$3) AS entitled, \
+		EXISTS(SELECT 1 FROM expiry_allocation_input WHERE vtxo_id=$3) AS allocated, \
+		EXISTS(SELECT 1 FROM expiry_allocation_payout p JOIN expiry_allocation_input i ON i.allocation_id=p.allocation_id WHERE i.vtxo_id=$3) AS payout, \
+		EXISTS(SELECT 1 FROM mailbox WHERE payment_hash=$2) AS notified \
+		FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id CROSS JOIN expiry_lightning_dispatch d \
+		WHERE v.vtxo_id=$3 AND d.id=$1", &[&attempt, &hash.to_string(), &source.to_string()]).await?)).await.unwrap();
+	assert_eq!(state.get::<_, &str>("spend_state"), "spendable");
+	assert!(state.get::<_, Option<&str>>("offchain_resolution").is_none());
+	assert_eq!(state.get::<_, &str>("label"), label);
+	assert_eq!(state.get::<_, i64>("attempts"), 1);
+	assert_eq!(state.get::<_, i64>("dispatches"), 1);
+	assert_eq!(state.get::<_, i64>("sources"), 1);
+	assert!(state.get::<_, bool>("bound"));
+	for field in ["failure", "rejection", "success", "funding", "wal", "entitled", "allocated", "payout", "notified"] {
+		assert!(!state.get::<_, bool>(field), "a refused Pending source cannot release economic principal");
+	}
+}
+
 /// Recover an unsent dispatch after shutdown and store reopen.
 /// Its signed source must receive one confirmed fallback payout.
 #[tokio::test]

@@ -419,6 +419,11 @@ impl Lightningd {
 		Daemon::wrap(inner)
 	}
 
+	/// Kill and reap this node without letting it persist a graceful shutdown.
+	pub async fn crash_stop(&self) -> anyhow::Result<()> {
+		self.stop_with_signal(nix::sys::signal::Signal::SIGKILL).await
+	}
+
 	pub async fn try_grpc_client(&self) -> anyhow::Result<NodeClient<Channel>> {
 		self.inner.try_grpc_client().await
 	}

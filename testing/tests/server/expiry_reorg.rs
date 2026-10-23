@@ -362,23 +362,30 @@ async fn payout_reorg(depth: u32) {
 		server::database::SpendState::Spent, "a reorg must not reopen the committed source");
 
 	srv.watchmand().start().await.unwrap();
+	// Upstream's wallet processes a reorg on the next block. Mine one of
+	// the replacement blocks before asking it to rebuild the fee child.
+	// A fresh coinbase destination prevents reproducing the invalid block.
+	let mining_address = ctx.bitcoind().get_new_address();
+	rpc.generate_to_address(1, &mining_address).unwrap();
+	let recovery_tip = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
 	tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			let valid = db.read(async |t| {
 				let invalid = t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0);
-				Ok(!invalid && t.get_highest_block(BlockTable::Captaind).await? == Some(fork)
-					&& t.get_highest_block(BlockTable::Watchmand).await? == Some(fork))
+				Ok(!invalid && t.get_highest_block(BlockTable::Captaind).await? == Some(recovery_tip)
+					&& t.get_highest_block(BlockTable::Watchmand).await? == Some(recovery_tip))
 			}).await.unwrap();
-			// Core may retain the package through the reorg; otherwise the
-			// watchman must rebroadcast it before replacement mining.
-			if valid && rpc.get_mempool_entry(&txid).is_ok() { break; }
+			// A retained package may already be mined in the first replacement
+			// block; otherwise the watchman must recover it in the mempool.
+			let published = rpc.get_mempool_entry(&txid).is_ok()
+				|| rpc.custom_get_raw_transaction_info(txid, None).unwrap()
+					.is_some_and(|info| info.confirmations.unwrap_or(0) > 0);
+			if valid && published { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("watchman restart did not rebuild and recover the immutable payout package");
 
-	// A fresh coinbase destination prevents reproducing the invalid block.
-	let mining_address = ctx.bitcoind().get_new_address();
-	rpc.generate_to_address(u64::from(depth + 1), &mining_address).unwrap();
+	rpc.generate_to_address(u64::from(depth), &mining_address).unwrap();
 	let new_tip = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
 	let current = rpc.custom_get_raw_transaction_info(txid, None).unwrap().unwrap();
 	let new_hash = current.blockhash.expect("the original payout must re-confirm on the replacement chain");

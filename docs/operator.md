@@ -663,6 +663,11 @@ the stopped state and investigate; never initialize a replacement identity.
 
 ## Reorgs and unresolved Lightning requests
 
+Wallets process a reorg to a shorter tip when the next block arrives. Fee
+sponsorship can wait for that block while the wallet still has the old chain
+view. Do not spend orphaned change or disable confirmed-input checks to bypass
+this wait.
+
 After a reorg, preserve the signed transactions and original payment records.
 Allow the existing chain listeners to rebuild facts from both completed views.
 Verify canonical transactions and fees again. Do not clear decision fences or

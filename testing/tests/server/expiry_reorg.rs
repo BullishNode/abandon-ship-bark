@@ -1,4 +1,11 @@
 use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use axum::body::Bytes;
+use axum::http::{HeaderMap, header};
+use axum::routing::post;
+use axum::Router;
 
 use ark_testing::{sat, TestContext};
 use bitcoin::{BlockHash, Transaction};
@@ -302,10 +309,37 @@ async fn wait_for_confirmation(db: &Db, allocation: i64, point: BlockRef, hash: 
 async fn payout_reorg(depth: u32) {
 	let name = format!("server/expiry_payout_reorg_{depth}");
 	let ctx = TestContext::new(&name).await;
-	// Core invalidation is local to a node. Both daemons must observe the
-	// same Core that this test forks, as in the Signet deployment.
+	// Count actual watchman Core calls without intercepting the captain or
+	// the assertions' independent Core client. Forward the unchanged RPC body.
+	let observed = Arc::new(Mutex::new(None::<String>));
+	let queries = Arc::new(AtomicUsize::new(0));
+	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let proxy_url = format!("http://{}", listener.local_addr().unwrap());
+	let upstream = ctx.bitcoind().rpc_url();
+	let client = reqwest::Client::builder().no_proxy().build().unwrap();
+	let app = Router::new().route("/", post({
+		let observed = observed.clone();
+		let queries = queries.clone();
+		move |headers: HeaderMap, body: Bytes| {
+			let (observed, queries, upstream, client) = (observed.clone(), queries.clone(), upstream.clone(), client.clone());
+			async move {
+				let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
+				if request["method"] == "getrawtransaction"
+					&& request["params"][0].as_str() == observed.lock().unwrap().as_deref() {
+					queries.fetch_add(1, Ordering::SeqCst);
+				}
+				let response = client.post(upstream).header(header::AUTHORIZATION, headers[header::AUTHORIZATION].clone())
+					.header(header::CONTENT_TYPE, "application/json").body(body).send().await.unwrap();
+				(response.status(), response.bytes().await.unwrap())
+			}
+		}
+	})).layer(axum::extract::DefaultBodyLimit::disable());
+	let proxy = tokio::spawn(async move { axum::serve(listener, app).await.unwrap(); });
+	// Core invalidation is local to a node. Both daemons observe the same
+	// Core; only the watchman's HTTP route passes through the counter.
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).no_vtxo_pool()
-		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).watchmand().create().await;
+		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24))
+		.watchmand_cfg(move |cfg| cfg.bitcoind.url = proxy_url).create().await;
 	let wallet = ctx.bark("abandoned", &srv).funded(sat(200_000)).create().await;
 	let ids = wallet.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	assert_eq!(ids.len(), 1);
@@ -323,6 +357,7 @@ async fn payout_reorg(depth: u32) {
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let (allocation, parent) = wait_for_payout(&db, ids[0]).await;
 	let txid = parent.compute_txid();
+	*observed.lock().unwrap() = Some(txid.to_string());
 	assert_eq!(ctx.bitcoind().await_transaction(txid).await, parent);
 	ctx.generate_blocks(depth).await;
 	let rpc = ctx.bitcoind().sync_client();
@@ -331,6 +366,26 @@ async fn payout_reorg(depth: u32) {
 	assert!(original.confirmations.unwrap() >= depth);
 	let old_tip = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
 	let old_generation = wait_for_confirmation(&db, allocation, old_tip, old_hash).await;
+	let deep_queries = queries.load(Ordering::SeqCst);
+	if depth > 6 {
+		assert!(deep_queries > 0, "counter must observe the real initial parent confirmation lookup");
+		// Only the actual watchman rebuild writes this existing row. Observe
+		// two completed passes at the same deep-confirmed canonical tip.
+		let mut version = db.read(async |t| Ok(t.query_one("SELECT xmin::TEXT FROM expiry_chain_view WHERE id=1", &[])
+			.await?.get::<_, String>(0))).await.unwrap();
+		for _ in 0..2 {
+			srv.watchmand().trigger_sweep().await;
+			version = tokio::time::timeout(Duration::from_secs(10), async {
+				loop {
+					let current = db.read(async |t| Ok(t.query_one("SELECT xmin::TEXT FROM expiry_chain_view WHERE id=1", &[])
+						.await?.get::<_, String>(0))).await.unwrap();
+					if current != version { break current; }
+					tokio::time::sleep(Duration::from_millis(50)).await;
+				}
+			}).await.expect("watchman must complete another real rebuild pass");
+			assert_eq!(queries.load(Ordering::SeqCst), deep_queries, "deep-confirmed allocation was queried again");
+		}
+	}
 	let payout_index = parent.output.iter().position(|out| out.script_pubkey == destination.spk).unwrap() as u32;
 	assert_eq!(parent.output[payout_index as usize].value, expected);
 	let permanent = db.read(async |t| Ok(t.query_one(
@@ -392,6 +447,9 @@ async fn payout_reorg(depth: u32) {
 	assert_ne!(new_hash, old_hash);
 	assert!(current.confirmations.unwrap() >= depth);
 	let new_generation = wait_for_confirmation(&db, allocation, new_tip, new_hash).await;
+	if depth > 6 {
+		assert!(queries.load(Ordering::SeqCst) > deep_queries, "reorg must re-enable the actual parent lookup");
+	}
 	assert!(new_generation > old_generation);
 	assert_eq!(ctx.bitcoind().await_transaction(txid).await, parent);
 	assert_eq!(rpc.get_tx_out(&txid, payout_index, Some(true)).unwrap().unwrap().value, expected);
@@ -410,6 +468,7 @@ async fn payout_reorg(depth: u32) {
 	assert_eq!(row.get::<_, i64>("payments"), 1);
 	assert_eq!(deserialize::<Transaction>(row.get::<_, &[u8]>("raw")).unwrap(), parent,
 		"reorg recovery cannot rewrite the immutable payout parent");
+	proxy.abort();
 }
 
 #[tokio::test]

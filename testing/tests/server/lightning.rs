@@ -2199,10 +2199,14 @@ async fn lightning_send_needs_lifetime_margin_then_succeeds_after_refresh() {
 	sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	let height = ctx.generate_blocks(150).await;
 	srv.wait_for_sync_height(height).await;
-	let deadline = height + srv.config().htlc_send_expiry_delta + BlockDelta::new(2);
+	let deadline = height + srv.config().max_htlc_expiry_delta;
 	let hash = ark::lightning::Preimage::random().compute_payment_hash();
 	for refreshed in [false, true] {
-		if refreshed { ctx.refresh_all(&srv, &[&sender]).await; }
+		if refreshed {
+			ctx.refresh_all(&srv, &[&sender]).await;
+			ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+			sender.sync().await;
+		}
 		let wallet = sender.client().await;
 		let coins = wallet.spendable_vtxos().await.unwrap();
 		assert!(!coins.is_empty());
@@ -2253,7 +2257,7 @@ async fn failed_intra_ark_promotion_does_not_bind_another_payers_grants() {
 	let hash = preimage.compute_payment_hash();
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
-		payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 128,
+		payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 58,
 		mailbox_id: None, description: None,
 	}).await.unwrap().into_inner().bolt11;
 	lightning.sync().await;
@@ -2268,7 +2272,7 @@ async fn failed_intra_ark_promotion_does_not_bind_another_payers_grants() {
 	let tip = ctx.bitcoind().get_block_count().await as u32;
 	let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
 		payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
-		htlc_recv_expiry: tip + 64, lightning_receive_anti_dos: None,
+		htlc_recv_expiry: tip + 32, lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner().htlc_vtxos;
 	assert!(!grants.is_empty());
 	wait_for_subscription_status(&db, hash, "htlcs-ready").await;

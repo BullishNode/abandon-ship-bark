@@ -569,7 +569,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_s
 	// Reach the original 100-block reaction window without shortening that backing.
 	if !past_source_expiry {
 		let height = ctx.bitcoind().get_block_count().await as u32;
-		let target = source_expiry.saturating_sub(BlockDelta::new(80)).to_u32();
+		let target = source_expiry.saturating_sub(BlockDelta::new(40)).to_u32();
 		if target > height {
 			let height = ctx.generate_blocks(target - height).await;
 			srv.wait_for_sync_height(height).await;
@@ -728,7 +728,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 	ctx.generate_blocks(2).await;
 	// Keep the original 100-block reaction budget around this now-valid root's expiry.
 	let height = ctx.bitcoind().get_block_count().await as u32;
-	let target = original_body.expiry_height().saturating_sub(BlockDelta::new(80)).to_u32();
+	let target = original_body.expiry_height().saturating_sub(BlockDelta::new(40)).to_u32();
 	if target > height {
 		let height = ctx.generate_blocks(target - height).await;
 		srv.wait_for_sync_height(height).await;

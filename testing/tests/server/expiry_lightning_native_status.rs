@@ -131,7 +131,7 @@ async fn native_refund_status(two_sources: bool) {
 	// enter the existing 100-block reaction window before the first one expires.
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	let target = sources.iter().map(Vtxo::expiry_height).min().unwrap()
-		.saturating_sub(BlockDelta::new(80)).to_u32();
+		.saturating_sub(BlockDelta::new(40)).to_u32();
 	if target > height {
 		let height = ctx.generate_blocks(target - height).await;
 		srv.wait_for_sync_height(height).await;

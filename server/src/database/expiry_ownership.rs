@@ -55,6 +55,8 @@ pub enum OwnershipEvidence {
 	/// upstream off-chain revocation.
 	HtlcUnattemptedExpired { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
 	HtlcExternalFailed { payment_hash: PaymentHash, htlc_expiry: BlockHeight },
+	/// Chain-derived closure of every receive funded by these own attempts.
+	HtlcInternalGrantsReclaimed { payment_hash: PaymentHash, attempts: Vec<(i64, i64)>, block: BlockRef },
 	/// An unsettled receive grant past its HTLC expiry and unspent on chain.
 	/// The operator takes it back with the expiry sweep of its tree output.
 	/// Chain-derived: a later preimage spend conflicts the sweep.
@@ -100,7 +102,7 @@ impl Tx<'_> {
 		funding: &Transaction,
 		tip: BlockHeight,
 		watchman_tip: Option<BlockHeight>,
-		_internal_refund_depth: u32,
+		internal_refund_depth: u32,
 	) -> anyhow::Result<OwnershipProposal> {
 		let mut proposal = OwnershipProposal::pending(fact, "missing complete source path");
 		let Some(full) = &fact.full_vtxo else { return Ok(proposal); };
@@ -285,6 +287,20 @@ impl Tx<'_> {
 					proposal.disposition = OwnershipDisposition::Operator;
 					proposal.evidence = Some(OwnershipEvidence::HtlcSourceDischarged { payment_hash: hash });
 					return Ok(proposal);
+				}
+				if source == LightningSourceState::Failed && fact.onchain_spent_height.is_none()
+					&& fact.onchain_spent_txid.is_none() && htlc.htlc.chain_resolution.is_none() {
+					if let Some(watchman_tip) = watchman_tip {
+						if let Some((attempts, block)) = self.internal_grants_reclaimed(
+							state.vtxo_id, hash, tip, watchman_tip, internal_refund_depth,
+						).await? {
+							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
+							proposal.evidence = Some(OwnershipEvidence::HtlcInternalGrantsReclaimed {
+								payment_hash: hash, attempts, block,
+							});
+							return Ok(proposal);
+						}
+					}
 				}
 				// A same-hash receive funded by another source cannot retain
 				// this sender's money. Open attempts still wait.

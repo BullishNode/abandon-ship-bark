@@ -137,6 +137,9 @@ fn evidence_json(evidence: &OwnershipEvidence, preimage: bool) -> serde_json::Va
 			serde_json::json!({"kind":"htlc_source_discharged","payment_hash":payment_hash.to_string()}),
 		OwnershipEvidence::HtlcExternalFailed { payment_hash, htlc_expiry } =>
 			serde_json::json!({"kind":"htlc_external_failed","payment_hash":payment_hash.to_string(),"htlc_expiry":htlc_expiry.to_u32()}),
+		OwnershipEvidence::HtlcInternalGrantsReclaimed { payment_hash, attempts, block } =>
+			serde_json::json!({"kind":"htlc_internal_grants_reclaimed","payment_hash":payment_hash.to_string(),
+				"attempts":attempts,"height":block.height.to_u32(),"hash":block.hash.to_string()}),
 		OwnershipEvidence::HtlcRecvExpired { payment_hash, htlc_expiry } =>
 			serde_json::json!({"kind":"htlc_recv_expired","payment_hash":payment_hash.to_string(),"htlc_expiry":htlc_expiry.to_u32()}),
 		OwnershipEvidence::HtlcUnattemptedExpired { payment_hash, htlc_expiry } =>
@@ -177,6 +180,16 @@ impl Tx<'_> {
 			ids.extend(self.query("SELECT vtxo_id FROM round_part_input WHERE participation_id=ANY($1)", &[&participations]).await?
 				.into_iter().map(|r| r.get::<_, String>("vtxo_id")));
 		}
+		let internal_attempts = outputs.iter().flat_map(|o| &o.coins).flat_map(|c| match c.ownership.evidence.as_ref() {
+			Some(OwnershipEvidence::HtlcInternalGrantsReclaimed { attempts, .. }) => attempts.as_slice(),
+			_ => &[],
+		}).copied().collect::<Vec<_>>();
+		if !internal_attempts.is_empty() {
+			let attempts = internal_attempts.iter().map(|(attempt, _)| *attempt).collect::<Vec<_>>();
+			ids.extend(self.query("SELECT vtxo_id FROM lightning_payment_attempt_htlc_vtxo \
+				WHERE lightning_payment_attempt_id=ANY($1)", &[&attempts]).await?
+				.into_iter().map(|r| r.get::<_, String>("vtxo_id")));
+		}
 		ids.sort(); ids.dedup();
 		let rows = self.query("
 			SELECT vtxo_id,updated_at,spend_state::TEXT,onchain_spent_height IS NOT NULL OR onchain_spent_txid IS NOT NULL AS chain_spent
@@ -185,6 +198,13 @@ impl Tx<'_> {
 			ORDER BY vtxo_id FOR UPDATE
 		", &[&ids]).await?;
 		self.lock_htlc_settlements().await?;
+		let mut subscriptions = internal_attempts.iter().map(|(_, subscription)| *subscription).collect::<Vec<_>>();
+		subscriptions.sort_unstable(); subscriptions.dedup();
+		if !subscriptions.is_empty() {
+			let locked = self.query("SELECT id FROM lightning_htlc_subscription WHERE id=ANY($1) ORDER BY id FOR UPDATE",
+				&[&subscriptions]).await?;
+			ensure!(locked.len() == subscriptions.len(), "expiry settlement subscription disappeared");
+		}
 		let actual = rows.into_iter().map(|r| (
 			r.get::<_, String>("vtxo_id"),
 			(
@@ -311,7 +331,7 @@ impl Tx<'_> {
 				let proposal = &coin.ownership;
 				let evidence = proposal.evidence.as_ref().context("ready ownership lacks evidence")?;
 				let observed = evidence_json(evidence, proposal.has_stored_preimage);
-				let conditional = matches!(evidence, OwnershipEvidence::HtlcChain { .. }
+				let conditional = matches!(evidence, OwnershipEvidence::HtlcChain { .. } | OwnershipEvidence::HtlcInternalGrantsReclaimed { .. }
 					| OwnershipEvidence::HtlcRecvExpired { .. });
 				let mut stable = if conditional {
 					serde_json::json!({"stored_preimage": proposal.has_stored_preimage})

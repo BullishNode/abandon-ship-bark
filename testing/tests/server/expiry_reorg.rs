@@ -77,7 +77,7 @@ async fn oversized_fee_child(retained: bool) {
 	// This RPC-only fixture requires a fixed fallback even after funding.
 	let mut config = std::fs::OpenOptions::new().write(true).create_new(true)
 		.open(ctx.bitcoind().datadir().join("bitcoin.conf")).unwrap();
-	std::io::Write::write_all(&mut config, b"blocksonly=1\n").unwrap();
+	std::io::Write::write_all(&mut config, b"blocksonly=1\nwalletbroadcast=1\n").unwrap();
 	drop(config);
 	ctx.bitcoind().start().await.unwrap();
 	assert_eq!((ctx.bitcoind().rpc_url(), ctx.bitcoind().p2p_url(), ctx.bitcoind().zmq_url()), endpoints);
@@ -110,7 +110,16 @@ async fn oversized_fee_child(retained: bool) {
 		}).create()).await;
 	wait_for_fee_fallback(&srv, started).await;
 	assert_eq!(srv.watchmand().config().watchman.min_cpfp_amount, sat(10_000));
-	let owner = ctx.bark("absent_owner", &srv).funded(sat(200_000)).create().await;
+	let owner = ctx.bark("absent_owner", &srv).create().await;
+	let funding_txid = ctx.fund_bark(&owner, sat(200_000)).await;
+	let onchain = owner.onchain_utxos().await;
+	assert_eq!(onchain.len(), 1);
+	assert_eq!(onchain[0].outpoint.txid, funding_txid);
+	assert_eq!(onchain[0].amount, sat(200_000));
+	assert!(onchain[0].confirmation_height.is_some());
+	let funded = rpc.get_tx_out(&funding_txid, onchain[0].outpoint.vout, Some(true)).unwrap().unwrap();
+	assert_eq!(funded.value, sat(200_000));
+	assert!(funded.confirmations >= 1);
 	let ids = owner.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	assert_eq!(ids.len(), 1);
 	let client = owner.client().await;

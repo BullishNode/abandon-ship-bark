@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
+use ark::fees::VtxoFeeInfo;
 use ark::lightning::{PaymentHash, Preimage};
 use ark::vtxo::Full;
 use ark::{ProtocolEncoding, ServerVtxo, Vtxo, VtxoPolicy, SECP};
@@ -23,7 +24,7 @@ use cln_rpc::listsendpays_payments::ListsendpaysPaymentsStatus;
 use cln_rpc::plugins::hold;
 use server::database::Db;
 use server::database::htlc_vtxo::{self, HtlcResolution};
-use server_log::{ClaimBroadcast, ClaimBroadcastFailure, ClaimChunkBroadcastFailure};
+use server_log::{ArkFeeRecorded, ClaimBroadcast, ClaimBroadcastFailure, ClaimChunkBroadcastFailure};
 use server_rpc::protos;
 
 use super::expiry_internal_partial_terminal::confirm_actual_path;
@@ -265,7 +266,7 @@ async fn assert_no_refund(db: &Db, sources: &[Vtxo<Full>]) {
 async fn publish_exact_claims(
 	ctx: &TestContext, server: &Captaind, db: &Db,
 	selected: &[Vtxo<Full>], omitted: Option<&Vtxo<Full>>,
-) {
+) -> (Amount, Amount) {
 	let selected_ids = selected.iter().map(Vtxo::id).collect::<BTreeSet<_>>();
 	let by_id = selected.iter().map(|source| (source.id(), source)).collect::<BTreeMap<_, _>>();
 	let confirmations = selected.iter().map(|source| (source.id(), confirmed_height(ctx, source)))
@@ -365,6 +366,7 @@ async fn publish_exact_claims(
 	}
 	if let Some(omitted) = omitted { assert_unspent(ctx, omitted); }
 	assert_no_refund(db, selected).await;
+	(paid_outputs, claim_fees)
 }
 
 fn canonical_spend(ctx: &TestContext, source: &Vtxo<Full>) -> Transaction {
@@ -403,8 +405,12 @@ async fn send_claim_collects_only_selected_fragmented_sources() {
 }
 
 async fn internal_server(ctx: &TestContext, node: &Lightningd) -> Arc<Captaind> {
+	internal_server_with_fee(ctx, node, Amount::ZERO).await
+}
+
+async fn internal_server_with_fee(ctx: &TestContext, node: &Lightningd, user_fee: Amount) -> Arc<Captaind> {
 	let drain = ctx.bitcoind().get_new_address();
-	ctx.captaind("server").lightningd(node).bitcoind(ctx.bitcoind_arc()).funded(btc(10)).cfg(|cfg| {
+	ctx.captaind("server").lightningd(node).bitcoind(ctx.bitcoind_arc()).funded(btc(10)).cfg(move |cfg| {
 		cfg.vtxo_lifetime = BlockDelta::new(1_000);
 		cfg.vtxopool.vtxo_lifetime = BlockDelta::new(1_000);
 		cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(90_000), count: 2 }];
@@ -414,6 +420,7 @@ async fn internal_server(ctx: &TestContext, node: &Lightningd) -> Arc<Captaind> 
 		cfg.max_user_invoice_cltv_delta = BlockDelta::new(240);
 		cfg.invoice_check_interval = Duration::from_secs(1);
 		cfg.receive_htlc_forward_timeout = Duration::from_secs(600);
+		cfg.fees.lightning_send.base_fee = user_fee;
 	}).watchmand().watchmand_cfg(move |cfg| {
 		cfg.sweep_address = Some(drain.into_unchecked());
 		cfg.watchman.reaction_interval = Duration::from_secs(600);
@@ -599,6 +606,187 @@ async fn send_claim_waits_for_internal_collection() {
 		assert_eq!(retained_spend.compute_wtxid(), unrelated_spend.compute_wtxid());
 		assert_eq!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap(), Some(preimage));
 	}).await.expect("internal collection source claim exceeded 180 seconds");
+}
+
+
+#[tokio::test]
+async fn internal_send_records_fee_without_native_payment() {
+	let ctx = TestContext::new("server/internal_send_records_fee_without_native_payment").await;
+	tokio::time::timeout(Duration::from_secs(180), async {
+		let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
+		let server = internal_server_with_fee(&ctx, &lightning.internal, sat(1_000)).await;
+		server.wait_for_vtxopool(&ctx).await;
+		let sender = ctx.bark("sender", &server).cfg(|cfg| cfg.daemon_manual_sync = true)
+			.funded(sat(400_000)).create().await;
+		let preimage = Preimage::random();
+		let hash = preimage.compute_payment_hash();
+		let receiver = Keypair::new(&SECP, &mut bitcoin::secp256k1::rand::thread_rng());
+		let sources = signed_sources(&ctx, &server, &sender, hash, sat(91_000), 2).await;
+		let source = &sources[0];
+		let wallet = sender.client().await;
+		let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		let user_fee = server.config().fees.lightning_send.calculate(sat(90_000),
+			[VtxoFeeInfo::from_vtxo_and_tip(source, tip)]).unwrap();
+		assert_eq!(user_fee, sat(1_000));
+		assert_eq!(source.amount(), sat(90_000) + user_fee);
+		let mut rpc = server.get_public_rpc().await;
+		let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+			payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 220,
+			mailbox_id: None, description: None,
+		}).await.unwrap().into_inner().bolt11;
+		let stdout_path = server.config().data_dir.join(ark_testing::daemon::STDOUT_LOGFILE);
+		let stdout_offset = usize::try_from(std::fs::metadata(&stdout_path).unwrap().len()).unwrap();
+		let mut fee_logs = server.subscribe_log::<ArkFeeRecorded>();
+		rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {
+			invoice, payment_amount_sat: 90_000, htlc_vtxo_ids: vec![source.id().to_bytes().to_vec()],
+			mailbox_id: None, retry_for_secs: Some(1),
+		}).await.unwrap();
+		let mut grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
+			htlc_recv_expiry: (tip + BlockDelta::new(220)).to_u32(), lightning_receive_anti_dos: None,
+		}).await.unwrap().into_inner().htlc_vtxos.into_iter()
+			.map(|raw| Vtxo::<Full>::deserialize(&raw).unwrap()).collect::<Vec<_>>();
+		assert!(!grants.is_empty());
+		assert_eq!(grants.iter().map(Vtxo::amount).sum::<Amount>(), sat(90_000));
+		assert!(grants.iter().all(|grant| sources.iter().all(|source| grant.chain_anchor() != source.chain_anchor())));
+		let db = Db::connect(&server.config().postgres).await.unwrap();
+		assert_internal_grants(&db, hash, source, &grants, false).await;
+		let pending = db.read(async |tx| tx.get_latest_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap();
+		assert!(pending.is_self_payment() && !pending.status.is_final());
+		assert_eq!(pending.amount_msat, 90_000_000);
+		assert_eq!(pending.final_amount_msat, None);
+		assert_eq!(pending.user_fee, Some(user_fee));
+		assert_eq!(pending.max_routing_fee, None);
+		assert!(native_parts(&lightning.internal, hash).await.is_empty());
+		assert!(lightning.internal.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
+			payment_hash: Some(hash.to_vec()), ..Default::default()
+		}).await.unwrap().into_inner().pays.is_empty());
+		while let Ok(event) = fee_logs.try_recv() {
+			assert_ne!(event.op_type, "lightning_send", "an uncollected receive must not record a send fee");
+		}
+		assert_no_refund(&db, &sources).await;
+		grants.sort_by_key(Vtxo::id);
+		let keys = vec![receiver; grants.len()];
+		let destination = VtxoPolicy::new_pubkey(receiver.public_key());
+		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(grants.clone(), destination.clone())
+			.unwrap().generate_user_nonces(&keys).unwrap();
+		let request = protos::ClaimLightningReceiveRequest {
+			payment_hash: hash.to_vec(), payment_preimage: preimage.to_vec(),
+			cosign_request: Some(protos::ArkoorPackageCosignRequest::from(builder.cosign_request())),
+		};
+		let response = rpc.claim_lightning_receive(request.clone()).await.unwrap().into_inner();
+		let outputs = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response.clone()).unwrap())
+			.unwrap().build_signed_vtxos();
+		assert_eq!(outputs.len(), grants.len());
+		assert_eq!(outputs.iter().map(Vtxo::amount).sum::<Amount>(), sat(90_000));
+		assert!(outputs.iter().all(|output| output.policy() == &destination));
+		for output in &outputs {
+			let funding = ctx.bitcoind().await_transaction(output.chain_anchor().txid).await;
+			output.validate(&funding).unwrap();
+		}
+		wallet.register_vtxo_transactions_with_server(&outputs).await.unwrap();
+		let event = tokio::time::timeout(Duration::from_secs(10), async {
+			loop {
+				let event = fee_logs.recv().await.expect("fee subscription closed");
+				if event.op_type == "lightning_send" { break event; }
+			}
+		}).await.expect("completed internal collection must record the send fee");
+		assert_eq!(event.user_fee_sat, 1_000);
+		assert_eq!(event.routing_fee_sat, Some(0));
+		assert_eq!(event.net_fee_sat, 1_000);
+		assert_eq!(event.round_seq, None);
+		let payment_state = async || db.read(async |tx| {
+			let attempt = tx.get_latest_payment_attempt_by_payment_hash(hash).await?.unwrap();
+			assert!(attempt.is_self_payment());
+			assert_eq!(attempt.status, server::database::ln::LightningPaymentStatus::Succeeded);
+			assert_eq!(attempt.amount_msat, 90_000_000);
+			assert_eq!(attempt.final_amount_msat, None);
+			assert_eq!(attempt.user_fee, Some(sat(1_000)));
+			assert_eq!(attempt.max_routing_fee, None);
+			let state = tx.query_one("SELECT jsonb_build_array(a.id,a.lightning_node_id,a.payment_hash, \
+				a.amount_msat,a.final_amount_msat,a.sender_mailbox_id,a.status,a.error,a.block_height, \
+				a.user_fee_sat,a.user_agent,a.retry_for_secs,a.max_routing_fee_msat, \
+				a.lightning_htlc_subscription_id,a.created_at,a.updated_at, \
+				(SELECT COUNT(*) FROM lightning_payment_attempt_history h WHERE h.id=a.id))::TEXT \
+				FROM lightning_payment_attempt a WHERE a.id=$1", &[&attempt.id]).await?.get::<_, String>(0);
+			let claims = tx.query("SELECT output_vtxo_id,output_vtxo,materialized \
+				FROM expiry_lightning_receive_claim WHERE payment_hash=$1 ORDER BY output_vtxo_id", &[&hash.to_string()]).await?
+				.into_iter().map(|row| (row.get::<_, String>(0), row.get::<_, Vec<u8>>(1), row.get::<_, bool>(2)))
+				.collect::<Vec<_>>();
+			assert_eq!(claims.len(), outputs.len());
+			for (id, bytes, materialized) in &claims {
+				let output = outputs.iter().find(|output| output.id().to_string() == *id).unwrap();
+				assert_eq!(Vtxo::<Full>::deserialize(bytes).unwrap().to_bare().serialize(), output.to_bare().serialize());
+				assert!(*materialized);
+			}
+			Ok((state, claims))
+		}).await.unwrap();
+		let before_replay = payment_state().await;
+		assert_internal_grants(&db, hash, source, &grants, true).await;
+		let replay = ArkoorPackageCosignResponse::try_from(
+			rpc.claim_lightning_receive(request).await.unwrap().into_inner()).unwrap();
+		let previous = ArkoorPackageCosignResponse::try_from(response).unwrap();
+		assert_eq!(replay.responses.len(), previous.responses.len());
+		for (replayed, paid) in replay.responses.iter().zip(&previous.responses) {
+			assert_eq!(replayed.server_pub_nonces.len(), paid.server_pub_nonces.len());
+			assert_eq!(replayed.server_partial_sigs.len(), paid.server_partial_sigs.len());
+		}
+		// Register the same signed outputs. The user nonces were consumed once.
+		wallet.register_vtxo_transactions_with_server(&outputs).await.unwrap();
+		assert!(payment_state().await == before_replay, "claim replay must preserve payment and receive outputs");
+		let mut seen = BTreeSet::new();
+		for output in &outputs { confirm_actual_path(&ctx, output, &mut seen).await; }
+		let chain = ctx.bitcoind().sync_client();
+		let mut received = Amount::ZERO;
+		for output in &outputs {
+			let output_utxo = chain.get_tx_out(&output.point().txid, output.point().vout, Some(true)).unwrap().unwrap();
+			assert!(output_utxo.confirmations > 0);
+			assert_eq!(output_utxo.value, output.amount());
+			assert_eq!(output_utxo.script_pub_key.script().unwrap(), output.txout().script_pubkey);
+			received += output_utxo.value;
+		}
+		assert_eq!(received, sat(90_000));
+		expose_and_mature(&ctx, &server, &sources).await;
+		for source in &sources { assert_unspent(&ctx, source); }
+		let (drain, claim_fees) = publish_exact_claims(&ctx, &server, &db, &sources[..1], Some(&sources[1])).await;
+		assert_eq!(source.amount(), drain + claim_fees);
+		assert_eq!(drain + claim_fees, received + user_fee);
+		assert_eq!(sources.iter().map(Vtxo::amount).sum::<Amount>(), drain + claim_fees + sources[1].amount());
+		assert_unspent(&ctx, &sources[1]);
+		assert_no_refund(&db, &sources).await;
+		assert_internal_grants(&db, hash, source, &grants, true).await;
+		assert!(payment_state().await == before_replay, "source collection must preserve completed payment accounting");
+		db.read(async |tx| {
+			let spare = sources[1].id();
+			assert_eq!(tx.query_one("SELECT COUNT(*) FROM lightning_payment_attempt_htlc_vtxo WHERE vtxo_id=$1",
+				&[&spare.to_string()]).await?.get::<_, i64>(0), 0);
+			let spare_htlc = htlc_vtxo::get_htlc_vtxo(tx, spare).await?.unwrap();
+			assert_eq!(spare_htlc.htlc.offchain_resolution, None);
+			assert_eq!(spare_htlc.htlc.chain_resolution, None);
+			Ok(())
+		}).await.unwrap();
+		assert!(native_parts(&lightning.internal, hash).await.is_empty());
+		assert!(lightning.internal.grpc_client().await.list_pays(cln_rpc::ListpaysRequest {
+			payment_hash: Some(hash.to_vec()), ..Default::default()
+		}).await.unwrap().into_inner().pays.is_empty());
+		assert_eq!(db.read(async |tx| tx.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap(), Some(preimage));
+		let stdout = std::fs::read(&stdout_path).unwrap();
+		assert!(stdout.len() >= stdout_offset, "the application log must remain append-only");
+		let epoch = std::str::from_utf8(&stdout[stdout_offset..]).unwrap();
+		let mut send_fees = Vec::new();
+		for line in epoch.lines() {
+			if let Ok(record) = server_log::parse_record(line) {
+				if record.is::<ArkFeeRecorded>() {
+					let fee = record.try_as::<ArkFeeRecorded>().unwrap();
+					if fee.op_type == "lightning_send" { send_fees.push(fee); }
+				}
+			}
+		}
+		assert_eq!(send_fees.len(), 1, "one internal payment must record one fee in the observed application interval");
+		assert_eq!(send_fees[0].user_fee_sat, 1_000);
+		assert_eq!(send_fees[0].routing_fee_sat, Some(0));
+		assert_eq!(send_fees[0].net_fee_sat, 1_000);
+	}).await.expect("internal send fee accounting exceeded 180 seconds");
 }
 
 struct ProductProcess {

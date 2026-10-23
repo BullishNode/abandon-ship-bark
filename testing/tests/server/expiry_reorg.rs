@@ -71,11 +71,29 @@ async fn expiry_payout_replaces_oversized_retained_fee_child() {
 async fn oversized_fee_child(retained: bool) {
 	let ctx = TestContext::new(if retained { "server/expiry_payout_replaces_oversized_retained_fee_child" }
 		else { "server/expiry_payout_refuses_oversized_fee_child" }).await;
+	let endpoints = (ctx.bitcoind().rpc_url(), ctx.bitcoind().p2p_url(), ctx.bitcoind().zmq_url());
+	let tip = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
+	ctx.bitcoind().stop().await.unwrap();
+	// This RPC-only fixture requires a fixed fallback even after funding.
+	let mut config = std::fs::OpenOptions::new().write(true).create_new(true)
+		.open(ctx.bitcoind().datadir().join("bitcoin.conf")).unwrap();
+	std::io::Write::write_all(&mut config, b"blocksonly=1\n").unwrap();
+	drop(config);
+	ctx.bitcoind().start().await.unwrap();
+	assert_eq!((ctx.bitcoind().rpc_url(), ctx.bitcoind().p2p_url(), ctx.bitcoind().zmq_url()), endpoints);
+	assert_eq!(server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap(), tip);
 	let rpc = ctx.bitcoind().sync_client();
+	if !rpc.list_wallets().unwrap().iter().any(|name| name == "central") {
+		ctx.bitcoind().load_wallet("central").await;
+	}
+	assert!(rpc.list_wallets().unwrap().iter().any(|name| name == "central"));
 	let assert_fallback = || {
-		let estimate: bitcoin_ext::rpc::json::EstimateSmartFeeResult = rpc.call("estimatesmartfee",
-			&[serde_json::json!(3), serde_json::json!("economical")]).unwrap();
-		assert!(estimate.fee_rate.is_none(), "the fixed-target fixture requires unavailable Core estimates");
+		let result = rpc.call::<bitcoin_ext::rpc::json::EstimateSmartFeeResult>("estimatesmartfee",
+			&[serde_json::json!(3), serde_json::json!("economical")]);
+		assert!(matches!(result,
+			Err(bitcoin_ext::rpc::Error::JsonRpc(bitcoin_ext::rpc::jsonrpc::Error::Rpc(error)))
+				if error.code == -32603 && error.message == "Fee estimation disabled"),
+			"the fixed-target fixture requires the native disabled-estimator response");
 	};
 	assert_fallback();
 	let target = bitcoin::FeeRate::from_sat_per_vb(8).unwrap();
@@ -142,6 +160,16 @@ async fn oversized_fee_child(retained: bool) {
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
 	}).await.expect("fragmented funding must confirm and synchronize");
+	let point = server::bitcoind::tip(&ctx.bitcoind().async_client()).await.unwrap();
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			if db.read(async |t| {
+				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
+				Ok(view.captaind == point && view.watchmand == point && t.expiry_view_is_rebuilt(view).await?)
+			}).await.unwrap() { break; }
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	}).await.expect("the exact Core tip must have a completed expiry reconstruction");
 	srv.watchmand().stop().await.unwrap();
 	let mut wallet = load_fee_wallet(&ctx, &srv, &db).await;
 	let child = if retained {
@@ -159,6 +187,9 @@ async fn oversized_fee_child(retained: bool) {
 	if retained {
 		db.write(async |t| {
 			let view = t.expiry_rebuild_token().await?.expect("both sync acknowledgments required");
+			assert_eq!(view.captaind, point);
+			assert_eq!(view.watchmand, point);
+			assert!(t.expiry_view_is_rebuilt(view).await?);
 			t.store_expiry_fee_child(view, allocation, &parent, &child, fee).await
 		}).await.unwrap();
 		wallet.commit_tx(&child);

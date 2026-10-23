@@ -2225,7 +2225,7 @@ async fn lightning_send_needs_lifetime_margin_then_succeeds_after_refresh() {
 		).await;
 		if !refreshed {
 			let error = response.expect_err("short-lived sources must be refused before spending");
-			assert!(error.message().contains("outlive"), "{error}");
+			assert!(error.message().contains("funding coin expiry") && error.message().contains("refresh the coin first"), "{error}");
 		} else {
 			let reply = response.expect("the same timeout must work after refreshing").into_inner();
 			let sends = builder.user_cosign(&keys,

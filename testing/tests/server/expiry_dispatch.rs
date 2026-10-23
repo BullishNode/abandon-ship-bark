@@ -315,6 +315,9 @@ async fn lightning_rejection_refunds_only_its_source() {
 				protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
 			).await;
 			if index == 0 {
+				let internal = builder.build_unsigned_internal_vtxos();
+				assert_eq!(internal.len(), 1);
+				let txids = builder.virtual_transactions().collect::<Vec<_>>();
 				let refund = builder.user_cosign(&[*key], ArkoorPackageCosignResponse::try_from(response.unwrap().into_inner()).unwrap())
 					.unwrap().build_signed_vtxos();
 				assert_eq!(refund.iter().map(|coin| coin.amount()).sum::<bitcoin::Amount>(), sat(100_000));
@@ -327,8 +330,40 @@ async fn lightning_rejection_refunds_only_its_source() {
 				assert_ne!(other_destination, key.public_key());
 				let repeat = ArkoorPackageBuilder::new_claim_all_with_checkpoints([source.clone()],
 					VtxoPolicy::new_pubkey(other_destination)).unwrap().generate_user_nonces(&[*key]).unwrap();
-				assert_eq!(rpc.request_lightning_pay_htlc_revocation(protos::ArkoorPackageCosignRequest::from(repeat.cosign_request()))
-					.await.unwrap_err().code(), tonic::Code::InvalidArgument);
+				let repeated_internal = repeat.build_unsigned_internal_vtxos();
+				assert_eq!(repeated_internal.len(), 1);
+				assert_eq!(repeated_internal[0].0.id(), internal[0].0.id());
+				assert_ne!(repeated_internal[0].1, internal[0].1);
+				let repeated_outputs = repeat.build_unsigned_vtxos().collect::<Vec<_>>();
+				assert_eq!(repeated_outputs.len(), 1);
+				assert_ne!(repeated_outputs[0].id(), refund[0].id());
+				let new_txids = repeat.virtual_transactions().filter(|txid| !txids.contains(txid)).collect::<Vec<_>>();
+				assert_eq!(new_txids.len(), 1);
+				for txid in &new_txids {
+					assert!(db.read(async |t| t.get_virtual_transaction_by_txid(*txid).await).await.unwrap().is_none());
+				}
+				assert!(db.read(async |t| Ok(t.query_opt("SELECT vtxo_id FROM vtxo WHERE vtxo_id=$1",
+					&[&repeated_outputs[0].id().to_string()]).await?.is_none())).await.unwrap());
+				let affected_coins = [source.id(), internal[0].0.id(), refund[0].id(), repeated_outputs[0].id()]
+					.map(|id| id.to_string()).to_vec();
+				let affected_txs = txids.iter().chain(new_txids.iter()).map(ToString::to_string).collect::<Vec<_>>();
+				let read_state = async || db.read(async |t| {
+					let row = t.query_one("SELECT \
+						(SELECT COALESCE(jsonb_agg(to_jsonb(v) ORDER BY v.vtxo_id),'[]'::jsonb)::TEXT FROM vtxo v WHERE v.vtxo_id=ANY($1)) AS coins, \
+						(SELECT COALESCE(jsonb_agg(to_jsonb(h) ORDER BY h.id),'[]'::jsonb)::TEXT FROM htlc_vtxo h JOIN vtxo v ON v.id=h.id WHERE v.vtxo_id=ANY($1)) AS htlcs, \
+						(SELECT COALESCE(jsonb_agg(to_jsonb(v) ORDER BY v.txid),'[]'::jsonb)::TEXT FROM virtual_transaction v WHERE v.txid=ANY($2)) AS txs, \
+						(SELECT COUNT(*) FROM virtual_transaction_history WHERE txid=ANY($2)) AS tx_history",
+						&[&affected_coins, &affected_txs]).await?;
+					Ok((row.get::<_, String>("coins"), row.get::<_, String>("htlcs"),
+						row.get::<_, String>("txs"), row.get::<_, i64>("tx_history")))
+				}).await.unwrap();
+				let before = read_state().await;
+				assert!(srv.config().rpc_rich_errors);
+				let refusal = rpc.request_lightning_pay_htlc_revocation(protos::ArkoorPackageCosignRequest::from(repeat.cosign_request()))
+					.await.unwrap_err();
+				assert_eq!(refusal.code(), tonic::Code::Internal);
+				assert_eq!(refusal.message(), format!("tx body error: vtxo {} is already spent", internal[0].0.id()));
+				assert_eq!(read_state().await, before);
 			} else { assert_eq!(response.unwrap_err().code(), tonic::Code::InvalidArgument); }
 		}
 		let after = db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(hash).await).await.unwrap().unwrap();

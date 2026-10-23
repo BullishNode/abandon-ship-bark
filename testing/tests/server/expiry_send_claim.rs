@@ -692,9 +692,15 @@ async fn refuse_pending_reuse(
 	assert_eq!(backing.value, spare.amount());
 }
 
-async fn linked_send_with_shared_preimage(failed: bool) {
+async fn assert_no_receive_subscription(db: &Db, hash: PaymentHash) {
+	assert!(db.read(async |tx| tx.get_htlc_subscription_by_payment_hash(hash).await).await.unwrap().is_none(),
+		"external repetition cannot create an internal receive");
+}
+
+async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: bool) {
 	let name = if failed { "server/send_claim_refuses_failed_source_with_shared_preimage" }
-		else { "server/send_claim_refuses_pending_source_with_shared_preimage" };
+		else if with_internal_receive { "server/send_claim_refuses_pending_source_with_shared_preimage" }
+		else { "server/external_send_refuses_reuse_after_onchain_preimage" };
 	let ctx = TestContext::new(name).await;
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let srv = claim_server(&ctx, &lightning.internal).await;
@@ -770,17 +776,23 @@ async fn linked_send_with_shared_preimage(failed: bool) {
 	assert_native_send(&pending, hash, &label, false);
 	let held = assert_future_held_parts(&ctx, &lightning.internal, hash, sent_at).await;
 	let internal_invoice = if let Some(spare) = &spare {
+		if !with_internal_receive { assert_no_receive_subscription(&db, hash).await; }
 		refuse_pending_reuse(&ctx, &srv, &db, &source, spare, hash, attempt, &label,
 			&payer_info.id, &lightning.internal, &invoice, false, sent_at).await;
-		// Only register this independent receive after the external dispatch is
-		// fixed. Its invoice does not reclassify that dispatch as internal.
-		let internal = srv.get_public_rpc().await.start_lightning_receive(protos::StartLightningReceiveRequest {
-			payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 18,
-			mailbox_id: None, description: None,
-		}).await.unwrap().into_inner().bolt11;
-		refuse_pending_reuse(&ctx, &srv, &db, &source, spare, hash, attempt, &label,
-			&payer_info.id, &lightning.internal, &internal, false, sent_at).await;
-		Some(internal)
+		if with_internal_receive {
+			// Only register this independent receive after the external dispatch is
+			// fixed. Its invoice does not reclassify that dispatch as internal.
+			let internal = srv.get_public_rpc().await.start_lightning_receive(protos::StartLightningReceiveRequest {
+				payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 18,
+				mailbox_id: None, description: None,
+			}).await.unwrap().into_inner().bolt11;
+			refuse_pending_reuse(&ctx, &srv, &db, &source, spare, hash, attempt, &label,
+				&payer_info.id, &lightning.internal, &internal, false, sent_at).await;
+			Some(internal)
+		} else {
+			assert_no_receive_subscription(&db, hash).await;
+			None
+		}
 	} else { None };
 	if failed {
 		lightning.external.hold_client().await.cancel(hold::CancelRequest { payment_hash: hash.to_vec() }).await.unwrap();
@@ -818,10 +830,18 @@ async fn linked_send_with_shared_preimage(failed: bool) {
 	if let Some(spare) = &spare {
 		assert_eq!(assert_future_held_parts(&ctx, &lightning.internal, hash, sent_at).await, held);
 		lightning.external.wait_for_hold_invoice_accepted(hash).await;
+		if !with_internal_receive { assert_no_receive_subscription(&db, hash).await; }
 		refuse_pending_reuse(&ctx, &srv, &db, &source, spare, hash, attempt, &label,
-			&payer_info.id, &lightning.internal, &invoice, true, sent_at).await;
-		refuse_pending_reuse(&ctx, &srv, &db, &source, spare, hash, attempt, &label,
-			&payer_info.id, &lightning.internal, internal_invoice.as_ref().unwrap(), false, sent_at).await;
+			&payer_info.id, &lightning.internal, &invoice, with_internal_receive, sent_at).await;
+		if let Some(internal) = &internal_invoice {
+			refuse_pending_reuse(&ctx, &srv, &db, &source, spare, hash, attempt, &label,
+				&payer_info.id, &lightning.internal, internal, false, sent_at).await;
+		} else {
+			assert_no_receive_subscription(&db, hash).await;
+			refuse_pending_reuse(&ctx, &srv, &db, &source, spare, hash, attempt, &label,
+				&payer_info.id, &lightning.internal, &invoice, false, sent_at).await;
+			assert_no_receive_subscription(&db, hash).await;
+		}
 	}
 	refuse_linked_send_twice(&ctx, &srv, &db, &source, hash, attempt, &label,
 		&payer_info.id, &lightning.internal, failed).await;
@@ -833,12 +853,18 @@ async fn linked_send_with_shared_preimage(failed: bool) {
 
 #[tokio::test]
 async fn send_claim_refuses_failed_source_with_shared_preimage() {
-	tokio::time::timeout(Duration::from_secs(180), linked_send_with_shared_preimage(true)).await
+	tokio::time::timeout(Duration::from_secs(180), linked_send_with_shared_preimage(true, false)).await
 		.expect("failed source drain refusal exceeded 180 seconds");
 }
 
 #[tokio::test]
 async fn send_claim_refuses_pending_source_with_shared_preimage() {
-	tokio::time::timeout(Duration::from_secs(180), linked_send_with_shared_preimage(false)).await
+	tokio::time::timeout(Duration::from_secs(180), linked_send_with_shared_preimage(false, true)).await
 		.expect("pending source drain refusal exceeded 180 seconds");
+}
+
+#[tokio::test]
+async fn external_send_refuses_reuse_after_onchain_preimage() {
+	tokio::time::timeout(Duration::from_secs(180), linked_send_with_shared_preimage(false, false)).await
+		.expect("external reuse refusal exceeded 180 seconds");
 }

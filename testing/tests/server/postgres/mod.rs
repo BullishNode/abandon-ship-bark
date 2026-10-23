@@ -9,7 +9,7 @@ use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use bitcoin::Transaction;
 use chrono::Local;
 
-use ark::{ServerVtxo, VtxoPolicy, VtxoRequest};
+use ark::{ServerVtxo, VtxoId, VtxoPolicy, VtxoRequest};
 use ark::offboard::OffboardForfeitResult;
 use ark::integration::{TokenStatus, TokenType};
 use ark::lightning::{AsPaymentHash, Invoice, Preimage};
@@ -1587,6 +1587,28 @@ async fn round_participation_same_vtxo_multiple_pending() {
 const DUMMY_PUBKEY: &str = "038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354";
 const BOLT11_INVOICE: &str = "lnbcrt11p59rr6msp534kz2tahyrxl0rndcjrt8qpqvd0dynxxwfd28ea74rxjuj0tphfspp5nc0gf6vamuphaf4j49qzjvz2rg3del5907vdhncn686cj5yykvfsdqqcqzzs9qyysgqgalnpu3selnlgw8n66qmdpuqdjpqak900ru52v572742wk4mags8a8nec2unls57r5j95kkxxp4lr6wy9048uzgsvdhrz7dh498va2cq4t6qh8";
 
+// These rows use the format from before the execution queue. New queue
+// admission is exercised separately through store_lightning_payment_start.
+async fn legacy_payment_attempt(db: &Db, node_id: i64, invoice: &Invoice, sources: &[VtxoId]) {
+	let principal = i64::try_from(invoice.amount_msat().expect("fixed invoice fixture")).unwrap();
+	let hash = invoice.payment_hash().to_string();
+	let ids = sources.iter().map(ToString::to_string).collect::<Vec<_>>();
+	db.write(async |t| {
+		let id = t.query_one("INSERT INTO lightning_payment_attempt( \
+			lightning_node_id,payment_hash,amount_msat,sender_mailbox_id,status,block_height, \
+			user_fee_sat,user_agent,retry_for_secs,created_at,updated_at,lightning_htlc_subscription_id) \
+			VALUES($1,$2,$3,NULL,'requested',1,1,'bark',60,NOW(),NOW(),NULL) RETURNING id",
+			&[&node_id, &hash, &principal]).await?.get::<_, i64>(0);
+		if !ids.is_empty() {
+			t.execute("INSERT INTO lightning_payment_attempt_htlc_vtxo(lightning_payment_attempt_id,vtxo_id) \
+				SELECT $1,unnest($2::TEXT[])", &[&id, &ids]).await?;
+		}
+		assert!(!t.query_one("SELECT EXISTS(SELECT 1 FROM expiry_lightning_queued_attempt WHERE id=$1) \
+			OR EXISTS(SELECT 1 FROM expiry_lightning_dispatch WHERE id=$1)", &[&id]).await?.get::<_, bool>(0));
+		Ok(())
+	}).await.unwrap();
+}
+
 #[tokio::test]
 async fn lightning_payment_attempt_lifecycle() {
 	use server::database::ln::LightningPaymentStatus;
@@ -1634,15 +1656,57 @@ async fn lightning_payment_attempt_lifecycle() {
 	// Update attempt status to Submitted
 	db.write(async |t| t.update_lightning_payment_attempt_status(&attempt, LightningPaymentStatus::Submitted, None).await).await.unwrap();
 
-	// Update attempt status to Succeeded with an error message (tests the error branch)
+	// Queue admission alone cannot justify success, even without source links.
 	let refreshed = db.read(async |t| t.get_open_lightning_payment_attempts(node_id).await).await.unwrap();
 	assert_eq!(refreshed.len(), 1); // Submitted is still "open"
+	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(
+		&refreshed[0], LightningPaymentStatus::Succeeded, None,
+	).await).await.is_err());
+	let refused = db.read(async |t| t.get_open_lightning_payment_attempts(node_id).await).await.unwrap();
+	assert_eq!(refused.len(), 1);
+	assert_eq!(refused[0].status, LightningPaymentStatus::Submitted);
+	assert_eq!(refused[0].final_amount_msat, None);
+	assert_eq!(refused[0].error, refreshed[0].error);
+	assert_eq!(refused[0].updated_at, refreshed[0].updated_at);
 
-	db.write(async |t| t.update_lightning_payment_attempt_status(&refreshed[0], LightningPaymentStatus::Succeeded, None).await).await.unwrap();
-
-	// Succeeded attempt is no longer "open"
+	// A local failure before injection still closes the queued attempt.
+	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(
+		&refused[0], LightningPaymentStatus::Failed, Some("not dispatched"),
+	).await).await.unwrap().is_some());
 	let open = db.read(async |t| t.get_open_lightning_payment_attempts(node_id).await).await.unwrap();
-	assert!(open.is_empty(), "succeeded attempt is closed");
+	assert!(open.is_empty(), "failed queued attempt is closed");
+}
+
+#[tokio::test]
+async fn legacy_lightning_payment_attempt_lifecycle() {
+	use server::database::ln::LightningPaymentStatus;
+
+	let mut ctx = TestContext::new_minimal("postgresd/legacy_lightning_payment_attempt").await;
+	ctx.init_central_postgres().await;
+	let config = ctx.new_postgres(&ctx.test_name).await;
+	Db::create(&config).await.unwrap();
+	let db = Db::connect(&config).await.unwrap();
+	let pubkey = PublicKey::from_str(DUMMY_PUBKEY).unwrap();
+	let (node, _) = db.write(async |t| t.register_lightning_node(&pubkey).await).await.unwrap();
+	let invoice = Invoice::Bolt11(Bolt11Invoice::from_str(BOLT11_INVOICE).unwrap());
+	legacy_payment_attempt(&db, node, &invoice, &[]).await;
+	let requested = db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(invoice.payment_hash()).await)
+		.await.unwrap().unwrap();
+	assert_eq!(requested.final_amount_msat, None);
+	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(
+		&requested, LightningPaymentStatus::Submitted, None,
+	).await).await.unwrap().is_some());
+	let submitted = db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(invoice.payment_hash()).await)
+		.await.unwrap().unwrap();
+	assert_eq!(submitted.status, LightningPaymentStatus::Submitted);
+	assert!(db.write(async |t| t.update_lightning_payment_attempt_status(
+		&submitted, LightningPaymentStatus::Succeeded, None,
+	).await).await.unwrap().is_some());
+	assert!(db.read(async |t| t.get_open_lightning_payment_attempts(node).await).await.unwrap().is_empty());
+	let history = db.read(async |t| Ok(t.query("SELECT status::TEXT FROM lightning_payment_attempt_history \
+		WHERE id=$1 ORDER BY history_created_at", &[&requested.id]).await?.into_iter()
+		.map(|row| row.get::<_, String>(0)).collect::<Vec<_>>())).await.unwrap();
+	assert_eq!(history, vec!["requested", "submitted"]);
 }
 
 #[tokio::test]
@@ -1682,10 +1746,10 @@ async fn lightning_payment_attempt_with_error() {
 }
 
 #[tokio::test]
-async fn lightning_payment_attempt_result_update() {
+async fn legacy_lightning_payment_attempt_result_update() {
 	use server::database::ln::LightningPaymentStatus;
 
-	let mut ctx = TestContext::new_minimal("postgresd/lightning_payment_attempt_result").await;
+	let mut ctx = TestContext::new_minimal("postgresd/legacy_lightning_payment_attempt_result").await;
 	ctx.init_central_postgres().await;
 	let postgres_cfg = ctx.new_postgres(&ctx.test_name).await;
 
@@ -1698,9 +1762,7 @@ async fn lightning_payment_attempt_result_update() {
 	let bolt11 = Bolt11Invoice::from_str(BOLT11_INVOICE).unwrap();
 	let invoice = Invoice::Bolt11(bolt11.clone());
 
-	db.write(async |t| t.store_lightning_payment_start(
-		node_id, &invoice, sat(1000), None, &[], None, BlockHeight::new(1), sat(1), Some("bark"), Duration::from_secs(60), None,
-	).await).await.unwrap();
+	legacy_payment_attempt(&db, node_id, &invoice, &[]).await;
 
 	let attempt = db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(
 		(&bolt11).into()
@@ -1775,12 +1837,12 @@ async fn lightning_payment_attempt_error_survives_until_failed() {
 	assert_eq!(failed.error.as_deref(), Some(error));
 }
 
-/// A stored xpay error is cleared when the remaining parts succeed.
+/// A legacy success result clears its stored error.
 #[tokio::test]
-async fn lightning_payment_attempt_error_cleared_on_success() {
+async fn legacy_lightning_payment_attempt_error_cleared_on_success() {
 	use server::database::ln::LightningPaymentStatus;
 
-	let mut ctx = TestContext::new_minimal("postgresd/lightning_payment_attempt_error_cleared").await;
+	let mut ctx = TestContext::new_minimal("postgresd/legacy_lightning_payment_attempt_error_cleared").await;
 	ctx.init_central_postgres().await;
 	let postgres_cfg = ctx.new_postgres(&ctx.test_name).await;
 
@@ -1793,9 +1855,7 @@ async fn lightning_payment_attempt_error_cleared_on_success() {
 	let bolt11 = Bolt11Invoice::from_str(BOLT11_INVOICE).unwrap();
 	let invoice = Invoice::Bolt11(bolt11.clone());
 
-	db.write(async |t| t.store_lightning_payment_start(
-		node_id, &invoice, sat(1000), None, &[], None, BlockHeight::new(1), sat(1), Some("bark"), Duration::from_secs(60), None,
-	).await).await.unwrap();
+	legacy_payment_attempt(&db, node_id, &invoice, &[]).await;
 
 	let read = async || db.read(async |t| t.get_latest_payment_attempt_by_payment_hash(
 		(&bolt11).into()
@@ -1822,13 +1882,13 @@ async fn lightning_payment_attempt_error_cleared_on_success() {
 	assert_eq!(succeeded.error, None);
 }
 
-/// Coarse Succeeded without an attempt receipt must leave a matching
+/// A legacy coarse Succeeded without an attempt receipt leaves a matching
 /// signed HTLC source spendable.
 #[tokio::test]
-async fn coarse_success_without_own_receipt_keeps_htlc_send_spendable() {
+async fn legacy_coarse_success_without_own_receipt_keeps_htlc_send_spendable() {
 	use server::database::ln::LightningPaymentStatus;
 
-	let mut ctx = TestContext::new_minimal("postgresd/coarse_success_without_own_receipt").await;
+	let mut ctx = TestContext::new_minimal("postgresd/legacy_coarse_success_without_own_receipt").await;
 	ctx.init_central_postgres().await;
 	let postgres_cfg = ctx.new_postgres(&ctx.test_name).await;
 
@@ -1864,9 +1924,7 @@ async fn coarse_success_without_own_receipt_keeps_htlc_send_spendable() {
 	assert_eq!(source.get::<_, &str>("payment_hash"), hash.to_string());
 
 	// Open attempt linked to the HTLC-send vtxo.
-	db.write(async |t| t.store_lightning_payment_start(
-		node_id, &invoice, sat(2), None, &[vtxo.id()], None, BlockHeight::new(1), sat(1), Some("bark"), Duration::from_secs(60), None,
-	).await).await.unwrap();
+	legacy_payment_attempt(&db, node_id, &invoice, &[vtxo.id()]).await;
 
 	let attempt = db.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(
 		(&bolt11).into()

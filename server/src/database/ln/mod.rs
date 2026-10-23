@@ -414,6 +414,12 @@ impl<'t> Tx<'t> {
 		// can retain a snapshot taken before a concurrent admission commits.
 		if self.query_opt("SELECT id FROM expiry_lightning_dispatch WHERE id=$1",
 			&[&attempt.id]).await?.is_none() {
+			if status == LightningPaymentStatus::Succeeded
+				&& current.get::<_, Option<i64>>("lightning_htlc_subscription_id").is_none()
+			{
+				ensure!(self.query_opt("SELECT id FROM expiry_lightning_queued_attempt WHERE id=$1",
+					&[&attempt.id]).await?.is_none(), "queued external payment has no own success receipt");
+			}
 			return Ok(Some(supplied.or(previous)));
 		}
 		let principal = current.get::<_, i64>("amount_msat");

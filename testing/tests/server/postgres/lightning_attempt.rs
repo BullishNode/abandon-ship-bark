@@ -75,6 +75,53 @@ async fn update(
 }
 
 #[tokio::test]
+async fn queued_attempt_refuses_success_without_dispatch() {
+	let (_ctx, db, attempt, source) = queued_attempt("postgresd/queued_attempt_refuses_success_without_dispatch").await;
+	let snapshot = async || db.read(async |t| Ok(serde_json::from_str::<serde_json::Value>(&t.query_one("SELECT jsonb_build_array( \
+		jsonb_build_array(a.id,a.lightning_node_id,a.payment_hash,a.amount_msat,a.final_amount_msat, \
+			a.sender_mailbox_id,a.status,a.error,a.block_height,a.user_fee_sat,a.user_agent,a.retry_for_secs, \
+			a.max_routing_fee_msat,a.lightning_htlc_subscription_id,a.created_at,a.updated_at), \
+		(SELECT jsonb_build_array(q.id,q.created_at) FROM expiry_lightning_queued_attempt q WHERE q.id=a.id), \
+		(SELECT COUNT(*) FROM lightning_payment_attempt_history h WHERE h.id=a.id), \
+		(SELECT COUNT(*) FROM expiry_lightning_dispatch d WHERE d.id=a.id), \
+		(SELECT COUNT(*) FROM expiry_lightning_external_success s WHERE s.id=a.id), \
+		(SELECT COUNT(*) FROM expiry_lightning_terminal_failure f WHERE f.id=a.id), \
+		(SELECT COUNT(*) FROM expiry_lightning_rpc_rejection r WHERE r.id=a.id), \
+		(SELECT COUNT(*) FROM expiry_lightning_internal_funding i WHERE i.id=a.id), \
+		(SELECT jsonb_agg(jsonb_build_array(l.vtxo_id,v.id,v.vtxo,v.expiry,v.oor_spent_txid,v.spent_in_round, \
+			v.created_at,v.updated_at,v.lightning_htlc_subscription_id,v.offboarded_in,v.vtxo_txid,v.exit_delta, \
+			v.policy_type,v.policy,v.server_pubkey,v.amount,v.anchor_point,v.banned_until_height,v.spend_state, \
+			v.frontier_at,v.confirmed_height,v.onchain_spent_height,v.onchain_spent_txid, \
+			h.id,h.payment_hash,h.htlc_expiry,h.direction,h.offchain_resolution,h.chain_resolution, \
+			h.chain_resolution_height,h.created_at) ORDER BY l.vtxo_id) \
+			FROM lightning_payment_attempt_htlc_vtxo l JOIN vtxo v ON v.vtxo_id=l.vtxo_id \
+			LEFT JOIN htlc_vtxo h ON h.id=v.id WHERE l.lightning_payment_attempt_id=a.id))::TEXT \
+		FROM lightning_payment_attempt a WHERE a.id=$1", &[&attempt.id]).await?.get::<_, String>(0))?))
+		.await.unwrap();
+	let before = snapshot().await;
+	assert!(before[1].is_array(), "the current attempt must retain its queue marker");
+	for index in 2..=7 { assert_eq!(before[index].as_i64(), Some(0)); }
+	assert_eq!(before[8].as_array().unwrap().len(), 1);
+	for (status_only, amount) in [(true, None), (false, None),
+		(false, Some(attempt.amount_msat)), (false, Some(attempt.amount_msat + 2_345))]
+	{
+		let result = db.write(async |t| {
+			if status_only {
+				t.update_lightning_payment_attempt_status(&attempt, LightningPaymentStatus::Succeeded,
+					Some("unproven success")).await
+			} else {
+				t.update_lightning_payment_attempt_result(&attempt, LightningPaymentStatus::Succeeded,
+					Some("unproven success"), amount).await
+			}
+		}).await;
+		let error = result.expect_err("a queued external source has no own success before dispatch");
+		assert!(format!("{error:#}").contains("queued external payment has no own success receipt"));
+		unchanged(&db, &attempt, &source).await;
+		assert!(snapshot().await == before, "refusal must preserve the attempt, history, queue and complete source");
+	}
+}
+
+#[tokio::test]
 async fn dispatched_attempt_refuses_unproven_results() {
 	let (_ctx, db, attempt, source) = queued_attempt("postgresd/dispatched_attempt_refuses_unproven_results").await;
 	assert!(db.write(async |t| t.admit_lightning_dispatch(&attempt).await).await.unwrap());

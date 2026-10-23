@@ -284,6 +284,13 @@ impl ClnXpayClient {
 				self.settler.settle(preimage).await?;
 			}
 		}
+		// The queue marker survives a crash before native admission.
+		// Keep this attempt open until its own outcome or verified recovery.
+		if dispatch.is_none() && self.db.read(async |t| Ok(t.query_opt(
+			"SELECT id FROM expiry_lightning_queued_attempt WHERE id=$1", &[&attempt.id],
+		).await?.is_some())).await? {
+			return Ok(());
+		}
 		if let Some((label,rejection)) = dispatch {
 			// A group label comes only from its first part. Require this
 			// dispatch's raw successful parts to cover the whole principal.

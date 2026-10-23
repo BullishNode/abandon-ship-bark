@@ -15,11 +15,12 @@ use ark::lightning::{AsPaymentHash, Invoice, Preimage};
 use ark::mailbox::{MailboxIdentifier, MailboxType};
 use ark::rounds::RoundId;
 use ark::test_util::VTXO_VECTORS;
+use ark::vtxo::ServerHtlcRecv_v0_VtxoPolicy;
 use ark::tree::signed::{UnlockHash, UnlockPreimage};
 
 use bitcoin::hashes::{sha256, Hash};
 use bark::lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
-use bitcoin_ext::{BlockHeight, BlockRef};
+use bitcoin_ext::{BlockDelta, BlockHeight, BlockRef};
 use cln_rpc::listsendpays_request::ListsendpaysIndex;
 
 use server::database::{BlockTable, Db, MailboxPayload};
@@ -2359,4 +2360,85 @@ async fn htlc_vtxo_chain_resolution_kept_at_fork_height() {
 		.unwrap().expect("htlc vtxo present");
 	assert_eq!(stored.htlc.chain_resolution, Some(HtlcResolution::Revoked));
 	assert_eq!(stored.htlc.chain_resolution_height, Some(BlockHeight::new(120)));
+}
+
+/// Exercise the claim guard's real subscription/source joins for both encodings.
+/// These are database authorization fixtures, not native collection proofs.
+#[tokio::test]
+async fn watchman_receive_claim_uses_upstream_facts_for_both_encodings() {
+	let mut ctx = TestContext::new_minimal("postgresd/watchman_receive_claim_upstream_facts").await;
+	ctx.init_central_postgres().await;
+	let cfg = ctx.new_postgres(&ctx.test_name).await;
+	Db::create(&cfg).await.unwrap();
+	let db = Db::connect(&cfg).await.unwrap();
+	let key = PublicKey::from_str(DUMMY_PUBKEY).unwrap();
+	let (node, _) = db.write(async |t| t.register_lightning_node(&key).await).await.unwrap();
+	let secp = Secp256k1::new();
+	let invoice_key = SecretKey::from_slice(&[41; 32]).unwrap();
+	let base = &VTXO_VECTORS.board_vtxo;
+
+	for legacy in [false, true] {
+		let preimage = Preimage::random();
+		let hash = preimage.compute_payment_hash();
+		let expiry = base.expiry_height().saturating_sub(BlockDelta::new(200));
+		let policy = if legacy {
+			VtxoPolicy::ServerHtlcRecv_v0(ServerHtlcRecv_v0_VtxoPolicy {
+				user_pubkey: key, payment_hash: hash, htlc_expiry: expiry,
+				htlc_expiry_delta: BlockDelta::new(40),
+			})
+		} else { VtxoPolicy::new_server_htlc_recv(key, hash, expiry, BlockDelta::new(40)) };
+		let point = bitcoin::OutPoint::new(base.point().txid, u32::from(legacy));
+		let source = ServerVtxo::new(point, policy.into(), base.amount(), base.expiry_height(),
+			base.server_pubkey(), base.exit_delta(), point);
+		let invoice = InvoiceBuilder::new(Currency::Regtest)
+			.description("receive claim authorization".into()).payment_hash(hash.to_sha256_hash())
+			.payment_secret(PaymentSecret([42; 32])).current_timestamp()
+			.min_final_cltv_expiry_delta(18).amount_milli_satoshis(source.amount().to_sat() * 1_000)
+			.build_signed(|message| secp.sign_ecdsa_recoverable(message, &invoice_key)).unwrap();
+		db.write(async |t| {
+			t.execute_vtxo_tree_update(VtxoTreeUpdate::new().insert_spendable_bare_vtxos([source.clone()])).await?;
+			htlc_vtxo::create_htlc_vtxos(t, &[(source.id(), hash, expiry)], HtlcDirection::Outgoing).await?;
+			t.register_vtxo_confirmation(source.id(), BlockHeight::new(100)).await?;
+			t.store_generated_lightning_receive(node, &invoice, source.amount().to_sat() * 1_000, None, None).await
+		}).await.unwrap();
+		let subscription = db.read(async |t| t.get_htlc_subscription_by_payment_hash(hash).await)
+			.await.unwrap().unwrap().id;
+		let missing = db.write(async |t| t.lock_watchman_claim_inputs(&[source.clone()]).await).await.unwrap_err();
+		assert!(format!("{missing:#}").contains("receive claim source has no subscription"), "{missing:#}");
+		db.write(async |t| t.store_lightning_htlc_subscription_status(subscription,
+			LightningHtlcSubscriptionStatus::Accepted, Some(expiry), None).await).await.unwrap();
+		db.write(async |t| t.update_lightning_htlc_subscription_with_htlcs(subscription, [source.id()]).await)
+			.await.unwrap();
+
+		for known in [false, true] {
+			if known { db.write(async |t| t.store_htlc_settlement(preimage).await).await.unwrap(); }
+			for (status, offchain, chain, allowed) in [
+				(LightningHtlcSubscriptionStatus::Created, None, None, false),
+				(LightningHtlcSubscriptionStatus::Accepted, None, None, false),
+				(LightningHtlcSubscriptionStatus::HtlcsReady, None, None, !known),
+				(LightningHtlcSubscriptionStatus::Settled, None, None, false),
+				(LightningHtlcSubscriptionStatus::Canceled, None, None, true),
+				(LightningHtlcSubscriptionStatus::Canceled, Some(HtlcResolution::Revoked), None, true),
+				(LightningHtlcSubscriptionStatus::Canceled, Some(HtlcResolution::Fulfilled), None, false),
+				(LightningHtlcSubscriptionStatus::Canceled, None, Some(HtlcResolution::Fulfilled), false),
+			] {
+				db.write(async |t| {
+					t.execute("UPDATE lightning_htlc_subscription SET status=$2,updated_at=NOW() WHERE id=$1",
+						&[&subscription, &status]).await?;
+					t.execute("UPDATE htlc_vtxo SET offchain_resolution=$2::TEXT::htlc_resolution,chain_resolution=$3::TEXT::htlc_resolution, \
+						chain_resolution_height=CASE WHEN $3::TEXT IS NULL THEN NULL ELSE 100 END \
+						WHERE id=(SELECT id FROM vtxo WHERE vtxo_id=$1)",
+						&[&source.id().to_string(), &offchain.map(|r| r.as_str()), &chain.map(|r| r.as_str())]).await?;
+					Ok(())
+				}).await.unwrap();
+				let result = db.write(async |t| t.lock_watchman_claim_inputs(&[source.clone()]).await).await;
+				assert_eq!(result.is_ok(), allowed,
+					"legacy={legacy} known={known} status={status} offchain={offchain:?} chain={chain:?}: {result:?}");
+				if !allowed {
+					let error = result.unwrap_err();
+					assert!(format!("{error:#}").contains("receive grant may have been collected"), "{error:#}");
+				}
+			}
+		}
+	}
 }

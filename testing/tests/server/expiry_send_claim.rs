@@ -9,9 +9,11 @@ use ark::lightning::{PaymentHash, Preimage};
 use ark::vtxo::{Full, ServerHtlcSend_v0_VtxoPolicy, TapScriptClause};
 use ark::{ProtocolEncoding, ServerVtxo, Vtxo, VtxoPolicy, SECP};
 use ark_testing::{btc, sat, TestContext};
+use ark_testing::constants::BOARD_CONFIRMATIONS;
 use ark_testing::daemon::captaind::Captaind;
 use ark_testing::daemon::lightningd::Lightningd;
-use bitcoin::{Amount, Transaction, TxIn, TxOut, Witness};
+use bitcoin::{Amount, OutPoint, Transaction, TxIn, TxOut, Witness};
+use bitcoin::consensus::deserialize;
 use bitcoin::secp256k1::Keypair;
 use bitcoin::sighash::{Prevouts, SighashCache, TapSighashType};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
@@ -24,6 +26,7 @@ use server_log::{ClaimBroadcastFailure, ProgressBroadcast};
 use server_rpc::protos;
 
 use super::expiry_internal_partial_terminal::confirm_actual_path;
+use super::watchman::observed_payout_fee_child;
 
 pub(super) async fn claim_server(ctx: &TestContext, node: &Lightningd) -> Arc<Captaind> {
 	let drain = ctx.bitcoind().get_new_address();
@@ -218,6 +221,143 @@ async fn refuse_two_reactions(ctx: &TestContext, srv: &Captaind, db: &Db, source
 		assert_unspent(ctx, source);
 		assert_unattempted(db, source, hash).await;
 	}
+}
+
+#[tokio::test]
+async fn exited_unattempted_send_does_not_block_unrelated_expiry_payout() {
+	tokio::time::timeout(Duration::from_secs(180), async {
+		let ctx = TestContext::new("server/exited_unattempted_send_unrelated_expiry_payout").await;
+		let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
+		let srv = claim_server(&ctx, &lightning.internal).await;
+		let sender = ctx.bark("sender", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
+			.funded(sat(200_000)).create().await;
+		let customer = ctx.bark("customer", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
+			.funded(sat(200_000)).create().await;
+		// Neither board helper mines: both genuine backings get the same expiry.
+		let send_board = sender.board(sat(100_000)).await;
+		let customer_board = customer.board(sat(100_000)).await;
+		ctx.generate_blocks(BOARD_CONFIRMATIONS).await;
+		sender.sync().await;
+		customer.sync().await;
+		assert_eq!(send_board.vtxos.len(), 1);
+		assert_eq!(customer_board.vtxos.len(), 1);
+		let wallet = sender.client().await;
+		let customer_wallet = customer.client().await;
+		let input = wallet.get_full_vtxo(send_board.vtxos[0]).await.unwrap();
+		let customer_source = customer_wallet.get_full_vtxo(customer_board.vtxos[0]).await.unwrap();
+		let destination = customer_wallet.fallback_destination().await.unwrap();
+		assert_ne!(wallet.mailbox_identifier(), customer_wallet.mailbox_identifier());
+		assert_ne!(input.chain_anchor(), customer_source.chain_anchor());
+		assert_eq!(input.expiry_height(), customer_source.expiry_height());
+		assert_eq!(customer_source.amount(), sat(100_000));
+		drop(customer_wallet);
+		let key = wallet.get_vtxo_key(&input).await.unwrap();
+		let hash = Preimage::random().compute_payment_hash();
+		let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		let source = signed_leaf(&ctx, &srv, &wallet, input,
+			VtxoPolicy::new_server_htlc_send(key.public_key(), hash, tip + BlockDelta::new(286))).await;
+		assert_eq!(source.expiry_height(), customer_source.expiry_height());
+		assert!(source.has_all_witnesses());
+		let mut seen = BTreeSet::new();
+		confirm_actual_path(&ctx, &source, &mut seen).await;
+		let db = Db::connect(&srv.config().postgres).await.unwrap();
+		let height = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		srv.wait_for_sync_height(height).await;
+		srv.watchmand().wait_for_sync_height(height).await;
+		assert_unattempted(&db, &source, hash).await;
+		let fee_address = srv.watchmand().wait_wallet_address().await;
+		ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
+		ctx.generate_blocks(2).await;
+		let start_height = ctx.bitcoind().get_block_count().await;
+		assert!(start_height < u64::from(source.expiry_height().to_u32()));
+		let expired = ctx.generate_blocks(source.expiry_height().to_u32() + 1 - start_height as u32).await;
+		srv.wait_for_sync_height(expired).await;
+		srv.watchmand().wait_for_sync_height(expired).await;
+		let parent = tokio::time::timeout(Duration::from_secs(30), async {
+			loop {
+				srv.watchmand().trigger_sweep().await;
+				let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
+					JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+					JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL",
+					&[&customer_source.id().to_string()]).await?)).await.unwrap();
+				if let Some(row) = row {
+					let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
+					if observed_payout_fee_child(&ctx, &parent).is_some() { break parent; }
+				}
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}).await.expect("an exited unpaid HTLC must not poison the unrelated owner's payout group");
+		assert_eq!(parent.input.len(), 1);
+		assert_eq!(parent.input[0].previous_output, customer_source.chain_anchor());
+		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
+		let funding = ctx.bitcoind().await_transaction(customer_source.chain_anchor().txid).await;
+		customer_source.validate(&funding).unwrap();
+		assert_eq!(funding.output[customer_source.chain_anchor().vout as usize].value,
+			parent.output.iter().map(|output| output.value).sum::<Amount>());
+		let payouts = parent.output.iter().enumerate().filter(|(_, out)| out.script_pubkey == destination.spk)
+			.collect::<Vec<_>>();
+		assert_eq!(payouts.len(), 1);
+		assert_eq!(payouts[0].1.value, sat(99_000));
+		let payout = OutPoint::new(parent.compute_txid(), payouts[0].0 as u32);
+		// Repeated reaction and canonical confirmation must neither fence the HTLC
+		// nor create another payout for the unrelated owner.
+		for _ in 0..2 {
+			let height = ctx.generate_blocks(6).await;
+			srv.wait_for_sync_height(height).await;
+			srv.watchmand().wait_for_sync_height(height).await;
+			srv.watchmand().trigger_sweep().await;
+			assert_unattempted(&db, &source, hash).await;
+			assert_unspent(&ctx, &source);
+			db.read(async |t| {
+				assert!(!t.get_server_vtxo_by_id(source.id()).await?.decided_for_fallback);
+				let count = t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
+					JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer'",
+					&[&customer_source.id().to_string()]).await?.get::<_, i64>(0);
+				assert_eq!(count, 1);
+				Ok(())
+			}).await.unwrap();
+		}
+		let chain = ctx.bitcoind().sync_client();
+		let received = chain.get_tx_out(&payout.txid, payout.vout, Some(true)).unwrap().unwrap();
+		assert!(received.confirmations >= 6);
+		assert_eq!(received.value, sat(99_000));
+		assert_eq!(received.script_pub_key.script().unwrap(), destination.spk);
+		let mut canonical_payouts = Vec::new();
+		for height in start_height + 1..=chain.get_block_count().unwrap() {
+			for transaction in chain.get_block(&chain.get_block_hash(height).unwrap()).unwrap().txdata {
+				for (vout, output) in transaction.output.iter().enumerate() {
+					if output.script_pubkey == destination.spk {
+						canonical_payouts.push((OutPoint::new(transaction.compute_txid(), vout as u32), output.value));
+					}
+				}
+			}
+		}
+		assert_eq!(canonical_payouts, vec![(payout, sat(99_000))]);
+		// The user retains the signed path and key; Core accepts their actual
+		// timeout refund after the unrelated customer's payment is confirmed.
+		let source_funding = ctx.bitcoind().await_transaction(source.chain_anchor().txid).await;
+		source.validate(&source_funding).unwrap();
+		let clause = source.policy().as_server_htlc_send().unwrap().user_claim_after_expiry_clause(source.exit_delta());
+		let mut refund = Transaction {
+			version: bitcoin::transaction::Version::TWO,
+			lock_time: bitcoin::absolute::LockTime::from_height(clause.timelock_height.to_u32()).unwrap(),
+			input: vec![TxIn { previous_output: source.point(), script_sig: Default::default(),
+				sequence: clause.sequence(), witness: Witness::new() }],
+			output: vec![TxOut { value: source.amount() - sat(2_000),
+				script_pubkey: ctx.bitcoind().get_new_address().script_pubkey() }],
+		};
+		let control = clause.control_block(&source);
+		let sighash = SighashCache::new(&refund).taproot_script_spend_signature_hash(0,
+			&Prevouts::All(&[source.txout()]), TapLeafHash::from_script(&clause.tapscript(), LeafVersion::TapScript),
+			TapSighashType::Default).unwrap();
+		refund.input[0].witness = clause.witness(&SECP.sign_schnorr(&sighash.into(), &key), &control);
+		assert!(chain.test_mempool_accept(&[&refund]).unwrap()[0].allowed,
+			"the untouched source must remain unilaterally refundable with the user's retained material");
+		assert_unattempted(&db, &source, hash).await;
+		assert_unspent(&ctx, &source);
+	}).await.expect("exited HTLC isolation exceeded 180 seconds");
 }
 
 async fn unattempted_shared_preimage(legacy: bool) {

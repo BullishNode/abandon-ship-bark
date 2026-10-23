@@ -915,7 +915,7 @@ async fn recovery_refuses_pending_payment_before_channel_commitment() {
 				let channel = &channels[0];
 				assert_eq!(channel.peer_id, receiver_info.id);
 				if channel.peer_connected && channel.state() == cln_rpc::ChannelState::ChanneldNormal
-					&& channel.owner.as_deref() == Some("lightning_channeld") && channel.reestablished == Some(true)
+					&& channel.owner.as_deref() == Some("channeld") && channel.reestablished == Some(true)
 				{ break channels; }
 				tokio::time::sleep(poll_interval()).await;
 			}

@@ -609,9 +609,8 @@ impl Watchman {
 	) -> anyhow::Result<()> {
 		let tx = self.build_claim_tx(vtxos, fee_rate).await?;
 		let txid = tx.compute_txid();
-		let ids = vtxos.iter().map(|v| v.id()).collect::<Vec<_>>();
 		self.db.write(async |t| {
-			t.lock_unallocated_watchman_inputs(&ids).await?;
+			t.lock_watchman_claim_inputs(vtxos).await?;
 			for vtxo in vtxos.iter().filter(|v| *v.policy() == ServerVtxoPolicy::ServerOwned) {
 				// Exclude mempool effects so our existing native RBF path can
 				// replace its own claim; canonical consumption always refuses.

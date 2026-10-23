@@ -21,6 +21,8 @@ mod expiry_internal_reserved_batched_terminal;
 mod expiry_hash_provenance;
 mod expiry_payout_flow;
 mod expiry_split;
+mod expiry_send_claim;
+mod expiry_send_claim_receipts;
 mod expiry_reorg;
 mod expiry_conflict;
 mod expiry_independent_payouts;

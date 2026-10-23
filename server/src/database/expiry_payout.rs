@@ -11,6 +11,8 @@ use bitcoin_ext::TxOutExt;
 use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoPolicy};
 
 use super::expiry_chain::ExpiryViewToken;
+use super::expiry_lightning::LightningSourceState;
+use super::htlc_vtxo::{self, HtlcDirection, HtlcResolution};
 use super::expiry_inventory::BackingSnapshot;
 use super::Tx;
 use crate::expiry_readiness::INVENTORY_LIMITS;
@@ -352,6 +354,40 @@ impl Tx<'_> {
 }
 
 impl Tx<'_> {
+	/// Shared preimage knowledge cannot authorize an unpaid send's drain claim.
+	/// Keep the exact source and its outcome stable through native publication.
+	pub async fn lock_watchman_claim_inputs(&self, vtxos: &[ServerVtxo]) -> anyhow::Result<()> {
+		let ids = vtxos.iter().map(|vtxo| vtxo.id()).collect::<Vec<_>>();
+		self.lock_unallocated_watchman_inputs(&ids).await?;
+		for candidate in vtxos {
+			let (hash, expiry) = match candidate.policy() {
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend(policy)) => (policy.payment_hash, policy.htlc_expiry),
+				ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcSend_v0(policy)) => (policy.payment_hash, policy.htlc_expiry),
+				_ => continue,
+			};
+			let state = self.get_server_vtxo_by_id(candidate.id()).await?;
+			ensure!(state.vtxo_id == candidate.id() && state.vtxo.id() == candidate.id()
+				&& state.vtxo.to_bare().serialize() == candidate.to_bare().serialize(),
+				"Lightning claim source differs from its retained contract");
+			ensure!(state.confirmed_height.is_some() && state.oor_spent_txid.is_none()
+				&& state.spent_in_round.is_none() && state.offboarded_in.is_none(),
+				"Lightning claim source has a successor or lacks confirmation");
+			let unspent = self.query_one("SELECT onchain_spent_height IS NULL AND onchain_spent_txid IS NULL AS unspent \
+				FROM vtxo WHERE id=$1", &[&state.id]).await?.get::<_, bool>("unspent");
+			ensure!(unspent, "Lightning claim source is already spent on chain");
+			let htlc = htlc_vtxo::get_htlc_vtxo(self, candidate.id()).await?
+				.context("Lightning claim source has no registered HTLC")?;
+			ensure!(htlc.vtxo.vtxo_id == candidate.id() && htlc.htlc.direction == HtlcDirection::Incoming
+				&& htlc.htlc.payment_hash == hash && htlc.htlc.htlc_expiry == expiry
+				&& htlc.htlc.offchain_resolution != Some(HtlcResolution::Revoked)
+				&& htlc.htlc.chain_resolution != Some(HtlcResolution::Revoked),
+				"Lightning claim source has a different or revoked HTLC");
+			ensure!(self.lightning_source_state(candidate.id(), hash).await? == LightningSourceState::Discharged,
+				"Lightning source is not discharged");
+		}
+		Ok(())
+	}
+
 	/// A reaction claim must not replace a financial payout already committed
 	/// for its physical backing. Use the allocator's sorted coin lock order and
 	/// keep these locks through broadcast, including when the root is not itself

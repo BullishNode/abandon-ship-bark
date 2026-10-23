@@ -202,7 +202,6 @@ async fn lightning_rejection_refunds_only_its_source() {
 			partial_msat: None, maxdelay: None, payer_note: None, localinvreqid: None, dev_use_shadow: None,
 		}).await.unwrap_err();
 		assert_eq!(probe.code(), tonic::Code::Unknown);
-		assert_eq!(probe.metadata().get("abandon-cln-jsonrpc-error-code").unwrap().to_str().unwrap(), "-32602");
 		assert!(probe.message().contains("Could not resolve any paths: unknown short_channel_id"));
 		assert!(payer.list_send_pays(cln_rpc::ListsendpaysRequest {
 			payment_hash: Some(hash.to_vec()), ..Default::default()

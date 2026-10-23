@@ -136,10 +136,3 @@ CREATE TABLE expiry_lightning_receive_claim (
 	output_vtxo_id TEXT NOT NULL UNIQUE,
 	output_vtxo BYTEA NOT NULL
 );
-
--- Confirmed user claims remain available for rebroadcast after a shallow reorg.
-CREATE TABLE user_exit_claim (
-	id TEXT PRIMARY KEY,
-	raw_tx BYTEA NOT NULL,
-	confirmed_height INT4
-);

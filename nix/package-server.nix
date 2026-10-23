@@ -1,5 +1,5 @@
 {
-	craneLib, pkgs, lib, cln-grpc,
+	craneLib, pkgs, lib,
 	gitHash ? "unknown",
 	targets ? [ "x86_64-unknown-linux-gnu" ],
 }:
@@ -39,9 +39,6 @@ let
 		strictDeps = true;
 		doCheck = false;
 
-		# The connected CLN node must load this plugin to preserve typed xpay errors.
-		propagatedBuildInputs = [ cln-grpc ];
-		passthru.requiredClnGrpc = cln-grpc;
 
 		# Strip via rustc instead of the stdenv fixup phase: the host GNU strip
 		# only understands ELF, so a Mach-O or PE artifact would ship unstripped

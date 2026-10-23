@@ -843,7 +843,6 @@ async fn wallet_skips_vtxos_at_exit_depth_limit() {
 		cfg.nb_round_nonces = 3;
 		cfg.vtxopool.max_vtxo_exit_depth = 9;
 		cfg.vtxopool.vtxo_targets = vec!["1000sat:10".parse().unwrap(), "10000sat:10".parse().unwrap()];
-		cfg.expiry_internal_refund_depth = 6;
 		cfg.round_interval = Duration::from_secs(3600);
 	}).create()).await;
 	ctx.fund_captaind(&srv, btc(10)).await;

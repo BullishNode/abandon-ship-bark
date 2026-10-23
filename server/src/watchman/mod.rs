@@ -13,7 +13,6 @@ mod policy;
 mod payout;
 mod recovery;
 mod signer;
-mod user_claim;
 pub(crate) mod settlement;
 
 pub use self::config::Config;
@@ -381,7 +380,6 @@ impl Watchman {
 	/// This is the time-critical half of the watchman's work and runs on the
 	/// short [Config::reaction_interval].
 	pub async fn process_reactions(&self) -> anyhow::Result<()> {
-		self.rebroadcast_user_exit_claims().await?;
 		let work = self.scan_frontier().await;
 
 		let vtxos = work.claims.iter().chain(work.progress.iter().map(|(_, v)| v));

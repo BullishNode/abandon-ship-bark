@@ -58,7 +58,7 @@ async fn expiry_abandoned_registered_send_needs_no_client_refund() {
 	let snapshot = db.read(async |t| t.backing_snapshot(&[root.clone()], limits).await).await.unwrap();
 	let fact = snapshot.regular.iter().find(|f| f.state.vtxo_id == htlc.id()).unwrap();
 	let pending = db.read(async |t| t.propose_expiry_ownership(
-		fact, &funding, expired, Some(expired), srv.config().expiry_internal_refund_depth,
+		fact, &funding, expired, Some(expired),
 	).await).await.unwrap();
 	assert!(matches!(pending.disposition, server::database::expiry_ownership::OwnershipDisposition::Unresolved(_)));
 	let tip = ctx.generate_blocks(deadline.to_u32() + 1 - expired.to_u32()).await;
@@ -66,7 +66,7 @@ async fn expiry_abandoned_registered_send_needs_no_client_refund() {
 	let snapshot = db.read(async |t| t.backing_snapshot(&[root.clone()], limits).await).await.unwrap();
 	let fact = snapshot.regular.iter().find(|f| f.state.vtxo_id == htlc.id()).unwrap();
 	let ready = db.read(async |t| t.propose_expiry_ownership(
-		fact, &funding, tip, Some(tip), srv.config().expiry_internal_refund_depth,
+		fact, &funding, tip, Some(tip),
 	).await).await.unwrap();
 	assert!(matches!(ready.disposition,
 		server::database::expiry_ownership::OwnershipDisposition::Customer { user_pubkey, .. }
@@ -130,7 +130,7 @@ async fn expiry_cancelled_unclaimed_output_keeps_owner_after_participation_remov
 	let fact = snapshot.regular.iter().find(|f| f.state.vtxo_id == root.id()).unwrap();
 	let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 	let proposal = db.read(async |t| t.propose_expiry_ownership(
-		fact, &funding, tip, Some(tip), srv.config().expiry_internal_refund_depth,
+		fact, &funding, tip, Some(tip),
 	).await).await.unwrap();
 	assert!(matches!(proposal.disposition, server::database::expiry_ownership::OwnershipDisposition::Operator));
 	assert!(matches!(proposal.evidence,

@@ -199,7 +199,6 @@ async fn bounded_round_inventory() {
 			cfg.max_arkoor_fanout = 4;
 			cfg.nb_round_nonces = 3;
 			cfg.vtxopool.max_vtxo_exit_depth = 9;
-			cfg.expiry_internal_refund_depth = 6;
 			cfg.round_interval = Duration::from_secs(86400);
 		}).watchmand().funded(sat(30_000_000)).create()).await;
 	assert!(srv.config().vtxopool.vtxo_targets.is_empty());

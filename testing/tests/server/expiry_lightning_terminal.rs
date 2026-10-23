@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use ark::arkoor::package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse};
 use ark::lightning::{PaymentHash, Preimage};
-use ark::{ProtocolEncoding, Vtxo, VtxoPolicy};
+use ark::{ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy};
 use ark::vtxo::{Full, TapScriptClause};
 use ark_testing::{btc, sat, TestContext};
 use bitcoin::consensus::deserialize;
@@ -80,11 +80,12 @@ async fn failed_external_payout(no_channel: bool) {
 	let lightning = if no_channel { ctx.new_lightning_setup_no_channel("lightningd").await }
 		else { ctx.new_lightning_setup("lightningd").await };
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).no_vtxo_pool()
-		.funded(btc(10)).cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).watchmand().create().await;
+		.funded(btc(10)).cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(400)).watchmand().create().await;
 	let wallet = ctx.bark("abandoned", &srv).funded(sat(200_000)).create().await;
 	let ids = wallet.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	let client = wallet.client().await;
 	let input = client.get_full_vtxo(ids[0]).await.unwrap();
+	let source_expiry = input.expiry_height();
 	let key = client.get_vtxo_key(&input).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
 	let preimage = Preimage::random();
@@ -139,7 +140,7 @@ async fn failed_external_payout(no_channel: bool) {
 	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
 	let height = ctx.bitcoind().get_block_count().await as u32;
-	let expired = ctx.generate_blocks(deadline.to_u32() + 1 - height).await;
+	let expired = ctx.generate_blocks(source_expiry.to_u32() + 1 - height).await;
 	srv.wait_for_sync_height(expired).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(30), async {
@@ -196,7 +197,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	let builder = builder.no_vtxo_pool();
 	let srv = builder
 		.funded(btc(10)).cfg(move |cfg| {
-			cfg.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxo_lifetime = BlockDelta::new(400);
 			cfg.receive_htlc_forward_timeout = Duration::from_secs(2);
 			cfg.invoice_check_interval = Duration::from_secs(1);
 		}).watchmand().create().await;
@@ -210,6 +211,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	let ids = sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	let client = sender.client().await;
 	let input = client.get_full_vtxo(ids[0]).await.unwrap();
+	let source_expiry = input.expiry_height();
 	assert_eq!(input.amount(), sat(100_000));
 	let key = client.get_vtxo_key(&input).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
@@ -238,7 +240,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 		loop {
 			let row = db.read(async |t| Ok(t.query_opt("SELECT a.id,a.lightning_htlc_subscription_id AS subscription_id FROM lightning_payment_attempt a \
 				JOIN lightning_htlc_subscription s ON s.id=a.lightning_htlc_subscription_id AND s.payment_hash=a.payment_hash \
-				WHERE a.payment_hash=$1 AND s.status='canceled'", &[&hash.to_string()]).await?)).await.unwrap();
+				WHERE a.payment_hash=$1 AND a.status='failed' AND s.status='canceled'", &[&hash.to_string()]).await?)).await.unwrap();
 			if let Some(row) = row { break (row.get::<_, i64>("id"), row.get::<_, i64>("subscription_id")); }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -269,7 +271,7 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 	}
 	ctx.generate_blocks(2).await;
 	let height = ctx.bitcoind().get_block_count().await as u32;
-	let expired = ctx.generate_blocks(deadline.to_u32() + 1 - height).await;
+	let expired = ctx.generate_blocks(source_expiry.to_u32() + 1 - height).await;
 	srv.wait_for_sync_height(expired).await;
 	srv.watchmand().wait_for_sync_height(expired).await;
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(30), async {
@@ -312,33 +314,50 @@ fn internal_zero_grant_timeout() -> std::pin::Pin<Box<dyn std::future::Future<Ou
 /// original sender's refund becomes eligible.
 #[tokio::test]
 async fn expiry_internal_signed_grants_joint_timeout_pays_absent_sender() {
-	internal_safe_pool_grants(false, false).await;
+	internal_safe_pool_grants(false, false, false).await;
 }
 
 #[tokio::test]
 async fn expiry_internal_existing_large_pool_cover_refunds_absent_owner() {
-	internal_safe_pool_grants(true, false).await;
+	internal_safe_pool_grants(true, false, false).await;
 }
 
 #[tokio::test]
 async fn exposed_small_receive_grant_refunds_absent_sender_after_six_confirmations() {
-	tokio::time::timeout(Duration::from_secs(180), internal_safe_pool_grants(false, true)).await
+	tokio::time::timeout(Duration::from_secs(180), internal_safe_pool_grants(false, true, false)).await
 		.expect("exposed grant closure and sender refund timed out");
 }
 
+#[tokio::test]
+async fn expired_internal_source_waits_for_six_confirmed_grant_reclamations() {
+	internal_safe_pool_grants(false, false, true).await;
+}
+
+async fn assert_internal_source_held(db: &Db, source: VtxoId) {
+	let row = db.read(async |t| Ok(t.query_one("SELECT v.spend_state::TEXT,
+		EXISTS(SELECT 1 FROM expiry_entitlement e WHERE e.vtxo_id=v.vtxo_id) AS entitled,
+		EXISTS(SELECT 1 FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id
+			WHERE e.vtxo_id=v.vtxo_id AND c.disposition='customer') AS allocated
+		FROM vtxo v WHERE v.vtxo_id=$1", &[&source.to_string()]).await?)).await.unwrap();
+	assert_eq!(row.get::<_, &str>("spend_state"), "spendable");
+	assert!(!row.get::<_, bool>("entitled"), "a live internal grant must not fence its expired funding source");
+	assert!(!row.get::<_, bool>("allocated"), "a live internal grant must prevent a sender payout");
+}
+
 #[inline(never)]
-fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
+fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_source_expiry: bool)
 	-> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>
 {
 	Box::pin(async move {
-	let name = if expose_small_grant { "server/exposed_small_receive_grant" }
+	let name = if past_source_expiry { "server/expired_internal_source_grant_closure" }
+		else if expose_small_grant { "server/exposed_small_receive_grant" }
 		else if large_cover { "server/expiry_internal_existing_large_pool_cover" }
 		else { "server/expiry_internal_signed_grants_joint_timeout" };
 	let ctx = TestContext::new(name).await;
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
 		.funded(btc(10)).cfg(move |cfg| {
-			cfg.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxo_lifetime = BlockDelta::new(400);
 			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
 			cfg.vtxopool.vtxo_targets = if expose_small_grant {
@@ -362,6 +381,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 	let ids = sender.board_and_confirm_and_register(&ctx, sat(100_000)).await;
 	let client = sender.client().await;
 	let input = client.get_full_vtxo(ids[0]).await.unwrap();
+	let source_expiry = input.expiry_height();
 	assert_eq!(input.amount(), sat(100_000));
 	let key = client.get_vtxo_key(&input).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
@@ -421,9 +441,56 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 	drop(recipient);
 	drop(rpc); // No preimage disclosure, cooperative revoke, or returning wallet.
 	assert!(db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap().is_none());
+	if past_source_expiry {
+		let height = ctx.bitcoind().get_block_count().await as u32;
+		let height = ctx.generate_blocks(source_expiry.to_u32() + 1 - height).await;
+		srv.wait_for_sync_height(height).await;
+		srv.watchmand().wait_for_sync_height(height).await;
+		tokio::time::timeout(Duration::from_secs(15), async {
+			loop {
+				let ready = db.read(async |t| {
+					let row = t.query_one("SELECT a.status::TEXT,s.status::TEXT AS subscription_status
+					FROM lightning_payment_attempt a JOIN lightning_htlc_subscription s ON s.id=a.lightning_htlc_subscription_id
+					JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=a.id
+					WHERE l.vtxo_id=$1", &[&source.to_string()]).await?;
+					Ok(row.get::<_, &str>("status") == "failed" && row.get::<_, &str>("subscription_status") == "canceled"
+						&& t.expiry_rebuild_token().await?.is_some())
+				}).await.unwrap();
+				if ready { break; }
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}).await.expect("expired uncollected internal attempt must become Failed");
+		tokio::time::sleep(Duration::from_secs(2)).await;
+		assert_internal_source_held(&db, source).await;
+	}
 	ctx.bitcoind().fund_addr(fee_address.clone(), sat(100_000)).await;
 	if large_cover { ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await; }
 	ctx.generate_blocks(2).await;
+	if past_source_expiry {
+		let ids = grants.iter().map(|grant| grant.id().to_string()).collect::<Vec<_>>();
+		let closure_height = tokio::time::timeout(Duration::from_secs(45), async {
+			loop {
+				let height = ctx.generate_blocks(1).await;
+				srv.wait_for_sync_height(height).await;
+				srv.watchmand().wait_for_sync_height(height).await;
+				let row = db.read(async |t| Ok(t.query_one("SELECT COUNT(DISTINCT e.vtxo_id) AS reclaimed,MAX(a.confirmed_height) AS height
+					FROM expiry_entitlement e JOIN expiry_allocation_coin c ON c.entitlement_id=e.id
+					JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=ANY($1)
+					AND c.active AND c.disposition='operator' AND a.status='confirmed'", &[&ids]).await?)).await.unwrap();
+				if row.get::<_, i64>("reclaimed") == grants.len() as i64 { break u32::try_from(row.get::<_, i64>("height")).unwrap(); }
+				tokio::time::sleep(Duration::from_millis(100)).await;
+			}
+		}).await.expect("uncollected internal grants must be reclaimed after fee replenishment");
+		assert_grants_reclaimed(&ctx, &db, &grants, &receiver_destination.spk).await;
+		let height = ctx.bitcoind().get_block_count().await as u32;
+		assert!(height < closure_height + 5);
+		let height = ctx.generate_blocks(closure_height + 4 - height).await;
+		srv.wait_for_sync_height(height).await;
+		srv.watchmand().wait_for_sync_height(height).await;
+		tokio::time::sleep(Duration::from_secs(1)).await;
+		assert_internal_source_held(&db, source).await;
+		ctx.generate_blocks(1).await;
+	}
 	if expose_small_grant {
 		let chain = ctx.bitcoind().sync_client();
 		let mut maturity = outgoing_deadline.to_u32();
@@ -498,6 +565,17 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 			&[&source.to_string()]).await?)).await.unwrap().is_none(), "sender refund must wait for six grant confirmations");
 		ctx.generate_blocks(1).await;
 	}
+	// The send contract now requires a backing coin that outlives its HTLC.
+	// Reach the original 100-block reaction window without shortening that backing.
+	if !past_source_expiry {
+		let height = ctx.bitcoind().get_block_count().await as u32;
+		let target = source_expiry.saturating_sub(BlockDelta::new(80)).to_u32();
+		if target > height {
+			let height = ctx.generate_blocks(target - height).await;
+			srv.wait_for_sync_height(height).await;
+			srv.watchmand().wait_for_sync_height(height).await;
+		}
+	}
 	// Normal watchman progress has to reach every HTLC leaf. Mine only
 	// through completed sync cycles and leave reaction/readiness time each block.
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {
@@ -526,7 +604,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool)
 	assert_eq!(parent.output.iter().map(|o| o.value.to_sat()).sum::<u64>(), input_sat);
 	ctx.generate_blocks(6).await;
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
-	if expose_small_grant {
+	if expose_small_grant || past_source_expiry {
 		let chain = ctx.bitcoind().sync_client();
 		let mut outputs = Vec::new();
 		for height in u64::from(tip.to_u32())..=chain.get_block_count().unwrap() {
@@ -561,7 +639,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
 		.funded(btc(10)).cfg(|cfg| {
-			cfg.vtxo_lifetime = BlockDelta::new(24);
+			cfg.vtxo_lifetime = BlockDelta::new(400);
 			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
 			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 8 }];
@@ -648,6 +726,14 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	ctx.bitcoind().fund_addr(fee_address, sat(150_000)).await;
 	ctx.generate_blocks(2).await;
+	// Keep the original 100-block reaction budget around this now-valid root's expiry.
+	let height = ctx.bitcoind().get_block_count().await as u32;
+	let target = original_body.expiry_height().saturating_sub(BlockDelta::new(80)).to_u32();
+	if target > height {
+		let height = ctx.generate_blocks(target - height).await;
+		srv.wait_for_sync_height(height).await;
+		srv.watchmand().wait_for_sync_height(height).await;
+	}
 	let grant_ids = grants.iter().map(|grant| grant.id().to_string()).collect::<Vec<_>>();
 	let mut final_fee_sponsored = false;
 	let parent: Transaction = tokio::time::timeout(Duration::from_secs(150), async {

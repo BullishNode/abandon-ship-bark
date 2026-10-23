@@ -21,12 +21,12 @@ async fn wait_for_migration_lock(client: &tokio_postgres::Client, granted: bool,
 
 async fn remove_fork_schema(client: &tokio_postgres::Client) {
 	let tables = client.query("SELECT tablename FROM pg_tables WHERE schemaname='public' \
-		AND (LEFT(tablename, 7)='expiry_' OR tablename IN ('fallback_record', 'user_exit_claim'))", &[]).await.unwrap();
+		AND (LEFT(tablename, 7)='expiry_' OR tablename='fallback_record')", &[]).await.unwrap();
 	for table in tables {
 		let name: &str = table.get(0);
 		client.batch_execute(&format!("DROP TABLE IF EXISTS \"{}\" CASCADE", name.replace('"', "\"\""))).await.unwrap();
 	}
-	client.batch_execute("DROP FUNCTION expiry_record_ledger_commit(); DROP INDEX expiry_vtxo_anchor_point_ix;").await.unwrap();
+	client.batch_execute("DROP INDEX expiry_vtxo_anchor_point_ix;").await.unwrap();
 }
 
 #[tokio::test]
@@ -96,20 +96,20 @@ async fn fallback_failed_initialization_rolls_back_schema() {
 	remove_fork_schema(&client).await;
 	// An empty conflicting relation fails near the end of the schema batch.
 	// No ownership, entitlement or payment rows are manufactured.
-	client.batch_execute("CREATE TABLE user_exit_claim (id INTEGER);").await.unwrap();
+	client.batch_execute("CREATE TABLE expiry_lightning_receive_claim (id INTEGER);").await.unwrap();
 	let Err(error) = server::database::Db::connect(&config).await else {
 		panic!("conflicting schema object must refuse initialization");
 	};
 	let pg = error.downcast_ref::<tokio_postgres::Error>().expect("expected schema statement failure");
 	let db_error = pg.as_db_error().expect("expected PostgreSQL schema error");
 	assert_eq!(db_error.code(), &tokio_postgres::error::SqlState::DUPLICATE_TABLE);
-	assert!(db_error.message().contains("user_exit_claim"));
+	assert!(db_error.message().contains("expiry_lightning_receive_claim"));
 	assert!(client.query_one("SELECT to_regclass('expiry_chain_view') IS NULL \
 		AND to_regclass('fallback_record') IS NULL", &[]).await.unwrap().get::<_, bool>(0),
 		"failed initialization must roll back its earlier tables and marker");
-	assert_eq!(client.query_one("SELECT COUNT(*) FROM user_exit_claim", &[]).await.unwrap().get::<_, i64>(0), 0);
+	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_lightning_receive_claim", &[]).await.unwrap().get::<_, i64>(0), 0);
 	wait_for_migration_lock(&client, true, 0).await;
-	client.batch_execute("DROP TABLE user_exit_claim;").await.unwrap();
+	client.batch_execute("DROP TABLE expiry_lightning_receive_claim;").await.unwrap();
 	drop(server::database::Db::connect(&config).await.unwrap());
 	assert_eq!(client.query_one("SELECT COUNT(*) FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), 1);
 }

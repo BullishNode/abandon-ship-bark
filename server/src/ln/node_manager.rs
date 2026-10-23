@@ -313,11 +313,10 @@ impl LightningManager {
 		);
 
 		// If a subscription already exists for this payment hash, the payment
-		// is an intra-Ark self-payment; the attempt is linked to it at
-		// initiation. A subscription registered only after this point does
-		// NOT make the attempt a self-payment.
+		// routes through the intra-Ark path. Only an attempt that actually
+		// promotes its subscription is linked as that receive's funding.
 		let sub = self.db.read(async |t| t.get_htlc_subscription_by_payment_hash(payment_hash).await).await?;
-		let lightning_htlc_subscription_id = sub.as_ref().map(|s| s.id);
+		let validation = sub.as_ref().map(|sub| validate_intra_ark_payment(sub, &invoice, amount));
 
 		// Read here, while we are still on the user's RPC task: every later
 		// status transition of this attempt is emitted by the xpay monitor,
@@ -325,17 +324,28 @@ impl LightningManager {
 		// label: the column has no cardinality budget.
 		let user_agent = telemetry::current_user_agent();
 
-		let attempt = self.db.write(async |t| {
+		let (attempt, promoted) = self.db.write(async |t| {
+			// Lock the funding sources before promoting the receive. The attempt
+			// and its actual funding link then become visible together.
+			database::expiry_guard::guard_new_lightning_inputs(t, htlc_vtxo_ids).await?;
+			let mut promoted = false;
+			if let Some(sub) = sub.as_ref().filter(|_| validation.as_ref().is_some_and(|v| v.is_ok())) {
+				promoted = sub.status == LightningHtlcSubscriptionStatus::Created
+					&& t.store_lightning_htlc_subscription_status(sub.id,
+						LightningHtlcSubscriptionStatus::Accepted, Some(htlc_send_expiry_height),
+						Some(LightningHtlcSubscriptionStatus::Created)).await?;
+			}
 			t.store_lightning_payment_start(
 				node.id, &invoice, amount, sender_mailbox_id, htlc_vtxo_ids,
-				lightning_htlc_subscription_id,
+				sub.as_ref().filter(|_| promoted).map(|sub| sub.id),
 				attempt_block_height, user_fee, user_agent.as_deref(), retry_for,
 				// An intra-Ark payment short-circuits before xpay, so no
 				// routing budget is ever authorised for it.
-				lightning_htlc_subscription_id.is_none().then_some(max_routing_fee),
+				sub.is_none().then_some(max_routing_fee),
 			).await?;
-			t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await?
-				.context("new Lightning attempt disappeared")
+			let attempt = t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await?
+				.context("new Lightning attempt disappeared")?;
+			Ok((attempt, promoted))
 		}).await?;
 
 		// If there is an existing subscription, it's an intra-Ark lightning
@@ -348,17 +358,13 @@ impl LightningManager {
 			// it: `initiate_lightning_payment` checks the same thing, but a
 			// receive registered after that check would otherwise land here
 			// unvalidated and be paid out of our vtxopool.
-			let res = match validate_intra_ark_payment(&sub, &invoice, amount) {
-				Ok(()) => self.set_created_subscription_to_accepted(sub, htlc_send_expiry_height).await,
+			let res = match validation.expect("existing subscription was validated") {
+				Ok(()) => self.finish_intra_ark_payment(sub, promoted).await,
 				Err(e) => Err(e),
 			};
 			if let Err(e) = res {
 				trace!("Failed to update subscription status: {e:#}");
-				let payment_attempt = self.db
-					.read(async |t| t.get_open_lightning_payment_attempt_by_payment_hash(payment_hash).await).await?
-					.expect("we inserted a payment attempt");
-
-				self.payment_handler().fail_payment_attempt(&payment_attempt, Some(&e.to_string())).await?;
+				self.payment_handler().fail_payment_attempt(&attempt, Some(&e.to_string())).await?;
 				return Err(e);
 			}
 
@@ -396,26 +402,13 @@ impl LightningManager {
 		Ok(())
 	}
 
-	/// Promote a Created hold-invoice subscription to Accepted for an
-	/// intra-Ark payment, cancel the locked hold HTLCs on the receiving
-	/// node, and notify the receiver to come online.
-	async fn set_created_subscription_to_accepted(
+	/// Finish the backend cancellation and notifications after the attempt
+	/// and its successful subscription promotion committed together.
+	async fn finish_intra_ark_payment(
 		&self,
 		subscription: LightningHtlcSubscription,
-		htlc_send_expiry_height: BlockHeight,
+		promoted: bool,
 	) -> anyhow::Result<()> {
-		// `subscription` is a snapshot read without a lock, so its status can be
-		// stale. The promotion is guarded on `Created` in the same statement, and
-		// when it does not apply we re-read to report the race instead of acting
-		// on what we thought we saw.
-		let promoted = subscription.status == LightningHtlcSubscriptionStatus::Created
-			&& self.db.write(async |t| t.store_lightning_htlc_subscription_status(
-				subscription.id,
-				LightningHtlcSubscriptionStatus::Accepted,
-				Some(htlc_send_expiry_height),
-				Some(LightningHtlcSubscriptionStatus::Created),
-			).await).await?;
-
 		if !promoted {
 			let current = self.db
 				.read(async |t| t.get_htlc_subscription_by_id(subscription.id).await).await?

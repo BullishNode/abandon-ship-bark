@@ -274,9 +274,6 @@ pub struct Config {
 	pub max_htlc_expiry_delta: BlockDelta,
 	/// Confirmations each receive grant's timeout spend needs before refunding its sender.
 	/// Must exceed the supported five-block reorg depth.
-	#[serde(default = "default_expiry_internal_refund_depth")]
-	pub expiry_internal_refund_depth: u32,
-
 	#[serde(with = "utils::serde::duration")]
 	pub round_interval: Duration,
 	#[serde(with = "utils::serde::duration")]
@@ -491,8 +488,6 @@ pub struct Config {
 }
 
 fn default_max_htlc_expiry_delta() -> BlockDelta { BlockDelta::new(288) }
-fn default_expiry_internal_refund_depth() -> u32 { 6 }
-
 impl Config {
 	fn load_with_custom_env(
 		config_file: impl AsRef<Path>,
@@ -571,9 +566,6 @@ impl Config {
 		self.bitcoind.validate()?;
 		self.fees.validate()?;
 
-		if self.expiry_internal_refund_depth < 6 {
-			bail!("expiry_internal_refund_depth must be at least 6");
-		}
 		if self.recovery_xpub_nb_keys == 0 {
 			bail!("recovery_xpub_nb_keys must be positive for expiry owner lookup");
 		}
@@ -780,25 +772,6 @@ mod test {
 		cfg.bitcoind.cookie = Some(".cookie".into());
 
 		cfg.validate().expect("error validating default config");
-	}
-
-	#[test]
-	fn internal_refund_depth_defaults_to_six_and_exceeds_the_reorg_bound() {
-		let mut cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
-		cfg.bitcoind.cookie = Some(".cookie".into());
-		let mut fields = serde_json::to_value(&cfg).unwrap();
-		fields.as_object_mut().unwrap().remove("expiry_internal_refund_depth");
-		let mut cfg: Config = serde_json::from_value(fields).unwrap();
-		assert_eq!(cfg.expiry_internal_refund_depth, 6);
-		cfg.validate().unwrap();
-		for depth in 0..6 {
-			cfg.expiry_internal_refund_depth = depth;
-			assert!(cfg.validate().unwrap_err().to_string().contains("expiry_internal_refund_depth"));
-		}
-		for depth in [6, 7, 12] {
-			cfg.expiry_internal_refund_depth = depth;
-			cfg.validate().unwrap();
-		}
 	}
 
 	#[test]

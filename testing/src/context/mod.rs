@@ -424,7 +424,6 @@ impl TestContext {
 			network: Network::Regtest,
 			vtxo_lifetime: BlockDelta::new(432),
 			vtxo_exit_delta: BlockDelta::new(12),
-			expiry_internal_refund_depth: 6,
 			round_interval: Duration::from_secs(3600),
 			round_submit_time: Duration::from_millis(5000),
 			// this one can be long cuz in most tests all users are ready and we don't wait

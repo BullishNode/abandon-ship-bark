@@ -123,7 +123,23 @@ xpay-slow-mode=true
 ```
 
 Verify the effective setting with `lightning-cli listconfigs xpay-slow-mode`.
-This is required on the deployed node, not only in the test harness.
+This is required on the deployed node, not only in the test harness. Run this
+check in the server supervisor's startup precondition for every configured node,
+and refuse startup unless `configs["xpay-slow-mode"].value_bool` is true. The
+bundled typed grpc API omits plugin configuration fields, so this check uses
+the existing native CLI rather than a new grpc extension. For systemd, use
+`ExecStartPre` with the CLI's failure propagated and `jq -e` checking that exact
+boolean. A missing setting, unreachable node or false value must fail startup.
+
+Set `vtxopool.vtxo_pre_expiry = 230` in this deployment. The upstream pool
+prunes near-expiry inputs and refills its existing targets; no separate grant
+selection rule is added. This requires more pool capital than the 144-block
+pruning setting. Every Lightning send source must expire strictly more than
+30 blocks after its HTLC. Refresh a source that does not meet that condition.
+A short-lived Signet source can therefore be suitable for Ark transfers while
+being refused for a Lightning send. The margin and pool policy do not prove
+that every allowed receive is terminal before expiry: keep unresolved funds
+held during outages or unusually long contracts.
 
 Validate both configuration files before starting the services:
 
@@ -132,7 +148,9 @@ captaind check-config /path/to/captaind.toml
 captaind check-config --watchman /path/to/watchmand.toml
 ```
 
-The internal Lightning refund depth must be at least 6. The supported protocol
+The bundled Core Lightning carries one patch: `onchaind` reports a timed-out
+on-chain HTLC to `lightningd` after 6 confirmations instead of 3, so a payment
+is only marked failed outside the supported reorg window. The supported protocol
 assumption excludes reorgs that remove 6 or more blocks. It includes reorgs that
 remove 1 through 5 blocks. This assumption does not make bitcoin finality
 absolute. Qualification of the reorg boundary remains incomplete.
@@ -186,7 +204,7 @@ validation does not establish liquidity, throughput or safe deadlines.
 | Lightning send fee | `[fees.lightning_send]`: `min_fee_sat`, `base_fee_sat`, `ppm_expiry_table`. `ln_max_fee_ppm` assigns a fraction of that customer fee to CLN's routing budget. Additional input value beyond principal plus the fee also increases that budget. |
 | Amount admission | `min_board_amount`, `max_vtxo_amount`, `max_board_amount`, `max_offboard_amount`, `max_arkoor_amount`, `max_ln_send_amount`, `max_ln_receive_amount`, `max_round_amount`. Unset optional maxima are unbounded. Zero disables the corresponding operation for the operation maxima. |
 | Tree and round geometry | `max_vtxo_exit_depth`, `max_arkoor_fanout`, `nb_round_nonces`, `round_interval`, `round_submit_time`, `round_sign_time`, `round_forfeit_nonces_timeout`. Geometry is not a measured capacity guarantee. |
-| Chain timing | `vtxo_lifetime`, `vtxo_exit_delta`, `required_board_confirmations`, `min_trusted_confs`, `expiry_internal_refund_depth`, `require_board_funding_tx`, `allow_expired_arkoor`, `nursery_confirm_target_blocks`. Refund depth defaults to 6 and validation rejects lower values. |
+| Chain timing | `vtxo_lifetime`, `vtxo_exit_delta`, `required_board_confirmations`, `min_trusted_confs`, `require_board_funding_tx`, `allow_expired_arkoor`, `nursery_confirm_target_blocks`. |
 | Lightning timing | `htlc_expiry_delta`, `htlc_send_expiry_delta`, `max_htlc_expiry_delta`, `max_user_invoice_cltv_delta`, `invoice_expiry`, `receive_htlc_forward_timeout`, `cln_xpay_timeout`, `cln_xpay_max_retry_for`. A retry deadline does not prove payment failure. |
 | Receive admission and pool | `ln_receive_anti_dos_required`; `[vtxopool]`: `vtxo_targets`, `vtxo_target_issue_threshold`, `vtxo_lifetime`, `vtxo_pre_expiry`, `max_vtxo_exit_depth`. Reserve liquidity and test replenishment under the declared load. |
 | Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons separately. Check initial fallback rates separately from later estimates. |
@@ -667,6 +685,12 @@ Wallets process a reorg to a shorter tip when the next block arrives. Fee
 sponsorship can wait for that block while the wallet still has the old chain
 view. Do not spend orphaned change or disable confirmed-input checks to bypass
 this wait.
+
+The server does not retain or replay customer emergency-exit claims. Core can
+evict a signed claim if a reorg makes its timelock nonfinal. The holder must
+retain that signed transaction and resubmit it after its timelocks are valid
+again. An absent holder does not receive automatic server replay. This does
+not resolve a Lightning payment status or change a payout obligation.
 
 After a reorg, preserve the signed transactions and original payment records.
 Allow the existing chain listeners to rebuild facts from both completed views.

@@ -41,7 +41,7 @@ async fn native_refund_status(two_sources: bool) {
 	let lightning = ctx.new_lightning_setup_no_channel("lightningd").await;
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).bitcoind(ctx.bitcoind_arc())
 		.funded(btc(10)).cfg(|cfg| {
-			cfg.vtxo_lifetime = BlockDelta::new(80);
+			cfg.vtxo_lifetime = BlockDelta::new(400);
 			cfg.vtxopool.vtxo_lifetime = BlockDelta::new(24);
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
 			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 8 }];
@@ -127,6 +127,16 @@ async fn native_refund_status(two_sources: bool) {
 	ctx.generate_blocks(2).await;
 	drop(sender);
 	drop(recipient);
+	// The sender's valid long-lived roots retain their staggered expiry gap;
+	// enter the existing 100-block reaction window before the first one expires.
+	let height = ctx.bitcoind().get_block_count().await as u32;
+	let target = sources.iter().map(Vtxo::expiry_height).min().unwrap()
+		.saturating_sub(BlockDelta::new(80)).to_u32();
+	if target > height {
+		let height = ctx.generate_blocks(target - height).await;
+		srv.wait_for_sync_height(height).await;
+		srv.watchmand().wait_for_sync_height(height).await;
+	}
 	let source_ids = sources.iter().map(|source| source.id().to_string()).collect::<Vec<_>>();
 	let mut parents = BTreeMap::<String, Transaction>::new();
 	let mut checked_partial = false;

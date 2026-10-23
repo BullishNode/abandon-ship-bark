@@ -102,7 +102,6 @@ impl Tx<'_> {
 		funding: &Transaction,
 		tip: BlockHeight,
 		watchman_tip: Option<BlockHeight>,
-		internal_refund_depth: u32,
 	) -> anyhow::Result<OwnershipProposal> {
 		let mut proposal = OwnershipProposal::pending(fact, "missing complete source path");
 		let Some(full) = &fact.full_vtxo else { return Ok(proposal); };
@@ -292,7 +291,7 @@ impl Tx<'_> {
 					&& fact.onchain_spent_txid.is_none() && htlc.htlc.chain_resolution.is_none() {
 					if let Some(watchman_tip) = watchman_tip {
 						if let Some((attempts, block)) = self.internal_grants_reclaimed(
-							state.vtxo_id, hash, tip, watchman_tip, internal_refund_depth,
+							state.vtxo_id, hash, tip, watchman_tip,
 						).await? {
 							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
 							proposal.evidence = Some(OwnershipEvidence::HtlcInternalGrantsReclaimed {
@@ -300,6 +299,17 @@ impl Tx<'_> {
 							});
 							return Ok(proposal);
 						}
+					}
+					// An issued internal receive still commits its funding source
+					// until every grant is reclaimed, even past the source's CLTV.
+					let issued = self.query_one("SELECT EXISTS(SELECT 1 FROM lightning_payment_attempt a \
+						JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id=a.id \
+						JOIN vtxo g ON g.lightning_htlc_subscription_id=a.lightning_htlc_subscription_id \
+						JOIN htlc_vtxo h ON h.id=g.id WHERE l.vtxo_id=$1 AND a.payment_hash=$2)",
+						&[&state.vtxo_id.to_string(), &hash.to_string()]).await?.get::<_, bool>(0);
+					if issued {
+						proposal.disposition = OwnershipDisposition::Unresolved("internal receive grants not reclaimed");
+						return Ok(proposal);
 					}
 				}
 				// A same-hash receive funded by another source cannot retain

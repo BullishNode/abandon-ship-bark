@@ -406,6 +406,7 @@ fn internal_safe_pool_grants(large_cover: bool, expose_small_grant: bool, past_s
 		htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
 	}).await.unwrap();
 	let granted = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: None,
 		payment_hash: hash.to_vec(), user_pubkey: receiver_key.serialize().to_vec(),
 		htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner();
@@ -701,6 +702,7 @@ async fn expiry_internal_shared_incoming_root_refunds_both_absent_attempts() {
 			htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
 		}).await.unwrap();
 		let response = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: None,
 			payment_hash: hash.to_vec(), user_pubkey: recipient_key.serialize().to_vec(),
 			htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner();

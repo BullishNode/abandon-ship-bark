@@ -488,6 +488,7 @@ async fn send_claim_follows_internal_attempt_settlement() {
 			mailbox_id: None, retry_for_secs: Some(1),
 		}).await.unwrap();
 		let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: None,
 			payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
 			htlc_recv_expiry: (tip + BlockDelta::new(220)).to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner().htlc_vtxos.into_iter()
@@ -622,6 +623,7 @@ async fn internal_send_records_fee_without_native_payment() {
 			mailbox_id: None, retry_for_secs: Some(1),
 		}).await.unwrap();
 		let mut grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: None,
 			payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
 			htlc_recv_expiry: (tip + BlockDelta::new(220)).to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner().htlc_vtxos.into_iter()

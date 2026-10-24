@@ -1667,6 +1667,7 @@ async fn server_returned_htlc_recv_vtxos_identical(
 
 			let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 			let req_1 = protos::PrepareLightningReceiveClaimRequest {
+				owner_proof: None,
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
 				htlc_recv_expiry: 172,
@@ -1686,6 +1687,7 @@ async fn server_returned_htlc_recv_vtxos_identical(
 			// we change keypair to make sure server don't use it on second request
 			let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 			let req_2 = protos::PrepareLightningReceiveClaimRequest {
+				owner_proof: None,
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
 				htlc_recv_expiry: 172,
@@ -1751,6 +1753,7 @@ async fn server_concurrent_prepare_lightning_claim(
 	let results = join_all((0..NB_REQUESTS).map(|_| async {
 		let mut client = srv.get_public_rpc().await;
 		client.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: None,
 			payment_hash: receive.payment_hash.to_vec(),
 			user_pubkey: Keypair::new(&SECP, &mut bip39::rand::thread_rng())
 				.public_key().serialize().to_vec(),
@@ -1796,6 +1799,7 @@ async fn server_concurrent_prepare_lightning_claim(
 	// return the winner's vtxos instead of allocating a new set.
 	let retry = srv.get_public_rpc().await
 		.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: None,
 			payment_hash: receive.payment_hash.to_vec(),
 			user_pubkey: Keypair::new(&SECP, &mut bip39::rand::thread_rng())
 				.public_key().serialize().to_vec(),
@@ -1858,6 +1862,7 @@ async fn refuses_htlc_recv_expiry_past_lowest_incoming_htlc_expiry(
 			let attacker_expiry = lowest.saturating_sub(htlc_expiry_delta).to_u32() + 1;
 			let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 			let req = protos::PrepareLightningReceiveClaimRequest {
+				owner_proof: None,
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
 				htlc_recv_expiry: attacker_expiry,
@@ -1876,6 +1881,7 @@ async fn refuses_htlc_recv_expiry_past_lowest_incoming_htlc_expiry(
 			let safe_expiry = lowest.saturating_sub(htlc_expiry_delta).to_u32();
 			let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 			let req_safe = protos::PrepareLightningReceiveClaimRequest {
+				owner_proof: None,
 				payment_hash: receive.payment_hash.to_vec(),
 				user_pubkey: keypair.public_key().serialize().to_vec(),
 				htlc_recv_expiry: safe_expiry,
@@ -1971,6 +1977,7 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 	let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 	let granted = rpc
 		.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: None,
 			payment_hash: payment_hash.as_ref().to_vec(),
 			user_pubkey: keypair.public_key().serialize().to_vec(),
 			htlc_recv_expiry: lowest.saturating_sub(srv.config().htlc_expiry_delta).into(),
@@ -2162,6 +2169,7 @@ async fn settled_hash_cannot_be_granted_htlc_recv_vtxos() {
 
 	let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 	let err = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: None,
 		payment_hash: payment_hash.as_ref().to_vec(),
 		user_pubkey: keypair.public_key().serialize().to_vec(),
 		htlc_recv_expiry: lowest.saturating_sub(srv.config().htlc_expiry_delta).into(),
@@ -2271,6 +2279,7 @@ async fn failed_intra_ark_promotion_does_not_bind_another_payers_grants() {
 	let receiver = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 	let tip = ctx.bitcoind().get_block_count().await as u32;
 	let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: None,
 		payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
 		htlc_recv_expiry: tip + 32, lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner().htlc_vtxos;
@@ -3378,6 +3387,7 @@ async fn self_payment_claim_rejected_after_sender_onchain_refund() {
 	let receiver_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 	let mut grants = rpc.prepare_lightning_receive_claim(
 		protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: None,
 			payment_hash: payment_hash.to_vec(),
 			user_pubkey: receiver_key.public_key().serialize().to_vec(),
 			htlc_recv_expiry: send_expiry.saturating_sub(srv.config().htlc_expiry_delta).into(),
@@ -3531,6 +3541,7 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	let incoming_expiry = subscription.lowest_incoming_htlc_expiry.unwrap();
 	let receiver = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 	let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: None,
 		payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
 		htlc_recv_expiry: incoming_expiry.saturating_sub(srv.config().htlc_expiry_delta).into(),
 		lightning_receive_anti_dos: None,

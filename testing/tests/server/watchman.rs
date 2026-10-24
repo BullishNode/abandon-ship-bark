@@ -4307,6 +4307,7 @@ async fn watchman_claims_expired_receive_grant_before_receiver() {
 	let expiry = subscription.lowest_incoming_htlc_expiry.unwrap()
 		.saturating_sub(srv.config().htlc_expiry_delta);
 	let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: None,
 		payment_hash: hash.to_vec(), user_pubkey: receiver_key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: expiry.into(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner().htlc_vtxos.into_iter()

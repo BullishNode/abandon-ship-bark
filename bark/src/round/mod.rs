@@ -2296,6 +2296,7 @@ impl Wallet {
 		let vtxo_requests = participation.outputs.iter()
 			.map(|req|
 				protos::VtxoRequest {
+					owner_proof: None,
 					policy: req.policy.serialize(),
 					amount: req.amount.to_sat(),
 			})

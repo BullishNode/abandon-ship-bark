@@ -94,6 +94,7 @@ async fn board(ctx: &TestContext, srv: &Captaind, key: Keypair) -> Vtxo<Full> {
 	let builder = builder.set_funding_details(sat(100_000), Amount::ZERO, point).unwrap().generate_user_nonces();
 	let mut rpc = srv.get_public_rpc().await;
 	let cosign = rpc.request_board_cosign(protos::BoardCosignRequest {
+		owner_proof: None,
 		amount: 100_000, utxo: serialize(&point), expiry_height: expiry.into(),
 		user_pubkey: key.public_key().serialize().to_vec(), pub_nonce: builder.user_pub_nonce().serialize().to_vec(),
 		funding_tx: serialize(&funding),

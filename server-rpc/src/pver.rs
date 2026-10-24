@@ -37,3 +37,7 @@ pub const PROTOCOL_VERSION_BOARD_FUNDING_TX: u64 = 4;
 /// scripts, so the server rejects Lightning sends and receives and round
 /// participations from clients below this version with an upgrade error.
 pub const PROTOCOL_VERSION_HASHLOCK_CLAUSES: u64 = 5;
+
+/// Version that carries coin-key signatures linking customer outputs to a
+/// registered fallback mailbox. The signed address delivery type is 0x02.
+pub const PROTOCOL_VERSION_OWNER_PROOF: u64 = 6;

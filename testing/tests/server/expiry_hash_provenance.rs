@@ -44,9 +44,10 @@ async fn same_hash_sources(cooperative_refund: bool) {
 		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([input.clone()],
 			VtxoPolicy::new_server_htlc_send(key.public_key(), hash, deadline)).unwrap()
 			.generate_user_nonces(&[key]).unwrap();
-		let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-		}).await.unwrap().into_inner();
+		// Keep the historical short-backing contract; current admission is checked by the fixture.
+		let request = super::owner_proof::prove_wallet_destinations(&client, &srv,
+			protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
+		let response = super::owner_fixture::legacy_send_commitment(&srv, request).await;
 		let leaves = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 			.unwrap().build_signed_vtxos();
 		client.register_vtxo_transactions_with_server(&leaves).await.unwrap();

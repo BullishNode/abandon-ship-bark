@@ -88,8 +88,12 @@ impl Owner {
 }
 
 pub(super) async fn server(ctx: &TestContext) -> Arc<Captaind> {
+	server_with_lifetime(ctx, BlockDelta::new(24)).await
+}
+
+async fn server_with_lifetime(ctx: &TestContext, lifetime: BlockDelta) -> Arc<Captaind> {
 	let srv = ctx.captaind("server").no_vtxo_pool()
-		.cfg(|cfg| cfg.vtxo_lifetime = BlockDelta::new(24)).watchmand().create().await;
+		.cfg(move |cfg| cfg.vtxo_lifetime = lifetime).watchmand().create().await;
 	ctx.bitcoind().fund_addr(srv.watchmand().wait_wallet_address().await, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
 	srv
@@ -256,7 +260,8 @@ async fn expiry_owner_finds_old_key_used_after_recovery() {
 #[tokio::test]
 async fn expiry_owner_finds_htlc_key() {
 	let ctx = TestContext::new("server/expiry_owner_finds_htlc_key").await;
-	let srv = server(&ctx).await;
+	// Native send expiry plus its existing 30-block margin needs ordinary backing.
+	let srv = server_with_lifetime(&ctx, BlockDelta::new(432)).await;
 	let owner = Owner::new(&ctx);
 	owner.register(&srv).await;
 	let input_key = owner.key(1);
@@ -289,7 +294,8 @@ async fn expiry_owner_finds_htlc_key() {
 #[tokio::test]
 async fn expiry_owner_finds_revoked_htlc_input_key() {
 	let ctx = TestContext::new("server/expiry_owner_finds_revoked_htlc_input_key").await;
-	let srv = server(&ctx).await;
+	// Native send expiry plus its existing 30-block margin needs ordinary backing.
+	let srv = server_with_lifetime(&ctx, BlockDelta::new(432)).await;
 	let owner = Owner::new(&ctx);
 	owner.register(&srv).await;
 	let input_key = owner.key(1);

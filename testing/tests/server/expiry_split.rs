@@ -51,10 +51,10 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 		ArkoorDestination { total_amount: sat(50_000), policy: VtxoPolicy::new_pubkey(key.public_key()) },
 		ArkoorDestination { total_amount: sat(50_000), policy: VtxoPolicy::new_server_htlc_send(key.public_key(), PaymentHash::from([19; 32]), deadline) },
 	]).unwrap().generate_user_nonces(&[key]).unwrap();
-	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-	}).await.unwrap().into_inner();
+	// Keep the historical short-backing contract; current admission is checked by the fixture.
+	let request = super::owner_proof::prove_wallet_destinations(&client, &srv,
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
+	let response = super::owner_fixture::legacy_send_commitment(&srv, request).await;
 	let package = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	let checkpoint = package.signed_virtual_transactions().into_iter()
 		.find(|tx| tx.input[0].previous_output == input.point()).unwrap();

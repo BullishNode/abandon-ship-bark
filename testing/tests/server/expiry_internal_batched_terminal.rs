@@ -1,5 +1,6 @@
 //! Two original send HTLCs are claimed together. The third original receives
 //! its own fallback payout after the receive grants close.
+//! Setup retains pre-source-guard commitments; recovery uses the current server.
 
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -89,9 +90,10 @@ async fn batched_terminal(reorg: bool) {
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(inputs,
 		VtxoPolicy::new_server_htlc_send(keys[0].public_key(),hash,deadline)).unwrap().generate_user_nonces(&keys).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts:super::owner_proof::prove_wallet_destinations(&sender, &srv, protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
-	}).await.unwrap().into_inner();
+	// This recovery scenario starts from an authentic pre-source-guard commitment.
+	let request = super::owner_proof::prove_wallet_destinations(&sender, &srv,
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
+	let response = super::owner_fixture::legacy_send_commitment(&srv, request).await;
 	let sources = builder.user_cosign(&keys,ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap().build_signed_vtxos();
 	assert_eq!(sources.len(),3);
 	assert!(sources.iter().all(|source|source.amount()==sat(100_000)));

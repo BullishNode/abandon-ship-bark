@@ -10,7 +10,7 @@ use log::{error, warn};
 use parking_lot::Mutex;
 use bitcoincore_rpc::RpcApi;
 
-use ark::{ProtocolEncoding, Vtxo, SECP};
+use ark::{ProtocolEncoding, Vtxo};
 use ark::fees::{BoardFees, PpmFeeRate};
 use ark::lightning::PaymentHash;
 use ark::vtxo::Full;
@@ -19,7 +19,6 @@ use bark_json::primitives::VtxoStateInfo;
 use bitcoin::{Amount, Network, OutPoint, Transaction};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
-use bitcoin::secp256k1::Keypair;
 use bitcoin_ext::rpc::BitcoinRpcExt;
 use bitcoin_ext::{BlockDelta, BlockHeight, TransactionExt, TxOutExt, TxStatus};
 use server::database::Db;
@@ -4290,7 +4289,9 @@ async fn watchman_claims_expired_receive_grant_before_receiver() {
 	// Request a grant without ever sending the preimage to the server.
 	let preimage = ark::lightning::Preimage::random();
 	let hash = preimage.compute_payment_hash();
-	let receiver_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
+	let receive_owner = super::expiry_attribution::Owner::new(&ctx);
+	receive_owner.register(&srv).await;
+	let receiver_key = receive_owner.key(1);
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
 		payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 18,
@@ -4307,6 +4308,7 @@ async fn watchman_claims_expired_receive_grant_before_receiver() {
 	let expiry = subscription.lowest_incoming_htlc_expiry.unwrap()
 		.saturating_sub(srv.config().htlc_expiry_delta);
 	let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: Some(receive_owner.proof(1, srv.ark_info().await.mailbox_pubkey)),
 		payment_hash: hash.to_vec(), user_pubkey: receiver_key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: expiry.into(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner().htlc_vtxos.into_iter()

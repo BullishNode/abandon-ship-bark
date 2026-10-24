@@ -37,3 +37,9 @@ pub const PROTOCOL_VERSION_BOARD_FUNDING_TX: u64 = 4;
 /// scripts, so the server rejects Lightning sends and receives and round
 /// participations from clients below this version with an upgrade error.
 pub const PROTOCOL_VERSION_HASHLOCK_CLAUSES: u64 = 5;
+
+/// Version that carries registered-account ownership evidence on customer outputs.
+///
+/// Issuance enforcement is independent of the caller's protocol version. Older
+/// clients retain access to recovery, status and already-admitted spend replay.
+pub const PROTOCOL_VERSION_OWNER_PROOF: u64 = 6;

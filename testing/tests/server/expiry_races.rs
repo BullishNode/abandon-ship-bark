@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use ark::test_util::VTXO_VECTORS;
+use super::owner_fixture::REGISTERED_VTXO_VECTORS as VTXO_VECTORS;
 use ark::ServerVtxo;
 use bitcoin::hashes::Hash;
 use bitcoin::Txid;
@@ -18,6 +18,7 @@ async fn expiry_coin_fence_serializes_actual_tree_writes() {
 	let cfg = ctx.new_postgres(&ctx.test_name).await;
 	Db::create(&cfg).await.unwrap();
 	let db = Db::connect(&cfg).await.unwrap();
+	super::owner_fixture::register_vector_owners(&db).await;
 	let coin = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos([&coin]).await).await.unwrap();
 	let txid = Txid::from_byte_array([42; 32]);
@@ -104,6 +105,7 @@ async fn expiry_cancels_unfinished_exchange_without_freezing_other_tree_inputs()
 	let cfg = ctx.new_postgres(&ctx.test_name).await;
 	Db::create(&cfg).await.unwrap();
 	let db = Db::connect(&cfg).await.unwrap();
+	super::owner_fixture::register_vector_owners(&db).await;
 	let old = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	let other = ServerVtxo::from(VTXO_VECTORS.round1_vtxo.clone());
 	let accepted = ServerVtxo::from(VTXO_VECTORS.round2_vtxo.clone());

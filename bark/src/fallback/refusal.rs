@@ -43,6 +43,9 @@ impl FallbackRefusal {
 	}
 
 	pub(crate) fn map_status(status: tonic::Status) -> anyhow::Error {
+		if let Some(refusal) = crate::OwnerProofRefusal::from_status(&status) {
+			return anyhow::Error::new(status).context(refusal);
+		}
 		match Self::from_status(&status) {
 			Some(refusal) => anyhow::Error::new(status).context(refusal),
 			None => status.into(),

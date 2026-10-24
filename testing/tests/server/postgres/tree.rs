@@ -4,7 +4,7 @@ use bitcoin::hashes::Hash;
 
 use ark::ServerVtxo;
 use ark::encode::ProtocolEncoding;
-use ark::test_util::VTXO_VECTORS;
+use super::super::owner_fixture::REGISTERED_VTXO_VECTORS as VTXO_VECTORS;
 
 use server::database::{Db, SpendState};
 use server::database::tree::VtxoTreeUpdate;
@@ -18,6 +18,7 @@ async fn test_db(name: &str) -> (TestContext, Db) {
 	let postgres_cfg = ctx.new_postgres(&ctx.test_name).await;
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::super::owner_fixture::register_vector_owners(&db).await;
 	(ctx, db)
 }
 

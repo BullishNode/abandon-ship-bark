@@ -306,6 +306,13 @@ message RecoverVtxosByXpubResponse {
 
 // boarding
 
+// Identifies a normal child of the account registered to the unblinded mailbox.
+// The server authenticates the account and derives the child before issuance.
+message OwnerProof {
+	bytes blinded_mailbox_id = 1;
+	uint32 child_index = 2;
+}
+
 message BoardCosignRequest {
 	uint64 amount = 1;
 	bytes utxo = 2;
@@ -313,6 +320,7 @@ message BoardCosignRequest {
 	bytes user_pubkey = 4;
 	bytes pub_nonce = 5;
 	bytes funding_tx = 6;
+	OwnerProof owner_proof = 7;
 }
 
 message BoardCosignResponse {
@@ -335,11 +343,13 @@ message RegisterVtxoTransactionsRequest {
 message VtxoRequest {
 	uint64 amount = 1;
 	bytes policy = 2;
+	OwnerProof owner_proof = 3;
 }
 
 message ArkoorDestination {
 	uint64 total_amount = 1;
 	bytes policy = 2;
+	OwnerProof owner_proof = 3;
 }
 
 message ArkoorCosignRequest {
@@ -437,6 +447,7 @@ message PrepareLightningReceiveClaimRequest {
 	bytes payment_hash = 1;
 	bytes user_pubkey = 2;
 	uint32 htlc_recv_expiry = 3;
+	OwnerProof owner_proof = 6;
 	oneof lightning_receive_anti_dos {
 		InputVtxo input_vtxo = 4;
 		string token = 5;

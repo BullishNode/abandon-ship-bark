@@ -215,10 +215,11 @@ fn validate_receive_claim(
 }
 
 impl Server {
-	#[tracing::instrument(skip(self, request))]
+	#[tracing::instrument(skip(self, request, owner_proofs))]
 	pub async fn request_lightning_pay_htlc_cosign(
 		&self,
 		request: ArkoorPackageCosignRequest<VtxoId>,
+		owner_proofs: crate::owner_proof::OwnerProofs,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		let input_vtxo_ids = request.inputs().cloned().collect::<Vec<VtxoId>>();
 		let input_vtxos = self.db.read(async |t| t.get_user_vtxos_by_id(&input_vtxo_ids).await).await?;
@@ -300,7 +301,7 @@ impl Server {
 
 		slog!(LightningPayHtlcsRequested, payment_hash, expiry);
 
-		let (builder, _) = self.cosign_oor_with_builder(builder).await?;
+		let (builder, _) = self.cosign_oor_with_builder(builder, &owner_proofs).await?;
 		Ok(builder.cosign_response())
 	}
 
@@ -485,6 +486,7 @@ impl Server {
 	pub async fn revoke_lightning_pay_htlcs(
 		&self,
 		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
+		owner_proofs: crate::owner_proof::OwnerProofs,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		let tip = self.chain_tip().height as BlockHeight;
 
@@ -536,6 +538,7 @@ impl Server {
 			.insert_unregistered_vtxos(builder.build_unsigned_vtxos().map(ServerVtxo::from))
 			.mark_vtxos_oor_spent(builder.input_spend_info());
 		self.db.write(async |t| {
+			self.verify_output_owners(t, builder.build_unsigned_vtxos().map(|v| v.user_pubkey()), &owner_proofs).await?;
 			crate::database::expiry_guard::guard_obligation_changes(t, &htlc_vtxo_ids).await?;
 			for source in &htlc_vtxo_ids {
 				match t.lightning_source_state(*source, payment_hash).await? {
@@ -782,13 +785,14 @@ impl Server {
 		Ok(sub)
 	}
 
-	#[tracing::instrument(skip(self))]
+	#[tracing::instrument(skip(self, owner_proof))]
 	pub async fn prepare_lightning_claim(
 		&self,
 		payment_hash: PaymentHash,
 		user_pubkey: PublicKey,
 		htlc_recv_expiry: BlockHeight,
 		anti_dos: Option<protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos>,
+		owner_proof: Option<ark::fallback::OwnerProof>,
 	) -> anyhow::Result<(LightningHtlcSubscription, Vec<Vtxo<Full>>)> {
 		// Held for the whole call. The status only becomes `htlcs-ready` after
 		// the arkoor is persisted, so without this lock concurrent calls each
@@ -836,6 +840,9 @@ impl Server {
 			return badarg!("invoice has already been paid");
 		}
 
+		let mut proofs = crate::owner_proof::OwnerProofs::new();
+		proofs.insert(user_pubkey, owner_proof)?;
+		self.db.write(async |t| self.verify_output_owners(t, [user_pubkey], &proofs).await).await?;
 		self.verify_ln_receive_anti_dos(anti_dos, payment_hash).await?;
 
 		// Deduct the fees from the HTLC VTXOs.
@@ -947,13 +954,14 @@ impl Server {
 		badarg!("this feature has been disabled by the server")
 	}
 
-	#[tracing::instrument(skip(self, payment_preimage, cosign_request))]
+	#[tracing::instrument(skip(self, payment_preimage, cosign_request, owner_proofs))]
 	pub async fn claim_lightning_receive(
 		&self,
 		payment_hash: PaymentHash,
 		payment_preimage: Preimage,
 		cosign_request: ArkoorPackageCosignRequest<VtxoId>,
 		pver: u64,
+		owner_proofs: crate::owner_proof::OwnerProofs,
 	) -> anyhow::Result<ArkoorPackageCosignResponse> {
 		// Held for the whole call, so no other call decides on this payment
 		// while the claim is validated, settled and cosigned.
@@ -1044,6 +1052,10 @@ impl Server {
 		let builder = self.validate_cosign_request(validation, cosign_request)
 			.badarg("invalid cosign request")?;
 
+		self.db.write(async |t| {
+			self.verify_output_owners(t, builder.build_unsigned_vtxos().map(|v| v.user_pubkey()), &owner_proofs).await
+		}).await?;
+
 		let receive_claims = crate::database::expiry_receive::ReceiveClaimBinding::from_package(&builder)
 			.badarg("invalid receive destination")?;
 		ensure!(receive_claims.len() == htlc_ids.len(), "receive claim contains a non-receive source");
@@ -1063,7 +1075,7 @@ impl Server {
 				.context("could not settle hold invoice, refusing to release the claim")?;
 		}
 
-		let (builder, _) = self.cosign_oor_with_builder(builder).await?;
+		let (builder, _) = self.cosign_oor_with_builder(builder, &owner_proofs).await?;
 		let vtxo_request = VtxoRequest {
 			amount: sub.amount(),
 			policy: vtxo_policy,

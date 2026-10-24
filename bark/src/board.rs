@@ -154,7 +154,7 @@ impl Wallet {
 		&self,
 		user_keypair: &Keypair,
 	) -> anyhow::Result<(Address, BlockHeight)> {
-		let (_, ark_info) = self.require_server().await?;
+		let (_, ark_info) = self.require_owner_proof_server().await?;
 		let properties = self.inner.db.read_properties().await?.context("Missing config")?;
 		let current_height = self.inner.chain.tip().await?;
 
@@ -215,7 +215,7 @@ impl Wallet {
 		user_keypair: Keypair,
 		expiry_height: BlockHeight,
 	) -> anyhow::Result<PendingBoard> {
-		let (mut srv, ark_info) = self.require_server().await?;
+		let (mut srv, ark_info) = self.require_owner_proof_server().await?;
 
 		let builder = BoardBuilder::new(
 			user_keypair.public_key(),
@@ -266,7 +266,8 @@ impl Wallet {
 			user_pubkey: user_keypair.public_key().serialize().to_vec(),
 			pub_nonce: builder.user_pub_nonce().serialize().to_vec(),
 			funding_tx: bitcoin::consensus::serialize(&board_psbt.unsigned_tx),
-		}).await.context("error requesting board cosign")?
+			owner_proof: Some(self.own_owner_proof(user_keypair.public_key()).await?.into()),
+		}).await.map_err(crate::FallbackRefusal::map_status).context("error requesting board cosign")?
 			.into_inner().try_into().context("invalid cosign response from server")?;
 
 		ensure!(builder.verify_cosign_response(&cosign_resp),

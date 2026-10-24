@@ -173,7 +173,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 			VtxoPolicy::new_server_htlc_send(key.public_key(), hash, incoming_deadline)).unwrap()
 			.generate_user_nonces(&[key]).unwrap();
 		let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+			parts: super::owner_proof::prove_wallet_destinations(&sender, &srv, protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 		}).await.unwrap().into_inner();
 		let incoming = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 			.unwrap().build_signed_vtxos();
@@ -187,6 +187,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 			htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
 		}).await.unwrap();
 		let response = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: Some(super::owner_proof::wallet_proof(&recipient, &srv, recipient_key).await),
 			payment_hash: hash.to_vec(), user_pubkey: recipient_key.serialize().to_vec(),
 			htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner();

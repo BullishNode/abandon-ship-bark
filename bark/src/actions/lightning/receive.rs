@@ -330,9 +330,10 @@ pub(crate) async fn start_lightning_receive(
 	if let Some(destination) = claim_destination.as_ref() {
 		wallet.validate_arkoor_address(destination).await
 			.context("invalid arkoor address")?;
+		crate::owner_proof::recipient_owner_proof(destination)?;
 	}
 
-	let (mut srv, ark_info) = wallet.require_server().await?;
+	let (mut srv, ark_info) = wallet.require_owner_proof_server().await?;
 	let config = wallet.config();
 
 	let fee = ark_info.fees.lightning_receive.calculate(amount).context("fee overflowed")?;
@@ -521,6 +522,7 @@ async fn prepare_lightning_receive_htlcs(
 		user_pubkey: keypair.public_key().serialize().to_vec(),
 		htlc_recv_expiry: htlc_recv_expiry.into(),
 		lightning_receive_anti_dos,
+		owner_proof: Some(wallet.own_owner_proof(keypair.public_key()).await.abort()?.into()),
 	};
 	let res = srv.client.prepare_lightning_receive_claim(req).await.map_err(crate::FallbackRefusal::map_status)
 		.retry_unless_rejected()?.into_inner();
@@ -644,6 +646,7 @@ struct PreparedClaim {
 	srv: ServerConnection,
 	builder: ArkoorPackageBuilder<UserGeneratedNonces>,
 	keypairs: Vec<Keypair>,
+	cosign_request: protos::ArkoorPackageCosignRequest,
 }
 
 /// Build the claim for the granted HTLC vtxos without revealing the
@@ -683,7 +686,16 @@ async fn prepare_lightning_receive_claim(
 		.generate_user_nonces(&keypairs)
 		.context("arkoor nonce generation for claim failed").abort()?;
 
-	Ok(PreparedClaim { srv, builder, keypairs })
+	let recipient = if let Some(destination) = recv.claim_destination.as_ref() {
+		let proof = destination.owner_proof().context("invalid recipient ownership metadata").abort()?;
+		if proof.is_none() && !matches!(&recv.progress, Progress::PreimageRevealed(_)) {
+			abort!(crate::OwnerProofRefusal::Required);
+		}
+		Some((destination.policy().user_pubkey(), proof))
+	} else { None };
+	let mut cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	wallet.attach_package_owner_proofs(&mut cosign_request, recipient).await.abort()?;
+	Ok(PreparedClaim { srv, builder, keypairs, cosign_request })
 }
 
 /// Claiming -> done, or -> Delivering when the receive has a claim
@@ -702,10 +714,9 @@ async fn claim_lightning_receive_htlcs(
 	htlcs: &Htlcs,
 	claim: PreparedClaim,
 ) -> Result<Option<Delivery>, AdvanceError> {
-	let PreparedClaim { mut srv, builder, keypairs } = claim;
+	let PreparedClaim { mut srv, builder, keypairs, cosign_request } = claim;
 
 	info!("Claiming arkoor against payment preimage for {}", recv.payment_hash);
-	let package_cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
 	// A lost reply or process stop can occur after the server settles the
 	// payer. Commit that possibility under the existing action lock before
 	// any request can reveal the preimage; a restart must never abandon it.
@@ -714,7 +725,7 @@ async fn claim_lightning_receive_htlcs(
 	let resp = srv.client.claim_lightning_receive(protos::ClaimLightningReceiveRequest {
 		payment_hash: recv.payment_hash.to_byte_array().to_vec(),
 		payment_preimage: recv.payment_preimage.to_vec(),
-		cosign_request: Some(package_cosign_request),
+		cosign_request: Some(cosign_request),
 	}).await.map_err(crate::FallbackRefusal::map_status).retry_unless_rejected()?.into_inner();
 
 	// The preimage is out, so from here on only retry: the server's

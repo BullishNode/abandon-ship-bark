@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
 use ark::lightning::PaymentHash;
-use ark::VtxoPolicy;
+use ark::{ProtocolEncoding, VtxoPolicy};
 use ark_testing::{sat, TestContext};
 use bitcoin::consensus::deserialize;
 use bitcoin::Transaction;
@@ -137,8 +137,9 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&second.compute_txid(), output_index, Some(true)).unwrap().unwrap().confirmations >= 6);
 }
 
-/// A key with no fallback registration keeps its backing while a registered
-/// sibling under the same anchor receives its ordinary expiry payout.
+/// A legacy restored coin with no ownership mapping keeps its backing while
+/// a registered sibling receives its ordinary expiry payout. New issuance is
+/// proven normally; only the isolated legacy snapshot omits the old records.
 #[tokio::test]
 async fn expiry_unregistered_owner_does_not_block_registered_sibling() {
 	let ctx = TestContext::new("server/expiry_unregistered_owner_with_registered_sibling").await;
@@ -152,15 +153,25 @@ async fn expiry_unregistered_owner_does_not_block_registered_sibling() {
 	let source = client.get_full_vtxo(ids[0]).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
 	let key = client.get_vtxo_key(&source).await.unwrap();
-	let unknown = bitcoin::secp256k1::Keypair::from_seckey_slice(&ark::SECP, &[91; 32]).unwrap().public_key();
+	let legacy_owner = super::expiry_attribution::Owner::with_seed(&ctx, 123);
+	legacy_owner.register(&srv).await;
+	let unknown = legacy_owner.key(1).public_key();
 	assert_ne!(key.public_key(), unknown);
 	let builder = ArkoorPackageBuilder::new_with_checkpoints([source.clone()], vec![
 		ArkoorDestination { total_amount: sat(90_000), policy: VtxoPolicy::new_pubkey(key.public_key()) },
 		ArkoorDestination { total_amount: sat(10_000), policy: VtxoPolicy::new_pubkey(unknown) },
 	]).unwrap().generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
-		.await.unwrap().into_inner();
+	let mut request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	for part in &mut request.parts {
+		for output in part.outputs.iter_mut().chain(&mut part.isolated_outputs) {
+			let pubkey = VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey();
+			output.owner_proof = Some(if pubkey == unknown {
+				legacy_owner.proof(1, srv.ark_info().await.mailbox_pubkey)
+			} else { super::owner_proof::wallet_proof(&client, &srv, pubkey).await });
+		}
+	}
+	let response = rpc.request_arkoor_cosign(request).await.unwrap().into_inner();
 	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	let checkpoint = signed.signed_virtual_transactions().into_iter()
 		.find(|tx| tx.input[0].previous_output == source.point()).unwrap();
@@ -185,6 +196,13 @@ async fn expiry_unregistered_owner_does_not_block_registered_sibling() {
 	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	// Restore the pre-enforcement snapshot only after genuine issuance and
+	// signed-chain registration. This is not a production creation bypass.
+	db.write(async |tx| {
+		tx.execute("DELETE FROM expiry_owner_key WHERE user_pubkey=$1", &[&unknown.to_string()]).await?;
+		tx.execute("DELETE FROM fallback_record WHERE mailbox_pk=$1", &[&legacy_owner.mailbox.public_key().to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	let scan_from = u64::from(height) + 1;
 	assert!(height < source.expiry_height().to_u32());

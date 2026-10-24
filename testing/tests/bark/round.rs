@@ -296,6 +296,158 @@ async fn delegated_maintenance_refresh() {
 	assert_eq!(vtxos[0].amount, sat(800_000));
 }
 
+/// Strip only the bad participant's transport metadata. Its real wallet
+/// still supplies valid input ownership and round signatures, so refusal must
+/// isolate the output-owner failure without stopping an honest round.
+#[tokio::test]
+async fn owner_proof_bad_participant_does_not_stop_honest_round() {
+	#[derive(Clone, Default)]
+	struct UnprovedOutput(Arc<parking_lot::Mutex<Vec<bitcoin::secp256k1::PublicKey>>>);
+	#[async_trait::async_trait]
+	impl captaind::proxy::ArkRpcProxy for UnprovedOutput {
+		async fn submit_payment(&self, upstream: &mut ArkClient, mut request: protos::SubmitPaymentRequest)
+			-> Result<protos::SubmitPaymentResponse, tonic::Status>
+		{
+			for output in &mut request.vtxo_requests {
+				let output = output.vtxo.as_mut().unwrap();
+				assert!(output.owner_proof.take().is_some(), "real wallet must supply its own evidence");
+				let policy = <VtxoPolicy as ark::ProtocolEncoding>::deserialize(&output.policy).unwrap();
+				self.0.lock().push(policy.user_pubkey());
+			}
+			let error = upstream.submit_payment(request).await.unwrap_err();
+			assert_eq!(error.metadata().get("abandon-reason").unwrap().to_str().unwrap(), "owner_proof_required");
+			Err(error)
+		}
+	}
+	let ctx = TestContext::new("bark/owner_proof_bad_participant_does_not_stop_honest_round").await;
+	let srv = ctx.captaind("server").no_vtxo_pool().cfg(|cfg| {
+		cfg.round_interval = Duration::from_secs(3600);
+	}).funded(btc(1)).create().await;
+	let stripped = UnprovedOutput::default();
+	let proxy = srv.start_proxy_no_mailbox(stripped.clone()).await;
+	let honest = ctx.bark("honest", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
+		.funded(sat(200_000)).create().await;
+	let bad = ctx.bark("bad", &proxy.address).cfg(|cfg| cfg.daemon_manual_sync = true)
+		.funded(sat(200_000)).create().await;
+	honest.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	let [bad_input] = bad.board_and_confirm_and_register(&ctx, sat(100_000)).await.try_into().unwrap();
+	let mut finished = srv.subscribe_log::<RoundFinished>();
+	let (_, (), error) = tokio::join!(srv.trigger_round(), honest.refresh_all_no_retry(), bad.try_refresh_all_no_retry());
+	assert!(error.is_err(), "the unproved output must be refused");
+	let finished = finished.recv().wait(Duration::from_secs(30)).await.unwrap();
+	assert_eq!(finished.nb_input_vtxos, 1, "the honest participant must finish without the offender");
+	let keys = stripped.0.lock().iter().map(ToString::to_string).collect::<Vec<_>>();
+	assert!(!keys.is_empty(), "the real bad participant must reach server admission");
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	assert_eq!(db.read(async |tx| tx.get_user_vtxo_by_id(bad_input).await).await.unwrap().spend_state,
+		server::database::SpendState::Spendable);
+	assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_owner_key WHERE user_pubkey=ANY($1)",
+		&[&keys]).await?.get::<_, i64>(0))).await.unwrap(), 0);
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	honest.sync().await;
+	bad.sync().await;
+	assert_eq!(honest.spendable_balance().await, sat(100_000));
+	assert_eq!(bad.spendable_balance().await, sat(100_000), "refusal must release the wallet's original input");
+}
+
+/// The proof mapping is part of delegated admission, not volatile round
+/// assembly. A restart before inclusion must preserve it. One real output also
+/// forces the coordinator's private padding path through the shared fence.
+#[tokio::test]
+async fn owner_proof_delegated_queue_survives_restart_and_one_output_padding() {
+	let ctx = TestContext::new("bark/owner_proof_delegated_queue_survives_restart_and_one_output_padding").await;
+	let srv = ctx.captaind("server").cfg(|cfg| {
+		cfg.round_interval = Duration::from_secs(3600);
+	}).funded(btc(1)).create().await;
+	let mut bark = ctx.bark("bark", &srv).funded(sat(1_000_000)).create().await;
+	let [input] = bark.board_and_confirm_and_register(&ctx, sat(800_000)).await.try_into().unwrap();
+	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	let wallet = bark.client().await;
+	let mut invalid = wallet.build_refresh_participation(vec![input]).await.unwrap().unwrap();
+	assert_eq!(invalid.outputs.len(), 1);
+	let key = invalid.outputs[0].policy.user_pubkey();
+	let (index, keypair) = wallet.pubkey_keypair(&key).await.unwrap().unwrap();
+	let blinded = wallet.mailbox_identifier().to_blinded(srv.ark_info().await.mailbox_pubkey, &keypair).unwrap();
+	invalid.owner_proofs.insert(key, ark::fallback::OwnerProof::new(blinded, index + 1).unwrap());
+	let error = wallet.join_next_round_delegated(invalid, None).await.err().expect("invalid delegated owner must refuse");
+	assert_eq!(error.downcast_ref::<bark::OwnerProofRefusal>(), Some(&bark::OwnerProofRefusal::Invalid));
+	assert!(db.read(async |tx| tx.get_all_pending_round_participations(bitcoin_ext::BlockHeight::new(0)).await)
+		.await.unwrap().is_empty());
+	assert_eq!(db.read(async |tx| tx.get_user_vtxo_by_id(input).await).await.unwrap().spend_state,
+		server::database::SpendState::Spendable);
+	assert_eq!(db.read(async |tx| tx.expiry_owner(key, bitcoin::Network::Regtest).await).await.unwrap(),
+		server::database::expiry_attribution::Attribution::Unresolved);
+	assert!(wallet.pending_round_states().await.unwrap().is_empty());
+	drop(wallet);
+	bark.refresh_all_delegated_no_sync().await;
+	let pending = db.read(async |tx| tx.get_all_pending_round_participations(bitcoin_ext::BlockHeight::new(0)).await)
+		.await.unwrap();
+	assert_eq!(pending.len(), 1);
+	assert!(pending[0].round_id.is_none(), "restart must precede round inclusion");
+	assert_eq!(pending[0].inputs.len(), 1);
+	assert_eq!(pending[0].inputs[0].vtxo_id, input);
+	assert_eq!(pending[0].outputs.len(), 1, "one customer output must require real server padding");
+	let unlock_hash = pending[0].unlock_hash;
+	let output = pending[0].outputs[0].vtxo_request.clone();
+	assert_eq!(output.amount, sat(800_000));
+	let wallet = bark.client().await;
+	let (index, _) = wallet.pubkey_keypair(&output.policy.user_pubkey()).await.unwrap().unwrap();
+	let destination = wallet.fallback_destination().await.unwrap();
+	let expected = server::database::expiry_attribution::Attribution::Owned {
+		mailbox_pk: wallet.mailbox_keypair().public_key(), child_index: index, spk: destination.spk,
+	};
+	drop(wallet);
+	assert_eq!(db.read(async |tx| tx.expiry_owner(output.policy.user_pubkey(), bitcoin::Network::Regtest).await)
+		.await.unwrap(), expected, "the owner must be committed while participation is still queued");
+
+	srv.stop().await.unwrap();
+	srv.start().await.unwrap();
+	bark.set_server_address(srv.ark_url()).await;
+	let pending = db.read(async |tx| tx.get_all_pending_round_participations(bitcoin_ext::BlockHeight::new(0)).await)
+		.await.unwrap();
+	assert_eq!(pending.len(), 1);
+	assert_eq!(pending[0].unlock_hash, unlock_hash);
+	assert_eq!(pending[0].outputs[0].vtxo_request, output);
+	assert_eq!(db.read(async |tx| tx.expiry_owner(output.policy.user_pubkey(), bitcoin::Network::Regtest).await)
+		.await.unwrap(), expected);
+	let mut finished = srv.subscribe_log::<RoundFinished>();
+	srv.trigger_round().await;
+	let finished = finished.recv().wait(Duration::from_secs(30)).await.unwrap();
+	assert_eq!(finished.nb_input_vtxos, 1);
+	let round = db.read(async |tx| {
+		let id = tx.get_last_round_id().await?.expect("finished round must be durable");
+		Ok(tx.get_round(id).await?.unwrap())
+	}).await.unwrap();
+	assert_eq!(round.signed_tree.nb_leaves(), 2, "one customer and one genuine padding leaf");
+	let leaves = &round.signed_tree.spec.vtxos;
+	assert_eq!(leaves.iter().filter(|leaf| leaf.vtxo == output).count(), 1);
+	let padding = leaves.iter().find(|leaf| leaf.vtxo != output).unwrap();
+	assert!(padding.cosign_pubkey.is_none());
+	assert_ne!(padding.vtxo.policy.user_pubkey(), output.policy.user_pubkey());
+	assert_eq!(db.read(async |tx| tx.expiry_owner(padding.vtxo.policy.user_pubkey(), bitcoin::Network::Regtest).await)
+		.await.unwrap(), server::database::expiry_attribution::Attribution::Unresolved,
+		"private padding is exempt by origin, not by fabricating a customer registration");
+	ctx.generate_blocks(ROUND_CONFIRMATIONS).await;
+	tokio::time::timeout(Duration::from_secs(30), async {
+		loop {
+			bark.sync().await;
+			let wallet = bark.client().await;
+			if wallet.pending_round_states().await.unwrap().is_empty() {
+				let coins = wallet.spendable_vtxos().await.unwrap();
+				assert_eq!(coins.len(), 1);
+				assert_eq!(coins[0].vtxo.amount(), sat(800_000));
+				assert_eq!(coins[0].vtxo.user_pubkey(), output.policy.user_pubkey());
+				let coin = wallet.get_full_vtxo(coins[0].vtxo.id()).await.unwrap();
+				let funding = ctx.bitcoind().await_transaction(coin.chain_anchor().txid).await;
+				coin.validate(&funding).unwrap();
+				break;
+			}
+			drop(wallet);
+			tokio::time::sleep(Duration::from_millis(200)).await;
+		}
+	}).await.expect("the queued single-output round must return its full value after restart");
+}
+
 #[tokio::test]
 async fn delegated_refresh_from_legacy_hashlock_round() {
 	//! Emulates the upgrade from the v0 to the v1 hashlock clauses.
@@ -707,6 +859,7 @@ async fn stepwise_round() {
 			amount: inputs[0].vtxo.amount(),
 		}],
 		unblinded_mailbox_id: None,
+		owner_proofs: Default::default(),
 	};
 
 	let state_id = bark.join_next_round(participation, Some(RoundMovement::Refresh)).await.unwrap().id();

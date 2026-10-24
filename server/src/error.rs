@@ -6,6 +6,7 @@ use std::error::Error as StdError;
 use anyhow::Context;
 
 use ark::VtxoId;
+use bitcoin::secp256k1::PublicKey;
 use ark::tree::signed::UnlockHash;
 
 /// The durable cancellation tombstone prevents this round from accepting forfeits.
@@ -50,6 +51,33 @@ impl fmt::Display for FallbackRefusal {
 }
 
 impl StdError for FallbackRefusal {}
+
+/// An output key has no VTXO id until its transaction is accepted.
+#[derive(Debug, Clone, Copy)]
+pub enum OwnerProofRefusal {
+	Required(PublicKey),
+	Invalid(PublicKey),
+}
+
+impl OwnerProofRefusal {
+	pub fn reason(&self) -> &'static str {
+		match self { Self::Required(_) => "owner_proof_required", Self::Invalid(_) => "invalid_owner_proof" }
+	}
+	pub fn key(&self) -> PublicKey {
+		match self { Self::Required(key) | Self::Invalid(key) => *key }
+	}
+}
+
+impl fmt::Display for OwnerProofRefusal {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::Required(key) => write!(f, "owner proof required for output key {}", key),
+			Self::Invalid(key) => write!(f, "invalid owner proof for output key {}", key),
+		}
+	}
+}
+
+impl StdError for OwnerProofRefusal {}
 
 /// An error type to add context to anyhow to indicate any form
 /// of incorrect user input.

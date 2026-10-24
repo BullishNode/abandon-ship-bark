@@ -19,7 +19,6 @@ use ark_testing::daemon::lightningd::Lightningd;
 use bitcoin::{Amount, Transaction, Txid, TxIn, TxOut, Witness};
 use bitcoin::sighash::{Prevouts, SighashCache, TapSighashType};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
-use bitcoin::secp256k1::Keypair;
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use bitcoin_ext::rpc::RpcApi;
 use cln_rpc::listpays_pays::ListpaysPaysStatus;
@@ -465,8 +464,10 @@ async fn send_claim_follows_internal_attempt_settlement() {
 			.funded(sat(400_000)).create().await;
 		let preimage = Preimage::random();
 		let hash = preimage.compute_payment_hash();
-		let receiver = Keypair::new(&SECP, &mut bitcoin::secp256k1::rand::thread_rng());
-		let beneficiary = Keypair::new(&SECP, &mut bitcoin::secp256k1::rand::thread_rng());
+		let receive_owner = super::expiry_attribution::Owner::with_seed(&ctx, 122);
+		receive_owner.register(&server).await;
+		let receiver = receive_owner.key(1);
+		let (beneficiary, _) = sender.client().await.derive_store_next_keypair().await.unwrap();
 		assert_ne!(beneficiary.public_key(), receiver.public_key());
 		let sources = signed_sources(&ctx, &server, &sender, hash, sat(90_000), 1).await;
 		let source = &sources[0];
@@ -488,6 +489,7 @@ async fn send_claim_follows_internal_attempt_settlement() {
 			mailbox_id: None, retry_for_secs: Some(1),
 		}).await.unwrap();
 		let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: Some(receive_owner.proof(1, server.ark_info().await.mailbox_pubkey)),
 			payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
 			htlc_recv_expiry: (tip + BlockDelta::new(220)).to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner().htlc_vtxos.into_iter()
@@ -524,9 +526,11 @@ async fn send_claim_follows_internal_attempt_settlement() {
 		let destination = VtxoPolicy::new_pubkey(receiver.public_key());
 		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(grants.clone(), destination.clone())
 			.unwrap().generate_user_nonces(&keys).unwrap();
+		let mut cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+		receive_owner.prove_destinations(&mut cosign_request, 1, server.ark_info().await.mailbox_pubkey);
 		let request = protos::ClaimLightningReceiveRequest {
 			payment_hash: hash.to_vec(), payment_preimage: preimage.to_vec(),
-			cosign_request: Some(protos::ArkoorPackageCosignRequest::from(builder.cosign_request())),
+			cosign_request: Some(cosign_request),
 		};
 		let response = rpc.claim_lightning_receive(request.clone()).await.unwrap().into_inner();
 		let outputs = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response.clone()).unwrap())
@@ -600,7 +604,9 @@ async fn internal_send_records_fee_without_native_payment() {
 			.funded(sat(400_000)).create().await;
 		let preimage = Preimage::random();
 		let hash = preimage.compute_payment_hash();
-		let receiver = Keypair::new(&SECP, &mut bitcoin::secp256k1::rand::thread_rng());
+		let receive_owner = super::expiry_attribution::Owner::with_seed(&ctx, 122);
+		receive_owner.register(&server).await;
+		let receiver = receive_owner.key(1);
 		let sources = signed_sources(&ctx, &server, &sender, hash, sat(91_000), 2).await;
 		let source = &sources[0];
 		let wallet = sender.client().await;
@@ -622,6 +628,7 @@ async fn internal_send_records_fee_without_native_payment() {
 			mailbox_id: None, retry_for_secs: Some(1),
 		}).await.unwrap();
 		let mut grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: Some(receive_owner.proof(1, server.ark_info().await.mailbox_pubkey)),
 			payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
 			htlc_recv_expiry: (tip + BlockDelta::new(220)).to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner().htlc_vtxos.into_iter()
@@ -650,9 +657,11 @@ async fn internal_send_records_fee_without_native_payment() {
 		let destination = VtxoPolicy::new_pubkey(receiver.public_key());
 		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(grants.clone(), destination.clone())
 			.unwrap().generate_user_nonces(&keys).unwrap();
+		let mut cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+		receive_owner.prove_destinations(&mut cosign_request, 1, server.ark_info().await.mailbox_pubkey);
 		let request = protos::ClaimLightningReceiveRequest {
 			payment_hash: hash.to_vec(), payment_preimage: preimage.to_vec(),
-			cosign_request: Some(protos::ArkoorPackageCosignRequest::from(builder.cosign_request())),
+			cosign_request: Some(cosign_request),
 		};
 		let response = rpc.claim_lightning_receive(request.clone()).await.unwrap().into_inner();
 		let outputs = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response.clone()).unwrap())

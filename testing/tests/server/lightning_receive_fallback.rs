@@ -13,19 +13,16 @@ use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPoli
 use ark::address::VtxoDelivery;
 use ark::mailbox::BlindedMailboxIdentifier;
 use ark::vtxo::Full;
-use ark::vtxo::policy::clause::TapScriptClause;
 use ark_testing::{sat, TestContext};
 use ark_testing::daemon::captaind::{proxy::MailboxRpcProxy, MailboxClient, WalletAdminClient};
 use bark::actions::lightning::receive::Progress;
-use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut, Witness};
+use bitcoin::{Address, Amount, Network, OutPoint, Transaction};
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::{Keypair, Secp256k1};
-use bitcoin::sighash::{Prevouts, SighashCache, TapSighashType};
-use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin_ext::{AmountExt, BlockDelta, TxOutExt};
-use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi, json::SignRawTransactionInput};
+use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::{Db, SpendState};
 use server::database::expiry_inventory::{BackingPartitionResidual, BackingSnapshot, BackingSnapshotLimits};
 use server::vtxopool::VtxoTarget;
@@ -56,22 +53,6 @@ async fn registered_forwarded_receive_pays_absent_recipient_after_provider_stops
 
 async fn registered_receive_fallback() {
 	let ctx = TestContext::new("server/registered_receive_fallback").await;
-	// Capture the existing four mature Core coinbases before any setup spend.
-	// The follow-on manual exit may sponsor fees only from this same20B cut.
-	let core = ctx.bitcoind().sync_client();
-	let initial_height = core.get_block_count().unwrap();
-	let initial_roots = core.list_unspent(Some(1), None, None, None, None).unwrap().into_iter().map(|coin| {
-		assert!(coin.spendable && coin.solvable && coin.safe && coin.confirmations >= 100);
-		let point = OutPoint::new(coin.txid, coin.vout);
-		let transaction = core.get_raw_transaction(&coin.txid, None).unwrap();
-		assert!(transaction.is_coinbase());
-		let output = transaction.output[coin.vout as usize].clone();
-		assert_eq!(output.value, coin.amount);
-		assert_eq!(output.script_pubkey, coin.script_pub_key);
-		(point, output)
-	}).collect::<BTreeMap<_, _>>();
-	assert_eq!(initial_roots.len(), 4);
-	assert_eq!(initial_roots.values().map(|output| output.value).sum::<Amount>(), Amount::from_sat(20_000_000_000));
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 	let audit_start_height = ctx.bitcoind().get_block_count().await;
 	let srv = ctx.captaind("server").bitcoind(ctx.bitcoind_arc()).lightningd(&lightning.internal).funded(sat(500_000))
@@ -116,7 +97,6 @@ async fn registered_receive_fallback() {
 	srv.wait_for_sync_height(funded).await;
 	srv.watchmand().wait_for_sync_height(funded).await;
 	let mut sponsors = BTreeMap::new();
-	let manual_sponsor_funding = *fee_funding.last().unwrap();
 	for txid in fee_funding {
 		let transaction = ctx.bitcoind().await_transaction(txid).await;
 		let vout = transaction.output.iter().position(|output|
@@ -157,9 +137,8 @@ async fn registered_receive_fallback() {
 	assert!(destination.spk.is_p2tr());
 	destination.verify(Network::Regtest, recipient.mailbox_keypair().public_key()).unwrap();
 	provider_destination.verify(Network::Regtest, provider.mailbox_keypair().public_key()).unwrap();
-	// B has an independent key and a valid address, but no SDK wallet or
-	// account registration. Independent-key separation is the fixture premise;
-	// a bounded owner scan is not an exhaustive BIP32 non-membership proof.
+	// A legacy recipient address without an ownership proof is refused before
+	// an invoice is created. No unowned sibling can enter this shared backing.
 	let unknown_identity = Keypair::new(&secp, &mut bitcoin::secp256k1::rand::thread_rng());
 	let unknown_key = unknown_identity.public_key();
 	assert_ne!(unknown_key, address.policy().user_pubkey());
@@ -185,7 +164,12 @@ async fn registered_receive_fallback() {
 	let invoice = provider.bolt11_invoice_for_address(amount, address.clone(),
 		Some("registered receive rightful fallback".into()), None).await.unwrap();
 	let hash = PaymentHash::from(&invoice);
-	let (delivery, unknown_delivery, unknown_hash, pool_change) = tokio::time::timeout(Duration::from_secs(30), async {
+	let refused = provider.bolt11_invoice_for_address(amount, unknown_address,
+		Some("unregistered recipient refused before payment".into()), None).await;
+	assert!(refused.is_err(), "a recipient without ownership metadata cannot receive new coins");
+	assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM lightning_htlc_subscription", &[])
+		.await?.get::<_, i64>(0))).await.unwrap(), 1, "only the valid recipient invoice may exist");
+	let delivery = tokio::time::timeout(Duration::from_secs(30), async {
 		let (payment, delivery) = tokio::join!(
 			lightning.external.try_pay_bolt11(invoice.to_string()),
 			async {
@@ -197,7 +181,7 @@ async fn registered_receive_fallback() {
 				}
 			},
 		);
-		payment.expect("A's original external payment must settle before B starts");
+		payment.expect("the registered recipient's external payment must settle");
 		assert_eq!(ctx.bitcoind().get_block_count().await, setup_height);
 		let changes = db.read(async |tx| Ok(tx.query(
 			"SELECT vtxo FROM vtxo_pool WHERE spent_at IS NULL AND amount=90000", &[],
@@ -213,27 +197,8 @@ async fn registered_receive_fallback() {
 			"SELECT COUNT(*) FROM vtxo_pool WHERE spent_at IS NULL AND amount=100000", &[],
 		).await?.get::<_, i64>(0))).await.unwrap();
 		assert_eq!(remaining, 1, "strict50percent refill threshold must not issue another tree");
-		// One30s boundary covers BOTH legitimate receives. A's90k change is
-		// inserted before its grant call returns; the picker selects it for B.
-		let invoice_b = provider.bolt11_invoice_for_address(amount, unknown_address.clone(),
-			Some("unregistered sibling held without appropriating its value".into()), None).await.unwrap();
-		let unknown_hash = PaymentHash::from(&invoice_b);
-		assert_ne!(unknown_hash, hash);
-		let (payment_b, unknown_delivery) = tokio::join!(
-			lightning.external.try_pay_bolt11(invoice_b.to_string()),
-			async {
-				loop {
-					let _ = provider.try_claim_lightning_receive(unknown_hash, false).await;
-					if let Some(checkpoint) = provider.lightning_receive_checkpoint(unknown_hash).await.unwrap()
-						&& let Progress::Delivering(delivery) = checkpoint.progress { break delivery; }
-					tokio::time::sleep(Duration::from_millis(50)).await;
-				}
-			},
-		);
-		payment_b.expect("B's actual external payer must settle, not merely expose a preimage");
-		assert_eq!(ctx.bitcoind().get_block_count().await, setup_height);
-		(delivery, unknown_delivery, unknown_hash, pool_change)
-	}).await.expect("both original receives must finish inside the single unchanged30s boundary");
+		delivery
+	}).await.expect("the registered receive must finish inside the original30s boundary");
 	assert!(outage.0.load(Ordering::SeqCst) > 0);
 	assert_eq!(delivery.vtxos.len(), 1, "one pool input must produce one 10k recipient output in this fixture");
 	let source = delivery.vtxos[0].clone();
@@ -248,16 +213,7 @@ async fn registered_receive_fallback() {
 	assert_eq!(registered.spend_state, SpendState::Spendable);
 	let anchor = source.chain_anchor();
 	assert_eq!(anchor, shared_anchor);
-	assert_eq!(unknown_delivery.vtxos.len(), 1);
-	let unknown_source = unknown_delivery.vtxos[0].clone();
-	assert_eq!(unknown_source.amount(), amount);
-	assert_eq!(unknown_source.policy(), unknown_address.policy());
-	assert_eq!(unknown_source.chain_anchor(), shared_anchor);
-	unknown_source.validate(&shared_funding).unwrap();
-	assert!(unknown_source.transactions().any(|step| step.tx.input.iter()
-		.any(|input| input.previous_output == pool_change.point())), "B must spend A's exact90k change");
-	let mut unknown_grants = Vec::new();
-	for (payment_hash, output) in [(hash, &source), (unknown_hash, &unknown_source)] {
+	for (payment_hash, output) in [(hash, &source)] {
 		let grants = srv.htlc_vtxos(payment_hash).await;
 		let grant_ids = grants.iter().map(|grant| grant.vtxo.vtxo_id.to_string()).collect::<BTreeSet<_>>();
 		assert!(!grant_ids.is_empty());
@@ -294,7 +250,6 @@ async fn registered_receive_fallback() {
 		assert_eq!(invoices[0].state(), InvoiceState::Paid);
 		assert_eq!(invoices[0].payment_hash, payment_hash.to_vec());
 		assert_eq!(invoices[0].invoice, rows[0].get::<_, String>("invoice"));
-		if payment_hash == unknown_hash { unknown_grants.extend(grant_ids); }
 	}
 	let pool_rows = db.read(async |tx| Ok(tx.query(
 		"SELECT vtxo FROM vtxo_pool WHERE spent_at IS NULL", &[],
@@ -303,8 +258,8 @@ async fn registered_receive_fallback() {
 		Vtxo::<Full>::deserialize(row.get("vtxo")).unwrap()).collect::<Vec<_>>();
 	assert_eq!(remaining_pool.len(), 2);
 	assert_eq!(remaining_pool.iter().map(|coin| coin.amount()).collect::<BTreeSet<_>>(),
-		BTreeSet::from([sat(80_000), sat(100_000)]));
-	let mut terminals = vec![ServerVtxo::from(source.clone()), ServerVtxo::from(unknown_source.clone())];
+		BTreeSet::from([sat(90_000), sat(100_000)]));
+	let mut terminals = vec![ServerVtxo::from(source.clone())];
 	for coin in &remaining_pool {
 		assert_eq!(coin.chain_anchor(), shared_anchor);
 		coin.validate(&shared_funding).unwrap();
@@ -332,13 +287,8 @@ async fn registered_receive_fallback() {
 		.check_partition(&terminals, &[shared_funding.clone()], &residuals, limits).unwrap();
 	assert_eq!(partition.roots.len(), 1);
 	assert_eq!(partition.roots[0].terminal_amount + partition.roots[0].anchor_residual_amount, root_value);
-	let depth = source.exit_depth().max(unknown_source.exit_depth());
-	assert!(depth <= 8, "the declared fixed confirmation schedule only covers this bounded signed geometry");
-	let mut unknown_path = BTreeMap::from([(shared_anchor, shared_funding.output[shared_anchor.vout as usize].clone())]);
-	for step in unknown_source.transactions() {
-		unknown_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32),
-			step.tx.output[step.output_idx as usize].clone());
-	}
+	let depth = source.exit_depth();
+	assert!(depth <= 8, "the fixed confirmation schedule covers this bounded signed geometry");
 	let mut recipient_path = BTreeMap::from([(shared_anchor, shared_funding.output[shared_anchor.vout as usize].clone())]);
 	for step in source.transactions() {
 		recipient_path.insert(OutPoint::new(step.tx.compute_txid(), step.output_idx as u32),
@@ -368,7 +318,7 @@ async fn registered_receive_fallback() {
 		let vtxo = &fact.state.vtxo;
 		let point = vtxo.point();
 		let output = pool_paths.get(&point)?;
-		if recipient_path.contains_key(&point) || unknown_path.contains_key(&point) { return None; }
+		if recipient_path.contains_key(&point) { return None; }
 		assert_eq!(vtxo.txout(), *output, "policy metadata must commit to the actual fully signed pool path output");
 		assert_eq!(vtxo.server_pubkey(), server_pubkey);
 		assert_eq!(vtxo.chain_anchor(), shared_anchor);
@@ -382,25 +332,9 @@ async fn registered_receive_fallback() {
 		};
 		recoverable.then_some((point, output.clone()))
 	}).collect::<BTreeMap<_, _>>();
-	// Observe the last signed B checkpoint that preserves a real server
-	// recovery path. Never require publication of B's user-only Pubkey leaf.
-	let b_steps = unknown_source.transactions().collect::<Vec<_>>();
-	let last_preserved = b_steps.iter().rposition(|step| {
-		let point = OutPoint::new(step.tx.compute_txid(), step.output_idx as u32);
-		let Some(fact) = snapshot.regular.iter().find(|fact| fact.state.vtxo.point() == point) else { return false; };
-		assert_eq!(fact.state.vtxo.txout(), step.tx.output[step.output_idx]);
-		assert_eq!(fact.state.vtxo.server_pubkey(), server_pubkey);
-		matches!(fact.state.vtxo.policy(), ServerVtxoPolicy::ServerOwned | ServerVtxoPolicy::Expiry(_)
-			| ServerVtxoPolicy::Checkpoint(_) | ServerVtxoPolicy::HarkLeaf(_) | ServerVtxoPolicy::HarkLeaf_v0(_)
-			| ServerVtxoPolicy::User(VtxoPolicy::ServerHtlcRecv(_) | VtxoPolicy::ServerHtlcRecv_v0(_)))
-	}).expect("B needs a fully signed preserved server-recovery checkpoint");
-	let b_confirmation_steps = b_steps[..=last_preserved].iter().map(|step| step.tx.clone()).collect::<Vec<_>>();
-	assert!(b_confirmation_steps.len() <= usize::from(depth));
 	assert!(ctx.bitcoind().sync_client().get_tx_out(&anchor.txid, anchor.vout, Some(true))
 		.unwrap().unwrap().confirmations >= 6, "the receive's actual pool backing must be confirmed");
-	let mut all_grants = srv.htlc_vtxos(hash).await;
-	all_grants.extend(srv.htlc_vtxos(unknown_hash).await);
-	unknown_grants.push(unknown_source.id().to_string());
+	let all_grants = srv.htlc_vtxos(hash).await;
 	let ancestor_deadline = all_grants.iter().map(|grant| grant.htlc.htlc_expiry)
 		.max().expect("a genuine receive must retain its actual HTLC grant");
 	let height = ctx.bitcoind().get_block_count().await as u32;
@@ -413,36 +347,7 @@ async fn registered_receive_fallback() {
 	let stopped_posts = outage.0.load(Ordering::SeqCst);
 	let root_ids = vec![source.chain_anchor().to_string()];
 	let source_id = source.id().to_string();
-	// A confirmed isolated B obligation needs no deeper signed publication.
-	// Include mempool spends so a spent ancestor cannot stand in for B.
-	let b_isolated_confirmed = || {
-		let core = ctx.bitcoind().sync_client();
-		let held = unknown_path.iter().filter_map(|(point, expected)| {
-			core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap()
-				.map(|actual| (*point, expected, actual))
-		}).collect::<Vec<_>>();
-		if held.len() != 1 { return false; }
-		let (point, expected, actual) = &held[0];
-		assert_eq!(actual.value, expected.value);
-		assert_eq!(actual.script_pub_key.script().unwrap(), expected.script_pubkey);
-		if actual.confirmations < 6 || expected.value != amount
-			|| recipient_path.contains_key(point) || operator_points.contains_key(point) { return false; }
-		let Some(required) = b_confirmation_steps.iter().find(|tx| tx.compute_txid() == point.txid)
-			else { return false; };
-		assert_eq!(core.get_raw_transaction(&point.txid, None).unwrap(), *required);
-		let info = core.custom_get_raw_transaction_info(point.txid, None).unwrap().unwrap();
-		assert!(info.confirmations.unwrap_or(0) >= 6);
-		let block_hash = info.blockhash.unwrap();
-		let header = core.get_block_header_info(&block_hash).unwrap();
-		assert_eq!(core.get_block_hash(header.height as u64).unwrap(), block_hash);
-		let block = core.get_block(&block_hash).unwrap();
-		assert_eq!(block.block_hash(), block_hash);
-		assert!(block.txdata.iter().any(|tx| tx == required));
-		let Some(current) = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap() else { return false; };
-		assert_eq!(current.value, expected.value);
-		assert_eq!(current.script_pub_key.script().unwrap(), expected.script_pubkey);
-		current.confirmations >= 6
-	};
+	let confirmation_steps = source.transactions().map(|step| step.tx).collect::<Vec<_>>();
 	let parent = tokio::time::timeout(Duration::from_secs(30), async {
 		let expired = ctx.generate_blocks(source.expiry_height().to_u32() + 1 - height).await;
 		srv.wait_for_sync_height(expired).await;
@@ -451,30 +356,20 @@ async fn registered_receive_fallback() {
 		// automatic prefix packages confirm; no split/progress/trigger call or
 		// extra mining batch is conditioned on a missing payout.
 		for _ in 0..=depth {
-			// Recompute B from confirmations, never from the batch index.
-			// A's package may confirm first to release its fee change:
-			// at most D B-prefix packages plus one A package fit D+1 batches.
 			loop {
 				let core = ctx.bitcoind().sync_client();
-				let next_b = if b_isolated_confirmed() { None } else {
-					b_confirmation_steps.iter().find(|required| {
-						!core.custom_get_raw_transaction_info(required.compute_txid(), None).unwrap()
-							.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6)
-					}).cloned()
-				};
 				let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
 					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='customer' AND a.broadcast_at IS NOT NULL",
 					&[&source_id],
 				).await?)).await.unwrap();
 				let mut a_confirmed = false;
-				let mut needed = next_b.into_iter().collect::<Vec<_>>();
+				let mut needed = Vec::new();
 				if let Some(row) = row {
 					let payout_parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
 					assert_eq!(payout_parent.input.len(), 1);
 					let point = payout_parent.input[0].previous_output;
 					let input = recipient_path.get(&point).expect("A must use its authentic signed source path");
-					assert!(!unknown_path.contains_key(&point), "A cannot use B's preserved backing");
 					assert_eq!(input.value, sat(10_000));
 					assert_eq!(payout_parent.output.iter().filter(|output| output.script_pubkey == destination.spk).count(), 1);
 					for output in &payout_parent.output {
@@ -485,7 +380,10 @@ async fn registered_receive_fallback() {
 					a_confirmed = core.custom_get_raw_transaction_info(payout_parent.compute_txid(), None).unwrap()
 						.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6);
 					if !a_confirmed { needed.push(payout_parent); }
-				}
+				} else if let Some(next) = confirmation_steps.iter().find(|required| {
+					!core.custom_get_raw_transaction_info(required.compute_txid(), None).unwrap()
+						.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6)
+				}) { needed.push(next.clone()); }
 				if needed.is_empty() && a_confirmed { tokio::time::sleep(Duration::from_millis(1100)).await; break; }
 				let mut ready = false;
 				for required in needed {
@@ -523,7 +421,6 @@ async fn registered_receive_fallback() {
 			srv.wait_for_sync_height(tip).await;
 			srv.watchmand().wait_for_sync_height(tip).await;
 		}
-		assert!(b_isolated_confirmed(), "B's current isolated signed economic frontier must be six-confirmed within the fixed schedule");
 		loop {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT a.sweep_tx FROM expiry_allocation a \
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
@@ -555,7 +452,6 @@ async fn registered_receive_fallback() {
 	assert_eq!(parent.input.len(), 1, "A's payout cannot use a sponsor or another branch as a subsidy");
 	let isolated = parent.input[0].previous_output;
 	let isolated_output = recipient_path.get(&isolated).expect("A parent must spend its authentic signed source path");
-	assert!(!unknown_path.contains_key(&isolated), "A must be isolated from B before its payout");
 	assert_eq!(isolated_output.value, source.amount());
 	let actual_source = ctx.bitcoind().await_transaction(isolated.txid).await;
 	assert_eq!(actual_source.output[isolated.vout as usize], *isolated_output);
@@ -605,25 +501,11 @@ async fn registered_receive_fallback() {
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
 		}).await.expect("both real daemon views and their financial ledger must finish rebuilding this Core tip");
-		let held = unknown_path.iter().filter_map(|(point, expected)| {
-			ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap()
-				.map(|actual| (*point, expected, actual))
-		}).collect::<Vec<_>>();
-		assert_eq!(held.len(), 1, "B must remain represented by one unspent compatible signed frontier");
-		assert!(held[0].2.confirmations >= 6);
-		assert_eq!(held[0].2.value, held[0].1.value);
-		assert_eq!(held[0].2.script_pub_key.script().unwrap(), held[0].1.script_pubkey);
-		assert!(held[0].2.value >= amount, "B's10k remains encumbered even when its branch also holds operator value");
-		let appropriated = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
-			JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE e.vtxo_id=ANY($1)",
-			&[&unknown_grants],
-		).await?.get::<_, i64>(0))).await.unwrap();
-		assert_eq!(appropriated, 0, "neither B nor its fulfilled grant ancestors may become operator income or another payout");
 		let registry = db.read(async |tx| Ok(tx.query(
 			"SELECT mailbox_pk,account_xpub,spk FROM fallback_record ORDER BY mailbox_pk", &[],
 		).await?.into_iter().map(|row| (row.get::<_, String>(0), row.get::<_, String>(1),
 			row.get::<_, String>(2))).collect::<Vec<_>>())).await.unwrap();
-		assert_eq!(registry, registry_before, "no account registration may be fabricated to free this backing");
+		assert_eq!(registry, registry_before, "payout processing cannot fabricate or change registrations");
 		let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk, \
 			c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.active,a.sweep_txid,a.status FROM expiry_allocation_coin c \
 			JOIN expiry_allocation a ON a.id=c.allocation_id \
@@ -756,7 +638,7 @@ async fn registered_receive_fallback() {
 					|| owned_pool_keys.contains(&policy.user_pubkey.to_string()),
 				_ => false,
 			};
-			if recoverable && !recipient_path.contains_key(&point) && !unknown_path.contains_key(&point) {
+			if recoverable && !recipient_path.contains_key(&point) {
 				if let Some(old) = operator_points.insert(point, output.clone()) { assert_eq!(old, output); }
 			}
 			assert_eq!(step.tx.input.len(), 1);
@@ -767,7 +649,7 @@ async fn registered_receive_fallback() {
 		}
 		assert_eq!(point, coin.point());
 		if owned_pool_keys.contains(&coin.user_pubkey().to_string())
-			&& !recipient_path.contains_key(&point) && !unknown_path.contains_key(&point) {
+			&& !recipient_path.contains_key(&point) {
 			assert_eq!(previous.output[point.vout as usize], coin.txout());
 			operator_points.insert(point, coin.txout());
 		}
@@ -848,8 +730,8 @@ async fn registered_receive_fallback() {
 				if txid != parent.compute_txid() {
 					for input in &tx.input {
 						let point = input.previous_output;
-						assert!(!recipient_path.contains_key(&point) && !unknown_path.contains_key(&point),
-							"operator allocations cannot absorb A or B's signed branches");
+						assert!(!recipient_path.contains_key(&point),
+							"operator allocations cannot absorb the recipient's signed branch");
 						let (output, expiry) = pool_expiry_paths.get(&point)
 							.expect("operator allocation input needs an exact original/refill signed Pool expiry ancestor");
 						let previous = core.get_raw_transaction(&point.txid, None).unwrap();
@@ -911,10 +793,6 @@ async fn registered_receive_fallback() {
 		"historical scanning must include the already spent A payout and reject duplicates");
 	assert_eq!(frontier.values().map(|(output, _)| output.value).sum::<Amount>() + total_miner_fees,
 		sat(700_000), "the original500k plus two100k sponsors conserves across all Pool refills/prefixes/allocations/children/recovery");
-	let held = frontier.iter().filter(|(point, _)| unknown_path.contains_key(point)).collect::<Vec<_>>();
-	assert_eq!(held.len(), 1);
-	assert_eq!(held[0].1.0, unknown_path[held[0].0]);
-	assert!(held[0].1.0.value >= amount, "B's accepted10k obligation stays on its compatible unspent branch");
 	let mut fee_change = BTreeSet::new();
 	for (point, (output, fee_coin)) in &frontier {
 		if output.value == Amount::ZERO { assert!(output.is_p2a_fee_anchor()); continue; }
@@ -925,8 +803,6 @@ async fn registered_receive_fallback() {
 		if *fee_coin { fee_change.insert(*point); }
 		else if *point == OutPoint::new(recovery.compute_txid(), 0) {
 			assert_eq!(output, &recovery.output[0]);
-		} else if unknown_path.contains_key(point) {
-			assert_eq!(output, &unknown_path[point]);
 		} else if output.script_pubkey != operator_script && !server_coins.contains(point) {
 			assert_eq!(operator_points.get(point), Some(output),
 				"every other terminal needs an exact signed Pool recovery path/server key or actual rounds-wallet ownership");
@@ -945,188 +821,4 @@ async fn registered_receive_fallback() {
 		assert!(!pending.input.iter().any(|input| frontier.contains_key(&input.previous_output)),
 			"no unconfirmed continuation may hide a spend of this complete original-funding cut");
 	}
-	// Original A payout/recovery, B held/no-appropriation and700k proofs above
-	// remain the precondition. This is B's raw-key MANUAL exit, not automatic
-	// unregistered fallback or seed recovery; the provider stays absent.
-	let owner_script = Address::p2tr(&secp, unknown_identity.x_only_public_key().0, None, Network::Regtest).script_pubkey();
-	assert_ne!(owner_script, destination.spk);
-	assert_ne!(owner_script, provider_destination.spk);
-	assert_ne!(owner_script, operator_script);
-	let whole_cut = || {
-		let mut cut = initial_roots.clone();
-		let mut miner_fees = Amount::ZERO;
-		let mut transactions = BTreeSet::new();
-		let mut owner_outputs = BTreeMap::new();
-		for height in initial_height + 1..=core.get_block_count().unwrap() {
-			let block = core.get_block(&core.get_block_hash(height).unwrap()).unwrap();
-			for tx in block.txdata {
-				for (vout, output) in tx.output.iter().enumerate() {
-					assert_ne!(output.script_pubkey, provider_destination.spk);
-					if output.script_pubkey == destination.spk {
-						assert_eq!(OutPoint::new(tx.compute_txid(), vout as u32), payout);
-						assert_eq!(output.value, expected);
-					}
-					if output.script_pubkey == owner_script {
-						assert!(owner_outputs.insert(OutPoint::new(tx.compute_txid(), vout as u32), output.value).is_none());
-					}
-				}
-				if !tx.input.iter().any(|input| cut.contains_key(&input.previous_output)) { continue; }
-				assert!(transactions.insert(tx.compute_txid()));
-				let points = tx.input.iter().map(|input| input.previous_output).collect::<BTreeSet<_>>();
-				assert_eq!(points.len(), tx.input.len());
-				assert!(points.iter().all(|point| cut.contains_key(point)), "no new capital may enter the original20B cut");
-				let mut input_value = Amount::ZERO;
-				for point in points {
-					let output = cut.remove(&point).unwrap();
-					assert_eq!(core.get_raw_transaction(&point.txid, None).unwrap().output[point.vout as usize], output);
-					input_value += output.value;
-				}
-				miner_fees += input_value.checked_sub(tx.output.iter().map(|output| output.value).sum()).unwrap();
-				for (vout, output) in tx.output.iter().cloned().enumerate() {
-					assert!(cut.insert(OutPoint::new(tx.compute_txid(), vout as u32), output).is_none());
-				}
-			}
-		}
-		assert_eq!(cut.values().map(|output| output.value).sum::<Amount>() + miner_fees, Amount::from_sat(20_000_000_000));
-		for (point, output) in &cut {
-			if output.value == Amount::ZERO { continue; }
-			let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
-			assert!(actual.confirmations >= 6);
-			assert_eq!(actual.value, output.value);
-			assert_eq!(actual.script_pub_key.script().unwrap(), output.script_pubkey);
-		}
-		for txid in core.get_raw_mempool().unwrap() {
-			let pending = core.get_raw_transaction(&txid, None).unwrap();
-			assert!(!pending.input.iter().any(|input| cut.contains_key(&input.previous_output)));
-		}
-		(cut, miner_fees, owner_outputs)
-	};
-	let (before_manual, before_manual_fees, before_owner_outputs) = whole_cut();
-	assert!(before_owner_outputs.is_empty());
-	let funding = core.get_raw_transaction(&manual_sponsor_funding, None).unwrap();
-	let core_change = funding.output.iter().enumerate().filter_map(|(vout, output)| {
-		if output.script_pubkey == fee_address.script_pubkey() { return None; }
-		let address = Address::from_script(&output.script_pubkey, Network::Regtest).unwrap();
-		assert_eq!(core.get_address_info(&address).unwrap().is_mine, Some(true));
-		let point = OutPoint::new(manual_sponsor_funding, vout as u32);
-		let actual = core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
-		assert!(actual.confirmations >= 6);
-		assert_eq!(actual.value, output.value);
-		assert_eq!(before_manual.get(&point), Some(output));
-		Some((point, output.clone()))
-	}).collect::<Vec<_>>();
-	assert_eq!(core_change.len(), 1, "use only the explicit existing funding transaction's Core-owned change");
-	let (original_fee_point, original_fee_output) = core_change[0].clone();
-	let (mut fee_point, mut fee_output) = (original_fee_point, original_fee_output.clone());
-	let held_point = *held[0].0;
-	assert_ne!(held_point, unknown_source.point());
-	assert_eq!(before_manual.get(&held_point), Some(&unknown_path[&held_point]));
-	assert_eq!(unknown_path[&held_point].value, amount);
-	let held_step = b_steps.iter().find(|step| OutPoint::new(step.tx.compute_txid(), step.output_idx as u32) == held_point).unwrap();
-	assert_eq!(core.get_raw_transaction(&held_point.txid, None).unwrap(), held_step.tx);
-	assert_eq!(held_step.tx.output[held_point.vout as usize], unknown_path[&held_point]);
-	assert!(unknown_source.has_all_witnesses());
-	let first = b_steps.iter().position(|step| step.tx.input[0].previous_output == held_point).unwrap();
-	assert!(b_steps[first..].len() <= usize::from(depth));
-	let mut publication_fees = Amount::ZERO;
-	for step in &b_steps[first..] {
-		assert_eq!(step.tx.input.len(), 1);
-		let previous = core.get_tx_out(&step.tx.input[0].previous_output.txid,
-			step.tx.input[0].previous_output.vout, Some(true)).unwrap().unwrap();
-		assert!(previous.confirmations >= 6);
-		assert_eq!(previous.value, amount);
-		assert_eq!(previous.script_pub_key.script().unwrap(), unknown_path[&step.tx.input[0].previous_output].script_pubkey);
-		assert_eq!(step.tx.output[step.output_idx].value, amount);
-		let anchors = step.tx.output.iter().enumerate().filter(|(_, output)| output.is_p2a_fee_anchor()).collect::<Vec<_>>();
-		assert_eq!(anchors.len(), 1);
-		assert_eq!(anchors[0].1.value, Amount::ZERO);
-		assert_eq!(step.tx.output.iter().map(|output| output.value).sum::<Amount>(), amount);
-		let anchor = OutPoint::new(step.tx.compute_txid(), anchors[0].0 as u32);
-		let fee = sat(2_000);
-		let child = Transaction {
-			version: bitcoin::transaction::Version(3), lock_time: bitcoin::absolute::LockTime::ZERO,
-			input: [anchor, fee_point].into_iter().map(|point| TxIn { previous_output: point,
-				script_sig: Default::default(), sequence: bitcoin::Sequence::ZERO, witness: Witness::new() }).collect(),
-			output: vec![TxOut { value: fee_output.value.checked_sub(fee).unwrap(), script_pubkey: original_fee_output.script_pubkey.clone() }],
-		};
-		let prevout = SignRawTransactionInput { txid: anchor.txid, vout: anchor.vout,
-			script_pub_key: anchors[0].1.script_pubkey.clone(), redeem_script: None, amount: Some(Amount::ZERO) };
-		let signed = core.sign_raw_transaction_with_wallet(&child, Some(&[prevout]), None).unwrap();
-		assert!(signed.complete);
-		let signed = signed.transaction().unwrap();
-		assert_eq!(signed.input.iter().map(|input| input.previous_output).collect::<Vec<_>>(), vec![anchor, fee_point]);
-		assert_eq!(signed.output, child.output);
-		let result = core.submit_package(&[&step.tx, &signed]).unwrap();
-		assert_eq!(result.package_msg, "success");
-		for tx in [&step.tx, &signed] {
-			assert!(result.tx_results.values().any(|entry| entry.txid == tx.compute_txid() && entry.error.is_none()));
-			assert_eq!(ctx.bitcoind().await_transaction(tx.compute_txid()).await, *tx);
-		}
-		ctx.generate_blocks(6).await;
-		fee_point = OutPoint::new(signed.compute_txid(), 0);
-		fee_output = signed.output[0].clone();
-		publication_fees += fee;
-	}
-	let leaf = core.get_tx_out(&unknown_source.point().txid, unknown_source.point().vout, Some(true)).unwrap().unwrap();
-	assert_eq!(leaf.value, amount);
-	assert_eq!(leaf.script_pub_key.script().unwrap(), unknown_source.txout().script_pubkey);
-	let clause = unknown_source.policy().as_pubkey().unwrap().user_pubkey_claim_clause(unknown_source.exit_delta());
-	assert_eq!(clause.pubkey, unknown_key);
-	assert_eq!(clause.block_delta.to_u32(), 12);
-	if leaf.confirmations <= 12 { ctx.generate_blocks(13 - leaf.confirmations as u32).await; }
-	let mature = core.get_tx_out(&unknown_source.point().txid, unknown_source.point().vout, Some(true)).unwrap().unwrap();
-	assert!(mature.confirmations > clause.block_delta.to_u32());
-	let control = clause.control_block(&unknown_source);
-	assert!(control.verify_taproot_commitment(&secp, unknown_source.output_taproot().output_key().to_x_only_public_key(), &clause.tapscript()));
-	let claim_fee = sat(1_000);
-	let fee_actual = core.get_tx_out(&fee_point.txid, fee_point.vout, Some(true)).unwrap().unwrap();
-	assert!(fee_actual.confirmations >= 6);
-	assert_eq!(fee_actual.value, fee_output.value);
-	assert_eq!(fee_actual.script_pub_key.script().unwrap(), fee_output.script_pubkey);
-	let mut claim = Transaction {
-		version: bitcoin::transaction::Version::TWO, lock_time: bitcoin::absolute::LockTime::ZERO,
-		input: vec![TxIn { previous_output: unknown_source.point(), script_sig: Default::default(),
-			sequence: clause.sequence(), witness: Witness::new() },
-			TxIn { previous_output: fee_point, script_sig: Default::default(), sequence: bitcoin::Sequence::ZERO, witness: Witness::new() }],
-		output: vec![TxOut { value: amount, script_pubkey: owner_script.clone() },
-			TxOut { value: fee_output.value.checked_sub(claim_fee).unwrap(), script_pubkey: original_fee_output.script_pubkey.clone() }],
-	};
-	let sighash = SighashCache::new(&claim).taproot_script_spend_signature_hash(0,
-		&Prevouts::All(&[unknown_source.txout(), fee_output.clone()]), TapLeafHash::from_script(&clause.tapscript(), LeafVersion::TapScript),
-		TapSighashType::Default).unwrap();
-	let signature = secp.sign_schnorr(&sighash.into(), &unknown_identity);
-	secp.verify_schnorr(&signature, &sighash.into(), &unknown_identity.x_only_public_key().0).unwrap();
-	claim.input[0].witness = clause.witness(&signature, &control);
-	let leaf_prevout = SignRawTransactionInput { txid: unknown_source.point().txid, vout: unknown_source.point().vout,
-		script_pub_key: unknown_source.txout().script_pubkey, redeem_script: None, amount: Some(amount) };
-	let signed = core.sign_raw_transaction_with_wallet(&claim, Some(&[leaf_prevout]), None).unwrap();
-	assert!(signed.complete);
-	let signed = signed.transaction().unwrap();
-	assert_eq!(signed.compute_txid(), claim.compute_txid(), "Core may only add the declared fee input's witness");
-	assert_eq!(signed.input[0].witness, claim.input[0].witness, "the raw B-owner signature must remain unchanged");
-	assert_eq!(signed.input.iter().map(|input| input.previous_output).collect::<Vec<_>>(), vec![unknown_source.point(), fee_point]);
-	assert_eq!(signed.output, claim.output);
-	assert_eq!(amount + fee_output.value, signed.output.iter().map(|output| output.value).sum::<Amount>() + claim_fee);
-	let claim = signed;
-	core.send_raw_transaction(&claim).unwrap();
-	ctx.generate_blocks(6).await;
-	assert_eq!(ctx.bitcoind().await_transaction(claim.compute_txid()).await, claim);
-	let owner_point = OutPoint::new(claim.compute_txid(), 0);
-	let paid = core.get_tx_out(&owner_point.txid, owner_point.vout, Some(true)).unwrap().unwrap();
-	assert!(paid.confirmations >= 6);
-	assert_eq!(paid.script_pub_key.script().unwrap(), owner_script);
-	assert_eq!(paid.value, amount, "B retains its full10k; the declared Core change sponsors only miner fees");
-	assert!(unknown_path.keys().all(|point| core.get_tx_out(&point.txid, point.vout, Some(true)).unwrap().is_none()));
-	let (after_manual, after_manual_fees, owner_outputs) = whole_cut();
-	let mut expected_cut = before_manual;
-	assert!(expected_cut.remove(&held_point).is_some());
-	assert_eq!(expected_cut.remove(&original_fee_point), Some(original_fee_output));
-	assert!(expected_cut.insert(owner_point, claim.output[0].clone()).is_none());
-	assert!(expected_cut.insert(OutPoint::new(claim.compute_txid(), 1), claim.output[1].clone()).is_none());
-	assert_eq!(after_manual, expected_cut, "only B's genuine signed branch and the declared fee coin may change the complete cut");
-	assert_eq!(after_manual_fees, before_manual_fees + publication_fees + claim_fee);
-	assert_eq!(after_manual.iter().filter(|(_, output)| output.script_pubkey == owner_script).map(|(point, output)| (*point, output.value)).collect::<BTreeMap<_, _>>(),
-		BTreeMap::from([(owner_point, amount)]));
-	assert_eq!(owner_outputs, BTreeMap::from([(owner_point, amount)]), "historical scanning rejects duplicate B-owner outputs, including already spent ones");
-	assert_eq!(outage.0.load(Ordering::SeqCst), stopped_posts);
 }

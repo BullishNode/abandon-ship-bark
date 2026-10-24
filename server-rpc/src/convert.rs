@@ -16,6 +16,7 @@ use ark::attestations::{
 };
 use ark::board::BoardCosignResponse;
 use ark::fees::PpmFeeRate;
+use ark::fallback::OwnerProof;
 use ark::forfeit::HashLockedForfeitBundle;
 use ark::lightning::{PaymentHash, Preimage};
 use ark::mailbox::BlindedMailboxIdentifier;
@@ -42,6 +43,25 @@ impl From<&'static str> for ConvertError {
 impl From<ConvertError> for tonic::Status {
 	fn from(e: ConvertError) -> Self {
 		tonic::Status::invalid_argument(e.msg)
+	}
+}
+
+impl TryFrom<protos::OwnerProof> for OwnerProof {
+	type Error = ConvertError;
+
+	fn try_from(value: protos::OwnerProof) -> Result<Self, Self::Error> {
+		let blinded = BlindedMailboxIdentifier::deserialize(&value.blinded_mailbox_id)
+			.map_err(|_| "invalid blinded owner mailbox identifier")?;
+		OwnerProof::new(blinded, value.child_index).map_err(|_| "invalid owner proof".into())
+	}
+}
+
+impl From<OwnerProof> for protos::OwnerProof {
+	fn from(value: OwnerProof) -> Self {
+		Self {
+			blinded_mailbox_id: value.blinded_mailbox_id.to_vec(),
+			child_index: value.child_index,
+		}
 	}
 }
 
@@ -490,6 +510,7 @@ impl<'a> From<&'a VtxoRequest> for protos::VtxoRequest {
 		protos::VtxoRequest {
 			amount: v.amount.to_sat(),
 			policy: v.policy.serialize(),
+			owner_proof: None,
 		}
 	}
 }
@@ -519,6 +540,7 @@ impl From<ArkoorDestination> for protos::ArkoorDestination {
 		Self {
 			total_amount: v.total_amount.to_sat(),
 			policy: v.policy.serialize(),
+			owner_proof: None,
 		}
 	}
 }
@@ -529,6 +551,7 @@ impl From<SignedVtxoRequest> for protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
 				amount: v.vtxo.amount.to_sat(),
 				policy: v.vtxo.policy.serialize(),
+				owner_proof: None,
 			}),
 			cosign_pubkey: v.cosign_pubkey.serialize().to_vec(),
 			public_nonces: v.nonces.iter().map(|n| n.serialize().to_vec()).collect(),
@@ -776,6 +799,29 @@ mod test {
 	use std::str::FromStr;
 	use bitcoin::hex::FromHex;
 	use super::*;
+
+	#[test]
+	fn owner_proof_conversion_validates_points_lengths_and_normal_indexes() {
+		let key = PublicKey::from_str(
+			"02dfa52f6690299d2d6a08323083e290597b56fee125063e5f4e2957731639c42c",
+		).unwrap();
+		for index in [0u32, 1, (1 << 31) - 1] {
+			let proof = OwnerProof::new(BlindedMailboxIdentifier::from_pubkey(key), index).unwrap();
+			assert_eq!(OwnerProof::try_from(protos::OwnerProof::from(proof)).unwrap(), proof);
+		}
+		for index in [1 << 31, u32::MAX] {
+			assert!(OwnerProof::try_from(protos::OwnerProof {
+				blinded_mailbox_id: key.serialize().to_vec(), child_index: index,
+			}).is_err());
+		}
+		for bytes in [vec![], vec![0; 33], key.serialize()[..32].to_vec(),
+			[key.serialize().as_slice(), &[0]].concat()]
+		{
+			assert!(OwnerProof::try_from(protos::OwnerProof {
+				blinded_mailbox_id: bytes, child_index: 1,
+			}).is_err());
+		}
+	}
 
 	#[test]
 	fn test_preimage_bytes() {

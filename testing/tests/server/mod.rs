@@ -45,6 +45,8 @@ mod block_index;
 mod forfeit;
 mod fallback;
 mod expiry_attribution;
+mod owner_proof;
+mod owner_fixture;
 mod lightning;
 mod mailbox;
 mod nursery;
@@ -1177,6 +1179,7 @@ async fn double_spend_arkoor() {
 		.unwrap().unwrap().1;
 	let vtxo = bark_client.get_full_vtxo(bare_vtxo.id()).await.unwrap();
 
+	let recipient = bark_client.derive_store_next_keypair().await.unwrap().0.public_key();
 	let pk1 = bark_client.derive_store_next_keypair().await.unwrap().0.public_key();
 	let pk2 = bark_client.derive_store_next_keypair().await.unwrap().0.public_key();
 
@@ -1184,7 +1187,7 @@ async fn double_spend_arkoor() {
 		[vtxo.clone()],
 		ArkoorDestination {
 			total_amount: sat(100_000),
-			policy: VtxoPolicy::new_pubkey(*RANDOM_PK),
+			policy: VtxoPolicy::new_pubkey(recipient),
 		},
 		VtxoPolicy::new_pubkey(pk1),
 	).unwrap();
@@ -1192,7 +1195,7 @@ async fn double_spend_arkoor() {
 		[vtxo.clone()],
 		ArkoorDestination {
 			total_amount: sat(200_000), // other amount
-			policy: VtxoPolicy::new_pubkey(*RANDOM_PK),
+			policy: VtxoPolicy::new_pubkey(recipient),
 		},
 		VtxoPolicy::new_pubkey(pk1),
 	).unwrap();
@@ -1200,7 +1203,7 @@ async fn double_spend_arkoor() {
 		[vtxo.clone()],
 		ArkoorDestination {
 			total_amount: sat(100_000),
-			policy: VtxoPolicy::new_pubkey(*RANDOM_PK),
+			policy: VtxoPolicy::new_pubkey(recipient),
 		},
 		VtxoPolicy::new_pubkey(pk2), // other change pk
 	).unwrap();
@@ -1213,9 +1216,9 @@ async fn double_spend_arkoor() {
 		protos::ArkoorPackageCosignRequest::from(cosign_request)
 	};
 
-	let req1 = sign_cosign_request(builder1);
-	let req2 = sign_cosign_request(builder2);
-	let req3 = sign_cosign_request(builder3);
+	let req1 = owner_proof::prove_wallet_destinations(&bark_client, &srv, sign_cosign_request(builder1)).await;
+	let req2 = owner_proof::prove_wallet_destinations(&bark_client, &srv, sign_cosign_request(builder2)).await;
+	let req3 = owner_proof::prove_wallet_destinations(&bark_client, &srv, sign_cosign_request(builder3)).await;
 
 	// Create 3 rpc-clients so we can send 3 requests in paralel
 	let mut rpc1 = srv.get_public_rpc().await;
@@ -1492,6 +1495,7 @@ async fn bad_round_input() {
 		input_vtxos: vec![],
 		vtxo_requests: vec![protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
+				owner_proof: None,
 				amount: vtxo_req.vtxo.amount.to_sat(),
 				policy: vtxo_req.vtxo.policy.serialize(),
 			}),
@@ -1540,6 +1544,7 @@ async fn bad_round_input() {
 		input_vtxos: vec![fake_input],
 		vtxo_requests: vec![protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
+				owner_proof: None,
 				amount: vtxo_req.vtxo.amount.to_sat(),
 				policy: vtxo_req.vtxo.policy.serialize(),
 			}),
@@ -1652,7 +1657,9 @@ async fn reject_overlong_board_cosign() {
 	// exercises the server's validation. The expiry check runs before any signing
 	// and before the funding tx is validated, so a freshly generated nonce, a
 	// throwaway outpoint and an empty funding tx suffice to reach it.
-	let user_key = Keypair::new(&SECP, &mut thread_rng());
+	let owner = expiry_attribution::Owner::random(&ctx);
+	owner.register(&srv).await;
+	let user_key = owner.key(1);
 	let (_sec_nonce, pub_nonce) = musig::nonce_pair(&user_key);
 	let funding_tx = Transaction {
 		version: transaction::Version::TWO,
@@ -1663,6 +1670,7 @@ async fn reject_overlong_board_cosign() {
 
 	let mut rpc = srv.get_public_rpc().await;
 	let res = rpc.request_board_cosign(protos::BoardCosignRequest {
+		owner_proof: Some(owner.proof(1, ark_info.mailbox_pubkey)),
 		amount: sat(100_000).to_sat(),
 		utxo: OutPoint::null().serialize(),
 		expiry_height,
@@ -1714,11 +1722,14 @@ async fn request_board_cosign_with_funding_tx(
 ) -> Result<protos::BoardCosignResponse, tonic::Status> {
 	let ark_info = srv.ark_info().await;
 	let tip = ctx.bitcoind().get_block_count().await as u32;
-	let user_key = Keypair::new(&SECP, &mut thread_rng());
+	let owner = expiry_attribution::Owner::random(&ctx);
+	owner.register(&srv).await;
+	let user_key = owner.key(1);
 	let (_sec_nonce, pub_nonce) = musig::nonce_pair(&user_key);
 
 	let mut rpc = srv.get_public_rpc().await;
 	let res = rpc.request_board_cosign(protos::BoardCosignRequest {
+		owner_proof: Some(owner.proof(1, ark_info.mailbox_pubkey)),
 		amount: amount.to_sat(),
 		utxo: utxo.serialize(),
 		expiry_height: tip + ark_info.vtxo_lifetime.to_u32(),
@@ -2531,7 +2542,9 @@ async fn test_register_board() {
 	}).create().await;
 
 	// Create keypair for the board cosigning
-	let client_cosign_keypair = Keypair::new(&*SECP, &mut thread_rng());
+	let owner = expiry_attribution::Owner::random(&ctx);
+	owner.register(&srv).await;
+	let client_cosign_keypair = owner.key(1);
 
 	// Get server info and calculate expiry height
 	let ark_info = srv.ark_info().await;
@@ -2566,6 +2579,7 @@ async fn test_register_board() {
 
 	// Request server to cosign the board
 	let cosign_request = protos::BoardCosignRequest {
+		owner_proof: Some(owner.proof(1, ark_info.mailbox_pubkey)),
 		amount: board_amount.to_sat(),
 		utxo: board_utxo.serialize(),
 		expiry_height: expiry_height.into(),

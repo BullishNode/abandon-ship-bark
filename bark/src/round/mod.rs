@@ -22,6 +22,7 @@ use bitcoin::hashes::Hash;
 use bitcoin::hex::DisplayHex;
 use bitcoin::key::Keypair;
 use bitcoin::secp256k1::schnorr;
+use bitcoin::secp256k1::PublicKey;
 use futures::future::join_all;
 use futures::{Stream, StreamExt};
 use log::{debug, error, info, trace, warn};
@@ -30,6 +31,7 @@ use ark::{ArkInfo, ProtocolEncoding, SignedVtxoRequest, Vtxo, VtxoId, VtxoReques
 use ark::vtxo::{Full, PubkeyVtxoPolicy, VtxoPolicy};
 use ark::attestations::{DelegatedRoundParticipationAttestation, RoundAttemptAttestation};
 use ark::fees::FeeValidationError;
+use ark::fallback::OwnerProof;
 use ark::forfeit::HashLockedForfeitBundle;
 use ark::musig::{self, PublicNonce, SecretNonce};
 use ark::rounds::{RoundAttempt, RoundEvent, RoundFinished, RoundSeq, ROUND_TX_VTXO_TREE_VOUT};
@@ -71,8 +73,12 @@ pub struct RoundParticipation {
 	/// including change
 	pub outputs: Vec<VtxoRequest>,
 	/// Optional mailbox identifier for round completion notification
-	#[serde(default, skip_serializing_if = "Option::is_none", with = "ark::encode::serde::opt")]
+	#[serde(default, with = "ark::encode::serde::opt")]
 	pub unblinded_mailbox_id: Option<ark::mailbox::MailboxIdentifier>,
+	/// Evidence for external output keys, retained across round retries and restarts.
+	/// Own output evidence can be reconstructed from the wallet's key-index database.
+	#[serde(default)]
+	pub owner_proofs: HashMap<PublicKey, OwnerProof>,
 }
 
 impl RoundParticipation {
@@ -685,6 +691,13 @@ impl RoundState {
 		wallet: &Wallet,
 		attempt: &RoundAttempt,
 	) {
+		if let Err(error) = wallet.validate_round_owner_proofs(&self.participation).await {
+			// A saved attempt can already have exposed forfeits. Keep its
+			// signed material and locks intact rather than treating missing
+			// pre-upgrade metadata as proof that nothing committed.
+			warn!("Cannot prove retained round outputs; preserving recovery state: {:#}", error);
+			return;
+		}
 		self.fallback_refusal = None;
 
 		// Drop the previous attempt's stashed nonces: the new attempt
@@ -1229,6 +1242,17 @@ async fn start_attempt(
 		})
 		.collect::<Vec<_>>();
 
+	let mut vtxo_requests = Vec::with_capacity(signed_reqs.len());
+	for request in &signed_reqs {
+		let proof = wallet.round_output_owner_proof(
+			participation, request.vtxo.policy.user_pubkey(),
+		).await?;
+		let mut request = protos::SignedVtxoRequest::from(request.clone());
+		request.vtxo.as_mut().context("round request has no output")?
+			.owner_proof = Some(proof.into());
+		vtxo_requests.push(request);
+	}
+
 	let mut input_vtxos = Vec::with_capacity(participation.inputs.len());
 	for vtxo in participation.inputs.iter() {
 		let keypair = wallet.get_vtxo_key(vtxo).await
@@ -1250,7 +1274,7 @@ async fn start_attempt(
 
 	let resp = srv.client.submit_payment(protos::SubmitPaymentRequest {
 		input_vtxos: input_vtxos,
-		vtxo_requests: signed_reqs.into_iter().map(Into::into).collect(),
+		vtxo_requests,
 		#[allow(deprecated)]
 		offboard_requests: vec![],
 		unblinded_mailbox_id: Some(unblinded_mailbox_id.serialize()),
@@ -2161,6 +2185,8 @@ impl Wallet {
 		participation: RoundParticipation,
 		movement_kind: Option<RoundMovement>,
 	) -> anyhow::Result<StoredRoundState> {
+		self.require_owner_proof_server().await?;
+		self.validate_round_owner_proofs(&participation).await?;
 		let input_ids = participation.inputs.iter().map(|v| v.id()).collect::<Vec<_>>();
 
 		// The inputs are only locked at attempt start; here they must just
@@ -2211,6 +2237,8 @@ impl Wallet {
 		movement_kind: Option<RoundMovement>,
 		scheduled_height: Option<BlockHeight>,
 	) -> anyhow::Result<StoredRoundState<Unlocked>> {
+		self.require_owner_proof_server().await?;
+		self.validate_round_owner_proofs(&participation).await?;
 		// The inputs are only locked once an attempt starts, so like an
 		// interactive registration this one just needs them spendable.
 		// Pending participations over the same inputs stand: the server drops
@@ -2293,13 +2321,13 @@ impl Wallet {
 		}
 
 		// Build proto VtxoRequests
-		let vtxo_requests = participation.outputs.iter()
-			.map(|req|
-				protos::VtxoRequest {
-					policy: req.policy.serialize(),
-					amount: req.amount.to_sat(),
-			})
-			.collect::<Vec<_>>();
+		let mut vtxo_requests = Vec::with_capacity(participation.outputs.len());
+		for output in &participation.outputs {
+			let proof = self.round_output_owner_proof(&participation, output.policy.user_pubkey()).await?;
+			let mut request = protos::VtxoRequest::from(output);
+			request.owner_proof = Some(proof.into());
+			vtxo_requests.push(request);
+		}
 
 		// Submit participation to server and get unlock_hash
 		let resp = srv.client.submit_round_participation(protos::RoundParticipationRequest {
@@ -2451,6 +2479,7 @@ impl Wallet {
 			inputs,
 			outputs,
 			unblinded_mailbox_id: Some(self.mailbox_identifier()),
+			owner_proofs: HashMap::new(),
 		};
 
 		// The participation is rebuilt from server data, so nothing else bounds
@@ -2494,6 +2523,8 @@ impl Wallet {
 		attempt: &RoundAttempt,
 		movement_kind: Option<RoundMovement>,
 	) -> anyhow::Result<StoredRoundState<Unlocked>> {
+		self.require_owner_proof_server().await?;
+		self.validate_round_owner_proofs(&participation).await?;
 		let movement = if let Some(kind) = movement_kind {
 			Some(self.inner.movements.new_guarded_movement_with_update(
 				Subsystem::ROUND,

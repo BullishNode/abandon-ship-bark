@@ -176,11 +176,31 @@ impl WalletAction for ArkoorSend {
 
 	/// The step can't be completed as-is: the server rejected the request
 	/// or our own state is inconsistent.
-	async fn on_abort(self, _wallet: &Wallet, error: anyhow::Error) -> Advance<Self> {
+	async fn on_abort(self, wallet: &Wallet, error: anyhow::Error) -> Advance<Self> {
 		match self.progress {
 			// Nothing happened server-side, so the inputs go back to spendable
 			// when the executor tears the action down.
 			Progress::Cosigning => {
+				// A legacy checkpoint can still be here after the server accepted
+				// its spend and lost the reply. A new owner-proof refusal does not
+				// establish that those inputs are unspent.
+				if self.destination.owner_proof().ok().flatten().is_none()
+					&& crate::OwnerProofRefusal::from_error(&error).is_some()
+				{
+					let unspent = async {
+						for id in &self.input_vtxo_ids {
+							let vtxo = wallet.get_vtxo_by_id(*id).await?;
+							let key = wallet.get_vtxo_key(&vtxo.vtxo).await?;
+							if wallet.fetch_vtxo_spend_state(*id, &key).await?
+								!= server_rpc::protos::VtxoSpendState::Spendable
+							{ return Ok::<_, anyhow::Error>(false); }
+						}
+						Ok(true)
+					}.await;
+					if !matches!(unspent, Ok(true)) {
+						return Advance::Park { state: self, wake_after: Some(DELIVERY_RETRY_BACKOFF), error: Some(error) };
+					}
+				}
 				error!("arkoor send {} rejected during cosign: {:?}", self.id, error);
 				Advance::Failed(error)
 			},
@@ -231,9 +251,10 @@ pub(crate) async fn start_arkoor_send(
 	destination: ark::Address,
 	amount: Amount,
 ) -> anyhow::Result<ArkoorSend> {
-	let _ = wallet.require_server().await?;
+	let _ = wallet.require_owner_proof_server().await?;
 	wallet.validate_arkoor_address(&destination).await
 		.context("invalid arkoor address")?;
+	crate::owner_proof::recipient_owner_proof(&destination)?;
 
 	let (change_keypair, change_key_index) = wallet.peek_next_keypair().await
 		.context("failed to derive arkoor change keypair")?;
@@ -300,7 +321,7 @@ async fn run_cosign(wallet: &Wallet, send: &ArkoorSend) -> Result<Progress, Adva
 	let neg_amount = -send.amount.to_signed().context("amount out-of-range").abort()?;
 
 	let arkoor = wallet.create_checkpointed_arkoor_with_vtxos(
-		dest, inputs, change_keypair, send.change_pieces.clone(),
+		dest, inputs, change_keypair, send.change_pieces.clone(), Some(&send.destination),
 	).await.retry_unless_rejected()?;
 
 	let initial_update = MovementUpdate::new()

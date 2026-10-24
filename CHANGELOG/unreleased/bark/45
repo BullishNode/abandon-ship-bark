@@ -1,0 +1,3 @@
+- Keep completed round inputs spent during fallback reconciliation
+  Prevent a completed refresh input from returning to the spendable balance.
+  [#45](https://github.com/BullishNode/abandon-ship-bark/pull/45)

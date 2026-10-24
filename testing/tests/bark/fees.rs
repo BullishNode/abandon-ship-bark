@@ -551,9 +551,19 @@ async fn refresh_should_refresh_vtxos_no_dust() {
 		"One VTXO which was not consolidated",
 	);
 
-	// The expired VTXO needs a refresh before it can be sent again.
+	// The remaining coin may be refreshable or awaiting fallback reconciliation.
+	// The completed round input cannot become another pending principal.
 	let balance = bark2.offchain_balance().await;
-	if is_bark_version!(> "0.7.1") || bark2.supports_awaiting_settlement().await {
+	if bark2.supports_awaiting_settlement().await {
+		assert_eq!(balance.spendable, sat(200_000) - expected_fee, "{balance:?}");
+		assert_eq!(balance.awaiting_settlement + balance.needs_refresh, sat(331), "{balance:?}");
+		let wallet = bark2.client().await;
+		assert_eq!(wallet.get_vtxo_by_id(vtxo.id).await.unwrap().state, bark::vtxo::VtxoState::Spent);
+		assert!(!wallet.vtxos().await.unwrap().iter().any(|coin| coin.id() == vtxo.id),
+			"the old 200000-sat round input cannot return to the live coin set");
+		assert_eq!(wallet.balance().await.unwrap().total(), sat(200_331) - expected_fee,
+			"the 198000-sat replacement and 331-sat pending coin count exactly once");
+	} else if is_bark_version!(> "0.7.1") {
 		assert_eq!(balance.spendable, sat(200_000) - expected_fee, "{balance:?}");
 		assert_eq!(balance.needs_refresh, sat(331), "{balance:?}");
 	} else {
@@ -1042,7 +1052,7 @@ async fn lightning_send_fee_ppm_expiry_table() {
 	let lightning = ctx.new_lightning_setup("lightningd").await;
 
 	let srv = ctx.captaind("server").lightningd(&lightning.internal).cfg(|cfg| {
-		cfg.vtxo_lifetime = BlockDelta::new(144);
+		// Keep the harness lifetime: the existing HTLC guard requires more than 258 + 30 blocks.
 		cfg.fees.lightning_send = LightningSendFees {
 			min_fee: Amount::ZERO,
 			base_fee: sat(1_000),

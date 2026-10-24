@@ -7,6 +7,8 @@ use bitcoin_ext::{BlockDelta, BlockRef, TxStatus};
 use ark::{Vtxo, VtxoId, VtxoPolicy};
 use ark::vtxo::{Full, TapScriptClause};
 use crate::Wallet;
+use crate::movement::MovementStatus;
+use crate::subsystem::Subsystem;
 use crate::vtxo::{VtxoState, VtxoStateKind};
 use super::payouts::FallbackSnapshot;
 
@@ -127,8 +129,18 @@ impl Wallet {
 		Ok(verified)
 	}
 
-	pub(crate) async fn apply_fallback_chain_states(&self, snapshot: &FallbackSnapshot) -> anyhow::Result<()> {
+	pub(crate) async fn apply_fallback_chain_states(&self, snapshot: &mut FallbackSnapshot) -> anyhow::Result<()> {
 		let claimed = self.operation_input_ids().await?;
+		// Completion records its successful movement before removing the round
+		// state, so reading pending operations first covers that transition.
+		let mut round_inputs = BTreeSet::new();
+		if !snapshot.awaiting_settlement.is_empty() {
+			for movement in self.inner.db.get_all_movements().await? {
+				if movement.status == MovementStatus::Successful && movement.subsystem.is_subsystem(Subsystem::ROUND) {
+					round_inputs.extend(movement.input_vtxos);
+				}
+			}
+		}
 		for id in &snapshot.adopted_payout_vtxos {
 			let Some(coin) = self.inner.db.get_wallet_vtxo(*id).await? else { continue; };
 			if coin.state == (VtxoState::Locked { holder: None }) && snapshot.quarantined_vtxos.contains(id)
@@ -137,15 +149,28 @@ impl Wallet {
 			self.inner.db.update_vtxo_state_checked(*id, VtxoState::Spent,
 				&[VtxoStateKind::Spendable, VtxoStateKind::Spent]).await?;
 		}
-		for id in &snapshot.awaiting_settlement {
-			if snapshot.adopted_payout_vtxos.contains(id) { continue; }
-			if let Some(coin) = self.inner.db.get_wallet_vtxo(*id).await? {
-				if coin.state == VtxoState::Spent && !snapshot.verified_ordinary_spends.contains(id)
-					&& !snapshot.unproven_spent_vtxos.contains(id) {
-					self.inner.db.update_vtxo_state_checked(*id, VtxoState::Spendable, &[VtxoStateKind::Spent]).await?;
+		let mut changed = false;
+		for id in snapshot.awaiting_settlement.clone() {
+			if snapshot.adopted_payout_vtxos.contains(&id) { continue; }
+			if let Some(coin) = self.inner.db.get_wallet_vtxo(id).await? {
+				if round_inputs.contains(&id) {
+					if coin.state == VtxoState::Spendable {
+						self.inner.db.update_vtxo_state_checked(id, VtxoState::Spent,
+							&[VtxoStateKind::Spendable]).await?;
+					}
+					if matches!(coin.state, VtxoState::Spendable | VtxoState::Spent) {
+						changed |= snapshot.awaiting_settlement.remove(&id);
+					}
+					continue;
+				}
+				if claimed.contains(&id) { continue; }
+				if coin.state == VtxoState::Spent && !snapshot.verified_ordinary_spends.contains(&id)
+					&& !snapshot.unproven_spent_vtxos.contains(&id) {
+					self.inner.db.update_vtxo_state_checked(id, VtxoState::Spendable, &[VtxoStateKind::Spent]).await?;
 				}
 			}
 		}
+		if changed { self.inner.db.store_fallback_snapshot(snapshot).await?; }
 		Ok(())
 	}
 }

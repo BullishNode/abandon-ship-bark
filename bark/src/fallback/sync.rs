@@ -33,6 +33,6 @@ impl Wallet {
 		for id in &paid { snapshot.awaiting_settlement.remove(id); }
 		for id in previous.difference(&paid) { snapshot.awaiting_settlement.insert(*id); }
 		self.inner.db.store_fallback_snapshot(&snapshot).await?;
-		self.apply_fallback_chain_states(&snapshot).await
+		self.apply_fallback_chain_states(&mut snapshot).await
 	}
 }

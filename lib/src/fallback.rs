@@ -9,11 +9,49 @@ use bitcoin::secp256k1::{self, schnorr, Keypair, Message, PublicKey};
 use bitcoin::{Network, Script, ScriptBuf};
 
 use crate::{ProtocolDecodingError, ProtocolEncoding, ReadExt, WriteExt, SECP};
+use crate::mailbox::BlindedMailboxIdentifier;
 
 const RECORD_VERSION: u8 = 3;
 const MAX_ADDRESS_SCRIPT_LEN: usize = 42;
 const RECORD_DOMAIN: &[u8; 32] = b"Ark expiry fallback record v3   ";
 const ACCOUNT_DOMAIN: &[u8; 32] = b"Ark expiry fallback account v3  ";
+
+/// Evidence identifying one normal child of a registered coin account.
+///
+/// The server must still authenticate the registration and derive the child.
+/// The blinded mailbox identifier alone is not an ownership proof.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OwnerProof {
+	pub blinded_mailbox_id: BlindedMailboxIdentifier,
+	pub child_index: u32,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OwnerProofError {
+	#[error("owner key index is outside the normal child range")]
+	InvalidChildIndex,
+	#[error("invalid blinded mailbox identifier")]
+	InvalidMailboxIdentifier,
+}
+
+impl OwnerProof {
+	pub fn new(
+		blinded_mailbox_id: BlindedMailboxIdentifier, child_index: u32,
+	) -> Result<Self, OwnerProofError> {
+		let proof = Self { blinded_mailbox_id, child_index };
+		proof.validate()?;
+		Ok(proof)
+	}
+
+	/// Check transport or persisted evidence before using its public key.
+	pub fn validate(&self) -> Result<(), OwnerProofError> {
+		ChildNumber::from_normal_idx(self.child_index)
+			.map_err(|_| OwnerProofError::InvalidChildIndex)?;
+		PublicKey::from_slice(self.blinded_mailbox_id.as_ref())
+			.map_err(|_| OwnerProofError::InvalidMailboxIdentifier)?;
+		Ok(())
+	}
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum FallbackError {

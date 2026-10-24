@@ -51,13 +51,15 @@ pub(super) async fn signed_leaf(
 	let key = wallet.get_vtxo_key(&input).await.unwrap();
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([input.clone()], policy.clone()).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
+	let request = super::owner_proof::prove_wallet_destinations(wallet, srv,
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
 	let mut rpc = srv.get_public_rpc().await;
 	let response = if matches!(&policy, VtxoPolicy::ServerHtlcSend(_)) {
 		rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+			parts: request.parts,
 		}).await.unwrap().into_inner()
 	} else {
-		rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+		rpc.request_arkoor_cosign(request)
 			.await.unwrap().into_inner()
 	};
 	let mut outputs = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
@@ -376,7 +378,7 @@ async fn unattempted_shared_preimage(legacy: bool) {
 	let receive_input = wallet.get_full_vtxo(receive_board[0]).await.unwrap();
 	assert_ne!(send_input.chain_anchor(), receive_input.chain_anchor());
 	let key = wallet.get_vtxo_key(&send_input).await.unwrap();
-	let beneficiary = Keypair::new(&SECP, &mut bitcoin::secp256k1::rand::thread_rng());
+	let (beneficiary, _) = wallet.derive_store_next_keypair().await.unwrap();
 	assert_ne!(beneficiary.public_key(), key.public_key());
 	let preimage = Preimage::random();
 	let hash = preimage.compute_payment_hash();
@@ -848,7 +850,7 @@ async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: b
 	let send_input = wallet.get_full_vtxo(boards[0]).await.unwrap();
 	let receive_input = wallet.get_full_vtxo(boards[1]).await.unwrap();
 	let send_key = wallet.get_vtxo_key(&send_input).await.unwrap();
-	let beneficiary = Keypair::new(&SECP, &mut bitcoin::secp256k1::rand::thread_rng());
+	let (beneficiary, _) = wallet.derive_store_next_keypair().await.unwrap();
 	assert_ne!(beneficiary.public_key(), send_key.public_key());
 	let preimage = Preimage::random();
 	let hash = preimage.compute_payment_hash();

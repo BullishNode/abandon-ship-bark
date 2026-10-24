@@ -6,6 +6,7 @@
 //! withhold the sender refund and its descendants so the watchman must
 //! rebroadcast the retained transaction. The ignored deeper-fork case replays
 //! the independent refund to preserve its economic double-payment assertion.
+//! Setup retains pre-source-guard commitments; recovery uses the current server.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -212,9 +213,10 @@ async fn reclaim_reorg(when: When) {
 		VtxoPolicy::new_server_htlc_send(key.public_key(), hash, incoming_deadline)).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-	}).await.unwrap().into_inner();
+	// This recovery scenario starts from an authentic pre-source-guard commitment.
+	let request = super::owner_proof::prove_wallet_destinations(&client, &srv,
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
+	let response = super::owner_fixture::legacy_send_commitment(&srv, request).await;
 	let incoming = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();
 	client.register_vtxo_transactions_with_server(&incoming).await.unwrap();
@@ -225,6 +227,7 @@ async fn reclaim_reorg(when: When) {
 		htlc_vtxo_ids: vec![incoming[0].id().to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
 	}).await.unwrap();
 	let granted = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: Some(super::owner_proof::wallet_proof(&recipient, &srv, receiver_key).await),
 		payment_hash: hash.to_vec(), user_pubkey: receiver_key.serialize().to_vec(),
 		htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner();

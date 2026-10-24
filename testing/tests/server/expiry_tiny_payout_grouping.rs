@@ -120,8 +120,16 @@ async fn tiny_group() {
 	let builder = ArkoorPackageBuilder::new_with_checkpoints([source.clone()], destinations).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
-		.await.unwrap().into_inner();
+	let mut request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	for part in &mut request.parts {
+		for output in part.outputs.iter_mut().chain(&mut part.isolated_outputs) {
+			let pubkey = VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey();
+			let index = keys.iter().position(|key| key.public_key() == pubkey).unwrap();
+			let owner = if index < 3 { &recipient } else { &sender };
+			output.owner_proof = Some(super::owner_proof::wallet_proof(owner, &srv, pubkey).await);
+		}
+	}
+	let response = rpc.request_arkoor_cosign(request).await.unwrap().into_inner();
 	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	assert_eq!(signed.build_signed_internal_vtxos().iter()
 		.filter(|(coin, _)| matches!(coin.policy(), ServerVtxoPolicy::Checkpoint(_))).count(), 4);

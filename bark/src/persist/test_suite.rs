@@ -92,6 +92,7 @@ macro_rules! bark_persister_tests {
 			test_get_or_create_movement_for_action,
 
 			test_store_and_get_round_state,
+			test_round_owner_proofs_roundtrip,
 			test_update_round_state,
 			test_remove_round_state,
 
@@ -190,6 +191,7 @@ fn empty_round_state() -> RoundState {
 			inputs: vec![],
 			outputs: vec![],
 			unblinded_mailbox_id: None,
+			owner_proofs: Default::default(),
 		},
 		flow: RoundFlowState::InteractivePending,
 		new_vtxos: vec![],
@@ -272,9 +274,9 @@ fn test_exit_txid() -> bitcoin::Txid {
 /// `RoundFlowState` contains `Keypair` and `SecretNonce`.  We compare the
 /// fields that survive a round-trip through `SerdeRoundState`.
 fn round_states_match(stored: &StoredRoundState<Unlocked>, expected: &RoundState) -> bool {
-	let stored_json = serde_json::to_string(&SerdeRoundState::from(stored.state()))
+	let stored_json = serde_json::to_value(&SerdeRoundState::from(stored.state()))
 		.expect("SerdeRoundState serialization failed for the stored state");
-	let expected_json = serde_json::to_string(&SerdeRoundState::from(expected))
+	let expected_json = serde_json::to_value(&SerdeRoundState::from(expected))
 		.expect("SerdeRoundState serialization failed for the expected state");
 	stored_json == expected_json
 }
@@ -797,6 +799,23 @@ pub async fn test_store_and_get_round_state(db: &impl BarkPersister) {
 		.expect("stored round state present");
 	assert_eq!(stored.id(), id, "stored round state id");
 	assert!(round_states_match(&stored, &state), "stored round state differs from the input");
+}
+
+pub async fn test_round_owner_proofs_roundtrip(db: &impl BarkPersister) {
+	let key = test_pubkey();
+	let proof = ark::fallback::OwnerProof::new(
+		ark::mailbox::BlindedMailboxIdentifier::from_pubkey(key), 20_001,
+	).unwrap();
+	let mut state = empty_round_state();
+	state.participation.outputs.push(ark::VtxoRequest {
+		amount: Amount::from_sat(100_000), policy: ark::VtxoPolicy::new_pubkey(key),
+	});
+	state.participation.owner_proofs.insert(key, proof);
+	let id = db.store_round_state(&state).await.expect("store_round_state with owner proof");
+	let stored = db.get_round_state_by_id(id).await.expect("get round with owner proof")
+		.expect("round with owner proof exists");
+	assert!(round_states_match(&stored, &state));
+	assert_eq!(stored.state().participation.owner_proofs.get(&key), Some(&proof));
 }
 
 pub async fn test_update_round_state(db: &impl BarkPersister) {

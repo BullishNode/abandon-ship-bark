@@ -540,6 +540,11 @@ impl ServerConnection {
 		self.info.read().await.info.clone()
 	}
 
+	/// Returns the protocol version negotiated for this connection.
+	pub async fn protocol_version(&self) -> u64 {
+		self.info.read().await.pver
+	}
+
 	/// Fetches the current offboard fee rate from the server.
 	pub async fn offboard_feerate(&self) -> Result<FeeRate, ConnectError> {
 		let resp = self.client.clone()
@@ -592,7 +597,18 @@ fn check_handshake(handshake: protos::HandshakeResponse) -> Result<u64, ConnectE
 
 #[cfg(test)]
 mod tests {
-	use super::{CreateEndpointError, NO_TRANSPORT_BACKEND_MESSAGE};
+	use super::{check_handshake, CreateEndpointError, NO_TRANSPORT_BACKEND_MESSAGE};
+
+	#[test]
+	fn older_protocols_remain_available_for_recovery() {
+		for version in [crate::MIN_PROTOCOL_VERSION, crate::pver::PROTOCOL_VERSION_OWNER_PROOF - 1] {
+			let negotiated = check_handshake(crate::protos::HandshakeResponse {
+				min_protocol_version: version, max_protocol_version: version, psa: None,
+			}).unwrap();
+			assert_eq!(negotiated, version);
+			assert!(negotiated < crate::pver::PROTOCOL_VERSION_OWNER_PROOF);
+		}
+	}
 
 	#[test]
 	fn no_transport_backend_error_mentions_feature_selection() {

@@ -49,7 +49,9 @@ async fn assert_pending_root_is_untouched(
 
 /// Both real roots expire together. An unattempted signed HTLC under one
 /// root cannot delay the other root's automatic, confirmed customer payout.
-/// No financial rows, split requests or chain acknowledgments are fabricated.
+/// The pending branch is an explicit pre-source-guard signed commitment.
+/// Current admission refuses it; payout decisions, native outcomes, physical
+/// funding and chain acknowledgments are never fabricated.
 #[tokio::test]
 async fn expiry_ready_root_does_not_wait_for_unresolved_same_expiry_root() {
 	let ctx = TestContext::new("server/expiry_ready_root_with_pending_same_expiry_root").await;
@@ -77,10 +79,12 @@ async fn expiry_ready_root_does_not_wait_for_unresolved_same_expiry_root() {
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([pending.clone()],
 		VtxoPolicy::new_server_htlc_send(key.public_key(), PaymentHash::from([83; 32]), deadline))
 		.unwrap().generate_user_nonces(&[key]).unwrap();
-	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-	}).await.unwrap().into_inner();
+	let request = super::owner_proof::prove_wallet_destinations(&client, &srv,
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
+	// Load only the historically committed unsigned tree. This obtains a real
+	// library server cosign for these same client nonces; the caller still
+	// completes the signatures and normal public chain registration below.
+	let response = super::owner_fixture::legacy_send_commitment(&srv, request).await;
 	let grants = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();
 	assert_eq!(grants.len(), 1);

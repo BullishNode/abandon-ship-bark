@@ -25,13 +25,14 @@ use crate::round::InteractiveParticipation;
 
 impl<'t> Tx<'t> {
 	#[tracing::instrument(skip(self, unsigned_funding_tx, input_vtxos, signed_tree, interactive_participations))]
-	pub async fn finish_round(
+	pub(crate) async fn finish_round(
 		&self,
 		round_seq: RoundSeq,
 		unsigned_funding_tx: &Transaction,
 		input_vtxos: impl IntoIterator<Item = VtxoId>,
 		signed_tree: &CachedSignedVtxoTree,
 		interactive_participations: &HashMap<UnlockHash, InteractiveParticipation>,
+		padding_ids: &[VtxoId],
 	) -> anyhow::Result<()> {
 		let input_vtxos = input_vtxos.into_iter().collect::<Vec<_>>();
 		crate::database::expiry_guard::guard_obligation_changes(self, &input_vtxos).await?;
@@ -118,7 +119,7 @@ impl<'t> Tx<'t> {
 			.upsert_signed_tx(signed_tree.internal_node_txs().iter().cloned())
 			.upsert_unsigned_tx(signed_tree.unsigned_leaf_txs().iter().map(Transaction::compute_txid))
 			.insert_oor_spent_vtxos(signed_tree.internal_vtxos())
-			.insert_unclaimed_vtxos(signed_tree.output_vtxos().map(ServerVtxo::from))
+			.insert_round_outputs(signed_tree.output_vtxos().map(ServerVtxo::from), padding_ids)
 			.mark_vtxos_round_spent(input_vtxos.into_iter().map(|id| (id, round_id)));
 		tree::execute_vtxo_tree_update(&self, update).await?;
 

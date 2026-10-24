@@ -1,5 +1,6 @@
 //! User timeout claims consume two reserved original sources. The third
 //! original's fallback payout preserves its existing entitlement and fences.
+//! Setup retains pre-source-guard commitments; recovery uses the current server.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -131,9 +132,10 @@ async fn reserved_batched_terminal(reorg:bool) {
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints(inputs,
 		VtxoPolicy::new_server_htlc_send(keys[0].public_key(),hash,deadline)).unwrap().generate_user_nonces(&keys).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts:protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-	}).await.unwrap().into_inner();
+	// This recovery scenario starts from an authentic pre-source-guard commitment.
+	let request = super::owner_proof::prove_wallet_destinations(&sender, &srv,
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
+	let response = super::owner_fixture::legacy_send_commitment(&srv, request).await;
 	let sources = builder.user_cosign(&keys,ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap().build_signed_vtxos();
 	assert_eq!(sources.len(),3);
 	assert!(sources.iter().all(|source|source.amount()==sat(100_000)));
@@ -144,6 +146,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 		htlc_vtxo_ids:sources.iter().map(|source|source.id().to_bytes().to_vec()).collect(),mailbox_id:None,retry_for_secs:Some(5),
 	}).await.unwrap();
 	let response = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: Some(super::owner_proof::wallet_proof(&recipient, &srv, receive_key).await),
 		payment_hash:hash.to_vec(),user_pubkey:receive_key.serialize().to_vec(),
 		htlc_recv_expiry:(tip+BlockDelta::new(36)).to_u32(),lightning_receive_anti_dos:None,
 	}).await.unwrap().into_inner();

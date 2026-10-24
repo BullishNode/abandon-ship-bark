@@ -101,7 +101,7 @@ pub(crate) async fn post_arkoor_to_mailboxes(
 	let mut any_succeeded = false;
 	let mut failures: Vec<String> = Vec::new();
 	for method in delivery {
-		let VtxoDelivery::ServerMailbox { blinded_id } = method else { continue };
+		let Some(blinded_id) = method.mailbox_id() else { continue };
 		let req = protos::mailbox_server::PostArkoorMessageRequest {
 			blinded_id: blinded_id.as_ref().to_vec(),
 			vtxos: serialized.clone(),
@@ -140,7 +140,7 @@ fn check_delivery(delivery: &[VtxoDelivery]) -> Result<(), ArkoorAddressError> {
 		return Ok(());
 	}
 
-	if delivery.iter().any(|d| matches!(d, VtxoDelivery::ServerMailbox { .. })) {
+	if delivery.iter().any(|d| d.mailbox_id().is_some()) {
 		return Ok(());
 	}
 
@@ -203,6 +203,7 @@ impl Wallet {
 		inputs: impl IntoIterator<Item = WalletVtxo>,
 		change_keypair: Keypair,
 		change_pieces: Option<Vec<Amount>>,
+		recipient: Option<&ark::Address>,
 	) -> anyhow::Result<ArkoorCreateResult> {
 		let (mut srv, _) = self.require_server().await?;
 		let input_ids = inputs.into_iter().map(|v| v.id()).collect::<Vec<_>>();
@@ -252,9 +253,13 @@ impl Wallet {
 			.generate_user_nonces(&user_keypairs)
 			.context("invalid nb of keypairs")?;
 
-		let cosign_request = protos::ArkoorPackageCosignRequest::from(
+		let mut cosign_request = protos::ArkoorPackageCosignRequest::from(
 			builder.cosign_request(),
 		);
+		let recipient = recipient.map(|address| -> anyhow::Result<_> {
+			Ok((address.policy().user_pubkey(), address.owner_proof()?))
+		}).transpose()?;
+		self.attach_package_owner_proofs(&mut cosign_request, recipient).await?;
 
 		let response = srv.client.request_arkoor_cosign(cosign_request).await.map_err(crate::FallbackRefusal::map_status)
 			.context("error requesting arkoor cosign")?

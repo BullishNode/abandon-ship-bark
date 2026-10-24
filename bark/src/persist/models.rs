@@ -11,6 +11,7 @@
 pub use ark::fallback::FallbackRecord;
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ use lightning_invoice::Bolt11Invoice;
 
 use ark::{Vtxo, VtxoId, VtxoPolicy, VtxoRequest};
 use ark::vtxo::Full;
+use ark::fallback::OwnerProof;
 use ark::mailbox::MailboxIdentifier;
 use ark::tree::signed::{UnlockHash, VtxoTreeSpec};
 use ark::lightning::{PaymentHash, Preimage};
@@ -297,8 +299,11 @@ struct SerdeRoundParticipation<'a> {
 	#[serde(with = "ark::encode::serde::cow::vec")]
 	inputs: Cow<'a, [Vtxo<Full>]>,
 	outputs: Vec<SerdeVtxoRequest<'a>>,
-	#[serde(default, skip_serializing_if = "Option::is_none", with = "ark::encode::serde::opt")]
+	// MessagePack is positional: retain the nil mailbox slot before owner_proofs.
+	#[serde(default, with = "ark::encode::serde::opt")]
 	unblinded_mailbox_id: Option<MailboxIdentifier>,
+	#[serde(default)]
+	owner_proofs: HashMap<PublicKey, OwnerProof>,
 }
 
 impl<'a> From<&'a RoundParticipation> for SerdeRoundParticipation<'a> {
@@ -307,6 +312,7 @@ impl<'a> From<&'a RoundParticipation> for SerdeRoundParticipation<'a> {
 			inputs: Cow::Borrowed(&v.inputs),
 			outputs: v.outputs.iter().map(|v| v.into()).collect(),
 			unblinded_mailbox_id: v.unblinded_mailbox_id,
+			owner_proofs: v.owner_proofs.clone(),
 		}
 	}
 }
@@ -317,6 +323,7 @@ impl<'a> From<SerdeRoundParticipation<'a>> for RoundParticipation {
 			inputs: v.inputs.into_owned(),
 			outputs: v.outputs.into_iter().map(|v| v.into()).collect(),
 			unblinded_mailbox_id: v.unblinded_mailbox_id,
+			owner_proofs: v.owner_proofs,
 		}
 	}
 }
@@ -564,11 +571,80 @@ impl<'a> From<SerdeRoundState<'a>> for RoundState {
 
 #[cfg(test)]
 mod test {
+	use std::collections::HashMap;
+
+	use bitcoin::secp256k1::Keypair;
 	use bitcoin_ext::BlockHeight;
+	use ark::fallback::OwnerProof;
+	use ark::mailbox::{BlindedMailboxIdentifier, MailboxIdentifier};
+	use ark::{Vtxo, VtxoRequest, VtxoPolicy, SECP};
+	use ark::vtxo::Full;
 
 	use crate::exit::{ExitState, ExitTxOrigin};
+	use crate::round::RoundParticipation;
 	use crate::vtxo::VtxoState;
-	use super::SerdeAttemptState;
+	use super::{SerdeAttemptState, SerdeRoundParticipation, SerdeVtxoRequest};
+
+	#[test]
+	fn round_participation_reads_legacy_positional_owner_metadata() {
+		#[derive(serde::Serialize)]
+		struct LegacyParticipation {
+			#[serde(with = "ark::encode::serde::vec")]
+			inputs: Vec<Vtxo<Full>>,
+			outputs: Vec<SerdeVtxoRequest<'static>>,
+			#[serde(skip_serializing_if = "Option::is_none", with = "ark::encode::serde::opt")]
+			unblinded_mailbox_id: Option<MailboxIdentifier>,
+		}
+
+		let key = Keypair::from_seckey_slice(&SECP, &[3; 32]).unwrap().public_key();
+		for mailbox in [None, Some(MailboxIdentifier::from_pubkey(key))] {
+			let legacy = rmp_serde::to_vec(&LegacyParticipation {
+				inputs: Vec::new(), outputs: Vec::new(), unblinded_mailbox_id: mailbox,
+			}).unwrap();
+			assert_eq!(legacy[0], if mailbox.is_some() { 0x93 } else { 0x92 });
+			let restored: SerdeRoundParticipation = rmp_serde::from_slice(&legacy).unwrap();
+			assert_eq!(restored.unblinded_mailbox_id, mailbox);
+			assert!(restored.owner_proofs.is_empty());
+		}
+
+		let restored: SerdeRoundParticipation = serde_json::from_str(
+			r#"{"inputs":[],"outputs":[]}"#,
+		).unwrap();
+		assert!(restored.unblinded_mailbox_id.is_none());
+		assert!(restored.owner_proofs.is_empty());
+	}
+
+	#[test]
+	fn round_participation_owner_proofs_roundtrip_with_absent_or_present_mailbox() {
+		let key = Keypair::from_seckey_slice(&SECP, &[3; 32]).unwrap().public_key();
+		let proof = OwnerProof::new(BlindedMailboxIdentifier::from_pubkey(key), 20_001).unwrap();
+		for mailbox in [None, Some(MailboxIdentifier::from_pubkey(key))] {
+			let participation = RoundParticipation {
+				inputs: Vec::new(),
+				outputs: vec![VtxoRequest {
+					amount: bitcoin::Amount::from_sat(100_000), policy: VtxoPolicy::new_pubkey(key),
+				}],
+				unblinded_mailbox_id: mailbox,
+				owner_proofs: HashMap::from([(key, proof)]),
+			};
+			let model = SerdeRoundParticipation::from(&participation);
+			let encoded = rmp_serde::to_vec(&model).unwrap();
+			// The optional mailbox must occupy its slot even when absent.
+			assert_eq!(encoded[0], 0x94);
+			let restored: RoundParticipation = rmp_serde::from_slice::<SerdeRoundParticipation>(
+				&encoded,
+			).unwrap().into();
+			assert_eq!(restored.outputs, participation.outputs);
+			assert_eq!(restored.unblinded_mailbox_id, mailbox);
+			assert_eq!(restored.owner_proofs, participation.owner_proofs);
+
+			let json = serde_json::to_string(&model).unwrap();
+			let restored: RoundParticipation = serde_json::from_str::<SerdeRoundParticipation>(
+				&json,
+			).unwrap().into();
+			assert_eq!(restored.owner_proofs.get(&key), Some(&proof));
+		}
+	}
 
 	#[test]
 	/// Each struct stored as JSON in the database should have test to check for backwards compatibility

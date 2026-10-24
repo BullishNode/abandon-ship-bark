@@ -47,9 +47,11 @@ async fn mailbox_checkpoint_visibility_gap() {
 	let mailbox_pubkey = srv.ark_info().await.mailbox_pubkey;
 	let ark_url = srv.ark_url();
 
-	// Generate 100 unique VTXOs and seed them into the vtxo table (FK constraint).
-	let vtxo_pairs: Vec<_> = (0..100).map(|_| {
-		let kp = Keypair::new(&SECP, &mut thread_rng());
+	// Use signed coins whose public keys belong to one registered fixture account.
+	let account = bitcoin::bip32::Xpriv::new_master(bitcoin::Network::Regtest, &[135; 32]).unwrap();
+	let vtxo_pairs: Vec<_> = (1u32..=100).map(|index| {
+		let kp = account.derive_priv(&SECP, &[bitcoin::bip32::ChildNumber::from_normal_idx(index).unwrap()])
+			.unwrap().to_keypair(&SECP);
 		let (_tx, vtxo) = DummyTestVtxoSpec {
 			user_keypair: kp,
 			..Default::default()
@@ -57,6 +59,8 @@ async fn mailbox_checkpoint_visibility_gap() {
 		(kp, vtxo)
 	}).collect();
 
+	super::owner_fixture::register_account_children(&db, account,
+		vtxo_pairs.iter().enumerate().map(|(offset, (key, _))| (key.public_key(), offset as u32 + 1))).await;
 	db.write(async |t| t.upsert_vtxos(
 		vtxo_pairs.iter().map(|(_, v)| ServerVtxo::from(v.clone()))
 	).await).await.expect("upsert vtxos");
@@ -163,7 +167,10 @@ async fn mailbox_post_arkoor_requires_known_vtxos() {
 	let mailbox_pubkey = srv.ark_info().await.mailbox_pubkey;
 
 	// Seed one vtxo into the vtxo table, as if the server cosigned it.
-	let owner_kp = Keypair::new(&SECP, &mut thread_rng());
+	let account = bitcoin::bip32::Xpriv::new_master(bitcoin::Network::Regtest, &[136; 32]).unwrap();
+	let owner_kp = account.derive_priv(&SECP, &[bitcoin::bip32::ChildNumber::from_normal_idx(1).unwrap()])
+		.unwrap().to_keypair(&SECP);
+	super::owner_fixture::register_account_children(&db, account, [(owner_kp.public_key(), 1)]).await;
 	let (_tx, vtxo) = DummyTestVtxoSpec {
 		user_keypair: owner_kp,
 		..Default::default()

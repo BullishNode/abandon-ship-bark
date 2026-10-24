@@ -566,9 +566,6 @@ impl Config {
 		self.bitcoind.validate()?;
 		self.fees.validate()?;
 
-		if self.recovery_xpub_nb_keys == 0 {
-			bail!("recovery_xpub_nb_keys must be positive for expiry owner lookup");
-		}
 		if self.max_htlc_expiry_delta < self.htlc_send_expiry_delta {
 			bail!("max_htlc_expiry_delta must cover htlc_send_expiry_delta");
 		}
@@ -772,17 +769,6 @@ mod test {
 		cfg.bitcoind.cookie = Some(".cookie".into());
 
 		cfg.validate().expect("error validating default config");
-	}
-
-	#[test]
-	fn expiry_owner_lookup_requires_xpub_recovery() {
-		let mut cfg = Config::load(DEFAULT_CAPTAIND_CONFIG_PATH).unwrap();
-		cfg.bitcoind.cookie = Some(".cookie".into());
-		cfg.validate().unwrap();
-		cfg.recovery_xpub_nb_keys = 0;
-		assert!(cfg.validate().unwrap_err().to_string().contains("recovery_xpub_nb_keys"));
-		cfg.recovery_xpub_nb_keys = 1;
-		cfg.validate().unwrap();
 	}
 
 	#[test]

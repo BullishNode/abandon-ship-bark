@@ -59,7 +59,7 @@ fn owner() -> Owner {
 }
 
 async fn native_node(
-	client: &bark::Wallet, rpc: &mut ArkClient, input: Vtxo<Full>, key: Keypair,
+	client: &bark::Wallet, srv: &Captaind, owners: &[Owner], rpc: &mut ArkClient, input: Vtxo<Full>, key: Keypair,
 	destinations: Vec<ArkoorDestination>, payees: usize,
 ) -> (Vec<Vtxo<Full>>, Node) {
 	assert!(input.exit_depth() < 100);
@@ -71,8 +71,18 @@ async fn native_node(
 	let expected = destinations.iter().map(|d| (d.policy.clone(), d.total_amount)).collect::<Vec<_>>();
 	let builder = ArkoorPackageBuilder::new_with_checkpoints([input], destinations).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
-	let response = rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
-		.await.unwrap().into_inner();
+	let mut request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	let mailbox_pubkey = srv.ark_info().await.mailbox_pubkey;
+	for part in &mut request.parts {
+		for output in part.outputs.iter_mut().chain(&mut part.isolated_outputs) {
+			let key = ark::VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey();
+			output.owner_proof = Some(if let Some(owner) = owners.iter().find(|owner| owner.key.public_key() == key) {
+				let blinded = owner.mailbox.to_blinded(mailbox_pubkey, &owner.key).unwrap();
+				protos::OwnerProof { blinded_mailbox_id: blinded.as_ref().to_vec(), child_index: 1 }
+			} else { super::owner_proof::wallet_proof(client, srv, key).await });
+		}
+	}
+	let response = rpc.request_arkoor_cosign(request).await.unwrap().into_inner();
 	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	let checkpoints = signed.build_signed_internal_vtxos().into_iter()
 		.filter(|(v, _)| matches!(v.policy(), ServerVtxoPolicy::Checkpoint(_))).collect::<Vec<_>>();
@@ -301,7 +311,7 @@ async fn bounded_round_inventory() {
 			});
 			children.push((indices.to_vec(), child_key));
 		}
-		let (outputs, node) = native_node(&client, &mut rpc, input, key, destinations, group.len()).await;
+		let (outputs, node) = native_node(&client, &srv, &owners, &mut rpc, input, key, destinations, group.len()).await;
 		nodes.push(node);
 		for (output, (indices, child_key)) in outputs.into_iter().zip(children) {
 			assert!(output.exit_depth() <= 11);
@@ -464,7 +474,7 @@ async fn automatic_multilevel_split() {
 		});
 		child_keys.push((group.len() > 1).then_some(key));
 	}
-	let (outputs, root_node) = native_node(&client, &mut rpc, source.clone(), source_key, destinations, PAYEES).await;
+	let (outputs, root_node) = native_node(&client, &srv, &owners, &mut rpc, source.clone(), source_key, destinations, PAYEES).await;
 	let mut terminals = Vec::new();
 	for ((output, key), group) in outputs.into_iter().zip(child_keys).zip(root_groups) {
 		if let Some(key) = key { jobs.push_back((output, key, group)); }
@@ -497,7 +507,7 @@ async fn automatic_multilevel_split() {
 				children.push((indices, (count > 1).then_some(child_key)));
 			}
 		}
-		let (outputs, node) = native_node(&client, &mut rpc, input, key, destinations, group.len()).await;
+		let (outputs, node) = native_node(&client, &srv, &owners, &mut rpc, input, key, destinations, group.len()).await;
 		nodes.push(node);
 		for (output, (indices, child_key)) in outputs.into_iter().zip(children) {
 			if let Some(key) = child_key { jobs.push_back((output, key, indices)); }

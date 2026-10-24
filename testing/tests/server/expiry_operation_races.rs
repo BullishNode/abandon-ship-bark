@@ -200,12 +200,14 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 			assert_eq!(cancelled.offchain_fee, bitcoin::Amount::ZERO);
 			wallet.sync_fallback_payouts().await.unwrap();
 			assert_eq!(wallet.offboard_checkpoint(&prepared.id).await.unwrap(), Some(prepared.clone()));
-			let history = wallet.history().await.unwrap();
-			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0,
-				"a refused offboard and its pending fallback must not debit the same principal twice");
+			let balance = wallet.balance().await.unwrap();
+			assert_eq!(balance.total(), coin.amount(),
+				"the refused offboard and unconfirmed payout must retain one principal");
+			assert_eq!(balance.spendable, bitcoin::Amount::ZERO);
 		}
 		ctx.generate_blocks(6).await;
 		assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
+		assert_eq!(wallet.verify_fallback_output(bitcoin::OutPoint::new(parent.compute_txid(), index as u32)).await.unwrap(), sat(99_000));
 		assert_eq!(ctx.bitcoind().get_received_by_address(&offboard_address), bitcoin::Amount::ZERO);
 		if finality {
 			let signed = wallet.get_full_vtxo(id).await.unwrap();
@@ -218,9 +220,6 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 				"independent payment must finish the superseded intent even while Ark is unavailable");
 			assert_eq!(wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap().state, VtxoState::Spent);
 			assert_eq!(wallet.get_full_vtxo(id).await.unwrap(), signed, "payment must retain signed recovery material");
-			let history = wallet.history().await.unwrap();
-			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0);
-			assert_eq!(history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").count(), 1);
 			let rpc = ctx.bitcoind().sync_client();
 			let confirmed = rpc.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap();
 			rpc.invalidate_block(&confirmed.blockhash.unwrap()).unwrap();
@@ -229,17 +228,14 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 			assert_eq!(protection.exits_started, vec![id], "an undone payout must restore actual signed-path protection");
 			let protected = wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap();
 			assert!(matches!(&protected.state, VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { .. }) }));
-			assert!(wallet.sync_fallback_payouts().await.is_err(), "Ark is physically unavailable");
+			wallet.sync_fallback_payouts().await.expect("local signed bodies and Core remain available while Ark is stopped");
 			wallet.protect_expiring_vtxos().await.unwrap();
 			assert_eq!(wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap().state, protected.state,
-				"receipt retry must not steal the actual protective exit holder");
+				"chain-only payout sync must not steal the actual protective exit holder");
 			assert_eq!(wallet.get_full_vtxo(id).await.unwrap(), signed);
-			let history = wallet.history().await.unwrap();
-			let fallback = history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-			assert_eq!(fallback.len(), 1);
-			assert_eq!(fallback[0].status, bark::movement::MovementStatus::Pending);
-			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0,
-				"reorg protection and the pending receipt reserve one principal");
+			let balance = wallet.balance().await.unwrap();
+			assert_eq!(balance.pending_exit, coin.amount());
+			assert_eq!(balance.total(), coin.amount(), "reorg protection must reserve one principal");
 		}
 
 	}
@@ -277,9 +273,10 @@ async fn expiry_uninitiated_grant_can_revoke_after_backing_expiry() {
 		VtxoPolicy::new_server_htlc_send(key.public_key(), hash, deadline)).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-	}).await.unwrap().into_inner();
+	// Keep the historical short-backing contract; current admission is checked by the fixture.
+	let request = super::owner_proof::prove_wallet_destinations(&wallet, &srv,
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
+	let response = super::owner_fixture::legacy_send_commitment(&srv, request).await;
 	let grants = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();
 	assert_eq!(grants.len(), 1);

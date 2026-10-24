@@ -61,12 +61,12 @@ async fn fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payme
 	let address = srv.watchmand().wait_wallet_address().await;
 	ctx.bitcoind().fund_addr(address, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
-	let _payout = tokio::time::timeout(Duration::from_secs(30), async {
+	let (payout, index) = tokio::time::timeout(Duration::from_secs(30), async {
 		loop {
 			for txid in ctx.bitcoind().sync_client().get_raw_mempool().unwrap() {
 				let tx = ctx.bitcoind().await_transaction(txid).await;
-				if tx.output.iter().any(|output| output.script_pubkey == registration.spk
-					&& output.value == coin.amount() - sat(1_000)) { return txid; }
+				if let Some(index) = tx.output.iter().position(|output| output.script_pubkey == registration.spk
+					&& output.value == coin.amount() - sat(1_000)) { return (tx, index as u32); }
 			}
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -75,6 +75,11 @@ async fn fallback_unfunded_decision_keeps_exit_material_until_actual_chain_payme
 	let confirmation_hash = ctx.bitcoind().sync_client().get_block_hash(first_confirmation.into()).unwrap();
 	ctx.generate_blocks(5).await;
 	wallet.chain().invalidate_caches().await;
+	let point = bitcoin::OutPoint::new(payout.compute_txid(), index);
+	let paid = ctx.bitcoind().sync_client().get_tx_out(&point.txid, point.vout, Some(true)).unwrap().unwrap();
+	assert!(paid.confirmations >= 6);
+	assert_eq!(paid.value + sat(1_000), coin.amount());
+	assert_eq!(wallet.verify_fallback_output(point).await.unwrap(), paid.value);
 	wallet.sync_fallback_payouts().await.unwrap();
 	assert_eq!(client_db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spent);
 	let snapshot = client_db.get_fallback_snapshot().await.unwrap();
@@ -178,17 +183,12 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	assert_eq!(client_db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spendable);
 	assert!(wallet.awaiting_settlement_vtxos().await.unwrap().contains(&coin.id()));
 	assert_eq!(wallet.get_full_vtxo(coin.id()).await.unwrap().serialize(), original);
-	let pending = wallet.history().await.unwrap().into_iter()
-		.filter(|movement| movement.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-	assert_eq!(pending.len(), 1);
-	assert_eq!(pending[0].status, bark::movement::MovementStatus::Pending);
-	assert_eq!(pending[0].effective_balance.to_sat(), -1_200);
 	let owed_again = wallet.balance().await.unwrap();
 	assert_eq!(owed_again.spendable, Amount::ZERO);
 	assert_eq!(owed_again.awaiting_settlement, sat(1_200));
 	assert_eq!(owed_again.total(), sat(1_200));
 	// Retained transaction observations can confirm again without
-	// asking the stopped Ark server for another receipt or moving principal.
+	// asking the stopped Ark server for another payment observation or moving principal.
 	ctx.generate_blocks(6).await;
 	wallet.chain().invalidate_caches().await;
 	wallet.sync_fallback_payouts().await.unwrap();

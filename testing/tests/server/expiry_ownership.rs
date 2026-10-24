@@ -32,9 +32,10 @@ async fn expiry_abandoned_registered_send_needs_no_client_refund() {
 		[input.clone()], VtxoPolicy::new_server_htlc_send(key.public_key(), hash, deadline),
 	).unwrap().generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-	}).await.unwrap().into_inner();
+	// Keep the historical short-backing contract; current admission is checked by the fixture.
+	let request = super::owner_proof::prove_wallet_destinations(&wallet, &srv,
+		protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await;
+	let response = super::owner_fixture::legacy_send_commitment(&srv, request).await;
 	let response = ark::arkoor::package::ArkoorPackageCosignResponse::try_from(response).unwrap();
 	let htlcs = builder.user_cosign(&[key], response).unwrap().build_signed_vtxos();
 	wallet.register_vtxo_transactions_with_server(&htlcs).await.unwrap();

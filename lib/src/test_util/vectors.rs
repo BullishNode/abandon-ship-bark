@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use bitcoin::absolute::LockTime;
+use bitcoin::bip32::{ChildNumber, Xpriv};
 use bitcoin::consensus::encode::{deserialize_hex, serialize_hex};
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::hex::{DisplayHex, FromHex};
@@ -114,10 +115,27 @@ impl VtxoTestHex {
 }
 
 pub fn generate_vtxo_vectors() -> VtxoTestVectors {
+	generate_vtxo_vectors_with_account(None)
+}
+
+/// Generate the same VTXO shapes using normal children of a test account.
+///
+/// The returned board, HTLC-send, arkoor2, round1, round2 and arkoor3 VTXOs use
+/// children 1 through 6 respectively. The frozen encoding vectors are unchanged.
+pub fn generate_vtxo_vectors_for_account(account: &Xpriv) -> VtxoTestVectors {
+	generate_vtxo_vectors_with_account(Some(account))
+}
+
+fn generate_vtxo_vectors_with_account(account: Option<&Xpriv>) -> VtxoTestVectors {
+	let user_key = |index, original: &str| match account {
+		Some(account) => account.derive_priv(&SECP, &[ChildNumber::Normal { index }])
+			.expect("test account child should derive").to_keypair(&SECP),
+		None => Keypair::from_str(original).unwrap(),
+	};
 	let expiry_height = BlockHeight::new(101_010);
 	let exit_delta = BlockDelta::new(2016);
 	let server_key = Keypair::from_str("916da686cedaee9a9bfb731b77439f2a3f1df8664e16488fba46b8d2bfe15e92").unwrap();
-	let board_user_key = Keypair::from_str("fab9e598081a3e74b2233d470c4ad87bcc285b6912ed929568e62ac0e9409879").unwrap();
+	let board_user_key = user_key(1, "fab9e598081a3e74b2233d470c4ad87bcc285b6912ed929568e62ac0e9409879");
 	let amount = Amount::from_sat(10_330);
 	let fee = Amount::from_sat(330);
 	let builder = BoardBuilder::new(
@@ -165,7 +183,7 @@ pub fn generate_vtxo_vectors() -> VtxoTestVectors {
 
 	// arkoor1: htlc send
 
-	let arkoor_htlc_out_user_key = Keypair::from_str("33b6f3ede430a1a53229f55da7117242d8392cbfc64a57249ba70731dba71408").unwrap();
+	let arkoor_htlc_out_user_key = user_key(2, "33b6f3ede430a1a53229f55da7117242d8392cbfc64a57249ba70731dba71408");
 	let payment_hash = PaymentHash::from(sha256::Hash::hash("arkoor1".as_bytes()).to_byte_array());
 	let arkoor1_dest1 = ArkoorDestination {
 		total_amount: Amount::from_sat(9000),
@@ -193,7 +211,7 @@ pub fn generate_vtxo_vectors() -> VtxoTestVectors {
 
 	// arkoor2: regular pubkey
 
-	let arkoor2_user_key = Keypair::from_str("fcc43a4f03356092a945ca1d7218503156bed3f94c2fa224578ce5b158fbf5a6").unwrap();
+	let arkoor2_user_key = user_key(3, "fcc43a4f03356092a945ca1d7218503156bed3f94c2fa224578ce5b158fbf5a6");
 	let arkoor2_dest1 = ArkoorDestination {
 		total_amount: Amount::from_sat(8000),
 		policy: VtxoPolicy::new_pubkey(arkoor2_user_key.public_key()),
@@ -217,7 +235,7 @@ pub fn generate_vtxo_vectors() -> VtxoTestVectors {
 	// round 1
 
 	//TODO(stevenroose) rename to round htlc in
-	let round1_user_key = Keypair::from_str("0a832e9574070c94b5b078600a18639321c880c830c5ba2f2a96850c7dcc4725").unwrap();
+	let round1_user_key = user_key(4, "0a832e9574070c94b5b078600a18639321c880c830c5ba2f2a96850c7dcc4725");
 	let round1_cosign_key = Keypair::from_str("e14bfc3199842c76816eec1d93c9da00b850c4ed19e414e246d07e845e465a2b").unwrap();
 	let round1_unlock_preimage = UnlockPreimage::from_hex("c05bc2f82c8c64e470cd4d87aca42989b46879ca32320cd035db124bb78c4e74").unwrap();
 	let round1_unlock_hash = UnlockHash::hash(&round1_unlock_preimage);
@@ -232,7 +250,7 @@ pub fn generate_vtxo_vectors() -> VtxoTestVectors {
 	};
 	let round1_nonces = iter::repeat_with(|| musig::nonce_pair(&round1_cosign_key)).take(5).collect::<Vec<_>>();
 
-	let round2_user_key = Keypair::from_str("c0b645b01cac427717a18b30c7c9238dee2b3885f659930144fbe05061ad6166").unwrap();
+	let round2_user_key = user_key(5, "c0b645b01cac427717a18b30c7c9238dee2b3885f659930144fbe05061ad6166");
 	let round2_cosign_key = Keypair::from_str("628789cd7b7e02766d184ecfecc433798c9640349e41822df7996c66a56fc633").unwrap();
 	let round2_unlock_preimage = UnlockPreimage::from_hex("61050792ef121826fda248a789c8ba75b955844c65acd2c6361950bdd31dae7d").unwrap();
 	let round2_unlock_hash = UnlockHash::hash(&round2_unlock_preimage);
@@ -363,7 +381,7 @@ pub fn generate_vtxo_vectors() -> VtxoTestVectors {
 
 	// arkoor3: off from round2's htlc
 
-	let arkoor3_user_key = Keypair::from_str("ad12595bdbdab56cb61d1f60ccc46ff96b11c5d6fe06ae7ba03d3a5f4347440f").unwrap();
+	let arkoor3_user_key = user_key(6, "ad12595bdbdab56cb61d1f60ccc46ff96b11c5d6fe06ae7ba03d3a5f4347440f");
 	let arkoor3_dest = ArkoorDestination {
 		total_amount: Amount::from_sat(10_000),
 		policy: VtxoPolicy::Pubkey(PubkeyVtxoPolicy { user_pubkey: arkoor3_user_key.public_key() }),
@@ -390,6 +408,28 @@ pub fn generate_vtxo_vectors() -> VtxoTestVectors {
 		round2_vtxo,
 		arkoor3_user_key,
 		arkoor3_vtxo,
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn account_vectors_use_registered_children_and_remain_valid() {
+		let account = Xpriv::new_master(bitcoin::Network::Regtest, &[17; 32]).unwrap();
+		let vectors = generate_vtxo_vectors_for_account(&account);
+		let vtxos = [
+			&vectors.board_vtxo, &vectors.arkoor_htlc_out_vtxo, &vectors.arkoor2_vtxo,
+			&vectors.round1_vtxo, &vectors.round2_vtxo, &vectors.arkoor3_vtxo,
+		];
+		for (offset, vtxo) in vtxos.iter().enumerate() {
+			let index = u32::try_from(offset + 1).unwrap();
+			let child = account.derive_priv(&SECP, &[ChildNumber::Normal { index }]).unwrap();
+			assert_eq!(vtxo.user_pubkey(), child.to_keypair(&SECP).public_key());
+		}
+		assert_eq!(vectors.arkoor3_user_key.public_key(), vectors.arkoor3_vtxo.user_pubkey());
+		vectors.validate_vtxos();
 	}
 }
 

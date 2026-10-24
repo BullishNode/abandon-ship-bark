@@ -14,7 +14,7 @@ use ark::integration::{TokenStatus, TokenType};
 use ark::lightning::{AsPaymentHash, Invoice, Preimage};
 use ark::mailbox::{MailboxIdentifier, MailboxType};
 use ark::rounds::RoundId;
-use ark::test_util::VTXO_VECTORS;
+use super::owner_fixture::REGISTERED_VTXO_VECTORS as VTXO_VECTORS;
 use ark::vtxo::ServerHtlcRecv_v0_VtxoPolicy;
 use ark::tree::signed::{UnlockHash, UnlockPreimage};
 
@@ -46,6 +46,7 @@ async fn upsert_vtxo() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	// Create a few dummy vtxo's
 	let vtxo1 = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
@@ -380,6 +381,7 @@ async fn upsert_vtxos_with_txid() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	// Create vtxos using VTXO_VECTORS
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
@@ -481,6 +483,7 @@ async fn ban_vtxo() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	// Insert a vtxo
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
@@ -601,6 +604,7 @@ async fn postgres_offboards() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos(&[vtxo.clone()]).await).await.unwrap();
@@ -773,6 +777,7 @@ async fn vtxo_mailbox() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let mailbox_id = MailboxIdentifier::from_str(
 		"038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354"
@@ -847,6 +852,7 @@ async fn store_vtxos_in_mailbox_duplicate() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let mailbox_id = MailboxIdentifier::from_str(
 		"038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354"
@@ -891,6 +897,7 @@ async fn store_vtxo_ids_in_mailbox_duplicate() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let mailbox_id = MailboxIdentifier::from_str(
 		"038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354"
@@ -938,6 +945,7 @@ async fn mailbox_page_returns_whole_batch() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let mailbox_id = MailboxIdentifier::from_str(
 		"038f47dcd43ba6d97fc9ed2e3bba09b175a45fac55f0683e8cf771e8ced4572354"
@@ -975,6 +983,7 @@ async fn vtxo_pool() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo1 = PoolVtxo::new(VTXO_VECTORS.board_vtxo.clone());
 	let vtxo2 = PoolVtxo::new(VTXO_VECTORS.round1_vtxo.clone());
@@ -1018,6 +1027,7 @@ async fn watchman_frontier() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	// Store the vtxo row that the frontier columns hang off of
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
@@ -1074,6 +1084,7 @@ async fn watchman_reorg() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos(&[vtxo.clone()]).await).await.unwrap();
@@ -1099,6 +1110,7 @@ async fn watchman_get_vtxos_by_txid() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos(&[vtxo.clone()]).await).await.unwrap();
@@ -1128,6 +1140,7 @@ async fn watchman_unfrontiered_funding_txids() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	// No vtxos → no unfrontiered txids
 	let unfrontiered = db.read(async |t| t.get_unfrontiered_funding_txids().await).await.unwrap();
@@ -1182,6 +1195,7 @@ async fn round_participation() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	// Insert a vtxo to use as an input
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
@@ -1246,6 +1260,7 @@ async fn round_participation_supersedes_on_same_input() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos(&[vtxo.clone()]).await).await.unwrap();
@@ -1291,6 +1306,7 @@ async fn round_participation_forfeited_at() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos(&[vtxo.clone()]).await).await.unwrap();
@@ -1352,6 +1368,7 @@ async fn set_forfeit_transactions_is_idempotent() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	// We will create a few vtxos, all pubkey policy: htlc vtxos are
 	// refused as round inputs
@@ -1493,6 +1510,7 @@ async fn set_forfeit_transactions_rejects_non_round_spent_vtxo() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos(&[vtxo.clone()]).await).await.unwrap();
@@ -1555,6 +1573,7 @@ async fn round_participation_same_vtxo_multiple_pending() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos(&[vtxo.clone()]).await).await.unwrap();
@@ -1881,6 +1900,7 @@ async fn successful_attempt_consumes_its_linked_htlc_send() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let pubkey = PublicKey::from_str(DUMMY_PUBKEY).unwrap();
 	let (node_id, _) = db.write(async |t| t.register_lightning_node(&pubkey).await).await.unwrap();
@@ -1947,6 +1967,7 @@ async fn lightning_payment_attempt_stores_protocol_fee() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let pubkey = PublicKey::from_str(DUMMY_PUBKEY).unwrap();
 	let (node_id, _) = db.write(async |t| t.register_lightning_node(&pubkey).await).await.unwrap();
@@ -2001,6 +2022,7 @@ async fn lightning_generated_invoice_and_htlc_subscription() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let pubkey = PublicKey::from_str(DUMMY_PUBKEY).unwrap();
 	let (node_id, _) = db.write(async |t| t.register_lightning_node(&pubkey).await).await.unwrap();
@@ -2304,6 +2326,7 @@ async fn htlc_vtxo_chain_resolution_cleared_above_fork_height() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.arkoor_htlc_out_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos([vtxo.clone()]).await).await.unwrap();
@@ -2340,6 +2363,7 @@ async fn htlc_vtxo_chain_resolution_kept_at_fork_height() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.arkoor_htlc_out_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos([vtxo.clone()]).await).await.unwrap();
@@ -2371,7 +2395,8 @@ async fn watchman_receive_claim_uses_upstream_facts_for_both_encodings() {
 	let cfg = ctx.new_postgres(&ctx.test_name).await;
 	Db::create(&cfg).await.unwrap();
 	let db = Db::connect(&cfg).await.unwrap();
-	let key = PublicKey::from_str(DUMMY_PUBKEY).unwrap();
+	super::owner_fixture::register_vector_owners(&db).await;
+	let key = VTXO_VECTORS.board_vtxo.user_pubkey();
 	let (node, _) = db.write(async |t| t.register_lightning_node(&key).await).await.unwrap();
 	let secp = Secp256k1::new();
 	let invoice_key = SecretKey::from_slice(&[41; 32]).unwrap();

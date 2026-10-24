@@ -2,7 +2,7 @@ use bitcoin::{OutPoint, Transaction};
 
 use ark::encode::ProtocolEncoding;
 use ark::offboard::OffboardForfeitResult;
-use ark::test_util::VTXO_VECTORS;
+use super::owner_fixture::REGISTERED_VTXO_VECTORS as VTXO_VECTORS;
 use ark::{ServerVtxo, ServerVtxoPolicy};
 use bitcoin_ext::{BlockDelta, P2TR_DUST};
 use server::database::data_migrations;
@@ -19,6 +19,7 @@ async fn get_bare_vtxo_by_id() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	db.write(async |t| t.upsert_vtxos([vtxo.clone()]).await).await.unwrap();
@@ -57,6 +58,7 @@ async fn fix_offboard_vtxos() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
+	super::owner_fixture::register_vector_owners(&db).await;
 
 	// the user vtxo that gets offboarded
 	let vtxo = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());

@@ -9,6 +9,7 @@ use bitcoin::secp256k1::{Keypair, PublicKey};
 
 use crate::{ProtocolDecodingError, ProtocolEncoding, VtxoPolicy};
 use crate::encode::{MAX_VEC_SIZE, ReadExt, WriteExt};
+use crate::fallback::OwnerProof;
 use crate::mailbox::{BlindedMailboxIdentifier, MailboxIdentifier};
 
 
@@ -59,6 +60,11 @@ pub enum VtxoDelivery {
 	ServerMailbox {
 		blinded_id: BlindedMailboxIdentifier,
 	},
+	/// Mailbox delivery with the normal account child used by this address.
+	ServerMailboxWithOwnerIndex {
+		blinded_id: BlindedMailboxIdentifier,
+		child_index: u32,
+	},
 	Unknown {
 		delivery_type: u8,
 		data: Vec<u8>,
@@ -75,8 +81,17 @@ const DELIVERY_BUILTIN: u8 = 0x00;
 
 /// The type byte for the "server mailbox" delivery mechanism
 const DELIVERY_MAILBOX: u8 = 0x01;
+const DELIVERY_MAILBOX_WITH_OWNER_INDEX: u8 = 0x02;
 
 impl VtxoDelivery {
+	/// The mailbox routing identifier, independent of ownership metadata.
+	pub fn mailbox_id(&self) -> Option<BlindedMailboxIdentifier> {
+		match self {
+			Self::ServerMailbox { blinded_id }
+				| Self::ServerMailboxWithOwnerIndex { blinded_id, .. } => Some(*blinded_id),
+			Self::Unknown { .. } => None,
+		}
+	}
 
 	/// Returns whether the VTXO delivery type is unknown
 	pub fn is_unknown(&self) -> bool {
@@ -90,6 +105,7 @@ impl VtxoDelivery {
 	fn encoded_length(&self) -> usize {
 		match self {
 			Self::ServerMailbox { .. } => 1 + 33,
+			Self::ServerMailboxWithOwnerIndex { .. } => 1 + 33 + 4,
 			Self::Unknown { data, .. } => 1usize.saturating_add(data.len()),
 		}
 	}
@@ -100,6 +116,11 @@ impl VtxoDelivery {
 			Self::ServerMailbox { blinded_id } => {
 				w.emit_u8(DELIVERY_MAILBOX)?;
 				w.emit_slice(blinded_id.as_ref())?;
+			},
+			Self::ServerMailboxWithOwnerIndex { blinded_id, child_index } => {
+				w.emit_u8(DELIVERY_MAILBOX_WITH_OWNER_INDEX)?;
+				w.emit_slice(blinded_id.as_ref())?;
+				w.emit_slice(&child_index.to_be_bytes())?;
 			},
 			Self::Unknown { delivery_type, data } => {
 				w.emit_u8(*delivery_type)?;
@@ -121,6 +142,19 @@ impl VtxoDelivery {
 					|_| ParseAddressError::Invalid("invalid blinded mailbox identifier"),
 				)?,
 			}),
+			DELIVERY_MAILBOX_WITH_OWNER_INDEX => {
+				if payload.len() != 38 {
+					return Err(ParseAddressError::Invalid("invalid indexed mailbox length"));
+				}
+				let blinded_id = BlindedMailboxIdentifier::from_slice(&payload[1..34])
+					.map_err(|_| ParseAddressError::Invalid("invalid blinded mailbox identifier"))?;
+				let index_bytes = <[u8; 4]>::try_from(&payload[34..38])
+					.map_err(|_| ParseAddressError::Invalid("invalid owner key index"))?;
+				let child_index = u32::from_be_bytes(index_bytes);
+				OwnerProof::new(blinded_id, child_index)
+					.map_err(|_| ParseAddressError::Invalid("invalid indexed mailbox owner proof"))?;
+				Ok(Self::ServerMailboxWithOwnerIndex { blinded_id, child_index })
+			},
 			delivery_type => Ok(Self::Unknown {
 				delivery_type: delivery_type,
 				data: payload[1..].to_vec(),
@@ -208,6 +242,32 @@ impl Address {
 		&self.delivery
 	}
 
+	/// Return the unique ownership evidence advertised by this address.
+	///
+	/// Repeated identical entries are harmless. Conflicting owner entries or
+	/// mailbox routing alongside a different owner must never be selected silently.
+	pub fn owner_proof(&self) -> Result<Option<OwnerProof>, ParseAddressError> {
+		let mut owner = None;
+		for method in &self.delivery {
+			if let VtxoDelivery::ServerMailboxWithOwnerIndex { blinded_id, child_index } = method {
+				let proof = OwnerProof::new(*blinded_id, *child_index)
+					.map_err(|_| ParseAddressError::Invalid("invalid indexed mailbox owner proof"))?;
+				if owner.is_some_and(|existing| existing != proof) {
+					return Err(ParseAddressError::Invalid("conflicting owner proofs"));
+				}
+				owner = Some(proof);
+			}
+		}
+		if let Some(proof) = owner {
+			if self.delivery.iter().filter_map(VtxoDelivery::mailbox_id)
+				.any(|id| id != proof.blinded_mailbox_id)
+			{
+				return Err(ParseAddressError::Invalid("mailbox delivery conflicts with owner proof"));
+			}
+		}
+		Ok(owner)
+	}
+
 	/// Write the address payload to the writer
 	pub fn encode_payload<W: io::Write + ?Sized>(&self, writer: &mut W) -> Result<(), io::Error> {
 		writer.emit_slice(&self.ark_id.to_byte_array())?;
@@ -267,7 +327,9 @@ impl Address {
 			delivery.push(VtxoDelivery::decode(&buf[..])?);
 		}
 
-		Ok(Address::new(testnet, ark_id, policy, delivery))
+			let address = Address::new(testnet, ark_id, policy, delivery);
+			address.owner_proof()?;
+			Ok(address)
 	}
 }
 
@@ -440,6 +502,7 @@ pub struct Builder {
 
 	delivery: Vec<VtxoDelivery>,
 	mailbox_id: Option<BlindedMailboxIdentifier>,
+	mailbox_child_index: Option<u32>,
 }
 
 impl Builder {
@@ -451,6 +514,7 @@ impl Builder {
 			policy: None,
 			delivery: Vec::new(),
 			mailbox_id: None,
+				mailbox_child_index: None,
 		}
 	}
 
@@ -504,12 +568,28 @@ impl Builder {
 		let blinded = mailbox.to_blinded(server_mailbox_pubkey, vtxo_key)
 			.map_err(|_| "mailbox blinding failed: point at infinity")?;
 		self.mailbox_id = Some(blinded);
+		self.mailbox_child_index = None;
 		Ok(self)
+	}
+
+	/// Set mailbox delivery and the normal account child of this output key.
+	pub fn mailbox_with_owner_index(
+		self,
+		server_mailbox_pubkey: PublicKey,
+		mailbox: MailboxIdentifier,
+		vtxo_key: &Keypair,
+		child_index: u32,
+	) -> Result<Self, AddressBuilderError> {
+		bitcoin::bip32::ChildNumber::from_normal_idx(child_index)
+			.map_err(|_| AddressBuilderError::from("owner key index is outside the normal child range"))?;
+		let mut builder = self.mailbox(server_mailbox_pubkey, mailbox, vtxo_key)?;
+		builder.mailbox_child_index = Some(child_index);
+		Ok(builder)
 	}
 
 	/// Finish by building an [Address]
 	pub fn into_address(self) -> Result<Address, AddressBuilderError> {
-		Ok(Address {
+		let address = Address {
 			testnet: self.testnet,
 			ark_id: self.server_pubkey.ok_or("missing server pubkey")?.into(),
 			policy: self.policy.ok_or("missing policy")?,
@@ -517,7 +597,10 @@ impl Builder {
 				let mut ret = Vec::new();
 
 				if let Some(blinded_id) = self.mailbox_id {
-					ret.push(VtxoDelivery::ServerMailbox { blinded_id });
+					ret.push(match self.mailbox_child_index {
+						Some(child_index) => VtxoDelivery::ServerMailboxWithOwnerIndex { blinded_id, child_index },
+						None => VtxoDelivery::ServerMailbox { blinded_id },
+					});
 				}
 
 				ret.extend(self.delivery);
@@ -527,7 +610,9 @@ impl Builder {
 
 				ret
 			}
-		})
+		};
+		address.owner_proof().map_err(|_| AddressBuilderError::from("conflicting or invalid owner proof"))?;
+		Ok(address)
 	}
 }
 
@@ -648,5 +733,115 @@ mod test {
 			Err(e) => panic!("expected Invalid error, got {:?}", e),
 			Ok(_) => panic!("expected error, got a parsed address"),
 		}
+	}
+
+	fn indexed_delivery(child_index: u32) -> VtxoDelivery {
+		let key = Keypair::from_str("6b0f024af54172a9aed9a0f044689175787676c469ff2aa75024cae5445c7a02").unwrap();
+		VtxoDelivery::ServerMailboxWithOwnerIndex {
+			blinded_id: BlindedMailboxIdentifier::from_pubkey(key.public_key()), child_index,
+		}
+	}
+
+	fn address_with_delivery(delivery: Vec<VtxoDelivery>) -> Address {
+		let key = Keypair::from_str("6b0f024af54172a9aed9a0f044689175787676c469ff2aa75024cae5445c7a02").unwrap();
+		Address::new(false, key.public_key(), VtxoPolicy::new_pubkey(key.public_key()), delivery)
+	}
+
+	#[test]
+	fn indexed_mailbox_has_fixed_big_endian_payload() {
+		let delivery = indexed_delivery(0x01020304);
+		let mut payload = Vec::new();
+		delivery.encode(&mut payload).unwrap();
+		assert_eq!(payload.len(), 38);
+		assert_eq!(payload[0], 0x02);
+		assert_eq!(&payload[34..], &[1, 2, 3, 4]);
+		assert_eq!(VtxoDelivery::decode(&payload).unwrap(), delivery);
+
+		let address = address_with_delivery(vec![delivery.clone()]);
+		let parsed = test_roundtrip(&address);
+		let proof = parsed.owner_proof().unwrap().unwrap();
+		assert_eq!(proof.child_index, 0x01020304);
+		assert_eq!(Some(proof.blinded_mailbox_id), delivery.mailbox_id());
+
+		let legacy = address_with_delivery(vec![VtxoDelivery::ServerMailbox {
+			blinded_id: proof.blinded_mailbox_id,
+		}]);
+		let mut legacy_bytes = Vec::new();
+		let mut indexed_bytes = Vec::new();
+		legacy.encode_payload(&mut legacy_bytes).unwrap();
+		address.encode_payload(&mut indexed_bytes).unwrap();
+		assert_eq!(indexed_bytes.len(), legacy_bytes.len() + 4);
+		assert!(legacy.owner_proof().unwrap().is_none());
+	}
+
+	#[test]
+	fn indexed_mailbox_rejects_bad_lengths_points_and_indexes() {
+		let mut payload = Vec::new();
+		indexed_delivery(1).encode(&mut payload).unwrap();
+		for length in 0..38 {
+			assert!(VtxoDelivery::decode(&payload[..length]).is_err());
+		}
+		let mut extra = payload.clone();
+		extra.push(0);
+		assert!(VtxoDelivery::decode(&extra).is_err());
+
+		let mut invalid_point = payload.clone();
+		invalid_point[1..34].fill(0);
+		assert!(VtxoDelivery::decode(&invalid_point).is_err());
+		for index in [0u32, 1, (1 << 31) - 1, 1 << 31, u32::MAX] {
+			payload[34..38].copy_from_slice(&index.to_be_bytes());
+			assert_eq!(VtxoDelivery::decode(&payload).is_ok(), index < 1 << 31);
+		}
+	}
+
+	#[test]
+	fn indexed_mailbox_rejects_ambiguous_owner_and_legacy_routes() {
+		let delivery = indexed_delivery(7);
+		let mailbox = delivery.mailbox_id().unwrap();
+		let identical = address_with_delivery(vec![
+			delivery.clone(), delivery.clone(), VtxoDelivery::ServerMailbox { blinded_id: mailbox },
+		]);
+		assert!(identical.owner_proof().unwrap().is_some());
+		test_roundtrip(&identical);
+
+		let conflicting = address_with_delivery(vec![delivery.clone(), indexed_delivery(8)]);
+		assert!(conflicting.owner_proof().is_err());
+		assert!(Address::from_str(&conflicting.to_string()).is_err());
+
+		let other = Keypair::from_str("76f78cc00278817fe65fd81cb962782d2625834d08b66edbf2cd60f6c520db63").unwrap();
+		let conflicting = address_with_delivery(vec![
+			delivery, VtxoDelivery::ServerMailbox {
+				blinded_id: BlindedMailboxIdentifier::from_pubkey(other.public_key()),
+			},
+		]);
+		assert!(conflicting.owner_proof().is_err());
+		assert!(Address::from_str(&conflicting.to_string()).is_err());
+	}
+
+	#[test]
+	fn indexed_mailbox_builder_preserves_blinding_and_legacy_unknowns() {
+		let server = Keypair::new(&SECP, &mut rand::thread_rng());
+		let mailbox_server = Keypair::new(&SECP, &mut rand::thread_rng());
+		let mailbox_key = Keypair::new(&SECP, &mut rand::thread_rng());
+		let user = Keypair::new(&SECP, &mut rand::thread_rng());
+		let mailbox = MailboxIdentifier::from_pubkey(mailbox_key.public_key());
+		let address = Address::builder().server_pubkey(server.public_key())
+			.pubkey_policy(user.public_key())
+			.mailbox_with_owner_index(mailbox_server.public_key(), mailbox, &user, 42).unwrap()
+			.into_address().unwrap();
+		let proof = test_roundtrip(&address).owner_proof().unwrap().unwrap();
+		assert_eq!(proof.child_index, 42);
+		assert_eq!(MailboxIdentifier::from_blinded(
+			proof.blinded_mailbox_id, user.public_key(), &mailbox_server,
+		).unwrap(), mailbox);
+		assert!(Address::builder().server_pubkey(server.public_key())
+			.pubkey_policy(user.public_key())
+			.mailbox_with_owner_index(mailbox_server.public_key(), mailbox, &user, 1 << 31).is_err());
+
+		let unknown = address_with_delivery(vec![VtxoDelivery::Unknown {
+			delivery_type: 0xfe, data: vec![1, 2, 3, 4],
+		}]);
+		test_roundtrip(&unknown);
+		assert!(unknown.owner_proof().unwrap().is_none());
 	}
 }

@@ -34,6 +34,7 @@ pub mod ln;
 pub mod nursery;
 mod offboards;
 mod expiry_owner;
+pub mod owner_proof;
 mod expiry_readiness;
 pub mod recovery;
 mod round;
@@ -633,7 +634,7 @@ impl Server {
 		Ok(HashSet::new())
 	}
 
-	#[tracing::instrument(skip(self))]
+	#[tracing::instrument(skip(self, owner_proof))]
 	pub async fn cosign_board(
 		&self,
 		amount: Amount,
@@ -642,6 +643,7 @@ impl Server {
 		utxo: OutPoint,
 		funding_tx: Option<&Transaction>,
 		user_pub_nonce: PublicNonce,
+		owner_proof: Option<ark::fallback::OwnerProof>,
 	) -> anyhow::Result<ark::board::BoardCosignResponse> {
 		check_max_amount("board", amount, self.config.max_board_amount)?;
 
@@ -757,6 +759,9 @@ impl Server {
 		);
 
 		info!("Cosigning board request for utxo {}", utxo);
+		let mut proofs = crate::owner_proof::OwnerProofs::new();
+		proofs.insert(user_pubkey, owner_proof)?;
+		self.db.write(async |t| self.verify_output_owners(t, [user_pubkey], &proofs).await).await?;
 		let resp = builder.server_cosign(self.server_key.leak_ref());
 
 		slog!(CosignedBoard, utxo, amount, fee);

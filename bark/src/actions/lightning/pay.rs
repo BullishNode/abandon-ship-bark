@@ -358,7 +358,7 @@ pub(crate) async fn start_lightning_send(
 	original_payment_method: PaymentMethod,
 	retry_for: Option<Duration>,
 ) -> anyhow::Result<LightningSend> {
-	let (_, ark_info) = wallet.require_server().await?;
+	let (_, ark_info) = wallet.require_owner_proof_server().await?;
 	let tip = wallet.inner.chain.tip().await?;
 
 	let properties = wallet.inner.db.read_properties().await?.context("Missing config")?;
@@ -503,9 +503,9 @@ async fn request_lightning_send_htlcs(
 		.generate_user_nonces(&input_keypairs)
 		.context("invalid nb of keypairs").abort()?;
 
-	let cosign_request = protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-	};
+	let mut package = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	wallet.attach_package_owner_proofs(&mut package, None).await.abort()?;
+	let cosign_request = protos::LightningPayHtlcCosignRequest { parts: package.parts };
 	let response = srv.client.request_lightning_pay_htlc_cosign(cosign_request).await.map_err(crate::FallbackRefusal::map_status)
 		.retry_unless_rejected()?.into_inner();
 
@@ -767,10 +767,11 @@ async fn revoke_lightning_send_htlcs(
 		.generate_user_nonces(&htlc_keypairs)
 		.context("failed to generate user nonces").abort()?;
 
-	let cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	let mut cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	wallet.attach_package_owner_proofs(&mut cosign_request, None).await.retry()?;
 	let response = srv.client
 		.request_lightning_pay_htlc_revocation(cosign_request).await
-		.retry_unless_rejected()?.into_inner();
+		.map_err(crate::FallbackRefusal::map_status).retry_unless_rejected()?.into_inner();
 
 	// The server has cosigned the revocation by now, so from here on only
 	// retry: the request replays with fresh nonces.

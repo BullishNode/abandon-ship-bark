@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use anyhow::{Context, bail};
 
 use bitcoin::{Transaction, Txid};
+use bitcoin::secp256k1::PublicKey;
 use tracing::debug;
 
 use ark::{ProtocolEncoding, ServerVtxo, Vtxo, VtxoId};
@@ -46,6 +47,7 @@ struct UndoRoundUpdate {
 /// `execute_vtxo_tree_update` can pass the arrays directly to one INSERT
 /// query regardless of the mix of spendable, unclaimed, and oor-spent VTXOs.
 struct VtxoInserts {
+	customer_keys: Vec<PublicKey>,
 	vtxo_ids: Vec<String>,
 	vtxo_txids: Vec<String>,
 	data: Vec<Vec<u8>>,
@@ -63,6 +65,7 @@ struct VtxoInserts {
 impl VtxoInserts {
 	fn new() -> Self {
 		VtxoInserts {
+			customer_keys: Vec::new(),
 			vtxo_ids: Vec::new(),
 			vtxo_txids: Vec::new(),
 			data: Vec::new(),
@@ -78,7 +81,10 @@ impl VtxoInserts {
 		}
 	}
 
-	fn push_vtxo(&mut self, vtxo: &ServerVtxo<Full>, spend_state: SpendState, oor_spent_txid: Option<Txid>) {
+	fn push_vtxo(&mut self, vtxo: &ServerVtxo<Full>, spend_state: SpendState, oor_spent_txid: Option<Txid>, padding: bool) {
+		if !padding && customer_state(spend_state) {
+			if let Some(key) = vtxo.policy().user_pubkey() { self.customer_keys.push(key); }
+		}
 		self.vtxo_ids.push(vtxo.id().to_string());
 		self.vtxo_txids.push(vtxo.point().txid.to_string());
 		self.data.push(vtxo.serialize());
@@ -94,6 +100,9 @@ impl VtxoInserts {
 	}
 
 	fn push_bare_vtxo(&mut self, vtxo: &ServerVtxo<Bare>, spend_state: SpendState, oor_spent_txid: Option<Txid>) {
+		if customer_state(spend_state) {
+			if let Some(key) = vtxo.policy().user_pubkey() { self.customer_keys.push(key); }
+		}
 		self.vtxo_ids.push(vtxo.id().to_string());
 		self.vtxo_txids.push(vtxo.point().txid.to_string());
 		// Bare vtxos encode as a full vtxo with an empty genesis, so readers
@@ -116,7 +125,7 @@ impl VtxoInserts {
 		spend_state: SpendState,
 		oor_spent_txid: Option<Txid>,
 	) {
-		self.push_vtxo(vtxo, spend_state, oor_spent_txid);
+		self.push_vtxo(vtxo, spend_state, oor_spent_txid, false);
 	}
 
 	fn push_bare(
@@ -134,6 +143,15 @@ impl VtxoInserts {
 
 	fn is_empty(&self) -> bool {
 		self.vtxo_ids.is_empty()
+	}
+}
+
+fn customer_state(state: SpendState) -> bool {
+	match state {
+		SpendState::Spendable | SpendState::Unregistered | SpendState::Unclaimed
+			| SpendState::HtlcRecvUnclaimed => true,
+		SpendState::Spent | SpendState::Pool | SpendState::LnSpent | SpendState::RoundForfeit
+			| SpendState::OffboardForfeit | SpendState::OffboardConnector => false,
 	}
 }
 
@@ -282,6 +300,17 @@ impl VtxoTreeUpdate {
 		vtxos: impl IntoIterator<Item = ServerVtxo<Full>>,
 	) -> Self {
 		self.insert_unspent_vtxos(vtxos, SpendState::Unclaimed)
+	}
+
+	/// Only finish_round can supply ids originating in the private padding loop.
+	pub(super) fn insert_round_outputs(
+		mut self, vtxos: impl IntoIterator<Item = ServerVtxo<Full>>, padding_ids: &[VtxoId],
+	) -> Self {
+		for vtxo in vtxos {
+			let padding = padding_ids.contains(&vtxo.id());
+			self.vtxo_inserts.push_vtxo(&vtxo, SpendState::Unclaimed, None, padding);
+		}
+		self
 	}
 
 	/// Insert vtxos with `spend_state = 'spent'` and `oor_spent_txid` set.
@@ -465,6 +494,7 @@ pub async fn execute_vtxo_tree_update(
 	obligation_ids.sort_unstable();
 	obligation_ids.dedup();
 	super::expiry_guard::guard_obligation_changes(tx, &obligation_ids).await?;
+	crate::owner_proof::require_mappings(tx, &update.vtxo_inserts.customer_keys).await?;
 
 	upsert_virtual_transactions(tx, &update.tx_inserts).await?;
 	let inserted = insert_vtxos(tx, &update.vtxo_inserts).await?;

@@ -410,6 +410,7 @@ impl rpc::server::ArkService for Server {
 
 		let resp = self.cosign_board(
 			amount, user_pubkey, expiry_height, utxo, funding_tx.as_ref(), pub_nonce,
+			crate::owner_proof::parse_proof(user_pubkey, req.owner_proof).to_status()?,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(resp.into()))
@@ -495,10 +496,12 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ArkoorPackageCosignRequest>,
 	) -> Result<tonic::Response<protos::ArkoorPackageCosignResponse>, tonic::Status> {
-		let request = ArkoorPackageCosignRequest::try_from(req.into_inner())
+		let req = req.into_inner();
+		let owner_proofs = crate::owner_proof::OwnerProofs::from_arkoor_parts(&req.parts).to_status()?;
+		let request = ArkoorPackageCosignRequest::try_from(req)
 			.context("Failed to parse request")?;
 
-		let response = self.cosign_oor(request).await.to_status()?;
+		let response = self.cosign_oor(request, owner_proofs).await.to_status()?;
 		Ok(tonic::Response::new(response.into()))
 	}
 
@@ -519,8 +522,9 @@ impl rpc::server::ArkService for Server {
 
 		let cosign_requests = ArkoorPackageCosignRequest::try_from(req.clone())
 			.context("Failed to parse request")?;
+		let owner_proofs = crate::owner_proof::OwnerProofs::from_arkoor_parts(&req.parts).to_status()?;
 
-		let resp = self.request_lightning_pay_htlc_cosign(cosign_requests)
+		let resp = self.request_lightning_pay_htlc_cosign(cosign_requests, owner_proofs)
 			.await.context("error making payment")?;
 
 		Ok(tonic::Response::new(resp.into()))
@@ -580,10 +584,12 @@ impl rpc::server::ArkService for Server {
 		&self,
 		req: tonic::Request<protos::ArkoorPackageCosignRequest>
 	) -> Result<tonic::Response<protos::ArkoorPackageCosignResponse>, tonic::Status> {
-		let cosign_requests = ArkoorPackageCosignRequest::try_from(req.into_inner())
+		let req = req.into_inner();
+		let owner_proofs = crate::owner_proof::OwnerProofs::from_arkoor_parts(&req.parts).to_status()?;
+		let cosign_requests = ArkoorPackageCosignRequest::try_from(req)
 			.context("Failed to parse request")?;
 
-		let cosign_resp = self.revoke_lightning_pay_htlcs(cosign_requests).await
+		let cosign_resp = self.revoke_lightning_pay_htlcs(cosign_requests, owner_proofs).await
 			.to_status()?;
 
 		Ok(tonic::Response::new(cosign_resp.into()))
@@ -682,6 +688,7 @@ impl rpc::server::ArkService for Server {
 
 		let (sub, htlcs) = self.prepare_lightning_claim(
 			payment_hash, user_pubkey, htlc_recv_expiry, req.lightning_receive_anti_dos,
+			crate::owner_proof::parse_proof(user_pubkey, req.owner_proof).to_status()?,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(protos::PrepareLightningReceiveClaimResponse {
@@ -701,15 +708,16 @@ impl rpc::server::ArkService for Server {
 		let payment_hash = PaymentHash::from_bytes(req.payment_hash)?;
 
 		let payment_preimage = Preimage::from_bytes(req.payment_preimage)?;
-		let cosign_request = ArkoorPackageCosignRequest::try_from(
-			req.cosign_request.badarg("cosign request missing")?,
-		).badarg("invalid cosign request")?;
+		let raw_cosign = req.cosign_request.badarg("cosign request missing")?;
+		let owner_proofs = crate::owner_proof::OwnerProofs::from_arkoor_parts(&raw_cosign.parts).to_status()?;
+		let cosign_request = ArkoorPackageCosignRequest::try_from(raw_cosign).badarg("invalid cosign request")?;
 
 		let cosign_resp = self.claim_lightning_receive(
 			payment_hash,
 			payment_preimage,
 			cosign_request,
 			pver,
+			owner_proofs,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(cosign_resp.into()))
@@ -797,12 +805,16 @@ impl rpc::server::ArkService for Server {
 		}).collect::<Result<_, tonic::Status>>()?;
 
 		let mut vtxo_requests = Vec::with_capacity(req.vtxo_requests.len());
+		let mut owner_proofs = crate::owner_proof::OwnerProofs::new();
 		for r in req.vtxo_requests.clone() {
 			// Make sure users provided right number of nonces.
 			if r.public_nonces.len() != self.config.nb_round_nonces {
 				macros::badarg!("need exactly {} public nonces", self.config.nb_round_nonces);
 			}
-			vtxo_requests.push(r.try_into().badarg("invalid signed vtxo request")?);
+			let proof = r.vtxo.as_ref().and_then(|v| v.owner_proof.clone());
+			let converted: ark::SignedVtxoRequest = r.try_into().badarg("invalid signed vtxo request")?;
+			owner_proofs.insert_proto(converted.vtxo.policy.user_pubkey(), proof).to_status()?;
+			vtxo_requests.push(converted);
 		}
 
 		#[allow(deprecated)]
@@ -817,6 +829,7 @@ impl rpc::server::ArkService for Server {
 		let inp = RoundInput::RegisterPayment {
 			inputs,
 			vtxo_requests,
+			owner_proofs,
 			unlock_preimage: Secret::new(unlock_preimage),
 			user_agent_name: crate::telemetry::current_user_agent_name(),
 		};
@@ -891,15 +904,19 @@ impl rpc::server::ArkService for Server {
 			.transpose().badarg("invalid unblinded mailbox id")?;
 
 		let mut outputs = Vec::with_capacity(req.vtxo_requests.len());
+		let mut owner_proofs = crate::owner_proof::OwnerProofs::new();
 		for r in req.vtxo_requests {
+			let proof = r.owner_proof.clone();
+			let vtxo_request: ark::VtxoRequest = r.try_into().badarg("invalid vtxo request")?;
+			owner_proofs.insert_proto(vtxo_request.policy.user_pubkey(), proof).to_status()?;
 			outputs.push(StoredRoundOutput {
-				vtxo_request: r.try_into().badarg("invalid vtxo request")?,
+				vtxo_request,
 				unblinded_mailbox_id,
 			});
 		}
 
 		let unlock_hash = self.register_delegated_round_participation(
-			inputs, outputs, req.scheduled_height.map(BlockHeight::new),
+			inputs, outputs, req.scheduled_height.map(BlockHeight::new), owner_proofs,
 		).await.to_status()?;
 
 		Ok(tonic::Response::new(protos::RoundParticipationResponse {

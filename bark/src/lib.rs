@@ -398,6 +398,8 @@ mod board;
 mod config;
 mod daemon;
 mod fallback;
+mod owner_proof;
+pub use owner_proof::OwnerProofRefusal;
 pub use fallback::{FallbackRefusal, ExitProtectionOutcome, ExitProtectionSchedule,
 	ExitProtectionReport, ExitProtectionIssue, ExitProtectionIncomplete};
 pub use fallback::payouts::FallbackSnapshot;
@@ -1176,7 +1178,7 @@ impl Wallet {
 			.testnet(network != bitcoin::Network::Bitcoin)
 			.server_pubkey(server_pubkey)
 			.pubkey_policy(keypair.public_key())
-			.mailbox(mailbox_pubkey, mailbox, &keypair)
+				.mailbox_with_owner_index(mailbox_pubkey, mailbox, &keypair, index)
 			.context("failed to assign mailbox")?
 			.into_address()
 			.context("failed to build address")?)
@@ -2338,6 +2340,7 @@ impl Wallet {
 			inputs: vtxos,
 			outputs: vec![req],
 			unblinded_mailbox_id: None,
+			owner_proofs: Default::default(),
 		}))
 	}
 

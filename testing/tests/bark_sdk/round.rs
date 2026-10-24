@@ -1470,16 +1470,9 @@ async fn cancelled_issued_refresh_reopens_and_receives_one_fallback_payout() {
 		let refreshes = history.iter().filter(|entry| entry.subsystem.name == "bark.round").collect::<Vec<_>>();
 		assert_eq!(refreshes.len(), 1);
 		assert_eq!(refreshes[0].id, movement);
-		let payouts = history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-		assert_eq!(payouts.len(), 1);
-		assert_eq!(payouts[0].status, MovementStatus::Successful);
-		assert_eq!(payouts[0].metadata["fallback"]["chain_verified"], true);
-		assert_eq!(payouts[0].sent_to.len(), 1);
-		assert_eq!(payouts[0].sent_to[0], bark::movement::MovementDestination::bitcoin(
-			bitcoin::Address::from_script(&registration.spk, Network::Regtest).unwrap(), sat(99_000)));
-		assert_eq!(payouts[0].sent_to[0].amount, sat(99_000));
-		assert_eq!(payouts[0].offchain_fee, sat(1_000));
-		assert_eq!(payouts[0].effective_balance.to_sat(), -100_000);
+		assert_eq!(wallet.verify_fallback_output(payout).await.unwrap(), sat(99_000));
+		assert_eq!(wallet.get_full_vtxo(source.id()).await.unwrap(), source,
+			"settlement must retain the original signed recovery material");
 		assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 0);
 	})).await.expect("cancelled refresh and absent-owner payout must finish within the test budget");
 }

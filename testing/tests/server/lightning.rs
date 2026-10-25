@@ -1613,6 +1613,7 @@ async fn check_lightning_receive_returns_on_canceled_subscription() {
 	let payment_hash = ark::lightning::Preimage::random().compute_payment_hash();
 	let mut rpc = srv.get_public_rpc().await;
 	rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: payment_hash.as_ref().to_vec(),
 		amount_sat: btc(1).to_sat(),
 		min_cltv_delta: 6,
@@ -1990,6 +1991,7 @@ async fn refuse_receive_claim_after_incoming_htlc_expiry() {
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc
 		.start_lightning_receive(protos::StartLightningReceiveRequest {
+			claim_destination: None,
 			payment_hash: payment_hash.as_ref().to_vec(),
 			amount_sat: btc(1).to_sat(),
 			min_cltv_delta,
@@ -2123,6 +2125,7 @@ async fn settled_hash_cannot_fund_new_receive() {
 	// The same hash must now be refused for a receive.
 	let err = srv.get_public_rpc().await
 		.start_lightning_receive(protos::StartLightningReceiveRequest {
+			claim_destination: None,
 			payment_hash: payment_hash.as_ref().to_vec(),
 			amount_sat: btc(1).to_sat(),
 			min_cltv_delta: 6,
@@ -2197,6 +2200,7 @@ async fn settled_hash_cannot_be_granted_htlc_recv_vtxos() {
 	// it so the subscription is Accepted.
 	let mut rpc = srv.get_public_rpc().await;
 	let receive_invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: payment_hash.as_ref().to_vec(),
 		amount_sat: btc(1).to_sat(),
 		min_cltv_delta: 6,
@@ -2268,6 +2272,7 @@ async fn failed_intra_ark_promotion_does_not_bind_another_payers_grants() {
 	let hash = preimage.compute_payment_hash();
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 58,
 		mailbox_id: None, description: None,
 	}).await.unwrap().into_inner().bolt11;
@@ -2372,6 +2377,7 @@ async fn intra_ark_payment_refused_while_same_hash_send_is_open() {
 	// A receive for H is allowed: H is not settled.
 	let mut rpc = srv.get_public_rpc().await;
 	let receive_invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: payment_hash.as_ref().to_vec(),
 		amount_sat: btc(0.5).to_sat(),
 		min_cltv_delta: 6,
@@ -2943,7 +2949,7 @@ async fn check_lightning_receive_poll_interval_fallback() {
 
 	// Create a hold invoice on the server.
 	let resp = srv.start_lightning_receive(
-		payment_hash, btc(1), BlockDelta::new(18), None, None,
+		payment_hash, btc(1), BlockDelta::new(18), None, None, None,
 	).await.unwrap();
 
 	// Create a disconnected receiver: the sender is kept alive so
@@ -3014,6 +3020,7 @@ async fn refuse_receive_with_unlock_hash_as_payment_hash() {
 
 	let mut rpc = srv.get_public_rpc().await;
 	let err = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: payment_hash.as_ref().to_vec(),
 		amount_sat: 10_000,
 		min_cltv_delta: 8,
@@ -3246,6 +3253,7 @@ async fn prevent_double_pay_via_canceled_subscription_and_inflight_xpay() {
 	// 3. Register a server receive with the same payment hash H.
 	let invoice_2 = srv.get_public_rpc().await
 		.start_lightning_receive(protos::StartLightningReceiveRequest {
+			claim_destination: None,
 			payment_hash: payment_hash.to_byte_array().to_vec(),
 			amount_sat: amount.to_sat(),
 			min_cltv_delta: 6,
@@ -3361,6 +3369,7 @@ async fn self_payment_claim_rejected_after_sender_onchain_refund() {
 	let payment_hash = preimage.compute_payment_hash();
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: payment_hash.to_vec(),
 		amount_sat: 100_000,
 		min_cltv_delta: 18,
@@ -3530,6 +3539,7 @@ async fn canceled_external_receive_with_preimage_recovers_backing_directly() {
 	let hash = preimage.compute_payment_hash();
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: srv.config().max_user_invoice_cltv_delta.into(),
 		mailbox_id: None, description: None,
 	}).await.unwrap().into_inner().bolt11;

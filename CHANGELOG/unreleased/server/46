@@ -15,3 +15,7 @@
   Use the immutable mailbox constraint instead of a global registry lock, so
   one registration does not block unrelated admissions or mailbox operations.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+- Check forwarded destinations before invoice creation
+  Verify the recipient's actual key, signed mailbox link and net amount before
+  a new invoice or a Created-invoice retry. Keep the final claim checks.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

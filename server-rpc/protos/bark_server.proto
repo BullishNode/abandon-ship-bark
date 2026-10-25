@@ -432,6 +432,8 @@ message StartLightningReceiveRequest {
 	uint32 min_cltv_delta = 3;
 	optional bytes mailbox_id = 4;
 	optional string description = 5;
+	// Point-in-time check for an explicit recipient before invoice creation.
+	VtxoRequest claim_destination = 6;
 }
 
 message StartLightningReceiveResponse {

@@ -21,7 +21,7 @@ use bitcoin::hex::DisplayHex;
 use bitcoin::secp256k1::PublicKey;
 use tracing::{error, info, trace, warn};
 
-use ark::{Vtxo, VtxoId, VtxoPolicy, VtxoRequest, ServerVtxo};
+use ark::{ProtocolEncoding, Vtxo, VtxoId, VtxoPolicy, VtxoRequest, ServerVtxo};
 use ark::arkoor::ArkoorDestination;
 use ark::vtxo::Full;
 use ark::arkoor::package::{ArkoorPackageCosignRequest, ArkoorPackageCosignResponse};
@@ -44,6 +44,7 @@ use crate::database::ln::{
 	LightningHtlcSubscription, LightningHtlcSubscriptionStatus,
 };
 use crate::error::ContextExt;
+use crate::owner_proof::OwnerLinks;
 use crate::{check_max_amount, telemetry, Server, CAPTAIND_API_KEY};
 
 
@@ -606,6 +607,7 @@ impl Server {
 		min_cltv_delta: BlockDelta,
 		mailbox_id: Option<ark::mailbox::MailboxIdentifier>,
 		description: Option<String>,
+		claim_destination: Option<protos::VtxoRequest>,
 	) -> anyhow::Result<protos::StartLightningReceiveResponse> {
 		if let Some(mailbox) = mailbox_id {
 			self.db.write(async |t| t.require_registered_mailbox(mailbox, self.config.network).await).await?;
@@ -650,12 +652,25 @@ impl Server {
 		// Calculate lightning receive fees and validate fees don't exceed the received amount
 		let fee = self.config.fees.lightning_receive.calculate(amount)
 			.context("fee overflowed")?;
-		validate_and_subtract_fee(amount, fee)?;
+		let net_amount = validate_and_subtract_fee(amount, fee)?;
 
 		if let Some(max) = self.config.max_vtxo_amount {
 			if amount > max {
 				return badarg!("Requested amount exceeds limit of {}", max);
 			}
+		}
+		if let Some(destination) = claim_destination {
+			let policy = VtxoPolicy::deserialize(&destination.policy).badarg("invalid claim destination policy")?;
+			if !matches!(policy, VtxoPolicy::Pubkey(_)) {
+				return badarg!("claim destination must use a pubkey policy");
+			}
+			if destination.amount != net_amount.to_sat() {
+				return badarg!("claim destination amount differs from receive amount after fees");
+			}
+			let mut links = OwnerLinks::default();
+			links.insert_request(&destination)?;
+			self.db.write(async |t| links.verify(t, [policy.user_pubkey()],
+				self.mailbox_key.leak_ref(), self.config.network).await).await?;
 		}
 
 		// A payment hash carries at most one subscription.

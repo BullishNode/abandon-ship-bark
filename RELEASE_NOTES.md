@@ -70,6 +70,9 @@ or recovery.
 - A valid link can direct a gift to another registered mailbox. It authorizes
   that destination rather than claiming ownership of the mailbox. Explicit
   recipient links remain authoritative even for a locally owned coin key.
+- Forwarded invoice requests from the reference SDK include the recipient's
+  policy, signed link and amount after current receive fees. The server checks
+  them before invoice creation or a Created-invoice retry.
 - Expiry payouts charge each owner payout script once per expiry height. The
   cumulative fee is the greater of 1,000 sats and 1% of the total gross paid,
   rounded up. Each new output pays that cumulative fee minus the fees already
@@ -110,6 +113,9 @@ matching final GNU programs and the final release bundle remain required.
   already broadcast before a later collection cannot be retracted by this
   guard. An exposed forwarded grant still requires its original provider's key
   to spend; no new recipient signing protocol is introduced.
+  Recipient checks at invoice creation do not commit a destination to the
+  payment hash. Later record loss or corruption can still park a receive at
+  its final claim guard.
 - Exposed uncollected receive grants use upstream's native timeout claim. It
   pays the actual miner fee from reclaimed operator funds rather than using a
   sponsored payout child. A grant that cannot cover its claim fee plus a

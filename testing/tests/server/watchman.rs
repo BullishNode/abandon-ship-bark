@@ -4293,6 +4293,7 @@ async fn watchman_claims_expired_receive_grant_before_receiver() {
 	let receiver_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 18,
 		mailbox_id: None, description: None,
 	}).await.unwrap().into_inner().bolt11;

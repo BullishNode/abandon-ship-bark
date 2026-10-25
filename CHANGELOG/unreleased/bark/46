@@ -11,3 +11,7 @@
   Avoid repeated registration requests during payments. Explicit refresh and
   wallet sync still repair registrations after a server restore.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+- Send the recipient's signed destination with a forwarded invoice request
+  Let the server refuse an invalid or unregistered recipient before it creates
+  a payable invoice.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

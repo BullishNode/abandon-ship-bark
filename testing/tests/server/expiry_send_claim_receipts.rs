@@ -481,6 +481,7 @@ async fn send_claim_follows_internal_attempt_settlement() {
 		assert_ne!(source.chain_anchor(), unrelated.chain_anchor());
 		let mut rpc = server.get_public_rpc().await;
 		let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+			claim_destination: None,
 			payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 220,
 			mailbox_id: None, description: None,
 		}).await.unwrap().into_inner().bolt11;
@@ -613,6 +614,7 @@ async fn internal_send_records_fee_without_native_payment() {
 		assert_eq!(source.amount(), sat(90_000) + user_fee);
 		let mut rpc = server.get_public_rpc().await;
 		let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+			claim_destination: None,
 			payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 220,
 			mailbox_id: None, description: None,
 		}).await.unwrap().into_inner().bolt11;

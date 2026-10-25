@@ -911,6 +911,7 @@ async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: b
 			// Only register this independent receive after the external dispatch is
 			// fixed. Its invoice does not reclassify that dispatch as internal.
 			let internal = srv.get_public_rpc().await.start_lightning_receive(protos::StartLightningReceiveRequest {
+				claim_destination: None,
 				payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 18,
 				mailbox_id: None, description: None,
 			}).await.unwrap().into_inner().bolt11;

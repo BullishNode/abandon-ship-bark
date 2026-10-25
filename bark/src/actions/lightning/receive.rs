@@ -26,7 +26,7 @@ use bitcoin_ext::{BlockDelta, BlockHeight};
 use server_rpc::{protos, ServerConnection};
 use server_rpc::protos::prepare_lightning_receive_claim_request::LightningReceiveAntiDos;
 
-use crate::{Config, Wallet};
+use crate::{Config, FallbackRefusal, Wallet};
 use crate::actions::{
 	abort, or_retry, Advance, AdvanceError, IntoAdvanceResult, IntoAnyhow,
 	RetryUnlessRejected, WalletAction, WalletActionId, BASE_RETRY_BACKOFF,
@@ -337,7 +337,15 @@ pub(crate) async fn start_lightning_receive(
 	let config = wallet.config();
 
 	let fee = ark_info.fees.lightning_receive.calculate(amount).context("fee overflowed")?;
-	validate_and_subtract_fee(amount, fee)?;
+	let net_amount = validate_and_subtract_fee(amount, fee)?;
+	let destination = claim_destination.as_ref().map(|destination| -> anyhow::Result<_> {
+		let link = destination.owner_link(ark_info.mailbox_pubkey)?
+			.ok_or(FallbackRefusal::RecipientMustUpdate)?;
+		Ok(protos::VtxoRequest {
+			amount: net_amount.to_sat(), policy: destination.policy().serialize(),
+			owner_proof: Some(link.into()),
+		})
+	}).transpose()?;
 
 	// User needs to enforce the following delta:
 	// - vtxo exit delta + htlc expiry delta (time to exit the vtxo before the htlc expires)
@@ -370,6 +378,7 @@ pub(crate) async fn start_lightning_receive(
 		min_cltv_delta: requested_min_cltv_delta.into(),
 		mailbox_id: Some(mailbox_id.serialize()),
 		description,
+		claim_destination: destination,
 	};
 
 	let (_, key_index) = wallet.derive_store_next_keypair().await?;

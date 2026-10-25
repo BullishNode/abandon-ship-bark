@@ -366,6 +366,12 @@ signer owns the coin key. A signed gift therefore directs fallback payment to
 that mailbox's script. A notification mailbox does not replace this choice.
 Forwarded Lightning receives require the recipient's signed address and the
 same link checks before the server accepts the destination output.
+The reference SDK also sends the recipient policy, signed link and amount after
+current receive fees when it requests a forwarded invoice. The server checks
+that destination before it creates an invoice or returns a Created-invoice
+retry. This stores the binding at admission; it does not commit the payment hash
+to that destination. The final claim still verifies its actual outputs. Loss or
+corruption after invoice creation can still cause that claim to remain pending.
 
 At expiry, the server rechecks the stored coin signature, unblinding and
 canonical registration. There is no owner scan, announcement window or index

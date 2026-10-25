@@ -2,7 +2,12 @@ use ark_testing::TestContext;
 use bitcoin::{Network, ScriptBuf};
 use bitcoin::hex::DisplayHex;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::str::FromStr;
+use std::task::Poll;
+
+use futures::future::try_join_all;
+use tokio::sync::Notify;
 
 use bark::persist::{BarkPersister, sqlite::SqliteClient};
 
@@ -47,6 +52,14 @@ struct FallbackRpcFault {
 	lose_reply_on: Option<usize>,
 	seen: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 	refusal: Arc<Mutex<Option<tonic::Code>>>,
+	reply_gate: Option<Arc<FallbackReplyGate>>,
+}
+
+#[derive(Default)]
+struct FallbackReplyGate {
+	pause_on: AtomicUsize,
+	entered: Notify,
+	release: Notify,
 }
 
 #[async_trait::async_trait]
@@ -58,8 +71,15 @@ impl ark_testing::daemon::captaind::proxy::ArkRpcProxy for FallbackRpcFault {
 		let code = *self.refusal.lock().unwrap();
 		if let Some(code) = code { return Err(tonic::Status::new(code, "injected registration RPC refusal")); }
 		let response = upstream.set_fallback(request).await?.into_inner();
-		if Some(self.seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1) == self.lose_reply_on {
+		let seen = self.seen.fetch_add(1, Ordering::SeqCst) + 1;
+		if Some(seen) == self.lose_reply_on {
 			return Err(tonic::Status::unavailable("injected lost registration reply"));
+		}
+		if let Some(gate) = &self.reply_gate {
+			if gate.pause_on.load(Ordering::SeqCst) == seen {
+				gate.entered.notify_one();
+				gate.release.notified().await;
+			}
 		}
 		Ok(response)
 	}
@@ -72,7 +92,7 @@ async fn fallback_native_retries_a_lost_registration_reply() {
 		let srv = ctx.captaind("server").create().await;
 		let proxy = srv.start_proxy_no_mailbox(FallbackRpcFault {
 			lose_reply_on: Some(request), seen: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
-			refusal: Arc::new(Mutex::new(None)),
+			refusal: Arc::new(Mutex::new(None)), reply_gate: None,
 		}).await;
 		let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 		let first = ctx.bark_sdk("wallet", &proxy.address).mnemonic(mnemonic.clone())
@@ -223,7 +243,8 @@ async fn cached_open_defers_only_temporary_registration_rpc_failures() {
 	let ctx = TestContext::new("bark_sdk/cached_open_registration_rpc_failures").await;
 	let srv = ctx.captaind("server").create().await;
 	let gate = FallbackRpcFault { lose_reply_on: None,
-		seen: Arc::new(std::sync::atomic::AtomicUsize::new(0)), refusal: Arc::new(Mutex::new(None)) };
+		seen: Arc::new(std::sync::atomic::AtomicUsize::new(0)), refusal: Arc::new(Mutex::new(None)),
+		reply_gate: None };
 	let proxy = srv.start_proxy_no_mailbox(gate.clone()).await;
 	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
 	let wallet = ctx.bark_sdk("wallet", &proxy.address).mnemonic(mnemonic.clone())
@@ -260,4 +281,68 @@ async fn cached_open_defers_only_temporary_registration_rpc_failures() {
 	online.sync_mailbox().await.unwrap();
 	assert_eq!(online.fallback_destination().await.unwrap(), canonical);
 	assert_eq!(online.exit_mgr().get_exit_vtxo_ids().await, vec![coin.id()]);
+}
+
+#[tokio::test]
+async fn fallback_reconciles_once_per_connection_and_explicit_sync() {
+	let ctx = TestContext::new("bark_sdk/fallback_once_per_connection").await;
+	let srv = ctx.captaind("server").create().await;
+	let reply_gate = Arc::new(FallbackReplyGate::default());
+	let gate = FallbackRpcFault { lose_reply_on: None, seen: Arc::new(AtomicUsize::new(0)),
+		refusal: Arc::new(Mutex::new(None)), reply_gate: Some(reply_gate.clone()) };
+	let proxy = srv.start_proxy_no_mailbox(gate.clone()).await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let wallet = ctx.bark_sdk("wallet", &proxy.address).mnemonic(mnemonic.clone())
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let canonical = wallet.fallback_destination().await.unwrap();
+	let recovery = wallet.recovery_mailbox_identifier();
+	gate.seen.store(0, Ordering::SeqCst);
+	try_join_all((0..16).map(|_| wallet.require_ark_info())).await.unwrap();
+	assert_eq!(gate.seen.load(Ordering::SeqCst), 0, "warm calls must not register again");
+	wallet.refresh_server().await.unwrap();
+	assert_eq!(gate.seen.load(Ordering::SeqCst), 2, "explicit refresh reconciles both identities");
+
+	let postgres = srv.config().postgres.clone();
+	let db = server::database::Db::connect(&postgres).await.unwrap();
+	// The local record is acknowledged; only the remote recovery registration is lost.
+	db.write(async |tx| {
+		tx.execute("DELETE FROM fallback_record WHERE mailbox_pk=$1", &[&recovery.to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
+	wallet.sync().await;
+	assert_eq!(gate.seen.load(Ordering::SeqCst), 4, "manual sync must repair an acknowledged registration");
+	let restored = db.read(async |tx| tx.get_fallback(recovery.as_pubkey()).await).await.unwrap().unwrap();
+	assert_eq!(restored.spk, canonical.spk);
+	restored.verify(Network::Regtest, recovery.as_pubkey()).unwrap();
+	try_join_all((0..16).map(|_| wallet.require_ark_info())).await.unwrap();
+	assert_eq!(gate.seen.load(Ordering::SeqCst), 4);
+
+	let config = wallet.config().clone();
+	drop(wallet);
+	*gate.refusal.lock().unwrap() = Some(tonic::Code::Unavailable);
+	let cached = bark::Wallet::open(Network::Regtest,
+		bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic), config,
+		bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: false,
+			skip_recovery: true, ..Default::default() }).await.unwrap();
+	assert!(cached.ark_info().await.unwrap().is_none(), "failed registration cannot publish a connection");
+	*gate.refusal.lock().unwrap() = None;
+	gate.seen.store(0, Ordering::SeqCst);
+	reply_gate.pause_on.store(2, Ordering::SeqCst);
+	let refresh = tokio::spawn({
+		let wallet = cached.clone();
+		async move { wallet.refresh_server().await }
+	});
+	tokio::time::timeout(std::time::Duration::from_secs(10), reply_gate.entered.notified()).await.unwrap();
+	// The recovery record committed upstream, but its acknowledgement is withheld.
+	let info = cached.ark_info();
+	let operation = cached.require_ark_info();
+	tokio::pin!(info, operation);
+	assert!(matches!(futures::poll!(info.as_mut()), Poll::Pending));
+	assert!(matches!(futures::poll!(operation.as_mut()), Poll::Pending));
+	reply_gate.release.notify_one();
+	refresh.await.unwrap().unwrap();
+	assert!(info.await.unwrap().is_some());
+	operation.await.unwrap();
+	assert_eq!(gate.seen.load(Ordering::SeqCst), 2, "cold waiters share the authenticated connection");
 }

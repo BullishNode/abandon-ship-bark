@@ -7,3 +7,7 @@
   and reconcile normal and recovery registrations before mailbox use.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
   - **BREAKING:** Require signed recipient addresses and protocol version 6.
+- Reconcile fallback registrations once per server connection
+  Avoid repeated registration requests during payments. Explicit refresh and
+  wallet sync still repair registrations after a server restore.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

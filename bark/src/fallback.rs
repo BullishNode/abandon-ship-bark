@@ -191,13 +191,6 @@ impl Wallet {
 		self.fallback_registration().await?.context("no fallback mailbox registered")
 	}
 
-	pub(crate) async fn retry_pending_fallback_registration(&self) -> anyhow::Result<()> {
-		if self.inner.db.get_pending_fallback_record().await?.is_some() {
-			self.open_fallback(None, true).await?;
-		}
-		Ok(())
-	}
-
 	pub(crate) async fn open_fallback(&self, requested: Option<ScriptBuf>, allow_offline: bool) -> anyhow::Result<()> {
 		let _guard = self.inner.lock_manager.lock(&format!("{}.fallback", self.fingerprint()), Duration::from_secs(30)).await?;
 		let stored = self.inner.db.get_fallback_record().await?;

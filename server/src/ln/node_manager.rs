@@ -85,6 +85,7 @@ enum PayInvoiceRace {
 
 /// Handle for the cln manager process.
 pub struct LightningManager {
+	network: bitcoin::Network,
 	db: database::Db,
 	settler: Arc<HtlcSettler>,
 	invoice_poll_interval: Duration,
@@ -111,7 +112,7 @@ pub struct LightningManager {
 
 impl LightningManager {
 	fn payment_handler(&self) -> PaymentAttemptHandler<'_> {
-		PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx)
+		PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx, self.network)
 	}
 
 	/// Start the [LightningManager].
@@ -168,6 +169,7 @@ impl LightningManager {
 		tokio::spawn(proc.run(config.cln_reconnect_interval));
 
 		Ok(LightningManager {
+			network: config.network,
 			db,
 			settler,
 			mailbox_manager,
@@ -437,7 +439,7 @@ impl LightningManager {
 
 		// Post mailbox notification so the client knows to come online and claim
 		post_lightning_receive_notification(
-			&self.db, &self.mailbox_manager, payment_hash, subscription.amount(),
+			&self.db, &self.mailbox_manager, payment_hash, subscription.amount(), self.network,
 		).await;
 
 		// Cancel the hold invoice on the receiving node: the intra-Ark
@@ -787,6 +789,7 @@ pub(crate) async fn post_lightning_receive_notification(
 	mailbox_manager: &crate::mailbox_manager::MailboxManager,
 	payment_hash: PaymentHash,
 	amount: Amount,
+	network: bitcoin::Network,
 ) {
 	let res = db.write(async |t| {
 		if let Some(id) = t.get_lightning_receiver_mailbox_id(payment_hash).await
@@ -796,6 +799,7 @@ pub(crate) async fn post_lightning_receive_notification(
 			// the re-post is silently ignored.
 			let cp = t.store_lightning_receive_notification(
 				id, &payment_hash.to_string(), amount,
+				network,
 			).await?;
 			Ok(cp.map(|cp| (id, cp)))
 		} else {

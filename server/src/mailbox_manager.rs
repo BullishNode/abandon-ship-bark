@@ -21,7 +21,15 @@ impl MailboxManager {
 
 	/// Get a [MailboxSubscription] for the given mailbox.
 	/// Creates the channel on first use with the initial value of parameter `init`.
-	pub fn subscribe(self: &Arc<Self>, id: MailboxIdentifier, init: Checkpoint) -> MailboxSubscription {
+	pub async fn subscribe(
+		self: &Arc<Self>, tx: &crate::database::Tx<'_>, network: bitcoin::Network,
+		id: MailboxIdentifier, init: Checkpoint,
+	) -> anyhow::Result<MailboxSubscription> {
+		tx.require_registered_mailbox(id, network).await?;
+		Ok(self.subscribe_registered(id, init))
+	}
+
+	fn subscribe_registered(self: &Arc<Self>, id: MailboxIdentifier, init: Checkpoint) -> MailboxSubscription {
 		// read lock first
 		{
 			let map = self.map.read();
@@ -117,7 +125,7 @@ mod test {
 
 		let id = MailboxIdentifier::from_str("02f6378a16b72df9316d7b933f631141d85f5554d38f2d94ba2a692e9fd1031d70").unwrap();
 
-		let receiver = mgr.subscribe(id, 5);
+		let receiver = mgr.subscribe_registered(id, 5);
 		assert_eq!(*receiver.borrow(), 5);
 		assert_eq!(*receiver.borrow(), 5);
 		assert_eq!(mgr.map.read().len(), 1);
@@ -135,7 +143,7 @@ mod test {
 
 		let id = MailboxIdentifier::from_str("02f6378a16b72df9316d7b933f631141d85f5554d38f2d94ba2a692e9fd1031d70").unwrap();
 
-		let receiver = mgr.subscribe(id, 0);
+		let receiver = mgr.subscribe_registered(id, 0);
 		assert_eq!(mgr.map.read().len(), 1);
 		drop(receiver);
 		assert_eq!(mgr.map.read().len(), 0);
@@ -147,8 +155,8 @@ mod test {
 
 		let id = MailboxIdentifier::from_str("02f6378a16b72df9316d7b933f631141d85f5554d38f2d94ba2a692e9fd1031d70").unwrap();
 
-		let first = mgr.subscribe(id, 0);
-		let second = mgr.subscribe(id, 0);
+		let first = mgr.subscribe_registered(id, 0);
+		let second = mgr.subscribe_registered(id, 0);
 		assert_eq!(mgr.map.read().len(), 1);
 
 		drop(first);

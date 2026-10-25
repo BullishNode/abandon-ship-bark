@@ -23,7 +23,8 @@ impl Tx<'_> {
 		self.lock_fallback_registry().await?;
 		let record = self.get_fallback(mailbox.as_pubkey()).await?
 			.ok_or(crate::error::OwnershipRefusal::UnregisteredMailbox(mailbox.as_pubkey()))?;
-		record.verify(network, mailbox.as_pubkey()).context("invalid stored fallback registration")?;
+		record.verify(network, mailbox.as_pubkey())
+			.map_err(|_| crate::error::OwnershipRefusal::UnregisteredMailbox(mailbox.as_pubkey()))?;
 		Ok(())
 	}
 
@@ -64,8 +65,10 @@ impl Tx<'_> {
 			WHERE mailbox_pk = $1
 		", &[&mailbox_pk.to_string()]).await?
 			.map(|row| -> anyhow::Result<_> { Ok(FallbackRegistration {
-				spk: ScriptBuf::from(Vec::<u8>::from_hex(row.get::<_, &str>("spk"))?),
-				mailbox_signature: schnorr::Signature::from_str(row.get("mailbox_sig"))?,
+				spk: ScriptBuf::from(Vec::<u8>::from_hex(row.get::<_, &str>("spk"))
+					.map_err(|_| crate::error::OwnershipRefusal::UnregisteredMailbox(mailbox_pk))?),
+				mailbox_signature: schnorr::Signature::from_str(row.get("mailbox_sig"))
+					.map_err(|_| crate::error::OwnershipRefusal::UnregisteredMailbox(mailbox_pk))?,
 			}) }).transpose()
 	}
 }

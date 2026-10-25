@@ -1321,6 +1321,7 @@ async fn persist_round(
 			(srv.config.network, srv.mailbox_key.leak_ref()),
 		).await?;
 
+		let mut notifications = Vec::new();
 		// Post VTXOs to mailboxes for wallet recovery support.
 		// This is done after the round is persisted so VTXOs exist in the DB.
 		// Skip adding VTXOs which have None for their unblinded_mailbox_id.
@@ -1331,47 +1332,54 @@ async fn persist_round(
 			let Some(unlock_hash) = vtxo.unlock_hash() else {
 				continue; // Skip VTXOs without unlock hash
 			};
-			match t.store_round_participation_in_mailbox(*mailbox_id, unlock_hash).await {
+			match t.store_round_participation_in_mailbox(*mailbox_id, unlock_hash, srv.config.network).await {
 				Ok(checkpoint) => {
 					if let Some(cp) = checkpoint {
-						srv.mailbox_manager.notify(*mailbox_id, cp);
+						notifications.push((*mailbox_id, cp));
 					}
 					trace!("Posted round VTXO {} to mailbox", vtxo.id());
 				}
 				Err(e) => {
+					if e.is::<crate::error::OwnershipRefusal>() { return Err(e); }
 					// Log but don't fail the round - mailbox delivery is best-effort
 					warn!("Failed to post round VTXO {} to mailbox: {:#}", vtxo.id(), e);
 				}
 			}
 		}
 
-		Ok(())
+		Ok(notifications)
 	}).await;
 
 	telemetry::set_round_step_duration(round_step);
 
-	if let Err(e) = result {
-		if e.is::<crate::error::OwnershipRefusal>() {
-			return Err(RoundError::Recoverable(e));
-		}
-		server_rslog!(FatalStoringRound, round_step,
-			error: format!("{:?}", e),
-			unsigned_funding_tx: serialize(unsigned_funding_tx),
-			vtxo_tree: signed_vtxos.spec.serialize(),
-			input_vtxos: state.all_inputs.keys().copied().collect(),
-		);
+	match result {
+		Err(e) => {
+			if e.is::<crate::error::OwnershipRefusal>() {
+				return Err(RoundError::Recoverable(e));
+			}
+			server_rslog!(FatalStoringRound, round_step,
+				error: format!("{:?}", e),
+				unsigned_funding_tx: serialize(unsigned_funding_tx),
+				vtxo_tree: signed_vtxos.spec.serialize(),
+				input_vtxos: state.all_inputs.keys().copied().collect(),
+			);
 
-		Err(RoundError::Fatal(e))
-	} else {
-		server_rslog!(RoundFinished, round_step,
-			txid: state.funding_tx.txid(),
-			vtxo_expiry_block_height: state.expiry_height,
-			nb_input_vtxos: state.all_inputs.len(),
-			nb_output_vtxos: signed_vtxos.nb_leaves(),
-			total_output_amount: signed_vtxos.spec.spec.total_required_value(),
-		);
+			Err(RoundError::Fatal(e))
+		},
+		Ok(notifications) => {
+			for (mailbox, checkpoint) in notifications {
+				srv.mailbox_manager.notify(mailbox, checkpoint);
+			}
+			server_rslog!(RoundFinished, round_step,
+				txid: state.funding_tx.txid(),
+				vtxo_expiry_block_height: state.expiry_height,
+				nb_input_vtxos: state.all_inputs.len(),
+				nb_output_vtxos: signed_vtxos.nb_leaves(),
+				total_output_amount: signed_vtxos.spec.spec.total_required_value(),
+			);
 
-		Ok(())
+			Ok(())
+		},
 	}
 }
 

@@ -7,3 +7,7 @@
   Verify the actual output key at every admission and again in the tree writer,
   so an accepted customer coin has an authenticated Bitcoin fallback destination.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+- Require fallback registration for every mailbox operation
+  Refuse unregistered reads, subscriptions and notices before allocating a
+  checkpoint or channel, and notify round recipients only after commit.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

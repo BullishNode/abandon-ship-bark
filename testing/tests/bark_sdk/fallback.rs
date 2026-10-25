@@ -102,10 +102,10 @@ async fn fallback_offline_creation_retains_identity_and_registers_on_online_reop
 	assert!(wallet.fallback_destination().await.is_err());
 	assert!(wallet.peek_address(0).await.is_err());
 	assert!(wallet.new_address_with_index().await.is_err());
-	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), Some(0));
+	assert_eq!(db.get_last_vtxo_key_index().await.unwrap(), None);
 	let pending = db.get_pending_fallback_record().await.unwrap().unwrap();
 	assert_eq!(pending.spk, expected);
-	assert_eq!(pending.account_xpub, wallet.vtxo_xpub());
+	pending.verify(Network::Regtest, wallet.mailbox_identifier().as_pubkey()).unwrap();
 	drop(wallet);
 	let offline = bark::Wallet::open(Network::Regtest, seed(), config.clone(), bark::OpenWalletArgs {
 		persister: Some(db.clone()), datadir: Some(directory.clone()), run_daemon: false, ..Default::default()
@@ -126,10 +126,10 @@ async fn fallback_offline_creation_retains_identity_and_registers_on_online_reop
 	}).await.unwrap();
 	let registered = online.fallback_destination().await.unwrap();
 	assert_eq!(registered.spk, expected);
-	assert_eq!(registered.account_xpub, online.vtxo_xpub());
+	registered.verify(Network::Regtest, online.mailbox_identifier().as_pubkey()).unwrap();
 	assert!(db.get_pending_fallback_record().await.unwrap().is_none());
 	let canonical = server::database::Db::connect(&srv.config().postgres).await.unwrap()
 		.read(async |tx| tx.get_fallback(online.mailbox_identifier().as_pubkey()).await).await.unwrap().unwrap();
 	assert_eq!(registered, canonical);
-	assert_eq!(online.new_address_with_index().await.unwrap().1, 1);
+	assert_eq!(online.new_address_with_index().await.unwrap().1, 0);
 }

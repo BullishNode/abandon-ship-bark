@@ -5125,7 +5125,7 @@ async fn offboard_of_confirmed_exited_vtxo_never_costs_server() {
 
 async fn check_receive_seed_custody(
 	ctx: &TestContext, srv: &ark_testing::Captaind,
-	wallet: &bark::Wallet, oldest: &ark::Vtxo<ark::vtxo::Bare>, destination: &ark::fallback::FallbackRecord,
+	wallet: &bark::Wallet, oldest: &ark::Vtxo<ark::vtxo::Bare>, destination: &ark::fallback::FallbackRegistration,
 	payout: OutPoint, remaining: &BTreeMap<String, ark::Vtxo>,
 ) {
 	// Only the original seed and genesis birthday enter the new REST database.
@@ -5499,18 +5499,18 @@ async fn expiry_same_owner_fragments(name: &str, small_first: bool) {
 	srv.wait_for_sync_height(tip).await;
 	wm.wait_for_sync_height(tip).await;
 	let output = core.get_tx_out(&small.txid, small.vout, Some(true)).unwrap().unwrap();
-	// The production readiness task resolves every owner through recovery.
+	// Readiness re-verifies every customer's admitted mailbox link.
 	tokio::time::timeout(Duration::from_secs(10), async {
 		loop {
 			let mut complete = true;
 			for coin in customers.values() {
-				complete &= matches!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest).await).await.unwrap(),
+				complete &= matches!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest, &srv.mailbox_keypair()).await).await.unwrap(),
 					server::database::expiry_attribution::Attribution::Owned { mailbox_pk, spk, .. }
 						if mailbox_pk == mailbox && spk == destination.spk);
 			}
 			if complete { break; }
 		}
-	}).await.expect("all owners must derive through expiry readiness");
+	}).await.expect("all owners must verify through expiry readiness");
 	assert!(output.confirmations >= 6);
 	assert_eq!(output.value, sat(1_000));
 	assert!(core.get_tx_out(&remainder.txid, remainder.vout, Some(true)).unwrap().is_none());

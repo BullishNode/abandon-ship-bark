@@ -106,8 +106,7 @@ fn accepted_reply_loss() -> Pin<Box<dyn Future<Output = ()>>> {
 			_ => None,
 		}).collect::<Vec<_>>();
 		assert_eq!(mailboxes.len(), 1, "this case requires one exact recipient mailbox");
-		assert_ne!(provider.fallback_destination().await.unwrap().account_xpub,
-			recipient.fallback_destination().await.unwrap().account_xpub);
+		assert_ne!(provider.mailbox_identifier(), recipient.mailbox_identifier());
 		let gross = sat(10_000);
 		let fee = srv.ark_info().await.fees.lightning_receive.calculate(gross).unwrap();
 		let net = gross.checked_sub(fee).unwrap();

@@ -220,7 +220,7 @@ async fn expiry_unregistered_owner_does_not_block_registered_sibling() {
 	let paid = core.get_tx_out(&parent.compute_txid(), outputs[0].0 as u32, Some(true)).unwrap().unwrap();
 	assert!(paid.confirmations >= 6);
 	assert_eq!(paid.value, sat(89_000));
-	let state = db.read(async |tx| tx.expiry_owner(unknown, bitcoin::Network::Regtest).await).await.unwrap();
+	let state = db.read(async |tx| tx.expiry_owner(unknown, bitcoin::Network::Regtest, &srv.mailbox_keypair()).await).await.unwrap();
 	assert_eq!(state, server::database::expiry_attribution::Attribution::Unresolved);
 	assert!(db.read(async |tx| Ok(tx.query_one("SELECT \
 		NOT EXISTS(SELECT 1 FROM expiry_owner_key WHERE user_pubkey=$1) \

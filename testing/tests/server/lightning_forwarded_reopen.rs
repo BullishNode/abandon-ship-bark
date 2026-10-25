@@ -74,8 +74,8 @@ async fn interrupted_forwarding() {
 	}).collect::<Vec<_>>();
 	assert_eq!(mailboxes.len(), 1, "this native fixture must name one exact recipient server mailbox");
 	let mailbox = mailboxes[0].clone();
-	let registration = recipient.fallback_destination().await.unwrap();
-	assert_ne!(provider.fallback_destination().await.unwrap().account_xpub, registration.account_xpub);
+	recipient.fallback_destination().await.unwrap();
+	assert_ne!(provider.mailbox_identifier(), recipient.mailbox_identifier());
 	recipient.stop_daemon_wait().await.unwrap();
 	drop(recipient);
 	// Never reopen/sync the recipient again. Only the active provider owns a

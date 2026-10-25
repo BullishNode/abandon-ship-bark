@@ -382,7 +382,7 @@ async fn collected_external_receive_pays_recipient_without_provider() {
 	let recipient_key = address.policy().user_pubkey();
 	let destination = recipient.fallback_destination().await.unwrap();
 	let recipient_mailbox = recipient.mailbox_keypair().public_key().to_string();
-	assert_ne!(destination.account_xpub, provider_destination.account_xpub);
+	assert_ne!(recipient.mailbox_identifier(), provider.mailbox_identifier());
 	assert_ne!(destination.spk, provider_destination.spk);
 	assert_eq!(recipient.balance().await.unwrap().spendable, sat(0));
 	drop(recipient);
@@ -394,7 +394,7 @@ async fn collected_external_receive_pays_recipient_without_provider() {
 	let registered = db.read(async |tx| tx.get_fallback(recipient_mailbox.parse().unwrap()).await).await.unwrap().unwrap();
 	registered.verify(bitcoin::Network::Regtest, recipient_mailbox.parse().unwrap()).unwrap();
 	assert_eq!(registered.spk, destination.spk);
-	assert_eq!(registered.account_xpub, destination.account_xpub);
+	assert!(registered.same_binding(&destination));
 	let operation_provider = provider.clone();
 	let claim = tokio::spawn(async move { operation_provider.try_claim_lightning_receive(hash, true).await });
 	let payment = lightning.external.try_pay_bolt11(invoice.to_string());

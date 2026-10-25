@@ -137,11 +137,11 @@ impl BarkPersister for Dummy {
 		Ok(())
 	}
 
-	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>> {
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRegistration>> {
 		Ok(None)
 	}
 
-	async fn store_fallback_record(&self, _record: &ark::fallback::FallbackRecord) -> anyhow::Result<()> {
+	async fn store_fallback_record(&self, _record: &ark::fallback::FallbackRegistration) -> anyhow::Result<()> {
 		Ok(())
 	}
 

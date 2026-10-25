@@ -108,7 +108,7 @@ async fn interrupted_offboard() {
 	let registered = db.read(async |tx| tx.get_fallback(mailbox).await).await.unwrap().unwrap();
 	registered.verify(bitcoin::Network::Regtest, mailbox).unwrap();
 	assert_eq!(registered.spk, fallback.spk);
-	assert_eq!(registered.account_xpub, fallback.account_xpub);
+	assert!(registered.same_binding(&fallback));
 	srv.watchmand().stop().await.unwrap();
 	let sender = wallet.clone();
 	let destination = address.clone();

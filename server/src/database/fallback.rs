@@ -3,12 +3,11 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-use bitcoin::bip32::Xpub;
 use bitcoin::hex::{DisplayHex, FromHex};
 use bitcoin::secp256k1::{schnorr, PublicKey};
 use bitcoin::{Network, ScriptBuf};
 
-use ark::fallback::FallbackRecord;
+use ark::fallback::FallbackRegistration;
 
 use crate::error::{badarg, ContextExt};
 
@@ -29,40 +28,35 @@ impl Tx<'_> {
 		Ok(())
 	}
 
-	/// The first valid mailbox binding wins. A retry returns its exact canonical
-	/// signatures; attempting to reuse an account with another mailbox is refused.
+	/// The first valid mailbox binding wins. A same-binding retry returns the
+	/// canonical signature even when the caller signs with new randomness.
 	pub async fn set_fallback(
-		&self, mailbox_pk: PublicKey, record: &FallbackRecord, network: Network,
-	) -> anyhow::Result<FallbackRecord> {
+		&self, mailbox_pk: PublicKey, record: &FallbackRegistration, network: Network,
+	) -> anyhow::Result<FallbackRegistration> {
 		record.verify(network, mailbox_pk).badarg("invalid fallback record")?;
 		self.lock_fallback_registry_writer().await?;
-		if let Some(stored) = self.get_fallback(mailbox_pk).await? { return Ok(stored); }
-		let account_xpub = record.account_xpub.to_string();
-		let account_pubkey = record.account_xpub.public_key.to_string();
-		let account_chain_code = record.account_xpub.chain_code.to_string();
-		let reused = self.query_opt("SELECT id FROM fallback_record WHERE account_pubkey = $1 AND account_chain_code = $2",
-			&[&account_pubkey, &account_chain_code]).await?;
-		if reused.is_some() { return badarg!("fallback account already registered to another mailbox"); }
+		if let Some(stored) = self.get_fallback(mailbox_pk).await? {
+			stored.verify(network, mailbox_pk).context("invalid stored fallback registration")?;
+			if !stored.same_binding(record) { return badarg!("immutable fallback destination differs"); }
+			return Ok(stored);
+		}
 		self.query_one("
-			INSERT INTO fallback_record (mailbox_pk, spk, account_xpub, account_pubkey, account_chain_code, mailbox_sig, account_sig)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
+			INSERT INTO fallback_record (mailbox_pk, spk, mailbox_sig)
+			VALUES ($1, $2, $3) RETURNING id
 		", &[
-			&mailbox_pk.to_string(), &record.spk.as_bytes().to_lower_hex_string(), &account_xpub,
-			&account_pubkey, &account_chain_code, &record.mailbox_signature.to_string(), &record.account_signature.to_string(),
+			&mailbox_pk.to_string(), &record.spk.as_bytes().to_lower_hex_string(), &record.mailbox_signature.to_string(),
 		]).await.context("failed to store fallback record")?;
 		Ok(record.clone())
 	}
 
-	pub async fn get_fallback(&self, mailbox_pk: PublicKey) -> anyhow::Result<Option<FallbackRecord>> {
+	pub async fn get_fallback(&self, mailbox_pk: PublicKey) -> anyhow::Result<Option<FallbackRegistration>> {
 		self.query_opt("
-			SELECT spk, account_xpub, mailbox_sig, account_sig FROM fallback_record
+			SELECT spk, mailbox_sig FROM fallback_record
 			WHERE mailbox_pk = $1
 		", &[&mailbox_pk.to_string()]).await?
-			.map(|row| -> anyhow::Result<_> { Ok(FallbackRecord {
+			.map(|row| -> anyhow::Result<_> { Ok(FallbackRegistration {
 				spk: ScriptBuf::from(Vec::<u8>::from_hex(row.get::<_, &str>("spk"))?),
-				account_xpub: Xpub::from_str(row.get("account_xpub"))?,
 				mailbox_signature: schnorr::Signature::from_str(row.get("mailbox_sig"))?,
-				account_signature: schnorr::Signature::from_str(row.get("account_sig"))?,
 			}) }).transpose()
 	}
 }

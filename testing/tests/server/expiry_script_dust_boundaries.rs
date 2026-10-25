@@ -542,12 +542,11 @@ async fn boundaries(family: Family) {
 		assert!(wallet.onchain().is_none());
 		let binding = wallet.fallback_destination().await.unwrap();
 		assert_eq!(binding.spk, app.script);
-		assert_eq!(binding.account_xpub, wallet.vtxo_xpub());
+		binding.verify(Network::Regtest, wallet.mailbox_identifier().as_pubkey()).unwrap();
 		bindings.push(binding);
 		mailboxes.push(wallet.mailbox_identifier());
 	}
 	assert_eq!(bindings.iter().map(|binding| binding.spk.clone()).collect::<BTreeSet<_>>().len(), 4);
-	assert_eq!(bindings.iter().map(|binding| binding.account_xpub).collect::<BTreeSet<_>>().len(), 4);
 	assert_eq!(mailboxes.iter().map(|mailbox| mailbox.as_pubkey().to_string()).collect::<BTreeSet<_>>().len(), 4);
 	for (binding, mailbox) in bindings.iter().zip(&mailboxes) {
 		binding.verify(Network::Regtest, mailbox.as_pubkey()).unwrap();

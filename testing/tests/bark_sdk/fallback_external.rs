@@ -39,8 +39,8 @@ async fn fallback_external_bip84_wallet_registers_and_restores_without_ark_seed_
 	}).await.unwrap();
 	let record = wallet.fallback_destination().await.unwrap();
 	assert_eq!(record.spk, payout);
-	assert_eq!(record.account_xpub, wallet.vtxo_xpub());
-	assert_eq!(wallet.new_address_with_index().await.unwrap().1, 1);
+	record.verify(network, wallet.mailbox_identifier().as_pubkey()).unwrap();
+	assert_eq!(wallet.new_address_with_index().await.unwrap().1, 0);
 	let address = Address::from_script(&payout, network).unwrap();
 	ctx.bitcoind().fund_addr(address, sat(20_000)).await;
 	ctx.generate_blocks(1).await;

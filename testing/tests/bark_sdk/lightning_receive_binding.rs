@@ -17,8 +17,7 @@ async fn receive_binding_normal_external_claim_keeps_the_actual_recipient() {
 		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
 	let address = recipient.new_address().await.unwrap();
 	let recipient_key = address.policy().user_pubkey();
-	assert_ne!(provider.fallback_destination().await.unwrap().account_xpub,
-		recipient.fallback_destination().await.unwrap().account_xpub);
+	assert_ne!(provider.mailbox_identifier(), recipient.mailbox_identifier());
 	let invoice = provider.bolt11_invoice_for_address(sat(50_000), address, None, None).await.unwrap();
 	let hash = PaymentHash::from(&invoice);
 	lightning.sync().await;

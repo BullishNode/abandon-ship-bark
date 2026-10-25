@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::time::Duration;
 
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
-use ark::fallback::FallbackRecord;
+use ark::fallback::FallbackRegistration;
 use ark::mailbox::MailboxIdentifier;
 use ark::vtxo::Full;
 use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoRequest, SECP};
@@ -29,7 +29,7 @@ const LEAF_SAT: u64 = 5_000;
 struct Owner {
 	key: Keypair,
 	mailbox: MailboxIdentifier,
-	record: FallbackRecord,
+	record: FallbackRegistration,
 }
 
 struct Node {
@@ -54,7 +54,7 @@ fn owner() -> Owner {
 	thread_rng().fill_bytes(&mut seed);
 	let payout = Xpriv::new_master(Network::Regtest, &seed).unwrap().to_keypair(&SECP);
 	let script = ScriptBuf::new_p2wpkh(&WPubkeyHash::hash(&payout.public_key().serialize()));
-	let record = FallbackRecord::new(Network::Regtest, script, &account, &mailbox).unwrap();
+	let record = FallbackRegistration::new(Network::Regtest, script, &mailbox).unwrap();
 	Owner { key, mailbox: MailboxIdentifier::from_pubkey(mailbox.public_key()), record }
 }
 

@@ -497,7 +497,6 @@ async fn three_owners() {
 	let bindings = [&a_binding, &b_binding, &c_binding];
 	assert_eq!(mailboxes.iter().map(|mailbox| mailbox.as_pubkey().to_string()).collect::<BTreeSet<_>>().len(), 3);
 	assert_eq!(bindings.iter().map(|record| record.spk.clone()).collect::<BTreeSet<_>>().len(), 3);
-	assert_eq!(bindings.iter().map(|record| record.account_xpub).collect::<BTreeSet<_>>().len(), 3);
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	for (mailbox, binding) in mailboxes.iter().zip(&bindings) {
 		binding.verify(Network::Regtest, mailbox.as_pubkey()).unwrap();

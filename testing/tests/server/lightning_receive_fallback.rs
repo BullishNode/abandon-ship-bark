@@ -140,7 +140,7 @@ async fn registered_receive_fallback() {
 	let address = recipient.new_address().await.unwrap();
 	let destination = recipient.fallback_destination().await.unwrap();
 	let recipient_mailbox = recipient.mailbox_keypair().public_key().to_string();
-	assert_ne!(destination.account_xpub, provider_destination.account_xpub);
+	assert_ne!(recipient.mailbox_identifier(), provider.mailbox_identifier());
 	assert_ne!(destination.spk, provider_destination.spk);
 	assert_ne!(destination.spk, operator_script);
 	assert_ne!(provider_destination.spk, operator_script);
@@ -169,7 +169,7 @@ async fn registered_receive_fallback() {
 		}]);
 	provider.validate_arkoor_address(&unknown_address).await.unwrap();
 	let registry_before = db.read(async |tx| Ok(tx.query(
-		"SELECT mailbox_pk,account_xpub,spk FROM fallback_record ORDER BY mailbox_pk", &[],
+		"SELECT mailbox_pk,mailbox_sig,spk FROM fallback_record ORDER BY mailbox_pk", &[],
 	).await?.into_iter().map(|row| (row.get::<_, String>(0), row.get::<_, String>(1),
 		row.get::<_, String>(2))).collect::<Vec<_>>())).await.unwrap();
 	assert_eq!(registry_before.len(), 2);
@@ -620,10 +620,10 @@ async fn registered_receive_fallback() {
 		).await?.get::<_, i64>(0))).await.unwrap();
 		assert_eq!(appropriated, 0, "neither B nor its fulfilled grant ancestors may become operator income or another payout");
 		let registry = db.read(async |tx| Ok(tx.query(
-			"SELECT mailbox_pk,account_xpub,spk FROM fallback_record ORDER BY mailbox_pk", &[],
+			"SELECT mailbox_pk,mailbox_sig,spk FROM fallback_record ORDER BY mailbox_pk", &[],
 		).await?.into_iter().map(|row| (row.get::<_, String>(0), row.get::<_, String>(1),
 			row.get::<_, String>(2))).collect::<Vec<_>>())).await.unwrap();
-		assert_eq!(registry, registry_before, "no account registration may be fabricated to free this backing");
+		assert_eq!(registry, registry_before, "no mailbox registration may be fabricated to free this backing");
 		let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,c.owner_mailbox,c.user_pubkey,c.spk, \
 			c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat,c.active,a.sweep_txid,a.status FROM expiry_allocation_coin c \
 			JOIN expiry_allocation a ON a.id=c.allocation_id \

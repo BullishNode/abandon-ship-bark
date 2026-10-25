@@ -1,7 +1,6 @@
-use ark::fallback::FallbackRecord;
+use ark::fallback::FallbackRegistration;
 use ark::{ProtocolEncoding, SECP};
 use ark_testing::TestContext;
-use bitcoin::bip32::Xpriv;
 use bitcoin::secp256k1::Keypair;
 use bitcoin::{Network, ScriptBuf};
 use server_rpc::protos;
@@ -120,51 +119,31 @@ async fn fallback_registration_is_authenticated_immutable_and_idempotent() {
 	let srv = ctx.captaind("server").create().await;
 	let mut rpc = srv.get_public_rpc().await;
 	let mailbox = Keypair::from_seckey_slice(&SECP, &[7; 32]).unwrap();
-	let account = Xpriv::new_master(Network::Regtest, &[3; 64]).unwrap();
 	let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
-	let record = FallbackRecord::new(Network::Regtest, spk.clone(), &account, &mailbox).unwrap();
+	let record = FallbackRegistration::new(Network::Regtest, spk.clone(), &mailbox).unwrap();
 	let request = |record| protos::SetFallbackRequest {
 		mailbox_pk: mailbox.public_key().serialize().to_vec(), record,
 	};
 	assert_eq!(rpc.set_fallback(request(vec![])).await.unwrap_err().code(), tonic::Code::InvalidArgument);
 	let canonical = rpc.set_fallback(request(record.serialize())).await.unwrap().into_inner().record;
 	// The first reply can be lost: a second device signs the same seed binding afresh.
-	let second = FallbackRecord::new(Network::Regtest, spk.clone(), &account, &mailbox).unwrap();
+	let second = FallbackRegistration::new(Network::Regtest, spk.clone(), &mailbox).unwrap();
 	assert_eq!(rpc.set_fallback(request(second.serialize())).await.unwrap().into_inner().record, canonical);
 	let alternate = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
-	let changed = FallbackRecord::new(Network::Regtest, alternate, &account, &mailbox).unwrap();
-	assert_eq!(rpc.set_fallback(request(changed.serialize())).await.unwrap().into_inner().record, canonical);
+	let changed = FallbackRegistration::new(Network::Regtest, alternate, &mailbox).unwrap();
+	assert_eq!(rpc.set_fallback(request(changed.serialize())).await.unwrap_err().code(), tonic::Code::InvalidArgument);
 	for offset in [3, canonical.len() - 65, canonical.len() - 1] {
 		let mut changed = canonical.clone();
 		changed[offset] ^= 1;
 		assert_eq!(rpc.set_fallback(request(changed)).await.unwrap_err().code(), tonic::Code::InvalidArgument);
 	}
-	let replay = FallbackRecord::new(Network::Signet, spk.clone(), &account, &mailbox).unwrap();
+	let replay = FallbackRegistration::new(Network::Signet, spk.clone(), &mailbox).unwrap();
 	assert_eq!(rpc.set_fallback(request(replay.serialize())).await.unwrap_err().code(), tonic::Code::InvalidArgument);
 	let other = Keypair::from_seckey_slice(&SECP, &[8; 32]).unwrap();
-	let duplicate = FallbackRecord::new(Network::Regtest, spk, &account, &other).unwrap();
+	let duplicate = FallbackRegistration::new(Network::Regtest, spk, &other).unwrap();
 	assert_eq!(rpc.set_fallback(protos::SetFallbackRequest {
 		mailbox_pk: other.public_key().serialize().to_vec(), record: duplicate.serialize(),
-	}).await.unwrap_err().code(), tonic::Code::InvalidArgument);
-	// Changing only BIP32 ancestry metadata keeps every derived public key.
-	// It must not bypass account uniqueness and create a second payee binding.
-	let mut alias = account;
-	alias.depth = 1;
-	alias.parent_fingerprint = bitcoin::bip32::Fingerprint::from([9; 4]);
-	alias.child_number = bitcoin::bip32::ChildNumber::Normal { index: 9 };
-	let original_xpub = bitcoin::bip32::Xpub::from_priv(&SECP, &account);
-	let alias_xpub = bitcoin::bip32::Xpub::from_priv(&SECP, &alias);
-	assert_ne!(original_xpub, alias_xpub);
-	assert_eq!(original_xpub.public_key, alias_xpub.public_key);
-	assert_eq!(original_xpub.chain_code, alias_xpub.chain_code);
-	let child = bitcoin::bip32::ChildNumber::Normal { index: 8 };
-	assert_eq!(original_xpub.ckd_pub(&SECP, child).unwrap().public_key,
-		alias_xpub.ckd_pub(&SECP, child).unwrap().public_key);
-	let alias_record = FallbackRecord::new(Network::Regtest, record.spk.clone(), &alias, &other).unwrap();
-	alias_record.verify(Network::Regtest, other.public_key()).unwrap();
-	assert_eq!(rpc.set_fallback(protos::SetFallbackRequest {
-		mailbox_pk: other.public_key().serialize().to_vec(), record: alias_record.serialize(),
-	}).await.unwrap_err().code(), tonic::Code::InvalidArgument);
+	}).await.unwrap().into_inner().record, duplicate.serialize());
 	assert_eq!(rpc.set_fallback(request(record.serialize())).await.unwrap().into_inner().record, canonical);
 }
 
@@ -194,4 +173,74 @@ async fn fallback_schema_initialization_preserves_upstream_history() {
 	let generation = client.query_one("SELECT generation FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0);
 	server::database::Db::connect(&config).await.unwrap();
 	assert_eq!(client.query_one("SELECT generation FROM expiry_chain_view WHERE id=1", &[]).await.unwrap().get::<_, i64>(0), generation);
+}
+
+#[tokio::test]
+async fn fallback_links_are_authenticated_conflict_safe_and_transactional() {
+	let mut ctx = TestContext::new_minimal("postgresd/fallback_links_are_authenticated_conflict_safe_and_transactional").await;
+	ctx.init_central_postgres().await;
+	let config = ctx.new_postgres(&ctx.test_name).await;
+	let db = server::database::Db::create(&config).await.unwrap();
+	let key = |byte| Keypair::from_seckey_slice(&SECP, &[byte; 32]).unwrap();
+	let server = key(11);
+	let mailbox = key(17);
+	let other_mailbox = key(19);
+	let coin = key(3);
+	let script = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+	let registration = FallbackRegistration::new(Network::Regtest, script.clone(), &mailbox).unwrap();
+	let other = FallbackRegistration::new(Network::Regtest, script.clone(), &other_mailbox).unwrap();
+	for (mailbox, record) in [(mailbox.public_key(), &registration), (other_mailbox.public_key(), &other)] {
+		db.write(async |tx| tx.set_fallback(mailbox, record, Network::Regtest).await).await.unwrap();
+	}
+	let link = ark::fallback::OwnerLink::new(server.public_key(),
+		ark::mailbox::MailboxIdentifier::from_pubkey(mailbox.public_key()), &coin).unwrap();
+	let resigned = ark::fallback::OwnerLink::new(server.public_key(),
+		ark::mailbox::MailboxIdentifier::from_pubkey(mailbox.public_key()), &coin).unwrap();
+	for proof in [&link, &resigned] {
+		assert_eq!(db.write(async |tx| tx.verify_owner_link(&server, coin.public_key(), proof, Network::Regtest).await)
+			.await.unwrap(), mailbox.public_key());
+	}
+	let stored = db.read(async |tx| Ok(tx.query_one("SELECT blinded_id,signature FROM expiry_owner_key WHERE user_pubkey=$1",
+		&[&coin.public_key().to_string()]).await?)).await.unwrap();
+	assert_eq!(stored.get::<_, String>("blinded_id"), link.blinded_id.to_string());
+	assert_eq!(stored.get::<_, String>("signature"), link.signature.to_string());
+	let conflict = ark::fallback::OwnerLink::new(server.public_key(),
+		ark::mailbox::MailboxIdentifier::from_pubkey(other_mailbox.public_key()), &coin).unwrap();
+	assert!(db.write(async |tx| tx.verify_owner_link(&server, coin.public_key(), &conflict, Network::Regtest).await).await.is_err());
+	assert!(db.write(async |tx| tx.verify_owner_link(&key(13), coin.public_key(), &link, Network::Regtest).await).await.is_err());
+	assert!(db.write(async |tx| tx.verify_owner_link(&server, key(5).public_key(), &link, Network::Regtest).await).await.is_err());
+	let unregistered = ark::fallback::OwnerLink::new(server.public_key(),
+		ark::mailbox::MailboxIdentifier::from_pubkey(key(21).public_key()), &key(7)).unwrap();
+	assert!(db.write(async |tx| tx.verify_owner_link(&server, key(7).public_key(), &unregistered, Network::Regtest).await).await.is_err());
+
+	let pending = key(9);
+	let pending_link = ark::fallback::OwnerLink::new(server.public_key(),
+		ark::mailbox::MailboxIdentifier::from_pubkey(mailbox.public_key()), &pending).unwrap();
+	let result = db.write(async |tx| {
+		tx.verify_owner_link(&server, pending.public_key(), &pending_link, Network::Regtest).await?;
+		tx.verify_owner_link(&server, coin.public_key(), &conflict, Network::Regtest).await?;
+		Ok(())
+	}).await;
+	assert!(result.is_err());
+	assert_eq!(db.read(async |tx| tx.expiry_owner(pending.public_key(), Network::Regtest, &server).await).await.unwrap(),
+		server::database::expiry_attribution::Attribution::Unresolved);
+	let raced = key(23);
+	let first = ark::fallback::OwnerLink::new(server.public_key(),
+		ark::mailbox::MailboxIdentifier::from_pubkey(mailbox.public_key()), &raced).unwrap();
+	let second = ark::fallback::OwnerLink::new(server.public_key(),
+		ark::mailbox::MailboxIdentifier::from_pubkey(other_mailbox.public_key()), &raced).unwrap();
+	let (first_result, second_result) = tokio::join!(
+		db.write(async |tx| tx.verify_owner_link(&server, raced.public_key(), &first, Network::Regtest).await),
+		db.write(async |tx| tx.verify_owner_link(&server, raced.public_key(), &second, Network::Regtest).await),
+	);
+	assert!(first_result.is_ok() ^ second_result.is_ok());
+	let winner = if first_result.is_ok() { mailbox.public_key() } else { other_mailbox.public_key() };
+	assert_eq!(db.read(async |tx| tx.expiry_owner(raced.public_key(), Network::Regtest, &server).await).await.unwrap(),
+		server::database::expiry_attribution::Attribution::Owned { mailbox_pk: winner, spk: script.clone() });
+	let expected = server::database::expiry_attribution::Attribution::Owned { mailbox_pk: mailbox.public_key(), spk: script };
+	assert_eq!(db.read(async |tx| tx.expiry_owner(coin.public_key(), Network::Regtest, &server).await).await.unwrap(), expected);
+	db.write(async |tx| Ok(tx.execute("UPDATE expiry_owner_key SET signature=$1 WHERE user_pubkey=$2",
+		&[&"00".repeat(64), &coin.public_key().to_string()]).await?)).await.unwrap();
+	assert_eq!(db.read(async |tx| tx.expiry_owner(coin.public_key(), Network::Regtest, &server).await).await.unwrap(),
+		server::database::expiry_attribution::Attribution::Unresolved);
 }

@@ -253,9 +253,22 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 					loop {
 						let rebuilt = db.read(async |t| {
 							let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-							Ok(view.captaind.height == tip && view.watchmand.height == tip
-								&& view.captaind.hash == hash && view.watchmand.hash == hash
-								&& super::expiry_view_is_rebuilt(t, view).await?)
+							if view.captaind.height != tip || view.watchmand.height != tip
+								|| view.captaind.hash != hash || view.watchmand.hash != hash
+								|| !super::expiry_view_is_rebuilt(t, view).await? { return Ok(false); }
+							// The completed chain view does not mean captaind's separate
+							// readiness worker has committed both refund obligations yet.
+							// Reserve the original shared root before allowing its sweep.
+							Ok(t.query_opt("SELECT a.id FROM expiry_allocation a \
+								JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+								JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+								WHERE a.status='pending' AND c.active AND c.disposition='customer' \
+								AND e.vtxo_id=ANY($1) \
+								AND (SELECT COUNT(*) FROM expiry_allocation_input i WHERE i.allocation_id=a.id)=1 \
+								AND EXISTS(SELECT 1 FROM expiry_allocation_input i \
+									WHERE i.allocation_id=a.id AND i.vtxo_id=$2) \
+								GROUP BY a.id HAVING COUNT(DISTINCT e.vtxo_id)=2",
+								&[&ids,&anchor.to_string()]).await?.is_some())
 						}).await.unwrap();
 						if rebuilt { return; }
 						tokio::time::sleep(Duration::from_millis(50)).await;

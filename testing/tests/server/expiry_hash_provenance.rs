@@ -45,7 +45,7 @@ async fn same_hash_sources(cooperative_refund: bool) {
 			VtxoPolicy::new_server_htlc_send(key.public_key(), hash, deadline)).unwrap()
 			.generate_user_nonces(&[key]).unwrap();
 		let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+			parts: super::signed_package(&srv, &[&client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 		}).await.unwrap().into_inner();
 		let leaves = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 			.unwrap().build_signed_vtxos();
@@ -109,7 +109,7 @@ async fn same_hash_sources(cooperative_refund: bool) {
 			let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([signed_grants[index].clone()],
 				VtxoPolicy::new_pubkey(key.public_key())).unwrap().generate_user_nonces(&[key]).unwrap();
 			let response = rpc.request_lightning_pay_htlc_revocation(
-				protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+				super::signed_package(&srv, &[&client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await,
 			).await;
 			if index == 0 {
 				assert_eq!(response.unwrap_err().code(), tonic::Code::InvalidArgument,

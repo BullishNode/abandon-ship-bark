@@ -54,10 +54,10 @@ pub(super) async fn signed_leaf(
 	let mut rpc = srv.get_public_rpc().await;
 	let response = if matches!(&policy, VtxoPolicy::ServerHtlcSend(_)) {
 		rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+			parts: super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 		}).await.unwrap().into_inner()
 	} else {
-		rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+		rpc.request_arkoor_cosign(super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await)
 			.await.unwrap().into_inner()
 	};
 	let mut outputs = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
@@ -459,7 +459,7 @@ async fn send_claim_does_not_block_ordinary_progression() {
 		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([source.clone()],
 			VtxoPolicy::new_pubkey(key.public_key())).unwrap().generate_user_nonces(&[key]).unwrap();
 		let response = srv.get_public_rpc().await.request_lightning_pay_htlc_revocation(
-			protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+			super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await,
 		).await.unwrap().into_inner();
 		let mut outputs = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 			.unwrap().build_signed_vtxos();

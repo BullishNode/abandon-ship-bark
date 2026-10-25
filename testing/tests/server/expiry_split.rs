@@ -53,7 +53,7 @@ async fn expiry_requested_split_preserves_mixed_siblings_and_eventual_refund() {
 	]).unwrap().generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
 	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts: super::signed_package(&srv, &[&client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let package = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	let checkpoint = package.signed_virtual_transactions().into_iter()
@@ -152,14 +152,16 @@ async fn expiry_unregistered_owner_does_not_block_registered_sibling() {
 	let source = client.get_full_vtxo(ids[0]).await.unwrap();
 	let destination = client.fallback_destination().await.unwrap();
 	let key = client.get_vtxo_key(&source).await.unwrap();
-	let unknown = bitcoin::secp256k1::Keypair::from_seckey_slice(&ark::SECP, &[91; 32]).unwrap().public_key();
+	let unknown_pair = bitcoin::secp256k1::Keypair::from_seckey_slice(&ark::SECP, &[91; 32]).unwrap();
+	let unknown = unknown_pair.public_key();
+	super::test_owner_link(&srv, &unknown_pair).await;
 	assert_ne!(key.public_key(), unknown);
 	let builder = ArkoorPackageBuilder::new_with_checkpoints([source.clone()], vec![
 		ArkoorDestination { total_amount: sat(90_000), policy: VtxoPolicy::new_pubkey(key.public_key()) },
 		ArkoorDestination { total_amount: sat(10_000), policy: VtxoPolicy::new_pubkey(unknown) },
 	]).unwrap().generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+	let response = rpc.request_arkoor_cosign(super::signed_package(&srv, &[&client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await)
 		.await.unwrap().into_inner();
 	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	let checkpoint = signed.signed_virtual_transactions().into_iter()
@@ -185,6 +187,14 @@ async fn expiry_unregistered_owner_does_not_block_registered_sibling() {
 	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	// F18: deliberately corrupt attribution evidence after genuine signed admission.
+	assert!(matches!(db.read(async |tx| tx.expiry_owner(unknown, bitcoin::Network::Regtest,
+		&srv.mailbox_keypair()).await).await.unwrap(), server::database::expiry_attribution::Attribution::Owned { mailbox_pk, .. } if mailbox_pk == unknown));
+	db.write(async |tx| {
+		tx.execute("DELETE FROM expiry_owner_key WHERE user_pubkey=$1", &[&unknown.to_string()]).await?;
+		tx.execute("DELETE FROM fallback_record WHERE mailbox_pk=$1", &[&unknown.to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
 	let height = ctx.bitcoind().get_block_count().await as u32;
 	let scan_from = u64::from(height) + 1;
 	assert!(height < source.expiry_height().to_u32());

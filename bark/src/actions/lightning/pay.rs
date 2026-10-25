@@ -464,7 +464,7 @@ async fn request_lightning_send_htlcs(
 	send: &LightningSend,
 	movement_id: MovementId,
 ) -> Result<Htlcs, AdvanceError> {
-	let (mut srv, _) = wallet.require_server().await.retry()?;
+	let (mut srv, info) = wallet.require_server().await.retry()?;
 
 	let full_inputs = wallet.inner.db.get_full_vtxos(&send.input_vtxo_ids).await
 		.context("failed to hydrate lightning-send input vtxos").retry()?;
@@ -503,9 +503,9 @@ async fn request_lightning_send_htlcs(
 		.generate_user_nonces(&input_keypairs)
 		.context("invalid nb of keypairs").abort()?;
 
-	let cosign_request = protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
-	};
+	let mut package = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	wallet.attach_owner_links(&mut package, &Default::default(), info.mailbox_pubkey).await.abort()?;
+	let cosign_request = protos::LightningPayHtlcCosignRequest { parts: package.parts };
 	let response = srv.client.request_lightning_pay_htlc_cosign(cosign_request).await.map_err(crate::FallbackRefusal::map_status)
 		.retry_unless_rejected()?.into_inner();
 
@@ -746,7 +746,7 @@ async fn revoke_lightning_send_htlcs(
 	htlcs: &Htlcs,
 	revocation: &Revocation,
 ) -> Result<(), AdvanceError> {
-	let (mut srv, _) = wallet.require_server().await.retry()?;
+	let (mut srv, info) = wallet.require_server().await.retry()?;
 
 	debug!("Revoking {} HTLC vtxos for payment {} (expiry: {})",
 		htlcs.vtxo_ids.len(), send.invoice.payment_hash(), send.htlc_expiry);
@@ -767,9 +767,10 @@ async fn revoke_lightning_send_htlcs(
 		.generate_user_nonces(&htlc_keypairs)
 		.context("failed to generate user nonces").abort()?;
 
-	let cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	let mut cosign_request = protos::ArkoorPackageCosignRequest::from(builder.cosign_request());
+	wallet.attach_owner_links(&mut cosign_request, &Default::default(), info.mailbox_pubkey).await.abort()?;
 	let response = srv.client
-		.request_lightning_pay_htlc_revocation(cosign_request).await
+		.request_lightning_pay_htlc_revocation(cosign_request).await.map_err(crate::FallbackRefusal::map_status)
 		.retry_unless_rejected()?.into_inner();
 
 	// The server has cosigned the revocation by now, so from here on only

@@ -33,7 +33,7 @@ async fn expiry_abandoned_registered_send_needs_no_client_refund() {
 	).unwrap().generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
 	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts: super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let response = ark::arkoor::package::ArkoorPackageCosignResponse::try_from(response).unwrap();
 	let htlcs = builder.user_cosign(&[key], response).unwrap().build_signed_vtxos();

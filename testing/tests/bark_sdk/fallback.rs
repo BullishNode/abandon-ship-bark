@@ -1,6 +1,8 @@
 use ark_testing::TestContext;
 use bitcoin::{Network, ScriptBuf};
-use std::sync::Arc;
+use bitcoin::hex::DisplayHex;
+use std::sync::{Arc, Mutex};
+use std::str::FromStr;
 
 use bark::persist::{BarkPersister, sqlite::SqliteClient};
 
@@ -19,13 +21,15 @@ async fn fallback_native_registration_survives_seed_only_second_device_and_reope
 		(&*guard as &dyn std::any::Any).downcast_ref::<bark::onchain::OnchainWallet>().unwrap().fallback_script()
 	};
 	assert_eq!(record.spk, expected);
-	let identity = first.peek_keypair(0).await.unwrap().public_key();
-	assert_eq!(first.new_address_with_index().await.unwrap().1, 1);
+	let (address, index) = first.new_address_with_index().await.unwrap();
+	assert_eq!(index, 0, "fallback registration reserves no coin child");
+	let identity = address.policy().user_pubkey();
 	let config = first.config().clone();
 	let second = ctx.bark_sdk("second", &srv).mnemonic(mnemonic.clone())
 		.cfg(|c| c.daemon_manual_sync = true).create().await;
 	second.stop_daemon_wait().await.unwrap();
 	assert_eq!(second.fallback_destination().await.unwrap(), record);
+	assert_eq!(second.new_address_with_index().await.unwrap().1, 0);
 	assert_eq!(second.peek_keypair(0).await.unwrap().public_key(), identity);
 	drop(first);
 	// A cached identity supports a seed-only read/status open. It does not
@@ -35,20 +39,26 @@ async fn fallback_native_registration_survives_seed_only_second_device_and_reope
 		bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("first")), run_daemon: false, ..Default::default() },
 	).await.unwrap();
 	assert_eq!(reopened.fallback_destination().await.unwrap(), record);
-	assert_eq!(reopened.new_address_with_index().await.unwrap().1, 2);
+	assert_eq!(reopened.new_address_with_index().await.unwrap().1, 1);
 }
 
 #[derive(Clone)]
-struct LoseFirstFallbackReply(std::sync::Arc<std::sync::atomic::AtomicBool>);
+struct FallbackRpcFault {
+	lose_reply_on: Option<usize>,
+	seen: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+	refusal: Arc<Mutex<Option<tonic::Code>>>,
+}
 
 #[async_trait::async_trait]
-impl ark_testing::daemon::captaind::proxy::ArkRpcProxy for LoseFirstFallbackReply {
+impl ark_testing::daemon::captaind::proxy::ArkRpcProxy for FallbackRpcFault {
 	async fn set_fallback(
 		&self, upstream: &mut ark_testing::daemon::captaind::ArkClient,
 		request: server_rpc::protos::SetFallbackRequest,
 	) -> Result<server_rpc::protos::SetFallbackResponse, tonic::Status> {
+		let code = *self.refusal.lock().unwrap();
+		if let Some(code) = code { return Err(tonic::Status::new(code, "injected registration RPC refusal")); }
 		let response = upstream.set_fallback(request).await?.into_inner();
-		if self.0.swap(false, std::sync::atomic::Ordering::SeqCst) {
+		if Some(self.seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1) == self.lose_reply_on {
 			return Err(tonic::Status::unavailable("injected lost registration reply"));
 		}
 		Ok(response)
@@ -57,26 +67,32 @@ impl ark_testing::daemon::captaind::proxy::ArkRpcProxy for LoseFirstFallbackRepl
 
 #[tokio::test]
 async fn fallback_native_retries_a_lost_registration_reply() {
-	let ctx = TestContext::new("bark_sdk/fallback_native_retries_a_lost_registration_reply").await;
-	let srv = ctx.captaind("server").create().await;
-	let proxy = srv.start_proxy_no_mailbox(LoseFirstFallbackReply(
-		std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
-	)).await;
-	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
-	let first = ctx.bark_sdk("wallet", &proxy.address).mnemonic(mnemonic.clone())
-		.cfg(|c| c.daemon_manual_sync = true).try_create().await;
-	assert!(first.is_err(), "the caller must observe the lost reply");
-	let postgres = srv.config().postgres.clone();
-	let db = server::database::Db::connect(&postgres).await.unwrap();
-	let count = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM fallback_record", &[]).await?.get::<_, i64>(0))).await.unwrap();
-	assert_eq!(count, 1, "the upstream must commit before the proxy loses its reply");
-	let wallet = ctx.bark_sdk("wallet", &proxy.address).mnemonic(mnemonic)
-		.cfg(|c| c.daemon_manual_sync = true).create().await;
-	wallet.stop_daemon_wait().await.unwrap();
-	let record = wallet.fallback_destination().await.unwrap();
-	let canonical = db.read(async |tx| tx.get_fallback(wallet.mailbox_identifier().as_pubkey()).await).await.unwrap().unwrap();
-	assert_eq!(record, canonical);
-	assert_eq!(wallet.new_address_with_index().await.unwrap().1, 1);
+	for request in [1, 2] {
+		let ctx = TestContext::new(&format!("bark_sdk/fallback_lost_registration_reply_{request}")).await;
+		let srv = ctx.captaind("server").create().await;
+		let proxy = srv.start_proxy_no_mailbox(FallbackRpcFault {
+			lose_reply_on: Some(request), seen: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+			refusal: Arc::new(Mutex::new(None)),
+		}).await;
+		let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+		let first = ctx.bark_sdk("wallet", &proxy.address).mnemonic(mnemonic.clone())
+			.cfg(|c| c.daemon_manual_sync = true).try_create().await;
+		assert!(first.is_err(), "the caller must observe the lost reply");
+		let postgres = srv.config().postgres.clone();
+		let db = server::database::Db::connect(&postgres).await.unwrap();
+		let count = db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM fallback_record", &[]).await?.get::<_, i64>(0))).await.unwrap();
+		assert_eq!(count, request as i64, "each canonical mailbox commits before its reply can be lost");
+		let wallet = ctx.bark_sdk("wallet", &proxy.address).mnemonic(mnemonic)
+			.cfg(|c| c.daemon_manual_sync = true).create().await;
+		wallet.stop_daemon_wait().await.unwrap();
+		let record = wallet.fallback_destination().await.unwrap();
+		let canonical = db.read(async |tx| tx.get_fallback(wallet.mailbox_identifier().as_pubkey()).await).await.unwrap().unwrap();
+		assert_eq!(record, canonical);
+		assert_eq!(wallet.new_address_with_index().await.unwrap().1, 0);
+		let recovery = db.read(async |tx| tx.get_fallback(wallet.recovery_mailbox_identifier().as_pubkey()).await)
+			.await.unwrap().unwrap();
+		assert_eq!(recovery.spk, record.spk);
+	}
 }
 
 /// Offline creation retains an exact local destination, without treating the
@@ -132,4 +148,116 @@ async fn fallback_offline_creation_retains_identity_and_registers_on_online_reop
 		.read(async |tx| tx.get_fallback(online.mailbox_identifier().as_pubkey()).await).await.unwrap().unwrap();
 	assert_eq!(registered, canonical);
 	assert_eq!(online.new_address_with_index().await.unwrap().1, 0);
+}
+
+#[tokio::test]
+async fn fallback_reconciles_normal_and_recovery_mailboxes_before_use() {
+	let ctx = TestContext::new("bark_sdk/fallback_reconciles_both_mailboxes").await;
+	let srv = ctx.captaind("server").create().await;
+	let wallet = ctx.bark_sdk("wallet", &srv).boarded(ark_testing::sat(100_000))
+		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let canonical = wallet.fallback_destination().await.unwrap();
+	let recovery = wallet.recovery_mailbox_identifier();
+	let main = wallet.mailbox_identifier();
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	for mailbox in [main, recovery] {
+		let record = db.read(async |tx| tx.get_fallback(mailbox.as_pubkey()).await).await.unwrap().unwrap();
+		record.verify(Network::Regtest, mailbox.as_pubkey()).unwrap();
+		assert_eq!(record.spk, canonical.spk);
+	}
+	let coin = wallet.spendable_vtxos().await.unwrap()[0].vtxo.id();
+	// Only recovery routing metadata is lost; every coin and its main binding remain.
+	db.write(async |tx| {
+		tx.execute("DELETE FROM fallback_record WHERE mailbox_pk=$1", &[&recovery.to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
+	wallet.refresh_server().await.unwrap();
+	wallet.post_recovery_vtxo_ids([coin]).await.unwrap();
+	let auth = wallet.mailbox_authorization(chrono::Local::now() + std::time::Duration::from_secs(60));
+	assert_eq!(auth.mailbox(), main);
+	let rows = db.read(async |tx| tx.get_mailbox_messages(recovery, 0, 10, Network::Regtest).await).await.unwrap();
+	assert_eq!(rows.len(), 1);
+	assert!(matches!(&rows[0].payload, server::database::MailboxPayload::RecoveryVtxoIds { vtxo_ids } if vtxo_ids == &[coin]));
+	let config = wallet.config().clone();
+	let mnemonic = bip39::Mnemonic::from_str(tokio::fs::read_to_string(ctx.datadir.join("wallet/mnemonic"))
+		.await.unwrap().trim()).unwrap();
+	drop(wallet);
+	db.write(async |tx| {
+		tx.execute("DELETE FROM fallback_record WHERE mailbox_pk=$1", &[&recovery.to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
+	let reopened = bark::Wallet::open(Network::Regtest,
+		bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic), config,
+		bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: true,
+			skip_recovery: true, ..Default::default() }).await.unwrap();
+	// Manual-sync startup still registers before exposing the wallet to callers.
+	let restored = db.read(async |tx| tx.get_fallback(recovery.as_pubkey()).await).await.unwrap().unwrap();
+	assert_eq!(restored.spk, canonical.spk);
+	reopened.sync_mailbox().await.unwrap();
+	reopened.post_recovery_vtxo_ids([coin]).await.unwrap();
+	assert_eq!(db.read(async |tx| tx.get_mailbox_messages(recovery, 0, 10, Network::Regtest).await).await.unwrap().len(), 1);
+	// Deliberate canonical-record corruption is refused rather than repaired
+	// by replacing an immutable recovery destination or the main destination.
+	let other_key = bitcoin::secp256k1::Keypair::from_seckey_slice(&ark::SECP, &[99; 32]).unwrap();
+	let other_script = ScriptBuf::new_p2tr(&ark::SECP, other_key.x_only_public_key().0, None);
+	assert_ne!(other_script, canonical.spk);
+	let disagreeing = ark::fallback::FallbackRegistration::new(Network::Regtest, other_script,
+		&reopened.recovery_mailbox_keypair()).unwrap();
+	db.write(async |tx| {
+		tx.execute("UPDATE fallback_record SET spk=$2, mailbox_sig=$3 WHERE mailbox_pk=$1",
+			&[&recovery.to_string(), &disagreeing.spk.as_bytes().to_lower_hex_string(),
+				&disagreeing.mailbox_signature.to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
+	let error = reopened.refresh_server().await.unwrap_err();
+	assert!(format!("{error:#}").contains("recovery mailbox"), "{error:#}");
+	let error = reopened.post_recovery_vtxo_ids([coin]).await.unwrap_err();
+	assert!(format!("{error:#}").contains("recovery mailbox"), "{error:#}");
+	assert_eq!(db.read(async |tx| tx.get_fallback(main.as_pubkey()).await).await.unwrap().unwrap(), canonical);
+	assert_eq!(db.read(async |tx| tx.get_fallback(recovery.as_pubkey()).await).await.unwrap().unwrap(), disagreeing);
+}
+
+#[tokio::test]
+async fn cached_open_defers_only_temporary_registration_rpc_failures() {
+	let ctx = TestContext::new("bark_sdk/cached_open_registration_rpc_failures").await;
+	let srv = ctx.captaind("server").create().await;
+	let gate = FallbackRpcFault { lose_reply_on: None,
+		seen: Arc::new(std::sync::atomic::AtomicUsize::new(0)), refusal: Arc::new(Mutex::new(None)) };
+	let proxy = srv.start_proxy_no_mailbox(gate.clone()).await;
+	let mnemonic = bip39::Mnemonic::generate(12).unwrap();
+	let wallet = ctx.bark_sdk("wallet", &proxy.address).mnemonic(mnemonic.clone())
+		.cfg(|cfg| cfg.daemon_manual_sync = true).boarded(ark_testing::sat(100_000)).create().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let canonical = wallet.fallback_destination().await.unwrap();
+	let config = wallet.config().clone();
+	let coin = wallet.spendable_vtxos().await.unwrap().remove(0).vtxo;
+	drop(wallet);
+	let open = async || bark::Wallet::open(Network::Regtest,
+		bark::WalletSeed::new_from_mnemonic(Network::Regtest, &mnemonic), config.clone(),
+		bark::OpenWalletArgs { datadir: Some(ctx.datadir.join("wallet")), run_daemon: false,
+			skip_recovery: true, ..Default::default() }).await;
+	for code in [tonic::Code::Unavailable, tonic::Code::DeadlineExceeded] {
+		*gate.refusal.lock().unwrap() = Some(code);
+		// Handshake/getinfo succeed, but SetFallback is temporarily unavailable.
+		// A previously authenticated wallet still opens and loads its exit state.
+		let cached = open().await.unwrap();
+		let address = cached.new_address().await.unwrap();
+		assert!(address.owner_link(srv.ark_info().await.mailbox_pubkey).unwrap().is_some());
+		assert_eq!(cached.fallback_destination().await.unwrap(), canonical);
+		if !cached.exit_mgr().is_exiting(coin.id()).await {
+			cached.exit_mgr().start_exit_for_vtxos(&[coin.clone()]).await.unwrap();
+		}
+		assert_eq!(cached.exit_mgr().get_exit_vtxo_ids().await, vec![coin.id()]);
+		assert!(cached.sync_mailbox().await.is_err(), "live mailbox use must still reconcile");
+		assert!(cached.refresh_server().await.is_err(), "a heartbeat cannot acknowledge failed registration");
+	}
+	*gate.refusal.lock().unwrap() = Some(tonic::Code::InvalidArgument);
+	assert!(open().await.is_err(), "a permanent registration refusal must prevent opening");
+	*gate.refusal.lock().unwrap() = None;
+	let online = open().await.unwrap();
+	online.refresh_server().await.unwrap();
+	online.sync_mailbox().await.unwrap();
+	assert_eq!(online.fallback_destination().await.unwrap(), canonical);
+	assert_eq!(online.exit_mgr().get_exit_vtxo_ids().await, vec![coin.id()]);
 }

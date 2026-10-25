@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::time::Duration;
 
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
-use ark::fallback::FallbackRegistration;
+use ark::fallback::{FallbackRegistration, OwnerLink};
 use ark::mailbox::MailboxIdentifier;
 use ark::vtxo::Full;
 use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoRequest, SECP};
@@ -59,7 +59,7 @@ fn owner() -> Owner {
 }
 
 async fn native_node(
-	client: &bark::Wallet, rpc: &mut ArkClient, input: Vtxo<Full>, key: Keypair,
+	srv: &Captaind, client: &bark::Wallet, rpc: &mut ArkClient, input: Vtxo<Full>, key: Keypair,
 	destinations: Vec<ArkoorDestination>, payees: usize,
 ) -> (Vec<Vtxo<Full>>, Node) {
 	assert!(input.exit_depth() < 100);
@@ -71,7 +71,7 @@ async fn native_node(
 	let expected = destinations.iter().map(|d| (d.policy.clone(), d.total_amount)).collect::<Vec<_>>();
 	let builder = ArkoorPackageBuilder::new_with_checkpoints([input], destinations).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
-	let response = rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+	let response = rpc.request_arkoor_cosign(super::signed_package(srv, &[client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await)
 		.await.unwrap().into_inner();
 	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	let checkpoints = signed.build_signed_internal_vtxos().into_iter()
@@ -260,12 +260,17 @@ async fn bounded_round_inventory() {
 	let owners = (0..COUNT).map(|_| owner()).collect::<Vec<_>>();
 	assert_eq!(owners.iter().map(|owner| owner.record.spk.clone()).collect::<BTreeSet<_>>().len(), COUNT);
 	let mut rpc = srv.get_public_rpc().await;
+	let proof_db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mailbox_key = srv.mailbox_keypair();
 	for owner in &owners {
 		let record = owner.record.serialize();
 		let response = rpc.set_fallback(protos::SetFallbackRequest {
 			mailbox_pk: owner.mailbox.as_pubkey().serialize().to_vec(), record: record.clone(),
 		}).await.unwrap().into_inner();
 		assert_eq!(response.record, record);
+		let proof = OwnerLink::new(mailbox_key.public_key(), owner.mailbox, &owner.key).unwrap();
+		proof_db.write(async |tx| tx.verify_owner_link(&mailbox_key, owner.key.public_key(), &proof, Network::Regtest).await)
+			.await.unwrap();
 	}
 	let mut sponsor_funding = BTreeSet::new();
 	let fee_address = srv.watchmand().wait_wallet_address().await;
@@ -301,7 +306,7 @@ async fn bounded_round_inventory() {
 			});
 			children.push((indices.to_vec(), child_key));
 		}
-		let (outputs, node) = native_node(&client, &mut rpc, input, key, destinations, group.len()).await;
+		let (outputs, node) = native_node(&srv, &client, &mut rpc, input, key, destinations, group.len()).await;
 		nodes.push(node);
 		for (output, (indices, child_key)) in outputs.into_iter().zip(children) {
 			assert!(output.exit_depth() <= 11);
@@ -417,12 +422,17 @@ async fn automatic_multilevel_split() {
 	assert_eq!(minimum_outputs, 10_044);
 	assert!(minimum_outputs > 10_000);
 	let mut rpc = srv.get_public_rpc().await;
+	let proof_db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mailbox_key = srv.mailbox_keypair();
 	for owner in &owners {
 		let bytes = owner.record.serialize();
 		let reply = rpc.set_fallback(protos::SetFallbackRequest {
 			mailbox_pk: owner.mailbox.as_pubkey().serialize().to_vec(), record: bytes.clone(),
 		}).await.unwrap().into_inner();
 		assert_eq!(reply.record, bytes);
+		let proof = OwnerLink::new(mailbox_key.public_key(), owner.mailbox, &owner.key).unwrap();
+		proof_db.write(async |tx| tx.verify_owner_link(&mailbox_key, owner.key.public_key(), &proof, Network::Regtest).await)
+			.await.unwrap();
 	}
 	let wallet = ctx.bark("source", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
 		.funded(sat(2_000_000)).create().await;
@@ -433,7 +443,7 @@ async fn automatic_multilevel_split() {
 	let registry_count = db.read(async |tx| Ok(tx.query_one(
 		"SELECT COUNT(*) FROM fallback_record", &[],
 	).await?.get::<_, i64>(0))).await.unwrap();
-	assert_eq!(registry_count, PAYEES as i64 + 1, "the source wallet adds its own real fallback registration");
+	assert_eq!(registry_count, PAYEES as i64 + 2, "the source wallet registers its normal and recovery mailbox identities");
 	let source = client.get_full_vtxo(ids[0]).await.unwrap();
 	let source_key = client.get_vtxo_key(&source).await.unwrap();
 	let board_exit = source.transactions().find(|step| step.tx.input[0].previous_output == source.chain_anchor())
@@ -464,7 +474,7 @@ async fn automatic_multilevel_split() {
 		});
 		child_keys.push((group.len() > 1).then_some(key));
 	}
-	let (outputs, root_node) = native_node(&client, &mut rpc, source.clone(), source_key, destinations, PAYEES).await;
+	let (outputs, root_node) = native_node(&srv, &client, &mut rpc, source.clone(), source_key, destinations, PAYEES).await;
 	let mut terminals = Vec::new();
 	for ((output, key), group) in outputs.into_iter().zip(child_keys).zip(root_groups) {
 		if let Some(key) = key { jobs.push_back((output, key, group)); }
@@ -497,7 +507,7 @@ async fn automatic_multilevel_split() {
 				children.push((indices, (count > 1).then_some(child_key)));
 			}
 		}
-		let (outputs, node) = native_node(&client, &mut rpc, input, key, destinations, group.len()).await;
+		let (outputs, node) = native_node(&srv, &client, &mut rpc, input, key, destinations, group.len()).await;
 		nodes.push(node);
 		for (output, (indices, child_key)) in outputs.into_iter().zip(children) {
 			if let Some(key) = child_key { jobs.push_back((output, key, indices)); }

@@ -1176,7 +1176,7 @@ impl Wallet {
 			.testnet(network != bitcoin::Network::Bitcoin)
 			.server_pubkey(server_pubkey)
 			.pubkey_policy(keypair.public_key())
-			.mailbox(mailbox_pubkey, mailbox, &keypair)
+			.mailbox_signed(mailbox_pubkey, mailbox, &keypair)
 			.context("failed to assign mailbox")?
 			.into_address()
 			.context("failed to build address")?)
@@ -1502,7 +1502,7 @@ impl Wallet {
 		// Connect lazily if not yet connected. `get_or_try_init` ensures
 		// concurrent callers on a cold cell all await the same in-flight
 		// connect future instead of each opening a fresh gRPC channel.
-		let conn = self.inner.server.get_or_try_init(|| async {
+		let mut conn = self.inner.server.get_or_try_init(|| async {
 			let network = self.properties().await?.network;
 			Self::connect_to_server(&self.inner.config, network).await
 				.context("You should be connected to Ark server to perform this action")
@@ -1511,6 +1511,7 @@ impl Wallet {
 		let ark_info = conn.ark_info().await;
 		check_ark_info_safe(&ark_info, self.inner.config.vtxo_exit_margin)?;
 		self.check_and_store_server_keys(&ark_info).await?;
+		self.reconcile_fallback(&mut conn).await?;
 
 		Ok((conn, ark_info))
 	}
@@ -1532,6 +1533,8 @@ impl Wallet {
 		ark_info.fees.validate().context("invalid fee schedule")?;
 		check_ark_info_safe(&ark_info, self.inner.config.vtxo_exit_margin)?;
 		self.check_and_store_server_keys(&ark_info).await?;
+		let mut connection = srv.clone();
+		self.reconcile_fallback(&mut connection).await?;
 
 		Ok(())
 	}
@@ -2335,6 +2338,7 @@ impl Wallet {
 		};
 
 		Ok(Some(RoundParticipation {
+			owner_proofs: Default::default(),
 			inputs: vtxos,
 			outputs: vec![req],
 			unblinded_mailbox_id: None,

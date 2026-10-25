@@ -10,8 +10,6 @@ use std::time::Duration;
 
 use ark::lightning::PaymentHash;
 use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
-use ark::address::VtxoDelivery;
-use ark::mailbox::BlindedMailboxIdentifier;
 use ark::vtxo::Full;
 use ark::vtxo::policy::clause::TapScriptClause;
 use ark_testing::{sat, TestContext};
@@ -157,24 +155,25 @@ async fn registered_receive_fallback() {
 	assert!(destination.spk.is_p2tr());
 	destination.verify(Network::Regtest, recipient.mailbox_keypair().public_key()).unwrap();
 	provider_destination.verify(Network::Regtest, provider.mailbox_keypair().public_key()).unwrap();
-	// B has an independent key and a valid address, but no SDK wallet or
-	// account registration. Independent-key separation is the fixture premise;
-	// a bounded owner scan is not an exhaustive BIP32 non-membership proof.
+	// B has an independent key and no SDK wallet. Its genuine issuance is
+	// followed by deliberate attribution-evidence corruption, exercising F18.
 	let unknown_identity = Keypair::new(&secp, &mut bitcoin::secp256k1::rand::thread_rng());
 	let unknown_key = unknown_identity.public_key();
 	assert_ne!(unknown_key, address.policy().user_pubkey());
-	let unknown_address = ark::Address::new(true, address.ark_id(),
-		VtxoPolicy::new_pubkey(unknown_key), vec![VtxoDelivery::ServerMailbox {
-			blinded_id: BlindedMailboxIdentifier::from_pubkey(unknown_key),
-		}]);
+	let unknown_address = ark::Address::builder().testnet(true)
+		.server_pubkey(srv.ark_info().await.server_pubkey).pubkey_policy(unknown_key)
+		.mailbox_signed(srv.ark_info().await.mailbox_pubkey,
+			ark::mailbox::MailboxIdentifier::from_pubkey(unknown_key), &unknown_identity).unwrap()
+		.into_address().unwrap();
 	provider.validate_arkoor_address(&unknown_address).await.unwrap();
 	let registry_before = db.read(async |tx| Ok(tx.query(
 		"SELECT mailbox_pk,mailbox_sig,spk FROM fallback_record ORDER BY mailbox_pk", &[],
 	).await?.into_iter().map(|row| (row.get::<_, String>(0), row.get::<_, String>(1),
 		row.get::<_, String>(2))).collect::<Vec<_>>())).await.unwrap();
-	assert_eq!(registry_before.len(), 2);
+	assert_eq!(registry_before.len(), 4);
 	assert_eq!(registry_before.iter().map(|record| record.0.clone()).collect::<BTreeSet<_>>(),
-		BTreeSet::from([recipient_mailbox.clone(), provider.mailbox_keypair().public_key().to_string()]));
+		BTreeSet::from([recipient_mailbox.clone(), provider.mailbox_keypair().public_key().to_string(),
+			recipient.recovery_mailbox_identifier().to_string(), provider.recovery_mailbox_identifier().to_string()]));
 	assert_eq!(recipient.balance().await.unwrap().spendable, sat(0));
 	drop(recipient);
 	// The original recipient is never reopened, synced, delivered to or
@@ -215,6 +214,7 @@ async fn registered_receive_fallback() {
 		assert_eq!(remaining, 1, "strict50percent refill threshold must not issue another tree");
 		// One30s boundary covers BOTH legitimate receives. A's90k change is
 		// inserted before its grant call returns; the picker selects it for B.
+		super::test_owner_link(&srv, &unknown_identity).await;
 		let invoice_b = provider.bolt11_invoice_for_address(amount, unknown_address.clone(),
 			Some("unregistered sibling held without appropriating its value".into()), None).await.unwrap();
 		let unknown_hash = PaymentHash::from(&invoice_b);
@@ -253,6 +253,16 @@ async fn registered_receive_fallback() {
 	assert_eq!(unknown_source.amount(), amount);
 	assert_eq!(unknown_source.policy(), unknown_address.policy());
 	assert_eq!(unknown_source.chain_anchor(), shared_anchor);
+	// F18 deliberately loses attribution evidence after genuine signed admission.
+	// This is not a supported restore. No coin, entitlement, attempt, receive
+	// binding, transaction, amount or payout row is changed.
+	assert!(matches!(db.read(async |tx| tx.expiry_owner(unknown_key, Network::Regtest,
+		&srv.mailbox_keypair()).await).await.unwrap(), server::database::expiry_attribution::Attribution::Owned { mailbox_pk, .. } if mailbox_pk == unknown_key));
+	db.write(async |tx| {
+		tx.execute("DELETE FROM expiry_owner_key WHERE user_pubkey=$1", &[&unknown_key.to_string()]).await?;
+		tx.execute("DELETE FROM fallback_record WHERE mailbox_pk=$1", &[&unknown_key.to_string()]).await?;
+		Ok(())
+	}).await.unwrap();
 	unknown_source.validate(&shared_funding).unwrap();
 	assert!(unknown_source.transactions().any(|step| step.tx.input.iter()
 		.any(|input| input.previous_output == pool_change.point())), "B must spend A's exact90k change");

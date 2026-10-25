@@ -86,7 +86,7 @@ async fn native_refund_status(two_sources: bool) {
 		.unwrap().generate_user_nonces(&keys).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
 	let reply = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts: super::signed_package(&srv, &[&sender], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let sources = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(reply).unwrap())
 		.unwrap().build_signed_vtxos();
@@ -113,7 +113,7 @@ async fn native_refund_status(two_sources: bool) {
 		htlc_vtxo_ids: ids.clone(), mailbox_id: Some(mailbox.serialize()), retry_for_secs: Some(5),
 	}).await.unwrap();
 	let reply = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-		owner_proof: None,
+		owner_proof: Some(recipient.owner_link(receive_key).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: receive_key.serialize().to_vec(),
 		htlc_recv_expiry: (tip + BlockDelta::new(12)).to_u32(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner();

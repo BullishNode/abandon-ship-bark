@@ -103,7 +103,8 @@ use ark_testing::exit::complete_exit;
 use server_rpc::protos::mailbox_server::mailbox_message::Message;
 
 lazy_static::lazy_static! {
-	static ref RANDOM_PK: PublicKey = "02c7ef7d49b365974cd219f7036753e1544a3cdd2120eb7247dd8a94ef91cf1e49".parse().unwrap();
+	static ref RANDOM_KEY: Keypair = Keypair::from_seckey_slice(&SECP, &[42; 32]).unwrap();
+	static ref RANDOM_PK: PublicKey = RANDOM_KEY.public_key();
 }
 
 #[tokio::test]
@@ -1214,9 +1215,10 @@ async fn double_spend_arkoor() {
 		protos::ArkoorPackageCosignRequest::from(cosign_request)
 	};
 
-	let req1 = sign_cosign_request(builder1);
-	let req2 = sign_cosign_request(builder2);
-	let req3 = sign_cosign_request(builder3);
+	test_owner_link(&srv, &RANDOM_KEY).await;
+	let req1 = signed_package(&srv, &[&bark_client], sign_cosign_request(builder1)).await;
+	let req2 = signed_package(&srv, &[&bark_client], sign_cosign_request(builder2)).await;
+	let req3 = signed_package(&srv, &[&bark_client], sign_cosign_request(builder3)).await;
 
 	// Create 3 rpc-clients so we can send 3 requests in paralel
 	let mut rpc1 = srv.get_public_rpc().await;
@@ -1284,6 +1286,9 @@ async fn reject_expired_arkoor_cosign() {
 	let cosign_request = protos::ArkoorPackageCosignRequest::from(
 		builder.generate_user_nonces(&[vtxo_keypair]).unwrap().cosign_request(),
 	);
+
+	test_owner_link(&srv, &RANDOM_KEY).await;
+	let cosign_request = signed_package(&srv, &[&bark_client], cosign_request).await;
 
 	// Let the vtxo expire before the server sees the request.
 	let height = ctx.generate_blocks(srv.config().vtxo_lifetime.to_u32() + 1).await;
@@ -1493,7 +1498,7 @@ async fn bad_round_input() {
 		input_vtxos: vec![],
 		vtxo_requests: vec![protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
-				owner_proof: None,
+				owner_proof: Some(test_owner_link(&srv, &key).await.into()),
 				amount: vtxo_req.vtxo.amount.to_sat(),
 				policy: vtxo_req.vtxo.policy.serialize(),
 			}),
@@ -1542,7 +1547,7 @@ async fn bad_round_input() {
 		input_vtxos: vec![fake_input],
 		vtxo_requests: vec![protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
-				owner_proof: None,
+				owner_proof: Some(test_owner_link(&srv, &key).await.into()),
 				amount: vtxo_req.vtxo.amount.to_sat(),
 				policy: vtxo_req.vtxo.policy.serialize(),
 			}),
@@ -1666,7 +1671,7 @@ async fn reject_overlong_board_cosign() {
 
 	let mut rpc = srv.get_public_rpc().await;
 	let res = rpc.request_board_cosign(protos::BoardCosignRequest {
-		owner_proof: None,
+		owner_proof: Some(test_owner_link(&srv, &user_key).await.into()),
 		amount: sat(100_000).to_sat(),
 		utxo: OutPoint::null().serialize(),
 		expiry_height,
@@ -1723,7 +1728,7 @@ async fn request_board_cosign_with_funding_tx(
 
 	let mut rpc = srv.get_public_rpc().await;
 	let res = rpc.request_board_cosign(protos::BoardCosignRequest {
-		owner_proof: None,
+		owner_proof: Some(test_owner_link(&srv, &user_key).await.into()),
 		amount: amount.to_sat(),
 		utxo: utxo.serialize(),
 		expiry_height: tip + ark_info.vtxo_lifetime.to_u32(),
@@ -2571,7 +2576,7 @@ async fn test_register_board() {
 
 	// Request server to cosign the board
 	let cosign_request = protos::BoardCosignRequest {
-		owner_proof: None,
+		owner_proof: Some(test_owner_link(&srv, &client_cosign_keypair).await.into()),
 		amount: board_amount.to_sat(),
 		utxo: board_utxo.serialize(),
 		expiry_height: expiry_height.into(),
@@ -2874,4 +2879,48 @@ async fn register_vector_owners(db: &server::database::Db) {
 	].iter().map(|key| Keypair::from_str(key).unwrap()).collect::<Vec<_>>();
 	let server = test_server_mailbox_key();
 	register_test_owners(db, server, server, &keys).await;
+}
+
+/// Standalone protocol actors authenticate their real key and destination.
+async fn test_owner_link(srv: &Captaind, key: &Keypair) -> OwnerLink {
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	let server = srv.mailbox_keypair();
+	register_test_owners(&db, &server, key, &[*key]).await;
+	OwnerLink::new(server.public_key(), MailboxIdentifier::from_pubkey(key.public_key()), key).unwrap()
+}
+
+/// Carry real evidence through hand-built financial requests. Wallet outputs
+/// sign from their keystores; custom actors copy their previously signed link.
+async fn signed_package(
+	srv: &Captaind, wallets: &[&Wallet], mut package: protos::ArkoorPackageCosignRequest,
+) -> protos::ArkoorPackageCosignRequest {
+	let server = srv.ark_info().await.mailbox_pubkey;
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	let mut links = std::collections::BTreeMap::new();
+	for output in package.parts.iter().flat_map(|part| part.outputs.iter().chain(&part.isolated_outputs)) {
+		let key = VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey();
+		if links.contains_key(&key) { continue; }
+		let mut link = None;
+		for wallet in wallets {
+			if wallet.pubkey_keypair(&key).await.unwrap().is_some() {
+				link = Some(wallet.owner_link(key).await.unwrap());
+				break;
+			}
+		}
+		if link.is_none() {
+			link = db.read(async |tx| Ok(tx.query_opt("SELECT blinded_id, signature FROM expiry_owner_key WHERE user_pubkey=$1",
+				&[&key.to_string()]).await?.map(|row| OwnerLink {
+					blinded_id: ark::mailbox::BlindedMailboxIdentifier::deserialize_hex(row.get("blinded_id")).unwrap(),
+					signature: row.get::<_, &str>("signature").parse().unwrap(),
+				}))).await.unwrap();
+		}
+		let link = link.unwrap_or_else(|| panic!("hand-built output {key} needs its real signing key"));
+		link.verify(server, key).unwrap();
+		links.insert(key, link);
+	}
+	for output in package.parts.iter_mut().flat_map(|part| part.outputs.iter_mut().chain(&mut part.isolated_outputs)) {
+		let key = VtxoPolicy::deserialize(&output.policy).unwrap().user_pubkey();
+		output.owner_proof = Some(links[&key].into());
+	}
+	package
 }

@@ -278,7 +278,7 @@ async fn expiry_uninitiated_grant_can_revoke_after_backing_expiry() {
 		.generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
 	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts: super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let grants = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();
@@ -298,7 +298,7 @@ async fn expiry_uninitiated_grant_can_revoke_after_backing_expiry() {
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([grants[0].clone()],
 		VtxoPolicy::new_pubkey(key.public_key())).unwrap().generate_user_nonces(&[key]).unwrap();
 	let response = rpc.request_lightning_pay_htlc_revocation(
-		protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+		super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await,
 	).await.unwrap().into_inner();
 	let refunds = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();

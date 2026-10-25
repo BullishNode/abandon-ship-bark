@@ -8,6 +8,7 @@ use bitcoin::secp256k1::{schnorr, PublicKey};
 use bitcoin::{Network, ScriptBuf};
 
 use ark::fallback::FallbackRegistration;
+use ark::mailbox::MailboxIdentifier;
 
 use crate::error::{badarg, ContextExt};
 
@@ -18,6 +19,14 @@ use super::Tx;
 const REGISTRY_LOCK: i64 = 3;
 
 impl Tx<'_> {
+	pub async fn require_registered_mailbox(&self, mailbox: MailboxIdentifier, network: Network) -> anyhow::Result<()> {
+		self.lock_fallback_registry().await?;
+		let record = self.get_fallback(mailbox.as_pubkey()).await?
+			.ok_or(crate::error::OwnershipRefusal::UnregisteredMailbox(mailbox.as_pubkey()))?;
+		record.verify(network, mailbox.as_pubkey()).context("invalid stored fallback registration")?;
+		Ok(())
+	}
+
 	pub async fn lock_fallback_registry(&self) -> anyhow::Result<()> {
 		self.execute("SELECT pg_advisory_xact_lock_shared($1)", &[&REGISTRY_LOCK]).await?;
 		Ok(())

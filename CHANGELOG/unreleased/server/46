@@ -3,3 +3,7 @@
   Remove account-key discovery and hold outputs without a valid link.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
   - **BREAKING:** Use fresh stores and mailbox-only v4 registrations.
+- Require signed ownership links before customer issuance
+  Verify the actual output key at every admission and again in the tree writer,
+  so an accepted customer coin has an authenticated Bitcoin fallback destination.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

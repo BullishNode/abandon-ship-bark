@@ -57,9 +57,11 @@ async fn mailbox_checkpoint_visibility_gap() {
 		(kp, vtxo)
 	}).collect();
 
+	super::register_test_owners(&db, &srv.mailbox_keypair(), &mailbox_kp,
+		&vtxo_pairs.iter().map(|(key, _)| *key).collect::<Vec<_>>()).await;
 	db.write(async |t| t.upsert_vtxos(
 		vtxo_pairs.iter().map(|(_, v)| ServerVtxo::from(v.clone()))
-	).await).await.expect("upsert vtxos");
+	, Some((bitcoin::Network::Regtest, &srv.mailbox_keypair()))).await).await.expect("upsert vtxos");
 
 	let writers_done = Arc::new(AtomicBool::new(false));
 	let expiry = chrono::Local::now() + Duration::from_secs(300);
@@ -168,7 +170,8 @@ async fn mailbox_post_arkoor_requires_known_vtxos() {
 		user_keypair: owner_kp,
 		..Default::default()
 	}.build();
-	db.write(async |t| t.upsert_vtxos([ServerVtxo::from(vtxo.clone())]).await).await
+	super::register_test_owners(&db, &srv.mailbox_keypair(), &mailbox_kp, &[owner_kp]).await;
+	db.write(async |t| t.upsert_vtxos([ServerVtxo::from(vtxo.clone())], Some((bitcoin::Network::Regtest, &srv.mailbox_keypair()))).await).await
 		.expect("upsert vtxo");
 
 	// A vtxo the server never cosigned is rejected.

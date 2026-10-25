@@ -1,7 +1,8 @@
 use ark::arkoor::ArkoorDestination;
 use ark::arkoor::package::ArkoorPackageBuilder;
 use ark::lightning::PaymentHash;
-use ark::VtxoPolicy;
+use ark::{ProtocolEncoding, VtxoPolicy};
+use ark::test_util::VTXO_VECTORS;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin_ext::{BlockDelta, BlockHeight};
 use server_rpc::protos;
@@ -92,4 +93,53 @@ async fn expiry_native_rpc_refusals_have_stable_reasons() {
 	let error = rpc.request_lightning_pay_htlc_cosign(request()).await.expect_err("already-decided source must have a specific refusal");
 	assert_eq!(error.metadata().get("abandon-reason").unwrap().to_str().unwrap(), "decided_for_fallback");
 	assert_eq!(full.vtxo.amount(),sat(100_000));
+}
+
+/// Each public issuance path rejects a missing link while its original request
+/// metadata is still available, before canonical conversion or money handling.
+#[tokio::test]
+async fn ownership_links_are_required_at_all_eight_admissions() {
+	let ctx = TestContext::new("server/owner_links_all_admissions").await;
+	let srv = ctx.captaind("server").create().await;
+	let mut rpc = srv.get_public_rpc().await;
+	let key = VTXO_VECTORS.board_vtxo.user_pubkey();
+	let policy = VtxoPolicy::new_pubkey(key).serialize();
+	let destination = protos::ArkoorDestination {
+		total_amount: 100_000, policy: policy.clone(), owner_proof: None,
+	};
+	let part = protos::ArkoorCosignRequest { outputs: vec![destination], ..Default::default() };
+	let package = || protos::ArkoorPackageCosignRequest { parts: vec![part.clone()] };
+	let refusal = |status: tonic::Status| {
+		assert_eq!(status.code(), tonic::Code::InvalidArgument, "{status}");
+		assert_eq!(status.metadata().get("abandon-reason").unwrap().to_str().unwrap(), "owner_proof_required");
+		assert_eq!(status.metadata().get("identifiers").unwrap().to_str().unwrap(), key.to_string());
+	};
+	refusal(rpc.request_board_cosign(protos::BoardCosignRequest {
+		user_pubkey: key.serialize().to_vec(), ..Default::default()
+	}).await.unwrap_err());
+	refusal(rpc.request_arkoor_cosign(package()).await.unwrap_err());
+	refusal(rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
+		parts: vec![part.clone()],
+	}).await.unwrap_err());
+	refusal(rpc.request_lightning_pay_htlc_revocation(package()).await.unwrap_err());
+	refusal(rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		payment_hash: vec![1; 32], user_pubkey: key.serialize().to_vec(), ..Default::default()
+	}).await.unwrap_err());
+	refusal(rpc.claim_lightning_receive(protos::ClaimLightningReceiveRequest {
+		payment_hash: vec![1; 32], payment_preimage: vec![2; 32], cosign_request: Some(package()),
+	}).await.unwrap_err());
+	let output = protos::VtxoRequest { amount: 100_000, policy, owner_proof: None };
+	refusal(rpc.submit_payment(protos::SubmitPaymentRequest {
+		vtxo_requests: vec![protos::SignedVtxoRequest { vtxo: Some(output.clone()), ..Default::default() }],
+		..Default::default()
+	}).await.unwrap_err());
+	refusal(rpc.submit_round_participation(protos::RoundParticipationRequest {
+		vtxo_requests: vec![output], ..Default::default()
+	}).await.unwrap_err());
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	let counts = db.read(async |tx| Ok(tx.query_one("SELECT
+		(SELECT count(*) FROM expiry_owner_key),
+		(SELECT count(*) FROM lightning_payment_attempt),
+		(SELECT count(*) FROM lightning_htlc_subscription)", &[]).await?)).await.unwrap();
+	assert_eq!((counts.get::<_, i64>(0), counts.get::<_, i64>(1), counts.get::<_, i64>(2)), (0, 0, 0));
 }

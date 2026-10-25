@@ -1,7 +1,7 @@
 //! Real-size native splitting. Run explicitly with the fallback-scale profile.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
 use ark::fallback::{FallbackRegistration, OwnerLink};
@@ -20,6 +20,7 @@ use bitcoin::secp256k1::{Keypair, rand::{thread_rng, RngCore}};
 use bitcoin_ext::{BlockDelta, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::Db;
+use server::owner_proof::OwnerLinks;
 use server::database::expiry_inventory::{BackingPartitionResidual, BackingSnapshotLimits};
 use server_rpc::protos;
 
@@ -262,6 +263,7 @@ async fn bounded_round_inventory() {
 	let mut rpc = srv.get_public_rpc().await;
 	let proof_db = Db::connect(&srv.config().postgres).await.unwrap();
 	let mailbox_key = srv.mailbox_keypair();
+	let mut first_link_elapsed = Duration::ZERO;
 	for owner in &owners {
 		let record = owner.record.serialize();
 		let response = rpc.set_fallback(protos::SetFallbackRequest {
@@ -269,9 +271,69 @@ async fn bounded_round_inventory() {
 		}).await.unwrap().into_inner();
 		assert_eq!(response.record, record);
 		let proof = OwnerLink::new(mailbox_key.public_key(), owner.mailbox, &owner.key).unwrap();
+		let started = Instant::now();
 		proof_db.write(async |tx| tx.verify_owner_link(&mailbox_key, owner.key.public_key(), &proof, Network::Regtest).await)
 			.await.unwrap();
+		first_link_elapsed += started.elapsed();
 	}
+	// Measure the existing configured round bound, not the larger default.
+	// Signing/setup stays outside each verification timer; no release limit or
+	// financial oracle is changed to fit this measurement.
+	let batch_limit = 4_usize.saturating_pow(srv.config().nb_round_nonces as u32);
+	assert_eq!(batch_limit, 64);
+	let mut distinct_elapsed = Duration::ZERO;
+	let mut repeated_elapsed = Duration::ZERO;
+	let mut invalid_elapsed = Duration::ZERO;
+	let mut max_evidence_bytes = 0;
+	for group in owners.chunks(batch_limit) {
+		let keys = group.iter().map(|owner| owner.key.public_key()).collect::<Vec<_>>();
+		let mut distinct = OwnerLinks::default();
+		let mut evidence_bytes = 0;
+		for owner in group {
+			let proof = OwnerLink::new(mailbox_key.public_key(), owner.mailbox, &owner.key).unwrap();
+			evidence_bytes += proof.serialize().len(); distinct.insert(owner.key.public_key(), proof);
+		}
+		max_evidence_bytes = max_evidence_bytes.max(evidence_bytes);
+		let started = Instant::now();
+		proof_db.write(async |tx| distinct.verify(tx, keys.iter().copied(), &mailbox_key, Network::Regtest).await).await.unwrap();
+		distinct_elapsed += started.elapsed();
+		let one = &group[0];
+		let before = proof_db.read(async |tx| Ok(tx.query_one("SELECT blinded_id,signature FROM expiry_owner_key WHERE user_pubkey=$1",
+			&[&one.key.public_key().to_string()]).await?)).await.unwrap();
+		let canonical = (before.get::<_, String>(0), before.get::<_, String>(1));
+		let mut repeated = OwnerLinks::default();
+		let mut invalid = OwnerLinks::default();
+		for index in 0..batch_limit {
+			let proof = OwnerLink::new(mailbox_key.public_key(), one.mailbox, &one.key).unwrap();
+			repeated.insert(one.key.public_key(), proof);
+			let mut bad = proof;
+			if index + 1 == batch_limit { bad.signature = bitcoin::secp256k1::schnorr::Signature::from_slice(&[0; 64]).unwrap(); }
+			invalid.insert(one.key.public_key(), bad);
+		}
+		let started = Instant::now();
+		proof_db.write(async |tx| repeated.verify(tx, [one.key.public_key()], &mailbox_key, Network::Regtest).await).await.unwrap();
+		repeated_elapsed += started.elapsed();
+		let started = Instant::now();
+		let error = proof_db.write(async |tx| invalid.verify(tx, [one.key.public_key()], &mailbox_key, Network::Regtest).await).await.unwrap_err();
+		invalid_elapsed += started.elapsed();
+		assert!(error.is::<server::OwnershipRefusal>(), "{error:#}");
+		let after = proof_db.read(async |tx| Ok(tx.query_one("SELECT blinded_id,signature FROM expiry_owner_key WHERE user_pubkey=$1",
+			&[&one.key.public_key().to_string()]).await?)).await.unwrap();
+		assert_eq!((after.get::<_, String>(0), after.get::<_, String>(1)), canonical);
+	}
+	let started = Instant::now();
+	proof_db.read(async |tx| {
+		for owner in &owners {
+			assert_eq!(tx.expiry_owner(owner.key.public_key(), Network::Regtest, &mailbox_key).await?,
+				server::database::expiry_attribution::Attribution::Owned { mailbox_pk: owner.mailbox.as_pubkey(), spk: owner.record.spk.clone() });
+		}
+		Ok(())
+	}).await.unwrap();
+	let payout_reverify_elapsed = started.elapsed();
+	assert_eq!(max_evidence_bytes, batch_limit * 97);
+	eprintln!("signed-link cost: owners={} configured_batch={} max_encoded_evidence_bytes={} first_link_us={} distinct_replay_us={} repeated_us={} invalid_last_us={} payout_reverify_us={}",
+		owners.len(), batch_limit, max_evidence_bytes, first_link_elapsed.as_micros(), distinct_elapsed.as_micros(),
+		repeated_elapsed.as_micros(), invalid_elapsed.as_micros(), payout_reverify_elapsed.as_micros());
 	let mut sponsor_funding = BTreeSet::new();
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	for _ in 0..96 {

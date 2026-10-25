@@ -3,9 +3,13 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use bitcoin::{Address, Network, OutPoint};
+use bitcoin::{Address, Amount, Network, OutPoint};
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin_ext::BlockDelta;
 use bitcoin_ext::rpc::RpcApi;
+use bark::lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
+use bark_json::movements::MovementStatus;
+use server::database::Db;
 
 use ark_testing::{sat, TestContext};
 use ark_testing::constants::BOARD_CONFIRMATIONS;
@@ -40,7 +44,7 @@ async fn fallback_payout_history_and_seed_restore() {
 	assert_eq!(coins[0].state, bark_json::primitives::VtxoStateInfo::Spendable);
 	let coin = &coins[0];
 	let expected = coin.vtxo.amount - sat(1_000);
-	let returning_address = barkd.ark_address().await;
+	let original = barkd.get_vtxo_encoded(&coin.vtxo.id.to_string()).await.encoded;
 
 	// Absence means the native process is stopped, including every
 	// maintenance and sync task. No wallet observer opens it during expiry.
@@ -72,33 +76,67 @@ async fn fallback_payout_history_and_seed_restore() {
 		.unwrap().unwrap().value, expected);
 	barkd.start().await.unwrap();
 	// Before any status adoption, a returning wallet may still cache the
-	// old spendable coin. The decided server must explain its fence.
+	// old coin. A Lightning send reaches the server's fence; ordinary arkoor
+	// selection excludes expired inputs before it makes an RPC.
+	let key = bitcoin::secp256k1::SecretKey::from_slice(&[61; 32]).unwrap();
+	let hash = sha256::Hash::hash(b"native paid-source refusal");
+	let invoice = InvoiceBuilder::new(Currency::Regtest)
+		.description("native paid-source refusal".into())
+		.payment_hash(hash).payment_secret(PaymentSecret([63; 32]))
+		.current_timestamp().min_final_cltv_expiry_delta(18).amount_milli_satoshis(1_000_000)
+		.build_signed(|hash| bitcoin::secp256k1::Secp256k1::new().sign_ecdsa_recoverable(hash, &key)).unwrap();
 	let returning = barkd.client_config();
 	let refusal = returning.client.post(format!("{}/api/v1/wallet/send", returning.base_path))
-		.json(&serde_json::json!({ "destination": returning_address, "amount_sat": 1_000 }))
+		.json(&serde_json::json!({ "destination": invoice.to_string() }))
 		.send().await.unwrap();
 	assert_eq!(refusal.status(), reqwest::StatusCode::CONFLICT);
 	let refusal: serde_json::Value = refusal.json().await.unwrap();
 	assert_eq!(refusal["code"], "decided_for_fallback");
 	assert_eq!(refusal["message"], "This coin expired and is being paid to your fallback address.");
-	// Core confirmation precedes the background ledger's observation. Wait
-	// for the native receipt instead of assuming a tip ACK means the
-	// payout projection has already caught up.
-	let history = tokio::time::timeout(Duration::from_secs(10), async {
+	assert_eq!(barkd.get_vtxo(&coin.vtxo.id.to_string()).await.state, bark_json::primitives::VtxoStateInfo::Spendable,
+		"the refused send must release its temporary input lock");
+	assert_eq!(barkd.get_vtxo_encoded(&coin.vtxo.id.to_string()).await.encoded, original);
+	let postgres = srv.config().postgres.clone();
+	let db = Db::connect(&postgres).await.unwrap();
+	assert_eq!(db.read(async |tx| Ok(tx.query_one(
+		"SELECT COUNT(*) FROM lightning_payment_attempt WHERE payment_hash=$1", &[&hash.to_string()],
+	).await?.get::<_, i64>(0))).await.unwrap(), 0, "a fenced coin must not dispatch a payment");
+	let native_history = barkd.history(None, None).await;
+	let refused = native_history.iter().filter(|entry| entry.subsystem.name == "bark.lightning_send").collect::<Vec<_>>();
+	assert_eq!(refused.len(), 1);
+	assert_eq!(refused[0].status, MovementStatus::Failed);
+	assert_eq!(refused[0].effective_balance.to_sat(), 0);
+	// Discover the canonical output with the ordinary chain wallet, while
+	// retained Ark material is retired only after chain verification.
+	tokio::time::timeout(Duration::from_secs(10), async {
 		loop {
 			barkd.sync().await;
-			let history = barkd.history(None, None).await;
-			if history.iter().any(|movement| movement.subsystem.name == "abandon.fallback_payout"
-				&& movement.metadata.as_ref().and_then(|metadata| metadata.get("fallback"))
-					.is_some_and(|receipt| receipt["stage"] == "confirmed")) { break history; }
+			barkd.onchain_sync().await;
+			if barkd.get_vtxo(&coin.vtxo.id.to_string()).await.state == bark_json::primitives::VtxoStateInfo::Spent
+				&& barkd.onchain_utxos().await.iter().any(|utxo| utxo.outpoint == point) { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-	}).await.expect("the native confirmed payout receipt did not catch up with Core");
-	barkd.onchain_sync().await;
-	let receipts = history.iter().filter(|movement| movement.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-	assert_eq!(receipts.len(), 1);
-	assert_eq!(receipts[0].sent_to[0].amount, expected);
-	assert_eq!(receipts[0].offchain_fee, sat(1_000));
+	}).await.expect("the native wallet did not discover the confirmed payout and retire its source");
+	assert_eq!(barkd.history(None, None).await, native_history, "chain discovery must not invent a native action");
+	assert_eq!(barkd.get_vtxo_encoded(&coin.vtxo.id.to_string()).await.encoded, original);
+	assert_eq!(barkd.bark_balance().await.spendable, Amount::ZERO);
+	let own_payouts = barkd.onchain_utxos().await.into_iter().filter(|utxo| utxo.outpoint == point).collect::<Vec<_>>();
+	assert_eq!(own_payouts.len(), 1);
+	assert_eq!(own_payouts[0].amount, expected);
+	assert!(own_payouts[0].confirmation_height.is_some());
+	let allocations = db.read(async |tx| Ok(tx.query(
+		"SELECT a.sweep_txid,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat \
+		FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+		JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=$1 AND c.active",
+		&[&coin.vtxo.id.to_string()],
+	).await?)).await.unwrap();
+	assert_eq!(allocations.len(), 1);
+	let allocation = &allocations[0];
+	assert_eq!(allocation.get::<_, &str>("sweep_txid"), point.txid.to_string());
+	assert_eq!((allocation.get::<_, i64>("gross_sat"), allocation.get::<_, i64>("fee_sat"),
+		allocation.get::<_, i64>("payout_sat"), allocation.get::<_, i64>("forfeited_sat")),
+		(100_000, 1_000, 99_000, 0));
+	assert_eq!(coin.vtxo.amount, expected + sat(1_000));
 
 	barkd.stop().await.unwrap();
 
@@ -106,12 +144,16 @@ async fn fallback_payout_history_and_seed_restore() {
 		.cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
 	restored.sync().await;
 	restored.onchain_sync().await;
-	let restored_history = restored.history(None, None).await;
-	let restored_receipts = restored_history.iter().filter(|movement|
-		movement.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-	assert_eq!(restored_receipts.len(), 1);
-	assert_eq!(restored_receipts[0].sent_to[0].amount, expected);
-	assert!(restored.onchain_utxos().await.iter().any(|utxo| utxo.outpoint == point));
+	let restored_config = restored.client_config();
+	let restored_registration: bark_json::web::FallbackRegistrationInfo = restored_config.client
+		.get(format!("{}/api/v1/wallet/fallback", restored_config.base_path)).send().await.unwrap()
+		.error_for_status().unwrap().json().await.unwrap();
+	assert!(restored_registration.registered);
+	assert_eq!(restored_registration.payout_address, registration.payout_address);
+	let restored_payouts = restored.onchain_utxos().await.into_iter().filter(|utxo| utxo.outpoint == point).collect::<Vec<_>>();
+	assert_eq!(restored_payouts.len(), 1);
+	assert_eq!(restored_payouts[0].amount, expected);
+	assert!(restored_payouts[0].confirmation_height.is_some());
 	restored.stop().await.unwrap();
 	srv.watchmand().stop().await.unwrap();
 	srv.stop().await.unwrap();

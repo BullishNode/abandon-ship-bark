@@ -93,10 +93,9 @@ pub async fn generate_invoice(
 	),
 	description = "Generates a new BOLT11 invoice. When paid, the wallet app claims the Lightning \
 		receive and forwards the resulting Ark VTXO to the specified Ark address mailbox. \
-		Automated fallback requires the final recipient's authenticated fallback registration on the Ark server. \
-		The destination key must derive from that registered xpub. Address validation does not verify fallback registration. \
-		At expiry, no matching registration and an incomplete attribution scan for a registered owner both require a hold. \
-		The recipient's bitcoin must not become provider or operator bitcoin.",
+		The address must carry a valid signed mailbox link. The server verifies the link and the recipient's \
+		immutable fallback registration before it accepts the destination output. Missing or invalid ownership \
+		evidence at expiry leaves the bitcoin held; it never makes that bitcoin the provider's or operator's.",
 	tag = "lightning"
 )]
 #[debug_handler]

@@ -20,7 +20,7 @@ pub enum Attribution {
 }
 
 impl Tx<'_> {
-	/// Verify the actual output key's chosen mailbox and cache the immutable
+	/// Verify the actual output key's chosen mailbox and store the immutable
 	/// binding in the caller's admission transaction. Gifts are valid links.
 	pub async fn verify_owner_link(
 		&self, server_mailbox_key: &Keypair, user_pubkey: PublicKey,

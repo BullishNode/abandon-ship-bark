@@ -25,7 +25,7 @@ CREATE TABLE expiry_cancelled_participation (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Owner matches are rechecked against the signed registration before payout.
+-- Signed coin links and mailbox registrations are rechecked before payout.
 CREATE TABLE expiry_owner_key (
 	user_pubkey TEXT PRIMARY KEY,
 	mailbox_pk TEXT NOT NULL REFERENCES fallback_record(mailbox_pk),

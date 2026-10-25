@@ -1,4 +1,5 @@
 - Add signed links from coin keys to fallback mailboxes
-  Carry a server-specific mailbox signature in an Ark address and define the
-  mailbox-only fallback registration format for the next release.
+  Carry a server-specific coin-key signature in an Ark address and define the
+  mailbox-only v4 fallback registration format.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+  - **BREAKING:** Use `FallbackRegistration` and signed `0x02` recipient addresses.

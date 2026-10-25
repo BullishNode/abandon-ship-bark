@@ -807,7 +807,7 @@ message LightningNodeUri {
 	string uri = 1;
 }
 
-// The record uses ark-lib's versioned, bounded FallbackRecord encoding.
+// The record uses ark-lib's bounded mailbox-only v4 FallbackRegistration encoding.
 message SetFallbackRequest {
 	bytes mailbox_pk = 1;
 	bytes record = 2;

@@ -2,7 +2,7 @@
   Remove the server-held account xpub and the special registration key slot.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
   - **BREAKING:** Fallback persistence uses mailbox-only v4 registrations.
-- Carry signed mailbox links with every created output
+- Carry signed mailbox links with every customer output
   Emit signed recipient addresses, retain external round links across restart,
   and reconcile normal and recovery registrations before mailbox use.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

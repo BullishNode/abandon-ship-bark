@@ -5,7 +5,7 @@
   - **BREAKING:** Use fresh stores and mailbox-only v4 registrations.
 - Require signed ownership links before customer issuance
   Verify the actual output key at every admission and again in the tree writer,
-  so an accepted customer coin has an authenticated Bitcoin fallback destination.
+  so an accepted customer coin has an authenticated bitcoin fallback destination.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
 - Require fallback registration for every mailbox operation
   Refuse unregistered reads, subscriptions and notices before allocating a

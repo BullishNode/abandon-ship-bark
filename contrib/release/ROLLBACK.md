@@ -13,6 +13,11 @@ Keep the original stores intact. Restore into separate paths when possible.
 A binary rollback does not itself require a database restore. Do not restore a
 snapshot that omits accepted customer commitments.
 
+The signature-link release uses mailbox-only v4 registrations and fresh paired
+client/server stores. It has no conversion from earlier fork formats. Retain
+the original server seed: its mailbox key must verify and unblind every stored
+coin link. Preserve signed links and registrations with the financial records.
+
 For PostgreSQL 17 on Ubuntu, use these executable paths with the deployment's
 socket, port, database and private backup destination. Use port 5433 explicitly
 for a separate cluster beside a default 5432 cluster. Keep credentials in the

@@ -1,9 +1,11 @@
 use ark::fallback::FallbackRegistration;
+use ark::mailbox::MailboxIdentifier;
 use ark::{ProtocolEncoding, SECP};
 use ark_testing::TestContext;
 use bitcoin::secp256k1::Keypair;
 use bitcoin::{Network, ScriptBuf};
 use server_rpc::protos;
+use std::time::Duration;
 
 async fn wait_for_migration_lock(client: &tokio_postgres::Client, granted: bool, count: i64) {
 	tokio::time::timeout(std::time::Duration::from_secs(15), async {
@@ -145,6 +147,82 @@ async fn fallback_registration_is_authenticated_immutable_and_idempotent() {
 		mailbox_pk: other.public_key().serialize().to_vec(), record: duplicate.serialize(),
 	}).await.unwrap().into_inner().record, duplicate.serialize());
 	assert_eq!(rpc.set_fallback(request(record.serialize())).await.unwrap().into_inner().record, canonical);
+}
+
+#[tokio::test]
+async fn fallback_registration_conflicts_do_not_block_other_mailboxes() {
+	let ctx = TestContext::new("server/fallback_registration_conflicts_do_not_block_other_mailboxes").await;
+	let srv = ctx.captaind("server").create().await;
+	let mut rpc = srv.get_public_rpc().await;
+	let postgres = srv.config().postgres.clone();
+	let db = server::database::Db::connect(&postgres).await.unwrap();
+	let key = |byte| Keypair::from_seckey_slice(&SECP, &[byte; 32]).unwrap();
+	let first_script = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
+	let other_script = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
+	let known = key(5);
+	let known_record = FallbackRegistration::new(Network::Regtest, first_script.clone(), &known).unwrap();
+	rpc.set_fallback(protos::SetFallbackRequest {
+		mailbox_pk: known.public_key().serialize().to_vec(), record: known_record.serialize(),
+	}).await.unwrap();
+
+	for (byte, conflict) in [(7, false), (9, true)] {
+		let mailbox = key(byte);
+		let first_record = FallbackRegistration::new(Network::Regtest, first_script.clone(), &mailbox).unwrap();
+		let contender_record = FallbackRegistration::new(Network::Regtest,
+			if conflict { other_script.clone() } else { first_script.clone() }, &mailbox).unwrap();
+		assert_ne!(first_record.mailbox_signature, contender_record.mailbox_signature);
+		let mut contender_rpc = rpc.clone();
+		let request = protos::SetFallbackRequest {
+			mailbox_pk: mailbox.public_key().serialize().to_vec(), record: contender_record.serialize(),
+		};
+		let (canonical, contender) = db.write(async |tx| {
+			let canonical = tx.set_fallback(mailbox.public_key(), &first_record, Network::Regtest).await?;
+			let blocker = tx.query_one("SELECT pg_backend_pid()", &[]).await?.get::<_, i32>(0);
+			let contender = tokio::spawn(async move { contender_rpc.set_fallback(request).await });
+			// Observe the real unique-key wait before allowing the winner to commit.
+			tokio::time::timeout(Duration::from_secs(10), async {
+				loop {
+					tx.query_one("SELECT pg_stat_clear_snapshot()", &[]).await?;
+					let blocked = tx.query_one("SELECT EXISTS(SELECT 1 FROM pg_stat_activity a \
+						JOIN pg_locks l ON l.pid=a.pid WHERE a.datname=current_database() \
+						AND a.query LIKE '%INSERT INTO fallback_record%' AND l.locktype='transactionid' \
+						AND NOT l.granted AND $1=ANY(pg_blocking_pids(a.pid)))", &[&blocker])
+						.await?.get::<_, bool>(0);
+					if blocked { break; }
+					tokio::time::sleep(Duration::from_millis(10)).await;
+				}
+				Ok::<_, anyhow::Error>(())
+			}).await.expect("registration never reached the unique-key conflict")?;
+
+			// Neither an unrelated registration nor a registered mailbox read
+			// must wait for the first mailbox's transaction to end.
+			let unrelated = key(byte + 1);
+			let unrelated_record = FallbackRegistration::new(Network::Regtest, other_script.clone(), &unrelated).unwrap();
+			let result = tokio::time::timeout(Duration::from_secs(10), rpc.set_fallback(protos::SetFallbackRequest {
+				mailbox_pk: unrelated.public_key().serialize().to_vec(), record: unrelated_record.serialize(),
+			})).await.expect("unrelated registration waited for another mailbox").unwrap().into_inner();
+			assert_eq!(result.record, unrelated_record.serialize());
+			tokio::time::timeout(Duration::from_secs(10), db.read(async |other| {
+				other.require_registered_mailbox(MailboxIdentifier::from_pubkey(known.public_key()), Network::Regtest).await
+			})).await.expect("registered mailbox read waited for another mailbox").unwrap();
+			assert!(!contender.is_finished(), "the same-key request must still await the winner");
+			Ok((canonical, contender))
+		}).await.unwrap();
+		assert_eq!(canonical, first_record);
+		let result = tokio::time::timeout(Duration::from_secs(10), contender).await
+			.expect("registration did not resume after the winning commit").unwrap();
+		if conflict {
+			let error = result.unwrap_err();
+			assert_eq!(error.code(), tonic::Code::InvalidArgument);
+			assert!(error.message().contains("immutable fallback destination differs"), "{error}");
+		} else {
+			assert_eq!(result.unwrap().into_inner().record, canonical.serialize());
+		}
+		let stored = db.read(async |tx| tx.get_fallback(mailbox.public_key()).await).await.unwrap().unwrap();
+		assert_eq!(stored, canonical);
+		assert_eq!(db.read(async |tx| Ok(tx.query_one("SELECT COUNT(*) FROM fallback_record WHERE mailbox_pk=$1",
+			&[&mailbox.public_key().to_string()]).await?.get::<_, i64>(0))).await.unwrap(), 1);
+	}
 }
 
 #[tokio::test]

@@ -11,3 +11,7 @@
   Refuse unregistered reads, subscriptions and notices before allocating a
   checkpoint or channel, and notify round recipients only after commit.
   [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+- Keep fallback registration contention local to each mailbox
+  Use the immutable mailbox constraint instead of a global registry lock, so
+  one registration does not block unrelated admissions or mailbox operations.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

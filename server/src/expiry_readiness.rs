@@ -246,8 +246,6 @@ impl Server {
 					if self.rtmgr.shutdown_requested() {
 						return Ok(());
 					}
-					// Release the registry lock between coins. A large tree must
-					// not block registrations while preparing all of its owners.
 					let coin = self.db.write(async |t| t.prepare_expiry_coin(
 						&snapshot.regular[*index],
 						&funding,

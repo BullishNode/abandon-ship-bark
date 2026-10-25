@@ -14,27 +14,12 @@ use crate::error::{badarg, ContextExt};
 
 use super::Tx;
 
-/// Serializes registration with the short payout decision transaction. The lock
-/// is shared for decisions and exclusive for a new immutable registration.
-const REGISTRY_LOCK: i64 = 3;
-
 impl Tx<'_> {
 	pub async fn require_registered_mailbox(&self, mailbox: MailboxIdentifier, network: Network) -> anyhow::Result<()> {
-		self.lock_fallback_registry().await?;
 		let record = self.get_fallback(mailbox.as_pubkey()).await?
 			.ok_or(crate::error::OwnershipRefusal::UnregisteredMailbox(mailbox.as_pubkey()))?;
 		record.verify(network, mailbox.as_pubkey())
 			.map_err(|_| crate::error::OwnershipRefusal::UnregisteredMailbox(mailbox.as_pubkey()))?;
-		Ok(())
-	}
-
-	pub async fn lock_fallback_registry(&self) -> anyhow::Result<()> {
-		self.execute("SELECT pg_advisory_xact_lock_shared($1)", &[&REGISTRY_LOCK]).await?;
-		Ok(())
-	}
-
-	pub(super) async fn lock_fallback_registry_writer(&self) -> anyhow::Result<()> {
-		self.execute("SELECT pg_advisory_xact_lock($1)", &[&REGISTRY_LOCK]).await?;
 		Ok(())
 	}
 
@@ -44,19 +29,19 @@ impl Tx<'_> {
 		&self, mailbox_pk: PublicKey, record: &FallbackRegistration, network: Network,
 	) -> anyhow::Result<FallbackRegistration> {
 		record.verify(network, mailbox_pk).badarg("invalid fallback record")?;
-		self.lock_fallback_registry_writer().await?;
-		if let Some(stored) = self.get_fallback(mailbox_pk).await? {
-			stored.verify(network, mailbox_pk).context("invalid stored fallback registration")?;
-			if !stored.same_binding(record) { return badarg!("immutable fallback destination differs"); }
-			return Ok(stored);
-		}
-		self.query_one("
+		let _ = self.query_opt("
 			INSERT INTO fallback_record (mailbox_pk, spk, mailbox_sig)
-			VALUES ($1, $2, $3) RETURNING id
+			VALUES ($1, $2, $3) ON CONFLICT (mailbox_pk) DO NOTHING RETURNING id
 		", &[
 			&mailbox_pk.to_string(), &record.spk.as_bytes().to_lower_hex_string(), &record.mailbox_signature.to_string(),
 		]).await.context("failed to store fallback record")?;
-		Ok(record.clone())
+		// A separate READ COMMITTED statement sees a concurrent winner after
+		// the insert waits for its commit. Always return that canonical record.
+		let stored = self.get_fallback(mailbox_pk).await?
+			.context("fallback record missing after registration")?;
+		stored.verify(network, mailbox_pk).context("invalid stored fallback registration")?;
+		if !stored.same_binding(record) { return badarg!("immutable fallback destination differs"); }
+		Ok(stored)
 	}
 
 	pub async fn get_fallback(&self, mailbox_pk: PublicKey) -> anyhow::Result<Option<FallbackRegistration>> {

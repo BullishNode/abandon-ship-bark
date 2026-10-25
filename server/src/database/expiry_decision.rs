@@ -165,7 +165,6 @@ impl Tx<'_> {
 		if outputs.is_empty() { return Ok(None); }
 		ensure!(ReadyOutput::group_fits(&outputs.iter().collect::<Vec<_>>())?, "expiry group exceeds version-3 sweep size");
 		self.lock_valid_expiry_view(view).await?;
-		self.lock_fallback_registry().await?;
 		let expiry = outputs[0].root.expiry_height();
 		ensure!(outputs.iter().all(|o| o.root.expiry_height() == expiry), "expiry group mixes expiry heights");
 		// Serialize fee history at this height before locking source rows.

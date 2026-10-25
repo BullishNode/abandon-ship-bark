@@ -30,7 +30,6 @@ impl Tx<'_> {
 			.map_err(|_| OwnershipRefusal::Invalid(user_pubkey))?;
 		let mailbox = MailboxIdentifier::from_blinded(link.blinded_id, user_pubkey, server_mailbox_key)
 			.map_err(|_| OwnershipRefusal::Invalid(user_pubkey))?.as_pubkey();
-		self.lock_fallback_registry().await?;
 		let Some(record) = self.get_fallback(mailbox).await? else {
 			return Err(OwnershipRefusal::UnregisteredMailbox(user_pubkey).into());
 		};
@@ -52,7 +51,6 @@ impl Tx<'_> {
 	pub async fn expiry_owner(
 		&self, user_pubkey: PublicKey, network: Network, server_mailbox_key: &Keypair,
 	) -> anyhow::Result<Attribution> {
-		self.lock_fallback_registry().await?;
 		let Some(row) = self.query_opt("
 			SELECT mailbox_pk, blinded_id, signature FROM expiry_owner_key WHERE user_pubkey=$1
 		", &[&user_pubkey.to_string()]).await? else { return Ok(Attribution::Unresolved); };

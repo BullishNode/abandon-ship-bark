@@ -472,7 +472,7 @@ async fn request_lightning_send_htlcs(
 	// Ensure inputs are fully registered server-side before the cosign.
 	wallet.register_vtxo_transactions_with_server(&full_inputs).await
 		.context("failed to register lightning-send input vtxo transactions with server")
-		.retry()?;
+		.retry_unless_rejected()?;
 
 	let mut input_keypairs = Vec::with_capacity(full_inputs.len());
 	for input in full_inputs.iter() {

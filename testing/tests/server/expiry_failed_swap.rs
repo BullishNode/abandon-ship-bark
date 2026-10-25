@@ -113,7 +113,7 @@ async fn wait_rebuilt(db: &Db, point: BlockRef) {
 		loop {
 			let rebuilt = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
 			}).await.unwrap();
 			if rebuilt { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
@@ -167,7 +167,7 @@ async fn failed_swap_during_restart() {
 		.generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
 	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts: super::signed_package(&srv, &[&client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let grants = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();

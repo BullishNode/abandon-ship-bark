@@ -54,10 +54,10 @@ pub(super) async fn signed_leaf(
 	let mut rpc = srv.get_public_rpc().await;
 	let response = if matches!(&policy, VtxoPolicy::ServerHtlcSend(_)) {
 		rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+			parts: super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 		}).await.unwrap().into_inner()
 	} else {
-		rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+		rpc.request_arkoor_cosign(super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await)
 			.await.unwrap().into_inner()
 	};
 	let mut outputs = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
@@ -408,6 +408,7 @@ async fn unattempted_shared_preimage(legacy: bool) {
 		assert_eq!(db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM lightning_payment_attempt a WHERE a.payment_hash=$1", &[&hash.to_string()])
 			.await?.get::<_, i64>(0))).await.unwrap(), 0);
 	}
+	super::test_owner_link(&srv, &beneficiary).await;
 	let receive = signed_leaf(&ctx, &srv, &wallet, receive_input,
 		VtxoPolicy::new_server_htlc_recv(beneficiary.public_key(), hash,
 			tip + BlockDelta::new(700), BlockDelta::new(40))).await;
@@ -459,7 +460,7 @@ async fn send_claim_does_not_block_ordinary_progression() {
 		let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([source.clone()],
 			VtxoPolicy::new_pubkey(key.public_key())).unwrap().generate_user_nonces(&[key]).unwrap();
 		let response = srv.get_public_rpc().await.request_lightning_pay_htlc_revocation(
-			protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+			super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await,
 		).await.unwrap().into_inner();
 		let mut outputs = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 			.unwrap().build_signed_vtxos();
@@ -856,6 +857,7 @@ async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: b
 	let expiry = tip + BlockDelta::new(286);
 	let source = signed_leaf(&ctx, &srv, &wallet, send_input,
 		VtxoPolicy::new_server_htlc_send(send_key.public_key(), hash, expiry)).await;
+	super::test_owner_link(&srv, &beneficiary).await;
 	let receive = signed_leaf(&ctx, &srv, &wallet, receive_input,
 		VtxoPolicy::new_server_htlc_recv(beneficiary.public_key(), hash,
 			tip + BlockDelta::new(700), BlockDelta::new(40))).await;
@@ -909,6 +911,7 @@ async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: b
 			// Only register this independent receive after the external dispatch is
 			// fixed. Its invoice does not reclassify that dispatch as internal.
 			let internal = srv.get_public_rpc().await.start_lightning_receive(protos::StartLightningReceiveRequest {
+				claim_destination: None,
 				payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 18,
 				mailbox_id: None, description: None,
 			}).await.unwrap().into_inner().bolt11;

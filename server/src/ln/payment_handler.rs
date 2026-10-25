@@ -16,6 +16,7 @@ use crate::telemetry;
 /// so that every payment-attempt status change is consistently followed by
 /// a broadcast and (for final states) a mailbox notification.
 pub(crate) struct PaymentAttemptHandler<'a> {
+	network: bitcoin::Network,
 	db: &'a database::Db,
 	mailbox_manager: &'a crate::mailbox_manager::MailboxManager,
 	payment_update_tx: &'a broadcast::Sender<PaymentHash>,
@@ -26,8 +27,9 @@ impl<'a> PaymentAttemptHandler<'a> {
 		db: &'a database::Db,
 		mailbox_manager: &'a crate::mailbox_manager::MailboxManager,
 		payment_update_tx: &'a broadcast::Sender<PaymentHash>,
+		network: bitcoin::Network,
 	) -> Self {
-		Self { db, mailbox_manager, payment_update_tx }
+		Self { db, mailbox_manager, payment_update_tx, network }
 	}
 
 	/// Mark a lightning payment attempt as failed.
@@ -205,7 +207,7 @@ impl<'a> PaymentAttemptHandler<'a> {
 		};
 
 		match self.db.write(async |t|
-			t.store_lightning_send_finished(mailbox_id, payment_hash, preimage, failure).await
+			t.store_lightning_send_finished(mailbox_id, payment_hash, preimage, failure, self.network).await
 		).await {
 			Ok(Some(checkpoint)) => {
 				self.mailbox_manager.notify(mailbox_id, checkpoint);

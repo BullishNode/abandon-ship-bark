@@ -4293,6 +4293,7 @@ async fn watchman_claims_expired_receive_grant_before_receiver() {
 	let receiver_key = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
 	let mut rpc = srv.get_public_rpc().await;
 	let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+		claim_destination: None,
 		payment_hash: hash.to_vec(), amount_sat: 100_000, min_cltv_delta: 18,
 		mailbox_id: None, description: None,
 	}).await.unwrap().into_inner().bolt11;
@@ -4307,6 +4308,7 @@ async fn watchman_claims_expired_receive_grant_before_receiver() {
 	let expiry = subscription.lowest_incoming_htlc_expiry.unwrap()
 		.saturating_sub(srv.config().htlc_expiry_delta);
 	let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: Some(super::test_owner_link(&srv, &receiver_key).await.into()),
 		payment_hash: hash.to_vec(), user_pubkey: receiver_key.public_key().serialize().to_vec(),
 		htlc_recv_expiry: expiry.into(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner().htlc_vtxos.into_iter()
@@ -5124,7 +5126,7 @@ async fn offboard_of_confirmed_exited_vtxo_never_costs_server() {
 
 async fn check_receive_seed_custody(
 	ctx: &TestContext, srv: &ark_testing::Captaind,
-	wallet: &bark::Wallet, oldest: &ark::Vtxo<ark::vtxo::Bare>, destination: &ark::fallback::FallbackRecord,
+	wallet: &bark::Wallet, oldest: &ark::Vtxo<ark::vtxo::Bare>, destination: &ark::fallback::FallbackRegistration,
 	payout: OutPoint, remaining: &BTreeMap<String, ark::Vtxo>,
 ) {
 	// Only the original seed and genesis birthday enter the new REST database.
@@ -5498,18 +5500,18 @@ async fn expiry_same_owner_fragments(name: &str, small_first: bool) {
 	srv.wait_for_sync_height(tip).await;
 	wm.wait_for_sync_height(tip).await;
 	let output = core.get_tx_out(&small.txid, small.vout, Some(true)).unwrap().unwrap();
-	// The production readiness task resolves every owner through recovery.
+	// Readiness re-verifies every customer's admitted mailbox link.
 	tokio::time::timeout(Duration::from_secs(10), async {
 		loop {
 			let mut complete = true;
 			for coin in customers.values() {
-				complete &= matches!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest).await).await.unwrap(),
+				complete &= matches!(db.read(async |tx| tx.expiry_owner(coin.user_pubkey(), Network::Regtest, &srv.mailbox_keypair()).await).await.unwrap(),
 					server::database::expiry_attribution::Attribution::Owned { mailbox_pk, spk, .. }
 						if mailbox_pk == mailbox && spk == destination.spk);
 			}
 			if complete { break; }
 		}
-	}).await.expect("all owners must derive through expiry readiness");
+	}).await.expect("all owners must verify through expiry readiness");
 	assert!(output.confirmations >= 6);
 	assert_eq!(output.value, sat(1_000));
 	assert!(core.get_tx_out(&remainder.txid, remainder.vout, Some(true)).unwrap().is_none());

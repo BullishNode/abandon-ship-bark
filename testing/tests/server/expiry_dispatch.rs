@@ -174,7 +174,7 @@ async fn lightning_rejection_refunds_only_its_source() {
 				VtxoPolicy::new_server_htlc_send(key.public_key(), hash, deadline)).unwrap()
 				.generate_user_nonces(&[key]).unwrap();
 			let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-				parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+				parts: super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 			}).await.unwrap().into_inner();
 			let mut grants = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 				.unwrap().build_signed_vtxos();
@@ -292,7 +292,7 @@ async fn lightning_rejection_refunds_only_its_source() {
 			let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([source.clone()],
 				VtxoPolicy::new_pubkey(key.public_key())).unwrap().generate_user_nonces(&[*key]).unwrap();
 			let response = rpc.request_lightning_pay_htlc_revocation(
-				protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+				super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await,
 			).await;
 			if index == 0 {
 				let internal = builder.build_unsigned_internal_vtxos();
@@ -339,7 +339,7 @@ async fn lightning_rejection_refunds_only_its_source() {
 				}).await.unwrap();
 				let before = read_state().await;
 				assert!(srv.config().rpc_rich_errors);
-				let refusal = rpc.request_lightning_pay_htlc_revocation(protos::ArkoorPackageCosignRequest::from(repeat.cosign_request()))
+				let refusal = rpc.request_lightning_pay_htlc_revocation(super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(repeat.cosign_request())).await)
 					.await.unwrap_err();
 				assert_eq!(refusal.code(), tonic::Code::Internal);
 				assert_eq!(refusal.message(), format!("tx body error: vtxo {} is already spent", internal[0].0.id()));

@@ -9,7 +9,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use ark::{ProtocolEncoding, VtxoId};
-use ark::address::VtxoDelivery;
 use ark::lightning::PaymentHash;
 use ark_testing::{sat, TestContext};
 use ark_testing::daemon::captaind::{proxy::MailboxRpcProxy, MailboxClient};
@@ -101,13 +100,9 @@ fn accepted_reply_loss() -> Pin<Box<dyn Future<Output = ()>>> {
 		provider.stop_daemon_wait().await.unwrap();
 		recipient.stop_daemon_wait().await.unwrap();
 		let address = recipient.new_address().await.unwrap();
-		let mailboxes = address.delivery().iter().filter_map(|delivery| match delivery {
-			VtxoDelivery::ServerMailbox { blinded_id } => Some(blinded_id.as_ref().to_vec()),
-			_ => None,
-		}).collect::<Vec<_>>();
+		let mailboxes = address.delivery().iter().filter_map(|delivery| delivery.mailbox_id().map(|id| id.as_ref().to_vec())).collect::<Vec<_>>();
 		assert_eq!(mailboxes.len(), 1, "this case requires one exact recipient mailbox");
-		assert_ne!(provider.fallback_destination().await.unwrap().account_xpub,
-			recipient.fallback_destination().await.unwrap().account_xpub);
+		assert_ne!(provider.mailbox_identifier(), recipient.mailbox_identifier());
 		let gross = sat(10_000);
 		let fee = srv.ark_info().await.fees.lightning_receive.calculate(gross).unwrap();
 		let net = gross.checked_sub(fee).unwrap();

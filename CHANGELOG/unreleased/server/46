@@ -1,0 +1,21 @@
+- Attribute fallback payouts through signed coin-to-mailbox links
+  Recheck each link and the mailbox's registered destination before payout.
+  Remove account-key discovery and hold outputs without a valid link.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+  - **BREAKING:** Use fresh stores and mailbox-only v4 registrations.
+- Require signed ownership links before customer issuance
+  Verify the actual output key at every admission and again in the tree writer,
+  so an accepted customer coin has an authenticated bitcoin fallback destination.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+- Require fallback registration for every mailbox operation
+  Refuse unregistered reads, subscriptions and notices before allocating a
+  checkpoint or channel, and notify round recipients only after commit.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+- Keep fallback registration contention local to each mailbox
+  Use the immutable mailbox constraint instead of a global registry lock, so
+  one registration does not block unrelated admissions or mailbox operations.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+- Check forwarded destinations before invoice creation
+  Verify the recipient's actual key, signed mailbox link and net amount before
+  a new invoice or a Created-invoice retry. Keep the final claim checks.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

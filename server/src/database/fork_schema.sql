@@ -4,14 +4,7 @@ CREATE TABLE fallback_record (
 	id BIGSERIAL PRIMARY KEY,
 	mailbox_pk TEXT NOT NULL UNIQUE,
 	spk TEXT NOT NULL,
-	account_xpub TEXT NOT NULL UNIQUE,
-	-- BIP32 metadata does not affect child keys. Deduplicate the account's
-	-- derivation identity too, so aliases cannot assign different payees.
-	account_pubkey TEXT NOT NULL,
-	account_chain_code TEXT NOT NULL,
-	UNIQUE (account_pubkey, account_chain_code),
 	mailbox_sig TEXT NOT NULL,
-	account_sig TEXT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -32,12 +25,12 @@ CREATE TABLE expiry_cancelled_participation (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Owner matches are rechecked against the signed registration before payout.
+-- Signed coin links and mailbox registrations are rechecked before payout.
 CREATE TABLE expiry_owner_key (
 	user_pubkey TEXT PRIMARY KEY,
 	mailbox_pk TEXT NOT NULL REFERENCES fallback_record(mailbox_pk),
-	child_index BIGINT NOT NULL CHECK (child_index >= 0 AND child_index < 2147483648),
-	UNIQUE (mailbox_pk, child_index)
+	blinded_id TEXT NOT NULL CHECK (length(blinded_id) = 66),
+	signature TEXT NOT NULL CHECK (length(signature) = 128)
 );
 
 -- Chain-derived decisions are invalid until both processes acknowledge their

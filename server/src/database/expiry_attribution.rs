@@ -1,76 +1,73 @@
-//! Authenticated payout owner matches.
+//! Authenticated payout mailbox links.
 
 use std::str::FromStr;
 
 use anyhow::Context;
-use bitcoin::bip32::ChildNumber;
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::{schnorr, Keypair, PublicKey};
 use bitcoin::{Network, ScriptBuf};
 
-use ark::mailbox::MailboxIdentifier;
-use ark::SECP;
+use ark::fallback::OwnerLink;
+use ark::mailbox::{BlindedMailboxIdentifier, MailboxIdentifier};
+use ark::ProtocolEncoding;
 
+use crate::error::OwnershipRefusal;
 use super::Tx;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Attribution {
-	Owned { mailbox_pk: PublicKey, child_index: u32, spk: ScriptBuf },
+	Owned { mailbox_pk: PublicKey, spk: ScriptBuf },
 	Unresolved,
 }
 
 impl Tx<'_> {
-	pub(crate) async fn cache_expiry_owner(
-		&self, user_pubkey: PublicKey, mailbox_pk: PublicKey, child_index: u32,
-	) -> anyhow::Result<()> {
-		let key = user_pubkey.to_string();
-		let mailbox = mailbox_pk.to_string();
-		let index = i64::from(child_index);
+	/// Verify the actual output key's chosen mailbox and store the immutable
+	/// binding in the caller's admission transaction. Gifts are valid links.
+	pub async fn verify_owner_link(
+		&self, server_mailbox_key: &Keypair, user_pubkey: PublicKey,
+		link: &OwnerLink, network: Network,
+	) -> anyhow::Result<PublicKey> {
+		link.verify(server_mailbox_key.public_key(), user_pubkey)
+			.map_err(|_| OwnershipRefusal::Invalid(user_pubkey))?;
+		let mailbox = MailboxIdentifier::from_blinded(link.blinded_id, user_pubkey, server_mailbox_key)
+			.map_err(|_| OwnershipRefusal::Invalid(user_pubkey))?.as_pubkey();
+		let Some(record) = self.get_fallback(mailbox).await? else {
+			return Err(OwnershipRefusal::UnregisteredMailbox(user_pubkey).into());
+		};
+		record.verify(network, mailbox).context("invalid stored fallback registration")?;
 		self.execute("
-			INSERT INTO expiry_owner_key (user_pubkey, mailbox_pk, child_index)
-			VALUES ($1, $2, $3) ON CONFLICT (user_pubkey) DO NOTHING
-		", &[&key, &mailbox, &index]).await?;
-		let owner = self.query_one("
-			SELECT mailbox_pk, child_index FROM expiry_owner_key WHERE user_pubkey=$1
-		", &[&key]).await?;
-		ensure!(owner.get::<_, &str>("mailbox_pk") == mailbox
-			&& owner.get::<_, i64>("child_index") == index,
-			"coin key derives from conflicting registered accounts");
-		Ok(())
-	}
-
-	/// Try the mailbox's first 32 keys. The mailbox alone is not an owner proof.
-	pub(crate) async fn queue_expiry_owner_with_candidate_proof(
-		&self, user_pubkey: PublicKey, mailbox: Option<MailboxIdentifier>,
-	) -> anyhow::Result<()> {
-		if self.query_opt("SELECT user_pubkey FROM expiry_owner_key WHERE user_pubkey=$1",
-			&[&user_pubkey.to_string()]).await?.is_some() { return Ok(()); }
-		let Some(mailbox_pk) = mailbox.map(|id| id.as_pubkey()) else { return Ok(()); };
-		let Some(record) = self.get_fallback(mailbox_pk).await? else { return Ok(()); };
-		let index = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<u32>> {
-			for index in 0..32 {
-				let child = record.account_xpub.ckd_pub(&SECP, ChildNumber::from_normal_idx(index)?)?;
-				if child.public_key == user_pubkey { return Ok(Some(index)); }
-			}
-			Ok(None)
-		}).await.context("mailbox owner derivation task failed")??;
-		if let Some(index) = index {
-			self.cache_expiry_owner(user_pubkey, mailbox_pk, index).await?;
+			INSERT INTO expiry_owner_key (user_pubkey, mailbox_pk, blinded_id, signature)
+			VALUES ($1, $2, $3, $4) ON CONFLICT (user_pubkey) DO NOTHING
+		", &[&user_pubkey.to_string(), &mailbox.to_string(),
+			&link.blinded_id.to_string(), &link.signature.to_string()]).await?;
+		match self.expiry_owner(user_pubkey, network, server_mailbox_key).await? {
+			Attribution::Owned { mailbox_pk, .. } if mailbox_pk == mailbox => Ok(mailbox),
+			Attribution::Owned { .. } => Err(OwnershipRefusal::Conflicting(user_pubkey).into()),
+			Attribution::Unresolved => Err(OwnershipRefusal::Invalid(user_pubkey).into()),
 		}
-		Ok(())
 	}
 
-	/// Recheck the immutable registration and its child key before each payout.
-	pub async fn expiry_owner(&self, user_pubkey: PublicKey, network: Network) -> anyhow::Result<Attribution> {
-		self.lock_fallback_registry().await?;
+	/// Recheck signature, unblinding and the immutable registration before payout.
+	/// A missing or invalid link never becomes an operator entitlement.
+	pub async fn expiry_owner(
+		&self, user_pubkey: PublicKey, network: Network, server_mailbox_key: &Keypair,
+	) -> anyhow::Result<Attribution> {
 		let Some(row) = self.query_opt("
-			SELECT mailbox_pk, child_index FROM expiry_owner_key WHERE user_pubkey=$1
+			SELECT mailbox_pk, blinded_id, signature FROM expiry_owner_key WHERE user_pubkey=$1
 		", &[&user_pubkey.to_string()]).await? else { return Ok(Attribution::Unresolved); };
-		let mailbox_pk = PublicKey::from_str(row.get("mailbox_pk"))?;
-		let child_index = u32::try_from(row.get::<_, i64>("child_index"))?;
-		let record = self.get_fallback(mailbox_pk).await?.context("owner registration disappeared")?;
-		record.verify(network, mailbox_pk)?;
-		let child = record.account_xpub.ckd_pub(&SECP, ChildNumber::from_normal_idx(child_index)?)?;
-		ensure!(child.public_key == user_pubkey, "cached fallback owner does not derive this key");
-		Ok(Attribution::Owned { mailbox_pk, child_index, spk: record.spk })
+		let (Ok(mailbox), Ok(blinded_id), Ok(signature)) = (
+			PublicKey::from_str(row.get("mailbox_pk")),
+			BlindedMailboxIdentifier::deserialize_hex(row.get("blinded_id")),
+			schnorr::Signature::from_str(row.get("signature")),
+		) else { return Ok(Attribution::Unresolved); };
+		let link = OwnerLink { blinded_id, signature };
+		if link.verify(server_mailbox_key.public_key(), user_pubkey).is_err() {
+			return Ok(Attribution::Unresolved);
+		}
+		let Ok(unblinded) = MailboxIdentifier::from_blinded(blinded_id, user_pubkey, server_mailbox_key)
+			else { return Ok(Attribution::Unresolved); };
+		if unblinded.as_pubkey() != mailbox { return Ok(Attribution::Unresolved); }
+		let Some(record) = self.get_fallback(mailbox).await? else { return Ok(Attribution::Unresolved); };
+		if record.verify(network, mailbox).is_err() { return Ok(Attribution::Unresolved); }
+		Ok(Attribution::Owned { mailbox_pk: mailbox, spk: record.spk })
 	}
 }

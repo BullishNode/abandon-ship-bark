@@ -1,10 +1,10 @@
 //! Real-size native splitting. Run explicitly with the fallback-scale profile.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
-use ark::fallback::FallbackRecord;
+use ark::fallback::{FallbackRegistration, OwnerLink};
 use ark::mailbox::MailboxIdentifier;
 use ark::vtxo::Full;
 use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoRequest, SECP};
@@ -20,6 +20,7 @@ use bitcoin::secp256k1::{Keypair, rand::{thread_rng, RngCore}};
 use bitcoin_ext::{BlockDelta, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use server::database::Db;
+use server::owner_proof::OwnerLinks;
 use server::database::expiry_inventory::{BackingPartitionResidual, BackingSnapshotLimits};
 use server_rpc::protos;
 
@@ -29,7 +30,7 @@ const LEAF_SAT: u64 = 5_000;
 struct Owner {
 	key: Keypair,
 	mailbox: MailboxIdentifier,
-	record: FallbackRecord,
+	record: FallbackRegistration,
 }
 
 struct Node {
@@ -54,12 +55,12 @@ fn owner() -> Owner {
 	thread_rng().fill_bytes(&mut seed);
 	let payout = Xpriv::new_master(Network::Regtest, &seed).unwrap().to_keypair(&SECP);
 	let script = ScriptBuf::new_p2wpkh(&WPubkeyHash::hash(&payout.public_key().serialize()));
-	let record = FallbackRecord::new(Network::Regtest, script, &account, &mailbox).unwrap();
+	let record = FallbackRegistration::new(Network::Regtest, script, &mailbox).unwrap();
 	Owner { key, mailbox: MailboxIdentifier::from_pubkey(mailbox.public_key()), record }
 }
 
 async fn native_node(
-	client: &bark::Wallet, rpc: &mut ArkClient, input: Vtxo<Full>, key: Keypair,
+	srv: &Captaind, client: &bark::Wallet, rpc: &mut ArkClient, input: Vtxo<Full>, key: Keypair,
 	destinations: Vec<ArkoorDestination>, payees: usize,
 ) -> (Vec<Vtxo<Full>>, Node) {
 	assert!(input.exit_depth() < 100);
@@ -71,7 +72,7 @@ async fn native_node(
 	let expected = destinations.iter().map(|d| (d.policy.clone(), d.total_amount)).collect::<Vec<_>>();
 	let builder = ArkoorPackageBuilder::new_with_checkpoints([input], destinations).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
-	let response = rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+	let response = rpc.request_arkoor_cosign(super::signed_package(srv, &[client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await)
 		.await.unwrap().into_inner();
 	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	let checkpoints = signed.build_signed_internal_vtxos().into_iter()
@@ -260,13 +261,79 @@ async fn bounded_round_inventory() {
 	let owners = (0..COUNT).map(|_| owner()).collect::<Vec<_>>();
 	assert_eq!(owners.iter().map(|owner| owner.record.spk.clone()).collect::<BTreeSet<_>>().len(), COUNT);
 	let mut rpc = srv.get_public_rpc().await;
+	let proof_db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mailbox_key = srv.mailbox_keypair();
+	let mut first_link_elapsed = Duration::ZERO;
 	for owner in &owners {
 		let record = owner.record.serialize();
 		let response = rpc.set_fallback(protos::SetFallbackRequest {
 			mailbox_pk: owner.mailbox.as_pubkey().serialize().to_vec(), record: record.clone(),
 		}).await.unwrap().into_inner();
 		assert_eq!(response.record, record);
+		let proof = OwnerLink::new(mailbox_key.public_key(), owner.mailbox, &owner.key).unwrap();
+		let started = Instant::now();
+		proof_db.write(async |tx| tx.verify_owner_link(&mailbox_key, owner.key.public_key(), &proof, Network::Regtest).await)
+			.await.unwrap();
+		first_link_elapsed += started.elapsed();
 	}
+	// Measure the existing configured round bound, not the larger default.
+	// Signing/setup stays outside each verification timer; no release limit or
+	// financial oracle is changed to fit this measurement.
+	let batch_limit = 4_usize.saturating_pow(srv.config().nb_round_nonces as u32);
+	assert_eq!(batch_limit, 64);
+	let mut distinct_elapsed = Duration::ZERO;
+	let mut repeated_elapsed = Duration::ZERO;
+	let mut invalid_elapsed = Duration::ZERO;
+	let mut max_evidence_bytes = 0;
+	for group in owners.chunks(batch_limit) {
+		let keys = group.iter().map(|owner| owner.key.public_key()).collect::<Vec<_>>();
+		let mut distinct = OwnerLinks::default();
+		let mut evidence_bytes = 0;
+		for owner in group {
+			let proof = OwnerLink::new(mailbox_key.public_key(), owner.mailbox, &owner.key).unwrap();
+			evidence_bytes += proof.serialize().len(); distinct.insert(owner.key.public_key(), proof);
+		}
+		max_evidence_bytes = max_evidence_bytes.max(evidence_bytes);
+		let started = Instant::now();
+		proof_db.write(async |tx| distinct.verify(tx, keys.iter().copied(), &mailbox_key, Network::Regtest).await).await.unwrap();
+		distinct_elapsed += started.elapsed();
+		let one = &group[0];
+		let before = proof_db.read(async |tx| Ok(tx.query_one("SELECT blinded_id,signature FROM expiry_owner_key WHERE user_pubkey=$1",
+			&[&one.key.public_key().to_string()]).await?)).await.unwrap();
+		let canonical = (before.get::<_, String>(0), before.get::<_, String>(1));
+		let mut repeated = OwnerLinks::default();
+		let mut invalid = OwnerLinks::default();
+		for index in 0..batch_limit {
+			let proof = OwnerLink::new(mailbox_key.public_key(), one.mailbox, &one.key).unwrap();
+			repeated.insert(one.key.public_key(), proof);
+			let mut bad = proof;
+			if index + 1 == batch_limit { bad.signature = bitcoin::secp256k1::schnorr::Signature::from_slice(&[0; 64]).unwrap(); }
+			invalid.insert(one.key.public_key(), bad);
+		}
+		let started = Instant::now();
+		proof_db.write(async |tx| repeated.verify(tx, [one.key.public_key()], &mailbox_key, Network::Regtest).await).await.unwrap();
+		repeated_elapsed += started.elapsed();
+		let started = Instant::now();
+		let error = proof_db.write(async |tx| invalid.verify(tx, [one.key.public_key()], &mailbox_key, Network::Regtest).await).await.unwrap_err();
+		invalid_elapsed += started.elapsed();
+		assert!(error.is::<server::OwnershipRefusal>(), "{error:#}");
+		let after = proof_db.read(async |tx| Ok(tx.query_one("SELECT blinded_id,signature FROM expiry_owner_key WHERE user_pubkey=$1",
+			&[&one.key.public_key().to_string()]).await?)).await.unwrap();
+		assert_eq!((after.get::<_, String>(0), after.get::<_, String>(1)), canonical);
+	}
+	let started = Instant::now();
+	proof_db.read(async |tx| {
+		for owner in &owners {
+			assert_eq!(tx.expiry_owner(owner.key.public_key(), Network::Regtest, &mailbox_key).await?,
+				server::database::expiry_attribution::Attribution::Owned { mailbox_pk: owner.mailbox.as_pubkey(), spk: owner.record.spk.clone() });
+		}
+		Ok(())
+	}).await.unwrap();
+	let payout_reverify_elapsed = started.elapsed();
+	assert_eq!(max_evidence_bytes, batch_limit * 97);
+	eprintln!("signed-link cost: owners={} configured_batch={} max_encoded_evidence_bytes={} first_link_us={} distinct_replay_us={} repeated_us={} invalid_last_us={} payout_reverify_us={}",
+		owners.len(), batch_limit, max_evidence_bytes, first_link_elapsed.as_micros(), distinct_elapsed.as_micros(),
+		repeated_elapsed.as_micros(), invalid_elapsed.as_micros(), payout_reverify_elapsed.as_micros());
 	let mut sponsor_funding = BTreeSet::new();
 	let fee_address = srv.watchmand().wait_wallet_address().await;
 	for _ in 0..96 {
@@ -301,7 +368,7 @@ async fn bounded_round_inventory() {
 			});
 			children.push((indices.to_vec(), child_key));
 		}
-		let (outputs, node) = native_node(&client, &mut rpc, input, key, destinations, group.len()).await;
+		let (outputs, node) = native_node(&srv, &client, &mut rpc, input, key, destinations, group.len()).await;
 		nodes.push(node);
 		for (output, (indices, child_key)) in outputs.into_iter().zip(children) {
 			assert!(output.exit_depth() <= 11);
@@ -417,12 +484,17 @@ async fn automatic_multilevel_split() {
 	assert_eq!(minimum_outputs, 10_044);
 	assert!(minimum_outputs > 10_000);
 	let mut rpc = srv.get_public_rpc().await;
+	let proof_db = Db::connect(&srv.config().postgres).await.unwrap();
+	let mailbox_key = srv.mailbox_keypair();
 	for owner in &owners {
 		let bytes = owner.record.serialize();
 		let reply = rpc.set_fallback(protos::SetFallbackRequest {
 			mailbox_pk: owner.mailbox.as_pubkey().serialize().to_vec(), record: bytes.clone(),
 		}).await.unwrap().into_inner();
 		assert_eq!(reply.record, bytes);
+		let proof = OwnerLink::new(mailbox_key.public_key(), owner.mailbox, &owner.key).unwrap();
+		proof_db.write(async |tx| tx.verify_owner_link(&mailbox_key, owner.key.public_key(), &proof, Network::Regtest).await)
+			.await.unwrap();
 	}
 	let wallet = ctx.bark("source", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
 		.funded(sat(2_000_000)).create().await;
@@ -433,7 +505,7 @@ async fn automatic_multilevel_split() {
 	let registry_count = db.read(async |tx| Ok(tx.query_one(
 		"SELECT COUNT(*) FROM fallback_record", &[],
 	).await?.get::<_, i64>(0))).await.unwrap();
-	assert_eq!(registry_count, PAYEES as i64 + 1, "the source wallet adds its own real fallback registration");
+	assert_eq!(registry_count, PAYEES as i64 + 2, "the source wallet registers its normal and recovery mailbox identities");
 	let source = client.get_full_vtxo(ids[0]).await.unwrap();
 	let source_key = client.get_vtxo_key(&source).await.unwrap();
 	let board_exit = source.transactions().find(|step| step.tx.input[0].previous_output == source.chain_anchor())
@@ -464,7 +536,7 @@ async fn automatic_multilevel_split() {
 		});
 		child_keys.push((group.len() > 1).then_some(key));
 	}
-	let (outputs, root_node) = native_node(&client, &mut rpc, source.clone(), source_key, destinations, PAYEES).await;
+	let (outputs, root_node) = native_node(&srv, &client, &mut rpc, source.clone(), source_key, destinations, PAYEES).await;
 	let mut terminals = Vec::new();
 	for ((output, key), group) in outputs.into_iter().zip(child_keys).zip(root_groups) {
 		if let Some(key) = key { jobs.push_back((output, key, group)); }
@@ -497,7 +569,7 @@ async fn automatic_multilevel_split() {
 				children.push((indices, (count > 1).then_some(child_key)));
 			}
 		}
-		let (outputs, node) = native_node(&client, &mut rpc, input, key, destinations, group.len()).await;
+		let (outputs, node) = native_node(&srv, &client, &mut rpc, input, key, destinations, group.len()).await;
 		nodes.push(node);
 		for (output, (indices, child_key)) in outputs.into_iter().zip(children) {
 			if let Some(key) = child_key { jobs.push_back((output, key, indices)); }

@@ -127,7 +127,11 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 			cfg.vtxopool.vtxo_pre_expiry = BlockDelta::new(2);
 			cfg.vtxopool.vtxo_targets = vec![server::vtxopool::VtxoTarget { amount: sat(50_000), count: 8 }];
 			cfg.invoice_check_interval = Duration::from_secs(1);
-		}).watchmand()).await;
+		}).watchmand().watchmand_cfg(|cfg| {
+			// Native grant claims keep reacting; only this fixture's financial
+			// split/payout passes run at the explicit scenario phase boundaries.
+			cfg.watchman.sweep_interval = Duration::from_secs(600);
+		})).await;
 	srv.wait_for_vtxopool(&ctx).await;
 	let recipient = create_wallet(ctx.bark_sdk("absent-recipient", &srv)
 		.cfg(|cfg| cfg.daemon_manual_sync = true)).await;
@@ -173,7 +177,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 			VtxoPolicy::new_server_htlc_send(key.public_key(), hash, incoming_deadline)).unwrap()
 			.generate_user_nonces(&[key]).unwrap();
 		let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+			parts: super::signed_package(&srv, &[&sender], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 		}).await.unwrap().into_inner();
 		let incoming = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 			.unwrap().build_signed_vtxos();
@@ -187,6 +191,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 			htlc_vtxo_ids: vec![source.to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
 		}).await.unwrap();
 		let response = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: Some(recipient.owner_link(recipient_key).await.unwrap().into()),
 			payment_hash: hash.to_vec(), user_pubkey: recipient_key.serialize().to_vec(),
 			htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner();
@@ -240,22 +245,42 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 			srv.wait_for_sync_height(tip).await;
 			srv.watchmand().wait_for_sync_height(tip).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			let mut closed = 0;
-			for grant in &grants {
-				let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_txid FROM expiry_allocation a \
-					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='operator' AND a.status='confirmed'",
-					&[&grant.id().to_string()]).await?)).await.unwrap();
-				if let Some(row) = row {
-					let txid = row.get::<_, String>(0).parse().unwrap();
-					if ctx.bitcoind().sync_client().custom_get_raw_transaction_info(txid, None).unwrap()
-						.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6) { closed += 1; }
+			if let Some(closures) = super::expiry_lightning_terminal::confirmed_grant_closures(
+				&ctx, &db, &grants, &recipient_destination.spk,
+			).await {
+				if closures.values().all(|(_, closed)| closed.checked_add(6).is_some_and(|required| required <= tip.to_u32())) {
+					let hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(tip.to_u32())).unwrap();
+					loop {
+						let rebuilt = db.read(async |t| {
+							let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
+							if view.captaind.height != tip || view.watchmand.height != tip
+								|| view.captaind.hash != hash || view.watchmand.hash != hash
+								|| !super::expiry_view_is_rebuilt(t, view).await? { return Ok(false); }
+							// The completed chain view does not mean captaind's separate
+							// readiness worker has committed both refund obligations yet.
+							// Reserve the original shared root before allowing its sweep.
+							Ok(t.query_opt("SELECT a.id FROM expiry_allocation a \
+								JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+								JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+								WHERE a.status='pending' AND c.active AND c.disposition='customer' \
+								AND e.vtxo_id=ANY($1) \
+								AND (SELECT COUNT(*) FROM expiry_allocation_input i WHERE i.allocation_id=a.id)=1 \
+								AND EXISTS(SELECT 1 FROM expiry_allocation_input i \
+									WHERE i.allocation_id=a.id AND i.vtxo_id=$2) \
+								GROUP BY a.id HAVING COUNT(DISTINCT e.vtxo_id)=2",
+								&[&ids,&anchor.to_string()]).await?.is_some())
+						}).await.unwrap();
+						if rebuilt { return; }
+						tokio::time::sleep(Duration::from_millis(50)).await;
+					}
 				}
 			}
-			if closed == grants.len() { return; }
 		}
 		panic!("the actual operator grant closures did not reach six confirmations");
 	}).await.expect("both attempts need funded canonical grant closure before refund");
+	assert!(ctx.bitcoind().sync_client().get_tx_out(&anchor.txid, anchor.vout, Some(true)).unwrap().is_some(),
+		"the original shared root must remain unspent through actual H+6 grant closure");
+	srv.watchmand().trigger_sweep().await;
 	// Hold this tip while capturing the real decision: a funded refund may
 	// enter the mempool, but must not become a canonical customer receipt.
 	let (old_id, old_parent, entitlements) = tokio::time::timeout(Duration::from_secs(20), async {
@@ -329,7 +354,10 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 	for _ in 0..4 {
 		ctx.bitcoind().fund_addr(fee_address.clone(),sat(150_000)).await;
 	}
-	ctx.generate_blocks(2).await;
+	let funded = ctx.generate_blocks(2).await;
+	srv.wait_for_sync_height(funded).await;
+	srv.watchmand().wait_for_sync_height(funded).await;
+	srv.watchmand().trigger_sweep().await;
 	let replacements = tokio::time::timeout(Duration::from_secs(45), async {
 		loop {
 			let rows = db.read(async |t| Ok(t.query("SELECT a.id,a.sweep_tx,e.vtxo_id,e.id AS entitlement FROM expiry_allocation a \
@@ -434,6 +462,7 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 			let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 			srv.wait_for_sync_height(tip).await;
 			srv.watchmand().wait_for_sync_height(tip).await;
+			srv.watchmand().trigger_sweep().await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
 			let ready = db.read(async |t| {
 				let rows = t.query("SELECT e.vtxo_id,e.id,COUNT(*) FILTER(WHERE a.status='confirmed') AS paid \

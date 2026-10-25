@@ -446,11 +446,12 @@ impl<'t> Tx<'t> {
 	pub async fn upsert_vtxos(
 		&self,
 		vtxos: impl IntoIterator<Item = impl Borrow<ServerVtxo<Full>>>,
+		owners: Option<(bitcoin::Network, &secp256k1::Keypair)>,
 	) -> anyhow::Result<()> {
 		let vtxos = vtxos.into_iter().map(|v| v.borrow().clone()).collect::<Vec<_>>();
 		let update = tree::VtxoTreeUpdate::new()
 			.insert_spendable_vtxos(vtxos);
-		self.execute_vtxo_tree_update(update).await?;
+		self.execute_vtxo_tree_update(update, owners).await?;
 		Ok(())
 	}
 
@@ -530,8 +531,9 @@ impl<'t> Tx<'t> {
 	pub async fn execute_vtxo_tree_update(
 		&self,
 		update: tree::VtxoTreeUpdate,
+		owners: Option<(bitcoin::Network, &secp256k1::Keypair)>,
 	) -> anyhow::Result<u64> {
-		tree::execute_vtxo_tree_update(&self, update).await
+		tree::execute_vtxo_tree_update(self, update, owners).await
 	}
 
 	/// Queries a virtual transaction by txid
@@ -553,7 +555,9 @@ impl<'t> Tx<'t> {
 		mailbox_type: MailboxType,
 		mailbox_id: MailboxIdentifier,
 		vtxos: &[Vtxo<Full>],
+		network: bitcoin::Network,
 	) -> anyhow::Result<Option<Checkpoint>> {
+		self.require_registered_mailbox(mailbox_id, network).await?;
 		if vtxos.is_empty() {
 			return Ok(None);
 		}
@@ -599,8 +603,10 @@ impl<'t> Tx<'t> {
 		mailbox_id: MailboxIdentifier,
 		checkpoint: Checkpoint,
 		limit: usize,
+		network: bitcoin::Network,
 	) -> anyhow::Result<Vec<MailboxEntry>> {
-		let entries = self.get_mailbox_messages(mailbox_id, checkpoint, limit).await?;
+		self.require_registered_mailbox(mailbox_id, network).await?;
+		let entries = self.get_mailbox_messages(mailbox_id, checkpoint, limit, network).await?;
 		Ok(entries.into_iter()
 			.filter(|e| matches!(e.payload, MailboxPayload::Arkoor { .. }))
 			.collect())
@@ -620,7 +626,9 @@ impl<'t> Tx<'t> {
 		mailbox_id: MailboxIdentifier,
 		checkpoint: Checkpoint,
 		limit: usize,
+		network: bitcoin::Network,
 	) -> anyhow::Result<Vec<MailboxEntry>> {
+		self.require_registered_mailbox(mailbox_id, network).await?;
 		let statement = self.prepare(&format!("
 			WITH checkpoints AS (
 				SELECT DISTINCT checkpoint FROM mailbox
@@ -786,7 +794,9 @@ impl<'t> Tx<'t> {
 		&self,
 		mailbox_id: MailboxIdentifier,
 		unlock_hash: UnlockHash,
+		network: bitcoin::Network,
 	) -> anyhow::Result<Option<Checkpoint>> {
+		self.require_registered_mailbox(mailbox_id, network).await?;
 		// Acquire advisory lock to serialize all mailbox writes.
 		// This prevents race conditions where checkpoints could be committed out of order.
 		// Lock is automatically released when transaction commits/rolls back.
@@ -820,7 +830,9 @@ impl<'t> Tx<'t> {
 		mailbox_id: MailboxIdentifier,
 		payment_hash: &str,
 		amount: Amount,
+		network: bitcoin::Network,
 	) -> anyhow::Result<Option<Checkpoint>> {
+		self.require_registered_mailbox(mailbox_id, network).await?;
 		// Acquire advisory lock to serialize all mailbox writes.
 		// This prevents race conditions where checkpoints could be committed out of order.
 		// Lock is automatically released when transaction commits/rolls back.
@@ -865,7 +877,9 @@ impl<'t> Tx<'t> {
 		payment_hash: PaymentHash,
 		preimage: Option<Preimage>,
 		failure: Option<LightningFailureKind>,
+		network: bitcoin::Network,
 	) -> anyhow::Result<Option<Checkpoint>> {
+		self.require_registered_mailbox(mailbox_id, network).await?;
 		// Acquire advisory lock to serialize all mailbox writes.
 		// This prevents race conditions where checkpoints could be committed out of order.
 		// Lock is automatically released when transaction commits/rolls back.
@@ -905,7 +919,9 @@ impl<'t> Tx<'t> {
 		mailbox_type: MailboxType,
 		mailbox_id: MailboxIdentifier,
 		vtxo_ids: &[VtxoId],
+		network: bitcoin::Network,
 	) -> anyhow::Result<Option<Checkpoint>> {
+		self.require_registered_mailbox(mailbox_id, network).await?;
 		if vtxo_ids.is_empty() {
 			return Ok(None);
 		}
@@ -1049,7 +1065,7 @@ impl<'t> Tx<'t> {
 				&forfeit_result.connector_vtxos, SpendState::OffboardConnector
 			)
 			.mark_vtxos_offboard_spent(offboard_triples);
-		tree::execute_vtxo_tree_update(&self, update).await?;
+		tree::execute_vtxo_tree_update(self, update, None).await?;
 
 		// register the connector output vtxo directly into the frontier, so
 		// the watchman can sweep it once the input vtxos have expired

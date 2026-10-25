@@ -1466,20 +1466,27 @@ async fn cancelled_issued_refresh_reopens_and_receives_one_fallback_payout() {
 		assert!(wallet.spendable_vtxos().await.unwrap().is_empty());
 		assert_refresh_balance(&wallet, Amount::ZERO, Amount::ZERO, Amount::ZERO, Amount::ZERO).await;
 		assert_eq!(database.get_movement_by_id(movement).await.unwrap().status, MovementStatus::Failed);
-		let history = wallet.history().await.unwrap();
-		let refreshes = history.iter().filter(|entry| entry.subsystem.name == "bark.round").collect::<Vec<_>>();
+		let current_history = wallet.history().await.unwrap();
+		assert_eq!(current_history, history, "chain discovery preserves the original native action history");
+		let refreshes = current_history.iter().filter(|entry| entry.subsystem.name == "bark.round").collect::<Vec<_>>();
 		assert_eq!(refreshes.len(), 1);
 		assert_eq!(refreshes[0].id, movement);
-		let payouts = history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-		assert_eq!(payouts.len(), 1);
-		assert_eq!(payouts[0].status, MovementStatus::Successful);
-		assert_eq!(payouts[0].metadata["fallback"]["chain_verified"], true);
-		assert_eq!(payouts[0].sent_to.len(), 1);
-		assert_eq!(payouts[0].sent_to[0], bark::movement::MovementDestination::bitcoin(
-			bitcoin::Address::from_script(&registration.spk, Network::Regtest).unwrap(), sat(99_000)));
-		assert_eq!(payouts[0].sent_to[0].amount, sat(99_000));
-		assert_eq!(payouts[0].offchain_fee, sat(1_000));
-		assert_eq!(payouts[0].effective_balance.to_sat(), -100_000);
+		let snapshot = database.get_fallback_snapshot().await.unwrap();
+		assert!(snapshot.adopted_payout_vtxos.contains(&source.id()));
+		assert!(!snapshot.awaiting_settlement.contains(&source.id()));
+		assert_eq!(source.amount() - sat(1_000) - paid.value, Amount::ZERO,
+			"the canonical 99,000-sat output and 1,000-sat charge leave no forfeited principal");
+		wallet.sync_onchain().await.unwrap();
+		let own_payouts = {
+			let onchain = wallet.onchain().unwrap();
+			let guard = onchain.read().await;
+			let bdk = (&*guard as &dyn std::any::Any).downcast_ref::<OnchainWallet>().unwrap();
+			bdk.list_unspent().into_iter().filter(|coin| coin.outpoint == payout)
+				.map(|coin| coin.txout.clone()).collect::<Vec<_>>()
+		};
+		assert_eq!(own_payouts.len(), 1);
+		assert_eq!(own_payouts[0].value, sat(99_000));
+		assert_eq!(own_payouts[0].script_pubkey, registration.spk);
 		assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 0);
 	})).await.expect("cancelled refresh and absent-owner payout must finish within the test budget");
 }
@@ -1646,4 +1653,61 @@ async fn accepted_forfeit_lost_reply_never_releases_the_original_refresh_input()
 		assert!(wallet.sync_pending_rounds().await.unwrap().is_empty());
 		assert_eq!(wallet.history().await.unwrap(), history);
 	})).await.expect("an accepted refresh must recover its replacement without unlocking its original input");
+}
+
+#[tokio::test]
+async fn external_round_link_survives_restart_and_wins_over_owned_key() {
+	let ctx = TestContext::new("bark_sdk/external_round_link_restart").await;
+	let srv = ctx.captaind("server").cfg(|cfg| cfg.round_interval = Duration::from_secs(3600)).create().await;
+	let actor = ctx.bark("sender", &srv).cfg(|cfg| cfg.daemon_manual_sync = true).funded(sat(200_000)).create().await;
+	let ids = actor.board_and_confirm_and_register(&ctx, sat(100_000)).await;
+	let wallet = actor.client().await;
+	wallet.stop_daemon_wait().await.unwrap();
+	let recipient = ctx.bark_sdk("gift-recipient", &srv).cfg(|cfg| cfg.daemon_manual_sync = true).create().await;
+	recipient.stop_daemon_wait().await.unwrap();
+	let key = wallet.derive_store_next_keypair().await.unwrap().0;
+	let link = ark::fallback::OwnerLink::new(srv.ark_info().await.mailbox_pubkey,
+		recipient.mailbox_identifier(), &key).unwrap();
+	let input = wallet.get_full_vtxo(ids[0]).await.unwrap();
+	let external_address = recipient.new_address().await.unwrap();
+	let external_key = external_address.policy().user_pubkey();
+	assert!(wallet.pubkey_keypair(&external_key).await.unwrap().is_none());
+	let mut external = bark::round::RoundParticipation {
+		inputs: vec![input.clone()], outputs: vec![ark::VtxoRequest {
+			amount: sat(100_000), policy: external_address.policy().clone(),
+		}], owner_proofs: Default::default(), unblinded_mailbox_id: Some(wallet.mailbox_identifier()),
+	};
+	let error = wallet.join_next_round(external.clone(), None).await.err().unwrap();
+	assert_eq!(bark::FallbackRefusal::from_error(&error), Some(bark::FallbackRefusal::OwnerProofRequired));
+	external.owner_proofs.insert(external_key, link);
+	let error = wallet.join_next_round(external.clone(), None).await.err().unwrap();
+	assert_eq!(bark::FallbackRefusal::from_error(&error), Some(bark::FallbackRefusal::InvalidOwnerProof));
+	assert!(wallet.pending_round_state_ids().await.unwrap().is_empty());
+	let external_link = external_address.owner_link(srv.ark_info().await.mailbox_pubkey).unwrap().unwrap();
+	external.owner_proofs.insert(external_key, external_link);
+	let external_id = wallet.join_next_round(external.clone(), None).await.unwrap().id();
+	let participation = bark::round::RoundParticipation {
+		inputs: vec![input], outputs: vec![ark::VtxoRequest {
+			amount: sat(100_000), policy: ark::VtxoPolicy::new_pubkey(key.public_key()),
+		}], owner_proofs: std::collections::BTreeMap::from([(key.public_key(), link)]),
+		unblinded_mailbox_id: Some(wallet.mailbox_identifier()),
+	};
+	let id = wallet.join_next_round(participation.clone(), None).await.unwrap().id();
+	drop(wallet);
+	let reopened = actor.client().await;
+	let persisted = reopened.pending_round_states().await.unwrap();
+	let stored = persisted.iter().find(|state| state.id() == id).unwrap();
+	assert_eq!(stored.state().participation().owner_proofs, participation.owner_proofs);
+	let stored_external = persisted.iter().find(|state| state.id() == external_id).unwrap();
+	assert_eq!(stored_external.state().participation().owner_proofs, external.owner_proofs);
+	assert_eq!(stored_external.state().participation().owner_proofs[&external_key], external_link);
+	reopened.cancel_pending_round(external_id).await.unwrap();
+	// Queue the same actual keys using the delegated RPC path. The explicit
+	// recipient binding must not become this wallet's default mailbox.
+	reopened.join_next_round_delegated(participation, None).await.unwrap();
+	let db = server::database::Db::connect(&srv.config().postgres).await.unwrap();
+	let owner = db.read(async |tx| tx.expiry_owner(key.public_key(), Network::Regtest,
+		&srv.mailbox_keypair()).await).await.unwrap();
+	assert!(matches!(owner, server::database::expiry_attribution::Attribution::Owned { mailbox_pk, .. }
+		if mailbox_pk == recipient.mailbox_identifier().as_pubkey()));
 }

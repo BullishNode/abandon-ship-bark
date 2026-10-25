@@ -6,14 +6,13 @@ use std::time::Duration;
 
 use anyhow::Context;
 use bitcoin::{OutPoint, Transaction};
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::Keypair;
 use bitcoin_ext::BlockHeight;
 use bitcoin_ext::rpc::BitcoinAsyncRpcExt;
 use bitcoind_async_client::traits::Reader;
 use tracing::{debug, info, warn};
 
-use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoPolicy};
-use ark::mailbox::MailboxIdentifier;
+use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy};
 
 use crate::Server;
 use crate::database::Tx;
@@ -35,7 +34,6 @@ pub(crate) const INVENTORY_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits
 enum PreparedCoin {
 	Ready(ReadyCoin),
 	Hold,
-	LookupOwner(PublicKey, Option<MailboxIdentifier>),
 	NeedsHtlcProgress,
 }
 
@@ -46,6 +44,7 @@ impl Tx<'_> {
 		funding: &Transaction,
 		view: ExpiryViewToken,
 		network: bitcoin::Network,
+		server_mailbox_key: &Keypair,
 	) -> anyhow::Result<PreparedCoin> {
 		let ownership = self.propose_expiry_ownership(
 			fact,
@@ -54,12 +53,11 @@ impl Tx<'_> {
 			Some(view.watchmand.height),
 		).await?;
 		let payee = match &ownership.disposition {
-			OwnershipDisposition::Customer { user_pubkey, mailbox } => {
-				self.queue_expiry_owner_with_candidate_proof(*user_pubkey, *mailbox).await?;
-				match self.expiry_owner(*user_pubkey, network).await? {
-					Attribution::Owned { mailbox_pk, child_index, spk } =>
-						Some(VerifiedPayee { mailbox: mailbox_pk, child_index, script: spk }),
-					Attribution::Unresolved => return Ok(PreparedCoin::LookupOwner(*user_pubkey, *mailbox)),
+			OwnershipDisposition::Customer { user_pubkey } => {
+				match self.expiry_owner(*user_pubkey, network, server_mailbox_key).await? {
+					Attribution::Owned { mailbox_pk, spk } =>
+						Some(VerifiedPayee { mailbox: mailbox_pk, script: spk }),
+					Attribution::Unresolved => return Ok(PreparedCoin::Hold),
 				}
 			},
 			OwnershipDisposition::Operator => None,
@@ -248,25 +246,18 @@ impl Server {
 					if self.rtmgr.shutdown_requested() {
 						return Ok(());
 					}
-					// Release the registry lock between coins. A large tree must
-					// not block registrations while preparing all of its owners.
 					let coin = self.db.write(async |t| t.prepare_expiry_coin(
 						&snapshot.regular[*index],
 						&funding,
 						view,
 						self.config.network,
+						self.mailbox_key.leak_ref(),
 					).await).await.with_context(|| format!(
 						"expiry ownership preparation for terminal {}", snapshot.regular[*index].state.vtxo_id
 					))?;
 					match coin {
 						PreparedCoin::Ready(coin) => coins.push(coin),
 						PreparedCoin::Hold => hold = true,
-						PreparedCoin::LookupOwner(key, mailbox) => {
-							hold = true;
-							let htlc = !matches!(snapshot.regular[*index].state.vtxo.policy(),
-								ServerVtxoPolicy::User(VtxoPolicy::Pubkey(policy)) if policy.user_pubkey == key);
-							self.queue_expiry_owner_lookup(key, mailbox, htlc).await?;
-						},
 						PreparedCoin::NeedsHtlcProgress => needs_htlc_progress = true,
 					}
 				}
@@ -318,6 +309,7 @@ impl Server {
 			view,
 			outputs,
 			self.config.network,
+			self.mailbox_key.leak_ref(),
 		).await).await {
 			Ok(Some(group)) => info!(
 				allocation_id = group.id,

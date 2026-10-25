@@ -114,7 +114,7 @@ async fn expiry_payout_native_board_seed_restore(name: &str, board_fees: Option<
 			let split_count = db.read(async |t| Ok(t.query_one(
 				"SELECT COUNT(*) FROM expiry_split_request", &[],
 			).await?.get::<_, i64>(0))).await.unwrap();
-			assert_eq!(split_count, 0, "pending owner search must not progress a board into a user-only leaf");
+			assert_eq!(split_count, 0, "unresolved ownership must not progress a board into a user-only leaf");
 			if let Some(row) = row {
 				let parent = deserialize::<Transaction>(row.get("sweep_tx")).unwrap();
 				if let Some((child, measured_fee)) = observed_payout_fee_child(&ctx, &parent) {

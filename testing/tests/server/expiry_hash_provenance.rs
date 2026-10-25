@@ -45,7 +45,7 @@ async fn same_hash_sources(cooperative_refund: bool) {
 			VtxoPolicy::new_server_htlc_send(key.public_key(), hash, deadline)).unwrap()
 			.generate_user_nonces(&[key]).unwrap();
 		let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-			parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+			parts: super::signed_package(&srv, &[&client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 		}).await.unwrap().into_inner();
 		let leaves = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 			.unwrap().build_signed_vtxos();
@@ -64,11 +64,11 @@ async fn same_hash_sources(cooperative_refund: bool) {
 		loop {
 			let paid_source = db.read(async |t| Ok(t.query_one("
 				SELECT EXISTS(SELECT 1
-					FROM expiry_lightning_external_success s
-					JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id = s.id
-					WHERE l.vtxo_id = $1)
+					FROM lightning_payment_attempt a
+					JOIN lightning_payment_attempt_htlc_vtxo l ON l.lightning_payment_attempt_id = a.id
+					WHERE l.vtxo_id = $1 AND a.payment_hash = $2 AND a.status = 'succeeded')
 			",
-				&[&grants[0].to_string()]).await?.get::<_, bool>(0))).await.unwrap();
+				&[&grants[0].to_string(), &hash.to_string()]).await?.get::<_, bool>(0))).await.unwrap();
 			if paid_source && db.read(async |t| t.get_htlc_settlement_by_payment_hash(hash).await).await.unwrap() == Some(preimage) {
 				break;
 			}
@@ -109,7 +109,7 @@ async fn same_hash_sources(cooperative_refund: bool) {
 			let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([signed_grants[index].clone()],
 				VtxoPolicy::new_pubkey(key.public_key())).unwrap().generate_user_nonces(&[key]).unwrap();
 			let response = rpc.request_lightning_pay_htlc_revocation(
-				protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+				super::signed_package(&srv, &[&client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await,
 			).await;
 			if index == 0 {
 				assert_eq!(response.unwrap_err().code(), tonic::Code::InvalidArgument,

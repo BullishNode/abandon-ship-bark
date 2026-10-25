@@ -18,8 +18,9 @@ async fn expiry_coin_fence_serializes_actual_tree_writes() {
 	let cfg = ctx.new_postgres(&ctx.test_name).await;
 	Db::create(&cfg).await.unwrap();
 	let db = Db::connect(&cfg).await.unwrap();
+	super::register_vector_owners(&db).await;
 	let coin = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
-	db.write(async |t| t.upsert_vtxos([&coin]).await).await.unwrap();
+	db.write(async |t| t.upsert_vtxos([&coin], Some((bitcoin::Network::Regtest, super::test_server_mailbox_key()))).await).await.unwrap();
 	let txid = Txid::from_byte_array([42; 32]);
 	let writes = [
 		("Lightning grant", VtxoTreeUpdate::new().mark_vtxos_oor_spent([(coin.id(), txid)])),
@@ -42,7 +43,7 @@ async fn expiry_coin_fence_serializes_actual_tree_writes() {
 						SELECT pg_backend_pid()
 					", &[]).await?.get::<_, i32>(0);
 					pid_send.send(pid).expect("race observer alive");
-					tx.execute_vtxo_tree_update(update).await
+					tx.execute_vtxo_tree_update(update, Some((bitcoin::Network::Regtest, super::test_server_mailbox_key()))).await
 				}).await
 			});
 			let pid = pid_recv.await.unwrap();
@@ -104,13 +105,14 @@ async fn expiry_cancels_unfinished_exchange_without_freezing_other_tree_inputs()
 	let cfg = ctx.new_postgres(&ctx.test_name).await;
 	Db::create(&cfg).await.unwrap();
 	let db = Db::connect(&cfg).await.unwrap();
+	super::register_vector_owners(&db).await;
 	let old = ServerVtxo::from(VTXO_VECTORS.board_vtxo.clone());
 	let other = ServerVtxo::from(VTXO_VECTORS.round1_vtxo.clone());
 	let accepted = ServerVtxo::from(VTXO_VECTORS.round2_vtxo.clone());
 	let hash = ark::tree::signed::UnlockHash::hash(&[7; 32]);
 	let accepted_hash = ark::tree::signed::UnlockHash::hash(&[8; 32]);
 	let (pending, binding) = db.write(async |t| {
-		t.upsert_vtxos([&old, &other, &accepted]).await?;
+		t.upsert_vtxos([&old, &other, &accepted], Some((bitcoin::Network::Regtest, super::test_server_mailbox_key()))).await?;
 		let pending = t.query_one("
 			INSERT INTO round_participation(unlock_hash, created_at)
 			VALUES($1, NOW())
@@ -141,7 +143,7 @@ async fn expiry_cancels_unfinished_exchange_without_freezing_other_tree_inputs()
 	assert!(format!("{error:#}").contains("cancelled for expiry recovery"), "{error:#}");
 	// This input remains a normal spendable source for a different operation.
 	db.write(async |t| t.execute_vtxo_tree_update(VtxoTreeUpdate::new()
-		.mark_vtxos_oor_spent([(other.id(), Txid::from_byte_array([3; 32]))])).await).await.unwrap();
+		.mark_vtxos_oor_spent([(other.id(), Txid::from_byte_array([3; 32]))]), Some((bitcoin::Network::Regtest, super::test_server_mailbox_key()))).await).await.unwrap();
 	assert!(!db.write(async |t| t.cancel_expiry_participations(&[binding]).await).await.unwrap());
 	let cancelled = db.read(async |t| Ok(t.query_one("
 		SELECT COUNT(*)
@@ -161,6 +163,7 @@ async fn expiry_cancelled_native_refresh_status_never_releases_preimage() {
 	let ids = wallet.board_and_confirm_and_register(&ctx, ark_testing::sat(200_000)).await;
 	ctx.refresh_all(&srv, &[&wallet]).await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
+	super::register_vector_owners(&db).await;
 	let (part, hash, inputs) = db.read(async |t| {
 		let row = t.query_one("
 			SELECT id, unlock_hash, forfeited_at IS NOT NULL AS forfeited

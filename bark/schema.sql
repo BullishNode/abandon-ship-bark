@@ -225,7 +225,6 @@ CREATE TABLE bark_fallback_record (
 				id INTEGER PRIMARY KEY CHECK (id = 1),
 				record BLOB NOT NULL,
 				spk BLOB NOT NULL,
-				account_xpub BLOB NOT NULL,
 				registered INTEGER NOT NULL DEFAULT 1
 			);
 CREATE TABLE bark_fallback_snapshot (

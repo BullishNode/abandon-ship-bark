@@ -90,6 +90,9 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 	let coin = wallet.spendable_vtxos().await.unwrap().pop().unwrap();
 	let id = coin.id();
 	let destination = wallet.fallback_destination().await.unwrap();
+	let native_balance = wallet.history().await.unwrap().iter()
+		.map(|entry| entry.effective_balance.to_sat()).sum::<i64>();
+	assert_eq!(native_balance, 100_000, "the genuine board credit must be retained");
 	let offboard_address = ctx.bitcoind().get_new_address();
 	let funding = srv.watchmand().wait_wallet_address().await;
 	ctx.bitcoind().fund_addr(funding, sat(100_000)).await;
@@ -189,11 +192,11 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 		assert_eq!(ctx.bitcoind().await_transaction(parent.compute_txid()).await, parent);
 		let (index, output) = parent.output.iter().enumerate().find(|(_, o)| o.script_pubkey == destination.spk).unwrap();
 		assert_eq!(output.value, coin.amount() - sat(1_000));
+		let movement = match &prepared.progress {
+			Progress::OffboardTxPrepared { movement_id, .. } => *movement_id,
+			_ => unreachable!(),
+		};
 		if finality {
-			let movement = match &prepared.progress {
-				Progress::OffboardTxPrepared { movement_id, .. } => *movement_id,
-				_ => unreachable!(),
-			};
 			let cancelled = wallet_db.get_movement_by_id(movement).await.unwrap();
 			assert_eq!(cancelled.status, bark::movement::MovementStatus::Canceled);
 			assert_eq!(cancelled.effective_balance, bitcoin::SignedAmount::ZERO);
@@ -201,8 +204,8 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 			wallet.sync_fallback_payouts().await.unwrap();
 			assert_eq!(wallet.offboard_checkpoint(&prepared.id).await.unwrap(), Some(prepared.clone()));
 			let history = wallet.history().await.unwrap();
-			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0,
-				"a refused offboard and its pending fallback must not debit the same principal twice");
+			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), native_balance,
+				"a refused offboard must not debit the genuine board credit");
 		}
 		ctx.generate_blocks(6).await;
 		assert!(ctx.bitcoind().sync_client().get_tx_out(&parent.compute_txid(), index as u32, Some(true)).unwrap().unwrap().confirmations >= 6);
@@ -219,8 +222,11 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 			assert_eq!(wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap().state, VtxoState::Spent);
 			assert_eq!(wallet.get_full_vtxo(id).await.unwrap(), signed, "payment must retain signed recovery material");
 			let history = wallet.history().await.unwrap();
-			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0);
-			assert_eq!(history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").count(), 1);
+			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), native_balance);
+			let cancelled = history.iter().find(|entry| entry.id == movement).unwrap();
+			assert_eq!(cancelled.status, bark::movement::MovementStatus::Canceled);
+			assert_eq!(cancelled.effective_balance, bitcoin::SignedAmount::ZERO);
+			assert_eq!(cancelled.offchain_fee, bitcoin::Amount::ZERO);
 			let rpc = ctx.bitcoind().sync_client();
 			let confirmed = rpc.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap();
 			rpc.invalidate_block(&confirmed.blockhash.unwrap()).unwrap();
@@ -229,17 +235,32 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 			assert_eq!(protection.exits_started, vec![id], "an undone payout must restore actual signed-path protection");
 			let protected = wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap();
 			assert!(matches!(&protected.state, VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { .. }) }));
-			assert!(wallet.sync_fallback_payouts().await.is_err(), "Ark is physically unavailable");
+			wallet.sync_fallback_payouts().await.unwrap(); // Core remains available while Ark is stopped.
 			wallet.protect_expiring_vtxos().await.unwrap();
 			assert_eq!(wallet_db.get_wallet_vtxo(id).await.unwrap().unwrap().state, protected.state,
-				"receipt retry must not steal the actual protective exit holder");
+				"chain reconciliation must not steal the actual protective exit holder");
 			assert_eq!(wallet.get_full_vtxo(id).await.unwrap(), signed);
 			let history = wallet.history().await.unwrap();
-			let fallback = history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-			assert_eq!(fallback.len(), 1);
-			assert_eq!(fallback[0].status, bark::movement::MovementStatus::Pending);
-			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0,
-				"reorg protection and the pending receipt reserve one principal");
+			let cancelled = history.iter().find(|entry| entry.id == movement).unwrap();
+			assert_eq!(cancelled.status, bark::movement::MovementStatus::Canceled);
+			assert_eq!(cancelled.effective_balance, bitcoin::SignedAmount::ZERO);
+			assert_eq!(cancelled.offchain_fee, bitcoin::Amount::ZERO);
+			let exit_holder = match &protected.state {
+				VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { id }) } => *id,
+				other => panic!("protective exit lost its real movement holder: {other:?}"),
+			};
+			let exits = history.iter().filter(|entry| entry.input_vtxos.contains(&id)
+				&& entry.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true)))
+				.collect::<Vec<_>>();
+			assert_eq!(exits.len(), 1, "one real protective exit must reserve the principal");
+			assert_eq!(exits[0].id, exit_holder);
+			assert_eq!(exits[0].subsystem.name, "bark.exit");
+			assert_eq!(exits[0].input_vtxos, vec![id]);
+			assert_eq!(exits[0].effective_balance.to_sat(), -i64::try_from(coin.amount().to_sat()).unwrap());
+			assert_eq!(exits[0].offchain_fee, bitcoin::Amount::ZERO);
+			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(),
+				native_balance + exits[0].effective_balance.to_sat(),
+				"only the genuine protective exit may debit the original board credit");
 		}
 
 	}
@@ -278,7 +299,7 @@ async fn expiry_uninitiated_grant_can_revoke_after_backing_expiry() {
 		.generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
 	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts: super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let grants = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();
@@ -298,7 +319,7 @@ async fn expiry_uninitiated_grant_can_revoke_after_backing_expiry() {
 	let builder = ArkoorPackageBuilder::new_claim_all_with_checkpoints([grants[0].clone()],
 		VtxoPolicy::new_pubkey(key.public_key())).unwrap().generate_user_nonces(&[key]).unwrap();
 	let response = rpc.request_lightning_pay_htlc_revocation(
-		protos::ArkoorPackageCosignRequest::from(builder.cosign_request()),
+		super::signed_package(&srv, &[&wallet], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await,
 	).await.unwrap().into_inner();
 	let refunds = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();

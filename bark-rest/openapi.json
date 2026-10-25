@@ -1480,7 +1480,7 @@
           "lightning"
         ],
         "summary": "Create a BOLT11 invoice for an Ark address",
-        "description": "Generates a new BOLT11 invoice. When paid, the wallet claims the Lightning receive and forwards the resulting Ark VTXO to the supplied Ark address mailbox.",
+        "description": "Generates a new BOLT11 invoice. When paid, the wallet app claims the Lightning receive and forwards the resulting Ark VTXO to the specified Ark address mailbox. The address must carry a valid signed mailbox link. The server verifies the link and the recipient's immutable fallback registration before it accepts the destination output. Missing or invalid ownership evidence at expiry leaves the bitcoin held; it never makes that bitcoin the provider's or operator's.",
         "operationId": "generate_invoice_for_address",
         "requestBody": {
           "content": {

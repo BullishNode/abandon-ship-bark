@@ -37,7 +37,7 @@ enum When {
 	/// The refund is confirmed, then a reorg of at most five blocks (the
 	/// owner's bound) happens at the tip.
 	AfterRefundShallow(usize),
-	/// The refund is actually in the mempool at the earliest six-deep closure boundary.
+	/// The refund is actually in the mempool at the earliest H+6 closure boundary.
 	AfterSignedRefundFive,
 }
 
@@ -98,7 +98,7 @@ async fn rebuilt_current_view(ctx: &TestContext, db: &Db) -> bool {
 	let hash = chain.get_block_hash(u64::from(height.to_u32())).unwrap();
 	db.read(async |t| {
 		let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
-		Ok(!t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0)
+		Ok(super::expiry_view_is_rebuilt(t, view).await?
 			&& view.captaind.height == height && view.captaind.hash == hash
 			&& view.watchmand.height == height && view.watchmand.hash == hash)
 	}).await.unwrap()
@@ -213,7 +213,7 @@ async fn reclaim_reorg(when: When) {
 		.generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
 	let response = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts: super::signed_package(&srv, &[&client], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let incoming = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap())
 		.unwrap().build_signed_vtxos();
@@ -225,6 +225,7 @@ async fn reclaim_reorg(when: When) {
 		htlc_vtxo_ids: vec![incoming[0].id().to_bytes().to_vec()], mailbox_id: None, retry_for_secs: Some(5),
 	}).await.unwrap();
 	let granted = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: Some(recipient.owner_link(receiver_key).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: receiver_key.serialize().to_vec(),
 		htlc_recv_expiry: outgoing_deadline.to_u32(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner();
@@ -241,40 +242,48 @@ async fn reclaim_reorg(when: When) {
 	let chain = ctx.bitcoind().sync_client();
 
 	// Run until the grants are reclaimed and, for AfterRefund, the refund is confirmed.
-	let grant_ids = grants.iter().map(|g| g.id().to_string()).collect::<Vec<_>>();
+	let mut observed_h5 = false;
 	let reclaims: BTreeSet<Txid> = tokio::time::timeout(Duration::from_secs(200), async {
 		'reclaims: loop {
 			let height = ctx.generate_blocks(1).await;
 			srv.wait_for_sync_height(height).await;
 			srv.watchmand().wait_for_sync_height(height).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			if matches!(when, When::BeforeRefund | When::BeforeRefundFive) {
+			let closures = super::expiry_lightning_terminal::confirmed_grant_closures(
+				&ctx, &db, &grants, &receiver_destination.spk,
+			).await;
+			let required = closures.as_ref().map(|rows| rows.values().map(|(_, closed)|
+				closed.checked_add(6).unwrap()).max().unwrap());
+			if required.is_none_or(|required| height.to_u32() < required) {
+				let exact_h5 = required == Some(height.to_u32() + 1);
+				if exact_h5 {
+					while !rebuilt_current_view(&ctx, &db).await {
+						tokio::time::sleep(Duration::from_millis(50)).await;
+					}
+				}
 				let count = db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
 					JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 					WHERE e.vtxo_id=$1 AND c.disposition='customer'", &[&source]).await?.get::<_, i64>(0))).await.unwrap();
-				assert_eq!(count, 0, "sender allocation must wait for six confirmations of every grant closure");
+				assert_eq!(count, 0, "sender allocation must wait through H+5 for every actual grant closure");
+				observed_h5 |= exact_h5;
 			}
-			// Only the ordinary funded operator payout closes these unresolved
-			// outgoing grants, including their already exposed leaves.
-			let rows = db.read(async |t| Ok(t.query("SELECT a.sweep_txid FROM expiry_allocation a \
-				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-				WHERE e.vtxo_id=ANY($1) AND c.active AND c.disposition='operator' AND a.status='confirmed' \
-				AND c.evidence->>'kind'='htlc_recv_expired'", &[&grant_ids]).await?)).await.unwrap();
-			if rows.len() != grants.len() { continue; }
-			let reclaims = rows.iter().map(|r| r.get::<_, &str>(0).parse().unwrap()).collect::<BTreeSet<Txid>>();
+			let Some(closures) = closures else { continue; };
+			let reclaims = closures.values().map(|(txid, _)| *txid).collect::<BTreeSet<Txid>>();
 			match when {
 				When::BeforeRefund | When::BeforeRefundFive => {
 					let depths = reclaims.iter().map(|txid| chain.custom_get_raw_transaction_info(*txid, None).unwrap()
 						.unwrap().confirmations.unwrap()).collect::<Vec<_>>();
-					assert!(depths.iter().all(|depth| *depth > 0 && *depth < 6));
+					assert!(depths.iter().all(|depth| *depth > 0 && *depth <= 6));
 					if when == When::BeforeRefundFive && depths.iter().any(|depth| *depth != 5) { continue; }
 					break reclaims;
 				},
 				When::AfterSignedRefundFive => {
 					let depths = reclaims.iter().map(|txid| chain.custom_get_raw_transaction_info(*txid, None).unwrap()
 						.unwrap().confirmations.unwrap()).collect::<Vec<_>>();
-					if depths.iter().any(|depth| *depth < 6) { continue; }
-					assert_eq!(depths.iter().min(), Some(&6), "the fixture must stop mining at the earliest six-deep closure boundary");
+					if depths.iter().any(|depth| *depth < 7) { continue; }
+					assert!(observed_h5, "the exact preceding H+5 view must refuse every sender allocation");
+					assert_eq!(height.to_u32(), required.unwrap(), "do not substitute a later tip for H+6 eligibility");
+					assert_eq!(depths.iter().min(), Some(&7), "H+6 is seven Core confirmations");
 					// The existing enclosing bound covers this fixed-height wait.
 					// No extra block may manufacture a deeper confirmation premise.
 					loop {
@@ -331,12 +340,12 @@ async fn reclaim_reorg(when: When) {
 		let (id, parent) = refunds.into_iter().next().unwrap();
 		let info = chain.custom_get_raw_transaction_info(parent.compute_txid(), None).unwrap().unwrap();
 		if signed_only {
-			assert_eq!(reclaim_heights.iter().map(|height| old_tip + 1 - *height).min(), Some(6));
+			assert_eq!(reclaim_heights.iter().map(|height| old_tip + 1 - *height).min(), Some(7));
 			assert_eq!(info.confirmations.unwrap_or(0), 0);
 			assert!(chain.get_mempool_entry(&parent.compute_txid()).is_ok(), "the captured parent must be genuinely published before the fault");
 		} else {
-			assert!(reclaim_heights.iter().all(|height| old_tip + 1 - *height >= 7),
-				"a confirmed refund is later than the six-deep signing boundary; five removed blocks still leave at least two confirmations");
+			assert!(reclaim_heights.iter().all(|height| old_tip + 1 - *height >= 8),
+				"a confirmed refund follows H+6 signing; five removed blocks still leave at least three confirmations");
 			let parent_height = chain.get_block_header_info(&info.blockhash.unwrap()).unwrap().height;
 			assert!(parent_height >= fork_height, "the exact supported fork must remove the sender refund");
 		}
@@ -376,7 +385,7 @@ async fn reclaim_reorg(when: When) {
 		let surviving_depths = reclaims.iter().map(|txid| chain.custom_get_raw_transaction_info(*txid, None).unwrap()
 			.unwrap().confirmations.unwrap()).collect::<Vec<_>>();
 		assert!(surviving_depths.iter().all(|depth| *depth >= 1));
-		assert_eq!(surviving_depths.iter().min(), Some(&1), "five removed blocks must leave the actual earliest-eligibility closure one deep");
+		assert_eq!(surviving_depths.iter().min(), Some(&2), "five removed blocks must leave the actual earliest-eligibility closure two deep");
 	}
 	if original_refund.is_some() {
 		// Preserve Core's disconnected mempool, then remove its automatic replay
@@ -400,21 +409,21 @@ async fn reclaim_reorg(when: When) {
 	};
 	let started_at_fault = when == When::AfterSignedRefundFive;
 	if started_at_fault {
-		// Reopen against the one-deep closure before replacing any block.
+		// Reopen against the two-deep closure before replacing any block.
 		// The existing case bound covers this static-height observer wait.
 		srv.start().await.unwrap();
 		let invalid = db.read(async |t| Ok(t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?
 			.get::<_, bool>(0))).await.unwrap();
-		assert!(invalid, "the cold server must durably invalidate its old six-deep view");
+		assert!(invalid, "the cold server must durably invalidate its old H+6 view");
 		srv.watchmand().start().await.unwrap();
 		while !rebuilt_current_view(&ctx, &db).await {
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
-		assert_eq!(chain.get_block_count().unwrap(), ancestor_height as u64, "no observer may mine through the one-deep boundary");
+		assert_eq!(chain.get_block_count().unwrap(), ancestor_height as u64, "no observer may mine through the two-deep boundary");
 		assert_eq!(chain.get_block_hash(ancestor_height as u64).unwrap(), ancestor_hash);
 		let depths = reclaims.iter().map(|txid| chain.custom_get_raw_transaction_info(*txid, None).unwrap()
 			.unwrap().confirmations.unwrap()).collect::<Vec<_>>();
-		assert_eq!(depths.iter().min(), Some(&1), "both completed daemon views must rebuild while a closure is still one deep");
+		assert_eq!(depths.iter().min(), Some(&2), "both completed daemon views must rebuild while a closure is still two deep");
 		let (allocation, parent) = original_refund.as_ref().unwrap();
 		let retained = customer_allocations(&db, &source, "pending").await;
 		assert_eq!(retained.len(), 1);
@@ -422,7 +431,7 @@ async fn reclaim_reorg(when: When) {
 		let decisions = db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
 			JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE e.vtxo_id=$1 AND c.disposition='customer'",
 			&[&source]).await?.get::<_, i64>(0))).await.unwrap();
-		assert_eq!(decisions, 1, "a below-six-deep view cannot create a second sender authorization");
+		assert_eq!(decisions, 1, "a below-H+6 view cannot create a second sender authorization");
 		assert!(!is_confirmed(parent.compute_txid()));
 		assert!(chain.get_mempool_entry(&parent.compute_txid()).is_err(), "the retained future-locktime parent is not yet final on this fork");
 	}

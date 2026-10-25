@@ -1,0 +1,17 @@
+- Register fallback destinations with the mailbox key alone
+  Remove the server-held account xpub and the special registration key slot.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+  - **BREAKING:** Fallback persistence uses mailbox-only v4 registrations.
+- Carry signed mailbox links with every customer output
+  Emit signed recipient addresses, retain external round links across restart,
+  and reconcile normal and recovery registrations before mailbox use.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+  - **BREAKING:** Require signed recipient addresses and protocol version 6.
+- Reconcile fallback registrations once per server connection
+  Avoid repeated registration requests during payments. Explicit refresh and
+  wallet sync still repair registrations after a server restore.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)
+- Send the recipient's signed destination with a forwarded invoice request
+  Let the server refuse an invalid or unregistered recipient before it creates
+  a payable invoice.
+  [#46](https://github.com/BullishNode/abandon-ship-bark/pull/46)

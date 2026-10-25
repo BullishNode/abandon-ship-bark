@@ -1,11 +1,13 @@
 # Fork operations
 
 Use the server, watchman and plugins from the same qualified release.
-This source candidate is not production ready and is not qualified for bitcoin
-mainnet. Complete the release qualification before you accept customer deposits.
+This release targets signet. Complete financial and operational qualification
+before production use or customer deposits. Source review and a successful
+build do not establish qualification. Do not deploy on bitcoin mainnet.
 Read that release's installation notes and limits. The portable bundle also
-contains Bark and `barkd` as test helpers; it is not a client release. The GNU
-programs require the release-pinned node and both qualified plugins.
+contains the matching Bark wallet app and `barkd`. Use these clients for the
+signature-link protocol. The GNU programs require the release-pinned node and
+both qualified plugins.
 
 Use the release-pinned complete Core Lightning node, `v26.06.6-abandon6`.
 The node includes a six-confirmation delay for on-chain HTLC failure reports.
@@ -26,10 +28,11 @@ important plugins. Do not replace their bytes to repair a missing
 library. Follow `contrib/release/README.md` in the source and `INSTALL.md`
 in the bundle.
 
-Use a fresh database for a new installation. This fork does not convert earlier
-experimental fork stores. Complete stores from the same supported schema can
-reopen with their original registrations and obligations. Keep existing stores
-and backups intact.
+Use fresh server and client stores for this release. Mailbox-only v4
+registrations and signed addresses replace the earlier account-xpub format.
+There is no conversion, backfill or compatibility mode for earlier fork stores
+or addresses. Complete stores from this release can reopen with their original
+registrations and obligations. Keep earlier stores and backups intact.
 
 ## Install from a release
 
@@ -100,9 +103,13 @@ initialization by removing the seed or clearing the database.
 There is no `watchmand create` CLI command. The watchman must read the same
 seed phrase and database as its server. Provision an owner-only copy of the
 original server `mnemonic` in the watchman data directory through the local
-secret-custody procedure. Compare
-the files locally without displaying them. Never generate another seed phrase
-for the watchman. Retain a private backup before funding the wallets.
+secret-custody procedure. Compare the files locally without displaying them.
+`captaind` derives the server mailbox key from this seed. Existing signed links
+depend on that exact key for verification and unblinding. `watchmand` publishes
+committed payout allocations; it does not need the mailbox key. It still needs
+the original seed for contract signing and its fee wallet. A replacement server
+seed cannot interpret existing links. Never generate another seed phrase for
+the watchman. Retain a private backup before you fund the wallets.
 
 ## Configure and start
 
@@ -206,7 +213,7 @@ validation does not establish liquidity, throughput or safe deadlines.
 | Receive admission and pool | `ln_receive_anti_dos_required`; `[vtxopool]`: `vtxo_targets`, `vtxo_target_issue_threshold`, `vtxo_lifetime`, `vtxo_pre_expiry`, `max_vtxo_exit_depth`. Reserve liquidity and test replenishment under the declared load. |
 | Fee estimates | `[fee_estimator]`: `update_interval`, `history_duration`, `fallback_fee_rate_fast`, `fallback_fee_rate_regular`, `fallback_fee_rate_slow`, optional `max_fee_rate`; configure both daemons separately. Check initial fallback rates separately from later estimates. |
 | Watchman policy | `[watchman]`: `reaction_interval`, `sweep_interval`, `progress_grace_period`, `claim_chunksize`, `incremental_relay_fee`, `min_cpfp_amount`. |
-| Attribution and recovery | `recovery_xpub_nb_keys` (must be positive), `max_concurrent_xpub_recoveries`, `max_read_mailbox_items`; PostgreSQL `max_connections`, `connection_timeout_secs`, `idle_timeout_secs`. |
+| Mailbox and optional wallet recovery | `max_read_mailbox_items`; upstream xpub recovery uses `recovery_xpub_nb_keys` (zero disables that RPC) and `max_concurrent_xpub_recoveries`. These settings do not control fallback attribution. PostgreSQL uses `max_connections`, `connection_timeout_secs`, `idle_timeout_secs`. |
 | Offboard sessions | `offboard_session_timeout`, `offboard_check_interval`, `offboard_acceptable_fee_rate_duration`; the check interval must not exceed the timeout. |
 
 Expiry tables use `expiry_blocks_threshold` and `ppm`. Keep thresholds and
@@ -232,7 +239,7 @@ have separate fees. There is no TOML key for this fee.
 
 A group whose net amount is below its script's dust threshold remains held while
 another coin under the same source anchor at that expiry height is undecided.
-An unresolved owner lookup also holds the output without a split. When all such
+Unresolved ownership also holds the output without a split. When all such
 coins are decided, the dust decision can complete. A final dust forfeiture records
 no payout fee. Unknown ownership must remain held. Miner fees come from the
 watchman fee child, separately from customer outputs. No setting establishes a
@@ -291,12 +298,13 @@ the package transaction records.
 
 Monitor the age and value of unpaid obligations, not only process health or
 broadcast counts. Alert when either process falls behind the bitcoin node,
-when the chain view remains invalid, when owner-search work stops progressing,
-or when an expired customer remains unpaid beyond the declared operating
+when the chain view remains invalid, when ownership evidence is missing or
+invalid, or when an expired customer remains unpaid beyond the declared operating
 window. Inspect these read-only tables with a restricted database account:
 
 - `expiry_chain_view` and `expiry_sync_ack`: completed chain views and rebuilds.
-- `expiry_owner_key`: owner matches, rechecked against signed registrations before payout.
+- `fallback_record`: immutable mailbox-to-script registrations.
+- `expiry_owner_key`: signed coin-to-mailbox links, rechecked before payout.
 - `expiry_entitlement`: decision fences, gross amounts and fixed source facts.
   A fence alone does not identify a final payee or establish payment.
 - `expiry_allocation_coin`: the allocated owner, script, disposition and amounts.
@@ -314,39 +322,90 @@ relevant previous payouts and customer claims for duplicates. A successful RPC,
 a local paid status or a mempool entry is insufficient. Check customer amounts,
 output fees, operator change and miner fees separately.
 
-Unknown ownership must remain unresolved. Do not assign an unknown customer's
-value to the operator. Preserve registered xpubs and address bindings. A wrong
-mailbox hint does not replace proof against the registered xpub.
+### Signed fallback ownership
 
-Automated fallback requires the final recipient's authenticated fallback
-registration on the Ark server. The destination key must derive from that
-registered xpub. The `/receives/invoice/for-address` endpoint validates the
-address. It does not verify the recipient's fallback registration.
+A v4 registration binds a mailbox public key to one exact bitcoin payout script
+on the configured network. The mailbox key signs that binding. The first valid
+binding is immutable. A retry for the same script returns the canonical record;
+a different script is refused. The signature authorizes the script but does not
+prove that the mailbox holder can spend it. Check the destination before the
+first registration. Keep the keys or recovery procedure for that destination.
+The wallet app must persist the exact chosen script or the recovery parameters
+needed to reproduce it. A seed phrase alone does not identify a separately
+chosen script. There is no `GetFallback` RPC. `SetFallback` reconciles a supplied
+binding and returns the canonical record only for the same script.
 
-At expiry, keep bitcoin held if no registration matches. Also keep bitcoin
-held while a registered owner's attribution scan is incomplete. Do not assign
-the recipient's bitcoin to the provider or operator.
+Each customer output must also carry a link signed by its actual coin key.
+The signature commits to the server mailbox public key `S` and the blinded
+mailbox identifier `B`. The server verifies the signature, unblinds `B` with
+the actual output key and its own mailbox key, and requires that mailbox's valid
+registration. The stored binding is immutable for that coin key. The arkoor path
+stores the link with the new output in the same transaction. Boards and Lightning
+receives can store the link at admission before the later coin write.
+Interactive rounds store the link at admission; delegated rounds store it with
+the queued participation. Both insert coin rows when the round finishes. These
+checks precede signatures, settlement and other financial side effects. The
+tree writer verifies the durable binding again before it inserts customer rows.
+Server-created internal, pool and private padding rows use their existing roles
+instead of customer links.
 
-Owner lookup first checks cached matches, then the mailbox registration's first
-32 keys. A cache miss uses upstream wallet recovery, from index 0 on each search,
-with the mailbox registration first and then all other registrations. Recovery
-stops at an unused chunk of 10,000 keys. A coin beyond that gap remains held.
-HTLC keys are compared only within the range recovery covered. A search with
-no match is repeated when a registration is added, and once per day.
+Use the matching protocol 6 SDK and reference clients. Their Ark addresses carry
+the signed delivery type `0x02`; no child index or account xpub is sent. After an
+online open caches both server public keys and authenticates both mailbox
+registrations, the client can generate these addresses offline. It refuses
+delivery-less addresses and addresses with only an unsigned `0x01` mailbox entry
+before it reserves coins. Live client operations reconcile both the normal and
+recovery mailbox registrations against the same canonical payout script.
+Temporary registration transport failures can permit a cached client to open
+for offline recovery; they do not permit mailbox use or cooperative
+transactions without reconciliation.
 
-An unresolved owner lookup holds its output and splits it away from ready
-siblings. A lookup never authorizes an operator claim of customer bitcoin.
+A coin signature chooses the payout mailbox. It does not claim ownership of
+that mailbox. Gifts to another registered mailbox are valid, even when the
+signer owns the coin key. A signed gift therefore directs fallback payment to
+that mailbox's script. A notification mailbox does not replace this choice.
+Forwarded Lightning receives require the recipient's signed address and the
+same link checks before the server accepts the destination output.
+The reference SDK also sends the recipient policy, signed link and amount after
+current receive fees when it requests a forwarded invoice. The server checks
+that destination before it creates an invoice or returns a Created-invoice
+retry. This stores the binding at admission; it does not commit the payment hash
+to that destination. The final claim still verifies its actual outputs. Loss or
+corruption after invoice creation can still cause that claim to remain pending.
+
+At expiry, the server rechecks the stored coin signature, unblinding and
+canonical registration. There is no owner scan, announcement window or index
+gap limit. A missing registration or link, an invalid link or a decoded
+registration that fails authentication leaves the bitcoin held and separates
+it from ready siblings. Never assign that bitcoin to the provider or operator.
+`captaind` performs this authentication before it commits payout allocations.
+`watchmand` consumes those committed allocations without the server mailbox
+key. Preserve the original server seed, registrations and signed links together
+with all financial commitments.
+
+Malformed script hex or signature text in a stored registration can pause the
+entire backing root, including ready siblings, until the authentic record is
+restored. Public registration RPCs reject this encoding. This limit concerns
+database corruption or administrative edits; it does not authorize a sweep.
+
+Normal wallet key derivation and the optional upstream xpub-recovery RPC remain.
+That RPC is separate from fallback ownership and can receive an xpub when used.
+Neither it nor a seed-only scan guarantees discovery across arbitrary gaps or
+recovery of a separately chosen fallback script.
+
 A sub-dust group remains held while another coin under the same source anchor at
 the same expiry height is undecided. Do not split or discard obligations to
 bypass these holds. Charge the cumulative fee per payout script and expiry height,
 including earlier non-conflicted payments.
 
-The fork assigns padding leaves to the operator when their policy key equals
-upstream's unspendable key, `0x02 || sha256("unspendable1")`. It does not use an
-amount, transaction hash or issuance record to identify padding. This also assigns
-a coin deliberately locked by a customer to that key to the operator. No one can
-spend with that key. This is an accepted exception to the rule that the operator
-keeps only value it paid for.
+The round's padding loop retains its output positions and passes the resulting
+VTXO IDs to persistence. Only those padding rows bypass the customer-link fence.
+At expiry, the fork assigns padding leaves to the operator when their policy
+key equals upstream's unspendable key, `0x02 || sha256("unspendable1")`. It does
+not use an amount, transaction hash or issuance record to identify padding.
+This also assigns a coin deliberately locked by a customer to that key to the
+operator. No one can spend with that key. This is an accepted exception to the
+rule that the operator keeps only value it paid for.
 
 ### Alert rules and first actions
 
@@ -362,10 +421,10 @@ Use a read-only database role and retain private snapshots for comparison.
 | Either daemon exits or its required plugin is absent | Inspect the exact supervisor unit and plugin logs. Restore the pinned bytes and runtime environment. Require both daemons and plugins to resume useful work. |
 | Node tip advances but either daemon stays behind for 2 consecutive new blocks | Compare its `expiry_sync_ack` and stored block hash with the canonical node. Check RPC, disk and worker errors. Close only after both completed views reconcile. |
 | `expiry_chain_view.invalid` persists across 2 completed daemon sync cycles | Preserve the generation and acknowledgements. Investigate rebuild errors. Do not clear the invalid flag or force a financial decision. |
-| An expired customer remains unpaid | Check authenticated registrations, `expiry_owner_key`, recovery warnings and the 10,000-key stop rule. Check database/resource pressure. Keep unresolved bitcoin held. |
+| An expired customer remains unpaid | Check the canonical `fallback_record`, signed `expiry_owner_key` link and original server mailbox key. Check database/resource pressure. Keep unresolved bitcoin held. |
 | A customer's unpaid age exceeds the declared window, or backlog/value grows across observations | Identify its VTXO, rightful owner, decision fence and canonical spend. Resolve the specific hold, fee shortage or chain issue. A healthy process or a new allocation does not close the alert. |
 | Either confirmed-usable-funding warning occurs | Refill the watchman wallet. Check usable confirmed outpoints, then observe the queued payout confirm with correct customer amounts. |
-| `Expiry payout remains pending`, readiness or owner-lookup warnings recur without progress | Retain allocation/key identifiers and source-specific error records. Follow the relevant ownership, fee-child or Lightning procedure. Never delete a fence to clear an alert. |
+| `Expiry payout remains pending` or readiness warnings recur without progress | Retain allocation/key identifiers and source-specific error records. Follow the relevant ownership, fee-child or Lightning procedure. Never delete a fence to clear an alert. |
 | Disk/WAL headroom falls below the configured alert, PostgreSQL backup fails, or RSS/database size grows without bound | Escalate before storage exhaustion. Preserve WAL and authoritative history. Verify the next backup and a separate restore; do not prune financial history to clear the alert. |
 | A canonical-chain money check finds a wrong amount, wrong script or duplicate payment | Suspend new admission under reviewed deployment controls. Preserve all stores and signed transactions. Keep protective claims available and reconcile every affected obligation before resumption. |
 
@@ -391,9 +450,11 @@ Preserve the failed stores for investigation. Restore into separate paths.
 Reopen with the same supported version and identity, then let both chain views
 reconcile before relying on payout decisions. Reconcile registrations, customer
 obligations, source-specific Lightning outcomes and canonical transactions.
-The retained registry must cover customer registrations that the server already
-accepted. Do not resume admission from an older backup that omits these records.
-Recover them from intact PostgreSQL/WAL or the same signed registration.
+The retained registry and signed links must cover customer outputs that the
+server already accepted. Preserve the original server mailbox key. Do not
+resume admission from an older backup that omits these records. Recover them
+from intact PostgreSQL/WAL or retained authenticated evidence. A re-sent link
+can authenticate a binding; it cannot recreate a missing financial commitment.
 A missing record remains unresolved; it never makes customer bitcoin operator
 bitcoin. An absent client cannot recreate its lost server registration for you.
 Restoring a backup that predates commitments does not prove those commitments
@@ -658,9 +719,10 @@ qualify seed recovery for a new release.
 ## Upgrade and rollback
 
 Keep each complete release in a separate directory. An upgrade requires an
-explicitly qualified schema transition and matching CLN/plugins. This candidate
-has no conversion for earlier experimental fork schemas. A source-level
-compatibility statement does not qualify an upgrade.
+explicitly qualified schema transition and matching clients, CLN and plugins.
+This candidate has no conversion from earlier fork stores or v3 registrations
+to its v4 format. A source-level compatibility statement does not qualify an
+upgrade.
 
 Before a change, verify the new archive and readback. Record current identities,
 registrations, obligations, balances and UTXO sets. Stop and exclude producers,

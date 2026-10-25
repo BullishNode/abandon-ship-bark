@@ -846,11 +846,10 @@ struct WalletInner {
 
 	/// Live connection to an Ark server for round participation and synchronization.
 	///
-	/// Lazily initialised on first use via [`Wallet::require_server`]. A
-	/// [`OnceCell`] is the right primitive here: concurrent callers on a
-	/// cold cell all await the same in-flight `connect_to_server` future
-	/// instead of each opening a fresh gRPC channel.
-	server: tokio::sync::OnceCell<ServerConnection>,
+	/// Lazily initialized by [`Wallet::require_server`]. Concurrent cold callers
+	/// share a connection only after its keys and fallback registrations pass.
+	/// An explicit refresh removes it until those checks succeed again.
+	server: tokio::sync::RwLock<Option<ServerConnection>>,
 
 	/// Onchain wallet used for boarding, exit fee-bumping, and onchain syncing.
 	///
@@ -1176,7 +1175,7 @@ impl Wallet {
 			.testnet(network != bitcoin::Network::Bitcoin)
 			.server_pubkey(server_pubkey)
 			.pubkey_policy(keypair.public_key())
-			.mailbox(mailbox_pubkey, mailbox, &keypair)
+			.mailbox_signed(mailbox_pubkey, mailbox, &keypair)
 			.context("failed to assign mailbox")?
 			.into_address()
 			.context("failed to build address")?)
@@ -1383,7 +1382,7 @@ impl Wallet {
 		chain.require_version().await
 			.context("provided chain source doesn't meet version requirement")?;
 
-		let server = tokio::sync::OnceCell::new();
+		let server = tokio::sync::RwLock::new(None);
 
 		let notifications = NotificationDispatch::new();
 		let movements = Arc::new(MovementManager::new(db.clone(), notifications.clone()));
@@ -1499,14 +1498,25 @@ impl Wallet {
 	}
 
 	async fn require_server(&self) -> anyhow::Result<(ServerConnection, ArkInfo)> {
-		// Connect lazily if not yet connected. `get_or_try_init` ensures
-		// concurrent callers on a cold cell all await the same in-flight
-		// connect future instead of each opening a fresh gRPC channel.
-		let conn = self.inner.server.get_or_try_init(|| async {
-			let network = self.properties().await?.network;
-			Self::connect_to_server(&self.inner.config, network).await
-				.context("You should be connected to Ark server to perform this action")
-		}).await?.clone();
+		let existing = { self.inner.server.read().await.clone() };
+		let conn = if let Some(connection) = existing {
+			connection
+		} else {
+			let mut server = self.inner.server.write().await;
+			if let Some(connection) = server.as_ref() {
+				connection.clone()
+			} else {
+				let network = self.properties().await?.network;
+				let mut connection = Self::connect_to_server(&self.inner.config, network).await
+					.context("You should be connected to Ark server to perform this action")?;
+				let ark_info = connection.ark_info().await;
+				check_ark_info_safe(&ark_info, self.inner.config.vtxo_exit_margin)?;
+				self.check_and_store_server_keys(&ark_info).await?;
+				self.reconcile_fallback(&mut connection).await?;
+				*server = Some(connection.clone());
+				connection
+			}
+		};
 
 		let ark_info = conn.ark_info().await;
 		check_ark_info_safe(&ark_info, self.inner.config.vtxo_exit_margin)?;
@@ -1516,22 +1526,23 @@ impl Wallet {
 	}
 
 	pub async fn refresh_server(&self) -> anyhow::Result<()> {
-		// If the cell is still cold, initialise it with a fresh connection.
-		// If it is already initialised, run a heartbeat against the existing
-		// one — `OnceCell` does not support replacing a stored value, but
-		// `ServerConnection` is built around a tonic `Channel` which
-		// transparently reconnects, so we don't need to swap it.
-		let srv = self.inner.server.get_or_try_init(|| async {
+		// Remove the cached connection before refreshing it. On failure or
+		// cancellation, future callers must connect and authenticate again.
+		let mut server = self.inner.server.write().await;
+		let mut connection = if let Some(connection) = server.take() {
+			connection
+		} else {
 			let properties = self.properties().await?;
-			Self::connect_to_server(&self.inner.config, properties.network).await
-				.map_err(anyhow::Error::from)
-		}).await?;
+			Self::connect_to_server(&self.inner.config, properties.network).await?
+		};
 
-		srv.check_connection().await?;
-		let ark_info = srv.ark_info().await;
+		connection.check_connection().await?;
+		let ark_info = connection.ark_info().await;
 		ark_info.fees.validate().context("invalid fee schedule")?;
 		check_ark_info_safe(&ark_info, self.inner.config.vtxo_exit_margin)?;
 		self.check_and_store_server_keys(&ark_info).await?;
+		self.reconcile_fallback(&mut connection).await?;
+		*server = Some(connection);
 
 		Ok(())
 	}
@@ -1583,7 +1594,8 @@ impl Wallet {
 
 	/// Return [ArkInfo] fetched on last handshake with the Ark server
 	pub async fn ark_info(&self) -> anyhow::Result<Option<ArkInfo>> {
-		match self.inner.server.get() {
+		let server = { self.inner.server.read().await.clone() };
+		match server {
 			Some(srv) => Ok(Some(srv.ark_info().await)),
 			None => Ok(None),
 		}
@@ -2051,8 +2063,8 @@ impl Wallet {
 	/// Notes:
 	/// - Exits are only synced if we detect onchain activity which has force-exited our VTXO.
 	pub async fn sync(&self) {
-		if let Err(error) = self.retry_pending_fallback_registration().await {
-			warn!("Fallback registration remains pending: {:#}", error);
+		if let Err(error) = self.refresh_server().await {
+			warn!("Ark server refresh failed: {:#}", error);
 		}
 		self.inner.chain.invalidate_caches().await;
 		if let Err(error) = self.sync_fallback_payouts().await {
@@ -2335,6 +2347,7 @@ impl Wallet {
 		};
 
 		Ok(Some(RoundParticipation {
+			owner_proofs: Default::default(),
 			inputs: vtxos,
 			outputs: vec![req],
 			unblinded_mailbox_id: None,

@@ -86,7 +86,7 @@ async fn native_refund_status(two_sources: bool) {
 		.unwrap().generate_user_nonces(&keys).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
 	let reply = rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts: protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts: super::signed_package(&srv, &[&sender], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let sources = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(reply).unwrap())
 		.unwrap().build_signed_vtxos();
@@ -113,6 +113,7 @@ async fn native_refund_status(two_sources: bool) {
 		htlc_vtxo_ids: ids.clone(), mailbox_id: Some(mailbox.serialize()), retry_for_secs: Some(5),
 	}).await.unwrap();
 	let reply = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: Some(recipient.owner_link(receive_key).await.unwrap().into()),
 		payment_hash: hash.to_vec(), user_pubkey: receive_key.serialize().to_vec(),
 		htlc_recv_expiry: (tip + BlockDelta::new(12)).to_u32(), lightning_receive_anti_dos: None,
 	}).await.unwrap().into_inner();
@@ -165,12 +166,17 @@ async fn native_refund_status(two_sources: bool) {
 				let status = rpc.check_lightning_payment(protos::CheckLightningPaymentRequest {
 					hash: hash.to_vec(), wait: false, htlc_vtxo_ids: ids.clone(),
 				}).wait_millis(30_000).await.unwrap().into_inner();
-				assert!(matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Pending(_))),
-					"one actual native receipt cannot finish the complete two-source attempt");
+				assert!(matches!(status.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Failed(_))),
+					"the own attempt is Failed independently of the second source's pending refund");
 				let mut echoed = status.htlc_vtxo_ids; echoed.sort_unstable(); assert_eq!(echoed, ids);
-				assert_eq!(db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM mailbox WHERE payment_hash=$1 \
-					AND mailbox_type::TEXT=$2", &[&hash.to_string(), &String::from(ark::mailbox::MailboxType::LnSendFinished)])
-					.await?.get::<_, i64>(0))).await.unwrap(), 0);
+				let notices = db.read(async |t| Ok(t.query("SELECT unblinded_mailbox_id,preimage FROM mailbox \
+					WHERE payment_hash=$1 AND mailbox_type::TEXT=$2", &[&hash.to_string(),
+						&String::from(ark::mailbox::MailboxType::LnSendFinished)]).await?)).await.unwrap();
+				assert_eq!(notices.len(), 1, "the notification reports the own attempt, not refund completion");
+				assert_eq!(notices[0].get::<_, &str>("unblinded_mailbox_id"), mailbox.to_string());
+				assert_eq!(notices[0].get::<_, Option<&str>>("preimage"), None);
+				let original = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, unpaid.id()).await).await.unwrap().unwrap();
+				assert!(original.htlc.offchain_resolution.is_none(), "Failed must not manufacture a cooperative refund");
 				checked_partial = true;
 			}
 			if parents.len() == sources.len() { return; }
@@ -227,6 +233,6 @@ async fn expiry_native_refund_finishes_original_source_and_mailbox() {
 }
 
 #[tokio::test]
-async fn expiry_native_refund_partial_set_stays_pending_until_every_source_is_paid() {
+async fn expiry_native_refund_partial_set_preserves_own_failed_outcome() {
 	Box::pin(native_refund_status(true)).await;
 }

@@ -22,7 +22,7 @@ use crate::exit::{ExitState, ExitStateKind, ExitTxOrigin};
 use crate::movement::{Movement, MovementId, MovementStatus, MovementSubsystem, PaymentMethod};
 use crate::persist::{RoundStateId, StoredRoundState};
 use crate::persist::models::{
-	FallbackRecord,	PaidInvoice, SerdeRoundState, SettledLightningReceive, StoredExit, Unlocked,
+	FallbackRegistration,	PaidInvoice, SerdeRoundState, SettledLightningReceive, StoredExit, Unlocked,
 };
 use crate::persist::sqlite::convert::{row_to_movement, row_to_wallet_vtxo, rows_to_wallet_vtxos};
 use crate::round::RoundState;
@@ -834,45 +834,43 @@ pub fn get_last_vtxo_key_index(conn: &Connection) -> anyhow::Result<Option<u32>>
 	}
 }
 
-pub fn get_fallback_record(conn: &Connection) -> anyhow::Result<Option<FallbackRecord>> {
+pub fn get_fallback_record(conn: &Connection) -> anyhow::Result<Option<FallbackRegistration>> {
 	let bytes: Option<Vec<u8>> = conn.query_row(
 		"SELECT record FROM bark_fallback_record WHERE id = 1 AND registered = 1",
 		[],
 		|row| row.get(0),
 	).optional()?;
-	bytes.map(|bytes| FallbackRecord::deserialize(&bytes).map_err(Into::into)).transpose()
+	bytes.map(|bytes| FallbackRegistration::deserialize(&bytes).map_err(Into::into)).transpose()
 }
 
-pub fn get_pending_fallback_record(conn: &Connection) -> anyhow::Result<Option<FallbackRecord>> {
+pub fn get_pending_fallback_record(conn: &Connection) -> anyhow::Result<Option<FallbackRegistration>> {
 	let bytes: Option<Vec<u8>> = conn.query_row(
 		"SELECT record FROM bark_fallback_record WHERE id = 1 AND registered = 0",
 		[],
 		|row| row.get(0),
 	).optional()?;
-	bytes.map(|bytes| FallbackRecord::deserialize(&bytes).map_err(Into::into)).transpose()
+	bytes.map(|bytes| FallbackRegistration::deserialize(&bytes).map_err(Into::into)).transpose()
 }
 
-pub fn store_pending_fallback_record(conn: &Connection, record: &FallbackRecord) -> anyhow::Result<()> {
+pub fn store_pending_fallback_record(conn: &Connection, record: &FallbackRegistration) -> anyhow::Result<()> {
 	store_fallback_binding(conn, record, false)
 }
 
-pub fn store_fallback_record(conn: &Connection, record: &FallbackRecord) -> anyhow::Result<()> {
+pub fn store_fallback_record(conn: &Connection, record: &FallbackRegistration) -> anyhow::Result<()> {
 	store_fallback_binding(conn, record, true)
 }
 
-fn store_fallback_binding(conn: &Connection, record: &FallbackRecord, registered: bool) -> anyhow::Result<()> {
+fn store_fallback_binding(conn: &Connection, record: &FallbackRegistration, registered: bool) -> anyhow::Result<()> {
 	let changed = conn.execute(
-		"INSERT INTO bark_fallback_record (id, record, spk, account_xpub, registered)
-		VALUES (1, ?1, ?2, ?3, ?4)
+		"INSERT INTO bark_fallback_record (id, record, spk, registered)
+		VALUES (1, ?1, ?2, ?3)
 		ON CONFLICT (id) DO UPDATE SET
 			record = excluded.record,
 			registered = MAX(bark_fallback_record.registered, excluded.registered)
-		WHERE bark_fallback_record.spk = excluded.spk
-			AND bark_fallback_record.account_xpub = excluded.account_xpub",
+		WHERE bark_fallback_record.spk = excluded.spk",
 		params![
 			record.serialize(),
 			record.spk.as_bytes(),
-			record.account_xpub.encode().as_slice(),
 			registered,
 		],
 	)?;

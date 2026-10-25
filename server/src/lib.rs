@@ -33,8 +33,8 @@ mod intman;
 pub mod ln;
 pub mod nursery;
 mod offboards;
-mod expiry_owner;
 mod expiry_readiness;
+pub mod owner_proof;
 pub mod recovery;
 mod round;
 pub mod telemetry;
@@ -47,9 +47,10 @@ use crate::database::htlc_vtxo::{self, HtlcDirection};
 use crate::database::tree::VtxoTreeUpdate;
 pub use crate::intman::{CAPTAIND_API_KEY, CAPTAIND_CLI_API_KEY};
 pub use crate::config::Config;
+pub use crate::error::OwnershipRefusal;
 pub use bark_common::{fs_perms, secret};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -226,7 +227,6 @@ pub struct Server {
 	xpub_recovery_queue: tokio::sync::Semaphore,
 	/// One permit for each xpub recovery scan that may run at once.
 	xpub_recovery_permits: tokio::sync::Semaphore,
-	expiry_owner_lookups: parking_lot::Mutex<HashMap<PublicKey, expiry_owner::OwnerLookup>>,
 	lightning_manager: LightningManager,
 	htlc_settler: Arc<HtlcSettler>,
 	vtxopool: VtxoPool,
@@ -483,7 +483,6 @@ impl Server {
 				cfg.max_concurrent_xpub_recoveries.saturating_add(recovery::XPUB_RECOVERY_QUEUE_SIZE),
 			),
 			xpub_recovery_permits: tokio::sync::Semaphore::new(cfg.max_concurrent_xpub_recoveries),
-			expiry_owner_lookups: parking_lot::Mutex::new(HashMap::new()),
 			config: cfg.clone(),
 			db,
 			server_pubkey: server_key.public_key(),
@@ -642,6 +641,7 @@ impl Server {
 		utxo: OutPoint,
 		funding_tx: Option<&Transaction>,
 		user_pub_nonce: PublicNonce,
+		owner_links: &crate::owner_proof::OwnerLinks,
 	) -> anyhow::Result<ark::board::BoardCosignResponse> {
 		check_max_amount("board", amount, self.config.max_board_amount)?;
 
@@ -756,6 +756,9 @@ impl Server {
 			user_pub_nonce,
 		);
 
+		self.db.write(async |t| owner_links.verify(t, [user_pubkey],
+			self.mailbox_key.leak_ref(), self.config.network).await).await?;
+
 		info!("Cosigning board request for utxo {}", utxo);
 		let resp = builder.server_cosign(self.server_key.leak_ref());
 
@@ -842,7 +845,7 @@ impl Server {
 			.insert_spendable_vtxos(builder.build_server_vtxos())
 			.mark_vtxos_oor_spent(builder.spend_info());
 		let inserted = self.db.write(async |t| {
-			let inserted = t.execute_vtxo_tree_update(update).await?;
+			let inserted = t.execute_vtxo_tree_update(update, Some((self.config.network, self.mailbox_key.leak_ref()))).await?;
 			t.add_funding_vtxos_to_frontier(funding_txid, Some(confirmed_height)).await
 				.context("failed to add board vtxos to frontier")?;
 			Ok(inserted)
@@ -1022,7 +1025,7 @@ impl Server {
 			.provide_signatures(vtxos)
 			.mark_vtxos_registered(registered_ids);
 		self.db.write(async |t| {
-			t.execute_vtxo_tree_update(update).await?;
+			t.execute_vtxo_tree_update(update, None).await?;
 			htlc_vtxo::create_htlc_vtxos(&t, &htlc_sends, HtlcDirection::Incoming).await?;
 			Ok(())
 		}).await?;

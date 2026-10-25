@@ -57,6 +57,7 @@ pub const XPAY_TIMEOUT_BUFFER: Duration = Duration::from_secs(15);
 /// Wrapped in an `Arc` so both [`ClnXpay::pay`] (fire-and-forget spawned tasks)
 /// and [`ClnXpayProcess`] (periodic reconciliation) can use it concurrently.
 pub(crate) struct ClnXpayClient {
+	network: bitcoin::Network,
 	db: database::Db,
 	rpc: ClnGrpcClient,
 	settler: Arc<HtlcSettler>,
@@ -70,7 +71,7 @@ pub(crate) struct ClnXpayClient {
 
 impl ClnXpayClient {
 	fn payment_handler(&self) -> PaymentAttemptHandler<'_> {
-		PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx)
+		PaymentAttemptHandler::new(&self.db, &self.mailbox_manager, &self.payment_update_tx, self.network)
 	}
 
 	pub async fn new(
@@ -80,8 +81,9 @@ impl ClnXpayClient {
 		settler: Arc<HtlcSettler>,
 		mailbox_manager: Arc<crate::mailbox_manager::MailboxManager>,
 		payment_guards: PaymentGuards,
+		network: bitcoin::Network,
 	) -> Arc<Self> {
-		Arc::new(Self { db, payment_update_tx, rpc, settler, mailbox_manager, payment_guards })
+		Arc::new(Self { db, payment_update_tx, rpc, settler, mailbox_manager, payment_guards, network })
 	}
 
 	/// Calls xpay and then reconciles the attempt status against CLN.
@@ -359,6 +361,7 @@ impl ClnXpay {
 		settler: Arc<HtlcSettler>,
 		mailbox_manager: Arc<crate::mailbox_manager::MailboxManager>,
 		payment_guards: PaymentGuards,
+		network: bitcoin::Network,
 	) -> anyhow::Result<ClnXpay> {
 		let payment_idxs = db.read(async |t| t.get_lightning_payment_indexes(node_id).await).await
 			.with_context(|| format!("failed to fetch payment indices for {}", node_id))?
@@ -370,7 +373,7 @@ impl ClnXpay {
 			updated_index: payment_idxs.updated_index,
 		);
 
-		let client = ClnXpayClient::new(db.clone(), payment_update_tx, rpc, settler, mailbox_manager, payment_guards).await;
+		let client = ClnXpayClient::new(db.clone(), payment_update_tx, rpc, settler, mailbox_manager, payment_guards, network).await;
 
 		let proc = ClnXpayProcess {
 			config, db, node_id,

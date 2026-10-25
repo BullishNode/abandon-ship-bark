@@ -187,6 +187,7 @@ fn empty_round_state() -> RoundState {
 		done: false,
 		onchain_recovery: false,
 		participation: RoundParticipation {
+			owner_proofs: Default::default(),
 			inputs: vec![],
 			outputs: vec![],
 			unblinded_mailbox_id: None,
@@ -785,6 +786,15 @@ pub async fn test_get_or_create_movement_for_action(db: &impl BarkPersister) {
 
 pub async fn test_store_and_get_round_state(db: &impl BarkPersister) {
 	let mut state = empty_round_state();
+	let server = Keypair::from_seckey_slice(&ark::SECP, &[17; 32]).unwrap();
+	let recipient = Keypair::from_seckey_slice(&ark::SECP, &[18; 32]).unwrap();
+	let coin = VTXO_VECTORS.arkoor3_user_key;
+	let link = ark::fallback::OwnerLink::new(server.public_key(),
+		ark::mailbox::MailboxIdentifier::from_pubkey(recipient.public_key()), &coin).unwrap();
+	state.participation.outputs.push(ark::VtxoRequest {
+		amount: Amount::from_sat(1_000), policy: ark::VtxoPolicy::new_pubkey(coin.public_key()),
+	});
+	state.participation.owner_proofs.insert(coin.public_key(), link);
 	state.flow = RoundFlowState::Failed { error: "diagnostic text is not a refusal code".into() };
 	state.fallback_refusal = Some(crate::FallbackRefusal::DecidedForFallback);
 
@@ -1165,34 +1175,32 @@ pub async fn test_exit_child_tx_roundtrip(db: &impl BarkPersister) {
 	);
 }
 
-/// Canonical signatures may change, but the seed/account/destination may not.
+/// Canonical signatures may change, but the registered destination may not.
 pub async fn test_fallback_record_is_immutable(db: &impl BarkPersister) {
-	let account = bitcoin::bip32::Xpriv::new_master(Network::Regtest, &[3; 64]).unwrap();
 	let mailbox = Keypair::from_seckey_slice(&ark::SECP, &[7; 32]).unwrap();
 	let spk = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
-	let record = ark::fallback::FallbackRecord::new(Network::Regtest, spk.clone(), &account, &mailbox).unwrap();
+	let record = ark::fallback::FallbackRegistration::new(Network::Regtest, spk.clone(), &mailbox).unwrap();
 	assert!(db.get_fallback_record().await.unwrap().is_none());
 	db.store_fallback_record(&record).await.unwrap();
-	let resigned = ark::fallback::FallbackRecord::new(Network::Regtest, spk, &account, &mailbox).unwrap();
+	let resigned = ark::fallback::FallbackRegistration::new(Network::Regtest, spk, &mailbox).unwrap();
 	db.store_fallback_record(&resigned).await.unwrap();
 	assert_eq!(db.get_fallback_record().await.unwrap().unwrap(), resigned);
 	let alternate = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
-	let changed = ark::fallback::FallbackRecord::new(Network::Regtest, alternate, &account, &mailbox).unwrap();
+	let changed = ark::fallback::FallbackRegistration::new(Network::Regtest, alternate, &mailbox).unwrap();
 	assert!(db.store_fallback_record(&changed).await.is_err());
 	assert_eq!(db.get_fallback_record().await.unwrap().unwrap(), resigned);
 }
 
 /// Local signatures reserve the identity but cannot acknowledge a server write.
 pub async fn test_pending_fallback_record_never_authorizes_registration(db: &impl BarkPersister) {
-	let account = bitcoin::bip32::Xpriv::new_master(Network::Regtest, &[3; 64]).unwrap();
 	let mailbox = Keypair::from_seckey_slice(&ark::SECP, &[7; 32]).unwrap();
 	let script = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
-	let record = ark::fallback::FallbackRecord::new(Network::Regtest, script, &account, &mailbox).unwrap();
+	let record = ark::fallback::FallbackRegistration::new(Network::Regtest, script, &mailbox).unwrap();
 	db.store_pending_fallback_record(&record).await.unwrap();
 	assert!(db.get_fallback_record().await.unwrap().is_none());
 	assert_eq!(db.get_pending_fallback_record().await.unwrap(), Some(record.clone()));
 	let alternate = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
-	let changed = ark::fallback::FallbackRecord::new(Network::Regtest, alternate, &account, &mailbox).unwrap();
+	let changed = ark::fallback::FallbackRegistration::new(Network::Regtest, alternate, &mailbox).unwrap();
 	assert!(db.store_pending_fallback_record(&changed).await.is_err());
 	assert!(db.store_fallback_record(&changed).await.is_err());
 	assert!(db.get_fallback_record().await.unwrap().is_none());

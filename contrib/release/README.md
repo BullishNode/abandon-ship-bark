@@ -3,7 +3,9 @@
 Run `build-bundle.py` on the build machine with Python 3.11 or later, Git, Nix
 and the qualified GNU programs runnable there. It assembles existing artifacts.
 It does not build programs, install software or execute deployment commands.
-This server candidate includes Bark and `barkd` only as test helpers.
+This candidate pairs the server and watchman with matching protocol 6 Bark and
+`barkd` clients. Use fresh stores and signed recipient addresses as described
+in `OPERATOR.md`.
 
 Use the complete CLN, grpc and Core store outputs from the qualified build.
 The grpc output must contain the exact qualified plugin bytes. A rebuild of the

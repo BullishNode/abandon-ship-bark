@@ -73,7 +73,7 @@ async fn reserved_terminal(reorg:bool,partial:bool) {
 		VtxoPolicy::new_server_htlc_send(keys[0].public_key(),hash,deadline)).unwrap().generate_user_nonces(&keys).unwrap();
 	let mut rpc=srv.get_public_rpc().await;
 	let reply=rpc.request_lightning_pay_htlc_cosign(protos::LightningPayHtlcCosignRequest {
-		parts:protos::ArkoorPackageCosignRequest::from(builder.cosign_request()).parts,
+		parts:super::signed_package(&srv, &[&sender], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await.parts,
 	}).await.unwrap().into_inner();
 	let sources=builder.user_cosign(&keys,ArkoorPackageCosignResponse::try_from(reply).unwrap()).unwrap().build_signed_vtxos();
 	assert_eq!(sources.len(),2);
@@ -83,6 +83,7 @@ async fn reserved_terminal(reorg:bool,partial:bool) {
 	rpc.initiate_lightning_payment(protos::InitiateLightningPaymentRequest {invoice:invoice.to_string(),payment_amount_sat:180_000,
 		htlc_vtxo_ids:sources.iter().map(|source|source.id().to_bytes().to_vec()).collect(),mailbox_id:None,retry_for_secs:Some(5)}).await.unwrap();
 	let reply=rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+		owner_proof: Some(recipient.owner_link(receive_key).await.unwrap().into()),
 		payment_hash:hash.to_vec(),user_pubkey:receive_key.serialize().to_vec(),htlc_recv_expiry:(tip+BlockDelta::new(36)).to_u32(),
 		lightning_receive_anti_dos:None,
 	}).await.unwrap().into_inner();
@@ -129,19 +130,11 @@ async fn reserved_terminal(reorg:bool,partial:bool) {
 			srv.wait_for_sync_height(height).await;
 			srv.watchmand().wait_for_sync_height(height).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			let mut closed=0;
-			for grant in &grants {
-				let row=db.read(async |t|Ok(t.query_opt("SELECT a.sweep_txid FROM expiry_allocation a \
-					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='operator' AND a.status='confirmed' \
-					AND c.evidence->>'kind'='htlc_recv_expired'",&[&grant.id().to_string()]).await?)).await.unwrap();
-				if let Some(row)=row {
-					let txid=row.get::<_,String>(0).parse().unwrap();
-					if chain.custom_get_raw_transaction_info(txid,None).unwrap()
-						.is_some_and(|info|info.confirmations.unwrap_or(0)>=6) {closed+=1;}
-				}
+			if let Some(closures) = super::expiry_lightning_terminal::confirmed_grant_closures(
+				&ctx, &db, &grants, &receive_spk,
+			).await {
+				if closures.values().all(|(_, closed)| closed.checked_add(6).is_some_and(|required| required <= height.to_u32())) { break; }
 			}
-			if closed==grants.len() {break;}
 		}
 	}).await.expect("receive grants must close in funded operator payouts six confirmations deep");
 	let reserved=tokio::time::timeout(Duration::from_secs(20),async {

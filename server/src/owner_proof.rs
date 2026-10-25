@@ -1,0 +1,82 @@
+//! Request-scoped coin-to-mailbox evidence, outside signed transaction encodings.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use bitcoin::secp256k1::{Keypair, PublicKey};
+use bitcoin::Network;
+use ark::{ProtocolEncoding, VtxoPolicy};
+use ark::fallback::OwnerLink;
+use ark::mailbox::MailboxIdentifier;
+use server_rpc::protos;
+
+use crate::database::Tx;
+use crate::error::{ContextExt, OwnershipRefusal};
+
+#[derive(Debug, Clone, Default)]
+pub struct OwnerLinks(BTreeMap<PublicKey, Vec<OwnerLink>>);
+
+impl OwnerLinks {
+	pub fn insert(&mut self, key: PublicKey, link: OwnerLink) {
+		self.0.entry(key).or_default().push(link);
+	}
+
+	pub fn insert_proto(&mut self, key: PublicKey, proof: Option<&protos::OwnerProof>) -> anyhow::Result<()> {
+		let proof = proof.ok_or(OwnershipRefusal::Required(key))?;
+		let link = OwnerLink::try_from(proof.clone()).map_err(|_| OwnershipRefusal::Invalid(key))?;
+		self.insert(key, link);
+		Ok(())
+	}
+
+	pub fn insert_request(&mut self, request: &protos::VtxoRequest) -> anyhow::Result<()> {
+		let key = VtxoPolicy::deserialize(&request.policy).badarg("invalid destination policy")?.user_pubkey();
+		self.insert_proto(key, request.owner_proof.as_ref())
+	}
+
+	pub fn from_parts(parts: &[protos::ArkoorCosignRequest]) -> anyhow::Result<Self> {
+		let mut links = Self::default();
+		for part in parts {
+			for output in part.outputs.iter().chain(&part.isolated_outputs) {
+				let key = VtxoPolicy::deserialize(&output.policy).badarg("invalid destination policy")?.user_pubkey();
+				links.insert_proto(key, output.owner_proof.as_ref())?;
+			}
+		}
+		Ok(links)
+	}
+
+	/// Validate every supplied copy, even when several outputs use one key.
+	pub fn check_signatures(
+		&self, keys: impl IntoIterator<Item = PublicKey>, server_mailbox_key: &Keypair,
+	) -> anyhow::Result<BTreeSet<PublicKey>> {
+		let keys = keys.into_iter().collect::<BTreeSet<_>>();
+		for key in self.0.keys() {
+			if !keys.contains(key) { return Err(OwnershipRefusal::Invalid(*key).into()); }
+		}
+		for key in &keys {
+			let copies = self.0.get(key).ok_or(OwnershipRefusal::Required(*key))?;
+			let mut mailbox = None;
+			for link in copies {
+				link.verify(server_mailbox_key.public_key(), *key).map_err(|_| OwnershipRefusal::Invalid(*key))?;
+				let current = MailboxIdentifier::from_blinded(link.blinded_id, *key, server_mailbox_key)
+					.map_err(|_| OwnershipRefusal::Invalid(*key))?;
+				if mailbox.is_some_and(|previous| previous != current) {
+					return Err(OwnershipRefusal::Conflicting(*key).into());
+				}
+				mailbox = Some(current);
+			}
+		}
+		Ok(keys)
+	}
+
+	/// Store distinct bindings in key order only after every copy is checked.
+	pub async fn verify(
+		&self, tx: &Tx<'_>, keys: impl IntoIterator<Item = PublicKey>,
+		server_mailbox_key: &Keypair, network: Network,
+	) -> anyhow::Result<()> {
+		let keys = self.check_signatures(keys, server_mailbox_key)?;
+		for key in keys {
+			let link = self.0.get(&key).and_then(|copies| copies.first()).ok_or(OwnershipRefusal::Required(key))?;
+			tx.verify_owner_link(server_mailbox_key, key, link, network).await?;
+		}
+		Ok(())
+	}
+}

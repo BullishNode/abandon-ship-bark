@@ -17,7 +17,6 @@ use server::vtxopool::VtxoTarget;
 use server_rpc::protos;
 
 use ark::ProtocolEncoding;
-use ark::address::VtxoDelivery;
 use ark::lightning::PaymentHash;
 use ark_testing::{sat, TestContext};
 use ark_testing::daemon::captaind::{proxy::MailboxRpcProxy, MailboxClient};
@@ -68,14 +67,11 @@ async fn interrupted_forwarding() {
 	provider.stop_daemon_wait().await.unwrap();
 	let recipient = ctx.bark_sdk("recipient", &srv).cfg(|config| config.daemon_manual_sync = true).create().await;
 	let address = recipient.new_address().await.unwrap();
-	let mailboxes = address.delivery().iter().filter_map(|delivery| match delivery {
-		VtxoDelivery::ServerMailbox { blinded_id } => Some(blinded_id.as_ref().to_vec()),
-		_ => None,
-	}).collect::<Vec<_>>();
+	let mailboxes = address.delivery().iter().filter_map(|delivery| delivery.mailbox_id().map(|id| id.as_ref().to_vec())).collect::<Vec<_>>();
 	assert_eq!(mailboxes.len(), 1, "this native fixture must name one exact recipient server mailbox");
 	let mailbox = mailboxes[0].clone();
-	let registration = recipient.fallback_destination().await.unwrap();
-	assert_ne!(provider.fallback_destination().await.unwrap().account_xpub, registration.account_xpub);
+	recipient.fallback_destination().await.unwrap();
+	assert_ne!(provider.mailbox_identifier(), recipient.mailbox_identifier());
 	recipient.stop_daemon_wait().await.unwrap();
 	drop(recipient);
 	// Never reopen/sync the recipient again. Only the active provider owns a

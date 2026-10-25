@@ -120,7 +120,7 @@ async fn tiny_group() {
 	let builder = ArkoorPackageBuilder::new_with_checkpoints([source.clone()], destinations).unwrap()
 		.generate_user_nonces(&[key]).unwrap();
 	let mut rpc = srv.get_public_rpc().await;
-	let response = rpc.request_arkoor_cosign(protos::ArkoorPackageCosignRequest::from(builder.cosign_request()))
+	let response = rpc.request_arkoor_cosign(super::signed_package(&srv, &[&sender, &recipient], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await)
 		.await.unwrap().into_inner();
 	let signed = builder.user_cosign(&[key], ArkoorPackageCosignResponse::try_from(response).unwrap()).unwrap();
 	assert_eq!(signed.build_signed_internal_vtxos().iter()

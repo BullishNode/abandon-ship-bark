@@ -306,6 +306,13 @@ message RecoverVtxosByXpubResponse {
 
 // boarding
 
+// The output key signs a link to a server-specific fallback mailbox.
+message OwnerProof {
+	bytes blinded_mailbox_id = 1;
+	reserved 2;
+	bytes signature = 3;
+}
+
 message BoardCosignRequest {
 	uint64 amount = 1;
 	bytes utxo = 2;
@@ -313,6 +320,7 @@ message BoardCosignRequest {
 	bytes user_pubkey = 4;
 	bytes pub_nonce = 5;
 	bytes funding_tx = 6;
+	OwnerProof owner_proof = 7;
 }
 
 message BoardCosignResponse {
@@ -335,11 +343,13 @@ message RegisterVtxoTransactionsRequest {
 message VtxoRequest {
 	uint64 amount = 1;
 	bytes policy = 2;
+	OwnerProof owner_proof = 3;
 }
 
 message ArkoorDestination {
 	uint64 total_amount = 1;
 	bytes policy = 2;
+	OwnerProof owner_proof = 3;
 }
 
 message ArkoorCosignRequest {
@@ -422,6 +432,8 @@ message StartLightningReceiveRequest {
 	uint32 min_cltv_delta = 3;
 	optional bytes mailbox_id = 4;
 	optional string description = 5;
+	// Point-in-time check for an explicit recipient before invoice creation.
+	VtxoRequest claim_destination = 6;
 }
 
 message StartLightningReceiveResponse {
@@ -441,6 +453,7 @@ message PrepareLightningReceiveClaimRequest {
 		InputVtxo input_vtxo = 4;
 		string token = 5;
 	};
+	OwnerProof owner_proof = 6;
 }
 
 message PrepareLightningReceiveClaimResponse {
@@ -796,7 +809,7 @@ message LightningNodeUri {
 	string uri = 1;
 }
 
-// The record uses ark-lib's versioned, bounded FallbackRecord encoding.
+// The record uses ark-lib's bounded mailbox-only v4 FallbackRegistration encoding.
 message SetFallbackRequest {
 	bytes mailbox_pk = 1;
 	bytes record = 2;

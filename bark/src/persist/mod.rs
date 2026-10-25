@@ -460,19 +460,19 @@ pub trait BarkPersister: Send + Sync + 'static {
 	async fn store_fallback_snapshot(&self, snapshot: &crate::FallbackSnapshot) -> anyhow::Result<()>;
 
 	/// Read the immutable signed fallback destination.
-	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>>;
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRegistration>>;
 
 	/// Adopt canonical signatures only when the immutable binding is unchanged.
-	async fn store_fallback_record(&self, record: &ark::fallback::FallbackRecord) -> anyhow::Result<()>;
+	async fn store_fallback_record(&self, record: &ark::fallback::FallbackRegistration) -> anyhow::Result<()>;
 
 	/// An authenticated local destination which has not received a server acknowledgement.
 	/// It must not authorize coin issuance or be reported as registered.
-	async fn get_pending_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRecord>> {
+	async fn get_pending_fallback_record(&self) -> anyhow::Result<Option<ark::fallback::FallbackRegistration>> {
 		Ok(None)
 	}
 
 	/// Keep the exact local binding immutable while registration is unavailable.
-	async fn store_pending_fallback_record(&self, _record: &ark::fallback::FallbackRecord) -> anyhow::Result<()> {
+	async fn store_pending_fallback_record(&self, _record: &ark::fallback::FallbackRegistration) -> anyhow::Result<()> {
 		bail!("persister does not support pending fallback registration")
 	}
 

@@ -16,6 +16,7 @@ use ark::attestations::{
 };
 use ark::board::BoardCosignResponse;
 use ark::fees::PpmFeeRate;
+use ark::fallback::OwnerLink;
 use ark::forfeit::HashLockedForfeitBundle;
 use ark::lightning::{PaymentHash, Preimage};
 use ark::mailbox::BlindedMailboxIdentifier;
@@ -42,6 +43,26 @@ impl From<&'static str> for ConvertError {
 impl From<ConvertError> for tonic::Status {
 	fn from(e: ConvertError) -> Self {
 		tonic::Status::invalid_argument(e.msg)
+	}
+}
+
+impl From<OwnerLink> for protos::OwnerProof {
+	fn from(link: OwnerLink) -> Self {
+		Self {
+			blinded_mailbox_id: link.blinded_id.as_ref().to_vec(),
+			signature: link.signature.serialize().to_vec(),
+		}
+	}
+}
+
+impl TryFrom<protos::OwnerProof> for OwnerLink {
+	type Error = ConvertError;
+	fn try_from(proof: protos::OwnerProof) -> Result<Self, Self::Error> {
+		let blinded_id = BlindedMailboxIdentifier::deserialize(&proof.blinded_mailbox_id)
+			.map_err(|_| "invalid blinded mailbox identifier")?;
+		let signature = schnorr::Signature::from_slice(&proof.signature)
+			.map_err(|_| "invalid mailbox link signature")?;
+		OwnerLink::from_parts(blinded_id, signature).map_err(|_| "invalid blinded mailbox identifier".into())
 	}
 }
 
@@ -488,6 +509,7 @@ impl TryFrom<protos::WalletStatus> for crate::WalletStatus {
 impl<'a> From<&'a VtxoRequest> for protos::VtxoRequest {
 	fn from(v: &'a VtxoRequest) -> Self {
 		protos::VtxoRequest {
+			owner_proof: None,
 			amount: v.amount.to_sat(),
 			policy: v.policy.serialize(),
 		}
@@ -517,6 +539,7 @@ impl TryFrom<protos::ArkoorDestination> for ArkoorDestination {
 impl From<ArkoorDestination> for protos::ArkoorDestination {
 	fn from(v: ArkoorDestination) -> Self {
 		Self {
+			owner_proof: None,
 			total_amount: v.total_amount.to_sat(),
 			policy: v.policy.serialize(),
 		}
@@ -527,6 +550,7 @@ impl From<SignedVtxoRequest> for protos::SignedVtxoRequest {
 	fn from(v: SignedVtxoRequest) -> Self {
 		protos::SignedVtxoRequest {
 			vtxo: Some(protos::VtxoRequest {
+				owner_proof: None,
 				amount: v.vtxo.amount.to_sat(),
 				policy: v.vtxo.policy.serialize(),
 			}),
@@ -776,6 +800,26 @@ mod test {
 	use std::str::FromStr;
 	use bitcoin::hex::FromHex;
 	use super::*;
+
+	#[test]
+	fn owner_link_proto_roundtrip_rejects_malformed_evidence() {
+		let blinded_id = BlindedMailboxIdentifier::from_pubkey(PublicKey::from_str(
+			"0229757774cc6f3be1d5f1774aefa8f02e50bc64404230e7a67e8fde79bd559a9a").unwrap());
+		let link = OwnerLink::from_parts(blinded_id, schnorr::Signature::from_str(
+			"20a352f4f1e0868fa74f8ff5752927ec0b05b2b554daeccdabe8fe02e3d14e7eb42941fc34d91d18ab45b8a44223377a891f39948a59a5e510b1bf4bb0160e5c").unwrap()).unwrap();
+		let proto = protos::OwnerProof::from(link);
+		assert_eq!(OwnerLink::try_from(proto.clone()).unwrap(), link);
+		for length in [0, 32, 34] {
+			let mut malformed = proto.clone(); malformed.blinded_mailbox_id.resize(length, 0);
+			assert!(OwnerLink::try_from(malformed).is_err());
+		}
+		for length in [0, 63, 65] {
+			let mut malformed = proto.clone(); malformed.signature.resize(length, 0);
+			assert!(OwnerLink::try_from(malformed).is_err());
+		}
+		let mut malformed = proto; malformed.blinded_mailbox_id.fill(0);
+		assert!(OwnerLink::try_from(malformed).is_err());
+	}
 
 	#[test]
 	fn test_preimage_bytes() {

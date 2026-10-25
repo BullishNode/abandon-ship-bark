@@ -115,6 +115,7 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	assert_eq!(coin.amount(), sat(1_200));
 	let signed = wallet.get_full_vtxo(coin.id()).await.unwrap();
 	let original = signed.serialize();
+	let native_history = wallet.history().await.unwrap();
 	let registration = wallet.fallback_destination().await.unwrap();
 	assert!(sat(200) < registration.spk.minimal_non_dust());
 	let client_db = SqliteClient::open(ctx.datadir.join("owner/db.sqlite")).unwrap();
@@ -154,6 +155,19 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	}).await.expect("actual dust sweep never broadcast");
 	assert!(parent.input.iter().any(|input| input.previous_output == signed.chain_anchor()));
 	assert!(!parent.output.iter().any(|output| output.script_pubkey == registration.spk));
+	let allocations = db.read(async |tx| Ok(tx.query(
+		"SELECT a.sweep_txid,c.disposition,c.gross_sat,c.fee_sat,c.payout_sat,c.forfeited_sat \
+		FROM expiry_allocation_coin c JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+		JOIN expiry_allocation a ON a.id=c.allocation_id WHERE e.vtxo_id=$1 AND c.active",
+		&[&coin.id().to_string()],
+	).await?)).await.unwrap();
+	assert_eq!(allocations.len(), 1);
+	let allocation = &allocations[0];
+	assert_eq!(allocation.get::<_, &str>("sweep_txid"), parent.compute_txid().to_string());
+	assert_eq!(allocation.get::<_, &str>("disposition"), "customer");
+	assert_eq!((allocation.get::<_, i64>("gross_sat"), allocation.get::<_, i64>("fee_sat"),
+		allocation.get::<_, i64>("payout_sat"), allocation.get::<_, i64>("forfeited_sat")),
+		(1_200, 0, 0, 1_200));
 	ctx.generate_blocks(6).await;
 	// Raw Core JSON avoids the older RPC crate's unknown P2A script decoder.
 	let parent_info: serde_json::Value = ctx.bitcoind().sync_client().call("getrawtransaction",
@@ -178,11 +192,8 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	assert_eq!(client_db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spendable);
 	assert!(wallet.awaiting_settlement_vtxos().await.unwrap().contains(&coin.id()));
 	assert_eq!(wallet.get_full_vtxo(coin.id()).await.unwrap().serialize(), original);
-	let pending = wallet.history().await.unwrap().into_iter()
-		.filter(|movement| movement.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-	assert_eq!(pending.len(), 1);
-	assert_eq!(pending[0].status, bark::movement::MovementStatus::Pending);
-	assert_eq!(pending[0].effective_balance.to_sat(), -1_200);
+	// Chain reconciliation does not invent another native payment or debit.
+	assert_eq!(wallet.history().await.unwrap(), native_history);
 	let owed_again = wallet.balance().await.unwrap();
 	assert_eq!(owed_again.spendable, Amount::ZERO);
 	assert_eq!(owed_again.awaiting_settlement, sat(1_200));
@@ -195,4 +206,10 @@ async fn fallback_dust_forfeiture_is_confirmed_and_reorgs_without_server() {
 	assert_eq!(client_db.get_wallet_vtxo(coin.id()).await.unwrap().unwrap().state, VtxoState::Spent);
 	assert!(!wallet.awaiting_settlement_vtxos().await.unwrap().contains(&coin.id()));
 	assert_eq!(wallet.get_full_vtxo(coin.id()).await.unwrap().serialize(), original);
+	assert!(client_db.get_fallback_snapshot().await.unwrap().adopted_payout_vtxos.contains(&coin.id()));
+	assert_eq!(wallet.balance().await.unwrap().total(), Amount::ZERO);
+	assert_eq!(wallet.history().await.unwrap(), native_history);
+	let reconfirmed: serde_json::Value = ctx.bitcoind().sync_client().call("getrawtransaction",
+		&[serde_json::json!(parent.compute_txid()), serde_json::json!(true)]).unwrap();
+	assert!(reconfirmed["confirmations"].as_u64().unwrap() >= 6);
 }

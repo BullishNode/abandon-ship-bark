@@ -2,7 +2,6 @@
 //! No proposal is an authorization: allocation revalidates its proof under
 //! coin, participation and chain-view locks before committing a spend fence.
 
-use std::str::FromStr;
 
 use anyhow::Context;
 use bitcoin::{Amount, Transaction, Txid};
@@ -12,7 +11,6 @@ use chrono::{DateTime, Local};
 
 use ark::{ProtocolEncoding, ServerVtxo, ServerVtxoPolicy, VtxoId};
 use ark::lightning::PaymentHash;
-use ark::mailbox::MailboxIdentifier;
 use ark::vtxo::Full;
 
 use super::expiry_inventory::BackingVtxoFact;
@@ -23,7 +21,7 @@ use super::{BlockTable, SpendState, Tx};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnershipDisposition {
-	Customer { user_pubkey: PublicKey, mailbox: Option<MailboxIdentifier> },
+	Customer { user_pubkey: PublicKey },
 	Operator,
 	Unresolved(&'static str),
 }
@@ -135,7 +133,7 @@ impl Tx<'_> {
 						| "htlc_source_discharged"
 				)) {
 					proposal.disposition = if let Some(key) = facts.get("customer_key").and_then(serde_json::Value::as_str) {
-						self.expiry_customer(state.vtxo_id, key.parse()?).await?
+						OwnershipDisposition::Customer { user_pubkey: key.parse()? }
 					} else if facts.get("operator") == Some(&serde_json::Value::Bool(true)) {
 						OwnershipDisposition::Operator
 					} else { return Ok(proposal); };
@@ -172,7 +170,7 @@ impl Tx<'_> {
 			if forfeited {
 				proposal.disposition = OwnershipDisposition::Operator;
 			} else if let Ok(user) = full.clone().try_into_user_vtxo() {
-				proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
+				proposal.disposition = OwnershipDisposition::Customer { user_pubkey: user.user_pubkey() };
 				proposal.cancellations.push(id);
 			}
 			return Ok(proposal);
@@ -198,13 +196,13 @@ impl Tx<'_> {
 			return Ok(proposal);
 		}
 		if let Some((output, key)) = self.receive_claim_recipient(state.vtxo_id).await? {
-			proposal.disposition = self.expiry_customer(output, key).await?;
+			proposal.disposition = OwnershipDisposition::Customer { user_pubkey: key };
 			proposal.evidence = Some(OwnershipEvidence::LightningReceiveClaim { source: state.vtxo_id, output });
 			return Ok(proposal);
 		}
 		if state.spend_state == SpendState::Unregistered {
-			if let Some((parent, key)) = self.expiry_unregistered_input_owner(full).await? {
-				proposal.disposition = self.expiry_customer(parent, key).await?;
+			if let Some(key) = self.expiry_unregistered_input_owner(full).await? {
+				proposal.disposition = OwnershipDisposition::Customer { user_pubkey: key };
 				proposal.evidence = Some(OwnershipEvidence::InputOwner);
 			}
 			return Ok(proposal);
@@ -215,7 +213,7 @@ impl Tx<'_> {
 			if let Some(part) = part {
 				let id = part.get::<_, i64>("id");
 				let forfeited = part.get::<_, bool>("forfeited");
-				proposal.disposition = if forfeited { self.expiry_customer(state.vtxo_id, user.user_pubkey()).await? }
+				proposal.disposition = if forfeited { OwnershipDisposition::Customer { user_pubkey: user.user_pubkey() } }
 					else { proposal.cancellations.push(id); OwnershipDisposition::Operator };
 				proposal.evidence = Some(OwnershipEvidence::Exchange { participation_id: id, unlock_hash: hash.to_string(), forfeited });
 			} else if let Some(cancelled) = self.query_opt(
@@ -258,7 +256,7 @@ impl Tx<'_> {
 					if subscription.payment_hash != hash { return Ok(proposal); }
 					match subscription.status {
 						LightningHtlcSubscriptionStatus::Settled => {
-							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
+							proposal.disposition = OwnershipDisposition::Customer { user_pubkey: user.user_pubkey() };
 							proposal.evidence = Some(OwnershipEvidence::HtlcStoredPreimage { payment_hash: hash });
 						},
 						LightningHtlcSubscriptionStatus::Canceled if expired_contract => {
@@ -287,7 +285,7 @@ impl Tx<'_> {
 						if let Some((attempts, block)) = self.internal_grants_reclaimed(
 							state.vtxo_id, hash, tip, watchman_tip,
 						).await? {
-							proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
+							proposal.disposition = OwnershipDisposition::Customer { user_pubkey: user.user_pubkey() };
 							proposal.evidence = Some(OwnershipEvidence::HtlcInternalGrantsReclaimed {
 								payment_hash: hash, attempts, block,
 							});
@@ -311,7 +309,7 @@ impl Tx<'_> {
 				if matches!(source, LightningSourceState::Unattempted | LightningSourceState::Failed)
 					&& fact.onchain_spent_height.is_none() && htlc.htlc.chain_resolution.is_none()
 					&& htlc.htlc.htlc_expiry <= tip && watchman_tip.is_some_and(|h| htlc.htlc.htlc_expiry <= h) {
-					proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
+					proposal.disposition = OwnershipDisposition::Customer { user_pubkey: user.user_pubkey() };
 					proposal.evidence = Some(match source {
 						LightningSourceState::Failed => OwnershipEvidence::HtlcExternalFailed { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry },
 						_ => OwnershipEvidence::HtlcUnattemptedExpired { payment_hash: hash, htlc_expiry: htlc.htlc.htlc_expiry },
@@ -340,7 +338,7 @@ impl Tx<'_> {
 			} else { Some(OwnershipEvidence::HtlcOffchain { payment_hash: hash, resolution }) };
 			proposal.disposition = match (htlc.direction(), resolution) {
 				(HtlcDirection::Incoming, HtlcResolution::Fulfilled) | (HtlcDirection::Outgoing, HtlcResolution::Revoked) => OwnershipDisposition::Operator,
-				_ => self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?,
+				_ => OwnershipDisposition::Customer { user_pubkey: user.user_pubkey() },
 			};
 			return Ok(proposal);
 		}
@@ -349,18 +347,13 @@ impl Tx<'_> {
 			return Ok(proposal);
 		}
 		full.validate(funding).context("invalid customer expiry source signature")?;
-		proposal.disposition = self.expiry_customer(state.vtxo_id, user.user_pubkey()).await?;
+		proposal.disposition = OwnershipDisposition::Customer { user_pubkey: user.user_pubkey() };
 		proposal.evidence = Some(OwnershipEvidence::Pubkey);
 		Ok(proposal)
 	}
 
-	async fn expiry_customer(&self, id: VtxoId, user_pubkey: PublicKey) -> anyhow::Result<OwnershipDisposition> {
-		let mailbox = self.query_opt("SELECT unblinded_mailbox_id FROM mailbox WHERE vtxo_id=$1 ORDER BY id LIMIT 1", &[&id.to_string()]).await?
-			.map(|r| MailboxIdentifier::from_str(r.get("unblinded_mailbox_id"))).transpose()?;
-		Ok(OwnershipDisposition::Customer { user_pubkey, mailbox })
-	}
 
-	async fn expiry_unregistered_input_owner(&self, full: &ServerVtxo<Full>) -> anyhow::Result<Option<(VtxoId, PublicKey)>> {
+	async fn expiry_unregistered_input_owner(&self, full: &ServerVtxo<Full>) -> anyhow::Result<Option<PublicKey>> {
 		let Some(last) = full.transactions().last() else { return Ok(None); };
 		let [input] = last.tx.input.as_slice() else { return Ok(None); };
 		let parent = VtxoId::from(input.previous_output);
@@ -376,6 +369,6 @@ impl Tx<'_> {
 			ServerVtxoPolicy::Checkpoint(p) => p.user_pubkey,
 			_ => return Ok(None),
 		};
-		Ok(Some((parent, key)))
+		Ok(Some(key))
 	}
 }

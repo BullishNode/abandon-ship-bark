@@ -1,4 +1,4 @@
-//! Register a fixed fallback destination for the wallet account.
+//! Register a fixed fallback destination for the wallet mailbox.
 
 pub(crate) mod payouts;
 mod refusal;
@@ -14,11 +14,14 @@ pub use refusal::FallbackRefusal;
 pub(crate) use protection::spends_user_claim;
 
 use std::time::Duration;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Context;
 use bitcoin::{Network, Script, ScriptBuf};
+use bitcoin::secp256k1::{Keypair, PublicKey};
 
-use ark::ProtocolEncoding;
+use ark::{ProtocolEncoding, VtxoPolicy};
+use ark::fallback::OwnerLink;
 use server_rpc::{ServerConnection, protos};
 use server_rpc::client::ConnectError;
 #[cfg(feature = "native")]
@@ -26,7 +29,7 @@ use server_rpc::client::CreateEndpointError;
 
 use crate::{Wallet, WalletSeed};
 use crate::persist::BarkPersister;
-use crate::persist::models::FallbackRecord;
+use crate::persist::models::FallbackRegistration;
 
 impl Wallet {
 	pub(crate) async fn lock_fallback_history(
@@ -45,11 +48,9 @@ pub(crate) fn next_key_index(last: Option<u32>) -> anyhow::Result<u32> {
 	Ok(next)
 }
 
-fn authenticate_binding(record: &FallbackRecord, seed: &WalletSeed, network: Network, expected: &Script) -> anyhow::Result<()> {
+fn authenticate_binding(record: &FallbackRegistration, seed: &WalletSeed, network: Network, expected: &Script) -> anyhow::Result<()> {
 	record.verify(network, seed.to_mailbox_keypair().public_key())?;
 	ensure!(record.spk.as_script() == expected, "fallback record differs from the exact expected destination");
-	ensure!(record.account_xpub == bitcoin::bip32::Xpub::from_priv(&crate::SECP, &seed.vtxo),
-		"fallback record is not this seed's coin account");
 	Ok(())
 }
 
@@ -58,10 +59,18 @@ fn validate_destination(network: Network, script: &Script) -> anyhow::Result<()>
 	Ok(())
 }
 
-/// Defer registration only for temporary connection or handshake failures.
-/// Configuration, protocol, server identity and storage errors must prevent
-/// the wallet from opening, even when it has a pending registration.
+/// Identify the RPC stage without treating a storage error carrying a tonic
+/// status as a temporary server failure.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+struct RegistrationRpcError(#[source] tonic::Status);
+
+/// Only temporary connection, handshake or registration RPC failures permit
+/// cached/offline opens. Authentication, binding and storage failures stay hard.
 fn registration_server_unavailable(error: &anyhow::Error) -> bool {
+	if let Some(RegistrationRpcError(status)) = error.downcast_ref::<RegistrationRpcError>() {
+		return matches!(status.code(), tonic::Code::Unavailable | tonic::Code::DeadlineExceeded);
+	}
 	match error.downcast_ref::<ConnectError>() {
 		Some(ConnectError::Handshake(status) | ConnectError::GetArkInfo(status)
 			| ConnectError::GetOffboardFeeRate(status)) => matches!(status.code(),
@@ -81,54 +90,105 @@ fn registration_server_unavailable(error: &anyhow::Error) -> bool {
 	}
 }
 
-async fn persist_native_identity(db: &dyn BarkPersister, seed: &WalletSeed, record: &FallbackRecord) -> anyhow::Result<()> {
-	// Child zero signs account registration and identifies the wallet.
-	// Reserve it once so key allocation does not reuse it.
-	db.store_vtxo_key(0, seed.derive_vtxo_keypair(0).public_key()).await?;
-	db.store_fallback_record(record).await
+async fn register_mailbox(
+	network: Network, key: &Keypair, connection: &mut ServerConnection, expected: &Script,
+) -> anyhow::Result<FallbackRegistration> {
+	let proposed = FallbackRegistration::new(network, expected.to_owned(), key)?;
+	let reply = connection.client.set_fallback(protos::SetFallbackRequest {
+		mailbox_pk: key.public_key().serialize().to_vec(), record: proposed.serialize(),
+	}).await.map_err(RegistrationRpcError)
+		.context("failed to register immutable fallback mailbox")?.into_inner();
+	let current = FallbackRegistration::deserialize(&reply.record)?;
+	current.verify(network, key.public_key())?;
+	ensure!(current.spk.as_script() == expected, "server fallback destination differs from the exact expected destination");
+	Ok(current)
 }
 
 pub(crate) async fn register(
 	network: Network, seed: &WalletSeed, db: &dyn BarkPersister,
-	connection: &mut ServerConnection,
-	expected: &Script,
+	connection: &mut ServerConnection, expected: &Script,
 ) -> anyhow::Result<()> {
-	let spk = expected.to_owned();
-	validate_destination(network, &spk)?;
+	validate_destination(network, expected)?;
 	if let Some(stored) = db.get_fallback_record().await? { authenticate_binding(&stored, seed, network, expected)?; }
 	if let Some(pending) = db.get_pending_fallback_record().await? { authenticate_binding(&pending, seed, network, expected)?; }
-	let key = seed.to_mailbox_keypair();
-	let proposed = FallbackRecord::new(network, spk, &seed.vtxo, &key)?;
-	// Deterministic binding makes a lost reply safe to retry, including from a
-	// different device. Adopt its canonical signatures only after authenticating
-	// the exact seed-derived fields; a mismatch never overwrites local state.
-	let reply = connection.client.set_fallback(protos::SetFallbackRequest {
-		mailbox_pk: key.public_key().serialize().to_vec(), record: proposed.serialize(),
-	}).await.context("failed to register immutable fallback account")?.into_inner();
-	let current = FallbackRecord::deserialize(&reply.record)?;
-	authenticate_binding(&current, seed, network, expected)?;
-	persist_native_identity(db, seed, &current).await
+	let current = register_mailbox(network, &seed.to_mailbox_keypair(), connection, expected).await?;
+	register_mailbox(network, &seed.to_recovery_mailbox_keypair(), connection, expected).await
+		.context("failed to reconcile recovery mailbox with the fallback destination")?;
+	// Neither a lost reply nor a second-device retry changes either immutable
+	// binding. The main acknowledgement is durable only after both succeed.
+	db.store_fallback_record(&current).await
 }
 
 impl Wallet {
+	/// Recheck both existing mailbox identities on a live connection. This
+	/// deliberately takes the connection, avoiding recursive connection/lock calls.
+	pub(crate) async fn reconcile_fallback(&self, connection: &mut ServerConnection) -> anyhow::Result<()> {
+		let record = match self.inner.db.get_fallback_record().await? {
+			Some(record) => Some(record),
+			None => self.inner.db.get_pending_fallback_record().await?,
+		};
+		if let Some(record) = record {
+			register(self.network().await?, &self.inner.seed, &*self.inner.db, connection, &record.spk).await?;
+		}
+		Ok(())
+	}
+
+	/// Sign this wallet's mailbox link with an actual coin key from its keystore.
+	pub async fn owner_link(&self, key: PublicKey) -> anyhow::Result<OwnerLink> {
+		let (_, info) = self.require_server().await?;
+		let links = self.output_owner_links([key], &BTreeMap::new(), info.mailbox_pubkey).await?;
+		Ok(links[&key])
+	}
+
+	pub(crate) async fn output_owner_links(
+		&self, keys: impl IntoIterator<Item = PublicKey>, supplied: &BTreeMap<PublicKey, OwnerLink>,
+		server_mailbox: PublicKey,
+	) -> anyhow::Result<BTreeMap<PublicKey, OwnerLink>> {
+		self.fallback_destination().await?;
+		let keys = keys.into_iter().collect::<BTreeSet<_>>();
+		for (key, link) in supplied {
+			ensure!(keys.contains(key), "ownership link names an absent output key {key}");
+			link.verify(server_mailbox, *key)
+				.map_err(|e| anyhow::Error::new(e).context(crate::FallbackRefusal::InvalidOwnerProof))?;
+		}
+		let mut links = BTreeMap::new();
+		for key in keys {
+			let link = if let Some(link) = supplied.get(&key) { *link } else {
+				let (_, pair) = self.pubkey_keypair(&key).await?
+					.ok_or(crate::FallbackRefusal::OwnerProofRequired)?;
+				OwnerLink::new(server_mailbox, self.mailbox_identifier(), &pair)?
+			};
+			links.insert(key, link);
+		}
+		Ok(links)
+	}
+
+	/// Attach after fragmentation, covering every normal and isolated output.
+	pub(crate) async fn attach_owner_links(
+		&self, package: &mut protos::ArkoorPackageCosignRequest,
+		supplied: &BTreeMap<PublicKey, OwnerLink>, server_mailbox: PublicKey,
+	) -> anyhow::Result<()> {
+		let keys = package.parts.iter().flat_map(|part| part.outputs.iter().chain(&part.isolated_outputs))
+			.map(|output| Ok(VtxoPolicy::deserialize(&output.policy)?.user_pubkey()))
+			.collect::<anyhow::Result<Vec<_>>>()?;
+		let links = self.output_owner_links(keys, supplied, server_mailbox).await?;
+		for output in package.parts.iter_mut().flat_map(|part| part.outputs.iter_mut().chain(&mut part.isolated_outputs)) {
+			let key = VtxoPolicy::deserialize(&output.policy)?.user_pubkey();
+			output.owner_proof = Some(links[&key].into());
+		}
+		Ok(())
+	}
+
 	/// Return the authenticated registration, if this wallet has one.
-	pub async fn fallback_registration(&self) -> anyhow::Result<Option<FallbackRecord>> {
+	pub async fn fallback_registration(&self) -> anyhow::Result<Option<FallbackRegistration>> {
 		let Some(record) = self.inner.db.get_fallback_record().await? else { return Ok(None); };
 		record.verify(self.network().await?, self.inner.seed.to_mailbox_keypair().public_key())?;
-		ensure!(record.account_xpub == self.vtxo_xpub(), "fallback record is not this seed's coin account");
 		Ok(Some(record))
 	}
 
 	/// Return the authenticated fallback destination.
-	pub async fn fallback_destination(&self) -> anyhow::Result<FallbackRecord> {
-		self.fallback_registration().await?.context("no fallback account registered")
-	}
-
-	pub(crate) async fn retry_pending_fallback_registration(&self) -> anyhow::Result<()> {
-		if self.inner.db.get_pending_fallback_record().await?.is_some() {
-			self.open_fallback(None, true).await?;
-		}
-		Ok(())
+	pub async fn fallback_destination(&self) -> anyhow::Result<FallbackRegistration> {
+		self.fallback_registration().await?.context("no fallback mailbox registered")
 	}
 
 	pub(crate) async fn open_fallback(&self, requested: Option<ScriptBuf>, allow_offline: bool) -> anyhow::Result<()> {
@@ -139,16 +199,13 @@ impl Wallet {
 			let expected = requested.as_deref().unwrap_or(record.spk.as_script());
 			validate_destination(network, expected)?;
 			authenticate_binding(&record, &self.inner.seed, network, expected)?;
-			persist_native_identity(&*self.inner.db, &self.inner.seed, &record).await?;
-			// A cached authenticated binding permits offline/seed-only status
-			// opens. An app that supplies its destination retries registration
-			// when connected, including after a server restore.
-			if requested.is_some() {
-				match self.require_server().await {
-					Ok((mut connection, _)) => register(network, &self.inner.seed, &*self.inner.db, &mut connection, expected).await?,
-					Err(error) if registration_server_unavailable(&error) => {},
-					Err(error) => return Err(error),
-				}
+			// Cached authenticated bindings still permit offline address/status use.
+			// Online opens reconcile both mailboxes even without a new destination.
+			match self.require_server().await {
+				// require_server already authenticated both remote bindings.
+				Ok(_) => {},
+				Err(error) if registration_server_unavailable(&error) => {},
+				Err(error) => return Err(error),
 			}
 			return Ok(());
 		}
@@ -164,11 +221,10 @@ impl Wallet {
 			authenticate_binding(&record, &self.inner.seed, network, &expected)?;
 			record
 		} else {
-			FallbackRecord::new(network, expected.clone(), &self.inner.seed.vtxo,
+			FallbackRegistration::new(network, expected.clone(),
 				&self.inner.seed.to_mailbox_keypair())?
 		};
 		if allow_offline || reopening_pending {
-			self.inner.db.store_vtxo_key(0, self.inner.seed.derive_vtxo_keypair(0).public_key()).await?;
 			self.inner.db.store_pending_fallback_record(&proposed).await?;
 		}
 		let (mut connection, _) = match self.require_server().await {
@@ -189,6 +245,13 @@ mod tests {
 		for status in [tonic::Status::unavailable("temporary"), tonic::Status::deadline_exceeded("temporary")] {
 			let error = anyhow::Error::from(ConnectError::Handshake(status)).context("wallet connection failed");
 			assert!(registration_server_unavailable(&error));
+		}
+		for code in [tonic::Code::Unavailable, tonic::Code::DeadlineExceeded,
+			tonic::Code::InvalidArgument, tonic::Code::PermissionDenied] {
+			let error = anyhow::Error::new(RegistrationRpcError(tonic::Status::new(code, "registration")))
+				.context("failed to register immutable fallback mailbox");
+			assert_eq!(registration_server_unavailable(&error), matches!(code,
+				tonic::Code::Unavailable | tonic::Code::DeadlineExceeded));
 		}
 		for error in [
 			anyhow::Error::from(ConnectError::Handshake(tonic::Status::invalid_argument("invalid client"))),
@@ -236,8 +299,7 @@ mod tests {
 		] {
 			let script = ScriptBuf::from_hex(&hex).unwrap();
 			validate_destination(Network::Regtest, &script).unwrap();
-			let record = FallbackRecord::new(Network::Regtest, script.clone(),
-				&seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
+			let record = FallbackRegistration::new(Network::Regtest, script.clone(), &seed.to_mailbox_keypair()).unwrap();
 			authenticate_binding(&record, &seed, Network::Regtest, &script).unwrap();
 		}
 		assert!(validate_destination(Network::Regtest, &ScriptBuf::from_bytes(vec![0x6a])).is_err());
@@ -247,15 +309,14 @@ mod tests {
 	fn restore_requires_exact_seed_binding_and_network() {
 		let seed = WalletSeed::new_from_seed(Network::Regtest, &[17; 64]);
 		let expected = ScriptBuf::from_hex("00141111111111111111111111111111111111111111").unwrap();
-		let record = FallbackRecord::new(Network::Regtest, expected.clone(),
-			&seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
+		let record = FallbackRegistration::new(Network::Regtest, expected.clone(), &seed.to_mailbox_keypair()).unwrap();
 		assert!(authenticate_binding(&record, &seed, Network::Regtest, &expected).is_ok());
 		assert!(authenticate_binding(&record, &seed, Network::Signet, &expected).is_err());
 		let other_script = ScriptBuf::from_hex("00142222222222222222222222222222222222222222").unwrap();
-		let wrong = FallbackRecord::new(Network::Regtest, other_script, &seed.vtxo, &seed.to_mailbox_keypair()).unwrap();
+		let wrong = FallbackRegistration::new(Network::Regtest, other_script, &seed.to_mailbox_keypair()).unwrap();
 		assert!(authenticate_binding(&wrong, &seed, Network::Regtest, &expected).is_err());
 		let other = WalletSeed::new_from_seed(Network::Regtest, &[18; 64]);
-		let wrong = FallbackRecord::new(Network::Regtest, record.spk.clone(), &other.vtxo, &seed.to_mailbox_keypair()).unwrap();
+		let wrong = FallbackRegistration::new(Network::Regtest, record.spk.clone(), &other.to_mailbox_keypair()).unwrap();
 		assert!(authenticate_binding(&wrong, &seed, Network::Regtest, &expected).is_err());
 		assert_eq!(next_key_index(None).unwrap(), 0);
 		assert_eq!(next_key_index(Some((1 << 31) - 2)).unwrap(), (1 << 31) - 1);

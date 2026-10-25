@@ -6,7 +6,7 @@ use anyhow::Context;
 use bitcoin::{Amount, Network, ScriptBuf, Transaction, TxIn, TxOut, Sequence, Witness};
 use bitcoin::hashes::Hash;
 use bitcoin::hex::DisplayHex;
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::{Keypair, PublicKey};
 use chrono::{DateTime, Local};
 
 use ark::{ServerVtxo, VtxoId};
@@ -20,7 +20,6 @@ use crate::watchman::settlement::{allocate, CustomerLeaf};
 
 pub struct VerifiedPayee {
 	pub mailbox: PublicKey,
-	pub child_index: u32,
 	pub script: ScriptBuf,
 }
 
@@ -161,11 +160,11 @@ impl Tx<'_> {
 		view: ExpiryViewToken,
 		outputs: Vec<ReadyOutput>,
 		network: Network,
+		server_mailbox_key: &Keypair,
 	) -> anyhow::Result<Option<CommittedExpiryGroup>> {
 		if outputs.is_empty() { return Ok(None); }
 		ensure!(ReadyOutput::group_fits(&outputs.iter().collect::<Vec<_>>())?, "expiry group exceeds version-3 sweep size");
 		self.lock_valid_expiry_view(view).await?;
-		self.lock_fallback_registry().await?;
 		let expiry = outputs[0].root.expiry_height();
 		ensure!(outputs.iter().all(|o| o.root.expiry_height() == expiry), "expiry group mixes expiry heights");
 		// Serialize fee history at this height before locking source rows.
@@ -229,7 +228,7 @@ impl Tx<'_> {
 				valid &= current.disposition == coin.ownership.disposition && current.evidence == coin.ownership.evidence
 					&& current.has_stored_preimage == coin.ownership.has_stored_preimage
 					&& current.cancellations == coin.ownership.cancellations;
-				valid &= self.revalidate_expiry_payee(coin, network).await?;
+				valid &= self.revalidate_expiry_payee(coin, network, server_mailbox_key).await?;
 
 				if let Some(row) = self.query_opt("
 					SELECT e.id,e.gross_sat,
@@ -394,12 +393,12 @@ impl Tx<'_> {
 		Ok(Some(CommittedExpiryGroup { id, inputs, dropped }))
 	}
 
-	async fn revalidate_expiry_payee(&self, coin: &ReadyCoin, network: Network) -> anyhow::Result<bool> {
+	async fn revalidate_expiry_payee(&self, coin: &ReadyCoin, network: Network, server_mailbox_key: &Keypair) -> anyhow::Result<bool> {
 		let OwnershipDisposition::Customer { user_pubkey, .. } = &coin.ownership.disposition else { return Ok(coin.payee.is_none()); };
-		let current = self.expiry_owner(*user_pubkey, network).await?;
+		let current = self.expiry_owner(*user_pubkey, network, server_mailbox_key).await?;
 		Ok(match (&coin.payee,current) {
-			(Some(payee),super::expiry_attribution::Attribution::Owned { mailbox_pk,child_index,spk }) =>
-				mailbox_pk == payee.mailbox && child_index == payee.child_index && spk == payee.script,
+			(Some(payee),super::expiry_attribution::Attribution::Owned { mailbox_pk,spk }) =>
+				mailbox_pk == payee.mailbox && spk == payee.script,
 			_ => false,
 		})
 	}

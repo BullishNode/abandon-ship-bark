@@ -72,7 +72,7 @@ use crate::movement::{
 use crate::movement::update::MovementUpdate;
 use crate::persist::BarkPersister;
 use crate::persist::models::{
-	FallbackRecord,	PaidInvoice, RoundStateId, SerdeExitChildTx, SerdeRoundState, SerdeVtxo, SerdeVtxoKey,
+	FallbackRegistration,	PaidInvoice, RoundStateId, SerdeExitChildTx, SerdeRoundState, SerdeVtxo, SerdeVtxoKey,
 	SettledLightningReceive, StoredExit, StoredRoundState, Unlocked, wallet_vtxo_from_full,
 };
 use crate::round::RoundState;
@@ -1009,16 +1009,16 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 		self.inner.write().await.put(Record::from_data(partition::FALLBACK_SNAPSHOT, &[], None, snapshot)?).await
 	}
 
-	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {
+	async fn get_fallback_record(&self) -> anyhow::Result<Option<FallbackRegistration>> {
 		self.inner.read().await.get(partition::FALLBACK_RECORD, &[]).await?
 			.map(|r| r.to_data()).transpose()
 	}
 
-	async fn store_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()> {
+	async fn store_fallback_record(&self, record: &FallbackRegistration) -> anyhow::Result<()> {
 		let mut guard = self.inner.write().await;
 		for partition in [partition::FALLBACK_RECORD, partition::PENDING_FALLBACK_RECORD] {
 			if let Some(stored) = guard.get(partition, &[]).await? {
-				ensure!(stored.to_data::<FallbackRecord>()?.same_binding(record), "immutable fallback record mismatch");
+				ensure!(stored.to_data::<FallbackRegistration>()?.same_binding(record), "immutable fallback record mismatch");
 			}
 		}
 		guard.put(Record::from_data(partition::FALLBACK_RECORD, &[], None, record)?).await?;
@@ -1026,17 +1026,17 @@ impl <S: StorageAdaptor> BarkPersister for StorageAdaptorWrapper<S> {
 		Ok(())
 	}
 
-	async fn get_pending_fallback_record(&self) -> anyhow::Result<Option<FallbackRecord>> {
+	async fn get_pending_fallback_record(&self) -> anyhow::Result<Option<FallbackRegistration>> {
 		let guard = self.inner.read().await;
 		if guard.get(partition::FALLBACK_RECORD, &[]).await?.is_some() { return Ok(None); }
 		guard.get(partition::PENDING_FALLBACK_RECORD, &[]).await?.map(|r| r.to_data()).transpose()
 	}
 
-	async fn store_pending_fallback_record(&self, record: &FallbackRecord) -> anyhow::Result<()> {
+	async fn store_pending_fallback_record(&self, record: &FallbackRegistration) -> anyhow::Result<()> {
 		let mut guard = self.inner.write().await;
 		for partition in [partition::FALLBACK_RECORD, partition::PENDING_FALLBACK_RECORD] {
 			if let Some(stored) = guard.get(partition, &[]).await? {
-				ensure!(stored.to_data::<FallbackRecord>()?.same_binding(record), "immutable fallback record mismatch");
+				ensure!(stored.to_data::<FallbackRegistration>()?.same_binding(record), "immutable fallback record mismatch");
 			}
 		}
 		if guard.get(partition::FALLBACK_RECORD, &[]).await?.is_some() { return Ok(()); }

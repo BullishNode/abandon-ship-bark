@@ -475,11 +475,13 @@ async fn send_claim_follows_internal_attempt_settlement() {
 		let wallet = sender.client().await;
 		let input = wallet.get_full_vtxo(receive_board[0]).await.unwrap();
 		let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		super::test_owner_link(&server, &beneficiary).await;
 		let unrelated = signed_leaf(&ctx, &server, &wallet, input,
 			VtxoPolicy::new_server_htlc_recv(beneficiary.public_key(), hash, tip + BlockDelta::new(700), BlockDelta::new(40))).await;
 		assert_ne!(source.chain_anchor(), unrelated.chain_anchor());
 		let mut rpc = server.get_public_rpc().await;
 		let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+			claim_destination: None,
 			payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 220,
 			mailbox_id: None, description: None,
 		}).await.unwrap().into_inner().bolt11;
@@ -488,6 +490,7 @@ async fn send_claim_follows_internal_attempt_settlement() {
 			mailbox_id: None, retry_for_secs: Some(1),
 		}).await.unwrap();
 		let grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: Some(super::test_owner_link(&server, &receiver).await.into()),
 			payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
 			htlc_recv_expiry: (tip + BlockDelta::new(220)).to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner().htlc_vtxos.into_iter()
@@ -526,7 +529,7 @@ async fn send_claim_follows_internal_attempt_settlement() {
 			.unwrap().generate_user_nonces(&keys).unwrap();
 		let request = protos::ClaimLightningReceiveRequest {
 			payment_hash: hash.to_vec(), payment_preimage: preimage.to_vec(),
-			cosign_request: Some(protos::ArkoorPackageCosignRequest::from(builder.cosign_request())),
+			cosign_request: Some(super::signed_package(&server, &[], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await),
 		};
 		let response = rpc.claim_lightning_receive(request.clone()).await.unwrap().into_inner();
 		let outputs = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response.clone()).unwrap())
@@ -611,6 +614,7 @@ async fn internal_send_records_fee_without_native_payment() {
 		assert_eq!(source.amount(), sat(90_000) + user_fee);
 		let mut rpc = server.get_public_rpc().await;
 		let invoice = rpc.start_lightning_receive(protos::StartLightningReceiveRequest {
+			claim_destination: None,
 			payment_hash: hash.to_vec(), amount_sat: 90_000, min_cltv_delta: 220,
 			mailbox_id: None, description: None,
 		}).await.unwrap().into_inner().bolt11;
@@ -622,6 +626,7 @@ async fn internal_send_records_fee_without_native_payment() {
 			mailbox_id: None, retry_for_secs: Some(1),
 		}).await.unwrap();
 		let mut grants = rpc.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+			owner_proof: Some(super::test_owner_link(&server, &receiver).await.into()),
 			payment_hash: hash.to_vec(), user_pubkey: receiver.public_key().serialize().to_vec(),
 			htlc_recv_expiry: (tip + BlockDelta::new(220)).to_u32(), lightning_receive_anti_dos: None,
 		}).await.unwrap().into_inner().htlc_vtxos.into_iter()
@@ -652,7 +657,7 @@ async fn internal_send_records_fee_without_native_payment() {
 			.unwrap().generate_user_nonces(&keys).unwrap();
 		let request = protos::ClaimLightningReceiveRequest {
 			payment_hash: hash.to_vec(), payment_preimage: preimage.to_vec(),
-			cosign_request: Some(protos::ArkoorPackageCosignRequest::from(builder.cosign_request())),
+			cosign_request: Some(super::signed_package(&server, &[], protos::ArkoorPackageCosignRequest::from(builder.cosign_request())).await),
 		};
 		let response = rpc.claim_lightning_receive(request.clone()).await.unwrap().into_inner();
 		let outputs = builder.user_cosign(&keys, ArkoorPackageCosignResponse::try_from(response.clone()).unwrap())

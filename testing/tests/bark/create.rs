@@ -98,21 +98,13 @@ async fn bark_address_works_offline() {
 	let srv = ctx.captaind("server").create().await;
 	let bark = ctx.bark("bark", &srv).create().await;
 
-	// Fallback registration reserves child zero for stable wallet identity
-	// and account possession. The first fresh receiving key follows it.
-	const IDENTITY_INDEX: u32 = 0;
-	const FIRST_RECEIVE_INDEX: u32 = IDENTITY_INDEX + 1;
-	let identity_with_server = bark.address_at_idx(IDENTITY_INDEX).await;
 	let addr_with_server = bark.address().await;
-	assert_eq!(addr_with_server, bark.address_at_idx(FIRST_RECEIVE_INDEX).await,
-		"the first fresh address must follow the reserved identity key");
-	assert_ne!(addr_with_server, identity_with_server);
+	assert_eq!(addr_with_server, bark.address_at_idx(0).await,
+		"the first receiving address must use child zero");
 
 	srv.stop().await.unwrap();
 
-	assert_eq!(identity_with_server, bark.address_at_idx(IDENTITY_INDEX).await,
-		"the reserved identity address must match with the server offline");
-	let addr_without_server = bark.address_at_idx(FIRST_RECEIVE_INDEX).await;
+	let addr_without_server = bark.address_at_idx(0).await;
 	assert_eq!(addr_with_server, addr_without_server,
 		"the same fresh address index must match with the server offline");
 
@@ -120,8 +112,8 @@ async fn bark_address_works_offline() {
 	let new_addr_without_server = bark.address().await;
 	assert_ne!(new_addr_without_server, addr_with_server,
 		"new address should use a freshly derived key");
-	assert_ne!(new_addr_without_server, identity_with_server,
-		"a fresh receiving address must not reuse the reserved identity key");
+	assert_eq!(new_addr_without_server, bark.address_at_idx(1).await,
+		"the next offline address must use child one");
 }
 
 #[tokio::test]

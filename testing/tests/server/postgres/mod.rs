@@ -100,7 +100,6 @@ async fn integration() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	let integration_second = db.write(async |t| t.store_integration("second").await).await.unwrap();
 	assert_ne!(integration_second.id, 0);
@@ -226,7 +225,6 @@ async fn block_database_crud() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	// Construct some mock block refs
 	let hash1 = bitcoin::BlockHash::from_str("0000000000000000000670ab57e8c1a4637b22d1d56e4c2837d08ec9a61e7777").unwrap();
@@ -296,7 +294,6 @@ async fn get_virtual_transaction_not_found() {
 
 	Db::create(&postgres_cfg).await.expect("Database created");
 	let db = Db::connect(&postgres_cfg).await.expect("Connected to database");
-	super::register_vector_owners(&db).await;
 
 	// Create a txid without inserting it
 	let tx = Transaction {

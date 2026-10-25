@@ -104,10 +104,12 @@ There is no `watchmand create` CLI command. The watchman must read the same
 seed phrase and database as its server. Provision an owner-only copy of the
 original server `mnemonic` in the watchman data directory through the local
 secret-custody procedure. Compare the files locally without displaying them.
-The server mailbox key derives from this seed. Existing signed links depend on
-that exact key for verification and unblinding. A replacement seed cannot
-interpret them. Never generate another seed phrase for the watchman. Retain a
-private backup before you fund the wallets.
+`captaind` derives the server mailbox key from this seed. Existing signed links
+depend on that exact key for verification and unblinding. `watchmand` publishes
+committed payout allocations; it does not need the mailbox key. It still needs
+the original seed for contract signing and its fee wallet. A replacement server
+seed cannot interpret existing links. Never generate another seed phrase for
+the watchman. Retain a private backup before you fund the wallets.
 
 ## Configure and start
 
@@ -328,24 +330,35 @@ binding is immutable. A retry for the same script returns the canonical record;
 a different script is refused. The signature authorizes the script but does not
 prove that the mailbox holder can spend it. Check the destination before the
 first registration. Keep the keys or recovery procedure for that destination.
+The wallet app must persist the exact chosen script or the recovery parameters
+needed to reproduce it. A seed phrase alone does not identify a separately
+chosen script. There is no `GetFallback` RPC. `SetFallback` reconciles a supplied
+binding and returns the canonical record only for the same script.
 
 Each customer output must also carry a link signed by its actual coin key.
 The signature commits to the server mailbox public key `S` and the blinded
 mailbox identifier `B`. The server verifies the signature, unblinds `B` with
 the actual output key and its own mailbox key, and requires that mailbox's valid
-registration. It stores the link with the output in the same transaction. These
+registration. The stored binding is immutable for that coin key. The arkoor path
+stores the link with the new output in the same transaction. Boards and Lightning
+receives can store the link at admission before the later coin write.
+Interactive rounds store the link at admission; delegated rounds store it with
+the queued participation. Both insert coin rows when the round finishes. These
 checks precede signatures, settlement and other financial side effects. The
-tree writer verifies the durable binding again. Server-created internal, pool
-and private padding rows use their existing roles instead of customer links.
+tree writer verifies the durable binding again before it inserts customer rows.
+Server-created internal, pool and private padding rows use their existing roles
+instead of customer links.
 
-Use the matching protocol 6 wallet app. Its Ark addresses carry the signed
-delivery type `0x02`; no child index or account xpub is sent. A cached,
-authenticated wallet can generate these addresses offline. A payer refuses an
-old address without a signed link before it reserves coins. Live wallet
-operations reconcile both the normal and recovery mailbox registrations against
-the same canonical payout script. Temporary registration transport failures can
-permit a cached wallet to open for offline recovery; they do not permit mailbox
-use or cooperative transactions without reconciliation.
+Use the matching protocol 6 SDK and reference clients. Their Ark addresses carry
+the signed delivery type `0x02`; no child index or account xpub is sent. After an
+online open caches both server public keys and authenticates both mailbox
+registrations, the client can generate these addresses offline. It refuses
+delivery-less addresses and addresses with only an unsigned `0x01` mailbox entry
+before it reserves coins. Live client operations reconcile both the normal and
+recovery mailbox registrations against the same canonical payout script.
+Temporary registration transport failures can permit a cached client to open
+for offline recovery; they do not permit mailbox use or cooperative
+transactions without reconciliation.
 
 A coin signature chooses the payout mailbox. It does not claim ownership of
 that mailbox. Gifts to another registered mailbox are valid, even when the
@@ -359,8 +372,10 @@ canonical registration. There is no owner scan, announcement window or index
 gap limit. A missing registration or link, an invalid link or a decoded
 registration that fails authentication leaves the bitcoin held and separates
 it from ready siblings. Never assign that bitcoin to the provider or operator.
-Preserve the server seed, registrations and signed links together with all
-financial commitments.
+`captaind` performs this authentication before it commits payout allocations.
+`watchmand` consumes those committed allocations without the server mailbox
+key. Preserve the original server seed, registrations and signed links together
+with all financial commitments.
 
 Malformed script hex or signature text in a stored registration can pause the
 entire backing root, including ready siblings, until the authentic record is
@@ -377,12 +392,14 @@ the same expiry height is undecided. Do not split or discard obligations to
 bypass these holds. Charge the cumulative fee per payout script and expiry height,
 including earlier non-conflicted payments.
 
-The fork assigns padding leaves to the operator when their policy key equals
-upstream's unspendable key, `0x02 || sha256("unspendable1")`. It does not use an
-amount, transaction hash or issuance record to identify padding. This also assigns
-a coin deliberately locked by a customer to that key to the operator. No one can
-spend with that key. This is an accepted exception to the rule that the operator
-keeps only value it paid for.
+The round's padding loop retains its output positions and passes the resulting
+VTXO IDs to persistence. Only those padding rows bypass the customer-link fence.
+At expiry, the fork assigns padding leaves to the operator when their policy
+key equals upstream's unspendable key, `0x02 || sha256("unspendable1")`. It does
+not use an amount, transaction hash or issuance record to identify padding.
+This also assigns a coin deliberately locked by a customer to that key to the
+operator. No one can spend with that key. This is an accepted exception to the
+rule that the operator keeps only value it paid for.
 
 ### Alert rules and first actions
 

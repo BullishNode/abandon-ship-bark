@@ -187,7 +187,7 @@ async fn expiry_unregistered_owner_does_not_block_registered_sibling() {
 	ctx.bitcoind().fund_addr(fee_address, sat(100_000)).await;
 	ctx.generate_blocks(2).await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
-	// F18: deliberately corrupt attribution evidence after genuine signed admission.
+	// Deliberately corrupt attribution evidence after genuine signed admission.
 	assert!(matches!(db.read(async |tx| tx.expiry_owner(unknown, bitcoin::Network::Regtest,
 		&srv.mailbox_keypair()).await).await.unwrap(), server::database::expiry_attribution::Attribution::Owned { mailbox_pk, .. } if mailbox_pk == unknown));
 	db.write(async |tx| {

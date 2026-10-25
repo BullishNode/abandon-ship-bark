@@ -156,7 +156,7 @@ async fn registered_receive_fallback() {
 	destination.verify(Network::Regtest, recipient.mailbox_keypair().public_key()).unwrap();
 	provider_destination.verify(Network::Regtest, provider.mailbox_keypair().public_key()).unwrap();
 	// B has an independent key and no SDK wallet. Its genuine issuance is
-	// followed by deliberate attribution-evidence corruption, exercising F18.
+	// followed by deliberate attribution-evidence corruption.
 	let unknown_identity = Keypair::new(&secp, &mut bitcoin::secp256k1::rand::thread_rng());
 	let unknown_key = unknown_identity.public_key();
 	assert_ne!(unknown_key, address.policy().user_pubkey());
@@ -253,7 +253,7 @@ async fn registered_receive_fallback() {
 	assert_eq!(unknown_source.amount(), amount);
 	assert_eq!(unknown_source.policy(), unknown_address.policy());
 	assert_eq!(unknown_source.chain_anchor(), shared_anchor);
-	// F18 deliberately loses attribution evidence after genuine signed admission.
+	// Deliberately lose attribution evidence after genuine signed admission.
 	// This is not a supported restore. No coin, entitlement, attempt, receive
 	// binding, transaction, amount or payout row is changed.
 	assert!(matches!(db.read(async |tx| tx.expiry_owner(unknown_key, Network::Regtest,

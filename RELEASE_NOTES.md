@@ -1,9 +1,9 @@
 # Signature-linked fallback payout candidate
 
-This candidate pairs `captaind` and `watchmand` with the matching Bark wallet
-app and `barkd` for signet. Complete financial and operational qualification
-before production use. Source review and a successful build do not establish
-qualification. Do not deploy this release on bitcoin mainnet.
+This candidate pairs `captaind` and `watchmand` with the matching Bark SDK and
+reference clients for signet qualification. Complete financial and operational
+qualification before production use. Source review and a successful build do
+not establish qualification. Do not deploy this release on bitcoin mainnet.
 
 Use fresh server and client stores. This release requires mailbox-only v4
 registrations, signed recipient addresses and protocol 6 output proofs. There
@@ -56,12 +56,17 @@ or recovery.
   link before financial side effects and again in the tree writer. It rechecks
   the stored evidence before payout. No account xpub, child index or owner
   scanner participates in fallback attribution.
-- The matching wallet app emits signed `0x02` addresses and retains external
-  output links across restarts. Cached authenticated wallets can generate
-  addresses offline. Old addresses without a signed link are refused before
-  coin reservations. Normal and recovery mailboxes must both register the
-  canonical payout script before live mailbox use. Unregistered mailbox reads,
-  subscriptions and notices are refused; round notifications follow commit.
+- The matching reference clients emit signed `0x02` addresses and retain external
+  output links across restarts. Offline address generation requires an earlier
+  online open that caches both server public keys and authenticates both mailbox
+  registrations. Delivery-less addresses and addresses with only an unsigned
+  `0x01` mailbox entry are refused before coin reservations. Normal and recovery
+  mailboxes must both register the canonical payout script before live mailbox
+  use. Unregistered mailbox reads, subscriptions and notices are refused; round
+  notifications follow commit.
+- A wallet app must persist its chosen immutable fallback script or the recovery
+  parameters needed to reproduce it. There is no `GetFallback` RPC. A seed phrase
+  alone does not identify a separately chosen destination.
 - A valid link can direct a gift to another registered mailbox. It authorizes
   that destination rather than claiming ownership of the mailbox. Explicit
   recipient links remain authoritative even for a locally owned coin key.
@@ -74,11 +79,13 @@ or recovery.
   another coin under the same source anchor at that height is undecided. The
   dust decision completes once those
   coins are decided.
-- Padding leaves belong to the operator when their policy key is upstream's
-  unspendable key, `0x02 || sha256("unspendable1")`. There is no provenance table or
-  change to upstream round creation. This also assigns coins deliberately locked
-  to that key to the operator, an accepted exception to the rule that the operator
-  keeps only value it paid for. No one can spend with that key.
+- Round construction retains the positions of its server-generated padding
+  outputs. It passes their VTXO IDs to persistence so only those rows bypass the
+  customer-link fence. At expiry, padding leaves belong to the operator when
+  their policy key is upstream's unspendable key, `0x02 || sha256("unspendable1")`.
+  There is no separate provenance table. This also assigns coins deliberately
+  locked to that key to the operator, an accepted exception to the rule that the
+  operator keeps only value it paid for. No one can spend with that key.
 - The watchman uses Core's observed fee to replace an unrecognized P2A fee child.
   It preserves the exact payout parent. An unrecognized child does not establish
   operator funding or customer settlement.
@@ -138,8 +145,10 @@ matching final GNU programs and the final release bundle remain required.
   Failed rule with the transport/restart limit described above.
 - A missing registration or link, an invalid link or a decoded registration
   that fails authentication leaves customer bitcoin held and separates it from
-  ready siblings. Never assign it to the operator. The server mailbox key
-  derives from the original server seed; every link depends on that exact key.
+  ready siblings. Never assign it to the operator. `captaind` derives the server
+  mailbox key from the original server seed and authenticates links before it
+  commits payout allocations. `watchmand` consumes committed allocations without
+  that mailbox key. Every link depends on the exact original key.
   Restore must retain that seed, all accepted registrations,
   signed links and financial commitments. Re-sent evidence does not recreate
   lost commitments.

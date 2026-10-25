@@ -261,6 +261,7 @@ impl LightningManager {
 			attempt_block_height,
 			retry_for,
 		).await {
+			if e.is::<crate::error::FallbackRefusal>() { return Err(e); }
 			// The attempt is already recorded as failed and the client sees the
 			// failure via CheckLightningPayment. Benign races (someone else paid
 			// or canceled the invoice first) surface as PayInvoiceRace and

@@ -10,20 +10,12 @@ async fn bark_address_changes() {
 	let srv = ctx.captaind("server").create().await;
 	let bark1 = ctx.bark("bark1", &srv).create().await;
 
-	// Fallback registration reserves child zero for stable wallet identity;
-	// fresh receiving addresses start immediately after that reserved key.
-	const IDENTITY_INDEX: u32 = 0;
-	const FIRST_RECEIVE_INDEX: u32 = IDENTITY_INDEX + 1;
-	const SECOND_RECEIVE_INDEX: u32 = FIRST_RECEIVE_INDEX + 1;
-	let identity = bark1.address_at_idx(IDENTITY_INDEX).await;
 	let addr1 = bark1.address().await;
 	let addr2 = bark1.address().await;
 
 	assert_ne!(addr1, addr2);
-	assert_ne!(addr1, identity);
-	assert_ne!(addr2, identity);
-	assert_eq!(addr1, bark1.address_at_idx(FIRST_RECEIVE_INDEX).await);
-	assert_eq!(addr2, bark1.address_at_idx(SECOND_RECEIVE_INDEX).await);
+	assert_eq!(addr1, bark1.address_at_idx(0).await);
+	assert_eq!(addr2, bark1.address_at_idx(1).await);
 }
 
 #[tokio::test]

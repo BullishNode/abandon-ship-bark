@@ -568,10 +568,13 @@ impl Builder {
 		if policy.user_pubkey() != vtxo_key.public_key() {
 			return Err("VTXO key does not match policy".into());
 		}
-		let link = OwnerLink::new(server_mailbox_pubkey, mailbox, vtxo_key)
+		let blinded_id = mailbox.to_blinded(server_mailbox_pubkey, vtxo_key)
 			.map_err(|_| "mailbox blinding failed: point at infinity")?;
+		// Reconstruct the exact address for history lookups and offline use.
+		let message = OwnerLink::message(server_mailbox_pubkey, blinded_id);
+		let signature = crate::SECP.sign_schnorr_no_aux_rand(&message, vtxo_key);
 		self.delivery.push(VtxoDelivery::ServerMailboxSigned {
-			blinded_id: link.blinded_id, signature: link.signature,
+			blinded_id, signature,
 		});
 		Ok(self)
 	}
@@ -679,6 +682,18 @@ mod test {
 		assert_eq!(MailboxIdentifier::from_blinded(link.blinded_id, coin.public_key(), &server).unwrap(), mailbox);
 		assert!(Address::builder().server_pubkey(signed_key(13).public_key()).pubkey_policy(signed_key(6).public_key())
 			.mailbox_signed(server.public_key(), mailbox, &coin).is_err());
+	}
+
+	#[test]
+	fn signed_mailbox_builder_reconstructs_identical_addresses() {
+		let server = signed_key(11);
+		let mailbox = MailboxIdentifier::from_pubkey(signed_key(17).public_key());
+		for coin in [signed_key(3), signed_key(6)] {
+			let build = || Address::builder().server_pubkey(signed_key(13).public_key())
+				.pubkey_policy(coin.public_key()).mailbox_signed(server.public_key(), mailbox, &coin).unwrap()
+				.into_address().unwrap();
+			assert_eq!(build().to_string(), build().to_string());
+		}
 	}
 
 	#[test]

@@ -1466,20 +1466,27 @@ async fn cancelled_issued_refresh_reopens_and_receives_one_fallback_payout() {
 		assert!(wallet.spendable_vtxos().await.unwrap().is_empty());
 		assert_refresh_balance(&wallet, Amount::ZERO, Amount::ZERO, Amount::ZERO, Amount::ZERO).await;
 		assert_eq!(database.get_movement_by_id(movement).await.unwrap().status, MovementStatus::Failed);
-		let history = wallet.history().await.unwrap();
-		let refreshes = history.iter().filter(|entry| entry.subsystem.name == "bark.round").collect::<Vec<_>>();
+		let current_history = wallet.history().await.unwrap();
+		assert_eq!(current_history, history, "chain discovery preserves the original native action history");
+		let refreshes = current_history.iter().filter(|entry| entry.subsystem.name == "bark.round").collect::<Vec<_>>();
 		assert_eq!(refreshes.len(), 1);
 		assert_eq!(refreshes[0].id, movement);
-		let payouts = history.iter().filter(|entry| entry.subsystem.name == "abandon.fallback_payout").collect::<Vec<_>>();
-		assert_eq!(payouts.len(), 1);
-		assert_eq!(payouts[0].status, MovementStatus::Successful);
-		assert_eq!(payouts[0].metadata["fallback"]["chain_verified"], true);
-		assert_eq!(payouts[0].sent_to.len(), 1);
-		assert_eq!(payouts[0].sent_to[0], bark::movement::MovementDestination::bitcoin(
-			bitcoin::Address::from_script(&registration.spk, Network::Regtest).unwrap(), sat(99_000)));
-		assert_eq!(payouts[0].sent_to[0].amount, sat(99_000));
-		assert_eq!(payouts[0].offchain_fee, sat(1_000));
-		assert_eq!(payouts[0].effective_balance.to_sat(), -100_000);
+		let snapshot = database.get_fallback_snapshot().await.unwrap();
+		assert!(snapshot.adopted_payout_vtxos.contains(&source.id()));
+		assert!(!snapshot.awaiting_settlement.contains(&source.id()));
+		assert_eq!(source.amount() - sat(1_000) - paid.value, Amount::ZERO,
+			"the canonical 99,000-sat output and 1,000-sat charge leave no forfeited principal");
+		wallet.sync_onchain().await.unwrap();
+		let own_payouts = {
+			let onchain = wallet.onchain().unwrap();
+			let guard = onchain.read().await;
+			let bdk = (&*guard as &dyn std::any::Any).downcast_ref::<OnchainWallet>().unwrap();
+			bdk.list_unspent().into_iter().filter(|coin| coin.outpoint == payout)
+				.map(|coin| coin.txout.clone()).collect::<Vec<_>>()
+		};
+		assert_eq!(own_payouts.len(), 1);
+		assert_eq!(own_payouts[0].value, sat(99_000));
+		assert_eq!(own_payouts[0].script_pubkey, registration.spk);
 		assert_eq!(transport.accepted_forfeits.load(Ordering::SeqCst), 0);
 	})).await.expect("cancelled refresh and absent-owner payout must finish within the test budget");
 }

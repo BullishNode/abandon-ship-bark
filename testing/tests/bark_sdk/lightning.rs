@@ -209,15 +209,12 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		let earliest = db.read(async |tx| Ok(tx.query_one(
 			"SELECT MIN(expiry) FROM vtxo WHERE frontier_at IS NOT NULL AND onchain_spent_height IS NULL", &[],
 		).await?.get::<_, Option<i32>>(0))).await.unwrap().expect("fixture must have a real backing frontier");
-		assert!(i64::from(earliest) > i64::from(tip), "the registry barrier must precede every backing maturity");
-		// The real registry writer lock holds decisions before they take coin
-		// locks. Ordinary refresh/forfeit registration remains available.
-		let mut registry_conn = db.raw_conn().await.unwrap();
-		let registry_gate = registry_conn.transaction().await.unwrap();
-		registry_gate.execute("SELECT pg_advisory_xact_lock($1)", &[&3_i64]).await.unwrap();
+		assert!(i64::from(earliest) > i64::from(tip), "the watchman pause must precede every backing maturity");
+		// Pause scheduled fallback while ordinary registration and the real
+		// refresh remain available through the running server.
+		srv.watchmand().stop().await.unwrap();
 		let expired = ctx.generate_blocks(source.expiry_height().to_u32() - tip).await;
 		srv.wait_for_sync_height(expired).await;
-		srv.watchmand().wait_for_sync_height(expired).await;
 		wallet.chain().invalidate_caches().await;
 		assert_eq!(wallet.chain().tip().await.unwrap(), source.expiry_height());
 		let native = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
@@ -276,10 +273,10 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		assert!(matches!(refresh, bark::round::RoundStatus::Unconfirmed { .. }));
 		let committed = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
 		assert_eq!(committed.spend_state, server::database::SpendState::Spent);
-		assert!(committed.spent_in_round.is_some(), "release the barrier only after real refresh binding commits");
+		assert!(committed.spent_in_round.is_some(), "restart the watchman only after real refresh binding commits");
 		assert!(!committed.decided_for_fallback);
-		registry_gate.commit().await.unwrap();
-		drop(registry_conn);
+		srv.watchmand().start().await.unwrap();
+		srv.watchmand().wait_for_sync_height(expired).await;
 		ctx.generate_blocks(ark_testing::constants::ROUND_CONFIRMATIONS).await;
 		wallet.chain().invalidate_caches().await;
 		tokio::time::timeout(Duration::from_secs(15), async {
@@ -315,7 +312,7 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		let forfeit = &forfeits[0];
 		assert!(forfeit.get::<_, bool>("signed") && forfeit.get::<_, bool>("accepted"));
 		assert_eq!(forfeit.get::<_, String>("funding_txid"), replacement.chain_anchor().txid.to_string());
-		// Once the barrier is released, expiry may decide the surrendered old
+		// Once the watchman resumes, expiry may decide the surrendered old
 		// backing for the operator. It must never pay that principal again.
 		let allocations = db.read(async |tx| Ok(tx.query(
 			"SELECT e.gross_sat,e.irreversible_facts::TEXT AS facts,c.gross_sat AS allocated_gross_sat,c.disposition,c.owner_mailbox,c.user_pubkey,c.spk, \

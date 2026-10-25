@@ -475,6 +475,7 @@ async fn send_claim_follows_internal_attempt_settlement() {
 		let wallet = sender.client().await;
 		let input = wallet.get_full_vtxo(receive_board[0]).await.unwrap();
 		let tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
+		super::test_owner_link(&server, &beneficiary).await;
 		let unrelated = signed_leaf(&ctx, &server, &wallet, input,
 			VtxoPolicy::new_server_htlc_recv(beneficiary.public_key(), hash, tip + BlockDelta::new(700), BlockDelta::new(40))).await;
 		assert_ne!(source.chain_anchor(), unrelated.chain_anchor());

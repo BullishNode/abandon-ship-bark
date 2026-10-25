@@ -257,7 +257,7 @@ async fn rebuilt_generation(db: &Db, point: BlockRef) -> i64 {
 		loop {
 			let generation = db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(None); };
-				if view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0) {
+				if view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await? {
 					Ok(Some(view.generation))
 				} else { Ok(None) }
 			}).await.unwrap();

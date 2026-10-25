@@ -408,6 +408,7 @@ async fn unattempted_shared_preimage(legacy: bool) {
 		assert_eq!(db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM lightning_payment_attempt a WHERE a.payment_hash=$1", &[&hash.to_string()])
 			.await?.get::<_, i64>(0))).await.unwrap(), 0);
 	}
+	super::test_owner_link(&srv, &beneficiary).await;
 	let receive = signed_leaf(&ctx, &srv, &wallet, receive_input,
 		VtxoPolicy::new_server_htlc_recv(beneficiary.public_key(), hash,
 			tip + BlockDelta::new(700), BlockDelta::new(40))).await;
@@ -856,6 +857,7 @@ async fn linked_send_with_shared_preimage(failed: bool, with_internal_receive: b
 	let expiry = tip + BlockDelta::new(286);
 	let source = signed_leaf(&ctx, &srv, &wallet, send_input,
 		VtxoPolicy::new_server_htlc_send(send_key.public_key(), hash, expiry)).await;
+	super::test_owner_link(&srv, &beneficiary).await;
 	let receive = signed_leaf(&ctx, &srv, &wallet, receive_input,
 		VtxoPolicy::new_server_htlc_recv(beneficiary.public_key(), hash,
 			tip + BlockDelta::new(700), BlockDelta::new(40))).await;

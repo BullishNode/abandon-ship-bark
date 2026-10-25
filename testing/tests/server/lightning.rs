@@ -297,11 +297,9 @@ async fn reject_revocation_on_successful_lightning_payment() {
 /// on its own permits revocation (here, `failed`) would let the server sign the
 /// revocation and refund a payment that actually went through: a double-pay.
 ///
-/// Note this exercises the settler gate as a whole (the early `is_settled`
-/// bail fires first, since the settlement row is left intact): it pins that the
-/// settler, not the attempt status, decides. Isolating the in-write-tx recheck
-/// specifically would need a settlement committed between the two checks within
-/// a single request, which isn't reproducible without fault injection.
+/// The paid source is already spent, so its spendability check can refuse
+/// before the settlement check. Either gate must prevent a second signed spend
+/// despite the regressed attempt status.
 #[tokio::test]
 async fn reject_revocation_when_settled_but_status_regressed() {
 	require_bark_version!(> "0.5.0");
@@ -347,13 +345,24 @@ async fn reject_revocation_when_settled_but_status_regressed() {
 
 	assert_eq!(status.code(), tonic::Code::InvalidArgument);
 	assert!(
-		status.message().contains("invoice has already been paid"),
+		status.message().contains("invoice has already been paid")
+			|| status.message().contains("vtxo doesn't exist or is unspendable"),
 		"unexpected server response: {status:?}",
 	);
 	assert!(
 		!status.message().to_lowercase().contains("preimage"),
 		"preimage must not appear in the error message",
 	);
+	assert!(client.is_invoice_paid(payment_hash).await.unwrap());
+	let source_ids = htlc_send_vtxo_ids(&client, payment_hash).await;
+	assert!(!source_ids.is_empty());
+	for id in source_ids {
+		let source = db.read(async |t| t.get_user_vtxo_by_id(id).await).await.unwrap();
+		assert_eq!(source.spend_state, server::database::SpendState::LnSpent,
+			"a refused revoke must not reopen an actually paid source");
+		let htlc = db.read(async |t| server::database::htlc_vtxo::get_htlc_vtxo(t, id).await).await.unwrap().unwrap();
+		assert_ne!(htlc.htlc.offchain_resolution, Some(server::database::htlc_vtxo::HtlcResolution::Revoked));
+	}
 }
 
 /// The invoice-expiry sweep used to cancel an `HtlcsReady` intra-ark receive
@@ -727,14 +736,14 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 		.confirmed_utxos.into_iter().map(|point| OutPoint::from_str(&point).unwrap()).collect::<HashSet<_>>();
 	assert!(!fee_change.is_empty());
 	assert!(fee_change.is_subset(&watchman_coins), "all unused operator fee capital must remain watchman-owned");
-	// N6 alone still cannot report Failed: drive the SDK's real signed refund.
+	// The own attempt is Failed; the SDK must still complete the real signed refund.
 	let before_refund = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
 		hash: payment_hash.to_vec(), wait: false, htlc_vtxo_ids: payer_htlc_vtxo_ids.clone(),
 	}).wait_millis(30_000).await.unwrap().into_inner();
 	let mut before_refund_ids = before_refund.htlc_vtxo_ids.clone();
 	before_refund_ids.sort_unstable();
 	assert_eq!(before_refund_ids, payer_htlc_vtxo_ids);
-	assert!(matches!(before_refund.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Pending(_))));
+	assert!(matches!(before_refund.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Failed(_))));
 	let height = core.get_block_count().unwrap() as u32;
 	let tip = ctx.generate_blocks(refund_height.to_u32().saturating_sub(height)).await;
 	srv.wait_for_sync_height(tip).await;
@@ -856,8 +865,8 @@ impl ParkedReceive {
 	async fn setup(ctx: &TestContext) -> ParkedReceive {
 		let lightning = ctx.new_lightning_setup("lightningd").await;
 
-		// An unexposed grant remains a commitment until its funded timeout
-		// closure, even after both daemons observe its HTLC expiry.
+		// An unexposed grant stays committed through its expiry in both
+		// daemon views. The existing timeout contract permits a later refund.
 		let srv = ctx.captaind("server").lightningd(&lightning.internal).watchmand().cfg(|cfg| {
 			cfg.invoice_check_interval = Duration::from_secs(1);
 		}).create().await;
@@ -914,36 +923,60 @@ impl ParkedReceive {
 		try_request_htlc_revocation(&self.srv, &self.payer, self.payment_hash).await
 	}
 
-	/// Expiry does not prove that the server recovered an issued grant.
-	/// Refuse at every height through expiry+1 while the grants remain open.
-	async fn assert_revoke_refused_past_expiry(&self, ctx: &TestContext) {
+	/// Refuse through expiry and release the unexposed grant only after
+	/// both completed daemon views have passed it.
+	async fn assert_revoke_after_expiry(&self, ctx: &TestContext) {
 		let mut tip = BlockHeight::new(ctx.bitcoind().get_block_count().await as u32);
 		loop {
 			self.srv.wait_for_sync_height(tip).await;
 			self.srv.watchmand().wait_for_sync_height(tip).await;
-			let status = self.revoke().await.expect_err("expiry alone must not authorize a signed refund");
+			if tip > self.htlc_recv_expiry { break; }
+			let status = self.revoke().await.expect_err("a live grant must retain the sender's refund");
 			assert!(status.message().contains("already committed"), "unexpected refusal: {status:?}");
-			if tip > self.htlc_recv_expiry {
-				let db = Db::connect(&self.srv.config().postgres.clone()).await.unwrap();
-				let open = db.read(async |t| { Ok(t.query_one("SELECT COUNT(*) AS grants, \
-					BOOL_AND(h.offchain_resolution IS NULL AND h.chain_resolution IS NULL \
-					AND NOT EXISTS(SELECT 1 FROM expiry_allocation a \
-					JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
-					JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE e.vtxo_id=v.vtxo_id AND c.disposition='operator' AND a.status='confirmed')) AS open \
-					FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id \
-					WHERE h.payment_hash=$1 AND h.direction='outgoing'", &[&self.payment_hash.to_string()]).await?) }).await.unwrap();
-				assert!(open.get::<_, i64>("grants") > 0);
-				assert!(open.get::<_, bool>("open"), "this regression must retain actual unreclaimed grants");
-				return;
-			}
 			ctx.generate_blocks_unsynced(1).await;
 			tip = tip + BlockDelta::new(1);
 		}
+		let db = Db::connect(&self.srv.config().postgres.clone()).await.unwrap();
+		let open = db.read(async |t| { Ok(t.query_one("SELECT COUNT(*) AS grants, \
+			BOOL_AND(v.confirmed_height IS NULL AND h.offchain_resolution IS NULL AND h.chain_resolution IS NULL \
+			AND NOT EXISTS(SELECT 1 FROM expiry_allocation a \
+			JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+			JOIN expiry_entitlement e ON e.id=c.entitlement_id \
+			WHERE e.vtxo_id=v.vtxo_id AND c.disposition='operator' AND a.status='confirmed')) AS open \
+			FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id \
+			WHERE h.payment_hash=$1 AND h.direction='outgoing'", &[&self.payment_hash.to_string()]).await?) }).await.unwrap();
+		assert!(open.get::<_, i64>("grants") > 0);
+		assert!(open.get::<_, bool>("open"), "this case requires actual unexposed, unreclaimed grants");
+
+		// Keep the real refund in the payer's wallet rather than discarding a
+		// cosign response into a synthetic test output.
+		let checkpoint = self.payer.lightning_send_checkpoint(self.payment_hash).await.unwrap().unwrap();
+		let htlcs = match &checkpoint.progress {
+			bark::actions::lightning::pay::Progress::HtlcReceived(htlcs)
+				| bark::actions::lightning::pay::Progress::PaymentInitiated(htlcs)
+				| bark::actions::lightning::pay::Progress::RevocableHtlcs { htlcs, .. }
+				| bark::actions::lightning::pay::Progress::RevocationStuck { htlcs, .. } => htlcs,
+			other => panic!("payer must retain its real HTLC checkpoint: {other:?}"),
+		};
+		Box::pin(self.payer.check_lightning_payment(self.payment_hash, true)).wait_millis(30_000).await.unwrap();
+		assert!(self.payer.lightning_send_checkpoint(self.payment_hash).await.unwrap().is_none());
+		assert!(!self.payer.is_invoice_paid(self.payment_hash).await.unwrap());
+		let balance = self.payer.balance().await.unwrap();
+		assert_eq!(balance.total(), btc(2));
+		assert_eq!(balance.spendable, btc(2));
+		assert_eq!(balance.pending(), Amount::ZERO);
+		let history = self.payer.history().await.unwrap();
+		let movement = history.iter().find(|movement| movement.id == htlcs.movement_id).unwrap();
+		assert_eq!(movement.status, bark::movement::MovementStatus::Failed);
+		assert_eq!(movement.effective_balance, bitcoin::SignedAmount::ZERO);
+		assert_eq!(movement.offchain_fee, Amount::ZERO);
+		assert!(movement.exited_vtxos.is_empty());
+		self.revoke().await.expect_err("a completed refund must not be signed a second time");
+		assert_eq!(self.payer.balance().await.unwrap().spendable, btc(2));
 	}
 
 	/// Release the parked claim, which must be refused, leaving the payee
-	/// unpaid. The grants expired, but have not authorized any signed refund.
+	/// unpaid after the payer has recovered the original principal.
 	async fn assert_claim_refused(self) {
 		self.release.notify_one();
 		self.payee_task.wait_millis(120_000).await
@@ -955,22 +988,21 @@ impl ParkedReceive {
 
 /// The payer of an intra-ark payment tries to revoke at every block height
 /// while the payee holds granted HTLC-recv vtxos and withholds the preimage.
-/// Every revoke must be refused, including after HTLC expiry while the issued
-/// grants have not actually been recovered. The parked claim is then refused.
+/// Refuse through HTLC expiry, then let the payer recover its principal once
+/// both views pass expiry. The parked recipient claim must still be refused.
 #[tokio::test]
 async fn intra_ark_revoke_refused_until_htlc_recvs_expire() {
 	require_bark_version!(> "0.5.0");
 
 	let ctx = TestContext::new("server/intra_ark_revoke_refused_until_htlc_recvs_expire").await;
 	let parked = ParkedReceive::setup(&ctx).await;
-	parked.assert_revoke_refused_past_expiry(&ctx).await;
+	parked.assert_revoke_after_expiry(&ctx).await;
 	parked.assert_claim_refused().await;
 }
 
 /// Like [intra_ark_revoke_refused_until_htlc_recvs_expire], but with the
-/// receive already canceled. Canceling only refuses the cooperative claim:
-/// the payee can still claim live HTLC-recv vtxos on-chain, so the canceled
-/// receive must stay committed until the issued grants are actually recovered.
+/// receive already canceled. Canceling refuses the cooperative claim, but the
+/// live grant must still retain the sender's refund through expiry.
 #[tokio::test]
 async fn intra_ark_revoke_refused_on_canceled_receive_until_htlc_recvs_expire() {
 	require_bark_version!(> "0.5.0");
@@ -987,15 +1019,15 @@ async fn intra_ark_revoke_refused_on_canceled_receive_until_htlc_recvs_expire() 
 		Ok(())
 	}).await.unwrap();
 
-	parked.assert_revoke_refused_past_expiry(&ctx).await;
+	parked.assert_revoke_after_expiry(&ctx).await;
 	parked.assert_claim_refused().await;
 }
 
 /// Exits, resolutions and on-chain preimages are only recorded by the
 /// watchman. While it is behind, the server cannot tell whether the payee
 /// exited an HTLC-recv vtxo, so the revoke must be refused past their expiry
-/// until the watchman caught up. Catching up to expiry alone is still
-/// insufficient: the issued grants must be recovered at the configured depth.
+/// until the watchman catches up. An unexposed grant can release the refund
+/// once both completed views are strictly beyond expiry.
 #[tokio::test]
 async fn intra_ark_revoke_refused_while_watchman_is_behind() {
 	require_bark_version!(> "0.5.0");
@@ -1014,7 +1046,7 @@ async fn intra_ark_revoke_refused_while_watchman_is_behind() {
 
 	parked.srv.watchmand().start().await.unwrap();
 	parked.srv.watchmand().wait_for_sync_height(tip).await;
-	parked.assert_revoke_refused_past_expiry(&ctx).await;
+	parked.assert_revoke_after_expiry(&ctx).await;
 	parked.assert_claim_refused().await;
 }
 

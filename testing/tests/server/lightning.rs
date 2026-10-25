@@ -635,14 +635,14 @@ async fn intra_ark_granted_receive_canceled_after_htlc_recv_expiry() {
 	assert_eq!(log.reason, "htlc-recv vtxos expired");
 	assert!(!invoice.is_expired());
 
-	// Cancellation is a label, not a refund while grants remain live.
+	// The own attempt is Failed; that status alone does not refund its live sources.
 	let pending = srv.get_public_rpc().await.check_lightning_payment(protos::CheckLightningPaymentRequest {
 		hash: payment_hash.to_vec(), wait: false, htlc_vtxo_ids: payer_htlc_vtxo_ids.clone(),
 	}).wait_millis(30_000).await.unwrap().into_inner();
 	let mut pending_ids = pending.htlc_vtxo_ids.clone();
 	pending_ids.sort_unstable();
 	assert_eq!(pending_ids, payer_htlc_vtxo_ids);
-	assert!(matches!(pending.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Pending(_))));
+	assert!(matches!(pending.payment_status, Some(protos::lightning_payment_status::PaymentStatus::Failed(_))));
 	assert_eq!(payer.balance().await.unwrap().pending_lightning_send, btc(1));
 	for source in &original_sources {
 		assert!(srv.htlc_vtxos(payment_hash).await.iter().any(|h|
@@ -852,6 +852,8 @@ impl captaind::proxy::ArkRpcProxy for HoldClaim {
 /// invoice-expiry sweep used to leave behind, so only the receive side
 /// decides whether a revoke goes through.
 struct ParkedReceive {
+	_lightning: LightningPaymentSetup,
+	_proxy: captaind::proxy::ArkRpcProxyServer,
 	srv: Arc<Captaind>,
 	payer: Wallet,
 	payee: Arc<Bark>,
@@ -916,7 +918,7 @@ impl ParkedReceive {
 		}).await.unwrap();
 
 		let payer = bark_payer.client().await;
-		ParkedReceive { srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task }
+		ParkedReceive { _lightning: lightning, _proxy: proxy, srv, payer, payee, payment_hash, htlc_recv_expiry, release, payee_task }
 	}
 
 	async fn revoke(&self) -> Result<(), tonic::Status> {
@@ -1787,20 +1789,34 @@ async fn server_concurrent_prepare_lightning_claim(
 		} => {},
 	}
 
-	// Fire all requests at once, each over its own connection. Every call
-	// uses a fresh user pubkey, so nothing but the server's own bookkeeping
-	// ties the requests together.
-	let results = join_all((0..NB_REQUESTS).map(|_| async {
-		let mut client = srv.get_public_rpc().await;
+	// Authenticate all real actors through the existing connection pool before
+	// the RPC storm; fixture setup must not open 100 PostgreSQL pools at once.
+	let server_mailbox = srv.mailbox_keypair();
+	let mut actors = Vec::with_capacity(NB_REQUESTS);
+	for _ in 0..NB_REQUESTS {
 		let keypair = Keypair::new(&SECP, &mut bip39::rand::thread_rng());
-		client.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
-			owner_proof: Some(super::test_owner_link(&srv, &keypair).await.into()),
-			payment_hash: receive.payment_hash.to_vec(),
-			user_pubkey: keypair.public_key().serialize().to_vec(),
-			htlc_recv_expiry: 172,
-			lightning_receive_anti_dos: None,
-		}).await
+		super::register_test_owners(&db, &server_mailbox, &keypair, &[keypair]).await;
+		let proof = ark::fallback::OwnerLink::new(server_mailbox.public_key(),
+			ark::mailbox::MailboxIdentifier::from_pubkey(keypair.public_key()), &keypair).unwrap();
+		actors.push((keypair, proof));
+	}
+	assert_eq!(actors.len(), NB_REQUESTS);
+	// Fire the same 100 RPCs at once, each over its own connection and with
+	// its own key. Only the server's bookkeeping ties the requests together.
+	let results = join_all(actors.into_iter().map(|(keypair, proof)| {
+		let payment_hash = receive.payment_hash;
+		async move {
+			let mut client = srv.get_public_rpc().await;
+			client.prepare_lightning_receive_claim(protos::PrepareLightningReceiveClaimRequest {
+				owner_proof: Some(proof.into()),
+				payment_hash: payment_hash.to_vec(),
+				user_pubkey: keypair.public_key().serialize().to_vec(),
+				htlc_recv_expiry: 172,
+				lightning_receive_anti_dos: None,
+			}).await
+		}
 	})).await;
+	assert_eq!(results.len(), NB_REQUESTS);
 
 	// Collect every distinct HTLC vtxo the calls handed out.
 	let mut nb_success = 0;

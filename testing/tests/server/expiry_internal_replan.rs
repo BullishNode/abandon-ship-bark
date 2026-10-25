@@ -241,19 +241,11 @@ async fn expiry_internal_shared_root_frontier_replan_survives_restart_and_reorg(
 			srv.wait_for_sync_height(tip).await;
 			srv.watchmand().wait_for_sync_height(tip).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			let mut closed = 0;
-			for grant in &grants {
-				let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_txid FROM expiry_allocation a \
-					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='operator' AND a.status='confirmed'",
-					&[&grant.id().to_string()]).await?)).await.unwrap();
-				if let Some(row) = row {
-					let txid = row.get::<_, String>(0).parse().unwrap();
-					if ctx.bitcoind().sync_client().custom_get_raw_transaction_info(txid, None).unwrap()
-						.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6) { closed += 1; }
-				}
+			if let Some(closures) = super::expiry_lightning_terminal::confirmed_grant_closures(
+				&ctx, &db, &grants, &recipient_destination.spk,
+			).await {
+				if closures.values().all(|(_, closed)| closed.checked_add(6).is_some_and(|required| required <= tip.to_u32())) { return; }
 			}
-			if closed == grants.len() { return; }
 		}
 		panic!("the actual operator grant closures did not reach six confirmations");
 	}).await.expect("both attempts need funded canonical grant closure before refund");

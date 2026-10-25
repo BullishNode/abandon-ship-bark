@@ -276,7 +276,7 @@ async fn rebuilt(db: &Db, point: BlockRef) {
 		loop {
 			if db.read(async |tx| {
 				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+				Ok(view.captaind == point && view.watchmand == point && super::expiry_view_is_rebuilt(tx, view).await?)
 			}).await.unwrap() { break; }
 			tokio::time::sleep(Duration::from_millis(50)).await;
 		}
@@ -773,18 +773,26 @@ async fn lightning_backup(unclean: bool) {
 			let hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();
 			rebuilt(&db, BlockRef { height, hash }).await;
 		}
+		let mut observed_h5 = false;
 		loop {
 			let mut closures = BTreeMap::new();
 			let mut closed_points = BTreeMap::new();
+			let observed = super::expiry_lightning_terminal::confirmed_grant_closures(
+				&ctx, &db, &grants, &receiver_registration.spk,
+			).await;
+			let height = u32::try_from(ctx.bitcoind().get_block_count().await).unwrap();
+			let required = observed.as_ref().map(|rows| rows.values().map(|(_, closed)|
+				closed.checked_add(6).unwrap()).max().unwrap());
+			if required == Some(height + 1) {
+				assert_eq!(db.read(async |tx| Ok(tx.query_one(
+					"SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1", &[&source.to_string()],
+				).await?.get::<_, i64>(0))).await.unwrap(), 0, "the completed H+5 view must retain the sender");
+				observed_h5 = true;
+			}
 			for grant in &grants {
-				let row = db.read(async |tx| Ok(tx.query_opt("SELECT a.sweep_tx FROM expiry_allocation a \
-					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='operator' AND a.broadcast_at IS NOT NULL",
-					&[&grant.id().to_string()]).await?)).await.unwrap();
-				let Some(row) = row else { continue; };
-				let tx: Transaction = deserialize(row.get("sweep_tx")).unwrap();
-				let info = ctx.bitcoind().sync_client().custom_get_raw_transaction_info(tx.compute_txid(), None).unwrap();
-				if info.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6) {
+				let Some((txid, closed)) = observed.as_ref().and_then(|rows| rows.get(&grant.id())) else { continue; };
+				let tx = ctx.bitcoind().await_transaction(*txid).await;
+				if closed.checked_add(6).is_some_and(|required| required <= height) {
 					for input in tx.input.iter().filter(|input| !grant_path_inputs.contains(&input.previous_output)) {
 						let (previous, expiry) = initial_pool_expiry_paths.get(&input.previous_output)
 							.expect("extra closure inputs must be exact expiry ancestors of the original trusted Pool issuance");
@@ -803,11 +811,15 @@ async fn lightning_backup(unclean: bool) {
 					closures.insert(grant.id(), tx);
 				}
 			}
-			if closures.len() == grants.len() { break (closures, closed_points); }
+			if closures.len() == grants.len() {
+				assert!(observed_h5, "the exact H+5 cut must be observed before refund eligibility");
+				assert_eq!(Some(height), required, "hold the exact H+6 tip for the original-source refund");
+				break (closures, closed_points);
+			}
 			assert_eq!(db.read(async |tx| Ok(tx.query_one(
 				"SELECT COUNT(*) FROM expiry_entitlement WHERE vtxo_id=$1", &[&source.to_string()],
 			).await?.get::<_, i64>(0))).await.unwrap(), 0,
-				"the sender entitlement must not commit before every actual grant closure is six blocks deep");
+				"the sender entitlement must not commit before every actual grant closure reaches H+6");
 			let height = mine_continuing_core(&ctx, 1).await;
 			mined += 1;
 			restored.wait_for_sync_height(height).await;
@@ -815,7 +827,7 @@ async fn lightning_backup(unclean: bool) {
 			let hash = ctx.bitcoind().sync_client().get_block_hash(u64::from(height.to_u32())).unwrap();
 			rebuilt(&db, BlockRef { height, hash }).await;
 		}
-	}).await.expect("cold-restored receive grants must close in funded operator payouts six blocks deep");
+	}).await.expect("cold-restored receive grants must reach H+6 through actual native or operator closures");
 	let (allocation, parent) = tokio::time::timeout(Duration::from_secs(20), async {
 		loop {
 			let rows = db.read(async |tx| Ok(tx.query("SELECT a.id,a.sweep_tx FROM expiry_allocation a \

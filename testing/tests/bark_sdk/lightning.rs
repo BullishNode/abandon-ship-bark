@@ -273,11 +273,9 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		assert!(matches!(refresh, bark::round::RoundStatus::Unconfirmed { .. }));
 		let committed = db.read(async |tx| tx.get_user_vtxo_by_id(source.id()).await).await.unwrap();
 		assert_eq!(committed.spend_state, server::database::SpendState::Spent);
-		assert!(committed.spent_in_round.is_some(), "restart the watchman only after real refresh binding commits");
+		assert!(committed.spent_in_round.is_some(), "the real refresh must commit its source binding");
 		assert!(!committed.decided_for_fallback);
-		srv.watchmand().start().await.unwrap();
-		srv.watchmand().wait_for_sync_height(expired).await;
-		ctx.generate_blocks(ark_testing::constants::ROUND_CONFIRMATIONS).await;
+		let confirmed = ctx.generate_blocks(ark_testing::constants::ROUND_CONFIRMATIONS).await;
 		wallet.chain().invalidate_caches().await;
 		tokio::time::timeout(Duration::from_secs(15), async {
 			loop {
@@ -312,6 +310,10 @@ async fn pay_hold_expired_inputs_are_refused_then_refresh_succeeds() {
 		let forfeit = &forfeits[0];
 		assert!(forfeit.get::<_, bool>("signed") && forfeit.get::<_, bool>("accepted"));
 		assert_eq!(forfeit.get::<_, String>("funding_txid"), replacement.chain_anchor().txid.to_string());
+		// Issuance alone can still be canceled; resume fallback only after
+		// the real confirmed swap has accepted the old source's forfeit.
+		srv.watchmand().start().await.unwrap();
+		srv.watchmand().wait_for_sync_height(confirmed).await;
 		// Once the watchman resumes, expiry may decide the surrendered old
 		// backing for the operator. It must never pay that principal again.
 		let allocations = db.read(async |tx| Ok(tx.query(

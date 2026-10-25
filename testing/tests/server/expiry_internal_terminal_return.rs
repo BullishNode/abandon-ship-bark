@@ -130,19 +130,11 @@ async fn reserved_terminal(reorg:bool,partial:bool) {
 			srv.wait_for_sync_height(height).await;
 			srv.watchmand().wait_for_sync_height(height).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			let mut closed=0;
-			for grant in &grants {
-				let row=db.read(async |t|Ok(t.query_opt("SELECT a.sweep_txid FROM expiry_allocation a \
-					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='operator' AND a.status='confirmed' \
-					AND c.evidence->>'kind'='htlc_recv_expired'",&[&grant.id().to_string()]).await?)).await.unwrap();
-				if let Some(row)=row {
-					let txid=row.get::<_,String>(0).parse().unwrap();
-					if chain.custom_get_raw_transaction_info(txid,None).unwrap()
-						.is_some_and(|info|info.confirmations.unwrap_or(0)>=6) {closed+=1;}
-				}
+			if let Some(closures) = super::expiry_lightning_terminal::confirmed_grant_closures(
+				&ctx, &db, &grants, &receive_spk,
+			).await {
+				if closures.values().all(|(_, closed)| closed.checked_add(6).is_some_and(|required| required <= height.to_u32())) { break; }
 			}
-			if closed==grants.len() {break;}
 		}
 	}).await.expect("receive grants must close in funded operator payouts six confirmations deep");
 	let reserved=tokio::time::timeout(Duration::from_secs(20),async {

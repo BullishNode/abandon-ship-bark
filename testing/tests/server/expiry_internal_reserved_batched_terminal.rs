@@ -31,7 +31,7 @@ async fn wait_batched_parent(
 			let finished=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=hash || view.watchmand.hash!=hash
-					|| !!t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0) {return Ok(false);}
+					|| !super::expiry_view_is_rebuilt(t, view).await? {return Ok(false);}
 				let row=t.query_one("SELECT status,sweep_txid,sweep_tx,confirmed_hash FROM expiry_allocation WHERE id=$1",&[&allocation]).await?;
 				assert_eq!(row.get::<_,Option<&str>>("sweep_txid"),Some(parent.compute_txid().to_string().as_str()));
 				assert_eq!(row.get::<_,Option<&[u8]>>("sweep_tx"),Some(serialize(parent).as_slice()));
@@ -204,19 +204,11 @@ async fn reserved_batched_terminal(reorg:bool) {
 			srv.wait_for_sync_height(height).await;
 			srv.watchmand().wait_for_sync_height(height).await;
 			tokio::time::sleep(Duration::from_secs(1)).await;
-			let mut closed = 0;
-			for grant in &grants {
-				let row = db.read(async |t| Ok(t.query_opt("SELECT a.sweep_txid FROM expiry_allocation a \
-					JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
-					WHERE e.vtxo_id=$1 AND c.active AND c.disposition='operator' AND a.status='confirmed' \
-					AND c.evidence->>'kind'='htlc_recv_expired'", &[&grant.id().to_string()]).await?)).await.unwrap();
-				if let Some(row) = row {
-					let txid = row.get::<_, String>(0).parse().unwrap();
-					if core.custom_get_raw_transaction_info(txid, None).unwrap()
-						.is_some_and(|info| info.confirmations.unwrap_or(0) >= 6) { closed += 1; }
-				}
+			if let Some(closures) = super::expiry_lightning_terminal::confirmed_grant_closures(
+				&ctx, &db, &grants, &receive_destination.spk,
+			).await {
+				if closures.values().all(|(_, closed)| closed.checked_add(6).is_some_and(|required| required <= height.to_u32())) { break; }
 			}
-			if closed == grants.len() { break; }
 		}
 	}).await.expect("receive grants must close in funded operator payouts six confirmations deep");
 	// Freeze the tip so every original reservation is still noncanonical.
@@ -228,9 +220,9 @@ async fn reserved_batched_terminal(reorg:bool) {
 				JOIN expiry_allocation_coin c ON c.allocation_id=a.id JOIN expiry_entitlement e ON e.id=c.entitlement_id \
 				WHERE a.status='pending' AND a.sweep_tx IS NOT NULL AND c.active \
 				AND e.vtxo_id=ANY($1) AND c.disposition='customer' \
-				AND c.evidence->>'kind'='htlc_internal_grants_reclaimed' AND c.evidence->>'attempt_id'=$2 \
-				AND c.evidence->>'subscription_id'=$3",
-				&[&originals,&scope.0.to_string(),&scope.1.to_string()]).await?)).await.unwrap();
+				AND c.evidence->>'kind'='htlc_internal_grants_reclaimed' \
+				AND c.evidence->'attempts'=jsonb_build_array(jsonb_build_array($2::BIGINT,$3::BIGINT))",
+				&[&originals,&scope.0,&scope.1]).await?)).await.unwrap();
 			if rows.len()==3 {
 				break rows.into_iter().map(|row|(row.get::<_,String>(0),(row.get::<_,i64>(1),deserialize::<Transaction>(row.get(2)).unwrap()))).collect();
 			}
@@ -393,7 +385,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 			let ready=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				if view.captaind.height!=height || view.watchmand.height!=height || view.captaind.hash!=tip_hash || view.watchmand.hash!=tip_hash
-					|| !!t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0) {return Ok(false);}
+					|| !super::expiry_view_is_rebuilt(t, view).await? {return Ok(false);}
 				// Every reservation holding a user-claimed original conflicts.
 				let mut all=true;
 				for source in &paid_ids {
@@ -492,8 +484,7 @@ async fn reserved_batched_terminal(reorg:bool) {
 	assert_eq!(row.get::<_,&str>("vtxo_id"),sources[2].id().to_string());
 	assert_eq!((row.get::<_,i64>("gross_sat"),row.get::<_,i64>("payout_sat"),row.get::<_,i64>("fee_sat")),(100_000,99_000,1_000));
 	let evidence:serde_json::Value=serde_json::from_str(row.get("evidence")).unwrap();
-	assert_eq!(evidence["attempt_id"].as_i64(),Some(scope.0));
-	assert_eq!(evidence["subscription_id"].as_i64(),Some(scope.1));
+	assert_eq!(evidence["attempts"],serde_json::json!([[scope.0,scope.1]]));
 	assert_eq!(evidence["kind"].as_str(),Some("htlc_internal_grants_reclaimed"));
 	assert_eq!(final_rows.1,0,"the198k prior user receipt cannot also earn a customer fallback");
 	assert_eq!(final_rows.2.len(),grants.len());

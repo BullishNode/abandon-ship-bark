@@ -245,8 +245,22 @@ async fn offboard_race(offboard_wins: bool, finality: bool) {
 			assert_eq!(cancelled.status, bark::movement::MovementStatus::Canceled);
 			assert_eq!(cancelled.effective_balance, bitcoin::SignedAmount::ZERO);
 			assert_eq!(cancelled.offchain_fee, bitcoin::Amount::ZERO);
-			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), native_balance,
-				"reorg protection must retain one principal without another offboard debit");
+			let exit_holder = match &protected.state {
+				VtxoState::Locked { holder: Some(VtxoLockHolder::Movement { id }) } => *id,
+				other => panic!("protective exit lost its real movement holder: {other:?}"),
+			};
+			let exits = history.iter().filter(|entry| entry.input_vtxos.contains(&id)
+				&& entry.metadata.get("protective_exit") == Some(&serde_json::Value::Bool(true)))
+				.collect::<Vec<_>>();
+			assert_eq!(exits.len(), 1, "one real protective exit must reserve the principal");
+			assert_eq!(exits[0].id, exit_holder);
+			assert_eq!(exits[0].subsystem.name, "bark.exit");
+			assert_eq!(exits[0].input_vtxos, vec![id]);
+			assert_eq!(exits[0].effective_balance.to_sat(), -i64::try_from(coin.amount().to_sat()).unwrap());
+			assert_eq!(exits[0].offchain_fee, bitcoin::Amount::ZERO);
+			assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(),
+				native_balance + exits[0].effective_balance.to_sat(),
+				"only the genuine protective exit may debit the original board credit");
 		}
 
 	}

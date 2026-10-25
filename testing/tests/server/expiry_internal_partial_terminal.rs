@@ -379,7 +379,7 @@ pub(super) async fn wait_partial_confirmation(
 				let Some(view) = t.expiry_rebuild_token().await? else { return Ok(false); };
 				if view.captaind.height != height || view.watchmand.height != height
 					|| view.captaind.hash != expected_hash || view.watchmand.hash != expected_hash
-					|| !!t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0)
+					|| !super::expiry_view_is_rebuilt(t, view).await?
 				{ return Ok(false); }
 				t.lock_valid_expiry_view(view).await?;
 				let recorded = t.query_one("SELECT COUNT(*) FROM expiry_allocation_coin c \
@@ -428,7 +428,6 @@ async fn all_terminal_returns(
 	ctx:&TestContext,srv:&Captaind,db:&Db,sources:&[Vtxo<Full>],claims:&[Transaction],grants:&[Vtxo<Full>],operator:&bitcoin::Address,
 	fallback:&bitcoin::Script,receiver:&bitcoin::Script,
 ) {
-	let ids=grants.iter().map(|grant|grant.id().to_string()).collect::<Vec<_>>();
 	let original=sources.iter().map(|source|source.id().to_string()).collect::<Vec<_>>();
 	let old_reservations=db.read(async |t| Ok(t.query_one("SELECT COUNT(*) FROM ( \
 		SELECT vtxo_id FROM expiry_entitlement UNION ALL SELECT vtxo_id FROM expiry_allocation_input \
@@ -439,16 +438,8 @@ async fn all_terminal_returns(
 			let height=ctx.generate_blocks(1).await;
 			srv.wait_for_sync_height(height).await;
 			srv.watchmand().wait_for_sync_height(height).await;
-			let rows=db.read(async |t| Ok(t.query("SELECT v.vtxo_id,v.onchain_spent_txid,h.chain_resolution::TEXT,a.sweep_txid \
-				FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id \
-				JOIN expiry_entitlement e ON e.vtxo_id=v.vtxo_id JOIN expiry_allocation_coin c ON c.entitlement_id=e.id \
-				JOIN expiry_allocation a ON a.id=c.allocation_id WHERE v.vtxo_id=ANY($1) \
-				AND c.active AND c.disposition='operator' AND a.status='confirmed' \
-				AND c.evidence->>'kind'='htlc_recv_expired'",&[&ids]).await?)).await.unwrap();
-			if rows.len()==grants.len() && rows.iter().all(|row|row.get::<_,Option<&str>>("onchain_spent_txid").is_some()
-				&& row.get::<_,Option<&str>>("chain_resolution")==Some("revoked")
-				&& row.get::<_,Option<&str>>("onchain_spent_txid")==row.get::<_,Option<&str>>("sweep_txid")) {
-				return rows.iter().map(|row|row.get::<_,&str>("onchain_spent_txid").parse::<bitcoin::Txid>().unwrap()).collect::<BTreeSet<_>>();
+			if let Some(closures) = super::expiry_lightning_terminal::confirmed_grant_closures(ctx, db, grants, receiver).await {
+				return closures.values().map(|(txid, _)| *txid).collect::<BTreeSet<_>>();
 			}
 			tokio::time::sleep(Duration::from_secs(1)).await;
 		}
@@ -461,7 +452,6 @@ async fn all_terminal_returns(
 	let mut graph=BTreeMap::new();
 	for txid in &spenders {
 		let tx=ctx.bitcoind().await_transaction(*txid).await;
-		assert_eq!(tx.version.0,3);
 		assert!(tx.vsize()<=10_000);
 		assert!(tx.output.iter().all(|output|output.script_pubkey==operator.script_pubkey() || output.is_p2a_fee_anchor()));
 		let mut actual_inputs=sat(0);
@@ -475,8 +465,18 @@ async fn all_terminal_returns(
 				assert_eq!(input.witness.taproot_leaf_script().unwrap().script,script.as_script());
 			}
 		}
-		assert_eq!(actual_inputs,tx.output.iter().map(|output|output.value).sum::<bitcoin::Amount>(),"funded operator parent has zero miner fee");
 		principal+=actual_inputs;
+		if tx.version == bitcoin::transaction::Version::TWO {
+			assert_eq!(tx.output.len(), 1, "native claims drain only to the operator");
+			assert_eq!(tx.output[0].script_pubkey, operator.script_pubkey());
+			let native_fee = actual_inputs.checked_sub(tx.output[0].value).unwrap();
+			assert!(native_fee > sat(0));
+			fees += native_fee;
+			assert!(graph.insert(*txid, tx).is_none());
+			continue;
+		}
+		assert_eq!(tx.version.0,3);
+		assert_eq!(actual_inputs,tx.output.iter().map(|output|output.value).sum::<bitcoin::Amount>(),"funded operator parent has zero miner fee");
 		let anchors=tx.output.iter().enumerate().filter(|(_,output)|output.is_p2a_fee_anchor()).collect::<Vec<_>>();
 		assert_eq!(anchors.len(),1);
 		let anchor=bitcoin::OutPoint::new(*txid,anchors[0].0 as u32);
@@ -577,7 +577,7 @@ async fn all_terminal_returns(
 			let rebuilt=db.read(async |t| {
 				let Some(view)=t.expiry_rebuild_token().await? else {return Ok(false);};
 				Ok(view.captaind.height==height && view.watchmand.height==height
-					&& view.captaind.hash==expected_hash && view.watchmand.hash==expected_hash && !t.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
+					&& view.captaind.hash==expected_hash && view.watchmand.hash==expected_hash && super::expiry_view_is_rebuilt(t, view).await?)
 			}).await.unwrap();
 			if rebuilt {break;}
 			tokio::time::sleep(Duration::from_millis(50)).await;

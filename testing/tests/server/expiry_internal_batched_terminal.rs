@@ -321,8 +321,7 @@ async fn batched_terminal(reorg: bool) {
 	assert_eq!((row.get::<_,i64>("gross_sat"),row.get::<_,i64>("payout_sat"),row.get::<_,i64>("fee_sat")),(100_000,99_000,1_000));
 	let evidence:serde_json::Value=serde_json::from_str(row.get("evidence")).unwrap();
 	assert_eq!(evidence["kind"].as_str(),Some("htlc_internal_grants_reclaimed"));
-	assert_eq!(evidence["attempt_id"].as_i64(),Some(scope.0));
-	assert_eq!(evidence["subscription_id"].as_i64(),Some(scope.1));
+	assert_eq!(evidence["attempts"],serde_json::json!([[scope.0,scope.1]]));
 	assert_eq!(final_rows.1,0,"the198k prior user receipt cannot also earn a customer fallback");
 	assert_eq!(final_rows.2.len(),grants.len());
 	for row in &final_rows.2 {

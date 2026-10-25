@@ -37,6 +37,39 @@ pub(super) async fn assert_stored_grant_ancestry(db: &Db, grants: &[Vtxo<Full>])
 	}
 }
 
+/// Locate actual confirmed grant closures without assuming an allocation exists
+/// for a fully exposed leaf. The existing assertion below authenticates every
+/// candidate before any caller uses its canonical height as a refund premise.
+pub(super) async fn confirmed_grant_closures(
+	ctx: &TestContext, db: &Db, grants: &[Vtxo<Full>], receiver: &bitcoin::Script,
+) -> Option<std::collections::BTreeMap<VtxoId, (bitcoin::Txid, u32)>> {
+	let chain = ctx.bitcoind().sync_client();
+	let mut closures = std::collections::BTreeMap::new();
+	for grant in grants {
+		let row = db.read(async |t| Ok(t.query_one("SELECT v.onchain_spent_txid,h.chain_resolution::TEXT, \
+			(SELECT a.sweep_txid FROM expiry_allocation a JOIN expiry_allocation_coin c ON c.allocation_id=a.id \
+			JOIN expiry_entitlement e ON e.id=c.entitlement_id WHERE e.vtxo_id=v.vtxo_id \
+			AND c.active AND c.disposition='operator' AND a.status='confirmed') AS swept \
+			FROM vtxo v JOIN htlc_vtxo h ON h.id=v.id WHERE v.vtxo_id=$1", &[&grant.id().to_string()]).await?)).await.unwrap();
+		let txid = match (row.get::<_, Option<&str>>("chain_resolution"), row.get::<_, Option<&str>>("swept")) {
+			(Some("revoked"), _) => row.get::<_, Option<&str>>("onchain_spent_txid")
+				.expect("a native timeout resolution must retain its actual transaction"),
+			(None, Some(txid)) => txid,
+			(None, None) => return None,
+			other => panic!("grant {} has an unexpected closure: {other:?}", grant.id()),
+		};
+		let txid = txid.parse::<bitcoin::Txid>().unwrap();
+		let Some(info) = chain.custom_get_raw_transaction_info(txid, None).unwrap() else { return None; };
+		if info.confirmations.unwrap_or(0) <= 0 { return None; }
+		let hash = info.blockhash.expect("a confirmed grant closure must have a block");
+		let height = chain.get_block_header_info(&hash).unwrap().height;
+		assert_eq!(chain.get_block_hash(height as u64).unwrap(), hash);
+		assert!(closures.insert(grant.id(), (txid, u32::try_from(height).unwrap())).is_none());
+	}
+	assert_grants_reclaimed(ctx, db, grants, receiver).await;
+	Some(closures)
+}
+
 /// Every receive grant closes through a confirmed native timeout claim or
 /// a funded operator payout of an earlier recoverable tree output.
 pub(super) async fn assert_grants_reclaimed(ctx: &TestContext, db: &Db, grants: &[Vtxo<Full>], receiver: &bitcoin::Script) {

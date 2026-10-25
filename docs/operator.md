@@ -136,15 +136,12 @@ the existing native CLI rather than a new grpc extension. For systemd, use
 `ExecStartPre` with the CLI's failure propagated and `jq -e` checking that exact
 boolean. A missing setting, unreachable node or false value must fail startup.
 
-Set `vtxopool.vtxo_pre_expiry = 230` in this deployment. The upstream pool
-prunes near-expiry inputs and refills its existing targets; no separate grant
-selection rule is added. This requires more pool capital than the 144-block
-pruning setting. Every Lightning send source must expire strictly more than
-30 blocks after its HTLC. Refresh a source that does not meet that condition.
-A short-lived Signet source can therefore be suitable for Ark transfers while
-being refused for a Lightning send. The margin and pool policy do not prove
-that every allowed receive is terminal before expiry: keep unresolved funds
-held during outages or unusually long contracts.
+The upstream pool prunes near-expiry inputs according to its existing
+configuration and refills its targets. Near-expiry coins can fund admitted
+Lightning contracts. Source expiry alone does not resolve an open payment or
+an uncollected grant. Keep unresolved bitcoin held until the existing payment
+and contract rules establish its owner, including during outages or unusually
+long contracts.
 
 Validate both configuration files before starting the services:
 

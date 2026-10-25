@@ -66,16 +66,6 @@ impl Server {
 		};
 
 		for (idx, b) in ret.builders.iter().enumerate() {
-			for output in b.all_outputs() {
-				let expiry = match &output.policy {
-					VtxoPolicy::ServerHtlcSend(p) => Some(p.htlc_expiry),
-					VtxoPolicy::ServerHtlcSend_v0(p) => Some(p.htlc_expiry),
-					_ => None,
-				};
-				if let Some(expiry) = expiry {
-					crate::ln::validate_htlc_source_expiry(b.input().expiry_height(), expiry)?;
-				}
-			}
 			if let Some(max_exit_depth) = params.max_input_exit_depth {
 				let depth = b.input().exit_depth();
 				if depth >= max_exit_depth {

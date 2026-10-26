@@ -23,9 +23,8 @@ let
 			(craneLib.fileset.commonCargoSources ./..)
 			./../server-rpc/protos
 			./../cln-rpc/protos
-			# The server embeds these SQL files at compile time.
+			# embed_migrations! reads these SQL files at compile time.
 			./../server/src/database/migrations
-			./../server/src/database/fork_schema.sql
 		];
 	};
 
@@ -38,7 +37,6 @@ let
 		inherit src cargoVendorDir;
 		strictDeps = true;
 		doCheck = false;
-
 
 		# Strip via rustc instead of the stdenv fixup phase: the host GNU strip
 		# only understands ELF, so a Mach-O or PE artifact would ship unstripped

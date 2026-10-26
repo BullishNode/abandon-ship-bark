@@ -338,10 +338,10 @@ async fn registered_receive_fallback() {
 		}
 	}
 	let residuals = residuals.into_iter().map(|(outpoint, txout)| BackingPartitionResidual { outpoint, txout }).collect::<Vec<_>>();
-	let partition = BackingSnapshot { roots: vec![physical_root], regular: Vec::new(), serialized_bytes: 0 }
+	BackingSnapshot { roots: vec![physical_root], regular: Vec::new() }
 		.check_partition(&terminals, &[shared_funding.clone()], &residuals, limits).unwrap();
-	assert_eq!(partition.roots.len(), 1);
-	assert_eq!(partition.roots[0].terminal_amount + partition.roots[0].anchor_residual_amount, root_value);
+	assert_eq!(terminals.iter().map(|coin| coin.amount()).sum::<Amount>()
+		+ residuals.iter().map(|residual| residual.txout.value).sum::<Amount>(), root_value);
 	let depth = source.exit_depth().max(unknown_source.exit_depth());
 	assert!(depth <= 8, "the declared fixed confirmation schedule only covers this bounded signed geometry");
 	let mut unknown_path = BTreeMap::from([(shared_anchor, shared_funding.output[shared_anchor.vout as usize].clone())]);

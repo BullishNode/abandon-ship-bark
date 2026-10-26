@@ -11,7 +11,7 @@ import "core.proto";
 service ArkService {
 	rpc Handshake(HandshakeRequest) returns (HandshakeResponse) {}
 	rpc GetArkInfo(core.Empty) returns (ArkInfo) {}
-	// Register an authenticated immutable mailbox/account/payout binding.
+	// Register an authenticated immutable mailbox/payout binding.
 	rpc SetFallback(SetFallbackRequest) returns (SetFallbackResponse) {}
 	rpc GetOffboardFeeRate(core.Empty) returns (OffboardFeeRateResponse) {}
 

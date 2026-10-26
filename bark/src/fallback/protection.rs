@@ -36,8 +36,8 @@ impl Wallet {
 		if !spends_user_claim(coin, transaction) { return Ok(()); }
 		let _guard = self.lock_fallback_history(std::time::Duration::from_secs(30)).await?;
 		let mut snapshot = self.inner.db.get_fallback_snapshot().await?;
-		if snapshot.terminal_observations.values().flatten().any(|claim| claim.transaction == *transaction) { return Ok(()); }
-		snapshot.terminal_observations.entry(0).or_default().push(super::payouts::OwnClaim { transaction: transaction.clone() });
+		if snapshot.own_claims.iter().any(|claim| claim.transaction == *transaction) { return Ok(()); }
+		snapshot.own_claims.push(super::payouts::OwnClaim { transaction: transaction.clone() });
 		self.inner.db.store_fallback_snapshot(&snapshot).await
 	}
 

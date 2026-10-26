@@ -92,9 +92,9 @@ impl ExitProtectionReport {
 	}
 }
 
-fn automatic_exit_ownership_known(snapshot: &FallbackSnapshot, id: VtxoId) -> anyhow::Result<bool> {
-	Ok(!snapshot.verified_ordinary_spends.contains(&id) && !snapshot.adopted_payout_vtxos.contains(&id)
-		&& !snapshot.unproven_spent_vtxos.contains(&id))
+fn automatic_exit_ownership_known(snapshot: &FallbackSnapshot, id: VtxoId) -> bool {
+	!snapshot.verified_ordinary_spends.contains(&id) && !snapshot.adopted_payout_vtxos.contains(&id)
+		&& !snapshot.unproven_spent_vtxos.contains(&id)
 }
 
 fn deadlines(expiry: BlockHeight, path_blocks: u32, claim_csv: u32, margin: u32) -> (BlockHeight, BlockHeight, u32) {
@@ -115,7 +115,7 @@ impl Wallet {
 	) -> anyhow::Result<Box<dyn crate::lock_manager::LockGuard>> {
 		let guard = self.lock_fallback_history(Duration::from_secs(30)).await?;
 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
-		ensure!(automatic_exit_ownership_known(&snapshot, id)?,
+		ensure!(automatic_exit_ownership_known(&snapshot, id),
 			"current ownership or discharge evidence does not authorize this automatic exit");
 		Ok(guard)
 	}
@@ -230,7 +230,7 @@ impl Wallet {
 
 	async fn protect_scheduled_coin(&self, id: VtxoId) -> anyhow::Result<bool> {
 		let snapshot = self.inner.db.get_fallback_snapshot().await?;
-		ensure!(automatic_exit_ownership_known(&snapshot, id)?, "current ownership or discharge evidence does not authorize this automatic exit");
+		ensure!(automatic_exit_ownership_known(&snapshot, id), "current ownership or discharge evidence does not authorize this automatic exit");
 		for pending in self.pending_round_states().await? {
 			if !pending.state().participation().inputs.iter().any(|coin| coin.id() == id) { continue; }
 			if let Some(mut pending) = self.try_lock_round_state(pending.id()).await? {
@@ -262,10 +262,8 @@ impl Wallet {
 			if discharged.contains(&stored.id()) || snapshot.verified_ordinary_spends.contains(&stored.id())
 				|| !matches!(stored.policy(), VtxoPolicy::Pubkey(_)) { continue; }
 			if stored.state == (VtxoState::Locked { holder: None }) && !snapshot.quarantined_vtxos.contains(&stored.id()) { continue; }
-			match automatic_exit_ownership_known(&snapshot, stored.id()) {
-				Ok(false) => report.unproven_historical.push(stored.id()),
-				Ok(true) => {},
-				Err(error) => { report.issue(Some(stored.id()), "ownership", format!("{:#}", error)); continue; },
+			if !automatic_exit_ownership_known(&snapshot, stored.id()) {
+				report.unproven_historical.push(stored.id());
 			}
 			report.collect(stored.id(), self.coin_exit_schedule(&stored, tip.height).await);
 		}
@@ -330,11 +328,11 @@ mod tests {
 	fn unproven_historic_body_does_not_authorize_automatic_exit() {
 		let id = VtxoId::from_slice(&[3; 36]).unwrap();
 		let mut snapshot = FallbackSnapshot::default();
-		assert!(automatic_exit_ownership_known(&snapshot, id).unwrap(), "prior positive local ownership remains protected");
+		assert!(automatic_exit_ownership_known(&snapshot, id), "prior positive local ownership remains protected");
 		snapshot.unproven_spent_vtxos.insert(id);
 		snapshot.quarantined_vtxos.insert(id);
 		snapshot.awaiting_settlement.insert(id);
-		assert!(!automatic_exit_ownership_known(&snapshot, id).unwrap(), "retention and waiting are not current ownership evidence");
+		assert!(!automatic_exit_ownership_known(&snapshot, id), "retention and waiting are not current ownership evidence");
 	}
 
 

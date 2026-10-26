@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Context;
-use bitcoin::{OutPoint, Transaction, Txid, Witness};
+use bitcoin::{OutPoint, Txid, Witness};
 use bitcoin::taproot::LeafVersion;
 use tokio::sync::RwLock;
 use tracing::{error, trace};
@@ -85,10 +85,9 @@ impl VtxoExitFrontier {
 		&mut self,
 		vtxo_id: VtxoId,
 		spent_height: BlockHeight,
-		transaction: &Transaction,
+		spent_txid: Txid,
 		witness: &Witness,
 	) -> anyhow::Result<bool> {
-		let spent_txid = transaction.compute_txid();
 		if let Some((_height, vtxo)) = self.frontier.remove(&vtxo_id) {
 			// Try to extract a preimage from the spending witness if this is an HTLC vtxo.
 			// This must succeed before we proceed — if persisting the preimage fails,
@@ -301,7 +300,7 @@ impl ChainEventListener for Arc<RwLock<VtxoExitFrontier>> {
 			let mut removed_any = false;
 			for input in &tx.input {
 				if frontier.spend(
-					input.previous_output.into(), height, tx, &input.witness,
+					input.previous_output.into(), height, txid, &input.witness,
 				).await? {
 					removed_any = true;
 				}

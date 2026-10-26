@@ -1,7 +1,8 @@
 //! Dust forfeiture cannot become principal in a later receipt.
 
+use super::expiry_test::{fields, rebuilt, actual_fee, watch_coins, Epoch};
+
 use std::collections::{BTreeMap, BTreeSet};
-use std::str::FromStr;
 use std::time::Duration;
 
 use ark::arkoor::{ArkoorDestination, package::{ArkoorPackageBuilder, ArkoorPackageCosignResponse}};
@@ -9,25 +10,17 @@ use ark::mailbox::MailboxIdentifier;
 use ark::{ProtocolEncoding, ServerVtxoPolicy, Vtxo, VtxoId, VtxoPolicy};
 use ark::vtxo::Full;
 use ark_testing::{require_bitcoind_chain_source, sat, Captaind, TestContext};
-use ark_testing::daemon::captaind::WalletAdminClient;
 use bark::{Wallet};
 use bark::movement::Movement;
 use bark::vtxo::VtxoState;
-use bitcoin::{Amount, BlockHash, Network, OutPoint, ScriptBuf, Transaction, Txid, TxOut};
+use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Transaction, TxOut};
 use bitcoin::consensus::deserialize;
 use bitcoin::hex::DisplayHex;
-use bitcoin_ext::{BlockDelta, BlockRef, TxOutExt};
+use bitcoin_ext::{BlockDelta, TxOutExt};
 use bitcoin_ext::rpc::{BitcoinRpcExt, RpcApi};
 use serde_json::json;
 use server::database::Db;
 use server_rpc::protos;
-
-fn fields(balance: &bark::Balance) -> [Amount; 10] {
-	[balance.spendable, balance.needs_refresh, balance.pending_lightning_send,
-		balance.claimable_lightning_receive, balance.pending_in_round, balance.pending_exit,
-		balance.pending_board, balance.pending_arkoor_send, balance.pending_offboard,
-		balance.awaiting_settlement]
-}
 
 async fn balances(wallet: &Wallet, spendable: Amount) {
 	let mut expected = [Amount::ZERO; 10];
@@ -35,40 +28,6 @@ async fn balances(wallet: &Wallet, spendable: Amount) {
 	assert_eq!(fields(&wallet.balance().await.unwrap()), expected);
 	assert!(wallet.exit_mgr().list_all(false, false).await.unwrap().is_empty(),
 		"no live or finished unilateral exit may claim the forfeited principal");
-}
-
-async fn rebuilt(ctx: &TestContext, srv: &Captaind, db: &Db) {
-	let height = bitcoin_ext::BlockHeight::new(u32::try_from(ctx.bitcoind().get_block_count().await).unwrap());
-	srv.wait_for_sync_height(height).await;
-	srv.watchmand().wait_for_sync_height(height).await;
-	let point = BlockRef { height, hash: ctx.bitcoind().sync_client().get_best_block_hash().unwrap() };
-	tokio::time::timeout(Duration::from_secs(15), async {
-		loop {
-			if db.read(async |tx| {
-				let Some(view) = tx.expiry_rebuild_token().await? else { return Ok(false); };
-				Ok(view.captaind == point && view.watchmand == point && !tx.query_one("SELECT invalid FROM expiry_chain_view WHERE id=1", &[]).await?.get::<_, bool>(0))
-			}).await.unwrap() { break; }
-			tokio::time::sleep(Duration::from_millis(50)).await;
-		}
-	}).await.expect("both completed expiry views must bind the real Core tip");
-}
-
-async fn actual_fee(ctx: &TestContext, transaction: &Transaction) -> Amount {
-	let mut total = Amount::ZERO;
-	let mut seen = BTreeSet::new();
-	for input in &transaction.input {
-		assert!(seen.insert(input.previous_output));
-		let previous = ctx.bitcoind().await_transaction(input.previous_output.txid).await;
-		total += previous.output[input.previous_output.vout as usize].value;
-	}
-	total.checked_sub(transaction.output.iter().map(|output| output.value).sum::<Amount>()).unwrap()
-}
-
-async fn watch_coins(srv: &Captaind) -> BTreeSet<OutPoint> {
-	let address = srv.watchmand().config().admin_address.unwrap();
-	let mut rpc = WalletAdminClient::connect(format!("http://{address}")).await.unwrap();
-	rpc.wallet_status(protos::Empty {}).await.unwrap().into_inner().watchman.unwrap()
-		.confirmed_utxos.into_iter().map(|point| OutPoint::from_str(&point).unwrap()).collect()
 }
 
 #[derive(Clone)]
@@ -79,16 +38,6 @@ struct ExpectedLeaf {
 	fee: u64,
 	payout: u64,
 	forfeited: u64,
-}
-
-struct Epoch {
-	parents: BTreeMap<Txid, Transaction>,
-	children: BTreeMap<Txid, Transaction>,
-	allocations: BTreeMap<VtxoId, i64>,
-	outputs: BTreeMap<VtxoId, Option<OutPoint>>,
-	hashes: BTreeMap<Txid, BlockHash>,
-	heights: BTreeMap<Txid, bitcoin_ext::BlockHeight>,
-	packages: Vec<serde_json::Value>,
 }
 
 /// Use the production cosign, signed-chain registration and mailbox paths.

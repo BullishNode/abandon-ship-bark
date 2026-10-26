@@ -463,8 +463,8 @@ impl LightningManager {
 		payment_hash: PaymentHash,
 		source_ids: &[VtxoId],
 	) -> anyhow::Result<(PaymentStatus, Vec<VtxoId>)> {
-		let Some(outcome) = self.db.read_snapshot(async |t|
-			t.lightning_payment_outcome(payment_hash, source_ids, None).await
+		let Some(outcome) = self.db.read(async |t|
+			t.lightning_payment_outcome(payment_hash, source_ids).await
 		).await? else { return Ok((PaymentStatus::Pending, Vec::new())); };
 		let status = match outcome.state {
 			LightningSourceState::Discharged => {

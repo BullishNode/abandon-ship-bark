@@ -1743,7 +1743,7 @@ impl Wallet {
 
 	/// Fetches all wallet fund movements ordered from newest to oldest.
 	pub async fn history(&self) -> anyhow::Result<Vec<Movement>> {
-		self.inner.db.get_all_movements().await
+		Ok(self.inner.db.get_all_movements().await?)
 	}
 
 	/// Applies an [RFC 7396](https://www.rfc-editor.org/rfc/rfc7396) JSON Merge Patch to the

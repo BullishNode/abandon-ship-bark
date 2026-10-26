@@ -73,7 +73,7 @@ async fn receive_expired_arkoor_while_offline() {
 	bark2.sync().await;
 	assert_eq!(bark2.vtxos().await.len(), 1);
 	let balance = bark2.offchain_balance().await;
-	if is_bark_version!(> "0.7.1") || bark2.supports_awaiting_settlement().await {
+	if is_bark_version!(> "0.7.1") {
 		assert_eq!(balance.needs_refresh, sat(100_000), "{balance:?}");
 		assert_eq!(balance.spendable, Amount::ZERO, "{balance:?}");
 	} else {

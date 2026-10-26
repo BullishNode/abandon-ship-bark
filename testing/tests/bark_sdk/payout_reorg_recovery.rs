@@ -432,7 +432,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	assert!(matches!(wallet.chain().tx_status(claim.compute_txid()).await.unwrap(),
 		bitcoin_ext::TxStatus::Confirmed(block) if block.hash == final_block));
 
-	assert!(claimed_snapshot.terminal_observations.values().flatten().any(|proof| proof.transaction == claim));
+	assert!(claimed_snapshot.own_claims.iter().any(|proof| proof.transaction == claim));
 	let second_miner = claim_fork_miner.unwrap();
 	assert_ne!(second_miner.script_pubkey(), alternate_miner.script_pubkey());
 	// This variant disconnects the published signed exit path while retaining
@@ -598,7 +598,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 		assert_eq!(own_history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), -100_000,
 			"reorg recovery must retain one principal debit/reservation, never duplicate it");
 		assert_eq!(history.iter().map(|entry| entry.effective_balance.to_sat()).sum::<i64>(), 0);
-		assert!(snapshot.terminal_observations.values().flatten().any(|proof| proof.transaction == claim));
+		assert!(snapshot.own_claims.iter().any(|proof| proof.transaction == claim));
 		let exit = db.get_exit_vtxo_entry(&owned.id()).await.unwrap().unwrap();
 		if remove_claim_path {
 			assert_eq!(exit.movement_id, Some(movement));
@@ -748,7 +748,7 @@ async fn run_with_prefix_fork(later_claim_fork: bool, remove_claim_path: bool, k
 	assert!(reopened.exit_mgr().list_claimable().await.is_empty());
 	assert_eq!(reopened.get_full_vtxo(owned.id()).await.unwrap().serialize(), owned_bytes);
 	let settled_snapshot = db.get_fallback_snapshot().await.unwrap();
-	assert!(settled_snapshot.terminal_observations.values().flatten().any(|backup| backup.transaction == settled_claim));
+	assert!(settled_snapshot.own_claims.iter().any(|backup| backup.transaction == settled_claim));
 	assert!(matches!(reopened.chain().tx_status(settled_claim.compute_txid()).await.unwrap(),
 		bitcoin_ext::TxStatus::Confirmed(block) if block.hash == settled_block));
 	assert!(!matches!(reopened.chain().tx_status(claim.compute_txid()).await.unwrap(), bitcoin_ext::TxStatus::Confirmed(_)));

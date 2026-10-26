@@ -218,3 +218,15 @@ async fn recover_vtxos_by_xpub_rejects_bad_requests() {
 	client.recover_vtxos_by_xpub(xpub_request(&xpriv, server_pubkey, 0)).await
 		.expect("a valid request is accepted");
 }
+
+#[tokio::test]
+async fn recover_vtxos_by_xpub_disabled() {
+	let ctx = TestContext::new("server/recover_vtxos_by_xpub_disabled").await;
+	let srv = ctx.captaind("server").cfg(|c| c.recovery_xpub_nb_keys = 0).create().await;
+	let server_pubkey = srv.ark_info().await.server_pubkey;
+	let mut client = srv.get_public_rpc().await;
+
+	let req = xpub_request(&dummy_xpriv(NetworkKind::Test), server_pubkey, 0);
+	let err = client.recover_vtxos_by_xpub(req).await.expect_err("the rpc is disabled");
+	assert_eq!(err.code(), tonic::Code::Unimplemented, "{err:?}");
+}

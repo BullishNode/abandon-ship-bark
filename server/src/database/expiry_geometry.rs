@@ -71,7 +71,7 @@ pub(crate) fn economic_cut(
 	let terminals = cut.terminals.iter().map(|index| snapshot.regular[*index].full_vtxo.clone()
 		.context("expiry current terminal lacks its complete source path"))
 		.collect::<anyhow::Result<Vec<_>>>()?;
-	let selected = BackingSnapshot { roots: vec![root.clone()], regular: Vec::new(), serialized_bytes: 0 };
+	let selected = BackingSnapshot { roots: vec![root.clone()], regular: Vec::new() };
 	selected.check_partition(&terminals, std::slice::from_ref(funding), &cut.residuals, limits)
 		.context("expiry current economic cut is invalid")?;
 	Ok(cut)
@@ -111,7 +111,7 @@ mod tests {
 	use ark::vtxo::Full;
 	use ark::vtxo::raw::RawVtxo;
 	use crate::database::{SpendState, VtxoState};
-	use crate::database::expiry_inventory::{BackingVtxoFact, SnapshotGenesis};
+	use crate::database::expiry_inventory::BackingVtxoFact;
 
 	const TEST_LIMITS: BackingSnapshotLimits = BackingSnapshotLimits { max_rows: 100, max_serialized_bytes: 1_000_000 };
 
@@ -123,8 +123,8 @@ mod tests {
 				spend_state: SpendState::Spendable, confirmed_height: None, decided_for_fallback: false,
 				created_at: chrono::Local::now(), updated_at: chrono::Local::now(),
 			},
-			full_vtxo: Some(full), genesis: SnapshotGenesis::EncodedPath,
-			frontier_at: None, onchain_spent_height: None, onchain_spent_txid: None,
+			full_vtxo: Some(full),
+			onchain_spent_height: None, onchain_spent_txid: None,
 			lightning_htlc_subscription_id: None,
 		}
 	}
@@ -139,7 +139,6 @@ mod tests {
 		let root_bare = root.to_bare();
 		(BackingSnapshot {
 			roots: vec![root_bare], regular: vec![fact(root, Some(exit)), fact(source, None)],
-			serialized_bytes: 0,
 		}, VTXO_VECTORS.anchor_tx.clone())
 	}
 
@@ -151,10 +150,8 @@ mod tests {
 		assert_eq!(cut.terminals, [1]);
 		assert_eq!(cut.visited, [0, 1]);
 		let leaf = snapshot.regular[1].full_vtxo.clone().unwrap();
-		let partition = snapshot.check_partition(&[leaf.clone()], &[funding], &cut.residuals, TEST_LIMITS).unwrap();
-		assert_eq!(partition.roots[0].terminal_amount, leaf.amount());
-		assert_eq!(partition.roots[0].anchor_residual_amount, bitcoin::Amount::from_sat(330));
-		assert_eq!(leaf.amount() + partition.roots[0].anchor_residual_amount, snapshot.roots[0].amount());
+		snapshot.check_partition(&[leaf.clone()], &[funding], &cut.residuals, TEST_LIMITS).unwrap();
+		assert_eq!(leaf.amount() + bitcoin::Amount::from_sat(330), snapshot.roots[0].amount());
 	}
 
 	#[test]

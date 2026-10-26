@@ -617,7 +617,7 @@ async fn list_movements() {
 
 	// See https://gitlab.com/ark-bitcoin/bark/-/merge_requests/2579 for why
 	// the behavior changed
-	if is_bark_version!(> "0.7.1") || bark1.supports_awaiting_settlement().await {
+	if is_bark_version!(> "0.7.1") {
 		assert_eq!(movements.last().unwrap().output_vtxos.len(), 2);
 	}
 

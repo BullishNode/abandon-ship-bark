@@ -771,7 +771,13 @@ async fn returning_failed_sender_is_not_debited_by_a_later_same_hash_ark_payment
 			loop {
 				let status = db.read(async |tx| Ok(tx.query_one("SELECT status::TEXT FROM lightning_payment_attempt WHERE id=$1",
 					&[&old_attempt]).await?.get::<_, String>(0))).await.unwrap();
-				if status == "failed" { break; }
+				if status == "failed" {
+					// The status commits before the mailbox notification.
+					let notified = db.read(async |tx| Ok(tx.query_one("SELECT EXISTS(SELECT 1 FROM mailbox \
+						WHERE unblinded_mailbox_id=$1 AND payment_hash=$2 AND mailbox_type='ln-send-finished')",
+						&[&mailbox.mailbox().to_string(), &hash.to_string()]).await?.get::<_, bool>(0))).await.unwrap();
+					if notified { break; }
+				}
 				tokio::time::sleep(Duration::from_millis(50)).await;
 			}
 		}).await.expect("the normal monitor must close the previous failure before a later Ark attempt");

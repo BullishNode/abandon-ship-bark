@@ -1085,7 +1085,9 @@ async fn intra_ark_revoke_then_claim_does_not_drain_server() {
 
 	// Both clients share the same server (and proxy) -> intra-ark self-payment.
 	let bark_payer = ctx.bark("bark-payer", &proxy.address).funded(btc(3)).create().await;
-	let bark_payee = Arc::new(ctx.bark("bark-payee", &proxy.address).create().await);
+	let mut bark_payee = ctx.bark("bark-payee", &proxy.address).create().await;
+	bark_payee.set_timeout(Duration::from_secs(120));
+	let bark_payee = Arc::new(bark_payee);
 
 	let board_amount = btc(2);
 	bark_payer.board_and_confirm_and_register(&ctx, board_amount).await;

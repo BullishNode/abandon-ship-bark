@@ -4365,7 +4365,7 @@ async fn watchman_claims_expired_receive_grant_before_receiver() {
 	let claim = claims.recv().wait_millis(15_000).await.expect("the watchman must claim the grant");
 	assert_eq!(claim.vtxo_ids, vec![grant.id()]);
 	assert_eq!(claim.total_input_value, grant.amount());
-	let tx = core.get_raw_transaction(&claim.txid, None).unwrap();
+	let tx = ctx.bitcoind().await_transaction(claim.txid).await;
 	assert_eq!(tx.input.len(), 1);
 	assert_eq!(tx.input[0].previous_output, point);
 	let server_script = wm.config().sweep_address.clone().unwrap().require_network(Network::Regtest)

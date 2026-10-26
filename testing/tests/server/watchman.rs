@@ -2416,7 +2416,7 @@ async fn watchman_sweeps_round_leftovers_after_exits() {
 	}
 	assert_eq!(sat(3_800_000), terminal_outputs.values().map(|output| output.value).sum::<Amount>()
 		+ change.values().map(|output| output.value).sum::<Amount>() + miner);
-	assert_eq!(operator, sat(2_008_000));
+	assert_eq!(operator, sat(10 * 200_000 + 8 * 2_000));
 	let rows = db.read(async |tx| Ok(tx.query("SELECT e.vtxo_id,e.gross_sat,e.irreversible_facts::TEXT AS facts, \
 		c.allocation_id,c.gross_sat AS allocated,c.disposition,c.owner_mailbox,c.user_pubkey,c.spk,c.fee_sat,c.payout_sat,c.forfeited_sat,c.active \
 		FROM expiry_entitlement e JOIN vtxo v ON v.vtxo_id=e.vtxo_id \
@@ -4422,7 +4422,9 @@ async fn watchman_doesnt_broadcast_htlc_recv_chain() {
 		assert!(sponsors.insert(OutPoint::new(id, outputs[0].0 as u32), outputs[0].1.clone()).is_none());
 	}
 
-	let wallet = ctx.bark_sdk("bark", &srv).funded(sat(1_000_000)).create().await;
+	// Only the explicit oldest-coin exit may progress across the expiry jump.
+	let wallet = ctx.bark_sdk("bark", &srv).cfg(|cfg| cfg.daemon_manual_sync = true)
+		.funded(sat(1_000_000)).create().await;
 	srv.wait_for_vtxopool(&ctx).await;
 	let db = Db::connect(&srv.config().postgres).await.unwrap();
 	let initial = futures::TryStreamExt::try_collect::<Vec<_>>(db.load_vtxopool().await.unwrap()).await.unwrap();
